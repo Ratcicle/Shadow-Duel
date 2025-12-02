@@ -231,6 +231,7 @@ export default class EffectEngine {
       source: card,
       player,
       opponent: this.game.getOpponent(player),
+      activationZone: "hand",
     };
 
     const targetResult = this.resolveTargets(effect.targets || [], ctx, selections);
@@ -357,6 +358,9 @@ export default class EffectEngine {
     for (const owner of owners) {
       const zone = this.getZone(owner, zoneName) || [];
       for (const card of zone) {
+        if (zoneName === "hand" && ctx.activationZone === "hand" && card === ctx.source) {
+          continue;
+        }
         if (def.cardKind && card.cardKind !== def.cardKind) continue;
         if (
           def.position &&
