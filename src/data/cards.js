@@ -573,4 +573,95 @@ export const cardDatabase = [
       },
     ],
   },
+  {
+    id: 36,
+    name: "Shadow-Heart Coward",
+    cardKind: "monster",
+    atk: 800,
+    def: 1000,
+    level: 3,
+    type: "Fiend",
+    archetype: "Shadow-Heart",
+    description:
+      'If this card is discarded from your hand to the Graveyard: target 1 monster your opponent controls; its ATK and DEF are halved until the end of this turn.',
+    image: "assets/Shadow-Heart Coward.png",
+    effects: [
+      {
+        id: "shadow_heart_coward_discard",
+        timing: "on_event",
+        event: "card_to_grave",
+        fromZone: "hand",
+        targets: [
+          {
+            id: "coward_debuff_target",
+            owner: "opponent",
+            zone: "field",
+            cardKind: "monster",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "modify_stats_temp",
+            targetRef: "coward_debuff_target",
+            atkFactor: 0.5,
+            defFactor: 0.5,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 37,
+    name: "Shadow-Heart Infusion",
+    cardKind: "spell",
+    subtype: "normal",
+    description:
+      'Discard 2 cards from your hand, then target 1 "Shadow-Heart" monster in your Graveyard; Special Summon it, but it cannot declare an attack this turn.',
+    image: "assets/Shadow-Heart Infusion.png",
+    effects: [
+      {
+        id: "shadow_heart_infusion",
+        timing: "on_play",
+        speed: 1,
+        targets: [
+          {
+            id: "infusion_discard",
+            owner: "self",
+            zone: "hand",
+            count: { min: 2, max: 2 },
+          },
+          {
+            id: "infusion_revive",
+            owner: "self",
+            zone: "graveyard",
+            cardKind: "monster",
+            archetype: "Shadow-Heart",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "infusion_discard",
+            player: "self",
+            to: "graveyard",
+          },
+          {
+            type: "move",
+            targetRef: "infusion_revive",
+            player: "self",
+            to: "field",
+            position: "attack",
+            isFacedown: false,
+            resetAttackFlags: false,
+          },
+          {
+            type: "forbid_attack_this_turn",
+            targetRef: "infusion_revive",
+          },
+        ],
+      },
+    ],
+  },
 ];

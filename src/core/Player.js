@@ -97,6 +97,20 @@ export default class Player {
     }
 
     if (cardIndex >= 0 && cardIndex < this.hand.length) {
+      const sendToGrave = (sacrificed) => {
+        if (!sacrificed) return;
+        if (this.game && typeof this.game.moveCard === "function") {
+          this.game.moveCard(sacrificed, this, "graveyard");
+          return;
+        }
+
+        const idx = this.field.indexOf(sacrificed);
+        if (idx > -1) {
+          this.field.splice(idx, 1);
+        }
+        this.graveyard.push(sacrificed);
+      };
+
       const tributeInfo = this.getTributeRequirement(card);
       let { tributesNeeded, usingAlt, alt } = tributeInfo;
 
@@ -120,10 +134,7 @@ export default class Player {
             return null;
           }
 
-          for (const idx of sortedIndices) {
-            const sacrificed = this.field.splice(idx, 1)[0];
-            this.graveyard.push(sacrificed);
-          }
+          tributes.forEach((sacrificed) => sendToGrave(sacrificed));
         } else {
           if (usingAlt && alt) {
             const altIdx = this.field.findIndex((c) => c.name === alt.requiresName);
@@ -131,12 +142,12 @@ export default class Player {
               console.log(`No ${alt.requiresName} available for tribute.`);
               return null;
             }
-            const sacrificed = this.field.splice(altIdx, 1)[0];
-            this.graveyard.push(sacrificed);
+            const sacrificed = this.field[altIdx];
+            sendToGrave(sacrificed);
           } else {
             for (let i = 0; i < tributesNeeded; i++) {
-              const sacrificed = this.field.shift();
-              this.graveyard.push(sacrificed);
+              const sacrificed = this.field[0];
+              sendToGrave(sacrificed);
             }
           }
         }
