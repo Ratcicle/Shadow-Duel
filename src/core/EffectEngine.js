@@ -365,6 +365,10 @@ export default class EffectEngine {
         ) {
           continue;
         }
+        const cardLevel = card.level || 0;
+        if (def.level !== undefined && cardLevel !== def.level) continue;
+        if (def.minLevel !== undefined && cardLevel < def.minLevel) continue;
+        if (def.maxLevel !== undefined && cardLevel > def.maxLevel) continue;
         if (def.archetype) {
           const cardArchetypes = card.archetypes
             ? card.archetypes

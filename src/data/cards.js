@@ -527,8 +527,8 @@ export const cardDatabase = [
             zone: "hand",
             cardKind: "monster",
             archetype: "Shadow-Heart",
-            // por enquanto todos os Shadow-Heart são lvl 4 ou 8;
-            // se quiser travar nível no futuro, dá pra adicionar um filtro de level no motor
+            maxLevel: 4,
+            // limita a monstros Level 4 ou menos
             count: { min: 0, max: 1 },
           },
         ],
