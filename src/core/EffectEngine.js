@@ -265,6 +265,30 @@ export default class EffectEngine {
     if (this.game.phase !== "main1" && this.game.phase !== "main2") {
       return { ok: false, reason: "Can only activate in Main Phase." };
     }
+
+    if (card.name === "Shadow-Heart Infusion" || card.id === 37) {
+      const handCount = (player.hand && player.hand.length) || 0;
+      if (handCount < 2) {
+        return { ok: false, reason: "Need at least 2 cards in hand." };
+      }
+
+      const gy = player.graveyard || [];
+      const hasShadowHeart = gy.some((c) => {
+        if (!c || c.cardKind !== "monster") return false;
+        if (c.archetype === "Shadow-Heart") return true;
+        if (Array.isArray(c.archetypes)) {
+          return c.archetypes.includes("Shadow-Heart");
+        }
+        return false;
+      });
+
+      if (!hasShadowHeart) {
+        return {
+          ok: false,
+          reason: 'No "Shadow-Heart" monsters in graveyard.',
+        };
+      }
+    }
     return { ok: true };
   }
 
@@ -440,6 +464,9 @@ export default class EffectEngine {
           break;
         case "move":
           this.applyMove(action, ctx, targets);
+          break;
+        case "revive_shadowheart_from_grave":
+          this.applyReviveShadowHeartFromGrave(action, ctx);
           break;
         case "forbid_attack_this_turn":
           this.applyForbidAttackThisTurn(action, targets);
@@ -708,5 +735,72 @@ export default class EffectEngine {
         destArr.push(card);
       }
     });
+  }
+
+  applyReviveShadowHeartFromGrave(action, ctx) {
+    const player = action.player === "opponent" ? ctx.opponent : ctx.player;
+    if (!player) return;
+
+    const gy = player.graveyard || [];
+
+    const candidates = gy.filter((card) => {
+      if (!card || card.cardKind !== "monster") return false;
+      if (card.archetype === "Shadow-Heart") return true;
+      if (Array.isArray(card.archetypes)) {
+        return card.archetypes.includes("Shadow-Heart");
+      }
+      return false;
+    });
+
+    if (candidates.length === 0) {
+      console.log('No "Shadow-Heart" monsters in graveyard to revive.');
+      return;
+    }
+
+    let chosen = candidates[0];
+
+    if (candidates.length > 1 && typeof window !== "undefined") {
+      const uniqueNames = [...new Set(candidates.map((c) => c.name))];
+      const choice = window.prompt(
+        `Choose 1 "Shadow-Heart" monster to revive:\n` + uniqueNames.join("\n")
+      );
+      if (choice) {
+        const normalized = choice.trim().toLowerCase();
+        const byName = candidates.find(
+          (c) => c.name.trim().toLowerCase() === normalized
+        );
+        if (byName) {
+          chosen = byName;
+        }
+      }
+    }
+
+    if (!chosen) {
+      console.log("No valid choice made for revival.");
+      return;
+    }
+
+    const idx = gy.indexOf(chosen);
+    if (idx === -1) {
+      console.warn("Chosen card is not in graveyard anymore:", chosen.name);
+      return;
+    }
+
+    gy.splice(idx, 1);
+
+    chosen.position = action.position || "attack";
+    chosen.isFacedown = false;
+    chosen.hasAttacked = false;
+    chosen.cannotAttackThisTurn = true;
+
+    player.field.push(chosen);
+
+    console.log(
+      `Revived "${chosen.name}" from graveyard with Shadow-Heart Infusion.`
+    );
+
+    if (this.game && typeof this.game.updateBoard === "function") {
+      this.game.updateBoard();
+    }
   }
 }

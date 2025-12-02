@@ -620,7 +620,7 @@ export const cardDatabase = [
     subtype: "normal",
     archetype: "Shadow-Heart",
     description:
-      'Discard 2 cards from your hand, then target 1 "Shadow-Heart" monster in your Graveyard; Special Summon it, but it cannot declare an attack this turn.',
+      'Discard 2 cards from your hand, then Special Summon 1 "Shadow-Heart" monster from your Graveyard, but it cannot declare an attack this turn.',
     image: "assets/Shadow-Heart Infusion.png",
     effects: [
       {
@@ -634,14 +634,6 @@ export const cardDatabase = [
             zone: "hand",
             count: { min: 2, max: 2 },
           },
-          {
-            id: "infusion_revive",
-            owner: "self",
-            zone: "graveyard",
-            cardKind: "monster",
-            archetype: "Shadow-Heart",
-            count: { min: 1, max: 1 },
-          },
         ],
         actions: [
           {
@@ -651,17 +643,9 @@ export const cardDatabase = [
             to: "graveyard",
           },
           {
-            type: "move",
-            targetRef: "infusion_revive",
+            type: "revive_shadowheart_from_grave",
             player: "self",
-            to: "field",
             position: "attack",
-            isFacedown: false,
-            resetAttackFlags: false,
-          },
-          {
-            type: "forbid_attack_this_turn",
-            targetRef: "infusion_revive",
           },
         ],
       },
