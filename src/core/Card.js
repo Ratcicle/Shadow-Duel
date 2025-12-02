@@ -22,6 +22,8 @@ export default class Card {
     this.hasAttacked = false;
 
     this.tempAtkBoost = 0;
+    this.tempDefBoost = 0;
+    this.cannotAttackThisTurn = false;
     this.altTribute = data.altTribute || null;
     this.onBattleDestroy = data.onBattleDestroy || null;
 

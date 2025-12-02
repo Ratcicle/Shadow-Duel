@@ -10,6 +10,9 @@ export default class Game {
     this.renderer = new Renderer();
     this.effectEngine = new EffectEngine(this);
 
+    this.player.game = this;
+    this.bot.game = this;
+
     this.turn = "player";
     this.phase = "draw";
     this.turnCount = 1;
@@ -89,7 +92,10 @@ export default class Game {
     this.phase = "draw";
 
     const activePlayer = this.turn === "player" ? this.player : this.bot;
-    activePlayer.field.forEach((card) => (card.hasAttacked = false));
+    activePlayer.field.forEach((card) => {
+      card.hasAttacked = false;
+      card.cannotAttackThisTurn = false;
+    });
     activePlayer.summonCount = 0;
 
     this.updateBoard();
@@ -282,6 +288,10 @@ export default class Game {
       const attacker = this.player.field[index];
 
       if (attacker) {
+        if (attacker.cannotAttackThisTurn) {
+          console.log(`${attacker.name} cannot attack this turn.`);
+          return;
+        }
         if (attacker.hasAttacked) {
           console.log("This monster has already attacked!");
           return;
@@ -633,6 +643,11 @@ export default class Game {
   }  resolveCombat(attacker, target) {
     if (!attacker) return;
 
+    if (attacker.cannotAttackThisTurn) {
+      console.log(`${attacker.name} cannot attack this turn.`);
+      return;
+    }
+
     console.log(
       `${attacker.name} attacks ${target ? target.name : "directly"}!`
     );
@@ -681,50 +696,23 @@ export default class Game {
         const defender = target.owner === "player" ? this.player : this.bot;
         const damage = attacker.atk - target.atk;
         defender.takeDamage(damage);
-
-        const defField = defender.field;
-        const idx = defField.indexOf(target);
-        if (idx > -1) {
-          defField.splice(idx, 1);
-          defender.graveyard.push(target);
-        }
+        this.moveCard(target, defender, "graveyard");
         this.applyBattleDestroyEffect(attacker, target);
       } else if (attacker.atk < target.atk) {
         const attPlayer = attacker.owner === "player" ? this.player : this.bot;
         const damage = target.atk - attacker.atk;
         attPlayer.takeDamage(damage);
-
-        const attField = attPlayer.field;
-        const idx = attField.indexOf(attacker);
-        if (idx > -1) {
-          attField.splice(idx, 1);
-          attPlayer.graveyard.push(attacker);
-        }
+        this.moveCard(attacker, attPlayer, "graveyard");
       } else {
         const attPlayer = attacker.owner === "player" ? this.player : this.bot;
         const defPlayer = target.owner === "player" ? this.player : this.bot;
-
-        const attIdx = attPlayer.field.indexOf(attacker);
-        if (attIdx > -1) {
-          attPlayer.field.splice(attIdx, 1);
-          attPlayer.graveyard.push(attacker);
-        }
-
-        const defIdx = defPlayer.field.indexOf(target);
-        if (defIdx > -1) {
-          defPlayer.field.splice(defIdx, 1);
-          defPlayer.graveyard.push(target);
-        }
+        this.moveCard(attacker, attPlayer, "graveyard");
+        this.moveCard(target, defPlayer, "graveyard");
       }
     } else {
       if (attacker.atk > target.def) {
         const defender = target.owner === "player" ? this.player : this.bot;
-        const defField = defender.field;
-        const idx = defField.indexOf(target);
-        if (idx > -1) {
-          defField.splice(idx, 1);
-          defender.graveyard.push(target);
-        }
+        this.moveCard(target, defender, "graveyard");
         this.applyBattleDestroyEffect(attacker, target);
       } else if (attacker.atk < target.def) {
         const attPlayer = attacker.owner === "player" ? this.player : this.bot;
@@ -758,7 +746,86 @@ export default class Game {
         if (card.atk < 0) card.atk = 0;
         card.tempAtkBoost = 0;
       }
+      if (card.tempDefBoost) {
+        card.def -= card.tempDefBoost;
+        if (card.def < 0) card.def = 0;
+        card.tempDefBoost = 0;
+      }
     });
+  }
+
+  getZone(player, zone) {
+    switch (zone) {
+      case "hand":
+        return player.hand;
+      case "deck":
+        return player.deck;
+      case "graveyard":
+        return player.graveyard;
+      case "field":
+      default:
+        return player.field;
+    }
+  }
+
+  moveCard(card, destPlayer, toZone, options = {}) {
+    if (!card || !destPlayer || !toZone) return;
+
+    const zones = ["field", "hand", "deck", "graveyard"];
+    const fromOwner = card.owner === this.player.id ? this.player : this.bot;
+    let fromZone = null;
+
+    for (const zoneName of zones) {
+      const arr = this.getZone(fromOwner, zoneName) || [];
+      const idx = arr.indexOf(card);
+      if (idx > -1) {
+        arr.splice(idx, 1);
+        fromZone = zoneName;
+        break;
+      }
+    }
+
+    const destArr = this.getZone(destPlayer, toZone);
+    if (!destArr) {
+      console.warn("moveCard: destination zone not found", toZone);
+      return;
+    }
+
+    if (toZone === "field" && destArr.length >= 5) {
+      console.log("Field is full (max 5 monsters).");
+      return;
+    }
+
+    if (options.position) {
+      card.position = options.position;
+    }
+    if (typeof options.isFacedown === "boolean") {
+      card.isFacedown = options.isFacedown;
+    }
+    if (options.resetAttackFlags) {
+      card.hasAttacked = false;
+      card.cannotAttackThisTurn = false;
+    }
+
+    card.owner = destPlayer.id;
+    destArr.push(card);
+
+    if (
+      toZone === "graveyard" &&
+      this.effectEngine &&
+      typeof this.effectEngine.handleEvent === "function"
+    ) {
+      const ownerPlayer = card.owner === "player" ? this.player : this.bot;
+      const otherPlayer = ownerPlayer === this.player ? this.bot : this.player;
+
+      this.effectEngine.handleEvent("card_to_grave", {
+        card,
+        fromZone: fromZone || options.fromZone || null,
+        toZone: "graveyard",
+        player: ownerPlayer,
+        opponent: otherPlayer,
+      });
+    }
   }
 
   applyBattleDestroyEffect(attacker, destroyed) {

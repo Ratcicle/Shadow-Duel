@@ -61,7 +61,7 @@ export default class Bot extends Player {
   battlePhaseLogic(game) {
     if (this.field.length > 0) {
       const attacker = this.field.find(
-        (c) => c.position === "attack" && !c.hasAttacked
+        (c) => c.position === "attack" && !c.hasAttacked && !c.cannotAttackThisTurn
       );
 
       if (attacker) {

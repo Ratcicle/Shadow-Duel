@@ -10,6 +10,8 @@ export default class EffectEngine {
       this.handleAfterSummonEvent(payload);
     } else if (eventName === "battle_destroy") {
       this.handleBattleDestroyEvent(payload);
+    } else if (eventName === "card_to_grave") {
+      this.handleCardToGraveEvent(payload);
     }
   }
 
@@ -131,6 +133,60 @@ export default class EffectEngine {
     }
   }
 
+  handleCardToGraveEvent(payload) {
+    const { card, player, opponent, fromZone, toZone } = payload || {};
+    if (!card || !player) return;
+    if (!card.effects || !Array.isArray(card.effects)) return;
+
+    const ctx = {
+      source: card,
+      player,
+      opponent,
+      fromZone,
+      toZone,
+    };
+
+    for (const effect of card.effects) {
+      if (!effect || effect.timing !== "on_event") continue;
+      if (effect.event !== "card_to_grave") continue;
+
+      if (effect.fromZone && effect.fromZone !== fromZone) continue;
+
+      const targetResult = this.resolveTargets(effect.targets || [], ctx, null);
+
+      if (targetResult.needsSelection) {
+        if (
+          this.game &&
+          typeof this.game.startTriggeredTargetSelection === "function"
+        ) {
+          this.game.startTriggeredTargetSelection(
+            card,
+            effect,
+            ctx,
+            targetResult.options
+          );
+        } else {
+          console.warn(
+            "card_to_grave effect requires selection but no UI is available."
+          );
+        }
+        return;
+      }
+
+      if (targetResult.ok === false) {
+        console.warn(
+          "card_to_grave effect has no valid targets:",
+          effect.id || effect,
+          targetResult.reason
+        );
+        continue;
+      }
+
+      this.applyActions(effect.actions || [], ctx, targetResult.targets || {});
+      this.game.checkWinCondition();
+    }
+  }
+
   resolveTriggeredSelection(effect, ctx, selections) {
     if (!effect) return;
 
@@ -186,14 +242,11 @@ export default class EffectEngine {
       return { success: false, reason: targetResult.reason };
     }
 
-    // pay activation cost: remove from hand
-    player.hand.splice(handIndex, 1);
-
     this.applyActions(effect.actions || [], ctx, targetResult.targets);
     this.game.checkWinCondition();
 
     if (this.game && typeof this.game.moveCard === "function") {
-      this.game.moveCard(card, player, "graveyard");
+      this.game.moveCard(card, player, "graveyard", { fromZone: "hand" });
     } else {
       player.graveyard.push(card);
     }
@@ -367,6 +420,9 @@ export default class EffectEngine {
         case "buff_atk_temp":
           this.applyBuffAtkTemp(action, targets);
           break;
+        case "modify_stats_temp":
+          this.applyModifyStatsTemp(action, targets);
+          break;
         case "search_any":
           this.applySearchAny(action, ctx);
           break;
@@ -375,6 +431,9 @@ export default class EffectEngine {
           break;
         case "move":
           this.applyMove(action, ctx, targets);
+          break;
+        case "forbid_attack_this_turn":
+          this.applyForbidAttackThisTurn(action, targets);
           break;
         default:
           console.warn(`Unknown action type: ${action.type}`);
@@ -467,6 +526,34 @@ export default class EffectEngine {
     targetCards.forEach((card) => {
       card.atk += amount;
       card.tempAtkBoost = (card.tempAtkBoost || 0) + amount;
+    });
+  }
+
+  applyModifyStatsTemp(action, targets) {
+    const targetCards = targets[action.targetRef] || [];
+    const atkFactor = action.atkFactor ?? 1;
+    const defFactor = action.defFactor ?? 1;
+
+    targetCards.forEach((card) => {
+      if (atkFactor !== 1) {
+        const newAtk = Math.floor((card.atk || 0) * atkFactor);
+        const deltaAtk = newAtk - card.atk;
+        card.atk = newAtk;
+        card.tempAtkBoost = (card.tempAtkBoost || 0) + deltaAtk;
+      }
+      if (defFactor !== 1) {
+        const newDef = Math.floor((card.def || 0) * defFactor);
+        const deltaDef = newDef - card.def;
+        card.def = newDef;
+        card.tempDefBoost = (card.tempDefBoost || 0) + deltaDef;
+      }
+    });
+  }
+
+  applyForbidAttackThisTurn(action, targets) {
+    const targetCards = targets[action.targetRef] || [];
+    targetCards.forEach((card) => {
+      card.cannotAttackThisTurn = true;
     });
   }
 
