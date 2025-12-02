@@ -48,8 +48,9 @@ export default class Game {
 
   start() {
     this.player.buildDeck();
-    // Garante que as 4 primeiras cartas compradas serão Infinity Searcher
-    this.player.ensureCardOnTop("Infinity Searcher", 4);
+    for (let i = 0; i < 4; i++) {
+      this.player.ensureCardOnTop("Infinity Searcher");
+    }
     this.bot.buildDeck();
 
     for (let i = 0; i < 4; i++) {
@@ -71,7 +72,6 @@ export default class Game {
     });
     this.bindCardInteractions();
   }
-
 
   updateBoard() {
     this.renderer.renderHand(this.player);
