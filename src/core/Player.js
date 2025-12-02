@@ -164,12 +164,14 @@ export default class Player {
     return null;
   }
 
-  ensureCardOnTop(cardName) {
-    const idx = this.deck.findIndex((card) => card.name === cardName);
-    if (idx > -1) {
-      const [card] = this.deck.splice(idx, 1);
-      this.deck.push(card);
-      return card;
+  ensureCardOnTop(cardName, createNew = false) {
+    if (!createNew) {
+      const idx = this.deck.findIndex((card) => card.name === cardName);
+      if (idx > -1) {
+        const [card] = this.deck.splice(idx, 1);
+        this.deck.push(card);
+        return card;
+      }
     }
 
     const data = cardDatabase.find((c) => c.name === cardName);
