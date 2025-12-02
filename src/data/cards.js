@@ -452,6 +452,7 @@ export const cardDatabase = [
     name: "Shadow-Heart Battle Hymn",
     cardKind: "spell",
     subtype: "normal",
+    archetype: "Shadow-Heart",
     description:
       'All "Shadow-Heart" monsters you control gain 500 ATK until the end of this turn.',
     image: "assets/Shadow-Heart Battle Hymn.png", // cria esse PNG depois
@@ -486,6 +487,7 @@ export const cardDatabase = [
     name: "Shadow-Heart Covenant",
     cardKind: "spell",
     subtype: "normal",
+    archetype: "Shadow-Heart",
     description: 'Add 1 "Shadow-Heart" card from your Deck to your hand.',
     image: "assets/Shadow-Heart Covenant.png",
     effects: [
@@ -616,6 +618,7 @@ export const cardDatabase = [
     name: "Shadow-Heart Infusion",
     cardKind: "spell",
     subtype: "normal",
+    archetype: "Shadow-Heart",
     description:
       'Discard 2 cards from your hand, then target 1 "Shadow-Heart" monster in your Graveyard; Special Summon it, but it cannot declare an attack this turn.',
     image: "assets/Shadow-Heart Infusion.png",
