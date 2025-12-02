@@ -27,6 +27,23 @@ export default class Player {
       });
     } else {
       const copies = {};
+      const archetype = "Shadow-Heart";
+      const archetypeCards = cardDatabase.filter((c) => {
+        const archetypes = Array.isArray(c.archetypes)
+          ? c.archetypes
+          : c.archetype
+          ? [c.archetype]
+          : [];
+        return archetypes.includes(archetype);
+      });
+
+      archetypeCards.forEach((data) => {
+        if (this.deck.length < maxDeckSize) {
+          this.deck.push(new Card(data, this.id));
+          copies[data.id] = 1;
+        }
+      });
+
       while (this.deck.length < maxDeckSize) {
         for (const data of cardDatabase) {
           copies[data.id] = copies[data.id] || 0;
