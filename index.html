@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Shadow Duel</title>
+    <link rel="stylesheet" href="style.css" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <!-- Start Screen -->
+    <div id="start-screen" class="overlay">
+      <div class="start-panel">
+        <h1>Shadow Duel</h1>
+        <p class="start-sub">
+          Monte um deck de até 30 cartas e duele contra um bot.
+        </p>
+        <div class="start-actions">
+          <button id="btn-start-duel">Duelar</button>
+          <button id="btn-deck-builder">Meu Deck</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Deck Builder -->
+    <div id="deck-builder" class="overlay hidden">
+      <div class="deck-panel">
+        <div class="deck-header">
+          <h2>Meu Deck</h2>
+          <span id="deck-count">0 / 30</span>
+        </div>
+        <p class="deck-hint">Maximo de 3 cópias por carta.</p>
+        <div class="deck-body">
+          <div class="deck-left">
+            <div id="deck-grid" class="deck-grid"></div>
+            <div class="pool">
+              <div class="pool-grid" id="pool-grid"></div>
+            </div>
+          </div>
+          <div class="deck-preview-panel">
+            <div class="deck-preview-image" id="deck-preview-image"></div>
+            <h3 id="deck-preview-name">Selecione uma carta</h3>
+            <div class="deck-preview-stats">
+              <span id="deck-preview-atk">ATK: -</span>
+              <span id="deck-preview-def">DEF: -</span>
+            </div>
+            <div id="deck-preview-level">Level: -</div>
+            <p id="deck-preview-desc">Descricao aparecera aqui.</p>
+          </div>
+        </div>
+        <div class="deck-footer">
+          <button id="deck-save">Salvar</button>
+          <button id="deck-cancel">Fechar</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="game-container">
+      <!-- Bot Area (Top) -->
+      <div id="bot-area" class="player-area">
+        <div class="player-info">
+          <span class="name">Opponent</span>
+          <div class="lp-counter">LP: <span id="bot-lp">8000</span></div>
+        </div>
+        <div class="zones">
+          <div class="deck-zone" id="bot-deck">Deck</div>
+          <div class="hand-zone" id="bot-hand"></div>
+          <div class="field-zone" id="bot-field"></div>
+          <div class="graveyard-zone" id="bot-graveyard">GY</div>
+        </div>
+      </div>
+
+      <!-- Center Info / Phase Indicator -->
+      <div id="center-info">
+        <div id="turn-indicator">Turn: Player</div>
+        <ul id="phase-track">
+          <li data-phase="draw" class="active">Draw Phase</li>
+          <li data-phase="main1">Main Phase 1</li>
+          <li data-phase="battle">Battle Phase</li>
+          <li data-phase="main2">Main Phase 2</li>
+          <li data-phase="end">End Phase</li>
+        </ul>
+      </div>
+
+      <!-- Player Area (Bottom) -->
+      <div id="player-area" class="player-area">
+        <div class="zones">
+          <div class="graveyard-zone" id="player-graveyard">GY</div>
+          <div class="field-zone" id="player-field"></div>
+          <div class="hand-zone" id="player-hand"></div>
+          <div class="deck-zone" id="player-deck">Deck</div>
+        </div>
+        <div class="player-info">
+          <span class="name">You</span>
+          <div class="lp-counter">LP: <span id="player-lp">8000</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div id="sidebar">
+      <div id="card-preview">
+        <div id="preview-image"></div>
+        <div id="preview-info">
+          <h2 id="preview-name">Hover a card</h2>
+          <div id="preview-stats">
+            <span id="preview-atk">ATK: -</span>
+            <span id="preview-def">DEF: -</span>
+          </div>
+          <div id="preview-level">Level: -</div>
+          <p id="preview-desc">Description will appear here.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Graveyard Modal -->
+    <div id="gy-modal" class="modal hidden">
+      <div class="modal-content">
+        <span class="close-modal">&times;</span>
+        <h2>Graveyard</h2>
+        <p id=\"gy-hint\" class=\"gy-hint\"></p>
+        <div id="gy-grid" class="gy-grid"></div>
+      </div>
+    </div>
+
+    <script type="module" src="src/main.js"></script>
+  </body>
+</html>
+
