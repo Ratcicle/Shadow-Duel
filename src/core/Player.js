@@ -27,6 +27,23 @@ export default class Player {
       });
     } else {
       const copies = {};
+      const archetype = "Shadow-Heart";
+      const archetypeCards = cardDatabase.filter((c) => {
+        const archetypes = Array.isArray(c.archetypes)
+          ? c.archetypes
+          : c.archetype
+          ? [c.archetype]
+          : [];
+        return archetypes.includes(archetype);
+      });
+
+      archetypeCards.forEach((data) => {
+        if (this.deck.length < maxDeckSize) {
+          this.deck.push(new Card(data, this.id));
+          copies[data.id] = 1;
+        }
+      });
+
       while (this.deck.length < maxDeckSize) {
         for (const data of cardDatabase) {
           copies[data.id] = copies[data.id] || 0;
@@ -164,12 +181,14 @@ export default class Player {
     return null;
   }
 
-  ensureCardOnTop(cardName) {
-    const idx = this.deck.findIndex((card) => card.name === cardName);
-    if (idx > -1) {
-      const [card] = this.deck.splice(idx, 1);
-      this.deck.push(card);
-      return card;
+  ensureCardOnTop(cardName, createNew = false) {
+    if (!createNew) {
+      const idx = this.deck.findIndex((card) => card.name === cardName);
+      if (idx > -1) {
+        const [card] = this.deck.splice(idx, 1);
+        this.deck.push(card);
+        return card;
+      }
     }
 
     const data = cardDatabase.find((c) => c.name === cardName);
