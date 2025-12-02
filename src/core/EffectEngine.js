@@ -294,7 +294,8 @@ export default class EffectEngine {
 
       const shouldAutoSelect = def.autoSelect || !!def.strategy;
       if (shouldAutoSelect) {
-        targetMap[def.id] = candidates.slice(0, min);
+        const takeCount = Math.min(max, candidates.length);
+        targetMap[def.id] = candidates.slice(0, takeCount);
         continue;
       }
 
