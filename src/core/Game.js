@@ -48,7 +48,9 @@ export default class Game {
 
   start() {
     this.player.buildDeck();
-    this.player.ensureCardOnTop("Infinity Searcher");
+    for (let i = 0; i < 4; i++) {
+      this.player.ensureCardOnTop("Infinity Searcher");
+    }
     this.bot.buildDeck();
 
     for (let i = 0; i < 4; i++) {
