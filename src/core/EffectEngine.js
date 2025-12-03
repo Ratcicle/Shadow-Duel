@@ -655,7 +655,8 @@ if (card.name === "Shadow-Heart Invocation" || card.id === 39) {
     if (choice) {
       const lower = choice.toLowerCase();
       chosenFromCandidates =
-        candidates.find((c) => c.name.toLowerCase() === lower) || null;
+        candidates.find((c) => c && c.name && c.name.toLowerCase() === lower) ||
+        null;
     }
 
     if (!chosenFromCandidates) {
@@ -802,7 +803,11 @@ if (card.name === "Shadow-Heart Invocation" || card.id === 39) {
       if (choice) {
         const normalized = choice.trim().toLowerCase();
         const byName = candidates.find(
-          (c) => c.name.trim().toLowerCase() === normalized
+          (c) =>
+            c &&
+            c.name &&
+            typeof c.name === "string" &&
+            c.name.trim().toLowerCase() === normalized
         );
         if (byName) {
           chosen = byName;
