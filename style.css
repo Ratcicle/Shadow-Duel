@@ -325,6 +325,12 @@ body {
   opacity: 0.9;
 }
 
+.modal-content button.secondary {
+  background: transparent;
+  border: 1px solid var(--accent-color);
+  color: var(--accent-color);
+}
+
 .close-modal {
   color: #aaa;
   float: right;
@@ -338,6 +344,47 @@ body {
   color: #fff;
   text-decoration: none;
   cursor: pointer;
+}
+
+.search-modal-content {
+  max-width: 520px;
+}
+
+.search-hint {
+  color: #bdbdbd;
+  margin: 8px 0 14px;
+  line-height: 1.4;
+}
+
+.search-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.search-row input,
+.search-row select {
+  flex: 1;
+  background: #111;
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 10px;
+  font-size: 1rem;
+}
+
+.search-row input:focus,
+.search-row select:focus {
+  outline: 1px solid var(--accent-color);
+}
+
+.search-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.search-actions button {
+  flex: 1;
 }
 
 .gy-grid {

@@ -126,6 +126,29 @@
       </div>
     </div>
 
+    <!-- Search Modal -->
+    <div id="search-modal" class="modal hidden">
+      <div class="modal-content search-modal-content">
+        <span class="close-modal" id="search-close">&times;</span>
+        <h2>Adicionar carta do Deck</h2>
+        <p class="search-hint">
+          Selecione uma carta do deck ou digite o nome exato para testes.
+        </p>
+        <div class="search-row">
+          <input
+            type="text"
+            id="search-input"
+            placeholder="Digite o nome da carta"
+          />
+          <select id="search-dropdown"></select>
+        </div>
+        <div class="search-actions">
+          <button id="search-confirm">Adicionar</button>
+          <button id="search-cancel" class="secondary">Cancelar</button>
+        </div>
+      </div>
+    </div>
+
     <script type="module" src="src/main.js"></script>
   </body>
 </html>
