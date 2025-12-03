@@ -8,10 +8,8 @@ export default class EffectEngine {
   handleEvent(eventName, payload) {
     if (eventName === "after_summon") {
       this.handleAfterSummonEvent(payload);
-    } else if (eventName === "battle_destroy") {
-      this.handleBattleDestroyEvent(payload);
-    } else if (eventName === "card_to_grave") {
-      this.handleCardToGraveEvent(payload);
+    } else if (eventName === "after_battle_destroy") {
+      this.handleAfterBattleDestroyEvent(payload);
     }
   }
 
@@ -75,118 +73,6 @@ export default class EffectEngine {
     }
   }
 
-
-  handleBattleDestroyEvent(payload) {
-    if (!payload || !payload.player || !payload.opponent) return;
-
-    const { player, opponent, attacker, destroyed } = payload;
-    const fieldCards = player.field ? [...player.field] : [];
-
-    for (const card of fieldCards) {
-      if (!card || !card.effects || !Array.isArray(card.effects)) continue;
-
-      const ctx = {
-        source: card,
-        player,
-        opponent,
-        attacker,
-        destroyed,
-      };
-
-      for (const effect of card.effects) {
-        if (!effect || effect.timing !== "on_event") continue;
-        if (effect.event !== "battle_destroy") continue;
-
-        const targetResult = this.resolveTargets(effect.targets || [], ctx, null);
-
-        if (targetResult.needsSelection) {
-          if (
-            this.game &&
-            typeof this.game.startTriggeredTargetSelection === "function"
-          ) {
-            this.game.startTriggeredTargetSelection(
-              card,
-              effect,
-              ctx,
-              targetResult.options
-            );
-          } else {
-            console.warn(
-              "Triggered battle_destroy effect requires selection but game does not support triggered targeting."
-            );
-          }
-          return;
-        }
-
-        if (targetResult.ok === false) {
-          console.warn(
-            "Triggered battle_destroy effect has no valid targets:",
-            effect.id || effect,
-            targetResult.reason
-          );
-          continue;
-        }
-
-        this.applyActions(effect.actions || [], ctx, targetResult.targets || {});
-        this.game.checkWinCondition();
-      }
-    }
-  }
-
-  handleCardToGraveEvent(payload) {
-    const { card, player, opponent, fromZone, toZone } = payload || {};
-    if (!card || !player) return;
-    if (!card.effects || !Array.isArray(card.effects)) return;
-
-    const ctx = {
-      source: card,
-      player,
-      opponent,
-      fromZone,
-      toZone,
-    };
-
-    for (const effect of card.effects) {
-      if (!effect || effect.timing !== "on_event") continue;
-      if (effect.event !== "card_to_grave") continue;
-
-      if (effect.fromZone && effect.fromZone !== fromZone) continue;
-
-      const targetResult = this.resolveTargets(effect.targets || [], ctx, null);
-
-      if (targetResult.needsSelection) {
-        if (
-          this.game &&
-          typeof this.game.startTriggeredTargetSelection === "function"
-        ) {
-          this.game.startTriggeredTargetSelection(
-            card,
-            effect,
-            ctx,
-            targetResult.options
-          );
-        } else {
-          console.warn(
-            "card_to_grave effect requires selection but no UI is available."
-          );
-        }
-        return;
-      }
-
-      if (targetResult.ok === false) {
-        console.warn(
-          "card_to_grave effect has no valid targets:",
-          effect.id || effect,
-          targetResult.reason
-        );
-        continue;
-      }
-
-      this.applyActions(effect.actions || [], ctx, targetResult.targets || {});
-      this.game.checkWinCondition();
-    }
-  }
-
   resolveTriggeredSelection(effect, ctx, selections) {
     if (!effect) return;
 
@@ -231,7 +117,6 @@ export default class EffectEngine {
       source: card,
       player,
       opponent: this.game.getOpponent(player),
-      activationZone: "hand",
     };
 
     const targetResult = this.resolveTargets(effect.targets || [], ctx, selections);
@@ -243,11 +128,13 @@ export default class EffectEngine {
       return { success: false, reason: targetResult.reason };
     }
 
+    player.hand.splice(handIndex, 1);
+
     this.applyActions(effect.actions || [], ctx, targetResult.targets);
     this.game.checkWinCondition();
 
     if (this.game && typeof this.game.moveCard === "function") {
-      this.game.moveCard(card, player, "graveyard", { fromZone: "hand" });
+      this.game.moveCard(card, player, "graveyard");
     } else {
       player.graveyard.push(card);
     }
@@ -264,30 +151,6 @@ export default class EffectEngine {
     }
     if (this.game.phase !== "main1" && this.game.phase !== "main2") {
       return { ok: false, reason: "Can only activate in Main Phase." };
-    }
-
-    if (card.name === "Shadow-Heart Infusion" || card.id === 37) {
-      const handCount = (player.hand && player.hand.length) || 0;
-      if (handCount < 2) {
-        return { ok: false, reason: "Need at least 2 cards in hand." };
-      }
-
-      const gy = player.graveyard || [];
-      const hasShadowHeart = gy.some((c) => {
-        if (!c || c.cardKind !== "monster") return false;
-        if (c.archetype === "Shadow-Heart") return true;
-        if (Array.isArray(c.archetypes)) {
-          return c.archetypes.includes("Shadow-Heart");
-        }
-        return false;
-      });
-
-      if (!hasShadowHeart) {
-        return {
-          ok: false,
-          reason: 'No "Shadow-Heart" monsters in graveyard.',
-        };
-      }
     }
     return { ok: true };
   }
@@ -319,8 +182,7 @@ export default class EffectEngine {
 
       const shouldAutoSelect = def.autoSelect || !!def.strategy;
       if (shouldAutoSelect) {
-        const takeCount = Math.min(max, candidates.length);
-        targetMap[def.id] = candidates.slice(0, takeCount);
+        targetMap[def.id] = candidates.slice(0, min);
         continue;
       }
 
@@ -382,9 +244,6 @@ export default class EffectEngine {
     for (const owner of owners) {
       const zone = this.getZone(owner, zoneName) || [];
       for (const card of zone) {
-        if (zoneName === "hand" && ctx.activationZone === "hand" && card === ctx.source) {
-          continue;
-        }
         if (def.cardKind && card.cardKind !== def.cardKind) continue;
         if (
           def.position &&
@@ -393,10 +252,6 @@ export default class EffectEngine {
         ) {
           continue;
         }
-        const cardLevel = card.level || 0;
-        if (def.level !== undefined && cardLevel !== def.level) continue;
-        if (def.minLevel !== undefined && cardLevel < def.minLevel) continue;
-        if (def.maxLevel !== undefined && cardLevel > def.maxLevel) continue;
         if (def.archetype) {
           const cardArchetypes = card.archetypes
             ? card.archetypes
@@ -453,11 +308,8 @@ export default class EffectEngine {
         case "buff_atk_temp":
           this.applyBuffAtkTemp(action, targets);
           break;
-        case "modify_stats_temp":
-          this.applyModifyStatsTemp(action, targets);
-          break;
         case "search_any":
-          this.applySearchAny(action, ctx);
+          this.applySearchAny(ctx);
           break;
         case "transmutate":
           this.applyTransmutate(action, ctx, targets);
@@ -465,11 +317,8 @@ export default class EffectEngine {
         case "move":
           this.applyMove(action, ctx, targets);
           break;
-        case "revive_shadowheart_from_grave":
-          this.applyReviveShadowHeartFromGrave(action, ctx);
-          break;
-        case "forbid_attack_this_turn":
-          this.applyForbidAttackThisTurn(action, targets);
+        case "shadow_heart_ritual_summon":
+          this.applyShadowHeartRitualSummon(action, ctx, targets);
           break;
         default:
           console.warn(`Unknown action type: ${action.type}`);
@@ -565,84 +414,20 @@ export default class EffectEngine {
     });
   }
 
-  applyModifyStatsTemp(action, targets) {
-    const targetCards = targets[action.targetRef] || [];
-    const atkFactor = action.atkFactor ?? 1;
-    const defFactor = action.defFactor ?? 1;
-
-    targetCards.forEach((card) => {
-      if (atkFactor !== 1) {
-        const newAtk = Math.floor((card.atk || 0) * atkFactor);
-        const deltaAtk = newAtk - card.atk;
-        card.atk = newAtk;
-        card.tempAtkBoost = (card.tempAtkBoost || 0) + deltaAtk;
-      }
-      if (defFactor !== 1) {
-        const newDef = Math.floor((card.def || 0) * defFactor);
-        const deltaDef = newDef - card.def;
-        card.def = newDef;
-        card.tempDefBoost = (card.tempDefBoost || 0) + deltaDef;
-      }
-    });
-  }
-
-  applyForbidAttackThisTurn(action, targets) {
-    const targetCards = targets[action.targetRef] || [];
-    targetCards.forEach((card) => {
-      card.cannotAttackThisTurn = true;
-    });
-  }
-
-  applySearchAny(action, ctx) {
-    const deck = ctx.player.deck;
-    if (!deck || deck.length === 0) {
-      console.log("No cards in deck to search.");
-      return;
-    }
-
-    // Opcional: filtrar por arquétipo
-    let candidates = deck;
-    if (action.archetype) {
-      candidates = deck.filter((card) => {
-        const archetypes = Array.isArray(card.archetypes)
-          ? card.archetypes
-          : card.archetype
-          ? [card.archetype]
-          : [];
-        return archetypes.includes(action.archetype);
-      });
-
-      if (candidates.length === 0) {
-        console.log(`No cards in deck matching archetype: ${action.archetype}`);
-        return;
-      }
-    }
-
-    const defaultCard = candidates[candidates.length - 1].name;
-    let choice = window.prompt(
-      "Enter the card name to add to your hand:",
-      defaultCard
-    );
-
-    let chosenFromCandidates = null;
-
+  applySearchAny(ctx) {
+    if (ctx.player.deck.length === 0) return;
+    const defaultCard = ctx.player.deck[ctx.player.deck.length - 1].name;
+    let choice = window.prompt("Enter the card name to add to your hand:", defaultCard);
+    let cardIndex = -1;
     if (choice) {
       const lower = choice.toLowerCase();
-      chosenFromCandidates =
-        candidates.find((c) => c.name.toLowerCase() === lower) || null;
+      cardIndex = ctx.player.deck.findIndex((card) => card.name.toLowerCase() === lower);
     }
-
-    if (!chosenFromCandidates) {
-      // fallback: último candidato da lista
-      chosenFromCandidates = candidates[candidates.length - 1];
+    if (cardIndex === -1) {
+      cardIndex = ctx.player.deck.length - 1;
     }
-
-    const cardIndex = deck.indexOf(chosenFromCandidates);
-    if (cardIndex === -1) return;
-
-    const [card] = deck.splice(cardIndex, 1);
+    const [card] = ctx.player.deck.splice(cardIndex, 1);
     ctx.player.hand.push(card);
-    console.log(`${ctx.player.id} added ${card.name} from Deck to hand.`);
   }
 
   applyTransmutate(action, ctx, targets) {
@@ -687,6 +472,17 @@ export default class EffectEngine {
     }
 
     targetCards.forEach((card) => {
+      if (
+        toZone === "field" &&
+        card.summonRestrict === "shadow_heart_invocation_only" &&
+        !action.allowShadowHeartInvocationBypass
+      ) {
+        console.log(
+          `${card.name} can only be Special Summoned by "Shadow-Heart Invocation".`
+        );
+        return;
+      }
+
       let destPlayer;
       if (action.player === "self") {
         destPlayer = ctx.player;
@@ -735,72 +531,5 @@ export default class EffectEngine {
         destArr.push(card);
       }
     });
-  }
-
-  applyReviveShadowHeartFromGrave(action, ctx) {
-    const player = action.player === "opponent" ? ctx.opponent : ctx.player;
-    if (!player) return;
-
-    const gy = player.graveyard || [];
-
-    const candidates = gy.filter((card) => {
-      if (!card || card.cardKind !== "monster") return false;
-      if (card.archetype === "Shadow-Heart") return true;
-      if (Array.isArray(card.archetypes)) {
-        return card.archetypes.includes("Shadow-Heart");
-      }
-      return false;
-    });
-
-    if (candidates.length === 0) {
-      console.log('No "Shadow-Heart" monsters in graveyard to revive.');
-      return;
-    }
-
-    let chosen = candidates[0];
-
-    if (candidates.length > 1 && typeof window !== "undefined") {
-      const uniqueNames = [...new Set(candidates.map((c) => c.name))];
-      const choice = window.prompt(
-        `Choose 1 "Shadow-Heart" monster to revive:\n` + uniqueNames.join("\n")
-      );
-      if (choice) {
-        const normalized = choice.trim().toLowerCase();
-        const byName = candidates.find(
-          (c) => c.name.trim().toLowerCase() === normalized
-        );
-        if (byName) {
-          chosen = byName;
-        }
-      }
-    }
-
-    if (!chosen) {
-      console.log("No valid choice made for revival.");
-      return;
-    }
-
-    const idx = gy.indexOf(chosen);
-    if (idx === -1) {
-      console.warn("Chosen card is not in graveyard anymore:", chosen.name);
-      return;
-    }
-
-    gy.splice(idx, 1);
-
-    chosen.position = action.position || "attack";
-    chosen.isFacedown = false;
-    chosen.hasAttacked = false;
-    chosen.cannotAttackThisTurn = true;
-
-    player.field.push(chosen);
-
-    console.log(
-      `Revived "${chosen.name}" from graveyard with Shadow-Heart Infusion.`
-    );
-
-    if (this.game && typeof this.game.updateBoard === "function") {
-      this.game.updateBoard();
-    }
   }
 }

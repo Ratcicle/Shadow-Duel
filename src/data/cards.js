@@ -419,7 +419,7 @@ export const cardDatabase = [
     def: 1800,
     level: 8,
     type: "Fiend",
-    archetype: "Shadow-Heart",
+    archetypes: ["ShadowHeart", "Demon"],
     description:
       "When this card is Normal Summoned: target 1 monster your opponent controls; destroy that target.",
     image: "assets/Shadow-Heart Demon Arctroth.png",
@@ -446,209 +446,76 @@ export const cardDatabase = [
         ],
       },
     ],
-  },
-  {
-    id: 32,
-    name: "Shadow-Heart Battle Hymn",
-    cardKind: "spell",
-    subtype: "normal",
-    archetype: "Shadow-Heart",
-    description:
-      'All "Shadow-Heart" monsters you control gain 500 ATK until the end of this turn.',
-    image: "assets/Shadow-Heart Battle Hymn.png", // cria esse PNG depois
-    effects: [
-      {
-        id: "shadow_heart_battle_hymn",
-        timing: "on_play",
-        speed: 1,
-        targets: [
-          {
-            id: "shadowheart_allies",
-            owner: "self",
-            zone: "field",
-            cardKind: "monster",
-            archetype: "Shadow-Heart", // <<< filtro de arquétipo
-            count: { min: 1, max: 5 },
-            autoSelect: true, // pega automaticamente todos os válidos
-          },
-        ],
-        actions: [
-          {
-            type: "buff_atk_temp",
-            targetRef: "shadowheart_allies",
-            amount: 500,
-          },
-        ],
-      },
-    ],
-  },
-  {
-    id: 33,
-    name: "Shadow-Heart Covenant",
-    cardKind: "spell",
-    subtype: "normal",
-    archetype: "Shadow-Heart",
-    description: 'Add 1 "Shadow-Heart" card from your Deck to your hand.',
-    image: "assets/Shadow-Heart Covenant.png",
-    effects: [
-      {
-        id: "shadow_heart_covenant",
-        timing: "on_play",
-        speed: 1,
-        actions: [
-          {
-            type: "search_any",
-            archetype: "Shadow-Heart", // usa o filtro do EffectEngine
-          },
-        ],
-      },
-    ],
-  },
-  {
-    id: 34,
-    name: "Shadow-Heart Imp",
-    cardKind: "monster",
-    atk: 1500,
-    def: 800,
-    level: 4,
-    type: "Fiend",
-    archetype: "Shadow-Heart",
-    description:
-      'When this card is Normal Summoned: You can Special Summon 1 Level 4 or lower "Shadow-Heart" monster from your hand.',
-    image: "assets/Shadow-Heart Imp.png",
-    effects: [
-      {
-        id: "shadow_heart_imp_on_summon",
-        timing: "on_event",
-        event: "after_summon",
-        summonMethod: "normal",
-        targets: [
-          {
-            id: "imp_special_from_hand",
-            owner: "self",
-            zone: "hand",
-            cardKind: "monster",
-            archetype: "Shadow-Heart",
-            maxLevel: 4,
-            // limita a monstros Level 4 ou menos
-            count: { min: 0, max: 1 },
-          },
-        ],
-        actions: [
-          {
-            type: "move",
-            targetRef: "imp_special_from_hand",
-            player: "self",
-            to: "field",
-            position: "attack",
-            isFacedown: false,
-            resetAttackFlags: true,
-          },
-        ],
-      },
-    ],
-  },
-  {
-    id: 35,
-    name: "Shadow-Heart Gecko",
-    cardKind: "monster",
-    atk: 1000,
-    def: 1000,
-    level: 3,
-    type: "Reptile",
-    archetype: "Shadow-Heart",
-    description:
-      "If an opponent's monster is destroyed by battle while this card is on the field: Draw 1 card.",
-    image: "assets/Shadow-Heart Gecko.png",
-    effects: [
-      {
-        id: "shadow_heart_gecko_draw",
-        timing: "on_event",
-        event: "battle_destroy",
-        actions: [
-          {
-            type: "draw",
-            player: "self",
-            amount: 1,
-          },
-        ],
-      },
-    ],
-  },
-  {
-    id: 36,
-    name: "Shadow-Heart Coward",
-    cardKind: "monster",
-    atk: 800,
-    def: 1000,
-    level: 3,
-    type: "Fiend",
-    archetype: "Shadow-Heart",
-    description:
-      "If this card is discarded from your hand to the Graveyard: target 1 monster your opponent controls; its ATK and DEF are halved until the end of this turn.",
-    image: "assets/Shadow-Heart Coward.png",
-    effects: [
-      {
-        id: "shadow_heart_coward_discard",
-        timing: "on_event",
-        event: "card_to_grave",
-        fromZone: "hand",
-        targets: [
-          {
-            id: "coward_debuff_target",
-            owner: "opponent",
-            zone: "field",
-            cardKind: "monster",
-            count: { min: 1, max: 1 },
-          },
-        ],
-        actions: [
-          {
-            type: "modify_stats_temp",
-            targetRef: "coward_debuff_target",
-            atkFactor: 0.5,
-            defFactor: 0.5,
-          },
-        ],
-      },
-    ],
-  },
-  {
-    id: 37,
-    name: "Shadow-Heart Infusion",
-    cardKind: "spell",
-    subtype: "normal",
-    archetype: "Shadow-Heart",
-    description:
-      'Discard 2 cards from your hand, then Special Summon 1 "Shadow-Heart" monster from your Graveyard, but it cannot declare an attack this turn.',
-    image: "assets/Shadow-Heart Infusion.png",
-    effects: [
-      {
-        id: "shadow_heart_infusion",
-        timing: "on_play",
-        speed: 1,
-        targets: [
-          {
-            id: "infusion_discard",
-            owner: "self",
-            zone: "hand",
-            count: { min: 2, max: 2 },
-          },
-        ],
-        actions: [
-          {
-            type: "move",
-            targetRef: "infusion_discard",
-            player: "self",
-            to: "graveyard",
-          },
-          {
-            type: "revive_shadowheart_from_grave",
-            player: "self",
-            position: "attack",
-          },
-        ],
-      },
-    ],
-  },
+  },,
+{
+  id: 32,
+  name: "Shadow-Heart Scale Dragon",
+  cardKind: "monster",
+  atk: 3000,
+  def: 2500,
+  level: 8,
+  type: "Dragon",
+  archetypes: ["ShadowHeart", "Dragon"],
+  summonRestrict: "shadow_heart_invocation_only",
+  description:
+    'Cannot be Normal Summoned/Set. Must be Special Summoned by the effect of "Shadow-Heart Invocation" and cannot be Special Summoned by other ways. When this card destroys a monster by battle: target 1 "Shadow-Heart" monster in your Graveyard; shuffle that target into the Deck.',
+  image: "assets/Shadow-Heart Scale Dragon.png",
+  effects: [
+    {
+      id: "shadow_heart_scale_dragon_recycle",
+      timing: "on_event",
+      event: "after_battle_destroy",
+      targets: [
+        {
+          id: "shadow_heart_recycle_target",
+          owner: "self",
+          zone: "graveyard",
+          cardKind: "monster",
+          archetype: "ShadowHeart",
+          count: { min: 1, max: 1 },
+        },
+      ],
+      actions: [
+        {
+          type: "move",
+          targetRef: "shadow_heart_recycle_target",
+          player: "self",
+          to: "deck",
+        },
+      ],
+    },
+  ],
+},
+{
+  id: 33,
+  name: "Shadow-Heart Invocation",
+  cardKind: "spell",
+  subtype: "normal",
+  description:
+    'If "Shadow-Heart Scale Dragon" is in your hand or Graveyard: Tribute 3 "Shadow-Heart" monsters with different names; Special Summon 1 "Shadow-Heart Scale Dragon" from your hand or Graveyard.',
+  image: "assets/Shadow-Heart Invocation.png",
+  effects: [
+    {
+      id: "shadow_heart_invocation_ritual",
+      timing: "on_play",
+      speed: 1,
+      targets: [
+        {
+          id: "shadow_heart_ritual_tributes",
+          owner: "self",
+          zone: "field",
+          cardKind: "monster",
+          archetype: "ShadowHeart",
+          count: { min: 3, max: 3 },
+        },
+      ],
+      actions: [
+        {
+          type: "shadow_heart_ritual_summon",
+          tributeRef: "shadow_heart_ritual_tributes",
+        },
+      ],
+    },
+  ],
+},
 ];

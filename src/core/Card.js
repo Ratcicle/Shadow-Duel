@@ -5,14 +5,6 @@ export default class Card {
     this.cardKind = data.cardKind || "monster"; // monster | spell | trap
     this.subtype = data.subtype || null; // normal | quick | continuous | counter | etc
 
-    // Archetypes support
-    this.archetypes = Array.isArray(data.archetypes)
-      ? [...data.archetypes]
-      : typeof data.archetype === "string"
-      ? [data.archetype]
-      : [];
-    this.archetype = this.archetypes[0] || null;
-
     this.atk = data.atk ?? 0;
     this.def = data.def ?? 0;
     this.type = data.type; // monster race/attribute description
@@ -22,10 +14,9 @@ export default class Card {
     this.hasAttacked = false;
 
     this.tempAtkBoost = 0;
-    this.tempDefBoost = 0;
-    this.cannotAttackThisTurn = false;
     this.altTribute = data.altTribute || null;
     this.onBattleDestroy = data.onBattleDestroy || null;
+    this.summonRestrict = data.summonRestrict || null;
 
     this.description = data.description;
     this.effects = data.effects || [];

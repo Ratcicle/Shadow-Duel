@@ -27,23 +27,6 @@ export default class Player {
       });
     } else {
       const copies = {};
-      const archetype = "Shadow-Heart";
-      const archetypeCards = cardDatabase.filter((c) => {
-        const archetypes = Array.isArray(c.archetypes)
-          ? c.archetypes
-          : c.archetype
-          ? [c.archetype]
-          : [];
-        return archetypes.includes(archetype);
-      });
-
-      archetypeCards.forEach((data) => {
-        if (this.deck.length < maxDeckSize) {
-          this.deck.push(new Card(data, this.id));
-          copies[data.id] = 1;
-        }
-      });
-
       while (this.deck.length < maxDeckSize) {
         for (const data of cardDatabase) {
           copies[data.id] = copies[data.id] || 0;
@@ -103,6 +86,13 @@ export default class Player {
       return null;
     }
 
+    if (card.summonRestrict === "shadow_heart_invocation_only") {
+      console.log(
+        `${card.name} cannot be Normal Summoned/Set. It must be Special Summoned by "Shadow-Heart Invocation".`
+      );
+      return null;
+    }
+
     if (this.summonCount >= 1) {
       console.log("Summon limit reached for this turn.");
       return null;
@@ -114,20 +104,6 @@ export default class Player {
     }
 
     if (cardIndex >= 0 && cardIndex < this.hand.length) {
-      const sendToGrave = (sacrificed) => {
-        if (!sacrificed) return;
-        if (this.game && typeof this.game.moveCard === "function") {
-          this.game.moveCard(sacrificed, this, "graveyard");
-          return;
-        }
-
-        const idx = this.field.indexOf(sacrificed);
-        if (idx > -1) {
-          this.field.splice(idx, 1);
-        }
-        this.graveyard.push(sacrificed);
-      };
-
       const tributeInfo = this.getTributeRequirement(card);
       let { tributesNeeded, usingAlt, alt } = tributeInfo;
 
@@ -151,7 +127,10 @@ export default class Player {
             return null;
           }
 
-          tributes.forEach((sacrificed) => sendToGrave(sacrificed));
+          for (const idx of sortedIndices) {
+            const sacrificed = this.field.splice(idx, 1)[0];
+            this.graveyard.push(sacrificed);
+          }
         } else {
           if (usingAlt && alt) {
             const altIdx = this.field.findIndex((c) => c.name === alt.requiresName);
@@ -159,12 +138,12 @@ export default class Player {
               console.log(`No ${alt.requiresName} available for tribute.`);
               return null;
             }
-            const sacrificed = this.field[altIdx];
-            sendToGrave(sacrificed);
+            const sacrificed = this.field.splice(altIdx, 1)[0];
+            this.graveyard.push(sacrificed);
           } else {
             for (let i = 0; i < tributesNeeded; i++) {
-              const sacrificed = this.field[0];
-              sendToGrave(sacrificed);
+              const sacrificed = this.field.shift();
+              this.graveyard.push(sacrificed);
             }
           }
         }
@@ -181,14 +160,12 @@ export default class Player {
     return null;
   }
 
-  ensureCardOnTop(cardName, createNew = false) {
-    if (!createNew) {
-      const idx = this.deck.findIndex((card) => card.name === cardName);
-      if (idx > -1) {
-        const [card] = this.deck.splice(idx, 1);
-        this.deck.push(card);
-        return card;
-      }
+  ensureCardOnTop(cardName) {
+    const idx = this.deck.findIndex((card) => card.name === cardName);
+    if (idx > -1) {
+      const [card] = this.deck.splice(idx, 1);
+      this.deck.push(card);
+      return card;
     }
 
     const data = cardDatabase.find((c) => c.name === cardName);
