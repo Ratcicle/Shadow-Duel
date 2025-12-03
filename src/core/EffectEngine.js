@@ -666,11 +666,110 @@ export default class EffectEngine {
     }
 
     const defaultCard = candidates[candidates.length - 1].name;
-    let choice = window.prompt(
+    const searchModal = this.getSearchModalElements();
+
+    if (searchModal) {
+      this.showSearchModal(searchModal, candidates, defaultCard, (choice) => {
+        this.finishSearchSelection(choice, candidates, ctx);
+      });
+      return;
+    }
+
+    const choice = window.prompt(
       "Enter the card name to add to your hand:",
       defaultCard
     );
 
+    this.finishSearchSelection(choice, candidates, ctx);
+  }
+
+  getSearchModalElements() {
+    const modal = document.getElementById("search-modal");
+    const input = document.getElementById("search-input");
+    const select = document.getElementById("search-dropdown");
+    const confirmBtn = document.getElementById("search-confirm");
+    const cancelBtn = document.getElementById("search-cancel");
+    const closeBtn = document.getElementById("search-close");
+
+    if (modal && input && select && confirmBtn && cancelBtn && closeBtn) {
+      return { modal, input, select, confirmBtn, cancelBtn, closeBtn };
+    }
+
+    return null;
+  }
+
+  showSearchModal(elements, candidates, defaultCard, onConfirm) {
+    const { modal, input, select, confirmBtn, cancelBtn, closeBtn } = elements;
+
+    select.innerHTML = "";
+
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = "Escolha uma carta";
+    select.appendChild(placeholder);
+
+    const sortedCandidates = [...candidates].sort((a, b) => {
+      const nameA = (a?.name || "").toLocaleLowerCase();
+      const nameB = (b?.name || "").toLocaleLowerCase();
+      return nameA.localeCompare(nameB);
+    });
+
+    sortedCandidates.forEach((card) => {
+      if (!card || !card.name) return;
+      const opt = document.createElement("option");
+      opt.value = card.name;
+      opt.textContent = card.name;
+      select.appendChild(opt);
+    });
+
+    input.value = defaultCard || "";
+
+    const cleanup = () => {
+      modal.classList.add("hidden");
+      confirmBtn.removeEventListener("click", confirmHandler);
+      cancelBtn.removeEventListener("click", cancelHandler);
+      closeBtn.removeEventListener("click", cancelHandler);
+      select.removeEventListener("change", selectHandler);
+      input.removeEventListener("keydown", keyHandler);
+    };
+
+    const confirmHandler = () => {
+      const choice = (input.value || select.value || "").trim();
+      cleanup();
+      onConfirm(choice);
+    };
+
+    const cancelHandler = () => {
+      cleanup();
+    };
+
+    const selectHandler = () => {
+      if (select.value) {
+        input.value = select.value;
+      }
+    };
+
+    const keyHandler = (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        confirmHandler();
+      } else if (e.key === "Escape") {
+        cancelHandler();
+      }
+    };
+
+    confirmBtn.addEventListener("click", confirmHandler);
+    cancelBtn.addEventListener("click", cancelHandler);
+    closeBtn.addEventListener("click", cancelHandler);
+    select.addEventListener("change", selectHandler);
+    input.addEventListener("keydown", keyHandler);
+
+    modal.classList.remove("hidden");
+    input.focus();
+  }
+
+  finishSearchSelection(choice, candidates, ctx) {
+    const deck = ctx.player.deck;
     let chosenFromCandidates = null;
 
     if (choice) {
@@ -690,6 +789,7 @@ export default class EffectEngine {
 
     const [card] = deck.splice(cardIndex, 1);
     ctx.player.hand.push(card);
+    this.game.updateBoard();
     console.log(`${ctx.player.id} added ${card.name} from Deck to hand.`);
   }
 
