@@ -75,7 +75,6 @@ export default class EffectEngine {
     }
   }
 
-
   handleBattleDestroyEvent(payload) {
     if (!payload || !payload.player || !payload.opponent) return;
 
@@ -99,7 +98,11 @@ export default class EffectEngine {
 
         if (effect.requireSelfAsAttacker && ctx.attacker !== card) continue;
 
-        const targetResult = this.resolveTargets(effect.targets || [], ctx, null);
+        const targetResult = this.resolveTargets(
+          effect.targets || [],
+          ctx,
+          null
+        );
 
         if (targetResult.needsSelection) {
           if (
@@ -129,7 +132,11 @@ export default class EffectEngine {
           continue;
         }
 
-        this.applyActions(effect.actions || [], ctx, targetResult.targets || {});
+        this.applyActions(
+          effect.actions || [],
+          ctx,
+          targetResult.targets || {}
+        );
         this.game.checkWinCondition();
       }
     }
@@ -236,9 +243,17 @@ export default class EffectEngine {
       activationZone: "hand",
     };
 
-    const targetResult = this.resolveTargets(effect.targets || [], ctx, selections);
+    const targetResult = this.resolveTargets(
+      effect.targets || [],
+      ctx,
+      selections
+    );
     if (targetResult.needsSelection) {
-      return { success: false, needsSelection: true, options: targetResult.options };
+      return {
+        success: false,
+        needsSelection: true,
+        options: targetResult.options,
+      };
     }
 
     if (!targetResult.ok) {
@@ -274,26 +289,25 @@ export default class EffectEngine {
         return { ok: false, reason: "Need at least 2 cards in hand." };
       }
 
+      if (card.name === "Shadow-Heart Invocation" || card.id === 39) {
+        const hand = player.hand || [];
+        const gy = player.graveyard || [];
 
-if (card.name === "Shadow-Heart Invocation" || card.id === 39) {
-  const hand = player.hand || [];
-  const gy = player.graveyard || [];
+        const hasDragonInHand = hand.some(
+          (c) => c && c.name === "Shadow-Heart Scale Dragon"
+        );
+        const hasDragonInGY = gy.some(
+          (c) => c && c.name === "Shadow-Heart Scale Dragon"
+        );
 
-  const hasDragonInHand = hand.some(
-    (c) => c && c.name === "Shadow-Heart Scale Dragon"
-  );
-  const hasDragonInGY = gy.some(
-    (c) => c && c.name === "Shadow-Heart Scale Dragon"
-  );
-
-  if (!hasDragonInHand && !hasDragonInGY) {
-    return {
-      ok: false,
-      reason:
-        '"Shadow-Heart Scale Dragon" must be in your hand or Graveyard to activate this card.',
-    };
-  }
-}
+        if (!hasDragonInHand && !hasDragonInGY) {
+          return {
+            ok: false,
+            reason:
+              '"Shadow-Heart Scale Dragon" must be in your hand or Graveyard to activate this card.',
+          };
+        }
+      }
 
       const gy = player.graveyard || [];
       const hasShadowHeart = gy.some((c) => {
@@ -405,7 +419,11 @@ if (card.name === "Shadow-Heart Invocation" || card.id === 39) {
     for (const owner of owners) {
       const zone = this.getZone(owner, zoneName) || [];
       for (const card of zone) {
-        if (zoneName === "hand" && ctx.activationZone === "hand" && card === ctx.source) {
+        if (
+          zoneName === "hand" &&
+          ctx.activationZone === "hand" &&
+          card === ctx.source
+        ) {
           continue;
         }
         if (def.cardKind && card.cardKind !== def.cardKind) continue;
@@ -504,7 +522,8 @@ if (card.name === "Shadow-Heart Invocation" || card.id === 39) {
   }
 
   applyDraw(action, ctx) {
-    const targetPlayer = action.player === "opponent" ? ctx.opponent : ctx.player;
+    const targetPlayer =
+      action.player === "opponent" ? ctx.opponent : ctx.player;
     const amount = action.amount ?? 1;
     for (let i = 0; i < amount; i++) {
       targetPlayer.draw();
@@ -512,7 +531,8 @@ if (card.name === "Shadow-Heart Invocation" || card.id === 39) {
   }
 
   applyHeal(action, ctx) {
-    const targetPlayer = action.player === "opponent" ? ctx.opponent : ctx.player;
+    const targetPlayer =
+      action.player === "opponent" ? ctx.opponent : ctx.player;
     const amount = action.amount ?? 0;
     targetPlayer.gainLP(amount);
   }
@@ -546,7 +566,8 @@ if (card.name === "Shadow-Heart Invocation" || card.id === 39) {
   }
 
   applySpecialSummonToken(action, ctx) {
-    const targetPlayer = action.player === "opponent" ? ctx.opponent : ctx.player;
+    const targetPlayer =
+      action.player === "opponent" ? ctx.opponent : ctx.player;
     if (!action.token) return;
     if (targetPlayer.field.length >= 5) {
       console.log("No space to special summon token.");
@@ -677,7 +698,8 @@ if (card.name === "Shadow-Heart Invocation" || card.id === 39) {
     const sacrifice = costTargets[0];
     if (!sacrifice) return;
 
-    const owner = sacrifice.owner === "player" ? this.game.player : this.game.bot;
+    const owner =
+      sacrifice.owner === "player" ? this.game.player : this.game.bot;
     if (owner !== ctx.player) {
       return;
     }
