@@ -585,7 +585,7 @@ export const cardDatabase = [
     type: "Fiend",
     archetype: "Shadow-Heart",
     description:
-      'If this card is discarded from your hand to the Graveyard: target 1 monster your opponent controls; its ATK and DEF are halved until the end of this turn.',
+      "If this card is discarded from your hand to the Graveyard: target 1 monster your opponent controls; its ATK and DEF are halved until the end of this turn.",
     image: "assets/Shadow-Heart Coward.png",
     effects: [
       {
@@ -650,78 +650,78 @@ export const cardDatabase = [
         ],
       },
     ],
-  },,
-{
-  id: 38,
-  name: "Shadow-Heart Scale Dragon",
-  cardKind: "monster",
-  atk: 3000,
-  def: 2500,
-  level: 8,
-  type: "Dragon",
-  archetype: "Shadow-Heart",
-  summonRestrict: "shadow_heart_invocation_only",
-  description:
-    'Cannot be Normal Summoned/Set. Must be Special Summoned by the effect of "Shadow-Heart Invocation" and cannot be Special Summoned by other ways. When this card destroys a monster by battle: target 1 "Shadow-Heart" monster in your Graveyard; shuffle that target into the Deck.',
-  image: "assets/Shadow-Heart Scale Dragon.png",
-  effects: [
-    {
-      id: "shadow_heart_scale_dragon_recycle",
-      timing: "on_event",
-      event: "battle_destroy",
-      requireSelfAsAttacker: true,
-      targets: [
-        {
-          id: "shadow_heart_recycle_target",
-          owner: "self",
-          zone: "graveyard",
-          cardKind: "monster",
-          archetype: "Shadow-Heart",
-          count: { min: 1, max: 1 },
-        },
-      ],
-      actions: [
-        {
-          type: "move",
-          targetRef: "shadow_heart_recycle_target",
-          player: "self",
-          to: "deck",
-        },
-      ],
-    },
-  ],
-},
-{
-  id: 39,
-  name: "Shadow-Heart Invocation",
-  cardKind: "spell",
-  subtype: "normal",
-  archetype: "Shadow-Heart",
-  description:
-    'If "Shadow-Heart Scale Dragon" is in your hand or Graveyard: Tribute 3 "Shadow-Heart" monsters with different names; Special Summon 1 "Shadow-Heart Scale Dragon" from your hand or Graveyard.',
-  image: "assets/Shadow-Heart Invocation.png",
-  effects: [
-    {
-      id: "shadow_heart_invocation_ritual",
-      timing: "on_play",
-      speed: 1,
-      targets: [
-        {
-          id: "shadow_heart_ritual_tributes",
-          owner: "self",
-          zone: "field",
-          cardKind: "monster",
-          archetype: "Shadow-Heart",
-          count: { min: 3, max: 3 },
-        },
-      ],
-      actions: [
-        {
-          type: "shadow_heart_ritual_summon",
-          tributeRef: "shadow_heart_ritual_tributes",
-        },
-      ],
-    },
-  ],
-},
+  },
+  {
+    id: 38,
+    name: "Shadow-Heart Scale Dragon",
+    cardKind: "monster",
+    atk: 3000,
+    def: 2500,
+    level: 8,
+    type: "Dragon",
+    archetype: "Shadow-Heart",
+    summonRestrict: "shadow_heart_invocation_only",
+    description:
+      'Cannot be Normal Summoned/Set. Must be Special Summoned by the effect of "Shadow-Heart Invocation" and cannot be Special Summoned by other ways. When this card destroys a monster by battle: target 1 "Shadow-Heart" monster in your Graveyard; shuffle that target into the Deck.',
+    image: "assets/Shadow-Heart Scale Dragon.png",
+    effects: [
+      {
+        id: "shadow_heart_scale_dragon_recycle",
+        timing: "on_event",
+        event: "battle_destroy",
+        requireSelfAsAttacker: true,
+        targets: [
+          {
+            id: "shadow_heart_recycle_target",
+            owner: "self",
+            zone: "graveyard",
+            cardKind: "monster",
+            archetype: "Shadow-Heart",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "shadow_heart_recycle_target",
+            player: "self",
+            to: "deck",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 39,
+    name: "Shadow-Heart Invocation",
+    cardKind: "spell",
+    subtype: "normal",
+    archetype: "Shadow-Heart",
+    description:
+      'If "Shadow-Heart Scale Dragon" is in your hand or Graveyard: Tribute 3 "Shadow-Heart" monsters with different names; Special Summon 1 "Shadow-Heart Scale Dragon" from your hand or Graveyard.',
+    image: "assets/Shadow-Heart Invocation.png",
+    effects: [
+      {
+        id: "shadow_heart_invocation_ritual",
+        timing: "on_play",
+        speed: 1,
+        targets: [
+          {
+            id: "shadow_heart_ritual_tributes",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            archetype: "Shadow-Heart",
+            count: { min: 3, max: 3 },
+          },
+        ],
+        actions: [
+          {
+            type: "shadow_heart_ritual_summon",
+            tributeRef: "shadow_heart_ritual_tributes",
+          },
+        ],
+      },
+    ],
+  },
 ];
