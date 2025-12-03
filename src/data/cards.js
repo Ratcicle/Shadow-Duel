@@ -585,7 +585,7 @@ export const cardDatabase = [
     type: "Fiend",
     archetype: "Shadow-Heart",
     description:
-      'If this card is discarded from your hand to the Graveyard: target 1 monster your opponent controls; its ATK and DEF are halved until the end of this turn.',
+      "If this card is discarded from your hand to the Graveyard: target 1 monster your opponent controls; its ATK and DEF are halved until the end of this turn.",
     image: "assets/Shadow-Heart Coward.png",
     effects: [
       {
