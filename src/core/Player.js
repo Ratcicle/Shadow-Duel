@@ -204,7 +204,32 @@ export default class Player {
     }
 
     if (this.deck.length >= this.maxDeckSize) {
-      this.deck.shift();
+      const targetArchetypes = Array.isArray(data.archetypes)
+        ? data.archetypes
+        : data.archetype
+        ? [data.archetype]
+        : [];
+
+      let removeIdx = -1;
+
+      if (targetArchetypes.length === 0) {
+        removeIdx = this.deck.findIndex((card) => card.archetypes.length === 0);
+      } else {
+        removeIdx = this.deck.findIndex((card) => {
+          const archetypes = Array.isArray(card.archetypes)
+            ? card.archetypes
+            : card.archetype
+            ? [card.archetype]
+            : [];
+          return targetArchetypes.every((arc) => !archetypes.includes(arc));
+        });
+      }
+
+      if (removeIdx === -1) {
+        removeIdx = 0;
+      }
+
+      this.deck.splice(removeIdx, 1);
     }
 
     const freshCard = new Card(data, this.id);
