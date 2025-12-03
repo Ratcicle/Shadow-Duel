@@ -740,7 +740,9 @@ export default class EffectEngine {
     };
 
     const cancelHandler = () => {
+      const choice = (input.value || select.value || defaultCard || "").trim();
       cleanup();
+      onConfirm(choice);
     };
 
     const selectHandler = () => {
@@ -903,6 +905,9 @@ export default class EffectEngine {
 
     const candidates = gy.filter((card) => {
       if (!card || card.cardKind !== "monster") return false;
+
+      // Ritual boss cannot be revived by Infusion
+      if (card.summonRestrict === "shadow_heart_invocation_only") return false;
       if (card.archetype === "Shadow-Heart") return true;
       if (Array.isArray(card.archetypes)) {
         return card.archetypes.includes("Shadow-Heart");
