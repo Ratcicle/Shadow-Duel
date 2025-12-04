@@ -247,6 +247,12 @@ export default class EffectEngine {
       activationZone: "hand",
     };
 
+    const previousFieldSpell =
+      card.cardKind === "spell" && card.subtype === "field"
+        ? player.fieldSpell || null
+        : null;
+    let movedFieldSpell = false;
+
     if (card.cardKind === "spell" && card.subtype === "field") {
       if (this.game && typeof this.game.moveCard === "function") {
         this.game.moveCard(card, player, "fieldSpell", {
@@ -262,6 +268,7 @@ export default class EffectEngine {
         card.owner = player.id;
       }
 
+      movedFieldSpell = true;
       ctx.activationZone = "fieldSpell";
     }
 
@@ -279,6 +286,24 @@ export default class EffectEngine {
     }
 
     if (!targetResult.ok) {
+      if (card.cardKind === "spell" && card.subtype === "field" && movedFieldSpell) {
+        if (this.game && typeof this.game.moveCard === "function") {
+          this.game.moveCard(card, player, "hand", { fromZone: "fieldSpell" });
+
+          if (previousFieldSpell) {
+            this.game.moveCard(previousFieldSpell, player, "fieldSpell", {
+              fromZone: "graveyard",
+              isFacedown: false,
+            });
+          }
+        } else {
+          player.fieldSpell = previousFieldSpell;
+          if (!player.hand.includes(card)) {
+            player.hand.push(card);
+          }
+        }
+      }
+
       return { success: false, reason: targetResult.reason };
     }
 
