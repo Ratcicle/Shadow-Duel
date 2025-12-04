@@ -516,6 +516,9 @@ export default class EffectEngine {
         case "move":
           this.applyMove(action, ctx, targets);
           break;
+        case "equip":
+          this.applyEquip(action, ctx, targets);
+          break;
         case "shadow_heart_ritual_summon":
           this.applyShadowHeartRitualSummon(action, ctx, targets);
           break;
