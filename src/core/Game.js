@@ -79,6 +79,7 @@ export default class Game {
   updateBoard() {
     this.renderer.renderHand(this.player);
     this.renderer.renderField(this.player);
+    this.renderer.renderFieldSpell(this.player);
 
     if (typeof this.renderer.renderSpellTrap === "function") {
       this.renderer.renderSpellTrap(this.player);
@@ -89,6 +90,7 @@ export default class Game {
 
     this.renderer.renderHand(this.bot);
     this.renderer.renderField(this.bot);
+    this.renderer.renderFieldSpell(this.bot);
     this.renderer.updateLP(this.player);
     this.renderer.updateLP(this.bot);
     this.renderer.updatePhaseTrack(this.phase);
@@ -332,6 +334,32 @@ export default class Game {
 
       this.handleTargetSelectionClick("bot", index, cardEl);
     });
+
+    const playerFieldSpellEl = document.getElementById("player-fieldspell");
+    if (playerFieldSpellEl) {
+      playerFieldSpellEl.addEventListener("click", (e) => {
+        const cardEl = e.target.closest(".card");
+        if (!cardEl) return;
+        if (this.targetSelection) {
+          this.handleTargetSelectionClick("player", 0, cardEl);
+          return;
+        }
+        const card = this.player.fieldSpell;
+        if (card) {
+          this.activateFieldSpellEffect(card);
+        }
+      });
+    }
+
+    const botFieldSpellEl = document.getElementById("bot-fieldspell");
+    if (botFieldSpellEl) {
+      botFieldSpellEl.addEventListener("click", (e) => {
+        if (!this.targetSelection) return;
+        const cardEl = e.target.closest(".card");
+        if (!cardEl) return;
+        this.handleTargetSelectionClick("bot", 0, cardEl);
+      });
+    }
     this.renderer.bindCardHover((owner, location, index) => {
       let card = null;
       const playerObj = owner === "player" ? this.player : this.bot;
@@ -342,6 +370,8 @@ export default class Game {
         card = playerObj.field[index];
       } else if (location === "spellTrap") {
         card = playerObj.spellTrap[index];
+      } else if (location === "fieldSpell") {
+        card = playerObj.fieldSpell;
       }
 
       if (card) {
@@ -421,6 +451,40 @@ export default class Game {
     this.updateBoard();
   }
 
+  handleFieldSpellActivationResult(card, owner, result) {
+    if (result.needsSelection) {
+      if (this.canUseFieldTargeting(result.options)) {
+        this.startFieldSpellTargetSelection(card, owner, result.options);
+      } else {
+        this.renderer.showTargetSelection(
+          result.options,
+          (chosenMap) => {
+            const finalResult = this.effectEngine.activateFieldSpell(
+              card,
+              owner,
+              chosenMap
+            );
+            this.handleFieldSpellActivationResult(card, owner, finalResult);
+          },
+          () => {
+            this.cancelTargetSelection();
+          }
+        );
+      }
+      return;
+    }
+
+    if (!result.success) {
+      if (result.reason) {
+        console.log(result.reason);
+      }
+      return;
+    }
+
+    console.log(`${card.name} field effect activated.`);
+    this.updateBoard();
+  }
+
   canUseFieldTargeting(options) {
     if (!options || options.length === 0) return false;
     return options.every(
@@ -429,10 +493,16 @@ export default class Game {
         opt.candidates.length > 0 &&
         opt.candidates.every(
           (cand) =>
-            cand.zone === "field" &&
+            (cand.zone === "field" || cand.zone === "fieldSpell") &&
             (cand.controller === "player" || cand.controller === "bot")
         )
     );
+  }
+
+  activateFieldSpellEffect(card) {
+    const owner = card.owner === "player" ? this.player : this.bot;
+    const result = this.effectEngine.activateFieldSpell(card, owner);
+    this.handleFieldSpellActivationResult(card, owner, result);
   }
 
   startTargetSelection(card, handIndex, options) {
@@ -446,6 +516,20 @@ export default class Game {
       currentOption: 0,
     };
     console.log("Select target(s) by clicking the highlighted monsters.");
+    this.highlightTargetCandidates();
+  }
+
+  startFieldSpellTargetSelection(card, owner, options) {
+    this.cancelTargetSelection();
+    this.targetSelection = {
+      kind: "fieldSpell",
+      card,
+      owner,
+      options,
+      selections: {},
+      currentOption: 0,
+    };
+    console.log("Select target(s) for the field spell effect.");
     this.highlightTargetCandidates();
   }
 
@@ -487,12 +571,22 @@ export default class Game {
     if (!option) return;
 
     option.candidates.forEach((cand) => {
-      if (cand.zone !== "field") return;
-      const fieldSelector =
-        cand.controller === "player" ? "#player-field" : "#bot-field";
-      const cardEl = document.querySelector(
-        `${fieldSelector} .card[data-index="${cand.zoneIndex}"]`
-      );
+      let fieldSelector = null;
+      if (cand.zone === "field") {
+        fieldSelector =
+          cand.controller === "player" ? "#player-field" : "#bot-field";
+      } else if (cand.zone === "fieldSpell") {
+        fieldSelector =
+          cand.controller === "player"
+            ? "#player-fieldspell"
+            : "#bot-fieldspell";
+      }
+
+      if (!fieldSelector) return;
+
+      const indexSelector =
+        cand.zone === "fieldSpell" ? " .card" : ` .card[data-index="${cand.zoneIndex}"]`;
+      const cardEl = document.querySelector(`${fieldSelector}${indexSelector}`);
       if (cardEl) {
         cardEl.classList.add("targetable");
         const selected = this.targetSelection.selections[option.id] || [];
@@ -519,7 +613,14 @@ export default class Game {
     if (!option) return false;
 
     const ownerPlayer = ownerId === "player" ? this.player : this.bot;
-    const card = ownerPlayer.field[cardIndex];
+    let card = null;
+
+    if (option.zone === "fieldSpell") {
+      card = ownerPlayer.fieldSpell;
+    } else {
+      card = ownerPlayer.field[cardIndex];
+    }
+
     if (!card) return true;
 
     const candidate = option.candidates.find((cand) => cand.cardRef === card);
@@ -587,6 +688,14 @@ export default class Game {
         selection.handIndex,
         result
       );
+    } else if (selection.kind === "fieldSpell") {
+      const owner = selection.owner;
+      const result = this.effectEngine.activateFieldSpell(
+        selection.card,
+        owner,
+        selection.selections
+      );
+      this.handleFieldSpellActivationResult(selection.card, owner, result);
     } else if (selection.kind === "triggered") {
       this.effectEngine.resolveTriggeredSelection(
         selection.effect,
@@ -795,6 +904,8 @@ export default class Game {
         return player.graveyard;
       case "spellTrap":
         return player.spellTrapZone;
+      case "fieldSpell":
+        return player.fieldSpell ? [player.fieldSpell] : [];
       case "field":
       default:
         return player.field;
@@ -804,11 +915,24 @@ export default class Game {
   moveCard(card, destPlayer, toZone, options = {}) {
     if (!card || !destPlayer || !toZone) return;
 
-    const zones = ["field", "hand", "deck", "graveyard", "spellTrap"];
+    const zones = [
+      "field",
+      "hand",
+      "deck",
+      "graveyard",
+      "spellTrap",
+      "fieldSpell",
+    ];
     const fromOwner = card.owner === this.player.id ? this.player : this.bot;
     let fromZone = null;
 
     for (const zoneName of zones) {
+      if (zoneName === "fieldSpell" && fromOwner.fieldSpell === card) {
+        fromOwner.fieldSpell = null;
+        fromZone = zoneName;
+        break;
+      }
+
       const arr = this.getZone(fromOwner, zoneName) || [];
       const idx = arr.indexOf(card);
       if (idx > -1) {
@@ -850,6 +974,25 @@ export default class Game {
       }
 
       card.equippedTo = null;
+    }
+
+    if (toZone === "fieldSpell") {
+      if (destPlayer.fieldSpell) {
+        this.moveCard(destPlayer.fieldSpell, destPlayer, "graveyard", {
+          fromZone: "fieldSpell",
+        });
+      }
+
+      if (options.position) {
+        card.position = options.position;
+      }
+      if (typeof options.isFacedown === "boolean") {
+        card.isFacedown = options.isFacedown;
+      }
+
+      card.owner = destPlayer.id;
+      destPlayer.fieldSpell = card;
+      return;
     }
 
     const destArr = this.getZone(destPlayer, toZone);
