@@ -79,7 +79,9 @@ export default class Bot extends Player {
 
       for (const target of possibleTargets) {
         const simState = this.cloneGameState(game);
-        const simAttacker = simState.bot.field.find((c) => c.id === attacker.id);
+        const simAttacker = simState.bot.field.find(
+          (c) => c.id === attacker.id
+        );
         const simTarget = target
           ? simState.player.field.find((c) => c.id === target.id)
           : null;
@@ -109,7 +111,9 @@ export default class Bot extends Player {
         : gameOrState.player && perspectivePlayer.id === "bot"
         ? gameOrState.player
         : gameOrState.bot;
-    const perspective = perspectivePlayer.id ? perspectivePlayer : gameOrState.bot;
+    const perspective = perspectivePlayer.id
+      ? perspectivePlayer
+      : gameOrState.bot;
     let score = 0;
 
     // Life points
@@ -139,7 +143,10 @@ export default class Bot extends Player {
       (sum, m) => sum + monsterValue(m),
       0
     );
-    const oppMonsters = opponent.field.reduce((sum, m) => sum + monsterValue(m), 0);
+    const oppMonsters = opponent.field.reduce(
+      (sum, m) => sum + monsterValue(m),
+      0
+    );
     score += playerMonsters - oppMonsters;
 
     // Spells and field
@@ -164,7 +171,8 @@ export default class Bot extends Player {
     );
     if (hasReviver) {
       const bestGY = perspective.graveyard.reduce(
-        (max, c) => (c.cardKind === "monster" ? Math.max(max, c.atk || 0) : max),
+        (max, c) =>
+          c.cardKind === "monster" ? Math.max(max, c.atk || 0) : max,
         0
       );
       score += bestGY / 2000;
@@ -193,8 +201,18 @@ export default class Bot extends Player {
       const tributeInfo = this.getTributeRequirement(card);
       if (this.field.length < tributeInfo.tributesNeeded) return;
 
-      actions.push({ type: "summon", index, position: "attack", facedown: false });
-      actions.push({ type: "summon", index, position: "defense", facedown: true });
+      actions.push({
+        type: "summon",
+        index,
+        position: "attack",
+        facedown: false,
+      });
+      actions.push({
+        type: "summon",
+        index,
+        position: "defense",
+        facedown: true,
+      });
     });
 
     // Spells
@@ -205,7 +223,9 @@ export default class Bot extends Player {
 
       // Extra heuristics
       if (card.name === "Shadow-Heart Infusion") {
-        const gyHasSH = this.graveyard.some((c) => c.archetypes?.includes("Shadow-Heart"));
+        const gyHasSH = this.graveyard.some((c) =>
+          c.archetypes?.includes("Shadow-Heart")
+        );
         if (this.hand.length < 3 || !gyHasSH) return;
       }
       if (card.name === "Shadow-Heart Invocation") {
@@ -369,7 +389,9 @@ export default class Bot extends Player {
         break;
       }
       case "Shadow Coat": {
-        const target = player.field.sort((a, b) => (b.atk || 0) - (a.atk || 0))[0];
+        const target = player.field.sort(
+          (a, b) => (b.atk || 0) - (a.atk || 0)
+        )[0];
         if (target) {
           target.atk += 1000;
           target.tempAtkBoost = (target.tempAtkBoost || 0) + 1000;
@@ -380,7 +402,11 @@ export default class Bot extends Player {
         player.hand.push({ placeholder: true });
         break;
       case "Transmutate": {
-        if (player.field.length && player.graveyard.length && player.field.length < 5) {
+        if (
+          player.field.length &&
+          player.graveyard.length &&
+          player.field.length < 5
+        ) {
           const sent = player.field.shift();
           player.graveyard.push(sent);
           const level = sent.level || 0;
@@ -427,7 +453,11 @@ export default class Bot extends Player {
           const discards = player.hand.splice(0, 2);
           player.graveyard.push(...discards);
           const target = player.graveyard
-            .filter((c) => c.archetypes?.includes("Shadow-Heart") && c.cardKind === "monster")
+            .filter(
+              (c) =>
+                c.archetypes?.includes("Shadow-Heart") &&
+                c.cardKind === "monster"
+            )
             .sort((a, b) => (b.atk || 0) - (a.atk || 0))[0];
           if (target) {
             const idx = player.graveyard.indexOf(target);
@@ -440,9 +470,15 @@ export default class Bot extends Player {
         break;
       }
       case "Shadow-Heart Invocation": {
-        const shMonsters = player.field.filter((c) => c.archetypes?.includes("Shadow-Heart"));
+        const shMonsters = player.field.filter((c) =>
+          c.archetypes?.includes("Shadow-Heart")
+        );
         const uniqueNames = new Set(shMonsters.map((c) => c.name));
-        if (uniqueNames.size >= 3 && player.field.length >= 3 && player.field.length <= 5) {
+        if (
+          uniqueNames.size >= 3 &&
+          player.field.length >= 3 &&
+          player.field.length <= 5
+        ) {
           const tributes = shMonsters.slice(0, 3);
           tributes.forEach((t) => {
             const idx = player.field.indexOf(t);
@@ -453,7 +489,9 @@ export default class Bot extends Player {
           });
           const dragon =
             player.hand.find((c) => c.name === "Shadow-Heart Scale Dragon") ||
-            player.graveyard.find((c) => c.name === "Shadow-Heart Scale Dragon");
+            player.graveyard.find(
+              (c) => c.name === "Shadow-Heart Scale Dragon"
+            );
           if (dragon) {
             const fromGY = player.graveyard.includes(dragon);
             if (fromGY) {
@@ -471,7 +509,9 @@ export default class Bot extends Player {
         break;
       }
       case "Shadow-Heart Shield": {
-        const target = player.field.sort((a, b) => (b.atk || 0) - (a.atk || 0))[0];
+        const target = player.field.sort(
+          (a, b) => (b.atk || 0) - (a.atk || 0)
+        )[0];
         if (target) {
           target.atk += 500;
           target.def += 500;
@@ -507,7 +547,8 @@ export default class Bot extends Player {
       return;
     }
 
-    const targetStat = target.position === "attack" ? target.atk || 0 : target.def || 0;
+    const targetStat =
+      target.position === "attack" ? target.atk || 0 : target.def || 0;
     if (target.position === "attack") {
       if (attackStat > targetStat) {
         defenderOwner.lp -= attackStat - targetStat;
@@ -552,12 +593,22 @@ export default class Bot extends Player {
       const card = this.hand[action.index];
       if (!card) return;
       const selections = this.buildAutoSelections(card, game);
-      let result = game.effectEngine.activateFromHand(card, this, action.index, selections);
+      let result = game.effectEngine.activateFromHand(
+        card,
+        this,
+        action.index,
+        selections
+      );
 
       if (result && result.needsSelection && result.options) {
         const auto = this.convertOptionsToSelection(result.options);
         if (auto) {
-          result = game.effectEngine.activateFromHand(card, this, action.index, auto);
+          result = game.effectEngine.activateFromHand(
+            card,
+            this,
+            action.index,
+            auto
+          );
         }
       }
       if (!result?.success) {
@@ -613,7 +664,10 @@ export default class Bot extends Player {
           }
         });
         chosen = [bestIdx];
-      } else if (card.name === "Shadow-Heart Shield" || card.name === "Shadow Coat") {
+      } else if (
+        card.name === "Shadow-Heart Shield" ||
+        card.name === "Shadow Coat"
+      ) {
         let bestIdx = 0;
         let bestAtk = -Infinity;
         candidates.candidates.forEach((c, idx) => {
