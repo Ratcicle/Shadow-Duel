@@ -125,51 +125,88 @@ export default class Renderer {
     });
   }
 
-  showSummonModal(cardIndex, callback) {
-    const existingModal = document.querySelector(".summon-choice-modal");
-    if (existingModal) {
-      existingModal.remove();
-    }
 
-    const cardElement = document.querySelector(
-      `#player-hand .card[data-index="${cardIndex}"]`
-    );
-    const rect = cardElement ? cardElement.getBoundingClientRect() : null;
-
-    const modal = document.createElement("div");
-    modal.className = "summon-choice-modal";
-    modal.innerHTML = `
-        <div class="summon-choice-content">
-            <h3>Summon Monster</h3>
-            <button id="btn-attack">Attack Position</button>
-            <button id="btn-defense">Set (Defense)</button>
-            <button id="btn-cancel">Cancel</button>
-        </div>
-      `;
-
-    if (rect) {
-      modal.style.position = "fixed";
-      modal.style.left = `${rect.left}px`;
-      modal.style.top = `${rect.bottom + 10}px`;
-      modal.style.zIndex = "200";
-    }
-
-    document.body.appendChild(modal);
-
-    document.getElementById("btn-attack").onclick = () => {
-      callback("attack");
-      document.body.removeChild(modal);
-    };
-    document.getElementById("btn-defense").onclick = () => {
-      callback("defense");
-      document.body.removeChild(modal);
-    };
-    document.getElementById("btn-cancel").onclick = () => {
-      document.body.removeChild(modal);
-    };
+  
+showSummonModal(cardIndex, callback) {
+  const existingModal = document.querySelector(".summon-choice-modal");
+  if (existingModal) {
+    existingModal.remove();
   }
 
-  createCardElement(card, visible) {
+  const cardElement = document.querySelector(
+    `#player-hand .card[data-index="${cardIndex}"]`
+  );
+  const rect = cardElement ? cardElement.getBoundingClientRect() : null;
+
+  const modal = document.createElement("div");
+  modal.className = "summon-choice-modal";
+  modal.innerHTML = `
+      <div class="summon-choice-content">
+          <button id="btn-normal-summon">Normal Summon</button>
+          <button id="btn-set">Set</button>
+      </div>
+    `;
+
+  // posicionamento inteligente: tenta abaixo da carta,
+  // e se não couber, abre acima; também evita sair pelas laterais
+  modal.style.position = "fixed";
+  modal.style.zIndex = "200";
+
+  document.body.appendChild(modal);
+
+  if (rect) {
+    const content = modal.querySelector(".summon-choice-content") || modal;
+    const contentRect = content.getBoundingClientRect();
+
+    let left = rect.left;
+    let top = rect.bottom + 10;
+
+    // se estourar a parte de baixo da tela, coloca acima da carta
+    if (top + contentRect.height > window.innerHeight - 10) {
+      top = rect.top - contentRect.height - 10;
+    }
+
+    // clamp horizontal para não sair pelas laterais
+    if (left + contentRect.width > window.innerWidth - 10) {
+      left = window.innerWidth - contentRect.width - 10;
+    }
+    if (left < 10) left = 10;
+
+    modal.style.left = `${left}px`;
+    modal.style.top = `${top}px`;
+  }
+
+  const cleanup = () => {
+    if (modal.parentNode) {
+      modal.parentNode.removeChild(modal);
+    }
+    document.removeEventListener("mousedown", handleOutsideClick);
+  };
+
+  const handleOutsideClick = (event) => {
+    if (!modal.contains(event.target)) {
+      cleanup();
+    }
+  };
+
+  // registra o listener após o frame para não disparar com o próprio clique de abertura
+  setTimeout(() => {
+    document.addEventListener("mousedown", handleOutsideClick);
+  }, 0);
+
+  document.getElementById("btn-normal-summon").onclick = (e) => {
+    e.stopPropagation();
+    callback("attack");
+    cleanup();
+  };
+  document.getElementById("btn-set").onclick = (e) => {
+    e.stopPropagation();
+    callback("defense");
+    cleanup();
+  };
+}
+
+createCardElement(card, visible) {
     const el = document.createElement("div");
     el.className = "card";
 
