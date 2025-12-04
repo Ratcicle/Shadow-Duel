@@ -6,7 +6,15 @@
   --border-color: #333;
   --zone-bg: #1a1a1a;
   --font-main: "Outfit", sans-serif;
+
+  /* Card size responsive to viewport height */
+  --card-h: min(13vh, 130px);
+  --card-w: calc(var(--card-h) * 0.6923);
+  --card-gap: 10px;
+  --zone-pad: 12px;
+  --zone-width: calc(5 * var(--card-w) + 4 * var(--card-gap) + 2 * var(--zone-pad));
 }
+
 
 * {
   box-sizing: border-box;
@@ -30,8 +38,11 @@ body {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  padding: 20px;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px 12px;
+  position: relative;
 }
 
 #sidebar {
@@ -79,62 +90,71 @@ body {
 }
 
 .player-area {
-  flex: 1;
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
+  gap: 10px;
   border: 1px solid var(--border-color);
   padding: 10px;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.02);
+  width: 100%;
+  position: relative;
 }
 
-#bot-area {
-  transform: rotate(180deg);
-}
 
-#bot-area .player-info {
-  transform: rotate(180deg);
-}
+#bot-area,
+#bot-area 
 
-.player-info {
-  display: flex;
-  justify-content: space-between;
-  padding: 10px;
-  font-weight: bold;
-  font-size: 1.2rem;
-}
+
 
 .lp-counter {
   color: var(--accent-color);
 }
 
 .zones {
-  display: flex;
-  justify-content: center;
-  gap: 15px;
+  display: grid;
+  grid-template-columns: 90px 1fr 90px;
+  grid-template-rows: auto auto;
+  grid-template-areas:
+    "gy board deck"
+    "gy hand deck";
   align-items: center;
+  justify-items: center;
+  gap: 12px 16px;
   flex: 1;
+  width: 100%;
+}
+
+.bot-zones {
+  grid-template-areas:
+    "gy hand deck"
+    "gy board deck";
 }
 
 .board-zones {
+  grid-area: board;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   align-items: center;
-  width: 100%;
+  width: var(--zone-width);
+  max-width: var(--zone-width);
 }
 
 .field-zone {
   display: flex;
   gap: 10px;
-  min-width: 400px;
-  min-height: 170px;
+  width: var(--zone-width);
+  min-width: var(--zone-width);
+  max-width: var(--zone-width);
+  min-height: calc(var(--card-h) + 10px);
   justify-content: center;
   align-items: center;
   border: 1px dashed var(--border-color);
   border-radius: 8px;
-  padding: 12px;
+  padding: var(--zone-pad);
   position: relative;
   background: radial-gradient(
     circle at 10% 20%,
@@ -142,6 +162,7 @@ body {
     rgba(0, 0, 0, 0)
   );
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+  margin: 0 auto;
 }
 
 .field-zone::before {
@@ -159,12 +180,8 @@ body {
 }
 
 .spelltrap-row {
-  background: linear-gradient(
-    135deg,
-    rgba(21, 29, 54, 0.35),
-    rgba(0, 0, 0, 0.08)
-  );
-  border-color: #486fbb;
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.18), rgba(0, 0, 0, 0.08));
+  border-color: var(--border-color);
 }
 
 .spelltrap-zone {
@@ -183,21 +200,25 @@ body {
 }
 
 .hand-zone {
+  grid-area: hand;
   display: flex;
-  gap: 5px;
-  min-width: 300px;
-  min-height: 180px;
+  gap: 8px;
+  width: var(--zone-width);
+  min-width: var(--zone-width);
+  max-width: var(--zone-width);
+  min-height: calc(var(--card-h) + 6px);
   justify-content: center;
   align-items: center;
   background: rgba(0, 0, 0, 0.2);
   border-radius: 8px;
-  padding: 5px;
+  padding: 10px;
 }
 
 .deck-zone,
 .graveyard-zone {
-  width: 80px;
-  height: 110px;
+  grid-row: 1 / span 2;
+  width: 90px;
+  height: 130px;
   border: 1px solid var(--border-color);
   border-radius: 6px;
   display: flex;
@@ -206,11 +227,17 @@ body {
   font-size: 0.8rem;
   color: #555;
   background: var(--zone-bg);
+  align-self: center;
 }
 
 .graveyard-zone {
+  grid-area: gy;
   position: relative;
   cursor: pointer;
+}
+
+.deck-zone {
+  grid-area: deck;
 }
 
 /* Card Styles */
@@ -307,14 +334,25 @@ body {
 
 /* Center Info */
 #center-info {
-  height: 60px;
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 20px;
+  gap: 14px;
   background: #181818;
-  border-top: 1px solid var(--border-color);
-  border-bottom: 1px solid var(--border-color);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 8px 12px;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.4);
+  z-index: 10;
+}
+
+#center-info > * {
+  pointer-events: auto;
 }
 
 #next-phase-btn {
@@ -804,4 +842,48 @@ body {
 .gy-selectable.disabled {
   opacity: 0.3;
   pointer-events: none;
+}
+
+.player-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  font-weight: bold;
+  font-size: 1rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(6px);
+  gap: 12px;
+}
+
+
+/* HUD-style placement for Life Points */
+#bot-area .player-info {
+  position: absolute;
+  top: 8px;
+  right: 16px;
+}
+
+#player-area .player-info {
+  position: absolute;
+  bottom: 8px;
+  left: 16px;
+}
+
+
+@media (max-height: 900px) {
+  #game-container {
+    gap: 8px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+
+  .board-zones {
+    gap: 6px;
+  }
+
+  .hand-zone {
+    padding: 6px;
+  }
 }

@@ -7,14 +7,12 @@ export default class Renderer {
       playerDeck: document.getElementById("player-deck"),
       playerGraveyard: document.getElementById("player-graveyard"),
       playerLP: document.getElementById("player-lp"),
-      playerSpellTrap: document.getElementById("player-spelltrap"),
       botHand: document.getElementById("bot-hand"),
       botField: document.getElementById("bot-field"),
       botSpellTrap: document.getElementById("bot-spelltrap"),
       botDeck: document.getElementById("bot-deck"),
       botGraveyard: document.getElementById("bot-graveyard"),
       botLP: document.getElementById("bot-lp"),
-      botSpellTrap: document.getElementById("bot-spelltrap"),
       turnIndicator: document.getElementById("turn-indicator"),
       phaseTrack: document.getElementById("phase-track"),
     };
@@ -87,6 +85,33 @@ export default class Renderer {
       if (card.position === "defense") {
         cardEl.classList.add("defense");
       }
+
+      if (card.isFacedown) {
+        cardEl.classList.add("facedown");
+        cardEl.innerHTML = '<div class="card-back"></div>';
+        cardEl.style.backgroundImage = "none";
+        cardEl.style.backgroundColor = "#333";
+        cardEl.style.border = "1px solid #555";
+      }
+
+      container.appendChild(cardEl);
+    });
+  }
+
+  renderSpellTrap(player) {
+    const container =
+      player.id === "player"
+        ? this.elements.playerSpellTrap
+        : this.elements.botSpellTrap;
+    if (!container) return;
+
+    container.innerHTML = "";
+
+    player.spellTrap.forEach((card, index) => {
+      const isVisible = player.id === "player" || !card.isFacedown;
+      const cardEl = this.createCardElement(card, isVisible);
+      cardEl.dataset.index = index;
+      cardEl.dataset.location = "spellTrap";
 
       if (card.isFacedown) {
         cardEl.classList.add("facedown");

@@ -65,11 +65,22 @@
           <span class="name">Opponent</span>
           <div class="lp-counter">LP: <span id="bot-lp">8000</span></div>
         </div>
-        <div class="zones">
+        <div class="zones board-grid bot-zones">
+          <div class="graveyard-zone" id="bot-graveyard">GY</div>
+          <div class="board-zones">
+            <div
+              id="bot-spelltrap"
+              class="field-zone spelltrap-row"
+              data-label="Spell/Trap"
+            ></div>
+            <div
+              id="bot-field"
+              class="field-zone monster-row"
+              data-label="Monsters"
+            ></div>
+          </div>
           <div class="deck-zone" id="bot-deck">Deck</div>
           <div class="hand-zone" id="bot-hand"></div>
-          <div class="field-zone" id="bot-field"></div>
-          <div class="graveyard-zone" id="bot-graveyard">GY</div>
         </div>
       </div>
 
@@ -87,23 +98,22 @@
 
       <!-- Player Area (Bottom) -->
       <div id="player-area" class="player-area">
-        <div class="zones">
+        <div class="zones board-grid">
           <div class="graveyard-zone" id="player-graveyard">GY</div>
-          <div class="field-zone" id="player-field"></div>
           <div class="board-zones player-board">
-            <div
-              id="player-spelltrap"
-              class="field-zone spelltrap-row"
-              data-label="Spell/Trap"
-            ></div>
             <div
               id="player-field"
               class="field-zone monster-row"
               data-label="Monsters"
             ></div>
+            <div
+              id="player-spelltrap"
+              class="field-zone spelltrap-row"
+              data-label="Spell/Trap"
+            ></div>
           </div>
-          <div class="hand-zone" id="player-hand"></div>
           <div class="deck-zone" id="player-deck">Deck</div>
+          <div class="hand-zone" id="player-hand"></div>
         </div>
         <div class="player-info">
           <span class="name">You</span>
