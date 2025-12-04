@@ -19,16 +19,16 @@ export default class Player {
   buildDeck(deckList = null) {
     this.deck = [];
     const maxDeckSize = this.maxDeckSize;
+    const copies = {};
 
-    if (Array.isArray(deckList) && deckList.length > 0) {
-      deckList.slice(0, maxDeckSize).forEach((cardId) => {
-        const data = cardDatabase.find((c) => c.id === cardId);
-        if (data) {
-          this.deck.push(new Card(data, this.id));
-        }
-      });
-    } else {
-      const copies = {};
+    const addCard = (data) => {
+      copies[data.id] = copies[data.id] || 0;
+      if (copies[data.id] >= 3 || this.deck.length >= maxDeckSize) return;
+      this.deck.push(new Card(data, this.id));
+      copies[data.id]++;
+    };
+
+    const fillWithDefaults = () => {
       const archetype = "Shadow-Heart";
       const archetypeCards = cardDatabase.filter((c) => {
         const archetypes = Array.isArray(c.archetypes)
@@ -39,22 +39,29 @@ export default class Player {
         return archetypes.includes(archetype);
       });
 
-      archetypeCards.forEach((data) => {
-        if (this.deck.length < maxDeckSize) {
-          this.deck.push(new Card(data, this.id));
-          copies[data.id] = 1;
-        }
-      });
+      archetypeCards.forEach(addCard);
 
       while (this.deck.length < maxDeckSize) {
         for (const data of cardDatabase) {
-          copies[data.id] = copies[data.id] || 0;
-          if (copies[data.id] < 3 && this.deck.length < maxDeckSize) {
-            this.deck.push(new Card(data, this.id));
-            copies[data.id]++;
-          }
+          addCard(data);
+          if (this.deck.length >= maxDeckSize) break;
         }
       }
+    };
+
+    if (Array.isArray(deckList) && deckList.length > 0) {
+      deckList.slice(0, maxDeckSize).forEach((cardId) => {
+        const data = cardDatabase.find((c) => c.id === cardId);
+        if (data) {
+          addCard(data);
+        }
+      });
+
+      if (this.deck.length < maxDeckSize) {
+        fillWithDefaults();
+      }
+    } else {
+      fillWithDefaults();
     }
 
     this.shuffleDeck();

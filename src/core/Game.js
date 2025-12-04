@@ -49,8 +49,8 @@ export default class Game {
     }
   }
 
-  start() {
-    this.player.buildDeck();
+  start(deckList = null) {
+    this.player.buildDeck(deckList);
     for (let i = 0; i < 4; i++) {
       this.player.ensureCardOnTop("Infinity Searcher", true);
     }
@@ -79,10 +79,16 @@ export default class Game {
   updateBoard() {
     this.renderer.renderHand(this.player);
     this.renderer.renderField(this.player);
-    this.renderer.renderSpellTrap(this.player);
+
+    if (typeof this.renderer.renderSpellTrap === "function") {
+      this.renderer.renderSpellTrap(this.player);
+      this.renderer.renderSpellTrap(this.bot);
+    } else {
+      console.warn("Renderer missing renderSpellTrap implementation.");
+    }
+
     this.renderer.renderHand(this.bot);
     this.renderer.renderField(this.bot);
-    this.renderer.renderSpellTrap(this.bot);
     this.renderer.updateLP(this.player);
     this.renderer.updateLP(this.bot);
     this.renderer.updatePhaseTrack(this.phase);

@@ -1,4 +1,5 @@
 import Card from "./Card.js";
+import { cardDatabase } from "../data/cards.js";
 
 export default class EffectEngine {
   constructor(game) {
@@ -679,9 +680,15 @@ export default class EffectEngine {
     const searchModal = this.getSearchModalElements();
 
     if (searchModal) {
-      this.showSearchModal(searchModal, candidates, defaultCard, (choice) => {
-        this.finishSearchSelection(choice, candidates, ctx);
-      });
+      this.showSearchModal(
+        searchModal,
+        candidates,
+        defaultCard,
+        (choice) => {
+          this.finishSearchSelection(choice, candidates, ctx);
+        },
+        cardDatabase
+      );
       return;
     }
 
@@ -708,7 +715,7 @@ export default class EffectEngine {
     return null;
   }
 
-  showSearchModal(elements, candidates, defaultCard, onConfirm) {
+  showSearchModal(elements, candidates, defaultCard, onConfirm, allCards) {
     const { modal, input, select, confirmBtn, cancelBtn, closeBtn } = elements;
 
     select.innerHTML = "";
@@ -718,7 +725,10 @@ export default class EffectEngine {
     placeholder.textContent = "Escolha uma carta";
     select.appendChild(placeholder);
 
-    const sortedCandidates = [...candidates].sort((a, b) => {
+    const dropdownOptions =
+      Array.isArray(allCards) && allCards.length > 0 ? allCards : candidates;
+
+    const sortedCandidates = [...dropdownOptions].sort((a, b) => {
       const nameA = (a?.name || "").toLocaleLowerCase();
       const nameB = (b?.name || "").toLocaleLowerCase();
       return nameA.localeCompare(nameB);
