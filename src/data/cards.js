@@ -770,8 +770,8 @@ export const cardDatabase = [
     archetype: "Shadow-Heart",
     altTribute: { type: "no_tribute_if_empty_field" },
     description:
-      'If you control no monsters, you can Normal Summon this card without Tributing. Otherwise, Tribute Summon it as a Level 5 monster.',
-    image: "assets/Shadow-Hearted Griffin.png",
+      "If you control no monsters, you can Normal Summon this card without Tributing. Otherwise, Tribute Summon it as a Level 5 monster.",
+    image: "assets/Shadow-Heart Griffin.png",
     effects: [],
   },
 ];
