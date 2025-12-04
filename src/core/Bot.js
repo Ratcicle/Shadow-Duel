@@ -61,6 +61,7 @@ export default class Bot extends Player {
 
   battlePhaseLogic(game) {
     const baseScore = this.evaluateBoard(game, this);
+    const minDeltaToAttack = 0.1;
     let bestAttack = null;
     let bestDelta = -Infinity;
 
@@ -87,8 +88,8 @@ export default class Bot extends Player {
           : null;
 
         this.simulateBattle(simState, simAttacker, simTarget);
-        const newScore = this.evaluateBoard(simState, simState.bot);
-        const delta = newScore - baseScore;
+        const scoreAfter = this.evaluateBoard(simState, simState.bot);
+        const delta = scoreAfter - baseScore;
 
         if (delta > bestDelta) {
           bestDelta = delta;
@@ -97,7 +98,7 @@ export default class Bot extends Player {
       }
     }
 
-    if (bestAttack && bestDelta > -Infinity) {
+    if (bestAttack && bestDelta > minDeltaToAttack) {
       game.resolveCombat(bestAttack.attacker, bestAttack.target);
     }
 
