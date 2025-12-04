@@ -68,15 +68,22 @@
         <div class="zones board-grid bot-zones">
           <div class="graveyard-zone" id="bot-graveyard">GY</div>
           <div class="board-zones">
+            <div class="field-row">
+              <div
+                id="bot-fieldspell"
+                class="field-slot"
+                data-label="Field"
+              ></div>
+              <div
+                id="bot-field"
+                class="field-zone monster-row"
+                data-label="Monsters"
+              ></div>
+            </div>
             <div
               id="bot-spelltrap"
               class="field-zone spelltrap-row"
               data-label="Spell/Trap"
-            ></div>
-            <div
-              id="bot-field"
-              class="field-zone monster-row"
-              data-label="Monsters"
             ></div>
           </div>
           <div class="deck-zone" id="bot-deck">Deck</div>
@@ -101,11 +108,18 @@
         <div class="zones board-grid">
           <div class="graveyard-zone" id="player-graveyard">GY</div>
           <div class="board-zones player-board">
-            <div
-              id="player-field"
-              class="field-zone monster-row"
-              data-label="Monsters"
-            ></div>
+            <div class="field-row">
+              <div
+                id="player-fieldspell"
+                class="field-slot"
+                data-label="Field"
+              ></div>
+              <div
+                id="player-field"
+                class="field-zone monster-row"
+                data-label="Monsters"
+              ></div>
+            </div>
             <div
               id="player-spelltrap"
               class="field-zone spelltrap-row"

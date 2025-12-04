@@ -81,6 +81,9 @@ export default class EffectEngine {
 
     const { player, opponent, attacker, destroyed } = payload;
     const fieldCards = player.field ? [...player.field] : [];
+    if (player.fieldSpell) {
+      fieldCards.push(player.fieldSpell);
+    }
 
     for (const card of fieldCards) {
       if (!card || !card.effects || !Array.isArray(card.effects)) continue;
@@ -264,6 +267,24 @@ export default class EffectEngine {
     this.applyActions(effect.actions || [], ctx, targetResult.targets);
     this.game.checkWinCondition();
 
+    if (card.cardKind === "spell" && card.subtype === "field") {
+      if (this.game && typeof this.game.moveCard === "function") {
+        this.game.moveCard(card, player, "fieldSpell", {
+          fromZone: "hand",
+          isFacedown: false,
+        });
+      } else {
+        const idx = player.hand.indexOf(card);
+        if (idx > -1) {
+          player.hand.splice(idx, 1);
+        }
+        player.fieldSpell = card;
+        card.owner = player.id;
+      }
+
+      return { success: true };
+    }
+
     // Equip Spells serão movidas para a zona de spell/trap na própria action.
     if (card.cardKind === "spell" && card.subtype === "equip") {
       return { success: true };
@@ -274,6 +295,55 @@ export default class EffectEngine {
     } else {
       player.graveyard.push(card);
     }
+
+    return { success: true };
+  }
+
+  activateFieldSpell(card, player, selections = null) {
+    if (!card || card.cardKind !== "spell" || card.subtype !== "field") {
+      return { success: false, reason: "Not a field spell." };
+    }
+
+    const check = this.canActivate(card, player);
+    if (!check.ok) {
+      return { success: false, reason: check.reason };
+    }
+
+    const effect = (card.effects || []).find(
+      (e) => e && e.timing === "on_field_activate"
+    );
+
+    if (!effect) {
+      return { success: false, reason: "No field activation effect." };
+    }
+
+    const ctx = {
+      source: card,
+      player,
+      opponent: this.game.getOpponent(player),
+      activationZone: "fieldSpell",
+    };
+
+    const targetResult = this.resolveTargets(
+      effect.targets || [],
+      ctx,
+      selections
+    );
+
+    if (targetResult.needsSelection) {
+      return {
+        success: false,
+        needsSelection: true,
+        options: targetResult.options,
+      };
+    }
+
+    if (!targetResult.ok) {
+      return { success: false, reason: targetResult.reason };
+    }
+
+    this.applyActions(effect.actions || [], ctx, targetResult.targets);
+    this.game.checkWinCondition();
 
     return { success: true };
   }
@@ -398,6 +468,7 @@ export default class EffectEngine {
         id: def.id,
         min,
         max,
+        zone: zoneName,
         candidates: decoratedCandidates,
       });
     }
@@ -475,6 +546,8 @@ export default class EffectEngine {
         return player.deck;
       case "spellTrap":
         return player.spellTrapZone;
+      case "fieldSpell":
+        return player.fieldSpell ? [player.fieldSpell] : [];
       case "field":
       default:
         return player.field;
@@ -567,12 +640,21 @@ export default class EffectEngine {
         return;
       }
 
-      const zones = [owner.field, owner.hand, owner.deck];
+      const zones = [
+        owner.field,
+        owner.hand,
+        owner.deck,
+        owner.spellTrap,
+        owner.fieldSpell ? [owner.fieldSpell] : [],
+      ];
       for (const zone of zones) {
         const idx = zone.indexOf(card);
         if (idx > -1) {
           zone.splice(idx, 1);
           owner.graveyard.push(card);
+          if (owner.fieldSpell === card) {
+            owner.fieldSpell = null;
+          }
           break;
         }
       }

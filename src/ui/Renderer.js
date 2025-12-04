@@ -13,6 +13,8 @@ export default class Renderer {
       botDeck: document.getElementById("bot-deck"),
       botGraveyard: document.getElementById("bot-graveyard"),
       botLP: document.getElementById("bot-lp"),
+      playerFieldSpell: document.getElementById("player-fieldspell"),
+      botFieldSpell: document.getElementById("bot-fieldspell"),
       turnIndicator: document.getElementById("turn-indicator"),
       phaseTrack: document.getElementById("phase-track"),
     };
@@ -123,6 +125,34 @@ export default class Renderer {
 
       container.appendChild(cardEl);
     });
+  }
+
+  renderFieldSpell(player) {
+    const container =
+      player.id === "player"
+        ? this.elements.playerFieldSpell
+        : this.elements.botFieldSpell;
+    if (!container) return;
+
+    container.innerHTML = "";
+
+    const card = player.fieldSpell;
+    if (!card) return;
+
+    const isVisible = player.id === "player" || !card.isFacedown;
+    const cardEl = this.createCardElement(card, isVisible);
+    cardEl.dataset.location = "fieldSpell";
+    cardEl.dataset.index = 0;
+
+    if (card.isFacedown) {
+      cardEl.classList.add("facedown");
+      cardEl.innerHTML = '<div class="card-back"></div>';
+      cardEl.style.backgroundImage = "none";
+      cardEl.style.backgroundColor = "#333";
+      cardEl.style.border = "1px solid #555";
+    }
+
+    container.appendChild(cardEl);
   }
 
 
