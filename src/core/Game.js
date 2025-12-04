@@ -334,6 +334,8 @@ export default class Game {
         card = playerObj.hand[index];
       } else if (location === "field") {
         card = playerObj.field[index];
+      } else if (location === "spellTrap") {
+        card = playerObj.spellTrap[index];
       }
 
       if (card) {
@@ -703,24 +705,38 @@ export default class Game {
         const defender = target.owner === "player" ? this.player : this.bot;
         const damage = attacker.atk - target.atk;
         defender.takeDamage(damage);
-        this.moveCard(target, defender, "graveyard");
-        this.applyBattleDestroyEffect(attacker, target);
+
+        if (!target.battleIndestructible) {
+          this.moveCard(target, defender, "graveyard");
+          this.applyBattleDestroyEffect(attacker, target);
+        }
       } else if (attacker.atk < target.atk) {
         const attPlayer = attacker.owner === "player" ? this.player : this.bot;
         const damage = target.atk - attacker.atk;
         attPlayer.takeDamage(damage);
-        this.moveCard(attacker, attPlayer, "graveyard");
+
+        if (!attacker.battleIndestructible) {
+          this.moveCard(attacker, attPlayer, "graveyard");
+        }
       } else {
         const attPlayer = attacker.owner === "player" ? this.player : this.bot;
         const defPlayer = target.owner === "player" ? this.player : this.bot;
-        this.moveCard(attacker, attPlayer, "graveyard");
-        this.moveCard(target, defPlayer, "graveyard");
+
+        if (!attacker.battleIndestructible) {
+          this.moveCard(attacker, attPlayer, "graveyard");
+        }
+
+        if (!target.battleIndestructible) {
+          this.moveCard(target, defPlayer, "graveyard");
+        }
       }
     } else {
       if (attacker.atk > target.def) {
         const defender = target.owner === "player" ? this.player : this.bot;
-        this.moveCard(target, defender, "graveyard");
-        this.applyBattleDestroyEffect(attacker, target);
+        if (!target.battleIndestructible) {
+          this.moveCard(target, defender, "graveyard");
+          this.applyBattleDestroyEffect(attacker, target);
+        }
       } else if (attacker.atk < target.def) {
         const attPlayer = attacker.owner === "player" ? this.player : this.bot;
         const damage = target.def - attacker.atk;
@@ -767,6 +783,8 @@ export default class Game {
         return player.hand;
       case "deck":
         return player.deck;
+      case "spellTrap":
+        return player.spellTrap;
       case "graveyard":
         return player.graveyard;
       case "spellTrap":
@@ -780,7 +798,7 @@ export default class Game {
   moveCard(card, destPlayer, toZone, options = {}) {
     if (!card || !destPlayer || !toZone) return;
 
-    const zones = ["field", "hand", "deck", "graveyard"];
+    const zones = ["field", "hand", "deck", "graveyard", "spellTrap"];
     const fromOwner = card.owner === this.player.id ? this.player : this.bot;
     let fromZone = null;
 
@@ -792,6 +810,40 @@ export default class Game {
         fromZone = zoneName;
         break;
       }
+    }
+
+    // Se um equip spell está saindo da spell/trap zone, limpar seus efeitos no monstro
+    if (
+      fromZone === "spellTrap" &&
+      card.cardKind === "spell" &&
+      card.subtype === "equip" &&
+      card.equippedTo
+    ) {
+      const host = card.equippedTo;
+
+      if (host && Array.isArray(host.equips)) {
+        const idxEquip = host.equips.indexOf(card);
+        if (idxEquip > -1) {
+          host.equips.splice(idxEquip, 1);
+        }
+      }
+
+      if (typeof card.equipAtkBonus === "number" && card.equipAtkBonus !== 0) {
+        host.atk -= card.equipAtkBonus;
+        card.equipAtkBonus = 0;
+      }
+
+      if (typeof card.equipDefBonus === "number" && card.equipDefBonus !== 0) {
+        host.def -= card.equipDefBonus;
+        card.equipDefBonus = 0;
+      }
+
+      if (card.grantsBattleIndestructible) {
+        host.battleIndestructible = false;
+        card.grantsBattleIndestructible = false;
+      }
+
+      card.equippedTo = null;
     }
 
     const destArr = this.getZone(destPlayer, toZone);

@@ -32,6 +32,20 @@ export default class Card {
     this.equips = [];
     this.summonRestrict = data.summonRestrict || null;
 
+    // Equip / status helpers
+    this.equippedTo = this.equippedTo || null;
+    this.equips = this.equips || [];
+
+    // NOVO: controle de bônus de equipamento
+    this.equipAtkBonus = 0;
+    this.equipDefBonus = 0;
+
+    // NOVO: controle de efeitos concedidos
+    this.grantsBattleIndestructible = false;
+
+    // NOVO: status do monstro – não pode ser destruído em batalha
+    this.battleIndestructible = false;
+
     this.description = data.description;
     this.effects = data.effects || [];
     this.image = data.image;

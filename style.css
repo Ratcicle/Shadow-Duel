@@ -136,6 +136,21 @@ body {
   padding: 8px 12px;
 }
 
+.spelltrap-zone {
+  display: flex;
+  gap: 10px;
+  min-width: 400px;
+  min-height: 160px;
+  justify-content: center;
+  align-items: center;
+  border: 1px dashed var(--border-color);
+  border-radius: 8px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  color: #555;
+  font-size: 0.85rem;
+}
+
 .hand-zone {
   display: flex;
   gap: 5px;
@@ -690,10 +705,6 @@ body {
   font-weight: 700;
 }
 
-
-
-
-
 /* phase track */
 #phase-track {
   list-style: none;
@@ -721,7 +732,6 @@ body {
 #phase-track li.done {
   opacity: 0.6;
 }
-
 
 .card.targetable {
   border: 2px dashed #64d7ff;
@@ -764,6 +774,3 @@ body {
   opacity: 0.3;
   pointer-events: none;
 }
-
-
-

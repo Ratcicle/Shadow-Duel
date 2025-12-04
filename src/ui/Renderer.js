@@ -3,12 +3,14 @@ export default class Renderer {
     this.elements = {
       playerHand: document.getElementById("player-hand"),
       playerField: document.getElementById("player-field"),
+      playerSpellTrap: document.getElementById("player-spelltrap"),
       playerDeck: document.getElementById("player-deck"),
       playerGraveyard: document.getElementById("player-graveyard"),
       playerLP: document.getElementById("player-lp"),
       playerSpellTrap: document.getElementById("player-spelltrap"),
       botHand: document.getElementById("bot-hand"),
       botField: document.getElementById("bot-field"),
+      botSpellTrap: document.getElementById("bot-spelltrap"),
       botDeck: document.getElementById("bot-deck"),
       botGraveyard: document.getElementById("bot-graveyard"),
       botLP: document.getElementById("bot-lp"),
@@ -98,29 +100,6 @@ export default class Renderer {
     });
   }
 
-  renderSpellTrap(player) {
-    const container =
-      player.id === "player"
-        ? this.elements.playerSpellTrap
-        : this.elements.botSpellTrap;
-
-    if (!container) return;
-    container.innerHTML = "";
-
-    player.spellTrapZone.forEach((card, index) => {
-      const cardEl = this.createCardElement(card, true);
-      cardEl.dataset.index = index;
-      cardEl.dataset.location = "spellTrap";
-
-      if (card.isFacedown) {
-        cardEl.classList.add("facedown");
-        cardEl.innerHTML = '<div class="card-back"></div>';
-      }
-
-      container.appendChild(cardEl);
-    });
-  }
-
   showSummonModal(cardIndex, callback) {
     const existingModal = document.querySelector(".summon-choice-modal");
     if (existingModal) {
@@ -183,14 +162,18 @@ export default class Renderer {
           <div class="card-name">${card.name}</div>
           <div class="card-level">${typeLabel}</div>
         </div>
-        <div class="card-image" style="background-image: url('${card.image}'); background-size: cover; background-position: center;"></div>
+        <div class="card-image" style="background-image: url('${
+          card.image
+        }'); background-size: cover; background-position: center;"></div>
         ${
           isMonster
             ? `<div class="card-stats">
                  <span class="stat-atk">ATK ${card.atk}</span>
                  <span class="stat-def">DEF ${card.def}</span>
                </div>`
-            : `<div class="card-text">${card.description || "Effect card."}</div>`
+            : `<div class="card-text">${
+                card.description || "Effect card."
+              }</div>`
         }
       `;
     }
@@ -231,7 +214,14 @@ export default class Renderer {
     const previewLevel = document.getElementById("preview-level");
     const previewDesc = document.getElementById("preview-desc");
 
-    if (!previewImage || !previewName || !previewAtk || !previewDef || !previewLevel || !previewDesc) {
+    if (
+      !previewImage ||
+      !previewName ||
+      !previewAtk ||
+      !previewDef ||
+      !previewLevel ||
+      !previewDesc
+    ) {
       return;
     }
 

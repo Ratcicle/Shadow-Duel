@@ -912,7 +912,7 @@ export default class EffectEngine {
       } else {
         const fromOwner =
           card.owner === "player" ? this.game.player : this.game.bot;
-        const zones = ["field", "hand", "deck", "graveyard"];
+        const zones = ["field", "hand", "deck", "graveyard", "spellTrap"];
         for (const zoneName of zones) {
           const arr = this.getZone(fromOwner, zoneName);
           const idx = arr ? arr.indexOf(card) : -1;
@@ -942,6 +942,55 @@ export default class EffectEngine {
         destArr.push(card);
       }
     });
+  }
+
+  applyEquip(action, ctx, targets) {
+    const equipCard = ctx.source;
+    const player = ctx.player;
+
+    const targetCards = targets[action.targetRef] || [];
+    if (!targetCards.length) return;
+
+    const target = targetCards[0];
+
+    if (!target || target.cardKind !== "monster") return;
+
+    // Se ainda estiver na mão, mover para spell/trap
+    if (this.game && typeof this.game.moveCard === "function") {
+      const handZone = this.game.getZone(player, "hand");
+      if (handZone && handZone.includes(equipCard)) {
+        this.game.moveCard(equipCard, player, "spellTrap", {
+          isFacedown: false,
+          resetAttackFlags: false,
+        });
+      }
+    }
+
+    // Vincular equip ↔ monstro
+    equipCard.equippedTo = target;
+    if (!Array.isArray(target.equips)) {
+      target.equips = [];
+    }
+    if (!target.equips.includes(equipCard)) {
+      target.equips.push(equipCard);
+    }
+
+    // Bônus de ATK/DEF – guardar no equip
+    if (typeof action.atkBonus === "number") {
+      equipCard.equipAtkBonus = action.atkBonus;
+      target.atk += action.atkBonus;
+    }
+
+    if (typeof action.defBonus === "number") {
+      equipCard.equipDefBonus = action.defBonus;
+      target.def += action.defBonus;
+    }
+
+    // NOVO: indestrutível por batalha
+    if (action.battleIndestructible) {
+      equipCard.grantsBattleIndestructible = true;
+      target.battleIndestructible = true;
+    }
   }
 
   applyReviveShadowHeartFromGrave(action, ctx) {

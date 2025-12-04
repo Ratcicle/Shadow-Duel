@@ -9,6 +9,7 @@ export default class Player {
     this.deck = [];
     this.hand = [];
     this.field = [];
+    this.spellTrap = [];
     this.graveyard = [];
     this.spellTrapZone = [];
     this.summonCount = 0;
