@@ -15,6 +15,7 @@ export default class Player {
     this.fieldSpell = null;
     this.summonCount = 0;
     this.maxDeckSize = 30;
+    this.oncePerTurnUsageByName = {};
   }
 
   buildDeck(deckList = null) {

@@ -1069,6 +1069,7 @@ export default class Game {
 
     const destroyedOwner =
       destroyed.owner === "player" ? this.player : this.bot;
+    const attackerOwner = attacker.owner === "player" ? this.player : this.bot;
     const otherPlayer = destroyedOwner === this.player ? this.bot : this.player;
 
     this.effectEngine.handleEvent("battle_destroy", {
@@ -1076,6 +1077,8 @@ export default class Game {
       opponent: destroyedOwner, // the player who lost the monster
       attacker,
       destroyed,
+      attackerOwner,
+      destroyedOwner,
     });
   }
 
