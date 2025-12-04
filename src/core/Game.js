@@ -862,6 +862,10 @@ export default class Game {
       console.log("Field is full (max 5 cards).");
       return;
     }
+    if (toZone === "spellTrap" && destArr.length >= 5) {
+      console.log("Spell/Trap zone is full (max 5 cards).");
+      return;
+    }
 
     if (options.position) {
       card.position = options.position;

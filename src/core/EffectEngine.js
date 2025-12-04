@@ -474,7 +474,7 @@ export default class EffectEngine {
       case "deck":
         return player.deck;
       case "spellTrap":
-        return player.spellTrap;
+        return player.spellTrapZone;
       case "field":
       default:
         return player.field;
@@ -510,6 +510,9 @@ export default class EffectEngine {
           break;
         case "transmutate":
           this.applyTransmutate(action, ctx, targets);
+          break;
+        case "equip":
+          this.applyEquip(action, ctx, targets);
           break;
         case "move":
           this.applyMove(action, ctx, targets);
