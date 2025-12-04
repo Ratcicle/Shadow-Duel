@@ -15,7 +15,7 @@ export default class Game {
 
     this.turn = "player";
     this.phase = "draw";
-    this.turnCount = 1;
+    this.turnCounter = 0;
     this.gameOver = false;
     this.targetSelection = null;
     this.graveyardSelection = null;
@@ -104,6 +104,7 @@ export default class Game {
   }
 
   startTurn() {
+    this.turnCounter += 1;
     this.phase = "draw";
 
     const activePlayer = this.turn === "player" ? this.player : this.bot;
@@ -147,7 +148,6 @@ export default class Game {
     this.cleanupTempBoosts(this.player);
     this.cleanupTempBoosts(this.bot);
     this.turn = this.turn === "player" ? "bot" : "player";
-    this.turnCount++;
     this.startTurn();
   }
 

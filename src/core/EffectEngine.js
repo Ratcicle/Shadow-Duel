@@ -6,6 +6,41 @@ export default class EffectEngine {
     this.game = game;
   }
 
+  checkOncePerTurn(card, player, effect) {
+    if (!effect || !effect.oncePerTurn) {
+      return { ok: true };
+    }
+
+    if (!player.oncePerTurnUsageByName) {
+      player.oncePerTurnUsageByName = {};
+    }
+
+    const currentTurn = this.game?.turnCounter ?? 0;
+    const lastTurn = player.oncePerTurnUsageByName[card.name] ?? 0;
+
+    if (lastTurn === currentTurn) {
+      return {
+        ok: false,
+        reason: "Once per turn effect already used this turn.",
+      };
+    }
+
+    return { ok: true };
+  }
+
+  registerOncePerTurnUsage(card, player, effect) {
+    if (!effect || !effect.oncePerTurn) {
+      return;
+    }
+
+    if (!player.oncePerTurnUsageByName) {
+      player.oncePerTurnUsageByName = {};
+    }
+
+    const currentTurn = this.game?.turnCounter ?? 0;
+    player.oncePerTurnUsageByName[card.name] = currentTurn;
+  }
+
   handleEvent(eventName, payload) {
     if (eventName === "after_summon") {
       this.handleAfterSummonEvent(payload);
@@ -41,6 +76,12 @@ export default class EffectEngine {
         }
       }
 
+      const optCheck = this.checkOncePerTurn(card, player, effect);
+      if (!optCheck.ok) {
+        console.log(optCheck.reason);
+        continue;
+      }
+
       const targetResult = this.resolveTargets(effect.targets || [], ctx, null);
 
       if (targetResult.needsSelection) {
@@ -72,6 +113,7 @@ export default class EffectEngine {
       }
 
       this.applyActions(effect.actions || [], ctx, targetResult.targets || {});
+      this.registerOncePerTurnUsage(card, ctx.player, effect);
       this.game.checkWinCondition();
     }
   }
@@ -101,6 +143,12 @@ export default class EffectEngine {
         if (effect.event !== "battle_destroy") continue;
 
         if (effect.requireSelfAsAttacker && ctx.attacker !== card) continue;
+
+        const optCheck = this.checkOncePerTurn(card, ctx.player, effect);
+        if (!optCheck.ok) {
+          console.log(optCheck.reason);
+          continue;
+        }
 
         const targetResult = this.resolveTargets(
           effect.targets || [],
@@ -141,6 +189,7 @@ export default class EffectEngine {
           ctx,
           targetResult.targets || {}
         );
+        this.registerOncePerTurnUsage(card, ctx.player, effect);
         this.game.checkWinCondition();
       }
     }
@@ -164,6 +213,12 @@ export default class EffectEngine {
       if (effect.event !== "card_to_grave") continue;
 
       if (effect.fromZone && effect.fromZone !== fromZone) continue;
+
+      const optCheck = this.checkOncePerTurn(card, player, effect);
+      if (!optCheck.ok) {
+        console.log(optCheck.reason);
+        continue;
+      }
 
       const targetResult = this.resolveTargets(effect.targets || [], ctx, null);
 
@@ -196,12 +251,19 @@ export default class EffectEngine {
       }
 
       this.applyActions(effect.actions || [], ctx, targetResult.targets || {});
+      this.registerOncePerTurnUsage(card, ctx.player, effect);
       this.game.checkWinCondition();
     }
   }
 
   resolveTriggeredSelection(effect, ctx, selections) {
     if (!effect) return;
+
+    const optCheck = this.checkOncePerTurn(ctx.source, ctx.player, effect);
+    if (!optCheck.ok) {
+      console.log(optCheck.reason);
+      return;
+    }
 
     const targetResult = this.resolveTargets(
       effect.targets || [],
@@ -226,6 +288,7 @@ export default class EffectEngine {
     }
 
     this.applyActions(effect.actions || [], ctx, targetResult.targets || {});
+    this.registerOncePerTurnUsage(ctx.source, ctx.player, effect);
     this.game.checkWinCondition();
   }
 
@@ -238,6 +301,11 @@ export default class EffectEngine {
     const effect = (card.effects && card.effects[0]) || null;
     if (!effect) {
       return { success: false, reason: "No effect defined." };
+    }
+
+    const optCheck = this.checkOncePerTurn(card, player, effect);
+    if (!optCheck.ok) {
+      return { success: false, reason: optCheck.reason };
     }
 
     const ctx = {
@@ -265,6 +333,7 @@ export default class EffectEngine {
     }
 
     this.applyActions(effect.actions || [], ctx, targetResult.targets);
+    this.registerOncePerTurnUsage(card, player, effect);
     this.game.checkWinCondition();
 
     if (card.cardKind === "spell" && card.subtype === "field") {
@@ -317,6 +386,11 @@ export default class EffectEngine {
       return { success: false, reason: "No field activation effect." };
     }
 
+    const optCheck = this.checkOncePerTurn(card, player, effect);
+    if (!optCheck.ok) {
+      return { success: false, reason: optCheck.reason };
+    }
+
     const ctx = {
       source: card,
       player,
@@ -343,6 +417,7 @@ export default class EffectEngine {
     }
 
     this.applyActions(effect.actions || [], ctx, targetResult.targets);
+    this.registerOncePerTurnUsage(card, player, effect);
     this.game.checkWinCondition();
 
     return { success: true };
