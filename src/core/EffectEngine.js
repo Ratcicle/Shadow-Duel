@@ -263,6 +263,11 @@ export default class EffectEngine {
     this.applyActions(effect.actions || [], ctx, targetResult.targets);
     this.game.checkWinCondition();
 
+    // Equip Spells serão movidas para a zona de spell/trap na própria action.
+    if (card.cardKind === "spell" && card.subtype === "equip") {
+      return { success: true };
+    }
+
     if (this.game && typeof this.game.moveCard === "function") {
       this.game.moveCard(card, player, "graveyard", { fromZone: "hand" });
     } else {
@@ -467,6 +472,8 @@ export default class EffectEngine {
         return player.graveyard;
       case "deck":
         return player.deck;
+      case "spellTrap":
+        return player.spellTrapZone;
       case "field":
       default:
         return player.field;
@@ -502,6 +509,9 @@ export default class EffectEngine {
           break;
         case "transmutate":
           this.applyTransmutate(action, ctx, targets);
+          break;
+        case "equip":
+          this.applyEquip(action, ctx, targets);
           break;
         case "move":
           this.applyMove(action, ctx, targets);
@@ -825,6 +835,43 @@ export default class EffectEngine {
     setTimeout(() => {
       this.game.promptTransmutateRevive(owner, level);
     }, 350);
+  }
+
+  applyEquip(action, ctx, targets) {
+    const equipCard = ctx.source;
+    const player = ctx.player;
+
+    const targetCards = targets[action.targetRef] || [];
+    if (!targetCards.length) return;
+
+    const target = targetCards[0];
+
+    if (!target || target.cardKind !== "monster") return;
+
+    if (this.game && typeof this.game.moveCard === "function") {
+      const zone = this.game.getZone(player, "hand");
+      if (zone && zone.includes(equipCard)) {
+        this.game.moveCard(equipCard, player, "spellTrap", {
+          isFacedown: false,
+          resetAttackFlags: false,
+        });
+      }
+    }
+
+    equipCard.equippedTo = target;
+    if (!Array.isArray(target.equips)) {
+      target.equips = [];
+    }
+    if (!target.equips.includes(equipCard)) {
+      target.equips.push(equipCard);
+    }
+
+    if (typeof action.atkBonus === "number") {
+      target.atk += action.atkBonus;
+    }
+    if (typeof action.defBonus === "number") {
+      target.def += action.defBonus;
+    }
   }
 
   applyMove(action, ctx, targets) {

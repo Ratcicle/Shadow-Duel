@@ -10,6 +10,7 @@ export default class Player {
     this.hand = [];
     this.field = [];
     this.graveyard = [];
+    this.spellTrapZone = [];
     this.summonCount = 0;
     this.maxDeckSize = 30;
   }

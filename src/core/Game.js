@@ -76,8 +76,10 @@ export default class Game {
   updateBoard() {
     this.renderer.renderHand(this.player);
     this.renderer.renderField(this.player);
+    this.renderer.renderSpellTrap(this.player);
     this.renderer.renderHand(this.bot);
     this.renderer.renderField(this.bot);
+    this.renderer.renderSpellTrap(this.bot);
     this.renderer.updateLP(this.player);
     this.renderer.updateLP(this.bot);
     this.renderer.updatePhaseTrack(this.phase);
@@ -764,6 +766,8 @@ export default class Game {
         return player.deck;
       case "graveyard":
         return player.graveyard;
+      case "spellTrap":
+        return player.spellTrapZone;
       case "field":
       default:
         return player.field;
@@ -773,7 +777,7 @@ export default class Game {
   moveCard(card, destPlayer, toZone, options = {}) {
     if (!card || !destPlayer || !toZone) return;
 
-    const zones = ["field", "hand", "deck", "graveyard"];
+    const zones = ["field", "hand", "deck", "graveyard", "spellTrap"];
     const fromOwner = card.owner === this.player.id ? this.player : this.bot;
     let fromZone = null;
 
@@ -795,6 +799,10 @@ export default class Game {
 
     if (toZone === "field" && destArr.length >= 5) {
       console.log("Field is full (max 5 monsters).");
+      return;
+    }
+    if (toZone === "spellTrap" && destArr.length >= 5) {
+      console.log("Spell/Trap zone is full (max 5 cards).");
       return;
     }
 

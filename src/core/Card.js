@@ -26,6 +26,10 @@ export default class Card {
     this.cannotAttackThisTurn = false;
     this.altTribute = data.altTribute || null;
     this.onBattleDestroy = data.onBattleDestroy || null;
+
+    // Equip support
+    this.equippedTo = null;
+    this.equips = [];
     this.summonRestrict = data.summonRestrict || null;
 
     this.description = data.description;
