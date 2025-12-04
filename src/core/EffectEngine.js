@@ -869,6 +869,11 @@ export default class EffectEngine {
       target.equips.push(equipCard);
     }
 
+    equipCard.equipBonus = {
+      atkBonus: typeof action.atkBonus === "number" ? action.atkBonus : 0,
+      defBonus: typeof action.defBonus === "number" ? action.defBonus : 0,
+    };
+
     if (typeof action.atkBonus === "number") {
       target.atk += action.atkBonus;
     }

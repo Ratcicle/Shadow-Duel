@@ -784,10 +784,40 @@ export default class Game {
     const fromOwner = card.owner === this.player.id ? this.player : this.bot;
     let fromZone = null;
 
+    const detachEquip = (equipCard) => {
+      const target = equipCard && equipCard.equippedTo;
+      if (!target) return;
+
+      if (Array.isArray(target.equips)) {
+        const idx = target.equips.indexOf(equipCard);
+        if (idx > -1) {
+          target.equips.splice(idx, 1);
+        }
+      }
+
+      if (equipCard.equipBonus) {
+        if (typeof equipCard.equipBonus.atkBonus === "number") {
+          target.atk -= equipCard.equipBonus.atkBonus;
+        }
+        if (typeof equipCard.equipBonus.defBonus === "number") {
+          target.def -= equipCard.equipBonus.defBonus;
+        }
+      }
+
+      equipCard.equippedTo = null;
+    };
+
     for (const zoneName of zones) {
       const arr = this.getZone(fromOwner, zoneName) || [];
       const idx = arr.indexOf(card);
       if (idx > -1) {
+        if (card.equippedTo) {
+          detachEquip(card);
+        }
+        if (Array.isArray(card.equips) && card.equips.length > 0) {
+          card.equips.forEach((equip) => detachEquip(equip));
+          card.equips = [];
+        }
         arr.splice(idx, 1);
         fromZone = zoneName;
         break;
