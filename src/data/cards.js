@@ -724,4 +724,39 @@ export const cardDatabase = [
       },
     ],
   },
+  {
+    id: 40,
+    name: "Shadow-Heart Shield",
+    cardKind: "spell",
+    subtype: "equip",
+    archetype: "Shadow-Heart",
+    description:
+      "Equip only to a monster you control. It gains 500 ATK/DEF and cannot be destroyed by battle.",
+    image: "assets/Shadow-Heart Shield.png",
+    effects: [
+      {
+        id: "shadow_heart_shield_equip",
+        timing: "on_play",
+        speed: 1,
+        targets: [
+          {
+            id: "shield_equip_target",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "equip",
+            targetRef: "shield_equip_target",
+            atkBonus: 500,
+            defBonus: 500,
+            battleIndestructible: true,
+          },
+        ],
+      },
+    ],
+  },
 ];
