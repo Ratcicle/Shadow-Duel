@@ -15,8 +15,9 @@ export default class EffectEngine {
       player.oncePerTurnUsageByName = {};
     }
 
+    const key = effect?.oncePerTurnName || effect?.id || card.name;
     const currentTurn = this.game?.turnCounter ?? 0;
-    const lastTurn = player.oncePerTurnUsageByName[card.name];
+    const lastTurn = player.oncePerTurnUsageByName[key];
 
     if (lastTurn === currentTurn) {
       return {
@@ -37,8 +38,9 @@ export default class EffectEngine {
       player.oncePerTurnUsageByName = {};
     }
 
+    const key = effect?.oncePerTurnName || effect?.id || card.name;
     const currentTurn = this.game?.turnCounter ?? 0;
-    player.oncePerTurnUsageByName[card.name] = currentTurn;
+    player.oncePerTurnUsageByName[key] = currentTurn;
   }
 
   handleEvent(eventName, payload) {
@@ -688,9 +690,12 @@ export default class EffectEngine {
   addNamedPermanentAtkBuff(card, sourceName, amount) {
     if (!card || !sourceName || !amount) return false;
     card.permanentBuffsBySource = card.permanentBuffsBySource || {};
-    card.atk += amount;
-    card.permanentBuffsBySource[sourceName] =
-      (card.permanentBuffsBySource[sourceName] || 0) + amount;
+    const prev = card.permanentBuffsBySource[sourceName] || 0;
+    const next = Math.max(prev, amount);
+    const delta = next - prev;
+    if (delta === 0) return false;
+    card.atk += delta;
+    card.permanentBuffsBySource[sourceName] = next;
     return true;
   }
 
