@@ -90,6 +90,14 @@ export default class Player {
 
     let usingAlt = false;
     const alt = card.altTribute;
+    if (
+      alt?.type === "no_tribute_if_empty_field" &&
+      this.field.length === 0 &&
+      tributesNeeded > 0
+    ) {
+      tributesNeeded = 0;
+      usingAlt = true;
+    }
     if (alt && this.field.some((c) => c.name === alt.requiresName)) {
       if (alt.tributes < tributesNeeded) {
         tributesNeeded = alt.tributes;

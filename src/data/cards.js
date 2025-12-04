@@ -759,4 +759,19 @@ export const cardDatabase = [
       },
     ],
   },
+  {
+    id: 41,
+    name: "Shadow-Heart Griffin",
+    cardKind: "monster",
+    atk: 2000,
+    def: 1500,
+    level: 5,
+    type: "Winged Beast",
+    archetype: "Shadow-Heart",
+    altTribute: { type: "no_tribute_if_empty_field" },
+    description:
+      'If you control no monsters, you can Normal Summon this card without Tributing. Otherwise, Tribute Summon it as a Level 5 monster.',
+    image: "assets/Shadow-Hearted Griffin.png",
+    effects: [],
+  },
 ];
