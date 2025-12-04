@@ -247,6 +247,24 @@ export default class EffectEngine {
       activationZone: "hand",
     };
 
+    if (card.cardKind === "spell" && card.subtype === "field") {
+      if (this.game && typeof this.game.moveCard === "function") {
+        this.game.moveCard(card, player, "fieldSpell", {
+          fromZone: "hand",
+          isFacedown: false,
+        });
+      } else {
+        const idx = player.hand.indexOf(card);
+        if (idx > -1) {
+          player.hand.splice(idx, 1);
+        }
+        player.fieldSpell = card;
+        card.owner = player.id;
+      }
+
+      ctx.activationZone = "fieldSpell";
+    }
+
     const targetResult = this.resolveTargets(
       effect.targets || [],
       ctx,
@@ -268,20 +286,6 @@ export default class EffectEngine {
     this.game.checkWinCondition();
 
     if (card.cardKind === "spell" && card.subtype === "field") {
-      if (this.game && typeof this.game.moveCard === "function") {
-        this.game.moveCard(card, player, "fieldSpell", {
-          fromZone: "hand",
-          isFacedown: false,
-        });
-      } else {
-        const idx = player.hand.indexOf(card);
-        if (idx > -1) {
-          player.hand.splice(idx, 1);
-        }
-        player.fieldSpell = card;
-        card.owner = player.id;
-      }
-
       return { success: true };
     }
 
