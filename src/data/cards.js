@@ -774,4 +774,66 @@ export const cardDatabase = [
     image: "assets/Shadow-Heart Griffin.png",
     effects: [],
   },
+  {
+    id: 42,
+    name: "Darkness Valley",
+    cardKind: "spell",
+    subtype: "field",
+    archetype: "Shadow-Heart",
+    description:
+      'All "Shadow-Heart" monsters you control gain 300 ATK. Once per turn, if a Level 8 or higher "Shadow-Heart" monster you control is destroyed by battle: destroy the attacking monster.',
+    image: "assets/Darkness Valley.png",
+    effects: [
+      {
+        id: "darkness_valley_activate",
+        timing: "on_field_activate",
+        actions: [
+          {
+            type: "darkness_valley_apply_existing",
+            amount: 300,
+            archetype: "Shadow-Heart",
+          },
+        ],
+      },
+      {
+        id: "darkness_valley_summon_buff",
+        timing: "on_event",
+        event: "after_summon",
+        actions: [
+          {
+            type: "darkness_valley_buff_summon",
+            amount: 300,
+            archetype: "Shadow-Heart",
+          },
+        ],
+      },
+      {
+        id: "darkness_valley_cleanup",
+        timing: "on_event",
+        event: "card_to_grave",
+        fromZone: "fieldSpell",
+        actions: [
+          {
+            type: "darkness_valley_cleanup",
+            amount: 300,
+            archetype: "Shadow-Heart",
+          },
+        ],
+      },
+      {
+        id: "darkness_valley_battle_punish",
+        timing: "on_event",
+        event: "battle_destroy",
+        oncePerTurn: true,
+        oncePerTurnName: "Darkness Valley",
+        actions: [
+          {
+            type: "darkness_valley_battle_punish",
+            archetype: "Shadow-Heart",
+            minLevel: 8,
+          },
+        ],
+      },
+    ],
+  },
 ];
