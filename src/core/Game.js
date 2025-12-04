@@ -41,7 +41,10 @@ export default class Game {
       }
     }
 
-    if (this.effectEngine && typeof this.effectEngine.handleEvent === "function") {
+    if (
+      this.effectEngine &&
+      typeof this.effectEngine.handleEvent === "function"
+    ) {
       this.effectEngine.handleEvent(eventName, payload);
     }
   }
@@ -76,8 +79,10 @@ export default class Game {
   updateBoard() {
     this.renderer.renderHand(this.player);
     this.renderer.renderField(this.player);
+    this.renderer.renderSpellTrap(this.player);
     this.renderer.renderHand(this.bot);
     this.renderer.renderField(this.bot);
+    this.renderer.renderSpellTrap(this.bot);
     this.renderer.updateLP(this.player);
     this.renderer.updateLP(this.bot);
     this.renderer.updatePhaseTrack(this.phase);
@@ -266,14 +271,12 @@ export default class Game {
             selectedTributes
           );
 
-          const summonedCard =
-            this.player.field[this.player.field.length - 1];
+          const summonedCard = this.player.field[this.player.field.length - 1];
 
           this.emit("after_summon", {
             card: summonedCard,
             player: this.player,
-            method:
-              pendingSummon.tributesNeeded > 0 ? "tribute" : "normal",
+            method: pendingSummon.tributesNeeded > 0 ? "tribute" : "normal",
           });
 
           tributeSelectionMode = false;
@@ -610,7 +613,8 @@ export default class Game {
   }
 
   promptTransmutateRevive(player, level) {
-    const filter = (card) => card.cardKind === "monster" && (card.level || 0) === level;
+    const filter = (card) =>
+      card.cardKind === "monster" && (card.level || 0) === level;
     if (!player.graveyard.some(filter)) {
       alert("No monster with a matching Level in your Graveyard.");
       return;
@@ -642,7 +646,8 @@ export default class Game {
         console.log("Transmutate selection cancelled.");
       },
     });
-  }  resolveCombat(attacker, target) {
+  }
+  resolveCombat(attacker, target) {
     if (!attacker) return;
 
     if (attacker.cannotAttackThisTurn) {
@@ -764,6 +769,8 @@ export default class Game {
         return player.deck;
       case "graveyard":
         return player.graveyard;
+      case "spellTrap":
+        return player.spellTrapZone;
       case "field":
       default:
         return player.field;
@@ -793,8 +800,8 @@ export default class Game {
       return;
     }
 
-    if (toZone === "field" && destArr.length >= 5) {
-      console.log("Field is full (max 5 monsters).");
+    if ((toZone === "field" || toZone === "spellTrap") && destArr.length >= 5) {
+      console.log("Field is full (max 5 cards).");
       return;
     }
 
@@ -847,7 +854,11 @@ export default class Game {
     }
 
     // New: global battle_destroy event for cards like Shadow-Heart Gecko
-    if (!destroyed || !this.effectEngine || typeof this.effectEngine.handleEvent !== "function") {
+    if (
+      !destroyed ||
+      !this.effectEngine ||
+      typeof this.effectEngine.handleEvent !== "function"
+    ) {
       return;
     }
 
@@ -856,7 +867,7 @@ export default class Game {
     const otherPlayer = destroyedOwner === this.player ? this.bot : this.player;
 
     this.effectEngine.handleEvent("battle_destroy", {
-      player: otherPlayer,      // the player whose opponent's monster was destroyed
+      player: otherPlayer, // the player whose opponent's monster was destroyed
       opponent: destroyedOwner, // the player who lost the monster
       attacker,
       destroyed,
@@ -876,8 +887,3 @@ export default class Game {
     this.handleSpellActivationResult(card, handIndex, result);
   }
 }
-
-
-
-
-

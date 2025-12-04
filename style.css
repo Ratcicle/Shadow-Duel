@@ -117,6 +117,13 @@ body {
   flex: 1;
 }
 
+.board-zones {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+}
+
 .field-zone {
   display: flex;
   gap: 10px;

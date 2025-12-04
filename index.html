@@ -68,7 +68,10 @@
         <div class="zones">
           <div class="deck-zone" id="bot-deck">Deck</div>
           <div class="hand-zone" id="bot-hand"></div>
-          <div class="field-zone" id="bot-field"></div>
+          <div class="board-zones bot-board">
+            <div id="bot-field" class="field-zone monster-row"></div>
+            <div id="bot-spelltrap" class="field-zone spelltrap-row"></div>
+          </div>
           <div class="graveyard-zone" id="bot-graveyard">GY</div>
         </div>
       </div>
@@ -89,7 +92,10 @@
       <div id="player-area" class="player-area">
         <div class="zones">
           <div class="graveyard-zone" id="player-graveyard">GY</div>
-          <div class="field-zone" id="player-field"></div>
+          <div class="board-zones player-board">
+            <div id="player-spelltrap" class="field-zone spelltrap-row"></div>
+            <div id="player-field" class="field-zone monster-row"></div>
+          </div>
           <div class="hand-zone" id="player-hand"></div>
           <div class="deck-zone" id="player-deck">Deck</div>
         </div>
