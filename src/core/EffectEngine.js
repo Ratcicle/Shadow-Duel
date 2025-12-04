@@ -16,7 +16,7 @@ export default class EffectEngine {
     }
 
     const currentTurn = this.game?.turnCounter ?? 0;
-    const lastTurn = player.oncePerTurnUsageByName[card.name] ?? 0;
+    const lastTurn = player.oncePerTurnUsageByName[card.name];
 
     if (lastTurn === currentTurn) {
       return {
@@ -77,14 +77,20 @@ export default class EffectEngine {
         if (!effect || effect.timing !== "on_event") continue;
         if (effect.event !== "after_summon") continue;
 
-      if (effect.summonMethod) {
-        const methods = Array.isArray(effect.summonMethod)
-          ? effect.summonMethod
-          : [effect.summonMethod];
-        if (!methods.includes(method)) {
+        const optCheck = this.checkOncePerTurn(sourceCard, player, effect);
+        if (!optCheck.ok) {
+          console.log(optCheck.reason);
           continue;
         }
-      }
+
+        if (effect.summonMethod) {
+          const methods = Array.isArray(effect.summonMethod)
+            ? effect.summonMethod
+            : [effect.summonMethod];
+          if (!methods.includes(method)) {
+            continue;
+          }
+        }
 
         const targetResult = this.resolveTargets(effect.targets || [], ctx, null);
 
@@ -116,8 +122,10 @@ export default class EffectEngine {
           continue;
         }
 
-      this.applyActions(effect.actions || [], ctx, targetResult.targets || {});
-      this.game.checkWinCondition();
+        this.applyActions(effect.actions || [], ctx, targetResult.targets || {});
+        this.registerOncePerTurnUsage(sourceCard, player, effect);
+        this.game.checkWinCondition();
+      }
     }
   }
 
@@ -158,7 +166,13 @@ export default class EffectEngine {
           if (!effect || effect.timing !== "on_event") continue;
           if (effect.event !== "battle_destroy") continue;
 
-        if (effect.requireSelfAsAttacker && ctx.attacker !== card) continue;
+          const optCheck = this.checkOncePerTurn(card, owner, effect);
+          if (!optCheck.ok) {
+            console.log(optCheck.reason);
+            continue;
+          }
+
+          if (effect.requireSelfAsAttacker && ctx.attacker !== card) continue;
 
           const targetResult = this.resolveTargets(
             effect.targets || [],
@@ -194,12 +208,14 @@ export default class EffectEngine {
             continue;
           }
 
-        this.applyActions(
-          effect.actions || [],
-          ctx,
-          targetResult.targets || {}
-        );
-        this.game.checkWinCondition();
+          this.applyActions(
+            effect.actions || [],
+            ctx,
+            targetResult.targets || {}
+          );
+          this.registerOncePerTurnUsage(card, owner, effect);
+          this.game.checkWinCondition();
+        }
       }
     }
   }
@@ -209,21 +225,27 @@ export default class EffectEngine {
     if (!card || !player) return;
     if (!card.effects || !Array.isArray(card.effects)) return;
 
-      const ctx = {
-        source: card,
-        player,
-        opponent,
-        fromZone,
-        toZone,
-      };
+    const ctx = {
+      source: card,
+      player,
+      opponent,
+      fromZone,
+      toZone,
+    };
 
-      for (const effect of card.effects) {
-        if (!effect || effect.timing !== "on_event") continue;
-        if (effect.event !== "card_to_grave") continue;
+    for (const effect of card.effects) {
+      if (!effect || effect.timing !== "on_event") continue;
+      if (effect.event !== "card_to_grave") continue;
+
+      const optCheck = this.checkOncePerTurn(card, player, effect);
+      if (!optCheck.ok) {
+        console.log(optCheck.reason);
+        continue;
+      }
 
       if (effect.fromZone && effect.fromZone !== fromZone) continue;
 
-        const targetResult = this.resolveTargets(effect.targets || [], ctx, null);
+      const targetResult = this.resolveTargets(effect.targets || [], ctx, null);
 
       if (targetResult.needsSelection) {
         if (
@@ -244,16 +266,17 @@ export default class EffectEngine {
         return;
       }
 
-        if (targetResult.ok === false) {
-          console.warn(
-            "card_to_grave effect has no valid targets:",
-            effect.id || effect,
-            targetResult.reason
-          );
-          continue;
-        }
+      if (targetResult.ok === false) {
+        console.warn(
+          "card_to_grave effect has no valid targets:",
+          effect.id || effect,
+          targetResult.reason
+        );
+        continue;
+      }
 
       this.applyActions(effect.actions || [], ctx, targetResult.targets || {});
+      this.registerOncePerTurnUsage(card, player, effect);
       this.game.checkWinCondition();
     }
   }
@@ -442,26 +465,6 @@ export default class EffectEngine {
         return { ok: false, reason: "Need at least 2 cards in hand." };
       }
 
-      if (card.name === "Shadow-Heart Invocation" || card.id === 39) {
-        const hand = player.hand || [];
-        const gy = player.graveyard || [];
-
-        const hasDragonInHand = hand.some(
-          (c) => c && c.name === "Shadow-Heart Scale Dragon"
-        );
-        const hasDragonInGY = gy.some(
-          (c) => c && c.name === "Shadow-Heart Scale Dragon"
-        );
-
-        if (!hasDragonInHand && !hasDragonInGY) {
-          return {
-            ok: false,
-            reason:
-              '"Shadow-Heart Scale Dragon" must be in your hand or Graveyard to activate this card.',
-          };
-        }
-      }
-
       const gy = player.graveyard || [];
       const hasShadowHeart = gy.some((c) => {
         if (!c || c.cardKind !== "monster") return false;
@@ -476,6 +479,26 @@ export default class EffectEngine {
         return {
           ok: false,
           reason: 'No "Shadow-Heart" monsters in graveyard.',
+        };
+      }
+    }
+
+    if (card.name === "Shadow-Heart Invocation" || card.id === 39) {
+      const hand = player.hand || [];
+      const gy = player.graveyard || [];
+
+      const hasDragonInHand = hand.some(
+        (c) => c && c.name === "Shadow-Heart Scale Dragon"
+      );
+      const hasDragonInGY = gy.some(
+        (c) => c && c.name === "Shadow-Heart Scale Dragon"
+      );
+
+      if (!hasDragonInHand && !hasDragonInGY) {
+        return {
+          ok: false,
+          reason:
+            '"Shadow-Heart Scale Dragon" must be in your hand or Graveyard to activate this card.',
         };
       }
     }
