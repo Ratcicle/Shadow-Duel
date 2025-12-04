@@ -780,7 +780,7 @@ export default class Game {
   moveCard(card, destPlayer, toZone, options = {}) {
     if (!card || !destPlayer || !toZone) return;
 
-    const zones = ["field", "hand", "deck", "graveyard"];
+    const zones = ["field", "hand", "deck", "graveyard", "spellTrap"];
     const fromOwner = card.owner === this.player.id ? this.player : this.bot;
     let fromZone = null;
 
@@ -802,6 +802,10 @@ export default class Game {
 
     if ((toZone === "field" || toZone === "spellTrap") && destArr.length >= 5) {
       console.log("Field is full (max 5 cards).");
+      return;
+    }
+    if (toZone === "spellTrap" && destArr.length >= 5) {
+      console.log("Spell/Trap zone is full (max 5 cards).");
       return;
     }
 
