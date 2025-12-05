@@ -17,6 +17,7 @@ export default class Renderer {
       botFieldSpell: document.getElementById("bot-fieldspell"),
       turnIndicator: document.getElementById("turn-indicator"),
       phaseTrack: document.getElementById("phase-track"),
+      actionLog: document.getElementById("action-log-list"),
     };
   }
 
@@ -339,6 +340,26 @@ createCardElement(card, visible) {
 
   log(message) {
     console.log(message);
+    const logList = this.elements.actionLog;
+    if (!logList) return;
+
+    const entry = document.createElement("div");
+    entry.className = "log-entry";
+
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, "0");
+    const mm = String(now.getMinutes()).padStart(2, "0");
+    const ss = String(now.getSeconds()).padStart(2, "0");
+
+    entry.innerHTML = `<span class="log-time">${hh}:${mm}:${ss}</span><span class="log-text">${message}</span>`;
+    logList.appendChild(entry);
+
+    const maxEntries = 80;
+    while (logList.children.length > maxEntries) {
+      logList.removeChild(logList.firstChild);
+    }
+
+    logList.scrollTop = logList.scrollHeight;
   }
 
   toggleModal(show) {

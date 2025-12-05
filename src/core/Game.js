@@ -198,7 +198,7 @@ export default class Game {
       const tributesNeeded = tributeInfo.tributesNeeded;
 
       if (tributesNeeded > 0 && this.player.field.length < tributesNeeded) {
-        console.log(`Not enough tributes for Level ${card.level} monster.`);
+        this.renderer.log(`Not enough tributes for Level ${card.level} monster.`);
         return;
       }
 
@@ -226,11 +226,15 @@ export default class Game {
               }
             });
 
-            console.log(`Select ${tributesNeeded} monster(s) to tribute.`);
+            this.renderer.log(`Select ${tributesNeeded} monster(s) to tribute.`);
           } else {
-            this.player.summon(index, position, isFacedown);
-            const summonedCard =
-              this.player.field[this.player.field.length - 1];
+            const before = this.player.field.length;
+            const result = this.player.summon(index, position, isFacedown);
+            if (!result && this.player.field.length === before) {
+              this.updateBoard();
+              return;
+            }
+            const summonedCard = this.player.field[this.player.field.length - 1];
             this.emit("after_summon", {
               card: summonedCard,
               player: this.player,
@@ -272,12 +276,21 @@ export default class Game {
             el.classList.remove("tributeable", "selected");
           });
 
-          this.player.summon(
+          const before = this.player.field.length;
+          const result = this.player.summon(
             pendingSummon.cardIndex,
             pendingSummon.position,
             pendingSummon.isFacedown,
             selectedTributes
           );
+
+          if (!result && this.player.field.length === before) {
+            tributeSelectionMode = false;
+            selectedTributes = [];
+            pendingSummon = null;
+            this.updateBoard();
+            return;
+          }
 
           const summonedCard = this.player.field[this.player.field.length - 1];
 
@@ -302,15 +315,15 @@ export default class Game {
 
       if (attacker) {
         if (attacker.cannotAttackThisTurn) {
-          console.log(`${attacker.name} cannot attack this turn.`);
+          this.renderer.log(`${attacker.name} cannot attack this turn.`);
           return;
         }
         if (attacker.hasAttacked) {
-          console.log("This monster has already attacked!");
+          this.renderer.log("This monster has already attacked!");
           return;
         }
         if (attacker.position === "defense") {
-          console.log("Defense position monsters cannot attack!");
+          this.renderer.log("Defense position monsters cannot attack!");
           return;
         }
 
@@ -442,12 +455,12 @@ export default class Game {
 
     if (!result.success) {
       if (result.reason) {
-        console.log(result.reason);
+        this.renderer.log(result.reason);
       }
       return;
     }
 
-    console.log(`${card.name} activated.`);
+    this.renderer.log(`${card.name} activated.`);
     this.updateBoard();
   }
 
@@ -476,12 +489,12 @@ export default class Game {
 
     if (!result.success) {
       if (result.reason) {
-        console.log(result.reason);
+        this.renderer.log(result.reason);
       }
       return;
     }
 
-    console.log(`${card.name} field effect activated.`);
+    this.renderer.log(`${card.name} field effect activated.`);
     this.updateBoard();
   }
 
@@ -515,7 +528,7 @@ export default class Game {
       selections: {},
       currentOption: 0,
     };
-    console.log("Select target(s) by clicking the highlighted monsters.");
+    this.renderer.log("Select target(s) by clicking the highlighted monsters.");
     this.highlightTargetCandidates();
   }
 
@@ -529,7 +542,7 @@ export default class Game {
       selections: {},
       currentOption: 0,
     };
-    console.log("Select target(s) for the field spell effect.");
+    this.renderer.log("Select target(s) for the field spell effect.");
     this.highlightTargetCandidates();
   }
 
@@ -545,21 +558,21 @@ export default class Game {
         selections: {},
         currentOption: 0,
       };
-      console.log(
+      this.renderer.log(
         "Select target(s) for triggered effect by clicking the highlighted monsters."
       );
       this.highlightTargetCandidates();
     } else {
-      this.renderer.showTargetSelection(
-        options,
-        (chosenMap) => {
-          this.effectEngine.resolveTriggeredSelection(effect, ctx, chosenMap);
-          this.updateBoard();
-        },
-        () => {
-          this.cancelTargetSelection();
-        }
-      );
+        this.renderer.showTargetSelection(
+          options,
+          (chosenMap) => {
+            this.effectEngine.resolveTriggeredSelection(effect, ctx, chosenMap);
+            this.updateBoard();
+          },
+          () => {
+            this.cancelTargetSelection();
+          }
+        );
     }
   }
 
@@ -760,7 +773,7 @@ export default class Game {
         this.updateBoard();
       },
       onCancel: () => {
-        console.log("Transmutate selection cancelled.");
+        this.renderer.log("Transmutate selection cancelled.");
       },
     });
   }
@@ -768,11 +781,11 @@ export default class Game {
     if (!attacker) return;
 
     if (attacker.cannotAttackThisTurn) {
-      console.log(`${attacker.name} cannot attack this turn.`);
+      this.renderer.log(`${attacker.name} cannot attack this turn.`);
       return;
     }
 
-    console.log(
+    this.renderer.log(
       `${attacker.name} attacks ${target ? target.name : "directly"}!`
     );
 
@@ -799,7 +812,7 @@ export default class Game {
         }
 
         target.isFacedown = false;
-        console.log(`${target.name} was flipped!`);
+        this.renderer.log(`${target.name} was flipped!`);
 
         this.updateBoard();
 
@@ -995,6 +1008,33 @@ export default class Game {
       return;
     }
 
+    // If a monster leaves the field to the graveyard, send attached equip spells too.
+    if (
+      fromZone === "field" &&
+      toZone === "graveyard" &&
+      card.cardKind === "monster"
+    ) {
+      const equipZone = this.getZone(fromOwner, "spellTrap") || [];
+      const attachedEquips = equipZone.filter(
+        (eq) =>
+          eq &&
+          eq.cardKind === "spell" &&
+          eq.subtype === "equip" &&
+          (eq.equippedTo === card || eq.equipTarget === card)
+      );
+      attachedEquips.forEach((equip) => {
+        this.moveCard(equip, fromOwner, "graveyard", {
+          fromZone: "spellTrap",
+        });
+        if (equip.equippedTo === card) {
+          equip.equippedTo = null;
+        }
+        if (equip.equipTarget === card) {
+          equip.equipTarget = null;
+        }
+      });
+    }
+
     const destArr = this.getZone(destPlayer, toZone);
     if (!destArr) {
       console.warn("moveCard: destination zone not found", toZone);
@@ -1002,11 +1042,11 @@ export default class Game {
     }
 
     if ((toZone === "field" || toZone === "spellTrap") && destArr.length >= 5) {
-      console.log("Field is full (max 5 cards).");
+      this.renderer.log("Field is full (max 5 cards).");
       return;
     }
     if (toZone === "spellTrap" && destArr.length >= 5) {
-      console.log("Spell/Trap zone is full (max 5 cards).");
+      this.renderer.log("Spell/Trap zone is full (max 5 cards).");
       return;
     }
 
@@ -1051,7 +1091,7 @@ export default class Game {
     ) {
       const defender = attacker.owner === "player" ? this.bot : this.player;
       defender.takeDamage(attacker.onBattleDestroy.damage);
-      console.log(
+      this.renderer.log(
         `${attacker.name} inflicts an extra ${attacker.onBattleDestroy.damage} damage!`
       );
       this.checkWinCondition();

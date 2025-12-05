@@ -1033,6 +1033,27 @@ export default class EffectEngine {
       }
     }
 
+    // Bots auto-pick a candidate without prompting the user.
+    if (ctx?.player?.id === "bot") {
+      const best =
+        candidates.reduce((top, card) => {
+          if (!card) return top;
+          if (!top) return card;
+          const cardAtk = card.atk || 0;
+          const topAtk = top.atk || 0;
+          return cardAtk >= topAtk ? card : top;
+        }, null) || candidates[candidates.length - 1];
+
+      const cardIndex = deck.indexOf(best);
+      if (cardIndex === -1) return false;
+
+      const [card] = deck.splice(cardIndex, 1);
+      ctx.player.hand.push(card);
+      this.game.updateBoard();
+      console.log(`${ctx.player.id} added ${card.name} from Deck to hand.`);
+      return true;
+    }
+
     const defaultCard = candidates[candidates.length - 1].name;
     const searchModal = this.getSearchModalElements();
 
