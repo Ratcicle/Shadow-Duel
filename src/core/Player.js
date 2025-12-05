@@ -199,6 +199,7 @@ export default class Player {
       card.position = position;
       card.isFacedown = isFacedown;
       card.hasAttacked = false;
+      card.attacksUsedThisTurn = 0;
       this.field.push(card);
       this.summonCount++;
       return card;

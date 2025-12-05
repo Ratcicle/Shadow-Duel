@@ -901,4 +901,56 @@ export const cardDatabase = [
       },
     ],
   },
+  {
+    id: 44,
+    name: "Sword of Two Darks",
+    cardKind: "spell",
+    subtype: "equip",
+    description:
+      "Equip only to a monster you control. It can make 1 additional attack during each Battle Phase. If this card is sent to the Graveyard: target 1 Spell/Trap your opponent controls; destroy that target.",
+    image: "assets/Sword of Two Darks.png",
+    effects: [
+      {
+        id: "sword_of_two_darks_equip",
+        timing: "on_play",
+        speed: 1,
+        targets: [
+          {
+            id: "sotd_equip_target",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "equip",
+            targetRef: "sotd_equip_target",
+            extraAttacks: 1,
+          },
+        ],
+      },
+      {
+        id: "sword_of_two_darks_pop_backrow",
+        timing: "on_event",
+        event: "card_to_grave",
+        fromZone: "spellTrap",
+        actions: [
+          {
+            type: "destroy",
+            targetRef: "sotd_pop_target",
+          },
+        ],
+        targets: [
+          {
+            id: "sotd_pop_target",
+            owner: "opponent",
+            zone: "spellTrap",
+            count: { min: 1, max: 1 },
+          },
+        ],
+      },
+    ],
+  },
 ];

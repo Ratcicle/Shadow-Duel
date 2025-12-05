@@ -20,6 +20,8 @@ export default class Card {
     this.position = "attack";
     this.isFacedown = false;
     this.hasAttacked = false;
+    this.extraAttacks = 0;
+    this.attacksUsedThisTurn = 0;
 
     this.tempAtkBoost = 0;
     this.tempDefBoost = 0;
@@ -39,6 +41,7 @@ export default class Card {
     // NOVO: controle de bônus de equipamento
     this.equipAtkBonus = 0;
     this.equipDefBonus = 0;
+    this.equipExtraAttacks = 0;
 
     // NOVO: controle de efeitos concedidos
     this.grantsBattleIndestructible = false;
