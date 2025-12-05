@@ -1027,8 +1027,6 @@ export default class Game {
         return player.spellTrap;
       case "graveyard":
         return player.graveyard;
-      case "spellTrap":
-        return player.spellTrapZone;
       case "fieldSpell":
         return player.fieldSpell ? [player.fieldSpell] : [];
       case "field":
@@ -1159,7 +1157,7 @@ export default class Game {
       return;
     }
 
-    if ((toZone === "field" || toZone === "spellTrap") && destArr.length >= 5) {
+    if (toZone === "field" && destArr.length >= 5) {
       this.renderer.log("Field is full (max 5 cards).");
       return;
     }
