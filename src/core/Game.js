@@ -1009,6 +1009,7 @@ export default class Game {
 
         if (!attacker.battleIndestructible) {
           this.moveCard(attacker, attPlayer, "graveyard");
+          this.applyBattleDestroyEffect(attacker, attacker);
         }
       } else {
         const attPlayer = attacker.owner === "player" ? this.player : this.bot;
@@ -1016,10 +1017,12 @@ export default class Game {
 
         if (!attacker.battleIndestructible) {
           this.moveCard(attacker, attPlayer, "graveyard");
+          this.applyBattleDestroyEffect(attacker, attacker);
         }
 
         if (!target.battleIndestructible) {
           this.moveCard(target, defPlayer, "graveyard");
+          this.applyBattleDestroyEffect(attacker, target);
         }
       }
     } else {
@@ -1033,6 +1036,10 @@ export default class Game {
         const attPlayer = attacker.owner === "player" ? this.player : this.bot;
         const damage = target.def - attacker.atk;
         attPlayer.takeDamage(damage);
+        if (!attacker.battleIndestructible) {
+          this.moveCard(attacker, attPlayer, "graveyard");
+          this.applyBattleDestroyEffect(attacker, attacker);
+        }
       }
     }
 
