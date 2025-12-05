@@ -661,7 +661,7 @@ export default class EffectEngine {
       case "deck":
         return player.deck;
       case "spellTrap":
-        return player.spellTrapZone;
+        return player.spellTrap;
       case "fieldSpell":
         return player.fieldSpell ? [player.fieldSpell] : [];
       case "field":
@@ -1256,6 +1256,10 @@ export default class EffectEngine {
     const target = targetCards[0];
 
     if (!target || target.cardKind !== "monster") return false;
+    if (target.isFacedown) {
+      console.warn("Cannot equip to a facedown monster:", target.name);
+      return false;
+    }
 
     if (this.game && typeof this.game.moveCard === "function") {
       const zone = this.game.getZone(player, "hand");

@@ -237,6 +237,84 @@ showSummonModal(cardIndex, callback) {
   };
 }
 
+  showPositionChoiceModal(cardEl, card, callback, options = {}) {
+    const existing = document.querySelector(".position-choice-modal");
+    if (existing) existing.remove();
+
+    const modal = document.createElement("div");
+    modal.className = "position-choice-modal";
+    modal.innerHTML = `
+      <div class="position-choice-content">
+        ${
+          options.canFlip
+            ? `<button data-choice="flip">Flip Summon</button>`
+            : ""
+        }
+        ${
+          options.canChangePosition && card?.position !== "attack"
+            ? `<button data-choice="to_attack">To Attack</button>`
+            : ""
+        }
+        ${
+          options.canChangePosition && card?.position !== "defense"
+            ? `<button data-choice="to_defense">To Defense</button>`
+            : ""
+        }
+      </div>
+    `;
+
+    modal.style.position = "fixed";
+    modal.style.zIndex = "200";
+
+    document.body.appendChild(modal);
+
+    const rect = cardEl?.getBoundingClientRect();
+    if (rect) {
+      const content = modal.querySelector(".position-choice-content") || modal;
+      const contentRect = content.getBoundingClientRect();
+
+      let left = rect.left;
+      let top = rect.bottom + 8;
+
+      if (top + contentRect.height > window.innerHeight - 8) {
+        top = rect.top - contentRect.height - 8;
+      }
+      if (left + contentRect.width > window.innerWidth - 8) {
+        left = window.innerWidth - contentRect.width - 8;
+      }
+      if (left < 8) left = 8;
+
+      modal.style.left = `${left}px`;
+      modal.style.top = `${top}px`;
+    }
+
+    const cleanup = () => {
+      if (modal.parentNode) {
+        modal.parentNode.removeChild(modal);
+      }
+      document.removeEventListener("mousedown", outsideHandler);
+    };
+
+    const outsideHandler = (e) => {
+      if (!modal.contains(e.target)) {
+        cleanup();
+      }
+    };
+
+    setTimeout(() => document.addEventListener("mousedown", outsideHandler), 0);
+
+    modal.querySelectorAll("button").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const choice = btn.dataset.choice;
+        cleanup();
+        if (choice) {
+          callback(choice);
+        }
+      });
+    });
+  }
+
 createCardElement(card, visible) {
     const el = document.createElement("div");
     el.className = "card";
