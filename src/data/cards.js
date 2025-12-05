@@ -655,9 +655,9 @@ export const cardDatabase = [
     id: 38,
     name: "Shadow-Heart Scale Dragon",
     cardKind: "monster",
-    atk: 3000,
+    atk: 3200,
     def: 2500,
-    level: 8,
+    level: 9,
     type: "Dragon",
     archetype: "Shadow-Heart",
     summonRestrict: "shadow_heart_invocation_only",
@@ -731,7 +731,7 @@ export const cardDatabase = [
     subtype: "equip",
     archetype: "Shadow-Heart",
     description:
-      "Equip only to a monster you control. It gains 500 ATK/DEF and cannot be destroyed by battle.",
+      "Equip only to a monster you control. It gains 500 ATK/DEF and cannot be destroyed by battle. During each of your Standby Phases: pay 800 LP or send this card to the Graveyard.",
     image: "assets/Shadow-Heart Shield.png",
     effects: [
       {
@@ -757,6 +757,15 @@ export const cardDatabase = [
           },
         ],
       },
+      {
+        timing: "on_event",
+        event: "standby_phase",
+        actions: [
+          {
+            type: "shadow_heart_shield_upkeep",
+          },
+        ],
+      },
     ],
   },
   {
@@ -770,7 +779,7 @@ export const cardDatabase = [
     archetype: "Shadow-Heart",
     altTribute: { type: "no_tribute_if_empty_field" },
     description:
-      "If you control no monsters, you can Normal Summon this card without Tributing. Otherwise, Tribute Summon it as a Level 5 monster.",
+      "If you control no monsters, you can Normal Summon this card without Tributing.",
     image: "assets/Shadow-Heart Griffin.png",
     effects: [],
   },

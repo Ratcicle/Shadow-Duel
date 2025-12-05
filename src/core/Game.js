@@ -20,6 +20,7 @@ export default class Game {
     this.targetSelection = null;
     this.graveyardSelection = null;
     this.eventListeners = {};
+    this.phaseDelayMs = 400;
   }
 
   on(eventName, handler) {
@@ -103,11 +104,12 @@ export default class Game {
     }
   }
 
-  startTurn() {
+  async startTurn() {
     this.turnCounter += 1;
     this.phase = "draw";
 
     const activePlayer = this.turn === "player" ? this.player : this.bot;
+    const opponent = activePlayer === this.player ? this.bot : this.player;
     activePlayer.field.forEach((card) => {
       card.hasAttacked = false;
       card.attacksUsedThisTurn = 0;
@@ -119,17 +121,31 @@ export default class Game {
     this.updateBoard();
 
     activePlayer.draw();
+    this.updateBoard();
+    await this.waitForPhaseDelay();
+
+    this.phase = "standby";
+    this.updateBoard();
+    this.emit("standby_phase", { player: activePlayer, opponent });
+    await this.waitForPhaseDelay();
+
     this.phase = "main1";
     this.updateBoard();
-    if (this.turn === "bot") {
+    if (this.turn === "bot" && !this.gameOver) {
       this.bot.makeMove(this);
     }
+  }
+
+  waitForPhaseDelay() {
+    return new Promise((resolve) =>
+      setTimeout(resolve, this.phaseDelayMs || 0)
+    );
   }
 
   nextPhase() {
     if (this.gameOver) return;
 
-    const order = ["draw", "main1", "battle", "main2", "end"];
+    const order = ["draw", "standby", "main1", "battle", "main2", "end"];
     const idx = order.indexOf(this.phase);
     if (idx === -1) return;
     const next = order[idx + 1];
@@ -154,7 +170,7 @@ export default class Game {
   }
 
   skipToPhase(targetPhase) {
-    const order = ["draw", "main1", "battle", "main2", "end"];
+    const order = ["draw", "standby", "main1", "battle", "main2", "end"];
     const currentIdx = order.indexOf(this.phase);
     const targetIdx = order.indexOf(targetPhase);
     if (currentIdx === -1 || targetIdx === -1) return;

@@ -50,6 +50,8 @@ export default class EffectEngine {
       this.handleBattleDestroyEvent(payload);
     } else if (eventName === "card_to_grave") {
       this.handleCardToGraveEvent(payload);
+    } else if (eventName === "standby_phase") {
+      this.handleStandbyPhaseEvent(payload);
     }
   }
 
@@ -290,6 +292,45 @@ export default class EffectEngine {
       this.applyActions(effect.actions || [], ctx, targetResult.targets || {});
       this.registerOncePerTurnUsage(card, player, effect);
       this.game.checkWinCondition();
+    }
+  }
+
+  handleStandbyPhaseEvent(payload) {
+    if (!payload || !payload.player) return;
+
+    const owner = payload.player;
+    const opponent = payload.opponent || this.game.getOpponent(owner);
+
+    const cards = [
+      ...(owner.field || []),
+      ...(owner.spellTrap || []),
+      owner.fieldSpell,
+    ].filter(Boolean);
+
+    for (const card of cards) {
+      if (!card.effects || !Array.isArray(card.effects)) continue;
+
+      const ctx = {
+        source: card,
+        player: owner,
+        opponent,
+        host: card.equippedTo || null,
+      };
+
+      for (const effect of card.effects) {
+        if (!effect || effect.timing !== "on_event") continue;
+        if (effect.event !== "standby_phase") continue;
+
+        const optCheck = this.checkOncePerTurn(card, owner, effect);
+        if (!optCheck.ok) {
+          console.log(optCheck.reason);
+          continue;
+        }
+
+        this.applyActions(effect.actions || [], ctx, {});
+        this.registerOncePerTurnUsage(card, owner, effect);
+        this.game.checkWinCondition();
+      }
     }
   }
 
@@ -776,6 +817,10 @@ export default class EffectEngine {
           break;
         case "move":
           executed = this.applyMove(action, ctx, targets) || executed;
+          break;
+        case "shadow_heart_shield_upkeep":
+          executed =
+            this.applyShadowHeartShieldUpkeep(action, ctx) || executed;
           break;
         case "shadow_heart_ritual_summon":
           executed =
@@ -1377,6 +1422,96 @@ export default class EffectEngine {
       moved = true;
     });
     return moved;
+  }
+
+  applyShadowHeartShieldUpkeep(action, ctx) {
+    const card = ctx?.source;
+    const owner = ctx?.player || this.getOwnerByCard(card);
+    if (!card || !owner) return false;
+
+    const game = this.game;
+    const renderer = game?.renderer;
+    const inSpellTrap = (owner.spellTrap || []).includes(card);
+    const onField =
+      inSpellTrap ||
+      owner.fieldSpell === card ||
+      (owner.field || []).includes(card);
+
+    if (!onField) return false;
+
+    const sendToGrave = (logMessage) => {
+      if (renderer && logMessage) {
+        renderer.log(logMessage);
+      }
+      if (game && typeof game.moveCard === "function") {
+        game.moveCard(card, owner, "graveyard", {
+          fromZone: inSpellTrap ? "spellTrap" : "fieldSpell",
+        });
+      } else {
+        const zones = [
+          owner.spellTrap,
+          owner.fieldSpell ? [owner.fieldSpell] : [],
+          owner.field,
+        ].filter(Boolean);
+        for (const zone of zones) {
+          const idx = zone.indexOf(card);
+          if (idx > -1) {
+            zone.splice(idx, 1);
+            if (owner.fieldSpell === card) {
+              owner.fieldSpell = null;
+            }
+            break;
+          }
+        }
+        owner.graveyard.push(card);
+      }
+      game?.updateBoard?.();
+      game?.checkWinCondition?.();
+      return true;
+    };
+
+    const logMessage = (msg) => {
+      if (renderer && msg) {
+        renderer.log(msg);
+      }
+    };
+
+    if (owner.lp < 800) {
+      return sendToGrave(
+        `${card.name} upkeep: not enough LP to pay 800, sent to Graveyard.`
+      );
+    }
+
+    if (owner.id === "player") {
+      const wantsToPay = window.confirm(
+        `Pagar 800 LP para manter "${card.name}" no campo? Se não pagar, esta carta será enviada ao Cemitério.`
+      );
+
+      if (wantsToPay) {
+        owner.takeDamage(800);
+        logMessage(`Paid 800 LP to maintain ${card.name}.`);
+        game?.updateBoard?.();
+        game?.checkWinCondition?.();
+        return true;
+      }
+
+      return sendToGrave(
+        `You chose not to pay 800 LP for ${card.name}; it was sent to the Graveyard.`
+      );
+    }
+
+    // Bot decision: pay if possible, otherwise send to Graveyard.
+    if (owner.lp >= 800) {
+      owner.takeDamage(800);
+      logMessage(`Bot paid 800 LP to maintain ${card.name}.`);
+      game?.updateBoard?.();
+      game?.checkWinCondition?.();
+      return true;
+    }
+
+    return sendToGrave(
+      `${card.name} upkeep: bot could not pay 800 LP, sent to Graveyard.`
+    );
   }
 
   applyReviveShadowHeartFromGrave(action, ctx) {
