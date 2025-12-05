@@ -2,7 +2,8 @@
 import { cardDatabase } from "./data/cards.js";
 
 let game = null;
-let currentDeck = loadDeck();
+const cardKindOrder = { monster: 0, spell: 1, trap: 2 };
+const cardById = new Map(cardDatabase.map((card) => [card.id, card]));
 
 const startScreen = document.getElementById("start-screen");
 const deckBuilder = document.getElementById("deck-builder");
@@ -23,6 +24,35 @@ const btnStartDuel = document.getElementById("btn-start-duel");
 const btnDeckBuilder = document.getElementById("btn-deck-builder");
 const btnDeckSave = document.getElementById("deck-save");
 const btnDeckCancel = document.getElementById("deck-cancel");
+let currentDeck = loadDeck();
+
+function getCardById(cardId) {
+  return cardById.get(cardId);
+}
+
+function levelOf(card) {
+  return typeof card?.level === "number" && !Number.isNaN(card.level) ? card.level : 0;
+}
+
+function sortDeck(deckIds = []) {
+  return [...deckIds].sort((aId, bId) => {
+    const cardA = getCardById(aId);
+    const cardB = getCardById(bId);
+    const kindA = (cardA?.cardKind || "").toLowerCase();
+    const kindB = (cardB?.cardKind || "").toLowerCase();
+    const orderA = cardKindOrder.hasOwnProperty(kindA) ? cardKindOrder[kindA] : 99;
+    const orderB = cardKindOrder.hasOwnProperty(kindB) ? cardKindOrder[kindB] : 99;
+    if (orderA !== orderB) return orderA - orderB;
+    if (kindA === "monster" && kindB === "monster") {
+      const levelA = levelOf(cardA);
+      const levelB = levelOf(cardB);
+      if (levelA !== levelB) return levelB - levelA;
+    }
+    const nameA = cardA?.name || "";
+    const nameB = cardB?.name || "";
+    return nameA.localeCompare(nameB);
+  });
+}
 
 function loadDeck() {
   try {
@@ -35,7 +65,8 @@ function loadDeck() {
 }
 
 function saveDeck(deck) {
-  localStorage.setItem("shadow_duel_deck", JSON.stringify(deck));
+  currentDeck = sortDeck(deck);
+  localStorage.setItem("shadow_duel_deck", JSON.stringify(currentDeck));
 }
 
 function sanitizeDeck(deck) {
@@ -50,7 +81,7 @@ function sanitizeDeck(deck) {
     counts[id]++;
     result.push(id);
   }
-  return topUpDeck(result);
+  return sortDeck(topUpDeck(result));
 }
 
 function topUpDeck(deck) {
@@ -73,7 +104,7 @@ function topUpDeck(deck) {
 }
 
 function buildDefaultDeck() {
-  return topUpDeck([]);
+  return sortDeck(topUpDeck([]));
 }
 
 function setPreview(card) {
@@ -133,6 +164,7 @@ function getSortedCardPool(cards) {
 }
 
 function renderDeckBuilder() {
+  currentDeck = sortDeck(currentDeck);
   deckGrid.innerHTML = "";
   poolGrid.innerHTML = "";
   const counts = {};
