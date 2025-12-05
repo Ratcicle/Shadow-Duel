@@ -836,4 +836,69 @@ export const cardDatabase = [
       },
     ],
   },
+  {
+    id: 43,
+    name: "Light-Dividing Sword",
+    cardKind: "spell",
+    subtype: "equip",
+    description:
+      "Equip only to a monster you control. When that monster destroys a monster by battle: gain 500 LP. If this card is sent to the Graveyard: target 1 Spell your opponent controls; destroy that target.",
+    image: "assets/Light-Dividing Sword.png",
+    effects: [
+      {
+        id: "light_dividing_sword_equip",
+        timing: "on_play",
+        speed: 1,
+        targets: [
+          {
+            id: "lds_equip_target",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "equip",
+            targetRef: "lds_equip_target",
+          },
+        ],
+      },
+      {
+        id: "light_dividing_sword_lifegain",
+        timing: "on_event",
+        event: "battle_destroy",
+        requireEquippedAsAttacker: true,
+        actions: [
+          {
+            type: "heal",
+            player: "self",
+            amount: 500,
+          },
+        ],
+      },
+      {
+        id: "light_dividing_sword_pop_backrow",
+        timing: "on_event",
+        event: "card_to_grave",
+        fromZone: "spellTrap",
+        actions: [
+          {
+            type: "destroy",
+            targetRef: "lds_pop_target",
+          },
+        ],
+        targets: [
+          {
+            id: "lds_pop_target",
+            owner: "opponent",
+            zone: "spellTrap",
+            cardKind: "spell",
+            count: { min: 1, max: 1 },
+          },
+        ],
+      },
+    ],
+  },
 ];
