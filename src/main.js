@@ -87,6 +87,51 @@ function setPreview(card) {
   previewEls.desc.textContent = card.description || "Sem descricao.";
 }
 
+function getSortedCardPool(cards) {
+  const spellSubtypeOrder = { normal: 0, equip: 1, field: 2 };
+  const nameOf = (card) => card.name || "";
+  const levelOf = (card) =>
+    typeof card.level === "number" && !Number.isNaN(card.level) ? card.level : 0;
+  const kindOf = (card) => (card.cardKind || "").toLowerCase();
+  const subtypeOf = (card) => (card.subtype || "").toLowerCase();
+
+  const monsters = [];
+  const spells = [];
+  const traps = [];
+  const others = [];
+
+  cards.forEach((card) => {
+    const kind = kindOf(card);
+    if (kind === "monster") monsters.push(card);
+    else if (kind === "spell") spells.push(card);
+    else if (kind === "trap") traps.push(card);
+    else others.push(card);
+  });
+
+  const sortedMonsters = monsters.sort((a, b) => {
+    const levelA = levelOf(a);
+    const levelB = levelOf(b);
+    if (levelA !== levelB) return levelB - levelA;
+    return nameOf(a).localeCompare(nameOf(b));
+  });
+
+  const sortedSpells = spells.sort((a, b) => {
+    const subA = spellSubtypeOrder.hasOwnProperty(subtypeOf(a))
+      ? spellSubtypeOrder[subtypeOf(a)]
+      : 3;
+    const subB = spellSubtypeOrder.hasOwnProperty(subtypeOf(b))
+      ? spellSubtypeOrder[subtypeOf(b)]
+      : 3;
+    if (subA !== subB) return subA - subB;
+    return nameOf(a).localeCompare(nameOf(b));
+  });
+
+  const sortedTraps = traps.sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
+  const sortedOthers = others.sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
+
+  return [...sortedMonsters, ...sortedSpells, ...sortedTraps, ...sortedOthers];
+}
+
 function renderDeckBuilder() {
   deckGrid.innerHTML = "";
   poolGrid.innerHTML = "";
@@ -119,7 +164,8 @@ function renderDeckBuilder() {
   }
 
   // Pool of all cards with counts
-  cardDatabase.forEach((card) => {
+  const sortedCards = getSortedCardPool(cardDatabase);
+  sortedCards.forEach((card) => {
     const cardEl = createCardThumb(card);
     const count = counts[card.id] || 0;
     const badge = document.createElement("div");

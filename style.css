@@ -13,6 +13,7 @@
   --card-gap: 10px;
   --zone-pad: 12px;
   --zone-width: calc(5 * var(--card-w) + 4 * var(--card-gap) + 2 * var(--zone-pad));
+  --deck-card-ratio: 3 / 4;
 }
 
 
@@ -830,8 +831,9 @@ body {
 }
 
 .card-thumb {
-  width: 100%;
+  width: auto;
   height: 100%;
+  aspect-ratio: var(--deck-card-ratio);
   background-size: cover;
   background-position: center;
   border-radius: 6px;
@@ -856,7 +858,7 @@ body {
 
 .pool-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
   grid-auto-rows: 100px;
   gap: 6px;
 }
