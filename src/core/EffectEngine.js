@@ -373,7 +373,7 @@ export default class EffectEngine {
     this.game.checkWinCondition();
   }
 
-  activateFromHand(card, player, handIndex, selections = null) {
+  activateFromHand(card, player, handIndex, selections = null, activationZone = "hand") {
     const check = this.canActivate(card, player);
     if (!check.ok) {
       return { success: false, reason: check.reason };
@@ -389,11 +389,13 @@ export default class EffectEngine {
       return { success: false, reason: optCheck.reason };
     }
 
+    let resolvedActivationZone = activationZone || "hand";
+
     const ctx = {
       source: card,
       player,
       opponent: this.game.getOpponent(player),
-      activationZone: "hand",
+      activationZone: resolvedActivationZone,
     };
 
     if (card.cardKind === "spell" && card.subtype === "field") {
@@ -411,7 +413,8 @@ export default class EffectEngine {
         card.owner = player.id;
       }
 
-      ctx.activationZone = "fieldSpell";
+      resolvedActivationZone = "fieldSpell";
+      ctx.activationZone = resolvedActivationZone;
     }
 
     const targetResult = this.resolveTargets(
@@ -445,7 +448,13 @@ export default class EffectEngine {
     }
 
     if (this.game && typeof this.game.moveCard === "function") {
-      this.game.moveCard(card, player, "graveyard", { fromZone: "hand" });
+      const fromZone =
+        resolvedActivationZone === "spellTrap"
+          ? "spellTrap"
+          : resolvedActivationZone === "fieldSpell"
+          ? "fieldSpell"
+          : "hand";
+      this.game.moveCard(card, player, "graveyard", { fromZone });
     } else {
       player.graveyard.push(card);
     }

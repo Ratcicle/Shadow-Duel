@@ -235,6 +235,146 @@ export default class Renderer {
     };
   }
 
+  showSpellChoiceModal(cardIndex, callback) {
+    const existingModal = document.querySelector(".spell-choice-modal");
+    if (existingModal) {
+      existingModal.remove();
+    }
+
+    const cardElement = document.querySelector(
+      `#player-hand .card[data-index="${cardIndex}"]`
+    );
+    const rect = cardElement ? cardElement.getBoundingClientRect() : null;
+
+    const modal = document.createElement("div");
+    modal.className = "spell-choice-modal";
+    modal.innerHTML = `
+      <div class="spell-choice-content">
+        <button data-choice="activate">Activate</button>
+        <button data-choice="set">Set</button>
+      </div>
+    `;
+
+    // posicionamento semelhante ao modal de invocacao
+    modal.style.position = "fixed";
+    modal.style.zIndex = "200";
+
+    document.body.appendChild(modal);
+
+    if (rect) {
+      const content = modal.querySelector(".spell-choice-content") || modal;
+      const contentRect = content.getBoundingClientRect();
+
+      let left = rect.left;
+      let top = rect.bottom + 10;
+
+      if (top + contentRect.height > window.innerHeight - 10) {
+        top = rect.top - contentRect.height - 10;
+      }
+      if (left + contentRect.width > window.innerWidth - 10) {
+        left = window.innerWidth - contentRect.width - 10;
+      }
+      if (left < 10) left = 10;
+
+      modal.style.left = `${left}px`;
+      modal.style.top = `${top}px`;
+    }
+
+    const cleanup = () => {
+      if (modal.parentNode) {
+        modal.parentNode.removeChild(modal);
+      }
+      document.removeEventListener("mousedown", handleOutsideClick);
+    };
+
+    const handleOutsideClick = (event) => {
+      if (!modal.contains(event.target)) {
+        cleanup();
+      }
+    };
+
+    setTimeout(() => {
+      document.addEventListener("mousedown", handleOutsideClick);
+    }, 0);
+
+    modal.querySelectorAll("button").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const choice = btn.dataset.choice;
+        cleanup();
+        if (choice && typeof callback === "function") {
+          callback(choice);
+        }
+      });
+    });
+  }
+
+  showSpellActivateModal(cardEl, onActivate) {
+    if (!cardEl) return;
+
+    const existing = document.querySelector(".spell-activate-modal");
+    if (existing) existing.remove();
+
+    const rect = cardEl.getBoundingClientRect();
+
+    const modal = document.createElement("div");
+    modal.className = "spell-activate-modal";
+    modal.innerHTML = `
+      <div class="spell-choice-content single">
+        <button data-choice="activate">Activate</button>
+      </div>
+    `;
+
+    modal.style.position = "fixed";
+    modal.style.zIndex = "200";
+    document.body.appendChild(modal);
+
+    if (rect) {
+      const content = modal.querySelector(".spell-choice-content") || modal;
+      const contentRect = content.getBoundingClientRect();
+
+      let left = rect.left;
+      let top = rect.bottom + 8;
+
+      if (top + contentRect.height > window.innerHeight - 8) {
+        top = rect.top - contentRect.height - 8;
+      }
+      if (left + contentRect.width > window.innerWidth - 8) {
+        left = window.innerWidth - contentRect.width - 8;
+      }
+      if (left < 8) left = 8;
+
+      modal.style.left = `${left}px`;
+      modal.style.top = `${top}px`;
+    }
+
+    const cleanup = () => {
+      if (modal.parentNode) {
+        modal.parentNode.removeChild(modal);
+      }
+      document.removeEventListener("mousedown", outsideHandler);
+    };
+
+    const outsideHandler = (e) => {
+      if (!modal.contains(e.target)) {
+        cleanup();
+      }
+    };
+
+    setTimeout(() => document.addEventListener("mousedown", outsideHandler), 0);
+
+    modal.querySelectorAll("button").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const choice = btn.dataset.choice;
+        cleanup();
+        if (choice === "activate" && typeof onActivate === "function") {
+          onActivate();
+        }
+      });
+    });
+  }
+
   showPositionChoiceModal(cardEl, card, callback, options = {}) {
     const existing = document.querySelector(".position-choice-modal");
     if (existing) existing.remove();

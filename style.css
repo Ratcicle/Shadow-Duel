@@ -598,7 +598,9 @@ body {
 
 /* Summon Choice Modal */
 .summon-choice-modal,
-.position-choice-modal {
+.position-choice-modal,
+.spell-choice-modal,
+.spell-activate-modal {
   position: fixed;
   background: none;
   pointer-events: none;
@@ -606,7 +608,8 @@ body {
 }
 
 .summon-choice-content,
-.position-choice-content {
+.position-choice-content,
+.spell-choice-content {
   background-color: #1e1e1e;
   border: 2px solid var(--accent-color);
   padding: 15px;
@@ -618,14 +621,16 @@ body {
 }
 
 .summon-choice-content h3,
-.position-choice-content h3 {
+.position-choice-content h3,
+.spell-choice-content h3 {
   margin: 0 0 10px 0;
   color: var(--accent-color);
   font-size: 0.9rem;
 }
 
 .summon-choice-content button,
-.position-choice-content button {
+.position-choice-content button,
+.spell-choice-content button {
   display: block;
   width: 100%;
   padding: 8px;
@@ -640,8 +645,17 @@ body {
 }
 
 .summon-choice-content button:hover,
-.position-choice-content button:hover {
+.position-choice-content button:hover,
+.spell-choice-content button:hover {
   opacity: 0.9;
+}
+
+.spell-choice-content {
+  width: 170px;
+}
+
+.spell-choice-content.single {
+  width: 140px;
 }
 
 .position-choice-modal {

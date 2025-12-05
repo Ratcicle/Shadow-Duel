@@ -193,11 +193,7 @@ export default class Game {
 
     document.getElementById("player-hand").addEventListener("click", (e) => {
       if (this.targetSelection) return;
-      if (
-        this.turn !== "player" ||
-        (this.phase !== "main1" && this.phase !== "main2")
-      )
-        return;
+      if (this.turn !== "player") return;
 
       const cardEl = e.target.closest(".card");
       if (!cardEl) return;
@@ -207,68 +203,103 @@ export default class Game {
       const index = parseInt(cardEl.dataset.index);
       const card = this.player.hand[index];
 
-      if (card.cardKind !== "monster") {
-        this.tryActivateSpell(card, index);
-        return;
-      }
+      if (!card) return;
 
-      const tributeInfo = this.player.getTributeRequirement(card);
-      const tributesNeeded = tributeInfo.tributesNeeded;
+      if (card.cardKind === "monster") {
+        if (this.phase !== "main1" && this.phase !== "main2") return;
 
-      if (tributesNeeded > 0 && this.player.field.length < tributesNeeded) {
-        this.renderer.log(`Not enough tributes for Level ${card.level} monster.`);
-        return;
-      }
+        const tributeInfo = this.player.getTributeRequirement(card);
+        const tributesNeeded = tributeInfo.tributesNeeded;
 
-      this.renderer.showSummonModal(index, (choice) => {
-        if (choice === "attack" || choice === "defense") {
-          const position = choice;
-          const isFacedown = choice === "defense";
-
-          if (tributesNeeded > 0) {
-            tributeSelectionMode = true;
-            selectedTributes = [];
-            pendingSummon = {
-              cardIndex: index,
-              position,
-              isFacedown,
-              tributesNeeded,
-            };
-
-            this.player.field.forEach((_, idx) => {
-              const fieldCard = document.querySelector(
-                `#player-field .card[data-index="${idx}"]`
-              );
-              if (fieldCard) {
-                fieldCard.classList.add("tributeable");
-              }
-            });
-
-            this.renderer.log(`Select ${tributesNeeded} monster(s) to tribute.`);
-          } else {
-            const before = this.player.field.length;
-            const result = this.player.summon(index, position, isFacedown);
-            if (!result && this.player.field.length === before) {
-              this.updateBoard();
-              return;
-            }
-            const summonedCard = this.player.field[this.player.field.length - 1];
-            summonedCard.summonedTurn = this.turnCounter;
-            summonedCard.positionChangedThisTurn = false;
-            if (summonedCard.isFacedown) {
-              summonedCard.setTurn = this.turnCounter;
-            } else {
-              summonedCard.setTurn = null;
-            }
-            this.emit("after_summon", {
-              card: summonedCard,
-              player: this.player,
-              method: "normal",
-            });
-            this.updateBoard();
-          }
+        if (tributesNeeded > 0 && this.player.field.length < tributesNeeded) {
+          this.renderer.log(`Not enough tributes for Level ${card.level} monster.`);
+          return;
         }
-      });
+
+        this.renderer.showSummonModal(index, (choice) => {
+          if (choice === "attack" || choice === "defense") {
+            const position = choice;
+            const isFacedown = choice === "defense";
+
+            if (tributesNeeded > 0) {
+              tributeSelectionMode = true;
+              selectedTributes = [];
+              pendingSummon = {
+                cardIndex: index,
+                position,
+                isFacedown,
+                tributesNeeded,
+              };
+
+              this.player.field.forEach((_, idx) => {
+                const fieldCard = document.querySelector(
+                  `#player-field .card[data-index="${idx}"]`
+                );
+                if (fieldCard) {
+                  fieldCard.classList.add("tributeable");
+                }
+              });
+
+              this.renderer.log(`Select ${tributesNeeded} monster(s) to tribute.`);
+            } else {
+              const before = this.player.field.length;
+              const result = this.player.summon(index, position, isFacedown);
+              if (!result && this.player.field.length === before) {
+                this.updateBoard();
+                return;
+              }
+              const summonedCard = this.player.field[this.player.field.length - 1];
+              summonedCard.summonedTurn = this.turnCounter;
+              summonedCard.positionChangedThisTurn = false;
+              if (summonedCard.isFacedown) {
+                summonedCard.setTurn = this.turnCounter;
+              } else {
+                summonedCard.setTurn = null;
+              }
+              this.emit("after_summon", {
+                card: summonedCard,
+                player: this.player,
+                method: "normal",
+              });
+              this.updateBoard();
+            }
+          }
+        });
+        return;
+      }
+
+      if (card.cardKind === "spell") {
+        if (this.phase !== "main1" && this.phase !== "main2") {
+          this.tryActivateSpell(card, index);
+          return;
+        }
+
+        const handleSpellChoice = (choice) => {
+          if (choice === "activate") {
+            this.tryActivateSpell(card, index);
+          } else if (choice === "set") {
+            this.setSpellOrTrap(card, index);
+          }
+        };
+
+        if (
+          this.renderer &&
+          typeof this.renderer.showSpellChoiceModal === "function"
+        ) {
+          this.renderer.showSpellChoiceModal(index, handleSpellChoice);
+        } else {
+          const shouldActivate = window.confirm(
+            "OK: Activate this Spell. Cancel: Set it face-down in your Spell/Trap Zone."
+          );
+          handleSpellChoice(shouldActivate ? "activate" : "set");
+        }
+        return;
+      }
+
+      if (card.cardKind === "trap") {
+        this.setSpellOrTrap(card, index);
+        return;
+      }
     });
 
     document.getElementById("player-field").addEventListener("click", (e) => {
@@ -394,6 +425,44 @@ export default class Game {
         this.resolveCombat(attacker, target);
       }
     });
+
+    const playerSpellTrapEl = document.getElementById("player-spelltrap");
+    if (playerSpellTrapEl) {
+      playerSpellTrapEl.addEventListener("click", (e) => {
+        if (this.targetSelection) return;
+        if (this.turn !== "player") return;
+        if (this.phase !== "main1" && this.phase !== "main2") return;
+
+        const cardEl = e.target.closest(".card");
+        if (!cardEl) return;
+
+        const index = parseInt(cardEl.dataset.index);
+        if (Number.isNaN(index)) return;
+
+        const card = this.player.spellTrap[index];
+        if (!card) return;
+
+        if (card.cardKind !== "spell") return;
+        if (!card.isFacedown) return;
+
+        const onActivate = () => {
+          card.isFacedown = false;
+          this.updateBoard();
+          this.tryActivateSpell(card, null, null, {
+            activationZone: "spellTrap",
+          });
+        };
+
+        if (
+          this.renderer &&
+          typeof this.renderer.showSpellActivateModal === "function"
+        ) {
+          this.renderer.showSpellActivateModal(cardEl, onActivate);
+        } else {
+          onActivate();
+        }
+      });
+    }
 
     document.getElementById("bot-field").addEventListener("click", (e) => {
       if (!this.targetSelection) return;
@@ -549,10 +618,10 @@ export default class Game {
     this.updateBoard();
   }
 
-  handleSpellActivationResult(card, handIndex, result) {
+  handleSpellActivationResult(card, handIndex, result, activationZone = null) {
     if (result.needsSelection) {
       if (this.canUseFieldTargeting(result.options)) {
-        this.startTargetSelection(card, handIndex, result.options);
+        this.startTargetSelection(card, handIndex, result.options, activationZone);
       } else {
         this.renderer.showTargetSelection(
           result.options,
@@ -561,9 +630,15 @@ export default class Game {
               card,
               this.player,
               handIndex,
-              chosenMap
+              chosenMap,
+              activationZone
             );
-            this.handleSpellActivationResult(card, handIndex, finalResult);
+            this.handleSpellActivationResult(
+              card,
+              handIndex,
+              finalResult,
+              activationZone
+            );
           },
           () => {
             this.cancelTargetSelection();
@@ -638,7 +713,7 @@ export default class Game {
     this.handleFieldSpellActivationResult(card, owner, result);
   }
 
-  startTargetSelection(card, handIndex, options) {
+  startTargetSelection(card, handIndex, options, activationZone = null) {
     this.cancelTargetSelection();
     this.targetSelection = {
       kind: "spell",
@@ -647,6 +722,7 @@ export default class Game {
       options,
       selections: {},
       currentOption: 0,
+      activationZone,
     };
     this.renderer.log("Select target(s) by clicking the highlighted monsters.");
     this.highlightTargetCandidates();
@@ -813,13 +889,15 @@ export default class Game {
         selection.card,
         this.player,
         selection.handIndex,
-        selection.selections
+        selection.selections,
+        selection.activationZone
       );
 
       this.handleSpellActivationResult(
         selection.card,
         selection.handIndex,
-        result
+        result,
+        selection.activationZone
       );
     } else if (selection.kind === "fieldSpell") {
       const owner = selection.owner;
@@ -1313,16 +1391,53 @@ export default class Game {
     });
   }
 
-  tryActivateSpell(card, handIndex, selections = null) {
+  setSpellOrTrap(card, handIndex) {
+    if (this.turn !== "player") return;
+    if (this.phase !== "main1" && this.phase !== "main2") return;
+    if (!card) return;
+    if (card.cardKind !== "spell" && card.cardKind !== "trap") return;
+
+    if (card.cardKind === "spell" && card.subtype === "field") {
+      this.renderer.log("Field Spells cannot be Set.");
+      return;
+    }
+
+    const zone = this.player.spellTrap;
+    if (zone.length >= 5) {
+      this.renderer.log("Spell/Trap zone is full (max 5 cards).");
+      return;
+    }
+
+    card.isFacedown = true;
+
+    if (typeof this.moveCard === "function") {
+      this.moveCard(card, this.player, "spellTrap", { fromZone: "hand" });
+    } else {
+      if (handIndex >= 0 && handIndex < this.player.hand.length) {
+        this.player.hand.splice(handIndex, 1);
+      }
+      this.player.spellTrap.push(card);
+    }
+
+    this.updateBoard();
+  }
+
+  tryActivateSpell(card, handIndex, selections = null, options = {}) {
     if (this.targetSelection) return;
 
     const result = this.effectEngine.activateFromHand(
       card,
       this.player,
       handIndex,
-      selections
+      selections,
+      options.activationZone
     );
 
-    this.handleSpellActivationResult(card, handIndex, result);
+    this.handleSpellActivationResult(
+      card,
+      handIndex,
+      result,
+      options.activationZone
+    );
   }
 }
