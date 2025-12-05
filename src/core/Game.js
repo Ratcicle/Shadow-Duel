@@ -1075,6 +1075,21 @@ export default class Game {
   moveCard(card, destPlayer, toZone, options = {}) {
     if (!card || !destPlayer || !toZone) return;
 
+    const destArr = this.getZone(destPlayer, toZone);
+    if (!destArr) {
+      console.warn("moveCard: destination zone not found", toZone);
+      return;
+    }
+
+    if (toZone === "field" && destArr.length >= 5) {
+      this.renderer.log("Field is full (max 5 cards).");
+      return;
+    }
+    if (toZone === "spellTrap" && destArr.length >= 5) {
+      this.renderer.log("Spell/Trap zone is full (max 5 cards).");
+      return;
+    }
+
     const zones = [
       "field",
       "hand",
@@ -1200,21 +1215,6 @@ export default class Game {
           equip.equipTarget = null;
         }
       });
-    }
-
-    const destArr = this.getZone(destPlayer, toZone);
-    if (!destArr) {
-      console.warn("moveCard: destination zone not found", toZone);
-      return;
-    }
-
-    if (toZone === "field" && destArr.length >= 5) {
-      this.renderer.log("Field is full (max 5 cards).");
-      return;
-    }
-    if (toZone === "spellTrap" && destArr.length >= 5) {
-      this.renderer.log("Spell/Trap zone is full (max 5 cards).");
-      return;
     }
 
     if (options.position) {

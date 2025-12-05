@@ -682,7 +682,7 @@ export default class EffectEngine {
     const key = effect.oncePerTurnName || effect.id || ctx?.source?.name;
     if (!key) return true;
     const usage = player.oncePerTurnUsageByName || {};
-    const currentTurn = this.game?.turnCount || 0;
+    const currentTurn = this.game?.turnCounter || 0;
     return usage[key] !== currentTurn;
   }
 
@@ -692,7 +692,7 @@ export default class EffectEngine {
     if (!player) return;
     const key = effect.oncePerTurnName || effect.id || ctx?.source?.name;
     if (!key) return;
-    const currentTurn = this.game?.turnCount || 0;
+    const currentTurn = this.game?.turnCounter || 0;
     player.oncePerTurnUsageByName = player.oncePerTurnUsageByName || {};
     player.oncePerTurnUsageByName[key] = currentTurn;
   }

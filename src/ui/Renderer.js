@@ -374,8 +374,6 @@ export default class Renderer {
   }
 
   renderPreview(card) {
-    if (!card) return;
-
     const previewImage = document.getElementById("preview-image");
     const previewName = document.getElementById("preview-name");
     const previewAtk = document.getElementById("preview-atk");
@@ -391,6 +389,16 @@ export default class Renderer {
       !previewLevel ||
       !previewDesc
     ) {
+      return;
+    }
+
+    if (!card) {
+      previewImage.style.backgroundImage = "";
+      previewName.textContent = "Hover a card";
+      previewAtk.textContent = "ATK: -";
+      previewDef.textContent = "DEF: -";
+      previewLevel.textContent = "Level: -";
+      previewDesc.textContent = "Description will appear here.";
       return;
     }
 

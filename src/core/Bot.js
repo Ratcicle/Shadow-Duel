@@ -725,10 +725,17 @@ export default class Bot extends Player {
     if (!Array.isArray(options)) return null;
     const selections = {};
     for (const opt of options) {
-      if (!opt.def || !Array.isArray(opt.candidates)) continue;
-      selections[opt.def.id] = [0];
+      if (!opt || !Array.isArray(opt.candidates)) continue;
+      const pickCount = Math.max(1, opt.min || 0);
+      const chosen = [];
+      for (let i = 0; i < Math.min(pickCount, opt.candidates.length); i++) {
+        chosen.push(i);
+      }
+      if (chosen.length) {
+        selections[opt.id] = chosen;
+      }
     }
-    return selections;
+    return Object.keys(selections).length ? selections : null;
   }
 
   cloneGameState(game) {
