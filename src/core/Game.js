@@ -111,6 +111,7 @@ export default class Game {
     activePlayer.field.forEach((card) => {
       card.hasAttacked = false;
       card.cannotAttackThisTurn = false;
+      card.positionChangedThisTurn = false;
     });
     activePlayer.summonCount = 0;
 
@@ -235,6 +236,13 @@ export default class Game {
               return;
             }
             const summonedCard = this.player.field[this.player.field.length - 1];
+            summonedCard.summonedTurn = this.turnCounter;
+            summonedCard.positionChangedThisTurn = false;
+            if (summonedCard.isFacedown) {
+              summonedCard.setTurn = this.turnCounter;
+            } else {
+              summonedCard.setTurn = null;
+            }
             this.emit("after_summon", {
               card: summonedCard,
               player: this.player,
@@ -293,6 +301,13 @@ export default class Game {
           }
 
           const summonedCard = this.player.field[this.player.field.length - 1];
+          summonedCard.summonedTurn = this.turnCounter;
+          summonedCard.positionChangedThisTurn = false;
+          if (summonedCard.isFacedown) {
+            summonedCard.setTurn = this.turnCounter;
+          } else {
+            summonedCard.setTurn = null;
+          }
 
           this.emit("after_summon", {
             card: summonedCard,
@@ -307,6 +322,41 @@ export default class Game {
           this.updateBoard();
         }
         return;
+      }
+
+      if (
+        this.turn === "player" &&
+        (this.phase === "main1" || this.phase === "main2")
+      ) {
+        const card = this.player.field[index];
+        const canFlip = card ? this.canFlipSummon(card) : false;
+        const canPosChange = card ? this.canChangePosition(card) : false;
+
+        if (card && (canFlip || canPosChange)) {
+          this.renderer.showPositionChoiceModal(
+            cardEl,
+            card,
+            (choice) => {
+              if (choice === "flip" && canFlip) {
+                this.flipSummon(card);
+              } else if (
+                choice === "to_attack" &&
+                canPosChange &&
+                card.position !== "attack"
+              ) {
+                this.changeMonsterPosition(card, "attack");
+              } else if (
+                choice === "to_defense" &&
+                canPosChange &&
+                card.position !== "defense"
+              ) {
+                this.changeMonsterPosition(card, "defense");
+              }
+            },
+            { canFlip, canChangePosition: canPosChange }
+          );
+          return;
+        }
       }
 
       if (this.turn !== "player" || this.phase !== "battle") return;
@@ -427,6 +477,68 @@ export default class Game {
         }
       }
     });
+  }
+
+  canFlipSummon(card) {
+    if (!card) return false;
+    const isTurnPlayer = card.owner === this.turn;
+    const isMainPhase = this.phase === "main1" || this.phase === "main2";
+    if (!isTurnPlayer || !isMainPhase) return false;
+    if (!card.isFacedown) return false;
+    if (card.positionChangedThisTurn) return false;
+
+    const setTurn = card.setTurn ?? card.summonedTurn ?? 0;
+    if (this.turnCounter <= setTurn) return false;
+
+    return true;
+  }
+
+  canChangePosition(card) {
+    if (!card) return false;
+    const isTurnPlayer = card.owner === this.turn;
+    const isMainPhase = this.phase === "main1" || this.phase === "main2";
+    if (!isTurnPlayer || !isMainPhase) return false;
+    if (card.isFacedown) return false;
+    if (card.positionChangedThisTurn) return false;
+    if (card.summonedTurn && this.turnCounter <= card.summonedTurn)
+      return false;
+    if (card.hasAttacked) return false;
+
+    return true;
+  }
+
+  flipSummon(card) {
+    if (!this.canFlipSummon(card)) return;
+    card.isFacedown = false;
+    card.position = "attack";
+    card.positionChangedThisTurn = true;
+    card.cannotAttackThisTurn = true;
+    this.renderer.log(`${card.name} is Flip Summoned!`);
+
+    this.emit("after_summon", {
+      card,
+      player: card.owner === "player" ? this.player : this.bot,
+      method: "flip",
+    });
+
+    this.updateBoard();
+  }
+
+  changeMonsterPosition(card, newPosition) {
+    if (newPosition !== "attack" && newPosition !== "defense") return;
+    if (!this.canChangePosition(card)) return;
+    if (!card || card.position === newPosition) return;
+
+    card.position = newPosition;
+    card.isFacedown = false;
+    card.positionChangedThisTurn = true;
+    card.cannotAttackThisTurn = true;
+    this.renderer.log(
+      `${card.name} changes to ${
+        newPosition === "attack" ? "Attack" : "Defense"
+      } Position.`
+    );
+    this.updateBoard();
   }
 
   handleSpellActivationResult(card, handIndex, result) {
@@ -953,6 +1065,12 @@ export default class Game {
         fromZone = zoneName;
         break;
       }
+    }
+
+    if (fromZone === "field" && card.cardKind === "monster") {
+      card.summonedTurn = null;
+      card.setTurn = null;
+      card.positionChangedThisTurn = false;
     }
 
     // Se um equip spell está saindo da spell/trap zone, limpar seus efeitos no monstro

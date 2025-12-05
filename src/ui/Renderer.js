@@ -237,6 +237,96 @@ showSummonModal(cardIndex, callback) {
   };
 }
 
+  showPositionChoiceModal(cardElement, card, callback, options = {}) {
+    const existingModal = document.querySelector(".position-choice-modal");
+    if (existingModal) {
+      existingModal.remove();
+    }
+
+    if (!cardElement) return;
+
+    const canFlip = options.canFlip ?? false;
+    const canChangePos = options.canChangePosition ?? false;
+
+    const buttons = [];
+    if (card?.isFacedown && canFlip) {
+      buttons.push({ label: "Flip Summon", choice: "flip" });
+    }
+    if (card && !card.isFacedown && canChangePos) {
+      if (card.position === "defense") {
+        buttons.push({ label: "To Attack", choice: "to_attack" });
+      } else if (card.position === "attack") {
+        buttons.push({ label: "To Defense", choice: "to_defense" });
+      }
+    }
+
+    if (buttons.length === 0) return;
+
+    const rect = cardElement.getBoundingClientRect();
+    const modal = document.createElement("div");
+    modal.className = "position-choice-modal";
+    modal.style.position = "fixed";
+    modal.style.zIndex = "200";
+    modal.innerHTML = `
+      <div class="position-choice-content">
+        ${buttons
+          .map(
+            (btn) =>
+              `<button data-choice="${btn.choice}">${btn.label}</button>`
+          )
+          .join("")}
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const content = modal.querySelector(".position-choice-content") || modal;
+    const contentRect = content.getBoundingClientRect();
+
+    let left = rect.left;
+    let top = rect.top - contentRect.height - 10;
+
+    if (top < 10) {
+      top = rect.bottom + 10;
+    }
+
+    if (left + contentRect.width > window.innerWidth - 10) {
+      left = window.innerWidth - contentRect.width - 10;
+    }
+    if (left < 10) left = 10;
+
+    modal.style.left = `${left}px`;
+    modal.style.top = `${top}px`;
+
+    const cleanup = () => {
+      if (modal.parentNode) {
+        modal.parentNode.removeChild(modal);
+      }
+      document.removeEventListener("mousedown", handleOutsideClick);
+    };
+
+    const handleOutsideClick = (event) => {
+      if (!modal.contains(event.target)) {
+        cleanup();
+      }
+    };
+
+    setTimeout(() => {
+      document.addEventListener("mousedown", handleOutsideClick);
+    }, 0);
+
+    modal.querySelectorAll("button").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const choice = btn.dataset.choice;
+        cleanup();
+        if (typeof callback === "function") {
+          callback(choice);
+        }
+      });
+    });
+  }
+
 createCardElement(card, visible) {
     const el = document.createElement("div");
     el.className = "card";

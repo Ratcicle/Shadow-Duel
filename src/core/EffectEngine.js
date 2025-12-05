@@ -146,10 +146,15 @@ export default class EffectEngine {
       const owner = side.owner;
       if (!owner) continue;
 
-      const fieldCards = owner.field ? [...owner.field] : [];
-      if (owner.fieldSpell) {
-        fieldCards.push(owner.fieldSpell);
-      }
+      const equipSpells = (owner.spellTrap || []).filter(
+        (c) => c && c.subtype === "equip" && c.equippedTo
+      );
+
+      const fieldCards = [
+        ...(owner.field || []),
+        owner.fieldSpell,
+        ...equipSpells,
+      ].filter(Boolean);
 
       for (const card of fieldCards) {
         if (!card || !card.effects || !Array.isArray(card.effects)) continue;
@@ -162,6 +167,7 @@ export default class EffectEngine {
           destroyed,
           attackerOwner: attackerOwner || this.getOwnerByCard(attacker),
           destroyedOwner: destroyedOwner || this.getOwnerByCard(destroyed),
+          host: card.equippedTo || null,
         };
 
         for (const effect of card.effects) {
@@ -175,6 +181,10 @@ export default class EffectEngine {
           }
 
           if (effect.requireSelfAsAttacker && ctx.attacker !== card) continue;
+          if (effect.requireEquippedAsAttacker) {
+            if (!card.equippedTo) continue;
+            if (ctx.attacker !== card.equippedTo) continue;
+          }
 
           const targetResult = this.resolveTargets(
             effect.targets || [],
@@ -651,7 +661,7 @@ export default class EffectEngine {
       case "deck":
         return player.deck;
       case "spellTrap":
-        return player.spellTrapZone;
+        return player.spellTrap;
       case "fieldSpell":
         return player.fieldSpell ? [player.fieldSpell] : [];
       case "field":
@@ -1246,6 +1256,10 @@ export default class EffectEngine {
     const target = targetCards[0];
 
     if (!target || target.cardKind !== "monster") return false;
+    if (target.isFacedown) {
+      console.warn("Cannot equip to a facedown monster:", target.name);
+      return false;
+    }
 
     if (this.game && typeof this.game.moveCard === "function") {
       const zone = this.game.getZone(player, "hand");

@@ -596,13 +596,16 @@ body {
 }
 
 /* Summon Choice Modal */
-.summon-choice-modal {
+.summon-choice-modal,
+.position-choice-modal {
   position: fixed;
   background: none;
   pointer-events: none;
+  z-index: 200;
 }
 
-.summon-choice-content {
+.summon-choice-content,
+.position-choice-content {
   background-color: #1e1e1e;
   border: 2px solid var(--accent-color);
   padding: 15px;
@@ -613,13 +616,15 @@ body {
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.7);
 }
 
-.summon-choice-content h3 {
+.summon-choice-content h3,
+.position-choice-content h3 {
   margin: 0 0 10px 0;
   color: var(--accent-color);
   font-size: 0.9rem;
 }
 
-.summon-choice-content button {
+.summon-choice-content button,
+.position-choice-content button {
   display: block;
   width: 100%;
   padding: 8px;
@@ -633,7 +638,8 @@ body {
   font-size: 0.85rem;
 }
 
-.summon-choice-content button:hover {
+.summon-choice-content button:hover,
+.position-choice-content button:hover {
   opacity: 0.9;
 }
 
