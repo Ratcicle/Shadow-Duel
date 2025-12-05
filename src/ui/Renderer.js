@@ -156,147 +156,54 @@ export default class Renderer {
     container.appendChild(cardEl);
   }
 
+  showSummonModal(cardIndex, callback) {
+    const existingModal = document.querySelector(".summon-choice-modal");
+    if (existingModal) {
+      existingModal.remove();
+    }
 
-  
-showSummonModal(cardIndex, callback) {
-  const existingModal = document.querySelector(".summon-choice-modal");
-  if (existingModal) {
-    existingModal.remove();
-  }
+    const cardElement = document.querySelector(
+      `#player-hand .card[data-index="${cardIndex}"]`
+    );
+    const rect = cardElement ? cardElement.getBoundingClientRect() : null;
 
-  const cardElement = document.querySelector(
-    `#player-hand .card[data-index="${cardIndex}"]`
-  );
-  const rect = cardElement ? cardElement.getBoundingClientRect() : null;
-
-  const modal = document.createElement("div");
-  modal.className = "summon-choice-modal";
-  modal.innerHTML = `
+    const modal = document.createElement("div");
+    modal.className = "summon-choice-modal";
+    modal.innerHTML = `
       <div class="summon-choice-content">
           <button id="btn-normal-summon">Normal Summon</button>
           <button id="btn-set">Set</button>
       </div>
     `;
 
-  // posicionamento inteligente: tenta abaixo da carta,
-  // e se não couber, abre acima; também evita sair pelas laterais
-  modal.style.position = "fixed";
-  modal.style.zIndex = "200";
-
-  document.body.appendChild(modal);
-
-  if (rect) {
-    const content = modal.querySelector(".summon-choice-content") || modal;
-    const contentRect = content.getBoundingClientRect();
-
-    let left = rect.left;
-    let top = rect.bottom + 10;
-
-    // se estourar a parte de baixo da tela, coloca acima da carta
-    if (top + contentRect.height > window.innerHeight - 10) {
-      top = rect.top - contentRect.height - 10;
-    }
-
-    // clamp horizontal para não sair pelas laterais
-    if (left + contentRect.width > window.innerWidth - 10) {
-      left = window.innerWidth - contentRect.width - 10;
-    }
-    if (left < 10) left = 10;
-
-    modal.style.left = `${left}px`;
-    modal.style.top = `${top}px`;
-  }
-
-  const cleanup = () => {
-    if (modal.parentNode) {
-      modal.parentNode.removeChild(modal);
-    }
-    document.removeEventListener("mousedown", handleOutsideClick);
-  };
-
-  const handleOutsideClick = (event) => {
-    if (!modal.contains(event.target)) {
-      cleanup();
-    }
-  };
-
-  // registra o listener após o frame para não disparar com o próprio clique de abertura
-  setTimeout(() => {
-    document.addEventListener("mousedown", handleOutsideClick);
-  }, 0);
-
-  document.getElementById("btn-normal-summon").onclick = (e) => {
-    e.stopPropagation();
-    callback("attack");
-    cleanup();
-  };
-  document.getElementById("btn-set").onclick = (e) => {
-    e.stopPropagation();
-    callback("defense");
-    cleanup();
-  };
-}
-
-  showPositionChoiceModal(cardElement, card, callback, options = {}) {
-    const existingModal = document.querySelector(".position-choice-modal");
-    if (existingModal) {
-      existingModal.remove();
-    }
-
-    if (!cardElement) return;
-
-    const canFlip = options.canFlip ?? false;
-    const canChangePos = options.canChangePosition ?? false;
-
-    const buttons = [];
-    if (card?.isFacedown && canFlip) {
-      buttons.push({ label: "Flip Summon", choice: "flip" });
-    }
-    if (card && !card.isFacedown && canChangePos) {
-      if (card.position === "defense") {
-        buttons.push({ label: "To Attack", choice: "to_attack" });
-      } else if (card.position === "attack") {
-        buttons.push({ label: "To Defense", choice: "to_defense" });
-      }
-    }
-
-    if (buttons.length === 0) return;
-
-    const rect = cardElement.getBoundingClientRect();
-    const modal = document.createElement("div");
-    modal.className = "position-choice-modal";
+    // posicionamento inteligente: tenta abaixo da carta,
+    // e se não couber, abre acima; também evita sair pelas laterais
     modal.style.position = "fixed";
     modal.style.zIndex = "200";
-    modal.innerHTML = `
-      <div class="position-choice-content">
-        ${buttons
-          .map(
-            (btn) =>
-              `<button data-choice="${btn.choice}">${btn.label}</button>`
-          )
-          .join("")}
-      </div>
-    `;
 
     document.body.appendChild(modal);
 
-    const content = modal.querySelector(".position-choice-content") || modal;
-    const contentRect = content.getBoundingClientRect();
+    if (rect) {
+      const content = modal.querySelector(".summon-choice-content") || modal;
+      const contentRect = content.getBoundingClientRect();
 
-    let left = rect.left;
-    let top = rect.top - contentRect.height - 10;
+      let left = rect.left;
+      let top = rect.bottom + 10;
 
-    if (top < 10) {
-      top = rect.bottom + 10;
+      // se estourar a parte de baixo da tela, coloca acima da carta
+      if (top + contentRect.height > window.innerHeight - 10) {
+        top = rect.top - contentRect.height - 10;
+      }
+
+      // clamp horizontal para não sair pelas laterais
+      if (left + contentRect.width > window.innerWidth - 10) {
+        left = window.innerWidth - contentRect.width - 10;
+      }
+      if (left < 10) left = 10;
+
+      modal.style.left = `${left}px`;
+      modal.style.top = `${top}px`;
     }
-
-    if (left + contentRect.width > window.innerWidth - 10) {
-      left = window.innerWidth - contentRect.width - 10;
-    }
-    if (left < 10) left = 10;
-
-    modal.style.left = `${left}px`;
-    modal.style.top = `${top}px`;
 
     const cleanup = () => {
       if (modal.parentNode) {
@@ -311,23 +218,102 @@ showSummonModal(cardIndex, callback) {
       }
     };
 
+    // registra o listener após o frame para não disparar com o próprio clique de abertura
     setTimeout(() => {
       document.addEventListener("mousedown", handleOutsideClick);
     }, 0);
+
+    document.getElementById("btn-normal-summon").onclick = (e) => {
+      e.stopPropagation();
+      callback("attack");
+      cleanup();
+    };
+    document.getElementById("btn-set").onclick = (e) => {
+      e.stopPropagation();
+      callback("defense");
+      cleanup();
+    };
+  }
+
+  showPositionChoiceModal(cardEl, card, callback, options = {}) {
+    const existing = document.querySelector(".position-choice-modal");
+    if (existing) existing.remove();
+
+    const modal = document.createElement("div");
+    modal.className = "position-choice-modal";
+    modal.innerHTML = `
+      <div class="position-choice-content">
+        ${
+          options.canFlip
+            ? `<button data-choice="flip">Flip Summon</button>`
+            : ""
+        }
+        ${
+          options.canChangePosition && card?.position !== "attack"
+            ? `<button data-choice="to_attack">To Attack</button>`
+            : ""
+        }
+        ${
+          options.canChangePosition && card?.position !== "defense"
+            ? `<button data-choice="to_defense">To Defense</button>`
+            : ""
+        }
+      </div>
+    `;
+
+    modal.style.position = "fixed";
+    modal.style.zIndex = "200";
+
+    document.body.appendChild(modal);
+
+    const rect = cardEl?.getBoundingClientRect();
+    if (rect) {
+      const content = modal.querySelector(".position-choice-content") || modal;
+      const contentRect = content.getBoundingClientRect();
+
+      let left = rect.left;
+      let top = rect.bottom + 8;
+
+      if (top + contentRect.height > window.innerHeight - 8) {
+        top = rect.top - contentRect.height - 8;
+      }
+      if (left + contentRect.width > window.innerWidth - 8) {
+        left = window.innerWidth - contentRect.width - 8;
+      }
+      if (left < 8) left = 8;
+
+      modal.style.left = `${left}px`;
+      modal.style.top = `${top}px`;
+    }
+
+    const cleanup = () => {
+      if (modal.parentNode) {
+        modal.parentNode.removeChild(modal);
+      }
+      document.removeEventListener("mousedown", outsideHandler);
+    };
+
+    const outsideHandler = (e) => {
+      if (!modal.contains(e.target)) {
+        cleanup();
+      }
+    };
+
+    setTimeout(() => document.addEventListener("mousedown", outsideHandler), 0);
 
     modal.querySelectorAll("button").forEach((btn) => {
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
         const choice = btn.dataset.choice;
         cleanup();
-        if (typeof callback === "function") {
+        if (choice) {
           callback(choice);
         }
       });
     });
   }
 
-createCardElement(card, visible) {
+  createCardElement(card, visible) {
     const el = document.createElement("div");
     el.className = "card";
 

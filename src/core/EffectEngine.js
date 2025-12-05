@@ -1287,11 +1287,19 @@ export default class EffectEngine {
       equipCard.equipDefBonus = action.defBonus;
       target.def += action.defBonus;
     }
+    if (typeof action.extraAttacks === "number" && action.extraAttacks !== 0) {
+      equipCard.equipExtraAttacks = action.extraAttacks;
+      target.extraAttacks = (target.extraAttacks || 0) + action.extraAttacks;
+    }
 
     if (action.battleIndestructible) {
       equipCard.grantsBattleIndestructible = true;
       target.battleIndestructible = true;
     }
+
+    const maxAttacksAfterEquip = 1 + (target.extraAttacks || 0);
+    target.hasAttacked =
+      (target.attacksUsedThisTurn || 0) >= maxAttacksAfterEquip;
     return true;
   }
 
@@ -1359,6 +1367,8 @@ export default class EffectEngine {
         }
         if (action.resetAttackFlags) {
           card.hasAttacked = false;
+          card.cannotAttackThisTurn = false;
+          card.attacksUsedThisTurn = 0;
         }
 
         card.owner = destPlayer.id;
@@ -1430,6 +1440,7 @@ export default class EffectEngine {
     chosen.position = action.position || "attack";
     chosen.isFacedown = false;
     chosen.hasAttacked = false;
+    chosen.attacksUsedThisTurn = 0;
     chosen.cannotAttackThisTurn = true;
 
     player.field.push(chosen);

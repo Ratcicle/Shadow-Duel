@@ -60,49 +60,57 @@ export default class Bot extends Player {
   }
 
   battlePhaseLogic(game) {
-    const baseScore = this.evaluateBoard(game, this);
     const minDeltaToAttack = 0.1;
-    let bestAttack = null;
-    let bestDelta = -Infinity;
-
-    for (const attacker of this.field) {
-      if (
-        attacker.position !== "attack" ||
-        attacker.hasAttacked ||
-        attacker.cannotAttackThisTurn
-      ) {
-        continue;
+    const performAttack = () => {
+      if (game.gameOver || game.phase !== "battle") {
+        return;
       }
 
-      const possibleTargets = game.player.field.length
-        ? [...game.player.field]
-        : [null];
+      const baseScore = this.evaluateBoard(game, this);
+      let bestAttack = null;
+      let bestDelta = -Infinity;
 
-      for (const target of possibleTargets) {
-        const simState = this.cloneGameState(game);
-        const simAttacker = simState.bot.field.find(
-          (c) => c.id === attacker.id
-        );
-        const simTarget = target
-          ? simState.player.field.find((c) => c.id === target.id)
-          : null;
+      for (const attacker of this.field) {
+        const availability = game.getAttackAvailability(attacker);
+        if (!availability.ok) continue;
 
-        this.simulateBattle(simState, simAttacker, simTarget);
-        const scoreAfter = this.evaluateBoard(simState, simState.bot);
-        const delta = scoreAfter - baseScore;
+        const possibleTargets = game.player.field.length
+          ? [...game.player.field]
+          : [null];
 
-        if (delta > bestDelta) {
-          bestDelta = delta;
-          bestAttack = { attacker, target };
+        for (const target of possibleTargets) {
+          const simState = this.cloneGameState(game);
+          const simAttacker = simState.bot.field.find(
+            (c) => c.id === attacker.id
+          );
+          const simTarget = target
+            ? simState.player.field.find((c) => c.id === target.id)
+            : null;
+
+          if (!simAttacker) continue;
+
+          this.simulateBattle(simState, simAttacker, simTarget);
+          const scoreAfter = this.evaluateBoard(simState, simState.bot);
+          const delta = scoreAfter - baseScore;
+
+          if (delta > bestDelta) {
+            bestDelta = delta;
+            bestAttack = { attacker, target };
+          }
         }
       }
-    }
 
-    if (bestAttack && bestDelta > minDeltaToAttack) {
-      game.resolveCombat(bestAttack.attacker, bestAttack.target);
-    }
+      if (bestAttack && bestDelta > minDeltaToAttack) {
+        game.resolveCombat(bestAttack.attacker, bestAttack.target);
+        if (!game.gameOver) {
+          setTimeout(() => performAttack(), 800);
+        }
+      } else {
+        setTimeout(() => game.nextPhase(), 800);
+      }
+    };
 
-    setTimeout(() => game.nextPhase(), 800);
+    performAttack();
   }
 
   evaluateBoard(gameOrState, perspectivePlayer) {
@@ -322,6 +330,7 @@ export default class Bot extends Player {
         newCard.position = action.position;
         newCard.isFacedown = action.facedown;
         newCard.hasAttacked = false;
+        newCard.attacksUsedThisTurn = 0;
         player.field.push(newCard);
         player.summonCount = (player.summonCount || 0) + 1;
         break;
@@ -384,6 +393,8 @@ export default class Bot extends Player {
             level: 1,
             position: "attack",
             isFacedown: false,
+            hasAttacked: false,
+            attacksUsedThisTurn: 0,
             cardKind: "monster",
           });
         }
@@ -419,6 +430,7 @@ export default class Bot extends Player {
             player.graveyard.splice(idx, 1);
             candidate.position = "attack";
             candidate.hasAttacked = false;
+            candidate.attacksUsedThisTurn = 0;
             player.field.push(candidate);
           }
         }
@@ -438,6 +450,7 @@ export default class Bot extends Player {
           ownerGrave.splice(idx, 1);
           best.position = "attack";
           best.hasAttacked = false;
+          best.attacksUsedThisTurn = 0;
           player.field.push(best);
         }
         break;
@@ -465,6 +478,8 @@ export default class Bot extends Player {
             player.graveyard.splice(idx, 1);
             target.position = "attack";
             target.cannotAttackThisTurn = true;
+            target.hasAttacked = false;
+            target.attacksUsedThisTurn = 0;
             player.field.push(target);
           }
         }
@@ -504,6 +519,7 @@ export default class Bot extends Player {
             }
             dragon.position = "attack";
             dragon.hasAttacked = false;
+            dragon.attacksUsedThisTurn = 0;
             player.field.push(dragon);
           }
         }
@@ -537,6 +553,11 @@ export default class Bot extends Player {
   simulateBattle(state, attacker, target) {
     if (!attacker) return;
     if (attacker.cannotAttackThisTurn) return;
+    if (attacker.position === "defense") return;
+
+    const maxAttacks = 1 + (attacker.extraAttacks || 0);
+    const usedAttacks = attacker.attacksUsedThisTurn || 0;
+    if (usedAttacks >= maxAttacks) return;
 
     const attackerOwner = state.bot;
     const defenderOwner = state.player;
@@ -544,7 +565,8 @@ export default class Bot extends Player {
     const attackStat = attacker.atk || 0;
     if (!target) {
       defenderOwner.lp -= attackStat;
-      attacker.hasAttacked = true;
+      attacker.attacksUsedThisTurn = usedAttacks + 1;
+      attacker.hasAttacked = attacker.attacksUsedThisTurn >= maxAttacks;
       return;
     }
 
@@ -573,7 +595,8 @@ export default class Bot extends Player {
         attackerOwner.lp -= targetStat - attackStat;
       }
     }
-    attacker.hasAttacked = true;
+    attacker.attacksUsedThisTurn = usedAttacks + 1;
+    attacker.hasAttacked = attacker.attacksUsedThisTurn >= maxAttacks;
   }
 
   executeMainPhaseAction(game, action) {

@@ -110,6 +110,7 @@ export default class Game {
     const activePlayer = this.turn === "player" ? this.player : this.bot;
     activePlayer.field.forEach((card) => {
       card.hasAttacked = false;
+      card.attacksUsedThisTurn = 0;
       card.cannotAttackThisTurn = false;
       card.positionChangedThisTurn = false;
     });
@@ -364,16 +365,9 @@ export default class Game {
       const attacker = this.player.field[index];
 
       if (attacker) {
-        if (attacker.cannotAttackThisTurn) {
-          this.renderer.log(`${attacker.name} cannot attack this turn.`);
-          return;
-        }
-        if (attacker.hasAttacked) {
-          this.renderer.log("This monster has already attacked!");
-          return;
-        }
-        if (attacker.position === "defense") {
-          this.renderer.log("Defense position monsters cannot attack!");
+        const availability = this.getAttackAvailability(attacker);
+        if (!availability.ok) {
+          this.renderer.log(availability.reason);
           return;
         }
 
@@ -382,8 +376,6 @@ export default class Game {
           target = this.bot.field[0];
         }
         this.resolveCombat(attacker, target);
-        attacker.hasAttacked = true;
-        this.updateBoard();
       }
     });
 
@@ -879,6 +871,7 @@ export default class Game {
         card.position = "attack";
         card.isFacedown = false;
         card.hasAttacked = false;
+        card.attacksUsedThisTurn = 0;
         card.owner = player.id;
         player.field.push(card);
         this.closeGraveyardModal(false);
@@ -889,13 +882,55 @@ export default class Game {
       },
     });
   }
+
+  getAttackAvailability(attacker) {
+    if (!attacker) {
+      return { ok: false, reason: "No attacker selected." };
+    }
+    if (attacker.cannotAttackThisTurn) {
+      return {
+        ok: false,
+        reason: `${attacker.name} cannot attack this turn.`,
+      };
+    }
+    if (attacker.position === "defense") {
+      return {
+        ok: false,
+        reason: "Defense position monsters cannot attack!",
+      };
+    }
+
+    const extraAttacks = attacker.extraAttacks || 0;
+    const maxAttacks = 1 + extraAttacks;
+    const attacksUsed = attacker.attacksUsedThisTurn || 0;
+
+    if (attacksUsed >= maxAttacks) {
+      return {
+        ok: false,
+        reason: `${attacker.name} has already attacked the maximum number of times this turn.`,
+      };
+    }
+
+    return { ok: true, maxAttacks, attacksUsed };
+  }
+
+  markAttackUsed(attacker) {
+    if (!attacker) return;
+    const extraAttacks = attacker.extraAttacks || 0;
+    const maxAttacks = 1 + extraAttacks;
+    attacker.attacksUsedThisTurn = (attacker.attacksUsedThisTurn || 0) + 1;
+    if (attacker.attacksUsedThisTurn >= maxAttacks) {
+      attacker.hasAttacked = true;
+    } else {
+      attacker.hasAttacked = false;
+    }
+  }
+
   resolveCombat(attacker, target) {
     if (!attacker) return;
 
-    if (attacker.cannotAttackThisTurn) {
-      this.renderer.log(`${attacker.name} cannot attack this turn.`);
-      return;
-    }
+    const availability = this.getAttackAvailability(attacker);
+    if (!availability.ok) return;
 
     this.renderer.log(
       `${attacker.name} attacks ${target ? target.name : "directly"}!`
@@ -904,6 +939,7 @@ export default class Game {
     if (!target) {
       const defender = attacker.owner === "player" ? this.bot : this.player;
       defender.takeDamage(attacker.atk);
+      this.markAttackUsed(attacker);
       this.checkWinCondition();
       this.updateBoard();
     } else {
@@ -984,6 +1020,7 @@ export default class Game {
       }
     }
 
+    this.markAttackUsed(attacker);
     this.checkWinCondition();
     this.updateBoard();
   }
@@ -1027,8 +1064,6 @@ export default class Game {
         return player.spellTrap;
       case "graveyard":
         return player.graveyard;
-      case "spellTrap":
-        return player.spellTrapZone;
       case "fieldSpell":
         return player.fieldSpell ? [player.fieldSpell] : [];
       case "field":
@@ -1099,6 +1134,20 @@ export default class Game {
         card.equipDefBonus = 0;
       }
 
+      if (
+        typeof card.equipExtraAttacks === "number" &&
+        card.equipExtraAttacks !== 0
+      ) {
+        const currentExtra = host.extraAttacks || 0;
+        const nextExtra = currentExtra - card.equipExtraAttacks;
+        host.extraAttacks = Math.max(0, nextExtra);
+        card.equipExtraAttacks = 0;
+      }
+
+      const maxAttacksAfterEquipChange = 1 + (host.extraAttacks || 0);
+      host.hasAttacked =
+        (host.attacksUsedThisTurn || 0) >= maxAttacksAfterEquipChange;
+
       if (card.grantsBattleIndestructible) {
         host.battleIndestructible = false;
         card.grantsBattleIndestructible = false;
@@ -1159,7 +1208,7 @@ export default class Game {
       return;
     }
 
-    if ((toZone === "field" || toZone === "spellTrap") && destArr.length >= 5) {
+    if (toZone === "field" && destArr.length >= 5) {
       this.renderer.log("Field is full (max 5 cards).");
       return;
     }
@@ -1177,6 +1226,7 @@ export default class Game {
     if (options.resetAttackFlags) {
       card.hasAttacked = false;
       card.cannotAttackThisTurn = false;
+      card.attacksUsedThisTurn = 0;
     }
 
     card.owner = destPlayer.id;

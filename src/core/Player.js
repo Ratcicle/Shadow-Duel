@@ -11,7 +11,6 @@ export default class Player {
     this.field = [];
     this.spellTrap = [];
     this.graveyard = [];
-    this.spellTrapZone = [];
     this.fieldSpell = null;
     this.summonCount = 0;
     this.maxDeckSize = 30;
@@ -200,6 +199,7 @@ export default class Player {
       card.position = position;
       card.isFacedown = isFacedown;
       card.hasAttacked = false;
+      card.attacksUsedThisTurn = 0;
       this.field.push(card);
       this.summonCount++;
       return card;
