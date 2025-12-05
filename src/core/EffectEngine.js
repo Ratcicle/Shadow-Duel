@@ -158,7 +158,10 @@ export default class EffectEngine {
         ...equipSpells,
       ].filter(Boolean);
 
-      for (const card of fieldCards) {
+      const handCards = owner.hand || [];
+      const triggerSources = [...fieldCards, ...handCards];
+
+      for (const card of triggerSources) {
         if (!card || !card.effects || !Array.isArray(card.effects)) continue;
 
         const ctx = {
@@ -844,6 +847,10 @@ export default class EffectEngine {
         case "darkness_valley_battle_punish":
           executed = this.applyDarknessValleyBattlePunish(action, ctx) || executed;
           break;
+        case "shadow_heart_death_wyrm_special_summon":
+          executed =
+            this.applyShadowHeartDeathWyrmSpecialSummon(action, ctx) || executed;
+          break;
         default:
           console.warn(`Unknown action type: ${action.type}`);
       }
@@ -1422,6 +1429,60 @@ export default class EffectEngine {
       moved = true;
     });
     return moved;
+  }
+
+  applyShadowHeartDeathWyrmSpecialSummon(action, ctx) {
+    const card = ctx?.source;
+    if (!card) return false;
+
+    const owner = ctx?.player || this.getOwnerByCard(card);
+    if (!owner) return false;
+
+    owner.hand = owner.hand || [];
+    owner.field = owner.field || [];
+
+    if (!owner.hand.includes(card)) return false;
+
+    const destroyed = ctx?.destroyed;
+    const destroyedOwner = ctx?.destroyedOwner;
+    if (!destroyed || !destroyedOwner) return false;
+    if (destroyedOwner !== owner && destroyedOwner?.id !== owner.id) return false;
+
+    const destroyedArchetypes = destroyed.archetypes
+      ? destroyed.archetypes
+      : destroyed.archetype
+      ? [destroyed.archetype]
+      : [];
+    if (!destroyedArchetypes.includes("Shadow-Heart")) return false;
+
+    if (owner.field.length >= 5) {
+      console.log("No space to Special Summon Shadow-Heart Death Wyrm.");
+      return false;
+    }
+
+    if (this.game && typeof this.game.moveCard === "function") {
+      this.game.moveCard(card, owner, "field", {
+        fromZone: "hand",
+        position: "attack",
+        isFacedown: false,
+        resetAttackFlags: true,
+      });
+    } else {
+      const handIndex = owner.hand.indexOf(card);
+      if (handIndex === -1) return false;
+      owner.hand.splice(handIndex, 1);
+      card.position = "attack";
+      card.isFacedown = false;
+      card.hasAttacked = false;
+      card.cannotAttackThisTurn = false;
+      card.attacksUsedThisTurn = 0;
+      card.owner = owner.id;
+      owner.field.push(card);
+    }
+
+    console.log("Shadow-Heart Death Wyrm is Special Summoned from the hand!");
+    this.game?.updateBoard?.();
+    return true;
   }
 
   applyShadowHeartShieldUpkeep(action, ctx) {

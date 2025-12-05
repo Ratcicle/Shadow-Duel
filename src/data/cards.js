@@ -962,4 +962,31 @@ export const cardDatabase = [
       },
     ],
   },
+  {
+    id: 45,
+    name: "Shadow-Heart Death Wyrm",
+    cardKind: "monster",
+    atk: 2400,
+    def: 2000,
+    level: 8,
+    type: "Fiend",
+    archetype: "Shadow-Heart",
+    description:
+      'Quick Effect: Once per turn, when a "Shadow-Heart" monster you control is destroyed by battle: You can Special Summon this card from your hand.',
+    image: "assets/Shadow-Heart Death Wyrm.png",
+    effects: [
+      {
+        id: "shadow_heart_death_wyrm_hand_summon",
+        timing: "on_event",
+        event: "battle_destroy",
+        oncePerTurn: true,
+        oncePerTurnName: "Shadow-Heart Death Wyrm",
+        actions: [
+          {
+            type: "shadow_heart_death_wyrm_special_summon",
+          },
+        ],
+      },
+    ],
+  },
 ];
