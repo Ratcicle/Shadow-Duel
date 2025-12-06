@@ -654,14 +654,14 @@ export const cardDatabase = [
     id: 38,
     name: "Shadow-Heart Scale Dragon",
     cardKind: "monster",
-    atk: 3200,
+    atk: 3000,
     def: 2500,
     level: 9,
     type: "Dragon",
     archetype: "Shadow-Heart",
-    summonRestrict: "shadow_heart_invocation_only",
+    requiredTributes: 3,
     description:
-      'Cannot be Normal Summoned/Set. Must be Special Summoned by the effect of "Shadow-Heart Invocation" and cannot be Special Summoned by other ways. When this card destroys a monster by battle: target 1 "Shadow-Heart" monster in your Graveyard; shuffle that target into the Deck.',
+      'Requires 3 tributes to Normal Summon/Set. Once per turn, if this card destroys a monster by battle: You can target 1 "Shadow-Heart" card in your Graveyard; add it to your hand.',
     image: "assets/Shadow-Heart Scale Dragon.png",
     effects: [
       {
@@ -669,12 +669,13 @@ export const cardDatabase = [
         timing: "on_event",
         event: "battle_destroy",
         requireSelfAsAttacker: true,
+        oncePerTurn: true,
+        oncePerTurnName: "shadow_heart_scale_dragon_recycle",
         targets: [
           {
             id: "shadow_heart_recycle_target",
             owner: "self",
             zone: "graveyard",
-            cardKind: "monster",
             archetype: "Shadow-Heart",
             count: { min: 1, max: 1 },
           },
@@ -684,7 +685,7 @@ export const cardDatabase = [
             type: "move",
             targetRef: "shadow_heart_recycle_target",
             player: "self",
-            to: "deck",
+            to: "hand",
           },
         ],
       },
@@ -692,32 +693,23 @@ export const cardDatabase = [
   },
   {
     id: 39,
-    name: "Shadow-Heart Invocation",
+    name: "Shadow-Heart Rage",
     cardKind: "spell",
     subtype: "normal",
     archetype: "Shadow-Heart",
     description:
-      'If "Shadow-Heart Scale Dragon" is in your hand or Graveyard: Tribute 3 "Shadow-Heart" monsters with different names; Special Summon 1 "Shadow-Heart Scale Dragon" from your hand or Graveyard.',
-    image: "assets/Shadow-Heart Invocation.png",
+      'If "Shadow-Heart Scale Dragon" is the only monster you control: It gains 700 ATK/DEF until the end of this turn, and it can make a second attack during this Battle Phase.',
+    image: "assets/Shadow-Heart Rage.png",
     effects: [
       {
-        id: "shadow_heart_invocation_ritual",
+        id: "shadow_heart_rage_scale_buff_effect",
         timing: "on_play",
         speed: 1,
-        targets: [
-          {
-            id: "shadow_heart_ritual_tributes",
-            owner: "self",
-            zone: "field",
-            cardKind: "monster",
-            archetype: "Shadow-Heart",
-            count: { min: 3, max: 3 },
-          },
-        ],
         actions: [
           {
-            type: "shadow_heart_ritual_summon",
-            tributeRef: "shadow_heart_ritual_tributes",
+            type: "shadow_heart_rage_scale_buff",
+            atkBoost: 700,
+            defBoost: 700,
           },
         ],
       },
@@ -1108,7 +1100,7 @@ export const cardDatabase = [
     archetype: "Luminarch",
     mustBeAttacked: true,
     description:
-      'If this card is Special Summoned: Increase its DEF by 500. While this card is face-up on the field, your opponent\'s attacks must target this card, if possible.',
+      "If this card is Special Summoned: Increase its DEF by 500. While this card is face-up on the field, your opponent's attacks must target this card, if possible.",
     image: "assets/Luminarch Aegisbearer.png",
     effects: [
       {
@@ -1192,7 +1184,7 @@ export const cardDatabase = [
     piercing: true,
     battleIndestructibleOncePerTurn: true,
     description:
-      'If this card battles a Defense Position monster, inflict piercing battle damage to your opponent. Once per turn, this card cannot be destroyed by battle.',
+      "If this card battles a Defense Position monster, inflict piercing battle damage to your opponent. Once per turn, this card cannot be destroyed by battle.",
     image: "assets/Luminarch Celestial Marshal.png",
     effects: [],
   },
@@ -1219,6 +1211,33 @@ export const cardDatabase = [
             type: "luminarch_magic_sickle_recycle",
           },
         ],
+      },
+    ],
+  },
+  {
+    id: 53,
+    name: "Luminarch Sanctum Protector",
+    cardKind: "monster",
+    atk: 2200,
+    def: 2800,
+    level: 7,
+    type: "Warrior",
+    archetype: "Luminarch",
+    description:
+      'If you control a face-up "Luminarch Aegisbearer", you can send it to the GY; Special Summon this card from your hand. Once per turn, when an opponent\'s monster declares an attack (Quick Effect): negate that attack.',
+    image: "assets/Luminarch Sanctum Protector.png",
+    effects: [
+      {
+        id: "luminarch_sanctum_protector_negate",
+        timing: "on_event",
+        event: "attack_declared",
+        speed: 2,
+        oncePerTurn: true,
+        oncePerTurnName: "luminarch_sanctum_protector_negate",
+        oncePerTurnScope: "card",
+        requireOpponentAttack: true,
+        requireDefenderIsSelf: true,
+        actions: [{ type: "negate_attack" }],
       },
     ],
   },

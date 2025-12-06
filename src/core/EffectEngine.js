@@ -11,13 +11,19 @@ export default class EffectEngine {
       return { ok: true };
     }
 
-    if (!player.oncePerTurnUsageByName) {
-      player.oncePerTurnUsageByName = {};
-    }
-
     const key = effect?.oncePerTurnName || effect?.id || card.name;
     const currentTurn = this.game?.turnCounter ?? 0;
-    const lastTurn = player.oncePerTurnUsageByName[key];
+    const useCardScope =
+      effect.oncePerTurnScope === "card" || effect.oncePerTurnPerCard;
+
+    const usageStore =
+      useCardScope && card
+        ? (card.oncePerTurnUsageByName =
+            card.oncePerTurnUsageByName || {})
+        : (player.oncePerTurnUsageByName =
+            player.oncePerTurnUsageByName || {});
+
+    const lastTurn = usageStore[key];
 
     if (lastTurn === currentTurn) {
       return {
@@ -34,13 +40,19 @@ export default class EffectEngine {
       return;
     }
 
-    if (!player.oncePerTurnUsageByName) {
-      player.oncePerTurnUsageByName = {};
-    }
-
     const key = effect?.oncePerTurnName || effect?.id || card.name;
     const currentTurn = this.game?.turnCounter ?? 0;
-    player.oncePerTurnUsageByName[key] = currentTurn;
+    const useCardScope =
+      effect.oncePerTurnScope === "card" || effect.oncePerTurnPerCard;
+
+    const usageStore =
+      useCardScope && card
+        ? (card.oncePerTurnUsageByName =
+            card.oncePerTurnUsageByName || {})
+        : (player.oncePerTurnUsageByName =
+            player.oncePerTurnUsageByName || {});
+
+    usageStore[key] = currentTurn;
   }
 
   handleEvent(eventName, payload) {
@@ -50,6 +62,8 @@ export default class EffectEngine {
       this.handleBattleDestroyEvent(payload);
     } else if (eventName === "card_to_grave") {
       this.handleCardToGraveEvent(payload);
+    } else if (eventName === "attack_declared") {
+      this.handleAttackDeclaredEvent(payload);
     } else if (eventName === "standby_phase") {
       this.handleStandbyPhaseEvent(payload);
     }
@@ -231,6 +245,119 @@ export default class EffectEngine {
             targetResult.targets || {}
           );
           this.registerOncePerTurnUsage(card, owner, effect);
+          this.game.checkWinCondition();
+        }
+      }
+    }
+  }
+
+  handleAttackDeclaredEvent(payload) {
+    if (!payload || !payload.attacker || !payload.attackerOwner || !payload.defenderOwner) {
+      return;
+    }
+
+    const attackerOwner = payload.attackerOwner;
+    const defenderOwner = payload.defenderOwner;
+
+    const participants = [
+      { owner: attackerOwner, other: defenderOwner },
+      { owner: defenderOwner, other: attackerOwner },
+    ];
+
+    for (const side of participants) {
+      const player = side.owner;
+      const opponent = side.other;
+      if (!player) continue;
+
+      const sources = [...(player.field || [])];
+      if (player.fieldSpell) {
+        sources.push(player.fieldSpell);
+      }
+
+      for (const card of sources) {
+        if (!card || !card.effects || !Array.isArray(card.effects)) continue;
+
+        for (const effect of card.effects) {
+          if (!effect || effect.timing !== "on_event") continue;
+          if (effect.event !== "attack_declared") continue;
+
+          const optCheck = this.checkOncePerTurn(card, player, effect);
+          if (!optCheck.ok) {
+            console.log(optCheck.reason);
+            continue;
+          }
+
+          if (
+            effect.requireOpponentAttack === true &&
+            payload.attackerOwner?.id !== opponent?.id
+          ) {
+            continue;
+          }
+
+          if (
+            effect.requireDefenderIsSelf === true &&
+            payload.defenderOwner?.id !== player?.id
+          ) {
+            continue;
+          }
+
+          if (player.id === "player") {
+            const wantsToUse = window.confirm(
+              `Use ${card.name}'s effect to negate the attack?`
+            );
+            if (!wantsToUse) continue;
+          }
+
+          const ctx = {
+            source: card,
+            player,
+            opponent,
+            attacker: payload.attacker,
+            target: payload.target || null,
+            attackerOwner: payload.attackerOwner,
+            defenderOwner: payload.defenderOwner,
+          };
+
+          const targetResult = this.resolveTargets(
+            effect.targets || [],
+            ctx,
+            null
+          );
+
+          if (targetResult?.needsSelection) {
+            if (
+              this.game &&
+              typeof this.game.startTriggeredTargetSelection === "function"
+            ) {
+              this.game.startTriggeredTargetSelection(
+                card,
+                effect,
+                ctx,
+                targetResult.options
+              );
+            } else {
+              console.warn(
+                "attack_declared effect requires selection but game does not support triggered targeting."
+              );
+            }
+            return;
+          }
+
+          if (targetResult && targetResult.ok === false) {
+            console.warn(
+              "Triggered attack_declared effect has no valid targets:",
+              effect.id || effect,
+              targetResult.reason
+            );
+            continue;
+          }
+
+          this.applyActions(
+            effect.actions || [],
+            ctx,
+            targetResult?.targets || {}
+          );
+          this.registerOncePerTurnUsage(card, player, effect);
           this.game.checkWinCondition();
         }
       }
@@ -615,25 +742,6 @@ export default class EffectEngine {
       }
     }
 
-    if (card.name === "Shadow-Heart Invocation" || card.id === 39) {
-      const hand = player.hand || [];
-      const gy = player.graveyard || [];
-
-      const hasDragonInHand = hand.some(
-        (c) => c && c.name === "Shadow-Heart Scale Dragon"
-      );
-      const hasDragonInGY = gy.some(
-        (c) => c && c.name === "Shadow-Heart Scale Dragon"
-      );
-
-      if (!hasDragonInHand && !hasDragonInGY) {
-        return {
-          ok: false,
-          reason:
-            '"Shadow-Heart Scale Dragon" must be in your hand or Graveyard to activate this card.',
-        };
-      }
-    }
     return { ok: true };
   }
 
@@ -794,10 +902,15 @@ export default class EffectEngine {
   canUseOncePerTurn(effect, ctx) {
     if (!effect || !effect.oncePerTurn) return true;
     const player = ctx?.player;
+    const card = ctx?.source;
     if (!player) return true;
     const key = effect.oncePerTurnName || effect.id || ctx?.source?.name;
     if (!key) return true;
-    const usage = player.oncePerTurnUsageByName || {};
+    const useCardScope =
+      effect.oncePerTurnScope === "card" || effect.oncePerTurnPerCard;
+    const usage = useCardScope
+      ? card?.oncePerTurnUsageByName || {}
+      : player.oncePerTurnUsageByName || {};
     const currentTurn = this.game?.turnCounter || 0;
     return usage[key] !== currentTurn;
   }
@@ -805,10 +918,19 @@ export default class EffectEngine {
   markOncePerTurn(effect, ctx) {
     if (!effect || !effect.oncePerTurn) return;
     const player = ctx?.player;
+    const card = ctx?.source;
     if (!player) return;
     const key = effect.oncePerTurnName || effect.id || ctx?.source?.name;
     if (!key) return;
+    const useCardScope =
+      effect.oncePerTurnScope === "card" || effect.oncePerTurnPerCard;
     const currentTurn = this.game?.turnCounter || 0;
+    if (useCardScope && card) {
+      card.oncePerTurnUsageByName = card.oncePerTurnUsageByName || {};
+      card.oncePerTurnUsageByName[key] = currentTurn;
+      return;
+    }
+
     player.oncePerTurnUsageByName = player.oncePerTurnUsageByName || {};
     player.oncePerTurnUsageByName[key] = currentTurn;
   }
@@ -876,6 +998,9 @@ export default class EffectEngine {
         case "destroy":
           executed = this.applyDestroy(action, targets) || executed;
           break;
+        case "negate_attack":
+          executed = this.applyNegateAttack(action, ctx) || executed;
+          break;
         case "special_summon_token":
           executed = this.applySpecialSummonToken(action, ctx) || executed;
           break;
@@ -900,6 +1025,10 @@ export default class EffectEngine {
         case "luminarch_aegisbearer_def_boost":
           executed =
             this.applyLuminarchAegisbearerDefBoost(action, ctx) || executed;
+          break;
+        case "shadow_heart_rage_scale_buff":
+          executed =
+            this.applyShadowHeartRageScaleBuff(action, ctx) || executed;
           break;
         case "grant_second_attack_this_turn":
           executed =
@@ -1035,6 +1164,15 @@ export default class EffectEngine {
       }
     });
     return targetCards.length > 0;
+  }
+
+  applyNegateAttack(action, ctx) {
+    if (!this.game || !ctx?.attacker) return false;
+    if (typeof this.game.registerAttackNegated === "function") {
+      this.game.registerAttackNegated(ctx.attacker);
+      return true;
+    }
+    return false;
   }
 
   applySpecialSummonToken(action, ctx) {
@@ -1544,6 +1682,35 @@ export default class EffectEngine {
     if (!owner || !owner.field.includes(card)) return false;
 
     card.def += amount;
+    return true;
+  }
+
+  applyShadowHeartRageScaleBuff(action, ctx) {
+    const player = ctx?.player;
+    if (!player) return false;
+
+    const faceUpMonsters = (player.field || []).filter(
+      (c) => c && c.cardKind === "monster" && !c.isFacedown
+    );
+    if (faceUpMonsters.length !== 1) return false;
+
+    const scale = faceUpMonsters[0];
+    if (scale.name !== "Shadow-Heart Scale Dragon") return false;
+
+    const atkBoost = action.atkBoost ?? 700;
+    const defBoost = action.defBoost ?? 700;
+
+    if (atkBoost) {
+      scale.atk += atkBoost;
+      scale.tempAtkBoost = (scale.tempAtkBoost || 0) + atkBoost;
+    }
+    if (defBoost) {
+      scale.def += defBoost;
+      scale.tempDefBoost = (scale.tempDefBoost || 0) + defBoost;
+    }
+
+    scale.canMakeSecondAttackThisTurn = true;
+    scale.secondAttackUsedThisTurn = false;
     return true;
   }
 

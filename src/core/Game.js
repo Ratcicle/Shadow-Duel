@@ -21,6 +21,7 @@ export default class Game {
     this.graveyardSelection = null;
     this.eventListeners = {};
     this.phaseDelayMs = 400;
+    this.lastAttackNegated = false;
   }
 
   on(eventName, handler) {
@@ -276,15 +277,31 @@ export default class Game {
       if (card.cardKind === "monster") {
         if (this.phase !== "main1" && this.phase !== "main2") return;
 
+        const canSanctumSpecialFromAegis =
+          card.name === "Luminarch Sanctum Protector" &&
+          this.player.field.length < 5 &&
+          this.player.field.some(
+            (c) => c && c.name === "Luminarch Aegisbearer" && !c.isFacedown
+          );
+
         const tributeInfo = this.player.getTributeRequirement(card);
         const tributesNeeded = tributeInfo.tributesNeeded;
 
-        if (tributesNeeded > 0 && this.player.field.length < tributesNeeded) {
+        if (
+          tributesNeeded > 0 &&
+          this.player.field.length < tributesNeeded &&
+          !canSanctumSpecialFromAegis
+        ) {
           this.renderer.log(`Not enough tributes for Level ${card.level} monster.`);
           return;
         }
 
         this.renderer.showSummonModal(index, (choice) => {
+          if (choice === "special_from_aegisbearer") {
+            this.specialSummonSanctumProtectorFromHand(index);
+            return;
+          }
+
           if (choice === "attack" || choice === "defense") {
             const position = choice;
             const isFacedown = choice === "defense";
@@ -332,7 +349,7 @@ export default class Game {
               this.updateBoard();
             }
           }
-        });
+        }, { canSanctumSpecialFromAegis });
         return;
       }
 
@@ -669,6 +686,53 @@ export default class Game {
     });
   }
 
+  specialSummonSanctumProtectorFromHand(handIndex) {
+    if (this.turn !== "player") return;
+    if (this.phase !== "main1" && this.phase !== "main2") return;
+    if (this.player.field.length >= 5) {
+      this.renderer.log("Field is full (max 5 monsters).");
+      return;
+    }
+
+    const card = this.player.hand[handIndex];
+    if (!card || card.name !== "Luminarch Sanctum Protector") return;
+
+    const aegis = this.player.field.find(
+      (c) => c && c.name === "Luminarch Aegisbearer" && !c.isFacedown
+    );
+
+    if (!aegis) {
+      this.renderer.log('No face-up "Luminarch Aegisbearer" to send.');
+      return;
+    }
+
+    this.moveCard(aegis, this.player, "graveyard", { fromZone: "field" });
+
+    const idxInHand = this.player.hand.indexOf(card);
+    if (idxInHand === -1) return;
+    this.player.hand.splice(idxInHand, 1);
+
+    card.position = "attack";
+    card.isFacedown = false;
+    card.hasAttacked = false;
+    card.cannotAttackThisTurn = false;
+    card.attacksUsedThisTurn = 0;
+    card.positionChangedThisTurn = false;
+    card.summonedTurn = this.turnCounter;
+    card.setTurn = null;
+    card.owner = this.player.id;
+
+    this.player.field.push(card);
+
+    this.emit("after_summon", {
+      card,
+      player: this.player,
+      method: "special",
+    });
+
+    this.updateBoard();
+  }
+
   canFlipSummon(card) {
     if (!card) return false;
     const isTurnPlayer = card.owner === this.turn;
@@ -722,7 +786,7 @@ export default class Game {
     card.position = newPosition;
     card.isFacedown = false;
     card.positionChangedThisTurn = true;
-    card.cannotAttackThisTurn = true;
+    card.cannotAttackThisTurn = newPosition === "defense";
     this.renderer.log(
       `${card.name} changes to ${
         newPosition === "attack" ? "Attack" : "Defense"
@@ -1161,6 +1225,15 @@ export default class Game {
     }
   }
 
+  registerAttackNegated(attacker) {
+    this.lastAttackNegated = true;
+    if (attacker?.name) {
+      this.renderer.log(`The attack of ${attacker.name} was negated!`);
+    } else {
+      this.renderer.log("The attack was negated!");
+    }
+  }
+
   canDestroyByBattle(card) {
     if (!card) return false;
     if (card.battleIndestructible) return false;
@@ -1181,9 +1254,29 @@ export default class Game {
     const availability = this.getAttackAvailability(attacker);
     if (!availability.ok) return;
 
+    this.lastAttackNegated = false;
+
     this.renderer.log(
       `${attacker.name} attacks ${target ? target.name : "directly"}!`
     );
+
+    const attackerOwner = attacker.owner === "player" ? this.player : this.bot;
+    const defenderOwner = attacker.owner === "player" ? this.bot : this.player;
+
+    this.emit("attack_declared", {
+      attacker,
+      target: target || null,
+      attackerOwner,
+      defenderOwner,
+    });
+
+    if (this.lastAttackNegated) {
+      attacker.attacksUsedThisTurn = (attacker.attacksUsedThisTurn || 0) + 1;
+      attacker.hasAttacked = true;
+      this.updateBoard();
+      this.checkWinCondition();
+      return;
+    }
 
     if (!target) {
       const defender = attacker.owner === "player" ? this.bot : this.player;

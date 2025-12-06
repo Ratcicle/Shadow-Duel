@@ -115,6 +115,10 @@ export default class Player {
       }
     }
 
+    if (typeof card.requiredTributes === "number" && card.requiredTributes >= 0) {
+      tributesNeeded = card.requiredTributes;
+    }
+
     return { tributesNeeded, usingAlt, alt };
   }
 

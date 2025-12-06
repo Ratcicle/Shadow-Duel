@@ -156,7 +156,7 @@ export default class Renderer {
     container.appendChild(cardEl);
   }
 
-  showSummonModal(cardIndex, callback) {
+  showSummonModal(cardIndex, callback, options = {}) {
     const existingModal = document.querySelector(".summon-choice-modal");
     if (existingModal) {
       existingModal.remove();
@@ -169,12 +169,32 @@ export default class Renderer {
 
     const modal = document.createElement("div");
     modal.className = "summon-choice-modal";
-    modal.innerHTML = `
-      <div class="summon-choice-content">
-          <button id="btn-normal-summon">Normal Summon</button>
-          <button id="btn-set">Set</button>
-      </div>
-    `;
+    const content = document.createElement("div");
+    content.className = "summon-choice-content";
+
+    const normalBtn = document.createElement("button");
+    normalBtn.textContent = "Normal Summon";
+
+    const setBtn = document.createElement("button");
+    setBtn.textContent = "Set";
+
+    content.appendChild(normalBtn);
+    content.appendChild(setBtn);
+
+    if (options.canSanctumSpecialFromAegis) {
+      const specialBtn = document.createElement("button");
+      specialBtn.textContent =
+        "Special Summon (send Luminarch Aegisbearer to GY)";
+      content.appendChild(specialBtn);
+
+      specialBtn.onclick = (e) => {
+        e.stopPropagation();
+        callback("special_from_aegisbearer");
+        cleanup();
+      };
+    }
+
+    modal.appendChild(content);
 
     // posicionamento inteligente: tenta abaixo da carta,
     // e se não couber, abre acima; também evita sair pelas laterais
@@ -184,7 +204,6 @@ export default class Renderer {
     document.body.appendChild(modal);
 
     if (rect) {
-      const content = modal.querySelector(".summon-choice-content") || modal;
       const contentRect = content.getBoundingClientRect();
 
       let left = rect.left;
@@ -223,12 +242,12 @@ export default class Renderer {
       document.addEventListener("mousedown", handleOutsideClick);
     }, 0);
 
-    document.getElementById("btn-normal-summon").onclick = (e) => {
+    normalBtn.onclick = (e) => {
       e.stopPropagation();
       callback("attack");
       cleanup();
     };
-    document.getElementById("btn-set").onclick = (e) => {
+    setBtn.onclick = (e) => {
       e.stopPropagation();
       callback("defense");
       cleanup();
