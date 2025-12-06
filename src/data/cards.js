@@ -997,7 +997,7 @@ export const cardDatabase = [
         id: "radiant_dragon_search_luminarch",
         timing: "on_event",
         event: "after_summon",
-        summonMethod: "normal",
+        summonMethod: ["normal", "tribute"],
         actions: [
           {
             type: "search_any",

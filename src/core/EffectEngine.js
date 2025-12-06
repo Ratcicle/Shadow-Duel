@@ -1719,12 +1719,58 @@ export default class EffectEngine {
     if (!targetCards.length) return false;
 
     const target = targetCards[0];
+    const detachFromPreviousHost = () => {
+      const previousHost = equipCard.equippedTo;
+      if (!previousHost || previousHost === target) return;
+
+      if (Array.isArray(previousHost.equips)) {
+        const idxEquip = previousHost.equips.indexOf(equipCard);
+        if (idxEquip > -1) {
+          previousHost.equips.splice(idxEquip, 1);
+        }
+      }
+
+      if (typeof equipCard.equipAtkBonus === "number" && equipCard.equipAtkBonus !== 0) {
+        previousHost.atk = Math.max(
+          0,
+          (previousHost.atk || 0) - equipCard.equipAtkBonus
+        );
+      }
+      if (typeof equipCard.equipDefBonus === "number" && equipCard.equipDefBonus !== 0) {
+        previousHost.def = Math.max(
+          0,
+          (previousHost.def || 0) - equipCard.equipDefBonus
+        );
+      }
+      if (
+        typeof equipCard.equipExtraAttacks === "number" &&
+        equipCard.equipExtraAttacks !== 0
+      ) {
+        const currentExtra = previousHost.extraAttacks || 0;
+        const nextExtra = currentExtra - equipCard.equipExtraAttacks;
+        previousHost.extraAttacks = Math.max(0, nextExtra);
+        const prevMaxAttacks = 1 + (previousHost.extraAttacks || 0);
+        previousHost.hasAttacked =
+          (previousHost.attacksUsedThisTurn || 0) >= prevMaxAttacks;
+      }
+      if (equipCard.grantsBattleIndestructible) {
+        previousHost.battleIndestructible = false;
+      }
+
+      equipCard.equipAtkBonus = 0;
+      equipCard.equipDefBonus = 0;
+      equipCard.equipExtraAttacks = 0;
+      equipCard.grantsBattleIndestructible = false;
+      equipCard.equippedTo = null;
+    };
 
     if (!target || target.cardKind !== "monster") return false;
     if (target.isFacedown) {
       console.warn("Cannot equip to a facedown monster:", target.name);
       return false;
     }
+
+    detachFromPreviousHost();
 
     if (this.game && typeof this.game.moveCard === "function") {
       const zone = this.game.getZone(player, "hand");
@@ -1760,6 +1806,8 @@ export default class EffectEngine {
     if (action.battleIndestructible) {
       equipCard.grantsBattleIndestructible = true;
       target.battleIndestructible = true;
+    } else {
+      equipCard.grantsBattleIndestructible = false;
     }
 
     const maxAttacksAfterEquip = 1 + (target.extraAttacks || 0);

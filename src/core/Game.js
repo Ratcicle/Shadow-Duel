@@ -1568,12 +1568,27 @@ export default class Game {
       }
     };
 
+    const logBattleDestroyCheck = (context) => {
+      const formatCard = (card, label) => {
+        if (!card) return `${label}: (none)`;
+        const flags = `bi=${!!card.battleIndestructible}, tempBi=${!!card.tempBattleIndestructible}, once=${!!card.battleIndestructibleOncePerTurn}, onceUsed=${!!card.battleIndestructibleOncePerTurnUsed}`;
+        return `${label}: ${card.name} ATK:${card.atk} DEF:${card.def} ${flags}`;
+      };
+      console.debug(
+        `[Battle] canDestroyByBattle check (${context}) | ${formatCard(
+          attacker,
+          "attacker"
+        )} | ${formatCard(target, "target")}`
+      );
+    };
+
     if (target.position === "attack") {
       if (attacker.atk > target.atk) {
         const defender = target.owner === "player" ? this.player : this.bot;
         const damage = attacker.atk - target.atk;
         applyBattleDamage(defender, target, damage);
 
+        logBattleDestroyCheck("attacker over atk target");
         if (this.canDestroyByBattle(target)) {
           const replaced = await this.resolveDestructionWithReplacement(target, {
             reason: "battle",
@@ -1589,6 +1604,7 @@ export default class Game {
         const damage = target.atk - attacker.atk;
         applyBattleDamage(attPlayer, attacker, damage);
 
+        logBattleDestroyCheck("attacker loses to atk target");
         if (this.canDestroyByBattle(attacker)) {
           const replaced = await this.resolveDestructionWithReplacement(attacker, {
             reason: "battle",
@@ -1603,6 +1619,7 @@ export default class Game {
         const attPlayer = attacker.owner === "player" ? this.player : this.bot;
         const defPlayer = target.owner === "player" ? this.player : this.bot;
 
+        logBattleDestroyCheck("tie - attacker destruction check");
         if (this.canDestroyByBattle(attacker)) {
           const replaced = await this.resolveDestructionWithReplacement(attacker, {
             reason: "battle",
@@ -1614,6 +1631,7 @@ export default class Game {
           }
         }
 
+        logBattleDestroyCheck("tie - target destruction check");
         if (this.canDestroyByBattle(target)) {
           const replaced = await this.resolveDestructionWithReplacement(target, {
             reason: "battle",
@@ -1632,6 +1650,7 @@ export default class Game {
           const damage = attacker.atk - target.def;
           applyBattleDamage(defender, target, damage);
         }
+        logBattleDestroyCheck("defense target destruction check");
         if (this.canDestroyByBattle(target)) {
           const replaced = await this.resolveDestructionWithReplacement(target, {
             reason: "battle",
