@@ -1,0 +1,38 @@
+Visão Geral
+
+Shadow Duel é um duelo 1x1 contra bot inspirado nos primeiros Yu-Gi-Oh!: turnos com fases Draw → Main1 → Battle → Main2 → End, objetivo zerar LP do oponente e evitar mecânicas complicadas como negates em cadeia ou hand traps. O motor roda em ES modules (`src/core` + `src/data/cards.js` + `src/ui/Renderer.js`) e entrega a experiência como uma página estática com `index.html` e `style.css`.
+
+Arquitetura de Jogo (src/core)
+
+- `Game.js` coordena fases, compras, summons, ataque, limpeza de buffs temporários, movimentação entre zonas, modais de alvo/ceu e dispara eventos (`after_summon`, `battle_destroy`, etc.) para o `EffectEngine`. Limites: 5 monstros ativos, 5 slots de Spell/Trap e 1 Field Spell, além de apenas 1 Normal Summon por turno.
+- `Player.js` monta o deck (min 20, máx 30, 3 copies por carta), embaralha, tira cartas, calcula tributos (incluindo alternativas como “sem tributo se não há monstros”) e aplica restrições (`shadow_heart_invocation_only`). `Bot.js` usa simulações heurísticas (Main Phase + Battle Phase) para decidir summons, spells, campo e combate com foco em Shadow-Heart e Luminarch.
+- `Card.js` guarda atributos, posição, flags (piercing, mustBeAttacked, battleIndestructible), efeitos, equips e buffs temporários/permanentes; gera instâncias com dono, arquétipo(s) e imagem.
+
+Motor de Efeitos (src/core/EffectEngine.js)
+
+- Resolve eventos declarativos (`after_summon`, `battle_destroy`, `card_to_grave`, `attack_declared`, `standby_phase`) e dispara ações como draw/heal/damage, destroy, buff temporário, forbid attack, search no deck, move entre zonas, revive do cemitério, equips, tokens e os pacotes específicos (`darkness_valley_*`, `shadow_heart_shield_upkeep`, `luminarch_*`). Mantém controle de once-per-turn por jogador ou por carta.
+- `resolveTargets` coleta candidatos com filtros de owner/zone/cardKind/archetype/levels e gera modais de seleção ou auto-seleções (`autoSelect`, `strategy`). `applyActions` é o hub que chama `applyEquip`, `applyTransmutate`, `applyReviveShadowHeartFromGrave`, `applyLuminarchMagicSickleRecycle`, `applyDarknessValley*` e outros helpers, além de atualizar o board/UI.
+- A engine já sabe que cartas com `summonRestrict` pedem `Shadow-Heart Invocation`, controla tokens, contas de ataques extras e pode mostrar o modal de busca (`showSearchModal`) ou prompt para o jogador.
+
+Cartas e Arquétipos (src/data/cards.js)
+
+- Banco com ~43 cartas de teste e dois arquétipos em destaque.
+- Shadow-Heart: cartas como `Shadow-Heart Imp`, `Gecko`, `Coward`, `Infusion`, `Battle Hymn`, `Covenant`, `Shield`, `Darkness Valley`, `Scale Dragon`, `Death Wyrm`, `Rage` e `Shield` exploram special summons, draws e buffs com triggers (`battle_destroy`, `standby_phase`). Há suporte a equip (`Shadow-Heart Shield`) e field spell (`Darkness Valley`) que paga buffs permanentes e executa punições.
+- Luminarch: `Radiant Dragon`, `Luminarch Valiant – Knight of the Dawn`, `Moonblade Captain`, `Luminarch Sanctum Protector`, `Luminarch Holy Shield`, `Celestial Marshal`, `Magic Sickle` e `Sanctum Protector` trazem search, heal por arquétipo, proteção contra ataques, refluxo do cemitério e equips que concedem ataques extras ou negam ataques. `Magic Sickle` abre modal para retornar até duas cartas do GY; `Sanctum Protector` usa attack_declared para negar.
+- Spells/Effects genéricos como `Infinity Searcher`, `Transmutate`, `Monster Reborn`, `Shadow Purge`, `Shadow Recall`, `Cheap Necromancy`, `Blood Sucking`, `Arcane Surge` continuam presentes, reforçando a base de draw, search, destruição e tokens.
+- Pendência mecânica: `shadow_heart_ritual_summon` ainda é um stub, e a carta `Shadow-Heart Invocation` precisa receber seu efeito de ritual completo (tributos + Special Summon de `Shadow-Heart Scale Dragon`), mesmo que o motor já conheça a flag `shadow_heart_invocation_only`.
+
+UI/UX (src/ui/Renderer.js, index.html, style.css)
+
+- Start screen com “Duelar” e “Meu Deck”; deck builder 6x5 com limite de 3 cópias, preview, cliques para set/activate, e salvamento em `localStorage`.
+- Tabuleiro desenha mão/campo do jogador e do bot, Spell/Trap separados, field spell, log de ações e previews; highlight, modais de alvo, escolha de posição/flip, target selection click e modal de busca/arquivo tornam a interação direta.
+- Graveyard modal compartilhado com filtros do `Game` (usado pelo Transmutate, Sickle etc.) e ESC cancela seleções de alvo.
+
+Fluxo de Execução
+
+- Rode com qualquer servidor estático (ex.: `npx serve` ou `python -m http.server`) e abra `index.html`; o deck builder carrega/salva, inicia `Game` com o deck atual e quatro compras iniciais para ambos os lados.
+
+Restrições e Próximos Passos
+
+- Registrar as novas mecânicas no `Mechanics Overview.md` e testar manual/bot para garantir tributos/SS corretos.
+- Monitorar os gatilhos `standby_phase`, `battle_destroy` e `attack_declared` se forem usados por futuras traps ou quick plays; refinar a IA para escolhas de alvos mais complexas e preferências de position change.
