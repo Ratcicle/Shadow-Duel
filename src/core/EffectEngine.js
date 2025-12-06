@@ -174,6 +174,13 @@ export default class EffectEngine {
 
       const handCards = owner.hand || [];
       const triggerSources = [...fieldCards, ...handCards];
+      if (
+        destroyed &&
+        destroyedOwner === owner &&
+        !triggerSources.includes(destroyed)
+      ) {
+        triggerSources.push(destroyed);
+      }
 
       for (const card of triggerSources) {
         if (!card || !card.effects || !Array.isArray(card.effects)) continue;
@@ -200,6 +207,7 @@ export default class EffectEngine {
           }
 
           if (effect.requireSelfAsAttacker && ctx.attacker !== card) continue;
+          if (effect.requireSelfAsDestroyed && ctx.destroyed !== card) continue;
           if (effect.requireEquippedAsAttacker) {
             if (!card.equippedTo) continue;
             if (ctx.attacker !== card.equippedTo) continue;
@@ -1071,6 +1079,14 @@ export default class EffectEngine {
         case "shadow_heart_death_wyrm_special_summon":
           executed =
             this.applyShadowHeartDeathWyrmSpecialSummon(action, ctx) || executed;
+          break;
+        case "luminarch_radiant_lancer_atk_boost":
+          executed =
+            this.applyLuminarchRadiantLancerAtkBoost(action, ctx) || executed;
+          break;
+        case "luminarch_radiant_lancer_reset_atk":
+          executed =
+            this.applyLuminarchRadiantLancerResetAtk(action, ctx) || executed;
           break;
         default:
           console.warn(`Unknown action type: ${action.type}`);
@@ -2224,5 +2240,24 @@ export default class EffectEngine {
       this.game.updateBoard();
     }
     return true;
+  }
+
+  applyLuminarchRadiantLancerAtkBoost(action, ctx) {
+    const card = ctx?.source;
+    const player = ctx?.player;
+    if (!card || !player || card.cardKind !== "monster") return false;
+    if (!player.field || !player.field.includes(card)) return false;
+    const amount = action.amount ?? 0;
+    if (amount <= 0) return false;
+    const sourceName = card.name;
+    const current = card.permanentBuffsBySource?.[sourceName] ?? 0;
+    const nextTotal = current + amount;
+    return this.addNamedPermanentAtkBuff(card, sourceName, nextTotal);
+  }
+
+  applyLuminarchRadiantLancerResetAtk(action, ctx) {
+    const card = ctx?.source;
+    if (!card) return false;
+    return this.removeNamedPermanentAtkBuff(card, card.name);
   }
 }

@@ -1093,7 +1093,7 @@ export const cardDatabase = [
     id: 49,
     name: "Luminarch Aegisbearer",
     cardKind: "monster",
-    atk: 1300,
+    atk: 1000,
     def: 2000,
     level: 4,
     type: "Warrior",
@@ -1122,7 +1122,7 @@ export const cardDatabase = [
     name: "Luminarch Moonblade Captain",
     cardKind: "monster",
     atk: 2300,
-    def: 1900,
+    def: 1700,
     level: 6,
     type: "Warrior",
     archetype: "Luminarch",
@@ -1218,7 +1218,7 @@ export const cardDatabase = [
     id: 53,
     name: "Luminarch Sanctum Protector",
     cardKind: "monster",
-    atk: 2200,
+    atk: 1800,
     def: 2800,
     level: 7,
     type: "Warrior",
@@ -1238,6 +1238,64 @@ export const cardDatabase = [
         requireOpponentAttack: true,
         requireDefenderIsSelf: true,
         actions: [{ type: "negate_attack" }],
+      },
+    ],
+  },
+  {
+    id: 54,
+    name: "Luminarch Radiant Lancer",
+    cardKind: "monster",
+    atk: 2600,
+    def: 2000,
+    level: 8,
+    type: "Warrior",
+    archetype: "Luminarch",
+    description:
+      "If this card destroys an opponent's monster by battle, it gains 200 ATK while it remains on the field. If this card is destroyed by battle, destroy 1 Spell/Trap your opponent controls.",
+    image: "assets/Luminarch Radiant Lancer.png",
+    effects: [
+      {
+        id: "luminarch_radiant_lancer_atk_boost",
+        timing: "on_event",
+        event: "battle_destroy",
+        requireSelfAsAttacker: true,
+        actions: [
+          {
+            type: "luminarch_radiant_lancer_atk_boost",
+            amount: 200,
+          },
+        ],
+      },
+      {
+        id: "luminarch_radiant_lancer_destroy_spelltrap",
+        timing: "on_event",
+        event: "battle_destroy",
+        requireSelfAsDestroyed: true,
+        targets: [
+          {
+            id: "radiant_lancer_destroy_target",
+            owner: "opponent",
+            zone: "spellTrap",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "destroy",
+            targetRef: "radiant_lancer_destroy_target",
+          },
+        ],
+      },
+      {
+        id: "luminarch_radiant_lancer_reset",
+        timing: "on_event",
+        event: "card_to_grave",
+        fromZone: "field",
+        actions: [
+          {
+            type: "luminarch_radiant_lancer_reset_atk",
+          },
+        ],
       },
     ],
   },

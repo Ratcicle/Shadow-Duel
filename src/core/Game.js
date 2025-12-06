@@ -712,25 +712,35 @@ export default class Game {
     if (idxInHand === -1) return;
     this.player.hand.splice(idxInHand, 1);
 
-    card.position = "attack";
-    card.isFacedown = false;
-    card.hasAttacked = false;
-    card.cannotAttackThisTurn = false;
-    card.attacksUsedThisTurn = 0;
-    card.positionChangedThisTurn = false;
-    card.summonedTurn = this.turnCounter;
-    card.setTurn = null;
-    card.owner = this.player.id;
+    const finalizeSummon = (positionChoice) => {
+      const position = positionChoice === "defense" ? "defense" : "attack";
+      card.position = position;
+      card.isFacedown = false;
+      card.hasAttacked = false;
+      card.cannotAttackThisTurn = false;
+      card.attacksUsedThisTurn = 0;
+      card.positionChangedThisTurn = false;
+      card.summonedTurn = this.turnCounter;
+      card.setTurn = null;
+      card.owner = this.player.id;
 
-    this.player.field.push(card);
+      this.player.field.push(card);
 
-    this.emit("after_summon", {
-      card,
-      player: this.player,
-      method: "special",
-    });
+      this.emit("after_summon", {
+        card,
+        player: this.player,
+        method: "special",
+      });
 
-    this.updateBoard();
+      this.updateBoard();
+    };
+
+    const positionChoice = this.chooseSpecialSummonPosition(this.player, card);
+    if (positionChoice && typeof positionChoice.then === "function") {
+      positionChoice.then((resolved) => finalizeSummon(resolved));
+    } else {
+      finalizeSummon(positionChoice);
+    }
   }
 
   canFlipSummon(card) {
