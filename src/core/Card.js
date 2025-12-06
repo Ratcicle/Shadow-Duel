@@ -48,6 +48,14 @@ export default class Card {
 
     // NOVO: status do monstro – não pode ser destruído em batalha
     this.battleIndestructible = false;
+    // Status temporário: não pode ser destruído em batalha até o fim do turno
+    this.tempBattleIndestructible = false;
+    // Status temporário: dano de batalha sofrido envolvendo este monstro vira cura para o controlador
+    this.battleDamageHealsControllerThisTurn = false;
+    this.mustBeAttacked = !!data.mustBeAttacked;
+    this.piercing = !!data.piercing;
+    this.canMakeSecondAttackThisTurn = false;
+    this.secondAttackUsedThisTurn = false;
 
     this.description = data.description;
     this.effects = data.effects || [];

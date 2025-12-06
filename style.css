@@ -694,6 +694,95 @@ body {
   opacity: 0.9;
 }
 
+.special-summon-position-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 260;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.special-position-backdrop {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.75), rgba(20, 12, 32, 0.85));
+  backdrop-filter: blur(2px);
+  pointer-events: all;
+}
+
+.special-position-content {
+  position: relative;
+  background: #181222;
+  border: 2px solid var(--accent-color);
+  border-radius: 12px;
+  padding: 16px;
+  width: min(460px, 90vw);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.75);
+  pointer-events: all;
+  z-index: 1;
+}
+
+.special-position-content h3 {
+  margin: 0 0 6px 0;
+  color: var(--accent-color);
+  font-size: 1.05rem;
+  letter-spacing: 0.5px;
+}
+
+.special-position-content p {
+  margin: 0 0 12px 0;
+  color: #cfc9db;
+  font-size: 0.95rem;
+}
+
+.special-position-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.special-position-content .position-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  background: #231732;
+  border: 1px solid rgba(187, 134, 252, 0.3);
+  border-radius: 10px;
+  color: #f5f2ff;
+  cursor: pointer;
+  transition: transform 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.special-position-content .position-option:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent-color);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.45);
+}
+
+.position-card {
+  width: 120px;
+  height: 170px;
+  background: linear-gradient(135deg, #2b2b2b, #1d1d1d);
+  background-size: cover;
+  background-position: center;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6);
+}
+
+.position-card.defense {
+  transform: rotate(-90deg);
+}
+
+.position-option span {
+  font-weight: 700;
+  letter-spacing: 0.4px;
+}
+
 /* Tribute Selection */
 .card.tributeable {
   border: 2px dashed var(--accent-color);

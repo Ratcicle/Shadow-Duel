@@ -104,6 +104,28 @@ export default class Game {
     }
   }
 
+  chooseSpecialSummonPosition(player, card = null) {
+    if (!player || player.id !== "player") {
+      return "attack";
+    }
+
+    if (
+      this.renderer &&
+      typeof this.renderer.showSpecialSummonPositionModal === "function"
+    ) {
+      return new Promise((resolve) => {
+        this.renderer.showSpecialSummonPositionModal(card, (choice) => {
+          resolve(choice === "defense" ? "defense" : "attack");
+        });
+      });
+    }
+
+    const wantsAttack = window.confirm(
+      "Special Summon em ATAQUE? (OK = Ataque, Cancelar = Defesa)"
+    );
+    return wantsAttack ? "attack" : "defense";
+  }
+
   async startTurn() {
     this.turnCounter += 1;
     this.phase = "draw";
@@ -115,6 +137,8 @@ export default class Game {
       card.attacksUsedThisTurn = 0;
       card.cannotAttackThisTurn = false;
       card.positionChangedThisTurn = false;
+      card.canMakeSecondAttackThisTurn = false;
+      card.secondAttackUsedThisTurn = false;
     });
     activePlayer.summonCount = 0;
 
@@ -418,11 +442,35 @@ export default class Game {
           return;
         }
 
+        const canUseSecondAttack =
+          attacker.canMakeSecondAttackThisTurn &&
+          !attacker.secondAttackUsedThisTurn;
+
+        if (attacker.hasAttacked && !canUseSecondAttack) {
+          this.renderer.log("This monster has already attacked!");
+          return;
+        }
+
+        const wasAlreadyAttacked = attacker.hasAttacked;
+
         let target = null;
-        if (this.bot.field.length > 0) {
+        const tauntTargets = this.bot.field.filter(
+          (card) =>
+            card &&
+            card.cardKind === "monster" &&
+            !card.isFacedown &&
+            card.mustBeAttacked
+        );
+
+        if (tauntTargets.length > 0) {
+          target = tauntTargets[0];
+        } else if (this.bot.field.length > 0) {
           target = this.bot.field[0];
         }
         this.resolveCombat(attacker, target);
+        if (wasAlreadyAttacked && canUseSecondAttack) {
+          attacker.secondAttackUsedThisTurn = true;
+        }
       }
     });
 
@@ -961,15 +1009,33 @@ export default class Game {
           this.closeGraveyardModal(false);
           return;
         }
-        player.graveyard.splice(index, 1);
-        card.position = "attack";
-        card.isFacedown = false;
-        card.hasAttacked = false;
-        card.attacksUsedThisTurn = 0;
-        card.owner = player.id;
-        player.field.push(card);
-        this.closeGraveyardModal(false);
-        this.updateBoard();
+        const finalizeRevive = (posChoice) => {
+          const position = posChoice || "attack";
+          const gyIndex = player.graveyard.indexOf(card);
+          if (gyIndex === -1) {
+            this.renderer.log("Selected card is no longer in the Graveyard.");
+            this.closeGraveyardModal(false);
+            this.updateBoard();
+            return;
+          }
+
+          player.graveyard.splice(gyIndex, 1);
+          card.position = position;
+          card.isFacedown = false;
+          card.hasAttacked = false;
+          card.attacksUsedThisTurn = 0;
+          card.owner = player.id;
+          player.field.push(card);
+          this.closeGraveyardModal(false);
+          this.updateBoard();
+        };
+
+        const positionChoice = this.chooseSpecialSummonPosition(player, card);
+        if (positionChoice && typeof positionChoice.then === "function") {
+          positionChoice.then((pos) => finalizeRevive(pos));
+        } else {
+          finalizeRevive(positionChoice);
+        }
       },
       onCancel: () => {
         this.renderer.log("Transmutate selection cancelled.");
@@ -997,8 +1063,11 @@ export default class Game {
     const extraAttacks = attacker.extraAttacks || 0;
     const maxAttacks = 1 + extraAttacks;
     const attacksUsed = attacker.attacksUsedThisTurn || 0;
+    const canUseSecondAttack =
+      attacker.canMakeSecondAttackThisTurn &&
+      !attacker.secondAttackUsedThisTurn;
 
-    if (attacksUsed >= maxAttacks) {
+    if (attacksUsed >= maxAttacks && !canUseSecondAttack) {
       return {
         ok: false,
         reason: `${attacker.name} has already attacked the maximum number of times this turn.`,
@@ -1013,6 +1082,13 @@ export default class Game {
     const extraAttacks = attacker.extraAttacks || 0;
     const maxAttacks = 1 + extraAttacks;
     attacker.attacksUsedThisTurn = (attacker.attacksUsedThisTurn || 0) + 1;
+    if (
+      attacker.attacksUsedThisTurn > maxAttacks &&
+      attacker.canMakeSecondAttackThisTurn &&
+      !attacker.secondAttackUsedThisTurn
+    ) {
+      attacker.secondAttackUsedThisTurn = true;
+    }
     if (attacker.attacksUsedThisTurn >= maxAttacks) {
       attacker.hasAttacked = true;
     } else {
@@ -1070,22 +1146,37 @@ export default class Game {
   }
 
   finishCombat(attacker, target) {
+    const preventDestroy = (card) =>
+      card && (card.battleIndestructible || card.tempBattleIndestructible);
+
+    const applyBattleDamage = (player, cardInvolved, amount) => {
+      if (!player || amount <= 0) return;
+      if (
+        cardInvolved?.battleDamageHealsControllerThisTurn &&
+        player.id === cardInvolved.owner
+      ) {
+        player.gainLP(amount);
+      } else {
+        player.takeDamage(amount);
+      }
+    };
+
     if (target.position === "attack") {
       if (attacker.atk > target.atk) {
         const defender = target.owner === "player" ? this.player : this.bot;
         const damage = attacker.atk - target.atk;
-        defender.takeDamage(damage);
+        applyBattleDamage(defender, target, damage);
 
-        if (!target.battleIndestructible) {
+        if (!preventDestroy(target)) {
           this.moveCard(target, defender, "graveyard");
           this.applyBattleDestroyEffect(attacker, target);
         }
       } else if (attacker.atk < target.atk) {
         const attPlayer = attacker.owner === "player" ? this.player : this.bot;
         const damage = target.atk - attacker.atk;
-        attPlayer.takeDamage(damage);
+        applyBattleDamage(attPlayer, attacker, damage);
 
-        if (!attacker.battleIndestructible) {
+        if (!preventDestroy(attacker)) {
           this.moveCard(attacker, attPlayer, "graveyard");
           this.applyBattleDestroyEffect(attacker, attacker);
         }
@@ -1093,28 +1184,32 @@ export default class Game {
         const attPlayer = attacker.owner === "player" ? this.player : this.bot;
         const defPlayer = target.owner === "player" ? this.player : this.bot;
 
-        if (!attacker.battleIndestructible) {
+        if (!preventDestroy(attacker)) {
           this.moveCard(attacker, attPlayer, "graveyard");
           this.applyBattleDestroyEffect(attacker, attacker);
         }
 
-        if (!target.battleIndestructible) {
+        if (!preventDestroy(target)) {
           this.moveCard(target, defPlayer, "graveyard");
           this.applyBattleDestroyEffect(attacker, target);
         }
       }
     } else {
+      const defender = target.owner === "player" ? this.player : this.bot;
       if (attacker.atk > target.def) {
-        const defender = target.owner === "player" ? this.player : this.bot;
-        if (!target.battleIndestructible) {
+        if (attacker.piercing) {
+          const damage = attacker.atk - target.def;
+          applyBattleDamage(defender, target, damage);
+        }
+        if (!preventDestroy(target)) {
           this.moveCard(target, defender, "graveyard");
           this.applyBattleDestroyEffect(attacker, target);
         }
       } else if (attacker.atk < target.def) {
         const attPlayer = attacker.owner === "player" ? this.player : this.bot;
         const damage = target.def - attacker.atk;
-        attPlayer.takeDamage(damage);
-        if (!attacker.battleIndestructible) {
+        applyBattleDamage(attPlayer, attacker, damage);
+        if (!preventDestroy(attacker)) {
           this.moveCard(attacker, attPlayer, "graveyard");
           this.applyBattleDestroyEffect(attacker, attacker);
         }
@@ -1152,6 +1247,8 @@ export default class Game {
         if (card.def < 0) card.def = 0;
         card.tempDefBoost = 0;
       }
+      card.tempBattleIndestructible = false;
+      card.battleDamageHealsControllerThisTurn = false;
     });
   }
 
@@ -1328,6 +1425,8 @@ export default class Game {
       card.hasAttacked = false;
       card.cannotAttackThisTurn = false;
       card.attacksUsedThisTurn = 0;
+      card.canMakeSecondAttackThisTurn = false;
+      card.secondAttackUsedThisTurn = false;
     }
 
     card.owner = destPlayer.id;

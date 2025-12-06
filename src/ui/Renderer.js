@@ -453,6 +453,84 @@ export default class Renderer {
     });
   }
 
+  showSpecialSummonPositionModal(card, onChoose) {
+    const existing = document.querySelector(".special-summon-position-modal");
+    if (existing) existing.remove();
+
+    const modal = document.createElement("div");
+    modal.className = "special-summon-position-modal";
+
+    const imageUrl = card?.image || "";
+    const safeName =
+      (card?.name && card.name.trim()) || "este monstro";
+    const previewStyle = imageUrl
+      ? `background-image: url('${imageUrl}')`
+      : "";
+
+    modal.innerHTML = `
+      <div class="special-position-backdrop"></div>
+      <div class="special-position-content">
+        <h3>Special Summon</h3>
+        <p class="special-position-subtitle"></p>
+        <div class="special-position-options">
+          <button class="position-option attack" data-choice="attack">
+            <div class="position-card attack" style="${previewStyle}"></div>
+            <span>Ataque</span>
+          </button>
+          <button class="position-option defense" data-choice="defense">
+            <div class="position-card defense" style="${previewStyle}"></div>
+            <span>Defesa</span>
+          </button>
+        </div>
+      </div>
+    `;
+
+    const subtitle = modal.querySelector(".special-position-subtitle");
+    if (subtitle) {
+      subtitle.textContent = `Escolha a posição para "${safeName}".`;
+    }
+
+    const cleanup = () => {
+      document.removeEventListener("keydown", keyHandler);
+      if (modal.parentNode) {
+        modal.parentNode.removeChild(modal);
+      }
+    };
+
+    const keyHandler = (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        cleanup();
+        if (typeof onChoose === "function") {
+          onChoose("defense");
+        }
+      }
+    };
+
+    modal
+      .querySelector(".special-position-backdrop")
+      ?.addEventListener("click", () => {
+        cleanup();
+        if (typeof onChoose === "function") {
+          onChoose("attack");
+        }
+      });
+
+    modal.querySelectorAll(".position-option").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const choice = btn.dataset.choice;
+        cleanup();
+        if (typeof onChoose === "function") {
+          onChoose(choice);
+        }
+      });
+    });
+
+    document.addEventListener("keydown", keyHandler);
+    document.body.appendChild(modal);
+  }
+
   createCardElement(card, visible) {
     const el = document.createElement("div");
     el.className = "card";

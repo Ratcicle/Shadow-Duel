@@ -4,6 +4,8 @@ import { cardDatabase } from "./data/cards.js";
 let game = null;
 const cardKindOrder = { monster: 0, spell: 1, trap: 2 };
 const cardById = new Map(cardDatabase.map((card) => [card.id, card]));
+const MIN_DECK_SIZE = 20;
+const MAX_DECK_SIZE = 30;
 
 const startScreen = document.getElementById("start-screen");
 const deckBuilder = document.getElementById("deck-builder");
@@ -77,7 +79,7 @@ function sanitizeDeck(deck) {
     if (!valid.has(id)) continue;
     counts[id] = counts[id] || 0;
     if (counts[id] >= 3) continue;
-    if (result.length >= 30) break;
+    if (result.length >= MAX_DECK_SIZE) break;
     counts[id]++;
     result.push(id);
   }
@@ -91,10 +93,14 @@ function topUpDeck(deck) {
     counts[id]++;
   });
   const filled = [...deck];
-  while (filled.length < 30) {
+  const targetSize = Math.max(
+    MIN_DECK_SIZE,
+    Math.min(MAX_DECK_SIZE, filled.length)
+  );
+  while (filled.length < targetSize) {
     for (const card of cardDatabase) {
       counts[card.id] = counts[card.id] || 0;
-      if (counts[card.id] < 3 && filled.length < 30) {
+      if (counts[card.id] < 3 && filled.length < targetSize) {
         filled.push(card.id);
         counts[card.id]++;
       }
@@ -172,10 +178,10 @@ function renderDeckBuilder() {
     counts[id] = counts[id] || 0;
     counts[id]++;
   });
-  deckCountEl.textContent = `${currentDeck.length} / 30`;
+  deckCountEl.textContent = `${currentDeck.length} / ${MAX_DECK_SIZE} (min ${MIN_DECK_SIZE})`;
 
-  // Deck slots 6x5 = 30
-  for (let i = 0; i < 30; i++) {
+  // Deck slots up to MAX_DECK_SIZE (6x5 grid default)
+  for (let i = 0; i < MAX_DECK_SIZE; i++) {
     const slot = document.createElement("div");
     slot.className = "deck-slot";
     const cardId = currentDeck[i];
@@ -207,8 +213,8 @@ function renderDeckBuilder() {
 
     cardEl.onmouseenter = () => setPreview(card);
     cardEl.onclick = () => {
-      if (currentDeck.length >= 30) {
-        alert("Limite de 30 cartas atingido.");
+      if (currentDeck.length >= MAX_DECK_SIZE) {
+        alert(`Limite de ${MAX_DECK_SIZE} cartas atingido.`);
         return;
       }
       const current = counts[card.id] || 0;
@@ -247,8 +253,8 @@ function closeDeckBuilder() {
 }
 
 function startDuel() {
-  if (currentDeck.length !== 30) {
-    alert("O deck precisa ter exatamente 30 cartas.");
+  if (currentDeck.length < MIN_DECK_SIZE || currentDeck.length > MAX_DECK_SIZE) {
+    alert(`O deck precisa ter entre ${MIN_DECK_SIZE} e ${MAX_DECK_SIZE} cartas.`);
     return;
   }
   saveDeck(currentDeck);

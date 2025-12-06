@@ -14,12 +14,14 @@ export default class Player {
     this.fieldSpell = null;
     this.summonCount = 0;
     this.maxDeckSize = 30;
+    this.minDeckSize = 20;
     this.oncePerTurnUsageByName = {};
   }
 
   buildDeck(deckList = null) {
     this.deck = [];
     const maxDeckSize = this.maxDeckSize;
+    const minDeckSize = this.minDeckSize || maxDeckSize;
     const copies = {};
 
     const addCard = (data) => {
@@ -30,6 +32,10 @@ export default class Player {
     };
 
     const fillWithDefaults = () => {
+      const targetSize = Math.max(
+        minDeckSize,
+        Math.min(maxDeckSize, this.deck.length)
+      );
       const archetype = "Shadow-Heart";
       const archetypeCards = cardDatabase.filter((c) => {
         const archetypes = Array.isArray(c.archetypes)
@@ -40,12 +46,15 @@ export default class Player {
         return archetypes.includes(archetype);
       });
 
-      archetypeCards.forEach(addCard);
+      for (const data of archetypeCards) {
+        addCard(data);
+        if (this.deck.length >= targetSize) break;
+      }
 
-      while (this.deck.length < maxDeckSize) {
+      while (this.deck.length < targetSize) {
         for (const data of cardDatabase) {
           addCard(data);
-          if (this.deck.length >= maxDeckSize) break;
+          if (this.deck.length >= targetSize) break;
         }
       }
     };
@@ -58,7 +67,7 @@ export default class Player {
         }
       });
 
-      if (this.deck.length < maxDeckSize) {
+      if (this.deck.length < minDeckSize) {
         fillWithDefaults();
       }
     } else {

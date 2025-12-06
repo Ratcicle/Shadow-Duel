@@ -344,7 +344,6 @@ export const cardDatabase = [
             targetRef: "reborn_target",
             player: "self",
             to: "field",
-            position: "attack",
             isFacedown: false,
             resetAttackFlags: true,
           },
@@ -984,6 +983,198 @@ export const cardDatabase = [
         actions: [
           {
             type: "shadow_heart_death_wyrm_special_summon",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 46,
+    name: "Radiant Dragon",
+    cardKind: "monster",
+    atk: 2200,
+    def: 1600,
+    level: 6,
+    type: "Dragon",
+    archetype: "Radiant",
+    description:
+      'If this card was Normal Summoned: Add 1 "Luminarch" monster from your Deck to your hand. Once per turn, during your Standby Phase: gain 300 LP for each "Luminarch" monster you control.',
+    image: "assets/Radiant Dragon.png",
+    effects: [
+      {
+        id: "radiant_dragon_search_luminarch",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethod: "normal",
+        actions: [
+          {
+            type: "search_any",
+            archetype: "Luminarch",
+            cardKind: "monster",
+            player: "self",
+          },
+        ],
+      },
+      {
+        id: "radiant_dragon_luminarch_heal",
+        timing: "on_event",
+        event: "standby_phase",
+        oncePerTurn: true,
+        oncePerTurnName: "radiant_dragon_luminarch_heal",
+        actions: [
+          {
+            type: "heal_per_archetype_monster",
+            player: "self",
+            archetype: "Luminarch",
+            amountPerMonster: 300,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 47,
+    name: "Luminarch Valiant – Knight of the Dawn",
+    cardKind: "monster",
+    atk: 1600,
+    def: 1200,
+    level: 4,
+    type: "Warrior",
+    archetype: "Luminarch",
+    piercing: true,
+    description:
+      'If this card is Normal or Special Summoned: Add 1 Level 4 or lower "Luminarch" monster from your Deck to your hand. If this card battles a Defense Position monster, inflict piercing battle damage to your opponent.',
+    image: "assets/Luminarch Valiant – Knight of the Dawn.png",
+    effects: [
+      {
+        id: "luminarch_valiant_search",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethod: ["normal", "special"],
+        actions: [
+          {
+            type: "search_any",
+            archetype: "Luminarch",
+            cardKind: "monster",
+            minLevel: 1,
+            maxLevel: 4,
+            player: "self",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 48,
+    name: "Luminarch Holy Shield",
+    cardKind: "spell",
+    subtype: "normal",
+    archetype: "Luminarch",
+    description:
+      'Target up to 3 "Luminarch" monsters you control; until the end of this turn, they cannot be destroyed by battle, and any battle damage you would take involving those monsters is gained instead.',
+    image: "assets/Luminarch Holy Shield.png",
+    effects: [
+      {
+        id: "luminarch_holy_shield_effect",
+        timing: "on_play",
+        speed: 1,
+        targets: [
+          {
+            id: "holy_shield_targets",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            archetype: "Luminarch",
+            count: { min: 1, max: 3 },
+          },
+        ],
+        actions: [
+          {
+            type: "luminarch_holy_shield_apply",
+            targetRef: "holy_shield_targets",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 49,
+    name: "Luminarch Aegisbearer",
+    cardKind: "monster",
+    atk: 1300,
+    def: 2000,
+    level: 4,
+    type: "Warrior",
+    archetype: "Luminarch",
+    mustBeAttacked: true,
+    description:
+      'If this card is Special Summoned: Increase its DEF by 500. While this card is face-up on the field, your opponent\'s attacks must target this card, if possible.',
+    image: "assets/Luminarch Aegisbearer.png",
+    effects: [
+      {
+        id: "luminarch_aegisbearer_def_boost",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethod: "special",
+        actions: [
+          {
+            type: "luminarch_aegisbearer_def_boost",
+            amount: 500,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 50,
+    name: "Luminarch Moonblade Captain",
+    cardKind: "monster",
+    atk: 2300,
+    def: 1900,
+    level: 6,
+    type: "Warrior",
+    archetype: "Luminarch",
+    description:
+      'If this card is Normal Summoned: You can target 1 Level 4 or lower "Luminarch" monster in your GY; Special Summon it. Once per turn, if this card destroys an opponent\'s monster by battle: it can make a second attack this turn.',
+    image: "assets/Luminarch Moonblade Captain.png",
+    effects: [
+      {
+        id: "moonblade_captain_revive",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethod: "normal",
+        targets: [
+          {
+            id: "moonblade_revive_target",
+            owner: "self",
+            zone: "graveyard",
+            cardKind: "monster",
+            archetype: "Luminarch",
+            maxLevel: 4,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "moonblade_revive_target",
+            player: "self",
+            to: "field",
+            isFacedown: false,
+            resetAttackFlags: true,
+          },
+        ],
+      },
+      {
+        id: "moonblade_captain_second_attack",
+        timing: "on_event",
+        event: "battle_destroy",
+        requireSelfAsAttacker: true,
+        oncePerTurn: true,
+        oncePerTurnName: "luminarch_moonblade_second_attack",
+        actions: [
+          {
+            type: "grant_second_attack_this_turn",
           },
         ],
       },

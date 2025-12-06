@@ -803,6 +803,10 @@ export default class EffectEngine {
         case "heal":
           executed = this.applyHeal(action, ctx) || executed;
           break;
+        case "heal_per_archetype_monster":
+          executed =
+            this.applyHealPerArchetypeMonster(action, ctx) || executed;
+          break;
         case "damage":
           executed = this.applyDamage(action, ctx) || executed;
           break;
@@ -829,6 +833,18 @@ export default class EffectEngine {
           break;
         case "move":
           executed = this.applyMove(action, ctx, targets) || executed;
+          break;
+        case "luminarch_aegisbearer_def_boost":
+          executed =
+            this.applyLuminarchAegisbearerDefBoost(action, ctx) || executed;
+          break;
+        case "grant_second_attack_this_turn":
+          executed =
+            this.applyGrantSecondAttackThisTurn(action, ctx) || executed;
+          break;
+        case "luminarch_holy_shield_apply":
+          executed =
+            this.applyLuminarchHolyShield(action, ctx, targets) || executed;
           break;
         case "shadow_heart_shield_upkeep":
           executed =
@@ -883,6 +899,36 @@ export default class EffectEngine {
     const amount = action.amount ?? 0;
     targetPlayer.gainLP(amount);
     return amount !== 0;
+  }
+
+  applyHealPerArchetypeMonster(action, ctx) {
+    const targetPlayer =
+      action.player === "opponent" ? ctx.opponent : ctx.player;
+    const archetype = action.archetype;
+    const amountPerMonster = action.amountPerMonster ?? 0;
+
+    if (!targetPlayer || amountPerMonster <= 0 || !archetype) return false;
+
+    const count = (targetPlayer.field || []).reduce((acc, card) => {
+      if (!card || card.cardKind !== "monster" || card.isFacedown) return acc;
+      const archetypes = Array.isArray(card.archetypes)
+        ? card.archetypes
+        : card.archetype
+        ? [card.archetype]
+        : [];
+      return archetypes.includes(archetype) ? acc + 1 : acc;
+    }, 0);
+
+    const totalHeal = count * amountPerMonster;
+    if (totalHeal > 0) {
+      targetPlayer.gainLP(totalHeal);
+      console.log(
+        `${targetPlayer.id} gained ${totalHeal} LP from ${count} ${archetype} monster(s).`
+      );
+      return true;
+    }
+
+    return false;
   }
 
   applyDamage(action, ctx) {
@@ -947,18 +993,47 @@ export default class EffectEngine {
       targetPlayer.id
     );
 
-    tokenCard.position = action.position || "attack";
-    tokenCard.isFacedown = false;
-    tokenCard.hasAttacked = false;
+    const finishSummon = (posChoice) => {
+      const position = posChoice || action.position || "attack";
 
-    if (this.game && typeof this.game.moveCard === "function") {
-      this.game.moveCard(tokenCard, targetPlayer, "field", {
-        position: tokenCard.position,
-        isFacedown: tokenCard.isFacedown,
-        resetAttackFlags: true,
-      });
+      tokenCard.position = position;
+      tokenCard.isFacedown = false;
+      tokenCard.hasAttacked = false;
+
+      if (this.game && typeof this.game.moveCard === "function") {
+        this.game.moveCard(tokenCard, targetPlayer, "field", {
+          position,
+          isFacedown: tokenCard.isFacedown,
+          resetAttackFlags: true,
+        });
+      } else {
+        targetPlayer.field.push(tokenCard);
+      }
+
+      if (this.game && typeof this.game.updateBoard === "function") {
+        this.game.updateBoard();
+      }
+      if (this.game && typeof this.game.checkWinCondition === "function") {
+        this.game.checkWinCondition();
+      }
+    };
+
+    if (
+      this.game &&
+      targetPlayer === this.game.player &&
+      typeof this.game.chooseSpecialSummonPosition === "function"
+    ) {
+      const positionChoice = this.game.chooseSpecialSummonPosition(
+        targetPlayer,
+        tokenCard
+      );
+      if (positionChoice && typeof positionChoice.then === "function") {
+        positionChoice.then((pos) => finishSummon(pos));
+      } else {
+        finishSummon(positionChoice);
+      }
     } else {
-      targetPlayer.field.push(tokenCard);
+      finishSummon(action.position || "attack");
     }
     return true;
   }
@@ -1102,6 +1177,34 @@ export default class EffectEngine {
         console.log(`No cards in deck matching archetype: ${action.archetype}`);
         return false;
       }
+    }
+
+    if (action.cardKind) {
+      candidates = candidates.filter(
+        (card) => card.cardKind === action.cardKind
+      );
+
+      if (candidates.length === 0) {
+        console.log(`No cards in deck matching card kind: ${action.cardKind}`);
+        return false;
+      }
+    }
+
+    if (typeof action.minLevel === "number") {
+      candidates = candidates.filter(
+        (card) => (card.level || 0) >= action.minLevel
+      );
+    }
+
+    if (typeof action.maxLevel === "number") {
+      candidates = candidates.filter(
+        (card) => (card.level || 0) <= action.maxLevel
+      );
+    }
+
+    if (candidates.length === 0) {
+      console.log("No cards in deck matching level constraints.");
+      return false;
     }
 
     // Bots auto-pick a candidate without prompting the user.
@@ -1364,6 +1467,46 @@ export default class EffectEngine {
     return true;
   }
 
+  applyLuminarchAegisbearerDefBoost(action, ctx) {
+    const amount = action.amount ?? 0;
+    const card = ctx?.source;
+    if (!card || card.cardKind !== "monster" || amount <= 0) return false;
+
+    const owner =
+      card.owner === "player" ? this.game?.player : this.game?.bot;
+    if (!owner || !owner.field.includes(card)) return false;
+
+    card.def += amount;
+    return true;
+  }
+
+  applyGrantSecondAttackThisTurn(action, ctx) {
+    const card = ctx?.source;
+    if (!card || card.cardKind !== "monster") return false;
+
+    const owner = this.getOwnerByCard(card);
+    if (!owner || !owner.field.includes(card) || card.isFacedown) return false;
+
+    card.canMakeSecondAttackThisTurn = true;
+    card.secondAttackUsedThisTurn = false;
+    return true;
+  }
+
+  applyLuminarchHolyShield(action, ctx, targets) {
+    const targetCards = targets[action.targetRef] || [];
+    if (!Array.isArray(targetCards) || targetCards.length === 0) return false;
+
+    let applied = false;
+    targetCards.forEach((card) => {
+      if (!card) return;
+      card.tempBattleIndestructible = true;
+      card.battleDamageHealsControllerThisTurn = true;
+      applied = true;
+    });
+
+    return applied;
+  }
+
   applyMove(action, ctx, targets) {
     const targetCards = targets[action.targetRef] || [];
     if (!targetCards || targetCards.length === 0) return false;
@@ -1375,6 +1518,7 @@ export default class EffectEngine {
     }
 
     let moved = false;
+    let waitingForChoice = false;
 
     targetCards.forEach((card) => {
       if (
@@ -1395,49 +1539,87 @@ export default class EffectEngine {
         destPlayer = card.owner === "player" ? this.game.player : this.game.bot;
       }
 
-      if (this.game && typeof this.game.moveCard === "function") {
-        this.game.moveCard(card, destPlayer, toZone, {
-          position: action.position,
-          isFacedown: action.isFacedown,
-          resetAttackFlags: action.resetAttackFlags,
-        });
-      } else {
-        const fromOwner =
-          card.owner === "player" ? this.game.player : this.game.bot;
-        const zones = ["field", "hand", "deck", "graveyard", "spellTrap"];
-        for (const zoneName of zones) {
-          const arr = this.getZone(fromOwner, zoneName);
-          const idx = arr ? arr.indexOf(card) : -1;
-          if (idx > -1) {
-            arr.splice(idx, 1);
-            break;
+      const shouldPromptForPosition =
+        toZone === "field" &&
+        card.cardKind === "monster" &&
+        this.game &&
+        destPlayer === this.game.player &&
+        typeof this.game.chooseSpecialSummonPosition === "function";
+
+      const defaultFieldPosition =
+        toZone === "field" && card.cardKind === "monster" ? "attack" : null;
+
+      const applyMoveWithPosition = (chosenPosition) => {
+        const finalPosition = shouldPromptForPosition
+          ? chosenPosition || action.position || defaultFieldPosition || "attack"
+          : chosenPosition ?? action.position ?? defaultFieldPosition;
+
+        if (this.game && typeof this.game.moveCard === "function") {
+          this.game.moveCard(card, destPlayer, toZone, {
+            position: finalPosition,
+            isFacedown: action.isFacedown,
+            resetAttackFlags: action.resetAttackFlags,
+          });
+        } else {
+          const fromOwner =
+            card.owner === "player" ? this.game.player : this.game.bot;
+          const zones = ["field", "hand", "deck", "graveyard", "spellTrap"];
+          for (const zoneName of zones) {
+            const arr = this.getZone(fromOwner, zoneName);
+            const idx = arr ? arr.indexOf(card) : -1;
+            if (idx > -1) {
+              arr.splice(idx, 1);
+              break;
+            }
           }
-        }
 
-        const destArr = this.getZone(destPlayer, toZone);
-        if (!destArr) {
-          console.warn("applyMove: unknown destination zone:", toZone);
-          return;
-        }
+          const destArr = this.getZone(destPlayer, toZone);
+          if (!destArr) {
+            console.warn("applyMove: unknown destination zone:", toZone);
+            return;
+          }
 
-        if (action.position) {
-          card.position = action.position;
-        }
-        if (typeof action.isFacedown === "boolean") {
-          card.isFacedown = action.isFacedown;
-        }
-        if (action.resetAttackFlags) {
-          card.hasAttacked = false;
-          card.cannotAttackThisTurn = false;
-          card.attacksUsedThisTurn = 0;
-        }
+          if (finalPosition) {
+            card.position = finalPosition;
+          }
+          if (typeof action.isFacedown === "boolean") {
+            card.isFacedown = action.isFacedown;
+          }
+          if (action.resetAttackFlags) {
+            card.hasAttacked = false;
+            card.cannotAttackThisTurn = false;
+            card.attacksUsedThisTurn = 0;
+          }
 
-        card.owner = destPlayer.id;
-        destArr.push(card);
+          card.owner = destPlayer.id;
+          destArr.push(card);
+        }
+        moved = true;
+
+        if (this.game && typeof this.game.updateBoard === "function") {
+          this.game.updateBoard();
+        }
+        if (this.game && typeof this.game.checkWinCondition === "function") {
+          this.game.checkWinCondition();
+        }
+      };
+
+      if (shouldPromptForPosition) {
+        const positionChoice = this.game.chooseSpecialSummonPosition(
+          destPlayer,
+          card
+        );
+        if (positionChoice && typeof positionChoice.then === "function") {
+          waitingForChoice = true;
+          positionChoice.then((resolved) => applyMoveWithPosition(resolved));
+        } else {
+          applyMoveWithPosition(positionChoice);
+        }
+      } else {
+        applyMoveWithPosition(action.position);
       }
-      moved = true;
     });
-    return moved;
+    return moved || waitingForChoice;
   }
 
   applyShadowHeartDeathWyrmSpecialSummon(action, ctx) {

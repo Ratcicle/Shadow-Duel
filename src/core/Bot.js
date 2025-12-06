@@ -74,9 +74,20 @@ export default class Bot extends Player {
         const availability = game.getAttackAvailability(attacker);
         if (!availability.ok) continue;
 
-        const possibleTargets = game.player.field.length
-          ? [...game.player.field]
-          : [null];
+        const tauntTargets = game.player.field.filter(
+          (card) =>
+            card &&
+            card.cardKind === "monster" &&
+            !card.isFacedown &&
+            card.mustBeAttacked
+        );
+
+        const possibleTargets =
+          tauntTargets.length > 0
+            ? [...tauntTargets]
+            : game.player.field.length
+            ? [...game.player.field]
+            : [null];
 
         for (const target of possibleTargets) {
           const simState = this.cloneGameState(game);
