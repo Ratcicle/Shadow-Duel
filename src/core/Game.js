@@ -387,7 +387,9 @@ export default class Game {
       }
     });
 
-    document.getElementById("player-field").addEventListener("click", (e) => {
+    document
+      .getElementById("player-field")
+      .addEventListener("click", async (e) => {
       const cardEl = e.target.closest(".card");
       if (!cardEl) return;
 
@@ -535,21 +537,22 @@ export default class Game {
 
         const wasAlreadyAttacked = attacker.hasAttacked;
 
-        let target = null;
-        const tauntTargets = this.bot.field.filter(
-          (card) =>
-            card &&
-            card.cardKind === "monster" &&
-            !card.isFacedown &&
-            card.mustBeAttacked
+        const opponentTargets = this.bot.field.filter(
+          (card) => card && card.cardKind === "monster"
         );
 
-        if (tauntTargets.length > 0) {
-          target = tauntTargets[0];
-        } else if (this.bot.field.length > 0) {
-          target = this.bot.field[0];
+        const attackCandidates =
+          opponentTargets.filter((card) => card && card.mustBeAttacked).length >
+          0
+            ? opponentTargets.filter((card) => card && card.mustBeAttacked)
+            : opponentTargets;
+
+        if (attackCandidates.length === 0) {
+          await this.resolveCombat(attacker, null);
+        } else {
+          this.startAttackTargetSelection(attacker, attackCandidates);
         }
-        this.resolveCombat(attacker, target);
+
         if (wasAlreadyAttacked && canUseSecondAttack) {
           attacker.secondAttackUsedThisTurn = true;
         }
@@ -741,6 +744,88 @@ export default class Game {
     } else {
       finalizeSummon(positionChoice);
     }
+  }
+ 
+  async resolveDestructionWithReplacement(card, options = {}) {
+    if (!card || card.cardKind !== "monster") {
+      return { replaced: false };
+    }
+
+    const ownerPlayer = card.owner === "player" ? this.player : this.bot;
+    if (!ownerPlayer) {
+      return { replaced: false };
+    }
+
+    const effect = (card.effects || []).find(
+      (eff) => eff.id === "luminarch_aurora_seraph_protect"
+    );
+    if (!effect) {
+      return { replaced: false };
+    }
+
+    const onceCheck = this.effectEngine.checkOncePerTurn(
+      card,
+      ownerPlayer,
+      effect
+    );
+    if (!onceCheck.ok) {
+      return { replaced: false };
+    }
+
+    const isLuminarch = (candidate) =>
+      candidate &&
+      candidate.cardKind === "monster" &&
+      candidate !== card &&
+      ((Array.isArray(candidate.archetypes) &&
+        candidate.archetypes.includes("Luminarch")) ||
+        candidate.archetype === "Luminarch");
+
+    const candidates = (ownerPlayer.field || []).filter(isLuminarch);
+    if (candidates.length === 0) {
+      return { replaced: false };
+    }
+
+    if (ownerPlayer.id !== "player") {
+      const chosen = [...candidates].sort((a, b) => (a.atk || 0) - (b.atk || 0))[0];
+      if (chosen) {
+        this.moveCard(chosen, ownerPlayer, "graveyard", { fromZone: "field" });
+        this.effectEngine.registerOncePerTurnUsage(card, ownerPlayer, effect);
+        this.renderer.log(
+          `${card.name} avoided destruction by sending ${chosen.name} to the Graveyard.`
+        );
+        return { replaced: true };
+      }
+      return { replaced: false };
+    }
+
+    const wantsToReplace = window.confirm(
+      `Send 1 "Luminarch" monster you control to the GY to save ${card.name}?`
+    );
+    if (!wantsToReplace) {
+      return { replaced: false };
+    }
+
+    const selections = await this.askPlayerToSelectCards({
+      owner: "player",
+      zone: "field",
+      min: 1,
+      max: 1,
+      filter: isLuminarch,
+      message: `Choose a "Luminarch" monster to send to the Graveyard for ${card.name}'s protection.`,
+    });
+
+    const chosen = selections[0];
+    if (!chosen) {
+      this.renderer.log("Protection cancelled.");
+      return { replaced: false };
+    }
+
+    this.moveCard(chosen, ownerPlayer, "graveyard", { fromZone: "field" });
+    this.effectEngine.registerOncePerTurnUsage(card, ownerPlayer, effect);
+    this.renderer.log(
+      `${card.name} avoided destruction by sending ${chosen.name} to the Graveyard.`
+    );
+    return { replaced: true };
   }
 
   canFlipSummon(card) {
@@ -955,8 +1040,127 @@ export default class Game {
           () => {
             this.cancelTargetSelection();
           }
-        );
+      );
     }
+  }
+
+  startAttackTargetSelection(attacker, candidates) {
+    if (!attacker || !Array.isArray(candidates) || candidates.length === 0) return;
+    this.cancelTargetSelection();
+    const decorated = candidates.map((card, idx) => {
+      const ownerLabel = card.owner === "player" ? "player" : "opponent";
+      const ownerPlayer =
+        card.owner === "player" ? this.player : this.bot;
+      const zoneArr = this.getZone(ownerPlayer, "field") || [];
+      const zoneIndex = zoneArr.indexOf(card);
+      return {
+        idx,
+        name: card.name,
+        owner: ownerLabel,
+        controller: card.owner,
+        zone: "field",
+        zoneIndex,
+        position: card.position,
+        atk: card.atk,
+        def: card.def,
+        cardKind: card.cardKind,
+        cardRef: card,
+      };
+    });
+
+    this.targetSelection = {
+      kind: "attack",
+      attacker,
+      options: [
+        {
+          id: "attack_target",
+          min: 1,
+          max: 1,
+          zone: "field",
+          candidates: decorated,
+        },
+      ],
+      selections: {},
+      currentOption: 0,
+    };
+    this.renderer.log("Select a monster to attack.");
+    this.highlightTargetCandidates();
+  }
+
+  askPlayerToSelectCards(config = {}) {
+    const owner = config.owner === "player" ? this.player : null;
+    if (!owner) return Promise.resolve([]);
+
+    const zoneName = config.zone || "field";
+    let candidates = this.getZone(owner, zoneName) || [];
+
+    const filter = config.filter;
+    if (filter) {
+      if (typeof filter === "function") {
+        candidates = candidates.filter(filter);
+      } else if (typeof filter === "object") {
+        candidates = candidates.filter((card) => {
+          return Object.entries(filter).every(([key, value]) => {
+            if (!card) return false;
+            if (Array.isArray(value)) {
+              return value.includes(card[key]);
+            }
+            return card[key] === value;
+          });
+        });
+      }
+    }
+
+    const min = Math.max(1, config.min ?? 1);
+    const max = Math.min(config.max ?? min, candidates.length);
+
+    if (candidates.length < min) {
+      return Promise.resolve([]);
+    }
+
+    const decorated = candidates.map((card, idx) => {
+      const ownerLabel = card.owner === "player" ? "player" : "opponent";
+      const ownerPlayer =
+        card.owner === "player" ? this.player : this.bot;
+      const zoneArr = this.getZone(ownerPlayer, zoneName) || [];
+      const zoneIndex = zoneArr.indexOf(card);
+      return {
+        idx,
+        name: card.name,
+        owner: ownerLabel,
+        controller: card.owner,
+        zone: zoneName,
+        zoneIndex,
+        position: card.position,
+        atk: card.atk,
+        def: card.def,
+        cardKind: card.cardKind,
+        cardRef: card,
+      };
+    });
+
+    return new Promise((resolve) => {
+      this.cancelTargetSelection();
+      this.targetSelection = {
+        kind: "custom",
+        options: [
+          {
+            id: "custom_select",
+            zone: zoneName,
+            min,
+            max,
+            candidates: decorated,
+          },
+        ],
+        selections: {},
+        currentOption: 0,
+        resolve,
+      };
+      this.renderer.log(
+        config.message || "Select card(s) by clicking the highlighted targets."
+      );
+      this.highlightTargetCandidates();
+    });
   }
 
   highlightTargetCandidates() {
@@ -1101,11 +1305,35 @@ export default class Game {
         selection.selections
       );
       this.updateBoard();
+    } else if (selection.kind === "attack") {
+      const option = selection.options[0];
+      if (option) {
+        const chosenIndexes = selection.selections[option.id] || [];
+        const chosenCard =
+          option.candidates[chosenIndexes[0]]?.cardRef ?? null;
+        if (chosenCard) {
+          this.resolveCombat(selection.attacker, chosenCard).catch((err) =>
+            console.error(err)
+          );
+        }
+      }
+    } else if (selection.kind === "custom") {
+      const option = selection.options[0];
+      const chosen = (selection.selections[option.id] || [])
+        .map((idx) => option.candidates[idx]?.cardRef)
+        .filter(Boolean);
+      if (selection.resolve) {
+        selection.resolve(chosen);
+      }
     }
   }
 
   cancelTargetSelection() {
     if (!this.targetSelection) return;
+    const selection = this.targetSelection;
+    if (selection?.resolve) {
+      selection.resolve([]);
+    }
     this.clearTargetHighlights();
     this.targetSelection = null;
   }
@@ -1258,7 +1486,7 @@ export default class Game {
     return true;
   }
 
-  resolveCombat(attacker, target) {
+  async resolveCombat(attacker, target) {
     if (!attacker) return;
 
     const availability = this.getAttackAvailability(attacker);
@@ -1317,17 +1545,17 @@ export default class Game {
         this.updateBoard();
 
         setTimeout(() => {
-          this.finishCombat(attacker, target);
+          this.finishCombat(attacker, target).catch((err) => console.error(err));
         }, 600);
 
         return;
       }
 
-      this.finishCombat(attacker, target);
+      this.finishCombat(attacker, target).catch((err) => console.error(err));
     }
   }
 
-  finishCombat(attacker, target) {
+  async finishCombat(attacker, target) {
     const applyBattleDamage = (player, cardInvolved, amount) => {
       if (!player || amount <= 0) return;
       if (
@@ -1347,8 +1575,14 @@ export default class Game {
         applyBattleDamage(defender, target, damage);
 
         if (this.canDestroyByBattle(target)) {
-          this.moveCard(target, defender, "graveyard");
-          this.applyBattleDestroyEffect(attacker, target);
+          const replaced = await this.resolveDestructionWithReplacement(target, {
+            reason: "battle",
+            sourceCard: attacker,
+          });
+          if (!replaced) {
+            this.moveCard(target, defender, "graveyard");
+            this.applyBattleDestroyEffect(attacker, target);
+          }
         }
       } else if (attacker.atk < target.atk) {
         const attPlayer = attacker.owner === "player" ? this.player : this.bot;
@@ -1356,21 +1590,39 @@ export default class Game {
         applyBattleDamage(attPlayer, attacker, damage);
 
         if (this.canDestroyByBattle(attacker)) {
-          this.moveCard(attacker, attPlayer, "graveyard");
-          this.applyBattleDestroyEffect(attacker, attacker);
+          const replaced = await this.resolveDestructionWithReplacement(attacker, {
+            reason: "battle",
+            sourceCard: target,
+          });
+          if (!replaced) {
+            this.moveCard(attacker, attPlayer, "graveyard");
+            this.applyBattleDestroyEffect(attacker, attacker);
+          }
         }
       } else {
         const attPlayer = attacker.owner === "player" ? this.player : this.bot;
         const defPlayer = target.owner === "player" ? this.player : this.bot;
 
         if (this.canDestroyByBattle(attacker)) {
-          this.moveCard(attacker, attPlayer, "graveyard");
-          this.applyBattleDestroyEffect(attacker, attacker);
+          const replaced = await this.resolveDestructionWithReplacement(attacker, {
+            reason: "battle",
+            sourceCard: target,
+          });
+          if (!replaced) {
+            this.moveCard(attacker, attPlayer, "graveyard");
+            this.applyBattleDestroyEffect(attacker, attacker);
+          }
         }
 
         if (this.canDestroyByBattle(target)) {
-          this.moveCard(target, defPlayer, "graveyard");
-          this.applyBattleDestroyEffect(attacker, target);
+          const replaced = await this.resolveDestructionWithReplacement(target, {
+            reason: "battle",
+            sourceCard: attacker,
+          });
+          if (!replaced) {
+            this.moveCard(target, defPlayer, "graveyard");
+            this.applyBattleDestroyEffect(attacker, target);
+          }
         }
       }
     } else {
@@ -1381,17 +1633,19 @@ export default class Game {
           applyBattleDamage(defender, target, damage);
         }
         if (this.canDestroyByBattle(target)) {
-          this.moveCard(target, defender, "graveyard");
-          this.applyBattleDestroyEffect(attacker, target);
+          const replaced = await this.resolveDestructionWithReplacement(target, {
+            reason: "battle",
+            sourceCard: attacker,
+          });
+          if (!replaced) {
+            this.moveCard(target, defender, "graveyard");
+            this.applyBattleDestroyEffect(attacker, target);
+          }
         }
       } else if (attacker.atk < target.def) {
         const attPlayer = attacker.owner === "player" ? this.player : this.bot;
         const damage = target.def - attacker.atk;
         applyBattleDamage(attPlayer, attacker, damage);
-        if (this.canDestroyByBattle(attacker)) {
-          this.moveCard(attacker, attPlayer, "graveyard");
-          this.applyBattleDestroyEffect(attacker, attacker);
-        }
       }
     }
 

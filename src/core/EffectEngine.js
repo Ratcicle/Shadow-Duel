@@ -778,16 +778,23 @@ export default class EffectEngine {
         }
       }
 
-      const shouldAutoSelect = def.autoSelect || !!def.strategy;
-      if (shouldAutoSelect) {
-        const takeCount = Math.min(max, candidates.length);
-        targetMap[def.id] = candidates.slice(0, takeCount);
-        continue;
-      }
+      const isHuman =
+        ctx?.player &&
+        this.game &&
+        ctx.player === this.game.player;
 
-      if (candidates.length === 1 && min === 1) {
-        targetMap[def.id] = [candidates[0]];
-        continue;
+      if (!isHuman) {
+        const shouldAutoSelect = def.autoSelect || !!def.strategy;
+        if (shouldAutoSelect) {
+          const takeCount = Math.min(max, candidates.length);
+          targetMap[def.id] = candidates.slice(0, takeCount);
+          continue;
+        }
+
+        if (candidates.length === 1 && min === 1) {
+          targetMap[def.id] = [candidates[0]];
+          continue;
+        }
       }
 
       needsSelection = true;
@@ -986,112 +993,139 @@ export default class EffectEngine {
     return removedAny;
   }
 
-  applyActions(actions, ctx, targets) {
+  async applyActions(actions, ctx, targets) {
     let executed = false;
-    actions.forEach((action) => {
-      switch (action.type) {
-        case "draw":
-          executed = this.applyDraw(action, ctx) || executed;
-          break;
-        case "heal":
-          executed = this.applyHeal(action, ctx) || executed;
-          break;
-        case "heal_per_archetype_monster":
-          executed =
-            this.applyHealPerArchetypeMonster(action, ctx) || executed;
-          break;
-        case "damage":
-          executed = this.applyDamage(action, ctx) || executed;
-          break;
-        case "destroy":
-          executed = this.applyDestroy(action, targets) || executed;
-          break;
-        case "negate_attack":
-          executed = this.applyNegateAttack(action, ctx) || executed;
-          break;
-        case "special_summon_token":
-          executed = this.applySpecialSummonToken(action, ctx) || executed;
-          break;
-        case "buff_atk_temp":
-          executed = this.applyBuffAtkTemp(action, targets) || executed;
-          break;
-        case "modify_stats_temp":
-          executed = this.applyModifyStatsTemp(action, targets) || executed;
-          break;
-        case "search_any":
-          executed = this.applySearchAny(action, ctx) || executed;
-          break;
-        case "transmutate":
-          executed = this.applyTransmutate(action, ctx, targets) || executed;
-          break;
-        case "equip":
-          executed = this.applyEquip(action, ctx, targets) || executed;
-          break;
-        case "move":
-          executed = this.applyMove(action, ctx, targets) || executed;
-          break;
-        case "luminarch_aegisbearer_def_boost":
-          executed =
-            this.applyLuminarchAegisbearerDefBoost(action, ctx) || executed;
-          break;
-        case "shadow_heart_rage_scale_buff":
-          executed =
-            this.applyShadowHeartRageScaleBuff(action, ctx) || executed;
-          break;
-        case "grant_second_attack_this_turn":
-          executed =
-            this.applyGrantSecondAttackThisTurn(action, ctx) || executed;
-          break;
-        case "luminarch_magic_sickle_recycle":
-          executed =
-            this.applyLuminarchMagicSickleRecycle(action, ctx) || executed;
-          break;
-        case "luminarch_holy_shield_apply":
-          executed =
-            this.applyLuminarchHolyShield(action, ctx, targets) || executed;
-          break;
-        case "shadow_heart_shield_upkeep":
-          executed =
-            this.applyShadowHeartShieldUpkeep(action, ctx) || executed;
-          break;
-        case "shadow_heart_ritual_summon":
-          executed =
-            this.applyShadowHeartRitualSummon(action, ctx, targets) || executed;
-          break;
-        case "revive_shadowheart_from_grave":
-          executed = this.applyReviveShadowHeartFromGrave(action, ctx) || executed;
-          break;
-        case "forbid_attack_this_turn":
-          executed = this.applyForbidAttackThisTurn(action, targets) || executed;
-          break;
-        case "darkness_valley_apply_existing":
-          executed = this.applyDarknessValleyInitialBuff(action, ctx) || executed;
-          break;
-        case "darkness_valley_buff_summon":
-          executed = this.applyDarknessValleySummonBuff(action, ctx) || executed;
-          break;
-        case "darkness_valley_cleanup":
-          executed = this.applyDarknessValleyCleanup(action, ctx) || executed;
-          break;
-        case "darkness_valley_battle_punish":
-          executed = this.applyDarknessValleyBattlePunish(action, ctx) || executed;
-          break;
-        case "shadow_heart_death_wyrm_special_summon":
-          executed =
-            this.applyShadowHeartDeathWyrmSpecialSummon(action, ctx) || executed;
-          break;
-        case "luminarch_radiant_lancer_atk_boost":
-          executed =
-            this.applyLuminarchRadiantLancerAtkBoost(action, ctx) || executed;
-          break;
-        case "luminarch_radiant_lancer_reset_atk":
-          executed =
-            this.applyLuminarchRadiantLancerResetAtk(action, ctx) || executed;
-          break;
-        default:
-          console.warn(`Unknown action type: ${action.type}`);
+    if (!Array.isArray(actions)) {
+      return executed;
+    }
+
+    try {
+      for (const action of actions) {
+        switch (action.type) {
+          case "draw":
+            executed = this.applyDraw(action, ctx) || executed;
+            break;
+          case "heal":
+            executed = this.applyHeal(action, ctx) || executed;
+            break;
+          case "heal_per_archetype_monster":
+            executed =
+              this.applyHealPerArchetypeMonster(action, ctx) || executed;
+            break;
+          case "damage":
+            executed = this.applyDamage(action, ctx) || executed;
+            break;
+          case "destroy":
+            executed =
+              (await this.applyDestroy(action, targets, ctx)) || executed;
+            break;
+          case "negate_attack":
+            executed = this.applyNegateAttack(action, ctx) || executed;
+            break;
+          case "special_summon_token":
+            executed =
+              this.applySpecialSummonToken(action, ctx) || executed;
+            break;
+          case "buff_atk_temp":
+            executed = this.applyBuffAtkTemp(action, targets) || executed;
+            break;
+          case "modify_stats_temp":
+            executed =
+              this.applyModifyStatsTemp(action, targets) || executed;
+            break;
+          case "search_any":
+            executed = this.applySearchAny(action, ctx) || executed;
+            break;
+          case "transmutate":
+            executed =
+              this.applyTransmutate(action, ctx, targets) || executed;
+            break;
+          case "equip":
+            executed = this.applyEquip(action, ctx, targets) || executed;
+            break;
+          case "move":
+            executed = this.applyMove(action, ctx, targets) || executed;
+            break;
+          case "luminarch_aegisbearer_def_boost":
+            executed =
+              this.applyLuminarchAegisbearerDefBoost(action, ctx) || executed;
+            break;
+          case "shadow_heart_rage_scale_buff":
+            executed =
+              this.applyShadowHeartRageScaleBuff(action, ctx) || executed;
+            break;
+          case "grant_second_attack_this_turn":
+            executed =
+              this.applyGrantSecondAttackThisTurn(action, ctx) || executed;
+            break;
+          case "luminarch_magic_sickle_recycle":
+            executed =
+              this.applyLuminarchMagicSickleRecycle(action, ctx) || executed;
+            break;
+          case "luminarch_holy_shield_apply":
+            executed =
+              this.applyLuminarchHolyShield(action, ctx, targets) || executed;
+            break;
+          case "shadow_heart_shield_upkeep":
+            executed =
+              this.applyShadowHeartShieldUpkeep(action, ctx) || executed;
+            break;
+          case "shadow_heart_ritual_summon":
+            executed =
+              this.applyShadowHeartRitualSummon(action, ctx, targets) ||
+              executed;
+            break;
+          case "revive_shadowheart_from_grave":
+            executed =
+              this.applyReviveShadowHeartFromGrave(action, ctx) || executed;
+            break;
+          case "forbid_attack_this_turn":
+            executed =
+              this.applyForbidAttackThisTurn(action, targets) || executed;
+            break;
+          case "darkness_valley_apply_existing":
+            executed =
+              this.applyDarknessValleyInitialBuff(action, ctx) || executed;
+            break;
+          case "darkness_valley_buff_summon":
+            executed =
+              this.applyDarknessValleySummonBuff(action, ctx) || executed;
+            break;
+          case "darkness_valley_cleanup":
+            executed =
+              this.applyDarknessValleyCleanup(action, ctx) || executed;
+            break;
+          case "darkness_valley_battle_punish":
+            executed =
+              this.applyDarknessValleyBattlePunish(action, ctx) || executed;
+            break;
+          case "shadow_heart_death_wyrm_special_summon":
+            executed =
+              this.applyShadowHeartDeathWyrmSpecialSummon(action, ctx) ||
+              executed;
+            break;
+          case "luminarch_radiant_lancer_atk_boost":
+            executed =
+              this.applyLuminarchRadiantLancerAtkBoost(action, ctx) ||
+              executed;
+            break;
+          case "luminarch_radiant_lancer_reset_atk":
+            executed =
+              this.applyLuminarchRadiantLancerResetAtk(action, ctx) ||
+              executed;
+            break;
+          case "luminarch_aurora_seraph_heal":
+            executed =
+              this.applyAuroraSeraphHeal(action, ctx) || executed;
+            break;
+          default:
+            console.warn(`Unknown action type: ${action.type}`);
+        }
       }
-    });
+    } catch (err) {
+      console.error("Error while applying actions:", err);
+    }
+
     return executed;
   }
 
@@ -1150,14 +1184,42 @@ export default class EffectEngine {
     return amount !== 0;
   }
 
-  applyDestroy(action, targets) {
+  async applyDestroy(action, targets, ctx) {
     const targetCards = targets[action.targetRef] || [];
-    targetCards.forEach((card) => {
+    let destroyedAny = false;
+
+    for (const card of targetCards) {
       const owner = card.owner === "player" ? this.game.player : this.game.bot;
+      if (!owner) continue;
+
+      let replaced = false;
+      if (
+        this.game &&
+        typeof this.game.resolveDestructionWithReplacement === "function"
+      ) {
+        try {
+          const replacement = await this.game.resolveDestructionWithReplacement(
+            card,
+            {
+              reason: "effect",
+              sourceCard: ctx?.source || null,
+            }
+          );
+          replaced = replacement?.replaced;
+        } catch (err) {
+          console.error(
+            "Error resolving destruction replacement:",
+            err
+          );
+        }
+      }
+
+      if (replaced) continue;
 
       if (this.game && typeof this.game.moveCard === "function") {
         this.game.moveCard(card, owner, "graveyard");
-        return;
+        destroyedAny = true;
+        continue;
       }
 
       const zones = [
@@ -1175,11 +1237,29 @@ export default class EffectEngine {
           if (owner.fieldSpell === card) {
             owner.fieldSpell = null;
           }
+          destroyedAny = true;
           break;
         }
       }
-    });
-    return targetCards.length > 0;
+    }
+
+    return destroyedAny;
+  }
+
+  applyAuroraSeraphHeal(action, ctx) {
+    const destroyed = ctx?.destroyed;
+    const player = ctx?.player;
+    if (!destroyed || !player) return false;
+
+    const amount = Math.floor((destroyed.atk || 0) / 2);
+    if (amount <= 0) return false;
+
+    player.gainLP(amount);
+    this.game?.renderer?.log(
+      `${player.name} gains ${amount} LP from ${ctx.source?.name || "Aurora Seraph"}.`
+    );
+
+    return true;
   }
 
   applyNegateAttack(action, ctx) {

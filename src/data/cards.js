@@ -1121,7 +1121,7 @@ export const cardDatabase = [
     id: 50,
     name: "Luminarch Moonblade Captain",
     cardKind: "monster",
-    atk: 2300,
+    atk: 2200,
     def: 1700,
     level: 6,
     type: "Warrior",
@@ -1296,6 +1296,39 @@ export const cardDatabase = [
             type: "luminarch_radiant_lancer_reset_atk",
           },
         ],
+      },
+    ],
+  },
+  {
+    id: 55,
+    name: "Luminarch Aurora Seraph",
+    cardKind: "monster",
+    atk: 2800,
+    def: 2400,
+    level: 8,
+    type: "Fairy",
+    archetype: "Luminarch",
+    description:
+      "If this card destroys an opponent's monster by battle, gain LP equal to half that monster's ATK. Once per turn, if this card would be destroyed by battle or card effect: you can send 1 \"Luminarch\" monster you control to the GY instead.",
+    image: "assets/Luminarch Aurora Seraph.png",
+    effects: [
+      {
+        id: "luminarch_aurora_seraph_heal",
+        timing: "on_event",
+        event: "battle_destroy",
+        requireSelfAsAttacker: true,
+        actions: [
+          {
+            type: "luminarch_aurora_seraph_heal",
+          },
+        ],
+      },
+      {
+        id: "luminarch_aurora_seraph_protect",
+        timing: "passive",
+        oncePerTurn: true,
+        oncePerTurnName: "luminarch_aurora_seraph_protect",
+        oncePerTurnScope: "card",
       },
     ],
   },
