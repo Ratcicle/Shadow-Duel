@@ -139,6 +139,7 @@ export default class Game {
       card.positionChangedThisTurn = false;
       card.canMakeSecondAttackThisTurn = false;
       card.secondAttackUsedThisTurn = false;
+      card.battleIndestructibleOncePerTurnUsed = false;
     });
     activePlayer.summonCount = 0;
 
@@ -191,6 +192,49 @@ export default class Game {
     this.cleanupTempBoosts(this.bot);
     this.turn = this.turn === "player" ? "bot" : "player";
     this.startTurn();
+  }
+
+  showIgnitionActivateModal(card, onActivate) {
+    const overlay = document.createElement("div");
+    overlay.classList.add("modal", "ignition-overlay");
+
+    const modal = document.createElement("div");
+    modal.classList.add("modal-content", "ignition-modal");
+
+    const title = document.createElement("h3");
+    title.textContent = card ? card.name : "Activate effect?";
+    title.classList.add("modal-title");
+
+    const desc = document.createElement("p");
+    desc.textContent = "Activate this monster's effect?";
+    desc.classList.add("modal-text");
+
+    const actions = document.createElement("div");
+    actions.classList.add("modal-actions");
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.textContent = "Cancel";
+    cancelBtn.classList.add("secondary");
+    const activateBtn = document.createElement("button");
+    activateBtn.textContent = "Activate";
+
+    const cleanup = () => {
+      overlay.remove();
+    };
+
+    cancelBtn.onclick = () => cleanup();
+    activateBtn.onclick = () => {
+      cleanup();
+      if (typeof onActivate === "function") onActivate();
+    };
+
+    actions.appendChild(cancelBtn);
+    actions.appendChild(activateBtn);
+    modal.appendChild(title);
+    modal.appendChild(desc);
+    modal.appendChild(actions);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
   }
 
   skipToPhase(targetPhase) {
@@ -401,6 +445,27 @@ export default class Game {
         (this.phase === "main1" || this.phase === "main2")
       ) {
         const card = this.player.field[index];
+        if (
+          card &&
+          card.cardKind === "monster" &&
+          card.effects &&
+          card.effects[0] &&
+          card.effects[0].timing === "ignition"
+        ) {
+          this.showIgnitionActivateModal(card, () => {
+            const result = this.effectEngine.activateMonsterFromField(
+              card,
+              this.player,
+              index
+            );
+            if (result.success) {
+              this.updateBoard();
+            } else if (result.reason) {
+              this.renderer.log(result.reason);
+            }
+          });
+          return;
+        }
         const canFlip = card ? this.canFlipSummon(card) : false;
         const canPosChange = card ? this.canChangePosition(card) : false;
 
@@ -1096,6 +1161,20 @@ export default class Game {
     }
   }
 
+  canDestroyByBattle(card) {
+    if (!card) return false;
+    if (card.battleIndestructible) return false;
+    if (card.tempBattleIndestructible) return false;
+    if (
+      card.battleIndestructibleOncePerTurn &&
+      !card.battleIndestructibleOncePerTurnUsed
+    ) {
+      card.battleIndestructibleOncePerTurnUsed = true;
+      return false;
+    }
+    return true;
+  }
+
   resolveCombat(attacker, target) {
     if (!attacker) return;
 
@@ -1146,9 +1225,6 @@ export default class Game {
   }
 
   finishCombat(attacker, target) {
-    const preventDestroy = (card) =>
-      card && (card.battleIndestructible || card.tempBattleIndestructible);
-
     const applyBattleDamage = (player, cardInvolved, amount) => {
       if (!player || amount <= 0) return;
       if (
@@ -1167,7 +1243,7 @@ export default class Game {
         const damage = attacker.atk - target.atk;
         applyBattleDamage(defender, target, damage);
 
-        if (!preventDestroy(target)) {
+        if (this.canDestroyByBattle(target)) {
           this.moveCard(target, defender, "graveyard");
           this.applyBattleDestroyEffect(attacker, target);
         }
@@ -1176,7 +1252,7 @@ export default class Game {
         const damage = target.atk - attacker.atk;
         applyBattleDamage(attPlayer, attacker, damage);
 
-        if (!preventDestroy(attacker)) {
+        if (this.canDestroyByBattle(attacker)) {
           this.moveCard(attacker, attPlayer, "graveyard");
           this.applyBattleDestroyEffect(attacker, attacker);
         }
@@ -1184,12 +1260,12 @@ export default class Game {
         const attPlayer = attacker.owner === "player" ? this.player : this.bot;
         const defPlayer = target.owner === "player" ? this.player : this.bot;
 
-        if (!preventDestroy(attacker)) {
+        if (this.canDestroyByBattle(attacker)) {
           this.moveCard(attacker, attPlayer, "graveyard");
           this.applyBattleDestroyEffect(attacker, attacker);
         }
 
-        if (!preventDestroy(target)) {
+        if (this.canDestroyByBattle(target)) {
           this.moveCard(target, defPlayer, "graveyard");
           this.applyBattleDestroyEffect(attacker, target);
         }
@@ -1201,7 +1277,7 @@ export default class Game {
           const damage = attacker.atk - target.def;
           applyBattleDamage(defender, target, damage);
         }
-        if (!preventDestroy(target)) {
+        if (this.canDestroyByBattle(target)) {
           this.moveCard(target, defender, "graveyard");
           this.applyBattleDestroyEffect(attacker, target);
         }
@@ -1209,7 +1285,7 @@ export default class Game {
         const attPlayer = attacker.owner === "player" ? this.player : this.bot;
         const damage = target.def - attacker.atk;
         applyBattleDamage(attPlayer, attacker, damage);
-        if (!preventDestroy(attacker)) {
+        if (this.canDestroyByBattle(attacker)) {
           this.moveCard(attacker, attPlayer, "graveyard");
           this.applyBattleDestroyEffect(attacker, attacker);
         }
@@ -1431,6 +1507,23 @@ export default class Game {
 
     card.owner = destPlayer.id;
     destArr.push(card);
+
+    if (
+      toZone === "field" &&
+      card.cardKind === "monster" &&
+      fromZone !== "field" &&
+      this.effectEngine &&
+      typeof this.effectEngine.handleEvent === "function"
+    ) {
+      const ownerPlayer = card.owner === "player" ? this.player : this.bot;
+      const otherPlayer = ownerPlayer === this.player ? this.bot : this.player;
+      this.effectEngine.handleEvent("after_summon", {
+        card,
+        player: ownerPlayer,
+        opponent: otherPlayer,
+        method: "special",
+      });
+    }
 
     if (
       toZone === "graveyard" &&

@@ -462,6 +462,69 @@ export default class EffectEngine {
     return { success: true };
   }
 
+  activateMonsterFromField(card, player, fieldIndex, selections = null) {
+    if (!card || !player) {
+      return { success: false, reason: "Missing card or player." };
+    }
+    if (this.game?.turn !== player.id) {
+      return { success: false, reason: "Not your turn." };
+    }
+    if (this.game?.phase !== "main1" && this.game?.phase !== "main2") {
+      return { success: false, reason: "Effect can only be used in Main Phase." };
+    }
+    if (card.cardKind !== "monster") {
+      return { success: false, reason: "Only monsters can activate from field." };
+    }
+    if (card.isFacedown) {
+      return { success: false, reason: "Cannot activate facedown monster effects." };
+    }
+    if (!player.field || !player.field.includes(card)) {
+      return { success: false, reason: "Monster is not on the field." };
+    }
+    const effect = (card.effects && card.effects[0]) || null;
+    if (!effect) {
+      return { success: false, reason: "No effect defined." };
+    }
+    if (effect.timing && effect.timing !== "ignition") {
+      return { success: false, reason: "Effect is not ignition timing." };
+    }
+
+    const optCheck = this.checkOncePerTurn(card, player, effect);
+    if (!optCheck.ok) {
+      return { success: false, reason: optCheck.reason };
+    }
+
+    const ctx = {
+      source: card,
+      player,
+      opponent: this.game.getOpponent(player),
+      activationZone: "field",
+    };
+
+    const targetResult = this.resolveTargets(
+      effect.targets || [],
+      ctx,
+      selections
+    );
+
+    if (targetResult.needsSelection) {
+      return {
+        success: false,
+        needsSelection: true,
+        options: targetResult.options,
+      };
+    }
+
+    if (!targetResult.ok) {
+      return { success: false, reason: targetResult.reason };
+    }
+
+    this.applyActions(effect.actions || [], ctx, targetResult.targets);
+    this.registerOncePerTurnUsage(card, player, effect);
+    this.game.checkWinCondition();
+    return { success: true };
+  }
+
   activateFieldSpell(card, player, selections = null) {
     if (!card || card.cardKind !== "spell" || card.subtype !== "field") {
       return { success: false, reason: "Not a field spell." };
@@ -841,6 +904,10 @@ export default class EffectEngine {
         case "grant_second_attack_this_turn":
           executed =
             this.applyGrantSecondAttackThisTurn(action, ctx) || executed;
+          break;
+        case "luminarch_magic_sickle_recycle":
+          executed =
+            this.applyLuminarchMagicSickleRecycle(action, ctx) || executed;
           break;
         case "luminarch_holy_shield_apply":
           executed =
@@ -1490,6 +1557,156 @@ export default class EffectEngine {
     card.canMakeSecondAttackThisTurn = true;
     card.secondAttackUsedThisTurn = false;
     return true;
+  }
+
+  applyLuminarchMagicSickleRecycle(action, ctx) {
+    const card = ctx?.source;
+    const player = ctx?.player;
+    const game = this.game;
+
+    if (
+      !card ||
+      !player ||
+      !game ||
+      game.turn !== player.id ||
+      (game.phase !== "main1" && game.phase !== "main2") ||
+      card.cardKind !== "monster" ||
+      !(player.field || []).includes(card)
+    ) {
+      return false;
+    }
+
+    this.game.moveCard(card, player, "graveyard", { fromZone: "field" });
+
+    const gy = player.graveyard || [];
+    const luminarchMonsters = gy.filter((c) => {
+      if (!c || c.cardKind !== "monster") return false;
+      if (c === card) return false; // do not let Sickle retrieve itself
+      const archetypes = Array.isArray(c.archetypes)
+        ? c.archetypes
+        : c.archetype
+        ? [c.archetype]
+        : [];
+      return archetypes.includes("Luminarch");
+    });
+
+    const finishReturn = (chosenCards) => {
+      chosenCards.forEach((c) => {
+        const idx = player.graveyard.indexOf(c);
+        if (idx > -1) {
+          player.graveyard.splice(idx, 1);
+        }
+        player.hand.push(c);
+      });
+
+      if (typeof this.game.updateBoard === "function") {
+        this.game.updateBoard();
+      }
+    };
+
+    if (
+      typeof document === "undefined" ||
+      !document ||
+      !document.body ||
+      luminarchMonsters.length === 0
+    ) {
+      if (luminarchMonsters.length === 0) {
+        console.log("No Luminarch monsters in GY to add.");
+        return true;
+      }
+
+      const maxToReturn = Math.min(2, luminarchMonsters.length);
+      const chosen = [...luminarchMonsters]
+        .sort((a, b) => (b.atk || 0) - (a.atk || 0))
+        .slice(0, maxToReturn);
+      finishReturn(chosen);
+      return true;
+    }
+
+    this.showSickleSelectionModal(
+      luminarchMonsters,
+      2,
+      (selected) => {
+        finishReturn(selected);
+      },
+      () => {
+        finishReturn([]);
+      }
+    );
+
+    return true;
+  }
+
+  showSickleSelectionModal(candidates, maxSelect, onConfirm, onCancel) {
+    const overlay = document.createElement("div");
+    overlay.classList.add("modal", "sickle-overlay");
+
+    const modal = document.createElement("div");
+    modal.classList.add("modal-content", "sickle-modal");
+
+    const title = document.createElement("h3");
+    title.textContent = 'Select up to 2 "Luminarch" monsters to add to hand';
+    title.classList.add("modal-title");
+    modal.appendChild(title);
+
+    const list = document.createElement("div");
+    list.classList.add("sickle-list");
+    candidates.forEach((c, idx) => {
+      const row = document.createElement("label");
+      row.classList.add("sickle-row");
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.dataset.index = String(idx);
+      const name = document.createElement("span");
+      const stats = `ATK ${c.atk || 0} / DEF ${c.def || 0} / L${c.level || 0}`;
+      name.textContent = `${c.name} (${stats})`;
+      row.appendChild(cb);
+      row.appendChild(name);
+      list.appendChild(row);
+    });
+    modal.appendChild(list);
+
+    const info = document.createElement("div");
+    info.classList.add("modal-hint");
+    info.textContent = `Select up to ${maxSelect}.`;
+    modal.appendChild(info);
+
+    const actions = document.createElement("div");
+    actions.classList.add("modal-actions");
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.textContent = "Cancel";
+    cancelBtn.classList.add("secondary");
+    const confirmBtn = document.createElement("button");
+    confirmBtn.textContent = "Add to Hand";
+
+    const cleanup = () => {
+      overlay.remove();
+    };
+
+    confirmBtn.onclick = () => {
+      const selectedIdx = Array.from(
+        modal.querySelectorAll("input[type=checkbox]:checked")
+      )
+        .slice(0, maxSelect)
+        .map((el) => parseInt(el.dataset.index, 10))
+        .filter((n) => !Number.isNaN(n));
+      const chosen = selectedIdx.map((i) => candidates[i]).filter(Boolean);
+      cleanup();
+      onConfirm(chosen);
+    };
+
+    cancelBtn.onclick = () => {
+      cleanup();
+      onCancel();
+    };
+
+    actions.appendChild(cancelBtn);
+    actions.appendChild(confirmBtn);
+    modal.appendChild(actions);
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
   }
 
   applyLuminarchHolyShield(action, ctx, targets) {

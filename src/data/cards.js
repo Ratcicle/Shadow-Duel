@@ -1142,7 +1142,7 @@ export const cardDatabase = [
         id: "moonblade_captain_revive",
         timing: "on_event",
         event: "after_summon",
-        summonMethod: "normal",
+        summonMethod: ["normal", "tribute"],
         targets: [
           {
             id: "moonblade_revive_target",
@@ -1175,6 +1175,48 @@ export const cardDatabase = [
         actions: [
           {
             type: "grant_second_attack_this_turn",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 51,
+    name: "Luminarch Celestial Marshal",
+    cardKind: "monster",
+    atk: 2500,
+    def: 2000,
+    level: 7,
+    type: "Warrior",
+    archetype: "Luminarch",
+    piercing: true,
+    battleIndestructibleOncePerTurn: true,
+    description:
+      'If this card battles a Defense Position monster, inflict piercing battle damage to your opponent. Once per turn, this card cannot be destroyed by battle.',
+    image: "assets/Luminarch Celestial Marshal.png",
+    effects: [],
+  },
+  {
+    id: 52,
+    name: "Luminarch Magic Sickle",
+    cardKind: "monster",
+    atk: 1000,
+    def: 1000,
+    level: 3,
+    type: "Warrior",
+    archetype: "Luminarch",
+    description:
+      'You can send this card from the field to the GY; add up to 2 "Luminarch" monsters from your GY to your hand.',
+    image: "assets/Luminarch Magic Sickle.png",
+    effects: [
+      {
+        id: "luminarch_magic_sickle_effect",
+        timing: "ignition",
+        oncePerTurn: true,
+        oncePerTurnName: "luminarch_magic_sickle_effect",
+        actions: [
+          {
+            type: "luminarch_magic_sickle_recycle",
           },
         ],
       },
