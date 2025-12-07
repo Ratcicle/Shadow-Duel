@@ -115,7 +115,10 @@ export default class Player {
       }
     }
 
-    if (typeof card.requiredTributes === "number" && card.requiredTributes >= 0) {
+    if (
+      typeof card.requiredTributes === "number" &&
+      card.requiredTributes >= 0
+    ) {
       tributesNeeded = card.requiredTributes;
     }
 
@@ -146,11 +149,6 @@ export default class Player {
       return null;
     }
 
-    if (this.field.length >= 5) {
-      console.log("Field is full (max 5 monsters).");
-      return null;
-    }
-
     if (cardIndex >= 0 && cardIndex < this.hand.length) {
       const sendToGrave = (sacrificed) => {
         if (!sacrificed) return;
@@ -174,6 +172,13 @@ export default class Player {
         return null;
       }
 
+      // Calculate field state AFTER removing tributes: current field - tributes + new card must be <= 5
+      const fieldAfterTributes = this.field.length - tributesNeeded + 1;
+      if (fieldAfterTributes > 5) {
+        console.log("Field is full (max 5 monsters).");
+        return null;
+      }
+
       if (tributesNeeded > 0) {
         if (tributeIndices && tributeIndices.length === tributesNeeded) {
           const sortedIndices = [...tributeIndices].sort((a, b) => b - a);
@@ -184,15 +189,23 @@ export default class Player {
             }
           }
 
-          if (usingAlt && alt && !tributes.some((t) => t.name === alt.requiresName)) {
-            console.log(`Must tribute ${alt.requiresName} to use reduced tribute.`);
+          if (
+            usingAlt &&
+            alt &&
+            !tributes.some((t) => t.name === alt.requiresName)
+          ) {
+            console.log(
+              `Must tribute ${alt.requiresName} to use reduced tribute.`
+            );
             return null;
           }
 
           tributes.forEach((sacrificed) => sendToGrave(sacrificed));
         } else {
           if (usingAlt && alt) {
-            const altIdx = this.field.findIndex((c) => c.name === alt.requiresName);
+            const altIdx = this.field.findIndex(
+              (c) => c.name === alt.requiresName
+            );
             if (altIdx === -1) {
               console.log(`No ${alt.requiresName} available for tribute.`);
               return null;
@@ -278,9 +291,3 @@ export default class Player {
     this.lp += amount;
   }
 }
-
-
-
-
-
-

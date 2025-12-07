@@ -1468,6 +1468,11 @@ export default class EffectEngine {
                 targets
               )) || executed;
             break;
+          case "luminarch_sacred_judgment_revive":
+            executed =
+              (await this.applyLuminarchSacredJudgmentRevive(action, ctx)) ||
+              executed;
+            break;
           case "luminarch_aurora_seraph_heal":
             executed = this.applyAuroraSeraphHeal(action, ctx) || executed;
             break;
@@ -2968,6 +2973,296 @@ export default class EffectEngine {
     }
 
     return true;
+  }
+
+  async applyLuminarchSacredJudgmentRevive(action, ctx) {
+    const player = ctx?.player;
+    const opponent = ctx?.opponent;
+    if (!player || !opponent) return false;
+
+    // Check activation conditions
+    if (player.field.length !== 0) {
+      console.log("Sacred Judgment: You must control no monsters.");
+      return false;
+    }
+
+    if (opponent.field.length < 2) {
+      console.log("Sacred Judgment: Opponent must control 2+ monsters.");
+      return false;
+    }
+
+    // Check LP cost
+    if (player.lp < 2000) {
+      console.log("Sacred Judgment: Not enough LP to pay cost (2000 LP).");
+      return false;
+    }
+
+    // Filter Luminarch monsters in GY
+    const gy = player.graveyard || [];
+    const candidates = gy.filter(
+      (card) =>
+        card && card.cardKind === "monster" && card.archetype === "Luminarch"
+    );
+
+    if (candidates.length === 0) {
+      console.log("Sacred Judgment: No Luminarch monsters in Graveyard.");
+      return false;
+    }
+
+    const maxRevive = Math.min(opponent.field.length, candidates.length, 5);
+
+    // Pay LP cost upfront
+    player.takeDamage(2000);
+    console.log(`${player.name} paid 2000 LP to activate Sacred Judgment.`);
+
+    if (this.game && typeof this.game.updateBoard === "function") {
+      this.game.updateBoard();
+    }
+
+    // Bot auto-selects highest ATK monsters
+    if (player.id === "bot") {
+      const sorted = [...candidates].sort(
+        (a, b) => (b.atk || 0) - (a.atk || 0)
+      );
+      const toSummon = sorted.slice(0, maxRevive);
+
+      let summoned = 0;
+      for (const card of toSummon) {
+        if (player.field.length >= 5) break;
+
+        const idx = gy.indexOf(card);
+        if (idx === -1) continue;
+
+        gy.splice(idx, 1);
+        card.position = "attack";
+        card.isFacedown = false;
+        card.hasAttacked = false;
+        card.cannotAttackThisTurn = false;
+        card.attacksUsedThisTurn = 0;
+        player.field.push(card);
+        summoned++;
+      }
+
+      const lpGain = summoned * 500;
+      if (lpGain > 0) {
+        player.gainLP(lpGain);
+        console.log(
+          `Bot Special Summoned ${summoned} monsters and gained ${lpGain} LP.`
+        );
+      }
+
+      if (this.game && typeof this.game.updateBoard === "function") {
+        this.game.updateBoard();
+      }
+
+      return true;
+    }
+
+    // Human player: show multi-select modal
+    return new Promise((resolve) => {
+      this.showSacredJudgmentSelectionModal(
+        candidates,
+        maxRevive,
+        async (selectedCards) => {
+          if (selectedCards.length === 0) {
+            console.log("Sacred Judgment: No monsters selected.");
+            if (this.game && typeof this.game.updateBoard === "function") {
+              this.game.updateBoard();
+            }
+            resolve(true);
+            return;
+          }
+
+          let summoned = 0;
+
+          // Summon each card individually with position choice
+          for (const card of selectedCards) {
+            if (player.field.length >= 5) {
+              console.log("Field is full, cannot summon more monsters.");
+              break;
+            }
+
+            const idx = gy.indexOf(card);
+            if (idx === -1) continue;
+
+            // Remove from GY
+            gy.splice(idx, 1);
+
+            // Prompt for position
+            const positionChoice = await this.game.chooseSpecialSummonPosition(
+              player,
+              card
+            );
+            const position = positionChoice || "attack";
+
+            card.position = position;
+            card.isFacedown = false;
+            card.hasAttacked = false;
+            card.cannotAttackThisTurn = false;
+            card.attacksUsedThisTurn = 0;
+            player.field.push(card);
+            summoned++;
+
+            console.log(
+              `Special Summoned ${card.name} in ${position} position.`
+            );
+
+            if (this.game && typeof this.game.updateBoard === "function") {
+              this.game.updateBoard();
+            }
+          }
+
+          // Gain LP based on summoned count
+          const lpGain = summoned * 500;
+          if (lpGain > 0) {
+            player.gainLP(lpGain);
+            console.log(
+              `Gained ${lpGain} LP from Sacred Judgment (${summoned} monsters).`
+            );
+          }
+
+          if (this.game && typeof this.game.updateBoard === "function") {
+            this.game.updateBoard();
+          }
+
+          resolve(true);
+        }
+      );
+    });
+  }
+
+  showSacredJudgmentSelectionModal(candidates, maxSelect, onConfirm) {
+    const overlay = document.createElement("div");
+    overlay.classList.add("sacred-judgment-overlay");
+
+    const backdrop = document.createElement("div");
+    backdrop.classList.add("sacred-judgment-backdrop");
+    overlay.appendChild(backdrop);
+
+    const modal = document.createElement("div");
+    modal.classList.add("sacred-judgment-modal");
+
+    const title = document.createElement("h3");
+    title.textContent = "Luminarch Sacred Judgment";
+    modal.appendChild(title);
+
+    const subtitle = document.createElement("p");
+    subtitle.textContent = `Select up to ${maxSelect} "Luminarch" monsters to Special Summon from your Graveyard.`;
+    modal.appendChild(subtitle);
+
+    // Card grid with visual preview
+    const grid = document.createElement("div");
+    grid.classList.add("sacred-judgment-grid");
+
+    const selectedIndices = new Set();
+
+    candidates.forEach((card, idx) => {
+      const cardEl = document.createElement("div");
+      cardEl.classList.add("sacred-judgment-card");
+      cardEl.dataset.index = String(idx);
+
+      const imageDiv = document.createElement("div");
+      imageDiv.classList.add("sacred-judgment-card-image");
+      imageDiv.style.backgroundImage = `url('${card.image}')`;
+      cardEl.appendChild(imageDiv);
+
+      const infoDiv = document.createElement("div");
+      infoDiv.classList.add("sacred-judgment-card-info");
+
+      const nameDiv = document.createElement("div");
+      nameDiv.classList.add("sacred-judgment-card-name");
+      nameDiv.textContent = card.name;
+      infoDiv.appendChild(nameDiv);
+
+      const statsDiv = document.createElement("div");
+      statsDiv.classList.add("sacred-judgment-card-stats");
+      statsDiv.innerHTML = `<span>ATK ${card.atk || 0}</span><span>DEF ${
+        card.def || 0
+      }</span>`;
+      infoDiv.appendChild(statsDiv);
+
+      cardEl.appendChild(infoDiv);
+
+      // Checkbox (visual)
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.classList.add("sacred-judgment-card-checkbox");
+      checkbox.dataset.index = String(idx);
+      cardEl.appendChild(checkbox);
+
+      // Click handler
+      cardEl.addEventListener("click", (e) => {
+        if (e.target === checkbox) return; // Let checkbox handle itself
+        e.preventDefault();
+
+        if (selectedIndices.has(idx)) {
+          selectedIndices.delete(idx);
+          cardEl.classList.remove("selected");
+          checkbox.checked = false;
+        } else if (selectedIndices.size < maxSelect) {
+          selectedIndices.add(idx);
+          cardEl.classList.add("selected");
+          checkbox.checked = true;
+        }
+      });
+
+      // Checkbox change handler
+      checkbox.addEventListener("change", (e) => {
+        if (e.target.checked) {
+          if (selectedIndices.size < maxSelect) {
+            selectedIndices.add(idx);
+            cardEl.classList.add("selected");
+          } else {
+            e.target.checked = false;
+          }
+        } else {
+          selectedIndices.delete(idx);
+          cardEl.classList.remove("selected");
+        }
+      });
+
+      grid.appendChild(cardEl);
+    });
+
+    modal.appendChild(grid);
+
+    const info = document.createElement("div");
+    info.textContent = `You will choose Attack/Defense position for each monster individually. Gain 500 LP per summon.`;
+    modal.appendChild(info);
+
+    const actions = document.createElement("div");
+    actions.classList.add("sacred-judgment-actions");
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.textContent = "Cancel";
+    cancelBtn.classList.add("secondary");
+    const confirmBtn = document.createElement("button");
+    confirmBtn.textContent = "Summon";
+    confirmBtn.classList.add("primary");
+
+    const cleanup = () => {
+      overlay.remove();
+    };
+
+    confirmBtn.onclick = () => {
+      const chosen = Array.from(selectedIndices)
+        .map((i) => candidates[i])
+        .filter(Boolean);
+      cleanup();
+      onConfirm(chosen);
+    };
+
+    cancelBtn.onclick = () => {
+      cleanup();
+      onConfirm([]);
+    };
+
+    actions.appendChild(cancelBtn);
+    actions.appendChild(confirmBtn);
+    modal.appendChild(actions);
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
   }
 
   async applyConditionalSpecialSummonFromHand(action, ctx) {

@@ -1708,4 +1708,28 @@ export const cardDatabase = [
       },
     ],
   },
+  {
+    id: 65,
+    name: "Luminarch Sacred Judgment",
+    cardKind: "spell",
+    subtype: "normal",
+    archetype: "Luminarch",
+    description:
+      'If you control no monsters and your opponent controls 2 or more monsters: Pay 2000 LP; Special Summon "Luminarch" monsters from your GY, up to the number of monsters your opponent controls, then gain 500 LP for each monster Special Summoned. You can only activate 1 "Luminarch Sacred Judgment" per turn.',
+    image: "assets/Luminarch Sacred Judgment.png",
+    effects: [
+      {
+        id: "luminarch_sacred_judgment_effect",
+        timing: "on_play",
+        speed: 1,
+        oncePerTurn: true,
+        oncePerTurnName: "luminarch_sacred_judgment",
+        actions: [
+          {
+            type: "luminarch_sacred_judgment_revive",
+          },
+        ],
+      },
+    ],
+  },
 ];
