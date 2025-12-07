@@ -1631,6 +1631,7 @@ export default class Game {
     await this.emit("attack_declared", {
       attacker,
       target: target || null,
+      defender: target || null,
       attackerOwner,
       defenderOwner,
     });

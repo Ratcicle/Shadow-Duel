@@ -508,6 +508,13 @@ export default class EffectEngine {
             continue;
           }
 
+          if (effect.requireDefenderPosition === true) {
+            const defenderCard = payload.defender;
+            if (!defenderCard || defenderCard.position !== "defense") {
+              continue;
+            }
+          }
+
           const shouldPrompt =
             effect.speed === 2 && effect.promptOnAttackDeclared !== false;
           if (player.id === "player" && shouldPrompt) {
@@ -1485,6 +1492,14 @@ export default class EffectEngine {
             executed =
               (await this.applyConditionalSpecialSummonFromHand(action, ctx)) ||
               executed;
+            break;
+          case "shadow_heart_observer_summon":
+            executed =
+              (await this.applyShadowHeartObserverSummon(
+                action,
+                ctx,
+                targets
+              )) || executed;
             break;
           default:
             console.warn(`Unknown action type: ${action.type}`);
@@ -3317,5 +3332,94 @@ export default class EffectEngine {
     }
 
     return true;
+  }
+
+  async applyShadowHeartObserverSummon(action, ctx, targets) {
+    const observerCard = targets && targets[0];
+    if (!observerCard || !observerCard.level) {
+      console.log("No valid target for Shadow-Heart Observer.");
+      return false;
+    }
+
+    const targetLevel = observerCard.level;
+    const candidates = ctx.player.hand.filter(
+      (c) => c.cardKind === "monster" && c.level === targetLevel
+    );
+
+    if (candidates.length === 0) {
+      console.log(
+        `No monsters in hand with Level ${targetLevel} to Special Summon.`
+      );
+      return false;
+    }
+
+    if (candidates.length === 1) {
+      const card = candidates[0];
+      const handIndex = ctx.player.hand.indexOf(card);
+      if (handIndex === -1) return false;
+
+      ctx.player.hand.splice(handIndex, 1);
+      card.position = "attack";
+      card.isFacedown = false;
+      card.hasAttacked = false;
+      card.attacksUsedThisTurn = 0;
+      ctx.player.field.push(card);
+
+      if (this.game && typeof this.game.updateBoard === "function") {
+        this.game.updateBoard();
+      }
+
+      return true;
+    }
+
+    // Multiple candidates - show modal
+    return new Promise((resolve) => {
+      this.game.showCardSelectionModal(
+        candidates,
+        `Select 1 monster with Level ${targetLevel} to Special Summon`,
+        1,
+        (selected) => {
+          if (selected.length === 0) {
+            resolve(false);
+            return;
+          }
+
+          const card = selected[0];
+          const handIndex = ctx.player.hand.indexOf(card);
+          if (handIndex === -1) {
+            resolve(false);
+            return;
+          }
+
+          ctx.player.hand.splice(handIndex, 1);
+          card.position = "attack";
+          card.isFacedown = false;
+          card.hasAttacked = false;
+          card.attacksUsedThisTurn = 0;
+          ctx.player.field.push(card);
+
+          if (this.game && typeof this.game.updateBoard === "function") {
+            this.game.updateBoard();
+          }
+
+          resolve(true);
+        }
+      );
+    });
+  }
+
+  applyShadowHeartAbyssalEelDamage(action, ctx) {
+    if (action.type === "damage" && action.player === "opponent") {
+      const opponent = ctx.opponent;
+      opponent.takeDamage(action.amount);
+      console.log(`${opponent.name} took ${action.amount} damage.`);
+
+      if (this.game && typeof this.game.updateBoard === "function") {
+        this.game.updateBoard();
+      }
+
+      return true;
+    }
+    return false;
   }
 }

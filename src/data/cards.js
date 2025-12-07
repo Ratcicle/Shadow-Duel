@@ -23,14 +23,40 @@ export const cardDatabase = [
   },
   {
     id: 3,
-    name: "Mystic Eye",
+    name: "Shadow-Heart Observer",
     cardKind: "monster",
-    atk: 500,
-    def: 2000,
+    atk: 1000,
+    def: 1000,
     level: 3,
     type: "Fiend",
-    description: "It sees everything.",
-    image: "assets/mystic_eye.png",
+    archetype: "Shadow-Heart",
+    description:
+      "If this card is Normal Summoned: You can target 1 monster your opponent controls with Level 4 or lower; Special Summon 1 monster from your hand with the same Level as the target.",
+    image: "assets/Shadow-Heart Observer.png",
+    effects: [
+      {
+        id: "shadow_heart_observer_special_summon",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethod: "normal",
+        targets: [
+          {
+            id: "observer_target",
+            owner: "opponent",
+            zone: "field",
+            cardKind: "monster",
+            maxLevel: 4,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "shadow_heart_observer_summon",
+            targetRef: "observer_target",
+          },
+        ],
+      },
+    ],
   },
   {
     id: 4,
@@ -67,14 +93,65 @@ export const cardDatabase = [
   },
   {
     id: 7,
-    name: "Abyssal Eel",
+    name: "Shadow-Heart Abyssal Eel",
     cardKind: "monster",
-    atk: 1800,
-    def: 400,
-    level: 5,
+    atk: 1600,
+    def: 1700,
+    level: 4,
     type: "Sea Serpent",
-    description: "Strikes from the deep.",
+    archetype: "Shadow-Heart",
+    description:
+      'If this card is attacked while in Defense Position: inflict 600 damage to your opponent. You can send this card from the field to the GY; Special Summon 1 "Shadow-Heart Leviathan" from your hand, but it cannot attack this turn.',
     image: "assets/abyssal_eel.png",
+    effects: [
+      {
+        id: "shadow_heart_abyssal_eel_battle_damage",
+        timing: "on_event",
+        event: "attack_declared",
+        requireDefenderPosition: true,
+        requireSelfAsDefender: true,
+        actions: [
+          {
+            type: "damage",
+            player: "opponent",
+            amount: 600,
+          },
+        ],
+      },
+      {
+        id: "shadow_heart_abyssal_eel_summon",
+        timing: "ignition",
+        oncePerTurn: true,
+        oncePerTurnName: "shadow_heart_abyssal_eel_summon",
+        targets: [
+          {
+            id: "leviathan_target",
+            owner: "self",
+            zone: "hand",
+            cardKind: "monster",
+            cardName: "Shadow-Heart Leviathan",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "leviathan_target",
+            player: "self",
+            to: "field",
+            position: "attack",
+            isFacedown: false,
+            resetAttackFlags: true,
+          },
+          {
+            type: "move",
+            targetRef: "self",
+            player: "self",
+            to: "graveyard",
+          },
+        ],
+      },
+    ],
   },
   {
     id: 8,
