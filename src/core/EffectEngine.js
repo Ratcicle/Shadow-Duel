@@ -53,16 +53,17 @@ export default class EffectEngine {
 
   handleEvent(eventName, payload) {
     if (eventName === "after_summon") {
-      this.handleAfterSummonEvent(payload);
+      return this.handleAfterSummonEvent(payload);
     } else if (eventName === "battle_destroy") {
-      this.handleBattleDestroyEvent(payload);
+      return this.handleBattleDestroyEvent(payload);
     } else if (eventName === "card_to_grave") {
-      this.handleCardToGraveEvent(payload);
+      return this.handleCardToGraveEvent(payload);
     } else if (eventName === "attack_declared") {
-      this.handleAttackDeclaredEvent(payload);
+      return this.handleAttackDeclaredEvent(payload);
     } else if (eventName === "standby_phase") {
-      this.handleStandbyPhaseEvent(payload);
+      return this.handleStandbyPhaseEvent(payload);
     }
+    return undefined;
   }
 
   handleAfterSummonEvent(payload) {
@@ -269,7 +270,7 @@ export default class EffectEngine {
     }
   }
 
-  handleAttackDeclaredEvent(payload) {
+  async handleAttackDeclaredEvent(payload) {
     if (
       !payload ||
       !payload.attacker ||
@@ -324,10 +325,21 @@ export default class EffectEngine {
             continue;
           }
 
-          if (player.id === "player") {
-            const wantsToUse = window.confirm(
-              `Use ${card.name}'s effect to negate the attack?`
-            );
+          const shouldPrompt =
+            effect.speed === 2 && effect.promptOnAttackDeclared !== false;
+          if (player.id === "player" && shouldPrompt) {
+            let wantsToUse = true;
+            if (
+              this.game?.renderer?.showProtectorPrompt &&
+              card.name === "Luminarch Sanctum Protector"
+            ) {
+              wantsToUse = await this.game.renderer.showProtectorPrompt();
+            } else {
+              wantsToUse = window.confirm(
+                `Use ${card.name}'s effect to negate the attack?`
+              );
+            }
+
             if (!wantsToUse) continue;
           }
 

@@ -12,10 +12,11 @@
   --card-w: calc(var(--card-h) * 0.6923);
   --card-gap: 10px;
   --zone-pad: 12px;
-  --zone-width: calc(5 * var(--card-w) + 4 * var(--card-gap) + 2 * var(--zone-pad));
+  --zone-width: calc(
+    5 * var(--card-w) + 4 * var(--card-gap) + 2 * var(--zone-pad)
+  );
   --deck-card-ratio: 3 / 4;
 }
-
 
 * {
   box-sizing: border-box;
@@ -160,13 +161,8 @@ body {
   position: relative;
 }
 
-
 #bot-area,
-#bot-area 
-
-
-
-.lp-counter {
+#bot-area .lp-counter {
   color: var(--accent-color);
 }
 
@@ -184,12 +180,11 @@ body {
   width: 100%;
 }
 
- .bot-zones {
+.bot-zones {
   grid-template-areas:
     "hand gy"
     "board deck";
 }
-
 
 .board-zones {
   grid-area: board;
@@ -694,6 +689,86 @@ body {
   opacity: 0.9;
 }
 
+.protector-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.protector-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  pointer-events: all;
+}
+
+.protector-content {
+  position: relative;
+  pointer-events: all;
+  background: linear-gradient(
+    145deg,
+    rgba(27, 20, 36, 0.98),
+    rgba(12, 9, 20, 0.95)
+  );
+  border: 2px solid #ffd369;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  border-radius: 14px;
+  padding: 22px 24px;
+  min-width: 320px;
+  color: #f8f6ff;
+  text-align: center;
+}
+
+.protector-content header {
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+  color: #ffd369;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+}
+
+.protector-content p {
+  font-size: 0.95rem;
+  margin-bottom: 18px;
+  color: #dcd6f7;
+}
+
+.protector-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.protector-actions button {
+  flex: 1;
+  padding: 10px 0;
+  border-radius: 8px;
+  border: none;
+  font-weight: 600;
+  text-transform: uppercase;
+  cursor: pointer;
+  letter-spacing: 0.05em;
+}
+
+.protector-actions button.primary {
+  background: linear-gradient(135deg, #ffd369, #ffb347);
+  color: #1b132a;
+}
+
+.protector-actions button.secondary {
+  background: transparent;
+  border: 1px solid rgba(255, 211, 105, 0.5);
+  color: #ffd369;
+}
+
+.protector-actions button:hover {
+  opacity: 0.92;
+}
+
 .special-summon-position-modal {
   position: fixed;
   inset: 0;
@@ -707,7 +782,11 @@ body {
 .special-position-backdrop {
   position: absolute;
   inset: 0;
-  background: linear-gradient(135deg, rgba(0, 0, 0, 0.75), rgba(20, 12, 32, 0.85));
+  background: linear-gradient(
+    135deg,
+    rgba(0, 0, 0, 0.75),
+    rgba(20, 12, 32, 0.85)
+  );
   backdrop-filter: blur(2px);
   pointer-events: all;
 }
@@ -754,7 +833,8 @@ body {
   border-radius: 10px;
   color: #f5f2ff;
   cursor: pointer;
-  transition: transform 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+  transition: transform 0.12s ease, border-color 0.12s ease,
+    box-shadow 0.12s ease;
 }
 
 .special-position-content .position-option:hover {
@@ -1104,7 +1184,6 @@ body {
   gap: 12px;
 }
 
-
 /* HUD-style placement for Life Points */
 #bot-area .player-info {
   position: absolute;
@@ -1117,7 +1196,6 @@ body {
   bottom: 8px;
   left: 16px;
 }
-
 
 @media (max-height: 900px) {
   #game-container {

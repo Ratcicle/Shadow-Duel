@@ -47,8 +47,9 @@ export default class Game {
       this.effectEngine &&
       typeof this.effectEngine.handleEvent === "function"
     ) {
-      this.effectEngine.handleEvent(eventName, payload);
+      return this.effectEngine.handleEvent(eventName, payload);
     }
+    return undefined;
   }
 
   start(deckList = null) {
@@ -1611,7 +1612,7 @@ export default class Game {
     const attackerOwner = attacker.owner === "player" ? this.player : this.bot;
     const defenderOwner = attacker.owner === "player" ? this.bot : this.player;
 
-    this.emit("attack_declared", {
+    await this.emit("attack_declared", {
       attacker,
       target: target || null,
       attackerOwner,

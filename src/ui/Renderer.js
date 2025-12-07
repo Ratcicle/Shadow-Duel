@@ -254,6 +254,55 @@ export default class Renderer {
     };
   }
 
+  showProtectorPrompt() {
+    if (typeof document === "undefined") {
+      return Promise.resolve(true);
+    }
+
+    const existing = document.querySelector(".protector-modal");
+    if (existing) existing.remove();
+
+    const modal = document.createElement("div");
+    modal.className = "protector-modal";
+    modal.innerHTML = `
+      <div class="protector-backdrop"></div>
+      <div class="protector-content">
+        <header>
+          <span>Luminarch Sanctum Protector</span>
+        </header>
+        <p>Negar o ataque do oponente?</p>
+        <div class="protector-actions">
+          <button class="primary" data-choice="yes">Sim</button>
+          <button class="secondary" data-choice="no">Não</button>
+        </div>
+      </div>
+    `;
+
+    const promise = new Promise((resolve) => {
+      const cleanup = (result) => {
+        modal.remove();
+        resolve(result);
+      };
+
+      modal.addEventListener("click", (e) => {
+        if (e.target.classList.contains("protector-backdrop")) {
+          cleanup(false);
+        }
+      });
+
+      modal.querySelectorAll("button").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const choice = btn.dataset.choice;
+          cleanup(choice === "yes");
+        });
+      });
+    });
+
+    document.body.appendChild(modal);
+    return promise;
+  }
+
   showSpellChoiceModal(cardIndex, callback) {
     const existingModal = document.querySelector(".spell-choice-modal");
     if (existingModal) {
@@ -480,11 +529,8 @@ export default class Renderer {
     modal.className = "special-summon-position-modal";
 
     const imageUrl = card?.image || "";
-    const safeName =
-      (card?.name && card.name.trim()) || "este monstro";
-    const previewStyle = imageUrl
-      ? `background-image: url('${imageUrl}')`
-      : "";
+    const safeName = (card?.name && card.name.trim()) || "este monstro";
+    const previewStyle = imageUrl ? `background-image: url('${imageUrl}')` : "";
 
     modal.innerHTML = `
       <div class="special-position-backdrop"></div>
