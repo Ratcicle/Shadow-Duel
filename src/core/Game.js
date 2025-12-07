@@ -1917,6 +1917,22 @@ export default class Game {
     ) {
       const host = card.equippedTo;
 
+      // Verificar se é "The Shadow Heart" - se sair do campo, destruir o monstro equipado
+      if (card.name === "The Shadow Heart" && host) {
+        this.renderer.log(
+          `${host.name} is destroyed as ${card.name} left the field.`
+        );
+        const hostOwner = host.owner === "player" ? this.player : this.bot;
+        const hostFieldIndex = hostOwner.field.indexOf(host);
+        if (hostFieldIndex > -1) {
+          hostOwner.field.splice(hostFieldIndex, 1);
+          hostOwner.graveyard.push(host);
+        }
+        card.equippedTo = null;
+        this.updateBoard();
+        return;
+      }
+
       if (host && Array.isArray(host.equips)) {
         const idxEquip = host.equips.indexOf(card);
         if (idxEquip > -1) {
@@ -2048,6 +2064,10 @@ export default class Game {
       const ownerPlayer = card.owner === "player" ? this.player : this.bot;
       const otherPlayer = ownerPlayer === this.player ? this.bot : this.player;
 
+      console.log(
+        `[moveCard] Emitting card_to_grave event for ${card.name} (fromZone: ${fromZone})`
+      );
+
       this.effectEngine.handleEvent("card_to_grave", {
         card,
         fromZone: fromZone || options.fromZone || null,
@@ -2146,5 +2166,82 @@ export default class Game {
       result,
       options.activationZone
     );
+  }
+
+  showShadowHeartCathedralModal(validMonsters, maxAtk, counterCount, callback) {
+    const overlay = document.createElement("div");
+    overlay.classList.add("modal", "cathedral-overlay");
+
+    const modal = document.createElement("div");
+    modal.classList.add("modal-content", "cathedral-modal");
+
+    const title = document.createElement("h3");
+    title.textContent = "Shadow-Heart Cathedral";
+    title.classList.add("modal-title");
+
+    const desc = document.createElement("p");
+    desc.innerHTML = `Choose a <strong>Shadow-Heart</strong> monster from your Deck to Special Summon.<br>
+    <span class="counter-info">${counterCount} Judgment Counter(s) - Max ATK: ${maxAtk}</span>`;
+    desc.classList.add("modal-text");
+
+    const cardList = document.createElement("div");
+    cardList.classList.add("cathedral-card-list");
+
+    validMonsters.forEach((monster) => {
+      const cardItem = document.createElement("div");
+      cardItem.classList.add("cathedral-card-item");
+
+      const cardImg = document.createElement("img");
+      cardImg.src = monster.image || "assets/card-back.png";
+      cardImg.alt = monster.name;
+      cardImg.classList.add("cathedral-card-img");
+
+      const cardInfo = document.createElement("div");
+      cardInfo.classList.add("cathedral-card-info");
+
+      const cardName = document.createElement("div");
+      cardName.textContent = monster.name;
+      cardName.classList.add("cathedral-card-name");
+
+      const cardStats = document.createElement("div");
+      cardStats.textContent = `ATK ${monster.atk} / DEF ${monster.def} / Level ${monster.level}`;
+      cardStats.classList.add("cathedral-card-stats");
+
+      cardInfo.appendChild(cardName);
+      cardInfo.appendChild(cardStats);
+      cardItem.appendChild(cardImg);
+      cardItem.appendChild(cardInfo);
+
+      cardItem.onclick = () => {
+        cleanup();
+        callback(monster);
+      };
+
+      cardList.appendChild(cardItem);
+    });
+
+    const actions = document.createElement("div");
+    actions.classList.add("modal-actions");
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.textContent = "Cancel";
+    cancelBtn.classList.add("secondary");
+
+    const cleanup = () => {
+      overlay.remove();
+    };
+
+    cancelBtn.onclick = () => {
+      cleanup();
+      callback(null);
+    };
+
+    actions.appendChild(cancelBtn);
+    modal.appendChild(title);
+    modal.appendChild(desc);
+    modal.appendChild(cardList);
+    modal.appendChild(actions);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
   }
 }

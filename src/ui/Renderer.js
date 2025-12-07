@@ -183,8 +183,7 @@ export default class Renderer {
 
     if (options.canSanctumSpecialFromAegis) {
       const specialBtn = document.createElement("button");
-      specialBtn.textContent =
-        "Special Summon (send Luminarch Aegisbearer to GY)";
+      specialBtn.textContent = "Special Summon";
       content.appendChild(specialBtn);
 
       specialBtn.onclick = (e) => {
@@ -377,12 +376,20 @@ export default class Renderer {
 
     const modal = document.createElement("div");
     modal.className = "spell-choice-modal";
-    modal.innerHTML = `
-      <div class="spell-choice-content">
-        <button data-choice="activate">Activate</button>
-        <button data-choice="set">Set</button>
-      </div>
-    `;
+    const content = document.createElement("div");
+    content.className = "spell-choice-content";
+
+    const activateBtn = document.createElement("button");
+    activateBtn.dataset.choice = "activate";
+    activateBtn.textContent = "Activate";
+
+    const setBtn = document.createElement("button");
+    setBtn.dataset.choice = "set";
+    setBtn.textContent = "Set";
+
+    content.appendChild(activateBtn);
+    content.appendChild(setBtn);
+    modal.appendChild(content);
 
     // posicionamento semelhante ao modal de invocacao
     modal.style.position = "fixed";
@@ -510,25 +517,30 @@ export default class Renderer {
 
     const modal = document.createElement("div");
     modal.className = "position-choice-modal";
-    modal.innerHTML = `
-      <div class="position-choice-content">
-        ${
-          options.canFlip
-            ? `<button data-choice="flip">Flip Summon</button>`
-            : ""
-        }
-        ${
-          options.canChangePosition && card?.position !== "attack"
-            ? `<button data-choice="to_attack">To Attack</button>`
-            : ""
-        }
-        ${
-          options.canChangePosition && card?.position !== "defense"
-            ? `<button data-choice="to_defense">To Defense</button>`
-            : ""
-        }
-      </div>
-    `;
+    const content = document.createElement("div");
+    content.className = "position-choice-content";
+
+    if (options.canFlip) {
+      const flipBtn = document.createElement("button");
+      flipBtn.dataset.choice = "flip";
+      flipBtn.textContent = "Flip Summon";
+      content.appendChild(flipBtn);
+    }
+
+    if (options.canChangePosition && card?.position !== "attack") {
+      const attackBtn = document.createElement("button");
+      attackBtn.dataset.choice = "to_attack";
+      attackBtn.textContent = "To Attack";
+      content.appendChild(attackBtn);
+    }
+
+    if (options.canChangePosition && card?.position !== "defense") {
+      const defenseBtn = document.createElement("button");
+      defenseBtn.dataset.choice = "to_defense";
+      defenseBtn.textContent = "To Defense";
+      content.appendChild(defenseBtn);
+    }
+    modal.appendChild(content);
 
     modal.style.position = "fixed";
     modal.style.zIndex = "200";
@@ -880,13 +892,35 @@ export default class Renderer {
         btn.className = "target-btn";
         btn.dataset.targetId = opt.id;
         btn.dataset.idx = cand.idx;
-        btn.innerHTML = `
-          <div class="target-name">${cand.name}</div>
-          <div class="target-meta">${cand.owner} ${cand.position || ""}</div>
-          <div class="target-stats">ATK ${cand.atk ?? "-"} / DEF ${
+
+        // Create card visual
+        const cardImage = document.createElement("img");
+        cardImage.src = cand.cardRef?.image || "assets/card-back.png";
+        cardImage.alt = cand.name;
+        cardImage.style.width = "100px";
+        cardImage.style.height = "auto";
+        cardImage.style.borderRadius = "4px";
+        cardImage.style.marginBottom = "8px";
+        cardImage.style.boxShadow = "0 2px 8px rgba(0, 0, 0, 0.5)";
+
+        const nameDiv = document.createElement("div");
+        nameDiv.className = "target-name";
+        nameDiv.textContent = cand.name;
+
+        const metaDiv = document.createElement("div");
+        metaDiv.className = "target-meta";
+        metaDiv.textContent = `${cand.owner} ${cand.position || ""}`.trim();
+
+        const statsDiv = document.createElement("div");
+        statsDiv.className = "target-stats";
+        statsDiv.textContent = `ATK ${cand.atk ?? "-"} / DEF ${
           cand.def ?? "-"
-        }</div>
-        `;
+        }`;
+
+        btn.appendChild(cardImage);
+        btn.appendChild(nameDiv);
+        btn.appendChild(metaDiv);
+        btn.appendChild(statsDiv);
 
         btn.addEventListener("click", () => {
           const arr = selectionState[opt.id] || [];

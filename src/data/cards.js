@@ -102,7 +102,7 @@ export const cardDatabase = [
     archetype: "Shadow-Heart",
     description:
       'If this card is attacked while in Defense Position: inflict 600 damage to your opponent. You can send this card from the field to the GY; Special Summon 1 "Shadow-Heart Leviathan" from your hand, but it cannot attack this turn.',
-    image: "assets/abyssal_eel.png",
+    image: "assets/Shadow-Heart Abyssal Eel.png",
     effects: [
       {
         id: "shadow_heart_abyssal_eel_battle_damage",
@@ -188,14 +188,43 @@ export const cardDatabase = [
   },
   {
     id: 11,
-    name: "Cursed Specter",
+    name: "Shadow-Heart Specter",
     cardKind: "monster",
-    atk: 1400,
-    def: 1400,
-    level: 3,
+    atk: 800,
+    def: 800,
+    level: 2,
     type: "Spirit",
-    description: "A floating ghostly figure with chains.",
-    image: "assets/phantom.png",
+    archetype: "Shadow-Heart",
+    description:
+      'If this card is sent to the Graveyard: You can target 1 "Shadow-Heart" monster in your Graveyard, except "Shadow-Heart Specter"; add it to your hand.',
+    image: "assets/Shadow-Heart Specter.png",
+    effects: [
+      {
+        id: "shadow_heart_specter_recycle",
+        timing: "on_event",
+        event: "card_to_grave",
+        fromZone: "any",
+        targets: [
+          {
+            id: "specter_recycle_target",
+            owner: "self",
+            zone: "graveyard",
+            cardKind: "monster",
+            archetype: "Shadow-Heart",
+            excludeCardName: "Shadow-Heart Specter",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "specter_recycle_target",
+            player: "self",
+            to: "hand",
+          },
+        ],
+      },
+    ],
   },
   {
     id: 12,
@@ -237,28 +266,42 @@ export const cardDatabase = [
   },
   {
     id: 15,
-    name: "Shadow Purge",
+    name: "Shadow-Heart Purge",
     cardKind: "spell",
     subtype: "normal",
-    description: "Destroy 1 opponent's monster (highest ATK).",
-    image: "assets/Shadow Purge.png",
+    archetype: "Shadow-Heart",
+    description:
+      "Discard 1 card; then target 1 monster your opponent controls; destroy that target.",
+    image: "assets/Shadow-Heart Purge.png",
     effects: [
       {
-        id: "shadow_purge_destroy",
+        id: "shadow_heart_purge_destroy",
         timing: "on_play",
         speed: 1,
         targets: [
           {
-            id: "target_monster",
+            id: "purge_discard",
+            owner: "self",
+            zone: "hand",
+            count: { min: 1, max: 1 },
+          },
+          {
+            id: "purge_target_monster",
             owner: "opponent",
             zone: "field",
             cardKind: "monster",
             count: { min: 1, max: 1 },
-            strategy: "highest_atk",
-            autoSelect: true,
           },
         ],
-        actions: [{ type: "destroy", targetRef: "target_monster" }],
+        actions: [
+          {
+            type: "move",
+            targetRef: "purge_discard",
+            player: "self",
+            to: "graveyard",
+          },
+          { type: "destroy", targetRef: "purge_target_monster" },
+        ],
       },
     ],
   },
@@ -643,6 +686,7 @@ export const cardDatabase = [
         id: "shadow_heart_gecko_draw",
         timing: "on_event",
         event: "battle_destroy",
+        requireDestroyedIsOpponent: true,
         actions: [
           {
             type: "draw",
@@ -1057,6 +1101,167 @@ export const cardDatabase = [
             type: "shadow_heart_death_wyrm_special_summon",
           },
         ],
+      },
+    ],
+  },
+  {
+    id: 66,
+    name: "Shadow-Heart Leviathan",
+    cardKind: "monster",
+    atk: 2200,
+    def: 1800,
+    level: 6,
+    type: "Sea Serpent",
+    archetype: "Shadow-Heart",
+    description:
+      "If this card destroys a monster by battle: inflict 500 damage to your opponent. If this card is destroyed by battle: inflict 800 damage to your opponent.",
+    image: "assets/Shadow-Heart Leviathan.png",
+    effects: [
+      {
+        id: "shadow_heart_leviathan_burn_attacker",
+        timing: "on_event",
+        event: "battle_destroy",
+        requireSelfAsAttacker: true,
+        actions: [
+          {
+            type: "damage",
+            player: "opponent",
+            amount: 500,
+          },
+        ],
+      },
+      {
+        id: "shadow_heart_leviathan_burn_destroyed",
+        timing: "on_event",
+        event: "battle_destroy",
+        requireSelfAsDestroyed: true,
+        actions: [
+          {
+            type: "damage",
+            player: "opponent",
+            amount: 800,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 67,
+    name: "Shadow-Heart Void Mage",
+    cardKind: "monster",
+    atk: 1500,
+    def: 1500,
+    level: 4,
+    type: "Spellcaster",
+    archetype: "Shadow-Heart",
+    description:
+      'If this card is Normal Summoned: You can add 1 "Shadow-Heart" Spell/Trap from your Deck to your hand. If your opponent loses LP while this card is on the field: draw 1 card.',
+    image: "assets/Shadow-Heart Void Mage.png",
+    effects: [
+      {
+        id: "shadow_heart_void_mage_search",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethod: "normal",
+        actions: [
+          {
+            type: "search_any",
+            player: "self",
+            archetype: "Shadow-Heart",
+            cardKind: ["spell", "trap"],
+          },
+        ],
+      },
+      {
+        id: "shadow_heart_void_mage_draw",
+        timing: "on_event",
+        event: "opponent_damage",
+        actions: [
+          {
+            type: "draw",
+            player: "self",
+            amount: 1,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 68,
+    name: "Shadow-Heart Cathedral",
+    cardKind: "spell",
+    subtype: "continuous",
+    archetype: "Shadow-Heart",
+    description:
+      'Each time your opponent takes damage: place 1 Judgment Counter on this card for each 500 damage they took. During your Main Phase: You can send this face-up card to the GY; Special Summon 1 "Shadow-Heart" monster from your Deck with ATK less than or equal to 500 x the number of Judgment Counters on this card. You can only use this effect of "Shadow-Heart Cathedral" once per turn.',
+    image: "assets/Shadow-Heart Cathedral.png",
+    effects: [
+      {
+        id: "shadow_heart_cathedral_add_counter",
+        timing: "on_event",
+        event: "opponent_damage",
+        actions: [
+          {
+            type: "add_counter",
+            counterType: "judgment_marker",
+            damagePerCounter: 500,
+            targetRef: "self",
+          },
+        ],
+      },
+      {
+        id: "shadow_heart_cathedral_summon_effect",
+        timing: "ignition",
+        oncePerTurn: true,
+        oncePerTurnName: "shadow_heart_cathedral_summon",
+        actions: [
+          {
+            type: "shadow_heart_cathedral_summon",
+            counterType: "judgment_marker",
+            counterMultiplier: 500,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 69,
+    name: "The Shadow Heart",
+    cardKind: "spell",
+    subtype: "equip",
+    archetype: "Shadow-Heart",
+    description:
+      'You must control no monsters to activate this effect. Target 1 "Shadow-Heart" monster in your Graveyard; Special Summon it and equip this card to it. If this card leaves the field, destroy the equipped monster.',
+    image: "assets/The Shadow Heart.png",
+    effects: [
+      {
+        id: "the_shadow_heart_summon_and_equip",
+        timing: "ignition",
+        oncePerTurn: true,
+        oncePerTurnName: "the_shadow_heart_summon_and_equip",
+        requireEmptyField: true,
+        targets: [
+          {
+            id: "shadow_heart_gy_target",
+            owner: "self",
+            zone: "graveyard",
+            cardKind: "monster",
+            archetype: "Shadow-Heart",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "the_shadow_heart_special_summon_and_equip",
+            targetRef: "shadow_heart_gy_target",
+          },
+        ],
+      },
+      {
+        id: "the_shadow_heart_destroy_on_leave",
+        timing: "passive",
+        description:
+          "If this card leaves the field, destroy the equipped monster.",
       },
     ],
   },

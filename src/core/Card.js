@@ -60,9 +60,35 @@ export default class Card {
     this.canMakeSecondAttackThisTurn = false;
     this.secondAttackUsedThisTurn = false;
 
+    // Counter system
+    this.counters = new Map(); // counterType -> amount
+
     this.description = data.description;
     this.effects = data.effects || [];
     this.image = data.image;
     this.owner = owner;
+  }
+
+  addCounter(counterType, amount = 1) {
+    const current = this.counters.get(counterType) || 0;
+    this.counters.set(counterType, current + amount);
+  }
+
+  removeCounter(counterType, amount = 1) {
+    const current = this.counters.get(counterType) || 0;
+    const newAmount = Math.max(0, current - amount);
+    if (newAmount === 0) {
+      this.counters.delete(counterType);
+    } else {
+      this.counters.set(counterType, newAmount);
+    }
+  }
+
+  getCounter(counterType) {
+    return this.counters.get(counterType) || 0;
+  }
+
+  hasCounter(counterType) {
+    return this.counters.has(counterType) && this.counters.get(counterType) > 0;
   }
 }

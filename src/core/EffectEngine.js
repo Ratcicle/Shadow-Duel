@@ -402,6 +402,11 @@ export default class EffectEngine {
 
           if (effect.requireSelfAsAttacker && ctx.attacker !== card) continue;
           if (effect.requireSelfAsDestroyed && ctx.destroyed !== card) continue;
+          if (
+            effect.requireDestroyedIsOpponent &&
+            ctx.destroyedOwner !== side.other?.id
+          )
+            continue;
           if (effect.requireEquippedAsAttacker) {
             if (!card.equippedTo) continue;
             if (ctx.attacker !== card.equippedTo) continue;
@@ -594,6 +599,13 @@ export default class EffectEngine {
     if (!card || !player) return;
     if (!card.effects || !Array.isArray(card.effects)) return;
 
+    console.log(
+      `[handleCardToGraveEvent] ${card.name} entered graveyard. card.owner="${card.owner}", ctx.player.id="${player.id}", ctx.opponent.id="${opponent.id}"`
+    );
+    console.log(
+      `[handleCardToGraveEvent] ${card.name} entered graveyard from ${fromZone}. Card has ${card.effects.length} effects.`
+    );
+
     const ctx = {
       source: card,
       player,
@@ -603,24 +615,68 @@ export default class EffectEngine {
     };
 
     for (const effect of card.effects) {
-      if (!effect || effect.timing !== "on_event") continue;
-      if (effect.event !== "card_to_grave") continue;
-
-      const optCheck = this.checkOncePerTurn(card, player, effect);
-      if (!optCheck.ok) {
-        console.log(optCheck.reason);
+      if (!effect || effect.timing !== "on_event") {
+        console.log(`[handleCardToGraveEvent] Skipping effect: not on_event`);
+        continue;
+      }
+      if (effect.event !== "card_to_grave") {
+        console.log(
+          `[handleCardToGraveEvent] Skipping effect: event is ${effect.event}, not card_to_grave`
+        );
         continue;
       }
 
-      if (effect.fromZone && effect.fromZone !== fromZone) continue;
+      console.log(
+        `[handleCardToGraveEvent] Found card_to_grave effect: ${effect.id}`
+      );
+
+      const optCheck = this.checkOncePerTurn(card, player, effect);
+      if (!optCheck.ok) {
+        console.log(
+          `[handleCardToGraveEvent] Once per turn check failed: ${optCheck.reason}`
+        );
+        continue;
+      }
+
+      console.log(
+        `[handleCardToGraveEvent] fromZone check: effect.fromZone="${effect.fromZone}", actual fromZone="${fromZone}"`
+      );
+
+      if (
+        effect.fromZone &&
+        effect.fromZone !== "any" &&
+        effect.fromZone !== fromZone
+      ) {
+        console.log(
+          `[handleCardToGraveEvent] Skipping: fromZone mismatch (${effect.fromZone} !== ${fromZone})`
+        );
+        continue;
+      }
+
+      console.log(
+        `[card_to_grave] About to resolve targets for ${
+          card.name
+        }. Targets definition: ${JSON.stringify(effect.targets)}`
+      );
 
       const targetResult = this.resolveTargets(effect.targets || [], ctx, null);
+
+      console.log(
+        `[card_to_grave] ${card.name} effect "${effect.id}" - needsSelection: ${
+          targetResult.needsSelection
+        }, ok: ${targetResult.ok}, targetResult: ${JSON.stringify(
+          targetResult
+        )}`
+      );
 
       if (targetResult.needsSelection) {
         if (
           this.game &&
           typeof this.game.startTriggeredTargetSelection === "function"
         ) {
+          console.log(
+            `[card_to_grave] Starting triggered selection for ${card.name}`
+          );
           this.game.startTriggeredTargetSelection(
             card,
             effect,
@@ -1017,6 +1073,14 @@ export default class EffectEngine {
       return { success: false, reason: "No ignition effect defined." };
     }
 
+    // Check requireEmptyField condition
+    if (effect.requireEmptyField && player.field.length > 0) {
+      return {
+        success: false,
+        reason: "You must control no monsters to activate this effect.",
+      };
+    }
+
     const ctx = {
       source: card,
       player,
@@ -1180,6 +1244,10 @@ export default class EffectEngine {
     const zoneList =
       Array.isArray(def.zones) && def.zones.length > 0 ? def.zones : [zoneName];
 
+    console.log(
+      `[selectCandidates] Starting search for target "${def.id}": owner="${def.owner}", zone="${zoneName}", archetype="${def.archetype}", excludeCardName="${def.excludeCardName}"`
+    );
+
     const owners = [];
     if (def.owner === "opponent") {
       owners.push(ctx.opponent);
@@ -1190,45 +1258,135 @@ export default class EffectEngine {
     }
 
     let candidates = [];
+    console.log(
+      `[selectCandidates] Using ${owners.length} owners: ${owners
+        .map((o) => o.id)
+        .join(", ")}`
+    );
     for (const owner of owners) {
       for (const zoneKey of zoneList) {
         const zone = this.getZone(owner, zoneKey) || [];
+        console.log(
+          `[selectCandidates] Checking zone "${zoneKey}" for owner ${
+            owner.id
+          }: ${zone.length} cards ${
+            zone.length > 0 ? `(${zone.map((c) => c.name).join(", ")})` : ""
+          }`
+        );
         for (const card of zone) {
+          console.log(
+            `[selectCandidates] Evaluating card: ${card.name} (archetype: ${card.archetype}, owner: ${owner.id})`
+          );
           if (
             zoneKey === "hand" &&
             ctx.activationZone === "hand" &&
             card === ctx.source
           ) {
+            console.log(
+              `[selectCandidates] Rejecting: card is source in hand zone`
+            );
             continue;
           }
-          if (def.cardKind && card.cardKind !== def.cardKind) continue;
-          if (def.requireFaceup && card.isFacedown) continue;
+          if (def.cardKind && card.cardKind !== def.cardKind) {
+            console.log(
+              `[selectCandidates] Rejecting: cardKind mismatch (${card.cardKind} !== ${def.cardKind})`
+            );
+            continue;
+          }
+          if (def.requireFaceup && card.isFacedown) {
+            console.log(`[selectCandidates] Rejecting: card is facedown`);
+            continue;
+          }
           if (
             def.position &&
             def.position !== "any" &&
             card.position !== def.position
           ) {
+            console.log(
+              `[selectCandidates] Rejecting: position mismatch (${card.position} !== ${def.position})`
+            );
             continue;
           }
           const cardLevel = card.level || 0;
-          if (def.level !== undefined && cardLevel !== def.level) continue;
-          if (def.minLevel !== undefined && cardLevel < def.minLevel) continue;
-          if (def.maxLevel !== undefined && cardLevel > def.maxLevel) continue;
+          if (def.level !== undefined && cardLevel !== def.level) {
+            console.log(
+              `[selectCandidates] Rejecting: level mismatch (${cardLevel} !== ${def.level})`
+            );
+            continue;
+          }
+          if (def.minLevel !== undefined && cardLevel < def.minLevel) {
+            console.log(
+              `[selectCandidates] Rejecting: level too low (${cardLevel} < ${def.minLevel})`
+            );
+            continue;
+          }
+          if (def.maxLevel !== undefined && cardLevel > def.maxLevel) {
+            console.log(
+              `[selectCandidates] Rejecting: level too high (${cardLevel} > ${def.maxLevel})`
+            );
+            continue;
+          }
           const cardAtk = card.atk || 0;
-          if (def.minAtk !== undefined && cardAtk < def.minAtk) continue;
-          if (def.maxAtk !== undefined && cardAtk > def.maxAtk) continue;
+          if (def.minAtk !== undefined && cardAtk < def.minAtk) {
+            console.log(
+              `[selectCandidates] Rejecting: ATK too low (${cardAtk} < ${def.minAtk})`
+            );
+            continue;
+          }
+          if (def.maxAtk !== undefined && cardAtk > def.maxAtk) {
+            console.log(
+              `[selectCandidates] Rejecting: ATK too high (${cardAtk} > ${def.maxAtk})`
+            );
+            continue;
+          }
+
+          // Counter-based ATK filter
+          if (def.maxAtkByCounters && ctx.source) {
+            const counterType = def.counterType || "judgment_marker";
+            const multiplier = def.counterMultiplier || 500;
+            const counterCount = ctx.source.getCounter
+              ? ctx.source.getCounter(counterType)
+              : 0;
+            const maxAllowedAtk = counterCount * multiplier;
+            if (cardAtk > maxAllowedAtk) {
+              console.log(
+                `[selectCandidates] Rejecting: counter-based ATK too high`
+              );
+              continue;
+            }
+          }
+
           if (def.archetype) {
             const cardArchetypes = card.archetypes
               ? card.archetypes
               : card.archetype
               ? [card.archetype]
               : [];
-            if (!cardArchetypes.includes(def.archetype)) continue;
+            if (!cardArchetypes.includes(def.archetype)) {
+              console.log(
+                `[selectCandidates] Rejecting: archetype mismatch (${card.archetype} doesn't include ${def.archetype})`
+              );
+              continue;
+            }
           }
+
+          // Exclude by card name
+          if (def.excludeCardName && card.name === def.excludeCardName) {
+            console.log(
+              `[selectCandidates] Excluding ${card.name} (matches excludeCardName)`
+            );
+            continue;
+          }
+
+          console.log(`[selectCandidates] ACCEPTED: ${card.name}`);
           candidates.push(card);
         }
       }
     }
+
+    console.log(
+      `[selectCandidates] Found ${candidates.length} candidates for target "${def.id}" (archetype: ${def.archetype}, zone: ${zoneName}, exclude: ${def.excludeCardName})`
+    );
 
     if (def.strategy === "highest_atk") {
       candidates = [...candidates].sort((a, b) => (b.atk || 0) - (a.atk || 0));
@@ -1501,6 +1659,22 @@ export default class EffectEngine {
                 targets
               )) || executed;
             break;
+          case "add_counter":
+            executed = this.applyAddCounter(action, ctx, targets) || executed;
+            break;
+          case "shadow_heart_cathedral_summon":
+            executed =
+              (await this.applyShadowHeartCathedralSummon(action, ctx)) ||
+              executed;
+            break;
+          case "the_shadow_heart_special_summon_and_equip":
+            executed =
+              (await this.applyTheShadowHeartSummonAndEquip(
+                action,
+                ctx,
+                targets
+              )) || executed;
+            break;
           default:
             console.warn(`Unknown action type: ${action.type}`);
         }
@@ -1564,6 +1738,55 @@ export default class EffectEngine {
     const targetPlayer = action.player === "self" ? ctx.player : ctx.opponent;
     const amount = action.amount ?? 0;
     targetPlayer.takeDamage(amount);
+
+    // Trigger effects that care about opponent losing LP
+    if (amount > 0 && this.game) {
+      const damaged =
+        targetPlayer.id === "player" ? this.game.player : this.game.bot;
+      const other = damaged.id === "player" ? this.game.bot : this.game.player;
+
+      // Check field cards (including spellTrap zone for continuous spells)
+      const fieldCards = [
+        ...(other.field || []),
+        ...(other.spellTrap || []).filter(
+          (c) => c && c.subtype === "continuous"
+        ),
+      ].filter(Boolean);
+
+      for (const card of fieldCards) {
+        if (!card?.effects) continue;
+
+        for (const effect of card.effects) {
+          if (
+            effect.timing !== "on_event" ||
+            effect.event !== "opponent_damage"
+          )
+            continue;
+
+          const optCheck = this.checkOncePerTurn(card, other, effect);
+          if (!optCheck.ok) {
+            console.log(optCheck.reason);
+            continue;
+          }
+
+          const ctx2 = {
+            source: card,
+            player: other,
+            opponent: damaged,
+            damageAmount: amount, // Pass damage amount for counter calculation
+          };
+
+          // Apply the actual effect actions instead of hardcoding draw
+          this.applyActions(effect.actions || [], ctx2, {});
+          this.registerOncePerTurnUsage(card, other, effect);
+
+          if (this.game && typeof this.game.updateBoard === "function") {
+            this.game.updateBoard();
+          }
+        }
+      }
+    }
+
     return amount !== 0;
   }
 
@@ -1875,9 +2098,11 @@ export default class EffectEngine {
     }
 
     if (action.cardKind) {
-      candidates = candidates.filter(
-        (card) => card.cardKind === action.cardKind
-      );
+      const kinds = Array.isArray(action.cardKind)
+        ? action.cardKind
+        : [action.cardKind];
+
+      candidates = candidates.filter((card) => kinds.includes(card.cardKind));
 
       if (candidates.length === 0) {
         console.log(`No cards in deck matching card kind: ${action.cardKind}`);
@@ -1948,14 +2173,13 @@ export default class EffectEngine {
     const searchModal = this.getSearchModalElements();
 
     if (searchModal) {
-      this.showSearchModal(
+      this.showSearchModalVisual(
         searchModal,
         candidates,
         defaultCard,
         (choice) => {
           this.finishSearchSelection(choice, candidates, ctx);
-        },
-        cardDatabase
+        }
       );
       return true;
     }
@@ -1994,10 +2218,8 @@ export default class EffectEngine {
     placeholder.textContent = "Escolha uma carta";
     select.appendChild(placeholder);
 
-    const dropdownOptions =
-      Array.isArray(allCards) && allCards.length > 0 ? allCards : candidates;
-
-    const sortedCandidates = [...dropdownOptions].sort((a, b) => {
+    // Only show candidates, not all cards from the database
+    const sortedCandidates = [...candidates].sort((a, b) => {
       const nameA = (a?.name || "").toLocaleLowerCase();
       const nameB = (b?.name || "").toLocaleLowerCase();
       return nameA.localeCompare(nameB);
@@ -2057,6 +2279,142 @@ export default class EffectEngine {
 
     modal.classList.remove("hidden");
     input.focus();
+  }
+
+  showSearchModalVisual(elements, candidates, defaultCard, onConfirm) {
+    // Create overlay wrapper
+    const overlay = document.createElement("div");
+    overlay.className = "search-modal-visual";
+
+    // Create modal content container
+    const modalContent = document.createElement("div");
+    modalContent.className = "modal-content";
+
+    // Title
+    const title = document.createElement("h2");
+    title.textContent = "Select a card from candidates";
+    modalContent.appendChild(title);
+
+    // Hint text
+    const hint = document.createElement("p");
+    hint.className = "search-hint";
+    hint.textContent = "Click on a card to select it";
+    modalContent.appendChild(hint);
+
+    // Cards grid
+    const grid = document.createElement("div");
+    grid.className = "cards-grid";
+
+    let selectedCard = defaultCard
+      ? candidates.find((c) => c.name === defaultCard) || candidates[0]
+      : candidates[0];
+
+    candidates.forEach((card) => {
+      if (!card || !card.name) return;
+
+      const cardBtn = document.createElement("button");
+      cardBtn.className = "search-card-btn";
+      if (selectedCard && card.name === selectedCard.name) {
+        cardBtn.classList.add("selected");
+      }
+
+      // Card image
+      const img = document.createElement("img");
+      img.src = card.image || "assets/card-back.png";
+      img.alt = card.name;
+      img.className = "search-card-image";
+      cardBtn.appendChild(img);
+
+      // Card name
+      const nameDiv = document.createElement("div");
+      nameDiv.className = "search-card-name";
+      nameDiv.textContent = card.name;
+      cardBtn.appendChild(nameDiv);
+
+      // Card type
+      const typeDiv = document.createElement("div");
+      typeDiv.className = "search-card-type";
+      const typeText = card.type ? `${card.type}` : "Unknown";
+      const levelText = card.level ? ` / L${card.level}` : "";
+      typeDiv.textContent = typeText + levelText;
+      cardBtn.appendChild(typeDiv);
+
+      // Card stats
+      if (card.cardKind === "monster") {
+        const statsDiv = document.createElement("div");
+        statsDiv.className = "search-card-stats";
+        const atk = card.atk !== undefined ? card.atk : "?";
+        const def = card.def !== undefined ? card.def : "?";
+        statsDiv.textContent = `ATK ${atk} / DEF ${def}`;
+        cardBtn.appendChild(statsDiv);
+      }
+
+      // Click handler
+      cardBtn.onclick = () => {
+        // Remove selected from all cards
+        grid.querySelectorAll(".search-card-btn").forEach((btn) => {
+          btn.classList.remove("selected");
+        });
+        // Add selected to this card
+        cardBtn.classList.add("selected");
+        selectedCard = card;
+      };
+
+      grid.appendChild(cardBtn);
+    });
+
+    modalContent.appendChild(grid);
+
+    // Action buttons
+    const actions = document.createElement("div");
+    actions.className = "search-actions";
+
+    const confirmBtn = document.createElement("button");
+    confirmBtn.textContent = "Confirm";
+    confirmBtn.className = "confirm";
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.textContent = "Cancel";
+    cancelBtn.className = "cancel";
+
+    const cleanup = () => {
+      overlay.remove();
+    };
+
+    confirmBtn.onclick = () => {
+      cleanup();
+      if (selectedCard) {
+        onConfirm(selectedCard.name);
+      }
+    };
+
+    cancelBtn.onclick = () => {
+      cleanup();
+      if (defaultCard) {
+        onConfirm(defaultCard);
+      } else if (selectedCard) {
+        onConfirm(selectedCard.name);
+      }
+    };
+
+    // Click outside to close
+    overlay.onclick = (e) => {
+      if (e.target === overlay) {
+        cleanup();
+        if (defaultCard) {
+          onConfirm(defaultCard);
+        } else if (selectedCard) {
+          onConfirm(selectedCard.name);
+        }
+      }
+    };
+
+    actions.appendChild(confirmBtn);
+    actions.appendChild(cancelBtn);
+    modalContent.appendChild(actions);
+
+    overlay.appendChild(modalContent);
+    document.body.appendChild(overlay);
   }
 
   finishSearchSelection(choice, candidates, ctx) {
@@ -3421,5 +3779,188 @@ export default class EffectEngine {
       return true;
     }
     return false;
+  }
+
+  applyAddCounter(action, ctx, targets) {
+    const counterType = action.counterType || "default";
+    let amount = action.amount || 1;
+    const targetRef = action.targetRef || "self";
+
+    // If damagePerCounter is specified, calculate amount based on damage
+    if (action.damagePerCounter && ctx.damageAmount) {
+      amount = Math.floor(ctx.damageAmount / action.damagePerCounter);
+      if (amount <= 0) return false;
+    }
+
+    let targetCards = [];
+    if (targetRef === "self") {
+      targetCards = [ctx.source];
+    } else if (targets[targetRef]) {
+      targetCards = targets[targetRef];
+    }
+
+    if (!Array.isArray(targetCards)) {
+      targetCards = [targetCards];
+    }
+
+    let added = false;
+    for (const card of targetCards) {
+      if (card && typeof card.addCounter === "function") {
+        card.addCounter(counterType, amount);
+        console.log(
+          `Added ${amount} ${counterType} counter(s) to ${card.name}`
+        );
+        added = true;
+      }
+    }
+
+    if (added && this.game && typeof this.game.updateBoard === "function") {
+      this.game.updateBoard();
+    }
+
+    return added;
+  }
+
+  async applyShadowHeartCathedralSummon(action, ctx) {
+    if (!ctx.source || !ctx.player || !this.game) return false;
+
+    const counterType = action.counterType || "judgment_marker";
+    const multiplier = action.counterMultiplier || 500;
+    const counterCount = ctx.source.getCounter
+      ? ctx.source.getCounter(counterType)
+      : 0;
+
+    if (counterCount <= 0) {
+      console.log("No counters on Shadow-Heart Cathedral to use.");
+      return false;
+    }
+
+    const maxAtk = counterCount * multiplier;
+
+    // Get deck candidates
+    const deck = ctx.player.deck || [];
+    const validMonsters = deck.filter((card) => {
+      if (card.cardKind !== "monster") return false;
+      if (!card.archetype || card.archetype !== "Shadow-Heart") return false;
+      const cardAtk = card.atk || 0;
+      return cardAtk <= maxAtk;
+    });
+
+    if (validMonsters.length === 0) {
+      console.log(
+        `No Shadow-Heart monsters in deck with ATK ≤ ${maxAtk} to summon.`
+      );
+      return false;
+    }
+
+    // Show selection modal to player
+    return new Promise((resolve) => {
+      this.game.showShadowHeartCathedralModal(
+        validMonsters,
+        maxAtk,
+        counterCount,
+        (selectedCard) => {
+          if (!selectedCard) {
+            resolve(false);
+            return;
+          }
+
+          // Remove card from deck
+          const deckIndex = ctx.player.deck.indexOf(selectedCard);
+          if (deckIndex !== -1) {
+            ctx.player.deck.splice(deckIndex, 1);
+          }
+
+          // Special Summon to field
+          if (ctx.player.field.length < 5) {
+            selectedCard.position = "attack";
+            selectedCard.isFacedown = false;
+            selectedCard.hasAttacked = false;
+            selectedCard.cannotAttackThisTurn = false;
+            ctx.player.field.push(selectedCard);
+
+            console.log(
+              `Special Summoned ${selectedCard.name} from deck via Shadow-Heart Cathedral (${counterCount} counters, max ATK ${maxAtk}).`
+            );
+
+            // Send Cathedral to GY
+            this.game.moveCard(ctx.source, ctx.player, "graveyard");
+
+            if (typeof this.game.updateBoard === "function") {
+              this.game.updateBoard();
+            }
+
+            resolve(true);
+          } else {
+            console.log("Field is full, cannot Special Summon.");
+            resolve(false);
+          }
+        }
+      );
+    });
+  }
+
+  async applyTheShadowHeartSummonAndEquip(action, ctx, targets) {
+    return new Promise((resolve) => {
+      const targetRef = action.targetRef;
+      const selectedCards = targets[targetRef] || [];
+
+      if (selectedCards.length === 0) {
+        console.log("No target selected for The Shadow Heart.");
+        resolve(false);
+        return;
+      }
+
+      const selectedCard = selectedCards[0];
+
+      if (!selectedCard) {
+        console.log("Target card not found.");
+        resolve(false);
+        return;
+      }
+
+      // Remove from Graveyard
+      const gyIndex = ctx.player.graveyard.indexOf(selectedCard);
+      if (gyIndex > -1) {
+        ctx.player.graveyard.splice(gyIndex, 1);
+      }
+
+      // Check field space
+      if (ctx.player.field.length >= 5) {
+        console.log("Field is full, cannot Special Summon.");
+        ctx.player.graveyard.push(selectedCard);
+        resolve(false);
+        return;
+      }
+
+      // Prepare the monster for Special Summon
+      selectedCard.position = "attack";
+      selectedCard.isFacedown = false;
+      selectedCard.hasAttacked = false;
+      selectedCard.cannotAttackThisTurn = false;
+      selectedCard.owner = ctx.player.id;
+      ctx.player.field.push(selectedCard);
+
+      // Equip The Shadow Heart to the monster
+      const equipCard = ctx.source; // The Shadow Heart card itself
+      if (!equipCard.equips) {
+        equipCard.equips = [];
+      }
+      equipCard.equippedTo = selectedCard;
+      if (!selectedCard.equips) {
+        selectedCard.equips = [];
+      }
+      selectedCard.equips.push(equipCard);
+
+      console.log(
+        `Special Summoned ${selectedCard.name} from Graveyard via The Shadow Heart and equipped the spell.`
+      );
+
+      if (typeof this.game.updateBoard === "function") {
+        this.game.updateBoard();
+      }
+
+      resolve(true);
+    });
   }
 }
