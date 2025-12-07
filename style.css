@@ -31,7 +31,7 @@ body {
   height: 100vh;
   overflow: hidden;
   display: flex;
-  justify-content: flex-start;
+  justify-content: center;
   align-items: center;
 }
 
@@ -166,42 +166,51 @@ body {
   color: var(--accent-color);
 }
 
-.zones {
-  display: grid;
-  grid-template-columns: 1fr 90px;
-  grid-template-rows: auto auto;
-  grid-template-areas:
-    "board gy"
-    "hand deck";
-  align-items: center;
-  justify-items: center;
-  gap: 12px 16px;
-  flex: 1;
+.board-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+  gap: 18px;
   width: 100%;
 }
 
-.bot-zones {
-  grid-template-areas:
-    "hand gy"
-    "board deck";
-}
-
-.board-zones {
-  grid-area: board;
+.fieldspell-dock,
+.side-dock {
   display: flex;
   flex-direction: column;
-  gap: 10px;
   align-items: center;
-  width: calc(var(--zone-width) + var(--card-w) + var(--card-gap));
-  max-width: calc(var(--zone-width) + var(--card-w) + var(--card-gap));
+  gap: 12px;
 }
 
-.field-row {
+.fieldspell-dock {
+  width: var(--card-w);
+  min-width: var(--card-w);
+  align-self: flex-start;
+}
+
+.board-core {
   display: flex;
+  flex-direction: column;
+  gap: 12px;
   align-items: center;
-  gap: var(--card-gap);
+  width: var(--zone-width);
+  min-width: var(--zone-width);
+  max-width: var(--zone-width);
+  align-self: flex-start;
+}
+
+.side-dock {
+  width: 90px;
+  min-width: 90px;
+  justify-content: space-between;
+  align-self: stretch;
+}
+
+.hand-row {
   width: 100%;
+  display: flex;
   justify-content: center;
+  margin-top: 6px;
 }
 
 .field-slot {
@@ -290,7 +299,6 @@ body {
 }
 
 .hand-zone {
-  grid-area: hand;
   display: flex;
   gap: 8px;
   width: var(--zone-width);
@@ -306,7 +314,6 @@ body {
 
 .deck-zone,
 .graveyard-zone {
-  grid-row: 1 / span 2;
   width: 90px;
   height: 130px;
   border: 1px solid var(--border-color);
@@ -317,17 +324,11 @@ body {
   font-size: 0.8rem;
   color: #555;
   background: var(--zone-bg);
-  align-self: center;
 }
 
 .graveyard-zone {
-  grid-area: gy;
   position: relative;
   cursor: pointer;
-}
-
-.deck-zone {
-  grid-area: deck;
 }
 
 /* Card Styles */
@@ -452,30 +453,34 @@ body {
 
 #next-phase-btn {
   background: var(--accent-color);
-  border: none;
-  padding: 8px 16px;
-  color: #000;
-  font-weight: bold;
-  cursor: pointer;
-  border-radius: 4px;
+  .deck-zone,
+  .graveyard-zone {
+    width: 90px;
+    height: 130px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 0.8rem;
+    color: #555;
+    background: var(--zone-bg);
+  }
+
+  .graveyard-zone {
+    position: relative;
+    cursor: pointer;
+  }
 }
 
-#next-phase-btn:hover {
-  opacity: 0.9;
-}
-
-/* Modal Styles */
 .modal {
-  display: flex;
   position: fixed;
-  z-index: 100;
-  left: 0;
-  top: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.8);
+  inset: 0;
+  display: flex;
   justify-content: center;
   align-items: center;
+  background-color: rgba(0, 0, 0, 0.8);
+  z-index: 100;
 }
 
 .modal.hidden {
@@ -490,6 +495,7 @@ body {
   max-width: 800px;
   max-height: 80vh;
   overflow-y: auto;
+  overflow-x: hidden;
   border-radius: 8px;
   position: relative;
 }
@@ -1275,12 +1281,12 @@ body {
     padding-bottom: 6px;
   }
 
-  .board-zones {
-    gap: 6px;
-  }
-
   .hand-zone {
     padding: 6px;
+  }
+
+  .board-core {
+    gap: 6px;
   }
 }
 

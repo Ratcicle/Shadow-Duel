@@ -65,28 +65,32 @@
           <span class="name">Opponent</span>
           <div class="lp-counter">LP: <span id="bot-lp">8000</span></div>
         </div>
-        <div class="zones board-grid bot-zones">
-          <div class="graveyard-zone" id="bot-graveyard">GY</div>
-          <div class="board-zones">
-            <div class="field-row">
-              <div
-                id="bot-fieldspell"
-                class="field-slot"
-                data-label="Field"
-              ></div>
-              <div
-                id="bot-field"
-                class="field-zone monster-row"
-                data-label="Monsters"
-              ></div>
-            </div>
+        <div class="board-wrapper bot-board">
+          <div class="fieldspell-dock">
+            <div
+              id="bot-fieldspell"
+              class="field-slot"
+              data-label="Field"
+            ></div>
+          </div>
+          <div class="board-core">
+            <div
+              id="bot-field"
+              class="field-zone monster-row"
+              data-label="Monsters"
+            ></div>
             <div
               id="bot-spelltrap"
               class="field-zone spelltrap-row"
               data-label="Spell/Trap"
             ></div>
           </div>
-          <div class="deck-zone" id="bot-deck">Deck</div>
+          <div class="side-dock">
+            <div class="graveyard-zone" id="bot-graveyard">GY</div>
+            <div class="deck-zone" id="bot-deck">Deck</div>
+          </div>
+        </div>
+        <div class="hand-row">
           <div class="hand-zone" id="bot-hand"></div>
         </div>
       </div>
@@ -106,28 +110,32 @@
 
       <!-- Player Area (Bottom) -->
       <div id="player-area" class="player-area">
-        <div class="zones board-grid">
-          <div class="graveyard-zone" id="player-graveyard">GY</div>
-          <div class="board-zones player-board">
-            <div class="field-row">
-              <div
-                id="player-fieldspell"
-                class="field-slot"
-                data-label="Field"
-              ></div>
-              <div
-                id="player-field"
-                class="field-zone monster-row"
-                data-label="Monsters"
-              ></div>
-            </div>
+        <div class="board-wrapper player-board">
+          <div class="fieldspell-dock">
+            <div
+              id="player-fieldspell"
+              class="field-slot"
+              data-label="Field"
+            ></div>
+          </div>
+          <div class="board-core">
+            <div
+              id="player-field"
+              class="field-zone monster-row"
+              data-label="Monsters"
+            ></div>
             <div
               id="player-spelltrap"
               class="field-zone spelltrap-row"
               data-label="Spell/Trap"
             ></div>
           </div>
-          <div class="deck-zone" id="player-deck">Deck</div>
+          <div class="side-dock">
+            <div class="graveyard-zone" id="player-graveyard">GY</div>
+            <div class="deck-zone" id="player-deck">Deck</div>
+          </div>
+        </div>
+        <div class="hand-row">
           <div class="hand-zone" id="player-hand"></div>
         </div>
         <div class="player-info">
@@ -195,4 +203,3 @@
     <script type="module" src="src/main.js"></script>
   </body>
 </html>
-
