@@ -1332,4 +1332,139 @@ export const cardDatabase = [
       },
     ],
   },
+  {
+    id: 56,
+    name: "Luminarch Sanctified Arbiter",
+    cardKind: "monster",
+    atk: 1500,
+    def: 1000,
+    level: 4,
+    type: "Warrior",
+    archetype: "Luminarch",
+    description:
+      'When this card is Normal Summoned: add 1 "Luminarch Knights Convocation" from your Deck to your hand.',
+    image: "assets/Luminarch Sanctified Arbiter.png",
+    effects: [
+      {
+        id: "luminarch_sanctified_arbiter_search",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethod: "normal",
+        actions: [
+          {
+            type: "search_any",
+            player: "self",
+            archetype: "Luminarch",
+            cardKind: "spell",
+            cardName: "Luminarch Knights Convocation",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 57,
+    name: "Luminarch Knights Convocation",
+    cardKind: "spell",
+    subtype: "continuous",
+    archetype: "Luminarch",
+    description:
+      "Once per turn: discard 1 Level 7 or higher Luminarch monster; add 1 Level 4 or lower Luminarch monster from your Deck to your hand.",
+    image: "assets/Luminarch Knights Convocation.png",
+    effects: [
+      {
+        id: "luminarch_knights_convocation_activate",
+        timing: "on_play",
+        speed: 1,
+        actions: [],
+      },
+      {
+        id: "luminarch_knights_convocation_effect",
+        timing: "ignition",
+        oncePerTurn: true,
+        oncePerTurnName: "luminarch_knights_convocation_effect",
+        targets: [
+          {
+            id: "convocation_discard",
+            owner: "self",
+            zone: "hand",
+            cardKind: "monster",
+            archetype: "Luminarch",
+            minLevel: 7,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "convocation_discard",
+            player: "self",
+            to: "graveyard",
+          },
+          {
+            type: "search_any",
+            player: "self",
+            archetype: "Luminarch",
+            cardKind: "monster",
+            maxLevel: 4,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 58,
+    name: "Sanctum of the Luminarch Citadel",
+    cardKind: "spell",
+    subtype: "field",
+    archetype: "Luminarch",
+    description:
+      'Whenever an opponent\'s monster declares an attack: gain 500 LP. Once per turn: You can pay 1000 LP, then target 1 "Luminarch" monster you control; it gains 500 ATK/DEF until the end of this turn.',
+    image: "assets/Sanctum of the Luminarch Citadel.png",
+    effects: [
+      {
+        id: "sanctum_luminarch_citadel_attack_heal",
+        timing: "on_event",
+        event: "attack_declared",
+        requireOpponentAttack: true,
+        actions: [
+          {
+            type: "heal",
+            player: "self",
+            amount: 500,
+          },
+        ],
+      },
+      {
+        id: "sanctum_luminarch_citadel_buff",
+        timing: "on_field_activate",
+        speed: 1,
+        oncePerTurn: true,
+        oncePerTurnName: "sanctum_luminarch_citadel_buff",
+        oncePerTurnScope: "card",
+        targets: [
+          {
+            id: "sanctum_citadel_target",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            archetype: "Luminarch",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "damage",
+            player: "self",
+            amount: 1000,
+          },
+          {
+            type: "luminarch_citadel_atkdef_buff",
+            targetRef: "sanctum_citadel_target",
+            amount: 500,
+          },
+        ],
+      },
+    ],
+  },
 ];

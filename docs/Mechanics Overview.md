@@ -213,6 +213,12 @@
   - Code: `src/core/EffectEngine.js:1879`
   - Example cards: `Luminarch Holy Shield` (`src/data/cards.js:970`)
 
+- `field.activation.continuous`
+  - Status: ✅ IMPLEMENTED
+  - Description: Continuous Spells now resolve their on-play step by simply moving face-up to the Spell/Trap Zone, and their actual effects are triggered later when the player clicks the card; `Game.tryActivateSpellTrapEffect` routes the request to `EffectEngine.activateSpellTrapEffect`, which enforces Main Phase timing, once-per-turn limits, targeting, and costs (e.g., discards).
+  - Code: `src/core/Game.js:586`, `src/core/Game.js:1013`, `src/core/EffectEngine.js:520`, `src/core/EffectEngine.js:780`
+  - Example cards: `Luminarch Knights Convocation` (`src/data/cards.js:1348`)
+
 ## 6. Life Points & Turn Flow
 
 - `life.phase.sequence`

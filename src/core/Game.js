@@ -292,64 +292,73 @@ export default class Game {
           this.player.field.length < tributesNeeded &&
           !canSanctumSpecialFromAegis
         ) {
-          this.renderer.log(`Not enough tributes for Level ${card.level} monster.`);
+          this.renderer.log(
+            `Not enough tributes for Level ${card.level} monster.`
+          );
           return;
         }
 
-        this.renderer.showSummonModal(index, (choice) => {
-          if (choice === "special_from_aegisbearer") {
-            this.specialSummonSanctumProtectorFromHand(index);
-            return;
-          }
-
-          if (choice === "attack" || choice === "defense") {
-            const position = choice;
-            const isFacedown = choice === "defense";
-
-            if (tributesNeeded > 0) {
-              tributeSelectionMode = true;
-              selectedTributes = [];
-              pendingSummon = {
-                cardIndex: index,
-                position,
-                isFacedown,
-                tributesNeeded,
-              };
-
-              this.player.field.forEach((_, idx) => {
-                const fieldCard = document.querySelector(
-                  `#player-field .card[data-index="${idx}"]`
-                );
-                if (fieldCard) {
-                  fieldCard.classList.add("tributeable");
-                }
-              });
-
-              this.renderer.log(`Select ${tributesNeeded} monster(s) to tribute.`);
-            } else {
-              const before = this.player.field.length;
-              const result = this.player.summon(index, position, isFacedown);
-              if (!result && this.player.field.length === before) {
-                this.updateBoard();
-                return;
-              }
-              const summonedCard = this.player.field[this.player.field.length - 1];
-              summonedCard.summonedTurn = this.turnCounter;
-              summonedCard.positionChangedThisTurn = false;
-              if (summonedCard.isFacedown) {
-                summonedCard.setTurn = this.turnCounter;
-              } else {
-                summonedCard.setTurn = null;
-              }
-              this.emit("after_summon", {
-                card: summonedCard,
-                player: this.player,
-                method: "normal",
-              });
-              this.updateBoard();
+        this.renderer.showSummonModal(
+          index,
+          (choice) => {
+            if (choice === "special_from_aegisbearer") {
+              this.specialSummonSanctumProtectorFromHand(index);
+              return;
             }
-          }
-        }, { canSanctumSpecialFromAegis });
+
+            if (choice === "attack" || choice === "defense") {
+              const position = choice;
+              const isFacedown = choice === "defense";
+
+              if (tributesNeeded > 0) {
+                tributeSelectionMode = true;
+                selectedTributes = [];
+                pendingSummon = {
+                  cardIndex: index,
+                  position,
+                  isFacedown,
+                  tributesNeeded,
+                };
+
+                this.player.field.forEach((_, idx) => {
+                  const fieldCard = document.querySelector(
+                    `#player-field .card[data-index="${idx}"]`
+                  );
+                  if (fieldCard) {
+                    fieldCard.classList.add("tributeable");
+                  }
+                });
+
+                this.renderer.log(
+                  `Select ${tributesNeeded} monster(s) to tribute.`
+                );
+              } else {
+                const before = this.player.field.length;
+                const result = this.player.summon(index, position, isFacedown);
+                if (!result && this.player.field.length === before) {
+                  this.updateBoard();
+                  return;
+                }
+                const summonedCard =
+                  this.player.field[this.player.field.length - 1];
+                summonedCard.summonedTurn = this.turnCounter;
+                summonedCard.positionChangedThisTurn = false;
+                if (summonedCard.isFacedown) {
+                  summonedCard.setTurn = this.turnCounter;
+                } else {
+                  summonedCard.setTurn = null;
+                }
+                this.emit("after_summon", {
+                  card: summonedCard,
+                  player: this.player,
+                  method: "normal",
+                });
+                this.updateBoard();
+              }
+            }
+          },
+          { canSanctumSpecialFromAegis }
+        );
         return;
       }
 
@@ -390,174 +399,175 @@ export default class Game {
     document
       .getElementById("player-field")
       .addEventListener("click", async (e) => {
-      const cardEl = e.target.closest(".card");
-      if (!cardEl) return;
+        const cardEl = e.target.closest(".card");
+        if (!cardEl) return;
 
-      const index = parseInt(cardEl.dataset.index);
-      if (Number.isNaN(index)) return;
+        const index = parseInt(cardEl.dataset.index);
+        if (Number.isNaN(index)) return;
 
-      if (
-        this.targetSelection &&
-        this.handleTargetSelectionClick("player", index, cardEl)
-      ) {
-        return;
-      }
-
-      if (tributeSelectionMode && pendingSummon) {
-        if (!cardEl.classList.contains("tributeable")) return;
-
-        if (selectedTributes.includes(index)) {
-          selectedTributes = selectedTributes.filter((i) => i !== index);
-          cardEl.classList.remove("selected");
-        } else if (selectedTributes.length < pendingSummon.tributesNeeded) {
-          selectedTributes.push(index);
-          cardEl.classList.add("selected");
+        if (
+          this.targetSelection &&
+          this.handleTargetSelectionClick("player", index, cardEl)
+        ) {
+          return;
         }
 
-        if (selectedTributes.length === pendingSummon.tributesNeeded) {
-          document.querySelectorAll(".tributeable").forEach((el) => {
-            el.classList.remove("tributeable", "selected");
-          });
+        if (tributeSelectionMode && pendingSummon) {
+          if (!cardEl.classList.contains("tributeable")) return;
 
-          const before = this.player.field.length;
-          const result = this.player.summon(
-            pendingSummon.cardIndex,
-            pendingSummon.position,
-            pendingSummon.isFacedown,
-            selectedTributes
-          );
+          if (selectedTributes.includes(index)) {
+            selectedTributes = selectedTributes.filter((i) => i !== index);
+            cardEl.classList.remove("selected");
+          } else if (selectedTributes.length < pendingSummon.tributesNeeded) {
+            selectedTributes.push(index);
+            cardEl.classList.add("selected");
+          }
 
-          if (!result && this.player.field.length === before) {
+          if (selectedTributes.length === pendingSummon.tributesNeeded) {
+            document.querySelectorAll(".tributeable").forEach((el) => {
+              el.classList.remove("tributeable", "selected");
+            });
+
+            const before = this.player.field.length;
+            const result = this.player.summon(
+              pendingSummon.cardIndex,
+              pendingSummon.position,
+              pendingSummon.isFacedown,
+              selectedTributes
+            );
+
+            if (!result && this.player.field.length === before) {
+              tributeSelectionMode = false;
+              selectedTributes = [];
+              pendingSummon = null;
+              this.updateBoard();
+              return;
+            }
+
+            const summonedCard =
+              this.player.field[this.player.field.length - 1];
+            summonedCard.summonedTurn = this.turnCounter;
+            summonedCard.positionChangedThisTurn = false;
+            if (summonedCard.isFacedown) {
+              summonedCard.setTurn = this.turnCounter;
+            } else {
+              summonedCard.setTurn = null;
+            }
+
+            this.emit("after_summon", {
+              card: summonedCard,
+              player: this.player,
+              method: pendingSummon.tributesNeeded > 0 ? "tribute" : "normal",
+            });
+
             tributeSelectionMode = false;
             selectedTributes = [];
             pendingSummon = null;
+
             this.updateBoard();
+          }
+          return;
+        }
+
+        if (
+          this.turn === "player" &&
+          (this.phase === "main1" || this.phase === "main2")
+        ) {
+          const card = this.player.field[index];
+          if (
+            card &&
+            card.cardKind === "monster" &&
+            card.effects &&
+            card.effects[0] &&
+            card.effects[0].timing === "ignition"
+          ) {
+            this.showIgnitionActivateModal(card, () => {
+              const result = this.effectEngine.activateMonsterFromField(
+                card,
+                this.player,
+                index
+              );
+              if (result.success) {
+                this.updateBoard();
+              } else if (result.reason) {
+                this.renderer.log(result.reason);
+              }
+            });
+            return;
+          }
+          const canFlip = card ? this.canFlipSummon(card) : false;
+          const canPosChange = card ? this.canChangePosition(card) : false;
+
+          if (card && (canFlip || canPosChange)) {
+            this.renderer.showPositionChoiceModal(
+              cardEl,
+              card,
+              (choice) => {
+                if (choice === "flip" && canFlip) {
+                  this.flipSummon(card);
+                } else if (
+                  choice === "to_attack" &&
+                  canPosChange &&
+                  card.position !== "attack"
+                ) {
+                  this.changeMonsterPosition(card, "attack");
+                } else if (
+                  choice === "to_defense" &&
+                  canPosChange &&
+                  card.position !== "defense"
+                ) {
+                  this.changeMonsterPosition(card, "defense");
+                }
+              },
+              { canFlip, canChangePosition: canPosChange }
+            );
+            return;
+          }
+        }
+
+        if (this.turn !== "player" || this.phase !== "battle") return;
+
+        const attacker = this.player.field[index];
+
+        if (attacker) {
+          const availability = this.getAttackAvailability(attacker);
+          if (!availability.ok) {
+            this.renderer.log(availability.reason);
             return;
           }
 
-          const summonedCard = this.player.field[this.player.field.length - 1];
-          summonedCard.summonedTurn = this.turnCounter;
-          summonedCard.positionChangedThisTurn = false;
-          if (summonedCard.isFacedown) {
-            summonedCard.setTurn = this.turnCounter;
-          } else {
-            summonedCard.setTurn = null;
+          const canUseSecondAttack =
+            attacker.canMakeSecondAttackThisTurn &&
+            !attacker.secondAttackUsedThisTurn;
+
+          if (attacker.hasAttacked && !canUseSecondAttack) {
+            this.renderer.log("This monster has already attacked!");
+            return;
           }
 
-          this.emit("after_summon", {
-            card: summonedCard,
-            player: this.player,
-            method: pendingSummon.tributesNeeded > 0 ? "tribute" : "normal",
-          });
+          const wasAlreadyAttacked = attacker.hasAttacked;
 
-          tributeSelectionMode = false;
-          selectedTributes = [];
-          pendingSummon = null;
-
-          this.updateBoard();
-        }
-        return;
-      }
-
-      if (
-        this.turn === "player" &&
-        (this.phase === "main1" || this.phase === "main2")
-      ) {
-        const card = this.player.field[index];
-        if (
-          card &&
-          card.cardKind === "monster" &&
-          card.effects &&
-          card.effects[0] &&
-          card.effects[0].timing === "ignition"
-        ) {
-          this.showIgnitionActivateModal(card, () => {
-            const result = this.effectEngine.activateMonsterFromField(
-              card,
-              this.player,
-              index
-            );
-            if (result.success) {
-              this.updateBoard();
-            } else if (result.reason) {
-              this.renderer.log(result.reason);
-            }
-          });
-          return;
-        }
-        const canFlip = card ? this.canFlipSummon(card) : false;
-        const canPosChange = card ? this.canChangePosition(card) : false;
-
-        if (card && (canFlip || canPosChange)) {
-          this.renderer.showPositionChoiceModal(
-            cardEl,
-            card,
-            (choice) => {
-              if (choice === "flip" && canFlip) {
-                this.flipSummon(card);
-              } else if (
-                choice === "to_attack" &&
-                canPosChange &&
-                card.position !== "attack"
-              ) {
-                this.changeMonsterPosition(card, "attack");
-              } else if (
-                choice === "to_defense" &&
-                canPosChange &&
-                card.position !== "defense"
-              ) {
-                this.changeMonsterPosition(card, "defense");
-              }
-            },
-            { canFlip, canChangePosition: canPosChange }
+          const opponentTargets = this.bot.field.filter(
+            (card) => card && card.cardKind === "monster"
           );
-          return;
+
+          const attackCandidates =
+            opponentTargets.filter((card) => card && card.mustBeAttacked)
+              .length > 0
+              ? opponentTargets.filter((card) => card && card.mustBeAttacked)
+              : opponentTargets;
+
+          if (attackCandidates.length === 0) {
+            await this.resolveCombat(attacker, null);
+          } else {
+            this.startAttackTargetSelection(attacker, attackCandidates);
+          }
+
+          if (wasAlreadyAttacked && canUseSecondAttack) {
+            attacker.secondAttackUsedThisTurn = true;
+          }
         }
-      }
-
-      if (this.turn !== "player" || this.phase !== "battle") return;
-
-      const attacker = this.player.field[index];
-
-      if (attacker) {
-        const availability = this.getAttackAvailability(attacker);
-        if (!availability.ok) {
-          this.renderer.log(availability.reason);
-          return;
-        }
-
-        const canUseSecondAttack =
-          attacker.canMakeSecondAttackThisTurn &&
-          !attacker.secondAttackUsedThisTurn;
-
-        if (attacker.hasAttacked && !canUseSecondAttack) {
-          this.renderer.log("This monster has already attacked!");
-          return;
-        }
-
-        const wasAlreadyAttacked = attacker.hasAttacked;
-
-        const opponentTargets = this.bot.field.filter(
-          (card) => card && card.cardKind === "monster"
-        );
-
-        const attackCandidates =
-          opponentTargets.filter((card) => card && card.mustBeAttacked).length >
-          0
-            ? opponentTargets.filter((card) => card && card.mustBeAttacked)
-            : opponentTargets;
-
-        if (attackCandidates.length === 0) {
-          await this.resolveCombat(attacker, null);
-        } else {
-          this.startAttackTargetSelection(attacker, attackCandidates);
-        }
-
-        if (wasAlreadyAttacked && canUseSecondAttack) {
-          attacker.secondAttackUsedThisTurn = true;
-        }
-      }
-    });
+      });
 
     const playerSpellTrapEl = document.getElementById("player-spelltrap");
     if (playerSpellTrapEl) {
@@ -576,7 +586,13 @@ export default class Game {
         if (!card) return;
 
         if (card.cardKind !== "spell") return;
-        if (!card.isFacedown) return;
+
+        if (!card.isFacedown) {
+          if (card.subtype === "continuous") {
+            this.tryActivateSpellTrapEffect(card);
+          }
+          return;
+        }
 
         const onActivate = () => {
           card.isFacedown = false;
@@ -745,7 +761,7 @@ export default class Game {
       finalizeSummon(positionChoice);
     }
   }
- 
+
   async resolveDestructionWithReplacement(card, options = {}) {
     if (!card || card.cardKind !== "monster") {
       return { replaced: false };
@@ -786,7 +802,9 @@ export default class Game {
     }
 
     if (ownerPlayer.id !== "player") {
-      const chosen = [...candidates].sort((a, b) => (a.atk || 0) - (b.atk || 0))[0];
+      const chosen = [...candidates].sort(
+        (a, b) => (a.atk || 0) - (b.atk || 0)
+      )[0];
       if (chosen) {
         this.moveCard(chosen, ownerPlayer, "graveyard", { fromZone: "field" });
         this.effectEngine.registerOncePerTurnUsage(card, ownerPlayer, effect);
@@ -893,7 +911,12 @@ export default class Game {
   handleSpellActivationResult(card, handIndex, result, activationZone = null) {
     if (result.needsSelection) {
       if (this.canUseFieldTargeting(result.options)) {
-        this.startTargetSelection(card, handIndex, result.options, activationZone);
+        this.startTargetSelection(
+          card,
+          handIndex,
+          result.options,
+          activationZone
+        );
       } else {
         this.renderer.showTargetSelection(
           result.options,
@@ -965,6 +988,80 @@ export default class Game {
     this.updateBoard();
   }
 
+  handleSpellTrapActivationResult(card, owner, result, activationZone = null) {
+    if (result.needsSelection) {
+      if (this.canUseFieldTargeting(result.options)) {
+        this.startSpellTrapTargetSelection(
+          card,
+          result.options,
+          activationZone
+        );
+      } else {
+        this.renderer.showTargetSelection(
+          result.options,
+          (chosenMap) => {
+            const finalResult = this.effectEngine.activateSpellTrapEffect(
+              card,
+              owner,
+              chosenMap,
+              activationZone
+            );
+            this.handleSpellTrapActivationResult(
+              card,
+              owner,
+              finalResult,
+              activationZone
+            );
+          },
+          () => {
+            this.cancelTargetSelection();
+          }
+        );
+      }
+      return;
+    }
+
+    if (!result.success) {
+      if (result.reason) {
+        this.renderer.log(result.reason);
+      }
+      return;
+    }
+
+    this.renderer.log(`${card.name} effect activated.`);
+    this.updateBoard();
+  }
+
+  startSpellTrapTargetSelection(card, options, activationZone = null) {
+    this.cancelTargetSelection();
+    this.targetSelection = {
+      kind: "spellTrapEffect",
+      card,
+      options,
+      selections: {},
+      currentOption: 0,
+      activationZone,
+    };
+    this.renderer.log("Select target(s) for the continuous spell effect.");
+    this.highlightTargetCandidates();
+  }
+
+  tryActivateSpellTrapEffect(card, selections = null) {
+    if (!card) return;
+    const result = this.effectEngine.activateSpellTrapEffect(
+      card,
+      this.player,
+      selections,
+      "spellTrap"
+    );
+    this.handleSpellTrapActivationResult(
+      card,
+      this.player,
+      result,
+      "spellTrap"
+    );
+  }
+
   canUseFieldTargeting(options) {
     if (!options || options.length === 0) return false;
     return options.every(
@@ -1031,26 +1128,26 @@ export default class Game {
       );
       this.highlightTargetCandidates();
     } else {
-        this.renderer.showTargetSelection(
-          options,
-          (chosenMap) => {
-            this.effectEngine.resolveTriggeredSelection(effect, ctx, chosenMap);
-            this.updateBoard();
-          },
-          () => {
-            this.cancelTargetSelection();
-          }
+      this.renderer.showTargetSelection(
+        options,
+        (chosenMap) => {
+          this.effectEngine.resolveTriggeredSelection(effect, ctx, chosenMap);
+          this.updateBoard();
+        },
+        () => {
+          this.cancelTargetSelection();
+        }
       );
     }
   }
 
   startAttackTargetSelection(attacker, candidates) {
-    if (!attacker || !Array.isArray(candidates) || candidates.length === 0) return;
+    if (!attacker || !Array.isArray(candidates) || candidates.length === 0)
+      return;
     this.cancelTargetSelection();
     const decorated = candidates.map((card, idx) => {
       const ownerLabel = card.owner === "player" ? "player" : "opponent";
-      const ownerPlayer =
-        card.owner === "player" ? this.player : this.bot;
+      const ownerPlayer = card.owner === "player" ? this.player : this.bot;
       const zoneArr = this.getZone(ownerPlayer, "field") || [];
       const zoneIndex = zoneArr.indexOf(card);
       return {
@@ -1120,8 +1217,7 @@ export default class Game {
 
     const decorated = candidates.map((card, idx) => {
       const ownerLabel = card.owner === "player" ? "player" : "opponent";
-      const ownerPlayer =
-        card.owner === "player" ? this.player : this.bot;
+      const ownerPlayer = card.owner === "player" ? this.player : this.bot;
       const zoneArr = this.getZone(ownerPlayer, zoneName) || [];
       const zoneIndex = zoneArr.indexOf(card);
       return {
@@ -1185,7 +1281,9 @@ export default class Game {
       if (!fieldSelector) return;
 
       const indexSelector =
-        cand.zone === "fieldSpell" ? " .card" : ` .card[data-index="${cand.zoneIndex}"]`;
+        cand.zone === "fieldSpell"
+          ? " .card"
+          : ` .card[data-index="${cand.zoneIndex}"]`;
       const cardEl = document.querySelector(`${fieldSelector}${indexSelector}`);
       if (cardEl) {
         cardEl.classList.add("targetable");
@@ -1298,6 +1396,19 @@ export default class Game {
         selection.selections
       );
       this.handleFieldSpellActivationResult(selection.card, owner, result);
+    } else if (selection.kind === "spellTrapEffect") {
+      const result = this.effectEngine.activateSpellTrapEffect(
+        selection.card,
+        this.player,
+        selection.selections,
+        selection.activationZone
+      );
+      this.handleSpellTrapActivationResult(
+        selection.card,
+        this.player,
+        result,
+        selection.activationZone
+      );
     } else if (selection.kind === "triggered") {
       this.effectEngine.resolveTriggeredSelection(
         selection.effect,
@@ -1309,8 +1420,7 @@ export default class Game {
       const option = selection.options[0];
       if (option) {
         const chosenIndexes = selection.selections[option.id] || [];
-        const chosenCard =
-          option.candidates[chosenIndexes[0]]?.cardRef ?? null;
+        const chosenCard = option.candidates[chosenIndexes[0]]?.cardRef ?? null;
         if (chosenCard) {
           this.resolveCombat(selection.attacker, chosenCard).catch((err) =>
             console.error(err)
@@ -1545,7 +1655,9 @@ export default class Game {
         this.updateBoard();
 
         setTimeout(() => {
-          this.finishCombat(attacker, target).catch((err) => console.error(err));
+          this.finishCombat(attacker, target).catch((err) =>
+            console.error(err)
+          );
         }, 600);
 
         return;
