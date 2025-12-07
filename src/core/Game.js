@@ -1590,10 +1590,11 @@ export default class Game {
 
         logBattleDestroyCheck("attacker over atk target");
         if (this.canDestroyByBattle(target)) {
-          const replaced = await this.resolveDestructionWithReplacement(target, {
-            reason: "battle",
-            sourceCard: attacker,
-          });
+          const { replaced } =
+            (await this.resolveDestructionWithReplacement(target, {
+              reason: "battle",
+              sourceCard: attacker,
+            })) || {};
           if (!replaced) {
             this.moveCard(target, defender, "graveyard");
             this.applyBattleDestroyEffect(attacker, target);
@@ -1606,10 +1607,11 @@ export default class Game {
 
         logBattleDestroyCheck("attacker loses to atk target");
         if (this.canDestroyByBattle(attacker)) {
-          const replaced = await this.resolveDestructionWithReplacement(attacker, {
-            reason: "battle",
-            sourceCard: target,
-          });
+          const { replaced } =
+            (await this.resolveDestructionWithReplacement(attacker, {
+              reason: "battle",
+              sourceCard: target,
+            })) || {};
           if (!replaced) {
             this.moveCard(attacker, attPlayer, "graveyard");
             this.applyBattleDestroyEffect(attacker, attacker);
@@ -1621,10 +1623,11 @@ export default class Game {
 
         logBattleDestroyCheck("tie - attacker destruction check");
         if (this.canDestroyByBattle(attacker)) {
-          const replaced = await this.resolveDestructionWithReplacement(attacker, {
-            reason: "battle",
-            sourceCard: target,
-          });
+          const { replaced } =
+            (await this.resolveDestructionWithReplacement(attacker, {
+              reason: "battle",
+              sourceCard: target,
+            })) || {};
           if (!replaced) {
             this.moveCard(attacker, attPlayer, "graveyard");
             this.applyBattleDestroyEffect(attacker, attacker);
@@ -1633,10 +1636,11 @@ export default class Game {
 
         logBattleDestroyCheck("tie - target destruction check");
         if (this.canDestroyByBattle(target)) {
-          const replaced = await this.resolveDestructionWithReplacement(target, {
-            reason: "battle",
-            sourceCard: attacker,
-          });
+          const { replaced } =
+            (await this.resolveDestructionWithReplacement(target, {
+              reason: "battle",
+              sourceCard: attacker,
+            })) || {};
           if (!replaced) {
             this.moveCard(target, defPlayer, "graveyard");
             this.applyBattleDestroyEffect(attacker, target);
@@ -1652,10 +1656,11 @@ export default class Game {
         }
         logBattleDestroyCheck("defense target destruction check");
         if (this.canDestroyByBattle(target)) {
-          const replaced = await this.resolveDestructionWithReplacement(target, {
-            reason: "battle",
-            sourceCard: attacker,
-          });
+          const { replaced } =
+            (await this.resolveDestructionWithReplacement(target, {
+              reason: "battle",
+              sourceCard: attacker,
+            })) || {};
           if (!replaced) {
             this.moveCard(target, defender, "graveyard");
             this.applyBattleDestroyEffect(attacker, target);
