@@ -773,6 +773,24 @@ export default class Game {
       return { replaced: false };
     }
 
+    if (options.reason === "battle") {
+      const guardEquip = (card.equips || []).find(
+        (equip) =>
+          equip && equip.grantsCrescentShieldGuard && equip.equippedTo === card
+      );
+
+      if (guardEquip) {
+        this.renderer.log(
+          `${guardEquip.name} was destroyed to protect ${card.name}.`
+        );
+        this.moveCard(guardEquip, ownerPlayer, "graveyard", {
+          fromZone: "spellTrap",
+        });
+        guardEquip.grantsCrescentShieldGuard = false;
+        return { replaced: true };
+      }
+    }
+
     const effect = (card.effects || []).find(
       (eff) => eff.id === "luminarch_aurora_seraph_protect"
     );
@@ -1934,6 +1952,10 @@ export default class Game {
       if (card.grantsBattleIndestructible) {
         host.battleIndestructible = false;
         card.grantsBattleIndestructible = false;
+      }
+
+      if (card.grantsCrescentShieldGuard) {
+        card.grantsCrescentShieldGuard = false;
       }
 
       card.equippedTo = null;

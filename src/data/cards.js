@@ -265,6 +265,7 @@ export const cardDatabase = [
             owner: "self",
             zone: "field",
             cardKind: "monster",
+            requireFaceup: true,
             count: { min: 1, max: 1 },
           },
         ],
@@ -467,6 +468,7 @@ export const cardDatabase = [
             zone: "field",
             cardKind: "monster",
             archetype: "Shadow-Heart", // <<< filtro de arquétipo
+            requireFaceup: true,
             count: { min: 1, max: 5 },
             autoSelect: true, // pega automaticamente todos os válidos
           },
@@ -598,6 +600,7 @@ export const cardDatabase = [
             owner: "opponent",
             zone: "field",
             cardKind: "monster",
+            requireFaceup: true,
             count: { min: 1, max: 1 },
           },
         ],
@@ -1077,6 +1080,7 @@ export const cardDatabase = [
             zone: "field",
             cardKind: "monster",
             archetype: "Luminarch",
+            requireFaceup: true,
             count: { min: 1, max: 3 },
           },
         ],
@@ -1449,6 +1453,7 @@ export const cardDatabase = [
             zone: "field",
             cardKind: "monster",
             archetype: "Luminarch",
+            requireFaceup: true,
             count: { min: 1, max: 1 },
           },
         ],
@@ -1462,6 +1467,171 @@ export const cardDatabase = [
             type: "luminarch_citadel_atkdef_buff",
             targetRef: "sanctum_citadel_target",
             amount: 500,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 59,
+    name: "Luminarch Holy Ascension",
+    cardKind: "spell",
+    subtype: "normal",
+    archetype: "Luminarch",
+    description:
+      'Pay 1000 LP, then target 1 "Luminarch" monster you control; it gains 800 ATK/DEF until the end of this turn.',
+    image: "assets/Luminarch Holy Ascension.png",
+    effects: [
+      {
+        id: "luminarch_holy_ascension_boost",
+        timing: "on_play",
+        speed: 1,
+        targets: [
+          {
+            id: "holy_ascension_target",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            archetype: "Luminarch",
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "damage",
+            player: "self",
+            amount: 1000,
+          },
+          {
+            type: "luminarch_citadel_atkdef_buff",
+            targetRef: "holy_ascension_target",
+            amount: 800,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 60,
+    name: "Luminarch Radiant Wave",
+    cardKind: "spell",
+    subtype: "normal",
+    archetype: "Luminarch",
+    description:
+      'Send 1 "Luminarch" monster with 2000 or more ATK you control to the GY, then target 1 card your opponent controls; destroy it.',
+    image: "assets/Luminarch Radiant Wave.png",
+    effects: [
+      {
+        id: "luminarch_radiant_wave_effect",
+        timing: "on_play",
+        speed: 1,
+        targets: [
+          {
+            id: "radiant_wave_cost",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            archetype: "Luminarch",
+            minAtk: 2000,
+            count: { min: 1, max: 1 },
+          },
+          {
+            id: "radiant_wave_destroy",
+            owner: "opponent",
+            zones: ["field", "spellTrap", "fieldSpell"],
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "radiant_wave_cost",
+            player: "self",
+            to: "graveyard",
+          },
+          {
+            type: "destroy",
+            targetRef: "radiant_wave_destroy",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 61,
+    name: "Luminarch Crescent Shield",
+    cardKind: "spell",
+    subtype: "equip",
+    archetype: "Luminarch",
+    description:
+      'Equip only to a "Luminarch" monster you control. It gains 500 DEF. If the equipped monster would be destroyed by battle, send this card to the GY instead.',
+    image: "assets/Luminarch Crescent Shield.png",
+    effects: [
+      {
+        id: "luminarch_crescent_shield_equip",
+        timing: "on_play",
+        speed: 1,
+        targets: [
+          {
+            id: "crescent_shield_target",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            archetype: "Luminarch",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "equip",
+            targetRef: "crescent_shield_target",
+            defBonus: 500,
+            grantCrescentShieldGuard: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 62,
+    name: "Luminarch Spear of Dawnfall",
+    cardKind: "spell",
+    subtype: "normal",
+    archetype: "Luminarch",
+    description:
+      'If you control a "Luminarch" monster: target 1 monster your opponent controls; its ATK and DEF become 0 until the end of this turn.',
+    image: "assets/Luminarch Spear of Dawnfall.png",
+    effects: [
+      {
+        id: "luminarch_spear_dawnfall",
+        timing: "on_play",
+        speed: 1,
+        targets: [
+          {
+            id: "spear_luminarch_check",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            archetype: "Luminarch",
+            count: { min: 1, max: 1 },
+            autoSelect: true,
+          },
+          {
+            id: "spear_zero_target",
+            owner: "opponent",
+            zone: "field",
+            cardKind: "monster",
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "modify_stats_temp",
+            targetRef: "spear_zero_target",
+            atkFactor: 0,
+            defFactor: 0,
           },
         ],
       },

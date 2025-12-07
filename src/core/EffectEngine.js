@@ -944,14 +944,23 @@ export default class EffectEngine {
         const ownerLabel = controller === ctx.player.id ? "player" : "opponent";
         const ownerPlayer =
           controller === "player" ? this.game.player : this.game.bot;
-        const zoneArr = this.getZone(ownerPlayer, zoneName) || [];
-        const zoneIndex = zoneArr.indexOf(card);
+        let zoneForDisplay = zoneName;
+        let zoneArr = this.getZone(ownerPlayer, zoneForDisplay) || [];
+        let zoneIndex = zoneArr.indexOf(card);
+        if (zoneIndex === -1) {
+          const detectedZone = this.findCardZone(ownerPlayer, card);
+          if (detectedZone) {
+            zoneForDisplay = detectedZone;
+            zoneArr = this.getZone(ownerPlayer, detectedZone) || [];
+            zoneIndex = zoneArr.indexOf(card);
+          }
+        }
         return {
           idx,
           name: card.name,
           owner: ownerLabel,
           controller,
-          zone: zoneName,
+          zone: zoneForDisplay,
           zoneIndex,
           position: card.position,
           atk: card.atk,
@@ -978,6 +987,8 @@ export default class EffectEngine {
 
   selectCandidates(def, ctx) {
     const zoneName = def.zone || "field";
+    const zoneList =
+      Array.isArray(def.zones) && def.zones.length > 0 ? def.zones : [zoneName];
 
     const owners = [];
     if (def.owner === "opponent") {
@@ -990,36 +1001,42 @@ export default class EffectEngine {
 
     let candidates = [];
     for (const owner of owners) {
-      const zone = this.getZone(owner, zoneName) || [];
-      for (const card of zone) {
-        if (
-          zoneName === "hand" &&
-          ctx.activationZone === "hand" &&
-          card === ctx.source
-        ) {
-          continue;
+      for (const zoneKey of zoneList) {
+        const zone = this.getZone(owner, zoneKey) || [];
+        for (const card of zone) {
+          if (
+            zoneKey === "hand" &&
+            ctx.activationZone === "hand" &&
+            card === ctx.source
+          ) {
+            continue;
+          }
+          if (def.cardKind && card.cardKind !== def.cardKind) continue;
+          if (def.requireFaceup && card.isFacedown) continue;
+          if (
+            def.position &&
+            def.position !== "any" &&
+            card.position !== def.position
+          ) {
+            continue;
+          }
+          const cardLevel = card.level || 0;
+          if (def.level !== undefined && cardLevel !== def.level) continue;
+          if (def.minLevel !== undefined && cardLevel < def.minLevel) continue;
+          if (def.maxLevel !== undefined && cardLevel > def.maxLevel) continue;
+          const cardAtk = card.atk || 0;
+          if (def.minAtk !== undefined && cardAtk < def.minAtk) continue;
+          if (def.maxAtk !== undefined && cardAtk > def.maxAtk) continue;
+          if (def.archetype) {
+            const cardArchetypes = card.archetypes
+              ? card.archetypes
+              : card.archetype
+              ? [card.archetype]
+              : [];
+            if (!cardArchetypes.includes(def.archetype)) continue;
+          }
+          candidates.push(card);
         }
-        if (def.cardKind && card.cardKind !== def.cardKind) continue;
-        if (
-          def.position &&
-          def.position !== "any" &&
-          card.position !== def.position
-        ) {
-          continue;
-        }
-        const cardLevel = card.level || 0;
-        if (def.level !== undefined && cardLevel !== def.level) continue;
-        if (def.minLevel !== undefined && cardLevel < def.minLevel) continue;
-        if (def.maxLevel !== undefined && cardLevel > def.maxLevel) continue;
-        if (def.archetype) {
-          const cardArchetypes = card.archetypes
-            ? card.archetypes
-            : card.archetype
-            ? [card.archetype]
-            : [];
-          if (!cardArchetypes.includes(def.archetype)) continue;
-        }
-        candidates.push(card);
       }
     }
 
@@ -1048,6 +1065,17 @@ export default class EffectEngine {
       default:
         return player.field;
     }
+  }
+
+  findCardZone(player, card) {
+    if (!player || !card) return null;
+    if (player.field && player.field.includes(card)) return "field";
+    if (player.spellTrap && player.spellTrap.includes(card)) return "spellTrap";
+    if (player.fieldSpell === card) return "fieldSpell";
+    if (player.hand && player.hand.includes(card)) return "hand";
+    if (player.graveyard && player.graveyard.includes(card)) return "graveyard";
+    if (player.deck && player.deck.includes(card)) return "deck";
+    return null;
   }
 
   getOwnerByCard(card) {
@@ -1355,6 +1383,12 @@ export default class EffectEngine {
       if (this.game && typeof this.game.moveCard === "function") {
         this.game.moveCard(card, owner, "graveyard");
         destroyedAny = true;
+        if (typeof this.game.updateBoard === "function") {
+          this.game.updateBoard();
+        }
+        if (typeof this.game.checkWinCondition === "function") {
+          this.game.checkWinCondition();
+        }
         continue;
       }
 
@@ -1481,6 +1515,7 @@ export default class EffectEngine {
     const targetCards = targets[action.targetRef] || [];
     const amount = action.amount ?? 0;
     targetCards.forEach((card) => {
+      if (card.isFacedown) return;
       card.atk += amount;
       card.tempAtkBoost = (card.tempAtkBoost || 0) + amount;
     });
@@ -1493,6 +1528,7 @@ export default class EffectEngine {
     const defFactor = action.defFactor ?? 1;
 
     targetCards.forEach((card) => {
+      if (card.isFacedown) return;
       if (atkFactor !== 1) {
         const newAtk = Math.floor((card.atk || 0) * atkFactor);
         const deltaAtk = newAtk - card.atk;
@@ -1525,6 +1561,7 @@ export default class EffectEngine {
 
     (ctx.player.field || []).forEach((monster) => {
       if (!monster || monster.cardKind !== "monster") return;
+      if (monster.isFacedown) return;
       const archetypes = monster.archetypes
         ? monster.archetypes
         : monster.archetype
@@ -1544,6 +1581,7 @@ export default class EffectEngine {
     const monster = ctx?.summonedCard;
     if (!amount || !monster || monster.cardKind !== "monster") return false;
     if (monster.owner !== ctx.player.id) return false;
+    if (monster.isFacedown) return false;
 
     const archetype = action.archetype || "Shadow-Heart";
     const archetypes = monster.archetypes
@@ -1928,6 +1966,7 @@ export default class EffectEngine {
       equipCard.equipDefBonus = 0;
       equipCard.equipExtraAttacks = 0;
       equipCard.grantsBattleIndestructible = false;
+      equipCard.grantsCrescentShieldGuard = false;
       equipCard.equippedTo = null;
     };
 
@@ -1977,6 +2016,12 @@ export default class EffectEngine {
       equipCard.grantsBattleIndestructible = false;
     }
 
+    if (action.grantCrescentShieldGuard) {
+      equipCard.grantsCrescentShieldGuard = true;
+    } else {
+      equipCard.grantsCrescentShieldGuard = false;
+    }
+
     const maxAttacksAfterEquip = 1 + (target.extraAttacks || 0);
     target.hasAttacked =
       (target.attacksUsedThisTurn || 0) >= maxAttacksAfterEquip;
@@ -2002,7 +2047,7 @@ export default class EffectEngine {
 
     let applied = false;
     targetCards.forEach((card) => {
-      if (!card || card.cardKind !== "monster") return;
+      if (!card || card.cardKind !== "monster" || card.isFacedown) return;
       const owner = this.getOwnerByCard(card);
       if (!owner || !owner.field || !owner.field.includes(card)) return;
 

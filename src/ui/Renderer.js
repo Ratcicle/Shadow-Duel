@@ -267,13 +267,23 @@ export default class Renderer {
     modal.innerHTML = `
       <div class="protector-backdrop"></div>
       <div class="protector-content">
-        <header>
-          <span>Luminarch Sanctum Protector</span>
+        <div class="protector-glow"></div>
+        <header class="protector-header">
+          <div class="protector-title">
+            <span class="protector-label">Resposta do Sanctum</span>
+            <strong>Luminarch Sanctum Protector</strong>
+          </div>
+          <span class="protector-pill">Quick Effect</span>
         </header>
-        <p>Negar o ataque do oponente?</p>
+        <p class="protector-text">
+          Negar o ataque declarado e manter o campo Luminarch seguro?
+        </p>
+        <p class="protector-subtext">
+          Se você recusar, o ataque continuará normalmente.
+        </p>
         <div class="protector-actions">
-          <button class="primary" data-choice="yes">Sim</button>
-          <button class="secondary" data-choice="no">Não</button>
+          <button class="primary" data-choice="yes">Negar ataque</button>
+          <button class="secondary" data-choice="no">Permitir ataque</button>
         </div>
       </div>
     `;
