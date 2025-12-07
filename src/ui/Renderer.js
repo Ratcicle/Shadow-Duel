@@ -313,6 +313,57 @@ export default class Renderer {
     return promise;
   }
 
+  showConditionalSummonPrompt(cardName, message) {
+    if (typeof document === "undefined") {
+      return Promise.resolve(false);
+    }
+
+    const existing = document.querySelector(".conditional-summon-modal");
+    if (existing) existing.remove();
+
+    const modal = document.createElement("div");
+    modal.className = "conditional-summon-modal";
+    modal.innerHTML = `
+      <div class="conditional-summon-backdrop"></div>
+      <div class="conditional-summon-content">
+        <header class="conditional-summon-header">
+          <h3 class="conditional-summon-title">${cardName}</h3>
+        </header>
+        <p class="conditional-summon-text">
+          ${message}
+        </p>
+        <div class="conditional-summon-actions">
+          <button class="primary" data-choice="yes">Invocar</button>
+          <button class="secondary" data-choice="no">Recusar</button>
+        </div>
+      </div>
+    `;
+
+    const promise = new Promise((resolve) => {
+      const cleanup = (result) => {
+        modal.remove();
+        resolve(result);
+      };
+
+      modal.addEventListener("click", (e) => {
+        if (e.target.classList.contains("conditional-summon-backdrop")) {
+          cleanup(false);
+        }
+      });
+
+      modal.querySelectorAll("button").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const choice = btn.dataset.choice;
+          cleanup(choice === "yes");
+        });
+      });
+    });
+
+    document.body.appendChild(modal);
+    return promise;
+  }
+
   showSpellChoiceModal(cardIndex, callback) {
     const existingModal = document.querySelector(".spell-choice-modal");
     if (existingModal) {

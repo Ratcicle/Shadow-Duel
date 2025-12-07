@@ -1637,4 +1637,75 @@ export const cardDatabase = [
       },
     ],
   },
+  {
+    id: 63,
+    name: "Luminarch Enchanted Halberd",
+    cardKind: "monster",
+    atk: 1600,
+    def: 1400,
+    level: 4,
+    type: "Warrior",
+    archetype: "Luminarch",
+    image: "assets/Luminarch Enchanted Halberd.png",
+    description:
+      'Uma vez por turno, se um monstro "Luminarch" for invocado por invocação especial no seu campo; você pode invocar essa carta por invocação especial da sua mão, mas ela não pode declarar um ataque neste turno.',
+    effects: [
+      {
+        id: "luminarch_enchanted_halberd_conditional_summon",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethod: "special",
+        oncePerTurn: true,
+        oncePerTurnName: "luminarch_enchanted_halberd_conditional_summon",
+        condition: {
+          triggerArchetype: "Luminarch",
+          requires: "self_in_hand",
+        },
+        promptUser: true,
+        promptMessage:
+          "Um monstro Luminarch foi invocado por invocação especial. Deseja invocar Luminarch Enchanted Halberd da sua mão?",
+        actions: [
+          {
+            type: "conditional_special_summon_from_hand",
+            restrictAttackThisTurn: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 64,
+    name: "Luminarch Moonlit Blessing",
+    cardKind: "spell",
+    subtype: "normal",
+    archetype: "Luminarch",
+    description:
+      'Target 1 "Luminarch" monster in your Graveyard; add it to your hand, then if you control "Sanctum of the Luminarch Citadel", you can Special Summon that monster. You can only activate 1 "Luminarch Moonlit Blessing" per turn.',
+    image: "assets/Luminarch Moonlit Blessing.png",
+    effects: [
+      {
+        id: "luminarch_moonlit_blessing_effect",
+        timing: "on_play",
+        speed: 1,
+        oncePerTurn: true,
+        oncePerTurnName: "luminarch_moonlit_blessing",
+        targets: [
+          {
+            id: "moonlit_blessing_target",
+            owner: "self",
+            zone: "graveyard",
+            cardKind: "monster",
+            archetype: "Luminarch",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "luminarch_moonlit_blessing",
+            targetRef: "moonlit_blessing_target",
+          },
+        ],
+      },
+    ],
+  },
 ];

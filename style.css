@@ -846,10 +846,100 @@ body {
   outline: none;
 }
 
+.conditional-summon-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 320;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.conditional-summon-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(4px);
+  pointer-events: all;
+}
+
+.conditional-summon-content {
+  position: relative;
+  pointer-events: all;
+  background: linear-gradient(135deg, #1a1525 0%, #0f0b18 100%);
+  border: 1px solid rgba(187, 134, 252, 0.4);
+  border-radius: 12px;
+  padding: 24px;
+  min-width: min(90vw, 420px);
+  max-width: 500px;
+  color: #fff;
+  text-align: left;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+
+.conditional-summon-header {
+  margin-bottom: 16px;
+}
+
+.conditional-summon-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #fff;
+  margin: 0 0 8px 0;
+}
+
+.conditional-summon-text {
+  margin-bottom: 20px;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.conditional-summon-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.conditional-summon-actions button {
+  flex: 1;
+  padding: 10px 20px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.conditional-summon-actions button.primary {
+  background: #bb86fc;
+  color: #000;
+  border-color: #bb86fc;
+}
+
+.conditional-summon-actions button.primary:hover {
+  background: #d4a5ff;
+  border-color: #d4a5ff;
+  transform: translateY(-1px);
+}
+
+.conditional-summon-actions button.secondary {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.conditional-summon-actions button.secondary:hover {
+  border-color: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.05);
+  transform: translateY(-1px);
+}
+
 .special-summon-position-modal {
   position: fixed;
   inset: 0;
-  z-index: 260;
+  z-index: 330;
   display: flex;
   align-items: center;
   justify-content: center;

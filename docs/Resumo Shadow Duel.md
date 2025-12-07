@@ -128,6 +128,15 @@ O lema desse projeto é desenvolver do jeito mais modular, flexível e organizad
 - **Events**: Lowercase with underscores (e.g., `after_summon`, `battle_destroy`, `standby_phase`)
 - **Action types**: Lowercase with underscores; match property names exactly in EffectEngine dispatch
 
+## Design Restrictions
+
+**⚠️ PROHIBITED (unless explicitly requested by user):**
+- **Effect negation cards** (cards that negate other card effects)
+- **Hand trap effects** (effects activated from hand during opponent's turn)
+- **XYZ, Pendulum, or Link monsters** (only Normal, Effect, and Ritual monsters allowed)
+
+These mechanics add excessive complexity to the current engine and are out of scope for Shadow Duel's design philosophy.
+
 ## Known Gaps & Planned Features
 
 - **Ritual Summon** (`summon.special.shadow_heart_ritual`): Stub exists but needs ritual card definition

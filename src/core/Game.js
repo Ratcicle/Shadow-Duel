@@ -122,10 +122,8 @@ export default class Game {
       });
     }
 
-    const wantsAttack = window.confirm(
-      "Special Summon em ATAQUE? (OK = Ataque, Cancelar = Defesa)"
-    );
-    return wantsAttack ? "attack" : "defense";
+    // Fallback: return a Promise that always resolves to "attack"
+    return Promise.resolve("attack");
   }
 
   async startTurn() {

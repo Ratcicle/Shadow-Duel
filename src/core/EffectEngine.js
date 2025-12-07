@@ -66,7 +66,7 @@ export default class EffectEngine {
     return undefined;
   }
 
-  handleAfterSummonEvent(payload) {
+  async handleAfterSummonEvent(payload) {
     if (!payload || !payload.card || !payload.player) return;
     const { card, player, method } = payload;
 
@@ -74,11 +74,17 @@ export default class EffectEngine {
     if (player.fieldSpell) {
       sources.push(player.fieldSpell);
     }
+    // Also check cards in hand for conditional summon effects
+    if (player.hand && Array.isArray(player.hand)) {
+      sources.push(...player.hand);
+    }
 
     const opponent = this.game.getOpponent(player);
 
     for (const sourceCard of sources) {
       if (!sourceCard.effects || !Array.isArray(sourceCard.effects)) continue;
+
+      const sourceZone = this.findCardZone(player, sourceCard);
 
       const ctx = {
         source: sourceCard,
@@ -91,6 +97,18 @@ export default class EffectEngine {
       for (const effect of sourceCard.effects) {
         if (!effect || effect.timing !== "on_event") continue;
         if (effect.event !== "after_summon") continue;
+
+        // Only allow hand-based triggers if explicitly intended
+        if (sourceZone === "hand") {
+          const requiresSelfInHand =
+            effect?.condition?.requires === "self_in_hand";
+          const isConditionalSummonFromHand = (effect.actions || []).some(
+            (a) => a?.type === "conditional_special_summon_from_hand"
+          );
+          if (!requiresSelfInHand && !isConditionalSummonFromHand) {
+            continue;
+          }
+        }
 
         const optCheck = this.checkOncePerTurn(sourceCard, player, effect);
         if (!optCheck.ok) {
@@ -105,6 +123,16 @@ export default class EffectEngine {
           if (!methods.includes(method)) {
             continue;
           }
+        }
+
+        if (effect.condition) {
+          const conditionMet = this.checkEffectCondition(
+            effect.condition,
+            sourceCard,
+            player,
+            card
+          );
+          if (!conditionMet) continue;
         }
 
         const targetResult = this.resolveTargets(
@@ -141,6 +169,31 @@ export default class EffectEngine {
           continue;
         }
 
+        if (effect.promptUser === true && player === this.game.player) {
+          const shouldActivate =
+            await this.game.renderer.showConditionalSummonPrompt(
+              sourceCard.name,
+              effect.promptMessage || `Activate ${sourceCard.name}'s effect?`
+            );
+          if (!shouldActivate) continue;
+
+          if (
+            effect.actions &&
+            effect.actions[0]?.type === "conditional_special_summon_from_hand"
+          ) {
+            const summonResult =
+              await this.handleConditionalSpecialSummonFromHand(
+                sourceCard,
+                player,
+                effect
+              );
+            if (!summonResult?.success) continue;
+            this.registerOncePerTurnUsage(sourceCard, player, effect);
+            this.game.checkWinCondition();
+            return;
+          }
+        }
+
         this.applyActions(
           effect.actions || [],
           ctx,
@@ -150,6 +203,136 @@ export default class EffectEngine {
         this.game.checkWinCondition();
       }
     }
+  }
+
+  checkEffectCondition(condition, sourceCard, player, summonedCard) {
+    if (!condition) return true;
+
+    if (condition.requires === "self_in_hand") {
+      if (!player.hand || !player.hand.includes(sourceCard)) {
+        return false;
+      }
+    }
+
+    if (condition.triggerArchetype) {
+      const archetypes = summonedCard.archetypes
+        ? summonedCard.archetypes
+        : summonedCard.archetype
+        ? [summonedCard.archetype]
+        : [];
+      if (!archetypes.includes(condition.triggerArchetype)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  async handleTriggeredEffect(sourceCard, effect, ctx) {
+    const optCheck = this.checkOncePerTurn(sourceCard, ctx.player, effect);
+    if (!optCheck.ok) {
+      console.log(optCheck.reason);
+      return { success: false, reason: optCheck.reason };
+    }
+
+    const targetResult = this.resolveTargets(effect.targets || [], ctx, null);
+
+    if (targetResult.needsSelection) {
+      return {
+        success: false,
+        needsSelection: true,
+        options: targetResult.options,
+      };
+    }
+
+    if (targetResult.ok === false) {
+      return { success: false, reason: targetResult.reason };
+    }
+
+    // Don't apply actions here for conditional_special_summon_from_hand
+    // as it's handled separately in handleConditionalSpecialSummonFromHand
+    const isConditionalSummon =
+      effect.actions &&
+      effect.actions[0]?.type === "conditional_special_summon_from_hand";
+
+    if (!isConditionalSummon) {
+      this.applyActions(effect.actions || [], ctx, targetResult.targets || {});
+      this.registerOncePerTurnUsage(sourceCard, ctx.player, effect);
+      this.game.checkWinCondition();
+    }
+
+    return { success: true };
+  }
+
+  async handleConditionalSpecialSummonFromHand(card, player, effect) {
+    if (!card || !player || card.cardKind !== "monster") {
+      return { success: false, reason: "Invalid card or player." };
+    }
+
+    if (!player.hand || !player.hand.includes(card)) {
+      return { success: false, reason: "Card is not in hand." };
+    }
+
+    const opponent = this.game.getOpponent(player);
+    const ctx = {
+      source: card,
+      player,
+      opponent,
+      activationZone: "hand",
+    };
+
+    const triggerResult = await this.handleTriggeredEffect(card, effect, ctx);
+    if (!triggerResult.success) {
+      return triggerResult;
+    }
+
+    const finishSummon = async (position) => {
+      const pos = position || "attack";
+
+      card.position = pos;
+      card.isFacedown = false;
+      card.hasAttacked = false;
+      card.cannotAttackThisTurn = effect.restrictAttackThisTurn ? true : false;
+
+      if (this.game && typeof this.game.moveCard === "function") {
+        this.game.moveCard(card, player, "field", {
+          fromZone: "hand",
+          position: pos,
+          isFacedown: false,
+          resetAttackFlags: true,
+        });
+      } else {
+        const idx = player.hand.indexOf(card);
+        if (idx > -1) {
+          player.hand.splice(idx, 1);
+        }
+        player.field.push(card);
+      }
+
+      if (this.game && typeof this.game.updateBoard === "function") {
+        this.game.updateBoard();
+      }
+    };
+
+    if (
+      this.game &&
+      player === this.game.player &&
+      typeof this.game.chooseSpecialSummonPosition === "function"
+    ) {
+      const positionChoice = this.game.chooseSpecialSummonPosition(
+        player,
+        card
+      );
+      if (positionChoice && typeof positionChoice.then === "function") {
+        await positionChoice.then((pos) => finishSummon(pos));
+      } else {
+        await finishSummon(positionChoice);
+      }
+    } else {
+      await finishSummon("attack");
+    }
+
+    return { success: true };
   }
 
   handleBattleDestroyEvent(payload) {
@@ -1277,12 +1460,25 @@ export default class EffectEngine {
             executed =
               this.applyLuminarchRadiantLancerResetAtk(action, ctx) || executed;
             break;
+          case "luminarch_moonlit_blessing":
+            executed =
+              (await this.applyLuminarchMoonlitBlessing(
+                action,
+                ctx,
+                targets
+              )) || executed;
+            break;
           case "luminarch_aurora_seraph_heal":
             executed = this.applyAuroraSeraphHeal(action, ctx) || executed;
             break;
           case "luminarch_citadel_atkdef_buff":
             executed =
               this.applyLuminarchCitadelAtkDefBuff(action, ctx, targets) ||
+              executed;
+            break;
+          case "conditional_special_summon_from_hand":
+            executed =
+              (await this.applyConditionalSpecialSummonFromHand(action, ctx)) ||
               executed;
             break;
           default:
@@ -2623,5 +2819,208 @@ export default class EffectEngine {
     const card = ctx?.source;
     if (!card) return false;
     return this.removeNamedPermanentAtkBuff(card, card.name);
+  }
+
+  async applyLuminarchMoonlitBlessing(action, ctx, targets) {
+    const targetCards = targets[action.targetRef] || [];
+    if (targetCards.length === 0) return false;
+
+    const card = targetCards[0];
+    const player = ctx?.player;
+    if (!player || !card) return false;
+
+    // Move card from GY to hand
+    const gy = player.graveyard || [];
+    const idx = gy.indexOf(card);
+    if (idx === -1) {
+      console.warn("Target card not found in graveyard:", card.name);
+      return false;
+    }
+
+    gy.splice(idx, 1);
+    player.hand = player.hand || [];
+    player.hand.push(card);
+
+    console.log(`Added ${card.name} from Graveyard to hand.`);
+
+    // Check if player controls Sanctum of the Luminarch Citadel
+    const hasCitadel =
+      player.fieldSpell &&
+      player.fieldSpell.name === "Sanctum of the Luminarch Citadel";
+
+    if (!hasCitadel) {
+      if (this.game && typeof this.game.updateBoard === "function") {
+        this.game.updateBoard();
+      }
+      return true;
+    }
+
+    // Offer Special Summon for human player
+    if (player === this.game?.player) {
+      const wantsToSummon = window.confirm(
+        `Você controla "Sanctum of the Luminarch Citadel". Deseja invocar por invocação especial "${card.name}" da sua mão?`
+      );
+
+      if (!wantsToSummon) {
+        if (this.game && typeof this.game.updateBoard === "function") {
+          this.game.updateBoard();
+        }
+        return true;
+      }
+
+      // Check field space
+      if (player.field.length >= 5) {
+        console.log("No space to Special Summon.");
+        if (this.game && typeof this.game.updateBoard === "function") {
+          this.game.updateBoard();
+        }
+        return true;
+      }
+
+      // Remove from hand
+      const handIdx = player.hand.indexOf(card);
+      if (handIdx === -1) {
+        console.warn("Card disappeared from hand:", card.name);
+        if (this.game && typeof this.game.updateBoard === "function") {
+          this.game.updateBoard();
+        }
+        return true;
+      }
+
+      // Get position choice and summon
+      const finishSummon = (position) => {
+        const pos = position || "attack";
+        card.position = pos;
+        card.isFacedown = false;
+        card.hasAttacked = false;
+        card.cannotAttackThisTurn = false;
+
+        if (this.game && typeof this.game.moveCard === "function") {
+          this.game.moveCard(card, player, "field", {
+            fromZone: "hand",
+            position: pos,
+            isFacedown: false,
+            resetAttackFlags: true,
+          });
+        } else {
+          player.hand.splice(handIdx, 1);
+          player.field.push(card);
+        }
+
+        console.log(
+          `Special Summoned ${card.name} in ${pos} position via Moonlit Blessing.`
+        );
+
+        if (this.game && typeof this.game.updateBoard === "function") {
+          this.game.updateBoard();
+        }
+      };
+
+      if (
+        this.game &&
+        typeof this.game.chooseSpecialSummonPosition === "function"
+      ) {
+        const positionChoice = this.game.chooseSpecialSummonPosition(
+          player,
+          card
+        );
+        if (positionChoice && typeof positionChoice.then === "function") {
+          await positionChoice.then((pos) => finishSummon(pos));
+        } else {
+          finishSummon(positionChoice);
+        }
+      } else {
+        finishSummon("attack");
+      }
+
+      return true;
+    }
+
+    // Bot always summons if possible
+    if (player.field.length >= 5) {
+      if (this.game && typeof this.game.updateBoard === "function") {
+        this.game.updateBoard();
+      }
+      return true;
+    }
+
+    const handIdx = player.hand.indexOf(card);
+    if (handIdx === -1) {
+      if (this.game && typeof this.game.updateBoard === "function") {
+        this.game.updateBoard();
+      }
+      return true;
+    }
+
+    player.hand.splice(handIdx, 1);
+    card.position = "attack";
+    card.isFacedown = false;
+    card.hasAttacked = false;
+    card.cannotAttackThisTurn = false;
+    player.field.push(card);
+
+    console.log(
+      `Bot Special Summoned ${card.name} in attack position via Moonlit Blessing.`
+    );
+
+    if (this.game && typeof this.game.updateBoard === "function") {
+      this.game.updateBoard();
+    }
+
+    return true;
+  }
+
+  async applyConditionalSpecialSummonFromHand(action, ctx) {
+    const player = ctx?.player;
+    if (!player) return false;
+
+    if (!player.hand || player.hand.length === 0) return false;
+
+    const candidates = player.hand.filter((c) => c && c.cardKind === "monster");
+    if (candidates.length === 0) return false;
+
+    let targetCard = candidates[0];
+    if (candidates.length > 1) {
+      const cardNames = [...new Set(candidates.map((c) => c.name))];
+      const choice = window.prompt(
+        `Choose a monster to special summon:\n${cardNames.join("\n")}`
+      );
+      if (choice) {
+        const normalized = choice.trim().toLowerCase();
+        const byName = candidates.find(
+          (c) => c && c.name && c.name.trim().toLowerCase() === normalized
+        );
+        if (byName) targetCard = byName;
+      }
+    }
+
+    const position = action.position || "attack";
+    targetCard.position = position;
+    targetCard.isFacedown = false;
+    targetCard.hasAttacked = false;
+    targetCard.cannotAttackThisTurn = action.restrictAttackThisTurn
+      ? true
+      : false;
+
+    if (this.game && typeof this.game.moveCard === "function") {
+      this.game.moveCard(targetCard, player, "field", {
+        fromZone: "hand",
+        position,
+        isFacedown: false,
+        resetAttackFlags: true,
+      });
+    } else {
+      const idx = player.hand.indexOf(targetCard);
+      if (idx > -1) {
+        player.hand.splice(idx, 1);
+      }
+      player.field.push(targetCard);
+    }
+
+    if (this.game && typeof this.game.updateBoard === "function") {
+      this.game.updateBoard();
+    }
+
+    return true;
   }
 }
