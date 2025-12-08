@@ -1046,7 +1046,7 @@ export default class EffectEngine {
     return { success: true };
   }
 
-  activateSpellTrapEffect(
+  async activateSpellTrapEffect(
     card,
     player,
     selections = null,
@@ -1125,7 +1125,7 @@ export default class EffectEngine {
       return { success: false, reason: targetResult.reason };
     }
 
-    this.applyActions(effect.actions || [], ctx, targetResult.targets || {});
+    await this.applyActions(effect.actions || [], ctx, targetResult.targets || {});
     this.registerOncePerTurnUsage(card, player, effect);
     this.game.checkWinCondition();
     return { success: true };
@@ -3827,11 +3827,7 @@ export default class EffectEngine {
 
     console.log(`[Cathedral] Counter count: ${counterCount}`);
 
-    if (counterCount <= 0) {
-      console.log("No counters on Shadow-Heart Cathedral to use.");
-      return false;
-    }
-
+    // Allow opening modal even with 0 counters to show info
     const maxAtk = counterCount * multiplier;
 
     // Get deck candidates
@@ -3843,10 +3839,18 @@ export default class EffectEngine {
       return cardAtk <= maxAtk;
     });
 
+    console.log(`[Cathedral] Found ${validMonsters.length} valid monsters in deck (ATK ≤ ${maxAtk})`);
+
     if (validMonsters.length === 0) {
       console.log(
         `No Shadow-Heart monsters in deck with ATK ≤ ${maxAtk} to summon.`
       );
+      // Still show info to player
+      if (counterCount === 0) {
+        this.game.renderer.log("Shadow-Heart Cathedral has no Judgment Counters yet.");
+      } else {
+        this.game.renderer.log(`No valid Shadow-Heart monsters in deck with ATK ≤ ${maxAtk}.`);
+      }
       return false;
     }
 
@@ -3856,11 +3860,14 @@ export default class EffectEngine {
         validMonsters,
         maxAtk,
         counterCount,
-        (selectedCard) => {
+        async (selectedCard) => {
           if (!selectedCard) {
+            console.log("[Cathedral] No card selected, canceling");
             resolve(false);
             return;
           }
+
+          console.log(`[Cathedral] Card selected: ${selectedCard.name}`);
 
           // Remove card from deck
           const deckIndex = ctx.player.deck.indexOf(selectedCard);
@@ -3868,30 +3875,65 @@ export default class EffectEngine {
             ctx.player.deck.splice(deckIndex, 1);
           }
 
-          // Special Summon to field
-          if (ctx.player.field.length < 5) {
-            selectedCard.position = "attack";
-            selectedCard.isFacedown = false;
-            selectedCard.hasAttacked = false;
-            selectedCard.cannotAttackThisTurn = false;
-            ctx.player.field.push(selectedCard);
-
-            console.log(
-              `Special Summoned ${selectedCard.name} from deck via Shadow-Heart Cathedral (${counterCount} counters, max ATK ${maxAtk}).`
-            );
-
-            // Send Cathedral to GY
-            this.game.moveCard(ctx.source, ctx.player, "graveyard");
-
-            if (typeof this.game.updateBoard === "function") {
-              this.game.updateBoard();
-            }
-
-            resolve(true);
-          } else {
+          // Check field space
+          if (ctx.player.field.length >= 5) {
             console.log("Field is full, cannot Special Summon.");
+            this.game.renderer.log("Your field is full!");
+            // Return card to deck
+            ctx.player.deck.splice(deckIndex, 0, selectedCard);
             resolve(false);
+            return;
           }
+
+          // Ask for position
+          const position = await new Promise((resolvePos) => {
+            this.game.renderer.showSummonModal(
+              selectedCard,
+              false, // not a tribute summon
+              (pos) => resolvePos(pos),
+              () => resolvePos(null)
+            );
+          });
+
+          if (!position) {
+            console.log("[Cathedral] Position selection cancelled");
+            // Return card to deck
+            ctx.player.deck.splice(deckIndex, 0, selectedCard);
+            resolve(false);
+            return;
+          }
+
+          // Special Summon to field
+          selectedCard.position = position;
+          selectedCard.isFacedown = position === "defense" ? true : false;
+          selectedCard.hasAttacked = false;
+          selectedCard.cannotAttackThisTurn = false;
+          ctx.player.field.push(selectedCard);
+
+          console.log(
+            `Special Summoned ${selectedCard.name} from deck via Shadow-Heart Cathedral (${counterCount} counters, max ATK ${maxAtk}) in ${position} position.`
+          );
+
+          this.game.renderer.log(
+            `Special Summoned ${selectedCard.name} from deck via Shadow-Heart Cathedral!`
+          );
+
+          // Send Cathedral to GY (zeroing counters)
+          this.game.moveCard(ctx.source, ctx.player, "graveyard");
+          console.log("[Cathedral] Sent to Graveyard");
+
+          // Emit after_summon event
+          this.emit("after_summon", {
+            card: selectedCard,
+            player: ctx.player,
+            summonMethod: "special",
+          });
+
+          if (typeof this.game.updateBoard === "function") {
+            this.game.updateBoard();
+          }
+
+          resolve(true);
         }
       );
     });

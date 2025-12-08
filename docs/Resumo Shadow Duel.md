@@ -8,28 +8,34 @@ O lema desse projeto é desenvolver do jeito mais modular, flexível e organizad
 
 ## Architecture & Key Components
 
-### Core Game Loop (`src/core/Game.js`)
+### Core Game Loop (`src/core/Game.js` → 2690 lines)
 
-- **Orchestrates turns and phases**: Draw → Main1 → Battle → Main2 → End
+- **Orchestrates turns and phases**: Draw → Standby → Main1 → Battle → Main2 → End
 - **Key methods**:
   - `startTurn()`: Begins turn, triggers standby phase effects
   - `resolveCombat(attacker, defender)`: Calculates damage, handles piercing, triggers `battle_destroy` events
   - `emit(eventName, payload)` / `on(eventName, handler)`: Event system that feeds into `EffectEngine`
-- **Board state**: Maintains `player` and `bot` objects with field, hand, graveyard, spell/trap zones
+  - **Async activation**: `tryActivateSpellTrapEffect()` now properly awaits modal interactions for continuous spells
+- **Board state**: Maintains `player` and `bot` objects with field (max 5 monsters), hand, graveyard, spell/trap zones (max 5), field spell, extra deck
+- **Special mechanics**: Counter system (e.g., Judgment Counters), fusion summons via Polymerization, equip spells, continuous spell ignition effects
 
-### Declarative Effect System (`src/core/EffectEngine.js` → 2392 lines)
+### Declarative Effect System (`src/core/EffectEngine.js` → 4457 lines)
 
 **All card effects are data-driven JSON structures** (see `Card.effects` in `cards.js`). The engine resolves them by:
 
-1. **Event Filtering**: Listens to `after_summon`, `battle_destroy`, `card_to_grave`, `attack_declared`, `standby_phase`
-2. **Target Resolution**: `resolveTargets()` filters candidates (owner, zone, cardKind, archetype, level, etc.) and gathers auto-selected or user-chosen targets
-3. **Action Dispatch**: `applyActions()` performs 40+ action types: `draw`, `destroy`, `heal`, `buff_atk_temp`, `equip`, `search_any`, `move`, `modify_stats_temp`, etc.
+1. **Event Filtering**: Listens to `after_summon`, `battle_destroy`, `card_to_grave`, `attack_declared`, `standby_phase`, `opponent_damage`
+2. **Target Resolution**: `resolveTargets()` filters candidates (owner, zone, cardKind, archetype, level, minAtk, maxAtk, etc.) and gathers auto-selected or user-chosen targets
+3. **Action Dispatch**: `applyActions()` performs 50+ action types: `draw`, `destroy`, `heal`, `buff_atk_temp`, `equip`, `search_any`, `move`, `modify_stats_temp`, `pay_lp`, `add_counter`, `polymerization_fusion_summon`, `shadow_heart_cathedral_summon`, etc.
 4. **Once-Per-Turn Guards**: Prevents re-triggering effects within the same turn (card-scoped or player-scoped)
+5. **Async Support**: Actions can now be async for modal-based user interactions (e.g., Cathedral summon selection)
 
-### Card Database (`src/data/cards.js`)
+### Card Database (`src/data/cards.js` → 2070 lines)
 
-- **Structure**: Array of card objects with `id`, `name`, `cardKind` (monster/spell), and `effects[]`
+- **Structure**: Array of card objects with `id`, `name`, `cardKind` (monster/spell/trap), `subtype` (normal/continuous/equip/field/fusion), and `effects[]`
 - **Archetype Support**: Cards can filter by `archetype` (e.g., "Shadow-Heart", "Luminarch") in targets and searches
+- **Balancing**: Recent updates added Hard OPT restrictions and LP costs to prevent broken loops:
+  - **Shadow-Heart Covenant**: Now costs 800 LP + Hard OPT
+  - **Shadow-Heart Specter, Imp, Gecko, Infusion**: All have Hard OPT to prevent spam
 - **Key Pattern** (example: `Shadow-Heart Imp`):
   ```javascript
   {
@@ -39,6 +45,8 @@ O lema desse projeto é desenvolver do jeito mais modular, flexível e organizad
       timing: "on_event",
       event: "after_summon",
       summonMethod: "normal",
+      oncePerTurn: true,
+      oncePerTurnName: "shadow_heart_imp_on_summon",
       targets: [{ owner: "self", zone: "hand", archetype: "Shadow-Heart", maxLevel: 4, count: {min: 0, max: 1} }],
       actions: [{ type: "move", targetRef: "imp_special_from_hand", to: "field" }]
     }]
@@ -109,16 +117,16 @@ O lema desse projeto é desenvolver do jeito mais modular, flexível e organizad
 
 ## Key Files Quick Reference
 
-| File                       | Purpose                                                        |
-| -------------------------- | -------------------------------------------------------------- |
-| `src/core/Game.js`         | Turn loop, phase management, event dispatcher                  |
-| `src/core/EffectEngine.js` | Effect resolver: target filtering + action dispatch            |
-| `src/core/Card.js`         | Card state container (ATK/DEF, position, temp boosts, effects) |
-| `src/data/cards.js`        | Card definitions with declarative effects                      |
-| `src/core/Player.js`       | Zone management, deck building, summon logic                   |
-| `src/core/Bot.js`          | AI decision-making via Monte-Carlo simulation                  |
-| `src/ui/Renderer.js`       | DOM rendering and user interaction                             |
-| `index.html`               | Entry point and layout                                         |
+| File                       | Lines | Purpose                                                        |
+| -------------------------- | ----- | -------------------------------------------------------------- |
+| `src/core/Game.js`         | 2690  | Turn loop, phase management, event dispatcher, async actions   |
+| `src/core/EffectEngine.js` | 4457  | Effect resolver: target filtering + action dispatch + counters |
+| `src/core/Card.js`         | 100   | Card state container (ATK/DEF, position, temp boosts, effects, counters) |
+| `src/data/cards.js`        | 2070  | Card definitions with declarative effects (101 unique cards)   |
+| `src/core/Player.js`       | 318   | Zone management, deck building, summon logic                   |
+| `src/core/Bot.js`          | ~800  | AI decision-making via Monte-Carlo simulation                  |
+| `src/ui/Renderer.js`       | 1335  | DOM rendering, modals, card grid selection UI                  |
+| `index.html`               | 230   | Entry point, deck builder, game board layout                   |
 
 ## Conventions
 
@@ -133,13 +141,37 @@ O lema desse projeto é desenvolver do jeito mais modular, flexível e organizad
 **⚠️ PROHIBITED (unless explicitly requested by user):**
 - **Effect negation cards** (cards that negate other card effects)
 - **Hand trap effects** (effects activated from hand during opponent's turn)
-- **XYZ, Pendulum, or Link monsters** (only Normal, Effect, and Ritual monsters allowed)
+- **XYZ, Pendulum, or Link monsters** (only Normal, Effect, Fusion, and Ritual monsters allowed)
 
 These mechanics add excessive complexity to the current engine and are out of scope for Shadow Duel's design philosophy.
+
+## Recent Major Updates (December 2025)
+
+### Balancing Pass - Shadow-Heart Archetype
+- **Shadow-Heart Covenant**: Added 800 LP cost + Hard OPT to prevent free advantage loops
+- **Shadow-Heart Specter**: Added Hard OPT to graveyard recovery effect
+- **Shadow-Heart Imp**: Added Hard OPT to special summon extender
+- **Shadow-Heart Gecko**: Added Hard OPT to battle draw effect
+- **Shadow-Heart Infusion**: Added Hard OPT (revives any level, not restricted to Level 4)
+
+### New Mechanics Implemented
+- **Counter System**: Cards can track counters (e.g., Shadow-Heart Cathedral's Judgment Counters)
+- **Async Activation**: Continuous spells with ignition effects now properly await user input via modals
+- **Fusion Summons**: Full Polymerization support with material selection from hand/field
+- **Advanced Targeting**: Support for `minAtk`, `maxAtk`, counter-based filtering in deck searches
+
+### Bug Fixes
+- Fixed async/await syntax error in Spell/Trap zone click handlers (Game.js line 647)
+- Fixed Shadow-Heart Cathedral modal not appearing on click (added async flow + ignition timing check)
+- Improved Bot AI stability with proper action generation and const/let variable handling
 
 ## Known Gaps & Planned Features
 
 - **Ritual Summon** (`summon.special.shadow_heart_ritual`): Stub exists but needs ritual card definition
 - **Trap Cards**: Structure exists but mechanic incomplete (speed/chain system not fully implemented)
-- **Multiple Attacks**: Partial; some cards grant extra attacks but not all battle scenarios are tested
-- **Field Spell** interactions: Present but limited; archetype-wide buffs like "Darkness Valley" need full integration testing
+- **Chain System**: No priority passing or chain link resolution (cards resolve immediately)
+- ~~**Multiple Attacks**~~: ✅ **IMPLEMENTED** - Cards like Moonblade Captain, Sword of Two Darks grant second attacks
+- ~~**Field Spell** interactions~~: ✅ **IMPLEMENTED** - Darkness Valley, Sanctum of Luminarch Citadel fully functional
+- ~~**Continuous Spell Ignition Effects**~~: ✅ **IMPLEMENTED** - Shadow-Heart Cathedral uses counter system + manual activation
+- ~~**Fusion Summons**~~: ✅ **IMPLEMENTED** - Polymerization + Shadow-Heart Demon Dragon working
+- **Counter System**: ✅ **FULLY IMPLEMENTED** - Cards can track and consume counters (e.g., Judgment Counters)

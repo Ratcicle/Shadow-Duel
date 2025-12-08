@@ -386,7 +386,7 @@ export default class Bot extends Player {
   }
 
   generateMainPhaseActions(game) {
-    const actions = [];
+    let actions = [];
 
     // Summon / Set monsters
     this.hand.forEach((card, index) => {

@@ -174,7 +174,7 @@ export const cardDatabase = [
     type: "Spirit",
     archetype: "Shadow-Heart",
     description:
-      'If this card is sent to the Graveyard: You can target 1 "Shadow-Heart" monster in your Graveyard, except "Shadow-Heart Specter"; add it to your hand.',
+      'If this card is sent to the Graveyard: You can target 1 "Shadow-Heart" monster in your Graveyard, except "Shadow-Heart Specter"; add it to your hand. You can only use this effect of "Shadow-Heart Specter" once per turn.',
     image: "assets/Shadow-Heart Specter.png",
     effects: [
       {
@@ -182,6 +182,8 @@ export const cardDatabase = [
         timing: "on_event",
         event: "card_to_grave",
         fromZone: "any",
+        oncePerTurn: true,
+        oncePerTurnName: "shadow_heart_specter_recycle",
         targets: [
           {
             id: "specter_recycle_target",
@@ -587,17 +589,25 @@ export const cardDatabase = [
     cardKind: "spell",
     subtype: "normal",
     archetype: "Shadow-Heart",
-    description: 'Add 1 "Shadow-Heart" card from your Deck to your hand.',
+    description:
+      'Pay 800 LP; add 1 "Shadow-Heart" card from your Deck to your hand. You can only activate 1 "Shadow-Heart Covenant" per turn.',
     image: "assets/Shadow-Heart Covenant.png",
     effects: [
       {
         id: "shadow_heart_covenant",
         timing: "on_play",
         speed: 1,
+        oncePerTurn: true,
+        oncePerTurnName: "shadow_heart_covenant",
         actions: [
           {
+            type: "pay_lp",
+            amount: 800,
+            player: "self",
+          },
+          {
             type: "search_any",
-            archetype: "Shadow-Heart", // usa o filtro do EffectEngine
+            archetype: "Shadow-Heart",
           },
         ],
       },
@@ -613,7 +623,7 @@ export const cardDatabase = [
     type: "Fiend",
     archetype: "Shadow-Heart",
     description:
-      'When this card is Normal Summoned: You can Special Summon 1 Level 4 or lower "Shadow-Heart" monster from your hand.',
+      'When this card is Normal Summoned: You can Special Summon 1 Level 4 or lower "Shadow-Heart" monster from your hand. You can only use this effect of "Shadow-Heart Imp" once per turn.',
     image: "assets/Shadow-Heart Imp.png",
     effects: [
       {
@@ -621,6 +631,8 @@ export const cardDatabase = [
         timing: "on_event",
         event: "after_summon",
         summonMethod: "normal",
+        oncePerTurn: true,
+        oncePerTurnName: "shadow_heart_imp_on_summon",
         targets: [
           {
             id: "imp_special_from_hand",
@@ -657,7 +669,7 @@ export const cardDatabase = [
     type: "Reptile",
     archetype: "Shadow-Heart",
     description:
-      "If an opponent's monster is destroyed by battle while this card is on the field: Draw 1 card.",
+      "If an opponent's monster is destroyed by battle while this card is on the field: Draw 1 card. You can only use this effect of \"Shadow-Heart Gecko\" once per turn.",
     image: "assets/Shadow-Heart Gecko.png",
     effects: [
       {
@@ -665,6 +677,8 @@ export const cardDatabase = [
         timing: "on_event",
         event: "battle_destroy",
         requireDestroyedIsOpponent: true,
+        oncePerTurn: true,
+        oncePerTurnName: "shadow_heart_gecko_draw",
         actions: [
           {
             type: "draw",
@@ -721,13 +735,15 @@ export const cardDatabase = [
     subtype: "normal",
     archetype: "Shadow-Heart",
     description:
-      'Discard 2 cards from your hand, then Special Summon 1 "Shadow-Heart" monster from your Graveyard, but it cannot declare an attack this turn.',
+      'Discard 2 cards from your hand, then Special Summon 1 "Shadow-Heart" monster from your Graveyard, but it cannot declare an attack this turn. You can only activate 1 "Shadow-Heart Infusion" per turn.',
     image: "assets/Shadow-Heart Infusion.png",
     effects: [
       {
         id: "shadow_heart_infusion",
         timing: "on_play",
         speed: 1,
+        oncePerTurn: true,
+        oncePerTurnName: "shadow_heart_infusion",
         targets: [
           {
             id: "infusion_discard",

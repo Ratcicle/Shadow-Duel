@@ -643,7 +643,7 @@ export default class Game {
 
     const playerSpellTrapEl = document.getElementById("player-spelltrap");
     if (playerSpellTrapEl) {
-      playerSpellTrapEl.addEventListener("click", (e) => {
+      playerSpellTrapEl.addEventListener("click", async (e) => {
         if (this.targetSelection) return;
         if (this.isResolvingEffect) {
           this.renderer.log(
@@ -666,9 +666,14 @@ export default class Game {
         if (card.cardKind !== "spell") return;
 
         if (!card.isFacedown) {
-          if (card.subtype === "continuous") {
-            console.log(`[Game] Clicking continuous spell: ${card.name}`);
-            this.tryActivateSpellTrapEffect(card);
+          const hasIgnition = (card.effects || []).some(
+            (e) => e.timing === "ignition"
+          );
+          if (card.subtype === "continuous" || hasIgnition) {
+            console.log(
+              `[Game] Clicking continuous spell/ignition: ${card.name}`
+            );
+            await this.tryActivateSpellTrapEffect(card);
           }
           return;
         }
@@ -1166,8 +1171,8 @@ export default class Game {
       } else {
         this.renderer.showTargetSelection(
           result.options,
-          (chosenMap) => {
-            const finalResult = this.effectEngine.activateSpellTrapEffect(
+          async (chosenMap) => {
+            const finalResult = await this.effectEngine.activateSpellTrapEffect(
               card,
               owner,
               chosenMap,
@@ -1293,10 +1298,10 @@ export default class Game {
     this.highlightTargetCandidates();
   }
 
-  tryActivateSpellTrapEffect(card, selections = null) {
+  async tryActivateSpellTrapEffect(card, selections = null) {
     if (!card) return;
     console.log(`[Game] tryActivateSpellTrapEffect called for: ${card.name}`);
-    const result = this.effectEngine.activateSpellTrapEffect(
+    const result = await this.effectEngine.activateSpellTrapEffect(
       card,
       this.player,
       selections,
@@ -1615,7 +1620,7 @@ export default class Game {
     }
   }
 
-  finishTargetSelection() {
+  async finishTargetSelection() {
     if (!this.targetSelection) return;
     const selection = this.targetSelection;
     this.targetSelection = null;
@@ -1646,7 +1651,7 @@ export default class Game {
       );
       this.handleFieldSpellActivationResult(selection.card, owner, result);
     } else if (selection.kind === "spellTrapEffect") {
-      const result = this.effectEngine.activateSpellTrapEffect(
+      const result = await this.effectEngine.activateSpellTrapEffect(
         selection.card,
         this.player,
         selection.selections,
@@ -2571,10 +2576,15 @@ export default class Game {
   }
 
   showShadowHeartCathedralModal(validMonsters, maxAtk, counterCount, callback) {
+    console.log(
+      `[Cathedral Modal] Opening with ${validMonsters.length} valid monsters, Max ATK: ${maxAtk}, Counters: ${counterCount}`
+    );
+
     if (
       this.renderer &&
       typeof this.renderer.showCardGridSelectionModal === "function"
     ) {
+      console.log("[Cathedral Modal] Using showCardGridSelectionModal");
       this.renderer.showCardGridSelectionModal({
         title: "Shadow-Heart Cathedral",
         subtitle: `Choose a <strong>Shadow-Heart</strong> monster from your Deck to Special Summon.<br><span class="counter-info">${counterCount} Judgment Counter(s) - Max ATK: ${maxAtk}</span>`,
@@ -2587,41 +2597,83 @@ export default class Game {
         modalClass: "modal-content cathedral-modal",
         gridClass: "cathedral-card-list",
         cardClass: "cathedral-card-item",
+        infoText: `Select a monster with ATK ≤ ${maxAtk}`,
         onConfirm: (chosen) => {
-          const card = chosen && chosen[0] ? chosen[0] : null;
+          console.log("[Cathedral Modal] Confirm called with:", chosen);
+          const card = chosen && chosen.length > 0 ? chosen[0] : null;
+          if (card) {
+            console.log("[Cathedral Modal] Selected:", card.name);
+          }
           callback(card || null);
         },
-        onCancel: () => callback(null),
+        onCancel: () => {
+          console.log("[Cathedral Modal] Cancel called");
+          callback(null);
+        },
         renderCard: (monster) => {
-          const cardItem = document.createElement("div");
-          cardItem.classList.add("cathedral-card-item");
+          try {
+            const cardItem = document.createElement("div");
+            cardItem.classList.add("cathedral-card-item");
+            cardItem.style.display = "flex";
+            cardItem.style.alignItems = "center";
+            cardItem.style.gap = "12px";
+            cardItem.style.padding = "12px";
+            cardItem.style.margin = "8px 0";
+            cardItem.style.border = "2px solid #555";
+            cardItem.style.borderRadius = "8px";
+            cardItem.style.cursor = "pointer";
+            cardItem.style.transition = "all 0.2s";
+            cardItem.style.backgroundColor = "#2a2a2a";
+            cardItem.style.minHeight = "100px";
 
-          const cardImg = document.createElement("img");
-          cardImg.src = monster.image || "assets/card-back.png";
-          cardImg.alt = monster.name;
-          cardImg.classList.add("cathedral-card-img");
+            const cardImg = document.createElement("img");
+            cardImg.src = monster.image || "assets/card-back.png";
+            cardImg.alt = monster.name;
+            cardImg.classList.add("cathedral-card-img");
+            cardImg.style.width = "80px";
+            cardImg.style.height = "120px";
+            cardImg.style.objectFit = "cover";
+            cardImg.style.borderRadius = "4px";
+            cardImg.style.flexShrink = "0";
+            cardImg.style.border = "1px solid #444";
 
-          const cardInfo = document.createElement("div");
-          cardInfo.classList.add("cathedral-card-info");
+            const cardInfo = document.createElement("div");
+            cardInfo.classList.add("cathedral-card-info");
+            cardInfo.style.flex = "1";
+            cardInfo.style.display = "flex";
+            cardInfo.style.flexDirection = "column";
+            cardInfo.style.gap = "8px";
 
-          const cardName = document.createElement("div");
-          cardName.textContent = monster.name;
-          cardName.classList.add("cathedral-card-name");
+            const cardName = document.createElement("div");
+            cardName.textContent = monster.name;
+            cardName.classList.add("cathedral-card-name");
+            cardName.style.fontWeight = "bold";
+            cardName.style.fontSize = "16px";
+            cardName.style.color = "#fff";
+            cardName.style.lineHeight = "1.3";
 
-          const cardStats = document.createElement("div");
-          cardStats.textContent = `ATK ${monster.atk} / DEF ${monster.def} / Level ${monster.level}`;
-          cardStats.classList.add("cathedral-card-stats");
+            const cardStats = document.createElement("div");
+            cardStats.textContent = `ATK ${monster.atk || 0} / DEF ${monster.def || 0} / Level ${monster.level || 0}`;
+            cardStats.classList.add("cathedral-card-stats");
+            cardStats.style.fontSize = "14px";
+            cardStats.style.color = "#aaa";
+            cardStats.style.fontWeight = "500";
 
-          cardInfo.appendChild(cardName);
-          cardInfo.appendChild(cardStats);
-          cardItem.appendChild(cardImg);
-          cardItem.appendChild(cardInfo);
-          return cardItem;
+            cardInfo.appendChild(cardName);
+            cardInfo.appendChild(cardStats);
+            cardItem.appendChild(cardImg);
+            cardItem.appendChild(cardInfo);
+            return cardItem;
+          } catch (e) {
+            console.error("[Cathedral Modal] Error in renderCard:", e);
+            return null;
+          }
         },
       });
       return;
     }
 
+    console.log("[Cathedral Modal] Using fallback prompt (no renderer available)");
     // Fallback simple prompt
     const choice = window.prompt("Choose a Shadow-Heart monster name to summon:");
     if (!choice) {
