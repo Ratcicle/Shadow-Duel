@@ -2074,4 +2074,54 @@ export const cardDatabase = [
       },
     ],
   },
+  {
+    id: 102,
+    name: "Luminarch Megashield Barbarias",
+    cardKind: "monster",
+    monsterType: "fusion",
+    atk: 2500,
+    def: 3000,
+    level: 9,
+    type: "Warrior",
+    archetype: "Luminarch",
+    archetypes: ["Luminarch"],
+    description:
+      "'Luminarch Sanctum Protector' + 1 Level 5 or higher 'Luminarch' monster. All LP you would gain is doubled. Once per turn: You can target 1 monster you control; switch its battle position, and if you do, it gains 1000 ATK until the end of this turn.",
+    image: "assets/Luminarch Megashield Barbarias.png",
+    fusionMaterials: [
+      { name: "Luminarch Sanctum Protector", count: 1 },
+      { archetype: "Luminarch", minLevel: 5, count: 1 },
+    ],
+    effects: [
+      {
+        id: "megashield_barbarias_lp_doubling",
+        timing: "passive",
+        actions: [],
+      },
+      {
+        id: "megashield_barbarias_switch_boost",
+        timing: "ignition",
+        oncePerTurn: true,
+        oncePerTurnName: "megashield_barbarias_switch_boost",
+        oncePerTurnScope: "card",
+        targets: [
+          {
+            id: "barbarias_switch_target",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "megashield_barbarias_switch_boost",
+            targetRef: "barbarias_switch_target",
+            atkBoost: 1000,
+          },
+        ],
+      },
+    ],
+  },
 ];

@@ -1778,6 +1778,10 @@ export default class EffectEngine {
             executed =
               (await this.applyDemonDragonRevive(action, ctx)) || executed;
             break;
+          case "megashield_barbarias_switch_boost":
+            executed =
+              this.applyMegashieldBarbariasSwitch(action, ctx, targets) || executed;
+            break;
           default:
             console.warn(`Unknown action type: ${action.type}`);
         }
@@ -1802,7 +1806,21 @@ export default class EffectEngine {
   applyHeal(action, ctx) {
     const targetPlayer =
       action.player === "opponent" ? ctx.opponent : ctx.player;
-    const amount = action.amount ?? 0;
+    let amount = action.amount ?? 0;
+    
+    // Check for Megashield Barbarias LP doubling passive
+    if (targetPlayer === ctx.player && amount > 0) {
+      const hasMegashieldBarbarias = (targetPlayer.field || []).some(
+        (card) =>
+          card &&
+          !card.isFacedown &&
+          card.name === "Luminarch Megashield Barbarias"
+      );
+      if (hasMegashieldBarbarias) {
+        amount = amount * 2;
+      }
+    }
+    
     targetPlayer.gainLP(amount);
     return amount !== 0;
   }
@@ -4452,5 +4470,33 @@ export default class EffectEngine {
         resolve(false);
       }
     });
+  }
+
+  applyMegashieldBarbariasSwitch(action, ctx, targets) {
+    const targetCard = targets?.[action.targetRef]?.[0];
+    
+    if (!targetCard || targetCard.zone !== "field" || targetCard.isFacedown) {
+      console.warn(
+        "[applyMegashieldBarbariasSwitch] Invalid target for position switch:",
+        targetCard
+      );
+      return false;
+    }
+
+    // Switch position of target
+    const newPosition = targetCard.position === "attack" ? "defense" : "attack";
+    targetCard.position = newPosition;
+    targetCard.hasChangedPosition = true;
+
+    // Apply ATK boost to target until end of turn
+    const atkBoost = action.atkBoost ?? 1000;
+    targetCard.tempAtkBoost = (targetCard.tempAtkBoost || 0) + atkBoost;
+
+    this.game.renderer.log(
+      `${ctx.card.name} effect: ${targetCard.name} switched to ${newPosition.toUpperCase()} Position and gained ${atkBoost} ATK!`
+    );
+
+    this.game.updateBoard();
+    return true;
   }
 }
