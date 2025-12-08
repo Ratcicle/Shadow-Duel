@@ -22,6 +22,8 @@ export default class Game {
     this.eventListeners = {};
     this.phaseDelayMs = 400;
     this.lastAttackNegated = false;
+    this.pendingSpecialSummon = null; // Track pending special summon (e.g., Leviathan from Eel)
+    this.isResolvingEffect = false; // Lock player actions while resolving an effect
   }
 
   on(eventName, handler) {
@@ -52,8 +54,9 @@ export default class Game {
     return undefined;
   }
 
-  start(deckList = null) {
+  start(deckList = null, extraDeckList = null) {
     this.player.buildDeck(deckList);
+    this.player.buildExtraDeck(extraDeckList);
     for (let i = 0; i < 4; i++) {
       this.player.ensureCardOnTop("Infinity Searcher", true);
     }
@@ -101,8 +104,18 @@ export default class Game {
     this.renderer.updateGYPreview(this.player);
     this.renderer.updateGYPreview(this.bot);
 
+    if (typeof this.renderer.updateExtraDeckPreview === "function") {
+      this.renderer.updateExtraDeckPreview(this.player);
+      this.renderer.updateExtraDeckPreview(this.bot);
+    }
+
     if (this.targetSelection) {
       this.highlightTargetCandidates();
+    }
+
+    // Highlight cards ready for special summon after rendering
+    if (this.pendingSpecialSummon) {
+      this.highlightReadySpecialSummon();
     }
   }
 
@@ -169,6 +182,12 @@ export default class Game {
 
   nextPhase() {
     if (this.gameOver) return;
+    if (this.isResolvingEffect) {
+      this.renderer.log(
+        "⚠️ Finalize o efeito pendente antes de mudar de fase."
+      );
+      return;
+    }
 
     const order = ["draw", "standby", "main1", "battle", "main2", "end"];
     const idx = order.indexOf(this.phase);
@@ -188,6 +207,12 @@ export default class Game {
   }
 
   endTurn() {
+    if (this.isResolvingEffect) {
+      this.renderer.log(
+        "⚠️ Finalize o efeito pendente antes de terminar o turno."
+      );
+      return;
+    }
     this.cleanupTempBoosts(this.player);
     this.cleanupTempBoosts(this.bot);
     this.turn = this.turn === "player" ? "bot" : "player";
@@ -238,6 +263,12 @@ export default class Game {
   }
 
   skipToPhase(targetPhase) {
+    if (this.isResolvingEffect) {
+      this.renderer.log(
+        "⚠️ Finalize o efeito pendente antes de mudar de fase."
+      );
+      return;
+    }
     const order = ["draw", "standby", "main1", "battle", "main2", "end"];
     const currentIdx = order.indexOf(this.phase);
     const targetIdx = order.indexOf(targetPhase);
@@ -272,6 +303,32 @@ export default class Game {
       const card = this.player.hand[index];
 
       if (!card) return;
+
+      // If resolving an effect, only allow the specific pending action
+      if (this.isResolvingEffect) {
+        if (
+          this.pendingSpecialSummon &&
+          card.name === this.pendingSpecialSummon.cardName
+        ) {
+          // Show position choice for special summon
+          if (
+            this.renderer &&
+            typeof this.renderer.showSpecialSummonPositionModal === "function"
+          ) {
+            this.renderer.showSpecialSummonPositionModal(card, (choice) => {
+              const position = choice === "defense" ? "defense" : "attack";
+              this.performSpecialSummon(index, position);
+            });
+          } else {
+            this.performSpecialSummon(index, "attack");
+          }
+        } else {
+          this.renderer.log(
+            "⚠️ Finalize o efeito pendente antes de fazer outra ação."
+          );
+        }
+        return;
+      }
 
       if (card.cardKind === "monster") {
         if (this.phase !== "main1" && this.phase !== "main2") return;
@@ -367,6 +424,16 @@ export default class Game {
           return;
         }
 
+        // Special check for Polymerization
+        if (card.name === "Polymerization") {
+          if (!this.canActivatePolymerization()) {
+            this.renderer.log(
+              "Cannot activate Polymerization: No valid Fusion Summons available."
+            );
+            return;
+          }
+        }
+
         const handleSpellChoice = (choice) => {
           if (choice === "activate") {
             this.tryActivateSpell(card, index);
@@ -400,6 +467,12 @@ export default class Game {
       .addEventListener("click", async (e) => {
         const cardEl = e.target.closest(".card");
         if (!cardEl) return;
+        if (this.isResolvingEffect) {
+          this.renderer.log(
+            "⚠️ Finalize o efeito pendente antes de fazer outra ação."
+          );
+          return;
+        }
 
         const index = parseInt(cardEl.dataset.index);
         if (Number.isNaN(index)) return;
@@ -572,6 +645,12 @@ export default class Game {
     if (playerSpellTrapEl) {
       playerSpellTrapEl.addEventListener("click", (e) => {
         if (this.targetSelection) return;
+        if (this.isResolvingEffect) {
+          this.renderer.log(
+            "⚠️ Finalize o efeito pendente antes de fazer outra ação."
+          );
+          return;
+        }
         if (this.turn !== "player") return;
         if (this.phase !== "main1" && this.phase !== "main2") return;
 
@@ -588,6 +667,7 @@ export default class Game {
 
         if (!card.isFacedown) {
           if (card.subtype === "continuous") {
+            console.log(`[Game] Clicking continuous spell: ${card.name}`);
             this.tryActivateSpellTrapEffect(card);
           }
           return;
@@ -622,6 +702,56 @@ export default class Game {
 
       this.handleTargetSelectionClick("bot", index, cardEl);
     });
+
+    // Player field monsters - check for ignition effects
+    const playerFieldEl = document.getElementById("player-field");
+    if (playerFieldEl) {
+      playerFieldEl.addEventListener("click", (e) => {
+        if (this.targetSelection) {
+          const cardEl = e.target.closest(".card");
+          if (!cardEl) return;
+          const index = parseInt(cardEl.dataset.index);
+          if (!Number.isNaN(index)) {
+            this.handleTargetSelectionClick("player", index, cardEl);
+          }
+          return;
+        }
+
+        if (this.turn !== "player") return;
+        if (this.phase !== "main1" && this.phase !== "main2") return;
+
+        const cardEl = e.target.closest(".card");
+        if (!cardEl) return;
+
+        const index = parseInt(cardEl.dataset.index);
+        if (Number.isNaN(index)) return;
+
+        const card = this.player.field[index];
+        if (!card || card.isFacedown) return;
+
+        // Check if card has ignition effects
+        const hasIgnitionEffect = (card.effects || []).some(
+          (e) => e && e.timing === "ignition"
+        );
+
+        if (hasIgnitionEffect) {
+          console.log(
+            `[Game] Clicking monster with ignition effect: ${card.name}`
+          );
+          // Show "Activate Effect" modal like spells
+          if (
+            this.renderer &&
+            typeof this.renderer.showSpellActivateModal === "function"
+          ) {
+            this.renderer.showSpellActivateModal(cardEl, () => {
+              this.tryActivateMonsterEffect(card);
+            });
+          } else {
+            this.tryActivateMonsterEffect(card);
+          }
+        }
+      });
+    }
 
     const playerFieldSpellEl = document.getElementById("player-fieldspell");
     if (playerFieldSpellEl) {
@@ -682,14 +812,34 @@ export default class Game {
       .getElementById("bot-graveyard")
       .addEventListener("click", () => showGY(this.bot));
 
+    const showExtraDeck = (player) => {
+      if (player.id !== "player") return; // Only player can view their Extra Deck
+      this.openExtraDeckModal(player);
+    };
+
+    document
+      .getElementById("player-extradeck")
+      .addEventListener("click", () => showExtraDeck(this.player));
+
     document.querySelector(".close-modal").addEventListener("click", () => {
       this.closeGraveyardModal();
     });
 
+    const closeExtraDeckBtn = document.querySelector(".close-extradeck");
+    if (closeExtraDeckBtn) {
+      closeExtraDeckBtn.addEventListener("click", () => {
+        this.closeExtraDeckModal();
+      });
+    }
+
     window.addEventListener("click", (e) => {
       const modal = document.getElementById("gy-modal");
+      const extraModal = document.getElementById("extradeck-modal");
       if (e.target === modal) {
         this.closeGraveyardModal();
+      }
+      if (e.target === extraModal) {
+        this.closeExtraDeckModal();
       }
     });
 
@@ -1049,6 +1199,86 @@ export default class Game {
     this.updateBoard();
   }
 
+  tryActivateMonsterEffect(card, selections = null) {
+    if (!card) return;
+    console.log(`[Game] tryActivateMonsterEffect called for: ${card.name}`);
+    const result = this.effectEngine.activateMonsterEffect(
+      card,
+      this.player,
+      selections,
+      "field"
+    );
+    console.log(`[Game] Monster effect result:`, result);
+    this.handleMonsterEffectActivationResult(
+      card,
+      this.player,
+      result,
+      "field"
+    );
+  }
+
+  handleMonsterEffectActivationResult(
+    card,
+    owner,
+    result,
+    activationZone = null
+  ) {
+    if (result.needsSelection) {
+      if (this.canUseFieldTargeting(result.options)) {
+        this.startMonsterEffectTargetSelection(
+          card,
+          result.options,
+          activationZone
+        );
+      } else {
+        this.renderer.showTargetSelection(
+          result.options,
+          (chosenMap) => {
+            const finalResult = this.effectEngine.activateMonsterEffect(
+              card,
+              owner,
+              chosenMap,
+              activationZone
+            );
+            this.handleMonsterEffectActivationResult(
+              card,
+              owner,
+              finalResult,
+              activationZone
+            );
+          },
+          () => {
+            this.cancelTargetSelection();
+          }
+        );
+      }
+      return;
+    }
+
+    if (!result.success) {
+      if (result.reason) {
+        this.renderer.log(result.reason);
+      }
+      return;
+    }
+
+    this.renderer.log(`${card.name} effect activated.`);
+    this.updateBoard();
+  }
+
+  startMonsterEffectTargetSelection(card, options, activationZone = null) {
+    this.cancelTargetSelection();
+    this.targetSelection = {
+      kind: "monsterEffect",
+      card,
+      options,
+      selections: {},
+      currentOption: 0,
+      activationZone,
+    };
+    console.log("[Game] Started monster effect target selection");
+  }
+
   startSpellTrapTargetSelection(card, options, activationZone = null) {
     this.cancelTargetSelection();
     this.targetSelection = {
@@ -1065,12 +1295,14 @@ export default class Game {
 
   tryActivateSpellTrapEffect(card, selections = null) {
     if (!card) return;
+    console.log(`[Game] tryActivateSpellTrapEffect called for: ${card.name}`);
     const result = this.effectEngine.activateSpellTrapEffect(
       card,
       this.player,
       selections,
       "spellTrap"
     );
+    console.log(`[Game] Result:`, result);
     this.handleSpellTrapActivationResult(
       card,
       this.player,
@@ -1482,6 +1714,15 @@ export default class Game {
     this.graveyardSelection = null;
   }
 
+  openExtraDeckModal(player) {
+    this.renderer.renderExtraDeckModal(player.extraDeck);
+    this.renderer.toggleExtraDeckModal(true);
+  }
+
+  closeExtraDeckModal() {
+    this.renderer.toggleExtraDeckModal(false);
+  }
+
   promptTransmutateRevive(player, level) {
     const filter = (card) =>
       card.cardKind === "monster" && (card.level || 0) === level;
@@ -1808,6 +2049,132 @@ export default class Game {
     this.updateBoard();
   }
 
+  performFusionSummon(materials, fusionMonsterIndex, position = "attack") {
+    // Validate inputs
+    if (!materials || materials.length === 0) {
+      this.renderer.log("No materials selected for Fusion Summon.");
+      return false;
+    }
+
+    const fusionMonster = this.player.extraDeck[fusionMonsterIndex];
+    if (!fusionMonster) {
+      this.renderer.log("Fusion Monster not found in Extra Deck.");
+      return false;
+    }
+
+    // Check field space
+    if (this.player.field.length >= 5) {
+      this.renderer.log("Field is full (max 5 monsters).");
+      return false;
+    }
+
+    // Send materials to GY
+    materials.forEach((material) => {
+      this.moveCard(material, this.player, "graveyard");
+    });
+
+    // Remove fusion monster from Extra Deck
+    this.player.extraDeck.splice(fusionMonsterIndex, 1);
+
+    // Add to field
+    fusionMonster.position = position;
+    fusionMonster.isFacedown = false;
+    fusionMonster.hasAttacked = false;
+    fusionMonster.cannotAttackThisTurn = false;
+    fusionMonster.owner = "player";
+    fusionMonster.summonedTurn = this.turnCounter;
+    this.player.field.push(fusionMonster);
+
+    this.renderer.log(`Fusion Summoned ${fusionMonster.name}!`);
+
+    // Emit after_summon event
+    this.emit("after_summon", {
+      card: fusionMonster,
+      player: this.player,
+      method: "fusion",
+    });
+
+    this.updateBoard();
+    return true;
+  }
+
+  performSpecialSummon(handIndex, position) {
+    const card = this.player.hand[handIndex];
+    if (!card) return;
+
+    // Remove from hand
+    this.player.hand.splice(handIndex, 1);
+
+    // Add to field
+    const isFacedown = position === "defense";
+    card.position = position;
+    card.isFacedown = false;
+    card.hasAttacked = false;
+    card.cannotAttackThisTurn = true; // Cannot attack this turn (from Eel effect)
+    card.owner = "player";
+    this.player.field.push(card);
+
+    this.renderer.log(`Special Summoned ${card.name} from hand.`);
+
+    // Clear pending special summon and unlock actions
+    this.pendingSpecialSummon = null;
+    this.isResolvingEffect = false;
+
+    // Remove highlight from all hand cards
+    const handCards = document.querySelectorAll("#player-hand .card");
+    handCards.forEach((cardEl) => {
+      cardEl.classList.remove("targetable");
+    });
+
+    this.updateBoard();
+  }
+
+  canActivatePolymerization() {
+    // Check if player has Extra Deck with Fusion Monsters
+    if (!this.player.extraDeck || this.player.extraDeck.length === 0) {
+      return false;
+    }
+
+    // Check field space
+    if (this.player.field.length >= 5) {
+      return false;
+    }
+
+    // Get available materials (hand + field)
+    const availableMaterials = [
+      ...(this.player.hand || []),
+      ...(this.player.field || []),
+    ].filter((card) => card && card.cardKind === "monster");
+
+    if (availableMaterials.length === 0) {
+      return false;
+    }
+
+    // Check if at least one Fusion Monster can be summoned
+    for (const fusion of this.player.extraDeck) {
+      if (this.effectEngine.canSummonFusion(fusion, availableMaterials)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  highlightReadySpecialSummon() {
+    // Find and highlight the card ready for special summon in hand
+    if (!this.pendingSpecialSummon) return;
+
+    const handCards = document.querySelectorAll("#player-hand .card");
+    handCards.forEach((cardEl, index) => {
+      const card = this.player.hand[index];
+      if (card && card.name === this.pendingSpecialSummon.cardName) {
+        cardEl.classList.add("targetable");
+      } else {
+        cardEl.classList.remove("targetable");
+      }
+    });
+  }
+
   checkWinCondition() {
     if (this.player.lp <= 0) {
       alert("Game Over! You Lost.");
@@ -1845,6 +2212,8 @@ export default class Game {
         return player.hand;
       case "deck":
         return player.deck;
+      case "extraDeck":
+        return player.extraDeck;
       case "spellTrap":
         return player.spellTrap;
       case "graveyard":
@@ -2037,6 +2406,17 @@ export default class Game {
     }
 
     card.owner = destPlayer.id;
+
+    // Special case: Fusion monsters returning to hand go back to Extra Deck instead
+    if (toZone === "hand" && card.monsterType === "fusion") {
+      const extraDeck = this.getZone(destPlayer, "extraDeck");
+      if (extraDeck) {
+        extraDeck.push(card);
+        this.renderer.log(`${card.name} returned to Extra Deck.`);
+        return;
+      }
+    }
+
     destArr.push(card);
 
     if (

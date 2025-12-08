@@ -123,31 +123,9 @@ export const cardDatabase = [
         timing: "ignition",
         oncePerTurn: true,
         oncePerTurnName: "shadow_heart_abyssal_eel_summon",
-        targets: [
-          {
-            id: "leviathan_target",
-            owner: "self",
-            zone: "hand",
-            cardKind: "monster",
-            cardName: "Shadow-Heart Leviathan",
-            count: { min: 1, max: 1 },
-          },
-        ],
         actions: [
           {
-            type: "move",
-            targetRef: "leviathan_target",
-            player: "self",
-            to: "field",
-            position: "attack",
-            isFacedown: false,
-            resetAttackFlags: true,
-          },
-          {
-            type: "move",
-            targetRef: "self",
-            player: "self",
-            to: "graveyard",
+            type: "abyssal_eel_special_summon",
           },
         ],
       },
@@ -2009,6 +1987,72 @@ export const cardDatabase = [
         actions: [
           {
             type: "luminarch_sacred_judgment_revive",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 100,
+    name: "Polymerization",
+    cardKind: "spell",
+    subtype: "normal",
+    description:
+      "Fusion Summon 1 Fusion Monster from your Extra Deck, using monsters from your hand or field as Fusion Material.",
+    image: "assets/Polymerization.png",
+    effects: [
+      {
+        id: "polymerization_fusion",
+        timing: "on_play",
+        speed: 1,
+        actions: [
+          {
+            type: "polymerization_fusion_summon",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 101,
+    name: "Shadow-Heart Demon Dragon",
+    cardKind: "monster",
+    monsterType: "fusion",
+    atk: 3000,
+    def: 3000,
+    level: 10,
+    type: "Dragon",
+    archetype: "Shadow-Heart",
+    archetypes: ["Shadow-Heart"],
+    description:
+      "Shadow-Heart Scale Dragon + 1 'Shadow-Heart' monster with 5+ Level. If this card is Fusion Summoned: target 2 cards your opponent controls; destroy them. If this card is destroyed by battle or card effect: You can Special Summon 1 'Shadow-Heart Scale Dragon' from your GY.",
+    image: "assets/Shadow-Heart Demon Dragon.png",
+    fusionMaterials: [
+      { name: "Shadow-Heart Scale Dragon", count: 1 },
+      { archetype: "Shadow-Heart", minLevel: 5, count: 1 },
+    ],
+    effects: [
+      {
+        id: "demon_dragon_fusion_destroy",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethod: "fusion",
+        actions: [
+          {
+            type: "demon_dragon_destroy_two",
+          },
+        ],
+      },
+      {
+        id: "demon_dragon_revive_scale",
+        timing: "on_event",
+        event: "card_to_grave",
+        condition: {
+          type: "destroyed_by_battle_or_effect",
+        },
+        actions: [
+          {
+            type: "demon_dragon_revive_scale_dragon",
           },
         ],
       },

@@ -7,6 +7,7 @@ export default class Player {
     this.name = name;
     this.lp = 8000;
     this.deck = [];
+    this.extraDeck = [];
     this.hand = [];
     this.field = [];
     this.spellTrap = [];
@@ -15,6 +16,7 @@ export default class Player {
     this.summonCount = 0;
     this.maxDeckSize = 30;
     this.minDeckSize = 20;
+    this.maxExtraDeckSize = 10;
     this.oncePerTurnUsageByName = {};
   }
 
@@ -75,6 +77,21 @@ export default class Player {
     }
 
     this.shuffleDeck();
+  }
+
+  buildExtraDeck(extraDeckList = null) {
+    this.extraDeck = [];
+
+    if (extraDeckList && Array.isArray(extraDeckList)) {
+      extraDeckList.forEach((cardId) => {
+        const data = cardDatabase.find((c) => c.id === cardId);
+        if (data && data.monsterType === "fusion") {
+          if (this.extraDeck.length < this.maxExtraDeckSize) {
+            this.extraDeck.push(new Card(data, this.id));
+          }
+        }
+      });
+    }
   }
 
   shuffleDeck() {

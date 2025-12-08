@@ -1,10 +1,72 @@
 ﻿import Player from "./Player.js";
+import { cardDatabase } from "../data/cards.js";
+import Card from "./Card.js";
 
 export default class Bot extends Player {
   constructor() {
     super("bot", "Opponent");
     this.maxSimulationsPerPhase = 20;
     this.maxChainedActions = 2;
+  }
+
+  // Sobrescreve buildDeck para usar deck Luminarch
+  buildDeck(deckList = null) {
+    this.deck = [];
+    const copies = {};
+
+    const addCard = (data) => {
+      copies[data.id] = copies[data.id] || 0;
+      if (copies[data.id] >= 3 || this.deck.length >= this.maxDeckSize)
+        return false;
+      this.deck.push(new Card(data, this.id));
+      copies[data.id]++;
+      return true;
+    };
+
+    // Deck Luminarch fixo e balanceado
+    const luminarchDeck = [
+      // Monstros principais (nível baixo - searchers/utility)
+      47,
+      47,
+      47, // Luminarch Valiant – Knight of the Dawn (searcher)
+      49,
+      49,
+      49, // Luminarch Aegisbearer (taunt/tank)
+      56,
+      56, // Luminarch Sanctified Arbiter (busca Convocation)
+      52,
+      52, // Luminarch Magic Sickle (baixo nível)
+      63,
+      63, // Luminarch Enchanted Halberd
+      // Monstros médios/altos (bosses)
+      50,
+      50, // Luminarch Moonblade Captain (revive + double attack)
+      51,
+      51, // Luminarch Celestial Marshal (boss lv7)
+      54, // Luminarch Radiant Lancer (boss lv8)
+      55, // Luminarch Aurora Seraph (boss lv8)
+      53, // Luminarch Sanctum Protector (lv7 defesa)
+      // Magias
+      57,
+      57, // Luminarch Knights Convocation
+      58,
+      58, // Sanctum of the Luminarch Citadel (field spell)
+      64,
+      64, // Luminarch Moonlit Blessing (recovery)
+      48,
+      48, // Luminarch Holy Shield (proteção)
+      61, // Luminarch Crescent Shield (equip)
+      65, // Luminarch Sacred Judgment (comeback)
+    ];
+
+    for (const cardId of luminarchDeck) {
+      const data = cardDatabase.find((c) => c.id === cardId);
+      if (data) {
+        addCard(data);
+      }
+    }
+
+    this.shuffleDeck();
   }
 
   async makeMove(game) {
@@ -60,7 +122,10 @@ export default class Bot extends Player {
   }
 
   battlePhaseLogic(game) {
-    const minDeltaToAttack = 0.1;
+    // Threshold muito baixo para atacar mais agressivamente
+    // -0.3 significa: aceita perder um pouco de valor se causar dano significativo
+    const minDeltaToAttack = -0.3;
+
     const performAttack = () => {
       if (game.gameOver || game.phase !== "battle") {
         return;
@@ -70,9 +135,20 @@ export default class Bot extends Player {
       let bestAttack = null;
       let bestDelta = -Infinity;
 
-      for (const attacker of this.field) {
+      // Ordenar atacantes por ATK decrescente para priorizar ataques fortes
+      const sortedAttackers = [...this.field].sort(
+        (a, b) => (b.atk || 0) - (a.atk || 0)
+      );
+
+      for (const attacker of sortedAttackers) {
         const availability = game.getAttackAvailability(attacker);
         if (!availability.ok) continue;
+
+        // Se é segundo ataque de Moonblade, ser mais conservador (não aceitar perdas)
+        const isSecondAttack =
+          attacker.canMakeSecondAttackThisTurn &&
+          (attacker.attacksUsedThisTurn || 0) >= 1;
+        const attackThreshold = isSecondAttack ? 0.0 : minDeltaToAttack;
 
         const tauntTargets = game.player.field.filter(
           (card) =>
@@ -82,14 +158,18 @@ export default class Bot extends Player {
             card.mustBeAttacked
         );
 
+        // Priorizar ataque direto se oponente não tem monstros
         const possibleTargets =
           tauntTargets.length > 0
             ? [...tauntTargets]
             : game.player.field.length
-            ? [...game.player.field]
+            ? [...game.player.field, null] // Incluir null para considerar ataque direto se possível
             : [null];
 
         for (const target of possibleTargets) {
+          // Se há monstros no campo do oponente, não pode atacar diretamente
+          if (target === null && game.player.field.length > 0) continue;
+
           const simState = this.cloneGameState(game);
           const simAttacker = simState.bot.field.find(
             (c) => c.id === attacker.id
@@ -102,16 +182,27 @@ export default class Bot extends Player {
 
           this.simulateBattle(simState, simAttacker, simTarget);
           const scoreAfter = this.evaluateBoard(simState, simState.bot);
-          const delta = scoreAfter - baseScore;
+          let delta = scoreAfter - baseScore;
+
+          // Bonus para ataque direto (causa dano ao oponente)
+          if (target === null) {
+            delta += 0.5;
+          }
+          // Bonus para destruir monstro sem perder o atacante
+          if (target && simState.bot.field.find((c) => c.id === attacker.id)) {
+            delta += 0.3;
+          }
 
           if (delta > bestDelta) {
             bestDelta = delta;
-            bestAttack = { attacker, target };
+            bestAttack = { attacker, target, threshold: attackThreshold };
           }
         }
       }
 
-      if (bestAttack && bestDelta > minDeltaToAttack) {
+      // Usar threshold específico do ataque (pode ser diferente para segundo ataque)
+      const finalThreshold = bestAttack?.threshold ?? minDeltaToAttack;
+      if (bestAttack && bestDelta > finalThreshold) {
         game.resolveCombat(bestAttack.attacker, bestAttack.target);
         if (!game.gameOver) {
           setTimeout(() => performAttack(), 800);
@@ -136,10 +227,21 @@ export default class Bot extends Player {
       : gameOrState.bot;
     let score = 0;
 
-    // Life points
-    score += (perspective.lp - opponent.lp) / 500;
+    // Life points - reduzido peso para não priorizar LP sobre controle de campo
+    score += (perspective.lp - opponent.lp) / 800;
 
-    // Monster presence
+    // Helper para verificar arquétipo Luminarch
+    const isLuminarch = (card) => {
+      if (!card) return false;
+      const archetypes = Array.isArray(card.archetypes)
+        ? card.archetypes
+        : card.archetype
+        ? [card.archetype]
+        : [];
+      return archetypes.includes("Luminarch");
+    };
+
+    // Monster presence com valorização Luminarch
     const monsterValue = (monster) => {
       const atk = (monster.atk || 0) + (monster.tempAtkBoost || 0);
       const def = (monster.def || 0) + (monster.tempDefBoost || 0);
@@ -148,14 +250,41 @@ export default class Bot extends Player {
       if (monster.cannotAttackThisTurn) value -= 0.2;
       if (monster.hasAttacked) value -= 0.05;
 
-      if (perspective.fieldSpell && perspective.fieldSpell.name) {
-        if (
-          perspective.fieldSpell.name === "Darkness Valley" &&
-          monster.archetypes?.includes("Shadow-Heart")
-        ) {
-          value += 0.3;
+      // Bonus para monstros Luminarch com Citadel ativo
+      if (
+        perspective.fieldSpell &&
+        perspective.fieldSpell.name === "Sanctum of the Luminarch Citadel"
+      ) {
+        if (isLuminarch(monster)) {
+          value += 0.4;
         }
       }
+
+      // Valorização especial para cartas-chave Luminarch
+      if (
+        monster.name === "Luminarch Aegisbearer" ||
+        monster.name === "Luminarch Sanctum Protector"
+      ) {
+        value += 0.5; // Monstros de defesa/taunt são valiosos
+      }
+      if (monster.name === "Luminarch Aurora Seraph") {
+        value += 1.2; // Boss principal
+      }
+      if (monster.name === "Luminarch Celestial Marshal") {
+        value += 0.8; // Boss forte
+      }
+      if (monster.name === "Luminarch Radiant Lancer") {
+        value += 1.0; // Boss com piercing
+      }
+      if (monster.name === "Luminarch Moonblade Captain") {
+        value += 0.6; // Revive + double attack
+      }
+
+      // Monstros com taunt são mais valiosos defensivamente
+      if (monster.mustBeAttacked) {
+        value += 0.3;
+      }
+
       return value;
     };
 
@@ -169,43 +298,58 @@ export default class Bot extends Player {
     );
     score += playerMonsters - oppMonsters;
 
-    // Spells and field
+    // Field spell - valoriza Citadel
     if (perspective.fieldSpell) {
       score += 1.2;
-      if (perspective.fieldSpell.name === "Darkness Valley") {
-        score += 0.5;
+      if (perspective.fieldSpell.name === "Sanctum of the Luminarch Citadel") {
+        score += 0.8; // Citadel é muito bom para Luminarch
       }
     }
     score -= opponent.fieldSpell ? 0.8 : 0;
 
-    // Equips on field
-    score += perspective.spellTrap.length * 0.2;
+    // Equips on field (Crescent Shield, etc)
+    score += perspective.spellTrap.length * 0.25;
     score -= opponent.spellTrap.length * 0.15;
+
+    // Verificar se tem Holy Shield na spellTrap zone (proteção ativa)
+    const hasHolyShieldActive = perspective.spellTrap.some(
+      (c) => c.name === "Luminarch Holy Shield"
+    );
+    if (hasHolyShieldActive) {
+      score += 0.5;
+    }
 
     // Hand advantage
     score += (perspective.hand.length - opponent.hand.length) * 0.3;
 
-    // Graveyard synergies
+    // Graveyard synergies para Luminarch
     const hasReviver = perspective.hand.some((c) =>
-      ["Monster Reborn", "Shadow-Heart Infusion"].includes(c.name)
+      [
+        "Monster Reborn",
+        "Luminarch Moonlit Blessing",
+        "Luminarch Sacred Judgment",
+      ].includes(c.name)
     );
     if (hasReviver) {
       const bestGY = perspective.graveyard.reduce(
         (max, c) =>
-          c.cardKind === "monster" ? Math.max(max, c.atk || 0) : max,
+          c.cardKind === "monster" && isLuminarch(c)
+            ? Math.max(max, c.atk || 0)
+            : max,
         0
       );
       score += bestGY / 2000;
     }
 
-    const hasInvocation = perspective.hand.some(
-      (c) => c.name === "Shadow-Heart Invocation"
+    // Valorizar ter Convocation na mão com monstros Luminarch de alto nível no GY
+    const hasConvocation = perspective.hand.some(
+      (c) => c.name === "Luminarch Knights Convocation"
     );
-    const hasScaleDragon =
-      perspective.hand.some((c) => c.name === "Shadow-Heart Scale Dragon") ||
-      perspective.graveyard.some((c) => c.name === "Shadow-Heart Scale Dragon");
-    if (hasInvocation && hasScaleDragon) {
-      score += 1.5;
+    const hasHighLevelInGY = perspective.graveyard.some(
+      (c) => isLuminarch(c) && c.cardKind === "monster" && (c.level || 0) >= 7
+    );
+    if (hasConvocation && hasHighLevelInGY) {
+      score += 0.7;
     }
 
     return score;
@@ -241,23 +385,65 @@ export default class Bot extends Player {
       const check = game.effectEngine.canActivate(card, this);
       if (!check.ok) return;
 
-      // Extra heuristics
-      if (card.name === "Shadow-Heart Infusion") {
-        const gyHasSH = this.graveyard.some((c) =>
-          c.archetypes?.includes("Shadow-Heart")
-        );
-        if (this.hand.length < 3 || !gyHasSH) return;
+      // Extra heuristics para Luminarch
+      if (card.name === "Luminarch Holy Shield") {
+        // Só usar Holy Shield se tiver monstros Luminarch para proteger
+        const luminarchOnField = this.field.filter((c) => {
+          const archetypes = Array.isArray(c.archetypes)
+            ? c.archetypes
+            : c.archetype
+            ? [c.archetype]
+            : [];
+          return archetypes.includes("Luminarch");
+        });
+        if (luminarchOnField.length === 0) return;
       }
-      if (card.name === "Shadow-Heart Invocation") {
-        const hasScale =
-          this.hand.some((c) => c.name === "Shadow-Heart Scale Dragon") ||
-          this.graveyard.some((c) => c.name === "Shadow-Heart Scale Dragon");
-        const uniqueSH = new Set(
-          this.field
-            .filter((c) => c.archetypes?.includes("Shadow-Heart"))
-            .map((c) => c.name)
-        );
-        if (!hasScale || uniqueSH.size < 3) return;
+      if (card.name === "Luminarch Moonlit Blessing") {
+        // Só usar se tiver Luminarch no GY para recuperar
+        const gyHasLuminarch = this.graveyard.some((c) => {
+          const archetypes = Array.isArray(c.archetypes)
+            ? c.archetypes
+            : c.archetype
+            ? [c.archetype]
+            : [];
+          return archetypes.includes("Luminarch") && c.cardKind === "monster";
+        });
+        if (!gyHasLuminarch) return;
+      }
+      if (card.name === "Luminarch Sacred Judgment") {
+        // Só usar Sacred Judgment se não controlar monstros (é a condição da carta)
+        if (this.field.length > 0) return;
+        // Oponente precisa controlar 2+ monstros (condição da carta)
+        if (game.player.field.length < 2) return;
+        // Precisa ter Luminarch no GY
+        const gyHasLuminarch = this.graveyard.some((c) => {
+          const archetypes = Array.isArray(c.archetypes)
+            ? c.archetypes
+            : c.archetype
+            ? [c.archetype]
+            : [];
+          return archetypes.includes("Luminarch") && c.cardKind === "monster";
+        });
+        if (!gyHasLuminarch) return;
+        // Precisa ter LP suficiente para pagar o custo
+        if (this.lp < 2000) return;
+      }
+      if (card.name === "Luminarch Knights Convocation") {
+        // Precisa ter Luminarch lv7+ na mão para descartar
+        const hasHighLevel = this.hand.some((c) => {
+          if (c === card) return false;
+          const archetypes = Array.isArray(c.archetypes)
+            ? c.archetypes
+            : c.archetype
+            ? [c.archetype]
+            : [];
+          return (
+            archetypes.includes("Luminarch") &&
+            c.cardKind === "monster" &&
+            (c.level || 0) >= 7
+          );
+        });
+        if (!hasHighLevel) return;
       }
       if (card.subtype === "field" && this.fieldSpell) {
         // Prefer not replacing unless field is missing
@@ -312,6 +498,83 @@ export default class Bot extends Player {
     return { tributesNeeded, usingAlt, alt };
   }
 
+  // Seleciona os melhores monstros para usar como tributo (os PIORES do campo)
+  selectBestTributes(field, tributesNeeded, cardToSummon) {
+    if (tributesNeeded <= 0 || !field || field.length < tributesNeeded) {
+      return [];
+    }
+
+    // Calcular valor de cada monstro no campo
+    const monstersWithValue = field.map((monster, index) => {
+      let value = 0;
+      const atk = monster.atk || 0;
+      const def = monster.def || 0;
+      const level = monster.level || 0;
+
+      // Valor base: ATK é o principal indicador de força
+      value += atk / 500;
+      value += def / 1000;
+      value += level * 0.2;
+
+      // Penalizar monstros que são claramente importantes
+      const importantMonsters = [
+        "Luminarch Aurora Seraph",
+        "Luminarch Celestial Marshal",
+        "Luminarch Radiant Lancer",
+        "Luminarch Sanctum Protector",
+        "Luminarch Moonblade Captain",
+        "Luminarch Aegisbearer",
+      ];
+      if (importantMonsters.includes(monster.name)) {
+        value += 5; // Muito importante, evitar tributar
+      }
+
+      // Monstros com taunt são importantes para defesa
+      if (monster.mustBeAttacked) {
+        value += 2;
+      }
+
+      // Monstros com efeitos contínuos são mais valiosos
+      if (
+        monster.effects &&
+        monster.effects.some(
+          (e) => e.timing === "passive" || e.timing === "continuous"
+        )
+      ) {
+        value += 1;
+      }
+
+      // Tokens e monstros fracos são ideais para tributo
+      if (monster.isToken || monster.name.includes("Token")) {
+        value -= 3;
+      }
+      if (atk <= 1000 && level <= 4) {
+        value -= 1; // Monstros fracos são bons tributos
+      }
+
+      return { monster, index, value };
+    });
+
+    // Ordenar por valor ASCENDENTE (menores valores = piores monstros = melhores tributos)
+    monstersWithValue.sort((a, b) => a.value - b.value);
+
+    // Verificar se o monstro a invocar vale a pena (não tributar algo melhor)
+    const summonAtk = cardToSummon.atk || 0;
+    const summonValue = summonAtk / 500 + (cardToSummon.level || 0) * 0.2;
+
+    // Se vamos sacrificar algo muito forte para algo mais fraco, reconsiderar
+    const tributeCandidates = monstersWithValue.slice(0, tributesNeeded);
+    const totalTributeValue = tributeCandidates.reduce(
+      (sum, t) => sum + t.value,
+      0
+    );
+
+    // Se o valor total dos tributos é maior que o monstro invocado, ainda retorna
+    // mas a simulação vai avaliar se vale a pena
+
+    return tributeCandidates.map((t) => t.index);
+  }
+
   simulateMainPhaseAction(state, action) {
     if (!action) return state;
 
@@ -322,10 +585,13 @@ export default class Bot extends Player {
         if (!card) break;
         const tributeInfo = this.getTributeRequirementFor(card, player);
         const tributesNeeded = tributeInfo.tributesNeeded;
-        const tributeIndices = [];
-        for (let i = 0; i < tributesNeeded; i++) {
-          tributeIndices.push(i);
-        }
+
+        // Escolher tributos inteligentemente: sacrificar os PIORES monstros
+        const tributeIndices = this.selectBestTributes(
+          player.field,
+          tributesNeeded,
+          card
+        );
 
         tributeIndices.sort((a, b) => b - a);
         tributeIndices.forEach((idx) => {
@@ -364,6 +630,7 @@ export default class Bot extends Player {
             }
           });
         }
+        // Citadel não tem efeito de ativação manual, só passivo
         break;
       }
       default:
@@ -556,6 +823,67 @@ export default class Bot extends Player {
         });
         break;
       }
+      // Spells Luminarch
+      case "Sanctum of the Luminarch Citadel": {
+        player.fieldSpell = { ...card };
+        // Citadel buffa Luminarch
+        break;
+      }
+      case "Luminarch Holy Shield": {
+        // Protege até 3 monstros Luminarch de destruição em batalha
+        // Simular como aumento de valor defensivo
+        player.field.forEach((m) => {
+          const archetypes = Array.isArray(m.archetypes)
+            ? m.archetypes
+            : m.archetype
+            ? [m.archetype]
+            : [];
+          if (archetypes.includes("Luminarch")) {
+            m.battleIndestructible = true;
+          }
+        });
+        break;
+      }
+      case "Luminarch Moonlit Blessing": {
+        // Adiciona Luminarch do GY à mão
+        const target = player.graveyard
+          .filter((c) => {
+            const archetypes = Array.isArray(c.archetypes)
+              ? c.archetypes
+              : c.archetype
+              ? [c.archetype]
+              : [];
+            return archetypes.includes("Luminarch") && c.cardKind === "monster";
+          })
+          .sort((a, b) => (b.atk || 0) - (a.atk || 0))[0];
+        if (target) {
+          const idx = player.graveyard.indexOf(target);
+          player.graveyard.splice(idx, 1);
+          player.hand.push(target);
+        }
+        break;
+      }
+      case "Luminarch Holy Ascension": {
+        player.lp -= 1000;
+        const target = player.field.sort(
+          (a, b) => (b.atk || 0) - (a.atk || 0)
+        )[0];
+        if (target) {
+          target.atk += 800;
+          target.def += 800;
+        }
+        break;
+      }
+      case "Luminarch Crescent Shield": {
+        const target = player.field.sort(
+          (a, b) => (b.def || 0) - (a.def || 0)
+        )[0];
+        if (target) {
+          target.def += 500;
+          target.battleIndestructible = true;
+        }
+        break;
+      }
       default:
         break;
     }
@@ -614,7 +942,27 @@ export default class Bot extends Player {
     if (!action) return;
 
     if (action.type === "summon") {
-      const card = this.summon(action.index, action.position, action.facedown);
+      const cardToSummon = this.hand[action.index];
+      if (!cardToSummon) return;
+
+      // Calcular tributos necessários e selecionar os melhores (piores monstros)
+      const tributeInfo = this.getTributeRequirement(cardToSummon);
+      let tributeIndices = null;
+
+      if (tributeInfo.tributesNeeded > 0) {
+        tributeIndices = this.selectBestTributes(
+          this.field,
+          tributeInfo.tributesNeeded,
+          cardToSummon
+        );
+      }
+
+      const card = this.summon(
+        action.index,
+        action.position,
+        action.facedown,
+        tributeIndices
+      );
       if (card) {
         game.renderer.log(
           `Bot summons ${action.facedown ? "a monster in defense" : card.name}`
@@ -701,17 +1049,82 @@ export default class Bot extends Player {
         chosen = [bestIdx];
       } else if (
         card.name === "Shadow-Heart Shield" ||
-        card.name === "Shadow Coat"
+        card.name === "Shadow Coat" ||
+        card.name === "Luminarch Holy Ascension" ||
+        card.name === "Luminarch Crescent Shield"
       ) {
+        // Escolher o monstro mais forte para buffs
         let bestIdx = 0;
         let bestAtk = -Infinity;
         candidates.candidates.forEach((c, idx) => {
-          if (c.atk > bestAtk) {
-            bestAtk = c.atk;
+          if ((c.atk || 0) > bestAtk) {
+            bestAtk = c.atk || 0;
             bestIdx = idx;
           }
         });
         chosen = [bestIdx];
+      } else if (card.name === "Luminarch Holy Shield") {
+        // Escolher até 3 monstros Luminarch para proteger
+        const luminarchIndices = [];
+        candidates.candidates.forEach((c, idx) => {
+          const archetypes = Array.isArray(c.archetypes)
+            ? c.archetypes
+            : c.archetype
+            ? [c.archetype]
+            : [];
+          if (archetypes.includes("Luminarch") && luminarchIndices.length < 3) {
+            luminarchIndices.push(idx);
+          }
+        });
+        chosen = luminarchIndices.length > 0 ? luminarchIndices : [0];
+      } else if (card.name === "Luminarch Moonlit Blessing") {
+        // Escolher o Luminarch mais forte do GY
+        let bestIdx = 0;
+        let bestAtk = -Infinity;
+        candidates.candidates.forEach((c, idx) => {
+          const archetypes = Array.isArray(c.archetypes)
+            ? c.archetypes
+            : c.archetype
+            ? [c.archetype]
+            : [];
+          if (archetypes.includes("Luminarch") && (c.atk || 0) > bestAtk) {
+            bestAtk = c.atk || 0;
+            bestIdx = idx;
+          }
+        });
+        chosen = [bestIdx];
+      } else if (card.name === "Luminarch Sacred Judgment") {
+        // Escolher múltiplos Luminarch do GY para reviver
+        const luminarchIndices = [];
+        candidates.candidates.forEach((c, idx) => {
+          const archetypes = Array.isArray(c.archetypes)
+            ? c.archetypes
+            : c.archetype
+            ? [c.archetype]
+            : [];
+          if (archetypes.includes("Luminarch") && c.cardKind === "monster") {
+            luminarchIndices.push(idx);
+          }
+        });
+        chosen = luminarchIndices.slice(0, targetDef.count?.max || 3);
+      } else if (card.name === "Luminarch Knights Convocation") {
+        // Escolher Luminarch lv7+ para descartar
+        let discardIdx = -1;
+        candidates.candidates.forEach((c, idx) => {
+          const archetypes = Array.isArray(c.archetypes)
+            ? c.archetypes
+            : c.archetype
+            ? [c.archetype]
+            : [];
+          if (
+            archetypes.includes("Luminarch") &&
+            (c.level || 0) >= 7 &&
+            discardIdx === -1
+          ) {
+            discardIdx = idx;
+          }
+        });
+        chosen = discardIdx >= 0 ? [discardIdx] : [0];
       } else if (card.name === "Shadow-Heart Infusion") {
         chosen = candidates.candidates.map((_, idx) => idx).slice(0, 2);
       } else if (card.name === "Shadow-Heart Invocation") {

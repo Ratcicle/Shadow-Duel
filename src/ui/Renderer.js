@@ -867,6 +867,70 @@ export default class Renderer {
     }
   }
 
+  updateExtraDeckPreview(player) {
+    const extraZone = document.getElementById(
+      player.id === "player" ? "player-extradeck" : "bot-extradeck"
+    );
+
+    if (!extraZone) return;
+
+    // Clear existing content
+    extraZone.innerHTML = "";
+
+    // Create counter
+    const count = player.extraDeck ? player.extraDeck.length : 0;
+    const counter = document.createElement("div");
+    counter.className = "zone-counter";
+    counter.textContent = count > 0 ? `Extra\n${count}` : "Extra";
+    extraZone.appendChild(counter);
+
+    // Show preview of top card (only for player)
+    if (player.id === "player" && count > 0) {
+      const topCard = player.extraDeck[0];
+      const preview = this.createCardElement(topCard, true);
+      preview.className = "card extra-preview";
+      preview.style.width = "60px";
+      preview.style.height = "87px";
+      preview.style.position = "absolute";
+      preview.style.bottom = "5px";
+      preview.style.right = "5px";
+      preview.style.opacity = "0.3";
+      extraZone.appendChild(preview);
+    }
+  }
+
+  renderExtraDeckModal(cards) {
+    const grid = document.getElementById("extradeck-grid");
+
+    if (!grid) {
+      console.warn("#extradeck-grid not found");
+      return;
+    }
+
+    grid.innerHTML = "";
+
+    if (!cards || cards.length === 0) {
+      grid.innerHTML = "<p>Extra Deck is empty.</p>";
+      return;
+    }
+
+    cards.forEach((card) => {
+      const cardEl = this.createCardElement(card, true);
+      grid.appendChild(cardEl);
+    });
+  }
+
+  toggleExtraDeckModal(show) {
+    const modal = document.getElementById("extradeck-modal");
+    if (modal) {
+      if (show) {
+        modal.classList.remove("hidden");
+      } else {
+        modal.classList.add("hidden");
+      }
+    }
+  }
+
   showTargetSelection(options, onConfirm, onCancel) {
     const overlay = document.createElement("div");
     overlay.className = "modal target-modal";
@@ -988,5 +1052,133 @@ export default class Renderer {
       closeModal();
       onConfirm && onConfirm(selectionState);
     });
+  }
+
+  showFusionTargetModal(availableFusions, onSelect) {
+    const overlay = document.createElement("div");
+    overlay.className = "modal fusion-modal";
+
+    const content = document.createElement("div");
+    content.className = "modal-content fusion-content";
+
+    const title = document.createElement("h2");
+    title.textContent = "Select Fusion Monster";
+    title.style.color = "#8b00ff";
+
+    const hint = document.createElement("p");
+    hint.textContent = "Choose a Fusion Monster to summon:";
+    hint.className = "fusion-hint";
+
+    const grid = document.createElement("div");
+    grid.className = "fusion-grid";
+
+    availableFusions.forEach(({ fusion, index }) => {
+      const cardEl = this.createCardElement(fusion, true);
+      cardEl.className = "card fusion-selectable";
+      cardEl.addEventListener("click", () => {
+        document.body.removeChild(overlay);
+        onSelect(index);
+      });
+      grid.appendChild(cardEl);
+    });
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.textContent = "Cancel";
+    cancelBtn.className = "secondary";
+    cancelBtn.onclick = () => document.body.removeChild(overlay);
+
+    content.appendChild(title);
+    content.appendChild(hint);
+    content.appendChild(grid);
+    content.appendChild(cancelBtn);
+    overlay.appendChild(content);
+    document.body.appendChild(overlay);
+  }
+
+  showFusionMaterialSelection(
+    availableMaterials,
+    requirements,
+    onConfirm,
+    onCancel
+  ) {
+    const overlay = document.createElement("div");
+    overlay.className = "modal fusion-material-modal";
+
+    const content = document.createElement("div");
+    content.className = "modal-content fusion-material-content";
+
+    const title = document.createElement("h2");
+    title.textContent = "Select Fusion Materials";
+    title.style.color = "#8b00ff";
+
+    const hint = document.createElement("p");
+    hint.className = "fusion-hint";
+    hint.innerHTML = "Select materials:<br>";
+    requirements.forEach((req) => {
+      const count = req.count || 1;
+      const desc =
+        req.name || req.archetype || req.type || req.attribute || "monster";
+      hint.innerHTML += `${count}x ${desc}<br>`;
+    });
+
+    const selectedMaterials = [];
+    const grid = document.createElement("div");
+    grid.className = "fusion-material-grid";
+
+    const updateButtons = () => {
+      confirmBtn.disabled = selectedMaterials.length === 0;
+    };
+
+    availableMaterials.forEach((material) => {
+      const cardEl = this.createCardElement(material, true);
+      cardEl.className = "card fusion-material-selectable";
+
+      cardEl.addEventListener("click", () => {
+        if (selectedMaterials.includes(material)) {
+          // Deselect
+          const idx = selectedMaterials.indexOf(material);
+          selectedMaterials.splice(idx, 1);
+          cardEl.classList.remove("selected");
+        } else {
+          // Select
+          selectedMaterials.push(material);
+          cardEl.classList.add("selected");
+        }
+        updateButtons();
+      });
+
+      grid.appendChild(cardEl);
+    });
+
+    const actions = document.createElement("div");
+    actions.className = "modal-actions";
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.textContent = "Cancel";
+    cancelBtn.className = "secondary";
+    cancelBtn.onclick = () => {
+      document.body.removeChild(overlay);
+      onCancel && onCancel();
+    };
+
+    const confirmBtn = document.createElement("button");
+    confirmBtn.textContent = "Confirm";
+    confirmBtn.disabled = true;
+    confirmBtn.onclick = () => {
+      document.body.removeChild(overlay);
+      onConfirm([...selectedMaterials]);
+    };
+
+    actions.appendChild(cancelBtn);
+    actions.appendChild(confirmBtn);
+
+    content.appendChild(title);
+    content.appendChild(hint);
+    content.appendChild(grid);
+    content.appendChild(actions);
+    overlay.appendChild(content);
+    document.body.appendChild(overlay);
+
+    updateButtons();
   }
 }

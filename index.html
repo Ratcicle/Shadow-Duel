@@ -36,6 +36,14 @@
         <div class="deck-body">
           <div class="deck-left">
             <div id="deck-grid" class="deck-grid"></div>
+            <div class="extradeck-section">
+              <h3 class="extradeck-title">Extra Deck</h3>
+              <span id="extradeck-count">0 / 10</span>
+              <div
+                id="extradeck-grid"
+                class="deck-grid extradeck-grid-builder"
+              ></div>
+            </div>
             <div class="pool">
               <div class="pool-grid" id="pool-grid"></div>
             </div>
@@ -65,33 +73,34 @@
           <span class="name">Opponent</span>
           <div class="lp-counter">LP: <span id="bot-lp">8000</span></div>
         </div>
+        <div class="hand-row">
+          <div class="hand-zone" id="bot-hand"></div>
+        </div>
         <div class="board-wrapper bot-board">
-          <div class="fieldspell-dock">
+          <div class="side-dock bot-left-dock">
+            <div class="deck-zone" id="bot-deck">Deck</div>
+            <div class="extradeck-zone" id="bot-extradeck">Extra</div>
+            <div class="graveyard-zone" id="bot-graveyard">GY</div>
+          </div>
+          <div class="board-core">
+            <div
+              id="bot-spelltrap"
+              class="field-zone spelltrap-row"
+              data-label="Spell/Trap"
+            ></div>
+            <div
+              id="bot-field"
+              class="field-zone monster-row"
+              data-label="Monsters"
+            ></div>
+          </div>
+          <div class="fieldspell-dock bot-right-dock">
             <div
               id="bot-fieldspell"
               class="field-slot"
               data-label="Field"
             ></div>
           </div>
-          <div class="board-core">
-            <div
-              id="bot-field"
-              class="field-zone monster-row"
-              data-label="Monsters"
-            ></div>
-            <div
-              id="bot-spelltrap"
-              class="field-zone spelltrap-row"
-              data-label="Spell/Trap"
-            ></div>
-          </div>
-          <div class="side-dock">
-            <div class="graveyard-zone" id="bot-graveyard">GY</div>
-            <div class="deck-zone" id="bot-deck">Deck</div>
-          </div>
-        </div>
-        <div class="hand-row">
-          <div class="hand-zone" id="bot-hand"></div>
         </div>
       </div>
 
@@ -132,6 +141,7 @@
           </div>
           <div class="side-dock">
             <div class="graveyard-zone" id="player-graveyard">GY</div>
+            <div class="extradeck-zone" id="player-extradeck">Extra</div>
             <div class="deck-zone" id="player-deck">Deck</div>
           </div>
         </div>
@@ -174,6 +184,16 @@
         <h2>Graveyard</h2>
         <p id="gy-hint" class="gy-hint"></p>
         <div id="gy-grid" class="gy-grid"></div>
+      </div>
+    </div>
+
+    <!-- Extra Deck Modal -->
+    <div id="extradeck-modal" class="modal hidden">
+      <div class="modal-content">
+        <span class="close-extradeck">&times;</span>
+        <h2>Extra Deck</h2>
+        <p class="extradeck-hint">Your Fusion Monsters</p>
+        <div id="extradeck-grid" class="gy-grid"></div>
       </div>
     </div>
 

@@ -213,6 +213,12 @@ body {
   margin-top: 6px;
 }
 
+/* Hand row for bot appears above board, so use margin-bottom */
+#bot-area .hand-row {
+  margin-top: 0;
+  margin-bottom: 6px;
+}
+
 .field-slot {
   width: var(--card-w);
   min-width: var(--card-w);
@@ -313,7 +319,8 @@ body {
 }
 
 .deck-zone,
-.graveyard-zone {
+.graveyard-zone,
+.extradeck-zone {
   width: 90px;
   height: 130px;
   border: 1px solid var(--border-color);
@@ -326,9 +333,21 @@ body {
   background: var(--zone-bg);
 }
 
-.graveyard-zone {
+.graveyard-zone,
+.extradeck-zone {
   position: relative;
   cursor: pointer;
+}
+
+.extradeck-zone {
+  background: linear-gradient(
+    135deg,
+    rgba(138, 43, 226, 0.2),
+    rgba(75, 0, 130, 0.2)
+  );
+  border-color: #8b00ff;
+  color: #8b00ff;
+  font-weight: bold;
 }
 
 /* Card Styles */
@@ -1244,6 +1263,37 @@ body {
   overflow-x: hidden;
 }
 
+.extradeck-section {
+  margin-top: 10px;
+  padding: 10px;
+  background: linear-gradient(
+    135deg,
+    rgba(138, 43, 226, 0.1),
+    rgba(75, 0, 130, 0.1)
+  );
+  border: 2px solid #8b00ff;
+  border-radius: 8px;
+}
+
+.extradeck-title {
+  font-size: 0.9rem;
+  color: #8b00ff;
+  margin: 0 0 5px 0;
+  display: inline-block;
+}
+
+#extradeck-count {
+  font-size: 0.8rem;
+  color: #8b00ff;
+  float: right;
+  font-weight: bold;
+}
+
+.extradeck-grid-builder {
+  min-height: 80px;
+  max-height: 120px;
+}
+
 .deck-slot {
   background: none;
   border: none;
@@ -1407,6 +1457,57 @@ body {
 .gy-selectable.disabled {
   opacity: 0.3;
   pointer-events: none;
+}
+
+.fusion-modal .modal-content,
+.fusion-material-modal .modal-content {
+  max-width: 900px;
+  background: linear-gradient(
+    135deg,
+    rgba(20, 0, 40, 0.98),
+    rgba(50, 0, 80, 0.98)
+  );
+  border: 2px solid #8b00ff;
+}
+
+.fusion-hint {
+  color: #ccc;
+  margin: 10px 0;
+  line-height: 1.6;
+}
+
+.fusion-grid,
+.fusion-material-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 15px;
+  padding: 20px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.fusion-selectable,
+.fusion-material-selectable {
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
+}
+
+.fusion-selectable:hover {
+  transform: translateY(-10px) scale(1.05);
+  box-shadow: 0 10px 30px rgba(138, 43, 226, 0.6);
+  border-color: #8b00ff;
+}
+
+.fusion-material-selectable:hover {
+  transform: scale(1.05);
+  box-shadow: 0 5px 20px rgba(138, 43, 226, 0.4);
+}
+
+.fusion-material-selectable.selected {
+  border: 3px solid #00ff88;
+  box-shadow: 0 0 20px rgba(0, 255, 136, 0.6);
+  transform: scale(1.1);
 }
 
 .player-info {

@@ -6,12 +6,15 @@ const cardKindOrder = { monster: 0, spell: 1, trap: 2 };
 const cardById = new Map(cardDatabase.map((card) => [card.id, card]));
 const MIN_DECK_SIZE = 20;
 const MAX_DECK_SIZE = 30;
+const MAX_EXTRA_DECK_SIZE = 10;
 
 const startScreen = document.getElementById("start-screen");
 const deckBuilder = document.getElementById("deck-builder");
 const deckGrid = document.getElementById("deck-grid");
+const extraDeckGrid = document.getElementById("extradeck-grid");
 const poolGrid = document.getElementById("pool-grid");
 const deckCountEl = document.getElementById("deck-count");
+const extraDeckCountEl = document.getElementById("extradeck-count");
 
 const previewEls = {
   image: document.getElementById("deck-preview-image"),
@@ -27,6 +30,7 @@ const btnDeckBuilder = document.getElementById("btn-deck-builder");
 const btnDeckSave = document.getElementById("deck-save");
 const btnDeckCancel = document.getElementById("deck-cancel");
 let currentDeck = loadDeck();
+let currentExtraDeck = loadExtraDeck();
 
 function getCardById(cardId) {
   return cardById.get(cardId);
@@ -69,6 +73,34 @@ function loadDeck() {
 function saveDeck(deck) {
   currentDeck = sortDeck(deck);
   localStorage.setItem("shadow_duel_deck", JSON.stringify(currentDeck));
+}
+
+function loadExtraDeck() {
+  try {
+    const stored = localStorage.getItem("shadow_duel_extra_deck");
+    if (stored) return sanitizeExtraDeck(JSON.parse(stored));
+  } catch (e) {
+    console.warn("Failed to load extra deck", e);
+  }
+  return [];
+}
+
+function saveExtraDeck(extraDeck) {
+  currentExtraDeck = [...extraDeck];
+  localStorage.setItem("shadow_duel_extra_deck", JSON.stringify(currentExtraDeck));
+}
+
+function sanitizeExtraDeck(extraDeck) {
+  const valid = new Set(
+    cardDatabase.filter(c => c.monsterType === "fusion").map(c => c.id)
+  );
+  const result = [];
+  for (const id of extraDeck || []) {
+    if (!valid.has(id)) continue;
+    if (result.length >= MAX_EXTRA_DECK_SIZE) break;
+    result.push(id);
+  }
+  return result;
 }
 
 function sanitizeDeck(deck) {
@@ -201,9 +233,71 @@ function renderDeckBuilder() {
     deckGrid.appendChild(slot);
   }
 
+  // Extra Deck rendering
+  currentExtraDeck = currentExtraDeck || [];
+  extraDeckGrid.innerHTML = "";
+  extraDeckCountEl.textContent = `${currentExtraDeck.length} / ${MAX_EXTRA_DECK_SIZE}`;
+
+  for (let i = 0; i < MAX_EXTRA_DECK_SIZE; i++) {
+    const slot = document.createElement("div");
+    slot.className = "deck-slot";
+    const cardId = currentExtraDeck[i];
+    if (cardId) {
+      const cardData = cardDatabase.find((c) => c.id === cardId);
+      if (cardData) {
+        const cardEl = createCardThumb(cardData);
+        cardEl.onmouseenter = () => setPreview(cardData);
+        cardEl.onclick = () => {
+          currentExtraDeck.splice(i, 1);
+          renderDeckBuilder();
+          setPreview(cardData);
+        };
+        slot.appendChild(cardEl);
+      }
+    }
+    extraDeckGrid.appendChild(slot);
+  }
+
   // Pool of all cards with counts
-  const sortedCards = getSortedCardPool(cardDatabase);
-  sortedCards.forEach((card) => {
+  const sortedCards = getSortedCardPool(cardDatabase.filter(c => !c.monsterType || c.monsterType !== "fusion"));
+  const fusionCards = cardDatabase.filter(c => c.monsterType === "fusion");
+  
+  const extraCounts = {};
+  currentExtraDeck.forEach((id) => {
+    extraCounts[id] = extraCounts[id] || 0;
+    extraCounts[id]++;
+  });
+
+  // Render fusion monsters first with different styling
+  fusionCards.forEach((card) => {
+    const cardEl = createCardThumb(card);
+    const count = extraCounts[card.id] || 0;
+    const badge = document.createElement("div");
+    badge.className = "pool-count fusion-count";
+    badge.textContent = `${count}/1`;
+    badge.style.background = "linear-gradient(135deg, #8b00ff, #4b0082)";
+    cardEl.appendChild(badge);
+
+    cardEl.onmouseenter = () => setPreview(card);
+    cardEl.onclick = () => {
+      if (currentExtraDeck.length >= MAX_EXTRA_DECK_SIZE) {
+        alert(`Extra Deck está cheio (max ${MAX_EXTRA_DECK_SIZE}).`);
+        return;
+      }
+      if (count >= 1) {
+        alert("Apenas 1 cópia de cada Fusion Monster no Extra Deck.");
+        return;
+      }
+      currentExtraDeck.push(card.id);
+      renderDeckBuilder();
+      setPreview(card);
+    };
+
+    poolGrid.appendChild(cardEl);
+  });
+
+  // Render normal cards
+  sortedCards.forEach((card) {
     const cardEl = createCardThumb(card);
     const count = counts[card.id] || 0;
     const badge = document.createElement("div");
@@ -258,16 +352,18 @@ function startDuel() {
     return;
   }
   saveDeck(currentDeck);
+  saveExtraDeck(currentExtraDeck);
   startScreen.classList.add("hidden");
   deckBuilder.classList.add("hidden");
   game = new Game();
-  game.start([...currentDeck]);
+  game.start([...currentDeck], [...currentExtraDeck]);
 }
 
 btnDeckBuilder?.addEventListener("click", openDeckBuilder);
 btnDeckCancel?.addEventListener("click", closeDeckBuilder);
 btnDeckSave?.addEventListener("click", () => {
   saveDeck(currentDeck);
+  saveExtraDeck(currentExtraDeck);
   closeDeckBuilder();
 });
 btnStartDuel?.addEventListener("click", startDuel);

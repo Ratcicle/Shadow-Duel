@@ -798,6 +798,20 @@ export default class EffectEngine {
       return { success: false, reason: "No effect defined." };
     }
 
+    // Verificação de campo vazio para spells do tipo equip com requireEmptyField
+    if (
+      card.cardKind === "spell" &&
+      card.subtype === "equip" &&
+      effect.requireEmptyField
+    ) {
+      if (player.field && player.field.length > 0) {
+        return {
+          success: false,
+          reason: "Você deve controlar nenhum monstro para ativar este efeito.",
+        };
+      }
+    }
+
     const optCheck = this.checkOncePerTurn(card, player, effect);
     if (!optCheck.ok) {
       return { success: false, reason: optCheck.reason };
@@ -1079,6 +1093,83 @@ export default class EffectEngine {
         success: false,
         reason: "You must control no monsters to activate this effect.",
       };
+    }
+
+    const ctx = {
+      source: card,
+      player,
+      opponent: this.game.getOpponent(player),
+      activationZone,
+    };
+
+    const optCheck = this.checkOncePerTurn(card, player, effect);
+    if (!optCheck.ok) {
+      return { success: false, reason: optCheck.reason };
+    }
+
+    console.log(`[EffectEngine] Resolving targets for ${card.name}`);
+    const targetResult = this.resolveTargets(
+      effect.targets || [],
+      ctx,
+      selections
+    );
+    if (targetResult.needsSelection) {
+      console.log(`[EffectEngine] Needs selection`);
+      return { needsSelection: true, options: targetResult.options };
+    }
+
+    if (targetResult.ok === false) {
+      console.log(
+        `[EffectEngine] Target resolution failed: ${targetResult.reason}`
+      );
+      return { success: false, reason: targetResult.reason };
+    }
+
+    this.applyActions(effect.actions || [], ctx, targetResult.targets || {});
+    this.registerOncePerTurnUsage(card, player, effect);
+    this.game.checkWinCondition();
+    return { success: true };
+  }
+
+  activateMonsterEffect(
+    card,
+    player,
+    selections = null,
+    activationZone = "field"
+  ) {
+    if (!card || !player) {
+      return { success: false, reason: "Missing card or player." };
+    }
+    if (card.owner !== player.id) {
+      return {
+        success: false,
+        reason: "Card does not belong to the requesting player.",
+      };
+    }
+    if (card.cardKind !== "monster") {
+      return {
+        success: false,
+        reason: "Only Monster cards can use this effect.",
+      };
+    }
+    if (card.isFacedown) {
+      return { success: false, reason: "Card must be face-up to activate." };
+    }
+    if (this.game.turn !== player.id) {
+      return { success: false, reason: "Not your turn." };
+    }
+    if (this.game.phase !== "main1" && this.game.phase !== "main2") {
+      return {
+        success: false,
+        reason: "Effect can only be activated during Main Phase.",
+      };
+    }
+
+    const effect = (card.effects || []).find(
+      (e) => e && e.timing === "ignition"
+    );
+    if (!effect) {
+      return { success: false, reason: "No ignition effect defined." };
     }
 
     const ctx = {
@@ -1674,6 +1765,23 @@ export default class EffectEngine {
                 ctx,
                 targets
               )) || executed;
+            break;
+          case "abyssal_eel_special_summon":
+            executed =
+              (await this.applyAbyssalEelSpecialSummon(action, ctx)) ||
+              executed;
+            break;
+          case "polymerization_fusion_summon":
+            executed =
+              (await this.applyPolymerizationFusion(action, ctx)) || executed;
+            break;
+          case "demon_dragon_destroy_two":
+            executed =
+              (await this.applyDemonDragonDestroy(action, ctx)) || executed;
+            break;
+          case "demon_dragon_revive_scale_dragon":
+            executed =
+              (await this.applyDemonDragonRevive(action, ctx)) || executed;
             break;
           default:
             console.warn(`Unknown action type: ${action.type}`);
@@ -3788,7 +3896,8 @@ export default class EffectEngine {
 
     // If damagePerCounter is specified, calculate amount based on damage
     if (action.damagePerCounter && ctx.damageAmount) {
-      amount = Math.floor(ctx.damageAmount / action.damagePerCounter);
+      // Add 1 counter per instance of damage that meets the threshold
+      amount = ctx.damageAmount >= action.damagePerCounter ? 1 : 0;
       if (amount <= 0) return false;
     }
 
@@ -3822,13 +3931,22 @@ export default class EffectEngine {
   }
 
   async applyShadowHeartCathedralSummon(action, ctx) {
-    if (!ctx.source || !ctx.player || !this.game) return false;
+    console.log(`[Cathedral] applyShadowHeartCathedralSummon called`);
+    if (!ctx.source || !ctx.player || !this.game) {
+      console.log(
+        `[Cathedral] Missing context: source=${!!ctx.source}, player=${!!ctx.player}, game=${!!this
+          .game}`
+      );
+      return false;
+    }
 
     const counterType = action.counterType || "judgment_marker";
     const multiplier = action.counterMultiplier || 500;
     const counterCount = ctx.source.getCounter
       ? ctx.source.getCounter(counterType)
       : 0;
+
+    console.log(`[Cathedral] Counter count: ${counterCount}`);
 
     if (counterCount <= 0) {
       console.log("No counters on Shadow-Heart Cathedral to use.");
@@ -3943,14 +4061,23 @@ export default class EffectEngine {
 
       // Equip The Shadow Heart to the monster
       const equipCard = ctx.source; // The Shadow Heart card itself
-      if (!equipCard.equips) {
-        equipCard.equips = [];
+      // Move para zona de spell/trap se estiver na mão ou em outro lugar
+      if (this.game && typeof this.game.moveCard === "function") {
+        const zone = this.game.getZone(ctx.player, "hand");
+        if (zone && zone.includes(equipCard)) {
+          this.game.moveCard(equipCard, ctx.player, "spellTrap", {
+            isFacedown: false,
+            resetAttackFlags: false,
+          });
+        }
       }
       equipCard.equippedTo = selectedCard;
-      if (!selectedCard.equips) {
+      if (!Array.isArray(selectedCard.equips)) {
         selectedCard.equips = [];
       }
-      selectedCard.equips.push(equipCard);
+      if (!selectedCard.equips.includes(equipCard)) {
+        selectedCard.equips.push(equipCard);
+      }
 
       console.log(
         `Special Summoned ${selectedCard.name} from Graveyard via The Shadow Heart and equipped the spell.`
@@ -3961,6 +4088,384 @@ export default class EffectEngine {
       }
 
       resolve(true);
+    });
+  }
+
+  async applyAbyssalEelSpecialSummon(action, ctx) {
+    if (!ctx.source || !ctx.player || !this.game) {
+      return false;
+    }
+
+    // Find Leviathan in hand
+    const hand = ctx.player.hand || [];
+    const leviathanCard = hand.find(
+      (card) => card && card.name === "Shadow-Heart Leviathan"
+    );
+
+    if (!leviathanCard) {
+      this.game.renderer.log("No Shadow-Heart Leviathan in hand.");
+      return false;
+    }
+
+    // Check field space
+    if (ctx.player.field.length >= 5) {
+      this.game.renderer.log("Field is full.");
+      return false;
+    }
+
+    // Send Abyssal Eel to GY
+    this.game.moveCard(ctx.source, ctx.player, "graveyard");
+
+    // Set pending special summon for Leviathan and lock player actions
+    this.game.pendingSpecialSummon = {
+      cardName: "Shadow-Heart Leviathan",
+    };
+    this.game.isResolvingEffect = true;
+
+    this.game.renderer.log(
+      `${ctx.source.name} sent to Graveyard. Click ${leviathanCard.name} to Special Summon it.`
+    );
+
+    if (typeof this.game.updateBoard === "function") {
+      this.game.updateBoard();
+    }
+
+    return true;
+  }
+
+  async applyPolymerizationFusion(action, ctx) {
+    if (!ctx.player || !this.game) {
+      return false;
+    }
+
+    // Check if player has Extra Deck with Fusion Monsters
+    if (!ctx.player.extraDeck || ctx.player.extraDeck.length === 0) {
+      this.game.renderer.log("No Fusion Monsters in Extra Deck.");
+      return false;
+    }
+
+    // Check field space
+    if (ctx.player.field.length >= 5) {
+      this.game.renderer.log("Field is full.");
+      return false;
+    }
+
+    // Get available materials (hand + field)
+    const availableMaterials = [
+      ...(ctx.player.hand || []),
+      ...(ctx.player.field || []),
+    ].filter((card) => card && card.cardKind === "monster");
+
+    if (availableMaterials.length === 0) {
+      this.game.renderer.log("No monsters available for Fusion Summon.");
+      return false;
+    }
+
+    // Check which Fusion Monsters can be summoned
+    const summonableFusions = this.getAvailableFusions(
+      ctx.player.extraDeck,
+      availableMaterials
+    );
+
+    if (summonableFusions.length === 0) {
+      this.game.renderer.log(
+        "No Fusion Monsters can be summoned with available materials."
+      );
+      return false;
+    }
+
+    // Lock actions during fusion process
+    this.game.isResolvingEffect = true;
+
+    // Step 1: Show Extra Deck modal to select Fusion Monster
+    this.game.renderer.showFusionTargetModal(
+      summonableFusions,
+      async (selectedFusionIndex) => {
+        const fusionMonster = ctx.player.extraDeck[selectedFusionIndex];
+
+        if (!fusionMonster) {
+          this.game.isResolvingEffect = false;
+          this.game.renderer.log("Fusion Monster not found.");
+          return;
+        }
+
+        // Step 2: Highlight valid materials and wait for selection
+        const requiredMaterials = this.getRequiredMaterials(
+          fusionMonster,
+          availableMaterials
+        );
+
+        this.game.renderer.showFusionMaterialSelection(
+          availableMaterials,
+          requiredMaterials,
+          async (selectedMaterials) => {
+            // Validate materials
+            if (
+              !this.validateFusionMaterials(fusionMonster, selectedMaterials)
+            ) {
+              this.game.isResolvingEffect = false;
+              this.game.renderer.log("Invalid Fusion Materials selected.");
+              return;
+            }
+
+            // Step 3: Choose position for Fusion Summon
+            const position = await this.game.chooseSpecialSummonPosition(
+              ctx.player,
+              fusionMonster
+            );
+
+            // Execute Fusion Summon
+            const success = this.game.performFusionSummon(
+              selectedMaterials,
+              selectedFusionIndex,
+              position
+            );
+
+            if (success) {
+              this.game.renderer.log(
+                `Successfully Fusion Summoned ${fusionMonster.name}!`
+              );
+            }
+
+            this.game.isResolvingEffect = false;
+          },
+          () => {
+            // Cancel callback
+            this.game.isResolvingEffect = false;
+            this.game.renderer.log("Fusion Summon cancelled.");
+          }
+        );
+      }
+    );
+
+    return true;
+  }
+
+  getAvailableFusions(extraDeck, materials) {
+    // Returns fusion monsters that can be summoned with available materials
+    return extraDeck
+      .map((fusion, index) => {
+        if (this.canSummonFusion(fusion, materials)) {
+          return { fusion, index };
+        }
+        return null;
+      })
+      .filter(Boolean);
+  }
+
+  canSummonFusion(fusionMonster, materials) {
+    if (
+      !fusionMonster.fusionMaterials ||
+      fusionMonster.fusionMaterials.length === 0
+    ) {
+      return false;
+    }
+
+    // Check if materials satisfy fusion requirements
+    // This will be specific to each fusion monster's requirements
+    const requirements = fusionMonster.fusionMaterials;
+
+    // Simple implementation: check if we have enough matching materials
+    for (const req of requirements) {
+      const count = req.count || 1;
+      let found = 0;
+
+      for (const material of materials) {
+        if (this.matchesFusionRequirement(material, req)) {
+          found++;
+          if (found >= count) break;
+        }
+      }
+
+      if (found < count) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  matchesFusionRequirement(card, requirement) {
+    // Check if card matches fusion requirement
+    if (requirement.name && card.name === requirement.name) {
+      return true;
+    }
+    if (requirement.archetype) {
+      const matchesArchetype = card.archetype === requirement.archetype;
+      if (!matchesArchetype) return false;
+
+      // Check minLevel if specified
+      if (requirement.minLevel) {
+        const cardLevel = card.level || 0;
+        if (cardLevel < requirement.minLevel) return false;
+      }
+
+      return true;
+    }
+    if (requirement.type && card.type === requirement.type) {
+      return true;
+    }
+    if (requirement.attribute && card.attribute === requirement.attribute) {
+      return true;
+    }
+    return false;
+  }
+
+  getRequiredMaterials(fusionMonster, availableMaterials) {
+    // Returns info about required materials for UI display
+    return fusionMonster.fusionMaterials;
+  }
+
+  validateFusionMaterials(fusionMonster, selectedMaterials) {
+    // Validates that selected materials meet fusion requirements
+    const requirements = fusionMonster.fusionMaterials;
+    const usedMaterials = new Set();
+
+    for (const req of requirements) {
+      const count = req.count || 1;
+      let found = 0;
+
+      for (const material of selectedMaterials) {
+        if (usedMaterials.has(material)) continue;
+
+        if (this.matchesFusionRequirement(material, req)) {
+          usedMaterials.add(material);
+          found++;
+          if (found >= count) break;
+        }
+      }
+
+      if (found < count) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  async applyDemonDragonDestroy(action, ctx) {
+    if (!ctx.source || !ctx.player || !this.game) {
+      return false;
+    }
+
+    const opponent = ctx.opponent || this.game.getOpponent(ctx.player);
+
+    // Get all opponent's cards on field
+    const opponentCards = [
+      ...(opponent.field || []),
+      ...(opponent.spellTrap || []),
+    ];
+
+    if (opponent.fieldSpell) {
+      opponentCards.push(opponent.fieldSpell);
+    }
+
+    if (opponentCards.length === 0) {
+      this.game.renderer.log("Opponent has no cards to destroy.");
+      return false;
+    }
+
+    // Select up to 2 targets
+    const maxTargets = Math.min(2, opponentCards.length);
+
+    this.game.renderer.log(
+      `${ctx.source.name}: Select up to ${maxTargets} opponent's cards to destroy.`
+    );
+
+    return new Promise((resolve) => {
+      this.game.renderer.showTargetSelection(
+        [
+          {
+            id: "demon_dragon_targets",
+            zone: "opponent_field",
+            min: maxTargets,
+            max: maxTargets,
+            filter: (card) => opponentCards.includes(card),
+          },
+        ],
+        (selections) => {
+          const targets = selections["demon_dragon_targets"] || [];
+
+          targets.forEach((target) => {
+            this.game.renderer.log(
+              `${ctx.source.name} destroyed ${target.name}!`
+            );
+            this.game.moveCard(target, opponent, "graveyard");
+          });
+
+          this.game.updateBoard();
+          resolve(true);
+        },
+        () => {
+          this.game.renderer.log("Target selection cancelled.");
+          resolve(false);
+        }
+      );
+    });
+  }
+
+  async applyDemonDragonRevive(action, ctx) {
+    if (!ctx.card || !ctx.player || !this.game) {
+      return false;
+    }
+
+    // Check if this was Demon Dragon being destroyed
+    if (ctx.card.name !== "Shadow-Heart Demon Dragon") {
+      return false;
+    }
+
+    // Find Scale Dragon in GY
+    const scaleDragon = ctx.player.graveyard.find(
+      (card) => card && card.name === "Shadow-Heart Scale Dragon"
+    );
+
+    if (!scaleDragon) {
+      this.game.renderer.log("No Shadow-Heart Scale Dragon in Graveyard.");
+      return false;
+    }
+
+    // Check field space
+    if (ctx.player.field.length >= 5) {
+      this.game.renderer.log("Field is full.");
+      return false;
+    }
+
+    // Prompt to activate effect
+    return new Promise((resolve) => {
+      if (
+        window.confirm(
+          `Activate ${ctx.card.name} effect to Special Summon Shadow-Heart Scale Dragon from GY?`
+        )
+      ) {
+        // Remove from GY
+        const gyIndex = ctx.player.graveyard.indexOf(scaleDragon);
+        if (gyIndex > -1) {
+          ctx.player.graveyard.splice(gyIndex, 1);
+        }
+
+        // Special Summon to field
+        scaleDragon.position = "attack";
+        scaleDragon.isFacedown = false;
+        scaleDragon.hasAttacked = false;
+        scaleDragon.cannotAttackThisTurn = false;
+        scaleDragon.owner = ctx.player.id;
+        ctx.player.field.push(scaleDragon);
+
+        this.game.renderer.log(
+          `${ctx.card.name} effect: Special Summoned ${scaleDragon.name} from Graveyard!`
+        );
+
+        this.game.emit("after_summon", {
+          card: scaleDragon,
+          player: ctx.player,
+          method: "special",
+        });
+
+        this.game.updateBoard();
+        resolve(true);
+      } else {
+        resolve(false);
+      }
     });
   }
 }
