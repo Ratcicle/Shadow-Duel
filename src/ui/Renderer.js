@@ -1331,4 +1331,103 @@ export default class Renderer {
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
   }
+
+  showTrapActivationModal(trapCard, event, eventData = {}) {
+    return new Promise((resolve) => {
+      const overlay = document.createElement("div");
+      overlay.className = "trap-activation-overlay";
+
+      const modal = document.createElement("div");
+      modal.className = "trap-activation-modal";
+
+      // Cabeçalho
+      const header = document.createElement("div");
+      header.className = "trap-modal-header";
+
+      const title = document.createElement("h3");
+      title.textContent = "Ativar Armadilha?";
+      header.appendChild(title);
+
+      // Imagem da carta
+      const cardPreview = document.createElement("div");
+      cardPreview.className = "trap-card-preview";
+
+      const img = document.createElement("img");
+      img.src = trapCard.image || "assets/card-back.png";
+      img.alt = trapCard.name;
+      img.className = "trap-card-image";
+      cardPreview.appendChild(img);
+
+      // Informações da carta
+      const cardInfo = document.createElement("div");
+      cardInfo.className = "trap-card-info";
+
+      const cardName = document.createElement("div");
+      cardName.className = "trap-card-name";
+      cardName.textContent = trapCard.name;
+
+      const cardDesc = document.createElement("div");
+      cardDesc.className = "trap-card-description";
+      cardDesc.textContent = trapCard.description;
+
+      cardInfo.appendChild(cardName);
+      cardInfo.appendChild(cardDesc);
+
+      // Botões de ação
+      const actions = document.createElement("div");
+      actions.className = "trap-modal-actions";
+
+      const cancelBtn = document.createElement("button");
+      cancelBtn.textContent = "Não Ativar";
+      cancelBtn.className = "trap-btn-cancel";
+      cancelBtn.onclick = () => {
+        overlay.remove();
+        resolve(false);
+      };
+
+      const confirmBtn = document.createElement("button");
+      confirmBtn.textContent = "Ativar Armadilha";
+      confirmBtn.className = "trap-btn-confirm";
+      confirmBtn.onclick = () => {
+        overlay.remove();
+        resolve(true);
+      };
+
+      actions.appendChild(cancelBtn);
+      actions.appendChild(confirmBtn);
+
+      // Montar modal
+      modal.appendChild(header);
+      modal.appendChild(cardPreview);
+      modal.appendChild(cardInfo);
+      modal.appendChild(actions);
+
+      overlay.appendChild(modal);
+      document.body.appendChild(overlay);
+
+      // Foco no botão de confirmar
+      confirmBtn.focus();
+    });
+  }
+
+  getTrapEventDescription(event, eventData) {
+    const descriptions = {
+      attack_declared: "🗡️ Um ataque foi declarado!",
+      after_summon: "✨ Um monstro foi invocado!",
+      battle_destroy: "💥 Um monstro foi destruído em combate!",
+      card_to_grave: "⚰️ Uma carta foi para o cemitério!",
+      phase_end: "⏰ Final da fase - você pode ativar esta armadilha.",
+    };
+
+    let desc = descriptions[event] || "⚡ Um evento ocorreu!";
+
+    if (eventData.isOpponentAttack) {
+      desc += "<br><small>Ataque do oponente</small>";
+    }
+    if (eventData.isOpponentSummon) {
+      desc += "<br><small>Invocação do oponente</small>";
+    }
+
+    return desc;
+  }
 }

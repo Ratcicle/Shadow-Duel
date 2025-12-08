@@ -24,6 +24,7 @@ export default class Game {
     this.lastAttackNegated = false;
     this.pendingSpecialSummon = null; // Track pending special summon (e.g., Leviathan from Eel)
     this.isResolvingEffect = false; // Lock player actions while resolving an effect
+    this.trapPromptInProgress = false; // Evita múltiplos modais de armadilha simultâneos
   }
 
   on(eventName, handler) {
@@ -180,7 +181,7 @@ export default class Game {
     );
   }
 
-  nextPhase() {
+  async nextPhase() {
     if (this.gameOver) return;
     if (this.isResolvingEffect) {
       this.renderer.log(
@@ -188,6 +189,11 @@ export default class Game {
       );
       return;
     }
+
+    // Oferecer ativação de traps genéricas no final da fase atual
+    await this.checkAndOfferTraps("phase_end", {
+      currentPhase: this.phase,
+    });
 
     const order = ["draw", "standby", "main1", "battle", "main2", "end"];
     const idx = order.indexOf(this.phase);
@@ -286,6 +292,12 @@ export default class Game {
   }
 
   bindCardInteractions() {
+    console.log(`[Game] bindCardInteractions called`);
+    console.log(
+      `[Game] player-spelltrap element:`,
+      document.getElementById("player-spelltrap")
+    );
+
     let tributeSelectionMode = false;
     let selectedTributes = [];
     let pendingSummon = null;
@@ -644,15 +656,26 @@ export default class Game {
     const playerSpellTrapEl = document.getElementById("player-spelltrap");
     if (playerSpellTrapEl) {
       playerSpellTrapEl.addEventListener("click", async (e) => {
-        if (this.targetSelection) return;
+        console.log(`[Game] Spell/Trap zone clicked! Target:`, e.target);
+
+        if (this.targetSelection) {
+          console.log(`[Game] Returning: targetSelection active`);
+          return;
+        }
         if (this.isResolvingEffect) {
           this.renderer.log(
             "⚠️ Finalize o efeito pendente antes de fazer outra ação."
           );
           return;
         }
-        if (this.turn !== "player") return;
-        if (this.phase !== "main1" && this.phase !== "main2") return;
+        if (this.turn !== "player") {
+          console.log(`[Game] Returning: not player turn (${this.turn})`);
+          return;
+        }
+        if (this.phase !== "main1" && this.phase !== "main2") {
+          console.log(`[Game] Returning: wrong phase (${this.phase})`);
+          return;
+        }
 
         const cardEl = e.target.closest(".card");
         if (!cardEl) return;
@@ -663,9 +686,36 @@ export default class Game {
         const card = this.player.spellTrap[index];
         if (!card) return;
 
-        if (card.cardKind !== "spell") return;
+        console.log(
+          `[Game] Clicked spell/trap: ${card.name}, isFacedown: ${card.isFacedown}, cardKind: ${card.cardKind}`
+        );
 
-        if (!card.isFacedown) {
+        // Handle traps (can be facedown with on_activate timing)
+        if (card.cardKind === "trap") {
+          const hasActivateEffect = (card.effects || []).some(
+            (e) => e && e.timing === "on_activate"
+          );
+
+          if (hasActivateEffect) {
+            // Check if trap can be activated (waited at least 1 turn)
+            if (!this.canActivateTrap(card)) {
+              this.renderer.log(
+                "Esta armadilha não pode ser ativada neste turno."
+              );
+              return;
+            }
+
+            console.log(`[Game] Activating trap: ${card.name}`);
+            await this.tryActivateSpellTrapEffect(card);
+          }
+          return;
+        }
+
+        // For spells, don't allow clicking facedown cards
+        if (card.isFacedown) return;
+
+        // Handle continuous spells and ignition effects
+        if (card.cardKind === "spell") {
           const hasIgnition = (card.effects || []).some(
             (e) => e.timing === "ignition"
           );
@@ -675,24 +725,6 @@ export default class Game {
             );
             await this.tryActivateSpellTrapEffect(card);
           }
-          return;
-        }
-
-        const onActivate = () => {
-          card.isFacedown = false;
-          this.updateBoard();
-          this.tryActivateSpell(card, null, null, {
-            activationZone: "spellTrap",
-          });
-        };
-
-        if (
-          this.renderer &&
-          typeof this.renderer.showSpellActivateModal === "function"
-        ) {
-          this.renderer.showSpellActivateModal(cardEl, onActivate);
-        } else {
-          onActivate();
         }
       });
     }
@@ -1301,6 +1333,27 @@ export default class Game {
   async tryActivateSpellTrapEffect(card, selections = null) {
     if (!card) return;
     console.log(`[Game] tryActivateSpellTrapEffect called for: ${card.name}`);
+
+    // If it's a trap, show confirmation modal first
+    if (card.cardKind === "trap") {
+      const confirmed = await this.renderer.showTrapActivationModal(
+        card,
+        "manual_activation"
+      );
+
+      if (!confirmed) {
+        console.log(`[Game] User cancelled trap activation`);
+        return;
+      }
+
+      // Flip the trap face-up after confirmation
+      if (card.isFacedown) {
+        card.isFacedown = false;
+        this.renderer.log(`${this.player.name} ativa ${card.name}!`);
+        this.updateBoard();
+      }
+    }
+
     const result = await this.effectEngine.activateSpellTrapEffect(
       card,
       this.player,
@@ -1882,6 +1935,17 @@ export default class Game {
       defenderOwner,
     });
 
+    // Verificar traps do player apenas quando ele está defendendo
+    if (defenderOwner === this.player) {
+      await this.checkAndOfferTraps("attack_declared", {
+        isOpponentAttack: attackerOwner === this.bot,
+        attacker,
+        target,
+        attackerOwner,
+        defenderOwner,
+      });
+    }
+
     if (this.lastAttackNegated) {
       attacker.attacksUsedThisTurn = (attacker.attacksUsedThisTurn || 0) + 1;
       attacker.hasAttacked = true;
@@ -2416,6 +2480,43 @@ export default class Game {
           equip.equipTarget = null;
         }
       });
+
+      // Se o monstro foi revivido por Call of the Haunted, destruir a trap também
+      if (card.callOfTheHauntedTrap) {
+        const callTrap = card.callOfTheHauntedTrap;
+        const trapIndex = fromOwner.spellTrap.indexOf(callTrap);
+        if (trapIndex > -1) {
+          fromOwner.spellTrap.splice(trapIndex, 1);
+          fromOwner.graveyard.push(callTrap);
+          this.renderer.log(
+            `${callTrap.name} was destroyed as ${card.name} left the field.`
+          );
+        }
+        card.callOfTheHauntedTrap = null;
+      }
+    }
+
+    // Se Call of the Haunted sai do campo, destruir o monstro revivido
+    if (
+      fromZone === "spellTrap" &&
+      toZone === "graveyard" &&
+      card.cardKind === "trap" &&
+      card.subtype === "continuous" &&
+      card.name === "Call of the Haunted" &&
+      card.callOfTheHauntedTarget
+    ) {
+      const revivedMonster = card.callOfTheHauntedTarget;
+      const monsterOwner =
+        revivedMonster.owner === "player" ? this.player : this.bot;
+      const monsterIndex = monsterOwner.field.indexOf(revivedMonster);
+      if (monsterIndex > -1) {
+        monsterOwner.field.splice(monsterIndex, 1);
+        monsterOwner.graveyard.push(revivedMonster);
+        this.renderer.log(
+          `${revivedMonster.name} was destroyed as ${card.name} left the field.`
+        );
+      }
+      card.callOfTheHauntedTarget = null;
     }
 
     if (options.position) {
@@ -2543,6 +2644,7 @@ export default class Game {
     }
 
     card.isFacedown = true;
+    card.turnSetOn = this.turnCounter;
 
     if (typeof this.moveCard === "function") {
       this.moveCard(card, this.player, "spellTrap", { fromZone: "hand" });
@@ -2653,7 +2755,9 @@ export default class Game {
             cardName.style.lineHeight = "1.3";
 
             const cardStats = document.createElement("div");
-            cardStats.textContent = `ATK ${monster.atk || 0} / DEF ${monster.def || 0} / Level ${monster.level || 0}`;
+            cardStats.textContent = `ATK ${monster.atk || 0} / DEF ${
+              monster.def || 0
+            } / Level ${monster.level || 0}`;
             cardStats.classList.add("cathedral-card-stats");
             cardStats.style.fontSize = "14px";
             cardStats.style.color = "#aaa";
@@ -2673,9 +2777,13 @@ export default class Game {
       return;
     }
 
-    console.log("[Cathedral Modal] Using fallback prompt (no renderer available)");
+    console.log(
+      "[Cathedral Modal] Using fallback prompt (no renderer available)"
+    );
     // Fallback simple prompt
-    const choice = window.prompt("Choose a Shadow-Heart monster name to summon:");
+    const choice = window.prompt(
+      "Choose a Shadow-Heart monster name to summon:"
+    );
     if (!choice) {
       callback(null);
       return;
@@ -2685,5 +2793,112 @@ export default class Game {
       (c) => c.name && c.name.trim().toLowerCase() === normalized
     );
     callback(card || null);
+  }
+
+  canActivateTrap(card) {
+    console.log(
+      `[canActivateTrap] Checking: ${card?.name}, cardKind: ${card?.cardKind}, isFacedown: ${card?.isFacedown}, turnSetOn: ${card?.turnSetOn}, currentTurn: ${this.turnCounter}`
+    );
+    if (!card || card.cardKind !== "trap") return false;
+    if (!card.isFacedown) return false;
+    if (!card.turnSetOn) return false;
+
+    // Trap só pode ser ativada a partir do próximo turno
+    const result = this.turnCounter > card.turnSetOn;
+    console.log(
+      `[canActivateTrap] Result: ${result} (${this.turnCounter} > ${card.turnSetOn})`
+    );
+    return result;
+  }
+
+  async checkAndOfferTraps(event, eventData = {}) {
+    if (!this.player) return;
+
+    // Evitar reentrância: se já existe um modal de trap aberto, não abrir outro
+    if (this.trapPromptInProgress) return;
+    this.trapPromptInProgress = true;
+
+    try {
+      const eligibleTraps = this.player.spellTrap.filter((card) => {
+        if (!this.canActivateTrap(card)) return false;
+
+        // Verificar se a trap tem efeito que responde a este evento
+        if (!card.effects || card.effects.length === 0) return false;
+
+        return card.effects.some((effect) => {
+          if (effect.timing === "manual") return event === "phase_end";
+          if (effect.timing !== "on_event") return false;
+          if (effect.event !== event) return false;
+
+          // Verificar condições específicas do evento
+          if (effect.requireOpponentAttack && !eventData.isOpponentAttack)
+            return false;
+          if (effect.requireOpponentSummon && !eventData.isOpponentSummon)
+            return false;
+
+          return true;
+        });
+      });
+
+      if (eligibleTraps.length === 0) return;
+
+      // Oferecer ativação de cada trap elegível (uma por vez)
+      for (const trap of eligibleTraps) {
+        const shouldActivate = await this.renderer.showTrapActivationModal(
+          trap,
+          event,
+          eventData
+        );
+
+        if (shouldActivate) {
+          await this.activateTrapFromZone(trap, eventData);
+          break; // Por enquanto, apenas uma trap por evento
+        }
+      }
+    } finally {
+      this.trapPromptInProgress = false;
+    }
+  }
+
+  async activateTrapFromZone(card, eventData = {}) {
+    if (!card || card.cardKind !== "trap") return;
+
+    const trapIndex = this.player.spellTrap.indexOf(card);
+    if (trapIndex === -1) return;
+
+    // Virar a carta face-up
+    card.isFacedown = false;
+    this.renderer.log(`${this.player.name} ativa ${card.name}!`);
+
+    // Resolver efeitos
+    const result = await this.effectEngine.resolveTrapEffects(
+      card,
+      this.player,
+      eventData
+    );
+
+    // Se for trap normal, mover para o cemitério após resolver
+    if (card.subtype === "normal") {
+      this.moveCard(card, this.player, "graveyard", { fromZone: "spellTrap" });
+    }
+    // Se for continuous, permanece no campo face-up
+
+    this.updateBoard();
+    return result;
+  }
+
+  async emitWithTrapCheck(event, eventData = {}) {
+    // Primeiro emite o evento normalmente
+    await this.emit(event, eventData);
+
+    // Depois verifica se há traps que podem responder
+    if (this.turn !== "player") {
+      // Se é o turno do bot, verificar traps do player (defensor)
+      await this.checkAndOfferTraps(event, {
+        ...eventData,
+        isOpponentSummon: eventData.player?.id === "bot",
+        isOpponentAttack: eventData.attackerOwner?.id === "bot",
+      });
+    }
   }
 }

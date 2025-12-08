@@ -669,7 +669,7 @@ export const cardDatabase = [
     type: "Reptile",
     archetype: "Shadow-Heart",
     description:
-      "If an opponent's monster is destroyed by battle while this card is on the field: Draw 1 card. You can only use this effect of \"Shadow-Heart Gecko\" once per turn.",
+      'If an opponent\'s monster is destroyed by battle while this card is on the field: Draw 1 card. You can only use this effect of "Shadow-Heart Gecko" once per turn.',
     image: "assets/Shadow-Heart Gecko.png",
     effects: [
       {
@@ -2119,6 +2119,153 @@ export const cardDatabase = [
             type: "megashield_barbarias_switch_boost",
             targetRef: "barbarias_switch_target",
             atkBoost: 1000,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 200,
+    name: "Mirror Force",
+    cardKind: "trap",
+    subtype: "normal",
+    description:
+      "When an opponent's monster declares an attack: Destroy all Attack Position monsters your opponent controls.",
+    image: "assets/Mirror Force.png",
+    effects: [
+      {
+        id: "mirror_force_effect",
+        timing: "on_event",
+        event: "attack_declared",
+        requireOpponentAttack: true,
+        actions: [
+          {
+            type: "mirror_force_destroy_all",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 201,
+    name: "Trap Hole",
+    cardKind: "trap",
+    subtype: "normal",
+    description:
+      "When your opponent Normal or Flip Summons a monster with 1000 or more ATK: Destroy that monster.",
+    image: "assets/Trap Hole.png",
+    effects: [
+      {
+        id: "trap_hole_effect",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethod: ["normal", "flip"],
+        requireOpponentSummon: true,
+        targets: [
+          {
+            id: "trap_hole_target",
+            owner: "opponent",
+            zone: "field",
+            cardKind: "monster",
+            minAtk: 1000,
+            count: { min: 1, max: 1 },
+            autoSelect: true,
+          },
+        ],
+        actions: [
+          {
+            type: "destroy",
+            targetRef: "trap_hole_target",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 202,
+    name: "Call of the Haunted",
+    cardKind: "trap",
+    subtype: "continuous",
+    description:
+      "Activate this card by targeting 1 monster in your GY; Special Summon that target in Attack Position. When this card leaves the field, destroy that target. When that target is destroyed, destroy this card.",
+    image: "assets/Call of the Haunted.png",
+    effects: [
+      {
+        id: "call_of_the_haunted_activate",
+        timing: "on_activate",
+        targets: [
+          {
+            id: "haunted_target",
+            owner: "self",
+            zone: "graveyard",
+            cardKind: "monster",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "call_of_haunted_summon_and_bind",
+            targetRef: "haunted_target",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 203,
+    name: "Bottomless Trap Hole",
+    cardKind: "trap",
+    subtype: "normal",
+    description:
+      "When your opponent Summons a monster(s) with 1500 or more ATK: Destroy that monster(s) with 1500 or more ATK, and if you do, banish it.",
+    image: "assets/Bottomless Trap Hole.png",
+    effects: [
+      {
+        id: "bottomless_trap_hole_effect",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethod: ["normal", "special", "tribute"],
+        requireOpponentSummon: true,
+        targets: [
+          {
+            id: "bottomless_target",
+            owner: "opponent",
+            zone: "field",
+            cardKind: "monster",
+            minAtk: 1500,
+            count: { min: 1, max: 1 },
+            autoSelect: true,
+          },
+        ],
+        actions: [
+          {
+            type: "bottomless_destroy_banish",
+            targetRef: "bottomless_target",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 204,
+    name: "Reckless Greed",
+    cardKind: "trap",
+    subtype: "normal",
+    description: "Draw 2 cards, then skip your next 2 Draw Phases.",
+    image: "assets/Reckless Greed.png",
+    effects: [
+      {
+        id: "reckless_greed_effect",
+        timing: "manual",
+        actions: [
+          {
+            type: "draw",
+            player: "self",
+            amount: 2,
+          },
+          {
+            type: "reckless_greed_skip_draws",
+            skipCount: 2,
           },
         ],
       },

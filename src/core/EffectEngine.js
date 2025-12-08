@@ -1081,7 +1081,10 @@ export default class EffectEngine {
     }
 
     const effect = (card.effects || []).find(
-      (e) => e && e.timing === "ignition"
+      (e) =>
+        e &&
+        (e.timing === "ignition" ||
+          (e.timing === "on_activate" && card.cardKind === "trap"))
     );
     if (!effect) {
       return { success: false, reason: "No ignition effect defined." };
@@ -1125,7 +1128,11 @@ export default class EffectEngine {
       return { success: false, reason: targetResult.reason };
     }
 
-    await this.applyActions(effect.actions || [], ctx, targetResult.targets || {});
+    await this.applyActions(
+      effect.actions || [],
+      ctx,
+      targetResult.targets || {}
+    );
     this.registerOncePerTurnUsage(card, player, effect);
     this.game.checkWinCondition();
     return { success: true };
@@ -1780,7 +1787,17 @@ export default class EffectEngine {
             break;
           case "megashield_barbarias_switch_boost":
             executed =
-              this.applyMegashieldBarbariasSwitch(action, ctx, targets) || executed;
+              this.applyMegashieldBarbariasSwitch(action, ctx, targets) ||
+              executed;
+            break;
+          case "mirror_force_destroy_all":
+            executed =
+              (await this.applyMirrorForceDestroy(action, ctx)) || executed;
+            break;
+          case "call_of_haunted_summon_and_bind":
+            executed =
+              (await this.applyCallOfTheHauntedSummon(action, ctx, targets)) ||
+              executed;
             break;
           default:
             console.warn(`Unknown action type: ${action.type}`);
@@ -1807,7 +1824,7 @@ export default class EffectEngine {
     const targetPlayer =
       action.player === "opponent" ? ctx.opponent : ctx.player;
     let amount = action.amount ?? 0;
-    
+
     // Check for Megashield Barbarias LP doubling passive
     if (targetPlayer === ctx.player && amount > 0) {
       const hasMegashieldBarbarias = (targetPlayer.field || []).some(
@@ -1820,7 +1837,7 @@ export default class EffectEngine {
         amount = amount * 2;
       }
     }
-    
+
     targetPlayer.gainLP(amount);
     return amount !== 0;
   }
@@ -3857,7 +3874,9 @@ export default class EffectEngine {
       return cardAtk <= maxAtk;
     });
 
-    console.log(`[Cathedral] Found ${validMonsters.length} valid monsters in deck (ATK ≤ ${maxAtk})`);
+    console.log(
+      `[Cathedral] Found ${validMonsters.length} valid monsters in deck (ATK ≤ ${maxAtk})`
+    );
 
     if (validMonsters.length === 0) {
       console.log(
@@ -3865,9 +3884,13 @@ export default class EffectEngine {
       );
       // Still show info to player
       if (counterCount === 0) {
-        this.game.renderer.log("Shadow-Heart Cathedral has no Judgment Counters yet.");
+        this.game.renderer.log(
+          "Shadow-Heart Cathedral has no Judgment Counters yet."
+        );
       } else {
-        this.game.renderer.log(`No valid Shadow-Heart monsters in deck with ATK ≤ ${maxAtk}.`);
+        this.game.renderer.log(
+          `No valid Shadow-Heart monsters in deck with ATK ≤ ${maxAtk}.`
+        );
       }
       return false;
     }
@@ -4315,9 +4338,13 @@ export default class EffectEngine {
   evaluateFusionSelection(fusionMonster, selectedMaterials) {
     const requirements = this.getFusionRequirements(fusionMonster);
     const requiredCount = this.getFusionRequiredCount(requirements);
-    const combos = this.findFusionMaterialCombos(fusionMonster, selectedMaterials, {
-      maxResults: 1,
-    });
+    const combos = this.findFusionMaterialCombos(
+      fusionMonster,
+      selectedMaterials,
+      {
+        maxResults: 1,
+      }
+    );
 
     if (combos.length === 0) {
       return { ok: false, usedMaterials: [], requiredCount };
@@ -4474,7 +4501,7 @@ export default class EffectEngine {
 
   applyMegashieldBarbariasSwitch(action, ctx, targets) {
     const targetCard = targets?.[action.targetRef]?.[0];
-    
+
     if (!targetCard || targetCard.zone !== "field" || targetCard.isFacedown) {
       console.warn(
         "[applyMegashieldBarbariasSwitch] Invalid target for position switch:",
@@ -4493,10 +4520,182 @@ export default class EffectEngine {
     targetCard.tempAtkBoost = (targetCard.tempAtkBoost || 0) + atkBoost;
 
     this.game.renderer.log(
-      `${ctx.card.name} effect: ${targetCard.name} switched to ${newPosition.toUpperCase()} Position and gained ${atkBoost} ATK!`
+      `${ctx.card.name} effect: ${
+        targetCard.name
+      } switched to ${newPosition.toUpperCase()} Position and gained ${atkBoost} ATK!`
     );
 
     this.game.updateBoard();
     return true;
+  }
+
+  async applyCallOfTheHauntedSummon(action, ctx, targets) {
+    const player = ctx.player;
+    const card = ctx.source;
+    const game = this.game;
+
+    console.log(`[applyCallOfTheHauntedSummon] Called with targets:`, targets);
+
+    if (!targets || !targets.haunted_target) {
+      game.renderer.log(
+        `Call of the Haunted: Nenhum alvo selecionado no cemitério.`
+      );
+      return false;
+    }
+
+    // targets.haunted_target pode ser um array de cartas selecionadas
+    const targetArray = Array.isArray(targets.haunted_target)
+      ? targets.haunted_target
+      : [targets.haunted_target];
+
+    const targetMonster = targetArray[0];
+    console.log(
+      `[applyCallOfTheHauntedSummon] Target monster:`,
+      targetMonster?.name
+    );
+
+    if (!targetMonster || targetMonster.cardKind !== "monster") {
+      game.renderer.log(`Call of the Haunted: Alvo inválido.`);
+      return false;
+    }
+
+    // Remover do cemitério
+    const gyIndex = player.graveyard.indexOf(targetMonster);
+    if (gyIndex > -1) {
+      player.graveyard.splice(gyIndex, 1);
+    } else {
+      console.log(
+        `[applyCallOfTheHauntedSummon] Monster not found in graveyard`
+      );
+    }
+
+    // Mostrar modal para escolher posição (Special Summon permite escolha)
+    const chosenPosition = await new Promise((resolve) => {
+      game.renderer.showSpecialSummonPositionModal(
+        targetMonster,
+        (position) => {
+          resolve(position);
+        }
+      );
+    });
+
+    // Sumonizar na posição escolhida
+    targetMonster.position = chosenPosition || "attack";
+    targetMonster.isFacedown = false;
+    targetMonster.owner = player.id;
+    targetMonster.hasAttacked = true; // Não pode atacar no mesmo turno
+    player.field.push(targetMonster);
+
+    // Vincular a trap ao monstro para que se destruam mutuamente
+    targetMonster.callOfTheHauntedTrap = card;
+    card.callOfTheHauntedTarget = targetMonster;
+
+    game.renderer.log(
+      `Call of the Haunted: ${
+        targetMonster.name
+      } foi revivido do cemitério em ${
+        chosenPosition === "defense" ? "Defesa" : "Ataque"
+      }!`
+    );
+    game.updateBoard();
+    return true;
+  }
+
+  async applyMirrorForceDestroy(action, ctx) {
+    const { game, player, eventData } = ctx;
+
+    // Determinar quem é o oponente
+    const opponent = player.id === "player" ? game.bot : game.player;
+
+    if (!opponent || !opponent.field) {
+      return false;
+    }
+
+    // Encontrar todos os monstros em Attack Position do oponente
+    const attackPositionMonsters = opponent.field.filter(
+      (card) =>
+        card &&
+        card.cardKind === "monster" &&
+        card.position === "attack" &&
+        !card.isFacedown
+    );
+
+    if (attackPositionMonsters.length === 0) {
+      game.renderer.log(
+        `Mirror Force: Nenhum monstro em Attack Position para destruir.`
+      );
+      return false;
+    }
+
+    game.renderer.log(
+      `Mirror Force: Destruindo ${attackPositionMonsters.length} monstro(s) em Attack Position!`
+    );
+
+    // Destruir todos os monstros em Attack Position (com substituição de destruição)
+    for (const monster of attackPositionMonsters) {
+      const { replaced } =
+        (await game.resolveDestructionWithReplacement(monster, {
+          reason: "effect",
+          sourceCard: ctx.card,
+        })) || {};
+
+      if (!replaced) {
+        game.moveCard(monster, opponent, "graveyard", { fromZone: "field" });
+      }
+    }
+
+    // Negar o ataque que disparou a Mirror Force
+    if (ctx.eventData?.attacker) {
+      game.registerAttackNegated(ctx.eventData.attacker);
+    } else {
+      game.lastAttackNegated = true;
+    }
+
+    game.updateBoard();
+    return true;
+  }
+
+  async resolveTrapEffects(card, player, eventData = {}) {
+    if (!card || !card.effects || card.effects.length === 0) {
+      return { ok: false, reason: "No effects to resolve" };
+    }
+
+    // Encontrar efeito que responde ao evento atual
+    const relevantEffect = card.effects.find((effect) => {
+      if (effect.timing === "manual") return true;
+      if (effect.timing === "on_activate") return true;
+      if (effect.timing !== "on_event") return false;
+
+      // Para traps ativadas manualmente, qualquer efeito on_event pode ser relevante
+      return true;
+    });
+
+    if (!relevantEffect) {
+      return { ok: false, reason: "No relevant effect found" };
+    }
+
+    const opponent = this.game.getOpponent(player);
+
+    const ctx = {
+      game: this.game,
+      card,
+      player,
+      opponent,
+      eventData,
+      effect: relevantEffect,
+      source: card,
+    };
+
+    try {
+      // Executar as ações do efeito
+      for (const action of relevantEffect.actions || []) {
+        await this.applyActions([action], ctx, {});
+      }
+
+      return { ok: true };
+    } catch (error) {
+      console.error("Error resolving trap effects:", error);
+      return { ok: false, reason: error.message };
+    }
   }
 }
