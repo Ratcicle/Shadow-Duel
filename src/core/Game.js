@@ -2049,7 +2049,12 @@ export default class Game {
     this.updateBoard();
   }
 
-  performFusionSummon(materials, fusionMonsterIndex, position = "attack") {
+  performFusionSummon(
+    materials,
+    fusionMonsterIndex,
+    position = "attack",
+    requiredSubset = null
+  ) {
     // Validate inputs
     if (!materials || materials.length === 0) {
       this.renderer.log("No materials selected for Fusion Summon.");
@@ -2068,6 +2073,11 @@ export default class Game {
       return false;
     }
 
+    const requiredMaterials =
+      requiredSubset && requiredSubset.length ? requiredSubset : materials;
+    const requiredSet = new Set(requiredMaterials);
+    const extraMaterials = materials.filter((mat) => !requiredSet.has(mat));
+
     // Send materials to GY
     materials.forEach((material) => {
       this.moveCard(material, this.player, "graveyard");
@@ -2085,7 +2095,18 @@ export default class Game {
     fusionMonster.summonedTurn = this.turnCounter;
     this.player.field.push(fusionMonster);
 
-    this.renderer.log(`Fusion Summoned ${fusionMonster.name}!`);
+    const requiredNames = requiredMaterials.map((c) => c.name).join(", ");
+    const extraNames = extraMaterials.map((c) => c.name).join(", ");
+    const extraNote =
+      extraMaterials.length > 0
+        ? ` Extra materials also sent to GY: ${extraNames}.`
+        : "";
+
+    this.renderer.log(
+      `Fusion Summoned ${fusionMonster.name} using ${
+        requiredNames || "selected materials"
+      }.${extraNote}`
+    );
 
     // Emit after_summon event
     this.emit("after_summon", {
@@ -2251,6 +2272,7 @@ export default class Game {
       "graveyard",
       "spellTrap",
       "fieldSpell",
+      "extraDeck",
     ];
     const fromOwner = card.owner === this.player.id ? this.player : this.bot;
     let fromZone = null;
@@ -2549,79 +2571,67 @@ export default class Game {
   }
 
   showShadowHeartCathedralModal(validMonsters, maxAtk, counterCount, callback) {
-    const overlay = document.createElement("div");
-    overlay.classList.add("modal", "cathedral-overlay");
+    if (
+      this.renderer &&
+      typeof this.renderer.showCardGridSelectionModal === "function"
+    ) {
+      this.renderer.showCardGridSelectionModal({
+        title: "Shadow-Heart Cathedral",
+        subtitle: `Choose a <strong>Shadow-Heart</strong> monster from your Deck to Special Summon.<br><span class="counter-info">${counterCount} Judgment Counter(s) - Max ATK: ${maxAtk}</span>`,
+        cards: validMonsters,
+        minSelect: 1,
+        maxSelect: 1,
+        confirmLabel: "Summon",
+        cancelLabel: "Cancel",
+        overlayClass: "modal cathedral-overlay",
+        modalClass: "modal-content cathedral-modal",
+        gridClass: "cathedral-card-list",
+        cardClass: "cathedral-card-item",
+        onConfirm: (chosen) => {
+          const card = chosen && chosen[0] ? chosen[0] : null;
+          callback(card || null);
+        },
+        onCancel: () => callback(null),
+        renderCard: (monster) => {
+          const cardItem = document.createElement("div");
+          cardItem.classList.add("cathedral-card-item");
 
-    const modal = document.createElement("div");
-    modal.classList.add("modal-content", "cathedral-modal");
+          const cardImg = document.createElement("img");
+          cardImg.src = monster.image || "assets/card-back.png";
+          cardImg.alt = monster.name;
+          cardImg.classList.add("cathedral-card-img");
 
-    const title = document.createElement("h3");
-    title.textContent = "Shadow-Heart Cathedral";
-    title.classList.add("modal-title");
+          const cardInfo = document.createElement("div");
+          cardInfo.classList.add("cathedral-card-info");
 
-    const desc = document.createElement("p");
-    desc.innerHTML = `Choose a <strong>Shadow-Heart</strong> monster from your Deck to Special Summon.<br>
-    <span class="counter-info">${counterCount} Judgment Counter(s) - Max ATK: ${maxAtk}</span>`;
-    desc.classList.add("modal-text");
+          const cardName = document.createElement("div");
+          cardName.textContent = monster.name;
+          cardName.classList.add("cathedral-card-name");
 
-    const cardList = document.createElement("div");
-    cardList.classList.add("cathedral-card-list");
+          const cardStats = document.createElement("div");
+          cardStats.textContent = `ATK ${monster.atk} / DEF ${monster.def} / Level ${monster.level}`;
+          cardStats.classList.add("cathedral-card-stats");
 
-    validMonsters.forEach((monster) => {
-      const cardItem = document.createElement("div");
-      cardItem.classList.add("cathedral-card-item");
+          cardInfo.appendChild(cardName);
+          cardInfo.appendChild(cardStats);
+          cardItem.appendChild(cardImg);
+          cardItem.appendChild(cardInfo);
+          return cardItem;
+        },
+      });
+      return;
+    }
 
-      const cardImg = document.createElement("img");
-      cardImg.src = monster.image || "assets/card-back.png";
-      cardImg.alt = monster.name;
-      cardImg.classList.add("cathedral-card-img");
-
-      const cardInfo = document.createElement("div");
-      cardInfo.classList.add("cathedral-card-info");
-
-      const cardName = document.createElement("div");
-      cardName.textContent = monster.name;
-      cardName.classList.add("cathedral-card-name");
-
-      const cardStats = document.createElement("div");
-      cardStats.textContent = `ATK ${monster.atk} / DEF ${monster.def} / Level ${monster.level}`;
-      cardStats.classList.add("cathedral-card-stats");
-
-      cardInfo.appendChild(cardName);
-      cardInfo.appendChild(cardStats);
-      cardItem.appendChild(cardImg);
-      cardItem.appendChild(cardInfo);
-
-      cardItem.onclick = () => {
-        cleanup();
-        callback(monster);
-      };
-
-      cardList.appendChild(cardItem);
-    });
-
-    const actions = document.createElement("div");
-    actions.classList.add("modal-actions");
-
-    const cancelBtn = document.createElement("button");
-    cancelBtn.textContent = "Cancel";
-    cancelBtn.classList.add("secondary");
-
-    const cleanup = () => {
-      overlay.remove();
-    };
-
-    cancelBtn.onclick = () => {
-      cleanup();
+    // Fallback simple prompt
+    const choice = window.prompt("Choose a Shadow-Heart monster name to summon:");
+    if (!choice) {
       callback(null);
-    };
-
-    actions.appendChild(cancelBtn);
-    modal.appendChild(title);
-    modal.appendChild(desc);
-    modal.appendChild(cardList);
-    modal.appendChild(actions);
-    overlay.appendChild(modal);
-    document.body.appendChild(overlay);
+      return;
+    }
+    const normalized = choice.trim().toLowerCase();
+    const card = validMonsters.find(
+      (c) => c.name && c.name.trim().toLowerCase() === normalized
+    );
+    callback(card || null);
   }
 }

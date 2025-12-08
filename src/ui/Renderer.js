@@ -1054,7 +1054,7 @@ export default class Renderer {
     });
   }
 
-  showFusionTargetModal(availableFusions, onSelect) {
+  showFusionTargetModal(availableFusions, onSelect, onCancel) {
     const overlay = document.createElement("div");
     overlay.className = "modal fusion-modal";
 
@@ -1085,7 +1085,12 @@ export default class Renderer {
     const cancelBtn = document.createElement("button");
     cancelBtn.textContent = "Cancel";
     cancelBtn.className = "secondary";
-    cancelBtn.onclick = () => document.body.removeChild(overlay);
+    cancelBtn.onclick = () => {
+      document.body.removeChild(overlay);
+      if (typeof onCancel === "function") {
+        onCancel();
+      }
+    };
 
     content.appendChild(title);
     content.appendChild(hint);
@@ -1180,5 +1185,150 @@ export default class Renderer {
     document.body.appendChild(overlay);
 
     updateButtons();
+  }
+
+  showCardGridSelectionModal(options) {
+    const {
+      title = "Select Cards",
+      subtitle = "",
+      cards = [],
+      minSelect = 0,
+      maxSelect = cards.length || 1,
+      confirmLabel = "Confirm",
+      cancelLabel = "Cancel",
+      overlayClass = "card-grid-overlay",
+      modalClass = "card-grid-modal",
+      gridClass = "card-grid",
+      cardClass = "card-grid-item",
+      infoText = "",
+      onConfirm,
+      onCancel,
+      renderCard,
+    } = options || {};
+
+    const overlay = document.createElement("div");
+    overlay.className = overlayClass;
+
+    const modal = document.createElement("div");
+    modal.className = modalClass;
+
+    const header = document.createElement("div");
+    header.className = "card-grid-header";
+
+    const titleEl = document.createElement("h3");
+    titleEl.textContent = title;
+    header.appendChild(titleEl);
+
+    if (subtitle) {
+      const subEl = document.createElement("p");
+      subEl.className = "card-grid-subtitle";
+      subEl.innerHTML = subtitle;
+      header.appendChild(subEl);
+    }
+
+    modal.appendChild(header);
+
+    const grid = document.createElement("div");
+    grid.className = gridClass;
+    const selected = new Set();
+
+    const renderDefaultCard = (card) => {
+      const cardEl = document.createElement("div");
+      cardEl.className = cardClass;
+
+      const img = document.createElement("img");
+      img.src = card.image || "assets/card-back.png";
+      img.alt = card.name;
+      img.className = "card-grid-image";
+
+      const info = document.createElement("div");
+      info.className = "card-grid-info";
+
+      const name = document.createElement("div");
+      name.className = "card-grid-name";
+      name.textContent = card.name;
+      info.appendChild(name);
+
+      if (card.cardKind === "monster") {
+        const stats = document.createElement("div");
+        stats.className = "card-grid-stats";
+        stats.textContent = `ATK ${card.atk || 0} / DEF ${card.def || 0} / L${
+          card.level || 0
+        }`;
+        info.appendChild(stats);
+      }
+
+      cardEl.appendChild(img);
+      cardEl.appendChild(info);
+
+      return cardEl;
+    };
+
+    cards.forEach((card, idx) => {
+      const cardEl = renderCard
+        ? renderCard(card, idx)
+        : renderDefaultCard(card);
+      if (!cardEl) return;
+
+      cardEl.classList.add(cardClass);
+      cardEl.dataset.index = String(idx);
+
+      const toggle = () => {
+        const already = selected.has(idx);
+        if (already) {
+          selected.delete(idx);
+          cardEl.classList.remove("selected");
+          return;
+        }
+        if (selected.size >= maxSelect) return;
+        selected.add(idx);
+        cardEl.classList.add("selected");
+      };
+
+      cardEl.addEventListener("click", () => {
+        toggle();
+      });
+
+      grid.appendChild(cardEl);
+    });
+
+    modal.appendChild(grid);
+
+    if (infoText) {
+      const info = document.createElement("div");
+      info.className = "card-grid-info-text";
+      info.textContent = infoText;
+      modal.appendChild(info);
+    }
+
+    const actions = document.createElement("div");
+    actions.className = "card-grid-actions";
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.textContent = cancelLabel;
+    cancelBtn.className = "secondary";
+    cancelBtn.onclick = () => {
+      overlay.remove();
+      if (typeof onCancel === "function") onCancel();
+    };
+
+    const confirmBtn = document.createElement("button");
+    confirmBtn.textContent = confirmLabel;
+    confirmBtn.className = "primary";
+    confirmBtn.onclick = () => {
+      if (selected.size < minSelect) return;
+      const chosen = Array.from(selected)
+        .map((i) => cards[i])
+        .filter(Boolean);
+      overlay.remove();
+      if (typeof onConfirm === "function") onConfirm(chosen);
+    };
+
+    actions.appendChild(cancelBtn);
+    actions.appendChild(confirmBtn);
+    modal.appendChild(actions);
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
   }
 }

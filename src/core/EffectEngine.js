@@ -1675,11 +1675,6 @@ export default class EffectEngine {
             executed =
               this.applyShadowHeartShieldUpkeep(action, ctx) || executed;
             break;
-          case "shadow_heart_ritual_summon":
-            executed =
-              this.applyShadowHeartRitualSummon(action, ctx, targets) ||
-              executed;
-            break;
           case "revive_shadowheart_from_grave":
             executed =
               this.applyReviveShadowHeartFromGrave(action, ctx) || executed;
@@ -2583,15 +2578,6 @@ export default class EffectEngine {
     return true;
   }
 
-  applyShadowHeartRitualSummon(action, ctx, targets) {
-    console.warn(
-      "applyShadowHeartRitualSummon is not implemented; skipping action.",
-      action,
-      targets
-    );
-    return false;
-  }
-
   applyEquip(action, ctx, targets) {
     const equipCard = ctx.source;
     const player = ctx.player;
@@ -2863,75 +2849,45 @@ export default class EffectEngine {
   }
 
   showSickleSelectionModal(candidates, maxSelect, onConfirm, onCancel) {
-    const overlay = document.createElement("div");
-    overlay.classList.add("modal", "sickle-overlay");
+    if (
+      this.game?.renderer &&
+      typeof this.game.renderer.showCardGridSelectionModal === "function"
+    ) {
+      this.game.renderer.showCardGridSelectionModal({
+        title: 'Select up to 2 "Luminarch" monsters to add to hand',
+        subtitle: `Select up to ${maxSelect}.`,
+        cards: candidates,
+        minSelect: 0,
+        maxSelect,
+        confirmLabel: "Add to Hand",
+        cancelLabel: "Cancel",
+        overlayClass: "modal sickle-overlay",
+        modalClass: "modal-content sickle-modal",
+        gridClass: "sickle-list",
+        cardClass: "sickle-row",
+        onConfirm,
+        onCancel,
+        renderCard: (c) => {
+          const row = document.createElement("label");
+          row.classList.add("sickle-row");
+          const name = document.createElement("span");
+          const stats = `ATK ${c.atk || 0} / DEF ${c.def || 0} / L${
+            c.level || 0
+          }`;
+          name.textContent = `${c.name} (${stats})`;
+          row.appendChild(name);
+          return row;
+        },
+      });
+      return;
+    }
 
-    const modal = document.createElement("div");
-    modal.classList.add("modal-content", "sickle-modal");
-
-    const title = document.createElement("h3");
-    title.textContent = 'Select up to 2 "Luminarch" monsters to add to hand';
-    title.classList.add("modal-title");
-    modal.appendChild(title);
-
-    const list = document.createElement("div");
-    list.classList.add("sickle-list");
-    candidates.forEach((c, idx) => {
-      const row = document.createElement("label");
-      row.classList.add("sickle-row");
-      const cb = document.createElement("input");
-      cb.type = "checkbox";
-      cb.dataset.index = String(idx);
-      const name = document.createElement("span");
-      const stats = `ATK ${c.atk || 0} / DEF ${c.def || 0} / L${c.level || 0}`;
-      name.textContent = `${c.name} (${stats})`;
-      row.appendChild(cb);
-      row.appendChild(name);
-      list.appendChild(row);
-    });
-    modal.appendChild(list);
-
-    const info = document.createElement("div");
-    info.classList.add("modal-hint");
-    info.textContent = `Select up to ${maxSelect}.`;
-    modal.appendChild(info);
-
-    const actions = document.createElement("div");
-    actions.classList.add("modal-actions");
-
-    const cancelBtn = document.createElement("button");
-    cancelBtn.textContent = "Cancel";
-    cancelBtn.classList.add("secondary");
-    const confirmBtn = document.createElement("button");
-    confirmBtn.textContent = "Add to Hand";
-
-    const cleanup = () => {
-      overlay.remove();
-    };
-
-    confirmBtn.onclick = () => {
-      const selectedIdx = Array.from(
-        modal.querySelectorAll("input[type=checkbox]:checked")
-      )
-        .slice(0, maxSelect)
-        .map((el) => parseInt(el.dataset.index, 10))
-        .filter((n) => !Number.isNaN(n));
-      const chosen = selectedIdx.map((i) => candidates[i]).filter(Boolean);
-      cleanup();
-      onConfirm(chosen);
-    };
-
-    cancelBtn.onclick = () => {
-      cleanup();
-      onCancel();
-    };
-
-    actions.appendChild(cancelBtn);
-    actions.appendChild(confirmBtn);
-    modal.appendChild(actions);
-
-    overlay.appendChild(modal);
-    document.body.appendChild(overlay);
+    // Fallback: no auto-pick, just select up to maxSelect in order (respects manual philosophy)
+    const chosen = candidates.slice(0, maxSelect);
+    console.log(
+      `[HEADLESS] Sickle: Auto-selecting ${chosen.length} Luminarch monsters in order.`
+    );
+    onConfirm(chosen);
   }
 
   applyLuminarchHolyShield(action, ctx, targets) {
@@ -3046,6 +3002,10 @@ export default class EffectEngine {
         }
         if (this.game && typeof this.game.checkWinCondition === "function") {
           this.game.checkWinCondition();
+        }
+
+        if (this.game?.renderer?.log) {
+          this.game.renderer.log(`${card.name} moved to ${toZone}.`);
         }
       };
 
@@ -3613,137 +3573,63 @@ export default class EffectEngine {
   }
 
   showSacredJudgmentSelectionModal(candidates, maxSelect, onConfirm) {
-    const overlay = document.createElement("div");
-    overlay.classList.add("sacred-judgment-overlay");
+    if (
+      this.game?.renderer &&
+      typeof this.game.renderer.showCardGridSelectionModal === "function"
+    ) {
+      this.game.renderer.showCardGridSelectionModal({
+        title: "Luminarch Sacred Judgment",
+        subtitle: `Select up to ${maxSelect} "Luminarch" monsters to Special Summon from your Graveyard.`,
+        cards: candidates,
+        minSelect: 0,
+        maxSelect,
+        confirmLabel: "Summon",
+        cancelLabel: "Cancel",
+        overlayClass: "sacred-judgment-overlay",
+        modalClass: "sacred-judgment-modal",
+        gridClass: "sacred-judgment-grid",
+        cardClass: "sacred-judgment-card",
+        infoText:
+          "You will choose Attack/Defense position for each monster individually. Gain 500 LP per summon.",
+        onConfirm,
+        onCancel: () => onConfirm([]),
+        renderCard: (card) => {
+          const cardEl = document.createElement("div");
+          cardEl.classList.add("sacred-judgment-card");
 
-    const backdrop = document.createElement("div");
-    backdrop.classList.add("sacred-judgment-backdrop");
-    overlay.appendChild(backdrop);
+          const imageDiv = document.createElement("div");
+          imageDiv.classList.add("sacred-judgment-card-image");
+          imageDiv.style.backgroundImage = `url('${card.image}')`;
+          cardEl.appendChild(imageDiv);
 
-    const modal = document.createElement("div");
-    modal.classList.add("sacred-judgment-modal");
+          const infoDiv = document.createElement("div");
+          infoDiv.classList.add("sacred-judgment-card-info");
 
-    const title = document.createElement("h3");
-    title.textContent = "Luminarch Sacred Judgment";
-    modal.appendChild(title);
+          const nameDiv = document.createElement("div");
+          nameDiv.classList.add("sacred-judgment-card-name");
+          nameDiv.textContent = card.name;
+          infoDiv.appendChild(nameDiv);
 
-    const subtitle = document.createElement("p");
-    subtitle.textContent = `Select up to ${maxSelect} "Luminarch" monsters to Special Summon from your Graveyard.`;
-    modal.appendChild(subtitle);
+          const statsDiv = document.createElement("div");
+          statsDiv.classList.add("sacred-judgment-card-stats");
+          statsDiv.innerHTML = `<span>ATK ${card.atk || 0}</span><span>DEF ${
+            card.def || 0
+          }</span>`;
+          infoDiv.appendChild(statsDiv);
 
-    // Card grid with visual preview
-    const grid = document.createElement("div");
-    grid.classList.add("sacred-judgment-grid");
-
-    const selectedIndices = new Set();
-
-    candidates.forEach((card, idx) => {
-      const cardEl = document.createElement("div");
-      cardEl.classList.add("sacred-judgment-card");
-      cardEl.dataset.index = String(idx);
-
-      const imageDiv = document.createElement("div");
-      imageDiv.classList.add("sacred-judgment-card-image");
-      imageDiv.style.backgroundImage = `url('${card.image}')`;
-      cardEl.appendChild(imageDiv);
-
-      const infoDiv = document.createElement("div");
-      infoDiv.classList.add("sacred-judgment-card-info");
-
-      const nameDiv = document.createElement("div");
-      nameDiv.classList.add("sacred-judgment-card-name");
-      nameDiv.textContent = card.name;
-      infoDiv.appendChild(nameDiv);
-
-      const statsDiv = document.createElement("div");
-      statsDiv.classList.add("sacred-judgment-card-stats");
-      statsDiv.innerHTML = `<span>ATK ${card.atk || 0}</span><span>DEF ${
-        card.def || 0
-      }</span>`;
-      infoDiv.appendChild(statsDiv);
-
-      cardEl.appendChild(infoDiv);
-
-      // Checkbox (visual)
-      const checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      checkbox.classList.add("sacred-judgment-card-checkbox");
-      checkbox.dataset.index = String(idx);
-      cardEl.appendChild(checkbox);
-
-      // Click handler
-      cardEl.addEventListener("click", (e) => {
-        if (e.target === checkbox) return; // Let checkbox handle itself
-        e.preventDefault();
-
-        if (selectedIndices.has(idx)) {
-          selectedIndices.delete(idx);
-          cardEl.classList.remove("selected");
-          checkbox.checked = false;
-        } else if (selectedIndices.size < maxSelect) {
-          selectedIndices.add(idx);
-          cardEl.classList.add("selected");
-          checkbox.checked = true;
-        }
+          cardEl.appendChild(infoDiv);
+          return cardEl;
+        },
       });
+      return;
+    }
 
-      // Checkbox change handler
-      checkbox.addEventListener("change", (e) => {
-        if (e.target.checked) {
-          if (selectedIndices.size < maxSelect) {
-            selectedIndices.add(idx);
-            cardEl.classList.add("selected");
-          } else {
-            e.target.checked = false;
-          }
-        } else {
-          selectedIndices.delete(idx);
-          cardEl.classList.remove("selected");
-        }
-      });
-
-      grid.appendChild(cardEl);
-    });
-
-    modal.appendChild(grid);
-
-    const info = document.createElement("div");
-    info.textContent = `You will choose Attack/Defense position for each monster individually. Gain 500 LP per summon.`;
-    modal.appendChild(info);
-
-    const actions = document.createElement("div");
-    actions.classList.add("sacred-judgment-actions");
-
-    const cancelBtn = document.createElement("button");
-    cancelBtn.textContent = "Cancel";
-    cancelBtn.classList.add("secondary");
-    const confirmBtn = document.createElement("button");
-    confirmBtn.textContent = "Summon";
-    confirmBtn.classList.add("primary");
-
-    const cleanup = () => {
-      overlay.remove();
-    };
-
-    confirmBtn.onclick = () => {
-      const chosen = Array.from(selectedIndices)
-        .map((i) => candidates[i])
-        .filter(Boolean);
-      cleanup();
-      onConfirm(chosen);
-    };
-
-    cancelBtn.onclick = () => {
-      cleanup();
-      onConfirm([]);
-    };
-
-    actions.appendChild(cancelBtn);
-    actions.appendChild(confirmBtn);
-    modal.appendChild(actions);
-
-    overlay.appendChild(modal);
-    document.body.appendChild(overlay);
+    // Fallback: select up to maxSelect in order (respects min/max, no special ATK priority)
+    const chosen = candidates.slice(0, maxSelect);
+    console.log(
+      `[HEADLESS] Sacred Judgment: Auto-selecting ${chosen.length} monsters in order.`
+    );
+    onConfirm(chosen);
   }
 
   async applyConditionalSpecialSummonFromHand(action, ctx) {
@@ -3874,21 +3760,6 @@ export default class EffectEngine {
     });
   }
 
-  applyShadowHeartAbyssalEelDamage(action, ctx) {
-    if (action.type === "damage" && action.player === "opponent") {
-      const opponent = ctx.opponent;
-      opponent.takeDamage(action.amount);
-      console.log(`${opponent.name} took ${action.amount} damage.`);
-
-      if (this.game && typeof this.game.updateBoard === "function") {
-        this.game.updateBoard();
-      }
-
-      return true;
-    }
-    return false;
-  }
-
   applyAddCounter(action, ctx, targets) {
     const counterType = action.counterType || "default";
     let amount = action.amount || 1;
@@ -3925,6 +3796,14 @@ export default class EffectEngine {
 
     if (added && this.game && typeof this.game.updateBoard === "function") {
       this.game.updateBoard();
+    }
+
+    if (added && this.game?.renderer?.log) {
+      this.game.renderer.log(
+        `Added ${amount} ${counterType} counter(s) to ${
+          targetCards[0]?.name || ctx.source?.name || "card"
+        }.`
+      );
     }
 
     return added;
@@ -4190,22 +4069,30 @@ export default class EffectEngine {
         }
 
         // Step 2: Highlight valid materials and wait for selection
-        const requiredMaterials = this.getRequiredMaterials(
-          fusionMonster,
-          availableMaterials
-        );
+        const requiredMaterials = this.getFusionRequirements(fusionMonster);
 
         this.game.renderer.showFusionMaterialSelection(
           availableMaterials,
           requiredMaterials,
           async (selectedMaterials) => {
             // Validate materials
-            if (
-              !this.validateFusionMaterials(fusionMonster, selectedMaterials)
-            ) {
+            const validation = this.evaluateFusionSelection(
+              fusionMonster,
+              selectedMaterials
+            );
+
+            if (!validation.ok) {
               this.game.isResolvingEffect = false;
               this.game.renderer.log("Invalid Fusion Materials selected.");
               return;
+            }
+
+            const extraCount =
+              selectedMaterials.length - validation.requiredCount;
+            if (extraCount > 0) {
+              this.game.renderer.log(
+                `⚠️ You selected ${selectedMaterials.length} materials (requires ${validation.requiredCount}). All selected cards will be sent to the Graveyard.`
+              );
             }
 
             // Step 3: Choose position for Fusion Summon
@@ -4218,7 +4105,8 @@ export default class EffectEngine {
             const success = this.game.performFusionSummon(
               selectedMaterials,
               selectedFusionIndex,
-              position
+              position,
+              validation.usedMaterials
             );
 
             if (success) {
@@ -4235,6 +4123,10 @@ export default class EffectEngine {
             this.game.renderer.log("Fusion Summon cancelled.");
           }
         );
+      },
+      () => {
+        this.game.isResolvingEffect = false;
+        this.game.renderer.log("Fusion Summon cancelled.");
       }
     );
 
@@ -4245,7 +4137,10 @@ export default class EffectEngine {
     // Returns fusion monsters that can be summoned with available materials
     return extraDeck
       .map((fusion, index) => {
-        if (this.canSummonFusion(fusion, materials)) {
+        const combos = this.findFusionMaterialCombos(fusion, materials, {
+          maxResults: 1,
+        });
+        if (combos.length > 0) {
           return { fusion, index };
         }
         return null;
@@ -4254,36 +4149,10 @@ export default class EffectEngine {
   }
 
   canSummonFusion(fusionMonster, materials) {
-    if (
-      !fusionMonster.fusionMaterials ||
-      fusionMonster.fusionMaterials.length === 0
-    ) {
-      return false;
-    }
-
-    // Check if materials satisfy fusion requirements
-    const requirements = fusionMonster.fusionMaterials;
-    const usedMaterials = new Set();
-
-    // Check each requirement can be satisfied without reusing materials
-    for (const req of requirements) {
-      const count = req.count || 1;
-      let found = 0;
-      for (const material of materials) {
-        if (usedMaterials.has(material)) continue;
-        if (this.matchesFusionRequirement(material, req)) {
-          usedMaterials.add(material);
-          found++;
-          if (found >= count) break;
-        }
-      }
-
-      if (found < count) {
-        return false;
-      }
-    }
-
-    return true;
+    const combos = this.findFusionMaterialCombos(fusionMonster, materials, {
+      maxResults: 1,
+    });
+    return combos.length > 0;
   }
 
   matchesFusionRequirement(card, requirement) {
@@ -4301,6 +4170,11 @@ export default class EffectEngine {
         if (cardLevel < requirement.minLevel) return false;
       }
 
+      if (requirement.maxLevel) {
+        const cardLevel = card.level || 0;
+        if (cardLevel > requirement.maxLevel) return false;
+      }
+
       return true;
     }
     if (requirement.type && card.type === requirement.type) {
@@ -4312,36 +4186,92 @@ export default class EffectEngine {
     return false;
   }
 
-  getRequiredMaterials(fusionMonster, availableMaterials) {
-    // Returns info about required materials for UI display
-    return fusionMonster.fusionMaterials;
+  getFusionRequirements(fusionMonster) {
+    if (!fusionMonster || !Array.isArray(fusionMonster.fusionMaterials)) {
+      return [];
+    }
+    return fusionMonster.fusionMaterials.filter(Boolean);
+  }
+
+  getFusionRequiredCount(requirements) {
+    return (requirements || []).reduce(
+      (acc, req) => acc + (req?.count || 1),
+      0
+    );
+  }
+
+  findFusionMaterialCombos(fusionMonster, materials, options = {}) {
+    const requirements = this.getFusionRequirements(fusionMonster);
+    if (requirements.length === 0) return [];
+
+    const maxResults = options.maxResults || 3;
+    const results = [];
+    const pool = (materials || []).map((card, idx) => ({ card, idx }));
+
+    const used = new Set();
+
+    const chooseK = (candidates, k, start, picked, onPick) => {
+      if (k === 0) {
+        onPick(picked);
+        return;
+      }
+      for (let i = start; i < candidates.length; i++) {
+        picked.push(candidates[i]);
+        chooseK(candidates, k - 1, i + 1, picked, onPick);
+        picked.pop();
+        if (results.length >= maxResults) return;
+      }
+    };
+
+    const dfs = (reqIndex, current) => {
+      if (results.length >= maxResults) return;
+      if (reqIndex >= requirements.length) {
+        results.push([...current]);
+        return;
+      }
+
+      const req = requirements[reqIndex];
+      const needed = req.count || 1;
+      const candidates = pool.filter(
+        ({ card, idx }) =>
+          !used.has(idx) && this.matchesFusionRequirement(card, req)
+      );
+
+      if (candidates.length < needed) return;
+
+      chooseK(candidates, needed, 0, [], (picked) => {
+        picked.forEach(({ idx }) => used.add(idx));
+        current.push(...picked.map((p) => p.card));
+        dfs(reqIndex + 1, current);
+        current.splice(current.length - picked.length, picked.length);
+        picked.forEach(({ idx }) => used.delete(idx));
+      });
+    };
+
+    dfs(0, []);
+    return results;
+  }
+
+  evaluateFusionSelection(fusionMonster, selectedMaterials) {
+    const requirements = this.getFusionRequirements(fusionMonster);
+    const requiredCount = this.getFusionRequiredCount(requirements);
+    const combos = this.findFusionMaterialCombos(fusionMonster, selectedMaterials, {
+      maxResults: 1,
+    });
+
+    if (combos.length === 0) {
+      return { ok: false, usedMaterials: [], requiredCount };
+    }
+
+    return { ok: true, usedMaterials: combos[0], requiredCount };
+  }
+
+  getRequiredMaterials(fusionMonster) {
+    return this.getFusionRequirements(fusionMonster);
   }
 
   validateFusionMaterials(fusionMonster, selectedMaterials) {
-    // Validates that selected materials meet fusion requirements
-    const requirements = fusionMonster.fusionMaterials;
-    const usedMaterials = new Set();
-
-    for (const req of requirements) {
-      const count = req.count || 1;
-      let found = 0;
-
-      for (const material of selectedMaterials) {
-        if (usedMaterials.has(material)) continue;
-
-        if (this.matchesFusionRequirement(material, req)) {
-          usedMaterials.add(material);
-          found++;
-          if (found >= count) break;
-        }
-      }
-
-      if (found < count) {
-        return false;
-      }
-    }
-
-    return true;
+    return this.evaluateFusionSelection(fusionMonster, selectedMaterials).ok;
   }
 
   async applyDemonDragonDestroy(action, ctx) {

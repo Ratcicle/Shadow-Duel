@@ -55,6 +55,8 @@ export default class Player {
 
       while (this.deck.length < targetSize) {
         for (const data of cardDatabase) {
+          // Avoid pulling Fusion monsters into the main deck when topping up
+          if (data.monsterType === "fusion") continue;
           addCard(data);
           if (this.deck.length >= targetSize) break;
         }
@@ -82,14 +84,19 @@ export default class Player {
   buildExtraDeck(extraDeckList = null) {
     this.extraDeck = [];
 
+    const copies = new Set();
+    const pushFusion = (data) => {
+      if (!data || data.monsterType !== "fusion") return;
+      if (copies.has(data.id)) return;
+      if (this.extraDeck.length >= this.maxExtraDeckSize) return;
+      this.extraDeck.push(new Card(data, this.id));
+      copies.add(data.id);
+    };
+
     if (extraDeckList && Array.isArray(extraDeckList)) {
       extraDeckList.forEach((cardId) => {
         const data = cardDatabase.find((c) => c.id === cardId);
-        if (data && data.monsterType === "fusion") {
-          if (this.extraDeck.length < this.maxExtraDeckSize) {
-            this.extraDeck.push(new Card(data, this.id));
-          }
-        }
+        pushFusion(data);
       });
     }
   }
