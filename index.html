@@ -79,7 +79,6 @@
         <div class="board-wrapper bot-board">
           <div class="side-dock bot-left-dock">
             <div class="deck-zone" id="bot-deck">Deck</div>
-            <div class="extradeck-zone" id="bot-extradeck">Extra</div>
             <div class="graveyard-zone" id="bot-graveyard">GY</div>
           </div>
           <div class="board-core">
@@ -94,12 +93,15 @@
               data-label="Monsters"
             ></div>
           </div>
-          <div class="fieldspell-dock bot-right-dock">
-            <div
-              id="bot-fieldspell"
-              class="field-slot"
-              data-label="Field"
-            ></div>
+          <div class="side-dock bot-right-dock">
+            <div class="extradeck-zone" id="bot-extradeck">Extra</div>
+            <div class="fieldspell-dock">
+              <div
+                id="bot-fieldspell"
+                class="field-slot"
+                data-label="Field"
+              ></div>
+            </div>
           </div>
         </div>
       </div>
@@ -120,12 +122,15 @@
       <!-- Player Area (Bottom) -->
       <div id="player-area" class="player-area">
         <div class="board-wrapper player-board">
-          <div class="fieldspell-dock">
-            <div
-              id="player-fieldspell"
-              class="field-slot"
-              data-label="Field"
-            ></div>
+          <div class="side-dock player-left-dock">
+            <div class="fieldspell-dock">
+              <div
+                id="player-fieldspell"
+                class="field-slot"
+                data-label="Field"
+              ></div>
+            </div>
+            <div class="extradeck-zone" id="player-extradeck">Extra</div>
           </div>
           <div class="board-core">
             <div
@@ -139,9 +144,8 @@
               data-label="Spell/Trap"
             ></div>
           </div>
-          <div class="side-dock">
+          <div class="side-dock player-right-dock">
             <div class="graveyard-zone" id="player-graveyard">GY</div>
-            <div class="extradeck-zone" id="player-extradeck">Extra</div>
             <div class="deck-zone" id="player-deck">Deck</div>
           </div>
         </div>
@@ -193,7 +197,7 @@
         <span class="close-extradeck">&times;</span>
         <h2>Extra Deck</h2>
         <p class="extradeck-hint">Your Fusion Monsters</p>
-        <div id="extradeck-grid" class="gy-grid"></div>
+        <div id="extradeck-modal-grid" class="gy-grid"></div>
       </div>
     </div>
 

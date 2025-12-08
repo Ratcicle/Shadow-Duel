@@ -4,6 +4,7 @@ export default class Card {
     this.name = data.name;
     this.cardKind = data.cardKind || "monster"; // monster | spell | trap
     this.subtype = data.subtype || null; // normal | quick | continuous | counter | etc
+    this.monsterType = data.monsterType || null; // fusion, synchro, etc.
 
     // Archetypes support
     this.archetypes = Array.isArray(data.archetypes)
@@ -16,6 +17,7 @@ export default class Card {
     this.atk = data.atk ?? 0;
     this.def = data.def ?? 0;
     this.type = data.type; // monster race/attribute description
+    this.attribute = data.attribute || null;
     this.level = data.level ?? 0;
     this.position = "attack";
     this.isFacedown = false;
@@ -65,6 +67,9 @@ export default class Card {
 
     this.description = data.description;
     this.effects = data.effects || [];
+    this.fusionMaterials = data.fusionMaterials
+      ? JSON.parse(JSON.stringify(data.fusionMaterials))
+      : null;
     this.image = data.image;
     this.owner = owner;
   }

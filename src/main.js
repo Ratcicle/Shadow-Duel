@@ -37,7 +37,9 @@ function getCardById(cardId) {
 }
 
 function levelOf(card) {
-  return typeof card?.level === "number" && !Number.isNaN(card.level) ? card.level : 0;
+  return typeof card?.level === "number" && !Number.isNaN(card.level)
+    ? card.level
+    : 0;
 }
 
 function sortDeck(deckIds = []) {
@@ -46,8 +48,12 @@ function sortDeck(deckIds = []) {
     const cardB = getCardById(bId);
     const kindA = (cardA?.cardKind || "").toLowerCase();
     const kindB = (cardB?.cardKind || "").toLowerCase();
-    const orderA = cardKindOrder.hasOwnProperty(kindA) ? cardKindOrder[kindA] : 99;
-    const orderB = cardKindOrder.hasOwnProperty(kindB) ? cardKindOrder[kindB] : 99;
+    const orderA = cardKindOrder.hasOwnProperty(kindA)
+      ? cardKindOrder[kindA]
+      : 99;
+    const orderB = cardKindOrder.hasOwnProperty(kindB)
+      ? cardKindOrder[kindB]
+      : 99;
     if (orderA !== orderB) return orderA - orderB;
     if (kindA === "monster" && kindB === "monster") {
       const levelA = levelOf(cardA);
@@ -87,12 +93,15 @@ function loadExtraDeck() {
 
 function saveExtraDeck(extraDeck) {
   currentExtraDeck = [...extraDeck];
-  localStorage.setItem("shadow_duel_extra_deck", JSON.stringify(currentExtraDeck));
+  localStorage.setItem(
+    "shadow_duel_extra_deck",
+    JSON.stringify(currentExtraDeck)
+  );
 }
 
 function sanitizeExtraDeck(extraDeck) {
   const valid = new Set(
-    cardDatabase.filter(c => c.monsterType === "fusion").map(c => c.id)
+    cardDatabase.filter((c) => c.monsterType === "fusion").map((c) => c.id)
   );
   const result = [];
   for (const id of extraDeck || []) {
@@ -150,8 +159,14 @@ function setPreview(card) {
   previewEls.image.style.backgroundImage = `url('${card.image}')`;
   previewEls.name.textContent = card.name;
   const isMonster = card.cardKind !== "spell" && card.cardKind !== "trap";
-  previewEls.atk.textContent = isMonster ? `ATK: ${card.atk}` : card.cardKind.toUpperCase();
-  previewEls.def.textContent = isMonster ? `DEF: ${card.def}` : (card.subtype ? card.subtype.toUpperCase() : "");
+  previewEls.atk.textContent = isMonster
+    ? `ATK: ${card.atk}`
+    : card.cardKind.toUpperCase();
+  previewEls.def.textContent = isMonster
+    ? `DEF: ${card.def}`
+    : card.subtype
+    ? card.subtype.toUpperCase()
+    : "";
   previewEls.level.textContent = isMonster ? `Level: ${card.level}` : "";
   previewEls.desc.textContent = card.description || "Sem descricao.";
 }
@@ -160,7 +175,9 @@ function getSortedCardPool(cards) {
   const spellSubtypeOrder = { normal: 0, equip: 1, field: 2 };
   const nameOf = (card) => card.name || "";
   const levelOf = (card) =>
-    typeof card.level === "number" && !Number.isNaN(card.level) ? card.level : 0;
+    typeof card.level === "number" && !Number.isNaN(card.level)
+      ? card.level
+      : 0;
   const kindOf = (card) => (card.cardKind || "").toLowerCase();
   const subtypeOf = (card) => (card.subtype || "").toLowerCase();
 
@@ -196,7 +213,9 @@ function getSortedCardPool(cards) {
   });
 
   const sortedTraps = traps.sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
-  const sortedOthers = others.sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
+  const sortedOthers = others.sort((a, b) =>
+    nameOf(a).localeCompare(nameOf(b))
+  );
 
   return [...sortedMonsters, ...sortedSpells, ...sortedTraps, ...sortedOthers];
 }
@@ -259,9 +278,11 @@ function renderDeckBuilder() {
   }
 
   // Pool of all cards with counts
-  const sortedCards = getSortedCardPool(cardDatabase.filter(c => !c.monsterType || c.monsterType !== "fusion"));
-  const fusionCards = cardDatabase.filter(c => c.monsterType === "fusion");
-  
+  const sortedCards = getSortedCardPool(
+    cardDatabase.filter((c) => !c.monsterType || c.monsterType !== "fusion")
+  );
+  const fusionCards = cardDatabase.filter((c) => c.monsterType === "fusion");
+
   const extraCounts = {};
   currentExtraDeck.forEach((id) => {
     extraCounts[id] = extraCounts[id] || 0;
@@ -297,7 +318,7 @@ function renderDeckBuilder() {
   });
 
   // Render normal cards
-  sortedCards.forEach((card) {
+  sortedCards.forEach((card) => {
     const cardEl = createCardThumb(card);
     const count = counts[card.id] || 0;
     const badge = document.createElement("div");
@@ -347,8 +368,13 @@ function closeDeckBuilder() {
 }
 
 function startDuel() {
-  if (currentDeck.length < MIN_DECK_SIZE || currentDeck.length > MAX_DECK_SIZE) {
-    alert(`O deck precisa ter entre ${MIN_DECK_SIZE} e ${MAX_DECK_SIZE} cartas.`);
+  if (
+    currentDeck.length < MIN_DECK_SIZE ||
+    currentDeck.length > MAX_DECK_SIZE
+  ) {
+    alert(
+      `O deck precisa ter entre ${MIN_DECK_SIZE} e ${MAX_DECK_SIZE} cartas.`
+    );
     return;
   }
   saveDeck(currentDeck);

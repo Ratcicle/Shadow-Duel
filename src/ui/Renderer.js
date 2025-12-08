@@ -900,10 +900,10 @@ export default class Renderer {
   }
 
   renderExtraDeckModal(cards) {
-    const grid = document.getElementById("extradeck-grid");
+    const grid = document.getElementById("extradeck-modal-grid");
 
     if (!grid) {
-      console.warn("#extradeck-grid not found");
+      console.warn("#extradeck-modal-grid not found");
       return;
     }
 

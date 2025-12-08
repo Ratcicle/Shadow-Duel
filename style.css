@@ -202,7 +202,9 @@ body {
 .side-dock {
   width: 90px;
   min-width: 90px;
-  justify-content: space-between;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   align-self: stretch;
 }
 

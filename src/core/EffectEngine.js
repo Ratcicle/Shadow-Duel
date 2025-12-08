@@ -4262,16 +4262,17 @@ export default class EffectEngine {
     }
 
     // Check if materials satisfy fusion requirements
-    // This will be specific to each fusion monster's requirements
     const requirements = fusionMonster.fusionMaterials;
+    const usedMaterials = new Set();
 
-    // Simple implementation: check if we have enough matching materials
+    // Check each requirement can be satisfied without reusing materials
     for (const req of requirements) {
       const count = req.count || 1;
       let found = 0;
-
       for (const material of materials) {
+        if (usedMaterials.has(material)) continue;
         if (this.matchesFusionRequirement(material, req)) {
+          usedMaterials.add(material);
           found++;
           if (found >= count) break;
         }
@@ -4372,6 +4373,17 @@ export default class EffectEngine {
       `${ctx.source.name}: Select up to ${maxTargets} opponent's cards to destroy.`
     );
 
+    // Build candidates list for showTargetSelection
+    const candidates = opponentCards.map((card, index) => ({
+      idx: index,
+      name: card.name,
+      owner: opponent.id === "player" ? "Player" : "Opponent",
+      position: card.position || "",
+      atk: card.atk,
+      def: card.def,
+      cardRef: card,
+    }));
+
     return new Promise((resolve) => {
       this.game.renderer.showTargetSelection(
         [
@@ -4380,11 +4392,12 @@ export default class EffectEngine {
             zone: "opponent_field",
             min: maxTargets,
             max: maxTargets,
-            filter: (card) => opponentCards.includes(card),
+            candidates: candidates,
           },
         ],
         (selections) => {
-          const targets = selections["demon_dragon_targets"] || [];
+          const selectedIndices = selections["demon_dragon_targets"] || [];
+          const targets = selectedIndices.map((idx) => opponentCards[idx]);
 
           targets.forEach((target) => {
             this.game.renderer.log(
