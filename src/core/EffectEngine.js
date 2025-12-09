@@ -4095,6 +4095,64 @@ export default class EffectEngine {
     return true;
   }
 
+  async performBotFusion(ctx, summonableFusions, availableMaterials) {
+    // Bot escolhe automaticamente o melhor monstro de fusão (maior ATK)
+    const bestFusion = summonableFusions.reduce((best, current) => {
+      const bestAtk = best.fusion.atk || 0;
+      const currentAtk = current.fusion.atk || 0;
+      return currentAtk > bestAtk ? current : best;
+    }, summonableFusions[0]);
+
+    const fusionMonster = bestFusion.fusion;
+    const fusionIndex = bestFusion.index;
+
+    // Encontrar materiais válidos
+    const combos = this.findFusionMaterialCombos(
+      fusionMonster,
+      availableMaterials,
+      { maxResults: 1 }
+    );
+
+    if (combos.length === 0) {
+      this.game.renderer.log(
+        `${ctx.player.name} failed to find valid materials.`
+      );
+      return false;
+    }
+
+    const selectedMaterials = combos[0];
+
+    // Validar materiais
+    const validation = this.evaluateFusionSelection(
+      fusionMonster,
+      selectedMaterials
+    );
+    if (!validation.ok) {
+      this.game.renderer.log(`${ctx.player.name} selected invalid materials.`);
+      return false;
+    }
+
+    // Bot sempre invoca em ataque (monstros poderosos devem atacar)
+    const position = "attack";
+
+    // Executar Fusion Summon usando o jogador correto (bot)
+    const success = this.game.performFusionSummon(
+      selectedMaterials,
+      fusionIndex,
+      position,
+      validation.usedMaterials,
+      ctx.player // Passa o jogador correto
+    );
+
+    if (success) {
+      this.game.renderer.log(
+        `${ctx.player.name} Fusion Summoned ${fusionMonster.name}!`
+      );
+    }
+
+    return success;
+  }
+
   async applyPolymerizationFusion(action, ctx) {
     if (!ctx.player || !this.game) {
       return false;
@@ -4134,6 +4192,15 @@ export default class EffectEngine {
         "No Fusion Monsters can be summoned with available materials."
       );
       return false;
+    }
+
+    // BOT AUTO-FUSION: Se é o bot, executar fusão automaticamente
+    if (ctx.player.id === "bot") {
+      return await this.performBotFusion(
+        ctx,
+        summonableFusions,
+        availableMaterials
+      );
     }
 
     // Lock actions during fusion process

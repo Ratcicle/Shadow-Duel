@@ -58,10 +58,10 @@ export default class Game {
   start(deckList = null, extraDeckList = null) {
     this.player.buildDeck(deckList);
     this.player.buildExtraDeck(extraDeckList);
-    for (let i = 0; i < 4; i++) {
-      this.player.ensureCardOnTop("Infinity Searcher", true);
-    }
+    // Garante apenas 1 cópia de Infinity Searcher no topo para não poluir a mão inicial
+    this.player.ensureCardOnTop("Infinity Searcher", true);
     this.bot.buildDeck();
+    this.bot.buildExtraDeck();
 
     for (let i = 0; i < 4; i++) {
       this.player.draw();
@@ -2122,22 +2122,26 @@ export default class Game {
     materials,
     fusionMonsterIndex,
     position = "attack",
-    requiredSubset = null
+    requiredSubset = null,
+    player = null
   ) {
+    // Usa o jogador passado ou default para this.player
+    const activePlayer = player || this.player;
+
     // Validate inputs
     if (!materials || materials.length === 0) {
       this.renderer.log("No materials selected for Fusion Summon.");
       return false;
     }
 
-    const fusionMonster = this.player.extraDeck[fusionMonsterIndex];
+    const fusionMonster = activePlayer.extraDeck[fusionMonsterIndex];
     if (!fusionMonster) {
       this.renderer.log("Fusion Monster not found in Extra Deck.");
       return false;
     }
 
     // Check field space
-    if (this.player.field.length >= 5) {
+    if (activePlayer.field.length >= 5) {
       this.renderer.log("Field is full (max 5 monsters).");
       return false;
     }
@@ -2149,20 +2153,20 @@ export default class Game {
 
     // Send materials to GY
     materials.forEach((material) => {
-      this.moveCard(material, this.player, "graveyard");
+      this.moveCard(material, activePlayer, "graveyard");
     });
 
     // Remove fusion monster from Extra Deck
-    this.player.extraDeck.splice(fusionMonsterIndex, 1);
+    activePlayer.extraDeck.splice(fusionMonsterIndex, 1);
 
     // Add to field
     fusionMonster.position = position;
     fusionMonster.isFacedown = false;
     fusionMonster.hasAttacked = false;
     fusionMonster.cannotAttackThisTurn = false;
-    fusionMonster.owner = "player";
+    fusionMonster.owner = activePlayer.id;
     fusionMonster.summonedTurn = this.turnCounter;
-    this.player.field.push(fusionMonster);
+    activePlayer.field.push(fusionMonster);
 
     const requiredNames = requiredMaterials.map((c) => c.name).join(", ");
     const extraNames = extraMaterials.map((c) => c.name).join(", ");
@@ -2180,7 +2184,7 @@ export default class Game {
     // Emit after_summon event
     this.emit("after_summon", {
       card: fusionMonster,
-      player: this.player,
+      player: activePlayer,
       method: "fusion",
     });
 

@@ -280,18 +280,25 @@ export default class Player {
         : [];
 
       let removeIdx = -1;
-
-      if (targetArchetypes.length === 0) {
-        removeIdx = this.deck.findIndex((card) => card.archetypes.length === 0);
-      } else {
-        removeIdx = this.deck.findIndex((card) => {
+      // Prefer remover monstros sem arquétipo para não descartar spells/traps importantes (ex: Polymerization)
+      const findRemovable = (preferMonsters) =>
+        this.deck.findIndex((card) => {
           const archetypes = Array.isArray(card.archetypes)
             ? card.archetypes
             : card.archetype
             ? [card.archetype]
             : [];
-          return targetArchetypes.every((arc) => !archetypes.includes(arc));
+          const archetypeMismatch =
+            targetArchetypes.length === 0
+              ? archetypes.length === 0
+              : targetArchetypes.every((arc) => !archetypes.includes(arc));
+          const isMonster = card.cardKind === "monster";
+          return archetypeMismatch && (!preferMonsters || isMonster);
         });
+
+      removeIdx = findRemovable(true);
+      if (removeIdx === -1) {
+        removeIdx = findRemovable(false);
       }
 
       if (removeIdx === -1) {
