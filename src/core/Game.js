@@ -645,17 +645,10 @@ export default class Game {
 
           const canDirect = attacker.canAttackDirectlyThisTurn === true;
 
-          if (attackCandidates.length === 0) {
+          if (canDirect) {
+            this.startAttackTargetSelection(attacker, attackCandidates);
+          } else if (attackCandidates.length === 0) {
             await this.resolveCombat(attacker, null);
-          } else if (canDirect) {
-            const wantsDirect = window.confirm(
-              "Attack directly and ignore opponent's monsters this turn?"
-            );
-            if (wantsDirect) {
-              await this.resolveCombat(attacker, null);
-            } else {
-              this.startAttackTargetSelection(attacker, attackCandidates);
-            }
           } else {
             this.startAttackTargetSelection(attacker, attackCandidates);
           }
@@ -752,6 +745,29 @@ export default class Game {
 
       this.handleTargetSelectionClick("bot", index, cardEl);
     });
+
+    // Direcionar ataque direto: clicar na mão do oponente quando houver alvo "Direct Attack"
+    const botHandEl = document.getElementById("bot-hand");
+    if (botHandEl) {
+      botHandEl.addEventListener("click", (e) => {
+        if (!this.targetSelection) return;
+        if (this.targetSelection.kind !== "attack") return;
+        const option = this.targetSelection.options[0];
+        if (!option) return;
+
+        const directCandidate = option.candidates.find(
+          (c) => c && c.isDirectAttack
+        );
+        if (!directCandidate) return;
+
+        // Seleciona o índice do ataque direto e finaliza seleção
+        this.targetSelection.selections[option.id] = [directCandidate.idx];
+        this.targetSelection.currentOption =
+          this.targetSelection.options.length;
+        this.finishTargetSelection();
+        e.stopPropagation();
+      });
+    }
 
     // Player field monsters - check for ignition effects
     const playerFieldEl = document.getElementById("player-field");
@@ -1462,8 +1478,8 @@ export default class Game {
   }
 
   startAttackTargetSelection(attacker, candidates) {
-    if (!attacker || !Array.isArray(candidates) || candidates.length === 0)
-      return;
+    if (!attacker || !Array.isArray(candidates)) return;
+    if (candidates.length === 0 && !attacker.canAttackDirectlyThisTurn) return;
     this.cancelTargetSelection();
     const decorated = candidates.map((card, idx) => {
       const ownerLabel = card.owner === "player" ? "player" : "opponent";
@@ -1484,6 +1500,24 @@ export default class Game {
         cardRef: card,
       };
     });
+
+    // Adiciona alvo de ataque direto (clicar na mão do oponente) quando permitido
+    if (attacker.canAttackDirectlyThisTurn) {
+      decorated.push({
+        idx: decorated.length,
+        name: "Direct Attack",
+        owner: "opponent",
+        controller: this.bot.id,
+        zone: "hand",
+        zoneIndex: -1,
+        position: "attack",
+        atk: 0,
+        def: 0,
+        cardKind: "direct",
+        cardRef: null,
+        isDirectAttack: true,
+      });
+    }
 
     this.targetSelection = {
       kind: "attack",
@@ -1587,30 +1621,32 @@ export default class Game {
     if (!option) return;
 
     option.candidates.forEach((cand) => {
-      let fieldSelector = null;
-      if (cand.zone === "field") {
-        fieldSelector =
+      let targetEl = null;
+      if (cand.isDirectAttack) {
+        targetEl = document.querySelector("#bot-hand");
+      } else if (cand.zone === "field") {
+        const fieldSelector =
           cand.controller === "player" ? "#player-field" : "#bot-field";
+        const indexSelector = ` .card[data-index="${cand.zoneIndex}"]`;
+        targetEl = document.querySelector(`${fieldSelector}${indexSelector}`);
       } else if (cand.zone === "fieldSpell") {
-        fieldSelector =
+        const fieldSelector =
           cand.controller === "player"
             ? "#player-fieldspell"
             : "#bot-fieldspell";
+        targetEl = document.querySelector(`${fieldSelector} .card`);
       }
 
-      if (!fieldSelector) return;
+      if (!targetEl) return;
 
-      const indexSelector =
-        cand.zone === "fieldSpell"
-          ? " .card"
-          : ` .card[data-index="${cand.zoneIndex}"]`;
-      const cardEl = document.querySelector(`${fieldSelector}${indexSelector}`);
-      if (cardEl) {
-        cardEl.classList.add("targetable");
-        const selected = this.targetSelection.selections[option.id] || [];
-        if (selected.includes(cand.idx)) {
-          cardEl.classList.add("selected-target");
-        }
+      targetEl.classList.add("targetable");
+      if (cand.isDirectAttack) {
+        targetEl.style.pointerEvents = "auto";
+        targetEl.classList.add("direct-attack-target");
+      }
+      const selected = this.targetSelection.selections[option.id] || [];
+      if (selected.includes(cand.idx)) {
+        targetEl.classList.add("selected-target");
       }
     });
   }
@@ -1622,6 +1658,15 @@ export default class Game {
     document
       .querySelectorAll(".card.selected-target")
       .forEach((el) => el.classList.remove("selected-target"));
+    const botHand = document.querySelector("#bot-hand");
+    if (botHand) {
+      botHand.style.pointerEvents = "";
+      botHand.classList.remove(
+        "targetable",
+        "selected-target",
+        "direct-attack-target"
+      );
+    }
   }
 
   handleTargetSelectionClick(ownerId, cardIndex, cardEl) {
@@ -1740,8 +1785,14 @@ export default class Game {
       const option = selection.options[0];
       if (option) {
         const chosenIndexes = selection.selections[option.id] || [];
-        const chosenCard = option.candidates[chosenIndexes[0]]?.cardRef ?? null;
-        if (chosenCard) {
+        const chosenCandidate = option.candidates[chosenIndexes[0]];
+        const chosenCard = chosenCandidate?.cardRef ?? null;
+        const isDirectAttack = chosenCandidate?.isDirectAttack === true;
+        if (isDirectAttack) {
+          this.resolveCombat(selection.attacker, null).catch((err) =>
+            console.error(err)
+          );
+        } else if (chosenCard) {
           this.resolveCombat(selection.attacker, chosenCard).catch((err) =>
             console.error(err)
           );

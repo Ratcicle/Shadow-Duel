@@ -2440,12 +2440,17 @@ export default class EffectEngine {
       return true;
     }
 
-    const choice = window.prompt(
-      "Enter the card name to add to your hand:",
-      defaultCard
-    );
+    // Fallback: auto-seleciona o melhor disponível
+    const fallback =
+      candidates.reduce((top, card) => {
+        if (!card) return top;
+        if (!top) return card;
+        const cardAtk = card.atk || 0;
+        const topAtk = top.atk || 0;
+        return cardAtk >= topAtk ? card : top;
+      }, null) || candidates[candidates.length - 1];
 
-    this.finishSearchSelection(choice, candidates, ctx);
+    this.finishSearchSelection(fallback?.name || defaultCard, candidates, ctx);
     return true;
   }
 
@@ -3325,7 +3330,7 @@ export default class EffectEngine {
     );
   }
 
-  applyReviveShadowHeartFromGrave(action, ctx) {
+  async applyReviveShadowHeartFromGrave(action, ctx) {
     const player = action.player === "opponent" ? ctx.opponent : ctx.player;
     if (!player) return false;
 
@@ -3348,28 +3353,39 @@ export default class EffectEngine {
       return false;
     }
 
-    let chosen = candidates[0];
-
-    if (candidates.length > 1 && typeof window !== "undefined") {
-      const uniqueNames = [...new Set(candidates.map((c) => c.name))];
-      const choice = window.prompt(
-        `Choose 1 "Shadow-Heart" monster to revive:\n` + uniqueNames.join("\n")
-      );
-      if (choice) {
-        const normalized = choice.trim().toLowerCase();
-        const byName = candidates.find(
-          (c) =>
-            c &&
-            c.name &&
-            typeof c.name === "string" &&
-            c.name.trim().toLowerCase() === normalized
-        );
-        if (byName) {
-          chosen = byName;
-        }
-      }
+    // Bot ou candidato único: auto-seleciona
+    if (candidates.length === 1 || player.id === "bot") {
+      const chosen = candidates[0];
+      return this.finishReviveShadowHeart(chosen, gy, player, action);
     }
 
+    // Player: modal visual
+    const searchModal = this.getSearchModalElements();
+    const defaultCardName = candidates[0]?.name || "";
+
+    return new Promise((resolve) => {
+      const finalizeSelection = (selectedName) => {
+        const chosen =
+          candidates.find((c) => c && c.name === selectedName) || candidates[0];
+        const result = this.finishReviveShadowHeart(chosen, gy, player, action);
+        resolve(result);
+      };
+
+      if (searchModal) {
+        this.showSearchModalVisual(
+          searchModal,
+          candidates,
+          defaultCardName,
+          (choice) => finalizeSelection(choice)
+        );
+      } else {
+        // Fallback: auto-seleciona o primeiro
+        finalizeSelection(defaultCardName);
+      }
+    });
+  }
+
+  finishReviveShadowHeart(chosen, gy, player, action) {
     if (!chosen) {
       console.log("No valid choice made for revival.");
       return false;
@@ -3794,21 +3810,42 @@ export default class EffectEngine {
     const candidates = player.hand.filter((c) => c && c.cardKind === "monster");
     if (candidates.length === 0) return false;
 
-    let targetCard = candidates[0];
-    if (candidates.length > 1) {
-      const cardNames = [...new Set(candidates.map((c) => c.name))];
-      const choice = window.prompt(
-        `Choose a monster to special summon:\n${cardNames.join("\n")}`
-      );
-      if (choice) {
-        const normalized = choice.trim().toLowerCase();
-        const byName = candidates.find(
-          (c) => c && c.name && c.name.trim().toLowerCase() === normalized
-        );
-        if (byName) targetCard = byName;
-      }
+    // Candidato único ou bot: auto-seleciona
+    if (candidates.length === 1 || player.id === "bot") {
+      return this.finishConditionalSpecialSummon(candidates[0], player, action);
     }
 
+    // Player: modal visual
+    const searchModal = this.getSearchModalElements();
+    const defaultCardName = candidates[0]?.name || "";
+
+    return new Promise((resolve) => {
+      const finalizeSelection = (selectedName) => {
+        const chosen =
+          candidates.find((c) => c && c.name === selectedName) || candidates[0];
+        const result = this.finishConditionalSpecialSummon(
+          chosen,
+          player,
+          action
+        );
+        resolve(result);
+      };
+
+      if (searchModal) {
+        this.showSearchModalVisual(
+          searchModal,
+          candidates,
+          defaultCardName,
+          (choice) => finalizeSelection(choice)
+        );
+      } else {
+        // Fallback: auto-seleciona o primeiro
+        finalizeSelection(defaultCardName);
+      }
+    });
+  }
+
+  finishConditionalSpecialSummon(targetCard, player, action) {
     const position = action.position || "attack";
     targetCard.position = position;
     targetCard.isFacedown = false;
@@ -4270,68 +4307,55 @@ export default class EffectEngine {
       return true;
     }
 
-    // Player: mostrar modal de seleção
-    this.game.isResolvingEffect = true;
+    // Player: seleção visual
+    const searchModal = this.getSearchModalElements();
+    const defaultCardName = candidates[0]?.name || "";
 
-    const modal = document.getElementById("search-modal");
-    const select = document.getElementById("search-dropdown");
-    const confirmBtn = document.getElementById("search-confirm");
-    const cancelBtn = document.getElementById("search-cancel");
+    const finalizeSelection = (selectedName) => {
+      const chosen =
+        candidates.find((c) => c && c.name === selectedName) || candidates[0];
 
-    if (!modal || !select || !confirmBtn || !cancelBtn) {
-      this.game.isResolvingEffect = false;
-      return false;
-    }
-
-    select.innerHTML = "";
-    candidates.forEach((card) => {
-      const option = document.createElement("option");
-      option.value = card.name;
-      option.textContent = `${card.name} (ATK ${card.atk})`;
-      select.appendChild(option);
-    });
-
-    modal.style.display = "block";
-
-    const handleConfirm = () => {
-      const selectedName = select.value;
-      const card = candidates.find((c) => c.name === selectedName);
-
-      if (card && ctx.player.field.length < 5) {
-        const cardIndex = deck.indexOf(card);
+      if (chosen && ctx.player.field.length < 5) {
+        const cardIndex = deck.indexOf(chosen);
         if (cardIndex !== -1) {
           deck.splice(cardIndex, 1);
-          card.position = "attack";
-          card.isFacedown = false;
-          card.hasAttacked = false;
-          card.cannotAttackThisTurn = true;
-          card.owner = ctx.player.id;
-          ctx.player.field.push(card);
+          chosen.position = "attack";
+          chosen.isFacedown = false;
+          chosen.hasAttacked = false;
+          chosen.cannotAttackThisTurn = true; // Restrição de ataque
+          chosen.owner = ctx.player.id;
+          ctx.player.field.push(chosen);
 
           this.game.renderer.log(
-            `Special Summoned ${card.name} from Deck (cannot attack this turn).`
+            `Special Summoned ${chosen.name} from Deck (cannot attack this turn).`
           );
           this.game.updateBoard();
         }
       }
 
-      cleanup();
-    };
-
-    const handleCancel = () => {
-      this.game.renderer.log("Effect cancelled.");
-      cleanup();
-    };
-
-    const cleanup = () => {
-      modal.style.display = "none";
-      confirmBtn.removeEventListener("click", handleConfirm);
-      cancelBtn.removeEventListener("click", handleCancel);
       this.game.isResolvingEffect = false;
     };
 
-    confirmBtn.addEventListener("click", handleConfirm);
-    cancelBtn.addEventListener("click", handleCancel);
+    if (searchModal) {
+      this.game.isResolvingEffect = true;
+      this.showSearchModalVisual(
+        searchModal,
+        candidates,
+        defaultCardName,
+        (choice) => finalizeSelection(choice)
+      );
+      return true;
+    }
+
+    // Fallback: auto-seleciona o melhor alvo disponível
+    const fallback = candidates.reduce((top, card) => {
+      const cardAtk = card.atk || 0;
+      const topAtk = top.atk || 0;
+      return cardAtk >= topAtk ? card : top;
+    }, candidates[0]);
+
+    finalizeSelection(fallback?.name || defaultCardName);
+    return true;
 
     return true;
   }
@@ -4452,32 +4476,14 @@ export default class EffectEngine {
       return true;
     }
 
-    // Player: mostrar modal de seleção
-    this.game.isResolvingEffect = true;
+    // Player: modal visual
+    const searchModal = this.getSearchModalElements();
+    const defaultCardName = validTargets[0]?.name || "";
 
-    const modal = document.getElementById("search-modal");
-    const select = document.getElementById("search-dropdown");
-    const confirmBtn = document.getElementById("search-confirm");
-    const cancelBtn = document.getElementById("search-cancel");
-
-    if (!modal || !select || !confirmBtn || !cancelBtn) {
-      this.game.isResolvingEffect = false;
-      return false;
-    }
-
-    select.innerHTML = "";
-    validTargets.forEach((c) => {
-      const option = document.createElement("option");
-      option.value = c.name;
-      option.textContent = `${c.name} (ATK ${c.atk})`;
-      select.appendChild(option);
-    });
-
-    modal.style.display = "block";
-
-    const handleConfirm = () => {
-      const selectedName = select.value;
-      const target = validTargets.find((c) => c.name === selectedName);
+    const finalizeSelection = (selectedName) => {
+      const target =
+        validTargets.find((c) => c && c.name === selectedName) ||
+        validTargets[0];
 
       if (target && ctx.player.field.length < 5) {
         // Bounce Void Walker
@@ -4512,24 +4518,28 @@ export default class EffectEngine {
         }
       }
 
-      cleanup();
-    };
-
-    const handleCancel = () => {
-      this.game.renderer.log("Effect cancelled.");
-      cleanup();
-    };
-
-    const cleanup = () => {
-      modal.style.display = "none";
-      confirmBtn.removeEventListener("click", handleConfirm);
-      cancelBtn.removeEventListener("click", handleCancel);
       this.game.isResolvingEffect = false;
     };
 
-    confirmBtn.addEventListener("click", handleConfirm);
-    cancelBtn.addEventListener("click", handleCancel);
+    if (searchModal) {
+      this.game.isResolvingEffect = true;
+      this.showSearchModalVisual(
+        searchModal,
+        validTargets,
+        defaultCardName,
+        (choice) => finalizeSelection(choice)
+      );
+      return true;
+    }
 
+    // Fallback: auto-seleciona o melhor
+    const fallback = validTargets.reduce((top, c) => {
+      const cAtk = c.atk || 0;
+      const topAtk = top.atk || 0;
+      return cAtk >= topAtk ? c : top;
+    }, validTargets[0]);
+
+    finalizeSelection(fallback?.name || defaultCardName);
     return true;
   }
 
@@ -5259,36 +5269,17 @@ export default class EffectEngine {
       return true;
     }
 
-    // Player: mostrar modal de seleção
-    this.game.isResolvingEffect = true;
-
-    const modal = document.getElementById("search-modal");
-    const select = document.getElementById("search-dropdown");
-    const confirmBtn = document.getElementById("search-confirm");
-    const cancelBtn = document.getElementById("search-cancel");
-
-    if (!modal || !select || !confirmBtn || !cancelBtn) {
-      this.game.isResolvingEffect = false;
-      return false;
-    }
-
-    select.innerHTML = "";
-    candidates.forEach((card) => {
-      const option = document.createElement("option");
-      option.value = card.name;
-      option.textContent = card.name;
-      select.appendChild(option);
-    });
-
-    modal.style.display = "block";
+    // Player: modal visual
+    const searchModal = this.getSearchModalElements();
+    const defaultCardName = candidates[0]?.name || "";
 
     return new Promise((resolve) => {
-      const handleConfirm = () => {
-        const selectedName = select.value;
-        const card = candidates.find((c) => c.name === selectedName);
+      const finalizeSelection = (selectedName) => {
+        const chosen =
+          candidates.find((c) => c && c.name === selectedName) || candidates[0];
 
-        if (card && ctx.player.field.length < 5) {
-          const cardIndex = deck.indexOf(card);
+        if (chosen && ctx.player.field.length < 5) {
+          const cardIndex = deck.indexOf(chosen);
           if (cardIndex !== -1) {
             const [summonedCard] = deck.splice(cardIndex, 1);
             summonedCard.position = "attack";
@@ -5312,25 +5303,22 @@ export default class EffectEngine {
           }
         }
 
-        cleanup();
+        this.game.isResolvingEffect = false;
         resolve(true);
       };
 
-      const handleCancel = () => {
-        this.game.renderer.log("Effect cancelled.");
-        cleanup();
-        resolve(false);
-      };
-
-      const cleanup = () => {
-        modal.style.display = "none";
-        confirmBtn.removeEventListener("click", handleConfirm);
-        cancelBtn.removeEventListener("click", handleCancel);
-        this.game.isResolvingEffect = false;
-      };
-
-      confirmBtn.addEventListener("click", handleConfirm);
-      cancelBtn.addEventListener("click", handleCancel);
+      if (searchModal) {
+        this.game.isResolvingEffect = true;
+        this.showSearchModalVisual(
+          searchModal,
+          candidates,
+          defaultCardName,
+          (choice) => finalizeSelection(choice)
+        );
+      } else {
+        // Fallback: auto-seleciona o primeiro
+        finalizeSelection(defaultCardName);
+      }
     });
   }
 

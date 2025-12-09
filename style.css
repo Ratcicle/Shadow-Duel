@@ -504,6 +504,11 @@ body {
   z-index: 100;
 }
 
+/* Modal de ativação de efeito ignition - acima de modais de seleção */
+.modal.ignition-overlay {
+  z-index: 350;
+}
+
 .modal.hidden {
   display: none;
 }
@@ -1433,6 +1438,45 @@ body {
   border: 2px solid #7bff9d;
   box-shadow: 0 0 12px #7bff9d;
   animation: none;
+}
+
+#bot-hand.direct-attack-target {
+  position: relative;
+  outline: 2px dashed #ff6bd6;
+  box-shadow: 0 0 16px rgba(255, 107, 214, 0.65),
+    0 0 28px rgba(100, 215, 255, 0.35);
+  animation: pulse-direct-hand 1.2s ease-in-out infinite;
+  cursor: pointer;
+}
+
+#bot-hand.direct-attack-target::after {
+  content: "Direct Attack";
+  position: absolute;
+  top: -16px;
+  right: 8px;
+  padding: 4px 8px;
+  background: rgba(255, 107, 214, 0.9);
+  color: #0a0a0a;
+  font-weight: 700;
+  font-size: 0.7rem;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+@keyframes pulse-direct-hand {
+  0%,
+  100% {
+    outline-color: #ff6bd6;
+    box-shadow: 0 0 12px rgba(255, 107, 214, 0.6),
+      0 0 22px rgba(100, 215, 255, 0.3);
+  }
+  50% {
+    outline-color: #64d7ff;
+    box-shadow: 0 0 18px rgba(255, 107, 214, 0.85),
+      0 0 30px rgba(100, 215, 255, 0.5);
+  }
 }
 
 @keyframes pulse-target {
