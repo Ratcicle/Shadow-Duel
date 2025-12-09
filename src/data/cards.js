@@ -218,17 +218,6 @@ export const cardDatabase = [
     image: "assets/shadow_wolf.png",
   },
   {
-    id: 13,
-    name: "Void Walker",
-    cardKind: "monster",
-    atk: 2800,
-    def: 2500,
-    level: 8,
-    type: "Cosmic",
-    description: "A cosmic entity walking through a void portal.",
-    image: "assets/mystic_eye.png",
-  },
-  {
     id: 14,
     name: "Arcane Surge",
     cardKind: "spell",
