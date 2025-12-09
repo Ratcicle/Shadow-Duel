@@ -2125,6 +2125,203 @@ export const cardDatabase = [
     ],
   },
   {
+    id: 70,
+    name: "Void Conjurer",
+    cardKind: "monster",
+    atk: 1700,
+    def: 800,
+    level: 4,
+    type: "Spellcaster",
+    archetype: "Void",
+    description:
+      "Special Summon 1 Level 4 or lower 'Void' monster from your Deck, but it cannot attack this turn. If this card is in your GY: You can send 1 'Void' monster you control to the GY; Special Summon this card. You can only use each effect of 'Void Conjurer' once per turn.",
+    image: "assets/Void Conjurer.png",
+    effects: [
+      {
+        id: "void_conjurer_field_summon",
+        timing: "ignition",
+        oncePerTurn: true,
+        oncePerTurnName: "void_conjurer_field_summon",
+        actions: [
+          {
+            type: "void_conjurer_summon_from_deck",
+          },
+        ],
+      },
+      {
+        id: "void_conjurer_gy_revive",
+        timing: "ignition",
+        requireZone: "graveyard",
+        oncePerTurn: true,
+        oncePerTurnName: "void_conjurer_gy_revive",
+        targets: [
+          {
+            id: "void_conjurer_cost",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            archetype: "Void",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "void_conjurer_cost",
+            player: "self",
+            to: "graveyard",
+          },
+          {
+            type: "void_conjurer_self_revive",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 71,
+    name: "Void Walker",
+    cardKind: "monster",
+    atk: 1800,
+    def: 200,
+    level: 4,
+    type: "Fiend",
+    archetype: "Void",
+    description:
+      "Cannot attack the turn it is Summoned. Once per turn: You can return this card to your hand; Special Summon 1 'Void' monster from your hand, except 'Void Walker'.",
+    image: "assets/Void Walker.png",
+    effects: [
+      {
+        id: "void_walker_no_attack_when_summoned",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethod: ["normal", "special"],
+        actions: [
+          {
+            type: "forbid_attack_this_turn",
+          },
+        ],
+      },
+      {
+        id: "void_walker_bounce_summon",
+        timing: "ignition",
+        oncePerTurn: true,
+        oncePerTurnName: "void_walker_bounce_summon",
+        actions: [
+          {
+            type: "void_walker_bounce_and_summon",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 72,
+    name: "Void Beast",
+    cardKind: "monster",
+    atk: 1600,
+    def: 1300,
+    level: 4,
+    type: "Beast",
+    archetype: "Void",
+    description:
+      "If this card destroys an opponent's monster by battle: You can add 1 'Void Hollow' from your Deck to your hand. You can only use this effect of 'Void Beast' once per turn.",
+    image: "assets/Void Beast.png",
+    effects: [
+      {
+        id: "void_beast_search",
+        timing: "on_event",
+        event: "battle_destroy",
+        requireSelfAsAttacker: true,
+        oncePerTurn: true,
+        oncePerTurnName: "void_beast_search",
+        actions: [
+          {
+            type: "search_any",
+            cardName: "Void Hollow",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 73,
+    name: "Void Hollow",
+    cardKind: "monster",
+    atk: 1300,
+    def: 1200,
+    level: 3,
+    type: "Fiend",
+    archetype: "Void",
+    description:
+      "If this card is Special Summoned from your hand: You can Special Summon 1 'Void Hollow' from your Deck. You can only use this effect of 'Void Hollow' once per turn.",
+    image: "assets/Void Hollow.png",
+    effects: [
+      {
+        id: "void_hollow_summon",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethod: "special",
+        oncePerTurn: true,
+        oncePerTurnName: "void_hollow_summon",
+        actions: [
+          {
+            type: "void_hollow_summon_from_deck",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 74,
+    name: "Void Haunter",
+    cardKind: "monster",
+    atk: 2100,
+    def: 1500,
+    level: 5,
+    type: "Fiend",
+    archetype: "Void",
+    description:
+      "You can send 1 'Void Hollow' from your field to your GY; Special Summon this card from your hand. If this card is in your GY: You can banish this card from your GY, then target up to 2 'Void Hollow' in your GY; Special Summon those targets, but their ATK/DEF become 0. You can only use each effect of 'Void Haunter' once per turn.",
+    image: "assets/Void Haunter.png",
+    effects: [
+      {
+        id: "void_haunter_special_summon_hand",
+        timing: "ignition",
+        oncePerTurn: true,
+        oncePerTurnName: "void_haunter_special_summon_hand",
+        targets: [
+          {
+            id: "void_haunter_cost",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            name: "Void Hollow",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "void_haunter_special_summon_effect",
+            targetRef: "void_haunter_cost",
+          },
+        ],
+      },
+      {
+        id: "void_haunter_gy_effect",
+        timing: "ignition",
+        requireZone: "graveyard",
+        oncePerTurn: true,
+        oncePerTurnName: "void_haunter_gy_effect",
+        actions: [
+          {
+            type: "void_haunter_gy_effect",
+          },
+        ],
+      },
+    ],
+  },
+  {
     id: 200,
     name: "Mirror Force",
     cardKind: "trap",

@@ -991,6 +991,74 @@ export default class EffectEngine {
     return { success: true };
   }
 
+  activateMonsterFromGraveyard(card, player, selections = null) {
+    if (!card || !player) {
+      return { success: false, reason: "Missing card or player." };
+    }
+    if (this.game?.turn !== player.id) {
+      return { success: false, reason: "Not your turn." };
+    }
+    if (this.game?.phase !== "main1" && this.game?.phase !== "main2") {
+      return {
+        success: false,
+        reason: "Effect can only be used in Main Phase.",
+      };
+    }
+    if (card.cardKind !== "monster") {
+      return {
+        success: false,
+        reason: "Only monsters can activate from graveyard.",
+      };
+    }
+    if (!player.graveyard || !player.graveyard.includes(card)) {
+      return { success: false, reason: "Monster is not in the graveyard." };
+    }
+
+    // Busca efeito ignition com requireZone: "graveyard"
+    const effect = card.effects?.find(
+      (e) => e.timing === "ignition" && e.requireZone === "graveyard"
+    );
+
+    if (!effect) {
+      return { success: false, reason: "No graveyard ignition effect." };
+    }
+
+    const optCheck = this.checkOncePerTurn(card, player, effect);
+    if (!optCheck.ok) {
+      return { success: false, reason: optCheck.reason };
+    }
+
+    const ctx = {
+      source: card,
+      player,
+      opponent: this.game.getOpponent(player),
+      activationZone: "graveyard",
+    };
+
+    const targetResult = this.resolveTargets(
+      effect.targets || [],
+      ctx,
+      selections
+    );
+
+    if (targetResult.needsSelection) {
+      return {
+        success: false,
+        needsSelection: true,
+        options: targetResult.options,
+      };
+    }
+
+    if (!targetResult.ok) {
+      return { success: false, reason: targetResult.reason };
+    }
+
+    this.applyActions(effect.actions || [], ctx, targetResult.targets);
+    this.registerOncePerTurnUsage(card, player, effect);
+    this.game.checkWinCondition();
+    return { success: true };
+  }
+
   activateFieldSpell(card, player, selections = null) {
     if (!card || card.cardKind !== "spell" || card.subtype !== "field") {
       return { success: false, reason: "Not a field spell." };
@@ -1208,6 +1276,13 @@ export default class EffectEngine {
     this.registerOncePerTurnUsage(card, player, effect);
     this.game.checkWinCondition();
     return { success: true };
+  }
+
+  hasActivatableGraveyardEffect(card) {
+    if (!card || card.cardKind !== "monster") return false;
+    return card.effects?.some(
+      (e) => e.timing === "ignition" && e.requireZone === "graveyard"
+    );
   }
 
   canActivate(card, player) {
@@ -1776,6 +1851,40 @@ export default class EffectEngine {
           case "polymerization_fusion_summon":
             executed =
               (await this.applyPolymerizationFusion(action, ctx)) || executed;
+            break;
+          case "void_conjurer_summon_from_deck":
+            executed =
+              (await this.applyVoidConjurerSummonFromDeck(action, ctx)) ||
+              executed;
+            break;
+          case "void_conjurer_self_revive":
+            executed =
+              this.applyVoidConjurerSelfRevive(action, ctx) || executed;
+            break;
+          case "void_walker_bounce_and_summon":
+            executed =
+              (await this.applyVoidWalkerBounceAndSummon(action, ctx)) ||
+              executed;
+            break;
+          case "void_hollow_summon_from_deck":
+            executed =
+              (await this.applyVoidHollowSummonFromDeck(action, ctx)) ||
+              executed;
+            break;
+          case "void_haunter_special_summon_effect":
+            executed =
+              (await this.applyVoidHaunterSpecialSummon(
+                action,
+                ctx,
+                targets
+              )) || executed;
+            break;
+          case "void_haunter_gy_effect":
+            executed =
+              (await this.applyVoidHaunterGYEffect(action, ctx)) || executed;
+            break;
+          case "banish":
+            executed = this.applyBanish(action, ctx, targets) || executed;
             break;
           case "demon_dragon_destroy_two":
             executed =
@@ -4095,6 +4204,326 @@ export default class EffectEngine {
     return true;
   }
 
+  async applyVoidConjurerSummonFromDeck(action, ctx) {
+    if (!ctx.player || !this.game) {
+      return false;
+    }
+
+    const deck = ctx.player.deck;
+    if (!deck || deck.length === 0) {
+      this.game.renderer.log("No cards in deck.");
+      return false;
+    }
+
+    // Buscar monstros 'Void' de level 4 ou menos
+    const candidates = deck.filter(
+      (card) =>
+        card &&
+        card.cardKind === "monster" &&
+        card.archetype === "Void" &&
+        (card.level || 0) <= 4
+    );
+
+    if (candidates.length === 0) {
+      this.game.renderer.log("No valid 'Void' monsters in deck.");
+      return false;
+    }
+
+    // Check field space
+    if (ctx.player.field.length >= 5) {
+      this.game.renderer.log("Field is full.");
+      return false;
+    }
+
+    // Bot auto-seleciona o de maior ATK
+    if (ctx.player.id === "bot") {
+      const best = candidates.reduce((top, card) => {
+        const cardAtk = card.atk || 0;
+        const topAtk = top.atk || 0;
+        return cardAtk >= topAtk ? card : top;
+      }, candidates[0]);
+
+      const cardIndex = deck.indexOf(best);
+      if (cardIndex === -1) return false;
+
+      const [card] = deck.splice(cardIndex, 1);
+      card.position = "attack";
+      card.isFacedown = false;
+      card.hasAttacked = false;
+      card.cannotAttackThisTurn = true; // Restrição de ataque
+      card.owner = ctx.player.id;
+      ctx.player.field.push(card);
+
+      this.game.renderer.log(
+        `${ctx.player.name} Special Summoned ${card.name} from Deck (cannot attack this turn).`
+      );
+      this.game.updateBoard();
+      return true;
+    }
+
+    // Player: mostrar modal de seleção
+    this.game.isResolvingEffect = true;
+
+    const modal = document.getElementById("search-modal");
+    const select = document.getElementById("search-dropdown");
+    const confirmBtn = document.getElementById("search-confirm");
+    const cancelBtn = document.getElementById("search-cancel");
+
+    if (!modal || !select || !confirmBtn || !cancelBtn) {
+      this.game.isResolvingEffect = false;
+      return false;
+    }
+
+    select.innerHTML = "";
+    candidates.forEach((card) => {
+      const option = document.createElement("option");
+      option.value = card.name;
+      option.textContent = `${card.name} (ATK ${card.atk})`;
+      select.appendChild(option);
+    });
+
+    modal.style.display = "block";
+
+    const handleConfirm = () => {
+      const selectedName = select.value;
+      const card = candidates.find((c) => c.name === selectedName);
+
+      if (card && ctx.player.field.length < 5) {
+        const cardIndex = deck.indexOf(card);
+        if (cardIndex !== -1) {
+          deck.splice(cardIndex, 1);
+          card.position = "attack";
+          card.isFacedown = false;
+          card.hasAttacked = false;
+          card.cannotAttackThisTurn = true;
+          card.owner = ctx.player.id;
+          ctx.player.field.push(card);
+
+          this.game.renderer.log(
+            `Special Summoned ${card.name} from Deck (cannot attack this turn).`
+          );
+          this.game.updateBoard();
+        }
+      }
+
+      cleanup();
+    };
+
+    const handleCancel = () => {
+      this.game.renderer.log("Effect cancelled.");
+      cleanup();
+    };
+
+    const cleanup = () => {
+      modal.style.display = "none";
+      confirmBtn.removeEventListener("click", handleConfirm);
+      cancelBtn.removeEventListener("click", handleCancel);
+      this.game.isResolvingEffect = false;
+    };
+
+    confirmBtn.addEventListener("click", handleConfirm);
+    cancelBtn.addEventListener("click", handleCancel);
+
+    return true;
+  }
+
+  applyVoidConjurerSelfRevive(action, ctx) {
+    if (!ctx.player || !this.game) {
+      return false;
+    }
+
+    const card = ctx.source;
+    if (!card || !ctx.player.graveyard.includes(card)) {
+      this.game.renderer.log("Card not in graveyard.");
+      return false;
+    }
+
+    if (ctx.player.field.length >= 5) {
+      this.game.renderer.log("Field is full.");
+      return false;
+    }
+
+    // Remover do GY
+    const gyIndex = ctx.player.graveyard.indexOf(card);
+    if (gyIndex !== -1) {
+      ctx.player.graveyard.splice(gyIndex, 1);
+    }
+
+    // Special Summon
+    card.position = "attack";
+    card.isFacedown = false;
+    card.hasAttacked = false;
+    card.cannotAttackThisTurn = false;
+    card.owner = ctx.player.id;
+    ctx.player.field.push(card);
+
+    this.game.renderer.log(
+      `${card.name} Special Summoned from Graveyard by its own effect.`
+    );
+
+    this.game.emit("after_summon", {
+      card: card,
+      player: ctx.player,
+      method: "special",
+    });
+
+    this.game.updateBoard();
+    return true;
+  }
+
+  async applyVoidWalkerBounceAndSummon(action, ctx) {
+    if (!ctx.player || !this.game) {
+      return false;
+    }
+
+    const card = ctx.source;
+    if (!card || !ctx.player.field.includes(card)) {
+      this.game.renderer.log("Void Walker is not on the field.");
+      return false;
+    }
+
+    // Verificar se tem monstros Void na mão (exceto Void Walker)
+    const validTargets = ctx.player.hand.filter(
+      (c) =>
+        c &&
+        c.cardKind === "monster" &&
+        c.archetype === "Void" &&
+        c.name !== "Void Walker"
+    );
+
+    if (validTargets.length === 0) {
+      this.game.renderer.log("No valid 'Void' monsters in hand to summon.");
+      return false;
+    }
+
+    if (ctx.player.field.length >= 5) {
+      this.game.renderer.log("Field is full.");
+      return false;
+    }
+
+    // Bot auto-seleciona o de maior ATK
+    if (ctx.player.id === "bot") {
+      const best = validTargets.reduce((top, c) => {
+        const cAtk = c.atk || 0;
+        const topAtk = top.atk || 0;
+        return cAtk >= topAtk ? c : top;
+      }, validTargets[0]);
+
+      // Bounce Void Walker para a mão
+      const fieldIndex = ctx.player.field.indexOf(card);
+      if (fieldIndex !== -1) {
+        ctx.player.field.splice(fieldIndex, 1);
+        ctx.player.hand.push(card);
+      }
+
+      // Special Summon do alvo
+      const handIndex = ctx.player.hand.indexOf(best);
+      if (handIndex !== -1) {
+        ctx.player.hand.splice(handIndex, 1);
+        best.position = "attack";
+        best.isFacedown = false;
+        best.hasAttacked = false;
+        best.cannotAttackThisTurn = false;
+        best.owner = ctx.player.id;
+        ctx.player.field.push(best);
+
+        this.game.renderer.log(
+          `${ctx.player.name} returned Void Walker to hand and Special Summoned ${best.name}.`
+        );
+
+        this.game.emit("after_summon", {
+          card: best,
+          player: ctx.player,
+          method: "special",
+        });
+
+        this.game.updateBoard();
+      }
+
+      return true;
+    }
+
+    // Player: mostrar modal de seleção
+    this.game.isResolvingEffect = true;
+
+    const modal = document.getElementById("search-modal");
+    const select = document.getElementById("search-dropdown");
+    const confirmBtn = document.getElementById("search-confirm");
+    const cancelBtn = document.getElementById("search-cancel");
+
+    if (!modal || !select || !confirmBtn || !cancelBtn) {
+      this.game.isResolvingEffect = false;
+      return false;
+    }
+
+    select.innerHTML = "";
+    validTargets.forEach((c) => {
+      const option = document.createElement("option");
+      option.value = c.name;
+      option.textContent = `${c.name} (ATK ${c.atk})`;
+      select.appendChild(option);
+    });
+
+    modal.style.display = "block";
+
+    const handleConfirm = () => {
+      const selectedName = select.value;
+      const target = validTargets.find((c) => c.name === selectedName);
+
+      if (target && ctx.player.field.length < 5) {
+        // Bounce Void Walker
+        const fieldIndex = ctx.player.field.indexOf(card);
+        if (fieldIndex !== -1) {
+          ctx.player.field.splice(fieldIndex, 1);
+          ctx.player.hand.push(card);
+        }
+
+        // Special Summon
+        const handIndex = ctx.player.hand.indexOf(target);
+        if (handIndex !== -1) {
+          ctx.player.hand.splice(handIndex, 1);
+          target.position = "attack";
+          target.isFacedown = false;
+          target.hasAttacked = false;
+          target.cannotAttackThisTurn = false;
+          target.owner = ctx.player.id;
+          ctx.player.field.push(target);
+
+          this.game.renderer.log(
+            `Returned Void Walker to hand and Special Summoned ${target.name}.`
+          );
+
+          this.game.emit("after_summon", {
+            card: target,
+            player: ctx.player,
+            method: "special",
+          });
+
+          this.game.updateBoard();
+        }
+      }
+
+      cleanup();
+    };
+
+    const handleCancel = () => {
+      this.game.renderer.log("Effect cancelled.");
+      cleanup();
+    };
+
+    const cleanup = () => {
+      modal.style.display = "none";
+      confirmBtn.removeEventListener("click", handleConfirm);
+      cancelBtn.removeEventListener("click", handleCancel);
+      this.game.isResolvingEffect = false;
+    };
+
+    confirmBtn.addEventListener("click", handleConfirm);
+    cancelBtn.addEventListener("click", handleCancel);
+
+    return true;
+  }
+
   async performBotFusion(ctx, summonableFusions, availableMaterials) {
     // Bot escolhe automaticamente o melhor monstro de fusão (maior ATK)
     const bestFusion = summonableFusions.reduce((best, current) => {
@@ -4764,5 +5193,304 @@ export default class EffectEngine {
       console.error("Error resolving trap effects:", error);
       return { ok: false, reason: error.message };
     }
+  }
+
+  async applyVoidHollowSummonFromDeck(action, ctx) {
+    if (!ctx.player || !this.game) {
+      return false;
+    }
+
+    const deck = ctx.player.deck;
+    if (!deck || deck.length === 0) {
+      this.game.renderer.log("No cards in deck.");
+      return false;
+    }
+
+    // Buscar monstros 'Void Hollow'
+    const candidates = deck.filter(
+      (card) => card && card.name === "Void Hollow"
+    );
+
+    if (candidates.length === 0) {
+      this.game.renderer.log("No 'Void Hollow' in deck.");
+      return false;
+    }
+
+    // Check field space
+    if (ctx.player.field.length >= 5) {
+      this.game.renderer.log("Field is full.");
+      return false;
+    }
+
+    // Bot auto-seleciona o primeiro
+    if (ctx.player.id === "bot") {
+      const card = candidates[0];
+      const cardIndex = deck.indexOf(card);
+      if (cardIndex === -1) return false;
+
+      const [summonedCard] = deck.splice(cardIndex, 1);
+      summonedCard.position = "attack";
+      summonedCard.isFacedown = false;
+      summonedCard.hasAttacked = false;
+      summonedCard.cannotAttackThisTurn = false;
+      summonedCard.owner = ctx.player.id;
+      ctx.player.field.push(summonedCard);
+
+      this.game.renderer.log(
+        `${ctx.player.name} Special Summoned ${summonedCard.name} from Deck.`
+      );
+
+      this.game.emit("after_summon", {
+        card: summonedCard,
+        player: ctx.player,
+        method: "special",
+      });
+
+      this.game.updateBoard();
+      return true;
+    }
+
+    // Player: mostrar modal de seleção
+    this.game.isResolvingEffect = true;
+
+    const modal = document.getElementById("search-modal");
+    const select = document.getElementById("search-dropdown");
+    const confirmBtn = document.getElementById("search-confirm");
+    const cancelBtn = document.getElementById("search-cancel");
+
+    if (!modal || !select || !confirmBtn || !cancelBtn) {
+      this.game.isResolvingEffect = false;
+      return false;
+    }
+
+    select.innerHTML = "";
+    candidates.forEach((card) => {
+      const option = document.createElement("option");
+      option.value = card.name;
+      option.textContent = card.name;
+      select.appendChild(option);
+    });
+
+    modal.style.display = "block";
+
+    return new Promise((resolve) => {
+      const handleConfirm = () => {
+        const selectedName = select.value;
+        const card = candidates.find((c) => c.name === selectedName);
+
+        if (card && ctx.player.field.length < 5) {
+          const cardIndex = deck.indexOf(card);
+          if (cardIndex !== -1) {
+            const [summonedCard] = deck.splice(cardIndex, 1);
+            summonedCard.position = "attack";
+            summonedCard.isFacedown = false;
+            summonedCard.hasAttacked = false;
+            summonedCard.cannotAttackThisTurn = false;
+            summonedCard.owner = ctx.player.id;
+            ctx.player.field.push(summonedCard);
+
+            this.game.renderer.log(
+              `Special Summoned ${summonedCard.name} from Deck.`
+            );
+
+            this.game.emit("after_summon", {
+              card: summonedCard,
+              player: ctx.player,
+              method: "special",
+            });
+
+            this.game.updateBoard();
+          }
+        }
+
+        cleanup();
+        resolve(true);
+      };
+
+      const handleCancel = () => {
+        this.game.renderer.log("Effect cancelled.");
+        cleanup();
+        resolve(false);
+      };
+
+      const cleanup = () => {
+        modal.style.display = "none";
+        confirmBtn.removeEventListener("click", handleConfirm);
+        cancelBtn.removeEventListener("click", handleCancel);
+        this.game.isResolvingEffect = false;
+      };
+
+      confirmBtn.addEventListener("click", handleConfirm);
+      cancelBtn.addEventListener("click", handleCancel);
+    });
+  }
+
+  async applyVoidHaunterSpecialSummon(action, ctx, targets) {
+    if (!ctx.player || !this.game) {
+      return false;
+    }
+
+    const voidHollowCost = targets[action.targetRef];
+    if (!voidHollowCost || voidHollowCost.length === 0) {
+      this.game.renderer.log("No Void Hollow selected as cost.");
+      return false;
+    }
+
+    const card = voidHollowCost[0];
+
+    // Move Void Hollow from field to GY
+    const fieldIndex = ctx.player.field.indexOf(card);
+    if (fieldIndex !== -1) {
+      ctx.player.field.splice(fieldIndex, 1);
+      ctx.player.graveyard.push(card);
+    }
+
+    // Get Void Haunter from hand
+    const haunter = ctx.source;
+    if (!haunter || !ctx.player.hand.includes(haunter)) {
+      this.game.renderer.log("Void Haunter not in hand.");
+      return false;
+    }
+
+    if (ctx.player.field.length >= 5) {
+      this.game.renderer.log("Field is full.");
+      return false;
+    }
+
+    // Remove from hand
+    const handIndex = ctx.player.hand.indexOf(haunter);
+    if (handIndex !== -1) {
+      ctx.player.hand.splice(handIndex, 1);
+    }
+
+    // Special Summon
+    haunter.position = "attack";
+    haunter.isFacedown = false;
+    haunter.hasAttacked = false;
+    haunter.cannotAttackThisTurn = false;
+    haunter.owner = ctx.player.id;
+    ctx.player.field.push(haunter);
+
+    this.game.renderer.log(
+      `${ctx.player.name} Special Summoned ${haunter.name} from hand.`
+    );
+
+    this.game.emit("after_summon", {
+      card: haunter,
+      player: ctx.player,
+      method: "special",
+    });
+
+    this.game.updateBoard();
+    return true;
+  }
+
+  async applyVoidHaunterGYEffect(action, ctx) {
+    if (!ctx.player || !this.game) {
+      return false;
+    }
+
+    const haunter = ctx.source;
+    if (!haunter || !ctx.player.graveyard.includes(haunter)) {
+      this.game.renderer.log("Void Haunter not in graveyard.");
+      return false;
+    }
+
+    // Banish Void Haunter
+    const gyIndex = ctx.player.graveyard.indexOf(haunter);
+    if (gyIndex !== -1) {
+      ctx.player.graveyard.splice(gyIndex, 1);
+    }
+
+    // Find up to 2 Void Hollow in GY
+    const voidHollows = ctx.player.graveyard.filter(
+      (card) => card && card.name === "Void Hollow"
+    );
+
+    if (voidHollows.length === 0) {
+      this.game.renderer.log("No Void Hollow in graveyard.");
+      this.game.updateBoard();
+      return true;
+    }
+
+    const toSummon = voidHollows.slice(0, 2);
+    let summoned = 0;
+
+    for (const hollow of toSummon) {
+      if (ctx.player.field.length >= 5) {
+        break;
+      }
+
+      // Remove from GY
+      const idx = ctx.player.graveyard.indexOf(hollow);
+      if (idx !== -1) {
+        ctx.player.graveyard.splice(idx, 1);
+      }
+
+      // Set ATK/DEF to 0
+      hollow.tempAtkBoost = -(hollow.atk || 0);
+      hollow.tempDefBoost = -(hollow.def || 0);
+      hollow.position = "attack";
+      hollow.isFacedown = false;
+      hollow.hasAttacked = false;
+      hollow.cannotAttackThisTurn = false;
+      hollow.owner = ctx.player.id;
+      ctx.player.field.push(hollow);
+
+      this.game.emit("after_summon", {
+        card: hollow,
+        player: ctx.player,
+        method: "special",
+      });
+
+      summoned++;
+    }
+
+    this.game.renderer.log(
+      `Special Summoned ${summoned} Void Hollow from Graveyard with 0 ATK/DEF.`
+    );
+    this.game.updateBoard();
+    return summoned > 0;
+  }
+
+  applyBanish(action, ctx, targets) {
+    const targetCards = targets[action.targetRef] || [];
+    if (!targetCards || targetCards.length === 0) {
+      return false;
+    }
+
+    let banished = 0;
+
+    targetCards.forEach((card) => {
+      // Remove from all zones
+      const zones = [
+        ctx.player.field,
+        ctx.player.hand,
+        ctx.player.deck,
+        ctx.player.graveyard,
+        ctx.player.spellTrap,
+      ];
+
+      for (const zone of zones) {
+        if (zone) {
+          const idx = zone.indexOf(card);
+          if (idx > -1) {
+            zone.splice(idx, 1);
+            banished++;
+            break;
+          }
+        }
+      }
+    });
+
+    if (this.game && typeof this.game.updateBoard === "function") {
+      this.game.updateBoard();
+    }
+
+    if (banished > 0 && this.game?.renderer?.log) {
+      this.game.renderer.log(`${banished} card(s) banished.`);
+    }
+
+    return banished > 0;
   }
 }

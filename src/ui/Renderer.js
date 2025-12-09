@@ -842,6 +842,19 @@ export default class Renderer {
           cardEl.addEventListener("click", () => options.onSelect(card, index));
         }
       }
+      // Adiciona indicador visual de efeito ativável
+      if (
+        options.showActivatable &&
+        typeof options.isActivatable === "function"
+      ) {
+        if (options.isActivatable(card)) {
+          cardEl.classList.add("gy-activatable");
+          const indicator = document.createElement("div");
+          indicator.className = "gy-activate-indicator";
+          indicator.textContent = "⚡";
+          cardEl.appendChild(indicator);
+        }
+      }
       grid.appendChild(cardEl);
     });
   }

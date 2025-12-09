@@ -1760,6 +1760,38 @@ export default class Game {
     } else {
       this.graveyardSelection = null;
     }
+
+    // Se não está em modo de seleção, mostrar indicador de efeitos ativáveis
+    if (
+      !options.selectable &&
+      player.id === "player" &&
+      this.turn === "player"
+    ) {
+      options.showActivatable = true;
+      options.isActivatable = (card) => {
+        return this.effectEngine.hasActivatableGraveyardEffect(card);
+      };
+
+      // Se não tem onSelect customizado, usar o padrão para ativar efeitos
+      if (!options.onSelect) {
+        options.onSelect = (card) => {
+          if (this.effectEngine.hasActivatableGraveyardEffect(card)) {
+            const result = this.effectEngine.activateMonsterFromGraveyard(
+              card,
+              player
+            );
+            if (result.success) {
+              this.closeGraveyardModal(false);
+              this.updateBoard();
+            } else {
+              this.renderer.log(result.reason || "Cannot activate effect.");
+            }
+          }
+        };
+        options.selectable = true;
+      }
+    }
+
     this.renderer.renderGraveyardModal(player.graveyard, options);
     this.renderer.toggleModal(true);
   }
