@@ -1351,18 +1351,16 @@ export default class EffectEngine {
       const isHuman =
         ctx?.player && this.game && ctx.player === this.game.player;
 
-      if (!isHuman) {
-        const shouldAutoSelect = def.autoSelect || !!def.strategy;
-        if (shouldAutoSelect) {
-          const takeCount = Math.min(max, candidates.length);
-          targetMap[def.id] = candidates.slice(0, takeCount);
-          continue;
-        }
+      const shouldAutoSelect = def.autoSelect || !!def.strategy;
+      if (shouldAutoSelect) {
+        const takeCount = Math.min(max, candidates.length);
+        targetMap[def.id] = candidates.slice(0, takeCount);
+        continue;
+      }
 
-        if (candidates.length === 1 && min === 1) {
-          targetMap[def.id] = [candidates[0]];
-          continue;
-        }
+      if (candidates.length === 1 && min === 1) {
+        targetMap[def.id] = [candidates[0]];
+        continue;
       }
 
       needsSelection = true;
@@ -1450,6 +1448,12 @@ export default class EffectEngine {
           console.log(
             `[selectCandidates] Evaluating card: ${card.name} (archetype: ${card.archetype}, owner: ${owner.id})`
           );
+          if (def.requireThisCard && ctx?.source && card !== ctx.source) {
+            console.log(
+              `[selectCandidates] Rejecting: requireThisCard and card is not source`
+            );
+            continue;
+          }
           if (
             zoneKey === "hand" &&
             ctx.activationZone === "hand" &&
@@ -1885,6 +1889,11 @@ export default class EffectEngine {
             break;
           case "banish":
             executed = this.applyBanish(action, ctx, targets) || executed;
+            break;
+          case "allow_direct_attack_this_turn":
+            executed =
+              this.applyAllowDirectAttackThisTurn(action, ctx, targets) ||
+              executed;
             break;
           case "demon_dragon_destroy_two":
             executed =
@@ -5492,5 +5501,17 @@ export default class EffectEngine {
     }
 
     return banished > 0;
+  }
+
+  applyAllowDirectAttackThisTurn(action, ctx, targets) {
+    const targetCards =
+      targets[action.targetRef] || [ctx.source].filter(Boolean);
+    if (!targetCards.length) return false;
+
+    targetCards.forEach((card) => {
+      card.canAttackDirectlyThisTurn = true;
+    });
+
+    return true;
   }
 }

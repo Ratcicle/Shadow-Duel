@@ -2322,6 +2322,50 @@ export const cardDatabase = [
     ],
   },
   {
+    id: 75,
+    name: "Void Ghost Wolf",
+    cardKind: "monster",
+    atk: 1200,
+    def: 600,
+    level: 3,
+    type: "Beast",
+    archetype: "Void",
+    description:
+      "Once per turn: You can halve this card's ATK until the end of this turn, and if you do, it can attack directly this turn.",
+    image: "assets/Void Ghost Wolf.png",
+    effects: [
+      {
+        id: "void_ghost_wolf_direct",
+        timing: "ignition",
+        oncePerTurn: true,
+        oncePerTurnName: "void_ghost_wolf_direct",
+        targets: [
+          {
+            id: "ghost_self",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            cardName: "Void Ghost Wolf",
+            count: { min: 1, max: 1 },
+            autoSelect: true,
+            requireThisCard: true,
+          },
+        ],
+        actions: [
+          {
+            type: "modify_stats_temp",
+            targetRef: "ghost_self",
+            atkFactor: 0.5,
+          },
+          {
+            type: "allow_direct_attack_this_turn",
+            targetRef: "ghost_self",
+          },
+        ],
+      },
+    ],
+  },
+  {
     id: 200,
     name: "Mirror Force",
     cardKind: "trap",

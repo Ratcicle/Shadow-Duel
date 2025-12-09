@@ -565,18 +565,20 @@ export default class Game {
             card.effects[0] &&
             card.effects[0].timing === "ignition"
           ) {
-            this.showIgnitionActivateModal(card, () => {
-              const result = this.effectEngine.activateMonsterFromField(
-                card,
-                this.player,
-                index
-              );
-              if (result.success) {
-                this.updateBoard();
-              } else if (result.reason) {
-                this.renderer.log(result.reason);
-              }
-            });
+            // Apenas o popup pequeno de "Activate"
+            if (e && typeof e.stopImmediatePropagation === "function") {
+              e.stopImmediatePropagation();
+            }
+            if (
+              this.renderer &&
+              typeof this.renderer.showSpellActivateModal === "function"
+            ) {
+              this.renderer.showSpellActivateModal(cardEl, () => {
+                this.tryActivateMonsterEffect(card);
+              });
+            } else {
+              this.tryActivateMonsterEffect(card);
+            }
             return;
           }
           const canFlip = card ? this.canFlipSummon(card) : false;
@@ -641,8 +643,19 @@ export default class Game {
               ? opponentTargets.filter((card) => card && card.mustBeAttacked)
               : opponentTargets;
 
+          const canDirect = attacker.canAttackDirectlyThisTurn === true;
+
           if (attackCandidates.length === 0) {
             await this.resolveCombat(attacker, null);
+          } else if (canDirect) {
+            const wantsDirect = window.confirm(
+              "Attack directly and ignore opponent's monsters this turn?"
+            );
+            if (wantsDirect) {
+              await this.resolveCombat(attacker, null);
+            } else {
+              this.startAttackTargetSelection(attacker, attackCandidates);
+            }
           } else {
             this.startAttackTargetSelection(attacker, attackCandidates);
           }
@@ -2329,6 +2342,7 @@ export default class Game {
       }
       card.tempBattleIndestructible = false;
       card.battleDamageHealsControllerThisTurn = false;
+      card.canAttackDirectlyThisTurn = false;
     });
   }
 

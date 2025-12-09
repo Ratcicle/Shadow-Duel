@@ -30,6 +30,7 @@ export default class Card {
     this.cannotAttackThisTurn = false;
     this.altTribute = data.altTribute || null;
     this.onBattleDestroy = data.onBattleDestroy || null;
+    this.canAttackDirectlyThisTurn = false;
 
     // Equip support
     this.equippedTo = null;
