@@ -6,6 +6,37 @@ export default class EffectEngine {
     this.game = game;
   }
 
+  /**
+   * Helper para realizar Special Summon com escolha de posição
+   * @param {Object} card - A carta a ser invocada
+   * @param {Object} player - O jogador que está invocando
+   * @param {Object} options - Opções adicionais
+   * @param {boolean} options.cannotAttackThisTurn - Se o monstro não pode atacar neste turno
+   * @param {string} options.fromZone - Zona de origem (hand, deck, graveyard)
+   * @returns {Promise<string>} - A posição escolhida ('attack' ou 'defense')
+   */
+  async chooseSpecialSummonPosition(card, player, options = {}) {
+    // Bot sempre escolhe attack
+    if (player.id === "bot") {
+      return "attack";
+    }
+
+    // Player: mostrar modal de escolha de posição
+    if (
+      this.game.renderer &&
+      typeof this.game.renderer.showSpecialSummonPositionModal === "function"
+    ) {
+      return new Promise((resolve) => {
+        this.game.renderer.showSpecialSummonPositionModal(card, (choice) => {
+          resolve(choice === "defense" ? "defense" : "attack");
+        });
+      });
+    }
+
+    // Fallback: attack
+    return "attack";
+  }
+
   checkOncePerTurn(card, player, effect) {
     if (!effect || !effect.oncePerTurn) {
       return { ok: true };
@@ -1767,7 +1798,7 @@ export default class EffectEngine {
             break;
           case "forbid_attack_this_turn":
             executed =
-              this.applyForbidAttackThisTurn(action, targets) || executed;
+              this.applyForbidAttackThisTurn(action, targets, ctx) || executed;
             break;
           case "darkness_valley_apply_existing":
             executed =
@@ -1886,6 +1917,10 @@ export default class EffectEngine {
           case "void_haunter_gy_effect":
             executed =
               (await this.applyVoidHaunterGYEffect(action, ctx)) || executed;
+            break;
+          case "void_hollow_king_revive_effect":
+            executed =
+              (await this.applyVoidHollowKingRevive(action, ctx)) || executed;
             break;
           case "banish":
             executed = this.applyBanish(action, ctx, targets) || executed;
@@ -2240,8 +2275,16 @@ export default class EffectEngine {
     return targetCards.length > 0 && (atkFactor !== 1 || defFactor !== 1);
   }
 
-  applyForbidAttackThisTurn(action, targets) {
-    const targetCards = targets[action.targetRef] || [];
+  applyForbidAttackThisTurn(action, targets, ctx) {
+    // Se targetRef está definido, usa os alvos selecionados
+    // Caso contrário, aplica à carta fonte (self)
+    let targetCards = [];
+    if (action.targetRef && targets[action.targetRef]) {
+      targetCards = targets[action.targetRef];
+    } else if (ctx && ctx.source) {
+      targetCards = [ctx.source];
+    }
+
     targetCards.forEach((card) => {
       card.cannotAttackThisTurn = true;
     });
@@ -3385,7 +3428,7 @@ export default class EffectEngine {
     });
   }
 
-  finishReviveShadowHeart(chosen, gy, player, action) {
+  async finishReviveShadowHeart(chosen, gy, player, action) {
     if (!chosen) {
       console.log("No valid choice made for revival.");
       return false;
@@ -3399,7 +3442,10 @@ export default class EffectEngine {
 
     gy.splice(idx, 1);
 
-    chosen.position = action.position || "attack";
+    // Escolher posição para special summon
+    const position = await this.chooseSpecialSummonPosition(chosen, player);
+
+    chosen.position = position;
     chosen.isFacedown = false;
     chosen.hasAttacked = false;
     chosen.attacksUsedThisTurn = 0;
@@ -3408,7 +3454,9 @@ export default class EffectEngine {
     player.field.push(chosen);
 
     console.log(
-      `Revived "${chosen.name}" from graveyard with Shadow-Heart Infusion.`
+      `Revived "${chosen.name}" from graveyard with Shadow-Heart Infusion in ${
+        position === "defense" ? "Defense" : "Attack"
+      } Position.`
     );
 
     if (this.game && typeof this.game.updateBoard === "function") {
@@ -3845,8 +3893,10 @@ export default class EffectEngine {
     });
   }
 
-  finishConditionalSpecialSummon(targetCard, player, action) {
-    const position = action.position || "attack";
+  async finishConditionalSpecialSummon(targetCard, player, action) {
+    // Escolher posição para special summon
+    const position = await this.chooseSpecialSummonPosition(targetCard, player);
+
     targetCard.position = position;
     targetCard.isFacedown = false;
     targetCard.hasAttacked = false;
@@ -4311,7 +4361,7 @@ export default class EffectEngine {
     const searchModal = this.getSearchModalElements();
     const defaultCardName = candidates[0]?.name || "";
 
-    const finalizeSelection = (selectedName) => {
+    const finalizeSelection = async (selectedName) => {
       const chosen =
         candidates.find((c) => c && c.name === selectedName) || candidates[0];
 
@@ -4319,7 +4369,14 @@ export default class EffectEngine {
         const cardIndex = deck.indexOf(chosen);
         if (cardIndex !== -1) {
           deck.splice(cardIndex, 1);
-          chosen.position = "attack";
+
+          // Escolher posição
+          const position = await this.chooseSpecialSummonPosition(
+            chosen,
+            ctx.player
+          );
+
+          chosen.position = position;
           chosen.isFacedown = false;
           chosen.hasAttacked = false;
           chosen.cannotAttackThisTurn = true; // Restrição de ataque
@@ -4327,7 +4384,9 @@ export default class EffectEngine {
           ctx.player.field.push(chosen);
 
           this.game.renderer.log(
-            `Special Summoned ${chosen.name} from Deck (cannot attack this turn).`
+            `Special Summoned ${chosen.name} from Deck in ${
+              position === "defense" ? "Defense" : "Attack"
+            } Position (cannot attack this turn).`
           );
           this.game.updateBoard();
         }
@@ -4356,11 +4415,9 @@ export default class EffectEngine {
 
     finalizeSelection(fallback?.name || defaultCardName);
     return true;
-
-    return true;
   }
 
-  applyVoidConjurerSelfRevive(action, ctx) {
+  async applyVoidConjurerSelfRevive(action, ctx) {
     if (!ctx.player || !this.game) {
       return false;
     }
@@ -4382,8 +4439,11 @@ export default class EffectEngine {
       ctx.player.graveyard.splice(gyIndex, 1);
     }
 
+    // Escolher posição para special summon
+    const position = await this.chooseSpecialSummonPosition(card, ctx.player);
+
     // Special Summon
-    card.position = "attack";
+    card.position = position;
     card.isFacedown = false;
     card.hasAttacked = false;
     card.cannotAttackThisTurn = false;
@@ -4391,7 +4451,9 @@ export default class EffectEngine {
     ctx.player.field.push(card);
 
     this.game.renderer.log(
-      `${card.name} Special Summoned from Graveyard by its own effect.`
+      `${card.name} Special Summoned from Graveyard by its own effect in ${
+        position === "defense" ? "Defense" : "Attack"
+      } Position.`
     );
 
     this.game.emit("after_summon", {
@@ -4415,13 +4477,14 @@ export default class EffectEngine {
       return false;
     }
 
-    // Verificar se tem monstros Void na mão (exceto Void Walker)
+    // Verificar se tem monstros Void na mão (exceto Void Walker, nível 4 ou menor)
     const validTargets = ctx.player.hand.filter(
       (c) =>
         c &&
         c.cardKind === "monster" &&
         c.archetype === "Void" &&
-        c.name !== "Void Walker"
+        c.name !== "Void Walker" &&
+        (c.level || 0) <= 4
     );
 
     if (validTargets.length === 0) {
@@ -4480,7 +4543,7 @@ export default class EffectEngine {
     const searchModal = this.getSearchModalElements();
     const defaultCardName = validTargets[0]?.name || "";
 
-    const finalizeSelection = (selectedName) => {
+    const finalizeSelection = async (selectedName) => {
       const target =
         validTargets.find((c) => c && c.name === selectedName) ||
         validTargets[0];
@@ -4493,11 +4556,17 @@ export default class EffectEngine {
           ctx.player.hand.push(card);
         }
 
+        // Escolher posição
+        const position = await this.chooseSpecialSummonPosition(
+          target,
+          ctx.player
+        );
+
         // Special Summon
         const handIndex = ctx.player.hand.indexOf(target);
         if (handIndex !== -1) {
           ctx.player.hand.splice(handIndex, 1);
-          target.position = "attack";
+          target.position = position;
           target.isFacedown = false;
           target.hasAttacked = false;
           target.cannotAttackThisTurn = false;
@@ -4505,7 +4574,9 @@ export default class EffectEngine {
           ctx.player.field.push(target);
 
           this.game.renderer.log(
-            `Returned Void Walker to hand and Special Summoned ${target.name}.`
+            `Returned Void Walker to hand and Special Summoned ${
+              target.name
+            } in ${position === "defense" ? "Defense" : "Attack"} Position.`
           );
 
           this.game.emit("after_summon", {
@@ -5274,7 +5345,7 @@ export default class EffectEngine {
     const defaultCardName = candidates[0]?.name || "";
 
     return new Promise((resolve) => {
-      const finalizeSelection = (selectedName) => {
+      const finalizeSelection = async (selectedName) => {
         const chosen =
           candidates.find((c) => c && c.name === selectedName) || candidates[0];
 
@@ -5282,7 +5353,14 @@ export default class EffectEngine {
           const cardIndex = deck.indexOf(chosen);
           if (cardIndex !== -1) {
             const [summonedCard] = deck.splice(cardIndex, 1);
-            summonedCard.position = "attack";
+
+            // Escolher posição
+            const position = await this.chooseSpecialSummonPosition(
+              summonedCard,
+              ctx.player
+            );
+
+            summonedCard.position = position;
             summonedCard.isFacedown = false;
             summonedCard.hasAttacked = false;
             summonedCard.cannotAttackThisTurn = false;
@@ -5290,7 +5368,9 @@ export default class EffectEngine {
             ctx.player.field.push(summonedCard);
 
             this.game.renderer.log(
-              `Special Summoned ${summonedCard.name} from Deck.`
+              `Special Summoned ${summonedCard.name} from Deck in ${
+                position === "defense" ? "Defense" : "Attack"
+              } Position.`
             );
 
             this.game.emit("after_summon", {
@@ -5447,6 +5527,130 @@ export default class EffectEngine {
       `Special Summoned ${summoned} Void Hollow from Graveyard with 0 ATK/DEF.`
     );
     this.game.updateBoard();
+    return summoned > 0;
+  }
+
+  async applyVoidHollowKingRevive(action, ctx) {
+    if (!ctx.player || !this.game) {
+      return false;
+    }
+
+    const king = ctx.destroyed || ctx.source;
+    if (!king || king.name !== "Void Hollow King") {
+      return false;
+    }
+
+    // Find up to 3 Void Hollow in GY
+    const voidHollows = ctx.player.graveyard.filter(
+      (card) => card && card.name === "Void Hollow"
+    );
+
+    if (voidHollows.length === 0) {
+      this.game.renderer.log("No Void Hollow in graveyard to revive.");
+      return false;
+    }
+
+    // Player: escolher até 3
+    if (ctx.player.id === "player") {
+      const maxSelect = Math.min(
+        3,
+        voidHollows.length,
+        5 - ctx.player.field.length
+      );
+
+      if (maxSelect === 0) {
+        this.game.renderer.log("Field is full, cannot Special Summon.");
+        return false;
+      }
+
+      return new Promise((resolve) => {
+        this.game.renderer.showMultiSelectModal(
+          voidHollows,
+          { min: 0, max: maxSelect },
+          async (selected) => {
+            if (!selected || selected.length === 0) {
+              this.game.renderer.log("No Void Hollow selected.");
+              resolve(false);
+              return;
+            }
+
+            for (const hollow of selected) {
+              if (ctx.player.field.length >= 5) break;
+
+              // Remove from GY
+              const idx = ctx.player.graveyard.indexOf(hollow);
+              if (idx !== -1) {
+                ctx.player.graveyard.splice(idx, 1);
+              }
+
+              // Escolher posição
+              const position = await this.chooseSpecialSummonPosition(
+                hollow,
+                ctx.player
+              );
+
+              hollow.position = position;
+              hollow.isFacedown = false;
+              hollow.hasAttacked = false;
+              hollow.cannotAttackThisTurn = false;
+              hollow.owner = ctx.player.id;
+              ctx.player.field.push(hollow);
+
+              this.game.emit("after_summon", {
+                card: hollow,
+                player: ctx.player,
+                method: "special",
+              });
+            }
+
+            this.game.renderer.log(
+              `Special Summoned ${selected.length} Void Hollow from Graveyard.`
+            );
+            this.game.updateBoard();
+            resolve(true);
+          }
+        );
+      });
+    }
+
+    // Bot: auto-seleciona até 3
+    const toSummon = voidHollows.slice(
+      0,
+      Math.min(3, 5 - ctx.player.field.length)
+    );
+    let summoned = 0;
+
+    for (const hollow of toSummon) {
+      if (ctx.player.field.length >= 5) break;
+
+      const idx = ctx.player.graveyard.indexOf(hollow);
+      if (idx !== -1) {
+        ctx.player.graveyard.splice(idx, 1);
+      }
+
+      hollow.position = "attack";
+      hollow.isFacedown = false;
+      hollow.hasAttacked = false;
+      hollow.cannotAttackThisTurn = false;
+      hollow.owner = ctx.player.id;
+      ctx.player.field.push(hollow);
+
+      this.game.emit("after_summon", {
+        card: hollow,
+        player: ctx.player,
+        method: "special",
+      });
+
+      summoned++;
+    }
+
+    if (summoned > 0) {
+      this.game.renderer.log(
+        `${ctx.player.name} Special Summoned ${summoned} Void Hollow from Graveyard.`
+      );
+      this.game.updateBoard();
+    }
+
     return summoned > 0;
   }
 

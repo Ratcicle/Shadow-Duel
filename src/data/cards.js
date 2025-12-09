@@ -2177,7 +2177,7 @@ export const cardDatabase = [
     type: "Fiend",
     archetype: "Void",
     description:
-      "Cannot attack the turn it is Summoned. Once per turn: You can return this card to your hand; Special Summon 1 'Void' monster from your hand, except 'Void Walker'.",
+      "Cannot attack the turn it is Summoned. Once per turn: You can return this card to your hand; Special Summon 1 Level 4 or lower 'Void' monster from your hand, except 'Void Walker'.",
     image: "assets/Void Walker.png",
     effects: [
       {
@@ -2349,6 +2349,34 @@ export const cardDatabase = [
           {
             type: "allow_direct_attack_this_turn",
             targetRef: "ghost_self",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 76,
+    name: "Void Hollow King",
+    cardKind: "monster",
+    atk: 2500,
+    def: 1200,
+    level: 6,
+    type: "Fiend",
+    archetype: "Void",
+    description:
+      "3 'Void Hollow' monsters. If this card is destroyed by battle or card effect: You can Special Summon up to 3 'Void Hollow' from your GY.",
+    image: "assets/Void Hollow King.png",
+    monsterType: "fusion",
+    fusionMaterials: [{ name: "Void Hollow", count: 3 }],
+    effects: [
+      {
+        id: "void_hollow_king_revive",
+        timing: "on_event",
+        event: "card_to_grave",
+        requireSelfAsDestroyed: true,
+        actions: [
+          {
+            type: "void_hollow_king_revive_effect",
           },
         ],
       },

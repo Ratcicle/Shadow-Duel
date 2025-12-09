@@ -520,6 +520,17 @@ export default class Renderer {
     const content = document.createElement("div");
     content.className = "position-choice-content";
 
+    // Botão de ativar efeito ignition (se disponível)
+    if (
+      options.hasIgnitionEffect &&
+      typeof options.onActivateEffect === "function"
+    ) {
+      const activateBtn = document.createElement("button");
+      activateBtn.dataset.choice = "activate_effect";
+      activateBtn.textContent = "Activate";
+      content.appendChild(activateBtn);
+    }
+
     if (options.canFlip) {
       const flipBtn = document.createElement("button");
       flipBtn.dataset.choice = "flip";
@@ -587,7 +598,12 @@ export default class Renderer {
         e.stopPropagation();
         const choice = btn.dataset.choice;
         cleanup();
-        if (choice) {
+        if (
+          choice === "activate_effect" &&
+          typeof options.onActivateEffect === "function"
+        ) {
+          options.onActivateEffect();
+        } else if (choice) {
           callback(choice);
         }
       });

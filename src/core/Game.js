@@ -558,33 +558,22 @@ export default class Game {
           (this.phase === "main1" || this.phase === "main2")
         ) {
           const card = this.player.field[index];
-          if (
-            card &&
-            card.cardKind === "monster" &&
+          if (!card || card.cardKind !== "monster") return;
+
+          // Verificar se tem efeito ignition ativável
+          const hasIgnition =
             card.effects &&
-            card.effects[0] &&
-            card.effects[0].timing === "ignition"
-          ) {
-            // Apenas o popup pequeno de "Activate"
+            card.effects.some((eff) => eff && eff.timing === "ignition");
+
+          const canFlip = this.canFlipSummon(card);
+          const canPosChange = this.canChangePosition(card);
+
+          // Se tem qualquer opção disponível, mostrar o modal unificado
+          if (hasIgnition || canFlip || canPosChange) {
             if (e && typeof e.stopImmediatePropagation === "function") {
               e.stopImmediatePropagation();
             }
-            if (
-              this.renderer &&
-              typeof this.renderer.showSpellActivateModal === "function"
-            ) {
-              this.renderer.showSpellActivateModal(cardEl, () => {
-                this.tryActivateMonsterEffect(card);
-              });
-            } else {
-              this.tryActivateMonsterEffect(card);
-            }
-            return;
-          }
-          const canFlip = card ? this.canFlipSummon(card) : false;
-          const canPosChange = card ? this.canChangePosition(card) : false;
 
-          if (card && (canFlip || canPosChange)) {
             this.renderer.showPositionChoiceModal(
               cardEl,
               card,
@@ -605,7 +594,14 @@ export default class Game {
                   this.changeMonsterPosition(card, "defense");
                 }
               },
-              { canFlip, canChangePosition: canPosChange }
+              {
+                canFlip,
+                canChangePosition: canPosChange,
+                hasIgnitionEffect: hasIgnition,
+                onActivateEffect: hasIgnition
+                  ? () => this.tryActivateMonsterEffect(card)
+                  : null,
+              }
             );
             return;
           }
@@ -2715,11 +2711,10 @@ export default class Game {
     const destroyedOwner =
       destroyed.owner === "player" ? this.player : this.bot;
     const attackerOwner = attacker.owner === "player" ? this.player : this.bot;
-    const otherPlayer = destroyedOwner === this.player ? this.bot : this.player;
 
     this.effectEngine.handleEvent("battle_destroy", {
-      player: otherPlayer, // the player whose opponent's monster was destroyed
-      opponent: destroyedOwner, // the player who lost the monster
+      player: attackerOwner, // o dono do atacante (quem causou a destruição)
+      opponent: destroyedOwner, // o jogador que perdeu o monstro
       attacker,
       destroyed,
       attackerOwner,
