@@ -1,9 +1,17 @@
 import Card from "./Card.js";
 import { cardDatabase } from "../data/cards.js";
+import {
+  ActionHandlerRegistry,
+  registerDefaultHandlers,
+} from "./ActionHandlers.js";
 
 export default class EffectEngine {
   constructor(game) {
     this.game = game;
+    
+    // Initialize action handler registry
+    this.actionHandlers = new ActionHandlerRegistry();
+    registerDefaultHandlers(this.actionHandlers);
   }
 
   /**
@@ -1890,6 +1898,20 @@ export default class EffectEngine {
         if (this.shouldSkipActionDueToImmunity(action, targets, ctx)) {
           continue;
         }
+        
+        // Check if there's a registered handler for this action type
+        const handler = this.actionHandlers.get(action.type);
+        if (handler) {
+          try {
+            const result = await handler(action, ctx, targets, this);
+            executed = result || executed;
+            continue; // Skip to next action
+          } catch (error) {
+            console.error(`Error in action handler for ${action.type}:`, error);
+            // Fall through to legacy switch statement as fallback
+          }
+        }
+        
         switch (action.type) {
           case "draw":
             executed = this.applyDraw(action, ctx) || executed;
