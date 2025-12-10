@@ -2133,7 +2133,16 @@ export const cardDatabase = [
         oncePerTurnName: "void_conjurer_field_summon",
         actions: [
           {
-            type: "void_conjurer_summon_from_deck",
+            type: "special_summon_from_deck",
+            zone: "deck",
+            filters: {
+              archetype: "Void",
+              cardKind: "monster",
+              level: 4,
+              levelOp: "lte",
+            },
+            position: "choice",
+            cannotAttackThisTurn: true,
           },
         ],
       },
@@ -2161,7 +2170,10 @@ export const cardDatabase = [
             to: "graveyard",
           },
           {
-            type: "void_conjurer_self_revive",
+            type: "special_summon_from_graveyard",
+            requireSource: true,
+            position: "choice",
+            cannotAttackThisTurn: false,
           },
         ],
       },
@@ -2198,7 +2210,17 @@ export const cardDatabase = [
         oncePerTurnName: "void_walker_bounce_summon",
         actions: [
           {
-            type: "void_walker_bounce_and_summon",
+            type: "bounce_and_summon",
+            bounceSource: true,
+            filters: {
+              archetype: "Void",
+              cardKind: "monster",
+              level: 4,
+              levelOp: "lte",
+              excludeSelf: true,
+            },
+            position: "choice",
+            cannotAttackThisTurn: false,
           },
         ],
       },
@@ -2255,7 +2277,15 @@ export const cardDatabase = [
         oncePerTurnName: "void_hollow_summon",
         actions: [
           {
-            type: "void_hollow_summon_from_deck",
+            type: "special_summon_from_deck",
+            zone: "deck",
+            filters: {
+              name: "Void Hollow",
+              cardKind: "monster",
+            },
+            position: "choice",
+            cannotAttackThisTurn: false,
+            promptPlayer: true,
           },
         ],
       },
@@ -2291,8 +2321,10 @@ export const cardDatabase = [
         ],
         actions: [
           {
-            type: "void_haunter_special_summon_effect",
-            targetRef: "void_haunter_cost",
+            type: "special_summon_from_hand_with_cost",
+            costTargetRef: "void_haunter_cost",
+            position: "attack",
+            cannotAttackThisTurn: false,
           },
         ],
       },
@@ -2304,7 +2336,16 @@ export const cardDatabase = [
         oncePerTurnName: "void_haunter_gy_effect",
         actions: [
           {
-            type: "void_haunter_gy_effect",
+            type: "special_summon_from_graveyard",
+            requireSource: false,
+            banishCost: true,
+            filters: {
+              name: "Void Hollow",
+              cardKind: "monster",
+            },
+            count: { min: 0, max: 3 },
+            position: "choice",
+            cannotAttackThisTurn: false,
           },
         ],
       },
@@ -2474,8 +2515,10 @@ export const cardDatabase = [
         ],
         actions: [
           {
-            type: "void_forgotten_knight_special_summon",
-            targetRef: "void_forgotten_knight_cost",
+            type: "special_summon_from_hand_with_cost",
+            costTargetRef: "void_forgotten_knight_cost",
+            position: "attack",
+            cannotAttackThisTurn: false,
           },
         ],
       },
@@ -2606,7 +2649,14 @@ export const cardDatabase = [
             to: "graveyard",
           },
           {
-            type: "void_slayer_brute_special_summon",
+            type: "special_summon_from_deck",
+            zone: "hand",
+            filters: {
+              name: "Void Slayer Brute",
+            },
+            position: "attack",
+            cannotAttackThisTurn: false,
+            promptPlayer: false,
           },
         ],
       },
@@ -2670,8 +2720,10 @@ export const cardDatabase = [
         ],
         actions: [
           {
-            type: "void_tenebris_horn_grave_special_summon",
-            targetRef: "void_tenebris_horn_self",
+            type: "special_summon_from_graveyard",
+            requireSource: true,
+            position: "attack",
+            cannotAttackThisTurn: false,
           },
         ],
       },
