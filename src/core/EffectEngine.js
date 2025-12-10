@@ -318,6 +318,14 @@ export default class EffectEngine {
     return true;
   }
 
+  // Helper to check if a card belongs to Void archetype
+  isVoidArchetype(card) {
+    if (!card || card.cardKind !== "monster") return false;
+    if (card.archetype === "Void") return true;
+    if (Array.isArray(card.archetypes) && card.archetypes.includes("Void")) return true;
+    return false;
+  }
+
   // Continuous effect: Void Tenebris Horn buff system
   // Note: This could be refactored into a more generic continuous effect handler
   updateVoidTenebrisHornBuffs() {
@@ -335,8 +343,7 @@ export default class EffectEngine {
       if (!card || card.cardKind !== "monster") continue;
       
       // Check if it's a Void card
-      if (card.archetype === "Void" || 
-          (Array.isArray(card.archetypes) && card.archetypes.includes("Void"))) {
+      if (this.isVoidArchetype(card)) {
         voidCount++;
       }
       

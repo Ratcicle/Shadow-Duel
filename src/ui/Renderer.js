@@ -53,7 +53,7 @@ export default class Renderer {
       player.id === "player" ? this.elements.playerHand : this.elements.botHand;
     if (!container) return;
 
-    // Use DocumentFragment to minimize reflows
+    // Batch DOM updates with DocumentFragment to minimize reflows
     const fragment = document.createDocumentFragment();
 
     player.hand.forEach((card, index) => {
@@ -71,7 +71,6 @@ export default class Renderer {
       fragment.appendChild(cardEl);
     });
     
-    // Single DOM update instead of multiple appendChild calls
     container.innerHTML = "";
     container.appendChild(fragment);
   }
@@ -83,7 +82,7 @@ export default class Renderer {
         : this.elements.botField;
     if (!container) return;
 
-    // Use DocumentFragment to minimize reflows
+    // Batch DOM updates with DocumentFragment to minimize reflows
     const fragment = document.createDocumentFragment();
 
     player.field.forEach((card, index) => {
@@ -106,7 +105,6 @@ export default class Renderer {
       fragment.appendChild(cardEl);
     });
     
-    // Single DOM update
     container.innerHTML = "";
     container.appendChild(fragment);
   }
@@ -118,7 +116,7 @@ export default class Renderer {
         : this.elements.botSpellTrap;
     if (!container) return;
 
-    // Use DocumentFragment to minimize reflows
+    // Batch DOM updates with DocumentFragment to minimize reflows
     const fragment = document.createDocumentFragment();
 
     player.spellTrap.forEach((card, index) => {
@@ -138,7 +136,6 @@ export default class Renderer {
       fragment.appendChild(cardEl);
     });
     
-    // Single DOM update
     container.innerHTML = "";
     container.appendChild(fragment);
   }

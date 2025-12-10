@@ -6,7 +6,7 @@ Este documento descreve as otimizações de performance implementadas no Shadow 
 
 ### 1. Indexação do Banco de Dados de Cartas
 
-**Problema:** Chamadas repetidas a `cardDatabase.find()` resultavam em busca linear O(n) através de 83+ cartas.
+**Problema:** Chamadas repetidas a `cardDatabase.find()` resultavam em busca linear O(n) através de todas as cartas do banco de dados.
 
 **Solução:** Criamos Maps indexados para busca O(1):
 
