@@ -318,6 +318,9 @@ export default class EffectEngine {
     return true;
   }
 
+  // TODO: Replace with generic continuous effect system
+  // This should be refactored into a declarative continuous effect handler
+  // that can work for any card with "count cards on field and boost" mechanics
   updateVoidTenebrisHornBuffs() {
     if (!this.game) return false;
     const allFields = [
@@ -696,11 +699,14 @@ export default class EffectEngine {
             effect.speed === 2 && effect.promptOnAttackDeclared !== false;
           if (player.id === "player" && shouldPrompt) {
             let wantsToUse = true;
+            
+            // Use custom prompt if renderer provides one for this effect
+            const customPromptMethod = effect.customPromptMethod;
             if (
-              this.game?.renderer?.showProtectorPrompt &&
-              card.name === "Luminarch Sanctum Protector"
+              customPromptMethod &&
+              this.game?.renderer?.[customPromptMethod]
             ) {
-              wantsToUse = await this.game.renderer.showProtectorPrompt();
+              wantsToUse = await this.game.renderer[customPromptMethod]();
             } else {
               wantsToUse = window.confirm(
                 `Use ${card.name}'s effect to negate the attack?`
@@ -1496,6 +1502,8 @@ export default class EffectEngine {
       return { ok: false, reason: "Can only activate in Main Phase." };
     }
 
+    // TODO: Move card-specific activation requirements to card effect definitions
+    // This hardcoded check should be replaced with a generic activation cost/requirement system
     if (card.name === "Shadow-Heart Infusion" || card.id === 37) {
       const handCount = (player.hand && player.hand.length) || 0;
       if (handCount < 2) {
