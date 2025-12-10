@@ -2089,61 +2089,6 @@ export default class EffectEngine {
             executed =
               (await this.applyPolymerizationFusion(action, ctx)) || executed;
             break;
-          case "void_conjurer_summon_from_deck":
-            executed =
-              (await this.applyVoidConjurerSummonFromDeck(action, ctx)) ||
-              executed;
-            break;
-          case "void_conjurer_self_revive":
-            executed =
-              this.applyVoidConjurerSelfRevive(action, ctx) || executed;
-            break;
-          case "void_walker_bounce_and_summon":
-            executed =
-              (await this.applyVoidWalkerBounceAndSummon(action, ctx)) ||
-              executed;
-            break;
-          case "void_hollow_summon_from_deck":
-            executed =
-              (await this.applyVoidHollowSummonFromDeck(action, ctx)) ||
-              executed;
-            break;
-          case "void_haunter_special_summon_effect":
-            executed =
-              (await this.applyVoidHaunterSpecialSummon(
-                action,
-                ctx,
-                targets
-              )) || executed;
-            break;
-          case "void_haunter_gy_effect":
-            executed =
-              (await this.applyVoidHaunterGYEffect(action, ctx)) || executed;
-            break;
-          case "void_forgotten_knight_special_summon":
-            executed =
-              (await this.applyVoidForgottenKnightSpecialSummon(
-                action,
-                ctx,
-                targets
-              )) || executed;
-            break;
-          case "void_slayer_brute_special_summon":
-            executed =
-              (await this.applyVoidSlayerBruteSpecialSummon(
-                action,
-                ctx,
-                targets
-              )) || executed;
-            break;
-          case "void_tenebris_horn_grave_special_summon":
-            executed =
-              (await this.applyVoidTenebrisHornGraveSummon(
-                action,
-                ctx,
-                targets
-              )) || executed;
-            break;
           case "void_hollow_king_revive_effect":
             executed =
               (await this.applyVoidHollowKingRevive(action, ctx)) || executed;
