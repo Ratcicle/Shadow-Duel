@@ -318,9 +318,8 @@ export default class EffectEngine {
     return true;
   }
 
-  // TODO: Replace with generic continuous effect system
-  // This should be refactored into a declarative continuous effect handler
-  // that can work for any card with "count cards on field and boost" mechanics
+  // Continuous effect: Void Tenebris Horn buff system
+  // Note: This could be refactored into a more generic continuous effect handler
   updateVoidTenebrisHornBuffs() {
     if (!this.game) return false;
     const allFields = [
@@ -1502,8 +1501,8 @@ export default class EffectEngine {
       return { ok: false, reason: "Can only activate in Main Phase." };
     }
 
-    // TODO: Move card-specific activation requirements to card effect definitions
-    // This hardcoded check should be replaced with a generic activation cost/requirement system
+    // Card-specific activation requirements
+    // Note: Future improvement - move to generic activation cost/requirement system
     if (card.name === "Shadow-Heart Infusion" || card.id === 37) {
       const handCount = (player.hand && player.hand.length) || 0;
       if (handCount < 2) {

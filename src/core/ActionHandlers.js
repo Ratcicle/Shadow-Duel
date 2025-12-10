@@ -110,7 +110,8 @@ export async function handleSpecialSummonFromZone(action, ctx, targets, engine) 
     }
     
     // Exclude source card if specified in filters
-    if (filters.excludeSelf && source && card === source) return false;
+    // Use ID comparison for reliability across card instances
+    if (filters.excludeSelf && source && card.id === source.id) return false;
     
     return true;
   });
@@ -538,6 +539,7 @@ export async function handleSpecialSummonFromGraveyard(action, ctx, targets, eng
     return await reviveCards(toSummon, player, action, engine);
   }
 
+  // At this point, we know showMultiSelectModal exists
   return new Promise((resolve) => {
     game.renderer.showMultiSelectModal(
       candidateCards,
