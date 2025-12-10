@@ -1372,6 +1372,7 @@ export default class Game {
       activationZone,
     };
     console.log("[Game] Started monster effect target selection");
+    this.highlightTargetCandidates();
   }
 
   startSpellTrapTargetSelection(card, options, activationZone = null) {
