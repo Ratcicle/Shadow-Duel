@@ -289,11 +289,21 @@ export async function handleSpecialSummonFromHandWithCost(
   // Check if source is in hand
   console.log("[handleSpecialSummonFromHandWithCost] Checking if source is in hand:", {
     sourceName: source.name,
+    sourceId: source.id,
     inHand: player.hand.includes(source),
     handSize: player.hand.length,
+    handCardNames: player.hand.map(c => c.name),
+    handCardIds: player.hand.map(c => c.id),
+    sourceReference: source,
   });
   if (!player.hand.includes(source)) {
     console.log("[handleSpecialSummonFromHandWithCost] Source not in hand!");
+    console.log("[handleSpecialSummonFromHandWithCost] Checking if any card in hand matches by ID:");
+    const matchById = player.hand.find(c => c.id === source.id);
+    if (matchById) {
+      console.log("[handleSpecialSummonFromHandWithCost] Found card with same ID but different reference!:", matchById);
+      console.log("[handleSpecialSummonFromHandWithCost] This suggests a card cloning issue.");
+    }
     game.renderer?.log("Card not in hand.");
     return false;
   }
