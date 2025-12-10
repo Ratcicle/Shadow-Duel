@@ -2271,7 +2271,7 @@ export const cardDatabase = [
     type: "Fiend",
     archetype: "Void",
     description:
-      "You can send 1 'Void Hollow' from your field to your GY; Special Summon this card from your hand. If this card is in your GY: You can banish this card from your GY, then target up to 2 'Void Hollow' in your GY; Special Summon those targets, but their ATK/DEF become 0. You can only use each effect of 'Void Haunter' once per turn.",
+      "You can send 1 'Void Hollow' from your field to your GY; Special Summon this card from your hand. You can banish this card from your GY, then target up to 2 'Void Hollow' in your GY; Special Summon those targets, but their ATK/DEF become 0. You can only use each effect of 'Void Haunter' once per turn.",
     image: "assets/Void Haunter.png",
     effects: [
       {
