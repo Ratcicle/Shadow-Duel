@@ -29,6 +29,7 @@ export default class Card {
     this.tempDefBoost = 0;
     this.cannotAttackThisTurn = false;
     this.cannotAttackUntilTurn = null;
+    this.immuneToOpponentEffectsUntilTurn = null;
     this.altTribute = data.altTribute || null;
     this.onBattleDestroy = data.onBattleDestroy || null;
     this.canAttackDirectlyThisTurn = false;
@@ -63,6 +64,7 @@ export default class Card {
     this.piercing = !!data.piercing;
     this.canMakeSecondAttackThisTurn = false;
     this.secondAttackUsedThisTurn = false;
+    this.voidTenebrisBuffValue = 0;
 
     // Counter system
     this.counters = new Map(); // counterType -> amount

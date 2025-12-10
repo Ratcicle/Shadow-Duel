@@ -2517,6 +2517,167 @@ export const cardDatabase = [
     ],
   },
   {
+    id: 79,
+    name: "Void Raven",
+    cardKind: "monster",
+    atk: 300,
+    def: 300,
+    level: 2,
+    type: "Winged Beast",
+    archetype: "Void",
+    description:
+      "Se um monstro de fusão 'Void' for Invocado por Invocação-Fusão: você pode descartar esta carta da mão; esse monstro fica imune aos efeitos de cartas do oponente até o final do próximo turno.",
+    image: "assets/Void Raven.png",
+    effects: [
+      {
+        id: "void_raven_fusion_immunity",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethod: "fusion",
+        promptUser: true,
+        promptMessage:
+          "Descartar Void Raven para proteger o monstro 'Void' recém-invocado?",
+        oncePerTurn: true,
+        oncePerTurnName: "void_raven_fusion_immunity",
+        condition: {
+          requires: "self_in_hand",
+          triggerArchetype: "Void",
+        },
+        targets: [
+          {
+            id: "void_raven_discard_cost",
+            owner: "self",
+            zone: "hand",
+            cardKind: "monster",
+            cardName: "Void Raven",
+            requireThisCard: true,
+            count: { min: 1, max: 1 },
+            autoSelect: true,
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "void_raven_discard_cost",
+            player: "self",
+            to: "graveyard",
+          },
+          {
+            type: "grant_void_fusion_immunity",
+            durationTurns: 1,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 80,
+    name: "Void Slayer Brute",
+    cardKind: "monster",
+    atk: 2500,
+    def: 2000,
+    level: 8,
+    type: "Fiend",
+    archetype: "Void",
+    description:
+      "Pode ser Invocado por Invocação-Especial da mão ao enviar 2 monstros 'Void' que você controla para o Cemitério. Se destruir um monstro do oponente em batalha: bana esse monstro.",
+    image: "assets/Void Slayer Brute.png",
+    effects: [
+      {
+        id: "void_slayer_brute_hand_summon",
+        timing: "ignition",
+        oncePerTurn: true,
+        oncePerTurnName: "void_slayer_brute_hand_summon",
+        targets: [
+          {
+            id: "void_slayer_brute_cost",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            archetype: "Void",
+            count: { min: 2, max: 2 },
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "void_slayer_brute_cost",
+            player: "self",
+            to: "graveyard",
+          },
+          {
+            type: "void_slayer_brute_special_summon",
+          },
+        ],
+      },
+      {
+        id: "void_slayer_brute_banish_destroyed",
+        timing: "on_event",
+        event: "battle_destroy",
+        requireSelfAsAttacker: true,
+        requireDestroyedIsOpponent: true,
+        oncePerTurn: true,
+        oncePerTurnName: "void_slayer_brute_banish",
+        targets: [
+          {
+            id: "void_slayer_brute_banish_target",
+            owner: "opponent",
+            zone: "graveyard",
+            cardKind: "monster",
+            count: { min: 1, max: 1 },
+            autoSelect: true,
+          },
+        ],
+        actions: [
+          {
+            type: "banish",
+            targetRef: "void_slayer_brute_banish_target",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 81,
+    name: "Void Tenebris Horn",
+    cardKind: "monster",
+    atk: 1500,
+    def: 800,
+    level: 4,
+    type: "Fiend",
+    archetype: "Void",
+    description:
+      "Ganha 100 ATK/DEF para cada carta 'Void' no campo. Uma vez por duelo, se esta carta estiver no seu Cemitério, você pode Invocá-la por Invocação-Especial.",
+    image: "assets/Void Tenebris Horn.png",
+    effects: [
+      {
+        id: "void_tenebris_horn_revive",
+        timing: "ignition",
+        requireZone: "graveyard",
+        oncePerDuel: true,
+        oncePerDuelName: "void_tenebris_horn_revive",
+        targets: [
+          {
+            id: "void_tenebris_horn_self",
+            owner: "self",
+            zone: "graveyard",
+            cardKind: "monster",
+            cardName: "Void Tenebris Horn",
+            count: { min: 1, max: 1 },
+            requireThisCard: true,
+            autoSelect: true,
+          },
+        ],
+        actions: [
+          {
+            type: "void_tenebris_horn_grave_special_summon",
+            targetRef: "void_tenebris_horn_self",
+          },
+        ],
+      },
+    ],
+  },
+  {
     id: 200,
     name: "Mirror Force",
     cardKind: "trap",

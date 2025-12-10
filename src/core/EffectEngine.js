@@ -64,6 +64,34 @@ export default class EffectEngine {
     return { ok: true };
   }
 
+  checkOncePerDuel(card, player, effect) {
+    if (!effect || !effect.oncePerDuel || !player) {
+      return { ok: true };
+    }
+
+    const key = effect.oncePerDuelName || effect.id || card?.name;
+    player.oncePerDuelUsageByName =
+      player.oncePerDuelUsageByName || Object.create(null);
+    if (player.oncePerDuelUsageByName[key]) {
+      return {
+        ok: false,
+        reason: "Once per duel effect already used.",
+      };
+    }
+    return { ok: true };
+  }
+
+  registerOncePerDuelUsage(card, player, effect) {
+    if (!effect || !effect.oncePerDuel || !player) {
+      return;
+    }
+
+    const key = effect.oncePerDuelName || effect.id || card?.name;
+    player.oncePerDuelUsageByName =
+      player.oncePerDuelUsageByName || Object.create(null);
+    player.oncePerDuelUsageByName[key] = true;
+  }
+
   registerOncePerTurnUsage(card, player, effect) {
     if (!effect || !effect.oncePerTurn) {
       return;
@@ -147,6 +175,12 @@ export default class EffectEngine {
           continue;
         }
 
+        const duelCheck = this.checkOncePerDuel(sourceCard, player, effect);
+        if (!duelCheck.ok) {
+          console.log(duelCheck.reason);
+          continue;
+        }
+
         if (effect.summonMethod) {
           const methods = Array.isArray(effect.summonMethod)
             ? effect.summonMethod
@@ -220,6 +254,7 @@ export default class EffectEngine {
               );
             if (!summonResult?.success) continue;
             this.registerOncePerTurnUsage(sourceCard, player, effect);
+            this.registerOncePerDuelUsage(sourceCard, player, effect);
             this.game.checkWinCondition();
             return;
           }
@@ -231,9 +266,12 @@ export default class EffectEngine {
           targetResult.targets || {}
         );
         this.registerOncePerTurnUsage(sourceCard, player, effect);
+        this.registerOncePerDuelUsage(sourceCard, player, effect);
         this.game.checkWinCondition();
       }
     }
+
+    this.updateVoidTenebrisHornBuffs();
   }
 
   checkEffectCondition(condition, sourceCard, player, summonedCard) {
@@ -259,11 +297,100 @@ export default class EffectEngine {
     return true;
   }
 
+  applyVoidTenebrisHornBoost(card, boostValue) {
+    if (!card || card.cardKind !== "monster") return false;
+    const previous = card.voidTenebrisBuffValue ?? 0;
+    if (previous === boostValue) {
+      return false;
+    }
+    const delta = boostValue - previous;
+    card.atk += delta;
+    card.def += delta;
+    card.voidTenebrisBuffValue = boostValue;
+    return true;
+  }
+
+  updateVoidTenebrisHornBuffs() {
+    if (!this.game) return false;
+    const allFields = [
+      ...(this.game.player.field || []),
+      ...(this.game.bot.field || []),
+    ].filter(Boolean);
+    const voidCount = allFields.filter((card) => {
+      if (!card || card.cardKind !== "monster") return false;
+      if (card.archetype === "Void") return true;
+      if (Array.isArray(card.archetypes)) {
+        return card.archetypes.includes("Void");
+      }
+      return false;
+    }).length;
+    const boostValue = voidCount * 100;
+
+    let updated = false;
+    allFields
+      .filter((card) => card?.name === "Void Tenebris Horn")
+      .forEach((horn) => {
+        const refreshed = this.applyVoidTenebrisHornBoost(horn, boostValue);
+        if (refreshed) {
+          updated = true;
+        }
+      });
+
+    return updated;
+  }
+
+  isImmuneToOpponentEffects(card, sourcePlayer) {
+    if (
+      !card ||
+      !card.immuneToOpponentEffectsUntilTurn ||
+      !sourcePlayer ||
+      !card.owner
+    ) {
+      return false;
+    }
+
+    const currentTurn = this.game?.turnCounter ?? 0;
+    if (currentTurn > card.immuneToOpponentEffectsUntilTurn) {
+      return false;
+    }
+
+    return card.owner !== sourcePlayer.id;
+  }
+
+  shouldSkipActionDueToImmunity(action, targets, ctx) {
+    if (!action || !action.targetRef || !ctx?.player) return false;
+    const targetCards = targets?.[action.targetRef];
+    if (!Array.isArray(targetCards) || targetCards.length === 0) return false;
+
+    for (const card of targetCards) {
+      if (this.isImmuneToOpponentEffects(card, ctx.player)) {
+        if (this.game?.renderer?.log) {
+          this.game.renderer.log(
+            `${card.name} está imune aos efeitos do oponente e ignora ${action.type}.`
+          );
+        }
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   async handleTriggeredEffect(sourceCard, effect, ctx) {
     const optCheck = this.checkOncePerTurn(sourceCard, ctx.player, effect);
     if (!optCheck.ok) {
       console.log(optCheck.reason);
       return { success: false, reason: optCheck.reason };
+    }
+
+    const duelCheck = this.checkOncePerDuel(
+      sourceCard,
+      ctx.player,
+      effect
+    );
+    if (!duelCheck.ok) {
+      console.log(duelCheck.reason);
+      return { success: false, reason: duelCheck.reason };
     }
 
     const targetResult = this.resolveTargets(effect.targets || [], ctx, null);
@@ -289,6 +416,7 @@ export default class EffectEngine {
     if (!isConditionalSummon) {
       this.applyActions(effect.actions || [], ctx, targetResult.targets || {});
       this.registerOncePerTurnUsage(sourceCard, ctx.player, effect);
+      this.registerOncePerDuelUsage(sourceCard, ctx.player, effect);
       this.game.checkWinCondition();
     }
 
@@ -431,6 +559,12 @@ export default class EffectEngine {
             continue;
           }
 
+          const duelCheck = this.checkOncePerDuel(card, owner, effect);
+          if (!duelCheck.ok) {
+            console.log(duelCheck.reason);
+            continue;
+          }
+
           if (effect.requireSelfAsAttacker && ctx.attacker !== card) continue;
           if (effect.requireSelfAsDestroyed && ctx.destroyed !== card) continue;
           if (
@@ -483,10 +617,13 @@ export default class EffectEngine {
             targetResult.targets || {}
           );
           this.registerOncePerTurnUsage(card, owner, effect);
+          this.registerOncePerDuelUsage(card, owner, effect);
           this.game.checkWinCondition();
         }
       }
     }
+
+    this.updateVoidTenebrisHornBuffs();
   }
 
   async handleAttackDeclaredEvent(payload) {
@@ -669,6 +806,14 @@ export default class EffectEngine {
         continue;
       }
 
+      const duelCheck = this.checkOncePerDuel(card, player, effect);
+      if (!duelCheck.ok) {
+        console.log(
+          `[handleCardToGraveEvent] Once per duel check failed: ${duelCheck.reason}`
+        );
+        continue;
+      }
+
       console.log(
         `[handleCardToGraveEvent] fromZone check: effect.fromZone="${effect.fromZone}", actual fromZone="${fromZone}"`
       );
@@ -733,6 +878,7 @@ export default class EffectEngine {
 
       this.applyActions(effect.actions || [], ctx, targetResult.targets || {});
       this.registerOncePerTurnUsage(card, player, effect);
+      this.registerOncePerDuelUsage(card, player, effect);
       this.game.checkWinCondition();
     }
   }
@@ -769,8 +915,15 @@ export default class EffectEngine {
           continue;
         }
 
+        const duelCheck = this.checkOncePerDuel(card, owner, effect);
+        if (!duelCheck.ok) {
+          console.log(duelCheck.reason);
+          continue;
+        }
+
         this.applyActions(effect.actions || [], ctx, {});
         this.registerOncePerTurnUsage(card, owner, effect);
+        this.registerOncePerDuelUsage(card, owner, effect);
         this.game.checkWinCondition();
       }
     }
@@ -846,6 +999,11 @@ export default class EffectEngine {
     const optCheck = this.checkOncePerTurn(card, player, effect);
     if (!optCheck.ok) {
       return { success: false, reason: optCheck.reason };
+    }
+
+    const duelCheck = this.checkOncePerDuel(card, player, effect);
+    if (!duelCheck.ok) {
+      return { success: false, reason: duelCheck.reason };
     }
 
     let resolvedActivationZone = activationZone || "hand";
@@ -1059,6 +1217,11 @@ export default class EffectEngine {
       return { success: false, reason: optCheck.reason };
     }
 
+    const duelCheck = this.checkOncePerDuel(card, player, effect);
+    if (!duelCheck.ok) {
+      return { success: false, reason: duelCheck.reason };
+    }
+
     const ctx = {
       source: card,
       player,
@@ -1086,6 +1249,7 @@ export default class EffectEngine {
 
     this.applyActions(effect.actions || [], ctx, targetResult.targets);
     this.registerOncePerTurnUsage(card, player, effect);
+    this.registerOncePerDuelUsage(card, player, effect);
     this.game.checkWinCondition();
     return { success: true };
   }
@@ -1305,6 +1469,7 @@ export default class EffectEngine {
 
     this.applyActions(effect.actions || [], ctx, targetResult.targets || {});
     this.registerOncePerTurnUsage(card, player, effect);
+    this.registerOncePerDuelUsage(card, player, effect);
     this.game.checkWinCondition();
     return { success: true };
   }
@@ -1726,6 +1891,9 @@ export default class EffectEngine {
 
     try {
       for (const action of actions) {
+        if (this.shouldSkipActionDueToImmunity(action, targets, ctx)) {
+          continue;
+        }
         switch (action.type) {
           case "draw":
             executed = this.applyDraw(action, ctx) || executed;
@@ -1803,6 +1971,10 @@ export default class EffectEngine {
           case "forbid_attack_next_turn":
             executed =
               this.applyForbidAttackNextTurn(action, targets, ctx) || executed;
+            break;
+          case "grant_void_fusion_immunity":
+            executed =
+              this.applyGrantVoidFusionImmunity(action, ctx) || executed;
             break;
           case "darkness_valley_apply_existing":
             executed =
@@ -1925,6 +2097,19 @@ export default class EffectEngine {
           case "void_forgotten_knight_special_summon":
             executed =
               (await this.applyVoidForgottenKnightSpecialSummon(
+                action,
+                ctx,
+                targets
+              )) || executed;
+            break;
+          case "void_slayer_brute_special_summon":
+            executed =
+              (await this.applyVoidSlayerBruteSpecialSummon(action, ctx, targets)) ||
+              executed;
+            break;
+          case "void_tenebris_horn_grave_special_summon":
+            executed =
+              (await this.applyVoidTenebrisHornGraveSummon(
                 action,
                 ctx,
                 targets
@@ -2331,6 +2516,44 @@ export default class EffectEngine {
         card.cannotAttackUntilTurn = untilTurn;
       }
     });
+
+    return true;
+  }
+
+  applyGrantVoidFusionImmunity(action, ctx) {
+    const card = ctx?.summonedCard;
+    const player = ctx?.player;
+    if (
+      !card ||
+      !player ||
+      card.cardKind !== "monster" ||
+      card.monsterType !== "fusion" ||
+      card.owner !== player.id
+    ) {
+      return false;
+    }
+
+    const archetypes = card.archetypes
+      ? card.archetypes
+      : card.archetype
+      ? [card.archetype]
+      : [];
+    if (!archetypes.includes("Void")) {
+      return false;
+    }
+
+    const duration = Math.max(1, action.durationTurns ?? 1);
+    const untilTurn = (this.game?.turnCounter ?? 0) + duration;
+    card.immuneToOpponentEffectsUntilTurn = Math.max(
+      card.immuneToOpponentEffectsUntilTurn ?? 0,
+      untilTurn
+    );
+
+    if (this.game?.renderer?.log) {
+      this.game.renderer.log(
+        `${card.name} está imune aos efeitos do oponente até o final do próximo turno.`
+      );
+    }
 
     return true;
   }
@@ -5687,6 +5910,87 @@ export default class EffectEngine {
     return true;
   }
 
+  async applyVoidSlayerBruteSpecialSummon(action, ctx) {
+    if (!ctx.player || !this.game) return false;
+
+    const brute = ctx.source;
+    if (!brute || brute.cardKind !== "monster") return false;
+    if (!ctx.player.hand.includes(brute)) {
+      this.game.renderer.log("Void Slayer Brute não está na mão.");
+      return false;
+    }
+
+    if (ctx.player.field.length >= 5) {
+      this.game.renderer.log("Field está cheio.");
+      return false;
+    }
+
+    const handIndex = ctx.player.hand.indexOf(brute);
+    if (handIndex !== -1) {
+      ctx.player.hand.splice(handIndex, 1);
+    }
+    brute.position = "attack";
+    brute.isFacedown = false;
+    brute.hasAttacked = false;
+    brute.cannotAttackThisTurn = false;
+    brute.owner = ctx.player.id;
+    ctx.player.field.push(brute);
+
+    this.game.renderer.log(
+      `${ctx.player.name} Invocou ${brute.name} por Invocação-Especial da mão.`
+    );
+
+    this.game.emit("after_summon", {
+      card: brute,
+      player: ctx.player,
+      method: "special",
+    });
+
+    this.game.updateBoard();
+    this.updateVoidTenebrisHornBuffs();
+    return true;
+  }
+
+  async applyVoidTenebrisHornGraveSummon(action, ctx, targets) {
+    if (!ctx.player || !this.game) return false;
+
+    const targetCards = targets[action.targetRef] || [];
+    const horn = targetCards[0];
+    if (!horn) return false;
+
+    if (ctx.player.field.length >= 5) {
+      this.game.renderer.log("Field está cheio.");
+      return false;
+    }
+
+    this.game.moveCard(horn, ctx.player, "field", {
+      fromZone: "graveyard",
+      position: "attack",
+      isFacedown: false,
+      resetAttackFlags: true,
+    });
+
+    horn.position = "attack";
+    horn.isFacedown = false;
+    horn.hasAttacked = false;
+    horn.cannotAttackThisTurn = false;
+    horn.owner = ctx.player.id;
+
+    this.game.renderer.log(
+      `${ctx.player.name} Special Summoned ${horn.name} from the Graveyard.`
+    );
+
+    this.game.emit("after_summon", {
+      card: horn,
+      player: ctx.player,
+      method: "special",
+    });
+
+    this.updateVoidTenebrisHornBuffs();
+    this.game.updateBoard();
+    return true;
+  }
+
   async applyVoidHollowKingRevive(action, ctx) {
     if (!ctx.player || !this.game) {
       return false;
@@ -5849,6 +6153,7 @@ export default class EffectEngine {
       this.game.renderer.log(`${banished} card(s) banished.`);
     }
 
+    this.updateVoidTenebrisHornBuffs();
     return banished > 0;
   }
 

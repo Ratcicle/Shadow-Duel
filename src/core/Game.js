@@ -162,6 +162,12 @@ export default class Game {
       if (!shouldRestrictAttack && card.cannotAttackUntilTurn) {
         card.cannotAttackUntilTurn = null;
       }
+      if (
+        card.immuneToOpponentEffectsUntilTurn &&
+        this.turnCounter > card.immuneToOpponentEffectsUntilTurn
+      ) {
+        card.immuneToOpponentEffectsUntilTurn = null;
+      }
     });
     activePlayer.summonCount = 0;
 
@@ -2492,6 +2498,16 @@ export default class Game {
         card.positionChangedThisTurn = false;
         card.cannotAttackThisTurn = false;
         card.cannotAttackUntilTurn = null;
+        card.immuneToOpponentEffectsUntilTurn = null;
+        const prevBuff = card.voidTenebrisBuffValue || 0;
+        if (prevBuff) {
+          card.atk -= prevBuff;
+          card.def -= prevBuff;
+        }
+        card.voidTenebrisBuffValue = 0;
+        if (this.effectEngine) {
+          this.effectEngine.updateVoidTenebrisHornBuffs();
+        }
       }
 
     // Se um equip spell está saindo da spell/trap zone, limpar seus efeitos no monstro
