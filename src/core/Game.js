@@ -1886,6 +1886,13 @@ export default class Game {
   async finishTargetSelection() {
     if (!this.targetSelection) return;
     const selection = this.targetSelection;
+    console.log("[Game] finishTargetSelection called:", {
+      kind: selection.kind,
+      card: selection.card?.name,
+      selectionsKeys: Object.keys(selection.selections),
+      selections: selection.selections,
+    });
+    
     this.targetSelection = null;
     this.graveyardSelection = null;
     this.clearTargetHighlights();
