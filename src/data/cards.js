@@ -2824,4 +2824,55 @@ export const cardDatabase = [
       },
     ],
   },
+  {
+    id: 103,
+    name: "Void Hydra Titan",
+    cardKind: "monster",
+    monsterType: "fusion",
+    atk: 3500,
+    def: 2900,
+    level: 10,
+    type: "Dragon",
+    archetype: "Void",
+    archetypes: ["Void"],
+    description:
+      "6 'Void' monsters. If this card is Fusion Summoned: destroy all other monsters you control; draw 1 card for each destroyed. Once per turn: If this card would be destroyed by battle or card effects: You can reduce its ATK by 700; negate the destruction of this card.",
+    image: "assets/Void Hydra Titan.png",
+    fusionMaterials: [
+      {
+        archetype: "Void",
+        count: 6,
+      },
+    ],
+    effects: [
+      {
+        id: "void_hydra_titan_summon",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethod: "fusion",
+        description:
+          "When Fusion Summoned: Destroy all other monsters you control; draw 1 card for each destroyed.",
+        actions: [
+          {
+            type: "destroy_self_monsters_and_draw",
+          },
+        ],
+      },
+      {
+        id: "void_hydra_titan_negate_destruction",
+        timing: "on_event",
+        event: "before_destroy",
+        description:
+          "[Once per turn]: You can negate the destruction of this card; reduce its ATK by 700.",
+        oncePerTurnScope: "card",
+        oncePerTurnName: "void_hydra_titan_negate_destruction",
+        negationCost: [
+          {
+            type: "reduce_self_atk",
+            amount: 700,
+          },
+        ],
+      },
+    ],
+  },
 ];

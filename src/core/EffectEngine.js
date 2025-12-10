@@ -383,11 +383,7 @@ export default class EffectEngine {
       return { success: false, reason: optCheck.reason };
     }
 
-    const duelCheck = this.checkOncePerDuel(
-      sourceCard,
-      ctx.player,
-      effect
-    );
+    const duelCheck = this.checkOncePerDuel(sourceCard, ctx.player, effect);
     if (!duelCheck.ok) {
       console.log(duelCheck.reason);
       return { success: false, reason: duelCheck.reason };
@@ -1924,6 +1920,9 @@ export default class EffectEngine {
           case "modify_stats_temp":
             executed = this.applyModifyStatsTemp(action, targets) || executed;
             break;
+          case "reduce_self_atk":
+            executed = this.applyReduceSelfAtk(action, ctx) || executed;
+            break;
           case "search_any":
             executed = this.applySearchAny(action, ctx) || executed;
             break;
@@ -1935,6 +1934,11 @@ export default class EffectEngine {
             break;
           case "move":
             executed = this.applyMove(action, ctx, targets) || executed;
+            break;
+          case "destroy_self_monsters_and_draw":
+            executed =
+              (await this.applyDestroyAllOthersAndDraw(action, ctx)) ||
+              executed;
             break;
           case "luminarch_aegisbearer_def_boost":
             executed =
@@ -2104,8 +2108,11 @@ export default class EffectEngine {
             break;
           case "void_slayer_brute_special_summon":
             executed =
-              (await this.applyVoidSlayerBruteSpecialSummon(action, ctx, targets)) ||
-              executed;
+              (await this.applyVoidSlayerBruteSpecialSummon(
+                action,
+                ctx,
+                targets
+              )) || executed;
             break;
           case "void_tenebris_horn_grave_special_summon":
             executed =
@@ -2286,6 +2293,12 @@ export default class EffectEngine {
       const owner = card.owner === "player" ? this.game.player : this.game.bot;
       if (!owner) continue;
 
+      // Check for before_destroy negation handlers (e.g., destruction protection with cost)
+      const negationResult = await this.checkBeforeDestroyNegations(card, ctx);
+      if (negationResult?.negated) {
+        continue; // Skip destruction for this card
+      }
+
       let replaced = false;
       if (
         this.game &&
@@ -2341,6 +2354,208 @@ export default class EffectEngine {
     }
 
     return destroyedAny;
+  }
+
+  /**
+   * Check if a card being destroyed has negation effects that can prevent it.
+   * Allows cards to negate their own destruction by paying costs (e.g., ATK reduction).
+   * @param {Card} card - Card being destroyed
+   * @param {Object} ctx - Context with source, player, opponent info
+   * @returns {Promise<Object>} - { negated: boolean, costPaid: boolean }
+   */
+  async checkBeforeDestroyNegations(card, ctx) {
+    if (!card || !card.effects) {
+      return { negated: false };
+    }
+
+    const owner = card.owner === "player" ? this.game.player : this.game.bot;
+    if (!owner) {
+      return { negated: false };
+    }
+
+    for (const effect of card.effects) {
+      if (!effect || effect.timing !== "on_event") continue;
+      if (effect.event !== "before_destroy") continue;
+
+      // Check once-per-turn for negation
+      const optCheck = this.checkOncePerTurn(card, owner, effect);
+      if (!optCheck.ok) {
+        console.log(`Negation blocked by OPT: ${optCheck.reason}`);
+        continue;
+      }
+
+      // For player-controlled cards, prompt for confirmation
+      if (owner === this.game.player) {
+        const shouldNegate = await this.promptForDestructionNegation(
+          card,
+          effect
+        );
+        if (!shouldNegate) {
+          continue;
+        }
+      }
+
+      // Apply negation actions (e.g., cost payment)
+      const negationCtx = {
+        source: card,
+        player: owner,
+        opponent:
+          ctx?.opponent ||
+          (owner === this.game.player ? this.game.bot : this.game.player),
+      };
+
+      const costSuccess = await this.applyActions(
+        effect.negationCost || [],
+        negationCtx,
+        {}
+      );
+
+      if (costSuccess || effect.negationCost?.length === 0) {
+        // Register OPT usage for negation
+        this.registerOncePerTurnUsage(card, owner, effect);
+
+        if (this.game?.renderer?.log) {
+          this.game.renderer.log(`${card.name} negated its destruction!`);
+        }
+
+        return { negated: true, costPaid: true };
+      }
+    }
+
+    return { negated: false };
+  }
+
+  /**
+   * Prompt the player to decide if they want to negate destruction with a cost.
+   * @param {Card} card - Card offering negation
+   * @param {Object} effect - Effect definition with negationCost
+   * @returns {Promise<boolean>} - Whether player wants to activate negation
+   */
+  async promptForDestructionNegation(card, effect) {
+    if (!this.game?.renderer) {
+      return false;
+    }
+
+    const costDescription = this.getDestructionNegationCostDescription(effect);
+    const message = `${card.name} would be destroyed. Negate destruction? Cost: ${costDescription}`;
+
+    return new Promise((resolve) => {
+      if (this.game.renderer.showDestructionNegationPrompt) {
+        this.game.renderer.showDestructionNegationPrompt(
+          card.name,
+          costDescription,
+          resolve
+        );
+      } else {
+        // Fallback to window.confirm
+        const confirm = window.confirm(message);
+        resolve(confirm);
+      }
+    });
+  }
+
+  /**
+   * Generate a human-readable description of the cost to negate destruction.
+   * @param {Object} effect - Effect with negationCost array
+   * @returns {string} - Cost description
+   */
+  getDestructionNegationCostDescription(effect) {
+    if (!effect?.negationCost || !Array.isArray(effect.negationCost)) {
+      return "Unknown cost";
+    }
+
+    const descriptions = [];
+    for (const action of effect.negationCost) {
+      if (action.type === "modify_stats_temp") {
+        const baseAtk = action.baseAtk ?? 3500;
+        const atkReduction = Math.floor(
+          baseAtk * (1 - (action.atkFactor ?? 1))
+        );
+        descriptions.push(`reduce ATK by ${atkReduction}`);
+      } else if (action.type === "pay_lp") {
+        descriptions.push(`pay ${action.amount} LP`);
+      } else if (action.type === "damage") {
+        descriptions.push(`take ${action.amount} damage`);
+      } else {
+        descriptions.push(action.type);
+      }
+    }
+
+    return descriptions.join(" and ");
+  }
+
+  /**
+   * Destroy all other monsters controlled by the player and draw 1 card per destroyed monster.
+   * Used by Void Hydra Titan on-summon effect.
+   * @param {Object} action - Action definition
+   * @param {Object} ctx - Context with source, player, opponent
+   * @returns {Promise<boolean>} - Whether any cards were destroyed
+   */
+  async applyDestroyAllOthersAndDraw(action, ctx) {
+    const player = ctx?.player;
+    const sourceCard = ctx?.source;
+
+    if (!player || !sourceCard) {
+      return false;
+    }
+
+    // Collect all monsters on the field except the source card
+    const othersToDestroy = (player.field || []).filter(
+      (card) => card && card !== sourceCard && card.cardKind === "monster"
+    );
+
+    if (othersToDestroy.length === 0) {
+      console.log("No other monsters to destroy.");
+      return false;
+    }
+
+    // Count how many we're destroying
+    let destroyedCount = 0;
+
+    // Destroy all collected monsters
+    for (const card of othersToDestroy) {
+      // Check for negation on each card being destroyed
+      const negationResult = await this.checkBeforeDestroyNegations(card, ctx);
+      if (negationResult?.negated) {
+        // If negated, don't destroy and don't count towards draw
+        continue;
+      }
+
+      // Move card to graveyard
+      let moved = false;
+      if (this.game && typeof this.game.moveCard === "function") {
+        this.game.moveCard(card, player, "graveyard");
+        moved = true;
+      } else {
+        const idx = player.field.indexOf(card);
+        if (idx > -1) {
+          player.field.splice(idx, 1);
+          player.graveyard.push(card);
+          moved = true;
+        }
+      }
+
+      if (moved) {
+        destroyedCount += 1;
+      }
+    }
+
+    // Draw 1 card for each monster destroyed
+    for (let i = 0; i < destroyedCount; i++) {
+      player.draw();
+    }
+
+    if (destroyedCount > 0 && this.game && typeof this.game.updateBoard === "function") {
+      this.game.updateBoard();
+    }
+
+    if (destroyedCount > 0 && this.game?.renderer?.log) {
+      this.game.renderer.log(
+        `${sourceCard.name} destroyed ${destroyedCount} monster(s) and drew ${destroyedCount} card(s)!`
+      );
+    }
+
+    return destroyedCount > 0;
   }
 
   applyAuroraSeraphHeal(action, ctx) {
@@ -2470,6 +2685,23 @@ export default class EffectEngine {
       }
     });
     return targetCards.length > 0 && (atkFactor !== 1 || defFactor !== 1);
+  }
+
+  applyReduceSelfAtk(action, ctx) {
+    const card = ctx?.source;
+    const amount = Math.max(0, action.amount ?? 0);
+    if (!card || amount <= 0) return false;
+
+    const originalAtk = card.atk || 0;
+    card.atk = Math.max(0, originalAtk - amount);
+
+    if (this.game?.renderer?.log) {
+      this.game.renderer.log(
+        `${card.name} paid ${amount} ATK to negate destruction (ATK agora: ${card.atk}).`
+      );
+    }
+
+    return true;
   }
 
   applyForbidAttackThisTurn(action, targets, ctx) {
