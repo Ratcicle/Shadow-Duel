@@ -1,9 +1,17 @@
 import Card from "./Card.js";
 import { cardDatabase } from "../data/cards.js";
+import {
+  ActionHandlerRegistry,
+  registerDefaultHandlers,
+} from "./ActionHandlers.js";
 
 export default class EffectEngine {
   constructor(game) {
     this.game = game;
+    
+    // Initialize action handler registry
+    this.actionHandlers = new ActionHandlerRegistry();
+    registerDefaultHandlers(this.actionHandlers);
   }
 
   /**
@@ -310,6 +318,8 @@ export default class EffectEngine {
     return true;
   }
 
+  // Continuous effect: Void Tenebris Horn buff system
+  // Note: This could be refactored into a more generic continuous effect handler
   updateVoidTenebrisHornBuffs() {
     if (!this.game) return false;
     const allFields = [
@@ -688,11 +698,14 @@ export default class EffectEngine {
             effect.speed === 2 && effect.promptOnAttackDeclared !== false;
           if (player.id === "player" && shouldPrompt) {
             let wantsToUse = true;
+            
+            // Use custom prompt if renderer provides one for this effect
+            const customPromptMethod = effect.customPromptMethod;
             if (
-              this.game?.renderer?.showProtectorPrompt &&
-              card.name === "Luminarch Sanctum Protector"
+              customPromptMethod &&
+              this.game?.renderer?.[customPromptMethod]
             ) {
-              wantsToUse = await this.game.renderer.showProtectorPrompt();
+              wantsToUse = await this.game.renderer[customPromptMethod]();
             } else {
               wantsToUse = window.confirm(
                 `Use ${card.name}'s effect to negate the attack?`
@@ -1488,6 +1501,8 @@ export default class EffectEngine {
       return { ok: false, reason: "Can only activate in Main Phase." };
     }
 
+    // Card-specific activation requirements
+    // Note: Future improvement - move to generic activation cost/requirement system
     if (card.name === "Shadow-Heart Infusion" || card.id === 37) {
       const handCount = (player.hand && player.hand.length) || 0;
       if (handCount < 2) {
@@ -1890,6 +1905,23 @@ export default class EffectEngine {
         if (this.shouldSkipActionDueToImmunity(action, targets, ctx)) {
           continue;
         }
+        
+        // Check if there's a registered handler for this action type
+        const handler = this.actionHandlers.get(action.type);
+        if (handler) {
+          try {
+            const result = await handler(action, ctx, targets, this);
+            executed = result || executed;
+            continue; // Skip to next action
+          } catch (error) {
+            console.error(`Error executing registered handler for action type "${action.type}":`, error);
+            console.error(`Action config:`, action);
+            console.error(`Context:`, { player: ctx.player?.id, source: ctx.source?.name });
+            // Fall through to legacy switch statement as fallback
+            console.warn(`Falling back to legacy switch statement for action type "${action.type}"`);
+          }
+        }
+        
         switch (action.type) {
           case "draw":
             executed = this.applyDraw(action, ctx) || executed;
@@ -2066,61 +2098,6 @@ export default class EffectEngine {
           case "polymerization_fusion_summon":
             executed =
               (await this.applyPolymerizationFusion(action, ctx)) || executed;
-            break;
-          case "void_conjurer_summon_from_deck":
-            executed =
-              (await this.applyVoidConjurerSummonFromDeck(action, ctx)) ||
-              executed;
-            break;
-          case "void_conjurer_self_revive":
-            executed =
-              this.applyVoidConjurerSelfRevive(action, ctx) || executed;
-            break;
-          case "void_walker_bounce_and_summon":
-            executed =
-              (await this.applyVoidWalkerBounceAndSummon(action, ctx)) ||
-              executed;
-            break;
-          case "void_hollow_summon_from_deck":
-            executed =
-              (await this.applyVoidHollowSummonFromDeck(action, ctx)) ||
-              executed;
-            break;
-          case "void_haunter_special_summon_effect":
-            executed =
-              (await this.applyVoidHaunterSpecialSummon(
-                action,
-                ctx,
-                targets
-              )) || executed;
-            break;
-          case "void_haunter_gy_effect":
-            executed =
-              (await this.applyVoidHaunterGYEffect(action, ctx)) || executed;
-            break;
-          case "void_forgotten_knight_special_summon":
-            executed =
-              (await this.applyVoidForgottenKnightSpecialSummon(
-                action,
-                ctx,
-                targets
-              )) || executed;
-            break;
-          case "void_slayer_brute_special_summon":
-            executed =
-              (await this.applyVoidSlayerBruteSpecialSummon(
-                action,
-                ctx,
-                targets
-              )) || executed;
-            break;
-          case "void_tenebris_horn_grave_special_summon":
-            executed =
-              (await this.applyVoidTenebrisHornGraveSummon(
-                action,
-                ctx,
-                targets
-              )) || executed;
             break;
           case "void_hollow_king_revive_effect":
             executed =
