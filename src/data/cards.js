@@ -2314,7 +2314,7 @@ export const cardDatabase = [
     id: 75,
     name: "Void Ghost Wolf",
     cardKind: "monster",
-    atk: 1200,
+    atk: 1400,
     def: 600,
     level: 3,
     type: "Beast",
@@ -2392,7 +2392,7 @@ export const cardDatabase = [
     type: "Insect",
     archetype: "Void",
     description:
-      "Choose 1 monster your opponent controls; it cannot attack until the end of the next turn. If this card is sent from the field to the Graveyard: Special Summon a 'Void Little Spider' token (Level 1, 500 ATK/DEF).",
+      "Target 1 monster your opponent controls; it cannot attack until the end of the next turn. If this card is sent from the field to the Graveyard: Special Summon a 'Void Little Spider' token (Level 1, 500 ATK/DEF).",
     image: "assets/Void Bone Spider.png",
     effects: [
       {
