@@ -2614,82 +2614,6 @@ export const cardDatabase = [
     ],
   },
   {
-    id: 80,
-    name: "Void Slayer Brute",
-    cardKind: "monster",
-    atk: 2500,
-    def: 2000,
-    level: 8,
-    type: "Fiend",
-    archetype: "Void",
-    description:
-      "Pode ser Invocado por Invocação-Especial da mão ao enviar 2 monstros 'Void' que você controla para o Cemitério. Se destruir um monstro do oponente em batalha: bana esse monstro.",
-    image: "assets/Void Slayer Brute.png",
-    effects: [
-      {
-        id: "void_slayer_brute_hand_summon",
-        timing: "ignition",
-        requireZone: "hand",
-        oncePerTurn: true,
-        oncePerTurnName: "void_slayer_brute_hand_summon",
-        targets: [
-          {
-            id: "void_slayer_brute_cost",
-            owner: "self",
-            zone: "field",
-            cardKind: "monster",
-            archetype: "Void",
-            count: { min: 2, max: 2 },
-          },
-        ],
-        actions: [
-          {
-            type: "move",
-            targetRef: "void_slayer_brute_cost",
-            player: "self",
-            to: "graveyard",
-          },
-          {
-            // Uses special_summon_from_deck handler which supports any zone
-            type: "special_summon_from_deck",
-            zone: "hand", // Source zone is hand (summon itself)
-            filters: {
-              name: "Void Slayer Brute",
-            },
-            position: "choice",
-            cannotAttackThisTurn: false,
-            promptPlayer: true,
-          },
-        ],
-      },
-      {
-        id: "void_slayer_brute_banish_destroyed",
-        timing: "on_event",
-        event: "battle_destroy",
-        requireSelfAsAttacker: true,
-        requireDestroyedIsOpponent: true,
-        oncePerTurn: true,
-        oncePerTurnName: "void_slayer_brute_banish",
-        targets: [
-          {
-            id: "void_slayer_brute_banish_target",
-            owner: "opponent",
-            zone: "graveyard",
-            cardKind: "monster",
-            count: { min: 1, max: 1 },
-            autoSelect: true,
-          },
-        ],
-        actions: [
-          {
-            type: "banish",
-            targetRef: "void_slayer_brute_banish_target",
-          },
-        ],
-      },
-    ],
-  },
-  {
     id: 81,
     name: "Void Tenebris Horn",
     cardKind: "monster",
@@ -2726,6 +2650,59 @@ export const cardDatabase = [
             requireSource: true,
             position: "attack",
             cannotAttackThisTurn: false,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 82,
+    name: "Void Slayer Brute",
+    cardKind: "monster",
+    atk: 2500,
+    def: 2000,
+    level: 8,
+    type: "Fiend",
+    archetype: "Void",
+    description:
+      'You can Special Summon this card from your hand by sending 2 "Void" monsters you control to the GY. If this card destroys an opponent\'s monster by battle: banish that monster.',
+    image: "assets/Void Slayer Brute.png",
+    effects: [
+      {
+        id: "void_slayer_brute_hand_summon",
+        timing: "ignition",
+        requireZone: "hand",
+        oncePerTurn: true,
+        oncePerTurnName: "void_slayer_brute_hand_summon",
+        targets: [
+          {
+            id: "void_slayer_brute_cost",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            archetype: "Void",
+            requireFaceup: true,
+            count: { min: 2, max: 2 },
+          },
+        ],
+        actions: [
+          {
+            type: "special_summon_from_hand_with_cost",
+            costTargetRef: "void_slayer_brute_cost",
+            position: "attack",
+            cannotAttackThisTurn: false,
+          },
+        ],
+      },
+      {
+        id: "void_slayer_brute_banish_destroyed",
+        timing: "on_event",
+        event: "battle_destroy",
+        requireSelfAsAttacker: true,
+        requireDestroyedIsOpponent: true,
+        actions: [
+          {
+            type: "banish_destroyed_monster",
           },
         ],
       },

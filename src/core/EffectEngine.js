@@ -1582,8 +1582,8 @@ export default class EffectEngine {
 
     for (const def of targetDefs) {
       const { zoneName, candidates } = this.selectCandidates(def, ctx);
-      const min = def.count?.min ?? 1;
-      const max = def.count?.max ?? min;
+      const min = Number(def.count?.min ?? 1);
+      const max = Number(def.count?.max ?? min);
 
       if (candidates.length < min) {
         return { ok: false, reason: "No valid targets for this effect." };
@@ -6173,47 +6173,6 @@ export default class EffectEngine {
     });
 
     this.game.updateBoard();
-    return true;
-  }
-
-  async applyVoidSlayerBruteSpecialSummon(action, ctx) {
-    if (!ctx.player || !this.game) return false;
-
-    const brute = ctx.source;
-    if (!brute || brute.cardKind !== "monster") return false;
-    if (!ctx.player.hand.includes(brute)) {
-      this.game.renderer.log("Void Slayer Brute não está na mão.");
-      return false;
-    }
-
-    if (ctx.player.field.length >= 5) {
-      this.game.renderer.log("Field está cheio.");
-      return false;
-    }
-
-    const handIndex = ctx.player.hand.indexOf(brute);
-    if (handIndex !== -1) {
-      ctx.player.hand.splice(handIndex, 1);
-    }
-    brute.position = "attack";
-    brute.isFacedown = false;
-    brute.hasAttacked = false;
-    brute.cannotAttackThisTurn = false;
-    brute.owner = ctx.player.id;
-    ctx.player.field.push(brute);
-
-    this.game.renderer.log(
-      `${ctx.player.name} Invocou ${brute.name} por Invocação-Especial da mão.`
-    );
-
-    this.game.emit("after_summon", {
-      card: brute,
-      player: ctx.player,
-      method: "special",
-    });
-
-    this.game.updateBoard();
-    this.updateVoidTenebrisHornBuffs();
     return true;
   }
 

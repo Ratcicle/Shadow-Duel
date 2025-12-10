@@ -195,11 +195,7 @@ async applyActions(actions, ctx, targets) {
    - Antes: 90 linhas hardcoded
    - Depois: Configuração JSON
 
-6. **Void Slayer Brute**
-   - Antes: 70 linhas hardcoded
-   - Depois: Configuração JSON
-
-7. **Void Tenebris Horn**
+6. **Void Tenebris Horn**
    - Antes: 80 linhas hardcoded
    - Depois: Configuração JSON
 

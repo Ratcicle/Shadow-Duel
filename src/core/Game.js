@@ -1832,13 +1832,14 @@ export default class Game {
     }
 
     const selections = this.targetSelection.selections[option.id] || [];
+    const max = Number(option.max ?? 0);
     const existing = selections.indexOf(candidate.idx);
     if (existing > -1) {
       selections.splice(existing, 1);
       cardEl.classList.remove("selected-target");
       console.log("[Game] Deselected card");
     } else {
-      if (selections.length >= option.max) {
+      if (max > 0 && selections.length >= max) {
         console.log("[Game] Max selections reached");
         return true;
       }
@@ -1848,12 +1849,12 @@ export default class Game {
         "[Game] Selected card, total:",
         selections.length,
         "/",
-        option.max
+        max || option.max
       );
     }
     this.targetSelection.selections[option.id] = selections;
 
-    if (selections.length === option.max) {
+    if (max > 0 && selections.length >= max) {
       console.log("[Game] Max reached, advancing selection");
       this.advanceTargetSelection();
     }

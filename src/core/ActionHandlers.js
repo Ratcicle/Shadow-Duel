@@ -1,10 +1,10 @@
 /**
  * ActionHandlers.js
- * 
+ *
  * Generic, reusable action handlers for card effects.
  * This module provides a registry system and generic handlers that replace
  * card-specific hardcoded methods in EffectEngine.
- * 
+ *
  * Philosophy:
  * - Handlers are generic and configured via action properties
  * - Card-specific logic should be in card definitions, not in handlers
@@ -47,10 +47,10 @@ export class ActionHandlerRegistry {
 /**
  * Generic handler for special summoning from any zone with filters
  * Replaces: applyVoidConjurerSummonFromDeck, applyVoidHollowSummonFromDeck, etc.
- * 
+ *
  * NOTE: Despite the registered name "special_summon_from_deck", this handler
  * works with ANY zone (deck, hand, graveyard) by specifying the zone property.
- * 
+ *
  * Action properties:
  * - zone: "deck" | "hand" | "graveyard" | "banished" (default: "deck")
  * - filters: { archetype, name, level, levelOp, cardKind }
@@ -58,7 +58,12 @@ export class ActionHandlerRegistry {
  * - cannotAttackThisTurn: boolean
  * - promptPlayer: boolean (default: true for human player)
  */
-export async function handleSpecialSummonFromZone(action, ctx, targets, engine) {
+export async function handleSpecialSummonFromZone(
+  action,
+  ctx,
+  targets,
+  engine
+) {
   const { player, source } = ctx;
   const game = engine.game;
 
@@ -83,36 +88,38 @@ export async function handleSpecialSummonFromZone(action, ctx, targets, engine) 
   const filters = action.filters || {};
   const candidates = zone.filter((card) => {
     if (!card) return false;
-    
+
     // Card kind filter
     if (filters.cardKind && card.cardKind !== filters.cardKind) return false;
-    
+
     // Archetype filter
     if (filters.archetype) {
-      const hasArchetype = card.archetype === filters.archetype ||
-        (Array.isArray(card.archetypes) && card.archetypes.includes(filters.archetype));
+      const hasArchetype =
+        card.archetype === filters.archetype ||
+        (Array.isArray(card.archetypes) &&
+          card.archetypes.includes(filters.archetype));
       if (!hasArchetype) return false;
     }
-    
+
     // Name filter
     if (filters.name && card.name !== filters.name) return false;
-    
+
     // Level filter
     if (filters.level !== undefined) {
       const cardLevel = card.level || 0;
       const op = filters.levelOp || "eq";
-      
+
       if (op === "eq" && cardLevel !== filters.level) return false;
       if (op === "lte" && cardLevel > filters.level) return false;
       if (op === "gte" && cardLevel < filters.level) return false;
       if (op === "lt" && cardLevel >= filters.level) return false;
       if (op === "gt" && cardLevel <= filters.level) return false;
     }
-    
+
     // Exclude source card if specified in filters
     // Use ID comparison for reliability across card instances
     if (filters.excludeSelf && source && card.id === source.id) return false;
-    
+
     return true;
   });
 
@@ -134,7 +141,7 @@ export async function handleSpecialSummonFromZone(action, ctx, targets, engine) 
 
   // Player selection
   const promptPlayer = action.promptPlayer !== false;
-  
+
   if (!promptPlayer || candidates.length === 1) {
     // Auto-select if only one candidate or prompt disabled
     return await summonCard(candidates[0], zone, player, action, engine);
@@ -147,13 +154,15 @@ export async function handleSpecialSummonFromZone(action, ctx, targets, engine) 
   if (searchModal) {
     return new Promise((resolve) => {
       game.isResolvingEffect = true;
-      
+
       engine.showSearchModalVisual(
         searchModal,
         candidates,
         defaultCardName,
         async (selectedName) => {
-          const chosen = candidates.find((c) => c && c.name === selectedName) || candidates[0];
+          const chosen =
+            candidates.find((c) => c && c.name === selectedName) ||
+            candidates[0];
           const result = await summonCard(chosen, zone, player, action, engine);
           game.isResolvingEffect = false;
           resolve(result);
@@ -171,7 +180,7 @@ export async function handleSpecialSummonFromZone(action, ctx, targets, engine) 
  */
 async function summonCard(card, sourceZone, player, action, engine) {
   const game = engine.game;
-  
+
   if (!card || player.field.length >= 5) return false;
 
   // Remove from source zone
@@ -192,17 +201,21 @@ async function summonCard(card, sourceZone, player, action, engine) {
   card.hasAttacked = false;
   card.cannotAttackThisTurn = action.cannotAttackThisTurn || false;
   card.owner = player.id;
-  
+
   // Add to field
   player.field.push(card);
 
   // Log
   const zoneName = action.zone || "deck";
   const positionText = position === "defense" ? "Defense" : "Attack";
-  const restrictText = card.cannotAttackThisTurn ? " (cannot attack this turn)" : "";
-  
+  const restrictText = card.cannotAttackThisTurn
+    ? " (cannot attack this turn)"
+    : "";
+
   game.renderer?.log(
-    `${player.name || player.id} Special Summoned ${card.name} from ${zoneName} in ${positionText} Position${restrictText}.`
+    `${player.name || player.id} Special Summoned ${
+      card.name
+    } from ${zoneName} in ${positionText} Position${restrictText}.`
   );
 
   // Emit after_summon event
@@ -219,13 +232,18 @@ async function summonCard(card, sourceZone, player, action, engine) {
 /**
  * Generic handler for special summon from hand with cost
  * Replaces: applyVoidHaunterSpecialSummon, applyVoidForgottenKnightSpecialSummon, etc.
- * 
+ *
  * Action properties:
  * - costTargetRef: reference to target definition for cost
  * - position: "attack" | "defense" | "choice"
  * - cannotAttackThisTurn: boolean
  */
-export async function handleSpecialSummonFromHandWithCost(action, ctx, targets, engine) {
+export async function handleSpecialSummonFromHandWithCost(
+  action,
+  ctx,
+  targets,
+  engine
+) {
   const { player, source } = ctx;
   const game = engine.game;
 
@@ -277,7 +295,7 @@ export async function handleSpecialSummonFromHandWithCost(action, ctx, targets, 
   source.hasAttacked = false;
   source.cannotAttackThisTurn = action.cannotAttackThisTurn || false;
   source.owner = player.id;
-  
+
   // Add to field
   player.field.push(source);
 
@@ -299,7 +317,7 @@ export async function handleSpecialSummonFromHandWithCost(action, ctx, targets, 
 /**
  * Generic handler for returning a card to hand and special summoning another
  * Replaces: applyVoidWalkerBounceAndSummon
- * 
+ *
  * Action properties:
  * - bounceSource: boolean (if true, bounce the source card)
  * - filters: { archetype, name, level, levelOp, excludeSelf }
@@ -315,27 +333,29 @@ export async function handleBounceAndSummon(action, ctx, targets, engine) {
   const filters = action.filters || {};
   const validTargets = player.hand.filter((card) => {
     if (!card) return false;
-    
+
     if (filters.cardKind && card.cardKind !== filters.cardKind) return false;
-    
+
     if (filters.archetype) {
-      const hasArchetype = card.archetype === filters.archetype ||
-        (Array.isArray(card.archetypes) && card.archetypes.includes(filters.archetype));
+      const hasArchetype =
+        card.archetype === filters.archetype ||
+        (Array.isArray(card.archetypes) &&
+          card.archetypes.includes(filters.archetype));
       if (!hasArchetype) return false;
     }
-    
+
     if (filters.excludeSelf && card === source) return false;
     if (filters.name && card.name !== filters.name) return false;
-    
+
     if (filters.level !== undefined) {
       const cardLevel = card.level || 0;
       const op = filters.levelOp || "lte";
-      
+
       if (op === "eq" && cardLevel !== filters.level) return false;
       if (op === "lte" && cardLevel > filters.level) return false;
       if (op === "gte" && cardLevel < filters.level) return false;
     }
-    
+
     return true;
   });
 
@@ -367,14 +387,22 @@ export async function handleBounceAndSummon(action, ctx, targets, engine) {
   if (searchModal) {
     return new Promise((resolve) => {
       game.isResolvingEffect = true;
-      
+
       engine.showSearchModalVisual(
         searchModal,
         validTargets,
         defaultCardName,
         async (selectedName) => {
-          const target = validTargets.find((c) => c && c.name === selectedName) || validTargets[0];
-          const result = await bounceAndSummonCard(source, target, player, action, engine);
+          const target =
+            validTargets.find((c) => c && c.name === selectedName) ||
+            validTargets[0];
+          const result = await bounceAndSummonCard(
+            source,
+            target,
+            player,
+            action,
+            engine
+          );
           game.isResolvingEffect = false;
           resolve(result);
         }
@@ -392,7 +420,7 @@ export async function handleBounceAndSummon(action, ctx, targets, engine) {
  */
 async function bounceAndSummonCard(source, target, player, action, engine) {
   const game = engine.game;
-  
+
   if (!target || player.field.length >= 5) return false;
 
   // Bounce source to hand
@@ -422,13 +450,14 @@ async function bounceAndSummonCard(source, target, player, action, engine) {
   target.hasAttacked = false;
   target.cannotAttackThisTurn = action.cannotAttackThisTurn || false;
   target.owner = player.id;
-  
+
   // Add to field
   player.field.push(target);
 
-  const bounceText = action.bounceSource !== false ? `Returned ${source.name} to hand and ` : "";
+  const bounceText =
+    action.bounceSource !== false ? `Returned ${source.name} to hand and ` : "";
   const positionText = position === "defense" ? "Defense" : "Attack";
-  
+
   game.renderer?.log(
     `${bounceText}Special Summoned ${target.name} in ${positionText} Position.`
   );
@@ -447,7 +476,7 @@ async function bounceAndSummonCard(source, target, player, action, engine) {
 /**
  * Generic handler for special summoning from graveyard
  * Replaces: applyVoidConjurerSelfRevive, applyVoidHollowKingRevive, etc.
- * 
+ *
  * Action properties:
  * - requireSource: boolean (if true, uses ctx.source as the card to revive)
  * - filters: { archetype, name, cardKind }
@@ -456,7 +485,12 @@ async function bounceAndSummonCard(source, target, player, action, engine) {
  * - cannotAttackThisTurn: boolean
  * - banishCost: boolean (if true, banish source as cost)
  */
-export async function handleSpecialSummonFromGraveyard(action, ctx, targets, engine) {
+export async function handleSpecialSummonFromGraveyard(
+  action,
+  ctx,
+  targets,
+  engine
+) {
   const { player, source, destroyed } = ctx;
   const game = engine.game;
 
@@ -479,17 +513,19 @@ export async function handleSpecialSummonFromGraveyard(action, ctx, targets, eng
     const filters = action.filters || {};
     candidateCards = player.graveyard.filter((card) => {
       if (!card) return false;
-      
+
       if (filters.cardKind && card.cardKind !== filters.cardKind) return false;
-      
+
       if (filters.archetype) {
-        const hasArchetype = card.archetype === filters.archetype ||
-          (Array.isArray(card.archetypes) && card.archetypes.includes(filters.archetype));
+        const hasArchetype =
+          card.archetype === filters.archetype ||
+          (Array.isArray(card.archetypes) &&
+            card.archetypes.includes(filters.archetype));
         if (!hasArchetype) return false;
       }
-      
+
       if (filters.name && card.name !== filters.name) return false;
-      
+
       return true;
     });
   }
@@ -510,7 +546,11 @@ export async function handleSpecialSummonFromGraveyard(action, ctx, targets, eng
 
   // Determine how many to summon
   const count = action.count || { min: 1, max: 1 };
-  const maxSelect = Math.min(count.max, candidateCards.length, 5 - player.field.length);
+  const maxSelect = Math.min(
+    count.max,
+    candidateCards.length,
+    5 - player.field.length
+  );
 
   if (maxSelect === 0) {
     game.renderer?.log("Field is full, cannot Special Summon.");
@@ -586,7 +626,7 @@ async function reviveCards(cards, player, action, engine) {
     card.hasAttacked = false;
     card.cannotAttackThisTurn = action.cannotAttackThisTurn || false;
     card.owner = player.id;
-    
+
     // Add to field
     player.field.push(card);
 
@@ -612,13 +652,143 @@ async function reviveCards(cards, player, action, engine) {
 }
 
 /**
+ * Generic handler for banishing resolved targets
+ * Allows cards to banish targets resolved by action definitions
+ */
+export async function handleBanish(action, ctx, targets, engine) {
+  const { player } = ctx;
+  const game = engine.game;
+
+  if (!game) return false;
+
+  const targetRef = action.targetRef;
+  const resolved = targetRef ? targets?.[targetRef] : [];
+
+  if (!Array.isArray(resolved) || resolved.length === 0) {
+    game.renderer?.log("Nenhum alvo válido para banish.");
+    return false;
+  }
+
+  function removeCardFromOwnerZones(owner, card) {
+    const zones = [
+      "hand",
+      "field",
+      "graveyard",
+      "deck",
+      "spellTrap",
+      "fieldSpell",
+      "banished",
+    ];
+    for (const z of zones) {
+      const zoneArr = owner?.[z];
+      if (!Array.isArray(zoneArr)) continue;
+      const idx = zoneArr.findIndex((c) => c === card);
+      if (idx !== -1) {
+        zoneArr.splice(idx, 1);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  let banishedCount = 0;
+  const opponent =
+    player && typeof engine.getOpponent === "function"
+      ? engine.getOpponent(player)
+      : null;
+
+  for (const tgt of resolved) {
+    if (!tgt) continue;
+
+    const fallbackOwner =
+      tgt.ownerPlayer || (tgt.controller === "opponent" ? opponent : player);
+    const ownerPlayer =
+      typeof engine.getOwnerOfCard === "function"
+        ? engine.getOwnerOfCard(tgt)
+        : fallbackOwner;
+
+    if (!ownerPlayer) {
+      game.renderer?.log(`Não foi possível determinar o dono de ${tgt.name}.`);
+      continue;
+    }
+
+    if (action.fromZone && !ownerPlayer[action.fromZone]?.includes(tgt)) {
+      game.renderer?.log(
+        `${tgt.name} não está mais em ${action.fromZone}; não pode ser banida.`
+      );
+      continue;
+    }
+
+    removeCardFromOwnerZones(ownerPlayer, tgt);
+
+    ownerPlayer.banished = ownerPlayer.banished || [];
+    ownerPlayer.banished.push(tgt);
+
+    tgt.location = "banished";
+
+    if (player) {
+      tgt.controller = ownerPlayer === player ? "self" : "opponent";
+    }
+
+    banishedCount += 1;
+    game.renderer?.log(`${tgt.name} foi banida.`);
+  }
+
+  if (banishedCount > 0) {
+    game.updateBoard();
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Generic handler for banishing the monster destroyed in battle
+ * Useful for effects that need to remove whatever was just destroyed.
+ */
+export async function handleBanishDestroyedMonster(
+  action,
+  ctx,
+  targets,
+  engine
+) {
+  const { destroyed } = ctx || {};
+  const game = engine.game;
+
+  if (!destroyed) {
+    game?.renderer?.log("Nenhum monstro destruído disponível para banir.");
+    return false;
+  }
+
+  const targetRef = action.targetRef || "__destroyed_monster_to_banish";
+  const mergedTargets = {
+    ...(targets || {}),
+    [targetRef]: [destroyed],
+  };
+
+  const tempAction = { ...action, targetRef };
+  return await handleBanish(tempAction, ctx, mergedTargets, engine);
+}
+
+/**
  * Initialize default handlers
  * @param {ActionHandlerRegistry} registry
  */
 export function registerDefaultHandlers(registry) {
   // Generic special summon handlers
   registry.register("special_summon_from_deck", handleSpecialSummonFromZone);
-  registry.register("special_summon_from_hand_with_cost", handleSpecialSummonFromHandWithCost);
+  registry.register(
+    "special_summon_from_hand_with_cost",
+    handleSpecialSummonFromHandWithCost
+  );
   registry.register("bounce_and_summon", handleBounceAndSummon);
-  registry.register("special_summon_from_graveyard", handleSpecialSummonFromGraveyard);
+  registry.register(
+    "special_summon_from_graveyard",
+    handleSpecialSummonFromGraveyard
+  );
+  registry.register("banish", handleBanish);
+  registry.register(
+    "banish_destroyed_monster",
+    handleBanishDestroyedMonster
+  );
 }
