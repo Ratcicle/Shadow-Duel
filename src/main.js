@@ -1,9 +1,10 @@
 ﻿import Game from "./core/Game.js";
-import { cardDatabase } from "./data/cards.js";
+import { cardDatabase, cardDatabaseById } from "./data/cards.js";
 
 let game = null;
 const cardKindOrder = { monster: 0, spell: 1, trap: 2 };
-const cardById = new Map(cardDatabase.map((card) => [card.id, card]));
+// Use the imported indexed map instead of creating a new one
+const cardById = cardDatabaseById;
 const MIN_DECK_SIZE = 20;
 const MAX_DECK_SIZE = 30;
 const MAX_EXTRA_DECK_SIZE = 10;
@@ -237,7 +238,7 @@ function renderDeckBuilder() {
     slot.className = "deck-slot";
     const cardId = currentDeck[i];
     if (cardId) {
-      const cardData = cardDatabase.find((c) => c.id === cardId);
+      const cardData = cardDatabaseById.get(cardId);
       if (cardData) {
         const cardEl = createCardThumb(cardData);
         cardEl.onmouseenter = () => setPreview(cardData);
@@ -262,7 +263,7 @@ function renderDeckBuilder() {
     slot.className = "deck-slot";
     const cardId = currentExtraDeck[i];
     if (cardId) {
-      const cardData = cardDatabase.find((c) => c.id === cardId);
+      const cardData = cardDatabaseById.get(cardId);
       if (cardData) {
         const cardEl = createCardThumb(cardData);
         cardEl.onmouseenter = () => setPreview(cardData);
