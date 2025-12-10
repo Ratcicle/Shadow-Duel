@@ -2307,6 +2307,7 @@ export const cardDatabase = [
       {
         id: "void_haunter_special_summon_hand",
         timing: "ignition",
+        requireZone: "hand",
         oncePerTurn: true,
         oncePerTurnName: "void_haunter_special_summon_hand",
         targets: [
@@ -2499,6 +2500,7 @@ export const cardDatabase = [
       {
         id: "void_forgotten_knight_hand_summon",
         timing: "ignition",
+        requireZone: "hand",
         oncePerTurn: true,
         oncePerTurnName: "void_forgotten_knight_hand_summon",
         targets: [
