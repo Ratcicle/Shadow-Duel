@@ -1,5 +1,5 @@
 ﻿import Player from "./Player.js";
-import { cardDatabase } from "../data/cards.js";
+import { cardDatabase, cardDatabaseById } from "../data/cards.js";
 import Card from "./Card.js";
 import LuminarchStrategy from "./ai/LuminarchStrategy.js";
 import ShadowHeartStrategy from "./ai/ShadowHeartStrategy.js";
@@ -40,7 +40,7 @@ export default class Bot extends Player {
         : this.getLuminarchDeck();
 
     for (const cardId of deckList) {
-      const data = cardDatabase.find((c) => c.id === cardId);
+      const data = cardDatabaseById.get(cardId);
       if (data) {
         addCard(data);
       }

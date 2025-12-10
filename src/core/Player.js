@@ -1,4 +1,4 @@
-import { cardDatabase } from "../data/cards.js";
+import { cardDatabase, cardDatabaseById, cardDatabaseByName } from "../data/cards.js";
 import Card from "./Card.js";
 
 export default class Player {
@@ -65,7 +65,7 @@ export default class Player {
 
     if (Array.isArray(deckList) && deckList.length > 0) {
       deckList.slice(0, maxDeckSize).forEach((cardId) => {
-        const data = cardDatabase.find((c) => c.id === cardId);
+        const data = cardDatabaseById.get(cardId);
         if (data) {
           addCard(data);
         }
@@ -95,7 +95,7 @@ export default class Player {
 
     if (extraDeckList && Array.isArray(extraDeckList)) {
       extraDeckList.forEach((cardId) => {
-        const data = cardDatabase.find((c) => c.id === cardId);
+        const data = cardDatabaseById.get(cardId);
         pushFusion(data);
       });
     }
@@ -267,7 +267,7 @@ export default class Player {
       }
     }
 
-    const data = cardDatabase.find((c) => c.name === cardName);
+    const data = cardDatabaseByName.get(cardName);
     if (!data) {
       return null;
     }

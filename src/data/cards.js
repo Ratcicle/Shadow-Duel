@@ -2930,3 +2930,7 @@ export const cardDatabase = [
     ],
   },
 ];
+
+// Performance optimization: Create indexed maps for O(1) lookups
+export const cardDatabaseById = new Map(cardDatabase.map(card => [card.id, card]));
+export const cardDatabaseByName = new Map(cardDatabase.map(card => [card.name, card]));

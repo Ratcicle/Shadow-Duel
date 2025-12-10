@@ -318,6 +318,14 @@ export default class EffectEngine {
     return true;
   }
 
+  // Helper to check if a card belongs to Void archetype
+  isVoidArchetype(card) {
+    if (!card || card.cardKind !== "monster") return false;
+    if (card.archetype === "Void") return true;
+    if (Array.isArray(card.archetypes) && card.archetypes.includes("Void")) return true;
+    return false;
+  }
+
   // Continuous effect: Void Tenebris Horn buff system
   // Note: This could be refactored into a more generic continuous effect handler
   updateVoidTenebrisHornBuffs() {
@@ -326,25 +334,34 @@ export default class EffectEngine {
       ...(this.game.player.field || []),
       ...(this.game.bot.field || []),
     ].filter(Boolean);
-    const voidCount = allFields.filter((card) => {
-      if (!card || card.cardKind !== "monster") return false;
-      if (card.archetype === "Void") return true;
-      if (Array.isArray(card.archetypes)) {
-        return card.archetypes.includes("Void");
+    
+    // Single pass optimization: count voids and find horns in one loop
+    let voidCount = 0;
+    const horns = [];
+    
+    for (const card of allFields) {
+      if (!card || card.cardKind !== "monster") continue;
+      
+      // Check if it's a Void card
+      if (this.isVoidArchetype(card)) {
+        voidCount++;
       }
-      return false;
-    }).length;
+      
+      // Check if it's a Void Tenebris Horn
+      if (card.name === "Void Tenebris Horn") {
+        horns.push(card);
+      }
+    }
+    
     const boostValue = voidCount * 100;
 
     let updated = false;
-    allFields
-      .filter((card) => card?.name === "Void Tenebris Horn")
-      .forEach((horn) => {
-        const refreshed = this.applyVoidTenebrisHornBoost(horn, boostValue);
-        if (refreshed) {
-          updated = true;
-        }
-      });
+    for (const horn of horns) {
+      const refreshed = this.applyVoidTenebrisHornBoost(horn, boostValue);
+      if (refreshed) {
+        updated = true;
+      }
+    }
 
     return updated;
   }

@@ -53,7 +53,8 @@ export default class Renderer {
       player.id === "player" ? this.elements.playerHand : this.elements.botHand;
     if (!container) return;
 
-    container.innerHTML = "";
+    // Batch DOM updates with DocumentFragment to minimize reflows
+    const fragment = document.createDocumentFragment();
 
     player.hand.forEach((card, index) => {
       const cardEl = this.createCardElement(card, player.id === "player");
@@ -67,8 +68,11 @@ export default class Renderer {
         cardEl.style.border = "1px solid #555";
       }
 
-      container.appendChild(cardEl);
+      fragment.appendChild(cardEl);
     });
+    
+    container.innerHTML = "";
+    container.appendChild(fragment);
   }
 
   renderField(player) {
@@ -78,7 +82,8 @@ export default class Renderer {
         : this.elements.botField;
     if (!container) return;
 
-    container.innerHTML = "";
+    // Batch DOM updates with DocumentFragment to minimize reflows
+    const fragment = document.createDocumentFragment();
 
     player.field.forEach((card, index) => {
       const cardEl = this.createCardElement(card, true);
@@ -97,8 +102,11 @@ export default class Renderer {
         cardEl.style.border = "1px solid #555";
       }
 
-      container.appendChild(cardEl);
+      fragment.appendChild(cardEl);
     });
+    
+    container.innerHTML = "";
+    container.appendChild(fragment);
   }
 
   renderSpellTrap(player) {
@@ -108,7 +116,8 @@ export default class Renderer {
         : this.elements.botSpellTrap;
     if (!container) return;
 
-    container.innerHTML = "";
+    // Batch DOM updates with DocumentFragment to minimize reflows
+    const fragment = document.createDocumentFragment();
 
     player.spellTrap.forEach((card, index) => {
       const isVisible = player.id === "player" || !card.isFacedown;
@@ -124,8 +133,11 @@ export default class Renderer {
         cardEl.style.border = "1px solid #555";
       }
 
-      container.appendChild(cardEl);
+      fragment.appendChild(cardEl);
     });
+    
+    container.innerHTML = "";
+    container.appendChild(fragment);
   }
 
   renderFieldSpell(player) {
@@ -873,6 +885,9 @@ export default class Renderer {
       return;
     }
 
+    // Use DocumentFragment to minimize reflows
+    const fragment = document.createDocumentFragment();
+    
     cards.forEach((card, index) => {
       const cardEl = this.createCardElement(card, true);
       if (options.selectable) {
@@ -897,8 +912,10 @@ export default class Renderer {
           cardEl.appendChild(indicator);
         }
       }
-      grid.appendChild(cardEl);
+      fragment.appendChild(cardEl);
     });
+    
+    grid.appendChild(fragment);
   }
 
   updateGYPreview(player) {
@@ -969,10 +986,15 @@ export default class Renderer {
       return;
     }
 
+    // Use DocumentFragment to minimize reflows
+    const fragment = document.createDocumentFragment();
+    
     cards.forEach((card) => {
       const cardEl = this.createCardElement(card, true);
-      grid.appendChild(cardEl);
+      fragment.appendChild(cardEl);
     });
+    
+    grid.appendChild(fragment);
   }
 
   toggleExtraDeckModal(show) {
