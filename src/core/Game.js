@@ -149,11 +149,19 @@ export default class Game {
     activePlayer.field.forEach((card) => {
       card.hasAttacked = false;
       card.attacksUsedThisTurn = 0;
-      card.cannotAttackThisTurn = false;
       card.positionChangedThisTurn = false;
       card.canMakeSecondAttackThisTurn = false;
       card.secondAttackUsedThisTurn = false;
       card.battleIndestructibleOncePerTurnUsed = false;
+
+      const shouldRestrictAttack =
+        card.cannotAttackUntilTurn &&
+        this.turnCounter <= card.cannotAttackUntilTurn;
+      card.cannotAttackThisTurn = shouldRestrictAttack;
+
+      if (!shouldRestrictAttack && card.cannotAttackUntilTurn) {
+        card.cannotAttackUntilTurn = null;
+      }
     });
     activePlayer.summonCount = 0;
 
@@ -366,69 +374,86 @@ export default class Game {
           return;
         }
 
-        this.renderer.showSummonModal(
-          index,
-          (choice) => {
-            if (choice === "special_from_aegisbearer") {
-              this.specialSummonSanctumProtectorFromHand(index);
-              return;
-            }
+          const canUseVoidForgottenHandEffect =
+            card.name === "Void Forgotten Knight" &&
+            this.player.field.some(
+              (fieldCard) =>
+                fieldCard &&
+                fieldCard.cardKind === "monster" &&
+                (fieldCard.archetypes || [fieldCard.archetype]).includes("Void")
+            );
 
-            if (choice === "attack" || choice === "defense") {
-              const position = choice;
-              const isFacedown = choice === "defense";
-
-              if (tributesNeeded > 0) {
-                tributeSelectionMode = true;
-                selectedTributes = [];
-                pendingSummon = {
-                  cardIndex: index,
-                  position,
-                  isFacedown,
-                  tributesNeeded,
-                };
-
-                this.player.field.forEach((_, idx) => {
-                  const fieldCard = document.querySelector(
-                    `#player-field .card[data-index="${idx}"]`
-                  );
-                  if (fieldCard) {
-                    fieldCard.classList.add("tributeable");
-                  }
-                });
-
-                this.renderer.log(
-                  `Select ${tributesNeeded} monster(s) to tribute.`
-                );
-              } else {
-                const before = this.player.field.length;
-                const result = this.player.summon(index, position, isFacedown);
-                if (!result && this.player.field.length === before) {
-                  this.updateBoard();
-                  return;
-                }
-                const summonedCard =
-                  this.player.field[this.player.field.length - 1];
-                summonedCard.summonedTurn = this.turnCounter;
-                summonedCard.positionChangedThisTurn = false;
-                if (summonedCard.isFacedown) {
-                  summonedCard.setTurn = this.turnCounter;
-                } else {
-                  summonedCard.setTurn = null;
-                }
-                this.emit("after_summon", {
-                  card: summonedCard,
-                  player: this.player,
-                  method: "normal",
-                });
-                this.updateBoard();
+          this.renderer.showSummonModal(
+            index,
+            (choice) => {
+              if (choice === "special_from_aegisbearer") {
+                this.specialSummonSanctumProtectorFromHand(index);
+                return;
               }
+
+              if (choice === "special_from_void_forgotten") {
+                this.tryActivateMonsterEffect(card, null, "hand");
+                return;
+              }
+
+              if (choice === "attack" || choice === "defense") {
+                const position = choice;
+                const isFacedown = choice === "defense";
+
+                if (tributesNeeded > 0) {
+                  tributeSelectionMode = true;
+                  selectedTributes = [];
+                  pendingSummon = {
+                    cardIndex: index,
+                    position,
+                    isFacedown,
+                    tributesNeeded,
+                  };
+
+                  this.player.field.forEach((_, idx) => {
+                    const fieldCard = document.querySelector(
+                      `#player-field .card[data-index="${idx}"]`
+                    );
+                    if (fieldCard) {
+                      fieldCard.classList.add("tributeable");
+                    }
+                  });
+
+                  this.renderer.log(
+                    `Select ${tributesNeeded} monster(s) to tribute.`
+                  );
+                } else {
+                  const before = this.player.field.length;
+                  const result = this.player.summon(index, position, isFacedown);
+                  if (!result && this.player.field.length === before) {
+                    this.updateBoard();
+                    return;
+                  }
+                  const summonedCard =
+                    this.player.field[this.player.field.length - 1];
+                  summonedCard.summonedTurn = this.turnCounter;
+                  summonedCard.positionChangedThisTurn = false;
+                  if (summonedCard.isFacedown) {
+                    summonedCard.setTurn = this.turnCounter;
+                  } else {
+                    summonedCard.setTurn = null;
+                  }
+                  this.emit("after_summon", {
+                    card: summonedCard,
+                    player: this.player,
+                    method: "normal",
+                  });
+                  this.updateBoard();
+                }
+              }
+            },
+            {
+              canSanctumSpecialFromAegis,
+              specialSummonFromHand: canUseVoidForgottenHandEffect,
             }
-          },
-          { canSanctumSpecialFromAegis }
-        );
-        return;
-      }
+          );
+          return;
+        }
 
       if (card.cardKind === "spell") {
         if (this.phase !== "main1" && this.phase !== "main2") {
@@ -1261,21 +1286,23 @@ export default class Game {
     this.updateBoard();
   }
 
-  tryActivateMonsterEffect(card, selections = null) {
+  tryActivateMonsterEffect(card, selections = null, activationZone = "field") {
     if (!card) return;
-    console.log(`[Game] tryActivateMonsterEffect called for: ${card.name}`);
+    console.log(
+      `[Game] tryActivateMonsterEffect called for: ${card.name} (zone: ${activationZone})`
+    );
     const result = this.effectEngine.activateMonsterEffect(
       card,
       this.player,
       selections,
-      "field"
+      activationZone
     );
     console.log(`[Game] Monster effect result:`, result);
     this.handleMonsterEffectActivationResult(
       card,
       this.player,
       result,
-      "field"
+      activationZone
     );
   }
 
@@ -2459,11 +2486,13 @@ export default class Game {
       }
     }
 
-    if (fromZone === "field" && card.cardKind === "monster") {
-      card.summonedTurn = null;
-      card.setTurn = null;
-      card.positionChangedThisTurn = false;
-    }
+      if (fromZone === "field" && card.cardKind === "monster") {
+        card.summonedTurn = null;
+        card.setTurn = null;
+        card.positionChangedThisTurn = false;
+        card.cannotAttackThisTurn = false;
+        card.cannotAttackUntilTurn = null;
+      }
 
     // Se um equip spell está saindo da spell/trap zone, limpar seus efeitos no monstro
     if (

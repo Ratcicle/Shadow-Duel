@@ -181,17 +181,30 @@ export default class Renderer {
     content.appendChild(normalBtn);
     content.appendChild(setBtn);
 
-    if (options.canSanctumSpecialFromAegis) {
-      const specialBtn = document.createElement("button");
-      specialBtn.textContent = "Special Summon";
-      content.appendChild(specialBtn);
+      if (options.canSanctumSpecialFromAegis) {
+        const specialBtn = document.createElement("button");
+        specialBtn.textContent = "Special Summon";
+        content.appendChild(specialBtn);
 
-      specialBtn.onclick = (e) => {
-        e.stopPropagation();
-        callback("special_from_aegisbearer");
-        cleanup();
-      };
-    }
+        specialBtn.onclick = (e) => {
+          e.stopPropagation();
+          callback("special_from_aegisbearer");
+          cleanup();
+        };
+      }
+
+      if (options.specialSummonFromHand) {
+        const specialHandBtn = document.createElement("button");
+        specialHandBtn.textContent =
+          options.specialSummonFromHandLabel || "Special Summon";
+        content.appendChild(specialHandBtn);
+
+        specialHandBtn.onclick = (e) => {
+          e.stopPropagation();
+          callback("special_from_void_forgotten");
+          cleanup();
+        };
+      }
 
     modal.appendChild(content);
 
@@ -1359,6 +1372,32 @@ export default class Renderer {
 
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
+  }
+
+  showMultiSelectModal(cards = [], selectionRange = {}, onConfirm) {
+    const {
+      min = 0,
+      max = cards.length,
+      title = "Select Cards",
+      subtitle = "",
+      infoText = "",
+      confirmLabel = "Confirm",
+      cancelLabel = "Cancel",
+      renderCard,
+    } = selectionRange || {};
+
+    this.showCardGridSelectionModal({
+      title,
+      subtitle,
+      cards,
+      minSelect: min,
+      maxSelect: max,
+      infoText,
+      confirmLabel,
+      cancelLabel,
+      renderCard,
+      onConfirm: onConfirm || (() => {}),
+    });
   }
 
   showTrapActivationModal(trapCard, event, eventData = {}) {

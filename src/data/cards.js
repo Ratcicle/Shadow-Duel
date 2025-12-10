@@ -2383,6 +2383,140 @@ export const cardDatabase = [
     ],
   },
   {
+    id: 77,
+    name: "Void Bone Spider",
+    cardKind: "monster",
+    atk: 2200,
+    def: 1400,
+    level: 6,
+    type: "Insect",
+    archetype: "Void",
+    description:
+      "Choose 1 monster your opponent controls; it cannot attack until the end of the next turn. If this card is sent from the field to the Graveyard: Special Summon a 'Void Little Spider' token (Level 1, 500 ATK/DEF).",
+    image: "assets/Void Bone Spider.png",
+    effects: [
+      {
+        id: "void_bone_spider_lock",
+        timing: "ignition",
+        oncePerTurn: true,
+        oncePerTurnName: "void_bone_spider_lock",
+        targets: [
+          {
+            id: "void_bone_spider_lock_target",
+            owner: "opponent",
+            zone: "field",
+            cardKind: "monster",
+            count: { min: 1, max: 1 },
+            requireFaceup: true,
+          },
+        ],
+        actions: [
+          {
+            type: "forbid_attack_next_turn",
+            targetRef: "void_bone_spider_lock_target",
+            turns: 1,
+          },
+        ],
+      },
+      {
+        id: "void_bone_spider_token",
+        timing: "on_event",
+        event: "card_to_grave",
+        fromZone: "field",
+        actions: [
+          {
+            type: "special_summon_token",
+            player: "self",
+            position: "attack",
+            token: {
+              name: "Void Little Spider",
+              atk: 500,
+              def: 500,
+              level: 1,
+              type: "Insect",
+              image: "assets/Void Little Spider.png",
+              description: "A Void token woven from the spider's bone husk.",
+            },
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 78,
+    name: "Void Forgotten Knight",
+    cardKind: "monster",
+    atk: 2000,
+    def: 1000,
+    level: 5,
+    type: "Fiend",
+    archetype: "Void",
+    description:
+      "You can send a 'Void' monster you control to the GY; Special Summon this card from your hand. You can banish this card from your GY; destroy 1 Spell/Trap your opponent controls. You can only use each effect of 'Void Forgotten Knight' once per turn.",
+    image: "assets/Void Forgotten Knight.png",
+    effects: [
+      {
+        id: "void_forgotten_knight_hand_summon",
+        timing: "ignition",
+        oncePerTurn: true,
+        oncePerTurnName: "void_forgotten_knight_hand_summon",
+        targets: [
+          {
+            id: "void_forgotten_knight_cost",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            archetype: "Void",
+            excludeCardName: "Void Forgotten Knight",
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "void_forgotten_knight_special_summon",
+            targetRef: "void_forgotten_knight_cost",
+          },
+        ],
+      },
+      {
+        id: "void_forgotten_knight_gy_destroy",
+        timing: "ignition",
+        requireZone: "graveyard",
+        oncePerTurn: true,
+        oncePerTurnName: "void_forgotten_knight_gy_destroy",
+        targets: [
+          {
+            id: "void_forgotten_knight_gy_self",
+            owner: "self",
+            zone: "graveyard",
+            cardKind: "monster",
+            cardName: "Void Forgotten Knight",
+            count: { min: 1, max: 1 },
+            autoSelect: true,
+          },
+          {
+            id: "void_forgotten_knight_gy_target",
+            owner: "opponent",
+            zones: ["spellTrap", "fieldSpell"],
+            count: { min: 1, max: 1 },
+            requireFaceup: true,
+          },
+        ],
+        actions: [
+          {
+            type: "banish",
+            targetRef: "void_forgotten_knight_gy_self",
+          },
+          {
+            type: "destroy",
+            targetRef: "void_forgotten_knight_gy_target",
+          },
+        ],
+      },
+    ],
+  },
+  {
     id: 200,
     name: "Mirror Force",
     cardKind: "trap",

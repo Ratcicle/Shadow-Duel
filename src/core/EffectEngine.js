@@ -1800,6 +1800,10 @@ export default class EffectEngine {
             executed =
               this.applyForbidAttackThisTurn(action, targets, ctx) || executed;
             break;
+          case "forbid_attack_next_turn":
+            executed =
+              this.applyForbidAttackNextTurn(action, targets, ctx) || executed;
+            break;
           case "darkness_valley_apply_existing":
             executed =
               this.applyDarknessValleyInitialBuff(action, ctx) || executed;
@@ -1917,6 +1921,14 @@ export default class EffectEngine {
           case "void_haunter_gy_effect":
             executed =
               (await this.applyVoidHaunterGYEffect(action, ctx)) || executed;
+            break;
+          case "void_forgotten_knight_special_summon":
+            executed =
+              (await this.applyVoidForgottenKnightSpecialSummon(
+                action,
+                ctx,
+                targets
+              )) || executed;
             break;
           case "void_hollow_king_revive_effect":
             executed =
@@ -2289,6 +2301,38 @@ export default class EffectEngine {
       card.cannotAttackThisTurn = true;
     });
     return targetCards.length > 0;
+  }
+
+  applyForbidAttackNextTurn(action, targets, ctx) {
+    let targetCards = [];
+    if (action.targetRef && targets[action.targetRef]) {
+      targetCards = targets[action.targetRef];
+    } else if (ctx && ctx.source) {
+      targetCards = [ctx.source];
+    }
+
+    if (targetCards.length === 0) {
+      return false;
+    }
+
+    const currentTurn = this.game?.turnCounter ?? 0;
+    const extraTurns = Math.max(
+      1,
+      Math.floor(typeof action.turns === "number" ? action.turns : 1)
+    );
+    const untilTurn = currentTurn + extraTurns;
+
+    targetCards.forEach((card) => {
+      card.cannotAttackThisTurn = true;
+      if (
+        !card.cannotAttackUntilTurn ||
+        card.cannotAttackUntilTurn < untilTurn
+      ) {
+        card.cannotAttackUntilTurn = untilTurn;
+      }
+    });
+
+    return true;
   }
 
   applyDarknessValleyInitialBuff(action, ctx) {
@@ -5490,23 +5534,80 @@ export default class EffectEngine {
       return true;
     }
 
-    const toSummon = voidHollows.slice(0, 2);
+    if (ctx.player.id === "player") {
+      const maxSelect = Math.min(
+        3,
+        voidHollows.length,
+        5 - ctx.player.field.length
+      );
+
+      if (maxSelect === 0) {
+        this.game.renderer.log("Field is full, cannot Special Summon.");
+        return false;
+      }
+
+      return new Promise((resolve) => {
+        this.game.renderer.showMultiSelectModal(
+          voidHollows,
+          { min: 0, max: maxSelect },
+          async (selected) => {
+            if (!selected || selected.length === 0) {
+              this.game.renderer.log("No Void Hollow selected.");
+              resolve(false);
+              return;
+            }
+
+            for (const hollow of selected) {
+              if (ctx.player.field.length >= 5) break;
+
+              const idx = ctx.player.graveyard.indexOf(hollow);
+              if (idx !== -1) {
+                ctx.player.graveyard.splice(idx, 1);
+              }
+
+              const position = await this.chooseSpecialSummonPosition(
+                hollow,
+                ctx.player
+              );
+
+              hollow.position = position;
+              hollow.isFacedown = false;
+              hollow.hasAttacked = false;
+              hollow.cannotAttackThisTurn = false;
+              hollow.owner = ctx.player.id;
+              ctx.player.field.push(hollow);
+
+              this.game.emit("after_summon", {
+                card: hollow,
+                player: ctx.player,
+                method: "special",
+              });
+            }
+
+            this.game.renderer.log(
+              `Special Summoned ${selected.length} Void Hollow from Graveyard.`
+            );
+            this.game.updateBoard();
+            resolve(true);
+          }
+        );
+      });
+    }
+
+    const toSummon = voidHollows.slice(
+      0,
+      Math.min(3, 5 - ctx.player.field.length)
+    );
     let summoned = 0;
 
     for (const hollow of toSummon) {
-      if (ctx.player.field.length >= 5) {
-        break;
-      }
+      if (ctx.player.field.length >= 5) break;
 
-      // Remove from GY
       const idx = ctx.player.graveyard.indexOf(hollow);
       if (idx !== -1) {
         ctx.player.graveyard.splice(idx, 1);
       }
 
-      // Set ATK/DEF to 0
-      hollow.tempAtkBoost = -(hollow.atk || 0);
-      hollow.tempDefBoost = -(hollow.def || 0);
       hollow.position = "attack";
       hollow.isFacedown = false;
       hollow.hasAttacked = false;
@@ -5523,11 +5624,67 @@ export default class EffectEngine {
       summoned++;
     }
 
-    this.game.renderer.log(
-      `Special Summoned ${summoned} Void Hollow from Graveyard with 0 ATK/DEF.`
-    );
-    this.game.updateBoard();
+    if (summoned > 0) {
+      this.game.renderer.log(
+        `${ctx.player.name} Special Summoned ${summoned} Void Hollow from Graveyard.`
+      );
+      this.game.updateBoard();
+    }
+
     return summoned > 0;
+  }
+
+  async applyVoidForgottenKnightSpecialSummon(action, ctx, targets) {
+    if (!ctx.player || !this.game) return false;
+
+    const costTargets = targets[action.targetRef];
+    if (!Array.isArray(costTargets) || costTargets.length === 0) {
+      this.game.renderer.log("No Void monster selected as cost.");
+      return false;
+    }
+
+    const costCard = costTargets[0];
+    const fieldIndex = ctx.player.field.indexOf(costCard);
+    if (fieldIndex !== -1) {
+      ctx.player.field.splice(fieldIndex, 1);
+      ctx.player.graveyard.push(costCard);
+    }
+
+    const knight = ctx.source;
+    if (!knight || !ctx.player.hand.includes(knight)) {
+      this.game.renderer.log("Void Forgotten Knight not in hand.");
+      return false;
+    }
+
+    if (ctx.player.field.length >= 5) {
+      this.game.renderer.log("Field is full.");
+      return false;
+    }
+
+    const handIndex = ctx.player.hand.indexOf(knight);
+    if (handIndex !== -1) {
+      ctx.player.hand.splice(handIndex, 1);
+    }
+
+    knight.position = "attack";
+    knight.isFacedown = false;
+    knight.hasAttacked = false;
+    knight.cannotAttackThisTurn = false;
+    knight.owner = ctx.player.id;
+    ctx.player.field.push(knight);
+
+    this.game.renderer.log(
+      `${ctx.player.name} Special Summoned ${knight.name} from hand.`
+    );
+
+    this.game.emit("after_summon", {
+      card: knight,
+      player: ctx.player,
+      method: "special",
+    });
+
+    this.game.updateBoard();
+    return true;
   }
 
   async applyVoidHollowKingRevive(action, ctx) {
