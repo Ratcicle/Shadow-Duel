@@ -1518,15 +1518,9 @@ export default class EffectEngine {
     }
 
     if (targetResult.ok === false) {
-      console.log(`[activateMonsterEffect] Target resolution failed:`, targetResult.reason);
       return { success: false, reason: targetResult.reason };
     }
 
-    console.log(`[activateMonsterEffect] Applying actions for ${card.name}:`, {
-      actionsCount: effect.actions?.length,
-      actions: effect.actions,
-      targets: targetResult.targets,
-    });
     this.applyActions(effect.actions || [], ctx, targetResult.targets || {});
     this.registerOncePerTurnUsage(card, player, effect);
     this.registerOncePerDuelUsage(card, player, effect);
@@ -1582,38 +1576,24 @@ export default class EffectEngine {
   }
 
   resolveTargets(targetDefs, ctx, selections) {
-    console.log("[resolveTargets] Called with:", {
-      targetDefsCount: targetDefs?.length,
-      targetDefs,
-      selectionsKeys: selections ? Object.keys(selections) : null,
-      selections,
-    });
-    
     const targetMap = {};
     const options = [];
     let needsSelection = false;
 
     for (const def of targetDefs) {
-      console.log(`[resolveTargets] Processing target def: ${def.id}`);
       const { zoneName, candidates } = this.selectCandidates(def, ctx);
       const min = Number(def.count?.min ?? 1);
       const max = Number(def.count?.max ?? min);
 
-      console.log(`[resolveTargets] Target ${def.id}: found ${candidates.length} candidates, need ${min}-${max}`);
-
       if (candidates.length < min) {
-        console.log(`[resolveTargets] Not enough candidates for ${def.id}`);
         return { ok: false, reason: "No valid targets for this effect." };
       }
 
       const provided = selections?.[def.id];
-      console.log(`[resolveTargets] Provided selections for ${def.id}:`, provided);
-      
       if (provided && provided.length >= min && provided.length <= max) {
         const chosen = provided
           .map((idx) => candidates[idx])
           .filter((c) => c !== undefined);
-        console.log(`[resolveTargets] Using provided selections for ${def.id}:`, chosen.map(c => c.name));
         if (chosen.length >= min && chosen.length <= max) {
           targetMap[def.id] = chosen;
           continue;
@@ -1626,18 +1606,15 @@ export default class EffectEngine {
       const shouldAutoSelect = def.autoSelect || !!def.strategy;
       if (shouldAutoSelect) {
         const takeCount = Math.min(max, candidates.length);
-        console.log(`[resolveTargets] Auto-selecting ${takeCount} targets for ${def.id}`);
         targetMap[def.id] = candidates.slice(0, takeCount);
         continue;
       }
 
       if (candidates.length === 1 && min === 1) {
-        console.log(`[resolveTargets] Only one candidate for ${def.id}, auto-selecting`);
         targetMap[def.id] = [candidates[0]];
         continue;
       }
 
-      console.log(`[resolveTargets] Needs user selection for ${def.id}`);
       needsSelection = true;
       const decoratedCandidates = candidates.map((card, idx) => {
         const controller = card.owner;
@@ -1679,11 +1656,9 @@ export default class EffectEngine {
     }
 
     if (needsSelection) {
-      console.log("[resolveTargets] Returning needsSelection with options:", options);
       return { needsSelection: true, options };
     }
 
-    console.log("[resolveTargets] All targets resolved:", targetMap);
     return { ok: true, targets: targetMap };
   }
 
@@ -1976,18 +1951,11 @@ export default class EffectEngine {
           continue;
         }
 
-        console.log(`[applyActions] Processing action type: ${action.type}`, {
-          action,
-          targetsKeys: Object.keys(targets),
-        });
-
         // Check if there's a registered handler for this action type
         const handler = this.actionHandlers.get(action.type);
         if (handler) {
-          console.log(`[applyActions] Found handler for ${action.type}`);
           try {
             const result = await handler(action, ctx, targets, this);
-            console.log(`[applyActions] Handler result for ${action.type}:`, result);
             executed = result || executed;
             continue; // Skip to next action
           } catch (error) {
@@ -2005,8 +1973,6 @@ export default class EffectEngine {
               `Falling back to legacy switch statement for action type "${action.type}"`
             );
           }
-        } else {
-          console.log(`[applyActions] No handler found for ${action.type}, trying legacy switch`);
         }
 
         switch (action.type) {

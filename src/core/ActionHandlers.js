@@ -247,70 +247,40 @@ export async function handleSpecialSummonFromHandWithCost(
   const { player, source } = ctx;
   const game = engine.game;
 
-  console.log("[handleSpecialSummonFromHandWithCost] Called with:", {
-    source: source?.name,
-    costTargetRef: action.costTargetRef,
-    targetsKeys: Object.keys(targets),
-    targets: targets,
-  });
-
   if (!player || !source || !game) {
-    console.log("[handleSpecialSummonFromHandWithCost] Missing player, source, or game");
+    console.error("[handleSpecialSummonFromHandWithCost] Missing required context:", {
+      hasPlayer: !!player,
+      hasSource: !!source,
+      hasGame: !!game,
+    });
     return false;
   }
 
   // Validate cost was paid
   const costTargets = targets[action.costTargetRef];
-  console.log("[handleSpecialSummonFromHandWithCost] Cost targets:", {
-    costTargetRef: action.costTargetRef,
-    costTargets: costTargets,
-    costTargetsLength: costTargets?.length,
-  });
-  
   if (!costTargets || costTargets.length === 0) {
-    console.log("[handleSpecialSummonFromHandWithCost] No cost targets found!");
     game.renderer?.log("No cost paid for special summon.");
     return false;
   }
 
   // Move cost cards to graveyard
-  console.log("[handleSpecialSummonFromHandWithCost] Moving cost cards to GY:", costTargets.map(c => c.name));
   for (const costCard of costTargets) {
     const fieldIndex = player.field.indexOf(costCard);
     if (fieldIndex !== -1) {
       player.field.splice(fieldIndex, 1);
       player.graveyard.push(costCard);
-      console.log(`[handleSpecialSummonFromHandWithCost] Moved ${costCard.name} to GY`);
-    } else {
-      console.log(`[handleSpecialSummonFromHandWithCost] WARNING: ${costCard.name} not found in field!`);
     }
   }
 
   // Check if source is in hand
-  console.log("[handleSpecialSummonFromHandWithCost] Checking if source is in hand:", {
-    sourceName: source.name,
-    sourceId: source.id,
-    inHand: player.hand.includes(source),
-    handSize: player.hand.length,
-    handCardNames: player.hand.map(c => c.name),
-    handCardIds: player.hand.map(c => c.id),
-    sourceReference: source,
-  });
   if (!player.hand.includes(source)) {
-    console.log("[handleSpecialSummonFromHandWithCost] Source not in hand!");
-    console.log("[handleSpecialSummonFromHandWithCost] Checking if any card in hand matches by ID:");
-    const matchById = player.hand.find(c => c.id === source.id);
-    if (matchById) {
-      console.log("[handleSpecialSummonFromHandWithCost] Found card with same ID but different reference!:", matchById);
-      console.log("[handleSpecialSummonFromHandWithCost] This suggests a card cloning issue.");
-    }
+    console.warn("[handleSpecialSummonFromHandWithCost] Card not found in hand:", source.name);
     game.renderer?.log("Card not in hand.");
     return false;
   }
 
   // Check field space
   if (player.field.length >= 5) {
-    console.log("[handleSpecialSummonFromHandWithCost] Field is full!");
     game.renderer?.log("Field is full.");
     return false;
   }
@@ -319,7 +289,6 @@ export async function handleSpecialSummonFromHandWithCost(
   const handIndex = player.hand.indexOf(source);
   if (handIndex !== -1) {
     player.hand.splice(handIndex, 1);
-    console.log(`[handleSpecialSummonFromHandWithCost] Removed ${source.name} from hand`);
   }
 
   // Determine position
@@ -327,7 +296,6 @@ export async function handleSpecialSummonFromHandWithCost(
   if (position === "choice") {
     position = await engine.chooseSpecialSummonPosition(source, player);
   }
-  console.log(`[handleSpecialSummonFromHandWithCost] Position: ${position}`);
 
   // Set card properties
   source.position = position;
@@ -338,7 +306,6 @@ export async function handleSpecialSummonFromHandWithCost(
 
   // Add to field
   player.field.push(source);
-  console.log(`[handleSpecialSummonFromHandWithCost] Added ${source.name} to field`);
 
   game.renderer?.log(
     `${player.name || player.id} Special Summoned ${source.name} from hand.`
@@ -352,7 +319,6 @@ export async function handleSpecialSummonFromHandWithCost(
   });
 
   game.updateBoard();
-  console.log("[handleSpecialSummonFromHandWithCost] Success!");
   return true;
 }
 
