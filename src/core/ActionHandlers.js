@@ -45,11 +45,14 @@ export class ActionHandlerRegistry {
 }
 
 /**
- * Generic handler for special summoning from deck with filters
+ * Generic handler for special summoning from any zone with filters
  * Replaces: applyVoidConjurerSummonFromDeck, applyVoidHollowSummonFromDeck, etc.
  * 
+ * NOTE: Despite the registered name "special_summon_from_deck", this handler
+ * works with ANY zone (deck, hand, graveyard) by specifying the zone property.
+ * 
  * Action properties:
- * - zone: "deck" (source zone)
+ * - zone: "deck" | "hand" | "graveyard" | "banished" (default: "deck")
  * - filters: { archetype, name, level, levelOp, cardKind }
  * - position: "attack" | "defense" | "choice" (default: "choice")
  * - cannotAttackThisTurn: boolean
@@ -106,8 +109,8 @@ export async function handleSpecialSummonFromZone(action, ctx, targets, engine) 
       if (op === "gt" && cardLevel <= filters.level) return false;
     }
     
-    // Exclude source card if it's in the same zone
-    if (source && card === source) return false;
+    // Exclude source card if specified in filters
+    if (filters.excludeSelf && source && card === source) return false;
     
     return true;
   });
@@ -527,6 +530,14 @@ export async function handleSpecialSummonFromGraveyard(action, ctx, targets, eng
   }
 
   // Player: show selection modal
+  if (!game.renderer?.showMultiSelectModal) {
+    // Fallback: auto-select best cards if no modal available
+    const toSummon = candidateCards
+      .sort((a, b) => (b.atk || 0) - (a.atk || 0))
+      .slice(0, maxSelect);
+    return await reviveCards(toSummon, player, action, engine);
+  }
+
   return new Promise((resolve) => {
     game.renderer.showMultiSelectModal(
       candidateCards,

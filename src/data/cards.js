@@ -2649,8 +2649,9 @@ export const cardDatabase = [
             to: "graveyard",
           },
           {
+            // Uses special_summon_from_deck handler which supports any zone
             type: "special_summon_from_deck",
-            zone: "hand",
+            zone: "hand",  // Source zone is hand (summon itself)
             filters: {
               name: "Void Slayer Brute",
             },

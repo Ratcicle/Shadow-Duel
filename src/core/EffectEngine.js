@@ -1915,8 +1915,11 @@ export default class EffectEngine {
             executed = result || executed;
             continue; // Skip to next action
           } catch (error) {
-            console.error(`Error in action handler for ${action.type}:`, error);
+            console.error(`Error executing registered handler for action type "${action.type}":`, error);
+            console.error(`Action config:`, action);
+            console.error(`Context:`, { player: ctx.player?.id, source: ctx.source?.name });
             // Fall through to legacy switch statement as fallback
+            console.warn(`Falling back to legacy switch statement for action type "${action.type}"`);
           }
         }
         
