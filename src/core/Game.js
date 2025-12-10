@@ -2161,7 +2161,9 @@ export default class Game {
               sourceCard: attacker,
             })) || {};
           if (!replaced) {
-            this.moveCard(target, defender, "graveyard");
+            this.moveCard(target, defender, "graveyard", {
+              reason: "battle",
+            });
             this.applyBattleDestroyEffect(attacker, target);
           }
         }
@@ -2178,7 +2180,9 @@ export default class Game {
               sourceCard: target,
             })) || {};
           if (!replaced) {
-            this.moveCard(attacker, attPlayer, "graveyard");
+            this.moveCard(attacker, attPlayer, "graveyard", {
+              reason: "battle",
+            });
             this.applyBattleDestroyEffect(attacker, attacker);
           }
         }
@@ -2194,7 +2198,9 @@ export default class Game {
               sourceCard: target,
             })) || {};
           if (!replaced) {
-            this.moveCard(attacker, attPlayer, "graveyard");
+            this.moveCard(attacker, attPlayer, "graveyard", {
+              reason: "battle",
+            });
             this.applyBattleDestroyEffect(attacker, attacker);
           }
         }
@@ -2207,7 +2213,9 @@ export default class Game {
               sourceCard: attacker,
             })) || {};
           if (!replaced) {
-            this.moveCard(target, defPlayer, "graveyard");
+            this.moveCard(target, defPlayer, "graveyard", {
+              reason: "battle",
+            });
             this.applyBattleDestroyEffect(attacker, target);
           }
         }
@@ -2227,7 +2235,9 @@ export default class Game {
               sourceCard: attacker,
             })) || {};
           if (!replaced) {
-            this.moveCard(target, defender, "graveyard");
+            this.moveCard(target, defender, "graveyard", {
+              reason: "battle",
+            });
             this.applyBattleDestroyEffect(attacker, target);
           }
         }
@@ -2722,6 +2732,7 @@ export default class Game {
         card,
         fromZone: fromZone || options.fromZone || null,
         toZone: "graveyard",
+        reason: options.reason || null,
         player: ownerPlayer,
         opponent: otherPlayer,
       });

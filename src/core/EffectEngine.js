@@ -773,6 +773,7 @@ export default class EffectEngine {
 
   handleCardToGraveEvent(payload) {
     const { card, player, opponent, fromZone, toZone } = payload || {};
+    const reason = payload?.reason || null;
     if (!card || !player) return;
     if (!card.effects || !Array.isArray(card.effects)) return;
 
@@ -789,6 +790,7 @@ export default class EffectEngine {
       opponent,
       fromZone,
       toZone,
+      reason,
     };
 
     for (const effect of card.effects) {
@@ -836,6 +838,26 @@ export default class EffectEngine {
           `[handleCardToGraveEvent] Skipping: fromZone mismatch (${effect.fromZone} !== ${fromZone})`
         );
         continue;
+      }
+
+      if (effect.destroyedBy) {
+        const allowedReasons = Array.isArray(effect.destroyedBy)
+          ? effect.destroyedBy
+          : [effect.destroyedBy];
+        const normalizedAllowed = allowedReasons
+          .filter(Boolean)
+          .map((r) => `${r}`.toLowerCase());
+        const normalizedReason = reason ? `${reason}`.toLowerCase() : "";
+
+        if (
+          normalizedAllowed.length > 0 &&
+          (!normalizedReason || !normalizedAllowed.includes(normalizedReason))
+        ) {
+          console.log(
+            `[handleCardToGraveEvent] Skipping: destroyedBy mismatch (reason="${normalizedReason}")`
+          );
+          continue;
+        }
       }
 
       console.log(
@@ -2298,7 +2320,7 @@ export default class EffectEngine {
       if (replaced) continue;
 
       if (this.game && typeof this.game.moveCard === "function") {
-        this.game.moveCard(card, owner, "graveyard");
+        this.game.moveCard(card, owner, "graveyard", { reason: "effect" });
         destroyedAny = true;
         if (typeof this.game.updateBoard === "function") {
           this.game.updateBoard();
@@ -2501,7 +2523,7 @@ export default class EffectEngine {
       // Move card to graveyard
       let moved = false;
       if (this.game && typeof this.game.moveCard === "function") {
-        this.game.moveCard(card, player, "graveyard");
+        this.game.moveCard(card, player, "graveyard", { reason: "effect" });
         moved = true;
       } else {
         const idx = player.field.indexOf(card);
@@ -2843,6 +2865,7 @@ export default class EffectEngine {
 
     this.game.moveCard(attacker, attackerOwner, "graveyard", {
       fromZone: "field",
+      reason: "effect",
     });
     return true;
   }
@@ -5482,7 +5505,9 @@ export default class EffectEngine {
             this.game.renderer.log(
               `${ctx.source.name} destroyed ${target.name}!`
             );
-            this.game.moveCard(target, opponent, "graveyard");
+            this.game.moveCard(target, opponent, "graveyard", {
+              reason: "effect",
+            });
           });
 
           this.game.updateBoard();
@@ -5702,7 +5727,10 @@ export default class EffectEngine {
         })) || {};
 
       if (!replaced) {
-        game.moveCard(monster, opponent, "graveyard", { fromZone: "field" });
+        game.moveCard(monster, opponent, "graveyard", {
+          fromZone: "field",
+          reason: "effect",
+        });
       }
     }
 

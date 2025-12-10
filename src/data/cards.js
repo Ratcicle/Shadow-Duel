@@ -2301,7 +2301,7 @@ export const cardDatabase = [
     type: "Fiend",
     archetype: "Void",
     description:
-      "You can send 1 'Void Hollow' from your field to your GY; Special Summon this card from your hand. You can banish this card from your GY, then target up to 2 'Void Hollow' in your GY; Special Summon those targets, but their ATK/DEF become 0. You can only use each effect of 'Void Haunter' once per turn.",
+      "You can special summon this card from your hand by sending 1 'Void Hollow' from your field to your GY. You can banish this card from your GY, then target up to 2 'Void Hollow' in your GY; Special Summon those targets, but their ATK/DEF become 0. You can only use each effect of 'Void Haunter' once per turn.",
     image: "assets/Void Haunter.png",
     effects: [
       {
@@ -2405,7 +2405,7 @@ export const cardDatabase = [
     type: "Fiend",
     archetype: "Void",
     description:
-      "3 'Void Hollow' monsters. If this card is destroyed by battle or card effect: You can Special Summon up to 3 'Void Hollow' from your GY.",
+      "3 'Void Hollow' monsters. If this card is destroyed by battle or card effect: You can target up to 3 'Void Hollow' in your GY; Special Summon those targets.",
     image: "assets/Void Hollow King.png",
     monsterType: "fusion",
     fusionMaterials: [{ name: "Void Hollow", count: 3 }],
@@ -2415,6 +2415,8 @@ export const cardDatabase = [
         timing: "on_event",
         event: "card_to_grave",
         requireSelfAsDestroyed: true,
+        fromZone: "field",
+        destroyedBy: ["battle", "effect"],
         actions: [
           {
             type: "void_hollow_king_revive_effect",
@@ -2437,7 +2439,7 @@ export const cardDatabase = [
     image: "assets/Void Bone Spider.png",
     effects: [
       {
-        id: "void_bone_spider_lock",
+        id: "voidp_bone_spider_lock",
         timing: "ignition",
         oncePerTurn: true,
         oncePerTurnName: "void_bone_spider_lock",
@@ -2493,7 +2495,7 @@ export const cardDatabase = [
     type: "Fiend",
     archetype: "Void",
     description:
-      "You can send a 'Void' monster you control to the GY; Special Summon this card from your hand. You can banish this card from your GY; destroy 1 Spell/Trap your opponent controls. You can only use each effect of 'Void Forgotten Knight' once per turn.",
+      "You can special summon this card from your hand by sending a 'Void' monster you control to the GY. You can banish this card from your GY; destroy 1 Spell/Trap your opponent controls. You can only use each effect of 'Void Forgotten Knight' once per turn.",
     image: "assets/Void Forgotten Knight.png",
     effects: [
       {
@@ -2623,7 +2625,7 @@ export const cardDatabase = [
     type: "Fiend",
     archetype: "Void",
     description:
-      "Pode ser Invocado por Invocação-Especial da mão ao enviar 2 monstros 'Void' que você controla para o Cemitério. Se destruir um monstro do oponente em batalha: bana esse monstro.",
+      "Pode ser Invocado por Invocação-Especial da mão ao enviar 2 monstros 'Void' que você controla para o Cemitério. Se destruir um monstro do oponente em batalha: bana o monstro destruído.",
     image: "assets/Void Slayer Brute.png",
     effects: [
       {
@@ -2698,7 +2700,7 @@ export const cardDatabase = [
     type: "Fiend",
     archetype: "Void",
     description:
-      "Ganha 100 ATK/DEF para cada carta 'Void' no campo. Uma vez por duelo, se esta carta estiver no seu Cemitério, você pode Invocá-la por Invocação-Especial.",
+      "Ganha 100 ATK/DEF para cada monstro 'Void' no campo. Uma vez por duelo, se esta carta estiver no seu Cemitério, você pode Invocá-la por Invocação-Especial.",
     image: "assets/Void Tenebris Horn.png",
     effects: [
       {
