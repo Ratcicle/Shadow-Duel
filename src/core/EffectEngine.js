@@ -8,7 +8,7 @@ import {
 export default class EffectEngine {
   constructor(game) {
     this.game = game;
-    
+
     // Initialize action handler registry
     this.actionHandlers = new ActionHandlerRegistry();
     registerDefaultHandlers(this.actionHandlers);
@@ -698,7 +698,7 @@ export default class EffectEngine {
             effect.speed === 2 && effect.promptOnAttackDeclared !== false;
           if (player.id === "player" && shouldPrompt) {
             let wantsToUse = true;
-            
+
             // Use custom prompt if renderer provides one for this effect
             const customPromptMethod = effect.customPromptMethod;
             if (
@@ -1444,11 +1444,39 @@ export default class EffectEngine {
       };
     }
 
-    const effect = (card.effects || []).find(
-      (e) => e && e.timing === "ignition"
-    );
+    // Verify card is in the correct zone
+    if (activationZone === "hand") {
+      if (!player.hand || !player.hand.includes(card)) {
+        return { success: false, reason: "Card is not in your hand." };
+      }
+    } else if (activationZone === "field") {
+      if (!player.field || !player.field.includes(card)) {
+        return { success: false, reason: "Card is not on the field." };
+      }
+    }
+
+    // Find effect that matches activation zone
+    let effect = null;
+    if (activationZone === "hand") {
+      // For hand effects, look for ignition effects with requireZone: "hand"
+      effect = (card.effects || []).find(
+        (e) => e && e.timing === "ignition" && e.requireZone === "hand"
+      );
+    } else {
+      // For field effects, look for ignition effects without requireZone (or with requireZone: "field")
+      effect = (card.effects || []).find(
+        (e) =>
+          e &&
+          e.timing === "ignition" &&
+          (!e.requireZone || e.requireZone === "field")
+      );
+    }
+
     if (!effect) {
-      return { success: false, reason: "No ignition effect defined." };
+      return {
+        success: false,
+        reason: "No ignition effect defined for this zone.",
+      };
     }
 
     const ctx = {
@@ -1905,7 +1933,7 @@ export default class EffectEngine {
         if (this.shouldSkipActionDueToImmunity(action, targets, ctx)) {
           continue;
         }
-        
+
         // Check if there's a registered handler for this action type
         const handler = this.actionHandlers.get(action.type);
         if (handler) {
@@ -1914,14 +1942,22 @@ export default class EffectEngine {
             executed = result || executed;
             continue; // Skip to next action
           } catch (error) {
-            console.error(`Error executing registered handler for action type "${action.type}":`, error);
+            console.error(
+              `Error executing registered handler for action type "${action.type}":`,
+              error
+            );
             console.error(`Action config:`, action);
-            console.error(`Context:`, { player: ctx.player?.id, source: ctx.source?.name });
+            console.error(`Context:`, {
+              player: ctx.player?.id,
+              source: ctx.source?.name,
+            });
             // Fall through to legacy switch statement as fallback
-            console.warn(`Falling back to legacy switch statement for action type "${action.type}"`);
+            console.warn(
+              `Falling back to legacy switch statement for action type "${action.type}"`
+            );
           }
         }
-        
+
         switch (action.type) {
           case "draw":
             executed = this.applyDraw(action, ctx) || executed;
@@ -2522,7 +2558,11 @@ export default class EffectEngine {
       player.draw();
     }
 
-    if (destroyedCount > 0 && this.game && typeof this.game.updateBoard === "function") {
+    if (
+      destroyedCount > 0 &&
+      this.game &&
+      typeof this.game.updateBoard === "function"
+    ) {
       this.game.updateBoard();
     }
 

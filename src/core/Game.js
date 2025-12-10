@@ -380,86 +380,134 @@ export default class Game {
           return;
         }
 
-          const canUseVoidForgottenHandEffect =
-            card.name === "Void Forgotten Knight" &&
-            this.player.field.some(
-              (fieldCard) =>
-                fieldCard &&
-                fieldCard.cardKind === "monster" &&
-                (fieldCard.archetypes || [fieldCard.archetype]).includes("Void")
+        const canUseVoidForgottenHandEffect =
+          card.name === "Void Forgotten Knight" &&
+          this.player.field.some(
+            (fieldCard) =>
+              fieldCard &&
+              fieldCard.cardKind === "monster" &&
+              (fieldCard.archetypes || [fieldCard.archetype]).includes("Void")
+          );
+
+        // Check if card has a hand effect (requireZone: "hand")
+        const hasHandEffect = (card.effects || []).some(
+          (e) => e && e.timing === "ignition" && e.requireZone === "hand"
+        );
+
+        // For hand effects, verify conditions are met
+        let canUseHandEffect = false;
+        let handEffectLabel = "Special Summon";
+        if (hasHandEffect) {
+          // Try to check if the effect can be activated (verify targets exist)
+          const effect = card.effects.find(
+            (e) => e && e.timing === "ignition" && e.requireZone === "hand"
+          );
+
+          if (effect && effect.targets) {
+            // Simple check: if effect needs Void monsters, verify they exist
+            const needsVoid = effect.targets.some(
+              (t) => t.archetype === "Void"
             );
 
-          this.renderer.showSummonModal(
-            index,
-            (choice) => {
-              if (choice === "special_from_aegisbearer") {
-                this.specialSummonSanctumProtectorFromHand(index);
-                return;
-              }
+            if (needsVoid) {
+              const voidMonstersCount = this.player.field.filter(
+                (c) =>
+                  c &&
+                  c.cardKind === "monster" &&
+                  !c.isFacedown &&
+                  (c.archetype === "Void" ||
+                    (Array.isArray(c.archetypes) &&
+                      c.archetypes.includes("Void")))
+              ).length;
 
-              if (choice === "special_from_void_forgotten") {
-                this.tryActivateMonsterEffect(card, null, "hand");
-                return;
-              }
-
-              if (choice === "attack" || choice === "defense") {
-                const position = choice;
-                const isFacedown = choice === "defense";
-
-                if (tributesNeeded > 0) {
-                  tributeSelectionMode = true;
-                  selectedTributes = [];
-                  pendingSummon = {
-                    cardIndex: index,
-                    position,
-                    isFacedown,
-                    tributesNeeded,
-                  };
-
-                  this.player.field.forEach((_, idx) => {
-                    const fieldCard = document.querySelector(
-                      `#player-field .card[data-index="${idx}"]`
-                    );
-                    if (fieldCard) {
-                      fieldCard.classList.add("tributeable");
-                    }
-                  });
-
-                  this.renderer.log(
-                    `Select ${tributesNeeded} monster(s) to tribute.`
-                  );
-                } else {
-                  const before = this.player.field.length;
-                  const result = this.player.summon(index, position, isFacedown);
-                  if (!result && this.player.field.length === before) {
-                    this.updateBoard();
-                    return;
-                  }
-                  const summonedCard =
-                    this.player.field[this.player.field.length - 1];
-                  summonedCard.summonedTurn = this.turnCounter;
-                  summonedCard.positionChangedThisTurn = false;
-                  if (summonedCard.isFacedown) {
-                    summonedCard.setTurn = this.turnCounter;
-                  } else {
-                    summonedCard.setTurn = null;
-                  }
-                  this.emit("after_summon", {
-                    card: summonedCard,
-                    player: this.player,
-                    method: "normal",
-                  });
-                  this.updateBoard();
-                }
-              }
-            },
-            {
-              canSanctumSpecialFromAegis,
-              specialSummonFromHand: canUseVoidForgottenHandEffect,
+              canUseHandEffect = voidMonstersCount >= 2;
+              handEffectLabel = `Special Summon (${voidMonstersCount}/2 Void)`;
+            } else {
+              canUseHandEffect = true;
             }
-          );
-          return;
+          } else {
+            canUseHandEffect = true;
+          }
         }
+
+        this.renderer.showSummonModal(
+          index,
+          (choice) => {
+            if (choice === "special_from_aegisbearer") {
+              this.specialSummonSanctumProtectorFromHand(index);
+              return;
+            }
+
+            if (choice === "special_from_void_forgotten") {
+              this.tryActivateMonsterEffect(card, null, "hand");
+              return;
+            }
+
+            if (choice === "special_from_hand_effect") {
+              console.log("[Game] Activating hand effect for:", card.name);
+              this.tryActivateMonsterEffect(card, null, "hand");
+              return;
+            }
+            if (choice === "attack" || choice === "defense") {
+              const position = choice;
+              const isFacedown = choice === "defense";
+
+              if (tributesNeeded > 0) {
+                tributeSelectionMode = true;
+                selectedTributes = [];
+                pendingSummon = {
+                  cardIndex: index,
+                  position,
+                  isFacedown,
+                  tributesNeeded,
+                };
+
+                this.player.field.forEach((_, idx) => {
+                  const fieldCard = document.querySelector(
+                    `#player-field .card[data-index="${idx}"]`
+                  );
+                  if (fieldCard) {
+                    fieldCard.classList.add("tributeable");
+                  }
+                });
+
+                this.renderer.log(
+                  `Select ${tributesNeeded} monster(s) to tribute.`
+                );
+              } else {
+                const before = this.player.field.length;
+                const result = this.player.summon(index, position, isFacedown);
+                if (!result && this.player.field.length === before) {
+                  this.updateBoard();
+                  return;
+                }
+                const summonedCard =
+                  this.player.field[this.player.field.length - 1];
+                summonedCard.summonedTurn = this.turnCounter;
+                summonedCard.positionChangedThisTurn = false;
+                if (summonedCard.isFacedown) {
+                  summonedCard.setTurn = this.turnCounter;
+                } else {
+                  summonedCard.setTurn = null;
+                }
+                this.emit("after_summon", {
+                  card: summonedCard,
+                  player: this.player,
+                  method: "normal",
+                });
+                this.updateBoard();
+              }
+            }
+          },
+          {
+            canSanctumSpecialFromAegis,
+            specialSummonFromHand: canUseVoidForgottenHandEffect,
+            specialSummonFromHandEffect: canUseHandEffect,
+            specialSummonFromHandEffectLabel: handEffectLabel,
+          }
+        );
+        return;
+      }
 
       if (card.cardKind === "spell") {
         if (this.phase !== "main1" && this.phase !== "main2") {
@@ -1372,6 +1420,7 @@ export default class Game {
       activationZone,
     };
     console.log("[Game] Started monster effect target selection");
+    this.highlightTargetCandidates();
   }
 
   startSpellTrapTargetSelection(card, options, activationZone = null) {
@@ -1644,10 +1693,24 @@ export default class Game {
 
   highlightTargetCandidates() {
     this.clearTargetHighlights();
-    if (!this.targetSelection) return;
+    if (!this.targetSelection) {
+      console.log("[Game] No target selection active");
+      return;
+    }
     const option =
       this.targetSelection.options[this.targetSelection.currentOption];
-    if (!option) return;
+    if (!option) {
+      console.log("[Game] No option to highlight");
+      return;
+    }
+
+    console.log("[Game] Highlighting targets:", {
+      kind: this.targetSelection.kind,
+      optionId: option.id,
+      candidatesCount: option.candidates?.length,
+      min: option.min,
+      max: option.max,
+    });
 
     option.candidates.forEach((cand) => {
       let targetEl = null;
@@ -1658,6 +1721,12 @@ export default class Game {
           cand.controller === "player" ? "#player-field" : "#bot-field";
         const indexSelector = ` .card[data-index="${cand.zoneIndex}"]`;
         targetEl = document.querySelector(`${fieldSelector}${indexSelector}`);
+        console.log("[Game] Highlighting field card:", {
+          controller: cand.controller,
+          index: cand.zoneIndex,
+          name: cand.name,
+          found: !!targetEl,
+        });
       } else if (cand.zone === "fieldSpell") {
         const fieldSelector =
           cand.controller === "player"
@@ -1666,7 +1735,10 @@ export default class Game {
         targetEl = document.querySelector(`${fieldSelector} .card`);
       }
 
-      if (!targetEl) return;
+      if (!targetEl) {
+        console.log("[Game] Target element not found for:", cand);
+        return;
+      }
 
       targetEl.classList.add("targetable");
       if (cand.isDirectAttack) {
@@ -1700,9 +1772,20 @@ export default class Game {
 
   handleTargetSelectionClick(ownerId, cardIndex, cardEl) {
     if (!this.targetSelection) return false;
+
+    console.log("[Game] Target selection click:", {
+      ownerId,
+      cardIndex,
+      currentOption: this.targetSelection.currentOption,
+      optionsLength: this.targetSelection.options?.length,
+    });
+
     const option =
       this.targetSelection.options[this.targetSelection.currentOption];
-    if (!option) return false;
+    if (!option) {
+      console.log("[Game] No option found");
+      return false;
+    }
 
     const ownerPlayer = ownerId === "player" ? this.player : this.bot;
     let card = null;
@@ -1713,26 +1796,65 @@ export default class Game {
       card = ownerPlayer.field[cardIndex];
     }
 
-    if (!card) return true;
+    if (!card) {
+      console.log("[Game] Card not found at index:", cardIndex);
+      return true;
+    }
 
-    const candidate = option.candidates.find((cand) => cand.cardRef === card);
-    if (!candidate) return true;
+    console.log("[Game] Looking for candidate:", {
+      cardName: card.name,
+      cardIndex: cardIndex,
+      candidatesCount: option.candidates.length,
+      candidateNames: option.candidates.map(
+        (c) => `${c.name} [idx:${c.zoneIndex}]`
+      ),
+    });
+
+    // Find candidate by matching both card reference AND zone index
+    const candidate = option.candidates.find((cand) => {
+      const refMatch = cand.cardRef === card;
+      const indexMatch = cand.zoneIndex === cardIndex;
+      return refMatch && indexMatch;
+    });
+
+    if (!candidate) {
+      console.log("[Game] Candidate not found. Checking references:");
+      option.candidates.forEach((cand, i) => {
+        console.log(`  Candidate ${i}:`, {
+          name: cand.name,
+          zoneIndex: cand.zoneIndex,
+          cardIndex: cardIndex,
+          refMatch: cand.cardRef === card,
+          indexMatch: cand.zoneIndex === cardIndex,
+        });
+      });
+      return true;
+    }
 
     const selections = this.targetSelection.selections[option.id] || [];
     const existing = selections.indexOf(candidate.idx);
     if (existing > -1) {
       selections.splice(existing, 1);
       cardEl.classList.remove("selected-target");
+      console.log("[Game] Deselected card");
     } else {
       if (selections.length >= option.max) {
+        console.log("[Game] Max selections reached");
         return true;
       }
       selections.push(candidate.idx);
       cardEl.classList.add("selected-target");
+      console.log(
+        "[Game] Selected card, total:",
+        selections.length,
+        "/",
+        option.max
+      );
     }
     this.targetSelection.selections[option.id] = selections;
 
     if (selections.length === option.max) {
+      console.log("[Game] Max reached, advancing selection");
       this.advanceTargetSelection();
     }
 
@@ -1798,6 +1920,19 @@ export default class Game {
         selection.activationZone
       );
       this.handleSpellTrapActivationResult(
+        selection.card,
+        this.player,
+        result,
+        selection.activationZone
+      );
+    } else if (selection.kind === "monsterEffect") {
+      const result = this.effectEngine.activateMonsterEffect(
+        selection.card,
+        this.player,
+        selection.selections,
+        selection.activationZone
+      );
+      this.handleMonsterEffectActivationResult(
         selection.card,
         this.player,
         result,
@@ -2492,23 +2627,23 @@ export default class Game {
       }
     }
 
-      if (fromZone === "field" && card.cardKind === "monster") {
-        card.summonedTurn = null;
-        card.setTurn = null;
-        card.positionChangedThisTurn = false;
-        card.cannotAttackThisTurn = false;
-        card.cannotAttackUntilTurn = null;
-        card.immuneToOpponentEffectsUntilTurn = null;
-        const prevBuff = card.voidTenebrisBuffValue || 0;
-        if (prevBuff) {
-          card.atk -= prevBuff;
-          card.def -= prevBuff;
-        }
-        card.voidTenebrisBuffValue = 0;
-        if (this.effectEngine) {
-          this.effectEngine.updateVoidTenebrisHornBuffs();
-        }
+    if (fromZone === "field" && card.cardKind === "monster") {
+      card.summonedTurn = null;
+      card.setTurn = null;
+      card.positionChangedThisTurn = false;
+      card.cannotAttackThisTurn = false;
+      card.cannotAttackUntilTurn = null;
+      card.immuneToOpponentEffectsUntilTurn = null;
+      const prevBuff = card.voidTenebrisBuffValue || 0;
+      if (prevBuff) {
+        card.atk -= prevBuff;
+        card.def -= prevBuff;
       }
+      card.voidTenebrisBuffValue = 0;
+      if (this.effectEngine) {
+        this.effectEngine.updateVoidTenebrisHornBuffs();
+      }
+    }
 
     // Se um equip spell está saindo da spell/trap zone, limpar seus efeitos no monstro
     if (

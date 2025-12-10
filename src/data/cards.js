@@ -2629,6 +2629,7 @@ export const cardDatabase = [
       {
         id: "void_slayer_brute_hand_summon",
         timing: "ignition",
+        requireZone: "hand",
         oncePerTurn: true,
         oncePerTurnName: "void_slayer_brute_hand_summon",
         targets: [
@@ -2651,13 +2652,13 @@ export const cardDatabase = [
           {
             // Uses special_summon_from_deck handler which supports any zone
             type: "special_summon_from_deck",
-            zone: "hand",  // Source zone is hand (summon itself)
+            zone: "hand", // Source zone is hand (summon itself)
             filters: {
               name: "Void Slayer Brute",
             },
-            position: "attack",
+            position: "choice",
             cannotAttackThisTurn: false,
-            promptPlayer: false,
+            promptPlayer: true,
           },
         ],
       },
