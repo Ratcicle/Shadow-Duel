@@ -839,48 +839,57 @@ export async function handleSetStatsToZeroAndNegate(action, ctx, targets, engine
   const negateEffects = action.negateEffects !== false;
   
   let modified = false;
+  const affectedCards = [];
   
   for (const card of targetCards) {
     if (!card || card.cardKind !== "monster") continue;
+    
+    let cardModified = false;
     
     // Store original stats if setting to zero
     if (setAtkToZero && card.originalAtk === null) {
       card.originalAtk = card.atk;
       card.atk = 0;
-      modified = true;
+      cardModified = true;
     }
     
     if (setDefToZero && card.originalDef === null) {
       card.originalDef = card.def;
       card.def = 0;
-      modified = true;
+      cardModified = true;
     }
     
     // Negate effects
     if (negateEffects) {
       card.effectsNegated = true;
-      modified = true;
+      cardModified = true;
     }
     
-    if (modified) {
-      // Build accurate log message based on what was modified
-      const effects = [];
-      if (setAtkToZero && setDefToZero) {
-        effects.push("ATK/DEF became 0");
-      } else if (setAtkToZero) {
-        effects.push("ATK became 0");
-      } else if (setDefToZero) {
-        effects.push("DEF became 0");
-      }
-      
-      if (negateEffects) {
-        effects.push("effects are negated");
-      }
-      
-      if (effects.length > 0) {
-        const message = `${card.name}'s ${effects.join(" and ")} until end of turn.`;
-        game.renderer?.log(message);
-      }
+    if (cardModified) {
+      modified = true;
+      affectedCards.push(card.name);
+    }
+  }
+  
+  // Log a consolidated message for all affected cards
+  if (modified && affectedCards.length > 0) {
+    const effects = [];
+    if (setAtkToZero && setDefToZero) {
+      effects.push("ATK/DEF became 0");
+    } else if (setAtkToZero) {
+      effects.push("ATK became 0");
+    } else if (setDefToZero) {
+      effects.push("DEF became 0");
+    }
+    
+    if (negateEffects) {
+      effects.push("effects are negated");
+    }
+    
+    if (effects.length > 0) {
+      const cardList = affectedCards.join(", ");
+      const message = `${cardList}'s ${effects.join(" and ")} until end of turn.`;
+      game.renderer?.log(message);
     }
   }
   
