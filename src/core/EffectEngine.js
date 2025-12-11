@@ -322,7 +322,8 @@ export default class EffectEngine {
   isVoidArchetype(card) {
     if (!card || card.cardKind !== "monster") return false;
     if (card.archetype === "Void") return true;
-    if (Array.isArray(card.archetypes) && card.archetypes.includes("Void")) return true;
+    if (Array.isArray(card.archetypes) && card.archetypes.includes("Void"))
+      return true;
     return false;
   }
 
@@ -334,25 +335,25 @@ export default class EffectEngine {
       ...(this.game.player.field || []),
       ...(this.game.bot.field || []),
     ].filter(Boolean);
-    
+
     // Single pass optimization: count voids and find horns in one loop
     let voidCount = 0;
     const horns = [];
-    
+
     for (const card of allFields) {
       if (!card || card.cardKind !== "monster") continue;
-      
+
       // Check if it's a Void card
       if (this.isVoidArchetype(card)) {
         voidCount++;
       }
-      
+
       // Check if it's a Void Tenebris Horn
       if (card.name === "Void Tenebris Horn") {
         horns.push(card);
       }
     }
-    
+
     const boostValue = voidCount * 100;
 
     let updated = false;

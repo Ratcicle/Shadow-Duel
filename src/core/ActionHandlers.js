@@ -247,6 +247,13 @@ export async function handleSpecialSummonFromHandWithCost(
   const { player, source } = ctx;
   const game = engine.game;
 
+  console.log("[handleSpecialSummonFromHandWithCost] Called with:", {
+    source: source?.name,
+    costTargetRef: action.costTargetRef,
+    targetsKeys: Object.keys(targets),
+    targets: targets,
+  });
+
   if (!player || !source || !game) {
     console.error("[handleSpecialSummonFromHandWithCost] Missing required context:", {
       hasPlayer: !!player,
@@ -258,17 +265,28 @@ export async function handleSpecialSummonFromHandWithCost(
 
   // Validate cost was paid
   const costTargets = targets[action.costTargetRef];
+  console.log("[handleSpecialSummonFromHandWithCost] Cost targets:", {
+    costTargetRef: action.costTargetRef,
+    found: !!costTargets,
+    length: costTargets?.length,
+    cards: costTargets?.map((c) => c.name),
+  });
+
   if (!costTargets || costTargets.length === 0) {
     game.renderer?.log("No cost paid for special summon.");
+    console.error("[handleSpecialSummonFromHandWithCost] No cost targets found!");
     return false;
   }
 
   // Move cost cards to graveyard
+  console.log("[handleSpecialSummonFromHandWithCost] Moving cards to graveyard...");
   for (const costCard of costTargets) {
     const fieldIndex = player.field.indexOf(costCard);
+    console.log(`[handleSpecialSummonFromHandWithCost] ${costCard.name}: fieldIndex=${fieldIndex}`);
     if (fieldIndex !== -1) {
       player.field.splice(fieldIndex, 1);
       player.graveyard.push(costCard);
+      console.log(`[handleSpecialSummonFromHandWithCost] Moved ${costCard.name} to graveyard`);
     }
   }
 
