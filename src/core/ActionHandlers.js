@@ -204,7 +204,7 @@ async function summonCard(card, sourceZone, player, action, engine) {
   card.owner = player.id;
 
   // Negate effects if specified
-  if (action.negateEffects === true) {
+  if (action.negateEffects) {
     card.effectsNegated = true;
   }
 
@@ -217,7 +217,7 @@ async function summonCard(card, sourceZone, player, action, engine) {
   const restrictText = card.cannotAttackThisTurn
     ? " (cannot attack this turn)"
     : "";
-  const negateText = action.negateEffects === true 
+  const negateText = action.negateEffects
     ? " (effects negated)" 
     : "";
 
