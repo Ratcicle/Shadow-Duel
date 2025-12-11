@@ -2481,11 +2481,11 @@ export default class Game {
       }
       
       // Restore stats if they were set to zero
-      if (card.originalAtk !== null) {
+      if (card.originalAtk != null) {
         card.atk = card.originalAtk;
         card.originalAtk = null;
       }
-      if (card.originalDef !== null) {
+      if (card.originalDef != null) {
         card.def = card.originalDef;
         card.originalDef = null;
       }

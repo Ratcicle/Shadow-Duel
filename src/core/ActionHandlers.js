@@ -847,13 +847,13 @@ export async function handleSetStatsToZeroAndNegate(action, ctx, targets, engine
     let cardModified = false;
     
     // Store original stats if setting to zero
-    if (setAtkToZero && card.originalAtk === null) {
+    if (setAtkToZero && card.originalAtk == null) {
       card.originalAtk = card.atk;
       card.atk = 0;
       cardModified = true;
     }
     
-    if (setDefToZero && card.originalDef === null) {
+    if (setDefToZero && card.originalDef == null) {
       card.originalDef = card.def;
       card.def = 0;
       cardModified = true;
