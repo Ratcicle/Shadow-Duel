@@ -1349,6 +1349,14 @@ export default class EffectEngine {
       return { success: false, reason: optCheck.reason };
     }
 
+    // Check requireEmptyField condition
+    if (effect.requireEmptyField && player.field.length > 0) {
+      return {
+        success: false,
+        reason: "You must control no monsters to activate this effect.",
+      };
+    }
+
     const ctx = {
       source: card,
       player,
