@@ -1131,6 +1131,55 @@ export default class Renderer {
     });
   }
 
+  showDestructionNegationPrompt(cardName, costDescription, onDecision) {
+    const existing = document.querySelector(".destruction-negation-modal");
+    if (existing) existing.remove();
+
+    const overlay = document.createElement("div");
+    overlay.className = "modal destruction-negation-modal";
+
+    const content = document.createElement("div");
+    content.className = "modal-content target-content";
+
+    const title = document.createElement("h3");
+    title.textContent = `Deseja ativar o efeito de "${cardName}"?`;
+
+    const desc = document.createElement("p");
+    desc.textContent = costDescription ? `Custo: ${costDescription}` : "";
+
+    const actions = document.createElement("div");
+    actions.className = "target-actions";
+
+    const confirmBtn = document.createElement("button");
+    confirmBtn.textContent = "Sim";
+    confirmBtn.className = "primary";
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.textContent = "Não";
+    cancelBtn.className = "secondary";
+
+    confirmBtn.onclick = () => {
+      overlay.remove();
+      if (typeof onDecision === "function") onDecision(true);
+    };
+    cancelBtn.onclick = () => {
+      overlay.remove();
+      if (typeof onDecision === "function") onDecision(false);
+    };
+
+    actions.appendChild(confirmBtn);
+    actions.appendChild(cancelBtn);
+
+    content.appendChild(title);
+    if (desc.textContent) {
+      content.appendChild(desc);
+    }
+    content.appendChild(actions);
+
+    overlay.appendChild(content);
+    document.body.appendChild(overlay);
+  }
+
   showFusionTargetModal(availableFusions, onSelect, onCancel) {
     const overlay = document.createElement("div");
     overlay.className = "modal fusion-modal";

@@ -2178,6 +2178,37 @@ body {
   border-color: var(--accent-color);
 }
 
+/* Compact prompt for destruction negation */
+.destruction-negation-modal .modal-content {
+  width: min(320px, 90vw);
+  max-width: 320px;
+  padding: 16px;
+  text-align: center;
+}
+
+.destruction-negation-modal h3 {
+  margin: 0 0 8px 0;
+  font-size: 1rem;
+}
+
+.destruction-negation-modal p {
+  margin: 0 0 12px 0;
+  font-size: 0.9rem;
+}
+
+.destruction-negation-modal .target-actions {
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid #333;
+  gap: 8px;
+}
+
+.destruction-negation-modal .target-actions button {
+  min-width: 100px;
+  padding: 10px 14px;
+  font-size: 0.9rem;
+}
+
 /* Search Modal Visual - Grid Layout */
 .search-modal-visual {
   position: fixed;

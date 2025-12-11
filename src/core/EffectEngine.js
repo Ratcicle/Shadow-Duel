@@ -1800,6 +1800,14 @@ export default class EffectEngine {
             }
           }
 
+          const requiredName = def.cardName || def.name;
+          if (requiredName && card.name !== requiredName) {
+            console.log(
+              `[selectCandidates] Rejecting: name mismatch (${card.name} !== ${requiredName})`
+            );
+            continue;
+          }
+
           // Exclude by card name
           if (def.excludeCardName && card.name === def.excludeCardName) {
             console.log(
@@ -2192,6 +2200,91 @@ export default class EffectEngine {
     }
 
     return executed;
+  }
+
+  /**
+   * Lightweight check to see if a monster effect could be activated from a zone,
+   * without consuming OPT flags or performing actions. Used for UI pre-checks
+   * (e.g., showing the Special Summon button in hand).
+   */
+  canActivateMonsterEffectPreview(
+    card,
+    player,
+    activationZone = "field",
+    selections = null
+  ) {
+    if (!card || !player) {
+      return { ok: false, reason: "Missing card or player." };
+    }
+    if (card.owner !== player.id) {
+      return { ok: false, reason: "Card does not belong to the player." };
+    }
+    if (card.cardKind !== "monster") {
+      return { ok: false, reason: "Only Monster cards can use this effect." };
+    }
+    if (card.isFacedown && activationZone !== "hand") {
+      return { ok: false, reason: "Card must be face-up to activate." };
+    }
+    if (this.game?.turn !== player.id) {
+      return { ok: false, reason: "Not your turn." };
+    }
+    if (this.game?.phase !== "main1" && this.game?.phase !== "main2") {
+      return { ok: false, reason: "Effect can only be activated during Main Phase." };
+    }
+
+    if (activationZone === "hand") {
+      if (!player.hand || !player.hand.includes(card)) {
+        return { ok: false, reason: "Card is not in your hand." };
+      }
+    } else if (activationZone === "field") {
+      if (!player.field || !player.field.includes(card)) {
+        return { ok: false, reason: "Card is not on the field." };
+      }
+    }
+
+    const effect =
+      activationZone === "hand"
+        ? (card.effects || []).find(
+            (e) => e && e.timing === "ignition" && e.requireZone === "hand"
+          )
+        : (card.effects || []).find(
+            (e) =>
+              e &&
+              e.timing === "ignition" &&
+              (!e.requireZone || e.requireZone === "field")
+          );
+
+    if (!effect) {
+      return { ok: false, reason: "No ignition effect defined for this zone." };
+    }
+
+    const ctx = {
+      source: card,
+      player,
+      opponent: this.game.getOpponent(player),
+      activationZone,
+    };
+
+    const optCheck = this.checkOncePerTurn(card, player, effect);
+    if (!optCheck.ok) {
+      return { ok: false, reason: optCheck.reason };
+    }
+
+    const targetResult = this.resolveTargets(
+      effect.targets || [],
+      ctx,
+      selections
+    );
+
+    if (targetResult.needsSelection) {
+      return { ok: true, reason: "Selection needed." };
+    }
+
+    if (targetResult.ok === false) {
+      return { ok: false, reason: targetResult.reason };
+    }
+
+    return { ok: true };
   }
 
   applyDraw(action, ctx) {

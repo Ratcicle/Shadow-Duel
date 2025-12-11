@@ -386,55 +386,22 @@ export default class Game {
           return;
         }
 
-        const canUseVoidForgottenHandEffect =
-          card.name === "Void Forgotten Knight" &&
-          this.player.field.some(
-            (fieldCard) =>
-              fieldCard &&
-              fieldCard.cardKind === "monster" &&
-              (fieldCard.archetypes || [fieldCard.archetype]).includes("Void")
-          );
-
-        // Check if card has a hand effect (requireZone: "hand")
-        const hasHandEffect = (card.effects || []).some(
+        // Find first hand ignition effect, if any
+        const handEffect = (card.effects || []).find(
           (e) => e && e.timing === "ignition" && e.requireZone === "hand"
         );
 
-        // For hand effects, verify conditions are met
-        let canUseHandEffect = false;
-        let handEffectLabel = "Special Summon";
-        if (hasHandEffect) {
-          // Try to check if the effect can be activated (verify targets exist)
-          const effect = card.effects.find(
-            (e) => e && e.timing === "ignition" && e.requireZone === "hand"
-          );
+        // Generic pre-check for hand effects (filters, OPT, targets, phase/turn)
+        const handEffectPreview = handEffect
+          ? this.effectEngine.canActivateMonsterEffectPreview(
+              card,
+              this.player,
+              "hand"
+            )
+          : { ok: false };
 
-          if (effect && effect.targets) {
-            // Simple check: if effect needs Void monsters, verify they exist
-            const needsVoid = effect.targets.some(
-              (t) => t.archetype === "Void"
-            );
-
-            if (needsVoid) {
-              const voidMonstersCount = this.player.field.filter(
-                (c) =>
-                  c &&
-                  c.cardKind === "monster" &&
-                  !c.isFacedown &&
-                  (c.archetype === "Void" ||
-                    (Array.isArray(c.archetypes) &&
-                      c.archetypes.includes("Void")))
-              ).length;
-
-              canUseHandEffect = voidMonstersCount >= 2;
-              handEffectLabel = `Special Summon (${voidMonstersCount}/2 Void)`;
-            } else {
-              canUseHandEffect = true;
-            }
-          } else {
-            canUseHandEffect = true;
-          }
-        }
+        const canUseHandEffect = handEffectPreview.ok;
+        const handEffectLabel = "Special Summon";
 
         this.renderer.showSummonModal(
           index,
@@ -507,7 +474,7 @@ export default class Game {
           },
           {
             canSanctumSpecialFromAegis,
-            specialSummonFromHand: canUseVoidForgottenHandEffect,
+            specialSummonFromHand: false,
             specialSummonFromHandEffect: canUseHandEffect,
             specialSummonFromHandEffectLabel: handEffectLabel,
           }

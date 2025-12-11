@@ -2316,7 +2316,7 @@ export const cardDatabase = [
             owner: "self",
             zone: "field",
             cardKind: "monster",
-            name: "Void Hollow",
+            cardName: "Void Hollow",
             count: { min: 1, max: 1 },
           },
         ],
