@@ -247,7 +247,14 @@ export async function handleSpecialSummonFromHandWithCost(
   const { player, source } = ctx;
   const game = engine.game;
 
-  if (!player || !source || !game) return false;
+  if (!player || !source || !game) {
+    console.error("[handleSpecialSummonFromHandWithCost] Missing required context:", {
+      hasPlayer: !!player,
+      hasSource: !!source,
+      hasGame: !!game,
+    });
+    return false;
+  }
 
   // Validate cost was paid
   const costTargets = targets[action.costTargetRef];
@@ -267,6 +274,7 @@ export async function handleSpecialSummonFromHandWithCost(
 
   // Check if source is in hand
   if (!player.hand.includes(source)) {
+    console.warn("[handleSpecialSummonFromHandWithCost] Card not found in hand:", source.name);
     game.renderer?.log("Card not in hand.");
     return false;
   }
