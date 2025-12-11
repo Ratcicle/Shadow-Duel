@@ -2922,12 +2922,14 @@ export const cardDatabase = [
     cardKind: "spell",
     subtype: "normal",
     description:
-      "Target 1 face-up 'Void' monster you control; until the end of this turn, that monster's ATK/DEF become 0, and its effects are negated. If this effect resolves, you can conduct 1 additional Normal Summon this turn.",
+      "Target 1 face-up 'Void' monster you control; until the end of this turn, that monster's ATK/DEF become 0, and its effects are negated. If this effect resolves, you can conduct 1 additional Normal Summon this turn. You can only activate 1 'Sealing the Void' per turn.",
     image: "assets/Sealing the Void.png",
     effects: [
       {
         id: "sealing_the_void_effect",
         timing: "on_activate",
+        oncePerTurn: true,
+        oncePerTurnName: "sealing_the_void_effect",
         targets: [
           {
             id: "void_monster_target",
