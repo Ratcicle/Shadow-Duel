@@ -56,6 +56,7 @@ export class ActionHandlerRegistry {
  * - filters: { archetype, name, level, levelOp, cardKind }
  * - position: "attack" | "defense" | "choice" (default: "choice")
  * - cannotAttackThisTurn: boolean
+ * - negateEffects: boolean (default: false) - whether to negate the summoned monster's effects
  * - promptPlayer: boolean (default: true for human player)
  */
 export async function handleSpecialSummonFromZone(
@@ -202,6 +203,11 @@ async function summonCard(card, sourceZone, player, action, engine) {
   card.cannotAttackThisTurn = action.cannotAttackThisTurn || false;
   card.owner = player.id;
 
+  // Negate effects if specified
+  if (action.negateEffects) {
+    card.effectsNegated = true;
+  }
+
   // Add to field
   player.field.push(card);
 
@@ -211,11 +217,14 @@ async function summonCard(card, sourceZone, player, action, engine) {
   const restrictText = card.cannotAttackThisTurn
     ? " (cannot attack this turn)"
     : "";
+  const negateText = action.negateEffects
+    ? " (effects negated)" 
+    : "";
 
   game.renderer?.log(
     `${player.name || player.id} Special Summoned ${
       card.name
-    } from ${zoneName} in ${positionText} Position${restrictText}.`
+    } from ${zoneName} in ${positionText} Position${restrictText}${negateText}.`
   );
 
   // Emit after_summon event

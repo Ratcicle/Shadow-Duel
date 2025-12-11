@@ -2957,6 +2957,40 @@ export const cardDatabase = [
       },
     ],
   },
+  {
+    id: 206,
+    name: "The Void",
+    cardKind: "spell",
+    subtype: "field",
+    archetype: "Void",
+    description:
+      "During your Main Phase, if you control no monsters: You can Special Summon 1 Level 4 or lower 'Void' monster from your Graveyard, but its effects are negated. You can only use this effect of 'The Void' once per turn.",
+    image: "assets/The Void.png",
+    effects: [
+      {
+        id: "the_void_summon",
+        timing: "on_field_activate",
+        oncePerTurn: true,
+        oncePerTurnName: "the_void_summon",
+        requireEmptyField: true,
+        actions: [
+          {
+            type: "special_summon_from_deck",
+            zone: "graveyard",
+            filters: {
+              archetype: "Void",
+              cardKind: "monster",
+              level: 4,
+              levelOp: "lte",
+            },
+            position: "choice",
+            negateEffects: true,
+            promptPlayer: true,
+          },
+        ],
+      },
+    ],
+  },
 ];
 
 // Performance optimization: Create indexed maps for O(1) lookups
