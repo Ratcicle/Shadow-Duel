@@ -66,6 +66,11 @@ export default class Card {
     this.secondAttackUsedThisTurn = false;
     this.voidTenebrisBuffValue = 0;
 
+    // Effect negation tracking
+    this.effectsNegated = false;
+    this.originalAtk = null; // Store original ATK when set to 0
+    this.originalDef = null; // Store original DEF when set to 0
+
     // Counter system
     this.counters = new Map(); // counterType -> amount
 

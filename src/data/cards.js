@@ -2916,6 +2916,45 @@ export const cardDatabase = [
       },
     ],
   },
+  {
+    id: 205,
+    name: "Sealing the Void",
+    cardKind: "spell",
+    subtype: "normal",
+    description:
+      "Target 1 face-up 'Void' monster you control; until the end of this turn, that monster's ATK/DEF become 0, and its effects are negated. If this effect resolves, you can conduct 1 additional Normal Summon this turn.",
+    image: "assets/Sealing the Void.png",
+    effects: [
+      {
+        id: "sealing_the_void_effect",
+        timing: "on_activate",
+        targets: [
+          {
+            id: "void_monster_target",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            archetype: "Void",
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "set_stats_to_zero_and_negate",
+            targetRef: "void_monster_target",
+            setAtkToZero: true,
+            setDefToZero: true,
+            negateEffects: true,
+          },
+          {
+            type: "grant_additional_normal_summon",
+            count: 1,
+          },
+        ],
+      },
+    ],
+  },
 ];
 
 // Performance optimization: Create indexed maps for O(1) lookups

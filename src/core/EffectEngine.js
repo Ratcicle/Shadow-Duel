@@ -45,6 +45,15 @@ export default class EffectEngine {
     return "attack";
   }
 
+  /**
+   * Check if card's effects are currently negated
+   * @param {Object} card - The card to check
+   * @returns {boolean} - True if effects are negated
+   */
+  isEffectNegated(card) {
+    return card && card.effectsNegated === true;
+  }
+
   checkOncePerTurn(card, player, effect) {
     if (!effect || !effect.oncePerTurn) {
       return { ok: true };
@@ -164,6 +173,12 @@ export default class EffectEngine {
       for (const effect of sourceCard.effects) {
         if (!effect || effect.timing !== "on_event") continue;
         if (effect.event !== "after_summon") continue;
+
+        // Skip if effects are negated
+        if (this.isEffectNegated(sourceCard)) {
+          console.log(`${sourceCard.name} effects are negated, skipping effect.`);
+          continue;
+        }
 
         // Only allow hand-based triggers if explicitly intended
         if (sourceZone === "hand") {
@@ -577,6 +592,12 @@ export default class EffectEngine {
           if (!effect || effect.timing !== "on_event") continue;
           if (effect.event !== "battle_destroy") continue;
 
+          // Skip if effects are negated
+          if (this.isEffectNegated(card)) {
+            console.log(`${card.name} effects are negated, skipping effect.`);
+            continue;
+          }
+
           const optCheck = this.checkOncePerTurn(card, owner, effect);
           if (!optCheck.ok) {
             console.log(optCheck.reason);
@@ -684,6 +705,12 @@ export default class EffectEngine {
         for (const effect of card.effects) {
           if (!effect || effect.timing !== "on_event") continue;
           if (effect.event !== "attack_declared") continue;
+
+          // Skip if effects are negated
+          if (this.isEffectNegated(card)) {
+            console.log(`${card.name} effects are negated, skipping effect.`);
+            continue;
+          }
 
           const optCheck = this.checkOncePerTurn(card, player, effect);
           if (!optCheck.ok) {
@@ -821,6 +848,12 @@ export default class EffectEngine {
         continue;
       }
 
+      // Skip if effects are negated
+      if (this.isEffectNegated(card)) {
+        console.log(`[handleCardToGraveEvent] ${card.name} effects are negated, skipping effect.`);
+        continue;
+      }
+
       console.log(
         `[handleCardToGraveEvent] Found card_to_grave effect: ${effect.id}`
       );
@@ -935,6 +968,12 @@ export default class EffectEngine {
       for (const effect of card.effects) {
         if (!effect || effect.timing !== "on_event") continue;
         if (effect.event !== "standby_phase") continue;
+
+        // Skip if effects are negated
+        if (this.isEffectNegated(card)) {
+          console.log(`${card.name} effects are negated, skipping effect.`);
+          continue;
+        }
 
         const optCheck = this.checkOncePerTurn(card, owner, effect);
         if (!optCheck.ok) {
@@ -1163,6 +1202,12 @@ export default class EffectEngine {
     if (!player.field || !player.field.includes(card)) {
       return { success: false, reason: "Monster is not on the field." };
     }
+    
+    // Check if effects are negated
+    if (this.isEffectNegated(card)) {
+      return { success: false, reason: "Card's effects are currently negated." };
+    }
+    
     const effect = (card.effects && card.effects[0]) || null;
     if (!effect) {
       return { success: false, reason: "No effect defined." };
@@ -1471,6 +1516,11 @@ export default class EffectEngine {
       if (!player.field || !player.field.includes(card)) {
         return { success: false, reason: "Card is not on the field." };
       }
+    }
+
+    // Check if effects are negated (only for cards on field)
+    if (activationZone === "field" && this.isEffectNegated(card)) {
+      return { success: false, reason: "Card's effects are currently negated." };
     }
 
     // Find effect that matches activation zone

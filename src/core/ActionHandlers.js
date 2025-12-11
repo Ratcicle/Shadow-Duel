@@ -811,6 +811,120 @@ export async function handleBanishDestroyedMonster(
 }
 
 /**
+ * Generic handler for setting stats to zero and negating effects
+ * Implements the "Sealing the Void" effect pattern
+ * 
+ * Action properties:
+ * - targetRef: reference to the target monster(s)
+ * - setAtkToZero: boolean (default: true)
+ * - setDefToZero: boolean (default: true)
+ * - negateEffects: boolean (default: true)
+ */
+export async function handleSetStatsToZeroAndNegate(action, ctx, targets, engine) {
+  const { player } = ctx;
+  const game = engine.game;
+  
+  if (!player || !game) return false;
+  
+  const targetRef = action.targetRef;
+  const targetCards = targets?.[targetRef] || [];
+  
+  if (!Array.isArray(targetCards) || targetCards.length === 0) {
+    game.renderer?.log("No valid targets for stat modification.");
+    return false;
+  }
+  
+  const setAtkToZero = action.setAtkToZero !== false;
+  const setDefToZero = action.setDefToZero !== false;
+  const negateEffects = action.negateEffects !== false;
+  
+  let modified = false;
+  const affectedCards = [];
+  
+  for (const card of targetCards) {
+    if (!card || card.cardKind !== "monster") continue;
+    
+    let cardModified = false;
+    
+    // Store original stats if setting to zero
+    if (setAtkToZero && card.originalAtk == null) {
+      card.originalAtk = card.atk;
+      card.atk = 0;
+      cardModified = true;
+    }
+    
+    if (setDefToZero && card.originalDef == null) {
+      card.originalDef = card.def;
+      card.def = 0;
+      cardModified = true;
+    }
+    
+    // Negate effects
+    if (negateEffects) {
+      card.effectsNegated = true;
+      cardModified = true;
+    }
+    
+    if (cardModified) {
+      modified = true;
+      affectedCards.push(card.name);
+    }
+  }
+  
+  // Log a consolidated message for all affected cards
+  if (modified && affectedCards.length > 0) {
+    const effects = [];
+    if (setAtkToZero && setDefToZero) {
+      effects.push("ATK/DEF became 0");
+    } else if (setAtkToZero) {
+      effects.push("ATK became 0");
+    } else if (setDefToZero) {
+      effects.push("DEF became 0");
+    }
+    
+    if (negateEffects) {
+      effects.push("effects are negated");
+    }
+    
+    if (effects.length > 0) {
+      const cardList = affectedCards.join(", ");
+      const message = `${cardList}'s ${effects.join(" and ")} until end of turn.`;
+      game.renderer?.log(message);
+    }
+  }
+  
+  if (modified) {
+    game.updateBoard();
+  }
+  
+  return modified;
+}
+
+/**
+ * Generic handler for granting additional normal summons
+ * 
+ * Action properties:
+ * - count: number of additional normal summons to grant (default: 1)
+ */
+export async function handleGrantAdditionalNormalSummon(action, ctx, targets, engine) {
+  const { player } = ctx;
+  const game = engine.game;
+  
+  if (!player || !game) return false;
+  
+  const count = action.count || 1;
+  player.additionalNormalSummons += count;
+  
+  const summonText = count === 1 ? "Normal Summon" : "Normal Summons";
+  game.renderer?.log(
+    `You can conduct ${count} additional ${summonText} this turn.`
+  );
+  
+  game.updateBoard();
+  return true;
+}
+
+/**
  * Initialize default handlers
  * @param {ActionHandlerRegistry} registry
  */
@@ -828,4 +942,8 @@ export function registerDefaultHandlers(registry) {
   );
   registry.register("banish", handleBanish);
   registry.register("banish_destroyed_monster", handleBanishDestroyedMonster);
+  
+  // Stat modification and effect negation handlers
+  registry.register("set_stats_to_zero_and_negate", handleSetStatsToZeroAndNegate);
+  registry.register("grant_additional_normal_summon", handleGrantAdditionalNormalSummon);
 }

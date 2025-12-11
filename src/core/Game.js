@@ -176,6 +176,7 @@ export default class Game {
       }
     });
     activePlayer.summonCount = 0;
+    activePlayer.additionalNormalSummons = 0;
 
     this.updateBoard();
 
@@ -2478,6 +2479,20 @@ export default class Game {
         if (card.def < 0) card.def = 0;
         card.tempDefBoost = 0;
       }
+      
+      // Restore stats if they were set to zero
+      if (card.originalAtk != null) {
+        card.atk = card.originalAtk;
+        card.originalAtk = null;
+      }
+      if (card.originalDef != null) {
+        card.def = card.originalDef;
+        card.originalDef = null;
+      }
+      
+      // Remove effect negation
+      card.effectsNegated = false;
+      
       card.tempBattleIndestructible = false;
       card.battleDamageHealsControllerThisTurn = false;
       card.canAttackDirectlyThisTurn = false;
