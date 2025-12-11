@@ -2418,7 +2418,15 @@ export const cardDatabase = [
         requireSelfAsDestroyed: true,
         actions: [
           {
-            type: "void_hollow_king_revive_effect",
+            type: "special_summon_from_graveyard",
+            requireSource: false,
+            filters: {
+              name: "Void Hollow",
+              cardKind: "monster",
+            },
+            count: { min: 0, max: 3 },
+            position: "choice",
+            cannotAttackThisTurn: false,
           },
         ],
       },

@@ -68,6 +68,12 @@ export default class Game {
       this.bot.draw();
     }
 
+    // Add extra Infinity Searchers to player's opening hand for quicker testing
+    for (let i = 0; i < 4; i++) {
+      this.player.ensureCardOnTop("Infinity Searcher", true);
+      this.player.draw();
+    }
+
     this.updateBoard();
     this.startTurn();
     this.renderer.bindPhaseClick((phase) => {
