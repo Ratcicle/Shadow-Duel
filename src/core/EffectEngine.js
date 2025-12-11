@@ -5899,7 +5899,6 @@ export default class EffectEngine {
     return true;
   }
 
-
   applyBanish(action, ctx, targets) {
     const targetCards = targets[action.targetRef] || [];
     if (!targetCards || targetCards.length === 0) {
