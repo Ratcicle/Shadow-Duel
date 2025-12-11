@@ -2935,7 +2935,7 @@ export const cardDatabase = [
             zone: "field",
             cardKind: "monster",
             archetype: "Void",
-            faceup: true,
+            requireFaceup: true,
             count: { min: 1, max: 1 },
           },
         ],
