@@ -1810,12 +1810,11 @@ export default class Game {
       ),
     });
 
-    // Find candidate by matching both card reference AND zone index
-    const candidate = option.candidates.find((cand) => {
-      const refMatch = cand.cardRef === card;
-      const indexMatch = cand.zoneIndex === cardIndex;
-      return refMatch && indexMatch;
-    });
+    // Find candidate by matching card reference (most reliable method)
+    // NOTE: We use cardRef identity match instead of zoneIndex because
+    // zoneIndex can become stale if the board is re-rendered between
+    // when decoratedCandidates were created and when the click occurs
+    const candidate = option.candidates.find((cand) => cand.cardRef === card);
 
     if (!candidate) {
       console.log("[Game] Candidate not found. Checking references:");
@@ -1825,7 +1824,6 @@ export default class Game {
           zoneIndex: cand.zoneIndex,
           cardIndex: cardIndex,
           refMatch: cand.cardRef === card,
-          indexMatch: cand.zoneIndex === cardIndex,
         });
       });
       return true;

@@ -255,11 +255,14 @@ export async function handleSpecialSummonFromHandWithCost(
   });
 
   if (!player || !source || !game) {
-    console.error("[handleSpecialSummonFromHandWithCost] Missing required context:", {
-      hasPlayer: !!player,
-      hasSource: !!source,
-      hasGame: !!game,
-    });
+    console.error(
+      "[handleSpecialSummonFromHandWithCost] Missing required context:",
+      {
+        hasPlayer: !!player,
+        hasSource: !!source,
+        hasGame: !!game,
+      }
+    );
     return false;
   }
 
@@ -274,25 +277,36 @@ export async function handleSpecialSummonFromHandWithCost(
 
   if (!costTargets || costTargets.length === 0) {
     game.renderer?.log("No cost paid for special summon.");
-    console.error("[handleSpecialSummonFromHandWithCost] No cost targets found!");
+    console.error(
+      "[handleSpecialSummonFromHandWithCost] No cost targets found!"
+    );
     return false;
   }
 
   // Move cost cards to graveyard
-  console.log("[handleSpecialSummonFromHandWithCost] Moving cards to graveyard...");
+  console.log(
+    "[handleSpecialSummonFromHandWithCost] Moving cards to graveyard..."
+  );
   for (const costCard of costTargets) {
     const fieldIndex = player.field.indexOf(costCard);
-    console.log(`[handleSpecialSummonFromHandWithCost] ${costCard.name}: fieldIndex=${fieldIndex}`);
+    console.log(
+      `[handleSpecialSummonFromHandWithCost] ${costCard.name}: fieldIndex=${fieldIndex}`
+    );
     if (fieldIndex !== -1) {
       player.field.splice(fieldIndex, 1);
       player.graveyard.push(costCard);
-      console.log(`[handleSpecialSummonFromHandWithCost] Moved ${costCard.name} to graveyard`);
+      console.log(
+        `[handleSpecialSummonFromHandWithCost] Moved ${costCard.name} to graveyard`
+      );
     }
   }
 
   // Check if source is in hand
   if (!player.hand.includes(source)) {
-    console.warn("[handleSpecialSummonFromHandWithCost] Card not found in hand:", source.name);
+    console.warn(
+      "[handleSpecialSummonFromHandWithCost] Card not found in hand:",
+      source.name
+    );
     game.renderer?.log("Card not in hand.");
     return false;
   }
@@ -813,8 +827,5 @@ export function registerDefaultHandlers(registry) {
     handleSpecialSummonFromGraveyard
   );
   registry.register("banish", handleBanish);
-  registry.register(
-    "banish_destroyed_monster",
-    handleBanishDestroyedMonster
-  );
+  registry.register("banish_destroyed_monster", handleBanishDestroyedMonster);
 }
