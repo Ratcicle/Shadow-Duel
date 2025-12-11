@@ -14,6 +14,7 @@ export default class Player {
     this.graveyard = [];
     this.fieldSpell = null;
     this.summonCount = 0;
+    this.additionalNormalSummons = 0; // Extra normal summons granted this turn
     this.maxDeckSize = 30;
     this.minDeckSize = 20;
     this.maxExtraDeckSize = 10;
@@ -168,7 +169,7 @@ export default class Player {
       return null;
     }
 
-    if (this.summonCount >= 1) {
+    if (this.summonCount >= 1 + this.additionalNormalSummons) {
       console.log("Summon limit reached for this turn.");
       return null;
     }
