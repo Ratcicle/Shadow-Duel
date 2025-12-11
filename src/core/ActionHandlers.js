@@ -863,9 +863,24 @@ export async function handleSetStatsToZeroAndNegate(action, ctx, targets, engine
     }
     
     if (modified) {
-      game.renderer?.log(
-        `${card.name}'s ATK/DEF became 0 and its effects are negated until end of turn.`
-      );
+      // Build accurate log message based on what was modified
+      const effects = [];
+      if (setAtkToZero && setDefToZero) {
+        effects.push("ATK/DEF became 0");
+      } else if (setAtkToZero) {
+        effects.push("ATK became 0");
+      } else if (setDefToZero) {
+        effects.push("DEF became 0");
+      }
+      
+      if (negateEffects) {
+        effects.push("effects are negated");
+      }
+      
+      if (effects.length > 0) {
+        const message = `${card.name}'s ${effects.join(" and ")} until end of turn.`;
+        game.renderer?.log(message);
+      }
     }
   }
   

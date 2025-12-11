@@ -855,12 +855,6 @@ export default class EffectEngine {
       }
 
       console.log(
-          `[handleCardToGraveEvent] Skipping effect: event is ${effect.event}, not card_to_grave`
-        );
-        continue;
-      }
-
-      console.log(
         `[handleCardToGraveEvent] Found card_to_grave effect: ${effect.id}`
       );
 
