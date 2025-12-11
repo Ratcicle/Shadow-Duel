@@ -844,56 +844,7 @@ export default class Game {
       });
     }
 
-    // Player field monsters - check for ignition effects
-    const playerFieldEl = document.getElementById("player-field");
-    if (playerFieldEl) {
-      playerFieldEl.addEventListener("click", (e) => {
-        if (this.targetSelection) {
-          const cardEl = e.target.closest(".card");
-          if (!cardEl) return;
-          const index = parseInt(cardEl.dataset.index);
-          if (!Number.isNaN(index)) {
-            this.handleTargetSelectionClick("player", index, cardEl);
-          }
-          return;
-        }
-
-        if (this.turn !== "player") return;
-        if (this.phase !== "main1" && this.phase !== "main2") return;
-
-        const cardEl = e.target.closest(".card");
-        if (!cardEl) return;
-
-        const index = parseInt(cardEl.dataset.index);
-        if (Number.isNaN(index)) return;
-
-        const card = this.player.field[index];
-        if (!card || card.isFacedown) return;
-
-        // Check if card has ignition effects
-        const hasIgnitionEffect = (card.effects || []).some(
-          (e) => e && e.timing === "ignition"
-        );
-
-        if (hasIgnitionEffect) {
-          console.log(
-            `[Game] Clicking monster with ignition effect: ${card.name}`
-          );
-          // Show "Activate Effect" modal like spells
-          if (
-            this.renderer &&
-            typeof this.renderer.showSpellActivateModal === "function"
-          ) {
-            this.renderer.showSpellActivateModal(cardEl, () => {
-              this.tryActivateMonsterEffect(card);
-            });
-          } else {
-            this.tryActivateMonsterEffect(card);
-          }
-        }
-      });
-    }
-
+    // Field spell effects for player
     const playerFieldSpellEl = document.getElementById("player-fieldspell");
     if (playerFieldSpellEl) {
       playerFieldSpellEl.addEventListener("click", (e) => {
