@@ -6,7 +6,7 @@ import EffectEngine from "./EffectEngine.js";
 export default class Game {
   constructor() {
     this.player = new Player("player", "You");
-    this.bot = new Bot();
+    this.bot = new Bot("luminarch");
     this.renderer = new Renderer();
     this.effectEngine = new EffectEngine(this);
 
@@ -58,20 +58,12 @@ export default class Game {
   start(deckList = null, extraDeckList = null) {
     this.player.buildDeck(deckList);
     this.player.buildExtraDeck(extraDeckList);
-    // Garante apenas 1 cópia de Infinity Searcher no topo para não poluir a mão inicial
-    this.player.ensureCardOnTop("Infinity Searcher", true);
     this.bot.buildDeck();
     this.bot.buildExtraDeck();
 
     for (let i = 0; i < 4; i++) {
       this.player.draw();
       this.bot.draw();
-    }
-
-    // Add extra Infinity Searchers to player's opening hand for quicker testing
-    for (let i = 0; i < 4; i++) {
-      this.player.ensureCardOnTop("Infinity Searcher", true);
-      this.player.draw();
     }
 
     this.updateBoard();
