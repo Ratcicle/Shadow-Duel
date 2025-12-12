@@ -1158,20 +1158,6 @@ async function promptTieBreaker(game, candidates, keepCount, sideDescription, mo
     });
   });
 }
-        infoDiv.appendChild(nameDiv);
-        
-        const statsDiv = document.createElement("div");
-        statsDiv.classList.add("tie-breaker-card-stats");
-        statsDiv.innerHTML = `<span>ATK ${card.atk || 0}</span>`;
-        infoDiv.appendChild(statsDiv);
-        
-        cardEl.appendChild(infoDiv);
-        return cardEl;
-      },
-    });
-  });
-}
-
 /**
  * Initialize default handlers
  * @param {ActionHandlerRegistry} registry
