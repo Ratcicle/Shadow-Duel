@@ -940,12 +940,15 @@ export async function handleGrantAdditionalNormalSummon(action, ctx, targets, en
  * Action properties:
  * - keepPerSide: number of highest ATK monsters to keep per side (default: 1)
  * - allowTieBreak: boolean - if true, player chooses which to keep on ties (default: true)
+ * - modalTitle: string - custom modal title (default: "Choose Survivor")
+ * - modalSubtitle: string - custom subtitle template (default: auto-generated)
+ * - modalInfoText: string - custom info text (default: "All other monsters will be destroyed.")
  * 
  * Effect: Destroys all monsters on field except keepPerSide highest ATK monsters per side.
  * If there's a tie for highest ATK, the card's controller chooses which to keep.
  */
 export async function handleSelectiveFieldDestruction(action, ctx, targets, engine) {
-  const { player } = ctx;
+  const { player, source } = ctx;
   const game = engine.game;
   
   if (!player || !game) return false;
@@ -985,6 +988,13 @@ export async function handleSelectiveFieldDestruction(action, ctx, targets, engi
   let playerToKeep = [];
   let opponentToKeep = [];
   
+  // Custom modal text from action properties
+  const modalConfig = {
+    title: action.modalTitle || "Choose Survivor",
+    subtitle: action.modalSubtitle || null, // null means auto-generate
+    infoText: action.modalInfoText || "All other monsters will be destroyed.",
+  };
+  
   // Handle player's side
   if (playerHighest.length <= keepPerSide) {
     // No tie or tie doesn't exceed keepPerSide
@@ -1000,7 +1010,8 @@ export async function handleSelectiveFieldDestruction(action, ctx, targets, engi
         game,
         playerHighest,
         keepPerSide,
-        "your"
+        "your",
+        modalConfig
       );
     }
   } else {
@@ -1021,7 +1032,8 @@ export async function handleSelectiveFieldDestruction(action, ctx, targets, engi
         game,
         opponentHighest,
         keepPerSide,
-        "opponent's"
+        "opponent's",
+        modalConfig
       );
     }
   } else {
@@ -1057,7 +1069,7 @@ export async function handleSelectiveFieldDestruction(action, ctx, targets, engi
     // Use game's destruction system to handle replacement effects
     const { replaced } = (await game.resolveDestructionWithReplacement?.(card, {
       reason: "effect",
-      sourceCard: ctx.source,
+      sourceCard: source,
     })) || {};
     
     if (!replaced) {
@@ -1083,8 +1095,9 @@ export async function handleSelectiveFieldDestruction(action, ctx, targets, engi
 
 /**
  * Helper function to prompt player for tie-breaker selection
+ * @param {Object} modalConfig - Configuration for modal text (title, subtitle, infoText)
  */
-async function promptTieBreaker(game, candidates, keepCount, sideDescription) {
+async function promptTieBreaker(game, candidates, keepCount, sideDescription, modalConfig = {}) {
   if (!game.renderer?.showCardGridSelectionModal) {
     // Fallback: auto-select first N
     return candidates.slice(0, keepCount);
@@ -1093,9 +1106,13 @@ async function promptTieBreaker(game, candidates, keepCount, sideDescription) {
   return new Promise((resolve) => {
     const maxAtk = candidates[0]?.atk || 0;
     
+    // Use custom subtitle or generate default one
+    const subtitle = modalConfig.subtitle || 
+      `Multiple monsters on ${sideDescription} side have ${maxAtk} ATK. Choose ${keepCount} to keep on the field.`;
+    
     game.renderer.showCardGridSelectionModal({
-      title: "Void Lost Throne - Choose Survivor",
-      subtitle: `Multiple monsters on ${sideDescription} side have ${maxAtk} ATK. Choose ${keepCount} to keep on the field.`,
+      title: modalConfig.title || "Choose Survivor",
+      subtitle: subtitle,
       cards: candidates,
       minSelect: keepCount,
       maxSelect: keepCount,
@@ -1105,7 +1122,7 @@ async function promptTieBreaker(game, candidates, keepCount, sideDescription) {
       modalClass: "tie-breaker-modal",
       gridClass: "tie-breaker-grid",
       cardClass: "tie-breaker-card",
-      infoText: `All other monsters will be destroyed.`,
+      infoText: modalConfig.infoText || "All other monsters will be destroyed.",
       onConfirm: (selected) => {
         resolve(selected || candidates.slice(0, keepCount));
       },
@@ -1128,6 +1145,19 @@ async function promptTieBreaker(game, candidates, keepCount, sideDescription) {
         const nameDiv = document.createElement("div");
         nameDiv.classList.add("tie-breaker-card-name");
         nameDiv.textContent = card.name;
+        infoDiv.appendChild(nameDiv);
+        
+        const statsDiv = document.createElement("div");
+        statsDiv.classList.add("tie-breaker-card-stats");
+        statsDiv.innerHTML = `<span>ATK ${card.atk || 0}</span>`;
+        infoDiv.appendChild(statsDiv);
+        
+        cardEl.appendChild(infoDiv);
+        return cardEl;
+      },
+    });
+  });
+}
         infoDiv.appendChild(nameDiv);
         
         const statsDiv = document.createElement("div");
