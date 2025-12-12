@@ -1155,6 +1155,8 @@ export async function handleSpecialSummonMatchingLevel(
 
   /**
    * Helper function to finalize the special summon
+   * @param {Object} card - The card to summon
+   * @param {string} position - The position to summon in ("attack" or "defense")
    */
   const finalizeSummon = (card, position) => {
     // Remove from hand
@@ -1208,10 +1210,15 @@ export async function handleSpecialSummonMatchingLevel(
       const card = candidates[0];
       
       // Ask for position
-      engine.chooseSpecialSummonPosition(card, player).then((position) => {
-        finalizeSummon(card, position);
-        resolve(true);
-      });
+      engine.chooseSpecialSummonPosition(card, player)
+        .then((position) => {
+          finalizeSummon(card, position);
+          resolve(true);
+        })
+        .catch((error) => {
+          console.error("Error choosing summon position:", error);
+          resolve(false);
+        });
     } else {
       // Multiple candidates - show selection modal
       game.showCardSelectionModal(
@@ -1226,14 +1233,19 @@ export async function handleSpecialSummonMatchingLevel(
 
           const card = selected[0];
           
-          // Ask for position
-          const position = await engine.chooseSpecialSummonPosition(
-            card,
-            player
-          );
+          try {
+            // Ask for position
+            const position = await engine.chooseSpecialSummonPosition(
+              card,
+              player
+            );
 
-          finalizeSummon(card, position);
-          resolve(true);
+            finalizeSummon(card, position);
+            resolve(true);
+          } catch (error) {
+            console.error("Error choosing summon position:", error);
+            resolve(false);
+          }
         }
       );
     }
