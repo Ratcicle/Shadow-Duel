@@ -2991,6 +2991,56 @@ export const cardDatabase = [
       },
     ],
   },
+  {
+    id: 104,
+    name: "Void Gravitational Pull",
+    cardKind: "spell",
+    subtype: "continuous",
+    description:
+      "Once per turn: You can target 1 monster you control and 1 monster your opponent controls; return those targets to the hand.",
+    image: "assets/Void Gravitational pull.png",
+    effects: [
+      {
+        id: "void_gravitational_pull_bounce",
+        timing: "ignition",
+        requireZone: "field",
+        oncePerTurn: true,
+        oncePerTurnName: "void_gravitational_pull_bounce",
+        targets: [
+          {
+            id: "void_gravitational_self",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+          {
+            id: "void_gravitational_opponent",
+            owner: "opponent",
+            zone: "field",
+            cardKind: "monster",
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "void_gravitational_self",
+            player: "self",
+            to: "hand",
+          },
+          {
+            type: "move",
+            targetRef: "void_gravitational_opponent",
+            player: "opponent",
+            to: "hand",
+          },
+        ],
+      },
+    ],
+  },
 ];
 
 // Performance optimization: Create indexed maps for O(1) lookups
