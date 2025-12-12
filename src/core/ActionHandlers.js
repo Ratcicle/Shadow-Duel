@@ -1094,6 +1094,217 @@ export async function handleSelectiveFieldDestruction(action, ctx, targets, engi
 }
 
 /**
+ * Generic handler for special summoning from hand with level matching
+ * Used for cards like "Void Mirror Dimension" that summon a monster with same level as another card
+ * 
+ * Action properties:
+ * - matchLevel: reference to the card whose level to match (from ctx)
+ * - negateEffects: boolean (default: true) - negate effects until end of turn
+ * - position: "attack" | "defense" | "choice" (default: "choice")
+ * - cannotAttackThisTurn: boolean (default: false)
+ * 
+ * @param {Object} action - The action definition
+ * @param {Object} ctx - Context with source, player, opponent, summonedCard
+ * @param {Object} targets - Resolved targets
+ * @param {Object} engine - The EffectEngine instance
+ * @returns {Promise<boolean>} - Success status
+ */
+export async function handleSpecialSummonMatchingLevel(
+  action,
+  ctx,
+  targets,
+  engine
+) {
+  const { player, summonedCard } = ctx;
+  const game = engine.game;
+
+  if (!player || !game || !summonedCard) return false;
+
+  // Get the level to match from the summoned card
+  const targetLevel = summonedCard.level;
+  if (!targetLevel) {
+    game.renderer?.log("Cannot match level: no level on summoned card.");
+    return false;
+  }
+
+  // Check field space
+  if (player.field.length >= 5) {
+    game.renderer?.log("Field is full.");
+    return false;
+  }
+
+  // Find candidates in hand with matching level
+  const hand = player.hand || [];
+  const candidates = hand.filter(
+    (card) =>
+      card &&
+      card.cardKind === "monster" &&
+      card.level === targetLevel
+  );
+
+  if (candidates.length === 0) {
+    game.renderer?.log(
+      `No monsters in hand with Level ${targetLevel} to Special Summon.`
+    );
+    return false;
+  }
+
+  // For bot, auto-select first candidate
+  if (player.id === "bot") {
+    const card = candidates[0];
+    const handIndex = hand.indexOf(card);
+    if (handIndex === -1) return false;
+
+    // Remove from hand
+    hand.splice(handIndex, 1);
+
+    // Determine position
+    const position = action.position === "defense" ? "defense" : "attack";
+
+    // Special Summon
+    card.position = position;
+    card.isFacedown = false;
+    card.hasAttacked = false;
+    card.cannotAttackThisTurn = action.cannotAttackThisTurn || false;
+    card.owner = player.id;
+
+    // Negate effects if specified (default: true)
+    const negateEffects = action.negateEffects !== false;
+    if (negateEffects) {
+      card.effectsNegated = true;
+    }
+
+    player.field.push(card);
+
+    game.renderer?.log(
+      `${player.name} Special Summoned ${card.name} (Level ${targetLevel}) from hand${
+        negateEffects ? " (effects negated)" : ""
+      }.`
+    );
+
+    // Emit after_summon event
+    game.emit("after_summon", {
+      card,
+      player,
+      method: "special",
+    });
+
+    game.updateBoard();
+    return true;
+  }
+
+  // For human player, show selection modal
+  return new Promise((resolve) => {
+    // If only one candidate, auto-select it
+    if (candidates.length === 1) {
+      const card = candidates[0];
+      const handIndex = hand.indexOf(card);
+      if (handIndex === -1) {
+        resolve(false);
+        return;
+      }
+
+      // Remove from hand
+      hand.splice(handIndex, 1);
+
+      // Ask for position
+      engine.chooseSpecialSummonPosition(card, player).then((position) => {
+        // Special Summon
+        card.position = position;
+        card.isFacedown = false;
+        card.hasAttacked = false;
+        card.cannotAttackThisTurn = action.cannotAttackThisTurn || false;
+        card.owner = player.id;
+
+        // Negate effects if specified (default: true)
+        const negateEffects = action.negateEffects !== false;
+        if (negateEffects) {
+          card.effectsNegated = true;
+        }
+
+        player.field.push(card);
+
+        game.renderer?.log(
+          `Special Summoned ${card.name} (Level ${targetLevel}) from hand${
+            negateEffects ? " (effects negated)" : ""
+          }.`
+        );
+
+        // Emit after_summon event
+        game.emit("after_summon", {
+          card,
+          player,
+          method: "special",
+        });
+
+        game.updateBoard();
+        resolve(true);
+      });
+    } else {
+      // Multiple candidates - show selection modal
+      game.showCardSelectionModal(
+        candidates,
+        `Select 1 monster with Level ${targetLevel} to Special Summon`,
+        1,
+        async (selected) => {
+          if (selected.length === 0) {
+            resolve(false);
+            return;
+          }
+
+          const card = selected[0];
+          const handIndex = hand.indexOf(card);
+          if (handIndex === -1) {
+            resolve(false);
+            return;
+          }
+
+          // Remove from hand
+          hand.splice(handIndex, 1);
+
+          // Ask for position
+          const position = await engine.chooseSpecialSummonPosition(
+            card,
+            player
+          );
+
+          // Special Summon
+          card.position = position;
+          card.isFacedown = false;
+          card.hasAttacked = false;
+          card.cannotAttackThisTurn = action.cannotAttackThisTurn || false;
+          card.owner = player.id;
+
+          // Negate effects if specified (default: true)
+          const negateEffects = action.negateEffects !== false;
+          if (negateEffects) {
+            card.effectsNegated = true;
+          }
+
+          player.field.push(card);
+
+          game.renderer?.log(
+            `Special Summoned ${card.name} (Level ${targetLevel}) from hand${
+              negateEffects ? " (effects negated)" : ""
+            }.`
+          );
+
+          // Emit after_summon event
+          game.emit("after_summon", {
+            card,
+            player,
+            method: "special",
+          });
+
+          game.updateBoard();
+          resolve(true);
+        }
+      );
+    }
+  });
+}
+
+/**
  * Helper function to prompt player for tie-breaker selection
  * @param {Object} modalConfig - Configuration for modal text (title, subtitle, infoText)
  */
@@ -1173,6 +1384,10 @@ export function registerDefaultHandlers(registry) {
   registry.register(
     "special_summon_from_graveyard",
     handleSpecialSummonFromGraveyard
+  );
+  registry.register(
+    "special_summon_matching_level",
+    handleSpecialSummonMatchingLevel
   );
   registry.register("banish", handleBanish);
   registry.register("banish_destroyed_monster", handleBanishDestroyedMonster);

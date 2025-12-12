@@ -3067,6 +3067,36 @@ export const cardDatabase = [
       },
     ],
   },
+  {
+    id: 208,
+    name: "Void Mirror Dimension",
+    cardKind: "trap",
+    subtype: "normal",
+    archetype: "Void",
+    description:
+      "Durante a Fase Principal, se seu oponente Invocar por Invocação-Especial um monstro: você pode Invocar por Invocação-Especial 1 monstro da sua mão com o mesmo Nível que esse monstro, mas, até o final deste turno, seus efeitos são negados. Você só pode ativar 1 'Void Mirror Dimension' por turno.",
+    image: "assets/Void Mirror Dimension.png",
+    effects: [
+      {
+        id: "void_mirror_dimension_effect",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethod: "special",
+        requireOpponentSummon: true,
+        requirePhase: ["main1", "main2"],
+        oncePerTurn: true,
+        oncePerTurnName: "void_mirror_dimension",
+        actions: [
+          {
+            type: "special_summon_matching_level",
+            negateEffects: true,
+            cannotAttackThisTurn: false,
+            position: "choice",
+          },
+        ],
+      },
+    ],
+  },
 ];
 
 // Performance optimization: Create indexed maps for O(1) lookups

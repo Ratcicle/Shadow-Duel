@@ -34,7 +34,7 @@ export default class Game {
     this.eventListeners[eventName].push(handler);
   }
 
-  emit(eventName, payload) {
+  async emit(eventName, payload) {
     const list = this.eventListeners[eventName];
     if (list) {
       for (const fn of list) {
@@ -50,8 +50,17 @@ export default class Game {
       this.effectEngine &&
       typeof this.effectEngine.handleEvent === "function"
     ) {
-      return this.effectEngine.handleEvent(eventName, payload);
+      this.effectEngine.handleEvent(eventName, payload);
     }
+    
+    // Check for traps that respond to this event (e.g., after_summon)
+    if (eventName === "after_summon" && payload) {
+      await this.checkAndOfferTraps(eventName, {
+        ...payload,
+        isOpponentSummon: payload.player?.id === "bot",
+      });
+    }
+    
     return undefined;
   }
 
