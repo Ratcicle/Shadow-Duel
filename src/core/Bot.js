@@ -1,541 +1,337 @@
 ﻿import Player from "./Player.js";
+import { cardDatabase } from "../data/cards.js";
+import Card from "./Card.js";
+import LuminarchStrategy from "./ai/LuminarchStrategy.js";
+import ShadowHeartStrategy from "./ai/ShadowHeartStrategy.js";
 
 export default class Bot extends Player {
-  constructor() {
+  constructor(archetype = "shadowheart") {
     super("bot", "Opponent");
     this.maxSimulationsPerPhase = 20;
-    this.maxChainedActions = 2;
+    this.maxChainedActions = 3;
+    this.archetype = archetype;
+
+    // Seleciona estratégia baseado no arquétipo
+    if (archetype === "shadowheart") {
+      this.strategy = new ShadowHeartStrategy(this);
+    } else {
+      this.strategy = new LuminarchStrategy(this);
+    }
+  }
+
+  // Sobrescreve buildDeck para usar deck do arquétipo selecionado
+  buildDeck() {
+    this.deck = [];
+    const copies = {};
+
+    const addCard = (data) => {
+      copies[data.id] = copies[data.id] || 0;
+      if (copies[data.id] >= 3 || this.deck.length >= this.maxDeckSize)
+        return false;
+      this.deck.push(new Card(data, this.id));
+      copies[data.id]++;
+      return true;
+    };
+
+    // Seleciona deck baseado no arquétipo
+    const deckList =
+      this.archetype === "shadowheart"
+        ? this.getShadowHeartDeck()
+        : this.getLuminarchDeck();
+
+    for (const cardId of deckList) {
+      const data = cardDatabase.find((c) => c.id === cardId);
+      if (data) {
+        addCard(data);
+      }
+    }
+
+    this.shuffleDeck();
+  }
+
+  // Deck Shadow-Heart otimizado para combos e fusões
+  getShadowHeartDeck() {
+    return [
+      // === MONSTROS ===
+      // Extenders e Searchers
+      34,
+      34,
+      34, // Shadow-Heart Imp (extender - 3x)
+      35, // Shadow-Heart Gecko (draw engine - 1x)
+      11,
+      11, // Shadow-Heart Specter (recursão GY - 2x)
+      36,
+      36, // Shadow-Heart Coward (discard value - 2x)
+      3,
+      3, // Shadow-Heart Observer (special summon - 2x)
+      7,
+      7, // Shadow-Heart Abyssal Eel (utility - 2x)
+      66, // Shadow-Heart Leviathan (burn beater - 1x)
+      45, // Shadow-Heart Death Wyrm (hand trap boss - 1x)
+      // Bosses
+      38,
+      38, // Shadow-Heart Scale Dragon (boss 3000 ATK - 2x)
+      31, // Shadow-Heart Demon Arctroth (boss com remoção - 1x)
+      41,
+      41, // Shadow-Heart Griffin (sem tributo - 2x)
+      // === SPELLS ===
+      100,
+      100, // Polymerization (fusão - 2x)
+      42,
+      42, // Darkness Valley (field spell - 2x)
+      37,
+      37, // Shadow-Heart Infusion (revive - 2x)
+      33,
+      33, // Shadow-Heart Covenant (searcher - 2x)
+      32, // Shadow-Heart Battle Hymn (buff - 1x)
+      39, // Shadow-Heart Rage (OTK enabler - 1x)
+      15, // Shadow-Heart Purge (remoção - 1x)
+      40, // Shadow-Heart Shield (proteção - 1x)
+    ];
+  }
+
+  // Deck Luminarch fixo e balanceado
+  getLuminarchDeck() {
+    return [
+      // Monstros principais (nível baixo - searchers/utility)
+      47,
+      47,
+      47, // Luminarch Valiant – Knight of the Dawn (searcher)
+      49,
+      49,
+      49, // Luminarch Aegisbearer (taunt/tank)
+      56,
+      56, // Luminarch Sanctified Arbiter (busca Convocation)
+      52,
+      52, // Luminarch Magic Sickle (baixo nível)
+      63,
+      63, // Luminarch Enchanted Halberd
+      // Monstros médios/altos (bosses)
+      50,
+      50, // Luminarch Moonblade Captain (revive + double attack)
+      51,
+      51, // Luminarch Celestial Marshal (boss lv7)
+      54, // Luminarch Radiant Lancer (boss lv8)
+      55, // Luminarch Aurora Seraph (boss lv8)
+      53, // Luminarch Sanctum Protector (lv7 defesa)
+      // Magias
+      57,
+      57, // Luminarch Knights Convocation
+      58,
+      58, // Sanctum of the Luminarch Citadel (field spell)
+      64,
+      64, // Luminarch Moonlit Blessing (recovery)
+      48,
+      48, // Luminarch Holy Shield (proteção)
+      61, // Luminarch Crescent Shield (equip)
+      65, // Luminarch Sacred Judgment (comeback)
+    ];
+  }
+
+  // Sobrescreve buildExtraDeck para usar fusões do arquétipo
+  buildExtraDeck() {
+    const extraDeckList =
+      this.archetype === "shadowheart"
+        ? this.getShadowHeartExtraDeck()
+        : this.getLuminarchExtraDeck();
+    super.buildExtraDeck(extraDeckList);
+  }
+
+  // Extra Deck Shadow-Heart
+  getShadowHeartExtraDeck() {
+    return [
+      101, // Shadow-Heart Demon Dragon (fusão principal)
+    ];
+  }
+
+  // Extra Deck Luminarch (placeholder para futuras fusões)
+  getLuminarchExtraDeck() {
+    return [];
   }
 
   async makeMove(game) {
-    await new Promise((resolve) => setTimeout(resolve, 800));
+    if (!game || game.gameOver) return;
 
-    if (game.phase === "main1" || game.phase === "main2") {
-      this.mainPhaseLogic(game);
-    } else if (game.phase === "battle") {
-      this.battlePhaseLogic(game);
-    } else if (game.phase === "end") {
+    const phase = game.phase;
+
+    if (phase === "main1" || phase === "main2") {
+      await this.playMainPhase(game);
+      if (!game.gameOver && game.phase === phase) {
+        setTimeout(() => game.nextPhase(), 500);
+      }
+      return;
+    }
+
+    if (phase === "battle") {
+      this.playBattlePhase(game);
+      return;
+    }
+
+    if (phase === "end") {
       game.endTurn();
     }
   }
 
-  mainPhaseLogic(game) {
-    let actionsTaken = 0;
-    let iterations = 0;
-    let improved = true;
+  async playMainPhase(game) {
+    let chainCount = 0;
+    const maxChains = this.maxChainedActions || 2;
 
-    while (
-      iterations < this.maxChainedActions &&
-      actionsTaken < this.maxSimulationsPerPhase &&
-      improved
-    ) {
-      iterations += 1;
+    while (chainCount < maxChains) {
+      const actions = this.sequenceActions(this.generateMainPhaseActions(game));
+      if (!actions.length) break;
+
       const baseScore = this.evaluateBoard(game, this);
-      const candidates = this.generateMainPhaseActions(game);
+      let bestAction = null;
+      let bestScore = baseScore;
 
-      if (candidates.length === 0) break;
-
-      let best = null;
-      let bestDelta = -Infinity;
-
-      for (const action of candidates.slice(0, this.maxSimulationsPerPhase)) {
+      for (const action of actions) {
         const simState = this.cloneGameState(game);
-        const simResult = this.simulateMainPhaseAction(simState, action);
-        const newScore = this.evaluateBoard(simState, simState.bot);
-        const delta = newScore - baseScore;
-        if (delta > bestDelta) {
-          bestDelta = delta;
-          best = action;
+        this.simulateMainPhaseAction(simState, action);
+        const score = this.evaluateBoard(simState, simState.bot);
+        if (score > bestScore + 0.001) {
+          bestScore = score;
+          bestAction = action;
         }
       }
 
-      if (!best) break;
+      if (!bestAction) break;
 
-      improved = bestDelta > -0.01;
-      actionsTaken += 1;
-      this.executeMainPhaseAction(game, best);
+      this.executeMainPhaseAction(game, bestAction);
+      chainCount += 1;
+
+      if (typeof game.waitForPhaseDelay === "function") {
+        await game.waitForPhaseDelay();
+      }
     }
-
-    setTimeout(() => game.nextPhase(), 800);
   }
 
-  battlePhaseLogic(game) {
-    const baseScore = this.evaluateBoard(game, this);
-    let bestAttack = null;
-    let bestDelta = -Infinity;
+  playBattlePhase(game) {
+    const minDeltaToAttack = 0.05;
 
-    for (const attacker of this.field) {
-      if (
-        attacker.position !== "attack" ||
-        attacker.hasAttacked ||
-        attacker.cannotAttackThisTurn
-      ) {
-        continue;
+    const performAttack = () => {
+      if (game.gameOver) return;
+
+      const availableAttackers = this.field.filter(
+        (m) =>
+          m &&
+          m.cardKind === "monster" &&
+          m.position === "attack" &&
+          !m.cannotAttackThisTurn &&
+          (m.attacksUsedThisTurn || 0) < 1 + (m.extraAttacks || 0)
+      );
+
+      if (!availableAttackers.length) {
+        setTimeout(() => game.nextPhase(), 800);
+        return;
       }
 
-      const possibleTargets = game.player.field.length
-        ? [...game.player.field]
-        : [null];
+      let bestAttack = null;
+      let bestDelta = 0;
+      const baseScore = this.evaluateBoard(game, this);
 
-      for (const target of possibleTargets) {
-        const simState = this.cloneGameState(game);
-        const simAttacker = simState.bot.field.find(
-          (c) => c.id === attacker.id
+      for (const attacker of availableAttackers) {
+        const isSecondAttack = (attacker.attacksUsedThisTurn || 0) >= 1;
+        const attackThreshold = isSecondAttack ? 0.0 : minDeltaToAttack;
+
+        const tauntTargets = game.player.field.filter(
+          (card) =>
+            card &&
+            card.cardKind === "monster" &&
+            !card.isFacedown &&
+            card.mustBeAttacked
         );
-        const simTarget = target
-          ? simState.player.field.find((c) => c.id === target.id)
-          : null;
 
-        this.simulateBattle(simState, simAttacker, simTarget);
-        const newScore = this.evaluateBoard(simState, simState.bot);
-        const delta = newScore - baseScore;
+        const possibleTargets =
+          tauntTargets.length > 0
+            ? [...tauntTargets]
+            : game.player.field.length
+            ? [...game.player.field, null]
+            : [null];
 
-        if (delta > bestDelta) {
-          bestDelta = delta;
-          bestAttack = { attacker, target };
+        for (const target of possibleTargets) {
+          if (target === null && game.player.field.length > 0) continue;
+
+          const simState = this.cloneGameState(game);
+          const simAttacker = simState.bot.field.find(
+            (c) => c.id === attacker.id
+          );
+          const simTarget = target
+            ? simState.player.field.find((c) => c.id === target.id)
+            : null;
+
+          if (!simAttacker) continue;
+
+          this.simulateBattle(simState, simAttacker, simTarget);
+          const scoreAfter = this.evaluateBoard(simState, simState.bot);
+          let delta = scoreAfter - baseScore;
+
+          if (target === null) delta += 0.5;
+          if (target && simState.bot.field.find((c) => c.id === attacker.id)) {
+            delta += 0.3;
+          }
+
+          if (delta > bestDelta) {
+            bestDelta = delta;
+            bestAttack = { attacker, target, threshold: attackThreshold };
+          }
         }
       }
-    }
 
-    if (bestAttack && bestDelta > -Infinity) {
-      game.resolveCombat(bestAttack.attacker, bestAttack.target);
-    }
+      const finalThreshold = bestAttack?.threshold ?? minDeltaToAttack;
+      if (bestAttack && bestDelta > finalThreshold) {
+        game.resolveCombat(bestAttack.attacker, bestAttack.target);
+        if (!game.gameOver) {
+          setTimeout(() => performAttack(), 800);
+        }
+      } else {
+        setTimeout(() => game.nextPhase(), 800);
+      }
+    };
 
-    setTimeout(() => game.nextPhase(), 800);
+    performAttack();
   }
 
   evaluateBoard(gameOrState, perspectivePlayer) {
-    const opponent =
-      typeof gameOrState.getOpponent === "function"
-        ? gameOrState.getOpponent(perspectivePlayer)
-        : gameOrState.player && perspectivePlayer.id === "bot"
-        ? gameOrState.player
-        : gameOrState.bot;
-    const perspective = perspectivePlayer.id
-      ? perspectivePlayer
-      : gameOrState.bot;
-    let score = 0;
-
-    // Life points
-    score += (perspective.lp - opponent.lp) / 500;
-
-    // Monster presence
-    const monsterValue = (monster) => {
-      const atk = (monster.atk || 0) + (monster.tempAtkBoost || 0);
-      const def = (monster.def || 0) + (monster.tempDefBoost || 0);
-      const base = monster.position === "defense" ? def : atk;
-      let value = base / 1000 + (monster.level || 0) * 0.15;
-      if (monster.cannotAttackThisTurn) value -= 0.2;
-      if (monster.hasAttacked) value -= 0.05;
-
-      if (perspective.fieldSpell && perspective.fieldSpell.name) {
-        if (
-          perspective.fieldSpell.name === "Darkness Valley" &&
-          monster.archetypes?.includes("Shadow-Heart")
-        ) {
-          value += 0.3;
-        }
-      }
-      return value;
-    };
-
-    const playerMonsters = perspective.field.reduce(
-      (sum, m) => sum + monsterValue(m),
-      0
-    );
-    const oppMonsters = opponent.field.reduce(
-      (sum, m) => sum + monsterValue(m),
-      0
-    );
-    score += playerMonsters - oppMonsters;
-
-    // Spells and field
-    if (perspective.fieldSpell) {
-      score += 1.2;
-      if (perspective.fieldSpell.name === "Darkness Valley") {
-        score += 0.5;
-      }
-    }
-    score -= opponent.fieldSpell ? 0.8 : 0;
-
-    // Equips on field
-    score += perspective.spellTrap.length * 0.2;
-    score -= opponent.spellTrap.length * 0.15;
-
-    // Hand advantage
-    score += (perspective.hand.length - opponent.hand.length) * 0.3;
-
-    // Graveyard synergies
-    const hasReviver = perspective.hand.some((c) =>
-      ["Monster Reborn", "Shadow-Heart Infusion"].includes(c.name)
-    );
-    if (hasReviver) {
-      const bestGY = perspective.graveyard.reduce(
-        (max, c) =>
-          c.cardKind === "monster" ? Math.max(max, c.atk || 0) : max,
-        0
-      );
-      score += bestGY / 2000;
-    }
-
-    const hasInvocation = perspective.hand.some(
-      (c) => c.name === "Shadow-Heart Invocation"
-    );
-    const hasScaleDragon =
-      perspective.hand.some((c) => c.name === "Shadow-Heart Scale Dragon") ||
-      perspective.graveyard.some((c) => c.name === "Shadow-Heart Scale Dragon");
-    if (hasInvocation && hasScaleDragon) {
-      score += 1.5;
-    }
-
-    return score;
+    return this.strategy.evaluateBoard(gameOrState, perspectivePlayer);
   }
 
   generateMainPhaseActions(game) {
-    const actions = [];
+    return this.strategy.generateMainPhaseActions(game);
+  }
 
-    // Summon / Set monsters
-    this.hand.forEach((card, index) => {
-      if (card.cardKind !== "monster") return;
-      if (this.summonCount >= 1) return;
-      const tributeInfo = this.getTributeRequirement(card);
-      if (this.field.length < tributeInfo.tributesNeeded) return;
-
-      actions.push({
-        type: "summon",
-        index,
-        position: "attack",
-        facedown: false,
-      });
-      actions.push({
-        type: "summon",
-        index,
-        position: "defense",
-        facedown: true,
-      });
-    });
-
-    // Spells
-    this.hand.forEach((card, index) => {
-      if (card.cardKind !== "spell") return;
-      const check = game.effectEngine.canActivate(card, this);
-      if (!check.ok) return;
-
-      // Extra heuristics
-      if (card.name === "Shadow-Heart Infusion") {
-        const gyHasSH = this.graveyard.some((c) =>
-          c.archetypes?.includes("Shadow-Heart")
-        );
-        if (this.hand.length < 3 || !gyHasSH) return;
-      }
-      if (card.name === "Shadow-Heart Invocation") {
-        const hasScale =
-          this.hand.some((c) => c.name === "Shadow-Heart Scale Dragon") ||
-          this.graveyard.some((c) => c.name === "Shadow-Heart Scale Dragon");
-        const uniqueSH = new Set(
-          this.field
-            .filter((c) => c.archetypes?.includes("Shadow-Heart"))
-            .map((c) => c.name)
-        );
-        if (!hasScale || uniqueSH.size < 3) return;
-      }
-      if (card.subtype === "field" && this.fieldSpell) {
-        // Prefer not replacing unless field is missing
-        if (this.fieldSpell.name === card.name) return;
-      }
-
-      actions.push({ type: "spell", index });
-    });
-
-    // Field spell activated effects
-    if (this.fieldSpell) {
-      const effect = (this.fieldSpell.effects || []).find(
-        (e) => e.timing === "on_field_activate"
-      );
-      if (effect) {
-        const optCheck = game.effectEngine.checkOncePerTurn(
-          this.fieldSpell,
-          this,
-          effect
-        );
-        if (optCheck.ok) {
-          actions.push({ type: "fieldEffect" });
-        }
-      }
-    }
-
-    return actions;
+  sequenceActions(actions) {
+    return this.strategy.sequenceActions(actions);
   }
 
   getTributeRequirementFor(card, playerState) {
-    let tributesNeeded = 0;
-    if (card.level >= 5 && card.level <= 6) tributesNeeded = 1;
-    else if (card.level >= 7) tributesNeeded = 2;
+    return this.strategy.getTributeRequirementFor(card, playerState);
+  }
 
-    let usingAlt = false;
-    const alt = card.altTribute;
-    if (
-      alt?.type === "no_tribute_if_empty_field" &&
-      (playerState.field?.length || 0) === 0 &&
-      tributesNeeded > 0
-    ) {
-      tributesNeeded = 0;
-      usingAlt = true;
-    }
-    if (alt && playerState.field?.some((c) => c.name === alt.requiresName)) {
-      if (alt.tributes < tributesNeeded) {
-        tributesNeeded = alt.tributes;
-        usingAlt = true;
-      }
-    }
-
-    return { tributesNeeded, usingAlt, alt };
+  // Seleciona os melhores monstros para usar como tributo (os PIORES do campo)
+  selectBestTributes(field, tributesNeeded, cardToSummon) {
+    return this.strategy.selectBestTributes(
+      field,
+      tributesNeeded,
+      cardToSummon
+    );
   }
 
   simulateMainPhaseAction(state, action) {
-    if (!action) return state;
-
-    switch (action.type) {
-      case "summon": {
-        const player = state.bot;
-        const card = player.hand[action.index];
-        if (!card) break;
-        const tributeInfo = this.getTributeRequirementFor(card, player);
-        const tributesNeeded = tributeInfo.tributesNeeded;
-        const tributeIndices = [];
-        for (let i = 0; i < tributesNeeded; i++) {
-          tributeIndices.push(i);
-        }
-
-        tributeIndices.sort((a, b) => b - a);
-        tributeIndices.forEach((idx) => {
-          const t = player.field[idx];
-          if (t) {
-            player.graveyard.push(t);
-            player.field.splice(idx, 1);
-          }
-        });
-
-        player.hand.splice(action.index, 1);
-        const newCard = { ...card };
-        newCard.position = action.position;
-        newCard.isFacedown = action.facedown;
-        newCard.hasAttacked = false;
-        player.field.push(newCard);
-        player.summonCount = (player.summonCount || 0) + 1;
-        break;
-      }
-      case "spell": {
-        const player = state.bot;
-        const card = player.hand[action.index];
-        if (!card) break;
-        this.simulateSpellEffect(state, card);
-        player.hand.splice(action.index, 1);
-        player.graveyard.push(card);
-        break;
-      }
-      case "fieldEffect": {
-        const player = state.bot;
-        if (player.fieldSpell && player.fieldSpell.name === "Darkness Valley") {
-          player.field.forEach((m) => {
-            if (m.archetypes?.includes("Shadow-Heart")) {
-              m.atk += 300;
-            }
-          });
-        }
-        break;
-      }
-      default:
-        break;
-    }
-
-    return state;
+    return this.strategy.simulateMainPhaseAction(state, action);
   }
 
   simulateSpellEffect(state, card) {
-    const player = state.bot;
-    const opponent = state.player;
-
-    switch (card.name) {
-      case "Arcane Surge":
-        player.hand.push({ placeholder: true }, { placeholder: true });
-        break;
-      case "Shadow Purge": {
-        const target = opponent.field
-          .slice()
-          .sort((a, b) => (b.atk || 0) - (a.atk || 0))[0];
-        if (target) {
-          const idx = opponent.field.indexOf(target);
-          opponent.field.splice(idx, 1);
-          opponent.graveyard.push(target);
-        }
-        break;
-      }
-      case "Blood Sucking":
-        player.lp += 1000;
-        break;
-      case "Cheap Necromancy": {
-        if (player.field.length < 5) {
-          player.field.push({
-            name: "Summoned Imp Token",
-            atk: 500,
-            def: 500,
-            level: 1,
-            position: "attack",
-            isFacedown: false,
-            cardKind: "monster",
-          });
-        }
-        break;
-      }
-      case "Shadow Coat": {
-        const target = player.field.sort(
-          (a, b) => (b.atk || 0) - (a.atk || 0)
-        )[0];
-        if (target) {
-          target.atk += 1000;
-          target.tempAtkBoost = (target.tempAtkBoost || 0) + 1000;
-        }
-        break;
-      }
-      case "Infinity Searcher":
-        player.hand.push({ placeholder: true });
-        break;
-      case "Transmutate": {
-        if (
-          player.field.length &&
-          player.graveyard.length &&
-          player.field.length < 5
-        ) {
-          const sent = player.field.shift();
-          player.graveyard.push(sent);
-          const level = sent.level || 0;
-          const candidate = player.graveyard
-            .filter((c) => c.level === level && c.cardKind === "monster")
-            .sort((a, b) => (b.atk || 0) - (a.atk || 0))[0];
-          if (candidate) {
-            const idx = player.graveyard.indexOf(candidate);
-            player.graveyard.splice(idx, 1);
-            candidate.position = "attack";
-            candidate.hasAttacked = false;
-            player.field.push(candidate);
-          }
-        }
-        break;
-      }
-      case "Monster Reborn": {
-        if (player.field.length >= 5) break;
-        const pool = [...player.graveyard, ...opponent.graveyard];
-        const best = pool
-          .filter((c) => c.cardKind === "monster")
-          .sort((a, b) => (b.atk || 0) - (a.atk || 0))[0];
-        if (best) {
-          const ownerGrave = player.graveyard.includes(best)
-            ? player.graveyard
-            : opponent.graveyard;
-          const idx = ownerGrave.indexOf(best);
-          ownerGrave.splice(idx, 1);
-          best.position = "attack";
-          best.hasAttacked = false;
-          player.field.push(best);
-        }
-        break;
-      }
-      case "Shadow Recall": {
-        if (player.field.length) {
-          const bounce = player.field.pop();
-          player.hand.push(bounce);
-        }
-        break;
-      }
-      case "Shadow-Heart Infusion": {
-        if (player.hand.length >= 2 && player.field.length < 5) {
-          const discards = player.hand.splice(0, 2);
-          player.graveyard.push(...discards);
-          const target = player.graveyard
-            .filter(
-              (c) =>
-                c.archetypes?.includes("Shadow-Heart") &&
-                c.cardKind === "monster"
-            )
-            .sort((a, b) => (b.atk || 0) - (a.atk || 0))[0];
-          if (target) {
-            const idx = player.graveyard.indexOf(target);
-            player.graveyard.splice(idx, 1);
-            target.position = "attack";
-            target.cannotAttackThisTurn = true;
-            player.field.push(target);
-          }
-        }
-        break;
-      }
-      case "Shadow-Heart Invocation": {
-        const shMonsters = player.field.filter((c) =>
-          c.archetypes?.includes("Shadow-Heart")
-        );
-        const uniqueNames = new Set(shMonsters.map((c) => c.name));
-        if (
-          uniqueNames.size >= 3 &&
-          player.field.length >= 3 &&
-          player.field.length <= 5
-        ) {
-          const tributes = shMonsters.slice(0, 3);
-          tributes.forEach((t) => {
-            const idx = player.field.indexOf(t);
-            if (idx > -1) {
-              player.field.splice(idx, 1);
-              player.graveyard.push(t);
-            }
-          });
-          const dragon =
-            player.hand.find((c) => c.name === "Shadow-Heart Scale Dragon") ||
-            player.graveyard.find(
-              (c) => c.name === "Shadow-Heart Scale Dragon"
-            );
-          if (dragon) {
-            const fromGY = player.graveyard.includes(dragon);
-            if (fromGY) {
-              const idx = player.graveyard.indexOf(dragon);
-              player.graveyard.splice(idx, 1);
-            } else {
-              const idx = player.hand.indexOf(dragon);
-              player.hand.splice(idx, 1);
-            }
-            dragon.position = "attack";
-            dragon.hasAttacked = false;
-            player.field.push(dragon);
-          }
-        }
-        break;
-      }
-      case "Shadow-Heart Shield": {
-        const target = player.field.sort(
-          (a, b) => (b.atk || 0) - (a.atk || 0)
-        )[0];
-        if (target) {
-          target.atk += 500;
-          target.def += 500;
-          target.battleIndestructible = true;
-        }
-        break;
-      }
-      case "Darkness Valley": {
-        player.fieldSpell = { ...card };
-        player.field.forEach((m) => {
-          if (m.archetypes?.includes("Shadow-Heart")) {
-            m.atk += 300;
-          }
-        });
-        break;
-      }
-      default:
-        break;
-    }
+    return this.strategy.simulateSpellEffect(state, card);
   }
 
   simulateBattle(state, attacker, target) {
     if (!attacker) return;
     if (attacker.cannotAttackThisTurn) return;
+    if (attacker.position === "defense") return;
+
+    const maxAttacks = 1 + (attacker.extraAttacks || 0);
+    const usedAttacks = attacker.attacksUsedThisTurn || 0;
+    if (usedAttacks >= maxAttacks) return;
 
     const attackerOwner = state.bot;
     const defenderOwner = state.player;
@@ -543,7 +339,8 @@ export default class Bot extends Player {
     const attackStat = attacker.atk || 0;
     if (!target) {
       defenderOwner.lp -= attackStat;
-      attacker.hasAttacked = true;
+      attacker.attacksUsedThisTurn = usedAttacks + 1;
+      attacker.hasAttacked = attacker.attacksUsedThisTurn >= maxAttacks;
       return;
     }
 
@@ -572,14 +369,35 @@ export default class Bot extends Player {
         attackerOwner.lp -= targetStat - attackStat;
       }
     }
-    attacker.hasAttacked = true;
+    attacker.attacksUsedThisTurn = usedAttacks + 1;
+    attacker.hasAttacked = attacker.attacksUsedThisTurn >= maxAttacks;
   }
 
   executeMainPhaseAction(game, action) {
     if (!action) return;
 
     if (action.type === "summon") {
-      const card = this.summon(action.index, action.position, action.facedown);
+      const cardToSummon = this.hand[action.index];
+      if (!cardToSummon) return;
+
+      // Calcular tributos necessários e selecionar os melhores (piores monstros)
+      const tributeInfo = this.getTributeRequirementFor(cardToSummon, this);
+      let tributeIndices = null;
+
+      if (tributeInfo.tributesNeeded > 0) {
+        tributeIndices = this.selectBestTributes(
+          this.field,
+          tributeInfo.tributesNeeded,
+          cardToSummon
+        );
+      }
+
+      const card = this.summon(
+        action.index,
+        action.position,
+        action.facedown,
+        tributeIndices
+      );
       if (card) {
         game.renderer.log(
           `Bot summons ${action.facedown ? "a monster in defense" : card.name}`
@@ -644,6 +462,34 @@ export default class Bot extends Player {
     );
     if (!effect || !effect.targets) return null;
 
+    // Helper: Check if card has Luminarch archetype
+    const hasLuminarchArchetype = (c) => {
+      const archetypes = Array.isArray(c.archetypes)
+        ? c.archetypes
+        : c.archetype
+        ? [c.archetype]
+        : [];
+      return archetypes.includes("Luminarch");
+    };
+
+    // Helper: Evaluate card value (ATK + archetype bonus + special boss bonus)
+    const evaluateCardValue = (c) => {
+      let value = c.atk || 0;
+      if (hasLuminarchArchetype(c)) {
+        value += 500; // Luminarch bonus
+        // Boss bonus
+        if (
+          c.name.includes("Marshal") ||
+          c.name.includes("Lancer") ||
+          c.name.includes("Seraph") ||
+          c.name.includes("Moonblade")
+        ) {
+          value += 300;
+        }
+      }
+      return value;
+    };
+
     const selections = {};
     effect.targets.forEach((targetDef) => {
       const candidates = game.effectEngine.selectCandidates(targetDef, {
@@ -666,17 +512,121 @@ export default class Bot extends Player {
         chosen = [bestIdx];
       } else if (
         card.name === "Shadow-Heart Shield" ||
-        card.name === "Shadow Coat"
+        card.name === "Shadow Coat" ||
+        card.name === "Luminarch Holy Ascension" ||
+        card.name === "Luminarch Crescent Shield"
       ) {
+        // Escolher o monstro mais forte para buffs
         let bestIdx = 0;
-        let bestAtk = -Infinity;
+        let bestValue = -Infinity;
         candidates.candidates.forEach((c, idx) => {
-          if (c.atk > bestAtk) {
-            bestAtk = c.atk;
+          const value = evaluateCardValue(c);
+          if (value > bestValue) {
+            bestValue = value;
             bestIdx = idx;
           }
         });
         chosen = [bestIdx];
+      } else if (card.name === "Luminarch Holy Shield") {
+        // Escolher até 3 monstros Luminarch para proteger
+        // Priorize by value (ATK + Citadel bonus if present)
+        const luminarchCandidates = candidates.candidates
+          .map((c, idx) => ({
+            idx,
+            card: c,
+            value: evaluateCardValue(c),
+          }))
+          .filter((item) => hasLuminarchArchetype(item.card))
+          .sort((a, b) => b.value - a.value)
+          .slice(0, 3);
+
+        chosen =
+          luminarchCandidates.length > 0
+            ? luminarchCandidates.map((item) => item.idx)
+            : [0];
+      } else if (card.name === "Luminarch Moonlit Blessing") {
+        // Escolher o Luminarch mais forte do GY
+        // Bonus se Citadel está no campo (special summon é possível)
+        const citadelBonus =
+          this.fieldSpell?.name === "Sanctum of the Luminarch Citadel"
+            ? 200
+            : 0;
+        let bestIdx = 0;
+        let bestValue = -Infinity;
+        candidates.candidates.forEach((c, idx) => {
+          if (hasLuminarchArchetype(c)) {
+            let value = c.atk || 0;
+            value += citadelBonus; // Boost if Citadel is present
+            if (value > bestValue) {
+              bestValue = value;
+              bestIdx = idx;
+            }
+          }
+        });
+        chosen = [bestIdx];
+      } else if (card.name === "Luminarch Sacred Judgment") {
+        // Escolher múltiplos Luminarch do GY para reviver
+        // Priorize by ATK, respect field capacity (max 5)
+        // Select highest ATK monsters to maximize board pressure
+        const maxSummons = Math.min(
+          targetDef.count?.max || 3,
+          5 - this.field.length
+        );
+        const luminarchCandidates = candidates.candidates
+          .map((c, idx) => ({
+            idx,
+            card: c,
+            atk: c.atk || 0,
+          }))
+          .filter(
+            (item) =>
+              hasLuminarchArchetype(item.card) &&
+              item.card.cardKind === "monster"
+          )
+          .sort((a, b) => b.atk - a.atk)
+          .slice(0, maxSummons);
+
+        if (luminarchCandidates.length > 0) {
+          console.log(
+            `[Sacred Judgment] Summoning ${
+              luminarchCandidates.length
+            } monsters: ${luminarchCandidates
+              .map((c) => c.card.name)
+              .join(", ")}`
+          );
+        }
+
+        chosen =
+          luminarchCandidates.length > 0
+            ? luminarchCandidates.map((item) => item.idx)
+            : [];
+      } else if (card.name === "Luminarch Knights Convocation") {
+        // Convocation: Discard Luminarch lv7+ to search any Luminarch
+        // Strategy: Discard weakest lv7+ to minimize loss
+        // The search target will be handled in follow-up selection
+        let discardIdx = -1;
+        let lowestValue = Infinity;
+        candidates.candidates.forEach((c, idx) => {
+          if (hasLuminarchArchetype(c) && (c.level || 0) >= 7) {
+            const value = evaluateCardValue(c);
+            if (value < lowestValue) {
+              lowestValue = value;
+              discardIdx = idx;
+            }
+          }
+        });
+
+        // Log selection for debugging
+        if (discardIdx >= 0) {
+          const discardCard = candidates.candidates[discardIdx];
+          console.log(
+            `[Convocation] Discarding ${
+              discardCard.name
+            } (value ${evaluateCardValue(discardCard)}) to search.`
+          );
+        }
+
+        chosen = discardIdx >= 0 ? [discardIdx] : [0];
       } else if (card.name === "Shadow-Heart Infusion") {
         chosen = candidates.candidates.map((_, idx) => idx).slice(0, 2);
       } else if (card.name === "Shadow-Heart Invocation") {
@@ -701,10 +651,17 @@ export default class Bot extends Player {
     if (!Array.isArray(options)) return null;
     const selections = {};
     for (const opt of options) {
-      if (!opt.def || !Array.isArray(opt.candidates)) continue;
-      selections[opt.def.id] = [0];
+      if (!opt || !Array.isArray(opt.candidates)) continue;
+      const pickCount = Math.max(1, opt.min || 0);
+      const chosen = [];
+      for (let i = 0; i < Math.min(pickCount, opt.candidates.length); i++) {
+        chosen.push(i);
+      }
+      if (chosen.length) {
+        selections[opt.id] = chosen;
+      }
     }
-    return selections;
+    return Object.keys(selections).length ? selections : null;
   }
 
   cloneGameState(game) {
@@ -726,6 +683,11 @@ export default class Bot extends Player {
       bot: clonePlayer(this),
       turn: game.turn,
       phase: game.phase,
+      turnCounter: game.turnCounter || 0,
+      // Clone once-per-turn tracking from effectEngine if available
+      usedThisTurn: game.effectEngine?.usedThisTurn
+        ? new Map(game.effectEngine.usedThisTurn)
+        : new Map(),
     };
   }
 }

@@ -23,14 +23,40 @@ export const cardDatabase = [
   },
   {
     id: 3,
-    name: "Mystic Eye",
+    name: "Shadow-Heart Observer",
     cardKind: "monster",
-    atk: 500,
-    def: 2000,
+    atk: 1000,
+    def: 1000,
     level: 3,
     type: "Fiend",
-    description: "It sees everything.",
-    image: "assets/mystic_eye.png",
+    archetype: "Shadow-Heart",
+    description:
+      "If this card is Normal Summoned: You can target 1 monster your opponent controls with Level 4 or lower; Special Summon 1 monster from your hand with the same Level as the target.",
+    image: "assets/Shadow-Heart Observer.png",
+    effects: [
+      {
+        id: "shadow_heart_observer_special_summon",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethod: "normal",
+        targets: [
+          {
+            id: "observer_target",
+            owner: "opponent",
+            zone: "field",
+            cardKind: "monster",
+            maxLevel: 4,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "shadow_heart_observer_summon",
+            targetRef: "observer_target",
+          },
+        ],
+      },
+    ],
   },
   {
     id: 4,
@@ -67,14 +93,43 @@ export const cardDatabase = [
   },
   {
     id: 7,
-    name: "Abyssal Eel",
+    name: "Shadow-Heart Abyssal Eel",
     cardKind: "monster",
-    atk: 1800,
-    def: 400,
-    level: 5,
+    atk: 1600,
+    def: 1700,
+    level: 4,
     type: "Sea Serpent",
-    description: "Strikes from the deep.",
-    image: "assets/abyssal_eel.png",
+    archetype: "Shadow-Heart",
+    description:
+      'If this card is attacked while in Defense Position: inflict 600 damage to your opponent. You can send this card from the field to the GY; Special Summon 1 "Shadow-Heart Leviathan" from your hand, but it cannot attack this turn.',
+    image: "assets/Shadow-Heart Abyssal Eel.png",
+    effects: [
+      {
+        id: "shadow_heart_abyssal_eel_battle_damage",
+        timing: "on_event",
+        event: "attack_declared",
+        requireDefenderPosition: true,
+        requireSelfAsDefender: true,
+        actions: [
+          {
+            type: "damage",
+            player: "opponent",
+            amount: 600,
+          },
+        ],
+      },
+      {
+        id: "shadow_heart_abyssal_eel_summon",
+        timing: "ignition",
+        oncePerTurn: true,
+        oncePerTurnName: "shadow_heart_abyssal_eel_summon",
+        actions: [
+          {
+            type: "abyssal_eel_special_summon",
+          },
+        ],
+      },
+    ],
   },
   {
     id: 8,
@@ -111,14 +166,45 @@ export const cardDatabase = [
   },
   {
     id: 11,
-    name: "Cursed Specter",
+    name: "Shadow-Heart Specter",
     cardKind: "monster",
-    atk: 1400,
-    def: 1400,
-    level: 3,
+    atk: 800,
+    def: 800,
+    level: 2,
     type: "Spirit",
-    description: "A floating ghostly figure with chains.",
-    image: "assets/phantom.png",
+    archetype: "Shadow-Heart",
+    description:
+      'If this card is sent to the Graveyard: You can target 1 "Shadow-Heart" monster in your Graveyard, except "Shadow-Heart Specter"; add it to your hand. You can only use this effect of "Shadow-Heart Specter" once per turn.',
+    image: "assets/Shadow-Heart Specter.png",
+    effects: [
+      {
+        id: "shadow_heart_specter_recycle",
+        timing: "on_event",
+        event: "card_to_grave",
+        fromZone: "any",
+        oncePerTurn: true,
+        oncePerTurnName: "shadow_heart_specter_recycle",
+        targets: [
+          {
+            id: "specter_recycle_target",
+            owner: "self",
+            zone: "graveyard",
+            cardKind: "monster",
+            archetype: "Shadow-Heart",
+            excludeCardName: "Shadow-Heart Specter",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "specter_recycle_target",
+            player: "self",
+            to: "hand",
+          },
+        ],
+      },
+    ],
   },
   {
     id: 12,
@@ -130,17 +216,6 @@ export const cardDatabase = [
     type: "Beast",
     description: "A demonic horse with flaming mane.",
     image: "assets/shadow_wolf.png",
-  },
-  {
-    id: 13,
-    name: "Void Walker",
-    cardKind: "monster",
-    atk: 2800,
-    def: 2500,
-    level: 8,
-    type: "Cosmic",
-    description: "A cosmic entity walking through a void portal.",
-    image: "assets/mystic_eye.png",
   },
   {
     id: 14,
@@ -160,28 +235,42 @@ export const cardDatabase = [
   },
   {
     id: 15,
-    name: "Shadow Purge",
+    name: "Shadow-Heart Purge",
     cardKind: "spell",
     subtype: "normal",
-    description: "Destroy 1 opponent's monster (highest ATK).",
-    image: "assets/Shadow Purge.png",
+    archetype: "Shadow-Heart",
+    description:
+      "Discard 1 card; then target 1 monster your opponent controls; destroy that target.",
+    image: "assets/Shadow-Heart Purge.png",
     effects: [
       {
-        id: "shadow_purge_destroy",
+        id: "shadow_heart_purge_destroy",
         timing: "on_play",
         speed: 1,
         targets: [
           {
-            id: "target_monster",
+            id: "purge_discard",
+            owner: "self",
+            zone: "hand",
+            count: { min: 1, max: 1 },
+          },
+          {
+            id: "purge_target_monster",
             owner: "opponent",
             zone: "field",
             cardKind: "monster",
             count: { min: 1, max: 1 },
-            strategy: "highest_atk",
-            autoSelect: true,
           },
         ],
-        actions: [{ type: "destroy", targetRef: "target_monster" }],
+        actions: [
+          {
+            type: "move",
+            targetRef: "purge_discard",
+            player: "self",
+            to: "graveyard",
+          },
+          { type: "destroy", targetRef: "purge_target_monster" },
+        ],
       },
     ],
   },
@@ -265,6 +354,7 @@ export const cardDatabase = [
             owner: "self",
             zone: "field",
             cardKind: "monster",
+            requireFaceup: true,
             count: { min: 1, max: 1 },
           },
         ],
@@ -344,7 +434,6 @@ export const cardDatabase = [
             targetRef: "reborn_target",
             player: "self",
             to: "field",
-            position: "attack",
             isFacedown: false,
             resetAttackFlags: true,
           },
@@ -468,6 +557,7 @@ export const cardDatabase = [
             zone: "field",
             cardKind: "monster",
             archetype: "Shadow-Heart", // <<< filtro de arquétipo
+            requireFaceup: true,
             count: { min: 1, max: 5 },
             autoSelect: true, // pega automaticamente todos os válidos
           },
@@ -488,17 +578,25 @@ export const cardDatabase = [
     cardKind: "spell",
     subtype: "normal",
     archetype: "Shadow-Heart",
-    description: 'Add 1 "Shadow-Heart" card from your Deck to your hand.',
+    description:
+      'Pay 800 LP; add 1 "Shadow-Heart" card from your Deck to your hand. You can only activate 1 "Shadow-Heart Covenant" per turn.',
     image: "assets/Shadow-Heart Covenant.png",
     effects: [
       {
         id: "shadow_heart_covenant",
         timing: "on_play",
         speed: 1,
+        oncePerTurn: true,
+        oncePerTurnName: "shadow_heart_covenant",
         actions: [
           {
+            type: "pay_lp",
+            amount: 800,
+            player: "self",
+          },
+          {
             type: "search_any",
-            archetype: "Shadow-Heart", // usa o filtro do EffectEngine
+            archetype: "Shadow-Heart",
           },
         ],
       },
@@ -514,7 +612,7 @@ export const cardDatabase = [
     type: "Fiend",
     archetype: "Shadow-Heart",
     description:
-      'When this card is Normal Summoned: You can Special Summon 1 Level 4 or lower "Shadow-Heart" monster from your hand.',
+      'When this card is Normal Summoned: You can Special Summon 1 Level 4 or lower "Shadow-Heart" monster from your hand. You can only use this effect of "Shadow-Heart Imp" once per turn.',
     image: "assets/Shadow-Heart Imp.png",
     effects: [
       {
@@ -522,6 +620,8 @@ export const cardDatabase = [
         timing: "on_event",
         event: "after_summon",
         summonMethod: "normal",
+        oncePerTurn: true,
+        oncePerTurnName: "shadow_heart_imp_on_summon",
         targets: [
           {
             id: "imp_special_from_hand",
@@ -558,13 +658,16 @@ export const cardDatabase = [
     type: "Reptile",
     archetype: "Shadow-Heart",
     description:
-      "If an opponent's monster is destroyed by battle while this card is on the field: Draw 1 card.",
+      'If an opponent\'s monster is destroyed by battle while this card is on the field: Draw 1 card. You can only use this effect of "Shadow-Heart Gecko" once per turn.',
     image: "assets/Shadow-Heart Gecko.png",
     effects: [
       {
         id: "shadow_heart_gecko_draw",
         timing: "on_event",
         event: "battle_destroy",
+        requireDestroyedIsOpponent: true,
+        oncePerTurn: true,
+        oncePerTurnName: "shadow_heart_gecko_draw",
         actions: [
           {
             type: "draw",
@@ -599,6 +702,7 @@ export const cardDatabase = [
             owner: "opponent",
             zone: "field",
             cardKind: "monster",
+            requireFaceup: true,
             count: { min: 1, max: 1 },
           },
         ],
@@ -620,13 +724,15 @@ export const cardDatabase = [
     subtype: "normal",
     archetype: "Shadow-Heart",
     description:
-      'Discard 2 cards from your hand, then Special Summon 1 "Shadow-Heart" monster from your Graveyard, but it cannot declare an attack this turn.',
+      'Discard 2 cards from your hand, then Special Summon 1 "Shadow-Heart" monster from your Graveyard, but it cannot declare an attack this turn. You can only activate 1 "Shadow-Heart Infusion" per turn.',
     image: "assets/Shadow-Heart Infusion.png",
     effects: [
       {
         id: "shadow_heart_infusion",
         timing: "on_play",
         speed: 1,
+        oncePerTurn: true,
+        oncePerTurnName: "shadow_heart_infusion",
         targets: [
           {
             id: "infusion_discard",
@@ -657,12 +763,12 @@ export const cardDatabase = [
     cardKind: "monster",
     atk: 3000,
     def: 2500,
-    level: 8,
+    level: 9,
     type: "Dragon",
     archetype: "Shadow-Heart",
-    summonRestrict: "shadow_heart_invocation_only",
+    requiredTributes: 3,
     description:
-      'Cannot be Normal Summoned/Set. Must be Special Summoned by the effect of "Shadow-Heart Invocation" and cannot be Special Summoned by other ways. When this card destroys a monster by battle: target 1 "Shadow-Heart" monster in your Graveyard; shuffle that target into the Deck.',
+      'Requires 3 tributes to Normal Summon/Set. Once per turn, if this card destroys a monster by battle: You can target 1 "Shadow-Heart" card in your Graveyard; add it to your hand.',
     image: "assets/Shadow-Heart Scale Dragon.png",
     effects: [
       {
@@ -670,12 +776,13 @@ export const cardDatabase = [
         timing: "on_event",
         event: "battle_destroy",
         requireSelfAsAttacker: true,
+        oncePerTurn: true,
+        oncePerTurnName: "shadow_heart_scale_dragon_recycle",
         targets: [
           {
             id: "shadow_heart_recycle_target",
             owner: "self",
             zone: "graveyard",
-            cardKind: "monster",
             archetype: "Shadow-Heart",
             count: { min: 1, max: 1 },
           },
@@ -685,7 +792,7 @@ export const cardDatabase = [
             type: "move",
             targetRef: "shadow_heart_recycle_target",
             player: "self",
-            to: "deck",
+            to: "hand",
           },
         ],
       },
@@ -693,32 +800,23 @@ export const cardDatabase = [
   },
   {
     id: 39,
-    name: "Shadow-Heart Invocation",
+    name: "Shadow-Heart Rage",
     cardKind: "spell",
     subtype: "normal",
     archetype: "Shadow-Heart",
     description:
-      'If "Shadow-Heart Scale Dragon" is in your hand or Graveyard: Tribute 3 "Shadow-Heart" monsters with different names; Special Summon 1 "Shadow-Heart Scale Dragon" from your hand or Graveyard.',
-    image: "assets/Shadow-Heart Invocation.png",
+      'If "Shadow-Heart Scale Dragon" is the only monster you control: It gains 700 ATK/DEF until the end of this turn, and it can make a second attack during this Battle Phase.',
+    image: "assets/Shadow-Heart Rage.png",
     effects: [
       {
-        id: "shadow_heart_invocation_ritual",
+        id: "shadow_heart_rage_scale_buff_effect",
         timing: "on_play",
         speed: 1,
-        targets: [
-          {
-            id: "shadow_heart_ritual_tributes",
-            owner: "self",
-            zone: "field",
-            cardKind: "monster",
-            archetype: "Shadow-Heart",
-            count: { min: 3, max: 3 },
-          },
-        ],
         actions: [
           {
-            type: "shadow_heart_ritual_summon",
-            tributeRef: "shadow_heart_ritual_tributes",
+            type: "shadow_heart_rage_scale_buff",
+            atkBoost: 700,
+            defBoost: 700,
           },
         ],
       },
@@ -731,7 +829,7 @@ export const cardDatabase = [
     subtype: "equip",
     archetype: "Shadow-Heart",
     description:
-      "Equip only to a monster you control. It gains 500 ATK/DEF and cannot be destroyed by battle.",
+      "Equip only to a monster you control. It gains 500 ATK/DEF and cannot be destroyed by battle. During each of your Standby Phases: pay 800 LP or send this card to the Graveyard.",
     image: "assets/Shadow-Heart Shield.png",
     effects: [
       {
@@ -757,6 +855,15 @@ export const cardDatabase = [
           },
         ],
       },
+      {
+        timing: "on_event",
+        event: "standby_phase",
+        actions: [
+          {
+            type: "shadow_heart_shield_upkeep",
+          },
+        ],
+      },
     ],
   },
   {
@@ -770,7 +877,7 @@ export const cardDatabase = [
     archetype: "Shadow-Heart",
     altTribute: { type: "no_tribute_if_empty_field" },
     description:
-      "If you control no monsters, you can Normal Summon this card without Tributing. Otherwise, Tribute Summon it as a Level 5 monster.",
+      "If you control no monsters, you can Normal Summon this card without Tributing.",
     image: "assets/Shadow-Heart Griffin.png",
     effects: [],
   },
@@ -831,6 +938,1993 @@ export const cardDatabase = [
             type: "darkness_valley_battle_punish",
             archetype: "Shadow-Heart",
             minLevel: 8,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 43,
+    name: "Light-Dividing Sword",
+    cardKind: "spell",
+    subtype: "equip",
+    description:
+      "Equip only to a monster you control. When that monster destroys a monster by battle: gain 500 LP. If this card is sent to the Graveyard: target 1 Spell your opponent controls; destroy that target.",
+    image: "assets/Light-Dividing Sword.png",
+    effects: [
+      {
+        id: "light_dividing_sword_equip",
+        timing: "on_play",
+        speed: 1,
+        targets: [
+          {
+            id: "lds_equip_target",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "equip",
+            targetRef: "lds_equip_target",
+          },
+        ],
+      },
+      {
+        id: "light_dividing_sword_lifegain",
+        timing: "on_event",
+        event: "battle_destroy",
+        requireEquippedAsAttacker: true,
+        actions: [
+          {
+            type: "heal",
+            player: "self",
+            amount: 500,
+          },
+        ],
+      },
+      {
+        id: "light_dividing_sword_pop_backrow",
+        timing: "on_event",
+        event: "card_to_grave",
+        fromZone: "spellTrap",
+        actions: [
+          {
+            type: "destroy",
+            targetRef: "lds_pop_target",
+          },
+        ],
+        targets: [
+          {
+            id: "lds_pop_target",
+            owner: "opponent",
+            zone: "spellTrap",
+            cardKind: "spell",
+            count: { min: 1, max: 1 },
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 44,
+    name: "Sword of Two Darks",
+    cardKind: "spell",
+    subtype: "equip",
+    description:
+      "Equip only to a monster you control. It can make 1 additional attack during each Battle Phase. If this card is sent to the Graveyard: target 1 Spell/Trap your opponent controls; destroy that target.",
+    image: "assets/Sword of Two Darks.png",
+    effects: [
+      {
+        id: "sword_of_two_darks_equip",
+        timing: "on_play",
+        speed: 1,
+        targets: [
+          {
+            id: "sotd_equip_target",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "equip",
+            targetRef: "sotd_equip_target",
+            extraAttacks: 1,
+          },
+        ],
+      },
+      {
+        id: "sword_of_two_darks_pop_backrow",
+        timing: "on_event",
+        event: "card_to_grave",
+        fromZone: "spellTrap",
+        actions: [
+          {
+            type: "destroy",
+            targetRef: "sotd_pop_target",
+          },
+        ],
+        targets: [
+          {
+            id: "sotd_pop_target",
+            owner: "opponent",
+            zone: "spellTrap",
+            count: { min: 1, max: 1 },
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 45,
+    name: "Shadow-Heart Death Wyrm",
+    cardKind: "monster",
+    atk: 2400,
+    def: 2000,
+    level: 8,
+    type: "Fiend",
+    archetype: "Shadow-Heart",
+    description:
+      'Quick Effect: Once per turn, when a "Shadow-Heart" monster you control is destroyed by battle: You can Special Summon this card from your hand.',
+    image: "assets/Shadow-Heart Death Wyrm.png",
+    effects: [
+      {
+        id: "shadow_heart_death_wyrm_hand_summon",
+        timing: "on_event",
+        event: "battle_destroy",
+        oncePerTurn: true,
+        oncePerTurnName: "Shadow-Heart Death Wyrm",
+        actions: [
+          {
+            type: "shadow_heart_death_wyrm_special_summon",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 66,
+    name: "Shadow-Heart Leviathan",
+    cardKind: "monster",
+    atk: 2200,
+    def: 1800,
+    level: 6,
+    type: "Sea Serpent",
+    archetype: "Shadow-Heart",
+    description:
+      "If this card destroys a monster by battle: inflict 500 damage to your opponent. If this card is destroyed by battle: inflict 800 damage to your opponent.",
+    image: "assets/Shadow-Heart Leviathan.png",
+    effects: [
+      {
+        id: "shadow_heart_leviathan_burn_attacker",
+        timing: "on_event",
+        event: "battle_destroy",
+        requireSelfAsAttacker: true,
+        actions: [
+          {
+            type: "damage",
+            player: "opponent",
+            amount: 500,
+          },
+        ],
+      },
+      {
+        id: "shadow_heart_leviathan_burn_destroyed",
+        timing: "on_event",
+        event: "battle_destroy",
+        requireSelfAsDestroyed: true,
+        actions: [
+          {
+            type: "damage",
+            player: "opponent",
+            amount: 800,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 67,
+    name: "Shadow-Heart Void Mage",
+    cardKind: "monster",
+    atk: 1500,
+    def: 1500,
+    level: 4,
+    type: "Spellcaster",
+    archetype: "Shadow-Heart",
+    description:
+      'If this card is Normal Summoned: You can add 1 "Shadow-Heart" Spell/Trap from your Deck to your hand. If your opponent loses LP while this card is on the field: draw 1 card.',
+    image: "assets/Shadow-Heart Void Mage.png",
+    effects: [
+      {
+        id: "shadow_heart_void_mage_search",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethod: "normal",
+        actions: [
+          {
+            type: "search_any",
+            player: "self",
+            archetype: "Shadow-Heart",
+            cardKind: ["spell", "trap"],
+          },
+        ],
+      },
+      {
+        id: "shadow_heart_void_mage_draw",
+        timing: "on_event",
+        event: "opponent_damage",
+        actions: [
+          {
+            type: "draw",
+            player: "self",
+            amount: 1,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 68,
+    name: "Shadow-Heart Cathedral",
+    cardKind: "spell",
+    subtype: "continuous",
+    archetype: "Shadow-Heart",
+    description:
+      'Each time your opponent takes damage: place 1 Judgment Counter on this card for each 500 damage they took. During your Main Phase: You can send this face-up card to the GY; Special Summon 1 "Shadow-Heart" monster from your Deck with ATK less than or equal to 500 x the number of Judgment Counters on this card. You can only use this effect of "Shadow-Heart Cathedral" once per turn.',
+    image: "assets/Shadow-Heart Cathedral.png",
+    effects: [
+      {
+        id: "shadow_heart_cathedral_add_counter",
+        timing: "on_event",
+        event: "opponent_damage",
+        actions: [
+          {
+            type: "add_counter",
+            counterType: "judgment_marker",
+            damagePerCounter: 500,
+            targetRef: "self",
+          },
+        ],
+      },
+      {
+        id: "shadow_heart_cathedral_summon_effect",
+        timing: "ignition",
+        oncePerTurn: true,
+        oncePerTurnName: "shadow_heart_cathedral_summon",
+        actions: [
+          {
+            type: "shadow_heart_cathedral_summon",
+            counterType: "judgment_marker",
+            counterMultiplier: 500,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 69,
+    name: "The Shadow Heart",
+    cardKind: "spell",
+    subtype: "equip",
+    archetype: "Shadow-Heart",
+    description:
+      'You must control no monsters to activate this effect. Target 1 "Shadow-Heart" monster in your Graveyard; Special Summon it and equip this card to it. If this card leaves the field, destroy the equipped monster.',
+    image: "assets/The Shadow Heart.png",
+    effects: [
+      {
+        id: "the_shadow_heart_summon_and_equip",
+        timing: "ignition",
+        oncePerTurn: true,
+        oncePerTurnName: "the_shadow_heart_summon_and_equip",
+        requireEmptyField: true,
+        targets: [
+          {
+            id: "shadow_heart_gy_target",
+            owner: "self",
+            zone: "graveyard",
+            cardKind: "monster",
+            archetype: "Shadow-Heart",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "the_shadow_heart_special_summon_and_equip",
+            targetRef: "shadow_heart_gy_target",
+          },
+        ],
+      },
+      {
+        id: "the_shadow_heart_destroy_on_leave",
+        timing: "passive",
+        description:
+          "If this card leaves the field, destroy the equipped monster.",
+      },
+    ],
+  },
+  {
+    id: 46,
+    name: "Radiant Dragon",
+    cardKind: "monster",
+    atk: 2200,
+    def: 1600,
+    level: 6,
+    type: "Dragon",
+    archetype: "Radiant",
+    description:
+      'If this card was Normal Summoned: Add 1 "Luminarch" monster from your Deck to your hand. Once per turn, during your Standby Phase: gain 300 LP for each "Luminarch" monster you control.',
+    image: "assets/Radiant Dragon.png",
+    effects: [
+      {
+        id: "radiant_dragon_search_luminarch",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethod: ["normal", "tribute"],
+        actions: [
+          {
+            type: "search_any",
+            archetype: "Luminarch",
+            cardKind: "monster",
+            player: "self",
+          },
+        ],
+      },
+      {
+        id: "radiant_dragon_luminarch_heal",
+        timing: "on_event",
+        event: "standby_phase",
+        oncePerTurn: true,
+        oncePerTurnName: "radiant_dragon_luminarch_heal",
+        actions: [
+          {
+            type: "heal_per_archetype_monster",
+            player: "self",
+            archetype: "Luminarch",
+            amountPerMonster: 300,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 47,
+    name: "Luminarch Valiant – Knight of the Dawn",
+    cardKind: "monster",
+    atk: 1600,
+    def: 1200,
+    level: 4,
+    type: "Warrior",
+    archetype: "Luminarch",
+    piercing: true,
+    description:
+      'If this card is Normal or Special Summoned: Add 1 Level 4 or lower "Luminarch" monster from your Deck to your hand. If this card battles a Defense Position monster, inflict piercing battle damage to your opponent.',
+    image: "assets/Luminarch Valiant – Knight of the Dawn.png",
+    effects: [
+      {
+        id: "luminarch_valiant_search",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethod: ["normal", "special"],
+        actions: [
+          {
+            type: "search_any",
+            archetype: "Luminarch",
+            cardKind: "monster",
+            minLevel: 1,
+            maxLevel: 4,
+            player: "self",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 48,
+    name: "Luminarch Holy Shield",
+    cardKind: "spell",
+    subtype: "normal",
+    archetype: "Luminarch",
+    description:
+      'Target up to 3 "Luminarch" monsters you control; until the end of this turn, they cannot be destroyed by battle, and any battle damage you would take involving those monsters is gained instead.',
+    image: "assets/Luminarch Holy Shield.png",
+    effects: [
+      {
+        id: "luminarch_holy_shield_effect",
+        timing: "on_play",
+        speed: 1,
+        targets: [
+          {
+            id: "holy_shield_targets",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            archetype: "Luminarch",
+            requireFaceup: true,
+            count: { min: 1, max: 3 },
+          },
+        ],
+        actions: [
+          {
+            type: "luminarch_holy_shield_apply",
+            targetRef: "holy_shield_targets",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 49,
+    name: "Luminarch Aegisbearer",
+    cardKind: "monster",
+    atk: 1000,
+    def: 2000,
+    level: 4,
+    type: "Warrior",
+    archetype: "Luminarch",
+    mustBeAttacked: true,
+    description:
+      "If this card is Special Summoned: Increase its DEF by 500. While this card is face-up on the field, your opponent's attacks must target this card, if possible.",
+    image: "assets/Luminarch Aegisbearer.png",
+    effects: [
+      {
+        id: "luminarch_aegisbearer_def_boost",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethod: "special",
+        actions: [
+          {
+            type: "luminarch_aegisbearer_def_boost",
+            amount: 500,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 50,
+    name: "Luminarch Moonblade Captain",
+    cardKind: "monster",
+    atk: 2200,
+    def: 1700,
+    level: 6,
+    type: "Warrior",
+    archetype: "Luminarch",
+    description:
+      'If this card is Normal Summoned: You can target 1 Level 4 or lower "Luminarch" monster in your GY; Special Summon it. Once per turn, if this card destroys an opponent\'s monster by battle: it can make a second attack this turn.',
+    image: "assets/Luminarch Moonblade Captain.png",
+    effects: [
+      {
+        id: "moonblade_captain_revive",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethod: ["normal", "tribute"],
+        targets: [
+          {
+            id: "moonblade_revive_target",
+            owner: "self",
+            zone: "graveyard",
+            cardKind: "monster",
+            archetype: "Luminarch",
+            maxLevel: 4,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "moonblade_revive_target",
+            player: "self",
+            to: "field",
+            isFacedown: false,
+            resetAttackFlags: true,
+          },
+        ],
+      },
+      {
+        id: "moonblade_captain_second_attack",
+        timing: "on_event",
+        event: "battle_destroy",
+        requireSelfAsAttacker: true,
+        oncePerTurn: true,
+        oncePerTurnName: "luminarch_moonblade_second_attack",
+        actions: [
+          {
+            type: "grant_second_attack_this_turn",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 51,
+    name: "Luminarch Celestial Marshal",
+    cardKind: "monster",
+    atk: 2500,
+    def: 2000,
+    level: 7,
+    type: "Warrior",
+    archetype: "Luminarch",
+    piercing: true,
+    battleIndestructibleOncePerTurn: true,
+    description:
+      "If this card battles a Defense Position monster, inflict piercing battle damage to your opponent. Once per turn, this card cannot be destroyed by battle.",
+    image: "assets/Luminarch Celestial Marshal.png",
+    effects: [],
+  },
+  {
+    id: 52,
+    name: "Luminarch Magic Sickle",
+    cardKind: "monster",
+    atk: 1000,
+    def: 1000,
+    level: 3,
+    type: "Warrior",
+    archetype: "Luminarch",
+    description:
+      'You can send this card from the field to the GY; add up to 2 "Luminarch" monsters from your GY to your hand.',
+    image: "assets/Luminarch Magic Sickle.png",
+    effects: [
+      {
+        id: "luminarch_magic_sickle_effect",
+        timing: "ignition",
+        oncePerTurn: true,
+        oncePerTurnName: "luminarch_magic_sickle_effect",
+        actions: [
+          {
+            type: "luminarch_magic_sickle_recycle",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 53,
+    name: "Luminarch Sanctum Protector",
+    cardKind: "monster",
+    atk: 1800,
+    def: 2800,
+    level: 7,
+    type: "Warrior",
+    archetype: "Luminarch",
+    description:
+      'If you control a face-up "Luminarch Aegisbearer", you can send it to the GY; Special Summon this card from your hand. Once per turn, when an opponent\'s monster declares an attack (Quick Effect): negate that attack.',
+    image: "assets/Luminarch Sanctum Protector.png",
+    effects: [
+      {
+        id: "luminarch_sanctum_protector_negate",
+        timing: "on_event",
+        event: "attack_declared",
+        speed: 2,
+        oncePerTurn: true,
+        oncePerTurnName: "luminarch_sanctum_protector_negate",
+        oncePerTurnScope: "card",
+        requireOpponentAttack: true,
+        requireDefenderIsSelf: true,
+        actions: [{ type: "negate_attack" }],
+      },
+    ],
+  },
+  {
+    id: 54,
+    name: "Luminarch Radiant Lancer",
+    cardKind: "monster",
+    atk: 2600,
+    def: 2000,
+    level: 8,
+    type: "Warrior",
+    archetype: "Luminarch",
+    description:
+      "If this card destroys an opponent's monster by battle, it gains 200 ATK while it remains on the field. If this card is destroyed by battle, destroy 1 Spell/Trap your opponent controls.",
+    image: "assets/Luminarch Radiant Lancer.png",
+    effects: [
+      {
+        id: "luminarch_radiant_lancer_atk_boost",
+        timing: "on_event",
+        event: "battle_destroy",
+        requireSelfAsAttacker: true,
+        actions: [
+          {
+            type: "luminarch_radiant_lancer_atk_boost",
+            amount: 200,
+          },
+        ],
+      },
+      {
+        id: "luminarch_radiant_lancer_destroy_spelltrap",
+        timing: "on_event",
+        event: "battle_destroy",
+        requireSelfAsDestroyed: true,
+        targets: [
+          {
+            id: "radiant_lancer_destroy_target",
+            owner: "opponent",
+            zone: "spellTrap",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "destroy",
+            targetRef: "radiant_lancer_destroy_target",
+          },
+        ],
+      },
+      {
+        id: "luminarch_radiant_lancer_reset",
+        timing: "on_event",
+        event: "card_to_grave",
+        fromZone: "field",
+        actions: [
+          {
+            type: "luminarch_radiant_lancer_reset_atk",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 55,
+    name: "Luminarch Aurora Seraph",
+    cardKind: "monster",
+    atk: 2800,
+    def: 2400,
+    level: 8,
+    type: "Fairy",
+    archetype: "Luminarch",
+    description:
+      "If this card destroys an opponent's monster by battle, gain LP equal to half that monster's ATK. Once per turn, if this card would be destroyed by battle or card effect: you can send 1 \"Luminarch\" monster you control to the GY instead.",
+    image: "assets/Luminarch Aurora Seraph.png",
+    effects: [
+      {
+        id: "luminarch_aurora_seraph_heal",
+        timing: "on_event",
+        event: "battle_destroy",
+        requireSelfAsAttacker: true,
+        actions: [
+          {
+            type: "luminarch_aurora_seraph_heal",
+          },
+        ],
+      },
+      {
+        id: "luminarch_aurora_seraph_protect",
+        timing: "passive",
+        oncePerTurn: true,
+        oncePerTurnName: "luminarch_aurora_seraph_protect",
+        oncePerTurnScope: "card",
+      },
+    ],
+  },
+  {
+    id: 56,
+    name: "Luminarch Sanctified Arbiter",
+    cardKind: "monster",
+    atk: 1500,
+    def: 1000,
+    level: 4,
+    type: "Warrior",
+    archetype: "Luminarch",
+    description:
+      'When this card is Normal Summoned: add 1 "Luminarch Knights Convocation" from your Deck to your hand.',
+    image: "assets/Luminarch Sanctified Arbiter.png",
+    effects: [
+      {
+        id: "luminarch_sanctified_arbiter_search",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethod: "normal",
+        actions: [
+          {
+            type: "search_any",
+            player: "self",
+            archetype: "Luminarch",
+            cardKind: "spell",
+            cardName: "Luminarch Knights Convocation",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 57,
+    name: "Luminarch Knights Convocation",
+    cardKind: "spell",
+    subtype: "continuous",
+    archetype: "Luminarch",
+    description:
+      "Once per turn: discard 1 Level 7 or higher Luminarch monster; add 1 Level 4 or lower Luminarch monster from your Deck to your hand.",
+    image: "assets/Luminarch Knights Convocation.png",
+    effects: [
+      {
+        id: "luminarch_knights_convocation_activate",
+        timing: "on_play",
+        speed: 1,
+        actions: [],
+      },
+      {
+        id: "luminarch_knights_convocation_effect",
+        timing: "ignition",
+        oncePerTurn: true,
+        oncePerTurnName: "luminarch_knights_convocation_effect",
+        targets: [
+          {
+            id: "convocation_discard",
+            owner: "self",
+            zone: "hand",
+            cardKind: "monster",
+            archetype: "Luminarch",
+            minLevel: 7,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "convocation_discard",
+            player: "self",
+            to: "graveyard",
+          },
+          {
+            type: "search_any",
+            player: "self",
+            archetype: "Luminarch",
+            cardKind: "monster",
+            maxLevel: 4,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 58,
+    name: "Sanctum of the Luminarch Citadel",
+    cardKind: "spell",
+    subtype: "field",
+    archetype: "Luminarch",
+    description:
+      'Whenever an opponent\'s monster declares an attack: gain 500 LP. Once per turn: You can pay 1000 LP, then target 1 "Luminarch" monster you control; it gains 500 ATK/DEF until the end of this turn.',
+    image: "assets/Sanctum of the Luminarch Citadel.png",
+    effects: [
+      {
+        id: "sanctum_luminarch_citadel_attack_heal",
+        timing: "on_event",
+        event: "attack_declared",
+        requireOpponentAttack: true,
+        actions: [
+          {
+            type: "heal",
+            player: "self",
+            amount: 500,
+          },
+        ],
+      },
+      {
+        id: "sanctum_luminarch_citadel_buff",
+        timing: "on_field_activate",
+        speed: 1,
+        oncePerTurn: true,
+        oncePerTurnName: "sanctum_luminarch_citadel_buff",
+        oncePerTurnScope: "card",
+        targets: [
+          {
+            id: "sanctum_citadel_target",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            archetype: "Luminarch",
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "damage",
+            player: "self",
+            amount: 1000,
+          },
+          {
+            type: "luminarch_citadel_atkdef_buff",
+            targetRef: "sanctum_citadel_target",
+            amount: 500,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 59,
+    name: "Luminarch Holy Ascension",
+    cardKind: "spell",
+    subtype: "normal",
+    archetype: "Luminarch",
+    description:
+      'Pay 1000 LP, then target 1 "Luminarch" monster you control; it gains 800 ATK/DEF until the end of this turn.',
+    image: "assets/Luminarch Holy Ascension.png",
+    effects: [
+      {
+        id: "luminarch_holy_ascension_boost",
+        timing: "on_play",
+        speed: 1,
+        targets: [
+          {
+            id: "holy_ascension_target",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            archetype: "Luminarch",
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "damage",
+            player: "self",
+            amount: 1000,
+          },
+          {
+            type: "luminarch_citadel_atkdef_buff",
+            targetRef: "holy_ascension_target",
+            amount: 800,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 60,
+    name: "Luminarch Radiant Wave",
+    cardKind: "spell",
+    subtype: "normal",
+    archetype: "Luminarch",
+    description:
+      'Send 1 "Luminarch" monster with 2000 or more ATK you control to the GY, then target 1 card your opponent controls; destroy it.',
+    image: "assets/Luminarch Radiant Wave.png",
+    effects: [
+      {
+        id: "luminarch_radiant_wave_effect",
+        timing: "on_play",
+        speed: 1,
+        targets: [
+          {
+            id: "radiant_wave_cost",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            archetype: "Luminarch",
+            minAtk: 2000,
+            count: { min: 1, max: 1 },
+          },
+          {
+            id: "radiant_wave_destroy",
+            owner: "opponent",
+            zones: ["field", "spellTrap", "fieldSpell"],
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "radiant_wave_cost",
+            player: "self",
+            to: "graveyard",
+          },
+          {
+            type: "destroy",
+            targetRef: "radiant_wave_destroy",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 61,
+    name: "Luminarch Crescent Shield",
+    cardKind: "spell",
+    subtype: "equip",
+    archetype: "Luminarch",
+    description:
+      'Equip only to a "Luminarch" monster you control. It gains 500 DEF. If the equipped monster would be destroyed by battle, send this card to the GY instead.',
+    image: "assets/Luminarch Crescent Shield.png",
+    effects: [
+      {
+        id: "luminarch_crescent_shield_equip",
+        timing: "on_play",
+        speed: 1,
+        targets: [
+          {
+            id: "crescent_shield_target",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            archetype: "Luminarch",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "equip",
+            targetRef: "crescent_shield_target",
+            defBonus: 500,
+            grantCrescentShieldGuard: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 62,
+    name: "Luminarch Spear of Dawnfall",
+    cardKind: "spell",
+    subtype: "normal",
+    archetype: "Luminarch",
+    description:
+      'If you control a "Luminarch" monster: target 1 monster your opponent controls; its ATK and DEF become 0 until the end of this turn.',
+    image: "assets/Luminarch Spear of Dawnfall.png",
+    effects: [
+      {
+        id: "luminarch_spear_dawnfall",
+        timing: "on_play",
+        speed: 1,
+        targets: [
+          {
+            id: "spear_luminarch_check",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            archetype: "Luminarch",
+            count: { min: 1, max: 1 },
+            autoSelect: true,
+          },
+          {
+            id: "spear_zero_target",
+            owner: "opponent",
+            zone: "field",
+            cardKind: "monster",
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "modify_stats_temp",
+            targetRef: "spear_zero_target",
+            atkFactor: 0,
+            defFactor: 0,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 63,
+    name: "Luminarch Enchanted Halberd",
+    cardKind: "monster",
+    atk: 1600,
+    def: 1400,
+    level: 4,
+    type: "Warrior",
+    archetype: "Luminarch",
+    image: "assets/Luminarch Enchanted Halberd.png",
+    description:
+      'Uma vez por turno, se um monstro "Luminarch" for invocado por invocação especial no seu campo; você pode invocar essa carta por invocação especial da sua mão, mas ela não pode declarar um ataque neste turno.',
+    effects: [
+      {
+        id: "luminarch_enchanted_halberd_conditional_summon",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethod: "special",
+        oncePerTurn: true,
+        oncePerTurnName: "luminarch_enchanted_halberd_conditional_summon",
+        condition: {
+          triggerArchetype: "Luminarch",
+          requires: "self_in_hand",
+        },
+        promptUser: true,
+        promptMessage:
+          "Um monstro Luminarch foi invocado por invocação especial. Deseja invocar Luminarch Enchanted Halberd da sua mão?",
+        actions: [
+          {
+            type: "conditional_special_summon_from_hand",
+            restrictAttackThisTurn: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 64,
+    name: "Luminarch Moonlit Blessing",
+    cardKind: "spell",
+    subtype: "normal",
+    archetype: "Luminarch",
+    description:
+      'Target 1 "Luminarch" monster in your Graveyard; add it to your hand, then if you control "Sanctum of the Luminarch Citadel", you can Special Summon that monster. You can only activate 1 "Luminarch Moonlit Blessing" per turn.',
+    image: "assets/Luminarch Moonlit Blessing.png",
+    effects: [
+      {
+        id: "luminarch_moonlit_blessing_effect",
+        timing: "on_play",
+        speed: 1,
+        oncePerTurn: true,
+        oncePerTurnName: "luminarch_moonlit_blessing",
+        targets: [
+          {
+            id: "moonlit_blessing_target",
+            owner: "self",
+            zone: "graveyard",
+            cardKind: "monster",
+            archetype: "Luminarch",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "luminarch_moonlit_blessing",
+            targetRef: "moonlit_blessing_target",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 65,
+    name: "Luminarch Sacred Judgment",
+    cardKind: "spell",
+    subtype: "normal",
+    archetype: "Luminarch",
+    description:
+      'If you control no monsters and your opponent controls 2 or more monsters: Pay 2000 LP; Special Summon "Luminarch" monsters from your GY, up to the number of monsters your opponent controls, then gain 500 LP for each monster Special Summoned. You can only activate 1 "Luminarch Sacred Judgment" per turn.',
+    image: "assets/Luminarch Sacred Judgment.png",
+    effects: [
+      {
+        id: "luminarch_sacred_judgment_effect",
+        timing: "on_play",
+        speed: 1,
+        oncePerTurn: true,
+        oncePerTurnName: "luminarch_sacred_judgment",
+        actions: [
+          {
+            type: "luminarch_sacred_judgment_revive",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 100,
+    name: "Polymerization",
+    cardKind: "spell",
+    subtype: "normal",
+    description:
+      "Fusion Summon 1 Fusion Monster from your Extra Deck, using monsters from your hand or field as Fusion Material.",
+    image: "assets/Polymerization.png",
+    effects: [
+      {
+        id: "polymerization_fusion",
+        timing: "on_play",
+        speed: 1,
+        actions: [
+          {
+            type: "polymerization_fusion_summon",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 101,
+    name: "Shadow-Heart Demon Dragon",
+    cardKind: "monster",
+    monsterType: "fusion",
+    atk: 3000,
+    def: 3000,
+    level: 10,
+    type: "Dragon",
+    archetype: "Shadow-Heart",
+    archetypes: ["Shadow-Heart"],
+    description:
+      "Shadow-Heart Scale Dragon + 1 level 5+ 'Shadow-Heart' monster. If this card is Fusion Summoned: target 2 cards your opponent controls; destroy them. If this card is destroyed by battle or card effect: You can Special Summon 1 'Shadow-Heart Scale Dragon' from your GY.",
+    image: "assets/Shadow-Heart Demon Dragon.png",
+    fusionMaterials: [
+      { name: "Shadow-Heart Scale Dragon", count: 1 },
+      { archetype: "Shadow-Heart", minLevel: 5, count: 1 },
+    ],
+    effects: [
+      {
+        id: "demon_dragon_fusion_destroy",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethod: "fusion",
+        actions: [
+          {
+            type: "demon_dragon_destroy_two",
+          },
+        ],
+      },
+      {
+        id: "demon_dragon_revive_scale",
+        timing: "on_event",
+        event: "card_to_grave",
+        condition: {
+          type: "destroyed_by_battle_or_effect",
+        },
+        actions: [
+          {
+            type: "demon_dragon_revive_scale_dragon",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 102,
+    name: "Luminarch Megashield Barbarias",
+    cardKind: "monster",
+    monsterType: "fusion",
+    atk: 2500,
+    def: 3000,
+    level: 9,
+    type: "Warrior",
+    archetype: "Luminarch",
+    archetypes: ["Luminarch"],
+    description:
+      "'Luminarch Sanctum Protector' + 1 Level 5 or higher 'Luminarch' monster. All LP you would gain is doubled. Once per turn: You can target 1 monster you control; switch its battle position, and if you do, it gains 1000 ATK until the end of this turn.",
+    image: "assets/Luminarch Megashield Barbarias.png",
+    fusionMaterials: [
+      { name: "Luminarch Sanctum Protector", count: 1 },
+      { archetype: "Luminarch", minLevel: 5, count: 1 },
+    ],
+    effects: [
+      {
+        id: "megashield_barbarias_lp_doubling",
+        timing: "passive",
+        actions: [],
+      },
+      {
+        id: "megashield_barbarias_switch_boost",
+        timing: "ignition",
+        oncePerTurn: true,
+        oncePerTurnName: "megashield_barbarias_switch_boost",
+        oncePerTurnScope: "card",
+        targets: [
+          {
+            id: "barbarias_switch_target",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "megashield_barbarias_switch_boost",
+            targetRef: "barbarias_switch_target",
+            atkBoost: 1000,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 70,
+    name: "Void Conjurer",
+    cardKind: "monster",
+    atk: 1700,
+    def: 800,
+    level: 4,
+    type: "Spellcaster",
+    archetype: "Void",
+    description:
+      "Special Summon 1 Level 4 or lower 'Void' monster from your Deck, but it cannot attack this turn. If this card is in your GY: You can send 1 'Void' monster you control to the GY; Special Summon this card. You can only use each effect of 'Void Conjurer' once per turn.",
+    image: "assets/Void Conjurer.png",
+    effects: [
+      {
+        id: "void_conjurer_field_summon",
+        timing: "ignition",
+        oncePerTurn: true,
+        oncePerTurnName: "void_conjurer_field_summon",
+        actions: [
+          {
+            type: "special_summon_from_deck",
+            zone: "deck",
+            filters: {
+              archetype: "Void",
+              cardKind: "monster",
+              level: 4,
+              levelOp: "lte",
+            },
+            position: "choice",
+            cannotAttackThisTurn: true,
+          },
+        ],
+      },
+      {
+        id: "void_conjurer_gy_revive",
+        timing: "ignition",
+        requireZone: "graveyard",
+        oncePerTurn: true,
+        oncePerTurnName: "void_conjurer_gy_revive",
+        targets: [
+          {
+            id: "void_conjurer_cost",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            archetype: "Void",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "void_conjurer_cost",
+            player: "self",
+            to: "graveyard",
+          },
+          {
+            type: "special_summon_from_graveyard",
+            requireSource: true,
+            position: "choice",
+            cannotAttackThisTurn: false,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 71,
+    name: "Void Walker",
+    cardKind: "monster",
+    atk: 1800,
+    def: 200,
+    level: 4,
+    type: "Fiend",
+    archetype: "Void",
+    description:
+      "Cannot attack the turn it is Summoned. Once per turn: You can return this card to your hand; Special Summon 1 Level 4 or lower 'Void' monster from your hand, except 'Void Walker'.",
+    image: "assets/Void Walker.png",
+    effects: [
+      {
+        id: "void_walker_no_attack_when_summoned",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethod: ["normal", "special"],
+        actions: [
+          {
+            type: "forbid_attack_this_turn",
+          },
+        ],
+      },
+      {
+        id: "void_walker_bounce_summon",
+        timing: "ignition",
+        oncePerTurn: true,
+        oncePerTurnName: "void_walker_bounce_summon",
+        actions: [
+          {
+            type: "bounce_and_summon",
+            bounceSource: true,
+            filters: {
+              archetype: "Void",
+              cardKind: "monster",
+              level: 4,
+              levelOp: "lte",
+              excludeSelf: true,
+            },
+            position: "choice",
+            cannotAttackThisTurn: false,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 72,
+    name: "Void Beast",
+    cardKind: "monster",
+    atk: 1600,
+    def: 1300,
+    level: 4,
+    type: "Beast",
+    archetype: "Void",
+    description:
+      "If this card destroys an opponent's monster by battle: You can add 1 'Void Hollow' from your Deck to your hand. You can only use this effect of 'Void Beast' once per turn.",
+    image: "assets/Void Beast.png",
+    effects: [
+      {
+        id: "void_beast_search",
+        timing: "on_event",
+        event: "battle_destroy",
+        requireSelfAsAttacker: true,
+        oncePerTurn: true,
+        oncePerTurnName: "void_beast_search",
+        actions: [
+          {
+            type: "search_any",
+            cardName: "Void Hollow",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 73,
+    name: "Void Hollow",
+    cardKind: "monster",
+    atk: 1300,
+    def: 1200,
+    level: 3,
+    type: "Fiend",
+    archetype: "Void",
+    description:
+      "If this card is Special Summoned from your hand: You can Special Summon 1 'Void Hollow' from your Deck. You can only use this effect of 'Void Hollow' once per turn.",
+    image: "assets/Void Hollow.png",
+    effects: [
+      {
+        id: "void_hollow_summon",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethod: "special",
+        oncePerTurn: true,
+        oncePerTurnName: "void_hollow_summon",
+        actions: [
+          {
+            type: "special_summon_from_deck",
+            zone: "deck",
+            filters: {
+              name: "Void Hollow",
+              cardKind: "monster",
+            },
+            position: "choice",
+            cannotAttackThisTurn: false,
+            promptPlayer: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 74,
+    name: "Void Haunter",
+    cardKind: "monster",
+    atk: 2100,
+    def: 1500,
+    level: 5,
+    type: "Fiend",
+    archetype: "Void",
+    description:
+      "You can special summon this card from your hand by sending 1 'Void Hollow' from your field to your GY. You can banish this card from your GY, then target up to 2 'Void Hollow' in your GY; Special Summon those targets, but their ATK/DEF become 0. You can only use each effect of 'Void Haunter' once per turn.",
+    image: "assets/Void Haunter.png",
+    effects: [
+      {
+        id: "void_haunter_special_summon_hand",
+        timing: "ignition",
+        oncePerTurn: true,
+        oncePerTurnName: "void_haunter_special_summon_hand",
+        targets: [
+          {
+            id: "void_haunter_cost",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            name: "Void Hollow",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "special_summon_from_hand_with_cost",
+            costTargetRef: "void_haunter_cost",
+            position: "attack",
+            cannotAttackThisTurn: false,
+          },
+        ],
+      },
+      {
+        id: "void_haunter_gy_effect",
+        timing: "ignition",
+        requireZone: "graveyard",
+        oncePerTurn: true,
+        oncePerTurnName: "void_haunter_gy_effect",
+        actions: [
+          {
+            type: "special_summon_from_graveyard",
+            requireSource: false,
+            banishCost: true,
+            filters: {
+              name: "Void Hollow",
+              cardKind: "monster",
+            },
+            count: { min: 0, max: 3 },
+            position: "choice",
+            cannotAttackThisTurn: false,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 75,
+    name: "Void Ghost Wolf",
+    cardKind: "monster",
+    atk: 1400,
+    def: 600,
+    level: 3,
+    type: "Beast",
+    archetype: "Void",
+    description:
+      "Once per turn: You can halve this card's ATK until the end of this turn, and if you do, it can attack directly this turn.",
+    image: "assets/Void Ghost Wolf.png",
+    effects: [
+      {
+        id: "void_ghost_wolf_direct",
+        timing: "ignition",
+        oncePerTurn: true,
+        oncePerTurnName: "void_ghost_wolf_direct",
+        targets: [
+          {
+            id: "ghost_self",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            cardName: "Void Ghost Wolf",
+            count: { min: 1, max: 1 },
+            autoSelect: true,
+            requireThisCard: true,
+          },
+        ],
+        actions: [
+          {
+            type: "modify_stats_temp",
+            targetRef: "ghost_self",
+            atkFactor: 0.5,
+          },
+          {
+            type: "allow_direct_attack_this_turn",
+            targetRef: "ghost_self",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 76,
+    name: "Void Hollow King",
+    cardKind: "monster",
+    atk: 2500,
+    def: 1200,
+    level: 6,
+    type: "Fiend",
+    archetype: "Void",
+    description:
+      "3 'Void Hollow' monsters. If this card is destroyed by battle or card effect: You can target up to 3 'Void Hollow' in your GY; Special Summon those targets.",
+    image: "assets/Void Hollow King.png",
+    monsterType: "fusion",
+    fusionMaterials: [{ name: "Void Hollow", count: 3 }],
+    effects: [
+      {
+        id: "void_hollow_king_revive",
+        timing: "on_event",
+        event: "card_to_grave",
+        requireSelfAsDestroyed: true,
+        fromZone: "field",
+        destroyedBy: ["battle", "effect"],
+        actions: [
+          {
+            type: "void_hollow_king_revive_effect",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 77,
+    name: "Void Bone Spider",
+    cardKind: "monster",
+    atk: 2200,
+    def: 1400,
+    level: 6,
+    type: "Insect",
+    archetype: "Void",
+    description:
+      "Target 1 monster your opponent controls; it cannot attack until the end of the next turn. If this card is sent from the field to the Graveyard: Special Summon a 'Void Little Spider' token (Level 1, 500 ATK/DEF).",
+    image: "assets/Void Bone Spider.png",
+    effects: [
+      {
+        id: "voidp_bone_spider_lock",
+        timing: "ignition",
+        oncePerTurn: true,
+        oncePerTurnName: "void_bone_spider_lock",
+        targets: [
+          {
+            id: "void_bone_spider_lock_target",
+            owner: "opponent",
+            zone: "field",
+            cardKind: "monster",
+            count: { min: 1, max: 1 },
+            requireFaceup: true,
+          },
+        ],
+        actions: [
+          {
+            type: "forbid_attack_next_turn",
+            targetRef: "void_bone_spider_lock_target",
+            turns: 1,
+          },
+        ],
+      },
+      {
+        id: "void_bone_spider_token",
+        timing: "on_event",
+        event: "card_to_grave",
+        fromZone: "field",
+        actions: [
+          {
+            type: "special_summon_token",
+            player: "self",
+            position: "attack",
+            token: {
+              name: "Void Little Spider",
+              atk: 500,
+              def: 500,
+              level: 1,
+              type: "Insect",
+              image: "assets/Void Little Spider.png",
+              description: "A Void token woven from the spider's bone husk.",
+            },
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 78,
+    name: "Void Forgotten Knight",
+    cardKind: "monster",
+    atk: 2000,
+    def: 1000,
+    level: 5,
+    type: "Fiend",
+    archetype: "Void",
+    description:
+      "You can special summon this card from your hand by sending a 'Void' monster you control to the GY. You can banish this card from your GY; destroy 1 Spell/Trap your opponent controls. You can only use each effect of 'Void Forgotten Knight' once per turn.",
+    image: "assets/Void Forgotten Knight.png",
+    effects: [
+      {
+        id: "void_forgotten_knight_hand_summon",
+        timing: "ignition",
+        oncePerTurn: true,
+        oncePerTurnName: "void_forgotten_knight_hand_summon",
+        targets: [
+          {
+            id: "void_forgotten_knight_cost",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            archetype: "Void",
+            excludeCardName: "Void Forgotten Knight",
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "special_summon_from_hand_with_cost",
+            costTargetRef: "void_forgotten_knight_cost",
+            position: "attack",
+            cannotAttackThisTurn: false,
+          },
+        ],
+      },
+      {
+        id: "void_forgotten_knight_gy_destroy",
+        timing: "ignition",
+        requireZone: "graveyard",
+        oncePerTurn: true,
+        oncePerTurnName: "void_forgotten_knight_gy_destroy",
+        targets: [
+          {
+            id: "void_forgotten_knight_gy_self",
+            owner: "self",
+            zone: "graveyard",
+            cardKind: "monster",
+            cardName: "Void Forgotten Knight",
+            count: { min: 1, max: 1 },
+            autoSelect: true,
+          },
+          {
+            id: "void_forgotten_knight_gy_target",
+            owner: "opponent",
+            zones: ["spellTrap", "fieldSpell"],
+            count: { min: 1, max: 1 },
+            requireFaceup: true,
+          },
+        ],
+        actions: [
+          {
+            type: "banish",
+            targetRef: "void_forgotten_knight_gy_self",
+          },
+          {
+            type: "destroy",
+            targetRef: "void_forgotten_knight_gy_target",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 79,
+    name: "Void Raven",
+    cardKind: "monster",
+    atk: 300,
+    def: 300,
+    level: 2,
+    type: "Winged Beast",
+    archetype: "Void",
+    description:
+      "Se um monstro de fusão 'Void' for Invocado por Invocação-Fusão: você pode descartar esta carta da mão; esse monstro fica imune aos efeitos de cartas do oponente até o final do próximo turno.",
+    image: "assets/Void Raven.png",
+    effects: [
+      {
+        id: "void_raven_fusion_immunity",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethod: "fusion",
+        promptUser: true,
+        promptMessage:
+          "Descartar Void Raven para proteger o monstro 'Void' recém-invocado?",
+        oncePerTurn: true,
+        oncePerTurnName: "void_raven_fusion_immunity",
+        condition: {
+          requires: "self_in_hand",
+          triggerArchetype: "Void",
+        },
+        targets: [
+          {
+            id: "void_raven_discard_cost",
+            owner: "self",
+            zone: "hand",
+            cardKind: "monster",
+            cardName: "Void Raven",
+            requireThisCard: true,
+            count: { min: 1, max: 1 },
+            autoSelect: true,
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "void_raven_discard_cost",
+            player: "self",
+            to: "graveyard",
+          },
+          {
+            type: "grant_void_fusion_immunity",
+            durationTurns: 1,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 80,
+    name: "Void Slayer Brute",
+    cardKind: "monster",
+    atk: 2500,
+    def: 2000,
+    level: 8,
+    type: "Fiend",
+    archetype: "Void",
+    description:
+      "Pode ser Invocado por Invocação-Especial da mão ao enviar 2 monstros 'Void' que você controla para o Cemitério. Se destruir um monstro do oponente em batalha: bana o monstro destruído.",
+    image: "assets/Void Slayer Brute.png",
+    effects: [
+      {
+        id: "void_slayer_brute_hand_summon",
+        timing: "ignition",
+        oncePerTurn: true,
+        oncePerTurnName: "void_slayer_brute_hand_summon",
+        targets: [
+          {
+            id: "void_slayer_brute_cost",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            archetype: "Void",
+            count: { min: 2, max: 2 },
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "void_slayer_brute_cost",
+            player: "self",
+            to: "graveyard",
+          },
+          {
+            // Uses special_summon_from_deck handler which supports any zone
+            type: "special_summon_from_deck",
+            zone: "hand",  // Source zone is hand (summon itself)
+            filters: {
+              name: "Void Slayer Brute",
+            },
+            position: "attack",
+            cannotAttackThisTurn: false,
+            promptPlayer: false,
+          },
+        ],
+      },
+      {
+        id: "void_slayer_brute_banish_destroyed",
+        timing: "on_event",
+        event: "battle_destroy",
+        requireSelfAsAttacker: true,
+        requireDestroyedIsOpponent: true,
+        oncePerTurn: true,
+        oncePerTurnName: "void_slayer_brute_banish",
+        targets: [
+          {
+            id: "void_slayer_brute_banish_target",
+            owner: "opponent",
+            zone: "graveyard",
+            cardKind: "monster",
+            count: { min: 1, max: 1 },
+            autoSelect: true,
+          },
+        ],
+        actions: [
+          {
+            type: "banish",
+            targetRef: "void_slayer_brute_banish_target",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 81,
+    name: "Void Tenebris Horn",
+    cardKind: "monster",
+    atk: 1500,
+    def: 800,
+    level: 4,
+    type: "Fiend",
+    archetype: "Void",
+    description:
+      "Ganha 100 ATK/DEF para cada monstro 'Void' no campo. Uma vez por duelo, se esta carta estiver no seu Cemitério, você pode Invocá-la por Invocação-Especial.",
+    image: "assets/Void Tenebris Horn.png",
+    effects: [
+      {
+        id: "void_tenebris_horn_revive",
+        timing: "ignition",
+        requireZone: "graveyard",
+        oncePerDuel: true,
+        oncePerDuelName: "void_tenebris_horn_revive",
+        targets: [
+          {
+            id: "void_tenebris_horn_self",
+            owner: "self",
+            zone: "graveyard",
+            cardKind: "monster",
+            cardName: "Void Tenebris Horn",
+            count: { min: 1, max: 1 },
+            requireThisCard: true,
+            autoSelect: true,
+          },
+        ],
+        actions: [
+          {
+            type: "special_summon_from_graveyard",
+            requireSource: true,
+            position: "attack",
+            cannotAttackThisTurn: false,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 200,
+    name: "Mirror Force",
+    cardKind: "trap",
+    subtype: "normal",
+    description:
+      "When an opponent's monster declares an attack: Destroy all Attack Position monsters your opponent controls.",
+    image: "assets/Mirror Force.png",
+    effects: [
+      {
+        id: "mirror_force_effect",
+        timing: "on_event",
+        event: "attack_declared",
+        requireOpponentAttack: true,
+        actions: [
+          {
+            type: "mirror_force_destroy_all",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 201,
+    name: "Trap Hole",
+    cardKind: "trap",
+    subtype: "normal",
+    description:
+      "When your opponent Normal or Flip Summons a monster with 1000 or more ATK: Destroy that monster.",
+    image: "assets/Trap Hole.png",
+    effects: [
+      {
+        id: "trap_hole_effect",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethod: ["normal", "flip"],
+        requireOpponentSummon: true,
+        targets: [
+          {
+            id: "trap_hole_target",
+            owner: "opponent",
+            zone: "field",
+            cardKind: "monster",
+            minAtk: 1000,
+            count: { min: 1, max: 1 },
+            autoSelect: true,
+          },
+        ],
+        actions: [
+          {
+            type: "destroy",
+            targetRef: "trap_hole_target",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 202,
+    name: "Call of the Haunted",
+    cardKind: "trap",
+    subtype: "continuous",
+    description:
+      "Activate this card by targeting 1 monster in your GY; Special Summon that target in Attack Position. When this card leaves the field, destroy that target. When that target is destroyed, destroy this card.",
+    image: "assets/Call of the Haunted.png",
+    effects: [
+      {
+        id: "call_of_the_haunted_activate",
+        timing: "on_activate",
+        targets: [
+          {
+            id: "haunted_target",
+            owner: "self",
+            zone: "graveyard",
+            cardKind: "monster",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "call_of_haunted_summon_and_bind",
+            targetRef: "haunted_target",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 203,
+    name: "Bottomless Trap Hole",
+    cardKind: "trap",
+    subtype: "normal",
+    description:
+      "When your opponent Summons a monster(s) with 1500 or more ATK: Destroy that monster(s) with 1500 or more ATK, and if you do, banish it.",
+    image: "assets/Bottomless Trap Hole.png",
+    effects: [
+      {
+        id: "bottomless_trap_hole_effect",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethod: ["normal", "special", "tribute"],
+        requireOpponentSummon: true,
+        targets: [
+          {
+            id: "bottomless_target",
+            owner: "opponent",
+            zone: "field",
+            cardKind: "monster",
+            minAtk: 1500,
+            count: { min: 1, max: 1 },
+            autoSelect: true,
+          },
+        ],
+        actions: [
+          {
+            type: "bottomless_destroy_banish",
+            targetRef: "bottomless_target",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 204,
+    name: "Reckless Greed",
+    cardKind: "trap",
+    subtype: "normal",
+    description: "Draw 2 cards, then skip your next 2 Draw Phases.",
+    image: "assets/Reckless Greed.png",
+    effects: [
+      {
+        id: "reckless_greed_effect",
+        timing: "manual",
+        actions: [
+          {
+            type: "draw",
+            player: "self",
+            amount: 2,
+          },
+          {
+            type: "reckless_greed_skip_draws",
+            skipCount: 2,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 103,
+    name: "Void Hydra Titan",
+    cardKind: "monster",
+    monsterType: "fusion",
+    atk: 3500,
+    def: 2900,
+    level: 10,
+    type: "Dragon",
+    archetype: "Void",
+    archetypes: ["Void"],
+    description:
+      "6 'Void' monsters. If this card is Fusion Summoned: destroy all other monsters you control; draw 1 card for each destroyed. Once per turn: If this card would be destroyed by battle or card effects: You can reduce its ATK by 700; negate the destruction of this card.",
+    image: "assets/Void Hydra Titan.png",
+    fusionMaterials: [
+      {
+        archetype: "Void",
+        count: 6,
+      },
+    ],
+    effects: [
+      {
+        id: "void_hydra_titan_summon",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethod: "fusion",
+        description:
+          "When Fusion Summoned: Destroy all other monsters you control; draw 1 card for each destroyed.",
+        actions: [
+          {
+            type: "destroy_self_monsters_and_draw",
+          },
+        ],
+      },
+      {
+        id: "void_hydra_titan_negate_destruction",
+        timing: "on_event",
+        event: "before_destroy",
+        description:
+          "[Once per turn]: You can negate the destruction of this card; reduce its ATK by 700.",
+        oncePerTurnScope: "card",
+        oncePerTurnName: "void_hydra_titan_negate_destruction",
+        negationCost: [
+          {
+            type: "reduce_self_atk",
+            amount: 700,
           },
         ],
       },

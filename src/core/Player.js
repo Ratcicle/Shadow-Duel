@@ -7,20 +7,23 @@ export default class Player {
     this.name = name;
     this.lp = 8000;
     this.deck = [];
+    this.extraDeck = [];
     this.hand = [];
     this.field = [];
     this.spellTrap = [];
     this.graveyard = [];
-    this.spellTrapZone = [];
     this.fieldSpell = null;
     this.summonCount = 0;
     this.maxDeckSize = 30;
+    this.minDeckSize = 20;
+    this.maxExtraDeckSize = 10;
     this.oncePerTurnUsageByName = {};
   }
 
   buildDeck(deckList = null) {
     this.deck = [];
     const maxDeckSize = this.maxDeckSize;
+    const minDeckSize = this.minDeckSize || maxDeckSize;
     const copies = {};
 
     const addCard = (data) => {
@@ -31,6 +34,10 @@ export default class Player {
     };
 
     const fillWithDefaults = () => {
+      const targetSize = Math.max(
+        minDeckSize,
+        Math.min(maxDeckSize, this.deck.length)
+      );
       const archetype = "Shadow-Heart";
       const archetypeCards = cardDatabase.filter((c) => {
         const archetypes = Array.isArray(c.archetypes)
@@ -41,12 +48,17 @@ export default class Player {
         return archetypes.includes(archetype);
       });
 
-      archetypeCards.forEach(addCard);
+      for (const data of archetypeCards) {
+        addCard(data);
+        if (this.deck.length >= targetSize) break;
+      }
 
-      while (this.deck.length < maxDeckSize) {
+      while (this.deck.length < targetSize) {
         for (const data of cardDatabase) {
+          // Avoid pulling Fusion monsters into the main deck when topping up
+          if (data.monsterType === "fusion") continue;
           addCard(data);
-          if (this.deck.length >= maxDeckSize) break;
+          if (this.deck.length >= targetSize) break;
         }
       }
     };
@@ -59,7 +71,7 @@ export default class Player {
         }
       });
 
-      if (this.deck.length < maxDeckSize) {
+      if (this.deck.length < minDeckSize) {
         fillWithDefaults();
       }
     } else {
@@ -67,6 +79,26 @@ export default class Player {
     }
 
     this.shuffleDeck();
+  }
+
+  buildExtraDeck(extraDeckList = null) {
+    this.extraDeck = [];
+
+    const copies = new Set();
+    const pushFusion = (data) => {
+      if (!data || data.monsterType !== "fusion") return;
+      if (copies.has(data.id)) return;
+      if (this.extraDeck.length >= this.maxExtraDeckSize) return;
+      this.extraDeck.push(new Card(data, this.id));
+      copies.add(data.id);
+    };
+
+    if (extraDeckList && Array.isArray(extraDeckList)) {
+      extraDeckList.forEach((cardId) => {
+        const data = cardDatabase.find((c) => c.id === cardId);
+        pushFusion(data);
+      });
+    }
   }
 
   shuffleDeck() {
@@ -107,6 +139,13 @@ export default class Player {
       }
     }
 
+    if (
+      typeof card.requiredTributes === "number" &&
+      card.requiredTributes >= 0
+    ) {
+      tributesNeeded = card.requiredTributes;
+    }
+
     return { tributesNeeded, usingAlt, alt };
   }
 
@@ -134,11 +173,6 @@ export default class Player {
       return null;
     }
 
-    if (this.field.length >= 5) {
-      console.log("Field is full (max 5 monsters).");
-      return null;
-    }
-
     if (cardIndex >= 0 && cardIndex < this.hand.length) {
       const sendToGrave = (sacrificed) => {
         if (!sacrificed) return;
@@ -162,6 +196,13 @@ export default class Player {
         return null;
       }
 
+      // Calculate field state AFTER removing tributes: current field - tributes + new card must be <= 5
+      const fieldAfterTributes = this.field.length - tributesNeeded + 1;
+      if (fieldAfterTributes > 5) {
+        console.log("Field is full (max 5 monsters).");
+        return null;
+      }
+
       if (tributesNeeded > 0) {
         if (tributeIndices && tributeIndices.length === tributesNeeded) {
           const sortedIndices = [...tributeIndices].sort((a, b) => b - a);
@@ -172,15 +213,23 @@ export default class Player {
             }
           }
 
-          if (usingAlt && alt && !tributes.some((t) => t.name === alt.requiresName)) {
-            console.log(`Must tribute ${alt.requiresName} to use reduced tribute.`);
+          if (
+            usingAlt &&
+            alt &&
+            !tributes.some((t) => t.name === alt.requiresName)
+          ) {
+            console.log(
+              `Must tribute ${alt.requiresName} to use reduced tribute.`
+            );
             return null;
           }
 
           tributes.forEach((sacrificed) => sendToGrave(sacrificed));
         } else {
           if (usingAlt && alt) {
-            const altIdx = this.field.findIndex((c) => c.name === alt.requiresName);
+            const altIdx = this.field.findIndex(
+              (c) => c.name === alt.requiresName
+            );
             if (altIdx === -1) {
               console.log(`No ${alt.requiresName} available for tribute.`);
               return null;
@@ -200,6 +249,7 @@ export default class Player {
       card.position = position;
       card.isFacedown = isFacedown;
       card.hasAttacked = false;
+      card.attacksUsedThisTurn = 0;
       this.field.push(card);
       this.summonCount++;
       return card;
@@ -230,18 +280,25 @@ export default class Player {
         : [];
 
       let removeIdx = -1;
-
-      if (targetArchetypes.length === 0) {
-        removeIdx = this.deck.findIndex((card) => card.archetypes.length === 0);
-      } else {
-        removeIdx = this.deck.findIndex((card) => {
+      // Prefer remover monstros sem arquétipo para não descartar spells/traps importantes (ex: Polymerization)
+      const findRemovable = (preferMonsters) =>
+        this.deck.findIndex((card) => {
           const archetypes = Array.isArray(card.archetypes)
             ? card.archetypes
             : card.archetype
             ? [card.archetype]
             : [];
-          return targetArchetypes.every((arc) => !archetypes.includes(arc));
+          const archetypeMismatch =
+            targetArchetypes.length === 0
+              ? archetypes.length === 0
+              : targetArchetypes.every((arc) => !archetypes.includes(arc));
+          const isMonster = card.cardKind === "monster";
+          return archetypeMismatch && (!preferMonsters || isMonster);
         });
+
+      removeIdx = findRemovable(true);
+      if (removeIdx === -1) {
+        removeIdx = findRemovable(false);
       }
 
       if (removeIdx === -1) {
@@ -265,9 +322,3 @@ export default class Player {
     this.lp += amount;
   }
 }
-
-
-
-
-
-
