@@ -2992,6 +2992,7 @@ export const cardDatabase = [
     ],
   },
   {
+<<<<<<< HEAD
     id: 104,
     name: "Void Gravitational Pull",
     cardKind: "spell",
@@ -3036,6 +3037,28 @@ export const cardDatabase = [
             targetRef: "void_gravitational_opponent",
             player: "opponent",
             to: "hand",
+=======
+    id: 207,
+    name: "Void Lost Throne",
+    cardKind: "spell",
+    subtype: "normal",
+    archetype: "Void",
+    description:
+      "Destroy as many monsters on the field as possible, except 1 monster with the highest ATK on each side of the field (in case of a tie, you choose 1 to remain on each side). You can only activate 1 'Void Lost Throne' per turn.",
+    image: "assets/Void Lost Throne.png",
+    effects: [
+      {
+        id: "void_lost_throne_effect",
+        timing: "on_play",
+        speed: 1,
+        oncePerTurn: true,
+        oncePerTurnName: "void_lost_throne",
+        actions: [
+          {
+            type: "selective_field_destruction",
+            keepPerSide: 1,
+            allowTieBreak: true,
+>>>>>>> 430436d6f669e8fa9461dfafd28a059cd5d019f3
           },
         ],
       },
