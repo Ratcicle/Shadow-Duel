@@ -1149,27 +1149,28 @@ export async function handleSpecialSummonMatchingLevel(
     return false;
   }
 
-  // For bot, auto-select first candidate
-  if (player.id === "bot") {
-    const card = candidates[0];
-    const handIndex = hand.indexOf(card);
-    if (handIndex === -1) return false;
+  // Extract common configuration
+  const negateEffects = action.negateEffects !== false;
+  const cannotAttackThisTurn = action.cannotAttackThisTurn || false;
 
+  /**
+   * Helper function to finalize the special summon
+   */
+  const finalizeSummon = (card, position) => {
     // Remove from hand
-    hand.splice(handIndex, 1);
-
-    // Determine position
-    const position = action.position === "defense" ? "defense" : "attack";
+    const handIndex = hand.indexOf(card);
+    if (handIndex !== -1) {
+      hand.splice(handIndex, 1);
+    }
 
     // Special Summon
     card.position = position;
     card.isFacedown = false;
     card.hasAttacked = false;
-    card.cannotAttackThisTurn = action.cannotAttackThisTurn || false;
+    card.cannotAttackThisTurn = cannotAttackThisTurn;
     card.owner = player.id;
 
-    // Negate effects if specified (default: true)
-    const negateEffects = action.negateEffects !== false;
+    // Negate effects if specified
     if (negateEffects) {
       card.effectsNegated = true;
     }
@@ -1177,7 +1178,7 @@ export async function handleSpecialSummonMatchingLevel(
     player.field.push(card);
 
     game.renderer?.log(
-      `${player.name} Special Summoned ${card.name} (Level ${targetLevel}) from hand${
+      `${player.name || "Player"} Special Summoned ${card.name} (Level ${targetLevel}) from hand${
         negateEffects ? " (effects negated)" : ""
       }.`
     );
@@ -1190,6 +1191,13 @@ export async function handleSpecialSummonMatchingLevel(
     });
 
     game.updateBoard();
+  };
+
+  // For bot, auto-select first candidate
+  if (player.id === "bot") {
+    const card = candidates[0];
+    const position = action.position === "defense" ? "defense" : "attack";
+    finalizeSummon(card, position);
     return true;
   }
 
@@ -1198,46 +1206,10 @@ export async function handleSpecialSummonMatchingLevel(
     // If only one candidate, auto-select it
     if (candidates.length === 1) {
       const card = candidates[0];
-      const handIndex = hand.indexOf(card);
-      if (handIndex === -1) {
-        resolve(false);
-        return;
-      }
-
-      // Remove from hand
-      hand.splice(handIndex, 1);
-
+      
       // Ask for position
       engine.chooseSpecialSummonPosition(card, player).then((position) => {
-        // Special Summon
-        card.position = position;
-        card.isFacedown = false;
-        card.hasAttacked = false;
-        card.cannotAttackThisTurn = action.cannotAttackThisTurn || false;
-        card.owner = player.id;
-
-        // Negate effects if specified (default: true)
-        const negateEffects = action.negateEffects !== false;
-        if (negateEffects) {
-          card.effectsNegated = true;
-        }
-
-        player.field.push(card);
-
-        game.renderer?.log(
-          `Special Summoned ${card.name} (Level ${targetLevel}) from hand${
-            negateEffects ? " (effects negated)" : ""
-          }.`
-        );
-
-        // Emit after_summon event
-        game.emit("after_summon", {
-          card,
-          player,
-          method: "special",
-        });
-
-        game.updateBoard();
+        finalizeSummon(card, position);
         resolve(true);
       });
     } else {
@@ -1253,50 +1225,14 @@ export async function handleSpecialSummonMatchingLevel(
           }
 
           const card = selected[0];
-          const handIndex = hand.indexOf(card);
-          if (handIndex === -1) {
-            resolve(false);
-            return;
-          }
-
-          // Remove from hand
-          hand.splice(handIndex, 1);
-
+          
           // Ask for position
           const position = await engine.chooseSpecialSummonPosition(
             card,
             player
           );
 
-          // Special Summon
-          card.position = position;
-          card.isFacedown = false;
-          card.hasAttacked = false;
-          card.cannotAttackThisTurn = action.cannotAttackThisTurn || false;
-          card.owner = player.id;
-
-          // Negate effects if specified (default: true)
-          const negateEffects = action.negateEffects !== false;
-          if (negateEffects) {
-            card.effectsNegated = true;
-          }
-
-          player.field.push(card);
-
-          game.renderer?.log(
-            `Special Summoned ${card.name} (Level ${targetLevel}) from hand${
-              negateEffects ? " (effects negated)" : ""
-            }.`
-          );
-
-          // Emit after_summon event
-          game.emit("after_summon", {
-            card,
-            player,
-            method: "special",
-          });
-
-          game.updateBoard();
+          finalizeSummon(card, position);
           resolve(true);
         }
       );

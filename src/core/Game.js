@@ -54,10 +54,14 @@ export default class Game {
     }
     
     // Check for traps that respond to this event (e.g., after_summon)
-    if (eventName === "after_summon" && payload) {
+    // Only check player's traps, and only if opponent performed the action
+    if (eventName === "after_summon" && payload && payload.player) {
+      // From player's perspective, bot is the opponent
+      const isOpponentSummon = payload.player.id !== "player";
+      
       await this.checkAndOfferTraps(eventName, {
         ...payload,
-        isOpponentSummon: payload.player?.id === "bot",
+        isOpponentSummon: isOpponentSummon,
       });
     }
     
