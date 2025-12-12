@@ -156,6 +156,9 @@ export default class EffectEngine {
     }
 
     const opponent = this.game.getOpponent(player);
+    
+    // Get current phase for trap requirements
+    const currentPhase = this.game?.phase;
 
     for (const sourceCard of sources) {
       if (!sourceCard.effects || !Array.isArray(sourceCard.effects)) continue;
@@ -168,6 +171,7 @@ export default class EffectEngine {
         opponent,
         summonedCard: card,
         summonMethod: method,
+        currentPhase,
       };
 
       for (const effect of sourceCard.effects) {
@@ -209,6 +213,16 @@ export default class EffectEngine {
             ? effect.summonMethod
             : [effect.summonMethod];
           if (!methods.includes(method)) {
+            continue;
+          }
+        }
+
+        // Check phase requirement (for trap cards that only activate in specific phases)
+        if (effect.requirePhase) {
+          const allowedPhases = Array.isArray(effect.requirePhase)
+            ? effect.requirePhase
+            : [effect.requirePhase];
+          if (!allowedPhases.includes(currentPhase)) {
             continue;
           }
         }
