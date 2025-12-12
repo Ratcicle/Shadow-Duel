@@ -934,6 +934,245 @@ export async function handleGrantAdditionalNormalSummon(action, ctx, targets, en
 }
 
 /**
+ * Generic handler for selective field destruction based on highest ATK
+ * Implements effects like "Void Lost Throne"
+ * 
+ * Action properties:
+ * - keepPerSide: number of highest ATK monsters to keep per side (default: 1)
+ * - allowTieBreak: boolean - if true, player chooses which to keep on ties (default: true)
+ * - modalTitle: string - custom modal title (default: "Choose Survivor")
+ * - modalSubtitle: string - custom subtitle template (default: auto-generated)
+ * - modalInfoText: string - custom info text (default: "All other monsters will be destroyed.")
+ * 
+ * Effect: Destroys all monsters on field except keepPerSide highest ATK monsters per side.
+ * If there's a tie for highest ATK, the card's controller chooses which to keep.
+ */
+export async function handleSelectiveFieldDestruction(action, ctx, targets, engine) {
+  const { player, source } = ctx;
+  const game = engine.game;
+  
+  if (!player || !game) return false;
+  
+  const opponent = game.getOpponent(player);
+  if (!opponent) return false;
+  
+  const keepPerSide = action.keepPerSide || 1;
+  const allowTieBreak = action.allowTieBreak !== false;
+  
+  // Get all monsters on both sides
+  const playerMonsters = (player.field || []).filter(
+    (card) => card && card.cardKind === "monster" && !card.isFacedown
+  );
+  const opponentMonsters = (opponent.field || []).filter(
+    (card) => card && card.cardKind === "monster" && !card.isFacedown
+  );
+  
+  if (playerMonsters.length === 0 && opponentMonsters.length === 0) {
+    game.renderer?.log("No monsters on the field to destroy.");
+    return false;
+  }
+  
+  // Helper function to find highest ATK monsters
+  const findHighestAtkMonsters = (monsters) => {
+    if (monsters.length === 0) return [];
+    
+    const maxAtk = Math.max(...monsters.map((m) => m.atk || 0));
+    return monsters.filter((m) => (m.atk || 0) === maxAtk);
+  };
+  
+  // Find highest ATK monsters on each side
+  const playerHighest = findHighestAtkMonsters(playerMonsters);
+  const opponentHighest = findHighestAtkMonsters(opponentMonsters);
+  
+  // Determine which monsters to keep
+  let playerToKeep = [];
+  let opponentToKeep = [];
+  
+  // Custom modal text from action properties
+  const modalConfig = {
+    title: action.modalTitle || "Choose Survivor",
+    subtitle: action.modalSubtitle || null, // null means auto-generate
+    infoText: action.modalInfoText || "All other monsters will be destroyed.",
+  };
+  
+  // Handle player's side
+  if (playerHighest.length <= keepPerSide) {
+    // No tie or tie doesn't exceed keepPerSide
+    playerToKeep = playerHighest;
+  } else if (allowTieBreak) {
+    // Tie exists and player needs to choose
+    if (player.id === "bot") {
+      // Bot auto-selects (first N in array)
+      playerToKeep = playerHighest.slice(0, keepPerSide);
+    } else {
+      // Ask human player to choose
+      playerToKeep = await promptTieBreaker(
+        game,
+        playerHighest,
+        keepPerSide,
+        "your",
+        modalConfig
+      );
+    }
+  } else {
+    // No tie-break allowed, keep all tied
+    playerToKeep = playerHighest;
+  }
+  
+  // Handle opponent's side
+  if (opponentHighest.length <= keepPerSide) {
+    opponentToKeep = opponentHighest;
+  } else if (allowTieBreak) {
+    if (player.id === "bot") {
+      // Bot chooses for opponent side (first N in array)
+      opponentToKeep = opponentHighest.slice(0, keepPerSide);
+    } else {
+      // Human player chooses which opponent monster to keep
+      opponentToKeep = await promptTieBreaker(
+        game,
+        opponentHighest,
+        keepPerSide,
+        "opponent's",
+        modalConfig
+      );
+    }
+  } else {
+    opponentToKeep = opponentHighest;
+  }
+  
+  // Determine which monsters to destroy
+  const toDestroy = [];
+  
+  for (const monster of playerMonsters) {
+    if (!playerToKeep.includes(monster)) {
+      toDestroy.push({ card: monster, owner: player });
+    }
+  }
+  
+  for (const monster of opponentMonsters) {
+    if (!opponentToKeep.includes(monster)) {
+      toDestroy.push({ card: monster, owner: opponent });
+    }
+  }
+  
+  if (toDestroy.length === 0) {
+    game.renderer?.log("No monsters were destroyed.");
+    return false;
+  }
+  
+  // Destroy all marked monsters
+  game.renderer?.log(
+    `Destroying ${toDestroy.length} monster(s) on the field...`
+  );
+  
+  for (const { card, owner } of toDestroy) {
+    // Use game's destruction system to handle replacement effects
+    const { replaced } = (await game.resolveDestructionWithReplacement?.(card, {
+      reason: "effect",
+      sourceCard: source,
+    })) || {};
+    
+    if (!replaced) {
+      game.moveCard(card, owner, "graveyard", { fromZone: "field" });
+    }
+  }
+  
+  // Log which monsters survived
+  const survivorNames = [
+    ...playerToKeep.map((m) => m.name),
+    ...opponentToKeep.map((m) => m.name),
+  ];
+  
+  if (survivorNames.length > 0) {
+    game.renderer?.log(
+      `${survivorNames.join(", ")} survived with highest ATK.`
+    );
+  }
+  
+  game.updateBoard();
+  return true;
+}
+
+/**
+ * Helper function to prompt player for tie-breaker selection
+ * @param {Object} modalConfig - Configuration for modal text (title, subtitle, infoText)
+ */
+async function promptTieBreaker(game, candidates, keepCount, sideDescription, modalConfig = {}) {
+  if (!game.renderer?.showCardGridSelectionModal) {
+    // Fallback: auto-select first N
+    return candidates.slice(0, keepCount);
+  }
+  
+  return new Promise((resolve) => {
+    const maxAtk = candidates[0]?.atk || 0;
+    
+    // Use custom subtitle or generate default one
+    const subtitle = modalConfig.subtitle || 
+      `Multiple monsters on ${sideDescription} side have ${maxAtk} ATK. Choose ${keepCount} to keep on the field.`;
+    
+    game.renderer.showCardGridSelectionModal({
+      title: modalConfig.title || "Choose Survivor",
+      subtitle: subtitle,
+      cards: candidates,
+      minSelect: keepCount,
+      maxSelect: keepCount,
+      confirmLabel: "Confirm",
+      cancelLabel: "Cancel",
+      overlayClass: "tie-breaker-overlay",
+      modalClass: "tie-breaker-modal",
+      gridClass: "tie-breaker-grid",
+      cardClass: "tie-breaker-card",
+      infoText: modalConfig.infoText || "All other monsters will be destroyed.",
+      onConfirm: (selected) => {
+        resolve(selected || candidates.slice(0, keepCount));
+      },
+      onCancel: () => {
+        // Auto-select on cancel
+        resolve(candidates.slice(0, keepCount));
+      },
+      renderCard: (card) => {
+        const cardEl = document.createElement("div");
+        cardEl.classList.add("tie-breaker-card-item");
+        
+        const imageDiv = document.createElement("div");
+        imageDiv.classList.add("tie-breaker-card-image");
+        imageDiv.style.backgroundImage = `url('${card.image}')`;
+        cardEl.appendChild(imageDiv);
+        
+        const infoDiv = document.createElement("div");
+        infoDiv.classList.add("tie-breaker-card-info");
+        
+        const nameDiv = document.createElement("div");
+        nameDiv.classList.add("tie-breaker-card-name");
+        nameDiv.textContent = card.name;
+        infoDiv.appendChild(nameDiv);
+        
+        const statsDiv = document.createElement("div");
+        statsDiv.classList.add("tie-breaker-card-stats");
+        statsDiv.innerHTML = `<span>ATK ${card.atk || 0}</span>`;
+        infoDiv.appendChild(statsDiv);
+        
+        cardEl.appendChild(infoDiv);
+        return cardEl;
+      },
+    });
+  });
+}
+        infoDiv.appendChild(nameDiv);
+        
+        const statsDiv = document.createElement("div");
+        statsDiv.classList.add("tie-breaker-card-stats");
+        statsDiv.innerHTML = `<span>ATK ${card.atk || 0}</span>`;
+        infoDiv.appendChild(statsDiv);
+        
+        cardEl.appendChild(infoDiv);
+        return cardEl;
+      },
+    });
+  });
+}
+
+/**
  * Initialize default handlers
  * @param {ActionHandlerRegistry} registry
  */
@@ -955,4 +1194,7 @@ export function registerDefaultHandlers(registry) {
   // Stat modification and effect negation handlers
   registry.register("set_stats_to_zero_and_negate", handleSetStatsToZeroAndNegate);
   registry.register("grant_additional_normal_summon", handleGrantAdditionalNormalSummon);
+  
+  // Field control handlers
+  registry.register("selective_field_destruction", handleSelectiveFieldDestruction);
 }
