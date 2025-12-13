@@ -2163,10 +2163,6 @@ export default class EffectEngine {
               (await this.applyDestroyAllOthersAndDraw(action, ctx)) ||
               executed;
             break;
-          case "luminarch_aegisbearer_def_boost":
-            executed =
-              this.applyLuminarchAegisbearerDefBoost(action, ctx) || executed;
-            break;
           case "shadow_heart_rage_scale_buff":
             executed =
               this.applyShadowHeartRageScaleBuff(action, ctx) || executed;
@@ -2174,14 +2170,6 @@ export default class EffectEngine {
           case "grant_second_attack_this_turn":
             executed =
               this.applyGrantSecondAttackThisTurn(action, ctx) || executed;
-            break;
-          case "luminarch_magic_sickle_recycle":
-            executed =
-              this.applyLuminarchMagicSickleRecycle(action, ctx) || executed;
-            break;
-          case "luminarch_holy_shield_apply":
-            executed =
-              this.applyLuminarchHolyShield(action, ctx, targets) || executed;
             break;
           case "shadow_heart_shield_upkeep":
             executed =
@@ -2244,14 +2232,6 @@ export default class EffectEngine {
               (await this.applyLuminarchSacredJudgmentRevive(action, ctx)) ||
               executed;
             break;
-          case "luminarch_aurora_seraph_heal":
-            executed = this.applyAuroraSeraphHeal(action, ctx) || executed;
-            break;
-          case "luminarch_citadel_atkdef_buff":
-            executed =
-              this.applyLuminarchCitadelAtkDefBuff(action, ctx, targets) ||
-              executed;
-            break;
           case "conditional_special_summon_from_hand":
             executed =
               (await this.applyConditionalSpecialSummonFromHand(action, ctx)) ||
@@ -2305,11 +2285,6 @@ export default class EffectEngine {
           case "demon_dragon_revive_scale_dragon":
             executed =
               (await this.applyDemonDragonRevive(action, ctx)) || executed;
-            break;
-          case "megashield_barbarias_switch_boost":
-            executed =
-              this.applyMegashieldBarbariasSwitch(action, ctx, targets) ||
-              executed;
             break;
           case "mirror_force_destroy_all":
             executed =
@@ -2806,24 +2781,6 @@ export default class EffectEngine {
     }
 
     return destroyedCount > 0;
-  }
-
-  applyAuroraSeraphHeal(action, ctx) {
-    const destroyed = ctx?.destroyed;
-    const player = ctx?.player;
-    if (!destroyed || !player) return false;
-
-    const amount = Math.floor((destroyed.atk || 0) / 2);
-    if (amount <= 0) return false;
-
-    player.gainLP(amount);
-    this.game?.renderer?.log(
-      `${player.name} gains ${amount} LP from ${
-        ctx.source?.name || "Aurora Seraph"
-      }.`
-    );
-
-    return true;
   }
 
   applyNegateAttack(action, ctx) {
@@ -3646,39 +3603,6 @@ export default class EffectEngine {
     return true;
   }
 
-  applyLuminarchAegisbearerDefBoost(action, ctx) {
-    const amount = action.amount ?? 0;
-    const card = ctx?.source;
-    if (!card || card.cardKind !== "monster" || amount <= 0) return false;
-
-    const owner = card.owner === "player" ? this.game?.player : this.game?.bot;
-    if (!owner || !owner.field.includes(card)) return false;
-
-    card.def += amount;
-    return true;
-  }
-
-  applyLuminarchCitadelAtkDefBuff(action, ctx, targets) {
-    const amount = action.amount ?? 500;
-    const targetCards = targets[action.targetRef] || [];
-    if (!amount || targetCards.length === 0) return false;
-
-    let applied = false;
-    targetCards.forEach((card) => {
-      if (!card || card.cardKind !== "monster" || card.isFacedown) return;
-      const owner = this.getOwnerByCard(card);
-      if (!owner || !owner.field || !owner.field.includes(card)) return;
-
-      card.atk += amount;
-      card.def += amount;
-      card.tempAtkBoost = (card.tempAtkBoost || 0) + amount;
-      card.tempDefBoost = (card.tempDefBoost || 0) + amount;
-      applied = true;
-    });
-
-    return applied;
-  }
-
   applyShadowHeartRageScaleBuff(action, ctx) {
     const player = ctx?.player;
     if (!player) return false;
@@ -3717,84 +3641,6 @@ export default class EffectEngine {
 
     card.canMakeSecondAttackThisTurn = true;
     card.secondAttackUsedThisTurn = false;
-    return true;
-  }
-
-  applyLuminarchMagicSickleRecycle(action, ctx) {
-    const card = ctx?.source;
-    const player = ctx?.player;
-    const game = this.game;
-
-    if (
-      !card ||
-      !player ||
-      !game ||
-      game.turn !== player.id ||
-      (game.phase !== "main1" && game.phase !== "main2") ||
-      card.cardKind !== "monster" ||
-      !(player.field || []).includes(card)
-    ) {
-      return false;
-    }
-
-    this.game.moveCard(card, player, "graveyard", { fromZone: "field" });
-
-    const gy = player.graveyard || [];
-    const luminarchMonsters = gy.filter((c) => {
-      if (!c || c.cardKind !== "monster") return false;
-      if (c === card) return false; // do not let Sickle retrieve itself
-      const archetypes = Array.isArray(c.archetypes)
-        ? c.archetypes
-        : c.archetype
-        ? [c.archetype]
-        : [];
-      return archetypes.includes("Luminarch");
-    });
-
-    const finishReturn = (chosenCards) => {
-      chosenCards.forEach((c) => {
-        const idx = player.graveyard.indexOf(c);
-        if (idx > -1) {
-          player.graveyard.splice(idx, 1);
-        }
-        player.hand.push(c);
-      });
-
-      if (typeof this.game.updateBoard === "function") {
-        this.game.updateBoard();
-      }
-    };
-
-    if (
-      typeof document === "undefined" ||
-      !document ||
-      !document.body ||
-      luminarchMonsters.length === 0
-    ) {
-      if (luminarchMonsters.length === 0) {
-        console.log("No Luminarch monsters in GY to add.");
-        return true;
-      }
-
-      const maxToReturn = Math.min(2, luminarchMonsters.length);
-      const chosen = [...luminarchMonsters]
-        .sort((a, b) => (b.atk || 0) - (a.atk || 0))
-        .slice(0, maxToReturn);
-      finishReturn(chosen);
-      return true;
-    }
-
-    this.showSickleSelectionModal(
-      luminarchMonsters,
-      2,
-      (selected) => {
-        finishReturn(selected);
-      },
-      () => {
-        finishReturn([]);
-      }
-    );
-
     return true;
   }
 
@@ -3838,21 +3684,6 @@ export default class EffectEngine {
       `[HEADLESS] Sickle: Auto-selecting ${chosen.length} Luminarch monsters in order.`
     );
     onConfirm(chosen);
-  }
-
-  applyLuminarchHolyShield(action, ctx, targets) {
-    const targetCards = targets[action.targetRef] || [];
-    if (!Array.isArray(targetCards) || targetCards.length === 0) return false;
-
-    let applied = false;
-    targetCards.forEach((card) => {
-      if (!card) return;
-      card.tempBattleIndestructible = true;
-      card.battleDamageHealsControllerThisTurn = true;
-      applied = true;
-    });
-
-    return applied;
   }
 
   applyMove(action, ctx, targets) {
@@ -5551,36 +5382,6 @@ export default class EffectEngine {
         resolve(false);
       }
     });
-  }
-
-  applyMegashieldBarbariasSwitch(action, ctx, targets) {
-    const targetCard = targets?.[action.targetRef]?.[0];
-
-    if (!targetCard || targetCard.zone !== "field" || targetCard.isFacedown) {
-      console.warn(
-        "[applyMegashieldBarbariasSwitch] Invalid target for position switch:",
-        targetCard
-      );
-      return false;
-    }
-
-    // Switch position of target
-    const newPosition = targetCard.position === "attack" ? "defense" : "attack";
-    targetCard.position = newPosition;
-    targetCard.hasChangedPosition = true;
-
-    // Apply ATK boost to target until end of turn
-    const atkBoost = action.atkBoost ?? 1000;
-    targetCard.tempAtkBoost = (targetCard.tempAtkBoost || 0) + atkBoost;
-
-    this.game.renderer.log(
-      `${ctx.card.name} effect: ${
-        targetCard.name
-      } switched to ${newPosition.toUpperCase()} Position and gained ${atkBoost} ATK!`
-    );
-
-    this.game.updateBoard();
-    return true;
   }
 
   async applyCallOfTheHauntedSummon(action, ctx, targets) {
