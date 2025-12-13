@@ -561,7 +561,7 @@ export default class EffectEngine {
     return { success: true };
   }
 
-  handleBattleDestroyEvent(payload) {
+  async handleBattleDestroyEvent(payload) {
     if (!payload || !payload.attacker || !payload.destroyed) return;
 
     const {
@@ -640,14 +640,29 @@ export default class EffectEngine {
 
           if (effect.requireSelfAsAttacker && ctx.attacker !== card) continue;
           if (effect.requireSelfAsDestroyed && ctx.destroyed !== card) continue;
-          if (
-            effect.requireDestroyedIsOpponent &&
-            ctx.destroyedOwner !== side.other?.id
-          )
-            continue;
+          if (effect.requireDestroyedIsOpponent) {
+            const destroyedOwnerId =
+              (ctx.destroyedOwner && ctx.destroyedOwner.id) || ctx.destroyedOwner;
+            const opponentId = side.other?.id;
+            if (!destroyedOwnerId || destroyedOwnerId !== opponentId) continue;
+          }
           if (effect.requireEquippedAsAttacker) {
             if (!card.equippedTo) continue;
             if (ctx.attacker !== card.equippedTo) continue;
+          }
+
+          if (
+            effect.promptUser === true &&
+            this.game &&
+            this.game.renderer &&
+            typeof this.game.renderer.showConditionalSummonPrompt === "function" &&
+            owner === this.game.player
+          ) {
+            const shouldActivate = await this.game.renderer.showConditionalSummonPrompt(
+              card.name,
+              effect.promptMessage || `Activate ${card.name}'s effect?`
+            );
+            if (!shouldActivate) continue;
           }
 
           const targetResult = this.resolveTargets(
@@ -1710,6 +1725,7 @@ export default class EffectEngine {
 
       const isHuman =
         ctx?.player && this.game && ctx.player === this.game.player;
+      const isBot = !isHuman && ctx?.player && this.game && ctx.player === this.game.bot;
 
       const shouldAutoSelect = def.autoSelect || !!def.strategy;
       if (shouldAutoSelect) {
@@ -1720,6 +1736,12 @@ export default class EffectEngine {
 
       if (candidates.length === 1 && min === 1) {
         targetMap[def.id] = [candidates[0]];
+        continue;
+      }
+
+      if (isBot) {
+        const takeCount = Math.min(max, candidates.length);
+        targetMap[def.id] = candidates.slice(0, takeCount);
         continue;
       }
 
@@ -5054,7 +5076,7 @@ export default class EffectEngine {
     const combos = this.findFusionMaterialCombos(
       fusionMonster,
       availableMaterials,
-      { maxResults: 1 }
+      { maxResults: 1, player: ctx.player }
     );
 
     if (combos.length === 0) {
@@ -5069,7 +5091,8 @@ export default class EffectEngine {
     // Validar materiais
     const validation = this.evaluateFusionSelection(
       fusionMonster,
-      selectedMaterials
+      selectedMaterials,
+      { player: ctx.player }
     );
     if (!validation.ok) {
       this.game.renderer.log(`${ctx.player.name} selected invalid materials.`);
@@ -5128,7 +5151,8 @@ export default class EffectEngine {
     // Check which Fusion Monsters can be summoned
     const summonableFusions = this.getAvailableFusions(
       ctx.player.extraDeck,
-      availableMaterials
+      availableMaterials,
+      ctx.player
     );
 
     if (summonableFusions.length === 0) {
@@ -5170,10 +5194,11 @@ export default class EffectEngine {
           requiredMaterials,
           async (selectedMaterials) => {
             // Validate materials
-            const validation = this.evaluateFusionSelection(
-              fusionMonster,
-              selectedMaterials
-            );
+              const validation = this.evaluateFusionSelection(
+                fusionMonster,
+                selectedMaterials,
+                { player: ctx.player }
+              );
 
             if (!validation.ok) {
               this.game.isResolvingEffect = false;
@@ -5227,12 +5252,13 @@ export default class EffectEngine {
     return true;
   }
 
-  getAvailableFusions(extraDeck, materials) {
+  getAvailableFusions(extraDeck, materials, player = null) {
     // Returns fusion monsters that can be summoned with available materials
     return extraDeck
       .map((fusion, index) => {
         const combos = this.findFusionMaterialCombos(fusion, materials, {
           maxResults: 1,
+          player,
         });
         if (combos.length > 0) {
           return { fusion, index };
@@ -5242,15 +5268,30 @@ export default class EffectEngine {
       .filter(Boolean);
   }
 
-  canSummonFusion(fusionMonster, materials) {
+  canSummonFusion(fusionMonster, materials, player = null) {
     const combos = this.findFusionMaterialCombos(fusionMonster, materials, {
       maxResults: 1,
+      player,
     });
     return combos.length > 0;
   }
 
-  matchesFusionRequirement(card, requirement) {
+  matchesFusionRequirement(card, requirement, materialZone = null) {
     // Check if card matches fusion requirement
+    if (!card || !requirement) return false;
+
+    const allowedZones = Array.isArray(requirement.allowedZones)
+      ? requirement.allowedZones
+      : typeof requirement.zone === "string"
+      ? [requirement.zone]
+      : null;
+
+    if (allowedZones) {
+      if (!materialZone || !allowedZones.includes(materialZone)) {
+        return false;
+      }
+    }
+
     if (requirement.name && card.name === requirement.name) {
       return true;
     }
@@ -5300,7 +5341,18 @@ export default class EffectEngine {
 
     const maxResults = options.maxResults || 3;
     const results = [];
-    const pool = (materials || []).map((card, idx) => ({ card, idx }));
+    const owner = options.player || null;
+    const resolveZone = (card) => {
+      if (!owner || !card) return null;
+      if ((owner.field || []).includes(card)) return "field";
+      if ((owner.hand || []).includes(card)) return "hand";
+      return null;
+    };
+    const pool = (materials || []).map((card, idx) => ({
+      card,
+      idx,
+      zone: resolveZone(card),
+    }));
 
     const used = new Set();
 
@@ -5327,8 +5379,8 @@ export default class EffectEngine {
       const req = requirements[reqIndex];
       const needed = req.count || 1;
       const candidates = pool.filter(
-        ({ card, idx }) =>
-          !used.has(idx) && this.matchesFusionRequirement(card, req)
+        ({ card, idx, zone }) =>
+          !used.has(idx) && this.matchesFusionRequirement(card, req, zone)
       );
 
       if (candidates.length < needed) return;
@@ -5346,7 +5398,7 @@ export default class EffectEngine {
     return results;
   }
 
-  evaluateFusionSelection(fusionMonster, selectedMaterials) {
+  evaluateFusionSelection(fusionMonster, selectedMaterials, options = {}) {
     const requirements = this.getFusionRequirements(fusionMonster);
     const requiredCount = this.getFusionRequiredCount(requirements);
     const combos = this.findFusionMaterialCombos(
@@ -5354,6 +5406,7 @@ export default class EffectEngine {
       selectedMaterials,
       {
         maxResults: 1,
+        player: options.player || null,
       }
     );
 
@@ -5368,8 +5421,10 @@ export default class EffectEngine {
     return this.getFusionRequirements(fusionMonster);
   }
 
-  validateFusionMaterials(fusionMonster, selectedMaterials) {
-    return this.evaluateFusionSelection(fusionMonster, selectedMaterials).ok;
+  validateFusionMaterials(fusionMonster, selectedMaterials, player = null) {
+    return this.evaluateFusionSelection(fusionMonster, selectedMaterials, {
+      player,
+    }).ok;
   }
 
   async applyDemonDragonDestroy(action, ctx) {

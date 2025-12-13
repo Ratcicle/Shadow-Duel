@@ -1341,7 +1341,14 @@ export default class Renderer {
       const count = req.count || 1;
       const desc =
         req.name || req.archetype || req.type || req.attribute || "monster";
-      hint.innerHTML += `${count}x ${desc}<br>`;
+      const zones = Array.isArray(req.allowedZones)
+        ? req.allowedZones
+        : typeof req.zone === "string"
+        ? [req.zone]
+        : null;
+      const zoneSuffix =
+        zones && zones.length > 0 ? ` (${zones.join(" or ")})` : "";
+      hint.innerHTML += `${count}x ${desc}${zoneSuffix}<br>`;
     });
 
     const selectedMaterials = [];

@@ -2509,7 +2509,7 @@ export default class Game {
 
     // Check if at least one Fusion Monster can be summoned
     for (const fusion of this.player.extraDeck) {
-      if (this.effectEngine.canSummonFusion(fusion, availableMaterials)) {
+      if (this.effectEngine.canSummonFusion(fusion, availableMaterials, this.player)) {
         return true;
       }
     }

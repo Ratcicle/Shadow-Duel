@@ -2726,6 +2726,55 @@ export const cardDatabase = [
     ],
   },
   {
+    id: 210,
+    name: "Void Berserker",
+    cardKind: "monster",
+    monsterType: "fusion",
+    atk: 2800,
+    def: 2200,
+    level: 8,
+    type: "Fiend",
+    archetype: "Void",
+    description:
+      "Void Slayer Brute (on the field) + 1 'Void' monster. This card can make up to 2 attacks during each Battle Phase. Once per turn, if this card destroys an opponent's monster by battle: You can target 1 card your opponent controls; return it to the hand.",
+    image: "assets/Void Berserker.png",
+    fusionMaterials: [
+      { name: "Void Slayer Brute", count: 1, allowedZones: ["field"] },
+      { archetype: "Void", count: 1 },
+    ],
+    extraAttacks: 1,
+    effects: [
+      {
+        id: "void_berserker_bounce_on_destroy",
+        timing: "on_event",
+        event: "battle_destroy",
+        requireSelfAsAttacker: true,
+        requireDestroyedIsOpponent: true,
+        oncePerTurn: true,
+        oncePerTurnName: "void_berserker_bounce_on_destroy",
+        promptUser: true,
+        promptMessage:
+          "Ativar Void Berserker para devolver 1 carta do oponente para a mão?",
+        targets: [
+          {
+            id: "void_berserker_bounce_target",
+            owner: "opponent",
+            zones: ["field", "spellTrap", "fieldSpell"],
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "void_berserker_bounce_target",
+            player: "opponent",
+            to: "hand",
+          },
+        ],
+      },
+    ],
+  },
+  {
     id: 209,
     name: "Void Serpent Drake",
     cardKind: "monster",

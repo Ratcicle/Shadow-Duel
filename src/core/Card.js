@@ -22,7 +22,8 @@ export default class Card {
     this.position = "attack";
     this.isFacedown = false;
     this.hasAttacked = false;
-    this.extraAttacks = 0;
+    const baseExtraAttacks = Number(data.extraAttacks ?? 0);
+    this.extraAttacks = Number.isFinite(baseExtraAttacks) ? baseExtraAttacks : 0;
     this.attacksUsedThisTurn = 0;
 
     this.tempAtkBoost = 0;

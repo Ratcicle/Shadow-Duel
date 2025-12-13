@@ -238,13 +238,22 @@ export async function handleSpecialSummonFromZone(
 
   // Show multi-select modal for player
   return new Promise((resolve) => {
+    const minRequired = Number(count.min ?? 0);
     game.renderer.showMultiSelectModal(
       candidates,
-      { min: count.min || 0, max: maxSelect },
+      { min: minRequired, max: maxSelect },
       async (selected) => {
         if (!selected || selected.length === 0) {
-          game.renderer?.log("No cards selected.");
-          resolve(false);
+          if (minRequired === 0) {
+            game.renderer?.log("No cards selected (optional).");
+            if (typeof game.updateBoard === "function") {
+              game.updateBoard();
+            }
+            resolve(true);
+          } else {
+            game.renderer?.log("No cards selected.");
+            resolve(false);
+          }
           return;
         }
 
