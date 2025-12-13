@@ -992,6 +992,7 @@ export default class Game {
       return { replaced: false };
     }
 
+    // Check for Equip Spell protection (e.g., Crescent Shield Guard)
     if (options.reason === "battle") {
       const guardEquip = (card.equips || []).find(
         (equip) =>
@@ -1010,76 +1011,119 @@ export default class Game {
       }
     }
 
-    const effect = (card.effects || []).find(
-      (eff) => eff.id === "luminarch_aurora_seraph_protect"
+    // Generic destruction replacement system
+    // Look for effects with replacementEffect property
+    const replacementEffect = (card.effects || []).find(
+      (eff) => eff.replacementEffect && eff.replacementEffect.type === "destruction"
     );
-    if (!effect) {
+
+    if (!replacementEffect) {
       return { replaced: false };
     }
 
+    const replacement = replacementEffect.replacementEffect;
+
+    // Check once per turn
     const onceCheck = this.effectEngine.checkOncePerTurn(
       card,
       ownerPlayer,
-      effect
+      replacementEffect
     );
     if (!onceCheck.ok) {
       return { replaced: false };
     }
 
-    const isLuminarch = (candidate) =>
-      candidate &&
-      candidate.cardKind === "monster" &&
-      candidate !== card &&
-      ((Array.isArray(candidate.archetypes) &&
-        candidate.archetypes.includes("Luminarch")) ||
-        candidate.archetype === "Luminarch");
-
-    const candidates = (ownerPlayer.field || []).filter(isLuminarch);
-    if (candidates.length === 0) {
+    // Check if reason matches (battle/effect/any)
+    if (replacement.reason && replacement.reason !== "any" && replacement.reason !== options.reason) {
       return { replaced: false };
     }
 
-    if (ownerPlayer.id !== "player") {
-      const chosen = [...candidates].sort(
-        (a, b) => (a.atk || 0) - (b.atk || 0)
-      )[0];
-      if (chosen) {
-        this.moveCard(chosen, ownerPlayer, "graveyard", { fromZone: "field" });
-        this.effectEngine.registerOncePerTurnUsage(card, ownerPlayer, effect);
-        this.renderer.log(
-          `${card.name} avoided destruction by sending ${chosen.name} to the Graveyard.`
-        );
-        return { replaced: true };
+    // Build filter function for cost candidates
+    const costFilters = replacement.costFilters || {};
+    const filterCandidates = (candidate) => {
+      if (!candidate || candidate === card) return false;
+
+      if (costFilters.cardKind && candidate.cardKind !== costFilters.cardKind) return false;
+
+      if (costFilters.archetype) {
+        const hasArchetype =
+          candidate.archetype === costFilters.archetype ||
+          (Array.isArray(candidate.archetypes) &&
+            candidate.archetypes.includes(costFilters.archetype));
+        if (!hasArchetype) return false;
       }
+
+      if (costFilters.name && candidate.name !== costFilters.name) return false;
+
+      return true;
+    };
+
+    // Find candidates in the specified zone (default: field)
+    const costZone = replacement.costZone || "field";
+    const candidateZone = ownerPlayer[costZone] || [];
+    const candidates = candidateZone.filter(filterCandidates);
+
+    const costCount = replacement.costCount || 1;
+
+    if (candidates.length < costCount) {
       return { replaced: false };
     }
 
-    const wantsToReplace = window.confirm(
-      `Send 1 "Luminarch" monster you control to the GY to save ${card.name}?`
-    );
+    // Bot auto-selection (lowest ATK for cost)
+    if (ownerPlayer.id !== "player") {
+      const chosen = [...candidates]
+        .sort((a, b) => (a.atk || 0) - (b.atk || 0))
+        .slice(0, costCount);
+
+      for (const costCard of chosen) {
+        this.moveCard(costCard, ownerPlayer, "graveyard", { fromZone: costZone });
+      }
+
+      this.effectEngine.registerOncePerTurnUsage(card, ownerPlayer, replacementEffect);
+
+      const costNames = chosen.map(c => c.name).join(", ");
+      this.renderer.log(
+        `${card.name} avoided destruction by sending ${costNames} to the Graveyard.`
+      );
+      return { replaced: true };
+    }
+
+    // Player confirmation
+    const costArchetype = costFilters.archetype || "monster";
+    const prompt = replacement.prompt || 
+      `Send ${costCount} "${costArchetype}" ${costCount > 1 ? 'monsters' : 'monster'} to the GY to save ${card.name}?`;
+    
+    const wantsToReplace = window.confirm(prompt);
     if (!wantsToReplace) {
       return { replaced: false };
     }
 
+    // Player selection
     const selections = await this.askPlayerToSelectCards({
       owner: "player",
-      zone: "field",
-      min: 1,
-      max: 1,
-      filter: isLuminarch,
-      message: `Choose a "Luminarch" monster to send to the Graveyard for ${card.name}'s protection.`,
+      zone: costZone,
+      min: costCount,
+      max: costCount,
+      filter: filterCandidates,
+      message: replacement.selectionMessage || 
+        `Choose ${costCount} ${costCount > 1 ? 'cards' : 'card'} to send to the Graveyard for ${card.name}'s protection.`,
     });
 
-    const chosen = selections[0];
-    if (!chosen) {
+    if (!selections || selections.length < costCount) {
       this.renderer.log("Protection cancelled.");
       return { replaced: false };
     }
 
-    this.moveCard(chosen, ownerPlayer, "graveyard", { fromZone: "field" });
-    this.effectEngine.registerOncePerTurnUsage(card, ownerPlayer, effect);
+    // Pay cost
+    for (const costCard of selections) {
+      this.moveCard(costCard, ownerPlayer, "graveyard", { fromZone: costZone });
+    }
+
+    this.effectEngine.registerOncePerTurnUsage(card, ownerPlayer, replacementEffect);
+
+    const costNames = selections.map(c => c.name).join(", ");
     this.renderer.log(
-      `${card.name} avoided destruction by sending ${chosen.name} to the Graveyard.`
+      `${card.name} avoided destruction by sending ${costNames} to the Graveyard.`
     );
     return { replaced: true };
   }
