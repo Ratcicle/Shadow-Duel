@@ -1097,9 +1097,9 @@ export default class Game {
     }
 
     // Player confirmation
-    const costArchetype = costFilters.archetype || "monster";
+    const costType = costFilters.archetype || costFilters.cardKind || "card";
     const prompt = replacement.prompt || 
-      `Send ${costCount} "${costArchetype}" ${costCount > 1 ? 'monsters' : 'monster'} to the GY to save ${card.name}?`;
+      `Send ${costCount} "${costType}" ${costCount > 1 ? 'cards' : 'card'} to the GY to save ${card.name}?`;
     
     const wantsToReplace = window.confirm(prompt);
     if (!wantsToReplace) {

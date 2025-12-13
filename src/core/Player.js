@@ -324,11 +324,6 @@ export default class Player {
     const multiplier = this.lpGainMultiplier || 1.0;
     const adjustedAmount = Math.floor(amount * multiplier);
     this.lp += adjustedAmount;
-    
-    // Log if multiplier was applied
-    if (multiplier !== 1.0 && amount > 0) {
-      console.log(`[Player] LP gain multiplier ${multiplier}x applied: ${amount} -> ${adjustedAmount}`);
-    }
   }
 
   /**
