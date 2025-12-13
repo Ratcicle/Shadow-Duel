@@ -1137,6 +1137,12 @@ export default class EffectEngine {
       ctx.activationZone = resolvedActivationZone;
     }
 
+    const skipImmediateResolution = effect && effect.manualActivationOnly;
+
+    if (skipImmediateResolution) {
+      return { success: true };
+    }
+
     const targetResult = this.resolveTargets(
       effect.targets || [],
       ctx,

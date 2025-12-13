@@ -2970,6 +2970,7 @@ export const cardDatabase = [
       {
         id: "the_void_summon",
         timing: "on_field_activate",
+        manualActivationOnly: true,
         oncePerTurn: true,
         oncePerTurnName: "the_void_summon",
         requireEmptyField: true,
@@ -3004,6 +3005,7 @@ export const cardDatabase = [
         id: "void_gravitational_pull_bounce",
         timing: "ignition",
         requireZone: "field",
+        manualActivationOnly: true,
         oncePerTurn: true,
         oncePerTurnName: "void_gravitational_pull_bounce",
         targets: [
