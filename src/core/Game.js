@@ -2287,7 +2287,10 @@ export default class Game {
               sourceCard: attacker,
             })) || {};
           if (!replaced) {
-            this.moveCard(target, defender, "graveyard");
+            this.moveCard(target, defender, "graveyard", {
+              fromZone: "field",
+              wasDestroyed: true,
+            });
             this.applyBattleDestroyEffect(attacker, target);
           }
         }
@@ -2320,7 +2323,10 @@ export default class Game {
               sourceCard: target,
             })) || {};
           if (!replaced) {
-            this.moveCard(attacker, attPlayer, "graveyard");
+            this.moveCard(attacker, attPlayer, "graveyard", {
+              fromZone: "field",
+              wasDestroyed: true,
+            });
             this.applyBattleDestroyEffect(attacker, attacker);
           }
         }
@@ -2333,7 +2339,10 @@ export default class Game {
               sourceCard: attacker,
             })) || {};
           if (!replaced) {
-            this.moveCard(target, defPlayer, "graveyard");
+            this.moveCard(target, defPlayer, "graveyard", {
+              fromZone: "field",
+              wasDestroyed: true,
+            });
             this.applyBattleDestroyEffect(attacker, target);
           }
         }
@@ -2353,7 +2362,10 @@ export default class Game {
               sourceCard: attacker,
             })) || {};
           if (!replaced) {
-            this.moveCard(target, defender, "graveyard");
+            this.moveCard(target, defender, "graveyard", {
+              fromZone: "field",
+              wasDestroyed: true,
+            });
             this.applyBattleDestroyEffect(attacker, target);
           }
         }
@@ -2864,6 +2876,7 @@ export default class Game {
         toZone: "graveyard",
         player: ownerPlayer,
         opponent: otherPlayer,
+        wasDestroyed: options.wasDestroyed || false,
       });
     }
   }

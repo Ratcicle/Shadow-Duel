@@ -156,7 +156,7 @@ export default class EffectEngine {
     }
 
     const opponent = this.game.getOpponent(player);
-    
+
     // Get current phase for trap requirements
     const currentPhase = this.game?.phase;
 
@@ -180,7 +180,9 @@ export default class EffectEngine {
 
         // Skip if effects are negated
         if (this.isEffectNegated(sourceCard)) {
-          console.log(`${sourceCard.name} effects are negated, skipping effect.`);
+          console.log(
+            `${sourceCard.name} effects are negated, skipping effect.`
+          );
           continue;
         }
 
@@ -232,7 +234,8 @@ export default class EffectEngine {
             effect.condition,
             sourceCard,
             player,
-            card
+            card,
+            payload.sourceZone
           );
           if (!conditionMet) continue;
         }
@@ -311,11 +314,22 @@ export default class EffectEngine {
     this.updateVoidTenebrisHornBuffs();
   }
 
-  checkEffectCondition(condition, sourceCard, player, summonedCard) {
+  checkEffectCondition(
+    condition,
+    sourceCard,
+    player,
+    summonedCard,
+    sourceZone
+  ) {
     if (!condition) return true;
 
     if (condition.requires === "self_in_hand") {
-      if (!player.hand || !player.hand.includes(sourceCard)) {
+      // The effect must trigger on the SAME card that was summoned from hand
+      if (sourceCard !== summonedCard) {
+        return false;
+      }
+      // Check if the card was summoned FROM the hand
+      if (sourceZone !== "hand") {
         return false;
       }
     }
@@ -836,7 +850,7 @@ export default class EffectEngine {
     if (!card.effects || !Array.isArray(card.effects)) return;
 
     console.log(
-      `[handleCardToGraveEvent] ${card.name} entered graveyard. card.owner="${card.owner}", ctx.player.id="${player.id}", ctx.opponent.id="${opponent.id}"`
+      `[handleCardToGraveEvent] ${card.name} entered graveyard. card.owner="${card.owner}", ctx.player.id="${player.id}", ctx.opponent.id="${opponent.id}", wasDestroyed=${payload.wasDestroyed}`
     );
     console.log(
       `[handleCardToGraveEvent] ${card.name} entered graveyard from ${fromZone}. Card has ${card.effects.length} effects.`
@@ -864,13 +878,22 @@ export default class EffectEngine {
 
       // Skip if effects are negated
       if (this.isEffectNegated(card)) {
-        console.log(`[handleCardToGraveEvent] ${card.name} effects are negated, skipping effect.`);
+        console.log(
+          `[handleCardToGraveEvent] ${card.name} effects are negated, skipping effect.`
+        );
         continue;
       }
 
       console.log(
         `[handleCardToGraveEvent] Found card_to_grave effect: ${effect.id}`
       );
+
+      if (effect.requireSelfAsDestroyed && !payload.wasDestroyed) {
+        console.log(
+          `[handleCardToGraveEvent] Skipping ${effect.id}: requires destruction.`
+        );
+        continue;
+      }
 
       const optCheck = this.checkOncePerTurn(card, player, effect);
       if (!optCheck.ok) {
@@ -1222,12 +1245,15 @@ export default class EffectEngine {
     if (!player.field || !player.field.includes(card)) {
       return { success: false, reason: "Monster is not on the field." };
     }
-    
+
     // Check if effects are negated
     if (this.isEffectNegated(card)) {
-      return { success: false, reason: "Card's effects are currently negated." };
+      return {
+        success: false,
+        reason: "Card's effects are currently negated.",
+      };
     }
-    
+
     const effect = (card.effects && card.effects[0]) || null;
     if (!effect) {
       return { success: false, reason: "No effect defined." };
@@ -1548,7 +1574,10 @@ export default class EffectEngine {
 
     // Check if effects are negated (only for cards on field)
     if (activationZone === "field" && this.isEffectNegated(card)) {
-      return { success: false, reason: "Card's effects are currently negated." };
+      return {
+        success: false,
+        reason: "Card's effects are currently negated.",
+      };
     }
 
     // Find effect that matches activation zone
@@ -2307,7 +2336,10 @@ export default class EffectEngine {
       return { ok: false, reason: "Not your turn." };
     }
     if (this.game?.phase !== "main1" && this.game?.phase !== "main2") {
-      return { ok: false, reason: "Effect can only be activated during Main Phase." };
+      return {
+        ok: false,
+        reason: "Effect can only be activated during Main Phase.",
+      };
     }
 
     if (activationZone === "hand") {
@@ -2519,7 +2551,10 @@ export default class EffectEngine {
       if (replaced) continue;
 
       if (this.game && typeof this.game.moveCard === "function") {
-        this.game.moveCard(card, owner, "graveyard");
+        this.game.moveCard(card, owner, "graveyard", {
+          fromZone: "field",
+          wasDestroyed: true,
+        });
         destroyedAny = true;
         if (typeof this.game.updateBoard === "function") {
           this.game.updateBoard();
@@ -2722,7 +2757,10 @@ export default class EffectEngine {
       // Move card to graveyard
       let moved = false;
       if (this.game && typeof this.game.moveCard === "function") {
-        this.game.moveCard(card, player, "graveyard");
+        this.game.moveCard(card, player, "graveyard", {
+          fromZone: "field",
+          wasDestroyed: true,
+        });
         moved = true;
       } else {
         const idx = player.field.indexOf(card);

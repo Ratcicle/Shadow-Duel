@@ -2171,6 +2171,7 @@ export const cardDatabase = [
           },
           {
             type: "special_summon_from_graveyard",
+            zone: "graveyard",
             requireSource: true,
             position: "choice",
             cannotAttackThisTurn: false,
@@ -2275,6 +2276,9 @@ export const cardDatabase = [
         summonMethod: "special",
         oncePerTurn: true,
         oncePerTurnName: "void_hollow_summon",
+        condition: {
+          requires: "self_in_hand",
+        },
         actions: [
           {
             type: "special_summon_from_deck",
@@ -2338,6 +2342,7 @@ export const cardDatabase = [
         actions: [
           {
             type: "special_summon_from_graveyard",
+            zone: "graveyard",
             requireSource: false,
             banishCost: true,
             filters: {
@@ -2419,6 +2424,7 @@ export const cardDatabase = [
         actions: [
           {
             type: "special_summon_from_graveyard",
+            zone: "graveyard",
             requireSource: false,
             filters: {
               name: "Void Hollow",
@@ -2657,8 +2663,9 @@ export const cardDatabase = [
         actions: [
           {
             type: "special_summon_from_graveyard",
+            zone: "graveyard",
             requireSource: true,
-            position: "attack",
+            position: "choice",
             cannotAttackThisTurn: false,
           },
         ],
@@ -2713,6 +2720,56 @@ export const cardDatabase = [
         actions: [
           {
             type: "banish_destroyed_monster",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 209,
+    name: "Void Serpent Drake",
+    cardKind: "monster",
+    atk: 2300,
+    def: 1800,
+    level: 6,
+    type: "Dragon",
+    archetype: "Void",
+    description:
+      'If this card is in your hand: You can send 1-3 "Void Hollow" you control to the GY, then Special Summon this card. Gains effects based on how many were sent: 1+: +300 ATK until end of turn; 2+: also cannot be destroyed by battle; 3: also destroy 1 card your opponent controls. You can only use this effect of "Void Serpent Drake" once per turn.',
+    image: "assets/Void Serpent Drake.png",
+    effects: [
+      {
+        id: "void_serpent_drake_hand_special",
+        timing: "ignition",
+        requireZone: "hand",
+        oncePerTurn: true,
+        oncePerTurnName: "void_serpent_drake_hand_special",
+        actions: [
+          {
+            type: "special_summon_from_hand_with_tiered_cost",
+            costFilters: { name: "Void Hollow", cardKind: "monster" },
+            minCost: 1,
+            maxCost: 3,
+            position: "attack",
+            tier1AtkBoost: 300,
+            tierOptions: [
+              {
+                count: 1,
+                label: "Tier 1",
+                description: "+300 ATK until end of turn",
+              },
+              {
+                count: 2,
+                label: "Tier 2",
+                description: "+300 ATK and cannot be destroyed by battle",
+              },
+              {
+                count: 3,
+                label: "Tier 3",
+                description:
+                  "+300 ATK, battle indestructible, destroy 1 opponent card",
+              },
+            ],
           },
         ],
       },

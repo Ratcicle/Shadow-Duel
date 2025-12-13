@@ -401,6 +401,98 @@ export default class Renderer {
     return promise;
   }
 
+  showTierChoiceModal({ title = "Choose Tier", options = [] } = {}) {
+    if (typeof document === "undefined") {
+      const best = options
+        .slice()
+        .sort((a, b) => (b.count || 0) - (a.count || 0))[0];
+      return Promise.resolve(best ? best.count : null);
+    }
+
+    const validOptions = options.filter(
+      (opt) => typeof opt.count === "number" && opt.count > 0
+    );
+
+    return new Promise((resolve) => {
+      const overlay = document.createElement("div");
+      overlay.className = "modal tier-choice-overlay";
+
+      const modal = document.createElement("div");
+      modal.className = "modal-content tier-choice-modal";
+
+      const header = document.createElement("div");
+      header.className = "tier-choice-header";
+
+      const titleEl = document.createElement("h3");
+      titleEl.textContent = title;
+      header.appendChild(titleEl);
+
+      modal.appendChild(header);
+
+      const grid = document.createElement("div");
+      grid.className = "tier-choice-grid";
+
+      let selected = null;
+
+      validOptions.forEach((opt) => {
+        const btn = document.createElement("button");
+        btn.className = "tier-choice-card";
+        btn.dataset.count = String(opt.count);
+
+        const label = document.createElement("div");
+        label.className = "tier-choice-label";
+        label.textContent = opt.label || `Tier ${opt.count}`;
+
+        const desc = document.createElement("div");
+        desc.className = "tier-choice-desc";
+        desc.textContent = opt.description || "";
+
+        btn.appendChild(label);
+        btn.appendChild(desc);
+
+        btn.addEventListener("click", () => {
+          modal
+            .querySelectorAll(".tier-choice-card")
+            .forEach((el) => el.classList.remove("selected"));
+          btn.classList.add("selected");
+          selected = opt.count;
+          confirmBtn.disabled = false;
+        });
+
+        grid.appendChild(btn);
+      });
+
+      modal.appendChild(grid);
+
+      const actions = document.createElement("div");
+      actions.className = "tier-choice-actions";
+
+      const cancelBtn = document.createElement("button");
+      cancelBtn.textContent = "Cancel";
+      cancelBtn.className = "secondary";
+      cancelBtn.onclick = () => {
+        overlay.remove();
+        resolve(null);
+      };
+
+      const confirmBtn = document.createElement("button");
+      confirmBtn.textContent = "Confirm";
+      confirmBtn.className = "primary";
+      confirmBtn.disabled = true;
+      confirmBtn.onclick = () => {
+        overlay.remove();
+        resolve(selected);
+      };
+
+      actions.appendChild(cancelBtn);
+      actions.appendChild(confirmBtn);
+      modal.appendChild(actions);
+
+      overlay.appendChild(modal);
+      document.body.appendChild(overlay);
+    });
+  }
+
   showSpellChoiceModal(cardIndex, callback) {
     const existingModal = document.querySelector(".spell-choice-modal");
     if (existingModal) {
@@ -1414,6 +1506,14 @@ export default class Renderer {
       cardEl.addEventListener("click", () => {
         toggle();
       });
+
+      const imgEl = cardEl.querySelector("img");
+      if (imgEl) {
+        imgEl.addEventListener("click", (e) => {
+          e.stopPropagation();
+          toggle();
+        });
+      }
 
       grid.appendChild(cardEl);
     });
