@@ -2432,21 +2432,9 @@ export default class EffectEngine {
   applyHeal(action, ctx) {
     const targetPlayer =
       action.player === "opponent" ? ctx.opponent : ctx.player;
-    let amount = action.amount ?? 0;
+    const amount = action.amount ?? 0;
 
-    // Check for Megashield Barbarias LP doubling passive
-    if (targetPlayer === ctx.player && amount > 0) {
-      const hasMegashieldBarbarias = (targetPlayer.field || []).some(
-        (card) =>
-          card &&
-          !card.isFacedown &&
-          card.name === "Luminarch Megashield Barbarias"
-      );
-      if (hasMegashieldBarbarias) {
-        amount = amount * 2;
-      }
-    }
-
+    // LP gain multiplier is now handled by Player.gainLP() based on passive effects
     targetPlayer.gainLP(amount);
     return amount !== 0;
   }

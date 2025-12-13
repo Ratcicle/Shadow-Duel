@@ -320,6 +320,40 @@ export default class Player {
   }
 
   gainLP(amount) {
-    this.lp += amount;
+    // Apply LP gain multiplier (for effects like Megashield Barbarias)
+    const multiplier = this.lpGainMultiplier || 1.0;
+    const adjustedAmount = Math.floor(amount * multiplier);
+    this.lp += adjustedAmount;
+    
+    // Log if multiplier was applied
+    if (multiplier !== 1.0 && amount > 0) {
+      console.log(`[Player] LP gain multiplier ${multiplier}x applied: ${amount} -> ${adjustedAmount}`);
+    }
+  }
+
+  /**
+   * Calculate and update continuous passive effects from field cards
+   * Called by Game.updateBoard()
+   */
+  updatePassiveEffects() {
+    // Reset to defaults
+    this.lpGainMultiplier = 1.0;
+
+    // Check for Megashield Barbarias LP doubling passive
+    const hasMegashieldBarbarias = (this.field || []).some(
+      (card) =>
+        card &&
+        !card.isFacedown &&
+        card.cardKind === "monster" &&
+        card.name === "Luminarch Megashield Barbarias"
+    );
+
+    if (hasMegashieldBarbarias) {
+      this.lpGainMultiplier = 2.0;
+    }
+
+    // Future: Add more passive effects here
+    // Example: this.damageReduction = ...
+    // Example: this.extraDraws = ...
   }
 }

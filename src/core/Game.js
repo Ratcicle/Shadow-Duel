@@ -95,6 +95,14 @@ export default class Game {
   }
 
   updateBoard() {
+    // Update passive effects before rendering
+    if (typeof this.player.updatePassiveEffects === "function") {
+      this.player.updatePassiveEffects();
+    }
+    if (typeof this.bot.updatePassiveEffects === "function") {
+      this.bot.updatePassiveEffects();
+    }
+
     this.renderer.renderHand(this.player);
     this.renderer.renderField(this.player);
     this.renderer.renderFieldSpell(this.player);
