@@ -1351,8 +1351,16 @@ export const cardDatabase = [
         ],
         actions: [
           {
-            type: "luminarch_holy_shield_apply",
+            type: "add_status",
             targetRef: "holy_shield_targets",
+            status: "tempBattleIndestructible",
+            value: true,
+          },
+          {
+            type: "add_status",
+            targetRef: "holy_shield_targets",
+            status: "battleDamageHealsControllerThisTurn",
+            value: true,
           },
         ],
       },
@@ -1479,7 +1487,18 @@ export const cardDatabase = [
         oncePerTurnName: "luminarch_magic_sickle_effect",
         actions: [
           {
-            type: "luminarch_magic_sickle_recycle",
+            type: "move",
+            targetRef: "self",
+            to: "graveyard",
+          },
+          {
+            type: "add_from_zone_to_hand",
+            zone: "graveyard",
+            filters: {
+              cardKind: "monster",
+              archetype: "Luminarch",
+            },
+            count: { min: 0, max: 2 },
           },
         ],
       },
@@ -1744,9 +1763,10 @@ export const cardDatabase = [
             amount: 1000,
           },
           {
-            type: "luminarch_citadel_atkdef_buff",
+            type: "buff_stats_temp",
             targetRef: "sanctum_citadel_target",
-            amount: 500,
+            atkBoost: 500,
+            defBoost: 500,
           },
         ],
       },
@@ -1784,9 +1804,10 @@ export const cardDatabase = [
             amount: 1000,
           },
           {
-            type: "luminarch_citadel_atkdef_buff",
+            type: "buff_stats_temp",
             targetRef: "holy_ascension_target",
-            amount: 800,
+            atkBoost: 800,
+            defBoost: 800,
           },
         ],
       },
@@ -2120,9 +2141,10 @@ export const cardDatabase = [
         ],
         actions: [
           {
-            type: "megashield_barbarias_switch_boost",
+            type: "switch_position",
             targetRef: "barbarias_switch_target",
             atkBoost: 1000,
+            markChanged: true,
           },
         ],
       },
