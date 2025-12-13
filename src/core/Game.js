@@ -6,7 +6,7 @@ import EffectEngine from "./EffectEngine.js";
 export default class Game {
   constructor() {
     this.player = new Player("player", "You");
-    this.bot = new Bot("luminarch");
+    this.bot = new Bot("shadowheart");
     this.renderer = new Renderer();
     this.effectEngine = new EffectEngine(this);
 
