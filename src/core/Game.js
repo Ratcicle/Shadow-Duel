@@ -1339,6 +1339,46 @@ export default class Game {
     this.updateBoard();
   }
 
+  handleGraveyardEffectActivationResult(card, owner, result) {
+    if (result.needsSelection) {
+      this.closeGraveyardModal(false);
+      if (this.canUseFieldTargeting(result.options)) {
+        this.startGraveyardEffectTargetSelection(card, owner, result.options);
+      } else {
+        this.renderer.showTargetSelection(
+          result.options,
+          (chosenMap) => {
+            const finalResult = this.effectEngine.activateMonsterFromGraveyard(
+              card,
+              owner,
+              chosenMap
+            );
+            this.handleGraveyardEffectActivationResult(
+              card,
+              owner,
+              finalResult
+            );
+          },
+          () => {
+            this.cancelTargetSelection();
+          }
+        );
+      }
+      return;
+    }
+
+    if (!result.success) {
+      if (result.reason) {
+        this.renderer.log(result.reason);
+      }
+      return;
+    }
+
+    this.closeGraveyardModal(false);
+    this.renderer.log(`${card.name} activates from the Graveyard.`);
+    this.updateBoard();
+  }
+
   startMonsterEffectTargetSelection(card, options, activationZone = null) {
     this.cancelTargetSelection();
     this.targetSelection = {
@@ -1350,6 +1390,20 @@ export default class Game {
       activationZone,
     };
     console.log("[Game] Started monster effect target selection");
+    this.highlightTargetCandidates();
+  }
+
+  startGraveyardEffectTargetSelection(card, owner, options) {
+    this.cancelTargetSelection();
+    this.targetSelection = {
+      kind: "graveyardEffect",
+      card,
+      owner,
+      options,
+      selections: {},
+      currentOption: 0,
+    };
+    this.renderer.log("Select target(s) for the graveyard effect.");
     this.highlightTargetCandidates();
   }
 
@@ -1867,6 +1921,18 @@ export default class Game {
         result,
         selection.activationZone
       );
+    } else if (selection.kind === "graveyardEffect") {
+      const owner = selection.owner || this.player;
+      const result = this.effectEngine.activateMonsterFromGraveyard(
+        selection.card,
+        owner,
+        selection.selections
+      );
+      this.handleGraveyardEffectActivationResult(
+        selection.card,
+        owner,
+        result
+      );
     } else if (selection.kind === "triggered") {
       this.effectEngine.resolveTriggeredSelection(
         selection.effect,
@@ -1932,18 +1998,14 @@ export default class Game {
       // Se não tem onSelect customizado, usar o padrão para ativar efeitos
       if (!options.onSelect) {
         options.onSelect = (card) => {
-          if (this.effectEngine.hasActivatableGraveyardEffect(card)) {
-            const result = this.effectEngine.activateMonsterFromGraveyard(
-              card,
-              player
-            );
-            if (result.success) {
-              this.closeGraveyardModal(false);
-              this.updateBoard();
-            } else {
-              this.renderer.log(result.reason || "Cannot activate effect.");
-            }
+          if (!this.effectEngine.hasActivatableGraveyardEffect(card)) {
+            return;
           }
+          const result = this.effectEngine.activateMonsterFromGraveyard(
+            card,
+            player
+          );
+          this.handleGraveyardEffectActivationResult(card, player, result);
         };
         options.selectable = true;
       }
