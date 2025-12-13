@@ -1379,8 +1379,10 @@ export const cardDatabase = [
         summonMethod: "special",
         actions: [
           {
-            type: "luminarch_aegisbearer_def_boost",
-            amount: 500,
+            type: "buff_stats_temp",
+            targetRef: "self",
+            defBoost: 500,
+            permanent: true, // Won't be cleaned up at end of turn
           },
         ],
       },
@@ -1588,7 +1590,8 @@ export const cardDatabase = [
         requireSelfAsAttacker: true,
         actions: [
           {
-            type: "luminarch_aurora_seraph_heal",
+            type: "heal_from_destroyed_atk",
+            fraction: 0.5,
           },
         ],
       },
@@ -1598,6 +1601,18 @@ export const cardDatabase = [
         oncePerTurn: true,
         oncePerTurnName: "luminarch_aurora_seraph_protect",
         oncePerTurnScope: "card",
+        replacementEffect: {
+          type: "destruction",
+          reason: "any", // battle or effect
+          costFilters: {
+            cardKind: "monster",
+            archetype: "Luminarch",
+          },
+          costZone: "field",
+          costCount: 1,
+          prompt: 'Send 1 "Luminarch" monster you control to the GY to save this card?',
+          selectionMessage: 'Choose a "Luminarch" monster to send to the Graveyard for protection.',
+        },
       },
     ],
   },

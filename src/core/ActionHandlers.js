@@ -1573,6 +1573,7 @@ async function promptTieBreaker(
  * - atkBoost: ATK boost amount (default: 0)
  * - defBoost: DEF boost amount (default: 0)
  * - untilEndOfTurn: boolean (default: true)
+ * - permanent: boolean (default: false) - if true, boost is not tracked for cleanup
  */
 export async function handleBuffStatsTemp(action, ctx, targets, engine) {
   const { player } = ctx;
@@ -1598,6 +1599,7 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
 
   const atkBoost = action.atkBoost || 0;
   const defBoost = action.defBoost || 0;
+  const permanent = action.permanent || false;
 
   let buffed = false;
   const affectedCards = [];
@@ -1606,13 +1608,17 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
     if (!card || card.cardKind !== "monster") continue;
 
     if (atkBoost !== 0) {
-      card.tempAtkBoost = (card.tempAtkBoost || 0) + atkBoost;
+      if (!permanent) {
+        card.tempAtkBoost = (card.tempAtkBoost || 0) + atkBoost;
+      }
       card.atk = (card.atk || 0) + atkBoost;
       buffed = true;
     }
 
     if (defBoost !== 0) {
-      card.tempDefBoost = (card.tempDefBoost || 0) + defBoost;
+      if (!permanent) {
+        card.tempDefBoost = (card.tempDefBoost || 0) + defBoost;
+      }
       card.def = (card.def || 0) + defBoost;
       buffed = true;
     }
@@ -1628,7 +1634,8 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
     if (defBoost !== 0) boosts.push(`${defBoost > 0 ? "+" : ""}${defBoost} DEF`);
 
     const cardList = affectedCards.join(", ");
-    game.renderer?.log(`${cardList} gained ${boosts.join(" and ")} until end of turn.`);
+    const duration = permanent ? "" : " until end of turn";
+    game.renderer?.log(`${cardList} gained ${boosts.join(" and ")}${duration}.`);
     game.updateBoard();
   }
 
