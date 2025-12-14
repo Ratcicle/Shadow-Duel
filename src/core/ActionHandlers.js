@@ -2140,11 +2140,6 @@ export async function handlePermanentBuffNamed(action, ctx, targets, engine) {
       card.def = (card.def || 0) + delta;
       cardBuffed = true;
     }
-      
-      // Apply to actual stat (remove old, add new)
-      card.def = (card.def || 0) - currentBuff + newBuff;
-      cardBuffed = true;
-    }
 
     if (cardBuffed) {
       anyBuffed = true;
