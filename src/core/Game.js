@@ -839,7 +839,7 @@ export default class Game {
           const hasIgnition = (card.effects || []).some(
             (e) => e.timing === "ignition"
           );
-          if (card.subtype === "continuous" || hasIgnition) {
+          if (hasIgnition) {
             console.log(
               `[Game] Clicking continuous spell/ignition: ${card.name}`
             );
@@ -1353,6 +1353,7 @@ export default class Game {
           activationZone,
           {
             preventCancel: !!options.committed,
+            activationContext: { fromHand: !!options.committed },
             commitInfo: options.commitInfo || null,
           }
         );
@@ -1360,14 +1361,26 @@ export default class Game {
         const minZero = (result.options || []).some(
           (opt) => Number(opt.min ?? opt.count?.min ?? 1) === 0
         );
+        const contextFromHand = options.committed === true;
+        console.debug?.(
+          "[Game] Target selection confirm callback prepared (fromHand:",
+          contextFromHand,
+          ")"
+        );
         this.renderer.showTargetSelection(
           result.options,
           async (chosenMap) => {
+            console.debug?.(
+              "[Game] Running activateSpellTrapEffect after target selection (fromHand:",
+              contextFromHand,
+              ")"
+            );
             const finalResult = await this.effectEngine.activateSpellTrapEffect(
               card,
               owner,
               chosenMap,
-              activationZone
+              activationZone,
+              { fromHand: contextFromHand }
             );
             this.handleSpellTrapActivationResult(
               card,
@@ -1590,6 +1603,7 @@ export default class Game {
       usingFieldTargeting,
       autoAdvanceOnMax: !usingFieldTargeting,
       preventCancel: !!extra.preventCancel,
+      activationContext: extra.activationContext || {},
       commitInfo: extra.commitInfo || null,
     };
     this.renderer.log("Select target(s) for the continuous spell effect.");
@@ -1634,7 +1648,8 @@ export default class Game {
       card,
       this.player,
       selections,
-      "spellTrap"
+      "spellTrap",
+      { fromHand: false }
     );
     console.log(`[Game] Result:`, result);
     this.handleSpellTrapActivationResult(
@@ -2137,39 +2152,8 @@ export default class Game {
     }
 
     if (selection.kind === "spell") {
-      const activationZone =
-        selection.activationZone ||
-        (selection.card?.subtype === "field" ? "fieldSpell" : "spellTrap");
-      let result = null;
-      if (selection.activationZone) {
-        result = await this.effectEngine.activateSpellTrapEffect(
-          selection.card,
-          this.player,
-          selection.selections,
-          activationZone
-        );
-        this.handleSpellTrapActivationResult(
-          selection.card,
-          this.player,
-          result,
-          activationZone
-        );
-      } else {
-        result = this.effectEngine.activateFromHand(
-          selection.card,
-          this.player,
-          selection.handIndex,
-          selection.selections,
-          selection.activationZone
-        );
-
-        this.handleSpellActivationResult(
-          selection.card,
-          selection.handIndex,
-          result,
-          selection.activationZone
-        );
-      }
+      this.renderer.log("Spell activation legacy path skipped.");
+      return;
     } else if (selection.kind === "fieldSpell") {
       const owner = selection.owner;
       const result = this.effectEngine.activateFieldSpell(
@@ -3317,7 +3301,8 @@ export default class Game {
       cardRef,
       this.player,
       selections,
-      activationZone
+      activationZone,
+      { fromHand: true }
     );
 
     this.handleSpellTrapActivationResult(cardRef, this.player, result, activationZone, {

@@ -452,7 +452,8 @@ export default class Bot extends Player {
         cardRef,
         this,
         selections,
-        activationZone
+        activationZone,
+        { fromHand: true }
       );
 
       if (result && result.needsSelection && result.options) {
@@ -462,7 +463,8 @@ export default class Bot extends Player {
             cardRef,
             this,
             auto,
-            activationZone
+            activationZone,
+            { fromHand: true }
           );
         }
       }

@@ -1545,7 +1545,8 @@ export default class EffectEngine {
     card,
     player,
     selections = null,
-    activationZone = "spellTrap"
+    activationZone = "spellTrap",
+    context = {}
   ) {
     if (!card || !player) {
       return { success: false, reason: "Missing card or player." };
@@ -1575,21 +1576,31 @@ export default class EffectEngine {
       };
     }
 
-    const placementOnly =
-      card.subtype === "field" || card.subtype === "continuous";
-    let effect = (card.effects || []).find(
-      (e) =>
-        e &&
-        (e.timing === "ignition" ||
-          (e.timing === "on_activate" && card.cardKind === "trap"))
-    );
-    if (!effect) {
-      if (!placementOnly && card.cardKind === "spell") {
-        effect = (card.effects || []).find((e) => e && e.timing === "on_play");
+    const fromHand = context.fromHand === true;
+    let effect = null;
+
+    if (card.cardKind === "trap") {
+      effect = (card.effects || []).find(
+        (e) => e && (e.timing === "on_activate" || e.timing === "ignition")
+      );
+      if (!effect) {
+        return { success: false, reason: "No trap activation effect defined." };
+      }
+    } else if (card.cardKind === "spell") {
+      if (fromHand) {
+        effect = this.getHandActivationEffect(card);
+        const placementOnly =
+          (!effect && (card.subtype === "field" || card.subtype === "continuous"));
+        if (!effect) {
+          return placementOnly
+            ? { success: true, placementOnly: true }
+            : { success: false, reason: "No on_play effect defined." };
+        }
       } else {
-        return placementOnly
-          ? { success: true }
-          : { success: false, reason: "No ignition effect defined." };
+        effect = (card.effects || []).find((e) => e && e.timing === "ignition");
+        if (!effect) {
+          return { success: false, reason: "No ignition effect defined." };
+        }
       }
     }
 

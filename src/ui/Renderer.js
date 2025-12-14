@@ -1119,9 +1119,11 @@ export default class Renderer {
     const overlay = document.createElement("div");
     overlay.className = "modal target-modal";
 
+    const allowCancel = config.allowCancel !== false;
+
     const content = document.createElement("div");
     content.className = "modal-content target-content";
-    content.innerHTML = `<span class="close-target">&times;</span><h2>Select target(s)</h2>`;
+    content.innerHTML = `<span class="close-target">${allowCancel ? "&times;" : ""}</span><h2>Select target(s)</h2>`;
 
     const selectionState = {};
 
@@ -1197,7 +1199,6 @@ export default class Renderer {
     actions.className = "target-actions";
     const confirmBtn = document.createElement("button");
     confirmBtn.textContent = "Confirm";
-    const allowCancel = config.allowCancel !== false;
     if (allowCancel) {
       const cancelBtn = document.createElement("button");
       cancelBtn.textContent = "Cancel";
@@ -1214,13 +1215,20 @@ export default class Renderer {
     document.body.appendChild(overlay);
 
     const closeModal = () => {
-      document.body.removeChild(overlay);
+      if (overlay.parentNode) {
+        document.body.removeChild(overlay);
+      }
     };
 
-    overlay.querySelector(".close-target").addEventListener("click", () => {
-      closeModal();
-      onCancel && onCancel();
-    });
+    const closeBtn = overlay.querySelector(".close-target");
+    if (allowCancel) {
+      closeBtn.addEventListener("click", () => {
+        closeModal();
+        onCancel && onCancel();
+      });
+    } else {
+      closeBtn.style.display = "none";
+    }
 
     confirmBtn.addEventListener("click", () => {
       // validate
