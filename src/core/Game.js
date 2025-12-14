@@ -2,6 +2,8 @@ import Player from "./Player.js";
 import Bot from "./Bot.js";
 import Renderer from "../ui/Renderer.js";
 import EffectEngine from "./EffectEngine.js";
+import Card from "./Card.js";
+import { cardDatabaseByName } from "../data/cards.js";
 
 // Helper to construct user-friendly cost type descriptions
 function getCostTypeDescription(costFilters, count) {
@@ -91,6 +93,7 @@ export default class Game {
     this.player.buildExtraDeck(extraDeckList);
     this.bot.buildDeck();
     this.bot.buildExtraDeck();
+    this.forceOpeningHand("Infinity Searcher", 4);
 
     for (let i = 0; i < 4; i++) {
       this.player.draw();
@@ -110,6 +113,24 @@ export default class Game {
       }
     });
     this.bindCardInteractions();
+  }
+
+  forceOpeningHand(cardName, count) {
+    if (!cardName || count <= 0) return;
+    const data = cardDatabaseByName.get(cardName);
+    if (!data || !this.player || !Array.isArray(this.player.deck)) return;
+
+    const ensured = [];
+    for (let i = 0; i < count; i++) {
+      const idx = this.player.deck.findIndex((card) => card?.name === cardName);
+      if (idx !== -1) {
+        ensured.push(this.player.deck.splice(idx, 1)[0]);
+      } else {
+        ensured.push(new Card(data, this.player.id));
+      }
+    }
+
+    ensured.forEach((card) => this.player.deck.push(card));
   }
 
   updateBoard() {
@@ -711,8 +732,6 @@ export default class Game {
             return;
           }
 
-          const wasAlreadyAttacked = attacker.hasAttacked;
-
           const opponentTargets = this.bot.field.filter(
             (card) => card && card.cardKind === "monster"
           );
@@ -731,10 +750,6 @@ export default class Game {
             await this.resolveCombat(attacker, null);
           } else {
             this.startAttackTargetSelection(attacker, attackCandidates);
-          }
-
-          if (wasAlreadyAttacked && canUseSecondAttack) {
-            attacker.secondAttackUsedThisTurn = true;
           }
         }
       });
@@ -2238,6 +2253,19 @@ export default class Game {
 
     const availability = this.getAttackAvailability(attacker);
     if (!availability.ok) return;
+
+    const attacksUsed =
+      availability.attacksUsed ?? attacker.attacksUsedThisTurn ?? 0;
+    const baseMaxAttacks = 1 + (attacker.extraAttacks || 0);
+    const maxAttacks = availability.maxAttacks ?? baseMaxAttacks;
+    const usingSecondAttack =
+      attacker.canMakeSecondAttackThisTurn &&
+      !attacker.secondAttackUsedThisTurn &&
+      attacksUsed >= maxAttacks;
+
+    if (usingSecondAttack) {
+      attacker.secondAttackUsedThisTurn = true;
+    }
 
     this.lastAttackNegated = false;
 

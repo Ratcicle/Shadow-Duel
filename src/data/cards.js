@@ -1387,10 +1387,23 @@ export const cardDatabase = [
         summonMethod: "special",
         actions: [
           {
-            type: "buff_stats_temp",
+            type: "permanent_buff_named",
             targetRef: "self",
             defBoost: 500,
-            permanent: true, // Won't be cleaned up at end of turn
+            sourceName: "aegisbearer_special_def",
+          },
+        ],
+      },
+      {
+        id: "luminarch_aegisbearer_def_reset",
+        timing: "on_event",
+        event: "card_to_grave",
+        fromZone: "field",
+        actions: [
+          {
+            type: "remove_permanent_buff_named",
+            targetRef: "self",
+            sourceName: "aegisbearer_special_def",
           },
         ],
       },
@@ -2072,6 +2085,7 @@ export const cardDatabase = [
           },
           {
             type: "special_summon_from_graveyard",
+            zone: "graveyard",
             filters: { cardKind: "monster", archetype: "Luminarch" },
             count: { min: 0, max: 5, maxFrom: "opponentFieldCount", cap: 5 },
             position: "choice",
