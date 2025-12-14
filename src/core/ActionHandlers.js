@@ -2061,6 +2061,345 @@ export async function handleSwitchPosition(action, ctx, targets, engine) {
 }
 
 /**
+ * Generic handler for permanent ATK/DEF buffs with named tracking
+ * This allows stackable buffs that persist while the card is on the field
+ * 
+ * Action properties:
+ * - targetRef: reference to the target card (default: "self")
+ * - atkBoost: ATK boost amount (default: 0)
+ * - defBoost: DEF boost amount (default: 0)
+ * - sourceName: identifier for this buff source (default: source card name)
+ * - cumulative: if true, adds to existing buff; if false, sets total (default: true)
+ */
+export async function handlePermanentBuffNamed(action, ctx, targets, engine) {
+  const { player, source } = ctx;
+  const game = engine.game;
+
+  if (!player || !game || !source) return false;
+
+  const targetRef = action.targetRef || "self";
+  let targetCards = [];
+
+  if (targetRef === "self") {
+    targetCards = [source];
+  } else if (targets[targetRef]) {
+    targetCards = Array.isArray(targets[targetRef])
+      ? targets[targetRef]
+      : [targets[targetRef]];
+  }
+
+  if (targetCards.length === 0) {
+    game.renderer?.log("No valid targets for permanent buff.");
+    return false;
+  }
+
+  const atkBoost = action.atkBoost || 0;
+  const defBoost = action.defBoost || 0;
+  const sourceName = action.sourceName || source.name;
+  const cumulative = action.cumulative !== false;
+
+  let anyBuffed = false;
+
+  for (const card of targetCards) {
+    if (!card || card.cardKind !== "monster") continue;
+    if (!player.field.includes(card)) continue;
+
+    // Initialize permanent buffs tracking
+    if (!card.permanentBuffsBySource) {
+      card.permanentBuffsBySource = {};
+    }
+
+    let cardBuffed = false;
+
+    if (atkBoost !== 0) {
+      const currentBuff = card.permanentBuffsBySource[sourceName]?.atk || 0;
+      const newBuff = cumulative ? currentBuff + atkBoost : atkBoost;
+      
+      if (!card.permanentBuffsBySource[sourceName]) {
+        card.permanentBuffsBySource[sourceName] = {};
+      }
+      card.permanentBuffsBySource[sourceName].atk = newBuff;
+      
+      // Apply to actual stat (remove old, add new)
+      card.atk = (card.atk || 0) - currentBuff + newBuff;
+      cardBuffed = true;
+    }
+
+    if (defBoost !== 0) {
+      const currentBuff = card.permanentBuffsBySource[sourceName]?.def || 0;
+      const newBuff = cumulative ? currentBuff + defBoost : defBoost;
+      
+      if (!card.permanentBuffsBySource[sourceName]) {
+        card.permanentBuffsBySource[sourceName] = {};
+      }
+      card.permanentBuffsBySource[sourceName].def = newBuff;
+      
+      // Apply to actual stat (remove old, add new)
+      card.def = (card.def || 0) - currentBuff + newBuff;
+      cardBuffed = true;
+    }
+
+    if (cardBuffed) {
+      anyBuffed = true;
+    }
+  }
+
+  if (anyBuffed) {
+    const boosts = [];
+    if (atkBoost !== 0) boosts.push(`${atkBoost > 0 ? "+" : ""}${atkBoost} ATK`);
+    if (defBoost !== 0) boosts.push(`${defBoost > 0 ? "+" : ""}${defBoost} DEF`);
+
+    game.renderer?.log(`${source.name} gained ${boosts.join(" and ")} permanently.`);
+    game.updateBoard();
+  }
+
+  return anyBuffed;
+}
+
+/**
+ * Generic handler for removing permanent named buffs
+ * Removes all buffs associated with a specific source name
+ * 
+ * Action properties:
+ * - targetRef: reference to the target card (default: "self")
+ * - sourceName: identifier for the buff source to remove (default: source card name)
+ */
+export async function handleRemovePermanentBuffNamed(action, ctx, targets, engine) {
+  const { source } = ctx;
+  const game = engine.game;
+
+  if (!source || !game) return false;
+
+  const targetRef = action.targetRef || "self";
+  let targetCards = [];
+
+  if (targetRef === "self") {
+    targetCards = [source];
+  } else if (targets[targetRef]) {
+    targetCards = Array.isArray(targets[targetRef])
+      ? targets[targetRef]
+      : [targets[targetRef]];
+  }
+
+  if (targetCards.length === 0) return false;
+
+  const sourceName = action.sourceName || source.name;
+  let anyRemoved = false;
+
+  for (const card of targetCards) {
+    if (!card || !card.permanentBuffsBySource) continue;
+
+    const buffData = card.permanentBuffsBySource[sourceName];
+    if (!buffData) continue;
+
+    // Remove buffs from stats
+    if (buffData.atk) {
+      card.atk = (card.atk || 0) - buffData.atk;
+    }
+    if (buffData.def) {
+      card.def = (card.def || 0) - buffData.def;
+    }
+
+    // Remove buff tracking
+    delete card.permanentBuffsBySource[sourceName];
+    anyRemoved = true;
+  }
+
+  if (anyRemoved) {
+    game.updateBoard();
+  }
+
+  return anyRemoved;
+}
+
+/**
+ * Generic handler for granting a second attack this turn
+ * 
+ * Action properties:
+ * - targetRef: reference to the target card (default: "self")
+ */
+export async function handleGrantSecondAttack(action, ctx, targets, engine) {
+  const { player, source } = ctx;
+  const game = engine.game;
+
+  if (!player || !game) return false;
+
+  const targetRef = action.targetRef || "self";
+  let targetCards = [];
+
+  if (targetRef === "self") {
+    targetCards = [source];
+  } else if (targets[targetRef]) {
+    targetCards = Array.isArray(targets[targetRef])
+      ? targets[targetRef]
+      : [targets[targetRef]];
+  }
+
+  if (targetCards.length === 0) return false;
+
+  let anyGranted = false;
+
+  for (const card of targetCards) {
+    if (!card || card.cardKind !== "monster") continue;
+    if (!player.field.includes(card) || card.isFacedown) continue;
+
+    card.canMakeSecondAttackThisTurn = true;
+    card.secondAttackUsedThisTurn = false;
+    anyGranted = true;
+  }
+
+  if (anyGranted) {
+    const cardList = targetCards.map(c => c.name).join(", ");
+    game.renderer?.log(`${cardList} can attack again this turn.`);
+    game.updateBoard();
+  }
+
+  return anyGranted;
+}
+
+/**
+ * Generic handler for conditional summon from hand
+ * Offers to summon a card if a condition is met (e.g., controlling a specific card)
+ * 
+ * Action properties:
+ * - targetRef: reference to the card to potentially summon (must be in hand)
+ * - condition: { type, cardName, zone } - condition to check
+ * - position: "attack" | "defense" | "choice" (default: "choice")
+ * - optional: boolean - if true, prompts player; if false, auto-summons (default: true)
+ */
+export async function handleConditionalSummonFromHand(action, ctx, targets, engine) {
+  const { player } = ctx;
+  const game = engine.game;
+
+  if (!player || !game) return false;
+
+  // Get the card(s) to potentially summon
+  const targetRef = action.targetRef;
+  const targetCards = targets?.[targetRef];
+  
+  if (!targetCards || targetCards.length === 0) return false;
+  
+  const card = Array.isArray(targetCards) ? targetCards[0] : targetCards;
+
+  // Check if card is in hand
+  if (!player.hand.includes(card)) {
+    // If not in hand, maybe it was already moved there by a previous action
+    // Try to find it in hand by name
+    const cardInHand = player.hand.find(c => c.name === card.name);
+    if (!cardInHand) {
+      console.log("Card not found in hand for conditional summon.");
+      return false;
+    }
+  }
+
+  // Check condition
+  const condition = action.condition || {};
+  let conditionMet = false;
+
+  if (condition.type === "control_card") {
+    const zoneName = condition.zone || "fieldSpell";
+    const cardName = condition.cardName;
+    
+    if (zoneName === "fieldSpell") {
+      conditionMet = player.fieldSpell?.name === cardName;
+    } else {
+      const zone = player[zoneName] || [];
+      conditionMet = zone.some(c => c && c.name === cardName);
+    }
+  } else {
+    // Default to true if no condition specified
+    conditionMet = true;
+  }
+
+  if (!conditionMet) {
+    console.log("Condition not met for conditional summon.");
+    return false;
+  }
+
+  // Check field space
+  if (player.field.length >= 5) {
+    game.renderer?.log("Field is full, cannot Special Summon.");
+    return false;
+  }
+
+  // Find the actual card in hand (might be different reference)
+  const handCard = player.hand.find(c => c.name === card.name) || card;
+  const handIndex = player.hand.indexOf(handCard);
+  
+  if (handIndex === -1) {
+    console.warn("Card not found in hand:", card.name);
+    return false;
+  }
+
+  const optional = action.optional !== false;
+
+  // For bot, auto-summon if not optional
+  if (player.id === "bot") {
+    if (!optional) {
+      return await performSummon(handCard, handIndex, player, action, engine);
+    }
+    // Bot chooses to summon (always optimal)
+    return await performSummon(handCard, handIndex, player, action, engine);
+  }
+
+  // For human player
+  if (optional) {
+    const conditionText = condition.cardName 
+      ? `You control "${condition.cardName}".` 
+      : "Condition met.";
+    
+    const wantsToSummon = window.confirm(
+      `${conditionText} Do you want to Special Summon "${handCard.name}" from your hand?`
+    );
+
+    if (!wantsToSummon) {
+      return false;
+    }
+  }
+
+  return await performSummon(handCard, handIndex, player, action, engine);
+}
+
+/**
+ * Helper function to perform the summon for conditional summon handler
+ */
+async function performSummon(card, handIndex, player, action, engine) {
+  const game = engine.game;
+
+  // Determine position
+  let position = action.position || "choice";
+  if (position === "choice") {
+    position = await engine.chooseSpecialSummonPosition(card, player);
+  }
+
+  // Remove from hand and add to field
+  player.hand.splice(handIndex, 1);
+  
+  card.position = position;
+  card.isFacedown = false;
+  card.hasAttacked = false;
+  card.cannotAttackThisTurn = action.cannotAttackThisTurn || false;
+  card.owner = player.id;
+  
+  player.field.push(card);
+
+  game.renderer?.log(
+    `${player.name || player.id} Special Summoned ${card.name} from hand.`
+  );
+
+  // Emit after_summon event
+  game.emit("after_summon", {
+    card: card,
+    player: player,
+    method: "special",
+    sourceZone: "hand",
+  });
+
+  game.updateBoard();
+  return true;
+}
+
+/**
  * Initialize default handlers
  * @param {ActionHandlerRegistry} registry
  */
@@ -2114,4 +2453,8 @@ export function registerDefaultHandlers(registry) {
   registry.register("add_from_zone_to_hand", handleAddFromZoneToHand);
   registry.register("heal_from_destroyed_atk", handleHealFromDestroyedAtk);
   registry.register("switch_position", handleSwitchPosition);
+  registry.register("permanent_buff_named", handlePermanentBuffNamed);
+  registry.register("remove_permanent_buff_named", handleRemovePermanentBuffNamed);
+  registry.register("grant_second_attack", handleGrantSecondAttack);
+  registry.register("conditional_summon_from_hand", handleConditionalSummonFromHand);
 }

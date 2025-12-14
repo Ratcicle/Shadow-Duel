@@ -1445,7 +1445,8 @@ export const cardDatabase = [
         oncePerTurnName: "luminarch_moonblade_second_attack",
         actions: [
           {
-            type: "grant_second_attack_this_turn",
+            type: "grant_second_attack",
+            targetRef: "self",
           },
         ],
       },
@@ -1551,8 +1552,9 @@ export const cardDatabase = [
         requireSelfAsAttacker: true,
         actions: [
           {
-            type: "luminarch_radiant_lancer_atk_boost",
-            amount: 200,
+            type: "permanent_buff_named",
+            targetRef: "self",
+            atkBoost: 200,
           },
         ],
       },
@@ -1583,7 +1585,8 @@ export const cardDatabase = [
         fromZone: "field",
         actions: [
           {
-            type: "luminarch_radiant_lancer_reset_atk",
+            type: "remove_permanent_buff_named",
+            targetRef: "self",
           },
         ],
       },
@@ -2002,8 +2005,20 @@ export const cardDatabase = [
         ],
         actions: [
           {
-            type: "luminarch_moonlit_blessing",
+            type: "move",
             targetRef: "moonlit_blessing_target",
+            to: "hand",
+          },
+          {
+            type: "conditional_summon_from_hand",
+            targetRef: "moonlit_blessing_target",
+            condition: {
+              type: "control_card",
+              cardName: "Sanctum of the Luminarch Citadel",
+              zone: "fieldSpell",
+            },
+            position: "choice",
+            optional: true,
           },
         ],
       },
