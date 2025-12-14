@@ -11,6 +11,16 @@
  * - New cards should work without modifying this file
  */
 
+// Map technical status names to user-friendly descriptions
+const STATUS_DISPLAY_NAMES = {
+  tempBattleIndestructible: "battle indestructibility",
+  battleDamageHealsControllerThisTurn: "battle damage healing",
+  battleIndestructible: "permanent battle indestructibility",
+  piercing: "piercing damage",
+  canAttackDirectlyThisTurn: "direct attack ability",
+  effectsNegated: "effect negation",
+};
+
 export class ActionHandlerRegistry {
   constructor() {
     this.handlers = new Map();
@@ -1566,6 +1576,491 @@ async function promptTieBreaker(
   });
 }
 /**
+ * Generic handler for temporarily boosting ATK/DEF until end of turn
+ * 
+ * Action properties:
+ * - targetRef: reference to the target card(s)
+ * - atkBoost: ATK boost amount (default: 0)
+ * - defBoost: DEF boost amount (default: 0)
+ * - untilEndOfTurn: boolean (default: true)
+ * - permanent: boolean (default: false) - if true, boost is not tracked for cleanup
+ */
+export async function handleBuffStatsTemp(action, ctx, targets, engine) {
+  const { player } = ctx;
+  const game = engine.game;
+
+  if (!player || !game) return false;
+
+  const targetRef = action.targetRef || "self";
+  let targetCards = [];
+
+  if (targetRef === "self") {
+    targetCards = [ctx.source];
+  } else if (targets[targetRef]) {
+    targetCards = Array.isArray(targets[targetRef])
+      ? targets[targetRef]
+      : [targets[targetRef]];
+  }
+
+  if (targetCards.length === 0) {
+    game.renderer?.log("No valid targets for stat buff.");
+    return false;
+  }
+
+  const atkBoost = action.atkBoost || 0;
+  const defBoost = action.defBoost || 0;
+  const permanent = action.permanent || false;
+
+  let anyBuffed = false;
+  const affectedCards = [];
+
+  for (const card of targetCards) {
+    if (!card || card.cardKind !== "monster") continue;
+
+    let cardBuffed = false;
+
+    if (atkBoost !== 0) {
+      if (!permanent) {
+        card.tempAtkBoost = (card.tempAtkBoost || 0) + atkBoost;
+      }
+      card.atk = (card.atk || 0) + atkBoost;
+      cardBuffed = true;
+      anyBuffed = true;
+    }
+
+    if (defBoost !== 0) {
+      if (!permanent) {
+        card.tempDefBoost = (card.tempDefBoost || 0) + defBoost;
+      }
+      card.def = (card.def || 0) + defBoost;
+      cardBuffed = true;
+      anyBuffed = true;
+    }
+
+    if (cardBuffed) {
+      affectedCards.push(card.name);
+    }
+  }
+
+  if (anyBuffed && affectedCards.length > 0) {
+    const boosts = [];
+    if (atkBoost !== 0) boosts.push(`${atkBoost > 0 ? "+" : ""}${atkBoost} ATK`);
+    if (defBoost !== 0) boosts.push(`${defBoost > 0 ? "+" : ""}${defBoost} DEF`);
+
+    const cardList = affectedCards.join(", ");
+    const duration = permanent ? "" : " until end of turn";
+    game.renderer?.log(`${cardList} gained ${boosts.join(" and ")}${duration}.`);
+    game.updateBoard();
+  }
+
+  return anyBuffed;
+}
+
+/**
+ * Generic handler for adding/removing status flags
+ * 
+ * Action properties:
+ * - targetRef: reference to the target card(s)
+ * - status: status flag to add/remove (e.g., "battleIndestructible", "piercing")
+ * - value: value to set (default: true)
+ * - remove: if true, removes the status instead (default: false)
+ * - untilEndOfTurn: if true, status is cleared at end of turn (handled by Game.cleanupTempBoosts)
+ */
+export async function handleAddStatus(action, ctx, targets, engine) {
+  const { player } = ctx;
+  const game = engine.game;
+
+  if (!player || !game) return false;
+
+  const targetRef = action.targetRef || "self";
+  let targetCards = [];
+
+  if (targetRef === "self") {
+    targetCards = [ctx.source];
+  } else if (targets[targetRef]) {
+    targetCards = Array.isArray(targets[targetRef])
+      ? targets[targetRef]
+      : [targets[targetRef]];
+  }
+
+  if (targetCards.length === 0) {
+    game.renderer?.log("No valid targets for status change.");
+    return false;
+  }
+
+  const status = action.status;
+  const value = action.value !== undefined ? action.value : true;
+  const remove = action.remove || false;
+
+  if (!status) {
+    console.warn("No status specified in add_status action");
+    return false;
+  }
+
+  let modified = false;
+  const affectedCards = [];
+
+  for (const card of targetCards) {
+    if (!card) continue;
+
+    if (remove) {
+      if (card[status] !== undefined) {
+        delete card[status];
+        modified = true;
+        affectedCards.push(card.name);
+      }
+    } else {
+      card[status] = value;
+      modified = true;
+      affectedCards.push(card.name);
+    }
+  }
+
+  if (modified && affectedCards.length > 0) {
+    const displayStatus = STATUS_DISPLAY_NAMES[status] || status;
+    const cardList = affectedCards.join(", ");
+    const statusText = remove ? `lost ${displayStatus}` : `gained ${displayStatus}`;
+    game.renderer?.log(`${cardList} ${statusText}.`);
+    game.updateBoard();
+  }
+
+  return modified;
+}
+
+/**
+ * Generic handler for paying Life Points as a cost
+ * 
+ * Action properties:
+ * - amount: LP to pay
+ * - fraction: alternative, pay a fraction of current LP (0.5 = half)
+ */
+export async function handlePayLP(action, ctx, targets, engine) {
+  const { player } = ctx;
+  const game = engine.game;
+
+  if (!player || !game) return false;
+
+  let amount = action.amount || 0;
+
+  if (action.fraction) {
+    amount = Math.floor(player.lp * action.fraction);
+  }
+
+  if (amount <= 0) return false;
+
+  if (player.lp < amount) {
+    game.renderer?.log("Not enough LP to pay cost.");
+    return false;
+  }
+
+  player.lp -= amount;
+  game.renderer?.log(`${player.name || player.id} paid ${amount} LP.`);
+  game.updateBoard();
+
+  return true;
+}
+
+/**
+ * Generic handler for adding cards from any zone to hand
+ * Supports multi-select with filters
+ * 
+ * Action properties:
+ * - zone: source zone (default: "graveyard")
+ * - filters: { archetype, name, level, cardKind, excludeSelf }
+ * - count: { min, max } for selection count
+ * - promptPlayer: boolean (default: true for human player)
+ */
+export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
+  const { player, source } = ctx;
+  const game = engine.game;
+
+  if (!player || !game) return false;
+
+  const sourceZone = action.zone || "graveyard";
+  const zone = player[sourceZone];
+
+  if (!zone || zone.length === 0) {
+    game.renderer?.log(`No cards in ${sourceZone}.`);
+    return false;
+  }
+
+  // Apply filters
+  const filters = action.filters || {};
+  const candidates = zone.filter((card) => {
+    if (!card) return false;
+
+    if (filters.cardKind && card.cardKind !== filters.cardKind) return false;
+
+    if (filters.archetype) {
+      const hasArchetype =
+        card.archetype === filters.archetype ||
+        (Array.isArray(card.archetypes) &&
+          card.archetypes.includes(filters.archetype));
+      if (!hasArchetype) return false;
+    }
+
+    if (filters.name && card.name !== filters.name) return false;
+
+    if (filters.level !== undefined) {
+      const cardLevel = card.level || 0;
+      const op = filters.levelOp || "eq";
+
+      if (op === "eq" && cardLevel !== filters.level) return false;
+      if (op === "lte" && cardLevel > filters.level) return false;
+      if (op === "gte" && cardLevel < filters.level) return false;
+    }
+
+    if (filters.excludeSelf && source && card.id === source.id) return false;
+
+    return true;
+  });
+
+  if (candidates.length === 0) {
+    game.renderer?.log(`No valid cards in ${sourceZone} matching filters.`);
+    return false;
+  }
+
+  const count = action.count || { min: 1, max: 1 };
+  const maxSelect = Math.min(count.max, candidates.length);
+  const minSelect = Math.max(count.min || 0, 0);
+
+  if (maxSelect === 0) {
+    game.renderer?.log("No cards available to add.");
+    return false;
+  }
+
+  // Bot auto-selection (highest ATK for monsters, first N for others)
+  if (player.id === "bot") {
+    const toAdd =
+      candidates[0]?.cardKind === "monster"
+        ? candidates.sort((a, b) => (b.atk || 0) - (a.atk || 0)).slice(0, maxSelect)
+        : candidates.slice(0, maxSelect);
+
+    for (const card of toAdd) {
+      const idx = zone.indexOf(card);
+      if (idx !== -1) {
+        zone.splice(idx, 1);
+        player.hand.push(card);
+      }
+    }
+
+    game.renderer?.log(
+      `${player.name || player.id} added ${toAdd.length} card(s) to hand from ${sourceZone}.`
+    );
+    game.updateBoard();
+    return true;
+  }
+
+  // Single card selection
+  if (maxSelect === 1) {
+    const promptPlayer = action.promptPlayer !== false;
+
+    if (!promptPlayer || candidates.length === 1) {
+      const card = candidates[0];
+      const idx = zone.indexOf(card);
+      if (idx !== -1) {
+        zone.splice(idx, 1);
+        player.hand.push(card);
+      }
+      game.renderer?.log(`Added ${card.name} to hand from ${sourceZone}.`);
+      game.updateBoard();
+      return true;
+    }
+
+    // Show visual selection modal
+    const searchModal = engine.getSearchModalElements();
+    const defaultCardName = candidates[0]?.name || "";
+
+    if (searchModal) {
+      return new Promise((resolve) => {
+        game.isResolvingEffect = true;
+
+        engine.showSearchModalVisual(
+          searchModal,
+          candidates,
+          defaultCardName,
+          (selectedName) => {
+            const chosen =
+              candidates.find((c) => c && c.name === selectedName) ||
+              candidates[0];
+
+            const idx = zone.indexOf(chosen);
+            if (idx !== -1) {
+              zone.splice(idx, 1);
+              player.hand.push(chosen);
+            }
+
+            game.renderer?.log(`Added ${chosen.name} to hand from ${sourceZone}.`);
+            game.isResolvingEffect = false;
+            game.updateBoard();
+            resolve(true);
+          }
+        );
+      });
+    }
+
+    // Fallback
+    const card = candidates[0];
+    const idx = zone.indexOf(card);
+    if (idx !== -1) {
+      zone.splice(idx, 1);
+      player.hand.push(card);
+    }
+    game.renderer?.log(`Added ${card.name} to hand from ${sourceZone}.`);
+    game.updateBoard();
+    return true;
+  }
+
+  // Multi-card selection
+  if (!game.renderer?.showMultiSelectModal) {
+    // Fallback: auto-select
+    const toAdd = candidates.slice(0, maxSelect);
+    for (const card of toAdd) {
+      const idx = zone.indexOf(card);
+      if (idx !== -1) {
+        zone.splice(idx, 1);
+        player.hand.push(card);
+      }
+    }
+    game.renderer?.log(
+      `Added ${toAdd.length} card(s) to hand from ${sourceZone}.`
+    );
+    game.updateBoard();
+    return true;
+  }
+
+  // Show multi-select modal
+  return new Promise((resolve) => {
+    game.renderer.showMultiSelectModal(
+      candidates,
+      { min: minSelect, max: maxSelect },
+      (selected) => {
+        if (!selected || selected.length === 0) {
+          if (minSelect === 0) {
+            game.renderer?.log("No cards selected (optional).");
+            game.updateBoard();
+            resolve(true);
+          } else {
+            game.renderer?.log("No cards selected.");
+            resolve(false);
+          }
+          return;
+        }
+
+        for (const card of selected) {
+          const idx = zone.indexOf(card);
+          if (idx !== -1) {
+            zone.splice(idx, 1);
+            player.hand.push(card);
+          }
+        }
+
+        game.renderer?.log(
+          `Added ${selected.length} card(s) to hand from ${sourceZone}.`
+        );
+        game.updateBoard();
+        resolve(true);
+      }
+    );
+  });
+}
+
+/**
+ * Generic handler for healing based on destroyed monster's ATK
+ * 
+ * Action properties:
+ * - fraction: fraction of ATK to heal (default: 1.0)
+ * - multiplier: alternative name for fraction
+ */
+export async function handleHealFromDestroyedAtk(action, ctx, targets, engine) {
+  const { player, destroyed } = ctx;
+  const game = engine.game;
+
+  if (!player || !game || !destroyed) return false;
+
+  const fraction = action.fraction || action.multiplier || 1.0;
+  const healAmount = Math.floor((destroyed.atk || 0) * fraction);
+
+  if (healAmount <= 0) return false;
+
+  player.gainLP(healAmount);
+  game.renderer?.log(
+    `${player.name || player.id} gained ${healAmount} LP from ${destroyed.name}'s ATK.`
+  );
+  game.updateBoard();
+
+  return true;
+}
+
+/**
+ * Generic handler for switching monster position (attack <-> defense)
+ * 
+ * Action properties:
+ * - targetRef: reference to the target card(s)
+ * - atkBoost: optional ATK boost after position change
+ * - defBoost: optional DEF boost after position change
+ * - markChanged: if true, sets hasChangedPosition (default: true)
+ */
+export async function handleSwitchPosition(action, ctx, targets, engine) {
+  const { player } = ctx;
+  const game = engine.game;
+
+  if (!player || !game) return false;
+
+  const targetRef = action.targetRef;
+  const targetCards = targets?.[targetRef] || [];
+
+  if (!Array.isArray(targetCards) || targetCards.length === 0) {
+    game.renderer?.log("No valid targets for position switch.");
+    return false;
+  }
+
+  let switched = false;
+  const affectedCards = [];
+
+  for (const card of targetCards) {
+    if (!card || card.cardKind !== "monster") continue;
+    if (card.isFacedown) continue;
+
+    // Switch position
+    const newPosition = card.position === "attack" ? "defense" : "attack";
+    card.position = newPosition;
+
+    if (action.markChanged !== false) {
+      card.hasChangedPosition = true;
+    }
+
+    // Apply stat boosts if specified
+    if (action.atkBoost) {
+      card.tempAtkBoost = (card.tempAtkBoost || 0) + action.atkBoost;
+      card.atk = (card.atk || 0) + action.atkBoost;
+    }
+
+    if (action.defBoost) {
+      card.tempDefBoost = (card.tempDefBoost || 0) + action.defBoost;
+      card.def = (card.def || 0) + action.defBoost;
+    }
+
+    switched = true;
+    affectedCards.push({
+      name: card.name,
+      position: newPosition,
+    });
+  }
+
+  if (switched && affectedCards.length > 0) {
+    for (const info of affectedCards) {
+      game.renderer?.log(
+        `${info.name} switched to ${info.position.toUpperCase()} Position.`
+      );
+    }
+    game.updateBoard();
+  }
+
+  return switched;
+}
+
+/**
  * Initialize default handlers
  * @param {ActionHandlerRegistry} registry
  */
@@ -1610,4 +2105,13 @@ export function registerDefaultHandlers(registry) {
     "selective_field_destruction",
     handleSelectiveFieldDestruction
   );
+
+  // Luminarch refactoring: new generic handlers
+  registry.register("buff_stats_temp", handleBuffStatsTemp);
+  registry.register("add_status", handleAddStatus);
+  registry.register("remove_status", handleAddStatus); // Same handler, uses action.remove flag
+  registry.register("pay_lp", handlePayLP);
+  registry.register("add_from_zone_to_hand", handleAddFromZoneToHand);
+  registry.register("heal_from_destroyed_atk", handleHealFromDestroyedAtk);
+  registry.register("switch_position", handleSwitchPosition);
 }

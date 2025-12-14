@@ -1351,8 +1351,16 @@ export const cardDatabase = [
         ],
         actions: [
           {
-            type: "luminarch_holy_shield_apply",
+            type: "add_status",
             targetRef: "holy_shield_targets",
+            status: "tempBattleIndestructible",
+            value: true,
+          },
+          {
+            type: "add_status",
+            targetRef: "holy_shield_targets",
+            status: "battleDamageHealsControllerThisTurn",
+            value: true,
           },
         ],
       },
@@ -1379,8 +1387,10 @@ export const cardDatabase = [
         summonMethod: "special",
         actions: [
           {
-            type: "luminarch_aegisbearer_def_boost",
-            amount: 500,
+            type: "buff_stats_temp",
+            targetRef: "self",
+            defBoost: 500,
+            permanent: true, // Won't be cleaned up at end of turn
           },
         ],
       },
@@ -1477,7 +1487,18 @@ export const cardDatabase = [
         oncePerTurnName: "luminarch_magic_sickle_effect",
         actions: [
           {
-            type: "luminarch_magic_sickle_recycle",
+            type: "move",
+            targetRef: "self",
+            to: "graveyard",
+          },
+          {
+            type: "add_from_zone_to_hand",
+            zone: "graveyard",
+            filters: {
+              cardKind: "monster",
+              archetype: "Luminarch",
+            },
+            count: { min: 0, max: 2 },
           },
         ],
       },
@@ -1588,7 +1609,8 @@ export const cardDatabase = [
         requireSelfAsAttacker: true,
         actions: [
           {
-            type: "luminarch_aurora_seraph_heal",
+            type: "heal_from_destroyed_atk",
+            fraction: 0.5,
           },
         ],
       },
@@ -1598,6 +1620,18 @@ export const cardDatabase = [
         oncePerTurn: true,
         oncePerTurnName: "luminarch_aurora_seraph_protect",
         oncePerTurnScope: "card",
+        replacementEffect: {
+          type: "destruction",
+          reason: "any", // battle or effect
+          costFilters: {
+            cardKind: "monster",
+            archetype: "Luminarch",
+          },
+          costZone: "field",
+          costCount: 1,
+          prompt: 'Send 1 "Luminarch" monster you control to the GY to save this card?',
+          selectionMessage: 'Choose a "Luminarch" monster to send to the Graveyard for protection.',
+        },
       },
     ],
   },
@@ -1729,9 +1763,10 @@ export const cardDatabase = [
             amount: 1000,
           },
           {
-            type: "luminarch_citadel_atkdef_buff",
+            type: "buff_stats_temp",
             targetRef: "sanctum_citadel_target",
-            amount: 500,
+            atkBoost: 500,
+            defBoost: 500,
           },
         ],
       },
@@ -1769,9 +1804,10 @@ export const cardDatabase = [
             amount: 1000,
           },
           {
-            type: "luminarch_citadel_atkdef_buff",
+            type: "buff_stats_temp",
             targetRef: "holy_ascension_target",
-            amount: 800,
+            atkBoost: 800,
+            defBoost: 800,
           },
         ],
       },
@@ -2105,9 +2141,10 @@ export const cardDatabase = [
         ],
         actions: [
           {
-            type: "megashield_barbarias_switch_boost",
+            type: "switch_position",
             targetRef: "barbarias_switch_target",
             atkBoost: 1000,
+            markChanged: true,
           },
         ],
       },
