@@ -1162,6 +1162,13 @@ export default class EffectEngine {
     this.game.checkWinCondition();
   }
 
+  getHandActivationEffect(card) {
+    if (!card || !Array.isArray(card.effects)) {
+      return null;
+    }
+    return card.effects.find((e) => e && e.timing === "on_play") || null;
+  }
+
   activateFromHand(
     card,
     player,
@@ -1174,13 +1181,20 @@ export default class EffectEngine {
       return { success: false, reason: check.reason };
     }
 
-    const effect = (card.effects && card.effects[0]) || null;
-    if (!effect) {
-      return { success: false, reason: "No effect defined." };
+    const effect = this.getHandActivationEffect(card);
+    const isFieldSpell =
+      card.cardKind === "spell" && card.subtype === "field";
+    const isContinuousSpell =
+      card.cardKind === "spell" && card.subtype === "continuous";
+    const placementOnly = !effect && (isFieldSpell || isContinuousSpell);
+
+    if (!effect && !placementOnly) {
+      return { success: false, reason: "No on_play effect defined." };
     }
 
     // Verificação de campo vazio para spells do tipo equip com requireEmptyField
     if (
+      effect &&
       card.cardKind === "spell" &&
       card.subtype === "equip" &&
       effect.requireEmptyField
@@ -1193,14 +1207,16 @@ export default class EffectEngine {
       }
     }
 
-    const optCheck = this.checkOncePerTurn(card, player, effect);
-    if (!optCheck.ok) {
-      return { success: false, reason: optCheck.reason };
-    }
+    if (effect) {
+      const optCheck = this.checkOncePerTurn(card, player, effect);
+      if (!optCheck.ok) {
+        return { success: false, reason: optCheck.reason };
+      }
 
-    const duelCheck = this.checkOncePerDuel(card, player, effect);
-    if (!duelCheck.ok) {
-      return { success: false, reason: duelCheck.reason };
+      const duelCheck = this.checkOncePerDuel(card, player, effect);
+      if (!duelCheck.ok) {
+        return { success: false, reason: duelCheck.reason };
+      }
     }
 
     let resolvedActivationZone = activationZone || "hand";
@@ -1212,7 +1228,7 @@ export default class EffectEngine {
       activationZone: resolvedActivationZone,
     };
 
-    if (card.cardKind === "spell" && card.subtype === "field") {
+    if (isFieldSpell) {
       if (this.game && typeof this.game.moveCard === "function") {
         this.game.moveCard(card, player, "fieldSpell", {
           fromZone: "hand",
@@ -1229,11 +1245,7 @@ export default class EffectEngine {
 
       resolvedActivationZone = "fieldSpell";
       ctx.activationZone = resolvedActivationZone;
-    } else if (
-      card.cardKind === "spell" &&
-      card.subtype === "continuous" &&
-      resolvedActivationZone === "hand"
-    ) {
+    } else if (isContinuousSpell && resolvedActivationZone === "hand") {
       if (this.game && typeof this.game.moveCard === "function") {
         this.game.moveCard(card, player, "spellTrap", {
           fromZone: "hand",
@@ -1252,6 +1264,10 @@ export default class EffectEngine {
 
       resolvedActivationZone = "spellTrap";
       ctx.activationZone = resolvedActivationZone;
+    }
+
+    if (placementOnly) {
+      return { success: true, placementOnly: true };
     }
 
     const skipImmediateResolution = effect && effect.manualActivationOnly;
@@ -1282,11 +1298,7 @@ export default class EffectEngine {
     this.game.checkWinCondition();
 
     if (card.cardKind === "spell") {
-      if (card.subtype === "field") {
-        return { success: true };
-      }
-
-      if (card.subtype === "continuous") {
+      if (isFieldSpell || isContinuousSpell) {
         return { success: true };
       }
 
@@ -1814,13 +1826,14 @@ export default class EffectEngine {
       return baseCheck;
     }
 
-    const effect = (card.effects || []).find(
-      (e) => e && e.timing === "on_play"
-    );
-    const placementOnly =
-      card.subtype === "field" || card.subtype === "continuous";
+    const effect = this.getHandActivationEffect(card);
+    const isFieldSpell = card.subtype === "field";
+    const isContinuousSpell = card.subtype === "continuous";
+    const placementOnly = !effect && (isFieldSpell || isContinuousSpell);
     if (!effect) {
-      return placementOnly ? { ok: true } : { ok: false, reason: "No on-play effect." };
+      return placementOnly
+        ? { ok: true, placementOnly: true }
+        : { ok: false, reason: "No on_play effect." };
     }
 
     const optCheck = this.checkOncePerTurn(card, player, effect);

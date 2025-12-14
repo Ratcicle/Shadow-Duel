@@ -819,9 +819,20 @@ export default class Renderer {
     document.body.appendChild(modal);
   }
 
+  bindPreviewForElement(element, card, visible = true) {
+    if (!element) return;
+    element.dataset.previewable = visible ? "true" : "false";
+    element.__cardData = visible ? card : null;
+
+    element.addEventListener("mouseenter", () => {
+      this.renderPreview(visible ? card : null);
+    });
+  }
+
   createCardElement(card, visible) {
     const el = document.createElement("div");
     el.className = "card";
+    this.bindPreviewForElement(el, card, visible);
 
     if (visible) {
       const isMonster = card.cardKind !== "spell" && card.cardKind !== "trap";
@@ -1561,6 +1572,7 @@ export default class Renderer {
 
       cardEl.classList.add(cardClass);
       cardEl.dataset.index = String(idx);
+      this.bindPreviewForElement(cardEl, card, true);
 
       const toggle = () => {
         const already = selected.has(idx);
@@ -1590,6 +1602,16 @@ export default class Renderer {
     });
 
     modal.appendChild(grid);
+
+    grid.addEventListener("mouseover", (e) => {
+      const item = e.target.closest(`.${cardClass}`);
+      if (!item) return;
+      const idx = Number(item.dataset.index);
+      const card = cards[idx];
+      if (card) {
+        this.renderPreview(card);
+      }
+    });
 
     if (infoText) {
       const info = document.createElement("div");

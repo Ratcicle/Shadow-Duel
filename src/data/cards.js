@@ -1621,12 +1621,6 @@ export const cardDatabase = [
     image: "assets/Luminarch Knights Convocation.png",
     effects: [
       {
-        id: "luminarch_knights_convocation_activate",
-        timing: "on_play",
-        speed: 1,
-        actions: [],
-      },
-      {
         id: "luminarch_knights_convocation_effect",
         timing: "ignition",
         oncePerTurn: true,

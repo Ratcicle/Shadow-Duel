@@ -58,6 +58,8 @@ body {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  position: relative;
+  z-index: 500;
 }
 
   #card-preview {

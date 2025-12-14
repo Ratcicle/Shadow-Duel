@@ -3257,6 +3257,27 @@ export default class Game {
     if (!commit || !commit.cardRef) return;
 
     const { cardRef, activationZone } = commit;
+
+    // Continuous/Field spells without on-play effects should only be placed
+    let shouldResolve = true;
+    if (
+      cardRef.cardKind === "spell" &&
+      (cardRef.subtype === "continuous" || cardRef.subtype === "field")
+    ) {
+      if (
+        typeof this.effectEngine?.getHandActivationEffect === "function" &&
+        !this.effectEngine.getHandActivationEffect(cardRef)
+      ) {
+        shouldResolve = false;
+      }
+    }
+
+    if (!shouldResolve) {
+      this.renderer.log(`${cardRef.name} is placed on the field.`);
+      this.updateBoard();
+      return;
+    }
+
     const result = await this.effectEngine.activateSpellTrapEffect(
       cardRef,
       this.player,
