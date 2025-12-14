@@ -1486,10 +1486,22 @@ export const cardDatabase = [
         timing: "ignition",
         oncePerTurn: true,
         oncePerTurnName: "luminarch_magic_sickle_effect",
+        targets: [
+          {
+            id: "magic_sickle_self",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            cardName: "Luminarch Magic Sickle",
+            count: { min: 1, max: 1 },
+            requireThisCard: true,
+            autoSelect: true,
+          },
+        ],
         actions: [
           {
             type: "move",
-            targetRef: "self",
+            targetRef: "magic_sickle_self",
             to: "graveyard",
           },
           {
@@ -1498,6 +1510,7 @@ export const cardDatabase = [
             filters: {
               cardKind: "monster",
               archetype: "Luminarch",
+              excludeSelf: true,
             },
             count: { min: 0, max: 2 },
           },
@@ -2040,9 +2053,35 @@ export const cardDatabase = [
         speed: 1,
         oncePerTurn: true,
         oncePerTurnName: "luminarch_sacred_judgment",
+        conditions: [
+          { type: "playerFieldEmpty" },
+          { type: "opponentMonstersMin", min: 2 },
+          { type: "playerLpMin", min: 2000 },
+          {
+            type: "graveyardHasMatch",
+            owner: "self",
+            zone: "graveyard",
+            filters: { cardKind: "monster", archetype: "Luminarch" },
+          },
+        ],
         actions: [
           {
-            type: "luminarch_sacred_judgment_revive",
+            type: "pay_lp",
+            amount: 2000,
+            player: "self",
+          },
+          {
+            type: "special_summon_from_graveyard",
+            filters: { cardKind: "monster", archetype: "Luminarch" },
+            count: { min: 0, max: 5, maxFrom: "opponentFieldCount", cap: 5 },
+            position: "choice",
+            promptPlayer: true,
+          },
+          {
+            type: "heal_per_archetype_monster",
+            archetype: "Luminarch",
+            amountPerMonster: 500,
+            player: "self",
           },
         ],
       },

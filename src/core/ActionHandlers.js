@@ -162,11 +162,21 @@ export async function handleSpecialSummonFromZone(
 
   // Determine how many cards to summon
   const count = action.count || { min: 1, max: 1 };
-  const maxSelect = Math.min(
-    count.max,
-    candidates.length,
-    5 - player.field.length
-  );
+  const dynamicSource = count.maxFrom;
+  let dynamicMax = null;
+  if (dynamicSource === "opponentFieldCount") {
+    const opponent = ctx?.opponent || engine.game?.getOpponent?.(player);
+    dynamicMax = opponent?.field ? opponent.field.length : 0;
+  }
+  const dynamicCap = Number.isFinite(count.cap)
+    ? count.cap
+    : Number.isFinite(count.maxCap)
+    ? count.maxCap
+    : 5;
+  const baseMax = Number.isFinite(count.max) ? count.max : 1;
+  const resolvedMax =
+    dynamicMax !== null ? Math.min(dynamicMax, dynamicCap, baseMax) : baseMax;
+  const maxSelect = Math.min(resolvedMax, candidates.length, 5 - player.field.length);
 
   if (maxSelect === 0) {
     game.renderer?.log("Field is full, cannot Special Summon.");
@@ -249,9 +259,25 @@ export async function handleSpecialSummonFromZone(
   // Show multi-select modal for player
   return new Promise((resolve) => {
     const minRequired = Number(count.min ?? 0);
+    const dynamicSource = count.maxFrom;
+    let dynamicMax = null;
+    if (dynamicSource === "opponentFieldCount") {
+      const opponent = ctx?.opponent || engine.game?.getOpponent?.(player);
+      dynamicMax = opponent?.field ? opponent.field.length : 0;
+    }
+    const dynamicCap = Number.isFinite(count.cap)
+      ? count.cap
+      : Number.isFinite(count.maxCap)
+      ? count.maxCap
+      : 5;
+    const dynamicMaxSelect =
+      dynamicMax !== null
+        ? Math.min(dynamicMax, dynamicCap, 5 - player.field.length)
+        : maxSelect;
+
     game.renderer.showMultiSelectModal(
       candidates,
-      { min: minRequired, max: maxSelect },
+      { min: minRequired, max: dynamicMaxSelect },
       async (selected) => {
         if (!selected || selected.length === 0) {
           if (minRequired === 0) {
