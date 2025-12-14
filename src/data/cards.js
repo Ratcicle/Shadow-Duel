@@ -188,11 +188,11 @@ export const cardDatabase = [
   },
   {
     id: 16,
-    name: "Blood Sucking",
+    name: "Blood Sucking Mosquito",
     cardKind: "spell",
     subtype: "normal",
     description: "Gain 1000 LP.",
-    image: "assets/Blood sucking.png",
+    image: "assets/Blood sucking Mosquito.png",
     effects: [
       {
         id: "life_pulse_heal",
@@ -254,7 +254,7 @@ export const cardDatabase = [
     subtype: "normal",
     archetype: "Shadow-Heart",
     description:
-      "Target 1 monster; it gains 1000 ATK until the end of this turn.",
+      "Target 1 monster; it gains 600 ATK until the end of this turn.",
     image: "assets/Shadow Coat.png",
     effects: [
       {
@@ -272,7 +272,7 @@ export const cardDatabase = [
           },
         ],
         actions: [
-          { type: "buff_atk_temp", amount: 1000, targetRef: "buff_target" },
+          { type: "buff_atk_temp", amount: 600, targetRef: "buff_target" },
         ],
       },
     ],
@@ -1572,8 +1572,10 @@ export const cardDatabase = [
           },
           costZone: "field",
           costCount: 1,
-          prompt: 'Send 1 "Luminarch" monster you control to the GY to save this card?',
-          selectionMessage: 'Choose a "Luminarch" monster to send to the Graveyard for protection.',
+          prompt:
+            'Send 1 "Luminarch" monster you control to the GY to save this card?',
+          selectionMessage:
+            'Choose a "Luminarch" monster to send to the Graveyard for protection.',
         },
       },
     ],
@@ -2093,7 +2095,7 @@ export const cardDatabase = [
     archetype: "Luminarch",
     archetypes: ["Luminarch"],
     description:
-      "'Luminarch Sanctum Protector' + 1 Level 5 or higher 'Luminarch' monster. All LP you would gain is doubled. Once per turn: You can target 1 monster you control; switch its battle position, and if you do, it gains 1000 ATK until the end of this turn.",
+      "'Luminarch Sanctum Protector' + 1 Level 5 or higher 'Luminarch' monster. All LP you would gain is doubled. Once per turn: You can target 1 monster you control; switch its battle position, and if you do, it gains 800 ATK until the end of this turn.",
     image: "assets/Luminarch Megashield Barbarias.png",
     fusionMaterials: [
       { name: "Luminarch Sanctum Protector", count: 1 },
@@ -2125,7 +2127,7 @@ export const cardDatabase = [
           {
             type: "switch_position",
             targetRef: "barbarias_switch_target",
-            atkBoost: 1000,
+            atkBoost: 800,
             markChanged: true,
           },
         ],

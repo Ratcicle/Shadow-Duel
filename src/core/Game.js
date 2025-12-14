@@ -542,12 +542,16 @@ export default class Game {
         }
 
         // Special check for Polymerization
+        const spellPreview =
+          this.effectEngine?.canActivateSpellFromHandPreview(
+            card,
+            this.player
+          ) || { ok: true };
+        let canActivateFromHand = !!spellPreview.ok;
+
         if (card.name === "Polymerization") {
           if (!this.canActivatePolymerization()) {
-            this.renderer.log(
-              "Cannot activate Polymerization: No valid Fusion Summons available."
-            );
-            return;
+            canActivateFromHand = false;
           }
         }
 
@@ -563,7 +567,9 @@ export default class Game {
           this.renderer &&
           typeof this.renderer.showSpellChoiceModal === "function"
         ) {
-          this.renderer.showSpellChoiceModal(index, handleSpellChoice);
+          this.renderer.showSpellChoiceModal(index, handleSpellChoice, {
+            canActivate: canActivateFromHand,
+          });
         } else {
           const shouldActivate = window.confirm(
             "OK: Activate this Spell. Cancel: Set it face-down in your Spell/Trap Zone."

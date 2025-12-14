@@ -1787,6 +1787,69 @@ export default class EffectEngine {
     return { ok: true };
   }
 
+  /**
+   * Dry-run check for activating a Spell from hand (no side effects).
+   */
+  canActivateSpellFromHandPreview(card, player) {
+    if (!card || !player) {
+      return { ok: false, reason: "Missing card or player." };
+    }
+    if (card.cardKind !== "spell") {
+      return { ok: false, reason: "Card is not a spell." };
+    }
+    if (!player.hand || !player.hand.includes(card)) {
+      return { ok: false, reason: "Card not in hand." };
+    }
+
+    const baseCheck = this.canActivate(card, player);
+    if (!baseCheck.ok) {
+      return baseCheck;
+    }
+
+    const effect = (card.effects || []).find(
+      (e) => e && e.timing === "on_play"
+    );
+    const placementOnly =
+      card.subtype === "field" || card.subtype === "continuous";
+    if (!effect) {
+      return placementOnly ? { ok: true } : { ok: false, reason: "No on-play effect." };
+    }
+
+    const optCheck = this.checkOncePerTurn(card, player, effect);
+    if (!optCheck.ok) return { ok: false, reason: optCheck.reason };
+
+    const opdCheck = this.checkOncePerDuel(card, player, effect);
+    if (!opdCheck.ok) return { ok: false, reason: opdCheck.reason };
+
+    const ctx = {
+      source: card,
+      player,
+      opponent: this.game?.getOpponent?.(player),
+      activationZone: "hand",
+    };
+
+    if (effect.conditions) {
+      const condResult = this.evaluateConditions(effect.conditions, ctx);
+      if (!condResult.ok) {
+        return { ok: false, reason: condResult.reason };
+      }
+    }
+
+    if (effect.requireEmptyField && (player.field?.length || 0) > 0) {
+      return { ok: false, reason: "You must control no monsters." };
+    }
+
+    const targetResult = this.resolveTargets(effect.targets || [], ctx, null);
+    if (targetResult.ok === false) {
+      return { ok: false, reason: targetResult.reason };
+    }
+
+    return {
+      ok: true,
+      needsSelection: !!targetResult.needsSelection,
+    };
+  }
+
   resolveTargets(targetDefs, ctx, selections) {
     const targetMap = {};
     const options = [];

@@ -30,8 +30,17 @@ const btnStartDuel = document.getElementById("btn-start-duel");
 const btnDeckBuilder = document.getElementById("btn-deck-builder");
 const btnDeckSave = document.getElementById("deck-save");
 const btnDeckCancel = document.getElementById("deck-cancel");
+const btnPoolFilterNoArchetype = document.getElementById(
+  "deck-filter-no-archetype"
+);
+const btnPoolFilterShadowHeart = document.getElementById(
+  "deck-filter-shadow-heart"
+);
+const btnPoolFilterLuminarch = document.getElementById("deck-filter-luminarch");
+const btnPoolFilterVoid = document.getElementById("deck-filter-void");
 let currentDeck = loadDeck();
 let currentExtraDeck = loadExtraDeck();
+let poolFilterMode = "all"; // all | no_archetype | void | luminarch | shadow_heart
 
 function getCardById(cardId) {
   return cardById.get(cardId);
@@ -172,6 +181,53 @@ function setPreview(card) {
   previewEls.desc.textContent = card.description || "Sem descricao.";
 }
 
+function cardHasArchetype(card) {
+  if (!card) return false;
+  const archetypes = Array.isArray(card.archetypes)
+    ? card.archetypes
+    : card.archetype
+    ? [card.archetype]
+    : [];
+  return archetypes.length > 0;
+}
+
+function cardHasArchetypeName(card, archetypeName) {
+  if (!card || !archetypeName) return false;
+  const archetypes = Array.isArray(card.archetypes)
+    ? card.archetypes
+    : card.archetype
+    ? [card.archetype]
+    : [];
+  return archetypes.includes(archetypeName);
+}
+
+function updatePoolFilterButtons() {
+  if (!btnPoolFilterNoArchetype) return;
+
+  const isNoArchetype = poolFilterMode === "no_archetype";
+  const isVoid = poolFilterMode === "void";
+  const isShadowHeart = poolFilterMode === "shadow_heart";
+  const isLuminarch = poolFilterMode === "luminarch";
+
+  btnPoolFilterNoArchetype.classList.toggle("active", isNoArchetype);
+  btnPoolFilterNoArchetype.textContent = "Sem arquétipo";
+
+  if (btnPoolFilterVoid) {
+    btnPoolFilterVoid.classList.toggle("active", isVoid);
+    btnPoolFilterVoid.textContent = "Void";
+  }
+
+  if (btnPoolFilterLuminarch) {
+    btnPoolFilterLuminarch.classList.toggle("active", isLuminarch);
+    btnPoolFilterLuminarch.textContent = "Luminarch";
+  }
+
+  if (btnPoolFilterShadowHeart) {
+    btnPoolFilterShadowHeart.classList.toggle("active", isShadowHeart);
+    btnPoolFilterShadowHeart.textContent = "Shadow-Heart";
+  }
+}
+
 function getSortedCardPool(cards) {
   const spellSubtypeOrder = { normal: 0, equip: 1, field: 2 };
   const nameOf = (card) => card.name || "";
@@ -222,6 +278,7 @@ function getSortedCardPool(cards) {
 }
 
 function renderDeckBuilder() {
+  updatePoolFilterButtons();
   currentDeck = sortDeck(currentDeck);
   deckGrid.innerHTML = "";
   poolGrid.innerHTML = "";
@@ -279,10 +336,29 @@ function renderDeckBuilder() {
   }
 
   // Pool of all cards with counts
-  const sortedCards = getSortedCardPool(
-    cardDatabase.filter((c) => !c.monsterType || c.monsterType !== "fusion")
+  const baseMainPool = cardDatabase.filter(
+    (c) => !c.monsterType || c.monsterType !== "fusion"
   );
-  const fusionCards = cardDatabase.filter((c) => c.monsterType === "fusion");
+  const baseFusionPool = cardDatabase.filter((c) => c.monsterType === "fusion");
+
+  const poolFilter = (card) => {
+    if (poolFilterMode === "no_archetype") {
+      return !cardHasArchetype(card);
+    }
+    if (poolFilterMode === "void") {
+      return cardHasArchetypeName(card, "Void");
+    }
+    if (poolFilterMode === "luminarch") {
+      return cardHasArchetypeName(card, "Luminarch");
+    }
+    if (poolFilterMode === "shadow_heart") {
+      return cardHasArchetypeName(card, "Shadow-Heart");
+    }
+    return true;
+  };
+
+  const sortedCards = getSortedCardPool(baseMainPool.filter(poolFilter));
+  const fusionCards = baseFusionPool.filter(poolFilter);
 
   const extraCounts = {};
   currentExtraDeck.forEach((id) => {
@@ -344,8 +420,9 @@ function renderDeckBuilder() {
   });
 
   // Preview first card if none
-  if (cardDatabase.length > 0) {
-    setPreview(cardDatabase[0]);
+  const firstAvailable = fusionCards[0] || sortedCards[0] || cardDatabase[0];
+  if (firstAvailable) {
+    setPreview(firstAvailable);
   }
 }
 
@@ -392,6 +469,22 @@ btnDeckSave?.addEventListener("click", () => {
   saveDeck(currentDeck);
   saveExtraDeck(currentExtraDeck);
   closeDeckBuilder();
+});
+btnPoolFilterNoArchetype?.addEventListener("click", () => {
+  poolFilterMode = poolFilterMode === "no_archetype" ? "all" : "no_archetype";
+  renderDeckBuilder();
+});
+btnPoolFilterVoid?.addEventListener("click", () => {
+  poolFilterMode = poolFilterMode === "void" ? "all" : "void";
+  renderDeckBuilder();
+});
+btnPoolFilterLuminarch?.addEventListener("click", () => {
+  poolFilterMode = poolFilterMode === "luminarch" ? "all" : "luminarch";
+  renderDeckBuilder();
+});
+btnPoolFilterShadowHeart?.addEventListener("click", () => {
+  poolFilterMode = poolFilterMode === "shadow_heart" ? "all" : "shadow_heart";
+  renderDeckBuilder();
 });
 btnStartDuel?.addEventListener("click", startDuel);
 

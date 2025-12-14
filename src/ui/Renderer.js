@@ -493,11 +493,14 @@ export default class Renderer {
     });
   }
 
-  showSpellChoiceModal(cardIndex, callback) {
+  showSpellChoiceModal(cardIndex, callback, options = {}) {
     const existingModal = document.querySelector(".spell-choice-modal");
     if (existingModal) {
       existingModal.remove();
     }
+
+    const canActivate =
+      options.canActivate === undefined ? true : !!options.canActivate;
 
     const cardElement = document.querySelector(
       `#player-hand .card[data-index="${cardIndex}"]`
@@ -509,15 +512,16 @@ export default class Renderer {
     const content = document.createElement("div");
     content.className = "spell-choice-content";
 
-    const activateBtn = document.createElement("button");
-    activateBtn.dataset.choice = "activate";
-    activateBtn.textContent = "Activate";
-
     const setBtn = document.createElement("button");
     setBtn.dataset.choice = "set";
     setBtn.textContent = "Set";
 
-    content.appendChild(activateBtn);
+    if (canActivate) {
+      const activateBtn = document.createElement("button");
+      activateBtn.dataset.choice = "activate";
+      activateBtn.textContent = "Activate";
+      content.appendChild(activateBtn);
+    }
     content.appendChild(setBtn);
     modal.appendChild(content);
 
