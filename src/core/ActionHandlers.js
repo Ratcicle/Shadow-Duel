@@ -2120,8 +2120,9 @@ export async function handlePermanentBuffNamed(action, ctx, targets, engine) {
       }
       card.permanentBuffsBySource[sourceName].atk = newBuff;
       
-      // Apply to actual stat (remove old, add new)
-      card.atk = (card.atk || 0) - currentBuff + newBuff;
+      // Apply to actual stat (calculate delta and apply)
+      const delta = newBuff - currentBuff;
+      card.atk = (card.atk || 0) + delta;
       cardBuffed = true;
     }
 
@@ -2133,6 +2134,12 @@ export async function handlePermanentBuffNamed(action, ctx, targets, engine) {
         card.permanentBuffsBySource[sourceName] = {};
       }
       card.permanentBuffsBySource[sourceName].def = newBuff;
+      
+      // Apply to actual stat (calculate delta and apply)
+      const delta = newBuff - currentBuff;
+      card.def = (card.def || 0) + delta;
+      cardBuffed = true;
+    }
       
       // Apply to actual stat (remove old, add new)
       card.def = (card.def || 0) - currentBuff + newBuff;
@@ -2281,15 +2288,14 @@ export async function handleConditionalSummonFromHand(action, ctx, targets, engi
   
   const card = Array.isArray(targetCards) ? targetCards[0] : targetCards;
 
-  // Check if card is in hand
-  if (!player.hand.includes(card)) {
-    // If not in hand, maybe it was already moved there by a previous action
-    // Try to find it in hand by name
-    const cardInHand = player.hand.find(c => c.name === card.name);
-    if (!cardInHand) {
-      console.log(`Card "${card.name}" not found in hand for conditional summon.`);
-      return false;
-    }
+  // Find card in hand (might be different reference if moved by previous action)
+  // The targets object contains the original reference, but after a move action,
+  // the card object may have been moved to hand with the same reference or a clone
+  const handCard = player.hand.find(c => c === card || c.name === card.name);
+  
+  if (!handCard) {
+    console.log(`Card "${card.name}" not found in hand for conditional summon.`);
+    return false;
   }
 
   // Check condition
@@ -2325,12 +2331,11 @@ export async function handleConditionalSummonFromHand(action, ctx, targets, engi
     return false;
   }
 
-  // Find the actual card in hand (might be different reference)
-  const handCard = player.hand.find(c => c.name === card.name) || card;
+  // Get the index of the card in hand
   const handIndex = player.hand.indexOf(handCard);
   
   if (handIndex === -1) {
-    console.warn(`Card "${card.name}" not found in hand during conditional summon execution.`);
+    console.warn(`Card "${handCard.name}" not found in hand during conditional summon execution.`);
     return false;
   }
 
