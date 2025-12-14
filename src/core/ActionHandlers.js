@@ -2287,7 +2287,7 @@ export async function handleConditionalSummonFromHand(action, ctx, targets, engi
     // Try to find it in hand by name
     const cardInHand = player.hand.find(c => c.name === card.name);
     if (!cardInHand) {
-      console.log("Card not found in hand for conditional summon.");
+      console.log(`Card "${card.name}" not found in hand for conditional summon.`);
       return false;
     }
   }
@@ -2312,7 +2312,10 @@ export async function handleConditionalSummonFromHand(action, ctx, targets, engi
   }
 
   if (!conditionMet) {
-    console.log("Condition not met for conditional summon.");
+    const conditionDesc = condition.type === "control_card" 
+      ? `controlling "${condition.cardName}"` 
+      : "unknown condition";
+    console.log(`Condition not met for conditional summon: ${conditionDesc}`);
     return false;
   }
 
@@ -2327,7 +2330,7 @@ export async function handleConditionalSummonFromHand(action, ctx, targets, engi
   const handIndex = player.hand.indexOf(handCard);
   
   if (handIndex === -1) {
-    console.warn("Card not found in hand:", card.name);
+    console.warn(`Card "${card.name}" not found in hand during conditional summon execution.`);
     return false;
   }
 
@@ -2369,7 +2372,7 @@ async function performSummon(card, handIndex, player, action, engine) {
   // Determine position
   let position = action.position || "choice";
   if (position === "choice") {
-    position = await engine.chooseSpecialSummonPosition(card, player);
+    position = await game.chooseSpecialSummonPosition(card, player);
   }
 
   // Remove from hand and add to field
