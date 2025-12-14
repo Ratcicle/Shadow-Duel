@@ -512,7 +512,7 @@ export default class LuminarchStrategy extends BaseStrategy {
         }
         break;
       }
-      case "Shadow Coat": {
+      case "Shadow-Heart Coat": {
         const target = player.field.sort(
           (a, b) => (b.atk || 0) - (a.atk || 0)
         )[0];
@@ -567,7 +567,7 @@ export default class LuminarchStrategy extends BaseStrategy {
         }
         break;
       }
-      case "Shadow Recall": {
+      case "Shadow-Heart Recall": {
         if (player.field.length) {
           const bounce = player.field.pop();
           player.hand.push(bounce);

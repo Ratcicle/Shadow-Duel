@@ -512,7 +512,7 @@ export default class Bot extends Player {
         chosen = [bestIdx];
       } else if (
         card.name === "Shadow-Heart Shield" ||
-        card.name === "Shadow Coat" ||
+        card.name === "Shadow-Heart Coat" ||
         card.name === "Luminarch Holy Ascension" ||
         card.name === "Luminarch Crescent Shield"
       ) {
