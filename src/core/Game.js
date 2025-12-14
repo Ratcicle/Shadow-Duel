@@ -13,13 +13,13 @@ function getCostTypeDescription(costFilters, count) {
     const plural = `"${costFilters.archetype}" ${baseType}s`;
     return count > 1 ? plural : singular;
   }
-  
+
   if (costFilters.cardKind) {
     const singular = costFilters.cardKind;
     const plural = costFilters.cardKind + "s";
     return count > 1 ? plural : singular;
   }
-  
+
   return count > 1 ? "cards" : "card";
 }
 
@@ -537,7 +537,7 @@ export default class Game {
 
       if (card.cardKind === "spell") {
         if (this.phase !== "main1" && this.phase !== "main2") {
-          this.tryActivateSpell(card, index);
+          this.renderer.log("Can only activate spells during Main Phase.");
           return;
         }
 
@@ -1351,7 +1351,10 @@ export default class Game {
           card,
           result.options,
           activationZone,
-          { preventCancel: !!options.committed }
+          {
+            preventCancel: !!options.committed,
+            commitInfo: options.commitInfo || null,
+          }
         );
       } else {
         const minZero = (result.options || []).some(
@@ -1384,6 +1387,9 @@ export default class Game {
     if (!result.success) {
       if (result.reason) {
         this.renderer.log(result.reason);
+      }
+      if (options.committed && options.commitInfo) {
+        this.rollbackSpellActivation(owner, options.commitInfo);
       }
       return;
     }
@@ -1584,6 +1590,7 @@ export default class Game {
       usingFieldTargeting,
       autoAdvanceOnMax: !usingFieldTargeting,
       preventCancel: !!extra.preventCancel,
+      commitInfo: extra.commitInfo || null,
     };
     this.renderer.log("Select target(s) for the continuous spell effect.");
     if (
@@ -2182,7 +2189,10 @@ export default class Game {
         selection.card,
         this.player,
         result,
-        selection.activationZone
+        selection.activationZone,
+        selection.commitInfo
+          ? { committed: true, commitInfo: selection.commitInfo }
+          : {}
       );
     } else if (selection.kind === "monsterEffect") {
       const result = this.effectEngine.activateMonsterEffect(
@@ -3252,6 +3262,31 @@ export default class Game {
 
   async tryActivateSpell(card, handIndex, selections = null, options = {}) {
     if (this.targetSelection) return;
+    if (this.turn !== "player") return;
+    if (this.phase !== "main1" && this.phase !== "main2") {
+      this.renderer.log("Can only activate spells during Main Phase.");
+      return;
+    }
+    if (this.isResolvingEffect) {
+      this.renderer.log("Finish the current effect before activating another card.");
+      return;
+    }
+
+    if (
+      this.effectEngine &&
+      typeof this.effectEngine.canActivateSpellFromHandPreview === "function"
+    ) {
+      const preview = this.effectEngine.canActivateSpellFromHandPreview(
+        card,
+        this.player
+      );
+      if (preview && !preview.ok) {
+        if (preview.reason) {
+          this.renderer.log(preview.reason);
+        }
+        return;
+      }
+    }
 
     const commit = this.commitCardActivationFromHand(this.player, handIndex);
     if (!commit || !commit.cardRef) return;
@@ -3288,7 +3323,29 @@ export default class Game {
     this.handleSpellTrapActivationResult(cardRef, this.player, result, activationZone, {
       committed: true,
       zoneIndex: commit.zoneIndex,
+      commitInfo: commit,
     });
+  }
+
+  rollbackSpellActivation(player, commitInfo) {
+    if (!player || !commitInfo || !commitInfo.cardRef) return;
+    const { cardRef, activationZone, fromIndex } = commitInfo;
+    const sourceZone = activationZone || "spellTrap";
+    this.moveCard(cardRef, player, "hand", { fromZone: sourceZone });
+
+    if (
+      typeof fromIndex === "number" &&
+      fromIndex >= 0 &&
+      fromIndex < player.hand.length
+    ) {
+      const currentIndex = player.hand.indexOf(cardRef);
+      if (currentIndex > -1 && currentIndex !== fromIndex) {
+        player.hand.splice(currentIndex, 1);
+        player.hand.splice(fromIndex, 0, cardRef);
+      }
+    }
+
+    this.updateBoard();
   }
 
   /**
@@ -3333,7 +3390,7 @@ export default class Game {
 
     this.updateBoard();
 
-    return { cardRef: card, activationZone, zoneIndex };
+    return { cardRef: card, activationZone, zoneIndex, fromIndex: handIndex };
   }
 
   showShadowHeartCathedralModal(validMonsters, maxAtk, counterCount, callback) {

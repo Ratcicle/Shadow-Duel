@@ -410,10 +410,43 @@ export default class Bot extends Player {
     if (action.type === "spell") {
       const card = this.hand[action.index];
       if (!card) return;
+      if (game.phase !== "main1" && game.phase !== "main2") return;
+
+      if (
+        game.effectEngine &&
+        typeof game.effectEngine.canActivateSpellFromHandPreview === "function"
+      ) {
+        const preview = game.effectEngine.canActivateSpellFromHandPreview(
+          card,
+          this
+        );
+        if (preview && !preview.ok) {
+          return;
+        }
+      }
+
       const selections = this.buildAutoSelections(card, game);
       const commit = game.commitCardActivationFromHand(this, action.index);
       if (!commit || !commit.cardRef) return;
       const { cardRef, activationZone } = commit;
+
+      let shouldResolve = true;
+      if (
+        cardRef.cardKind === "spell" &&
+        (cardRef.subtype === "continuous" || cardRef.subtype === "field")
+      ) {
+        const activationEffect =
+          game.effectEngine?.getHandActivationEffect?.(cardRef);
+        if (!activationEffect) {
+          shouldResolve = false;
+        }
+      }
+
+      if (!shouldResolve) {
+        game.renderer?.log?.(`Bot places ${cardRef.name}.`);
+        game.updateBoard();
+        return;
+      }
 
       let result = await game.effectEngine.activateSpellTrapEffect(
         cardRef,
@@ -435,6 +468,7 @@ export default class Bot extends Player {
       }
       if (!result?.success) {
         console.log("Bot failed to activate spell:", result?.reason);
+        game.rollbackSpellActivation(this, commit);
       } else {
         game.renderer.log(`Bot activates ${cardRef.name}`);
         game.updateBoard();
