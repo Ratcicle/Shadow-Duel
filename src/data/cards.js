@@ -2866,41 +2866,6 @@ export const cardDatabase = [
     ],
   },
   {
-    id: 201,
-    name: "Trap Hole",
-    cardKind: "trap",
-    subtype: "normal",
-    description:
-      "When your opponent Normal or Flip Summons a monster with 1000 or more ATK: Destroy that monster.",
-    image: "assets/Trap Hole.png",
-    effects: [
-      {
-        id: "trap_hole_effect",
-        timing: "on_event",
-        event: "after_summon",
-        summonMethod: ["normal", "flip"],
-        requireOpponentSummon: true,
-        targets: [
-          {
-            id: "trap_hole_target",
-            owner: "opponent",
-            zone: "field",
-            cardKind: "monster",
-            minAtk: 1000,
-            count: { min: 1, max: 1 },
-            autoSelect: true,
-          },
-        ],
-        actions: [
-          {
-            type: "destroy",
-            targetRef: "trap_hole_target",
-          },
-        ],
-      },
-    ],
-  },
-  {
     id: 202,
     name: "Call of the Haunted",
     cardKind: "trap",
@@ -2925,66 +2890,6 @@ export const cardDatabase = [
           {
             type: "call_of_haunted_summon_and_bind",
             targetRef: "haunted_target",
-          },
-        ],
-      },
-    ],
-  },
-  {
-    id: 203,
-    name: "Bottomless Trap Hole",
-    cardKind: "trap",
-    subtype: "normal",
-    description:
-      "When your opponent Summons a monster(s) with 1500 or more ATK: Destroy that monster(s) with 1500 or more ATK, and if you do, banish it.",
-    image: "assets/Bottomless Trap Hole.png",
-    effects: [
-      {
-        id: "bottomless_trap_hole_effect",
-        timing: "on_event",
-        event: "after_summon",
-        summonMethod: ["normal", "special", "tribute"],
-        requireOpponentSummon: true,
-        targets: [
-          {
-            id: "bottomless_target",
-            owner: "opponent",
-            zone: "field",
-            cardKind: "monster",
-            minAtk: 1500,
-            count: { min: 1, max: 1 },
-            autoSelect: true,
-          },
-        ],
-        actions: [
-          {
-            type: "bottomless_destroy_banish",
-            targetRef: "bottomless_target",
-          },
-        ],
-      },
-    ],
-  },
-  {
-    id: 204,
-    name: "Reckless Greed",
-    cardKind: "trap",
-    subtype: "normal",
-    description: "Draw 2 cards, then skip your next 2 Draw Phases.",
-    image: "assets/Reckless Greed.png",
-    effects: [
-      {
-        id: "reckless_greed_effect",
-        timing: "manual",
-        actions: [
-          {
-            type: "draw",
-            player: "self",
-            amount: 2,
-          },
-          {
-            type: "reckless_greed_skip_draws",
-            skipCount: 2,
           },
         ],
       },
@@ -3046,6 +2951,7 @@ export const cardDatabase = [
     name: "Sealing the Void",
     cardKind: "spell",
     subtype: "normal",
+    archetype: "Void",
     description:
       "Target 1 face-up 'Void' monster you control; until the end of this turn, that monster's ATK/DEF become 0, and its effects are negated. If this effect resolves, you can conduct 1 additional Normal Summon this turn. You can only activate 1 'Sealing the Void' per turn.",
     image: "assets/Sealing the Void.png",
@@ -3122,6 +3028,7 @@ export const cardDatabase = [
     name: "Void Gravitational Pull",
     cardKind: "spell",
     subtype: "continuous",
+    archetype: "Void",
     description:
       "Once per turn: You can target 1 monster you control and 1 monster your opponent controls; return those targets to the hand.",
     image: "assets/Void Gravitational pull.png",
