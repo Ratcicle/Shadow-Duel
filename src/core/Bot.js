@@ -196,7 +196,7 @@ export default class Bot extends Player {
 
       if (!bestAction) break;
 
-      this.executeMainPhaseAction(game, bestAction);
+      await this.executeMainPhaseAction(game, bestAction);
       chainCount += 1;
 
       if (typeof game.waitForPhaseDelay === "function") {
@@ -373,7 +373,7 @@ export default class Bot extends Player {
     attacker.hasAttacked = attacker.attacksUsedThisTurn >= maxAttacks;
   }
 
-  executeMainPhaseAction(game, action) {
+  async executeMainPhaseAction(game, action) {
     if (!action) return;
 
     if (action.type === "summon") {
@@ -411,29 +411,34 @@ export default class Bot extends Player {
       const card = this.hand[action.index];
       if (!card) return;
       const selections = this.buildAutoSelections(card, game);
-      let result = game.effectEngine.activateFromHand(
-        card,
+      const commit = game.commitCardActivationFromHand(this, action.index);
+      if (!commit || !commit.cardRef) return;
+      const { cardRef, activationZone } = commit;
+
+      let result = await game.effectEngine.activateSpellTrapEffect(
+        cardRef,
         this,
-        action.index,
-        selections
+        selections,
+        activationZone
       );
 
       if (result && result.needsSelection && result.options) {
         const auto = this.convertOptionsToSelection(result.options);
         if (auto) {
-          result = game.effectEngine.activateFromHand(
-            card,
+          result = await game.effectEngine.activateSpellTrapEffect(
+            cardRef,
             this,
-            action.index,
-            auto
+            auto,
+            activationZone
           );
         }
       }
       if (!result?.success) {
         console.log("Bot failed to activate spell:", result?.reason);
       } else {
-        game.renderer.log(`Bot activates ${card.name}`);
+        game.renderer.log(`Bot activates ${cardRef.name}`);
         game.updateBoard();
+        game.finalizeSpellTrapActivation(cardRef, this, activationZone);
       }
       return;
     }

@@ -1344,15 +1344,19 @@ export default class Game {
     this.updateBoard();
   }
 
-  handleSpellTrapActivationResult(card, owner, result, activationZone = null) {
+  handleSpellTrapActivationResult(card, owner, result, activationZone = null, options = {}) {
     if (result.needsSelection) {
       if (this.canUseFieldTargeting(result.options)) {
         this.startSpellTrapTargetSelection(
           card,
           result.options,
-          activationZone
+          activationZone,
+          { preventCancel: !!options.committed }
         );
       } else {
+        const minZero = (result.options || []).some(
+          (opt) => Number(opt.min ?? opt.count?.min ?? 1) === 0
+        );
         this.renderer.showTargetSelection(
           result.options,
           async (chosenMap) => {
@@ -1366,12 +1370,12 @@ export default class Game {
               card,
               owner,
               finalResult,
-              activationZone
+              activationZone,
+              options
             );
           },
-          () => {
-            this.cancelTargetSelection();
-          }
+          options.committed ? null : () => this.cancelTargetSelection(),
+          { allowCancel: !options.committed, allowEmpty: minZero }
         );
       }
       return;
@@ -1384,8 +1388,23 @@ export default class Game {
       return;
     }
 
+    this.finalizeSpellTrapActivation(card, owner, activationZone);
     this.renderer.log(`${card.name} effect activated.`);
     this.updateBoard();
+  }
+
+  finalizeSpellTrapActivation(card, owner, activationZone = null) {
+    if (!card || !owner) return;
+    const subtype = card.subtype || "";
+    const kind = card.cardKind || "";
+    const shouldSendToGY =
+      (kind === "spell" &&
+        (subtype === "normal" || subtype === "quick-play")) ||
+      (kind === "trap" && subtype === "normal");
+
+    if (shouldSendToGY) {
+      this.moveCard(card, owner, "graveyard", { fromZone: activationZone });
+    }
   }
 
   tryActivateMonsterEffect(card, selections = null, activationZone = "field") {
@@ -1551,18 +1570,20 @@ export default class Game {
     this.highlightTargetCandidates();
   }
 
-  startSpellTrapTargetSelection(card, options, activationZone = null) {
+  startSpellTrapTargetSelection(card, options, activationZone = null, extra = {}) {
     this.cancelTargetSelection();
     const usingFieldTargeting = this.canUseFieldTargeting(options);
+    const activationZoneResolved = activationZone || "spellTrap";
     this.targetSelection = {
       kind: "spellTrapEffect",
       card,
       options,
       selections: {},
       currentOption: 0,
-      activationZone,
+      activationZone: activationZoneResolved,
       usingFieldTargeting,
       autoAdvanceOnMax: !usingFieldTargeting,
+      preventCancel: !!extra.preventCancel,
     };
     this.renderer.log("Select target(s) for the continuous spell effect.");
     if (
@@ -2109,20 +2130,39 @@ export default class Game {
     }
 
     if (selection.kind === "spell") {
-      const result = this.effectEngine.activateFromHand(
-        selection.card,
-        this.player,
-        selection.handIndex,
-        selection.selections,
-        selection.activationZone
-      );
+      const activationZone =
+        selection.activationZone ||
+        (selection.card?.subtype === "field" ? "fieldSpell" : "spellTrap");
+      let result = null;
+      if (selection.activationZone) {
+        result = await this.effectEngine.activateSpellTrapEffect(
+          selection.card,
+          this.player,
+          selection.selections,
+          activationZone
+        );
+        this.handleSpellTrapActivationResult(
+          selection.card,
+          this.player,
+          result,
+          activationZone
+        );
+      } else {
+        result = this.effectEngine.activateFromHand(
+          selection.card,
+          this.player,
+          selection.handIndex,
+          selection.selections,
+          selection.activationZone
+        );
 
-      this.handleSpellActivationResult(
-        selection.card,
-        selection.handIndex,
-        result,
-        selection.activationZone
-      );
+        this.handleSpellActivationResult(
+          selection.card,
+          selection.handIndex,
+          result,
+          selection.activationZone
+        );
+      }
     } else if (selection.kind === "fieldSpell") {
       const owner = selection.owner;
       const result = this.effectEngine.activateFieldSpell(
@@ -2206,6 +2246,9 @@ export default class Game {
 
   cancelTargetSelection() {
     if (!this.targetSelection) return;
+    if (this.targetSelection.preventCancel) {
+      return;
+    }
     const selection = this.targetSelection;
     if (selection?.resolve) {
       selection.resolve([]);
@@ -3207,23 +3250,69 @@ export default class Game {
     this.updateBoard();
   }
 
-  tryActivateSpell(card, handIndex, selections = null, options = {}) {
+  async tryActivateSpell(card, handIndex, selections = null, options = {}) {
     if (this.targetSelection) return;
 
-    const result = this.effectEngine.activateFromHand(
-      card,
+    const commit = this.commitCardActivationFromHand(this.player, handIndex);
+    if (!commit || !commit.cardRef) return;
+
+    const { cardRef, activationZone } = commit;
+    const result = await this.effectEngine.activateSpellTrapEffect(
+      cardRef,
       this.player,
-      handIndex,
       selections,
-      options.activationZone
+      activationZone
     );
 
-    this.handleSpellActivationResult(
-      card,
-      handIndex,
-      result,
-      options.activationZone
-    );
+    this.handleSpellTrapActivationResult(cardRef, this.player, result, activationZone, {
+      committed: true,
+      zoneIndex: commit.zoneIndex,
+    });
+  }
+
+  /**
+   * Move a Spell/Trap from hand to the appropriate zone before resolving
+   * activation. Returns the committed card reference and activation zone.
+   */
+  commitCardActivationFromHand(player, handIndex) {
+    if (!player || handIndex == null) return null;
+    const card = player.hand?.[handIndex];
+    if (!card) return null;
+    if (card.cardKind !== "spell" && card.cardKind !== "trap") return null;
+
+    const isFieldSpell = card.subtype === "field";
+    const activationZone = isFieldSpell ? "fieldSpell" : "spellTrap";
+
+    // Check zone capacity
+    if (!isFieldSpell && player.spellTrap.length >= 5) {
+      this.renderer.log("Spell/Trap zone is full (max 5 cards).");
+      return null;
+    }
+
+    // Ensure face-up when placed
+    card.isFacedown = false;
+
+    // Move to destination
+    if (typeof this.moveCard === "function") {
+      this.moveCard(card, player, activationZone, { fromZone: "hand" });
+    } else {
+      // Fallback (should not happen)
+      player.hand.splice(handIndex, 1);
+      if (isFieldSpell) {
+        player.fieldSpell = card;
+      } else {
+        player.spellTrap.push(card);
+      }
+    }
+
+    // Determine zone index if in S/T array
+    const zoneIndex = activationZone === "spellTrap"
+      ? player.spellTrap.indexOf(card)
+      : null;
+
+    this.updateBoard();
+
+    return { cardRef: card, activationZone, zoneIndex };
   }
 
   showShadowHeartCathedralModal(validMonsters, maxAtk, counterCount, callback) {

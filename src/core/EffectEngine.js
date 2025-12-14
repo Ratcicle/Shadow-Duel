@@ -1563,14 +1563,22 @@ export default class EffectEngine {
       };
     }
 
-    const effect = (card.effects || []).find(
+    const placementOnly =
+      card.subtype === "field" || card.subtype === "continuous";
+    let effect = (card.effects || []).find(
       (e) =>
         e &&
         (e.timing === "ignition" ||
           (e.timing === "on_activate" && card.cardKind === "trap"))
     );
     if (!effect) {
-      return { success: false, reason: "No ignition effect defined." };
+      if (!placementOnly && card.cardKind === "spell") {
+        effect = (card.effects || []).find((e) => e && e.timing === "on_play");
+      } else {
+        return placementOnly
+          ? { success: true }
+          : { success: false, reason: "No ignition effect defined." };
+      }
     }
 
     // Check requireEmptyField condition

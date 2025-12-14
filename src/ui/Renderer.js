@@ -1104,7 +1104,7 @@ export default class Renderer {
     }
   }
 
-  showTargetSelection(options, onConfirm, onCancel) {
+  showTargetSelection(options, onConfirm, onCancel, config = {}) {
     const overlay = document.createElement("div");
     overlay.className = "modal target-modal";
 
@@ -1186,10 +1186,17 @@ export default class Renderer {
     actions.className = "target-actions";
     const confirmBtn = document.createElement("button");
     confirmBtn.textContent = "Confirm";
-    const cancelBtn = document.createElement("button");
-    cancelBtn.textContent = "Cancel";
+    const allowCancel = config.allowCancel !== false;
+    if (allowCancel) {
+      const cancelBtn = document.createElement("button");
+      cancelBtn.textContent = "Cancel";
+      actions.appendChild(cancelBtn);
+      cancelBtn.addEventListener("click", () => {
+        closeModal();
+        onCancel && onCancel();
+      });
+    }
     actions.appendChild(confirmBtn);
-    actions.appendChild(cancelBtn);
     content.appendChild(actions);
 
     overlay.appendChild(content);
@@ -1204,19 +1211,25 @@ export default class Renderer {
       onCancel && onCancel();
     });
 
-    cancelBtn.addEventListener("click", () => {
-      closeModal();
-      onCancel && onCancel();
-    });
-
     confirmBtn.addEventListener("click", () => {
       // validate
       for (const opt of options) {
         const selected = selectionState[opt.id] || [];
-        if (selected.length < opt.min || selected.length > opt.max) {
+        const minSel = opt.min ?? opt.count?.min ?? 0;
+        const maxSel = opt.max ?? opt.count?.max ?? minSel;
+        const allowEmpty = config.allowEmpty === true;
+        if (!allowEmpty && selected.length < minSel) {
           alert(
             `Select ${
-              opt.min === opt.max ? opt.min : `${opt.min}-${opt.max}`
+              minSel === maxSel ? minSel : `${minSel}-${maxSel}`
+            } target(s) for ${opt.id}`
+          );
+          return;
+        }
+        if (selected.length > maxSel) {
+          alert(
+            `Select ${
+              minSel === maxSel ? minSel : `${minSel}-${maxSel}`
             } target(s) for ${opt.id}`
           );
           return;
