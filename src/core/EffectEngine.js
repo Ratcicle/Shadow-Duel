@@ -2167,10 +2167,6 @@ export default class EffectEngine {
             executed =
               this.applyShadowHeartRageScaleBuff(action, ctx) || executed;
             break;
-          case "grant_second_attack_this_turn":
-            executed =
-              this.applyGrantSecondAttackThisTurn(action, ctx) || executed;
-            break;
           case "shadow_heart_shield_upkeep":
             executed =
               this.applyShadowHeartShieldUpkeep(action, ctx) || executed;
@@ -2210,22 +2206,6 @@ export default class EffectEngine {
             executed =
               this.applyShadowHeartDeathWyrmSpecialSummon(action, ctx) ||
               executed;
-            break;
-          case "luminarch_radiant_lancer_atk_boost":
-            executed =
-              this.applyLuminarchRadiantLancerAtkBoost(action, ctx) || executed;
-            break;
-          case "luminarch_radiant_lancer_reset_atk":
-            executed =
-              this.applyLuminarchRadiantLancerResetAtk(action, ctx) || executed;
-            break;
-          case "luminarch_moonlit_blessing":
-            executed =
-              (await this.applyLuminarchMoonlitBlessing(
-                action,
-                ctx,
-                targets
-              )) || executed;
             break;
           case "luminarch_sacred_judgment_revive":
             executed =
@@ -3632,18 +3612,6 @@ export default class EffectEngine {
     return true;
   }
 
-  applyGrantSecondAttackThisTurn(action, ctx) {
-    const card = ctx?.source;
-    if (!card || card.cardKind !== "monster") return false;
-
-    const owner = this.getOwnerByCard(card);
-    if (!owner || !owner.field.includes(card) || card.isFacedown) return false;
-
-    card.canMakeSecondAttackThisTurn = true;
-    card.secondAttackUsedThisTurn = false;
-    return true;
-  }
-
   showSickleSelectionModal(candidates, maxSelect, onConfirm, onCancel) {
     if (
       this.game?.renderer &&
@@ -4042,174 +4010,6 @@ export default class EffectEngine {
     if (this.game && typeof this.game.updateBoard === "function") {
       this.game.updateBoard();
     }
-    return true;
-  }
-
-  applyLuminarchRadiantLancerAtkBoost(action, ctx) {
-    const card = ctx?.source;
-    const player = ctx?.player;
-    if (!card || !player || card.cardKind !== "monster") return false;
-    if (!player.field || !player.field.includes(card)) return false;
-    const amount = action.amount ?? 0;
-    if (amount <= 0) return false;
-    const sourceName = card.name;
-    const current = card.permanentBuffsBySource?.[sourceName] ?? 0;
-    const nextTotal = current + amount;
-    return this.addNamedPermanentAtkBuff(card, sourceName, nextTotal);
-  }
-
-  applyLuminarchRadiantLancerResetAtk(action, ctx) {
-    const card = ctx?.source;
-    if (!card) return false;
-    return this.removeNamedPermanentAtkBuff(card, card.name);
-  }
-
-  async applyLuminarchMoonlitBlessing(action, ctx, targets) {
-    const targetCards = targets[action.targetRef] || [];
-    if (targetCards.length === 0) return false;
-
-    const card = targetCards[0];
-    const player = ctx?.player;
-    if (!player || !card) return false;
-
-    // Move card from GY to hand
-    const gy = player.graveyard || [];
-    const idx = gy.indexOf(card);
-    if (idx === -1) {
-      console.warn("Target card not found in graveyard:", card.name);
-      return false;
-    }
-
-    gy.splice(idx, 1);
-    player.hand = player.hand || [];
-    player.hand.push(card);
-
-    console.log(`Added ${card.name} from Graveyard to hand.`);
-
-    // Check if player controls Sanctum of the Luminarch Citadel
-    const hasCitadel =
-      player.fieldSpell &&
-      player.fieldSpell.name === "Sanctum of the Luminarch Citadel";
-
-    if (!hasCitadel) {
-      if (this.game && typeof this.game.updateBoard === "function") {
-        this.game.updateBoard();
-      }
-      return true;
-    }
-
-    // Offer Special Summon for human player
-    if (player === this.game?.player) {
-      const wantsToSummon = window.confirm(
-        `Você controla "Sanctum of the Luminarch Citadel". Deseja invocar por invocação especial "${card.name}" da sua mão?`
-      );
-
-      if (!wantsToSummon) {
-        if (this.game && typeof this.game.updateBoard === "function") {
-          this.game.updateBoard();
-        }
-        return true;
-      }
-
-      // Check field space
-      if (player.field.length >= 5) {
-        console.log("No space to Special Summon.");
-        if (this.game && typeof this.game.updateBoard === "function") {
-          this.game.updateBoard();
-        }
-        return true;
-      }
-
-      // Remove from hand
-      const handIdx = player.hand.indexOf(card);
-      if (handIdx === -1) {
-        console.warn("Card disappeared from hand:", card.name);
-        if (this.game && typeof this.game.updateBoard === "function") {
-          this.game.updateBoard();
-        }
-        return true;
-      }
-
-      // Get position choice and summon
-      const finishSummon = (position) => {
-        const pos = position || "attack";
-        card.position = pos;
-        card.isFacedown = false;
-        card.hasAttacked = false;
-        card.cannotAttackThisTurn = false;
-
-        if (this.game && typeof this.game.moveCard === "function") {
-          this.game.moveCard(card, player, "field", {
-            fromZone: "hand",
-            position: pos,
-            isFacedown: false,
-            resetAttackFlags: true,
-          });
-        } else {
-          player.hand.splice(handIdx, 1);
-          player.field.push(card);
-        }
-
-        console.log(
-          `Special Summoned ${card.name} in ${pos} position via Moonlit Blessing.`
-        );
-
-        if (this.game && typeof this.game.updateBoard === "function") {
-          this.game.updateBoard();
-        }
-      };
-
-      if (
-        this.game &&
-        typeof this.game.chooseSpecialSummonPosition === "function"
-      ) {
-        const positionChoice = this.game.chooseSpecialSummonPosition(
-          player,
-          card
-        );
-        if (positionChoice && typeof positionChoice.then === "function") {
-          await positionChoice.then((pos) => finishSummon(pos));
-        } else {
-          finishSummon(positionChoice);
-        }
-      } else {
-        finishSummon("attack");
-      }
-
-      return true;
-    }
-
-    // Bot always summons if possible
-    if (player.field.length >= 5) {
-      if (this.game && typeof this.game.updateBoard === "function") {
-        this.game.updateBoard();
-      }
-      return true;
-    }
-
-    const handIdx = player.hand.indexOf(card);
-    if (handIdx === -1) {
-      if (this.game && typeof this.game.updateBoard === "function") {
-        this.game.updateBoard();
-      }
-      return true;
-    }
-
-    player.hand.splice(handIdx, 1);
-    card.position = "attack";
-    card.isFacedown = false;
-    card.hasAttacked = false;
-    card.cannotAttackThisTurn = false;
-    player.field.push(card);
-
-    console.log(
-      `Bot Special Summoned ${card.name} in attack position via Moonlit Blessing.`
-    );
-
-    if (this.game && typeof this.game.updateBoard === "function") {
-      this.game.updateBoard();
-    }
-
     return true;
   }
 
