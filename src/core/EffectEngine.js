@@ -315,7 +315,7 @@ export default class EffectEngine {
             sourceCard,
             player,
             card,
-            payload.sourceZone
+            sourceZone
           );
           if (!conditionMet) continue;
         }
@@ -404,12 +404,11 @@ export default class EffectEngine {
     if (!condition) return true;
 
     if (condition.requires === "self_in_hand") {
-      // The effect must trigger on the SAME card that was summoned from hand
-      if (sourceCard !== summonedCard) {
+      // Effect card must currently be in the player's hand
+      if (sourceZone !== "hand") {
         return false;
       }
-      // Check if the card was summoned FROM the hand
-      if (sourceZone !== "hand") {
+      if (!player?.hand?.includes(sourceCard)) {
         return false;
       }
     }

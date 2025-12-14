@@ -1223,6 +1223,53 @@ export default class Renderer {
     });
   }
 
+  showFieldTargetingControls(onConfirm, onCancel) {
+    this.hideFieldTargetingControls();
+
+    const bar = document.createElement("div");
+    bar.className = "field-targeting-controls";
+    bar.style.position = "fixed";
+    bar.style.left = "50%";
+    bar.style.bottom = "24px";
+    bar.style.transform = "translateX(-50%)";
+    bar.style.display = "flex";
+    bar.style.gap = "12px";
+    bar.style.padding = "12px 16px";
+    bar.style.background = "rgba(16, 18, 28, 0.92)";
+    bar.style.borderRadius = "12px";
+    bar.style.boxShadow = "0 8px 24px rgba(0,0,0,0.35)";
+    bar.style.zIndex = "3000";
+    bar.style.alignItems = "center";
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.textContent = "Cancel";
+    cancelBtn.className = "secondary";
+    cancelBtn.style.minWidth = "96px";
+    cancelBtn.onclick = () => {
+      if (typeof onCancel === "function") onCancel();
+      this.hideFieldTargetingControls();
+    };
+
+    const confirmBtn = document.createElement("button");
+    confirmBtn.textContent = "Confirm";
+    confirmBtn.className = "primary";
+    confirmBtn.style.minWidth = "110px";
+    confirmBtn.onclick = () => {
+      if (typeof onConfirm === "function") onConfirm();
+    };
+
+    bar.appendChild(cancelBtn);
+    bar.appendChild(confirmBtn);
+    document.body.appendChild(bar);
+  }
+
+  hideFieldTargetingControls() {
+    const existing = document.querySelector(".field-targeting-controls");
+    if (existing) {
+      existing.remove();
+    }
+  }
+
   showDestructionNegationPrompt(cardName, costDescription, onDecision) {
     const existing = document.querySelector(".destruction-negation-modal");
     if (existing) existing.remove();

@@ -596,7 +596,7 @@ export default class Game {
 
         if (
           this.targetSelection &&
-          this.handleTargetSelectionClick("player", index, cardEl)
+          this.handleTargetSelectionClick("player", index, cardEl, "field")
         ) {
           return;
         }
@@ -760,6 +760,19 @@ export default class Game {
         console.log(`[Game] Spell/Trap zone clicked! Target:`, e.target);
 
         if (this.targetSelection) {
+          const cardEl = e.target.closest(".card");
+          if (cardEl) {
+            const idx = parseInt(cardEl.dataset.index);
+            if (!Number.isNaN(idx)) {
+              const handled = this.handleTargetSelectionClick(
+                "player",
+                idx,
+                cardEl,
+                "spellTrap"
+              );
+              if (handled) return;
+            }
+          }
           console.log(`[Game] Returning: targetSelection active`);
           return;
         }
@@ -838,10 +851,24 @@ export default class Game {
       const index = parseInt(cardEl.dataset.index);
       if (Number.isNaN(index)) return;
 
-      this.handleTargetSelectionClick("bot", index, cardEl);
+      this.handleTargetSelectionClick("bot", index, cardEl, "field");
     });
 
     // Direcionar ataque direto: clicar na mão do oponente quando houver alvo "Direct Attack"
+    const botSpellTrapEl = document.getElementById("bot-spelltrap");
+    if (botSpellTrapEl) {
+      botSpellTrapEl.addEventListener("click", (e) => {
+        if (!this.targetSelection) return;
+        const cardEl = e.target.closest(".card");
+        if (!cardEl) return;
+
+        const index = parseInt(cardEl.dataset.index);
+        if (Number.isNaN(index)) return;
+
+        this.handleTargetSelectionClick("bot", index, cardEl, "spellTrap");
+      });
+    }
+
     const botHandEl = document.getElementById("bot-hand");
     if (botHandEl) {
       botHandEl.addEventListener("click", (e) => {
@@ -871,7 +898,7 @@ export default class Game {
         const cardEl = e.target.closest(".card");
         if (!cardEl) return;
         if (this.targetSelection) {
-          this.handleTargetSelectionClick("player", 0, cardEl);
+          this.handleTargetSelectionClick("player", 0, cardEl, "fieldSpell");
           return;
         }
         const card = this.player.fieldSpell;
@@ -887,7 +914,7 @@ export default class Game {
         if (!this.targetSelection) return;
         const cardEl = e.target.closest(".card");
         if (!cardEl) return;
-        this.handleTargetSelectionClick("bot", 0, cardEl);
+        this.handleTargetSelectionClick("bot", 0, cardEl, "fieldSpell");
       });
     }
     this.renderer.bindCardHover((owner, location, index) => {
@@ -1466,6 +1493,7 @@ export default class Game {
 
   startMonsterEffectTargetSelection(card, options, activationZone = null) {
     this.cancelTargetSelection();
+    const usingFieldTargeting = this.canUseFieldTargeting(options);
     this.targetSelection = {
       kind: "monsterEffect",
       card,
@@ -1473,13 +1501,26 @@ export default class Game {
       selections: {},
       currentOption: 0,
       activationZone,
+      usingFieldTargeting,
+      autoAdvanceOnMax: !usingFieldTargeting,
     };
     console.log("[Game] Started monster effect target selection");
+    if (
+      usingFieldTargeting &&
+      this.renderer &&
+      typeof this.renderer.showFieldTargetingControls === "function"
+    ) {
+      this.renderer.showFieldTargetingControls(
+        () => this.advanceTargetSelection(),
+        () => this.cancelTargetSelection()
+      );
+    }
     this.highlightTargetCandidates();
   }
 
   startGraveyardEffectTargetSelection(card, owner, options) {
     this.cancelTargetSelection();
+    const usingFieldTargeting = this.canUseFieldTargeting(options);
     this.targetSelection = {
       kind: "graveyardEffect",
       card,
@@ -1487,13 +1528,26 @@ export default class Game {
       options,
       selections: {},
       currentOption: 0,
+      usingFieldTargeting,
+      autoAdvanceOnMax: !usingFieldTargeting,
     };
     this.renderer.log("Select target(s) for the graveyard effect.");
+    if (
+      usingFieldTargeting &&
+      this.renderer &&
+      typeof this.renderer.showFieldTargetingControls === "function"
+    ) {
+      this.renderer.showFieldTargetingControls(
+        () => this.advanceTargetSelection(),
+        () => this.cancelTargetSelection()
+      );
+    }
     this.highlightTargetCandidates();
   }
 
   startSpellTrapTargetSelection(card, options, activationZone = null) {
     this.cancelTargetSelection();
+    const usingFieldTargeting = this.canUseFieldTargeting(options);
     this.targetSelection = {
       kind: "spellTrapEffect",
       card,
@@ -1501,8 +1555,20 @@ export default class Game {
       selections: {},
       currentOption: 0,
       activationZone,
+      usingFieldTargeting,
+      autoAdvanceOnMax: !usingFieldTargeting,
     };
     this.renderer.log("Select target(s) for the continuous spell effect.");
+    if (
+      usingFieldTargeting &&
+      this.renderer &&
+      typeof this.renderer.showFieldTargetingControls === "function"
+    ) {
+      this.renderer.showFieldTargetingControls(
+        () => this.advanceTargetSelection(),
+        () => this.cancelTargetSelection()
+      );
+    }
     this.highlightTargetCandidates();
   }
 
@@ -1547,13 +1613,14 @@ export default class Game {
 
   canUseFieldTargeting(options) {
     if (!options || options.length === 0) return false;
+    const allowedZones = new Set(["field", "spellTrap", "fieldSpell"]);
     return options.every(
       (opt) =>
-        opt.min === opt.max &&
+        Array.isArray(opt.candidates) &&
         opt.candidates.length > 0 &&
         opt.candidates.every(
           (cand) =>
-            (cand.zone === "field" || cand.zone === "fieldSpell") &&
+            allowedZones.has(cand.zone) &&
             (cand.controller === "player" || cand.controller === "bot")
         )
     );
@@ -1567,6 +1634,7 @@ export default class Game {
 
   startTargetSelection(card, handIndex, options, activationZone = null) {
     this.cancelTargetSelection();
+    const usingFieldTargeting = this.canUseFieldTargeting(options);
     this.targetSelection = {
       kind: "spell",
       card,
@@ -1575,13 +1643,26 @@ export default class Game {
       selections: {},
       currentOption: 0,
       activationZone,
+      usingFieldTargeting,
+      autoAdvanceOnMax: !usingFieldTargeting,
     };
-    this.renderer.log("Select target(s) by clicking the highlighted monsters.");
+    if (
+      usingFieldTargeting &&
+      this.renderer &&
+      typeof this.renderer.showFieldTargetingControls === "function"
+    ) {
+      this.renderer.showFieldTargetingControls(
+        () => this.advanceTargetSelection(),
+        () => this.cancelTargetSelection()
+      );
+    }
+    this.renderer.log("Select target(s) by clicking the highlighted cards.");
     this.highlightTargetCandidates();
   }
 
   startFieldSpellTargetSelection(card, owner, options) {
     this.cancelTargetSelection();
+    const usingFieldTargeting = this.canUseFieldTargeting(options);
     this.targetSelection = {
       kind: "fieldSpell",
       card,
@@ -1589,7 +1670,19 @@ export default class Game {
       options,
       selections: {},
       currentOption: 0,
+      usingFieldTargeting,
+      autoAdvanceOnMax: !usingFieldTargeting,
     };
+    if (
+      usingFieldTargeting &&
+      this.renderer &&
+      typeof this.renderer.showFieldTargetingControls === "function"
+    ) {
+      this.renderer.showFieldTargetingControls(
+        () => this.advanceTargetSelection(),
+        () => this.cancelTargetSelection()
+      );
+    }
     this.renderer.log("Select target(s) for the field spell effect.");
     this.highlightTargetCandidates();
   }
@@ -1597,6 +1690,7 @@ export default class Game {
   startTriggeredTargetSelection(card, effect, ctx, options) {
     if (this.canUseFieldTargeting(options)) {
       this.cancelTargetSelection();
+      const usingFieldTargeting = true;
       this.targetSelection = {
         kind: "triggered",
         card,
@@ -1605,10 +1699,21 @@ export default class Game {
         options,
         selections: {},
         currentOption: 0,
+        usingFieldTargeting,
+        autoAdvanceOnMax: false,
       };
       this.renderer.log(
-        "Select target(s) for triggered effect by clicking the highlighted monsters."
+        "Select target(s) for triggered effect by clicking the highlighted cards."
       );
+      if (
+        this.renderer &&
+        typeof this.renderer.showFieldTargetingControls === "function"
+      ) {
+        this.renderer.showFieldTargetingControls(
+          () => this.advanceTargetSelection(),
+          () => this.cancelTargetSelection()
+        );
+      }
       this.highlightTargetCandidates();
     } else {
       this.renderer.showTargetSelection(
@@ -1753,6 +1858,21 @@ export default class Game {
         currentOption: 0,
         resolve,
       };
+      const usingFieldTargeting = this.canUseFieldTargeting(
+        this.targetSelection.options
+      );
+      this.targetSelection.usingFieldTargeting = usingFieldTargeting;
+      this.targetSelection.autoAdvanceOnMax = !usingFieldTargeting;
+      if (
+        usingFieldTargeting &&
+        this.renderer &&
+        typeof this.renderer.showFieldTargetingControls === "function"
+      ) {
+        this.renderer.showFieldTargetingControls(
+          () => this.advanceTargetSelection(),
+          () => this.cancelTargetSelection()
+        );
+      }
       this.renderer.log(
         config.message || "Select card(s) by clicking the highlighted targets."
       );
@@ -1791,6 +1911,19 @@ export default class Game {
         const indexSelector = ` .card[data-index="${cand.zoneIndex}"]`;
         targetEl = document.querySelector(`${fieldSelector}${indexSelector}`);
         console.log("[Game] Highlighting field card:", {
+          controller: cand.controller,
+          index: cand.zoneIndex,
+          name: cand.name,
+          found: !!targetEl,
+        });
+      } else if (cand.zone === "spellTrap") {
+        const stSelector =
+          cand.controller === "player"
+            ? "#player-spelltrap"
+            : "#bot-spelltrap";
+        const indexSelector = ` .card[data-index="${cand.zoneIndex}"]`;
+        targetEl = document.querySelector(`${stSelector}${indexSelector}`);
+        console.log("[Game] Highlighting spell/trap card:", {
           controller: cand.controller,
           index: cand.zoneIndex,
           name: cand.name,
@@ -1839,7 +1972,7 @@ export default class Game {
     }
   }
 
-  handleTargetSelectionClick(ownerId, cardIndex, cardEl) {
+  handleTargetSelectionClick(ownerId, cardIndex, cardEl, location = null) {
     if (!this.targetSelection) return false;
 
     console.log("[Game] Target selection click:", {
@@ -1858,9 +1991,12 @@ export default class Game {
 
     const ownerPlayer = ownerId === "player" ? this.player : this.bot;
     let card = null;
+    const zoneHint = location || option.zone || "field";
 
-    if (option.zone === "fieldSpell") {
+    if (zoneHint === "fieldSpell") {
       card = ownerPlayer.fieldSpell;
+    } else if (zoneHint === "spellTrap") {
+      card = ownerPlayer.spellTrap[cardIndex];
     } else {
       card = ownerPlayer.field[cardIndex];
     }
@@ -1921,7 +2057,10 @@ export default class Game {
     }
     this.targetSelection.selections[option.id] = selections;
 
-    if (max > 0 && selections.length >= max) {
+    const shouldAutoAdvance =
+      this.targetSelection.autoAdvanceOnMax !== false;
+
+    if (shouldAutoAdvance && max > 0 && selections.length >= max) {
       console.log("[Game] Max reached, advancing selection");
       this.advanceTargetSelection();
     }
@@ -1956,6 +2095,12 @@ export default class Game {
     this.targetSelection = null;
     this.graveyardSelection = null;
     this.clearTargetHighlights();
+    if (
+      this.renderer &&
+      typeof this.renderer.hideFieldTargetingControls === "function"
+    ) {
+      this.renderer.hideFieldTargetingControls();
+    }
 
     if (selection.kind === "spell") {
       const result = this.effectEngine.activateFromHand(
@@ -2060,6 +2205,12 @@ export default class Game {
       selection.resolve([]);
     }
     this.clearTargetHighlights();
+    if (
+      this.renderer &&
+      typeof this.renderer.hideFieldTargetingControls === "function"
+    ) {
+      this.renderer.hideFieldTargetingControls();
+    }
     this.targetSelection = null;
   }
   openGraveyardModal(player, options = {}) {
