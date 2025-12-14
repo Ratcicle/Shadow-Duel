@@ -1097,9 +1097,23 @@ export default class Game {
     }
 
     // Player confirmation
-    const costType = costFilters.archetype || costFilters.cardKind || "card";
+    let costType = "card";
+    let costTypePlural = "cards";
+    
+    if (costFilters.archetype) {
+      costType = costFilters.cardKind === "spell" ? `"${costFilters.archetype}" spell` :
+                 costFilters.cardKind === "trap" ? `"${costFilters.archetype}" trap` :
+                 `"${costFilters.archetype}" monster`;
+      costTypePlural = costFilters.cardKind === "spell" ? `"${costFilters.archetype}" spells` :
+                       costFilters.cardKind === "trap" ? `"${costFilters.archetype}" traps` :
+                       `"${costFilters.archetype}" monsters`;
+    } else if (costFilters.cardKind) {
+      costType = costFilters.cardKind;
+      costTypePlural = costFilters.cardKind + "s";
+    }
+    
     const prompt = replacement.prompt || 
-      `Send ${costCount} "${costType}" ${costCount > 1 ? 'cards' : 'card'} to the GY to save ${card.name}?`;
+      `Send ${costCount} ${costCount > 1 ? costTypePlural : costType} to the GY to save ${card.name}?`;
     
     const wantsToReplace = window.confirm(prompt);
     if (!wantsToReplace) {

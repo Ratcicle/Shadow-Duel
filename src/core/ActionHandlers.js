@@ -1601,18 +1601,21 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
   const defBoost = action.defBoost || 0;
   const permanent = action.permanent || false;
 
-  let buffed = false;
+  let anyBuffed = false;
   const affectedCards = [];
 
   for (const card of targetCards) {
     if (!card || card.cardKind !== "monster") continue;
+
+    let cardBuffed = false;
 
     if (atkBoost !== 0) {
       if (!permanent) {
         card.tempAtkBoost = (card.tempAtkBoost || 0) + atkBoost;
       }
       card.atk = (card.atk || 0) + atkBoost;
-      buffed = true;
+      cardBuffed = true;
+      anyBuffed = true;
     }
 
     if (defBoost !== 0) {
@@ -1620,15 +1623,16 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
         card.tempDefBoost = (card.tempDefBoost || 0) + defBoost;
       }
       card.def = (card.def || 0) + defBoost;
-      buffed = true;
+      cardBuffed = true;
+      anyBuffed = true;
     }
 
-    if (buffed) {
+    if (cardBuffed) {
       affectedCards.push(card.name);
     }
   }
 
-  if (buffed && affectedCards.length > 0) {
+  if (anyBuffed && affectedCards.length > 0) {
     const boosts = [];
     if (atkBoost !== 0) boosts.push(`${atkBoost > 0 ? "+" : ""}${atkBoost} ATK`);
     if (defBoost !== 0) boosts.push(`${defBoost > 0 ? "+" : ""}${defBoost} DEF`);
@@ -1639,7 +1643,7 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
     game.updateBoard();
   }
 
-  return buffed;
+  return anyBuffed;
 }
 
 /**
