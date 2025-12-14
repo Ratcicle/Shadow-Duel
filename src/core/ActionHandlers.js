@@ -11,6 +11,16 @@
  * - New cards should work without modifying this file
  */
 
+// Map technical status names to user-friendly descriptions
+const STATUS_DISPLAY_NAMES = {
+  tempBattleIndestructible: "battle indestructibility",
+  battleDamageHealsControllerThisTurn: "battle damage healing",
+  battleIndestructible: "permanent battle indestructibility",
+  piercing: "piercing damage",
+  canAttackDirectlyThisTurn: "direct attack ability",
+  effectsNegated: "effect negation",
+};
+
 export class ActionHandlerRegistry {
   constructor() {
     this.handlers = new Map();
@@ -1707,17 +1717,7 @@ export async function handleAddStatus(action, ctx, targets, engine) {
   }
 
   if (modified && affectedCards.length > 0) {
-    // Map technical status names to user-friendly descriptions
-    const statusDisplayNames = {
-      tempBattleIndestructible: "battle indestructibility",
-      battleDamageHealsControllerThisTurn: "battle damage healing",
-      battleIndestructible: "permanent battle indestructibility",
-      piercing: "piercing damage",
-      canAttackDirectlyThisTurn: "direct attack ability",
-      effectsNegated: "effect negation",
-    };
-    
-    const displayStatus = statusDisplayNames[status] || status;
+    const displayStatus = STATUS_DISPLAY_NAMES[status] || status;
     const cardList = affectedCards.join(", ");
     const statusText = remove ? `lost ${displayStatus}` : `gained ${displayStatus}`;
     game.renderer?.log(`${cardList} ${statusText}.`);

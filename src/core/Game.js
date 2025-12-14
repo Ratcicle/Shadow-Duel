@@ -3,6 +3,24 @@ import Bot from "./Bot.js";
 import Renderer from "../ui/Renderer.js";
 import EffectEngine from "./EffectEngine.js";
 
+// Helper to construct user-friendly cost type descriptions
+function getCostTypeDescription(costFilters, count) {
+  if (costFilters.archetype) {
+    const baseType = costFilters.cardKind || "monster";
+    const singular = `"${costFilters.archetype}" ${baseType}`;
+    const plural = `"${costFilters.archetype}" ${baseType}s`;
+    return count > 1 ? plural : singular;
+  }
+  
+  if (costFilters.cardKind) {
+    const singular = costFilters.cardKind;
+    const plural = costFilters.cardKind + "s";
+    return count > 1 ? plural : singular;
+  }
+  
+  return count > 1 ? "cards" : "card";
+}
+
 export default class Game {
   constructor() {
     this.player = new Player("player", "You");
@@ -1097,23 +1115,9 @@ export default class Game {
     }
 
     // Player confirmation
-    let costType = "card";
-    let costTypePlural = "cards";
-    
-    if (costFilters.archetype) {
-      costType = costFilters.cardKind === "spell" ? `"${costFilters.archetype}" spell` :
-                 costFilters.cardKind === "trap" ? `"${costFilters.archetype}" trap` :
-                 `"${costFilters.archetype}" monster`;
-      costTypePlural = costFilters.cardKind === "spell" ? `"${costFilters.archetype}" spells` :
-                       costFilters.cardKind === "trap" ? `"${costFilters.archetype}" traps` :
-                       `"${costFilters.archetype}" monsters`;
-    } else if (costFilters.cardKind) {
-      costType = costFilters.cardKind;
-      costTypePlural = costFilters.cardKind + "s";
-    }
-    
+    const costDescription = getCostTypeDescription(costFilters, costCount);
     const prompt = replacement.prompt || 
-      `Send ${costCount} ${costCount > 1 ? costTypePlural : costType} to the GY to save ${card.name}?`;
+      `Send ${costCount} ${costDescription} to the GY to save ${card.name}?`;
     
     const wantsToReplace = window.confirm(prompt);
     if (!wantsToReplace) {
