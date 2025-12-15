@@ -325,7 +325,7 @@ export const cardDatabase = [
     cardKind: "spell",
     subtype: "normal",
     description:
-      "Target 1 monster in your Graveyard; Special Summon it to your field.",
+      "Target 1 monster in any Graveyard; Special Summon it to your field.",
     image: "assets/Monster Reborn.png",
     effects: [
       {
