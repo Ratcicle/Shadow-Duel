@@ -1798,7 +1798,7 @@ export default class EffectEngine {
 
     // Card-specific activation requirements
     // Note: Future improvement - move to generic activation cost/requirement system
-    if (card.name === "Shadow-Heart Infusion" || card.id === 37) {
+    if (card.name === "Shadow-Heart Infusion") {
       const handCount = (player.hand && player.hand.length) || 0;
       if (handCount < 2) {
         return { ok: false, reason: "Need at least 2 cards in hand." };

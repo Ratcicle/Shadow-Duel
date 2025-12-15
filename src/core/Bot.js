@@ -65,39 +65,39 @@ export default class Bot extends Player {
     return [
       // === MONSTROS ===
       // Extenders e Searchers
-      34,
-      34,
-      34, // Shadow-Heart Imp (extender - 3x)
-      35, // Shadow-Heart Gecko (draw engine - 1x)
-      11,
-      11, // Shadow-Heart Specter (recursão GY - 2x)
-      36,
-      36, // Shadow-Heart Coward (discard value - 2x)
-      3,
-      3, // Shadow-Heart Observer (special summon - 2x)
-      7,
-      7, // Shadow-Heart Abyssal Eel (utility - 2x)
-      66, // Shadow-Heart Leviathan (burn beater - 1x)
-      45, // Shadow-Heart Death Wyrm (hand trap boss - 1x)
+      60,
+      60,
+      60, // Shadow-Heart Imp (extender - 3x)
+      61, // Shadow-Heart Gecko (draw engine - 1x)
+      53,
+      53, // Shadow-Heart Specter (recursão GY - 2x)
+      62,
+      62, // Shadow-Heart Coward (discard value - 2x)
+      51,
+      51, // Shadow-Heart Observer (special summon - 2x)
+      52,
+      52, // Shadow-Heart Abyssal Eel (utility - 2x)
+      70, // Shadow-Heart Leviathan (burn beater - 1x)
+      69, // Shadow-Heart Death Wyrm (hand trap boss - 1x)
       // Bosses
-      38,
-      38, // Shadow-Heart Scale Dragon (boss 3000 ATK - 2x)
-      31, // Shadow-Heart Demon Arctroth (boss com remoção - 1x)
-      41,
-      41, // Shadow-Heart Griffin (sem tributo - 2x)
+      64,
+      64, // Shadow-Heart Scale Dragon (boss 3000 ATK - 2x)
+      57, // Shadow-Heart Demon Arctroth (boss com remoção - 1x)
+      67,
+      67, // Shadow-Heart Griffin (sem tributo - 2x)
       // === SPELLS ===
-      100,
-      100, // Polymerization (fusão - 2x)
-      42,
-      42, // Darkness Valley (field spell - 2x)
-      37,
-      37, // Shadow-Heart Infusion (revive - 2x)
-      33,
-      33, // Shadow-Heart Covenant (searcher - 2x)
-      32, // Shadow-Heart Battle Hymn (buff - 1x)
-      39, // Shadow-Heart Rage (OTK enabler - 1x)
-      15, // Shadow-Heart Purge (remoção - 1x)
-      40, // Shadow-Heart Shield (proteção - 1x)
+      13,
+      13, // Polymerization (fusão - 2x)
+      68,
+      68, // Darkness Valley (field spell - 2x)
+      63,
+      63, // Shadow-Heart Infusion (revive - 2x)
+      59,
+      59, // Shadow-Heart Covenant (searcher - 2x)
+      58, // Shadow-Heart Battle Hymn (buff - 1x)
+      65, // Shadow-Heart Rage (OTK enabler - 1x)
+      54, // Shadow-Heart Purge (remoção - 1x)
+      66, // Shadow-Heart Shield (proteção - 1x)
     ];
   }
 
@@ -105,37 +105,37 @@ export default class Bot extends Player {
   getLuminarchDeck() {
     return [
       // Monstros principais (nível baixo - searchers/utility)
-      47,
-      47,
-      47, // Luminarch Valiant – Knight of the Dawn (searcher)
-      49,
-      49,
-      49, // Luminarch Aegisbearer (taunt/tank)
-      56,
-      56, // Luminarch Sanctified Arbiter (busca Convocation)
-      52,
-      52, // Luminarch Magic Sickle (baixo nível)
-      63,
-      63, // Luminarch Enchanted Halberd
+      101,
+      101,
+      101, // Luminarch Valiant – Knight of the Dawn (searcher)
+      103,
+      103,
+      103, // Luminarch Aegisbearer (taunt/tank)
+      110,
+      110, // Luminarch Sanctified Arbiter (busca Convocation)
+      106,
+      106, // Luminarch Magic Sickle (baixo nível)
+      117,
+      117, // Luminarch Enchanted Halberd
       // Monstros médios/altos (bosses)
-      50,
-      50, // Luminarch Moonblade Captain (revive + double attack)
-      51,
-      51, // Luminarch Celestial Marshal (boss lv7)
-      54, // Luminarch Radiant Lancer (boss lv8)
-      55, // Luminarch Aurora Seraph (boss lv8)
-      53, // Luminarch Sanctum Protector (lv7 defesa)
+      104,
+      104, // Luminarch Moonblade Captain (revive + double attack)
+      105,
+      105, // Luminarch Celestial Marshal (boss lv7)
+      108, // Luminarch Radiant Lancer (boss lv8)
+      109, // Luminarch Aurora Seraph (boss lv8)
+      107, // Luminarch Sanctum Protector (lv7 defesa)
       // Magias
-      57,
-      57, // Luminarch Knights Convocation
-      58,
-      58, // Sanctum of the Luminarch Citadel (field spell)
-      64,
-      64, // Luminarch Moonlit Blessing (recovery)
-      48,
-      48, // Luminarch Holy Shield (proteção)
-      61, // Luminarch Crescent Shield (equip)
-      65, // Luminarch Sacred Judgment (comeback)
+      111,
+      111, // Luminarch Knights Convocation
+      112,
+      112, // Sanctum of the Luminarch Citadel (field spell)
+      118,
+      118, // Luminarch Moonlit Blessing (recovery)
+      102,
+      102, // Luminarch Holy Shield (proteção)
+      115, // Luminarch Crescent Shield (equip)
+      119, // Luminarch Sacred Judgment (comeback)
     ];
   }
 
@@ -151,7 +151,7 @@ export default class Bot extends Player {
   // Extra Deck Shadow-Heart
   getShadowHeartExtraDeck() {
     return [
-      101, // Shadow-Heart Demon Dragon (fusão principal)
+      74, // Shadow-Heart Demon Dragon (fusão principal)
     ];
   }
 
