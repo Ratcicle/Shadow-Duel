@@ -44,7 +44,8 @@ export default class Game {
     this.lastAttackNegated = false;
     this.pendingSpecialSummon = null; // Track pending special summon (e.g., Leviathan from Eel)
     this.isResolvingEffect = false; // Lock player actions while resolving an effect
-    this.trapPromptInProgress = false; // Evita múltiplos modais de armadilha simultâneos
+    this.trapPromptInProgress = false; // Avoid multiple trap prompts simultaneously
+    this.testModeEnabled = false;
   }
 
   on(eventName, handler) {
@@ -93,7 +94,12 @@ export default class Game {
     this.player.buildExtraDeck(extraDeckList);
     this.bot.buildDeck();
     this.bot.buildExtraDeck();
-    this.forceOpeningHand("Infinity Searcher", 4);
+    if (this.testModeEnabled) {
+      this.forceOpeningHand("Infinity Searcher", 4);
+      this.renderer.log(
+        "Modo teste: adicionando 4 Infinity Searcher a mao inicial."
+      );
+    }
 
     for (let i = 0; i < 4; i++) {
       this.player.draw();
@@ -3557,7 +3563,8 @@ export default class Game {
         }
       }
     } finally {
-      this.trapPromptInProgress = false;
+      this.trapPromptInProgress = false; // Avoid multiple trap prompts simultaneously
+    this.testModeEnabled = false;
     }
   }
 

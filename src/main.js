@@ -3,6 +3,8 @@ import { cardDatabase, cardDatabaseById } from "./data/cards.js";
 
 let game = null;
 const cardKindOrder = { monster: 0, spell: 1, trap: 2 };
+const TEST_MODE_KEY = "shadow_duel_test_mode";
+let testModeEnabled = loadTestModeFlag();
 // Use the imported indexed map instead of creating a new one
 const cardById = cardDatabaseById;
 const MIN_DECK_SIZE = 20;
@@ -38,9 +40,11 @@ const btnPoolFilterShadowHeart = document.getElementById(
 );
 const btnPoolFilterLuminarch = document.getElementById("deck-filter-luminarch");
 const btnPoolFilterVoid = document.getElementById("deck-filter-void");
+const btnToggleTestMode = document.getElementById("btn-toggle-test-mode");
 let currentDeck = loadDeck();
 let currentExtraDeck = loadExtraDeck();
 let poolFilterMode = "all"; // all | no_archetype | void | luminarch | shadow_heart
+updateTestModeButton();
 
 function getCardById(cardId) {
   return cardById.get(cardId);
@@ -107,6 +111,31 @@ function saveExtraDeck(extraDeck) {
     "shadow_duel_extra_deck",
     JSON.stringify(currentExtraDeck)
   );
+}
+
+function loadTestModeFlag() {
+  try {
+    return localStorage.getItem(TEST_MODE_KEY) === "true";
+  } catch (e) {
+    console.warn("Failed to load test mode flag", e);
+    return false;
+  }
+}
+
+function saveTestModeFlag(enabled) {
+  try {
+    localStorage.setItem(TEST_MODE_KEY, enabled ? "true" : "false");
+  } catch (e) {
+    console.warn("Failed to save test mode flag", e);
+  }
+}
+
+function updateTestModeButton() {
+  if (!btnToggleTestMode) return;
+  btnToggleTestMode.textContent = `Modo teste: ${
+    testModeEnabled ? "ligado" : "desligado"
+  }`;
+  btnToggleTestMode.classList.toggle("active", testModeEnabled);
 }
 
 function sanitizeExtraDeck(extraDeck) {
@@ -460,6 +489,7 @@ function startDuel() {
   startScreen.classList.add("hidden");
   deckBuilder.classList.add("hidden");
   game = new Game();
+  game.testModeEnabled = !!testModeEnabled;
   game.start([...currentDeck], [...currentExtraDeck]);
 }
 
@@ -487,6 +517,11 @@ btnPoolFilterShadowHeart?.addEventListener("click", () => {
   renderDeckBuilder();
 });
 btnStartDuel?.addEventListener("click", startDuel);
+btnToggleTestMode?.addEventListener("click", () => {
+  testModeEnabled = !testModeEnabled;
+  saveTestModeFlag(testModeEnabled);
+  updateTestModeButton();
+});
 
 document.addEventListener("DOMContentLoaded", () => {
   startScreen.classList.remove("hidden");
