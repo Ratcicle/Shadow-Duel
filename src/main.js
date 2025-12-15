@@ -1,10 +1,13 @@
 ﻿import Game from "./core/Game.js";
+import Bot from "./core/Bot.js";
 import { cardDatabase, cardDatabaseById } from "./data/cards.js";
 
 let game = null;
 const cardKindOrder = { monster: 0, spell: 1, trap: 2 };
 const TEST_MODE_KEY = "shadow_duel_test_mode";
+const BOT_PRESET_KEY = "shadow_duel_bot_preset";
 let testModeEnabled = loadTestModeFlag();
+let currentBotPreset = loadBotPreset();
 // Use the imported indexed map instead of creating a new one
 const cardById = cardDatabaseById;
 const MIN_DECK_SIZE = 20;
@@ -18,6 +21,10 @@ const extraDeckGrid = document.getElementById("extradeck-grid");
 const poolGrid = document.getElementById("pool-grid");
 const deckCountEl = document.getElementById("deck-count");
 const extraDeckCountEl = document.getElementById("extradeck-count");
+const botPresetSelect = document.getElementById("bot-preset-select");
+const botPresetStatus = document.getElementById("bot-preset-status");
+populateBotPresetDropdown();
+updateBotPresetStatus();
 
 const previewEls = {
   image: document.getElementById("deck-preview-image"),
@@ -111,6 +118,52 @@ function saveExtraDeck(extraDeck) {
     "shadow_duel_extra_deck",
     JSON.stringify(currentExtraDeck)
   );
+}
+
+function loadBotPreset() {
+  try {
+    const stored = localStorage.getItem(BOT_PRESET_KEY);
+    if (stored) return stored;
+  } catch (e) {
+    console.warn("Failed to load bot preset", e);
+  }
+  return Bot.getAvailablePresets()[0]?.id || "shadowheart";
+}
+
+function saveBotPreset(preset) {
+  try {
+    localStorage.setItem(BOT_PRESET_KEY, preset);
+  } catch (e) {
+    console.warn("Failed to save bot preset", e);
+  }
+}
+
+function getBotPresetLabel(presetId) {
+  const preset =
+    Bot.getAvailablePresets().find((p) => p.id === presetId) || null;
+  return preset ? preset.label : "Shadow-Heart";
+}
+
+function updateBotPresetStatus() {
+  if (botPresetSelect && botPresetSelect.value !== currentBotPreset) {
+    botPresetSelect.value = currentBotPreset;
+  }
+  if (botPresetStatus) {
+    botPresetStatus.textContent = `Bot: ${getBotPresetLabel(
+      currentBotPreset
+    )}`;
+  }
+}
+
+function populateBotPresetDropdown() {
+  if (!botPresetSelect) return;
+  botPresetSelect.innerHTML = "";
+  Bot.getAvailablePresets().forEach((preset) => {
+    const option = document.createElement("option");
+    option.value = preset.id;
+    option.textContent = preset.label;
+    botPresetSelect.appendChild(option);
+  });
 }
 
 function loadTestModeFlag() {
@@ -488,7 +541,7 @@ function startDuel() {
   saveExtraDeck(currentExtraDeck);
   startScreen.classList.add("hidden");
   deckBuilder.classList.add("hidden");
-  game = new Game();
+  game = new Game({ botPreset: currentBotPreset });
   game.testModeEnabled = !!testModeEnabled;
   game.start([...currentDeck], [...currentExtraDeck]);
 }
@@ -517,6 +570,12 @@ btnPoolFilterShadowHeart?.addEventListener("click", () => {
   renderDeckBuilder();
 });
 btnStartDuel?.addEventListener("click", startDuel);
+botPresetSelect?.addEventListener("change", (e) => {
+  const value = e.target.value;
+  currentBotPreset = value;
+  saveBotPreset(value);
+  updateBotPresetStatus();
+});
 btnToggleTestMode?.addEventListener("click", () => {
   testModeEnabled = !testModeEnabled;
   saveTestModeFlag(testModeEnabled);

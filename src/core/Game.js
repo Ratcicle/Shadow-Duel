@@ -24,9 +24,10 @@ function getCostTypeDescription(costFilters, count) {
 }
 
 export default class Game {
-  constructor() {
+  constructor(options = {}) {
     this.player = new Player("player", "You");
-    this.bot = new Bot("shadowheart");
+    this.botPreset = options.botPreset || "shadowheart";
+    this.bot = new Bot(this.botPreset);
     this.renderer = new Renderer();
     this.effectEngine = new EffectEngine(this);
 

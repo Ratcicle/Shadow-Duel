@@ -67,6 +67,22 @@ export default class LuminarchStrategy extends BaseStrategy {
     );
     score += playerMonsters - oppMonsters;
 
+    const opponentStrongest = opponent.field.reduce((max, m) => {
+      if (!m || m.cardKind !== "monster") return max;
+      return Math.max(max, m.atk || 0);
+    }, 0);
+    const overfillPenalty = Math.max(0, perspective.field.length - 3) * 0.25;
+    score -= overfillPenalty;
+    const weakAttackers = perspective.field.filter(
+      (m) =>
+        m &&
+        m.cardKind === "monster" &&
+        m.position === "attack" &&
+        (m.atk || 0) + (m.tempAtkBoost || 0) <
+          Math.max(500, opponentStrongest - 200)
+    ).length;
+    score -= weakAttackers * 0.2;
+
     const vulnerablePenalty = perspective.field.reduce((penalty, card) => {
       if (card.position !== "attack") return penalty;
       const canBeDestroyed = opponent.field.some(
@@ -116,6 +132,31 @@ export default class LuminarchStrategy extends BaseStrategy {
       score += bestGY / 2000;
     }
 
+    const handQuality = perspective.hand.reduce((sum, card) => {
+      if (!card) return sum;
+      let value = 0.1;
+      if (card.cardKind === "monster") {
+        value += Math.min(1.5, (card.atk || 0) / 2000);
+        value += (card.level || 0) * 0.05;
+        if (isLuminarch(card)) value += 0.2;
+      } else if (card.cardKind === "spell") {
+        const subtype = (card.subtype || "").toLowerCase();
+        if (subtype === "field" || subtype === "continuous") {
+          value += 0.5;
+        } else {
+          value += 0.35;
+        }
+        if (
+          card.name === "Luminarch Knights Convocation" ||
+          card.name === "Luminarch Moonlit Blessing"
+        ) {
+          value += 0.3;
+        }
+      }
+      return sum + value;
+    }, 0);
+    score += handQuality * 0.3;
+
     const hasConvocation = perspective.hand.some(
       (c) => c.name === "Luminarch Knights Convocation"
     );
@@ -158,17 +199,12 @@ export default class LuminarchStrategy extends BaseStrategy {
       const tributeInfo = this.getTributeRequirementFor(card, bot);
       if (bot.field.length < tributeInfo.tributesNeeded) return;
 
+      const preferredPosition = this.chooseSummonPosition(card, game);
       actions.push({
         type: "summon",
         index,
-        position: "attack",
-        facedown: false,
-      });
-      actions.push({
-        type: "summon",
-        index,
-        position: "defense",
-        facedown: true,
+        position: preferredPosition,
+        facedown: preferredPosition === "defense",
       });
     });
 
@@ -411,6 +447,29 @@ export default class LuminarchStrategy extends BaseStrategy {
     return tributeCandidates.map((t) => t.index);
   }
 
+  chooseSummonPosition(card, game) {
+    const opponent = game?.player || { field: [] };
+    const opponentStrongest = opponent.field.reduce((max, m) => {
+      if (!m || m.cardKind !== "monster") return max;
+      return Math.max(max, m.atk || 0);
+    }, 0);
+
+    const atk = card.atk || 0;
+    const def = card.def || 0;
+    const level = card.level || 0;
+    const isTaunt =
+      card.name === "Luminarch Aegisbearer" ||
+      card.name === "Luminarch Sanctum Protector";
+
+    if (opponentStrongest <= 0) return "attack";
+    if (isTaunt && def >= atk) return "defense";
+    if (atk >= opponentStrongest || level >= 6) return "attack";
+    if (atk === 0 && def > 0) return "defense";
+    if (def >= opponentStrongest + 300) return "defense";
+    if (atk >= opponentStrongest * 0.85) return "attack";
+    return "defense";
+  }
+
   simulateMainPhaseAction(state, action) {
     if (!action) return state;
 
@@ -451,9 +510,24 @@ export default class LuminarchStrategy extends BaseStrategy {
         const player = state.bot;
         const card = player.hand[action.index];
         if (!card) break;
-        this.simulateSpellEffect(state, card);
         player.hand.splice(action.index, 1);
-        player.graveyard.push(card);
+        const placedCard = { ...card };
+        this.simulateSpellEffect(state, placedCard);
+
+        if (placedCard.subtype === "field") {
+          if (player.fieldSpell) {
+            player.graveyard.push(player.fieldSpell);
+          }
+          player.fieldSpell = placedCard;
+        } else if (
+          placedCard.subtype === "continuous" ||
+          placedCard.subtype === "equip"
+        ) {
+          player.spellTrap = player.spellTrap || [];
+          player.spellTrap.push(placedCard);
+        } else {
+          player.graveyard.push(placedCard);
+        }
         break;
       }
       case "fieldEffect": {
