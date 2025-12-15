@@ -572,16 +572,35 @@ export const cardDatabase = [
     type: "Reptile",
     archetype: "Shadow-Heart",
     description:
-      'If an opponent\'s monster is destroyed by battle while this card is on the field: Draw 1 card. You can only use this effect of "Shadow-Heart Gecko" once per turn.',
+      'If this card is Special Summoned: You can add 1 Level 8 "Shadow-Heart" monster from your Deck to your hand. If this card is destroyed by battle: draw 1 card. You can only use each effect of "Shadow-Heart Gecko" once per turn.',
     image: "assets/Shadow-Heart Gecko.png",
     effects: [
       {
-        id: "shadow_heart_gecko_draw",
+        id: "shadow_heart_gecko_special_search",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethod: "special",
+        requireSelfAsSummoned: true,
+        oncePerTurn: true,
+        oncePerTurnName: "shadow_heart_gecko_special_search",
+        actions: [
+          {
+            type: "search_any",
+            player: "self",
+            archetype: "Shadow-Heart",
+            cardKind: "monster",
+            minLevel: 8,
+            maxLevel: 8,
+          },
+        ],
+      },
+      {
+        id: "shadow_heart_gecko_battle_draw",
         timing: "on_event",
         event: "battle_destroy",
-        requireDestroyedIsOpponent: true,
+        requireSelfAsDestroyed: true,
         oncePerTurn: true,
-        oncePerTurnName: "shadow_heart_gecko_draw",
+        oncePerTurnName: "shadow_heart_gecko_battle_draw",
         actions: [
           {
             type: "draw",
@@ -677,7 +696,7 @@ export const cardDatabase = [
     cardKind: "monster",
     atk: 3000,
     def: 2500,
-    level: 9,
+    level: 8,
     type: "Dragon",
     archetype: "Shadow-Heart",
     requiredTributes: 3,
@@ -1590,7 +1609,7 @@ export const cardDatabase = [
     type: "Warrior",
     archetype: "Luminarch",
     description:
-      'When this card is Normal Summoned: add 1 "Luminarch Knights Convocation" from your Deck to your hand.',
+      'If this card is Normal Summoned: You can add 1 "Luminarch" Spell/Trap from your Deck to your hand. You can only use this effect of "Luminarch Sanctified Arbiter" once per turn.',
     image: "assets/Luminarch Sanctified Arbiter.png",
     effects: [
       {
@@ -1598,13 +1617,14 @@ export const cardDatabase = [
         timing: "on_event",
         event: "after_summon",
         summonMethod: "normal",
+        oncePerTurn: true,
+        oncePerTurnName: "luminarch_sanctified_arbiter_search",
         actions: [
           {
             type: "search_any",
             player: "self",
             archetype: "Luminarch",
-            cardKind: "spell",
-            cardName: "Luminarch Knights Convocation",
+            cardKind: ["spell", "trap"],
           },
         ],
       },

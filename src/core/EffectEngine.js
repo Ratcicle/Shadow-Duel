@@ -299,6 +299,13 @@ export default class EffectEngine {
           }
         }
 
+        if (
+          effect.requireSelfAsSummoned &&
+          ctx.summonedCard !== sourceCard
+        ) {
+          continue;
+        }
+
         // Check phase requirement (for trap cards that only activate in specific phases)
         if (effect.requirePhase) {
           const allowedPhases = Array.isArray(effect.requirePhase)
