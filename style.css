@@ -1264,17 +1264,49 @@ body {
   cursor: pointer;
 }
 
-.start-actions .test-mode-toggle {
+.start-actions .test-mode-toggle,
+.start-actions .dev-mode-toggle {
   background: #2d2d2d;
   color: #f0f0f0;
   border: 1px solid var(--border-color);
   transition: background 0.2s, color 0.2s;
 }
 
-.start-actions .test-mode-toggle.active {
+.start-actions .test-mode-toggle.active,
+.start-actions .dev-mode-toggle.active {
   background: #2ecc71;
   color: #0b2a12;
   border-color: #1f8a4a;
+}
+
+.validation-messages {
+  margin-top: 12px;
+  border: 1px solid #ff6961;
+  background: rgba(255, 71, 87, 0.12);
+  border-radius: 6px;
+  padding: 10px;
+  font-size: 0.9rem;
+  color: #ffdede;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.validation-messages.hidden {
+  display: none;
+}
+
+.validation-messages ul {
+  padding-left: 18px;
+  margin: 6px 0 0;
+  list-style-type: disc;
+}
+
+.validation-messages li {
+  margin-bottom: 4px;
+}
+
+.validation-messages li.warning {
+  color: #ffe9a3;
 }
 
 .deck-panel {

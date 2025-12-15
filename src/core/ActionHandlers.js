@@ -52,6 +52,14 @@ export class ActionHandlerRegistry {
   has(actionType) {
     return this.handlers.has(actionType);
   }
+
+  /**
+   * List registered action type identifiers.
+   * @returns {string[]}
+   */
+  listTypes() {
+    return Array.from(this.handlers.keys());
+  }
 }
 
 /**

@@ -5,6 +5,48 @@ import {
   registerDefaultHandlers,
 } from "./ActionHandlers.js";
 
+export const LEGACY_ACTION_TYPES = new Set([
+  "draw",
+  "heal",
+  "heal_per_archetype_monster",
+  "damage",
+  "destroy",
+  "negate_attack",
+  "special_summon_token",
+  "buff_atk_temp",
+  "modify_stats_temp",
+  "reduce_self_atk",
+  "search_any",
+  "transmutate",
+  "equip",
+  "move",
+  "destroy_self_monsters_and_draw",
+  "shadow_heart_rage_scale_buff",
+  "shadow_heart_shield_upkeep",
+  "revive_shadowheart_from_grave",
+  "forbid_attack_this_turn",
+  "forbid_attack_next_turn",
+  "grant_void_fusion_immunity",
+  "darkness_valley_apply_existing",
+  "darkness_valley_buff_summon",
+  "darkness_valley_cleanup",
+  "darkness_valley_battle_punish",
+  "shadow_heart_death_wyrm_special_summon",
+  "conditional_special_summon_from_hand",
+  "shadow_heart_observer_summon",
+  "add_counter",
+  "shadow_heart_cathedral_summon",
+  "the_shadow_heart_special_summon_and_equip",
+  "abyssal_eel_special_summon",
+  "polymerization_fusion_summon",
+  "banish",
+  "allow_direct_attack_this_turn",
+  "demon_dragon_destroy_two",
+  "demon_dragon_revive_scale_dragon",
+  "mirror_force_destroy_all",
+  "call_of_haunted_summon_and_bind",
+]);
+
 export default class EffectEngine {
   constructor(game) {
     this.game = game;

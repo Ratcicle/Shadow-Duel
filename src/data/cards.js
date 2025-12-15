@@ -1344,7 +1344,7 @@
   },
   {
     id: 101,
-    name: "Luminarch Valiant ÔÇô Knight of the Dawn",
+    name: "Luminarch Valiant - Knight of the Dawn",
     cardKind: "monster",
     atk: 1600,
     def: 1200,
@@ -1354,7 +1354,7 @@
     piercing: true,
     description:
       'If this card is Normal or Special Summoned: Add 1 Level 4 or lower "Luminarch" monster from your Deck to your hand. If this card battles a Defense Position monster, inflict piercing battle damage to your opponent.',
-    image: "assets/Luminarch Valiant ÔÇô Knight of the Dawn.png",
+    image: "assets/Luminarch Valiant – Knight of the Dawn.png",
     effects: [
       {
         id: "luminarch_valiant_search",

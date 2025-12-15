@@ -1,13 +1,17 @@
 ﻿import Game from "./core/Game.js";
 import Bot from "./core/Bot.js";
 import { cardDatabase, cardDatabaseById } from "./data/cards.js";
+import { validateCardDatabase } from "./core/CardDatabaseValidator.js";
 
 let game = null;
 const cardKindOrder = { monster: 0, spell: 1, trap: 2 };
 const TEST_MODE_KEY = "shadow_duel_test_mode";
+const DEV_MODE_KEY = "shadow_duel_dev_mode";
 const BOT_PRESET_KEY = "shadow_duel_bot_preset";
 let testModeEnabled = loadTestModeFlag();
+let devModeEnabled = loadDevModeFlag();
 let currentBotPreset = loadBotPreset();
+let latestValidationResult = null;
 // Use the imported indexed map instead of creating a new one
 const cardById = cardDatabaseById;
 const MIN_DECK_SIZE = 20;
@@ -48,10 +52,14 @@ const btnPoolFilterShadowHeart = document.getElementById(
 const btnPoolFilterLuminarch = document.getElementById("deck-filter-luminarch");
 const btnPoolFilterVoid = document.getElementById("deck-filter-void");
 const btnToggleTestMode = document.getElementById("btn-toggle-test-mode");
+const btnToggleDevMode = document.getElementById("btn-toggle-dev-mode");
+const validationMessagesEl = document.getElementById("validation-messages");
 let currentDeck = loadDeck();
 let currentExtraDeck = loadExtraDeck();
 let poolFilterMode = "all"; // all | no_archetype | void | luminarch | shadow_heart
 updateTestModeButton();
+updateDevModeButton();
+runCardDatabaseValidation({ silent: true });
 
 function getCardById(cardId) {
   return cardById.get(cardId);
@@ -189,6 +197,126 @@ function updateTestModeButton() {
     testModeEnabled ? "ligado" : "desligado"
   }`;
   btnToggleTestMode.classList.toggle("active", testModeEnabled);
+}
+
+function loadDevModeFlag() {
+  try {
+    return localStorage.getItem(DEV_MODE_KEY) === "true";
+  } catch (e) {
+    console.warn("Failed to load dev mode flag", e);
+    return false;
+  }
+}
+
+function saveDevModeFlag(enabled) {
+  try {
+    localStorage.setItem(DEV_MODE_KEY, enabled ? "true" : "false");
+  } catch (e) {
+    console.warn("Failed to save dev mode flag", e);
+  }
+}
+
+function updateDevModeButton() {
+  if (!btnToggleDevMode) return;
+  btnToggleDevMode.textContent = `Dev Mode: ${
+    devModeEnabled ? "ligado" : "desligado"
+  }`;
+  btnToggleDevMode.classList.toggle("active", devModeEnabled);
+}
+
+function runCardDatabaseValidation(options = {}) {
+  const { silent = false } = options;
+  latestValidationResult = validateCardDatabase();
+  showValidationMessages(latestValidationResult);
+  if (latestValidationResult.errors.length) {
+    console.error(
+      "Card database validation errors:",
+      latestValidationResult.errors
+    );
+    if (!silent) {
+      alert(
+        "Não é possível iniciar o duelo: há erros no banco de cartas. Verifique os detalhes acima."
+      );
+    }
+    return false;
+  }
+  if (latestValidationResult.warnings.length) {
+    console.warn(
+      "Card database validation warnings:",
+      latestValidationResult.warnings
+    );
+  }
+  return true;
+}
+
+function showValidationMessages(result) {
+  if (!validationMessagesEl || !result) return;
+  const shouldShowErrors = Array.isArray(result.errors)
+    ? result.errors.length > 0
+    : false;
+  const shouldShowWarnings =
+    devModeEnabled && Array.isArray(result.warnings)
+      ? result.warnings.length > 0
+      : false;
+
+  if (!shouldShowErrors && !shouldShowWarnings) {
+    validationMessagesEl.classList.add("hidden");
+    validationMessagesEl.innerHTML = "";
+    return;
+  }
+
+  const messages = [];
+  if (shouldShowErrors) {
+    messages.push(
+      `<strong>${result.errors.length} erro(s) na base de cartas.</strong>`
+    );
+    messages.push(renderIssueList(result.errors, "error"));
+  }
+  if (shouldShowWarnings) {
+    messages.push(
+      `<strong>${result.warnings.length} aviso(s) encontrados.</strong>`
+    );
+    messages.push(renderIssueList(result.warnings, "warning"));
+  }
+
+  validationMessagesEl.innerHTML = messages.join("");
+  validationMessagesEl.classList.remove("hidden");
+}
+
+function renderIssueList(issues, cssClass) {
+  const MAX_ITEMS = 5;
+  const listItems = issues.slice(0, MAX_ITEMS).map(
+    (issue) =>
+      `<li class="${cssClass === "warning" ? "warning" : ""}">${formatIssueForDisplay(
+        issue
+      )}</li>`
+  );
+  if (issues.length > MAX_ITEMS) {
+    listItems.push(
+      `<li class="${cssClass === "warning" ? "warning" : ""}">+ ${
+        issues.length - MAX_ITEMS
+      } mais...</li>`
+    );
+  }
+  return `<ul>${listItems.join("")}</ul>`;
+}
+
+function formatIssueForDisplay(issue) {
+  const parts = [];
+  if (typeof issue.cardId === "number") {
+    parts.push(`ID ${issue.cardId}`);
+  }
+  if (issue.cardName) {
+    parts.push(issue.cardName);
+  }
+  if (issue.effectIndex !== undefined && issue.effectIndex !== null) {
+    parts.push(`Efeito ${issue.effectIndex}`);
+  }
+  if (issue.actionIndex !== undefined && issue.actionIndex !== null) {
+    parts.push(`Ação ${issue.actionIndex}`);
+  }
+  const prefix = parts.length ? `[${parts.join(" | ")}] ` : "";
+  return `${prefix}${issue.message || ""}`;
 }
 
 function sanitizeExtraDeck(extraDeck) {
@@ -528,6 +656,9 @@ function closeDeckBuilder() {
 }
 
 function startDuel() {
+  if (!runCardDatabaseValidation()) {
+    return;
+  }
   if (
     currentDeck.length < MIN_DECK_SIZE ||
     currentDeck.length > MAX_DECK_SIZE
@@ -543,6 +674,7 @@ function startDuel() {
   deckBuilder.classList.add("hidden");
   game = new Game({ botPreset: currentBotPreset });
   game.testModeEnabled = !!testModeEnabled;
+  game.devModeEnabled = !!devModeEnabled;
   game.start([...currentDeck], [...currentExtraDeck]);
 }
 
@@ -580,6 +712,12 @@ btnToggleTestMode?.addEventListener("click", () => {
   testModeEnabled = !testModeEnabled;
   saveTestModeFlag(testModeEnabled);
   updateTestModeButton();
+});
+btnToggleDevMode?.addEventListener("click", () => {
+  devModeEnabled = !devModeEnabled;
+  saveDevModeFlag(devModeEnabled);
+  updateDevModeButton();
+  showValidationMessages(latestValidationResult);
 });
 
 document.addEventListener("DOMContentLoaded", () => {
