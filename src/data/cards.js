@@ -2428,6 +2428,8 @@
         timing: "on_event",
         event: "after_summon",
         summonMethod: "special",
+        requireSelfAsSummoned: true,
+        requireSummonedFrom: "hand",
         oncePerTurn: true,
         oncePerTurnName: "void_hollow_summon",
         condition: {

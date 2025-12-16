@@ -263,7 +263,7 @@ export default class EffectEngine {
 
   async handleAfterSummonEvent(payload) {
     if (!payload || !payload.card || !payload.player) return;
-    const { card, player, method } = payload;
+    const { card, player, method, fromZone: summonFromZone } = payload;
 
     const sources = [card];
     if (player.fieldSpell) {
@@ -338,6 +338,14 @@ export default class EffectEngine {
           }
         }
 
+        if (
+          effect.requireSummonedFrom &&
+          summonFromZone &&
+          effect.requireSummonedFrom !== summonFromZone
+        ) {
+          continue;
+        }
+
         if (effect.requireSelfAsSummoned && ctx.summonedCard !== sourceCard) {
           continue;
         }
@@ -358,7 +366,8 @@ export default class EffectEngine {
             sourceCard,
             player,
             card,
-            sourceZone
+            sourceZone,
+            summonFromZone
           );
           if (!conditionMet) continue;
         }
@@ -442,18 +451,17 @@ export default class EffectEngine {
     sourceCard,
     player,
     summonedCard,
-    sourceZone
+    sourceZone,
+    summonFromZone
   ) {
     if (!condition) return true;
 
     if (condition.requires === "self_in_hand") {
-      // Effect card must currently be in the player's hand
-      if (sourceZone !== "hand") {
-        return false;
-      }
-      if (!player?.hand?.includes(sourceCard)) {
-        return false;
-      }
+      const isCurrentlyInHand =
+        sourceZone === "hand" && player?.hand?.includes(sourceCard);
+      const wasSummonedFromHand =
+        summonFromZone === "hand" && summonedCard === sourceCard;
+      if (!isCurrentlyInHand && !wasSummonedFromHand) return false;
     }
 
     if (condition.triggerArchetype) {
@@ -4566,6 +4574,7 @@ export default class EffectEngine {
         card: summonedCard,
         player: ctx.player,
         method: "special",
+        fromZone: "deck",
       });
 
       this.game.updateBoard();
@@ -4609,6 +4618,7 @@ export default class EffectEngine {
               card: summonedCard,
               player: ctx.player,
               method: "special",
+              fromZone: "deck",
             });
 
             this.game.updateBoard();
@@ -4688,6 +4698,7 @@ export default class EffectEngine {
       card: haunter,
       player: ctx.player,
       method: "special",
+      fromZone: "hand",
     });
 
     this.game.updateBoard();

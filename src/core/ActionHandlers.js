@@ -381,7 +381,7 @@ async function summonCards(cards, sourceZone, player, action, engine) {
       card: card,
       player: player,
       method: "special",
-      sourceZone: action.zone || "deck",
+      fromZone: action.zone || "deck",
     });
 
     summoned++;
@@ -535,7 +535,7 @@ export async function handleSpecialSummonFromHandWithCost(
     card: source,
     player: player,
     method: "special",
-    sourceZone: "hand",
+    fromZone: "hand",
   });
 
   game.updateBoard();
@@ -730,7 +730,7 @@ export async function handleSpecialSummonFromHandWithTieredCost(
     card: source,
     player,
     method: "special",
-    sourceZone: "hand",
+    fromZone: "hand",
   });
 
   // Tier effects
@@ -979,7 +979,7 @@ async function bounceAndSummonCard(source, target, player, action, engine) {
     card: target,
     player: player,
     method: "special",
-    sourceZone: action.bounceSource
+    fromZone: action.bounceSource
       ? player.field.includes(action.bounceSource)
         ? "field"
         : "hand"
@@ -1497,7 +1497,7 @@ export async function handleSpecialSummonMatchingLevel(
       card,
       player,
       method: "special",
-      sourceZone: "hand",
+      fromZone: "hand",
     });
 
     game.updateBoard();
@@ -2542,7 +2542,7 @@ async function performSummon(card, handIndex, player, action, engine) {
     card: card,
     player: player,
     method: "special",
-    sourceZone: "hand",
+    fromZone: "hand",
   });
 
   game.updateBoard();
@@ -2888,7 +2888,7 @@ async function performSummonFromDeck(
     card: card,
     player: player,
     method: "special",
-    sourceZone: "deck",
+    fromZone: "deck",
   });
 
   // Send source to graveyard if specified

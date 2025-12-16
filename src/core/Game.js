@@ -547,6 +547,7 @@ export default class Game {
                   card: summonedCard,
                   player: this.player,
                   method: "normal",
+                  fromZone: "hand",
                 });
                 this.updateBoard();
               }
@@ -679,6 +680,7 @@ export default class Game {
               card: summonedCard,
               player: this.player,
               method: pendingSummon.tributesNeeded > 0 ? "tribute" : "normal",
+              fromZone: "hand",
             });
 
             tributeSelectionMode = false;
@@ -1063,13 +1065,14 @@ export default class Game {
       card.setTurn = null;
       card.owner = this.player.id;
 
-      this.player.field.push(card);
+    this.player.field.push(card);
 
-      this.emit("after_summon", {
-        card,
-        player: this.player,
-        method: "special",
-      });
+    this.emit("after_summon", {
+      card,
+      player: this.player,
+      method: "special",
+      fromZone: "hand",
+    });
 
       this.updateBoard();
     };
@@ -2791,6 +2794,7 @@ export default class Game {
       card: fusionMonster,
       player: activePlayer,
       method: "fusion",
+      fromZone: "extraDeck",
     });
 
     this.updateBoard();
@@ -2823,6 +2827,15 @@ export default class Game {
     const handCards = document.querySelectorAll("#player-hand .card");
     handCards.forEach((cardEl) => {
       cardEl.classList.remove("targetable");
+    });
+
+    // Emit after_summon for special summons performed directly from hand
+    this.emit("after_summon", {
+      card,
+      player: this.player,
+      opponent: this.bot,
+      method: "special",
+      fromZone: "hand",
     });
 
     this.updateBoard();
@@ -3216,6 +3229,7 @@ export default class Game {
         player: ownerPlayer,
         opponent: otherPlayer,
         method: "special",
+        fromZone,
       });
     }
 
