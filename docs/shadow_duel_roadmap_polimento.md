@@ -8,19 +8,19 @@
 
 **Objetivo:** parar de caçar bug no escuro.
 
-- [ ] **Modo Dev** com logs úteis (ativação, seleção, rollback, resolução, mudanças de zona).
-- [ ] **Validador de Card DB** no boot:
-  - [ ] IDs únicos
-  - [ ] nomes únicos (ou regras claras)
-  - [ ] efeitos com schema válido
-  - [ ] timings válidos
-  - [ ] actions registradas
+- [x] **Modo Dev** com logs úteis (ativação, seleção, rollback, resolução, mudanças de zona).
+- [x] **Validador de Card DB** no boot:
+  - [x] IDs únicos
+  - [x] nomes únicos (ou regras claras)
+  - [x] efeitos com schema válido
+  - [x] timings válidos
+  - [x] actions registradas
 - [ ] **Harness de testes manuais**:
-  - [ ] “Setup board”
-  - [ ] “Draw X”
-  - [ ] “Give card”
-  - [ ] “Force phase”
-  - [ ] “Reset duel”
+  - [ ] "Setup board"
+  - [ ] "Draw X"
+  - [ ] "Give card"
+  - [ ] "Force phase"
+  - [ ] "Reset duel"
 - [ ] (Opcional) **Replays simples**: registrar ações e reexecutar.
 
 **Pronto quando:** você consegue reproduzir bugs e ver no log *qual ação/handler/condição* causou.
@@ -49,15 +49,21 @@ Checklist:
 **Objetivo:** `EffectEngine` vira **orquestrador**, e os efeitos viram **dados + handlers**.
 
 Checklist:
-- [ ] Definir “catálogo oficial” de actions (ex.: `search_any`, `draw`, `special_summon`, `destroy`, `bounce`, `discard`, `send_to_gy`, `fusion_summon`, etc.)
-- [ ] Cada action:
-  - [ ] valida inputs
-  - [ ] pede seleção quando necessário (sem auto-escolha, exceto BOT)
-  - [ ] aplica resultado com mudanças de zona consistentes
-- [ ] Migrar todos os efeitos antigos/inline para handlers
-- [ ] Remover lógica específica de carta do engine (fica só em `cards.js`)
+- [x] Definir "catálogo oficial" de actions (ex.: `search_any`, `draw`, `special_summon`, `destroy`, `bounce`, `discard`, `send_to_gy`, `fusion_summon`, etc.)
+- [x] Cada action:
+  - [x] valida inputs
+  - [x] pede seleção quando necessário (sem auto-escolha, exceto BOT)
+  - [x] aplica resultado com mudanças de zona consistentes
+- [x] Migrar todos os efeitos antigos/inline para handlers
+  - [x] Removidos 11 métodos Shadow-Heart específicos
+  - [x] Criados 6 handlers genéricos reutilizáveis
+  - [x] 17 cartas Shadow-Heart refatoradas
+  - [x] Limpeza de LEGACY_ACTION_TYPES
+- [x] Remover lógica específica de carta do engine (fica só em `cards.js`)
 
 **Pronto quando:** adicionar uma carta nova não exige mexer no engine (só em `cards.js` e, se for mecânica nova, um handler genérico).
+
+**Status:** ✅ COMPLETO (5 fases de refatoração, commits: 207cdac, 465d297, a839aa0, 72b2bad, 3c220f0)
 
 ---
 
@@ -161,7 +167,15 @@ Checklist:
 
 ## Próximo passo sugerido
 
-- [ ] Criar uma checklist de migração (por action/por carta), listando:
-  - quais cartas ainda usam lógica fora de handler
-  - quais eventos ainda são “special-cased”
-  - ordem ideal de migração para reduzir regressões
+Com a Fase 2 completa, o próximo passo é trabalhar nas **Fases 1 e 3** em paralelo:
+
+1. **Fase 1** (Unificar ativação/resolução): refinar o pipeline de seleção para garantir que todo efeito com targets/custos segue o mesmo caminho robusto
+2. **Fase 3** (Seleção bulletproof): melhorar UI de seleção com estados explícitos e impossibilidade de softlock
+
+Depois disso, **Fase 4** (Integridade de estado) garantirá que o jogo nunca entra em estado inválido.
+
+Prioridades:
+- [ ] Criar harness de testes (Fase 0) para validar mudanças
+- [ ] Padronizar pipeline de seleção (Fase 1)
+- [ ] Melhorar UI de feedback (Fase 5 parcial)
+- [ ] Testar 20+ partidas contra bot sem regressões

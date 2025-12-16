@@ -3091,9 +3091,7 @@ export async function handleConditionalSpecialSummonFromHand(
   player.field = player.field || [];
   player.field.push(cardToSummon);
 
-  game.renderer?.log(
-    `${cardToSummon.name} was Special Summoned from hand!`
-  );
+  game.renderer?.log(`${cardToSummon.name} was Special Summoned from hand!`);
 
   game.emit("after_summon", {
     card: cardToSummon,
@@ -3114,6 +3112,7 @@ export function registerDefaultHandlers(registry) {
   // Generic special summon handlers
   // NOTE: Both "special_summon_from_deck" and "special_summon_from_graveyard"
   // now use the unified handler that supports all zones and patterns
+  registry.register("special_summon_from_zone", handleSpecialSummonFromZone);
   registry.register("special_summon_from_deck", handleSpecialSummonFromZone);
   registry.register(
     "special_summon_from_graveyard",
