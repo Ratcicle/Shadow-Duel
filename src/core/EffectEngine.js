@@ -31,16 +31,10 @@ export const LEGACY_ACTION_TYPES = new Set([
   "equip",
   "move",
   "destroy_self_monsters_and_draw",
-  "shadow_heart_shield_upkeep",
   "forbid_attack_this_turn",
   "forbid_attack_next_turn",
   "grant_void_fusion_immunity",
-  "darkness_valley_battle_punish",
-  "shadow_heart_death_wyrm_special_summon",
-  "conditional_special_summon_from_hand",
   "add_counter",
-  "the_shadow_heart_special_summon_and_equip",
-  "abyssal_eel_special_summon",
   "polymerization_fusion_summon",
   "banish",
   "allow_direct_attack_this_turn",
@@ -2509,12 +2503,6 @@ export default class EffectEngine {
             executed = result || executed;
             break;
           }
-          case "shadow_heart_shield_upkeep": {
-            const result = this.applyShadowHeartShieldUpkeep(action, ctx);
-            actionResult = actionResult || result;
-            executed = result || executed;
-            break;
-          }
           case "special_summon_from_zone": {
             const result = await handleSpecialSummonFromZone(
               action,
@@ -2647,22 +2635,6 @@ export default class EffectEngine {
               targets,
               this
             );
-            actionResult = actionResult || result;
-            executed = result || executed;
-            break;
-          }
-          case "the_shadow_heart_special_summon_and_equip": {
-            const result = await this.applyTheShadowHeartSummonAndEquip(
-              action,
-              ctx,
-              targets
-            );
-            actionResult = actionResult || result;
-            executed = result || executed;
-            break;
-          }
-          case "abyssal_eel_special_summon": {
-            const result = await this.applyAbyssalEelSpecialSummon(action, ctx);
             actionResult = actionResult || result;
             executed = result || executed;
             break;
@@ -4195,96 +4167,6 @@ export default class EffectEngine {
     return true;
   }
 
-  applyShadowHeartShieldUpkeep(action, ctx) {
-    const card = ctx?.source;
-    const owner = ctx?.player || this.getOwnerByCard(card);
-    if (!card || !owner) return false;
-
-    const game = this.game;
-    const renderer = game?.renderer;
-    const inSpellTrap = (owner.spellTrap || []).includes(card);
-    const onField =
-      inSpellTrap ||
-      owner.fieldSpell === card ||
-      (owner.field || []).includes(card);
-
-    if (!onField) return false;
-
-    const sendToGrave = (logMessage) => {
-      if (renderer && logMessage) {
-        renderer.log(logMessage);
-      }
-      if (game && typeof game.moveCard === "function") {
-        game.moveCard(card, owner, "graveyard", {
-          fromZone: inSpellTrap ? "spellTrap" : "fieldSpell",
-        });
-      } else {
-        const zones = [
-          owner.spellTrap,
-          owner.fieldSpell ? [owner.fieldSpell] : [],
-          owner.field,
-        ].filter(Boolean);
-        for (const zone of zones) {
-          const idx = zone.indexOf(card);
-          if (idx > -1) {
-            zone.splice(idx, 1);
-            if (owner.fieldSpell === card) {
-              owner.fieldSpell = null;
-            }
-            break;
-          }
-        }
-        owner.graveyard.push(card);
-      }
-      game?.updateBoard?.();
-      game?.checkWinCondition?.();
-      return true;
-    };
-
-    const logMessage = (msg) => {
-      if (renderer && msg) {
-        renderer.log(msg);
-      }
-    };
-
-    if (owner.lp < 800) {
-      return sendToGrave(
-        `${card.name} upkeep: not enough LP to pay 800, sent to Graveyard.`
-      );
-    }
-
-    if (owner.id === "player") {
-      const wantsToPay = window.confirm(
-        `Pagar 800 LP para manter "${card.name}" no campo? Se não pagar, esta carta será enviada ao Cemitério.`
-      );
-
-      if (wantsToPay) {
-        owner.takeDamage(800);
-        logMessage(`Paid 800 LP to maintain ${card.name}.`);
-        game?.updateBoard?.();
-        game?.checkWinCondition?.();
-        return true;
-      }
-
-      return sendToGrave(
-        `You chose not to pay 800 LP for ${card.name}; it was sent to the Graveyard.`
-      );
-    }
-
-    // Bot decision: pay if possible, otherwise send to Graveyard.
-    if (owner.lp >= 800) {
-      owner.takeDamage(800);
-      logMessage(`Bot paid 800 LP to maintain ${card.name}.`);
-      game?.updateBoard?.();
-      game?.checkWinCondition?.();
-      return true;
-    }
-
-    return sendToGrave(
-      `${card.name} upkeep: bot could not pay 800 LP, sent to Graveyard.`
-    );
-  }
-
   async applyConditionalSpecialSummonFromHand(action, ctx) {
     const player = ctx?.player;
     if (!player) return false;
@@ -4409,121 +4291,6 @@ export default class EffectEngine {
     }
 
     return added;
-  }
-
-  async applyTheShadowHeartSummonAndEquip(action, ctx, targets) {
-    return new Promise((resolve) => {
-      const targetRef = action.targetRef;
-      const selectedCards = targets[targetRef] || [];
-
-      if (selectedCards.length === 0) {
-        console.log("No target selected for The Shadow Heart.");
-        resolve(false);
-        return;
-      }
-
-      const selectedCard = selectedCards[0];
-
-      if (!selectedCard) {
-        console.log("Target card not found.");
-        resolve(false);
-        return;
-      }
-
-      // Remove from Graveyard
-      const gyIndex = ctx.player.graveyard.indexOf(selectedCard);
-      if (gyIndex > -1) {
-        ctx.player.graveyard.splice(gyIndex, 1);
-      }
-
-      // Check field space
-      if (ctx.player.field.length >= 5) {
-        console.log("Field is full, cannot Special Summon.");
-        ctx.player.graveyard.push(selectedCard);
-        resolve(false);
-        return;
-      }
-
-      // Prepare the monster for Special Summon
-      selectedCard.position = "attack";
-      selectedCard.isFacedown = false;
-      selectedCard.hasAttacked = false;
-      selectedCard.cannotAttackThisTurn = false;
-      selectedCard.owner = ctx.player.id;
-      ctx.player.field.push(selectedCard);
-
-      // Equip The Shadow Heart to the monster
-      const equipCard = ctx.source; // The Shadow Heart card itself
-      // Move para zona de spell/trap se estiver na mão ou em outro lugar
-      if (this.game && typeof this.game.moveCard === "function") {
-        const zone = this.game.getZone(ctx.player, "hand");
-        if (zone && zone.includes(equipCard)) {
-          this.game.moveCard(equipCard, ctx.player, "spellTrap", {
-            isFacedown: false,
-            resetAttackFlags: false,
-          });
-        }
-      }
-      equipCard.equippedTo = selectedCard;
-      if (!Array.isArray(selectedCard.equips)) {
-        selectedCard.equips = [];
-      }
-      if (!selectedCard.equips.includes(equipCard)) {
-        selectedCard.equips.push(equipCard);
-      }
-
-      console.log(
-        `Special Summoned ${selectedCard.name} from Graveyard via The Shadow Heart and equipped the spell.`
-      );
-
-      if (typeof this.game.updateBoard === "function") {
-        this.game.updateBoard();
-      }
-
-      resolve(true);
-    });
-  }
-
-  async applyAbyssalEelSpecialSummon(action, ctx) {
-    if (!ctx.source || !ctx.player || !this.game) {
-      return false;
-    }
-
-    // Find Leviathan in hand
-    const hand = ctx.player.hand || [];
-    const leviathanCard = hand.find(
-      (card) => card && card.name === "Shadow-Heart Leviathan"
-    );
-
-    if (!leviathanCard) {
-      this.game.renderer.log("No Shadow-Heart Leviathan in hand.");
-      return false;
-    }
-
-    // Check field space
-    if (ctx.player.field.length >= 5) {
-      this.game.renderer.log("Field is full.");
-      return false;
-    }
-
-    // Send Abyssal Eel to GY
-    this.game.moveCard(ctx.source, ctx.player, "graveyard");
-
-    // Set pending special summon for Leviathan and lock player actions
-    this.game.pendingSpecialSummon = {
-      cardName: "Shadow-Heart Leviathan",
-    };
-    this.game.isResolvingEffect = true;
-
-    this.game.renderer.log(
-      `${ctx.source.name} sent to Graveyard. Click ${leviathanCard.name} to Special Summon it.`
-    );
-
-    if (typeof this.game.updateBoard === "function") {
-      this.game.updateBoard();
-    }
-
-    return true;
   }
 
   async performBotFusion(ctx, summonableFusions, availableMaterials) {
