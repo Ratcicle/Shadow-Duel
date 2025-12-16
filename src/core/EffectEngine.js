@@ -7,6 +7,9 @@ import {
   handlePermanentBuffNamed,
   handleRemovePermanentBuffNamed,
   handleSpecialSummonMatchingLevel,
+  handleDestroyAttackerOnArchetypeDestruction,
+  handleUpkeepPayOrSendToGrave,
+  handleSpecialSummonFromDeckWithCounterLimit,
 } from "./ActionHandlers.js";
 
 export const LEGACY_ACTION_TYPES = new Set([
@@ -212,7 +215,9 @@ export default class EffectEngine {
           if ((opponent?.field?.length || 0) < (cond.min ?? 1)) {
             return {
               ok: false,
-              reason: `Opponent must control at least ${cond.min ?? 1} monster(s).`,
+              reason: `Opponent must control at least ${
+                cond.min ?? 1
+              } monster(s).`,
             };
           }
           break;
@@ -340,10 +345,7 @@ export default class EffectEngine {
           }
         }
 
-        if (
-          effect.requireSelfAsSummoned &&
-          ctx.summonedCard !== sourceCard
-        ) {
+        if (effect.requireSelfAsSummoned && ctx.summonedCard !== sourceCard) {
           continue;
         }
 
@@ -769,7 +771,8 @@ export default class EffectEngine {
           if (effect.requireSelfAsDestroyed && ctx.destroyed !== card) continue;
           if (effect.requireDestroyedIsOpponent) {
             const destroyedOwnerId =
-              (ctx.destroyedOwner && ctx.destroyedOwner.id) || ctx.destroyedOwner;
+              (ctx.destroyedOwner && ctx.destroyedOwner.id) ||
+              ctx.destroyedOwner;
             const opponentId = side.other?.id;
             if (!destroyedOwnerId || destroyedOwnerId !== opponentId) continue;
           }
@@ -782,13 +785,15 @@ export default class EffectEngine {
             effect.promptUser === true &&
             this.game &&
             this.game.renderer &&
-            typeof this.game.renderer.showConditionalSummonPrompt === "function" &&
+            typeof this.game.renderer.showConditionalSummonPrompt ===
+              "function" &&
             owner === this.game.player
           ) {
-            const shouldActivate = await this.game.renderer.showConditionalSummonPrompt(
-              card.name,
-              effect.promptMessage || `Activate ${card.name}'s effect?`
-            );
+            const shouldActivate =
+              await this.game.renderer.showConditionalSummonPrompt(
+                card.name,
+                effect.promptMessage || `Activate ${card.name}'s effect?`
+              );
             if (!shouldActivate) continue;
           }
 
@@ -1230,8 +1235,7 @@ export default class EffectEngine {
     }
 
     const effect = this.getHandActivationEffect(card);
-    const isFieldSpell =
-      card.cardKind === "spell" && card.subtype === "field";
+    const isFieldSpell = card.cardKind === "spell" && card.subtype === "field";
     const isContinuousSpell =
       card.cardKind === "spell" && card.subtype === "continuous";
     const placementOnly = !effect && (isFieldSpell || isContinuousSpell);
@@ -1650,7 +1654,8 @@ export default class EffectEngine {
       if (fromHand) {
         effect = this.getHandActivationEffect(card);
         const placementOnly =
-          (!effect && (card.subtype === "field" || card.subtype === "continuous"));
+          !effect &&
+          (card.subtype === "field" || card.subtype === "continuous");
         if (!effect) {
           if (placementOnly) {
             logDev?.("SPELL_TRAP_PLACEMENT_ONLY", {
@@ -1980,7 +1985,8 @@ export default class EffectEngine {
 
       const isHuman =
         ctx?.player && this.game && ctx.player === this.game.player;
-      const isBot = !isHuman && ctx?.player && this.game && ctx.player === this.game.bot;
+      const isBot =
+        !isHuman && ctx?.player && this.game && ctx.player === this.game.bot;
 
       const shouldAutoSelect = def.autoSelect || !!def.strategy;
       if (shouldAutoSelect) {
@@ -2477,10 +2483,7 @@ export default class EffectEngine {
             break;
           }
           case "destroy_self_monsters_and_draw": {
-            const result = await this.applyDestroyAllOthersAndDraw(
-              action,
-              ctx
-            );
+            const result = await this.applyDestroyAllOthersAndDraw(action, ctx);
             actionResult = actionResult || result;
             executed = result || executed;
             break;
@@ -2509,21 +2512,13 @@ export default class EffectEngine {
             break;
           }
           case "forbid_attack_this_turn": {
-            const result = this.applyForbidAttackThisTurn(
-              action,
-              targets,
-              ctx
-            );
+            const result = this.applyForbidAttackThisTurn(action, targets, ctx);
             actionResult = actionResult || result;
             executed = result || executed;
             break;
           }
           case "forbid_attack_next_turn": {
-            const result = this.applyForbidAttackNextTurn(
-              action,
-              targets,
-              ctx
-            );
+            const result = this.applyForbidAttackNextTurn(action, targets, ctx);
             actionResult = actionResult || result;
             executed = result || executed;
             break;
@@ -2556,8 +2551,41 @@ export default class EffectEngine {
             executed = result || executed;
             break;
           }
+          case "destroy_attacker_on_archetype_destruction": {
+            const result = await handleDestroyAttackerOnArchetypeDestruction(
+              action,
+              ctx,
+              targets,
+              this
+            );
+            actionResult = actionResult || result;
+            executed = result || executed;
+            break;
+          }
           case "darkness_valley_battle_punish": {
             const result = this.applyDarknessValleyBattlePunish(action, ctx);
+            actionResult = actionResult || result;
+            executed = result || executed;
+            break;
+          }
+          case "upkeep_pay_or_send_to_grave": {
+            const result = await handleUpkeepPayOrSendToGrave(
+              action,
+              ctx,
+              targets,
+              this
+            );
+            actionResult = actionResult || result;
+            executed = result || executed;
+            break;
+          }
+          case "special_summon_from_deck_with_counter_limit": {
+            const result = await handleSpecialSummonFromDeckWithCounterLimit(
+              action,
+              ctx,
+              targets,
+              this
+            );
             actionResult = actionResult || result;
             executed = result || executed;
             break;
@@ -2617,10 +2645,7 @@ export default class EffectEngine {
             break;
           }
           case "abyssal_eel_special_summon": {
-            const result = await this.applyAbyssalEelSpecialSummon(
-              action,
-              ctx
-            );
+            const result = await this.applyAbyssalEelSpecialSummon(action, ctx);
             actionResult = actionResult || result;
             executed = result || executed;
             break;
@@ -3381,8 +3406,6 @@ export default class EffectEngine {
 
     return true;
   }
-
-
 
   applyDarknessValleyBattlePunish(action, ctx) {
     const destroyed = ctx?.destroyed;
@@ -4352,8 +4375,6 @@ export default class EffectEngine {
     return true;
   }
 
-
-
   applyAddCounter(action, ctx, targets) {
     const counterType = action.counterType || "default";
     let amount = action.amount || 1;
@@ -4787,11 +4808,11 @@ export default class EffectEngine {
           requiredMaterials,
           async (selectedMaterials) => {
             // Validate materials
-              const validation = this.evaluateFusionSelection(
-                fusionMonster,
-                selectedMaterials,
-                { player: ctx.player }
-              );
+            const validation = this.evaluateFusionSelection(
+              fusionMonster,
+              selectedMaterials,
+              { player: ctx.player }
+            );
 
             if (!validation.ok) {
               this.game.isResolvingEffect = false;

@@ -127,7 +127,7 @@ export async function handleSpecialSummonFromZone(
     // Apply filters to find candidates
     const filters = action.filters || {};
     const excludeSummonRestrict = action.excludeSummonRestrict || [];
-    
+
     candidates = zone.filter((card) => {
       if (!card) return false;
 
@@ -191,7 +191,11 @@ export async function handleSpecialSummonFromZone(
   const baseMax = Number.isFinite(count.max) ? count.max : 1;
   const resolvedMax =
     dynamicMax !== null ? Math.min(dynamicMax, dynamicCap, baseMax) : baseMax;
-  const maxSelect = Math.min(resolvedMax, candidates.length, 5 - player.field.length);
+  const maxSelect = Math.min(
+    resolvedMax,
+    candidates.length,
+    5 - player.field.length
+  );
 
   if (maxSelect === 0) {
     game.renderer?.log("Field is full, cannot Special Summon.");
@@ -1618,7 +1622,7 @@ async function promptTieBreaker(
 }
 /**
  * Generic handler for temporarily boosting ATK/DEF until end of turn
- * 
+ *
  * Action properties:
  * - targetRef: reference to the target card(s)
  * - atkBoost: ATK boost amount (default: 0)
@@ -1685,12 +1689,16 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
 
   if (anyBuffed && affectedCards.length > 0) {
     const boosts = [];
-    if (atkBoost !== 0) boosts.push(`${atkBoost > 0 ? "+" : ""}${atkBoost} ATK`);
-    if (defBoost !== 0) boosts.push(`${defBoost > 0 ? "+" : ""}${defBoost} DEF`);
+    if (atkBoost !== 0)
+      boosts.push(`${atkBoost > 0 ? "+" : ""}${atkBoost} ATK`);
+    if (defBoost !== 0)
+      boosts.push(`${defBoost > 0 ? "+" : ""}${defBoost} DEF`);
 
     const cardList = affectedCards.join(", ");
     const duration = permanent ? "" : " until end of turn";
-    game.renderer?.log(`${cardList} gained ${boosts.join(" and ")}${duration}.`);
+    game.renderer?.log(
+      `${cardList} gained ${boosts.join(" and ")}${duration}.`
+    );
     game.updateBoard();
   }
 
@@ -1699,7 +1707,7 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
 
 /**
  * Generic handler for adding/removing status flags
- * 
+ *
  * Action properties:
  * - targetRef: reference to the target card(s)
  * - status: status flag to add/remove (e.g., "battleIndestructible", "piercing")
@@ -1760,7 +1768,9 @@ export async function handleAddStatus(action, ctx, targets, engine) {
   if (modified && affectedCards.length > 0) {
     const displayStatus = STATUS_DISPLAY_NAMES[status] || status;
     const cardList = affectedCards.join(", ");
-    const statusText = remove ? `lost ${displayStatus}` : `gained ${displayStatus}`;
+    const statusText = remove
+      ? `lost ${displayStatus}`
+      : `gained ${displayStatus}`;
     game.renderer?.log(`${cardList} ${statusText}.`);
     game.updateBoard();
   }
@@ -1770,7 +1780,7 @@ export async function handleAddStatus(action, ctx, targets, engine) {
 
 /**
  * Generic handler for paying Life Points as a cost
- * 
+ *
  * Action properties:
  * - amount: LP to pay
  * - fraction: alternative, pay a fraction of current LP (0.5 = half)
@@ -1804,7 +1814,7 @@ export async function handlePayLP(action, ctx, targets, engine) {
 /**
  * Generic handler for adding cards from any zone to hand
  * Supports multi-select with filters
- * 
+ *
  * Action properties:
  * - zone: source zone (default: "graveyard")
  * - filters: { archetype, name, level, cardKind, excludeSelf }
@@ -1874,7 +1884,9 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
   if (player.id === "bot") {
     const toAdd =
       candidates[0]?.cardKind === "monster"
-        ? candidates.sort((a, b) => (b.atk || 0) - (a.atk || 0)).slice(0, maxSelect)
+        ? candidates
+            .sort((a, b) => (b.atk || 0) - (a.atk || 0))
+            .slice(0, maxSelect)
         : candidates.slice(0, maxSelect);
 
     for (const card of toAdd) {
@@ -1886,7 +1898,9 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
     }
 
     game.renderer?.log(
-      `${player.name || player.id} added ${toAdd.length} card(s) to hand from ${sourceZone}.`
+      `${player.name || player.id} added ${
+        toAdd.length
+      } card(s) to hand from ${sourceZone}.`
     );
     game.updateBoard();
     return true;
@@ -1931,7 +1945,9 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
               player.hand.push(chosen);
             }
 
-            game.renderer?.log(`Added ${chosen.name} to hand from ${sourceZone}.`);
+            game.renderer?.log(
+              `Added ${chosen.name} to hand from ${sourceZone}.`
+            );
             game.isResolvingEffect = false;
             game.updateBoard();
             resolve(true);
@@ -2008,7 +2024,7 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
 
 /**
  * Generic handler for healing based on destroyed monster's ATK
- * 
+ *
  * Action properties:
  * - fraction: fraction of ATK to heal (default: 1.0)
  * - multiplier: alternative name for fraction
@@ -2026,7 +2042,9 @@ export async function handleHealFromDestroyedAtk(action, ctx, targets, engine) {
 
   player.gainLP(healAmount);
   game.renderer?.log(
-    `${player.name || player.id} gained ${healAmount} LP from ${destroyed.name}'s ATK.`
+    `${player.name || player.id} gained ${healAmount} LP from ${
+      destroyed.name
+    }'s ATK.`
   );
   game.updateBoard();
 
@@ -2035,7 +2053,7 @@ export async function handleHealFromDestroyedAtk(action, ctx, targets, engine) {
 
 /**
  * Generic handler for switching monster position (attack <-> defense)
- * 
+ *
  * Action properties:
  * - targetRef: reference to the target card(s)
  * - atkBoost: optional ATK boost after position change
@@ -2104,7 +2122,7 @@ export async function handleSwitchPosition(action, ctx, targets, engine) {
 /**
  * Generic handler for permanent ATK/DEF buffs with named tracking
  * This allows stackable buffs that persist while the card is on the field
- * 
+ *
  * Action properties:
  * - targetRef: reference to the target card (default: "self")
  * - atkBoost: ATK boost amount (default: 0)
@@ -2135,7 +2153,7 @@ export async function handlePermanentBuffNamed(action, ctx, targets, engine) {
     targetCards = (player.field || []).filter((card) => {
       if (!card || card.cardKind !== "monster") return false;
       if (card.isFacedown) return false;
-      
+
       // Check archetype filter
       if (action.archetype) {
         const cardArchetypes = Array.isArray(card.archetypes)
@@ -2145,7 +2163,7 @@ export async function handlePermanentBuffNamed(action, ctx, targets, engine) {
           : [];
         if (!cardArchetypes.includes(action.archetype)) return false;
       }
-      
+
       return true;
     });
   } else if (targetRef === "self") {
@@ -2169,7 +2187,7 @@ export async function handlePermanentBuffNamed(action, ctx, targets, engine) {
 
   for (const card of targetCards) {
     if (!card || card.cardKind !== "monster") continue;
-    
+
     // Check archetype filter again for summoned card scenario
     if (action.archetype && targetRef === "summonedCard") {
       const cardArchetypes = Array.isArray(card.archetypes)
@@ -2179,7 +2197,7 @@ export async function handlePermanentBuffNamed(action, ctx, targets, engine) {
         : [];
       if (!cardArchetypes.includes(action.archetype)) continue;
     }
-    
+
     // Check if card owner matches
     if (card.owner && card.owner !== player.id) continue;
 
@@ -2193,12 +2211,12 @@ export async function handlePermanentBuffNamed(action, ctx, targets, engine) {
     if (atkBoost !== 0) {
       const currentBuff = card.permanentBuffsBySource[sourceName]?.atk || 0;
       const newBuff = cumulative ? currentBuff + atkBoost : atkBoost;
-      
+
       if (!card.permanentBuffsBySource[sourceName]) {
         card.permanentBuffsBySource[sourceName] = {};
       }
       card.permanentBuffsBySource[sourceName].atk = newBuff;
-      
+
       // Apply to actual stat (calculate delta and apply)
       const delta = newBuff - currentBuff;
       card.atk = (card.atk || 0) + delta;
@@ -2208,12 +2226,12 @@ export async function handlePermanentBuffNamed(action, ctx, targets, engine) {
     if (defBoost !== 0) {
       const currentBuff = card.permanentBuffsBySource[sourceName]?.def || 0;
       const newBuff = cumulative ? currentBuff + defBoost : defBoost;
-      
+
       if (!card.permanentBuffsBySource[sourceName]) {
         card.permanentBuffsBySource[sourceName] = {};
       }
       card.permanentBuffsBySource[sourceName].def = newBuff;
-      
+
       // Apply to actual stat (calculate delta and apply)
       const delta = newBuff - currentBuff;
       card.def = (card.def || 0) + delta;
@@ -2227,8 +2245,10 @@ export async function handlePermanentBuffNamed(action, ctx, targets, engine) {
 
   if (anyBuffed) {
     const boosts = [];
-    if (atkBoost !== 0) boosts.push(`${atkBoost > 0 ? "+" : ""}${atkBoost} ATK`);
-    if (defBoost !== 0) boosts.push(`${defBoost > 0 ? "+" : ""}${defBoost} DEF`);
+    if (atkBoost !== 0)
+      boosts.push(`${atkBoost > 0 ? "+" : ""}${atkBoost} ATK`);
+    if (defBoost !== 0)
+      boosts.push(`${defBoost > 0 ? "+" : ""}${defBoost} DEF`);
 
     game.renderer?.log(`${source.name} applied ${boosts.join(" and ")} buff.`);
     game.updateBoard();
@@ -2240,14 +2260,19 @@ export async function handlePermanentBuffNamed(action, ctx, targets, engine) {
 /**
  * Generic handler for removing permanent named buffs
  * Removes all buffs associated with a specific source name
- * 
+ *
  * Action properties:
  * - targetRef: reference to the target card (default: "self")
  * - sourceName: identifier for the buff source to remove (default: source card name)
  * - removeFromAllField: if true, removes buff from all monsters on player's field
  * - archetype: if specified, only remove buffs from monsters of this archetype
  */
-export async function handleRemovePermanentBuffNamed(action, ctx, targets, engine) {
+export async function handleRemovePermanentBuffNamed(
+  action,
+  ctx,
+  targets,
+  engine
+) {
   const { player, source } = ctx;
   const game = engine.game;
 
@@ -2260,7 +2285,7 @@ export async function handleRemovePermanentBuffNamed(action, ctx, targets, engin
     // Remove from all monsters on field matching archetype
     targetCards = (player.field || []).filter((card) => {
       if (!card || card.cardKind !== "monster") return false;
-      
+
       // Check archetype filter
       if (action.archetype) {
         const cardArchetypes = Array.isArray(card.archetypes)
@@ -2270,7 +2295,7 @@ export async function handleRemovePermanentBuffNamed(action, ctx, targets, engin
           : [];
         if (!cardArchetypes.includes(action.archetype)) return false;
       }
-      
+
       return true;
     });
   } else if (targetRef === "self") {
@@ -2315,7 +2340,7 @@ export async function handleRemovePermanentBuffNamed(action, ctx, targets, engin
 
 /**
  * Generic handler for granting a second attack this turn
- * 
+ *
  * Action properties:
  * - targetRef: reference to the target card (default: "self")
  */
@@ -2350,7 +2375,7 @@ export async function handleGrantSecondAttack(action, ctx, targets, engine) {
   }
 
   if (anyGranted) {
-    const cardList = targetCards.map(c => c.name).join(", ");
+    const cardList = targetCards.map((c) => c.name).join(", ");
     game.renderer?.log(`${cardList} can attack again this turn.`);
     game.updateBoard();
   }
@@ -2361,14 +2386,19 @@ export async function handleGrantSecondAttack(action, ctx, targets, engine) {
 /**
  * Generic handler for conditional summon from hand
  * Offers to summon a card if a condition is met (e.g., controlling a specific card)
- * 
+ *
  * Action properties:
  * - targetRef: reference to the card to potentially summon (must be in hand)
  * - condition: { type, cardName, zone } - condition to check
  * - position: "attack" | "defense" | "choice" (default: "choice")
  * - optional: boolean - if true, prompts player; if false, auto-summons (default: true)
  */
-export async function handleConditionalSummonFromHand(action, ctx, targets, engine) {
+export async function handleConditionalSummonFromHand(
+  action,
+  ctx,
+  targets,
+  engine
+) {
   const { player } = ctx;
   const game = engine.game;
 
@@ -2377,18 +2407,20 @@ export async function handleConditionalSummonFromHand(action, ctx, targets, engi
   // Get the card(s) to potentially summon
   const targetRef = action.targetRef;
   const targetCards = targets?.[targetRef];
-  
+
   if (!targetCards || targetCards.length === 0) return false;
-  
+
   const card = Array.isArray(targetCards) ? targetCards[0] : targetCards;
 
   // Find card in hand (might be different reference if moved by previous action)
   // The targets object contains the original reference, but after a move action,
   // the card object may have been moved to hand with the same reference or a clone
-  const handCard = player.hand.find(c => c === card || c.name === card.name);
-  
+  const handCard = player.hand.find((c) => c === card || c.name === card.name);
+
   if (!handCard) {
-    console.log(`Card "${card.name}" not found in hand for conditional summon.`);
+    console.log(
+      `Card "${card.name}" not found in hand for conditional summon.`
+    );
     return false;
   }
 
@@ -2399,12 +2431,12 @@ export async function handleConditionalSummonFromHand(action, ctx, targets, engi
   if (condition.type === "control_card") {
     const zoneName = condition.zone || "fieldSpell";
     const cardName = condition.cardName;
-    
+
     if (zoneName === "fieldSpell") {
       conditionMet = player.fieldSpell?.name === cardName;
     } else {
       const zone = player[zoneName] || [];
-      conditionMet = zone.some(c => c && c.name === cardName);
+      conditionMet = zone.some((c) => c && c.name === cardName);
     }
   } else {
     // Default to true if no condition specified
@@ -2412,9 +2444,10 @@ export async function handleConditionalSummonFromHand(action, ctx, targets, engi
   }
 
   if (!conditionMet) {
-    const conditionDesc = condition.type === "control_card" 
-      ? `controlling "${condition.cardName}"` 
-      : "unknown condition";
+    const conditionDesc =
+      condition.type === "control_card"
+        ? `controlling "${condition.cardName}"`
+        : "unknown condition";
     console.log(`Condition not met for conditional summon: ${conditionDesc}`);
     return false;
   }
@@ -2427,9 +2460,11 @@ export async function handleConditionalSummonFromHand(action, ctx, targets, engi
 
   // Get the index of the card in hand
   const handIndex = player.hand.indexOf(handCard);
-  
+
   if (handIndex === -1) {
-    console.warn(`Card "${handCard.name}" not found in hand during conditional summon execution.`);
+    console.warn(
+      `Card "${handCard.name}" not found in hand during conditional summon execution.`
+    );
     return false;
   }
 
@@ -2446,10 +2481,10 @@ export async function handleConditionalSummonFromHand(action, ctx, targets, engi
 
   // For human player
   if (optional) {
-    const conditionText = condition.cardName 
-      ? `You control "${condition.cardName}".` 
+    const conditionText = condition.cardName
+      ? `You control "${condition.cardName}".`
       : "Condition met.";
-    
+
     const wantsToSummon = window.confirm(
       `${conditionText} Do you want to Special Summon "${handCard.name}" from your hand?`
     );
@@ -2476,13 +2511,13 @@ async function performSummon(card, handIndex, player, action, engine) {
 
   // Remove from hand and add to field
   player.hand.splice(handIndex, 1);
-  
+
   card.position = position;
   card.isFacedown = false;
   card.hasAttacked = false;
   card.cannotAttackThisTurn = action.cannotAttackThisTurn || false;
   card.owner = player.id;
-  
+
   player.field.push(card);
 
   game.renderer?.log(
@@ -2496,6 +2531,375 @@ async function performSummon(card, handIndex, player, action, engine) {
     method: "special",
     sourceZone: "hand",
   });
+
+  game.updateBoard();
+  return true;
+}
+
+/**
+ * Generic handler for destroying the attacking monster when your card is destroyed
+ * Implements the "Darkness Valley battle punish" effect pattern
+ * 
+ * Action properties:
+ * - archetype: archetype to check on destroyed card (e.g., "Shadow-Heart")
+ * - minLevel: minimum level of destroyed card to trigger (default: 1)
+ */
+export async function handleDestroyAttackerOnArchetypeDestruction(
+  action,
+  ctx,
+  targets,
+  engine
+) {
+  const { destroyed, attacker } = ctx;
+  const game = engine.game;
+
+  if (!destroyed || !attacker || !game) return false;
+
+  const archetype = action.archetype || "Shadow-Heart";
+  const minLevel = action.minLevel || 1;
+
+  // Validate destroyed card archetype and level
+  const destroyedArchetypes = Array.isArray(destroyed.archetypes)
+    ? destroyed.archetypes
+    : destroyed.archetype
+    ? [destroyed.archetype]
+    : [];
+
+  if (!destroyedArchetypes.includes(archetype)) return false;
+
+  const destroyedLevel = destroyed.level || 0;
+  if (destroyedLevel < minLevel) return false;
+
+  // Validate attacker is opponent's monster
+  const attackerOwner = engine.getOwnerByCard(attacker);
+  if (!attackerOwner || attackerOwner.id === ctx.player.id) return false;
+
+  // Move attacker to graveyard
+  const attackerZone = engine.findCardZone(attackerOwner, attacker);
+  if (!attackerZone) return false;
+
+  const idx = attackerZone.indexOf(attacker);
+  if (idx === -1) return false;
+
+  attackerZone.splice(idx, 1);
+
+  if (!attackerOwner.graveyard) {
+    attackerOwner.graveyard = [];
+  }
+  attackerOwner.graveyard.push(attacker);
+
+  game.renderer?.log(
+    `${attacker.name} was sent to the Graveyard as punishment!`
+  );
+
+  game.emit("card_to_grave", {
+    card: attacker,
+    fromZone: attackerZone,
+    player: attackerOwner,
+  });
+
+  game.updateBoard();
+  return true;
+}
+
+/**
+ * Generic handler for upkeep cost: pay LP or send card to graveyard
+ * Implements the "Shadow-Heart Shield" upkeep effect pattern
+ * 
+ * Action properties:
+ * - lpCost: amount of LP to pay (default: 800)
+ * - failureZone: zone to send if LP insufficient or player chooses not to pay (default: "graveyard")
+ */
+export async function handleUpkeepPayOrSendToGrave(
+  action,
+  ctx,
+  targets,
+  engine
+) {
+  const { player, source } = ctx;
+  const game = engine.game;
+
+  if (!player || !source || !game) return false;
+
+  const lpCost = action.lpCost || 800;
+  const failureZone = action.failureZone || "graveyard";
+
+  // Check if LP is available
+  if (player.lp < lpCost) {
+    // Send source to graveyard
+    const sourceZone = engine.findCardZone(player, source);
+    if (sourceZone) {
+      const idx = sourceZone.indexOf(source);
+      if (idx !== -1) {
+        sourceZone.splice(idx, 1);
+        if (failureZone === "graveyard") {
+          player.graveyard = player.graveyard || [];
+          player.graveyard.push(source);
+        } else if (failureZone === "banished") {
+          player.banished = player.banished || [];
+          player.banished.push(source);
+        }
+
+        game.renderer?.log(
+          `${player.name} cannot pay ${lpCost} LP upkeep for ${source.name}. Sent to ${failureZone}.`
+        );
+
+        game.emit("card_to_grave", {
+          card: source,
+          fromZone: sourceZone,
+          player: player,
+        });
+      }
+    }
+
+    game.updateBoard();
+    return true;
+  }
+
+  // Enough LP - ask player to pay
+  let shouldPay = false;
+
+  if (player.id === "bot") {
+    // Bot always pays if possible
+    shouldPay = true;
+  } else {
+    // Human player: show confirm dialog
+    const wantsToPay = window.confirm(
+      `Pay ${lpCost} LP to keep "${source.name}" on the field? If you decline, it will be sent to the ${failureZone}.`
+    );
+    shouldPay = wantsToPay;
+  }
+
+  if (shouldPay) {
+    player.takeDamage(lpCost);
+    game.renderer?.log(
+      `${player.name} paid ${lpCost} LP to keep ${source.name} on field.`
+    );
+    game.updateBoard();
+    game.checkWinCondition?.();
+    return true;
+  }
+
+  // Send to graveyard
+  const sourceZone = engine.findCardZone(player, source);
+  if (sourceZone) {
+    const idx = sourceZone.indexOf(source);
+    if (idx !== -1) {
+      sourceZone.splice(idx, 1);
+      if (failureZone === "graveyard") {
+        player.graveyard = player.graveyard || [];
+        player.graveyard.push(source);
+      } else if (failureZone === "banished") {
+        player.banished = player.banished || [];
+        player.banished.push(source);
+      }
+
+      game.renderer?.log(
+        `${player.name} chose not to pay upkeep. ${source.name} sent to ${failureZone}.`
+      );
+
+      game.emit("card_to_grave", {
+        card: source,
+        fromZone: sourceZone,
+        player: player,
+      });
+    }
+  }
+
+  game.updateBoard();
+  return true;
+}
+
+/**
+ * Generic handler for special summon from deck with counter-based ATK limit
+ * Implements the "Shadow-Heart Cathedral" summoning with judgment marker counters
+ * 
+ * Action properties:
+ * - counterType: type of counter to use (default: "judgment_marker")
+ * - counterMultiplier: ATK value per counter (default: 500)
+ * - filters: filters to apply to deck cards (archetype, cardKind, etc)
+ * - position: "attack" | "defense" | "choice" (default: "attack")
+ * - sendSourceToGraveAfter: if true, send source card to graveyard after summon (default: false)
+ */
+export async function handleSpecialSummonFromDeckWithCounterLimit(
+  action,
+  ctx,
+  targets,
+  engine
+) {
+  const { player, source } = ctx;
+  const game = engine.game;
+
+  if (!player || !source || !game) return false;
+
+  const counterType = action.counterType || "judgment_marker";
+  const counterMultiplier = action.counterMultiplier || 500;
+  const filters = action.filters || {};
+  const position = action.position || "attack";
+
+  // Calculate max ATK based on counters
+  const counterCount = source[counterType] || 0;
+  const maxAtk = counterCount * counterMultiplier;
+
+  if (maxAtk === 0) {
+    game.renderer?.log(
+      `No ${counterType} counters on ${source.name}. Cannot summon.`
+    );
+    return false;
+  }
+
+  // Filter deck by ATK limit
+  const deck = player.deck || [];
+  const candidates = deck.filter((card) => {
+    if (!card || card.cardKind !== "monster") return false;
+    if (card.atk > maxAtk) return false;
+
+    // Apply archetype filter
+    if (filters.archetype) {
+      const hasArchetype =
+        card.archetype === filters.archetype ||
+        (Array.isArray(card.archetypes) &&
+          card.archetypes.includes(filters.archetype));
+      if (!hasArchetype) return false;
+    }
+
+    return true;
+  });
+
+  if (candidates.length === 0) {
+    game.renderer?.log(
+      `No monsters in deck with ATK <= ${maxAtk} to summon.`
+    );
+    return false;
+  }
+
+  // Bot: auto-select best card (highest ATK)
+  if (player.id === "bot") {
+    const chosen = candidates.reduce((best, card) =>
+      card.atk > best.atk ? card : best
+    );
+
+    return await performSummonFromDeck(
+      chosen,
+      deck,
+      player,
+      action,
+      engine,
+      source
+    );
+  }
+
+  // Human player: show selection modal with counter info
+  return new Promise((resolve) => {
+    const modalConfig = {
+      title: `Select 1 monster (Max ATK: ${maxAtk}, ${counterCount}x ${counterType})`,
+      subtitle: `Monsters with ATK ≤ ${maxAtk}`,
+      infoText: `You have ${counterCount} ${counterType} counters. After summoning, this card will be sent to the Graveyard.`,
+    };
+
+    game.renderer?.showCardSelectionModal(
+      candidates,
+      modalConfig.title,
+      1,
+      async (selected) => {
+        if (!selected || selected.length === 0) {
+          resolve(false);
+          return;
+        }
+
+        const chosen = selected[0];
+        const result = await performSummonFromDeck(
+          chosen,
+          deck,
+          player,
+          action,
+          engine,
+          source
+        );
+        resolve(result);
+      }
+    );
+  });
+}
+
+/**
+ * Helper function to perform the summon for handleSpecialSummonFromDeckWithCounterLimit
+ */
+async function performSummonFromDeck(
+  card,
+  deck,
+  player,
+  action,
+  engine,
+  source
+) {
+  const game = engine.game;
+
+  if (!card || !deck.includes(card)) return false;
+
+  // Remove from deck
+  const idx = deck.indexOf(card);
+  if (idx !== -1) {
+    deck.splice(idx, 1);
+  }
+
+  // Check field space
+  if (player.field.length >= 5) {
+    // Return to deck
+    deck.push(card);
+    game.renderer?.log("Field is full. Cannot summon.");
+    return false;
+  }
+
+  // Determine position
+  let summonPosition = action.position || "attack";
+  if (summonPosition === "choice") {
+    summonPosition = await engine.chooseSpecialSummonPosition(card, player);
+  }
+
+  // Summon card
+  card.position = summonPosition;
+  card.isFacedown = false;
+  card.hasAttacked = false;
+  card.attacksUsedThisTurn = 0;
+  card.cannotAttackThisTurn = action.cannotAttackThisTurn || false;
+  card.owner = player.id;
+
+  player.field.push(card);
+
+  game.renderer?.log(
+    `${player.name} Special Summoned ${card.name} from deck in ${
+      summonPosition === "defense" ? "Defense" : "Attack"
+    } Position.`
+  );
+
+  game.emit("after_summon", {
+    card: card,
+    player: player,
+    method: "special",
+    sourceZone: "deck",
+  });
+
+  // Send source to graveyard if specified
+  if (action.sendSourceToGraveAfter && source) {
+    const sourceZone = engine.findCardZone(player, source);
+    if (sourceZone) {
+      const sourceIdx = sourceZone.indexOf(source);
+      if (sourceIdx !== -1) {
+        sourceZone.splice(sourceIdx, 1);
+        player.graveyard = player.graveyard || [];
+        player.graveyard.push(source);
+
+        game.emit("card_to_grave", {
+          card: source,
+          fromZone: sourceZone,
+          player: player,
+        });
+
+        game.renderer?.log(`${source.name} was sent to the Graveyard.`);
+      }
+    }
+  }
 
   game.updateBoard();
   return true;
@@ -2556,7 +2960,27 @@ export function registerDefaultHandlers(registry) {
   registry.register("heal_from_destroyed_atk", handleHealFromDestroyedAtk);
   registry.register("switch_position", handleSwitchPosition);
   registry.register("permanent_buff_named", handlePermanentBuffNamed);
-  registry.register("remove_permanent_buff_named", handleRemovePermanentBuffNamed);
+  registry.register(
+    "remove_permanent_buff_named",
+    handleRemovePermanentBuffNamed
+  );
   registry.register("grant_second_attack", handleGrantSecondAttack);
-  registry.register("conditional_summon_from_hand", handleConditionalSummonFromHand);
+  registry.register(
+    "conditional_summon_from_hand",
+    handleConditionalSummonFromHand
+  );
+
+  // FASE 2: New handlers for Shadow-Heart refactoring
+  registry.register(
+    "destroy_attacker_on_archetype_destruction",
+    handleDestroyAttackerOnArchetypeDestruction
+  );
+  registry.register(
+    "upkeep_pay_or_send_to_grave",
+    handleUpkeepPayOrSendToGrave
+  );
+  registry.register(
+    "special_summon_from_deck_with_counter_limit",
+    handleSpecialSummonFromDeckWithCounterLimit
+  );
 }
