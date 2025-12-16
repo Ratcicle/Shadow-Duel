@@ -2970,6 +2970,19 @@ export default class Game {
       card.cannotAttackThisTurn = false;
       card.cannotAttackUntilTurn = null;
       card.immuneToOpponentEffectsUntilTurn = null;
+      
+      // Clean up temporary stat modifiers from effects (e.g., Shadow-Heart Coward debuff)
+      if (card.tempAtkBoost) {
+        card.atk -= card.tempAtkBoost;
+        if (card.atk < 0) card.atk = 0;
+        card.tempAtkBoost = 0;
+      }
+      if (card.tempDefBoost) {
+        card.def -= card.tempDefBoost;
+        if (card.def < 0) card.def = 0;
+        card.tempDefBoost = 0;
+      }
+      
       const prevBuff = card.voidTenebrisBuffValue || 0;
       if (prevBuff) {
         card.atk -= prevBuff;
