@@ -12,6 +12,7 @@ import {
   handleSpecialSummonFromDeckWithCounterLimit,
   handleDestroyTargetedCards,
   handleBuffStatsTempWithSecondAttack,
+  handleConditionalSpecialSummonFromHand,
 } from "./ActionHandlers.js";
 
 export const LEGACY_ACTION_TYPES = new Set([
@@ -2487,7 +2488,23 @@ export default class EffectEngine {
             break;
           }
           case "buff_stats_temp_with_second_attack": {
-            const result = await handleBuffStatsTempWithSecondAttack(action, ctx, targets, this);
+            const result = await handleBuffStatsTempWithSecondAttack(
+              action,
+              ctx,
+              targets,
+              this
+            );
+            actionResult = actionResult || result;
+            executed = result || executed;
+            break;
+          }
+          case "conditional_special_summon_from_hand": {
+            const result = await handleConditionalSpecialSummonFromHand(
+              action,
+              ctx,
+              targets,
+              this
+            );
             actionResult = actionResult || result;
             executed = result || executed;
             break;
@@ -2673,7 +2690,12 @@ export default class EffectEngine {
             break;
           }
           case "destroy_targeted_cards": {
-            const result = await handleDestroyTargetedCards(action, ctx, targets, this);
+            const result = await handleDestroyTargetedCards(
+              action,
+              ctx,
+              targets,
+              this
+            );
             actionResult = actionResult || result;
             executed = result || executed;
             break;
@@ -3954,7 +3976,6 @@ export default class EffectEngine {
     return true;
   }
 
-
   showSickleSelectionModal(candidates, maxSelect, onConfirm, onCancel) {
     if (
       this.game?.renderer &&
@@ -4389,7 +4410,6 @@ export default class EffectEngine {
 
     return added;
   }
-
 
   async applyTheShadowHeartSummonAndEquip(action, ctx, targets) {
     return new Promise((resolve) => {
@@ -4871,8 +4891,6 @@ export default class EffectEngine {
       player,
     }).ok;
   }
-
-
 
   async applyCallOfTheHauntedSummon(action, ctx, targets) {
     const player = ctx.player;
@@ -5496,4 +5514,3 @@ export default class EffectEngine {
     return true;
   }
 }
-

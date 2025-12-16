@@ -2539,7 +2539,7 @@ async function performSummon(card, handIndex, player, action, engine) {
 /**
  * Generic handler for destroying the attacking monster when your card is destroyed
  * Implements the "Darkness Valley battle punish" effect pattern
- * 
+ *
  * Action properties:
  * - archetype: archetype to check on destroyed card (e.g., "Shadow-Heart")
  * - minLevel: minimum level of destroyed card to trigger (default: 1)
@@ -2605,7 +2605,7 @@ export async function handleDestroyAttackerOnArchetypeDestruction(
 /**
  * Generic handler for upkeep cost: pay LP or send card to graveyard
  * Implements the "Shadow-Heart Shield" upkeep effect pattern
- * 
+ *
  * Action properties:
  * - lpCost: amount of LP to pay (default: 800)
  * - failureZone: zone to send if LP insufficient or player chooses not to pay (default: "graveyard")
@@ -2713,7 +2713,7 @@ export async function handleUpkeepPayOrSendToGrave(
 /**
  * Generic handler for special summon from deck with counter-based ATK limit
  * Implements the "Shadow-Heart Cathedral" summoning with judgment marker counters
- * 
+ *
  * Action properties:
  * - counterType: type of counter to use (default: "judgment_marker")
  * - counterMultiplier: ATK value per counter (default: 500)
@@ -2767,9 +2767,7 @@ export async function handleSpecialSummonFromDeckWithCounterLimit(
   });
 
   if (candidates.length === 0) {
-    game.renderer?.log(
-      `No monsters in deck with ATK <= ${maxAtk} to summon.`
-    );
+    game.renderer?.log(`No monsters in deck with ATK <= ${maxAtk} to summon.`);
     return false;
   }
 
@@ -3039,6 +3037,76 @@ export async function handleBuffStatsTempWithSecondAttack(
 }
 
 /**
+ * Special Summon a specific card from hand based on a condition
+ * Used by: Shadow-Heart Death Wyrm (special summon from hand when Shadow-Heart destroyed)
+ * Properties:
+ * - cardName: The exact name of the card to summon from hand
+ * - position: "attack" or "defense" (default "attack")
+ * - cannotAttackThisTurn: Whether summoned card cannot attack (default false)
+ */
+export async function handleConditionalSpecialSummonFromHand(
+  action,
+  ctx,
+  targets,
+  engine
+) {
+  const { player } = ctx;
+  const game = engine.game;
+
+  if (!player || !game) return false;
+
+  const cardName = action.cardName;
+  const position = action.position || "attack";
+  const cannotAttackThisTurn = action.cannotAttackThisTurn || false;
+
+  // Find the card in hand
+  const hand = player.hand || [];
+  const cardToSummon = hand.find((c) => c && c.name === cardName);
+
+  if (!cardToSummon) {
+    game.renderer?.log(`No "${cardName}" in hand to Special Summon.`);
+    return false;
+  }
+
+  // Check field space
+  if ((player.field || []).length >= 5) {
+    game.renderer?.log("Your field is full!");
+    return false;
+  }
+
+  // Remove from hand
+  const handIndex = hand.indexOf(cardToSummon);
+  if (handIndex !== -1) {
+    hand.splice(handIndex, 1);
+  }
+
+  // Special Summon to field
+  cardToSummon.position = position;
+  cardToSummon.isFacedown = position === "defense" ? true : false;
+  cardToSummon.hasAttacked = false;
+  cardToSummon.cannotAttackThisTurn = cannotAttackThisTurn;
+  cardToSummon.cannotAttackNextTurn = false;
+  cardToSummon.owner = player.id;
+
+  player.field = player.field || [];
+  player.field.push(cardToSummon);
+
+  game.renderer?.log(
+    `${cardToSummon.name} was Special Summoned from hand!`
+  );
+
+  game.emit("after_summon", {
+    card: cardToSummon,
+    player: player,
+    method: "special",
+    fromZone: "hand",
+  });
+
+  game.updateBoard();
+  return true;
+}
+
+/**
  * Initialize default handlers
  * @param {ActionHandlerRegistry} registry
  */
@@ -3122,5 +3190,11 @@ export function registerDefaultHandlers(registry) {
   registry.register(
     "buff_stats_temp_with_second_attack",
     handleBuffStatsTempWithSecondAttack
+  );
+
+  // FASE 4: New handlers for remaining Shadow-Heart refactoring
+  registry.register(
+    "conditional_special_summon_from_hand",
+    handleConditionalSpecialSummonFromHand
   );
 }

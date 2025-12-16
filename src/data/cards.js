@@ -496,9 +496,35 @@
         timing: "ignition",
         oncePerTurn: true,
         oncePerTurnName: "shadow_heart_abyssal_eel_summon",
+        targets: [
+          {
+            id: "eel_self_cost",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            count: { min: 1, max: 1 },
+          },
+          {
+            id: "eel_hand_target",
+            owner: "self",
+            zone: "hand",
+            cardName: "Shadow-Heart Leviathan",
+            count: { min: 1, max: 1 },
+          },
+        ],
         actions: [
           {
-            type: "abyssal_eel_special_summon",
+            type: "move",
+            targetRef: "eel_self_cost",
+            player: "self",
+            to: "graveyard",
+          },
+          {
+            type: "special_summon_from_hand_with_cost",
+            targetRef: "eel_hand_target",
+            cost: "move_to_graveyard",
+            position: "attack",
+            cannotAttackThisTurn: true,
           },
         ],
       },
@@ -1032,11 +1058,14 @@
         ],
       },
       {
+        id: "shadow_heart_shield_upkeep_effect",
         timing: "on_event",
         event: "standby_phase",
         actions: [
           {
-            type: "shadow_heart_shield_upkeep",
+            type: "upkeep_pay_or_send_to_grave",
+            lpCost: 800,
+            failureZone: "graveyard",
           },
         ],
       },
@@ -1116,11 +1145,12 @@
         id: "darkness_valley_battle_punish",
         timing: "on_event",
         event: "battle_destroy",
+        requireSelfAsDestroyed: true,
         oncePerTurn: true,
         oncePerTurnName: "Darkness Valley",
         actions: [
           {
-            type: "darkness_valley_battle_punish",
+            type: "destroy_attacker_on_archetype_destruction",
             archetype: "Shadow-Heart",
             minLevel: 8,
           },
@@ -1145,11 +1175,15 @@
         id: "shadow_heart_death_wyrm_hand_summon",
         timing: "on_event",
         event: "battle_destroy",
+        requireOwnMonsterArchetype: "Shadow-Heart",
         oncePerTurn: true,
         oncePerTurnName: "Shadow-Heart Death Wyrm",
         actions: [
           {
-            type: "shadow_heart_death_wyrm_special_summon",
+            type: "conditional_special_summon_from_hand",
+            cardName: "Shadow-Heart Death Wyrm",
+            position: "attack",
+            cannotAttackThisTurn: false,
           },
         ],
       },
@@ -1305,8 +1339,15 @@
         ],
         actions: [
           {
-            type: "the_shadow_heart_special_summon_and_equip",
+            type: "special_summon_from_zone",
             targetRef: "shadow_heart_gy_target",
+            sourceZone: "graveyard",
+            position: "attack",
+          },
+          {
+            type: "equip",
+            targetRef: "shadow_heart_gy_target",
+            equippedCard: "self",
           },
         ],
       },
