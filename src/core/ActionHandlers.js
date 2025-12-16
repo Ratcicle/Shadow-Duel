@@ -126,6 +126,8 @@ export async function handleSpecialSummonFromZone(
   } else {
     // Apply filters to find candidates
     const filters = action.filters || {};
+    const excludeSummonRestrict = action.excludeSummonRestrict || [];
+    
     candidates = zone.filter((card) => {
       if (!card) return false;
 
@@ -158,6 +160,11 @@ export async function handleSpecialSummonFromZone(
 
       // Exclude source card if specified in filters
       if (filters.excludeSelf && source && card.id === source.id) return false;
+
+      // Exclude cards with specific summon restrictions
+      if (excludeSummonRestrict.length > 0 && card.summonRestrict) {
+        if (excludeSummonRestrict.includes(card.summonRestrict)) return false;
+      }
 
       return true;
     });
@@ -2104,6 +2111,9 @@ export async function handleSwitchPosition(action, ctx, targets, engine) {
  * - defBoost: DEF boost amount (default: 0)
  * - sourceName: identifier for this buff source (default: source card name)
  * - cumulative: if true, adds to existing buff; if false, sets total (default: true)
+ * - applyToAllField: if true, applies to all monsters on player's field matching filters
+ * - archetype: if specified, only buff monsters of this archetype
+ * - summonedCard: special targetRef that refers to ctx.summonedCard
  */
 export async function handlePermanentBuffNamed(action, ctx, targets, engine) {
   const { player, source } = ctx;
@@ -2114,7 +2124,31 @@ export async function handlePermanentBuffNamed(action, ctx, targets, engine) {
   const targetRef = action.targetRef || "self";
   let targetCards = [];
 
-  if (targetRef === "self") {
+  // Special handling for summonedCard
+  if (targetRef === "summonedCard") {
+    const summonedCard = ctx.summonedCard;
+    if (summonedCard) {
+      targetCards = [summonedCard];
+    }
+  } else if (targetRef === "self" && action.applyToAllField) {
+    // Apply to all monsters on field matching archetype
+    targetCards = (player.field || []).filter((card) => {
+      if (!card || card.cardKind !== "monster") return false;
+      if (card.isFacedown) return false;
+      
+      // Check archetype filter
+      if (action.archetype) {
+        const cardArchetypes = Array.isArray(card.archetypes)
+          ? card.archetypes
+          : card.archetype
+          ? [card.archetype]
+          : [];
+        if (!cardArchetypes.includes(action.archetype)) return false;
+      }
+      
+      return true;
+    });
+  } else if (targetRef === "self") {
     targetCards = [source];
   } else if (targets[targetRef]) {
     targetCards = Array.isArray(targets[targetRef])
@@ -2123,7 +2157,6 @@ export async function handlePermanentBuffNamed(action, ctx, targets, engine) {
   }
 
   if (targetCards.length === 0) {
-    game.renderer?.log("No valid targets for permanent buff.");
     return false;
   }
 
@@ -2136,7 +2169,19 @@ export async function handlePermanentBuffNamed(action, ctx, targets, engine) {
 
   for (const card of targetCards) {
     if (!card || card.cardKind !== "monster") continue;
-    if (!player.field.includes(card)) continue;
+    
+    // Check archetype filter again for summoned card scenario
+    if (action.archetype && targetRef === "summonedCard") {
+      const cardArchetypes = Array.isArray(card.archetypes)
+        ? card.archetypes
+        : card.archetype
+        ? [card.archetype]
+        : [];
+      if (!cardArchetypes.includes(action.archetype)) continue;
+    }
+    
+    // Check if card owner matches
+    if (card.owner && card.owner !== player.id) continue;
 
     // Initialize permanent buffs tracking
     if (!card.permanentBuffsBySource) {
@@ -2185,7 +2230,7 @@ export async function handlePermanentBuffNamed(action, ctx, targets, engine) {
     if (atkBoost !== 0) boosts.push(`${atkBoost > 0 ? "+" : ""}${atkBoost} ATK`);
     if (defBoost !== 0) boosts.push(`${defBoost > 0 ? "+" : ""}${defBoost} DEF`);
 
-    game.renderer?.log(`${source.name} gained ${boosts.join(" and ")} permanently.`);
+    game.renderer?.log(`${source.name} applied ${boosts.join(" and ")} buff.`);
     game.updateBoard();
   }
 
@@ -2199,17 +2244,36 @@ export async function handlePermanentBuffNamed(action, ctx, targets, engine) {
  * Action properties:
  * - targetRef: reference to the target card (default: "self")
  * - sourceName: identifier for the buff source to remove (default: source card name)
+ * - removeFromAllField: if true, removes buff from all monsters on player's field
+ * - archetype: if specified, only remove buffs from monsters of this archetype
  */
 export async function handleRemovePermanentBuffNamed(action, ctx, targets, engine) {
-  const { source } = ctx;
+  const { player, source } = ctx;
   const game = engine.game;
 
-  if (!source || !game) return false;
+  if (!source || !game || !player) return false;
 
   const targetRef = action.targetRef || "self";
   let targetCards = [];
 
-  if (targetRef === "self") {
+  if (targetRef === "self" && action.removeFromAllField) {
+    // Remove from all monsters on field matching archetype
+    targetCards = (player.field || []).filter((card) => {
+      if (!card || card.cardKind !== "monster") return false;
+      
+      // Check archetype filter
+      if (action.archetype) {
+        const cardArchetypes = Array.isArray(card.archetypes)
+          ? card.archetypes
+          : card.archetype
+          ? [card.archetype]
+          : [];
+        if (!cardArchetypes.includes(action.archetype)) return false;
+      }
+      
+      return true;
+    });
+  } else if (targetRef === "self") {
     targetCards = [source];
   } else if (targets[targetRef]) {
     targetCards = Array.isArray(targets[targetRef])
@@ -2242,6 +2306,7 @@ export async function handleRemovePermanentBuffNamed(action, ctx, targets, engin
   }
 
   if (anyRemoved) {
+    game.renderer?.log(`${sourceName} buffs removed.`);
     game.updateBoard();
   }
 

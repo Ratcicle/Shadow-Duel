@@ -1,8 +1,12 @@
-﻿import Card from "./Card.js";
+import Card from "./Card.js";
 import { cardDatabase } from "../data/cards.js";
 import {
   ActionHandlerRegistry,
   registerDefaultHandlers,
+  handleSpecialSummonFromZone,
+  handlePermanentBuffNamed,
+  handleRemovePermanentBuffNamed,
+  handleSpecialSummonMatchingLevel,
 } from "./ActionHandlers.js";
 
 export const LEGACY_ACTION_TYPES = new Set([
@@ -23,17 +27,12 @@ export const LEGACY_ACTION_TYPES = new Set([
   "destroy_self_monsters_and_draw",
   "shadow_heart_rage_scale_buff",
   "shadow_heart_shield_upkeep",
-  "revive_shadowheart_from_grave",
   "forbid_attack_this_turn",
   "forbid_attack_next_turn",
   "grant_void_fusion_immunity",
-  "darkness_valley_apply_existing",
-  "darkness_valley_buff_summon",
-  "darkness_valley_cleanup",
   "darkness_valley_battle_punish",
   "shadow_heart_death_wyrm_special_summon",
   "conditional_special_summon_from_hand",
-  "shadow_heart_observer_summon",
   "add_counter",
   "shadow_heart_cathedral_summon",
   "the_shadow_heart_special_summon_and_equip",
@@ -57,13 +56,13 @@ export default class EffectEngine {
   }
 
   /**
-   * Helper para realizar Special Summon com escolha de posiÃ§Ã£o
+   * Helper para realizar Special Summon com escolha de posição
    * @param {Object} card - A carta a ser invocada
-   * @param {Object} player - O jogador que estÃ¡ invocando
-   * @param {Object} options - OpÃ§Ãµes adicionais
-   * @param {boolean} options.cannotAttackThisTurn - Se o monstro nÃ£o pode atacar neste turno
+   * @param {Object} player - O jogador que está invocando
+   * @param {Object} options - Opções adicionais
+   * @param {boolean} options.cannotAttackThisTurn - Se o monstro não pode atacar neste turno
    * @param {string} options.fromZone - Zona de origem (hand, deck, graveyard)
-   * @returns {Promise<string>} - A posiÃ§Ã£o escolhida ('attack' ou 'defense')
+   * @returns {Promise<string>} - A posição escolhida ('attack' ou 'defense')
    */
   async chooseSpecialSummonPosition(card, player, options = {}) {
     // Bot sempre escolhe attack
@@ -71,7 +70,7 @@ export default class EffectEngine {
       return "attack";
     }
 
-    // Player: mostrar modal de escolha de posiÃ§Ã£o
+    // Player: mostrar modal de escolha de posição
     if (
       this.game.renderer &&
       typeof this.game.renderer.showSpecialSummonPositionModal === "function"
@@ -565,7 +564,7 @@ export default class EffectEngine {
       if (this.isImmuneToOpponentEffects(card, ctx.player)) {
         if (this.game?.renderer?.log) {
           this.game.renderer.log(
-            `${card.name} estÃ¡ imune aos efeitos do oponente e ignora ${action.type}.`
+            `${card.name} está imune aos efeitos do oponente e ignora ${action.type}.`
           );
         }
         return true;
@@ -1241,7 +1240,7 @@ export default class EffectEngine {
       return { success: false, reason: "No on_play effect defined." };
     }
 
-    // VerificaÃ§Ã£o de campo vazio para spells do tipo equip com requireEmptyField
+    // Verificação de campo vazio para spells do tipo equip com requireEmptyField
     if (
       effect &&
       card.cardKind === "spell" &&
@@ -1251,7 +1250,7 @@ export default class EffectEngine {
       if (player.field && player.field.length > 0) {
         return {
           success: false,
-          reason: "VocÃª deve controlar nenhum monstro para ativar este efeito.",
+          reason: "Você deve controlar nenhum monstro para ativar este efeito.",
         };
       }
     }
@@ -1351,7 +1350,7 @@ export default class EffectEngine {
         return { success: true };
       }
 
-      // Equip Spells serÃ£o movidas para a zona de spell/trap na prÃ³pria action.
+      // Equip Spells serão movidas para a zona de spell/trap na própria action.
       if (card.subtype === "equip") {
         return { success: true };
       }
@@ -2498,8 +2497,13 @@ export default class EffectEngine {
             executed = result || executed;
             break;
           }
-          case "revive_shadowheart_from_grave": {
-            const result = this.applyReviveShadowHeartFromGrave(action, ctx);
+          case "special_summon_from_zone": {
+            const result = await handleSpecialSummonFromZone(
+              action,
+              ctx,
+              targets,
+              this
+            );
             actionResult = actionResult || result;
             executed = result || executed;
             break;
@@ -2530,20 +2534,24 @@ export default class EffectEngine {
             executed = result || executed;
             break;
           }
-          case "darkness_valley_apply_existing": {
-            const result = this.applyDarknessValleyInitialBuff(action, ctx);
+          case "permanent_buff_named": {
+            const result = await handlePermanentBuffNamed(
+              action,
+              ctx,
+              targets,
+              this
+            );
             actionResult = actionResult || result;
             executed = result || executed;
             break;
           }
-          case "darkness_valley_buff_summon": {
-            const result = this.applyDarknessValleySummonBuff(action, ctx);
-            actionResult = actionResult || result;
-            executed = result || executed;
-            break;
-          }
-          case "darkness_valley_cleanup": {
-            const result = this.applyDarknessValleyCleanup(action, ctx);
+          case "remove_permanent_buff_named": {
+            const result = await handleRemovePermanentBuffNamed(
+              action,
+              ctx,
+              targets,
+              this
+            );
             actionResult = actionResult || result;
             executed = result || executed;
             break;
@@ -2572,11 +2580,12 @@ export default class EffectEngine {
             executed = result || executed;
             break;
           }
-          case "shadow_heart_observer_summon": {
-            const result = await this.applyShadowHeartObserverSummon(
+          case "special_summon_matching_level": {
+            const result = await handleSpecialSummonMatchingLevel(
               action,
               ctx,
-              targets
+              targets,
+              this
             );
             actionResult = actionResult || result;
             executed = result || executed;
@@ -3288,8 +3297,8 @@ export default class EffectEngine {
   }
 
   applyForbidAttackThisTurn(action, targets, ctx) {
-    // Se targetRef estÃ¡ definido, usa os alvos selecionados
-    // Caso contrÃ¡rio, aplica Ã  carta fonte (self)
+    // Se targetRef está definido, usa os alvos selecionados
+    // Caso contrário, aplica à carta fonte (self)
     let targetCards = [];
     if (action.targetRef && targets[action.targetRef]) {
       targetCards = targets[action.targetRef];
@@ -3366,65 +3375,14 @@ export default class EffectEngine {
 
     if (this.game?.renderer?.log) {
       this.game.renderer.log(
-        `${card.name} estÃ¡ imune aos efeitos do oponente atÃ© o final do prÃ³ximo turno.`
+        `${card.name} está imune aos efeitos do oponente até o final do próximo turno.`
       );
     }
 
     return true;
   }
 
-  applyDarknessValleyInitialBuff(action, ctx) {
-    const amount = action.amount ?? 0;
-    if (!amount || !ctx?.player) return false;
-    const archetype = action.archetype || "Shadow-Heart";
-    let applied = false;
 
-    (ctx.player.field || []).forEach((monster) => {
-      if (!monster || monster.cardKind !== "monster") return;
-      if (monster.isFacedown) return;
-      const archetypes = monster.archetypes
-        ? monster.archetypes
-        : monster.archetype
-        ? [monster.archetype]
-        : [];
-      if (!archetypes.includes(archetype)) return;
-      if (this.addNamedPermanentAtkBuff(monster, ctx.source.name, amount)) {
-        applied = true;
-      }
-    });
-
-    return applied;
-  }
-
-  applyDarknessValleySummonBuff(action, ctx) {
-    const amount = action.amount ?? 0;
-    const monster = ctx?.summonedCard;
-    if (!amount || !monster || monster.cardKind !== "monster") return false;
-    if (monster.owner !== ctx.player.id) return false;
-    if (monster.isFacedown) return false;
-
-    const archetype = action.archetype || "Shadow-Heart";
-    const archetypes = monster.archetypes
-      ? monster.archetypes
-      : monster.archetype
-      ? [monster.archetype]
-      : [];
-
-    if (!archetypes.includes(archetype)) return false;
-
-    return this.addNamedPermanentAtkBuff(monster, ctx.source.name, amount);
-  }
-
-  applyDarknessValleyCleanup(action, ctx) {
-    const amount = action.amount ?? 0;
-    const archetype = action.archetype || "Shadow-Heart";
-    return this.removePermanentBuffFromGroup(
-      ctx.player,
-      ctx.source.name,
-      archetype,
-      amount
-    );
-  }
 
   applyDarknessValleyBattlePunish(action, ctx) {
     const destroyed = ctx?.destroyed;
@@ -3460,7 +3418,7 @@ export default class EffectEngine {
       return false;
     }
 
-    // Opcional: filtrar por arquÃ©tipo
+    // Opcional: filtrar por arquétipo
     let candidates = deck;
     if (action.archetype) {
       candidates = deck.filter((card) => {
@@ -3565,7 +3523,7 @@ export default class EffectEngine {
       return true;
     }
 
-    // Fallback: auto-seleciona o melhor disponÃ­vel
+    // Fallback: auto-seleciona o melhor disponível
     const fallback =
       candidates.reduce((top, card) => {
         if (!card) return top;
@@ -3815,7 +3773,7 @@ export default class EffectEngine {
     }
 
     if (!chosenFromCandidates) {
-      // fallback: Ãºltimo candidato da lista
+      // fallback: último candidato da lista
       chosenFromCandidates = candidates[candidates.length - 1];
     }
 
@@ -4287,7 +4245,7 @@ export default class EffectEngine {
 
     if (owner.id === "player") {
       const wantsToPay = window.confirm(
-        `Pagar 800 LP para manter "${card.name}" no campo? Se nÃ£o pagar, esta carta serÃ¡ enviada ao CemitÃ©rio.`
+        `Pagar 800 LP para manter "${card.name}" no campo? Se não pagar, esta carta será enviada ao Cemitério.`
       );
 
       if (wantsToPay) {
@@ -4317,98 +4275,6 @@ export default class EffectEngine {
     );
   }
 
-  async applyReviveShadowHeartFromGrave(action, ctx) {
-    const player = action.player === "opponent" ? ctx.opponent : ctx.player;
-    if (!player) return false;
-
-    const gy = player.graveyard || [];
-
-    const candidates = gy.filter((card) => {
-      if (!card || card.cardKind !== "monster") return false;
-
-      // Ritual boss cannot be revived by Infusion
-      if (card.summonRestrict === "shadow_heart_invocation_only") return false;
-      if (card.archetype === "Shadow-Heart") return true;
-      if (Array.isArray(card.archetypes)) {
-        return card.archetypes.includes("Shadow-Heart");
-      }
-      return false;
-    });
-
-    if (candidates.length === 0) {
-      console.log('No "Shadow-Heart" monsters in graveyard to revive.');
-      return false;
-    }
-
-    // Bot ou candidato Ãºnico: auto-seleciona
-    if (candidates.length === 1 || player.id === "bot") {
-      const chosen = candidates[0];
-      return this.finishReviveShadowHeart(chosen, gy, player, action);
-    }
-
-    // Player: modal visual
-    const searchModal = this.getSearchModalElements();
-    const defaultCardName = candidates[0]?.name || "";
-
-    return new Promise((resolve) => {
-      const finalizeSelection = (selectedName) => {
-        const chosen =
-          candidates.find((c) => c && c.name === selectedName) || candidates[0];
-        const result = this.finishReviveShadowHeart(chosen, gy, player, action);
-        resolve(result);
-      };
-
-      if (searchModal) {
-        this.showSearchModalVisual(
-          searchModal,
-          candidates,
-          defaultCardName,
-          (choice) => finalizeSelection(choice)
-        );
-      } else {
-        // Fallback: auto-seleciona o primeiro
-        finalizeSelection(defaultCardName);
-      }
-    });
-  }
-
-  async finishReviveShadowHeart(chosen, gy, player, action) {
-    if (!chosen) {
-      console.log("No valid choice made for revival.");
-      return false;
-    }
-
-    const idx = gy.indexOf(chosen);
-    if (idx === -1) {
-      console.warn("Chosen card is not in graveyard anymore:", chosen.name);
-      return false;
-    }
-
-    gy.splice(idx, 1);
-
-    // Escolher posiÃ§Ã£o para special summon
-    const position = await this.chooseSpecialSummonPosition(chosen, player);
-
-    chosen.position = position;
-    chosen.isFacedown = false;
-    chosen.hasAttacked = false;
-    chosen.attacksUsedThisTurn = 0;
-    chosen.cannotAttackThisTurn = true;
-
-    player.field.push(chosen);
-
-    console.log(
-      `Revived "${chosen.name}" from graveyard with Shadow-Heart Infusion in ${
-        position === "defense" ? "Defense" : "Attack"
-      } Position.`
-    );
-
-    if (this.game && typeof this.game.updateBoard === "function") {
-      this.game.updateBoard();
-    }
-    return true;
-  }
-
   async applyConditionalSpecialSummonFromHand(action, ctx) {
     const player = ctx?.player;
     if (!player) return false;
@@ -4418,7 +4284,7 @@ export default class EffectEngine {
     const candidates = player.hand.filter((c) => c && c.cardKind === "monster");
     if (candidates.length === 0) return false;
 
-    // Candidato Ãºnico ou bot: auto-seleciona
+    // Candidato único ou bot: auto-seleciona
     if (candidates.length === 1 || player.id === "bot") {
       return this.finishConditionalSpecialSummon(candidates[0], player, action);
     }
@@ -4454,7 +4320,7 @@ export default class EffectEngine {
   }
 
   async finishConditionalSpecialSummon(targetCard, player, action) {
-    // Escolher posiÃ§Ã£o para special summon
+    // Escolher posição para special summon
     const position = await this.chooseSpecialSummonPosition(targetCard, player);
 
     targetCard.position = position;
@@ -4486,79 +4352,7 @@ export default class EffectEngine {
     return true;
   }
 
-  async applyShadowHeartObserverSummon(action, ctx, targets) {
-    const observerCard = targets && targets[0];
-    if (!observerCard || !observerCard.level) {
-      console.log("No valid target for Shadow-Heart Observer.");
-      return false;
-    }
 
-    const targetLevel = observerCard.level;
-    const candidates = ctx.player.hand.filter(
-      (c) => c.cardKind === "monster" && c.level === targetLevel
-    );
-
-    if (candidates.length === 0) {
-      console.log(
-        `No monsters in hand with Level ${targetLevel} to Special Summon.`
-      );
-      return false;
-    }
-
-    if (candidates.length === 1) {
-      const card = candidates[0];
-      const handIndex = ctx.player.hand.indexOf(card);
-      if (handIndex === -1) return false;
-
-      ctx.player.hand.splice(handIndex, 1);
-      card.position = "attack";
-      card.isFacedown = false;
-      card.hasAttacked = false;
-      card.attacksUsedThisTurn = 0;
-      ctx.player.field.push(card);
-
-      if (this.game && typeof this.game.updateBoard === "function") {
-        this.game.updateBoard();
-      }
-
-      return true;
-    }
-
-    // Multiple candidates - show modal
-    return new Promise((resolve) => {
-      this.game.showCardSelectionModal(
-        candidates,
-        `Select 1 monster with Level ${targetLevel} to Special Summon`,
-        1,
-        (selected) => {
-          if (selected.length === 0) {
-            resolve(false);
-            return;
-          }
-
-          const card = selected[0];
-          const handIndex = ctx.player.hand.indexOf(card);
-          if (handIndex === -1) {
-            resolve(false);
-            return;
-          }
-
-          ctx.player.hand.splice(handIndex, 1);
-          card.position = "attack";
-          card.isFacedown = false;
-          card.hasAttacked = false;
-          card.attacksUsedThisTurn = 0;
-          ctx.player.field.push(card);
-
-          if (this.game && typeof this.game.updateBoard === "function") {
-            this.game.updateBoard();
-          }
-
-          resolve(true);
-        }
-      );
-    });
-  }
 
   applyAddCounter(action, ctx, targets) {
     const counterType = action.counterType || "default";
@@ -4640,12 +4434,12 @@ export default class EffectEngine {
     });
 
     console.log(
-      `[Cathedral] Found ${validMonsters.length} valid monsters in deck (ATK â‰¤ ${maxAtk})`
+      `[Cathedral] Found ${validMonsters.length} valid monsters in deck (ATK ≤ ${maxAtk})`
     );
 
     if (validMonsters.length === 0) {
       console.log(
-        `No Shadow-Heart monsters in deck with ATK â‰¤ ${maxAtk} to summon.`
+        `No Shadow-Heart monsters in deck with ATK ≤ ${maxAtk} to summon.`
       );
       // Still show info to player
       if (counterCount === 0) {
@@ -4654,7 +4448,7 @@ export default class EffectEngine {
         );
       } else {
         this.game.renderer.log(
-          `No valid Shadow-Heart monsters in deck with ATK â‰¤ ${maxAtk}.`
+          `No valid Shadow-Heart monsters in deck with ATK ≤ ${maxAtk}.`
         );
       }
       return false;
@@ -4788,7 +4582,7 @@ export default class EffectEngine {
 
       // Equip The Shadow Heart to the monster
       const equipCard = ctx.source; // The Shadow Heart card itself
-      // Move para zona de spell/trap se estiver na mÃ£o ou em outro lugar
+      // Move para zona de spell/trap se estiver na mão ou em outro lugar
       if (this.game && typeof this.game.moveCard === "function") {
         const zone = this.game.getZone(ctx.player, "hand");
         if (zone && zone.includes(equipCard)) {
@@ -4861,7 +4655,7 @@ export default class EffectEngine {
   }
 
   async performBotFusion(ctx, summonableFusions, availableMaterials) {
-    // Bot escolhe automaticamente o melhor monstro de fusÃ£o (maior ATK)
+    // Bot escolhe automaticamente o melhor monstro de fusão (maior ATK)
     const bestFusion = summonableFusions.reduce((best, current) => {
       const bestAtk = best.fusion.atk || 0;
       const currentAtk = current.fusion.atk || 0;
@@ -4871,7 +4665,7 @@ export default class EffectEngine {
     const fusionMonster = bestFusion.fusion;
     const fusionIndex = bestFusion.index;
 
-    // Encontrar materiais vÃ¡lidos
+    // Encontrar materiais válidos
     const combos = this.findFusionMaterialCombos(
       fusionMonster,
       availableMaterials,
@@ -4961,7 +4755,7 @@ export default class EffectEngine {
       return false;
     }
 
-    // BOT AUTO-FUSION: Se Ã© o bot, executar fusÃ£o automaticamente
+    // BOT AUTO-FUSION: Se é o bot, executar fusão automaticamente
     if (ctx.player.id === "bot") {
       return await this.performBotFusion(
         ctx,
@@ -5009,7 +4803,7 @@ export default class EffectEngine {
               selectedMaterials.length - validation.requiredCount;
             if (extraCount > 0) {
               this.game.renderer.log(
-                `âš ï¸ You selected ${selectedMaterials.length} materials (requires ${validation.requiredCount}). All selected cards will be sent to the Graveyard.`
+                `⚠️ You selected ${selectedMaterials.length} materials (requires ${validation.requiredCount}). All selected cards will be sent to the Graveyard.`
               );
             }
 
@@ -5373,7 +5167,7 @@ export default class EffectEngine {
 
     if (!targets || !targets.haunted_target) {
       game.renderer.log(
-        `Call of the Haunted: Nenhum alvo selecionado no cemitÃ©rio.`
+        `Call of the Haunted: Nenhum alvo selecionado no cemitério.`
       );
       return false;
     }
@@ -5390,11 +5184,11 @@ export default class EffectEngine {
     );
 
     if (!targetMonster || targetMonster.cardKind !== "monster") {
-      game.renderer.log(`Call of the Haunted: Alvo invÃ¡lido.`);
+      game.renderer.log(`Call of the Haunted: Alvo inválido.`);
       return false;
     }
 
-    // Remover do cemitÃ©rio
+    // Remover do cemitério
     const gyIndex = player.graveyard.indexOf(targetMonster);
     if (gyIndex > -1) {
       player.graveyard.splice(gyIndex, 1);
@@ -5404,7 +5198,7 @@ export default class EffectEngine {
       );
     }
 
-    // Mostrar modal para escolher posiÃ§Ã£o (Special Summon permite escolha)
+    // Mostrar modal para escolher posição (Special Summon permite escolha)
     const chosenPosition = await new Promise((resolve) => {
       game.renderer.showSpecialSummonPositionModal(
         targetMonster,
@@ -5414,11 +5208,11 @@ export default class EffectEngine {
       );
     });
 
-    // Sumonizar na posiÃ§Ã£o escolhida
+    // Sumonizar na posição escolhida
     targetMonster.position = chosenPosition || "attack";
     targetMonster.isFacedown = false;
     targetMonster.owner = player.id;
-    targetMonster.hasAttacked = true; // NÃ£o pode atacar no mesmo turno
+    targetMonster.hasAttacked = true; // Não pode atacar no mesmo turno
     player.field.push(targetMonster);
 
     // Vincular a trap ao monstro para que se destruam mutuamente
@@ -5428,7 +5222,7 @@ export default class EffectEngine {
     game.renderer.log(
       `Call of the Haunted: ${
         targetMonster.name
-      } foi revivido do cemitÃ©rio em ${
+      } foi revivido do cemitério em ${
         chosenPosition === "defense" ? "Defesa" : "Ataque"
       }!`
     );
@@ -5439,7 +5233,7 @@ export default class EffectEngine {
   async applyMirrorForceDestroy(action, ctx) {
     const { game, player, eventData } = ctx;
 
-    // Determinar quem Ã© o oponente
+    // Determinar quem é o oponente
     const opponent = player.id === "player" ? game.bot : game.player;
 
     if (!opponent || !opponent.field) {
@@ -5466,7 +5260,7 @@ export default class EffectEngine {
       `Mirror Force: Destruindo ${attackPositionMonsters.length} monstro(s) em Attack Position!`
     );
 
-    // Destruir todos os monstros em Attack Position (com substituiÃ§Ã£o de destruiÃ§Ã£o)
+    // Destruir todos os monstros em Attack Position (com substituição de destruição)
     for (const monster of attackPositionMonsters) {
       const { replaced } =
         (await game.resolveDestructionWithReplacement(monster, {
@@ -5522,7 +5316,7 @@ export default class EffectEngine {
     };
 
     try {
-      // Executar as aÃ§Ãµes do efeito
+      // Executar as ações do efeito
       for (const action of relevantEffect.actions || []) {
         await this.applyActions([action], ctx, {});
       }
@@ -5603,7 +5397,7 @@ export default class EffectEngine {
           if (cardIndex !== -1) {
             const [summonedCard] = deck.splice(cardIndex, 1);
 
-            // Escolher posiÃ§Ã£o
+            // Escolher posição
             const position = await this.chooseSpecialSummonPosition(
               summonedCard,
               ctx.player
@@ -5900,7 +5694,7 @@ export default class EffectEngine {
     if (!horn) return false;
 
     if (ctx.player.field.length >= 5) {
-      this.game.renderer.log("Field estÃ¡ cheio.");
+      this.game.renderer.log("Field está cheio.");
       return false;
     }
 

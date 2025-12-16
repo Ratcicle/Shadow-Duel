@@ -454,8 +454,11 @@
         ],
         actions: [
           {
-            type: "shadow_heart_observer_summon",
-            targetRef: "observer_target",
+            type: "special_summon_matching_level",
+            zone: "hand",
+            position: "attack",
+            cannotAttackThisTurn: false,
+            negateEffects: false,
           },
         ],
       },
@@ -915,9 +918,15 @@
             to: "graveyard",
           },
           {
-            type: "revive_shadowheart_from_grave",
-            player: "self",
-            position: "attack",
+            type: "special_summon_from_zone",
+            zone: "graveyard",
+            filters: {
+              archetype: "Shadow-Heart",
+              cardKind: "monster",
+            },
+            excludeSummonRestrict: ["shadow_heart_invocation_only"],
+            position: "choice",
+            cannotAttackThisTurn: true,
           },
         ],
       },
@@ -1062,9 +1071,13 @@
         timing: "on_field_activate",
         actions: [
           {
-            type: "darkness_valley_apply_existing",
-            amount: 300,
+            type: "permanent_buff_named",
+            targetRef: "self",
+            atkBoost: 300,
+            sourceName: "Darkness Valley",
+            cumulative: true,
             archetype: "Shadow-Heart",
+            applyToAllField: true,
           },
         ],
       },
@@ -1074,8 +1087,11 @@
         event: "after_summon",
         actions: [
           {
-            type: "darkness_valley_buff_summon",
-            amount: 300,
+            type: "permanent_buff_named",
+            targetRef: "summonedCard",
+            atkBoost: 300,
+            sourceName: "Darkness Valley",
+            cumulative: true,
             archetype: "Shadow-Heart",
           },
         ],
@@ -1087,9 +1103,11 @@
         fromZone: "fieldSpell",
         actions: [
           {
-            type: "darkness_valley_cleanup",
-            amount: 300,
+            type: "remove_permanent_buff_named",
+            targetRef: "self",
+            sourceName: "Darkness Valley",
             archetype: "Shadow-Heart",
+            removeFromAllField: true,
           },
         ],
       },
