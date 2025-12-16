@@ -1,4 +1,4 @@
-import Card from "./Card.js";
+﻿import Card from "./Card.js";
 import { cardDatabase } from "../data/cards.js";
 import {
   ActionHandlerRegistry,
@@ -57,13 +57,13 @@ export default class EffectEngine {
   }
 
   /**
-   * Helper para realizar Special Summon com escolha de posição
+   * Helper para realizar Special Summon com escolha de posiÃ§Ã£o
    * @param {Object} card - A carta a ser invocada
-   * @param {Object} player - O jogador que está invocando
-   * @param {Object} options - Opções adicionais
-   * @param {boolean} options.cannotAttackThisTurn - Se o monstro não pode atacar neste turno
+   * @param {Object} player - O jogador que estÃ¡ invocando
+   * @param {Object} options - OpÃ§Ãµes adicionais
+   * @param {boolean} options.cannotAttackThisTurn - Se o monstro nÃ£o pode atacar neste turno
    * @param {string} options.fromZone - Zona de origem (hand, deck, graveyard)
-   * @returns {Promise<string>} - A posição escolhida ('attack' ou 'defense')
+   * @returns {Promise<string>} - A posiÃ§Ã£o escolhida ('attack' ou 'defense')
    */
   async chooseSpecialSummonPosition(card, player, options = {}) {
     // Bot sempre escolhe attack
@@ -71,7 +71,7 @@ export default class EffectEngine {
       return "attack";
     }
 
-    // Player: mostrar modal de escolha de posição
+    // Player: mostrar modal de escolha de posiÃ§Ã£o
     if (
       this.game.renderer &&
       typeof this.game.renderer.showSpecialSummonPositionModal === "function"
@@ -565,7 +565,7 @@ export default class EffectEngine {
       if (this.isImmuneToOpponentEffects(card, ctx.player)) {
         if (this.game?.renderer?.log) {
           this.game.renderer.log(
-            `${card.name} está imune aos efeitos do oponente e ignora ${action.type}.`
+            `${card.name} estÃ¡ imune aos efeitos do oponente e ignora ${action.type}.`
           );
         }
         return true;
@@ -1241,7 +1241,7 @@ export default class EffectEngine {
       return { success: false, reason: "No on_play effect defined." };
     }
 
-    // Verificação de campo vazio para spells do tipo equip com requireEmptyField
+    // VerificaÃ§Ã£o de campo vazio para spells do tipo equip com requireEmptyField
     if (
       effect &&
       card.cardKind === "spell" &&
@@ -1251,7 +1251,7 @@ export default class EffectEngine {
       if (player.field && player.field.length > 0) {
         return {
           success: false,
-          reason: "Você deve controlar nenhum monstro para ativar este efeito.",
+          reason: "VocÃª deve controlar nenhum monstro para ativar este efeito.",
         };
       }
     }
@@ -1351,7 +1351,7 @@ export default class EffectEngine {
         return { success: true };
       }
 
-      // Equip Spells serão movidas para a zona de spell/trap na própria action.
+      // Equip Spells serÃ£o movidas para a zona de spell/trap na prÃ³pria action.
       if (card.subtype === "equip") {
         return { success: true };
       }
@@ -1597,43 +1597,55 @@ export default class EffectEngine {
     activationZone = "spellTrap",
     context = {}
   ) {
+    const logDev =
+      this.game?.devLog &&
+      ((tag, detail) => this.game.devLog(tag, detail || {}));
+    const fail = (reason) => {
+      if (logDev) {
+        logDev("SPELL_TRAP_ACTIVATION_FAILED", {
+          card: card?.name || "Unknown",
+          player: player?.id || null,
+          reason,
+        });
+      }
+      return { success: false, reason };
+    };
+
     if (!card || !player) {
-      return { success: false, reason: "Missing card or player." };
+      return fail("Missing card or player.");
     }
     if (card.owner !== player.id) {
-      return {
-        success: false,
-        reason: "Card does not belong to the requesting player.",
-      };
+      return fail("Card does not belong to the requesting player.");
     }
     if (card.cardKind !== "spell" && card.cardKind !== "trap") {
-      return {
-        success: false,
-        reason: "Only Spell/Trap cards can use this effect.",
-      };
+      return fail("Only Spell/Trap cards can use this effect.");
     }
     if (card.isFacedown) {
-      return { success: false, reason: "Card must be face-up to activate." };
+      return fail("Card must be face-up to activate.");
     }
     if (this.game.turn !== player.id) {
-      return { success: false, reason: "Not your turn." };
+      return fail("Not your turn.");
     }
     if (this.game.phase !== "main1" && this.game.phase !== "main2") {
-      return {
-        success: false,
-        reason: "Effect can only be activated during Main Phase.",
-      };
+      return fail("Effect can only be activated during Main Phase.");
     }
 
     const fromHand = context.fromHand === true;
     let effect = null;
+
+    logDev?.("SPELL_TRAP_ACTIVATION_ATTEMPT", {
+      card: card.name,
+      player: player.id,
+      fromHand,
+      activationZone,
+    });
 
     if (card.cardKind === "trap") {
       effect = (card.effects || []).find(
         (e) => e && (e.timing === "on_activate" || e.timing === "ignition")
       );
       if (!effect) {
-        return { success: false, reason: "No trap activation effect defined." };
+        return fail("No trap activation effect defined.");
       }
     } else if (card.cardKind === "spell") {
       if (fromHand) {
@@ -1641,24 +1653,27 @@ export default class EffectEngine {
         const placementOnly =
           (!effect && (card.subtype === "field" || card.subtype === "continuous"));
         if (!effect) {
-          return placementOnly
-            ? { success: true, placementOnly: true }
-            : { success: false, reason: "No on_play effect defined." };
+          if (placementOnly) {
+            logDev?.("SPELL_TRAP_PLACEMENT_ONLY", {
+              card: card.name,
+              player: player.id,
+              activationZone,
+            });
+            return { success: true, placementOnly: true };
+          }
+          return fail("No on_play effect defined.");
         }
       } else {
         effect = (card.effects || []).find((e) => e && e.timing === "ignition");
         if (!effect) {
-          return { success: false, reason: "No ignition effect defined." };
+          return fail("No ignition effect defined.");
         }
       }
     }
 
     // Check requireEmptyField condition
     if (effect.requireEmptyField && player.field.length > 0) {
-      return {
-        success: false,
-        reason: "You must control no monsters to activate this effect.",
-      };
+      return fail("You must control no monsters to activate this effect.");
     }
 
     const ctx = {
@@ -1670,32 +1685,36 @@ export default class EffectEngine {
 
     const condCheck = this.evaluateConditions(effect.conditions, ctx);
     if (!condCheck.ok) {
-      return { success: false, reason: condCheck.reason };
+      return fail(condCheck.reason);
     }
 
     const optCheck = this.checkOncePerTurn(card, player, effect);
     if (!optCheck.ok) {
-      return { success: false, reason: optCheck.reason };
+      return fail(optCheck.reason);
     }
 
-    console.log(`[EffectEngine] Resolving targets for ${card.name}`);
     const targetResult = this.resolveTargets(
       effect.targets || [],
       ctx,
       selections
     );
     if (targetResult.needsSelection) {
-      console.log(`[EffectEngine] Needs selection`);
+      logDev?.("SPELL_TRAP_NEEDS_SELECTION", {
+        card: card.name,
+        player: player.id,
+      });
       return { needsSelection: true, options: targetResult.options };
     }
 
     if (targetResult.ok === false) {
-      console.log(
-        `[EffectEngine] Target resolution failed: ${targetResult.reason}`
-      );
-      return { success: false, reason: targetResult.reason };
+      return fail(targetResult.reason);
     }
 
+    logDev?.("SPELL_TRAP_ACTIONS_START", {
+      card: card.name,
+      player: player.id,
+      actionCount: (effect.actions || []).length,
+    });
     await this.applyActions(
       effect.actions || [],
       ctx,
@@ -1703,6 +1722,10 @@ export default class EffectEngine {
     );
     this.registerOncePerTurnUsage(card, player, effect);
     this.game.checkWinCondition();
+    logDev?.("SPELL_TRAP_ACTIVATION_RESOLVED", {
+      card: card.name,
+      player: player.id,
+    });
     return { success: true };
   }
 
@@ -2316,11 +2339,23 @@ export default class EffectEngine {
       return executed;
     }
 
+    const logDev =
+      this.game?.devLog &&
+      ((tag, detail) => this.game.devLog(tag, detail || {}));
+
     try {
       for (const action of actions) {
+        const actionInfo = {
+          type: action?.type || "unknown",
+          source: ctx?.source?.name || null,
+          player: ctx?.player?.id || null,
+        };
         if (this.shouldSkipActionDueToImmunity(action, targets, ctx)) {
+          logDev?.("ACTION_SKIPPED_IMMUNITY", actionInfo);
           continue;
         }
+
+        logDev?.("ACTION_START", actionInfo);
 
         // Check if there's a registered handler for this action type
         const handler = this.actionHandlers.get(action.type);
@@ -2328,8 +2363,17 @@ export default class EffectEngine {
           try {
             const result = await handler(action, ctx, targets, this);
             executed = result || executed;
+            logDev?.("ACTION_HANDLER_DONE", {
+              ...actionInfo,
+              handler: true,
+              result: !!result,
+            });
             continue; // Skip to next action
           } catch (error) {
+            logDev?.("ACTION_HANDLER_ERROR", {
+              ...actionInfo,
+              error: error.message,
+            });
             console.error(
               `Error executing registered handler for action type "${action.type}":`,
               error
@@ -2346,166 +2390,291 @@ export default class EffectEngine {
           }
         }
 
+        let actionResult = false;
+
         switch (action.type) {
-          case "draw":
-            executed = this.applyDraw(action, ctx) || executed;
+          case "draw": {
+            const result = this.applyDraw(action, ctx);
+            actionResult = actionResult || result;
+            executed = result || executed;
             break;
-          case "heal":
-            executed = this.applyHeal(action, ctx) || executed;
+          }
+          case "heal": {
+            const result = this.applyHeal(action, ctx);
+            actionResult = actionResult || result;
+            executed = result || executed;
             break;
-          case "heal_per_archetype_monster":
-            executed =
-              this.applyHealPerArchetypeMonster(action, ctx) || executed;
+          }
+          case "heal_per_archetype_monster": {
+            const result = this.applyHealPerArchetypeMonster(action, ctx);
+            actionResult = actionResult || result;
+            executed = result || executed;
             break;
-          case "damage":
-            executed = this.applyDamage(action, ctx) || executed;
+          }
+          case "damage": {
+            const result = this.applyDamage(action, ctx);
+            actionResult = actionResult || result;
+            executed = result || executed;
             break;
-          case "destroy":
-            executed =
-              (await this.applyDestroy(action, targets, ctx)) || executed;
+          }
+          case "destroy": {
+            const result = await this.applyDestroy(action, targets, ctx);
+            actionResult = actionResult || result;
+            executed = result || executed;
             break;
-          case "negate_attack":
-            executed = this.applyNegateAttack(action, ctx) || executed;
+          }
+          case "negate_attack": {
+            const result = this.applyNegateAttack(action, ctx);
+            actionResult = actionResult || result;
+            executed = result || executed;
             break;
-          case "special_summon_token":
-            executed = this.applySpecialSummonToken(action, ctx) || executed;
+          }
+          case "special_summon_token": {
+            const result = this.applySpecialSummonToken(action, ctx);
+            actionResult = actionResult || result;
+            executed = result || executed;
             break;
-          case "buff_atk_temp":
-            executed = this.applyBuffAtkTemp(action, targets) || executed;
+          }
+          case "buff_atk_temp": {
+            const result = this.applyBuffAtkTemp(action, targets);
+            actionResult = actionResult || result;
+            executed = result || executed;
             break;
-          case "modify_stats_temp":
-            executed = this.applyModifyStatsTemp(action, targets) || executed;
+          }
+          case "modify_stats_temp": {
+            const result = this.applyModifyStatsTemp(action, targets);
+            actionResult = actionResult || result;
+            executed = result || executed;
             break;
-          case "reduce_self_atk":
-            executed = this.applyReduceSelfAtk(action, ctx) || executed;
+          }
+          case "reduce_self_atk": {
+            const result = this.applyReduceSelfAtk(action, ctx);
+            actionResult = actionResult || result;
+            executed = result || executed;
             break;
-          case "search_any":
-            executed = this.applySearchAny(action, ctx) || executed;
+          }
+          case "search_any": {
+            const result = this.applySearchAny(action, ctx);
+            actionResult = actionResult || result;
+            executed = result || executed;
             break;
-          case "transmutate":
-            executed = this.applyTransmutate(action, ctx, targets) || executed;
+          }
+          case "transmutate": {
+            const result = this.applyTransmutate(action, ctx, targets);
+            actionResult = actionResult || result;
+            executed = result || executed;
             break;
-          case "equip":
-            executed = this.applyEquip(action, ctx, targets) || executed;
+          }
+          case "equip": {
+            const result = this.applyEquip(action, ctx, targets);
+            actionResult = actionResult || result;
+            executed = result || executed;
             break;
-          case "move":
-            executed = this.applyMove(action, ctx, targets) || executed;
+          }
+          case "move": {
+            const result = this.applyMove(action, ctx, targets);
+            actionResult = actionResult || result;
+            executed = result || executed;
             break;
-          case "destroy_self_monsters_and_draw":
-            executed =
-              (await this.applyDestroyAllOthersAndDraw(action, ctx)) ||
-              executed;
+          }
+          case "destroy_self_monsters_and_draw": {
+            const result = await this.applyDestroyAllOthersAndDraw(
+              action,
+              ctx
+            );
+            actionResult = actionResult || result;
+            executed = result || executed;
             break;
-          case "shadow_heart_rage_scale_buff":
-            executed =
-              this.applyShadowHeartRageScaleBuff(action, ctx) || executed;
+          }
+          case "shadow_heart_rage_scale_buff": {
+            const result = this.applyShadowHeartRageScaleBuff(action, ctx);
+            actionResult = actionResult || result;
+            executed = result || executed;
             break;
-          case "shadow_heart_shield_upkeep":
-            executed =
-              this.applyShadowHeartShieldUpkeep(action, ctx) || executed;
+          }
+          case "shadow_heart_shield_upkeep": {
+            const result = this.applyShadowHeartShieldUpkeep(action, ctx);
+            actionResult = actionResult || result;
+            executed = result || executed;
             break;
-          case "revive_shadowheart_from_grave":
-            executed =
-              this.applyReviveShadowHeartFromGrave(action, ctx) || executed;
+          }
+          case "revive_shadowheart_from_grave": {
+            const result = this.applyReviveShadowHeartFromGrave(action, ctx);
+            actionResult = actionResult || result;
+            executed = result || executed;
             break;
-          case "forbid_attack_this_turn":
-            executed =
-              this.applyForbidAttackThisTurn(action, targets, ctx) || executed;
+          }
+          case "forbid_attack_this_turn": {
+            const result = this.applyForbidAttackThisTurn(
+              action,
+              targets,
+              ctx
+            );
+            actionResult = actionResult || result;
+            executed = result || executed;
             break;
-          case "forbid_attack_next_turn":
-            executed =
-              this.applyForbidAttackNextTurn(action, targets, ctx) || executed;
+          }
+          case "forbid_attack_next_turn": {
+            const result = this.applyForbidAttackNextTurn(
+              action,
+              targets,
+              ctx
+            );
+            actionResult = actionResult || result;
+            executed = result || executed;
             break;
-          case "grant_void_fusion_immunity":
-            executed =
-              this.applyGrantVoidFusionImmunity(action, ctx) || executed;
+          }
+          case "grant_void_fusion_immunity": {
+            const result = this.applyGrantVoidFusionImmunity(action, ctx);
+            actionResult = actionResult || result;
+            executed = result || executed;
             break;
-          case "darkness_valley_apply_existing":
-            executed =
-              this.applyDarknessValleyInitialBuff(action, ctx) || executed;
+          }
+          case "darkness_valley_apply_existing": {
+            const result = this.applyDarknessValleyInitialBuff(action, ctx);
+            actionResult = actionResult || result;
+            executed = result || executed;
             break;
-          case "darkness_valley_buff_summon":
-            executed =
-              this.applyDarknessValleySummonBuff(action, ctx) || executed;
+          }
+          case "darkness_valley_buff_summon": {
+            const result = this.applyDarknessValleySummonBuff(action, ctx);
+            actionResult = actionResult || result;
+            executed = result || executed;
             break;
-          case "darkness_valley_cleanup":
-            executed = this.applyDarknessValleyCleanup(action, ctx) || executed;
+          }
+          case "darkness_valley_cleanup": {
+            const result = this.applyDarknessValleyCleanup(action, ctx);
+            actionResult = actionResult || result;
+            executed = result || executed;
             break;
-          case "darkness_valley_battle_punish":
-            executed =
-              this.applyDarknessValleyBattlePunish(action, ctx) || executed;
+          }
+          case "darkness_valley_battle_punish": {
+            const result = this.applyDarknessValleyBattlePunish(action, ctx);
+            actionResult = actionResult || result;
+            executed = result || executed;
             break;
-          case "shadow_heart_death_wyrm_special_summon":
-            executed =
-              this.applyShadowHeartDeathWyrmSpecialSummon(action, ctx) ||
-              executed;
+          }
+          case "shadow_heart_death_wyrm_special_summon": {
+            const result = this.applyShadowHeartDeathWyrmSpecialSummon(
+              action,
+              ctx
+            );
+            actionResult = actionResult || result;
+            executed = result || executed;
             break;
-          case "conditional_special_summon_from_hand":
-            executed =
-              (await this.applyConditionalSpecialSummonFromHand(action, ctx)) ||
-              executed;
+          }
+          case "conditional_special_summon_from_hand": {
+            const result = await this.applyConditionalSpecialSummonFromHand(
+              action,
+              ctx
+            );
+            actionResult = actionResult || result;
+            executed = result || executed;
             break;
-          case "shadow_heart_observer_summon":
-            executed =
-              (await this.applyShadowHeartObserverSummon(
-                action,
-                ctx,
-                targets
-              )) || executed;
+          }
+          case "shadow_heart_observer_summon": {
+            const result = await this.applyShadowHeartObserverSummon(
+              action,
+              ctx,
+              targets
+            );
+            actionResult = actionResult || result;
+            executed = result || executed;
             break;
-          case "add_counter":
-            executed = this.applyAddCounter(action, ctx, targets) || executed;
+          }
+          case "add_counter": {
+            const result = this.applyAddCounter(action, ctx, targets);
+            actionResult = actionResult || result;
+            executed = result || executed;
             break;
-          case "shadow_heart_cathedral_summon":
-            executed =
-              (await this.applyShadowHeartCathedralSummon(action, ctx)) ||
-              executed;
+          }
+          case "shadow_heart_cathedral_summon": {
+            const result = await this.applyShadowHeartCathedralSummon(
+              action,
+              ctx
+            );
+            actionResult = actionResult || result;
+            executed = result || executed;
             break;
-          case "the_shadow_heart_special_summon_and_equip":
-            executed =
-              (await this.applyTheShadowHeartSummonAndEquip(
-                action,
-                ctx,
-                targets
-              )) || executed;
+          }
+          case "the_shadow_heart_special_summon_and_equip": {
+            const result = await this.applyTheShadowHeartSummonAndEquip(
+              action,
+              ctx,
+              targets
+            );
+            actionResult = actionResult || result;
+            executed = result || executed;
             break;
-          case "abyssal_eel_special_summon":
-            executed =
-              (await this.applyAbyssalEelSpecialSummon(action, ctx)) ||
-              executed;
+          }
+          case "abyssal_eel_special_summon": {
+            const result = await this.applyAbyssalEelSpecialSummon(
+              action,
+              ctx
+            );
+            actionResult = actionResult || result;
+            executed = result || executed;
             break;
-          case "polymerization_fusion_summon":
-            executed =
-              (await this.applyPolymerizationFusion(action, ctx)) || executed;
+          }
+          case "polymerization_fusion_summon": {
+            const result = await this.applyPolymerizationFusion(action, ctx);
+            actionResult = actionResult || result;
+            executed = result || executed;
             break;
-          case "banish":
-            executed = this.applyBanish(action, ctx, targets) || executed;
+          }
+          case "banish": {
+            const result = this.applyBanish(action, ctx, targets);
+            actionResult = actionResult || result;
+            executed = result || executed;
             break;
-          case "allow_direct_attack_this_turn":
-            executed =
-              this.applyAllowDirectAttackThisTurn(action, ctx, targets) ||
-              executed;
+          }
+          case "allow_direct_attack_this_turn": {
+            const result = this.applyAllowDirectAttackThisTurn(
+              action,
+              ctx,
+              targets
+            );
+            actionResult = actionResult || result;
+            executed = result || executed;
             break;
-          case "demon_dragon_destroy_two":
-            executed =
-              (await this.applyDemonDragonDestroy(action, ctx)) || executed;
+          }
+          case "demon_dragon_destroy_two": {
+            const result = await this.applyDemonDragonDestroy(action, ctx);
+            actionResult = actionResult || result;
+            executed = result || executed;
             break;
-          case "demon_dragon_revive_scale_dragon":
-            executed =
-              (await this.applyDemonDragonRevive(action, ctx)) || executed;
+          }
+          case "demon_dragon_revive_scale_dragon": {
+            const result = await this.applyDemonDragonRevive(action, ctx);
+            actionResult = actionResult || result;
+            executed = result || executed;
             break;
-          case "mirror_force_destroy_all":
-            executed =
-              (await this.applyMirrorForceDestroy(action, ctx)) || executed;
+          }
+          case "mirror_force_destroy_all": {
+            const result = await this.applyMirrorForceDestroy(action, ctx);
+            actionResult = actionResult || result;
+            executed = result || executed;
             break;
-          case "call_of_haunted_summon_and_bind":
-            executed =
-              (await this.applyCallOfTheHauntedSummon(action, ctx, targets)) ||
-              executed;
+          }
+          case "call_of_haunted_summon_and_bind": {
+            const result = await this.applyCallOfTheHauntedSummon(
+              action,
+              ctx,
+              targets
+            );
+            actionResult = actionResult || result;
+            executed = result || executed;
             break;
+          }
           default:
             console.warn(`Unknown action type: ${action.type}`);
         }
+
+        logDev?.("ACTION_HANDLER_DONE", {
+          ...actionInfo,
+          handler: false,
+          result: !!actionResult,
+        });
       }
     } catch (err) {
       console.error("Error while applying actions:", err);
@@ -2513,7 +2682,6 @@ export default class EffectEngine {
 
     return executed;
   }
-
   /**
    * Lightweight check to see if a monster effect could be activated from a zone,
    * without consuming OPT flags or performing actions. Used for UI pre-checks
@@ -3120,8 +3288,8 @@ export default class EffectEngine {
   }
 
   applyForbidAttackThisTurn(action, targets, ctx) {
-    // Se targetRef está definido, usa os alvos selecionados
-    // Caso contrário, aplica à carta fonte (self)
+    // Se targetRef estÃ¡ definido, usa os alvos selecionados
+    // Caso contrÃ¡rio, aplica Ã  carta fonte (self)
     let targetCards = [];
     if (action.targetRef && targets[action.targetRef]) {
       targetCards = targets[action.targetRef];
@@ -3198,7 +3366,7 @@ export default class EffectEngine {
 
     if (this.game?.renderer?.log) {
       this.game.renderer.log(
-        `${card.name} está imune aos efeitos do oponente até o final do próximo turno.`
+        `${card.name} estÃ¡ imune aos efeitos do oponente atÃ© o final do prÃ³ximo turno.`
       );
     }
 
@@ -3292,7 +3460,7 @@ export default class EffectEngine {
       return false;
     }
 
-    // Opcional: filtrar por arquétipo
+    // Opcional: filtrar por arquÃ©tipo
     let candidates = deck;
     if (action.archetype) {
       candidates = deck.filter((card) => {
@@ -3397,7 +3565,7 @@ export default class EffectEngine {
       return true;
     }
 
-    // Fallback: auto-seleciona o melhor disponível
+    // Fallback: auto-seleciona o melhor disponÃ­vel
     const fallback =
       candidates.reduce((top, card) => {
         if (!card) return top;
@@ -3647,7 +3815,7 @@ export default class EffectEngine {
     }
 
     if (!chosenFromCandidates) {
-      // fallback: último candidato da lista
+      // fallback: Ãºltimo candidato da lista
       chosenFromCandidates = candidates[candidates.length - 1];
     }
 
@@ -4119,7 +4287,7 @@ export default class EffectEngine {
 
     if (owner.id === "player") {
       const wantsToPay = window.confirm(
-        `Pagar 800 LP para manter "${card.name}" no campo? Se não pagar, esta carta será enviada ao Cemitério.`
+        `Pagar 800 LP para manter "${card.name}" no campo? Se nÃ£o pagar, esta carta serÃ¡ enviada ao CemitÃ©rio.`
       );
 
       if (wantsToPay) {
@@ -4172,7 +4340,7 @@ export default class EffectEngine {
       return false;
     }
 
-    // Bot ou candidato único: auto-seleciona
+    // Bot ou candidato Ãºnico: auto-seleciona
     if (candidates.length === 1 || player.id === "bot") {
       const chosen = candidates[0];
       return this.finishReviveShadowHeart(chosen, gy, player, action);
@@ -4218,7 +4386,7 @@ export default class EffectEngine {
 
     gy.splice(idx, 1);
 
-    // Escolher posição para special summon
+    // Escolher posiÃ§Ã£o para special summon
     const position = await this.chooseSpecialSummonPosition(chosen, player);
 
     chosen.position = position;
@@ -4250,7 +4418,7 @@ export default class EffectEngine {
     const candidates = player.hand.filter((c) => c && c.cardKind === "monster");
     if (candidates.length === 0) return false;
 
-    // Candidato único ou bot: auto-seleciona
+    // Candidato Ãºnico ou bot: auto-seleciona
     if (candidates.length === 1 || player.id === "bot") {
       return this.finishConditionalSpecialSummon(candidates[0], player, action);
     }
@@ -4286,7 +4454,7 @@ export default class EffectEngine {
   }
 
   async finishConditionalSpecialSummon(targetCard, player, action) {
-    // Escolher posição para special summon
+    // Escolher posiÃ§Ã£o para special summon
     const position = await this.chooseSpecialSummonPosition(targetCard, player);
 
     targetCard.position = position;
@@ -4472,12 +4640,12 @@ export default class EffectEngine {
     });
 
     console.log(
-      `[Cathedral] Found ${validMonsters.length} valid monsters in deck (ATK ≤ ${maxAtk})`
+      `[Cathedral] Found ${validMonsters.length} valid monsters in deck (ATK â‰¤ ${maxAtk})`
     );
 
     if (validMonsters.length === 0) {
       console.log(
-        `No Shadow-Heart monsters in deck with ATK ≤ ${maxAtk} to summon.`
+        `No Shadow-Heart monsters in deck with ATK â‰¤ ${maxAtk} to summon.`
       );
       // Still show info to player
       if (counterCount === 0) {
@@ -4486,7 +4654,7 @@ export default class EffectEngine {
         );
       } else {
         this.game.renderer.log(
-          `No valid Shadow-Heart monsters in deck with ATK ≤ ${maxAtk}.`
+          `No valid Shadow-Heart monsters in deck with ATK â‰¤ ${maxAtk}.`
         );
       }
       return false;
@@ -4620,7 +4788,7 @@ export default class EffectEngine {
 
       // Equip The Shadow Heart to the monster
       const equipCard = ctx.source; // The Shadow Heart card itself
-      // Move para zona de spell/trap se estiver na mão ou em outro lugar
+      // Move para zona de spell/trap se estiver na mÃ£o ou em outro lugar
       if (this.game && typeof this.game.moveCard === "function") {
         const zone = this.game.getZone(ctx.player, "hand");
         if (zone && zone.includes(equipCard)) {
@@ -4693,7 +4861,7 @@ export default class EffectEngine {
   }
 
   async performBotFusion(ctx, summonableFusions, availableMaterials) {
-    // Bot escolhe automaticamente o melhor monstro de fusão (maior ATK)
+    // Bot escolhe automaticamente o melhor monstro de fusÃ£o (maior ATK)
     const bestFusion = summonableFusions.reduce((best, current) => {
       const bestAtk = best.fusion.atk || 0;
       const currentAtk = current.fusion.atk || 0;
@@ -4703,7 +4871,7 @@ export default class EffectEngine {
     const fusionMonster = bestFusion.fusion;
     const fusionIndex = bestFusion.index;
 
-    // Encontrar materiais válidos
+    // Encontrar materiais vÃ¡lidos
     const combos = this.findFusionMaterialCombos(
       fusionMonster,
       availableMaterials,
@@ -4793,7 +4961,7 @@ export default class EffectEngine {
       return false;
     }
 
-    // BOT AUTO-FUSION: Se é o bot, executar fusão automaticamente
+    // BOT AUTO-FUSION: Se Ã© o bot, executar fusÃ£o automaticamente
     if (ctx.player.id === "bot") {
       return await this.performBotFusion(
         ctx,
@@ -4841,7 +5009,7 @@ export default class EffectEngine {
               selectedMaterials.length - validation.requiredCount;
             if (extraCount > 0) {
               this.game.renderer.log(
-                `⚠️ You selected ${selectedMaterials.length} materials (requires ${validation.requiredCount}). All selected cards will be sent to the Graveyard.`
+                `âš ï¸ You selected ${selectedMaterials.length} materials (requires ${validation.requiredCount}). All selected cards will be sent to the Graveyard.`
               );
             }
 
@@ -5205,7 +5373,7 @@ export default class EffectEngine {
 
     if (!targets || !targets.haunted_target) {
       game.renderer.log(
-        `Call of the Haunted: Nenhum alvo selecionado no cemitério.`
+        `Call of the Haunted: Nenhum alvo selecionado no cemitÃ©rio.`
       );
       return false;
     }
@@ -5222,11 +5390,11 @@ export default class EffectEngine {
     );
 
     if (!targetMonster || targetMonster.cardKind !== "monster") {
-      game.renderer.log(`Call of the Haunted: Alvo inválido.`);
+      game.renderer.log(`Call of the Haunted: Alvo invÃ¡lido.`);
       return false;
     }
 
-    // Remover do cemitério
+    // Remover do cemitÃ©rio
     const gyIndex = player.graveyard.indexOf(targetMonster);
     if (gyIndex > -1) {
       player.graveyard.splice(gyIndex, 1);
@@ -5236,7 +5404,7 @@ export default class EffectEngine {
       );
     }
 
-    // Mostrar modal para escolher posição (Special Summon permite escolha)
+    // Mostrar modal para escolher posiÃ§Ã£o (Special Summon permite escolha)
     const chosenPosition = await new Promise((resolve) => {
       game.renderer.showSpecialSummonPositionModal(
         targetMonster,
@@ -5246,11 +5414,11 @@ export default class EffectEngine {
       );
     });
 
-    // Sumonizar na posição escolhida
+    // Sumonizar na posiÃ§Ã£o escolhida
     targetMonster.position = chosenPosition || "attack";
     targetMonster.isFacedown = false;
     targetMonster.owner = player.id;
-    targetMonster.hasAttacked = true; // Não pode atacar no mesmo turno
+    targetMonster.hasAttacked = true; // NÃ£o pode atacar no mesmo turno
     player.field.push(targetMonster);
 
     // Vincular a trap ao monstro para que se destruam mutuamente
@@ -5260,7 +5428,7 @@ export default class EffectEngine {
     game.renderer.log(
       `Call of the Haunted: ${
         targetMonster.name
-      } foi revivido do cemitério em ${
+      } foi revivido do cemitÃ©rio em ${
         chosenPosition === "defense" ? "Defesa" : "Ataque"
       }!`
     );
@@ -5271,7 +5439,7 @@ export default class EffectEngine {
   async applyMirrorForceDestroy(action, ctx) {
     const { game, player, eventData } = ctx;
 
-    // Determinar quem é o oponente
+    // Determinar quem Ã© o oponente
     const opponent = player.id === "player" ? game.bot : game.player;
 
     if (!opponent || !opponent.field) {
@@ -5298,7 +5466,7 @@ export default class EffectEngine {
       `Mirror Force: Destruindo ${attackPositionMonsters.length} monstro(s) em Attack Position!`
     );
 
-    // Destruir todos os monstros em Attack Position (com substituição de destruição)
+    // Destruir todos os monstros em Attack Position (com substituiÃ§Ã£o de destruiÃ§Ã£o)
     for (const monster of attackPositionMonsters) {
       const { replaced } =
         (await game.resolveDestructionWithReplacement(monster, {
@@ -5354,7 +5522,7 @@ export default class EffectEngine {
     };
 
     try {
-      // Executar as ações do efeito
+      // Executar as aÃ§Ãµes do efeito
       for (const action of relevantEffect.actions || []) {
         await this.applyActions([action], ctx, {});
       }
@@ -5435,7 +5603,7 @@ export default class EffectEngine {
           if (cardIndex !== -1) {
             const [summonedCard] = deck.splice(cardIndex, 1);
 
-            // Escolher posição
+            // Escolher posiÃ§Ã£o
             const position = await this.chooseSpecialSummonPosition(
               summonedCard,
               ctx.player
@@ -5732,7 +5900,7 @@ export default class EffectEngine {
     if (!horn) return false;
 
     if (ctx.player.field.length >= 5) {
-      this.game.renderer.log("Field está cheio.");
+      this.game.renderer.log("Field estÃ¡ cheio.");
       return false;
     }
 

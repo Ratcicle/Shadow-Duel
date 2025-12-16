@@ -1309,6 +1309,88 @@ body {
   color: #ffe9a3;
 }
 
+.dev-panel {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  width: 340px;
+  max-height: 80vh;
+  overflow-y: auto;
+  background: rgba(12, 12, 12, 0.95);
+  border: 1px solid var(--accent-color);
+  border-radius: 10px;
+  padding: 14px;
+  z-index: 2000;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+  font-size: 0.85rem;
+}
+
+.dev-panel.hidden {
+  display: none;
+}
+
+.dev-panel h3 {
+  margin: 0 0 10px;
+  font-size: 1rem;
+  color: var(--accent-color);
+}
+
+.dev-panel label {
+  font-weight: 600;
+}
+
+.dev-panel select,
+.dev-panel input,
+.dev-panel textarea {
+  width: 100%;
+  background: #1e1e1e;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-color);
+  padding: 6px 8px;
+  font-family: inherit;
+  font-size: 0.85rem;
+}
+
+.dev-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.dev-inline {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.dev-inline select,
+.dev-inline input {
+  flex: 1;
+  min-width: 90px;
+}
+
+.dev-panel button {
+  background: var(--accent-color);
+  border: none;
+  color: #120414;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.2s ease;
+}
+
+.dev-panel button:hover {
+  background: #e5a4f5;
+}
+
+.dev-reset-btn {
+  width: 100%;
+  margin-top: 4px;
+}
+
 .deck-panel {
   background: #1e1e1e;
   border: 1px solid var(--accent-color);

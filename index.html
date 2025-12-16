@@ -251,5 +251,73 @@
     </div>
 
     <script type="module" src="src/main.js"></script>
+
+    <div id="dev-panel" class="dev-panel hidden">
+      <h3>Dev Harness</h3>
+      <div class="dev-field">
+        <label for="dev-draw-player">Comprar cartas</label>
+        <div class="dev-inline">
+          <select id="dev-draw-player">
+            <option value="player">Player</option>
+            <option value="bot">Bot</option>
+          </select>
+          <input
+            type="number"
+            id="dev-draw-count"
+            min="1"
+            max="10"
+            value="1"
+          />
+          <button id="dev-draw-btn">Comprar</button>
+        </div>
+      </div>
+      <div class="dev-field">
+        <label for="dev-give-name">Adicionar carta</label>
+        <input
+          type="text"
+          id="dev-give-name"
+          placeholder="Nome da carta ex.: Infinity Searcher"
+        />
+        <div class="dev-inline">
+          <select id="dev-give-player">
+            <option value="player">Player</option>
+            <option value="bot">Bot</option>
+          </select>
+          <select id="dev-give-zone">
+            <option value="hand">Hand</option>
+            <option value="field-attack">Field (ATK)</option>
+            <option value="field-defense">Field (DEF)</option>
+            <option value="spellTrap">Spell/Trap</option>
+            <option value="fieldSpell">Field Spell</option>
+            <option value="graveyard">Graveyard</option>
+          </select>
+          <button id="dev-give-btn">Adicionar</button>
+        </div>
+      </div>
+      <div class="dev-field">
+        <label for="dev-force-phase">Forçar fase</label>
+        <div class="dev-inline">
+          <select id="dev-force-phase">
+            <option value="draw">Draw</option>
+            <option value="standby">Standby</option>
+            <option value="main1">Main 1</option>
+            <option value="battle">Battle</option>
+            <option value="main2">Main 2</option>
+            <option value="end">End</option>
+          </select>
+          <button id="dev-force-phase-btn">Forçar</button>
+        </div>
+      </div>
+      <div class="dev-field">
+        <label for="dev-setup-json">Setup de board (JSON)</label>
+        <textarea
+          id="dev-setup-json"
+          rows="4"
+          placeholder='{"player":{"hand":["Infinity Searcher"]}}'
+        ></textarea>
+        <button id="dev-apply-setup">Aplicar Setup</button>
+      </div>
+      <button id="dev-reset-duel" class="dev-reset-btn">Resetar Duelo</button>
+    </div>
   </body>
 </html>

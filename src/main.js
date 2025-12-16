@@ -54,6 +54,19 @@ const btnPoolFilterVoid = document.getElementById("deck-filter-void");
 const btnToggleTestMode = document.getElementById("btn-toggle-test-mode");
 const btnToggleDevMode = document.getElementById("btn-toggle-dev-mode");
 const validationMessagesEl = document.getElementById("validation-messages");
+const devPanel = document.getElementById("dev-panel");
+const devDrawPlayerSelect = document.getElementById("dev-draw-player");
+const devDrawCountInput = document.getElementById("dev-draw-count");
+const devDrawBtn = document.getElementById("dev-draw-btn");
+const devGiveNameInput = document.getElementById("dev-give-name");
+const devGivePlayerSelect = document.getElementById("dev-give-player");
+const devGiveZoneSelect = document.getElementById("dev-give-zone");
+const devGiveBtn = document.getElementById("dev-give-btn");
+const devForcePhaseSelect = document.getElementById("dev-force-phase");
+const devForcePhaseBtn = document.getElementById("dev-force-phase-btn");
+const devSetupInput = document.getElementById("dev-setup-json");
+const devApplySetupBtn = document.getElementById("dev-apply-setup");
+const devResetDuelBtn = document.getElementById("dev-reset-duel");
 let currentDeck = loadDeck();
 let currentExtraDeck = loadExtraDeck();
 let poolFilterMode = "all"; // all | no_archetype | void | luminarch | shadow_heart
@@ -222,6 +235,12 @@ function updateDevModeButton() {
     devModeEnabled ? "ligado" : "desligado"
   }`;
   btnToggleDevMode.classList.toggle("active", devModeEnabled);
+  updateDevPanelVisibility();
+}
+
+function updateDevPanelVisibility() {
+  if (!devPanel) return;
+  devPanel.classList.toggle("hidden", !devModeEnabled);
 }
 
 function runCardDatabaseValidation(options = {}) {
@@ -672,10 +691,23 @@ function startDuel() {
   saveExtraDeck(currentExtraDeck);
   startScreen.classList.add("hidden");
   deckBuilder.classList.add("hidden");
-  game = new Game({ botPreset: currentBotPreset });
+  bootGame();
+}
+
+function bootGame() {
+  game = new Game({ botPreset: currentBotPreset, devMode: devModeEnabled });
   game.testModeEnabled = !!testModeEnabled;
-  game.devModeEnabled = !!devModeEnabled;
   game.start([...currentDeck], [...currentExtraDeck]);
+}
+
+function restartCurrentDuelFromDev() {
+  if (!runCardDatabaseValidation({ silent: true })) {
+    alert("Corrija os erros do Card DB antes de reiniciar o duelo.");
+    return;
+  }
+  startScreen.classList.add("hidden");
+  deckBuilder.classList.add("hidden");
+  bootGame();
 }
 
 btnDeckBuilder?.addEventListener("click", openDeckBuilder);
@@ -717,9 +749,92 @@ btnToggleDevMode?.addEventListener("click", () => {
   devModeEnabled = !devModeEnabled;
   saveDevModeFlag(devModeEnabled);
   updateDevModeButton();
+  if (game && typeof game.setDevMode === "function") {
+    game.setDevMode(devModeEnabled);
+  }
   showValidationMessages(latestValidationResult);
+});
+
+devDrawBtn?.addEventListener("click", () => {
+  if (!requireActiveGameForDev()) return;
+  const playerId = devDrawPlayerSelect?.value || "player";
+  const count = Math.max(1, parseInt(devDrawCountInput?.value, 10) || 1);
+  const result = game.devDraw(playerId, count);
+  if (!result.success) {
+    alert(result.reason || "Não foi possível comprar cartas.");
+  }
+});
+
+devGiveBtn?.addEventListener("click", () => {
+  if (!requireActiveGameForDev()) return;
+  const cardName = devGiveNameInput?.value?.trim();
+  if (!cardName) {
+    alert("Informe o nome da carta.");
+    return;
+  }
+  const options = {
+    playerId: devGivePlayerSelect?.value || "player",
+    cardName,
+    zone: devGiveZoneSelect?.value || "hand",
+  };
+  const result = game.devGiveCard(options);
+  if (!result.success) {
+    alert(result.reason || "Não foi possível adicionar a carta.");
+  }
+});
+
+devForcePhaseBtn?.addEventListener("click", () => {
+  if (!requireActiveGameForDev()) return;
+  const phase = devForcePhaseSelect?.value || "main1";
+  const result = game.devForcePhase(phase);
+  if (!result.success) {
+    alert(result.reason || "Não foi possível forçar a fase.");
+  }
+});
+
+devApplySetupBtn?.addEventListener("click", () => {
+  if (!requireActiveGameForDev()) return;
+  const raw = devSetupInput?.value?.trim();
+  if (!raw) {
+    alert("Cole um JSON descrevendo o setup do board.");
+    return;
+  }
+  let parsed = null;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err) {
+    alert("JSON inválido para setup do board.");
+    return;
+  }
+  const result = game.applyManualSetup(parsed);
+  if (!result.success) {
+    alert(result.reason || "Não foi possível aplicar o setup.");
+  } else if (result.warnings?.length) {
+    alert(result.warnings.join("\n"));
+  }
+});
+
+devResetDuelBtn?.addEventListener("click", () => {
+  if (!devModeEnabled) {
+    alert("Ative o Dev Mode antes de reiniciar por aqui.");
+    return;
+  }
+  restartCurrentDuelFromDev();
 });
 
 document.addEventListener("DOMContentLoaded", () => {
   startScreen.classList.remove("hidden");
+  updateDevPanelVisibility();
 });
+
+function requireActiveGameForDev() {
+  if (!devModeEnabled) {
+    alert("Ative o Dev Mode para usar o Dev Harness.");
+    return false;
+  }
+  if (!game) {
+    alert("Inicie um duelo primeiro.");
+    return false;
+  }
+  return true;
+}

@@ -1701,7 +1701,7 @@
         oncePerTurnScope: "card",
         replacementEffect: {
           type: "destruction",
-          reason: "any", // battle or effect
+          reason: "any",
           costFilters: {
             cardKind: "monster",
             archetype: "Luminarch",

@@ -3,7 +3,7 @@ import Bot from "./Bot.js";
 import Renderer from "../ui/Renderer.js";
 import EffectEngine from "./EffectEngine.js";
 import Card from "./Card.js";
-import { cardDatabaseByName } from "../data/cards.js";
+import { cardDatabaseByName, cardDatabaseById } from "../data/cards.js";
 
 // Helper to construct user-friendly cost type descriptions
 function getCostTypeDescription(costFilters, count) {
@@ -372,11 +372,9 @@ export default class Game {
   }
 
   bindCardInteractions() {
-    console.log(`[Game] bindCardInteractions called`);
-    console.log(
-      `[Game] player-spelltrap element:`,
-      document.getElementById("player-spelltrap")
-    );
+    this.devLog("BIND_INTERACTIONS", {
+      summary: "Binding card interaction handlers",
+    });
 
     let tributeSelectionMode = false;
     let selectedTributes = [];
@@ -3609,5 +3607,374 @@ export default class Game {
         isOpponentAttack: eventData.attackerOwner?.id === "bot",
       });
     }
+  }
+
+  resolvePlayerById(id = "player") {
+    return id === "bot" ? this.bot : this.player;
+  }
+
+  resolveCardData(identifier) {
+    if (identifier && typeof identifier === "object") {
+      if (typeof identifier.id === "number") {
+        const found = cardDatabaseById.get(identifier.id);
+        if (found) return found;
+      }
+      if (identifier.name) {
+        return this.resolveCardData(identifier.name);
+      }
+    }
+
+    if (typeof identifier === "number") {
+      return cardDatabaseById.get(identifier) || null;
+    }
+
+    if (typeof identifier !== "string") {
+      return null;
+    }
+
+    const trimmed = identifier.trim();
+    if (!trimmed) return null;
+
+    let data = cardDatabaseByName.get(trimmed);
+    if (data) return data;
+
+    const lower = trimmed.toLowerCase();
+    for (const [name, item] of cardDatabaseByName.entries()) {
+      if (typeof name === "string" && name.toLowerCase() === lower) {
+        return item;
+      }
+    }
+    return null;
+  }
+
+  createCardForOwner(identifier, owner, overrides = {}) {
+    const player =
+      typeof owner === "string" ? this.resolvePlayerById(owner) : owner;
+    if (!player) return null;
+    const data = this.resolveCardData(identifier);
+    if (!data) return null;
+
+    const card = new Card(data, player.id);
+    if (overrides.position) {
+      card.position = overrides.position === "defense" ? "defense" : "attack";
+    }
+    if (typeof overrides.isFacedown === "boolean") {
+      card.isFacedown = overrides.isFacedown;
+    } else if (overrides.facedown === true) {
+      card.isFacedown = true;
+    }
+    if (overrides.turnSetOn != null) {
+      card.turnSetOn = overrides.turnSetOn;
+    }
+    if (overrides.counters && card.counters instanceof Map) {
+      Object.entries(overrides.counters).forEach(([type, amount]) => {
+        if (typeof amount === "number" && amount > 0) {
+          card.counters.set(type, amount);
+        }
+      });
+    }
+    return card;
+  }
+
+  devDraw(playerId = "player", count = 1) {
+    if (!this.devModeEnabled) {
+      return { success: false, reason: "Dev Mode is disabled." };
+    }
+
+    const player = this.resolvePlayerById(playerId);
+    if (!player) {
+      return { success: false, reason: "Invalid player id." };
+    }
+
+    const draws = Math.max(1, Number(count) || 1);
+    const drawn = [];
+    for (let i = 0; i < draws; i++) {
+      const card = player.draw();
+      if (!card) break;
+      drawn.push(card.name);
+    }
+
+    if (!drawn.length) {
+      return { success: false, reason: "Deck is empty." };
+    }
+
+    this.updateBoard();
+    this.devLog("DEV_DRAW", {
+      summary: `${player.id} drew ${drawn.length}`,
+      player: player.id,
+      cards: drawn,
+    });
+    return { success: true, drawn };
+  }
+
+  devGiveCard(options = {}) {
+    if (!this.devModeEnabled) {
+      return { success: false, reason: "Dev Mode is disabled." };
+    }
+
+    const player = this.resolvePlayerById(options.playerId || "player");
+    if (!player) {
+      return { success: false, reason: "Invalid player id." };
+    }
+
+    const zone = (options.zone || "hand").toLowerCase();
+    const card = this.createCardForOwner(
+      options.cardName || options.name,
+      player,
+      options
+    );
+    if (!card) {
+      return { success: false, reason: "Card not found." };
+    }
+
+    const sendOldFieldSpell = (existing) => {
+      if (existing) {
+        player.graveyard.push(existing);
+      }
+    };
+
+    if (zone === "hand") {
+      player.hand.push(card);
+    } else if (zone === "graveyard") {
+      player.graveyard.push(card);
+    } else if (zone === "spelltrap") {
+      if (player.spellTrap.length >= 5) {
+        return { success: false, reason: "Spell/Trap zone is full." };
+      }
+      if (card.cardKind === "monster") {
+        return {
+          success: false,
+          reason: "Only Spell/Trap cards can go to that zone.",
+        };
+      }
+      player.spellTrap.push(card);
+    } else if (zone === "field-attack" || zone === "field-defense") {
+      if (player.field.length >= 5) {
+        return { success: false, reason: "Field is full (max 5 monsters)." };
+      }
+      if (card.cardKind !== "monster") {
+        return { success: false, reason: "Only monsters can enter the field." };
+      }
+      card.position = zone === "field-defense" ? "defense" : "attack";
+      card.hasAttacked = false;
+      card.attacksUsedThisTurn = 0;
+      player.field.push(card);
+    } else if (zone === "fieldspell") {
+      if (card.cardKind !== "spell" || card.subtype !== "field") {
+        return { success: false, reason: "Card is not a Field Spell." };
+      }
+      sendOldFieldSpell(player.fieldSpell);
+      player.fieldSpell = card;
+    } else {
+      return { success: false, reason: "Unsupported zone." };
+    }
+
+    this.updateBoard();
+    this.devLog("DEV_GIVE_CARD", {
+      summary: `${card.name} -> ${zone} (${player.id})`,
+      player: player.id,
+      card: card.name,
+      zone,
+    });
+    return { success: true, card };
+  }
+
+  devForcePhase(targetPhase, options = {}) {
+    if (!this.devModeEnabled) {
+      return { success: false, reason: "Dev Mode is disabled." };
+    }
+
+    const validPhases = new Set([
+      "draw",
+      "standby",
+      "main1",
+      "battle",
+      "main2",
+      "end",
+    ]);
+    if (!validPhases.has(targetPhase)) {
+      return { success: false, reason: "Invalid phase." };
+    }
+
+    this.phase = targetPhase;
+    if (options.turn === "player" || options.turn === "bot") {
+      this.turn = options.turn;
+    }
+    this.updateBoard();
+    this.devLog("DEV_FORCE_PHASE", {
+      summary: `Phase forced to ${this.phase}`,
+      phase: this.phase,
+      turn: this.turn,
+    });
+    return { success: true };
+  }
+
+  applyManualSetup(definition = {}) {
+    if (!this.devModeEnabled) {
+      return { success: false, reason: "Dev Mode is disabled." };
+    }
+    if (!definition || typeof definition !== "object") {
+      return { success: false, reason: "Setup must be an object." };
+    }
+
+    const warnings = [];
+    const normalizeEntry = (entry) => {
+      if (typeof entry === "string") return { name: entry };
+      if (entry && typeof entry === "object") return { ...entry };
+      return null;
+    };
+
+    const placeInZone = (player, entry, zone) => {
+      const normalized = normalizeEntry(entry);
+      if (!normalized) {
+        warnings.push(`Invalid entry for ${zone}.`);
+        return;
+      }
+      const card = this.createCardForOwner(normalized, player, normalized);
+      if (!card) {
+        warnings.push(`Card "${normalized.name || normalized.id}" not found.`);
+        return;
+      }
+
+      switch (zone) {
+        case "hand":
+          player.hand.push(card);
+          break;
+        case "field":
+          if (card.cardKind !== "monster") {
+            warnings.push(`${card.name} is not a monster.`);
+            return;
+          }
+          if (player.field.length >= 5) {
+            warnings.push("Field is full (max 5 monsters).");
+            return;
+          }
+          card.position =
+            normalized.position === "defense" ? "defense" : "attack";
+          card.hasAttacked = false;
+          card.attacksUsedThisTurn = 0;
+          player.field.push(card);
+          break;
+        case "spellTrap":
+          if (card.cardKind === "monster") {
+            warnings.push(`${card.name} cannot be placed in Spell/Trap zone.`);
+            return;
+          }
+          if (player.spellTrap.length >= 5) {
+            warnings.push("Spell/Trap zone is full (max 5 cards).");
+            return;
+          }
+          player.spellTrap.push(card);
+          break;
+        case "graveyard":
+          player.graveyard.push(card);
+          break;
+        case "fieldSpell":
+          if (card.cardKind !== "spell" || card.subtype !== "field") {
+            warnings.push(`${card.name} is not a Field Spell.`);
+            return;
+          }
+          player.fieldSpell = card;
+          break;
+        case "extraDeck":
+          player.extraDeck.push(card);
+          break;
+        case "deck":
+          player.deck.push(card);
+          break;
+        default:
+          warnings.push(`Unsupported zone "${zone}".`);
+      }
+    };
+
+    const resetSide = (player) => {
+      player.hand = [];
+      player.field = [];
+      player.spellTrap = [];
+      player.graveyard = [];
+      player.fieldSpell = null;
+      player.oncePerTurnUsageByName = {};
+    };
+
+    const applySide = (player, payload = {}) => {
+      if (!payload || typeof payload !== "object") return;
+
+      resetSide(player);
+
+      if (typeof payload.lp === "number" && Number.isFinite(payload.lp)) {
+        player.lp = Math.max(0, Math.floor(payload.lp));
+      }
+
+      if (Array.isArray(payload.hand)) {
+        payload.hand.forEach((entry) => placeInZone(player, entry, "hand"));
+      }
+
+      if (Array.isArray(payload.field)) {
+        payload.field.forEach((entry) => placeInZone(player, entry, "field"));
+      }
+
+      if (Array.isArray(payload.spellTrap)) {
+        payload.spellTrap.forEach((entry) =>
+          placeInZone(player, entry, "spellTrap")
+        );
+      }
+
+      if (Array.isArray(payload.graveyard)) {
+        payload.graveyard.forEach((entry) =>
+          placeInZone(player, entry, "graveyard")
+        );
+      }
+
+      if (payload.fieldSpell) {
+        placeInZone(player, payload.fieldSpell, "fieldSpell");
+      }
+
+      if (Array.isArray(payload.extraDeck)) {
+        player.extraDeck = [];
+        payload.extraDeck.forEach((entry) =>
+          placeInZone(player, entry, "extraDeck")
+        );
+      }
+
+      if (Array.isArray(payload.deck)) {
+        player.deck = [];
+        payload.deck.forEach((entry) => placeInZone(player, entry, "deck"));
+      }
+
+      if (Array.isArray(payload.deckTop) && payload.deckTop.length > 0) {
+        for (let i = payload.deckTop.length - 1; i >= 0; i--) {
+          placeInZone(player, payload.deckTop[i], "deck");
+        }
+      }
+    };
+
+    if (definition.player) {
+      applySide(this.player, definition.player);
+    }
+    if (definition.bot) {
+      applySide(this.bot, definition.bot);
+    }
+
+    if (typeof definition.turn === "string") {
+      this.turn = definition.turn === "bot" ? "bot" : "player";
+    }
+    if (typeof definition.phase === "string") {
+      this.phase = definition.phase;
+    }
+
+    this.gameOver = false;
+    this.isResolvingEffect = false;
+    this.pendingSpecialSummon = null;
+    this.cancelTargetSelection();
+    this.effectEngine?.updateVoidTenebrisHornBuffs();
+    this.updateBoard();
+    if (this.renderer?.log) {
+      this.renderer.log("Dev setup applied.");
+    }
+    this.devLog("DEV_SETUP_APPLIED", {
+      summary: "Manual setup applied",
+      warnings: warnings.length,
+    });
+    return { success: true, warnings };
   }
 }
