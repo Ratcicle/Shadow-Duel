@@ -96,19 +96,19 @@ export default class Game {
     ) {
       this.effectEngine.handleEvent(eventName, payload);
     }
-    
+
     // Check for traps that respond to this event (e.g., after_summon)
     // Only check player's traps, and only if opponent performed the action
     if (eventName === "after_summon" && payload && payload.player) {
       // From player's perspective, bot is the opponent
       const isOpponentSummon = payload.player.id !== "player";
-      
+
       await this.checkAndOfferTraps(eventName, {
         ...payload,
         isOpponentSummon: isOpponentSummon,
       });
     }
-    
+
     return undefined;
   }
 
@@ -569,11 +569,10 @@ export default class Game {
         }
 
         // Special check for Polymerization
-        const spellPreview =
-          this.effectEngine?.canActivateSpellFromHandPreview(
-            card,
-            this.player
-          ) || { ok: true };
+        const spellPreview = this.effectEngine?.canActivateSpellFromHandPreview(
+          card,
+          this.player
+        ) || { ok: true };
         let canActivateFromHand = !!spellPreview.ok;
 
         if (card.name === "Polymerization") {
@@ -1115,7 +1114,8 @@ export default class Game {
     // Generic destruction replacement system
     // Look for effects with replacementEffect property
     const replacementEffect = (card.effects || []).find(
-      (eff) => eff.replacementEffect && eff.replacementEffect.type === "destruction"
+      (eff) =>
+        eff.replacementEffect && eff.replacementEffect.type === "destruction"
     );
 
     if (!replacementEffect) {
@@ -1135,7 +1135,11 @@ export default class Game {
     }
 
     // Check if reason matches (battle/effect/any)
-    if (replacement.reason && replacement.reason !== "any" && replacement.reason !== options.reason) {
+    if (
+      replacement.reason &&
+      replacement.reason !== "any" &&
+      replacement.reason !== options.reason
+    ) {
       return { replaced: false };
     }
 
@@ -1144,7 +1148,8 @@ export default class Game {
     const filterCandidates = (candidate) => {
       if (!candidate || candidate === card) return false;
 
-      if (costFilters.cardKind && candidate.cardKind !== costFilters.cardKind) return false;
+      if (costFilters.cardKind && candidate.cardKind !== costFilters.cardKind)
+        return false;
 
       if (costFilters.archetype) {
         const hasArchetype =
@@ -1177,12 +1182,18 @@ export default class Game {
         .slice(0, costCount);
 
       for (const costCard of chosen) {
-        this.moveCard(costCard, ownerPlayer, "graveyard", { fromZone: costZone });
+        this.moveCard(costCard, ownerPlayer, "graveyard", {
+          fromZone: costZone,
+        });
       }
 
-      this.effectEngine.registerOncePerTurnUsage(card, ownerPlayer, replacementEffect);
+      this.effectEngine.registerOncePerTurnUsage(
+        card,
+        ownerPlayer,
+        replacementEffect
+      );
 
-      const costNames = chosen.map(c => c.name).join(", ");
+      const costNames = chosen.map((c) => c.name).join(", ");
       this.renderer.log(
         `${card.name} avoided destruction by sending ${costNames} to the Graveyard.`
       );
@@ -1191,9 +1202,10 @@ export default class Game {
 
     // Player confirmation
     const costDescription = getCostTypeDescription(costFilters, costCount);
-    const prompt = replacement.prompt || 
+    const prompt =
+      replacement.prompt ||
       `Send ${costCount} ${costDescription} to the GY to save ${card.name}?`;
-    
+
     const wantsToReplace = window.confirm(prompt);
     if (!wantsToReplace) {
       return { replaced: false };
@@ -1206,8 +1218,11 @@ export default class Game {
       min: costCount,
       max: costCount,
       filter: filterCandidates,
-      message: replacement.selectionMessage || 
-        `Choose ${costCount} ${costCount > 1 ? 'cards' : 'card'} to send to the Graveyard for ${card.name}'s protection.`,
+      message:
+        replacement.selectionMessage ||
+        `Choose ${costCount} ${
+          costCount > 1 ? "cards" : "card"
+        } to send to the Graveyard for ${card.name}'s protection.`,
     });
 
     if (!selections || selections.length < costCount) {
@@ -1220,9 +1235,13 @@ export default class Game {
       this.moveCard(costCard, ownerPlayer, "graveyard", { fromZone: costZone });
     }
 
-    this.effectEngine.registerOncePerTurnUsage(card, ownerPlayer, replacementEffect);
+    this.effectEngine.registerOncePerTurnUsage(
+      card,
+      ownerPlayer,
+      replacementEffect
+    );
 
-    const costNames = selections.map(c => c.name).join(", ");
+    const costNames = selections.map((c) => c.name).join(", ");
     this.renderer.log(
       `${card.name} avoided destruction by sending ${costNames} to the Graveyard.`
     );
@@ -1371,7 +1390,13 @@ export default class Game {
     this.updateBoard();
   }
 
-  handleSpellTrapActivationResult(card, owner, result, activationZone = null, options = {}) {
+  handleSpellTrapActivationResult(
+    card,
+    owner,
+    result,
+    activationZone = null,
+    options = {}
+  ) {
     if (result.needsSelection) {
       if (this.canUseFieldTargeting(result.options)) {
         this.startSpellTrapTargetSelection(
@@ -1616,7 +1641,12 @@ export default class Game {
     this.highlightTargetCandidates();
   }
 
-  startSpellTrapTargetSelection(card, options, activationZone = null, extra = {}) {
+  startSpellTrapTargetSelection(
+    card,
+    options,
+    activationZone = null,
+    extra = {}
+  ) {
     this.cancelTargetSelection();
     const usingFieldTargeting = this.canUseFieldTargeting(options);
     const activationZoneResolved = activationZone || "spellTrap";
@@ -1994,9 +2024,7 @@ export default class Game {
         });
       } else if (cand.zone === "spellTrap") {
         const stSelector =
-          cand.controller === "player"
-            ? "#player-spelltrap"
-            : "#bot-spelltrap";
+          cand.controller === "player" ? "#player-spelltrap" : "#bot-spelltrap";
         const indexSelector = ` .card[data-index="${cand.zoneIndex}"]`;
         targetEl = document.querySelector(`${stSelector}${indexSelector}`);
         console.log("[Game] Highlighting spell/trap card:", {
@@ -2133,8 +2161,7 @@ export default class Game {
     }
     this.targetSelection.selections[option.id] = selections;
 
-    const shouldAutoAdvance =
-      this.targetSelection.autoAdvanceOnMax !== false;
+    const shouldAutoAdvance = this.targetSelection.autoAdvanceOnMax !== false;
 
     if (shouldAutoAdvance && max > 0 && selections.length >= max) {
       console.log("[Game] Max reached, advancing selection");
@@ -2225,11 +2252,7 @@ export default class Game {
         owner,
         selection.selections
       );
-      this.handleGraveyardEffectActivationResult(
-        selection.card,
-        owner,
-        result
-      );
+      this.handleGraveyardEffectActivationResult(selection.card, owner, result);
     } else if (selection.kind === "triggered") {
       this.effectEngine.resolveTriggeredSelection(
         selection.effect,
@@ -2828,7 +2851,13 @@ export default class Game {
 
     // Check if at least one Fusion Monster can be summoned
     for (const fusion of this.player.extraDeck) {
-      if (this.effectEngine.canSummonFusion(fusion, availableMaterials, this.player)) {
+      if (
+        this.effectEngine.canSummonFusion(
+          fusion,
+          availableMaterials,
+          this.player
+        )
+      ) {
         return true;
       }
     }
@@ -2877,7 +2906,7 @@ export default class Game {
         if (card.def < 0) card.def = 0;
         card.tempDefBoost = 0;
       }
-      
+
       // Restore stats if they were set to zero
       if (card.originalAtk != null) {
         card.atk = card.originalAtk;
@@ -2887,10 +2916,10 @@ export default class Game {
         card.def = card.originalDef;
         card.originalDef = null;
       }
-      
+
       // Remove effect negation
       card.effectsNegated = false;
-      
+
       card.tempBattleIndestructible = false;
       card.battleDamageHealsControllerThisTurn = false;
       card.canAttackDirectlyThisTurn = false;
@@ -2970,7 +2999,7 @@ export default class Game {
       card.cannotAttackThisTurn = false;
       card.cannotAttackUntilTurn = null;
       card.immuneToOpponentEffectsUntilTurn = null;
-      
+
       // Clean up temporary stat modifiers from effects (e.g., Shadow-Heart Coward debuff)
       if (card.tempAtkBoost) {
         card.atk -= card.tempAtkBoost;
@@ -2982,7 +3011,7 @@ export default class Game {
         if (card.def < 0) card.def = 0;
         card.tempDefBoost = 0;
       }
-      
+
       const prevBuff = card.voidTenebrisBuffValue || 0;
       if (prevBuff) {
         card.atk -= prevBuff;
@@ -3292,7 +3321,9 @@ export default class Game {
       return;
     }
     if (this.isResolvingEffect) {
-      this.renderer.log("Finish the current effect before activating another card.");
+      this.renderer.log(
+        "Finish the current effect before activating another card."
+      );
       return;
     }
 
@@ -3345,11 +3376,17 @@ export default class Game {
       { fromHand: true }
     );
 
-    this.handleSpellTrapActivationResult(cardRef, this.player, result, activationZone, {
-      committed: true,
-      zoneIndex: commit.zoneIndex,
-      commitInfo: commit,
-    });
+    this.handleSpellTrapActivationResult(
+      cardRef,
+      this.player,
+      result,
+      activationZone,
+      {
+        committed: true,
+        zoneIndex: commit.zoneIndex,
+        commitInfo: commit,
+      }
+    );
   }
 
   rollbackSpellActivation(player, commitInfo) {
@@ -3409,9 +3446,8 @@ export default class Game {
     }
 
     // Determine zone index if in S/T array
-    const zoneIndex = activationZone === "spellTrap"
-      ? player.spellTrap.indexOf(card)
-      : null;
+    const zoneIndex =
+      activationZone === "spellTrap" ? player.spellTrap.indexOf(card) : null;
 
     this.updateBoard();
 
@@ -3598,7 +3634,7 @@ export default class Game {
       }
     } finally {
       this.trapPromptInProgress = false; // Avoid multiple trap prompts simultaneously
-    this.testModeEnabled = false;
+      this.testModeEnabled = false;
     }
   }
 

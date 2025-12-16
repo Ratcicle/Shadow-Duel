@@ -62,6 +62,19 @@ export class ActionHandlerRegistry {
   }
 }
 
+// Helper: create a simple wrapper that proxies to EffectEngine methods.
+// Keeps the behavior identical to legacy switch/case while moving action types
+// into the registry.
+function proxyEngineMethod(methodName) {
+  return async (action, ctx, targets, engine) => {
+    if (!engine || typeof engine[methodName] !== "function") {
+      return false;
+    }
+    // Many legacy methods are sync, but awaiting is safe and keeps a uniform signature.
+    return await engine[methodName](action, ctx, targets);
+  };
+}
+
 /**
  * Generic handler for special summoning from any zone with filters
  * UNIFIED HANDLER - Replaces both single and multi-card summon patterns
@@ -3195,5 +3208,61 @@ export function registerDefaultHandlers(registry) {
   registry.register(
     "conditional_special_summon_from_hand",
     handleConditionalSpecialSummonFromHand
+  );
+
+  // Legacy/common actions migrated into the registry (proxy to EffectEngine methods)
+  registry.register("draw", proxyEngineMethod("applyDraw"));
+  registry.register("heal", proxyEngineMethod("applyHeal"));
+  registry.register(
+    "heal_per_archetype_monster",
+    proxyEngineMethod("applyHealPerArchetypeMonster")
+  );
+  registry.register("damage", proxyEngineMethod("applyDamage"));
+  registry.register("destroy", proxyEngineMethod("applyDestroy"));
+  registry.register("move", proxyEngineMethod("applyMove"));
+  registry.register("equip", proxyEngineMethod("applyEquip"));
+  registry.register("negate_attack", proxyEngineMethod("applyNegateAttack"));
+  registry.register("search_any", proxyEngineMethod("applySearchAny"));
+  registry.register("buff_atk_temp", proxyEngineMethod("applyBuffAtkTemp"));
+  registry.register(
+    "modify_stats_temp",
+    proxyEngineMethod("applyModifyStatsTemp")
+  );
+  registry.register("add_counter", proxyEngineMethod("applyAddCounter"));
+  registry.register(
+    "forbid_attack_this_turn",
+    proxyEngineMethod("applyForbidAttackThisTurn")
+  );
+  registry.register(
+    "forbid_attack_next_turn",
+    proxyEngineMethod("applyForbidAttackNextTurn")
+  );
+  registry.register(
+    "allow_direct_attack_this_turn",
+    proxyEngineMethod("applyAllowDirectAttackThisTurn")
+  );
+  registry.register(
+    "special_summon_token",
+    proxyEngineMethod("applySpecialSummonToken")
+  );
+  registry.register(
+    "grant_void_fusion_immunity",
+    proxyEngineMethod("applyGrantVoidFusionImmunity")
+  );
+  registry.register(
+    "destroy_self_monsters_and_draw",
+    proxyEngineMethod("applyDestroyAllOthersAndDraw")
+  );
+  registry.register(
+    "polymerization_fusion_summon",
+    proxyEngineMethod("applyPolymerizationFusion")
+  );
+  registry.register(
+    "call_of_haunted_summon_and_bind",
+    proxyEngineMethod("applyCallOfTheHauntedSummon")
+  );
+  registry.register(
+    "mirror_force_destroy_all",
+    proxyEngineMethod("applyMirrorForceDestroy")
   );
 }
