@@ -47,6 +47,28 @@ export default class Game {
     this.isResolvingEffect = false; // Lock player actions while resolving an effect
     this.trapPromptInProgress = false; // Avoid multiple trap prompts simultaneously
     this.testModeEnabled = false;
+    this.devModeEnabled = !!options.devMode;
+  }
+
+  setDevMode(enabled) {
+    this.devModeEnabled = !!enabled;
+  }
+
+  devLog(tag, detail) {
+    if (!this.devModeEnabled) return;
+    const prefix = `[DEV] ${tag}`;
+    const logMessage =
+      detail && typeof detail === "object"
+        ? `${prefix}: ${
+            typeof detail.summary === "string"
+              ? detail.summary
+              : JSON.stringify(detail)
+          }`
+        : `${prefix}: ${detail ?? ""}`;
+    console.debug(logMessage);
+    if (this.renderer?.log) {
+      this.renderer.log(logMessage);
+    }
   }
 
   on(eventName, handler) {
