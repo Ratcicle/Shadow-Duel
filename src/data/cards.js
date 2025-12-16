@@ -989,7 +989,8 @@
         speed: 1,
         actions: [
           {
-            type: "shadow_heart_rage_scale_buff",
+            type: "buff_stats_temp_with_second_attack",
+            targetRef: "self",
             atkBoost: 700,
             defBoost: 700,
           },
@@ -1266,9 +1267,11 @@
         oncePerTurnName: "shadow_heart_cathedral_summon",
         actions: [
           {
-            type: "shadow_heart_cathedral_summon",
+            type: "special_summon_from_deck_with_counter_limit",
             counterType: "judgment_marker",
             counterMultiplier: 500,
+            archetype: "Shadow-Heart",
+            sendSourceToGraveAfter: true,
           },
         ],
       },
@@ -1341,7 +1344,8 @@
         summonMethod: "fusion",
         actions: [
           {
-            type: "demon_dragon_destroy_two",
+            type: "destroy_targeted_cards",
+            maxTargets: 2,
           },
         ],
       },
@@ -1354,7 +1358,12 @@
         },
         actions: [
           {
-            type: "demon_dragon_revive_scale_dragon",
+            type: "special_summon_from_zone",
+            targetRef: "self",
+            sourceZone: "graveyard",
+            cardName: "Shadow-Heart Scale Dragon",
+            archetype: "Shadow-Heart",
+            position: "attack",
           },
         ],
       },

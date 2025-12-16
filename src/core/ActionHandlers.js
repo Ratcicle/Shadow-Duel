@@ -2906,6 +2906,139 @@ async function performSummonFromDeck(
 }
 
 /**
+ * Destroy up to N target cards (opponent's field/spellTrap/fieldSpell)
+ * Used by: Demon Dragon, and other destruction-based effects
+ */
+export async function handleDestroyTargetedCards(action, ctx, targets, engine) {
+  const { player, opponent, source } = ctx;
+  const game = engine.game;
+
+  if (!opponent || !source) return false;
+
+  // Get opponent's cards on field/spellTrap/fieldSpell
+  const opponentCards = [
+    ...(opponent.field || []),
+    ...(opponent.spellTrap || []),
+  ];
+
+  if (opponent.fieldSpell) {
+    opponentCards.push(opponent.fieldSpell);
+  }
+
+  if (opponentCards.length === 0) {
+    game.renderer?.log("Opponent has no cards to destroy.");
+    return false;
+  }
+
+  // action.maxTargets: how many cards to target (default 1)
+  const maxTargets = Math.min(action.maxTargets || 1, opponentCards.length);
+
+  game.renderer?.log(
+    `${source.name}: Select up to ${maxTargets} opponent cards to destroy.`
+  );
+
+  // Build candidates list for showTargetSelection
+  const candidates = opponentCards.map((card, index) => ({
+    idx: index,
+    name: card.name,
+    owner: opponent.id === "player" ? "Player" : "Opponent",
+    position: card.position || "",
+    atk: card.atk || 0,
+    def: card.def || 0,
+    cardRef: card,
+  }));
+
+  return new Promise((resolve) => {
+    game.renderer?.showTargetSelection(
+      [
+        {
+          id: "destroy_targets",
+          zone: "opponent_field",
+          min: maxTargets,
+          max: maxTargets,
+          candidates: candidates,
+        },
+      ],
+      (selections) => {
+        const selectedIndices = selections["destroy_targets"] || [];
+        const targetCards = selectedIndices.map((idx) => opponentCards[idx]);
+
+        if (targetCards.length === 0) {
+          game.renderer?.log("No cards selected.");
+          resolve(false);
+          return;
+        }
+
+        // Destroy each target
+        targetCards.forEach((card) => {
+          game.renderer?.log(`${source.name} destroyed ${card.name}!`);
+          game.moveCard(card, opponent, "graveyard");
+        });
+
+        game.updateBoard();
+        resolve(true);
+      },
+      () => {
+        game.renderer?.log("Target selection cancelled.");
+        resolve(false);
+      }
+    );
+  });
+}
+
+/**
+ * Temporarily buff a card's stats and grant it a second attack this Battle Phase
+ * Used by: Shadow-Heart Rage
+ * Properties:
+ * - targetRef: "self" or other reference (default: "self")
+ * - atkBoost: ATK increase
+ * - defBoost: DEF increase
+ */
+export async function handleBuffStatsTempWithSecondAttack(
+  action,
+  ctx,
+  targets,
+  engine
+) {
+  const { source } = ctx;
+  const game = engine.game;
+
+  if (!source) return false;
+
+  // Get target card
+  let targetCard = source;
+  if (action.targetRef === "self" || action.targetRef === "summonedCard") {
+    targetCard = source;
+  }
+
+  if (!targetCard) return false;
+
+  const atkBoost = action.atkBoost || 0;
+  const defBoost = action.defBoost || 0;
+
+  // Apply temporary stat boosts
+  if (atkBoost > 0) {
+    targetCard.atk += atkBoost;
+    targetCard.tempAtkBoost = (targetCard.tempAtkBoost || 0) + atkBoost;
+  }
+
+  if (defBoost > 0) {
+    targetCard.def += defBoost;
+    targetCard.tempDefBoost = (targetCard.tempDefBoost || 0) + defBoost;
+  }
+
+  // Grant second attack this Battle Phase
+  targetCard.canMakeSecondAttack = true;
+
+  game.renderer?.log(
+    `${targetCard.name} gains ${atkBoost} ATK / ${defBoost} DEF and can make a second attack!`
+  );
+
+  game.updateBoard();
+  return true;
+}
+
+/**
  * Initialize default handlers
  * @param {ActionHandlerRegistry} registry
  */
@@ -2982,5 +3115,12 @@ export function registerDefaultHandlers(registry) {
   registry.register(
     "special_summon_from_deck_with_counter_limit",
     handleSpecialSummonFromDeckWithCounterLimit
+  );
+
+  // FASE 3: New handlers for complex Shadow-Heart methods
+  registry.register("destroy_targeted_cards", handleDestroyTargetedCards);
+  registry.register(
+    "buff_stats_temp_with_second_attack",
+    handleBuffStatsTempWithSecondAttack
   );
 }

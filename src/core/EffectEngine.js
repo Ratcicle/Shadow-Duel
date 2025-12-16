@@ -10,6 +10,8 @@ import {
   handleDestroyAttackerOnArchetypeDestruction,
   handleUpkeepPayOrSendToGrave,
   handleSpecialSummonFromDeckWithCounterLimit,
+  handleDestroyTargetedCards,
+  handleBuffStatsTempWithSecondAttack,
 } from "./ActionHandlers.js";
 
 export const LEGACY_ACTION_TYPES = new Set([
@@ -28,7 +30,6 @@ export const LEGACY_ACTION_TYPES = new Set([
   "equip",
   "move",
   "destroy_self_monsters_and_draw",
-  "shadow_heart_rage_scale_buff",
   "shadow_heart_shield_upkeep",
   "forbid_attack_this_turn",
   "forbid_attack_next_turn",
@@ -37,14 +38,11 @@ export const LEGACY_ACTION_TYPES = new Set([
   "shadow_heart_death_wyrm_special_summon",
   "conditional_special_summon_from_hand",
   "add_counter",
-  "shadow_heart_cathedral_summon",
   "the_shadow_heart_special_summon_and_equip",
   "abyssal_eel_special_summon",
   "polymerization_fusion_summon",
   "banish",
   "allow_direct_attack_this_turn",
-  "demon_dragon_destroy_two",
-  "demon_dragon_revive_scale_dragon",
   "mirror_force_destroy_all",
   "call_of_haunted_summon_and_bind",
 ]);
@@ -2488,8 +2486,8 @@ export default class EffectEngine {
             executed = result || executed;
             break;
           }
-          case "shadow_heart_rage_scale_buff": {
-            const result = this.applyShadowHeartRageScaleBuff(action, ctx);
+          case "buff_stats_temp_with_second_attack": {
+            const result = await handleBuffStatsTempWithSecondAttack(action, ctx, targets, this);
             actionResult = actionResult || result;
             executed = result || executed;
             break;
@@ -2625,10 +2623,12 @@ export default class EffectEngine {
             executed = result || executed;
             break;
           }
-          case "shadow_heart_cathedral_summon": {
-            const result = await this.applyShadowHeartCathedralSummon(
+          case "special_summon_from_deck_with_counter_limit": {
+            const result = await handleSpecialSummonFromDeckWithCounterLimit(
               action,
-              ctx
+              ctx,
+              targets,
+              this
             );
             actionResult = actionResult || result;
             executed = result || executed;
@@ -2672,14 +2672,8 @@ export default class EffectEngine {
             executed = result || executed;
             break;
           }
-          case "demon_dragon_destroy_two": {
-            const result = await this.applyDemonDragonDestroy(action, ctx);
-            actionResult = actionResult || result;
-            executed = result || executed;
-            break;
-          }
-          case "demon_dragon_revive_scale_dragon": {
-            const result = await this.applyDemonDragonRevive(action, ctx);
+          case "destroy_targeted_cards": {
+            const result = await handleDestroyTargetedCards(action, ctx, targets, this);
             actionResult = actionResult || result;
             executed = result || executed;
             break;
@@ -3960,34 +3954,6 @@ export default class EffectEngine {
     return true;
   }
 
-  applyShadowHeartRageScaleBuff(action, ctx) {
-    const player = ctx?.player;
-    if (!player) return false;
-
-    const faceUpMonsters = (player.field || []).filter(
-      (c) => c && c.cardKind === "monster" && !c.isFacedown
-    );
-    if (faceUpMonsters.length !== 1) return false;
-
-    const scale = faceUpMonsters[0];
-    if (scale.name !== "Shadow-Heart Scale Dragon") return false;
-
-    const atkBoost = action.atkBoost ?? 700;
-    const defBoost = action.defBoost ?? 700;
-
-    if (atkBoost) {
-      scale.atk += atkBoost;
-      scale.tempAtkBoost = (scale.tempAtkBoost || 0) + atkBoost;
-    }
-    if (defBoost) {
-      scale.def += defBoost;
-      scale.tempDefBoost = (scale.tempDefBoost || 0) + defBoost;
-    }
-
-    scale.canMakeSecondAttackThisTurn = true;
-    scale.secondAttackUsedThisTurn = false;
-    return true;
-  }
 
   showSickleSelectionModal(candidates, maxSelect, onConfirm, onCancel) {
     if (
@@ -4424,141 +4390,6 @@ export default class EffectEngine {
     return added;
   }
 
-  async applyShadowHeartCathedralSummon(action, ctx) {
-    console.log(`[Cathedral] applyShadowHeartCathedralSummon called`);
-    if (!ctx.source || !ctx.player || !this.game) {
-      console.log(
-        `[Cathedral] Missing context: source=${!!ctx.source}, player=${!!ctx.player}, game=${!!this
-          .game}`
-      );
-      return false;
-    }
-
-    const counterType = action.counterType || "judgment_marker";
-    const multiplier = action.counterMultiplier || 500;
-    const counterCount = ctx.source.getCounter
-      ? ctx.source.getCounter(counterType)
-      : 0;
-
-    console.log(`[Cathedral] Counter count: ${counterCount}`);
-
-    // Allow opening modal even with 0 counters to show info
-    const maxAtk = counterCount * multiplier;
-
-    // Get deck candidates
-    const deck = ctx.player.deck || [];
-    const validMonsters = deck.filter((card) => {
-      if (card.cardKind !== "monster") return false;
-      if (!card.archetype || card.archetype !== "Shadow-Heart") return false;
-      const cardAtk = card.atk || 0;
-      return cardAtk <= maxAtk;
-    });
-
-    console.log(
-      `[Cathedral] Found ${validMonsters.length} valid monsters in deck (ATK ≤ ${maxAtk})`
-    );
-
-    if (validMonsters.length === 0) {
-      console.log(
-        `No Shadow-Heart monsters in deck with ATK ≤ ${maxAtk} to summon.`
-      );
-      // Still show info to player
-      if (counterCount === 0) {
-        this.game.renderer.log(
-          "Shadow-Heart Cathedral has no Judgment Counters yet."
-        );
-      } else {
-        this.game.renderer.log(
-          `No valid Shadow-Heart monsters in deck with ATK ≤ ${maxAtk}.`
-        );
-      }
-      return false;
-    }
-
-    // Show selection modal to player
-    return new Promise((resolve) => {
-      this.game.showShadowHeartCathedralModal(
-        validMonsters,
-        maxAtk,
-        counterCount,
-        async (selectedCard) => {
-          if (!selectedCard) {
-            console.log("[Cathedral] No card selected, canceling");
-            resolve(false);
-            return;
-          }
-
-          console.log(`[Cathedral] Card selected: ${selectedCard.name}`);
-
-          // Remove card from deck
-          const deckIndex = ctx.player.deck.indexOf(selectedCard);
-          if (deckIndex !== -1) {
-            ctx.player.deck.splice(deckIndex, 1);
-          }
-
-          // Check field space
-          if (ctx.player.field.length >= 5) {
-            console.log("Field is full, cannot Special Summon.");
-            this.game.renderer.log("Your field is full!");
-            // Return card to deck
-            ctx.player.deck.splice(deckIndex, 0, selectedCard);
-            resolve(false);
-            return;
-          }
-
-          // Ask for position
-          const position = await new Promise((resolvePos) => {
-            this.game.renderer.showSummonModal(
-              selectedCard,
-              false, // not a tribute summon
-              (pos) => resolvePos(pos),
-              () => resolvePos(null)
-            );
-          });
-
-          if (!position) {
-            console.log("[Cathedral] Position selection cancelled");
-            // Return card to deck
-            ctx.player.deck.splice(deckIndex, 0, selectedCard);
-            resolve(false);
-            return;
-          }
-
-          // Special Summon to field
-          selectedCard.position = position;
-          selectedCard.isFacedown = position === "defense" ? true : false;
-          selectedCard.hasAttacked = false;
-          selectedCard.cannotAttackThisTurn = false;
-          ctx.player.field.push(selectedCard);
-
-          console.log(
-            `Special Summoned ${selectedCard.name} from deck via Shadow-Heart Cathedral (${counterCount} counters, max ATK ${maxAtk}) in ${position} position.`
-          );
-
-          this.game.renderer.log(
-            `Special Summoned ${selectedCard.name} from deck via Shadow-Heart Cathedral!`
-          );
-
-          // Send Cathedral to GY (zeroing counters)
-          this.game.moveCard(ctx.source, ctx.player, "graveyard");
-          console.log("[Cathedral] Sent to Graveyard");
-
-          // Emit after_summon event
-          this.emit("after_summon", {
-            card: selectedCard,
-            player: ctx.player,
-            summonMethod: "special",
-          });
-
-          if (typeof this.game.updateBoard === "function") {
-            this.game.updateBoard();
-          }
-
-          resolve(true);
-        }
-      );
-    });
-  }
 
   async applyTheShadowHeartSummonAndEquip(action, ctx, targets) {
     return new Promise((resolve) => {
@@ -5041,143 +4872,7 @@ export default class EffectEngine {
     }).ok;
   }
 
-  async applyDemonDragonDestroy(action, ctx) {
-    if (!ctx.source || !ctx.player || !this.game) {
-      return false;
-    }
 
-    const opponent = ctx.opponent || this.game.getOpponent(ctx.player);
-
-    // Get all opponent's cards on field
-    const opponentCards = [
-      ...(opponent.field || []),
-      ...(opponent.spellTrap || []),
-    ];
-
-    if (opponent.fieldSpell) {
-      opponentCards.push(opponent.fieldSpell);
-    }
-
-    if (opponentCards.length === 0) {
-      this.game.renderer.log("Opponent has no cards to destroy.");
-      return false;
-    }
-
-    // Select up to 2 targets
-    const maxTargets = Math.min(2, opponentCards.length);
-
-    this.game.renderer.log(
-      `${ctx.source.name}: Select up to ${maxTargets} opponent's cards to destroy.`
-    );
-
-    // Build candidates list for showTargetSelection
-    const candidates = opponentCards.map((card, index) => ({
-      idx: index,
-      name: card.name,
-      owner: opponent.id === "player" ? "Player" : "Opponent",
-      position: card.position || "",
-      atk: card.atk,
-      def: card.def,
-      cardRef: card,
-    }));
-
-    return new Promise((resolve) => {
-      this.game.renderer.showTargetSelection(
-        [
-          {
-            id: "demon_dragon_targets",
-            zone: "opponent_field",
-            min: maxTargets,
-            max: maxTargets,
-            candidates: candidates,
-          },
-        ],
-        (selections) => {
-          const selectedIndices = selections["demon_dragon_targets"] || [];
-          const targets = selectedIndices.map((idx) => opponentCards[idx]);
-
-          targets.forEach((target) => {
-            this.game.renderer.log(
-              `${ctx.source.name} destroyed ${target.name}!`
-            );
-            this.game.moveCard(target, opponent, "graveyard");
-          });
-
-          this.game.updateBoard();
-          resolve(true);
-        },
-        () => {
-          this.game.renderer.log("Target selection cancelled.");
-          resolve(false);
-        }
-      );
-    });
-  }
-
-  async applyDemonDragonRevive(action, ctx) {
-    if (!ctx.card || !ctx.player || !this.game) {
-      return false;
-    }
-
-    // Check if this was Demon Dragon being destroyed
-    if (ctx.card.name !== "Shadow-Heart Demon Dragon") {
-      return false;
-    }
-
-    // Find Scale Dragon in GY
-    const scaleDragon = ctx.player.graveyard.find(
-      (card) => card && card.name === "Shadow-Heart Scale Dragon"
-    );
-
-    if (!scaleDragon) {
-      this.game.renderer.log("No Shadow-Heart Scale Dragon in Graveyard.");
-      return false;
-    }
-
-    // Check field space
-    if (ctx.player.field.length >= 5) {
-      this.game.renderer.log("Field is full.");
-      return false;
-    }
-
-    // Prompt to activate effect
-    return new Promise((resolve) => {
-      if (
-        window.confirm(
-          `Activate ${ctx.card.name} effect to Special Summon Shadow-Heart Scale Dragon from GY?`
-        )
-      ) {
-        // Remove from GY
-        const gyIndex = ctx.player.graveyard.indexOf(scaleDragon);
-        if (gyIndex > -1) {
-          ctx.player.graveyard.splice(gyIndex, 1);
-        }
-
-        // Special Summon to field
-        scaleDragon.position = "attack";
-        scaleDragon.isFacedown = false;
-        scaleDragon.hasAttacked = false;
-        scaleDragon.cannotAttackThisTurn = false;
-        scaleDragon.owner = ctx.player.id;
-        ctx.player.field.push(scaleDragon);
-
-        this.game.renderer.log(
-          `${ctx.card.name} effect: Special Summoned ${scaleDragon.name} from Graveyard!`
-        );
-
-        this.game.emit("after_summon", {
-          card: scaleDragon,
-          player: ctx.player,
-          method: "special",
-        });
-
-        this.game.updateBoard();
-        resolve(true);
-      } else {
-        resolve(false);
-      }
-    });
-  }
 
   async applyCallOfTheHauntedSummon(action, ctx, targets) {
     const player = ctx.player;
@@ -5801,3 +5496,4 @@ export default class EffectEngine {
     return true;
   }
 }
+
