@@ -8,7 +8,7 @@
     level: 4,
     type: "Beast",
     description: "A demonic horse with flaming mane.",
-    image: "assets/shadow_wolf.png",
+    image: "assets/Nightmare Steed.png",
   },
   {
     id: 2,

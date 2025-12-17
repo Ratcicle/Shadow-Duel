@@ -16,11 +16,11 @@
   - [x] timings válidos
   - [x] actions registradas
 - [ ] **Harness de testes manuais**:
-  - [ ] "Setup board"
-  - [ ] "Draw X"
-  - [ ] "Give card"
-  - [ ] "Force phase"
-  - [ ] "Reset duel"
+  - [x] "Setup board"
+  - [x] "Draw X"
+  - [x] "Give card"
+  - [x] "Force phase"
+  - [x] "Reset duel"
 - [ ] (Opcional) **Replays simples**: registrar ações e reexecutar.
 
 **Pronto quando:** você consegue reproduzir bugs e ver no log *qual ação/handler/condição* causou.
