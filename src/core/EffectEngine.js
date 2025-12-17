@@ -1217,7 +1217,7 @@ export default class EffectEngine {
   ) {
     const check = this.canActivate(card, player);
     if (!check.ok) {
-      return { success: false, reason: check.reason };
+      return { success: false, needsSelection: false, reason: check.reason };
     }
 
     const effect = this.getHandActivationEffect(card);
@@ -1227,7 +1227,11 @@ export default class EffectEngine {
     const placementOnly = !effect && (isFieldSpell || isContinuousSpell);
 
     if (!effect && !placementOnly) {
-      return { success: false, reason: "No on_play effect defined." };
+      return {
+        success: false,
+        needsSelection: false,
+        reason: "No on_play effect defined.",
+      };
     }
 
     // Verificação de campo vazio para spells do tipo equip com requireEmptyField
@@ -1240,6 +1244,7 @@ export default class EffectEngine {
       if (player.field && player.field.length > 0) {
         return {
           success: false,
+          needsSelection: false,
           reason: "Você deve controlar nenhum monstro para ativar este efeito.",
         };
       }
@@ -1248,12 +1253,12 @@ export default class EffectEngine {
     if (effect) {
       const optCheck = this.checkOncePerTurn(card, player, effect);
       if (!optCheck.ok) {
-        return { success: false, reason: optCheck.reason };
+        return { success: false, needsSelection: false, reason: optCheck.reason };
       }
 
       const duelCheck = this.checkOncePerDuel(card, player, effect);
       if (!duelCheck.ok) {
-        return { success: false, reason: duelCheck.reason };
+        return { success: false, needsSelection: false, reason: duelCheck.reason };
       }
     }
 
@@ -1305,13 +1310,13 @@ export default class EffectEngine {
     }
 
     if (placementOnly) {
-      return { success: true, placementOnly: true };
+      return { success: true, needsSelection: false, placementOnly: true };
     }
 
     const skipImmediateResolution = effect && effect.manualActivationOnly;
 
     if (skipImmediateResolution) {
-      return { success: true };
+      return { success: true, needsSelection: false };
     }
 
     const targetResult = this.resolveTargets(
@@ -1328,7 +1333,7 @@ export default class EffectEngine {
     }
 
     if (!targetResult.ok) {
-      return { success: false, reason: targetResult.reason };
+      return { success: false, needsSelection: false, reason: targetResult.reason };
     }
 
     this.applyActions(effect.actions || [], ctx, targetResult.targets);
@@ -1337,12 +1342,12 @@ export default class EffectEngine {
 
     if (card.cardKind === "spell") {
       if (isFieldSpell || isContinuousSpell) {
-        return { success: true };
+        return { success: true, needsSelection: false };
       }
 
       // Equip Spells serão movidas para a zona de spell/trap na própria action.
       if (card.subtype === "equip") {
-        return { success: true };
+        return { success: true, needsSelection: false };
       }
     }
 
@@ -1358,7 +1363,7 @@ export default class EffectEngine {
       player.graveyard.push(card);
     }
 
-    return { success: true };
+    return { success: true, needsSelection: false };
   }
 
   activateMonsterFromField(card, player, fieldIndex, selections = null) {
@@ -1516,14 +1521,18 @@ export default class EffectEngine {
     return { success: true };
   }
 
-  activateFieldSpell(card, player, selections = null) {
+  activateFieldSpell(card, player, selections = null, activationContext = {}) {
     if (!card || card.cardKind !== "spell" || card.subtype !== "field") {
-      return { success: false, reason: "Not a field spell." };
+      return {
+        success: false,
+        needsSelection: false,
+        reason: "Not a field spell.",
+      };
     }
 
     const check = this.canActivate(card, player);
     if (!check.ok) {
-      return { success: false, reason: check.reason };
+      return { success: false, needsSelection: false, reason: check.reason };
     }
 
     const effect = (card.effects || []).find(
@@ -1531,27 +1540,41 @@ export default class EffectEngine {
     );
 
     if (!effect) {
-      return { success: false, reason: "No field activation effect." };
+      return {
+        success: false,
+        needsSelection: false,
+        reason: "No field activation effect.",
+      };
     }
 
     const optCheck = this.checkOncePerTurn(card, player, effect);
     if (!optCheck.ok) {
-      return { success: false, reason: optCheck.reason };
+      return { success: false, needsSelection: false, reason: optCheck.reason };
     }
 
     // Check requireEmptyField condition
     if (effect.requireEmptyField && player.field.length > 0) {
       return {
         success: false,
+        needsSelection: false,
         reason: "You must control no monsters to activate this effect.",
       };
     }
+
+    const normalizedActivationContext = {
+      fromHand: activationContext?.fromHand === true,
+      activationZone: "fieldSpell",
+      sourceZone: activationContext?.sourceZone || "fieldSpell",
+      committed: activationContext?.committed === true,
+      commitInfo: activationContext?.commitInfo || null,
+    };
 
     const ctx = {
       source: card,
       player,
       opponent: this.game.getOpponent(player),
       activationZone: "fieldSpell",
+      activationContext: normalizedActivationContext,
     };
 
     const targetResult = this.resolveTargets(
@@ -1569,14 +1592,14 @@ export default class EffectEngine {
     }
 
     if (!targetResult.ok) {
-      return { success: false, reason: targetResult.reason };
+      return { success: false, needsSelection: false, reason: targetResult.reason };
     }
 
     this.applyActions(effect.actions || [], ctx, targetResult.targets);
     this.registerOncePerTurnUsage(card, player, effect);
     this.game.checkWinCondition();
 
-    return { success: true };
+    return { success: true, needsSelection: false };
   }
 
   async activateSpellTrapEffect(
@@ -1584,7 +1607,7 @@ export default class EffectEngine {
     player,
     selections = null,
     activationZone = "spellTrap",
-    context = {}
+    activationContext = {}
   ) {
     const logDev =
       this.game?.devLog &&
@@ -1597,7 +1620,7 @@ export default class EffectEngine {
           reason,
         });
       }
-      return { success: false, reason };
+      return { success: false, needsSelection: false, reason };
     };
 
     if (!card || !player) {
@@ -1619,7 +1642,15 @@ export default class EffectEngine {
       return fail("Effect can only be activated during Main Phase.");
     }
 
-    const fromHand = context.fromHand === true;
+    const fromHand = activationContext?.fromHand === true;
+    const normalizedActivationContext = {
+      fromHand,
+      activationZone,
+      sourceZone:
+        activationContext?.sourceZone || (fromHand ? "hand" : activationZone),
+      committed: activationContext?.committed === true,
+      commitInfo: activationContext?.commitInfo || null,
+    };
     let effect = null;
 
     logDev?.("SPELL_TRAP_ACTIVATION_ATTEMPT", {
@@ -1649,7 +1680,7 @@ export default class EffectEngine {
               player: player.id,
               activationZone,
             });
-            return { success: true, placementOnly: true };
+            return { success: true, needsSelection: false, placementOnly: true };
           }
           return fail("No on_play effect defined.");
         }
@@ -1671,6 +1702,7 @@ export default class EffectEngine {
       player,
       opponent: this.game.getOpponent(player),
       activationZone,
+      activationContext: normalizedActivationContext,
     };
 
     const condCheck = this.evaluateConditions(effect.conditions, ctx);
@@ -1693,7 +1725,11 @@ export default class EffectEngine {
         card: card.name,
         player: player.id,
       });
-      return { needsSelection: true, options: targetResult.options };
+      return {
+        success: false,
+        needsSelection: true,
+        options: targetResult.options,
+      };
     }
 
     if (targetResult.ok === false) {
@@ -1716,39 +1752,51 @@ export default class EffectEngine {
       card: card.name,
       player: player.id,
     });
-    return { success: true };
+    return { success: true, needsSelection: false };
   }
 
   activateMonsterEffect(
     card,
     player,
     selections = null,
-    activationZone = "field"
+    activationZone = "field",
+    activationContext = {}
   ) {
     if (!card || !player) {
-      return { success: false, reason: "Missing card or player." };
+      return {
+        success: false,
+        needsSelection: false,
+        reason: "Missing card or player.",
+      };
     }
     if (card.owner !== player.id) {
       return {
         success: false,
+        needsSelection: false,
         reason: "Card does not belong to the requesting player.",
       };
     }
     if (card.cardKind !== "monster") {
       return {
         success: false,
+        needsSelection: false,
         reason: "Only Monster cards can use this effect.",
       };
     }
     if (card.isFacedown) {
-      return { success: false, reason: "Card must be face-up to activate." };
+      return {
+        success: false,
+        needsSelection: false,
+        reason: "Card must be face-up to activate.",
+      };
     }
     if (this.game.turn !== player.id) {
-      return { success: false, reason: "Not your turn." };
+      return { success: false, needsSelection: false, reason: "Not your turn." };
     }
     if (this.game.phase !== "main1" && this.game.phase !== "main2") {
       return {
         success: false,
+        needsSelection: false,
         reason: "Effect can only be activated during Main Phase.",
       };
     }
@@ -1756,11 +1804,19 @@ export default class EffectEngine {
     // Verify card is in the correct zone
     if (activationZone === "hand") {
       if (!player.hand || !player.hand.includes(card)) {
-        return { success: false, reason: "Card is not in your hand." };
+        return {
+          success: false,
+          needsSelection: false,
+          reason: "Card is not in your hand.",
+        };
       }
     } else if (activationZone === "field") {
       if (!player.field || !player.field.includes(card)) {
-        return { success: false, reason: "Card is not on the field." };
+        return {
+          success: false,
+          needsSelection: false,
+          reason: "Card is not on the field.",
+        };
       }
     }
 
@@ -1768,6 +1824,7 @@ export default class EffectEngine {
     if (activationZone === "field" && this.isEffectNegated(card)) {
       return {
         success: false,
+        needsSelection: false,
         reason: "Card's effects are currently negated.",
       };
     }
@@ -1792,25 +1849,38 @@ export default class EffectEngine {
     if (!effect) {
       return {
         success: false,
+        needsSelection: false,
         reason: "No ignition effect defined for this zone.",
       };
     }
+
+    const fromHand =
+      activationContext?.fromHand === true || activationZone === "hand";
+    const normalizedActivationContext = {
+      fromHand,
+      activationZone,
+      sourceZone:
+        activationContext?.sourceZone || (fromHand ? "hand" : activationZone),
+      committed: activationContext?.committed === true,
+      commitInfo: activationContext?.commitInfo || null,
+    };
 
     const ctx = {
       source: card,
       player,
       opponent: this.game.getOpponent(player),
       activationZone,
+      activationContext: normalizedActivationContext,
     };
 
     const condCheck = this.evaluateConditions(effect.conditions, ctx);
     if (!condCheck.ok) {
-      return { success: false, reason: condCheck.reason };
+      return { success: false, needsSelection: false, reason: condCheck.reason };
     }
 
     const optCheck = this.checkOncePerTurn(card, player, effect);
     if (!optCheck.ok) {
-      return { success: false, reason: optCheck.reason };
+      return { success: false, needsSelection: false, reason: optCheck.reason };
     }
 
     const targetResult = this.resolveTargets(
@@ -1819,18 +1889,26 @@ export default class EffectEngine {
       selections
     );
     if (targetResult.needsSelection) {
-      return { needsSelection: true, options: targetResult.options };
+      return {
+        success: false,
+        needsSelection: true,
+        options: targetResult.options,
+      };
     }
 
     if (targetResult.ok === false) {
-      return { success: false, reason: targetResult.reason };
+      return {
+        success: false,
+        needsSelection: false,
+        reason: targetResult.reason,
+      };
     }
 
     this.applyActions(effect.actions || [], ctx, targetResult.targets || {});
     this.registerOncePerTurnUsage(card, player, effect);
     this.registerOncePerDuelUsage(card, player, effect);
     this.game.checkWinCondition();
-    return { success: true };
+    return { success: true, needsSelection: false };
   }
 
   hasActivatableGraveyardEffect(card) {

@@ -1,4 +1,4 @@
-import Player from "./Player.js";
+ï»¿import Player from "./Player.js";
 import { cardDatabase, cardDatabaseById } from "../data/cards.js";
 import Card from "./Card.js";
 import LuminarchStrategy from "./ai/LuminarchStrategy.js";
@@ -30,7 +30,7 @@ export default class Bot extends Player {
   }
 
 
-  // Sobrescreve buildDeck para usar deck do arquétipo selecionado
+  // Sobrescreve buildDeck para usar deck do arquÃ©tipo selecionado
   buildDeck() {
     this.deck = [];
     const copies = {};
@@ -44,7 +44,7 @@ export default class Bot extends Player {
       return true;
     };
 
-    // Seleciona deck baseado no arquétipo
+    // Seleciona deck baseado no arquÃ©tipo
     const deckList =
       this.archetype === "shadowheart"
         ? this.getShadowHeartDeck()
@@ -60,7 +60,7 @@ export default class Bot extends Player {
     this.shuffleDeck();
   }
 
-  // Deck Shadow-Heart otimizado para combos e fusões
+  // Deck Shadow-Heart otimizado para combos e fusÃµes
   getShadowHeartDeck() {
     return [
       // === MONSTROS ===
@@ -70,7 +70,7 @@ export default class Bot extends Player {
       60, // Shadow-Heart Imp (extender - 3x)
       61, // Shadow-Heart Gecko (draw engine - 1x)
       53,
-      53, // Shadow-Heart Specter (recursão GY - 2x)
+      53, // Shadow-Heart Specter (recursÃ£o GY - 2x)
       62,
       62, // Shadow-Heart Coward (discard value - 2x)
       51,
@@ -82,12 +82,12 @@ export default class Bot extends Player {
       // Bosses
       64,
       64, // Shadow-Heart Scale Dragon (boss 3000 ATK - 2x)
-      57, // Shadow-Heart Demon Arctroth (boss com remoção - 1x)
+      57, // Shadow-Heart Demon Arctroth (boss com remoÃ§Ã£o - 1x)
       67,
       67, // Shadow-Heart Griffin (sem tributo - 2x)
       // === SPELLS ===
       13,
-      13, // Polymerization (fusão - 2x)
+      13, // Polymerization (fusÃ£o - 2x)
       68,
       68, // Darkness Valley (field spell - 2x)
       63,
@@ -96,28 +96,28 @@ export default class Bot extends Player {
       59, // Shadow-Heart Covenant (searcher - 2x)
       58, // Shadow-Heart Battle Hymn (buff - 1x)
       65, // Shadow-Heart Rage (OTK enabler - 1x)
-      54, // Shadow-Heart Purge (remoção - 1x)
-      66, // Shadow-Heart Shield (proteção - 1x)
+      54, // Shadow-Heart Purge (remoÃ§Ã£o - 1x)
+      66, // Shadow-Heart Shield (proteÃ§Ã£o - 1x)
     ];
   }
 
   // Deck Luminarch fixo e balanceado
   getLuminarchDeck() {
     return [
-      // Monstros principais (nível baixo - searchers/utility)
+      // Monstros principais (nÃ­vel baixo - searchers/utility)
       101,
       101,
-      101, // Luminarch Valiant – Knight of the Dawn (searcher)
+      101, // Luminarch Valiant â€“ Knight of the Dawn (searcher)
       103,
       103,
       103, // Luminarch Aegisbearer (taunt/tank)
       110,
       110, // Luminarch Sanctified Arbiter (busca Convocation)
       106,
-      106, // Luminarch Magic Sickle (baixo nível)
+      106, // Luminarch Magic Sickle (baixo nÃ­vel)
       117,
       117, // Luminarch Enchanted Halberd
-      // Monstros médios/altos (bosses)
+      // Monstros mÃ©dios/altos (bosses)
       104,
       104, // Luminarch Moonblade Captain (revive + double attack)
       105,
@@ -133,13 +133,13 @@ export default class Bot extends Player {
       118,
       118, // Luminarch Moonlit Blessing (recovery)
       102,
-      102, // Luminarch Holy Shield (proteção)
+      102, // Luminarch Holy Shield (proteÃ§Ã£o)
       115, // Luminarch Crescent Shield (equip)
       119, // Luminarch Sacred Judgment (comeback)
     ];
   }
 
-  // Sobrescreve buildExtraDeck para usar fusões do arquétipo
+  // Sobrescreve buildExtraDeck para usar fusÃµes do arquÃ©tipo
   buildExtraDeck() {
     const extraDeckList =
       this.archetype === "shadowheart"
@@ -151,11 +151,11 @@ export default class Bot extends Player {
   // Extra Deck Shadow-Heart
   getShadowHeartExtraDeck() {
     return [
-      74, // Shadow-Heart Demon Dragon (fusão principal)
+      74, // Shadow-Heart Demon Dragon (fusÃ£o principal)
     ];
   }
 
-  // Extra Deck Luminarch (placeholder para futuras fusões)
+  // Extra Deck Luminarch (placeholder para futuras fusÃµes)
   getLuminarchExtraDeck() {
     return [];
   }
@@ -420,7 +420,7 @@ export default class Bot extends Player {
       const cardToSummon = this.hand[action.index];
       if (!cardToSummon) return;
 
-      // Calcular tributos necessários e selecionar os melhores (piores monstros)
+      // Calcular tributos necessÃ¡rios e selecionar os melhores (piores monstros)
       const tributeInfo = this.getTributeRequirementFor(cardToSummon, this);
       let tributeIndices = null;
 
@@ -488,12 +488,20 @@ export default class Bot extends Player {
         return;
       }
 
+      const activationContext = {
+        fromHand: true,
+        activationZone,
+        sourceZone: "hand",
+        committed: true,
+        commitInfo: commit,
+      };
+
       let result = await game.effectEngine.activateSpellTrapEffect(
         cardRef,
         this,
         selections,
         activationZone,
-        { fromHand: true }
+        activationContext
       );
 
       if (result && result.needsSelection && result.options) {
@@ -504,7 +512,7 @@ export default class Bot extends Player {
             this,
             auto,
             activationZone,
-            { fromHand: true }
+            activationContext
           );
         }
       }
@@ -521,10 +529,17 @@ export default class Bot extends Player {
 
     if (action.type === "fieldEffect" && this.fieldSpell) {
       const selections = this.buildAutoSelections(this.fieldSpell, game);
+      const activationContext = {
+        fromHand: false,
+        activationZone: "fieldSpell",
+        sourceZone: "fieldSpell",
+        committed: false,
+      };
       const result = game.effectEngine.activateFieldSpell(
         this.fieldSpell,
         this,
-        selections
+        selections,
+        activationContext
       );
       if (!result?.success) {
         console.log("Bot failed field effect:", result?.reason);
@@ -609,7 +624,7 @@ export default class Bot extends Player {
         });
         chosen = [bestIdx];
       } else if (card.name === "Luminarch Holy Shield") {
-        // Escolher até 3 monstros Luminarch para proteger
+        // Escolher atÃ© 3 monstros Luminarch para proteger
         // Priorize by value (ATK + Citadel bonus if present)
         const luminarchCandidates = candidates.candidates
           .map((c, idx) => ({
@@ -627,7 +642,7 @@ export default class Bot extends Player {
             : [0];
       } else if (card.name === "Luminarch Moonlit Blessing") {
         // Escolher o Luminarch mais forte do GY
-        // Bonus se Citadel está no campo (special summon é possível)
+        // Bonus se Citadel estÃ¡ no campo (special summon Ã© possÃ­vel)
         const citadelBonus =
           this.fieldSpell?.name === "Sanctum of the Luminarch Citadel"
             ? 200
@@ -646,7 +661,7 @@ export default class Bot extends Player {
         });
         chosen = [bestIdx];
       } else if (card.name === "Luminarch Sacred Judgment") {
-        // Escolher múltiplos Luminarch do GY para reviver
+        // Escolher mÃºltiplos Luminarch do GY para reviver
         // Priorize by ATK, respect field capacity (max 5)
         // Select highest ATK monsters to maximize board pressure
         const maxSummons = Math.min(
@@ -772,3 +787,4 @@ export default class Bot extends Player {
     };
   }
 }
+

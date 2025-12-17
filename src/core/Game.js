@@ -1319,66 +1319,35 @@ export default class Game {
     this.updateBoard();
   }
 
-  handleSpellActivationResult(card, handIndex, result, activationZone = null) {
-    if (result.needsSelection) {
-      if (this.canUseFieldTargeting(result.options)) {
-        this.startTargetSelection(
-          card,
-          handIndex,
-          result.options,
-          activationZone
-        );
+  handleFieldSpellActivationResult(
+    card,
+    owner,
+    result,
+    activationContext = null
+  ) {
+    const ctx =
+      activationContext || {
+        fromHand: false,
+        activationZone: "fieldSpell",
+        sourceZone: "fieldSpell",
+        committed: false,
+      };
+    const normalized = this.normalizeActivationResult(result);
+
+    if (normalized.needsSelection) {
+      if (this.canUseFieldTargeting(normalized.options)) {
+        this.startFieldSpellTargetSelection(card, owner, normalized.options, ctx);
       } else {
         this.renderer.showTargetSelection(
-          result.options,
-          (chosenMap) => {
-            const finalResult = this.effectEngine.activateFromHand(
-              card,
-              this.player,
-              handIndex,
-              chosenMap,
-              activationZone
-            );
-            this.handleSpellActivationResult(
-              card,
-              handIndex,
-              finalResult,
-              activationZone
-            );
-          },
-          () => {
-            this.cancelTargetSelection();
-          }
-        );
-      }
-      return;
-    }
-
-    if (!result.success) {
-      if (result.reason) {
-        this.renderer.log(result.reason);
-      }
-      return;
-    }
-
-    this.renderer.log(`${card.name} activated.`);
-    this.updateBoard();
-  }
-
-  handleFieldSpellActivationResult(card, owner, result) {
-    if (result.needsSelection) {
-      if (this.canUseFieldTargeting(result.options)) {
-        this.startFieldSpellTargetSelection(card, owner, result.options);
-      } else {
-        this.renderer.showTargetSelection(
-          result.options,
+          normalized.options,
           (chosenMap) => {
             const finalResult = this.effectEngine.activateFieldSpell(
               card,
               owner,
-              chosenMap
+              chosenMap,
+              ctx
             );
-            this.handleFieldSpellActivationResult(card, owner, finalResult);
+            this.handleFieldSpellActivationResult(card, owner, finalResult, ctx);
           },
           () => {
             this.cancelTargetSelection();
@@ -1388,9 +1357,9 @@ export default class Game {
       return;
     }
 
-    if (!result.success) {
-      if (result.reason) {
-        this.renderer.log(result.reason);
+    if (!normalized.success) {
+      if (normalized.reason) {
+        this.renderer.log(normalized.reason);
       }
       return;
     }
@@ -1406,69 +1375,92 @@ export default class Game {
     activationZone = null,
     options = {}
   ) {
-    if (result.needsSelection) {
-      if (this.canUseFieldTargeting(result.options)) {
+    const resolvedZone = activationZone || "spellTrap";
+    const activationContext =
+      options.activationContext ||
+      (() => {
+        const committed =
+          options.committed === true ||
+          (options.activationContext && options.activationContext.committed);
+        const sourceZone =
+          options.sourceZone ||
+          (options.activationContext && options.activationContext.sourceZone) ||
+          (committed ? "hand" : resolvedZone);
+        return {
+          fromHand:
+            (options.activationContext &&
+              options.activationContext.fromHand === true) ||
+            options.fromHand === true ||
+            committed,
+          activationZone: resolvedZone,
+          sourceZone,
+          committed,
+          commitInfo:
+            options.commitInfo ||
+            (options.activationContext && options.activationContext.commitInfo) ||
+            null,
+        };
+      })();
+
+    const normalized = this.normalizeActivationResult(result);
+
+    if (normalized.needsSelection) {
+      if (this.canUseFieldTargeting(normalized.options)) {
         this.startSpellTrapTargetSelection(
           card,
-          result.options,
-          activationZone,
+          owner,
+          normalized.options,
+          resolvedZone,
           {
-            preventCancel: !!options.committed,
-            activationContext: { fromHand: !!options.committed },
-            commitInfo: options.commitInfo || null,
+            preventCancel: !!activationContext.committed,
+            activationContext,
+            commitInfo: activationContext.commitInfo || null,
           }
         );
       } else {
-        const minZero = (result.options || []).some(
+        const minZero = (normalized.options || []).some(
           (opt) => Number(opt.min ?? opt.count?.min ?? 1) === 0
         );
-        const contextFromHand = options.committed === true;
-        console.debug?.(
-          "[Game] Target selection confirm callback prepared (fromHand:",
-          contextFromHand,
-          ")"
-        );
         this.renderer.showTargetSelection(
-          result.options,
+          normalized.options,
           async (chosenMap) => {
-            console.debug?.(
-              "[Game] Running activateSpellTrapEffect after target selection (fromHand:",
-              contextFromHand,
-              ")"
-            );
             const finalResult = await this.effectEngine.activateSpellTrapEffect(
               card,
               owner,
               chosenMap,
-              activationZone,
-              { fromHand: contextFromHand }
+              resolvedZone,
+              activationContext
             );
             this.handleSpellTrapActivationResult(
               card,
               owner,
               finalResult,
-              activationZone,
-              options
+              resolvedZone,
+              { activationContext, commitInfo: activationContext.commitInfo }
             );
           },
-          options.committed ? null : () => this.cancelTargetSelection(),
-          { allowCancel: !options.committed, allowEmpty: minZero }
+          activationContext.committed ? null : () => this.cancelTargetSelection(),
+          { allowCancel: !activationContext.committed, allowEmpty: minZero }
         );
       }
       return;
     }
 
-    if (!result.success) {
-      if (result.reason) {
-        this.renderer.log(result.reason);
+    if (!normalized.success) {
+      if (normalized.reason) {
+        this.renderer.log(normalized.reason);
       }
-      if (options.committed && options.commitInfo) {
-        this.rollbackSpellActivation(owner, options.commitInfo);
+      if (
+        activationContext.committed &&
+        activationContext.commitInfo &&
+        options.skipRollback !== true
+      ) {
+        this.rollbackSpellActivation(owner, activationContext.commitInfo);
       }
       return;
     }
 
-    this.finalizeSpellTrapActivation(card, owner, activationZone);
+    this.finalizeSpellTrapActivation(card, owner, resolvedZone);
     this.renderer.log(`${card.name} effect activated.`);
     this.updateBoard();
   }
@@ -1492,18 +1484,26 @@ export default class Game {
     console.log(
       `[Game] tryActivateMonsterEffect called for: ${card.name} (zone: ${activationZone})`
     );
+    const activationContext = {
+      fromHand: activationZone === "hand",
+      activationZone,
+      sourceZone: activationZone,
+      committed: false,
+    };
     const result = this.effectEngine.activateMonsterEffect(
       card,
       this.player,
       selections,
-      activationZone
+      activationZone,
+      activationContext
     );
     console.log(`[Game] Monster effect result:`, result);
     this.handleMonsterEffectActivationResult(
       card,
       this.player,
       result,
-      activationZone
+      activationZone,
+      activationContext
     );
   }
 
@@ -1511,30 +1511,45 @@ export default class Game {
     card,
     owner,
     result,
-    activationZone = null
+    activationZone = null,
+    activationContext = null
   ) {
-    if (result.needsSelection) {
-      if (this.canUseFieldTargeting(result.options)) {
+    const zone = activationZone || "field";
+    const ctx =
+      activationContext || {
+        fromHand: zone === "hand",
+        activationZone: zone,
+        sourceZone: zone,
+        committed: false,
+      };
+    const normalized = this.normalizeActivationResult(result);
+
+    if (normalized.needsSelection) {
+      if (this.canUseFieldTargeting(normalized.options)) {
         this.startMonsterEffectTargetSelection(
           card,
-          result.options,
-          activationZone
+          owner,
+          normalized.options,
+          zone,
+          ctx
         );
       } else {
         this.renderer.showTargetSelection(
-          result.options,
+          normalized.options,
           (chosenMap) => {
             const finalResult = this.effectEngine.activateMonsterEffect(
               card,
               owner,
               chosenMap,
-              activationZone
+              zone,
+              ctx
             );
             this.handleMonsterEffectActivationResult(
               card,
               owner,
               finalResult,
-              activationZone
+              zone,
+              ctx
             );
           },
           () => {
@@ -1545,9 +1560,9 @@ export default class Game {
       return;
     }
 
-    if (!result.success) {
-      if (result.reason) {
-        this.renderer.log(result.reason);
+    if (!normalized.success) {
+      if (normalized.reason) {
+        this.renderer.log(normalized.reason);
       }
       return;
     }
@@ -1596,94 +1611,114 @@ export default class Game {
     this.updateBoard();
   }
 
-  startMonsterEffectTargetSelection(card, options, activationZone = null) {
-    this.cancelTargetSelection();
-    const usingFieldTargeting = this.canUseFieldTargeting(options);
-    this.targetSelection = {
+  startMonsterEffectTargetSelection(
+    card,
+    owner,
+    options,
+    activationZone = null,
+    activationContext = {}
+  ) {
+    const zone = activationZone || "field";
+    const ctx = {
+      fromHand:
+        activationContext?.fromHand === true || (zone && zone === "hand"),
+      activationZone: zone,
+      sourceZone: activationContext?.sourceZone || zone,
+      committed: activationContext?.committed === true,
+      commitInfo: activationContext?.commitInfo || null,
+    };
+
+    this.startTargetSelectionSession({
       kind: "monsterEffect",
       card,
+      owner,
       options,
-      selections: {},
-      currentOption: 0,
-      activationZone,
-      usingFieldTargeting,
-      autoAdvanceOnMax: !usingFieldTargeting,
-    };
-    console.log("[Game] Started monster effect target selection");
-    if (
-      usingFieldTargeting &&
-      this.renderer &&
-      typeof this.renderer.showFieldTargetingControls === "function"
-    ) {
-      this.renderer.showFieldTargetingControls(
-        () => this.advanceTargetSelection(),
-        () => this.cancelTargetSelection()
-      );
-    }
-    this.highlightTargetCandidates();
+      activationZone: zone,
+      activationContext: ctx,
+      message: "Select target(s) for the monster effect.",
+      execute: (selections) =>
+        this.effectEngine.activateMonsterEffect(
+          card,
+          owner,
+          selections,
+          zone,
+          ctx
+        ),
+      onResult: (result) =>
+        this.handleMonsterEffectActivationResult(card, owner, result, zone, ctx),
+    });
   }
 
   startGraveyardEffectTargetSelection(card, owner, options) {
-    this.cancelTargetSelection();
-    const usingFieldTargeting = this.canUseFieldTargeting(options);
-    this.targetSelection = {
+    this.startTargetSelectionSession({
       kind: "graveyardEffect",
       card,
       owner,
       options,
-      selections: {},
-      currentOption: 0,
-      usingFieldTargeting,
-      autoAdvanceOnMax: !usingFieldTargeting,
-    };
-    this.renderer.log("Select target(s) for the graveyard effect.");
-    if (
-      usingFieldTargeting &&
-      this.renderer &&
-      typeof this.renderer.showFieldTargetingControls === "function"
-    ) {
-      this.renderer.showFieldTargetingControls(
-        () => this.advanceTargetSelection(),
-        () => this.cancelTargetSelection()
-      );
-    }
-    this.highlightTargetCandidates();
+      message: "Select target(s) for the graveyard effect.",
+      execute: (selections) =>
+        this.effectEngine.activateMonsterFromGraveyard(card, owner, selections),
+      onResult: (result) =>
+        this.handleGraveyardEffectActivationResult(card, owner, result),
+    });
   }
 
   startSpellTrapTargetSelection(
     card,
+    owner,
     options,
     activationZone = null,
     extra = {}
   ) {
-    this.cancelTargetSelection();
-    const usingFieldTargeting = this.canUseFieldTargeting(options);
     const activationZoneResolved = activationZone || "spellTrap";
-    this.targetSelection = {
+    const ctx =
+      extra.activationContext || {
+        fromHand: extra.fromHand === true,
+        activationZone: activationZoneResolved,
+        sourceZone:
+          extra.sourceZone ||
+          (extra.fromHand ? "hand" : activationZoneResolved),
+        committed: extra.preventCancel === true || extra.committed === true,
+        commitInfo: extra.commitInfo || null,
+      };
+
+    const rollback =
+      ctx.committed && extra.commitInfo
+        ? () => this.rollbackSpellActivation(owner, extra.commitInfo)
+        : null;
+
+    this.startTargetSelectionSession({
       kind: "spellTrapEffect",
       card,
+      owner,
       options,
-      selections: {},
-      currentOption: 0,
       activationZone: activationZoneResolved,
-      usingFieldTargeting,
-      autoAdvanceOnMax: !usingFieldTargeting,
+      activationContext: ctx,
       preventCancel: !!extra.preventCancel,
-      activationContext: extra.activationContext || {},
       commitInfo: extra.commitInfo || null,
-    };
-    this.renderer.log("Select target(s) for the continuous spell effect.");
-    if (
-      usingFieldTargeting &&
-      this.renderer &&
-      typeof this.renderer.showFieldTargetingControls === "function"
-    ) {
-      this.renderer.showFieldTargetingControls(
-        () => this.advanceTargetSelection(),
-        () => this.cancelTargetSelection()
-      );
-    }
-    this.highlightTargetCandidates();
+      rollback,
+      message: "Select target(s) for the continuous spell effect.",
+      execute: (selections) =>
+        this.effectEngine.activateSpellTrapEffect(
+          card,
+          owner,
+          selections,
+          activationZoneResolved,
+          ctx
+        ),
+      onResult: (result) =>
+        this.handleSpellTrapActivationResult(
+          card,
+          owner,
+          result,
+          activationZoneResolved,
+          {
+            activationContext: ctx,
+            commitInfo: extra.commitInfo || null,
+            skipRollback: true,
+          }
+        ),
+    });
   }
 
   async tryActivateSpellTrapEffect(card, selections = null) {
@@ -1710,19 +1745,26 @@ export default class Game {
       }
     }
 
+    const activationContext = {
+      fromHand: false,
+      activationZone: "spellTrap",
+      sourceZone: "spellTrap",
+      committed: false,
+    };
     const result = await this.effectEngine.activateSpellTrapEffect(
       card,
       this.player,
       selections,
       "spellTrap",
-      { fromHand: false }
+      activationContext
     );
     console.log(`[Game] Result:`, result);
     this.handleSpellTrapActivationResult(
       card,
       this.player,
       result,
-      "spellTrap"
+      "spellTrap",
+      { activationContext }
     );
   }
 
@@ -1741,95 +1783,116 @@ export default class Game {
     );
   }
 
-  activateFieldSpellEffect(card) {
-    const owner = card.owner === "player" ? this.player : this.bot;
-    const result = this.effectEngine.activateFieldSpell(card, owner);
-    this.handleFieldSpellActivationResult(card, owner, result);
+  normalizeActivationResult(result) {
+    const base =
+      result && typeof result === "object" && !Array.isArray(result)
+        ? result
+        : {};
+    const needsSelection = base.needsSelection === true;
+    const success = needsSelection ? false : base.success === true;
+    return { ...base, success, needsSelection };
   }
 
-  startTargetSelection(card, handIndex, options, activationZone = null) {
+  startTargetSelectionSession(session) {
+    if (!session || !Array.isArray(session.options)) return;
+
     this.cancelTargetSelection();
-    const usingFieldTargeting = this.canUseFieldTargeting(options);
+    if (this.targetSelection) {
+      return;
+    }
+
+    const usingFieldTargeting = this.canUseFieldTargeting(session.options);
+
     this.targetSelection = {
-      kind: "spell",
-      card,
-      handIndex,
-      options,
+      ...session,
       selections: {},
       currentOption: 0,
-      activationZone,
       usingFieldTargeting,
-      autoAdvanceOnMax: !usingFieldTargeting,
+      autoAdvanceOnMax:
+        typeof session.autoAdvanceOnMax === "boolean"
+          ? session.autoAdvanceOnMax
+          : !usingFieldTargeting,
     };
+
     if (
       usingFieldTargeting &&
       this.renderer &&
       typeof this.renderer.showFieldTargetingControls === "function"
     ) {
+      const allowCancel = !this.targetSelection.preventCancel;
       this.renderer.showFieldTargetingControls(
         () => this.advanceTargetSelection(),
-        () => this.cancelTargetSelection()
+        allowCancel ? () => this.cancelTargetSelection() : null,
+        { allowCancel }
       );
     }
-    this.renderer.log("Select target(s) by clicking the highlighted cards.");
+
+    if (session.message) {
+      this.renderer.log(session.message);
+    }
     this.highlightTargetCandidates();
   }
 
-  startFieldSpellTargetSelection(card, owner, options) {
-    this.cancelTargetSelection();
-    const usingFieldTargeting = this.canUseFieldTargeting(options);
-    this.targetSelection = {
+  activateFieldSpellEffect(card) {
+    const owner = card.owner === "player" ? this.player : this.bot;
+    const activationContext = {
+      fromHand: false,
+      activationZone: "fieldSpell",
+      sourceZone: "fieldSpell",
+      committed: false,
+    };
+    const result = this.effectEngine.activateFieldSpell(
+      card,
+      owner,
+      null,
+      activationContext
+    );
+    this.handleFieldSpellActivationResult(card, owner, result, activationContext);
+  }
+
+  startFieldSpellTargetSelection(card, owner, options, activationContext) {
+    const ctx = activationContext || {
+      fromHand: false,
+      activationZone: "fieldSpell",
+      sourceZone: "fieldSpell",
+      committed: false,
+    };
+
+    this.startTargetSelectionSession({
       kind: "fieldSpell",
       card,
       owner,
       options,
-      selections: {},
-      currentOption: 0,
-      usingFieldTargeting,
-      autoAdvanceOnMax: !usingFieldTargeting,
-    };
-    if (
-      usingFieldTargeting &&
-      this.renderer &&
-      typeof this.renderer.showFieldTargetingControls === "function"
-    ) {
-      this.renderer.showFieldTargetingControls(
-        () => this.advanceTargetSelection(),
-        () => this.cancelTargetSelection()
-      );
-    }
-    this.renderer.log("Select target(s) for the field spell effect.");
-    this.highlightTargetCandidates();
+      activationContext: ctx,
+      message: "Select target(s) for the field spell effect.",
+      execute: (selections) =>
+        this.effectEngine.activateFieldSpell(card, owner, selections, ctx),
+      onResult: (result) =>
+        this.handleFieldSpellActivationResult(card, owner, result, ctx),
+    });
   }
 
   startTriggeredTargetSelection(card, effect, ctx, options) {
     if (this.canUseFieldTargeting(options)) {
-      this.cancelTargetSelection();
-      const usingFieldTargeting = true;
-      this.targetSelection = {
+      this.startTargetSelectionSession({
         kind: "triggered",
         card,
         effect,
         ctx,
         options,
-        selections: {},
-        currentOption: 0,
-        usingFieldTargeting,
         autoAdvanceOnMax: false,
-      };
-      this.renderer.log(
-        "Select target(s) for triggered effect by clicking the highlighted cards."
-      );
-      if (
-        this.renderer &&
-        typeof this.renderer.showFieldTargetingControls === "function"
-      ) {
-        this.renderer.showFieldTargetingControls(
-          () => this.advanceTargetSelection(),
-          () => this.cancelTargetSelection()
-        );
-      }
-      this.highlightTargetCandidates();
+        message:
+          "Select target(s) for triggered effect by clicking the highlighted cards.",
+        execute: (selections) => {
+          this.effectEngine.resolveTriggeredSelection(
+            effect,
+            ctx,
+            selections
+          );
+          this.updateBoard();
+          return { success: true, needsSelection: false };
+        },
+      });
     } else {
       this.renderer.showTargetSelection(
         options,
@@ -1847,7 +1910,6 @@ export default class Game {
   startAttackTargetSelection(attacker, candidates) {
     if (!attacker || !Array.isArray(candidates)) return;
     if (candidates.length === 0 && !attacker.canAttackDirectlyThisTurn) return;
-    this.cancelTargetSelection();
     const decorated = candidates.map((card, idx) => {
       const ownerLabel = card.owner === "player" ? "player" : "opponent";
       const ownerPlayer = card.owner === "player" ? this.player : this.bot;
@@ -1886,23 +1948,37 @@ export default class Game {
       });
     }
 
-    this.targetSelection = {
+    const options = [
+      {
+        id: "attack_target",
+        min: 1,
+        max: 1,
+        zone: "field",
+        candidates: decorated,
+      },
+    ];
+
+    this.startTargetSelectionSession({
       kind: "attack",
       attacker,
-      options: [
-        {
-          id: "attack_target",
-          min: 1,
-          max: 1,
-          zone: "field",
-          candidates: decorated,
-        },
-      ],
-      selections: {},
-      currentOption: 0,
-    };
-    this.renderer.log("Select a monster to attack.");
-    this.highlightTargetCandidates();
+      options,
+      message: "Select a monster to attack.",
+      execute: (selections) => {
+        const option = options[0];
+        const chosenIndexes = selections[option.id] || [];
+        const chosenCandidate = option.candidates[chosenIndexes[0]];
+        if (chosenCandidate?.isDirectAttack) {
+          this.resolveCombat(attacker, null).catch((err) =>
+            console.error(err)
+          );
+        } else if (chosenCandidate?.cardRef) {
+          this.resolveCombat(attacker, chosenCandidate.cardRef).catch((err) =>
+            console.error(err)
+          );
+        }
+        return { success: true, needsSelection: false };
+      },
+    });
   }
 
   askPlayerToSelectCards(config = {}) {
@@ -1957,41 +2033,32 @@ export default class Game {
     });
 
     return new Promise((resolve) => {
-      this.cancelTargetSelection();
-      this.targetSelection = {
+      const options = [
+        {
+          id: "custom_select",
+          zone: zoneName,
+          min,
+          max,
+          candidates: decorated,
+        },
+      ];
+
+      this.startTargetSelectionSession({
         kind: "custom",
-        options: [
-          {
-            id: "custom_select",
-            zone: zoneName,
-            min,
-            max,
-            candidates: decorated,
-          },
-        ],
-        selections: {},
-        currentOption: 0,
+        options,
         resolve,
-      };
-      const usingFieldTargeting = this.canUseFieldTargeting(
-        this.targetSelection.options
-      );
-      this.targetSelection.usingFieldTargeting = usingFieldTargeting;
-      this.targetSelection.autoAdvanceOnMax = !usingFieldTargeting;
-      if (
-        usingFieldTargeting &&
-        this.renderer &&
-        typeof this.renderer.showFieldTargetingControls === "function"
-      ) {
-        this.renderer.showFieldTargetingControls(
-          () => this.advanceTargetSelection(),
-          () => this.cancelTargetSelection()
-        );
-      }
-      this.renderer.log(
-        config.message || "Select card(s) by clicking the highlighted targets."
-      );
-      this.highlightTargetCandidates();
+        message:
+          config.message ||
+          "Select card(s) by clicking the highlighted targets.",
+        execute: (selections) => {
+          const option = options[0];
+          const chosen = (selections[option.id] || [])
+            .map((idx) => option.candidates[idx]?.cardRef)
+            .filter(Boolean);
+          resolve(chosen);
+          return { success: true, needsSelection: false };
+        },
+      });
     });
   }
 
@@ -2214,86 +2281,36 @@ export default class Game {
       this.renderer.hideFieldTargetingControls();
     }
 
-    if (selection.kind === "spell") {
-      this.renderer.log("Spell activation legacy path skipped.");
+    if (typeof selection.execute !== "function") {
+      console.warn("[Game] Selection missing execute handler:", selection);
       return;
-    } else if (selection.kind === "fieldSpell") {
-      const owner = selection.owner;
-      const result = this.effectEngine.activateFieldSpell(
-        selection.card,
-        owner,
-        selection.selections
-      );
-      this.handleFieldSpellActivationResult(selection.card, owner, result);
-    } else if (selection.kind === "spellTrapEffect") {
-      const result = await this.effectEngine.activateSpellTrapEffect(
-        selection.card,
-        this.player,
-        selection.selections,
-        selection.activationZone
-      );
-      this.handleSpellTrapActivationResult(
-        selection.card,
-        this.player,
-        result,
-        selection.activationZone,
-        selection.commitInfo
-          ? { committed: true, commitInfo: selection.commitInfo }
-          : {}
-      );
-    } else if (selection.kind === "monsterEffect") {
-      const result = this.effectEngine.activateMonsterEffect(
-        selection.card,
-        this.player,
-        selection.selections,
-        selection.activationZone
-      );
-      this.handleMonsterEffectActivationResult(
-        selection.card,
-        this.player,
-        result,
-        selection.activationZone
-      );
-    } else if (selection.kind === "graveyardEffect") {
-      const owner = selection.owner || this.player;
-      const result = this.effectEngine.activateMonsterFromGraveyard(
-        selection.card,
-        owner,
-        selection.selections
-      );
-      this.handleGraveyardEffectActivationResult(selection.card, owner, result);
-    } else if (selection.kind === "triggered") {
-      this.effectEngine.resolveTriggeredSelection(
-        selection.effect,
-        selection.ctx,
-        selection.selections
-      );
-      this.updateBoard();
-    } else if (selection.kind === "attack") {
-      const option = selection.options[0];
-      if (option) {
-        const chosenIndexes = selection.selections[option.id] || [];
-        const chosenCandidate = option.candidates[chosenIndexes[0]];
-        const chosenCard = chosenCandidate?.cardRef ?? null;
-        const isDirectAttack = chosenCandidate?.isDirectAttack === true;
-        if (isDirectAttack) {
-          this.resolveCombat(selection.attacker, null).catch((err) =>
-            console.error(err)
-          );
-        } else if (chosenCard) {
-          this.resolveCombat(selection.attacker, chosenCard).catch((err) =>
-            console.error(err)
-          );
-        }
+    }
+
+    let result;
+    try {
+      result = await selection.execute(selection.selections || {});
+    } catch (err) {
+      console.error("[Game] Error resolving selection:", err);
+      result = { success: false, needsSelection: false, reason: "Resolution failed." };
+    }
+
+    const normalized = this.normalizeActivationResult(result);
+
+    if (
+      selection.rollback &&
+      selection.activationContext?.committed === true &&
+      !normalized.needsSelection &&
+      !normalized.success
+    ) {
+      try {
+        selection.rollback();
+      } catch (err) {
+        console.error("[Game] Rollback failed:", err);
       }
-    } else if (selection.kind === "custom") {
-      const option = selection.options[0];
-      const chosen = (selection.selections[option.id] || [])
-        .map((idx) => option.candidates[idx]?.cardRef)
-        .filter(Boolean);
-      if (selection.resolve) {
-        selection.resolve(chosen);
-      }
+    }
+
+    if (typeof selection.onResult === "function") {
+      selection.onResult(normalized);
     }
   }
 
@@ -2303,6 +2320,9 @@ export default class Game {
       return;
     }
     const selection = this.targetSelection;
+    if (typeof selection.onCancel === "function") {
+      selection.onCancel();
+    }
     if (selection?.resolve) {
       selection.resolve([]);
     }
@@ -3379,12 +3399,20 @@ export default class Game {
       return;
     }
 
+    const activationContext = {
+      fromHand: true,
+      activationZone,
+      sourceZone: "hand",
+      committed: true,
+      commitInfo: commit,
+    };
+
     const result = await this.effectEngine.activateSpellTrapEffect(
       cardRef,
       this.player,
       selections,
       activationZone,
-      { fromHand: true }
+      activationContext
     );
 
     this.handleSpellTrapActivationResult(
@@ -3393,8 +3421,7 @@ export default class Game {
       result,
       activationZone,
       {
-        committed: true,
-        zoneIndex: commit.zoneIndex,
+        activationContext,
         commitInfo: commit,
       }
     );

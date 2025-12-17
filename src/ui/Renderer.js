@@ -1286,8 +1286,10 @@ export default class Renderer {
     });
   }
 
-  showFieldTargetingControls(onConfirm, onCancel) {
+  showFieldTargetingControls(onConfirm, onCancel, config = {}) {
     this.hideFieldTargetingControls();
+
+    const allowCancel = config.allowCancel !== false;
 
     const bar = document.createElement("div");
     bar.className = "field-targeting-controls";
@@ -1304,15 +1306,6 @@ export default class Renderer {
     bar.style.zIndex = "3000";
     bar.style.alignItems = "center";
 
-    const cancelBtn = document.createElement("button");
-    cancelBtn.textContent = "Cancel";
-    cancelBtn.className = "secondary";
-    cancelBtn.style.minWidth = "96px";
-    cancelBtn.onclick = () => {
-      if (typeof onCancel === "function") onCancel();
-      this.hideFieldTargetingControls();
-    };
-
     const confirmBtn = document.createElement("button");
     confirmBtn.textContent = "Confirm";
     confirmBtn.className = "primary";
@@ -1321,7 +1314,18 @@ export default class Renderer {
       if (typeof onConfirm === "function") onConfirm();
     };
 
-    bar.appendChild(cancelBtn);
+    if (allowCancel) {
+      const cancelBtn = document.createElement("button");
+      cancelBtn.textContent = "Cancel";
+      cancelBtn.className = "secondary";
+      cancelBtn.style.minWidth = "96px";
+      cancelBtn.onclick = () => {
+        if (typeof onCancel === "function") onCancel();
+        this.hideFieldTargetingControls();
+      };
+      bar.appendChild(cancelBtn);
+    }
+
     bar.appendChild(confirmBtn);
     document.body.appendChild(bar);
   }
