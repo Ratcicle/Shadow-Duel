@@ -1,11 +1,79 @@
 {
   "cards": {
     "1": {
-      "name": "Corcel Espectral",
+      "name": "Corcel Pesadelo",
       "description": "Um cavalo demoníaco com a juba flamejante."
     },
+    "2":{
+      "name": "Surto Arcano",
+      "description": "Compre 2 cards."
+    },
+    "3": {
+      "name": "Mosquito Chupa-Sangue",
+      "description": "Ganhe 1000 PV."
+    },
+    "4": {
+      "name": "Necromancia Barata",
+      "description": "Invoque por invocação- Especial 1 Token de Diabinho (ATK/DEF 500)."
+    },
+    "5": {
+      "name": "Corcel Pesadelo da Meia-Noite",
+      "description": "Pode ser invocado por Inovocação-Tributo usando apenas 1 tributo ao tributar 'Corcel Pesadelo'. Se esse card destruir um monstro do oponente em batalha: cause 300 de dano."
+    },
+    "6": {
+      "name": "Buscador Infinito",
+      "description": "Adicione um card do seu deck a sua mão."
+    },
+    "7": {
+      "name": "Transmutar",
+      "description": "Envie um monstro que você controla para o cemitério, então invoque por invocação-Especial 1 monstro do seu cemitério do mesmo nível do monstro enviado."
+    },
+    "8": {
+      "name": "O Monstro que Renasce",
+      "description": "Escolha um monstro em qualquer cemitério, invoque-o por invocação-Especial no seu lado do campo."
+    },
+    "9": {
+      "name": "Estudioso Arcano",
+      "description": "Se esse card for invocado por invocação-Normal: compre 1 card."
+    },
+    "10": {
+      "name": "Espada Divisora de Luz",
+      "description": "Se o monstro equipado destruir um monstro do oponente em batalha: Ganhe 500 PV. Se este card for enviado para o Cemitério: escolha 1 Magia/Armadilha que seu oponente controla; destrua-a."
+    },
+    "11": {
+      "name": "Espada das Duas Trevas",
+      "description": "O monstro equipado pode atacar 1 vez adicional durante cada Fase de Batalha. Se este card for enviado para o Cemitério: escolha 1 Magia/Armadilha que seu oponente controla; destrua-a."
+    },
+    "12":{
+      "name":"Dragão Radiante",
+      "description": "Se esse card for invocado por invocação-Normal: Você pode adicionar um monstro 'Luminarca' do seu Deck à sua mão. Durante sua Fase de Espera, ganhe 500 PV para cada monstro 'Luminarca' que você controla."
+    },
+    "13":{
+      "name": "Polimerização",
+      "description": "Invoque por invocação-Fusão 1 monstro Fusão do seu Extra Deck, usando monstros da sua mão ou do campo como matéria de Fusão."
+    },
+    "14":{
+      "name": "Força Espelho",
+      "description": "Quando um monstro do oponente declarar um ataque: destrua todos os monstros em Posição de Ataque do seu oponente."
+    },
+    "15":{
+      "name": "Chamado dos Assombrados",
+      "description": "Ative este card ao escolher 1 monstro no seu Cemitério; Invoque o alvo por Invocação-Especial em Posição de Ataque. Quando este card deixar o campo, destrua esse monstro. Quando esse monstro for destruído, destrua este card."
+    },
+    "51":{
+      "name": "Observador do Coração Sombrio",
+      "description": "Se esse card for invocado por invocação-Normal: você pode escolher 1 monstro que seu oponente controla de nível 4 ou menor; invoque por invocação-Especial 1 monstro da sua mão do mesmo nível do alvo."
+    },
+    "52": {
+      "name": "Enguia Abissal do Coração Sombrio",
+      "description": "Se esse card for atacado em posição de defesa: cause 600 de dano ao seu oponente. Você pode enviar esse card para o cemitério; invoque por invocação-Especial 1 'Leviatã do Coração Sombrio' da sua mão, mas ele não pode atacar nesse turno."
+    },
+    "53": {
+      "name": "Espectro do Coração Sombrio",
+      "description": "Se esse card for enviado para o cemitério: você pode escolher 1 monstro 'Coração Sombrio' no seu cemitério, exceto 'Espectro do Coração Sombrio'; adicione-o à sua mão."
+    },
     "71": {
-      "name": "Mago do Vazio Coração Sombrio",
+      "name": "Mago do Vazio do Coração Sombrio",
       "description": "Se esse card for invocado por invocação-normal: Você pode adicionar 1 magia/armadilha 'Coração Sombrio' do seu Deck à sua mão. Se o oponente perder PV enquanto este card estiver no campo: compre 1 card."
     }
   }

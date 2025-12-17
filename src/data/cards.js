@@ -196,7 +196,7 @@
     cardKind: "spell",
     subtype: "equip",
     description:
-      "Equip only to a monster you control. When that monster destroys a monster by battle: gain 500 LP. If this card is sent to the Graveyard: target 1 Spell your opponent controls; destroy that target.",
+      "If the equipped monster destroys a monster by battle: gain 500 LP. If this card is sent to the Graveyard: target 1 Spell your opponent controls; destroy that target.",
     image: "assets/Light-Dividing Sword.png",
     effects: [
       {
@@ -261,7 +261,7 @@
     cardKind: "spell",
     subtype: "equip",
     description:
-      "Equip only to a monster you control. It can make 1 additional attack during each Battle Phase. If this card is sent to the Graveyard: target 1 Spell/Trap your opponent controls; destroy that target.",
+      "The Equipped monster can make 1 additional attack during each Battle Phase. If this card is sent to the Graveyard: target 1 Spell/Trap your opponent controls; destroy that target.",
     image: "assets/Sword of Two Darks.png",
     effects: [
       {
