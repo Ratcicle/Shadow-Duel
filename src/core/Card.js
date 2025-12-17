@@ -65,7 +65,7 @@ export default class Card {
     this.piercing = !!data.piercing;
     this.canMakeSecondAttackThisTurn = false;
     this.secondAttackUsedThisTurn = false;
-    this.voidTenebrisBuffValue = 0;
+    this.dynamicBuffs = null;
 
     // Effect negation tracking
     this.effectsNegated = false;

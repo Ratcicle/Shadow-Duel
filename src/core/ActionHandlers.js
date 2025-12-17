@@ -345,6 +345,8 @@ export async function handleSpecialSummonFromZone(
 async function summonCards(cards, sourceZone, player, action, engine) {
   const game = engine.game;
   let summoned = 0;
+  const setAtkToZero = action.setAtkToZeroAfterSummon === true;
+  const setDefToZero = action.setDefToZeroAfterSummon === true;
 
   for (const card of cards) {
     if (!card || player.field.length >= 5) break;
@@ -375,6 +377,20 @@ async function summonCards(cards, sourceZone, player, action, engine) {
 
     // Add to field
     player.field.push(card);
+
+    if (setAtkToZero) {
+      if (card.originalAtk == null) {
+        card.originalAtk = card.atk;
+      }
+      card.atk = 0;
+    }
+
+    if (setDefToZero) {
+      if (card.originalDef == null) {
+        card.originalDef = card.def;
+      }
+      card.def = 0;
+    }
 
     // Emit after_summon event
     game.emit("after_summon", {

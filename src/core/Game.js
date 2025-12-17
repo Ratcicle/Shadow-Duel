@@ -164,6 +164,7 @@ export default class Game {
 
   updateBoard() {
     // Update passive effects before rendering
+    this.effectEngine?.updatePassiveBuffs();
     if (typeof this.player.updatePassiveEffects === "function") {
       this.player.updatePassiveEffects();
     }
@@ -3024,16 +3025,7 @@ export default class Game {
         if (card.def < 0) card.def = 0;
         card.tempDefBoost = 0;
       }
-
-      const prevBuff = card.voidTenebrisBuffValue || 0;
-      if (prevBuff) {
-        card.atk -= prevBuff;
-        card.def -= prevBuff;
-      }
-      card.voidTenebrisBuffValue = 0;
-      if (this.effectEngine) {
-        this.effectEngine.updateVoidTenebrisHornBuffs();
-      }
+      this.effectEngine?.clearPassiveBuffsForCard(card);
     }
 
     // Se um equip spell está saindo da spell/trap zone, limpar seus efeitos no monstro
@@ -4051,7 +4043,7 @@ export default class Game {
     this.isResolvingEffect = false;
     this.pendingSpecialSummon = null;
     this.cancelTargetSelection();
-    this.effectEngine?.updateVoidTenebrisHornBuffs();
+    this.effectEngine?.updatePassiveBuffs();
     this.updateBoard();
     if (this.renderer?.log) {
       this.renderer.log("Dev setup applied.");

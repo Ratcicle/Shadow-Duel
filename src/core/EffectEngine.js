@@ -12,7 +12,6 @@ import {
   handleSpecialSummonFromDeckWithCounterLimit,
   handleDestroyTargetedCards,
   handleBuffStatsTempWithSecondAttack,
-  handleConditionalSpecialSummonFromHand,
 } from "./ActionHandlers.js";
 
 export const LEGACY_ACTION_TYPES = new Set([
@@ -413,23 +412,6 @@ export default class EffectEngine {
               effect.promptMessage || `Activate ${sourceCard.name}'s effect?`
             );
           if (!shouldActivate) continue;
-
-          if (
-            effect.actions &&
-            effect.actions[0]?.type === "conditional_special_summon_from_hand"
-          ) {
-            const summonResult =
-              await this.handleConditionalSpecialSummonFromHand(
-                sourceCard,
-                player,
-                effect
-              );
-            if (!summonResult?.success) continue;
-            this.registerOncePerTurnUsage(sourceCard, player, effect);
-            this.registerOncePerDuelUsage(sourceCard, player, effect);
-            this.game.checkWinCondition();
-            return;
-          }
         }
 
         this.applyActions(
@@ -443,7 +425,7 @@ export default class EffectEngine {
       }
     }
 
-    this.updateVoidTenebrisHornBuffs();
+    this.updatePassiveBuffs();
   }
 
   checkEffectCondition(
@@ -478,62 +460,139 @@ export default class EffectEngine {
     return true;
   }
 
-  applyVoidTenebrisHornBoost(card, boostValue) {
-    if (!card || card.cardKind !== "monster") return false;
-    const previous = card.voidTenebrisBuffValue ?? 0;
-    if (previous === boostValue) {
-      return false;
+  cardHasArchetype(card, archetype) {
+    if (!card || !archetype) return false;
+    if (card.archetype === archetype) return true;
+    if (Array.isArray(card.archetypes)) {
+      return card.archetypes.includes(archetype);
     }
-    const delta = boostValue - previous;
-    card.atk += delta;
-    card.def += delta;
-    card.voidTenebrisBuffValue = boostValue;
-    return true;
-  }
-
-  // Helper to check if a card belongs to Void archetype
-  isVoidArchetype(card) {
-    if (!card || card.cardKind !== "monster") return false;
-    if (card.archetype === "Void") return true;
-    if (Array.isArray(card.archetypes) && card.archetypes.includes("Void"))
-      return true;
     return false;
   }
 
-  // Continuous effect: Void Tenebris Horn buff system
-  // Note: This could be refactored into a more generic continuous effect handler
-  updateVoidTenebrisHornBuffs() {
+  applyPassiveBuffValue(card, effectKey, amount, stats = ["atk", "def"]) {
+    if (!card) return false;
+    card.dynamicBuffs = card.dynamicBuffs || {};
+    const previousEntry = card.dynamicBuffs[effectKey];
+    const previousValue = previousEntry?.value || 0;
+    if (previousValue === amount) {
+      return false;
+    }
+
+    const delta = amount - previousValue;
+    for (const stat of stats) {
+      if (typeof card[stat] === "number") {
+        card[stat] += delta;
+      }
+    }
+
+    if (amount === 0) {
+      delete card.dynamicBuffs[effectKey];
+      if (Object.keys(card.dynamicBuffs).length === 0) {
+        card.dynamicBuffs = null;
+      }
+    } else {
+      card.dynamicBuffs[effectKey] = { value: amount, stats };
+    }
+
+    return true;
+  }
+
+  clearPassiveBuffsForCard(card) {
+    if (!card || !card.dynamicBuffs) return;
+    for (const entry of Object.values(card.dynamicBuffs)) {
+      if (!entry) continue;
+      const value = entry.value || 0;
+      const stats = entry.stats || ["atk", "def"];
+      if (value === 0) continue;
+      for (const stat of stats) {
+        if (typeof card[stat] === "number") {
+          card[stat] -= value;
+        }
+      }
+    }
+    card.dynamicBuffs = null;
+  }
+
+  updatePassiveBuffs() {
     if (!this.game) return false;
-    const allFields = [
+
+    const fieldCards = [
       ...(this.game.player.field || []),
       ...(this.game.bot.field || []),
     ].filter(Boolean);
 
-    // Single pass optimization: count voids and find horns in one loop
-    let voidCount = 0;
-    const horns = [];
-
-    for (const card of allFields) {
-      if (!card || card.cardKind !== "monster") continue;
-
-      // Check if it's a Void card
-      if (this.isVoidArchetype(card)) {
-        voidCount++;
-      }
-
-      // Check if it's a Void Tenebris Horn
-      if (card.name === "Void Tenebris Horn") {
-        horns.push(card);
-      }
-    }
-
-    const boostValue = voidCount * 100;
-
     let updated = false;
-    for (const horn of horns) {
-      const refreshed = this.applyVoidTenebrisHornBoost(horn, boostValue);
-      if (refreshed) {
-        updated = true;
+
+    for (const card of fieldCards) {
+      const effects = card.effects || [];
+      const processedKeys = new Set();
+
+      effects.forEach((effect, index) => {
+        if (!effect || effect.timing !== "passive") return;
+        const passive = effect.passive;
+        if (!passive || passive.type !== "archetype_count_buff") return;
+
+        const archetype = passive.archetype;
+        if (!archetype) return;
+
+        const perCard =
+          passive.amountPerCard ?? passive.perCard ?? passive.buffPerCard ?? 0;
+        const cardKinds = passive.cardKinds || ["monster"];
+        const requireFaceup = passive.requireFaceup || false;
+        const includeSelf = passive.includeSelf !== false;
+        const stats = passive.stats || ["atk", "def"];
+        const owners = passive.countOwners || passive.owners || [
+          "self",
+          "opponent",
+        ];
+
+        let count = 0;
+        for (const target of fieldCards) {
+          if (!target) continue;
+          if (!cardKinds.includes(target.cardKind)) continue;
+          if (requireFaceup && target.isFacedown) continue;
+          if (!this.cardHasArchetype(target, archetype)) continue;
+          const ownerType =
+            target.owner === card.owner ? "self" : "opponent";
+          if (!owners.includes(ownerType)) continue;
+          if (!includeSelf && target === card) continue;
+          count++;
+        }
+
+        const buffKey = effect.id || `passive_${card.id}_${index}`;
+        const applied = this.applyPassiveBuffValue(
+          card,
+          buffKey,
+          count * perCard,
+          stats
+        );
+        if (applied) {
+          updated = true;
+        }
+        processedKeys.add(buffKey);
+      });
+
+      if (card.dynamicBuffs) {
+        for (const key of Object.keys(card.dynamicBuffs)) {
+          if (!processedKeys.has(key)) {
+            const entry = card.dynamicBuffs[key];
+            const value = entry?.value || 0;
+            const stats = entry?.stats || ["atk", "def"];
+            if (value !== 0) {
+              for (const stat of stats) {
+                if (typeof card[stat] === "number") {
+                  card[stat] -= value;
+                }
+              }
+              updated = true;
+            }
+            delete card.dynamicBuffs[key];
+          }
+        }
+
+        if (card.dynamicBuffs && Object.keys(card.dynamicBuffs).length === 0) {
+          card.dynamicBuffs = null;
+        }
       }
     }
 
@@ -604,89 +663,10 @@ export default class EffectEngine {
       return { success: false, reason: targetResult.reason };
     }
 
-    // Don't apply actions here for conditional_special_summon_from_hand
-    // as it's handled separately in handleConditionalSpecialSummonFromHand
-    const isConditionalSummon =
-      effect.actions &&
-      effect.actions[0]?.type === "conditional_special_summon_from_hand";
-
-    if (!isConditionalSummon) {
-      this.applyActions(effect.actions || [], ctx, targetResult.targets || {});
-      this.registerOncePerTurnUsage(sourceCard, ctx.player, effect);
-      this.registerOncePerDuelUsage(sourceCard, ctx.player, effect);
-      this.game.checkWinCondition();
-    }
-
-    return { success: true };
-  }
-
-  async handleConditionalSpecialSummonFromHand(card, player, effect) {
-    if (!card || !player || card.cardKind !== "monster") {
-      return { success: false, reason: "Invalid card or player." };
-    }
-
-    if (!player.hand || !player.hand.includes(card)) {
-      return { success: false, reason: "Card is not in hand." };
-    }
-
-    const opponent = this.game.getOpponent(player);
-    const ctx = {
-      source: card,
-      player,
-      opponent,
-      activationZone: "hand",
-    };
-
-    const triggerResult = await this.handleTriggeredEffect(card, effect, ctx);
-    if (!triggerResult.success) {
-      return triggerResult;
-    }
-
-    const finishSummon = async (position) => {
-      const pos = position || "attack";
-
-      card.position = pos;
-      card.isFacedown = false;
-      card.hasAttacked = false;
-      card.cannotAttackThisTurn = effect.restrictAttackThisTurn ? true : false;
-
-      if (this.game && typeof this.game.moveCard === "function") {
-        this.game.moveCard(card, player, "field", {
-          fromZone: "hand",
-          position: pos,
-          isFacedown: false,
-          resetAttackFlags: true,
-        });
-      } else {
-        const idx = player.hand.indexOf(card);
-        if (idx > -1) {
-          player.hand.splice(idx, 1);
-        }
-        player.field.push(card);
-      }
-
-      if (this.game && typeof this.game.updateBoard === "function") {
-        this.game.updateBoard();
-      }
-    };
-
-    if (
-      this.game &&
-      player === this.game.player &&
-      typeof this.game.chooseSpecialSummonPosition === "function"
-    ) {
-      const positionChoice = this.game.chooseSpecialSummonPosition(
-        player,
-        card
-      );
-      if (positionChoice && typeof positionChoice.then === "function") {
-        await positionChoice.then((pos) => finishSummon(pos));
-      } else {
-        await finishSummon(positionChoice);
-      }
-    } else {
-      await finishSummon("attack");
-    }
+    this.applyActions(effect.actions || [], ctx, targetResult.targets || {});
+    this.registerOncePerTurnUsage(sourceCard, ctx.player, effect);
+    this.registerOncePerDuelUsage(sourceCard, ctx.player, effect);
+    this.game.checkWinCondition();
 
     return { success: true };
   }
@@ -844,7 +824,7 @@ export default class EffectEngine {
       }
     }
 
-    this.updateVoidTenebrisHornBuffs();
+    this.updatePassiveBuffs();
   }
 
   async handleAttackDeclaredEvent(payload) {
@@ -1864,32 +1844,6 @@ export default class EffectEngine {
     }
     if (this.game.phase !== "main1" && this.game.phase !== "main2") {
       return { ok: false, reason: "Can only activate in Main Phase." };
-    }
-
-    // Card-specific activation requirements
-    // Note: Future improvement - move to generic activation cost/requirement system
-    if (card.name === "Shadow-Heart Infusion") {
-      const handCount = (player.hand && player.hand.length) || 0;
-      if (handCount < 2) {
-        return { ok: false, reason: "Need at least 2 cards in hand." };
-      }
-
-      const gy = player.graveyard || [];
-      const hasShadowHeart = gy.some((c) => {
-        if (!c || c.cardKind !== "monster") return false;
-        if (c.archetype === "Shadow-Heart") return true;
-        if (Array.isArray(c.archetypes)) {
-          return c.archetypes.includes("Shadow-Heart");
-        }
-        return false;
-      });
-
-      if (!hasShadowHeart) {
-        return {
-          ok: false,
-          reason: 'No "Shadow-Heart" monsters in graveyard.',
-        };
-      }
     }
 
     return { ok: true };
@@ -4525,406 +4479,15 @@ export default class EffectEngine {
     }
   }
 
-  async applyVoidHollowSummonFromDeck(action, ctx) {
-    if (!ctx.player || !this.game) {
-      return false;
-    }
+  
 
-    const deck = ctx.player.deck;
-    if (!deck || deck.length === 0) {
-      this.game.renderer.log("No cards in deck.");
-      return false;
-    }
+  
 
-    // Buscar monstros 'Void Hollow'
-    const candidates = deck.filter(
-      (card) => card && card.name === "Void Hollow"
-    );
+  
 
-    if (candidates.length === 0) {
-      this.game.renderer.log("No 'Void Hollow' in deck.");
-      return false;
-    }
+  
 
-    // Check field space
-    if (ctx.player.field.length >= 5) {
-      this.game.renderer.log("Field is full.");
-      return false;
-    }
-
-    // Bot auto-seleciona o primeiro
-    if (ctx.player.id === "bot") {
-      const card = candidates[0];
-      const cardIndex = deck.indexOf(card);
-      if (cardIndex === -1) return false;
-
-      const [summonedCard] = deck.splice(cardIndex, 1);
-      summonedCard.position = "attack";
-      summonedCard.isFacedown = false;
-      summonedCard.hasAttacked = false;
-      summonedCard.cannotAttackThisTurn = false;
-      summonedCard.owner = ctx.player.id;
-      ctx.player.field.push(summonedCard);
-
-      this.game.renderer.log(
-        `${ctx.player.name} Special Summoned ${summonedCard.name} from Deck.`
-      );
-
-      this.game.emit("after_summon", {
-        card: summonedCard,
-        player: ctx.player,
-        method: "special",
-        fromZone: "deck",
-      });
-
-      this.game.updateBoard();
-      return true;
-    }
-
-    // Player: modal visual
-    const searchModal = this.getSearchModalElements();
-    const defaultCardName = candidates[0]?.name || "";
-
-    return new Promise((resolve) => {
-      const finalizeSelection = async (selectedName) => {
-        const chosen =
-          candidates.find((c) => c && c.name === selectedName) || candidates[0];
-
-        if (chosen && ctx.player.field.length < 5) {
-          const cardIndex = deck.indexOf(chosen);
-          if (cardIndex !== -1) {
-            const [summonedCard] = deck.splice(cardIndex, 1);
-
-            // Escolher posição
-            const position = await this.chooseSpecialSummonPosition(
-              summonedCard,
-              ctx.player
-            );
-
-            summonedCard.position = position;
-            summonedCard.isFacedown = false;
-            summonedCard.hasAttacked = false;
-            summonedCard.cannotAttackThisTurn = false;
-            summonedCard.owner = ctx.player.id;
-            ctx.player.field.push(summonedCard);
-
-            this.game.renderer.log(
-              `Special Summoned ${summonedCard.name} from Deck in ${
-                position === "defense" ? "Defense" : "Attack"
-              } Position.`
-            );
-
-            this.game.emit("after_summon", {
-              card: summonedCard,
-              player: ctx.player,
-              method: "special",
-              fromZone: "deck",
-            });
-
-            this.game.updateBoard();
-          }
-        }
-
-        this.game.isResolvingEffect = false;
-        resolve(true);
-      };
-
-      if (searchModal) {
-        this.game.isResolvingEffect = true;
-        this.showSearchModalVisual(
-          searchModal,
-          candidates,
-          defaultCardName,
-          (choice) => finalizeSelection(choice)
-        );
-      } else {
-        // Fallback: auto-seleciona o primeiro
-        finalizeSelection(defaultCardName);
-      }
-    });
-  }
-
-  async applyVoidHaunterSpecialSummon(action, ctx, targets) {
-    if (!ctx.player || !this.game) {
-      return false;
-    }
-
-    const voidHollowCost = targets[action.targetRef];
-    if (!voidHollowCost || voidHollowCost.length === 0) {
-      this.game.renderer.log("No Void Hollow selected as cost.");
-      return false;
-    }
-
-    const card = voidHollowCost[0];
-
-    // Move Void Hollow from field to GY
-    const fieldIndex = ctx.player.field.indexOf(card);
-    if (fieldIndex !== -1) {
-      ctx.player.field.splice(fieldIndex, 1);
-      ctx.player.graveyard.push(card);
-    }
-
-    // Get Void Haunter from hand
-    const haunter = ctx.source;
-    if (!haunter || !ctx.player.hand.includes(haunter)) {
-      this.game.renderer.log("Void Haunter not in hand.");
-      return false;
-    }
-
-    if (ctx.player.field.length >= 5) {
-      this.game.renderer.log("Field is full.");
-      return false;
-    }
-
-    // Remove from hand
-    const handIndex = ctx.player.hand.indexOf(haunter);
-    if (handIndex !== -1) {
-      ctx.player.hand.splice(handIndex, 1);
-    }
-
-    // Special Summon
-    haunter.position = "attack";
-    haunter.isFacedown = false;
-    haunter.hasAttacked = false;
-    haunter.cannotAttackThisTurn = false;
-    haunter.owner = ctx.player.id;
-    ctx.player.field.push(haunter);
-
-    this.game.renderer.log(
-      `${ctx.player.name} Special Summoned ${haunter.name} from hand.`
-    );
-
-    this.game.emit("after_summon", {
-      card: haunter,
-      player: ctx.player,
-      method: "special",
-      fromZone: "hand",
-    });
-
-    this.game.updateBoard();
-    return true;
-  }
-
-  async applyVoidHaunterGYEffect(action, ctx) {
-    if (!ctx.player || !this.game) {
-      return false;
-    }
-
-    const haunter = ctx.source;
-    if (!haunter || !ctx.player.graveyard.includes(haunter)) {
-      this.game.renderer.log("Void Haunter not in graveyard.");
-      return false;
-    }
-
-    // Banish Void Haunter
-    const gyIndex = ctx.player.graveyard.indexOf(haunter);
-    if (gyIndex !== -1) {
-      ctx.player.graveyard.splice(gyIndex, 1);
-    }
-
-    // Find up to 2 Void Hollow in GY
-    const voidHollows = ctx.player.graveyard.filter(
-      (card) => card && card.name === "Void Hollow"
-    );
-
-    if (voidHollows.length === 0) {
-      this.game.renderer.log("No Void Hollow in graveyard.");
-      this.game.updateBoard();
-      return true;
-    }
-
-    if (ctx.player.id === "player") {
-      const maxSelect = Math.min(
-        3,
-        voidHollows.length,
-        5 - ctx.player.field.length
-      );
-
-      if (maxSelect === 0) {
-        this.game.renderer.log("Field is full, cannot Special Summon.");
-        return false;
-      }
-
-      return new Promise((resolve) => {
-        this.game.renderer.showMultiSelectModal(
-          voidHollows,
-          { min: 0, max: maxSelect },
-          async (selected) => {
-            if (!selected || selected.length === 0) {
-              this.game.renderer.log("No Void Hollow selected.");
-              resolve(false);
-              return;
-            }
-
-            for (const hollow of selected) {
-              if (ctx.player.field.length >= 5) break;
-
-              const idx = ctx.player.graveyard.indexOf(hollow);
-              if (idx !== -1) {
-                ctx.player.graveyard.splice(idx, 1);
-              }
-
-              const position = await this.chooseSpecialSummonPosition(
-                hollow,
-                ctx.player
-              );
-
-              hollow.position = position;
-              hollow.isFacedown = false;
-              hollow.hasAttacked = false;
-              hollow.cannotAttackThisTurn = false;
-              hollow.owner = ctx.player.id;
-              ctx.player.field.push(hollow);
-
-              this.game.emit("after_summon", {
-                card: hollow,
-                player: ctx.player,
-                method: "special",
-              });
-            }
-
-            this.game.renderer.log(
-              `Special Summoned ${selected.length} Void Hollow from Graveyard.`
-            );
-            this.game.updateBoard();
-            resolve(true);
-          }
-        );
-      });
-    }
-
-    const toSummon = voidHollows.slice(
-      0,
-      Math.min(3, 5 - ctx.player.field.length)
-    );
-    let summoned = 0;
-
-    for (const hollow of toSummon) {
-      if (ctx.player.field.length >= 5) break;
-
-      const idx = ctx.player.graveyard.indexOf(hollow);
-      if (idx !== -1) {
-        ctx.player.graveyard.splice(idx, 1);
-      }
-
-      hollow.position = "attack";
-      hollow.isFacedown = false;
-      hollow.hasAttacked = false;
-      hollow.cannotAttackThisTurn = false;
-      hollow.owner = ctx.player.id;
-      ctx.player.field.push(hollow);
-
-      this.game.emit("after_summon", {
-        card: hollow,
-        player: ctx.player,
-        method: "special",
-      });
-
-      summoned++;
-    }
-
-    if (summoned > 0) {
-      this.game.renderer.log(
-        `${ctx.player.name} Special Summoned ${summoned} Void Hollow from Graveyard.`
-      );
-      this.game.updateBoard();
-    }
-
-    return summoned > 0;
-  }
-
-  async applyVoidForgottenKnightSpecialSummon(action, ctx, targets) {
-    if (!ctx.player || !this.game) return false;
-
-    const costTargets = targets[action.targetRef];
-    if (!Array.isArray(costTargets) || costTargets.length === 0) {
-      this.game.renderer.log("No Void monster selected as cost.");
-      return false;
-    }
-
-    const costCard = costTargets[0];
-    const fieldIndex = ctx.player.field.indexOf(costCard);
-    if (fieldIndex !== -1) {
-      ctx.player.field.splice(fieldIndex, 1);
-      ctx.player.graveyard.push(costCard);
-    }
-
-    const knight = ctx.source;
-    if (!knight || !ctx.player.hand.includes(knight)) {
-      this.game.renderer.log("Void Forgotten Knight not in hand.");
-      return false;
-    }
-
-    if (ctx.player.field.length >= 5) {
-      this.game.renderer.log("Field is full.");
-      return false;
-    }
-
-    const handIndex = ctx.player.hand.indexOf(knight);
-    if (handIndex !== -1) {
-      ctx.player.hand.splice(handIndex, 1);
-    }
-
-    knight.position = "attack";
-    knight.isFacedown = false;
-    knight.hasAttacked = false;
-    knight.cannotAttackThisTurn = false;
-    knight.owner = ctx.player.id;
-    ctx.player.field.push(knight);
-
-    this.game.renderer.log(
-      `${ctx.player.name} Special Summoned ${knight.name} from hand.`
-    );
-
-    this.game.emit("after_summon", {
-      card: knight,
-      player: ctx.player,
-      method: "special",
-    });
-
-    this.game.updateBoard();
-    return true;
-  }
-
-  async applyVoidTenebrisHornGraveSummon(action, ctx, targets) {
-    if (!ctx.player || !this.game) return false;
-
-    const targetCards = targets[action.targetRef] || [];
-    const horn = targetCards[0];
-    if (!horn) return false;
-
-    if (ctx.player.field.length >= 5) {
-      this.game.renderer.log("Field está cheio.");
-      return false;
-    }
-
-    this.game.moveCard(horn, ctx.player, "field", {
-      fromZone: "graveyard",
-      position: "attack",
-      isFacedown: false,
-      resetAttackFlags: true,
-    });
-
-    horn.position = "attack";
-    horn.isFacedown = false;
-    horn.hasAttacked = false;
-    horn.cannotAttackThisTurn = false;
-    horn.owner = ctx.player.id;
-
-    this.game.renderer.log(
-      `${ctx.player.name} Special Summoned ${horn.name} from the Graveyard.`
-    );
-
-    this.game.emit("after_summon", {
-      card: horn,
-      player: ctx.player,
-      method: "special",
-    });
-
-    this.updateVoidTenebrisHornBuffs();
-    this.game.updateBoard();
-    return true;
-  }
+  
 
   applyBanish(action, ctx, targets) {
     const targetCards = targets[action.targetRef] || [];
@@ -4964,7 +4527,7 @@ export default class EffectEngine {
       this.game.renderer.log(`${banished} card(s) banished.`);
     }
 
-    this.updateVoidTenebrisHornBuffs();
+    this.updatePassiveBuffs();
     return banished > 0;
   }
 
