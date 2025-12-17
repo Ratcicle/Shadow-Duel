@@ -5,6 +5,8 @@ import { validateCardDatabase } from "./core/CardDatabaseValidator.js";
 
 import {
   initializeLocale,
+  setLocale,
+  getLocale,
   getCardDisplayDescription,
   getCardDisplayName,
 } from "./core/i18n.js";
@@ -37,6 +39,38 @@ const botPresetSelect = document.getElementById("bot-preset-select");
 const botPresetStatus = document.getElementById("bot-preset-status");
 populateBotPresetDropdown();
 updateBotPresetStatus();
+
+const localeButtons = Array.from(
+  document.querySelectorAll(".lang-toggle-btn")
+ );
+
+function updateLocaleButtons() {
+  if (!localeButtons.length) return;
+  const currentLang = getLocale();
+  localeButtons.forEach((btn) => {
+    const lang = btn.dataset.lang;
+    const isActive = lang && lang === currentLang;
+    btn.classList.toggle("active", isActive);
+    btn.setAttribute("aria-pressed", isActive ? "true" : "false");
+  });
+}
+
+function bindLocaleToggle() {
+  if (!localeButtons.length) return;
+  localeButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const targetLang = btn.dataset.lang;
+      if (!targetLang || getLocale() === targetLang) {
+        return;
+      }
+      setLocale(targetLang);
+      location.reload();
+    });
+  });
+}
+
+updateLocaleButtons();
+bindLocaleToggle();
 
 const previewEls = {
   image: document.getElementById("deck-preview-image"),

@@ -1254,6 +1254,35 @@ body {
   justify-content: center;
 }
 
+.language-toggle {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin-top: 12px;
+}
+
+.language-toggle .lang-toggle-btn {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-color);
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.language-toggle .lang-toggle-btn.active {
+  background: rgba(126, 81, 255, 0.16);
+  border-color: rgba(126, 81, 255, 0.9);
+  color: #fff;
+}
+
+.language-toggle .lang-toggle-btn:focus-visible {
+  outline: 2px solid rgba(126, 81, 255, 0.9);
+  outline-offset: 2px;
+}
+
 .start-actions button {
   background: var(--accent-color);
   color: #000;

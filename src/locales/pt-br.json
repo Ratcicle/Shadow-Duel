@@ -1,3 +1,12 @@
 {
-  "cards": {}
+  "cards": {
+    "1": {
+      "name": "Corcel Espectral",
+      "description": "Um cavalo demoníaco com a juba flamejante."
+    },
+    "71": {
+      "name": "Mago do Vazio Coração Sombrio",
+      "description": "Se esse card for invocado por invocação-normal: Você pode adicionar 1 magia/armadilha 'Coração Sombrio' do seu Deck à sua mão. Se o oponente perder PV enquanto este card estiver no campo: compre 1 card."
+    }
+  }
 }
