@@ -3,6 +3,14 @@ import Bot from "./core/Bot.js";
 import { cardDatabase, cardDatabaseById } from "./data/cards.js";
 import { validateCardDatabase } from "./core/CardDatabaseValidator.js";
 
+import {
+  initializeLocale,
+  getCardDisplayDescription,
+  getCardDisplayName,
+} from "./core/i18n.js";
+
+initializeLocale();
+
 let game = null;
 const cardKindOrder = { monster: 0, spell: 1, trap: 2 };
 const TEST_MODE_KEY = "shadow_duel_test_mode";
@@ -396,7 +404,7 @@ function buildDefaultDeck() {
 function setPreview(card) {
   if (!card) return;
   previewEls.image.style.backgroundImage = `url('${card.image}')`;
-  previewEls.name.textContent = card.name;
+  previewEls.name.textContent = getCardDisplayName(card) || card.name;
   const isMonster = card.cardKind !== "spell" && card.cardKind !== "trap";
   previewEls.atk.textContent = isMonster
     ? `ATK: ${card.atk}`
@@ -407,7 +415,8 @@ function setPreview(card) {
     ? card.subtype.toUpperCase()
     : "";
   previewEls.level.textContent = isMonster ? `Level: ${card.level}` : "";
-  previewEls.desc.textContent = card.description || "Sem descricao.";
+  previewEls.desc.textContent =
+    getCardDisplayDescription(card) || card.description || "Sem descricao.";
 }
 
 function cardHasArchetype(card) {
@@ -659,7 +668,7 @@ function createCardThumb(card) {
   const el = document.createElement("div");
   el.className = "card-thumb";
   el.style.backgroundImage = `url('${card.image}')`;
-  el.title = card.name;
+  el.title = getCardDisplayName(card) || card.name;
   return el;
 }
 

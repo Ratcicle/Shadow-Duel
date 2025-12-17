@@ -1,5 +1,6 @@
 import Card from "./Card.js";
 import { cardDatabase } from "../data/cards.js";
+import { getCardDisplayName } from "./i18n.js";
 import {
   ActionHandlerRegistry,
   registerDefaultHandlers,
@@ -406,10 +407,14 @@ export default class EffectEngine {
         }
 
         if (effect.promptUser === true && player === this.game.player) {
+          const promptName =
+            getCardDisplayName(sourceCard) ||
+            sourceCard?.name ||
+            "this card";
           const shouldActivate =
             await this.game.renderer.showConditionalSummonPrompt(
-              sourceCard.name,
-              effect.promptMessage || `Activate ${sourceCard.name}'s effect?`
+              promptName,
+              effect.promptMessage || `Activate ${promptName}'s effect?`
             );
           if (!shouldActivate) continue;
         }
@@ -2548,8 +2553,8 @@ export default class EffectEngine {
     return amount !== 0;
   }
 
-  async applyDestroy(action, targets, ctx) {
-    const targetCards = targets[action.targetRef] || [];
+  async applyDestroy(action, ctx, targets) {
+    const targetCards = targets?.[action.targetRef] || [];
     let destroyedAny = false;
 
     for (const card of targetCards) {
@@ -2908,8 +2913,8 @@ export default class EffectEngine {
     return true;
   }
 
-  applyBuffAtkTemp(action, targets) {
-    const targetCards = targets[action.targetRef] || [];
+  applyBuffAtkTemp(action, ctx, targets) {
+    const targetCards = targets?.[action.targetRef] || [];
     const amount = action.amount ?? 0;
     targetCards.forEach((card) => {
       if (card.isFacedown) return;
@@ -2919,8 +2924,8 @@ export default class EffectEngine {
     return targetCards.length > 0 && amount !== 0;
   }
 
-  applyModifyStatsTemp(action, targets) {
-    const targetCards = targets[action.targetRef] || [];
+  applyModifyStatsTemp(action, ctx, targets) {
+    const targetCards = targets?.[action.targetRef] || [];
     const atkFactor = action.atkFactor ?? 1;
     const defFactor = action.defFactor ?? 1;
 
@@ -2959,11 +2964,11 @@ export default class EffectEngine {
     return true;
   }
 
-  applyForbidAttackThisTurn(action, targets, ctx) {
+  applyForbidAttackThisTurn(action, ctx, targets) {
     // Se targetRef está definido, usa os alvos selecionados
     // Caso contrário, aplica à carta fonte (self)
     let targetCards = [];
-    if (action.targetRef && targets[action.targetRef]) {
+    if (action.targetRef && targets?.[action.targetRef]) {
       targetCards = targets[action.targetRef];
     } else if (ctx && ctx.source) {
       targetCards = [ctx.source];
@@ -2975,9 +2980,9 @@ export default class EffectEngine {
     return targetCards.length > 0;
   }
 
-  applyForbidAttackNextTurn(action, targets, ctx) {
+  applyForbidAttackNextTurn(action, ctx, targets) {
     let targetCards = [];
-    if (action.targetRef && targets[action.targetRef]) {
+    if (action.targetRef && targets?.[action.targetRef]) {
       targetCards = targets[action.targetRef];
     } else if (ctx && ctx.source) {
       targetCards = [ctx.source];
@@ -3234,7 +3239,7 @@ export default class EffectEngine {
       if (!card || !card.name) return;
       const opt = document.createElement("option");
       opt.value = card.name;
-      opt.textContent = card.name;
+      opt.textContent = getCardDisplayName(card) || card.name;
       select.appendChild(opt);
     });
 
@@ -3316,6 +3321,8 @@ export default class EffectEngine {
 
     candidates.forEach((card) => {
       if (!card || !card.name) return;
+      const displayName =
+        getCardDisplayName(card) || (card?.name && card.name) || "Card";
 
       const cardBtn = document.createElement("button");
       cardBtn.className = "search-card-btn";
@@ -3326,14 +3333,14 @@ export default class EffectEngine {
       // Card image
       const img = document.createElement("img");
       img.src = card.image || "assets/card-back.png";
-      img.alt = card.name;
+      img.alt = displayName;
       img.className = "search-card-image";
       cardBtn.appendChild(img);
 
       // Card name
       const nameDiv = document.createElement("div");
       nameDiv.className = "search-card-name";
-      nameDiv.textContent = card.name;
+      nameDiv.textContent = displayName;
       cardBtn.appendChild(nameDiv);
 
       // Card type

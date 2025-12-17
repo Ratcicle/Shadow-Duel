@@ -4,6 +4,7 @@ import Renderer from "../ui/Renderer.js";
 import EffectEngine from "./EffectEngine.js";
 import Card from "./Card.js";
 import { cardDatabaseByName, cardDatabaseById } from "../data/cards.js";
+import { getCardDisplayName } from "./i18n.js";
 
 // Helper to construct user-friendly cost type descriptions
 function getCostTypeDescription(costFilters, count) {
@@ -336,7 +337,11 @@ export default class Game {
     modal.classList.add("modal-content", "ignition-modal");
 
     const title = document.createElement("h3");
-    title.textContent = card ? card.name : "Activate effect?";
+    const titleText =
+      (card && getCardDisplayName(card)) ||
+      (card?.name && card.name) ||
+      "Activate effect?";
+    title.textContent = titleText;
     title.classList.add("modal-title");
 
     const desc = document.createElement("p");

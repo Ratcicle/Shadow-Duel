@@ -11,6 +11,8 @@
  * - New cards should work without modifying this file
  */
 
+import { getCardDisplayName } from "./i18n.js";
+
 // Map technical status names to user-friendly descriptions
 const STATUS_DISPLAY_NAMES = {
   tempBattleIndestructible: "battle indestructibility",
@@ -1635,7 +1637,11 @@ async function promptTieBreaker(
 
         const nameDiv = document.createElement("div");
         nameDiv.classList.add("tie-breaker-card-name");
-        nameDiv.textContent = card.name;
+        const displayName =
+          getCardDisplayName(card) ||
+          (card?.name && card.name) ||
+          "Card";
+        nameDiv.textContent = displayName;
         infoDiv.appendChild(nameDiv);
 
         const statsDiv = document.createElement("div");

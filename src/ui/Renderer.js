@@ -1,3 +1,8 @@
+import {
+  getCardDisplayDescription,
+  getCardDisplayName,
+} from "../core/i18n.js";
+
 export default class Renderer {
   constructor() {
     this.elements = {
@@ -752,7 +757,10 @@ export default class Renderer {
     modal.className = "special-summon-position-modal";
 
     const imageUrl = card?.image || "";
-    const safeName = (card?.name && card.name.trim()) || "este monstro";
+    const safeName =
+      (card && getCardDisplayName(card)) ||
+      (card?.name && card.name.trim()) ||
+      "este monstro";
     const previewStyle = imageUrl ? `background-image: url('${imageUrl}')` : "";
 
     modal.innerHTML = `
@@ -836,6 +844,10 @@ export default class Renderer {
 
     if (visible) {
       const isMonster = card.cardKind !== "spell" && card.cardKind !== "trap";
+      const displayName =
+        getCardDisplayName(card) ||
+        (card?.name && card.name.trim()) ||
+        "";
       const stars = "*".repeat(card.level || 0);
       const typeLabel = isMonster
         ? stars
@@ -843,9 +855,14 @@ export default class Renderer {
             card.subtype ? " / " + card.subtype.toUpperCase() : ""
           }`;
 
+      const displayDescription =
+        getCardDisplayDescription(card) ||
+        (card?.description && card.description.trim()) ||
+        "Effect card.";
+
       el.innerHTML = `
         <div class="card-header">
-          <div class="card-name">${card.name}</div>
+          <div class="card-name">${displayName}</div>
           <div class="card-level">${typeLabel}</div>
         </div>
         <div class="card-image" style="background-image: url('${
@@ -858,8 +875,8 @@ export default class Renderer {
                  <span class="stat-def">DEF ${card.def}</span>
                </div>`
             : `<div class="card-text">${
-                card.description || "Effect card."
-              }</div>`
+                displayDescription
+            }</div>`
         }
       `;
     }
@@ -920,7 +937,8 @@ export default class Renderer {
     }
 
     previewImage.style.backgroundImage = `url('${card.image}')`;
-    previewName.textContent = card.name;
+    previewName.textContent =
+      getCardDisplayName(card) || (card?.name && card.name) || "Hover a card";
     const isMonster = card.cardKind !== "spell" && card.cardKind !== "trap";
 
     if (isMonster) {
@@ -936,7 +954,10 @@ export default class Renderer {
       previewDef.textContent = "";
       previewLevel.textContent = "";
     }
-    previewDesc.textContent = card.description || "No description available.";
+    previewDesc.textContent =
+      getCardDisplayDescription(card) ||
+      card.description ||
+      "No description available.";
   }
 
   log(message) {
@@ -1144,9 +1165,15 @@ export default class Renderer {
         btn.dataset.idx = cand.idx;
 
         // Create card visual
+        const targetCard = cand.cardRef || cand;
+        const displayName =
+          getCardDisplayName(targetCard) ||
+          (targetCard?.name && targetCard.name) ||
+          cand.name ||
+          "Card";
         const cardImage = document.createElement("img");
-        cardImage.src = cand.cardRef?.image || "assets/card-back.png";
-        cardImage.alt = cand.name;
+        cardImage.src = targetCard.image || cand.cardRef?.image || "assets/card-back.png";
+        cardImage.alt = displayName;
         cardImage.style.width = "100px";
         cardImage.style.height = "auto";
         cardImage.style.borderRadius = "4px";
@@ -1155,7 +1182,7 @@ export default class Renderer {
 
         const nameDiv = document.createElement("div");
         nameDiv.className = "target-name";
-        nameDiv.textContent = cand.name;
+        nameDiv.textContent = displayName;
 
         const metaDiv = document.createElement("div");
         metaDiv.className = "target-meta";
@@ -1546,7 +1573,9 @@ export default class Renderer {
 
       const img = document.createElement("img");
       img.src = card.image || "assets/card-back.png";
-      img.alt = card.name;
+      const displayName =
+        getCardDisplayName(card) || (card?.name && card.name) || "";
+      img.alt = displayName || "Card";
       img.className = "card-grid-image";
 
       const info = document.createElement("div");
@@ -1554,7 +1583,7 @@ export default class Renderer {
 
       const name = document.createElement("div");
       name.className = "card-grid-name";
-      name.textContent = card.name;
+      name.textContent = displayName;
       info.appendChild(name);
 
       if (card.cardKind === "monster") {
@@ -1707,7 +1736,10 @@ export default class Renderer {
 
       const img = document.createElement("img");
       img.src = trapCard.image || "assets/card-back.png";
-      img.alt = trapCard.name;
+      img.alt =
+        getCardDisplayName(trapCard) ||
+        (trapCard?.name && trapCard.name) ||
+        "Trap Card";
       img.className = "trap-card-image";
       cardPreview.appendChild(img);
 
@@ -1717,11 +1749,15 @@ export default class Renderer {
 
       const cardName = document.createElement("div");
       cardName.className = "trap-card-name";
-      cardName.textContent = trapCard.name;
+      cardName.textContent =
+        getCardDisplayName(trapCard) || (trapCard?.name && trapCard.name) || "";
 
       const cardDesc = document.createElement("div");
       cardDesc.className = "trap-card-description";
-      cardDesc.textContent = trapCard.description;
+      cardDesc.textContent =
+        getCardDisplayDescription(trapCard) ||
+        (trapCard?.description && trapCard.description) ||
+        "";
 
       cardInfo.appendChild(cardName);
       cardInfo.appendChild(cardDesc);
