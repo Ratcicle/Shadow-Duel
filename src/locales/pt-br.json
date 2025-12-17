@@ -14,15 +14,15 @@
     },
     "4": {
       "name": "Necromancia Barata",
-      "description": "Invoque por invocação- Especial 1 Token de Diabinho (ATK/DEF 500)."
+      "description": "Invoque por invocação-Especial 1 Token de Diabinho (ATK/DEF 500)."
     },
     "5": {
       "name": "Corcel Pesadelo da Meia-Noite",
-      "description": "Pode ser invocado por Inovocação-Tributo usando apenas 1 tributo ao tributar 'Corcel Pesadelo'. Se esse card destruir um monstro do oponente em batalha: cause 300 de dano."
+      "description": "Pode ser invocado por Invocação-Tributo usando apenas 1 tributo ao tributar 'Corcel Pesadelo'. Se esse card destruir um monstro do oponente em batalha: cause 300 de dano."
     },
     "6": {
       "name": "Buscador Infinito",
-      "description": "Adicione um card do seu deck a sua mão."
+      "description": "Adicione um card do seu Deck à sua mão."
     },
     "7": {
       "name": "Transmutar",
@@ -46,7 +46,7 @@
     },
     "12": {
       "name": "Dragão Radiante",
-      "description": "Se esse card for invocado por invocação-Normal: Você pode adicionar um monstro 'Luminarca' do seu Deck à sua mão. Durante sua Fase de Espera, ganhe 500 PV para cada monstro 'Luminarca' que você controla."
+      "description": "Se esse card for invocado por invocação-Normal: Você pode adicionar um monstro 'Luminarca' do seu Deck à sua mão. Durante sua Fase de Espera, uma vez por turno: ganhe 300 PV para cada monstro 'Luminarca' que você controla."
     },
     "13": {
       "name": "Polimerização",
@@ -82,7 +82,7 @@
     },
     "56": {
       "name": "Recuo do Coração Sombrio",
-      "description": "Escolha 1 monstro que você controla: adicione o alvo a sua mão."
+      "description": "Escolha 1 monstro que você controla: adicione o alvo à sua mão."
     },
     "57": {
       "name": "Demônio Arctroth do Coração Sombrio",
@@ -102,7 +102,7 @@
     },
     "61": {
       "name": "Lagartixa do Coração Sombrio",
-      "description": "Se esse card for invocado por invocação-Especial: você pode adicionar 1 monstro 'coração sombrio' de nível 8 do seu deck à sua mão. Se esse card for destruído em batalha: compre 1 card. Você só pode usar cada efeito de 'Lagartixa do Coração Sombrio' uma vez por turno."
+      "description": "Se esse card for invocado por invocação-Especial: você pode adicionar 1 monstro 'Coração Sombrio' de nível 8 do seu Deck à sua mão. Se esse card for destruído em batalha: compre 1 card. Você só pode usar cada efeito de 'Lagartixa do Coração Sombrio' uma vez por turno."
     },
     "62": {
       "name": "Covarde do Coração Sombrio",
@@ -114,7 +114,7 @@
     },
     "64": {
       "name": "Dragão de Escamas do Coração Sombrio",
-      "description": "Requer 3 tributos para ser invocado por invocação-Normal/baixado. Se esse card destruir um monstro do oponente em batalha: você pode escolher 1 card 'coração sombrio' no seu cemitério; adicione-o à sua mão."
+      "description": "Requer 3 tributos para ser invocado por invocação-Normal/baixado. Se esse card destruir um monstro do oponente em batalha: você pode escolher 1 card 'Coração Sombrio' no seu cemitério; adicione-o à sua mão."
     },
     "65": {
       "name": "Fúria do Coração Sombrio",
@@ -138,11 +138,183 @@
     },
     "70": {
       "name": "Leviatã do Coração Sombrio",
-      "description": "Se esse card destruir um monstro em batalha: cause 500 de dano ao seu oponente. Se esse card for destruído em batalha: Cause 800 de dano ao seu oponente."
+      "description": "Se esse card destruir um monstro em batalha: cause 500 de dano ao seu oponente. Se esse card for destruído em batalha: cause 800 de dano ao seu oponente."
     },
     "71": {
       "name": "Mago do Vazio do Coração Sombrio",
-      "description": "Se esse card for invocado por invocação-normal: Você pode adicionar 1 magia/armadilha 'Coração Sombrio' do seu Deck à sua mão. Se o oponente perder PV enquanto este card estiver no campo: compre 1 card."
+      "description": "Se esse card for invocado por invocação-Normal: Você pode adicionar 1 Magia/Armadilha 'Coração Sombrio' do seu Deck à sua mão. Se o oponente perder PV enquanto este card estiver no campo: compre 1 card."
+    },
+    "72": {
+      "name": "Catedral do Coração Sombrio",
+      "description": "Cada vez que seu oponente perder PV: coloque 1 Contador do Julgamento neste card para cada 500 de dano. Durante sua Fase Principal: você pode enviar este card para o cemitério; Invoque por invocação-Especial 1 monstro 'Coração Sombrio' do seu Deck com o ataque igual ou menor ao número de Contadores do Julgamento x 500. Você só pode usar este efeito de 'Catedral do Coração Sombrio' uma vez por turno."
+    },
+    "73": {
+      "name": "O Coração Sombrio",
+      "description": "Escolha 1 monstro 'Coração Sombrio' no seu cemitério: invoque-o por invocação-Especial e equipe este card a ele. Se esse card deixar o campo, destrua o monstro equipado."
+    },
+    "74": {
+      "name": "Dragão Demônio do Coração Sombrio",
+      "description": "Dragão de Escamas do Coração Sombrio + Um monstro 'Coração Sombrio' de nível 5 ou superior. Se esse card for invocado por invocação-Fusão: Escolha 2 cards no campo do oponente; destrua-os. Se esse card for destruído em batalha ou por efeitos de card: Você pode invocar um 'Dragão de Escamas do Coração Sombrio' do seu cemitério."
+    },
+    "101": {
+      "name": "Luminarca Valente - Cavaleiro da Aurora",
+      "description": "Se esse card for invocado por invocação-Normal ou Especial: você pode adicionar 1 monstro 'Luminarca' de nível 4 ou menor do seu Deck à sua mão. Se esse card atacar um monstro em posição de defesa, cause dano perfurante."
+    },
+    "102": {
+      "name": "Escudo Sagrado Luminarca",
+      "description": "Escolha até 3 monstros 'Luminarca' que você controla; até o final do turno, eles não podem ser destruídos em batalha, e qualquer dano de batalha que você sofreria envolvendo esses monstros é transformado em cura."
+    },
+    "103": {
+      "name": "Portador da Égide Luminarca",
+      "description": "Se esse card for invocado por invocação-Especial: aumente sua DEF em 500. Enquanto esse card estiver com a face para cima no campo, o seu oponente deve atacar este card, se possível."
+    },
+    "104": {
+      "name": "Capitão da Lâmina Lunar Luminarca",
+      "description": "Se esse card for invocado por invocação-Normal: você pode escolher 1 monstro 'Luminarca' de nível 4 ou menor no seu cemitério; invoque-o por invocação-Especial. Uma vez por turno, se esse card destruir um monstro do oponente em batalha: ele pode realizar um segundo ataque."
+    },
+    "105": {
+      "name": "Marechal Celestial Luminarca",
+      "description": "Se esse card atacar um monstro em posição de defesa, cause dano perfurante. Uma vez por turno, esse card não pode ser destruído em batalha."
+    },
+    "106": {
+      "name": "Foice Mágica Luminarca",
+      "description": "Você pode enviar este card do seu campo para o cemitério: adicione até 2 monstros 'Luminarca' do seu cemitério à sua mão."
+    },
+    "107": {
+      "name": "Protetor do Santuário Luminarca",
+      "description": "Se você controlar um 'Portador da Égide Luminarca', você pode enviá-lo para o cemitério: invoque este card por invocação-Especial da sua mão. Uma vez por turno, quando um monstro do oponente declarar um ataque (efeito rápido): negue o ataque."
+    },
+    "108": {
+      "name": "Lanceiro Radiante Luminarca",
+      "description": "Se esse card destruir um monstro do oponente em batalha: ele ganha 200 de ATK enquanto estiver com a face para cima no campo. Se esse card for destruído em batalha: escolha uma Magia/Armadilha que seu oponente controla; destrua-a."
+    },
+    "109": {
+      "name": "Aurora Serafim Luminarca",
+      "description": "Se este card destruir um monstro do oponente em batalha: ganhe PV igual a metade do ATK do monstro destruído. Uma vez por turno, se esse card seria destruído por batalha ou efeitos de card: você pode enviar 1 monstro 'Luminarca' do seu cemitério para o cemitério; negue a destruição."
+    },
+    "110": {
+      "name": "Árbitro Santificado Luminarca",
+      "description": "Se esse card for invocado por invocação-Normal: você pode adicionar uma Magia/Armadilha 'Luminarca' do seu Deck à sua mão. Você só pode usar esse efeito de 'Árbitro Santificado Luminarca' uma vez por turno."
+    },
+    "111": {
+      "name": "Convocação dos Cavaleiros Luminarca",
+      "description": "Uma vez por turno, você pode descartar 1 monstro 'Luminarca' de nível 7 ou maior; adicione 1 monstro 'Luminarca' de nível 4 ou menor do seu Deck à sua mão."
+    },
+    "112": {
+      "name": "Santuário da Cidadela Luminarca",
+      "description": "Quando um monstro do oponente declarar um ataque: ganhe 500 PV. Uma vez por turno, você pode pagar 1000 PV e escolher 1 monstro 'Luminarca' que você controla: ele ganha de 500 ATK/DEF até o final do turno."
+    },
+    "113": {
+      "name": "Ascensão Sagrada Luminarca",
+      "description": "Pague 1000 PV, escolha um monstro 'Luminarca' que você controla; ele ganha 800 de ATK até o final do turno."
+    },
+    "114": {
+      "name": "Onda Radiante Luminarca",
+      "description": "Envie 1 monstro 'Luminarca' com 2000 ou mais de ATK do seu campo para o cemitério, e escolha 1 card no campo do oponente; destrua-o."
+    },
+    "115": {
+      "name": "Escudo Crescente Luminarca",
+      "description": "Só pode ser equipado a um monstro 'Luminarca'. O monstro equipado ganha 500 de DEF. Se o monstro equipado seria destruído em batalha, envie esse card para o cemitério em vez disso."
+    },
+    "116": {
+      "name": "Lança da Alvorada Luminarca",
+      "description": "Se você controlar 1 monstro 'Luminarca': Escolha 1 monstro que seu oponente controla; o ATK/DEF do alvo se tornam 0 até o final do turno."
+    },
+    "117": {
+      "name": "Alabarda Encantada Luminarca",
+      "description": "Uma vez por turno, se um monstro 'Luminarca' for invocado por invocação-Especial no seu campo, você pode invocar esse card por invocação-Especial da sua mão, mas ele não pode declarar um ataque nesse turno."
+    },
+    "118": {
+      "name": "Bênção do Brilho da Lua Luminarca",
+      "description": "Escolha 1 monstro 'Luminarca' no seu cemitério; adicione o alvo à sua mão, então se você controlar 'Santuário da Cidadela Luminarca', você pode invocar o alvo por invocação-Especial. Você só pode ativar 1 'Bênção do Brilho da Lua Luminarca' por turno."
+    },
+    "119": {
+      "name": "Julgamento Sagrado Luminarca",
+      "description": "Se você não controlar monstros e seu oponente controlar 2 ou mais monstros: pague 2000 PV; Invoque por invocação-Especial monstros 'Luminarca' do seu cemitério, até o número de monstros que seu oponente controla, então ganhe 500 PV por monstro invocado. Você só pode ativar 1 'Julgamento Sagrado Luminarca' por turno."
+    },
+    "120": {
+      "name": "Megaescudo Barbarias Luminarca",
+      "description": "'Protetor do Santuário Luminarca' + 1 monstro 'Luminarca' de nível 5 ou maior. Todo o PV ganho é dobrado. Uma vez por turno, você pode escolher 1 monstro que você controla; troque sua posição de batalha, e se isso acontecer, ele ganha 800 de ATK até o final do turno."
+    },
+    "151": {
+      "name": "Conjurador do Vazio",
+      "description": "Invoque por Invocação-Especial 1 monstro 'Void' de Nível 4 ou menor do seu Deck, mas ele não pode atacar neste turno. Se este card estiver no seu Cemitério: você pode enviar 1 monstro 'Void' que você controla para o Cemitério; Invoque este card por Invocação-Especial. Você só pode usar cada efeito de 'Conjurador do Vazio' uma vez por turno."
+    },
+    "152": {
+      "name": "Caminhante do Vazio",
+      "description": "Não pode atacar no turno em que é Invocado. Uma vez por turno: você pode devolver este card à sua mão; Invoque por Invocação-Especial 1 monstro 'Void' de Nível 4 ou menor da sua mão, exceto 'Caminhante do Vazio'."
+    },
+    "153": {
+      "name": "Fera do Vazio",
+      "description": "Se este card destruir um monstro do oponente em batalha: você pode adicionar 1 'Vazio Oco' do seu Deck à sua mão. Você só pode usar este efeito de 'Fera do Vazio' uma vez por turno."
+    },
+    "154": {
+      "name": "Vazio Oco",
+      "description": "Se este card for Invocado por Invocação-Especial da sua mão: você pode Invocar por Invocação-Especial 1 'Vazio Oco' do seu Deck. Você só pode usar este efeito de 'Vazio Oco' uma vez por turno."
+    },
+    "155": {
+      "name": "Assombrador do Vazio",
+      "description": "Você pode enviar 1 'Vazio Oco' do seu campo para o seu Cemitério; Invoque por Invocação-Especial este card da sua mão. Você pode banir este card do seu Cemitério e, depois, escolher até 2 'Vazio Oco' no seu Cemitério; Invoque por Invocação-Especial esses alvos, mas o ATK/DEF deles se tornam 0. Você só pode usar cada efeito de 'Assombrador do Vazio' uma vez por turno."
+    },
+    "156": {
+      "name": "Lobo Fantasma do Vazio",
+      "description": "Uma vez por turno: você pode reduzir pela metade o ATK deste card até o final deste turno e, se isso acontecer, ele pode atacar diretamente neste turno."
+    },
+    "157": {
+      "name": "Rei do Vazio Oco",
+      "description": "3 monstros 'Vazio Oco'. Se este card for destruído em batalha ou por efeito de card: você pode Invocar por Invocação-Especial até 3 'Vazio Oco' do seu Cemitério."
+    },
+    "158": {
+      "name": "Aranha Óssea do Vazio",
+      "description": "Escolha 1 monstro que seu oponente controla; ele não pode atacar até o final do próximo turno. Se este card for enviado do campo para o Cemitério: Invoque por Invocação-Especial 1 Token 'Pequena Aranha do Vazio' (Nível 1, 500 ATK/DEF)."
+    },
+    "159": {
+      "name": "Cavaleiro Esquecido do Vazio",
+      "description": "Você pode enviar 1 monstro 'Void' que você controla para o Cemitério; Invoque por Invocação-Especial este card da sua mão. Você pode banir este card do seu Cemitério; destrua 1 Magia/Armadilha que seu oponente controla. Você só pode usar cada efeito de 'Cavaleiro Esquecido do Vazio' uma vez por turno."
+    },
+    "160": {
+      "name": "Corvo do Vazio",
+      "description": "Se um Monstro de Fusão 'Void' for Invocado por Invocação-Fusão: você pode descartar este card da sua mão; esse monstro fica imune aos efeitos de cards do oponente até o final do próximo turno."
+    },
+    "161": {
+      "name": "Chifre Tenebris do Vazio",
+      "description": "Ganha 100 de ATK/DEF para cada card 'Void' no campo. Uma vez por Duelo, se este card estiver no seu Cemitério, você pode Invocá-lo por Invocação-Especial."
+    },
+    "162": {
+      "name": "Brutamontes Matador do Vazio",
+      "description": "Você pode Invocar por Invocação-Especial este card da sua mão ao enviar 2 monstros 'Void' que você controla para o Cemitério. Se este card destruir um monstro do oponente em batalha: bana esse monstro."
+    },
+    "163": {
+      "name": "Berserker do Vazio",
+      "description": "Brutamontes Matador do Vazio (no campo) + 1 monstro 'Void'. Este card pode realizar até 2 ataques durante cada Fase de Batalha. Uma vez por turno, se este card destruir um monstro do oponente em batalha: você pode escolher 1 card que seu oponente controla; devolva-o para a mão."
+    },
+    "164": {
+      "name": "Draco Serpente do Vazio",
+      "description": "Se este card estiver na sua mão: você pode enviar de 1 a 3 'Vazio Oco' que você controla para o Cemitério e, depois, Invocar por Invocação-Especial este card. Ele ganha efeitos de acordo com a quantidade enviada: 1+: ele ganha 300 de ATK até o final do turno; 2+: além disso, não pode ser destruído em batalha; 3+: além disso, destrua 1 card que seu oponente controla. Você só pode usar este efeito de 'Draco Serpente do Vazio' uma vez por turno."
+    },
+    "165": {
+      "name": "Titã Hidra do Vazio",
+      "description": "6 monstros 'Void'. Se este card for Invocado por Invocação-Fusão: destrua todos os outros monstros que você controla; compre 1 card para cada monstro destruído. Uma vez por turno: se este card seria destruído em batalha ou por efeitos de card: você pode reduzir o ATK dele em 700; negue a destruição deste card."
+    },
+    "166": {
+      "name": "Selamento do Vazio",
+      "description": "Escolha 1 monstro 'Void' com a face para cima que você controla; até o final deste turno, o ATK/DEF desse monstro se tornam 0 e seus efeitos são negados. Se este efeito resolver, você pode realizar 1 Invocação-Normal adicional neste turno. Você só pode ativar 1 'Selamento do Vazio' por turno."
+    },
+    "167": {
+      "name": "O Vazio",
+      "description": "Durante sua Fase Principal, se você não controlar monstros: você pode Invocar por Invocação-Especial 1 monstro 'Void' de Nível 4 ou menor do seu Cemitério, mas seus efeitos são negados. Você só pode usar este efeito de 'O Vazio' uma vez por turno."
+    },
+    "168": {
+      "name": "Atração Gravitacional do Vazio",
+      "description": "Uma vez por turno: você pode escolher 1 monstro que você controla e 1 monstro que seu oponente controla; devolva esses alvos para a mão."
+    },
+    "169": {
+      "name": "Trono Perdido do Vazio",
+      "description": "Destrua o máximo de monstros no campo possível, exceto 1 monstro com o maior ATK de cada lado do campo (em caso de empate, você escolhe 1 para permanecer em cada lado). Você só pode ativar 1 'Trono Perdido do Vazio' por turno."
+    },
+    "170": {
+      "name": "Dimensão Espelho do Vazio",
+      "description": "Durante a Fase Principal, se seu oponente Invocar por Invocação-Especial um monstro: você pode Invocar por Invocação-Especial 1 monstro da sua mão com o mesmo Nível que esse monstro, mas, até o final deste turno, seus efeitos são negados. Você só pode ativar 1 'Dimensão Espelho do Vazio' por turno."
     }
   }
 }
