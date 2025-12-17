@@ -620,7 +620,7 @@
     subtype: "normal",
     archetype: "Shadow-Heart",
     description:
-      "Target 1 monster; it gains 600 ATK until the end of this turn.",
+      "Target 1 'Shadow-Heart' monster you control; it gains 600 ATK until the end of this turn.",
     image: "assets/Shadow Coat.png",
     effects: [
       {
@@ -677,7 +677,7 @@
     ],
   },
   {
-    id: 57, // escolhe um id livre
+    id: 57,
     name: "Shadow-Heart Demon Arctroth",
     cardKind: "monster",
     atk: 2600,
@@ -686,14 +686,14 @@
     type: "Fiend",
     archetype: "Shadow-Heart",
     description:
-      "When this card is Normal Summoned: target 1 monster your opponent controls; destroy that target.",
+      "If this card is Normal Summoned: target 1 monster your opponent controls; destroy that target.",
     image: "assets/Shadow-Heart Demon Arctroth.png",
     effects: [
       {
         id: "shadow_heart_arctroth_on_summon",
         timing: "on_event",
         event: "after_summon",
-        summonMethod: "tribute", // ou ["normal", "tribute"] se quiser
+        summonMethod: "tribute",
         targets: [
           {
             id: "destroy_target",

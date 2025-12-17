@@ -4,7 +4,7 @@
       "name": "Corcel Pesadelo",
       "description": "Um cavalo demoníaco com a juba flamejante."
     },
-    "2":{
+    "2": {
       "name": "Surto Arcano",
       "description": "Compre 2 cards."
     },
@@ -44,23 +44,23 @@
       "name": "Espada das Duas Trevas",
       "description": "O monstro equipado pode atacar 1 vez adicional durante cada Fase de Batalha. Se este card for enviado para o Cemitério: escolha 1 Magia/Armadilha que seu oponente controla; destrua-a."
     },
-    "12":{
-      "name":"Dragão Radiante",
+    "12": {
+      "name": "Dragão Radiante",
       "description": "Se esse card for invocado por invocação-Normal: Você pode adicionar um monstro 'Luminarca' do seu Deck à sua mão. Durante sua Fase de Espera, ganhe 500 PV para cada monstro 'Luminarca' que você controla."
     },
-    "13":{
+    "13": {
       "name": "Polimerização",
       "description": "Invoque por invocação-Fusão 1 monstro Fusão do seu Extra Deck, usando monstros da sua mão ou do campo como matéria de Fusão."
     },
-    "14":{
+    "14": {
       "name": "Força Espelho",
       "description": "Quando um monstro do oponente declarar um ataque: destrua todos os monstros em Posição de Ataque do seu oponente."
     },
-    "15":{
+    "15": {
       "name": "Chamado dos Assombrados",
       "description": "Ative este card ao escolher 1 monstro no seu Cemitério; Invoque o alvo por Invocação-Especial em Posição de Ataque. Quando este card deixar o campo, destrua esse monstro. Quando esse monstro for destruído, destrua este card."
     },
-    "51":{
+    "51": {
       "name": "Observador do Coração Sombrio",
       "description": "Se esse card for invocado por invocação-Normal: você pode escolher 1 monstro que seu oponente controla de nível 4 ou menor; invoque por invocação-Especial 1 monstro da sua mão do mesmo nível do alvo."
     },
@@ -71,6 +71,74 @@
     "53": {
       "name": "Espectro do Coração Sombrio",
       "description": "Se esse card for enviado para o cemitério: você pode escolher 1 monstro 'Coração Sombrio' no seu cemitério, exceto 'Espectro do Coração Sombrio'; adicione-o à sua mão."
+    },
+    "54": {
+      "name": "Purificação do Coração Sombrio",
+      "description": "Discarte 1 card, e então escolha 1 monstro que seu oponente controla; destrua-o."
+    },
+    "55": {
+      "name": "Capa do Coração Sombrio",
+      "description": "Escolha 1 monstro 'Coração Sombrio' que você controla: ele ganha 600 de ATK até o final do turno."
+    },
+    "56": {
+      "name": "Recuo do Coração Sombrio",
+      "description": "Escolha 1 monstro que você controla: adicione o alvo a sua mão."
+    },
+    "57": {
+      "name": "Demônio Arctroth do Coração Sombrio",
+      "description": "Se esse card for invocado por invocação-Normal: você pode escolher 1 monstro que seu oponente controla; destrua-o."
+    },
+    "58": {
+      "name": "Hino de Batalha do Coração Sombrio",
+      "description": "Todos os monstros 'Coração Sombrio' que você controla ganham 500 de ATK até o final do turno."
+    },
+    "59": {
+      "name": "Pacto do Coração Sombrio",
+      "description": "Pague 800 PV; Adicione 1 card 'Coração Sombrio' do seu Deck à sua mão."
+    },
+    "60": {
+      "name": "Imp do Coração Sombrio",
+      "description": "Se esse card for invocado por invocação-Normal: você pode invocar por invocação-Especial 1 monstro 'Coração Sombrio' de nível 4 ou menor da sua mão. Você só pode usar esse efeito de 'Imp do Coração Sombrio' uma vez por turno."
+    },
+    "61": {
+      "name": "Lagartixa do Coração Sombrio",
+      "description": "Se esse card for invocado por invocação-Especial: você pode adicionar 1 monstro 'coração sombrio' de nível 8 do seu deck à sua mão. Se esse card for destruído em batalha: compre 1 card. Você só pode usar cada efeito de 'Lagartixa do Coração Sombrio' uma vez por turno."
+    },
+    "62": {
+      "name": "Covarde do Coração Sombrio",
+      "description": "Se esse card for descartado da sua mão para o cemitério: escolha 1 monstro que seu oponente controla; o ATK/DEF são reduzidos pela metade até o final do turno."
+    },
+    "63": {
+      "name": "Infusão do Coração Sombrio",
+      "description": "Discarte 2 cards da sua mão, e então invoque por invocação-Especial 1 monstro 'Coração Sombrio' do seu cemitério, mas ele não pode declarar um ataque nesse turno. Você só pode ativar 1 'Infusão do Coração Sombrio' por turno."
+    },
+    "64": {
+      "name": "Dragão de Escamas do Coração Sombrio",
+      "description": "Requer 3 tributos para ser invocado por invocação-Normal/baixado. Se esse card destruir um monstro do oponente em batalha: você pode escolher 1 card 'coração sombrio' no seu cemitério; adicione-o à sua mão."
+    },
+    "65": {
+      "name": "Fúria do Coração Sombrio",
+      "description": "Se 'Dragão de Escamas do Coração Sombrio' for o único monstro que você controla: ele ganha 700 de ATK/DEF até o final do turno, e pode realizar um segundo ataque durante essa fase de batalha."
+    },
+    "66": {
+      "name": "Escudo do Coração Sombrio",
+      "description": "Só pode ser equipado a um monstro 'Coração Sombrio'. O monstro equipado ganha 500 de ATK/DEF e não pode ser destruído em batalha. Durante cada fase de espera: pague 800 PV ou envie essa carta para o cemitério."
+    },
+    "67": {
+      "name": "Grifo do Coração Sombrio",
+      "description": "Se você não controlar monstros, você pode invocar esse card por invocação-Normal sem tributar."
+    },
+    "68": {
+      "name": "Vale das Trevas",
+      "description": "Todos os monstros 'Coração Sombrio' que você controla ganham 300 de ATK. Uma vez por turno, se um monstro 'Coração Sombrio' de nível 8 ou maior que você controla for destruído em batalha: destrua o monstro atacante."
+    },
+    "69": {
+      "name": "Verme da Morte do Coração Sombrio",
+      "description": "Efeito rápido: uma vez por turno, se um monstro 'Coração Sombrio' que você controla for destruído em batalha: Você pode invocar esse card por invocação-Especial da sua mão."
+    },
+    "70": {
+      "name": "Leviatã do Coração Sombrio",
+      "description": "Se esse card destruir um monstro em batalha: cause 500 de dano ao seu oponente. Se esse card for destruído em batalha: Cause 800 de dano ao seu oponente."
     },
     "71": {
       "name": "Mago do Vazio do Coração Sombrio",
