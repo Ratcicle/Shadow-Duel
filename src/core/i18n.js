@@ -1,15 +1,40 @@
 import { cardDatabase } from "../data/cards.js";
-import enLocaleRaw from "../locales/en.json" assert { type: "json" };
-import ptBrLocaleRaw from "../locales/pt-br.json" assert { type: "json" };
 
 const LOCALE_STORAGE_KEY = "shadowduel_locale";
 const DEFAULT_LOCALE = "en";
 const SUPPORTED_LOCALES = ["en", "pt-br"];
 
-const rawLocales = {
-  en: enLocaleRaw,
-  "pt-br": ptBrLocaleRaw,
+const LOCALE_SOURCES = {
+  en: "../locales/en.json",
+  "pt-br": "../locales/pt-br.json",
 };
+
+async function loadLocalePayload(relativePath) {
+  try {
+    const url = new URL(relativePath, import.meta.url);
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.error(`[i18n] Failed to load locale file ${relativePath}`);
+      return {};
+    }
+    return await response.json();
+  } catch (err) {
+    console.error(`[i18n] Error loading locale file ${relativePath}:`, err);
+    return {};
+  }
+}
+
+async function loadAllLocales() {
+  const entries = await Promise.all(
+    Object.entries(LOCALE_SOURCES).map(async ([locale, path]) => {
+      const payload = await loadLocalePayload(path);
+      return [locale, payload];
+    })
+  );
+  return Object.fromEntries(entries);
+}
+
+const rawLocales = await loadAllLocales();
 
 const normalizedLocales = Object.fromEntries(
   Object.entries(rawLocales).map(([locale, payload]) => [
