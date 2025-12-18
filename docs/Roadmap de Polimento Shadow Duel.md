@@ -15,13 +15,13 @@
   - [x] efeitos com schema válido
   - [x] timings válidos
   - [x] actions registradas
-- [ ] **Harness de testes manuais**:
+- [x] **Harness de testes manuais**:
   - [x] "Setup board"
   - [x] "Draw X"
   - [x] "Give card"
   - [x] "Force phase"
   - [x] "Reset duel"
-- [ ] (Opcional) **Replays simples**: registrar ações e reexecutar.
+  - [x] "Activation Pipeline Sanity Suite" (A/B/C)
 
 **Pronto quando:** você consegue reproduzir bugs e ver no log *qual ação/handler/condição* causou.
 
@@ -35,10 +35,11 @@
 - triggers (after_summon, battle_destroy, etc.)
 
 Checklist:
-- [ ] Pipeline único: **preview/gate → commit → seleção (se precisar) → resolve → finalize/rollback**
-- [ ] `activationContext` padronizado (ex.: `fromHand`, `activationZone`, `source`, `committed`, `commitInfo`)
-- [ ] **Rollback genérico** obrigatório quando `committed && fail/cancel`
-- [ ] Remover/deprecar caminhos legados (qualquer função antiga ainda chamada pela UI)
+- [x] Pipeline único: **preview/gate → commit → seleção (se precisar) → resolve → finalize/rollback**
+- [x] `activationContext` padronizado (ex.: `fromHand`, `activationZone`, `sourceZone`, `committed`, `commitInfo`)
+- [x] **Rollback genérico** obrigatório quando `committed && fail/cancel`
+- [x] Remover/deprecar caminhos legados (qualquer função antiga ainda chamada pela UI)
+- [ ] Triggers com o mesmo contrato/pipeline (ou padronização equivalente)
 
 **Pronto quando:** não existe mais “spell desce e não ativa”, “modal fecha e softlocka”, ou divergência entre rotas antiga/nova.
 
@@ -63,7 +64,7 @@ Checklist:
 
 **Pronto quando:** adicionar uma carta nova não exige mexer no engine (só em `cards.js` e, se for mecânica nova, um handler genérico).
 
-**Status:** ✅ COMPLETO (5 fases de refatoração, commits: 207cdac, 465d297, a839aa0, 72b2bad, 3c220f0)
+**Status:** OK. COMPLETO (5 fases de refatoração, commits: 207cdac, 465d297, a839aa0, 72b2bad, 3c220f0)
 
 ---
 
@@ -73,10 +74,11 @@ Checklist:
 
 Checklist:
 - [ ] Seleção com estados explícitos: `idle`, `selecting`, `confirming`, `resolving`
-- [ ] UI não pode fechar modal quando cancel é proibido
+- [x] UI não pode fechar modal quando cancel é proibido
+- [x] Player sempre confirma alvo (mesmo com 1 candidato); bot pode auto-selecionar
 - [ ] Contrato único de seleção:
   - [ ] `requirements` (quantidade, filtros, zonas)
-  - [ ] `allowCancel`
+  - [x] `allowCancel`
   - [ ] `onConfirm` sempre retorna para o engine
 - [ ] BOT usa um **AutoSelector** separado (não mistura com UI do player)
 
@@ -90,7 +92,7 @@ Checklist:
 
 Checklist:
 - [ ] Operações de zona transacionais (mover carta, desfazer, logs)
-- [ ] “Once per turn” centralizado e consistente (mesmo nome = mesma trava)
+- [ ] "Once per turn" centralizado e consistente (mesmo nome = mesma trava)
 - [ ] Checagens consistentes de fase/turno/resolving em todas as entradas
 - [ ] Ordem de eventos padronizada (ex.: after_summon → triggers → windows de ignition)
 - [ ] Sanitização de edge cases:
@@ -108,12 +110,12 @@ Checklist:
 **Objetivo:** o player “enxerga” o que pode fazer e o que está acontecendo.
 
 ### A) Indicadores de efeitos ativáveis
-- [ ] Ícone na carta (ex.: ⚡) quando existir activation/ignition disponível **agora**
+- [ ] Ícone na carta (ex.: 🟢) quando existir activation/ignition disponível **agora**
 - [ ] Tooltip/preview:
-  - [ ] “Ignition disponível”
-  - [ ] “1/turn já usado”
-  - [ ] “bloqueado por fase”
-  - [ ] “sem alvos válidos”
+  - [ ] "Ignition disponível"
+  - [ ] "1/turn já usado"
+  - [ ] "bloqueado por fase"
+  - [ ] "sem alvos válidos"
 
 ### B) Indicadores de ataque
 - [ ] Monstro “pronto pra atacar” destacado (borda/overlay)
@@ -123,7 +125,7 @@ Checklist:
 ### C) Feedback de dano
 - [ ] Pop-up flutuante “-800” no lado do player atingido
 - [ ] Barra de LP pisca/anima rapidamente
-- [ ] Log mais legível (“X atacou Y, dano Z”)
+- [ ] Log mais legível ("X atacou Y, dano Z")
 
 ### D) Clareza de seleção
 - [ ] Durante seleção: destacar **apenas** cartas válidas e escurecer o resto
@@ -142,7 +144,7 @@ Checklist:
 - [ ] Simulação do bot reflete regras reais (Field/Continuous não indo pro GY, placement-only, etc.)
 - [ ] Tie-breakers em battle phase (lethal primeiro, evitar suicídio sem ganho)
 - [ ] Heurísticas por arquétipo plugáveis (Void/Shadow-Heart/Luminarch)
-- [ ] “Action budget” por turno (evitar loops e spam de ações com ganho marginal)
+- [ ] "Action budget" por turno (evitar loops e spam de ações com ganho marginal)
 
 **Pronto quando:** você consegue “tryhard” sem precisar deixar ele montar campo, e as derrotas parecem “justas”.
 
@@ -157,9 +159,9 @@ Checklist:
 - [ ] Remover duplicações (funções antigas, handlers redundantes)
 - [ ] Padronizar nomes e schemas (timing/event/action)
 - [ ] Documentação curta:
-  - [ ] “Como criar uma carta”
-  - [ ] “Como criar um handler”
-  - [ ] “Como adicionar um arquétipo”
+  - [ ] "Como criar uma carta"
+  - [ ] "Como criar um handler"
+  - [ ] "Como adicionar um arquétipo"
 
 **Pronto quando:** você cria um arquétipo novo sem medo de quebrar o antigo.
 
@@ -172,10 +174,10 @@ Com a Fase 2 completa, o próximo passo é trabalhar nas **Fases 1 e 3** em para
 1. **Fase 1** (Unificar ativação/resolução): refinar o pipeline de seleção para garantir que todo efeito com targets/custos segue o mesmo caminho robusto
 2. **Fase 3** (Seleção bulletproof): melhorar UI de seleção com estados explícitos e impossibilidade de softlock
 
-Depois disso, **Fase 4** (Integridade de estado) garantirá que o jogo nunca entra em estado inválido.
+Depois disso, **Fase 4** (Integridade de estado) garante que o jogo nunca entra em estado inválido.
 
 Prioridades:
-- [ ] Criar harness de testes (Fase 0) para validar mudanças
+- [x] Criar harness de testes (Fase 0) para validar mudanças
 - [ ] Padronizar pipeline de seleção (Fase 1)
 - [ ] Melhorar UI de feedback (Fase 5 parcial)
 - [ ] Testar 20+ partidas contra bot sem regressões
