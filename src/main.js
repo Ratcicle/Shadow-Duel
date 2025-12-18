@@ -108,6 +108,9 @@ const devForcePhaseSelect = document.getElementById("dev-force-phase");
 const devForcePhaseBtn = document.getElementById("dev-force-phase-btn");
 const devSetupInput = document.getElementById("dev-setup-json");
 const devApplySetupBtn = document.getElementById("dev-apply-setup");
+const devSanityABtn = document.getElementById("dev-sanity-a");
+const devSanityBBtn = document.getElementById("dev-sanity-b");
+const devSanityCBtn = document.getElementById("dev-sanity-c");
 const devResetDuelBtn = document.getElementById("dev-reset-duel");
 let currentDeck = loadDeck();
 let currentExtraDeck = loadExtraDeck();
@@ -854,6 +857,30 @@ devApplySetupBtn?.addEventListener("click", () => {
     alert(result.reason || "Não foi possível aplicar o setup.");
   } else if (result.warnings?.length) {
     alert(result.warnings.join("\n"));
+  }
+});
+
+devSanityABtn?.addEventListener("click", async () => {
+  if (!requireActiveGameForDev()) return;
+  const result = await game.devRunSanityA();
+  if (!result?.success) {
+    alert(result?.reason || "Sanity A failed.");
+  }
+});
+
+devSanityBBtn?.addEventListener("click", async () => {
+  if (!requireActiveGameForDev()) return;
+  const result = await game.devRunSanityB();
+  if (!result?.success) {
+    alert(result?.reason || "Sanity B failed.");
+  }
+});
+
+devSanityCBtn?.addEventListener("click", async () => {
+  if (!requireActiveGameForDev()) return;
+  const result = await game.devRunSanityC();
+  if (!result?.success) {
+    alert(result?.reason || "Sanity C failed.");
   }
 });
 

@@ -1530,6 +1530,7 @@ export default class Game {
     const resolvedActivationZone =
       resolvedZone || config.activationContext?.activationZone || null;
     const activationContext = {
+      ...(config.activationContext || {}),
       fromHand,
       activationZone: resolvedActivationZone,
       sourceZone:
@@ -3821,6 +3822,413 @@ export default class Game {
       turn: this.turn,
     });
     return { success: true };
+  }
+
+  devGetSelectionCleanupState() {
+    const controlsVisible = !!document.querySelector(".field-targeting-controls");
+    const highlightCount = document.querySelectorAll(
+      ".card.targetable, .card.selected-target"
+    ).length;
+    return {
+      selectionActive: !!this.targetSelection,
+      controlsVisible,
+      highlightCount,
+    };
+  }
+
+  devForceTargetCleanup() {
+    this.clearTargetHighlights();
+    if (
+      this.renderer &&
+      typeof this.renderer.hideFieldTargetingControls === "function"
+    ) {
+      this.renderer.hideFieldTargetingControls();
+    }
+    this.targetSelection = null;
+  }
+
+  async devAutoConfirmTargetSelection() {
+    if (!this.devModeEnabled) {
+      return { success: false, reason: "Dev Mode is disabled." };
+    }
+    const selection = this.targetSelection;
+    if (!selection || !Array.isArray(selection.options)) {
+      return { success: false, reason: "No active target selection." };
+    }
+
+    const selections = {};
+    let canSatisfy = true;
+
+    for (const option of selection.options) {
+      const min = Number(option.min ?? option.count?.min ?? 0);
+      const candidates = Array.isArray(option.candidates) ? option.candidates : [];
+      if (candidates.length < min) {
+        canSatisfy = false;
+      }
+      selections[option.id] = candidates
+        .slice(0, min)
+        .map((cand) => cand.idx);
+    }
+
+    if (!canSatisfy) {
+      return { success: false, reason: "Not enough candidates to auto-confirm." };
+    }
+
+    selection.selections = selections;
+    selection.currentOption = selection.options.length;
+    await this.finishTargetSelection();
+    return { success: true };
+  }
+
+  async devRunSanityA() {
+    if (!this.devModeEnabled) {
+      return { success: false, reason: "Dev Mode is disabled." };
+    }
+
+    this.devLog("SANITY_A_START", {
+      summary: "Sanity A: hand spell target + cancel",
+    });
+
+    const setupResult = this.applyManualSetup({
+      turn: "player",
+      phase: "main1",
+      player: {
+        hand: ["Luminarch Holy Ascension"],
+        field: [
+          { name: "Luminarch Valiant - Knight of the Dawn", position: "attack" },
+        ],
+      },
+      bot: { field: [] },
+    });
+
+    if (!setupResult.success) {
+      return setupResult;
+    }
+
+    const card = this.player.hand.find(
+      (c) => c && c.name === "Luminarch Holy Ascension"
+    );
+    if (!card) {
+      return { success: false, reason: "Sanity A card not found in hand." };
+    }
+    const handIndex = this.player.hand.indexOf(card);
+
+    const pipelineResult = await this.runActivationPipeline({
+      card,
+      owner: this.player,
+      selectionKind: "spellTrapEffect",
+      selectionMessage: "Sanity A: select target(s) for the spell.",
+      gate: () => {
+        if (this.turn !== "player") return { ok: false };
+        if (this.phase !== "main1" && this.phase !== "main2") {
+          return {
+            ok: false,
+            reason: "Can only activate spells during Main Phase.",
+          };
+        }
+        if (this.isResolvingEffect) {
+          return {
+            ok: false,
+            reason: "Finish the current effect before activating another card.",
+          };
+        }
+        return { ok: true };
+      },
+      preview: () =>
+        this.effectEngine?.canActivateSpellFromHandPreview?.(
+          card,
+          this.player
+        ),
+      commit: () => this.commitCardActivationFromHand(this.player, handIndex),
+      activationContext: {
+        fromHand: true,
+        sourceZone: "hand",
+      },
+      activate: (chosen, ctx, zone, resolvedCard) =>
+        this.effectEngine.activateSpellTrapEffect(
+          resolvedCard,
+          this.player,
+          chosen,
+          zone,
+          ctx
+        ),
+      finalize: (result, info) => {
+        if (!result.placementOnly) {
+          this.finalizeSpellTrapActivation(
+            info.card,
+            this.player,
+            info.activationZone
+          );
+        }
+        this.updateBoard();
+      },
+    });
+
+    const selection = this.targetSelection;
+    const selectionOpened = !!selection;
+    const allowCancel = selectionOpened ? !selection.preventCancel : false;
+    let selectionResolved = false;
+    let cancelAttempted = false;
+
+    if (selectionOpened) {
+      if (allowCancel) {
+        cancelAttempted = true;
+        this.cancelTargetSelection();
+        selectionResolved = true;
+      } else {
+        const autoResult = await this.devAutoConfirmTargetSelection();
+        selectionResolved = autoResult.success;
+      }
+    }
+
+    this.devForceTargetCleanup();
+    const cleanupState = this.devGetSelectionCleanupState();
+    const cleanupOk =
+      !cleanupState.selectionActive &&
+      !cleanupState.controlsVisible &&
+      cleanupState.highlightCount === 0;
+
+    const success = selectionOpened && selectionResolved && cleanupOk;
+    this.devLog("SANITY_A_RESULT", {
+      summary: "Sanity A result",
+      selectionOpened,
+      allowCancel,
+      cancelAttempted,
+      selectionResolved,
+      cleanupOk,
+      pipelineResult,
+    });
+    return {
+      success,
+      selectionOpened,
+      allowCancel,
+      selectionResolved,
+      cleanupOk,
+      pipelineResult,
+    };
+  }
+
+  async devRunSanityB() {
+    if (!this.devModeEnabled) {
+      return { success: false, reason: "Dev Mode is disabled." };
+    }
+
+    this.devLog("SANITY_B_START", {
+      summary: "Sanity B: placement-only spell",
+    });
+
+    const setupResult = this.applyManualSetup({
+      turn: "player",
+      phase: "main1",
+      player: {
+        hand: ["Darkness Valley"],
+      },
+      bot: { field: [] },
+    });
+
+    if (!setupResult.success) {
+      return setupResult;
+    }
+
+    const card = this.player.hand.find(
+      (c) => c && c.name === "Darkness Valley"
+    );
+    if (!card) {
+      return { success: false, reason: "Sanity B card not found in hand." };
+    }
+    const handIndex = this.player.hand.indexOf(card);
+    const cardRef = card;
+
+    const pipelineResult = await this.runActivationPipeline({
+      card,
+      owner: this.player,
+      selectionKind: "spellTrapEffect",
+      selectionMessage: "Sanity B: placement-only check.",
+      gate: () => {
+        if (this.turn !== "player") return { ok: false };
+        if (this.phase !== "main1" && this.phase !== "main2") {
+          return {
+            ok: false,
+            reason: "Can only activate spells during Main Phase.",
+          };
+        }
+        if (this.isResolvingEffect) {
+          return {
+            ok: false,
+            reason: "Finish the current effect before activating another card.",
+          };
+        }
+        return { ok: true };
+      },
+      preview: () =>
+        this.effectEngine?.canActivateSpellFromHandPreview?.(
+          card,
+          this.player
+        ),
+      commit: () => this.commitCardActivationFromHand(this.player, handIndex),
+      activationContext: {
+        fromHand: true,
+        sourceZone: "hand",
+      },
+      activate: (chosen, ctx, zone, resolvedCard) =>
+        this.effectEngine.activateSpellTrapEffect(
+          resolvedCard,
+          this.player,
+          chosen,
+          zone,
+          ctx
+        ),
+      finalize: (result) => {
+        if (!result.placementOnly) {
+          this.finalizeSpellTrapActivation(card, this.player);
+        }
+        this.updateBoard();
+      },
+    });
+
+    this.devForceTargetCleanup();
+    const cleanupState = this.devGetSelectionCleanupState();
+    const cleanupOk =
+      !cleanupState.selectionActive &&
+      !cleanupState.controlsVisible &&
+      cleanupState.highlightCount === 0;
+
+    const placementOnlyOk =
+      pipelineResult?.success === true &&
+      pipelineResult?.needsSelection === false &&
+      pipelineResult?.placementOnly === true;
+    const placedOk = this.player.fieldSpell === cardRef;
+    const success = placementOnlyOk && placedOk && cleanupOk;
+
+    this.devLog("SANITY_B_RESULT", {
+      summary: "Sanity B result",
+      placementOnlyOk,
+      placedOk,
+      cleanupOk,
+      pipelineResult,
+    });
+    return {
+      success,
+      placementOnlyOk,
+      placedOk,
+      cleanupOk,
+      pipelineResult,
+    };
+  }
+
+  async devRunSanityC() {
+    if (!this.devModeEnabled) {
+      return { success: false, reason: "Dev Mode is disabled." };
+    }
+
+    this.devLog("SANITY_C_START", {
+      summary: "Sanity C: committed field spell fail + restore",
+    });
+
+    const setupResult = this.applyManualSetup({
+      turn: "player",
+      phase: "main1",
+      player: {
+        hand: ["Darkness Valley"],
+        fieldSpell: "Sanctum of the Luminarch Citadel",
+      },
+      bot: { field: [] },
+    });
+
+    if (!setupResult.success) {
+      return setupResult;
+    }
+
+    const card = this.player.hand.find(
+      (c) => c && c.name === "Darkness Valley"
+    );
+    if (!card) {
+      return { success: false, reason: "Sanity C card not found in hand." };
+    }
+    const handIndex = this.player.hand.indexOf(card);
+    const cardRef = card;
+    const replacedFieldSpell = this.player.fieldSpell;
+
+    const pipelineResult = await this.runActivationPipeline({
+      card,
+      owner: this.player,
+      selectionKind: "spellTrapEffect",
+      selectionMessage: "Sanity C: forced failure for rollback.",
+      gate: () => {
+        if (this.turn !== "player") return { ok: false };
+        if (this.phase !== "main1" && this.phase !== "main2") {
+          return {
+            ok: false,
+            reason: "Can only activate spells during Main Phase.",
+          };
+        }
+        if (this.isResolvingEffect) {
+          return {
+            ok: false,
+            reason: "Finish the current effect before activating another card.",
+          };
+        }
+        return { ok: true };
+      },
+      preview: () =>
+        this.effectEngine?.canActivateSpellFromHandPreview?.(
+          card,
+          this.player
+        ),
+      commit: () => this.commitCardActivationFromHand(this.player, handIndex),
+      activationContext: {
+        fromHand: true,
+        sourceZone: "hand",
+        devFailAfterCommit: true,
+      },
+      activate: (chosen, ctx, zone, resolvedCard) =>
+        this.effectEngine.activateSpellTrapEffect(
+          resolvedCard,
+          this.player,
+          chosen,
+          zone,
+          ctx
+        ),
+    });
+
+    this.devForceTargetCleanup();
+    const cleanupState = this.devGetSelectionCleanupState();
+    const cleanupOk =
+      !cleanupState.selectionActive &&
+      !cleanupState.controlsVisible &&
+      cleanupState.highlightCount === 0;
+
+    const failureOk =
+      pipelineResult?.success === false &&
+      pipelineResult?.needsSelection === false;
+    const restoredIndex = this.player.hand.indexOf(cardRef);
+    const restoredHandOk = restoredIndex === handIndex;
+    const restoredFieldOk = this.player.fieldSpell === replacedFieldSpell;
+    const restoredGyOk =
+      replacedFieldSpell && !this.player.graveyard.includes(replacedFieldSpell);
+    const rollbackOk = restoredHandOk && restoredFieldOk && restoredGyOk;
+    const success = failureOk && rollbackOk && cleanupOk;
+
+    this.devLog("SANITY_C_RESULT", {
+      summary: "Sanity C result",
+      failureOk,
+      rollbackOk,
+      restoredHandOk,
+      restoredFieldOk,
+      restoredGyOk,
+      cleanupOk,
+      pipelineResult,
+    });
+    return {
+      success,
+      failureOk,
+      rollbackOk,
+      restoredHandOk,
+      restoredFieldOk,
+      restoredGyOk,
+      cleanupOk,
+      pipelineResult,
+    };
   }
 
   applyManualSetup(definition = {}) {

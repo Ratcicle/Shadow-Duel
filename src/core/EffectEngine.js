@@ -1660,6 +1660,19 @@ export default class EffectEngine {
       activationZone,
     });
 
+    if (
+      this.game?.devModeEnabled &&
+      activationContext?.devFailAfterCommit === true &&
+      normalizedActivationContext.committed === true &&
+      activationZone === "fieldSpell"
+    ) {
+      return {
+        success: false,
+        needsSelection: false,
+        reason: "Dev forced failure.",
+      };
+    }
+
     if (card.cardKind === "trap") {
       effect = (card.effects || []).find(
         (e) => e && (e.timing === "on_activate" || e.timing === "ignition")
