@@ -40,6 +40,7 @@ export default class Game {
     this.turnCounter = 0;
     this.gameOver = false;
     this.targetSelection = null;
+    this.selectionState = "idle";
     this.graveyardSelection = null;
     this.eventListeners = {};
     this.phaseDelayMs = 400;
@@ -199,7 +200,7 @@ export default class Game {
       this.renderer.updateExtraDeckPreview(this.bot);
     }
 
-    if (this.targetSelection) {
+    if (this.targetSelection?.usingFieldTargeting) {
       this.highlightTargetCandidates();
     }
 
@@ -926,6 +927,7 @@ export default class Game {
         this.targetSelection.selections[option.id] = [directCandidate.idx];
         this.targetSelection.currentOption =
           this.targetSelection.options.length;
+        this.setSelectionState("confirming");
         this.finishTargetSelection();
         e.stopPropagation();
       });
@@ -1610,77 +1612,51 @@ export default class Game {
           optionCount: options.length,
         });
 
-        if (usingFieldTargeting) {
-          try {
-            this.startTargetSelectionSession({
-              kind: selectionKind,
-              card: resolvedCard,
-              owner,
-              options,
-              activationZone: resolvedActivationZone,
-              activationContext,
-              preventCancel:
-                activationContext.committed || config.preventCancel === true,
-              message: config.selectionMessage || null,
-              execute: (selections) => safeActivate(selections),
-              onResult: (nextResult) => handleResult(nextResult, true),
-              onCancel: allowCancel ? config.onCancel : null,
-            });
-          } catch (err) {
-            console.error("[Game] Failed to start field targeting:", err);
-            this.cancelTargetSelection();
-            if (this.targetSelection) {
-              this.clearTargetHighlights();
-              if (
-                this.renderer &&
-                typeof this.renderer.hideFieldTargetingControls === "function"
-              ) {
-                this.renderer.hideFieldTargetingControls();
-              }
-              this.targetSelection = null;
-            }
-            const selectionFailure = {
-              success: false,
-              needsSelection: false,
-              reason: "Target selection failed.",
-            };
-            return handleResult(selectionFailure, true);
-          }
-        } else {
-          this.renderer.showTargetSelection(
+        try {
+          this.startTargetSelectionSession({
+            kind: selectionKind,
+            card: resolvedCard,
+            owner,
             options,
-            async (chosenMap) => {
-              if (
-                this.renderer &&
-                typeof this.renderer.hideFieldTargetingControls === "function"
-              ) {
-                this.renderer.hideFieldTargetingControls();
-              }
-              const nextResult = await safeActivate(chosenMap);
-              await handleResult(nextResult, true);
-            },
-            allowCancel
-              ? () => {
-                  if (
-                    this.renderer &&
-                    typeof this.renderer.hideFieldTargetingControls === "function"
-                  ) {
-                    this.renderer.hideFieldTargetingControls();
-                  }
-                  if (typeof config.onCancel === "function") {
-                    config.onCancel();
-                  }
-                }
-              : null,
-            { allowCancel, allowEmpty }
-          );
+            activationZone: resolvedActivationZone,
+            activationContext,
+            preventCancel:
+              activationContext.committed || config.preventCancel === true,
+            allowCancel,
+            allowEmpty,
+            usingFieldTargeting,
+            message: config.selectionMessage || null,
+            execute: (selections) => safeActivate(selections),
+            onResult: (nextResult) => handleResult(nextResult, true),
+            onCancel: allowCancel ? config.onCancel : null,
+          });
+        } catch (err) {
+          console.error("[Game] Failed to start target selection:", err);
+          if (this.targetSelection?.closeModal) {
+            this.targetSelection.closeModal();
+          }
+          this.clearTargetHighlights();
+          if (
+            this.renderer &&
+            typeof this.renderer.hideFieldTargetingControls === "function"
+          ) {
+            this.renderer.hideFieldTargetingControls();
+          }
+          this.targetSelection = null;
+          this.setSelectionState("idle");
+          const selectionFailure = {
+            success: false,
+            needsSelection: false,
+            reason: "Target selection failed.",
+          };
+          return handleResult(selectionFailure, true);
         }
 
         return normalized;
       }
 
       if (!normalized.success) {
-        if (normalized.reason) {
+        if (normalized.reason && config.suppressFailureLog !== true) {
           this.renderer.log(normalized.reason);
         }
         if (activationContext.committed && activationContext.commitInfo) {
@@ -1724,36 +1700,73 @@ export default class Game {
       return;
     }
 
-    const usingFieldTargeting = this.canUseFieldTargeting(session.options);
+    const usingFieldTargeting =
+      typeof session.usingFieldTargeting === "boolean"
+        ? session.usingFieldTargeting
+        : this.canUseFieldTargeting(session.options);
 
     this.targetSelection = {
       ...session,
       selections: {},
       currentOption: 0,
       usingFieldTargeting,
+      allowCancel: session.allowCancel !== false,
+      allowEmpty: session.allowEmpty === true,
       autoAdvanceOnMax:
         typeof session.autoAdvanceOnMax === "boolean"
           ? session.autoAdvanceOnMax
           : !usingFieldTargeting,
     };
+    this.setSelectionState("selecting");
 
-    if (
-      usingFieldTargeting &&
+    if (usingFieldTargeting) {
+      if (
+        this.renderer &&
+        typeof this.renderer.showFieldTargetingControls === "function"
+      ) {
+        const allowCancel =
+          this.targetSelection.allowCancel !== false &&
+          !this.targetSelection.preventCancel;
+        this.renderer.showFieldTargetingControls(
+          () => this.advanceTargetSelection(),
+          allowCancel ? () => this.cancelTargetSelection() : null,
+          { allowCancel }
+        );
+      }
+    } else if (
       this.renderer &&
-      typeof this.renderer.showFieldTargetingControls === "function"
+      typeof this.renderer.showTargetSelection === "function"
     ) {
-      const allowCancel = !this.targetSelection.preventCancel;
-      this.renderer.showFieldTargetingControls(
-        () => this.advanceTargetSelection(),
+      const allowCancel =
+        this.targetSelection.allowCancel !== false &&
+        !this.targetSelection.preventCancel;
+      const modalHandle = this.renderer.showTargetSelection(
+        session.options,
+        (chosenMap) => {
+          if (!this.targetSelection) return;
+          this.setSelectionState("confirming");
+          this.targetSelection.selections = chosenMap || {};
+          this.targetSelection.currentOption =
+            this.targetSelection.options.length;
+          this.finishTargetSelection();
+        },
         allowCancel ? () => this.cancelTargetSelection() : null,
-        { allowCancel }
+        {
+          allowCancel,
+          allowEmpty: this.targetSelection.allowEmpty === true,
+        }
       );
+      if (modalHandle && typeof modalHandle.close === "function") {
+        this.targetSelection.closeModal = modalHandle.close;
+      }
     }
 
     if (session.message) {
       this.renderer.log(session.message);
     }
-    this.highlightTargetCandidates();
+    if (usingFieldTargeting) {
+      this.highlightTargetCandidates();
+    }
   }
 
   activateFieldSpellEffect(card) {
@@ -1778,41 +1791,6 @@ export default class Game {
         this.updateBoard();
       },
     });
-  }
-
-  startTriggeredTargetSelection(card, effect, ctx, options) {
-    if (this.canUseFieldTargeting(options)) {
-      this.startTargetSelectionSession({
-        kind: "triggered",
-        card,
-        effect,
-        ctx,
-        options,
-        autoAdvanceOnMax: false,
-        message:
-          "Select target(s) for triggered effect by clicking the highlighted cards.",
-        execute: (selections) => {
-          this.effectEngine.resolveTriggeredSelection(
-            effect,
-            ctx,
-            selections
-          );
-          this.updateBoard();
-          return { success: true, needsSelection: false };
-        },
-      });
-    } else {
-      this.renderer.showTargetSelection(
-        options,
-        (chosenMap) => {
-          this.effectEngine.resolveTriggeredSelection(effect, ctx, chosenMap);
-          this.updateBoard();
-        },
-        () => {
-          this.cancelTargetSelection();
-        }
-      );
-    }
   }
 
   startAttackTargetSelection(attacker, candidates) {
@@ -1976,6 +1954,12 @@ export default class Game {
       console.log("[Game] No target selection active");
       return;
     }
+    if (!this.targetSelection.usingFieldTargeting) {
+      return;
+    }
+    if (this.targetSelection.state && this.targetSelection.state !== "selecting") {
+      return;
+    }
     const option =
       this.targetSelection.options[this.targetSelection.currentOption];
     if (!option) {
@@ -2062,6 +2046,10 @@ export default class Game {
 
   handleTargetSelectionClick(ownerId, cardIndex, cardEl, location = null) {
     if (!this.targetSelection) return false;
+    if (!this.targetSelection.usingFieldTargeting) return false;
+    if (this.targetSelection.state && this.targetSelection.state !== "selecting") {
+      return false;
+    }
 
     console.log("[Game] Target selection click:", {
       ownerId,
@@ -2157,6 +2145,9 @@ export default class Game {
 
   advanceTargetSelection() {
     if (!this.targetSelection) return;
+    if (this.targetSelection.state && this.targetSelection.state !== "selecting") {
+      return;
+    }
     const option =
       this.targetSelection.options[this.targetSelection.currentOption];
     if (!option) return;
@@ -2170,6 +2161,7 @@ export default class Game {
     if (
       this.targetSelection.currentOption >= this.targetSelection.options.length
     ) {
+      this.setSelectionState("confirming");
       this.finishTargetSelection();
     } else {
       this.highlightTargetCandidates();
@@ -2179,6 +2171,7 @@ export default class Game {
   async finishTargetSelection() {
     if (!this.targetSelection) return;
     const selection = this.targetSelection;
+    this.setSelectionState("resolving");
     this.targetSelection = null;
     this.graveyardSelection = null;
     this.clearTargetHighlights();
@@ -2188,37 +2181,53 @@ export default class Game {
     ) {
       this.renderer.hideFieldTargetingControls();
     }
-
-    if (typeof selection.execute !== "function") {
-      console.warn("[Game] Selection missing execute handler:", selection);
-      return;
+    if (selection?.closeModal) {
+      selection.closeModal();
     }
 
-    let result;
+    let normalized = {
+      success: false,
+      needsSelection: false,
+      reason: "Selection failed.",
+    };
+
     try {
-      result = await selection.execute(selection.selections || {});
+      if (typeof selection.execute !== "function") {
+        console.warn("[Game] Selection missing execute handler:", selection);
+      } else {
+        const result = await selection.execute(selection.selections || {});
+        normalized = this.normalizeActivationResult(result);
+      }
+
+      if (
+        selection.rollback &&
+        selection.activationContext?.committed === true &&
+        !normalized.needsSelection &&
+        !normalized.success
+      ) {
+        try {
+          selection.rollback();
+        } catch (err) {
+          console.error("[Game] Rollback failed:", err);
+        }
+      }
+
+      if (typeof selection.onResult === "function") {
+        selection.onResult(normalized);
+      }
     } catch (err) {
       console.error("[Game] Error resolving selection:", err);
-      result = { success: false, needsSelection: false, reason: "Resolution failed." };
-    }
-
-    const normalized = this.normalizeActivationResult(result);
-
-    if (
-      selection.rollback &&
-      selection.activationContext?.committed === true &&
-      !normalized.needsSelection &&
-      !normalized.success
-    ) {
-      try {
-        selection.rollback();
-      } catch (err) {
-        console.error("[Game] Rollback failed:", err);
+    } finally {
+      if (!this.targetSelection) {
+        this.setSelectionState("idle");
       }
     }
+  }
 
-    if (typeof selection.onResult === "function") {
-      selection.onResult(normalized);
+  setSelectionState(state) {
+    this.selectionState = state;
+    if (this.targetSelection) {
+      this.targetSelection.state = state;
     }
   }
 
@@ -2241,7 +2250,11 @@ export default class Game {
     ) {
       this.renderer.hideFieldTargetingControls();
     }
+    if (selection?.closeModal) {
+      selection.closeModal();
+    }
     this.targetSelection = null;
+    this.setSelectionState("idle");
   }
   openGraveyardModal(player, options = {}) {
     if (options.selectable) {
@@ -3841,6 +3854,7 @@ export default class Game {
     ).length;
     return {
       selectionActive: !!this.targetSelection,
+      selectionState: this.selectionState,
       controlsVisible,
       highlightCount,
     };
@@ -3854,7 +3868,11 @@ export default class Game {
     ) {
       this.renderer.hideFieldTargetingControls();
     }
+    if (this.targetSelection?.closeModal) {
+      this.targetSelection.closeModal();
+    }
     this.targetSelection = null;
+    this.setSelectionState("idle");
   }
 
   async devAutoConfirmTargetSelection() {
@@ -3886,6 +3904,7 @@ export default class Game {
 
     selection.selections = selections;
     selection.currentOption = selection.options.length;
+    this.setSelectionState("confirming");
     await this.finishTargetSelection();
     return { success: true };
   }
@@ -4238,6 +4257,122 @@ export default class Game {
       restoredGyOk,
       cleanupOk,
       pipelineResult,
+    };
+  }
+
+  async devRunSanityD() {
+    if (!this.devModeEnabled) {
+      return { success: false, reason: "Dev Mode is disabled." };
+    }
+
+    this.devLog("SANITY_D_START", {
+      summary: "Sanity D: triggered target flow",
+    });
+
+    const setupResult = this.applyManualSetup({
+      turn: "player",
+      phase: "main1",
+      player: {
+        spellTrap: ["Sword of Two Darks"],
+      },
+      bot: {
+        spellTrap: ["Mirror Force"],
+      },
+    });
+
+    if (!setupResult.success) {
+      return setupResult;
+    }
+
+    const triggerCard = this.player.spellTrap.find(
+      (c) => c && c.name === "Sword of Two Darks"
+    );
+    if (!triggerCard) {
+      return { success: false, reason: "Sanity D trigger card not found." };
+    }
+
+    const targetCard = this.bot.spellTrap.find(
+      (c) => c && c.name === "Mirror Force"
+    );
+
+    this.moveCard(triggerCard, this.player, "graveyard", {
+      fromZone: "spellTrap",
+      wasDestroyed: true,
+    });
+    this.updateBoard();
+
+    const waitForSelection = async (attempts = 20, delayMs = 25) => {
+      for (let i = 0; i < attempts; i += 1) {
+        if (this.targetSelection) return true;
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+      return false;
+    };
+
+    await waitForSelection();
+
+    const selection = this.targetSelection;
+    const selectionOpened = !!selection;
+    const allowCancel = selectionOpened ? !selection.preventCancel : false;
+    const candidateCount = selectionOpened
+      ? selection.options?.[selection.currentOption]?.candidates?.length || 0
+      : 0;
+    const usingFieldTargeting = selectionOpened
+      ? !!selection.usingFieldTargeting
+      : false;
+
+    let selectionResolved = false;
+    if (selectionOpened) {
+      const autoResult = await this.devAutoConfirmTargetSelection();
+      selectionResolved = autoResult.success;
+    }
+
+    const candidateCountOk = candidateCount === 1;
+    const allowCancelOk = selectionOpened ? allowCancel === true : false;
+    const targetMoved =
+      targetCard &&
+      !this.bot.spellTrap.includes(targetCard) &&
+      this.bot.graveyard.includes(targetCard);
+
+    this.devForceTargetCleanup();
+    const cleanupState = this.devGetSelectionCleanupState();
+    const cleanupOk =
+      !cleanupState.selectionActive &&
+      !cleanupState.controlsVisible &&
+      cleanupState.highlightCount === 0;
+
+    const success =
+      selectionOpened &&
+      selectionResolved &&
+      cleanupOk &&
+      candidateCountOk &&
+      allowCancelOk &&
+      targetMoved;
+
+    this.devLog("SANITY_D_RESULT", {
+      summary: "Sanity D result",
+      selectionOpened,
+      allowCancel,
+      candidateCount,
+      candidateCountOk,
+      allowCancelOk,
+      usingFieldTargeting,
+      selectionResolved,
+      targetMoved,
+      cleanupOk,
+    });
+
+    return {
+      success,
+      selectionOpened,
+      allowCancel,
+      candidateCount,
+      candidateCountOk,
+      allowCancelOk,
+      usingFieldTargeting,
+      selectionResolved,
+      targetMoved,
+      cleanupOk,
     };
   }
 

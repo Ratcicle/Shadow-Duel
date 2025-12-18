@@ -1284,6 +1284,8 @@ export default class Renderer {
       closeModal();
       onConfirm && onConfirm(selectionState);
     });
+
+    return { close: closeModal };
   }
 
   showFieldTargetingControls(onConfirm, onCancel, config = {}) {

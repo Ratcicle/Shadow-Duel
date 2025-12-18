@@ -372,61 +372,93 @@ export default class EffectEngine {
           if (!conditionMet) continue;
         }
 
-        const targetResult = this.resolveTargets(
-          effect.targets || [],
-          ctx,
-          null
+        const activationContext = this.buildTriggerActivationContext(
+          sourceCard,
+          player,
+          sourceZone
         );
 
-        if (targetResult.needsSelection) {
-          if (
-            this.game &&
-            typeof this.game.startTriggeredTargetSelection === "function"
-          ) {
-            this.game.startTriggeredTargetSelection(
-              sourceCard,
-              effect,
-              ctx,
-              targetResult.options
+        const pipelineResult = await this.game.runActivationPipeline({
+          card: sourceCard,
+          owner: player,
+          activationZone: activationContext.activationZone,
+          activationContext,
+          selectionKind: "triggered",
+          selectionMessage: "Select target(s) for the triggered effect.",
+          suppressFailureLog: true,
+          activate: async (selections, activationCtx) => {
+            const resolvedCtx = {
+              ...ctx,
+              activationZone: activationCtx.activationZone,
+              activationContext: activationCtx,
+            };
+            const targetResult = this.resolveTargets(
+              effect.targets || [],
+              resolvedCtx,
+              selections
             );
-          } else {
-            console.warn(
-              "Triggered effect requires selection but game does not support triggered targeting."
+
+            if (targetResult.needsSelection) {
+              return {
+                success: false,
+                needsSelection: true,
+                options: targetResult.options,
+              };
+            }
+
+            if (targetResult.ok === false) {
+              return {
+                success: false,
+                needsSelection: false,
+                reason: targetResult.reason,
+              };
+            }
+
+            if (
+              effect.promptUser === true &&
+              player === this.game.player &&
+              selections == null
+            ) {
+              const promptName =
+                getCardDisplayName(sourceCard) ||
+                sourceCard?.name ||
+                "this card";
+              const shouldActivate =
+                await this.game.renderer.showConditionalSummonPrompt(
+                  promptName,
+                  effect.promptMessage || `Activate ${promptName}'s effect?`
+                );
+              if (!shouldActivate) {
+                return {
+                  success: false,
+                  needsSelection: false,
+                  reason: "Effect activation cancelled.",
+                };
+              }
+            }
+
+            this.applyActions(
+              effect.actions || [],
+              resolvedCtx,
+              targetResult.targets || {}
             );
-          }
+            this.game.checkWinCondition();
+
+            return { success: true };
+          },
+          onSuccess: () => {
+            this.registerOncePerTurnUsage(sourceCard, player, effect);
+            this.registerOncePerDuelUsage(sourceCard, player, effect);
+          },
+        });
+
+        if (!pipelineResult || pipelineResult.needsSelection) {
           return;
         }
 
-        if (targetResult.ok === false) {
-          console.warn(
-            "Triggered effect has no valid targets:",
-            effect.id || effect,
-            targetResult.reason
-          );
+        if (!pipelineResult.success) {
           continue;
         }
-
-        if (effect.promptUser === true && player === this.game.player) {
-          const promptName =
-            getCardDisplayName(sourceCard) ||
-            sourceCard?.name ||
-            "this card";
-          const shouldActivate =
-            await this.game.renderer.showConditionalSummonPrompt(
-              promptName,
-              effect.promptMessage || `Activate ${promptName}'s effect?`
-            );
-          if (!shouldActivate) continue;
-        }
-
-        this.applyActions(
-          effect.actions || [],
-          ctx,
-          targetResult.targets || {}
-        );
-        this.registerOncePerTurnUsage(sourceCard, player, effect);
-        this.registerOncePerDuelUsage(sourceCard, player, effect);
-        this.game.checkWinCondition();
       }
     }
 
@@ -641,20 +673,12 @@ export default class EffectEngine {
     return false;
   }
 
-  async handleTriggeredEffect(sourceCard, effect, ctx) {
-    const optCheck = this.checkOncePerTurn(sourceCard, ctx.player, effect);
-    if (!optCheck.ok) {
-      console.log(optCheck.reason);
-      return { success: false, reason: optCheck.reason };
-    }
-
-    const duelCheck = this.checkOncePerDuel(sourceCard, ctx.player, effect);
-    if (!duelCheck.ok) {
-      console.log(duelCheck.reason);
-      return { success: false, reason: duelCheck.reason };
-    }
-
-    const targetResult = this.resolveTargets(effect.targets || [], ctx, null);
+  async handleTriggeredEffect(sourceCard, effect, ctx, selections = null) {
+    const targetResult = this.resolveTargets(
+      effect.targets || [],
+      ctx,
+      selections || null
+    );
 
     if (targetResult.needsSelection) {
       return {
@@ -669,11 +693,20 @@ export default class EffectEngine {
     }
 
     this.applyActions(effect.actions || [], ctx, targetResult.targets || {});
-    this.registerOncePerTurnUsage(sourceCard, ctx.player, effect);
-    this.registerOncePerDuelUsage(sourceCard, ctx.player, effect);
     this.game.checkWinCondition();
 
     return { success: true };
+  }
+
+  buildTriggerActivationContext(sourceCard, player, zoneOverride = null) {
+    const activationZone =
+      zoneOverride || this.findCardZone(player, sourceCard) || "field";
+    return {
+      fromHand: activationZone === "hand",
+      activationZone,
+      sourceZone: activationZone,
+      committed: false,
+    };
   }
 
   async handleBattleDestroyEvent(payload) {
@@ -783,48 +816,45 @@ export default class EffectEngine {
             if (!shouldActivate) continue;
           }
 
-          const targetResult = this.resolveTargets(
-            effect.targets || [],
-            ctx,
-            null
+          const activationContext = this.buildTriggerActivationContext(
+            card,
+            owner
           );
 
-          if (targetResult.needsSelection) {
-            if (
-              this.game &&
-              typeof this.game.startTriggeredTargetSelection === "function"
-            ) {
-              this.game.startTriggeredTargetSelection(
+          const pipelineResult = await this.game.runActivationPipeline({
+            card,
+            owner,
+            activationZone: activationContext.activationZone,
+            activationContext,
+            selectionKind: "triggered",
+            selectionMessage: "Select target(s) for the triggered effect.",
+            suppressFailureLog: true,
+            activate: (selections, activationCtx) => {
+              const resolvedCtx = {
+                ...ctx,
+                activationZone: activationCtx.activationZone,
+                activationContext: activationCtx,
+              };
+              return this.handleTriggeredEffect(
                 card,
                 effect,
-                ctx,
-                targetResult.options
+                resolvedCtx,
+                selections
               );
-            } else {
-              console.warn(
-                "Triggered battle_destroy effect requires selection but game does not support triggered targeting."
-              );
-            }
+            },
+            onSuccess: () => {
+              this.registerOncePerTurnUsage(card, owner, effect);
+              this.registerOncePerDuelUsage(card, owner, effect);
+            },
+          });
+
+          if (!pipelineResult || pipelineResult.needsSelection) {
             return;
           }
 
-          if (targetResult.ok === false) {
-            console.warn(
-              "Triggered battle_destroy effect has no valid targets:",
-              effect.id || effect,
-              targetResult.reason
-            );
+          if (!pipelineResult.success) {
             continue;
           }
-
-          this.applyActions(
-            effect.actions || [],
-            ctx,
-            targetResult.targets || {}
-          );
-          this.registerOncePerTurnUsage(card, owner, effect);
-          this.registerOncePerDuelUsage(card, owner, effect);
-          this.game.checkWinCondition();
         }
       }
     }
@@ -931,53 +961,50 @@ export default class EffectEngine {
             defenderOwner: payload.defenderOwner,
           };
 
-          const targetResult = this.resolveTargets(
-            effect.targets || [],
-            ctx,
-            null
+          const activationContext = this.buildTriggerActivationContext(
+            card,
+            player
           );
 
-          if (targetResult?.needsSelection) {
-            if (
-              this.game &&
-              typeof this.game.startTriggeredTargetSelection === "function"
-            ) {
-              this.game.startTriggeredTargetSelection(
+          const pipelineResult = await this.game.runActivationPipeline({
+            card,
+            owner: player,
+            activationZone: activationContext.activationZone,
+            activationContext,
+            selectionKind: "triggered",
+            selectionMessage: "Select target(s) for the triggered effect.",
+            suppressFailureLog: true,
+            activate: (selections, activationCtx) => {
+              const resolvedCtx = {
+                ...ctx,
+                activationZone: activationCtx.activationZone,
+                activationContext: activationCtx,
+              };
+              return this.handleTriggeredEffect(
                 card,
                 effect,
-                ctx,
-                targetResult.options
+                resolvedCtx,
+                selections
               );
-            } else {
-              console.warn(
-                "attack_declared effect requires selection but game does not support triggered targeting."
-              );
-            }
+            },
+            onSuccess: () => {
+              this.registerOncePerTurnUsage(card, player, effect);
+            },
+          });
+
+          if (!pipelineResult || pipelineResult.needsSelection) {
             return;
           }
 
-          if (targetResult && targetResult.ok === false) {
-            console.warn(
-              "Triggered attack_declared effect has no valid targets:",
-              effect.id || effect,
-              targetResult.reason
-            );
+          if (!pipelineResult.success) {
             continue;
           }
-
-          this.applyActions(
-            effect.actions || [],
-            ctx,
-            targetResult?.targets || {}
-          );
-          this.registerOncePerTurnUsage(card, player, effect);
-          this.game.checkWinCondition();
         }
       }
     }
   }
 
-  handleCardToGraveEvent(payload) {
+  async handleCardToGraveEvent(payload) {
     const { card, player, opponent, fromZone, toZone } = payload || {};
     if (!card || !player) return;
     if (!card.effects || !Array.isArray(card.effects)) return;
@@ -1065,55 +1092,50 @@ export default class EffectEngine {
         }. Targets definition: ${JSON.stringify(effect.targets)}`
       );
 
-      const targetResult = this.resolveTargets(effect.targets || [], ctx, null);
-
-      console.log(
-        `[card_to_grave] ${card.name} effect "${effect.id}" - needsSelection: ${
-          targetResult.needsSelection
-        }, ok: ${targetResult.ok}, targetResult: ${JSON.stringify(
-          targetResult
-        )}`
+      const activationContext = this.buildTriggerActivationContext(
+        card,
+        player,
+        toZone || this.findCardZone(player, card) || "graveyard"
       );
 
-      if (targetResult.needsSelection) {
-        if (
-          this.game &&
-          typeof this.game.startTriggeredTargetSelection === "function"
-        ) {
-          console.log(
-            `[card_to_grave] Starting triggered selection for ${card.name}`
-          );
-          this.game.startTriggeredTargetSelection(
+      const pipelineResult = await this.game.runActivationPipeline({
+        card,
+        owner: player,
+        activationZone: activationContext.activationZone,
+        activationContext,
+        selectionKind: "triggered",
+        selectionMessage: "Select target(s) for the triggered effect.",
+        suppressFailureLog: true,
+        activate: (selections, activationCtx) => {
+          const resolvedCtx = {
+            ...ctx,
+            activationZone: activationCtx.activationZone,
+            activationContext: activationCtx,
+          };
+          return this.handleTriggeredEffect(
             card,
             effect,
-            ctx,
-            targetResult.options
+            resolvedCtx,
+            selections
           );
-        } else {
-          console.warn(
-            "card_to_grave effect requires selection but no UI is available."
-          );
-        }
+        },
+        onSuccess: () => {
+          this.registerOncePerTurnUsage(card, player, effect);
+          this.registerOncePerDuelUsage(card, player, effect);
+        },
+      });
+
+      if (!pipelineResult || pipelineResult.needsSelection) {
         return;
       }
 
-      if (targetResult.ok === false) {
-        console.warn(
-          "card_to_grave effect has no valid targets:",
-          effect.id || effect,
-          targetResult.reason
-        );
+      if (!pipelineResult.success) {
         continue;
       }
-
-      this.applyActions(effect.actions || [], ctx, targetResult.targets || {});
-      this.registerOncePerTurnUsage(card, player, effect);
-      this.registerOncePerDuelUsage(card, player, effect);
-      this.game.checkWinCondition();
     }
   }
 
-  handleStandbyPhaseEvent(payload) {
+  async handleStandbyPhaseEvent(payload) {
     if (!payload || !payload.player) return;
 
     const owner = payload.player;
@@ -1157,48 +1179,43 @@ export default class EffectEngine {
           continue;
         }
 
-        this.applyActions(effect.actions || [], ctx, {});
-        this.registerOncePerTurnUsage(card, owner, effect);
-        this.registerOncePerDuelUsage(card, owner, effect);
-        this.game.checkWinCondition();
+        const activationContext = this.buildTriggerActivationContext(
+          card,
+          owner
+        );
+
+        const pipelineResult = await this.game.runActivationPipeline({
+          card,
+          owner,
+          activationZone: activationContext.activationZone,
+          activationContext,
+          selectionKind: "triggered",
+          selectionMessage: "Select target(s) for the triggered effect.",
+          suppressFailureLog: true,
+          activate: (selections, activationCtx) => {
+            const resolvedCtx = {
+              ...ctx,
+              activationZone: activationCtx.activationZone,
+              activationContext: activationCtx,
+            };
+            return this.handleTriggeredEffect(
+              card,
+              effect,
+              resolvedCtx,
+              selections
+            );
+          },
+          onSuccess: () => {
+            this.registerOncePerTurnUsage(card, owner, effect);
+            this.registerOncePerDuelUsage(card, owner, effect);
+          },
+        });
+
+        if (!pipelineResult || pipelineResult.needsSelection) {
+          return;
+        }
       }
     }
-  }
-
-  resolveTriggeredSelection(effect, ctx, selections) {
-    if (!effect) return;
-
-    const optCheck = this.checkOncePerTurn(ctx.source, ctx.player, effect);
-    if (!optCheck.ok) {
-      console.log(optCheck.reason);
-      return;
-    }
-
-    const targetResult = this.resolveTargets(
-      effect.targets || [],
-      ctx,
-      selections || null
-    );
-
-    if (targetResult.needsSelection) {
-      console.warn(
-        "resolveTriggeredSelection called but still needsSelection; aborting."
-      );
-      return;
-    }
-
-    if (targetResult.ok === false) {
-      console.warn(
-        "Triggered effect has no valid targets after selection:",
-        effect.id || effect,
-        targetResult.reason
-      );
-      return;
-    }
-
-    this.applyActions(effect.actions || [], ctx, targetResult.targets || {});
-    this.registerOncePerTurnUsage(ctx.source, ctx.player, effect);
-    this.game.checkWinCondition();
   }
 
   getHandActivationEffect(card) {
@@ -2173,7 +2190,8 @@ export default class EffectEngine {
           if (
             zoneKey === "hand" &&
             ctx.activationZone === "hand" &&
-            card === ctx.source
+            card === ctx.source &&
+            !def.requireThisCard
           ) {
             console.log(
               `[selectCandidates] Rejecting: card is source in hand zone`

@@ -3208,7 +3208,7 @@
     subtype: "normal",
     archetype: "Void",
     description:
-      "Durante a Fase Principal, se seu oponente Invocar por Invoca├º├úo-Especial um monstro: voc├¬ pode Invocar por Invoca├º├úo-Especial 1 monstro da sua m├úo com o mesmo N├¡vel que esse monstro, mas, at├® o final deste turno, seus efeitos s├úo negados. Voc├¬ s├│ pode ativar 1 'Void Mirror Dimension' por turno.",
+      "During the Main Phase, if your opponent Special Summons a monster: You can Special Summon 1 monster from your hand with the same Level as that monster, but its effects are negated until the end of this turn. You can only activate 1 'Mirror Dimension of the Void' per turn",
     image: "assets/Void Mirror Dimension.png",
     effects: [
       {
