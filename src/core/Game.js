@@ -1529,6 +1529,10 @@ export default class Game {
     const fromHand = config.activationContext?.fromHand === true || !!commitInfo;
     const resolvedActivationZone =
       resolvedZone || config.activationContext?.activationZone || null;
+    const explicitAutoSelect =
+      typeof config.activationContext?.autoSelectSingleTarget === "boolean"
+        ? config.activationContext.autoSelectSingleTarget
+        : owner === this.bot;
     const activationContext = {
       ...(config.activationContext || {}),
       fromHand,
@@ -1538,6 +1542,7 @@ export default class Game {
         (fromHand ? "hand" : resolvedActivationZone),
       committed,
       commitInfo: config.activationContext?.commitInfo || commitInfo || null,
+      autoSelectSingleTarget: explicitAutoSelect,
     };
 
     const safeActivate = async (selections) => {
@@ -2276,8 +2281,13 @@ export default class Game {
             selectionKind: "graveyardEffect",
             selectionMessage: "Select target(s) for the graveyard effect.",
             onSelectionStart: () => this.closeGraveyardModal(false),
-            activate: (chosen) =>
-              this.effectEngine.activateMonsterFromGraveyard(card, player, chosen),
+            activate: (chosen, ctx) =>
+              this.effectEngine.activateMonsterFromGraveyard(
+                card,
+                player,
+                chosen,
+                ctx
+              ),
             finalize: () => {
               this.closeGraveyardModal(false);
               this.renderer.log(`${card.name} activates from the Graveyard.`);

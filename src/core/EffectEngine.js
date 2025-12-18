@@ -1447,7 +1447,12 @@ export default class EffectEngine {
     return { success: true };
   }
 
-  activateMonsterFromGraveyard(card, player, selections = null) {
+  activateMonsterFromGraveyard(
+    card,
+    player,
+    selections = null,
+    activationContext = {}
+  ) {
     if (!card || !player) {
       return { success: false, reason: "Missing card or player." };
     }
@@ -1489,11 +1494,21 @@ export default class EffectEngine {
       return { success: false, reason: duelCheck.reason };
     }
 
+    const normalizedActivationContext = {
+      fromHand: activationContext?.fromHand === true,
+      activationZone: "graveyard",
+      sourceZone: activationContext?.sourceZone || "graveyard",
+      committed: activationContext?.committed === true,
+      commitInfo: activationContext?.commitInfo || null,
+      autoSelectSingleTarget: activationContext?.autoSelectSingleTarget,
+    };
+
     const ctx = {
       source: card,
       player,
       opponent: this.game.getOpponent(player),
       activationZone: "graveyard",
+      activationContext: normalizedActivationContext,
     };
 
     const targetResult = this.resolveTargets(
@@ -1567,6 +1582,7 @@ export default class EffectEngine {
       sourceZone: activationContext?.sourceZone || "fieldSpell",
       committed: activationContext?.committed === true,
       commitInfo: activationContext?.commitInfo || null,
+      autoSelectSingleTarget: activationContext?.autoSelectSingleTarget,
     };
 
     const ctx = {
@@ -1650,6 +1666,7 @@ export default class EffectEngine {
         activationContext?.sourceZone || (fromHand ? "hand" : activationZone),
       committed: activationContext?.committed === true,
       commitInfo: activationContext?.commitInfo || null,
+      autoSelectSingleTarget: activationContext?.autoSelectSingleTarget,
     };
     let effect = null;
 
@@ -1876,6 +1893,7 @@ export default class EffectEngine {
         activationContext?.sourceZone || (fromHand ? "hand" : activationZone),
       committed: activationContext?.committed === true,
       commitInfo: activationContext?.commitInfo || null,
+      autoSelectSingleTarget: activationContext?.autoSelectSingleTarget,
     };
 
     const ctx = {
@@ -2047,8 +2065,12 @@ export default class EffectEngine {
       }
 
       if (candidates.length === 1 && min === 1) {
-        targetMap[def.id] = [candidates[0]];
-        continue;
+        const autoSelectSingleTarget =
+          ctx?.activationContext?.autoSelectSingleTarget !== false;
+        if (autoSelectSingleTarget) {
+          targetMap[def.id] = [candidates[0]];
+          continue;
+        }
       }
 
       if (isBot) {
@@ -2521,6 +2543,14 @@ export default class EffectEngine {
       return { ok: false, reason: optCheck.reason };
     }
 
+    const actionCheck = this.checkActionPreviewRequirements(
+      effect.actions || [],
+      ctx
+    );
+    if (!actionCheck.ok) {
+      return { ok: false, reason: actionCheck.reason };
+    }
+
     const targetResult = this.resolveTargets(
       effect.targets || [],
       ctx,
@@ -2533,6 +2563,56 @@ export default class EffectEngine {
 
     if (targetResult.ok === false) {
       return { ok: false, reason: targetResult.reason };
+    }
+
+    return { ok: true };
+  }
+
+  checkActionPreviewRequirements(actions, ctx) {
+    if (!Array.isArray(actions) || actions.length === 0) {
+      return { ok: true };
+    }
+
+    const player = ctx?.player;
+    if (!player) {
+      return { ok: false, reason: "Missing player." };
+    }
+
+    for (const action of actions) {
+      if (!action || !action.type) continue;
+      if (action.type === "special_summon_from_hand_with_tiered_cost") {
+        if ((player.field || []).length >= 5) {
+          return { ok: false, reason: "Field is full." };
+        }
+
+        const filters = action.costFilters || {
+          name: "Void Hollow",
+          cardKind: "monster",
+        };
+        const matchesFilters = (card) => {
+          if (!card) return false;
+          if (filters.cardKind && card.cardKind !== filters.cardKind) {
+            return false;
+          }
+          if (filters.name && card.name !== filters.name) return false;
+          if (filters.archetype) {
+            const hasArc =
+              card.archetype === filters.archetype ||
+              (Array.isArray(card.archetypes) &&
+                card.archetypes.includes(filters.archetype));
+            if (!hasArc) return false;
+          }
+          return true;
+        };
+        const costCandidates = (player.field || []).filter(matchesFilters);
+        const minCost = action.minCost ?? 1;
+        if (costCandidates.length < minCost) {
+          return {
+            ok: false,
+            reason: "Not enough cost monsters to Special Summon.",
+          };
+        }
+      }
     }
 
     return { ok: true };

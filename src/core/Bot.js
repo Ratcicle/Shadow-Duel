@@ -494,6 +494,7 @@ export default class Bot extends Player {
         sourceZone: "hand",
         committed: true,
         commitInfo: commit,
+        autoSelectSingleTarget: true,
       };
 
       let result = await game.effectEngine.activateSpellTrapEffect(
@@ -534,6 +535,7 @@ export default class Bot extends Player {
         activationZone: "fieldSpell",
         sourceZone: "fieldSpell",
         committed: false,
+        autoSelectSingleTarget: true,
       };
       const result = game.effectEngine.activateFieldSpell(
         this.fieldSpell,
