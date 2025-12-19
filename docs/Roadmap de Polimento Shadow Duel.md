@@ -21,7 +21,7 @@
   - [x] "Give card"
   - [x] "Force phase"
   - [x] "Reset duel"
-  - [x] "Activation Pipeline Sanity Suite" (A/B/C)
+  - [x] "Activation Pipeline Sanity Suite" (A/B/C/D)
 
 **Pronto quando:** você consegue reproduzir bugs e ver no log *qual ação/handler/condição* causou.
 
@@ -39,7 +39,9 @@ Checklist:
 - [x] `activationContext` padronizado (ex.: `fromHand`, `activationZone`, `sourceZone`, `committed`, `commitInfo`)
 - [x] **Rollback genérico** obrigatório quando `committed && fail/cancel`
 - [x] Remover/deprecar caminhos legados (qualquer função antiga ainda chamada pela UI)
-- [ ] Triggers com o mesmo contrato/pipeline (ou padronização equivalente)
+- [x] Triggers com o mesmo contrato/pipeline (ou padronização equivalente)
+
+**Status:** OK. COMPLETO
 
 **Pronto quando:** não existe mais “spell desce e não ativa”, “modal fecha e softlocka”, ou divergência entre rotas antiga/nova.
 
@@ -73,13 +75,13 @@ Checklist:
 **Objetivo:** seleção de alvo/custo nunca quebra o estado e nunca prende o jogador.
 
 Checklist:
-- [ ] Seleção com estados explícitos: `idle`, `selecting`, `confirming`, `resolving`
+- [x] Seleção com estados explícitos: `idle`, `selecting`, `confirming`, `resolving`
 - [x] UI não pode fechar modal quando cancel é proibido
 - [x] Player sempre confirma alvo (mesmo com 1 candidato); bot pode auto-selecionar
 - [ ] Contrato único de seleção:
   - [ ] `requirements` (quantidade, filtros, zonas)
   - [x] `allowCancel`
-  - [ ] `onConfirm` sempre retorna para o engine
+  - [x] `onConfirm` sempre retorna para o engine
 - [ ] BOT usa um **AutoSelector** separado (não mistura com UI do player)
 
 **Pronto quando:** não dá pra gerar softlock por UI, e todo efeito com targets/custos funciona igual em qualquer carta.

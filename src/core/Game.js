@@ -5,6 +5,7 @@ import EffectEngine from "./EffectEngine.js";
 import Card from "./Card.js";
 import { cardDatabaseByName, cardDatabaseById } from "../data/cards.js";
 import { getCardDisplayName } from "./i18n.js";
+import AutoSelector from "./AutoSelector.js";
 
 // Helper to construct user-friendly cost type descriptions
 function getCostTypeDescription(costFilters, count) {
@@ -31,6 +32,7 @@ export default class Game {
     this.bot = new Bot(this.botPreset);
     this.renderer = new Renderer();
     this.effectEngine = new EffectEngine(this);
+    this.autoSelector = new AutoSelector(this);
 
     this.player.game = this;
     this.bot.game = this;
@@ -915,18 +917,20 @@ export default class Game {
       botHandEl.addEventListener("click", (e) => {
         if (!this.targetSelection) return;
         if (this.targetSelection.kind !== "attack") return;
-        const option = this.targetSelection.options[0];
-        if (!option) return;
+        const requirement = this.targetSelection.requirements?.[0];
+        if (!requirement) return;
 
-        const directCandidate = option.candidates.find(
+        const directCandidate = requirement.candidates.find(
           (c) => c && c.isDirectAttack
         );
         if (!directCandidate) return;
 
         // Seleciona o índice do ataque direto e finaliza seleção
-        this.targetSelection.selections[option.id] = [directCandidate.idx];
-        this.targetSelection.currentOption =
-          this.targetSelection.options.length;
+        this.targetSelection.selections[requirement.id] = [
+          directCandidate.key,
+        ];
+        this.targetSelection.currentRequirement =
+          this.targetSelection.requirements.length;
         this.setSelectionState("confirming");
         this.finishTargetSelection();
         e.stopPropagation();
@@ -1433,19 +1437,183 @@ export default class Game {
     });
   }
 
-  canUseFieldTargeting(options) {
-    if (!options || options.length === 0) return false;
+  buildSelectionCandidateKey(candidate = {}, fallbackIndex = 0) {
+    const zone = candidate.zone || "field";
+    const zoneIndex =
+      typeof candidate.zoneIndex === "number" ? candidate.zoneIndex : -1;
+    const controller = candidate.controller || candidate.owner || "unknown";
+    const baseId =
+      candidate.cardRef?.id ||
+      candidate.cardRef?.name ||
+      candidate.name ||
+      String(fallbackIndex);
+    return `${controller}:${zone}:${zoneIndex}:${baseId}`;
+  }
+
+  normalizeSelectionContract(contract, overrides = {}) {
+    const base =
+      contract && typeof contract === "object" && !Array.isArray(contract)
+        ? contract
+        : {};
+    const rawRequirements = Array.isArray(base.requirements)
+      ? base.requirements
+      : base.requirements
+      ? [base.requirements]
+      : [];
+    const normalizedRequirements = [];
+
+    for (let i = 0; i < rawRequirements.length; i += 1) {
+      const req = rawRequirements[i];
+      if (!req || typeof req !== "object") {
+        return { ok: false, reason: "Invalid selection requirements." };
+      }
+
+      const min = Number(req.min ?? req.count?.min ?? 1);
+      const max = Number(req.max ?? req.count?.max ?? min);
+      if (!Number.isFinite(min) || !Number.isFinite(max) || min > max) {
+        return { ok: false, reason: "Selection requirements are invalid." };
+      }
+
+      const zones = Array.isArray(req.zones)
+        ? req.zones.filter(Boolean)
+        : req.zone
+        ? [req.zone]
+        : [];
+      if (zones.length === 0) {
+        return { ok: false, reason: "Selection requirements missing zones." };
+      }
+
+      const ownerRaw = req.owner || "player";
+      const owner =
+        ownerRaw === "opponent"
+          ? "opponent"
+          : ownerRaw === "either" || ownerRaw === "any"
+          ? "either"
+          : "player";
+
+      const candidates = Array.isArray(req.candidates)
+        ? req.candidates.map((cand, idx) => {
+            if (!cand || typeof cand !== "object") return null;
+            if (!cand.key) {
+              cand.key = this.buildSelectionCandidateKey(cand, idx);
+            }
+            return cand;
+          }).filter(Boolean)
+        : [];
+
+      const normalized = {
+        id: req.id || `selection_${i + 1}`,
+        min,
+        max,
+        zones,
+        owner,
+        filters:
+          req.filters && typeof req.filters === "object" ? { ...req.filters } : {},
+        allowSelf: req.allowSelf !== false,
+        distinct: req.distinct !== false,
+        candidates,
+      };
+
+      normalizedRequirements.push(normalized);
+    }
+
+    if (normalizedRequirements.length === 0) {
+      return { ok: false, reason: "Selection contract missing requirements." };
+    }
+
+    const uiBase =
+      base.ui && typeof base.ui === "object" ? base.ui : {};
+    const overrideUi =
+      overrides.ui && typeof overrides.ui === "object" ? overrides.ui : {};
+
+    const normalizedContract = {
+      kind: base.kind || overrides.kind || "target",
+      message:
+        overrides.message ?? base.message ?? null,
+      requirements: normalizedRequirements,
+      ui: {
+        allowCancel:
+          overrideUi.allowCancel ?? uiBase.allowCancel ?? true,
+        preventCancel:
+          overrideUi.preventCancel ?? uiBase.preventCancel ?? false,
+        useFieldTargeting:
+          overrideUi.useFieldTargeting ?? uiBase.useFieldTargeting,
+        allowEmpty: overrideUi.allowEmpty ?? uiBase.allowEmpty,
+      },
+      metadata:
+        base.metadata && typeof base.metadata === "object"
+          ? { ...base.metadata }
+          : {},
+    };
+
+    return { ok: true, contract: normalizedContract };
+  }
+
+  convertLegacyOptionsToSelectionContract(options, overrides = {}) {
+    if (!Array.isArray(options) || options.length === 0) {
+      return null;
+    }
+
+    const requirements = options
+      .map((opt, idx) => {
+        if (!opt || typeof opt !== "object") return null;
+        const candidates = Array.isArray(opt.candidates)
+          ? opt.candidates.map((cand, candIdx) => {
+              if (!cand || typeof cand !== "object") return null;
+              if (!cand.key) {
+                cand.key = this.buildSelectionCandidateKey(cand, candIdx);
+              }
+              return cand;
+            }).filter(Boolean)
+          : [];
+        const zones = Array.isArray(opt.zones)
+          ? opt.zones
+          : opt.zone
+          ? [opt.zone]
+          : candidates.length
+          ? [...new Set(candidates.map((cand) => cand.zone).filter(Boolean))]
+          : ["field"];
+        return {
+          id: opt.id || `legacy_${idx + 1}`,
+          min: Number(opt.min ?? opt.count?.min ?? 1),
+          max: Number(opt.max ?? opt.count?.max ?? opt.min ?? 1),
+          zones,
+          owner: "either",
+          filters: {},
+          allowSelf: true,
+          distinct: true,
+          candidates,
+        };
+      })
+      .filter(Boolean);
+
+    const contract = {
+      kind: overrides.kind || "target",
+      message: overrides.message || null,
+      requirements,
+      ui: overrides.ui || {},
+      metadata: { legacy: true },
+    };
+
+    return contract;
+  }
+
+  canUseFieldTargeting(requirements) {
+    const list = Array.isArray(requirements)
+      ? requirements
+      : requirements?.requirements || [];
+    if (!list || list.length === 0) return false;
     const allowedZones = new Set(["field", "spellTrap", "fieldSpell"]);
-    return options.every(
-      (opt) =>
-        Array.isArray(opt.candidates) &&
-        opt.candidates.length > 0 &&
-        opt.candidates.every(
-          (cand) =>
-            allowedZones.has(cand.zone) &&
-            (cand.controller === "player" || cand.controller === "bot")
-        )
-    );
+    return list.every((req) => {
+      if (!Array.isArray(req.candidates) || req.candidates.length === 0) {
+        return false;
+      }
+      return req.candidates.every(
+        (cand) =>
+          (allowedZones.has(cand.zone) || cand.isDirectAttack === true) &&
+          (cand.controller === "player" || cand.controller === "bot")
+      );
+    });
   }
 
   normalizeActivationResult(result) {
@@ -1455,7 +1623,21 @@ export default class Game {
         : {};
     const needsSelection = base.needsSelection === true;
     const success = needsSelection ? false : base.success === true;
-    return { ...base, success, needsSelection };
+    let selectionContract = base.selectionContract;
+
+    if (!selectionContract && Array.isArray(base.options)) {
+      selectionContract = this.convertLegacyOptionsToSelectionContract(
+        base.options,
+        { kind: base.selectionKind }
+      );
+      if (selectionContract) {
+        this.devLog("SELECTION_CONTRACT_LEGACY", {
+          summary: "Legacy options converted to selectionContract.",
+        });
+      }
+    }
+
+    return { ...base, success, needsSelection, selectionContract };
   }
 
   async runActivationPipeline(config = {}) {
@@ -1577,10 +1759,14 @@ export default class Game {
       }
 
       if (normalized.needsSelection) {
-        const options = Array.isArray(normalized.options)
-          ? normalized.options
-          : [];
-        if (options.length === 0) {
+        let selectionContract = normalized.selectionContract;
+        if (!selectionContract && Array.isArray(normalized.options)) {
+          selectionContract = this.convertLegacyOptionsToSelectionContract(
+            normalized.options,
+            { kind: selectionKind }
+          );
+        }
+        if (!selectionContract) {
           const selectionFailure = {
             success: false,
             needsSelection: false,
@@ -1588,12 +1774,7 @@ export default class Game {
           };
           return handleResult(selectionFailure, true);
         }
-        const allowEmpty =
-          typeof config.allowEmpty === "boolean"
-            ? config.allowEmpty
-            : (options || []).some(
-                (opt) => Number(opt.min ?? opt.count?.min ?? 1) === 0
-              );
+
         const allowCancel =
           activationContext.committed || config.preventCancel === true
             ? false
@@ -1601,31 +1782,93 @@ export default class Game {
             ? config.allowCancel
             : true;
 
+        const normalizedContract = this.normalizeSelectionContract(
+          selectionContract,
+          {
+            kind: selectionKind,
+            message: config.selectionMessage || selectionContract.message || null,
+            ui: {
+              allowCancel,
+              preventCancel:
+                activationContext.committed || config.preventCancel === true,
+              useFieldTargeting: config.useFieldTargeting,
+              allowEmpty: config.allowEmpty,
+            },
+          }
+        );
+
+        if (!normalizedContract.ok) {
+          const selectionFailure = {
+            success: false,
+            needsSelection: false,
+            reason: normalizedContract.reason || "Target selection failed.",
+          };
+          return handleResult(selectionFailure, true);
+        }
+
+        const contract = normalizedContract.contract;
+        if (typeof contract.ui.allowEmpty !== "boolean") {
+          contract.ui.allowEmpty = contract.requirements.some(
+            (req) => Number(req.min ?? 0) === 0
+          );
+        }
+        const usingFieldTargeting =
+          typeof contract.ui.useFieldTargeting === "boolean"
+            ? contract.ui.useFieldTargeting
+            : this.canUseFieldTargeting(contract.requirements);
+        contract.ui.useFieldTargeting = usingFieldTargeting;
+
         if (typeof config.onSelectionStart === "function") {
           config.onSelectionStart();
         }
 
-        const usingFieldTargeting = this.canUseFieldTargeting(options);
         logPipeline("PIPELINE_SELECTION_START", {
           mode: usingFieldTargeting ? "field" : "modal",
           committed: activationContext.committed,
-          optionCount: options.length,
+          requirementCount: contract.requirements.length,
         });
+
+        const shouldAutoSelect =
+          config.useAutoSelector === true || owner === this.bot;
+
+        if (shouldAutoSelect) {
+          const autoResult = this.autoSelector?.select(contract, {
+            owner,
+            activationContext,
+            selectionKind,
+          });
+          if (!autoResult?.ok) {
+            const selectionFailure = {
+              success: false,
+              needsSelection: false,
+              reason: autoResult?.reason || "Auto selection failed.",
+            };
+            return handleResult(selectionFailure, true);
+          }
+          const nextResult = await safeActivate(autoResult.selections || {});
+          const normalizedNext = this.normalizeActivationResult(nextResult);
+          if (normalizedNext.needsSelection) {
+            const selectionFailure = {
+              success: false,
+              needsSelection: false,
+              reason: "Auto selection failed.",
+            };
+            return handleResult(selectionFailure, true);
+          }
+          return handleResult(normalizedNext, true);
+        }
 
         try {
           this.startTargetSelectionSession({
             kind: selectionKind,
             card: resolvedCard,
             owner,
-            options,
+            selectionContract: contract,
             activationZone: resolvedActivationZone,
             activationContext,
-            preventCancel:
-              activationContext.committed || config.preventCancel === true,
-            allowCancel,
-            allowEmpty,
-            usingFieldTargeting,
-            message: config.selectionMessage || null,
+            preventCancel: contract.ui.preventCancel,
+            allowCancel: contract.ui.allowCancel,
+            message: contract.message,
             execute: (selections) => safeActivate(selections),
             onResult: (nextResult) => handleResult(nextResult, true),
             onCancel: allowCancel ? config.onCancel : null,
@@ -1693,7 +1936,28 @@ export default class Game {
   }
 
   startTargetSelectionSession(session) {
-    if (!session || !Array.isArray(session.options)) return;
+    if (!session || !session.selectionContract) return;
+
+    const normalizedContract = this.normalizeSelectionContract(
+      session.selectionContract,
+      {
+        kind: session.kind,
+        message: session.message,
+        ui: {
+          allowCancel: session.allowCancel,
+          preventCancel: session.preventCancel,
+          useFieldTargeting: session.useFieldTargeting,
+          allowEmpty: session.allowEmpty,
+        },
+      }
+    );
+
+    if (!normalizedContract.ok) {
+      console.warn("[Game] Invalid selection contract:", normalizedContract);
+      return;
+    }
+
+    const selectionContract = normalizedContract.contract;
 
     this.cancelTargetSelection();
     if (this.targetSelection) {
@@ -1701,17 +1965,20 @@ export default class Game {
     }
 
     const usingFieldTargeting =
-      typeof session.usingFieldTargeting === "boolean"
-        ? session.usingFieldTargeting
-        : this.canUseFieldTargeting(session.options);
+      typeof selectionContract.ui.useFieldTargeting === "boolean"
+        ? selectionContract.ui.useFieldTargeting
+        : this.canUseFieldTargeting(selectionContract.requirements);
+    selectionContract.ui.useFieldTargeting = usingFieldTargeting;
 
     this.targetSelection = {
       ...session,
+      selectionContract,
+      requirements: selectionContract.requirements,
       selections: {},
-      currentOption: 0,
+      currentRequirement: 0,
       usingFieldTargeting,
-      allowCancel: session.allowCancel !== false,
-      allowEmpty: session.allowEmpty === true,
+      allowCancel: selectionContract.ui.allowCancel !== false,
+      allowEmpty: selectionContract.ui.allowEmpty === true,
       autoAdvanceOnMax:
         typeof session.autoAdvanceOnMax === "boolean"
           ? session.autoAdvanceOnMax
@@ -1741,13 +2008,13 @@ export default class Game {
         this.targetSelection.allowCancel !== false &&
         !this.targetSelection.preventCancel;
       const modalHandle = this.renderer.showTargetSelection(
-        session.options,
+        selectionContract,
         (chosenMap) => {
           if (!this.targetSelection) return;
           this.setSelectionState("confirming");
           this.targetSelection.selections = chosenMap || {};
-          this.targetSelection.currentOption =
-            this.targetSelection.options.length;
+          this.targetSelection.currentRequirement =
+            this.targetSelection.requirements.length;
           this.finishTargetSelection();
         },
         allowCancel ? () => this.cancelTargetSelection() : null,
@@ -1761,8 +2028,8 @@ export default class Game {
       }
     }
 
-    if (session.message) {
-      this.renderer.log(session.message);
+    if (selectionContract.message) {
+      this.renderer.log(selectionContract.message);
     }
     if (usingFieldTargeting) {
       this.highlightTargetCandidates();
@@ -1801,7 +2068,7 @@ export default class Game {
       const ownerPlayer = card.owner === "player" ? this.player : this.bot;
       const zoneArr = this.getZone(ownerPlayer, "field") || [];
       const zoneIndex = zoneArr.indexOf(card);
-      return {
+      const candidate = {
         idx,
         name: card.name,
         owner: ownerLabel,
@@ -1814,6 +2081,8 @@ export default class Game {
         cardKind: card.cardKind,
         cardRef: card,
       };
+      candidate.key = this.buildSelectionCandidateKey(candidate, idx);
+      return candidate;
     });
 
     // Adiciona alvo de ataque direto (clicar na mão do oponente) quando permitido
@@ -1831,28 +2100,47 @@ export default class Game {
         cardKind: "direct",
         cardRef: null,
         isDirectAttack: true,
+        key: this.buildSelectionCandidateKey(
+          {
+            controller: this.bot.id,
+            zone: "hand",
+            zoneIndex: -1,
+            name: "Direct Attack",
+          },
+          decorated.length
+        ),
       });
     }
 
-    const options = [
-      {
-        id: "attack_target",
-        min: 1,
-        max: 1,
-        zone: "field",
-        candidates: decorated,
-      },
-    ];
+    const requirement = {
+      id: "attack_target",
+      min: 1,
+      max: 1,
+      zones: [...new Set(decorated.map((cand) => cand.zone).filter(Boolean))],
+      owner: "opponent",
+      filters: {},
+      allowSelf: true,
+      distinct: true,
+      candidates: decorated,
+    };
+    const selectionContract = {
+      kind: "choice",
+      message: "Select a monster to attack.",
+      requirements: [requirement],
+      ui: { useFieldTargeting: true },
+      metadata: { context: "attack" },
+    };
 
     this.startTargetSelectionSession({
       kind: "attack",
       attacker,
-      options,
-      message: "Select a monster to attack.",
+      selectionContract,
       execute: (selections) => {
-        const option = options[0];
-        const chosenIndexes = selections[option.id] || [];
-        const chosenCandidate = option.candidates[chosenIndexes[0]];
+        const chosenKeys = selections[requirement.id] || [];
+        const chosenKey = chosenKeys[0];
+        const chosenCandidate = requirement.candidates.find(
+          (cand) => cand.key === chosenKey
+        );
         if (chosenCandidate?.isDirectAttack) {
           this.resolveCombat(attacker, null).catch((err) =>
             console.error(err)
@@ -1919,27 +2207,44 @@ export default class Game {
     });
 
     return new Promise((resolve) => {
-      const options = [
-        {
-          id: "custom_select",
-          zone: zoneName,
-          min,
-          max,
-          candidates: decorated,
-        },
-      ];
-
-      this.startTargetSelectionSession({
-        kind: "custom",
-        options,
-        resolve,
+      const candidatesWithKeys = decorated.map((cand, idx) => {
+        if (!cand.key) {
+          cand.key = this.buildSelectionCandidateKey(cand, idx);
+        }
+        return cand;
+      });
+      const requirement = {
+        id: "custom_select",
+        min,
+        max,
+        zones: [zoneName],
+        owner: "player",
+        filters: {},
+        allowSelf: true,
+        distinct: true,
+        candidates: candidatesWithKeys,
+      };
+      const selectionContract = {
+        kind: "choice",
         message:
           config.message ||
           "Select card(s) by clicking the highlighted targets.",
+        requirements: [requirement],
+        ui: { useFieldTargeting: true },
+        metadata: { context: "custom" },
+      };
+
+      this.startTargetSelectionSession({
+        kind: "custom",
+        selectionContract,
+        resolve,
         execute: (selections) => {
-          const option = options[0];
-          const chosen = (selections[option.id] || [])
-            .map((idx) => option.candidates[idx]?.cardRef)
+          const chosenKeys = selections[requirement.id] || [];
+          const chosen = chosenKeys
+            .map((key) =>
+              requirement.candidates.find((cand) => cand.key === key)
+            )
+            .map((cand) => cand?.cardRef)
             .filter(Boolean);
           resolve(chosen);
           return { success: true, needsSelection: false };
@@ -1960,22 +2265,24 @@ export default class Game {
     if (this.targetSelection.state && this.targetSelection.state !== "selecting") {
       return;
     }
-    const option =
-      this.targetSelection.options[this.targetSelection.currentOption];
-    if (!option) {
+    const requirement =
+      this.targetSelection.requirements[
+        this.targetSelection.currentRequirement
+      ];
+    if (!requirement) {
       console.log("[Game] No option to highlight");
       return;
     }
 
     console.log("[Game] Highlighting targets:", {
       kind: this.targetSelection.kind,
-      optionId: option.id,
-      candidatesCount: option.candidates?.length,
-      min: option.min,
-      max: option.max,
+      optionId: requirement.id,
+      candidatesCount: requirement.candidates?.length,
+      min: requirement.min,
+      max: requirement.max,
     });
 
-    option.candidates.forEach((cand) => {
+    requirement.candidates.forEach((cand) => {
       let targetEl = null;
       if (cand.isDirectAttack) {
         targetEl = document.querySelector("#bot-hand");
@@ -2019,8 +2326,8 @@ export default class Game {
         targetEl.style.pointerEvents = "auto";
         targetEl.classList.add("direct-attack-target");
       }
-      const selected = this.targetSelection.selections[option.id] || [];
-      if (selected.includes(cand.idx)) {
+      const selected = this.targetSelection.selections[requirement.id] || [];
+      if (selected.includes(cand.key)) {
         targetEl.classList.add("selected-target");
       }
     });
@@ -2054,20 +2361,22 @@ export default class Game {
     console.log("[Game] Target selection click:", {
       ownerId,
       cardIndex,
-      currentOption: this.targetSelection.currentOption,
-      optionsLength: this.targetSelection.options?.length,
+      currentRequirement: this.targetSelection.currentRequirement,
+      requirementsLength: this.targetSelection.requirements?.length,
     });
 
-    const option =
-      this.targetSelection.options[this.targetSelection.currentOption];
-    if (!option) {
+    const requirement =
+      this.targetSelection.requirements[
+        this.targetSelection.currentRequirement
+      ];
+    if (!requirement) {
       console.log("[Game] No option found");
       return false;
     }
 
     const ownerPlayer = ownerId === "player" ? this.player : this.bot;
     let card = null;
-    const zoneHint = location || option.zone || "field";
+    const zoneHint = location || requirement.zones?.[0] || "field";
 
     if (zoneHint === "fieldSpell") {
       card = ownerPlayer.fieldSpell;
@@ -2085,8 +2394,8 @@ export default class Game {
     console.log("[Game] Looking for candidate:", {
       cardName: card.name,
       cardIndex: cardIndex,
-      candidatesCount: option.candidates.length,
-      candidateNames: option.candidates.map(
+      candidatesCount: requirement.candidates.length,
+      candidateNames: requirement.candidates.map(
         (c) => `${c.name} [idx:${c.zoneIndex}]`
       ),
     });
@@ -2095,11 +2404,13 @@ export default class Game {
     // NOTE: We use cardRef identity match instead of zoneIndex because
     // zoneIndex can become stale if the board is re-rendered between
     // when decoratedCandidates were created and when the click occurs
-    const candidate = option.candidates.find((cand) => cand.cardRef === card);
+    const candidate = requirement.candidates.find(
+      (cand) => cand.cardRef === card
+    );
 
     if (!candidate) {
       console.log("[Game] Candidate not found. Checking references:");
-      option.candidates.forEach((cand, i) => {
+      requirement.candidates.forEach((cand, i) => {
         console.log(`  Candidate ${i}:`, {
           name: cand.name,
           zoneIndex: cand.zoneIndex,
@@ -2110,9 +2421,9 @@ export default class Game {
       return true;
     }
 
-    const selections = this.targetSelection.selections[option.id] || [];
-    const max = Number(option.max ?? 0);
-    const existing = selections.indexOf(candidate.idx);
+    const selections = this.targetSelection.selections[requirement.id] || [];
+    const max = Number(requirement.max ?? 0);
+    const existing = selections.indexOf(candidate.key);
     if (existing > -1) {
       selections.splice(existing, 1);
       cardEl.classList.remove("selected-target");
@@ -2122,16 +2433,16 @@ export default class Game {
         console.log("[Game] Max selections reached");
         return true;
       }
-      selections.push(candidate.idx);
+      selections.push(candidate.key);
       cardEl.classList.add("selected-target");
       console.log(
         "[Game] Selected card, total:",
         selections.length,
         "/",
-        max || option.max
+        max || requirement.max
       );
     }
-    this.targetSelection.selections[option.id] = selections;
+    this.targetSelection.selections[requirement.id] = selections;
 
     const shouldAutoAdvance = this.targetSelection.autoAdvanceOnMax !== false;
 
@@ -2148,18 +2459,21 @@ export default class Game {
     if (this.targetSelection.state && this.targetSelection.state !== "selecting") {
       return;
     }
-    const option =
-      this.targetSelection.options[this.targetSelection.currentOption];
-    if (!option) return;
+    const requirement =
+      this.targetSelection.requirements[
+        this.targetSelection.currentRequirement
+      ];
+    if (!requirement) return;
 
-    const selections = this.targetSelection.selections[option.id] || [];
-    if (selections.length < option.min) {
+    const selections = this.targetSelection.selections[requirement.id] || [];
+    if (selections.length < requirement.min) {
       return;
     }
 
-    this.targetSelection.currentOption++;
+    this.targetSelection.currentRequirement++;
     if (
-      this.targetSelection.currentOption >= this.targetSelection.options.length
+      this.targetSelection.currentRequirement >=
+      this.targetSelection.requirements.length
     ) {
       this.setSelectionState("confirming");
       this.finishTargetSelection();
@@ -3880,22 +4194,24 @@ export default class Game {
       return { success: false, reason: "Dev Mode is disabled." };
     }
     const selection = this.targetSelection;
-    if (!selection || !Array.isArray(selection.options)) {
+    if (!selection || !Array.isArray(selection.requirements)) {
       return { success: false, reason: "No active target selection." };
     }
 
     const selections = {};
     let canSatisfy = true;
 
-    for (const option of selection.options) {
-      const min = Number(option.min ?? option.count?.min ?? 0);
-      const candidates = Array.isArray(option.candidates) ? option.candidates : [];
+    for (const requirement of selection.requirements) {
+      const min = Number(requirement.min ?? 0);
+      const candidates = Array.isArray(requirement.candidates)
+        ? requirement.candidates
+        : [];
       if (candidates.length < min) {
         canSatisfy = false;
       }
-      selections[option.id] = candidates
+      selections[requirement.id] = candidates
         .slice(0, min)
-        .map((cand) => cand.idx);
+        .map((cand) => cand.key);
     }
 
     if (!canSatisfy) {
@@ -3903,7 +4219,7 @@ export default class Game {
     }
 
     selection.selections = selections;
-    selection.currentOption = selection.options.length;
+    selection.currentRequirement = selection.requirements.length;
     this.setSelectionState("confirming");
     await this.finishTargetSelection();
     return { success: true };
@@ -3996,6 +4312,10 @@ export default class Game {
     const selection = this.targetSelection;
     const selectionOpened = !!selection;
     const allowCancel = selectionOpened ? !selection.preventCancel : false;
+    const contractOk = selectionOpened
+      ? Array.isArray(selection.selectionContract?.requirements) &&
+        selection.selectionContract.requirements.length > 0
+      : false;
     let selectionResolved = false;
     let cancelAttempted = false;
 
@@ -4017,11 +4337,13 @@ export default class Game {
       !cleanupState.controlsVisible &&
       cleanupState.highlightCount === 0;
 
-    const success = selectionOpened && selectionResolved && cleanupOk;
+    const success =
+      selectionOpened && selectionResolved && cleanupOk && contractOk;
     this.devLog("SANITY_A_RESULT", {
       summary: "Sanity A result",
       selectionOpened,
       allowCancel,
+      contractOk,
       cancelAttempted,
       selectionResolved,
       cleanupOk,
@@ -4031,6 +4353,7 @@ export default class Game {
       success,
       selectionOpened,
       allowCancel,
+      contractOk,
       selectionResolved,
       cleanupOk,
       pipelineResult,
@@ -4314,8 +4637,11 @@ export default class Game {
     const selection = this.targetSelection;
     const selectionOpened = !!selection;
     const allowCancel = selectionOpened ? !selection.preventCancel : false;
+    const contract = selectionOpened ? selection.selectionContract : null;
+    const requirements = contract?.requirements || [];
+    const contractOk = selectionOpened ? requirements.length > 0 : false;
     const candidateCount = selectionOpened
-      ? selection.options?.[selection.currentOption]?.candidates?.length || 0
+      ? requirements?.[selection.currentRequirement]?.candidates?.length || 0
       : 0;
     const usingFieldTargeting = selectionOpened
       ? !!selection.usingFieldTargeting
@@ -4345,6 +4671,7 @@ export default class Game {
       selectionOpened &&
       selectionResolved &&
       cleanupOk &&
+      contractOk &&
       candidateCountOk &&
       allowCancelOk &&
       targetMoved;
@@ -4353,6 +4680,7 @@ export default class Game {
       summary: "Sanity D result",
       selectionOpened,
       allowCancel,
+      contractOk,
       candidateCount,
       candidateCountOk,
       allowCancelOk,
@@ -4366,6 +4694,7 @@ export default class Game {
       success,
       selectionOpened,
       allowCancel,
+      contractOk,
       candidateCount,
       candidateCountOk,
       allowCancelOk,
@@ -4373,6 +4702,122 @@ export default class Game {
       selectionResolved,
       targetMoved,
       cleanupOk,
+    };
+  }
+
+  async devRunSanityE() {
+    if (!this.devModeEnabled) {
+      return { success: false, reason: "Dev Mode is disabled." };
+    }
+
+    this.devLog("SANITY_E_START", {
+      summary: "Sanity E: bot auto-select selection contract",
+    });
+
+    const setupResult = this.applyManualSetup({
+      turn: "bot",
+      phase: "main1",
+      player: { field: [] },
+      bot: {
+        hand: ["Luminarch Holy Ascension"],
+        field: [
+          { name: "Luminarch Valiant - Knight of the Dawn", position: "attack" },
+        ],
+      },
+    });
+
+    if (!setupResult.success) {
+      return setupResult;
+    }
+
+    const card = this.bot.hand.find(
+      (c) => c && c.name === "Luminarch Holy Ascension"
+    );
+    if (!card) {
+      return { success: false, reason: "Sanity E card not found in bot hand." };
+    }
+    const handIndex = this.bot.hand.indexOf(card);
+    const cardRef = card;
+
+    const pipelineResult = await this.runActivationPipeline({
+      card,
+      owner: this.bot,
+      selectionKind: "spellTrapEffect",
+      selectionMessage: "Sanity E: bot auto-select.",
+      gate: () => {
+        if (this.turn !== "bot") return { ok: false };
+        if (this.phase !== "main1" && this.phase !== "main2") {
+          return {
+            ok: false,
+            reason: "Can only activate spells during Main Phase.",
+          };
+        }
+        if (this.isResolvingEffect) {
+          return {
+            ok: false,
+            reason: "Finish the current effect before activating another card.",
+          };
+        }
+        return { ok: true };
+      },
+      preview: () =>
+        this.effectEngine?.canActivateSpellFromHandPreview?.(card, this.bot),
+      commit: () => this.commitCardActivationFromHand(this.bot, handIndex),
+      activationContext: {
+        fromHand: true,
+        sourceZone: "hand",
+      },
+      activate: (chosen, ctx, zone, resolvedCard) =>
+        this.effectEngine.activateSpellTrapEffect(
+          resolvedCard,
+          this.bot,
+          chosen,
+          zone,
+          ctx
+        ),
+      finalize: (result, info) => {
+        if (!result.placementOnly) {
+          this.finalizeSpellTrapActivation(
+            info.card,
+            this.bot,
+            info.activationZone
+          );
+        }
+        this.updateBoard();
+      },
+    });
+
+    const selectionOpened = !!this.targetSelection;
+    this.devForceTargetCleanup();
+    const cleanupState = this.devGetSelectionCleanupState();
+    const cleanupOk =
+      !cleanupState.selectionActive &&
+      !cleanupState.controlsVisible &&
+      cleanupState.highlightCount === 0;
+
+    const resolvedOk =
+      pipelineResult?.success === true &&
+      pipelineResult?.needsSelection === false;
+    const autoSelectedOk = !selectionOpened;
+    const graveyardOk = this.bot.graveyard.includes(cardRef);
+    const success = resolvedOk && autoSelectedOk && cleanupOk && graveyardOk;
+
+    this.devLog("SANITY_E_RESULT", {
+      summary: "Sanity E result",
+      resolvedOk,
+      autoSelectedOk,
+      graveyardOk,
+      cleanupOk,
+      pipelineResult,
+    });
+
+    return {
+      success,
+      resolvedOk,
+      autoSelectedOk,
+      graveyardOk,
+      cleanupOk,
+      pipelineResult,
     };
   }
 

@@ -402,7 +402,7 @@ export default class EffectEngine {
               return {
                 success: false,
                 needsSelection: true,
-                options: targetResult.options,
+                selectionContract: targetResult.selectionContract,
               };
             }
 
@@ -684,18 +684,22 @@ export default class EffectEngine {
       return {
         success: false,
         needsSelection: true,
-        options: targetResult.options,
+        selectionContract: targetResult.selectionContract,
       };
     }
 
     if (targetResult.ok === false) {
-      return { success: false, reason: targetResult.reason };
+      return {
+        success: false,
+        needsSelection: false,
+        reason: targetResult.reason,
+      };
     }
 
     this.applyActions(effect.actions || [], ctx, targetResult.targets || {});
     this.game.checkWinCondition();
 
-    return { success: true };
+    return { success: true, needsSelection: false };
   }
 
   buildTriggerActivationContext(sourceCard, player, zoneOverride = null) {
@@ -707,6 +711,19 @@ export default class EffectEngine {
       sourceZone: activationZone,
       committed: false,
     };
+  }
+
+  buildSelectionCandidateKey(candidate = {}, fallbackIndex = 0) {
+    const zone = candidate.zone || "field";
+    const zoneIndex =
+      typeof candidate.zoneIndex === "number" ? candidate.zoneIndex : -1;
+    const controller = candidate.controller || candidate.owner || "unknown";
+    const baseId =
+      candidate.cardRef?.id ||
+      candidate.cardRef?.name ||
+      candidate.name ||
+      String(fallbackIndex);
+    return `${controller}:${zone}:${zoneIndex}:${baseId}`;
   }
 
   async handleBattleDestroyEvent(payload) {
@@ -1345,7 +1362,7 @@ export default class EffectEngine {
       return {
         success: false,
         needsSelection: true,
-        options: targetResult.options,
+        selectionContract: targetResult.selectionContract,
       };
     }
 
@@ -1450,18 +1467,18 @@ export default class EffectEngine {
       return {
         success: false,
         needsSelection: true,
-        options: targetResult.options,
+        selectionContract: targetResult.selectionContract,
       };
     }
 
     if (!targetResult.ok) {
-      return { success: false, reason: targetResult.reason };
+      return { success: false, needsSelection: false, reason: targetResult.reason };
     }
 
     this.applyActions(effect.actions || [], ctx, targetResult.targets);
     this.registerOncePerTurnUsage(card, player, effect);
     this.game.checkWinCondition();
-    return { success: true };
+    return { success: true, needsSelection: false };
   }
 
   activateMonsterFromGraveyard(
@@ -1471,25 +1488,31 @@ export default class EffectEngine {
     activationContext = {}
   ) {
     if (!card || !player) {
-      return { success: false, reason: "Missing card or player." };
+      return { success: false, needsSelection: false, reason: "Missing card or player." };
     }
     if (this.game?.turn !== player.id) {
-      return { success: false, reason: "Not your turn." };
+      return { success: false, needsSelection: false, reason: "Not your turn." };
     }
     if (this.game?.phase !== "main1" && this.game?.phase !== "main2") {
       return {
         success: false,
+        needsSelection: false,
         reason: "Effect can only be used in Main Phase.",
       };
     }
     if (card.cardKind !== "monster") {
       return {
         success: false,
+        needsSelection: false,
         reason: "Only monsters can activate from graveyard.",
       };
     }
     if (!player.graveyard || !player.graveyard.includes(card)) {
-      return { success: false, reason: "Monster is not in the graveyard." };
+      return {
+        success: false,
+        needsSelection: false,
+        reason: "Monster is not in the graveyard.",
+      };
     }
 
     // Busca efeito ignition com requireZone: "graveyard"
@@ -1498,17 +1521,21 @@ export default class EffectEngine {
     );
 
     if (!effect) {
-      return { success: false, reason: "No graveyard ignition effect." };
+      return {
+        success: false,
+        needsSelection: false,
+        reason: "No graveyard ignition effect.",
+      };
     }
 
     const optCheck = this.checkOncePerTurn(card, player, effect);
     if (!optCheck.ok) {
-      return { success: false, reason: optCheck.reason };
+      return { success: false, needsSelection: false, reason: optCheck.reason };
     }
 
     const duelCheck = this.checkOncePerDuel(card, player, effect);
     if (!duelCheck.ok) {
-      return { success: false, reason: duelCheck.reason };
+      return { success: false, needsSelection: false, reason: duelCheck.reason };
     }
 
     const normalizedActivationContext = {
@@ -1538,19 +1565,19 @@ export default class EffectEngine {
       return {
         success: false,
         needsSelection: true,
-        options: targetResult.options,
+        selectionContract: targetResult.selectionContract,
       };
     }
 
     if (!targetResult.ok) {
-      return { success: false, reason: targetResult.reason };
+      return { success: false, needsSelection: false, reason: targetResult.reason };
     }
 
     this.applyActions(effect.actions || [], ctx, targetResult.targets);
     this.registerOncePerTurnUsage(card, player, effect);
     this.registerOncePerDuelUsage(card, player, effect);
     this.game.checkWinCondition();
-    return { success: true };
+    return { success: true, needsSelection: false };
   }
 
   activateFieldSpell(card, player, selections = null, activationContext = {}) {
@@ -1620,7 +1647,7 @@ export default class EffectEngine {
       return {
         success: false,
         needsSelection: true,
-        options: targetResult.options,
+        selectionContract: targetResult.selectionContract,
       };
     }
 
@@ -1775,7 +1802,7 @@ export default class EffectEngine {
       return {
         success: false,
         needsSelection: true,
-        options: targetResult.options,
+        selectionContract: targetResult.selectionContract,
       };
     }
 
@@ -1940,7 +1967,7 @@ export default class EffectEngine {
       return {
         success: false,
         needsSelection: true,
-        options: targetResult.options,
+        selectionContract: targetResult.selectionContract,
       };
     }
 
@@ -2046,7 +2073,7 @@ export default class EffectEngine {
 
   resolveTargets(targetDefs, ctx, selections) {
     const targetMap = {};
-    const options = [];
+    const requirements = [];
     let needsSelection = false;
 
     for (const def of targetDefs) {
@@ -2058,45 +2085,6 @@ export default class EffectEngine {
         return { ok: false, reason: "No valid targets for this effect." };
       }
 
-      const provided = selections?.[def.id];
-      if (provided && provided.length >= min && provided.length <= max) {
-        const chosen = provided
-          .map((idx) => candidates[idx])
-          .filter((c) => c !== undefined);
-        if (chosen.length >= min && chosen.length <= max) {
-          targetMap[def.id] = chosen;
-          continue;
-        }
-      }
-
-      const isHuman =
-        ctx?.player && this.game && ctx.player === this.game.player;
-      const isBot =
-        !isHuman && ctx?.player && this.game && ctx.player === this.game.bot;
-
-      const shouldAutoSelect = def.autoSelect || !!def.strategy;
-      if (shouldAutoSelect) {
-        const takeCount = Math.min(max, candidates.length);
-        targetMap[def.id] = candidates.slice(0, takeCount);
-        continue;
-      }
-
-      if (candidates.length === 1 && min === 1) {
-        const autoSelectSingleTarget =
-          ctx?.activationContext?.autoSelectSingleTarget !== false;
-        if (autoSelectSingleTarget) {
-          targetMap[def.id] = [candidates[0]];
-          continue;
-        }
-      }
-
-      if (isBot) {
-        const takeCount = Math.min(max, candidates.length);
-        targetMap[def.id] = candidates.slice(0, takeCount);
-        continue;
-      }
-
-      needsSelection = true;
       const decoratedCandidates = candidates.map((card, idx) => {
         const controller = card.owner;
         const ownerLabel = controller === ctx.player.id ? "player" : "opponent";
@@ -2113,7 +2101,7 @@ export default class EffectEngine {
             zoneIndex = zoneArr.indexOf(card);
           }
         }
-        return {
+        const candidate = {
           idx,
           name: card.name,
           owner: ownerLabel,
@@ -2126,18 +2114,125 @@ export default class EffectEngine {
           cardKind: card.cardKind,
           cardRef: card,
         };
+        candidate.key = this.buildSelectionCandidateKey(candidate, idx);
+        return candidate;
       });
-      options.push({
+
+      const provided = selections?.[def.id];
+      if (provided && provided.length >= min && provided.length <= max) {
+        const chosen = [];
+        const seen = new Set();
+        for (const entry of provided) {
+          let candidate = null;
+          if (typeof entry === "number") {
+            candidate = decoratedCandidates[entry];
+          } else if (typeof entry === "string") {
+            candidate = decoratedCandidates.find((cand) => cand.key === entry);
+          } else if (entry && typeof entry === "object") {
+            if (typeof entry.key === "string") {
+              candidate = decoratedCandidates.find(
+                (cand) => cand.key === entry.key
+              );
+            } else if (
+              typeof entry.zone === "string" &&
+              typeof entry.index === "number"
+            ) {
+              candidate = decoratedCandidates.find(
+                (cand) =>
+                  cand.zone === entry.zone &&
+                  cand.zoneIndex === entry.index &&
+                  (!entry.owner ||
+                    cand.controller === entry.owner ||
+                    cand.owner === entry.owner)
+              );
+            }
+          }
+          if (candidate && !seen.has(candidate.key)) {
+            seen.add(candidate.key);
+            if (candidate.cardRef) {
+              chosen.push(candidate.cardRef);
+            }
+          }
+        }
+        if (chosen.length >= min && chosen.length <= max) {
+          targetMap[def.id] = chosen;
+          continue;
+        }
+      }
+
+      const shouldAutoSelect = def.autoSelect || !!def.strategy;
+      if (shouldAutoSelect) {
+        const takeCount = Math.min(max, candidates.length);
+        targetMap[def.id] = candidates.slice(0, takeCount);
+        continue;
+      }
+
+      needsSelection = true;
+      const zones = Array.isArray(def.zones) && def.zones.length > 0
+        ? def.zones
+        : [def.zone || zoneName];
+      const owner =
+        def.owner === "opponent"
+          ? "opponent"
+          : def.owner === "any"
+          ? "either"
+          : "player";
+      const filters = {};
+      if (def.cardKind) filters.cardKind = def.cardKind;
+      if (def.archetype) filters.archetype = def.archetype;
+      if (def.cardName) filters.name = def.cardName;
+      if (def.subtype) filters.subtype = def.subtype;
+      if (def.requireFaceup) filters.faceUp = true;
+      if (def.position && def.position !== "any") {
+        filters.position = def.position;
+      }
+      if (def.excludeCardName) {
+        filters.excludeCardName = def.excludeCardName;
+      }
+      if (def.level !== undefined) {
+        filters.level = def.level;
+      }
+      if (def.levelOp) {
+        filters.levelOp = def.levelOp;
+      }
+      if (def.strategy) {
+        filters.strategy = def.strategy;
+      }
+      if (def.requireThisCard) {
+        filters.requireThisCard = true;
+      }
+      if (def.tags) {
+        filters.tags = def.tags;
+      }
+      if (def.type) {
+        filters.type = def.type;
+      }
+      requirements.push({
         id: def.id,
         min,
         max,
-        zone: zoneName,
+        zones,
+        owner,
+        filters,
+        allowSelf: def.allowSelf !== false || def.requireThisCard === true,
+        distinct: def.distinct !== false,
         candidates: decoratedCandidates,
       });
     }
 
     if (needsSelection) {
-      return { needsSelection: true, options };
+      return {
+        needsSelection: true,
+        selectionContract: {
+          kind: "target",
+          message: null,
+          requirements,
+          ui: {},
+          metadata: {
+            sourceCardId: ctx?.source?.id,
+          },
+        },
+      };
     }
 
     return { ok: true, targets: targetMap };

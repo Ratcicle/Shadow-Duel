@@ -465,301 +465,79 @@ export default class Bot extends Player {
         }
       }
 
-      const selections = this.buildAutoSelections(card, game);
-      const commit = game.commitCardActivationFromHand(this, action.index);
-      if (!commit || !commit.cardRef) return;
-      const { cardRef, activationZone } = commit;
-
-      let shouldResolve = true;
-      if (
-        cardRef.cardKind === "spell" &&
-        (cardRef.subtype === "continuous" || cardRef.subtype === "field")
-      ) {
-        const activationEffect =
-          game.effectEngine?.getHandActivationEffect?.(cardRef);
-        if (!activationEffect) {
-          shouldResolve = false;
-        }
-      }
-
-      if (!shouldResolve) {
-        game.renderer?.log?.(`Bot places ${cardRef.name}.`);
-        game.updateBoard();
-        return;
-      }
-
-      const activationContext = {
-        fromHand: true,
-        activationZone,
-        sourceZone: "hand",
-        committed: true,
-        commitInfo: commit,
-        autoSelectSingleTarget: true,
-      };
-
-      let result = await game.effectEngine.activateSpellTrapEffect(
-        cardRef,
-        this,
-        selections,
-        activationZone,
-        activationContext
-      );
-
-      if (result && result.needsSelection && result.options) {
-        const auto = this.convertOptionsToSelection(result.options);
-        if (auto) {
-          result = await game.effectEngine.activateSpellTrapEffect(
-            cardRef,
+      await game.runActivationPipeline({
+        card,
+        owner: this,
+        selectionKind: "spellTrapEffect",
+        selectionMessage: "Select target(s) for the spell effect.",
+        gate: () => {
+          if (game.turn !== "bot") return { ok: false };
+          if (game.isResolvingEffect) {
+            return {
+              ok: false,
+              reason: "Finish the current effect before activating another card.",
+            };
+          }
+          return { ok: true };
+        },
+        preview: () =>
+          game.effectEngine?.canActivateSpellFromHandPreview?.(card, this),
+        commit: () => game.commitCardActivationFromHand(this, action.index),
+        activationContext: {
+          fromHand: true,
+          sourceZone: "hand",
+        },
+        activate: (chosen, ctx, zone, resolvedCard) =>
+          game.effectEngine.activateSpellTrapEffect(
+            resolvedCard,
             this,
-            auto,
-            activationZone,
-            activationContext
-          );
-        }
-      }
-      if (!result?.success) {
-        console.log("Bot failed to activate spell:", result?.reason);
-        game.rollbackSpellActivation(this, commit);
-      } else {
-        game.renderer.log(`Bot activates ${cardRef.name}`);
-        game.updateBoard();
-        game.finalizeSpellTrapActivation(cardRef, this, activationZone);
-      }
+            chosen,
+            zone,
+            ctx
+          ),
+        finalize: (result, info) => {
+          if (result.placementOnly) {
+            game.renderer?.log?.(`Bot places ${info.card.name}.`);
+          } else {
+            game.finalizeSpellTrapActivation(
+              info.card,
+              this,
+              info.activationZone
+            );
+            game.renderer?.log?.(`Bot activates ${info.card.name}`);
+          }
+          game.updateBoard();
+        },
+      });
       return;
     }
 
     if (action.type === "fieldEffect" && this.fieldSpell) {
-      const selections = this.buildAutoSelections(this.fieldSpell, game);
       const activationContext = {
         fromHand: false,
         activationZone: "fieldSpell",
         sourceZone: "fieldSpell",
-        committed: false,
-        autoSelectSingleTarget: true,
       };
-      const result = game.effectEngine.activateFieldSpell(
-        this.fieldSpell,
-        this,
-        selections,
-        activationContext
-      );
-      if (!result?.success) {
-        console.log("Bot failed field effect:", result?.reason);
-      } else {
-        game.renderer.log(`Bot activates ${this.fieldSpell.name}'s effect`);
-        game.updateBoard();
-      }
-    }
-  }
-
-  buildAutoSelections(card, game) {
-    if (!card || !card.effects) return null;
-
-    const effect = card.effects.find(
-      (e) => e.timing === "on_play" || e.timing === "on_field_activate"
-    );
-    if (!effect || !effect.targets) return null;
-
-    // Helper: Check if card has Luminarch archetype
-    const hasLuminarchArchetype = (c) => {
-      const archetypes = Array.isArray(c.archetypes)
-        ? c.archetypes
-        : c.archetype
-        ? [c.archetype]
-        : [];
-      return archetypes.includes("Luminarch");
-    };
-
-    // Helper: Evaluate card value (ATK + archetype bonus + special boss bonus)
-    const evaluateCardValue = (c) => {
-      let value = c.atk || 0;
-      if (hasLuminarchArchetype(c)) {
-        value += 500; // Luminarch bonus
-        // Boss bonus
-        if (
-          c.name.includes("Marshal") ||
-          c.name.includes("Lancer") ||
-          c.name.includes("Seraph") ||
-          c.name.includes("Moonblade")
-        ) {
-          value += 300;
-        }
-      }
-      return value;
-    };
-
-    const selections = {};
-    effect.targets.forEach((targetDef) => {
-      const candidates = game.effectEngine.selectCandidates(targetDef, {
-        source: card,
-        player: this,
-        opponent: game.player,
+      await game.runActivationPipeline({
+        card: this.fieldSpell,
+        owner: this,
+        activationZone: "fieldSpell",
+        activationContext,
+        selectionKind: "fieldSpell",
+        selectionMessage: "Select target(s) for the field spell effect.",
+        activate: (selections, ctx) =>
+          game.effectEngine.activateFieldSpell(
+            this.fieldSpell,
+            this,
+            selections,
+            ctx
+          ),
+        finalize: () => {
+          game.renderer?.log?.(`Bot activates ${this.fieldSpell.name}'s effect`);
+          game.updateBoard();
+        },
       });
-      if (!candidates?.candidates?.length) return;
-
-      let chosen = [0];
-      if (card.name === "Monster Reborn") {
-        let bestIdx = 0;
-        let bestAtk = -Infinity;
-        candidates.candidates.forEach((c, idx) => {
-          if (c.cardKind === "monster" && (c.atk || 0) > bestAtk) {
-            bestAtk = c.atk || 0;
-            bestIdx = idx;
-          }
-        });
-        chosen = [bestIdx];
-      } else if (
-        card.name === "Shadow-Heart Shield" ||
-        card.name === "Shadow-Heart Coat" ||
-        card.name === "Luminarch Holy Ascension" ||
-        card.name === "Luminarch Crescent Shield"
-      ) {
-        // Escolher o monstro mais forte para buffs
-        let bestIdx = 0;
-        let bestValue = -Infinity;
-        candidates.candidates.forEach((c, idx) => {
-          const value = evaluateCardValue(c);
-          if (value > bestValue) {
-            bestValue = value;
-            bestIdx = idx;
-          }
-        });
-        chosen = [bestIdx];
-      } else if (card.name === "Luminarch Holy Shield") {
-        // Escolher até 3 monstros Luminarch para proteger
-        // Priorize by value (ATK + Citadel bonus if present)
-        const luminarchCandidates = candidates.candidates
-          .map((c, idx) => ({
-            idx,
-            card: c,
-            value: evaluateCardValue(c),
-          }))
-          .filter((item) => hasLuminarchArchetype(item.card))
-          .sort((a, b) => b.value - a.value)
-          .slice(0, 3);
-
-        chosen =
-          luminarchCandidates.length > 0
-            ? luminarchCandidates.map((item) => item.idx)
-            : [0];
-      } else if (card.name === "Luminarch Moonlit Blessing") {
-        // Escolher o Luminarch mais forte do GY
-        // Bonus se Citadel está no campo (special summon é possível)
-        const citadelBonus =
-          this.fieldSpell?.name === "Sanctum of the Luminarch Citadel"
-            ? 200
-            : 0;
-        let bestIdx = 0;
-        let bestValue = -Infinity;
-        candidates.candidates.forEach((c, idx) => {
-          if (hasLuminarchArchetype(c)) {
-            let value = c.atk || 0;
-            value += citadelBonus; // Boost if Citadel is present
-            if (value > bestValue) {
-              bestValue = value;
-              bestIdx = idx;
-            }
-          }
-        });
-        chosen = [bestIdx];
-      } else if (card.name === "Luminarch Sacred Judgment") {
-        // Escolher múltiplos Luminarch do GY para reviver
-        // Priorize by ATK, respect field capacity (max 5)
-        // Select highest ATK monsters to maximize board pressure
-        const maxSummons = Math.min(
-          targetDef.count?.max || 3,
-          5 - this.field.length
-        );
-        const luminarchCandidates = candidates.candidates
-          .map((c, idx) => ({
-            idx,
-            card: c,
-            atk: c.atk || 0,
-          }))
-          .filter(
-            (item) =>
-              hasLuminarchArchetype(item.card) &&
-              item.card.cardKind === "monster"
-          )
-          .sort((a, b) => b.atk - a.atk)
-          .slice(0, maxSummons);
-
-        if (luminarchCandidates.length > 0) {
-          console.log(
-            `[Sacred Judgment] Summoning ${
-              luminarchCandidates.length
-            } monsters: ${luminarchCandidates
-              .map((c) => c.card.name)
-              .join(", ")}`
-          );
-        }
-
-        chosen =
-          luminarchCandidates.length > 0
-            ? luminarchCandidates.map((item) => item.idx)
-            : [];
-      } else if (card.name === "Luminarch Knights Convocation") {
-        // Convocation: Discard Luminarch lv7+ to search any Luminarch
-        // Strategy: Discard weakest lv7+ to minimize loss
-        // The search target will be handled in follow-up selection
-        let discardIdx = -1;
-        let lowestValue = Infinity;
-        candidates.candidates.forEach((c, idx) => {
-          if (hasLuminarchArchetype(c) && (c.level || 0) >= 7) {
-            const value = evaluateCardValue(c);
-            if (value < lowestValue) {
-              lowestValue = value;
-              discardIdx = idx;
-            }
-          }
-        });
-
-        // Log selection for debugging
-        if (discardIdx >= 0) {
-          const discardCard = candidates.candidates[discardIdx];
-          console.log(
-            `[Convocation] Discarding ${
-              discardCard.name
-            } (value ${evaluateCardValue(discardCard)}) to search.`
-          );
-        }
-
-        chosen = discardIdx >= 0 ? [discardIdx] : [0];
-      } else if (card.name === "Shadow-Heart Infusion") {
-        chosen = candidates.candidates.map((_, idx) => idx).slice(0, 2);
-      } else if (card.name === "Shadow-Heart Invocation") {
-        const indices = [];
-        const usedNames = new Set();
-        candidates.candidates.forEach((c, idx) => {
-          if (!usedNames.has(c.name) && indices.length < 3) {
-            usedNames.add(c.name);
-            indices.push(idx);
-          }
-        });
-        chosen = indices;
-      }
-
-      selections[targetDef.id] = chosen;
-    });
-
-    return selections;
-  }
-
-  convertOptionsToSelection(options) {
-    if (!Array.isArray(options)) return null;
-    const selections = {};
-    for (const opt of options) {
-      if (!opt || !Array.isArray(opt.candidates)) continue;
-      const pickCount = Math.max(1, opt.min || 0);
-      const chosen = [];
-      for (let i = 0; i < Math.min(pickCount, opt.candidates.length); i++) {
-        chosen.push(i);
-      }
-      if (chosen.length) {
-        selections[opt.id] = chosen;
-      }
     }
-    return Object.keys(selections).length ? selections : null;
   }
 
   cloneGameState(game) {

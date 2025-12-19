@@ -1136,33 +1136,74 @@ export default class Renderer {
     }
   }
 
-  showTargetSelection(options, onConfirm, onCancel, config = {}) {
+  showTargetSelection(selectionContract, onConfirm, onCancel, config = {}) {
+    const contract =
+      selectionContract && typeof selectionContract === "object"
+        ? selectionContract
+        : {};
+    const requirements = Array.isArray(contract.requirements)
+      ? contract.requirements
+      : [];
+    if (requirements.length === 0) {
+      console.warn("[Renderer] Target selection missing requirements.");
+      return { close: () => {} };
+    }
+
     const overlay = document.createElement("div");
     overlay.className = "modal target-modal";
 
-    const allowCancel = config.allowCancel !== false;
+    const allowCancel =
+      contract.ui?.allowCancel !== false && config.allowCancel !== false;
+    const allowEmpty = contract.ui?.allowEmpty === true || config.allowEmpty === true;
 
     const content = document.createElement("div");
     content.className = "modal-content target-content";
     content.innerHTML = `<span class="close-target">${allowCancel ? "&times;" : ""}</span><h2>Select target(s)</h2>`;
 
     const selectionState = {};
+    const counterById = new Map();
 
-    options.forEach((opt) => {
+    const updateConfirmState = () => {
+      let ready = true;
+      requirements.forEach((req) => {
+        const selected = selectionState[req.id] || [];
+        const min = Number(req.min ?? 0);
+        const max = Number(req.max ?? min);
+        const requiredMin = allowEmpty ? 0 : min;
+        const counter = counterById.get(req.id);
+        if (counter) {
+          counter.textContent = `${selected.length} / ${max}`;
+        }
+        if (selected.length < requiredMin || selected.length > max) {
+          ready = false;
+        }
+      });
+      confirmBtn.disabled = !ready;
+    };
+
+    requirements.forEach((req) => {
       const block = document.createElement("div");
       block.className = "target-block";
+      const min = Number(req.min ?? 0);
+      const max = Number(req.max ?? min);
       block.innerHTML = `<p>Choose ${
-        opt.min === opt.max ? opt.min : `${opt.min}-${opt.max}`
-      } target(s) for ${opt.id}</p>`;
+        min === max ? min : `${min}-${max}`
+      } target(s) for ${req.id}</p>`;
+
+      const counter = document.createElement("div");
+      counter.className = "target-counter";
+      counter.textContent = `0 / ${max}`;
+      counterById.set(req.id, counter);
 
       const list = document.createElement("div");
       list.className = "target-list";
 
-      opt.candidates.forEach((cand) => {
+      req.candidates.forEach((cand, candIndex) => {
         const btn = document.createElement("button");
         btn.className = "target-btn";
-        btn.dataset.targetId = opt.id;
-        btn.dataset.idx = cand.idx;
+        btn.dataset.targetId = req.id;
+        const selectionKey = cand.key || `${req.id}_${candIndex}`;
+        btn.dataset.key = selectionKey;
 
         // Create card visual
         const targetCard = cand.cardRef || cand;
@@ -1200,25 +1241,26 @@ export default class Renderer {
         btn.appendChild(statsDiv);
 
         btn.addEventListener("click", () => {
-          const arr = selectionState[opt.id] || [];
-          const intIdx = parseInt(cand.idx);
-          const already = arr.indexOf(intIdx);
+          const arr = selectionState[req.id] || [];
+          const already = arr.indexOf(selectionKey);
           if (already > -1) {
             arr.splice(already, 1);
             btn.classList.remove("selected");
           } else {
-            if (arr.length < opt.max) {
-              arr.push(intIdx);
+            if (arr.length < max) {
+              arr.push(selectionKey);
               btn.classList.add("selected");
             }
           }
-          selectionState[opt.id] = arr;
+          selectionState[req.id] = arr;
+          updateConfirmState();
         });
 
         list.appendChild(btn);
       });
 
       block.appendChild(list);
+      block.appendChild(counter);
       content.appendChild(block);
     });
 
@@ -1241,6 +1283,8 @@ export default class Renderer {
     overlay.appendChild(content);
     document.body.appendChild(overlay);
 
+    updateConfirmState();
+
     const closeModal = () => {
       if (overlay.parentNode) {
         document.body.removeChild(overlay);
@@ -1259,16 +1303,16 @@ export default class Renderer {
 
     confirmBtn.addEventListener("click", () => {
       // validate
-      for (const opt of options) {
-        const selected = selectionState[opt.id] || [];
-        const minSel = opt.min ?? opt.count?.min ?? 0;
-        const maxSel = opt.max ?? opt.count?.max ?? minSel;
-        const allowEmpty = config.allowEmpty === true;
-        if (!allowEmpty && selected.length < minSel) {
+      for (const req of requirements) {
+        const selected = selectionState[req.id] || [];
+        const minSel = Number(req.min ?? 0);
+        const maxSel = Number(req.max ?? minSel);
+        const requiredMin = allowEmpty ? 0 : minSel;
+        if (selected.length < requiredMin) {
           alert(
             `Select ${
               minSel === maxSel ? minSel : `${minSel}-${maxSel}`
-            } target(s) for ${opt.id}`
+            } target(s) for ${req.id}`
           );
           return;
         }
@@ -1276,7 +1320,7 @@ export default class Renderer {
           alert(
             `Select ${
               minSel === maxSel ? minSel : `${minSel}-${maxSel}`
-            } target(s) for ${opt.id}`
+            } target(s) for ${req.id}`
           );
           return;
         }

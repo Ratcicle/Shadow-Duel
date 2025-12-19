@@ -670,43 +670,63 @@ export async function handleSpecialSummonFromHandWithTieredCost(
       .sort((a, b) => (a.atk || 0) - (b.atk || 0))
       .slice(0, chosenCount);
   } else {
-    const optionId = "tier_cost";
+    const requirementId = "tier_cost";
+    const decorated = costCandidates.map((card, idx) => {
+      const fieldIndex = player.field.indexOf(card);
+      const candidate = {
+        idx,
+        name: card.name,
+        owner: player.id,
+        controller: player.id,
+        zone: "field",
+        zoneIndex: fieldIndex !== -1 ? fieldIndex : idx,
+        position: card.position,
+        atk: card.atk,
+        def: card.def,
+        cardKind: card.cardKind,
+        cardRef: card,
+      };
+      candidate.key = game.buildSelectionCandidateKey(candidate, idx);
+      return candidate;
+    });
+    const selectionContract = {
+      kind: "cost",
+      message: "Select the Void Hollow cards to send to the Graveyard.",
+      requirements: [
+        {
+          id: requirementId,
+          min: chosenCount,
+          max: chosenCount,
+          zones: ["field"],
+          owner: "player",
+          filters: { cardKind: "monster", name: "Void Hollow" },
+          allowSelf: true,
+          distinct: true,
+          candidates: decorated,
+        },
+      ],
+      ui: { useFieldTargeting: true },
+      metadata: { context: "tier_cost" },
+    };
     const selection = await new Promise((resolve) => {
-      const decorated = costCandidates.map((card, idx) => {
-        const fieldIndex = player.field.indexOf(card);
-        return {
-          idx,
-          name: card.name,
-          owner: player.id,
-          controller: player.id,
-          zone: "field",
-          zoneIndex: fieldIndex !== -1 ? fieldIndex : idx,
-          position: card.position,
-          atk: card.atk,
-          def: card.def,
-          cardRef: card,
-        };
+      game.startTargetSelectionSession({
+        kind: "cost",
+        selectionContract,
+        onCancel: () => resolve(null),
+        execute: (selections) => {
+          resolve(selections);
+          return { success: true, needsSelection: false };
+        },
       });
-      game.renderer?.showTargetSelection(
-        [
-          {
-            id: optionId,
-            min: chosenCount,
-            max: chosenCount,
-            candidates: decorated,
-          },
-        ],
-        (map) => resolve(map?.[optionId] ?? null),
-        () => resolve(null)
-      );
     });
 
-    if (!selection) {
+    const chosenKeys = selection?.[requirementId] || [];
+    if (!chosenKeys.length) {
       return false;
     }
 
-    chosenCosts = selection
-      .map((idx) => costCandidates[idx])
+    chosenCosts = chosenKeys
+      .map((key) => decorated.find((cand) => cand.key === key)?.cardRef)
       .filter(Boolean)
       .slice(0, chosenCount);
   }
@@ -772,61 +792,87 @@ export async function handleSpecialSummonFromHandWithTieredCost(
       opponent.fieldSpell,
     ].filter(Boolean);
 
-    if (opponentCards.length > 0) {
-      let targetToDestroy = null;
-      if (player.id === "bot") {
-        targetToDestroy = opponentCards
-          .slice()
-          .sort((a, b) => (b.atk || 0) - (a.atk || 0))[0];
-      } else {
-        const optionId = "tier_destroy";
-        const decorated = opponentCards.map((card, idx) => {
-          const inField = opponent.field.indexOf(card);
-          const inSpell = opponent.spellTrap.indexOf(card);
-          const inFieldSpell = opponent.fieldSpell === card ? 0 : -1;
-          const zoneIndex =
-            inField !== -1 ? inField : inSpell !== -1 ? inSpell : inFieldSpell;
-          const zone =
-            inField !== -1
-              ? "field"
-              : inSpell !== -1
-              ? "spellTrap"
-              : "fieldSpell";
-          return {
-            idx,
-            name: card.name,
-            owner: opponent.id,
-            controller: opponent.id,
-            zone,
-            zoneIndex,
-            position: card.position,
-            atk: card.atk,
-            def: card.def,
-            cardRef: card,
-          };
-        });
+      if (opponentCards.length > 0) {
+        let targetToDestroy = null;
+        if (player.id === "bot") {
+          targetToDestroy = opponentCards
+            .slice()
+            .sort((a, b) => (b.atk || 0) - (a.atk || 0))[0];
+        } else {
+          const requirementId = "tier_destroy";
+          const decorated = opponentCards.map((card, idx) => {
+            const inField = opponent.field.indexOf(card);
+            const inSpell = opponent.spellTrap.indexOf(card);
+            const inFieldSpell = opponent.fieldSpell === card ? 0 : -1;
+            const zoneIndex =
+              inField !== -1
+                ? inField
+                : inSpell !== -1
+                ? inSpell
+                : inFieldSpell;
+            const zone =
+              inField !== -1
+                ? "field"
+                : inSpell !== -1
+                ? "spellTrap"
+                : "fieldSpell";
+            const candidate = {
+              idx,
+              name: card.name,
+              owner: opponent.id,
+              controller: opponent.id,
+              zone,
+              zoneIndex,
+              position: card.position,
+              atk: card.atk,
+              def: card.def,
+              cardKind: card.cardKind,
+              cardRef: card,
+            };
+            candidate.key = game.buildSelectionCandidateKey(candidate, idx);
+            return candidate;
+          });
 
-        const selection = await new Promise((resolve) => {
-          game.renderer?.showTargetSelection(
-            [
+          const selectionContract = {
+            kind: "target",
+            message: "Select a card to destroy.",
+            requirements: [
               {
-                id: optionId,
+                id: requirementId,
                 min: 1,
                 max: 1,
+                zones: ["field", "spellTrap", "fieldSpell"],
+                owner: "opponent",
+                filters: {},
+                allowSelf: true,
+                distinct: true,
                 candidates: decorated,
               },
             ],
-            (map) => resolve(map?.[optionId]?.[0] ?? null),
-            () => resolve(null)
-          );
-        });
+            ui: { useFieldTargeting: true },
+            metadata: { context: "tier_destroy" },
+          };
 
-        if (selection !== null && selection !== undefined) {
-          targetToDestroy = decorated[selection]?.cardRef || null;
+          const selection = await new Promise((resolve) => {
+            game.startTargetSelectionSession({
+              kind: "target",
+              selectionContract,
+              onCancel: () => resolve(null),
+              execute: (selections) => {
+                resolve(selections);
+                return { success: true, needsSelection: false };
+              },
+            });
+          });
+
+          const chosenKey = selection?.[requirementId]?.[0];
+          if (chosenKey) {
+            targetToDestroy =
+              decorated.find((cand) => cand.key === chosenKey)?.cardRef || null;
+          }
         }
-      }
 
-      if (targetToDestroy) {
+        if (targetToDestroy) {
         const zoneName = opponent.field.includes(targetToDestroy)
           ? "field"
           : opponent.spellTrap.includes(targetToDestroy)
@@ -2946,7 +2992,7 @@ export async function handleDestroyTargetedCards(action, ctx, targets, engine) {
   const { player, opponent, source } = ctx;
   const game = engine.game;
 
-  if (!opponent || !source) return false;
+  if (!player || !opponent || !source) return false;
 
   // Get opponent's cards on field/spellTrap/fieldSpell
   const opponentCards = [
@@ -2970,36 +3016,98 @@ export async function handleDestroyTargetedCards(action, ctx, targets, engine) {
     `${source.name}: Select up to ${maxTargets} opponent cards to destroy.`
   );
 
-  // Build candidates list for showTargetSelection
-  const candidates = opponentCards.map((card, index) => ({
-    idx: index,
-    name: card.name,
-    owner: opponent.id === "player" ? "Player" : "Opponent",
-    position: card.position || "",
-    atk: card.atk || 0,
-    def: card.def || 0,
-    cardRef: card,
-  }));
+  // Build candidates list for selection contract
+  const candidates = opponentCards.map((card, index) => {
+    const inField = opponent.field.indexOf(card);
+    const inSpell = opponent.spellTrap.indexOf(card);
+    const inFieldSpell = opponent.fieldSpell === card ? 0 : -1;
+    const zoneIndex =
+      inField !== -1 ? inField : inSpell !== -1 ? inSpell : inFieldSpell;
+    const zone =
+      inField !== -1 ? "field" : inSpell !== -1 ? "spellTrap" : "fieldSpell";
+    const candidate = {
+      idx: index,
+      name: card.name,
+      owner: opponent.id === "player" ? "player" : "opponent",
+      controller: opponent.id,
+      zone,
+      zoneIndex,
+      position: card.position || "",
+      atk: card.atk || 0,
+      def: card.def || 0,
+      cardKind: card.cardKind,
+      cardRef: card,
+    };
+    candidate.key = game.buildSelectionCandidateKey(candidate, index);
+    return candidate;
+  });
+
+  const selectionContract = {
+    kind: "target",
+    message: `Select ${maxTargets} opponent card(s) to destroy.`,
+    requirements: [
+      {
+        id: "destroy_targets",
+        min: maxTargets,
+        max: maxTargets,
+        zones: ["field", "spellTrap", "fieldSpell"],
+        owner: "opponent",
+        filters: {},
+        allowSelf: true,
+        distinct: true,
+        candidates,
+      },
+    ],
+    ui: { useFieldTargeting: true },
+    metadata: { context: "destroy_targets" },
+  };
+
+  if (player.id === "bot") {
+    const autoResult = game.autoSelector?.select(selectionContract, {
+      owner: player,
+      activationContext: ctx.activationContext,
+      selectionKind: "target",
+    });
+    const selectedKeys =
+      autoResult && autoResult.ok
+        ? autoResult.selections["destroy_targets"] || []
+        : candidates.slice(0, maxTargets).map((cand) => cand.key);
+    const targetCards = selectedKeys
+      .map((key) => candidates.find((cand) => cand.key === key)?.cardRef)
+      .filter(Boolean);
+
+    if (targetCards.length === 0) {
+      game.renderer?.log("No cards selected.");
+      return false;
+    }
+
+    targetCards.forEach((card) => {
+      game.renderer?.log(`${source.name} destroyed ${card.name}!`);
+      game.moveCard(card, opponent, "graveyard");
+    });
+
+    game.updateBoard();
+    return true;
+  }
 
   return new Promise((resolve) => {
-    game.renderer?.showTargetSelection(
-      [
-        {
-          id: "destroy_targets",
-          zone: "opponent_field",
-          min: maxTargets,
-          max: maxTargets,
-          candidates: candidates,
-        },
-      ],
-      (selections) => {
-        const selectedIndices = selections["destroy_targets"] || [];
-        const targetCards = selectedIndices.map((idx) => opponentCards[idx]);
+    game.startTargetSelectionSession({
+      kind: "target",
+      selectionContract,
+      onCancel: () => {
+        game.renderer?.log("Target selection cancelled.");
+        resolve(false);
+      },
+      execute: (selections) => {
+        const selectedKeys = selections["destroy_targets"] || [];
+        const targetCards = selectedKeys
+          .map((key) => candidates.find((cand) => cand.key === key)?.cardRef)
+          .filter(Boolean);
 
         if (targetCards.length === 0) {
           game.renderer?.log("No cards selected.");
           resolve(false);
-          return;
+          return { success: true, needsSelection: false };
         }
 
         // Destroy each target
@@ -3010,12 +3118,9 @@ export async function handleDestroyTargetedCards(action, ctx, targets, engine) {
 
         game.updateBoard();
         resolve(true);
+        return { success: true, needsSelection: false };
       },
-      () => {
-        game.renderer?.log("Target selection cancelled.");
-        resolve(false);
-      }
-    );
+    });
   });
 }
 
