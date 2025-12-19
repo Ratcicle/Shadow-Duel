@@ -1099,71 +1099,18 @@ export default class Game {
 
   async resolveDestructionWithReplacement(card, options = {}) {
     if (!card || card.cardKind !== "monster") {
-    return { replaced: false };
-  }
-
-  async destroyCard(card, options = {}) {
-    if (!card) {
-      return { destroyed: false, reason: "invalid_card" };
+      return { replaced: false };
     }
-
-    const owner = card.owner === "player" ? this.player : this.bot;
-    if (!owner) {
-      return { destroyed: false, reason: "missing_owner" };
-    }
-
-    const cause = options.cause || options.reason || "effect";
-    const sourceCard = options.sourceCard || options.source || null;
-    const opponent = options.opponent || this.getOpponent(owner);
-    const fromZone =
-      options.fromZone ||
-      this.effectEngine?.findCardZone?.(owner, card) ||
-      null;
-
-    if (!fromZone) {
-      return { destroyed: false, reason: "not_in_zone" };
-    }
-
-    if (this.effectEngine?.checkBeforeDestroyNegations) {
-      const negationResult = await this.effectEngine.checkBeforeDestroyNegations(
-        card,
-        {
-          source: sourceCard,
-          player: owner,
-          opponent,
-          cause,
-          fromZone,
-        }
-      );
-      if (negationResult?.negated) {
-        return { destroyed: false, negated: true };
-      }
-    }
-
-    const { replaced } = (await this.resolveDestructionWithReplacement(card, {
-      reason: cause,
-      sourceCard,
-    })) || { replaced: false };
-
-    if (replaced) {
-      return { destroyed: false, replaced: true };
-    }
-
-    this.moveCard(card, owner, "graveyard", {
-      fromZone: fromZone || undefined,
-      wasDestroyed: true,
-    });
-
-    return { destroyed: true };
-  }
 
     const ownerPlayer = card.owner === "player" ? this.player : this.bot;
     if (!ownerPlayer) {
       return { replaced: false };
     }
 
+    const cause = options.cause || options.reason || "effect";
+
     // Check for Equip Spell protection (e.g., Crescent Shield Guard)
-    if (options.reason === "battle") {
+    if (cause === "battle") {
       const guardEquip = (card.equips || []).find(
         (equip) =>
           equip && equip.grantsCrescentShieldGuard && equip.equippedTo === card
@@ -1173,11 +1120,17 @@ export default class Game {
         this.renderer.log(
           `${guardEquip.name} was destroyed to protect ${card.name}.`
         );
-        this.moveCard(guardEquip, ownerPlayer, "graveyard", {
+        const guardResult = await this.destroyCard(guardEquip, {
+          cause,
+          sourceCard: card,
+          opponent: this.getOpponent(ownerPlayer),
           fromZone: "spellTrap",
         });
-        guardEquip.grantsCrescentShieldGuard = false;
-        return { replaced: true };
+        if (guardResult?.destroyed) {
+          guardEquip.grantsCrescentShieldGuard = false;
+          return { replaced: true };
+        }
+        return { replaced: false };
       }
     }
 
@@ -1208,7 +1161,7 @@ export default class Game {
     if (
       replacement.reason &&
       replacement.reason !== "any" &&
-      replacement.reason !== options.reason
+      replacement.reason !== cause
     ) {
       return { replaced: false };
     }
@@ -1316,6 +1269,61 @@ export default class Game {
       `${card.name} avoided destruction by sending ${costNames} to the Graveyard.`
     );
     return { replaced: true };
+  }
+
+  async destroyCard(card, options = {}) {
+    if (!card) {
+      return { destroyed: false, reason: "invalid_card" };
+    }
+
+    const owner = card.owner === "player" ? this.player : this.bot;
+    if (!owner) {
+      return { destroyed: false, reason: "missing_owner" };
+    }
+
+    const cause = options.cause || options.reason || "effect";
+    const sourceCard = options.sourceCard || options.source || null;
+    const opponent = options.opponent || this.getOpponent(owner);
+    const fromZone =
+      options.fromZone ||
+      this.effectEngine?.findCardZone?.(owner, card) ||
+      null;
+
+    if (!fromZone) {
+      return { destroyed: false, reason: "not_in_zone" };
+    }
+
+    if (this.effectEngine?.checkBeforeDestroyNegations) {
+      const negationResult = await this.effectEngine.checkBeforeDestroyNegations(
+        card,
+        {
+          source: sourceCard,
+          player: owner,
+          opponent,
+          cause,
+          fromZone,
+        }
+      );
+      if (negationResult?.negated) {
+        return { destroyed: false, negated: true };
+      }
+    }
+
+    const { replaced } = (await this.resolveDestructionWithReplacement(card, {
+      cause,
+      sourceCard,
+    })) || { replaced: false };
+
+    if (replaced) {
+      return { destroyed: false, replaced: true };
+    }
+
+    this.moveCard(card, owner, "graveyard", {
+      fromZone: fromZone || undefined,
+      wasDestroyed: true,
+    });
+
+    return { destroyed: true };
   }
 
   canFlipSummon(card) {
@@ -5146,6 +5154,114 @@ export default class Game {
       autoSelectedOk,
       cleanupOk,
       pipelineResult,
+    };
+  }
+
+  async devRunSanityH() {
+    if (!this.devModeEnabled) {
+      return { success: false, reason: "Dev Mode is disabled." };
+    }
+
+    this.devLog("SANITY_H_START", {
+      summary: "Sanity H: Hydra Titan before_destroy battle + Mirror Force",
+    });
+
+    const setupResult = this.applyManualSetup({
+      turn: "player",
+      phase: "battle",
+      player: {
+        field: [
+          { name: "Shadow-Heart Scale Dragon", position: "attack" },
+        ],
+        spellTrap: ["Mirror Force"],
+      },
+      bot: {
+        field: [
+          { name: "Void Hydra Titan", position: "defense" },
+          { name: "Void Hydra Titan", position: "attack" },
+        ],
+      },
+    });
+
+    if (!setupResult.success) {
+      return setupResult;
+    }
+
+    const attacker = this.player.field.find(Boolean);
+    const battleTarget = this.bot.field.find(
+      (card) => card && card.name === "Void Hydra Titan" && card.position === "defense"
+    );
+    const effectTarget = this.bot.field.find(
+      (card) => card && card.name === "Void Hydra Titan" && card.position === "attack"
+    );
+    const mirrorForce = this.player.spellTrap.find(
+      (card) => card && card.name === "Mirror Force"
+    );
+
+    if (!attacker || !battleTarget || !effectTarget || !mirrorForce) {
+      return { success: false, reason: "Sanity H setup missing cards." };
+    }
+
+    const battleAtkBefore = battleTarget.atk;
+    const effectAtkBefore = effectTarget.atk;
+
+    const battleResult = await this.destroyCard(battleTarget, {
+      cause: "battle",
+      sourceCard: attacker,
+      opponent: this.player,
+    });
+
+    const battleNegated = battleResult?.negated === true;
+    const battleSurvived = this.bot.field.includes(battleTarget);
+    const battleAtkReduced = battleTarget.atk === battleAtkBefore - 700;
+
+    const mirrorResult = await this.effectEngine.applyMirrorForceDestroy(
+      {},
+      {
+        game: this,
+        player: this.player,
+        source: mirrorForce,
+        card: mirrorForce,
+        eventData: { attacker },
+      }
+    );
+
+    const effectSurvived = this.bot.field.includes(effectTarget);
+    const effectAtkReduced = effectTarget.atk === effectAtkBefore - 700;
+    const effectNegated = effectSurvived && effectAtkReduced;
+
+    const cleanupState = this.devGetSelectionCleanupState();
+    const cleanupOk =
+      !cleanupState.selectionActive &&
+      !cleanupState.controlsVisible &&
+      cleanupState.highlightCount === 0;
+
+    const success =
+      battleNegated &&
+      battleSurvived &&
+      battleAtkReduced &&
+      effectNegated &&
+      cleanupOk &&
+      mirrorResult === true;
+
+    this.devLog("SANITY_H_RESULT", {
+      summary: "Sanity H result",
+      battleNegated,
+      battleSurvived,
+      battleAtkReduced,
+      effectNegated,
+      mirrorResult,
+      cleanupOk,
+    });
+
+    return {
+      success,
+      battleNegated,
+      battleSurvived,
+      battleAtkReduced,
+      effectNegated,
+      mirrorResult,
+      cleanupOk,
     };
   }
 
