@@ -21,7 +21,7 @@
   - [x] "Give card"
   - [x] "Force phase"
   - [x] "Reset duel"
-  - [x] "Activation Pipeline Sanity Suite" (A/B/C/D)
+  - [x] "Activation Pipeline Sanity Suite" (A/B/C/D/E/F/G/H)
 
 **Pronto quando:** você consegue reproduzir bugs e ver no log *qual ação/handler/condição* causou.
 
@@ -78,13 +78,15 @@ Checklist:
 - [x] Seleção com estados explícitos: `idle`, `selecting`, `confirming`, `resolving`
 - [x] UI não pode fechar modal quando cancel é proibido
 - [x] Player sempre confirma alvo (mesmo com 1 candidato); bot pode auto-selecionar
-- [ ] Contrato único de seleção:
-  - [ ] `requirements` (quantidade, filtros, zonas)
+- [x] Contrato único de seleção:
+  - [x] `requirements` (quantidade, filtros, zonas)
   - [x] `allowCancel`
   - [x] `onConfirm` sempre retorna para o engine
-- [ ] BOT usa um **AutoSelector** separado (não mistura com UI do player)
+- [x] BOT usa um **AutoSelector** separado (não mistura com UI do player)
 
 **Pronto quando:** não dá pra gerar softlock por UI, e todo efeito com targets/custos funciona igual em qualquer carta.
+
+**Status:** OK. COMPLETO
 
 ---
 
