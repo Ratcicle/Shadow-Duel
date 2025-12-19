@@ -2895,6 +2895,9 @@ export default class EffectEngine {
         opponent:
           ctx?.opponent ||
           (owner === this.game.player ? this.game.bot : this.game.player),
+        cause: ctx?.cause,
+        destroySource: ctx?.source || null,
+        fromZone: ctx?.fromZone || null,
       };
 
       const costSuccess = await this.applyActions(
@@ -2964,13 +2967,13 @@ export default class EffectEngine {
         const atkReduction = Math.floor(
           baseAtk * (1 - (action.atkFactor ?? 1))
         );
-        descriptions.push(`reduce ATK by ${atkReduction}`);
+        descriptions.push(`reduzir ATK em ${atkReduction}`);
       } else if (action.type === "reduce_self_atk") {
-        descriptions.push(`reduce ATK by ${action.amount ?? 0}`);
+        descriptions.push(`reduzir ATK em ${action.amount ?? 0}`);
       } else if (action.type === "pay_lp") {
-        descriptions.push(`pay ${action.amount} LP`);
+        descriptions.push(`pagar ${action.amount} LP`);
       } else if (action.type === "damage") {
-        descriptions.push(`take ${action.amount} damage`);
+        descriptions.push(`sofrer ${action.amount} de dano`);
       } else {
         descriptions.push(action.type);
       }
@@ -4625,10 +4628,11 @@ export default class EffectEngine {
     );
 
     // Destruir todos os monstros em Attack Position (com substituição de destruição)
+    const sourceCard = ctx.source || ctx.card || null;
     for (const monster of attackPositionMonsters) {
       await game.destroyCard(monster, {
         cause: "effect",
-        sourceCard: ctx.card,
+        sourceCard,
         opponent: player,
       });
     }
