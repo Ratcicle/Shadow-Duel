@@ -15,33 +15,6 @@ import {
   handleBuffStatsTempWithSecondAttack,
 } from "./ActionHandlers.js";
 
-export const LEGACY_ACTION_TYPES = new Set([
-  "draw",
-  "heal",
-  "heal_per_archetype_monster",
-  "damage",
-  "destroy",
-  "negate_attack",
-  "special_summon_token",
-  "buff_atk_temp",
-  "modify_stats_temp",
-  "reduce_self_atk",
-  "search_any",
-  "transmutate",
-  "equip",
-  "move",
-  "destroy_self_monsters_and_draw",
-  "forbid_attack_this_turn",
-  "forbid_attack_next_turn",
-  "grant_void_fusion_immunity",
-  "add_counter",
-  "polymerization_fusion_summon",
-  "banish",
-  "allow_direct_attack_this_turn",
-  "mirror_force_destroy_all",
-  "call_of_haunted_summon_and_bind",
-]);
-
 export default class EffectEngine {
   constructor(game) {
     this.game = game;
@@ -2854,68 +2827,21 @@ export default class EffectEngine {
     let destroyedAny = false;
 
     for (const card of targetCards) {
-      const owner = card.owner === "player" ? this.game.player : this.game.bot;
-      if (!owner) continue;
+      if (!this.game?.destroyCard) continue;
 
-      // Check for before_destroy negation handlers (e.g., destruction protection with cost)
-      const negationResult = await this.checkBeforeDestroyNegations(card, ctx);
-      if (negationResult?.negated) {
-        continue; // Skip destruction for this card
-      }
+      const result = await this.game.destroyCard(card, {
+        cause: "effect",
+        sourceCard: ctx?.source || null,
+        opponent: ctx?.opponent || null,
+      });
 
-      let replaced = false;
-      if (
-        this.game &&
-        typeof this.game.resolveDestructionWithReplacement === "function"
-      ) {
-        try {
-          const replacement = await this.game.resolveDestructionWithReplacement(
-            card,
-            {
-              reason: "effect",
-              sourceCard: ctx?.source || null,
-            }
-          );
-          replaced = replacement?.replaced;
-        } catch (err) {
-          console.error("Error resolving destruction replacement:", err);
-        }
-      }
-
-      if (replaced) continue;
-
-      if (this.game && typeof this.game.moveCard === "function") {
-        this.game.moveCard(card, owner, "graveyard", {
-          fromZone: "field",
-          wasDestroyed: true,
-        });
+      if (result?.destroyed) {
         destroyedAny = true;
         if (typeof this.game.updateBoard === "function") {
           this.game.updateBoard();
         }
         if (typeof this.game.checkWinCondition === "function") {
           this.game.checkWinCondition();
-        }
-        continue;
-      }
-
-      const zones = [
-        owner.field,
-        owner.hand,
-        owner.deck,
-        owner.spellTrap,
-        owner.fieldSpell ? [owner.fieldSpell] : [],
-      ];
-      for (const zone of zones) {
-        const idx = zone.indexOf(card);
-        if (idx > -1) {
-          zone.splice(idx, 1);
-          owner.graveyard.push(card);
-          if (owner.fieldSpell === card) {
-            owner.fieldSpell = null;
-          }
-          destroyedAny = true;
-          break;
         }
       }
     }
@@ -3039,6 +2965,8 @@ export default class EffectEngine {
           baseAtk * (1 - (action.atkFactor ?? 1))
         );
         descriptions.push(`reduce ATK by ${atkReduction}`);
+      } else if (action.type === "reduce_self_atk") {
+        descriptions.push(`reduce ATK by ${action.amount ?? 0}`);
       } else if (action.type === "pay_lp") {
         descriptions.push(`pay ${action.amount} LP`);
       } else if (action.type === "damage") {
@@ -3081,31 +3009,13 @@ export default class EffectEngine {
 
     // Destroy all collected monsters
     for (const card of othersToDestroy) {
-      // Check for negation on each card being destroyed
-      const negationResult = await this.checkBeforeDestroyNegations(card, ctx);
-      if (negationResult?.negated) {
-        // If negated, don't destroy and don't count towards draw
-        continue;
-      }
-
-      // Move card to graveyard
-      let moved = false;
-      if (this.game && typeof this.game.moveCard === "function") {
-        this.game.moveCard(card, player, "graveyard", {
-          fromZone: "field",
-          wasDestroyed: true,
-        });
-        moved = true;
-      } else {
-        const idx = player.field.indexOf(card);
-        if (idx > -1) {
-          player.field.splice(idx, 1);
-          player.graveyard.push(card);
-          moved = true;
-        }
-      }
-
-      if (moved) {
+      if (!this.game?.destroyCard) continue;
+      const result = await this.game.destroyCard(card, {
+        cause: "effect",
+        sourceCard,
+        opponent: ctx?.opponent || null,
+      });
+      if (result?.destroyed) {
         destroyedCount += 1;
       }
     }
@@ -4716,15 +4626,11 @@ export default class EffectEngine {
 
     // Destruir todos os monstros em Attack Position (com substituição de destruição)
     for (const monster of attackPositionMonsters) {
-      const { replaced } =
-        (await game.resolveDestructionWithReplacement(monster, {
-          reason: "effect",
-          sourceCard: ctx.card,
-        })) || {};
-
-      if (!replaced) {
-        game.moveCard(monster, opponent, "graveyard", { fromZone: "field" });
-      }
+      await game.destroyCard(monster, {
+        cause: "effect",
+        sourceCard: ctx.card,
+        opponent: player,
+      });
     }
 
     // Negar o ataque que disparou a Mirror Force

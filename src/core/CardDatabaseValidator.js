@@ -3,7 +3,6 @@ import {
   ActionHandlerRegistry,
   registerDefaultHandlers,
 } from "./ActionHandlers.js";
-import { LEGACY_ACTION_TYPES } from "./EffectEngine.js";
 
 const VALID_TIMINGS = new Set([
   "on_play",
@@ -45,10 +44,7 @@ export function validateCardDatabase() {
       ? registry.listTypes()
       : Array.from(registry.handlers?.keys?.() ?? []);
 
-  const allowedActionTypes = new Set([
-    ...registeredHandlerTypes,
-    ...LEGACY_ACTION_TYPES,
-  ]);
+  const allowedActionTypes = new Set(registeredHandlerTypes);
 
   const seenIds = new Map();
   const seenNames = new Map();

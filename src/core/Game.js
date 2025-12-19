@@ -1099,8 +1099,63 @@ export default class Game {
 
   async resolveDestructionWithReplacement(card, options = {}) {
     if (!card || card.cardKind !== "monster") {
-      return { replaced: false };
+    return { replaced: false };
+  }
+
+  async destroyCard(card, options = {}) {
+    if (!card) {
+      return { destroyed: false, reason: "invalid_card" };
     }
+
+    const owner = card.owner === "player" ? this.player : this.bot;
+    if (!owner) {
+      return { destroyed: false, reason: "missing_owner" };
+    }
+
+    const cause = options.cause || options.reason || "effect";
+    const sourceCard = options.sourceCard || options.source || null;
+    const opponent = options.opponent || this.getOpponent(owner);
+    const fromZone =
+      options.fromZone ||
+      this.effectEngine?.findCardZone?.(owner, card) ||
+      null;
+
+    if (!fromZone) {
+      return { destroyed: false, reason: "not_in_zone" };
+    }
+
+    if (this.effectEngine?.checkBeforeDestroyNegations) {
+      const negationResult = await this.effectEngine.checkBeforeDestroyNegations(
+        card,
+        {
+          source: sourceCard,
+          player: owner,
+          opponent,
+          cause,
+          fromZone,
+        }
+      );
+      if (negationResult?.negated) {
+        return { destroyed: false, negated: true };
+      }
+    }
+
+    const { replaced } = (await this.resolveDestructionWithReplacement(card, {
+      reason: cause,
+      sourceCard,
+    })) || { replaced: false };
+
+    if (replaced) {
+      return { destroyed: false, replaced: true };
+    }
+
+    this.moveCard(card, owner, "graveyard", {
+      fromZone: fromZone || undefined,
+      wasDestroyed: true,
+    });
+
+    return { destroyed: true };
+  }
 
     const ownerPlayer = card.owner === "player" ? this.player : this.bot;
     if (!ownerPlayer) {
@@ -2909,16 +2964,11 @@ export default class Game {
 
         logBattleDestroyCheck("attacker over atk target");
         if (this.canDestroyByBattle(target)) {
-          const { replaced } =
-            (await this.resolveDestructionWithReplacement(target, {
-              reason: "battle",
-              sourceCard: attacker,
-            })) || {};
-          if (!replaced) {
-            this.moveCard(target, defender, "graveyard", {
-              fromZone: "field",
-              wasDestroyed: true,
-            });
+          const result = await this.destroyCard(target, {
+            cause: "battle",
+            sourceCard: attacker,
+          });
+          if (result?.destroyed) {
             this.applyBattleDestroyEffect(attacker, target);
           }
         }
@@ -2929,48 +2979,33 @@ export default class Game {
 
         logBattleDestroyCheck("attacker loses to atk target");
         if (this.canDestroyByBattle(attacker)) {
-          const { replaced } =
-            (await this.resolveDestructionWithReplacement(attacker, {
-              reason: "battle",
-              sourceCard: target,
-            })) || {};
-          if (!replaced) {
-            this.moveCard(attacker, attPlayer, "graveyard");
+          const result = await this.destroyCard(attacker, {
+            cause: "battle",
+            sourceCard: target,
+          });
+          if (result?.destroyed) {
             this.applyBattleDestroyEffect(attacker, attacker);
           }
         }
       } else {
-        const attPlayer = attacker.owner === "player" ? this.player : this.bot;
-        const defPlayer = target.owner === "player" ? this.player : this.bot;
-
         logBattleDestroyCheck("tie - attacker destruction check");
         if (this.canDestroyByBattle(attacker)) {
-          const { replaced } =
-            (await this.resolveDestructionWithReplacement(attacker, {
-              reason: "battle",
-              sourceCard: target,
-            })) || {};
-          if (!replaced) {
-            this.moveCard(attacker, attPlayer, "graveyard", {
-              fromZone: "field",
-              wasDestroyed: true,
-            });
+          const result = await this.destroyCard(attacker, {
+            cause: "battle",
+            sourceCard: target,
+          });
+          if (result?.destroyed) {
             this.applyBattleDestroyEffect(attacker, attacker);
           }
         }
 
         logBattleDestroyCheck("tie - target destruction check");
         if (this.canDestroyByBattle(target)) {
-          const { replaced } =
-            (await this.resolveDestructionWithReplacement(target, {
-              reason: "battle",
-              sourceCard: attacker,
-            })) || {};
-          if (!replaced) {
-            this.moveCard(target, defPlayer, "graveyard", {
-              fromZone: "field",
-              wasDestroyed: true,
-            });
+          const result = await this.destroyCard(target, {
+            cause: "battle",
+            sourceCard: attacker,
+          });
+          if (result?.destroyed) {
             this.applyBattleDestroyEffect(attacker, target);
           }
         }
@@ -2984,16 +3019,11 @@ export default class Game {
         }
         logBattleDestroyCheck("defense target destruction check");
         if (this.canDestroyByBattle(target)) {
-          const { replaced } =
-            (await this.resolveDestructionWithReplacement(target, {
-              reason: "battle",
-              sourceCard: attacker,
-            })) || {};
-          if (!replaced) {
-            this.moveCard(target, defender, "graveyard", {
-              fromZone: "field",
-              wasDestroyed: true,
-            });
+          const result = await this.destroyCard(target, {
+            cause: "battle",
+            sourceCard: attacker,
+          });
+          if (result?.destroyed) {
             this.applyBattleDestroyEffect(attacker, target);
           }
         }
@@ -3321,17 +3351,20 @@ export default class Game {
 
       // Verificar se é "The Shadow Heart" - se sair do campo, destruir o monstro equipado
       if (card.name === "The Shadow Heart" && host) {
-        this.renderer.log(
-          `${host.name} is destroyed as ${card.name} left the field.`
-        );
         const hostOwner = host.owner === "player" ? this.player : this.bot;
-        const hostFieldIndex = hostOwner.field.indexOf(host);
-        if (hostFieldIndex > -1) {
-          hostOwner.field.splice(hostFieldIndex, 1);
-          hostOwner.graveyard.push(host);
-        }
+        void this.destroyCard(host, {
+          cause: "effect",
+          sourceCard: card,
+          opponent: this.getOpponent(hostOwner),
+        }).then((result) => {
+          if (result?.destroyed) {
+            this.renderer.log(
+              `${host.name} is destroyed as ${card.name} left the field.`
+            );
+            this.updateBoard();
+          }
+        });
         card.equippedTo = null;
-        this.updateBoard();
         return;
       }
 
@@ -3426,14 +3459,18 @@ export default class Game {
       // Se o monstro foi revivido por Call of the Haunted, destruir a trap também
       if (card.callOfTheHauntedTrap) {
         const callTrap = card.callOfTheHauntedTrap;
-        const trapIndex = fromOwner.spellTrap.indexOf(callTrap);
-        if (trapIndex > -1) {
-          fromOwner.spellTrap.splice(trapIndex, 1);
-          fromOwner.graveyard.push(callTrap);
-          this.renderer.log(
-            `${callTrap.name} was destroyed as ${card.name} left the field.`
-          );
-        }
+        void this.destroyCard(callTrap, {
+          cause: "effect",
+          sourceCard: card,
+          opponent: this.getOpponent(fromOwner),
+        }).then((result) => {
+          if (result?.destroyed) {
+            this.renderer.log(
+              `${callTrap.name} was destroyed as ${card.name} left the field.`
+            );
+            this.updateBoard();
+          }
+        });
         card.callOfTheHauntedTrap = null;
       }
     }
@@ -3450,14 +3487,18 @@ export default class Game {
       const revivedMonster = card.callOfTheHauntedTarget;
       const monsterOwner =
         revivedMonster.owner === "player" ? this.player : this.bot;
-      const monsterIndex = monsterOwner.field.indexOf(revivedMonster);
-      if (monsterIndex > -1) {
-        monsterOwner.field.splice(monsterIndex, 1);
-        monsterOwner.graveyard.push(revivedMonster);
-        this.renderer.log(
-          `${revivedMonster.name} was destroyed as ${card.name} left the field.`
-        );
-      }
+      void this.destroyCard(revivedMonster, {
+        cause: "effect",
+        sourceCard: card,
+        opponent: this.getOpponent(monsterOwner),
+      }).then((result) => {
+        if (result?.destroyed) {
+          this.renderer.log(
+            `${revivedMonster.name} was destroyed as ${card.name} left the field.`
+          );
+          this.updateBoard();
+        }
+      });
       card.callOfTheHauntedTarget = null;
     }
 

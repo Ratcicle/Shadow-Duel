@@ -435,6 +435,95 @@ async function summonCards(cards, sourceZone, player, action, engine) {
 }
 
 /**
+ * Send a monster you control to the Graveyard, then Special Summon
+ * 1 monster from your Graveyard with the same Level.
+ *
+ * Action properties:
+ * - targetRef / costTargetRef: reference to the cost selection
+ * - summonZone: zone to summon from (default: "graveyard")
+ * - summonFilters: additional summon filters (archetype, name, etc.)
+ * - position: "attack" | "defense" | "choice" (default: "choice")
+ * - cannotAttackThisTurn: boolean (default: false)
+ * - negateEffects: boolean (default: false)
+ * - promptPlayer: boolean (default: true for human player)
+ */
+export async function handleTransmutate(action, ctx, targets, engine) {
+  const { player } = ctx;
+  const game = engine.game;
+
+  if (!player || !game) return false;
+
+  const costRef = action.costTargetRef || action.targetRef;
+  const rawCost = costRef ? targets?.[costRef] : null;
+  const costCards = Array.isArray(rawCost)
+    ? rawCost.filter(Boolean)
+    : rawCost
+    ? [rawCost]
+    : [];
+
+  if (costCards.length === 0) {
+    game.renderer?.log("No valid cost selected for Transmutate.");
+    return false;
+  }
+
+  const costCard = costCards[0];
+  const costLevel = costCard?.level ?? 0;
+  if (!costLevel) {
+    game.renderer?.log("Transmutate requires a monster with a Level.");
+    return false;
+  }
+
+  const fromZone =
+    (typeof engine.findCardZone === "function" &&
+      engine.findCardZone(player, costCard)) ||
+    action.costFromZone ||
+    "field";
+
+  if (typeof game.moveCard === "function") {
+    game.moveCard(costCard, player, "graveyard", { fromZone });
+  } else {
+    const zone = player[fromZone] || player.field;
+    const idx = zone ? zone.indexOf(costCard) : -1;
+    if (idx > -1) {
+      zone.splice(idx, 1);
+    }
+    player.graveyard = player.graveyard || [];
+    player.graveyard.push(costCard);
+  }
+
+  if (typeof game.updateBoard === "function") {
+    game.updateBoard();
+  }
+
+  const summonFilters = {
+    ...(action.summonFilters || action.filters || {}),
+  };
+  if (!summonFilters.cardKind) {
+    summonFilters.cardKind = "monster";
+  }
+  summonFilters.level = costLevel;
+  summonFilters.levelOp = action.levelOp || "eq";
+
+  const summonAction = {
+    zone: action.summonZone || action.zone || "graveyard",
+    filters: summonFilters,
+    count: action.count || { min: 1, max: 1 },
+    position: action.position || "choice",
+    cannotAttackThisTurn: action.cannotAttackThisTurn || false,
+    negateEffects: action.negateEffects || false,
+    promptPlayer: action.promptPlayer,
+    excludeSummonRestrict: action.excludeSummonRestrict || [],
+  };
+
+  return await handleSpecialSummonFromZone(
+    summonAction,
+    ctx,
+    targets,
+    engine
+  );
+}
+
+/**
  * Generic handler for special summon from hand with cost
  * Replaces: applyVoidHaunterSpecialSummon, applyVoidForgottenKnightSpecialSummon, etc.
  *
@@ -873,16 +962,17 @@ export async function handleSpecialSummonFromHandWithTieredCost(
         }
 
         if (targetToDestroy) {
-        const zoneName = opponent.field.includes(targetToDestroy)
-          ? "field"
-          : opponent.spellTrap.includes(targetToDestroy)
-          ? "spellTrap"
-          : "fieldSpell";
-        game.moveCard(targetToDestroy, opponent, "graveyard", {
-          fromZone: zoneName,
-        });
-        game.renderer?.log(`${source.name} destruiu ${targetToDestroy.name}.`);
-      }
+          const result = await game.destroyCard(targetToDestroy, {
+            cause: "effect",
+            sourceCard: source,
+            opponent: player,
+          });
+          if (result?.destroyed) {
+            game.renderer?.log(
+              `${source.name} destruiu ${targetToDestroy.name}.`
+            );
+          }
+        }
     }
   }
 
@@ -1437,16 +1527,11 @@ export async function handleSelectiveFieldDestruction(
   );
 
   for (const { card, owner } of toDestroy) {
-    // Use game's destruction system to handle replacement effects
-    const { replaced } =
-      (await game.resolveDestructionWithReplacement?.(card, {
-        reason: "effect",
-        sourceCard: source,
-      })) || {};
-
-    if (!replaced) {
-      game.moveCard(card, owner, "graveyard", { fromZone: "field" });
-    }
+    await game.destroyCard(card, {
+      cause: "effect",
+      sourceCard: source,
+      opponent: game.getOpponent(owner),
+    });
   }
 
   // Log which monsters survived
@@ -1784,6 +1869,53 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
   }
 
   return anyBuffed;
+}
+
+/**
+ * Reduce the ATK of the source (or explicit target) by a flat amount.
+ *
+ * Action properties:
+ * - amount: ATK reduction amount
+ * - targetRef: optional target reference (defaults to source)
+ */
+export async function handleReduceSelfAtk(action, ctx, targets, engine) {
+  const game = engine.game;
+  const amount = Math.max(0, action.amount ?? 0);
+  if (amount <= 0) return false;
+
+  const targetRef = action.targetRef || "self";
+  let targetCards = [];
+
+  if (targetRef === "self") {
+    targetCards = [ctx.source];
+  } else if (targets[targetRef]) {
+    targetCards = Array.isArray(targets[targetRef])
+      ? targets[targetRef]
+      : [targets[targetRef]];
+  }
+
+  const validTargets = targetCards.filter(
+    (card) => card && card.cardKind === "monster"
+  );
+  if (validTargets.length === 0) return false;
+
+  validTargets.forEach((card) => {
+    const currentAtk = card.atk || 0;
+    card.atk = Math.max(0, currentAtk - amount);
+  });
+
+  if (game?.renderer?.log && validTargets.length === 1) {
+    const card = validTargets[0];
+    game.renderer.log(
+      `${card.name} loses ${amount} ATK (ATK now: ${card.atk}).`
+    );
+  }
+
+  if (typeof game?.updateBoard === "function") {
+    game.updateBoard();
+  }
+
+  return true;
 }
 
 /**
@@ -2655,29 +2787,16 @@ export async function handleDestroyAttackerOnArchetypeDestruction(
   const attackerOwner = engine.getOwnerByCard(attacker);
   if (!attackerOwner || attackerOwner.id === ctx.player.id) return false;
 
-  // Move attacker to graveyard
-  const attackerZone = engine.findCardZone(attackerOwner, attacker);
-  if (!attackerZone) return false;
-
-  const idx = attackerZone.indexOf(attacker);
-  if (idx === -1) return false;
-
-  attackerZone.splice(idx, 1);
-
-  if (!attackerOwner.graveyard) {
-    attackerOwner.graveyard = [];
-  }
-  attackerOwner.graveyard.push(attacker);
+  const result = await game.destroyCard(attacker, {
+    cause: "effect",
+    sourceCard: ctx.source || destroyed,
+    opponent: ctx.player,
+  });
+  if (!result?.destroyed) return false;
 
   game.renderer?.log(
     `${attacker.name} was sent to the Graveyard as punishment!`
   );
-
-  game.emit("card_to_grave", {
-    card: attacker,
-    fromZone: attackerZone,
-    player: attackerOwner,
-  });
 
   game.updateBoard();
   return true;
@@ -3081,10 +3200,16 @@ export async function handleDestroyTargetedCards(action, ctx, targets, engine) {
       return false;
     }
 
-    targetCards.forEach((card) => {
-      game.renderer?.log(`${source.name} destroyed ${card.name}!`);
-      game.moveCard(card, opponent, "graveyard");
-    });
+    for (const card of targetCards) {
+      const result = await game.destroyCard(card, {
+        cause: "effect",
+        sourceCard: source,
+        opponent: player,
+      });
+      if (result?.destroyed) {
+        game.renderer?.log(`${source.name} destroyed ${card.name}!`);
+      }
+    }
 
     game.updateBoard();
     return true;
@@ -3098,7 +3223,7 @@ export async function handleDestroyTargetedCards(action, ctx, targets, engine) {
         game.renderer?.log("Target selection cancelled.");
         resolve(false);
       },
-      execute: (selections) => {
+      execute: async (selections) => {
         const selectedKeys = selections["destroy_targets"] || [];
         const targetCards = selectedKeys
           .map((key) => candidates.find((cand) => cand.key === key)?.cardRef)
@@ -3111,10 +3236,16 @@ export async function handleDestroyTargetedCards(action, ctx, targets, engine) {
         }
 
         // Destroy each target
-        targetCards.forEach((card) => {
-          game.renderer?.log(`${source.name} destroyed ${card.name}!`);
-          game.moveCard(card, opponent, "graveyard");
-        });
+        for (const card of targetCards) {
+          const result = await game.destroyCard(card, {
+            cause: "effect",
+            sourceCard: source,
+            opponent: player,
+          });
+          if (result?.destroyed) {
+            game.renderer?.log(`${source.name} destroyed ${card.name}!`);
+          }
+        }
 
         game.updateBoard();
         resolve(true);
@@ -3272,6 +3403,7 @@ export function registerDefaultHandlers(registry) {
     "special_summon_matching_level",
     handleSpecialSummonMatchingLevel
   );
+  registry.register("transmutate", handleTransmutate);
   registry.register("banish", handleBanish);
   registry.register("banish_destroyed_monster", handleBanishDestroyedMonster);
 
@@ -3293,6 +3425,7 @@ export function registerDefaultHandlers(registry) {
 
   // Luminarch refactoring: new generic handlers
   registry.register("buff_stats_temp", handleBuffStatsTemp);
+  registry.register("reduce_self_atk", handleReduceSelfAtk);
   registry.register("add_status", handleAddStatus);
   registry.register("remove_status", handleAddStatus); // Same handler, uses action.remove flag
   registry.register("pay_lp", handlePayLP);
