@@ -4821,6 +4821,293 @@ export default class Game {
     };
   }
 
+  async devRunSanityF() {
+    if (!this.devModeEnabled) {
+      return { success: false, reason: "Dev Mode is disabled." };
+    }
+
+    this.devLog("SANITY_F_START", {
+      summary: "Sanity F: player strategy manual confirm",
+    });
+
+    const setupResult = this.applyManualSetup({
+      turn: "player",
+      phase: "main1",
+      player: {
+        field: [
+          { name: "Luminarch Valiant - Knight of the Dawn", position: "attack" },
+        ],
+      },
+      bot: { field: [] },
+    });
+
+    if (!setupResult.success) {
+      return setupResult;
+    }
+
+    const source = this.player.field.find(Boolean);
+    if (!source) {
+      return { success: false, reason: "Sanity F source card not found." };
+    }
+
+    const targetDefs = [
+      {
+        id: "sanity_strategy_target",
+        owner: "self",
+        zone: "field",
+        cardKind: "monster",
+        cardName: source.name,
+        requireFaceup: true,
+        count: { min: 1, max: 1 },
+        strategy: "highest_atk",
+      },
+    ];
+
+    const pipelineResult = await this.runActivationPipeline({
+      card: source,
+      owner: this.player,
+      activationZone: "field",
+      activationContext: {
+        fromHand: false,
+        sourceZone: "field",
+      },
+      selectionKind: "sanityF",
+      selectionMessage: "Sanity F: confirm the target selection.",
+      activate: (selections, activationCtx) => {
+        const ctx = {
+          source,
+          player: this.player,
+          opponent: this.bot,
+          activationZone: "field",
+          activationContext: activationCtx,
+        };
+        const targetResult = this.effectEngine.resolveTargets(
+          targetDefs,
+          ctx,
+          selections
+        );
+        if (targetResult.needsSelection) {
+          return {
+            success: false,
+            needsSelection: true,
+            selectionContract: targetResult.selectionContract,
+          };
+        }
+        if (targetResult.ok === false) {
+          return {
+            success: false,
+            needsSelection: false,
+            reason: targetResult.reason,
+          };
+        }
+        return { success: true, needsSelection: false };
+      },
+    });
+
+    const selection = this.targetSelection;
+    const selectionOpened = !!selection;
+    const allowCancel = selectionOpened ? !selection.preventCancel : false;
+    const contract = selectionOpened ? selection.selectionContract : null;
+    const requirement =
+      contract?.requirements?.[selection?.currentRequirement ?? 0] ||
+      contract?.requirements?.[0] ||
+      null;
+    const contractOk =
+      selectionOpened &&
+      Array.isArray(contract?.requirements) &&
+      contract.requirements.length > 0;
+    const strategyOk = requirement?.filters?.strategy === "highest_atk";
+    const candidateCount = requirement?.candidates?.length || 0;
+
+    let selectionResolved = false;
+    let cancelAttempted = false;
+
+    if (selectionOpened) {
+      if (allowCancel) {
+        cancelAttempted = true;
+        this.cancelTargetSelection();
+        selectionResolved = true;
+      } else {
+        const autoResult = await this.devAutoConfirmTargetSelection();
+        selectionResolved = autoResult.success;
+      }
+    }
+
+    this.devForceTargetCleanup();
+    const cleanupState = this.devGetSelectionCleanupState();
+    const cleanupOk =
+      !cleanupState.selectionActive &&
+      !cleanupState.controlsVisible &&
+      cleanupState.highlightCount === 0;
+
+    const candidateCountOk = candidateCount === 1;
+    const success =
+      selectionOpened &&
+      selectionResolved &&
+      cleanupOk &&
+      contractOk &&
+      strategyOk &&
+      candidateCountOk;
+
+    this.devLog("SANITY_F_RESULT", {
+      summary: "Sanity F result",
+      selectionOpened,
+      allowCancel,
+      contractOk,
+      strategyOk,
+      candidateCount,
+      candidateCountOk,
+      cancelAttempted,
+      selectionResolved,
+      cleanupOk,
+      pipelineResult,
+    });
+
+    return {
+      success,
+      selectionOpened,
+      allowCancel,
+      contractOk,
+      strategyOk,
+      candidateCount,
+      candidateCountOk,
+      cancelAttempted,
+      selectionResolved,
+      cleanupOk,
+      pipelineResult,
+    };
+  }
+
+  async devRunSanityG() {
+    if (!this.devModeEnabled) {
+      return { success: false, reason: "Dev Mode is disabled." };
+    }
+
+    this.devLog("SANITY_G_START", {
+      summary: "Sanity G: bot optional min=0 selection",
+    });
+
+    const setupResult = this.applyManualSetup({
+      turn: "bot",
+      phase: "main1",
+      player: {
+        field: [
+          { name: "Luminarch Valiant - Knight of the Dawn", position: "attack" },
+        ],
+      },
+      bot: {
+        field: [
+          { name: "Luminarch Magic Sickle", position: "attack" },
+        ],
+      },
+    });
+
+    if (!setupResult.success) {
+      return setupResult;
+    }
+
+    const source = this.bot.field.find(Boolean);
+    if (!source) {
+      return { success: false, reason: "Sanity G source card not found." };
+    }
+
+    const targetDefs = [
+      {
+        id: "sanity_optional_target",
+        owner: "opponent",
+        zone: "field",
+        cardKind: "monster",
+        requireFaceup: true,
+        count: { min: 0, max: 1 },
+      },
+    ];
+
+    let chosenCount = null;
+    let selectionPrompted = false;
+
+    const pipelineResult = await this.runActivationPipeline({
+      card: source,
+      owner: this.bot,
+      activationZone: "field",
+      activationContext: {
+        fromHand: false,
+        sourceZone: "field",
+      },
+      selectionKind: "sanityG",
+      selectionMessage: "Sanity G: optional selection (bot).",
+      activate: (selections, activationCtx) => {
+        const ctx = {
+          source,
+          player: this.bot,
+          opponent: this.player,
+          activationZone: "field",
+          activationContext: activationCtx,
+        };
+        const targetResult = this.effectEngine.resolveTargets(
+          targetDefs,
+          ctx,
+          selections
+        );
+        if (targetResult.needsSelection) {
+          selectionPrompted = true;
+          return {
+            success: false,
+            needsSelection: true,
+            selectionContract: targetResult.selectionContract,
+          };
+        }
+        if (targetResult.ok === false) {
+          return {
+            success: false,
+            needsSelection: false,
+            reason: targetResult.reason,
+          };
+        }
+        const chosen = targetResult.targets?.sanity_optional_target || [];
+        chosenCount = chosen.length;
+        return { success: true, needsSelection: false };
+      },
+    });
+
+    const selectionOpened = !!this.targetSelection;
+    this.devForceTargetCleanup();
+    const cleanupState = this.devGetSelectionCleanupState();
+    const cleanupOk =
+      !cleanupState.selectionActive &&
+      !cleanupState.controlsVisible &&
+      cleanupState.highlightCount === 0;
+
+    const resolvedOk =
+      pipelineResult?.success === true &&
+      pipelineResult?.needsSelection === false;
+    const optionalOk = chosenCount === 0;
+    const autoSelectedOk = !selectionOpened;
+    const success =
+      resolvedOk && optionalOk && autoSelectedOk && cleanupOk;
+
+    this.devLog("SANITY_G_RESULT", {
+      summary: "Sanity G result",
+      selectionPrompted,
+      chosenCount,
+      resolvedOk,
+      optionalOk,
+      autoSelectedOk,
+      cleanupOk,
+      pipelineResult,
+    });
+
+    return {
+      success,
+      selectionPrompted,
+      chosenCount,
+      resolvedOk,
+      optionalOk,
+      autoSelectedOk,
+      cleanupOk,
+      pipelineResult,
+    };
+  }
+
   applyManualSetup(definition = {}) {
     if (!this.devModeEnabled) {
       return { success: false, reason: "Dev Mode is disabled." };

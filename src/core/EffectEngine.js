@@ -2075,6 +2075,10 @@ export default class EffectEngine {
     const targetMap = {};
     const requirements = [];
     let needsSelection = false;
+    const activationContext = ctx?.activationContext || {};
+    const autoSelectSingleTarget =
+      activationContext.autoSelectSingleTarget === true;
+    const isBot = ctx?.player?.id === "bot";
 
     for (const def of targetDefs) {
       const { zoneName, candidates } = this.selectCandidates(def, ctx);
@@ -2160,9 +2164,17 @@ export default class EffectEngine {
         }
       }
 
-      const shouldAutoSelect = def.autoSelect || !!def.strategy;
+      const autoSelectExplicit = def.autoSelect === true;
+      const allowAutoSelectForPlayer =
+        !isBot && autoSelectSingleTarget && autoSelectExplicit;
+      const allowAutoSelectForBot =
+        isBot &&
+        autoSelectSingleTarget &&
+        (autoSelectExplicit || (min === 1 && max === 1));
+      const shouldAutoSelect = allowAutoSelectForPlayer || allowAutoSelectForBot;
       if (shouldAutoSelect) {
-        const takeCount = Math.min(max, candidates.length);
+        const desiredCount = autoSelectExplicit ? max : 1;
+        const takeCount = Math.min(desiredCount, candidates.length);
         targetMap[def.id] = candidates.slice(0, takeCount);
         continue;
       }

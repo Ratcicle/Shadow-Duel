@@ -36,8 +36,12 @@ export default class AutoSelector {
         candidates,
         contextWithContract
       );
-      const desiredCount =
-        min === 0 && max > 0 ? Math.min(1, max) : Math.min(min, max);
+      const desiredCount = this.getDesiredCount(
+        requirement,
+        ordered,
+        { min, max },
+        contextWithContract
+      );
       const chosen = ordered.slice(0, desiredCount);
       selections[requirement.id] = chosen
         .map((cand) => cand.key)
@@ -62,6 +66,41 @@ export default class AutoSelector {
     }
 
     return candidates;
+  }
+
+  getDesiredCount(requirement, candidates, limits, context) {
+    const min = Number(limits.min ?? 0);
+    const max = Number(limits.max ?? min);
+    const available = Array.isArray(candidates) ? candidates.length : 0;
+    if (available <= 0) return 0;
+
+    if (min > 0) {
+      return Math.min(min, max, available);
+    }
+
+    const shouldSelectOptional = this.shouldSelectOptional(
+      requirement,
+      candidates,
+      context
+    );
+    if (!shouldSelectOptional || max <= 0) {
+      return 0;
+    }
+
+    return Math.min(1, max, available);
+  }
+
+  shouldSelectOptional(requirement, candidates, context) {
+    const intent =
+      requirement.intent ||
+      requirement.filters?.intent ||
+      requirement.filters?.strategy ||
+      requirement.strategy ||
+      selectionContractIntent(context) ||
+      null;
+    if (intent) return true;
+
+    return false;
   }
 }
 
