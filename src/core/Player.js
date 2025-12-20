@@ -321,15 +321,25 @@ export default class Player {
   }
 
   takeDamage(amount) {
+    if (!amount || amount <= 0) return;
+    const before = this.lp;
     this.lp -= amount;
     if (this.lp < 0) this.lp = 0;
+    const actual = Math.max(0, before - this.lp);
+    if (actual > 0 && this.game?.renderer?.showLpChange) {
+      this.game.renderer.showLpChange(this, -actual);
+    }
   }
 
   gainLP(amount) {
     // Apply LP gain multiplier (for effects like Megashield Barbarias)
     const multiplier = this.lpGainMultiplier || 1.0;
     const adjustedAmount = Math.floor(amount * multiplier);
+    if (!adjustedAmount || adjustedAmount <= 0) return;
     this.lp += adjustedAmount;
+    if (this.game?.renderer?.showLpChange) {
+      this.game.renderer.showLpChange(this, adjustedAmount);
+    }
   }
 
   /**

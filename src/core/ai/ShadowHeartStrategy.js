@@ -1248,9 +1248,13 @@ export default class ShadowHeartStrategy extends BaseStrategy {
         const player = state.bot;
         const card = player.hand[action.index];
         if (!card) break;
-        this.simulateSpellEffect(state, card);
         player.hand.splice(action.index, 1);
-        player.graveyard.push(card);
+        const placedCard = { ...card };
+        this.simulateSpellEffect(state, placedCard);
+        const placement = this.placeSpellCard(state, placedCard);
+        if (!placement.placed) {
+          player.graveyard.push(placedCard);
+        }
         break;
       }
       case "fieldEffect": {

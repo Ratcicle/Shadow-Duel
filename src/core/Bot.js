@@ -1,8 +1,7 @@
 ﻿import Player from "./Player.js";
 import { cardDatabase, cardDatabaseById } from "../data/cards.js";
 import Card from "./Card.js";
-import LuminarchStrategy from "./ai/LuminarchStrategy.js";
-import ShadowHeartStrategy from "./ai/ShadowHeartStrategy.js";
+import { getStrategyFor } from "./ai/StrategyRegistry.js";
 
 export default class Bot extends Player {
   constructor(archetype = "shadowheart") {
@@ -22,11 +21,7 @@ export default class Bot extends Player {
     const validIds = Bot.getAvailablePresets().map((p) => p.id);
     this.archetype = validIds.includes(presetId) ? presetId : "shadowheart";
 
-    if (this.archetype === "shadowheart") {
-      this.strategy = new ShadowHeartStrategy(this);
-    } else {
-      this.strategy = new LuminarchStrategy(this);
-    }
+    this.strategy = getStrategyFor(this.archetype, this);
   }
 
 
@@ -289,9 +284,17 @@ export default class Bot extends Player {
           this.simulateBattle(simState, simAttacker, simTarget);
           const scoreAfter = this.evaluateBoard(simState, simState.bot);
           let delta = scoreAfter - baseScore;
+          const opponentLpAfter = simState.player.lp || 0;
+          const attackerSurvived = simState.bot.field.some(
+            (c) => c.id === attacker.id
+          );
+          const targetSurvived = target
+            ? simState.player.field.some((c) => c.id === target.id)
+            : false;
+          const lethalNow = opponentLpAfter <= 0;
 
           if (target === null) delta += 0.5;
-          if (target && simState.bot.field.find((c) => c.id === attacker.id)) {
+          if (target && attackerSurvived) {
             delta += 0.3;
           }
           if (target === null && simState.player.field.length === 0) {
@@ -300,6 +303,15 @@ export default class Bot extends Player {
             } else if (totalAtkPotential >= opponentLp) {
               delta += 3;
             }
+          }
+          if (lethalNow) {
+            delta += 10;
+          }
+          if (!attackerSurvived && !lethalNow) {
+            delta -= targetSurvived ? 1.0 : 0.4;
+          }
+          if (target && !targetSurvived && attackerSurvived) {
+            delta += 0.4;
           }
           if (
             target &&
@@ -422,17 +434,17 @@ export default class Bot extends Player {
   }
 
   async executeMainPhaseAction(game, action) {
-    if (!action) return;
+    if (!action) return false;
     const baseGuard = game.canStartAction({
       actor: this,
       kind: "bot_main_action",
       phaseReq: ["main1", "main2"],
     });
-    if (!baseGuard.ok) return;
+    if (!baseGuard.ok) return false;
 
     if (action.type === "summon") {
       const cardToSummon = this.hand[action.index];
-      if (!cardToSummon) return;
+      if (!cardToSummon) return false;
 
       // Calcular tributos necessários e selecionar os melhores (piores monstros)
       const tributeInfo = this.getTributeRequirementFor(cardToSummon, this);
@@ -457,13 +469,14 @@ export default class Bot extends Player {
           `Bot summons ${action.facedown ? "a monster in defense" : card.name}`
         );
         game.updateBoard();
+        return true;
       }
-      return;
+      return false;
     }
 
     if (action.type === "spell") {
       const card = this.hand[action.index];
-      if (!card) return;
+      if (!card) return false;
 
       if (
         game.effectEngine &&
@@ -474,7 +487,7 @@ export default class Bot extends Player {
           this
         );
         if (preview && !preview.ok) {
-          return;
+          return false;
         }
       }
 
@@ -524,7 +537,7 @@ export default class Bot extends Player {
           game.updateBoard();
         },
       });
-      return;
+      return true;
     }
 
     if (action.type === "fieldEffect" && this.fieldSpell) {
@@ -561,7 +574,9 @@ export default class Bot extends Player {
           game.updateBoard();
         },
       });
+      return true;
     }
+    return false;
   }
 
   cloneGameState(game) {

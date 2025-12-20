@@ -53,6 +53,47 @@ export default class Renderer {
     el.textContent = player.lp;
   }
 
+  showLpChange(player, amount, options = {}) {
+    if (!player || !amount) return;
+    const value = Number(amount);
+    if (!Number.isFinite(value) || value === 0) return;
+
+    const isHeal = value > 0;
+    const container = document.getElementById(
+      player.id === "player" ? "player-area" : "bot-area"
+    );
+    if (!container) return;
+
+    const float = document.createElement("div");
+    float.className = [
+      "lp-float",
+      isHeal ? "lp-float-heal" : "lp-float-damage",
+      player.id === "player" ? "lp-float-player" : "lp-float-bot",
+    ].join(" ");
+    float.textContent = `${isHeal ? "+" : ""}${Math.abs(value)}`;
+    container.appendChild(float);
+
+    requestAnimationFrame(() => {
+      float.classList.add("lp-float-animate");
+    });
+
+    const lpEl =
+      player.id === "player" ? this.elements.playerLP : this.elements.botLP;
+    const counter = lpEl ? lpEl.closest(".lp-counter") : null;
+    if (counter) {
+      const flashClass = isHeal ? "lp-flash-heal" : "lp-flash-damage";
+      counter.classList.remove("lp-flash-heal", "lp-flash-damage");
+      counter.classList.add(flashClass);
+      setTimeout(() => {
+        counter.classList.remove(flashClass);
+      }, 420);
+    }
+
+    setTimeout(() => {
+      float.remove();
+    }, 1100);
+  }
+
   renderHand(player) {
     const container =
       player.id === "player" ? this.elements.playerHand : this.elements.botHand;
@@ -171,6 +212,73 @@ export default class Renderer {
     }
 
     container.appendChild(cardEl);
+  }
+
+  applyActivationIndicators(owner, indicators = {}) {
+    const prefix = owner === "player" ? "player" : "bot";
+    this.applyZoneActivationIndicators(
+      this.elements[`${prefix}Hand`],
+      indicators.hand || {}
+    );
+    this.applyZoneActivationIndicators(
+      this.elements[`${prefix}Field`],
+      indicators.field || {}
+    );
+    this.applyZoneActivationIndicators(
+      this.elements[`${prefix}SpellTrap`],
+      indicators.spellTrap || {}
+    );
+
+    const fieldSpellContainer = this.elements[`${prefix}FieldSpell`];
+    if (fieldSpellContainer) {
+      const cardEl = fieldSpellContainer.querySelector(".card");
+      if (cardEl) {
+        this.clearActivationHint(cardEl);
+        const hint = indicators.fieldSpell;
+        if (hint && hint.label) {
+          this.setActivationHint(cardEl, hint.label);
+        }
+        if (hint?.canActivate) {
+          this.decorateActivatableCard(cardEl);
+        }
+      }
+    }
+  }
+
+  applyZoneActivationIndicators(container, zoneIndicators) {
+    if (!container || !zoneIndicators) return;
+    const cardEls = container.querySelectorAll(".card");
+    cardEls.forEach((cardEl) => {
+      const index = Number(cardEl.dataset.index);
+      if (Number.isNaN(index)) return;
+      this.clearActivationHint(cardEl);
+      const hint = zoneIndicators[index];
+      if (!hint) return;
+      if (hint.label) {
+        this.setActivationHint(cardEl, hint.label);
+      }
+      if (hint.canActivate) {
+        this.decorateActivatableCard(cardEl);
+      }
+    });
+  }
+
+  decorateActivatableCard(cardEl) {
+    cardEl.classList.add("card-activatable");
+  }
+
+  setActivationHint(cardEl, label) {
+    if (!label) return;
+    cardEl.title = label;
+    cardEl.dataset.activationHint = "true";
+  }
+
+  clearActivationHint(cardEl) {
+    cardEl.classList.remove("card-activatable");
+    if (cardEl.dataset.activationHint) {
+      delete cardEl.dataset.activationHint;
+      cardEl.removeAttribute("title");
+    }
   }
 
   showSummonModal(cardIndex, callback, options = {}) {
@@ -1352,6 +1460,10 @@ export default class Renderer {
     bar.style.zIndex = "3000";
     bar.style.alignItems = "center";
 
+    const counter = document.createElement("div");
+    counter.className = "field-targeting-counter";
+    counter.textContent = "0 / 0";
+
     const confirmBtn = document.createElement("button");
     confirmBtn.textContent = "Confirm";
     confirmBtn.className = "primary";
@@ -1372,8 +1484,22 @@ export default class Renderer {
       bar.appendChild(cancelBtn);
     }
 
+    bar.appendChild(counter);
     bar.appendChild(confirmBtn);
     document.body.appendChild(bar);
+
+    const updateState = ({ selected = 0, min = 0, max = 0, allowEmpty }) => {
+      const requiredMin = allowEmpty ? 0 : min;
+      counter.textContent = `${selected} / ${max || "-"}`;
+      confirmBtn.disabled = selected < requiredMin || (max > 0 && selected > max);
+    };
+
+    updateState({ selected: 0, min: 0, max: 0, allowEmpty: true });
+
+    return {
+      updateState,
+      close: () => this.hideFieldTargetingControls(),
+    };
   }
 
   hideFieldTargetingControls() {

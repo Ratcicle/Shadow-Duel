@@ -385,6 +385,7 @@ body {
   cursor: pointer;
   transition: transform 0.2s, box-shadow 0.2s;
   user-select: none;
+  position: relative;
 }
 
 .field-slot .card {
@@ -1673,6 +1674,52 @@ body {
   animation: none;
 }
 
+.card.card-activatable {
+  border: 2px solid rgba(255, 215, 0, 0.85);
+  box-shadow: 0 0 16px rgba(255, 215, 0, 0.75);
+  animation: pulse-activatable 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse-activatable {
+  0%,
+  100% {
+    box-shadow: 0 0 12px rgba(255, 215, 0, 0.55);
+    border-color: rgba(255, 215, 0, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.9);
+    border-color: rgba(255, 215, 0, 1);
+  }
+}
+
+.card.attack-ready {
+  border: 2px solid rgba(187, 134, 252, 0.85);
+  box-shadow: 0 0 16px rgba(187, 134, 252, 0.75);
+  animation: pulse-attack-ready 1.2s ease-in-out infinite;
+}
+
+.card.attack-attacker {
+  border: 2px solid rgba(255, 80, 80, 0.95);
+  box-shadow: 0 0 18px rgba(255, 80, 80, 0.9);
+}
+
+.card.attack-target {
+  border: 2px solid rgba(255, 210, 120, 0.95);
+  box-shadow: 0 0 18px rgba(255, 210, 120, 0.85);
+}
+
+@keyframes pulse-attack-ready {
+  0%,
+  100% {
+    box-shadow: 0 0 12px rgba(187, 134, 252, 0.55);
+    border-color: rgba(187, 134, 252, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(187, 134, 252, 0.9);
+    border-color: rgba(187, 134, 252, 1);
+  }
+}
+
 #bot-hand.direct-attack-target {
   position: relative;
   outline: 2px dashed #ff6bd6;
@@ -1680,6 +1727,88 @@ body {
     0 0 28px rgba(100, 215, 255, 0.35);
   animation: pulse-direct-hand 1.2s ease-in-out infinite;
   cursor: pointer;
+}
+
+#bot-hand.direct-attack-active {
+  position: relative;
+  outline: 2px solid rgba(255, 80, 80, 0.9);
+  box-shadow: 0 0 18px rgba(255, 80, 80, 0.8),
+    0 0 32px rgba(255, 120, 80, 0.5);
+}
+
+.lp-float {
+  position: absolute;
+  right: 16px;
+  font-size: 1.2rem;
+  font-weight: 700;
+  opacity: 0;
+  transform: translateY(0);
+  pointer-events: none;
+  text-shadow: 0 0 6px rgba(0, 0, 0, 0.6);
+}
+
+.lp-float-player {
+  bottom: 18px;
+}
+
+.lp-float-bot {
+  top: 18px;
+}
+
+.lp-float-damage {
+  color: #ff6b6b;
+}
+
+.lp-float-heal {
+  color: #7bff9d;
+}
+
+.lp-float-animate {
+  animation: lp-float-rise 1s ease-out forwards;
+}
+
+@keyframes lp-float-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(0);
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+}
+
+.lp-counter.lp-flash-damage {
+  animation: lp-flash-damage 0.4s ease-in-out;
+}
+
+.lp-counter.lp-flash-heal {
+  animation: lp-flash-heal 0.4s ease-in-out;
+}
+
+@keyframes lp-flash-damage {
+  0% {
+    color: #ff6b6b;
+    text-shadow: 0 0 6px rgba(255, 107, 107, 0.6);
+  }
+  100% {
+    color: inherit;
+    text-shadow: none;
+  }
+}
+
+@keyframes lp-flash-heal {
+  0% {
+    color: #7bff9d;
+    text-shadow: 0 0 6px rgba(123, 255, 157, 0.6);
+  }
+  100% {
+    color: inherit;
+    text-shadow: none;
+  }
 }
 
 #bot-hand.direct-attack-target::after {
@@ -2395,6 +2524,31 @@ body {
 .target-actions button:last-child:hover {
   background: #444;
   border-color: var(--accent-color);
+}
+
+#game-container.selection-dim .card {
+  opacity: 0.35;
+  filter: saturate(0.6);
+}
+
+#game-container.selection-dim .card.targetable,
+#game-container.selection-dim .card.selected-target,
+#game-container.selection-dim .card.attack-attacker,
+#game-container.selection-dim .card.attack-target {
+  opacity: 1;
+  filter: none;
+}
+
+#game-container.selection-dim #bot-hand.direct-attack-target,
+#game-container.selection-dim #bot-hand.direct-attack-active {
+  opacity: 1;
+}
+
+.field-targeting-counter {
+  color: #ccc;
+  font-size: 0.9rem;
+  min-width: 64px;
+  text-align: center;
 }
 
 /* Compact prompt for destruction negation */

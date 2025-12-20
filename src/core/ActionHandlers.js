@@ -349,15 +349,12 @@ async function summonCards(cards, sourceZone, player, action, engine) {
   let summoned = 0;
   const setAtkToZero = action.setAtkToZeroAfterSummon === true;
   const setDefToZero = action.setDefToZeroAfterSummon === true;
+  const canUseMoveCard = game && typeof game.moveCard === "function";
+  const fromZoneName =
+    action.fromZone || action.zone || action.summonZone || "deck";
 
   for (const card of cards) {
     if (!card || player.field.length >= 5) break;
-
-    // Remove from source zone
-    const cardIndex = sourceZone.indexOf(card);
-    if (cardIndex !== -1) {
-      sourceZone.splice(cardIndex, 1);
-    }
 
     // Determine position
     let position = action.position || "choice";
@@ -365,20 +362,39 @@ async function summonCards(cards, sourceZone, player, action, engine) {
       position = await engine.chooseSpecialSummonPosition(card, player);
     }
 
-    // Set card properties
-    card.position = position;
-    card.isFacedown = false;
-    card.hasAttacked = false;
-    card.cannotAttackThisTurn = action.cannotAttackThisTurn || false;
-    card.owner = player.id;
+    let usedMoveCard = false;
+    if (canUseMoveCard) {
+      const moveResult = game.moveCard(card, player, "field", {
+        fromZone: fromZoneName,
+        position,
+        isFacedown: false,
+        resetAttackFlags: true,
+      });
+      if (moveResult?.success === false) {
+        continue;
+      }
+      usedMoveCard = true;
+    } else {
+      // Remove from source zone (fallback)
+      const cardIndex = sourceZone.indexOf(card);
+      if (cardIndex !== -1) {
+        sourceZone.splice(cardIndex, 1);
+      }
 
-    // Negate effects if specified
+      card.position = position;
+      card.isFacedown = false;
+      card.hasAttacked = false;
+      card.attacksUsedThisTurn = 0;
+      card.owner = player.id;
+      card.controller = player.id;
+      player.field.push(card);
+    }
+
+    card.cannotAttackThisTurn = action.cannotAttackThisTurn || false;
+
     if (action.negateEffects) {
       card.effectsNegated = true;
     }
-
-    // Add to field
-    player.field.push(card);
 
     if (setAtkToZero) {
       if (card.originalAtk == null) {
@@ -394,13 +410,14 @@ async function summonCards(cards, sourceZone, player, action, engine) {
       card.def = 0;
     }
 
-    // Emit after_summon event
-    await game.emit("after_summon", {
-      card: card,
-      player: player,
-      method: "special",
-      fromZone: action.zone || "deck",
-    });
+    if (!usedMoveCard) {
+      await game.emit("after_summon", {
+        card: card,
+        player: player,
+        method: "special",
+        fromZone: fromZoneName,
+      });
+    }
 
     summoned++;
   }
@@ -582,11 +599,20 @@ export async function handleSpecialSummonFromHandWithCost(
     "[handleSpecialSummonFromHandWithCost] Moving cards to graveyard..."
   );
   for (const costCard of costTargets) {
+    const fromZone =
+      typeof engine.findCardZone === "function"
+        ? engine.findCardZone(player, costCard) || "field"
+        : "field";
     const fieldIndex = player.field.indexOf(costCard);
     console.log(
       `[handleSpecialSummonFromHandWithCost] ${costCard.name}: fieldIndex=${fieldIndex}`
     );
-    if (fieldIndex !== -1) {
+    if (typeof game.moveCard === "function") {
+      game.moveCard(costCard, player, "graveyard", { fromZone });
+      console.log(
+        `[handleSpecialSummonFromHandWithCost] Moved ${costCard.name} to graveyard`
+      );
+    } else if (fieldIndex !== -1) {
       player.field.splice(fieldIndex, 1);
       player.graveyard.push(costCard);
       console.log(
@@ -611,39 +637,41 @@ export async function handleSpecialSummonFromHandWithCost(
     return false;
   }
 
-  // Remove from hand
-  const handIndex = player.hand.indexOf(source);
-  if (handIndex !== -1) {
-    player.hand.splice(handIndex, 1);
-  }
-
   // Determine position
   let position = action.position || "attack";
   if (position === "choice") {
     position = await engine.chooseSpecialSummonPosition(source, player);
   }
 
-  // Set card properties
-  source.position = position;
-  source.isFacedown = false;
-  source.hasAttacked = false;
+  const moveResult =
+    typeof game.moveCard === "function"
+      ? game.moveCard(source, player, "field", {
+          fromZone: "hand",
+          position,
+          isFacedown: false,
+          resetAttackFlags: true,
+        })
+      : null;
+  if (moveResult && moveResult.success === false) {
+    return false;
+  }
+  if (moveResult == null) {
+    const handIndex = player.hand.indexOf(source);
+    if (handIndex !== -1) {
+      player.hand.splice(handIndex, 1);
+    }
+    source.position = position;
+    source.isFacedown = false;
+    source.hasAttacked = false;
+    source.owner = player.id;
+    source.controller = player.id;
+    player.field.push(source);
+  }
   source.cannotAttackThisTurn = action.cannotAttackThisTurn || false;
-  source.owner = player.id;
-
-  // Add to field
-  player.field.push(source);
 
   game.renderer?.log(
     `${player.name || player.id} Special Summoned ${source.name} from hand.`
   );
-
-  // Emit after_summon event
-  await game.emit("after_summon", {
-    card: source,
-    player: player,
-    method: "special",
-    fromZone: "hand",
-  });
 
   game.updateBoard();
   return true;
@@ -830,35 +858,41 @@ export async function handleSpecialSummonFromHandWithTieredCost(
   }
 
   // Summon from hand
-  const handIndex = player.hand.indexOf(source);
-  if (handIndex !== -1) {
-    player.hand.splice(handIndex, 1);
-  }
-
   let position = action.position || "attack";
   if (position === "choice") {
     position = await engine.chooseSpecialSummonPosition(source, player);
   }
-
-  source.position = position;
-  source.isFacedown = false;
-  source.hasAttacked = false;
+  const moveResult =
+    typeof game.moveCard === "function"
+      ? game.moveCard(source, player, "field", {
+          fromZone: "hand",
+          position,
+          isFacedown: false,
+          resetAttackFlags: true,
+        })
+      : null;
+  if (moveResult && moveResult.success === false) {
+    return false;
+  }
+  if (moveResult == null) {
+    const handIndex = player.hand.indexOf(source);
+    if (handIndex !== -1) {
+      player.hand.splice(handIndex, 1);
+    }
+    source.position = position;
+    source.isFacedown = false;
+    source.hasAttacked = false;
+    source.owner = player.id;
+    source.controller = player.id;
+    player.field.push(source);
+  }
   source.cannotAttackThisTurn = !!action.cannotAttackThisTurn;
-  source.owner = player.id;
-  player.field.push(source);
 
   game.renderer?.log(
     `${player.name || player.id} enviou ${chosenCount} custo(s) para invocar ${
       source.name
     }.`
   );
-
-  await game.emit("after_summon", {
-    card: source,
-    player,
-    method: "special",
-    fromZone: "hand",
-  });
 
   // Tier effects
   const buffAmount = action.tier1AtkBoost ?? 300;
@@ -1091,10 +1125,14 @@ async function bounceAndSummonCard(source, target, player, action, engine) {
 
   // Bounce source to hand
   if (action.bounceSource !== false) {
-    const fieldIndex = player.field.indexOf(source);
-    if (fieldIndex !== -1) {
-      player.field.splice(fieldIndex, 1);
-      player.hand.push(source);
+    if (typeof game.moveCard === "function") {
+      game.moveCard(source, player, "hand", { fromZone: "field" });
+    } else {
+      const fieldIndex = player.field.indexOf(source);
+      if (fieldIndex !== -1) {
+        player.field.splice(fieldIndex, 1);
+        player.hand.push(source);
+      }
     }
   }
 
@@ -1104,21 +1142,31 @@ async function bounceAndSummonCard(source, target, player, action, engine) {
     position = await engine.chooseSpecialSummonPosition(target, player);
   }
 
-  // Remove target from hand
-  const handIndex = player.hand.indexOf(target);
-  if (handIndex !== -1) {
-    player.hand.splice(handIndex, 1);
+  const moveResult =
+    typeof game.moveCard === "function"
+      ? game.moveCard(target, player, "field", {
+          fromZone: "hand",
+          position,
+          isFacedown: false,
+          resetAttackFlags: true,
+        })
+      : null;
+  if (moveResult && moveResult.success === false) {
+    return false;
   }
-
-  // Set target properties
-  target.position = position;
-  target.isFacedown = false;
-  target.hasAttacked = false;
+  if (moveResult == null) {
+    const handIndex = player.hand.indexOf(target);
+    if (handIndex !== -1) {
+      player.hand.splice(handIndex, 1);
+    }
+    target.position = position;
+    target.isFacedown = false;
+    target.hasAttacked = false;
+    target.owner = player.id;
+    target.controller = player.id;
+    player.field.push(target);
+  }
   target.cannotAttackThisTurn = action.cannotAttackThisTurn || false;
-  target.owner = player.id;
-
-  // Add to field
-  player.field.push(target);
 
   const bounceText =
     action.bounceSource !== false ? `Returned ${source.name} to hand and ` : "";
@@ -1127,18 +1175,6 @@ async function bounceAndSummonCard(source, target, player, action, engine) {
   game.renderer?.log(
     `${bounceText}Special Summoned ${target.name} in ${positionText} Position.`
   );
-
-  // Emit after_summon event
-  await game.emit("after_summon", {
-    card: target,
-    player: player,
-    method: "special",
-    fromZone: action.bounceSource
-      ? player.field.includes(action.bounceSource)
-        ? "field"
-        : "hand"
-      : "hand",
-  });
 
   game.updateBoard();
   return true;
@@ -1613,25 +1649,35 @@ export async function handleSpecialSummonMatchingLevel(
    * @param {string} position - The position to summon in ("attack" or "defense")
    */
   const finalizeSummon = async (card, position) => {
-    // Remove from hand
-    const handIndex = hand.indexOf(card);
-    if (handIndex !== -1) {
-      hand.splice(handIndex, 1);
+    const moveResult =
+      typeof game.moveCard === "function"
+        ? game.moveCard(card, player, "field", {
+            fromZone: "hand",
+            position,
+            isFacedown: false,
+            resetAttackFlags: true,
+          })
+        : null;
+    if (moveResult && moveResult.success === false) {
+      return false;
     }
-
-    // Special Summon
-    card.position = position;
-    card.isFacedown = false;
-    card.hasAttacked = false;
+    if (moveResult == null) {
+      const handIndex = hand.indexOf(card);
+      if (handIndex !== -1) {
+        hand.splice(handIndex, 1);
+      }
+      card.position = position;
+      card.isFacedown = false;
+      card.hasAttacked = false;
+      card.owner = player.id;
+      card.controller = player.id;
+      player.field.push(card);
+    }
     card.cannotAttackThisTurn = cannotAttackThisTurn;
-    card.owner = player.id;
 
-    // Negate effects if specified
     if (negateEffects) {
       card.effectsNegated = true;
     }
-
-    player.field.push(card);
 
     game.renderer?.log(
       `${player.name || "Player"} Special Summoned ${
@@ -1641,15 +1687,8 @@ export async function handleSpecialSummonMatchingLevel(
       }.`
     );
 
-    // Emit after_summon event
-    await game.emit("after_summon", {
-      card,
-      player,
-      method: "special",
-      fromZone: "hand",
-    });
-
     game.updateBoard();
+    return true;
   };
 
   // For bot, auto-select first candidate
@@ -2103,10 +2142,14 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
         : candidates.slice(0, maxSelect);
 
     for (const card of toAdd) {
-      const idx = zone.indexOf(card);
-      if (idx !== -1) {
-        zone.splice(idx, 1);
-        player.hand.push(card);
+      if (typeof game.moveCard === "function") {
+        game.moveCard(card, player, "hand", { fromZone: sourceZone });
+      } else {
+        const idx = zone.indexOf(card);
+        if (idx !== -1) {
+          zone.splice(idx, 1);
+          player.hand.push(card);
+        }
       }
     }
 
@@ -2125,10 +2168,14 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
 
     if (!promptPlayer || candidates.length === 1) {
       const card = candidates[0];
-      const idx = zone.indexOf(card);
-      if (idx !== -1) {
-        zone.splice(idx, 1);
-        player.hand.push(card);
+      if (typeof game.moveCard === "function") {
+        game.moveCard(card, player, "hand", { fromZone: sourceZone });
+      } else {
+        const idx = zone.indexOf(card);
+        if (idx !== -1) {
+          zone.splice(idx, 1);
+          player.hand.push(card);
+        }
       }
       game.renderer?.log(`Added ${card.name} to hand from ${sourceZone}.`);
       game.updateBoard();
@@ -2152,10 +2199,14 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
               candidates.find((c) => c && c.name === selectedName) ||
               candidates[0];
 
-            const idx = zone.indexOf(chosen);
-            if (idx !== -1) {
-              zone.splice(idx, 1);
-              player.hand.push(chosen);
+            if (typeof game.moveCard === "function") {
+              game.moveCard(chosen, player, "hand", { fromZone: sourceZone });
+            } else {
+              const idx = zone.indexOf(chosen);
+              if (idx !== -1) {
+                zone.splice(idx, 1);
+                player.hand.push(chosen);
+              }
             }
 
             game.renderer?.log(
@@ -2722,28 +2773,32 @@ async function performSummon(card, handIndex, player, action, engine) {
     position = await game.chooseSpecialSummonPosition(card, player);
   }
 
-  // Remove from hand and add to field
-  player.hand.splice(handIndex, 1);
-
-  card.position = position;
-  card.isFacedown = false;
-  card.hasAttacked = false;
+  const moveResult =
+    typeof game.moveCard === "function"
+      ? game.moveCard(card, player, "field", {
+          fromZone: "hand",
+          position,
+          isFacedown: false,
+          resetAttackFlags: true,
+        })
+      : null;
+  if (moveResult && moveResult.success === false) {
+    return false;
+  }
+  if (moveResult == null) {
+    player.hand.splice(handIndex, 1);
+    card.position = position;
+    card.isFacedown = false;
+    card.hasAttacked = false;
+    card.owner = player.id;
+    card.controller = player.id;
+    player.field.push(card);
+  }
   card.cannotAttackThisTurn = action.cannotAttackThisTurn || false;
-  card.owner = player.id;
-
-  player.field.push(card);
 
   game.renderer?.log(
     `${player.name || player.id} Special Summoned ${card.name} from hand.`
   );
-
-  // Emit after_summon event
-  await game.emit("after_summon", {
-    card: card,
-    player: player,
-    method: "special",
-    fromZone: "hand",
-  });
 
   game.updateBoard();
   return true;
@@ -2827,29 +2882,38 @@ export async function handleUpkeepPayOrSendToGrave(
   // Check if LP is available
   if (player.lp < lpCost) {
     // Send source to graveyard
-    const sourceZone = engine.findCardZone(player, source);
+    const sourceZone =
+      typeof engine.findCardZone === "function"
+        ? engine.findCardZone(player, source)
+        : null;
     if (sourceZone) {
-      const idx = sourceZone.indexOf(source);
-      if (idx !== -1) {
-        sourceZone.splice(idx, 1);
-        if (failureZone === "graveyard") {
-          player.graveyard = player.graveyard || [];
-          player.graveyard.push(source);
-        } else if (failureZone === "banished") {
-          player.banished = player.banished || [];
-          player.banished.push(source);
+      if (failureZone === "graveyard" && typeof game.moveCard === "function") {
+        game.moveCard(source, player, "graveyard", { fromZone: sourceZone });
+      } else {
+        const zoneArr = player[sourceZone] || [];
+        const idx = zoneArr.indexOf(source);
+        if (idx !== -1) {
+          zoneArr.splice(idx, 1);
+          if (failureZone === "graveyard") {
+            player.graveyard = player.graveyard || [];
+            player.graveyard.push(source);
+          } else if (failureZone === "banished") {
+            player.banished = player.banished || [];
+            player.banished.push(source);
+          }
+          if (failureZone === "graveyard") {
+            await game.emit("card_to_grave", {
+              card: source,
+              fromZone: sourceZone,
+              player: player,
+            });
+          }
         }
-
-        game.renderer?.log(
-          `${player.name} cannot pay ${lpCost} LP upkeep for ${source.name}. Sent to ${failureZone}.`
-        );
-
-        await game.emit("card_to_grave", {
-          card: source,
-          fromZone: sourceZone,
-          player: player,
-        });
       }
+
+      game.renderer?.log(
+        `${player.name} cannot pay ${lpCost} LP upkeep for ${source.name}. Sent to ${failureZone}.`
+      );
     }
 
     game.updateBoard();
@@ -2881,29 +2945,38 @@ export async function handleUpkeepPayOrSendToGrave(
   }
 
   // Send to graveyard
-  const sourceZone = engine.findCardZone(player, source);
+  const sourceZone =
+    typeof engine.findCardZone === "function"
+      ? engine.findCardZone(player, source)
+      : null;
   if (sourceZone) {
-    const idx = sourceZone.indexOf(source);
-    if (idx !== -1) {
-      sourceZone.splice(idx, 1);
-      if (failureZone === "graveyard") {
-        player.graveyard = player.graveyard || [];
-        player.graveyard.push(source);
-      } else if (failureZone === "banished") {
-        player.banished = player.banished || [];
-        player.banished.push(source);
+    if (failureZone === "graveyard" && typeof game.moveCard === "function") {
+      game.moveCard(source, player, "graveyard", { fromZone: sourceZone });
+    } else {
+      const zoneArr = player[sourceZone] || [];
+      const idx = zoneArr.indexOf(source);
+      if (idx !== -1) {
+        zoneArr.splice(idx, 1);
+        if (failureZone === "graveyard") {
+          player.graveyard = player.graveyard || [];
+          player.graveyard.push(source);
+        } else if (failureZone === "banished") {
+          player.banished = player.banished || [];
+          player.banished.push(source);
+        }
+        if (failureZone === "graveyard") {
+          await game.emit("card_to_grave", {
+            card: source,
+            fromZone: sourceZone,
+            player: player,
+          });
+        }
       }
-
-      game.renderer?.log(
-        `${player.name} chose not to pay upkeep. ${source.name} sent to ${failureZone}.`
-      );
-
-      await game.emit("card_to_grave", {
-        card: source,
-        fromZone: sourceZone,
-        player: player,
-      });
     }
+
+    game.renderer?.log(
+      `${player.name} chose not to pay upkeep. ${source.name} sent to ${failureZone}.`
+    );
   }
 
   game.updateBoard();
@@ -3035,16 +3108,8 @@ async function performSummonFromDeck(
 
   if (!card || !deck.includes(card)) return false;
 
-  // Remove from deck
-  const idx = deck.indexOf(card);
-  if (idx !== -1) {
-    deck.splice(idx, 1);
-  }
-
   // Check field space
   if (player.field.length >= 5) {
-    // Return to deck
-    deck.push(card);
     game.renderer?.log("Field is full. Cannot summon.");
     return false;
   }
@@ -3055,15 +3120,33 @@ async function performSummonFromDeck(
     summonPosition = await engine.chooseSpecialSummonPosition(card, player);
   }
 
-  // Summon card
-  card.position = summonPosition;
-  card.isFacedown = false;
-  card.hasAttacked = false;
-  card.attacksUsedThisTurn = 0;
+  let usedMoveCard = false;
+  if (typeof game.moveCard === "function") {
+    const moveResult = game.moveCard(card, player, "field", {
+      fromZone: "deck",
+      position: summonPosition,
+      isFacedown: false,
+      resetAttackFlags: true,
+    });
+    if (moveResult?.success === false) {
+      return false;
+    }
+    usedMoveCard = true;
+  } else {
+    // Remove from deck (fallback)
+    const idx = deck.indexOf(card);
+    if (idx !== -1) {
+      deck.splice(idx, 1);
+    }
+    card.position = summonPosition;
+    card.isFacedown = false;
+    card.hasAttacked = false;
+    card.attacksUsedThisTurn = 0;
+    card.owner = player.id;
+    card.controller = player.id;
+    player.field.push(card);
+  }
   card.cannotAttackThisTurn = action.cannotAttackThisTurn || false;
-  card.owner = player.id;
-
-  player.field.push(card);
 
   game.renderer?.log(
     `${player.name} Special Summoned ${card.name} from deck in ${
@@ -3071,31 +3154,39 @@ async function performSummonFromDeck(
     } Position.`
   );
 
-  await game.emit("after_summon", {
-    card: card,
-    player: player,
-    method: "special",
-    fromZone: "deck",
-  });
+  if (!usedMoveCard) {
+    await game.emit("after_summon", {
+      card: card,
+      player: player,
+      method: "special",
+      fromZone: "deck",
+    });
+  }
 
   // Send source to graveyard if specified
   if (action.sendSourceToGraveAfter && source) {
-    const sourceZone = engine.findCardZone(player, source);
+    const sourceZone =
+      typeof engine.findCardZone === "function"
+        ? engine.findCardZone(player, source)
+        : null;
     if (sourceZone) {
-      const sourceIdx = sourceZone.indexOf(source);
-      if (sourceIdx !== -1) {
-        sourceZone.splice(sourceIdx, 1);
-        player.graveyard = player.graveyard || [];
-        player.graveyard.push(source);
+      if (typeof game.moveCard === "function") {
+        game.moveCard(source, player, "graveyard", { fromZone: sourceZone });
+      } else {
+        const sourceIdx = sourceZone.indexOf(source);
+        if (sourceIdx !== -1) {
+          sourceZone.splice(sourceIdx, 1);
+          player.graveyard = player.graveyard || [];
+          player.graveyard.push(source);
 
-        await game.emit("card_to_grave", {
-          card: source,
-          fromZone: sourceZone,
-          player: player,
-        });
-
-        game.renderer?.log(`${source.name} was sent to the Graveyard.`);
+          await game.emit("card_to_grave", {
+            card: source,
+            fromZone: sourceZone,
+            player: player,
+          });
+        }
       }
+      game.renderer?.log(`${source.name} was sent to the Graveyard.`);
     }
   }
 
@@ -3345,31 +3436,35 @@ export async function handleConditionalSpecialSummonFromHand(
     return false;
   }
 
-  // Remove from hand
-  const handIndex = hand.indexOf(cardToSummon);
-  if (handIndex !== -1) {
-    hand.splice(handIndex, 1);
+  const moveResult =
+    typeof game.moveCard === "function"
+      ? game.moveCard(cardToSummon, player, "field", {
+          fromZone: "hand",
+          position,
+          isFacedown: position === "defense",
+          resetAttackFlags: true,
+        })
+      : null;
+  if (moveResult && moveResult.success === false) {
+    return false;
   }
-
-  // Special Summon to field
-  cardToSummon.position = position;
-  cardToSummon.isFacedown = position === "defense" ? true : false;
-  cardToSummon.hasAttacked = false;
+  if (moveResult == null) {
+    const handIndex = hand.indexOf(cardToSummon);
+    if (handIndex !== -1) {
+      hand.splice(handIndex, 1);
+    }
+    cardToSummon.position = position;
+    cardToSummon.isFacedown = position === "defense";
+    cardToSummon.hasAttacked = false;
+    cardToSummon.owner = player.id;
+    cardToSummon.controller = player.id;
+    player.field = player.field || [];
+    player.field.push(cardToSummon);
+  }
   cardToSummon.cannotAttackThisTurn = cannotAttackThisTurn;
   cardToSummon.cannotAttackNextTurn = false;
-  cardToSummon.owner = player.id;
-
-  player.field = player.field || [];
-  player.field.push(cardToSummon);
 
   game.renderer?.log(`${cardToSummon.name} was Special Summoned from hand!`);
-
-  await game.emit("after_summon", {
-    card: cardToSummon,
-    player: player,
-    method: "special",
-    fromZone: "hand",
-  });
 
   game.updateBoard();
   return true;

@@ -178,6 +178,7 @@ export default class Game {
   canStartAction(options = {}) {
     const actor = options.actor || null;
     const kind = options.kind || "action";
+    const silent = options.silent === true;
     const allowDuringSelection =
       options.allowDuringSelection === true ||
       kind === "selection_interaction";
@@ -198,17 +199,19 @@ export default class Game {
 
     const blocked = (code, reason) => {
       const result = { ok: false, code, reason };
-      this.devLog("ACTION_GUARD_BLOCKED", {
-        summary: code,
-        kind,
-        reason,
-        phase: this.phase,
-        turn: this.turn,
-        actor: actor?.id,
-        selectionState: this.selectionState,
-        resolving: this.isResolvingEffect,
-        eventDepth: this.eventResolutionDepth,
-      });
+      if (!silent) {
+        this.devLog("ACTION_GUARD_BLOCKED", {
+          summary: code,
+          kind,
+          reason,
+          phase: this.phase,
+          turn: this.turn,
+          actor: actor?.id,
+          selectionState: this.selectionState,
+          resolving: this.isResolvingEffect,
+          eventDepth: this.eventResolutionDepth,
+        });
+      }
       return result;
     };
 
@@ -266,6 +269,7 @@ export default class Game {
       summary: `Selection cleared (${reason})`,
     });
     this.clearTargetHighlights();
+    this.setSelectionDimming(false);
     if (
       this.renderer &&
       typeof this.renderer.hideFieldTargetingControls === "function"
@@ -957,6 +961,269 @@ export default class Game {
     if (this.pendingSpecialSummon) {
       this.highlightReadySpecialSummon();
     }
+
+    this.updateActivationIndicators();
+    this.updateAttackIndicators();
+  }
+
+  updateActivationIndicators() {
+    if (
+      !this.renderer ||
+      typeof this.renderer.applyActivationIndicators !== "function"
+    ) {
+      return;
+    }
+
+    const indicators = this.buildActivationIndicatorsForPlayer(this.player);
+    if (!indicators) return;
+    this.renderer.applyActivationIndicators("player", indicators);
+  }
+
+  updateAttackIndicators() {
+    this.clearAttackReadyIndicators();
+
+    const selectionState = this.selectionState || "idle";
+    const hasActiveSelection = selectionState !== "idle";
+    if (
+      this.turn !== "player" ||
+      this.phase !== "battle" ||
+      hasActiveSelection ||
+      this.isResolvingEffect ||
+      this.eventResolutionDepth > 0
+    ) {
+      return;
+    }
+
+    const field = this.player.field || [];
+    field.forEach((card, index) => {
+      if (!card || card.cardKind !== "monster") return;
+      const availability = this.getAttackAvailability(card);
+      if (!availability.ok) return;
+      if (card.isFacedown) return;
+
+      const cardEl = document.querySelector(
+        `#player-field .card[data-index="${index}"]`
+      );
+      if (cardEl) {
+        cardEl.classList.add("attack-ready");
+      }
+    });
+  }
+
+  clearAttackReadyIndicators() {
+    document
+      .querySelectorAll(".card.attack-ready")
+      .forEach((el) => el.classList.remove("attack-ready"));
+  }
+
+  applyAttackResolutionIndicators(attacker, target) {
+    this.clearAttackResolutionIndicators();
+    const attackerOwner = attacker?.owner === "player" ? "player" : "bot";
+    const attackerField =
+      attackerOwner === "player" ? this.player.field : this.bot.field;
+    const attackerIndex = attackerField.indexOf(attacker);
+    if (attackerIndex > -1) {
+      const attackerEl = document.querySelector(
+        `#${attackerOwner}-field .card[data-index="${attackerIndex}"]`
+      );
+      if (attackerEl) {
+        attackerEl.classList.add("attack-attacker");
+      }
+    }
+
+    if (target) {
+      const targetOwner = target.owner === "player" ? "player" : "bot";
+      const targetField =
+        targetOwner === "player" ? this.player.field : this.bot.field;
+      const targetIndex = targetField.indexOf(target);
+      if (targetIndex > -1) {
+        const targetEl = document.querySelector(
+          `#${targetOwner}-field .card[data-index="${targetIndex}"]`
+        );
+        if (targetEl) {
+          targetEl.classList.add("attack-target");
+        }
+      }
+    } else {
+      const botHand = document.querySelector("#bot-hand");
+      if (botHand) {
+        botHand.classList.add("direct-attack-active");
+      }
+    }
+  }
+
+  clearAttackResolutionIndicators() {
+    document
+      .querySelectorAll(".card.attack-attacker")
+      .forEach((el) => el.classList.remove("attack-attacker"));
+    document
+      .querySelectorAll(".card.attack-target")
+      .forEach((el) => el.classList.remove("attack-target"));
+    const botHand = document.querySelector("#bot-hand");
+    if (botHand) {
+      botHand.classList.remove("direct-attack-active");
+    }
+  }
+
+  buildActivationIndicatorsForPlayer(player) {
+    if (!player || player.id !== "player") return null;
+
+    const activationContext = {
+      autoSelectSingleTarget: false,
+      logTargets: false,
+    };
+
+    const mapGuardHint = (guard) => {
+      if (!guard || guard.ok) return null;
+      if (guard.code === "BLOCKED_WRONG_PHASE") {
+        return "bloqueado por fase";
+      }
+      if (guard.code === "BLOCKED_NOT_YOUR_TURN") {
+        return "fora do seu turno";
+      }
+      return null;
+    };
+
+    const mapReasonHint = (reason) => {
+      if (!reason) return null;
+      const lower = reason.toLowerCase();
+      if (lower.includes("1/turn") || lower.includes("once per turn")) {
+        return "1/turn ja usado";
+      }
+      if (lower.includes("main phase") || lower.includes("phase")) {
+        return "bloqueado por fase";
+      }
+      if (lower.includes("no valid targets")) {
+        return "sem alvos validos";
+      }
+      if (lower.includes("not your turn")) {
+        return "fora do seu turno";
+      }
+      return null;
+    };
+
+    const canStart = (kind, phaseReq) =>
+      this.canStartAction({
+        actor: player,
+        kind,
+        phaseReq,
+        silent: true,
+      });
+
+    const buildHint = (guard, preview, readyLabel) => {
+      const guardHint = mapGuardHint(guard);
+      if (guardHint) {
+        return { canActivate: false, label: guardHint };
+      }
+      if (!preview) return null;
+      if (preview.ok) {
+        return { canActivate: true, label: readyLabel };
+      }
+      const reasonHint = mapReasonHint(preview.reason);
+      if (reasonHint) {
+        return { canActivate: false, label: reasonHint };
+      }
+      return null;
+    };
+
+    const indicators = {
+      hand: {},
+      field: {},
+      spellTrap: {},
+      fieldSpell: null,
+    };
+
+    (player.hand || []).forEach((card, index) => {
+      if (!card) return;
+      if (card.cardKind === "spell") {
+        const guard = canStart("spell_from_hand", ["main1", "main2"]);
+        const preview =
+          this.effectEngine?.canActivateSpellFromHandPreview?.(card, player, {
+            activationContext,
+          }) || { ok: false };
+        let ok = !!preview.ok;
+        if (ok && card.name === "Polymerization") {
+          ok = this.canActivatePolymerization();
+        }
+        const previewResult = { ...preview, ok };
+        const hint = buildHint(guard, previewResult, "ativacao disponivel");
+        if (!hint && card.name === "Polymerization" && !ok) {
+          indicators.hand[index] = {
+            canActivate: false,
+            label: "sem alvos validos",
+          };
+          return;
+        }
+        if (hint) {
+          indicators.hand[index] = hint;
+        }
+      } else if (card.cardKind === "monster") {
+        const guard = canStart("monster_effect", ["main1", "main2"]);
+        const preview =
+          this.effectEngine?.canActivateMonsterEffectPreview?.(
+            card,
+            player,
+            "hand",
+            null,
+            { activationContext }
+          ) || { ok: false };
+        const hint = buildHint(guard, preview, "ignition disponivel");
+        if (hint) {
+          indicators.hand[index] = hint;
+        }
+      }
+    });
+
+    (player.field || []).forEach((card, index) => {
+      if (!card || card.cardKind !== "monster") return;
+      const guard = canStart("monster_effect", ["main1", "main2"]);
+      const preview =
+        this.effectEngine?.canActivateMonsterEffectPreview?.(
+          card,
+          player,
+          "field",
+          null,
+          { activationContext }
+        ) || { ok: false };
+      const hint = buildHint(guard, preview, "ignition disponivel");
+      if (hint) {
+        indicators.field[index] = hint;
+      }
+    });
+
+    (player.spellTrap || []).forEach((card, index) => {
+      if (!card) return;
+      const guard = canStart("spelltrap_effect", ["main1", "main2"]);
+      const preview =
+        this.effectEngine?.canActivateSpellTrapEffectPreview?.(
+          card,
+          player,
+          "spellTrap",
+          null,
+          { activationContext }
+        ) || { ok: false };
+      const hint = buildHint(guard, preview, "ignition disponivel");
+      if (hint) {
+        indicators.spellTrap[index] = hint;
+      }
+    });
+
+    if (player.fieldSpell) {
+      const guard = canStart("fieldspell_effect", ["main1", "main2"]);
+      const preview =
+        this.effectEngine?.canActivateFieldSpellEffectPreview?.(
+          player.fieldSpell,
+          player,
+          null,
+          { activationContext }
+        ) || { ok: false };
+      const hint = buildHint(guard, preview, "ignition disponivel");
+      if (hint) {
+        indicators.fieldSpell = hint;
+      }
+    }
+
+    return indicators;
   }
 
   chooseSpecialSummonPosition(player, card = null) {
@@ -2075,10 +2342,17 @@ export default class Game {
           return { destroyed: false, replaced: true };
         }
 
-        this.moveCard(card, owner, "graveyard", {
+        const moveResult = this.moveCard(card, owner, "graveyard", {
           fromZone: fromZone || undefined,
           wasDestroyed: true,
         });
+
+        if (!moveResult || moveResult.success === false) {
+          return {
+            destroyed: false,
+            reason: moveResult?.reason || "move_failed",
+          };
+        }
 
         return { destroyed: true };
       },
@@ -2973,12 +3247,14 @@ export default class Game {
         const allowCancel =
           this.targetSelection.allowCancel !== false &&
           !this.targetSelection.preventCancel;
-        this.renderer.showFieldTargetingControls(
+        const controlsHandle = this.renderer.showFieldTargetingControls(
           () => this.advanceTargetSelection(),
           allowCancel ? () => this.cancelTargetSelection() : null,
           { allowCancel }
         );
+        this.targetSelection.controlsHandle = controlsHandle || null;
       }
+      this.setSelectionDimming(true);
     } else if (
       this.renderer &&
       typeof this.renderer.showTargetSelection === "function"
@@ -3012,6 +3288,7 @@ export default class Game {
     }
     if (usingFieldTargeting) {
       this.highlightTargetCandidates();
+      this.updateFieldTargetingProgress();
     }
   }
 
@@ -3275,6 +3552,22 @@ export default class Game {
       return;
     }
 
+    if (this.targetSelection.kind === "attack" && this.targetSelection.attacker) {
+      const attacker = this.targetSelection.attacker;
+      const attackerOwner = attacker.owner === "player" ? "player" : "bot";
+      const attackerField =
+        attackerOwner === "player" ? this.player.field : this.bot.field;
+      const attackerIndex = attackerField.indexOf(attacker);
+      if (attackerIndex > -1) {
+        const attackerEl = document.querySelector(
+          `#${attackerOwner}-field .card[data-index="${attackerIndex}"]`
+        );
+        if (attackerEl) {
+          attackerEl.classList.add("attack-attacker");
+        }
+      }
+    }
+
     console.log("[Game] Highlighting targets:", {
       kind: this.targetSelection.kind,
       optionId: requirement.id,
@@ -3330,8 +3623,12 @@ export default class Game {
       const selected = this.targetSelection.selections[requirement.id] || [];
       if (selected.includes(cand.key)) {
         targetEl.classList.add("selected-target");
+        if (this.targetSelection.kind === "attack") {
+          targetEl.classList.add("attack-target");
+        }
       }
     });
+    this.updateFieldTargetingProgress();
   }
 
   clearTargetHighlights() {
@@ -3341,6 +3638,12 @@ export default class Game {
     document
       .querySelectorAll(".card.selected-target")
       .forEach((el) => el.classList.remove("selected-target"));
+    document
+      .querySelectorAll(".card.attack-attacker")
+      .forEach((el) => el.classList.remove("attack-attacker"));
+    document
+      .querySelectorAll(".card.attack-target")
+      .forEach((el) => el.classList.remove("attack-target"));
     const botHand = document.querySelector("#bot-hand");
     if (botHand) {
       botHand.style.pointerEvents = "";
@@ -3350,6 +3653,34 @@ export default class Game {
         "direct-attack-target"
       );
     }
+  }
+
+  setSelectionDimming(active) {
+    const container = document.getElementById("game-container");
+    if (!container) return;
+    container.classList.toggle("selection-dim", !!active);
+  }
+
+  updateFieldTargetingProgress() {
+    if (!this.targetSelection || !this.targetSelection.usingFieldTargeting) {
+      return;
+    }
+    const handle = this.targetSelection.controlsHandle;
+    if (!handle || typeof handle.updateState !== "function") return;
+    const requirement =
+      this.targetSelection.requirements[
+        this.targetSelection.currentRequirement
+      ];
+    if (!requirement) return;
+    const selections = this.targetSelection.selections[requirement.id] || [];
+    const min = Number(requirement.min ?? 0);
+    const max = Number(requirement.max ?? min);
+    handle.updateState({
+      selected: selections.length,
+      min,
+      max,
+      allowEmpty: this.targetSelection.allowEmpty === true,
+    });
   }
 
   handleTargetSelectionClick(ownerId, cardIndex, cardEl, location = null) {
@@ -3451,6 +3782,7 @@ export default class Game {
       console.log("[Game] Max reached, advancing selection");
       this.advanceTargetSelection();
     }
+    this.updateFieldTargetingProgress();
 
     return true;
   }
@@ -3480,6 +3812,7 @@ export default class Game {
       this.finishTargetSelection();
     } else {
       this.highlightTargetCandidates();
+      this.updateFieldTargetingProgress();
     }
   }
 
@@ -3490,6 +3823,7 @@ export default class Game {
     this.targetSelection = null;
     this.graveyardSelection = null;
     this.clearTargetHighlights();
+    this.setSelectionDimming(false);
     if (
       this.renderer &&
       typeof this.renderer.hideFieldTargetingControls === "function"
@@ -3562,6 +3896,7 @@ export default class Game {
       selection.resolve([]);
     }
     this.clearTargetHighlights();
+    this.setSelectionDimming(false);
     if (
       this.renderer &&
       typeof this.renderer.hideFieldTargetingControls === "function"
@@ -3809,6 +4144,8 @@ export default class Game {
     const availability = this.getAttackAvailability(attacker);
     if (!availability.ok) return;
 
+    this.applyAttackResolutionIndicators(attacker, target);
+
     const attacksUsed =
       availability.attacksUsed ?? attacker.attacksUsedThisTurn ?? 0;
     const baseMaxAttacks = 1 + (attacker.extraAttacks || 0);
@@ -3841,6 +4178,7 @@ export default class Game {
     if (this.lastAttackNegated) {
       attacker.attacksUsedThisTurn = (attacker.attacksUsedThisTurn || 0) + 1;
       attacker.hasAttacked = true;
+      this.clearAttackResolutionIndicators();
       this.updateBoard();
       this.checkWinCondition();
       return;
@@ -3851,6 +4189,7 @@ export default class Game {
       defender.takeDamage(attacker.atk);
       this.markAttackUsed(attacker);
       this.checkWinCondition();
+      this.clearAttackResolutionIndicators();
       this.updateBoard();
     } else {
       const needsFlip = target.isFacedown;
@@ -3873,6 +4212,7 @@ export default class Game {
         this.renderer.log(`${target.name} was flipped!`);
 
         this.updateBoard();
+        this.applyAttackResolutionIndicators(attacker, target);
 
         setTimeout(() => {
           this.finishCombat(attacker, target).catch((err) =>
@@ -3900,6 +4240,12 @@ export default class Game {
       }
     };
 
+    const logBattleResult = (message) => {
+      if (message) {
+        this.renderer.log(message);
+      }
+    };
+
     const logBattleDestroyCheck = (context) => {
       const formatCard = (card, label) => {
         if (!card) return `${label}: (none)`;
@@ -3919,6 +4265,9 @@ export default class Game {
         const defender = target.owner === "player" ? this.player : this.bot;
         const damage = attacker.atk - target.atk;
         applyBattleDamage(defender, target, damage);
+        logBattleResult(
+          `${attacker.name} destroyed ${target.name} and dealt ${damage} damage.`
+        );
 
         logBattleDestroyCheck("attacker over atk target");
         if (this.canDestroyByBattle(target)) {
@@ -3934,6 +4283,9 @@ export default class Game {
         const attPlayer = attacker.owner === "player" ? this.player : this.bot;
         const damage = target.atk - attacker.atk;
         applyBattleDamage(attPlayer, attacker, damage);
+        logBattleResult(
+          `${attacker.name} was destroyed by ${target.name} and took ${damage} damage.`
+        );
 
         logBattleDestroyCheck("attacker loses to atk target");
         if (this.canDestroyByBattle(attacker)) {
@@ -3967,6 +4319,7 @@ export default class Game {
             this.applyBattleDestroyEffect(attacker, target);
           }
         }
+        logBattleResult(`${attacker.name} and ${target.name} destroyed each other.`);
       }
     } else {
       const defender = target.owner === "player" ? this.player : this.bot;
@@ -3974,6 +4327,9 @@ export default class Game {
         if (attacker.piercing) {
           const damage = attacker.atk - target.def;
           applyBattleDamage(defender, target, damage);
+          logBattleResult(
+            `${attacker.name} pierced ${target.name} for ${damage} damage.`
+          );
         }
         logBattleDestroyCheck("defense target destruction check");
         if (this.canDestroyByBattle(target)) {
@@ -3985,15 +4341,24 @@ export default class Game {
             this.applyBattleDestroyEffect(attacker, target);
           }
         }
+        if (!attacker.piercing) {
+          logBattleResult(`${attacker.name} destroyed ${target.name}.`);
+        }
       } else if (attacker.atk < target.def) {
         const attPlayer = attacker.owner === "player" ? this.player : this.bot;
         const damage = target.def - attacker.atk;
         applyBattleDamage(attPlayer, attacker, damage);
+        logBattleResult(
+          `${attacker.name} took ${damage} damage attacking ${target.name}.`
+        );
+      } else {
+        logBattleResult(`${attacker.name} could not break ${target.name}'s defense.`);
       }
     }
 
     this.markAttackUsed(attacker);
     this.checkWinCondition();
+    this.clearAttackResolutionIndicators();
     this.updateBoard();
   }
 
@@ -4272,23 +4637,67 @@ export default class Game {
       "fieldSpell",
       "extraDeck",
     ];
-    const fromOwner = card.owner === this.player.id ? this.player : this.bot;
+    let fromOwner = null;
     let fromZone = null;
 
-    for (const zoneName of zones) {
-      if (zoneName === "fieldSpell" && fromOwner.fieldSpell === card) {
-        fromOwner.fieldSpell = null;
-        fromZone = zoneName;
-        break;
+    const removeFromZone = (owner, zoneName) => {
+      if (!owner) return false;
+      if (zoneName === "fieldSpell") {
+        if (owner.fieldSpell === card) {
+          owner.fieldSpell = null;
+          return true;
+        }
+        return false;
+      }
+      const arr = this.getZone(owner, zoneName) || [];
+      let removed = false;
+      for (let i = arr.length - 1; i >= 0; i -= 1) {
+        if (arr[i] === card) {
+          arr.splice(i, 1);
+          removed = true;
+        }
+      }
+      return removed;
+    };
+
+    const locateAndRemove = (preferredZone = null) => {
+      const players = [this.player, this.bot];
+      const markFrom = (owner, zoneName) => {
+        if (!fromOwner && !fromZone) {
+          fromOwner = owner;
+          fromZone = zoneName;
+        }
+      };
+      let removedAny = false;
+      if (preferredZone) {
+        for (const player of players) {
+          if (removeFromZone(player, preferredZone)) {
+            removedAny = true;
+            markFrom(player, preferredZone);
+          }
+        }
       }
 
-      const arr = this.getZone(fromOwner, zoneName) || [];
-      const idx = arr.indexOf(card);
-      if (idx > -1) {
-        arr.splice(idx, 1);
-        fromZone = zoneName;
-        break;
+      for (const player of players) {
+        for (const zoneName of zones) {
+          if (zoneName === preferredZone) continue;
+          if (removeFromZone(player, zoneName)) {
+            removedAny = true;
+            markFrom(player, zoneName);
+          }
+        }
       }
+      return removedAny;
+    };
+
+    locateAndRemove(options.fromZone || null);
+
+    if (!fromZone || !fromOwner) {
+      return { success: false, reason: "card_not_found" };
+    }
+
+    if (card.owner !== fromOwner.id) {
+      card.owner = fromOwner.id;
     }
 
     if (fromZone === "field" && card.cardKind === "monster") {
@@ -4398,6 +4807,7 @@ export default class Game {
       }
 
       card.owner = destPlayer.id;
+      card.controller = destPlayer.id;
       destPlayer.fieldSpell = card;
       if (this.devModeEnabled && this.devFailAfterZoneMutation) {
         this.devFailAfterZoneMutation = false;
@@ -4493,6 +4903,7 @@ export default class Game {
     }
 
     card.owner = destPlayer.id;
+    card.controller = destPlayer.id;
 
     // Special case: Fusion monsters returning to hand go back to Extra Deck instead
     if (toZone === "hand" && card.monsterType === "fusion") {

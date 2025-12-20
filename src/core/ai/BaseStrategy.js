@@ -26,6 +26,28 @@ export default class BaseStrategy {
   // Hook to simulate a specific spell effect inside the cloned state
   simulateSpellEffect(_state, _card) {}
 
+  placeSpellCard(state, card) {
+    if (!state || !card) return { placed: false, zone: null };
+    const player = state.bot;
+    if (!player) return { placed: false, zone: null };
+
+    if (card.subtype === "field") {
+      if (player.fieldSpell) {
+        player.graveyard.push(player.fieldSpell);
+      }
+      player.fieldSpell = { ...card };
+      return { placed: true, zone: "fieldSpell" };
+    }
+
+    if (card.subtype === "continuous" || card.subtype === "equip") {
+      player.spellTrap = player.spellTrap || [];
+      player.spellTrap.push({ ...card });
+      return { placed: true, zone: "spellTrap" };
+    }
+
+    return { placed: false, zone: null };
+  }
+
   // Tribute requirement helper (can be overridden)
   getTributeRequirementFor(card, playerState) {
     let tributesNeeded = 0;
