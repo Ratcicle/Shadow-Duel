@@ -102,7 +102,7 @@ Checklist:
 - [ ] Sanitização de edge cases:
   - [x] campo cheio
   - [x] deck vazio
-  - [ ] alvo sumiu no meio
+  - [x] alvo sumiu no meio
   - [x] cancel/rollback corretos
 
 **Pronto quando:** 20 partidas seguidas contra bot sem bug de travamento/duplicação/perda de carta.

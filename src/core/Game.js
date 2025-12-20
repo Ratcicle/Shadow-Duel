@@ -3528,7 +3528,10 @@ export default class Game {
       }
 
       if (typeof selection.onResult === "function") {
-        selection.onResult(normalized);
+        const result = selection.onResult(normalized);
+        if (result && typeof result.then === "function") {
+          await result;
+        }
       }
     } catch (err) {
       console.error("[Game] Error resolving selection:", err);
@@ -6862,6 +6865,208 @@ export default class Game {
       handUnchanged,
       cleanupOk,
       drawResult,
+    };
+  }
+
+  async devRunSanityO() {
+    if (!this.devModeEnabled) {
+      return { success: false, reason: "Dev Mode is disabled." };
+    }
+
+    this.devLog("SANITY_O_START", {
+      summary: "Sanity O: stale target selection",
+    });
+
+    const setupResult = this.applyManualSetup({
+      turn: "player",
+      phase: "main1",
+      player: {
+        hand: ["Luminarch Holy Ascension"],
+        field: [
+          {
+            name: "Luminarch Valiant - Knight of the Dawn",
+            position: "attack",
+            facedown: false,
+          },
+          {
+            name: "Luminarch Magic Sickle",
+            position: "attack",
+            facedown: false,
+          },
+        ],
+      },
+      bot: { field: [] },
+    });
+
+    if (!setupResult.success) {
+      return setupResult;
+    }
+
+    this.player.field.forEach((card) => {
+      if (!card || card.cardKind !== "monster") return;
+      this.setMonsterFacing(card, { position: "attack", facedown: false });
+    });
+    this.updateBoard();
+
+    const spell = this.player.hand.find(
+      (card) => card && card.name === "Luminarch Holy Ascension"
+    );
+    if (!spell) {
+      return { success: false, reason: "Sanity O card not found in hand." };
+    }
+
+    const handIndex = this.player.hand.indexOf(spell);
+    let finalResult = null;
+    const selectionSessionBefore = this.selectionSessionCounter;
+
+    const pipelineResult = await this.runActivationPipeline({
+      card: spell,
+      owner: this.player,
+      selectionKind: "spellTrapEffect",
+      selectionMessage: "Sanity O: select target(s) for the spell.",
+      gate: () => {
+        if (this.turn !== "player") return { ok: false };
+        if (this.phase !== "main1" && this.phase !== "main2") {
+          return {
+            ok: false,
+            reason: "Can only activate spells during Main Phase.",
+          };
+        }
+        if (this.isResolvingEffect) {
+          return {
+            ok: false,
+            reason: "Finish the current effect before activating another card.",
+          };
+        }
+        return { ok: true };
+      },
+      preview: () =>
+        this.effectEngine?.canActivateSpellFromHandPreview?.(
+          spell,
+          this.player
+        ),
+      commit: () => this.commitCardActivationFromHand(this.player, handIndex),
+      activationContext: {
+        fromHand: true,
+        sourceZone: "hand",
+      },
+      activate: (chosen, ctx, zone, resolvedCard) =>
+        this.effectEngine.activateSpellTrapEffect(
+          resolvedCard,
+          this.player,
+          chosen,
+          zone,
+          ctx
+        ),
+      finalize: (result, info) => {
+        if (!result.placementOnly) {
+          this.finalizeSpellTrapActivation(
+            info.card,
+            this.player,
+            info.activationZone
+          );
+        }
+        this.updateBoard();
+      },
+      onSuccess: (result) => {
+        finalResult = result;
+      },
+      onFailure: (result) => {
+        finalResult = result;
+      },
+    });
+
+    const selectionOpened =
+      this.selectionSessionCounter > selectionSessionBefore;
+    let invalidated = false;
+    let selectionConfirmed = false;
+    let candidateKey = null;
+    let usedManualConfirm = false;
+    let candidateCount = 0;
+
+    if (selectionOpened && this.targetSelection) {
+      const requirement = this.targetSelection.requirements?.[0] || null;
+      const candidates = requirement?.candidates || [];
+      candidateCount = candidates.length;
+      const candidate = candidates[0] || null;
+      candidateKey = candidate?.key || null;
+      if (candidate?.cardRef) {
+        this.setMonsterFacing(candidate.cardRef, { facedown: true });
+        this.updateBoard();
+        invalidated = true;
+      }
+
+      if (candidateKey && requirement?.id) {
+        this.targetSelection.selections = {
+          ...(this.targetSelection.selections || {}),
+          [requirement.id]: [candidateKey],
+        };
+        this.targetSelection.currentRequirement =
+          this.targetSelection.requirements.length;
+        this.setSelectionState("confirming");
+        await this.finishTargetSelection();
+        usedManualConfirm = true;
+        selectionConfirmed = true;
+      } else {
+        const confirmResult = await this.devAutoConfirmTargetSelection();
+        selectionConfirmed = confirmResult?.success === true;
+      }
+    }
+
+    const resultFailed =
+      finalResult &&
+      finalResult.success === false &&
+      finalResult.reason === "Selected targets are no longer valid.";
+    const spellBackInHand = this.player.hand.includes(spell);
+    const spellIndexRestored = this.player.hand[handIndex] === spell;
+
+    const cleanupState = this.devGetSelectionCleanupState();
+    const cleanupOk =
+      !cleanupState.selectionActive &&
+      !cleanupState.controlsVisible &&
+      cleanupState.highlightCount === 0;
+    if (!cleanupOk) {
+      this.devForceTargetCleanup();
+    }
+
+    const success =
+      pipelineResult?.needsSelection === true &&
+      selectionOpened &&
+      candidateCount >= 2 &&
+      !!candidateKey &&
+      invalidated &&
+      selectionConfirmed &&
+      resultFailed &&
+      spellBackInHand &&
+      spellIndexRestored &&
+      cleanupOk;
+
+    this.devLog("SANITY_O_RESULT", {
+      summary: "Sanity O result",
+      selectionOpened,
+      candidateCount,
+      invalidated,
+      selectionConfirmed,
+      candidateKey,
+      usedManualConfirm,
+      resultFailed,
+      spellBackInHand,
+      spellIndexRestored,
+      cleanupOk,
+      finalResult,
+    });
+
+    return {
+      success,
+      selectionOpened,
+      candidateCount,
+      invalidated,
+      selectionConfirmed,
+      resultFailed,
+      spellBackInHand,
+      spellIndexRestored,
+      cleanupOk,
+      finalResult,
     };
   }
 

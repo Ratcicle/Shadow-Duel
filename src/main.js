@@ -122,6 +122,7 @@ const devSanityKBtn = document.getElementById("dev-sanity-k");
 const devSanityLBtn = document.getElementById("dev-sanity-l");
 const devSanityMBtn = document.getElementById("dev-sanity-m");
 const devSanityNBtn = document.getElementById("dev-sanity-n");
+const devSanityOBtn = document.getElementById("dev-sanity-o");
 const devResetDuelBtn = document.getElementById("dev-reset-duel");
 let currentDeck = loadDeck();
 let currentExtraDeck = loadExtraDeck();
@@ -979,6 +980,13 @@ devSanityNBtn?.addEventListener("click", async () => {
   const result = await game.devRunSanityN();
   if (!result?.success) {
     alert(result?.reason || "Sanity N failed.");
+  }
+});
+devSanityOBtn?.addEventListener("click", async () => {
+  if (!requireActiveGameForDev()) return;
+  const result = await game.devRunSanityO();
+  if (!result?.success) {
+    alert(result?.reason || "Sanity O failed.");
   }
 });
 devResetDuelBtn?.addEventListener("click", () => {
