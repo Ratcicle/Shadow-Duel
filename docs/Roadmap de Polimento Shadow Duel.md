@@ -1,4 +1,4 @@
-# Shadow Duel — Roadmap de Polimento
+﻿# Shadow Duel — Roadmap de Polimento
 
 > Objetivo: deixar o core do Shadow Duel “redondinho” antes de adicionar novos arquétipos — efeitos 100% migrados para handlers, código enxuto, estado consistente, e UI/UX clara.
 
@@ -95,15 +95,15 @@ Checklist:
 **Objetivo:** o jogo nunca entra em estado inválido.
 
 Checklist:
-- [ ] Operações de zona transacionais (mover carta, desfazer, logs)
-- [ ] "Once per turn" centralizado e consistente (mesmo nome = mesma trava)
-- [ ] Checagens consistentes de fase/turno/resolving em todas as entradas
-- [ ] Ordem de eventos padronizada (ex.: after_summon → triggers → windows de ignition)
+- [x] Operações de zona transacionais (mover carta, desfazer, logs)
+- [x] "Once per turn" centralizado e consistente (mesmo nome = mesma trava)
+- [x] Checagens consistentes de fase/turno/resolving em todas as entradas
+- [x] Ordem de eventos padronizada (ex.: after_summon → triggers → windows de ignition)
 - [ ] Sanitização de edge cases:
-  - [ ] campo cheio
-  - [ ] deck vazio
+  - [x] campo cheio
+  - [x] deck vazio
   - [ ] alvo sumiu no meio
-  - [ ] cancel/rollback corretos
+  - [x] cancel/rollback corretos
 
 **Pronto quando:** 20 partidas seguidas contra bot sem bug de travamento/duplicação/perda de carta.
 
