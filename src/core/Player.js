@@ -201,6 +201,9 @@ export default class Player {
       const fieldAfterTributes = this.field.length - tributesNeeded + 1;
       if (fieldAfterTributes > 5) {
         console.log("Field is full (max 5 monsters).");
+        if (this.game?.renderer?.log) {
+          this.game.renderer.log("Field is full (max 5 monsters).");
+        }
         return null;
       }
 
@@ -247,8 +250,11 @@ export default class Player {
       }
 
       this.hand.splice(cardIndex, 1);
-      card.position = position;
-      card.isFacedown = isFacedown;
+      card.position = position === "defense" ? "defense" : "attack";
+      card.isFacedown = isFacedown === true;
+      if (card.isFacedown) {
+        card.position = "defense";
+      }
       card.hasAttacked = false;
       card.attacksUsedThisTurn = 0;
       this.field.push(card);

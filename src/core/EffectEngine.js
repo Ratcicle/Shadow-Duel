@@ -1,4 +1,4 @@
-import Card from "./Card.js";
+﻿import Card from "./Card.js";
 import { cardDatabase } from "../data/cards.js";
 import { getCardDisplayName } from "./i18n.js";
 import {
@@ -25,13 +25,13 @@ export default class EffectEngine {
   }
 
   /**
-   * Helper para realizar Special Summon com escolha de posição
+   * Helper para realizar Special Summon com escolha de posiÃ§Ã£o
    * @param {Object} card - A carta a ser invocada
-   * @param {Object} player - O jogador que está invocando
-   * @param {Object} options - Opções adicionais
-   * @param {boolean} options.cannotAttackThisTurn - Se o monstro não pode atacar neste turno
+   * @param {Object} player - O jogador que estÃ¡ invocando
+   * @param {Object} options - OpÃ§Ãµes adicionais
+   * @param {boolean} options.cannotAttackThisTurn - Se o monstro nÃ£o pode atacar neste turno
    * @param {string} options.fromZone - Zona de origem (hand, deck, graveyard)
-   * @returns {Promise<string>} - A posição escolhida ('attack' ou 'defense')
+   * @returns {Promise<string>} - A posiÃ§Ã£o escolhida ('attack' ou 'defense')
    */
   async chooseSpecialSummonPosition(card, player, options = {}) {
     // Bot sempre escolhe attack
@@ -39,7 +39,7 @@ export default class EffectEngine {
       return "attack";
     }
 
-    // Player: mostrar modal de escolha de posição
+    // Player: mostrar modal de escolha de posiÃ§Ã£o
     if (
       this.game.renderer &&
       typeof this.game.renderer.showSpecialSummonPositionModal === "function"
@@ -67,6 +67,9 @@ export default class EffectEngine {
   checkOncePerTurn(card, player, effect) {
     if (!effect || !effect.oncePerTurn) {
       return { ok: true };
+    }
+    if (this.game && typeof this.game.canUseOncePerTurn === "function") {
+      return this.game.canUseOncePerTurn(card, player, effect);
     }
 
     const key = effect?.oncePerTurnName || effect?.id || card.name;
@@ -121,6 +124,10 @@ export default class EffectEngine {
 
   registerOncePerTurnUsage(card, player, effect) {
     if (!effect || !effect.oncePerTurn) {
+      return;
+    }
+    if (this.game && typeof this.game.markOncePerTurnUsed === "function") {
+      this.game.markOncePerTurnUsed(card, player, effect);
       return;
     }
 
@@ -219,223 +226,37 @@ export default class EffectEngine {
     return { ok: true };
   }
 
-  handleEvent(eventName, payload) {
-    if (eventName === "after_summon") {
-      return this.handleAfterSummonEvent(payload);
-    } else if (eventName === "battle_destroy") {
-      return this.handleBattleDestroyEvent(payload);
-    } else if (eventName === "card_to_grave") {
-      return this.handleCardToGraveEvent(payload);
-    } else if (eventName === "attack_declared") {
-      return this.handleAttackDeclaredEvent(payload);
-    } else if (eventName === "standby_phase") {
-      return this.handleStandbyPhaseEvent(payload);
+  async handleEvent(eventName, payload) {
+    if (this.game && typeof this.game.resolveEvent === "function") {
+      return await this.game.resolveEvent(eventName, payload);
     }
     return undefined;
   }
 
+  async collectEventTriggers(eventName, payload) {
+    if (eventName === "after_summon") {
+      return await this.collectAfterSummonTriggers(payload);
+    }
+    if (eventName === "battle_destroy") {
+      return await this.collectBattleDestroyTriggers(payload);
+    }
+    if (eventName === "card_to_grave") {
+      return await this.collectCardToGraveTriggers(payload);
+    }
+    if (eventName === "attack_declared") {
+      return await this.collectAttackDeclaredTriggers(payload);
+    }
+    if (eventName === "standby_phase") {
+      return await this.collectStandbyPhaseTriggers(payload);
+    }
+    return { entries: [], orderRule: "no_triggers" };
+  }
+
   async handleAfterSummonEvent(payload) {
-    if (!payload || !payload.card || !payload.player) return;
-    const { card, player, method, fromZone: summonFromZone } = payload;
-
-    const sources = [card];
-    if (player.fieldSpell) {
-      sources.push(player.fieldSpell);
+    if (this.game && typeof this.game.resolveEvent === "function") {
+      return await this.game.resolveEvent("after_summon", payload);
     }
-    // Also check cards in hand for conditional summon effects
-    if (player.hand && Array.isArray(player.hand)) {
-      sources.push(...player.hand);
-    }
-
-    const opponent = this.game.getOpponent(player);
-
-    // Get current phase for trap requirements
-    const currentPhase = this.game?.phase;
-
-    for (const sourceCard of sources) {
-      if (!sourceCard.effects || !Array.isArray(sourceCard.effects)) continue;
-
-      const sourceZone = this.findCardZone(player, sourceCard);
-
-      const ctx = {
-        source: sourceCard,
-        player,
-        opponent,
-        summonedCard: card,
-        summonMethod: method,
-        currentPhase,
-      };
-
-      for (const effect of sourceCard.effects) {
-        if (!effect || effect.timing !== "on_event") continue;
-        if (effect.event !== "after_summon") continue;
-
-        // Skip if effects are negated
-        if (this.isEffectNegated(sourceCard)) {
-          console.log(
-            `${sourceCard.name} effects are negated, skipping effect.`
-          );
-          continue;
-        }
-
-        // Only allow hand-based triggers if explicitly intended
-        if (sourceZone === "hand") {
-          const requiresSelfInHand =
-            effect?.condition?.requires === "self_in_hand";
-          const isConditionalSummonFromHand = (effect.actions || []).some(
-            (a) => a?.type === "conditional_special_summon_from_hand"
-          );
-          if (!requiresSelfInHand && !isConditionalSummonFromHand) {
-            continue;
-          }
-        }
-
-        const optCheck = this.checkOncePerTurn(sourceCard, player, effect);
-        if (!optCheck.ok) {
-          console.log(optCheck.reason);
-          continue;
-        }
-
-        const duelCheck = this.checkOncePerDuel(sourceCard, player, effect);
-        if (!duelCheck.ok) {
-          console.log(duelCheck.reason);
-          continue;
-        }
-
-        if (effect.summonMethod) {
-          const methods = Array.isArray(effect.summonMethod)
-            ? effect.summonMethod
-            : [effect.summonMethod];
-          if (!methods.includes(method)) {
-            continue;
-          }
-        }
-
-        if (
-          effect.requireSummonedFrom &&
-          summonFromZone &&
-          effect.requireSummonedFrom !== summonFromZone
-        ) {
-          continue;
-        }
-
-        if (effect.requireSelfAsSummoned && ctx.summonedCard !== sourceCard) {
-          continue;
-        }
-
-        // Check phase requirement (for trap cards that only activate in specific phases)
-        if (effect.requirePhase) {
-          const allowedPhases = Array.isArray(effect.requirePhase)
-            ? effect.requirePhase
-            : [effect.requirePhase];
-          if (!allowedPhases.includes(currentPhase)) {
-            continue;
-          }
-        }
-
-        if (effect.condition) {
-          const conditionMet = this.checkEffectCondition(
-            effect.condition,
-            sourceCard,
-            player,
-            card,
-            sourceZone,
-            summonFromZone
-          );
-          if (!conditionMet) continue;
-        }
-
-        const activationContext = this.buildTriggerActivationContext(
-          sourceCard,
-          player,
-          sourceZone
-        );
-
-        const pipelineResult = await this.game.runActivationPipeline({
-          card: sourceCard,
-          owner: player,
-          activationZone: activationContext.activationZone,
-          activationContext,
-          selectionKind: "triggered",
-          selectionMessage: "Select target(s) for the triggered effect.",
-          suppressFailureLog: true,
-          activate: async (selections, activationCtx) => {
-            const resolvedCtx = {
-              ...ctx,
-              activationZone: activationCtx.activationZone,
-              activationContext: activationCtx,
-            };
-            const targetResult = this.resolveTargets(
-              effect.targets || [],
-              resolvedCtx,
-              selections
-            );
-
-            if (targetResult.needsSelection) {
-              return {
-                success: false,
-                needsSelection: true,
-                selectionContract: targetResult.selectionContract,
-              };
-            }
-
-            if (targetResult.ok === false) {
-              return {
-                success: false,
-                needsSelection: false,
-                reason: targetResult.reason,
-              };
-            }
-
-            if (
-              effect.promptUser === true &&
-              player === this.game.player &&
-              selections == null
-            ) {
-              const promptName =
-                getCardDisplayName(sourceCard) ||
-                sourceCard?.name ||
-                "this card";
-              const shouldActivate =
-                await this.game.renderer.showConditionalSummonPrompt(
-                  promptName,
-                  effect.promptMessage || `Activate ${promptName}'s effect?`
-                );
-              if (!shouldActivate) {
-                return {
-                  success: false,
-                  needsSelection: false,
-                  reason: "Effect activation cancelled.",
-                };
-              }
-            }
-
-            this.applyActions(
-              effect.actions || [],
-              resolvedCtx,
-              targetResult.targets || {}
-            );
-            this.game.checkWinCondition();
-
-            return { success: true };
-          },
-          onSuccess: () => {
-            this.registerOncePerTurnUsage(sourceCard, player, effect);
-            this.registerOncePerDuelUsage(sourceCard, player, effect);
-          },
-        });
-
-        if (!pipelineResult || pipelineResult.needsSelection) {
-          return;
-        }
-
-        if (!pipelineResult.success) {
-          continue;
-        }
-      }
-    }
-
-    this.updatePassiveBuffs();
+    return undefined;
   }
 
   checkEffectCondition(
@@ -636,7 +457,7 @@ export default class EffectEngine {
       if (this.isImmuneToOpponentEffects(card, ctx.player)) {
         if (this.game?.renderer?.log) {
           this.game.renderer.log(
-            `${card.name} está imune aos efeitos do oponente e ignora ${action.type}.`
+            `${card.name} estÃ¡ imune aos efeitos do oponente e ignora ${action.type}.`
           );
         }
         return true;
@@ -699,21 +520,301 @@ export default class EffectEngine {
     return `${controller}:${zone}:${zoneIndex}:${baseId}`;
   }
 
-  async handleBattleDestroyEvent(payload) {
-    if (!payload || !payload.attacker || !payload.destroyed) return;
+  buildTriggerEntry(options = {}) {
+    const sourceCard = options.sourceCard;
+    const owner = options.owner;
+    const effect = options.effect;
 
-    const {
-      player,
-      opponent,
-      attacker,
-      destroyed,
-      attackerOwner,
-      destroyedOwner,
-    } = payload;
+    if (!sourceCard || !owner || !effect) {
+      return null;
+    }
+
+    const activationContext =
+      options.activationContext ||
+      this.buildTriggerActivationContext(
+        sourceCard,
+        owner,
+        options.activationZone
+      );
+    const selectionKind = options.selectionKind || "triggered";
+    const selectionMessage =
+      options.selectionMessage || "Select target(s) for the triggered effect.";
+    const summary =
+      options.summary ||
+      `${owner.id}:${sourceCard.name}:${effect.id || effect.event || "trigger"}`;
+
+    const baseCtx = options.ctx || {};
+    const activateImpl =
+      options.activate ||
+      ((selections, activationCtx, resolvedCtx) =>
+        this.handleTriggeredEffect(sourceCard, effect, resolvedCtx, selections));
+
+    const config = {
+      card: sourceCard,
+      owner,
+      activationZone: activationContext.activationZone,
+      activationContext,
+      selectionKind,
+      selectionMessage,
+      allowDuringOpponentTurn: true,
+      allowDuringResolving: true,
+      suppressFailureLog: true,
+      oncePerTurn: {
+        card: sourceCard,
+        player: owner,
+        effect,
+      },
+      activate: (selections, activationCtx) => {
+        const resolvedCtx = {
+          ...baseCtx,
+          activationZone: activationCtx.activationZone,
+          activationContext: activationCtx,
+        };
+        return activateImpl(selections, activationCtx, resolvedCtx);
+      },
+      onSuccess: (result, activationCtx) => {
+        this.registerOncePerTurnUsage(sourceCard, owner, effect);
+        this.registerOncePerDuelUsage(sourceCard, owner, effect);
+        if (typeof options.onSuccess === "function") {
+          options.onSuccess(result, activationCtx);
+        }
+      },
+    };
+
+    return {
+      summary,
+      card: sourceCard,
+      effect,
+      owner,
+      config,
+    };
+  }
+
+  async collectAfterSummonTriggers(payload) {
+    const entries = [];
+    const orderRule =
+      "summoner -> opponent; sources: summoned card -> fieldSpell -> hand";
+
+    if (!payload || !payload.card || !payload.player) {
+      return { entries, orderRule };
+    }
+
+    const { card, player: summoner, method, fromZone: summonFromZone } = payload;
+    const opponent = this.game?.getOpponent?.(summoner);
+    const participants = [];
+
+    if (summoner) {
+      participants.push({
+        owner: summoner,
+        opponent,
+        includeSummonedCard: true,
+      });
+    }
+    if (opponent) {
+      participants.push({
+        owner: opponent,
+        opponent: summoner,
+        includeSummonedCard: false,
+      });
+    }
+
+    const currentPhase = this.game?.phase;
+
+    for (const side of participants) {
+      const owner = side.owner;
+      const other = side.opponent;
+      if (!owner) continue;
+
+      const sources = [];
+      if (side.includeSummonedCard && card) {
+        sources.push(card);
+      }
+      if (owner.fieldSpell) {
+        sources.push(owner.fieldSpell);
+      }
+      if (Array.isArray(owner.hand)) {
+        sources.push(...owner.hand);
+      }
+
+      for (const sourceCard of sources) {
+        if (!sourceCard?.effects || !Array.isArray(sourceCard.effects)) continue;
+
+        const sourceZone = this.findCardZone(owner, sourceCard);
+        const ctx = {
+          source: sourceCard,
+          player: owner,
+          opponent: other,
+          summonedCard: card,
+          summonMethod: method,
+          summonFromZone,
+          currentPhase,
+        };
+
+        for (const effect of sourceCard.effects) {
+          if (!effect || effect.timing !== "on_event") continue;
+          if (effect.event !== "after_summon") continue;
+
+          if (this.isEffectNegated(sourceCard)) {
+            console.log(
+              `${sourceCard.name} effects are negated, skipping effect.`
+            );
+            continue;
+          }
+
+          if (sourceZone === "hand") {
+            const requiresSelfInHand =
+              effect?.condition?.requires === "self_in_hand";
+            const isConditionalSummonFromHand = (effect.actions || []).some(
+              (a) => a?.type === "conditional_special_summon_from_hand"
+            );
+            if (!requiresSelfInHand && !isConditionalSummonFromHand) {
+              continue;
+            }
+          }
+
+          if (effect.requireOpponentSummon === true) {
+            const isOpponentSummon =
+              summoner?.id && summoner.id !== owner.id;
+            if (!isOpponentSummon) continue;
+          }
+
+          const optCheck = this.checkOncePerTurn(sourceCard, owner, effect);
+          if (!optCheck.ok) {
+            console.log(optCheck.reason);
+            continue;
+          }
+
+          const duelCheck = this.checkOncePerDuel(sourceCard, owner, effect);
+          if (!duelCheck.ok) {
+            console.log(duelCheck.reason);
+            continue;
+          }
+
+          if (effect.summonMethod) {
+            const methods = Array.isArray(effect.summonMethod)
+              ? effect.summonMethod
+              : [effect.summonMethod];
+            if (!methods.includes(method)) {
+              continue;
+            }
+          }
+
+          if (
+            effect.requireSummonedFrom &&
+            summonFromZone &&
+            effect.requireSummonedFrom !== summonFromZone
+          ) {
+            continue;
+          }
+
+          if (effect.requireSelfAsSummoned && ctx.summonedCard !== sourceCard) {
+            continue;
+          }
+
+          if (effect.requirePhase) {
+            const allowedPhases = Array.isArray(effect.requirePhase)
+              ? effect.requirePhase
+              : [effect.requirePhase];
+            if (!allowedPhases.includes(currentPhase)) {
+              continue;
+            }
+          }
+
+          if (effect.condition) {
+            const conditionMet = this.checkEffectCondition(
+              effect.condition,
+              sourceCard,
+              owner,
+              card,
+              sourceZone,
+              summonFromZone
+            );
+            if (!conditionMet) continue;
+          }
+
+          const activationContext = this.buildTriggerActivationContext(
+            sourceCard,
+            owner,
+            sourceZone
+          );
+
+          const entry = this.buildTriggerEntry({
+            sourceCard,
+            owner,
+            effect,
+            ctx,
+            activationContext,
+            selectionKind: "triggered",
+            selectionMessage: "Select target(s) for the triggered effect.",
+            activate: async (selections, activationCtx, resolvedCtx) => {
+              if (
+                effect.promptUser === true &&
+                owner === this.game?.player &&
+                selections == null
+              ) {
+                const promptName =
+                  getCardDisplayName(sourceCard) ||
+                  sourceCard?.name ||
+                  "this card";
+                if (
+                  this.game?.renderer &&
+                  typeof this.game.renderer.showConditionalSummonPrompt ===
+                    "function"
+                ) {
+                  const shouldActivate =
+                    await this.game.renderer.showConditionalSummonPrompt(
+                      promptName,
+                      effect.promptMessage ||
+                        `Activate ${promptName}'s effect?`
+                    );
+                  if (!shouldActivate) {
+                    return {
+                      success: false,
+                      needsSelection: false,
+                      reason: "Effect activation cancelled.",
+                    };
+                  }
+                }
+              }
+
+              return this.handleTriggeredEffect(
+                sourceCard,
+                effect,
+                resolvedCtx,
+                selections
+              );
+            },
+          });
+
+          if (entry) {
+            entries.push(entry);
+          }
+        }
+      }
+    }
+
+    return { entries, orderRule, onComplete: () => this.updatePassiveBuffs() };
+  }
+
+  async collectBattleDestroyTriggers(payload) {
+    const entries = [];
+    const orderRule =
+      "attacker owner -> destroyed owner; sources: field/fieldSpell/equips -> hand -> destroyed card";
+
+    if (!payload || !payload.attacker || !payload.destroyed) {
+      return { entries, orderRule };
+    }
+
+    const attacker = payload.attacker;
+    const destroyed = payload.destroyed;
+    const attackerOwner =
+      payload.attackerOwner || this.getOwnerByCard(attacker);
+    const destroyedOwner =
+      payload.destroyedOwner || this.getOwnerByCard(destroyed);
 
     const participants = [
-      { owner: player, other: opponent },
-      { owner: opponent, other: player },
+      { owner: attackerOwner, other: destroyedOwner },
+      { owner: destroyedOwner, other: attackerOwner },
     ];
 
     for (const side of participants) {
@@ -749,8 +850,8 @@ export default class EffectEngine {
           opponent: side.other,
           attacker,
           destroyed,
-          attackerOwner: attackerOwner || this.getOwnerByCard(attacker),
-          destroyedOwner: destroyedOwner || this.getOwnerByCard(destroyed),
+          attackerOwner,
+          destroyedOwner,
           host: card.equippedTo || null,
         };
 
@@ -758,7 +859,6 @@ export default class EffectEngine {
           if (!effect || effect.timing !== "on_event") continue;
           if (effect.event !== "battle_destroy") continue;
 
-          // Skip if effects are negated
           if (this.isEffectNegated(card)) {
             console.log(`${card.name} effects are negated, skipping effect.`);
             continue;
@@ -790,76 +890,43 @@ export default class EffectEngine {
             if (ctx.attacker !== card.equippedTo) continue;
           }
 
-          if (
-            effect.promptUser === true &&
-            this.game &&
-            this.game.renderer &&
-            typeof this.game.renderer.showConditionalSummonPrompt ===
-              "function" &&
-            owner === this.game.player
-          ) {
-            const shouldActivate =
-              await this.game.renderer.showConditionalSummonPrompt(
-                card.name,
-                effect.promptMessage || `Activate ${card.name}'s effect?`
-              );
-            if (!shouldActivate) continue;
-          }
-
           const activationContext = this.buildTriggerActivationContext(
             card,
             owner
           );
 
-          const pipelineResult = await this.game.runActivationPipeline({
-            card,
+          const entry = this.buildTriggerEntry({
+            sourceCard: card,
             owner,
-            activationZone: activationContext.activationZone,
+            effect,
+            ctx,
             activationContext,
             selectionKind: "triggered",
             selectionMessage: "Select target(s) for the triggered effect.",
-            suppressFailureLog: true,
-            activate: (selections, activationCtx) => {
-              const resolvedCtx = {
-                ...ctx,
-                activationZone: activationCtx.activationZone,
-                activationContext: activationCtx,
-              };
-              return this.handleTriggeredEffect(
-                card,
-                effect,
-                resolvedCtx,
-                selections
-              );
-            },
-            onSuccess: () => {
-              this.registerOncePerTurnUsage(card, owner, effect);
-              this.registerOncePerDuelUsage(card, owner, effect);
-            },
           });
 
-          if (!pipelineResult || pipelineResult.needsSelection) {
-            return;
-          }
-
-          if (!pipelineResult.success) {
-            continue;
+          if (entry) {
+            entries.push(entry);
           }
         }
       }
     }
 
-    this.updatePassiveBuffs();
+    return { entries, orderRule, onComplete: () => this.updatePassiveBuffs() };
   }
 
-  async handleAttackDeclaredEvent(payload) {
+  async collectAttackDeclaredTriggers(payload) {
+    const entries = [];
+    const orderRule =
+      "attacker owner -> defender owner; sources: field -> fieldSpell";
+
     if (
       !payload ||
       !payload.attacker ||
       !payload.attackerOwner ||
       !payload.defenderOwner
     ) {
-      return;
+      return { entries, orderRule };
     }
 
     const attackerOwner = payload.attackerOwner;
@@ -887,7 +954,6 @@ export default class EffectEngine {
           if (!effect || effect.timing !== "on_event") continue;
           if (effect.event !== "attack_declared") continue;
 
-          // Skip if effects are negated
           if (this.isEffectNegated(card)) {
             console.log(`${card.name} effects are negated, skipping effect.`);
             continue;
@@ -925,7 +991,6 @@ export default class EffectEngine {
           if (player.id === "player" && shouldPrompt) {
             let wantsToUse = true;
 
-            // Use custom prompt if renderer provides one for this effect
             const customPromptMethod = effect.customPromptMethod;
             if (
               customPromptMethod &&
@@ -956,51 +1021,40 @@ export default class EffectEngine {
             player
           );
 
-          const pipelineResult = await this.game.runActivationPipeline({
-            card,
+          const entry = this.buildTriggerEntry({
+            sourceCard: card,
             owner: player,
-            activationZone: activationContext.activationZone,
+            effect,
+            ctx,
             activationContext,
             selectionKind: "triggered",
             selectionMessage: "Select target(s) for the triggered effect.",
-            suppressFailureLog: true,
-            activate: (selections, activationCtx) => {
-              const resolvedCtx = {
-                ...ctx,
-                activationZone: activationCtx.activationZone,
-                activationContext: activationCtx,
-              };
-              return this.handleTriggeredEffect(
-                card,
-                effect,
-                resolvedCtx,
-                selections
-              );
-            },
-            onSuccess: () => {
-              this.registerOncePerTurnUsage(card, player, effect);
-            },
           });
 
-          if (!pipelineResult || pipelineResult.needsSelection) {
-            return;
-          }
-
-          if (!pipelineResult.success) {
-            continue;
+          if (entry) {
+            entries.push(entry);
           }
         }
       }
     }
+
+    return { entries, orderRule };
   }
 
-  async handleCardToGraveEvent(payload) {
+  async collectCardToGraveTriggers(payload) {
+    const entries = [];
+    const orderRule = "card owner only; source: card";
+
     const { card, player, opponent, fromZone, toZone } = payload || {};
-    if (!card || !player) return;
-    if (!card.effects || !Array.isArray(card.effects)) return;
+    if (!card || !player) return { entries, orderRule };
+    if (!card.effects || !Array.isArray(card.effects)) {
+      return { entries, orderRule };
+    }
+
+    const resolvedOpponent = opponent || this.game?.getOpponent?.(player);
 
     console.log(
-      `[handleCardToGraveEvent] ${card.name} entered graveyard. card.owner="${card.owner}", ctx.player.id="${player.id}", ctx.opponent.id="${opponent.id}", wasDestroyed=${payload.wasDestroyed}`
+      `[handleCardToGraveEvent] ${card.name} entered graveyard. card.owner="${card.owner}", ctx.player.id="${player.id}", ctx.opponent.id="${resolvedOpponent?.id}", wasDestroyed=${payload?.wasDestroyed}`
     );
     console.log(
       `[handleCardToGraveEvent] ${card.name} entered graveyard from ${fromZone}. Card has ${card.effects.length} effects.`
@@ -1009,7 +1063,7 @@ export default class EffectEngine {
     const ctx = {
       source: card,
       player,
-      opponent,
+      opponent: resolvedOpponent,
       fromZone,
       toZone,
     };
@@ -1026,7 +1080,6 @@ export default class EffectEngine {
         continue;
       }
 
-      // Skip if effects are negated
       if (this.isEffectNegated(card)) {
         console.log(
           `[handleCardToGraveEvent] ${card.name} effects are negated, skipping effect.`
@@ -1038,7 +1091,7 @@ export default class EffectEngine {
         `[handleCardToGraveEvent] Found card_to_grave effect: ${effect.id}`
       );
 
-      if (effect.requireSelfAsDestroyed && !payload.wasDestroyed) {
+      if (effect.requireSelfAsDestroyed && !payload?.wasDestroyed) {
         console.log(
           `[handleCardToGraveEvent] Skipping ${effect.id}: requires destruction.`
         );
@@ -1088,48 +1141,32 @@ export default class EffectEngine {
         toZone || this.findCardZone(player, card) || "graveyard"
       );
 
-      const pipelineResult = await this.game.runActivationPipeline({
-        card,
+      const entry = this.buildTriggerEntry({
+        sourceCard: card,
         owner: player,
-        activationZone: activationContext.activationZone,
+        effect,
+        ctx,
         activationContext,
         selectionKind: "triggered",
         selectionMessage: "Select target(s) for the triggered effect.",
-        suppressFailureLog: true,
-        activate: (selections, activationCtx) => {
-          const resolvedCtx = {
-            ...ctx,
-            activationZone: activationCtx.activationZone,
-            activationContext: activationCtx,
-          };
-          return this.handleTriggeredEffect(
-            card,
-            effect,
-            resolvedCtx,
-            selections
-          );
-        },
-        onSuccess: () => {
-          this.registerOncePerTurnUsage(card, player, effect);
-          this.registerOncePerDuelUsage(card, player, effect);
-        },
       });
 
-      if (!pipelineResult || pipelineResult.needsSelection) {
-        return;
-      }
-
-      if (!pipelineResult.success) {
-        continue;
+      if (entry) {
+        entries.push(entry);
       }
     }
+
+    return { entries, orderRule };
   }
 
-  async handleStandbyPhaseEvent(payload) {
-    if (!payload || !payload.player) return;
+  async collectStandbyPhaseTriggers(payload) {
+    const entries = [];
+    const orderRule = "active player only; sources: field -> spellTrap -> fieldSpell";
+
+    if (!payload || !payload.player) return { entries, orderRule };
 
     const owner = payload.player;
-    const opponent = payload.opponent || this.game.getOpponent(owner);
+    const opponent = payload.opponent || this.game?.getOpponent?.(owner);
 
     const cards = [
       ...(owner.field || []),
@@ -1151,7 +1188,6 @@ export default class EffectEngine {
         if (!effect || effect.timing !== "on_event") continue;
         if (effect.event !== "standby_phase") continue;
 
-        // Skip if effects are negated
         if (this.isEffectNegated(card)) {
           console.log(`${card.name} effects are negated, skipping effect.`);
           continue;
@@ -1174,38 +1210,51 @@ export default class EffectEngine {
           owner
         );
 
-        const pipelineResult = await this.game.runActivationPipeline({
-          card,
+        const entry = this.buildTriggerEntry({
+          sourceCard: card,
           owner,
-          activationZone: activationContext.activationZone,
+          effect,
+          ctx,
           activationContext,
           selectionKind: "triggered",
           selectionMessage: "Select target(s) for the triggered effect.",
-          suppressFailureLog: true,
-          activate: (selections, activationCtx) => {
-            const resolvedCtx = {
-              ...ctx,
-              activationZone: activationCtx.activationZone,
-              activationContext: activationCtx,
-            };
-            return this.handleTriggeredEffect(
-              card,
-              effect,
-              resolvedCtx,
-              selections
-            );
-          },
-          onSuccess: () => {
-            this.registerOncePerTurnUsage(card, owner, effect);
-            this.registerOncePerDuelUsage(card, owner, effect);
-          },
         });
 
-        if (!pipelineResult || pipelineResult.needsSelection) {
-          return;
+        if (entry) {
+          entries.push(entry);
         }
       }
     }
+
+    return { entries, orderRule };
+  }
+
+  async handleBattleDestroyEvent(payload) {
+    if (this.game && typeof this.game.resolveEvent === "function") {
+      return await this.game.resolveEvent("battle_destroy", payload);
+    }
+    return undefined;
+  }
+
+  async handleAttackDeclaredEvent(payload) {
+    if (this.game && typeof this.game.resolveEvent === "function") {
+      return await this.game.resolveEvent("attack_declared", payload);
+    }
+    return undefined;
+  }
+
+  async handleCardToGraveEvent(payload) {
+    if (this.game && typeof this.game.resolveEvent === "function") {
+      return await this.game.resolveEvent("card_to_grave", payload);
+    }
+    return undefined;
+  }
+
+  async handleStandbyPhaseEvent(payload) {
+    if (this.game && typeof this.game.resolveEvent === "function") {
+      return await this.game.resolveEvent("standby_phase", payload);
+    }
+    return undefined;
   }
 
   getHandActivationEffect(card) {
@@ -1213,6 +1262,64 @@ export default class EffectEngine {
       return null;
     }
     return card.effects.find((e) => e && e.timing === "on_play") || null;
+  }
+
+  getSpellTrapActivationEffect(card, options = {}) {
+    if (!card || !Array.isArray(card.effects)) {
+      return null;
+    }
+    if (card.cardKind === "trap") {
+      return (
+        card.effects.find(
+          (e) => e && (e.timing === "on_activate" || e.timing === "ignition")
+        ) || null
+      );
+    }
+    if (card.cardKind === "spell") {
+      const fromHand = options.fromHand === true;
+      if (fromHand) {
+        return this.getHandActivationEffect(card);
+      }
+      return card.effects.find((e) => e && e.timing === "ignition") || null;
+    }
+    return null;
+  }
+
+  getMonsterIgnitionEffect(card, activationZone = "field") {
+    if (!card || !Array.isArray(card.effects)) {
+      return null;
+    }
+    if (activationZone === "graveyard") {
+      return (
+        card.effects.find(
+          (e) => e && e.timing === "ignition" && e.requireZone === "graveyard"
+        ) || null
+      );
+    }
+    if (activationZone === "hand") {
+      return (
+        card.effects.find(
+          (e) => e && e.timing === "ignition" && e.requireZone === "hand"
+        ) || null
+      );
+    }
+    return (
+      card.effects.find(
+        (e) =>
+          e &&
+          e.timing === "ignition" &&
+          (!e.requireZone || e.requireZone === "field")
+      ) || null
+    );
+  }
+
+  getFieldSpellActivationEffect(card) {
+    if (!card || !Array.isArray(card.effects)) {
+      return null;
+    }
+    return (
+      card.effects.find((e) => e && e.timing === "on_field_activate") || null
+    );
   }
 
   activateFromHand(
@@ -1241,7 +1348,7 @@ export default class EffectEngine {
       };
     }
 
-    // Verificação de campo vazio para spells do tipo equip com requireEmptyField
+    // VerificaÃ§Ã£o de campo vazio para spells do tipo equip com requireEmptyField
     if (
       effect &&
       card.cardKind === "spell" &&
@@ -1252,7 +1359,7 @@ export default class EffectEngine {
         return {
           success: false,
           needsSelection: false,
-          reason: "Você deve controlar nenhum monstro para ativar este efeito.",
+          reason: "VocÃª deve controlar nenhum monstro para ativar este efeito.",
         };
       }
     }
@@ -1352,7 +1459,7 @@ export default class EffectEngine {
         return { success: true, needsSelection: false };
       }
 
-      // Equip Spells serão movidas para a zona de spell/trap na própria action.
+      // Equip Spells serÃ£o movidas para a zona de spell/trap na prÃ³pria action.
       if (card.subtype === "equip") {
         return { success: true, needsSelection: false };
       }
@@ -2095,11 +2202,17 @@ export default class EffectEngine {
         return candidate;
       });
 
-      const provided = selections?.[def.id];
-      if (provided && provided.length >= min && provided.length <= max) {
+      const hasSelections = selections && typeof selections === "object";
+      const provided = hasSelections ? selections[def.id] : null;
+      if (hasSelections) {
+        const providedList = Array.isArray(provided)
+          ? provided
+          : provided != null
+          ? [provided]
+          : [];
         const chosen = [];
         const seen = new Set();
-        for (const entry of provided) {
+        for (const entry of providedList) {
           let candidate = null;
           if (typeof entry === "number") {
             candidate = decoratedCandidates[entry];
@@ -2135,6 +2248,10 @@ export default class EffectEngine {
           targetMap[def.id] = chosen;
           continue;
         }
+        return {
+          ok: false,
+          reason: "Selected targets are no longer valid.",
+        };
       }
 
       const autoSelectExplicit = def.autoSelect === true;
@@ -2435,6 +2552,9 @@ export default class EffectEngine {
     const player = ctx?.player;
     const card = ctx?.source;
     if (!player) return true;
+    if (this.game && typeof this.game.canUseOncePerTurn === "function") {
+      return this.game.canUseOncePerTurn(card, player, effect).ok === true;
+    }
     const key = effect.oncePerTurnName || effect.id || ctx?.source?.name;
     if (!key) return true;
     const useCardScope =
@@ -2451,6 +2571,10 @@ export default class EffectEngine {
     const player = ctx?.player;
     const card = ctx?.source;
     if (!player) return;
+    if (this.game && typeof this.game.markOncePerTurnUsed === "function") {
+      this.game.markOncePerTurnUsed(card, player, effect);
+      return;
+    }
     const key = effect.oncePerTurnName || effect.id || ctx?.source?.name;
     if (!key) return;
     const useCardScope =
@@ -2720,6 +2844,11 @@ export default class EffectEngine {
     const targetPlayer =
       action.player === "opponent" ? ctx.opponent : ctx.player;
     const amount = action.amount ?? 1;
+    if (this.game && typeof this.game.drawCards === "function") {
+      const result = this.game.drawCards(targetPlayer, amount);
+      return result?.ok || (result?.drawn?.length || 0) > 0;
+    }
+
     for (let i = 0; i < amount; i++) {
       targetPlayer.draw();
     }
@@ -3024,21 +3153,24 @@ export default class EffectEngine {
     }
 
     // Draw 1 card for each monster destroyed
-    for (let i = 0; i < destroyedCount; i++) {
-      player.draw();
+    let drawnCount = 0;
+    if (this.game && typeof this.game.drawCards === "function") {
+      const drawResult = this.game.drawCards(player, destroyedCount);
+      drawnCount = drawResult?.drawn?.length || 0;
+    } else {
+      for (let i = 0; i < destroyedCount; i++) {
+        player.draw();
+        drawnCount += 1;
+      }
     }
 
-    if (
-      destroyedCount > 0 &&
-      this.game &&
-      typeof this.game.updateBoard === "function"
-    ) {
+    if (destroyedCount > 0 && this.game?.updateBoard) {
       this.game.updateBoard();
     }
 
     if (destroyedCount > 0 && this.game?.renderer?.log) {
       this.game.renderer.log(
-        `${sourceCard.name} destroyed ${destroyedCount} monster(s) and drew ${destroyedCount} card(s)!`
+        `${sourceCard.name} destroyed ${destroyedCount} monster(s) and drew ${drawnCount} card(s)!`
       );
     }
 
@@ -3174,8 +3306,8 @@ export default class EffectEngine {
   }
 
   applyForbidAttackThisTurn(action, ctx, targets) {
-    // Se targetRef está definido, usa os alvos selecionados
-    // Caso contrário, aplica à carta fonte (self)
+    // Se targetRef estÃ¡ definido, usa os alvos selecionados
+    // Caso contrÃ¡rio, aplica Ã  carta fonte (self)
     let targetCards = [];
     if (action.targetRef && targets?.[action.targetRef]) {
       targetCards = targets[action.targetRef];
@@ -3252,7 +3384,7 @@ export default class EffectEngine {
 
     if (this.game?.renderer?.log) {
       this.game.renderer.log(
-        `${card.name} está imune aos efeitos do oponente até o final do próximo turno.`
+        `${card.name} estÃ¡ imune aos efeitos do oponente atÃ© o final do prÃ³ximo turno.`
       );
     }
 
@@ -3293,7 +3425,7 @@ export default class EffectEngine {
       return false;
     }
 
-    // Opcional: filtrar por arquétipo
+    // Opcional: filtrar por arquÃ©tipo
     let candidates = deck;
     if (action.archetype) {
       candidates = deck.filter((card) => {
@@ -3398,7 +3530,7 @@ export default class EffectEngine {
       return true;
     }
 
-    // Fallback: auto-seleciona o melhor disponível
+    // Fallback: auto-seleciona o melhor disponÃ­vel
     const fallback =
       candidates.reduce((top, card) => {
         if (!card) return top;
@@ -3650,7 +3782,7 @@ export default class EffectEngine {
     }
 
     if (!chosenFromCandidates) {
-      // fallback: último candidato da lista
+      // fallback: Ãºltimo candidato da lista
       chosenFromCandidates = candidates[candidates.length - 1];
     }
 
@@ -4042,7 +4174,7 @@ export default class EffectEngine {
     const candidates = player.hand.filter((c) => c && c.cardKind === "monster");
     if (candidates.length === 0) return false;
 
-    // Candidato único ou bot: auto-seleciona
+    // Candidato Ãºnico ou bot: auto-seleciona
     if (candidates.length === 1 || player.id === "bot") {
       return this.finishConditionalSpecialSummon(candidates[0], player, action);
     }
@@ -4078,7 +4210,7 @@ export default class EffectEngine {
   }
 
   async finishConditionalSpecialSummon(targetCard, player, action) {
-    // Escolher posição para special summon
+    // Escolher posiÃ§Ã£o para special summon
     const position = await this.chooseSpecialSummonPosition(targetCard, player);
 
     targetCard.position = position;
@@ -4160,7 +4292,7 @@ export default class EffectEngine {
   }
 
   async performBotFusion(ctx, summonableFusions, availableMaterials) {
-    // Bot escolhe automaticamente o melhor monstro de fusão (maior ATK)
+    // Bot escolhe automaticamente o melhor monstro de fusÃ£o (maior ATK)
     const bestFusion = summonableFusions.reduce((best, current) => {
       const bestAtk = best.fusion.atk || 0;
       const currentAtk = current.fusion.atk || 0;
@@ -4170,7 +4302,7 @@ export default class EffectEngine {
     const fusionMonster = bestFusion.fusion;
     const fusionIndex = bestFusion.index;
 
-    // Encontrar materiais válidos
+    // Encontrar materiais vÃ¡lidos
     const combos = this.findFusionMaterialCombos(
       fusionMonster,
       availableMaterials,
@@ -4260,7 +4392,7 @@ export default class EffectEngine {
       return false;
     }
 
-    // BOT AUTO-FUSION: Se é o bot, executar fusão automaticamente
+    // BOT AUTO-FUSION: Se Ã© o bot, executar fusÃ£o automaticamente
     if (ctx.player.id === "bot") {
       return await this.performBotFusion(
         ctx,
@@ -4308,7 +4440,7 @@ export default class EffectEngine {
               selectedMaterials.length - validation.requiredCount;
             if (extraCount > 0) {
               this.game.renderer.log(
-                `⚠️ You selected ${selectedMaterials.length} materials (requires ${validation.requiredCount}). All selected cards will be sent to the Graveyard.`
+                `âš ï¸ You selected ${selectedMaterials.length} materials (requires ${validation.requiredCount}). All selected cards will be sent to the Graveyard.`
               );
             }
 
@@ -4534,7 +4666,7 @@ export default class EffectEngine {
 
     if (!targets || !targets.haunted_target) {
       game.renderer.log(
-        `Call of the Haunted: Nenhum alvo selecionado no cemitério.`
+        `Call of the Haunted: Nenhum alvo selecionado no cemitÃ©rio.`
       );
       return false;
     }
@@ -4551,11 +4683,11 @@ export default class EffectEngine {
     );
 
     if (!targetMonster || targetMonster.cardKind !== "monster") {
-      game.renderer.log(`Call of the Haunted: Alvo inválido.`);
+      game.renderer.log(`Call of the Haunted: Alvo invÃ¡lido.`);
       return false;
     }
 
-    // Remover do cemitério
+    // Remover do cemitÃ©rio
     const gyIndex = player.graveyard.indexOf(targetMonster);
     if (gyIndex > -1) {
       player.graveyard.splice(gyIndex, 1);
@@ -4565,7 +4697,7 @@ export default class EffectEngine {
       );
     }
 
-    // Mostrar modal para escolher posição (Special Summon permite escolha)
+    // Mostrar modal para escolher posiÃ§Ã£o (Special Summon permite escolha)
     const chosenPosition = await new Promise((resolve) => {
       game.renderer.showSpecialSummonPositionModal(
         targetMonster,
@@ -4575,11 +4707,11 @@ export default class EffectEngine {
       );
     });
 
-    // Sumonizar na posição escolhida
+    // Sumonizar na posiÃ§Ã£o escolhida
     targetMonster.position = chosenPosition || "attack";
     targetMonster.isFacedown = false;
     targetMonster.owner = player.id;
-    targetMonster.hasAttacked = true; // Não pode atacar no mesmo turno
+    targetMonster.hasAttacked = true; // NÃ£o pode atacar no mesmo turno
     player.field.push(targetMonster);
 
     // Vincular a trap ao monstro para que se destruam mutuamente
@@ -4589,7 +4721,7 @@ export default class EffectEngine {
     game.renderer.log(
       `Call of the Haunted: ${
         targetMonster.name
-      } foi revivido do cemitério em ${
+      } foi revivido do cemitÃ©rio em ${
         chosenPosition === "defense" ? "Defesa" : "Ataque"
       }!`
     );
@@ -4600,7 +4732,7 @@ export default class EffectEngine {
   async applyMirrorForceDestroy(action, ctx) {
     const { game, player, eventData } = ctx;
 
-    // Determinar quem é o oponente
+    // Determinar quem Ã© o oponente
     const opponent = player.id === "player" ? game.bot : game.player;
 
     if (!opponent || !opponent.field) {
@@ -4627,7 +4759,7 @@ export default class EffectEngine {
       `Mirror Force: Destruindo ${attackPositionMonsters.length} monstro(s) em Attack Position!`
     );
 
-    // Destruir todos os monstros em Attack Position (com substituição de destruição)
+    // Destruir todos os monstros em Attack Position (com substituiÃ§Ã£o de destruiÃ§Ã£o)
     const sourceCard = ctx.source || ctx.card || null;
     for (const monster of attackPositionMonsters) {
       await game.destroyCard(monster, {
@@ -4680,7 +4812,7 @@ export default class EffectEngine {
     };
 
     try {
-      // Executar as ações do efeito
+      // Executar as aÃ§Ãµes do efeito
       for (const action of relevantEffect.actions || []) {
         await this.applyActions([action], ctx, {});
       }
@@ -4756,3 +4888,6 @@ export default class EffectEngine {
     return true;
   }
 }
+
+
+

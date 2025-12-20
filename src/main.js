@@ -116,6 +116,13 @@ const devSanityEBtn = document.getElementById("dev-sanity-e");
 const devSanityFBtn = document.getElementById("dev-sanity-f");
 const devSanityGBtn = document.getElementById("dev-sanity-g");
 const devSanityHBtn = document.getElementById("dev-sanity-h");
+const devSanityIBtn = document.getElementById("dev-sanity-i");
+const devSanityJBtn = document.getElementById("dev-sanity-j");
+const devSanityKBtn = document.getElementById("dev-sanity-k");
+const devSanityLBtn = document.getElementById("dev-sanity-l");
+const devSanityMBtn = document.getElementById("dev-sanity-m");
+const devSanityNBtn = document.getElementById("dev-sanity-n");
+const devSanityOBtn = document.getElementById("dev-sanity-o");
 const devResetDuelBtn = document.getElementById("dev-reset-duel");
 let currentDeck = loadDeck();
 let currentExtraDeck = loadExtraDeck();
@@ -926,6 +933,60 @@ devSanityHBtn?.addEventListener("click", async () => {
   const result = await game.devRunSanityH();
   if (!result?.success) {
     alert(result?.reason || "Sanity H failed.");
+  }
+});
+
+devSanityIBtn?.addEventListener("click", async () => {
+  if (!requireActiveGameForDev()) return;
+  const result = await game.devRunSanityI();
+  if (!result?.success) {
+    alert(result?.reason || "Sanity I failed.");
+  }
+});
+
+devSanityJBtn?.addEventListener("click", async () => {
+  if (!requireActiveGameForDev()) return;
+  const result = await game.devRunSanityJ();
+  if (!result?.success) {
+    alert(result?.reason || "Sanity J failed.");
+  }
+});
+
+devSanityKBtn?.addEventListener("click", async () => {
+  if (!requireActiveGameForDev()) return;
+  const result = await game.devRunSanityK();
+  if (!result?.success) {
+    alert(result?.reason || "Sanity K failed.");
+  }
+});
+
+devSanityLBtn?.addEventListener("click", async () => {
+  if (!requireActiveGameForDev()) return;
+  const result = await game.devRunSanityL();
+  if (!result?.success) {
+    alert(result?.reason || "Sanity L failed.");
+  }
+});
+
+devSanityMBtn?.addEventListener("click", async () => {
+  if (!requireActiveGameForDev()) return;
+  const result = await game.devRunSanityM();
+  if (!result?.success) {
+    alert(result?.reason || "Sanity M failed.");
+  }
+});
+devSanityNBtn?.addEventListener("click", async () => {
+  if (!requireActiveGameForDev()) return;
+  const result = await game.devRunSanityN();
+  if (!result?.success) {
+    alert(result?.reason || "Sanity N failed.");
+  }
+});
+devSanityOBtn?.addEventListener("click", async () => {
+  if (!requireActiveGameForDev()) return;
+  const result = await game.devRunSanityO();
+  if (!result?.success) {
+    alert(result?.reason || "Sanity O failed.");
   }
 });
 

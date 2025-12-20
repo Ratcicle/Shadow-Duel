@@ -162,6 +162,8 @@ export default class Bot extends Player {
 
   async makeMove(game) {
     if (!game || game.gameOver) return;
+    const guard = game.canStartAction({ actor: this, kind: "bot_turn" });
+    if (!guard.ok) return;
 
     const phase = game.phase;
 
@@ -217,6 +219,12 @@ export default class Bot extends Player {
   }
 
   playBattlePhase(game) {
+    const guard = game.canStartAction({
+      actor: this,
+      kind: "bot_attack",
+      phaseReq: "battle",
+    });
+    if (!guard.ok) return;
     const minDeltaToAttack = 0.05;
 
     const performAttack = () => {
@@ -415,6 +423,12 @@ export default class Bot extends Player {
 
   async executeMainPhaseAction(game, action) {
     if (!action) return;
+    const baseGuard = game.canStartAction({
+      actor: this,
+      kind: "bot_main_action",
+      phaseReq: ["main1", "main2"],
+    });
+    if (!baseGuard.ok) return;
 
     if (action.type === "summon") {
       const cardToSummon = this.hand[action.index];
@@ -450,7 +464,6 @@ export default class Bot extends Player {
     if (action.type === "spell") {
       const card = this.hand[action.index];
       if (!card) return;
-      if (game.phase !== "main1" && game.phase !== "main2") return;
 
       if (
         game.effectEngine &&
@@ -465,27 +478,29 @@ export default class Bot extends Player {
         }
       }
 
+      const activationEffect = game.effectEngine?.getSpellTrapActivationEffect?.(
+        card,
+        { fromHand: true }
+      );
+
       await game.runActivationPipeline({
         card,
         owner: this,
         selectionKind: "spellTrapEffect",
         selectionMessage: "Select target(s) for the spell effect.",
-        gate: () => {
-          if (game.turn !== "bot") return { ok: false };
-          if (game.isResolvingEffect) {
-            return {
-              ok: false,
-              reason: "Finish the current effect before activating another card.",
-            };
-          }
-          return { ok: true };
-        },
+        guardKind: "bot_spell_from_hand",
+        phaseReq: ["main1", "main2"],
         preview: () =>
           game.effectEngine?.canActivateSpellFromHandPreview?.(card, this),
         commit: () => game.commitCardActivationFromHand(this, action.index),
         activationContext: {
           fromHand: true,
           sourceZone: "hand",
+        },
+        oncePerTurn: {
+          card,
+          player: this,
+          effect: activationEffect,
         },
         activate: (chosen, ctx, zone, resolvedCard) =>
           game.effectEngine.activateSpellTrapEffect(
@@ -518,6 +533,8 @@ export default class Bot extends Player {
         activationZone: "fieldSpell",
         sourceZone: "fieldSpell",
       };
+      const activationEffect =
+        game.effectEngine?.getFieldSpellActivationEffect?.(this.fieldSpell);
       await game.runActivationPipeline({
         card: this.fieldSpell,
         owner: this,
@@ -525,6 +542,13 @@ export default class Bot extends Player {
         activationContext,
         selectionKind: "fieldSpell",
         selectionMessage: "Select target(s) for the field spell effect.",
+        guardKind: "bot_fieldspell_effect",
+        phaseReq: ["main1", "main2"],
+        oncePerTurn: {
+          card: this.fieldSpell,
+          player: this,
+          effect: activationEffect,
+        },
         activate: (selections, ctx) =>
           game.effectEngine.activateFieldSpell(
             this.fieldSpell,

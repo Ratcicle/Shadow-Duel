@@ -1,4 +1,4 @@
-import Player from "./Player.js";
+﻿import Player from "./Player.js";
 import Bot from "./Bot.js";
 import Renderer from "../ui/Renderer.js";
 import EffectEngine from "./EffectEngine.js";
@@ -44,14 +44,27 @@ export default class Game {
     this.targetSelection = null;
     this.selectionState = "idle";
     this.graveyardSelection = null;
+    this.selectionSessionCounter = 0;
+    this.lastSelectionSessionId = 0;
     this.eventListeners = {};
     this.phaseDelayMs = 400;
     this.lastAttackNegated = false;
     this.pendingSpecialSummon = null; // Track pending special summon (e.g., Leviathan from Eel)
     this.isResolvingEffect = false; // Lock player actions while resolving an effect
+    this.eventResolutionDepth = 0;
+    this.eventResolutionCounter = 0;
     this.trapPromptInProgress = false; // Avoid multiple trap prompts simultaneously
     this.testModeEnabled = false;
     this.devModeEnabled = !!options.devMode;
+    this.zoneOpDepth = 0;
+    this.zoneOpSnapshot = null;
+    this.devFailAfterZoneMutation = false;
+    this.oncePerTurnUsage = {
+      player: new Map(),
+      bot: new Map(),
+      card: new WeakMap(),
+    };
+    this.oncePerTurnTurnCounter = this.turnCounter;
   }
 
   setDevMode(enabled) {
@@ -75,6 +88,578 @@ export default class Game {
     }
   }
 
+  resetOncePerTurnUsage(reason = "reset") {
+    this.oncePerTurnUsage = {
+      player: new Map(),
+      bot: new Map(),
+      card: new WeakMap(),
+    };
+    this.oncePerTurnTurnCounter = this.turnCounter;
+    this.devLog("OPT_RESET", { summary: reason, turn: this.turnCounter });
+  }
+
+  ensureOncePerTurnUsageFresh() {
+    if (this.oncePerTurnTurnCounter !== this.turnCounter) {
+      this.resetOncePerTurnUsage("turn_change");
+    }
+  }
+
+  getOncePerTurnLockKey(card, effect, options = {}) {
+    const explicit = options.lockKey || options.key || null;
+    if (explicit) {
+      return explicit.startsWith("once_per_turn:")
+        ? explicit
+        : `once_per_turn:${explicit}`;
+    }
+
+    const base =
+      effect?.oncePerTurnName ||
+      effect?.id ||
+      options.actionId ||
+      card?.name ||
+      "effect";
+    return `once_per_turn:${base}`;
+  }
+
+  getOncePerTurnStore(card, player, effect, options = {}) {
+    const useCardScope =
+      effect?.oncePerTurnScope === "card" || effect?.oncePerTurnPerCard === true;
+    if (useCardScope && card) {
+      let store = this.oncePerTurnUsage.card.get(card);
+      if (!store) {
+        store = new Map();
+        this.oncePerTurnUsage.card.set(card, store);
+      }
+      return store;
+    }
+
+    const playerId = player?.id || "player";
+    if (!this.oncePerTurnUsage[playerId]) {
+      this.oncePerTurnUsage[playerId] = new Map();
+    }
+    return this.oncePerTurnUsage[playerId];
+  }
+
+  canUseOncePerTurn(card, player, effect, options = {}) {
+    if (!effect || !effect.oncePerTurn) {
+      return { ok: true };
+    }
+    this.ensureOncePerTurnUsageFresh();
+    const lockKey = this.getOncePerTurnLockKey(card, effect, options);
+    const store = this.getOncePerTurnStore(card, player, effect, options);
+    const currentTurn = this.turnCounter;
+    const lastTurn = store.get(lockKey);
+    if (lastTurn === currentTurn) {
+      return {
+        ok: false,
+        reason: "Efeito 1/turn ja usado neste turno.",
+        lockKey,
+      };
+    }
+    return { ok: true, lockKey };
+  }
+
+  markOncePerTurnUsed(card, player, effect, options = {}) {
+    if (!effect || !effect.oncePerTurn) {
+      return;
+    }
+    this.ensureOncePerTurnUsageFresh();
+    const lockKey = this.getOncePerTurnLockKey(card, effect, options);
+    const store = this.getOncePerTurnStore(card, player, effect, options);
+    store.set(lockKey, this.turnCounter);
+    this.devLog("OPT_MARK_USED", {
+      summary: lockKey,
+      card: card?.name,
+      player: player?.id,
+      turn: this.turnCounter,
+    });
+  }
+
+  canStartAction(options = {}) {
+    const actor = options.actor || null;
+    const kind = options.kind || "action";
+    const allowDuringSelection =
+      options.allowDuringSelection === true ||
+      kind === "selection_interaction";
+    const allowDuringResolving =
+      options.allowDuringResolving === true ||
+      kind === "selection_interaction";
+    const allowDuringOpponentTurn = options.allowDuringOpponentTurn === true;
+    const phaseReq = options.phaseReq || null;
+    const selectionState = this.selectionState || "idle";
+    const selectionInteractive =
+      !!this.targetSelection ||
+      selectionState === "selecting" ||
+      selectionState === "confirming";
+    const resolvingActive =
+      this.isResolvingEffect ||
+      selectionState === "resolving" ||
+      this.eventResolutionDepth > 0;
+
+    const blocked = (code, reason) => {
+      const result = { ok: false, code, reason };
+      this.devLog("ACTION_GUARD_BLOCKED", {
+        summary: code,
+        kind,
+        reason,
+        phase: this.phase,
+        turn: this.turn,
+        actor: actor?.id,
+        selectionState: this.selectionState,
+        resolving: this.isResolvingEffect,
+        eventDepth: this.eventResolutionDepth,
+      });
+      return result;
+    };
+
+    if (selectionInteractive && !allowDuringSelection) {
+      return blocked(
+        "BLOCKED_SELECTION_ACTIVE",
+        "Finalize a selecao atual antes de iniciar outra acao."
+      );
+    }
+
+    if (resolvingActive && !allowDuringResolving) {
+      return blocked(
+        "BLOCKED_RESOLVING",
+        "Finalize o efeito pendente antes de fazer outra acao."
+      );
+    }
+
+    if (
+      actor &&
+      actor.id &&
+      actor.id !== this.turn &&
+      !allowDuringOpponentTurn
+    ) {
+      return blocked("BLOCKED_NOT_YOUR_TURN", "Nao e o seu turno.");
+    }
+
+    if (phaseReq) {
+      const phases = Array.isArray(phaseReq) ? phaseReq : [phaseReq];
+      if (!phases.includes(this.phase)) {
+        return blocked(
+          "BLOCKED_WRONG_PHASE",
+          "Esta acao nao pode ser usada nesta fase."
+        );
+      }
+    }
+
+    return { ok: true };
+  }
+
+  assertCanStartAction(options = {}) {
+    return this.canStartAction(options);
+  }
+
+  guardActionStart(options = {}, logToRenderer = true) {
+    const result = this.canStartAction(options);
+    if (!result.ok && logToRenderer && result.reason && this.renderer?.log) {
+      this.renderer.log(result.reason);
+    }
+    return result;
+  }
+
+  forceClearTargetSelection(reason = "invariant_cleanup") {
+    if (!this.targetSelection) return;
+    this.devLog("SELECTION_FORCE_CLEAR", {
+      summary: `Selection cleared (${reason})`,
+    });
+    this.clearTargetHighlights();
+    if (
+      this.renderer &&
+      typeof this.renderer.hideFieldTargetingControls === "function"
+    ) {
+      this.renderer.hideFieldTargetingControls();
+    }
+    if (this.targetSelection?.closeModal) {
+      this.targetSelection.closeModal();
+    }
+    this.targetSelection = null;
+    this.setSelectionState("idle");
+  }
+
+  snapshotCardState(card) {
+    if (!card) return null;
+    const snapshot = { ...card };
+    if (card.counters instanceof Map) {
+      snapshot.counters = new Map(card.counters);
+    }
+    if (Array.isArray(card.equips)) {
+      snapshot.equips = [...card.equips];
+    }
+    return snapshot;
+  }
+
+  collectAllZoneCards() {
+    const cards = new Set();
+    const addList = (list) => {
+      if (!Array.isArray(list)) return;
+      list.forEach((card) => {
+        if (card) cards.add(card);
+      });
+    };
+    const addPlayer = (player) => {
+      if (!player) return;
+      addList(player.hand);
+      addList(player.field);
+      addList(player.spellTrap);
+      addList(player.graveyard);
+      addList(player.deck);
+      addList(player.extraDeck);
+      if (player.fieldSpell) {
+        cards.add(player.fieldSpell);
+      }
+    };
+    addPlayer(this.player);
+    addPlayer(this.bot);
+    return [...cards];
+  }
+
+  captureZoneSnapshot(contextLabel = "zone_op") {
+    const snapshot = {
+      contextLabel,
+      players: {
+        player: {
+          hand: [...(this.player?.hand || [])],
+          field: [...(this.player?.field || [])],
+          spellTrap: [...(this.player?.spellTrap || [])],
+          graveyard: [...(this.player?.graveyard || [])],
+          deck: [...(this.player?.deck || [])],
+          extraDeck: [...(this.player?.extraDeck || [])],
+          fieldSpell: this.player?.fieldSpell || null,
+        },
+        bot: {
+          hand: [...(this.bot?.hand || [])],
+          field: [...(this.bot?.field || [])],
+          spellTrap: [...(this.bot?.spellTrap || [])],
+          graveyard: [...(this.bot?.graveyard || [])],
+          deck: [...(this.bot?.deck || [])],
+          extraDeck: [...(this.bot?.extraDeck || [])],
+          fieldSpell: this.bot?.fieldSpell || null,
+        },
+      },
+      cardState: new Map(),
+    };
+
+    const cards = this.collectAllZoneCards();
+    cards.forEach((card) => {
+      const state = this.snapshotCardState(card);
+      if (state) {
+        snapshot.cardState.set(card, state);
+      }
+    });
+
+    return snapshot;
+  }
+
+  restoreZoneSnapshot(snapshot) {
+    if (!snapshot) return;
+    const restorePlayer = (player, state) => {
+      if (!player || !state) return;
+      player.hand = [...(state.hand || [])];
+      player.field = [...(state.field || [])];
+      player.spellTrap = [...(state.spellTrap || [])];
+      player.graveyard = [...(state.graveyard || [])];
+      player.deck = [...(state.deck || [])];
+      player.extraDeck = [...(state.extraDeck || [])];
+      player.fieldSpell = state.fieldSpell || null;
+    };
+
+    restorePlayer(this.player, snapshot.players?.player);
+    restorePlayer(this.bot, snapshot.players?.bot);
+
+    if (snapshot.cardState) {
+      snapshot.cardState.forEach((state, card) => {
+        if (!card || !state) return;
+        Object.keys(state).forEach((key) => {
+          if (key === "counters" && state.counters instanceof Map) {
+            card.counters = new Map(state.counters);
+            return;
+          }
+          if (key === "equips" && Array.isArray(state.equips)) {
+            card.equips = [...state.equips];
+            return;
+          }
+          card[key] = state[key];
+        });
+      });
+    }
+  }
+
+  compareZoneSnapshot(a, b, playerKey = "player") {
+    const stateA = a?.players?.[playerKey] || {};
+    const stateB = b?.players?.[playerKey] || {};
+    const listEqual = (left, right) => {
+      if (!Array.isArray(left) || !Array.isArray(right)) return false;
+      if (left.length !== right.length) return false;
+      for (let i = 0; i < left.length; i += 1) {
+        if (left[i] !== right[i]) return false;
+      }
+      return true;
+    };
+    return (
+      listEqual(stateA.hand || [], stateB.hand || []) &&
+      listEqual(stateA.field || [], stateB.field || []) &&
+      listEqual(stateA.spellTrap || [], stateB.spellTrap || []) &&
+      listEqual(stateA.graveyard || [], stateB.graveyard || []) &&
+      listEqual(stateA.deck || [], stateB.deck || []) &&
+      listEqual(stateA.extraDeck || [], stateB.extraDeck || []) &&
+      (stateA.fieldSpell || null) === (stateB.fieldSpell || null)
+    );
+  }
+
+  assertStateInvariants(contextLabel = "state_check", options = {}) {
+    const failFast =
+      options.failFast !== undefined ? options.failFast : this.devModeEnabled;
+    const normalize = options.normalize !== false;
+    const issues = [];
+    const addIssue = (message, detail) => {
+      issues.push({ message, detail });
+    };
+    const normalizeZone = (player, zoneName, list) => {
+      if (!Array.isArray(list)) return;
+      const hasHoles = list.some((item) => !item);
+      if (hasHoles) {
+        addIssue("zone_has_empty_slots", {
+          player: player?.id,
+          zone: zoneName,
+        });
+        if (normalize) {
+          const filtered = list.filter((item) => item);
+          if (player && Array.isArray(player[zoneName])) {
+            player[zoneName] = filtered;
+          }
+        }
+      }
+    };
+
+    const checkZoneLimit = (player, zoneName, max) => {
+      const list = player?.[zoneName];
+      if (Array.isArray(list) && list.length > max) {
+        addIssue("zone_limit_exceeded", {
+          player: player?.id,
+          zone: zoneName,
+          length: list.length,
+          max,
+        });
+      }
+    };
+
+    const collectZones = (player) => [
+      { name: "hand", list: player?.hand || [] },
+      { name: "field", list: player?.field || [] },
+      { name: "spellTrap", list: player?.spellTrap || [] },
+      { name: "graveyard", list: player?.graveyard || [] },
+      { name: "deck", list: player?.deck || [] },
+      { name: "extraDeck", list: player?.extraDeck || [] },
+    ];
+
+    [this.player, this.bot].forEach((player) => {
+      if (!player) return;
+      checkZoneLimit(player, "field", 5);
+      checkZoneLimit(player, "spellTrap", 5);
+      collectZones(player).forEach(({ name, list }) =>
+        normalizeZone(player, name, list)
+      );
+    });
+
+    const locationMap = new Map();
+    const registerCard = (card, playerId, zoneName) => {
+      if (!card) return;
+      if (!locationMap.has(card)) {
+        locationMap.set(card, []);
+      }
+      locationMap.get(card).push({ playerId, zoneName });
+    };
+
+    [this.player, this.bot].forEach((player) => {
+      if (!player) return;
+      collectZones(player).forEach(({ name, list }) => {
+        list.forEach((card) => registerCard(card, player.id, name));
+      });
+      if (player.fieldSpell) {
+        registerCard(player.fieldSpell, player.id, "fieldSpell");
+      }
+    });
+
+    locationMap.forEach((locations, card) => {
+      if (locations.length > 1) {
+        addIssue("card_in_multiple_zones", {
+          card: card?.name,
+          locations,
+        });
+      }
+      locations.forEach((entry) => {
+        if (card?.owner && card.owner !== entry.playerId) {
+          addIssue("owner_mismatch", {
+            card: card?.name,
+            owner: card.owner,
+            zoneOwner: entry.playerId,
+            zone: entry.zoneName,
+          });
+        }
+        if (card?.controller && card.controller !== entry.playerId) {
+          addIssue("controller_mismatch", {
+            card: card?.name,
+            controller: card.controller,
+            zoneOwner: entry.playerId,
+            zone: entry.zoneName,
+          });
+        }
+      });
+    });
+
+    [this.player, this.bot].forEach((player) => {
+      if (!player?.fieldSpell) return;
+      const fieldSpell = player.fieldSpell;
+      const locs = locationMap.get(fieldSpell) || [];
+      if (locs.length > 1) {
+        addIssue("field_spell_in_multiple_zones", {
+          card: fieldSpell.name,
+          locations: locs,
+        });
+      }
+    });
+
+    const selectionState = this.selectionState || "idle";
+    if (this.targetSelection && selectionState === "idle") {
+      addIssue("selection_stale", { state: selectionState });
+      this.forceClearTargetSelection("stale_selection");
+    } else if (!this.targetSelection) {
+      if (selectionState === "selecting" || selectionState === "confirming") {
+        addIssue("selection_state_mismatch", { state: selectionState });
+        this.setSelectionState("idle");
+      } else if (selectionState === "resolving") {
+        const resolvingContext =
+          this.isResolvingEffect || this.eventResolutionDepth > 0;
+        if (!resolvingContext) {
+          addIssue("resolving_state_stale", { state: selectionState });
+          this.devLog("SELECTION_STATE_RECOVERY", {
+            summary: "Resolving state stale, resetting to idle.",
+            state: selectionState,
+          });
+          this.setSelectionState("idle");
+        }
+      }
+    }
+
+    const nonCriticalIssues = new Set([
+      "selection_stale",
+      "selection_state_mismatch",
+      "resolving_state_stale",
+    ]);
+    const hasCritical = issues.some(
+      (issue) => !nonCriticalIssues.has(issue.message)
+    );
+    const criticalIssues = issues.filter(
+      (issue) => !nonCriticalIssues.has(issue.message)
+    );
+
+    if (issues.length) {
+      const summary = `[Game] State invariants failed (${contextLabel})`;
+      const log = hasCritical ? console.error : console.warn;
+      log(summary, issues);
+      if (failFast && hasCritical) {
+        throw new Error(`${summary} issues=${issues.length}`);
+      }
+    }
+
+    return { ok: issues.length === 0, issues, hasCritical, criticalIssues };
+  }
+
+  runZoneOp(opLabel, fn, options = {}) {
+    const contextLabel = options.contextLabel || opLabel;
+    const root = this.zoneOpDepth === 0;
+    if (root) {
+      this.zoneOpSnapshot = this.captureZoneSnapshot(contextLabel);
+    }
+    this.zoneOpDepth += 1;
+    this.devLog("ZONE_OP_START", {
+      summary: opLabel,
+      opLabel,
+      contextLabel,
+      card: options.card?.name,
+      fromZone: options.fromZone,
+      toZone: options.toZone,
+      depth: this.zoneOpDepth,
+    });
+
+    const rollback = (error) => {
+      if (root && this.zoneOpSnapshot) {
+        this.restoreZoneSnapshot(this.zoneOpSnapshot);
+      }
+      if (root) {
+        this.forceClearTargetSelection("zone_op_rollback");
+        this.updateBoard();
+        this.assertStateInvariants(`${contextLabel}_rollback`, {
+          failFast: false,
+        });
+      }
+      this.devLog("ZONE_OP_ROLLBACK", {
+        summary: opLabel,
+        opLabel,
+        contextLabel,
+        card: options.card?.name,
+        fromZone: options.fromZone,
+        toZone: options.toZone,
+        reason: error?.message || "unknown",
+      });
+    };
+
+    const finalizeFailure = (error) => {
+      this.zoneOpDepth = Math.max(0, this.zoneOpDepth - 1);
+      rollback(error);
+      if (root && this.zoneOpSnapshot) {
+        this.zoneOpSnapshot = null;
+      }
+      if (!root) {
+        throw error;
+      }
+      return {
+        success: false,
+        reason: error?.message || "zone_op_error",
+        rolledBack: true,
+      };
+    };
+
+    const finalizeSuccess = (result) => {
+      try {
+        const invariantResult = this.assertStateInvariants(contextLabel, {
+          failFast: false,
+        });
+        if (invariantResult?.hasCritical) {
+          throw new Error("STATE_INVARIANTS_FAILED");
+        }
+      } catch (err) {
+        return finalizeFailure(err);
+      }
+      this.zoneOpDepth = Math.max(0, this.zoneOpDepth - 1);
+      if (root) {
+        this.devLog("ZONE_OP_COMMIT", {
+          summary: opLabel,
+          opLabel,
+          contextLabel,
+          card: options.card?.name,
+          fromZone: options.fromZone,
+          toZone: options.toZone,
+        });
+        this.zoneOpSnapshot = null;
+      }
+      return result;
+    };
+
+    try {
+      const result = fn();
+      if (result && typeof result.then === "function") {
+        return result.then(finalizeSuccess).catch(finalizeFailure);
+      }
+      return finalizeSuccess(result);
+    } catch (error) {
+      return finalizeFailure(error);
+    }
+  }
+
   on(eventName, handler) {
     if (!this.eventListeners[eventName]) {
       this.eventListeners[eventName] = [];
@@ -93,27 +678,160 @@ export default class Game {
         }
       }
     }
+    return await this.resolveEvent(eventName, payload);
+  }
 
-    if (
-      this.effectEngine &&
-      typeof this.effectEngine.handleEvent === "function"
-    ) {
-      this.effectEngine.handleEvent(eventName, payload);
+  async resolveEvent(eventName, payload) {
+    if (!eventName) {
+      return { ok: false, reason: "missing_event" };
     }
 
-    // Check for traps that respond to this event (e.g., after_summon)
-    // Only check player's traps, and only if opponent performed the action
-    if (eventName === "after_summon" && payload && payload.player) {
-      // From player's perspective, bot is the opponent
-      const isOpponentSummon = payload.player.id !== "player";
+    this.eventResolutionDepth += 1;
+    this.eventResolutionCounter += 1;
+    const eventCounter = this.eventResolutionCounter;
+    const eventId = `${eventName}:${eventCounter}`;
+    const depth = this.eventResolutionDepth;
 
-      await this.checkAndOfferTraps(eventName, {
-        ...payload,
-        isOpponentSummon: isOpponentSummon,
+    this.devLog("EVENT_START", {
+      summary: `${eventName} (#${eventCounter})`,
+      event: eventName,
+      depth,
+      id: eventId,
+    });
+
+    let triggerPackage = null;
+    try {
+      if (
+        this.effectEngine &&
+        typeof this.effectEngine.collectEventTriggers === "function"
+      ) {
+        triggerPackage = await this.effectEngine.collectEventTriggers(
+          eventName,
+          payload
+        );
+      }
+    } catch (err) {
+      console.error(
+        `[Game] Failed to collect triggers for "${eventName}":`,
+        err
+      );
+    }
+
+    let entries = [];
+    let orderRule = null;
+    let onComplete = null;
+    if (Array.isArray(triggerPackage)) {
+      entries = triggerPackage;
+    } else if (triggerPackage && typeof triggerPackage === "object") {
+      entries = Array.isArray(triggerPackage.entries)
+        ? triggerPackage.entries
+        : [];
+      orderRule =
+        typeof triggerPackage.orderRule === "string"
+          ? triggerPackage.orderRule
+          : null;
+      onComplete =
+        typeof triggerPackage.onComplete === "function"
+          ? triggerPackage.onComplete
+          : null;
+    }
+
+    const order = entries
+      .map((entry) => entry?.summary)
+      .filter((value) => typeof value === "string" && value.trim().length > 0);
+
+    this.devLog("TRIGGERS_COLLECTED", {
+      summary: `${eventName} (${entries.length})`,
+      event: eventName,
+      count: entries.length,
+      order,
+      orderRule,
+      depth,
+    });
+
+    const results = [];
+    try {
+      for (const entry of entries) {
+        const config = entry?.config || entry?.pipeline || entry;
+        if (!config || typeof config.activate !== "function") {
+          continue;
+        }
+        const result = await this.runActivationPipelineWait(config);
+        results.push({
+          id: entry?.summary || entry?.effect?.id || entry?.card?.name || null,
+          success: result?.success === true,
+          needsSelection: result?.needsSelection === true,
+        });
+      }
+
+      this.devLog("TRIGGERS_DONE", {
+        summary: `${eventName} (${entries.length})`,
+        event: eventName,
+        count: entries.length,
+        depth,
+      });
+
+      if (typeof onComplete === "function") {
+        try {
+          onComplete();
+        } catch (err) {
+          console.error(
+            `[Game] Error running onComplete for "${eventName}":`,
+            err
+          );
+        }
+      }
+
+      if (eventName === "after_summon" && payload?.player) {
+        const isOpponentSummon = payload.player.id !== "player";
+        await this.checkAndOfferTraps(eventName, {
+          ...payload,
+          isOpponentSummon,
+        });
+      } else if (eventName === "attack_declared") {
+        const defenderOwner = payload?.defenderOwner || null;
+        if (defenderOwner === this.player) {
+          await this.checkAndOfferTraps(eventName, {
+            ...payload,
+            isOpponentAttack: payload?.attackerOwner?.id === "bot",
+          });
+        }
+      }
+    } catch (err) {
+      console.error(`[Game] Error resolving event "${eventName}":`, err);
+    } finally {
+      this.eventResolutionDepth = Math.max(0, this.eventResolutionDepth - 1);
+
+      if (this.devModeEnabled) {
+        const cleanupState = this.devGetSelectionCleanupState();
+        if (
+          cleanupState.selectionActive ||
+          cleanupState.controlsVisible ||
+          cleanupState.highlightCount > 0
+        ) {
+          this.devLog("EVENT_CLEANUP_FORCED", {
+            summary: `${eventName} cleanup`,
+            cleanupState,
+          });
+          this.devForceTargetCleanup();
+        }
+      }
+
+      this.assertStateInvariants(`event_${eventName}`, { failFast: false });
+
+      this.devLog("EVENT_END", {
+        summary: `${eventName} (#${eventCounter})`,
+        event: eventName,
+        depth: this.eventResolutionDepth,
+        id: eventId,
       });
     }
 
-    return undefined;
+    return {
+      ok: true,
+      triggerCount: entries.length,
+      results,
+    };
   }
 
   start(deckList = null, extraDeckList = null) {
@@ -128,10 +846,8 @@ export default class Game {
       );
     }
 
-    for (let i = 0; i < 4; i++) {
-      this.player.draw();
-      this.bot.draw();
-    }
+    this.drawCards(this.player, 4);
+    this.drawCards(this.bot, 4);
 
     this.updateBoard();
     this.startTurn();
@@ -146,6 +862,37 @@ export default class Game {
       }
     });
     this.bindCardInteractions();
+  }
+
+  drawCards(player, count = 1, options = {}) {
+    if (!player) {
+      return { ok: false, reason: "invalid_player", drawn: [] };
+    }
+
+    const drawCount = Math.max(0, Number(count) || 0);
+    if (drawCount === 0) {
+      return { ok: true, drawn: [] };
+    }
+
+    const drawn = [];
+    for (let i = 0; i < drawCount; i += 1) {
+      const card = player.draw();
+      if (!card) {
+        if (!options.silent && this.renderer?.log) {
+          this.renderer.log(options.message || "Deck is empty.");
+        }
+        this.devLog("DRAW_FAIL", {
+          summary: `${player.id} deck empty`,
+          player: player.id,
+          requested: drawCount,
+          drawn: drawn.length,
+        });
+        return { ok: false, reason: "deck_empty", drawn };
+      }
+      drawn.push(card);
+    }
+
+    return { ok: true, drawn };
   }
 
   forceOpeningHand(cardName, count) {
@@ -234,6 +981,7 @@ export default class Game {
 
   async startTurn() {
     this.turnCounter += 1;
+    this.resetOncePerTurnUsage("start_turn");
     this.phase = "draw";
 
     const activePlayer = this.turn === "player" ? this.player : this.bot;
@@ -266,13 +1014,13 @@ export default class Game {
 
     this.updateBoard();
 
-    activePlayer.draw();
+    this.drawCards(activePlayer, 1);
     this.updateBoard();
     await this.waitForPhaseDelay();
 
     this.phase = "standby";
     this.updateBoard();
-    this.emit("standby_phase", { player: activePlayer, opponent });
+    await this.emit("standby_phase", { player: activePlayer, opponent });
     await this.waitForPhaseDelay();
 
     this.phase = "main1";
@@ -290,14 +1038,14 @@ export default class Game {
 
   async nextPhase() {
     if (this.gameOver) return;
-    if (this.isResolvingEffect) {
-      this.renderer.log(
-        "⚠️ Finalize o efeito pendente antes de mudar de fase."
-      );
-      return;
-    }
+    const actor = this.turn === "player" ? this.player : this.bot;
+    const guard = this.guardActionStart(
+      { actor, kind: "phase_change" },
+      actor === this.player
+    );
+    if (!guard.ok) return guard;
 
-    // Oferecer ativação de traps genéricas no final da fase atual
+    // Oferecer ativacao de traps genericas no final da fase atual
     await this.checkAndOfferTraps("phase_end", {
       currentPhase: this.phase,
     });
@@ -320,12 +1068,12 @@ export default class Game {
   }
 
   endTurn() {
-    if (this.isResolvingEffect) {
-      this.renderer.log(
-        "⚠️ Finalize o efeito pendente antes de terminar o turno."
-      );
-      return;
-    }
+    const actor = this.turn === "player" ? this.player : this.bot;
+    const guard = this.guardActionStart(
+      { actor, kind: "phase_change" },
+      actor === this.player
+    );
+    if (!guard.ok) return guard;
     this.cleanupTempBoosts(this.player);
     this.cleanupTempBoosts(this.bot);
     this.turn = this.turn === "player" ? "bot" : "player";
@@ -380,12 +1128,11 @@ export default class Game {
   }
 
   skipToPhase(targetPhase) {
-    if (this.isResolvingEffect) {
-      this.renderer.log(
-        "⚠️ Finalize o efeito pendente antes de mudar de fase."
-      );
-      return;
-    }
+    const guard = this.guardActionStart({
+      actor: this.player,
+      kind: "phase_change",
+    });
+    if (!guard.ok) return guard;
     const order = ["draw", "standby", "main1", "battle", "main2", "end"];
     const currentIdx = order.indexOf(this.phase);
     const targetIdx = order.indexOf(targetPhase);
@@ -413,7 +1160,6 @@ export default class Game {
 
     document.getElementById("player-hand").addEventListener("click", (e) => {
       if (this.targetSelection) return;
-      if (this.turn !== "player") return;
 
       const cardEl = e.target.closest(".card");
       if (!cardEl) return;
@@ -445,14 +1191,19 @@ export default class Game {
           }
         } else {
           this.renderer.log(
-            "⚠️ Finalize o efeito pendente antes de fazer outra ação."
+            "Finalize o efeito pendente antes de fazer outra acao."
           );
         }
         return;
       }
 
       if (card.cardKind === "monster") {
-        if (this.phase !== "main1" && this.phase !== "main2") return;
+        const guard = this.guardActionStart({
+          actor: this.player,
+          kind: "summon",
+          phaseReq: ["main1", "main2"],
+        });
+        if (!guard.ok) return;
 
         const canSanctumSpecialFromAegis =
           card.name === "Luminarch Sanctum Protector" &&
@@ -573,10 +1324,12 @@ export default class Game {
       }
 
       if (card.cardKind === "spell") {
-        if (this.phase !== "main1" && this.phase !== "main2") {
-          this.renderer.log("Can only activate spells during Main Phase.");
-          return;
-        }
+        const guard = this.guardActionStart({
+          actor: this.player,
+          kind: "spell_from_hand",
+          phaseReq: ["main1", "main2"],
+        });
+        if (!guard.ok) return;
 
         // Special check for Polymerization
         const spellPreview = this.effectEngine?.canActivateSpellFromHandPreview(
@@ -616,6 +1369,12 @@ export default class Game {
       }
 
       if (card.cardKind === "trap") {
+        const guard = this.guardActionStart({
+          actor: this.player,
+          kind: "set_trap",
+          phaseReq: ["main1", "main2"],
+        });
+        if (!guard.ok) return;
         this.setSpellOrTrap(card, index);
         return;
       }
@@ -626,12 +1385,6 @@ export default class Game {
       .addEventListener("click", async (e) => {
         const cardEl = e.target.closest(".card");
         if (!cardEl) return;
-        if (this.isResolvingEffect) {
-          this.renderer.log(
-            "⚠️ Finalize o efeito pendente antes de fazer outra ação."
-          );
-          return;
-        }
 
         const index = parseInt(cardEl.dataset.index);
         if (Number.isNaN(index)) return;
@@ -705,10 +1458,17 @@ export default class Game {
           this.turn === "player" &&
           (this.phase === "main1" || this.phase === "main2")
         ) {
+          const guard = this.guardActionStart({
+            actor: this.player,
+            kind: "monster_action",
+            phaseReq: ["main1", "main2"],
+          });
+          if (!guard.ok) return;
+
           const card = this.player.field[index];
           if (!card || card.cardKind !== "monster") return;
 
-          // Verificar se tem efeito ignition ativável
+          // Verificar se tem efeito ignition ativavel
           const hasIgnition =
             card.effects &&
             card.effects.some((eff) => eff && eff.timing === "ignition");
@@ -716,7 +1476,7 @@ export default class Game {
           const canFlip = this.canFlipSummon(card);
           const canPosChange = this.canChangePosition(card);
 
-          // Se tem qualquer opção disponível, mostrar o modal unificado
+          // Se tem qualquer opcao disponivel, mostrar o modal unificado
           if (hasIgnition || canFlip || canPosChange) {
             if (e && typeof e.stopImmediatePropagation === "function") {
               e.stopImmediatePropagation();
@@ -760,6 +1520,13 @@ export default class Game {
         const attacker = this.player.field[index];
 
         if (attacker) {
+          const guard = this.guardActionStart({
+            actor: this.player,
+            kind: "attack",
+            phaseReq: "battle",
+          });
+          if (!guard.ok) return;
+
           const availability = this.getAttackAvailability(attacker);
           if (!availability.ok) {
             this.renderer.log(availability.reason);
@@ -819,20 +1586,12 @@ export default class Game {
           console.log(`[Game] Returning: targetSelection active`);
           return;
         }
-        if (this.isResolvingEffect) {
-          this.renderer.log(
-            "⚠️ Finalize o efeito pendente antes de fazer outra ação."
-          );
-          return;
-        }
-        if (this.turn !== "player") {
-          console.log(`[Game] Returning: not player turn (${this.turn})`);
-          return;
-        }
-        if (this.phase !== "main1" && this.phase !== "main2") {
-          console.log(`[Game] Returning: wrong phase (${this.phase})`);
-          return;
-        }
+        const guard = this.guardActionStart({
+          actor: this.player,
+          kind: "spelltrap_zone",
+          phaseReq: ["main1", "main2"],
+        });
+        if (!guard.ok) return;
 
         const cardEl = e.target.closest(".card");
         if (!cardEl) return;
@@ -857,7 +1616,7 @@ export default class Game {
             // Check if trap can be activated (waited at least 1 turn)
             if (!this.canActivateTrap(card)) {
               this.renderer.log(
-                "Esta armadilha não pode ser ativada neste turno."
+                "Esta armadilha nao pode ser ativada neste turno."
               );
               return;
             }
@@ -897,7 +1656,7 @@ export default class Game {
       this.handleTargetSelectionClick("bot", index, cardEl, "field");
     });
 
-    // Direcionar ataque direto: clicar na mão do oponente quando houver alvo "Direct Attack"
+    // Direcionar ataque direto: clicar na mao do oponente quando houver alvo "Direct Attack"
     const botSpellTrapEl = document.getElementById("bot-spelltrap");
     if (botSpellTrapEl) {
       botSpellTrapEl.addEventListener("click", (e) => {
@@ -925,7 +1684,7 @@ export default class Game {
         );
         if (!directCandidate) return;
 
-        // Seleciona o índice do ataque direto e finaliza seleção
+        // Seleciona o indice do ataque direto e finaliza selecao
         this.targetSelection.selections[requirement.id] = [
           directCandidate.key,
         ];
@@ -1040,8 +1799,12 @@ export default class Game {
   }
 
   specialSummonSanctumProtectorFromHand(handIndex) {
-    if (this.turn !== "player") return;
-    if (this.phase !== "main1" && this.phase !== "main2") return;
+    const guard = this.guardActionStart({
+      actor: this.player,
+      kind: "special_summon",
+      phaseReq: ["main1", "main2"],
+    });
+    if (!guard.ok) return guard;
     if (this.player.field.length >= 5) {
       this.renderer.log("Field is full (max 5 monsters).");
       return;
@@ -1148,7 +1911,7 @@ export default class Game {
     const replacement = replacementEffect.replacementEffect;
 
     // Check once per turn
-    const onceCheck = this.effectEngine.checkOncePerTurn(
+    const onceCheck = this.canUseOncePerTurn(
       card,
       ownerPlayer,
       replacementEffect
@@ -1210,11 +1973,7 @@ export default class Game {
         });
       }
 
-      this.effectEngine.registerOncePerTurnUsage(
-        card,
-        ownerPlayer,
-        replacementEffect
-      );
+      this.markOncePerTurnUsed(card, ownerPlayer, replacementEffect);
 
       const costNames = chosen.map((c) => c.name).join(", ");
       this.renderer.log(
@@ -1258,11 +2017,7 @@ export default class Game {
       this.moveCard(costCard, ownerPlayer, "graveyard", { fromZone: costZone });
     }
 
-    this.effectEngine.registerOncePerTurnUsage(
-      card,
-      ownerPlayer,
-      replacementEffect
-    );
+    this.markOncePerTurnUsed(card, ownerPlayer, replacementEffect);
 
     const costNames = selections.map((c) => c.name).join(", ");
     this.renderer.log(
@@ -1272,58 +2027,68 @@ export default class Game {
   }
 
   async destroyCard(card, options = {}) {
-    if (!card) {
-      return { destroyed: false, reason: "invalid_card" };
-    }
-
-    const owner = card.owner === "player" ? this.player : this.bot;
-    if (!owner) {
-      return { destroyed: false, reason: "missing_owner" };
-    }
-
-    const cause = options.cause || options.reason || "effect";
-    const sourceCard = options.sourceCard || options.source || null;
-    const opponent = options.opponent || this.getOpponent(owner);
-    const fromZone =
-      options.fromZone ||
-      this.effectEngine?.findCardZone?.(owner, card) ||
-      null;
-
-    if (!fromZone) {
-      return { destroyed: false, reason: "not_in_zone" };
-    }
-
-    if (this.effectEngine?.checkBeforeDestroyNegations) {
-      const negationResult = await this.effectEngine.checkBeforeDestroyNegations(
-        card,
-        {
-          source: sourceCard,
-          player: owner,
-          opponent,
-          cause,
-          fromZone,
+    return this.runZoneOp(
+      "DESTROY_CARD",
+      async () => {
+        if (!card) {
+          return { destroyed: false, reason: "invalid_card" };
         }
-      );
-      if (negationResult?.negated) {
-        return { destroyed: false, negated: true };
+
+        const owner = card.owner === "player" ? this.player : this.bot;
+        if (!owner) {
+          return { destroyed: false, reason: "missing_owner" };
+        }
+
+        const cause = options.cause || options.reason || "effect";
+        const sourceCard = options.sourceCard || options.source || null;
+        const opponent = options.opponent || this.getOpponent(owner);
+        const fromZone =
+          options.fromZone ||
+          this.effectEngine?.findCardZone?.(owner, card) ||
+          null;
+
+        if (!fromZone) {
+          return { destroyed: false, reason: "not_in_zone" };
+        }
+
+        if (this.effectEngine?.checkBeforeDestroyNegations) {
+          const negationResult =
+            await this.effectEngine.checkBeforeDestroyNegations(card, {
+              source: sourceCard,
+              player: owner,
+              opponent,
+              cause,
+              fromZone,
+            });
+          if (negationResult?.negated) {
+            return { destroyed: false, negated: true };
+          }
+        }
+
+        const { replaced } =
+          (await this.resolveDestructionWithReplacement(card, {
+            cause,
+            sourceCard,
+          })) || { replaced: false };
+
+        if (replaced) {
+          return { destroyed: false, replaced: true };
+        }
+
+        this.moveCard(card, owner, "graveyard", {
+          fromZone: fromZone || undefined,
+          wasDestroyed: true,
+        });
+
+        return { destroyed: true };
+      },
+      {
+        contextLabel: options.contextLabel || "destroyCard",
+        card,
+        fromZone: options.fromZone,
+        toZone: "graveyard",
       }
-    }
-
-    const { replaced } = (await this.resolveDestructionWithReplacement(card, {
-      cause,
-      sourceCard,
-    })) || { replaced: false };
-
-    if (replaced) {
-      return { destroyed: false, replaced: true };
-    }
-
-    this.moveCard(card, owner, "graveyard", {
-      fromZone: fromZone || undefined,
-      wasDestroyed: true,
-    });
-
-    return { destroyed: true };
+    );
   }
 
   canFlipSummon(card) {
@@ -1417,8 +2182,12 @@ export default class Game {
       sourceZone: activationZone,
       committed: false,
     };
+    const activationEffect = this.effectEngine?.getMonsterIgnitionEffect?.(
+      card,
+      activationZone
+    );
 
-    await this.runActivationPipeline({
+    const pipelineResult = await this.runActivationPipeline({
       card,
       owner: this.player,
       activationZone,
@@ -1426,6 +2195,13 @@ export default class Game {
       selections,
       selectionKind: "monsterEffect",
       selectionMessage: "Select target(s) for the monster effect.",
+      guardKind: "monster_effect",
+      phaseReq: ["main1", "main2"],
+      oncePerTurn: {
+        card,
+        player: this.player,
+        effect: activationEffect,
+      },
       activate: (chosen, ctx, zone) =>
         this.effectEngine.activateMonsterEffect(
           card,
@@ -1439,11 +2215,18 @@ export default class Game {
         this.updateBoard();
       },
     });
+    return pipelineResult;
   }
 
   async tryActivateSpellTrapEffect(card, selections = null) {
     if (!card) return;
     console.log(`[Game] tryActivateSpellTrapEffect called for: ${card.name}`);
+    const guard = this.guardActionStart({
+      actor: this.player,
+      kind: "spelltrap_effect",
+      phaseReq: ["main1", "main2"],
+    });
+    if (!guard.ok) return guard;
 
     // If it's a trap, show confirmation modal first
     if (card.cardKind === "trap") {
@@ -1471,8 +2254,12 @@ export default class Game {
       sourceZone: "spellTrap",
       committed: false,
     };
+    const activationEffect = this.effectEngine?.getSpellTrapActivationEffect?.(
+      card,
+      { fromHand: false }
+    );
 
-    await this.runActivationPipeline({
+    const pipelineResult = await this.runActivationPipeline({
       card,
       owner: this.player,
       activationZone: "spellTrap",
@@ -1480,6 +2267,13 @@ export default class Game {
       selections,
       selectionKind: "spellTrapEffect",
       selectionMessage: "Select target(s) for the continuous spell effect.",
+      guardKind: "spelltrap_effect",
+      phaseReq: ["main1", "main2"],
+      oncePerTurn: {
+        card,
+        player: this.player,
+        effect: activationEffect,
+      },
       activate: (chosen, ctx, zone) =>
         this.effectEngine.activateSpellTrapEffect(
           card,
@@ -1498,6 +2292,7 @@ export default class Game {
         this.updateBoard();
       },
     });
+    return pipelineResult;
   }
 
   buildSelectionCandidateKey(candidate = {}, fallbackIndex = 0) {
@@ -1710,10 +2505,6 @@ export default class Game {
     let resolvedCard = config.card;
     if (!owner || !resolvedCard) return null;
 
-    if (config.blockWhileSelecting !== false && this.targetSelection) {
-      return null;
-    }
-
     const selectionKind = config.selectionKind || "activation";
     let resolvedZone =
       config.activationZone || config.activationContext?.activationZone || null;
@@ -1731,6 +2522,35 @@ export default class Game {
         typeof detail.summary === "string" ? detail.summary : summaryBase;
       this.devLog(tag, { summary, ...detail });
     };
+
+    const guardResult = this.canStartAction({
+      actor: owner,
+      kind: config.guardKind || selectionKind || "activation",
+      phaseReq: config.phaseReq || null,
+      allowDuringSelection: config.allowDuringSelection === true,
+      allowDuringResolving: config.allowDuringResolving === true,
+      allowDuringOpponentTurn: config.allowDuringOpponentTurn === true,
+    });
+    if (!guardResult.ok) {
+      logPipeline("PIPELINE_GUARD_BLOCKED", {
+        reason: guardResult.reason,
+        code: guardResult.code,
+      });
+      if (
+        guardResult.reason &&
+        config.suppressFailureLog !== true &&
+        this.renderer?.log
+      ) {
+        this.renderer.log(guardResult.reason);
+      }
+      return {
+        success: false,
+        needsSelection: false,
+        reason: guardResult.reason,
+        code: guardResult.code,
+        blockedByGuard: true,
+      };
+    }
 
     if (typeof config.gate === "function") {
       const gateResult = config.gate();
@@ -1755,6 +2575,40 @@ export default class Game {
       logPipeline("PIPELINE_PREVIEW_OK");
     } else {
       logPipeline("PIPELINE_PREVIEW_OK");
+    }
+
+    const oncePerTurnConfig = config.oncePerTurn || null;
+    let oncePerTurnInfo = null;
+    if (oncePerTurnConfig?.effect && oncePerTurnConfig.effect.oncePerTurn) {
+      const optCard = oncePerTurnConfig.card || resolvedCard;
+      const optPlayer = oncePerTurnConfig.player || owner;
+      const optCheck = this.canUseOncePerTurn(
+        optCard,
+        optPlayer,
+        oncePerTurnConfig.effect,
+        oncePerTurnConfig
+      );
+      if (!optCheck.ok) {
+        logPipeline("PIPELINE_OPT_BLOCKED", {
+          reason: optCheck.reason,
+          lockKey: optCheck.lockKey,
+        });
+        if (optCheck.reason) {
+          this.renderer.log(optCheck.reason);
+        }
+        return {
+          success: false,
+          needsSelection: false,
+          reason: optCheck.reason,
+          blockedOncePerTurn: true,
+        };
+      }
+      oncePerTurnInfo = {
+        card: optCard,
+        player: optPlayer,
+        effect: oncePerTurnConfig.effect,
+        lockKey: optCheck.lockKey,
+      };
     }
 
     let commitInfo = null;
@@ -1985,6 +2839,14 @@ export default class Game {
           activationContext,
         });
       }
+      if (oncePerTurnInfo) {
+        this.markOncePerTurnUsed(
+          oncePerTurnInfo.card,
+          oncePerTurnInfo.player,
+          oncePerTurnInfo.effect,
+          { lockKey: oncePerTurnInfo.lockKey }
+        );
+      }
       logPipeline("PIPELINE_FINALIZE", {
         activationZone: resolvedActivationZone,
       });
@@ -1996,6 +2858,57 @@ export default class Game {
 
     const initialResult = await safeActivate(config.selections || null);
     return handleResult(initialResult, false);
+  }
+
+  async runActivationPipelineWait(config = {}) {
+    let finished = false;
+    let resolvePromise = null;
+
+    const waitForFinish = new Promise((resolve) => {
+      resolvePromise = resolve;
+    });
+
+    const finishOnce = (result) => {
+      if (finished) return;
+      finished = true;
+      if (typeof resolvePromise === "function") {
+        resolvePromise(result);
+      }
+    };
+
+    const wrappedConfig = {
+      ...config,
+      onSuccess: (result, ctx) => {
+        if (typeof config.onSuccess === "function") {
+          config.onSuccess(result, ctx);
+        }
+        finishOnce(result);
+      },
+      onFailure: (result, ctx) => {
+        if (typeof config.onFailure === "function") {
+          config.onFailure(result, ctx);
+        }
+        finishOnce(result);
+      },
+      onCancel: () => {
+        if (typeof config.onCancel === "function") {
+          config.onCancel();
+        }
+        finishOnce({
+          success: false,
+          needsSelection: false,
+          reason: "Selection cancelled.",
+        });
+      },
+    };
+
+    const initialResult = await this.runActivationPipeline(wrappedConfig);
+
+    if (!finished && (!initialResult || initialResult.needsSelection !== true)) {
+      finishOnce(initialResult);
+    }
+
+    return waitForFinish;
   }
 
   startTargetSelectionSession(session) {
@@ -2033,12 +2946,15 @@ export default class Game {
         : this.canUseFieldTargeting(selectionContract.requirements);
     selectionContract.ui.useFieldTargeting = usingFieldTargeting;
 
+    this.selectionSessionCounter += 1;
+    this.lastSelectionSessionId = this.selectionSessionCounter;
     this.targetSelection = {
       ...session,
       selectionContract,
       requirements: selectionContract.requirements,
       selections: {},
       currentRequirement: 0,
+      sessionId: this.lastSelectionSessionId,
       usingFieldTargeting,
       allowCancel: selectionContract.ui.allowCancel !== false,
       allowEmpty: selectionContract.ui.allowEmpty === true,
@@ -2101,19 +3017,38 @@ export default class Game {
 
   activateFieldSpellEffect(card) {
     const owner = card.owner === "player" ? this.player : this.bot;
+    const guard = this.guardActionStart(
+      {
+        actor: owner,
+        kind: "fieldspell_effect",
+        phaseReq: ["main1", "main2"],
+      },
+      owner === this.player
+    );
+    if (!guard.ok) return guard;
     const activationContext = {
       fromHand: false,
       activationZone: "fieldSpell",
       sourceZone: "fieldSpell",
       committed: false,
     };
-    this.runActivationPipeline({
+    const activationEffect = this.effectEngine?.getFieldSpellActivationEffect?.(
+      card
+    );
+    const pipelineResult = this.runActivationPipeline({
       card,
       owner,
       activationZone: "fieldSpell",
       activationContext,
       selectionKind: "fieldSpell",
       selectionMessage: "Select target(s) for the field spell effect.",
+      guardKind: "fieldspell_effect",
+      phaseReq: ["main1", "main2"],
+      oncePerTurn: {
+        card,
+        player: owner,
+        effect: activationEffect,
+      },
       activate: (selections, ctx) =>
         this.effectEngine.activateFieldSpell(card, owner, selections, ctx),
       finalize: () => {
@@ -2121,6 +3056,7 @@ export default class Game {
         this.updateBoard();
       },
     });
+    return pipelineResult;
   }
 
   startAttackTargetSelection(attacker, candidates) {
@@ -2148,7 +3084,7 @@ export default class Game {
       return candidate;
     });
 
-    // Adiciona alvo de ataque direto (clicar na mão do oponente) quando permitido
+    // Adiciona alvo de ataque direto (clicar na mao do oponente) quando permitido
     if (attacker.canAttackDirectlyThisTurn) {
       decorated.push({
         idx: decorated.length,
@@ -2205,13 +3141,15 @@ export default class Game {
           (cand) => cand.key === chosenKey
         );
         if (chosenCandidate?.isDirectAttack) {
-          this.resolveCombat(attacker, null).catch((err) =>
-            console.error(err)
-          );
+          this.resolveCombat(attacker, null, {
+            allowDuringSelection: true,
+            allowDuringResolving: true,
+          }).catch((err) => console.error(err));
         } else if (chosenCandidate?.cardRef) {
-          this.resolveCombat(attacker, chosenCandidate.cardRef).catch((err) =>
-            console.error(err)
-          );
+          this.resolveCombat(attacker, chosenCandidate.cardRef, {
+            allowDuringSelection: true,
+            allowDuringResolving: true,
+          }).catch((err) => console.error(err));
         }
         return { success: true, needsSelection: false };
       },
@@ -2640,7 +3578,7 @@ export default class Game {
       this.graveyardSelection = null;
     }
 
-    // Se não está em modo de seleção, mostrar indicador de efeitos ativáveis
+    // Se nÃ£o estÃ¡ em modo de seleÃ§Ã£o, mostrar indicador de efeitos ativÃ¡veis
     if (
       !options.selectable &&
       player.id === "player" &&
@@ -2651,7 +3589,7 @@ export default class Game {
         return this.effectEngine.hasActivatableGraveyardEffect(card);
       };
 
-      // Se não tem onSelect customizado, usar o padrão para ativar efeitos
+      // Se nÃ£o tem onSelect customizado, usar o padrÃ£o para ativar efeitos
       if (!options.onSelect) {
         options.onSelect = (card) => {
           if (!this.effectEngine.hasActivatableGraveyardEffect(card)) {
@@ -2663,6 +3601,8 @@ export default class Game {
             sourceZone: "graveyard",
             committed: false,
           };
+          const activationEffect =
+            this.effectEngine?.getMonsterIgnitionEffect?.(card, "graveyard");
           this.runActivationPipeline({
             card,
             owner: player,
@@ -2670,6 +3610,13 @@ export default class Game {
             activationContext,
             selectionKind: "graveyardEffect",
             selectionMessage: "Select target(s) for the graveyard effect.",
+            guardKind: "graveyard_effect",
+            phaseReq: ["main1", "main2"],
+            oncePerTurn: {
+              card,
+              player,
+              effect: activationEffect,
+            },
             onSelectionStart: () => this.closeGraveyardModal(false),
             activate: (chosen, ctx) =>
               this.effectEngine.activateMonsterFromGraveyard(
@@ -2841,8 +3788,20 @@ export default class Game {
     return true;
   }
 
-  async resolveCombat(attacker, target) {
+  async resolveCombat(attacker, target, options = {}) {
     if (!attacker) return;
+    const attackerOwner = attacker.owner === "player" ? this.player : this.bot;
+    const guard = this.guardActionStart(
+      {
+        actor: attackerOwner,
+        kind: "attack",
+        phaseReq: "battle",
+        allowDuringSelection: options.allowDuringSelection === true,
+        allowDuringResolving: options.allowDuringResolving === true,
+      },
+      attackerOwner === this.player
+    );
+    if (!guard.ok) return guard;
 
     const availability = this.getAttackAvailability(attacker);
     if (!availability.ok) return;
@@ -2866,7 +3825,6 @@ export default class Game {
       `${attacker.name} attacks ${target ? target.name : "directly"}!`
     );
 
-    const attackerOwner = attacker.owner === "player" ? this.player : this.bot;
     const defenderOwner = attacker.owner === "player" ? this.bot : this.player;
 
     await this.emit("attack_declared", {
@@ -2876,17 +3834,6 @@ export default class Game {
       attackerOwner,
       defenderOwner,
     });
-
-    // Verificar traps do player apenas quando ele está defendendo
-    if (defenderOwner === this.player) {
-      await this.checkAndOfferTraps("attack_declared", {
-        isOpponentAttack: attackerOwner === this.bot,
-        attacker,
-        target,
-        attackerOwner,
-        defenderOwner,
-      });
-    }
 
     if (this.lastAttackNegated) {
       attacker.attacksUsedThisTurn = (attacker.attacksUsedThisTurn || 0) + 1;
@@ -3281,21 +4228,36 @@ export default class Game {
   }
 
   moveCard(card, destPlayer, toZone, options = {}) {
-    if (!card || !destPlayer || !toZone) return;
+    return this.runZoneOp(
+      "MOVE_CARD",
+      () => this.moveCardInternal(card, destPlayer, toZone, options),
+      {
+        contextLabel: options.contextLabel || "moveCard",
+        card,
+        fromZone: options.fromZone,
+        toZone,
+      }
+    );
+  }
+
+  moveCardInternal(card, destPlayer, toZone, options = {}) {
+    if (!card || !destPlayer || !toZone) {
+      return { success: false, reason: "invalid_args" };
+    }
 
     const destArr = this.getZone(destPlayer, toZone);
     if (!destArr) {
       console.warn("moveCard: destination zone not found", toZone);
-      return;
+      return { success: false, reason: "invalid_zone" };
     }
 
     if (toZone === "field" && destArr.length >= 5) {
       this.renderer.log("Field is full (max 5 cards).");
-      return;
+      return { success: false, reason: "field_full" };
     }
     if (toZone === "spellTrap" && destArr.length >= 5) {
       this.renderer.log("Spell/Trap zone is full (max 5 cards).");
-      return;
+      return { success: false, reason: "spell_trap_full" };
     }
 
     const zones = [
@@ -3348,7 +4310,7 @@ export default class Game {
       this.effectEngine?.clearPassiveBuffsForCard(card);
     }
 
-    // Se um equip spell está saindo da spell/trap zone, limpar seus efeitos no monstro
+    // Se um equip spell estÃ¡ saindo da spell/trap zone, limpar seus efeitos no monstro
     if (
       fromZone === "spellTrap" &&
       card.cardKind === "spell" &&
@@ -3357,7 +4319,7 @@ export default class Game {
     ) {
       const host = card.equippedTo;
 
-      // Verificar se é "The Shadow Heart" - se sair do campo, destruir o monstro equipado
+      // Verificar se Ã© "The Shadow Heart" - se sair do campo, destruir o monstro equipado
       if (card.name === "The Shadow Heart" && host) {
         const hostOwner = host.owner === "player" ? this.player : this.bot;
         void this.destroyCard(host, {
@@ -3373,7 +4335,6 @@ export default class Game {
           }
         });
         card.equippedTo = null;
-        return;
       }
 
       if (host && Array.isArray(host.equips)) {
@@ -3435,7 +4396,11 @@ export default class Game {
 
       card.owner = destPlayer.id;
       destPlayer.fieldSpell = card;
-      return;
+      if (this.devModeEnabled && this.devFailAfterZoneMutation) {
+        this.devFailAfterZoneMutation = false;
+        throw new Error("DEV_ZONE_MUTATION_FAIL");
+      }
+      return { success: true, fromZone, toZone };
     }
 
     // If a monster leaves the field to the graveyard, send attached equip spells too.
@@ -3464,7 +4429,7 @@ export default class Game {
         }
       });
 
-      // Se o monstro foi revivido por Call of the Haunted, destruir a trap também
+      // Se o monstro foi revivido por Call of the Haunted, destruir a trap tambÃ©m
       if (card.callOfTheHauntedTrap) {
         const callTrap = card.callOfTheHauntedTrap;
         void this.destroyCard(callTrap, {
@@ -3532,22 +4497,25 @@ export default class Game {
       if (extraDeck) {
         extraDeck.push(card);
         this.renderer.log(`${card.name} returned to Extra Deck.`);
-        return;
+        if (this.devModeEnabled && this.devFailAfterZoneMutation) {
+          this.devFailAfterZoneMutation = false;
+          throw new Error("DEV_ZONE_MUTATION_FAIL");
+        }
+        return { success: true, fromZone, toZone: "extraDeck" };
       }
     }
 
     destArr.push(card);
 
-    if (
-      toZone === "field" &&
-      card.cardKind === "monster" &&
-      fromZone !== "field" &&
-      this.effectEngine &&
-      typeof this.effectEngine.handleEvent === "function"
-    ) {
+    if (this.devModeEnabled && this.devFailAfterZoneMutation) {
+      this.devFailAfterZoneMutation = false;
+      throw new Error("DEV_ZONE_MUTATION_FAIL");
+    }
+
+    if (toZone === "field" && card.cardKind === "monster" && fromZone !== "field") {
       const ownerPlayer = card.owner === "player" ? this.player : this.bot;
       const otherPlayer = ownerPlayer === this.player ? this.bot : this.player;
-      this.effectEngine.handleEvent("after_summon", {
+      void this.emit("after_summon", {
         card,
         player: ownerPlayer,
         opponent: otherPlayer,
@@ -3556,11 +4524,7 @@ export default class Game {
       });
     }
 
-    if (
-      toZone === "graveyard" &&
-      this.effectEngine &&
-      typeof this.effectEngine.handleEvent === "function"
-    ) {
+    if (toZone === "graveyard") {
       const ownerPlayer = card.owner === "player" ? this.player : this.bot;
       const otherPlayer = ownerPlayer === this.player ? this.bot : this.player;
 
@@ -3568,7 +4532,7 @@ export default class Game {
         `[moveCard] Emitting card_to_grave event for ${card.name} (fromZone: ${fromZone})`
       );
 
-      this.effectEngine.handleEvent("card_to_grave", {
+      void this.emit("card_to_grave", {
         card,
         fromZone: fromZone || options.fromZone || null,
         toZone: "graveyard",
@@ -3577,6 +4541,8 @@ export default class Game {
         wasDestroyed: options.wasDestroyed || false,
       });
     }
+
+    return { success: true, fromZone, toZone };
   }
 
   applyBattleDestroyEffect(attacker, destroyed) {
@@ -3596,11 +4562,7 @@ export default class Game {
     }
 
     // New: global battle_destroy event for cards like Shadow-Heart Gecko
-    if (
-      !destroyed ||
-      !this.effectEngine ||
-      typeof this.effectEngine.handleEvent !== "function"
-    ) {
+    if (!destroyed) {
       return;
     }
 
@@ -3608,8 +4570,8 @@ export default class Game {
       destroyed.owner === "player" ? this.player : this.bot;
     const attackerOwner = attacker.owner === "player" ? this.player : this.bot;
 
-    this.effectEngine.handleEvent("battle_destroy", {
-      player: attackerOwner, // o dono do atacante (quem causou a destruição)
+    void this.emit("battle_destroy", {
+      player: attackerOwner, // o dono do atacante (quem causou a destruiÃ§Ã£o)
       opponent: destroyedOwner, // o jogador que perdeu o monstro
       attacker,
       destroyed,
@@ -3619,8 +4581,12 @@ export default class Game {
   }
 
   setSpellOrTrap(card, handIndex) {
-    if (this.turn !== "player") return;
-    if (this.phase !== "main1" && this.phase !== "main2") return;
+    const guard = this.guardActionStart({
+      actor: this.player,
+      kind: "set_spell_trap",
+      phaseReq: ["main1", "main2"],
+    });
+    if (!guard.ok) return guard;
     if (!card) return;
     if (card.cardKind !== "spell" && card.cardKind !== "trap") return;
 
@@ -3651,31 +4617,29 @@ export default class Game {
   }
 
   async tryActivateSpell(card, handIndex, selections = null, options = {}) {
-    await this.runActivationPipeline({
+    const activationEffect = this.effectEngine?.getSpellTrapActivationEffect?.(
+      card,
+      { fromHand: true }
+    );
+    const pipelineResult = await this.runActivationPipeline({
       card,
       owner: this.player,
       selections,
       selectionKind: "spellTrapEffect",
       selectionMessage: "Select target(s) for the continuous spell effect.",
-      gate: () => {
-        if (this.turn !== "player") return { ok: false };
-        if (this.phase !== "main1" && this.phase !== "main2") {
-          return { ok: false, reason: "Can only activate spells during Main Phase." };
-        }
-        if (this.isResolvingEffect) {
-          return {
-            ok: false,
-            reason: "Finish the current effect before activating another card.",
-          };
-        }
-        return { ok: true };
-      },
+      guardKind: "spell_from_hand",
+      phaseReq: ["main1", "main2"],
       preview: () =>
         this.effectEngine?.canActivateSpellFromHandPreview?.(card, this.player),
       commit: () => this.commitCardActivationFromHand(this.player, handIndex),
       activationContext: {
         fromHand: true,
         sourceZone: "hand",
+      },
+      oncePerTurn: {
+        card,
+        player: this.player,
+        effect: activationEffect,
       },
       activate: (chosen, ctx, zone, resolvedCard) =>
         this.effectEngine.activateSpellTrapEffect(
@@ -3699,6 +4663,7 @@ export default class Game {
         this.updateBoard();
       },
     });
+    return pipelineResult;
   }
 
   rollbackSpellActivation(player, commitInfo) {
@@ -3731,6 +4696,7 @@ export default class Game {
     }
 
     this.updateBoard();
+    this.assertStateInvariants("rollbackSpellActivation", { failFast: false });
   }
 
   /**
@@ -3806,7 +4772,7 @@ export default class Game {
         modalClass: "modal-content cathedral-modal",
         gridClass: "cathedral-card-list",
         cardClass: "cathedral-card-item",
-        infoText: `Select a monster with ATK ≤ ${maxAtk}`,
+        infoText: `Select a monster with ATK â‰¤ ${maxAtk}`,
         onConfirm: (chosen) => {
           console.log("[Cathedral Modal] Confirm called with:", chosen);
           const card = chosen && chosen.length > 0 ? chosen[0] : null;
@@ -3910,7 +4876,7 @@ export default class Game {
     if (!card.isFacedown) return false;
     if (!card.turnSetOn) return false;
 
-    // Trap só pode ser ativada a partir do próximo turno
+    // Trap sÃ³ pode ser ativada a partir do prÃ³ximo turno
     const result = this.turnCounter > card.turnSetOn;
     console.log(
       `[canActivateTrap] Result: ${result} (${this.turnCounter} > ${card.turnSetOn})`
@@ -3921,7 +4887,7 @@ export default class Game {
   async checkAndOfferTraps(event, eventData = {}) {
     if (!this.player) return;
 
-    // Evitar reentrância: se já existe um modal de trap aberto, não abrir outro
+    // Evitar reentrÃ¢ncia: se jÃ¡ existe um modal de trap aberto, nÃ£o abrir outro
     if (this.trapPromptInProgress) return;
     this.trapPromptInProgress = true;
 
@@ -3937,7 +4903,7 @@ export default class Game {
           if (effect.timing !== "on_event") return false;
           if (effect.event !== event) return false;
 
-          // Verificar condições específicas do evento
+          // Verificar condiÃ§Ãµes especÃ­ficas do evento
           if (effect.requireOpponentAttack && !eventData.isOpponentAttack)
             return false;
           if (effect.requireOpponentSummon && !eventData.isOpponentSummon)
@@ -3949,7 +4915,7 @@ export default class Game {
 
       if (eligibleTraps.length === 0) return;
 
-      // Oferecer ativação de cada trap elegível (uma por vez)
+      // Oferecer ativaÃ§Ã£o de cada trap elegÃ­vel (uma por vez)
       for (const trap of eligibleTraps) {
         const shouldActivate = await this.renderer.showTrapActivationModal(
           trap,
@@ -3974,6 +4940,14 @@ export default class Game {
     const trapIndex = this.player.spellTrap.indexOf(card);
     if (trapIndex === -1) return;
 
+    const guard = this.guardActionStart({
+      actor: this.player,
+      kind: "trap_activation",
+      allowDuringOpponentTurn: true,
+      allowDuringResolving: true,
+    });
+    if (!guard.ok) return guard;
+
     // Virar a carta face-up
     card.isFacedown = false;
     this.renderer.log(`${this.player.name} ativa ${card.name}!`);
@@ -3985,7 +4959,7 @@ export default class Game {
       eventData
     );
 
-    // Se for trap normal, mover para o cemitério após resolver
+    // Se for trap normal, mover para o cemitÃ©rio apÃ³s resolver
     if (card.subtype === "normal") {
       this.moveCard(card, this.player, "graveyard", { fromZone: "spellTrap" });
     }
@@ -3996,18 +4970,7 @@ export default class Game {
   }
 
   async emitWithTrapCheck(event, eventData = {}) {
-    // Primeiro emite o evento normalmente
-    await this.emit(event, eventData);
-
-    // Depois verifica se há traps que podem responder
-    if (this.turn !== "player") {
-      // Se é o turno do bot, verificar traps do player (defensor)
-      await this.checkAndOfferTraps(event, {
-        ...eventData,
-        isOpponentSummon: eventData.player?.id === "bot",
-        isOpponentAttack: eventData.attackerOwner?.id === "bot",
-      });
-    }
+    return await this.emit(event, eventData);
   }
 
   resolvePlayerById(id = "player") {
@@ -4077,6 +5040,25 @@ export default class Game {
     return card;
   }
 
+  setMonsterFacing(card, options = {}) {
+    if (!card || card.cardKind !== "monster") return;
+    if (options.position) {
+      card.position = options.position === "defense" ? "defense" : "attack";
+    }
+    if (typeof options.facedown === "boolean") {
+      card.isFacedown = options.facedown;
+    }
+    if (card.isFacedown) {
+      card.position = "defense";
+    }
+    if (card.position !== "attack" && card.position !== "defense") {
+      card.position = "attack";
+    }
+    if (typeof card.isFacedown !== "boolean") {
+      card.isFacedown = false;
+    }
+  }
+
   devDraw(playerId = "player", count = 1) {
     if (!this.devModeEnabled) {
       return { success: false, reason: "Dev Mode is disabled." };
@@ -4088,15 +5070,11 @@ export default class Game {
     }
 
     const draws = Math.max(1, Number(count) || 1);
-    const drawn = [];
-    for (let i = 0; i < draws; i++) {
-      const card = player.draw();
-      if (!card) break;
-      drawn.push(card.name);
-    }
+    const drawResult = this.drawCards(player, draws);
+    const drawn = (drawResult.drawn || []).map((card) => card?.name);
 
-    if (!drawn.length) {
-      return { success: false, reason: "Deck is empty." };
+    if (!drawResult.ok) {
+      return { success: false, reason: "Deck is empty.", drawn };
     }
 
     this.updateBoard();
@@ -4224,6 +5202,10 @@ export default class Game {
   }
 
   devForceTargetCleanup() {
+    if (this.targetSelection) {
+      this.forceClearTargetSelection("dev_force_cleanup");
+      return;
+    }
     this.clearTargetHighlights();
     if (
       this.renderer &&
@@ -4231,10 +5213,6 @@ export default class Game {
     ) {
       this.renderer.hideFieldTargetingControls();
     }
-    if (this.targetSelection?.closeModal) {
-      this.targetSelection.closeModal();
-    }
-    this.targetSelection = null;
     this.setSelectionState("idle");
   }
 
@@ -5265,6 +6243,824 @@ export default class Game {
     };
   }
 
+  async devRunSanityI() {
+    if (!this.devModeEnabled) {
+      return { success: false, reason: "Dev Mode is disabled." };
+    }
+
+    this.devLog("SANITY_I_START", {
+      summary: "Sanity I: field full protection",
+    });
+
+    const setupResult = this.applyManualSetup({
+      turn: "player",
+      phase: "main1",
+      player: {
+        hand: ["Shadow-Heart Griffin", "Shadow-Heart Covenant"],
+        field: [
+          { name: "Shadow-Heart Observer", position: "attack" },
+          { name: "Shadow-Heart Abyssal Eel", position: "attack" },
+          { name: "Shadow-Heart Specter", position: "attack" },
+          { name: "Shadow-Heart Imp", position: "attack" },
+          { name: "Shadow-Heart Gecko", position: "attack" },
+        ],
+        spellTrap: [
+          "Shadow-Heart Battle Hymn",
+          "Shadow-Heart Shield",
+          "Shadow-Heart Covenant",
+          "Shadow-Heart Purge",
+          "Shadow-Heart Coat",
+        ],
+      },
+      bot: { field: [] },
+    });
+
+    if (!setupResult.success) {
+      return setupResult;
+    }
+
+    const extraMonster = this.player.hand.find(
+      (card) => card && card.cardKind === "monster"
+    );
+    const extraSpell = this.player.hand.find(
+      (card) => card && card.cardKind !== "monster"
+    );
+
+    if (!extraMonster || !extraSpell) {
+      return { success: false, reason: "Sanity I hand cards missing." };
+    }
+
+    const beforeField = this.captureZoneSnapshot("sanity_i_before_field");
+    const moveFieldResult = this.moveCard(extraMonster, this.player, "field", {
+      fromZone: "hand",
+    });
+    const afterField = this.captureZoneSnapshot("sanity_i_after_field");
+    const fieldStateOk = this.compareZoneSnapshot(
+      beforeField,
+      afterField,
+      "player"
+    );
+    const monsterStillInHand = this.player.hand.includes(extraMonster);
+    const fieldCountOk = this.player.field.length === 5;
+    const moveFieldRejected = moveFieldResult?.success === false;
+
+    const beforeSpell = this.captureZoneSnapshot("sanity_i_before_spell");
+    const moveSpellResult = this.moveCard(
+      extraSpell,
+      this.player,
+      "spellTrap",
+      { fromZone: "hand" }
+    );
+    const afterSpell = this.captureZoneSnapshot("sanity_i_after_spell");
+    const spellStateOk = this.compareZoneSnapshot(
+      beforeSpell,
+      afterSpell,
+      "player"
+    );
+    const spellStillInHand = this.player.hand.includes(extraSpell);
+    const spellCountOk = this.player.spellTrap.length === 5;
+    const moveSpellRejected = moveSpellResult?.success === false;
+
+    const cleanupState = this.devGetSelectionCleanupState();
+    const cleanupOk =
+      !cleanupState.selectionActive &&
+      !cleanupState.controlsVisible &&
+      cleanupState.highlightCount === 0;
+    if (!cleanupOk) {
+      this.devForceTargetCleanup();
+    }
+
+    const success =
+      fieldStateOk &&
+      spellStateOk &&
+      monsterStillInHand &&
+      spellStillInHand &&
+      fieldCountOk &&
+      spellCountOk &&
+      moveFieldRejected &&
+      moveSpellRejected &&
+      cleanupOk;
+
+    this.devLog("SANITY_I_RESULT", {
+      summary: "Sanity I result",
+      fieldStateOk,
+      spellStateOk,
+      monsterStillInHand,
+      spellStillInHand,
+      fieldCountOk,
+      spellCountOk,
+      moveFieldRejected,
+      moveSpellRejected,
+      cleanupOk,
+    });
+
+    return {
+      success,
+      fieldStateOk,
+      spellStateOk,
+      monsterStillInHand,
+      spellStillInHand,
+      fieldCountOk,
+      spellCountOk,
+      moveFieldRejected,
+      moveSpellRejected,
+      cleanupOk,
+    };
+  }
+
+  async devRunSanityJ() {
+    if (!this.devModeEnabled) {
+      return { success: false, reason: "Dev Mode is disabled." };
+    }
+
+    this.devLog("SANITY_J_START", {
+      summary: "Sanity J: rollback invariants",
+    });
+
+    const setupResult = this.applyManualSetup({
+      turn: "player",
+      phase: "main1",
+      player: {
+        hand: ["Shadow-Heart Observer"],
+        field: [],
+      },
+      bot: { field: [] },
+    });
+
+    if (!setupResult.success) {
+      return setupResult;
+    }
+
+    const card = this.player.hand.find(Boolean);
+    if (!card) {
+      return { success: false, reason: "Sanity J card not found." };
+    }
+
+    const before = this.captureZoneSnapshot("sanity_j_before");
+    let moveResult = null;
+    this.devFailAfterZoneMutation = true;
+    try {
+      moveResult = this.moveCard(card, this.player, "field", {
+        fromZone: "hand",
+      });
+    } catch (err) {
+      moveResult = {
+        success: false,
+        reason: err?.message || "exception",
+        rolledBack: true,
+      };
+    } finally {
+      if (this.devFailAfterZoneMutation) {
+        this.devFailAfterZoneMutation = false;
+      }
+    }
+
+    const after = this.captureZoneSnapshot("sanity_j_after");
+    const stateOk = this.compareZoneSnapshot(before, after, "player");
+    const cardInHand = this.player.hand.includes(card);
+    const fieldEmpty = this.player.field.length === 0;
+    const rollbackFlag =
+      moveResult?.rolledBack === true || moveResult?.success === false;
+
+    const cleanupState = this.devGetSelectionCleanupState();
+    const cleanupOk =
+      !cleanupState.selectionActive &&
+      !cleanupState.controlsVisible &&
+      cleanupState.highlightCount === 0;
+
+    const success =
+      stateOk && cardInHand && fieldEmpty && rollbackFlag && cleanupOk;
+
+    this.devLog("SANITY_J_RESULT", {
+      summary: "Sanity J result",
+      stateOk,
+      cardInHand,
+      fieldEmpty,
+      rollbackFlag,
+      cleanupOk,
+      moveResult,
+    });
+
+    return {
+      success,
+      stateOk,
+      cardInHand,
+      fieldEmpty,
+      rollbackFlag,
+      cleanupOk,
+      moveResult,
+    };
+  }
+
+  async devRunSanityK() {
+    if (!this.devModeEnabled) {
+      return { success: false, reason: "Dev Mode is disabled." };
+    }
+
+    this.devLog("SANITY_K_START", {
+      summary: "Sanity K: once per turn",
+    });
+
+    const setupResult = this.applyManualSetup({
+      turn: "player",
+      phase: "main1",
+      player: {
+        field: [
+          { name: "Luminarch Valiant - Knight of the Dawn", position: "attack" },
+        ],
+        fieldSpell: "Sanctum of the Luminarch Citadel",
+      },
+      bot: { field: [] },
+    });
+
+    if (!setupResult.success) {
+      return setupResult;
+    }
+
+    const fieldSpell = this.player.fieldSpell;
+    if (!fieldSpell) {
+      return { success: false, reason: "Sanity K field spell not found." };
+    }
+
+    const activationEffect =
+      this.effectEngine?.getFieldSpellActivationEffect?.(fieldSpell);
+    if (!activationEffect) {
+      return {
+        success: false,
+        reason: "Sanity K field spell effect not found.",
+      };
+    }
+
+    const baseConfig = {
+      card: fieldSpell,
+      owner: this.player,
+      activationZone: "fieldSpell",
+      activationContext: {
+        fromHand: false,
+        activationZone: "fieldSpell",
+        sourceZone: "fieldSpell",
+        committed: false,
+      },
+      selectionKind: "fieldSpell",
+      selectionMessage: "Sanity K: select target for field spell effect.",
+      oncePerTurn: {
+        card: fieldSpell,
+        player: this.player,
+        effect: activationEffect,
+      },
+      activate: (selections, ctx) =>
+        this.effectEngine.activateFieldSpell(
+          fieldSpell,
+          this.player,
+          selections,
+          ctx
+        ),
+      finalize: () => {
+        this.updateBoard();
+      },
+    };
+
+    const lpStart = this.player.lp;
+    const firstResult = await this.runActivationPipeline(baseConfig);
+    const firstSelectionOpened = !!this.targetSelection;
+    let firstResolved = false;
+    if (firstSelectionOpened) {
+      const autoResult = await this.devAutoConfirmTargetSelection();
+      firstResolved = autoResult.success === true;
+    }
+    const lpAfterFirst = this.player.lp;
+    const firstLpDelta = lpStart - lpAfterFirst;
+
+    const secondLpBefore = this.player.lp;
+    const secondResult = await this.runActivationPipeline(baseConfig);
+    const secondSelectionOpened = !!this.targetSelection;
+    if (secondSelectionOpened) {
+      await this.devAutoConfirmTargetSelection();
+    }
+    const secondLpAfter = this.player.lp;
+    const secondBlocked =
+      secondResult?.blockedOncePerTurn === true ||
+      (typeof secondResult?.reason === "string" &&
+        secondResult.reason.toLowerCase().includes("1/turn"));
+    const secondStateOk = secondLpAfter === secondLpBefore;
+
+    this.turnCounter += 1;
+    this.turn = "player";
+    this.phase = "main1";
+    this.updateBoard();
+
+    const thirdLpBefore = this.player.lp;
+    const thirdResult = await this.runActivationPipeline(baseConfig);
+    const thirdSelectionOpened = !!this.targetSelection;
+    let thirdResolved = false;
+    if (thirdSelectionOpened) {
+      const autoResult = await this.devAutoConfirmTargetSelection();
+      thirdResolved = autoResult.success === true;
+    }
+    const thirdLpAfter = this.player.lp;
+    const thirdLpDelta = thirdLpBefore - thirdLpAfter;
+
+    const cleanupState = this.devGetSelectionCleanupState();
+    const cleanupOk =
+      !cleanupState.selectionActive &&
+      !cleanupState.controlsVisible &&
+      cleanupState.highlightCount === 0;
+
+    const success =
+      firstSelectionOpened &&
+      firstResolved &&
+      firstLpDelta === 1000 &&
+      secondBlocked &&
+      !secondSelectionOpened &&
+      secondStateOk &&
+      thirdSelectionOpened &&
+      thirdResolved &&
+      thirdLpDelta === 1000 &&
+      cleanupOk;
+
+    this.devLog("SANITY_K_RESULT", {
+      summary: "Sanity K result",
+      firstSelectionOpened,
+      firstResolved,
+      firstLpDelta,
+      secondBlocked,
+      secondSelectionOpened,
+      secondStateOk,
+      thirdSelectionOpened,
+      thirdResolved,
+      thirdLpDelta,
+      cleanupOk,
+      firstResult,
+      secondResult,
+      thirdResult,
+    });
+
+    return {
+      success,
+      firstSelectionOpened,
+      firstResolved,
+      firstLpDelta,
+      secondBlocked,
+      secondSelectionOpened,
+      secondStateOk,
+      thirdSelectionOpened,
+      thirdResolved,
+      thirdLpDelta,
+      cleanupOk,
+      firstResult,
+      secondResult,
+      thirdResult,
+    };
+  }
+
+  async devRunSanityL() {
+    if (!this.devModeEnabled) {
+      return { success: false, reason: "Dev Mode is disabled." };
+    }
+
+    this.devLog("SANITY_L_START", {
+      summary: "Sanity L: action while selecting",
+    });
+
+    const setupResult = this.applyManualSetup({
+      turn: "player",
+      phase: "main1",
+      player: {
+        hand: ["Luminarch Holy Ascension", "Luminarch Holy Ascension"],
+        field: [
+          { name: "Luminarch Valiant - Knight of the Dawn", position: "attack" },
+        ],
+      },
+      bot: { field: [] },
+    });
+
+    if (!setupResult.success) {
+      return setupResult;
+    }
+
+    const firstCard = this.player.hand.find(
+      (c) => c && c.name === "Luminarch Holy Ascension"
+    );
+    if (!firstCard) {
+      return { success: false, reason: "Sanity L card not found in hand." };
+    }
+    const firstIndex = this.player.hand.indexOf(firstCard);
+
+    const firstResult = await this.tryActivateSpell(firstCard, firstIndex);
+    const selectionOpened = !!this.targetSelection;
+
+    const secondCard = this.player.hand.find((c) => c && c !== firstCard);
+    if (!secondCard) {
+      return { success: false, reason: "Sanity L second card not found." };
+    }
+    const secondIndex = this.player.hand.indexOf(secondCard);
+    const secondResult = await this.tryActivateSpell(secondCard, secondIndex);
+    const secondBlocked =
+      secondResult?.code === "BLOCKED_SELECTION_ACTIVE" &&
+      secondResult?.blockedByGuard === true;
+
+    const phaseBefore = this.phase;
+    const phaseResult = await this.nextPhase();
+    const phaseBlocked =
+      phaseResult?.code === "BLOCKED_SELECTION_ACTIVE" &&
+      this.phase === phaseBefore;
+
+    const attacker = this.player.field.find(
+      (c) => c && c.cardKind === "monster"
+    );
+    let attackBlocked = false;
+    let attackResult = null;
+    if (attacker) {
+      const attackedBefore = attacker.hasAttacked === true;
+      attackResult = await this.resolveCombat(attacker, null);
+      attackBlocked =
+        attackResult?.code === "BLOCKED_SELECTION_ACTIVE" &&
+        attacker.hasAttacked === attackedBefore;
+    }
+
+    let selectionResolved = false;
+    if (this.targetSelection) {
+      const allowCancel = !this.targetSelection.preventCancel;
+      if (allowCancel) {
+        this.cancelTargetSelection();
+        selectionResolved = true;
+      } else {
+        const autoResult = await this.devAutoConfirmTargetSelection();
+        selectionResolved = autoResult.success === true;
+      }
+    }
+
+    this.devForceTargetCleanup();
+    const cleanupState = this.devGetSelectionCleanupState();
+    const cleanupOk =
+      !cleanupState.selectionActive &&
+      !cleanupState.controlsVisible &&
+      cleanupState.highlightCount === 0;
+
+    const success =
+      selectionOpened &&
+      secondBlocked &&
+      phaseBlocked &&
+      attackBlocked &&
+      selectionResolved &&
+      cleanupOk;
+
+    this.devLog("SANITY_L_RESULT", {
+      summary: "Sanity L result",
+      selectionOpened,
+      secondBlocked,
+      phaseBlocked,
+      attackBlocked,
+      selectionResolved,
+      cleanupOk,
+      firstResult,
+      secondResult,
+      phaseResult,
+      attackResult,
+    });
+
+    return {
+      success,
+      selectionOpened,
+      secondBlocked,
+      phaseBlocked,
+      attackBlocked,
+      selectionResolved,
+      cleanupOk,
+      firstResult,
+      secondResult,
+      phaseResult,
+      attackResult,
+    };
+  }
+
+  async devRunSanityM() {
+    if (!this.devModeEnabled) {
+      return { success: false, reason: "Dev Mode is disabled." };
+    }
+
+    this.devLog("SANITY_M_START", {
+      summary: "Sanity M: action while resolving",
+    });
+
+    const setupResult = this.applyManualSetup({
+      turn: "player",
+      phase: "main1",
+      player: {
+        hand: ["Luminarch Holy Ascension"],
+        field: [
+          { name: "Luminarch Valiant - Knight of the Dawn", position: "attack" },
+        ],
+      },
+      bot: { field: [] },
+    });
+
+    if (!setupResult.success) {
+      return setupResult;
+    }
+
+    const card = this.player.hand.find(
+      (c) => c && c.name === "Luminarch Holy Ascension"
+    );
+    if (!card) {
+      return { success: false, reason: "Sanity M card not found in hand." };
+    }
+    const handIndex = this.player.hand.indexOf(card);
+    const handSizeBefore = this.player.hand.length;
+
+    let result = null;
+    this.isResolvingEffect = true;
+    try {
+      result = await this.tryActivateSpell(card, handIndex);
+    } finally {
+      this.isResolvingEffect = false;
+    }
+
+    const cardStillInHand = this.player.hand.includes(card);
+    const handSizeOk = this.player.hand.length === handSizeBefore;
+    const blocked =
+      result?.code === "BLOCKED_RESOLVING" && result?.blockedByGuard === true;
+
+    const cleanupState = this.devGetSelectionCleanupState();
+    const cleanupOk =
+      !cleanupState.selectionActive &&
+      !cleanupState.controlsVisible &&
+      cleanupState.highlightCount === 0;
+
+    const success = blocked && cardStillInHand && handSizeOk && cleanupOk;
+
+    this.devLog("SANITY_M_RESULT", {
+      summary: "Sanity M result",
+      blocked,
+      cardStillInHand,
+      handSizeOk,
+      cleanupOk,
+      result,
+    });
+
+    return {
+      success,
+      blocked,
+      cardStillInHand,
+      handSizeOk,
+      cleanupOk,
+      result,
+    };
+  }
+
+  async devRunSanityN() {
+    if (!this.devModeEnabled) {
+      return { success: false, reason: "Dev Mode is disabled." };
+    }
+
+    this.devLog("SANITY_N_START", {
+      summary: "Sanity N: deck empty draw",
+    });
+
+    const setupResult = this.applyManualSetup({
+      turn: "player",
+      phase: "draw",
+      player: {
+        hand: [],
+        deck: [],
+      },
+      bot: {},
+    });
+
+    if (!setupResult.success) {
+      return setupResult;
+    }
+
+    const handSizeBefore = this.player.hand.length;
+    const drawResult = this.drawCards(this.player, 1);
+
+    const blocked =
+      drawResult?.ok === false && drawResult?.reason === "deck_empty";
+    const handUnchanged = this.player.hand.length === handSizeBefore;
+    const cleanupState = this.devGetSelectionCleanupState();
+    const cleanupOk =
+      !cleanupState.selectionActive &&
+      !cleanupState.controlsVisible &&
+      cleanupState.highlightCount === 0;
+    if (!cleanupOk) {
+      this.devForceTargetCleanup();
+    }
+
+    const success = blocked && handUnchanged && cleanupOk;
+
+    this.devLog("SANITY_N_RESULT", {
+      summary: "Sanity N result",
+      blocked,
+      handUnchanged,
+      cleanupOk,
+      drawResult,
+    });
+
+    return {
+      success,
+      blocked,
+      handUnchanged,
+      cleanupOk,
+      drawResult,
+    };
+  }
+
+  async devRunSanityO() {
+    if (!this.devModeEnabled) {
+      return { success: false, reason: "Dev Mode is disabled." };
+    }
+
+    this.devLog("SANITY_O_START", {
+      summary: "Sanity O: target invalid mid-selection",
+    });
+
+    const setupResult = this.applyManualSetup({
+      turn: "player",
+      phase: "main1",
+      player: {
+        hand: ["Luminarch Holy Ascension"],
+        field: [
+          {
+            name: "Luminarch Valiant - Knight of the Dawn",
+            position: "attack",
+            facedown: false,
+          },
+        ],
+      },
+      bot: { field: [] },
+    });
+
+    if (!setupResult.success) {
+      return setupResult;
+    }
+
+    const setupTarget = this.player.field.find(
+      (card) => card && card.name === "Luminarch Valiant - Knight of the Dawn"
+    );
+    if (!setupTarget) {
+      return { success: false, reason: "Sanity O target not on field." };
+    }
+    this.setMonsterFacing(setupTarget, { position: "attack", facedown: false });
+    this.updateBoard();
+
+    const spell = this.player.hand.find(
+      (card) => card && card.name === "Luminarch Holy Ascension"
+    );
+    if (!spell) {
+      return { success: false, reason: "Sanity O card not found in hand." };
+    }
+
+    const handIndex = this.player.hand.indexOf(spell);
+    let finalResult = null;
+
+    const selectionSessionBefore = this.selectionSessionCounter;
+    const pipelineResult = await this.runActivationPipeline({
+      card: spell,
+      owner: this.player,
+      selectionKind: "spellTrapEffect",
+      selectionMessage: "Sanity O: select target(s) for the spell.",
+      gate: () => {
+        if (this.turn !== "player") return { ok: false };
+        if (this.phase !== "main1" && this.phase !== "main2") {
+          return {
+            ok: false,
+            reason: "Can only activate spells during Main Phase.",
+          };
+        }
+        if (this.isResolvingEffect) {
+          return {
+            ok: false,
+            reason: "Finish the current effect before activating another card.",
+          };
+        }
+        return { ok: true };
+      },
+      preview: () =>
+        this.effectEngine?.canActivateSpellFromHandPreview?.(
+          spell,
+          this.player
+        ),
+      commit: () => this.commitCardActivationFromHand(this.player, handIndex),
+      activationContext: {
+        fromHand: true,
+        sourceZone: "hand",
+      },
+      activate: (chosen, ctx, zone, resolvedCard) =>
+        this.effectEngine.activateSpellTrapEffect(
+          resolvedCard,
+          this.player,
+          chosen,
+          zone,
+          ctx
+        ),
+      finalize: (result, info) => {
+        if (!result.placementOnly) {
+          this.finalizeSpellTrapActivation(
+            info.card,
+            this.player,
+            info.activationZone
+          );
+        }
+        this.updateBoard();
+      },
+      onSuccess: (result) => {
+        finalResult = result;
+      },
+      onFailure: (result) => {
+        finalResult = result;
+      },
+    });
+
+    const selectionOpened =
+      this.selectionSessionCounter > selectionSessionBefore;
+    let invalidated = false;
+    let selectionConfirmed = false;
+    let candidateKey = null;
+    let usedManualConfirm = false;
+
+    if (selectionOpened && this.targetSelection) {
+      const requirement = this.targetSelection.requirements?.[0] || null;
+      candidateKey = requirement?.candidates?.[0]?.key || null;
+      const target = this.player.field.find(
+        (card) => card && card.name === "Luminarch Valiant - Knight of the Dawn"
+      );
+      if (target) {
+        this.setMonsterFacing(target, { facedown: true });
+        this.updateBoard();
+        invalidated = true;
+      }
+
+      if (candidateKey) {
+        this.targetSelection.selections = {
+          ...(this.targetSelection.selections || {}),
+          [requirement.id]: [candidateKey],
+        };
+        this.targetSelection.currentRequirement =
+          this.targetSelection.requirements.length;
+        this.setSelectionState("confirming");
+        await this.finishTargetSelection();
+        usedManualConfirm = true;
+        selectionConfirmed = true;
+      } else {
+        const confirmResult = await this.devAutoConfirmTargetSelection();
+        selectionConfirmed = confirmResult?.success === true;
+      }
+    }
+
+    const resultFailed =
+      finalResult &&
+      finalResult.success === false &&
+      finalResult.reason === "Selected targets are no longer valid.";
+    const spellBackInHand = this.player.hand.includes(spell);
+    const spellIndexRestored = this.player.hand[handIndex] === spell;
+
+    const cleanupState = this.devGetSelectionCleanupState();
+    const cleanupOk =
+      !cleanupState.selectionActive &&
+      !cleanupState.controlsVisible &&
+      cleanupState.highlightCount === 0;
+    if (!cleanupOk) {
+      this.devForceTargetCleanup();
+    }
+
+    const success =
+      pipelineResult?.needsSelection === true &&
+      selectionOpened &&
+      !!candidateKey &&
+      invalidated &&
+      selectionConfirmed &&
+      resultFailed &&
+      spellBackInHand &&
+      spellIndexRestored &&
+      cleanupOk;
+
+    this.devLog("SANITY_O_RESULT", {
+      summary: "Sanity O result",
+      selectionOpened,
+      invalidated,
+      selectionConfirmed,
+      candidateKey,
+      usedManualConfirm,
+      resultFailed,
+      spellBackInHand,
+      spellIndexRestored,
+      cleanupOk,
+      finalResult,
+    });
+
+    return {
+      success,
+      selectionOpened,
+      invalidated,
+      selectionConfirmed,
+      resultFailed,
+      spellBackInHand,
+      spellIndexRestored,
+      cleanupOk,
+      finalResult,
+    };
+  }
+
   applyManualSetup(definition = {}) {
     if (!this.devModeEnabled) {
       return { success: false, reason: "Dev Mode is disabled." };
@@ -5305,8 +7101,10 @@ export default class Game {
             warnings.push("Field is full (max 5 monsters).");
             return;
           }
-          card.position =
-            normalized.position === "defense" ? "defense" : "attack";
+          this.setMonsterFacing(card, {
+            position: normalized.position,
+            facedown: normalized.facedown === true,
+          });
           card.hasAttacked = false;
           card.attacksUsedThisTurn = 0;
           player.field.push(card);
@@ -5420,10 +7218,12 @@ export default class Game {
 
     this.gameOver = false;
     this.isResolvingEffect = false;
+    this.eventResolutionDepth = 0;
     this.pendingSpecialSummon = null;
     this.cancelTargetSelection();
     this.effectEngine?.updatePassiveBuffs();
     this.updateBoard();
+    this.resetOncePerTurnUsage("manual_setup");
     if (this.renderer?.log) {
       this.renderer.log("Dev setup applied.");
     }
@@ -5431,6 +7231,15 @@ export default class Game {
       summary: "Manual setup applied",
       warnings: warnings.length,
     });
+    this.assertStateInvariants("applyManualSetup", { failFast: false });
     return { success: true, warnings };
   }
 }
+
+
+
+
+
+
+
+
