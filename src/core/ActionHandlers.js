@@ -239,14 +239,15 @@ export async function handleSpecialSummonFromZone(
     }
 
     // Show visual selection modal
-    const searchModal = engine.getSearchModalElements();
+    const renderer = game.renderer;
+    const searchModal = renderer?.getSearchModalElements?.();
     const defaultCardName = candidates[0]?.name || "";
 
     if (searchModal) {
       return new Promise((resolve) => {
         game.isResolvingEffect = true;
 
-        engine.showSearchModalVisual(
+        renderer.showSearchModalVisual(
           searchModal,
           candidates,
           defaultCardName,
@@ -763,14 +764,12 @@ export async function handleSpecialSummonFromHandWithTieredCost(
       title: action.tierTitle || source.name,
       options: tierOptions,
     });
-  } else {
-    // Fallback simple prompt
-    const ask = window.prompt(
+  } else if (game.renderer?.showNumberPrompt) {
+    const parsed = game.renderer.showNumberPrompt(
       `Choose how many Void Hollow to send (1-${allowedMax}):`,
       String(allowedMax)
     );
-    const parsed = Number.parseInt(ask, 10);
-    if (!Number.isNaN(parsed) && parsed >= minCost && parsed <= allowedMax) {
+    if (parsed !== null && parsed >= minCost && parsed <= allowedMax) {
       chosenCount = parsed;
     }
   }
@@ -1081,14 +1080,15 @@ export async function handleBounceAndSummon(action, ctx, targets, engine) {
   }
 
   // Player selection
-  const searchModal = engine.getSearchModalElements();
+  const renderer = game.renderer;
+  const searchModal = renderer?.getSearchModalElements?.();
   const defaultCardName = validTargets[0]?.name || "";
 
   if (searchModal) {
     return new Promise((resolve) => {
       game.isResolvingEffect = true;
 
-      engine.showSearchModalVisual(
+      renderer.showSearchModalVisual(
         searchModal,
         validTargets,
         defaultCardName,
@@ -1230,7 +1230,14 @@ export async function handleBanish(action, ctx, targets, engine) {
     if (!tgt) continue;
 
     const fallbackOwner =
-      tgt.ownerPlayer || (tgt.controller === "opponent" ? opponent : player);
+      tgt.ownerPlayer ||
+      (opponent &&
+      (tgt.owner === opponent.id ||
+        tgt.controller === opponent.id ||
+        tgt.owner === "opponent" ||
+        tgt.controller === "opponent")
+        ? opponent
+        : player);
     const ownerPlayer =
       typeof engine.getOwnerOfCard === "function"
         ? engine.getOwnerOfCard(tgt)
@@ -1255,8 +1262,9 @@ export async function handleBanish(action, ctx, targets, engine) {
 
     tgt.location = "banished";
 
-    if (player) {
-      tgt.controller = ownerPlayer === player ? "self" : "opponent";
+    if (ownerPlayer?.id) {
+      tgt.owner = ownerPlayer.id;
+      tgt.controller = ownerPlayer.id;
     }
 
     banishedCount += 1;
@@ -1773,10 +1781,29 @@ async function promptTieBreaker(
       modalConfig.subtitle ||
       `Multiple monsters on ${sideDescription} side have ${maxAtk} ATK. Choose ${keepCount} to keep on the field.`;
 
-    game.renderer.showCardGridSelectionModal({
+    const baseOptions = {
       title: modalConfig.title || "Choose Survivor",
-      subtitle: subtitle,
+      subtitle,
       cards: candidates,
+      keepCount,
+      infoText: modalConfig.infoText || "All other monsters will be destroyed.",
+      onConfirm: (selected) => {
+        resolve(selected || candidates.slice(0, keepCount));
+      },
+      onCancel: () => {
+        resolve(candidates.slice(0, keepCount));
+      },
+    };
+
+    if (typeof game.renderer.showTieBreakerSelection === "function") {
+      game.renderer.showTieBreakerSelection(baseOptions);
+      return;
+    }
+
+    game.renderer.showCardGridSelectionModal({
+      title: baseOptions.title,
+      subtitle: baseOptions.subtitle,
+      cards: baseOptions.cards,
       minSelect: keepCount,
       maxSelect: keepCount,
       confirmLabel: "Confirm",
@@ -1785,43 +1812,9 @@ async function promptTieBreaker(
       modalClass: "tie-breaker-modal",
       gridClass: "tie-breaker-grid",
       cardClass: "tie-breaker-card",
-      infoText: modalConfig.infoText || "All other monsters will be destroyed.",
-      onConfirm: (selected) => {
-        resolve(selected || candidates.slice(0, keepCount));
-      },
-      onCancel: () => {
-        // Auto-select on cancel
-        resolve(candidates.slice(0, keepCount));
-      },
-      renderCard: (card) => {
-        const cardEl = document.createElement("div");
-        cardEl.classList.add("tie-breaker-card-item");
-
-        const imageDiv = document.createElement("div");
-        imageDiv.classList.add("tie-breaker-card-image");
-        imageDiv.style.backgroundImage = `url('${card.image}')`;
-        cardEl.appendChild(imageDiv);
-
-        const infoDiv = document.createElement("div");
-        infoDiv.classList.add("tie-breaker-card-info");
-
-        const nameDiv = document.createElement("div");
-        nameDiv.classList.add("tie-breaker-card-name");
-        const displayName =
-          getCardDisplayName(card) ||
-          (card?.name && card.name) ||
-          "Card";
-        nameDiv.textContent = displayName;
-        infoDiv.appendChild(nameDiv);
-
-        const statsDiv = document.createElement("div");
-        statsDiv.classList.add("tie-breaker-card-stats");
-        statsDiv.innerHTML = `<span>ATK ${card.atk || 0}</span>`;
-        infoDiv.appendChild(statsDiv);
-
-        cardEl.appendChild(infoDiv);
-        return cardEl;
-      },
+      infoText: baseOptions.infoText,
+      onConfirm: baseOptions.onConfirm,
+      onCancel: baseOptions.onCancel,
     });
   });
 }
@@ -2183,14 +2176,15 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
     }
 
     // Show visual selection modal
-    const searchModal = engine.getSearchModalElements();
+    const renderer = game.renderer;
+    const searchModal = renderer?.getSearchModalElements?.();
     const defaultCardName = candidates[0]?.name || "";
 
     if (searchModal) {
       return new Promise((resolve) => {
         game.isResolvingEffect = true;
 
-        engine.showSearchModalVisual(
+        renderer.showSearchModalVisual(
           searchModal,
           candidates,
           defaultCardName,
@@ -2749,9 +2743,11 @@ export async function handleConditionalSummonFromHand(
       ? `You control "${condition.cardName}".`
       : "Condition met.";
 
-    const wantsToSummon = window.confirm(
-      `${conditionText} Do you want to Special Summon "${handCard.name}" from your hand?`
-    );
+    const wantsToSummon =
+      game.renderer?.showConfirmPrompt?.(
+        `${conditionText} Do you want to Special Summon "${handCard.name}" from your hand?`,
+        { kind: "conditional_summon", cardName: handCard.name }
+      ) ?? false;
 
     if (!wantsToSummon) {
       return false;
@@ -2928,10 +2924,11 @@ export async function handleUpkeepPayOrSendToGrave(
     shouldPay = true;
   } else {
     // Human player: show confirm dialog
-    const wantsToPay = window.confirm(
-      `Pay ${lpCost} LP to keep "${source.name}" on the field? If you decline, it will be sent to the ${failureZone}.`
-    );
-    shouldPay = wantsToPay;
+    shouldPay =
+      game.renderer?.showConfirmPrompt?.(
+        `Pay ${lpCost} LP to keep "${source.name}" on the field? If you decline, it will be sent to the ${failureZone}.`,
+        { kind: "pay_lp", cardName: source.name, lpCost }
+      ) ?? false;
   }
 
   if (shouldPay) {

@@ -1,4 +1,4 @@
-﻿import Player from "./Player.js";
+import Player from "./Player.js";
 import Bot from "./Bot.js";
 import Renderer from "../ui/Renderer.js";
 import EffectEngine from "./EffectEngine.js";
@@ -85,6 +85,89 @@ export default class Game {
     console.debug(logMessage);
     if (this.renderer?.log) {
       this.renderer.log(logMessage);
+    }
+  }
+
+  normalizeRelativePlayerId(value, ctx, meta = {}) {
+    if (value !== "self" && value !== "opponent") return value;
+    const selfId = ctx?.player?.id ?? meta.selfId ?? null;
+    const opponentId = ctx?.opponent?.id ?? meta.opponentId ?? null;
+    const mapped = value === "self" ? selfId : opponentId;
+    if (this.devModeEnabled) {
+      const cardName = meta.card?.name || meta.cardName || "unknown";
+      const actionName = meta.action?.id || meta.action?.type || meta.action;
+      const summary = `Normalized ${meta.field || "id"} ${value} -> ${
+        mapped || "unknown"
+      } for ${cardName}`;
+      this.devLog("RELATIVE_OWNER_NORMALIZED", {
+        summary,
+        field: meta.field,
+        raw: value,
+        mapped,
+        card: cardName,
+        action: actionName,
+        context: meta.contextLabel,
+      });
+      console.warn("[DEV] RELATIVE_OWNER_NORMALIZED", {
+        field: meta.field,
+        raw: value,
+        mapped,
+        card: cardName,
+        action: actionName,
+        context: meta.contextLabel,
+        stack: new Error().stack,
+      });
+    }
+    return mapped ?? value;
+  }
+
+  normalizeCardOwnership(card, ctx, meta = {}) {
+    if (!card) return;
+    const owner = this.normalizeRelativePlayerId(card.owner, ctx, {
+      ...meta,
+      field: "owner",
+      card,
+    });
+    if (owner && card.owner !== owner) {
+      card.owner = owner;
+    }
+    const controller = this.normalizeRelativePlayerId(card.controller, ctx, {
+      ...meta,
+      field: "controller",
+      card,
+    });
+    if (controller && card.controller !== controller) {
+      card.controller = controller;
+    }
+
+    if (meta.enforceZoneOwner && meta.zoneOwnerId) {
+      const zoneOwnerId = meta.zoneOwnerId;
+      if (card.owner !== zoneOwnerId) {
+        if (this.devModeEnabled) {
+          this.devLog("ZONE_OWNER_CORRECTED", {
+            summary: `Owner corrected to ${zoneOwnerId} for ${card.name}`,
+            card: card.name,
+            from: card.owner,
+            to: zoneOwnerId,
+            zone: meta.zone,
+            context: meta.contextLabel,
+          });
+        }
+        card.owner = zoneOwnerId;
+      }
+      if (card.controller !== zoneOwnerId) {
+        if (this.devModeEnabled) {
+          this.devLog("ZONE_CONTROLLER_CORRECTED", {
+            summary: `Controller corrected to ${zoneOwnerId} for ${card.name}`,
+            card: card.name,
+            from: card.controller,
+            to: zoneOwnerId,
+            zone: meta.zone,
+            context: meta.contextLabel,
+          });
+        }
+        card.controller = zoneOwnerId;
+      }
     }
   }
 
@@ -389,6 +472,47 @@ export default class Game {
         });
       });
     }
+
+    this.normalizeZoneCardOwnership("restoreZoneSnapshot", {
+      enforceZoneOwner: true,
+    });
+  }
+
+  normalizeZoneCardOwnership(contextLabel = "zone_state", options = {}) {
+    const seen = new Set();
+    const enforceZoneOwner = options.enforceZoneOwner === true;
+    const addList = (player, opponent, zoneName, list) => {
+      if (!Array.isArray(list)) return;
+      list.forEach((card) => {
+        if (!card || seen.has(card)) return;
+        seen.add(card);
+        this.normalizeCardOwnership(
+          card,
+          { player, opponent },
+          {
+            contextLabel,
+            zone: zoneName,
+            zoneOwnerId: player?.id,
+            enforceZoneOwner,
+          }
+        );
+      });
+    };
+    const applyForPlayer = (player) => {
+      if (!player) return;
+      const opponent = this.getOpponent(player);
+      addList(player, opponent, "hand", player.hand);
+      addList(player, opponent, "field", player.field);
+      addList(player, opponent, "spellTrap", player.spellTrap);
+      addList(player, opponent, "graveyard", player.graveyard);
+      addList(player, opponent, "deck", player.deck);
+      addList(player, opponent, "extraDeck", player.extraDeck);
+      if (player.fieldSpell) {
+        addList(player, opponent, "fieldSpell", [player.fieldSpell]);
+      }
+    };
+    applyForPlayer(this.player);
+    applyForPlayer(this.bot);
   }
 
   compareZoneSnapshot(a, b, playerKey = "player") {
@@ -418,6 +542,12 @@ export default class Game {
       options.failFast !== undefined ? options.failFast : this.devModeEnabled;
     const normalize = options.normalize !== false;
     const issues = [];
+
+    if (normalize) {
+      this.normalizeZoneCardOwnership(contextLabel, {
+        enforceZoneOwner: true,
+      });
+    }
     const addIssue = (message, detail) => {
       issues.push({ message, detail });
     };
@@ -629,6 +759,9 @@ export default class Game {
 
     const finalizeSuccess = (result) => {
       try {
+        this.normalizeZoneCardOwnership(contextLabel, {
+          enforceZoneOwner: true,
+        });
         const invariantResult = this.assertStateInvariants(contextLabel, {
           failFast: false,
         });
@@ -995,73 +1128,61 @@ export default class Game {
     }
 
     const field = this.player.field || [];
+    const readyIndices = [];
     field.forEach((card, index) => {
       if (!card || card.cardKind !== "monster") return;
       const availability = this.getAttackAvailability(card);
       if (!availability.ok) return;
       if (card.isFacedown) return;
-
-      const cardEl = document.querySelector(
-        `#player-field .card[data-index="${index}"]`
-      );
-      if (cardEl) {
-        cardEl.classList.add("attack-ready");
-      }
+      readyIndices.push(index);
     });
+    if (
+      this.renderer &&
+      typeof this.renderer.applyAttackReadyIndicators === "function"
+    ) {
+      this.renderer.applyAttackReadyIndicators("player", readyIndices);
+    }
   }
 
   clearAttackReadyIndicators() {
-    document
-      .querySelectorAll(".card.attack-ready")
-      .forEach((el) => el.classList.remove("attack-ready"));
+    if (
+      this.renderer &&
+      typeof this.renderer.clearAttackReadyIndicators === "function"
+    ) {
+      this.renderer.clearAttackReadyIndicators();
+    }
   }
 
   applyAttackResolutionIndicators(attacker, target) {
-    this.clearAttackResolutionIndicators();
     const attackerOwner = attacker?.owner === "player" ? "player" : "bot";
     const attackerField =
       attackerOwner === "player" ? this.player.field : this.bot.field;
     const attackerIndex = attackerField.indexOf(attacker);
-    if (attackerIndex > -1) {
-      const attackerEl = document.querySelector(
-        `#${attackerOwner}-field .card[data-index="${attackerIndex}"]`
-      );
-      if (attackerEl) {
-        attackerEl.classList.add("attack-attacker");
-      }
-    }
+    const targetOwner = target?.owner === "player" ? "player" : "bot";
+    const targetField =
+      targetOwner === "player" ? this.player.field : this.bot.field;
+    const targetIndex = target ? targetField.indexOf(target) : -1;
 
-    if (target) {
-      const targetOwner = target.owner === "player" ? "player" : "bot";
-      const targetField =
-        targetOwner === "player" ? this.player.field : this.bot.field;
-      const targetIndex = targetField.indexOf(target);
-      if (targetIndex > -1) {
-        const targetEl = document.querySelector(
-          `#${targetOwner}-field .card[data-index="${targetIndex}"]`
-        );
-        if (targetEl) {
-          targetEl.classList.add("attack-target");
-        }
-      }
-    } else {
-      const botHand = document.querySelector("#bot-hand");
-      if (botHand) {
-        botHand.classList.add("direct-attack-active");
-      }
+    if (
+      this.renderer &&
+      typeof this.renderer.applyAttackResolutionIndicators === "function"
+    ) {
+      this.renderer.applyAttackResolutionIndicators({
+        attackerOwner,
+        attackerIndex,
+        targetOwner,
+        targetIndex,
+        directAttack: !target,
+      });
     }
   }
 
   clearAttackResolutionIndicators() {
-    document
-      .querySelectorAll(".card.attack-attacker")
-      .forEach((el) => el.classList.remove("attack-attacker"));
-    document
-      .querySelectorAll(".card.attack-target")
-      .forEach((el) => el.classList.remove("attack-target"));
-    const botHand = document.querySelector("#bot-hand");
-    if (botHand) {
-      botHand.classList.remove("direct-attack-active");
+    if (
+      this.renderer &&
+      typeof this.renderer.clearAttackResolutionIndicators === "function"
+    ) {
+      this.renderer.clearAttackResolutionIndicators();
     }
   }
 
@@ -1348,50 +1469,12 @@ export default class Game {
   }
 
   showIgnitionActivateModal(card, onActivate) {
-    const overlay = document.createElement("div");
-    overlay.classList.add("modal", "ignition-overlay");
-
-    const modal = document.createElement("div");
-    modal.classList.add("modal-content", "ignition-modal");
-
-    const title = document.createElement("h3");
-    const titleText =
-      (card && getCardDisplayName(card)) ||
-      (card?.name && card.name) ||
-      "Activate effect?";
-    title.textContent = titleText;
-    title.classList.add("modal-title");
-
-    const desc = document.createElement("p");
-    desc.textContent = "Activate this monster's effect?";
-    desc.classList.add("modal-text");
-
-    const actions = document.createElement("div");
-    actions.classList.add("modal-actions");
-
-    const cancelBtn = document.createElement("button");
-    cancelBtn.textContent = "Cancel";
-    cancelBtn.classList.add("secondary");
-    const activateBtn = document.createElement("button");
-    activateBtn.textContent = "Activate";
-
-    const cleanup = () => {
-      overlay.remove();
-    };
-
-    cancelBtn.onclick = () => cleanup();
-    activateBtn.onclick = () => {
-      cleanup();
-      if (typeof onActivate === "function") onActivate();
-    };
-
-    actions.appendChild(cancelBtn);
-    actions.appendChild(activateBtn);
-    modal.appendChild(title);
-    modal.appendChild(desc);
-    modal.appendChild(actions);
-    overlay.appendChild(modal);
-    document.body.appendChild(overlay);
+    if (
+      this.renderer &&
+      typeof this.renderer.showIgnitionActivateModal === "function"
+    ) {
+      this.renderer.showIgnitionActivateModal(card, onActivate);
+    }
   }
 
   skipToPhase(targetPhase) {
@@ -1425,15 +1508,14 @@ export default class Game {
     let selectedTributes = [];
     let pendingSummon = null;
 
-    document.getElementById("player-hand").addEventListener("click", (e) => {
+    if (
+      this.renderer &&
+      typeof this.renderer.bindPlayerHandClick === "function"
+    ) {
+      this.renderer.bindPlayerHandClick((e, cardEl, index) => {
       if (this.targetSelection) return;
 
-      const cardEl = e.target.closest(".card");
-      if (!cardEl) return;
-
       if (tributeSelectionMode) return;
-
-      const index = parseInt(cardEl.dataset.index);
       const card = this.player.hand[index];
 
       if (!card) return;
@@ -1541,15 +1623,17 @@ export default class Game {
                   isFacedown,
                   tributesNeeded,
                 };
-
-                this.player.field.forEach((_, idx) => {
-                  const fieldCard = document.querySelector(
-                    `#player-field .card[data-index="${idx}"]`
+                pendingSummon.tributeableIndices = this.player.field
+                  .map((card, idx) => (card ? idx : null))
+                  .filter((idx) => idx !== null);
+                if (
+                  this.renderer &&
+                  typeof this.renderer.setPlayerFieldTributeable === "function"
+                ) {
+                  this.renderer.setPlayerFieldTributeable(
+                    pendingSummon.tributeableIndices
                   );
-                  if (fieldCard) {
-                    fieldCard.classList.add("tributeable");
-                  }
-                });
+                }
 
                 this.renderer.log(
                   `Select ${tributesNeeded} monster(s) to tribute.`
@@ -1627,9 +1711,11 @@ export default class Game {
             canActivate: canActivateFromHand,
           });
         } else {
-          const shouldActivate = window.confirm(
-            "OK: Activate this Spell. Cancel: Set it face-down in your Spell/Trap Zone."
-          );
+          const shouldActivate =
+            this.renderer?.showConfirmPrompt?.(
+              "OK: Activate this Spell. Cancel: Set it face-down in your Spell/Trap Zone.",
+              { kind: "spell_choice", cardName: card.name }
+            ) ?? false;
           handleSpellChoice(shouldActivate ? "activate" : "set");
         }
         return;
@@ -1646,15 +1732,13 @@ export default class Game {
         return;
       }
     });
+    }
 
-    document
-      .getElementById("player-field")
-      .addEventListener("click", async (e) => {
-        const cardEl = e.target.closest(".card");
-        if (!cardEl) return;
-
-        const index = parseInt(cardEl.dataset.index);
-        if (Number.isNaN(index)) return;
+    if (
+      this.renderer &&
+      typeof this.renderer.bindPlayerFieldClick === "function"
+    ) {
+      this.renderer.bindPlayerFieldClick(async (e, cardEl, index) => {
 
         if (
           this.targetSelection &&
@@ -1664,20 +1748,34 @@ export default class Game {
         }
 
         if (tributeSelectionMode && pendingSummon) {
-          if (!cardEl.classList.contains("tributeable")) return;
+          const allowed = pendingSummon.tributeableIndices || [];
+          if (!allowed.includes(index)) return;
 
           if (selectedTributes.includes(index)) {
             selectedTributes = selectedTributes.filter((i) => i !== index);
-            cardEl.classList.remove("selected");
+            if (
+              this.renderer &&
+              typeof this.renderer.setPlayerFieldSelected === "function"
+            ) {
+              this.renderer.setPlayerFieldSelected(index, false);
+            }
           } else if (selectedTributes.length < pendingSummon.tributesNeeded) {
             selectedTributes.push(index);
-            cardEl.classList.add("selected");
+            if (
+              this.renderer &&
+              typeof this.renderer.setPlayerFieldSelected === "function"
+            ) {
+              this.renderer.setPlayerFieldSelected(index, true);
+            }
           }
 
           if (selectedTributes.length === pendingSummon.tributesNeeded) {
-            document.querySelectorAll(".tributeable").forEach((el) => {
-              el.classList.remove("tributeable", "selected");
-            });
+            if (
+              this.renderer &&
+              typeof this.renderer.clearPlayerFieldTributeable === "function"
+            ) {
+              this.renderer.clearPlayerFieldTributeable();
+            }
 
             const before = this.player.field.length;
             const result = this.player.summon(
@@ -1830,26 +1928,23 @@ export default class Game {
           }
         }
       });
+    }
 
-    const playerSpellTrapEl = document.getElementById("player-spelltrap");
-    if (playerSpellTrapEl) {
-      playerSpellTrapEl.addEventListener("click", async (e) => {
+    if (
+      this.renderer &&
+      typeof this.renderer.bindPlayerSpellTrapClick === "function"
+    ) {
+      this.renderer.bindPlayerSpellTrapClick(async (e, cardEl, index) => {
         console.log(`[Game] Spell/Trap zone clicked! Target:`, e.target);
 
         if (this.targetSelection) {
-          const cardEl = e.target.closest(".card");
-          if (cardEl) {
-            const idx = parseInt(cardEl.dataset.index);
-            if (!Number.isNaN(idx)) {
-              const handled = this.handleTargetSelectionClick(
-                "player",
-                idx,
-                cardEl,
-                "spellTrap"
-              );
-              if (handled) return;
-            }
-          }
+          const handled = this.handleTargetSelectionClick(
+            "player",
+            index,
+            cardEl,
+            "spellTrap"
+          );
+          if (handled) return;
           console.log(`[Game] Returning: targetSelection active`);
           return;
         }
@@ -1859,12 +1954,6 @@ export default class Game {
           phaseReq: ["main1", "main2"],
         });
         if (!guard.ok) return;
-
-        const cardEl = e.target.closest(".card");
-        if (!cardEl) return;
-
-        const index = parseInt(cardEl.dataset.index);
-        if (Number.isNaN(index)) return;
 
         const card = this.player.spellTrap[index];
         if (!card) return;
@@ -1912,35 +2001,26 @@ export default class Game {
       });
     }
 
-    document.getElementById("bot-field").addEventListener("click", (e) => {
-      if (!this.targetSelection) return;
-      const cardEl = e.target.closest(".card");
-      if (!cardEl) return;
-
-      const index = parseInt(cardEl.dataset.index);
-      if (Number.isNaN(index)) return;
-
-      this.handleTargetSelectionClick("bot", index, cardEl, "field");
-    });
+    if (this.renderer && typeof this.renderer.bindBotFieldClick === "function") {
+      this.renderer.bindBotFieldClick((e, cardEl, index) => {
+        if (!this.targetSelection) return;
+        this.handleTargetSelectionClick("bot", index, cardEl, "field");
+      });
+    }
 
     // Direcionar ataque direto: clicar na mao do oponente quando houver alvo "Direct Attack"
-    const botSpellTrapEl = document.getElementById("bot-spelltrap");
-    if (botSpellTrapEl) {
-      botSpellTrapEl.addEventListener("click", (e) => {
+    if (
+      this.renderer &&
+      typeof this.renderer.bindBotSpellTrapClick === "function"
+    ) {
+      this.renderer.bindBotSpellTrapClick((e, cardEl, index) => {
         if (!this.targetSelection) return;
-        const cardEl = e.target.closest(".card");
-        if (!cardEl) return;
-
-        const index = parseInt(cardEl.dataset.index);
-        if (Number.isNaN(index)) return;
-
         this.handleTargetSelectionClick("bot", index, cardEl, "spellTrap");
       });
     }
 
-    const botHandEl = document.getElementById("bot-hand");
-    if (botHandEl) {
-      botHandEl.addEventListener("click", (e) => {
+    if (this.renderer && typeof this.renderer.bindBotHandClick === "function") {
+      this.renderer.bindBotHandClick((e) => {
         if (!this.targetSelection) return;
         if (this.targetSelection.kind !== "attack") return;
         const requirement = this.targetSelection.requirements?.[0];
@@ -1964,11 +2044,11 @@ export default class Game {
     }
 
     // Field spell effects for player
-    const playerFieldSpellEl = document.getElementById("player-fieldspell");
-    if (playerFieldSpellEl) {
-      playerFieldSpellEl.addEventListener("click", (e) => {
-        const cardEl = e.target.closest(".card");
-        if (!cardEl) return;
+    if (
+      this.renderer &&
+      typeof this.renderer.bindPlayerFieldSpellClick === "function"
+    ) {
+      this.renderer.bindPlayerFieldSpellClick((e, cardEl) => {
         if (this.targetSelection) {
           this.handleTargetSelectionClick("player", 0, cardEl, "fieldSpell");
           return;
@@ -1980,12 +2060,12 @@ export default class Game {
       });
     }
 
-    const botFieldSpellEl = document.getElementById("bot-fieldspell");
-    if (botFieldSpellEl) {
-      botFieldSpellEl.addEventListener("click", (e) => {
+    if (
+      this.renderer &&
+      typeof this.renderer.bindBotFieldSpellClick === "function"
+    ) {
+      this.renderer.bindBotFieldSpellClick((e, cardEl) => {
         if (!this.targetSelection) return;
-        const cardEl = e.target.closest(".card");
-        if (!cardEl) return;
         this.handleTargetSelectionClick("bot", 0, cardEl, "fieldSpell");
       });
     }
@@ -2016,53 +2096,74 @@ export default class Game {
       this.openGraveyardModal(player);
     };
 
-    document
-      .getElementById("player-graveyard")
-      .addEventListener("click", () => showGY(this.player));
-    document
-      .getElementById("bot-graveyard")
-      .addEventListener("click", () => showGY(this.bot));
+    if (
+      this.renderer &&
+      typeof this.renderer.bindPlayerGraveyardClick === "function"
+    ) {
+      this.renderer.bindPlayerGraveyardClick(() => showGY(this.player));
+    }
+    if (this.renderer && typeof this.renderer.bindBotGraveyardClick === "function") {
+      this.renderer.bindBotGraveyardClick(() => showGY(this.bot));
+    }
 
     const showExtraDeck = (player) => {
       if (player.id !== "player") return; // Only player can view their Extra Deck
       this.openExtraDeckModal(player);
     };
 
-    document
-      .getElementById("player-extradeck")
-      .addEventListener("click", () => showExtraDeck(this.player));
+    if (
+      this.renderer &&
+      typeof this.renderer.bindPlayerExtraDeckClick === "function"
+    ) {
+      this.renderer.bindPlayerExtraDeckClick(() => showExtraDeck(this.player));
+    }
 
-    document.querySelector(".close-modal").addEventListener("click", () => {
-      this.closeGraveyardModal();
-    });
+    if (
+      this.renderer &&
+      typeof this.renderer.bindGraveyardModalClose === "function"
+    ) {
+      this.renderer.bindGraveyardModalClose(() => {
+        this.closeGraveyardModal();
+      });
+    }
 
-    const closeExtraDeckBtn = document.querySelector(".close-extradeck");
-    if (closeExtraDeckBtn) {
-      closeExtraDeckBtn.addEventListener("click", () => {
+    if (
+      this.renderer &&
+      typeof this.renderer.bindExtraDeckModalClose === "function"
+    ) {
+      this.renderer.bindExtraDeckModalClose(() => {
         this.closeExtraDeckModal();
       });
     }
 
-    window.addEventListener("click", (e) => {
-      const modal = document.getElementById("gy-modal");
-      const extraModal = document.getElementById("extradeck-modal");
-      if (e.target === modal) {
-        this.closeGraveyardModal();
-      }
-      if (e.target === extraModal) {
-        this.closeExtraDeckModal();
-      }
-    });
-
-    window.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") {
-        if (this.graveyardSelection) {
+    if (
+      this.renderer &&
+      typeof this.renderer.bindModalOverlayClick === "function"
+    ) {
+      this.renderer.bindModalOverlayClick((modalKind) => {
+        if (modalKind === "graveyard") {
           this.closeGraveyardModal();
-        } else {
-          this.cancelTargetSelection();
         }
-      }
-    });
+        if (modalKind === "extradeck") {
+          this.closeExtraDeckModal();
+        }
+      });
+    }
+
+    if (
+      this.renderer &&
+      typeof this.renderer.bindGlobalKeydown === "function"
+    ) {
+      this.renderer.bindGlobalKeydown((e) => {
+        if (e.key === "Escape") {
+          if (this.graveyardSelection) {
+            this.closeGraveyardModal();
+          } else {
+            this.cancelTargetSelection();
+          }
+        }
+      });
+    }
   }
 
   specialSummonSanctumProtectorFromHand(handIndex) {
@@ -2255,7 +2356,11 @@ export default class Game {
       replacement.prompt ||
       `Send ${costCount} ${costDescription} to the GY to save ${card.name}?`;
 
-    const wantsToReplace = window.confirm(prompt);
+    const wantsToReplace =
+      this.renderer?.showConfirmPrompt?.(prompt, {
+        kind: "destruction_replacement",
+        cardName: card.name,
+      }) ?? false;
     if (!wantsToReplace) {
       return { replaced: false };
     }
@@ -3552,6 +3657,7 @@ export default class Game {
       return;
     }
 
+    let attackerHighlight = null;
     if (this.targetSelection.kind === "attack" && this.targetSelection.attacker) {
       const attacker = this.targetSelection.attacker;
       const attackerOwner = attacker.owner === "player" ? "player" : "bot";
@@ -3559,12 +3665,7 @@ export default class Game {
         attackerOwner === "player" ? this.player.field : this.bot.field;
       const attackerIndex = attackerField.indexOf(attacker);
       if (attackerIndex > -1) {
-        const attackerEl = document.querySelector(
-          `#${attackerOwner}-field .card[data-index="${attackerIndex}"]`
-        );
-        if (attackerEl) {
-          attackerEl.classList.add("attack-attacker");
-        }
+        attackerHighlight = { owner: attackerOwner, index: attackerIndex };
       }
     }
 
@@ -3576,89 +3677,48 @@ export default class Game {
       max: requirement.max,
     });
 
-    requirement.candidates.forEach((cand) => {
-      let targetEl = null;
-      if (cand.isDirectAttack) {
-        targetEl = document.querySelector("#bot-hand");
-      } else if (cand.zone === "field") {
-        const fieldSelector =
-          cand.controller === "player" ? "#player-field" : "#bot-field";
-        const indexSelector = ` .card[data-index="${cand.zoneIndex}"]`;
-        targetEl = document.querySelector(`${fieldSelector}${indexSelector}`);
-        console.log("[Game] Highlighting field card:", {
-          controller: cand.controller,
-          index: cand.zoneIndex,
-          name: cand.name,
-          found: !!targetEl,
-        });
-      } else if (cand.zone === "spellTrap") {
-        const stSelector =
-          cand.controller === "player" ? "#player-spelltrap" : "#bot-spelltrap";
-        const indexSelector = ` .card[data-index="${cand.zoneIndex}"]`;
-        targetEl = document.querySelector(`${stSelector}${indexSelector}`);
-        console.log("[Game] Highlighting spell/trap card:", {
-          controller: cand.controller,
-          index: cand.zoneIndex,
-          name: cand.name,
-          found: !!targetEl,
-        });
-      } else if (cand.zone === "fieldSpell") {
-        const fieldSelector =
-          cand.controller === "player"
-            ? "#player-fieldspell"
-            : "#bot-fieldspell";
-        targetEl = document.querySelector(`${fieldSelector} .card`);
-      }
+    const selected = this.targetSelection.selections[requirement.id] || [];
+    const selectedSet = new Set(selected);
+    const highlightTargets = requirement.candidates.map((cand) => ({
+      key: cand.key,
+      zone: cand.zone,
+      controller: cand.controller,
+      zoneIndex: cand.zoneIndex,
+      name: cand.name,
+      isDirectAttack: !!cand.isDirectAttack,
+      isSelected: selectedSet.has(cand.key),
+      isAttackTarget:
+        this.targetSelection.kind === "attack" && selectedSet.has(cand.key),
+    }));
 
-      if (!targetEl) {
-        console.log("[Game] Target element not found for:", cand);
-        return;
-      }
-
-      targetEl.classList.add("targetable");
-      if (cand.isDirectAttack) {
-        targetEl.style.pointerEvents = "auto";
-        targetEl.classList.add("direct-attack-target");
-      }
-      const selected = this.targetSelection.selections[requirement.id] || [];
-      if (selected.includes(cand.key)) {
-        targetEl.classList.add("selected-target");
-        if (this.targetSelection.kind === "attack") {
-          targetEl.classList.add("attack-target");
-        }
-      }
-    });
+    if (
+      this.renderer &&
+      typeof this.renderer.applyTargetHighlights === "function"
+    ) {
+      this.renderer.applyTargetHighlights({
+        targets: highlightTargets,
+        attackerHighlight,
+      });
+    }
     this.updateFieldTargetingProgress();
   }
 
   clearTargetHighlights() {
-    document
-      .querySelectorAll(".card.targetable")
-      .forEach((el) => el.classList.remove("targetable"));
-    document
-      .querySelectorAll(".card.selected-target")
-      .forEach((el) => el.classList.remove("selected-target"));
-    document
-      .querySelectorAll(".card.attack-attacker")
-      .forEach((el) => el.classList.remove("attack-attacker"));
-    document
-      .querySelectorAll(".card.attack-target")
-      .forEach((el) => el.classList.remove("attack-target"));
-    const botHand = document.querySelector("#bot-hand");
-    if (botHand) {
-      botHand.style.pointerEvents = "";
-      botHand.classList.remove(
-        "targetable",
-        "selected-target",
-        "direct-attack-target"
-      );
+    if (
+      this.renderer &&
+      typeof this.renderer.clearTargetHighlights === "function"
+    ) {
+      this.renderer.clearTargetHighlights();
     }
   }
 
   setSelectionDimming(active) {
-    const container = document.getElementById("game-container");
-    if (!container) return;
-    container.classList.toggle("selection-dim", !!active);
+    if (
+      this.renderer &&
+      typeof this.renderer.setSelectionDimming === "function"
+    ) {
+      this.renderer.setSelectionDimming(!!active);
+    }
   }
 
   updateFieldTargetingProgress() {
@@ -3758,7 +3818,6 @@ export default class Game {
     const existing = selections.indexOf(candidate.key);
     if (existing > -1) {
       selections.splice(existing, 1);
-      cardEl.classList.remove("selected-target");
       console.log("[Game] Deselected card");
     } else {
       if (max > 0 && selections.length >= max) {
@@ -3766,7 +3825,6 @@ export default class Game {
         return true;
       }
       selections.push(candidate.key);
-      cardEl.classList.add("selected-target");
       console.log(
         "[Game] Selected card, total:",
         selections.length,
@@ -3782,6 +3840,7 @@ export default class Game {
       console.log("[Game] Max reached, advancing selection");
       this.advanceTargetSelection();
     }
+    this.highlightTargetCandidates();
     this.updateFieldTargetingProgress();
 
     return true;
@@ -3916,7 +3975,7 @@ export default class Game {
       this.graveyardSelection = null;
     }
 
-    // Se nÃ£o estÃ¡ em modo de seleÃ§Ã£o, mostrar indicador de efeitos ativÃ¡veis
+    // Se não está em modo de seleção, mostrar indicador de efeitos ativáveis
     if (
       !options.selectable &&
       player.id === "player" &&
@@ -3927,7 +3986,7 @@ export default class Game {
         return this.effectEngine.hasActivatableGraveyardEffect(card);
       };
 
-      // Se nÃ£o tem onSelect customizado, usar o padrÃ£o para ativar efeitos
+      // Se não tem onSelect customizado, usar o padrão para ativar efeitos
       if (!options.onSelect) {
         options.onSelect = (card) => {
           if (!this.effectEngine.hasActivatableGraveyardEffect(card)) {
@@ -3999,7 +4058,9 @@ export default class Game {
     const filter = (card) =>
       card.cardKind === "monster" && (card.level || 0) === level;
     if (!player.graveyard.some(filter)) {
-      alert("No monster with a matching Level in your Graveyard.");
+      this.renderer?.showAlert?.(
+        "No monster with a matching Level in your Graveyard."
+      );
       return;
     }
 
@@ -4012,7 +4073,7 @@ export default class Game {
       onSelect: (card, index) => {
         if (!filter(card)) return;
         if (player.field.length >= 5) {
-          alert("Field is full.");
+          this.renderer?.showAlert?.("Field is full.");
           this.closeGraveyardModal(false);
           return;
         }
@@ -4200,12 +4261,11 @@ export default class Game {
           target.owner === "player" ? this.player.field : this.bot.field;
         const targetIndex = targetField.indexOf(target);
 
-        const cardElement = document.querySelector(
-          `#${targetOwner}-field .card[data-index="${targetIndex}"]`
-        );
-
-        if (cardElement) {
-          cardElement.classList.add("flipping");
+        if (
+          this.renderer &&
+          typeof this.renderer.applyFlipAnimation === "function"
+        ) {
+          this.renderer.applyFlipAnimation(targetOwner, targetIndex);
         }
 
         target.isFacedown = false;
@@ -4460,10 +4520,12 @@ export default class Game {
     this.isResolvingEffect = false;
 
     // Remove highlight from all hand cards
-    const handCards = document.querySelectorAll("#player-hand .card");
-    handCards.forEach((cardEl) => {
-      cardEl.classList.remove("targetable");
-    });
+    if (
+      this.renderer &&
+      typeof this.renderer.applyHandTargetableIndices === "function"
+    ) {
+      this.renderer.applyHandTargetableIndices("player", []);
+    }
 
     // Emit after_summon for special summons performed directly from hand
     this.emit("after_summon", {
@@ -4517,24 +4579,26 @@ export default class Game {
   highlightReadySpecialSummon() {
     // Find and highlight the card ready for special summon in hand
     if (!this.pendingSpecialSummon) return;
-
-    const handCards = document.querySelectorAll("#player-hand .card");
-    handCards.forEach((cardEl, index) => {
-      const card = this.player.hand[index];
+    const indices = [];
+    this.player.hand.forEach((card, index) => {
       if (card && card.name === this.pendingSpecialSummon.cardName) {
-        cardEl.classList.add("targetable");
-      } else {
-        cardEl.classList.remove("targetable");
+        indices.push(index);
       }
     });
+    if (
+      this.renderer &&
+      typeof this.renderer.applyHandTargetableIndices === "function"
+    ) {
+      this.renderer.applyHandTargetableIndices("player", indices);
+    }
   }
 
   checkWinCondition() {
     if (this.player.lp <= 0) {
-      alert("Game Over! You Lost.");
+      this.renderer?.showAlert?.("Game Over! You Lost.");
       this.gameOver = true;
     } else if (this.bot.lp <= 0) {
-      alert("Victory! You Won.");
+      this.renderer?.showAlert?.("Victory! You Won.");
       this.gameOver = true;
     }
   }
@@ -4722,7 +4786,7 @@ export default class Game {
       this.effectEngine?.clearPassiveBuffsForCard(card);
     }
 
-    // Se um equip spell estÃ¡ saindo da spell/trap zone, limpar seus efeitos no monstro
+    // Se um equip spell está saindo da spell/trap zone, limpar seus efeitos no monstro
     if (
       fromZone === "spellTrap" &&
       card.cardKind === "spell" &&
@@ -4731,7 +4795,7 @@ export default class Game {
     ) {
       const host = card.equippedTo;
 
-      // Verificar se Ã© "The Shadow Heart" - se sair do campo, destruir o monstro equipado
+      // Verificar se é "The Shadow Heart" - se sair do campo, destruir o monstro equipado
       if (card.name === "The Shadow Heart" && host) {
         const hostOwner = host.owner === "player" ? this.player : this.bot;
         void this.destroyCard(host, {
@@ -4842,7 +4906,7 @@ export default class Game {
         }
       });
 
-      // Se o monstro foi revivido por Call of the Haunted, destruir a trap tambÃ©m
+      // Se o monstro foi revivido por Call of the Haunted, destruir a trap também
       if (card.callOfTheHauntedTrap) {
         const callTrap = card.callOfTheHauntedTrap;
         void this.destroyCard(callTrap, {
@@ -4985,7 +5049,7 @@ export default class Game {
     const attackerOwner = attacker.owner === "player" ? this.player : this.bot;
 
     void this.emit("battle_destroy", {
-      player: attackerOwner, // o dono do atacante (quem causou a destruiÃ§Ã£o)
+      player: attackerOwner, // o dono do atacante (quem causou a destruição)
       opponent: destroyedOwner, // o jogador que perdeu o monstro
       attacker,
       destroyed,
@@ -5171,115 +5235,19 @@ export default class Game {
 
     if (
       this.renderer &&
-      typeof this.renderer.showCardGridSelectionModal === "function"
+      typeof this.renderer.showShadowHeartCathedralModal === "function"
     ) {
-      console.log("[Cathedral Modal] Using showCardGridSelectionModal");
-      this.renderer.showCardGridSelectionModal({
-        title: "Shadow-Heart Cathedral",
-        subtitle: `Choose a <strong>Shadow-Heart</strong> monster from your Deck to Special Summon.<br><span class="counter-info">${counterCount} Judgment Counter(s) - Max ATK: ${maxAtk}</span>`,
-        cards: validMonsters,
-        minSelect: 1,
-        maxSelect: 1,
-        confirmLabel: "Summon",
-        cancelLabel: "Cancel",
-        overlayClass: "modal cathedral-overlay",
-        modalClass: "modal-content cathedral-modal",
-        gridClass: "cathedral-card-list",
-        cardClass: "cathedral-card-item",
-        infoText: `Select a monster with ATK â‰¤ ${maxAtk}`,
-        onConfirm: (chosen) => {
-          console.log("[Cathedral Modal] Confirm called with:", chosen);
-          const card = chosen && chosen.length > 0 ? chosen[0] : null;
-          if (card) {
-            console.log("[Cathedral Modal] Selected:", card.name);
-          }
-          callback(card || null);
-        },
-        onCancel: () => {
-          console.log("[Cathedral Modal] Cancel called");
-          callback(null);
-        },
-        renderCard: (monster) => {
-          try {
-            const cardItem = document.createElement("div");
-            cardItem.classList.add("cathedral-card-item");
-            cardItem.style.display = "flex";
-            cardItem.style.alignItems = "center";
-            cardItem.style.gap = "12px";
-            cardItem.style.padding = "12px";
-            cardItem.style.margin = "8px 0";
-            cardItem.style.border = "2px solid #555";
-            cardItem.style.borderRadius = "8px";
-            cardItem.style.cursor = "pointer";
-            cardItem.style.transition = "all 0.2s";
-            cardItem.style.backgroundColor = "#2a2a2a";
-            cardItem.style.minHeight = "100px";
-
-            const cardImg = document.createElement("img");
-            cardImg.src = monster.image || "assets/card-back.png";
-            cardImg.alt = monster.name;
-            cardImg.classList.add("cathedral-card-img");
-            cardImg.style.width = "80px";
-            cardImg.style.height = "120px";
-            cardImg.style.objectFit = "cover";
-            cardImg.style.borderRadius = "4px";
-            cardImg.style.flexShrink = "0";
-            cardImg.style.border = "1px solid #444";
-
-            const cardInfo = document.createElement("div");
-            cardInfo.classList.add("cathedral-card-info");
-            cardInfo.style.flex = "1";
-            cardInfo.style.display = "flex";
-            cardInfo.style.flexDirection = "column";
-            cardInfo.style.gap = "8px";
-
-            const cardName = document.createElement("div");
-            cardName.textContent = monster.name;
-            cardName.classList.add("cathedral-card-name");
-            cardName.style.fontWeight = "bold";
-            cardName.style.fontSize = "16px";
-            cardName.style.color = "#fff";
-            cardName.style.lineHeight = "1.3";
-
-            const cardStats = document.createElement("div");
-            cardStats.textContent = `ATK ${monster.atk || 0} / DEF ${
-              monster.def || 0
-            } / Level ${monster.level || 0}`;
-            cardStats.classList.add("cathedral-card-stats");
-            cardStats.style.fontSize = "14px";
-            cardStats.style.color = "#aaa";
-            cardStats.style.fontWeight = "500";
-
-            cardInfo.appendChild(cardName);
-            cardInfo.appendChild(cardStats);
-            cardItem.appendChild(cardImg);
-            cardItem.appendChild(cardInfo);
-            return cardItem;
-          } catch (e) {
-            console.error("[Cathedral Modal] Error in renderCard:", e);
-            return null;
-          }
-        },
-      });
+      this.renderer.showShadowHeartCathedralModal(
+        validMonsters,
+        maxAtk,
+        counterCount,
+        callback
+      );
       return;
     }
 
-    console.log(
-      "[Cathedral Modal] Using fallback prompt (no renderer available)"
-    );
-    // Fallback simple prompt
-    const choice = window.prompt(
-      "Choose a Shadow-Heart monster name to summon:"
-    );
-    if (!choice) {
-      callback(null);
-      return;
-    }
-    const normalized = choice.trim().toLowerCase();
-    const card = validMonsters.find(
-      (c) => c.name && c.name.trim().toLowerCase() === normalized
-    );
-    callback(card || null);
+    console.log("[Cathedral Modal] Renderer unavailable; skipping modal.");
+    callback(null);
   }
 
   canActivateTrap(card) {
@@ -5290,7 +5258,7 @@ export default class Game {
     if (!card.isFacedown) return false;
     if (!card.turnSetOn) return false;
 
-    // Trap sÃ³ pode ser ativada a partir do prÃ³ximo turno
+    // Trap só pode ser ativada a partir do próximo turno
     const result = this.turnCounter > card.turnSetOn;
     console.log(
       `[canActivateTrap] Result: ${result} (${this.turnCounter} > ${card.turnSetOn})`
@@ -5301,7 +5269,7 @@ export default class Game {
   async checkAndOfferTraps(event, eventData = {}) {
     if (!this.player) return;
 
-    // Evitar reentrÃ¢ncia: se jÃ¡ existe um modal de trap aberto, nÃ£o abrir outro
+    // Evitar reentrância: se já existe um modal de trap aberto, não abrir outro
     if (this.trapPromptInProgress) return;
     this.trapPromptInProgress = true;
 
@@ -5317,7 +5285,7 @@ export default class Game {
           if (effect.timing !== "on_event") return false;
           if (effect.event !== event) return false;
 
-          // Verificar condiÃ§Ãµes especÃ­ficas do evento
+          // Verificar condições específicas do evento
           if (effect.requireOpponentAttack && !eventData.isOpponentAttack)
             return false;
           if (effect.requireOpponentSummon && !eventData.isOpponentSummon)
@@ -5329,7 +5297,7 @@ export default class Game {
 
       if (eligibleTraps.length === 0) return;
 
-      // Oferecer ativaÃ§Ã£o de cada trap elegÃ­vel (uma por vez)
+      // Oferecer ativação de cada trap elegível (uma por vez)
       for (const trap of eligibleTraps) {
         const shouldActivate = await this.renderer.showTrapActivationModal(
           trap,
@@ -5373,7 +5341,7 @@ export default class Game {
       eventData
     );
 
-    // Se for trap normal, mover para o cemitÃ©rio apÃ³s resolver
+    // Se for trap normal, mover para o cemitério após resolver
     if (card.subtype === "normal") {
       this.moveCard(card, this.player, "graveyard", { fromZone: "spellTrap" });
     }
@@ -5603,15 +5571,15 @@ export default class Game {
   }
 
   devGetSelectionCleanupState() {
-    const controlsVisible = !!document.querySelector(".field-targeting-controls");
-    const highlightCount = document.querySelectorAll(
-      ".card.targetable, .card.selected-target"
-    ).length;
+    const uiState =
+      this.renderer && typeof this.renderer.getSelectionCleanupState === "function"
+        ? this.renderer.getSelectionCleanupState()
+        : { controlsVisible: false, highlightCount: 0 };
     return {
       selectionActive: !!this.targetSelection,
       selectionState: this.selectionState,
-      controlsVisible,
-      highlightCount,
+      controlsVisible: !!uiState.controlsVisible,
+      highlightCount: uiState.highlightCount || 0,
     };
   }
 
@@ -7656,6 +7624,7 @@ export default class Game {
     return { success: true, warnings };
   }
 }
+
 
 
 

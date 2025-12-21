@@ -979,6 +979,13 @@ export default class EffectEngine {
             continue;
           }
 
+          if (
+            effect.requireSelfAsDefender === true &&
+            payload.defender !== card
+          ) {
+            continue;
+          }
+
           if (effect.requireDefenderPosition === true) {
             const defenderCard = payload.defender;
             if (!defenderCard || defenderCard.position !== "defense") {
@@ -997,10 +1004,17 @@ export default class EffectEngine {
               this.game?.renderer?.[customPromptMethod]
             ) {
               wantsToUse = await this.game.renderer[customPromptMethod]();
-            } else {
-              wantsToUse = window.confirm(
-                `Use ${card.name}'s effect to negate the attack?`
+            } else if (this.game?.renderer?.showConfirmPrompt) {
+              const confirmResult = this.game.renderer.showConfirmPrompt(
+                `Use ${card.name}'s effect to negate the attack?`,
+                { kind: "attack_negation", cardName: card.name }
               );
+              wantsToUse =
+                confirmResult && typeof confirmResult.then === "function"
+                  ? await confirmResult
+                  : !!confirmResult;
+            } else {
+              wantsToUse = true;
             }
 
             if (!wantsToUse) continue;
@@ -3263,10 +3277,18 @@ export default class EffectEngine {
           costDescription,
           resolve
         );
+      } else if (this.game.renderer.showConfirmPrompt) {
+        const confirmResult = this.game.renderer.showConfirmPrompt(message, {
+          kind: "destruction_negation",
+          cardName: card.name,
+        });
+        if (confirmResult && typeof confirmResult.then === "function") {
+          confirmResult.then(resolve);
+        } else {
+          resolve(!!confirmResult);
+        }
       } else {
-        // Fallback to window.confirm
-        const confirm = window.confirm(message);
-        resolve(confirm);
+        resolve(false);
       }
     });
   }
@@ -3708,18 +3730,32 @@ export default class EffectEngine {
     }
 
     const defaultCard = candidates[candidates.length - 1].name;
-    const searchModal = this.getSearchModalElements();
+    const renderer = this.game?.renderer;
+    const searchModal = renderer?.getSearchModalElements?.();
 
-    if (searchModal) {
-      this.showSearchModalVisual(
-        searchModal,
-        candidates,
-        defaultCard,
-        (choice) => {
-          this.finishSearchSelection(choice, candidates, ctx);
-        }
-      );
-      return true;
+    if (searchModal && renderer) {
+      if (typeof renderer.showSearchModalVisual === "function") {
+        renderer.showSearchModalVisual(
+          searchModal,
+          candidates,
+          defaultCard,
+          (choice) => {
+            this.finishSearchSelection(choice, candidates, ctx);
+          }
+        );
+        return true;
+      }
+      if (typeof renderer.showSearchModal === "function") {
+        renderer.showSearchModal(
+          searchModal,
+          candidates,
+          defaultCard,
+          (choice) => {
+            this.finishSearchSelection(choice, candidates, ctx);
+          }
+        );
+        return true;
+      }
     }
 
     // Fallback: auto-seleciona o melhor disponível
@@ -3734,232 +3770,6 @@ export default class EffectEngine {
 
     this.finishSearchSelection(fallback?.name || defaultCard, candidates, ctx);
     return true;
-  }
-
-  getSearchModalElements() {
-    const modal = document.getElementById("search-modal");
-    const input = document.getElementById("search-input");
-    const select = document.getElementById("search-dropdown");
-    const confirmBtn = document.getElementById("search-confirm");
-    const cancelBtn = document.getElementById("search-cancel");
-    const closeBtn = document.getElementById("search-close");
-
-    if (modal && input && select && confirmBtn && cancelBtn && closeBtn) {
-      return { modal, input, select, confirmBtn, cancelBtn, closeBtn };
-    }
-
-    return null;
-  }
-
-  showSearchModal(elements, candidates, defaultCard, onConfirm, allCards) {
-    const { modal, input, select, confirmBtn, cancelBtn, closeBtn } = elements;
-
-    select.innerHTML = "";
-
-    const placeholder = document.createElement("option");
-    placeholder.value = "";
-    placeholder.textContent = "Escolha uma carta";
-    select.appendChild(placeholder);
-
-    // Only show candidates, not all cards from the database
-    const sortedCandidates = [...candidates].sort((a, b) => {
-      const nameA = (a?.name || "").toLocaleLowerCase();
-      const nameB = (b?.name || "").toLocaleLowerCase();
-      return nameA.localeCompare(nameB);
-    });
-
-    sortedCandidates.forEach((card) => {
-      if (!card || !card.name) return;
-      const opt = document.createElement("option");
-      opt.value = card.name;
-      opt.textContent = getCardDisplayName(card) || card.name;
-      select.appendChild(opt);
-    });
-
-    input.value = defaultCard || "";
-
-    const cleanup = () => {
-      modal.classList.add("hidden");
-      confirmBtn.removeEventListener("click", confirmHandler);
-      cancelBtn.removeEventListener("click", cancelHandler);
-      closeBtn.removeEventListener("click", cancelHandler);
-      select.removeEventListener("change", selectHandler);
-      input.removeEventListener("keydown", keyHandler);
-    };
-
-    const confirmHandler = () => {
-      const choice = (input.value || select.value || "").trim();
-      cleanup();
-      onConfirm(choice);
-    };
-
-    const cancelHandler = () => {
-      const choice = (input.value || select.value || defaultCard || "").trim();
-      cleanup();
-      onConfirm(choice);
-    };
-
-    const selectHandler = () => {
-      if (select.value) {
-        input.value = select.value;
-      }
-    };
-
-    const keyHandler = (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        confirmHandler();
-      } else if (e.key === "Escape") {
-        cancelHandler();
-      }
-    };
-
-    confirmBtn.addEventListener("click", confirmHandler);
-    cancelBtn.addEventListener("click", cancelHandler);
-    closeBtn.addEventListener("click", cancelHandler);
-    select.addEventListener("change", selectHandler);
-    input.addEventListener("keydown", keyHandler);
-
-    modal.classList.remove("hidden");
-    input.focus();
-  }
-
-  showSearchModalVisual(elements, candidates, defaultCard, onConfirm) {
-    // Create overlay wrapper
-    const overlay = document.createElement("div");
-    overlay.className = "search-modal-visual";
-
-    // Create modal content container
-    const modalContent = document.createElement("div");
-    modalContent.className = "modal-content";
-
-    // Title
-    const title = document.createElement("h2");
-    title.textContent = "Select a card from candidates";
-    modalContent.appendChild(title);
-
-    // Hint text
-    const hint = document.createElement("p");
-    hint.className = "search-hint";
-    hint.textContent = "Click on a card to select it";
-    modalContent.appendChild(hint);
-
-    // Cards grid
-    const grid = document.createElement("div");
-    grid.className = "cards-grid";
-
-    let selectedCard = defaultCard
-      ? candidates.find((c) => c.name === defaultCard) || candidates[0]
-      : candidates[0];
-
-    candidates.forEach((card) => {
-      if (!card || !card.name) return;
-      const displayName =
-        getCardDisplayName(card) || (card?.name && card.name) || "Card";
-
-      const cardBtn = document.createElement("button");
-      cardBtn.className = "search-card-btn";
-      if (selectedCard && card.name === selectedCard.name) {
-        cardBtn.classList.add("selected");
-      }
-
-      // Card image
-      const img = document.createElement("img");
-      img.src = card.image || "assets/card-back.png";
-      img.alt = displayName;
-      img.className = "search-card-image";
-      cardBtn.appendChild(img);
-
-      // Card name
-      const nameDiv = document.createElement("div");
-      nameDiv.className = "search-card-name";
-      nameDiv.textContent = displayName;
-      cardBtn.appendChild(nameDiv);
-
-      // Card type
-      const typeDiv = document.createElement("div");
-      typeDiv.className = "search-card-type";
-      const typeText = card.type ? `${card.type}` : "Unknown";
-      const levelText = card.level ? ` / L${card.level}` : "";
-      typeDiv.textContent = typeText + levelText;
-      cardBtn.appendChild(typeDiv);
-
-      // Card stats
-      if (card.cardKind === "monster") {
-        const statsDiv = document.createElement("div");
-        statsDiv.className = "search-card-stats";
-        const atk = card.atk !== undefined ? card.atk : "?";
-        const def = card.def !== undefined ? card.def : "?";
-        statsDiv.textContent = `ATK ${atk} / DEF ${def}`;
-        cardBtn.appendChild(statsDiv);
-      }
-
-      // Click handler
-      cardBtn.onclick = () => {
-        // Remove selected from all cards
-        grid.querySelectorAll(".search-card-btn").forEach((btn) => {
-          btn.classList.remove("selected");
-        });
-        // Add selected to this card
-        cardBtn.classList.add("selected");
-        selectedCard = card;
-      };
-
-      grid.appendChild(cardBtn);
-    });
-
-    modalContent.appendChild(grid);
-
-    // Action buttons
-    const actions = document.createElement("div");
-    actions.className = "search-actions";
-
-    const confirmBtn = document.createElement("button");
-    confirmBtn.textContent = "Confirm";
-    confirmBtn.className = "confirm";
-
-    const cancelBtn = document.createElement("button");
-    cancelBtn.textContent = "Cancel";
-    cancelBtn.className = "cancel";
-
-    const cleanup = () => {
-      overlay.remove();
-    };
-
-    confirmBtn.onclick = () => {
-      cleanup();
-      if (selectedCard) {
-        onConfirm(selectedCard.name);
-      }
-    };
-
-    cancelBtn.onclick = () => {
-      cleanup();
-      if (defaultCard) {
-        onConfirm(defaultCard);
-      } else if (selectedCard) {
-        onConfirm(selectedCard.name);
-      }
-    };
-
-    // Click outside to close
-    overlay.onclick = (e) => {
-      if (e.target === overlay) {
-        cleanup();
-        if (defaultCard) {
-          onConfirm(defaultCard);
-        } else if (selectedCard) {
-          onConfirm(selectedCard.name);
-        }
-      }
-    };
-
-    actions.appendChild(confirmBtn);
-    actions.appendChild(cancelBtn);
-    modalContent.appendChild(actions);
-
-    overlay.appendChild(modalContent);
-    document.body.appendChild(overlay);
   }
 
   finishSearchSelection(choice, candidates, ctx) {
@@ -4141,34 +3951,14 @@ export default class EffectEngine {
   showSickleSelectionModal(candidates, maxSelect, onConfirm, onCancel) {
     if (
       this.game?.renderer &&
-      typeof this.game.renderer.showCardGridSelectionModal === "function"
+      typeof this.game.renderer.showSickleSelectionModal === "function"
     ) {
-      this.game.renderer.showCardGridSelectionModal({
-        title: 'Select up to 2 "Luminarch" monsters to add to hand',
-        subtitle: `Select up to ${maxSelect}.`,
-        cards: candidates,
-        minSelect: 0,
+      this.game.renderer.showSickleSelectionModal(
+        candidates,
         maxSelect,
-        confirmLabel: "Add to Hand",
-        cancelLabel: "Cancel",
-        overlayClass: "modal sickle-overlay",
-        modalClass: "modal-content sickle-modal",
-        gridClass: "sickle-list",
-        cardClass: "sickle-row",
         onConfirm,
-        onCancel,
-        renderCard: (c) => {
-          const row = document.createElement("label");
-          row.classList.add("sickle-row");
-          const name = document.createElement("span");
-          const stats = `ATK ${c.atk || 0} / DEF ${c.def || 0} / L${
-            c.level || 0
-          }`;
-          name.textContent = `${c.name} (${stats})`;
-          row.appendChild(name);
-          return row;
-        },
-      });
+        onCancel
+      );
       return;
     }
 
@@ -4202,6 +3992,13 @@ export default class EffectEngine {
           `${card.name} can only be Special Summoned by "Shadow-Heart Invocation".`
         );
         return false;
+      }
+      if (this.game?.normalizeCardOwnership) {
+        this.game.normalizeCardOwnership(card, ctx, {
+          action,
+          source: ctx?.source,
+          contextLabel: "applyMove",
+        });
       }
       let destPlayer;
       if (action.player === "self") {
@@ -4372,7 +4169,8 @@ export default class EffectEngine {
     }
 
     // Player: modal visual
-    const searchModal = this.getSearchModalElements();
+    const renderer = this.game?.renderer;
+    const searchModal = renderer?.getSearchModalElements?.();
     const defaultCardName = candidates[0]?.name || "";
 
     return new Promise((resolve) => {
@@ -4387,14 +4185,27 @@ export default class EffectEngine {
         resolve(result);
       };
 
-      if (searchModal) {
-        this.showSearchModalVisual(
-          searchModal,
-          candidates,
-          defaultCardName,
-          (choice) => finalizeSelection(choice)
-        );
-      } else {
+      if (searchModal && renderer) {
+        if (typeof renderer.showSearchModalVisual === "function") {
+          renderer.showSearchModalVisual(
+            searchModal,
+            candidates,
+            defaultCardName,
+            (choice) => finalizeSelection(choice)
+          );
+          return;
+        }
+        if (typeof renderer.showSearchModal === "function") {
+          renderer.showSearchModal(
+            searchModal,
+            candidates,
+            defaultCardName,
+            (choice) => finalizeSelection(choice)
+          );
+          return;
+        }
+      }
+      {
         // Fallback: auto-seleciona o primeiro
         finalizeSelection(defaultCardName);
       }

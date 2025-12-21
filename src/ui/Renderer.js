@@ -245,6 +245,263 @@ export default class Renderer {
     }
   }
 
+  applyAttackReadyIndicators(owner, indices = []) {
+    this.clearAttackReadyIndicators();
+    if (!Array.isArray(indices) || indices.length === 0) return;
+    const container =
+      owner === "player" ? this.elements.playerField : this.elements.botField;
+    if (!container) return;
+    indices.forEach((index) => {
+      const cardEl = container.querySelector(
+        `.card[data-index=\"${index}\"]`
+      );
+      if (cardEl) {
+        cardEl.classList.add("attack-ready");
+      }
+    });
+  }
+
+  clearAttackReadyIndicators() {
+    const containers = [this.elements.playerField, this.elements.botField];
+    containers.forEach((container) => {
+      if (!container) return;
+      container
+        .querySelectorAll(".card.attack-ready")
+        .forEach((el) => el.classList.remove("attack-ready"));
+    });
+  }
+
+  applyAttackResolutionIndicators({
+    attackerOwner = "player",
+    attackerIndex = -1,
+    targetOwner = "bot",
+    targetIndex = -1,
+    directAttack = false,
+  } = {}) {
+    this.clearAttackResolutionIndicators();
+
+    const attackerContainer =
+      attackerOwner === "player" ? this.elements.playerField : this.elements.botField;
+    if (attackerContainer && attackerIndex >= 0) {
+      const attackerEl = attackerContainer.querySelector(
+        `.card[data-index=\"${attackerIndex}\"]`
+      );
+      if (attackerEl) {
+        attackerEl.classList.add("attack-attacker");
+      }
+    }
+
+    if (directAttack) {
+      if (this.elements.botHand) {
+        this.elements.botHand.classList.add("direct-attack-active");
+      }
+      return;
+    }
+
+    const targetContainer =
+      targetOwner === "player" ? this.elements.playerField : this.elements.botField;
+    if (targetContainer && targetIndex >= 0) {
+      const targetEl = targetContainer.querySelector(
+        `.card[data-index=\"${targetIndex}\"]`
+      );
+      if (targetEl) {
+        targetEl.classList.add("attack-target");
+      }
+    }
+  }
+
+  clearAttackResolutionIndicators() {
+    const containers = [this.elements.playerField, this.elements.botField];
+    containers.forEach((container) => {
+      if (!container) return;
+      container
+        .querySelectorAll(".card.attack-attacker")
+        .forEach((el) => el.classList.remove("attack-attacker"));
+      container
+        .querySelectorAll(".card.attack-target")
+        .forEach((el) => el.classList.remove("attack-target"));
+    });
+    if (this.elements.botHand) {
+      this.elements.botHand.classList.remove("direct-attack-active");
+    }
+  }
+
+  applyFlipAnimation(owner, index) {
+    const container =
+      owner === "player" ? this.elements.playerField : this.elements.botField;
+    if (!container || index < 0) return;
+    const cardEl = container.querySelector(`.card[data-index="${index}"]`);
+    if (cardEl) {
+      cardEl.classList.add("flipping");
+    }
+  }
+
+  setPlayerFieldTributeable(indices = []) {
+    if (!this.elements.playerField) return;
+    indices.forEach((index) => {
+      const cardEl = this.elements.playerField.querySelector(
+        `.card[data-index="${index}"]`
+      );
+      if (cardEl) {
+        cardEl.classList.add("tributeable");
+      }
+    });
+  }
+
+  setPlayerFieldSelected(index, selected) {
+    if (!this.elements.playerField || index < 0) return;
+    const cardEl = this.elements.playerField.querySelector(
+      `.card[data-index="${index}"]`
+    );
+    if (!cardEl) return;
+    if (selected) {
+      cardEl.classList.add("selected");
+    } else {
+      cardEl.classList.remove("selected");
+    }
+  }
+
+  clearPlayerFieldTributeable() {
+    if (!this.elements.playerField) return;
+    this.elements.playerField
+      .querySelectorAll(".tributeable, .selected")
+      .forEach((el) => el.classList.remove("tributeable", "selected"));
+  }
+
+  applyTargetHighlights({ targets = [], attackerHighlight = null } = {}) {
+    this.clearTargetHighlights();
+
+    if (attackerHighlight) {
+      const { owner, index } = attackerHighlight;
+      const container =
+        owner === "player" ? this.elements.playerField : this.elements.botField;
+      if (container && index >= 0) {
+        const attackerEl = container.querySelector(
+          `.card[data-index=\"${index}\"]`
+        );
+        if (attackerEl) {
+          attackerEl.classList.add("attack-attacker");
+        }
+      }
+    }
+
+    targets.forEach((cand) => {
+      let targetEl = null;
+      if (cand.isDirectAttack) {
+        targetEl = this.elements.botHand;
+      } else if (cand.zone === "field") {
+        const container =
+          cand.controller === "player"
+            ? this.elements.playerField
+            : this.elements.botField;
+        if (container) {
+          targetEl = container.querySelector(
+            `.card[data-index=\"${cand.zoneIndex}\"]`
+          );
+        }
+      } else if (cand.zone === "spellTrap") {
+        const container =
+          cand.controller === "player"
+            ? this.elements.playerSpellTrap
+            : this.elements.botSpellTrap;
+        if (container) {
+          targetEl = container.querySelector(
+            `.card[data-index=\"${cand.zoneIndex}\"]`
+          );
+        }
+      } else if (cand.zone === "fieldSpell") {
+        const container =
+          cand.controller === "player"
+            ? this.elements.playerFieldSpell
+            : this.elements.botFieldSpell;
+        if (container) {
+          targetEl = container.querySelector(".card");
+        }
+      }
+
+      if (!targetEl) {
+        return;
+      }
+
+      targetEl.classList.add("targetable");
+      if (cand.isDirectAttack) {
+        targetEl.style.pointerEvents = "auto";
+        targetEl.classList.add("direct-attack-target");
+      }
+      if (cand.isSelected) {
+        targetEl.classList.add("selected-target");
+      }
+      if (cand.isAttackTarget) {
+        targetEl.classList.add("attack-target");
+      }
+    });
+  }
+
+  clearTargetHighlights() {
+    const containers = [
+      this.elements.playerHand,
+      this.elements.botHand,
+      this.elements.playerField,
+      this.elements.botField,
+      this.elements.playerSpellTrap,
+      this.elements.botSpellTrap,
+      this.elements.playerFieldSpell,
+      this.elements.botFieldSpell,
+    ];
+
+    containers.forEach((container) => {
+      if (!container) return;
+      container
+        .querySelectorAll(
+          ".card.targetable, .card.selected-target, .card.attack-attacker, .card.attack-target, .direct-attack-target"
+        )
+        .forEach((el) => {
+          el.classList.remove(
+            "targetable",
+            "selected-target",
+            "attack-attacker",
+            "attack-target",
+            "direct-attack-target"
+          );
+        });
+    });
+
+    if (this.elements.botHand) {
+      this.elements.botHand.style.pointerEvents = "";
+    }
+  }
+
+  setSelectionDimming(active) {
+    const container = document.getElementById("game-container");
+    if (!container) return;
+    container.classList.toggle("selection-dim", !!active);
+  }
+
+  applyHandTargetableIndices(owner, indices = []) {
+    const container =
+      owner === "player" ? this.elements.playerHand : this.elements.botHand;
+    if (!container) return;
+    const indexSet = new Set(indices);
+    const cards = container.querySelectorAll(".card");
+    cards.forEach((cardEl, index) => {
+      if (indexSet.has(index)) {
+        cardEl.classList.add("targetable");
+      } else {
+        cardEl.classList.remove("targetable");
+      }
+    });
+  }
+
+  getSelectionCleanupState() {
+    const controlsVisible = !!document.querySelector(
+      ".field-targeting-controls"
+    );
+    const highlightCount = document.querySelectorAll(
+      ".card.targetable, .card.selected-target"
+    ).length;
+    return { controlsVisible, highlightCount };
+  }
+
   applyZoneActivationIndicators(container, zoneIndicators) {
     if (!container || !zoneIndicators) return;
     const cardEls = container.querySelectorAll(".card");
@@ -1013,6 +1270,97 @@ export default class Renderer {
         handler(owner, location, index);
       }
     });
+  }
+
+  bindZoneCardClick(zoneId, handler) {
+    const zone = document.getElementById(zoneId);
+    if (!zone) return;
+    zone.addEventListener("click", (e) => {
+      const cardEl = e.target.closest(".card");
+      if (!cardEl) return;
+      const index = Number.parseInt(cardEl.dataset.index, 10);
+      if (Number.isNaN(index)) return;
+      handler(e, cardEl, index);
+    });
+  }
+
+  bindZoneClick(zoneId, handler) {
+    const zone = document.getElementById(zoneId);
+    if (!zone) return;
+    zone.addEventListener("click", (e) => handler(e));
+  }
+
+  bindPlayerHandClick(handler) {
+    this.bindZoneCardClick("player-hand", handler);
+  }
+
+  bindPlayerFieldClick(handler) {
+    this.bindZoneCardClick("player-field", handler);
+  }
+
+  bindPlayerSpellTrapClick(handler) {
+    this.bindZoneCardClick("player-spelltrap", handler);
+  }
+
+  bindPlayerFieldSpellClick(handler) {
+    this.bindZoneCardClick("player-fieldspell", handler);
+  }
+
+  bindBotFieldClick(handler) {
+    this.bindZoneCardClick("bot-field", handler);
+  }
+
+  bindBotSpellTrapClick(handler) {
+    this.bindZoneCardClick("bot-spelltrap", handler);
+  }
+
+  bindBotHandClick(handler) {
+    this.bindZoneCardClick("bot-hand", handler);
+  }
+
+  bindBotFieldSpellClick(handler) {
+    this.bindZoneCardClick("bot-fieldspell", handler);
+  }
+
+  bindPlayerGraveyardClick(handler) {
+    this.bindZoneClick("player-graveyard", handler);
+  }
+
+  bindBotGraveyardClick(handler) {
+    this.bindZoneClick("bot-graveyard", handler);
+  }
+
+  bindPlayerExtraDeckClick(handler) {
+    this.bindZoneClick("player-extradeck", handler);
+  }
+
+  bindGraveyardModalClose(handler) {
+    const closeBtn = document.querySelector(".close-modal");
+    if (!closeBtn) return;
+    closeBtn.addEventListener("click", handler);
+  }
+
+  bindExtraDeckModalClose(handler) {
+    const closeBtn = document.querySelector(".close-extradeck");
+    if (!closeBtn) return;
+    closeBtn.addEventListener("click", handler);
+  }
+
+  bindModalOverlayClick(handler) {
+    window.addEventListener("click", (e) => {
+      const modal = document.getElementById("gy-modal");
+      const extraModal = document.getElementById("extradeck-modal");
+      if (e.target === modal) {
+        handler("graveyard", e);
+      }
+      if (e.target === extraModal) {
+        handler("extradeck", e);
+      }
+    });
+  }
+
+  bindGlobalKeydown(handler) {
+    window.addEventListener("keydown", handler);
   }
 
   renderPreview(card) {
@@ -1862,6 +2210,441 @@ export default class Renderer {
 
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
+  }
+
+  showIgnitionActivateModal(card, onActivate) {
+    const overlay = document.createElement("div");
+    overlay.classList.add("modal", "ignition-overlay");
+
+    const modal = document.createElement("div");
+    modal.classList.add("modal-content", "ignition-modal");
+
+    const title = document.createElement("h3");
+    const titleText =
+      (card && getCardDisplayName(card)) ||
+      (card?.name && card.name) ||
+      "Activate effect?";
+    title.textContent = titleText;
+    title.classList.add("modal-title");
+
+    const desc = document.createElement("p");
+    desc.textContent = "Activate this monster's effect?";
+    desc.classList.add("modal-text");
+
+    const actions = document.createElement("div");
+    actions.classList.add("modal-actions");
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.textContent = "Cancel";
+    cancelBtn.classList.add("secondary");
+    const activateBtn = document.createElement("button");
+    activateBtn.textContent = "Activate";
+
+    const cleanup = () => {
+      overlay.remove();
+    };
+
+    cancelBtn.onclick = () => cleanup();
+    activateBtn.onclick = () => {
+      cleanup();
+      if (typeof onActivate === "function") onActivate();
+    };
+
+    actions.appendChild(cancelBtn);
+    actions.appendChild(activateBtn);
+    modal.appendChild(title);
+    modal.appendChild(desc);
+    modal.appendChild(actions);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+  }
+
+  showShadowHeartCathedralModal(
+    validMonsters,
+    maxAtk,
+    counterCount,
+    callback
+  ) {
+    this.showCardGridSelectionModal({
+      title: "Shadow-Heart Cathedral",
+      subtitle: `Select 1 Shadow-Heart monster with ATK <= ${maxAtk} (${counterCount} counters)`,
+      cards: validMonsters,
+      minSelect: 1,
+      maxSelect: 1,
+      confirmLabel: "Confirm",
+      cancelLabel: "Cancel",
+      overlayClass: "cathedral-overlay",
+      modalClass: "cathedral-modal",
+      gridClass: "cathedral-grid",
+      cardClass: "cathedral-card",
+      infoText: "Only Shadow-Heart monsters in your GY are valid.",
+      onConfirm: (chosen) => {
+        const card = Array.isArray(chosen) ? chosen[0] : null;
+        if (callback) callback(card || null);
+      },
+      onCancel: () => {
+        if (callback) callback(null);
+      },
+      renderCard: (monster) => {
+        try {
+          const cardItem = document.createElement("div");
+          cardItem.classList.add("cathedral-card-item");
+
+          const cardImg = document.createElement("img");
+          cardImg.src = monster.image || "assets/card-back.png";
+          cardImg.alt = monster.name;
+          cardImg.classList.add("cathedral-card-img");
+
+          const cardInfo = document.createElement("div");
+          cardInfo.classList.add("cathedral-card-info");
+
+          const cardName = document.createElement("div");
+          cardName.textContent = monster.name;
+          cardName.classList.add("cathedral-card-name");
+          cardName.style.fontSize = "15px";
+          cardName.style.fontWeight = "bold";
+          cardName.style.lineHeight = "1.3";
+
+          const cardStats = document.createElement("div");
+          cardStats.textContent = `ATK ${monster.atk || 0} / DEF ${
+            monster.def || 0
+          } / Level ${monster.level || 0}`;
+          cardStats.classList.add("cathedral-card-stats");
+          cardStats.style.fontSize = "14px";
+          cardStats.style.color = "#aaa";
+          cardStats.style.fontWeight = "500";
+
+          cardInfo.appendChild(cardName);
+          cardInfo.appendChild(cardStats);
+          cardItem.appendChild(cardImg);
+          cardItem.appendChild(cardInfo);
+          return cardItem;
+        } catch (e) {
+          console.error("[Cathedral Modal] Error in renderCard:", e);
+          return null;
+        }
+      },
+    });
+  }
+
+  showSickleSelectionModal(candidates, maxSelect, onConfirm, onCancel) {
+    this.showCardGridSelectionModal({
+      title: 'Select up to 2 "Luminarch" monsters to add to hand',
+      subtitle: `Select up to ${maxSelect}.`,
+      cards: candidates,
+      minSelect: 0,
+      maxSelect,
+      confirmLabel: "Add to Hand",
+      cancelLabel: "Cancel",
+      overlayClass: "modal sickle-overlay",
+      modalClass: "modal-content sickle-modal",
+      gridClass: "sickle-list",
+      cardClass: "sickle-row",
+      onConfirm,
+      onCancel,
+      renderCard: (card) => {
+        const row = document.createElement("label");
+        row.classList.add("sickle-row");
+        const name = document.createElement("span");
+        const stats = `ATK ${card.atk || 0} / DEF ${card.def || 0} / L${
+          card.level || 0
+        }`;
+        name.textContent = `${card.name} (${stats})`;
+        row.appendChild(name);
+        return row;
+      },
+    });
+  }
+
+  showConfirmPrompt(message, options = {}) {
+    if (!message) return false;
+    const { confirmLabel, cancelLabel } = options;
+    if (confirmLabel || cancelLabel) {
+      // TODO: replace with styled modal if we need custom labels.
+    }
+    return window.confirm(message);
+  }
+
+  showNumberPrompt(message, defaultValue) {
+    const raw = window.prompt(message, defaultValue ?? "");
+    if (raw === null || raw === undefined) return null;
+    const parsed = Number.parseInt(String(raw), 10);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+
+  showAlert(message) {
+    if (!message) return;
+    window.alert(message);
+  }
+
+  getSearchModalElements() {
+    const modal = document.getElementById("search-modal");
+    const input = document.getElementById("search-input");
+    const select = document.getElementById("search-dropdown");
+    const confirmBtn = document.getElementById("search-confirm");
+    const cancelBtn = document.getElementById("search-cancel");
+    const closeBtn = document.getElementById("search-close");
+
+    if (modal && input && select && confirmBtn && cancelBtn && closeBtn) {
+      return { modal, input, select, confirmBtn, cancelBtn, closeBtn };
+    }
+
+    return null;
+  }
+
+  showSearchModal(elements, candidates, defaultCard, onConfirm, allCards) {
+    const { modal, input, select, confirmBtn, cancelBtn, closeBtn } = elements;
+
+    select.innerHTML = "";
+
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = "Escolha uma carta";
+    select.appendChild(placeholder);
+
+    // Only show candidates, not all cards from the database
+    const sortedCandidates = [...candidates].sort((a, b) => {
+      const nameA = (a?.name || "").toLocaleLowerCase();
+      const nameB = (b?.name || "").toLocaleLowerCase();
+      return nameA.localeCompare(nameB);
+    });
+
+    sortedCandidates.forEach((card) => {
+      if (!card || !card.name) return;
+      const opt = document.createElement("option");
+      opt.value = card.name;
+      opt.textContent = getCardDisplayName(card) || card.name;
+      select.appendChild(opt);
+    });
+
+    input.value = defaultCard || "";
+
+    const cleanup = () => {
+      modal.classList.add("hidden");
+      confirmBtn.removeEventListener("click", confirmHandler);
+      cancelBtn.removeEventListener("click", cancelHandler);
+      closeBtn.removeEventListener("click", cancelHandler);
+      select.removeEventListener("change", selectHandler);
+      input.removeEventListener("keydown", keyHandler);
+    };
+
+    const confirmHandler = () => {
+      const choice = (input.value || select.value || "").trim();
+      cleanup();
+      onConfirm(choice);
+    };
+
+    const cancelHandler = () => {
+      const choice = (input.value || select.value || defaultCard || "").trim();
+      cleanup();
+      onConfirm(choice);
+    };
+
+    const selectHandler = () => {
+      if (select.value) {
+        input.value = select.value;
+      }
+    };
+
+    const keyHandler = (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        confirmHandler();
+      } else if (e.key === "Escape") {
+        cancelHandler();
+      }
+    };
+
+    confirmBtn.addEventListener("click", confirmHandler);
+    cancelBtn.addEventListener("click", cancelHandler);
+    closeBtn.addEventListener("click", cancelHandler);
+    select.addEventListener("change", selectHandler);
+    input.addEventListener("keydown", keyHandler);
+
+    modal.classList.remove("hidden");
+    input.focus();
+  }
+
+  showSearchModalVisual(elements, candidates, defaultCard, onConfirm) {
+    const overlay = document.createElement("div");
+    overlay.className = "search-modal-visual";
+
+    const modalContent = document.createElement("div");
+    modalContent.className = "modal-content";
+
+    const title = document.createElement("h2");
+    title.textContent = "Select a card from candidates";
+    modalContent.appendChild(title);
+
+    const hint = document.createElement("p");
+    hint.className = "search-hint";
+    hint.textContent = "Click on a card to select it";
+    modalContent.appendChild(hint);
+
+    const grid = document.createElement("div");
+    grid.className = "cards-grid";
+
+    let selectedCard = defaultCard
+      ? candidates.find((c) => c.name === defaultCard) || candidates[0]
+      : candidates[0];
+
+    candidates.forEach((card) => {
+      if (!card || !card.name) return;
+      const displayName =
+        getCardDisplayName(card) || (card?.name && card.name) || "Card";
+
+      const cardBtn = document.createElement("button");
+      cardBtn.className = "search-card-btn";
+      if (selectedCard && card.name === selectedCard.name) {
+        cardBtn.classList.add("selected");
+      }
+
+      const img = document.createElement("img");
+      img.src = card.image || "assets/card-back.png";
+      img.alt = displayName;
+      img.className = "search-card-image";
+      cardBtn.appendChild(img);
+
+      const nameDiv = document.createElement("div");
+      nameDiv.className = "search-card-name";
+      nameDiv.textContent = displayName;
+      cardBtn.appendChild(nameDiv);
+
+      const typeDiv = document.createElement("div");
+      typeDiv.className = "search-card-type";
+      const typeText = card.type ? `${card.type}` : "Unknown";
+      const levelText = card.level ? ` / L${card.level}` : "";
+      typeDiv.textContent = typeText + levelText;
+      cardBtn.appendChild(typeDiv);
+
+      if (card.cardKind === "monster") {
+        const statsDiv = document.createElement("div");
+        statsDiv.className = "search-card-stats";
+        const atk = card.atk !== undefined ? card.atk : "?";
+        const def = card.def !== undefined ? card.def : "?";
+        statsDiv.textContent = `ATK ${atk} / DEF ${def}`;
+        cardBtn.appendChild(statsDiv);
+      }
+
+      cardBtn.onclick = () => {
+        grid.querySelectorAll(".search-card-btn").forEach((btn) => {
+          btn.classList.remove("selected");
+        });
+        cardBtn.classList.add("selected");
+        selectedCard = card;
+      };
+
+      grid.appendChild(cardBtn);
+    });
+
+    modalContent.appendChild(grid);
+
+    const actions = document.createElement("div");
+    actions.className = "search-actions";
+
+    const confirmBtn = document.createElement("button");
+    confirmBtn.textContent = "Confirm";
+    confirmBtn.className = "confirm";
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.textContent = "Cancel";
+    cancelBtn.className = "cancel";
+
+    const cleanup = () => {
+      overlay.remove();
+    };
+
+    confirmBtn.onclick = () => {
+      cleanup();
+      if (selectedCard) {
+        onConfirm(selectedCard.name);
+      }
+    };
+
+    cancelBtn.onclick = () => {
+      cleanup();
+      if (defaultCard) {
+        onConfirm(defaultCard);
+      } else if (selectedCard) {
+        onConfirm(selectedCard.name);
+      }
+    };
+
+    overlay.onclick = (e) => {
+      if (e.target === overlay) {
+        cleanup();
+        if (defaultCard) {
+          onConfirm(defaultCard);
+        } else if (selectedCard) {
+          onConfirm(selectedCard.name);
+        }
+      }
+    };
+
+    actions.appendChild(confirmBtn);
+    actions.appendChild(cancelBtn);
+    modalContent.appendChild(actions);
+
+    overlay.appendChild(modalContent);
+    document.body.appendChild(overlay);
+  }
+
+  showTieBreakerSelection(options = {}) {
+    const {
+      title = "Choose Survivor",
+      subtitle = "",
+      infoText = "",
+      cards = [],
+      keepCount = 1,
+      onConfirm,
+      onCancel,
+    } = options;
+
+    const renderCard = (card) => {
+      const cardEl = document.createElement("div");
+      cardEl.classList.add("tie-breaker-card-item");
+
+      const imageDiv = document.createElement("div");
+      imageDiv.classList.add("tie-breaker-card-image");
+      imageDiv.style.backgroundImage = `url('${card.image}')`;
+      cardEl.appendChild(imageDiv);
+
+      const infoDiv = document.createElement("div");
+      infoDiv.classList.add("tie-breaker-card-info");
+
+      const nameDiv = document.createElement("div");
+      nameDiv.classList.add("tie-breaker-card-name");
+      const displayName =
+        getCardDisplayName(card) || (card?.name && card.name) || "Card";
+      nameDiv.textContent = displayName;
+      infoDiv.appendChild(nameDiv);
+
+      const statsDiv = document.createElement("div");
+      statsDiv.classList.add("tie-breaker-card-stats");
+      statsDiv.innerHTML = `<span>ATK ${card.atk || 0}</span>`;
+      infoDiv.appendChild(statsDiv);
+
+      cardEl.appendChild(infoDiv);
+      return cardEl;
+    };
+
+    this.showCardGridSelectionModal({
+      title,
+      subtitle,
+      cards,
+      minSelect: keepCount,
+      maxSelect: keepCount,
+      confirmLabel: "Confirm",
+      cancelLabel: "Cancel",
+      overlayClass: "tie-breaker-overlay",
+      modalClass: "tie-breaker-modal",
+      gridClass: "tie-breaker-grid",
+      cardClass: "tie-breaker-card",
+      infoText,
+      onConfirm,
+      onCancel,
+      renderCard,
+    });
   }
 
   showMultiSelectModal(cards = [], selectionRange = {}, onConfirm) {
