@@ -660,66 +660,6 @@ export default class Renderer {
       cleanup();
     };
   }
-
-  showProtectorPrompt() {
-    if (typeof document === "undefined") {
-      return Promise.resolve(true);
-    }
-
-    const existing = document.querySelector(".protector-modal");
-    if (existing) existing.remove();
-
-    const modal = document.createElement("div");
-    modal.className = "protector-modal";
-    modal.innerHTML = `
-      <div class="protector-backdrop"></div>
-      <div class="protector-content">
-        <div class="protector-glow"></div>
-        <header class="protector-header">
-          <div class="protector-title">
-            <span class="protector-label">Resposta do Sanctum</span>
-            <strong>Luminarch Sanctum Protector</strong>
-          </div>
-          <span class="protector-pill">Quick Effect</span>
-        </header>
-        <p class="protector-text">
-          Negar o ataque declarado e manter o campo Luminarch seguro?
-        </p>
-        <p class="protector-subtext">
-          Se você recusar, o ataque continuará normalmente.
-        </p>
-        <div class="protector-actions">
-          <button class="primary" data-choice="yes">Negar ataque</button>
-          <button class="secondary" data-choice="no">Permitir ataque</button>
-        </div>
-      </div>
-    `;
-
-    const promise = new Promise((resolve) => {
-      const cleanup = (result) => {
-        modal.remove();
-        resolve(result);
-      };
-
-      modal.addEventListener("click", (e) => {
-        if (e.target.classList.contains("protector-backdrop")) {
-          cleanup(false);
-        }
-      });
-
-      modal.querySelectorAll("button").forEach((btn) => {
-        btn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          const choice = btn.dataset.choice;
-          cleanup(choice === "yes");
-        });
-      });
-    });
-
-    document.body.appendChild(modal);
-    return promise;
-  }
-
   showConditionalSummonPrompt(cardName, message) {
     if (typeof document === "undefined") {
       return Promise.resolve(false);
@@ -948,73 +888,6 @@ export default class Renderer {
       });
     });
   }
-
-  showSpellActivateModal(cardEl, onActivate) {
-    if (!cardEl) return;
-
-    const existing = document.querySelector(".spell-activate-modal");
-    if (existing) existing.remove();
-
-    const rect = cardEl.getBoundingClientRect();
-
-    const modal = document.createElement("div");
-    modal.className = "spell-activate-modal";
-    modal.innerHTML = `
-      <div class="spell-choice-content single">
-        <button data-choice="activate">Activate</button>
-      </div>
-    `;
-
-    modal.style.position = "fixed";
-    modal.style.zIndex = "200";
-    document.body.appendChild(modal);
-
-    if (rect) {
-      const content = modal.querySelector(".spell-choice-content") || modal;
-      const contentRect = content.getBoundingClientRect();
-
-      let left = rect.left;
-      let top = rect.bottom + 8;
-
-      if (top + contentRect.height > window.innerHeight - 8) {
-        top = rect.top - contentRect.height - 8;
-      }
-      if (left + contentRect.width > window.innerWidth - 8) {
-        left = window.innerWidth - contentRect.width - 8;
-      }
-      if (left < 8) left = 8;
-
-      modal.style.left = `${left}px`;
-      modal.style.top = `${top}px`;
-    }
-
-    const cleanup = () => {
-      if (modal.parentNode) {
-        modal.parentNode.removeChild(modal);
-      }
-      document.removeEventListener("mousedown", outsideHandler);
-    };
-
-    const outsideHandler = (e) => {
-      if (!modal.contains(e.target)) {
-        cleanup();
-      }
-    };
-
-    setTimeout(() => document.addEventListener("mousedown", outsideHandler), 0);
-
-    modal.querySelectorAll("button").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const choice = btn.dataset.choice;
-        cleanup();
-        if (choice === "activate" && typeof onActivate === "function") {
-          onActivate();
-        }
-      });
-    });
-  }
-
   showPositionChoiceModal(cardEl, card, callback, options = {}) {
     const existing = document.querySelector(".position-choice-modal");
     if (existing) existing.remove();
@@ -2756,26 +2629,5 @@ export default class Renderer {
       // Foco no botão de confirmar
       confirmBtn.focus();
     });
-  }
-
-  getTrapEventDescription(event, eventData) {
-    const descriptions = {
-      attack_declared: "🗡️ Um ataque foi declarado!",
-      after_summon: "✨ Um monstro foi invocado!",
-      battle_destroy: "💥 Um monstro foi destruído em combate!",
-      card_to_grave: "⚰️ Uma carta foi para o cemitério!",
-      phase_end: "⏰ Final da fase - você pode ativar esta armadilha.",
-    };
-
-    let desc = descriptions[event] || "⚡ Um evento ocorreu!";
-
-    if (eventData.isOpponentAttack) {
-      desc += "<br><small>Ataque do oponente</small>";
-    }
-    if (eventData.isOpponentSummon) {
-      desc += "<br><small>Invocação do oponente</small>";
-    }
-
-    return desc;
   }
 }
