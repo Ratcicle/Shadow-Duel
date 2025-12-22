@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ActionHandlers.js
  *
  * Generic, reusable action handlers for card effects.
@@ -745,17 +745,17 @@ export async function handleSpecialSummonFromHandWithTieredCost(
   }
 
   const defaultTierOptions = [
-    { count: 1, label: "Tier 1", description: "+300 ATK até o final do turno" },
+    { count: 1, label: "Tier 1", description: "+300 ATK atÃ© o final do turno" },
     {
       count: 2,
       label: "Tier 2",
-      description: "+300 ATK e não pode ser destruída em batalha",
+      description: "+300 ATK e nÃ£o pode ser destruÃ­da em batalha",
     },
     {
       count: 3,
       label: "Tier 3",
       description:
-        "+300 ATK, indestrutível em batalha e destrói 1 carta do oponente",
+        "+300 ATK, indestrutÃ­vel em batalha e destrÃ³i 1 carta do oponente",
     },
   ];
 
@@ -1199,10 +1199,16 @@ export async function handleBanish(action, ctx, targets, engine) {
   if (!game) return false;
 
   const targetRef = action.targetRef;
-  const resolved = targetRef ? targets?.[targetRef] : [];
+  let resolved = targetRef ? targets?.[targetRef] : [];
+  const useDestroyed =
+    action.useDestroyed === true || action.type === "banish_destroyed_monster";
+
+  if ((!Array.isArray(resolved) || resolved.length === 0) && useDestroyed) {
+    resolved = ctx?.destroyed ? [ctx.destroyed] : [];
+  }
 
   if (!Array.isArray(resolved) || resolved.length === 0) {
-    getUI(game)?.log("Nenhum alvo válido para banish.");
+    getUI(game)?.log("Nenhum alvo vÃ¡lido para banish.");
     return false;
   }
 
@@ -1252,13 +1258,13 @@ export async function handleBanish(action, ctx, targets, engine) {
         : fallbackOwner;
 
     if (!ownerPlayer) {
-      getUI(game)?.log(`Não foi possível determinar o dono de ${tgt.name}.`);
+      getUI(game)?.log(`NÃ£o foi possÃ­vel determinar o dono de ${tgt.name}.`);
       continue;
     }
 
     if (action.fromZone && !ownerPlayer[action.fromZone]?.includes(tgt)) {
       getUI(game)?.log(
-        `${tgt.name} não está mais em ${action.fromZone}; não pode ser banida.`
+        `${tgt.name} nÃ£o estÃ¡ mais em ${action.fromZone}; nÃ£o pode ser banida.`
       );
       continue;
     }
@@ -1285,34 +1291,6 @@ export async function handleBanish(action, ctx, targets, engine) {
   }
 
   return false;
-}
-
-/**
- * Generic handler for banishing the monster destroyed in battle
- * Useful for effects that need to remove whatever was just destroyed.
- */
-export async function handleBanishDestroyedMonster(
-  action,
-  ctx,
-  targets,
-  engine
-) {
-  const { destroyed } = ctx || {};
-  const game = engine.game;
-
-  if (!destroyed) {
-    getUI(game)?.log("Nenhum monstro destruído disponível para banir.");
-    return false;
-  }
-
-  const targetRef = action.targetRef || "__destroyed_monster_to_banish";
-  const mergedTargets = {
-    ...(targets || {}),
-    [targetRef]: [destroyed],
-  };
-
-  const tempAction = { ...action, targetRef };
-  return await handleBanish(tempAction, ctx, mergedTargets, engine);
 }
 
 /**
@@ -3081,7 +3059,7 @@ export async function handleSpecialSummonFromDeckWithCounterLimit(
   return new Promise((resolve) => {
     const modalConfig = {
       title: `Select 1 monster (Max ATK: ${maxAtk}, ${counterCount}x ${counterType})`,
-      subtitle: `Monsters with ATK ≤ ${maxAtk}`,
+      subtitle: `Monsters with ATK â‰¤ ${maxAtk}`,
       infoText: `You have ${counterCount} ${counterType} counters. After summoning, this card will be sent to the Graveyard.`,
     };
 
@@ -3438,7 +3416,7 @@ export function registerDefaultHandlers(registry) {
   );
   registry.register("transmutate", handleTransmutate);
   registry.register("banish", handleBanish);
-  registry.register("banish_destroyed_monster", handleBanishDestroyedMonster);
+  registry.register("banish_destroyed_monster", handleBanish);
 
   // Stat modification and effect negation handlers
   registry.register(
