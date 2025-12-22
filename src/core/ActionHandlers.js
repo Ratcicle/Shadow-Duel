@@ -904,88 +904,66 @@ export async function handleSpecialSummonFromHandWithCost(
     return false;
   }
 
-  // Validate cost was paid
-  const costTargets = resolveTargetCards(action, ctx, targets, {
-    targetRef: action.costTargetRef,
-    requireArray: true,
-  });
-
-  if (!costTargets || costTargets.length === 0) {
-    getUI(game)?.log("No cost paid for special summon.");
-    return false;
-  }
-
-  // Move cost cards to graveyard
-  sendCardsToGraveyard(costTargets, player, engine, {
-    resolveFromZone: (costCard) =>
-      typeof engine.findCardZone === "function"
-        ? engine.findCardZone(player, costCard) || "field"
-        : "field",
-    fallbackZone: "field",
-    useResolvedZoneOnFallback: false,
-  });
-
-  // Check if source is in hand
-  if (!player.hand.includes(source)) {
-    getUI(game)?.log("Card not in hand.");
-    return false;
-  }
-
-  // Check field space
-  if (player.field.length >= 5) {
-    getUI(game)?.log("Field is full.");
-    return false;
-  }
-
-  const summonResult = await summonFromHandCore({
-    card: source,
-    player,
-    engine,
-    game,
-    position: action.position || "attack",
-    cannotAttackThisTurn: action.cannotAttackThisTurn || false,
-  });
-  if (!summonResult.success) {
-    return false;
-  }
-
-  getUI(game)?.log(
-    `${player.name || player.id} Special Summoned ${source.name} from hand.`
-  );
-
-  game.updateBoard();
-  return true;
-}
-
-/**
- * Special Summon from hand with a tiered cost/bonus choice (1-3 Void Hollow style)
- * Self-contained: prompts tier, selects cost cards, pays cost, summons, applies tier effects.
- *
- * Action props:
- * - costFilters: { name?, archetype?, cardKind? } (default: name === "Void Hollow", cardKind: "monster")
- * - minCost: default 1
- * - maxCost: default 3
- * - position: "attack" | "defense" | "choice" (default: "attack")
- * - tierOptions: [{ count, label, description }]
- * - tier1AtkBoost: number (default 300)
- */
-export async function handleSpecialSummonFromHandWithTieredCost(
-  action,
-  ctx,
-  targets,
-  engine
-) {
-  const { player, source } = ctx;
-  const game = engine.game;
-
-  if (!player || !source || !game) return false;
   if (!player.hand?.includes(source)) {
     getUI(game)?.log("Card must be in hand to activate this effect.");
     return false;
   }
+
   if (player.field.length >= 5) {
     getUI(game)?.log("Field is full.");
     return false;
+  }
+
+  const performSummon = async () => {
+    const summonResult = await summonFromHandCore({
+      card: source,
+      player,
+      engine,
+      game,
+      position: action.position || "attack",
+      cannotAttackThisTurn: action.cannotAttackThisTurn || false,
+    });
+    return summonResult.success;
+  };
+
+  const isTiered =
+    action.type === "special_summon_from_hand_with_tiered_cost" ||
+    action.useTieredCost === true ||
+    Array.isArray(action.tierOptions);
+
+  if (!isTiered) {
+    // Validate cost was paid
+    const costTargets = resolveTargetCards(action, ctx, targets, {
+      targetRef: action.costTargetRef,
+      requireArray: true,
+    });
+
+    if (!costTargets || costTargets.length === 0) {
+      getUI(game)?.log("No cost paid for special summon.");
+      return false;
+    }
+
+    // Move cost cards to graveyard
+    sendCardsToGraveyard(costTargets, player, engine, {
+      resolveFromZone: (costCard) =>
+        typeof engine.findCardZone === "function"
+          ? engine.findCardZone(player, costCard) || "field"
+          : "field",
+      fallbackZone: "field",
+      useResolvedZoneOnFallback: false,
+    });
+
+    const success = await performSummon();
+    if (!success) {
+      return false;
+    }
+
+    getUI(game)?.log(
+      `${player.name || player.id} Special Summoned ${source.name} from hand.`
+    );
+
+    game.updateBoard();
+    return true;
   }
 
   const filters = action.costFilters || {
@@ -1117,15 +1095,8 @@ export async function handleSpecialSummonFromHandWithTieredCost(
       },
     },
     async () => {
-      const summonResult = await summonFromHandCore({
-        card: source,
-        player,
-        engine,
-        game,
-        position: action.position || "attack",
-        cannotAttackThisTurn: !!action.cannotAttackThisTurn,
-      });
-      if (!summonResult.success) {
+      const success = await performSummon();
+      if (!success) {
         return false;
       }
 
@@ -2023,21 +1994,30 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
 
   if (!player || !game) return false;
 
+  const atkBoost = action.atkBoost || 0;
+  const defBoost = action.defBoost || 0;
+  const permanent = action.permanent || false;
+  const grantSecondAttack =
+    action.grantSecondAttack === true ||
+    action.type === "grant_second_attack" ||
+    action.type === "buff_stats_temp_with_second_attack";
   const targetCards = resolveTargetCards(action, ctx, targets, {
     defaultRef: "self",
   });
 
   if (targetCards.length === 0) {
-    getUI(game)?.log("No valid targets for stat buff.");
+    const label =
+      grantSecondAttack && atkBoost === 0 && defBoost === 0
+        ? "second attack"
+        : "stat buff";
+    getUI(game)?.log(`No valid targets for ${label}.`);
     return false;
   }
 
-  const atkBoost = action.atkBoost || 0;
-  const defBoost = action.defBoost || 0;
-  const permanent = action.permanent || false;
-
   let anyBuffed = false;
-  const affectedCards = [];
+  let anySecondAttack = false;
+  const buffedCards = [];
+  const secondAttackCards = [];
 
   for (const card of targetCards) {
     if (!card || card.cardKind !== "monster") continue;
@@ -2063,26 +2043,54 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
     }
 
     if (cardBuffed) {
-      affectedCards.push(card.name);
+      buffedCards.push(card.name);
+    }
+
+    if (grantSecondAttack) {
+      if (!player.field.includes(card) || card.isFacedown) continue;
+      card.canMakeSecondAttackThisTurn = true;
+      card.secondAttackUsedThisTurn = false;
+      anySecondAttack = true;
+      secondAttackCards.push(card.name);
     }
   }
 
-  if (anyBuffed && affectedCards.length > 0) {
+  if (anyBuffed && buffedCards.length > 0) {
     const boosts = [];
     if (atkBoost !== 0)
       boosts.push(`${atkBoost > 0 ? "+" : ""}${atkBoost} ATK`);
     if (defBoost !== 0)
       boosts.push(`${defBoost > 0 ? "+" : ""}${defBoost} DEF`);
 
-    const cardList = affectedCards.join(", ");
+    const cardList = buffedCards.join(", ");
     const duration = permanent ? "" : " until end of turn";
-    getUI(game)?.log(
-      `${cardList} gained ${boosts.join(" and ")}${duration}.`
-    );
+    const combineSecondAttack =
+      action.type === "buff_stats_temp_with_second_attack" && anySecondAttack;
+    if (combineSecondAttack) {
+      getUI(game)?.log(
+        `${cardList} gained ${boosts.join(
+          " and "
+        )}${duration} and can make a second attack!`
+      );
+    } else {
+      getUI(game)?.log(
+        `${cardList} gained ${boosts.join(" and ")}${duration}.`
+      );
+    }
+  }
+
+  if (anySecondAttack && secondAttackCards.length > 0) {
+    const cardList = secondAttackCards.join(", ");
+    if (action.type !== "buff_stats_temp_with_second_attack") {
+      getUI(game)?.log(`${cardList} can attack again this turn.`);
+    }
+  }
+
+  if (anyBuffed || anySecondAttack) {
     game.updateBoard();
   }
 
-  return anyBuffed;
+  return anyBuffed || anySecondAttack;
 }
 
 /**
@@ -2680,38 +2688,6 @@ export async function handleRemovePermanentBuffNamed(
  * Action properties:
  * - targetRef: reference to the target card (default: "self")
  */
-export async function handleGrantSecondAttack(action, ctx, targets, engine) {
-  const { player, source } = ctx;
-  const game = engine.game;
-
-  if (!player || !game) return false;
-
-  const targetCards = resolveTargetCards(action, ctx, targets, {
-    defaultRef: "self",
-  });
-
-  if (targetCards.length === 0) return false;
-
-  let anyGranted = false;
-
-  for (const card of targetCards) {
-    if (!card || card.cardKind !== "monster") continue;
-    if (!player.field.includes(card) || card.isFacedown) continue;
-
-    card.canMakeSecondAttackThisTurn = true;
-    card.secondAttackUsedThisTurn = false;
-    anyGranted = true;
-  }
-
-  if (anyGranted) {
-    const cardList = targetCards.map((c) => c.name).join(", ");
-    getUI(game)?.log(`${cardList} can attack again this turn.`);
-    game.updateBoard();
-  }
-
-  return anyGranted;
-}
-
 /**
  * Generic handler for conditional summon from hand
  * Offers to summon a card if a condition is met (e.g., controlling a specific card)
@@ -3373,51 +3349,6 @@ export async function handleDestroyTargetedCards(action, ctx, targets, engine) {
  * - atkBoost: ATK increase
  * - defBoost: DEF increase
  */
-export async function handleBuffStatsTempWithSecondAttack(
-  action,
-  ctx,
-  targets,
-  engine
-) {
-  const { source } = ctx;
-  const game = engine.game;
-
-  if (!source) return false;
-
-  // Get target card
-  let targetCard = source;
-  if (action.targetRef === "self" || action.targetRef === "summonedCard") {
-    targetCard = source;
-  }
-
-  if (!targetCard) return false;
-
-  const atkBoost = action.atkBoost || 0;
-  const defBoost = action.defBoost || 0;
-
-  // Apply temporary stat boosts
-  if (atkBoost > 0) {
-    targetCard.atk += atkBoost;
-    targetCard.tempAtkBoost = (targetCard.tempAtkBoost || 0) + atkBoost;
-  }
-
-  if (defBoost > 0) {
-    targetCard.def += defBoost;
-    targetCard.tempDefBoost = (targetCard.tempDefBoost || 0) + defBoost;
-  }
-
-  // Grant second attack this Battle Phase
-  targetCard.canMakeSecondAttackThisTurn = true;
-  targetCard.secondAttackUsedThisTurn = false;
-
-  getUI(game)?.log(
-    `${targetCard.name} gains ${atkBoost} ATK / ${defBoost} DEF and can make a second attack!`
-  );
-
-  game.updateBoard();
-  return true;
-}
-
 /**
  * Initialize default handlers
  * @param {ActionHandlerRegistry} registry
@@ -3432,7 +3363,7 @@ export function registerDefaultHandlers(registry) {
   );
   registry.register(
     "special_summon_from_hand_with_tiered_cost",
-    handleSpecialSummonFromHandWithTieredCost
+    handleSpecialSummonFromHandWithCost
   );
   registry.register("bounce_and_summon", handleBounceAndSummon);
   registry.register(
@@ -3472,7 +3403,7 @@ export function registerDefaultHandlers(registry) {
     "remove_permanent_buff_named",
     handleRemovePermanentBuffNamed
   );
-  registry.register("grant_second_attack", handleGrantSecondAttack);
+  registry.register("grant_second_attack", handleBuffStatsTemp);
   registry.register(
     "conditional_summon_from_hand",
     handleConditionalSummonFromHand
@@ -3494,10 +3425,7 @@ export function registerDefaultHandlers(registry) {
 
   // FASE 3: New handlers for complex Shadow-Heart methods
   registry.register("destroy_targeted_cards", handleDestroyTargetedCards);
-  registry.register(
-    "buff_stats_temp_with_second_attack",
-    handleBuffStatsTempWithSecondAttack
-  );
+  registry.register("buff_stats_temp_with_second_attack", handleBuffStatsTemp);
 
   // Legacy/common actions migrated into the registry (proxy to EffectEngine methods)
   registry.register("draw", proxyEngineMethod("applyDraw"));
