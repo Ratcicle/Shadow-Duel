@@ -201,8 +201,8 @@ export default class Player {
       const fieldAfterTributes = this.field.length - tributesNeeded + 1;
       if (fieldAfterTributes > 5) {
         console.log("Field is full (max 5 monsters).");
-        if (this.game?.renderer?.log) {
-          this.game.renderer.log("Field is full (max 5 monsters).");
+        if (this.game?.ui?.log) {
+          this.game.ui.log("Field is full (max 5 monsters).");
         }
         return null;
       }
@@ -326,8 +326,8 @@ export default class Player {
     this.lp -= amount;
     if (this.lp < 0) this.lp = 0;
     const actual = Math.max(0, before - this.lp);
-    if (actual > 0 && this.game?.renderer?.showLpChange) {
-      this.game.renderer.showLpChange(this, -actual);
+    if (actual > 0 && this.game?.ui?.showLpChange) {
+      this.game.ui.showLpChange(this, -actual);
     }
   }
 
@@ -337,8 +337,8 @@ export default class Player {
     const adjustedAmount = Math.floor(amount * multiplier);
     if (!adjustedAmount || adjustedAmount <= 0) return;
     this.lp += adjustedAmount;
-    if (this.game?.renderer?.showLpChange) {
-      this.game.renderer.showLpChange(this, adjustedAmount);
+    if (this.game?.ui?.showLpChange) {
+      this.game.ui.showLpChange(this, adjustedAmount);
     }
   }
 

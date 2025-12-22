@@ -157,6 +157,42 @@ export function validateCardDatabase() {
         }
       }
 
+      if (effect.summonMethod !== undefined) {
+        warnings.push(
+          formatIssue(
+            card,
+            'Use "summonMethods" (array) instead of "summonMethod".',
+            effectIndex,
+            null
+          )
+        );
+      }
+
+      if (effect.requireSummonedFrom !== undefined) {
+        warnings.push(
+          formatIssue(
+            card,
+            'Use "summonFrom" instead of "requireSummonedFrom".',
+            effectIndex,
+            null
+          )
+        );
+      }
+
+      if (
+        effect.summonMethods !== undefined &&
+        !Array.isArray(effect.summonMethods)
+      ) {
+        errors.push(
+          formatIssue(
+            card,
+            'Effect "summonMethods" must be an array.',
+            effectIndex,
+            null
+          )
+        );
+      }
+
       const effectActions = Array.isArray(effect.actions)
         ? effect.actions
         : [];

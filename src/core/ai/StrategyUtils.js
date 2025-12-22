@@ -66,7 +66,6 @@ export function estimateCardValue(card, options = {}) {
       if (type === "buff_stats_temp" || type === "modify_stats_temp") {
         value += 0.25;
       }
-      if (type === "special_summon_from_graveyard") value += 0.6;
       if (type === "special_summon_from_zone") value += 0.6;
       if (type === "special_summon_token") value += 0.4;
     });
@@ -363,29 +362,6 @@ export function applySimulatedActions({
         chosen.forEach((card) => {
           removeCardFromZones(targetPlayer, card);
           targetPlayer.hand.push(card);
-        });
-        break;
-      }
-      case "special_summon_from_graveyard": {
-        const targetPlayer = action.player === "opponent" ? opponent : self;
-        if ((targetPlayer.field || []).length >= 5) break;
-        const filters = action.filters || {};
-        const candidates = (targetPlayer.graveyard || []).filter((card) =>
-          matchesTargetFilters(card, filters, null)
-        );
-        const count = action.count || { min: 1, max: 1 };
-        const max = Number.isFinite(count.max) ? count.max : 1;
-        const chosen = rankCandidates(candidates, "benefit", options).slice(
-          0,
-          Math.min(max, candidates.length, 5 - targetPlayer.field.length)
-        );
-        chosen.forEach((card) => {
-          removeCardFromZones(targetPlayer, card);
-          card.position = card.position || action.position || "attack";
-          card.isFacedown = false;
-          card.hasAttacked = false;
-          card.attacksUsedThisTurn = 0;
-          targetPlayer.field.push(card);
         });
         break;
       }

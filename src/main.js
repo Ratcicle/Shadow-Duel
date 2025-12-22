@@ -1,5 +1,6 @@
-Ôªøimport Game from "./core/Game.js";
+import Game from "./core/Game.js";
 import Bot from "./core/Bot.js";
+import Renderer from "./ui/Renderer.js";
 import { cardDatabase, cardDatabaseById } from "./data/cards.js";
 import { validateCardDatabase } from "./core/CardDatabaseValidator.js";
 
@@ -311,7 +312,7 @@ function runCardDatabaseValidation(options = {}) {
     );
     if (!silent) {
       alert(
-        "N√£o √© poss√≠vel iniciar o duelo: h√° erros no banco de cartas. Verifique os detalhes acima."
+        "N„o È possÌvel iniciar o duelo: h· erros no banco de cartas. Verifique os detalhes acima."
       );
     }
     return false;
@@ -389,7 +390,7 @@ function formatIssueForDisplay(issue) {
     parts.push(`Efeito ${issue.effectIndex}`);
   }
   if (issue.actionIndex !== undefined && issue.actionIndex !== null) {
-    parts.push(`A√ß√£o ${issue.actionIndex}`);
+    parts.push(`AÁ„o ${issue.actionIndex}`);
   }
   const prefix = parts.length ? `[${parts.join(" | ")}] ` : "";
   return `${prefix}${issue.message || ""}`;
@@ -497,7 +498,7 @@ function updatePoolFilterButtons() {
   const isLuminarch = poolFilterMode === "luminarch";
 
   btnPoolFilterNoArchetype.classList.toggle("active", isNoArchetype);
-  btnPoolFilterNoArchetype.textContent = "Sem arqu√©tipo";
+  btnPoolFilterNoArchetype.textContent = "Sem arquÈtipo";
 
   if (btnPoolFilterVoid) {
     btnPoolFilterVoid.classList.toggle("active", isVoid);
@@ -666,11 +667,11 @@ function renderDeckBuilder() {
     cardEl.onmouseenter = () => setPreview(card);
     cardEl.onclick = () => {
       if (currentExtraDeck.length >= MAX_EXTRA_DECK_SIZE) {
-        alert(`Extra Deck est√° cheio (max ${MAX_EXTRA_DECK_SIZE}).`);
+        alert(`Extra Deck est· cheio (max ${MAX_EXTRA_DECK_SIZE}).`);
         return;
       }
       if (count >= 1) {
-        alert("Apenas 1 c√≥pia de cada Fusion Monster no Extra Deck.");
+        alert("Apenas 1 cÛpia de cada Fusion Monster no Extra Deck.");
         return;
       }
       currentExtraDeck.push(card.id);
@@ -753,7 +754,8 @@ function startDuel() {
 }
 
 function bootGame() {
-  game = new Game({ botPreset: currentBotPreset, devMode: devModeEnabled });
+  const renderer = new Renderer();
+  game = new Game({ botPreset: currentBotPreset, devMode: devModeEnabled, renderer });
   game.testModeEnabled = !!testModeEnabled;
   game.start([...currentDeck], [...currentExtraDeck]);
 }
@@ -819,7 +821,7 @@ devDrawBtn?.addEventListener("click", () => {
   const count = Math.max(1, parseInt(devDrawCountInput?.value, 10) || 1);
   const result = game.devDraw(playerId, count);
   if (!result.success) {
-    alert(result.reason || "N√£o foi poss√≠vel comprar cartas.");
+    alert(result.reason || "N„o foi possÌvel comprar cartas.");
   }
 });
 
@@ -837,7 +839,7 @@ devGiveBtn?.addEventListener("click", () => {
   };
   const result = game.devGiveCard(options);
   if (!result.success) {
-    alert(result.reason || "N√£o foi poss√≠vel adicionar a carta.");
+    alert(result.reason || "N„o foi possÌvel adicionar a carta.");
   }
 });
 
@@ -846,7 +848,7 @@ devForcePhaseBtn?.addEventListener("click", () => {
   const phase = devForcePhaseSelect?.value || "main1";
   const result = game.devForcePhase(phase);
   if (!result.success) {
-    alert(result.reason || "N√£o foi poss√≠vel for√ßar a fase.");
+    alert(result.reason || "N„o foi possÌvel forÁar a fase.");
   }
 });
 
@@ -861,12 +863,12 @@ devApplySetupBtn?.addEventListener("click", () => {
   try {
     parsed = JSON.parse(raw);
   } catch (err) {
-    alert("JSON inv√°lido para setup do board.");
+    alert("JSON inv·lido para setup do board.");
     return;
   }
   const result = game.applyManualSetup(parsed);
   if (!result.success) {
-    alert(result.reason || "N√£o foi poss√≠vel aplicar o setup.");
+    alert(result.reason || "N„o foi possÌvel aplicar o setup.");
   } else if (result.warnings?.length) {
     alert(result.warnings.join("\n"));
   }
@@ -1013,3 +1015,5 @@ function requireActiveGameForDev() {
   }
   return true;
 }
+
+

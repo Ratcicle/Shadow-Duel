@@ -1,4 +1,4 @@
-﻿export const cardDatabase = [
+export const cardDatabase = [
   {
     id: 1,
     name: "Nightmare Steed",
@@ -179,7 +179,7 @@
         id: "arcane_scholar_on_normal_summon",
         timing: "on_event",
         event: "after_summon",
-        summonMethod: "normal",
+        summonMethods: ["normal"],
         actions: [
           {
             type: "draw",
@@ -324,7 +324,7 @@
         id: "radiant_dragon_search_luminarch",
         timing: "on_event",
         event: "after_summon",
-        summonMethod: ["normal", "tribute"],
+        summonMethods: ["normal", "tribute"],
         actions: [
           {
             type: "search_any",
@@ -441,7 +441,7 @@
         id: "shadow_heart_observer_special_summon",
         timing: "on_event",
         event: "after_summon",
-        summonMethod: "normal",
+        summonMethods: ["normal"],
         targets: [
           {
             id: "observer_target",
@@ -474,7 +474,7 @@
     type: "Sea Serpent",
     archetype: "Shadow-Heart",
     description:
-      'If this card is attacked while in Defense Position: inflict 600 damage to your opponent. You can send this card from the field to the GY; Special Summon 1 "Shadow-Heart Leviathan" from your hand, but it cannot attack this turn.',
+      'If this card is attacked while in Defense Position: inflict 600 damage to your opponent. If this card is destroyed by battle: You can add 1 "Shadow-Heart" Spell/Trap from your Graveyard to your hand.',
     image: "assets/Shadow-Heart Abyssal Eel.png",
     effects: [
       {
@@ -492,39 +492,26 @@
         ],
       },
       {
-        id: "shadow_heart_abyssal_eel_summon",
-        timing: "ignition",
-        oncePerTurn: true,
-        oncePerTurnName: "shadow_heart_abyssal_eel_summon",
+        id: "shadow_heart_abyssal_eel_recover",
+        timing: "on_event",
+        event: "battle_destroy",
+        requireSelfAsDestroyed: true,
         targets: [
           {
-            id: "eel_self_cost",
+            id: "eel_recover_target",
             owner: "self",
-            zone: "field",
-            cardKind: "monster",
-            count: { min: 1, max: 1 },
-          },
-          {
-            id: "eel_hand_target",
-            owner: "self",
-            zone: "hand",
-            cardName: "Shadow-Heart Leviathan",
-            count: { min: 1, max: 1 },
+            zone: "graveyard",
+            cardKind: ["spell", "trap"],
+            archetype: "Shadow-Heart",
+            count: { min: 0, max: 1 },
           },
         ],
         actions: [
           {
             type: "move",
-            targetRef: "eel_self_cost",
+            targetRef: "eel_recover_target",
             player: "self",
-            to: "graveyard",
-          },
-          {
-            type: "special_summon_from_hand_with_cost",
-            targetRef: "eel_hand_target",
-            cost: "move_to_graveyard",
-            position: "attack",
-            cannotAttackThisTurn: true,
+            to: "hand",
           },
         ],
       },
@@ -693,7 +680,7 @@
         id: "shadow_heart_arctroth_on_summon",
         timing: "on_event",
         event: "after_summon",
-        summonMethod: "tribute",
+        summonMethods: ["tribute"],
         targets: [
           {
             id: "destroy_target",
@@ -732,10 +719,10 @@
             owner: "self",
             zone: "field",
             cardKind: "monster",
-            archetype: "Shadow-Heart", // <<< filtro de arqu├®tipo
+            archetype: "Shadow-Heart", // <<< filtro de arqu+�tipo
             requireFaceup: true,
             count: { min: 1, max: 5 },
-            autoSelect: true, // pega automaticamente todos os v├ílidos
+            autoSelect: true, // pega automaticamente todos os v+�lidos
           },
         ],
         actions: [
@@ -795,7 +782,7 @@
         id: "shadow_heart_imp_on_summon",
         timing: "on_event",
         event: "after_summon",
-        summonMethod: "normal",
+        summonMethods: ["normal"],
         oncePerTurn: true,
         oncePerTurnName: "shadow_heart_imp_on_summon",
         targets: [
@@ -841,7 +828,7 @@
         id: "shadow_heart_gecko_special_search",
         timing: "on_event",
         event: "after_summon",
-        summonMethod: "special",
+        summonMethods: ["special"],
         requireSelfAsSummoned: true,
         oncePerTurn: true,
         oncePerTurnName: "shadow_heart_gecko_special_search",
@@ -1180,9 +1167,10 @@
         oncePerTurnName: "Shadow-Heart Death Wyrm",
         actions: [
           {
-            type: "conditional_special_summon_from_hand",
-            cardName: "Shadow-Heart Death Wyrm",
+            type: "conditional_summon_from_hand",
+            targetRef: "self",
             position: "attack",
+            optional: true,
             cannotAttackThisTurn: false,
           },
         ],
@@ -1199,9 +1187,32 @@
     type: "Sea Serpent",
     archetype: "Shadow-Heart",
     description:
-      "If this card destroys a monster by battle: inflict 500 damage to your opponent. If this card is destroyed by battle: inflict 800 damage to your opponent.",
+      'You can Special Summon this card from your hand by sending 1 "Shadow-Heart Abyssal Eel" you control to the GY. If this card destroys a monster by battle: inflict 500 damage to your opponent. If this card is destroyed by battle: inflict 800 damage to your opponent.',
     image: "assets/Shadow-Heart Leviathan.png",
     effects: [
+      {
+        id: "shadow_heart_leviathan_special_summon_hand",
+        timing: "ignition",
+        requireZone: "hand",
+        targets: [
+          {
+            id: "leviathan_cost",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            cardName: "Shadow-Heart Abyssal Eel",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "special_summon_from_hand_with_cost",
+            costTargetRef: "leviathan_cost",
+            position: "attack",
+            cannotAttackThisTurn: false,
+          },
+        ],
+      },
       {
         id: "shadow_heart_leviathan_burn_attacker",
         timing: "on_event",
@@ -1247,7 +1258,7 @@
         id: "shadow_heart_void_mage_search",
         timing: "on_event",
         event: "after_summon",
-        summonMethod: "normal",
+        summonMethods: ["normal"],
         actions: [
           {
             type: "search_any",
@@ -1382,7 +1393,7 @@
         id: "demon_dragon_fusion_destroy",
         timing: "on_event",
         event: "after_summon",
-        summonMethod: "fusion",
+        summonMethods: ["fusion"],
         actions: [
           {
             type: "destroy_targeted_cards",
@@ -1428,7 +1439,7 @@
         id: "luminarch_valiant_search",
         timing: "on_event",
         event: "after_summon",
-        summonMethod: ["normal", "special"],
+        summonMethods: ["normal", "special"],
         actions: [
           {
             type: "search_any",
@@ -1502,7 +1513,7 @@
         id: "luminarch_aegisbearer_def_boost",
         timing: "on_event",
         event: "after_summon",
-        summonMethod: "special",
+        summonMethods: ["special"],
         actions: [
           {
             type: "permanent_buff_named",
@@ -1544,7 +1555,7 @@
         id: "moonblade_captain_revive",
         timing: "on_event",
         event: "after_summon",
-        summonMethod: ["normal", "tribute"],
+        summonMethods: ["normal", "tribute"],
         targets: [
           {
             id: "moonblade_revive_target",
@@ -1801,7 +1812,7 @@
         id: "luminarch_sanctified_arbiter_search",
         timing: "on_event",
         event: "after_summon",
-        summonMethod: "normal",
+        summonMethods: ["normal"],
         oncePerTurn: true,
         oncePerTurnName: "luminarch_sanctified_arbiter_search",
         actions: [
@@ -2093,13 +2104,13 @@
     archetype: "Luminarch",
     image: "assets/Luminarch Enchanted Halberd.png",
     description:
-      'Uma vez por turno, se um monstro "Luminarch" for invocado por invoca├º├úo especial no seu campo; voc├¬ pode invocar essa carta por invoca├º├úo especial da sua m├úo, mas ela n├úo pode declarar um ataque neste turno.',
+      'Uma vez por turno, se um monstro "Luminarch" for invocado por invoca+�+�o especial no seu campo; voc+� pode invocar essa carta por invoca+�+�o especial da sua m+�o, mas ela n+�o pode declarar um ataque neste turno.',
     effects: [
       {
         id: "luminarch_enchanted_halberd_conditional_summon",
         timing: "on_event",
         event: "after_summon",
-        summonMethod: "special",
+        summonMethods: ["special"],
         oncePerTurn: true,
         oncePerTurnName: "luminarch_enchanted_halberd_conditional_summon",
         condition: {
@@ -2108,11 +2119,14 @@
         },
         promptUser: true,
         promptMessage:
-          "Um monstro Luminarch foi invocado por invoca├º├úo especial. Deseja invocar Luminarch Enchanted Halberd da sua m├úo?",
+          "Um monstro Luminarch foi invocado por invoca+�+�o especial. Deseja invocar Luminarch Enchanted Halberd da sua m+�o?",
         actions: [
           {
-            type: "conditional_special_summon_from_hand",
+            type: "conditional_summon_from_hand",
+            targetRef: "self",
+            position: "attack",
             restrictAttackThisTurn: true,
+            optional: false,
           },
         ],
       },
@@ -2199,7 +2213,7 @@
             player: "self",
           },
           {
-            type: "special_summon_from_graveyard",
+            type: "special_summon_from_zone",
             zone: "graveyard",
             filters: { cardKind: "monster", archetype: "Luminarch" },
             count: { min: 0, max: 5, maxFrom: "opponentFieldCount", cap: 5 },
@@ -2287,7 +2301,7 @@
         oncePerTurnName: "void_conjurer_field_summon",
         actions: [
           {
-            type: "special_summon_from_deck",
+            type: "special_summon_from_zone",
             zone: "deck",
             filters: {
               archetype: "Void",
@@ -2324,7 +2338,7 @@
             to: "graveyard",
           },
           {
-            type: "special_summon_from_graveyard",
+            type: "special_summon_from_zone",
             zone: "graveyard",
             requireSource: true,
             position: "choice",
@@ -2351,7 +2365,7 @@
         id: "void_walker_no_attack_when_summoned",
         timing: "on_event",
         event: "after_summon",
-        summonMethod: ["normal", "special"],
+        summonMethods: ["normal", "special"],
         actions: [
           {
             type: "forbid_attack_this_turn",
@@ -2427,9 +2441,9 @@
         id: "void_hollow_summon",
         timing: "on_event",
         event: "after_summon",
-        summonMethod: "special",
+        summonMethods: ["special"],
         requireSelfAsSummoned: true,
-        requireSummonedFrom: "hand",
+        summonFrom: "hand",
         oncePerTurn: true,
         oncePerTurnName: "void_hollow_summon",
         condition: {
@@ -2437,7 +2451,7 @@
         },
         actions: [
           {
-            type: "special_summon_from_deck",
+            type: "special_summon_from_zone",
             zone: "deck",
             filters: {
               name: "Void Hollow",
@@ -2497,7 +2511,7 @@
         oncePerTurnName: "void_haunter_gy_effect",
         actions: [
           {
-            type: "special_summon_from_graveyard",
+            type: "special_summon_from_zone",
             zone: "graveyard",
             requireSource: false,
             banishCost: true,
@@ -2581,7 +2595,7 @@
         requireSelfAsDestroyed: true,
         actions: [
           {
-            type: "special_summon_from_graveyard",
+            type: "special_summon_from_zone",
             zone: "graveyard",
             requireSource: false,
             filters: {
@@ -2743,17 +2757,17 @@
     type: "Winged Beast",
     archetype: "Void",
     description:
-      "Se um monstro de fus├úo 'Void' for Invocado por Invoca├º├úo-Fus├úo: voc├¬ pode descartar esta carta da m├úo; esse monstro fica imune aos efeitos de cartas do oponente at├® o final do pr├│ximo turno.",
+      "Se um monstro de fus+�o 'Void' for Invocado por Invoca+�+�o-Fus+�o: voc+� pode descartar esta carta da m+�o; esse monstro fica imune aos efeitos de cartas do oponente at+� o final do pr+�ximo turno.",
     image: "assets/Void Raven.png",
     effects: [
       {
         id: "void_raven_fusion_immunity",
         timing: "on_event",
         event: "after_summon",
-        summonMethod: "fusion",
+        summonMethods: ["fusion"],
         promptUser: true,
         promptMessage:
-          "Descartar Void Raven para proteger o monstro 'Void' rec├®m-invocado?",
+          "Descartar Void Raven para proteger o monstro 'Void' rec+�m-invocado?",
         oncePerTurn: true,
         oncePerTurnName: "void_raven_fusion_immunity",
         condition: {
@@ -2797,7 +2811,7 @@
     type: "Fiend",
     archetype: "Void",
     description:
-      "Ganha 100 ATK/DEF para cada carta 'Void' no campo. Uma vez por duelo, se esta carta estiver no seu Cemit├®rio, voc├¬ pode Invoc├í-la por Invoca├º├úo-Especial.",
+      "Ganha 100 ATK/DEF para cada carta 'Void' no campo. Uma vez por duelo, se esta carta estiver no seu Cemit+�rio, voc+� pode Invoc+�-la por Invoca+�+�o-Especial.",
     image: "assets/Void Tenebris Horn.png",
     effects: [
       {
@@ -2820,7 +2834,7 @@
         ],
         actions: [
           {
-            type: "special_summon_from_graveyard",
+            type: "special_summon_from_zone",
             zone: "graveyard",
             requireSource: true,
             position: "choice",
@@ -2925,7 +2939,7 @@
         oncePerTurnName: "void_berserker_bounce_on_destroy",
         promptUser: true,
         promptMessage:
-          "Ativar Void Berserker para devolver 1 carta do oponente para a m├úo?",
+          "Ativar Void Berserker para devolver 1 carta do oponente para a m+�o?",
         targets: [
           {
             id: "void_berserker_bounce_target",
@@ -3020,7 +3034,7 @@
         id: "void_hydra_titan_summon",
         timing: "on_event",
         event: "after_summon",
-        summonMethod: "fusion",
+        summonMethods: ["fusion"],
         description:
           "When Fusion Summoned: Destroy all other monsters you control; draw 1 card for each destroyed.",
         actions: [
@@ -3107,7 +3121,7 @@
         requireEmptyField: true,
         actions: [
           {
-            type: "special_summon_from_deck",
+            type: "special_summon_from_zone",
             zone: "graveyard",
             filters: {
               archetype: "Void",
@@ -3215,7 +3229,7 @@
         id: "void_mirror_dimension_effect",
         timing: "on_event",
         event: "after_summon",
-        summonMethod: "special",
+        summonMethods: ["special"],
         requireOpponentSummon: true,
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,

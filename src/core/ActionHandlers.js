@@ -1,4 +1,4 @@
-﻿/**
+/**
  * ActionHandlers.js
  *
  * Generic, reusable action handlers for card effects.
@@ -12,6 +12,14 @@
  */
 
 import { getCardDisplayName } from "./i18n.js";
+
+const NULL_UI = {
+  log: () => {},
+};
+
+function getUI(game) {
+  return game?.ui || game?.renderer || NULL_UI;
+}
 
 // Map technical status names to user-friendly descriptions
 const STATUS_DISPLAY_NAMES = {
@@ -112,7 +120,7 @@ export async function handleSpecialSummonFromZone(
   const zone = player[sourceZone];
 
   if (!zone || zone.length === 0) {
-    game.renderer?.log(`No cards in ${sourceZone}.`);
+    getUI(game)?.log(`No cards in ${sourceZone}.`);
     return false;
   }
 
@@ -123,7 +131,7 @@ export async function handleSpecialSummonFromZone(
       zone.splice(gyIndex, 1);
       player.banished = player.banished || [];
       player.banished.push(source);
-      game.renderer?.log(`${source.name} was banished as cost.`);
+      getUI(game)?.log(`${source.name} was banished as cost.`);
     }
   }
 
@@ -134,7 +142,7 @@ export async function handleSpecialSummonFromZone(
     // Summon the source/destroyed card itself
     const card = source || destroyed;
     if (!card || !zone.includes(card)) {
-      game.renderer?.log("Card not in specified zone.");
+      getUI(game)?.log("Card not in specified zone.");
       return false;
     }
     candidates = [card];
@@ -186,7 +194,7 @@ export async function handleSpecialSummonFromZone(
   }
 
   if (candidates.length === 0) {
-    game.renderer?.log(`No valid cards in ${sourceZone} matching filters.`);
+    getUI(game)?.log(`No valid cards in ${sourceZone} matching filters.`);
     return false;
   }
 
@@ -213,7 +221,7 @@ export async function handleSpecialSummonFromZone(
   );
 
   if (maxSelect === 0) {
-    game.renderer?.log("Field is full, cannot Special Summon.");
+    getUI(game)?.log("Field is full, cannot Special Summon.");
     return false;
   }
 
@@ -239,7 +247,7 @@ export async function handleSpecialSummonFromZone(
     }
 
     // Show visual selection modal
-    const renderer = game.renderer;
+    const renderer = getUI(game);
     const searchModal = renderer?.getSearchModalElements?.();
     const defaultCardName = candidates[0]?.name || "";
 
@@ -283,7 +291,7 @@ export async function handleSpecialSummonFromZone(
   }
 
   // Player: show selection modal
-  if (!game.renderer?.showMultiSelectModal) {
+  if (!getUI(game)?.showMultiSelectModal) {
     // Fallback: auto-select best cards if no modal available
     const toSummon = candidates
       .sort((a, b) => (b.atk || 0) - (a.atk || 0))
@@ -310,19 +318,19 @@ export async function handleSpecialSummonFromZone(
         ? Math.min(dynamicMax, dynamicCap, 5 - player.field.length)
         : maxSelect;
 
-    game.renderer.showMultiSelectModal(
+    getUI(game).showMultiSelectModal(
       candidates,
       { min: minRequired, max: dynamicMaxSelect },
       async (selected) => {
         if (!selected || selected.length === 0) {
           if (minRequired === 0) {
-            game.renderer?.log("No cards selected (optional).");
+            getUI(game)?.log("No cards selected (optional).");
             if (typeof game.updateBoard === "function") {
               game.updateBoard();
             }
             resolve(true);
           } else {
-            game.renderer?.log("No cards selected.");
+            getUI(game)?.log("No cards selected.");
             resolve(false);
           }
           return;
@@ -438,7 +446,7 @@ async function summonCards(cards, sourceZone, player, action, engine) {
       : "";
     const negateText = action.negateEffects ? " (effects negated)" : "";
 
-    game.renderer?.log(
+    getUI(game)?.log(
       `${
         player.name || player.id
       } Special Summoned ${cardText} from ${zoneName}${
@@ -480,14 +488,14 @@ export async function handleTransmutate(action, ctx, targets, engine) {
     : [];
 
   if (costCards.length === 0) {
-    game.renderer?.log("No valid cost selected for Transmutate.");
+    getUI(game)?.log("No valid cost selected for Transmutate.");
     return false;
   }
 
   const costCard = costCards[0];
   const costLevel = costCard?.level ?? 0;
   if (!costLevel) {
-    game.renderer?.log("Transmutate requires a monster with a Level.");
+    getUI(game)?.log("Transmutate requires a monster with a Level.");
     return false;
   }
 
@@ -588,7 +596,7 @@ export async function handleSpecialSummonFromHandWithCost(
   });
 
   if (!costTargets || costTargets.length === 0) {
-    game.renderer?.log("No cost paid for special summon.");
+    getUI(game)?.log("No cost paid for special summon.");
     console.error(
       "[handleSpecialSummonFromHandWithCost] No cost targets found!"
     );
@@ -628,13 +636,13 @@ export async function handleSpecialSummonFromHandWithCost(
       "[handleSpecialSummonFromHandWithCost] Card not found in hand:",
       source.name
     );
-    game.renderer?.log("Card not in hand.");
+    getUI(game)?.log("Card not in hand.");
     return false;
   }
 
   // Check field space
   if (player.field.length >= 5) {
-    game.renderer?.log("Field is full.");
+    getUI(game)?.log("Field is full.");
     return false;
   }
 
@@ -670,7 +678,7 @@ export async function handleSpecialSummonFromHandWithCost(
   }
   source.cannotAttackThisTurn = action.cannotAttackThisTurn || false;
 
-  game.renderer?.log(
+  getUI(game)?.log(
     `${player.name || player.id} Special Summoned ${source.name} from hand.`
   );
 
@@ -701,11 +709,11 @@ export async function handleSpecialSummonFromHandWithTieredCost(
 
   if (!player || !source || !game) return false;
   if (!player.hand?.includes(source)) {
-    game.renderer?.log("Card must be in hand to activate this effect.");
+    getUI(game)?.log("Card must be in hand to activate this effect.");
     return false;
   }
   if (player.field.length >= 5) {
-    game.renderer?.log("Field is full.");
+    getUI(game)?.log("Field is full.");
     return false;
   }
 
@@ -732,22 +740,22 @@ export async function handleSpecialSummonFromHandWithTieredCost(
   const maxCost = action.maxCost ?? 3;
   const allowedMax = Math.min(maxCost, costCandidates.length);
   if (allowedMax < minCost) {
-    game.renderer?.log("Not enough cost monsters to Special Summon.");
+    getUI(game)?.log("Not enough cost monsters to Special Summon.");
     return false;
   }
 
   const defaultTierOptions = [
-    { count: 1, label: "Tier 1", description: "+300 ATK atÃ© o final do turno" },
+    { count: 1, label: "Tier 1", description: "+300 ATK até o final do turno" },
     {
       count: 2,
       label: "Tier 2",
-      description: "+300 ATK e nÃ£o pode ser destruÃ­da em batalha",
+      description: "+300 ATK e não pode ser destruída em batalha",
     },
     {
       count: 3,
       label: "Tier 3",
       description:
-        "+300 ATK, indestrutÃ­vel em batalha e destrÃ³i 1 carta do oponente",
+        "+300 ATK, indestrutível em batalha e destrói 1 carta do oponente",
     },
   ];
 
@@ -759,13 +767,13 @@ export async function handleSpecialSummonFromHandWithTieredCost(
 
   if (player.id === "bot") {
     chosenCount = allowedMax;
-  } else if (game.renderer?.showTierChoiceModal) {
-    chosenCount = await game.renderer.showTierChoiceModal({
+  } else if (getUI(game)?.showTierChoiceModal) {
+    chosenCount = await getUI(game).showTierChoiceModal({
       title: action.tierTitle || source.name,
       options: tierOptions,
     });
-  } else if (game.renderer?.showNumberPrompt) {
-    const parsed = game.renderer.showNumberPrompt(
+  } else if (getUI(game)?.showNumberPrompt) {
+    const parsed = getUI(game).showNumberPrompt(
       `Choose how many Void Hollow to send (1-${allowedMax}):`,
       String(allowedMax)
     );
@@ -887,7 +895,7 @@ export async function handleSpecialSummonFromHandWithTieredCost(
   }
   source.cannotAttackThisTurn = !!action.cannotAttackThisTurn;
 
-  game.renderer?.log(
+  getUI(game)?.log(
     `${player.name || player.id} enviou ${chosenCount} custo(s) para invocar ${
       source.name
     }.`
@@ -1001,7 +1009,7 @@ export async function handleSpecialSummonFromHandWithTieredCost(
             opponent: player,
           });
           if (result?.destroyed) {
-            game.renderer?.log(
+            getUI(game)?.log(
               `${source.name} destruiu ${targetToDestroy.name}.`
             );
           }
@@ -1059,12 +1067,12 @@ export async function handleBounceAndSummon(action, ctx, targets, engine) {
   });
 
   if (validTargets.length === 0) {
-    game.renderer?.log("No valid monsters in hand to summon.");
+    getUI(game)?.log("No valid monsters in hand to summon.");
     return false;
   }
 
   if (player.field.length >= 5) {
-    game.renderer?.log("Field is full.");
+    getUI(game)?.log("Field is full.");
     return false;
   }
 
@@ -1080,7 +1088,7 @@ export async function handleBounceAndSummon(action, ctx, targets, engine) {
   }
 
   // Player selection
-  const renderer = game.renderer;
+  const renderer = getUI(game);
   const searchModal = renderer?.getSearchModalElements?.();
   const defaultCardName = validTargets[0]?.name || "";
 
@@ -1172,7 +1180,7 @@ async function bounceAndSummonCard(source, target, player, action, engine) {
     action.bounceSource !== false ? `Returned ${source.name} to hand and ` : "";
   const positionText = position === "defense" ? "Defense" : "Attack";
 
-  game.renderer?.log(
+  getUI(game)?.log(
     `${bounceText}Special Summoned ${target.name} in ${positionText} Position.`
   );
 
@@ -1194,7 +1202,7 @@ export async function handleBanish(action, ctx, targets, engine) {
   const resolved = targetRef ? targets?.[targetRef] : [];
 
   if (!Array.isArray(resolved) || resolved.length === 0) {
-    game.renderer?.log("Nenhum alvo vÃ¡lido para banish.");
+    getUI(game)?.log("Nenhum alvo válido para banish.");
     return false;
   }
 
@@ -1244,13 +1252,13 @@ export async function handleBanish(action, ctx, targets, engine) {
         : fallbackOwner;
 
     if (!ownerPlayer) {
-      game.renderer?.log(`NÃ£o foi possÃ­vel determinar o dono de ${tgt.name}.`);
+      getUI(game)?.log(`Não foi possível determinar o dono de ${tgt.name}.`);
       continue;
     }
 
     if (action.fromZone && !ownerPlayer[action.fromZone]?.includes(tgt)) {
-      game.renderer?.log(
-        `${tgt.name} nÃ£o estÃ¡ mais em ${action.fromZone}; nÃ£o pode ser banida.`
+      getUI(game)?.log(
+        `${tgt.name} não está mais em ${action.fromZone}; não pode ser banida.`
       );
       continue;
     }
@@ -1268,7 +1276,7 @@ export async function handleBanish(action, ctx, targets, engine) {
     }
 
     banishedCount += 1;
-    game.renderer?.log(`${tgt.name} foi banida.`);
+    getUI(game)?.log(`${tgt.name} foi banida.`);
   }
 
   if (banishedCount > 0) {
@@ -1293,7 +1301,7 @@ export async function handleBanishDestroyedMonster(
   const game = engine.game;
 
   if (!destroyed) {
-    game?.renderer?.log("Nenhum monstro destruÃ­do disponÃ­vel para banir.");
+    getUI(game)?.log("Nenhum monstro destruído disponível para banir.");
     return false;
   }
 
@@ -1332,7 +1340,7 @@ export async function handleSetStatsToZeroAndNegate(
   const targetCards = targets?.[targetRef] || [];
 
   if (!Array.isArray(targetCards) || targetCards.length === 0) {
-    game.renderer?.log("No valid targets for stat modification.");
+    getUI(game)?.log("No valid targets for stat modification.");
     return false;
   }
 
@@ -1393,7 +1401,7 @@ export async function handleSetStatsToZeroAndNegate(
       const message = `${cardList}'s ${effects.join(
         " and "
       )} until end of turn.`;
-      game.renderer?.log(message);
+      getUI(game)?.log(message);
     }
   }
 
@@ -1425,7 +1433,7 @@ export async function handleGrantAdditionalNormalSummon(
   player.additionalNormalSummons += count;
 
   const summonText = count === 1 ? "Normal Summon" : "Normal Summons";
-  game.renderer?.log(
+  getUI(game)?.log(
     `You can conduct ${count} additional ${summonText} this turn.`
   );
 
@@ -1473,7 +1481,7 @@ export async function handleSelectiveFieldDestruction(
   );
 
   if (playerMonsters.length === 0 && opponentMonsters.length === 0) {
-    game.renderer?.log("No monsters on the field to destroy.");
+    getUI(game)?.log("No monsters on the field to destroy.");
     return false;
   }
 
@@ -1561,12 +1569,12 @@ export async function handleSelectiveFieldDestruction(
   }
 
   if (toDestroy.length === 0) {
-    game.renderer?.log("No monsters were destroyed.");
+    getUI(game)?.log("No monsters were destroyed.");
     return false;
   }
 
   // Destroy all marked monsters
-  game.renderer?.log(
+  getUI(game)?.log(
     `Destroying ${toDestroy.length} monster(s) on the field...`
   );
 
@@ -1585,7 +1593,7 @@ export async function handleSelectiveFieldDestruction(
   ];
 
   if (survivorNames.length > 0) {
-    game.renderer?.log(
+    getUI(game)?.log(
       `${survivorNames.join(", ")} survived with highest ATK.`
     );
   }
@@ -1624,13 +1632,13 @@ export async function handleSpecialSummonMatchingLevel(
   // Get the level to match from the summoned card
   const targetLevel = summonedCard.level;
   if (!targetLevel) {
-    game.renderer?.log("Cannot match level: no level on summoned card.");
+    getUI(game)?.log("Cannot match level: no level on summoned card.");
     return false;
   }
 
   // Check field space
   if (player.field.length >= 5) {
-    game.renderer?.log("Field is full.");
+    getUI(game)?.log("Field is full.");
     return false;
   }
 
@@ -1641,7 +1649,7 @@ export async function handleSpecialSummonMatchingLevel(
   );
 
   if (candidates.length === 0) {
-    game.renderer?.log(
+    getUI(game)?.log(
       `No monsters in hand with Level ${targetLevel} to Special Summon.`
     );
     return false;
@@ -1687,7 +1695,7 @@ export async function handleSpecialSummonMatchingLevel(
       card.effectsNegated = true;
     }
 
-    game.renderer?.log(
+    getUI(game)?.log(
       `${player.name || "Player"} Special Summoned ${
         card.name
       } (Level ${targetLevel}) from hand${
@@ -1768,7 +1776,7 @@ async function promptTieBreaker(
   sideDescription,
   modalConfig = {}
 ) {
-  if (!game.renderer?.showCardGridSelectionModal) {
+  if (!getUI(game)?.showCardGridSelectionModal) {
     // Fallback: auto-select first N
     return candidates.slice(0, keepCount);
   }
@@ -1795,12 +1803,12 @@ async function promptTieBreaker(
       },
     };
 
-    if (typeof game.renderer.showTieBreakerSelection === "function") {
-      game.renderer.showTieBreakerSelection(baseOptions);
+    if (typeof getUI(game).showTieBreakerSelection === "function") {
+      getUI(game).showTieBreakerSelection(baseOptions);
       return;
     }
 
-    game.renderer.showCardGridSelectionModal({
+    getUI(game).showCardGridSelectionModal({
       title: baseOptions.title,
       subtitle: baseOptions.subtitle,
       cards: baseOptions.cards,
@@ -1846,7 +1854,7 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
   }
 
   if (targetCards.length === 0) {
-    game.renderer?.log("No valid targets for stat buff.");
+    getUI(game)?.log("No valid targets for stat buff.");
     return false;
   }
 
@@ -1894,7 +1902,7 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
 
     const cardList = affectedCards.join(", ");
     const duration = permanent ? "" : " until end of turn";
-    game.renderer?.log(
+    getUI(game)?.log(
       `${cardList} gained ${boosts.join(" and ")}${duration}.`
     );
     game.updateBoard();
@@ -1936,9 +1944,9 @@ export async function handleReduceSelfAtk(action, ctx, targets, engine) {
     card.atk = Math.max(0, currentAtk - amount);
   });
 
-  if (game?.renderer?.log && validTargets.length === 1) {
+  if (getUI(game)?.log && validTargets.length === 1) {
     const card = validTargets[0];
-    game.renderer.log(
+    getUI(game).log(
       `${card.name} loses ${amount} ATK (ATK now: ${card.atk}).`
     );
   }
@@ -1978,7 +1986,7 @@ export async function handleAddStatus(action, ctx, targets, engine) {
   }
 
   if (targetCards.length === 0) {
-    game.renderer?.log("No valid targets for status change.");
+    getUI(game)?.log("No valid targets for status change.");
     return false;
   }
 
@@ -2016,7 +2024,7 @@ export async function handleAddStatus(action, ctx, targets, engine) {
     const statusText = remove
       ? `lost ${displayStatus}`
       : `gained ${displayStatus}`;
-    game.renderer?.log(`${cardList} ${statusText}.`);
+    getUI(game)?.log(`${cardList} ${statusText}.`);
     game.updateBoard();
   }
 
@@ -2045,12 +2053,12 @@ export async function handlePayLP(action, ctx, targets, engine) {
   if (amount <= 0) return false;
 
   if (player.lp < amount) {
-    game.renderer?.log("Not enough LP to pay cost.");
+    getUI(game)?.log("Not enough LP to pay cost.");
     return false;
   }
 
   player.lp -= amount;
-  game.renderer?.log(`${player.name || player.id} paid ${amount} LP.`);
+  getUI(game)?.log(`${player.name || player.id} paid ${amount} LP.`);
   game.updateBoard();
 
   return true;
@@ -2076,7 +2084,7 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
   const zone = player[sourceZone];
 
   if (!zone || zone.length === 0) {
-    game.renderer?.log(`No cards in ${sourceZone}.`);
+    getUI(game)?.log(`No cards in ${sourceZone}.`);
     return false;
   }
 
@@ -2112,7 +2120,7 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
   });
 
   if (candidates.length === 0) {
-    game.renderer?.log(`No valid cards in ${sourceZone} matching filters.`);
+    getUI(game)?.log(`No valid cards in ${sourceZone} matching filters.`);
     return false;
   }
 
@@ -2121,7 +2129,7 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
   const minSelect = Math.max(count.min || 0, 0);
 
   if (maxSelect === 0) {
-    game.renderer?.log("No cards available to add.");
+    getUI(game)?.log("No cards available to add.");
     return false;
   }
 
@@ -2146,7 +2154,7 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
       }
     }
 
-    game.renderer?.log(
+    getUI(game)?.log(
       `${player.name || player.id} added ${
         toAdd.length
       } card(s) to hand from ${sourceZone}.`
@@ -2170,13 +2178,13 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
           player.hand.push(card);
         }
       }
-      game.renderer?.log(`Added ${card.name} to hand from ${sourceZone}.`);
+      getUI(game)?.log(`Added ${card.name} to hand from ${sourceZone}.`);
       game.updateBoard();
       return true;
     }
 
     // Show visual selection modal
-    const renderer = game.renderer;
+    const renderer = getUI(game);
     const searchModal = renderer?.getSearchModalElements?.();
     const defaultCardName = candidates[0]?.name || "";
 
@@ -2203,7 +2211,7 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
               }
             }
 
-            game.renderer?.log(
+            getUI(game)?.log(
               `Added ${chosen.name} to hand from ${sourceZone}.`
             );
             game.isResolvingEffect = false;
@@ -2221,13 +2229,13 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
       zone.splice(idx, 1);
       player.hand.push(card);
     }
-    game.renderer?.log(`Added ${card.name} to hand from ${sourceZone}.`);
+    getUI(game)?.log(`Added ${card.name} to hand from ${sourceZone}.`);
     game.updateBoard();
     return true;
   }
 
   // Multi-card selection
-  if (!game.renderer?.showMultiSelectModal) {
+  if (!getUI(game)?.showMultiSelectModal) {
     // Fallback: auto-select
     const toAdd = candidates.slice(0, maxSelect);
     for (const card of toAdd) {
@@ -2237,7 +2245,7 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
         player.hand.push(card);
       }
     }
-    game.renderer?.log(
+    getUI(game)?.log(
       `Added ${toAdd.length} card(s) to hand from ${sourceZone}.`
     );
     game.updateBoard();
@@ -2246,17 +2254,17 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
 
   // Show multi-select modal
   return new Promise((resolve) => {
-    game.renderer.showMultiSelectModal(
+    getUI(game).showMultiSelectModal(
       candidates,
       { min: minSelect, max: maxSelect },
       (selected) => {
         if (!selected || selected.length === 0) {
           if (minSelect === 0) {
-            game.renderer?.log("No cards selected (optional).");
+            getUI(game)?.log("No cards selected (optional).");
             game.updateBoard();
             resolve(true);
           } else {
-            game.renderer?.log("No cards selected.");
+            getUI(game)?.log("No cards selected.");
             resolve(false);
           }
           return;
@@ -2270,7 +2278,7 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
           }
         }
 
-        game.renderer?.log(
+        getUI(game)?.log(
           `Added ${selected.length} card(s) to hand from ${sourceZone}.`
         );
         game.updateBoard();
@@ -2299,7 +2307,7 @@ export async function handleHealFromDestroyedAtk(action, ctx, targets, engine) {
   if (healAmount <= 0) return false;
 
   player.gainLP(healAmount);
-  game.renderer?.log(
+  getUI(game)?.log(
     `${player.name || player.id} gained ${healAmount} LP from ${
       destroyed.name
     }'s ATK.`
@@ -2328,7 +2336,7 @@ export async function handleSwitchPosition(action, ctx, targets, engine) {
   const targetCards = targets?.[targetRef] || [];
 
   if (!Array.isArray(targetCards) || targetCards.length === 0) {
-    game.renderer?.log("No valid targets for position switch.");
+    getUI(game)?.log("No valid targets for position switch.");
     return false;
   }
 
@@ -2367,7 +2375,7 @@ export async function handleSwitchPosition(action, ctx, targets, engine) {
 
   if (switched && affectedCards.length > 0) {
     for (const info of affectedCards) {
-      game.renderer?.log(
+      getUI(game)?.log(
         `${info.name} switched to ${info.position.toUpperCase()} Position.`
       );
     }
@@ -2508,7 +2516,7 @@ export async function handlePermanentBuffNamed(action, ctx, targets, engine) {
     if (defBoost !== 0)
       boosts.push(`${defBoost > 0 ? "+" : ""}${defBoost} DEF`);
 
-    game.renderer?.log(`${source.name} applied ${boosts.join(" and ")} buff.`);
+    getUI(game)?.log(`${source.name} applied ${boosts.join(" and ")} buff.`);
     game.updateBoard();
   }
 
@@ -2589,7 +2597,7 @@ export async function handleRemovePermanentBuffNamed(
   }
 
   if (anyRemoved) {
-    game.renderer?.log(`${sourceName} buffs removed.`);
+    getUI(game)?.log(`${sourceName} buffs removed.`);
     game.updateBoard();
   }
 
@@ -2634,7 +2642,7 @@ export async function handleGrantSecondAttack(action, ctx, targets, engine) {
 
   if (anyGranted) {
     const cardList = targetCards.map((c) => c.name).join(", ");
-    game.renderer?.log(`${cardList} can attack again this turn.`);
+    getUI(game)?.log(`${cardList} can attack again this turn.`);
     game.updateBoard();
   }
 
@@ -2657,14 +2665,25 @@ export async function handleConditionalSummonFromHand(
   targets,
   engine
 ) {
-  const { player } = ctx;
+  const { player, source } = ctx;
   const game = engine.game;
 
   if (!player || !game) return false;
 
   // Get the card(s) to potentially summon
   const targetRef = action.targetRef;
-  const targetCards = targets?.[targetRef];
+  let targetCards = [];
+
+  if (targetRef === "self" && source) {
+    targetCards = [source];
+  } else if (targetRef && targets?.[targetRef]) {
+    targetCards = targets?.[targetRef];
+  } else if (action.cardName) {
+    const named = player.hand.find((c) => c && c.name === action.cardName);
+    if (named) {
+      targetCards = [named];
+    }
+  }
 
   if (!targetCards || targetCards.length === 0) return false;
 
@@ -2712,7 +2731,7 @@ export async function handleConditionalSummonFromHand(
 
   // Check field space
   if (player.field.length >= 5) {
-    game.renderer?.log("Field is full, cannot Special Summon.");
+    getUI(game)?.log("Field is full, cannot Special Summon.");
     return false;
   }
 
@@ -2744,7 +2763,7 @@ export async function handleConditionalSummonFromHand(
       : "Condition met.";
 
     const wantsToSummon =
-      game.renderer?.showConfirmPrompt?.(
+      getUI(game)?.showConfirmPrompt?.(
         `${conditionText} Do you want to Special Summon "${handCard.name}" from your hand?`,
         { kind: "conditional_summon", cardName: handCard.name }
       ) ?? false;
@@ -2790,9 +2809,10 @@ async function performSummon(card, handIndex, player, action, engine) {
     card.controller = player.id;
     player.field.push(card);
   }
-  card.cannotAttackThisTurn = action.cannotAttackThisTurn || false;
+  card.cannotAttackThisTurn =
+    action.restrictAttackThisTurn || action.cannotAttackThisTurn || false;
 
-  game.renderer?.log(
+  getUI(game)?.log(
     `${player.name || player.id} Special Summoned ${card.name} from hand.`
   );
 
@@ -2845,7 +2865,7 @@ export async function handleDestroyAttackerOnArchetypeDestruction(
   });
   if (!result?.destroyed) return false;
 
-  game.renderer?.log(
+  getUI(game)?.log(
     `${attacker.name} was sent to the Graveyard as punishment!`
   );
 
@@ -2907,7 +2927,7 @@ export async function handleUpkeepPayOrSendToGrave(
         }
       }
 
-      game.renderer?.log(
+      getUI(game)?.log(
         `${player.name} cannot pay ${lpCost} LP upkeep for ${source.name}. Sent to ${failureZone}.`
       );
     }
@@ -2925,7 +2945,7 @@ export async function handleUpkeepPayOrSendToGrave(
   } else {
     // Human player: show confirm dialog
     shouldPay =
-      game.renderer?.showConfirmPrompt?.(
+      getUI(game)?.showConfirmPrompt?.(
         `Pay ${lpCost} LP to keep "${source.name}" on the field? If you decline, it will be sent to the ${failureZone}.`,
         { kind: "pay_lp", cardName: source.name, lpCost }
       ) ?? false;
@@ -2933,7 +2953,7 @@ export async function handleUpkeepPayOrSendToGrave(
 
   if (shouldPay) {
     player.takeDamage(lpCost);
-    game.renderer?.log(
+    getUI(game)?.log(
       `${player.name} paid ${lpCost} LP to keep ${source.name} on field.`
     );
     game.updateBoard();
@@ -2971,7 +2991,7 @@ export async function handleUpkeepPayOrSendToGrave(
       }
     }
 
-    game.renderer?.log(
+    getUI(game)?.log(
       `${player.name} chose not to pay upkeep. ${source.name} sent to ${failureZone}.`
     );
   }
@@ -3012,7 +3032,7 @@ export async function handleSpecialSummonFromDeckWithCounterLimit(
   const maxAtk = counterCount * counterMultiplier;
 
   if (maxAtk === 0) {
-    game.renderer?.log(
+    getUI(game)?.log(
       `No ${counterType} counters on ${source.name}. Cannot summon.`
     );
     return false;
@@ -3037,7 +3057,7 @@ export async function handleSpecialSummonFromDeckWithCounterLimit(
   });
 
   if (candidates.length === 0) {
-    game.renderer?.log(`No monsters in deck with ATK <= ${maxAtk} to summon.`);
+    getUI(game)?.log(`No monsters in deck with ATK <= ${maxAtk} to summon.`);
     return false;
   }
 
@@ -3061,11 +3081,11 @@ export async function handleSpecialSummonFromDeckWithCounterLimit(
   return new Promise((resolve) => {
     const modalConfig = {
       title: `Select 1 monster (Max ATK: ${maxAtk}, ${counterCount}x ${counterType})`,
-      subtitle: `Monsters with ATK â‰¤ ${maxAtk}`,
+      subtitle: `Monsters with ATK ≤ ${maxAtk}`,
       infoText: `You have ${counterCount} ${counterType} counters. After summoning, this card will be sent to the Graveyard.`,
     };
 
-    game.renderer?.showCardSelectionModal(
+    getUI(game)?.showCardSelectionModal(
       candidates,
       modalConfig.title,
       1,
@@ -3107,7 +3127,7 @@ async function performSummonFromDeck(
 
   // Check field space
   if (player.field.length >= 5) {
-    game.renderer?.log("Field is full. Cannot summon.");
+    getUI(game)?.log("Field is full. Cannot summon.");
     return false;
   }
 
@@ -3145,7 +3165,7 @@ async function performSummonFromDeck(
   }
   card.cannotAttackThisTurn = action.cannotAttackThisTurn || false;
 
-  game.renderer?.log(
+  getUI(game)?.log(
     `${player.name} Special Summoned ${card.name} from deck in ${
       summonPosition === "defense" ? "Defense" : "Attack"
     } Position.`
@@ -3183,7 +3203,7 @@ async function performSummonFromDeck(
           });
         }
       }
-      game.renderer?.log(`${source.name} was sent to the Graveyard.`);
+      getUI(game)?.log(`${source.name} was sent to the Graveyard.`);
     }
   }
 
@@ -3212,14 +3232,14 @@ export async function handleDestroyTargetedCards(action, ctx, targets, engine) {
   }
 
   if (opponentCards.length === 0) {
-    game.renderer?.log("Opponent has no cards to destroy.");
+    getUI(game)?.log("Opponent has no cards to destroy.");
     return false;
   }
 
   // action.maxTargets: how many cards to target (default 1)
   const maxTargets = Math.min(action.maxTargets || 1, opponentCards.length);
 
-  game.renderer?.log(
+  getUI(game)?.log(
     `${source.name}: Select up to ${maxTargets} opponent cards to destroy.`
   );
 
@@ -3284,7 +3304,7 @@ export async function handleDestroyTargetedCards(action, ctx, targets, engine) {
       .filter(Boolean);
 
     if (targetCards.length === 0) {
-      game.renderer?.log("No cards selected.");
+      getUI(game)?.log("No cards selected.");
       return false;
     }
 
@@ -3295,7 +3315,7 @@ export async function handleDestroyTargetedCards(action, ctx, targets, engine) {
         opponent: player,
       });
       if (result?.destroyed) {
-        game.renderer?.log(`${source.name} destroyed ${card.name}!`);
+        getUI(game)?.log(`${source.name} destroyed ${card.name}!`);
       }
     }
 
@@ -3308,7 +3328,7 @@ export async function handleDestroyTargetedCards(action, ctx, targets, engine) {
       kind: "target",
       selectionContract,
       onCancel: () => {
-        game.renderer?.log("Target selection cancelled.");
+        getUI(game)?.log("Target selection cancelled.");
         resolve(false);
       },
       execute: async (selections) => {
@@ -3318,7 +3338,7 @@ export async function handleDestroyTargetedCards(action, ctx, targets, engine) {
           .filter(Boolean);
 
         if (targetCards.length === 0) {
-          game.renderer?.log("No cards selected.");
+          getUI(game)?.log("No cards selected.");
           resolve(false);
           return { success: true, needsSelection: false };
         }
@@ -3331,7 +3351,7 @@ export async function handleDestroyTargetedCards(action, ctx, targets, engine) {
             opponent: player,
           });
           if (result?.destroyed) {
-            game.renderer?.log(`${source.name} destroyed ${card.name}!`);
+            getUI(game)?.log(`${source.name} destroyed ${card.name}!`);
           }
         }
 
@@ -3387,81 +3407,9 @@ export async function handleBuffStatsTempWithSecondAttack(
   // Grant second attack this Battle Phase
   targetCard.canMakeSecondAttack = true;
 
-  game.renderer?.log(
+  getUI(game)?.log(
     `${targetCard.name} gains ${atkBoost} ATK / ${defBoost} DEF and can make a second attack!`
   );
-
-  game.updateBoard();
-  return true;
-}
-
-/**
- * Special Summon a specific card from hand based on a condition
- * Used by: Shadow-Heart Death Wyrm (special summon from hand when Shadow-Heart destroyed)
- * Properties:
- * - cardName: The exact name of the card to summon from hand
- * - position: "attack" or "defense" (default "attack")
- * - cannotAttackThisTurn: Whether summoned card cannot attack (default false)
- */
-export async function handleConditionalSpecialSummonFromHand(
-  action,
-  ctx,
-  targets,
-  engine
-) {
-  const { player } = ctx;
-  const game = engine.game;
-
-  if (!player || !game) return false;
-
-  const cardName = action.cardName;
-  const position = action.position || "attack";
-  const cannotAttackThisTurn = action.cannotAttackThisTurn || false;
-
-  // Find the card in hand
-  const hand = player.hand || [];
-  const cardToSummon = hand.find((c) => c && c.name === cardName);
-
-  if (!cardToSummon) {
-    game.renderer?.log(`No "${cardName}" in hand to Special Summon.`);
-    return false;
-  }
-
-  // Check field space
-  if ((player.field || []).length >= 5) {
-    game.renderer?.log("Your field is full!");
-    return false;
-  }
-
-  const moveResult =
-    typeof game.moveCard === "function"
-      ? game.moveCard(cardToSummon, player, "field", {
-          fromZone: "hand",
-          position,
-          isFacedown: position === "defense",
-          resetAttackFlags: true,
-        })
-      : null;
-  if (moveResult && moveResult.success === false) {
-    return false;
-  }
-  if (moveResult == null) {
-    const handIndex = hand.indexOf(cardToSummon);
-    if (handIndex !== -1) {
-      hand.splice(handIndex, 1);
-    }
-    cardToSummon.position = position;
-    cardToSummon.isFacedown = position === "defense";
-    cardToSummon.hasAttacked = false;
-    cardToSummon.owner = player.id;
-    cardToSummon.controller = player.id;
-    player.field = player.field || [];
-    player.field.push(cardToSummon);
-  }
-  cardToSummon.cannotAttackThisTurn = cannotAttackThisTurn;
-  cardToSummon.cannotAttackNextTurn = false;
-
-  game.renderer?.log(`${cardToSummon.name} was Special Summoned from hand!`);
 
   game.updateBoard();
   return true;
@@ -3472,15 +3420,8 @@ export async function handleConditionalSpecialSummonFromHand(
  * @param {ActionHandlerRegistry} registry
  */
 export function registerDefaultHandlers(registry) {
-  // Generic special summon handlers
-  // NOTE: Both "special_summon_from_deck" and "special_summon_from_graveyard"
-  // now use the unified handler that supports all zones and patterns
+  // Generic special summon handler
   registry.register("special_summon_from_zone", handleSpecialSummonFromZone);
-  registry.register("special_summon_from_deck", handleSpecialSummonFromZone);
-  registry.register(
-    "special_summon_from_graveyard",
-    handleSpecialSummonFromZone
-  );
 
   registry.register(
     "special_summon_from_hand_with_cost",
@@ -3519,7 +3460,6 @@ export function registerDefaultHandlers(registry) {
   registry.register("buff_stats_temp", handleBuffStatsTemp);
   registry.register("reduce_self_atk", handleReduceSelfAtk);
   registry.register("add_status", handleAddStatus);
-  registry.register("remove_status", handleAddStatus); // Same handler, uses action.remove flag
   registry.register("pay_lp", handlePayLP);
   registry.register("add_from_zone_to_hand", handleAddFromZoneToHand);
   registry.register("heal_from_destroyed_atk", handleHealFromDestroyedAtk);
@@ -3554,12 +3494,6 @@ export function registerDefaultHandlers(registry) {
   registry.register(
     "buff_stats_temp_with_second_attack",
     handleBuffStatsTempWithSecondAttack
-  );
-
-  // FASE 4: New handlers for remaining Shadow-Heart refactoring
-  registry.register(
-    "conditional_special_summon_from_hand",
-    handleConditionalSpecialSummonFromHand
   );
 
   // Legacy/common actions migrated into the registry (proxy to EffectEngine methods)
@@ -3618,4 +3552,6 @@ export function registerDefaultHandlers(registry) {
     proxyEngineMethod("applyMirrorForceDestroy")
   );
 }
+
+
 

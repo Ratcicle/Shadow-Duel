@@ -465,7 +465,7 @@ export default class Bot extends Player {
         tributeIndices
       );
       if (card) {
-        game.renderer.log(
+        game.ui?.log(
           `Bot summons ${action.facedown ? "a monster in defense" : card.name}`
         );
         game.updateBoard();
@@ -525,14 +525,14 @@ export default class Bot extends Player {
           ),
         finalize: (result, info) => {
           if (result.placementOnly) {
-            game.renderer?.log?.(`Bot places ${info.card.name}.`);
+            game.ui?.log?.(`Bot places ${info.card.name}.`);
           } else {
             game.finalizeSpellTrapActivation(
               info.card,
               this,
               info.activationZone
             );
-            game.renderer?.log?.(`Bot activates ${info.card.name}`);
+            game.ui?.log?.(`Bot activates ${info.card.name}`);
           }
           game.updateBoard();
         },
@@ -570,7 +570,7 @@ export default class Bot extends Player {
             ctx
           ),
         finalize: () => {
-          game.renderer?.log?.(`Bot activates ${this.fieldSpell.name}'s effect`);
+          game.ui?.log?.(`Bot activates ${this.fieldSpell.name}'s effect`);
           game.updateBoard();
         },
       });

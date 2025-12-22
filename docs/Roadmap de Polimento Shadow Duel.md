@@ -99,7 +99,7 @@ Checklist:
 - [x] "Once per turn" centralizado e consistente (mesmo nome = mesma trava)
 - [x] Checagens consistentes de fase/turno/resolving em todas as entradas
 - [x] Ordem de eventos padronizada (ex.: after_summon ? triggers ? windows de ignition)
-- [ ] Sanitiza��o de edge cases:
+- [X] Sanitiza��o de edge cases:
   - [x] campo cheio
   - [x] deck vazio
   - [x] alvo sumiu no meio

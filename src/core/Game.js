@@ -1,11 +1,11 @@
 import Player from "./Player.js";
 import Bot from "./Bot.js";
-import Renderer from "../ui/Renderer.js";
 import EffectEngine from "./EffectEngine.js";
 import Card from "./Card.js";
 import { cardDatabaseByName, cardDatabaseById } from "../data/cards.js";
 import { getCardDisplayName } from "./i18n.js";
 import AutoSelector from "./AutoSelector.js";
+import { createUIAdapter } from "./UIAdapter.js";
 
 // Helper to construct user-friendly cost type descriptions
 function getCostTypeDescription(costFilters, count) {
@@ -30,7 +30,8 @@ export default class Game {
     this.player = new Player("player", "You");
     this.botPreset = options.botPreset || "shadowheart";
     this.bot = new Bot(this.botPreset);
-    this.renderer = new Renderer();
+    this.renderer = options.renderer || null;
+    this.ui = createUIAdapter(this.renderer);
     this.effectEngine = new EffectEngine(this);
     this.autoSelector = new AutoSelector(this);
 
@@ -83,8 +84,8 @@ export default class Game {
           }`
         : `${prefix}: ${detail ?? ""}`;
     console.debug(logMessage);
-    if (this.renderer?.log) {
-      this.renderer.log(logMessage);
+    if (this.ui?.log) {
+      this.ui.log(logMessage);
     }
   }
 
@@ -334,14 +335,10 @@ export default class Game {
     return { ok: true };
   }
 
-  assertCanStartAction(options = {}) {
-    return this.canStartAction(options);
-  }
-
   guardActionStart(options = {}, logToRenderer = true) {
     const result = this.canStartAction(options);
-    if (!result.ok && logToRenderer && result.reason && this.renderer?.log) {
-      this.renderer.log(result.reason);
+    if (!result.ok && logToRenderer && result.reason && this.ui?.log) {
+      this.ui.log(result.reason);
     }
     return result;
   }
@@ -354,10 +351,10 @@ export default class Game {
     this.clearTargetHighlights();
     this.setSelectionDimming(false);
     if (
-      this.renderer &&
-      typeof this.renderer.hideFieldTargetingControls === "function"
+      this.ui &&
+      typeof this.ui.hideFieldTargetingControls === "function"
     ) {
-      this.renderer.hideFieldTargetingControls();
+      this.ui.hideFieldTargetingControls();
     }
     if (this.targetSelection?.closeModal) {
       this.targetSelection.closeModal();
@@ -978,7 +975,7 @@ export default class Game {
     this.bot.buildExtraDeck();
     if (this.testModeEnabled) {
       this.forceOpeningHand("Infinity Searcher", 4);
-      this.renderer.log(
+      this.ui.log(
         "Modo teste: adicionando 4 Infinity Searcher a mao inicial."
       );
     }
@@ -988,7 +985,7 @@ export default class Game {
 
     this.updateBoard();
     this.startTurn();
-    this.renderer.bindPhaseClick((phase) => {
+    this.ui.bindPhaseClick((phase) => {
       if (this.turn !== "player") return;
       if (
         this.phase === "main1" ||
@@ -1015,8 +1012,8 @@ export default class Game {
     for (let i = 0; i < drawCount; i += 1) {
       const card = player.draw();
       if (!card) {
-        if (!options.silent && this.renderer?.log) {
-          this.renderer.log(options.message || "Deck is empty.");
+        if (!options.silent && this.ui?.log) {
+          this.ui.log(options.message || "Deck is empty.");
         }
         this.devLog("DRAW_FAIL", {
           summary: `${player.id} deck empty`,
@@ -1060,30 +1057,30 @@ export default class Game {
       this.bot.updatePassiveEffects();
     }
 
-    this.renderer.renderHand(this.player);
-    this.renderer.renderField(this.player);
-    this.renderer.renderFieldSpell(this.player);
+    this.ui.renderHand(this.player);
+    this.ui.renderField(this.player);
+    this.ui.renderFieldSpell(this.player);
 
-    if (typeof this.renderer.renderSpellTrap === "function") {
-      this.renderer.renderSpellTrap(this.player);
-      this.renderer.renderSpellTrap(this.bot);
+    if (typeof this.ui.renderSpellTrap === "function") {
+      this.ui.renderSpellTrap(this.player);
+      this.ui.renderSpellTrap(this.bot);
     } else {
       console.warn("Renderer missing renderSpellTrap implementation.");
     }
 
-    this.renderer.renderHand(this.bot);
-    this.renderer.renderField(this.bot);
-    this.renderer.renderFieldSpell(this.bot);
-    this.renderer.updateLP(this.player);
-    this.renderer.updateLP(this.bot);
-    this.renderer.updatePhaseTrack(this.phase);
-    this.renderer.updateTurn(this.turn === "player" ? this.player : this.bot);
-    this.renderer.updateGYPreview(this.player);
-    this.renderer.updateGYPreview(this.bot);
+    this.ui.renderHand(this.bot);
+    this.ui.renderField(this.bot);
+    this.ui.renderFieldSpell(this.bot);
+    this.ui.updateLP(this.player);
+    this.ui.updateLP(this.bot);
+    this.ui.updatePhaseTrack(this.phase);
+    this.ui.updateTurn(this.turn === "player" ? this.player : this.bot);
+    this.ui.updateGYPreview(this.player);
+    this.ui.updateGYPreview(this.bot);
 
-    if (typeof this.renderer.updateExtraDeckPreview === "function") {
-      this.renderer.updateExtraDeckPreview(this.player);
-      this.renderer.updateExtraDeckPreview(this.bot);
+    if (typeof this.ui.updateExtraDeckPreview === "function") {
+      this.ui.updateExtraDeckPreview(this.player);
+      this.ui.updateExtraDeckPreview(this.bot);
     }
 
     if (this.targetSelection?.usingFieldTargeting) {
@@ -1101,15 +1098,15 @@ export default class Game {
 
   updateActivationIndicators() {
     if (
-      !this.renderer ||
-      typeof this.renderer.applyActivationIndicators !== "function"
+      !this.ui ||
+      typeof this.ui.applyActivationIndicators !== "function"
     ) {
       return;
     }
 
     const indicators = this.buildActivationIndicatorsForPlayer(this.player);
     if (!indicators) return;
-    this.renderer.applyActivationIndicators("player", indicators);
+    this.ui.applyActivationIndicators("player", indicators);
   }
 
   updateAttackIndicators() {
@@ -1137,19 +1134,19 @@ export default class Game {
       readyIndices.push(index);
     });
     if (
-      this.renderer &&
-      typeof this.renderer.applyAttackReadyIndicators === "function"
+      this.ui &&
+      typeof this.ui.applyAttackReadyIndicators === "function"
     ) {
-      this.renderer.applyAttackReadyIndicators("player", readyIndices);
+      this.ui.applyAttackReadyIndicators("player", readyIndices);
     }
   }
 
   clearAttackReadyIndicators() {
     if (
-      this.renderer &&
-      typeof this.renderer.clearAttackReadyIndicators === "function"
+      this.ui &&
+      typeof this.ui.clearAttackReadyIndicators === "function"
     ) {
-      this.renderer.clearAttackReadyIndicators();
+      this.ui.clearAttackReadyIndicators();
     }
   }
 
@@ -1164,10 +1161,10 @@ export default class Game {
     const targetIndex = target ? targetField.indexOf(target) : -1;
 
     if (
-      this.renderer &&
-      typeof this.renderer.applyAttackResolutionIndicators === "function"
+      this.ui &&
+      typeof this.ui.applyAttackResolutionIndicators === "function"
     ) {
-      this.renderer.applyAttackResolutionIndicators({
+      this.ui.applyAttackResolutionIndicators({
         attackerOwner,
         attackerIndex,
         targetOwner,
@@ -1179,10 +1176,10 @@ export default class Game {
 
   clearAttackResolutionIndicators() {
     if (
-      this.renderer &&
-      typeof this.renderer.clearAttackResolutionIndicators === "function"
+      this.ui &&
+      typeof this.ui.clearAttackResolutionIndicators === "function"
     ) {
-      this.renderer.clearAttackResolutionIndicators();
+      this.ui.clearAttackResolutionIndicators();
     }
   }
 
@@ -1353,11 +1350,11 @@ export default class Game {
     }
 
     if (
-      this.renderer &&
-      typeof this.renderer.showSpecialSummonPositionModal === "function"
+      this.ui &&
+      typeof this.ui.showSpecialSummonPositionModal === "function"
     ) {
       return new Promise((resolve) => {
-        this.renderer.showSpecialSummonPositionModal(card, (choice) => {
+        this.ui.showSpecialSummonPositionModal(card, (choice) => {
           resolve(choice === "defense" ? "defense" : "attack");
         });
       });
@@ -1470,10 +1467,10 @@ export default class Game {
 
   showIgnitionActivateModal(card, onActivate) {
     if (
-      this.renderer &&
-      typeof this.renderer.showIgnitionActivateModal === "function"
+      this.ui &&
+      typeof this.ui.showIgnitionActivateModal === "function"
     ) {
-      this.renderer.showIgnitionActivateModal(card, onActivate);
+      this.ui.showIgnitionActivateModal(card, onActivate);
     }
   }
 
@@ -1509,10 +1506,10 @@ export default class Game {
     let pendingSummon = null;
 
     if (
-      this.renderer &&
-      typeof this.renderer.bindPlayerHandClick === "function"
+      this.ui &&
+      typeof this.ui.bindPlayerHandClick === "function"
     ) {
-      this.renderer.bindPlayerHandClick((e, cardEl, index) => {
+      this.ui.bindPlayerHandClick((e, cardEl, index) => {
       if (this.targetSelection) return;
 
       if (tributeSelectionMode) return;
@@ -1528,10 +1525,10 @@ export default class Game {
         ) {
           // Show position choice for special summon
           if (
-            this.renderer &&
-            typeof this.renderer.showSpecialSummonPositionModal === "function"
+            this.ui &&
+            typeof this.ui.showSpecialSummonPositionModal === "function"
           ) {
-            this.renderer.showSpecialSummonPositionModal(card, (choice) => {
+            this.ui.showSpecialSummonPositionModal(card, (choice) => {
               const position = choice === "defense" ? "defense" : "attack";
               this.performSpecialSummon(index, position);
             });
@@ -1539,7 +1536,7 @@ export default class Game {
             this.performSpecialSummon(index, "attack");
           }
         } else {
-          this.renderer.log(
+          this.ui.log(
             "Finalize o efeito pendente antes de fazer outra acao."
           );
         }
@@ -1569,7 +1566,7 @@ export default class Game {
           this.player.field.length < tributesNeeded &&
           !canSanctumSpecialFromAegis
         ) {
-          this.renderer.log(
+          this.ui.log(
             `Not enough tributes for Level ${card.level} monster.`
           );
           return;
@@ -1592,7 +1589,7 @@ export default class Game {
         const canUseHandEffect = handEffectPreview.ok;
         const handEffectLabel = "Special Summon";
 
-        this.renderer.showSummonModal(
+        this.ui.showSummonModal(
           index,
           (choice) => {
             if (choice === "special_from_aegisbearer") {
@@ -1627,15 +1624,15 @@ export default class Game {
                   .map((card, idx) => (card ? idx : null))
                   .filter((idx) => idx !== null);
                 if (
-                  this.renderer &&
-                  typeof this.renderer.setPlayerFieldTributeable === "function"
+                  this.ui &&
+                  typeof this.ui.setPlayerFieldTributeable === "function"
                 ) {
-                  this.renderer.setPlayerFieldTributeable(
+                  this.ui.setPlayerFieldTributeable(
                     pendingSummon.tributeableIndices
                   );
                 }
 
-                this.renderer.log(
+                this.ui.log(
                   `Select ${tributesNeeded} monster(s) to tribute.`
                 );
               } else {
@@ -1704,15 +1701,15 @@ export default class Game {
         };
 
         if (
-          this.renderer &&
-          typeof this.renderer.showSpellChoiceModal === "function"
+          this.ui &&
+          typeof this.ui.showSpellChoiceModal === "function"
         ) {
-          this.renderer.showSpellChoiceModal(index, handleSpellChoice, {
+          this.ui.showSpellChoiceModal(index, handleSpellChoice, {
             canActivate: canActivateFromHand,
           });
         } else {
           const shouldActivate =
-            this.renderer?.showConfirmPrompt?.(
+            this.ui?.showConfirmPrompt?.(
               "OK: Activate this Spell. Cancel: Set it face-down in your Spell/Trap Zone.",
               { kind: "spell_choice", cardName: card.name }
             ) ?? false;
@@ -1735,10 +1732,10 @@ export default class Game {
     }
 
     if (
-      this.renderer &&
-      typeof this.renderer.bindPlayerFieldClick === "function"
+      this.ui &&
+      typeof this.ui.bindPlayerFieldClick === "function"
     ) {
-      this.renderer.bindPlayerFieldClick(async (e, cardEl, index) => {
+      this.ui.bindPlayerFieldClick(async (e, cardEl, index) => {
 
         if (
           this.targetSelection &&
@@ -1754,27 +1751,27 @@ export default class Game {
           if (selectedTributes.includes(index)) {
             selectedTributes = selectedTributes.filter((i) => i !== index);
             if (
-              this.renderer &&
-              typeof this.renderer.setPlayerFieldSelected === "function"
+              this.ui &&
+              typeof this.ui.setPlayerFieldSelected === "function"
             ) {
-              this.renderer.setPlayerFieldSelected(index, false);
+              this.ui.setPlayerFieldSelected(index, false);
             }
           } else if (selectedTributes.length < pendingSummon.tributesNeeded) {
             selectedTributes.push(index);
             if (
-              this.renderer &&
-              typeof this.renderer.setPlayerFieldSelected === "function"
+              this.ui &&
+              typeof this.ui.setPlayerFieldSelected === "function"
             ) {
-              this.renderer.setPlayerFieldSelected(index, true);
+              this.ui.setPlayerFieldSelected(index, true);
             }
           }
 
           if (selectedTributes.length === pendingSummon.tributesNeeded) {
             if (
-              this.renderer &&
-              typeof this.renderer.clearPlayerFieldTributeable === "function"
+              this.ui &&
+              typeof this.ui.clearPlayerFieldTributeable === "function"
             ) {
-              this.renderer.clearPlayerFieldTributeable();
+              this.ui.clearPlayerFieldTributeable();
             }
 
             const before = this.player.field.length;
@@ -1847,7 +1844,7 @@ export default class Game {
               e.stopImmediatePropagation();
             }
 
-            this.renderer.showPositionChoiceModal(
+            this.ui.showPositionChoiceModal(
               cardEl,
               card,
               (choice) => {
@@ -1894,7 +1891,7 @@ export default class Game {
 
           const availability = this.getAttackAvailability(attacker);
           if (!availability.ok) {
-            this.renderer.log(availability.reason);
+            this.ui.log(availability.reason);
             return;
           }
 
@@ -1903,7 +1900,7 @@ export default class Game {
             !attacker.secondAttackUsedThisTurn;
 
           if (attacker.hasAttacked && !canUseSecondAttack) {
-            this.renderer.log("This monster has already attacked!");
+            this.ui.log("This monster has already attacked!");
             return;
           }
 
@@ -1931,10 +1928,10 @@ export default class Game {
     }
 
     if (
-      this.renderer &&
-      typeof this.renderer.bindPlayerSpellTrapClick === "function"
+      this.ui &&
+      typeof this.ui.bindPlayerSpellTrapClick === "function"
     ) {
-      this.renderer.bindPlayerSpellTrapClick(async (e, cardEl, index) => {
+      this.ui.bindPlayerSpellTrapClick(async (e, cardEl, index) => {
         console.log(`[Game] Spell/Trap zone clicked! Target:`, e.target);
 
         if (this.targetSelection) {
@@ -1971,7 +1968,7 @@ export default class Game {
           if (hasActivateEffect) {
             // Check if trap can be activated (waited at least 1 turn)
             if (!this.canActivateTrap(card)) {
-              this.renderer.log(
+              this.ui.log(
                 "Esta armadilha nao pode ser ativada neste turno."
               );
               return;
@@ -2001,8 +1998,8 @@ export default class Game {
       });
     }
 
-    if (this.renderer && typeof this.renderer.bindBotFieldClick === "function") {
-      this.renderer.bindBotFieldClick((e, cardEl, index) => {
+    if (this.ui && typeof this.ui.bindBotFieldClick === "function") {
+      this.ui.bindBotFieldClick((e, cardEl, index) => {
         if (!this.targetSelection) return;
         this.handleTargetSelectionClick("bot", index, cardEl, "field");
       });
@@ -2010,17 +2007,17 @@ export default class Game {
 
     // Direcionar ataque direto: clicar na mao do oponente quando houver alvo "Direct Attack"
     if (
-      this.renderer &&
-      typeof this.renderer.bindBotSpellTrapClick === "function"
+      this.ui &&
+      typeof this.ui.bindBotSpellTrapClick === "function"
     ) {
-      this.renderer.bindBotSpellTrapClick((e, cardEl, index) => {
+      this.ui.bindBotSpellTrapClick((e, cardEl, index) => {
         if (!this.targetSelection) return;
         this.handleTargetSelectionClick("bot", index, cardEl, "spellTrap");
       });
     }
 
-    if (this.renderer && typeof this.renderer.bindBotHandClick === "function") {
-      this.renderer.bindBotHandClick((e) => {
+    if (this.ui && typeof this.ui.bindBotHandClick === "function") {
+      this.ui.bindBotHandClick((e) => {
         if (!this.targetSelection) return;
         if (this.targetSelection.kind !== "attack") return;
         const requirement = this.targetSelection.requirements?.[0];
@@ -2045,10 +2042,10 @@ export default class Game {
 
     // Field spell effects for player
     if (
-      this.renderer &&
-      typeof this.renderer.bindPlayerFieldSpellClick === "function"
+      this.ui &&
+      typeof this.ui.bindPlayerFieldSpellClick === "function"
     ) {
-      this.renderer.bindPlayerFieldSpellClick((e, cardEl) => {
+      this.ui.bindPlayerFieldSpellClick((e, cardEl) => {
         if (this.targetSelection) {
           this.handleTargetSelectionClick("player", 0, cardEl, "fieldSpell");
           return;
@@ -2061,15 +2058,15 @@ export default class Game {
     }
 
     if (
-      this.renderer &&
-      typeof this.renderer.bindBotFieldSpellClick === "function"
+      this.ui &&
+      typeof this.ui.bindBotFieldSpellClick === "function"
     ) {
-      this.renderer.bindBotFieldSpellClick((e, cardEl) => {
+      this.ui.bindBotFieldSpellClick((e, cardEl) => {
         if (!this.targetSelection) return;
         this.handleTargetSelectionClick("bot", 0, cardEl, "fieldSpell");
       });
     }
-    this.renderer.bindCardHover((owner, location, index) => {
+    this.ui.bindCardHover((owner, location, index) => {
       let card = null;
       const playerObj = owner === "player" ? this.player : this.bot;
 
@@ -2085,9 +2082,9 @@ export default class Game {
 
       if (card) {
         if (card.isFacedown && owner === "bot") {
-          this.renderer.renderPreview(null);
+          this.ui.renderPreview(null);
         } else {
-          this.renderer.renderPreview(card);
+          this.ui.renderPreview(card);
         }
       }
     });
@@ -2097,13 +2094,13 @@ export default class Game {
     };
 
     if (
-      this.renderer &&
-      typeof this.renderer.bindPlayerGraveyardClick === "function"
+      this.ui &&
+      typeof this.ui.bindPlayerGraveyardClick === "function"
     ) {
-      this.renderer.bindPlayerGraveyardClick(() => showGY(this.player));
+      this.ui.bindPlayerGraveyardClick(() => showGY(this.player));
     }
-    if (this.renderer && typeof this.renderer.bindBotGraveyardClick === "function") {
-      this.renderer.bindBotGraveyardClick(() => showGY(this.bot));
+    if (this.ui && typeof this.ui.bindBotGraveyardClick === "function") {
+      this.ui.bindBotGraveyardClick(() => showGY(this.bot));
     }
 
     const showExtraDeck = (player) => {
@@ -2112,35 +2109,35 @@ export default class Game {
     };
 
     if (
-      this.renderer &&
-      typeof this.renderer.bindPlayerExtraDeckClick === "function"
+      this.ui &&
+      typeof this.ui.bindPlayerExtraDeckClick === "function"
     ) {
-      this.renderer.bindPlayerExtraDeckClick(() => showExtraDeck(this.player));
+      this.ui.bindPlayerExtraDeckClick(() => showExtraDeck(this.player));
     }
 
     if (
-      this.renderer &&
-      typeof this.renderer.bindGraveyardModalClose === "function"
+      this.ui &&
+      typeof this.ui.bindGraveyardModalClose === "function"
     ) {
-      this.renderer.bindGraveyardModalClose(() => {
+      this.ui.bindGraveyardModalClose(() => {
         this.closeGraveyardModal();
       });
     }
 
     if (
-      this.renderer &&
-      typeof this.renderer.bindExtraDeckModalClose === "function"
+      this.ui &&
+      typeof this.ui.bindExtraDeckModalClose === "function"
     ) {
-      this.renderer.bindExtraDeckModalClose(() => {
+      this.ui.bindExtraDeckModalClose(() => {
         this.closeExtraDeckModal();
       });
     }
 
     if (
-      this.renderer &&
-      typeof this.renderer.bindModalOverlayClick === "function"
+      this.ui &&
+      typeof this.ui.bindModalOverlayClick === "function"
     ) {
-      this.renderer.bindModalOverlayClick((modalKind) => {
+      this.ui.bindModalOverlayClick((modalKind) => {
         if (modalKind === "graveyard") {
           this.closeGraveyardModal();
         }
@@ -2151,10 +2148,10 @@ export default class Game {
     }
 
     if (
-      this.renderer &&
-      typeof this.renderer.bindGlobalKeydown === "function"
+      this.ui &&
+      typeof this.ui.bindGlobalKeydown === "function"
     ) {
-      this.renderer.bindGlobalKeydown((e) => {
+      this.ui.bindGlobalKeydown((e) => {
         if (e.key === "Escape") {
           if (this.graveyardSelection) {
             this.closeGraveyardModal();
@@ -2174,7 +2171,7 @@ export default class Game {
     });
     if (!guard.ok) return guard;
     if (this.player.field.length >= 5) {
-      this.renderer.log("Field is full (max 5 monsters).");
+      this.ui.log("Field is full (max 5 monsters).");
       return;
     }
 
@@ -2186,7 +2183,7 @@ export default class Game {
     );
 
     if (!aegis) {
-      this.renderer.log('No face-up "Luminarch Aegisbearer" to send.');
+      this.ui.log('No face-up "Luminarch Aegisbearer" to send.');
       return;
     }
 
@@ -2248,7 +2245,7 @@ export default class Game {
       );
 
       if (guardEquip) {
-        this.renderer.log(
+        this.ui.log(
           `${guardEquip.name} was destroyed to protect ${card.name}.`
         );
         const guardResult = await this.destroyCard(guardEquip, {
@@ -2344,7 +2341,7 @@ export default class Game {
       this.markOncePerTurnUsed(card, ownerPlayer, replacementEffect);
 
       const costNames = chosen.map((c) => c.name).join(", ");
-      this.renderer.log(
+      this.ui.log(
         `${card.name} avoided destruction by sending ${costNames} to the Graveyard.`
       );
       return { replaced: true };
@@ -2357,7 +2354,7 @@ export default class Game {
       `Send ${costCount} ${costDescription} to the GY to save ${card.name}?`;
 
     const wantsToReplace =
-      this.renderer?.showConfirmPrompt?.(prompt, {
+      this.ui?.showConfirmPrompt?.(prompt, {
         kind: "destruction_replacement",
         cardName: card.name,
       }) ?? false;
@@ -2380,7 +2377,7 @@ export default class Game {
     });
 
     if (!selections || selections.length < costCount) {
-      this.renderer.log("Protection cancelled.");
+      this.ui.log("Protection cancelled.");
       return { replaced: false };
     }
 
@@ -2392,7 +2389,7 @@ export default class Game {
     this.markOncePerTurnUsed(card, ownerPlayer, replacementEffect);
 
     const costNames = selections.map((c) => c.name).join(", ");
-    this.renderer.log(
+    this.ui.log(
       `${card.name} avoided destruction by sending ${costNames} to the Graveyard.`
     );
     return { replaced: true };
@@ -2504,7 +2501,7 @@ export default class Game {
     card.position = "attack";
     card.positionChangedThisTurn = true;
     card.cannotAttackThisTurn = true;
-    this.renderer.log(`${card.name} is Flip Summoned!`);
+    this.ui.log(`${card.name} is Flip Summoned!`);
 
     this.emit("after_summon", {
       card,
@@ -2524,7 +2521,7 @@ export default class Game {
     card.isFacedown = false;
     card.positionChangedThisTurn = true;
     card.cannotAttackThisTurn = newPosition === "defense";
-    this.renderer.log(
+    this.ui.log(
       `${card.name} changes to ${
         newPosition === "attack" ? "Attack" : "Defense"
       } Position.`
@@ -2590,7 +2587,7 @@ export default class Game {
           ctx
         ),
       finalize: () => {
-        this.renderer.log(`${card.name} effect activated.`);
+        this.ui.log(`${card.name} effect activated.`);
         this.updateBoard();
       },
     });
@@ -2609,7 +2606,7 @@ export default class Game {
 
     // If it's a trap, show confirmation modal first
     if (card.cardKind === "trap") {
-      const confirmed = await this.renderer.showTrapActivationModal(
+      const confirmed = await this.ui.showTrapActivationModal(
         card,
         "manual_activation"
       );
@@ -2622,7 +2619,7 @@ export default class Game {
       // Flip the trap face-up after confirmation
       if (card.isFacedown) {
         card.isFacedown = false;
-        this.renderer.log(`${this.player.name} ativa ${card.name}!`);
+        this.ui.log(`${this.player.name} ativa ${card.name}!`);
         this.updateBoard();
       }
     }
@@ -2663,10 +2660,10 @@ export default class Game {
         ),
       finalize: (result, info) => {
         if (result.placementOnly) {
-          this.renderer.log(`${card.name} is placed on the field.`);
+          this.ui.log(`${card.name} is placed on the field.`);
         } else {
           this.finalizeSpellTrapActivation(card, this.player, info.activationZone);
-          this.renderer.log(`${card.name} effect activated.`);
+          this.ui.log(`${card.name} effect activated.`);
         }
         this.updateBoard();
       },
@@ -2786,55 +2783,6 @@ export default class Game {
     return { ok: true, contract: normalizedContract };
   }
 
-  convertLegacyOptionsToSelectionContract(options, overrides = {}) {
-    if (!Array.isArray(options) || options.length === 0) {
-      return null;
-    }
-
-    const requirements = options
-      .map((opt, idx) => {
-        if (!opt || typeof opt !== "object") return null;
-        const candidates = Array.isArray(opt.candidates)
-          ? opt.candidates.map((cand, candIdx) => {
-              if (!cand || typeof cand !== "object") return null;
-              if (!cand.key) {
-                cand.key = this.buildSelectionCandidateKey(cand, candIdx);
-              }
-              return cand;
-            }).filter(Boolean)
-          : [];
-        const zones = Array.isArray(opt.zones)
-          ? opt.zones
-          : opt.zone
-          ? [opt.zone]
-          : candidates.length
-          ? [...new Set(candidates.map((cand) => cand.zone).filter(Boolean))]
-          : ["field"];
-        return {
-          id: opt.id || `legacy_${idx + 1}`,
-          min: Number(opt.min ?? opt.count?.min ?? 1),
-          max: Number(opt.max ?? opt.count?.max ?? opt.min ?? 1),
-          zones,
-          owner: "either",
-          filters: {},
-          allowSelf: true,
-          distinct: true,
-          candidates,
-        };
-      })
-      .filter(Boolean);
-
-    const contract = {
-      kind: overrides.kind || "target",
-      message: overrides.message || null,
-      requirements,
-      ui: overrides.ui || {},
-      metadata: { legacy: true },
-    };
-
-    return contract;
-  }
-
   canUseFieldTargeting(requirements) {
     const list = Array.isArray(requirements)
       ? requirements
@@ -2860,19 +2808,7 @@ export default class Game {
         : {};
     const needsSelection = base.needsSelection === true;
     const success = needsSelection ? false : base.success === true;
-    let selectionContract = base.selectionContract;
-
-    if (!selectionContract && Array.isArray(base.options)) {
-      selectionContract = this.convertLegacyOptionsToSelectionContract(
-        base.options,
-        { kind: base.selectionKind }
-      );
-      if (selectionContract) {
-        this.devLog("SELECTION_CONTRACT_LEGACY", {
-          summary: "Legacy options converted to selectionContract.",
-        });
-      }
-    }
+    const selectionContract = base.selectionContract;
 
     return { ...base, success, needsSelection, selectionContract };
   }
@@ -2918,9 +2854,9 @@ export default class Game {
       if (
         guardResult.reason &&
         config.suppressFailureLog !== true &&
-        this.renderer?.log
+        this.ui?.log
       ) {
-        this.renderer.log(guardResult.reason);
+        this.ui.log(guardResult.reason);
       }
       return {
         success: false,
@@ -2936,7 +2872,7 @@ export default class Game {
       if (gateResult && gateResult.ok === false) {
         logPipeline("PIPELINE_PREVIEW_FAIL", { reason: gateResult.reason });
         if (gateResult.reason) {
-          this.renderer.log(gateResult.reason);
+          this.ui.log(gateResult.reason);
         }
         return gateResult;
       }
@@ -2947,7 +2883,7 @@ export default class Game {
       if (previewResult && previewResult.ok === false) {
         logPipeline("PIPELINE_PREVIEW_FAIL", { reason: previewResult.reason });
         if (previewResult.reason) {
-          this.renderer.log(previewResult.reason);
+          this.ui.log(previewResult.reason);
         }
         return previewResult;
       }
@@ -2973,7 +2909,7 @@ export default class Game {
           lockKey: optCheck.lockKey,
         });
         if (optCheck.reason) {
-          this.renderer.log(optCheck.reason);
+          this.ui.log(optCheck.reason);
         }
         return {
           success: false,
@@ -3055,13 +2991,7 @@ export default class Game {
       }
 
       if (normalized.needsSelection) {
-        let selectionContract = normalized.selectionContract;
-        if (!selectionContract && Array.isArray(normalized.options)) {
-          selectionContract = this.convertLegacyOptionsToSelectionContract(
-            normalized.options,
-            { kind: selectionKind }
-          );
-        }
+        const selectionContract = normalized.selectionContract;
         if (!selectionContract) {
           const selectionFailure = {
             success: false,
@@ -3176,10 +3106,10 @@ export default class Game {
           }
           this.clearTargetHighlights();
           if (
-            this.renderer &&
-            typeof this.renderer.hideFieldTargetingControls === "function"
+            this.ui &&
+            typeof this.ui.hideFieldTargetingControls === "function"
           ) {
-            this.renderer.hideFieldTargetingControls();
+            this.ui.hideFieldTargetingControls();
           }
           this.targetSelection = null;
           this.setSelectionState("idle");
@@ -3196,7 +3126,7 @@ export default class Game {
 
       if (!normalized.success) {
         if (normalized.reason && config.suppressFailureLog !== true) {
-          this.renderer.log(normalized.reason);
+          this.ui.log(normalized.reason);
         }
         if (activationContext.committed && activationContext.commitInfo) {
           this.rollbackSpellActivation(owner, activationContext.commitInfo);
@@ -3346,13 +3276,13 @@ export default class Game {
 
     if (usingFieldTargeting) {
       if (
-        this.renderer &&
-        typeof this.renderer.showFieldTargetingControls === "function"
+        this.ui &&
+        typeof this.ui.showFieldTargetingControls === "function"
       ) {
         const allowCancel =
           this.targetSelection.allowCancel !== false &&
           !this.targetSelection.preventCancel;
-        const controlsHandle = this.renderer.showFieldTargetingControls(
+        const controlsHandle = this.ui.showFieldTargetingControls(
           () => this.advanceTargetSelection(),
           allowCancel ? () => this.cancelTargetSelection() : null,
           { allowCancel }
@@ -3361,13 +3291,13 @@ export default class Game {
       }
       this.setSelectionDimming(true);
     } else if (
-      this.renderer &&
-      typeof this.renderer.showTargetSelection === "function"
+      this.ui &&
+      typeof this.ui.showTargetSelection === "function"
     ) {
       const allowCancel =
         this.targetSelection.allowCancel !== false &&
         !this.targetSelection.preventCancel;
-      const modalHandle = this.renderer.showTargetSelection(
+      const modalHandle = this.ui.showTargetSelection(
         selectionContract,
         (chosenMap) => {
           if (!this.targetSelection) return;
@@ -3389,7 +3319,7 @@ export default class Game {
     }
 
     if (selectionContract.message) {
-      this.renderer.log(selectionContract.message);
+      this.ui.log(selectionContract.message);
     }
     if (usingFieldTargeting) {
       this.highlightTargetCandidates();
@@ -3434,7 +3364,7 @@ export default class Game {
       activate: (selections, ctx) =>
         this.effectEngine.activateFieldSpell(card, owner, selections, ctx),
       finalize: () => {
-        this.renderer.log(`${card.name} field effect activated.`);
+        this.ui.log(`${card.name} field effect activated.`);
         this.updateBoard();
       },
     });
@@ -3692,10 +3622,10 @@ export default class Game {
     }));
 
     if (
-      this.renderer &&
-      typeof this.renderer.applyTargetHighlights === "function"
+      this.ui &&
+      typeof this.ui.applyTargetHighlights === "function"
     ) {
-      this.renderer.applyTargetHighlights({
+      this.ui.applyTargetHighlights({
         targets: highlightTargets,
         attackerHighlight,
       });
@@ -3705,19 +3635,19 @@ export default class Game {
 
   clearTargetHighlights() {
     if (
-      this.renderer &&
-      typeof this.renderer.clearTargetHighlights === "function"
+      this.ui &&
+      typeof this.ui.clearTargetHighlights === "function"
     ) {
-      this.renderer.clearTargetHighlights();
+      this.ui.clearTargetHighlights();
     }
   }
 
   setSelectionDimming(active) {
     if (
-      this.renderer &&
-      typeof this.renderer.setSelectionDimming === "function"
+      this.ui &&
+      typeof this.ui.setSelectionDimming === "function"
     ) {
-      this.renderer.setSelectionDimming(!!active);
+      this.ui.setSelectionDimming(!!active);
     }
   }
 
@@ -3884,10 +3814,10 @@ export default class Game {
     this.clearTargetHighlights();
     this.setSelectionDimming(false);
     if (
-      this.renderer &&
-      typeof this.renderer.hideFieldTargetingControls === "function"
+      this.ui &&
+      typeof this.ui.hideFieldTargetingControls === "function"
     ) {
-      this.renderer.hideFieldTargetingControls();
+      this.ui.hideFieldTargetingControls();
     }
     if (selection?.closeModal) {
       selection.closeModal();
@@ -3957,10 +3887,10 @@ export default class Game {
     this.clearTargetHighlights();
     this.setSelectionDimming(false);
     if (
-      this.renderer &&
-      typeof this.renderer.hideFieldTargetingControls === "function"
+      this.ui &&
+      typeof this.ui.hideFieldTargetingControls === "function"
     ) {
-      this.renderer.hideFieldTargetingControls();
+      this.ui.hideFieldTargetingControls();
     }
     if (selection?.closeModal) {
       selection.closeModal();
@@ -4024,7 +3954,7 @@ export default class Game {
               ),
             finalize: () => {
               this.closeGraveyardModal(false);
-              this.renderer.log(`${card.name} activates from the Graveyard.`);
+              this.ui.log(`${card.name} activates from the Graveyard.`);
               this.updateBoard();
             },
           });
@@ -4033,12 +3963,12 @@ export default class Game {
       }
     }
 
-    this.renderer.renderGraveyardModal(player.graveyard, options);
-    this.renderer.toggleModal(true);
+    this.ui.renderGraveyardModal(player.graveyard, options);
+    this.ui.toggleModal(true);
   }
 
   closeGraveyardModal(triggerCancel = true) {
-    this.renderer.toggleModal(false);
+    this.ui.toggleModal(false);
     if (triggerCancel && this.graveyardSelection?.onCancel) {
       this.graveyardSelection.onCancel();
     }
@@ -4046,69 +3976,12 @@ export default class Game {
   }
 
   openExtraDeckModal(player) {
-    this.renderer.renderExtraDeckModal(player.extraDeck);
-    this.renderer.toggleExtraDeckModal(true);
+    this.ui.renderExtraDeckModal(player.extraDeck);
+    this.ui.toggleExtraDeckModal(true);
   }
 
   closeExtraDeckModal() {
-    this.renderer.toggleExtraDeckModal(false);
-  }
-
-  promptTransmutateRevive(player, level) {
-    const filter = (card) =>
-      card.cardKind === "monster" && (card.level || 0) === level;
-    if (!player.graveyard.some(filter)) {
-      this.renderer?.showAlert?.(
-        "No monster with a matching Level in your Graveyard."
-      );
-      return;
-    }
-
-    const levelLabel = level > 0 ? "Level " + level : "matching";
-
-    this.openGraveyardModal(player, {
-      selectable: true,
-      filterMessage: "Select a " + levelLabel + " monster to Special Summon.",
-      isDisabled: (card) => !filter(card),
-      onSelect: (card, index) => {
-        if (!filter(card)) return;
-        if (player.field.length >= 5) {
-          this.renderer?.showAlert?.("Field is full.");
-          this.closeGraveyardModal(false);
-          return;
-        }
-        const finalizeRevive = (posChoice) => {
-          const position = posChoice || "attack";
-          const gyIndex = player.graveyard.indexOf(card);
-          if (gyIndex === -1) {
-            this.renderer.log("Selected card is no longer in the Graveyard.");
-            this.closeGraveyardModal(false);
-            this.updateBoard();
-            return;
-          }
-
-          player.graveyard.splice(gyIndex, 1);
-          card.position = position;
-          card.isFacedown = false;
-          card.hasAttacked = false;
-          card.attacksUsedThisTurn = 0;
-          card.owner = player.id;
-          player.field.push(card);
-          this.closeGraveyardModal(false);
-          this.updateBoard();
-        };
-
-        const positionChoice = this.chooseSpecialSummonPosition(player, card);
-        if (positionChoice && typeof positionChoice.then === "function") {
-          positionChoice.then((pos) => finalizeRevive(pos));
-        } else {
-          finalizeRevive(positionChoice);
-        }
-      },
-      onCancel: () => {
-        this.renderer.log("Transmutate selection cancelled.");
-      },
-    });
+    this.ui.toggleExtraDeckModal(false);
   }
 
   getAttackAvailability(attacker) {
@@ -4167,9 +4040,9 @@ export default class Game {
   registerAttackNegated(attacker) {
     this.lastAttackNegated = true;
     if (attacker?.name) {
-      this.renderer.log(`The attack of ${attacker.name} was negated!`);
+      this.ui.log(`The attack of ${attacker.name} was negated!`);
     } else {
-      this.renderer.log("The attack was negated!");
+      this.ui.log("The attack was negated!");
     }
   }
 
@@ -4222,7 +4095,7 @@ export default class Game {
 
     this.lastAttackNegated = false;
 
-    this.renderer.log(
+    this.ui.log(
       `${attacker.name} attacks ${target ? target.name : "directly"}!`
     );
 
@@ -4262,14 +4135,14 @@ export default class Game {
         const targetIndex = targetField.indexOf(target);
 
         if (
-          this.renderer &&
-          typeof this.renderer.applyFlipAnimation === "function"
+          this.ui &&
+          typeof this.ui.applyFlipAnimation === "function"
         ) {
-          this.renderer.applyFlipAnimation(targetOwner, targetIndex);
+          this.ui.applyFlipAnimation(targetOwner, targetIndex);
         }
 
         target.isFacedown = false;
-        this.renderer.log(`${target.name} was flipped!`);
+        this.ui.log(`${target.name} was flipped!`);
 
         this.updateBoard();
         this.applyAttackResolutionIndicators(attacker, target);
@@ -4302,7 +4175,7 @@ export default class Game {
 
     const logBattleResult = (message) => {
       if (message) {
-        this.renderer.log(message);
+        this.ui.log(message);
       }
     };
 
@@ -4434,19 +4307,19 @@ export default class Game {
 
     // Validate inputs
     if (!materials || materials.length === 0) {
-      this.renderer.log("No materials selected for Fusion Summon.");
+      this.ui.log("No materials selected for Fusion Summon.");
       return false;
     }
 
     const fusionMonster = activePlayer.extraDeck[fusionMonsterIndex];
     if (!fusionMonster) {
-      this.renderer.log("Fusion Monster not found in Extra Deck.");
+      this.ui.log("Fusion Monster not found in Extra Deck.");
       return false;
     }
 
     // Check field space
     if (activePlayer.field.length >= 5) {
-      this.renderer.log("Field is full (max 5 monsters).");
+      this.ui.log("Field is full (max 5 monsters).");
       return false;
     }
 
@@ -4479,7 +4352,7 @@ export default class Game {
         ? ` Extra materials also sent to GY: ${extraNames}.`
         : "";
 
-    this.renderer.log(
+    this.ui.log(
       `Fusion Summoned ${fusionMonster.name} using ${
         requiredNames || "selected materials"
       }.${extraNote}`
@@ -4513,7 +4386,7 @@ export default class Game {
     card.owner = "player";
     this.player.field.push(card);
 
-    this.renderer.log(`Special Summoned ${card.name} from hand.`);
+    this.ui.log(`Special Summoned ${card.name} from hand.`);
 
     // Clear pending special summon and unlock actions
     this.pendingSpecialSummon = null;
@@ -4521,10 +4394,10 @@ export default class Game {
 
     // Remove highlight from all hand cards
     if (
-      this.renderer &&
-      typeof this.renderer.applyHandTargetableIndices === "function"
+      this.ui &&
+      typeof this.ui.applyHandTargetableIndices === "function"
     ) {
-      this.renderer.applyHandTargetableIndices("player", []);
+      this.ui.applyHandTargetableIndices("player", []);
     }
 
     // Emit after_summon for special summons performed directly from hand
@@ -4586,19 +4459,19 @@ export default class Game {
       }
     });
     if (
-      this.renderer &&
-      typeof this.renderer.applyHandTargetableIndices === "function"
+      this.ui &&
+      typeof this.ui.applyHandTargetableIndices === "function"
     ) {
-      this.renderer.applyHandTargetableIndices("player", indices);
+      this.ui.applyHandTargetableIndices("player", indices);
     }
   }
 
   checkWinCondition() {
     if (this.player.lp <= 0) {
-      this.renderer?.showAlert?.("Game Over! You Lost.");
+      this.ui?.showAlert?.("Game Over! You Lost.");
       this.gameOver = true;
     } else if (this.bot.lp <= 0) {
-      this.renderer?.showAlert?.("Victory! You Won.");
+      this.ui?.showAlert?.("Victory! You Won.");
       this.gameOver = true;
     }
   }
@@ -4684,11 +4557,11 @@ export default class Game {
     }
 
     if (toZone === "field" && destArr.length >= 5) {
-      this.renderer.log("Field is full (max 5 cards).");
+      this.ui.log("Field is full (max 5 cards).");
       return { success: false, reason: "field_full" };
     }
     if (toZone === "spellTrap" && destArr.length >= 5) {
-      this.renderer.log("Spell/Trap zone is full (max 5 cards).");
+      this.ui.log("Spell/Trap zone is full (max 5 cards).");
       return { success: false, reason: "spell_trap_full" };
     }
 
@@ -4804,7 +4677,7 @@ export default class Game {
           opponent: this.getOpponent(hostOwner),
         }).then((result) => {
           if (result?.destroyed) {
-            this.renderer.log(
+            this.ui.log(
               `${host.name} is destroyed as ${card.name} left the field.`
             );
             this.updateBoard();
@@ -4915,7 +4788,7 @@ export default class Game {
           opponent: this.getOpponent(fromOwner),
         }).then((result) => {
           if (result?.destroyed) {
-            this.renderer.log(
+            this.ui.log(
               `${callTrap.name} was destroyed as ${card.name} left the field.`
             );
             this.updateBoard();
@@ -4943,7 +4816,7 @@ export default class Game {
         opponent: this.getOpponent(monsterOwner),
       }).then((result) => {
         if (result?.destroyed) {
-          this.renderer.log(
+          this.ui.log(
             `${revivedMonster.name} was destroyed as ${card.name} left the field.`
           );
           this.updateBoard();
@@ -4974,7 +4847,7 @@ export default class Game {
       const extraDeck = this.getZone(destPlayer, "extraDeck");
       if (extraDeck) {
         extraDeck.push(card);
-        this.renderer.log(`${card.name} returned to Extra Deck.`);
+        this.ui.log(`${card.name} returned to Extra Deck.`);
         if (this.devModeEnabled && this.devFailAfterZoneMutation) {
           this.devFailAfterZoneMutation = false;
           throw new Error("DEV_ZONE_MUTATION_FAIL");
@@ -5032,7 +4905,7 @@ export default class Game {
     ) {
       const defender = attacker.owner === "player" ? this.bot : this.player;
       defender.takeDamage(attacker.onBattleDestroy.damage);
-      this.renderer.log(
+      this.ui.log(
         `${attacker.name} inflicts an extra ${attacker.onBattleDestroy.damage} damage!`
       );
       this.checkWinCondition();
@@ -5069,13 +4942,13 @@ export default class Game {
     if (card.cardKind !== "spell" && card.cardKind !== "trap") return;
 
     if (card.cardKind === "spell" && card.subtype === "field") {
-      this.renderer.log("Field Spells cannot be Set.");
+      this.ui.log("Field Spells cannot be Set.");
       return;
     }
 
     const zone = this.player.spellTrap;
     if (zone.length >= 5) {
-      this.renderer.log("Spell/Trap zone is full (max 5 cards).");
+      this.ui.log("Spell/Trap zone is full (max 5 cards).");
       return;
     }
 
@@ -5129,14 +5002,14 @@ export default class Game {
         ),
       finalize: (result, info) => {
         if (result.placementOnly) {
-          this.renderer.log(`${info.card.name} is placed on the field.`);
+          this.ui.log(`${info.card.name} is placed on the field.`);
         } else {
           this.finalizeSpellTrapActivation(
             info.card,
             this.player,
             info.activationZone
           );
-          this.renderer.log(`${info.card.name} effect activated.`);
+          this.ui.log(`${info.card.name} effect activated.`);
         }
         this.updateBoard();
       },
@@ -5193,7 +5066,7 @@ export default class Game {
 
     // Check zone capacity
     if (!isFieldSpell && player.spellTrap.length >= 5) {
-      this.renderer.log("Spell/Trap zone is full (max 5 cards).");
+      this.ui.log("Spell/Trap zone is full (max 5 cards).");
       return null;
     }
 
@@ -5234,10 +5107,10 @@ export default class Game {
     );
 
     if (
-      this.renderer &&
-      typeof this.renderer.showShadowHeartCathedralModal === "function"
+      this.ui &&
+      typeof this.ui.showShadowHeartCathedralModal === "function"
     ) {
-      this.renderer.showShadowHeartCathedralModal(
+      this.ui.showShadowHeartCathedralModal(
         validMonsters,
         maxAtk,
         counterCount,
@@ -5299,7 +5172,7 @@ export default class Game {
 
       // Oferecer ativação de cada trap elegível (uma por vez)
       for (const trap of eligibleTraps) {
-        const shouldActivate = await this.renderer.showTrapActivationModal(
+        const shouldActivate = await this.ui.showTrapActivationModal(
           trap,
           event,
           eventData
@@ -5332,7 +5205,7 @@ export default class Game {
 
     // Virar a carta face-up
     card.isFacedown = false;
-    this.renderer.log(`${this.player.name} ativa ${card.name}!`);
+    this.ui.log(`${this.player.name} ativa ${card.name}!`);
 
     // Resolver efeitos
     const result = await this.effectEngine.resolveTrapEffects(
@@ -5349,10 +5222,6 @@ export default class Game {
 
     this.updateBoard();
     return result;
-  }
-
-  async emitWithTrapCheck(event, eventData = {}) {
-    return await this.emit(event, eventData);
   }
 
   resolvePlayerById(id = "player") {
@@ -5572,8 +5441,8 @@ export default class Game {
 
   devGetSelectionCleanupState() {
     const uiState =
-      this.renderer && typeof this.renderer.getSelectionCleanupState === "function"
-        ? this.renderer.getSelectionCleanupState()
+      this.ui && typeof this.ui.getSelectionCleanupState === "function"
+        ? this.ui.getSelectionCleanupState()
         : { controlsVisible: false, highlightCount: 0 };
     return {
       selectionActive: !!this.targetSelection,
@@ -5590,10 +5459,10 @@ export default class Game {
     }
     this.clearTargetHighlights();
     if (
-      this.renderer &&
-      typeof this.renderer.hideFieldTargetingControls === "function"
+      this.ui &&
+      typeof this.ui.hideFieldTargetingControls === "function"
     ) {
-      this.renderer.hideFieldTargetingControls();
+      this.ui.hideFieldTargetingControls();
     }
     this.setSelectionState("idle");
   }
@@ -7613,8 +7482,8 @@ export default class Game {
     this.effectEngine?.updatePassiveBuffs();
     this.updateBoard();
     this.resetOncePerTurnUsage("manual_setup");
-    if (this.renderer?.log) {
-      this.renderer.log("Dev setup applied.");
+    if (this.ui?.log) {
+      this.ui.log("Dev setup applied.");
     }
     this.devLog("DEV_SETUP_APPLIED", {
       summary: "Manual setup applied",
@@ -7624,6 +7493,8 @@ export default class Game {
     return { success: true, warnings };
   }
 }
+
+
 
 
 

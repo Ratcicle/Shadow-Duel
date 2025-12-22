@@ -1,4 +1,4 @@
-{
+﻿{
   "cards": {
     "1": {
       "name": "Corcel Pesadelo",
@@ -66,7 +66,7 @@
     },
     "52": {
       "name": "Enguia Abissal do Coração Sombrio",
-      "description": "Se esse card for atacado em posição de defesa: cause 600 de dano ao seu oponente. Você pode enviar esse card para o cemitério; invoque por invocação-Especial 1 'Leviatã do Coração Sombrio' da sua mão, mas ele não pode atacar nesse turno."
+      "description": "Se esse card for atacado em posição de defesa: cause 600 de dano ao oponente. Se esse card for destruído em batalha: você pode adicionar 1 Magia/Armadilha 'Coração Sombrio' do seu cemitério à sua mão."
     },
     "53": {
       "name": "Espectro do Coração Sombrio",
@@ -138,7 +138,7 @@
     },
     "70": {
       "name": "Leviatã do Coração Sombrio",
-      "description": "Se esse card destruir um monstro em batalha: cause 500 de dano ao seu oponente. Se esse card for destruído em batalha: cause 800 de dano ao seu oponente."
+      "description": "Você pode invocar este card por Invocação-Especial da sua mão ao enviar 1 'Enguia Abissal do Coração Sombrio' que você controla para o cemitério. Se esse card destruir um monstro em batalha: cause 500 de dano ao oponente. Se esse card for destruído em batalha: cause 800 de dano ao oponente."
     },
     "71": {
       "name": "Mago do Vazio do Coração Sombrio",
@@ -318,3 +318,4 @@
     }
   }
 }
+
