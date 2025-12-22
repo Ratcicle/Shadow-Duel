@@ -28,11 +28,6 @@ Resumo rápido do estado atual do jogo e da arquitetura.
 - Summon rules: `summonMethods` (array) e `summonFrom`.
 - Actions validadas pelo `CardDatabaseValidator` contra o registry.
 
-## Estado do Roadmap
-
-- Fase 0-6: concluída.
-- Fase 7: em andamento (limpeza de duplicações, padronização de schema, docs curtas).
-
 ## Lacunas atuais
 
 - Sistema de chain/traps ainda simplificado.

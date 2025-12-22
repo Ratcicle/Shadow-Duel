@@ -551,6 +551,17 @@ export async function handleSpecialSummonFromZone(
     const filters = action.filters || {};
     const excludeSummonRestrict = action.excludeSummonRestrict || [];
 
+    if (action.matchLevelRef) {
+      const levelCard = ctx?.[action.matchLevelRef] || null;
+      const levelValue = levelCard?.level;
+      if (!levelValue) {
+        getUI(game)?.log("Cannot match level: no level on reference card.");
+        return false;
+      }
+      filters.level = levelValue;
+      filters.levelOp = filters.levelOp || action.levelOp || "eq";
+    }
+
     candidates = collectZoneCandidates(zone, filters, {
       source,
       excludeSummonRestrict,
@@ -1609,12 +1620,7 @@ export async function handleGrantAdditionalNormalSummon(
  * Effect: Destroys all monsters on field except keepPerSide highest ATK monsters per side.
  * If there's a tie for highest ATK, the card's controller chooses which to keep.
  */
-export async function handleSelectiveFieldDestruction(
-  action,
-  ctx,
-  targets,
-  engine
-) {
+async function destroySelectiveField(action, ctx, targets, engine) {
   const { player, source } = ctx;
   const game = engine.game;
 
@@ -1772,151 +1778,6 @@ export async function handleSelectiveFieldDestruction(
  * @param {Object} engine - The EffectEngine instance
  * @returns {Promise<boolean>} - Success status
  */
-export async function handleSpecialSummonMatchingLevel(
-  action,
-  ctx,
-  targets,
-  engine
-) {
-  const { player, summonedCard } = ctx;
-  const game = engine.game;
-
-  if (!player || !game || !summonedCard) return false;
-
-  // Get the level to match from the summoned card
-  const targetLevel = summonedCard.level;
-  if (!targetLevel) {
-    getUI(game)?.log("Cannot match level: no level on summoned card.");
-    return false;
-  }
-
-  // Check field space
-  if (player.field.length >= 5) {
-    getUI(game)?.log("Field is full.");
-    return false;
-  }
-
-  // Find candidates in hand with matching level
-  const hand = player.hand || [];
-  const candidates = hand.filter(
-    (card) => card && card.cardKind === "monster" && card.level === targetLevel
-  );
-
-  if (candidates.length === 0) {
-    getUI(game)?.log(
-      `No monsters in hand with Level ${targetLevel} to Special Summon.`
-    );
-    return false;
-  }
-
-  // Extract common configuration
-  const negateEffects = action.negateEffects !== false;
-  const cannotAttackThisTurn = action.cannotAttackThisTurn || false;
-
-  /**
-   * Helper function to finalize the special summon
-   * @param {Object} card - The card to summon
-   * @param {string} position - The position to summon in ("attack" or "defense")
-   */
-  const finalizeSummon = async (card, position) => {
-    const moveResult =
-      typeof game.moveCard === "function"
-        ? game.moveCard(card, player, "field", {
-            fromZone: "hand",
-            position,
-            isFacedown: false,
-            resetAttackFlags: true,
-          })
-        : null;
-    if (moveResult && moveResult.success === false) {
-      return false;
-    }
-    if (moveResult == null) {
-      const handIndex = hand.indexOf(card);
-      if (handIndex !== -1) {
-        hand.splice(handIndex, 1);
-      }
-      card.position = position;
-      card.isFacedown = false;
-      card.hasAttacked = false;
-      card.owner = player.id;
-      card.controller = player.id;
-      player.field.push(card);
-    }
-    card.cannotAttackThisTurn = cannotAttackThisTurn;
-
-    if (negateEffects) {
-      card.effectsNegated = true;
-    }
-
-    getUI(game)?.log(
-      `${player.name || "Player"} Special Summoned ${
-        card.name
-      } (Level ${targetLevel}) from hand${
-        negateEffects ? " (effects negated)" : ""
-      }.`
-    );
-
-    game.updateBoard();
-    return true;
-  };
-
-  // For bot, auto-select first candidate
-  if (player.id === "bot") {
-    const card = candidates[0];
-    const position = action.position === "defense" ? "defense" : "attack";
-    await finalizeSummon(card, position);
-    return true;
-  }
-
-  // For human player, show selection modal
-  return new Promise((resolve) => {
-    // If only one candidate, auto-select it
-    if (candidates.length === 1) {
-      const card = candidates[0];
-
-      // Ask for position
-      engine
-        .chooseSpecialSummonPosition(card, player)
-        .then(async (position) => {
-          await finalizeSummon(card, position);
-          resolve(true);
-        })
-        .catch(() => {
-          resolve(false);
-        });
-    } else {
-      // Multiple candidates - show selection modal
-      game.showCardSelectionModal(
-        candidates,
-        `Select 1 monster with Level ${targetLevel} to Special Summon`,
-        1,
-        async (selected) => {
-          if (selected.length === 0) {
-            resolve(false);
-            return;
-          }
-
-          const card = selected[0];
-
-          try {
-            // Ask for position
-            const position = await engine.chooseSpecialSummonPosition(
-              card,
-              player
-            );
-
-            await finalizeSummon(card, position);
-            resolve(true);
-          } catch {
-            resolve(false);
-          }
-        }
-      );
-    }
-  });
-}
-
 /**
  * Helper function to prompt player for tie-breaker selection
  * @param {Object} modalConfig - Configuration for modal text (title, subtitle, infoText)
@@ -1994,13 +1855,20 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
 
   if (!player || !game) return false;
 
-  const atkBoost = action.atkBoost || 0;
+  let atkBoost = action.atkBoost || 0;
   const defBoost = action.defBoost || 0;
-  const permanent = action.permanent || false;
+  let permanent = action.permanent || false;
   const grantSecondAttack =
     action.grantSecondAttack === true ||
     action.type === "grant_second_attack" ||
     action.type === "buff_stats_temp_with_second_attack";
+  if (action.type === "reduce_self_atk" && atkBoost === 0) {
+    const amount = Math.max(0, action.amount ?? 0);
+    if (amount > 0) {
+      atkBoost = -amount;
+      permanent = true;
+    }
+  }
   const targetCards = resolveTargetCards(action, ctx, targets, {
     defaultRef: "self",
   });
@@ -2091,46 +1959,6 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
   }
 
   return anyBuffed || anySecondAttack;
-}
-
-/**
- * Reduce the ATK of the source (or explicit target) by a flat amount.
- *
- * Action properties:
- * - amount: ATK reduction amount
- * - targetRef: optional target reference (defaults to source)
- */
-export async function handleReduceSelfAtk(action, ctx, targets, engine) {
-  const game = engine.game;
-  const amount = Math.max(0, action.amount ?? 0);
-  if (amount <= 0) return false;
-
-  const targetCards = resolveTargetCards(action, ctx, targets, {
-    defaultRef: "self",
-  });
-
-  const validTargets = targetCards.filter(
-    (card) => card && card.cardKind === "monster"
-  );
-  if (validTargets.length === 0) return false;
-
-  validTargets.forEach((card) => {
-    const currentAtk = card.atk || 0;
-    card.atk = Math.max(0, currentAtk - amount);
-  });
-
-  if (getUI(game)?.log && validTargets.length === 1) {
-    const card = validTargets[0];
-    getUI(game).log(
-      `${card.name} loses ${amount} ATK (ATK now: ${card.atk}).`
-    );
-  }
-
-  if (typeof game?.updateBoard === "function") {
-    game.updateBoard();
-  }
-
-  return true;
 }
 
 /**
@@ -2247,7 +2075,9 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
 
   if (!player || !game) return false;
 
-  const sourceZone = action.zone || "graveyard";
+  const inferredSearch =
+    action?.type === "search_any" || action?.mode === "search_any";
+  const sourceZone = action.zone || (inferredSearch ? "deck" : "graveyard");
   const zone = player[sourceZone];
 
   if (!zone || zone.length === 0) {
@@ -2256,8 +2086,54 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
   }
 
   // Apply filters
-  const filters = action.filters || {};
-  const candidates = collectZoneCandidates(zone, filters, { source });
+  const baseFilters = action.filters || {};
+  const filters = { ...baseFilters };
+  if (inferredSearch) {
+    if (action.archetype && !filters.archetype) {
+      filters.archetype = action.archetype;
+    }
+    if (action.cardKind && !filters.cardKind) {
+      filters.cardKind = action.cardKind;
+    }
+    if (action.cardName && !filters.name) {
+      filters.name = action.cardName;
+    }
+  }
+
+  const extraFilter = (card) => {
+    if (!card) return false;
+    if (Array.isArray(filters.cardKind)) {
+      if (!filters.cardKind.includes(card.cardKind)) return false;
+    }
+    if (Array.isArray(filters.name)) {
+      if (!filters.name.includes(card.name)) return false;
+    }
+    if (action.cardName) {
+      const match = action.cardName.toLowerCase();
+      if ((card.name || "").toLowerCase() !== match) return false;
+    }
+    if (typeof action.cardId === "number" && card.id !== action.cardId) {
+      return false;
+    }
+    if (
+      typeof action.minLevel === "number" &&
+      (card.level || 0) < action.minLevel
+    ) {
+      return false;
+    }
+    if (
+      typeof action.maxLevel === "number" &&
+      (card.level || 0) > action.maxLevel
+    ) {
+      return false;
+    }
+    return true;
+  };
+
+  const candidates = collectZoneCandidates(zone, filters, {
+    source,
+    extraFilter,
+  });
 
   if (candidates.length === 0) {
     getUI(game)?.log(`No valid cards in ${sourceZone} matching filters.`);
@@ -3249,6 +3125,15 @@ export async function handleDestroyTargetedCards(action, ctx, targets, engine) {
 
   if (!player || !opponent || !source) return false;
 
+  const useSelectiveField =
+    action?.type === "selective_field_destruction" ||
+    action?.mode === "selective_field" ||
+    Number.isFinite(action?.keepPerSide);
+
+  if (useSelectiveField) {
+    return await destroySelectiveField(action, ctx, targets, engine);
+  }
+
   // Get opponent's cards on field/spellTrap/fieldSpell
   const opponentCards = [
     ...(opponent.field || []),
@@ -3368,7 +3253,7 @@ export function registerDefaultHandlers(registry) {
   registry.register("bounce_and_summon", handleBounceAndSummon);
   registry.register(
     "special_summon_matching_level",
-    handleSpecialSummonMatchingLevel
+    handleSpecialSummonFromZone
   );
   registry.register("transmutate", handleTransmutate);
   registry.register("banish", handleBanish);
@@ -3385,14 +3270,11 @@ export function registerDefaultHandlers(registry) {
   );
 
   // Field control handlers
-  registry.register(
-    "selective_field_destruction",
-    handleSelectiveFieldDestruction
-  );
+  registry.register("selective_field_destruction", handleDestroyTargetedCards);
 
   // Luminarch refactoring: new generic handlers
   registry.register("buff_stats_temp", handleBuffStatsTemp);
-  registry.register("reduce_self_atk", handleReduceSelfAtk);
+  registry.register("reduce_self_atk", handleBuffStatsTemp);
   registry.register("add_status", handleAddStatus);
   registry.register("pay_lp", handlePayLP);
   registry.register("add_from_zone_to_hand", handleAddFromZoneToHand);
@@ -3439,7 +3321,7 @@ export function registerDefaultHandlers(registry) {
   registry.register("move", proxyEngineMethod("applyMove"));
   registry.register("equip", proxyEngineMethod("applyEquip"));
   registry.register("negate_attack", proxyEngineMethod("applyNegateAttack"));
-  registry.register("search_any", proxyEngineMethod("applySearchAny"));
+  registry.register("search_any", handleAddFromZoneToHand);
   registry.register("buff_atk_temp", proxyEngineMethod("applyBuffAtkTemp"));
   registry.register(
     "modify_stats_temp",

@@ -665,11 +665,6 @@ export default class Game {
         const resolvingContext =
           this.isResolvingEffect || this.eventResolutionDepth > 0;
         if (!resolvingContext) {
-          addIssue("resolving_state_stale", { state: selectionState });
-          this.devLog("SELECTION_STATE_RECOVERY", {
-            summary: "Resolving state stale, resetting to idle.",
-            state: selectionState,
-          });
           this.setSelectionState("idle");
         }
       }

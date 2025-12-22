@@ -456,6 +456,7 @@ export const cardDatabase = [
           {
             type: "special_summon_matching_level",
             zone: "hand",
+            matchLevelRef: "summonedCard",
             position: "attack",
             cannotAttackThisTurn: false,
             negateEffects: false,
@@ -3237,6 +3238,7 @@ export const cardDatabase = [
         actions: [
           {
             type: "special_summon_matching_level",
+            matchLevelRef: "summonedCard",
             negateEffects: true,
             cannotAttackThisTurn: false,
             position: "choice",

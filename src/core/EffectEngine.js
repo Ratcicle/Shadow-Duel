@@ -1,4 +1,4 @@
-import Card from "./Card.js";
+﻿import Card from "./Card.js";
 import { cardDatabase } from "../data/cards.js";
 import { getCardDisplayName } from "./i18n.js";
 import {
@@ -7,12 +7,10 @@ import {
   handleSpecialSummonFromZone,
   handlePermanentBuffNamed,
   handleRemovePermanentBuffNamed,
-  handleSpecialSummonMatchingLevel,
   handleDestroyAttackerOnArchetypeDestruction,
   handleUpkeepPayOrSendToGrave,
   handleSpecialSummonFromDeckWithCounterLimit,
   handleDestroyTargetedCards,
-  handleBuffStatsTempWithSecondAttack,
 } from "./ActionHandlers.js";
 
 export default class EffectEngine {
@@ -29,13 +27,13 @@ export default class EffectEngine {
   }
 
   /**
-   * Helper para realizar Special Summon com escolha de posição
+   * Helper para realizar Special Summon com escolha de posiÃ§Ã£o
    * @param {Object} card - A carta a ser invocada
-   * @param {Object} player - O jogador que está invocando
-   * @param {Object} options - Opções adicionais
-   * @param {boolean} options.cannotAttackThisTurn - Se o monstro não pode atacar neste turno
+   * @param {Object} player - O jogador que estÃ¡ invocando
+   * @param {Object} options - OpÃ§Ãµes adicionais
+   * @param {boolean} options.cannotAttackThisTurn - Se o monstro nÃ£o pode atacar neste turno
    * @param {string} options.fromZone - Zona de origem (hand, deck, graveyard)
-   * @returns {Promise<string>} - A posição escolhida ('attack' ou 'defense')
+   * @returns {Promise<string>} - A posiÃ§Ã£o escolhida ('attack' ou 'defense')
    */
   async chooseSpecialSummonPosition(card, player, options = {}) {
     // Bot sempre escolhe attack
@@ -43,7 +41,7 @@ export default class EffectEngine {
       return "attack";
     }
 
-    // Player: mostrar modal de escolha de posição
+    // Player: mostrar modal de escolha de posiÃ§Ã£o
     if (
       this.ui &&
       typeof this.ui.showSpecialSummonPositionModal === "function"
@@ -447,7 +445,7 @@ export default class EffectEngine {
       if (this.isImmuneToOpponentEffects(card, ctx.player)) {
         if (this.ui?.log) {
           this.ui.log(
-            `${card.name} está imune aos efeitos do oponente e ignora ${action.type}.`
+            `${card.name} estÃ¡ imune aos efeitos do oponente e ignora ${action.type}.`
           );
         }
         return true;
@@ -3202,8 +3200,8 @@ export default class EffectEngine {
   }
 
   applyForbidAttackThisTurn(action, ctx, targets) {
-    // Se targetRef está definido, usa os alvos selecionados
-    // Caso contrário, aplica à carta fonte (self)
+    // Se targetRef estÃ¡ definido, usa os alvos selecionados
+    // Caso contrÃ¡rio, aplica Ã  carta fonte (self)
     let targetCards = [];
     if (action.targetRef && targets?.[action.targetRef]) {
       targetCards = targets[action.targetRef];
@@ -3280,176 +3278,11 @@ export default class EffectEngine {
 
     if (this.ui?.log) {
       this.ui.log(
-        `${card.name} está imune aos efeitos do oponente até o final do próximo turno.`
+        `${card.name} estÃ¡ imune aos efeitos do oponente atÃ© o final do prÃ³ximo turno.`
       );
     }
 
     return true;
-  }
-
-  applySearchAny(action, ctx) {
-    const deck = ctx.player.deck;
-    if (!deck || deck.length === 0) {
-      console.log("No cards in deck to search.");
-      return false;
-    }
-
-    // Opcional: filtrar por arquétipo
-    let candidates = deck;
-    if (action.archetype) {
-      candidates = deck.filter((card) => {
-        const archetypes = Array.isArray(card.archetypes)
-          ? card.archetypes
-          : card.archetype
-          ? [card.archetype]
-          : [];
-        return archetypes.includes(action.archetype);
-      });
-
-      if (candidates.length === 0) {
-        console.log(`No cards in deck matching archetype: ${action.archetype}`);
-        return false;
-      }
-    }
-
-    if (action.cardKind) {
-      const kinds = Array.isArray(action.cardKind)
-        ? action.cardKind
-        : [action.cardKind];
-
-      candidates = candidates.filter((card) => kinds.includes(card.cardKind));
-
-      if (candidates.length === 0) {
-        console.log(`No cards in deck matching card kind: ${action.cardKind}`);
-        return false;
-      }
-    }
-
-    if (action.cardName) {
-      const nameToMatch = action.cardName?.toLowerCase?.() ?? "";
-      candidates = candidates.filter(
-        (card) => card && card.name && card.name.toLowerCase() === nameToMatch
-      );
-      if (candidates.length === 0) {
-        console.log(`No cards in deck matching name: ${action.cardName}`);
-        return false;
-      }
-    }
-
-    if (typeof action.cardId === "number") {
-      candidates = candidates.filter(
-        (card) => card && card.id === action.cardId
-      );
-      if (candidates.length === 0) {
-        console.log(`No cards in deck with ID: ${action.cardId}`);
-        return false;
-      }
-    }
-
-    if (typeof action.minLevel === "number") {
-      candidates = candidates.filter(
-        (card) => (card.level || 0) >= action.minLevel
-      );
-    }
-
-    if (typeof action.maxLevel === "number") {
-      candidates = candidates.filter(
-        (card) => (card.level || 0) <= action.maxLevel
-      );
-    }
-
-    if (candidates.length === 0) {
-      console.log("No cards in deck matching level constraints.");
-      return false;
-    }
-
-    // Bots auto-pick a candidate without prompting the user.
-    if (ctx?.player?.id === "bot") {
-      const best =
-        candidates.reduce((top, card) => {
-          if (!card) return top;
-          if (!top) return card;
-          const cardAtk = card.atk || 0;
-          const topAtk = top.atk || 0;
-          return cardAtk >= topAtk ? card : top;
-        }, null) || candidates[candidates.length - 1];
-
-      const cardIndex = deck.indexOf(best);
-      if (cardIndex === -1) return false;
-
-      const [card] = deck.splice(cardIndex, 1);
-      ctx.player.hand.push(card);
-      this.game.updateBoard();
-      console.log(`${ctx.player.id} added ${card.name} from Deck to hand.`);
-      return true;
-    }
-
-    const defaultCard = candidates[candidates.length - 1].name;
-    const renderer = this.ui;
-    const searchModal = renderer?.getSearchModalElements?.();
-
-    if (searchModal && renderer) {
-      if (typeof renderer.showSearchModalVisual === "function") {
-        renderer.showSearchModalVisual(
-          searchModal,
-          candidates,
-          defaultCard,
-          (choice) => {
-            this.finishSearchSelection(choice, candidates, ctx);
-          }
-        );
-        return true;
-      }
-      if (typeof renderer.showSearchModal === "function") {
-        renderer.showSearchModal(
-          searchModal,
-          candidates,
-          defaultCard,
-          (choice) => {
-            this.finishSearchSelection(choice, candidates, ctx);
-          }
-        );
-        return true;
-      }
-    }
-
-    // Fallback: auto-seleciona o melhor disponível
-    const fallback =
-      candidates.reduce((top, card) => {
-        if (!card) return top;
-        if (!top) return card;
-        const cardAtk = card.atk || 0;
-        const topAtk = top.atk || 0;
-        return cardAtk >= topAtk ? card : top;
-      }, null) || candidates[candidates.length - 1];
-
-    this.finishSearchSelection(fallback?.name || defaultCard, candidates, ctx);
-    return true;
-  }
-
-  finishSearchSelection(choice, candidates, ctx) {
-    const deck = ctx.player.deck;
-    let chosenFromCandidates = null;
-
-    if (choice) {
-      const lower = choice.toLowerCase();
-      chosenFromCandidates =
-        candidates.find((c) => c && c.name && c.name.toLowerCase() === lower) ||
-        null;
-    }
-
-    if (!chosenFromCandidates) {
-      // fallback: último candidato da lista
-      chosenFromCandidates = candidates[candidates.length - 1];
-    }
-
-    const cardIndex = deck.indexOf(chosenFromCandidates);
-    if (cardIndex === -1) return;
-
-    const [card] = deck.splice(cardIndex, 1);
-    ctx.player.hand.push(card);
-    this.game.updateBoard();
-    console.log(`${ctx.player.id} added ${card.name} from Deck to hand.`);
   }
 
   applyEquip(action, ctx, targets) {
@@ -3771,7 +3604,7 @@ export default class EffectEngine {
   }
 
   async performBotFusion(ctx, summonableFusions, availableMaterials) {
-    // Bot escolhe automaticamente o melhor monstro de fusão (maior ATK)
+    // Bot escolhe automaticamente o melhor monstro de fusÃ£o (maior ATK)
     const bestFusion = summonableFusions.reduce((best, current) => {
       const bestAtk = best.fusion.atk || 0;
       const currentAtk = current.fusion.atk || 0;
@@ -3781,7 +3614,7 @@ export default class EffectEngine {
     const fusionMonster = bestFusion.fusion;
     const fusionIndex = bestFusion.index;
 
-    // Encontrar materiais válidos
+    // Encontrar materiais vÃ¡lidos
     const combos = this.findFusionMaterialCombos(
       fusionMonster,
       availableMaterials,
@@ -3871,7 +3704,7 @@ export default class EffectEngine {
       return false;
     }
 
-    // BOT AUTO-FUSION: Se é o bot, executar fusão automaticamente
+    // BOT AUTO-FUSION: Se Ã© o bot, executar fusÃ£o automaticamente
     if (ctx.player.id === "bot") {
       return await this.performBotFusion(
         ctx,
@@ -3919,7 +3752,7 @@ export default class EffectEngine {
               selectedMaterials.length - validation.requiredCount;
             if (extraCount > 0) {
               this.ui.log(
-                `⚠️ You selected ${selectedMaterials.length} materials (requires ${validation.requiredCount}). All selected cards will be sent to the Graveyard.`
+                `âš ï¸ You selected ${selectedMaterials.length} materials (requires ${validation.requiredCount}). All selected cards will be sent to the Graveyard.`
               );
             }
 
@@ -4135,7 +3968,7 @@ export default class EffectEngine {
 
     if (!targets || !targets.haunted_target) {
       game.ui.log(
-        `Call of the Haunted: Nenhum alvo selecionado no cemitério.`
+        `Call of the Haunted: Nenhum alvo selecionado no cemitÃ©rio.`
       );
       return false;
     }
@@ -4152,11 +3985,11 @@ export default class EffectEngine {
     );
 
     if (!targetMonster || targetMonster.cardKind !== "monster") {
-      game.ui.log(`Call of the Haunted: Alvo inválido.`);
+      game.ui.log(`Call of the Haunted: Alvo invÃ¡lido.`);
       return false;
     }
 
-    // Remover do cemitério
+    // Remover do cemitÃ©rio
     const gyIndex = player.graveyard.indexOf(targetMonster);
     if (gyIndex > -1) {
       player.graveyard.splice(gyIndex, 1);
@@ -4166,7 +3999,7 @@ export default class EffectEngine {
       );
     }
 
-    // Mostrar modal para escolher posição (Special Summon permite escolha)
+    // Mostrar modal para escolher posiÃ§Ã£o (Special Summon permite escolha)
     const chosenPosition = await new Promise((resolve) => {
       game.ui.showSpecialSummonPositionModal(
         targetMonster,
@@ -4176,11 +4009,11 @@ export default class EffectEngine {
       );
     });
 
-    // Sumonizar na posição escolhida
+    // Sumonizar na posiÃ§Ã£o escolhida
     targetMonster.position = chosenPosition || "attack";
     targetMonster.isFacedown = false;
     targetMonster.owner = player.id;
-    targetMonster.hasAttacked = true; // Não pode atacar no mesmo turno
+    targetMonster.hasAttacked = true; // NÃ£o pode atacar no mesmo turno
     player.field.push(targetMonster);
 
     // Vincular a trap ao monstro para que se destruam mutuamente
@@ -4190,7 +4023,7 @@ export default class EffectEngine {
     game.ui.log(
       `Call of the Haunted: ${
         targetMonster.name
-      } foi revivido do cemitério em ${
+      } foi revivido do cemitÃ©rio em ${
         chosenPosition === "defense" ? "Defesa" : "Ataque"
       }!`
     );
@@ -4201,7 +4034,7 @@ export default class EffectEngine {
   async applyMirrorForceDestroy(action, ctx) {
     const { game, player, eventData } = ctx;
 
-    // Determinar quem é o oponente
+    // Determinar quem Ã© o oponente
     const opponent = player.id === "player" ? game.bot : game.player;
 
     if (!opponent || !opponent.field) {
@@ -4228,7 +4061,7 @@ export default class EffectEngine {
       `Mirror Force: Destruindo ${attackPositionMonsters.length} monstro(s) em Attack Position!`
     );
 
-    // Destruir todos os monstros em Attack Position (com substituição de destruição)
+    // Destruir todos os monstros em Attack Position (com substituiÃ§Ã£o de destruiÃ§Ã£o)
     const sourceCard = ctx.source || ctx.card || null;
     for (const monster of attackPositionMonsters) {
       await game.destroyCard(monster, {
@@ -4281,7 +4114,7 @@ export default class EffectEngine {
     };
 
     try {
-      // Executar as ações do efeito
+      // Executar as aÃ§Ãµes do efeito
       for (const action of relevantEffect.actions || []) {
         await this.applyActions([action], ctx, {});
       }
