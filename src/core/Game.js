@@ -4311,7 +4311,31 @@ export default class Game {
       materialCard
     );
     if (allAscensions.length === 0) {
-      const reason = "No Ascension monsters available for this material.";
+      let hint = "";
+      try {
+        const extra = Array.isArray(player.extraDeck) ? player.extraDeck : [];
+        const ascInExtra = extra.filter(
+          (c) => c && c.cardKind === "monster" && c.monsterType === "ascension"
+        );
+        if (ascInExtra.length === 0) {
+          hint = " No ascension monsters in Extra Deck.";
+        } else {
+          const missingMeta = ascInExtra.filter((c) => !c.ascension).length;
+          const wrongMaterial = ascInExtra.filter(
+            (c) => c.ascension && c.ascension.materialId !== materialCard.id
+          ).length;
+          if (missingMeta > 0) {
+            hint += ` ${missingMeta} ascension card(s) missing metadata.`;
+          }
+          if (wrongMaterial > 0) {
+            hint += ` ${wrongMaterial} ascension card(s) require a different material.`;
+          }
+        }
+      } catch (_) {
+        // best-effort diagnostics only
+      }
+
+      const reason = `No Ascension monsters available for this material.${hint}`.trim();
       this.ui.log(reason);
       return { success: false, reason };
     }

@@ -80,6 +80,14 @@ export default class Card {
     this.fusionMaterials = data.fusionMaterials
       ? JSON.parse(JSON.stringify(data.fusionMaterials))
       : null;
+    // Ascension metadata (Extra Deck monsters with monsterType "ascension")
+    if (this.monsterType === "ascension") {
+      this.ascension = data.ascension
+        ? JSON.parse(JSON.stringify(data.ascension))
+        : null;
+    } else {
+      this.ascension = null;
+    }
     this.image = data.image;
     this.owner = owner;
   }
