@@ -635,7 +635,9 @@ function renderDeckBuilder() {
 
   // Pool of all cards with counts
   const baseMainPool = cardDatabase.filter(
-    (c) => !c.monsterType || c.monsterType !== "fusion"
+    (c) =>
+      !c.monsterType ||
+      (c.monsterType !== "fusion" && c.monsterType !== "ascension")
   );
   const baseExtraPool = cardDatabase.filter(
     (c) => c.monsterType === "fusion" || c.monsterType === "ascension"
@@ -658,7 +660,7 @@ function renderDeckBuilder() {
   };
 
   const sortedCards = getSortedCardPool(baseMainPool.filter(poolFilter));
-  const fusionCards = baseFusionPool.filter(poolFilter);
+  const extraCards = baseExtraPool.filter(poolFilter);
 
   const extraCounts = {};
   currentExtraDeck.forEach((id) => {
@@ -667,7 +669,7 @@ function renderDeckBuilder() {
   });
 
   // Render Extra Deck monsters (Fusion + Ascension) first with different styling
-  baseExtraPool.forEach((card) => {
+  extraCards.forEach((card) => {
     const cardEl = createCardThumb(card);
     const count = extraCounts[card.id] || 0;
     const badge = document.createElement("div");
@@ -724,7 +726,7 @@ function renderDeckBuilder() {
   });
 
   // Preview first card if none
-  const firstAvailable = baseExtraPool[0] || sortedCards[0] || cardDatabase[0];
+  const firstAvailable = extraCards[0] || sortedCards[0] || cardDatabase[0];
   if (firstAvailable) {
     setPreview(firstAvailable);
   }

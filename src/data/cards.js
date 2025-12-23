@@ -1423,6 +1423,139 @@ export const cardDatabase = [
     ],
   },
   {
+    id: 75,
+    name: "Shadow-Heart Armored Arctroth",
+    cardKind: "monster",
+    archetype: "Shadow-Heart",
+    level: 9,
+    atk: 2800,
+    def: 2500,
+    monsterType: "ascension",
+    ascension: {
+      materialId: 57,
+      requirements: [
+        { type: "material_destroyed_opponent_monsters", count: 2 },
+      ],
+      position: "choice",
+    },
+    description:
+      "Ascension Summon: Send 1 'Shadow-Heart Demon Arctroth' you control to the Graveyard. Requirement: That monster must have destroyed 2 opponent's monsters by battle or card effect. If this card is Ascension Summoned: Target 1 monster your opponent controls; its ATK/DEF become 0. If this card attacks a Defense Position monster: change that monster to Attack Position.",
+    image: "assets/Shadow-Heart Armored Arctroth.png",
+    effects: [
+      {
+        id: "armored_arctroth_on_ascension",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethods: ["ascension"],
+        requireSelfAsSummoned: true,
+        targets: [
+          {
+            ref: "armored_arctroth_zero_target",
+            owner: "opponent",
+            zone: "field",
+            requireFaceup: true,
+            cardKind: "monster",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "set_stats_to_zero_and_negate",
+            targetRef: "armored_arctroth_zero_target",
+            setAtkToZero: true,
+            setDefToZero: true,
+            negateEffects: false,
+          },
+        ],
+      },
+      {
+        id: "armored_arctroth_force_defender_attack",
+        timing: "on_event",
+        event: "attack_declared",
+        requireSelfAsAttacker: true,
+        requireDefenderPosition: true,
+        actions: [
+          {
+            type: "switch_position",
+            targetRef: "defender",
+            markChanged: false,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 76,
+    name: "Shadow-Heart Apocalypse Dragon",
+    cardKind: "monster",
+    archetype: "Shadow-Heart",
+    level: 9,
+    atk: 3300,
+    def: 2600,
+    monsterType: "ascension",
+    ascension: {
+      materialId: 64,
+      requirements: [{ type: "material_effect_activations", count: 3 }],
+      position: "choice",
+    },
+    description:
+      "Ascension Summon: Send 1 'Shadow-Heart Scale Dragon' you control to the Graveyard. Requirement: That monster's effect was activated at least 3 times this duel. Once per turn: You can discard 1 card; destroy 1 monster your opponent controls. If this card leaves the field: destroy all monsters on the field.",
+    image: "assets/Shadow-Heart Apocalypse Dragon.png",
+    effects: [
+      {
+        id: "apocalypse_dragon_once_per_turn_destroy",
+        timing: "ignition",
+        requireZone: "field",
+        requirePhase: ["main1", "main2"],
+        oncePerTurn: true,
+        oncePerTurnName: "apocalypse_dragon_discard_destroy",
+        targets: [
+          {
+            ref: "apocalypse_discard",
+            owner: "self",
+            zone: "hand",
+            count: { min: 1, max: 1 },
+          },
+          {
+            ref: "apocalypse_destroy_target",
+            owner: "opponent",
+            zone: "field",
+            requireFaceup: true,
+            cardKind: "monster",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "apocalypse_discard",
+            player: "self",
+            to: "graveyard",
+          },
+          {
+            type: "destroy",
+            targetRef: "apocalypse_destroy_target",
+          },
+        ],
+      },
+      {
+        id: "apocalypse_dragon_leave_field_destroy_all",
+        timing: "on_event",
+        event: "card_to_grave",
+        fromZone: "field",
+        actions: [
+          {
+            type: "selective_field_destruction",
+            keepPerSide: 0,
+            allowTieBreak: false,
+            modalTitle: "Apocalypse",
+            modalInfoText: "All monsters will be destroyed.",
+          },
+        ],
+      },
+    ],
+  },
+  {
     id: 101,
     name: "Luminarch Valiant - Knight of the Dawn",
     cardKind: "monster",
@@ -3249,137 +3382,6 @@ export const cardDatabase = [
   },
   {
     id: 171,
-    name: "Shadow-Heart Armored Arctroth",
-    cardKind: "monster",
-    archetype: "Shadow-Heart",
-    level: 9,
-    atk: 2800,
-    def: 2500,
-    monsterType: "ascension",
-    ascension: {
-      materialId: 57, // Shadow-Heart Demon Arctroth
-      requirements: [{ type: "material_destroyed_opponent_monsters", count: 2 }],
-      position: "choice",
-    },
-    description:
-      "Ascension Summon: Send 1 'Shadow-Heart Demon Arctroth' you control to the Graveyard. Requirement: That monster must have destroyed 2 opponent's monsters by battle or card effect. If this card is Ascension Summoned: Target 1 monster your opponent controls; its ATK/DEF become 0. If this card attacks a Defense Position monster: change that monster to Attack Position.",
-    image: "assets/Shadow-Heart Armored Arctroth.png",
-    effects: [
-      {
-        id: "armored_arctroth_on_ascension",
-        timing: "on_event",
-        event: "after_summon",
-        summonMethods: ["ascension"],
-        requireSelfAsSummoned: true,
-        targets: [
-          {
-            ref: "armored_arctroth_zero_target",
-            owner: "opponent",
-            zone: "field",
-            requireFaceup: true,
-            cardKind: "monster",
-            count: { min: 1, max: 1 },
-          },
-        ],
-        actions: [
-          {
-            type: "set_stats_to_zero_and_negate",
-            targetRef: "armored_arctroth_zero_target",
-            setAtkToZero: true,
-            setDefToZero: true,
-            negateEffects: false,
-          },
-        ],
-      },
-      {
-        id: "armored_arctroth_force_defender_attack",
-        timing: "on_event",
-        event: "attack_declared",
-        requireSelfAsAttacker: true,
-        requireDefenderPosition: true,
-        actions: [
-          {
-            type: "switch_position",
-            targetRef: "defender",
-            markChanged: false,
-          },
-        ],
-      },
-    ],
-  },
-  {
-    id: 172,
-    name: "Shadow-Heart Apocalypse Dragon",
-    cardKind: "monster",
-    archetype: "Shadow-Heart",
-    level: 9,
-    atk: 3300,
-    def: 2600,
-    monsterType: "ascension",
-    ascension: {
-      materialId: 64, // Shadow-Heart Scale Dragon
-      requirements: [{ type: "material_effect_activations", count: 3 }],
-      position: "choice",
-    },
-    description:
-      "Ascension Summon: Send 1 'Shadow-Heart Scale Dragon' you control to the Graveyard. Requirement: That monster's effect was activated at least 3 times this duel. Once per turn: You can discard 1 card; destroy 1 monster your opponent controls. If this card leaves the field: destroy all monsters on the field.",
-    image: "assets/Shadow-Heart Apocalypse Dragon.png",
-    effects: [
-      {
-        id: "apocalypse_dragon_once_per_turn_destroy",
-        timing: "ignition",
-        requireZone: "field",
-        requirePhase: ["main1", "main2"],
-        oncePerTurn: true,
-        oncePerTurnName: "apocalypse_dragon_discard_destroy",
-        targets: [
-          {
-            ref: "apocalypse_discard",
-            owner: "self",
-            zone: "hand",
-            count: { min: 1, max: 1 },
-          },
-          {
-            ref: "apocalypse_destroy_target",
-            owner: "opponent",
-            zone: "field",
-            requireFaceup: true,
-            cardKind: "monster",
-            count: { min: 1, max: 1 },
-          },
-        ],
-        actions: [
-          {
-            type: "move",
-            targetRef: "apocalypse_discard",
-            player: "self",
-            to: "graveyard",
-          },
-          {
-            type: "destroy",
-            targetRef: "apocalypse_destroy_target",
-          },
-        ],
-      },
-      {
-        id: "apocalypse_dragon_leave_field_destroy_all",
-        timing: "on_event",
-        event: "card_to_grave",
-        fromZone: "field",
-        actions: [
-          {
-            type: "selective_field_destruction",
-            keepPerSide: 0,
-            allowTieBreak: false,
-            modalTitle: "Apocalypse",
-            modalInfoText: "All monsters will be destroyed.",
-          },
-        ],
-      },
-    ],
-  },
-  {
-    id: 173,
     name: "Void Cosmic Walker",
     cardKind: "monster",
     archetype: "Void",
@@ -3388,7 +3390,7 @@ export const cardDatabase = [
     def: 1600,
     monsterType: "ascension",
     ascension: {
-      materialId: 152, // Void Walker
+      materialId: 152,
       requirements: [{ type: "material_effect_activations", count: 2 }],
       position: "choice",
     },

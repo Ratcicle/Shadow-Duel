@@ -360,10 +360,8 @@ export default class EffectEngine {
         const requireFaceup = passive.requireFaceup || false;
         const includeSelf = passive.includeSelf !== false;
         const stats = passive.stats || ["atk", "def"];
-        const owners = passive.countOwners || passive.owners || [
-          "self",
-          "opponent",
-        ];
+        const owners = passive.countOwners ||
+          passive.owners || ["self", "opponent"];
 
         let count = 0;
         for (const target of fieldCards) {
@@ -371,8 +369,7 @@ export default class EffectEngine {
           if (!cardKinds.includes(target.cardKind)) continue;
           if (requireFaceup && target.isFacedown) continue;
           if (!this.cardHasArchetype(target, archetype)) continue;
-          const ownerType =
-            target.owner === card.owner ? "self" : "opponent";
+          const ownerType = target.owner === card.owner ? "self" : "opponent";
           if (!owners.includes(ownerType)) continue;
           if (!includeSelf && target === card) continue;
           count++;
@@ -479,6 +476,20 @@ export default class EffectEngine {
     }
 
     this.applyActions(effect.actions || [], ctx, targetResult.targets || {});
+
+    // Record material effect activation for ascension tracking
+    const owner = ctx?.player;
+    if (
+      owner &&
+      sourceCard?.cardKind === "monster" &&
+      typeof sourceCard.id === "number"
+    ) {
+      this.game.recordMaterialEffectActivation(owner, sourceCard, {
+        contextLabel: "triggered",
+        effectId: effect.id,
+      });
+    }
+
     this.game.checkWinCondition();
 
     return { success: true, needsSelection: false };
@@ -529,13 +540,20 @@ export default class EffectEngine {
       options.selectionMessage || "Select target(s) for the triggered effect.";
     const summary =
       options.summary ||
-      `${owner.id}:${sourceCard.name}:${effect.id || effect.event || "trigger"}`;
+      `${owner.id}:${sourceCard.name}:${
+        effect.id || effect.event || "trigger"
+      }`;
 
     const baseCtx = options.ctx || {};
     const activateImpl =
       options.activate ||
       ((selections, activationCtx, resolvedCtx) =>
-        this.handleTriggeredEffect(sourceCard, effect, resolvedCtx, selections));
+        this.handleTriggeredEffect(
+          sourceCard,
+          effect,
+          resolvedCtx,
+          selections
+        ));
 
     const config = {
       card: sourceCard,
@@ -587,7 +605,12 @@ export default class EffectEngine {
       return { entries, orderRule };
     }
 
-    const { card, player: summoner, method, fromZone: summonFromZone } = payload;
+    const {
+      card,
+      player: summoner,
+      method,
+      fromZone: summonFromZone,
+    } = payload;
     const opponent = this.game?.getOpponent?.(summoner);
     const participants = [];
 
@@ -625,7 +648,8 @@ export default class EffectEngine {
       }
 
       for (const sourceCard of sources) {
-        if (!sourceCard?.effects || !Array.isArray(sourceCard.effects)) continue;
+        if (!sourceCard?.effects || !Array.isArray(sourceCard.effects))
+          continue;
 
         const sourceZone = this.findCardZone(owner, sourceCard);
         const ctx = {
@@ -661,8 +685,7 @@ export default class EffectEngine {
           }
 
           if (effect.requireOpponentSummon === true) {
-            const isOpponentSummon =
-              summoner?.id && summoner.id !== owner.id;
+            const isOpponentSummon = summoner?.id && summoner.id !== owner.id;
             if (!isOpponentSummon) continue;
           }
 
@@ -744,14 +767,12 @@ export default class EffectEngine {
                   "this card";
                 if (
                   this.ui &&
-                  typeof this.ui.showConditionalSummonPrompt ===
-                    "function"
+                  typeof this.ui.showConditionalSummonPrompt === "function"
                 ) {
                   const shouldActivate =
                     await this.ui.showConditionalSummonPrompt(
                       promptName,
-                      effect.promptMessage ||
-                        `Activate ${promptName}'s effect?`
+                      effect.promptMessage || `Activate ${promptName}'s effect?`
                     );
                   if (!shouldActivate) {
                     return {
@@ -1001,10 +1022,7 @@ export default class EffectEngine {
             let wantsToUse = true;
 
             const customPromptMethod = effect.customPromptMethod;
-            if (
-              customPromptMethod &&
-              this.ui?.[customPromptMethod]
-            ) {
+            if (customPromptMethod && this.ui?.[customPromptMethod]) {
               wantsToUse = await this.ui[customPromptMethod]();
             } else if (this.ui?.showConfirmPrompt) {
               const confirmResult = this.ui.showConfirmPrompt(
@@ -1177,7 +1195,8 @@ export default class EffectEngine {
 
   async collectStandbyPhaseTriggers(payload) {
     const entries = [];
-    const orderRule = "active player only; sources: field -> spellTrap -> fieldSpell";
+    const orderRule =
+      "active player only; sources: field -> spellTrap -> fieldSpell";
 
     if (!payload || !payload.player) return { entries, orderRule };
 
@@ -1317,10 +1336,18 @@ export default class EffectEngine {
     activationContext = {}
   ) {
     if (!card || !player) {
-      return { success: false, needsSelection: false, reason: "Missing card or player." };
+      return {
+        success: false,
+        needsSelection: false,
+        reason: "Missing card or player.",
+      };
     }
     if (this.game?.turn !== player.id) {
-      return { success: false, needsSelection: false, reason: "Not your turn." };
+      return {
+        success: false,
+        needsSelection: false,
+        reason: "Not your turn.",
+      };
     }
     if (this.game?.phase !== "main1" && this.game?.phase !== "main2") {
       return {
@@ -1364,7 +1391,11 @@ export default class EffectEngine {
 
     const duelCheck = this.checkOncePerDuel(card, player, effect);
     if (!duelCheck.ok) {
-      return { success: false, needsSelection: false, reason: duelCheck.reason };
+      return {
+        success: false,
+        needsSelection: false,
+        reason: duelCheck.reason,
+      };
     }
 
     const normalizedActivationContext = {
@@ -1399,7 +1430,11 @@ export default class EffectEngine {
     }
 
     if (!targetResult.ok) {
-      return { success: false, needsSelection: false, reason: targetResult.reason };
+      return {
+        success: false,
+        needsSelection: false,
+        reason: targetResult.reason,
+      };
     }
 
     this.applyActions(effect.actions || [], ctx, targetResult.targets);
@@ -1481,7 +1516,11 @@ export default class EffectEngine {
     }
 
     if (!targetResult.ok) {
-      return { success: false, needsSelection: false, reason: targetResult.reason };
+      return {
+        success: false,
+        needsSelection: false,
+        reason: targetResult.reason,
+      };
     }
 
     this.applyActions(effect.actions || [], ctx, targetResult.targets);
@@ -1583,7 +1622,11 @@ export default class EffectEngine {
               player: player.id,
               activationZone,
             });
-            return { success: true, needsSelection: false, placementOnly: true };
+            return {
+              success: true,
+              needsSelection: false,
+              placementOnly: true,
+            };
           }
           return fail("No on_play effect defined.");
         }
@@ -1694,7 +1737,11 @@ export default class EffectEngine {
       };
     }
     if (this.game.turn !== player.id) {
-      return { success: false, needsSelection: false, reason: "Not your turn." };
+      return {
+        success: false,
+        needsSelection: false,
+        reason: "Not your turn.",
+      };
     }
     if (this.game.phase !== "main1" && this.game.phase !== "main2") {
       return {
@@ -1779,7 +1826,11 @@ export default class EffectEngine {
 
     const condCheck = this.evaluateConditions(effect.conditions, ctx);
     if (!condCheck.ok) {
-      return { success: false, needsSelection: false, reason: condCheck.reason };
+      return {
+        success: false,
+        needsSelection: false,
+        reason: condCheck.reason,
+      };
     }
 
     const optCheck = this.checkOncePerTurn(card, player, effect);
@@ -2012,7 +2063,8 @@ export default class EffectEngine {
         isBot &&
         autoSelectSingleTarget &&
         (autoSelectExplicit || (min === 1 && max === 1));
-      const shouldAutoSelect = allowAutoSelectForPlayer || allowAutoSelectForBot;
+      const shouldAutoSelect =
+        allowAutoSelectForPlayer || allowAutoSelectForBot;
       if (shouldAutoSelect) {
         const desiredCount = autoSelectExplicit ? max : 1;
         const takeCount = Math.min(desiredCount, candidates.length);
@@ -2021,9 +2073,10 @@ export default class EffectEngine {
       }
 
       needsSelection = true;
-      const zones = Array.isArray(def.zones) && def.zones.length > 0
-        ? def.zones
-        : [def.zone || zoneName];
+      const zones =
+        Array.isArray(def.zones) && def.zones.length > 0
+          ? def.zones
+          : [def.zone || zoneName];
       const owner =
         def.owner === "opponent"
           ? "opponent"
@@ -2147,9 +2200,7 @@ export default class EffectEngine {
             card === ctx.source &&
             !def.requireThisCard
           ) {
-            log(
-              `[selectCandidates] Rejecting: card is source in hand zone`
-            );
+            log(`[selectCandidates] Rejecting: card is source in hand zone`);
             continue;
           }
           if (def.cardKind) {
@@ -2158,7 +2209,9 @@ export default class EffectEngine {
               : [def.cardKind];
             if (!requiredKinds.includes(card.cardKind)) {
               log(
-                `[selectCandidates] Rejecting: cardKind mismatch (${card.cardKind} !== ${requiredKinds.join(",")})`
+                `[selectCandidates] Rejecting: cardKind mismatch (${
+                  card.cardKind
+                } !== ${requiredKinds.join(",")})`
               );
               continue;
             }
@@ -2219,9 +2272,7 @@ export default class EffectEngine {
               : 0;
             const maxAllowedAtk = counterCount * multiplier;
             if (cardAtk > maxAllowedAtk) {
-              log(
-                `[selectCandidates] Rejecting: counter-based ATK too high`
-              );
+              log(`[selectCandidates] Rejecting: counter-based ATK too high`);
               continue;
             }
           }
@@ -2379,7 +2430,9 @@ export default class EffectEngine {
         const handler = this.actionHandlers.get(action.type);
         if (!handler) {
           logDev?.("ACTION_HANDLER_MISSING", actionInfo);
-          console.warn(`No handler for action type "${action.type}". Action skipped.`);
+          console.warn(
+            `No handler for action type "${action.type}". Action skipped.`
+          );
           continue;
         }
 
@@ -2528,7 +2581,10 @@ export default class EffectEngine {
       return { ok: false, reason: "Card does not belong to the player." };
     }
     if (card.cardKind !== "spell" && card.cardKind !== "trap") {
-      return { ok: false, reason: "Only Spell/Trap cards can use this effect." };
+      return {
+        ok: false,
+        reason: "Only Spell/Trap cards can use this effect.",
+      };
     }
     if (this.game?.turn !== player.id) {
       return { ok: false, reason: "Not your turn." };
@@ -3404,10 +3460,7 @@ export default class EffectEngine {
   }
 
   showSickleSelectionModal(candidates, maxSelect, onConfirm, onCancel) {
-    if (
-      this.ui &&
-      typeof this.ui.showSickleSelectionModal === "function"
-    ) {
+    if (this.ui && typeof this.ui.showSickleSelectionModal === "function") {
       this.ui.showSickleSelectionModal(
         candidates,
         maxSelect,
@@ -3622,9 +3675,7 @@ export default class EffectEngine {
     );
 
     if (combos.length === 0) {
-      this.ui.log(
-        `${ctx.player.name} failed to find valid materials.`
-      );
+      this.ui.log(`${ctx.player.name} failed to find valid materials.`);
       return false;
     }
 
@@ -3654,9 +3705,7 @@ export default class EffectEngine {
     );
 
     if (success) {
-      this.ui.log(
-        `${ctx.player.name} Fusion Summoned ${fusionMonster.name}!`
-      );
+      this.ui.log(`${ctx.player.name} Fusion Summoned ${fusionMonster.name}!`);
     }
 
     return success;
@@ -4001,12 +4050,9 @@ export default class EffectEngine {
 
     // Mostrar modal para escolher posiÃ§Ã£o (Special Summon permite escolha)
     const chosenPosition = await new Promise((resolve) => {
-      game.ui.showSpecialSummonPositionModal(
-        targetMonster,
-        (position) => {
-          resolve(position);
-        }
-      );
+      game.ui.showSpecialSummonPositionModal(targetMonster, (position) => {
+        resolve(position);
+      });
     });
 
     // Sumonizar na posiÃ§Ã£o escolhida
@@ -4138,4 +4184,3 @@ export default class EffectEngine {
     return true;
   }
 }
-
