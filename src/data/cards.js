@@ -1450,7 +1450,7 @@ export const cardDatabase = [
         requireSelfAsSummoned: true,
         targets: [
           {
-            ref: "armored_arctroth_zero_target",
+            id: "armored_arctroth_zero_target",
             owner: "opponent",
             zone: "field",
             requireFaceup: true,
@@ -1511,13 +1511,13 @@ export const cardDatabase = [
         oncePerTurnName: "apocalypse_dragon_discard_destroy",
         targets: [
           {
-            ref: "apocalypse_discard",
+            id: "apocalypse_discard",
             owner: "self",
             zone: "hand",
             count: { min: 1, max: 1 },
           },
           {
-            ref: "apocalypse_destroy_target",
+            id: "apocalypse_destroy_target",
             owner: "opponent",
             zone: "field",
             requireFaceup: true,
@@ -3407,7 +3407,7 @@ export const cardDatabase = [
         oncePerTurnName: "void_cosmic_walker_summon",
         targets: [
           {
-            ref: "void_cosmic_walker_cost",
+            id: "void_cosmic_walker_cost",
             owner: "self",
             zone: "field",
             archetype: "Void",
@@ -3450,7 +3450,7 @@ export const cardDatabase = [
             zone: ["hand", "deck"],
             filters: { name: "Void Hollow", cardKind: "monster" },
             count: { min: 0, max: 3 },
-            position: "attack",
+            position: "choice",
             promptPlayer: true,
           },
         ],
