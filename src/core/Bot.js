@@ -24,7 +24,6 @@ export default class Bot extends Player {
     this.strategy = getStrategyFor(this.archetype, this);
   }
 
-
   // Sobrescreve buildDeck para usar deck do arquétipo selecionado
   buildDeck() {
     this.deck = [];
@@ -185,6 +184,15 @@ export default class Bot extends Player {
     const maxChains = this.maxChainedActions || 2;
 
     while (chainCount < maxChains) {
+      // Try Ascension before other actions if available
+      const ascended = await this.tryAscensionIfAvailable(game);
+      if (ascended) {
+        // Allow subsequent actions after ascension
+        if (typeof game.waitForPhaseDelay === "function") {
+          await game.waitForPhaseDelay();
+        }
+      }
+
       const actions = this.sequenceActions(this.generateMainPhaseActions(game));
       if (!actions.length) break;
 
@@ -211,6 +219,9 @@ export default class Bot extends Player {
         await game.waitForPhaseDelay();
       }
     }
+
+    // Final chance to ascend if no actions left
+    await this.tryAscensionIfAvailable(game);
   }
 
   playBattlePhase(game) {
@@ -491,10 +502,10 @@ export default class Bot extends Player {
         }
       }
 
-      const activationEffect = game.effectEngine?.getSpellTrapActivationEffect?.(
-        card,
-        { fromHand: true }
-      );
+      const activationEffect =
+        game.effectEngine?.getSpellTrapActivationEffect?.(card, {
+          fromHand: true,
+        });
 
       await game.runActivationPipeline({
         card,
@@ -605,5 +616,36 @@ export default class Bot extends Player {
         : new Map(),
     };
   }
-}
 
+  async tryAscensionIfAvailable(game) {
+    try {
+      // Find a material on bot field eligible for ascension
+      const materials = (game.bot.field || []).filter(
+        (m) => m && m.cardKind === "monster" && !m.isFacedown
+      );
+      for (const material of materials) {
+        const matCheck = game.canUseAsAscensionMaterial(game.bot, material);
+        if (!matCheck.ok) continue;
+        const candidates =
+          game.getAscensionCandidatesForMaterial(game.bot, material) || [];
+        if (!candidates.length) continue;
+        // Filter by requirements
+        const eligible = candidates.filter(
+          (asc) => game.checkAscensionRequirements(game.bot, asc).ok
+        );
+        if (!eligible.length) continue;
+        // Pick highest ATK ascension monster
+        const best = eligible
+          .slice()
+          .sort((a, b) => (b.atk || 0) - (a.atk || 0))[0];
+        const res = await game.performAscensionSummon(game.bot, material, best);
+        if (res?.success) {
+          return true;
+        }
+      }
+    } catch (e) {
+      // Silent fail; bot ascension is opportunistic
+    }
+    return false;
+  }
+}

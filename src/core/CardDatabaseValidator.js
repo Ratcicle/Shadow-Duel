@@ -1,4 +1,4 @@
-import { cardDatabase } from "../data/cards.js";
+import { cardDatabase, cardDatabaseById } from "../data/cards.js";
 import {
   ActionHandlerRegistry,
   registerDefaultHandlers,
@@ -50,6 +50,72 @@ export function validateCardDatabase() {
   const seenNames = new Map();
 
   for (const card of cardDatabase) {
+    // Basic monster type checks for Extra Deck categories
+    if (card.monsterType === "ascension") {
+      // Must be a monster and live in Extra Deck during play; validate ascension metadata
+      if (card.cardKind !== "monster") {
+        warnings.push(
+          formatIssue(
+            card,
+            'Ascension card should have cardKind "monster".',
+            null,
+            null
+          )
+        );
+      }
+      const asc = card.ascension;
+      if (!asc || typeof asc !== "object") {
+        errors.push(
+          formatIssue(card, "Ascension cards must define ascension metadata.")
+        );
+      } else {
+        const materialId = asc.materialId;
+        if (!Number.isFinite(materialId)) {
+          errors.push(
+            formatIssue(card, "Ascension.materialId must be a finite number.")
+          );
+        } else if (!cardDatabaseById.get(materialId)) {
+          errors.push(
+            formatIssue(
+              card,
+              `Ascension.materialId ${materialId} not found in card database.`
+            )
+          );
+        }
+        const reqs = Array.isArray(asc.requirements) ? asc.requirements : [];
+        reqs.forEach((req, idx) => {
+          if (!req || typeof req !== "object") {
+            errors.push(
+              formatIssue(
+                card,
+                "Ascension.requirements entries must be objects.",
+                null,
+                idx
+              )
+            );
+            return;
+          }
+          const allowedReqs = new Set([
+            "material_destroyed_opponent_monsters",
+            "material_effect_activations",
+            "player_lp_gte",
+            "player_lp_lte",
+            "player_hand_gte",
+            "player_graveyard_gte",
+          ]);
+          if (!req.type || !allowedReqs.has(req.type)) {
+            warnings.push(
+              formatIssue(
+                card,
+                `Unknown or unsupported ascension requirement type "${req.type}".`,
+                null,
+                idx
+              )
+            );
+          }
+        });
+      }
+    }
     if (typeof card.id !== "number" || !Number.isFinite(card.id)) {
       errors.push(
         formatIssue(card, "Card id must be a finite number.", null, null)
@@ -148,8 +214,9 @@ export function validateCardDatabase() {
           warnings.push(
             formatIssue(
               card,
-              `Effect defines event "${effect.event}" but timing is "${effect.timing ||
-                "undefined"}".`,
+              `Effect defines event "${effect.event}" but timing is "${
+                effect.timing || "undefined"
+              }".`,
               effectIndex,
               null
             )
@@ -193,9 +260,7 @@ export function validateCardDatabase() {
         );
       }
 
-      const effectActions = Array.isArray(effect.actions)
-        ? effect.actions
-        : [];
+      const effectActions = Array.isArray(effect.actions) ? effect.actions : [];
 
       effectActions.forEach((action, actionIndex) => {
         if (!action || typeof action !== "object") {

@@ -41,9 +41,7 @@ const botPresetStatus = document.getElementById("bot-preset-status");
 populateBotPresetDropdown();
 updateBotPresetStatus();
 
-const localeButtons = Array.from(
-  document.querySelectorAll(".lang-toggle-btn")
- );
+const localeButtons = Array.from(document.querySelectorAll(".lang-toggle-btn"));
 
 function updateLocaleButtons() {
   if (!localeButtons.length) return;
@@ -228,9 +226,7 @@ function updateBotPresetStatus() {
     botPresetSelect.value = currentBotPreset;
   }
   if (botPresetStatus) {
-    botPresetStatus.textContent = `Bot: ${getBotPresetLabel(
-      currentBotPreset
-    )}`;
+    botPresetStatus.textContent = `Bot: ${getBotPresetLabel(currentBotPreset)}`;
   }
 }
 
@@ -312,7 +308,7 @@ function runCardDatabaseValidation(options = {}) {
     );
     if (!silent) {
       alert(
-        "Não é possível iniciar o duelo: há erros no banco de cartas. Verifique os detalhes acima."
+        "Nï¿½o ï¿½ possï¿½vel iniciar o duelo: hï¿½ erros no banco de cartas. Verifique os detalhes acima."
       );
     }
     return false;
@@ -362,12 +358,14 @@ function showValidationMessages(result) {
 
 function renderIssueList(issues, cssClass) {
   const MAX_ITEMS = 5;
-  const listItems = issues.slice(0, MAX_ITEMS).map(
-    (issue) =>
-      `<li class="${cssClass === "warning" ? "warning" : ""}">${formatIssueForDisplay(
-        issue
-      )}</li>`
-  );
+  const listItems = issues
+    .slice(0, MAX_ITEMS)
+    .map(
+      (issue) =>
+        `<li class="${
+          cssClass === "warning" ? "warning" : ""
+        }">${formatIssueForDisplay(issue)}</li>`
+    );
   if (issues.length > MAX_ITEMS) {
     listItems.push(
       `<li class="${cssClass === "warning" ? "warning" : ""}">+ ${
@@ -390,20 +388,28 @@ function formatIssueForDisplay(issue) {
     parts.push(`Efeito ${issue.effectIndex}`);
   }
   if (issue.actionIndex !== undefined && issue.actionIndex !== null) {
-    parts.push(`Ação ${issue.actionIndex}`);
+    parts.push(`Aï¿½ï¿½o ${issue.actionIndex}`);
   }
   const prefix = parts.length ? `[${parts.join(" | ")}] ` : "";
   return `${prefix}${issue.message || ""}`;
 }
 
 function sanitizeExtraDeck(extraDeck) {
+  // Allow Fusion and Ascension monsters only; max 1 copy per id
   const valid = new Set(
-    cardDatabase.filter((c) => c.monsterType === "fusion").map((c) => c.id)
+    cardDatabase
+      .filter(
+        (c) => c.monsterType === "fusion" || c.monsterType === "ascension"
+      )
+      .map((c) => c.id)
   );
+  const seen = new Set();
   const result = [];
   for (const id of extraDeck || []) {
     if (!valid.has(id)) continue;
+    if (seen.has(id)) continue;
     if (result.length >= MAX_EXTRA_DECK_SIZE) break;
+    seen.add(id);
     result.push(id);
   }
   return result;
@@ -438,6 +444,10 @@ function topUpDeck(deck) {
   while (filled.length < targetSize) {
     for (const card of cardDatabase) {
       counts[card.id] = counts[card.id] || 0;
+      // Do not auto-fill with Extra Deck monsters
+      if (card.monsterType === "fusion" || card.monsterType === "ascension") {
+        continue;
+      }
       if (counts[card.id] < 3 && filled.length < targetSize) {
         filled.push(card.id);
         counts[card.id]++;
@@ -498,7 +508,7 @@ function updatePoolFilterButtons() {
   const isLuminarch = poolFilterMode === "luminarch";
 
   btnPoolFilterNoArchetype.classList.toggle("active", isNoArchetype);
-  btnPoolFilterNoArchetype.textContent = "Sem arquétipo";
+  btnPoolFilterNoArchetype.textContent = "Sem arquï¿½tipo";
 
   if (btnPoolFilterVoid) {
     btnPoolFilterVoid.classList.toggle("active", isVoid);
@@ -627,7 +637,9 @@ function renderDeckBuilder() {
   const baseMainPool = cardDatabase.filter(
     (c) => !c.monsterType || c.monsterType !== "fusion"
   );
-  const baseFusionPool = cardDatabase.filter((c) => c.monsterType === "fusion");
+  const baseExtraPool = cardDatabase.filter(
+    (c) => c.monsterType === "fusion" || c.monsterType === "ascension"
+  );
 
   const poolFilter = (card) => {
     if (poolFilterMode === "no_archetype") {
@@ -654,24 +666,28 @@ function renderDeckBuilder() {
     extraCounts[id]++;
   });
 
-  // Render fusion monsters first with different styling
-  fusionCards.forEach((card) => {
+  // Render Extra Deck monsters (Fusion + Ascension) first with different styling
+  baseExtraPool.forEach((card) => {
     const cardEl = createCardThumb(card);
     const count = extraCounts[card.id] || 0;
     const badge = document.createElement("div");
+    // Reuse fusion styling for ascension as well
     badge.className = "pool-count fusion-count";
     badge.textContent = `${count}/1`;
-    badge.style.background = "linear-gradient(135deg, #8b00ff, #4b0082)";
+    badge.style.background =
+      card.monsterType === "ascension"
+        ? "linear-gradient(135deg, #0066ff, #003399)"
+        : "linear-gradient(135deg, #8b00ff, #4b0082)";
     cardEl.appendChild(badge);
 
     cardEl.onmouseenter = () => setPreview(card);
     cardEl.onclick = () => {
       if (currentExtraDeck.length >= MAX_EXTRA_DECK_SIZE) {
-        alert(`Extra Deck está cheio (max ${MAX_EXTRA_DECK_SIZE}).`);
+        alert(`Extra Deck estï¿½ cheio (max ${MAX_EXTRA_DECK_SIZE}).`);
         return;
       }
       if (count >= 1) {
-        alert("Apenas 1 cópia de cada Fusion Monster no Extra Deck.");
+        alert("Apenas 1 c f3pia de cada monstro do Extra Deck por id.");
         return;
       }
       currentExtraDeck.push(card.id);
@@ -708,7 +724,7 @@ function renderDeckBuilder() {
   });
 
   // Preview first card if none
-  const firstAvailable = fusionCards[0] || sortedCards[0] || cardDatabase[0];
+  const firstAvailable = baseExtraPool[0] || sortedCards[0] || cardDatabase[0];
   if (firstAvailable) {
     setPreview(firstAvailable);
   }
@@ -755,7 +771,11 @@ function startDuel() {
 
 function bootGame() {
   const renderer = new Renderer();
-  game = new Game({ botPreset: currentBotPreset, devMode: devModeEnabled, renderer });
+  game = new Game({
+    botPreset: currentBotPreset,
+    devMode: devModeEnabled,
+    renderer,
+  });
   game.testModeEnabled = !!testModeEnabled;
   game.start([...currentDeck], [...currentExtraDeck]);
 }
@@ -821,7 +841,7 @@ devDrawBtn?.addEventListener("click", () => {
   const count = Math.max(1, parseInt(devDrawCountInput?.value, 10) || 1);
   const result = game.devDraw(playerId, count);
   if (!result.success) {
-    alert(result.reason || "Não foi possível comprar cartas.");
+    alert(result.reason || "Nï¿½o foi possï¿½vel comprar cartas.");
   }
 });
 
@@ -839,7 +859,7 @@ devGiveBtn?.addEventListener("click", () => {
   };
   const result = game.devGiveCard(options);
   if (!result.success) {
-    alert(result.reason || "Não foi possível adicionar a carta.");
+    alert(result.reason || "Nï¿½o foi possï¿½vel adicionar a carta.");
   }
 });
 
@@ -848,7 +868,7 @@ devForcePhaseBtn?.addEventListener("click", () => {
   const phase = devForcePhaseSelect?.value || "main1";
   const result = game.devForcePhase(phase);
   if (!result.success) {
-    alert(result.reason || "Não foi possível forçar a fase.");
+    alert(result.reason || "Nï¿½o foi possï¿½vel forï¿½ar a fase.");
   }
 });
 
@@ -863,12 +883,12 @@ devApplySetupBtn?.addEventListener("click", () => {
   try {
     parsed = JSON.parse(raw);
   } catch (err) {
-    alert("JSON inválido para setup do board.");
+    alert("JSON invï¿½lido para setup do board.");
     return;
   }
   const result = game.applyManualSetup(parsed);
   if (!result.success) {
-    alert(result.reason || "Não foi possível aplicar o setup.");
+    alert(result.reason || "Nï¿½o foi possï¿½vel aplicar o setup.");
   } else if (result.warnings?.length) {
     alert(result.warnings.join("\n"));
   }
@@ -1015,5 +1035,3 @@ function requireActiveGameForDev() {
   }
   return true;
 }
-
-
