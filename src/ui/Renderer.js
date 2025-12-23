@@ -908,6 +908,16 @@ export default class Renderer {
       content.appendChild(activateBtn);
     }
 
+    if (
+      options.hasAscensionSummon &&
+      typeof options.onAscensionSummon === "function"
+    ) {
+      const ascendBtn = document.createElement("button");
+      ascendBtn.dataset.choice = "ascension_summon";
+      ascendBtn.textContent = "Ascend";
+      content.appendChild(ascendBtn);
+    }
+
     if (options.canFlip) {
       const flipBtn = document.createElement("button");
       flipBtn.dataset.choice = "flip";
@@ -980,6 +990,11 @@ export default class Renderer {
           typeof options.onActivateEffect === "function"
         ) {
           options.onActivateEffect();
+        } else if (
+          choice === "ascension_summon" &&
+          typeof options.onAscensionSummon === "function"
+        ) {
+          options.onAscensionSummon();
         } else if (choice) {
           callback(choice);
         }

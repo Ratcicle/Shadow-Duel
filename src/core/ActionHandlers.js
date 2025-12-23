@@ -47,6 +47,18 @@ function resolveTargetCards(action, ctx, targets, options = {}) {
     if (ctx?.source) {
       resolved = [ctx.source];
     }
+  } else if (targetRef === "attacker") {
+    if (ctx?.attacker) {
+      resolved = [ctx.attacker];
+    }
+  } else if (targetRef === "defender") {
+    if (ctx?.defender) {
+      resolved = [ctx.defender];
+    }
+  } else if (targetRef === "destroyed") {
+    if (ctx?.destroyed) {
+      resolved = [ctx.destroyed];
+    }
   } else if (targetRef === "summonedCard") {
     if (ctx?.summonedCard) {
       resolved = [ctx.summonedCard];
@@ -515,23 +527,32 @@ export async function handleSpecialSummonFromZone(
 
   if (!player || !game) return false;
 
-  // Determine source zone (default: deck)
-  const sourceZone = action.zone || "deck";
-  const zone = player[sourceZone];
+  const zoneSpec = action.zone || "deck";
+  const zoneNames = Array.isArray(zoneSpec) ? zoneSpec : [zoneSpec];
+  const zoneEntries = zoneNames
+    .filter((name) => typeof name === "string")
+    .map((name) => ({ name, list: player[name] }))
+    .filter((entry) => Array.isArray(entry.list));
 
-  if (!zone || zone.length === 0) {
-    getUI(game)?.log(`No cards in ${sourceZone}.`);
+  const zoneHasCards = zoneEntries.some((entry) => entry.list.length > 0);
+  if (!zoneHasCards) {
+    getUI(game)?.log(
+      `No cards in ${Array.isArray(zoneSpec) ? zoneSpec.join("/") : zoneSpec}.`
+    );
     return false;
   }
 
   // Handle banish cost (before finding candidates)
   if (action.banishCost && source) {
-    const gyIndex = zone.indexOf(source);
-    if (gyIndex !== -1) {
-      zone.splice(gyIndex, 1);
-      player.banished = player.banished || [];
-      player.banished.push(source);
-      getUI(game)?.log(`${source.name} was banished as cost.`);
+    for (const entry of zoneEntries) {
+      const idx = entry.list.indexOf(source);
+      if (idx !== -1) {
+        entry.list.splice(idx, 1);
+        player.banished = player.banished || [];
+        player.banished.push(source);
+        getUI(game)?.log(`${source.name} was banished as cost.`);
+        break;
+      }
     }
   }
 
@@ -541,7 +562,8 @@ export async function handleSpecialSummonFromZone(
   if (action.requireSource) {
     // Summon the source/destroyed card itself
     const card = source || destroyed;
-    if (!card || !zone.includes(card)) {
+    const inAnyZone = zoneEntries.some((entry) => entry.list.includes(card));
+    if (!card || !inAnyZone) {
       getUI(game)?.log("Card not in specified zone.");
       return false;
     }
@@ -562,14 +584,20 @@ export async function handleSpecialSummonFromZone(
       filters.levelOp = filters.levelOp || action.levelOp || "eq";
     }
 
-    candidates = collectZoneCandidates(zone, filters, {
-      source,
-      excludeSummonRestrict,
-    });
+    candidates = zoneEntries.flatMap((entry) =>
+      collectZoneCandidates(entry.list, filters, {
+        source,
+        excludeSummonRestrict,
+      })
+    );
   }
 
   if (candidates.length === 0) {
-    getUI(game)?.log(`No valid cards in ${sourceZone} matching filters.`);
+    getUI(game)?.log(
+      `No valid cards in ${
+        Array.isArray(zoneSpec) ? zoneSpec.join("/") : zoneSpec
+      } matching filters.`
+    );
     return false;
   }
 
@@ -645,7 +673,13 @@ export async function handleSpecialSummonFromZone(
       return false;
     }
 
-    return await summonCards(selection.selected, zone, player, action, engine);
+    return await summonCards(
+      selection.selected,
+      zoneEntries,
+      player,
+      action,
+      engine
+    );
   }
 
   // Multi-card summon (graveyard revival pattern)
@@ -699,24 +733,35 @@ export async function handleSpecialSummonFromZone(
     return false;
   }
 
-  return await summonCards(selected, zone, player, action, engine);
+  return await summonCards(selected, zoneEntries, player, action, engine);
 }
 
 /**
  * Helper function to summon one or more cards
  * Unified to handle both single and multi-card summons
  */
-async function summonCards(cards, sourceZone, player, action, engine) {
+async function summonCards(cards, sourceZoneEntries, player, action, engine) {
   const game = engine.game;
   let summoned = 0;
   const setAtkToZero = action.setAtkToZeroAfterSummon === true;
   const setDefToZero = action.setDefToZeroAfterSummon === true;
   const canUseMoveCard = game && typeof game.moveCard === "function";
-  const fromZoneName =
-    action.fromZone || action.zone || action.summonZone || "deck";
+  const fromZoneSpec = action.fromZone || action.zone || action.summonZone || "deck";
+  const fromZoneName = Array.isArray(fromZoneSpec)
+    ? null
+    : typeof fromZoneSpec === "string"
+    ? fromZoneSpec
+    : null;
 
   for (const card of cards) {
     if (!card || player.field.length >= 5) break;
+
+    const resolvedFromZone =
+      typeof action.fromZone === "string"
+        ? action.fromZone
+        : typeof engine.findCardZone === "function"
+        ? engine.findCardZone(player, card)
+        : fromZoneName;
 
     // Determine position
     let position = action.position || "choice";
@@ -727,7 +772,7 @@ async function summonCards(cards, sourceZone, player, action, engine) {
     let usedMoveCard = false;
     if (canUseMoveCard) {
       const moveResult = game.moveCard(card, player, "field", {
-        fromZone: fromZoneName,
+        fromZone: resolvedFromZone || undefined,
         position,
         isFacedown: false,
         resetAttackFlags: true,
@@ -738,9 +783,16 @@ async function summonCards(cards, sourceZone, player, action, engine) {
       usedMoveCard = true;
     } else {
       // Remove from source zone (fallback)
-      const cardIndex = sourceZone.indexOf(card);
+      const fallbackZoneName =
+        resolvedFromZone ||
+        (Array.isArray(sourceZoneEntries) && sourceZoneEntries.length > 0
+          ? sourceZoneEntries[0].name
+          : null);
+      const fallbackArr =
+        (fallbackZoneName && player[fallbackZoneName]) || player.deck || [];
+      const cardIndex = fallbackArr.indexOf(card);
       if (cardIndex !== -1) {
-        sourceZone.splice(cardIndex, 1);
+        fallbackArr.splice(cardIndex, 1);
       }
 
       card.position = position;
@@ -777,7 +829,7 @@ async function summonCards(cards, sourceZone, player, action, engine) {
         card: card,
         player: player,
         method: "special",
-        fromZone: fromZoneName,
+        fromZone: resolvedFromZone || fromZoneName || "deck",
       });
     }
 
@@ -786,7 +838,9 @@ async function summonCards(cards, sourceZone, player, action, engine) {
 
   if (summoned > 0) {
     // Log message
-    const zoneName = action.zone || "deck";
+    const zoneName = Array.isArray(action.zone)
+      ? action.zone.join("/")
+      : action.zone || "deck";
     const cardText = summoned === 1 ? cards[0].name : `${summoned} cards`;
     const positionText =
       action.position === "defense"
@@ -1629,7 +1683,9 @@ async function destroySelectiveField(action, ctx, targets, engine) {
   const opponent = game.getOpponent(player);
   if (!opponent) return false;
 
-  const keepPerSide = action.keepPerSide || 1;
+  const keepPerSide = Number.isFinite(action.keepPerSide)
+    ? action.keepPerSide
+    : 1;
   const allowTieBreak = action.allowTieBreak !== false;
 
   // Get all monsters on both sides
@@ -1668,49 +1724,44 @@ async function destroySelectiveField(action, ctx, targets, engine) {
     infoText: action.modalInfoText || "All other monsters will be destroyed.",
   };
 
-  // Handle player's side
-  if (playerHighest.length <= keepPerSide) {
-    // No tie or tie doesn't exceed keepPerSide
-    playerToKeep = playerHighest;
-  } else if (allowTieBreak) {
-    // Tie exists and player needs to choose
-    if (player.id === "bot") {
-      // Bot auto-selects (first N in array)
+  if (keepPerSide > 0) {
+    // Handle player's side
+    if (playerHighest.length <= keepPerSide) {
+      playerToKeep = playerHighest;
+    } else if (allowTieBreak) {
+      if (player.id === "bot") {
+        playerToKeep = playerHighest.slice(0, keepPerSide);
+      } else {
+        playerToKeep = await promptTieBreaker(
+          game,
+          playerHighest,
+          keepPerSide,
+          "your",
+          modalConfig
+        );
+      }
+    } else {
       playerToKeep = playerHighest.slice(0, keepPerSide);
-    } else {
-      // Ask human player to choose
-      playerToKeep = await promptTieBreaker(
-        game,
-        playerHighest,
-        keepPerSide,
-        "your",
-        modalConfig
-      );
     }
-  } else {
-    // No tie-break allowed, keep all tied
-    playerToKeep = playerHighest;
-  }
 
-  // Handle opponent's side
-  if (opponentHighest.length <= keepPerSide) {
-    opponentToKeep = opponentHighest;
-  } else if (allowTieBreak) {
-    if (player.id === "bot") {
-      // Bot chooses for opponent side (first N in array)
-      opponentToKeep = opponentHighest.slice(0, keepPerSide);
+    // Handle opponent's side
+    if (opponentHighest.length <= keepPerSide) {
+      opponentToKeep = opponentHighest;
+    } else if (allowTieBreak) {
+      if (player.id === "bot") {
+        opponentToKeep = opponentHighest.slice(0, keepPerSide);
+      } else {
+        opponentToKeep = await promptTieBreaker(
+          game,
+          opponentHighest,
+          keepPerSide,
+          "opponent's",
+          modalConfig
+        );
+      }
     } else {
-      // Human player chooses which opponent monster to keep
-      opponentToKeep = await promptTieBreaker(
-        game,
-        opponentHighest,
-        keepPerSide,
-        "opponent's",
-        modalConfig
-      );
+      opponentToKeep = opponentHighest.slice(0, keepPerSide);
     }
-  } else {
-    opponentToKeep = opponentHighest;
   }
 
   // Determine which monsters to destroy

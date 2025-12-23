@@ -66,6 +66,77 @@ export default class Game {
       card: new WeakMap(),
     };
     this.oncePerTurnTurnCounter = this.turnCounter;
+    this.resetMaterialDuelStats("init");
+  }
+
+  resetMaterialDuelStats(reason = "reset") {
+    this.materialDuelStats = {
+      player: {
+        destroyedOpponentMonstersByMaterialId: new Map(),
+        effectActivationsByMaterialId: new Map(),
+      },
+      bot: {
+        destroyedOpponentMonstersByMaterialId: new Map(),
+        effectActivationsByMaterialId: new Map(),
+      },
+    };
+    this.devLog("MATERIAL_STATS_RESET", { summary: reason });
+  }
+
+  incrementMaterialStat(playerId, mapName, materialCardId, delta = 1) {
+    const store = this.materialDuelStats?.[playerId]?.[mapName];
+    if (!store || !(store instanceof Map) || !Number.isFinite(materialCardId)) {
+      return;
+    }
+    const next = (store.get(materialCardId) || 0) + delta;
+    store.set(materialCardId, next);
+  }
+
+  recordMaterialEffectActivation(player, sourceCard, meta = {}) {
+    const playerId = player?.id || player;
+    if (playerId !== "player" && playerId !== "bot") return;
+    if (!sourceCard || sourceCard.cardKind !== "monster") return;
+    if (typeof sourceCard.id !== "number") return;
+    this.incrementMaterialStat(
+      playerId,
+      "effectActivationsByMaterialId",
+      sourceCard.id,
+      1
+    );
+    this.devLog("MATERIAL_EFFECT_ACTIVATION", {
+      summary: `${playerId}:${sourceCard.name} (${sourceCard.id})`,
+      player: playerId,
+      card: sourceCard.name,
+      cardId: sourceCard.id,
+      context: meta.contextLabel,
+    });
+  }
+
+  recordMaterialDestroyedOpponentMonster(sourceCard, destroyedCard) {
+    if (!sourceCard || !destroyedCard) return;
+    if (sourceCard.cardKind !== "monster") return;
+    if (destroyedCard.cardKind !== "monster") return;
+    if (typeof sourceCard.id !== "number") return;
+
+    const sourcePlayerId = sourceCard.controller || sourceCard.owner;
+    const destroyedPlayerId = destroyedCard.controller || destroyedCard.owner;
+    if (sourcePlayerId !== "player" && sourcePlayerId !== "bot") return;
+    if (destroyedPlayerId !== "player" && destroyedPlayerId !== "bot") return;
+    if (sourcePlayerId === destroyedPlayerId) return;
+
+    this.incrementMaterialStat(
+      sourcePlayerId,
+      "destroyedOpponentMonstersByMaterialId",
+      sourceCard.id,
+      1
+    );
+    this.devLog("MATERIAL_DESTROY_COUNT", {
+      summary: `${sourcePlayerId}:${sourceCard.name} -> ${destroyedCard.name}`,
+      player: sourcePlayerId,
+      source: sourceCard.name,
+      sourceId: sourceCard.id,
+      destroyed: destroyedCard.name,
+    });
   }
 
   setDevMode(enabled) {
@@ -964,6 +1035,7 @@ export default class Game {
   }
 
   start(deckList = null, extraDeckList = null) {
+    this.resetMaterialDuelStats("start");
     this.player.buildDeck(deckList);
     this.player.buildExtraDeck(extraDeckList);
     this.bot.buildDeck();
@@ -1832,9 +1904,11 @@ export default class Game {
 
           const canFlip = this.canFlipSummon(card);
           const canPosChange = this.canChangePosition(card);
+          const hasAscension =
+            this.getAscensionCandidatesForMaterial(this.player, card).length > 0;
 
           // Se tem qualquer opcao disponivel, mostrar o modal unificado
-          if (hasIgnition || canFlip || canPosChange) {
+          if (hasIgnition || canFlip || canPosChange || hasAscension) {
             if (e && typeof e.stopImmediatePropagation === "function") {
               e.stopImmediatePropagation();
             }
@@ -1865,6 +1939,10 @@ export default class Game {
                 hasIgnitionEffect: hasIgnition,
                 onActivateEffect: hasIgnition
                   ? () => this.tryActivateMonsterEffect(card)
+                  : null,
+                hasAscensionSummon: hasAscension,
+                onAscensionSummon: hasAscension
+                  ? () => this.tryAscensionSummon(card)
                   : null,
               }
             );
@@ -2391,7 +2469,7 @@ export default class Game {
   }
 
   async destroyCard(card, options = {}) {
-    return this.runZoneOp(
+    const result = await this.runZoneOp(
       "DESTROY_CARD",
       async () => {
         if (!card) {
@@ -2460,6 +2538,11 @@ export default class Game {
         toZone: "graveyard",
       }
     );
+    if (result?.destroyed) {
+      const sourceCard = options.sourceCard || options.source || null;
+      this.recordMaterialDestroyedOpponentMonster(sourceCard, card);
+    }
+    return result;
   }
 
   canFlipSummon(card) {
@@ -3141,6 +3224,15 @@ export default class Game {
           owner,
           activationZone: resolvedActivationZone,
           activationContext,
+        });
+      }
+
+      const shouldCountMaterialActivation =
+        resolvedCard?.cardKind === "monster" &&
+        (selectionKind === "monsterEffect" || selectionKind === "graveyardEffect");
+      if (shouldCountMaterialActivation) {
+        this.recordMaterialEffectActivation(owner, resolvedCard, {
+          contextLabel: selectionKind,
         });
       }
       if (oncePerTurnInfo) {
@@ -3977,6 +4069,342 @@ export default class Game {
 
   closeExtraDeckModal() {
     this.ui.toggleExtraDeckModal(false);
+  }
+
+  getMaterialFieldAgeTurnCounter(card) {
+    if (!card) return this.turnCounter;
+    const entered = card.enteredFieldTurn ?? null;
+    const summoned = card.summonedTurn ?? null;
+    const setTurn = card.setTurn ?? null;
+    const values = [entered, summoned, setTurn].filter((v) =>
+      Number.isFinite(v)
+    );
+    if (values.length === 0) return this.turnCounter;
+    return Math.max(...values);
+  }
+
+  getAscensionCandidatesForMaterial(player, materialCard) {
+    if (!player || !materialCard) return [];
+    if (!Array.isArray(player.extraDeck)) return [];
+    if (typeof materialCard.id !== "number") return [];
+
+    return player.extraDeck.filter((card) => {
+      const asc = card?.ascension;
+      if (!card || card.cardKind !== "monster") return false;
+      if (card.monsterType !== "ascension") return false;
+      if (!asc || typeof asc !== "object") return false;
+      return asc.materialId === materialCard.id;
+    });
+  }
+
+  checkAscensionRequirements(player, ascensionCard) {
+    const asc = ascensionCard?.ascension;
+    if (!player || !ascensionCard || !asc) {
+      return { ok: false, reason: "Invalid ascension card." };
+    }
+    const materialId = asc.materialId;
+    if (typeof materialId !== "number") {
+      return { ok: false, reason: "Missing ascension materialId." };
+    }
+
+    const reqs = Array.isArray(asc.requirements) ? asc.requirements : [];
+    for (const req of reqs) {
+      if (!req || !req.type) continue;
+      switch (req.type) {
+        case "material_destroyed_opponent_monsters": {
+          const need = Math.max(0, req.count ?? req.min ?? 0);
+          const got =
+            this.materialDuelStats?.[player.id]?.destroyedOpponentMonstersByMaterialId?.get?.(
+              materialId
+            ) || 0;
+          if (got < need) {
+            return {
+              ok: false,
+              reason: `Ascension requirement not met: ${need} opponent monster(s) destroyed (current: ${got}).`,
+            };
+          }
+          break;
+        }
+        case "material_effect_activations": {
+          const need = Math.max(0, req.count ?? req.min ?? 0);
+          const got =
+            this.materialDuelStats?.[player.id]?.effectActivationsByMaterialId?.get?.(
+              materialId
+            ) || 0;
+          if (got < need) {
+            return {
+              ok: false,
+              reason: `Ascension requirement not met: material effect activated ${need} time(s) (current: ${got}).`,
+            };
+          }
+          break;
+        }
+        case "player_lp_gte": {
+          const need = Math.max(0, req.amount ?? req.min ?? 0);
+          if ((player.lp ?? 0) < need) {
+            return { ok: false, reason: `Need at least ${need} LP.` };
+          }
+          break;
+        }
+        case "player_lp_lte": {
+          const need = Math.max(0, req.amount ?? req.max ?? 0);
+          if ((player.lp ?? 0) > need) {
+            return { ok: false, reason: `Need at most ${need} LP.` };
+          }
+          break;
+        }
+        case "player_hand_gte": {
+          const need = Math.max(0, req.count ?? req.min ?? 0);
+          if ((player.hand?.length || 0) < need) {
+            return {
+              ok: false,
+              reason: `Need at least ${need} card(s) in hand.`,
+            };
+          }
+          break;
+        }
+        case "player_graveyard_gte": {
+          const need = Math.max(0, req.count ?? req.min ?? 0);
+          if ((player.graveyard?.length || 0) < need) {
+            return {
+              ok: false,
+              reason: `Need at least ${need} card(s) in graveyard.`,
+            };
+          }
+          break;
+        }
+        default:
+          break;
+      }
+    }
+
+    return { ok: true };
+  }
+
+  canUseAsAscensionMaterial(player, materialCard) {
+    if (!player || !materialCard) {
+      return { ok: false, reason: "Missing material." };
+    }
+    if (!player.field?.includes(materialCard)) {
+      return { ok: false, reason: "Material must be on the field." };
+    }
+    if (materialCard.cardKind !== "monster") {
+      return { ok: false, reason: "Material must be a monster." };
+    }
+    if (materialCard.isFacedown) {
+      return { ok: false, reason: "Material must be face-up." };
+    }
+
+    const enteredTurn = this.getMaterialFieldAgeTurnCounter(materialCard);
+    if (this.turnCounter <= enteredTurn) {
+      return {
+        ok: false,
+        reason: "Material must have been on the field for at least 1 turn.",
+      };
+    }
+
+    return { ok: true };
+  }
+
+  async performAscensionSummon(player, materialCard, ascensionCard) {
+    const game = this;
+    if (!player || !materialCard || !ascensionCard) {
+      return { success: false, needsSelection: false, reason: "Invalid summon." };
+    }
+
+    const materialCheck = this.canUseAsAscensionMaterial(player, materialCard);
+    if (!materialCheck.ok) {
+      return {
+        success: false,
+        needsSelection: false,
+        reason: materialCheck.reason,
+      };
+    }
+
+    const reqCheck = this.checkAscensionRequirements(player, ascensionCard);
+    if (!reqCheck.ok) {
+      return { success: false, needsSelection: false, reason: reqCheck.reason };
+    }
+
+    if ((player.field?.length || 0) >= 5) {
+      return {
+        success: false,
+        needsSelection: false,
+        reason: "Field is full.",
+      };
+    }
+
+    const positionPref = ascensionCard.ascension?.position || "choice";
+    const resolvedPosition =
+      positionPref === "choice" &&
+      typeof this.effectEngine?.chooseSpecialSummonPosition === "function"
+        ? await this.effectEngine.chooseSpecialSummonPosition(
+            ascensionCard,
+            player
+          )
+        : positionPref === "defense"
+        ? "defense"
+        : "attack";
+
+    const result = await this.runZoneOp(
+      "ASCENSION_SUMMON",
+      async () => {
+        const sendResult = this.moveCard(materialCard, player, "graveyard", {
+          fromZone: "field",
+          contextLabel: "ascension_material",
+          wasDestroyed: false,
+        });
+        if (sendResult?.success === false) {
+          return { success: false, needsSelection: false, reason: "Failed to pay material." };
+        }
+
+        const summonResult = this.moveCard(ascensionCard, player, "field", {
+          fromZone: "extraDeck",
+          position: resolvedPosition,
+          isFacedown: false,
+          resetAttackFlags: true,
+          summonMethodOverride: "ascension",
+          contextLabel: "ascension_summon",
+        });
+        if (summonResult?.success === false) {
+          return {
+            success: false,
+            needsSelection: false,
+            reason: summonResult.reason || "Ascension summon failed.",
+          };
+        }
+
+        return { success: true, needsSelection: false };
+      },
+      {
+        contextLabel: "ascension_summon",
+        card: ascensionCard,
+        fromZone: "extraDeck",
+        toZone: "field",
+      }
+    );
+
+    if (result?.success) {
+      game.ui.log(
+        `${player.name || player.id} Ascension Summoned ${ascensionCard.name} by sending ${materialCard.name} to the Graveyard.`
+      );
+      game.updateBoard();
+    } else if (result?.reason) {
+      game.ui.log(result.reason);
+    }
+
+    return result || { success: false, needsSelection: false, reason: "Ascension summon failed." };
+  }
+
+  async tryAscensionSummon(materialCard, options = {}) {
+    const player = this.player;
+    const guard = this.guardActionStart({
+      actor: player,
+      kind: "ascension_summon",
+      phaseReq: ["main1", "main2"],
+    });
+    if (!guard.ok) return guard;
+
+    const materialCheck = this.canUseAsAscensionMaterial(player, materialCard);
+    if (!materialCheck.ok) {
+      this.ui.log(materialCheck.reason);
+      return { success: false, reason: materialCheck.reason };
+    }
+
+    const allAscensions = this.getAscensionCandidatesForMaterial(
+      player,
+      materialCard
+    );
+    if (allAscensions.length === 0) {
+      const reason = "No Ascension monsters available for this material.";
+      this.ui.log(reason);
+      return { success: false, reason };
+    }
+
+    const eligible = [];
+    let lastFailure = null;
+    for (const asc of allAscensions) {
+      const req = this.checkAscensionRequirements(player, asc);
+      if (req.ok) {
+        eligible.push(asc);
+      } else {
+        lastFailure = req.reason;
+      }
+    }
+
+    if (eligible.length === 0) {
+      const reason = lastFailure || "Ascension requirements not met.";
+      this.ui.log(reason);
+      return { success: false, reason };
+    }
+
+    if (eligible.length === 1) {
+      return await this.performAscensionSummon(player, materialCard, eligible[0]);
+    }
+
+    const candidates = eligible
+      .map((card) => {
+        const zoneIndex = player.extraDeck.indexOf(card);
+        return {
+          name: card.name,
+          owner: "player",
+          controller: player.id,
+          zone: "extraDeck",
+          zoneIndex,
+          atk: card.atk || 0,
+          def: card.def || 0,
+          level: card.level || 0,
+          cardKind: card.cardKind,
+          cardRef: card,
+        };
+      })
+      .map((cand, idx) => ({
+        ...cand,
+        key: this.buildSelectionCandidateKey(cand, idx),
+      }));
+
+    return new Promise((resolve) => {
+      const requirementId = "ascension_choice";
+      const requirement = {
+        id: requirementId,
+        min: 1,
+        max: 1,
+        zones: ["extraDeck"],
+        owner: "player",
+        filters: {},
+        allowSelf: true,
+        distinct: true,
+        candidates,
+      };
+      const selectionContract = {
+        kind: "choice",
+        message: "Select an Ascension Monster to Summon.",
+        requirements: [requirement],
+        ui: { useFieldTargeting: false, allowCancel: true },
+        metadata: { context: "ascension_choice" },
+      };
+
+      this.startTargetSelectionSession({
+        kind: "ascension",
+        selectionContract,
+        onCancel: () => resolve({ success: false, reason: "Ascension cancelled." }),
+        execute: async (selections) => {
+          const chosenKey = (selections?.[requirementId] || [])[0];
+          const chosenCard =
+            candidates.find((cand) => cand.key === chosenKey)?.cardRef || null;
+          if (!chosenCard) {
+            return { success: false, needsSelection: false, reason: "No Ascension selected." };
+          }
+          const res = await this.performAscensionSummon(
+            player,
+            materialCard,
+            chosenCard
+          );
+          resolve(res);
+          return res;
+        },
+      });
+    });
   }
 
   getAttackAvailability(attacker) {
@@ -4837,8 +5265,11 @@ export default class Game {
     card.owner = destPlayer.id;
     card.controller = destPlayer.id;
 
-    // Special case: Fusion monsters returning to hand go back to Extra Deck instead
-    if (toZone === "hand" && card.monsterType === "fusion") {
+    // Special case: Extra Deck monsters returning to hand go back to Extra Deck instead
+    if (
+      toZone === "hand" &&
+      (card.monsterType === "fusion" || card.monsterType === "ascension")
+    ) {
       const extraDeck = this.getZone(destPlayer, "extraDeck");
       if (extraDeck) {
         extraDeck.push(card);
@@ -4859,13 +5290,23 @@ export default class Game {
     }
 
     if (toZone === "field" && card.cardKind === "monster" && fromZone !== "field") {
+      card.enteredFieldTurn = this.turnCounter;
+      card.summonedTurn = this.turnCounter;
+      card.positionChangedThisTurn = false;
+      if (card.isFacedown) {
+        card.setTurn = this.turnCounter;
+      } else {
+        card.setTurn = null;
+      }
+
       const ownerPlayer = card.owner === "player" ? this.player : this.bot;
       const otherPlayer = ownerPlayer === this.player ? this.bot : this.player;
+      const summonMethod = options.summonMethodOverride || "special";
       void this.emit("after_summon", {
         card,
         player: ownerPlayer,
         opponent: otherPlayer,
-        method: "special",
+        method: summonMethod,
         fromZone,
       });
     }
@@ -7360,6 +7801,9 @@ export default class Game {
           });
           card.hasAttacked = false;
           card.attacksUsedThisTurn = 0;
+          card.enteredFieldTurn = this.turnCounter;
+          card.summonedTurn = this.turnCounter;
+          card.setTurn = card.isFacedown ? this.turnCounter : null;
           player.field.push(card);
           break;
         case "spellTrap":
