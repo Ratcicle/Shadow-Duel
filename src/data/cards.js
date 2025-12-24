@@ -3457,6 +3457,99 @@ export const cardDatabase = [
       },
     ],
   },
+  {
+    id: 180,
+    name: "Armored Dragon",
+    cardKind: "monster",
+    type: "Dragon",
+    level: 4,
+    atk: 1600,
+    def: 1500,
+    description:
+      "If this card is Normal Summoned: You can add 1 Level 4 or lower Dragon monster from your Deck to your hand. If this card is destroyed by battle: draw 1 card, and if it is a Level 4 or lower Dragon monster, you can Special Summon it.",
+    image: "assets/Armored Dragon.png",
+    effects: [
+      {
+        id: "armored_dragon_search_on_normal",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethods: ["normal"],
+        requireSelfAsSummoned: true,
+        actions: [
+          {
+            type: "search_any",
+            player: "self",
+            filters: { cardKind: "monster", type: "Dragon" },
+            maxLevel: 4,
+            count: { min: 0, max: 1 },
+            promptPlayer: true,
+          },
+        ],
+      },
+      {
+        id: "armored_dragon_battle_destroy_draw_summon",
+        timing: "on_event",
+        event: "battle_destroy",
+        requireSelfAsDestroyed: true,
+        actions: [
+          { type: "draw", player: "self", amount: 1 },
+          {
+            type: "conditional_summon_from_hand",
+            targetRef: "last_drawn_card",
+            condition: {
+              type: "match_card_props",
+              typeName: "Dragon",
+              maxLevel: 4,
+              cardKind: "monster",
+            },
+            position: "choice",
+            optional: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 181,
+    name: "Metal Armored Dragon",
+    cardKind: "monster",
+    type: "Dragon",
+    level: 6,
+    atk: 2200,
+    def: 2000,
+    monsterType: "ascension",
+    ascension: {
+      materialId: 180,
+      requirements: [],
+      position: "choice",
+    },
+    description:
+      "While in Defense Position, this card cannot be destroyed by battle. While face-up on the field, it gains 300 ATK/DEF for each Dragon monster its controller has Special Summoned this duel.",
+    image: "assets/Metal Armored Dragon.png",
+    effects: [
+      {
+        id: "metal_armored_defense_indestructible",
+        timing: "passive",
+        passive: {
+          type: "position_status",
+          activePosition: "defense",
+          status: "battleIndestructible",
+        },
+      },
+      {
+        id: "metal_armored_dragon_special_buff",
+        timing: "passive",
+        passive: {
+          type: "type_special_summoned_count_buff",
+          typeName: "Dragon",
+          amountPerCard: 300,
+          scope: "card_state",
+          owners: ["self"],
+          stats: ["atk", "def"],
+        },
+      },
+    ],
+  },
 ];
 
 // Performance optimization: Create indexed maps for O(1) lookups

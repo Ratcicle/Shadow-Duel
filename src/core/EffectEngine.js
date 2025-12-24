@@ -20,6 +20,14 @@ export default class EffectEngine {
     // Initialize action handler registry
     this.actionHandlers = new ActionHandlerRegistry();
     registerDefaultHandlers(this.actionHandlers);
+
+    // Track per-card counters for special summon by type (used by passives like Metal Armored Dragon)
+    // Defer listener registration until game is fully initialized
+    if (game && typeof game.on === "function") {
+      game.on("after_summon", (payload) =>
+        this.handleSpecialSummonTypeCounters(payload)
+      );
+    }
   }
 
   get ui() {
@@ -381,6 +389,43 @@ export default class EffectEngine {
     card.dynamicBuffs = null;
   }
 
+  handleSpecialSummonTypeCounters(payload) {
+    const { card: summonedCard, player, method } = payload || {};
+    if (!summonedCard || method !== "special" || !player) return;
+
+    const typeName = summonedCard.type || null;
+    if (!typeName) return;
+
+    const controllerId = player.id || player;
+    const fieldCards = player.field || [];
+
+    for (const fieldCard of fieldCards) {
+      if (!fieldCard || fieldCard.isFacedown) continue;
+      if (fieldCard.cardKind !== "monster") continue;
+
+      const effects = fieldCard.effects || [];
+      for (const effect of effects) {
+        if (!effect || effect.timing !== "passive") continue;
+        const passive = effect.passive;
+        if (!passive) continue;
+        if (passive.type !== "type_special_summoned_count_buff") continue;
+        if (passive.scope !== "card_state") continue; // only per-instance counters
+
+        const passiveType = passive.typeName || passive.monsterType || null;
+        if (!passiveType || passiveType !== typeName) continue;
+
+        // Ensure state map and increment
+        const state = fieldCard.state || (fieldCard.state = {});
+        const map =
+          state.specialSummonTypeCount || (state.specialSummonTypeCount = {});
+        map[typeName] = (map[typeName] || 0) + 1;
+      }
+    }
+
+    // Update passives after increment to reflect new buff values
+    this.updatePassiveBuffs();
+  }
+
   updatePassiveBuffs() {
     if (!this.game) return false;
 
@@ -398,7 +443,69 @@ export default class EffectEngine {
       effects.forEach((effect, index) => {
         if (!effect || effect.timing !== "passive") return;
         const passive = effect.passive;
-        if (!passive || passive.type !== "archetype_count_buff") return;
+        if (!passive) return;
+
+        // Passive: position-based status (e.g., battle indestructible in defense)
+        if (passive.type === "position_status") {
+          const activePos = passive.activePosition || "defense";
+          const statusName = passive.status || "battleIndestructible";
+          const shouldHave = (card.position || "attack") === activePos;
+          const hasNow = !!card[statusName];
+          if (shouldHave && !hasNow) {
+            card[statusName] = true;
+            updated = true;
+          } else if (!shouldHave && hasNow) {
+            delete card[statusName];
+            updated = true;
+          }
+          processedKeys.add(effect.id || `passive_${card.id}_${index}_pos`);
+          return;
+        }
+
+        // Passive: buff per count of special-summoned monsters of a given type
+        // Supports per-card scope (card.state) or game-level fallback for future uses
+        if (passive.type === "type_special_summoned_count_buff") {
+          const typeName = passive.typeName || passive.monsterType || null;
+          if (!typeName) return;
+
+          const scope = passive.scope || passive.sourceScope || "game";
+          let count = 0;
+
+          if (scope === "card_state") {
+            const state = card.state || (card.state = {});
+            const map = state.specialSummonTypeCount || {};
+            count = map[typeName] || 0;
+          } else if (
+            this.game &&
+            typeof this.game.getSpecialSummonedTypeCount === "function"
+          ) {
+            const owners = passive.owners || passive.countOwners || ["self"]; // flexibility
+            const ownerType = "self"; // current card owner only
+            if (owners.includes(ownerType)) {
+              const ownerId = card.owner;
+              count += this.game.getSpecialSummonedTypeCount(ownerId, typeName);
+            }
+          }
+
+          const perCard =
+            passive.amountPerCard ??
+            passive.perCard ??
+            passive.buffPerCard ??
+            0;
+          const stats = passive.stats || ["atk", "def"];
+          const buffKey = effect.id || `passive_${card.id}_${index}_type_count`;
+          const applied = this.applyPassiveBuffValue(
+            card,
+            buffKey,
+            count * perCard,
+            stats
+          );
+          if (applied) updated = true;
+          processedKeys.add(buffKey);
+          return;
+        }
+
+        if (passive.type !== "archetype_count_buff") return;
 
         const archetype = passive.archetype;
         if (!archetype) return;
@@ -2880,6 +2987,9 @@ export default class EffectEngine {
     const amount = action.amount ?? 1;
     if (this.game && typeof this.game.drawCards === "function") {
       const result = this.game.drawCards(targetPlayer, amount);
+      if (ctx && result && Array.isArray(result.drawn)) {
+        ctx.lastDrawnCards = result.drawn.slice();
+      }
       return result?.ok || (result?.drawn?.length || 0) > 0;
     }
 

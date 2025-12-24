@@ -47,6 +47,11 @@ function resolveTargetCards(action, ctx, targets, options = {}) {
     if (ctx?.source) {
       resolved = [ctx.source];
     }
+  } else if (targetRef === "last_drawn_card") {
+    const arr = Array.isArray(ctx?.lastDrawnCards) ? ctx.lastDrawnCards : [];
+    resolved = arr.length > 0 ? [arr[0]] : [];
+  } else if (targetRef === "last_drawn") {
+    resolved = Array.isArray(ctx?.lastDrawnCards) ? ctx.lastDrawnCards : [];
   } else if (targetRef === "attacker") {
     if (ctx?.attacker) {
       resolved = [ctx.attacker];
@@ -149,6 +154,23 @@ function collectZoneCandidates(zone, filters = {}, options = {}) {
         if (!filters.cardKind.includes(card.cardKind)) return false;
       } else {
         if (card.cardKind !== filters.cardKind) return false;
+      }
+    }
+
+    // Support filtering by monster type (e.g., "Dragon")
+    if (filters.type) {
+      const cardType = card.type || null;
+      const cardTypes = Array.isArray(card.types) ? card.types : null;
+      if (Array.isArray(filters.type)) {
+        const ok = cardTypes
+          ? filters.type.some((t) => cardTypes.includes(t))
+          : filters.type.includes(cardType);
+        if (!ok) return false;
+      } else {
+        const ok = cardTypes
+          ? cardTypes.includes(filters.type)
+          : cardType === filters.type;
+        if (!ok) return false;
       }
     }
 
@@ -2742,8 +2764,38 @@ export async function handleConditionalSummonFromHand(
       conditionMet = zone.some((c) => c && c.name === cardName);
     }
   } else {
-    // Default to true if no condition specified
-    conditionMet = true;
+    // Additional generic condition: match properties of the card itself
+    if (condition.type === "match_card_props") {
+      const typeName =
+        condition.typeName || condition.typeFilter || condition.type || null;
+      const minLevel = Number.isFinite(condition.minLevel)
+        ? condition.minLevel
+        : null;
+      const maxLevel = Number.isFinite(condition.maxLevel)
+        ? condition.maxLevel
+        : null;
+      const requireKind = condition.cardKind || null;
+
+      let ok = true;
+      if (typeName) {
+        const types = Array.isArray(handCard.types) ? handCard.types : null;
+        const cardType = handCard.type || null;
+        ok = types ? types.includes(typeName) : cardType === typeName;
+      }
+      if (ok && requireKind) {
+        ok = handCard.cardKind === requireKind;
+      }
+      if (ok && minLevel !== null) {
+        ok = (handCard.level || 0) >= minLevel;
+      }
+      if (ok && maxLevel !== null) {
+        ok = (handCard.level || 0) <= maxLevel;
+      }
+      conditionMet = ok;
+    } else {
+      // Default to true if no condition specified
+      conditionMet = true;
+    }
   }
 
   if (!conditionMet) {

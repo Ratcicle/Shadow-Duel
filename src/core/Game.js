@@ -32,7 +32,6 @@ export default class Game {
     this.bot = new Bot(this.botPreset);
     this.renderer = options.renderer || null;
     this.ui = createUIAdapter(this.renderer);
-    this.effectEngine = new EffectEngine(this);
     this.autoSelector = new AutoSelector(this);
 
     this.player.game = this;
@@ -67,6 +66,18 @@ export default class Game {
     };
     this.oncePerTurnTurnCounter = this.turnCounter;
     this.resetMaterialDuelStats("init");
+
+    // Track counts of special-summoned monsters by type per player
+    this.specialSummonTypeCounts = {
+      player: new Map(),
+      bot: new Map(),
+    };
+
+    // Listener to record type counts on special summons
+    this.on("after_summon", (payload) => this._trackSpecialSummonType(payload));
+
+    // Initialize EffectEngine after eventListeners is set up
+    this.effectEngine = new EffectEngine(this);
   }
 
   resetMaterialDuelStats(reason = "reset") {
@@ -81,6 +92,35 @@ export default class Game {
       },
     };
     this.devLog("MATERIAL_STATS_RESET", { summary: reason });
+  }
+
+  _trackSpecialSummonType(payload) {
+    try {
+      const { card, player, method } = payload || {};
+      if (!card || !player || method !== "special") return;
+      const typeName = card.type || null;
+      if (!typeName) return;
+      const playerId = player?.id || player;
+      const store = this.specialSummonTypeCounts?.[playerId];
+      if (!store || !(store instanceof Map)) return;
+      const next = (store.get(typeName) || 0) + 1;
+      store.set(typeName, next);
+      this.devLog?.("SS_TYPE_TRACK", {
+        summary: `${playerId} special-summoned ${typeName} (${next})`,
+        player: playerId,
+        type: typeName,
+        count: next,
+      });
+    } catch (err) {
+      console.error("Failed to track special summon type:", err);
+    }
+  }
+
+  getSpecialSummonedTypeCount(owner, typeName) {
+    const playerId = owner?.id || owner;
+    const store = this.specialSummonTypeCounts?.[playerId];
+    if (!store || !(store instanceof Map)) return 0;
+    return store.get(typeName) || 0;
   }
 
   incrementMaterialStat(playerId, mapName, materialCardId, delta = 1) {
