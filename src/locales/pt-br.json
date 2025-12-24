@@ -14,7 +14,7 @@
     },
     "4": {
       "name": "Necromancia Barata",
-      "description": "Invoque por invocação-Especial 1 Token de Diabinho (ATK/DEF 500)."
+      "description": "Invoque por invocação-Especial 1 Token de Esqueleto (ATK/DEF 500)."
     },
     "5": {
       "name": "Corcel Pesadelo da Meia-Noite",
@@ -318,4 +318,3 @@
     }
   }
 }
-

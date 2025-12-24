@@ -105,8 +105,7 @@ function sendCardsToGraveyard(cards, player, engine, options = {}) {
 
     if (typeof game.moveCard === "function") {
       const moveResult = game.moveCard(card, player, "graveyard", { fromZone });
-      const moveFailed =
-        moveResult === false || moveResult?.success === false;
+      const moveFailed = moveResult === false || moveResult?.success === false;
       if (!moveFailed) {
         movedCards.push(card);
         continue;
@@ -145,7 +144,13 @@ function collectZoneCandidates(zone, filters = {}, options = {}) {
   return zone.filter((card) => {
     if (!card) return false;
 
-    if (filters.cardKind && card.cardKind !== filters.cardKind) return false;
+    if (filters.cardKind) {
+      if (Array.isArray(filters.cardKind)) {
+        if (!filters.cardKind.includes(card.cardKind)) return false;
+      } else {
+        if (card.cardKind !== filters.cardKind) return false;
+      }
+    }
 
     if (filters.archetype) {
       const hasArchetype =
@@ -183,8 +188,7 @@ function collectZoneCandidates(zone, filters = {}, options = {}) {
 function buildFieldSelectionCandidates(owner, game, cards, options = {}) {
   if (!owner || !Array.isArray(cards)) return [];
   const ownerLabel =
-    options.ownerLabel ??
-    (owner.id === "player" ? "player" : "opponent");
+    options.ownerLabel ?? (owner.id === "player" ? "player" : "opponent");
 
   return cards.map((card, index) => {
     const inField = owner.field?.indexOf(card) ?? -1;
@@ -307,7 +311,11 @@ async function selectCardsFromZone({
     if (typeof selectSingle === "function") {
       const chosen = await selectSingle(resolvedCandidates);
       if (!chosen) {
-        return { candidates: resolvedCandidates, selected: [], cancelled: true };
+        return {
+          candidates: resolvedCandidates,
+          selected: [],
+          cancelled: true,
+        };
       }
       return {
         candidates: resolvedCandidates,
@@ -409,10 +417,12 @@ async function summonFromHandCore({
     return { success: false, position };
   }
 
-  let resolvedPosition = position || "attack";
-  if (resolvedPosition === "choice") {
-    resolvedPosition = await engine.chooseSpecialSummonPosition(card, player);
-  }
+  // Unified semantics: undefined → choice, use EffectEngine resolver
+  const resolvedPosition = await engine.chooseSpecialSummonPosition(
+    card,
+    player,
+    { position }
+  );
 
   const moveResult =
     typeof game.moveCard === "function"
@@ -746,7 +756,8 @@ async function summonCards(cards, sourceZoneEntries, player, action, engine) {
   const setAtkToZero = action.setAtkToZeroAfterSummon === true;
   const setDefToZero = action.setDefToZeroAfterSummon === true;
   const canUseMoveCard = game && typeof game.moveCard === "function";
-  const fromZoneSpec = action.fromZone || action.zone || action.summonZone || "deck";
+  const fromZoneSpec =
+    action.fromZone || action.zone || action.summonZone || "deck";
   const fromZoneName = Array.isArray(fromZoneSpec)
     ? null
     : typeof fromZoneSpec === "string"
@@ -763,11 +774,10 @@ async function summonCards(cards, sourceZoneEntries, player, action, engine) {
         ? engine.findCardZone(player, card)
         : fromZoneName;
 
-    // Determine position
-    let position = action.position || "choice";
-    if (position === "choice") {
-      position = await engine.chooseSpecialSummonPosition(card, player);
-    }
+    // Unified semantics: delegate to unified resolver
+    const position = await engine.chooseSpecialSummonPosition(card, player, {
+      position: action.position,
+    });
 
     let usedMoveCard = false;
     if (canUseMoveCard) {
@@ -939,12 +949,7 @@ export async function handleTransmutate(action, ctx, targets, engine) {
     excludeSummonRestrict: action.excludeSummonRestrict || [],
   };
 
-  return await handleSpecialSummonFromZone(
-    summonAction,
-    ctx,
-    targets,
-    engine
-  );
+  return await handleSpecialSummonFromZone(summonAction, ctx, targets, engine);
 }
 
 /**
@@ -985,7 +990,7 @@ export async function handleSpecialSummonFromHandWithCost(
       player,
       engine,
       game,
-      position: action.position || "attack",
+      position: action.position || "choice",
       cannotAttackThisTurn: action.cannotAttackThisTurn || false,
     });
     return summonResult.success;
@@ -1059,7 +1064,11 @@ export async function handleSpecialSummonFromHandWithCost(
   }
 
   const defaultTierOptions = [
-    { count: 1, label: "Tier 1", description: "+300 ATK atÃ© o final do turno" },
+    {
+      count: 1,
+      label: "Tier 1",
+      description: "+300 ATK atÃ© o final do turno",
+    },
     {
       count: 2,
       label: "Tier 2",
@@ -1131,7 +1140,8 @@ export async function handleSpecialSummonFromHandWithCost(
               decorated,
               selectionContract: {
                 kind: "cost",
-                message: "Select the Void Hollow cards to send to the Graveyard.",
+                message:
+                  "Select the Void Hollow cards to send to the Graveyard.",
                 requirements: [
                   {
                     id: requirementId,
@@ -1166,9 +1176,9 @@ export async function handleSpecialSummonFromHandWithCost(
       }
 
       getUI(game)?.log(
-        `${player.name || player.id} enviou ${chosenCount} custo(s) para invocar ${
-          source.name
-        }.`
+        `${
+          player.name || player.id
+        } enviou ${chosenCount} custo(s) para invocar ${source.name}.`
       );
 
       const buffAmount = action.tier1AtkBoost ?? 300;
@@ -1785,9 +1795,7 @@ async function destroySelectiveField(action, ctx, targets, engine) {
   }
 
   // Destroy all marked monsters
-  getUI(game)?.log(
-    `Destroying ${toDestroy.length} monster(s) on the field...`
-  );
+  getUI(game)?.log(`Destroying ${toDestroy.length} monster(s) on the field...`);
 
   for (const { card, owner } of toDestroy) {
     await game.destroyCard(card, {
@@ -1804,9 +1812,7 @@ async function destroySelectiveField(action, ctx, targets, engine) {
   ];
 
   if (survivorNames.length > 0) {
-    getUI(game)?.log(
-      `${survivorNames.join(", ")} survived with highest ATK.`
-    );
+    getUI(game)?.log(`${survivorNames.join(", ")} survived with highest ATK.`);
   }
 
   game.updateBoard();
@@ -2344,6 +2350,10 @@ export async function handleSwitchPosition(action, ctx, targets, engine) {
 
   if (targetCards.length === 0) {
     getUI(game)?.log("No valid targets for position switch.");
+    console.log("[handleSwitchPosition] DEBUG: No targets resolved", {
+      actionTargetRef: action.targetRef,
+      targetsObject: targets,
+    });
     return false;
   }
 
@@ -2357,6 +2367,17 @@ export async function handleSwitchPosition(action, ctx, targets, engine) {
     // Switch position
     const newPosition = card.position === "attack" ? "defense" : "attack";
     card.position = newPosition;
+
+    console.log("[handleSwitchPosition] DEBUG: Switched position", {
+      cardName: card.name,
+      oldPosition:
+        card.position === newPosition
+          ? newPosition
+          : newPosition === "attack"
+          ? "defense"
+          : "attack",
+      newPosition: newPosition,
+    });
 
     if (action.markChanged !== false) {
       card.hasChangedPosition = true;
@@ -2390,6 +2411,48 @@ export async function handleSwitchPosition(action, ctx, targets, engine) {
   }
 
   return switched;
+}
+
+export async function handleSwitchDefenderPositionOnAttack(
+  action,
+  ctx,
+  targets,
+  engine
+) {
+  const { player, defender } = ctx;
+  const game = engine.game;
+
+  if (!defender || defender.cardKind !== "monster") {
+    getUI(game)?.log("No valid defender to switch position.");
+    return false;
+  }
+
+  if (defender.isFacedown) {
+    getUI(game)?.log("Cannot switch position of face-down card.");
+    return false;
+  }
+
+  if (defender.position !== "defense") {
+    getUI(game)?.log("Defender is not in defense position.");
+    return false;
+  }
+
+  // Switch position to attack
+  defender.position = "attack";
+  defender.hasChangedPosition = true;
+
+  console.log(
+    "[handleSwitchDefenderPositionOnAttack] Switched defender position",
+    {
+      cardName: defender.name,
+      newPosition: "attack",
+    }
+  );
+
+  getUI(game)?.log(`${defender.name} switched to ATTACK Position.`);
+  game.updateBoard();
+
+  return true;
 }
 
 /**
@@ -2737,11 +2800,10 @@ export async function handleConditionalSummonFromHand(
 async function performSummon(card, handIndex, player, action, engine) {
   const game = engine.game;
 
-  // Determine position
-  let position = action.position || "choice";
-  if (position === "choice") {
-    position = await game.chooseSpecialSummonPosition(card, player);
-  }
+  // Unified semantics: use EffectEngine resolver with action.position
+  const position = await engine.chooseSpecialSummonPosition(card, player, {
+    position: action.position,
+  });
 
   const moveResult =
     typeof game.moveCard === "function"
@@ -2820,9 +2882,7 @@ export async function handleDestroyAttackerOnArchetypeDestruction(
   });
   if (!result?.destroyed) return false;
 
-  getUI(game)?.log(
-    `${attacker.name} was sent to the Graveyard as punishment!`
-  );
+  getUI(game)?.log(`${attacker.name} was sent to the Graveyard as punishment!`);
 
   game.updateBoard();
   return true;
@@ -2980,7 +3040,7 @@ export async function handleSpecialSummonFromDeckWithCounterLimit(
   const counterType = action.counterType || "judgment_marker";
   const counterMultiplier = action.counterMultiplier || 500;
   const filters = action.filters || {};
-  const position = action.position || "attack";
+  const position = action.position || "choice";
 
   // Calculate max ATK based on counters
   const counterCount = source[counterType] || 0;
@@ -3086,11 +3146,12 @@ async function performSummonFromDeck(
     return false;
   }
 
-  // Determine position
-  let summonPosition = action.position || "attack";
-  if (summonPosition === "choice") {
-    summonPosition = await engine.chooseSpecialSummonPosition(card, player);
-  }
+  // Unified semantics: use EffectEngine resolver with action.position
+  const summonPosition = await engine.chooseSpecialSummonPosition(
+    card,
+    player,
+    { position: action.position }
+  );
 
   let usedMoveCard = false;
   if (typeof game.moveCard === "function") {
@@ -3245,7 +3306,8 @@ export async function handleDestroyTargetedCards(action, ctx, targets, engine) {
       activationContext: ctx.activationContext,
       selectionKind: "target",
     },
-    autoSelectKeys: () => candidates.slice(0, maxTargets).map((cand) => cand.key),
+    autoSelectKeys: () =>
+      candidates.slice(0, maxTargets).map((cand) => cand.key),
   });
 
   if (selectedKeys === null) {
@@ -3331,6 +3393,10 @@ export function registerDefaultHandlers(registry) {
   registry.register("add_from_zone_to_hand", handleAddFromZoneToHand);
   registry.register("heal_from_destroyed_atk", handleHealFromDestroyedAtk);
   registry.register("switch_position", handleSwitchPosition);
+  registry.register(
+    "switch_defender_position_on_attack",
+    handleSwitchDefenderPositionOnAttack
+  );
   registry.register("permanent_buff_named", handlePermanentBuffNamed);
   registry.register(
     "remove_permanent_buff_named",
@@ -3416,6 +3482,3 @@ export function registerDefaultHandlers(registry) {
     proxyEngineMethod("applyMirrorForceDestroy")
   );
 }
-
-
-

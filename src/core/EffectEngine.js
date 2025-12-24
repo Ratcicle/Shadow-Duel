@@ -27,33 +27,82 @@ export default class EffectEngine {
   }
 
   /**
-   * Helper para realizar Special Summon com escolha de posiÃ§Ã£o
-   * @param {Object} card - A carta a ser invocada
-   * @param {Object} player - O jogador que estÃ¡ invocando
-   * @param {Object} options - OpÃ§Ãµes adicionais
-   * @param {boolean} options.cannotAttackThisTurn - Se o monstro nÃ£o pode atacar neste turno
-   * @param {string} options.fromZone - Zona de origem (hand, deck, graveyard)
-   * @returns {Promise<string>} - A posiÃ§Ã£o escolhida ('attack' ou 'defense')
+   * UNIFIED SPECIAL SUMMON POSITION RESOLVER
+   * Implements strict semantics for position selection in all Special Summon paths.
+   *
+   * Semantics:
+   * - position undefined or null => treat as "choice" (player modal, bot defaults to "attack")
+   * - position === "choice" => allow choice (player modal, bot defaults to "attack")
+   * - position === "attack" or "defense" => FORCED position (no modal, no override)
+   *
+   * @param {Object} card - Card being summoned
+   * @param {Object} player - Player summoning the card
+   * @param {Object} options - Additional options
+   * @param {string} options.position - Explicit position from action: undefined/"choice"/"attack"/"defense"
+   * @returns {Promise<string>} - Resolved position ('attack' or 'defense')
    */
   async chooseSpecialSummonPosition(card, player, options = {}) {
-    // Bot sempre escolhe attack
-    if (player.id === "bot") {
+    const actionPosition = options.position;
+
+    // Determine if position is forced or allows choice
+    const isForced =
+      actionPosition === "attack" || actionPosition === "defense";
+    const allowsChoice = !actionPosition || actionPosition === "choice";
+
+    // FORCED POSITION: return immediately without modal
+    if (isForced) {
+      this.game?.devLog?.("SS_POSITION", {
+        summary: `Forced position ${actionPosition} for ${
+          card?.name || "unknown"
+        }`,
+        player: player?.id,
+        card: card?.name,
+        actionPosition,
+        forced: true,
+      });
+      return actionPosition;
+    }
+
+    // CHOICE ALLOWED: Bot auto-selects "attack"
+    if (player?.id === "bot") {
+      this.game?.devLog?.("SS_POSITION", {
+        summary: `Bot auto-chooses attack for ${card?.name || "unknown"}`,
+        player: player?.id,
+        card: card?.name,
+        actionPosition,
+        allowsChoice: true,
+      });
       return "attack";
     }
 
-    // Player: mostrar modal de escolha de posiÃ§Ã£o
+    // CHOICE ALLOWED: Player gets modal
     if (
       this.ui &&
       typeof this.ui.showSpecialSummonPositionModal === "function"
     ) {
       return new Promise((resolve) => {
         this.ui.showSpecialSummonPositionModal(card, (choice) => {
-          resolve(choice === "defense" ? "defense" : "attack");
+          const resolved = choice === "defense" ? "defense" : "attack";
+          this.game?.devLog?.("SS_POSITION", {
+            summary: `Player chose ${resolved} for ${card?.name || "unknown"}`,
+            player: player?.id,
+            card: card?.name,
+            actionPosition,
+            playerChoice: choice,
+          });
+          resolve(resolved);
         });
       });
     }
 
-    // Fallback: attack
+    // Fallback: default to "attack" if no UI available
+    this.game?.devLog?.("SS_POSITION", {
+      summary: `Fallback to attack for ${card?.name || "unknown"} (no UI)`,
+      player: player?.id,
+      card: card?.name,
+      actionPosition,
+      fallback: true,
+    });
     return "attack";
   }
 
@@ -1009,9 +1058,34 @@ export default class EffectEngine {
             continue;
           }
 
+          if (
+            effect.requireSelfAsAttacker === true &&
+            payload.attacker !== card
+          ) {
+            console.log(
+              "[attack_declared] Skipping effect: requireSelfAsAttacker not met",
+              {
+                effectId: effect.id,
+                cardName: card.name,
+                attackerName: payload.attacker?.name,
+              }
+            );
+            continue;
+          }
+
           if (effect.requireDefenderPosition === true) {
             const defenderCard = payload.defender;
             if (!defenderCard || defenderCard.position !== "defense") {
+              console.log(
+                "[attack_declared] Skipping effect: requireDefenderPosition not met",
+                {
+                  effectId: effect.id,
+                  cardName: card.name,
+                  hasDefender: !!defenderCard,
+                  defenderName: defenderCard?.name,
+                  defenderPosition: defenderCard?.position,
+                }
+              );
               continue;
             }
           }
@@ -1045,6 +1119,7 @@ export default class EffectEngine {
             player,
             opponent,
             attacker: payload.attacker,
+            defender: payload.defender || null,
             target: payload.target || null,
             attackerOwner: payload.attackerOwner,
             defenderOwner: payload.defenderOwner,
@@ -2857,7 +2932,12 @@ export default class EffectEngine {
   applyDamage(action, ctx) {
     const targetPlayer = action.player === "self" ? ctx.player : ctx.opponent;
     const amount = action.amount ?? 0;
-    targetPlayer.takeDamage(amount);
+
+    // Apply damage to LP only if not in trigger-only mode
+    // (inflictDamage from Game already applied the damage)
+    if (!action.triggerOnly) {
+      targetPlayer.takeDamage(amount);
+    }
 
     // Trigger effects that care about opponent losing LP
     if (amount > 0 && this.game) {
@@ -3153,7 +3233,12 @@ export default class EffectEngine {
     return false;
   }
 
-  applySpecialSummonToken(action, ctx) {
+  /**
+   * Special Summon Token: Create and summon a token monster.
+   * Unified semantics: respects action.position (undefined/choice/attack/defense).
+   * Uses moveCard pipeline when possible and emits after_summon event.
+   */
+  async applySpecialSummonToken(action, ctx) {
     const targetPlayer =
       action.player === "opponent" ? ctx.opponent : ctx.player;
     if (!action.token) return false;
@@ -3176,48 +3261,64 @@ export default class EffectEngine {
       targetPlayer.id
     );
 
-    const finishSummon = (posChoice) => {
-      const position = posChoice || action.position || "attack";
+    // UNIFIED POSITION SEMANTICS: respect action.position
+    // undefined/null → "choice" (default)
+    // "choice" → allow player/bot to choose
+    // "attack"/"defense" → forced position
+    const position = await this.chooseSpecialSummonPosition(
+      tokenCard,
+      targetPlayer,
+      { position: action.position }
+    );
 
+    // Try moveCard first for consistent pipeline
+    let moved = false;
+    if (this.game && typeof this.game.moveCard === "function") {
+      const moveResult = this.game.moveCard(tokenCard, targetPlayer, "field", {
+        position,
+        isFacedown: false,
+        resetAttackFlags: true,
+      });
+      moved = moveResult?.success === true;
+    }
+
+    // Fallback for tokens (not present in any zone initially)
+    if (!moved) {
       tokenCard.position = position;
       tokenCard.isFacedown = false;
       tokenCard.hasAttacked = false;
+      tokenCard.cannotAttackThisTurn = action.cannotAttackThisTurn !== false; // Default true for tokens
+      tokenCard.attacksUsedThisTurn = 0;
+      tokenCard.owner = targetPlayer.id;
+      tokenCard.controller = targetPlayer.id;
 
-      if (this.game && typeof this.game.moveCard === "function") {
-        this.game.moveCard(tokenCard, targetPlayer, "field", {
-          position,
-          isFacedown: tokenCard.isFacedown,
-          resetAttackFlags: true,
-        });
-      } else {
+      // Set summonedTurn for consistency with other summons
+      if (this.game?.turnCounter) {
+        tokenCard.summonedTurn = this.game.turnCounter;
+      }
+
+      if (!targetPlayer.field.includes(tokenCard)) {
         targetPlayer.field.push(tokenCard);
       }
 
-      if (this.game && typeof this.game.updateBoard === "function") {
-        this.game.updateBoard();
+      // Emit after_summon event manually (moveCard would do this automatically)
+      if (this.game && typeof this.game.emit === "function") {
+        await this.game.emit("after_summon", {
+          card: tokenCard,
+          player: targetPlayer,
+          method: "special",
+          fromZone: "token",
+        });
       }
-      if (this.game && typeof this.game.checkWinCondition === "function") {
-        this.game.checkWinCondition();
-      }
-    };
-
-    if (
-      this.game &&
-      targetPlayer === this.game.player &&
-      typeof this.game.chooseSpecialSummonPosition === "function"
-    ) {
-      const positionChoice = this.game.chooseSpecialSummonPosition(
-        targetPlayer,
-        tokenCard
-      );
-      if (positionChoice && typeof positionChoice.then === "function") {
-        positionChoice.then((pos) => finishSummon(pos));
-      } else {
-        finishSummon(positionChoice);
-      }
-    } else {
-      finishSummon(action.position || "attack");
     }
+
+    if (this.game && typeof this.game.updateBoard === "function") {
+      this.game.updateBoard();
+    }
+    if (this.game && typeof this.game.checkWinCondition === "function") {
+      this.game.checkWinCondition();
+    }
+
     return true;
   }
 
@@ -3887,8 +3988,18 @@ export default class EffectEngine {
       return true;
     }
     if (requirement.archetype) {
-      const matchesArchetype = card.archetype === requirement.archetype;
-      if (!matchesArchetype) return false;
+      // Check both card.archetype and card.archetypes (array)
+      let hasArchetype = false;
+      if (card.archetype === requirement.archetype) {
+        hasArchetype = true;
+      } else if (
+        Array.isArray(card.archetypes) &&
+        card.archetypes.includes(requirement.archetype)
+      ) {
+        hasArchetype = true;
+      }
+
+      if (!hasArchetype) return false;
 
       // Check minLevel if specified
       if (requirement.minLevel) {
@@ -4008,6 +4119,11 @@ export default class EffectEngine {
     return { ok: true, usedMaterials: combos[0], requiredCount };
   }
 
+  /**
+   * Call of the Haunted: Special Summon monster from graveyard.
+   * Unified semantics: respects action.position (undefined/choice/attack/defense).
+   * Uses moveCard pipeline and emits after_summon event.
+   */
   async applyCallOfTheHauntedSummon(action, ctx, targets) {
     const player = ctx.player;
     const card = ctx.source;
@@ -4016,9 +4132,7 @@ export default class EffectEngine {
     console.log(`[applyCallOfTheHauntedSummon] Called with targets:`, targets);
 
     if (!targets || !targets.haunted_target) {
-      game.ui.log(
-        `Call of the Haunted: Nenhum alvo selecionado no cemitÃ©rio.`
-      );
+      game.ui.log(`Call of the Haunted: Nenhum alvo selecionado no cemitério.`);
       return false;
     }
 
@@ -4034,33 +4148,67 @@ export default class EffectEngine {
     );
 
     if (!targetMonster || targetMonster.cardKind !== "monster") {
-      game.ui.log(`Call of the Haunted: Alvo invÃ¡lido.`);
+      game.ui.log(`Call of the Haunted: Alvo inválido.`);
       return false;
     }
 
-    // Remover do cemitÃ©rio
-    const gyIndex = player.graveyard.indexOf(targetMonster);
-    if (gyIndex > -1) {
-      player.graveyard.splice(gyIndex, 1);
-    } else {
-      console.log(
-        `[applyCallOfTheHauntedSummon] Monster not found in graveyard`
-      );
+    // UNIFIED POSITION SEMANTICS: respect action.position
+    // undefined/null → "choice" (default for Call of the Haunted)
+    // "choice" → allow player/bot to choose
+    // "attack"/"defense" → forced position
+    const position = await this.chooseSpecialSummonPosition(
+      targetMonster,
+      player,
+      { position: action.position }
+    );
+
+    // Use moveCard for consistent pipeline (handles zones, flags, events)
+    let usedMoveCard = false;
+    if (game && typeof game.moveCard === "function") {
+      const moveResult = game.moveCard(targetMonster, player, "field", {
+        fromZone: "graveyard",
+        position,
+        isFacedown: false,
+        resetAttackFlags: true,
+      });
+      usedMoveCard = moveResult?.success === true;
     }
 
-    // Mostrar modal para escolher posiÃ§Ã£o (Special Summon permite escolha)
-    const chosenPosition = await new Promise((resolve) => {
-      game.ui.showSpecialSummonPositionModal(targetMonster, (position) => {
-        resolve(position);
-      });
-    });
+    // Fallback if moveCard not available or failed
+    if (!usedMoveCard) {
+      // Manual removal from graveyard
+      const gyIndex = player.graveyard.indexOf(targetMonster);
+      if (gyIndex > -1) {
+        player.graveyard.splice(gyIndex, 1);
+      } else {
+        console.log(
+          `[applyCallOfTheHauntedSummon] Monster not found in graveyard`
+        );
+      }
 
-    // Sumonizar na posiÃ§Ã£o escolhida
-    targetMonster.position = chosenPosition || "attack";
-    targetMonster.isFacedown = false;
-    targetMonster.owner = player.id;
-    targetMonster.hasAttacked = true; // NÃ£o pode atacar no mesmo turno
-    player.field.push(targetMonster);
+      // Manual field addition with consistent flags
+      targetMonster.position = position;
+      targetMonster.isFacedown = false;
+      targetMonster.hasAttacked = false;
+      targetMonster.cannotAttackThisTurn = true; // Cannot attack turn summoned
+      targetMonster.attacksUsedThisTurn = 0;
+      targetMonster.owner = player.id;
+      targetMonster.controller = player.id;
+
+      if (!player.field.includes(targetMonster)) {
+        player.field.push(targetMonster);
+      }
+
+      // Emit after_summon event manually (moveCard would do this automatically)
+      if (game && typeof game.emit === "function") {
+        await game.emit("after_summon", {
+          card: targetMonster,
+          player: player,
+          method: "special",
+          fromZone: "graveyard",
+        });
+      }
+    }
 
     // Vincular a trap ao monstro para que se destruam mutuamente
     targetMonster.callOfTheHauntedTrap = card;
@@ -4069,8 +4217,8 @@ export default class EffectEngine {
     game.ui.log(
       `Call of the Haunted: ${
         targetMonster.name
-      } foi revivido do cemitÃ©rio em ${
-        chosenPosition === "defense" ? "Defesa" : "Ataque"
+      } foi revivido do cemitério em ${
+        position === "defense" ? "Defesa" : "Ataque"
       }!`
     );
     game.updateBoard();

@@ -1395,24 +1395,71 @@ export default class Game {
     return indicators;
   }
 
-  chooseSpecialSummonPosition(player, card = null) {
-    if (!player || player.id !== "player") {
-      return "attack";
-    }
-
+  /**
+   * WRAPPER for unified Special Summon position resolver.
+   * Delegates to EffectEngine.chooseSpecialSummonPosition for consistent behavior.
+   *
+   * @param {Object} player - Player summoning the card
+   * @param {Object} card - Card being summoned (optional)
+   * @param {Object} options - Position options (position: undefined/"choice"/"attack"/"defense")
+   * @returns {Promise<string>} - Resolved position ('attack' or 'defense')
+   */
+  chooseSpecialSummonPosition(player, card = null, options = {}) {
     if (
-      this.ui &&
-      typeof this.ui.showSpecialSummonPositionModal === "function"
+      this.effectEngine &&
+      typeof this.effectEngine.chooseSpecialSummonPosition === "function"
     ) {
-      return new Promise((resolve) => {
-        this.ui.showSpecialSummonPositionModal(card, (choice) => {
-          resolve(choice === "defense" ? "defense" : "attack");
-        });
-      });
+      return this.effectEngine.chooseSpecialSummonPosition(
+        card,
+        player,
+        options
+      );
     }
 
-    // Fallback: return a Promise that always resolves to "attack"
-    return Promise.resolve("attack");
+    // Fallback if EffectEngine not available
+    const actionPosition = options.position;
+    if (actionPosition === "attack" || actionPosition === "defense") {
+      return Promise.resolve(actionPosition);
+    }
+    return Promise.resolve(player?.id === "bot" ? "attack" : "attack");
+  }
+
+  /**
+   * UNIFIED DAMAGE APPLICATION
+   * Centralizes all damage to trigger opponent_damage effects consistently.
+   * Should be used instead of direct player.takeDamage() calls.
+   *
+   * @param {Object} player - Player taking damage
+   * @param {number} amount - Damage amount
+   * @param {Object} options - Additional context (cause, sourceCard, etc.)
+   */
+  inflictDamage(player, amount, options = {}) {
+    if (!player || !amount || amount <= 0) return;
+
+    // Apply the damage to player LP
+    player.takeDamage(amount);
+
+    // Trigger opponent_damage effects via EffectEngine
+    if (
+      this.effectEngine &&
+      typeof this.effectEngine.applyDamage === "function"
+    ) {
+      const opponent = player === this.player ? this.bot : this.player;
+      const ctx = {
+        player: opponent, // The one whose effects will trigger
+        opponent: player, // The one taking damage
+        source: options.sourceCard || null,
+      };
+      const action = {
+        type: "damage",
+        player: "opponent", // From opponent's perspective
+        amount: amount,
+        triggerOnly: true, // Don't apply damage again, just trigger effects
+      };
+
+      // This will trigger all opponent_damage effects
+      this.effectEngine.applyDamage(action, ctx);
+    }
   }
 
   async startTurn() {
@@ -1568,18 +1615,14 @@ export default class Game {
             this.pendingSpecialSummon &&
             card.name === this.pendingSpecialSummon.cardName
           ) {
-            // Show position choice for special summon
-            if (
-              this.ui &&
-              typeof this.ui.showSpecialSummonPositionModal === "function"
-            ) {
-              this.ui.showSpecialSummonPositionModal(card, (choice) => {
-                const position = choice === "defense" ? "defense" : "attack";
+            // Use unified position resolver
+            this.chooseSpecialSummonPosition(this.player, card, {})
+              .then((position) => {
                 this.performSpecialSummon(index, position);
+              })
+              .catch(() => {
+                this.performSpecialSummon(index, "attack");
               });
-            } else {
-              this.performSpecialSummon(index, "attack");
-            }
           } else {
             this.ui.log(
               "Finalize o efeito pendente antes de fazer outra acao."
@@ -4335,7 +4378,8 @@ export default class Game {
         // best-effort diagnostics only
       }
 
-      const reason = `No Ascension monsters available for this material.${hint}`.trim();
+      const reason =
+        `No Ascension monsters available for this material.${hint}`.trim();
       this.ui.log(reason);
       return { success: false, reason };
     }
@@ -4571,7 +4615,10 @@ export default class Game {
 
     if (!target) {
       const defender = attacker.owner === "player" ? this.bot : this.player;
-      defender.takeDamage(attacker.atk);
+      this.inflictDamage(defender, attacker.atk, {
+        sourceCard: attacker,
+        cause: "battle",
+      });
       this.markAttackUsed(attacker);
       this.checkWinCondition();
       this.clearAttackResolutionIndicators();
@@ -4617,7 +4664,10 @@ export default class Game {
       ) {
         player.gainLP(amount);
       } else {
-        player.takeDamage(amount);
+        this.inflictDamage(player, amount, {
+          sourceCard: cardInvolved,
+          cause: "battle",
+        });
       }
     };
 
@@ -5367,7 +5417,10 @@ export default class Game {
       attacker.onBattleDestroy.damage
     ) {
       const defender = attacker.owner === "player" ? this.bot : this.player;
-      defender.takeDamage(attacker.onBattleDestroy.damage);
+      this.inflictDamage(defender, attacker.onBattleDestroy.damage, {
+        sourceCard: attacker,
+        cause: "effect",
+      });
       this.ui.log(
         `${attacker.name} inflicts an extra ${attacker.onBattleDestroy.damage} damage!`
       );

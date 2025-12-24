@@ -47,8 +47,9 @@ export const cardDatabase = [
     name: "Cheap Necromancy",
     cardKind: "spell",
     subtype: "normal",
-    description: "Special Summon 1 Summoned Imp token (ATK/DEF 500).",
-    image: "assets/Summoned Imp.jpg",
+    description:
+      'Special Summon 1 "Summoned Skeleton" Token (ATK/DEF 500). Choose its battle position.',
+    image: "assets/Summoned Skeleton.jpg",
     effects: [
       {
         id: "cheap_necromancy",
@@ -58,14 +59,14 @@ export const cardDatabase = [
           {
             type: "special_summon_token",
             player: "self",
-            position: "attack",
+            position: "choice",
             token: {
-              name: "Summoned Imp",
+              name: "Summoned Skeleton",
               atk: 500,
               def: 500,
               level: 2,
               type: "Fiend",
-              image: "assets/Summoned Imp.jpg",
+              image: "assets/Summoned Skeleton.jpg",
               description: "A mischievous imp called from beyond.",
             },
           },
@@ -1260,6 +1261,7 @@ export const cardDatabase = [
         timing: "on_event",
         event: "after_summon",
         summonMethods: ["normal"],
+        requireSelfAsSummoned: true,
         actions: [
           {
             type: "search_any",
@@ -1476,9 +1478,7 @@ export const cardDatabase = [
         requireDefenderPosition: true,
         actions: [
           {
-            type: "switch_position",
-            targetRef: "defender",
-            markChanged: false,
+            type: "switch_defender_position_on_attack",
           },
         ],
       },
@@ -3395,7 +3395,7 @@ export const cardDatabase = [
       position: "choice",
     },
     description:
-      "Ascension Summon: Send 1 'Void Walker' you control to the Graveyard. Requirement: That monster's effect was activated at least 2 times this duel. Once per turn: You can send 1 'Void' monster you control to the Graveyard; Special Summon 1 Level 5 or lower 'Void' monster from your hand. If this card is sent from the field to the Graveyard: You can Special Summon up to 3 'Void Hollow' from your hand or Deck.",
+      "Ascension Material: 'Void Walker'. Requirement: The effect of the material being activated twice in this duel. Once per turn: You can send 1 'Void' monster you control to the Graveyard; Special Summon 1 Level 5 or lower 'Void' monster from your hand. If this card is sent from the field to the Graveyard: You can Special Summon up to 3 'Void Hollow' from your hand or Deck.",
     image: "assets/Void Cosmic Walker.png",
     effects: [
       {
