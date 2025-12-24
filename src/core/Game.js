@@ -2058,7 +2058,9 @@ export default class Game {
               ? opponentTargets.filter((card) => card && card.mustBeAttacked)
               : opponentTargets;
 
-          const canDirect = attacker.canAttackDirectlyThisTurn === true;
+          const canDirect =
+            attacker.canAttackDirectlyThisTurn === true &&
+            !attacker.cannotAttackDirectly;
 
           if (canDirect) {
             this.startAttackTargetSelection(attacker, attackCandidates);
@@ -3504,7 +3506,10 @@ export default class Game {
 
   startAttackTargetSelection(attacker, candidates) {
     if (!attacker || !Array.isArray(candidates)) return;
-    if (candidates.length === 0 && !attacker.canAttackDirectlyThisTurn) return;
+    const canDirect =
+      attacker.canAttackDirectlyThisTurn === true &&
+      !attacker.cannotAttackDirectly;
+    if (candidates.length === 0 && !canDirect) return;
     const decorated = candidates.map((card, idx) => {
       const ownerLabel = card.owner === "player" ? "player" : "opponent";
       const ownerPlayer = card.owner === "player" ? this.player : this.bot;
@@ -3528,7 +3533,7 @@ export default class Game {
     });
 
     // Adiciona alvo de ataque direto (clicar na mao do oponente) quando permitido
-    if (attacker.canAttackDirectlyThisTurn) {
+    if (canDirect) {
       decorated.push({
         idx: decorated.length,
         name: "Direct Attack",

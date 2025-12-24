@@ -2701,6 +2701,115 @@ export async function handleRemovePermanentBuffNamed(
  * - targetRef: reference to the target card (default: "self")
  */
 /**
+ * Generic handler for drawing and conditionally summoning from hand
+ * Draws N cards, checks if the drawn card matches a condition, and optionally summons it
+ *
+ * Action properties:
+ * - player: "self" | "opponent" - player to draw for
+ * - drawAmount: number - how many cards to draw
+ * - condition: { type, typeName, maxLevel, cardKind } - condition for drawn card
+ * - position: "attack" | "defense" | "choice" (default: "choice")
+ * - optional: boolean - if true, prompts player; if false, auto-summons (default: true)
+ */
+export async function handleDrawAndSummon(action, ctx, targets, engine) {
+  const { player, source } = ctx;
+  const game = engine.game;
+
+  if (!player || !game) return false;
+
+  const drawAmount = action.drawAmount || 1;
+  const condition = action.condition || {};
+  const optional = action.optional !== false;
+
+  // Draw the cards
+  const drawn = game.drawCards(player, drawAmount);
+  if (!drawn || !drawn.ok || !drawn.drawn || drawn.drawn.length === 0) {
+    return false;
+  }
+
+  const drawnCard = drawn.drawn[0]; // Take first drawn card
+  if (!drawnCard) return false;
+
+  // Update board to show the drawn card visually
+  game.updateBoard();
+
+  // Add a small delay to let the user see the card being drawn
+  await new Promise((resolve) => setTimeout(resolve, 400));
+
+  // Check condition against drawn card
+  let conditionMet = false;
+  if (condition.type === "match_card_props") {
+    const typeName = condition.typeName || null;
+    const minLevel = Number.isFinite(condition.minLevel)
+      ? condition.minLevel
+      : null;
+    const maxLevel = Number.isFinite(condition.maxLevel)
+      ? condition.maxLevel
+      : null;
+    const requireKind = condition.cardKind || null;
+
+    let ok = true;
+    if (typeName) {
+      const types = Array.isArray(drawnCard.types) ? drawnCard.types : null;
+      const cardType = drawnCard.type || null;
+      ok = types ? types.includes(typeName) : cardType === typeName;
+    }
+    if (ok && requireKind) {
+      ok = drawnCard.cardKind === requireKind;
+    }
+    if (ok && minLevel !== null) {
+      ok = (drawnCard.level || 0) >= minLevel;
+    }
+    if (ok && maxLevel !== null) {
+      ok = (drawnCard.level || 0) <= maxLevel;
+    }
+    conditionMet = ok;
+  } else {
+    conditionMet = true;
+  }
+
+  if (!conditionMet) {
+    return false;
+  }
+
+  // Check field space
+  if (player.field.length >= 5) {
+    getUI(game)?.log("Field is full, cannot Special Summon.");
+    return false;
+  }
+
+  // Get the index of the card in hand
+  const handIndex = player.hand.indexOf(drawnCard);
+  if (handIndex === -1) {
+    return false;
+  }
+
+  // For bot, auto-summon if not optional
+  if (player.id === "bot") {
+    if (!optional) {
+      return await performSummon(drawnCard, handIndex, player, action, engine);
+    }
+    // Bot chooses to summon (always optimal)
+    return await performSummon(drawnCard, handIndex, player, action, engine);
+  }
+
+  // For human player
+  if (optional) {
+    const wantsToSummon =
+      getUI(game)?.showConfirmPrompt?.(
+        `You drew "${drawnCard.name}". Do you want to Special Summon it from your hand?`,
+        { kind: "draw_and_summon", cardName: drawnCard.name }
+      ) ?? false;
+
+    if (!wantsToSummon) {
+      return false;
+    }
+  }
+
+  return await performSummon(drawnCard, handIndex, player, action, engine);
+}
+
+/**
  * Generic handler for conditional summon from hand
  * Offers to summon a card if a condition is met (e.g., controlling a specific card)
  *
@@ -3477,6 +3586,7 @@ export function registerDefaultHandlers(registry) {
   // FASE 3: New handlers for complex Shadow-Heart methods
   registry.register("destroy_targeted_cards", handleDestroyTargetedCards);
   registry.register("buff_stats_temp_with_second_attack", handleBuffStatsTemp);
+  registry.register("draw_and_summon", handleDrawAndSummon);
 
   // Legacy/common actions migrated into the registry (proxy to EffectEngine methods)
   registry.register("draw", proxyEngineMethod("applyDraw"));

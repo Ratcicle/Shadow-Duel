@@ -3492,10 +3492,10 @@ export const cardDatabase = [
         event: "battle_destroy",
         requireSelfAsDestroyed: true,
         actions: [
-          { type: "draw", player: "self", amount: 1 },
           {
-            type: "conditional_summon_from_hand",
-            targetRef: "last_drawn_card",
+            type: "draw_and_summon",
+            player: "self",
+            drawAmount: 1,
             condition: {
               type: "match_card_props",
               typeName: "Dragon",
@@ -3547,6 +3547,195 @@ export const cardDatabase = [
           owners: ["self"],
           stats: ["atk", "def"],
         },
+      },
+    ],
+  },
+  {
+    id: 182,
+    name: "Grey Dragon",
+    cardKind: "monster",
+    type: "Dragon",
+    level: 4,
+    atk: 1900,
+    def: 800,
+    cannotAttackDirectly: true,
+    description:
+      "Cannot attack directly. If this card is Special Summoned: You can target 1 other Dragon monster you control; it gains 500 ATK until the end of this turn. If this card is in your GY: You can discard 1 Dragon monster; add this card to your hand.",
+    image: "assets/Grey Dragon.png",
+    effects: [
+      {
+        id: "grey_dragon_special_summon_buff",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethods: ["special"],
+        requireSelfAsSummoned: true,
+        targets: [
+          {
+            id: "grey_dragon_buff_target",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            requireFaceup: true,
+            filters: { type: "Dragon" },
+            excludeSelf: true,
+            count: { min: 0, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "buff_stats_temp",
+            targetRef: "grey_dragon_buff_target",
+            atk: 500,
+            def: 0,
+          },
+        ],
+      },
+      {
+        id: "grey_dragon_gy_return",
+        timing: "ignition",
+        requireZone: "graveyard",
+        requirePhase: ["main1", "main2"],
+        targets: [
+          {
+            id: "grey_dragon_discard_cost",
+            owner: "self",
+            zone: "hand",
+            cardKind: "monster",
+            filters: { type: "Dragon" },
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "grey_dragon_discard_cost",
+            player: "self",
+            to: "graveyard",
+          },
+          {
+            type: "add_from_zone_to_hand",
+            zone: "graveyard",
+            requireSource: true,
+            player: "self",
+            count: { min: 1, max: 1 },
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 183,
+    name: "Voltaic Dragon",
+    cardKind: "monster",
+    type: "Dragon",
+    level: 3,
+    atk: 1200,
+    def: 800,
+    description:
+      "If this card is discarded from your hand to the GY: Inflict 800 damage to your opponent. If you control a Dragon monster: You can Special Summon this card from your hand. You can only use each effect of 'Voltaic Dragon' once per turn.",
+    image: "assets/Voltaic Dragon.png",
+    effects: [
+      {
+        id: "voltaic_dragon_discard_damage",
+        timing: "on_event",
+        event: "card_to_grave",
+        fromZone: "hand",
+        oncePerTurn: true,
+        oncePerTurnName: "voltaic_dragon_discard_damage",
+        actions: [
+          {
+            type: "damage",
+            player: "opponent",
+            amount: 800,
+          },
+        ],
+      },
+      {
+        id: "voltaic_dragon_special_summon",
+        timing: "ignition",
+        requireZone: "hand",
+        requirePhase: ["main1", "main2"],
+        oncePerTurn: true,
+        oncePerTurnName: "voltaic_dragon_special_summon",
+        actions: [
+          {
+            type: "conditional_summon_from_hand",
+            targetRef: "self",
+            condition: {
+              type: "control_card_type",
+              typeName: "Dragon",
+              zone: "field",
+            },
+            position: "choice",
+            optional: false,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 184,
+    name: "Luminescent Dragon",
+    cardKind: "monster",
+    type: "Dragon",
+    level: 4,
+    atk: 1500,
+    def: 900,
+    description:
+      "If this card is Normal Summoned: You can target 1 Level 4 or lower Dragon monster in your GY; Special Summon it. You can banish this card from your GY, then target 1 monster your opponent controls; it loses 1000 ATK/DEF until the end of this turn.",
+    image: "assets/Luminescent Dragon.png",
+    effects: [
+      {
+        id: "luminescent_dragon_normal_summon_revive",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethods: ["normal"],
+        requireSelfAsSummoned: true,
+        actions: [
+          {
+            type: "special_summon_from_zone",
+            zone: "graveyard",
+            filters: {
+              cardKind: "monster",
+              type: "Dragon",
+            },
+            maxLevel: 4,
+            count: { min: 0, max: 1 },
+            position: "choice",
+            promptPlayer: true,
+          },
+        ],
+      },
+      {
+        id: "luminescent_dragon_banish_debuff",
+        timing: "ignition",
+        requireZone: "graveyard",
+        requirePhase: ["main1", "main2"],
+        targets: [
+          {
+            id: "luminescent_debuff_target",
+            owner: "opponent",
+            zone: "field",
+            cardKind: "monster",
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "self",
+            player: "self",
+            to: "banished",
+            fromZone: "graveyard",
+          },
+          {
+            type: "buff_stats_temp",
+            targetRef: "luminescent_debuff_target",
+            atk: -1000,
+            def: -1000,
+          },
+        ],
       },
     ],
   },
