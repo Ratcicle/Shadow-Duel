@@ -5288,6 +5288,7 @@ export default class Game {
     }
 
     // Se um equip spell está saindo da spell/trap zone, limpar seus efeitos no monstro
+    // NOTE: This block only runs if equippedTo is still set (not already cleaned by host's cleanup)
     if (
       fromZone === "spellTrap" &&
       card.cardKind === "spell" &&
@@ -5299,6 +5300,11 @@ export default class Game {
       // Clear equip reference immediately to prevent stale pointers
       card.equippedTo = null;
 
+      // Also clear equipTarget if it points to the same host
+      if (card.equipTarget === host) {
+        card.equipTarget = null;
+      }
+
       // Remove from host's equips array
       if (host && Array.isArray(host.equips)) {
         const idxEquip = host.equips.indexOf(card);
@@ -5308,41 +5314,50 @@ export default class Game {
       }
 
       // Remove stat bonuses (clamp to 0 to prevent negative stats)
-      if (typeof card.equipAtkBonus === "number" && card.equipAtkBonus !== 0) {
-        host.atk = Math.max(0, (host.atk || 0) - card.equipAtkBonus);
-        card.equipAtkBonus = 0;
-      }
+      if (host) {
+        if (
+          typeof card.equipAtkBonus === "number" &&
+          card.equipAtkBonus !== 0
+        ) {
+          host.atk = Math.max(0, (host.atk || 0) - card.equipAtkBonus);
+          card.equipAtkBonus = 0;
+        }
 
-      if (typeof card.equipDefBonus === "number" && card.equipDefBonus !== 0) {
-        host.def = Math.max(0, (host.def || 0) - card.equipDefBonus);
-        card.equipDefBonus = 0;
-      }
+        if (
+          typeof card.equipDefBonus === "number" &&
+          card.equipDefBonus !== 0
+        ) {
+          host.def = Math.max(0, (host.def || 0) - card.equipDefBonus);
+          card.equipDefBonus = 0;
+        }
 
-      if (
-        typeof card.equipExtraAttacks === "number" &&
-        card.equipExtraAttacks !== 0
-      ) {
-        const currentExtra = host.extraAttacks || 0;
-        const nextExtra = currentExtra - card.equipExtraAttacks;
-        host.extraAttacks = Math.max(0, nextExtra);
-        card.equipExtraAttacks = 0;
-      }
+        if (
+          typeof card.equipExtraAttacks === "number" &&
+          card.equipExtraAttacks !== 0
+        ) {
+          const currentExtra = host.extraAttacks || 0;
+          const nextExtra = currentExtra - card.equipExtraAttacks;
+          host.extraAttacks = Math.max(0, nextExtra);
+          card.equipExtraAttacks = 0;
+        }
 
-      const maxAttacksAfterEquipChange = 1 + (host.extraAttacks || 0);
-      host.hasAttacked =
-        (host.attacksUsedThisTurn || 0) >= maxAttacksAfterEquipChange;
+        const maxAttacksAfterEquipChange = 1 + (host.extraAttacks || 0);
+        host.hasAttacked =
+          (host.attacksUsedThisTurn || 0) >= maxAttacksAfterEquipChange;
 
-      if (card.grantsBattleIndestructible) {
-        host.battleIndestructible = false;
-        card.grantsBattleIndestructible = false;
-      }
+        if (card.grantsBattleIndestructible) {
+          host.battleIndestructible = false;
+          card.grantsBattleIndestructible = false;
+        }
 
-      if (card.grantsCrescentShieldGuard) {
-        card.grantsCrescentShieldGuard = false;
+        if (card.grantsCrescentShieldGuard) {
+          card.grantsCrescentShieldGuard = false;
+        }
       }
 
       // Special case: "The Shadow Heart" - if it leaves the field, destroy the equipped monster
       // Process this AFTER removing bonuses to ensure clean state
+      // State is already consistent (refs cleared, bonuses removed), so destroy result doesn't affect cleanup
       if (card.name === "The Shadow Heart" && host) {
         const hostOwner = host.owner === "player" ? this.player : this.bot;
         this.destroyCard(host, {
@@ -5401,8 +5416,50 @@ export default class Game {
       );
 
       // Process equips synchronously to ensure deterministic state
+      // IMPORTANT: Remove bonuses and clear refs BEFORE moving equips to GY
+      // This prevents the equip's own moveCard path from trying to cleanup again
       for (const equip of attachedEquips) {
-        // Clear equip references BEFORE moving to avoid stale pointers
+        // Remove bonuses from host (with clamp) - do this BEFORE clearing refs
+        if (
+          typeof equip.equipAtkBonus === "number" &&
+          equip.equipAtkBonus !== 0
+        ) {
+          card.atk = Math.max(0, (card.atk || 0) - equip.equipAtkBonus);
+          equip.equipAtkBonus = 0;
+        }
+        if (
+          typeof equip.equipDefBonus === "number" &&
+          equip.equipDefBonus !== 0
+        ) {
+          card.def = Math.max(0, (card.def || 0) - equip.equipDefBonus);
+          equip.equipDefBonus = 0;
+        }
+        if (
+          typeof equip.equipExtraAttacks === "number" &&
+          equip.equipExtraAttacks !== 0
+        ) {
+          const currentExtra = card.extraAttacks || 0;
+          card.extraAttacks = Math.max(
+            0,
+            currentExtra - equip.equipExtraAttacks
+          );
+          equip.equipExtraAttacks = 0;
+        }
+        if (equip.grantsBattleIndestructible) {
+          card.battleIndestructible = false;
+          equip.grantsBattleIndestructible = false;
+        }
+        if (equip.grantsCrescentShieldGuard) {
+          equip.grantsCrescentShieldGuard = false;
+        }
+
+        // Remove from host's equips array
+        if (Array.isArray(card.equips)) {
+          const idx = card.equips.indexOf(equip);
+          if (idx > -1) card.equips.splice(idx, 1);
+        }
+
+        // Clear equip references AFTER removing bonuses
         if (equip.equippedTo === card) {
           equip.equippedTo = null;
         }
@@ -5410,7 +5467,7 @@ export default class Game {
           equip.equipTarget = null;
         }
 
-        // Move equip to graveyard (this will trigger bonus cleanup in the equip's own moveCard path)
+        // Move equip to graveyard - refs already cleared, so equip's cleanup block will be skipped
         this.moveCard(equip, fromOwner, "graveyard", {
           fromZone: "spellTrap",
         });
@@ -5419,10 +5476,9 @@ export default class Game {
       // Se o monstro foi revivido por Call of the Haunted, destruir a trap também
       if (card.callOfTheHauntedTrap) {
         const callTrap = card.callOfTheHauntedTrap;
-        card.callOfTheHauntedTrap = null; // Clear reference before async operation
+        card.callOfTheHauntedTrap = null; // Clear reference before destroy
 
-        // Use synchronous-style destroy to maintain deterministic state
-        // The destroy will be processed, and we clear the reference first to avoid loops
+        // Destroy trap - refs already cleared, state is consistent regardless of result
         this.destroyCard(callTrap, {
           cause: "effect",
           sourceCard: card,
@@ -5438,20 +5494,22 @@ export default class Game {
       }
     }
 
-    // Se Call of the Haunted sai do campo, destruir o monstro revivido
+    // Se Call of the Haunted sai do campo (para qualquer destino), destruir o monstro revivido
+    // Generalized: trap leaving spellTrap to ANY zone triggers cleanup (consistent with equip rules)
     if (
       fromZone === "spellTrap" &&
-      toZone === "graveyard" &&
+      toZone !== "spellTrap" &&
       card.cardKind === "trap" &&
       card.subtype === "continuous" &&
       card.name === "Call of the Haunted" &&
       card.callOfTheHauntedTarget
     ) {
       const revivedMonster = card.callOfTheHauntedTarget;
-      card.callOfTheHauntedTarget = null; // Clear reference before async operation
+      card.callOfTheHauntedTarget = null; // Clear reference BEFORE destroy - state is consistent
 
       const monsterOwner =
         revivedMonster.owner === "player" ? this.player : this.bot;
+      // Destroy is fire-and-forget but safe - ref already cleared, state is consistent
       this.destroyCard(revivedMonster, {
         cause: "effect",
         sourceCard: card,
