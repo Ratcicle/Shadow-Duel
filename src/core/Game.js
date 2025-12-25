@@ -5293,6 +5293,7 @@ export default class Game {
         if (arr[i] === card) {
           arr.splice(i, 1);
           removed = true;
+          break; // Remove only the first occurrence found (iterating backwards)
         }
       }
       return removed;
