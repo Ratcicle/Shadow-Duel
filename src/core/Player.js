@@ -1,4 +1,8 @@
-import { cardDatabase, cardDatabaseById, cardDatabaseByName } from "../data/cards.js";
+import {
+  cardDatabase,
+  cardDatabaseById,
+  cardDatabaseByName,
+} from "../data/cards.js";
 import Card from "./Card.js";
 
 export default class Player {
@@ -131,6 +135,18 @@ export default class Player {
 
     let usingAlt = false;
     const alt = card.altTribute;
+
+    console.log("[getTributeRequirement] Card:", card.name, {
+      level: card.level,
+      initialTributes: tributesNeeded,
+      altTribute: alt,
+      fieldMonsters: this.field.map((c) => ({
+        name: c?.name,
+        type: c?.type,
+        types: c?.types,
+      })),
+    });
+
     if (
       alt?.type === "no_tribute_if_empty_field" &&
       this.field.length === 0 &&
@@ -139,12 +155,60 @@ export default class Player {
       tributesNeeded = 0;
       usingAlt = true;
     }
-    if (alt && this.field.some((c) => c.name === alt.requiresName)) {
+
+    // Check if player has specific card by name
+    if (
+      alt?.requiresName &&
+      this.field.some((c) => c && c.name === alt.requiresName)
+    ) {
       if (alt.tributes < tributesNeeded) {
         tributesNeeded = alt.tributes;
         usingAlt = true;
       }
     }
+
+    // Check if player has card of specific type
+    if (alt?.requiresType && !usingAlt) {
+      console.log(
+        "[getTributeRequirement] Checking requiresType:",
+        alt.requiresType
+      );
+      const hasRequiredType = this.field.some((c) => {
+        if (!c || c.isFacedown) return false;
+        const hasType = Array.isArray(c.types)
+          ? c.types.includes(alt.requiresType)
+          : c.type === alt.requiresType;
+        console.log(
+          "[getTributeRequirement] Monster check:",
+          c.name,
+          "type:",
+          c.type,
+          "hasType:",
+          hasType
+        );
+        return hasType;
+      });
+
+      console.log(
+        "[getTributeRequirement] hasRequiredType:",
+        hasRequiredType,
+        "alt.tributes:",
+        alt.tributes,
+        "tributesNeeded:",
+        tributesNeeded
+      );
+
+      if (hasRequiredType && alt.tributes < tributesNeeded) {
+        tributesNeeded = alt.tributes;
+        usingAlt = true;
+      }
+    }
+
+    console.log("[getTributeRequirement] Final result:", {
+      tributesNeeded,
+      usingAlt,
+      alt,
+    });
 
     if (
       typeof card.requiredTributes === "number" &&
@@ -223,13 +287,20 @@ export default class Player {
             }
           }
 
-          if (
-            usingAlt &&
-            alt &&
-            !tributes.some((t) => t.name === alt.requiresName)
-          ) {
+          const matchesAltRequirement = (c) => {
+            if (!c) return false;
+            if (alt.requiresName) return c.name === alt.requiresName;
+            if (alt.requiresType) {
+              const types = Array.isArray(c.types) ? c.types : [c.type];
+              return types.includes(alt.requiresType);
+            }
+            return true;
+          };
+
+          if (usingAlt && alt && !tributes.some(matchesAltRequirement)) {
+            const requirementLabel = alt.requiresName || alt.requiresType;
             console.log(
-              `Must tribute ${alt.requiresName} to use reduced tribute.`
+              `Must tribute ${requirementLabel} to use reduced tribute.`
             );
             return null;
           }
@@ -237,11 +308,20 @@ export default class Player {
           tributes.forEach((sacrificed) => sendToGrave(sacrificed));
         } else {
           if (usingAlt && alt) {
-            const altIdx = this.field.findIndex(
-              (c) => c.name === alt.requiresName
-            );
+            const matchesAltRequirement = (c) => {
+              if (!c) return false;
+              if (alt.requiresName) return c.name === alt.requiresName;
+              if (alt.requiresType) {
+                const types = Array.isArray(c.types) ? c.types : [c.type];
+                return types.includes(alt.requiresType);
+              }
+              return true;
+            };
+
+            const altIdx = this.field.findIndex(matchesAltRequirement);
             if (altIdx === -1) {
-              console.log(`No ${alt.requiresName} available for tribute.`);
+              const requirementLabel = alt.requiresName || alt.requiresType;
+              console.log(`No ${requirementLabel} available for tribute.`);
               return null;
             }
             const sacrificed = this.field[altIdx];

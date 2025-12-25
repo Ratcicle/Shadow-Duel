@@ -2872,6 +2872,23 @@ export async function handleConditionalSummonFromHand(
       const zone = player[zoneName] || [];
       conditionMet = zone.some((c) => c && c.name === cardName);
     }
+  } else if (condition.type === "control_card_type") {
+    // Check if player controls a card of a specific type (e.g., Dragon)
+    const zoneName = condition.zone || "field";
+    const typeName = condition.typeName || condition.cardType;
+
+    if (!typeName) {
+      conditionMet = false;
+    } else {
+      const zone = player[zoneName] || [];
+      conditionMet = zone.some((c) => {
+        if (!c || c.isFacedown) return false;
+        if (Array.isArray(c.types)) {
+          return c.types.includes(typeName);
+        }
+        return c.type === typeName;
+      });
+    }
   } else {
     // Additional generic condition: match properties of the card itself
     if (condition.type === "match_card_props") {
@@ -3642,5 +3659,9 @@ export function registerDefaultHandlers(registry) {
   registry.register(
     "mirror_force_destroy_all",
     proxyEngineMethod("applyMirrorForceDestroy")
+  );
+  registry.register(
+    "destroy_other_dragons_and_buff",
+    proxyEngineMethod("applyDestroyOtherDragonsAndBuff")
   );
 }

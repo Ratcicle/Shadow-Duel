@@ -980,6 +980,8 @@ export default class EffectEngine {
       { owner: destroyedOwner, other: attackerOwner },
     ];
 
+    const processedDestroyedCard = new Set();
+
     for (const side of participants) {
       const owner = side.owner;
       if (!owner) continue;
@@ -996,12 +998,16 @@ export default class EffectEngine {
 
       const handCards = owner.hand || [];
       const triggerSources = [...fieldCards, ...handCards];
+
+      // Add destroyed card to trigger sources only once (avoid double processing in mutual destruction)
       if (
         destroyed &&
         destroyedOwner === owner &&
-        !triggerSources.includes(destroyed)
+        !triggerSources.includes(destroyed) &&
+        !processedDestroyedCard.has(destroyed)
       ) {
         triggerSources.push(destroyed);
+        processedDestroyedCard.add(destroyed);
       }
 
       for (const card of triggerSources) {
@@ -2723,7 +2729,7 @@ export default class EffectEngine {
 
     const actionCheck = this.checkActionPreviewRequirements(
       effect.actions || [],
-      ctx
+      { ...ctx, effect }
     );
     if (!actionCheck.ok) {
       return { ok: false, reason: actionCheck.reason };
@@ -2830,7 +2836,7 @@ export default class EffectEngine {
 
     const actionCheck = this.checkActionPreviewRequirements(
       effect.actions || [],
-      ctx
+      { ...ctx, effect }
     );
     if (!actionCheck.ok) {
       return { ok: false, reason: actionCheck.reason };
@@ -2910,7 +2916,7 @@ export default class EffectEngine {
 
     const actionCheck = this.checkActionPreviewRequirements(
       effect.actions || [],
-      ctx
+      { ...ctx, effect }
     );
     if (!actionCheck.ok) {
       return { ok: false, reason: actionCheck.reason };
@@ -2973,6 +2979,116 @@ export default class EffectEngine {
           return {
             ok: false,
             reason: "Not enough cost monsters to Special Summon.",
+          };
+        }
+      }
+
+      if (action.type === "conditional_summon_from_hand") {
+        // Check field space
+        if ((player.field || []).length >= 5) {
+          return { ok: false, reason: "Field is full." };
+        }
+
+        // Check condition
+        const condition = action.condition || {};
+        if (condition.type === "control_card") {
+          const zoneName = condition.zone || "fieldSpell";
+          const cardName = condition.cardName;
+          let conditionMet = false;
+
+          if (zoneName === "fieldSpell") {
+            conditionMet = player.fieldSpell?.name === cardName;
+          } else {
+            const zone = player[zoneName] || [];
+            conditionMet = zone.some((c) => c && c.name === cardName);
+          }
+
+          if (!conditionMet) {
+            return {
+              ok: false,
+              reason: `You must control "${cardName}" to activate this effect.`,
+            };
+          }
+        } else if (condition.type === "control_card_type") {
+          const zoneName = condition.zone || "field";
+          const typeName = condition.typeName || condition.cardType;
+
+          if (!typeName) {
+            return { ok: false, reason: "Invalid condition configuration." };
+          }
+
+          const zone = player[zoneName] || [];
+          const conditionMet = zone.some((c) => {
+            if (!c || c.isFacedown) return false;
+            if (Array.isArray(c.types)) {
+              return c.types.includes(typeName);
+            }
+            return c.type === typeName;
+          });
+
+          if (!conditionMet) {
+            return {
+              ok: false,
+              reason: `You must control a ${typeName} monster to activate this effect.`,
+            };
+          }
+        }
+      }
+
+      if (action.type === "special_summon_from_hand_with_cost") {
+        if ((player.field || []).length >= 5) {
+          return { ok: false, reason: "Field is full." };
+        }
+
+        // Get cost target filter from effect.targets
+        const costTargetRef = action.costTargetRef || "bbd_cost";
+        const costEffect = ctx?.effect;
+        if (!costEffect || !costEffect.targets) {
+          return {
+            ok: false,
+            reason: "Cost targets not defined in effect.",
+          };
+        }
+
+        const costTarget = costEffect.targets.find(
+          (t) => t && t.id === costTargetRef
+        );
+        if (!costTarget) {
+          return {
+            ok: false,
+            reason: "Cost target definition not found.",
+          };
+        }
+
+        const requiredCount = costTarget.count?.min || 0;
+        const zone = costTarget.zone ? player[costTarget.zone] : player.hand;
+        if (!zone) {
+          return { ok: false, reason: "Cost zone not found." };
+        }
+
+        const filters = costTarget.filters || {};
+        const matchesFilters = (card) => {
+          if (!card) return false;
+          if (filters.type) {
+            if (Array.isArray(card.types)) {
+              if (!card.types.includes(filters.type)) return false;
+            } else if (card.type !== filters.type) {
+              return false;
+            }
+          }
+          if (filters.cardKind && card.cardKind !== filters.cardKind) {
+            return false;
+          }
+          return true;
+        };
+
+        const validCosts = zone.filter(matchesFilters);
+        if (validCosts.length < requiredCount) {
+          return {
+            ok: false,
+            reason: `Need ${requiredCount} ${filters.type || "monster"}(s) in ${
+              costTarget.zone || "hand"
+            } to activate.`,
           };
         }
       }
@@ -3328,6 +3444,104 @@ export default class EffectEngine {
     if (destroyedCount > 0 && this.ui?.log) {
       this.ui.log(
         `${sourceCard.name} destroyed ${destroyedCount} monster(s) and drew ${drawnCount} card(s)!`
+      );
+    }
+
+    return destroyedCount > 0;
+  }
+
+  async applyDestroyOtherDragonsAndBuff(action, ctx) {
+    const player = ctx?.player;
+    const sourceCard = ctx?.source;
+
+    if (!player || !sourceCard) {
+      console.log("[applyDestroyOtherDragonsAndBuff] missing player/source", {
+        player: !!player,
+        source: !!sourceCard,
+      });
+      return false;
+    }
+
+    const typeName = action?.typeName || "Dragon";
+    const atkPerDestroyed = Number.isFinite(action?.atkPerDestroyed)
+      ? action.atkPerDestroyed
+      : 200;
+
+    const hasType = (card) => {
+      if (!card) return false;
+      if (Array.isArray(card.types)) return card.types.includes(typeName);
+      return card.type === typeName;
+    };
+
+    const othersToDestroy = (player.field || []).filter(
+      (card) =>
+        card &&
+        card !== sourceCard &&
+        card.cardKind === "monster" &&
+        hasType(card)
+    );
+
+    console.log("[applyDestroyOtherDragonsAndBuff] start", {
+      source: sourceCard.name,
+      field: player.field.map((c) => c && c.name),
+      othersToDestroy: othersToDestroy.map((c) => c && c.name),
+      typeName,
+    });
+
+    let destroyedCount = 0;
+
+    for (const card of othersToDestroy) {
+      if (!this.game?.destroyCard) continue;
+      const result = await this.game.destroyCard(card, {
+        cause: "effect",
+        sourceCard,
+        opponent: ctx?.opponent || null,
+      });
+      if (result?.destroyed) {
+        destroyedCount += 1;
+      }
+    }
+
+    console.log(
+      "[applyDestroyOtherDragonsAndBuff] destroyedCount",
+      destroyedCount
+    );
+
+    if (destroyedCount > 0 && atkPerDestroyed !== 0) {
+      const atkGain = destroyedCount * atkPerDestroyed;
+      const buffKey =
+        action?.buffSourceName || `${sourceCard.name}-self-destroy-buff`;
+      if (!sourceCard.permanentBuffsBySource) {
+        sourceCard.permanentBuffsBySource = {};
+      }
+      const currentBuff = sourceCard.permanentBuffsBySource[buffKey]?.atk || 0;
+      const newBuff = currentBuff + atkGain;
+      sourceCard.permanentBuffsBySource[buffKey] = {
+        ...(sourceCard.permanentBuffsBySource[buffKey] || {}),
+        atk: newBuff,
+      };
+
+      const delta = newBuff - currentBuff;
+      sourceCard.atk = (sourceCard.atk || 0) + delta;
+
+      console.log("[applyDestroyOtherDragonsAndBuff] applied buff", {
+        atkGain,
+        destroyedCount,
+        newAtk: sourceCard.atk,
+      });
+    }
+
+    if (destroyedCount > 0 && this.game?.updateBoard) {
+      this.game.updateBoard();
+    }
+
+    if (this.ui?.log) {
+      const gainText =
+        destroyedCount > 0
+          ? ` and gained ${destroyedCount * atkPerDestroyed} ATK`
+          : "";
+      this.ui.log(
+        `${sourceCard.name} destroyed ${destroyedCount} Dragon(s) you control${gainText}.`
       );
     }
 
@@ -3690,7 +3904,14 @@ export default class EffectEngine {
   }
 
   applyMove(action, ctx, targets) {
-    const targetCards = targets[action.targetRef] || [];
+    // Resolve targetRef to get the actual cards
+    let targetCards = targets[action.targetRef] || [];
+
+    // If targetRef is "self", resolve from ctx.source
+    if (action.targetRef === "self" && ctx?.source) {
+      targetCards = [ctx.source];
+    }
+
     if (!targetCards || targetCards.length === 0) return false;
 
     const toZone = action.to || action.toZone;

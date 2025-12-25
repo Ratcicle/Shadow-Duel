@@ -23,7 +23,9 @@ export default class Card {
     this.isFacedown = false;
     this.hasAttacked = false;
     const baseExtraAttacks = Number(data.extraAttacks ?? 0);
-    this.extraAttacks = Number.isFinite(baseExtraAttacks) ? baseExtraAttacks : 0;
+    this.extraAttacks = Number.isFinite(baseExtraAttacks)
+      ? baseExtraAttacks
+      : 0;
     this.attacksUsedThisTurn = 0;
 
     this.tempAtkBoost = 0;
@@ -34,6 +36,7 @@ export default class Card {
     this.altTribute = data.altTribute || null;
     this.onBattleDestroy = data.onBattleDestroy || null;
     this.canAttackDirectlyThisTurn = false;
+    this.cannotAttackDirectly = !!data.cannotAttackDirectly;
 
     // Equip support
     this.equippedTo = null;

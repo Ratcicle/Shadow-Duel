@@ -1689,16 +1689,6 @@ export default class Game {
           const tributeInfo = this.player.getTributeRequirement(card);
           const tributesNeeded = tributeInfo.tributesNeeded;
 
-          if (
-            tributesNeeded > 0 &&
-            this.player.field.length < tributesNeeded &&
-            !canSanctumSpecialFromAegis
-          ) {
-            this.ui.log(`Not enough tributes for Level ${card.level} monster.`);
-            return;
-          }
-
-          // Find first hand ignition effect, if any
           const handEffect = (card.effects || []).find(
             (e) => e && e.timing === "ignition" && e.requireZone === "hand"
           );
@@ -1714,6 +1704,16 @@ export default class Game {
 
           const canUseHandEffect = handEffectPreview.ok;
           const handEffectLabel = "Special Summon";
+
+          if (
+            !canUseHandEffect &&
+            tributesNeeded > 0 &&
+            this.player.field.length < tributesNeeded &&
+            !canSanctumSpecialFromAegis
+          ) {
+            this.ui.log(`Not enough tributes for Level ${card.level} monster.`);
+            return;
+          }
 
           this.ui.showSummonModal(
             index,
@@ -1745,10 +1745,28 @@ export default class Game {
                     position,
                     isFacedown,
                     tributesNeeded,
+                    altTribute: tributeInfo.usingAlt ? tributeInfo.alt : null,
                   };
-                  pendingSummon.tributeableIndices = this.player.field
+
+                  // Filter tributeable monsters based on altTribute requirements
+                  let tributeableIndices = this.player.field
                     .map((card, idx) => (card ? idx : null))
                     .filter((idx) => idx !== null);
+
+                  // If using alt tribute with type requirement, only allow that type
+                  if (tributeInfo.usingAlt && tributeInfo.alt?.requiresType) {
+                    const requiredType = tributeInfo.alt.requiresType;
+                    tributeableIndices = tributeableIndices.filter((idx) => {
+                      const fieldCard = this.player.field[idx];
+                      if (!fieldCard || fieldCard.isFacedown) return false;
+                      if (Array.isArray(fieldCard.types)) {
+                        return fieldCard.types.includes(requiredType);
+                      }
+                      return fieldCard.type === requiredType;
+                    });
+                  }
+
+                  pendingSummon.tributeableIndices = tributeableIndices;
                   if (
                     this.ui &&
                     typeof this.ui.setPlayerFieldTributeable === "function"
@@ -2065,7 +2083,8 @@ export default class Game {
           if (canDirect) {
             this.startAttackTargetSelection(attacker, attackCandidates);
           } else if (attackCandidates.length === 0) {
-            await this.resolveCombat(attacker, null);
+            this.ui.log("No valid attack targets and cannot attack directly!");
+            return;
           } else {
             this.startAttackTargetSelection(attacker, attackCandidates);
           }
@@ -5196,6 +5215,25 @@ export default class Game {
         card.def -= card.tempDefBoost;
         if (card.def < 0) card.def = 0;
         card.tempDefBoost = 0;
+      }
+
+      // Remove permanent named buffs when the monster leaves the field
+      if (toZone !== "field" && card.permanentBuffsBySource) {
+        let totalAtkBuff = 0;
+        let totalDefBuff = 0;
+        Object.values(card.permanentBuffsBySource).forEach((buff) => {
+          if (buff?.atk) totalAtkBuff += buff.atk;
+          if (buff?.def) totalDefBuff += buff.def;
+        });
+        if (totalAtkBuff) {
+          card.atk -= totalAtkBuff;
+          if (card.atk < 0) card.atk = 0;
+        }
+        if (totalDefBuff) {
+          card.def -= totalDefBuff;
+          if (card.def < 0) card.def = 0;
+        }
+        delete card.permanentBuffsBySource;
       }
       this.effectEngine?.clearPassiveBuffsForCard(card);
     }
