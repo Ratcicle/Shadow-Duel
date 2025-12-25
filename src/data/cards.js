@@ -422,6 +422,9 @@ export const cardDatabase = [
             targetRef: "haunted_target",
           },
         ],
+        ui: {
+          allowCancel: false,
+        },
       },
     ],
   },
@@ -3515,7 +3518,7 @@ export const cardDatabase = [
     cardKind: "monster",
     type: "Dragon",
     level: 6,
-    atk: 2200,
+    atk: 2000,
     def: 2000,
     monsterType: "ascension",
     ascension: {
@@ -3542,7 +3545,7 @@ export const cardDatabase = [
         passive: {
           type: "type_special_summoned_count_buff",
           typeName: "Dragon",
-          amountPerCard: 300,
+          amountPerCard: 200,
           scope: "card_state",
           owners: ["self"],
           stats: ["atk", "def"],
@@ -3615,6 +3618,7 @@ export const cardDatabase = [
           {
             type: "add_from_zone_to_hand",
             zone: "graveyard",
+            filters: { name: "Grey Dragon" },
             requireSource: true,
             player: "self",
             count: { min: 1, max: 1 },
@@ -3682,7 +3686,7 @@ export const cardDatabase = [
     atk: 1500,
     def: 900,
     description:
-      "If this card is Normal Summoned: You can target 1 Level 4 or lower Dragon monster in your GY; Special Summon it. You can banish this card from your GY, then target 1 monster your opponent controls; it loses 1000 ATK/DEF until the end of this turn.",
+      "If this card is Normal Summoned: You can target 1 Level 4 or lower Dragon-type monster in your GY; Special Summon it. You can banish this card from your GY, then target 1 monster your opponent controls; it loses 1000 ATK/DEF until the end of this turn.",
     image: "assets/Luminescent Dragon.png",
     effects: [
       {
@@ -3723,17 +3727,15 @@ export const cardDatabase = [
         ],
         actions: [
           {
-            type: "move",
+            type: "banish",
             targetRef: "self",
-            player: "self",
-            to: "banished",
             fromZone: "graveyard",
           },
           {
             type: "buff_stats_temp",
             targetRef: "luminescent_debuff_target",
-            atk: -1000,
-            def: -1000,
+            atkBoost: -1000,
+            defBoost: -1000,
           },
         ],
       },
@@ -3787,7 +3789,7 @@ export const cardDatabase = [
     atk: 2100,
     def: 1700,
     description:
-      "If this card is Normal or Special Summoned: Destroy all other Dragon monsters you control, and if you do, this card gains 200 ATK for each monster destroyed by this effect. Once per turn: You can discard 1 card, then target 1 monster your opponent controls; negate its effects until the end of this turn.",
+      "If this card is Normal or Special Summoned: Destroy all other Dragon-typer monsters you control, and if you do, this card gains 200 ATK for each monster destroyed by this effect. Once per turn: You can discard 1 card, then target 1 monster your opponent controls; negate its effects until the end of this turn.",
     image: "assets/Darkness Dragon.png",
     effects: [
       {
@@ -3942,6 +3944,191 @@ export const cardDatabase = [
             minLevel: 7,
             maxLevel: 8,
             count: { min: 1, max: 1 },
+            promptPlayer: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 189,
+    name: "Hellkite Dragon",
+    cardKind: "monster",
+    type: "Dragon",
+    level: 7,
+    atk: 2400,
+    def: 2000,
+    description:
+      "You can send 1 Dragon you control to the GY; Special Summon this card from your hand. Once per turn: You can send this face-up card to the GY; Special Summon 1 Level 7 or lower Dragon from your GY.",
+    image: "assets/Hellkite Dragon.png",
+    effects: [
+      {
+        id: "hellkite_dragon_hand_ss_cost",
+        timing: "ignition",
+        requireZone: "hand",
+        requirePhase: ["main1", "main2"],
+        targets: [
+          {
+            id: "hellkite_cost_field_dragon",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            filters: { type: "Dragon" },
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "special_summon_from_hand_with_cost",
+            costTargetRef: "hellkite_cost_field_dragon",
+            position: "choice",
+          },
+        ],
+      },
+      {
+        id: "hellkite_dragon_field_send_revive",
+        timing: "ignition",
+        requireZone: "field",
+        requirePhase: ["main1", "main2"],
+        oncePerTurn: true,
+        oncePerTurnName: "hellkite_dragon_field_revive",
+        actions: [
+          {
+            type: "move",
+            targetRef: "self",
+            player: "self",
+            to: "graveyard",
+          },
+          {
+            type: "special_summon_from_zone",
+            zone: "graveyard",
+            filters: { cardKind: "monster", type: "Dragon" },
+            maxLevel: 7,
+            count: { min: 1, max: 1 },
+            position: "choice",
+            promptPlayer: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 190,
+    name: "Hellkite Roar",
+    cardKind: "spell",
+    subtype: "normal",
+    description:
+      "If you control a Level 7 or higher Dragon: Destroy up to 2 Spell/Trap cards your opponent controls. You can banish this card from your GY; add 1 'Jagged Peak of the Dragons' from your Deck to your hand.",
+    image: "assets/Hellkite Roar.png",
+    effects: [
+      {
+        id: "hellkite_roar_pop_backrow",
+        timing: "on_play",
+        speed: 1,
+        conditions: [
+          {
+            type: "control_type_min_level",
+            typeName: "Dragon",
+            minLevel: 7,
+            zone: "field",
+            requireFaceup: true,
+          },
+        ],
+        actions: [
+          {
+            type: "destroy_targeted_cards",
+            maxTargets: 2,
+            zones: ["spellTrap", "fieldSpell"],
+            cardKind: ["spell", "trap"],
+          },
+        ],
+      },
+      {
+        id: "hellkite_roar_gy_search_peak",
+        timing: "ignition",
+        requireZone: "graveyard",
+        requirePhase: ["main1", "main2"],
+        actions: [
+          { type: "banish", targetRef: "self", fromZone: "graveyard" },
+          {
+            type: "add_from_zone_to_hand",
+            zone: "deck",
+            filters: { name: "Jagged Peak of the Dragons" },
+            count: { min: 1, max: 1 },
+            promptPlayer: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 191,
+    name: "Jagged Peak of the Dragons",
+    cardKind: "spell",
+    subtype: "field",
+    description:
+      "When this card is activated: You can add 1 Level 4 or lower Dragon from your GY to your hand. Each time a Dragon-type monster destroys an opponent's monster by battle, place 1 Dragon Peak counter on this card. Once per turn: If this card has 5 or more Dragon Peak counters; you can send it to the GY, and if you do, Special Summon 1 Dragon-type monster from your hand, Deck, or GY.",
+    image: "assets/Jagged Peak of the Dragons.png",
+    effects: [
+      {
+        id: "dragon_peak_on_play_add",
+        timing: "on_play",
+        speed: 1,
+        actions: [
+          {
+            type: "add_from_zone_to_hand",
+            zone: "graveyard",
+            filters: { cardKind: "monster", type: "Dragon" },
+            maxLevel: 4,
+            count: { min: 0, max: 1 },
+            promptPlayer: true,
+          },
+        ],
+      },
+      {
+        id: "dragon_peak_battle_counter",
+        timing: "on_event",
+        event: "battle_destroy",
+        requireDestroyedIsOpponent: true,
+        conditions: [
+          {
+            type: "attacker_matches",
+            owner: "self",
+            cardKind: "monster",
+            type: "Dragon",
+          },
+        ],
+        actions: [
+          {
+            type: "add_counter",
+            targetRef: "self",
+            counterType: "dragon_peak",
+            amount: 1,
+          },
+        ],
+      },
+      {
+        id: "dragon_peak_ignite_summon",
+        timing: "ignition",
+        requireZone: "fieldSpell",
+        requirePhase: ["main1", "main2"],
+        oncePerTurn: true,
+        oncePerTurnName: "dragon_peak_ignite_summon",
+        conditions: [
+          {
+            type: "source_counters_at_least",
+            counterType: "dragon_peak",
+            min: 5,
+          },
+        ],
+        actions: [
+          { type: "move", targetRef: "self", player: "self", to: "graveyard" },
+          {
+            type: "special_summon_from_zone",
+            zone: ["hand", "deck", "graveyard"],
+            filters: { cardKind: "monster", type: "Dragon" },
+            count: { min: 1, max: 1 },
+            position: "choice",
             promptPlayer: true,
           },
         ],

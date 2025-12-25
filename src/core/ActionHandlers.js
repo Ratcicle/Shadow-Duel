@@ -195,6 +195,17 @@ function collectZoneCandidates(zone, filters = {}, options = {}) {
       if (op === "gt" && cardLevel <= filters.level) return false;
     }
 
+    // Support minLevel and maxLevel bounds
+    if (filters.minLevel !== undefined) {
+      const cardLevel = card.level || 0;
+      if (cardLevel < filters.minLevel) return false;
+    }
+
+    if (filters.maxLevel !== undefined) {
+      const cardLevel = card.level || 0;
+      if (cardLevel > filters.maxLevel) return false;
+    }
+
     if (filters.excludeSelf && source && card.id === source.id) return false;
 
     if (excludeSummonRestrict.length > 0 && card.summonRestrict) {
@@ -604,6 +615,14 @@ export async function handleSpecialSummonFromZone(
     // Apply filters to find candidates
     const filters = action.filters || {};
     const excludeSummonRestrict = action.excludeSummonRestrict || [];
+
+    // Map action-level bounds to filters
+    if (Number.isFinite(action.minLevel)) {
+      filters.minLevel = action.minLevel;
+    }
+    if (Number.isFinite(action.maxLevel)) {
+      filters.maxLevel = action.maxLevel;
+    }
 
     if (action.matchLevelRef) {
       const levelCard = ctx?.[action.matchLevelRef] || null;
@@ -1476,6 +1495,15 @@ export async function handleBanish(action, ctx, targets, engine) {
 
   if ((!Array.isArray(resolved) || resolved.length === 0) && useDestroyed) {
     resolved = ctx?.destroyed ? [ctx.destroyed] : [];
+  }
+
+  // Allow banishing the source card when targetRef is "self" and no targets were pre-resolved
+  if (
+    (!Array.isArray(resolved) || resolved.length === 0) &&
+    targetRef === "self" &&
+    ctx?.source
+  ) {
+    resolved = [ctx.source];
   }
 
   if (!Array.isArray(resolved) || resolved.length === 0) {
@@ -3424,14 +3452,40 @@ export async function handleDestroyTargetedCards(action, ctx, targets, engine) {
     return await destroySelectiveField(action, ctx, targets, engine);
   }
 
-  // Get opponent's cards on field/spellTrap/fieldSpell
-  const opponentCards = [
-    ...(opponent.field || []),
-    ...(opponent.spellTrap || []),
-  ];
+  // Build candidate list based on optional zone and kind filters
+  const zones = Array.isArray(action.zones)
+    ? action.zones
+    : ["field", "spellTrap", "fieldSpell"];
 
-  if (opponent.fieldSpell) {
-    opponentCards.push(opponent.fieldSpell);
+  let opponentCards = [];
+  for (const z of zones) {
+    if (z === "field") {
+      opponentCards.push(...(opponent.field || []));
+    } else if (z === "spellTrap") {
+      opponentCards.push(...(opponent.spellTrap || []));
+    } else if (z === "fieldSpell") {
+      if (opponent.fieldSpell) opponentCards.push(opponent.fieldSpell);
+    }
+  }
+
+  // Filter by cardKind when provided (supports array)
+  if (action.cardKind) {
+    const allowedKinds = Array.isArray(action.cardKind)
+      ? action.cardKind
+      : [action.cardKind];
+    opponentCards = opponentCards.filter(
+      (c) => c && allowedKinds.includes(c.cardKind)
+    );
+  }
+
+  // Optional subtype filter (e.g., field, equip)
+  if (action.subtype) {
+    const allowedSubtypes = Array.isArray(action.subtype)
+      ? action.subtype
+      : [action.subtype];
+    opponentCards = opponentCards.filter(
+      (c) => c && c.subtype && allowedSubtypes.includes(c.subtype)
+    );
   }
 
   if (opponentCards.length === 0) {
@@ -3461,7 +3515,7 @@ export async function handleDestroyTargetedCards(action, ctx, targets, engine) {
         id: "destroy_targets",
         min: maxTargets,
         max: maxTargets,
-        zones: ["field", "spellTrap", "fieldSpell"],
+        zones: [...new Set(zones)],
         owner: "opponent",
         filters: {},
         allowSelf: true,

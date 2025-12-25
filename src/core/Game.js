@@ -1583,6 +1583,10 @@ export default class Game {
     }
     this.phase = next;
 
+    // Clear attack indicators when leaving battle phase
+    this.clearAttackResolutionIndicators();
+    this.clearAttackReadyIndicators();
+
     this.updateBoard();
 
     if (this.turn === "bot" && !this.gameOver) {
@@ -1599,6 +1603,11 @@ export default class Game {
     if (!guard.ok) return guard;
     this.cleanupTempBoosts(this.player);
     this.cleanupTempBoosts(this.bot);
+
+    // Clear all attack indicators at end of turn
+    this.clearAttackResolutionIndicators();
+    this.clearAttackReadyIndicators();
+
     this.turn = this.turn === "player" ? "bot" : "player";
     this.startTurn();
   }
@@ -1621,6 +1630,11 @@ export default class Game {
     if (currentIdx === -1 || targetIdx === -1) return;
     if (targetIdx <= currentIdx) return;
     this.phase = targetPhase;
+
+    // Clear attack indicators when skipping phases
+    this.clearAttackResolutionIndicators();
+    this.clearAttackReadyIndicators();
+
     if (this.phase === "end") {
       this.endTurn();
       return;
@@ -2076,18 +2090,20 @@ export default class Game {
               ? opponentTargets.filter((card) => card && card.mustBeAttacked)
               : opponentTargets;
 
+          // If using an extra attack (not the first), can only attack monsters
+          const isExtraAttack = attacker.hasAttacked && canUseSecondAttack;
           const canDirect =
-            attacker.canAttackDirectlyThisTurn === true &&
-            !attacker.cannotAttackDirectly;
+            !attacker.cannotAttackDirectly &&
+            !isExtraAttack && // Extra attacks cannot be direct
+            (attacker.canAttackDirectlyThisTurn === true ||
+              attackCandidates.length === 0);
 
-          if (canDirect) {
-            this.startAttackTargetSelection(attacker, attackCandidates);
-          } else if (attackCandidates.length === 0) {
+          // Always start selection; "Direct Attack" option added when allowed
+          if (!canDirect && attackCandidates.length === 0) {
             this.ui.log("No valid attack targets and cannot attack directly!");
             return;
-          } else {
-            this.startAttackTargetSelection(attacker, attackCandidates);
           }
+          this.startAttackTargetSelection(attacker, attackCandidates);
         }
       });
     }
@@ -3525,9 +3541,14 @@ export default class Game {
 
   startAttackTargetSelection(attacker, candidates) {
     if (!attacker || !Array.isArray(candidates)) return;
+
+    // Extra attacks (second+ attacks) cannot be direct
+    const isExtraAttack = attacker.hasAttacked;
     const canDirect =
-      attacker.canAttackDirectlyThisTurn === true &&
-      !attacker.cannotAttackDirectly;
+      !attacker.cannotAttackDirectly &&
+      !isExtraAttack && // Extra attacks cannot be direct
+      (attacker.canAttackDirectlyThisTurn === true || candidates.length === 0);
+
     if (candidates.length === 0 && !canDirect) return;
     const decorated = candidates.map((card, idx) => {
       const ownerLabel = card.owner === "player" ? "player" : "opponent";
@@ -4720,12 +4741,20 @@ export default class Game {
   }
 
   async finishCombat(attacker, target) {
-    const applyBattleDamage = (player, cardInvolved, amount) => {
+    // Capture healing flags at the start of combat resolution to avoid race conditions
+    const attackerHealsOnBattleDamage =
+      attacker?.battleDamageHealsControllerThisTurn || false;
+    const defenderHealsOnBattleDamage =
+      target?.battleDamageHealsControllerThisTurn || false;
+
+    const applyBattleDamage = (
+      player,
+      cardInvolved,
+      amount,
+      shouldHeal = false
+    ) => {
       if (!player || amount <= 0) return;
-      if (
-        cardInvolved?.battleDamageHealsControllerThisTurn &&
-        player.id === cardInvolved.owner
-      ) {
+      if (shouldHeal && player.id === cardInvolved?.owner) {
         player.gainLP(amount);
       } else {
         this.inflictDamage(player, amount, {
@@ -4759,7 +4788,12 @@ export default class Game {
       if (attacker.atk > target.atk) {
         const defender = target.owner === "player" ? this.player : this.bot;
         const damage = attacker.atk - target.atk;
-        applyBattleDamage(defender, target, damage);
+        applyBattleDamage(
+          defender,
+          attacker,
+          damage,
+          attackerHealsOnBattleDamage
+        );
         logBattleResult(
           `${attacker.name} destroyed ${target.name} and dealt ${damage} damage.`
         );
@@ -4777,7 +4811,12 @@ export default class Game {
       } else if (attacker.atk < target.atk) {
         const attPlayer = attacker.owner === "player" ? this.player : this.bot;
         const damage = target.atk - attacker.atk;
-        applyBattleDamage(attPlayer, attacker, damage);
+        applyBattleDamage(
+          attPlayer,
+          target,
+          damage,
+          defenderHealsOnBattleDamage
+        );
         logBattleResult(
           `${attacker.name} was destroyed by ${target.name} and took ${damage} damage.`
         );
@@ -4823,7 +4862,12 @@ export default class Game {
       if (attacker.atk > target.def) {
         if (attacker.piercing) {
           const damage = attacker.atk - target.def;
-          applyBattleDamage(defender, target, damage);
+          applyBattleDamage(
+            defender,
+            attacker,
+            damage,
+            attackerHealsOnBattleDamage
+          );
           logBattleResult(
             `${attacker.name} pierced ${target.name} for ${damage} damage.`
           );
@@ -4844,7 +4888,12 @@ export default class Game {
       } else if (attacker.atk < target.def) {
         const attPlayer = attacker.owner === "player" ? this.player : this.bot;
         const damage = target.def - attacker.atk;
-        applyBattleDamage(attPlayer, attacker, damage);
+        applyBattleDamage(
+          attPlayer,
+          target,
+          damage,
+          defenderHealsOnBattleDamage
+        );
         logBattleResult(
           `${attacker.name} took ${damage} damage attacking ${target.name}.`
         );

@@ -127,30 +127,13 @@ export default class EffectEngine {
     if (!effect || !effect.oncePerTurn) {
       return { ok: true };
     }
-    if (this.game && typeof this.game.canUseOncePerTurn === "function") {
-      return this.game.canUseOncePerTurn(card, player, effect);
+    if (!this.game || typeof this.game.canUseOncePerTurn !== "function") {
+      console.error(
+        "[EffectEngine] checkOncePerTurn: Game instance or canUseOncePerTurn not available"
+      );
+      return { ok: false, reason: "Game not initialized" };
     }
-
-    const key = effect?.oncePerTurnName || effect?.id || card.name;
-    const currentTurn = this.game?.turnCounter ?? 0;
-    const useCardScope =
-      effect.oncePerTurnScope === "card" || effect.oncePerTurnPerCard;
-
-    const usageStore =
-      useCardScope && card
-        ? (card.oncePerTurnUsageByName = card.oncePerTurnUsageByName || {})
-        : (player.oncePerTurnUsageByName = player.oncePerTurnUsageByName || {});
-
-    const lastTurn = usageStore[key];
-
-    if (lastTurn === currentTurn) {
-      return {
-        ok: false,
-        reason: "Once per turn effect already used this turn.",
-      };
-    }
-
-    return { ok: true };
+    return this.game.canUseOncePerTurn(card, player, effect);
   }
 
   checkOncePerDuel(card, player, effect) {
@@ -185,28 +168,34 @@ export default class EffectEngine {
     if (!effect || !effect.oncePerTurn) {
       return;
     }
-    if (this.game && typeof this.game.markOncePerTurnUsed === "function") {
-      this.game.markOncePerTurnUsed(card, player, effect);
+    if (!this.game || typeof this.game.markOncePerTurnUsed !== "function") {
+      console.error(
+        "[EffectEngine] registerOncePerTurnUsage: Game instance or markOncePerTurnUsed not available"
+      );
       return;
     }
-
-    const key = effect?.oncePerTurnName || effect?.id || card.name;
-    const currentTurn = this.game?.turnCounter ?? 0;
-    const useCardScope =
-      effect.oncePerTurnScope === "card" || effect.oncePerTurnPerCard;
-
-    const usageStore =
-      useCardScope && card
-        ? (card.oncePerTurnUsageByName = card.oncePerTurnUsageByName || {})
-        : (player.oncePerTurnUsageByName = player.oncePerTurnUsageByName || {});
-
-    usageStore[key] = currentTurn;
+    this.game.markOncePerTurnUsed(card, player, effect);
   }
 
   cardMatchesFilters(card, filters = {}) {
     if (!card) return false;
     if (filters.cardKind && card.cardKind !== filters.cardKind) return false;
     if (filters.name && card.name !== filters.name) return false;
+    if (filters.type) {
+      const cardType = card.type || null;
+      const cardTypes = Array.isArray(card.types) ? card.types : null;
+      if (Array.isArray(filters.type)) {
+        const ok = cardTypes
+          ? filters.type.some((t) => cardTypes.includes(t))
+          : filters.type.includes(cardType);
+        if (!ok) return false;
+      } else {
+        const ok = cardTypes
+          ? cardTypes.includes(filters.type)
+          : cardType === filters.type;
+        if (!ok) return false;
+      }
+    }
     if (filters.archetype) {
       const archetypes = Array.isArray(card.archetypes)
         ? card.archetypes
@@ -273,6 +262,95 @@ export default class EffectEngine {
             return {
               ok: false,
               reason: cond.reason || "No valid cards in graveyard.",
+            };
+          }
+          break;
+        }
+        case "control_type_min_level": {
+          const zoneName = cond.zone || "field";
+          const requireFaceup = cond.requireFaceup !== false; // default true
+          const typeName = cond.typeName || cond.cardType;
+          const minLevel = cond.minLevel ?? cond.level ?? 1;
+          if (!typeName) {
+            return { ok: false, reason: "Invalid condition configuration." };
+          }
+          const zone = player?.[zoneName] || [];
+          const hasMatch = zone.some((c) => {
+            if (!c) return false;
+            if (c.cardKind !== "monster") return false;
+            if (requireFaceup && c.isFacedown) return false;
+            const lvl = c.level || 0;
+            const type = c.type || null;
+            const types = Array.isArray(c.types) ? c.types : null;
+            const typeOk = types ? types.includes(typeName) : type === typeName;
+            return typeOk && lvl >= minLevel;
+          });
+          if (!hasMatch) {
+            return {
+              ok: false,
+              reason:
+                cond.reason ||
+                `You must control a ${typeName} with Level ≥ ${minLevel}.`,
+            };
+          }
+          break;
+        }
+        case "attacker_matches": {
+          const attacker = ctx?.attacker;
+          if (!attacker) {
+            return { ok: false, reason: "No attacker in context." };
+          }
+          const ownerRule = cond.owner || "any"; // self | opponent | any
+          const attackerOwner = this.getOwnerByCard(attacker);
+          if (ownerRule === "self" && attackerOwner?.id !== player?.id) {
+            return { ok: false, reason: "Attacker is not yours." };
+          }
+          if (ownerRule === "opponent" && attackerOwner?.id === player?.id) {
+            return { ok: false, reason: "Attacker is not opponent's." };
+          }
+          // Match filters: type, cardKind, level bounds
+          if (cond.cardKind && attacker.cardKind !== cond.cardKind) {
+            return { ok: false, reason: "Attacker kind mismatch." };
+          }
+          if (cond.type) {
+            const aType = attacker.type || null;
+            const aTypes = Array.isArray(attacker.types)
+              ? attacker.types
+              : null;
+            const ok = Array.isArray(cond.type)
+              ? aTypes
+                ? cond.type.some((t) => aTypes.includes(t))
+                : cond.type.includes(aType)
+              : aTypes
+              ? aTypes.includes(cond.type)
+              : aType === cond.type;
+            if (!ok) {
+              return { ok: false, reason: "Attacker type mismatch." };
+            }
+          }
+          const lvl = attacker.level || 0;
+          if (cond.minLevel !== undefined && lvl < cond.minLevel) {
+            return { ok: false, reason: "Attacker level too low." };
+          }
+          if (cond.maxLevel !== undefined && lvl > cond.maxLevel) {
+            return { ok: false, reason: "Attacker level too high." };
+          }
+          break;
+        }
+        case "source_counters_at_least": {
+          const counterType = cond.counterType || "default";
+          const min = Number(cond.min ?? 1);
+          const source = ctx?.source;
+          const count =
+            typeof source?.getCounter === "function"
+              ? source.getCounter(counterType)
+              : 0;
+          if (count < min) {
+            return {
+              ok: false,
+              reason:
+                cond.reason ||
+                `Need at least ${min} ${counterType} counter(s).`,
             };
           }
           break;
