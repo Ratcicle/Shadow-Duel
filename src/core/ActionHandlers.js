@@ -1289,15 +1289,22 @@ export async function handleSpecialSummonFromHandWithCost(
             decorated.find((cand) => cand.key === chosenKey)?.cardRef || null;
 
           if (targetToDestroy) {
-            const result = await game.destroyCard(targetToDestroy, {
-              cause: "effect",
-              sourceCard: source,
-              opponent: player,
-            });
-            if (result?.destroyed) {
+            // Check immunity before destroying
+            if (engine.isImmuneToOpponentEffects(targetToDestroy, player)) {
               getUI(game)?.log(
-                `${source.name} destruiu ${targetToDestroy.name}.`
+                `${targetToDestroy.name} is immune to opponent's effects.`
               );
+            } else {
+              const result = await game.destroyCard(targetToDestroy, {
+                cause: "effect",
+                sourceCard: source,
+                opponent: player,
+              });
+              if (result?.destroyed) {
+                getUI(game)?.log(
+                  `${source.name} destruiu ${targetToDestroy.name}.`
+                );
+              }
             }
           }
         }
@@ -1844,10 +1851,33 @@ async function destroySelectiveField(action, ctx, targets, engine) {
     return false;
   }
 
-  // Destroy all marked monsters
-  getUI(game)?.log(`Destroying ${toDestroy.length} monster(s) on the field...`);
+  // Filter out immune monsters before destroying
+  // For each entry, check if the card is immune to the source player's effects
+  const toDestroyFiltered = toDestroy.filter(({ card, owner }) => {
+    // Only filter opponent's monsters - player's own monsters are not protected by opponent immunity
+    if (owner.id === player.id) return true;
 
-  for (const { card, owner } of toDestroy) {
+    // Check if opponent's monster is immune to player's effect
+    const isImmune = engine.isImmuneToOpponentEffects(card, player);
+    if (isImmune && getUI(game)?.log) {
+      getUI(game)?.log(
+        `${card.name} is immune to opponent's effects and was not destroyed.`
+      );
+    }
+    return !isImmune;
+  });
+
+  if (toDestroyFiltered.length === 0) {
+    getUI(game)?.log("No monsters were destroyed (all targets are immune).");
+    return false;
+  }
+
+  // Destroy all marked monsters
+  getUI(game)?.log(
+    `Destroying ${toDestroyFiltered.length} monster(s) on the field...`
+  );
+
+  for (const { card, owner } of toDestroyFiltered) {
     await game.destroyCard(card, {
       cause: "effect",
       sourceCard: source,
@@ -3081,6 +3111,12 @@ export async function handleDestroyAttackerOnArchetypeDestruction(
   const attackerOwner = engine.getOwnerByCard(attacker);
   if (!attackerOwner || attackerOwner.id === ctx.player.id) return false;
 
+  // Check if attacker is immune to opponent's effects
+  if (engine.isImmuneToOpponentEffects(attacker, ctx.player)) {
+    getUI(game)?.log(`${attacker.name} is immune to opponent's effects.`);
+    return false;
+  }
+
   const result = await game.destroyCard(attacker, {
     cause: "effect",
     sourceCard: ctx.source || destroyed,
@@ -3556,7 +3592,19 @@ export async function handleDestroyTargetedCards(action, ctx, targets, engine) {
     return false;
   }
 
-  for (const card of targetCards) {
+  // Filter out immune cards before destroying
+  const { allowed: nonImmuneTargets } = engine.filterCardsListByImmunity(
+    targetCards,
+    player,
+    { actionType: "destroy_targeted_cards" }
+  );
+
+  if (nonImmuneTargets.length === 0) {
+    getUI(game)?.log("All selected targets are immune to effects.");
+    return false;
+  }
+
+  for (const card of nonImmuneTargets) {
     const result = await game.destroyCard(card, {
       cause: "effect",
       sourceCard: source,
