@@ -5121,6 +5121,98 @@ export default class Game {
     });
   }
 
+  /**
+   * Cleanup references that might point to a token being removed from the game.
+   * Called when a token leaves the field (tokens cannot exist outside the field).
+   * This prevents stale pointers from equips, Call of the Haunted, etc.
+   * Also sends attached equip spells to the graveyard (same as regular monster cleanup).
+   */
+  cleanupTokenReferences(token, tokenOwner) {
+    if (!token) return;
+
+    // Find and process equip spells attached to this token (same logic as monster cleanup)
+    const equipZone = this.getZone(tokenOwner, "spellTrap") || [];
+    const attachedEquips = equipZone.filter(
+      (eq) =>
+        eq &&
+        eq.cardKind === "spell" &&
+        eq.subtype === "equip" &&
+        (eq.equippedTo === token || eq.equipTarget === token)
+    );
+
+    // Process equips: clear refs and send to GY
+    for (const equip of attachedEquips) {
+      // Clear equip references
+      if (equip.equippedTo === token) {
+        equip.equippedTo = null;
+      }
+      if (equip.equipTarget === token) {
+        equip.equipTarget = null;
+      }
+      // Reset equip bonuses (they were applied to the token which is being removed)
+      equip.equipAtkBonus = 0;
+      equip.equipDefBonus = 0;
+      equip.equipExtraAttacks = 0;
+      equip.grantsBattleIndestructible = false;
+      equip.grantsCrescentShieldGuard = false;
+
+      // Move equip to graveyard - refs already cleared, so equip's cleanup block will be skipped
+      this.moveCard(equip, tokenOwner, "graveyard", {
+        fromZone: "spellTrap",
+      });
+    }
+
+    // Clear the token's equips array
+    if (Array.isArray(token.equips)) {
+      token.equips = [];
+    }
+
+    // If this token was revived by Call of the Haunted, clear that reference
+    // and destroy the trap
+    if (token.callOfTheHauntedTrap) {
+      const trap = token.callOfTheHauntedTrap;
+      if (trap.callOfTheHauntedTarget === token) {
+        trap.callOfTheHauntedTarget = null;
+      }
+      token.callOfTheHauntedTrap = null;
+
+      // Destroy the Call of the Haunted trap (fire-and-forget, ref already cleared)
+      this.destroyCard(trap, {
+        cause: "effect",
+        sourceCard: token,
+        opponent: this.getOpponent(tokenOwner),
+      }).then((result) => {
+        if (result?.destroyed) {
+          this.ui.log(
+            `${trap.name} was destroyed as ${token.name} (Token) was removed from the game.`
+          );
+          this.updateBoard();
+        }
+      });
+    }
+
+    // If this token is equipped to something (unlikely but possible), clean up
+    if (token.equippedTo) {
+      const host = token.equippedTo;
+      if (Array.isArray(host.equips)) {
+        const idx = host.equips.indexOf(token);
+        if (idx > -1) host.equips.splice(idx, 1);
+      }
+      token.equippedTo = null;
+    }
+    if (token.equipTarget) {
+      token.equipTarget = null;
+    }
+
+    // Clear any passive buff tracking
+    this.effectEngine?.clearPassiveBuffsForCard(token);
+
+    // Clear temporary stat modifiers
+    token.tempAtkBoost = 0;
+    token.tempDefBoost = 0;
+    delete token.permanentBuffsBySource;
+  }
+
   getZone(player, zone) {
     switch (zone) {
       case "hand":
@@ -5240,6 +5332,23 @@ export default class Game {
 
     if (!fromZone || !fromOwner) {
       return { success: false, reason: "card_not_found" };
+    }
+
+    // TOKEN RULE: Tokens cannot exist outside the field.
+    // If a token is leaving the field to any other zone, remove it from the game entirely.
+    // This handles: destruction, bounce to hand, banish, shuffle to deck, tribute, etc.
+    if (card.isToken === true && fromZone === "field" && toZone !== "field") {
+      // Clean up any references that might point to this token
+      this.cleanupTokenReferences(card, fromOwner);
+
+      // Log the removal
+      this.ui.log(`${card.name} (Token) was removed from the game.`);
+
+      // Update board to reflect removal
+      this.updateBoard();
+
+      // Return success with tokenRemoved flag - token is NOT added to any zone
+      return { success: true, tokenRemoved: true, fromZone, toZone: null };
     }
 
     if (card.owner !== fromOwner.id) {

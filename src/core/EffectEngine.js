@@ -3663,6 +3663,12 @@ export default class EffectEngine {
       targetPlayer.id
     );
 
+    // Mark as token - this is the canonical flag for token identification
+    // Tokens that leave the field are removed from the game entirely (handled in Game.moveCardInternal)
+    tokenCard.isToken = true;
+    // Optional debug info - not used for logic, only for tracing
+    tokenCard.tokenSourceCard = ctx.card?.name || null;
+
     // UNIFIED POSITION SEMANTICS: respect action.position
     // undefined/null → "choice" (default)
     // "choice" → allow player/bot to choose
