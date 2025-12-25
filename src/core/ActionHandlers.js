@@ -2602,9 +2602,9 @@ export async function handlePermanentBuffNamed(action, ctx, targets, engine) {
       }
       card.permanentBuffsBySource[sourceName].atk = newBuff;
 
-      // Apply to actual stat (calculate delta and apply)
+      // Apply to actual stat (calculate delta and apply, clamp to 0)
       const delta = newBuff - currentBuff;
-      card.atk = (card.atk || 0) + delta;
+      card.atk = Math.max(0, (card.atk || 0) + delta);
       cardBuffed = true;
     }
 
@@ -2617,9 +2617,9 @@ export async function handlePermanentBuffNamed(action, ctx, targets, engine) {
       }
       card.permanentBuffsBySource[sourceName].def = newBuff;
 
-      // Apply to actual stat (calculate delta and apply)
+      // Apply to actual stat (calculate delta and apply, clamp to 0)
       const delta = newBuff - currentBuff;
-      card.def = (card.def || 0) + delta;
+      card.def = Math.max(0, (card.def || 0) + delta);
       cardBuffed = true;
     }
 
@@ -2701,12 +2701,12 @@ export async function handleRemovePermanentBuffNamed(
     const buffData = card.permanentBuffsBySource[sourceName];
     if (!buffData) continue;
 
-    // Remove buffs from stats
+    // Remove buffs from stats (clamp to 0)
     if (buffData.atk) {
-      card.atk = (card.atk || 0) - buffData.atk;
+      card.atk = Math.max(0, (card.atk || 0) - buffData.atk);
     }
     if (buffData.def) {
-      card.def = (card.def || 0) - buffData.def;
+      card.def = Math.max(0, (card.def || 0) - buffData.def);
     }
 
     // Remove buff tracking

@@ -5296,24 +5296,10 @@ export default class Game {
     ) {
       const host = card.equippedTo;
 
-      // Verificar se é "The Shadow Heart" - se sair do campo, destruir o monstro equipado
-      if (card.name === "The Shadow Heart" && host) {
-        const hostOwner = host.owner === "player" ? this.player : this.bot;
-        void this.destroyCard(host, {
-          cause: "effect",
-          sourceCard: card,
-          opponent: this.getOpponent(hostOwner),
-        }).then((result) => {
-          if (result?.destroyed) {
-            this.ui.log(
-              `${host.name} is destroyed as ${card.name} left the field.`
-            );
-            this.updateBoard();
-          }
-        });
-        card.equippedTo = null;
-      }
+      // Clear equip reference immediately to prevent stale pointers
+      card.equippedTo = null;
 
+      // Remove from host's equips array
       if (host && Array.isArray(host.equips)) {
         const idxEquip = host.equips.indexOf(card);
         if (idxEquip > -1) {
@@ -5321,13 +5307,14 @@ export default class Game {
         }
       }
 
+      // Remove stat bonuses (clamp to 0 to prevent negative stats)
       if (typeof card.equipAtkBonus === "number" && card.equipAtkBonus !== 0) {
-        host.atk -= card.equipAtkBonus;
+        host.atk = Math.max(0, (host.atk || 0) - card.equipAtkBonus);
         card.equipAtkBonus = 0;
       }
 
       if (typeof card.equipDefBonus === "number" && card.equipDefBonus !== 0) {
-        host.def -= card.equipDefBonus;
+        host.def = Math.max(0, (host.def || 0) - card.equipDefBonus);
         card.equipDefBonus = 0;
       }
 
@@ -5354,7 +5341,23 @@ export default class Game {
         card.grantsCrescentShieldGuard = false;
       }
 
-      card.equippedTo = null;
+      // Special case: "The Shadow Heart" - if it leaves the field, destroy the equipped monster
+      // Process this AFTER removing bonuses to ensure clean state
+      if (card.name === "The Shadow Heart" && host) {
+        const hostOwner = host.owner === "player" ? this.player : this.bot;
+        this.destroyCard(host, {
+          cause: "effect",
+          sourceCard: card,
+          opponent: this.getOpponent(hostOwner),
+        }).then((result) => {
+          if (result?.destroyed) {
+            this.ui.log(
+              `${host.name} is destroyed as ${card.name} left the field.`
+            );
+            this.updateBoard();
+          }
+        });
+      }
     }
 
     if (toZone === "fieldSpell") {
@@ -5381,10 +5384,11 @@ export default class Game {
       return { success: true, fromZone, toZone };
     }
 
-    // If a monster leaves the field to the graveyard, send attached equip spells too.
+    // STATE-BASED CLEANUP: If a monster leaves the field to ANY other zone,
+    // send attached equip spells to the graveyard (state-based rule).
     if (
       fromZone === "field" &&
-      toZone === "graveyard" &&
+      toZone !== "field" &&
       card.cardKind === "monster"
     ) {
       const equipZone = this.getZone(fromOwner, "spellTrap") || [];
@@ -5395,22 +5399,31 @@ export default class Game {
           eq.subtype === "equip" &&
           (eq.equippedTo === card || eq.equipTarget === card)
       );
-      attachedEquips.forEach((equip) => {
-        this.moveCard(equip, fromOwner, "graveyard", {
-          fromZone: "spellTrap",
-        });
+
+      // Process equips synchronously to ensure deterministic state
+      for (const equip of attachedEquips) {
+        // Clear equip references BEFORE moving to avoid stale pointers
         if (equip.equippedTo === card) {
           equip.equippedTo = null;
         }
         if (equip.equipTarget === card) {
           equip.equipTarget = null;
         }
-      });
+
+        // Move equip to graveyard (this will trigger bonus cleanup in the equip's own moveCard path)
+        this.moveCard(equip, fromOwner, "graveyard", {
+          fromZone: "spellTrap",
+        });
+      }
 
       // Se o monstro foi revivido por Call of the Haunted, destruir a trap também
       if (card.callOfTheHauntedTrap) {
         const callTrap = card.callOfTheHauntedTrap;
-        void this.destroyCard(callTrap, {
+        card.callOfTheHauntedTrap = null; // Clear reference before async operation
+
+        // Use synchronous-style destroy to maintain deterministic state
+        // The destroy will be processed, and we clear the reference first to avoid loops
+        this.destroyCard(callTrap, {
           cause: "effect",
           sourceCard: card,
           opponent: this.getOpponent(fromOwner),
@@ -5422,7 +5435,6 @@ export default class Game {
             this.updateBoard();
           }
         });
-        card.callOfTheHauntedTrap = null;
       }
     }
 
@@ -5436,9 +5448,11 @@ export default class Game {
       card.callOfTheHauntedTarget
     ) {
       const revivedMonster = card.callOfTheHauntedTarget;
+      card.callOfTheHauntedTarget = null; // Clear reference before async operation
+
       const monsterOwner =
         revivedMonster.owner === "player" ? this.player : this.bot;
-      void this.destroyCard(revivedMonster, {
+      this.destroyCard(revivedMonster, {
         cause: "effect",
         sourceCard: card,
         opponent: this.getOpponent(monsterOwner),
@@ -5450,7 +5464,6 @@ export default class Game {
           this.updateBoard();
         }
       });
-      card.callOfTheHauntedTarget = null;
     }
 
     if (options.position) {
