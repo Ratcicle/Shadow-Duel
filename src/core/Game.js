@@ -4790,9 +4790,9 @@ export default class Game {
         const damage = attacker.atk - target.atk;
         applyBattleDamage(
           defender,
-          attacker,
+          target,
           damage,
-          attackerHealsOnBattleDamage
+          defenderHealsOnBattleDamage
         );
         logBattleResult(
           `${attacker.name} destroyed ${target.name} and dealt ${damage} damage.`
@@ -4813,9 +4813,9 @@ export default class Game {
         const damage = target.atk - attacker.atk;
         applyBattleDamage(
           attPlayer,
-          target,
+          attacker,
           damage,
-          defenderHealsOnBattleDamage
+          attackerHealsOnBattleDamage
         );
         logBattleResult(
           `${attacker.name} was destroyed by ${target.name} and took ${damage} damage.`
@@ -4864,9 +4864,9 @@ export default class Game {
           const damage = attacker.atk - target.def;
           applyBattleDamage(
             defender,
-            attacker,
+            target,
             damage,
-            attackerHealsOnBattleDamage
+            defenderHealsOnBattleDamage
           );
           logBattleResult(
             `${attacker.name} pierced ${target.name} for ${damage} damage.`
@@ -4890,9 +4890,9 @@ export default class Game {
         const damage = target.def - attacker.atk;
         applyBattleDamage(
           attPlayer,
-          target,
+          attacker,
           damage,
-          defenderHealsOnBattleDamage
+          attackerHealsOnBattleDamage
         );
         logBattleResult(
           `${attacker.name} took ${damage} damage attacking ${target.name}.`
