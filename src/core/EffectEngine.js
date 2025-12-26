@@ -2748,6 +2748,9 @@ export default class EffectEngine {
       if (def.type) {
         filters.type = def.type;
       }
+      if (def.excludeSelf) {
+        filters.excludeSelf = true;
+      }
       requirements.push({
         id: def.id,
         min,

@@ -3734,8 +3734,8 @@ export const cardDatabase = [
           {
             type: "buff_stats_temp",
             targetRef: "luminescent_debuff_target",
-            atkBoost: -1000,
-            defBoost: -1000,
+            atkBoost: -600,
+            defBoost: -600,
           },
         ],
       },
