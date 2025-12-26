@@ -5400,6 +5400,17 @@ export default class Game {
         delete card.permanentBuffsBySource;
       }
       this.effectEngine?.clearPassiveBuffsForCard(card);
+
+      // Clear field presence ID for field_presence_type_summon_count_buff tracking
+      // This resets the counter when the card leaves the field
+      if (toZone !== "field") {
+        if (
+          this.effectEngine &&
+          typeof this.effectEngine.clearFieldPresenceId === "function"
+        ) {
+          this.effectEngine.clearFieldPresenceId(card);
+        }
+      }
     }
 
     // Se um equip spell está saindo da spell/trap zone, limpar seus efeitos no monstro
@@ -5692,6 +5703,14 @@ export default class Game {
         card.setTurn = this.turnCounter;
       } else {
         card.setTurn = null;
+      }
+
+      // Assign field presence ID for field_presence_type_summon_count_buff tracking
+      if (
+        this.effectEngine &&
+        typeof this.effectEngine.assignFieldPresenceId === "function"
+      ) {
+        this.effectEngine.assignFieldPresenceId(card);
       }
 
       const ownerPlayer = card.owner === "player" ? this.player : this.bot;

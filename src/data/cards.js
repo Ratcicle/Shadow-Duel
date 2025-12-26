@@ -3527,7 +3527,7 @@ export const cardDatabase = [
       position: "choice",
     },
     description:
-      "While in Defense Position, this card cannot be destroyed by battle. While face-up on the field, it gains 300 ATK/DEF for each Dragon monster its controller has Special Summoned this duel.",
+      "While in Defense Position, this card cannot be destroyed by battle. This card gains 200 ATK/DEF for each Dragon-type monster Special Summoned while this card is face-up on the field.",
     image: "assets/Metal Armored Dragon.png",
     effects: [
       {
@@ -3540,14 +3540,14 @@ export const cardDatabase = [
         },
       },
       {
-        id: "metal_armored_dragon_special_buff",
+        id: "metal_armored_dragon_field_presence_buff",
         timing: "passive",
         passive: {
-          type: "type_special_summoned_count_buff",
+          type: "field_presence_type_summon_count_buff",
           typeName: "Dragon",
           amountPerCard: 200,
-          scope: "card_state",
-          owners: ["self"],
+          summonMethods: ["special"],
+          countOwner: "self",
           stats: ["atk", "def"],
         },
       },

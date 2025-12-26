@@ -24,9 +24,10 @@ export default class EffectEngine {
     // Track per-card counters for special summon by type (used by passives like Metal Armored Dragon)
     // Defer listener registration until game is fully initialized
     if (game && typeof game.on === "function") {
-      game.on("after_summon", (payload) =>
-        this.handleSpecialSummonTypeCounters(payload)
-      );
+      game.on("after_summon", (payload) => {
+        this.handleSpecialSummonTypeCounters(payload);
+        this.handleFieldPresenceTypeSummonCounters(payload);
+      });
     }
   }
 
@@ -504,6 +505,125 @@ export default class EffectEngine {
     this.updatePassiveBuffs();
   }
 
+  /**
+   * Assign a unique field presence ID to a card when it enters the field.
+   * This ID is used to track counters that should reset when the card leaves and returns.
+   * The counter tracks events (like summons) that occur WHILE this specific instance is on the field.
+   *
+   * @param {Object} card - The card entering the field
+   */
+  assignFieldPresenceId(card) {
+    if (!card) return;
+
+    // Generate unique ID: card.id + timestamp + random component
+    const timestamp = Date.now();
+    const random = Math.floor(Math.random() * 1000000);
+    card.fieldPresenceId = `fp_${card.id}_${timestamp}_${random}`;
+
+    // Initialize presence-specific state for tracking counters
+    if (!card.fieldPresenceState) {
+      card.fieldPresenceState = {};
+    }
+  }
+
+  /**
+   * Clear field presence ID and associated state when a card leaves the field.
+   * This ensures counters reset when the card returns to the field later.
+   *
+   * @param {Object} card - The card leaving the field
+   */
+  clearFieldPresenceId(card) {
+    if (!card) return;
+
+    // Clear presence-specific counters
+    if (card.fieldPresenceState) {
+      card.fieldPresenceState = null;
+    }
+
+    // Clear the presence ID
+    delete card.fieldPresenceId;
+  }
+
+  /**
+   * Handle field-presence-based type summon counters.
+   * This tracks how many monsters of a specific type have been Special Summoned
+   * WHILE a specific card is face-up on the field.
+   * The counter resets when the card leaves the field.
+   *
+   * @param {Object} payload - Event payload from after_summon
+   */
+  handleFieldPresenceTypeSummonCounters(payload) {
+    const { card: summonedCard, player, method } = payload || {};
+
+    // Validate payload
+    if (!summonedCard || !player) return;
+
+    const typeName = summonedCard.type || null;
+    if (!typeName) return;
+
+    const controllerId = player.id || player;
+    const fieldCards = player.field || [];
+
+    // Find all cards with field_presence_type_summon_count_buff passives
+    for (const fieldCard of fieldCards) {
+      if (!fieldCard || fieldCard.isFacedown) continue;
+      if (fieldCard.cardKind !== "monster") continue;
+      if (!fieldCard.fieldPresenceId) continue; // Must have a presence ID
+
+      // Don't count the card that was just summoned for itself
+      // (it wasn't on the field when the summon happened)
+      if (fieldCard === summonedCard) continue;
+
+      const effects = fieldCard.effects || [];
+      for (const effect of effects) {
+        if (!effect || effect.timing !== "passive") continue;
+        const passive = effect.passive;
+        if (!passive) continue;
+        if (passive.type !== "field_presence_type_summon_count_buff") continue;
+
+        // Check if this passive tracks the summoned card's type
+        const passiveType = passive.typeName || null;
+        if (!passiveType || passiveType !== typeName) continue;
+
+        // Check summon method filter
+        const summonMethods = passive.summonMethods || ["special"];
+        // "special" includes ascension, fusion, etc. - normalize check
+        const isSpecialSummon =
+          method === "special" || method === "ascension" || method === "fusion";
+        if (summonMethods.includes("special") && !isSpecialSummon) continue;
+        if (
+          !summonMethods.includes("special") &&
+          !summonMethods.includes(method)
+        )
+          continue;
+
+        // Check owner filter
+        const countOwner = passive.countOwner || "self";
+        const summonedOwner = summonedCard.owner || null;
+        if (countOwner === "self" && summonedOwner !== controllerId) continue;
+        if (countOwner === "opponent" && summonedOwner === controllerId)
+          continue;
+
+        // Initialize field presence state if needed
+        if (!fieldCard.fieldPresenceState) {
+          fieldCard.fieldPresenceState = {};
+        }
+
+        // Initialize counter for this type
+        const counterKey = `summon_count_${typeName}`;
+        if (!fieldCard.fieldPresenceState[counterKey]) {
+          fieldCard.fieldPresenceState[counterKey] = 0;
+        }
+
+        // Increment counter
+        fieldCard.fieldPresenceState[counterKey]++;
+      }
+    }
+
+    // Update passive buffs to reflect new counts
+    this.updatePassiveBuffs();
+  }
+
   updatePassiveBuffs() {
     if (!this.game) return false;
 
@@ -600,6 +720,34 @@ export default class EffectEngine {
             0;
           const stats = passive.stats || ["atk", "def"];
           const buffKey = effect.id || `passive_${card.id}_${index}_type_count`;
+          const applied = this.applyPassiveBuffValue(
+            card,
+            buffKey,
+            count * perCard,
+            stats
+          );
+          if (applied) updated = true;
+          return;
+        }
+
+        // Passive: field_presence_type_summon_count_buff - buff based on summons WHILE card is face-up on field
+        // Uses fieldPresenceState to track summons only during this card's field presence
+        if (passive.type === "field_presence_type_summon_count_buff") {
+          const typeName = passive.typeName || passive.monsterType || null;
+          if (!typeName) return;
+
+          // Read counter from fieldPresenceState (set by handleFieldPresenceTypeSummonCounters)
+          const counterKey = `summon_count_${typeName}`;
+          const count = card.fieldPresenceState?.[counterKey] || 0;
+
+          const perCard =
+            passive.amountPerCard ??
+            passive.perCard ??
+            passive.buffPerCard ??
+            0;
+          const stats = passive.stats || ["atk", "def"];
+          const buffKey =
+            effect.id || `passive_${card.id}_${index}_field_presence_type`;
           const applied = this.applyPassiveBuffValue(
             card,
             buffKey,
