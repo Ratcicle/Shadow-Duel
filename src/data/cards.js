@@ -4136,7 +4136,7 @@ export const cardDatabase = [
     ],
   },
   {
-    id: 189,
+    id: 192,
     name: "Abyssal Serpent Dragon",
     cardKind: "monster",
     type: "Dragon",
