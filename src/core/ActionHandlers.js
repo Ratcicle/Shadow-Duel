@@ -1677,6 +1677,101 @@ export async function handleBanish(action, ctx, targets, engine) {
 }
 
 /**
+ * Handler for banishing a specific card from the graveyard as a cost.
+ * This is used for destruction negation costs and similar effects.
+ *
+ * Action properties:
+ * - cardName: name of the card to banish (required)
+ * - count: number of cards to banish (default: 1)
+ * - cardType: optional type filter (e.g., "Dragon")
+ * - promptPlayer: whether to let player choose (default: true for multiple matches)
+ */
+export async function handleBanishCardFromGraveyard(
+  action,
+  ctx,
+  targets,
+  engine
+) {
+  const { player } = ctx;
+  const game = engine.game;
+
+  if (!player || !game) return false;
+
+  const cardName = action.cardName;
+  const cardType = action.cardType || action.type;
+  const count = action.count || 1;
+
+  // Find matching cards in the graveyard
+  const graveyard = player.graveyard || [];
+  let candidates = graveyard.filter((card) => {
+    if (!card) return false;
+    if (cardName && card.name !== cardName) return false;
+    if (cardType && card.type !== cardType) return false;
+    return true;
+  });
+
+  if (candidates.length < count) {
+    const filterDesc = cardName || cardType || "matching card";
+    getUI(game)?.log(
+      `Not enough ${filterDesc} in graveyard to banish (need ${count}, found ${candidates.length}).`
+    );
+    return false;
+  }
+
+  // Select cards to banish
+  let toBanish = [];
+
+  if (candidates.length === count) {
+    // Exactly enough cards, no choice needed
+    toBanish = candidates.slice(0, count);
+  } else if (action.promptPlayer !== false && player === game.player) {
+    // Player can choose which cards to banish
+    const ui = getUI(game);
+    if (ui?.showCardSelectionPrompt) {
+      const selected = await ui.showCardSelectionPrompt({
+        cards: candidates,
+        min: count,
+        max: count,
+        message: `Select ${count} card(s) to banish from graveyard as cost`,
+        zone: "graveyard",
+      });
+      toBanish = selected || [];
+    } else {
+      toBanish = candidates.slice(0, count);
+    }
+  } else {
+    // Bot or auto-select: take first matching cards
+    toBanish = candidates.slice(0, count);
+  }
+
+  if (toBanish.length < count) {
+    getUI(game)?.log(`Cost not paid: not enough cards selected to banish.`);
+    return false;
+  }
+
+  // Perform the banish
+  let banishedCount = 0;
+  for (const card of toBanish) {
+    const idx = player.graveyard.indexOf(card);
+    if (idx !== -1) {
+      player.graveyard.splice(idx, 1);
+      player.banished = player.banished || [];
+      player.banished.push(card);
+      card.location = "banished";
+      banishedCount++;
+      getUI(game)?.log(`${card.name} was banished from the graveyard.`);
+    }
+  }
+
+  if (banishedCount > 0) {
+    game.updateBoard();
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Generic handler for setting stats to zero and negating effects
  * Implements the "Sealing the Void" effect pattern
  *
@@ -2173,6 +2268,96 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
   }
 
   return anyBuffed || anySecondAttack;
+}
+
+/**
+ * Generic handler for granting ability to attack all opponent monsters this turn
+ *
+ * Action properties:
+ * - targetRef: reference to the monster(s) that will gain the ability
+ * - attackCount: how many times each target can attack (default: "all" = number of opponent monsters)
+ * - requireOpponentMonsters: if true, effect fails if opponent has no monsters (default: false)
+ *
+ * This sets a flag on the monster that allows it to attack each opponent monster once.
+ * The attack limit is dynamically calculated based on opponent's field.
+ *
+ * Used by: Tech-Void Cosmic Dragon, future multi-attack effects
+ */
+export async function handleGrantAttackAllMonsters(
+  action,
+  ctx,
+  targets,
+  engine
+) {
+  const { player } = ctx;
+  const game = engine.game;
+
+  if (!player || !game) return false;
+
+  const targetCards = resolveTargetCards(action, ctx, targets, {
+    defaultRef: "self",
+  });
+
+  if (targetCards.length === 0) {
+    getUI(game)?.log("No valid targets for multi-attack effect.");
+    return false;
+  }
+
+  const opponent = player.id === "player" ? game.bot : game.player;
+  const opponentMonsterCount = (opponent?.field || []).filter(
+    (m) => m && !m.isFacedown
+  ).length;
+
+  // Check if opponent has monsters when required
+  if (action.requireOpponentMonsters && opponentMonsterCount === 0) {
+    getUI(game)?.log("No opponent monsters to attack.");
+    return false;
+  }
+
+  let anyGranted = false;
+  const grantedCards = [];
+
+  for (const card of targetCards) {
+    if (!card || card.cardKind !== "monster") continue;
+    if (!player.field?.includes(card)) continue;
+    if (card.isFacedown) continue;
+
+    // Set flag for attacking all opponent monsters
+    card.canAttackAllOpponentMonstersThisTurn = true;
+
+    // Track which monsters have been attacked this turn (cleared at end of turn)
+    card.attackedMonstersThisTurn = card.attackedMonstersThisTurn || new Set();
+
+    // Calculate max attacks based on opponent's current field
+    // This is recalculated dynamically in getAttackAvailability
+    const attackLimit =
+      action.attackCount === "all"
+        ? Math.max(1, opponentMonsterCount)
+        : typeof action.attackCount === "number"
+        ? action.attackCount
+        : opponentMonsterCount;
+
+    card.multiAttackLimit = attackLimit;
+
+    anyGranted = true;
+    grantedCards.push(card.name);
+  }
+
+  if (anyGranted && grantedCards.length > 0) {
+    const cardList = grantedCards.join(", ");
+    if (opponentMonsterCount > 0) {
+      getUI(game)?.log(
+        `${cardList} can attack all opponent monsters this turn!`
+      );
+    } else {
+      getUI(game)?.log(
+        `${cardList} gained multi-attack ability, but opponent has no monsters.`
+      );
+    }
+    game.updateBoard();
+  }
+
+  return anyGranted;
 }
 
 /**
@@ -4053,6 +4238,10 @@ export function registerDefaultHandlers(registry) {
   registry.register("transmutate", handleTransmutate);
   registry.register("banish", handleBanish);
   registry.register("banish_destroyed_monster", handleBanish);
+  registry.register(
+    "banish_card_from_graveyard",
+    handleBanishCardFromGraveyard
+  );
 
   // Stat modification and effect negation handlers
   registry.register(
@@ -4088,6 +4277,7 @@ export function registerDefaultHandlers(registry) {
     handleRemovePermanentBuffNamed
   );
   registry.register("grant_second_attack", handleBuffStatsTemp);
+  registry.register("grant_attack_all_monsters", handleGrantAttackAllMonsters);
   registry.register(
     "conditional_summon_from_hand",
     handleConditionalSummonFromHand

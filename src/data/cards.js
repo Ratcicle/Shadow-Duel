@@ -4327,6 +4327,68 @@ export const cardDatabase = [
       },
     ],
   },
+  {
+    id: 195,
+    name: "Tech-Void Cosmic Dragon",
+    cardKind: "monster",
+    monsterType: "ascension",
+    level: 10,
+    atk: 3500,
+    def: 1500,
+    type: "Dragon",
+    ascension: {
+      materialId: 194,
+      requirements: [{ type: "material_effect_activations", count: 2 }],
+      position: "choice",
+    },
+    description:
+      "Ascension Material: 'Tech-Void Dragon'. Requirement: The material activated all of its effects during this duel. If this card would be destroyed: You can banish 'Tech-Void Dragon' from your GY instead. Once per turn: You can banish 1 Dragon monster from your GY; this card can attack all monsters your opponent controls, once each, this turn. You can only use each effect of 'Tech-Void Cosmic Dragon' once per turn.",
+    image: "assets/Tech-Void Cosmic Dragon.png",
+    effects: [
+      {
+        id: "tech_void_cosmic_negate_destruction",
+        timing: "on_event",
+        event: "before_destroy",
+        oncePerTurn: true,
+        oncePerTurnName: "tech_void_cosmic_negate_destruction",
+        negationCost: [
+          {
+            type: "banish_card_from_graveyard",
+            cardName: "Tech-Void Dragon",
+            count: 1,
+          },
+        ],
+      },
+      {
+        id: "tech_void_cosmic_attack_all",
+        timing: "ignition",
+        requireZone: "field",
+        requirePhase: ["main1", "battle"],
+        oncePerTurn: true,
+        oncePerTurnName: "tech_void_cosmic_attack_all",
+        targets: [
+          {
+            id: "tech_void_cosmic_banish_cost",
+            owner: "self",
+            zone: "graveyard",
+            type: "Dragon",
+            cardKind: "monster",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "banish",
+            targetRef: "tech_void_cosmic_banish_cost",
+          },
+          {
+            type: "grant_attack_all_monsters",
+            targetRef: "self",
+          },
+        ],
+      },
+    ],
+  },
 ];
 
 // Performance optimization: Create indexed maps for O(1) lookups

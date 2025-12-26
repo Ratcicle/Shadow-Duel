@@ -315,6 +315,14 @@
     "170": {
       "name": "Dimensão Espelho do Vazio",
       "description": "Durante a Fase Principal, se seu oponente Invocar por Invocação-Especial um monstro: você pode Invocar por Invocação-Especial 1 monstro da sua mão com o mesmo Nível que esse monstro, mas, até o final deste turno, seus efeitos são negados. Você só pode ativar 1 'Dimensão Espelho do Vazio' por turno."
+    },
+    "194": {
+      "name": "Dragão Tecno-Vazio",
+      "description": "Dragão Voltaico + 1 monstro Dragão de Nível 5 ou maior. Se este card for Invocado por Invocação-Fusão: você pode escolher 1 monstro Dragão de Nível 4 ou menor no seu Cemitério; bana-o e, se fizer isso, este card ganha ATK igual ao ATK do monstro banido até o final deste turno. Se este card for destruído em batalha: você pode Invocar por Invocação-Especial 1 'Dragão Voltaico' do seu Cemitério. Você só pode usar cada efeito de 'Dragão Tecno-Vazio' uma vez por turno."
+    },
+    "195": {
+      "name": "Dragão Cósmico Tecno-Vazio",
+      "description": "Material de Ascensão: 'Dragão Tecno-Vazio'. Requisito: O material ativou todos os seus efeitos durante este duelo. Se este card seria destruído: você pode banir 'Dragão Tecno-Vazio' do seu Cemitério em vez disso. Uma vez por turno: você pode banir 1 monstro Dragão do seu Cemitério; este card pode atacar todos os monstros que seu oponente controla, uma vez cada, neste turno. Você só pode usar cada efeito de 'Dragão Cósmico Tecno-Vazio' uma vez por turno."
     }
   }
 }

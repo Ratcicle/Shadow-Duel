@@ -3892,6 +3892,10 @@ export default class EffectEngine {
         descriptions.push(`pagar ${action.amount} LP`);
       } else if (action.type === "damage") {
         descriptions.push(`sofrer ${action.amount} de dano`);
+      } else if (action.type === "banish_card_from_graveyard") {
+        const cardDesc = action.cardName || action.cardType || "carta";
+        const count = action.count || 1;
+        descriptions.push(`banir ${count} '${cardDesc}' do Cemitério`);
       } else {
         descriptions.push(action.type);
       }

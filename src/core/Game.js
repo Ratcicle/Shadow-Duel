@@ -2378,19 +2378,32 @@ export default class Game {
             (card) => card && card.cardKind === "monster"
           );
 
-          const attackCandidates =
+          let attackCandidates =
             opponentTargets.filter((card) => card && card.mustBeAttacked)
               .length > 0
               ? opponentTargets.filter((card) => card && card.mustBeAttacked)
               : opponentTargets;
 
+          // For multi-attack mode, filter out monsters already attacked this turn
+          if (attacker.canAttackAllOpponentMonstersThisTurn) {
+            const attackedMonsters =
+              attacker.attackedMonstersThisTurn || new Set();
+            attackCandidates = attackCandidates.filter(
+              (card) => !attackedMonsters.has(card)
+            );
+          }
+
           // ✅ CORREÇÃO: Detecta extra attacks para AMBOS os sistemas (extraAttacks E canMakeSecondAttackThisTurn)
           // Um ataque é considerado "extra" se o monstro já atacou antes neste turno
+          // Multi-attack mode allows multiple attacks, so it's not considered "extra" for direct attack purposes
           const attacksUsed = attacker.attacksUsedThisTurn || 0;
-          const isExtraAttack = attacksUsed > 0;
+          const isMultiAttackMode =
+            attacker.canAttackAllOpponentMonstersThisTurn;
+          const isExtraAttack = attacksUsed > 0 && !isMultiAttackMode;
           const canDirect =
             !attacker.cannotAttackDirectly &&
             !isExtraAttack && // Extra attacks (2nd, 3rd, etc.) cannot be direct
+            !isMultiAttackMode && // Multi-attack can only target monsters, not direct
             (attacker.canAttackDirectlyThisTurn === true ||
               attackCandidates.length === 0);
 
@@ -3875,11 +3888,14 @@ export default class Game {
 
     // ✅ CORREÇÃO:  Detecta extra attacks consistentemente com bindCardInteractions
     // Extra attacks (2nd, 3rd, etc.) cannot be direct
+    // Multi-attack mode allows multiple attacks but cannot attack directly
     const attacksUsed = attacker.attacksUsedThisTurn || 0;
-    const isExtraAttack = attacksUsed > 0;
+    const isMultiAttackMode = attacker.canAttackAllOpponentMonstersThisTurn;
+    const isExtraAttack = attacksUsed > 0 && !isMultiAttackMode;
     const canDirect =
       !attacker.cannotAttackDirectly &&
       !isExtraAttack && // Extra attacks cannot be direct
+      !isMultiAttackMode && // Multi-attack can only target monsters, not direct
       (attacker.canAttackDirectlyThisTurn === true || candidates.length === 0);
 
     if (candidates.length === 0 && !canDirect) return;
@@ -4921,6 +4937,31 @@ export default class Game {
       attacker.canMakeSecondAttackThisTurn &&
       !attacker.secondAttackUsedThisTurn;
 
+    // Check for multi-attack ability (attack all opponent monsters)
+    if (attacker.canAttackAllOpponentMonstersThisTurn) {
+      const attackerOwner =
+        attacker.owner === "player" ? this.player : this.bot;
+      const opponent = attacker.owner === "player" ? this.bot : this.player;
+      const opponentMonsterCount = (opponent?.field || []).filter(
+        (m) => m && !m.isFacedown
+      ).length;
+
+      // Can attack as many times as there are opponent monsters (minimum 1 for direct attack)
+      const multiAttackLimit =
+        attacker.multiAttackLimit || Math.max(1, opponentMonsterCount);
+
+      if (attacksUsed < multiAttackLimit) {
+        return {
+          ok: true,
+          maxAttacks: multiAttackLimit,
+          attacksUsed,
+          isMultiAttack: true,
+        };
+      }
+
+      // Fall through to normal check if multi-attack limit reached
+    }
+
     if (attacksUsed >= maxAttacks && !canUseSecondAttack) {
       return {
         ok: false,
@@ -4931,11 +4972,21 @@ export default class Game {
     return { ok: true, maxAttacks, attacksUsed };
   }
 
-  markAttackUsed(attacker) {
+  markAttackUsed(attacker, target = null) {
     if (!attacker) return;
     const extraAttacks = attacker.extraAttacks || 0;
     const maxAttacks = 1 + extraAttacks;
     attacker.attacksUsedThisTurn = (attacker.attacksUsedThisTurn || 0) + 1;
+
+    // Track attacked monsters for multi-attack effects
+    if (attacker.canAttackAllOpponentMonstersThisTurn && target) {
+      attacker.attackedMonstersThisTurn =
+        attacker.attackedMonstersThisTurn || new Set();
+      // Use unique identifier for the target (id or reference)
+      const targetId = target.instanceId || target.id || target.name;
+      attacker.attackedMonstersThisTurn.add(targetId);
+    }
+
     if (
       attacker.attacksUsedThisTurn > maxAttacks &&
       attacker.canMakeSecondAttackThisTurn &&
@@ -5037,7 +5088,7 @@ export default class Game {
         sourceCard: attacker,
         cause: "battle",
       });
-      this.markAttackUsed(attacker);
+      this.markAttackUsed(attacker, null); // Direct attack, no target
       this.checkWinCondition();
       this.clearAttackResolutionIndicators();
       this.updateBoard();
@@ -5237,7 +5288,7 @@ export default class Game {
       }
     }
 
-    this.markAttackUsed(attacker);
+    this.markAttackUsed(attacker, target);
     this.checkWinCondition();
     this.clearAttackResolutionIndicators();
     this.updateBoard();
@@ -5451,6 +5502,10 @@ export default class Game {
       card.tempBattleIndestructible = false;
       card.battleDamageHealsControllerThisTurn = false;
       card.canAttackDirectlyThisTurn = false;
+
+      // Reset multi-attack flags
+      delete card.canAttackAllOpponentMonstersThisTurn;
+      delete card.attackedMonstersThisTurn;
     });
   }
 
