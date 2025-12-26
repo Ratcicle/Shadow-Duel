@@ -402,7 +402,13 @@ export default class Bot extends Player {
 
     const maxAttacks = 1 + (attacker.extraAttacks || 0);
     const usedAttacks = attacker.attacksUsedThisTurn || 0;
-    if (usedAttacks >= maxAttacks) return;
+
+    // Multi-attack mode allows more attacks
+    const isMultiAttackMode = attacker.canAttackAllOpponentMonstersThisTurn;
+    const multiAttackLimit = attacker.multiAttackLimit || 1;
+
+    if (!isMultiAttackMode && usedAttacks >= maxAttacks) return;
+    if (isMultiAttackMode && usedAttacks >= multiAttackLimit) return;
 
     const attackerOwner = state.bot;
     const defenderOwner = state.player;
@@ -411,7 +417,9 @@ export default class Bot extends Player {
     if (!target) {
       defenderOwner.lp -= attackStat;
       attacker.attacksUsedThisTurn = usedAttacks + 1;
-      attacker.hasAttacked = attacker.attacksUsedThisTurn >= maxAttacks;
+      // Multi-attack mode uses different limit
+      const effectiveMax = isMultiAttackMode ? multiAttackLimit : maxAttacks;
+      attacker.hasAttacked = attacker.attacksUsedThisTurn >= effectiveMax;
       return;
     }
 
@@ -450,7 +458,9 @@ export default class Bot extends Player {
       // If attackStat === targetStat: tie, no damage, no destruction
     }
     attacker.attacksUsedThisTurn = usedAttacks + 1;
-    attacker.hasAttacked = attacker.attacksUsedThisTurn >= maxAttacks;
+    // Multi-attack mode uses different limit
+    const effectiveMax = isMultiAttackMode ? multiAttackLimit : maxAttacks;
+    attacker.hasAttacked = attacker.attacksUsedThisTurn >= effectiveMax;
   }
 
   async executeMainPhaseAction(game, action) {
