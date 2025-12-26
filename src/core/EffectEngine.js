@@ -514,9 +514,38 @@ export default class EffectEngine {
 
     let updated = false;
 
+    // BUG #11 FIX - PHASE 1: Clear ALL dynamic buffs before recalculating
+    // This prevents "ghost buffs" from accumulating when effect IDs change
+    // or when passive conditions are no longer met
+    for (const card of fieldCards) {
+      if (!card.dynamicBuffs) continue;
+
+      // Revert all currently applied buffs
+      for (const key of Object.keys(card.dynamicBuffs)) {
+        const entry = card.dynamicBuffs[key];
+        if (!entry) continue;
+
+        const value = entry.value || 0;
+        const stats = entry.stats || ["atk", "def"];
+
+        if (value !== 0) {
+          for (const stat of stats) {
+            if (typeof card[stat] === "number") {
+              // Remove buff with clamp to prevent negative stats
+              card[stat] = Math.max(0, card[stat] - value);
+            }
+          }
+          updated = true;
+        }
+      }
+
+      // Clear the buffs object completely - will be rebuilt in Phase 2
+      card.dynamicBuffs = {};
+    }
+
+    // PHASE 2: Recalculate fresh buffs based on current game state
     for (const card of fieldCards) {
       const effects = card.effects || [];
-      const processedKeys = new Set();
 
       effects.forEach((effect, index) => {
         if (!effect || effect.timing !== "passive") return;
@@ -536,7 +565,6 @@ export default class EffectEngine {
             delete card[statusName];
             updated = true;
           }
-          processedKeys.add(effect.id || `passive_${card.id}_${index}_pos`);
           return;
         }
 
@@ -557,8 +585,8 @@ export default class EffectEngine {
             this.game &&
             typeof this.game.getSpecialSummonedTypeCount === "function"
           ) {
-            const owners = passive.owners || passive.countOwners || ["self"]; // flexibility
-            const ownerType = "self"; // current card owner only
+            const owners = passive.owners || passive.countOwners || ["self"];
+            const ownerType = "self";
             if (owners.includes(ownerType)) {
               const ownerId = card.owner;
               count += this.game.getSpecialSummonedTypeCount(ownerId, typeName);
@@ -579,10 +607,10 @@ export default class EffectEngine {
             stats
           );
           if (applied) updated = true;
-          processedKeys.add(buffKey);
           return;
         }
 
+        // Passive: archetype_count_buff - buff based on count of archetype cards on field
         if (passive.type !== "archetype_count_buff") return;
 
         const archetype = passive.archetype;
@@ -619,30 +647,11 @@ export default class EffectEngine {
         if (applied) {
           updated = true;
         }
-        processedKeys.add(buffKey);
       });
 
-      if (card.dynamicBuffs) {
-        for (const key of Object.keys(card.dynamicBuffs)) {
-          if (!processedKeys.has(key)) {
-            const entry = card.dynamicBuffs[key];
-            const value = entry?.value || 0;
-            const stats = entry?.stats || ["atk", "def"];
-            if (value !== 0) {
-              for (const stat of stats) {
-                if (typeof card[stat] === "number") {
-                  card[stat] -= value;
-                }
-              }
-              updated = true;
-            }
-            delete card.dynamicBuffs[key];
-          }
-        }
-
-        if (card.dynamicBuffs && Object.keys(card.dynamicBuffs).length === 0) {
-          card.dynamicBuffs = null;
-        }
+      // Clean up empty dynamicBuffs object
+      if (card.dynamicBuffs && Object.keys(card.dynamicBuffs).length === 0) {
+        card.dynamicBuffs = null;
       }
     }
 

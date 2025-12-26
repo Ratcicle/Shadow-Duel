@@ -433,12 +433,21 @@ export default class Bot extends Player {
         defenderOwner.field.splice(defenderOwner.field.indexOf(target), 1);
       }
     } else {
+      // BUG #12 FIX: Target in defense position - consider piercing damage
       if (attackStat > targetStat) {
+        // Attacker wins - destroy defender
         defenderOwner.graveyard.push(target);
         defenderOwner.field.splice(defenderOwner.field.indexOf(target), 1);
+        // Check for piercing damage (inflict excess damage to LP)
+        if (attacker.piercing) {
+          const piercingDamage = attackStat - targetStat;
+          defenderOwner.lp -= piercingDamage;
+        }
       } else if (attackStat < targetStat) {
+        // Attacker loses - take reflect damage
         attackerOwner.lp -= targetStat - attackStat;
       }
+      // If attackStat === targetStat: tie, no damage, no destruction
     }
     attacker.attacksUsedThisTurn = usedAttacks + 1;
     attacker.hasAttacked = attacker.attacksUsedThisTurn >= maxAttacks;
