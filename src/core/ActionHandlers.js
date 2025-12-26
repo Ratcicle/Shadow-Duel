@@ -2545,6 +2545,145 @@ export async function handleGrantProtection(action, ctx, targets, engine) {
 }
 
 /**
+ * ✅ Handler genérico para banir carta(s) de uma zona e aplicar buff baseado em propriedade
+ *
+ * Este handler é flexível e pode:
+ * - Banir do cemitério, mão, ou qualquer zona
+ * - Aplicar buff de ATK/DEF baseado em atk, def, level, ou valor fixo
+ * - Buff temporário (até fim do turno) ou permanente
+ * - Suportar seleção por filtros (type, level, archetype, etc.)
+ *
+ * Action properties:
+ * - targetRef: referência ao(s) alvo(s) a serem banidos (obrigatório)
+ * - buffTarget: quem recebe o buff ("self" = carta fonte, ou targetRef específico)
+ * - buffSource: propriedade da carta banida a usar ("atk", "def", "level", ou número fixo)
+ * - buffMultiplier: multiplicador do valor (default: 1)
+ * - buffType: "atk", "def", ou "both" (default: "atk")
+ * - duration: "end_of_turn" ou "permanent" (default: "end_of_turn")
+ * - optional: se true, jogador pode cancelar a seleção (default: false)
+ */
+export async function handleBanishAndBuff(action, ctx, targets, engine) {
+  const { player, source } = ctx;
+  const game = engine.game;
+
+  if (!player || !game) return false;
+
+  // Resolve targets to banish
+  const banishTargets = resolveTargetCards(action, ctx, targets, {
+    targetRef: action.targetRef,
+    requireArray: true,
+  });
+
+  if (!banishTargets || banishTargets.length === 0) {
+    getUI(game)?.log("No valid targets to banish.");
+    return false;
+  }
+
+  // Calculate total buff value from all banished cards
+  const buffSource = action.buffSource || "atk";
+  const buffMultiplier = action.buffMultiplier ?? 1;
+  let totalBuffValue = 0;
+
+  for (const banishCard of banishTargets) {
+    if (!banishCard) continue;
+
+    // Calculate value based on buffSource
+    let cardValue = 0;
+    if (typeof buffSource === "number") {
+      cardValue = buffSource;
+    } else if (buffSource === "atk") {
+      cardValue = banishCard.atk || 0;
+    } else if (buffSource === "def") {
+      cardValue = banishCard.def || 0;
+    } else if (buffSource === "level") {
+      cardValue = (banishCard.level || 0) * 100; // Convert level to points
+    } else {
+      cardValue = banishCard[buffSource] || 0;
+    }
+
+    totalBuffValue += Math.floor(cardValue * buffMultiplier);
+
+    // Banish the card (remove from game)
+    const fromZone =
+      typeof engine.findCardZone === "function"
+        ? engine.findCardZone(player, banishCard)
+        : "graveyard";
+
+    if (fromZone && Array.isArray(player[fromZone])) {
+      const idx = player[fromZone].indexOf(banishCard);
+      if (idx > -1) {
+        player[fromZone].splice(idx, 1);
+      }
+    }
+
+    // Track banished cards
+    if (!game.banishedCards) {
+      game.banishedCards = [];
+    }
+    game.banishedCards.push(banishCard);
+
+    getUI(game)?.log(`${banishCard.name} was banished (removed from game).`);
+  }
+
+  if (totalBuffValue === 0) {
+    getUI(game)?.log("Banished card(s) have 0 value, no buff applied.");
+    game.updateBoard();
+    return true;
+  }
+
+  // Determine who receives the buff
+  const buffTargetRef = action.buffTarget || "self";
+  let buffRecipients = [];
+
+  if (buffTargetRef === "self") {
+    if (source) buffRecipients = [source];
+  } else {
+    buffRecipients = resolveTargetCards(action, ctx, targets, {
+      targetRef: buffTargetRef,
+      requireArray: true,
+    });
+  }
+
+  if (buffRecipients.length === 0) {
+    getUI(game)?.log("No valid recipient for buff.");
+    game.updateBoard();
+    return true;
+  }
+
+  // Apply buff
+  const buffType = action.buffType || "atk";
+  const duration = action.duration || "end_of_turn";
+  const isTemporary = duration === "end_of_turn";
+
+  for (const recipient of buffRecipients) {
+    if (!recipient || recipient.cardKind !== "monster") continue;
+
+    if (buffType === "atk" || buffType === "both") {
+      recipient.atk = (recipient.atk || 0) + totalBuffValue;
+      if (isTemporary) {
+        recipient.tempAtkBoost = (recipient.tempAtkBoost || 0) + totalBuffValue;
+      }
+    }
+
+    if (buffType === "def" || buffType === "both") {
+      recipient.def = (recipient.def || 0) + totalBuffValue;
+      if (isTemporary) {
+        recipient.tempDefBoost = (recipient.tempDefBoost || 0) + totalBuffValue;
+      }
+    }
+
+    const durationText = isTemporary ? " until end of turn" : "";
+    const statText = buffType === "both" ? "ATK/DEF" : buffType.toUpperCase();
+    getUI(game)?.log(
+      `${recipient.name} gains ${totalBuffValue} ${statText}${durationText}!`
+    );
+  }
+
+  game.updateBoard();
+  return true;
+}
+
+/**
  * Generic handler for switching monster position (attack <-> defense)
  *
  * Action properties:
@@ -3905,6 +4044,7 @@ export function registerDefaultHandlers(registry) {
   registry.register("heal_from_destroyed_atk", handleHealFromDestroyedAtk);
   registry.register("heal_from_destroyed_level", handleHealFromDestroyedLevel);
   registry.register("grant_protection", handleGrantProtection);
+  registry.register("banish_and_buff", handleBanishAndBuff);
   registry.register("switch_position", handleSwitchPosition);
   registry.register(
     "switch_defender_position_on_attack",

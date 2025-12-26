@@ -4255,6 +4255,75 @@ export const cardDatabase = [
       },
     ],
   },
+  {
+    id: 191,
+    name: "Tech-Void Dragon",
+    cardKind: "monster",
+    monsterType: "fusion",
+    level: 8,
+    atk: 2500,
+    def: 1000,
+    type: "Dragon",
+    description:
+      "Voltaic Dragon + 1 Level 5 or higher Dragon monster. If this card is Fusion Summoned: You can target 1 Level 4 or lower Dragon monster in your GY; banish it, and if you do, this card gains ATK equal to the banished monster's ATK until the end of this turn. If this card is destroyed by battle: You can Special Summon 1 'Voltaic Dragon' from your GY. You can only use each effect of 'Tech-Void Dragon' once per turn.",
+    image: "assets/Tech-Void Dragon.png",
+    fusionMaterials: [
+      { name: "Voltaic Dragon", count: 1 },
+      { type: "Dragon", minLevel: 5, count: 1 },
+    ],
+    effects: [
+      {
+        id: "tech_void_fusion_banish_buff",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethods: ["fusion"],
+        requireSelfAsSummoned: true,
+        oncePerTurn: true,
+        oncePerTurnName: "tech_void_fusion_banish_buff",
+        targets: [
+          {
+            id: "tech_void_banish_target",
+            owner: "self",
+            zone: "graveyard",
+            cardKind: "monster",
+            type: "Dragon",
+            maxLevel: 4,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "banish_and_buff",
+            targetRef: "tech_void_banish_target",
+            buffTarget: "self",
+            buffSource: "atk",
+            buffMultiplier: 1,
+            buffType: "atk",
+            duration: "end_of_turn",
+          },
+        ],
+      },
+      {
+        id: "tech_void_revive_voltaic",
+        timing: "on_event",
+        event: "card_to_grave",
+        requireSelfAsSummoned: true,
+        condition: {
+          type: "destroyed_by_battle",
+        },
+        oncePerTurn: true,
+        oncePerTurnName: "tech_void_revive_voltaic",
+        actions: [
+          {
+            type: "special_summon_from_zone",
+            zone: "graveyard",
+            cardName: "Voltaic Dragon",
+            position: "choice",
+          },
+        ],
+      },
+    ],
+  },
 ];
 
 // Performance optimization: Create indexed maps for O(1) lookups
