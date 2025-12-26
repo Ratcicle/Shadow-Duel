@@ -1,7 +1,4 @@
-import {
-  getCardDisplayDescription,
-  getCardDisplayName,
-} from "../core/i18n.js";
+import { getCardDisplayDescription, getCardDisplayName } from "../core/i18n.js";
 
 export default class Renderer {
   constructor() {
@@ -116,7 +113,7 @@ export default class Renderer {
 
       fragment.appendChild(cardEl);
     });
-    
+
     container.innerHTML = "";
     container.appendChild(fragment);
   }
@@ -150,7 +147,7 @@ export default class Renderer {
 
       fragment.appendChild(cardEl);
     });
-    
+
     container.innerHTML = "";
     container.appendChild(fragment);
   }
@@ -181,7 +178,7 @@ export default class Renderer {
 
       fragment.appendChild(cardEl);
     });
-    
+
     container.innerHTML = "";
     container.appendChild(fragment);
   }
@@ -252,9 +249,7 @@ export default class Renderer {
       owner === "player" ? this.elements.playerField : this.elements.botField;
     if (!container) return;
     indices.forEach((index) => {
-      const cardEl = container.querySelector(
-        `.card[data-index=\"${index}\"]`
-      );
+      const cardEl = container.querySelector(`.card[data-index=\"${index}\"]`);
       if (cardEl) {
         cardEl.classList.add("attack-ready");
       }
@@ -281,7 +276,9 @@ export default class Renderer {
     this.clearAttackResolutionIndicators();
 
     const attackerContainer =
-      attackerOwner === "player" ? this.elements.playerField : this.elements.botField;
+      attackerOwner === "player"
+        ? this.elements.playerField
+        : this.elements.botField;
     if (attackerContainer && attackerIndex >= 0) {
       const attackerEl = attackerContainer.querySelector(
         `.card[data-index=\"${attackerIndex}\"]`
@@ -299,7 +296,9 @@ export default class Renderer {
     }
 
     const targetContainer =
-      targetOwner === "player" ? this.elements.playerField : this.elements.botField;
+      targetOwner === "player"
+        ? this.elements.playerField
+        : this.elements.botField;
     if (targetContainer && targetIndex >= 0) {
       const targetEl = targetContainer.querySelector(
         `.card[data-index=\"${targetIndex}\"]`
@@ -1098,9 +1097,7 @@ export default class Renderer {
     if (visible) {
       const isMonster = card.cardKind !== "spell" && card.cardKind !== "trap";
       const displayName =
-        getCardDisplayName(card) ||
-        (card?.name && card.name.trim()) ||
-        "";
+        getCardDisplayName(card) || (card?.name && card.name.trim()) || "";
       const stars = "*".repeat(card.level || 0);
       const typeLabel = isMonster
         ? stars
@@ -1127,9 +1124,7 @@ export default class Renderer {
                  <span class="stat-atk">ATK ${card.atk}</span>
                  <span class="stat-def">DEF ${card.def}</span>
                </div>`
-            : `<div class="card-text">${
-                displayDescription
-            }</div>`
+            : `<div class="card-text">${displayDescription}</div>`
         }
       `;
     }
@@ -1359,7 +1354,7 @@ export default class Renderer {
 
     // Use DocumentFragment to minimize reflows
     const fragment = document.createDocumentFragment();
-    
+
     cards.forEach((card, index) => {
       const cardEl = this.createCardElement(card, true);
       if (options.selectable) {
@@ -1386,7 +1381,7 @@ export default class Renderer {
       }
       fragment.appendChild(cardEl);
     });
-    
+
     grid.appendChild(fragment);
   }
 
@@ -1460,12 +1455,12 @@ export default class Renderer {
 
     // Use DocumentFragment to minimize reflows
     const fragment = document.createDocumentFragment();
-    
+
     cards.forEach((card) => {
       const cardEl = this.createCardElement(card, true);
       fragment.appendChild(cardEl);
     });
-    
+
     grid.appendChild(fragment);
   }
 
@@ -1498,11 +1493,14 @@ export default class Renderer {
 
     const allowCancel =
       contract.ui?.allowCancel !== false && config.allowCancel !== false;
-    const allowEmpty = contract.ui?.allowEmpty === true || config.allowEmpty === true;
+    const allowEmpty =
+      contract.ui?.allowEmpty === true || config.allowEmpty === true;
 
     const content = document.createElement("div");
     content.className = "modal-content target-content";
-    content.innerHTML = `<span class="close-target">${allowCancel ? "&times;" : ""}</span><h2>Select target(s)</h2>`;
+    content.innerHTML = `<span class="close-target">${
+      allowCancel ? "&times;" : ""
+    }</span><h2>Select target(s)</h2>`;
 
     const selectionState = {};
     const counterById = new Map();
@@ -1557,7 +1555,8 @@ export default class Renderer {
           cand.name ||
           "Card";
         const cardImage = document.createElement("img");
-        cardImage.src = targetCard.image || cand.cardRef?.image || "assets/card-back.png";
+        cardImage.src =
+          targetCard.image || cand.cardRef?.image || "assets/card-back.png";
         cardImage.alt = displayName;
         cardImage.style.width = "100px";
         cardImage.style.height = "auto";
@@ -1727,7 +1726,8 @@ export default class Renderer {
     const updateState = ({ selected = 0, min = 0, max = 0, allowEmpty }) => {
       const requiredMin = allowEmpty ? 0 : min;
       counter.textContent = `${selected} / ${max || "-"}`;
-      confirmBtn.disabled = selected < requiredMin || (max > 0 && selected > max);
+      confirmBtn.disabled =
+        selected < requiredMin || (max > 0 && selected > max);
     };
 
     updateState({ selected: 0, min: 0, max: 0, allowEmpty: true });
@@ -2147,12 +2147,7 @@ export default class Renderer {
     document.body.appendChild(overlay);
   }
 
-  showShadowHeartCathedralModal(
-    validMonsters,
-    maxAtk,
-    counterCount,
-    callback
-  ) {
+  showShadowHeartCathedralModal(validMonsters, maxAtk, counterCount, callback) {
     this.showCardGridSelectionModal({
       title: "Shadow-Heart Cathedral",
       subtitle: `Select 1 Shadow-Heart monster with ATK <= ${maxAtk} (${counterCount} counters)`,
@@ -2644,5 +2639,162 @@ export default class Renderer {
       // Foco no botão de confirmar
       confirmBtn.focus();
     });
+  }
+
+  /**
+   * Show a modal for chain response selection
+   * @param {Array} activatable - Array of {card, effect, zone} objects
+   * @param {Object} context - Chain context (type, event, etc.)
+   * @param {Array} chainStack - Current chain stack for display
+   * @returns {Promise<{card, effect, selections}|null>}
+   */
+  showChainResponseModal(activatable, context, chainStack = []) {
+    return new Promise((resolve) => {
+      const overlay = document.createElement("div");
+      overlay.className = "chain-response-overlay";
+
+      const modal = document.createElement("div");
+      modal.className = "chain-response-modal";
+
+      // Header com informação do contexto
+      const header = document.createElement("div");
+      header.className = "chain-modal-header";
+
+      const title = document.createElement("h3");
+      title.textContent = "Responder à Chain?";
+      header.appendChild(title);
+
+      // Contexto atual
+      const contextInfo = document.createElement("div");
+      contextInfo.className = "chain-context-info";
+      contextInfo.textContent = this._getContextDescription(context);
+      header.appendChild(contextInfo);
+
+      // Mostrar chain atual se existir
+      if (chainStack.length > 0) {
+        const chainDisplay = document.createElement("div");
+        chainDisplay.className = "chain-stack-display";
+
+        const chainTitle = document.createElement("div");
+        chainTitle.className = "chain-stack-title";
+        chainTitle.textContent = `Chain atual (${chainStack.length} link${
+          chainStack.length > 1 ? "s" : ""
+        }):`;
+        chainDisplay.appendChild(chainTitle);
+
+        chainStack.forEach((link, idx) => {
+          const linkEl = document.createElement("div");
+          linkEl.className = "chain-link-item";
+          linkEl.textContent = `${idx + 1}. ${link.card?.name || "Carta"} (${
+            link.player?.name || link.player?.id || "Jogador"
+          })`;
+          chainDisplay.appendChild(linkEl);
+        });
+
+        header.appendChild(chainDisplay);
+      }
+
+      // Lista de cartas ativáveis
+      const cardList = document.createElement("div");
+      cardList.className = "chain-card-list";
+
+      activatable.forEach((item) => {
+        const cardOption = document.createElement("div");
+        cardOption.className = "chain-card-option";
+
+        const img = document.createElement("img");
+        img.src = item.card.image || "assets/card-back.png";
+        img.alt = getCardDisplayName(item.card) || item.card.name || "Card";
+        img.className = "chain-card-image";
+
+        const info = document.createElement("div");
+        info.className = "chain-card-info";
+
+        const name = document.createElement("div");
+        name.className = "chain-card-name";
+        name.textContent =
+          getCardDisplayName(item.card) || item.card.name || "";
+
+        const speed = document.createElement("div");
+        speed.className = "chain-card-speed";
+        const cardSpeed =
+          item.card.speed || (item.card.subtype === "counter" ? 3 : 2);
+        speed.textContent = `Spell Speed ${cardSpeed}`;
+
+        info.appendChild(name);
+        info.appendChild(speed);
+
+        const activateBtn = document.createElement("button");
+        activateBtn.textContent = "Ativar";
+        activateBtn.className = "chain-btn-activate";
+        activateBtn.onclick = () => {
+          overlay.remove();
+          resolve({ card: item.card, effect: item.effect, selections: null });
+        };
+
+        cardOption.appendChild(img);
+        cardOption.appendChild(info);
+        cardOption.appendChild(activateBtn);
+        cardList.appendChild(cardOption);
+      });
+
+      // Botão de passar
+      const actions = document.createElement("div");
+      actions.className = "chain-modal-actions";
+
+      const passBtn = document.createElement("button");
+      passBtn.textContent = "Passar (Não Responder)";
+      passBtn.className = "chain-btn-pass";
+      passBtn.onclick = () => {
+        overlay.remove();
+        resolve(null);
+      };
+
+      actions.appendChild(passBtn);
+
+      // Montar modal
+      modal.appendChild(header);
+      modal.appendChild(cardList);
+      modal.appendChild(actions);
+
+      overlay.appendChild(modal);
+      document.body.appendChild(overlay);
+
+      // Auto-focus no botão de passar
+      passBtn.focus();
+    });
+  }
+
+  /**
+   * Get human-readable description of chain context
+   * @param {Object} context
+   * @returns {string}
+   */
+  _getContextDescription(context) {
+    if (!context) return "Responda à ação.";
+
+    switch (context.type) {
+      case "attack_declaration":
+        const attacker = context.attacker?.name || "Monstro";
+        const target = context.target?.name || "ataque direto";
+        return `${attacker} declarou ataque em ${target}.`;
+
+      case "summon":
+        const summoned = context.card?.name || "Monstro";
+        return `${summoned} foi invocado.`;
+
+      case "card_activation":
+        const activated = context.card?.name || "Carta";
+        return `${activated} foi ativado.`;
+
+      case "phase_change":
+        return `Mudança de fase.`;
+
+      case "effect_activation":
+        return `Efeito ativado.`;
+
+      default:
+        return `Responda à ${context.event || context.type || "ação"}.`;
+    }
   }
 }

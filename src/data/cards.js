@@ -378,6 +378,7 @@ export const cardDatabase = [
     name: "Mirror Force",
     cardKind: "trap",
     subtype: "normal",
+    speed: 2,
     description:
       "When an opponent's monster declares an attack: Destroy all Attack Position monsters your opponent controls.",
     image: "assets/Mirror Force.png",
@@ -400,6 +401,7 @@ export const cardDatabase = [
     name: "Call of the Haunted",
     cardKind: "trap",
     subtype: "continuous",
+    speed: 2,
     description:
       "Activate this card by targeting 1 monster in your GY; Special Summon that target in Attack Position. When this card leaves the field, destroy that target. When that target is destroyed, destroy this card.",
     image: "assets/Call of the Haunted.png",
@@ -3357,6 +3359,7 @@ export const cardDatabase = [
     name: "Void Mirror Dimension",
     cardKind: "trap",
     subtype: "normal",
+    speed: 2,
     archetype: "Void",
     description:
       "During the Main Phase, if your opponent Special Summons a monster: You can Special Summon 1 monster from your hand with the same Level as that monster, but its effects are negated until the end of this turn. You can only activate 1 'Mirror Dimension of the Void' per turn",

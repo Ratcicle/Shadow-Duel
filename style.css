@@ -2916,6 +2916,174 @@ body {
     transform: translateY(0);
   }
 }
+
+/* Chain Response Modal */
+.chain-response-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10001;
+  backdrop-filter: blur(6px);
+  animation: fadeIn 0.2s ease;
+}
+
+.chain-response-modal {
+  background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+  border: 2px solid #e94560;
+  border-radius: 16px;
+  padding: 20px;
+  max-width: 520px;
+  width: 92%;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(233, 69, 96, 0.3);
+  animation: slideUp 0.24s ease;
+}
+
+.chain-modal-header {
+  text-align: center;
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(233, 69, 96, 0.4);
+}
+
+.chain-modal-header h3 {
+  font-size: 1.5rem;
+  color: #e94560;
+  text-shadow: 0 0 10px rgba(233, 69, 96, 0.5);
+  margin: 0 0 8px 0;
+}
+
+.chain-context-info {
+  font-size: 0.95rem;
+  color: #9db2bf;
+  font-style: italic;
+}
+
+.chain-stack-display {
+  margin-top: 12px;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  border-left: 3px solid #e94560;
+}
+
+.chain-stack-title {
+  font-size: 0.85rem;
+  color: #e94560;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.chain-link-item {
+  font-size: 0.8rem;
+  color: #ddd;
+  padding: 4px 0;
+  padding-left: 8px;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+}
+
+.chain-link-item:last-child {
+  border-bottom: none;
+}
+
+.chain-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.chain-card-option {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(233, 69, 96, 0.3);
+  border-radius: 10px;
+  transition: all 0.2s;
+}
+
+.chain-card-option:hover {
+  background: rgba(233, 69, 96, 0.1);
+  border-color: #e94560;
+  transform: translateX(4px);
+}
+
+.chain-card-option .chain-card-image {
+  width: 60px;
+  height: auto;
+  border-radius: 6px;
+  border: 1px solid #e94560;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.chain-card-option .chain-card-info {
+  flex: 1;
+}
+
+.chain-card-option .chain-card-name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 4px;
+}
+
+.chain-card-option .chain-card-speed {
+  font-size: 0.8rem;
+  color: #e94560;
+  font-weight: 500;
+}
+
+.chain-btn-activate {
+  padding: 8px 16px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  background: linear-gradient(145deg, #e94560, #c73659);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 3px 10px rgba(233, 69, 96, 0.4);
+}
+
+.chain-btn-activate:hover {
+  transform: scale(1.05);
+  box-shadow: 0 5px 15px rgba(233, 69, 96, 0.6);
+}
+
+.chain-modal-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+}
+
+.chain-btn-pass {
+  padding: 12px 28px;
+  font-size: 1rem;
+  font-weight: 600;
+  background: #2d3436;
+  color: #9db2bf;
+  border: 2px solid #636e72;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.chain-btn-pass:hover {
+  background: #434a4d;
+  border-color: #9db2bf;
+  color: #fff;
+}
+
 .card-grid-overlay {
   position: fixed;
   inset: 0;

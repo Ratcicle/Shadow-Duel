@@ -1,6 +1,7 @@
 import Player from "./Player.js";
 import Bot from "./Bot.js";
 import EffectEngine from "./EffectEngine.js";
+import ChainSystem from "./ChainSystem.js";
 import Card from "./Card.js";
 import { cardDatabaseByName, cardDatabaseById } from "../data/cards.js";
 import { getCardDisplayName } from "./i18n.js";
@@ -83,6 +84,9 @@ export default class Game {
 
     // Initialize EffectEngine after eventListeners is set up
     this.effectEngine = new EffectEngine(this);
+
+    // Initialize ChainSystem for chain windows and spell speed validation
+    this.chainSystem = new ChainSystem(this);
   }
 
   resetMaterialDuelStats(reason = "reset") {
@@ -6329,49 +6333,65 @@ export default class Game {
 
     // Evitar reentrância: se já existe um modal de trap aberto, não abrir outro
     if (this.trapPromptInProgress) return;
+
+    // Se o ChainSystem já está resolvendo, não interromper
+    if (this.chainSystem?.isChainResolving()) return;
+
     this.trapPromptInProgress = true;
 
     try {
-      const eligibleTraps = this.player.spellTrap.filter((card) => {
-        if (!this.canActivateTrap(card)) return false;
+      // Mapear evento para contexto de chain
+      const contextType = this._mapEventToChainContext(event);
 
-        // Verificar se a trap tem efeito que responde a este evento
-        if (!card.effects || card.effects.length === 0) return false;
+      // Usar ChainSystem para abrir chain window
+      const context = {
+        type: contextType,
+        event,
+        ...eventData,
+        triggerPlayer:
+          eventData.attackerOwner ||
+          eventData.player ||
+          (this.turn === "player" ? this.player : this.bot),
+      };
 
-        return card.effects.some((effect) => {
-          if (effect.timing === "manual") return event === "phase_end";
-          if (effect.timing !== "on_event") return false;
-          if (effect.event !== event) return false;
+      // Verificar se há cartas ativáveis antes de abrir chain window
+      const playerActivatable = this.chainSystem.getActivatableCardsInChain(
+        this.player,
+        context
+      );
+      const botActivatable = this.chainSystem.getActivatableCardsInChain(
+        this.bot,
+        context
+      );
 
-          // Verificar condições específicas do evento
-          if (effect.requireOpponentAttack && !eventData.isOpponentAttack)
-            return false;
-          if (effect.requireOpponentSummon && !eventData.isOpponentSummon)
-            return false;
-
-          return true;
-        });
-      });
-
-      if (eligibleTraps.length === 0) return;
-
-      // Oferecer ativação de cada trap elegível (uma por vez)
-      for (const trap of eligibleTraps) {
-        const shouldActivate = await this.ui.showTrapActivationModal(
-          trap,
-          event,
-          eventData
-        );
-
-        if (shouldActivate) {
-          await this.activateTrapFromZone(trap, eventData);
-          break; // Por enquanto, apenas uma trap por evento
-        }
+      if (playerActivatable.length === 0 && botActivatable.length === 0) {
+        return; // Nenhuma carta pode responder
       }
+
+      // Abrir chain window através do ChainSystem
+      await this.chainSystem.openChainWindow(context);
     } finally {
-      this.trapPromptInProgress = false; // Avoid multiple trap prompts simultaneously
+      this.trapPromptInProgress = false;
       this.testModeEnabled = false;
     }
+  }
+
+  /**
+   * Map game events to chain context types
+   * @param {string} event
+   * @returns {string}
+   */
+  _mapEventToChainContext(event) {
+    const eventToContext = {
+      attack_declared: "attack_declaration",
+      after_summon: "summon",
+      phase_end: "phase_change",
+      phase_start: "phase_change",
+      card_activation: "card_activation",
+      effect_activation: "effect_activation",
+      battle_damage: "battle_damage",
+    };
+    return eventToContext[event] || "card_activation";
   }
 
   async activateTrapFromZone(card, eventData = {}) {
