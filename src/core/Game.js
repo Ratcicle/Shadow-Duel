@@ -2095,11 +2095,13 @@ export default class Game {
               ? opponentTargets.filter((card) => card && card.mustBeAttacked)
               : opponentTargets;
 
-          // If using an extra attack (not the first), can only attack monsters
-          const isExtraAttack = attacker.hasAttacked && canUseSecondAttack;
+          // ✅ CORREÇÃO: Detecta extra attacks para AMBOS os sistemas (extraAttacks E canMakeSecondAttackThisTurn)
+          // Um ataque é considerado "extra" se o monstro já atacou antes neste turno
+          const attacksUsed = attacker.attacksUsedThisTurn || 0;
+          const isExtraAttack = attacksUsed > 0;
           const canDirect =
             !attacker.cannotAttackDirectly &&
-            !isExtraAttack && // Extra attacks cannot be direct
+            !isExtraAttack && // Extra attacks (2nd, 3rd, etc.) cannot be direct
             (attacker.canAttackDirectlyThisTurn === true ||
               attackCandidates.length === 0);
 
@@ -3547,8 +3549,10 @@ export default class Game {
   startAttackTargetSelection(attacker, candidates) {
     if (!attacker || !Array.isArray(candidates)) return;
 
-    // Extra attacks (second+ attacks) cannot be direct
-    const isExtraAttack = attacker.hasAttacked;
+    // ✅ CORREÇÃO:  Detecta extra attacks consistentemente com bindCardInteractions
+    // Extra attacks (2nd, 3rd, etc.) cannot be direct
+    const attacksUsed = attacker.attacksUsedThisTurn || 0;
+    const isExtraAttack = attacksUsed > 0;
     const canDirect =
       !attacker.cannotAttackDirectly &&
       !isExtraAttack && // Extra attacks cannot be direct
