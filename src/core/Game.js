@@ -282,8 +282,11 @@ export default class Game {
       });
       successCount++;
 
-      // Aplicar buff condicional se alvo era Fusion/Ascension
-      if (summonData.isFusionOrAscension && card.cardKind === "monster") {
+      // Aplicar buff condicional: Abyssal Serpent ganha +800 ATK se alvo era Fusion/Ascension
+      if (
+        summonData.getsBuffIfTargetWasFusionOrAscension &&
+        card.cardKind === "monster"
+      ) {
         const expiresOnTurn = this.turnCounter + 1;
         this.applyTurnBasedBuff(card, "atk", 800, expiresOnTurn);
         this.ui?.log?.(
@@ -2854,6 +2857,40 @@ export default class Game {
 
         if (!fromZone) {
           return { destroyed: false, reason: "not_in_zone" };
+        }
+
+        // ✅ Check protection effects before destruction
+        if (
+          Array.isArray(card.protectionEffects) &&
+          card.protectionEffects.length > 0
+        ) {
+          const protectionType =
+            cause === "battle" ? "battle_destruction" : "effect_destruction";
+
+          const activeProtection = card.protectionEffects.find((p) => {
+            if (p.type !== protectionType) return false;
+
+            // Check duration validity
+            if (p.duration === "while_faceup") {
+              return !card.isFacedown;
+            }
+            if (p.duration === "end_of_turn") {
+              return this.turnCounter === p.grantedOnTurn;
+            }
+            if (typeof p.duration === "number") {
+              return this.turnCounter <= p.duration;
+            }
+            return true; // "permanent" or unknown duration
+          });
+
+          if (activeProtection) {
+            this.ui?.log?.(
+              `${card.name} is protected from destruction by ${
+                cause === "battle" ? "battle" : "card effects"
+              }!`
+            );
+            return { destroyed: false, reason: "protected", protectionType };
+          }
         }
 
         if (this.effectEngine?.checkBeforeDestroyNegations) {
@@ -5695,6 +5732,13 @@ export default class Game {
           typeof this.effectEngine.clearFieldPresenceId === "function"
         ) {
           this.effectEngine.clearFieldPresenceId(card);
+        }
+
+        // ✅ Clear protection effects when card leaves field (duration "while_faceup")
+        if (Array.isArray(card.protectionEffects)) {
+          card.protectionEffects = card.protectionEffects.filter(
+            (p) => p.duration !== "while_faceup"
+          );
         }
       }
     }

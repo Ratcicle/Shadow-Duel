@@ -1066,15 +1066,48 @@ export async function handleSpecialSummonFromHandWithCost(
       return false;
     }
 
-    // Move cost cards to graveyard
-    sendCardsToGraveyard(costTargets, player, engine, {
-      resolveFromZone: (costCard) =>
-        typeof engine.findCardZone === "function"
-          ? engine.findCardZone(player, costCard) || "field"
-          : "field",
-      fallbackZone: "field",
-      useResolvedZoneOnFallback: false,
-    });
+    // ✅ Process cost cards based on destination
+    const costDestination = action.costDestination || "graveyard";
+
+    if (costDestination === "banish") {
+      // BANISH = REMOVE FROM GAME (not move to zone)
+      for (const costCard of costTargets) {
+        if (!costCard) continue;
+
+        // Find the zone where the cost card is
+        const fromZone =
+          typeof engine.findCardZone === "function"
+            ? engine.findCardZone(player, costCard)
+            : null;
+
+        if (fromZone && Array.isArray(player[fromZone])) {
+          const idx = player[fromZone].indexOf(costCard);
+          if (idx > -1) {
+            player[fromZone].splice(idx, 1);
+          }
+        }
+
+        // Track banished cards (read-only, not accessible by effects)
+        if (!game.banishedCards) {
+          game.banishedCards = [];
+        }
+        game.banishedCards.push(costCard);
+      }
+
+      getUI(game)?.log(
+        `Banished ${costTargets.length} card(s) (removed from game).`
+      );
+    } else {
+      // Default: Move cost cards to graveyard
+      sendCardsToGraveyard(costTargets, player, engine, {
+        resolveFromZone: (costCard) =>
+          typeof engine.findCardZone === "function"
+            ? engine.findCardZone(player, costCard) || "field"
+            : "field",
+        fallbackZone: "field",
+        useResolvedZoneOnFallback: false,
+      });
+    }
 
     const success = await performSummon();
     if (!success) {
@@ -2421,6 +2454,97 @@ export async function handleHealFromDestroyedAtk(action, ctx, targets, engine) {
 }
 
 /**
+ * ✅ Handler para curar LP baseado no Level do monstro destruído em batalha
+ *
+ * Action properties:
+ * - multiplier: quanto multiplicar o level (default: 100)
+ * - player: quem ganha LP ("self" default)
+ */
+export async function handleHealFromDestroyedLevel(
+  action,
+  ctx,
+  targets,
+  engine
+) {
+  const { player, destroyed } = ctx;
+  const game = engine.game;
+
+  if (!player || !game || !destroyed) return false;
+
+  const multiplier = action.multiplier || 100;
+  const level = destroyed.level || 0;
+  const healAmount = Math.floor(level * multiplier);
+
+  if (healAmount <= 0) {
+    getUI(game)?.log(`${destroyed.name} has Level 0, no LP gained.`);
+    return true; // Still valid execution, just 0 heal
+  }
+
+  player.gainLP(healAmount);
+  getUI(game)?.log(
+    `${
+      player.name || player.id
+    } gained ${healAmount} LP from destroying a Level ${level} monster!`
+  );
+  game.updateBoard();
+
+  return true;
+}
+
+/**
+ * ✅ Handler para conceder proteção contra destruição por efeitos
+ *
+ * Action properties:
+ * - targetRef: referência ao target que recebe proteção
+ * - protectionType: tipo de proteção ("effect_destruction", "battle_destruction", etc.)
+ * - duration: duração ("while_faceup", "end_of_turn", número de turno)
+ */
+export async function handleGrantProtection(action, ctx, targets, engine) {
+  const { player, source } = ctx;
+  const game = engine.game;
+
+  if (!player || !game) return false;
+
+  const targetCards = resolveTargetCards(action, ctx, targets, {
+    targetRef: action.targetRef,
+    requireArray: true,
+  });
+
+  if (!targetCards || targetCards.length === 0) {
+    getUI(game)?.log("No valid targets for protection.");
+    return false;
+  }
+
+  const protectionType = action.protectionType || "effect_destruction";
+  const duration = action.duration || "while_faceup";
+  const sourceName = source?.name || "Unknown";
+
+  for (const target of targetCards) {
+    if (!target) continue;
+
+    // Initialize protectionEffects array if needed
+    if (!Array.isArray(target.protectionEffects)) {
+      target.protectionEffects = [];
+    }
+
+    // Add protection entry
+    target.protectionEffects.push({
+      type: protectionType,
+      source: sourceName,
+      duration,
+      grantedOnTurn: game.turnCounter,
+    });
+
+    getUI(game)?.log(
+      `${target.name} is now protected from destruction by card effects!`
+    );
+  }
+
+  game.updateBoard();
+  return true;
+}
+
+/**
  * Generic handler for switching monster position (attack <-> defense)
  *
  * Action properties:
@@ -2831,13 +2955,13 @@ export async function handleAbyssalSerpentDelayedSummon(
         card: source,
         owner: "player",
         fromZone: "graveyard",
-        isFusionOrAscension: false, // Source nunca foi Fusion/Ascension
+        getsBuffIfTargetWasFusionOrAscension: isFusionOrAscension, // Flag para aplicar buff ao source
       },
       {
         card: target,
         owner: "bot",
         fromZone: "graveyard",
-        isFusionOrAscension, // Flag baseada no tipo do target
+        getsBuffIfTargetWasFusionOrAscension: false, // Target nunca ganha buff
       },
     ],
   };
@@ -3779,6 +3903,8 @@ export function registerDefaultHandlers(registry) {
   registry.register("pay_lp", handlePayLP);
   registry.register("add_from_zone_to_hand", handleAddFromZoneToHand);
   registry.register("heal_from_destroyed_atk", handleHealFromDestroyedAtk);
+  registry.register("heal_from_destroyed_level", handleHealFromDestroyedLevel);
+  registry.register("grant_protection", handleGrantProtection);
   registry.register("switch_position", handleSwitchPosition);
   registry.register(
     "switch_defender_position_on_attack",
