@@ -1988,8 +1988,14 @@ export default class EffectEngine {
     if (!card || !Array.isArray(card.effects)) {
       return null;
     }
+    // Look for on_field_activate OR ignition with requireZone: "fieldSpell"
     return (
-      card.effects.find((e) => e && e.timing === "on_field_activate") || null
+      card.effects.find(
+        (e) =>
+          e &&
+          (e.timing === "on_field_activate" ||
+            (e.timing === "ignition" && e.requireZone === "fieldSpell"))
+      ) || null
     );
   }
 
@@ -2122,8 +2128,12 @@ export default class EffectEngine {
       return { success: false, needsSelection: false, reason: check.reason };
     }
 
+    // Look for on_field_activate OR ignition with requireZone: "fieldSpell"
     const effect = (card.effects || []).find(
-      (e) => e && e.timing === "on_field_activate"
+      (e) =>
+        e &&
+        (e.timing === "on_field_activate" ||
+          (e.timing === "ignition" && e.requireZone === "fieldSpell"))
     );
 
     if (!effect) {
