@@ -67,6 +67,11 @@ export default class Game {
     this.oncePerTurnTurnCounter = this.turnCounter;
     this.resetMaterialDuelStats("init");
 
+    // ✅ FASE 2: Sistema global de delayed actions
+    // Estrutura genérica para rastrear ações agendadas (summons, damage, etc.)
+    // Cada entrada contém: actionType, triggerCondition, payload, scheduledTurn, priority
+    this.delayedActions = [];
+
     // Track counts of special-summoned monsters by type per player
     this.specialSummonTypeCounts = {
       player: new Map(),
@@ -121,6 +126,275 @@ export default class Game {
     const store = this.specialSummonTypeCounts?.[playerId];
     if (!store || !(store instanceof Map)) return 0;
     return store.get(typeName) || 0;
+  }
+
+  /**
+   * ✅ FASE 2: Adicionar ação agendada (delayed action)
+   * Suporta qualquer tipo de ação futura: summons, damage, draw, etc.
+   * @param {string} actionType - Tipo de ação (ex: "delayed_summon")
+   * @param {Object} triggerCondition - Condição de trigger (ex: {phase: "standby", player: "opponent"})
+   * @param {Object} payload - Dados da ação
+   * @param {number} priority - Prioridade de execução (padrão: 0)
+   * @returns {number} ID da ação agendada
+   */
+  scheduleDelayedAction(actionType, triggerCondition, payload, priority = 0) {
+    if (!actionType || !triggerCondition || !payload) {
+      console.error("Invalid delayed action parameters");
+      return null;
+    }
+
+    const action = {
+      id: Math.random().toString(36).substr(2, 9),
+      actionType,
+      triggerCondition,
+      payload,
+      scheduledTurn: this.turnCounter,
+      priority,
+    };
+
+    this.delayedActions.push(action);
+    this.devLog?.("DELAYED_ACTION_SCHEDULED", {
+      summary: `${actionType} scheduled for ${triggerCondition.phase} (${triggerCondition.player})`,
+      actionType,
+      trigger: triggerCondition,
+      turn: this.turnCounter,
+    });
+
+    return action.id;
+  }
+
+  /**
+   * ✅ FASE 2: Processar delayed actions que devem ser resolvidas agora
+   * Filtra ações pelo trigger atual e executa resolvers apropriados
+   * @param {string} phase - Fase atual (ex: "standby")
+   * @param {string} activePlayer - Player ativo ("player" ou "bot")
+   */
+  processDelayedActions(phase, activePlayer) {
+    if (
+      !Array.isArray(this.delayedActions) ||
+      this.delayedActions.length === 0
+    ) {
+      return;
+    }
+
+    // Filtrar ações que devem ser resolvidas nesta fase/player
+    const actionsToResolve = this.delayedActions.filter((action) => {
+      const trigger = action.triggerCondition;
+      if (!trigger) return false;
+
+      // Verificar se a fase corresponde
+      if (trigger.phase && trigger.phase !== phase) return false;
+
+      // Verificar se o player corresponde
+      if (trigger.player) {
+        const triggerPlayer =
+          trigger.player === "opponent"
+            ? activePlayer === "player"
+              ? "bot"
+              : "player"
+            : trigger.player;
+        if (triggerPlayer !== activePlayer) return false;
+      }
+
+      return true;
+    });
+
+    // Ordenar por prioridade e executar
+    actionsToResolve.sort((a, b) => b.priority - a.priority);
+
+    for (const action of actionsToResolve) {
+      this.resolveDelayedAction(action);
+    }
+
+    // Remover ações resolvidas
+    this.delayedActions = this.delayedActions.filter(
+      (action) => !actionsToResolve.includes(action)
+    );
+  }
+
+  /**
+   * ✅ FASE 2: Resolver uma ação agendada individual
+   * Chama o resolver apropriado baseado no tipo de ação
+   * @param {Object} action - Ação a resolver
+   */
+  resolveDelayedAction(action) {
+    try {
+      switch (action.actionType) {
+        case "delayed_summon":
+          this.resolveDelayedSummon(action.payload);
+          break;
+        // Futuros tipos de ações podem ser adicionados aqui
+        default:
+          console.warn(`Unknown delayed action type: ${action.actionType}`);
+      }
+    } catch (err) {
+      console.error("Error resolving delayed action:", err);
+    }
+  }
+
+  /**
+   * ✅ FASE 5: Resolver delayed summon específico
+   * Executa Special Summons agendadas com verificações de validade
+   * @param {Object} payload - Dados do delayed summon
+   */
+  resolveDelayedSummon(payload) {
+    if (
+      !payload ||
+      !Array.isArray(payload.summons) ||
+      payload.summons.length === 0
+    ) {
+      console.warn("Invalid delayed summon payload");
+      return;
+    }
+
+    const { summons, owners } = payload;
+    let successCount = 0;
+
+    for (const summonData of summons) {
+      const card = summonData.card;
+      const targetOwner = summonData.owner;
+      const targetPlayer = targetOwner === "player" ? this.player : this.bot;
+
+      if (!card) {
+        this.ui?.log?.(`Card reference missing in delayed summon.`);
+        continue;
+      }
+
+      // Verificar se carta ainda está na zona de origem esperada
+      const originZone = summonData.fromZone || "graveyard";
+      const zoneList = targetPlayer[originZone];
+      if (!Array.isArray(zoneList) || !zoneList.includes(card)) {
+        this.ui?.log?.(
+          `${card.name} is no longer in ${originZone}, cannot special summon.`
+        );
+        continue;
+      }
+
+      // Verificar se há espaço no campo
+      if (targetPlayer.field.length >= 5) {
+        this.ui?.log?.(`Field is full, cannot special summon ${card.name}.`);
+        continue;
+      }
+
+      // Executar special summon
+      void this.moveCard(card, targetPlayer, "field", {
+        summonMethodOverride: "special",
+      });
+      successCount++;
+
+      // Aplicar buff condicional se alvo era Fusion/Ascension
+      if (summonData.isFusionOrAscension && card.cardKind === "monster") {
+        const expiresOnTurn = this.turnCounter + 1;
+        this.applyTurnBasedBuff(card, "atk", 800, expiresOnTurn);
+        this.ui?.log?.(
+          `${card.name} gains +800 ATK until the end of turn ${expiresOnTurn}.`
+        );
+      }
+    }
+
+    if (successCount > 0) {
+      this.updateBoard();
+      this.ui?.log?.(
+        `${successCount} card(s) special summoned from delayed action.`
+      );
+    }
+  }
+
+  /**
+   * ✅ FASE 4: Aplicar buff temporário com expiração baseada em turno
+   * Suporta múltiplos buffs simultâneos com expiração em turnos diferentes
+   * @param {Object} card - Carta a receber o buff
+   * @param {string} stat - Stat afetado ("atk" ou "def")
+   * @param {number} value - Valor do buff
+   * @param {number} expiresOnTurn - Turno em que o buff expira
+   * @param {string} id - ID único do buff (opcional)
+   */
+  applyTurnBasedBuff(card, stat, value, expiresOnTurn, id = null) {
+    if (
+      !card ||
+      !stat ||
+      !Number.isFinite(value) ||
+      !Number.isFinite(expiresOnTurn)
+    ) {
+      return false;
+    }
+
+    if (!Array.isArray(card.turnBasedBuffs)) {
+      card.turnBasedBuffs = [];
+    }
+
+    const buffId =
+      id || `buff_${card.id}_${Math.random().toString(36).substr(2, 9)}`;
+    const buffEntry = {
+      id: buffId,
+      stat,
+      value,
+      expiresOnTurn,
+    };
+
+    card.turnBasedBuffs.push(buffEntry);
+
+    // Aplicar modificação imediata ao stat
+    if (stat === "atk") {
+      card.atk += value;
+    } else if (stat === "def") {
+      card.def += value;
+    }
+
+    this.devLog?.("TURN_BASED_BUFF_APPLIED", {
+      summary: `${card.name} +${value} ${stat} (expires turn ${expiresOnTurn})`,
+      card: card.name,
+      stat,
+      value,
+      expiresOnTurn,
+    });
+
+    return true;
+  }
+
+  /**
+   * ✅ FASE 4: Limpar buffs temporários expirados
+   * Chamado no início de startTurn() para remover buffs cujo turno de expiração foi atingido
+   */
+  cleanupExpiredBuffs() {
+    const allMonsters = [
+      ...(this.player?.field || []),
+      ...(this.bot?.field || []),
+    ].filter(Boolean);
+
+    for (const card of allMonsters) {
+      if (
+        !Array.isArray(card.turnBasedBuffs) ||
+        card.turnBasedBuffs.length === 0
+      ) {
+        continue;
+      }
+
+      const expiredBuffs = card.turnBasedBuffs.filter(
+        (buff) => this.turnCounter > buff.expiresOnTurn
+      );
+
+      for (const buff of expiredBuffs) {
+        // Remover valor do stat
+        if (buff.stat === "atk") {
+          card.atk = Math.max(0, card.atk - buff.value);
+        } else if (buff.stat === "def") {
+          card.def = Math.max(0, card.def - buff.value);
+        }
+
+        this.devLog?.("TURN_BASED_BUFF_EXPIRED", {
+          summary: `${card.name} buff expired (${buff.id})`,
+          card: card.name,
+          buffId: buff.id,
+          stat: buff.stat,
+        });
+      }
+
+      // Remover buffs expirados da lista
+      card.turnBasedBuffs = card.turnBasedBuffs.filter(
+        (buff) => this.turnCounter <= buff.expiresOnTurn
+      );
+    }
   }
 
   incrementMaterialStat(playerId, mapName, materialCardId, delta = 1) {
@@ -1510,6 +1784,10 @@ export default class Game {
   async startTurn() {
     this.turnCounter += 1;
     this.resetOncePerTurnUsage("start_turn");
+
+    // ✅ FASE 4: Limpar buffs temporários expirados no início do turno
+    this.cleanupExpiredBuffs();
+
     this.phase = "draw";
 
     const activePlayer = this.turn === "player" ? this.player : this.bot;
@@ -1547,6 +1825,10 @@ export default class Game {
     await this.waitForPhaseDelay();
 
     this.phase = "standby";
+
+    // ✅ FASE 2 & 5: Processar delayed actions na standby phase ANTES de emitir o evento
+    this.processDelayedActions("standby", activePlayer.id || this.turn);
+
     this.updateBoard();
     await this.emit("standby_phase", { player: activePlayer, opponent });
     await this.waitForPhaseDelay();

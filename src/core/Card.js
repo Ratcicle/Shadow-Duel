@@ -70,6 +70,17 @@ export default class Card {
     this.secondAttackUsedThisTurn = false;
     this.dynamicBuffs = null;
 
+    // Summon restrictions
+    this.cannotBeSpecialSummoned = !!data.cannotBeSpecialSummoned;
+
+    // Turn-based temporary buffs (for expirations like "until end of next turn")
+    // Structure: Array of {stat, value, expiresOnTurn, id}
+    this.turnBasedBuffs = [];
+
+    // Field presence tracking (for mechanics like "while this card is face-up on field")
+    this.fieldPresenceId = null;
+    this.fieldPresenceState = null;
+
     // Effect negation tracking
     this.effectsNegated = false;
     this.originalAtk = null; // Store original ATK when set to 0

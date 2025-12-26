@@ -643,6 +643,18 @@ export async function handleSpecialSummonFromZone(
     );
   }
 
+  // ✅ FASE 1: Filtrar cartas que não podem ser special summoned
+  candidates = candidates.filter((card) => {
+    if (card.cannotBeSpecialSummoned) {
+      const ui = getUI(game);
+      if (ui && ui.log) {
+        ui.log(`${card.name} cannot be Special Summoned.`);
+      }
+      return false;
+    }
+    return true;
+  });
+
   if (candidates.length === 0) {
     getUI(game)?.log(
       `No valid cards in ${
@@ -2753,6 +2765,101 @@ export async function handleRemovePermanentBuffNamed(
 }
 
 /**
+ * ✅ FASE 3: Handler para efeito delayed summon de Abyssal Serpent Dragon
+ * Envia self e target ao GY, agenda summon para próxima standby phase do oponente
+ * Se target era Fusion/Ascension, aplica buff de +800 ATK com expiração
+ *
+ * Ação properties:
+ * - targetRef: referência ao monstro alvo ("abyssal_target" padrão)
+ * - buffValue: valor do buff se alvo era Fusion/Ascension (padrão: 800)
+ */
+export async function handleAbyssalSerpentDelayedSummon(
+  action,
+  ctx,
+  targets,
+  engine
+) {
+  const { player, source } = ctx;
+  const game = engine?.game;
+  const ui = getUI(game);
+
+  if (!player || !source || !game) {
+    return false;
+  }
+
+  // Extrair target do monstro oponente selecionado
+  const targetRef = action.targetRef || "abyssal_target";
+  const targetCards = targets?.[targetRef];
+  if (!Array.isArray(targetCards) || targetCards.length === 0) {
+    ui?.log?.("No target selected for Abyssal Serpent effect.");
+    return false;
+  }
+
+  const target = targetCards[0]; // Efeito opera com 1 target
+  const opponent = ctx?.opponent || game.getOpponent?.(player);
+  if (!opponent) {
+    ui?.log?.("Cannot determine opponent.");
+    return false;
+  }
+
+  // Verificar se ambas cartas estão no campo
+  if (!player.field.includes(source)) {
+    ui?.log?.("Source card is not on field.");
+    return false;
+  }
+  if (!opponent.field.includes(target)) {
+    ui?.log?.("Target card is not on field.");
+    return false;
+  }
+
+  // Detectar se target é Fusion ou Ascension
+  const isFusionOrAscension =
+    target.monsterType === "fusion" || target.monsterType === "ascension";
+
+  // Enviar ambas cartas ao GY
+  await game.moveCard(source, player, "graveyard");
+  await game.moveCard(target, opponent, "graveyard");
+
+  ui?.log?.(
+    `${source.name} and ${target.name} are sent to the GY. They will be special summoned during the opponent's next Standby Phase.`
+  );
+
+  // Agendar delayed summon para próxima standby phase do oponente
+  const summonPayload = {
+    summons: [
+      {
+        card: source,
+        owner: "player",
+        fromZone: "graveyard",
+        isFusionOrAscension: false, // Source nunca foi Fusion/Ascension
+      },
+      {
+        card: target,
+        owner: "bot",
+        fromZone: "graveyard",
+        isFusionOrAscension, // Flag baseada no tipo do target
+      },
+    ],
+  };
+
+  // Determinar qual é a próxima standby phase do oponente
+  const opponentPlayerId =
+    opponent.id || (player.id === "player" ? "bot" : "player");
+
+  game.scheduleDelayedAction(
+    "delayed_summon",
+    {
+      phase: "standby",
+      player: opponentPlayerId,
+    },
+    summonPayload,
+    1 // Prioridade 1 para processar antes de outros efeitos
+  );
+
+  return true;
+}
+
+/**
  * Generic handler for granting a second attack this turn
  *
  * Action properties:
@@ -3706,6 +3813,12 @@ export function registerDefaultHandlers(registry) {
   registry.register("destroy_targeted_cards", handleDestroyTargetedCards);
   registry.register("buff_stats_temp_with_second_attack", handleBuffStatsTemp);
   registry.register("draw_and_summon", handleDrawAndSummon);
+
+  // ✅ FASE 3: Handler para Abyssal Serpent Dragon delayed summon
+  registry.register(
+    "abyssal_serpent_delayed_summon",
+    handleAbyssalSerpentDelayedSummon
+  );
 
   // Legacy/common actions migrated into the registry (proxy to EffectEngine methods)
   registry.register("draw", proxyEngineMethod("applyDraw"));

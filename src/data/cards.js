@@ -4068,7 +4068,7 @@ export const cardDatabase = [
     subtype: "field",
     description:
       "When this card is activated: You can add 1 Level 4 or lower Dragon from your GY to your hand. Each time a Dragon-type monster destroys an opponent's monster by battle, place 1 Dragon Peak counter on this card. Once per turn: If this card has 5 or more Dragon Peak counters; you can send it to the GY, and if you do, Special Summon 1 Dragon-type monster from your hand, Deck, or GY.",
-    image: "assets/Jagged Peak of the Dragons.png",
+    image: "assets/Jagged Peak of Dragons.png",
     effects: [
       {
         id: "dragon_peak_on_play_add",
@@ -4130,6 +4130,45 @@ export const cardDatabase = [
             count: { min: 1, max: 1 },
             position: "choice",
             promptPlayer: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 189,
+    name: "Abyssal Serpent Dragon",
+    cardKind: "monster",
+    type: "Dragon",
+    level: 7,
+    atk: 2200,
+    def: 1400,
+    cannotBeSpecialSummoned: true,
+    description:
+      "Cannot be Special Summoned. During your Main Phase: you can select 1 monster your opponent controls; send this card and the target to the GY, and during your opponent's next Standby Phase, Special Summon them. If you selected a Fusion or Ascension Monster as a target: this card gains 800 ATK until the end of your next turn. You can use each effect of 'Abyssal Serpent Dragon' once per turn.",
+    image: "assets/Abyssal Serpent Dragon.png",
+    effects: [
+      {
+        id: "abyssal_serpent_delayed_summon_effect",
+        timing: "ignition",
+        requireZone: "field",
+        requirePhase: ["main1", "main2"],
+        oncePerTurn: true,
+        oncePerTurnName: "abyssal_serpent_delayed_summon",
+        targets: [
+          {
+            id: "abyssal_target",
+            owner: "opponent",
+            zone: "field",
+            cardKind: "monster",
+            faceup: true,
+          },
+        ],
+        actions: [
+          {
+            type: "abyssal_serpent_delayed_summon",
+            targetRef: "abyssal_target",
+            buffValue: 800,
           },
         ],
       },
