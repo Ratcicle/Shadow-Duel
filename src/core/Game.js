@@ -2922,6 +2922,7 @@ export default class Game {
         const moveResult = this.moveCard(card, owner, "graveyard", {
           fromZone: fromZone || undefined,
           wasDestroyed: true,
+          destroyCause: cause,
         });
 
         if (!moveResult || moveResult.success === false) {
@@ -6070,6 +6071,7 @@ export default class Game {
         player: ownerPlayer,
         opponent: otherPlayer,
         wasDestroyed: options.wasDestroyed || false,
+        destroyCause: options.destroyCause || null,
       });
     }
 

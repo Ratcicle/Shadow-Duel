@@ -3686,7 +3686,7 @@ export const cardDatabase = [
     atk: 1500,
     def: 900,
     description:
-      "If this card is Normal Summoned: You can target 1 Level 4 or lower Dragon-type monster in your GY; Special Summon it. You can banish this card from your GY, then target 1 monster your opponent controls; it loses 1000 ATK/DEF until the end of this turn.",
+      "If this card is Normal Summoned: You can target 1 Level 4 or lower Dragon-type monster in your GY; Special Summon it. You can banish this card from your GY, then target 1 monster your opponent controls; it loses 600 ATK/DEF until the end of this turn.",
     image: "assets/Luminescent Dragon.png",
     effects: [
       {
@@ -4256,7 +4256,7 @@ export const cardDatabase = [
     ],
   },
   {
-    id: 191,
+    id: 194,
     name: "Tech-Void Dragon",
     cardKind: "monster",
     monsterType: "fusion",
@@ -4265,7 +4265,7 @@ export const cardDatabase = [
     def: 1000,
     type: "Dragon",
     description:
-      "Voltaic Dragon + 1 Level 5 or higher Dragon monster. If this card is Fusion Summoned: You can target 1 Level 4 or lower Dragon monster in your GY; banish it, and if you do, this card gains ATK equal to the banished monster's ATK until the end of this turn. If this card is destroyed by battle: You can Special Summon 1 'Voltaic Dragon' from your GY. You can only use each effect of 'Tech-Void Dragon' once per turn.",
+      "Voltaic Dragon + 1 Level 5+ Dragon monster. If this card is Fusion Summoned: You can target 1 Level 4 or lower Dragon monster in your GY; banish it, and if you do, this card gains ATK equal to the banished monster's ATK until the end of this turn. If this card is destroyed by battle: You can Special Summon 1 'Voltaic Dragon' from your GY. You can only use each effect of 'Tech-Void Dragon' once per turn.",
     image: "assets/Tech-Void Dragon.png",
     fusionMaterials: [
       { name: "Voltaic Dragon", count: 1 },
@@ -4307,7 +4307,7 @@ export const cardDatabase = [
         id: "tech_void_revive_voltaic",
         timing: "on_event",
         event: "card_to_grave",
-        requireSelfAsSummoned: true,
+        requireSelfAsDestroyed: true,
         condition: {
           type: "destroyed_by_battle",
         },

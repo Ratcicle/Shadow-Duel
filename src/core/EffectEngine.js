@@ -1767,6 +1767,35 @@ export default class EffectEngine {
         continue;
       }
 
+      // ✅ Check condition for destruction type (battle vs effect)
+      if (effect.condition) {
+        const condType = effect.condition.type;
+        const destroyCause = payload?.destroyCause;
+
+        if (condType === "destroyed_by_battle") {
+          if (destroyCause !== "battle") {
+            console.log(
+              `[handleCardToGraveEvent] Skipping ${effect.id}: requires destruction by battle, but cause was "${destroyCause}".`
+            );
+            continue;
+          }
+        } else if (condType === "destroyed_by_effect") {
+          if (destroyCause !== "effect") {
+            console.log(
+              `[handleCardToGraveEvent] Skipping ${effect.id}: requires destruction by effect, but cause was "${destroyCause}".`
+            );
+            continue;
+          }
+        } else if (condType === "destroyed_by_battle_or_effect") {
+          if (destroyCause !== "battle" && destroyCause !== "effect") {
+            console.log(
+              `[handleCardToGraveEvent] Skipping ${effect.id}: requires destruction by battle or effect, but cause was "${destroyCause}".`
+            );
+            continue;
+          }
+        }
+      }
+
       const optCheck = this.checkOncePerTurn(card, player, effect);
       if (!optCheck.ok) {
         console.log(

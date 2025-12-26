@@ -616,7 +616,21 @@ export async function handleSpecialSummonFromZone(
     const filters = action.filters || {};
     const excludeSummonRestrict = action.excludeSummonRestrict || [];
 
-    // Map action-level bounds to filters
+    // Map action-level properties to filters
+    if (action.cardName) {
+      filters.name = action.cardName;
+    }
+    if (action.archetype) {
+      filters.archetype = action.archetype;
+    }
+    if (action.cardKind) {
+      filters.cardKind = action.cardKind;
+    }
+    // Use monsterType for filtering by monster type (e.g., "Dragon")
+    // to avoid conflict with action.type which is the handler type
+    if (action.monsterType) {
+      filters.type = action.monsterType;
+    }
     if (Number.isFinite(action.minLevel)) {
       filters.minLevel = action.minLevel;
     }
@@ -635,11 +649,29 @@ export async function handleSpecialSummonFromZone(
       filters.levelOp = filters.levelOp || action.levelOp || "eq";
     }
 
+    // Debug logging
+    console.log("[handleSpecialSummonFromZone] Debug:", {
+      playerId: player.id,
+      zoneSpec,
+      zoneEntriesLength: zoneEntries.length,
+      zoneContents: zoneEntries.map((e) => ({
+        name: e.name,
+        cards: e.list.map((c) => c?.name),
+      })),
+      filters: JSON.stringify(filters),
+      actionCardName: action.cardName,
+    });
+
     candidates = zoneEntries.flatMap((entry) =>
       collectZoneCandidates(entry.list, filters, {
         source,
         excludeSummonRestrict,
       })
+    );
+
+    console.log(
+      "[handleSpecialSummonFromZone] Candidates found:",
+      candidates.map((c) => c?.name)
     );
   }
 
