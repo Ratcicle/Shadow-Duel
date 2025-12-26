@@ -6189,7 +6189,7 @@ export default class Game {
           zone,
           ctx
         ),
-      finalize: (result, info) => {
+      finalize: async (result, info) => {
         if (result.placementOnly) {
           this.ui.log(`${info.card.name} is placed on the field.`);
         } else {
@@ -6199,6 +6199,13 @@ export default class Game {
             info.activationZone
           );
           this.ui.log(`${info.card.name} effect activated.`);
+
+          // Offer chain window for opponent to respond to spell activation
+          await this.checkAndOfferTraps("card_activation", {
+            card: info.card,
+            player: this.player,
+            activationType: "spell",
+          });
         }
         this.updateBoard();
       },

@@ -65,6 +65,7 @@ export const CHAIN_CONTEXTS = {
  * @property {Object} player - The player activating the card
  * @property {Object} effect - The effect being activated
  * @property {Object} context - Activation context
+ * @property {string} zone - Zone the card was activated from (hand, field, spellTrap, graveyard)
  * @property {Object|null} selections - Selected targets (if any)
  * @property {number} chainLevel - Position in chain (1, 2, 3...)
  */
@@ -213,12 +214,13 @@ export default class ChainSystem {
       return 2;
     }
 
-    // Chain Link 2+: Must match or exceed last card's speed
+    // Chain Link 2+: Must be at least Speed 2 to chain
+    // AND must match or exceed last card's speed
     const lastLink = this.chainStack[this.chainStack.length - 1];
     const lastSpeed = this.getEffectSpellSpeed(lastLink.effect, lastLink.card);
 
-    // Can respond with same or higher speed
-    return lastSpeed;
+    // Minimum Speed 2 for any chain response (Speed 1 cannot respond)
+    return Math.max(2, lastSpeed);
   }
 
   /**
@@ -309,17 +311,26 @@ export default class ChainSystem {
       }
     }
 
-    // Check Quick-Play Spells in hand (can be activated from hand during opponent's turn)
-    if (context?.type !== "main_phase_action" || this.game.turn !== player.id) {
-      if (Array.isArray(player.hand)) {
-        for (const card of player.hand) {
-          if (!card || card.cardKind !== "spell") continue;
-          if (card.subtype !== "quick") continue;
+    // Check Quick-Play Spells in hand
+    // Quick-Play can be activated:
+    // - During your own Main Phase (like a normal spell)
+    // - During opponent's turn as a response
+    // - In response to any chain (Speed 2)
+    if (Array.isArray(player.hand)) {
+      for (const card of player.hand) {
+        if (!card || card.cardKind !== "spell") continue;
+        if (card.subtype !== "quick") continue;
 
-          const effect = this.findActivatableEffect(card, context);
-          if (effect) {
-            const chainCheck = this.canActivateInChain(effect, card, context);
-            if (chainCheck.ok) {
+        const effect = this.findActivatableEffect(card, context);
+        if (effect) {
+          const chainCheck = this.canActivateInChain(effect, card, context);
+          if (chainCheck.ok) {
+            // Apply canActivate check for consistency
+            const canActivate = this.game.effectEngine?.canActivate?.(
+              card,
+              player
+            );
+            if (!canActivate || canActivate.ok !== false) {
               activatable.push({ card, effect, zone: "hand" });
             }
           }
@@ -337,7 +348,14 @@ export default class ChainSystem {
         if (effect) {
           const chainCheck = this.canActivateInChain(effect, card, context);
           if (chainCheck.ok) {
-            activatable.push({ card, effect, zone: "field" });
+            // Apply canActivate check for consistency (same as traps)
+            const canActivate = this.game.effectEngine?.canActivate?.(
+              card,
+              player
+            );
+            if (!canActivate || canActivate.ok !== false) {
+              activatable.push({ card, effect, zone: "field" });
+            }
           }
         }
       }
@@ -403,13 +421,29 @@ export default class ChainSystem {
         }
 
         // Check on_activate, manual, ignition effects
+        // These require a valid chain window context to activate
         if (
           effect.timing === "on_activate" ||
           effect.timing === "manual" ||
           effect.timing === "ignition"
         ) {
-          // These can be activated at various times depending on context
-          return effect;
+          // Only allow activation in appropriate contexts:
+          // - on_activate: when setting or in response to specific events
+          // - manual: only during phase_change/phase_end
+          // - ignition: only during main phase actions
+          const contextDef = CHAIN_CONTEXTS[context?.type];
+          if (!contextDef) continue; // No valid context
+
+          // manual timing only valid at phase_change
+          if (effect.timing === "manual" && context?.type !== "phase_change") {
+            continue;
+          }
+
+          // ignition timing typically for main phase, but traps can chain
+          // Allow if we're in a valid chain window
+          if (contextDef.requiresChainWindow || this.chainStack.length > 0) {
+            return effect;
+          }
         }
       }
 
@@ -472,7 +506,16 @@ export default class ChainSystem {
 
     // If there's a triggering card/effect, add it as Chain Link 1
     if (context?.card && context?.effect && context?.player) {
-      this.addToChain(context.card, context.player, context.effect, context);
+      const triggerZone =
+        context?.zone || this.determineCardZone(context.card, context.player);
+      this.addToChain(
+        context.card,
+        context.player,
+        context.effect,
+        context,
+        null,
+        triggerZone
+      );
     }
 
     // Determine priority order
@@ -510,13 +553,14 @@ export default class ChainSystem {
         // Player activated something, reset pass counter
         consecutivePasses = 0;
 
-        // Add to chain
+        // Add to chain with the zone from the response
         this.addToChain(
           response.card,
           currentResponder,
           response.effect,
           context,
-          response.selections
+          response.selections,
+          response.zone
         );
 
         this.log(
@@ -569,27 +613,184 @@ export default class ChainSystem {
    * @returns {Promise<Object|null>}
    */
   async botChooseChainResponse(player, activatable, context) {
-    // Simple AI: Activate counter traps when available, otherwise pass most of the time
-    // TODO: Implement smarter AI based on game state
+    if (!activatable || activatable.length === 0) return null;
 
-    // Look for counter traps first (highest priority)
-    const counterTrap = activatable.find(
-      (a) => a.card.subtype === "counter" || a.effect.speed === 3
-    );
+    const game = this.game;
+    const opponent = this.getOpponent(player);
 
-    if (counterTrap && Math.random() > 0.3) {
-      this.log(`Bot activating counter trap: ${counterTrap.card.name}`);
-      return counterTrap;
+    // Evaluate each activatable card for strategic value
+    const evaluatedOptions = activatable.map((option) => {
+      let priority = 0;
+      const card = option.card;
+      const effect = option.effect;
+
+      // Counter Traps: highest priority against important plays
+      if (card.subtype === "counter" || effect?.speed === 3) {
+        priority += 100;
+      }
+
+      // Mirror Force: High priority when opponent attacks with multiple monsters
+      if (
+        card.name === "Mirror Force" &&
+        context?.type === "attack_declaration"
+      ) {
+        const opponentAttackMonsters =
+          opponent?.field?.filter(
+            (m) => m && !m.isFacedown && m.position === "attack"
+          ).length || 0;
+        priority += 50 + opponentAttackMonsters * 20;
+      }
+
+      // Call of the Haunted: Value based on graveyard monsters
+      if (card.name === "Call of the Haunted") {
+        const graveyardMonsters =
+          player?.graveyard?.filter((c) => c.cardKind === "monster").length ||
+          0;
+        const bestMonsterAtk = Math.max(
+          ...(player?.graveyard || [])
+            .filter((c) => c.cardKind === "monster")
+            .map((c) => c.atk || 0),
+          0
+        );
+        priority +=
+          30 +
+          Math.min(graveyardMonsters * 5, 25) +
+          Math.floor(bestMonsterAtk / 100);
+      }
+
+      // Void Mirror Dimension: High priority if we have matching level monsters
+      if (card.name === "Void Mirror Dimension" && context?.type === "summon") {
+        const summonedLevel = context.card?.level || 0;
+        const matchingMonsters =
+          player?.hand?.filter(
+            (c) => c.cardKind === "monster" && c.level === summonedLevel
+          ).length || 0;
+        if (matchingMonsters > 0) {
+          priority += 60 + matchingMonsters * 10;
+        }
+      }
+
+      // General trap value: consider game state
+      if (card.cardKind === "trap") {
+        // Higher priority if we're behind on field presence
+        const myFieldCount = player?.field?.filter((m) => m).length || 0;
+        const oppFieldCount = opponent?.field?.filter((m) => m).length || 0;
+        if (oppFieldCount > myFieldCount) {
+          priority += 15;
+        }
+
+        // Higher priority if LP is low
+        if (player?.lp < 2000) {
+          priority += 20;
+        }
+      }
+
+      return { ...option, priority };
+    });
+
+    // Sort by priority (highest first)
+    evaluatedOptions.sort((a, b) => b.priority - a.priority);
+
+    // Get best option
+    const bestOption = evaluatedOptions[0];
+
+    // Activation threshold based on priority
+    // High priority (70+): 80% chance to activate
+    // Medium priority (40-69): 50% chance to activate
+    // Low priority (<40): 20% chance to activate
+    let activationChance = 0.2;
+    if (bestOption.priority >= 70) {
+      activationChance = 0.8;
+    } else if (bestOption.priority >= 40) {
+      activationChance = 0.5;
     }
 
-    // 30% chance to activate other traps
-    if (activatable.length > 0 && Math.random() > 0.7) {
-      const choice = activatable[0];
-      this.log(`Bot activating: ${choice.card.name}`);
-      return choice;
+    if (Math.random() < activationChance) {
+      this.log(
+        `Bot activating ${bestOption.card.name} (priority: ${bestOption.priority})`
+      );
+
+      // Get selections if the effect requires targets
+      const selections = await this.getBotSelectionsForEffect(
+        bestOption.card,
+        bestOption.effect,
+        player,
+        context
+      );
+
+      return { ...bestOption, selections };
     }
 
+    this.log(`Bot passing (best option priority: ${bestOption.priority})`);
     return null;
+  }
+
+  /**
+   * Get bot selections for an effect that requires targets
+   * @param {Object} card
+   * @param {Object} effect
+   * @param {Object} player
+   * @param {ChainContext} context
+   * @returns {Promise<Object|null>}
+   */
+  async getBotSelectionsForEffect(card, effect, player, context) {
+    if (!effect?.targets || !Array.isArray(effect.targets)) {
+      return null;
+    }
+
+    const selections = {};
+    const effectEngine = this.game?.effectEngine;
+
+    for (const targetDef of effect.targets) {
+      if (!targetDef.id) continue;
+
+      // Use AutoSelector if available
+      if (this.game?.autoSelector) {
+        try {
+          const candidates = effectEngine?.resolveTargets?.(targetDef, {
+            source: card,
+            player,
+            opponent: this.getOpponent(player),
+          });
+
+          if (candidates && candidates.length > 0) {
+            // Bot selects best target (first one for simplicity, or highest ATK for monsters)
+            const count = targetDef.count?.max || targetDef.count?.min || 1;
+            const selected = this.selectBestTargets(
+              candidates,
+              count,
+              targetDef
+            );
+            selections[targetDef.id] = selected;
+          }
+        } catch (error) {
+          this.log(`Error getting bot selections: ${error.message}`);
+        }
+      }
+    }
+
+    return Object.keys(selections).length > 0 ? selections : null;
+  }
+
+  /**
+   * Select best targets from candidates based on strategy
+   * @param {Array} candidates
+   * @param {number} count
+   * @param {Object} targetDef
+   * @returns {Array}
+   */
+  selectBestTargets(candidates, count, targetDef) {
+    if (!candidates || candidates.length === 0) return [];
+
+    // Sort candidates by strategic value
+    const sorted = [...candidates].sort((a, b) => {
+      // Prefer higher ATK monsters
+      const aAtk = a.atk || 0;
+      const bAtk = b.atk || 0;
+      return bAtk - aAtk;
+    });
+
+    return sorted.slice(0, Math.min(count, sorted.length));
   }
 
   /**
@@ -607,17 +808,17 @@ export default class ChainSystem {
       return null;
     }
 
+    let chosenOption = null;
+
     // Use existing trap offering system or create new modal
     if (typeof ui.showChainResponseModal === "function") {
-      return await ui.showChainResponseModal(
+      chosenOption = await ui.showChainResponseModal(
         activatable,
         context,
         this.chainStack
       );
-    }
-
-    // Fallback: Use existing trap selection if available
-    if (typeof ui.offerTrapActivation === "function") {
+    } else if (typeof ui.offerTrapActivation === "function") {
+      // Fallback: Use existing trap selection if available
       const cards = activatable.map((a) => a.card);
       const result = await ui.offerTrapActivation(
         cards,
@@ -625,13 +826,98 @@ export default class ChainSystem {
       );
 
       if (result && result.card) {
-        const match = activatable.find((a) => a.card === result.card);
-        return match || null;
+        chosenOption = activatable.find((a) => a.card === result.card) || null;
       }
     }
 
-    // No UI method available, auto-pass
+    // If player chose a card, get target selections if needed
+    if (chosenOption) {
+      const selections = await this.getPlayerSelectionsForEffect(
+        chosenOption.card,
+        chosenOption.effect,
+        player,
+        context
+      );
+
+      if (
+        selections === null &&
+        this.effectRequiresTargets(chosenOption.effect)
+      ) {
+        // Player cancelled target selection, treat as pass
+        this.log("Player cancelled target selection");
+        return null;
+      }
+
+      return { ...chosenOption, selections };
+    }
+
     return null;
+  }
+
+  /**
+   * Check if an effect requires target selection
+   * @param {Object} effect
+   * @returns {boolean}
+   */
+  effectRequiresTargets(effect) {
+    return (
+      effect?.targets &&
+      Array.isArray(effect.targets) &&
+      effect.targets.length > 0
+    );
+  }
+
+  /**
+   * Get player selections for an effect that requires targets
+   * @param {Object} card
+   * @param {Object} effect
+   * @param {Object} player
+   * @param {ChainContext} context
+   * @returns {Promise<Object|null>}
+   */
+  async getPlayerSelectionsForEffect(card, effect, player, context) {
+    if (!this.effectRequiresTargets(effect)) {
+      return {};
+    }
+
+    const effectEngine = this.game?.effectEngine;
+    const ui = this.getUI();
+
+    if (!effectEngine || !ui) {
+      return null;
+    }
+
+    const selections = {};
+    const ctx = {
+      source: card,
+      player,
+      opponent: this.getOpponent(player),
+    };
+
+    for (const targetDef of effect.targets) {
+      if (!targetDef.id) continue;
+
+      try {
+        // Use the existing target selection system
+        const result = await effectEngine.resolveTargetSelection(
+          targetDef,
+          ctx,
+          `Select target for ${card.name}`
+        );
+
+        if (result && result.targets) {
+          selections[targetDef.id] = result.targets;
+        } else if (result === null) {
+          // Player cancelled
+          return null;
+        }
+      } catch (error) {
+        this.log(`Error getting player selections: ${error.message}`);
+        return null;
+      }
+    }
+
+    return selections;
   }
 
   /**
@@ -642,14 +928,18 @@ export default class ChainSystem {
    * @param {ChainContext} context
    * @param {Object} [selections]
    */
-  addToChain(card, player, effect, context, selections = null) {
+  addToChain(card, player, effect, context, selections = null, zone = null) {
     this.currentChainLevel++;
+
+    // Determine activation zone if not provided
+    const activationZone = zone || this.determineCardZone(card, player);
 
     const chainLink = {
       card,
       player,
       effect,
       context,
+      zone: activationZone,
       selections,
       chainLevel: this.currentChainLevel,
     };
@@ -731,31 +1021,38 @@ export default class ChainSystem {
       return;
     }
 
-    // Check if the card was removed from the field/hand before resolution
-    // (e.g., destroyed by a higher chain link)
-    const cardStillValid = this.isCardStillValid(card, player, link.context);
+    // Check if the card was removed from the expected zone before resolution
+    // Use the zone stored in the chain link, not assumed 'spellTrap'
+    const activationZone = link.zone || "spellTrap";
+    const cardStillValid = this.isCardStillValid(card, player, activationZone);
 
     if (!cardStillValid) {
-      this.log(`${card.name} is no longer valid, effect fizzles`);
+      this.log(
+        `${card.name} is no longer valid in ${activationZone}, effect fizzles`
+      );
       const ui = this.getUI();
       if (ui?.log) {
-        ui.log(`${card.name}'s effect fizzles (card is no longer on field).`);
+        ui.log(`${card.name}'s effect fizzles (card is no longer available).`);
       }
       return;
     }
 
-    // Move trap to graveyard after activation (if it was set)
+    // Mark trap as face-up when activated (but don't move to GY yet)
     if (card.cardKind === "trap" && card.isFacedown) {
       card.isFacedown = false;
+    }
 
-      // Non-continuous traps go to graveyard after resolution
-      if (card.subtype !== "continuous") {
-        const idx = player.spellTrap?.indexOf(card);
-        if (idx !== -1) {
-          player.spellTrap.splice(idx, 1);
-          player.graveyard = player.graveyard || [];
-          player.graveyard.push(card);
-        }
+    // For Quick-Play spells from hand, move to spellTrap zone before resolution
+    if (
+      card.cardKind === "spell" &&
+      card.subtype === "quick" &&
+      activationZone === "hand"
+    ) {
+      const handIdx = player.hand?.indexOf(card);
+      if (handIdx !== -1) {
+        player.hand.splice(handIdx, 1);
+        player.spellTrap = player.spellTrap || [];
+        player.spellTrap.push(card);
       }
     }
 
@@ -764,7 +1061,7 @@ export default class ChainSystem {
       source: card,
       player,
       opponent: this.getOpponent(player),
-      activationZone: link.context?.zone || "spellTrap",
+      activationZone: activationZone,
       activationContext: {
         chainLevel: link.chainLevel,
         context: link.context,
@@ -780,9 +1077,36 @@ export default class ChainSystem {
       }
     }
 
-    // Register once per turn usage
+    // AFTER resolution: Move non-continuous traps and quick-play spells to graveyard
+    if (card.cardKind === "trap" && card.subtype !== "continuous") {
+      const idx = player.spellTrap?.indexOf(card);
+      if (idx !== -1) {
+        player.spellTrap.splice(idx, 1);
+        player.graveyard = player.graveyard || [];
+        player.graveyard.push(card);
+        this.log(`${card.name} sent to graveyard after resolution`);
+      }
+    }
+
+    // Quick-Play spells also go to graveyard after resolution
+    if (card.cardKind === "spell" && card.subtype === "quick") {
+      const idx = player.spellTrap?.indexOf(card);
+      if (idx !== -1) {
+        player.spellTrap.splice(idx, 1);
+        player.graveyard = player.graveyard || [];
+        player.graveyard.push(card);
+        this.log(`${card.name} sent to graveyard after resolution`);
+      }
+    }
+
+    // Register once per turn usage using the game's method for consistency
     if (effect.oncePerTurn) {
-      effectEngine.registerOncePerTurnUsage?.(card, player, effect);
+      // Use game's method if available, otherwise fallback to effectEngine
+      if (this.game?.registerOncePerTurnUsage) {
+        this.game.registerOncePerTurnUsage(card, player, effect);
+      } else if (effectEngine?.registerOncePerTurnUsage) {
+        effectEngine.registerOncePerTurnUsage(card, player, effect);
+      }
     }
 
     this.game?.updateBoard?.();
@@ -795,28 +1119,46 @@ export default class ChainSystem {
    * @param {ChainContext} context
    * @returns {boolean}
    */
-  isCardStillValid(card, player, context) {
+  isCardStillValid(card, player, zone) {
     if (!card || !player) return false;
 
     // Check if card is still in expected zone
-    const zone = context?.zone || "spellTrap";
+    // zone is now passed directly, not extracted from context
+    const checkZone = zone || "spellTrap";
 
-    if (zone === "spellTrap") {
-      return player.spellTrap?.includes(card);
+    if (checkZone === "spellTrap") {
+      return player.spellTrap?.includes(card) === true;
     }
-    if (zone === "hand") {
-      return player.hand?.includes(card);
+    if (checkZone === "hand") {
+      return player.hand?.includes(card) === true;
     }
-    if (zone === "field") {
-      return player.field?.includes(card);
+    if (checkZone === "field") {
+      return player.field?.includes(card) === true;
     }
-
-    // For graveyard effects, check graveyard
-    if (zone === "graveyard") {
-      return player.graveyard?.includes(card);
+    if (checkZone === "graveyard") {
+      return player.graveyard?.includes(card) === true;
     }
 
+    // Unknown zone - assume valid to avoid false fizzles
     return true;
+  }
+
+  /**
+   * Determine which zone a card is currently in
+   * @param {Object} card
+   * @param {Object} player
+   * @returns {string}
+   */
+  determineCardZone(card, player) {
+    if (!card || !player) return "unknown";
+
+    if (player.hand?.includes(card)) return "hand";
+    if (player.field?.includes(card)) return "field";
+    if (player.spellTrap?.includes(card)) return "spellTrap";
+    if (player.graveyard?.includes(card)) return "graveyard";
+    if (player.banished?.includes(card)) return "banished";
+
+    return "unknown";
   }
 
   // ============================================================
