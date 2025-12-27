@@ -232,6 +232,14 @@ export default class Player {
       return null;
     }
 
+    if (card.cannotBeNormalSummonedOrSet) {
+      console.log(`${card.name} cannot be Normal Summoned/Set.`);
+      if (this.game?.ui?.log) {
+        this.game.ui.log(`${card.name} cannot be Normal Summoned/Set.`);
+      }
+      return null;
+    }
+
     if (card.summonRestrict === "shadow_heart_invocation_only") {
       console.log(
         `${card.name} cannot be Normal Summoned/Set. It must be Special Summoned by "Shadow-Heart Invocation".`

@@ -72,6 +72,7 @@ export default class Card {
 
     // Summon restrictions
     this.cannotBeSpecialSummoned = !!data.cannotBeSpecialSummoned;
+    this.cannotBeNormalSummonedOrSet = !!data.cannotBeNormalSummonedOrSet;
 
     // Turn-based temporary buffs (for expirations like "until end of next turn")
     // Structure: Array of {stat, value, expiresOnTurn, id}

@@ -4487,6 +4487,64 @@ export const cardDatabase = [
       },
     ],
   },
+  {
+    id: 201,
+    name: "Boneflame Dragon",
+    cardKind: "monster",
+    type: "Dragon",
+    level: 3,
+    atk: 0,
+    def: 0,
+    cannotBeNormalSummonedOrSet: true,
+    description:
+      "Cannot be Normal Summoned/Set. Once per turn, if this card is in your Graveyard: You can send 1 Dragon monster you control to the Graveyard; Special Summon this card. Gains 300 ATK for each Dragon monster in your Graveyard.",
+    image: "assets/Boneflame Dragon.png",
+    effects: [
+      {
+        id: "boneflame_dragon_gy_revive",
+        timing: "ignition",
+        requireZone: "graveyard",
+        requirePhase: ["main1", "main2"],
+        oncePerTurn: true,
+        oncePerTurnName: "boneflame_dragon_gy_revive",
+        targets: [
+          {
+            id: "boneflame_cost_target",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            type: "Dragon",
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "boneflame_cost_target",
+            player: "self",
+            to: "graveyard",
+          },
+          {
+            type: "special_summon_from_zone",
+            zone: "graveyard",
+            requireSource: true,
+            position: "choice",
+          },
+        ],
+      },
+      {
+        id: "boneflame_dragon_grave_buff",
+        timing: "passive",
+        passive: {
+          type: "graveyard_type_count_buff",
+          monsterType: "Dragon",
+          amountPerCard: 300,
+          stats: ["atk"],
+        },
+      },
+    ],
+  },
 ];
 
 // Performance optimization: Create indexed maps for O(1) lookups
