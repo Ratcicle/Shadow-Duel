@@ -2556,7 +2556,17 @@ export default class Renderer {
     });
   }
 
-  showTrapActivationModal(trapCard, event, eventData = {}) {
+  /**
+   * Unified trap activation modal - handles both manual activation and chain response
+   * @param {Object} options
+   * @param {Array} options.cards - Array of {card, effect, zone} objects
+   * @param {Object} options.context - Chain context (for response mode)
+   * @param {string} options.mode - 'single' for manual, 'chain' for chain response
+   * @returns {Promise<{card, effect, activate: boolean}|null>}
+   */
+  showUnifiedTrapModal(options = {}) {
+    const { cards = [], context = null, mode = "single" } = options;
+
     return new Promise((resolve) => {
       const overlay = document.createElement("div");
       overlay.className = "trap-activation-overlay";
@@ -2564,81 +2574,150 @@ export default class Renderer {
       const modal = document.createElement("div");
       modal.className = "trap-activation-modal";
 
-      // Cabeçalho
+      // Header - same style, different text based on mode
       const header = document.createElement("div");
       header.className = "trap-modal-header";
 
       const title = document.createElement("h3");
-      title.textContent = "Ativar Armadilha?";
+      if (mode === "chain" && context) {
+        title.textContent = this._getContextDescription(context);
+      } else {
+        title.textContent = "Ativar Armadilha?";
+      }
       header.appendChild(title);
-
-      // Imagem da carta
-      const cardPreview = document.createElement("div");
-      cardPreview.className = "trap-card-preview";
-
-      const img = document.createElement("img");
-      img.src = trapCard.image || "assets/card-back.png";
-      img.alt =
-        getCardDisplayName(trapCard) ||
-        (trapCard?.name && trapCard.name) ||
-        "Trap Card";
-      img.className = "trap-card-image";
-      cardPreview.appendChild(img);
-
-      // Informações da carta
-      const cardInfo = document.createElement("div");
-      cardInfo.className = "trap-card-info";
-
-      const cardName = document.createElement("div");
-      cardName.className = "trap-card-name";
-      cardName.textContent =
-        getCardDisplayName(trapCard) || (trapCard?.name && trapCard.name) || "";
-
-      const cardDesc = document.createElement("div");
-      cardDesc.className = "trap-card-description";
-      cardDesc.textContent =
-        getCardDisplayDescription(trapCard) ||
-        (trapCard?.description && trapCard.description) ||
-        "";
-
-      cardInfo.appendChild(cardName);
-      cardInfo.appendChild(cardDesc);
-
-      // Botões de ação
-      const actions = document.createElement("div");
-      actions.className = "trap-modal-actions";
-
-      const cancelBtn = document.createElement("button");
-      cancelBtn.textContent = "Não Ativar";
-      cancelBtn.className = "trap-btn-cancel";
-      cancelBtn.onclick = () => {
-        overlay.remove();
-        resolve(false);
-      };
-
-      const confirmBtn = document.createElement("button");
-      confirmBtn.textContent = "Ativar Armadilha";
-      confirmBtn.className = "trap-btn-confirm";
-      confirmBtn.onclick = () => {
-        overlay.remove();
-        resolve(true);
-      };
-
-      actions.appendChild(cancelBtn);
-      actions.appendChild(confirmBtn);
-
-      // Montar modal
       modal.appendChild(header);
-      modal.appendChild(cardPreview);
-      modal.appendChild(cardInfo);
-      modal.appendChild(actions);
 
-      overlay.appendChild(modal);
-      document.body.appendChild(overlay);
+      // For single card: show full card preview (original style)
+      // For multiple cards: show scrollable list with same card styling
+      if (cards.length === 1) {
+        const item = cards[0];
+        const card = item.card || item;
 
-      // Foco no botão de confirmar
-      confirmBtn.focus();
+        // Card image preview
+        const cardPreview = document.createElement("div");
+        cardPreview.className = "trap-card-preview";
+        const img = document.createElement("img");
+        img.src = card.image || "assets/card-back.png";
+        img.alt = getCardDisplayName(card) || card.name || "Trap Card";
+        img.className = "trap-card-image";
+        cardPreview.appendChild(img);
+        modal.appendChild(cardPreview);
+
+        // Card info
+        const cardInfo = document.createElement("div");
+        cardInfo.className = "trap-card-info";
+        const cardName = document.createElement("div");
+        cardName.className = "trap-card-name";
+        cardName.textContent = getCardDisplayName(card) || card.name || "";
+        const cardDesc = document.createElement("div");
+        cardDesc.className = "trap-card-description";
+        cardDesc.textContent =
+          getCardDisplayDescription(card) || card.description || "";
+        cardInfo.appendChild(cardName);
+        cardInfo.appendChild(cardDesc);
+        modal.appendChild(cardInfo);
+
+        // Actions for single card
+        const actions = document.createElement("div");
+        actions.className = "trap-modal-actions";
+
+        const cancelBtn = document.createElement("button");
+        cancelBtn.textContent = mode === "chain" ? "Passar" : "Não Ativar";
+        cancelBtn.className = "trap-btn-cancel";
+        cancelBtn.onclick = () => {
+          overlay.remove();
+          resolve(null);
+        };
+
+        const confirmBtn = document.createElement("button");
+        confirmBtn.textContent = "Ativar Armadilha";
+        confirmBtn.className = "trap-btn-confirm";
+        confirmBtn.onclick = () => {
+          overlay.remove();
+          resolve({ card, effect: item.effect || null, activate: true });
+        };
+
+        actions.appendChild(cancelBtn);
+        actions.appendChild(confirmBtn);
+        modal.appendChild(actions);
+
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+        confirmBtn.focus();
+      } else if (cards.length > 1) {
+        // Multiple cards - show list with same styling
+        const cardList = document.createElement("div");
+        cardList.className = "trap-card-list";
+
+        cards.forEach((item) => {
+          const card = item.card || item;
+          const effect = item.effect || null;
+
+          const cardOption = document.createElement("div");
+          cardOption.className = "trap-card-option";
+
+          // Mini card preview
+          const preview = document.createElement("div");
+          preview.className = "trap-card-preview-mini";
+          const img = document.createElement("img");
+          img.src = card.image || "assets/card-back.png";
+          img.className = "trap-card-image-mini";
+          preview.appendChild(img);
+
+          // Card info
+          const info = document.createElement("div");
+          info.className = "trap-card-info-inline";
+          const name = document.createElement("div");
+          name.className = "trap-card-name";
+          name.textContent = getCardDisplayName(card) || card.name || "";
+          info.appendChild(name);
+
+          // Activate button per card
+          const activateBtn = document.createElement("button");
+          activateBtn.textContent = "Ativar";
+          activateBtn.className = "trap-btn-confirm";
+          activateBtn.onclick = () => {
+            overlay.remove();
+            resolve({ card, effect, activate: true });
+          };
+
+          cardOption.appendChild(preview);
+          cardOption.appendChild(info);
+          cardOption.appendChild(activateBtn);
+          cardList.appendChild(cardOption);
+        });
+
+        modal.appendChild(cardList);
+
+        // Pass button for chain mode
+        const actions = document.createElement("div");
+        actions.className = "trap-modal-actions";
+        const passBtn = document.createElement("button");
+        passBtn.textContent = "Passar (Não Responder)";
+        passBtn.className = "trap-btn-cancel";
+        passBtn.style.width = "100%";
+        passBtn.onclick = () => {
+          overlay.remove();
+          resolve(null);
+        };
+        actions.appendChild(passBtn);
+        modal.appendChild(actions);
+
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+        passBtn.focus();
+      } else {
+        // No cards - just resolve null
+        resolve(null);
+      }
     });
+  }
+
+  showTrapActivationModal(trapCard, event, eventData = {}) {
+    return this.showUnifiedTrapModal({
+      cards: [{ card: trapCard }],
+      mode: "single",
+    }).then((result) => result?.activate === true);
   }
 
   /**
@@ -2649,119 +2728,15 @@ export default class Renderer {
    * @returns {Promise<{card, effect, selections}|null>}
    */
   showChainResponseModal(activatable, context, chainStack = []) {
-    return new Promise((resolve) => {
-      const overlay = document.createElement("div");
-      overlay.className = "chain-response-overlay";
-
-      const modal = document.createElement("div");
-      modal.className = "chain-response-modal";
-
-      // Header com informação do contexto
-      const header = document.createElement("div");
-      header.className = "chain-modal-header";
-
-      const title = document.createElement("h3");
-      title.textContent = "Responder à Chain?";
-      header.appendChild(title);
-
-      // Contexto atual
-      const contextInfo = document.createElement("div");
-      contextInfo.className = "chain-context-info";
-      contextInfo.textContent = this._getContextDescription(context);
-      header.appendChild(contextInfo);
-
-      // Mostrar chain atual se existir
-      if (chainStack.length > 0) {
-        const chainDisplay = document.createElement("div");
-        chainDisplay.className = "chain-stack-display";
-
-        const chainTitle = document.createElement("div");
-        chainTitle.className = "chain-stack-title";
-        chainTitle.textContent = `Chain atual (${chainStack.length} link${
-          chainStack.length > 1 ? "s" : ""
-        }):`;
-        chainDisplay.appendChild(chainTitle);
-
-        chainStack.forEach((link, idx) => {
-          const linkEl = document.createElement("div");
-          linkEl.className = "chain-link-item";
-          linkEl.textContent = `${idx + 1}. ${link.card?.name || "Carta"} (${
-            link.player?.name || link.player?.id || "Jogador"
-          })`;
-          chainDisplay.appendChild(linkEl);
-        });
-
-        header.appendChild(chainDisplay);
+    return this.showUnifiedTrapModal({
+      cards: activatable,
+      context,
+      mode: "chain",
+    }).then((result) => {
+      if (result?.activate) {
+        return { card: result.card, effect: result.effect, selections: null };
       }
-
-      // Lista de cartas ativáveis
-      const cardList = document.createElement("div");
-      cardList.className = "chain-card-list";
-
-      activatable.forEach((item) => {
-        const cardOption = document.createElement("div");
-        cardOption.className = "chain-card-option";
-
-        const img = document.createElement("img");
-        img.src = item.card.image || "assets/card-back.png";
-        img.alt = getCardDisplayName(item.card) || item.card.name || "Card";
-        img.className = "chain-card-image";
-
-        const info = document.createElement("div");
-        info.className = "chain-card-info";
-
-        const name = document.createElement("div");
-        name.className = "chain-card-name";
-        name.textContent =
-          getCardDisplayName(item.card) || item.card.name || "";
-
-        const speed = document.createElement("div");
-        speed.className = "chain-card-speed";
-        const cardSpeed =
-          item.card.speed || (item.card.subtype === "counter" ? 3 : 2);
-        speed.textContent = `Spell Speed ${cardSpeed}`;
-
-        info.appendChild(name);
-        info.appendChild(speed);
-
-        const activateBtn = document.createElement("button");
-        activateBtn.textContent = "Ativar";
-        activateBtn.className = "chain-btn-activate";
-        activateBtn.onclick = () => {
-          overlay.remove();
-          resolve({ card: item.card, effect: item.effect, selections: null });
-        };
-
-        cardOption.appendChild(img);
-        cardOption.appendChild(info);
-        cardOption.appendChild(activateBtn);
-        cardList.appendChild(cardOption);
-      });
-
-      // Botão de passar
-      const actions = document.createElement("div");
-      actions.className = "chain-modal-actions";
-
-      const passBtn = document.createElement("button");
-      passBtn.textContent = "Passar (Não Responder)";
-      passBtn.className = "chain-btn-pass";
-      passBtn.onclick = () => {
-        overlay.remove();
-        resolve(null);
-      };
-
-      actions.appendChild(passBtn);
-
-      // Montar modal
-      modal.appendChild(header);
-      modal.appendChild(cardList);
-      modal.appendChild(actions);
-
-      overlay.appendChild(modal);
-      document.body.appendChild(overlay);
-
-      // Auto-focus no botão de passar
-      passBtn.focus();
+      return null;
     });
   }
 
