@@ -2680,6 +2680,12 @@ export default class EffectEngine {
       activationContext.autoSelectSingleTarget === true;
     const isBot = ctx?.player?.id === "bot";
 
+    // ✅ DRAGON SPIRIT SANCTUARY: Inject targetMap into context for compareAttribute support
+    const enhancedCtx = {
+      ...ctx,
+      _selectCandidatesTargetMap: targetMap,
+    };
+
     for (const def of targetDefs) {
       // Support for targetFromContext: get target directly from event context
       if (def.targetFromContext) {
@@ -2730,7 +2736,10 @@ export default class EffectEngine {
         }
       }
 
-      const { zoneName, candidates } = this.selectCandidates(effectiveDef, ctx);
+      const { zoneName, candidates } = this.selectCandidates(
+        effectiveDef,
+        enhancedCtx
+      );
       const min = Number(def.count?.min ?? 1);
       const max = Number(def.count?.max ?? min);
 
@@ -2909,6 +2918,37 @@ export default class EffectEngine {
           },
         },
       };
+    }
+
+    // ✅ DRAGON SPIRIT SANCTUARY: Emit effect_targeted event for opponent's cards
+    // This allows traps like Dragon Spirit Sanctuary to respond before effect resolves
+    if (this.game && ctx?.source && ctx?.player) {
+      for (const [targetId, targetCards] of Object.entries(targetMap)) {
+        if (!Array.isArray(targetCards)) continue;
+
+        for (const targetCard of targetCards) {
+          if (!targetCard) continue;
+
+          // Check if target belongs to opponent
+          const targetOwner =
+            targetCard.owner === "player" ? this.game.player : this.game.bot;
+          if (targetOwner && targetOwner.id !== ctx.player.id) {
+            // Emit event for opponent's targeted card
+            console.log(
+              `[resolveTargets] Emitting effect_targeted: ${ctx.source.name} targets ${targetCard.name}`
+            );
+
+            // Emit event asynchronously (don't wait for it to avoid blocking)
+            void this.game.emit("effect_targeted", {
+              source: ctx.source,
+              sourcePlayer: ctx.player,
+              target: targetCard,
+              targetOwner: targetOwner,
+              targetId: targetId,
+            });
+          }
+        }
+      }
     }
 
     return { ok: true, targets: targetMap };
@@ -3114,6 +3154,62 @@ export default class EffectEngine {
           log(`[selectCandidates] ACCEPTED: ${card.name}`);
           candidates.push(card);
         }
+      }
+    }
+
+    // ✅ DRAGON SPIRIT SANCTUARY: Compare attributes between targets (e.g., level <= returning monster's level)
+    if (def.compareAttribute && ctx) {
+      const { attr, ref, op } = def.compareAttribute;
+      const targetMap = ctx._selectCandidatesTargetMap || {};
+      const refCards = targetMap[ref];
+
+      if (refCards && refCards.length > 0) {
+        const refValue = refCards[0]?.[attr];
+
+        if (refValue !== undefined) {
+          log(
+            `[selectCandidates] Applying compareAttribute filter: ${attr} ${op} ${refValue} (from ref "${ref}")`
+          );
+
+          candidates = candidates.filter((card) => {
+            const cardValue = card[attr];
+            if (cardValue === undefined) {
+              log(
+                `[selectCandidates] Rejecting ${card.name}: no ${attr} attribute`
+              );
+              return false;
+            }
+
+            let passes = false;
+            if (op === "lte" || op === "<=") passes = cardValue <= refValue;
+            else if (op === "gte" || op === ">=")
+              passes = cardValue >= refValue;
+            else if (op === "lt" || op === "<") passes = cardValue < refValue;
+            else if (op === "gt" || op === ">") passes = cardValue > refValue;
+            else if (op === "eq" || op === "==")
+              passes = cardValue === refValue;
+            else passes = true;
+
+            if (!passes) {
+              log(
+                `[selectCandidates] Rejecting ${card.name}: ${attr} ${cardValue} does not satisfy ${op} ${refValue}`
+              );
+            }
+            return passes;
+          });
+
+          log(
+            `[selectCandidates] After compareAttribute filter: ${candidates.length} candidates remain`
+          );
+        } else {
+          log(
+            `[selectCandidates] Warning: compareAttribute ref "${ref}" has no ${attr} attribute`
+          );
+        }
+      } else {
+        log(
+          `[selectCandidates] Warning: compareAttribute ref "${ref}" not found in context`
+        );
       }
     }
 

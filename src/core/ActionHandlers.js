@@ -438,6 +438,79 @@ async function selectCards({
   });
 }
 
+/**
+ * Generic handler for returning cards to hand (bounce effect)
+ * UNIFIED HANDLER - Works for any card returning to owner's hand
+ *
+ * Action properties:
+ * - targetRef: reference to target cards (can be array or single card)
+ * - fromZone: zone to return from (optional, auto-detected if not specified)
+ * - player: "self" | "opponent" (default: "self")
+ *
+ * Replaces patterns like:
+ * - Bounce attacker/defender to hand
+ * - Return targeted monster to hand
+ * - Self-bounce effects
+ */
+export async function handleReturnToHand(action, ctx, targets, engine) {
+  const game = engine?.game;
+  if (!game) return false;
+
+  const cards = resolveTargetCards(action, ctx, targets);
+  if (!cards || cards.length === 0) {
+    return false;
+  }
+
+  const targetPlayer =
+    action.player === "opponent" ? ctx?.opponent : ctx?.player;
+  if (!targetPlayer) return false;
+
+  let returnedCount = 0;
+
+  for (const card of cards) {
+    if (!card) continue;
+
+    // Find the owner of the card
+    const cardOwner = card.owner === "player" ? game.player : game.bot;
+    if (!cardOwner) continue;
+
+    // Detect current zone if not specified
+    const fromZone =
+      action.fromZone ||
+      (typeof engine.findCardZone === "function"
+        ? engine.findCardZone(cardOwner, card)
+        : null) ||
+      "field";
+
+    // Use game.moveCard for proper event handling
+    const moveResult = game.moveCard(card, cardOwner, "hand", { fromZone });
+
+    if (moveResult && moveResult.success !== false) {
+      returnedCount++;
+      getUI(game)?.log(`${card.name} returned to hand.`);
+    } else {
+      // Fallback for older moveCard implementations
+      const sourceZone = cardOwner[fromZone];
+      if (Array.isArray(sourceZone)) {
+        const idx = sourceZone.indexOf(card);
+        if (idx !== -1) {
+          sourceZone.splice(idx, 1);
+          cardOwner.hand = cardOwner.hand || [];
+          cardOwner.hand.push(card);
+          returnedCount++;
+          getUI(game)?.log(`${card.name} returned to hand.`);
+        }
+      }
+    }
+  }
+
+  if (returnedCount > 0 && typeof game.updateBoard === "function") {
+    game.updateBoard();
+  }
+
+  return returnedCount > 0;
+}
+
 async function summonFromHandCore({
   card,
   player,
@@ -4271,6 +4344,7 @@ export function registerDefaultHandlers(registry) {
     "special_summon_matching_level",
     handleSpecialSummonFromZone
   );
+  registry.register("return_to_hand", handleReturnToHand);
   registry.register("transmutate", handleTransmutate);
   registry.register("banish", handleBanish);
   registry.register("banish_destroyed_monster", handleBanish);

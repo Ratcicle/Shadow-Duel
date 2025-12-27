@@ -57,6 +57,12 @@ export const CHAIN_CONTEXTS = {
     allowedSpeeds: [2, 3],
     requiresChainWindow: false,
   },
+
+  effect_targeted: {
+    description: "When a card effect targets your card",
+    allowedSpeeds: [2, 3],
+    requiresChainWindow: true,
+  },
 };
 
 /**
@@ -434,6 +440,7 @@ export default class ChainSystem {
       phase_change: "phase_end",
       card_activation: "card_activation",
       effect_activation: "effect_activation",
+      effect_targeted: "effect_targeted",
       battle_damage: "battle_damage",
     };
     const expectedEvent = contextToEvent[context?.type] || context?.event;

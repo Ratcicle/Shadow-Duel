@@ -323,6 +323,10 @@
     "195": {
       "name": "Dragão Cósmico Tecno-Vazio",
       "description": "Material de Ascensão: 'Dragão Tecno-Vazio'. Requisito: O material ativou todos os seus efeitos durante este duelo. Se este card seria destruído: você pode banir 'Dragão Tecno-Vazio' do seu Cemitério em vez disso. Uma vez por turno: você pode banir 1 monstro Dragão do seu Cemitério; este card pode atacar todos os monstros que seu oponente controla, uma vez cada, neste turno. Você só pode usar cada efeito de 'Dragão Cósmico Tecno-Vazio' uma vez por turno."
+    },
+    "200": {
+      "name": "Santuário do Espírito Dragão",
+      "description": "Quando um monstro Dragão que você controla for alvo de um ataque ou efeito de card do oponente: devolva esse monstro para a mão; então Invoque por Invocação-Especial 1 monstro Dragão da sua mão com Nível menor ou igual ao do monstro devolvido. Você só pode ativar 1 'Santuário do Espírito Dragão' por turno."
     }
   }
 }

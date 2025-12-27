@@ -4389,6 +4389,104 @@ export const cardDatabase = [
       },
     ],
   },
+  {
+    id: 200,
+    name: "Dragon Spirit Sanctuary",
+    cardKind: "trap",
+    subtype: "normal",
+    speed: 2,
+    description:
+      "When a Dragon monster you control is targeted by an opponent's attack or card effect: return that monster to the hand; then Special Summon 1 Dragon monster from your hand with Level less than or equal to the returned monster. You can only activate 1 'Dragon Spirit Sanctuary' per turn.",
+    image: "assets/Dragon Spirit Sanctuary.png",
+    effects: [
+      {
+        id: "dragon_spirit_sanctuary_attack",
+        timing: "on_event",
+        event: "attack_declared",
+        requireDefenderIsSelf: true,
+        requireDefenderType: "dragon",
+        oncePerTurn: true,
+        oncePerTurnName: "dragon_spirit_sanctuary",
+        targets: [
+          {
+            id: "returning",
+            targetFromContext: "defender",
+            cardKind: "monster",
+            type: "dragon",
+            count: { min: 1, max: 1 },
+          },
+          {
+            id: "replacement",
+            owner: "self",
+            zone: "hand",
+            cardKind: "monster",
+            type: "dragon",
+            count: { min: 1, max: 1 },
+            compareAttribute: {
+              attr: "level",
+              ref: "returning",
+              op: "lte",
+            },
+          },
+        ],
+        actions: [
+          {
+            type: "return_to_hand",
+            targetRef: "returning",
+            fromZone: "field",
+          },
+          {
+            type: "special_summon_from_zone",
+            targetRef: "replacement",
+            zone: "hand",
+            position: "attack",
+          },
+        ],
+      },
+      {
+        id: "dragon_spirit_sanctuary_effect_targeted",
+        timing: "on_event",
+        event: "effect_targeted",
+        oncePerTurn: true,
+        oncePerTurnName: "dragon_spirit_sanctuary",
+        targets: [
+          {
+            id: "returning",
+            targetFromContext: "target",
+            cardKind: "monster",
+            type: "dragon",
+            count: { min: 1, max: 1 },
+          },
+          {
+            id: "replacement",
+            owner: "self",
+            zone: "hand",
+            cardKind: "monster",
+            type: "dragon",
+            count: { min: 1, max: 1 },
+            compareAttribute: {
+              attr: "level",
+              ref: "returning",
+              op: "lte",
+            },
+          },
+        ],
+        actions: [
+          {
+            type: "return_to_hand",
+            targetRef: "returning",
+            fromZone: "field",
+          },
+          {
+            type: "special_summon_from_zone",
+            targetRef: "replacement",
+            zone: "hand",
+            position: "attack",
+          },
+        ],
+      },
+    ],
+  },
 ];
 
 // Performance optimization: Create indexed maps for O(1) lookups

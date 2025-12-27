@@ -1,3 +1,8 @@
 {
-  "cards": {}
+  "cards": {
+    "200": {
+      "name": "Dragon Spirit Sanctuary",
+      "description": "When a Dragon monster you control is targeted by an opponent's attack or card effect: return that monster to the hand; then Special Summon 1 Dragon monster from your hand with Level less than or equal to the returned monster. You can only activate 1 'Dragon Spirit Sanctuary' per turn."
+    }
+  }
 }

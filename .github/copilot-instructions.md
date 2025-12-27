@@ -1,22 +1,93 @@
 ## Shadow Duel – Copilot Instructions
 
-- **Run locally**: Static site; serve repo root (e.g., `npx serve`, `python -m http.server`) and open `index.html`. No build step.
-- **Core loop**: `src/main.js` boots `Game` + `Renderer` via `UIAdapter`. `Game` owns turn/phases/combat/events; `EffectEngine` resolves effects; `Renderer` is DOM-only; `AutoSelector` handles bot selections.
-- **Data-driven cards**: Single source in `src/data/cards.js`. Describe effects with `timing`/`event` + `targets`/`conditions` + `actions`; never hardcode card names in engine.
-- **Action handlers**: Registry in `ActionHandlers.js` (`ActionHandlerRegistry`, `registerDefaultHandlers`). Handlers are pure logic `(action, ctx, targets, engine)`, no UI, no card-specific branches. Register new `action.type` or validation fails.
-- **Effect schema**: Timings (`on_play`, `on_activate`, `on_field_activate`, `ignition`, `on_event`, `passive`); events (`after_summon`, `battle_destroy`, `card_to_grave`, `standby_phase`, `attack_declared`, `opponent_damage`, `before_destroy`). Use `summonMethods`/`summonFrom` and `requireSelfAsSummoned`/`requireOpponentAttack` flags to gate triggers.
-- **Selection pipeline**: Define `targets`; engine builds selection contracts; bot uses `AutoSelector`; handlers consume `targetRef` only. Avoid extra prompts inside handlers.
-- **Special summons**: `EffectEngine.chooseSpecialSummonPosition` enforces forced vs choice. Always summon through `game.moveCard` so `after_summon` events, position rules, and special-summon type counters stay consistent.
-- **LP/damage**: Use `Game.inflictDamage()`/healing actions instead of mutating `lp` directly; it emits `opponent_damage` and keeps UI in sync.
-- **Validation**: `CardDatabaseValidator.validateCardDatabase()` runs on load/duel start; missing handler types or misaligned `oncePerTurnName` stop duels (errors vs dev warnings).
-- **Once-per-turn/duel**: Centralized in `Game`/`EffectEngine`; set `oncePerTurn`/`oncePerDuel` and `oncePerTurnName`/`oncePerDuelName` to avoid collisions. No ad-hoc flags on cards.
-- **Zone ops**: Prefer `game.moveCard` to preserve ownership/snapshots; call `game.updateBoard()` as needed. Update passive buffs via `EffectEngine.updatePassiveBuffs()`/`Player.updatePassiveEffects()` after zone changes.
-- **Deck builder rules**: Main deck 20–30 (max 3 copies each); Extra Deck up to 10 fusion/ascension (1 copy). UI auto-fills and sorts by monster level desc then spell/trap subtype.
-- **Dev/Test modes**: Toggle `shadow_duel_dev_mode`/`shadow_duel_test_mode` in `localStorage`. Dev panel enables phase forcing, draws, setup JSON, sanity buttons A–O, duel reset; keep hooks stable.
-- **Bots/AI**: Presets via `Bot.getAvailablePresets()` (Shadow-Heart, Luminarch). Strategies registered in `src/core/ai/StrategyRegistry.js`; add decklists in `Bot` when adding a preset.
-- **i18n**: Strings in `src/locales/en.json` and `src/locales/pt-br.json`; always render names/descriptions via `getCardDisplayName/Description`.
-- **Rendering**: `Renderer` batches with `DocumentFragment`; respects `isFacedown`, `position`, activation hints, attack indicators. Keep these attributes updated when mutating card state.
-- **Archetypes**: Tag cards with `archetype`/`archetypes`; use `passive.type: "archetype_count_buff"` for passive buffs (see `docs/Como adicionar um arquetipo.md`).
-- **Docs**: See `docs/ActionHandlers-System.md`, `docs/Como criar uma carta.md`, and `docs/Como criar um handler.md` for patterns and examples.
+### Run & Debug
 
-Use this file as the canonical guide for AI agents—extend with concrete patterns when adding mechanics.
+- **No build step**: Static site; serve root with `npx serve` or `python -m http.server`, open `index.html`.
+- **Dev mode**: Set `localStorage.setItem("shadow_duel_dev_mode", "true")` to enable dev panel (phase forcing, manual draws, setup JSON, duel reset).
+- **Test mode**: `shadow_duel_test_mode` in localStorage for additional sanity checks.
+
+### Architecture Overview
+
+```
+main.js → Game (turn/phase/combat) → EffectEngine (effects) → ActionHandlers (actions)
+               ↓                           ↓
+          UIAdapter ← Renderer (DOM)    AutoSelector (bot)
+```
+
+- `Game` owns turn flow, combat, event bus (`on`/`emit`), zone operations.
+- `EffectEngine` resolves effects, handles passive buffs, once-per-turn checks.
+- `ActionHandlers.js` registry: handlers are `(action, ctx, targets, engine) → bool`, pure logic, no UI.
+- `AutoSelector` fulfills selection contracts for bots.
+
+### Adding Cards (`src/data/cards.js`)
+
+Single source of truth. Effects are declarative—never hardcode card names in engine.
+
+**Effect structure:**
+
+```js
+effects: [{
+  id: "unique_id",
+  timing: "on_play" | "on_event" | "ignition" | "passive",
+  event: "after_summon" | "battle_destroy" | "card_to_grave" | "standby_phase" | "attack_declared" | "opponent_damage" | "before_destroy",
+  targets: [{ id: "ref", owner: "self"|"opponent"|"any", zone: "field"|"hand"|"graveyard", ... }],
+  conditions: [...],
+  actions: [{ type: "draw", amount: 2, player: "self" }]
+}]
+```
+
+**Summon triggers:** Use `summonMethods: ["normal","special"]`, `summonFrom: "hand"`, `requireSelfAsSummoned: true`.
+
+### Action Handler Contract
+
+- Handlers registered in `ActionHandlers.js` via `registry.register("type", handler)`.
+- `CardDatabaseValidator` blocks duels if `action.type` is missing from registry.
+- No UI calls inside handlers; selection comes from `targets` → `targetRef`.
+- After zone changes: call `game.updateBoard()` (triggers `updatePassiveBuffs`).
+
+**Handler signature:**
+
+```js
+async function handleMyAction(action, ctx, targets, engine) {
+  const { player, opponent, source } = ctx;
+  const game = engine.game;
+  // Use game.moveCard(), game.inflictDamage(), etc.
+  return true; // or false on failure
+}
+```
+
+### Critical Patterns
+
+- **Move cards**: Always use `game.moveCard(card, player, zone, {fromZone})` to preserve events/snapshots.
+- **Damage/heal**: Use `Game.inflictDamage()` or `heal` action—never mutate `player.lp` directly.
+- **Special summon position**: `EffectEngine.chooseSpecialSummonPosition()` handles forced vs choice.
+- **Once-per-turn/duel**: Set `oncePerTurn`/`oncePerDuel` + `oncePerTurnName`/`oncePerDuelName` in effect. No ad-hoc flags.
+
+### Archetypes
+
+- Tag: `archetype: "Shadow-Heart"` or `archetypes: ["Void", "Dark"]`.
+- Passive buffs: `passive: { type: "archetype_count_buff", archetype: "Void", amountPerCard: 100, stats: ["atk"] }`.
+- Filters: Use `filters.archetype` in actions for generic targeting.
+
+### Bot/AI System
+
+- Presets: `Bot.getAvailablePresets()` → `["shadowheart", "luminarch"]`.
+- Strategies in `src/core/ai/StrategyRegistry.js`; add new via `registerStrategy("id", Class)`.
+- Decklists in `Bot.getShadowHeartDeck()` / `getLuminarchDeck()`.
+
+### i18n
+
+- Locales: `src/locales/en.json`, `src/locales/pt-br.json`.
+- Always use `getCardDisplayName(card)` and `getCardDisplayDescription(card)` for UI.
+
+### Deck Rules
+
+- Main: 20–30 cards (max 3 copies each).
+- Extra: Up to 10 fusion/ascension (1 copy each).
+
+### Key Docs
+
+- `docs/ActionHandlers-System.md` – Handler architecture and examples.
+- `docs/Como criar uma carta.md` – Card definition schema.
+- `docs/Como criar um handler.md` – Handler creation guide.
+- `docs/Como adicionar um arquetipo.md` – Archetype patterns.

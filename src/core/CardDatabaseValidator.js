@@ -21,6 +21,7 @@ const VALID_EVENTS = new Set([
   "attack_declared",
   "opponent_damage",
   "before_destroy",
+  "effect_targeted",
 ]);
 
 function formatIssue(card, message, effectIndex = null, actionIndex = null) {
