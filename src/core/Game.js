@@ -2439,12 +2439,6 @@ export default class Game {
           console.log(`[Game] Returning: targetSelection active`);
           return;
         }
-        const guard = this.guardActionStart({
-          actor: this.player,
-          kind: "spelltrap_zone",
-          phaseReq: ["main1", "main2"],
-        });
-        if (!guard.ok) return;
 
         const card = this.player.spellTrap[index];
         if (!card) return;
@@ -2453,8 +2447,16 @@ export default class Game {
           `[Game] Clicked spell/trap: ${card.name}, isFacedown: ${card.isFacedown}, cardKind: ${card.cardKind}`
         );
 
-        // Handle traps (can be facedown with on_activate timing)
+        // Handle traps - can be activated on opponent's turn and during battle phase
         if (card.cardKind === "trap") {
+          const guard = this.guardActionStart({
+            actor: this.player,
+            kind: "trap_activation",
+            phaseReq: ["main1", "battle", "main2"],
+            allowDuringOpponentTurn: true,
+          });
+          if (!guard.ok) return;
+
           const hasActivateEffect = (card.effects || []).some(
             (e) => e && e.timing === "on_activate"
           );
@@ -2471,6 +2473,14 @@ export default class Game {
           }
           return;
         }
+
+        // Spells can only be activated on your turn during Main Phase
+        const guard = this.guardActionStart({
+          actor: this.player,
+          kind: "spelltrap_zone",
+          phaseReq: ["main1", "main2"],
+        });
+        if (!guard.ok) return;
 
         // For spells, don't allow clicking facedown cards
         if (card.isFacedown) return;
@@ -3102,11 +3112,23 @@ export default class Game {
   async tryActivateSpellTrapEffect(card, selections = null) {
     if (!card) return;
     console.log(`[Game] tryActivateSpellTrapEffect called for: ${card.name}`);
-    const guard = this.guardActionStart({
-      actor: this.player,
-      kind: "spelltrap_effect",
-      phaseReq: ["main1", "main2"],
-    });
+
+    // Traps can be activated on opponent's turn and during battle phase
+    const isTrap = card.cardKind === "trap";
+    const guardConfig = isTrap
+      ? {
+          actor: this.player,
+          kind: "trap_activation",
+          phaseReq: ["main1", "battle", "main2"],
+          allowDuringOpponentTurn: true,
+        }
+      : {
+          actor: this.player,
+          kind: "spelltrap_effect",
+          phaseReq: ["main1", "main2"],
+        };
+
+    const guard = this.guardActionStart(guardConfig);
     if (!guard.ok) return guard;
 
     // If it's a trap, show confirmation modal first
@@ -3140,6 +3162,10 @@ export default class Game {
       { fromHand: false }
     );
 
+    const pipelinePhaseReq = isTrap
+      ? ["main1", "battle", "main2"]
+      : ["main1", "main2"];
+
     const pipelineResult = await this.runActivationPipeline({
       card,
       owner: this.player,
@@ -3148,8 +3174,9 @@ export default class Game {
       selections,
       selectionKind: "spellTrapEffect",
       selectionMessage: "Select target(s) for the continuous spell effect.",
-      guardKind: "spelltrap_effect",
-      phaseReq: ["main1", "main2"],
+      guardKind: isTrap ? "trap_activation" : "spelltrap_effect",
+      phaseReq: pipelinePhaseReq,
+      allowDuringOpponentTurn: isTrap,
       oncePerTurn: {
         card,
         player: this.player,
@@ -6432,6 +6459,9 @@ export default class Game {
 
     // Se o ChainSystem já está resolvendo, não interromper
     if (this.chainSystem?.isChainResolving()) return;
+
+    // Prevenir abrir nova chain window enquanto outra já está aberta
+    if (this.chainSystem?.isChainWindowOpen?.()) return;
 
     this.trapPromptInProgress = true;
 

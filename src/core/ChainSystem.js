@@ -100,6 +100,9 @@ export default class ChainSystem {
     /** @type {boolean} Whether chain is currently resolving */
     this.isResolving = false;
 
+    /** @type {Set<Object>} Cards currently being resolved (to prevent re-offering) */
+    this.cardsBeingResolved = new Set();
+
     /** @type {number} Current chain level counter */
     this.currentChainLevel = 0;
 
@@ -286,27 +289,68 @@ export default class ChainSystem {
     const activatable = [];
     const effectEngine = this.game.effectEngine;
 
+    // Build a set of cards already in the current chain (to prevent offering them again)
+    const cardsInChain = new Set();
+    if (Array.isArray(this.chainStack)) {
+      for (const link of this.chainStack) {
+        if (link?.card) {
+          cardsInChain.add(link.card);
+        }
+      }
+    }
+    // Also include cards currently being resolved (they've been popped from chainStack)
+    if (this.cardsBeingResolved) {
+      for (const card of this.cardsBeingResolved) {
+        cardsInChain.add(card);
+      }
+    }
+
     // Check set Trap cards in spellTrap zone
     if (Array.isArray(player.spellTrap)) {
       for (const card of player.spellTrap) {
         if (!card || card.cardKind !== "trap") continue;
         if (!card.isFacedown) continue; // Must be set
 
+        // Skip cards already in the current chain or being resolved
+        if (cardsInChain.has(card)) continue;
+
         // Check if trap can be activated (was set before this turn)
         // Support both setTurn and turnSetOn properties
         const setTurn = card.setTurn ?? card.turnSetOn ?? null;
-        if (setTurn === null || setTurn >= this.game.turnCounter) continue;
+        if (setTurn === null || setTurn >= this.game.turnCounter) {
+          console.log(
+            `[getActivatableCardsInChain] ${card.name}: cannot activate yet (setTurn=${setTurn}, currentTurn=${this.game.turnCounter})`
+          );
+          continue;
+        }
+
+        console.log(
+          `[getActivatableCardsInChain] Checking trap ${card.name} for context ${context?.type}`
+        );
 
         const effect = this.findActivatableEffect(card, context);
         if (effect) {
+          console.log(
+            `[getActivatableCardsInChain] Found effect for ${card.name}:`,
+            effect.id
+          );
           const chainCheck = this.canActivateInChain(effect, card, context);
+          console.log(
+            `[getActivatableCardsInChain] Chain check for ${card.name}:`,
+            chainCheck
+          );
           if (chainCheck.ok) {
-            // Check additional activation conditions
-            const canActivate = effectEngine?.canActivate?.(card, player);
-            if (!canActivate || canActivate.ok !== false) {
-              activatable.push({ card, effect, zone: "spellTrap" });
-            }
+            // Skip the canActivate check for traps - it's only meant for spells
+            // Traps have their own validation in findActivatableEffect
+            console.log(
+              `[getActivatableCardsInChain] ${card.name} is ACTIVATABLE`
+            );
+            activatable.push({ card, effect, zone: "spellTrap" });
           }
+        } else {
+          console.log(
+            `[getActivatableCardsInChain] No activatable effect found for ${card.name}`
+          );
         }
       }
     }
@@ -320,6 +364,9 @@ export default class ChainSystem {
       for (const card of player.hand) {
         if (!card || card.cardKind !== "spell") continue;
         if (card.subtype !== "quick") continue;
+
+        // Skip cards already in the current chain
+        if (cardsInChain.has(card)) continue;
 
         const effect = this.findActivatableEffect(card, context);
         if (effect) {
@@ -343,6 +390,9 @@ export default class ChainSystem {
       for (const card of player.field) {
         if (!card || card.cardKind !== "monster") continue;
         if (card.isFacedown) continue;
+
+        // Skip cards already in the current chain
+        if (cardsInChain.has(card)) continue;
 
         const effect = this.findQuickMonsterEffect(card, context);
         if (effect) {
@@ -415,6 +465,87 @@ export default class ChainSystem {
                 context.isOpponentSummon === true;
               if (!summonerIsOpponent) continue;
             }
+            // Check requireDefenderIsSelf (e.g., Dragon Spirit Sanctuary)
+            if (
+              effect.requireDefenderIsSelf &&
+              context?.type === "attack_declaration"
+            ) {
+              // The card owner's monster must be the defender
+              const cardOwner =
+                card.owner === "player" ? this.game.player : this.game.bot;
+              if (context.defenderOwner?.id !== cardOwner?.id) continue;
+            }
+            // Check requireDefenderType (e.g., Dragon Spirit Sanctuary)
+            if (
+              effect.requireDefenderType &&
+              context?.type === "attack_declaration"
+            ) {
+              const defender = context.defender || context.target;
+              const requiredTypes = Array.isArray(effect.requireDefenderType)
+                ? effect.requireDefenderType
+                : [effect.requireDefenderType];
+              if (!defender || !requiredTypes.includes(defender.type)) continue;
+            }
+
+            // Check if targets are available before allowing activation
+            if (
+              effect.targets &&
+              effect.targets.length > 0 &&
+              this.game?.effectEngine
+            ) {
+              const cardOwner =
+                card.owner === "player" ? this.game.player : this.game.bot;
+              const ctx = {
+                source: card,
+                player: cardOwner,
+                opponent:
+                  card.owner === "player" ? this.game.bot : this.game.player,
+                defender: context.defender || context.target,
+                attacker: context.attacker,
+                attackerOwner: context.attackerOwner,
+                defenderOwner: context.defenderOwner,
+                activationContext: {
+                  autoSelectSingleTarget: true,
+                  logTargets: false,
+                },
+              };
+
+              console.log(
+                `[findActivatableEffect] Checking targets for ${card.name}:`,
+                {
+                  defender: ctx.defender?.name,
+                  defenderType: ctx.defender?.type,
+                  targets: effect.targets.map((t) => ({
+                    id: t.id,
+                    targetFromContext: t.targetFromContext,
+                    type: t.type,
+                  })),
+                }
+              );
+
+              const targetResult = this.game.effectEngine.resolveTargets(
+                effect.targets,
+                ctx,
+                null
+              );
+
+              console.log(
+                `[findActivatableEffect] Target result for ${card.name}:`,
+                {
+                  ok: targetResult.ok,
+                  reason: targetResult.reason,
+                  needsSelection: targetResult.needsSelection,
+                }
+              );
+
+              if (targetResult.ok === false) {
+                this.log(
+                  `[findActivatableEffect] ${card.name}: targets not available - ${targetResult.reason}`
+                );
+                continue;
+              }
+            }
+
             return effect;
           }
           continue;
@@ -439,6 +570,39 @@ export default class ChainSystem {
             continue;
           }
 
+          // Check if targets are available before allowing activation
+          if (
+            effect.targets &&
+            effect.targets.length > 0 &&
+            this.game?.effectEngine
+          ) {
+            const cardOwner =
+              card.owner === "player" ? this.game.player : this.game.bot;
+            const ctx = {
+              source: card,
+              player: cardOwner,
+              opponent:
+                card.owner === "player" ? this.game.bot : this.game.player,
+              activationContext: {
+                autoSelectSingleTarget: true,
+                logTargets: false,
+              },
+            };
+
+            const targetResult = this.game.effectEngine.resolveTargets(
+              effect.targets,
+              ctx,
+              null
+            );
+
+            if (targetResult.ok === false) {
+              this.log(
+                `[findActivatableEffect] ${card.name}: targets not available for on_activate - ${targetResult.reason}`
+              );
+              continue;
+            }
+          }
+
           // ignition timing typically for main phase, but traps can chain
           // Allow if we're in a valid chain window
           if (contextDef.requiresChainWindow || this.chainStack.length > 0) {
@@ -454,6 +618,38 @@ export default class ChainSystem {
           effect.timing === "on_activate" ||
           effect.timing === "ignition"
         ) {
+          // Check if targets are available before allowing activation
+          if (
+            effect.targets &&
+            effect.targets.length > 0 &&
+            this.game?.effectEngine
+          ) {
+            const cardOwner =
+              card.owner === "player" ? this.game.player : this.game.bot;
+            const ctx = {
+              source: card,
+              player: cardOwner,
+              opponent:
+                card.owner === "player" ? this.game.bot : this.game.player,
+              activationContext: {
+                autoSelectSingleTarget: true,
+                logTargets: false,
+              },
+            };
+
+            const targetResult = this.game.effectEngine.resolveTargets(
+              effect.targets,
+              ctx,
+              null
+            );
+
+            if (targetResult.ok === false) {
+              this.log(
+                `[findActivatableEffect] ${card.name}: targets not available for quick-play - ${targetResult.reason}`
+              );
+              continue;
+            }
+          }
           return effect;
         }
       }
@@ -534,6 +730,7 @@ export default class ChainSystem {
     this.chainWindowContext = null;
     this.chainStack = [];
     this.currentChainLevel = 0;
+    this.cardsBeingResolved.clear();
   }
 
   /**
@@ -887,37 +1084,90 @@ export default class ChainSystem {
       return null;
     }
 
-    const selections = {};
+    // Build context with attack info if available
     const ctx = {
       source: card,
       player,
       opponent: this.getOpponent(player),
+      defender: context?.defender || context?.target,
+      attacker: context?.attacker,
+      attackerOwner: context?.attackerOwner,
+      defenderOwner: context?.defenderOwner,
+      activationContext: { autoSelectSingleTarget: true },
     };
 
-    for (const targetDef of effect.targets) {
-      if (!targetDef.id) continue;
+    // Use resolveTargets to check what selections are needed
+    const targetResult = effectEngine.resolveTargets(effect.targets, ctx, null);
 
-      try {
-        // Use the existing target selection system
-        const result = await effectEngine.resolveTargetSelection(
-          targetDef,
-          ctx,
-          `Select target for ${card.name}`
-        );
+    if (targetResult.ok === false) {
+      this.log(`Target resolution failed: ${targetResult.reason}`);
+      return null;
+    }
 
-        if (result && result.targets) {
-          selections[targetDef.id] = result.targets;
-        } else if (result === null) {
-          // Player cancelled
-          return null;
-        }
-      } catch (error) {
-        this.log(`Error getting player selections: ${error.message}`);
-        return null;
+    // If targets were auto-resolved (e.g., targetFromContext), return them
+    if (!targetResult.needsSelection && targetResult.targets) {
+      return targetResult.targets;
+    }
+
+    // If selection is needed, show selection UI
+    if (targetResult.needsSelection && targetResult.selectionContract) {
+      const contract = targetResult.selectionContract;
+
+      // Use the game's target selection system
+      if (this.game?.startTargetSelectionSession) {
+        return new Promise((resolve) => {
+          this.game.startTargetSelectionSession({
+            selectionContract: contract,
+            message: contract.message || `Select target(s) for ${card.name}`,
+            kind: "target",
+            allowCancel: true,
+            execute: (selections) => {
+              // Convert selection keys to actual card references
+              const resolvedSelections = this.resolveSelectionsToCards(
+                selections,
+                contract.requirements,
+                player
+              );
+              resolve(resolvedSelections);
+              return { success: true, needsSelection: false };
+            },
+            onCancel: () => {
+              resolve(null);
+            },
+          });
+        });
       }
     }
 
-    return selections;
+    return {};
+  }
+
+  /**
+   * Convert selection keys to actual card references
+   * @param {Object} selections - Map of requirement id to selected keys
+   * @param {Array} requirements - Selection requirements with candidates
+   * @param {Object} player
+   * @returns {Object} Map of requirement id to card arrays
+   */
+  resolveSelectionsToCards(selections, requirements, player) {
+    const resolved = {};
+
+    for (const req of requirements || []) {
+      const selectedKeys = selections[req.id] || [];
+      const cards = [];
+
+      for (const key of selectedKeys) {
+        // Find the candidate by key
+        const candidate = req.candidates?.find((c) => c.key === key);
+        if (candidate?.cardRef) {
+          cards.push(candidate.cardRef);
+        }
+      }
+
+      resolved[req.id] = cards;
+    }
+
+    return resolved;
   }
 
   /**
@@ -1015,9 +1265,13 @@ export default class ChainSystem {
       return;
     }
 
+    // Track that this card is being resolved (prevents re-offering during resolution)
+    this.cardsBeingResolved.add(card);
+
     const effectEngine = this.game?.effectEngine;
     if (!effectEngine) {
       this.log("No effect engine available");
+      this.cardsBeingResolved.delete(card);
       return;
     }
 
@@ -1034,82 +1288,117 @@ export default class ChainSystem {
       if (ui?.log) {
         ui.log(`${card.name}'s effect fizzles (card is no longer available).`);
       }
+      this.cardsBeingResolved.delete(card);
       return;
     }
 
-    // Mark trap as face-up when activated (but don't move to GY yet)
-    if (card.cardKind === "trap" && card.isFacedown) {
-      card.isFacedown = false;
-    }
-
-    // For Quick-Play spells from hand, move to spellTrap zone before resolution
-    if (
-      card.cardKind === "spell" &&
-      card.subtype === "quick" &&
-      activationZone === "hand"
-    ) {
-      const handIdx = player.hand?.indexOf(card);
-      if (handIdx !== -1) {
-        player.hand.splice(handIdx, 1);
-        player.spellTrap = player.spellTrap || [];
-        player.spellTrap.push(card);
+    try {
+      // Mark trap as face-up when activated (but don't move to GY yet)
+      if (card.cardKind === "trap" && card.isFacedown) {
+        card.isFacedown = false;
       }
-    }
 
-    // Resolve the effect
-    const ctx = {
-      source: card,
-      player,
-      opponent: this.getOpponent(player),
-      activationZone: activationZone,
-      activationContext: {
-        chainLevel: link.chainLevel,
-        context: link.context,
-      },
-    };
-
-    // Apply actions
-    if (Array.isArray(effect.actions)) {
-      try {
-        await effectEngine.applyActions(effect.actions, ctx, selections || {});
-      } catch (error) {
-        console.error(`[ChainSystem] Action error:`, error);
+      // For Quick-Play spells from hand, move to spellTrap zone before resolution
+      if (
+        card.cardKind === "spell" &&
+        card.subtype === "quick" &&
+        activationZone === "hand"
+      ) {
+        const handIdx = player.hand?.indexOf(card);
+        if (handIdx !== -1) {
+          player.hand.splice(handIdx, 1);
+          player.spellTrap = player.spellTrap || [];
+          player.spellTrap.push(card);
+        }
       }
-    }
 
-    // AFTER resolution: Move non-continuous traps and quick-play spells to graveyard
-    if (card.cardKind === "trap" && card.subtype !== "continuous") {
-      const idx = player.spellTrap?.indexOf(card);
-      if (idx !== -1) {
-        player.spellTrap.splice(idx, 1);
-        player.graveyard = player.graveyard || [];
-        player.graveyard.push(card);
-        this.log(`${card.name} sent to graveyard after resolution`);
+      // Resolve the effect
+      const ctx = {
+        source: card,
+        player,
+        opponent: this.getOpponent(player),
+        activationZone: activationZone,
+        // Include attack context if available (for traps like Dragon Spirit Sanctuary)
+        defender: link.context?.defender || link.context?.target,
+        attacker: link.context?.attacker,
+        attackerOwner: link.context?.attackerOwner,
+        defenderOwner: link.context?.defenderOwner,
+        activationContext: {
+          chainLevel: link.chainLevel,
+          context: link.context,
+          autoSelectSingleTarget: true,
+        },
+      };
+
+      // If we have selections, use them directly; otherwise resolve targets
+      let resolvedSelections = selections;
+      if (!resolvedSelections || Object.keys(resolvedSelections).length === 0) {
+        // Resolve targets using the context (this handles targetFromContext)
+        const targetResult = effectEngine.resolveTargets(
+          effect.targets || [],
+          ctx,
+          null
+        );
+        if (targetResult.ok !== false && targetResult.targets) {
+          resolvedSelections = targetResult.targets;
+        } else if (targetResult.needsSelection) {
+          this.log(
+            `${card.name} requires selection but none provided, effect may fail`
+          );
+          resolvedSelections = {};
+        }
       }
-    }
 
-    // Quick-Play spells also go to graveyard after resolution
-    if (card.cardKind === "spell" && card.subtype === "quick") {
-      const idx = player.spellTrap?.indexOf(card);
-      if (idx !== -1) {
-        player.spellTrap.splice(idx, 1);
-        player.graveyard = player.graveyard || [];
-        player.graveyard.push(card);
-        this.log(`${card.name} sent to graveyard after resolution`);
+      // Apply actions
+      if (Array.isArray(effect.actions)) {
+        try {
+          await effectEngine.applyActions(
+            effect.actions,
+            ctx,
+            resolvedSelections || {}
+          );
+        } catch (error) {
+          console.error(`[ChainSystem] Action error:`, error);
+        }
       }
-    }
 
-    // Register once per turn usage using the game's method for consistency
-    if (effect.oncePerTurn) {
-      // Use game's method if available, otherwise fallback to effectEngine
-      if (this.game?.registerOncePerTurnUsage) {
-        this.game.registerOncePerTurnUsage(card, player, effect);
-      } else if (effectEngine?.registerOncePerTurnUsage) {
-        effectEngine.registerOncePerTurnUsage(card, player, effect);
+      // AFTER resolution: Move non-continuous traps and quick-play spells to graveyard
+      if (card.cardKind === "trap" && card.subtype !== "continuous") {
+        const idx = player.spellTrap?.indexOf(card);
+        if (idx !== -1) {
+          player.spellTrap.splice(idx, 1);
+          player.graveyard = player.graveyard || [];
+          player.graveyard.push(card);
+          this.log(`${card.name} sent to graveyard after resolution`);
+        }
       }
-    }
 
-    this.game?.updateBoard?.();
+      // Quick-Play spells also go to graveyard after resolution
+      if (card.cardKind === "spell" && card.subtype === "quick") {
+        const idx = player.spellTrap?.indexOf(card);
+        if (idx !== -1) {
+          player.spellTrap.splice(idx, 1);
+          player.graveyard = player.graveyard || [];
+          player.graveyard.push(card);
+          this.log(`${card.name} sent to graveyard after resolution`);
+        }
+      }
+
+      // Register once per turn usage using the game's method for consistency
+      if (effect.oncePerTurn) {
+        // Use game's method if available, otherwise fallback to effectEngine
+        if (this.game?.registerOncePerTurnUsage) {
+          this.game.registerOncePerTurnUsage(card, player, effect);
+        } else if (effectEngine?.registerOncePerTurnUsage) {
+          effectEngine.registerOncePerTurnUsage(card, player, effect);
+        }
+      }
+
+      this.game?.updateBoard?.();
+    } finally {
+      // Always remove from cardsBeingResolved to ensure cleanup
+      this.cardsBeingResolved.delete(card);
+    }
   }
 
   /**
@@ -1208,6 +1497,7 @@ export default class ChainSystem {
     this.chainWindowContext = null;
     this.isResolving = false;
     this.currentChainLevel = 0;
+    this.cardsBeingResolved.clear();
   }
 
   /**

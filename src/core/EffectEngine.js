@@ -1578,6 +1578,15 @@ export default class EffectEngine {
       if (player.fieldSpell) {
         sources.push(player.fieldSpell);
       }
+      // Note: Facedown traps in spellTrap zone are handled by ChainSystem.checkAndOfferTraps
+      // Only include face-up continuous traps here (they have already been activated)
+      if (player.spellTrap && Array.isArray(player.spellTrap)) {
+        for (const trap of player.spellTrap) {
+          if (trap && !trap.isFacedown) {
+            sources.push(trap);
+          }
+        }
+      }
 
       for (const card of sources) {
         if (!card || !card.effects || !Array.isArray(card.effects)) continue;
@@ -1585,6 +1594,19 @@ export default class EffectEngine {
         for (const effect of card.effects) {
           if (!effect || effect.timing !== "on_event") continue;
           if (effect.event !== "attack_declared") continue;
+
+          console.log(
+            `[collectAttackDeclaredTriggers] Found attack_declared effect on ${card.name}:`,
+            {
+              effectId: effect.id,
+              requireDefenderType: effect.requireDefenderType,
+              requireDefenderIsSelf: effect.requireDefenderIsSelf,
+              defenderName: payload.defender?.name,
+              defenderType: payload.defender?.type,
+              defenderOwnerId: payload.defenderOwner?.id,
+              playerId: player.id,
+            }
+          );
 
           if (this.isEffectNegated(card)) {
             console.log(`${card.name} effects are negated, skipping effect.`);
@@ -1644,6 +1666,28 @@ export default class EffectEngine {
                   hasDefender: !!defenderCard,
                   defenderName: defenderCard?.name,
                   defenderPosition: defenderCard?.position,
+                }
+              );
+              continue;
+            }
+          }
+
+          // Filter by defender's monster type (Dragon, Warrior, etc.)
+          if (effect.requireDefenderType) {
+            const defenderCard = payload.defender;
+            const requiredTypes = Array.isArray(effect.requireDefenderType)
+              ? effect.requireDefenderType
+              : [effect.requireDefenderType];
+            if (!defenderCard || !requiredTypes.includes(defenderCard.type)) {
+              console.log(
+                "[attack_declared] Skipping effect: requireDefenderType not met",
+                {
+                  effectId: effect.id,
+                  cardName: card.name,
+                  hasDefender: !!defenderCard,
+                  defenderName: defenderCard?.name,
+                  defenderType: defenderCard?.type,
+                  requiredTypes,
                 }
               );
               continue;
@@ -2637,7 +2681,56 @@ export default class EffectEngine {
     const isBot = ctx?.player?.id === "bot";
 
     for (const def of targetDefs) {
-      const { zoneName, candidates } = this.selectCandidates(def, ctx);
+      // Support for targetFromContext: get target directly from event context
+      if (def.targetFromContext) {
+        const contextKey = def.targetFromContext;
+        const contextTarget = ctx?.[contextKey];
+        if (contextTarget) {
+          // Wrap single target as array
+          targetMap[def.id] = Array.isArray(contextTarget)
+            ? contextTarget
+            : [contextTarget];
+          console.log(
+            `[resolveTargets] Using targetFromContext "${contextKey}" for target "${
+              def.id
+            }": ${contextTarget.name || contextTarget}`
+          );
+          continue;
+        } else {
+          // Context target not available - fail or continue based on optional flag
+          if (def.optional) {
+            console.log(
+              `[resolveTargets] Context target "${contextKey}" not found but optional, skipping target "${def.id}"`
+            );
+            targetMap[def.id] = [];
+            continue;
+          }
+          return {
+            ok: false,
+            reason: `Context target "${contextKey}" not available.`,
+          };
+        }
+      }
+
+      // Support for excludeNameRef: get name to exclude from a previously resolved target
+      let effectiveDef = def;
+      if (def.excludeNameRef && targetMap[def.excludeNameRef]) {
+        const refTargets = targetMap[def.excludeNameRef];
+        const namesToExclude = refTargets.map((c) => c.name).filter(Boolean);
+        if (namesToExclude.length > 0) {
+          effectiveDef = {
+            ...def,
+            excludeCardNames: namesToExclude,
+          };
+          console.log(
+            `[resolveTargets] Excluding card names from ref "${
+              def.excludeNameRef
+            }": ${namesToExclude.join(", ")}`
+          );
+        }
+      }
+
+      const { zoneName, candidates } = this.selectCandidates(effectiveDef, ctx);
       const min = Number(def.count?.min ?? 1);
       const max = Number(def.count?.max ?? min);
 
@@ -2984,6 +3077,40 @@ export default class EffectEngine {
             continue;
           }
 
+          // Exclude by multiple card names (used with excludeNameRef)
+          if (def.excludeCardNames && Array.isArray(def.excludeCardNames)) {
+            if (def.excludeCardNames.includes(card.name)) {
+              log(
+                `[selectCandidates] Excluding ${
+                  card.name
+                } (matches excludeCardNames: ${def.excludeCardNames.join(
+                  ", "
+                )})`
+              );
+              continue;
+            }
+          }
+
+          // Filter by monster type (Dragon, Warrior, etc.)
+          if (def.type) {
+            const cardType = card.type || null;
+            const cardTypes = Array.isArray(card.types) ? card.types : null;
+            const requiredTypes = Array.isArray(def.type)
+              ? def.type
+              : [def.type];
+            const hasType = cardTypes
+              ? requiredTypes.some((t) => cardTypes.includes(t))
+              : requiredTypes.includes(cardType);
+            if (!hasType) {
+              log(
+                `[selectCandidates] Rejecting: type mismatch (${cardType} not in ${requiredTypes.join(
+                  ", "
+                )})`
+              );
+              continue;
+            }
+          }
+
           log(`[selectCandidates] ACCEPTED: ${card.name}`);
           candidates.push(card);
         }
@@ -3290,14 +3417,28 @@ export default class EffectEngine {
         reason: "Only Spell/Trap cards can use this effect.",
       };
     }
-    if (this.game?.turn !== player.id) {
-      return { ok: false, reason: "Not your turn." };
-    }
-    if (this.game?.phase !== "main1" && this.game?.phase !== "main2") {
-      return {
-        ok: false,
-        reason: "Effect can only be activated during Main Phase.",
-      };
+
+    // Spells can only be activated on your turn during Main Phase
+    // Traps can be activated on either player's turn (during appropriate phases)
+    if (card.cardKind === "spell") {
+      if (this.game?.turn !== player.id) {
+        return { ok: false, reason: "Not your turn." };
+      }
+      if (this.game?.phase !== "main1" && this.game?.phase !== "main2") {
+        return {
+          ok: false,
+          reason: "Spell can only be activated during Main Phase.",
+        };
+      }
+    } else if (card.cardKind === "trap") {
+      // Traps can be activated during most phases (except draw and standby typically)
+      const validPhases = ["main1", "battle", "main2"];
+      if (!validPhases.includes(this.game?.phase)) {
+        return {
+          ok: false,
+          reason: "Trap cannot be activated during this phase.",
+        };
+      }
     }
 
     if (activationZone === "spellTrap") {

@@ -577,6 +577,42 @@ export async function handleSpecialSummonFromZone(
     .map((name) => ({ name, list: player[name] }))
     .filter((entry) => Array.isArray(entry.list));
 
+  // Check for targetRef - use pre-resolved targets if available
+  if (action.targetRef && targets?.[action.targetRef]) {
+    const resolved = targets[action.targetRef];
+    const cardsToSummon = Array.isArray(resolved) ? resolved : [resolved];
+
+    if (cardsToSummon.length === 0) {
+      getUI(game)?.log("No valid targets for Special Summon.");
+      return false;
+    }
+
+    // Verify cards are in the specified zone(s)
+    const validCards = cardsToSummon.filter((card) => {
+      const inAnyZone = zoneEntries.some((entry) => entry.list.includes(card));
+      if (!inAnyZone) {
+        console.log(
+          `[handleSpecialSummonFromZone] Card ${card.name} not in specified zones, checking all zones`
+        );
+        // Card might have been moved to hand by a previous action
+        for (const zoneName of zoneNames) {
+          if (player[zoneName]?.includes(card)) {
+            return true;
+          }
+        }
+        return false;
+      }
+      return true;
+    });
+
+    if (validCards.length === 0) {
+      getUI(game)?.log("Target cards are no longer in the specified zone.");
+      return false;
+    }
+
+    return await summonCards(validCards, zoneEntries, player, action, engine);
+  }
+
   const zoneHasCards = zoneEntries.some((entry) => entry.list.length > 0);
   if (!zoneHasCards) {
     getUI(game)?.log(
