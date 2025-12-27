@@ -3521,7 +3521,7 @@ export const cardDatabase = [
     cardKind: "monster",
     type: "Dragon",
     level: 6,
-    atk: 2000,
+    atk: 1600,
     def: 2000,
     monsterType: "ascension",
     ascension: {
@@ -3530,7 +3530,7 @@ export const cardDatabase = [
       position: "choice",
     },
     description:
-      "While in Defense Position, this card cannot be destroyed by battle. This card gains 200 ATK/DEF for each Dragon-type monster Special Summoned while this card is face-up on the field.",
+      "While in Defense Position, this card cannot be destroyed by battle. This card gains 100 ATK/DEF for each Dragon-type monster Special Summoned while this card is face-up on the field.",
     image: "assets/Metal Armored Dragon.png",
     effects: [
       {
@@ -3548,7 +3548,7 @@ export const cardDatabase = [
         passive: {
           type: "field_presence_type_summon_count_buff",
           typeName: "Dragon",
-          amountPerCard: 200,
+          amountPerCard: 100,
           summonMethods: ["special"],
           countOwner: "self",
           stats: ["atk", "def"],
@@ -3888,7 +3888,7 @@ export const cardDatabase = [
     atk: 2600,
     def: 2000,
     description:
-      "You can send 2 Dragon-type monsters from your hand to the GY; Special Summon this card from your hand. This card can make up to 2 attacks on opponent's monsters during each Battle Phase. You can banish this card from your GY; add 1 Level 7 or 8 Dragon monster from your Deck to your hand.",
+      "You can send 2 Dragon-type monsters from your hand to the GY; Special Summon this card from your hand, but it cannot attack the turn it is Special Summoned by this effect. This card can make up to 2 attacks on opponent's monsters during each Battle Phase. You can banish this card from your GY; add 1 Level 7 or 8 Dragon monster from your Deck to your hand.",
     image: "assets/Black Bull Dragon.png",
     effects: [
       {
@@ -3911,6 +3911,7 @@ export const cardDatabase = [
             type: "special_summon_from_hand_with_cost",
             costTargetRef: "bbd_cost",
             position: "choice",
+            cannotAttackThisTurn: true,
           },
         ],
       },
@@ -4040,7 +4041,7 @@ export const cardDatabase = [
         actions: [
           {
             type: "destroy_targeted_cards",
-            maxTargets: 2,
+            maxTargets: 1,
             zones: ["spellTrap", "fieldSpell"],
             cardKind: ["spell", "trap"],
           },
@@ -4121,7 +4122,7 @@ export const cardDatabase = [
           {
             type: "source_counters_at_least",
             counterType: "dragon_peak",
-            min: 5,
+            min: 8,
           },
         ],
         actions: [
