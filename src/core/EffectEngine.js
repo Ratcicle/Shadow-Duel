@@ -1258,6 +1258,9 @@ export default class EffectEngine {
           continue;
 
         const sourceZone = this.findCardZone(owner, sourceCard);
+        const isFaceDownOnBoard =
+          sourceCard?.isFacedown === true &&
+          ["field", "spellTrap", "fieldSpell"].includes(sourceZone);
         const ctx = {
           source: sourceCard,
           player: owner,
@@ -1271,6 +1274,11 @@ export default class EffectEngine {
         for (const effect of sourceCard.effects) {
           if (!effect || effect.timing !== "on_event") continue;
           if (effect.event !== "after_summon") continue;
+
+          // Face-down cards on the field cannot activate triggered effects
+          if (isFaceDownOnBoard) {
+            continue;
+          }
 
           if (this.isEffectNegated(sourceCard)) {
             console.log(
