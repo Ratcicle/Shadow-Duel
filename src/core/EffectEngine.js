@@ -3073,6 +3073,9 @@ export default class EffectEngine {
             sourceCardId: ctx?.source?.id,
           },
         },
+        // Preserve already resolved targets (e.g., targetFromContext) so they
+        // survive downstream selection flows like ChainSystem.addToChain.
+        targets: targetMap,
       };
     }
 
@@ -3287,19 +3290,23 @@ export default class EffectEngine {
             }
           }
 
-          // Filter by monster type (Dragon, Warrior, etc.)
+          // Filter by monster type (Dragon, Warrior, etc.) with case-insensitive match
           if (def.type) {
-            const cardType = card.type || null;
-            const cardTypes = Array.isArray(card.types) ? card.types : null;
+            const cardTypeRaw = card.type || null;
+            const cardTypesRaw = Array.isArray(card.types) ? card.types : null;
             const requiredTypes = Array.isArray(def.type)
               ? def.type
               : [def.type];
-            const hasType = cardTypes
-              ? requiredTypes.some((t) => cardTypes.includes(t))
-              : requiredTypes.includes(cardType);
+            const norm = (v) => (v ? String(v).toLowerCase() : v);
+            const requiredTypesNorm = requiredTypes.map(norm);
+            const hasType = cardTypesRaw
+              ? requiredTypesNorm.some((t) =>
+                  cardTypesRaw.some((ct) => norm(ct) === t)
+                )
+              : requiredTypesNorm.includes(norm(cardTypeRaw));
             if (!hasType) {
               log(
-                `[selectCandidates] Rejecting: type mismatch (${cardType} not in ${requiredTypes.join(
+                `[selectCandidates] Rejecting: type mismatch (${cardTypeRaw} not in ${requiredTypes.join(
                   ", "
                 )})`
               );

@@ -457,6 +457,13 @@ export async function handleReturnToHand(action, ctx, targets, engine) {
   if (!game) return false;
 
   const cards = resolveTargetCards(action, ctx, targets);
+  console.log("[handleReturnToHand] targets", {
+    source: ctx?.source?.name,
+    attacker: ctx?.attacker?.name,
+    defender: ctx?.defender?.name,
+    target: ctx?.target?.name,
+    cards: cards?.map((c) => c.name),
+  });
   if (!cards || cards.length === 0) {
     return false;
   }
@@ -488,6 +495,15 @@ export async function handleReturnToHand(action, ctx, targets, engine) {
     if (moveResult && moveResult.success !== false) {
       returnedCount++;
       getUI(game)?.log(`${card.name} returned to hand.`);
+
+      // If this bounce removes the current attack target, negate the attack
+      if (
+        ctx?.attacker &&
+        (ctx.defender === card || ctx.target === card) &&
+        typeof game.registerAttackNegated === "function"
+      ) {
+        game.registerAttackNegated(ctx.attacker);
+      }
     } else {
       // Fallback for older moveCard implementations
       const sourceZone = cardOwner[fromZone];

@@ -5121,7 +5121,14 @@ export default class Game {
       `${attacker.name} attacks ${target ? target.name : "directly"}!`
     );
 
-    const defenderOwner = attacker.owner === "player" ? this.bot : this.player;
+    const defenderOwner = target
+      ? target.owner === "player"
+        ? this.player
+        : this.bot
+      : attacker.owner === "player"
+      ? this.bot
+      : this.player;
+    const targetOwner = defenderOwner;
 
     await this.emit("attack_declared", {
       attacker,
@@ -5129,6 +5136,7 @@ export default class Game {
       defender: target || null,
       attackerOwner,
       defenderOwner,
+      targetOwner,
     });
 
     if (this.lastAttackNegated) {
@@ -6470,12 +6478,41 @@ export default class Game {
       const contextType = this._mapEventToChainContext(event);
 
       // Usar ChainSystem para abrir chain window
+      const attacker = eventData.attacker || null;
+      const defender = eventData.defender ?? eventData.target ?? null;
+      const attackerOwner =
+        eventData.attackerOwner ??
+        (attacker
+          ? attacker.owner === "player"
+            ? this.player
+            : this.bot
+          : null);
+      const defenderOwner =
+        eventData.defenderOwner ??
+        (defender
+          ? defender.owner === "player"
+            ? this.player
+            : this.bot
+          : null);
+
       const context = {
         type: contextType,
         event,
         ...eventData,
+        attacker,
+        defender,
+        target: defender ?? eventData.target ?? null,
+        attackerOwner,
+        defenderOwner,
+        targetOwner: eventData.targetOwner ?? defenderOwner ?? null,
+        isOpponentAttack:
+          eventData.isOpponentAttack ??
+          (attackerOwner && defenderOwner
+            ? attackerOwner.id !== defenderOwner.id &&
+              defenderOwner.id === "player"
+            : false),
         triggerPlayer:
-          eventData.attackerOwner ||
+          attackerOwner ||
           eventData.player ||
           (this.turn === "player" ? this.player : this.bot),
       };
@@ -6516,6 +6553,7 @@ export default class Game {
       card_activation: "card_activation",
       effect_activation: "effect_activation",
       battle_damage: "battle_damage",
+      effect_targeted: "effect_targeted",
     };
     return eventToContext[event] || "card_activation";
   }

@@ -454,6 +454,23 @@ export default class ChainSystem {
         if (effect.timing === "on_event") {
           // Match the effect's event with the context
           if (effect.event === expectedEvent) {
+            // Debug log for attack declaration traps
+            if (context?.type === "attack_declaration") {
+              console.log(
+                `[findActivatableEffect] trap=${card.name} ctx attackers/defenders`,
+                {
+                  attacker: context.attacker?.name,
+                  attackerOwner: context.attackerOwner?.id,
+                  defender: context.defender?.name || context.target?.name,
+                  defenderOwner:
+                    context.defenderOwner?.id || context.targetOwner?.id,
+                  cardOwner: ownerPlayer?.id || card.owner,
+                  effectEvent: effect.event,
+                  expectedEvent,
+                }
+              );
+            }
+
             // Check additional conditions
             if (
               effect.requireOpponentAttack &&
@@ -485,7 +502,25 @@ export default class ChainSystem {
                   : card.owner === "bot"
                   ? this.game.bot
                   : null);
-              if (context.defenderOwner?.id !== inferredOwner?.id) continue;
+              const ctxDefenderOwner =
+                context.defenderOwner ||
+                context.targetOwner ||
+                (context.defender
+                  ? context.defender.owner === "player"
+                    ? this.game.player
+                    : this.game.bot
+                  : null);
+              if (ctxDefenderOwner?.id !== inferredOwner?.id) {
+                console.log(
+                  `[findActivatableEffect] requireDefenderIsSelf mismatch for ${card.name}`,
+                  {
+                    inferredOwner: inferredOwner?.id,
+                    ctxDefenderOwner: ctxDefenderOwner?.id,
+                    defender: context.defender?.name || context.target?.name,
+                  }
+                );
+                continue;
+              }
             }
             // Check requireDefenderType (e.g., Dragon Spirit Sanctuary)
             if (
@@ -496,7 +531,23 @@ export default class ChainSystem {
               const requiredTypes = Array.isArray(effect.requireDefenderType)
                 ? effect.requireDefenderType
                 : [effect.requireDefenderType];
-              if (!defender || !requiredTypes.includes(defender.type)) continue;
+              const defenderTypeNorm = defender?.type
+                ? String(defender.type).toLowerCase()
+                : null;
+              const requiredTypesNorm = requiredTypes.map((t) =>
+                String(t).toLowerCase()
+              );
+              if (!defender || !requiredTypesNorm.includes(defenderTypeNorm)) {
+                console.log(
+                  `[findActivatableEffect] requireDefenderType mismatch for ${card.name}`,
+                  {
+                    defender: defender?.name,
+                    defenderType: defender?.type,
+                    requiredTypes,
+                  }
+                );
+                continue;
+              }
             }
 
             // Check if targets are available before allowing activation
@@ -523,7 +574,7 @@ export default class ChainSystem {
                 defenderOwner: context.defenderOwner,
                 activationContext: {
                   autoSelectSingleTarget: true,
-                  logTargets: false,
+                  logTargets: true,
                 },
               };
 
@@ -1115,6 +1166,7 @@ export default class ChainSystem {
 
     // Use resolveTargets to check what selections are needed
     const targetResult = effectEngine.resolveTargets(effect.targets, ctx, null);
+    const baseTargets = targetResult.targets || {};
 
     if (targetResult.ok === false) {
       this.log(`Target resolution failed: ${targetResult.reason}`);
@@ -1145,7 +1197,13 @@ export default class ChainSystem {
                 contract.requirements,
                 player
               );
-              resolve(resolvedSelections);
+              // Merge auto-resolved targets (e.g., targetFromContext) so they
+              // are preserved alongside player-chosen selections.
+              const mergedSelections = {
+                ...baseTargets,
+                ...resolvedSelections,
+              };
+              resolve(mergedSelections);
               return { success: true, needsSelection: false };
             },
             onCancel: () => {
@@ -1156,7 +1214,8 @@ export default class ChainSystem {
       }
     }
 
-    return {};
+    // No selection flow available; return any auto-resolved targets we have.
+    return baseTargets;
   }
 
   /**
