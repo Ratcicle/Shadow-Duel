@@ -334,7 +334,7 @@ export default class ChainSystem {
           `[getActivatableCardsInChain] Checking trap ${card.name} for context ${context?.type}`
         );
 
-        const effect = this.findActivatableEffect(card, context);
+        const effect = this.findActivatableEffect(card, context, player);
         if (effect) {
           console.log(
             `[getActivatableCardsInChain] Found effect for ${card.name}:`,
@@ -374,7 +374,7 @@ export default class ChainSystem {
         // Skip cards already in the current chain
         if (cardsInChain.has(card)) continue;
 
-        const effect = this.findActivatableEffect(card, context);
+        const effect = this.findActivatableEffect(card, context, player);
         if (effect) {
           const chainCheck = this.canActivateInChain(effect, card, context);
           if (chainCheck.ok) {
@@ -430,7 +430,7 @@ export default class ChainSystem {
    * @param {ChainContext} context
    * @returns {Object|null}
    */
-  findActivatableEffect(card, context) {
+  findActivatableEffect(card, context, ownerPlayer = null) {
     if (!card?.effects || !Array.isArray(card.effects)) return null;
 
     // Map context type back to event name
@@ -477,10 +477,15 @@ export default class ChainSystem {
               effect.requireDefenderIsSelf &&
               context?.type === "attack_declaration"
             ) {
-              // The card owner's monster must be the defender
-              const cardOwner =
-                card.owner === "player" ? this.game.player : this.game.bot;
-              if (context.defenderOwner?.id !== cardOwner?.id) continue;
+              // Use the checking player as owner fallback because some set traps may miss card.owner
+              const inferredOwner =
+                ownerPlayer ||
+                (card.owner === "player"
+                  ? this.game.player
+                  : card.owner === "bot"
+                  ? this.game.bot
+                  : null);
+              if (context.defenderOwner?.id !== inferredOwner?.id) continue;
             }
             // Check requireDefenderType (e.g., Dragon Spirit Sanctuary)
             if (
@@ -501,7 +506,12 @@ export default class ChainSystem {
               this.game?.effectEngine
             ) {
               const cardOwner =
-                card.owner === "player" ? this.game.player : this.game.bot;
+                ownerPlayer ||
+                (card.owner === "player"
+                  ? this.game.player
+                  : card.owner === "bot"
+                  ? this.game.bot
+                  : null);
               const ctx = {
                 source: card,
                 player: cardOwner,

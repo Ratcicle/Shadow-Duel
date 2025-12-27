@@ -377,6 +377,9 @@ export default class EffectEngine {
     if (eventName === "attack_declared") {
       return await this.collectAttackDeclaredTriggers(payload);
     }
+    if (eventName === "effect_targeted") {
+      return await this.collectEffectTargetedTriggers(payload);
+    }
     if (eventName === "standby_phase") {
       return await this.collectStandbyPhaseTriggers(payload);
     }
@@ -1578,11 +1581,10 @@ export default class EffectEngine {
       if (player.fieldSpell) {
         sources.push(player.fieldSpell);
       }
-      // Note: Facedown traps in spellTrap zone are handled by ChainSystem.checkAndOfferTraps
-      // Only include face-up continuous traps here (they have already been activated)
+      // Include traps from spellTrap zone (both face-up and face-down)
       if (player.spellTrap && Array.isArray(player.spellTrap)) {
         for (const trap of player.spellTrap) {
-          if (trap && !trap.isFacedown) {
+          if (trap && trap.cardType === "trap") {
             sources.push(trap);
           }
         }
@@ -1605,10 +1607,12 @@ export default class EffectEngine {
               defenderType: payload.defender?.type,
               defenderOwnerId: payload.defenderOwner?.id,
               playerId: player.id,
+              isFacedown: card.isFacedown,
             }
           );
 
-          if (this.isEffectNegated(card)) {
+          // For face-down traps, skip negation check
+          if (!card.isFacedown && this.isEffectNegated(card)) {
             console.log(`${card.name} effects are negated, skipping effect.`);
             continue;
           }
@@ -1695,7 +1699,8 @@ export default class EffectEngine {
           }
 
           const shouldPrompt =
-            effect.speed === 2 && effect.promptOnAttackDeclared !== false;
+            (card.cardType === "trap" || effect.speed === 2) &&
+            effect.promptOnAttackDeclared !== false;
           if (player.id === "player" && shouldPrompt) {
             let wantsToUse = true;
 
@@ -1703,10 +1708,17 @@ export default class EffectEngine {
             if (customPromptMethod && this.ui?.[customPromptMethod]) {
               wantsToUse = await this.ui[customPromptMethod]();
             } else if (this.ui?.showConfirmPrompt) {
-              const confirmResult = this.ui.showConfirmPrompt(
-                `Use ${card.name}'s effect to negate the attack?`,
-                { kind: "attack_negation", cardName: card.name }
-              );
+              const promptMessage =
+                card.cardType === "trap"
+                  ? `Activate ${card.name} in response to the attack?`
+                  : `Use ${card.name}'s effect to negate the attack?`;
+              const confirmResult = this.ui.showConfirmPrompt(promptMessage, {
+                kind:
+                  card.cardType === "trap"
+                    ? "trap_activation"
+                    : "attack_negation",
+                cardName: card.name,
+              });
               wantsToUse =
                 confirmResult && typeof confirmResult.then === "function"
                   ? await confirmResult
@@ -1715,7 +1727,10 @@ export default class EffectEngine {
               wantsToUse = true;
             }
 
-            if (!wantsToUse) continue;
+            if (!wantsToUse) {
+              console.log(`Player declined to activate ${card.name}`);
+              continue;
+            }
           }
 
           const ctx = {
@@ -1724,7 +1739,7 @@ export default class EffectEngine {
             opponent,
             attacker: payload.attacker,
             defender: payload.defender || null,
-            target: payload.target || null,
+            target: payload.defender || payload.target || null,
             attackerOwner: payload.attackerOwner,
             defenderOwner: payload.defenderOwner,
           };
@@ -1747,6 +1762,147 @@ export default class EffectEngine {
           if (entry) {
             entries.push(entry);
           }
+        }
+      }
+    }
+
+    return { entries, orderRule };
+  }
+
+  async collectEffectTargetedTriggers(payload) {
+    const entries = [];
+    const orderRule =
+      "target owner only; sources: field -> spellTrap -> fieldSpell";
+
+    if (!payload || !payload.target || !payload.targetOwner) {
+      return { entries, orderRule };
+    }
+
+    const targetCard = payload.target;
+    const targetOwner = payload.targetOwner;
+    const sourceCard = payload.source;
+    const sourceOwner =
+      this.game?.player?.id === targetOwner.id
+        ? this.game.bot
+        : this.game.player;
+
+    if (!targetOwner) {
+      return { entries, orderRule };
+    }
+
+    const sources = [...(targetOwner.field || [])];
+
+    // Include face-down traps from spellTrap zone
+    if (targetOwner.spellTrap && Array.isArray(targetOwner.spellTrap)) {
+      for (const trap of targetOwner.spellTrap) {
+        if (trap && trap.cardType === "trap") {
+          sources.push(trap);
+        }
+      }
+    }
+
+    if (targetOwner.fieldSpell) {
+      sources.push(targetOwner.fieldSpell);
+    }
+
+    console.log(
+      `[collectEffectTargetedTriggers] ${targetCard.name} was targeted. Checking ${sources.length} sources for triggers.`
+    );
+
+    for (const card of sources) {
+      if (!card || !card.effects || !Array.isArray(card.effects)) continue;
+
+      for (const effect of card.effects) {
+        if (!effect || effect.timing !== "on_event") continue;
+        if (effect.event !== "effect_targeted") continue;
+
+        console.log(
+          `[collectEffectTargetedTriggers] Found effect_targeted effect on ${card.name}:`,
+          {
+            effectId: effect.id,
+            isFacedown: card.isFacedown,
+            targetFromContext: effect.targetFromContext,
+            targetCardName: targetCard.name,
+          }
+        );
+
+        // For face-down traps, skip negation check (they can activate even if negated before being flipped)
+        if (!card.isFacedown && this.isEffectNegated(card)) {
+          console.log(`${card.name} effects are negated, skipping effect.`);
+          continue;
+        }
+
+        const optCheck = this.checkOncePerTurn(card, targetOwner, effect);
+        if (!optCheck.ok) {
+          console.log(optCheck.reason);
+          continue;
+        }
+
+        // Check if the targeted card matches requirements (e.g., monster type)
+        if (effect.requireTargetType) {
+          const requiredTypes = Array.isArray(effect.requireTargetType)
+            ? effect.requireTargetType
+            : [effect.requireTargetType];
+          if (!requiredTypes.includes(targetCard.type)) {
+            console.log(
+              `[effect_targeted] Skipping effect: requireTargetType not met`,
+              {
+                effectId: effect.id,
+                cardName: card.name,
+                targetType: targetCard.type,
+                requiredTypes,
+              }
+            );
+            continue;
+          }
+        }
+
+        // Prompt player to activate (traps only activate on confirmation)
+        if (targetOwner.id === "player" && card.cardType === "trap") {
+          let wantsToUse = true;
+
+          if (this.ui?.showConfirmPrompt) {
+            const confirmResult = this.ui.showConfirmPrompt(
+              `Activate ${card.name} in response to targeting?`,
+              { kind: "trap_activation", cardName: card.name }
+            );
+            wantsToUse =
+              confirmResult && typeof confirmResult.then === "function"
+                ? await confirmResult
+                : !!confirmResult;
+          }
+
+          if (!wantsToUse) {
+            console.log(`Player declined to activate ${card.name}`);
+            continue;
+          }
+        }
+
+        const ctx = {
+          source: card,
+          player: targetOwner,
+          opponent: sourceOwner,
+          targetedCard: targetCard,
+          targetingSource: sourceCard,
+        };
+
+        const activationContext = this.buildTriggerActivationContext(
+          card,
+          targetOwner
+        );
+
+        const entry = this.buildTriggerEntry({
+          sourceCard: card,
+          owner: targetOwner,
+          effect,
+          ctx,
+          activationContext,
+          selectionKind: "triggered",
+          selectionMessage: "Select target(s) for the triggered effect.",
+        });
+
+        if (entry) {
+          entries.push(entry);
         }
       }
     }
