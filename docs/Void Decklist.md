@@ -1,12 +1,12 @@
 # Void — Decklist (Completa) & Efeitos
 
-Este documento lista todas as cartas do tema/arquétipo **Void** presentes no projeto, com decklist (1x cada) e o texto de efeito (descrição em `src/data/cards.js`).
+Fonte dos textos: `src/data/cards.js` (1x cada carta).
 
 ## Resumo
 
-- Total: 20
+- Total: 21
 - Monstros (Main Deck): 12
-- Monstros de Fusão (Extra Deck): 3
+- Extra Deck: 4 (3 Fusão, 1 Ascension)
 - Magias: 4
 - Armadilhas: 1
 
@@ -14,145 +14,85 @@ Este documento lista todas as cartas do tema/arquétipo **Void** presentes no pr
 
 ### Monstros (Main Deck)
 
-- 1x Void Conjurer
-- 1x Void Walker
-- 1x Void Beast
-- 1x Void Hollow
-- 1x Void Haunter
-- 1x Void Ghost Wolf
-- 1x Void Bone Spider
-- 1x Void Forgotten Knight
-- 1x Void Raven
-- 1x Void Tenebris Horn
-- 1x Void Slayer Brute
-- 1x Void Serpent Drake
+- 1x Void Conjurer (151)
+- 1x Void Walker (152)
+- 1x Void Beast (153)
+- 1x Void Hollow (154)
+- 1x Void Haunter (155)
+- 1x Void Ghost Wolf (156)
+- 1x Void Bone Spider (158)
+- 1x Void Forgotten Knight (159)
+- 1x Void Raven (160)
+- 1x Void Tenebris Horn (161)
+- 1x Void Slayer Brute (162)
+- 1x Void Serpent Drake (164)
 
-### Monstros de Fusão (Extra Deck)
+### Extra Deck
 
-- 1x Void Hollow King
-- 1x Void Hydra Titan
-- 1x Void Berserker
+- 1x Void Hollow King — Fusão (157)
+- 1x Void Berserker — Fusão (163)
+- 1x Void Hydra Titan — Fusão (165)
+- 1x Void Cosmic Walker — Ascension (171)
 
 ### Magias
 
-- 1x Void Gravitational Pull
-- 1x Sealing the Void
-- 1x The Void
-- 1x Void Lost Throne
+- Void Gravitational Pull (168)
+- Sealing the Void (166)
+- The Void (167)
+- Void Lost Throne (169)
 
 ### Armadilhas
 
-- 1x Void Mirror Dimension
+- Void Mirror Dimension (170)
 
 ## Efeitos & Detalhes
 
-## Monstros (Main Deck)
+### Monstros (Main Deck)
 
-### Void Conjurer (ID 70)
+**Void Conjurer (151)** — Nível 4, Spellcaster, 1700/800. Ignition OPT: Invoca do Deck 1 monstro "Void" de Nível 4 ou menos (pos. escolha), não pode atacar neste turno. No Cemitério, envie 1 monstro "Void" que você controla para o Cemitério; Invoque esta carta (pos. escolha).
 
-- Tipo: Monstro (Spellcaster) — Nível 4 — ATK/DEF 1700/800
-- Efeito: Special Summon 1 Level 4 or lower 'Void' monster from your Deck, but it cannot attack this turn. If this card is in your GY: You can send 1 'Void' monster you control to the GY; Special Summon this card. You can only use each effect of 'Void Conjurer' once per turn.
+**Void Walker (152)** — Nível 4, Fiend, 1800/200. Não pode atacar no turno em que é Invocada. OPT: devolva esta carta à mão; Invoque da mão 1 monstro "Void" de Nível 4 ou menos (pos. escolha), exceto "Void Walker".
 
-### Void Walker (ID 71)
+**Void Beast (153)** — Nível 4, Beast, 1600/1300. Se destruir um monstro em batalha: adicione 1 "Void Hollow" do Deck. OPT.
 
-- Tipo: Monstro (Fiend) — Nível 4 — ATK/DEF 1800/200
-- Efeito: Cannot attack the turn it is Summoned. Once per turn: You can return this card to your hand; Special Summon 1 Level 4 or lower 'Void' monster from your hand, except 'Void Walker'.
+**Void Hollow (154)** — Nível 3, Fiend, 1300/1200. Se for Invocada por Invocação-Especial da mão: Invoque 1 "Void Hollow" do Deck (pos. escolha). OPT.
 
-### Void Beast (ID 72)
+**Void Haunter (155)** — Nível 5, Fiend, 2100/1500. Da mão: envie 1 "Void Hollow" que você controla; Invoque esta carta. No Cemitério: bana esta carta; Invoque até 3 "Void Hollow" do Cemitério com ATK/DEF 0. Ambos OPT.
 
-- Tipo: Monstro (Beast) — Nível 4 — ATK/DEF 1600/1300
-- Efeito: If this card destroys an opponent's monster by battle: You can add 1 'Void Hollow' from your Deck to your hand. You can only use this effect of 'Void Beast' once per turn.
+**Void Ghost Wolf (156)** — Nível 3, Beast, 1400/600. OPT: metade do próprio ATK até o fim do turno; pode atacar diretamente.
 
-### Void Hollow (ID 73)
+**Void Bone Spider (158)** — Nível 6, Insect, 2200/1400. OPT: escolha 1 monstro do oponente; ele não pode atacar até o fim do próximo turno. Se esta carta sair do campo para o Cemitério: Invoque 1 ficha "Void Little Spider" (Nível 1, 500/500) em ATK.
 
-- Tipo: Monstro (Fiend) — Nível 3 — ATK/DEF 1300/1200
-- Efeito: If this card is Special Summoned from your hand: You can Special Summon 1 'Void Hollow' from your Deck. You can only use this effect of 'Void Hollow' once per turn.
+**Void Forgotten Knight (159)** — Nível 5, Fiend, 2000/1000. Da mão: envie 1 monstro "Void" que você controla (face-up); Invoque esta carta (OPT). No Cemitério: bana esta carta; destrua 1 Spell/Trap face-up do oponente (OPT).
 
-### Void Haunter (ID 74)
+**Void Raven (160)** — Nível 2, Winged Beast, 300/300. Quando um monstro de Fusão "Void" é Invocado: descarte esta carta; esse monstro fica imune a efeitos do oponente até o fim do próximo turno. OPT.
 
-- Tipo: Monstro (Fiend) — Nível 5 — ATK/DEF 2100/1500
-- Efeito: You can send 1 'Void Hollow' from your field to your GY; Special Summon this card from your hand. You can banish this card from your GY, then target up to 2 'Void Hollow' in your GY; Special Summon those targets, but their ATK/DEF become 0. You can only use each effect of 'Void Haunter' once per turn.
+**Void Tenebris Horn (161)** — Nível 4, Fiend, 1500/800. Ganha 100 ATK/DEF por carta "Void" em campo (ambos os lados). Uma vez por duelo: do Cemitério, Invoque por Invocação-Especial (pos. escolha).
 
-### Void Ghost Wolf (ID 75)
+**Void Slayer Brute (162)** — Nível 8, Fiend, 2500/2000. Da mão: envie 2 monstros "Void" que você controla; Invoque esta carta (OPT). Se destruir um monstro do oponente em batalha: bana-o.
 
-- Tipo: Monstro (Beast) — Nível 3 — ATK/DEF 1400/600
-- Efeito: Once per turn: You can halve this card's ATK until the end of this turn, and if you do, it can attack directly this turn.
+**Void Serpent Drake (164)** — Nível 6, Dragon, 2300/1800. Da mão: envie 1–3 "Void Hollow" que você controla; Invoque esta carta. Ganha efeitos: 1+: +300 ATK; 2+: também indestrutível em batalha; 3: também destrói 1 carta do oponente. OPT.
 
-### Void Bone Spider (ID 77)
+### Extra Deck
 
-- Tipo: Monstro (Insect) — Nível 6 — ATK/DEF 2200/1400
-- Efeito: Target 1 monster your opponent controls; it cannot attack until the end of the next turn. If this card is sent from the field to the Graveyard: Special Summon a 'Void Little Spider' token (Level 1, 500 ATK/DEF).
+**Void Hollow King (157)** — Fusão, Nível 6, Fiend, 2500/1200. Materiais: 3× "Void Hollow". Se destruído por batalha/efeito: Invoque até 3 "Void Hollow" do Cemitério (pos. escolha).
 
-### Void Forgotten Knight (ID 78)
+**Void Berserker (163)** — Fusão, Nível 8, Fiend, 2800/2200. Materiais: "Void Slayer Brute" (campo) + 1 monstro "Void". Pode fazer 2 ataques por Fase de Batalha. Uma vez por turno, se destruir monstro do oponente: devolva 1 carta do oponente à mão.
 
-- Tipo: Monstro (Fiend) — Nível 5 — ATK/DEF 2000/1000
-- Efeito: You can send a 'Void' monster you control to the GY; Special Summon this card from your hand. You can banish this card from your GY; destroy 1 Spell/Trap your opponent controls. You can only use each effect of 'Void Forgotten Knight' once per turn.
+**Void Hydra Titan (165)** — Fusão, Nível 10, Dragon, 3500/2900. Materiais: 6× "Void". Ao ser Invocada por Fusão: destrua todos os outros monstros que você controla; compre 1 por cada. 1/turno: se seria destruída, reduza ATK em 700 e negue a destruição.
 
-### Void Raven (ID 79)
+**Void Cosmic Walker (171)** — Ascension, Nível 6, 2100/1600. Matéria: "Void Walker" com 2 ativações de efeito no duelo. OPT: envie 1 monstro "Void" que você controla; Invoque da mão 1 monstro "Void" de Nível 5 ou menos (pos. escolha). Se esta carta for ao Cemitério do campo: Invoque até 3 "Void Hollow" da mão ou Deck (pos. escolha).
 
-- Tipo: Monstro (Winged Beast) — Nível 2 — ATK/DEF 300/300
-- Efeito: Se um monstro de fusão 'Void' for Invocado por Invocação-Fusão: você pode descartar esta carta da mão; esse monstro fica imune aos efeitos de cartas do oponente até o final do próximo turno.
+### Magias
 
-### Void Tenebris Horn (ID 81)
+**Void Gravitational Pull (168)** — Contínua. OPT: devolva 1 monstro seu e 1 do oponente para a mão.
 
-- Tipo: Monstro (Fiend) — Nível 4 — ATK/DEF 1500/800
-- Efeito: Ganha 100 ATK/DEF para cada carta 'Void' no campo. Uma vez por duelo, se esta carta estiver no seu Cemitério, você pode Invocá-la por Invocação-Especial.
+**Sealing the Void (166)** — Normal. Escolha 1 monstro "Void" face-up seu; ATK/DEF tornam-se 0 e efeitos são negados até o fim do turno, depois ganhe 1 Invocação-Normal adicional. OPT por nome.
 
-### Void Slayer Brute (ID 82)
+**The Void (167)** — Campo. Se você não controla monstros: Invoque do Cemitério 1 monstro "Void" de Nível 4 ou menos, com efeitos negados (pos. escolha). OPT por nome.
 
-- Tipo: Monstro (Fiend) — Nível 8 — ATK/DEF 2500/2000
-- Efeito: You can Special Summon this card from your hand by sending 2 "Void" monsters you control to the GY. If this card destroys an opponent's monster by battle: banish that monster.
+**Void Lost Throne (169)** — Normal. Destrua todos os monstros exceto 1 com maior ATK de cada lado (em empate, você escolhe quem fica). OPT por nome.
 
-### Void Serpent Drake (ID 209)
+### Armadilhas
 
-- Tipo: Monstro (Dragon) — Nível 6 — ATK/DEF 2300/1800
-- Efeito: If this card is in your hand: You can send 1-3 "Void Hollow" you control to the GY, then Special Summon this card. Gains effects based on how many were sent: 1+: +300 ATK until end of turn; 2+: also cannot be destroyed by battle; 3: also destroy 1 card your opponent controls. You can only use this effect of "Void Serpent Drake" once per turn.
-
-## Monstros de Fusão (Extra Deck)
-
-### Void Hollow King (ID 76)
-
-- Tipo: Monstro de Fusão (Fiend) — Nível 6 — ATK/DEF 2500/1200
-- Materiais: 3x "Void Hollow"
-- Efeito: 3 'Void Hollow' monsters. If this card is destroyed by battle or card effect: You can Special Summon up to 3 'Void Hollow' from your GY.
-
-### Void Hydra Titan (ID 103)
-
-- Tipo: Monstro de Fusão (Dragon) — Nível 10 — ATK/DEF 3500/2900
-- Materiais: 6x "Void" monsters
-- Efeito: 6 'Void' monsters. If this card is Fusion Summoned: destroy all other monsters you control; draw 1 card for each destroyed. Once per turn: If this card would be destroyed by battle or card effects: You can reduce its ATK by 700; negate the destruction of this card.
-
-### Void Berserker (ID 210)
-
-- Tipo: Monstro de Fusão (Fiend) — Nível 8 — ATK/DEF 2800/2200
-- Materiais: 1x "Void Slayer Brute" (no campo) + 1x monstro "Void" (mão ou campo)
-- Efeito: Void Slayer Brute (on the field) + 1 'Void' monster. This card can make up to 2 attacks during each Battle Phase. Once per turn, if this card destroys an opponent's monster by battle: You can target 1 card your opponent controls; return it to the hand.
-
-## Magias
-
-### Void Gravitational Pull (ID 104)
-
-- Tipo: Magia Contínua
-- Efeito: Once per turn: You can target 1 monster you control and 1 monster your opponent controls; return those targets to the hand.
-
-### Sealing the Void (ID 205)
-
-- Tipo: Magia Normal
-- Efeito: Target 1 face-up 'Void' monster you control; until the end of this turn, that monster's ATK/DEF become 0, and its effects are negated. If this effect resolves, you can conduct 1 additional Normal Summon this turn. You can only activate 1 'Sealing the Void' per turn.
-
-### The Void (ID 206)
-
-- Tipo: Magia de Campo
-- Efeito: During your Main Phase, if you control no monsters: You can Special Summon 1 Level 4 or lower 'Void' monster from your Graveyard, but its effects are negated. You can only use this effect of 'The Void' once per turn.
-
-### Void Lost Throne (ID 207)
-
-- Tipo: Magia Normal
-- Efeito: Destroy as many monsters on the field as possible, except 1 monster with the highest ATK on each side of the field (in case of a tie, you choose 1 to remain on each side). You can only activate 1 'Void Lost Throne' per turn.
-
-## Armadilhas
-
-### Void Mirror Dimension (ID 208)
-
-- Tipo: Armadilha Normal
-- Efeito: Durante a Fase Principal, se seu oponente Invocar por Invocação-Especial um monstro: você pode Invocar por Invocação-Especial 1 monstro da sua mão com o mesmo Nível que esse monstro, mas, até o final deste turno, seus efeitos são negados. Você só pode ativar 1 'Void Mirror Dimension' por turno.
+**Void Mirror Dimension (170)** — Normal, Speed 2. Na Fase Principal, se o oponente Invocar por Invocação-Especial: Invoque da mão 1 monstro com o mesmo Nível, com efeitos negados até o fim do turno (pos. escolha). OPT por nome.

@@ -4390,7 +4390,7 @@ export const cardDatabase = [
     ],
   },
   {
-    id: 200,
+    id: 196,
     name: "Dragon Spirit Sanctuary",
     cardKind: "trap",
     subtype: "normal",
@@ -4488,7 +4488,7 @@ export const cardDatabase = [
     ],
   },
   {
-    id: 201,
+    id: 197,
     name: "Boneflame Dragon",
     cardKind: "monster",
     type: "Dragon",
