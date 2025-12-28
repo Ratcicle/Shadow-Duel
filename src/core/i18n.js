@@ -12,12 +12,19 @@ const LOCALE_SOURCES = {
 async function loadLocalePayload(relativePath) {
   try {
     const url = new URL(relativePath, import.meta.url);
-    const response = await fetch(url);
-    if (!response.ok) {
-      console.error(`[i18n] Failed to load locale file ${relativePath}`);
-      return {};
+    // Browser/runtime with fetch over HTTP(S)
+    if (typeof fetch === "function" && url.protocol !== "file:") {
+      const response = await fetch(url);
+      if (!response.ok) {
+        console.error(`[i18n] Failed to load locale file ${relativePath}`);
+        return {};
+      }
+      return await response.json();
     }
-    return await response.json();
+    // Node or file:// fallback
+    const { readFile } = await import("fs/promises");
+    const fileData = await readFile(url);
+    return JSON.parse(fileData.toString());
   } catch (err) {
     console.error(`[i18n] Error loading locale file ${relativePath}:`, err);
     return {};

@@ -3,6 +3,8 @@ import Bot from "./core/Bot.js";
 import Renderer from "./ui/Renderer.js";
 import { cardDatabase, cardDatabaseById } from "./data/cards.js";
 import { validateCardDatabase } from "./core/CardDatabaseValidator.js";
+import OnlineSessionController from "./net/OnlineSessionController.js";
+import { ACTION_TYPES } from "./server/MessageProtocol.js";
 
 import {
   initializeLocale,
@@ -123,12 +125,42 @@ const devSanityMBtn = document.getElementById("dev-sanity-m");
 const devSanityNBtn = document.getElementById("dev-sanity-n");
 const devSanityOBtn = document.getElementById("dev-sanity-o");
 const devResetDuelBtn = document.getElementById("dev-reset-duel");
+// Online mode UI
+const btnOnlineMode = document.getElementById("btn-online-mode");
+const onlinePanel = document.getElementById("online-panel");
+const onlineConnectBtn = document.getElementById("online-connect");
+const onlineReadyBtn = document.getElementById("online-ready");
+const onlineDisconnectBtn = document.getElementById("online-disconnect");
+const onlineServerInput = document.getElementById("online-server-url");
+const onlineRoomInput = document.getElementById("online-room-id");
+const onlineNameInput = document.getElementById("online-player-name");
+const onlineStatusEl = document.getElementById("online-status");
+const onlineErrorEl = document.getElementById("online-error");
+const onlineInlineErrorEl = document.getElementById("online-inline-error");
+const onlineModeToggle = document.getElementById("btn-back-to-start");
+const onlineActionPanel = document.getElementById("online-action-panel");
+const onlineActionStatus = document.getElementById("online-action-status");
+const onlineBtnNextPhase = document.getElementById("online-btn-next-phase");
+const onlineBtnEndTurn = document.getElementById("online-btn-end-turn");
+
 let currentDeck = loadDeck();
 let currentExtraDeck = loadExtraDeck();
 let poolFilterMode = "all"; // all | no_archetype | void | luminarch | shadow_heart
 updateTestModeButton();
 updateDevModeButton();
 runCardDatabaseValidation({ silent: true });
+
+let onlineMode = false;
+let onlineSession = null;
+let onlineRenderer = null;
+let onlineSeat = null;
+let onlineSnapshot = null;
+const onlineSelections = {
+  handIndex: null,
+  fieldIndex: null,
+  targetIndex: null,
+};
+let activeOnlinePrompt = null;
 
 function getCardById(cardId) {
   return cardById.get(cardId);
@@ -792,6 +824,350 @@ function restartCurrentDuelFromDev() {
   bootGame();
 }
 
+// Online mode helpers
+function enterOnlineMode() {
+  onlineMode = true;
+  startScreen.classList.add("hidden");
+  deckBuilder.classList.add("hidden");
+  onlinePanel?.classList.remove("hidden");
+  if (!onlineSession) {
+    onlineSession = new OnlineSessionController();
+  }
+  onlineRenderer = onlineRenderer || new Renderer();
+  updateOnlineStatus({
+    connected: false,
+    seat: null,
+    roomId: onlineRoomInput?.value || "default",
+  });
+  clearOnlineSelections();
+  refreshOnlineActionAvailability();
+}
+
+function exitOnlineMode() {
+  onlineMode = false;
+  onlineSession?.disconnect();
+  onlineSnapshot = null;
+  onlineSeat = null;
+  clearOnlineSelections();
+  onlinePanel?.classList.add("hidden");
+  startScreen.classList.remove("hidden");
+  closeOnlinePrompt();
+  refreshOnlineActionAvailability();
+}
+
+function clearOnlineSelections() {
+  onlineSelections.handIndex = null;
+  onlineSelections.fieldIndex = null;
+  onlineSelections.targetIndex = null;
+}
+
+function updateOnlineSelectionsText() {
+  // Selections text removed in online alpha (modal-driven)
+}
+
+function updateOnlineStatus(status = {}) {
+  if (onlineStatusEl) {
+    const parts = [];
+    parts.push(status.connected ? "Connected" : "Disconnected");
+    if (status.seat) parts.push(`Seat: ${status.seat}`);
+    if (status.roomId) parts.push(`Room: ${status.roomId}`);
+    onlineStatusEl.textContent = parts.join(" • ");
+  }
+  if (status.message && onlineErrorEl) {
+    onlineErrorEl.textContent = status.message;
+  }
+}
+
+function renderOnlineSnapshot(snapshot, seat) {
+  if (!snapshot || !seat) return;
+  if (onlineInlineErrorEl) {
+    onlineInlineErrorEl.textContent = "";
+  }
+  onlineSnapshot = snapshot;
+  onlineSeat = seat;
+  const selfView = snapshot.players?.self || {};
+  const oppView = snapshot.players?.opponent || {};
+
+  // Clamp selections if indices no longer exist
+  // No selection clamping needed in modal-driven flow
+
+  const mapCardVisible = (cardView, isSelf, isSpellTrap = false) => {
+    if (!cardView) return null;
+    const baseData =
+      isSelf && cardView.cardId
+        ? cardDatabaseById.get(cardView.cardId) || {}
+        : {};
+    const visible = isSelf || (!cardView.faceDown && !cardView.faceDown);
+    const isFaceDown = !!cardView.faceDown;
+    const card = {
+      id: cardView.cardId ?? baseData.id ?? 0,
+      name:
+        visible && cardView.name
+          ? cardView.name
+          : isFaceDown
+          ? "Face-down"
+          : baseData.name || cardView.name || "Unknown",
+      cardKind: cardView.cardKind || baseData.cardKind || "monster",
+      subtype: cardView.subtype || baseData.subtype || null,
+      position: cardView.position || "attack",
+      atk: visible ? cardView.atk ?? baseData.atk ?? 0 : null,
+      def: visible ? cardView.def ?? baseData.def ?? 0 : null,
+      level: visible ? cardView.level ?? baseData.level ?? 0 : null,
+      isFacedown: isFaceDown,
+      faceDown: isFaceDown,
+      image: visible ? baseData.image : null,
+    };
+    if (isSpellTrap && card.cardKind === "monster") {
+      card.cardKind = "spell";
+    }
+    return card;
+  };
+
+  const buildHand = (view, isSelf) => {
+    if (Array.isArray(view.hand)) {
+      return view.hand.map((h) => mapCardVisible(h, isSelf));
+    }
+    const count = view.handCount || (view.hand && view.hand.count) || 0;
+    return Array.from({ length: count }, () => ({
+      id: 0,
+      name: "Unknown",
+      cardKind: "unknown",
+      isFacedown: true,
+      faceDown: true,
+    }));
+  };
+
+  const buildField = (view, isSelf) =>
+    (view.field || []).map((slot) => mapCardVisible(slot, isSelf));
+
+  const buildSpellTrap = (view, isSelf) =>
+    Array.isArray(view.spellTrap)
+      ? view.spellTrap.map((slot) => mapCardVisible(slot, isSelf, true))
+      : [];
+
+  const selfPlayer = {
+    id: "player",
+    name: selfView.name || "You",
+    lp: selfView.lp ?? 8000,
+    hand: buildHand(selfView, true),
+    field: buildField(selfView, true),
+    spellTrap: buildSpellTrap(selfView, true),
+    fieldSpell: selfView.fieldSpell
+      ? mapCardVisible(selfView.fieldSpell, true, true)
+      : null,
+  };
+
+  const oppPlayer = {
+    id: "bot",
+    name: oppView.name || "Opponent",
+    lp: oppView.lp ?? 8000,
+    hand: buildHand(oppView, false),
+    field: buildField(oppView, false),
+    spellTrap: buildSpellTrap(oppView, false),
+    fieldSpell: oppView.fieldSpell
+      ? mapCardVisible(oppView.fieldSpell, false, true)
+      : null,
+  };
+
+  // Render using existing renderer pipeline
+  onlineRenderer.renderHand(selfPlayer);
+  onlineRenderer.renderField(selfPlayer);
+  onlineRenderer.renderSpellTrap(selfPlayer);
+  onlineRenderer.renderFieldSpell(selfPlayer);
+
+  onlineRenderer.renderHand(oppPlayer);
+  onlineRenderer.renderField(oppPlayer);
+  onlineRenderer.renderSpellTrap(oppPlayer);
+  onlineRenderer.renderFieldSpell(oppPlayer);
+
+  onlineRenderer.updateLP(selfPlayer);
+  onlineRenderer.updateLP(oppPlayer);
+
+  const activeIsSelf = snapshot.currentPlayer === seat;
+  const currentTurnPlayer = activeIsSelf ? selfPlayer : oppPlayer;
+  onlineRenderer.updateTurn(currentTurnPlayer);
+  onlineRenderer.updatePhaseTrack(snapshot.phase || "draw");
+
+  refreshOnlineActionAvailability();
+  updateOnlineSelectionsText();
+}
+
+function refreshOnlineActionAvailability() {
+  const hasSnapshot = !!onlineSnapshot;
+  const isYourTurn =
+    hasSnapshot && onlineSnapshot.currentPlayer === (onlineSeat || "player");
+  const disableAll = !onlineMode || !hasSnapshot;
+
+  const setDisabled = (el, disabled) => {
+    if (!el) return;
+    el.disabled = !!disabled;
+  };
+
+  setDisabled(onlineBtnNextPhase, disableAll || !isYourTurn);
+  setDisabled(onlineBtnEndTurn, disableAll || !isYourTurn);
+
+  if (onlineActionStatus) {
+    const turnPart = hasSnapshot
+      ? `Turn: ${onlineSnapshot.turn}`
+      : "Awaiting state...";
+    const phasePart = hasSnapshot ? `Phase: ${onlineSnapshot.phase}` : "";
+    onlineActionStatus.textContent = [turnPart, phasePart]
+      .filter(Boolean)
+      .join(" | ");
+  }
+}
+
+function handleOnlineError(err) {
+  const message =
+    err?.message || err?.reason || (typeof err === "string" ? err : null);
+  const hint = err?.hint;
+  const finalMsg = message
+    ? hint
+      ? `${message} (${hint})`
+      : message
+    : "Unknown error from server";
+  if (onlineErrorEl) {
+    onlineErrorEl.textContent = finalMsg;
+  }
+  if (onlineInlineErrorEl) {
+    onlineInlineErrorEl.textContent = finalMsg;
+  }
+  console.warn("[Online] error", err);
+}
+
+function closeOnlinePrompt() {
+  if (activeOnlinePrompt?.overlay) {
+    activeOnlinePrompt.overlay.remove();
+  }
+  activeOnlinePrompt = null;
+}
+
+function showOnlinePrompt(prompt) {
+  closeOnlinePrompt();
+  if (!prompt) return;
+  console.log("[Online] prompt_request", prompt);
+  const overlay = document.createElement("div");
+  overlay.className = "online-prompt-overlay";
+  const modal = document.createElement("div");
+  modal.className = "online-prompt-modal";
+
+  const title = document.createElement("h3");
+  title.textContent = prompt.title || "Choose an action";
+  modal.appendChild(title);
+
+  const options = prompt.options || prompt.targets || [];
+  const list = document.createElement("div");
+  list.className = "online-prompt-options";
+
+  options.forEach((opt) => {
+    const btn = document.createElement("button");
+    btn.textContent = opt.label || opt.id || "Option";
+    btn.onclick = () => {
+      if (prompt.promptId && opt.id !== undefined) {
+        onlineSession?.sendPromptResponse(prompt.promptId, opt.id);
+      }
+      closeOnlinePrompt();
+    };
+    list.appendChild(btn);
+  });
+
+  modal.appendChild(list);
+
+  const cancel = document.createElement("button");
+  cancel.textContent = "Cancel";
+  cancel.className = "online-prompt-cancel";
+  cancel.onclick = () => {
+    if (prompt.promptId) {
+      onlineSession?.sendPromptResponse(prompt.promptId, "cancel");
+    }
+    closeOnlinePrompt();
+  };
+  modal.appendChild(cancel);
+
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+  activeOnlinePrompt = { overlay, prompt };
+}
+
+function requireOnlineState(options = {}) {
+  const { needMain = false, needBattle = false } = options;
+  if (!onlineSnapshot) {
+    handleOnlineError({ message: "Sem estado do servidor ainda." });
+    return false;
+  }
+  const isYourTurn =
+    onlineSnapshot.currentPlayer === (onlineSeat || "player");
+  if (!isYourTurn) {
+    handleOnlineError({ message: "Nao e seu turno." });
+    return false;
+  }
+  const phase = onlineSnapshot.phase || "";
+  const inMain = phase === "main1" || phase === "main2";
+  if (needMain && !inMain) {
+    handleOnlineError({ message: "So e permitido na Main Phase." });
+    return false;
+  }
+  if (needBattle && phase !== "battle") {
+    handleOnlineError({ message: "So e permitido na Battle Phase." });
+    return false;
+  }
+  return true;
+}
+
+function bindOnlineCardClicks() {
+  // Global click tap to ensure listeners are active
+  document.addEventListener(
+    "click",
+    (e) => {
+      const targetInfo = e.target?.className || e.target?.id || e.target;
+      console.log("[Online] document click", targetInfo);
+    },
+    { capture: true, passive: true }
+  );
+
+  const addHandler = (zoneId, handler) => {
+    const zone = document.getElementById(zoneId);
+    if (!zone) {
+      console.warn("[Online] zone not found", zoneId);
+      return;
+    }
+    console.log("[Online] binding clicks for", zoneId, zone);
+    zone.addEventListener("click", (e) => {
+      if (!onlineMode || !onlineSnapshot) {
+        console.log("[Online] click ignored (not online/without state)", zoneId);
+        return;
+      }
+      const cardEl = e.target.closest(".card");
+      if (!cardEl) {
+        console.log("[Online] click ignored (no .card)", zoneId, e.target);
+        return;
+      }
+      const idx = Number.parseInt(cardEl.dataset.index, 10);
+      if (Number.isNaN(idx)) {
+        console.log("[Online] click ignored (no index)", zoneId, cardEl);
+        return;
+      }
+      console.log("[Online] zone click", zoneId, "idx", idx);
+      handler(idx, cardEl);
+    });
+  };
+
+  addHandler("player-hand", (idx) => {
+    console.log("[Online] hand click -> intent", idx);
+    onlineSession?.sendIntentCardClick("hand", idx);
+  });
+
+  addHandler("player-field", (idx) => {
+    console.log("[Online] field click -> intent", idx);
+    onlineSession?.sendIntentCardClick("field", idx);
+  });
+
+  addHandler("bot-field", (idx) => {
+    console.log("[Online] opponent field click -> intent", idx);
+    onlineSession?.sendIntentCardClick("opponentField", idx);
+  });
+}
+
 btnDeckBuilder?.addEventListener("click", openDeckBuilder);
 btnDeckCancel?.addEventListener("click", closeDeckBuilder);
 btnDeckSave?.addEventListener("click", () => {
@@ -816,11 +1192,61 @@ btnPoolFilterShadowHeart?.addEventListener("click", () => {
   renderDeckBuilder();
 });
 btnStartDuel?.addEventListener("click", startDuel);
+btnOnlineMode?.addEventListener("click", enterOnlineMode);
+onlineModeToggle?.addEventListener("click", exitOnlineMode);
 botPresetSelect?.addEventListener("change", (e) => {
   const value = e.target.value;
   currentBotPreset = value;
   saveBotPreset(value);
   updateBotPresetStatus();
+});
+onlineConnectBtn?.addEventListener("click", () => {
+  if (!onlineSession) {
+    onlineSession = new OnlineSessionController();
+  }
+    onlineSession.setHandlers({
+      start: (msg) => {
+        updateOnlineStatus({
+          connected: true,
+          seat: msg.youAre,
+          roomId: msg.roomId,
+        });
+      },
+      state: (state, seat) => {
+        onlineErrorEl.textContent = "";
+        if (onlineInlineErrorEl) onlineInlineErrorEl.textContent = "";
+        closeOnlinePrompt();
+        renderOnlineSnapshot(state, seat);
+      },
+    error: (err) => {
+      handleOnlineError(err);
+    },
+    prompt: (prompt) => {
+      if (onlineInlineErrorEl) onlineInlineErrorEl.textContent = "";
+      showOnlinePrompt(prompt);
+    },
+    status: updateOnlineStatus,
+  });
+
+  const url = onlineServerInput?.value || "ws://localhost:8080";
+  const roomId = onlineRoomInput?.value || "default";
+  const name = onlineNameInput?.value || null;
+  onlineSession.connect(url, roomId, name);
+});
+onlineReadyBtn?.addEventListener("click", () => {
+  onlineSession?.ready();
+  onlinePanel?.classList.add("hidden");
+});
+onlineDisconnectBtn?.addEventListener("click", () => {
+  exitOnlineMode();
+});
+onlineBtnNextPhase?.addEventListener("click", () => {
+  if (!requireOnlineState()) return;
+  onlineSession?.sendAction(ACTION_TYPES.NEXT_PHASE, {});
+});
+onlineBtnEndTurn?.addEventListener("click", () => {
+  if (!requireOnlineState()) return;
+  onlineSession?.sendAction(ACTION_TYPES.END_TURN, {});
 });
 btnToggleTestMode?.addEventListener("click", () => {
   testModeEnabled = !testModeEnabled;
@@ -1024,6 +1450,7 @@ devResetDuelBtn?.addEventListener("click", () => {
 document.addEventListener("DOMContentLoaded", () => {
   startScreen.classList.remove("hidden");
   updateDevPanelVisibility();
+  bindOnlineCardClicks();
 });
 
 function requireActiveGameForDev() {
@@ -1037,3 +1464,5 @@ function requireActiveGameForDev() {
   }
   return true;
 }
+
+

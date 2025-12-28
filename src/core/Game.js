@@ -2,6 +2,7 @@ import Player from "./Player.js";
 import Bot from "./Bot.js";
 import EffectEngine from "./EffectEngine.js";
 import ChainSystem from "./ChainSystem.js";
+import NullChainSystem from "./NullChainSystem.js";
 import Card from "./Card.js";
 import { cardDatabaseByName, cardDatabaseById } from "../data/cards.js";
 import { getCardDisplayName } from "./i18n.js";
@@ -28,9 +29,18 @@ function getCostTypeDescription(costFilters, count) {
 
 export default class Game {
   constructor(options = {}) {
-    this.player = new Player("player", "You");
+    // Mode flags must be ready before any subsystem or player/bot creation
+    this.networkMode = !!options.networkMode;
+    this.disableChains = !!options.disableChains || this.networkMode;
+    this.disableTraps = !!options.disableTraps || this.networkMode;
+    this.disableEffectActivation = !!options.disableEffectActivation;
+
+    this.player = new Player("player", options.playerName || "You");
     this.botPreset = options.botPreset || "shadowheart";
-    this.bot = new Bot(this.botPreset);
+    this.bot =
+      options.opponentOverride ||
+      (this.networkMode ? new Player("bot", "Opponent") : new Bot(this.botPreset));
+
     this.renderer = options.renderer || null;
     this.ui = createUIAdapter(this.renderer);
     this.autoSelector = new AutoSelector(this);
@@ -86,7 +96,9 @@ export default class Game {
     this.effectEngine = new EffectEngine(this);
 
     // Initialize ChainSystem for chain windows and spell speed validation
-    this.chainSystem = new ChainSystem(this);
+    this.chainSystem = this.disableChains
+      ? new NullChainSystem()
+      : new ChainSystem(this);
   }
 
   resetMaterialDuelStats(reason = "reset") {
@@ -1842,7 +1854,11 @@ export default class Game {
 
     this.phase = "main1";
     this.updateBoard();
-    if (this.turn === "bot" && !this.gameOver) {
+    if (
+      this.turn === "bot" &&
+      !this.gameOver &&
+      typeof this.bot?.makeMove === "function"
+    ) {
       this.bot.makeMove(this);
     }
   }
@@ -1883,7 +1899,11 @@ export default class Game {
 
     this.updateBoard();
 
-    if (this.turn === "bot" && !this.gameOver) {
+    if (
+      this.turn === "bot" &&
+      !this.gameOver &&
+      typeof this.bot?.makeMove === "function"
+    ) {
       this.bot.makeMove(this);
     }
   }
@@ -1934,7 +1954,12 @@ export default class Game {
       return;
     }
     this.updateBoard();
-    if (this.turn === "bot" && this.phase !== "draw" && !this.gameOver) {
+    if (
+      this.turn === "bot" &&
+      this.phase !== "draw" &&
+      !this.gameOver &&
+      typeof this.bot?.makeMove === "function"
+    ) {
       this.bot.makeMove(this);
     }
   }
@@ -3061,8 +3086,13 @@ export default class Game {
   async tryActivateMonsterEffect(
     card,
     selections = null,
-    activationZone = "field"
+    activationZone = "field",
+    owner = this.player
   ) {
+    if (this.disableEffectActivation) {
+      this.ui?.log?.("Effect activations are disabled.");
+      return { success: false, reason: "effects_disabled" };
+    }
     if (!card) return;
     console.log(
       `[Game] tryActivateMonsterEffect called for: ${card.name} (zone: ${activationZone})`
@@ -3080,7 +3110,7 @@ export default class Game {
 
     const pipelineResult = await this.runActivationPipeline({
       card,
-      owner: this.player,
+      owner,
       activationZone,
       activationContext,
       selections,
@@ -3090,13 +3120,13 @@ export default class Game {
       phaseReq: ["main1", "main2"],
       oncePerTurn: {
         card,
-        player: this.player,
+        player: owner,
         effect: activationEffect,
       },
       activate: (chosen, ctx, zone) =>
         this.effectEngine.activateMonsterEffect(
           card,
-          this.player,
+          owner,
           chosen,
           zone,
           ctx
@@ -3110,6 +3140,10 @@ export default class Game {
   }
 
   async tryActivateSpellTrapEffect(card, selections = null) {
+    if (this.disableEffectActivation || this.disableTraps) {
+      this.ui?.log?.("Spell/Trap activations are disabled in network mode.");
+      return { success: false, reason: "effects_disabled" };
+    }
     if (!card) return;
     console.log(`[Game] tryActivateSpellTrapEffect called for: ${card.name}`);
 
@@ -3218,6 +3252,96 @@ export default class Game {
       candidate.name ||
       String(fallbackIndex);
     return `${controller}:${zone}:${zoneIndex}:${baseId}`;
+  }
+
+  /**
+   * Build a serialized, public-safe snapshot of the current game state.
+   * Hides opponent hand contents and face-down card details.
+   * @param {"player"|"bot"} forPlayerId
+   * @returns {Object} snapshot JSON
+   */
+  getPublicState(forPlayerId = "player") {
+    const viewPlayer =
+      forPlayerId === this.bot.id || forPlayerId === "bot"
+        ? this.bot
+        : this.player;
+    const opp = viewPlayer === this.player ? this.bot : this.player;
+
+    const serializeField = (owner, isSelf) =>
+      (owner.field || []).map((card) => {
+        if (!card) return null;
+        const hidden = card.isFacedown && !isSelf;
+        return {
+          cardId: card.id,
+          name: hidden ? null : card.name,
+          position: card.position,
+          atk: hidden ? null : card.atk,
+          def: hidden ? null : card.def,
+          level: hidden ? null : card.level,
+          faceDown: !!card.isFacedown,
+          status: {
+            cannotAttackThisTurn: !!card.cannotAttackThisTurn,
+            effectsNegated: !!card.effectsNegated,
+            canAttackAll: !!card.canAttackAllOpponentMonstersThisTurn,
+          },
+        };
+      });
+
+    const serializeHand = (owner, isSelf) =>
+      isSelf
+        ? (owner.hand || []).map((card) => ({
+            cardId: card.id,
+            name: card.name,
+            atk: card.atk,
+            def: card.def,
+            level: card.level,
+            cardKind: card.cardKind,
+          }))
+        : { count: (owner.hand || []).length };
+
+    const serializeSpells = (owner, isSelf) =>
+      (owner.spellTrap || []).map((card) => {
+        if (!card) return null;
+        const hidden = card.isFacedown && !isSelf;
+        return {
+          cardId: card.id,
+          name: hidden ? null : card.name,
+          faceDown: !!card.isFacedown,
+          cardKind: card.cardKind,
+          subtype: hidden ? null : card.subtype,
+        };
+      });
+
+    const buildPlayerView = (owner, isSelf) => ({
+      id: owner.id,
+      name: owner.name,
+      lp: owner.lp,
+      hand: serializeHand(owner, isSelf),
+      handCount: (owner.hand || []).length,
+      field: serializeField(owner, isSelf),
+      spellTrap: serializeSpells(owner, isSelf),
+      fieldSpell: owner.fieldSpell
+        ? {
+            cardId: owner.fieldSpell.id,
+            name: isSelf || !owner.fieldSpell.isFacedown
+              ? owner.fieldSpell.name
+              : null,
+            faceDown: !!owner.fieldSpell.isFacedown,
+          }
+        : null,
+      graveyardCount: (owner.graveyard || []).length,
+    });
+
+    return {
+      turn: this.turn,
+      phase: this.phase,
+      turnCounter: this.turnCounter,
+      currentPlayer: this.turn === "player" ? this.player.id : this.bot.id,
+      players: {
+        self: buildPlayerView(viewPlayer, true),
+        opponent: buildPlayerView(opp, false),
+      },
+    };
   }
 
   normalizeSelectionContract(contract, overrides = {}) {
@@ -6244,71 +6368,80 @@ export default class Game {
     });
   }
 
-  setSpellOrTrap(card, handIndex) {
+  setSpellOrTrap(card, handIndex, actor = this.player) {
     const guard = this.guardActionStart({
-      actor: this.player,
+      actor,
       kind: "set_spell_trap",
       phaseReq: ["main1", "main2"],
     });
     if (!guard.ok) return guard;
-    if (!card) return;
-    if (card.cardKind !== "spell" && card.cardKind !== "trap") return;
+    if (!card) return { ok: false, reason: "no_card" };
+    if (card.cardKind !== "spell" && card.cardKind !== "trap") {
+      return { ok: false, reason: "not_spell_trap" };
+    }
 
     if (card.cardKind === "spell" && card.subtype === "field") {
       this.ui.log("Field Spells cannot be Set.");
-      return;
+      return { ok: false, reason: "cannot_set_field_spell" };
     }
 
-    const zone = this.player.spellTrap;
+    const zone = actor.spellTrap;
     if (zone.length >= 5) {
       this.ui.log("Spell/Trap zone is full (max 5 cards).");
-      return;
+      return { ok: false, reason: "zone_full" };
     }
 
     card.isFacedown = true;
     card.turnSetOn = this.turnCounter;
 
     if (typeof this.moveCard === "function") {
-      this.moveCard(card, this.player, "spellTrap", { fromZone: "hand" });
+      this.moveCard(card, actor, "spellTrap", { fromZone: "hand" });
     } else {
-      if (handIndex >= 0 && handIndex < this.player.hand.length) {
-        this.player.hand.splice(handIndex, 1);
+      if (handIndex >= 0 && handIndex < actor.hand.length) {
+        actor.hand.splice(handIndex, 1);
       }
-      this.player.spellTrap.push(card);
+      actor.spellTrap.push(card);
     }
 
     this.updateBoard();
+    return { ok: true, success: true, card };
   }
 
-  async tryActivateSpell(card, handIndex, selections = null, options = {}) {
+  async tryActivateSpell(
+    card,
+    handIndex,
+    selections = null,
+    options = {}
+  ) {
+    const owner = options.owner || this.player;
     const activationEffect = this.effectEngine?.getSpellTrapActivationEffect?.(
       card,
       { fromHand: true }
     );
     const pipelineResult = await this.runActivationPipeline({
       card,
-      owner: this.player,
+      owner,
       selections,
       selectionKind: "spellTrapEffect",
       selectionMessage: "Select target(s) for the continuous spell effect.",
       guardKind: "spell_from_hand",
       phaseReq: ["main1", "main2"],
       preview: () =>
-        this.effectEngine?.canActivateSpellFromHandPreview?.(card, this.player),
-      commit: () => this.commitCardActivationFromHand(this.player, handIndex),
+        this.effectEngine?.canActivateSpellFromHandPreview?.(card, owner),
+      commit: () => this.commitCardActivationFromHand(owner, handIndex),
       activationContext: {
         fromHand: true,
         sourceZone: "hand",
       },
       oncePerTurn: {
         card,
-        player: this.player,
+        player: owner,
         effect: activationEffect,
       },
       activate: (chosen, ctx, zone, resolvedCard) =>
         this.effectEngine.activateSpellTrapEffect(
           resolvedCard,
-          this.player,
+          owner,
           chosen,
           zone,
           ctx
@@ -6319,7 +6452,7 @@ export default class Game {
         } else {
           this.finalizeSpellTrapActivation(
             info.card,
-            this.player,
+            owner,
             info.activationZone
           );
           this.ui.log(`${info.card.name} effect activated.`);
@@ -6327,7 +6460,7 @@ export default class Game {
           // Offer chain window for opponent to respond to spell activation
           await this.checkAndOfferTraps("card_activation", {
             card: info.card,
-            player: this.player,
+            player: owner,
             activationType: "spell",
           });
         }
@@ -6460,7 +6593,7 @@ export default class Game {
   }
 
   async checkAndOfferTraps(event, eventData = {}) {
-    if (!this.player) return;
+    if (!this.player || this.disableTraps || this.disableChains) return;
 
     // Evitar reentrância: se já existe um modal de trap aberto, não abrir outro
     if (this.trapPromptInProgress) return;
