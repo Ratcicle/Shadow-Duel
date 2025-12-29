@@ -3433,6 +3433,11 @@ body {
   color: #e5e7eb;
   cursor: pointer;
 }
+.online-prompt-options button.selected {
+  background: #3b82f6;
+  border-color: #60a5fa;
+  color: #f8fafc;
+}
 
 .online-prompt-options button:hover,
 .online-prompt-cancel:hover {

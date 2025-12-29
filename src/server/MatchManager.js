@@ -130,12 +130,19 @@ export class MatchManager {
     const room = this.getRoom(client);
     if (!room) return;
     client.ready = true;
+    console.log("[Server] ready received", {
+      seat: client.seat,
+      room: room.id,
+      playerReady: room.clients.player?.ready,
+      botReady: room.clients.bot?.ready,
+    });
     if (room.clients.player?.ready && room.clients.bot?.ready && !room.game) {
       this.startMatch(room);
     }
   }
 
   async startMatch(room) {
+    console.log("[Server] startMatch", { room: room.id });
     const renderer = serverRendererStub();
     const game = new Game({
       networkMode: true,
@@ -192,9 +199,9 @@ export class MatchManager {
     this.storeAndSendPrompt(room, client, prompt);
   }
 
-  storeAndSendPrompt(room, client, prompt) {
+  storeAndSendPrompt(room, client, prompt, extra = {}) {
     if (!prompt?.promptId) return;
-    room.prompts.set(prompt.promptId, { client, prompt });
+    room.prompts.set(prompt.promptId, { client, prompt, ...extra });
     console.log("[Server] send prompt", {
       seat: client.seat,
       promptId: prompt.promptId,
@@ -202,7 +209,7 @@ export class MatchManager {
     });
     send(client.ws, {
       type: SERVER_MESSAGE_TYPES.PROMPT_REQUEST,
-      ...prompt,
+      prompt,
     });
   }
 
@@ -361,7 +368,7 @@ export class MatchManager {
         return;
       }
       const applyResult = await this.applyAction(
-        room.game,
+        room,
         client.seat,
         choice.actionType,
         choice.payload || {}
@@ -374,6 +381,95 @@ export class MatchManager {
           applyResult.hint
         );
         this.sendState(client, room.game);
+        return;
+      }
+      if (applyResult.needsSelection && applyResult.selection?.prompt) {
+        const selectionInfo = applyResult.selection;
+        this.storeAndSendPrompt(room, client, selectionInfo.prompt, {
+          pendingSelection: {
+            seat: client.seat,
+            actionType: choice.actionType,
+            payload: choice.payload || {},
+            selectionContract: selectionInfo.contract,
+            requirementId: selectionInfo.requirementId,
+            resumeData: selectionInfo.resumeData,
+          },
+        });
+        this.broadcastState(room);
+        return;
+      }
+      this.broadcastState(room);
+      return;
+    }
+
+    if (prompt.type === "selection_contract") {
+      if (msg.choice === "cancel") {
+        this.sendState(client, room.game);
+        return;
+      }
+      const pending = promptEntry.pendingSelection || {};
+      const requirementId =
+        pending.requirementId ||
+        prompt.requirement?.id ||
+        pending.selectionContract?.requirements?.[0]?.id;
+      if (!requirementId) {
+        this.sendError(client, "Invalid selection", "action_rejected");
+        return;
+      }
+      const requirementDef =
+        pending.selectionContract?.requirements?.find(
+          (r) => r.id === requirementId
+        ) || prompt.requirement;
+      const min =
+        requirementDef && Number.isInteger(requirementDef.min)
+          ? requirementDef.min
+          : 1;
+      const max =
+        requirementDef && Number.isInteger(requirementDef.max)
+          ? requirementDef.max
+          : min;
+      const choiceValue = Array.isArray(msg.choice)
+        ? msg.choice
+        : msg.choice === undefined || msg.choice === null
+        ? []
+        : [msg.choice];
+      if (choiceValue.length < min || choiceValue.length > max) {
+        this.sendError(client, "Invalid selection size", "action_rejected");
+        this.sendState(client, room.game);
+        return;
+      }
+      const selections = { [requirementId]: choiceValue };
+      const nextPayload = { ...(pending.payload || {}), selections };
+      const applyResult = await this.applyAction(
+        room,
+        pending.seat || client.seat,
+        pending.actionType,
+        nextPayload,
+        { pendingSelection: pending }
+      );
+      if (!applyResult.ok) {
+        this.sendError(
+          client,
+          applyResult.message || "Action failed",
+          "action_rejected",
+          applyResult.hint
+        );
+        this.sendState(client, room.game);
+        return;
+      }
+      if (applyResult.needsSelection && applyResult.selection?.prompt) {
+        const selectionInfo = applyResult.selection;
+        this.storeAndSendPrompt(room, client, selectionInfo.prompt, {
+          pendingSelection: {
+            seat: pending.seat || client.seat,
+            actionType: pending.actionType,
+            payload: nextPayload,
+            selectionContract: selectionInfo.contract,
+            requirementId: selectionInfo.requirementId,
+            resumeData: selectionInfo.resumeData,
+          },
+        });
+        this.broadcastState(room);
         return;
       }
       this.broadcastState(room);
@@ -390,7 +486,7 @@ export class MatchManager {
         return;
       }
       const applyResult = await this.applyAction(
-        room.game,
+        room,
         client.seat,
         option.actionType,
         option.payload || {}
@@ -403,6 +499,21 @@ export class MatchManager {
           applyResult.hint
         );
         this.sendState(client, room.game);
+        return;
+      }
+      if (applyResult.needsSelection && applyResult.selection?.prompt) {
+        const selectionInfo = applyResult.selection;
+        this.storeAndSendPrompt(room, client, selectionInfo.prompt, {
+          pendingSelection: {
+            seat: client.seat,
+            actionType: option.actionType,
+            payload: option.payload || {},
+            selectionContract: selectionInfo.contract,
+            requirementId: selectionInfo.requirementId,
+            resumeData: selectionInfo.resumeData,
+          },
+        });
+        this.broadcastState(room);
         return;
       }
       this.broadcastState(room);
@@ -448,6 +559,38 @@ export class MatchManager {
     return null;
   }
 
+  buildSelectionPrompt(room, client, selectionResult, actionContext = {}) {
+    const contract = selectionResult?.selectionContract;
+    if (!contract || !Array.isArray(contract.requirements)) {
+      return null;
+    }
+    const requirement = contract.requirements[0];
+    if (!requirement || !Array.isArray(requirement.candidates)) {
+      return null;
+    }
+    const promptId = `p_${room.id}_${++this.promptCounter}`;
+    const candidates = requirement.candidates.map((cand, idx) => ({
+      id: cand.key ?? idx,
+      label: cand.name || `Target ${idx + 1}`,
+      zone: cand.zone || null,
+      controller: cand.controller || cand.owner || null,
+      zoneIndex: cand.zoneIndex ?? null,
+    }));
+
+    return {
+      type: "selection_contract",
+      promptId,
+      title: contract.message || "Select target(s)",
+      requirement: {
+        id: requirement.id || "selection",
+        min: requirement.min ?? 1,
+        max: requirement.max ?? 1,
+        candidates,
+      },
+      actionType: actionContext.actionType || null,
+    };
+  }
+
   async handleAction(client, msg) {
     const room = this.getRoom(client);
     if (!room || !room.game) {
@@ -479,7 +622,7 @@ export class MatchManager {
     }
 
     const applyResult = await this.applyAction(
-      room.game,
+      room,
       client.seat,
       actionType,
       payload
@@ -501,6 +644,22 @@ export class MatchManager {
       return;
     }
 
+    if (applyResult.needsSelection && applyResult.selection?.prompt) {
+      const selectionInfo = applyResult.selection;
+      this.storeAndSendPrompt(room, client, selectionInfo.prompt, {
+        pendingSelection: {
+          seat: client.seat,
+          actionType,
+          payload,
+          selectionContract: selectionInfo.contract,
+          requirementId: selectionInfo.requirementId,
+          resumeData: selectionInfo.resumeData,
+        },
+      });
+      this.broadcastState(room);
+      return;
+    }
+
     console.log("[Server] action accepted", {
       seat: client.seat,
       actionType,
@@ -508,7 +667,11 @@ export class MatchManager {
     this.broadcastState(room);
   }
 
-  async applyAction(game, seat, actionType, payload) {
+  async applyAction(room, seat, actionType, payload, context = null) {
+    const game = room?.game;
+    if (!game) {
+      return { ok: false, message: "Match not ready" };
+    }
     const actor = seat === "bot" ? game.bot : game.player;
     const opponent = seat === "bot" ? game.player : game.bot;
     if (!actor) {
@@ -532,6 +695,13 @@ export class MatchManager {
     };
 
     const buildSelection = (payload) => {
+      if (
+        payload?.selections &&
+        typeof payload.selections === "object" &&
+        !Array.isArray(payload.selections)
+      ) {
+        return payload.selections;
+      }
       const selections = {};
       if (payload?.targetIndex !== undefined && payload?.targetIndex !== null) {
         selections.targetIndex = payload.targetIndex;
@@ -641,7 +811,30 @@ export class MatchManager {
         const selections = buildSelection(payload);
         const result = await game.tryActivateSpell(card, handIndex, selections, {
           owner: actor,
+          resume: context?.pendingSelection?.resumeData || null,
         });
+        if (result?.needsSelection && result.selectionContract) {
+          const prompt = this.buildSelectionPrompt(room, { seat }, result, {
+            actionType,
+          });
+          return {
+            ok: true,
+            needsSelection: true,
+            selection: {
+              prompt,
+              contract: result.selectionContract,
+              requirementId:
+                prompt?.requirement?.id ||
+                result.selectionContract?.requirements?.[0]?.id ||
+                "selection",
+              resumeData: {
+                commitInfo: result.commitInfo || null,
+                activationZone: result.activationZone || null,
+                activationContext: result.activationContext || null,
+              },
+            },
+          };
+        }
         if (!result || result.success === false) {
           return {
             ok: false,
@@ -667,6 +860,24 @@ export class MatchManager {
           "field",
           actor
         );
+        if (result?.needsSelection && result.selectionContract) {
+          const prompt = this.buildSelectionPrompt(room, { seat }, result, {
+            actionType,
+          });
+          return {
+            ok: true,
+            needsSelection: true,
+            selection: {
+              prompt,
+              contract: result.selectionContract,
+              requirementId:
+                prompt?.requirement?.id ||
+                result.selectionContract?.requirements?.[0]?.id ||
+                "selection",
+              resumeData: null,
+            },
+          };
+        }
         if (!result || result.success === false) {
           return {
             ok: false,
@@ -692,7 +903,7 @@ export class MatchManager {
         if (target.isFacedown) {
           return { ok: false, message: "Target must be face-up" };
         }
-        const result = game.resolveCombat(attacker, target, {
+        const result = await game.resolveCombat(attacker, target, {
           allowDuringSelection: true,
           allowDuringResolving: true,
         });
@@ -722,6 +933,11 @@ export class MatchManager {
 
   broadcastState(room) {
     if (!room?.game) return;
+    console.log("[Server] broadcast state", {
+      room: room.id,
+      phase: room.game.phase,
+      turn: room.game.turn,
+    });
     const payloadForSeat = (seat) => ({
       type: SERVER_MESSAGE_TYPES.STATE_UPDATE,
       state: room.game.getPublicState(seat),

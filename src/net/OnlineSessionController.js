@@ -26,6 +26,7 @@ export default class OnlineSessionController {
     }
     this.client = new NetworkClient(url);
     this.client.onStart((msg) => {
+      console.log("[OnlineSession] match_start", msg);
       this.seat = msg.youAre;
       this.connected = true;
       this.handlers.start?.(msg);
@@ -36,11 +37,17 @@ export default class OnlineSessionController {
       });
     });
     this.client.onState((state) => {
+      console.log("[OnlineSession] state_update", {
+        phase: state?.phase,
+        turn: state?.turn,
+        currentPlayer: state?.currentPlayer,
+      });
       this.connected = true;
       this.snapshot = state;
       this.handlers.state?.(state, this.seat);
     });
     this.client.onError((err) => {
+      console.error("[OnlineSession] error", err);
       this.handlers.error?.(err);
       if (err?.code === "opponent_left") {
         this.connected = false;

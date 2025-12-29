@@ -1110,14 +1110,16 @@ export default class Renderer {
         (card?.description && card.description.trim()) ||
         "Effect card.";
 
+      const bgStyle = card.image
+        ? `background-image: url('${card.image}'); background-size: cover; background-position: center;`
+        : "background: #1f2937;";
+
       el.innerHTML = `
         <div class="card-header">
           <div class="card-name">${displayName}</div>
           <div class="card-level">${typeLabel}</div>
         </div>
-        <div class="card-image" style="background-image: url('${
-          card.image
-        }'); background-size: cover; background-position: center;"></div>
+        <div class="card-image" style="${bgStyle}"></div>
         ${
           isMonster
             ? `<div class="card-stats">

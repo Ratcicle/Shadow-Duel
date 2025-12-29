@@ -3645,6 +3645,16 @@ export default class Game {
 
     const handleResult = async (result, fromSelection = false) => {
       const normalized = this.normalizeActivationResult(result);
+      normalized.commitInfo =
+        normalized.commitInfo || activationContext.commitInfo || commitInfo;
+      normalized.activationZone =
+        normalized.activationZone ||
+        resolvedActivationZone ||
+        activationContext.activationZone ||
+        null;
+      normalized.activationContext =
+        normalized.activationContext || activationContext;
+      normalized.cardRef = normalized.cardRef || resolvedCard;
 
       if (fromSelection) {
         logPipeline("PIPELINE_SELECTION_FINISH", {
@@ -3719,7 +3729,8 @@ export default class Game {
         });
 
         const shouldAutoSelect =
-          config.useAutoSelector === true || owner === this.bot;
+          config.useAutoSelector === true ||
+          (!this.networkMode && owner === this.bot);
 
         if (shouldAutoSelect) {
           const autoResult = this.autoSelector?.select(contract, {
@@ -5272,7 +5283,7 @@ export default class Game {
       this.clearAttackResolutionIndicators();
       this.updateBoard();
       this.checkWinCondition();
-      return;
+      return { ok: true };
     }
 
     if (!target) {
@@ -5285,36 +5296,32 @@ export default class Game {
       this.checkWinCondition();
       this.clearAttackResolutionIndicators();
       this.updateBoard();
-    } else {
-      const needsFlip = target.isFacedown;
+      return { ok: true };
+    }
 
-      if (needsFlip) {
-        const targetOwner = target.owner === "player" ? "player" : "bot";
-        const targetField =
-          target.owner === "player" ? this.player.field : this.bot.field;
-        const targetIndex = targetField.indexOf(target);
+    const needsFlip = target.isFacedown;
 
-        if (this.ui && typeof this.ui.applyFlipAnimation === "function") {
-          this.ui.applyFlipAnimation(targetOwner, targetIndex);
-        }
+    if (needsFlip) {
+      const targetOwner = target.owner === "player" ? "player" : "bot";
+      const targetField =
+        target.owner === "player" ? this.player.field : this.bot.field;
+      const targetIndex = targetField.indexOf(target);
 
-        target.isFacedown = false;
-        this.ui.log(`${target.name} was flipped!`);
-
-        this.updateBoard();
-        this.applyAttackResolutionIndicators(attacker, target);
-
-        setTimeout(() => {
-          this.finishCombat(attacker, target).catch((err) =>
-            console.error(err)
-          );
-        }, 600);
-
-        return;
+      if (this.ui && typeof this.ui.applyFlipAnimation === "function") {
+        this.ui.applyFlipAnimation(targetOwner, targetIndex);
       }
 
-      this.finishCombat(attacker, target).catch((err) => console.error(err));
+      target.isFacedown = false;
+      this.ui.log(`${target.name} was flipped!`);
+
+      this.updateBoard();
+      this.applyAttackResolutionIndicators(attacker, target);
+
+      await new Promise((resolve) => setTimeout(resolve, 600));
     }
+
+    await this.finishCombat(attacker, target);
+    return { ok: true };
   }
 
   async finishCombat(attacker, target) {
@@ -6414,10 +6421,23 @@ export default class Game {
     options = {}
   ) {
     const owner = options.owner || this.player;
+    const resume = options.resume || null;
     const activationEffect = this.effectEngine?.getSpellTrapActivationEffect?.(
       card,
       { fromHand: true }
     );
+
+    const resumeCommitInfo = resume?.commitInfo || null;
+    const resolvedActivationZone =
+      resume?.activationZone || resumeCommitInfo?.activationZone || null;
+    const baseActivationContext = resume?.activationContext || {
+      fromHand: true,
+      activationZone: resolvedActivationZone,
+      sourceZone: "hand",
+      committed: false,
+      commitInfo: resumeCommitInfo,
+    };
+
     const pipelineResult = await this.runActivationPipeline({
       card,
       owner,
@@ -6426,12 +6446,25 @@ export default class Game {
       selectionMessage: "Select target(s) for the continuous spell effect.",
       guardKind: "spell_from_hand",
       phaseReq: ["main1", "main2"],
-      preview: () =>
-        this.effectEngine?.canActivateSpellFromHandPreview?.(card, owner),
-      commit: () => this.commitCardActivationFromHand(owner, handIndex),
+      preview: resume
+        ? null
+        : () =>
+            this.effectEngine?.canActivateSpellFromHandPreview?.(card, owner),
+      commit: resume
+        ? () =>
+            resumeCommitInfo || {
+              cardRef: card,
+              activationZone: resolvedActivationZone || "spellTrap",
+              fromIndex: handIndex,
+            }
+        : () => this.commitCardActivationFromHand(owner, handIndex),
       activationContext: {
-        fromHand: true,
-        sourceZone: "hand",
+        ...baseActivationContext,
+        committed: resume ? true : baseActivationContext.committed,
+        activationZone:
+          resolvedActivationZone || baseActivationContext.activationZone,
+        sourceZone: baseActivationContext.sourceZone || "hand",
+        commitInfo: baseActivationContext.commitInfo || resumeCommitInfo || null,
       },
       oncePerTurn: {
         card,

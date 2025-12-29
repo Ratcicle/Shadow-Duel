@@ -16,6 +16,7 @@ export default class NetworkClient {
   connect(roomId = "default", playerName = null) {
     this.ws = new WebSocket(this.url);
     this.ws.onopen = () => {
+      console.log("[Net] WS open -> join_room", { roomId, playerName });
       this.send({
         type: "join_room",
         roomId,
@@ -23,9 +24,14 @@ export default class NetworkClient {
       });
     };
     this.ws.onmessage = (evt) => this.handleMessage(evt);
-    this.ws.onerror = (err) => this.handlers.error?.(err);
-    this.ws.onclose = () =>
+    this.ws.onerror = (err) => {
+      console.error("[Net] WS error", err);
+      this.handlers.error?.(err);
+    };
+    this.ws.onclose = () => {
+      console.warn("[Net] WS closed");
       this.handlers.error?.({ message: "Connection closed" });
+    };
   }
 
   onState(handler) {
@@ -53,9 +59,19 @@ export default class NetworkClient {
     try {
       msg = JSON.parse(evt.data);
     } catch (err) {
+      console.error("[Net] Failed to parse message", err);
       return;
     }
     if (!msg || typeof msg.type !== "string") return;
+    console.log("[Net] <-", msg.type, msg);
+    const promptPayload =
+      msg.type === "prompt_request"
+        ? msg.prompt || msg
+        : msg.type === "card_action_menu" ||
+          msg.type === "target_select" ||
+          msg.type === "selection_contract"
+        ? msg
+        : null;
     switch (msg.type) {
       case "match_start":
         this.seat = msg.youAre;
@@ -65,7 +81,10 @@ export default class NetworkClient {
         this.handlers.state?.(msg.state);
         break;
       case "prompt_request":
-        this.handlers.prompt?.(msg);
+      case "card_action_menu":
+      case "target_select":
+      case "selection_contract":
+        this.handlers.prompt?.(promptPayload || msg);
         break;
       case "error":
         this.handlers.error?.(msg);
@@ -79,6 +98,7 @@ export default class NetworkClient {
   }
 
   sendAction(actionType, payload = {}) {
+    console.log("[Net] -> action", { actionType, payload });
     this.seq += 1;
     this.send({
       type: "action",
@@ -89,6 +109,7 @@ export default class NetworkClient {
   }
 
   sendIntentCardClick(zone, index) {
+    console.log("[Net] -> intent_card_click", { zone, index });
     this.send({
       type: "intent_card_click",
       zone,
@@ -97,6 +118,7 @@ export default class NetworkClient {
   }
 
   sendPromptResponse(promptId, choice) {
+    console.log("[Net] -> prompt_response", { promptId, choice });
     this.send({
       type: "prompt_response",
       promptId,

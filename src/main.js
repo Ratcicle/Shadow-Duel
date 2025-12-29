@@ -897,6 +897,8 @@ function renderOnlineSnapshot(snapshot, seat) {
       isSelf && cardView.cardId
         ? cardDatabaseById.get(cardView.cardId) || {}
         : {};
+    const baseImage =
+      baseData && typeof baseData.image === "string" ? baseData.image : null;
     const visible = isSelf || (!cardView.faceDown && !cardView.faceDown);
     const isFaceDown = !!cardView.faceDown;
     const card = {
@@ -915,7 +917,7 @@ function renderOnlineSnapshot(snapshot, seat) {
       level: visible ? cardView.level ?? baseData.level ?? 0 : null,
       isFacedown: isFaceDown,
       faceDown: isFaceDown,
-      image: visible ? baseData.image : null,
+      image: visible ? baseImage : null,
     };
     if (isSpellTrap && card.cardKind === "monster") {
       card.cardKind = "spell";
@@ -1055,23 +1057,71 @@ function showOnlinePrompt(prompt) {
   title.textContent = prompt.title || "Choose an action";
   modal.appendChild(title);
 
-  const options = prompt.options || prompt.targets || [];
-  const list = document.createElement("div");
-  list.className = "online-prompt-options";
+    const options = prompt.options || prompt.targets || [];
+    const list = document.createElement("div");
+    list.className = "online-prompt-options";
 
-  options.forEach((opt) => {
-    const btn = document.createElement("button");
-    btn.textContent = opt.label || opt.id || "Option";
-    btn.onclick = () => {
-      if (prompt.promptId && opt.id !== undefined) {
-        onlineSession?.sendPromptResponse(prompt.promptId, opt.id);
-      }
+    if (prompt.type === "selection_contract" && prompt.requirement) {
+    const requirement = prompt.requirement;
+    const min = Number.isInteger(requirement.min) ? requirement.min : 1;
+    const max = Number.isInteger(requirement.max) ? requirement.max : min;
+    const selected = new Set();
+
+    const updateConfirm = (btn) => {
+      if (!btn) return;
+      const count = selected.size;
+      btn.disabled = count < min || count > max;
+      btn.textContent =
+        count > 0 ? `Confirm (${count}/${max})` : `Confirm (${min})`;
+    };
+
+    requirement.candidates?.forEach((cand) => {
+      const btn = document.createElement("button");
+      btn.textContent = cand.label || cand.id || "Target";
+      btn.onclick = () => {
+        const key = cand.id;
+        if (selected.has(key)) {
+          selected.delete(key);
+          btn.classList.remove("selected");
+        } else {
+          if (selected.size >= max) return;
+          selected.add(key);
+          btn.classList.add("selected");
+        }
+        updateConfirm(confirmBtn);
+      };
+      list.appendChild(btn);
+    });
+
+    const confirmBtn = document.createElement("button");
+    confirmBtn.textContent = `Confirm (${min})`;
+    confirmBtn.disabled = min > 0;
+    confirmBtn.onclick = () => {
+      if (!prompt.promptId) return;
+      const payload =
+        min === 1 && max === 1 && selected.size === 1
+          ? Array.from(selected.values())[0]
+          : Array.from(selected.values());
+      onlineSession?.sendPromptResponse(prompt.promptId, payload);
       closeOnlinePrompt();
     };
-    list.appendChild(btn);
-  });
+    modal.appendChild(list);
+    modal.appendChild(confirmBtn);
+  } else {
+    options.forEach((opt) => {
+      const btn = document.createElement("button");
+      btn.textContent = opt.label || opt.id || "Option";
+      btn.onclick = () => {
+        if (prompt.promptId && opt.id !== undefined) {
+          onlineSession?.sendPromptResponse(prompt.promptId, opt.id);
+        }
+        closeOnlinePrompt();
+      };
+      list.appendChild(btn);
+    });
 
-  modal.appendChild(list);
+    modal.appendChild(list);
+  }
 
   const cancel = document.createElement("button");
   cancel.textContent = "Cancel";
@@ -1115,6 +1165,7 @@ function requireOnlineState(options = {}) {
 }
 
 function bindOnlineCardClicks() {
+  console.log("[Online] Binding card click handlers");
   // Global click tap to ensure listeners are active
   document.addEventListener(
     "click",
@@ -1133,10 +1184,6 @@ function bindOnlineCardClicks() {
     }
     console.log("[Online] binding clicks for", zoneId, zone);
     zone.addEventListener("click", (e) => {
-      if (!onlineMode || !onlineSnapshot) {
-        console.log("[Online] click ignored (not online/without state)", zoneId);
-        return;
-      }
       const cardEl = e.target.closest(".card");
       if (!cardEl) {
         console.log("[Online] click ignored (no .card)", zoneId, e.target);
@@ -1145,6 +1192,20 @@ function bindOnlineCardClicks() {
       const idx = Number.parseInt(cardEl.dataset.index, 10);
       if (Number.isNaN(idx)) {
         console.log("[Online] click ignored (no index)", zoneId, cardEl);
+        return;
+      }
+      if (!onlineMode) {
+        console.log("[Online] click ignored (online mode off)", zoneId);
+        if (onlineInlineErrorEl) {
+          onlineInlineErrorEl.textContent = "Entre no modo online para jogar.";
+        }
+        return;
+      }
+      if (!onlineSnapshot) {
+        console.log("[Online] click ignored (no snapshot yet)", zoneId);
+        if (onlineInlineErrorEl) {
+          onlineInlineErrorEl.textContent = "Aguardando estado do servidor.";
+        }
         return;
       }
       console.log("[Online] zone click", zoneId, "idx", idx);
@@ -1204,20 +1265,20 @@ onlineConnectBtn?.addEventListener("click", () => {
   if (!onlineSession) {
     onlineSession = new OnlineSessionController();
   }
-    onlineSession.setHandlers({
-      start: (msg) => {
-        updateOnlineStatus({
-          connected: true,
-          seat: msg.youAre,
-          roomId: msg.roomId,
-        });
-      },
-      state: (state, seat) => {
-        onlineErrorEl.textContent = "";
-        if (onlineInlineErrorEl) onlineInlineErrorEl.textContent = "";
-        closeOnlinePrompt();
-        renderOnlineSnapshot(state, seat);
-      },
+  onlineSession.setHandlers({
+    start: (msg) => {
+      updateOnlineStatus({
+        connected: true,
+        seat: msg.youAre,
+        roomId: msg.roomId,
+      });
+    },
+    state: (state, seat) => {
+      onlineErrorEl.textContent = "";
+      if (onlineInlineErrorEl) onlineInlineErrorEl.textContent = "";
+      closeOnlinePrompt();
+      renderOnlineSnapshot(state, seat);
+    },
     error: (err) => {
       handleOnlineError(err);
     },
@@ -1447,7 +1508,15 @@ devResetDuelBtn?.addEventListener("click", () => {
   restartCurrentDuelFromDev();
 });
 
-document.addEventListener("DOMContentLoaded", () => {
+function ensureDomReady(fn) {
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", fn, { once: true });
+  } else {
+    fn();
+  }
+}
+
+ensureDomReady(() => {
   startScreen.classList.remove("hidden");
   updateDevPanelVisibility();
   bindOnlineCardClicks();
