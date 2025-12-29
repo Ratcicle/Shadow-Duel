@@ -76,6 +76,9 @@ export class MatchManager {
       case CLIENT_MESSAGE_TYPES.PROMPT_RESPONSE:
         await this.handlePromptResponse(client, msg);
         break;
+      case CLIENT_MESSAGE_TYPES.REMATCH_REQUEST:
+        await this.handleRematchRequest(client);
+        break;
       default:
         this.sendError(client, "Unknown message type");
     }
@@ -174,7 +177,105 @@ export class MatchManager {
     await game.startTurn();
 
     room.game = game;
+
+    // Escutar evento de fim de partida
+    game.on("game_over", (payload) => {
+      this.handleGameOver(room, payload);
+    });
+
     this.broadcastState(room);
+  }
+
+  handleGameOver(room, payload) {
+    if (!room || room.gameEnded) return;
+    room.gameEnded = true;
+
+    const { winnerId, loserId, reason } = payload;
+    console.log("[Server] game_over", { room: room.id, winnerId, loserId, reason });
+
+    // Mapear seat para resultado
+    const playerSeat = "player";
+    const botSeat = "bot";
+
+    const resultForSeat = (seat) => {
+      const isWinner =
+        (seat === playerSeat && winnerId === "player") ||
+        (seat === botSeat && winnerId === "bot");
+      return {
+        type: SERVER_MESSAGE_TYPES.GAME_OVER,
+        result: isWinner ? "victory" : "defeat",
+        reason,
+        winnerId,
+        loserId,
+      };
+    };
+
+    if (room.clients.player?.ws) {
+      send(room.clients.player.ws, resultForSeat(playerSeat));
+    }
+    if (room.clients.bot?.ws) {
+      send(room.clients.bot.ws, resultForSeat(botSeat));
+    }
+
+    // Enviar estado final também
+    this.broadcastState(room);
+  }
+
+  async handleRematchRequest(client) {
+    const room = this.getRoom(client);
+    if (!room) {
+      this.sendError(client, "Not in a room");
+      return;
+    }
+    if (!room.gameEnded) {
+      this.sendError(client, "Game not ended yet");
+      return;
+    }
+
+    // Marcar que este cliente quer rematch
+    if (!room.rematchRequests) {
+      room.rematchRequests = new Set();
+    }
+    room.rematchRequests.add(client.seat);
+
+    console.log("[Server] rematch_request", {
+      room: room.id,
+      seat: client.seat,
+      requests: Array.from(room.rematchRequests),
+    });
+
+    // Notificar ambos sobre o status do rematch
+    const status = {
+      type: SERVER_MESSAGE_TYPES.REMATCH_STATUS,
+      playerWants: room.rematchRequests.has("player"),
+      botWants: room.rematchRequests.has("bot"),
+      ready: room.rematchRequests.size >= 2,
+    };
+
+    if (room.clients.player?.ws) {
+      send(room.clients.player.ws, status);
+    }
+    if (room.clients.bot?.ws) {
+      send(room.clients.bot.ws, status);
+    }
+
+    // Se ambos querem rematch, reiniciar
+    if (room.rematchRequests.has("player") && room.rematchRequests.has("bot")) {
+      await this.restartMatch(room);
+    }
+  }
+
+  async restartMatch(room) {
+    console.log("[Server] restartMatch", { room: room.id });
+
+    // Limpar estado anterior
+    room.game = null;
+    room.gameEnded = false;
+    room.rematchRequests = null;
+    room.prompts.clear();
+
+    // Reiniciar partida
+    await this.startMatch(room);
   }
 
   async handleIntent(client, msg) {
@@ -535,24 +636,42 @@ export class MatchManager {
             entry.card.cardKind === "monster" &&
             entry.card.isFacedown !== true
         );
-      if (!targets.length) return null;
+      
       const promptId = `p_${room.id}_${++this.promptCounter}`;
+      const targetOptions = [];
+
+      // Adicionar monstros face-up como alvos
+      targets.forEach((t) => {
+        targetOptions.push({
+          id: t.idx,
+          label: t.card.name || `Target ${t.idx}`,
+          actionType: ACTION_TYPES.DECLARE_ATTACK,
+          payload: {
+            attackerIndex: choice.payload?.attackerIndex,
+            targetIndex: t.idx,
+          },
+        });
+      });
+
+      // Se não há monstros face-up, oferecer ataque direto
+      if (targets.length === 0) {
+        targetOptions.push({
+          id: "direct",
+          label: "Direct Attack",
+          actionType: ACTION_TYPES.DIRECT_ATTACK,
+          payload: {
+            attackerIndex: choice.payload?.attackerIndex,
+          },
+        });
+      }
+
+      targetOptions.push({ id: "cancel", label: "Cancel", actionType: null, payload: null });
+
       return {
         type: "target_select",
         promptId,
-        title: "Select attack target",
-        targets: [
-          ...targets.map((t) => ({
-            id: t.idx,
-            label: t.card.name || `Target ${t.idx}`,
-            actionType: ACTION_TYPES.DECLARE_ATTACK,
-            payload: {
-              attackerIndex: choice.payload?.attackerIndex,
-              targetIndex: t.idx,
-            },
-          })),
-          { id: "cancel", label: "Cancel", actionType: null, payload: null },
-        ],
+        title: targets.length > 0 ? "Select attack target" : "No monsters to attack",
+        targets: targetOptions,
       };
     }
 
@@ -912,6 +1031,32 @@ export class MatchManager {
         }
         return { ok: true };
       }
+      case ACTION_TYPES.DIRECT_ATTACK: {
+        if (game.phase !== "battle") {
+          return { ok: false, message: "Attacks only in Battle Phase" };
+        }
+        const { attackerIndex } = payload;
+        const attacker = actor.field[attackerIndex];
+        if (!attacker || attacker.cardKind !== "monster") {
+          return { ok: false, message: "Invalid attacker" };
+        }
+        // Verificar se oponente realmente não tem monstros face-up
+        const hasTargets = (opponent.field || []).some(
+          (c) => c && c.cardKind === "monster" && !c.isFacedown
+        );
+        if (hasTargets) {
+          return { ok: false, message: "Cannot direct attack: opponent has monsters" };
+        }
+        // Passar null como target para indicar ataque direto
+        const result = await game.resolveCombat(attacker, null, {
+          allowDuringSelection: true,
+          allowDuringResolving: true,
+        });
+        if (result && result.ok === false) {
+          return { ok: false, message: result.reason || "Direct attack not allowed" };
+        }
+        return { ok: true };
+      }
       case ACTION_TYPES.NEXT_PHASE: {
         const res = game.nextPhase();
         if (res && res.ok === false) {
@@ -971,21 +1116,23 @@ export class MatchManager {
   handleDisconnect(client) {
     const room = this.getRoom(client);
     if (!room) return;
-    if (client.seat && room.clients[client.seat] === client) {
-      room.clients[client.seat] = null;
+    
+    const disconnectedSeat = client.seat;
+    
+    // Identificar o outro jogador ANTES de remover o cliente
+    const otherSeat = disconnectedSeat === "player" ? "bot" : "player";
+    const otherClient = room.clients[otherSeat];
+    
+    // Remover o cliente que desconectou
+    if (disconnectedSeat && room.clients[disconnectedSeat] === client) {
+      room.clients[disconnectedSeat] = null;
     }
-    const remaining =
-      room.clients.player?.ws?.readyState === room.clients.player?.ws?.OPEN ||
-      room.clients.bot?.ws?.readyState === room.clients.bot?.ws?.OPEN;
-    if (remaining) {
-      const other =
-        room.clients.player?.ws?.readyState === room.clients.player?.ws?.OPEN
-          ? room.clients.player
-          : room.clients.bot;
-      if (other) {
-        this.sendError(other, "Opponent disconnected", "opponent_left");
-      }
+    
+    // Notificar o outro jogador se ainda estiver conectado
+    if (otherClient?.ws?.readyState === otherClient?.ws?.OPEN) {
+      this.sendError(otherClient, "Opponent disconnected", "opponent_left");
     }
+    
     this.rooms.delete(room.id);
   }
 
