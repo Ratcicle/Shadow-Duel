@@ -8,6 +8,8 @@ export default class NetworkClient {
       start: null,
       info: null,
       prompt: null,
+      gameOver: null,
+      rematchStatus: null,
     };
     this.seq = 0;
     this.seat = null;
@@ -54,6 +56,19 @@ export default class NetworkClient {
     this.handlers.prompt = handler;
   }
 
+  onGameOver(handler) {
+    this.handlers.gameOver = handler;
+  }
+
+  onRematchStatus(handler) {
+    this.handlers.rematchStatus = handler;
+  }
+
+  sendRematchRequest() {
+    console.log("[Net] -> rematch_request");
+    this.send({ type: "rematch_request" });
+  }
+
   handleMessage(evt) {
     let msg = null;
     try {
@@ -79,6 +94,12 @@ export default class NetworkClient {
         break;
       case "state_update":
         this.handlers.state?.(msg.state);
+        break;
+      case "game_over":
+        this.handlers.gameOver?.(msg);
+        break;
+      case "rematch_status":
+        this.handlers.rematchStatus?.(msg);
         break;
       case "prompt_request":
       case "card_action_menu":

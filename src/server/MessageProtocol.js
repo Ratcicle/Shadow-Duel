@@ -4,11 +4,14 @@ export const CLIENT_MESSAGE_TYPES = {
   ACTION: "action",
   INTENT_CARD_CLICK: "intent_card_click",
   PROMPT_RESPONSE: "prompt_response",
+  REMATCH_REQUEST: "rematch_request",
 };
 
 export const SERVER_MESSAGE_TYPES = {
   MATCH_START: "match_start",
   STATE_UPDATE: "state_update",
+  GAME_OVER: "game_over",
+  REMATCH_STATUS: "rematch_status",
   ERROR: "error",
   INFO: "info",
   PROMPT_REQUEST: "prompt_request",
@@ -19,6 +22,7 @@ export const ACTION_TYPES = {
   SET_MONSTER: "SET_MONSTER",
   SWITCH_POSITION: "SWITCH_POSITION",
   DECLARE_ATTACK: "DECLARE_ATTACK",
+  DIRECT_ATTACK: "DIRECT_ATTACK",
   NEXT_PHASE: "NEXT_PHASE",
   END_TURN: "END_TURN",
   SET_SPELLTRAP: "SET_SPELLTRAP",
@@ -114,6 +118,13 @@ export function validateActionPayload(actionType, payload = {}) {
       }
       if (!Number.isInteger(targetIndex) || targetIndex < 0) {
         return { ok: false, message: "Invalid targetIndex" };
+      }
+      return { ok: true };
+    }
+    case ACTION_TYPES.DIRECT_ATTACK: {
+      const { attackerIndex } = payload;
+      if (!Number.isInteger(attackerIndex) || attackerIndex < 0) {
+        return { ok: false, message: "Invalid attackerIndex" };
       }
       return { ok: true };
     }

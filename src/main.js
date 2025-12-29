@@ -990,6 +990,19 @@ function renderOnlineSnapshot(snapshot, seat) {
   onlineRenderer.updateTurn(currentTurnPlayer);
   onlineRenderer.updatePhaseTrack(snapshot.phase || "draw");
 
+  // Indicador visual de turno: borda brilhante no campo do jogador ativo
+  const playerAreaEl = document.getElementById("player-area");
+  const botAreaEl = document.getElementById("bot-area");
+  if (playerAreaEl && botAreaEl) {
+    if (activeIsSelf) {
+      playerAreaEl.classList.add("active-turn");
+      botAreaEl.classList.remove("active-turn");
+    } else {
+      playerAreaEl.classList.remove("active-turn");
+      botAreaEl.classList.add("active-turn");
+    }
+  }
+
   refreshOnlineActionAvailability();
   updateOnlineSelectionsText();
 }
@@ -1023,11 +1036,19 @@ function handleOnlineError(err) {
   const message =
     err?.message || err?.reason || (typeof err === "string" ? err : null);
   const hint = err?.hint;
+  const code = err?.code;
   const finalMsg = message
     ? hint
       ? `${message} (${hint})`
       : message
     : "Unknown error from server";
+  
+  // Se o oponente desconectou, mostrar modal especial
+  if (code === "opponent_left") {
+    showDisconnectModal(finalMsg);
+    return;
+  }
+  
   if (onlineErrorEl) {
     onlineErrorEl.textContent = finalMsg;
   }
@@ -1037,11 +1058,131 @@ function handleOnlineError(err) {
   console.warn("[Online] error", err);
 }
 
+function showDisconnectModal(message) {
+  closeOnlinePrompt();
+  
+  const overlay = document.createElement("div");
+  overlay.className = "online-prompt-overlay disconnect-overlay";
+  
+  const modal = document.createElement("div");
+  modal.className = "online-prompt-modal disconnect-modal";
+  
+  const icon = document.createElement("div");
+  icon.textContent = "⚠️";
+  icon.className = "disconnect-icon";
+  modal.appendChild(icon);
+  
+  const title = document.createElement("h2");
+  title.textContent = "Opponent Disconnected";
+  title.className = "disconnect-title";
+  modal.appendChild(title);
+  
+  const desc = document.createElement("p");
+  desc.textContent = message || "Your opponent has left the match.";
+  desc.className = "disconnect-message";
+  modal.appendChild(desc);
+  
+  const closeBtn = document.createElement("button");
+  closeBtn.textContent = "Return to Menu";
+  closeBtn.onclick = () => {
+    overlay.remove();
+    exitOnlineMode();
+  };
+  modal.appendChild(closeBtn);
+  
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+  
+  console.log("[Online] Opponent disconnected");
+}
+
 function closeOnlinePrompt() {
   if (activeOnlinePrompt?.overlay) {
     activeOnlinePrompt.overlay.remove();
   }
   activeOnlinePrompt = null;
+}
+
+function showGameOverModal(msg) {
+  closeOnlinePrompt();
+  
+  const isVictory = msg.result === "victory";
+  const reasonText = msg.reason === "lp_zero" ? "LP reduced to 0" : 
+                     msg.reason === "deck_out" ? "Deck out" : 
+                     msg.reason || "Game ended";
+  
+  const overlay = document.createElement("div");
+  overlay.className = "online-prompt-overlay game-over-overlay";
+  overlay.id = "game-over-overlay";
+  
+  const modal = document.createElement("div");
+  modal.className = "online-prompt-modal game-over-modal";
+  
+  const title = document.createElement("h2");
+  title.textContent = isVictory ? "🏆 Victory!" : "💀 Defeat";
+  title.className = isVictory ? "game-over-victory" : "game-over-defeat";
+  modal.appendChild(title);
+  
+  const reason = document.createElement("p");
+  reason.textContent = reasonText;
+  reason.className = "game-over-reason";
+  modal.appendChild(reason);
+
+  const buttonsDiv = document.createElement("div");
+  buttonsDiv.className = "game-over-buttons";
+
+  const rematchBtn = document.createElement("button");
+  rematchBtn.textContent = "🔄 Rematch";
+  rematchBtn.id = "rematch-btn";
+  rematchBtn.onclick = () => {
+    rematchBtn.disabled = true;
+    rematchBtn.textContent = "⏳ Waiting for opponent...";
+    onlineSession?.sendRematchRequest();
+  };
+  buttonsDiv.appendChild(rematchBtn);
+  
+  const closeBtn = document.createElement("button");
+  closeBtn.textContent = "Exit";
+  closeBtn.onclick = () => {
+    overlay.remove();
+    exitOnlineMode();
+  };
+  buttonsDiv.appendChild(closeBtn);
+
+  modal.appendChild(buttonsDiv);
+  
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+  
+  console.log("[Online] Game Over:", msg);
+}
+
+function handleRematchStatus(msg) {
+  const rematchBtn = document.getElementById("rematch-btn");
+  
+  if (msg.ready) {
+    // Rematch aceito por ambos - fechar modal, jogo vai reiniciar
+    const overlay = document.getElementById("game-over-overlay");
+    if (overlay) overlay.remove();
+    console.log("[Online] Rematch starting!");
+    return;
+  }
+  
+  // Atualizar texto do botão baseado no status
+  if (rematchBtn) {
+    const iWantRematch = (onlineSeat === "player" && msg.playerWants) ||
+                         (onlineSeat === "bot" && msg.botWants);
+    const opponentWants = (onlineSeat === "player" && msg.botWants) ||
+                          (onlineSeat === "bot" && msg.playerWants);
+    
+    if (iWantRematch && !opponentWants) {
+      rematchBtn.textContent = "⏳ Waiting for opponent...";
+      rematchBtn.disabled = true;
+    } else if (!iWantRematch && opponentWants) {
+      rematchBtn.textContent = "🔄 Opponent wants rematch!";
+      rematchBtn.disabled = false;
+    }
+  }
 }
 
 function showOnlinePrompt(prompt) {
@@ -1285,6 +1426,12 @@ onlineConnectBtn?.addEventListener("click", () => {
     prompt: (prompt) => {
       if (onlineInlineErrorEl) onlineInlineErrorEl.textContent = "";
       showOnlinePrompt(prompt);
+    },
+    gameOver: (msg) => {
+      showGameOverModal(msg);
+    },
+    rematchStatus: (msg) => {
+      handleRematchStatus(msg);
     },
     status: updateOnlineStatus,
   });

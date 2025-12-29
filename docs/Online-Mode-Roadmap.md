@@ -1,175 +1,100 @@
 # Shadow Duel – Online Mode Roadmap
 
-Este documento descreve o estado atual da implementação do modo online e os próximos passos planejados.
+Foco: **o que desbloqueia jogar de verdade primeiro**.
 
 ---
 
-## 📊 Estado Atual
+## 📍 Estado Atual (Resumo)
 
-### Arquivos Principais
+### (A) Infraestrutura Online ✅
+- Servidor WebSocket funcionando (`npm run server`)
+- Cliente conecta, entra em sala, handshake completo
+- Protocolo de mensagens definido (join → ready → state_update → action → prompt)
+- Estado do jogo serializado e enviado a cada jogador (oculta mão/cartas viradas do oponente)
+- Ações executadas no servidor e broadcast para ambos
 
-| Arquivo | Descrição |
-|---------|-----------|
-| `src/server/ServerMain.js` | Servidor WebSocket (ws) |
-| `src/server/MatchManager.js` | Gerenciamento de salas, partidas e ações |
-| `src/server/MessageProtocol.js` | Tipos de mensagem cliente/servidor |
-| `src/net/NetworkClient.js` | Cliente WebSocket (browser) |
-| `src/net/OnlineSessionController.js` | Abstração do cliente para o main.js |
+### (B) UX/UI ⚠️
+- **Existe UI duplicada**: painel MVP online (mostra índices, botões Next Phase/End Turn separados) rodando **em paralelo** ao HUD padrão do jogo offline
+- Ao clicar em carta, abre modal genérico com opções (Summon/Set/Attack) – funciona, mas mostra índices numéricos ao invés de usar o visual normal
+- O HUD padrão (phase track, LP, context menus visuais) não está integrado ao modo online
+- Prompts de seleção de alvo usam índices em vez de clique visual nas cartas
 
-### Funcionalidades Implementadas ✅
-
-- [x] Servidor WebSocket básico (`npm run server`)
-- [x] Sistema de salas (rooms) com 2 jogadores
-- [x] Handshake: `join_room` → `match_start` → `ready` → jogo inicia
-- [x] Broadcast de estado com `getPublicState()` (esconde cartas do oponente)
-- [x] Ações básicas:
-  - [x] Normal Summon / Set Monster
-  - [x] Set Spell/Trap
-  - [x] Activate Spell
-  - [x] Activate Monster Effect
-  - [x] Switch Position
-  - [x] Declare Attack (a monstros face-up)
-  - [x] Next Phase / End Turn
-- [x] Sistema de prompts (menus de ação, seleção de alvo)
-- [x] UI básica: painel de conexão, status, botões de fase
-- [x] Renderização do estado recebido do servidor
-
-### Limitações Atuais ⚠️
-
-- `disableChains: true` – Chains desabilitadas no modo online
-- `disableTraps: true` – Armadilhas desabilitadas
-- Ataque direto não implementado (só a monstros face-up)
-- Fusão/Ascensão não implementados online
-- Tributo para monstros nível 5+ não implementado
-- Sem tratamento de fim de partida (vitória/derrota)
-- Sem reconexão após desconexão
-- Sem timeout de turno
+**Resultado:** dá pra jogar, mas a experiência é confusa e diferente do modo offline.
 
 ---
 
-## 🚀 Roadmap
+## 🚀 Próximos Passos (em ordem de prioridade)
 
-### Fase 1: Estabilidade e UX Básica
-> Prioridade: **Alta** | Objetivo: Tornar o jogo jogável de ponta a ponta
+### Fase 1.0 – UX Online = UX Offline
+> **Objetivo:** Jogar online deve parecer jogar offline. Sem painel MVP, sem índices.
 
-| # | Tarefa | Status | Notas |
-|---|--------|--------|-------|
-| 1.1 | **Ataque Direto** | ⬜ Pendente | Permitir atacar LP quando oponente não tem monstros |
-| 1.2 | **Tratamento de Fim de Partida** | ⬜ Pendente | Detectar LP ≤ 0 ou deck out, notificar ambos |
-| 1.3 | **Feedback Visual de Turno** | ⬜ Pendente | Indicar claramente de quem é o turno |
-| 1.4 | **Notificação de Desconexão** | ⬜ Pendente | Mostrar mensagem quando oponente desconecta |
-| 1.5 | **Opção de Rematch** | ⬜ Pendente | Após fim de partida, oferecer revanche |
-
-### Fase 2: Funcionalidades de Jogo
-> Prioridade: **Média** | Objetivo: Paridade com modo offline
-
-| # | Tarefa | Status | Notas |
-|---|--------|--------|-------|
-| 2.1 | **Tributos para Invocação** | ⬜ Pendente | Prompt de seleção de monstros para tributar (nível 5-6: 1, nível 7+: 2) |
-| 2.2 | **Habilitar Sistema de Chains** | ⬜ Pendente | Remover `disableChains`, implementar prompts de resposta |
-| 2.3 | **Habilitar Armadilhas** | ⬜ Pendente | Ativação em resposta a eventos, prompt de decisão |
-| 2.4 | **Fusão Online** | ⬜ Pendente | Seleção de materiais, acesso ao Extra Deck |
-| 2.5 | **Ascensão Online** | ⬜ Pendente | Seleção de tributo Ascension, materiais de Ascension |
-| 2.6 | **Flip Summon** | ⬜ Pendente | Virar monstros set para face-up |
-| 2.7 | **Graveyard/Extra Deck Preview** | ⬜ Pendente | Visualização de cemitério e extra deck |
-
-### Fase 3: Robustez e Segurança
-> Prioridade: **Média** | Objetivo: Prevenir bugs e trapaças
-
-| # | Tarefa | Status | Notas |
-|---|--------|--------|-------|
-| 3.1 | **Validação Server-Side Completa** | ⬜ Pendente | Não confiar em dados do cliente |
-| 3.2 | **Timeout de Turno** | ⬜ Pendente | Limite de tempo (ex: 3 min), auto-pass |
-| 3.3 | **Timeout de Prompt** | ⬜ Pendente | Se não responder prompt em X segundos, cancela |
-| 3.4 | **Checksum de Estado** | ⬜ Pendente | Detectar dessincronização cliente/servidor |
-| 3.5 | **Rate Limiting** | ⬜ Pendente | Prevenir spam de mensagens |
-| 3.6 | **Reconexão** | ⬜ Pendente | Permitir reconectar a partida em andamento |
-
-### Fase 4: Features Avançadas
-> Prioridade: **Baixa** | Objetivo: Experiência completa
-
-| # | Tarefa | Status | Notas |
-|---|--------|--------|-------|
-| 4.1 | **Lobby / Matchmaking** | ⬜ Pendente | Lista de salas, busca aleatória |
-| 4.2 | **Salas Privadas com Código** | ⬜ Pendente | Criar sala com código para compartilhar |
-| 4.3 | **Espectadores** | ⬜ Pendente | Assistir partidas em andamento |
-| 4.4 | **Chat in-game** | ⬜ Pendente | Mensagens entre jogadores |
-| 4.5 | **Histórico de Partidas** | ⬜ Pendente | Log de ações, replay |
-| 4.6 | **Estatísticas de Jogador** | ⬜ Pendente | Vitórias, derrotas, etc. |
-| 4.7 | **Deck Validation Online** | ⬜ Pendente | Validar deck antes de entrar na partida |
+| # | Tarefa | Bloqueador? | Dependências | Pronto quando... |
+|---|--------|-------------|--------------|-------------------|
+| 1.0.1 | Remover/ocultar painel MVP e barra de índices | Sim | — | Painel MVP não aparece; apenas HUD padrão visível |
+| 1.0.2 | Usar context menu padrão para ações (Summon/Set/Activate/Attack/Switch) | Sim | 1.0.1 | Clique em carta abre menu igual ao offline |
+| 1.0.3 | Seleção de alvo por clique visual | Sim | 1.0.2 | Ao atacar, clica no monstro inimigo (não escolhe índice) |
+| 1.0.4 | Next Phase / End Turn integrados ao HUD | Não | 1.0.1 | Botões de fase no lugar padrão, funcionando online |
 
 ---
 
-## 🔧 Como Rodar o Modo Online
+### Fase 1.1 – Jogável de Ponta a Ponta
+> **Objetivo:** Uma partida pode começar, acontecer e terminar.
 
-### Servidor
+| # | Tarefa | Bloqueador? | Dependências | Pronto quando... |
+|---|--------|-------------|--------------|-------------------|
+| 1.1.1 | Ataque Direto | ✅ Feito | 1.0.3 | Se oponente não tem monstros, pode atacar LP diretamente |
+| 1.1.2 | Detectar Fim de Partida | ✅ Feito | — | LP ≤ 0 ou deck out → partida encerra, ambos veem resultado |
+| 1.1.3 | Tela de Vitória/Derrota | ✅ Feito | 1.1.2 | Modal mostra "Você venceu" ou "Você perdeu" |
+| 1.1.4 | Feedback de Desconexão | ✅ Feito | — | Se oponente desconecta, mostra aviso claro |
+
+---
+
+### Fase 1.2 – Polimento Mínimo
+> **Objetivo:** Experiência minimamente agradável.
+
+| # | Tarefa | Bloqueador? | Dependências | Pronto quando... |
+|---|--------|-------------|--------------|-------------------|
+| 1.2.1 | Indicador visual de "turno do oponente" | ✅ Feito | — | Fica claro quando não é seu turno |
+| 1.2.2 | Botão de Rematch | ✅ Feito | 1.1.2 | Após fim, opção de jogar novamente na mesma sala |
+| 1.2.3 | Reconexão simples | Não | — | Se cair conexão, pode reconectar à partida em andamento |
+
+---
+
+## 📦 O que fica para depois (Fase 2+)
+
+Estas funcionalidades **não bloqueiam** uma partida básica funcionar:
+
+| Categoria | Itens |
+|-----------|-------|
+| **Mecânicas avançadas** | Tributo (nível 5+), Fusão, Ascensão, Extra Deck online |
+| **Chains e respostas** | Sistema de chains, ativação de traps, prompts de resposta |
+| **Robustez** | Timeout de turno, validação server-side completa, rate limiting |
+| **Features extras** | Lobby/matchmaking, salas privadas, espectadores, chat, histórico, estatísticas |
+| **Polish** | Animações, highlights de ataque, efeitos visuais |
+
+---
+
+## 🔧 Como Rodar
+
 ```bash
+# Terminal 1: Servidor
 npm run server
-# Servidor escuta em ws://localhost:8080
+
+# Terminal 2+: Abrir index.html em 2 abas
+# Clicar "Online Mode" → Conectar → Ready em ambas
 ```
-
-### Cliente
-1. Abrir `index.html` em duas abas do navegador
-2. Clicar em "Online Mode"
-3. Conectar ambas ao mesmo Room ID
-4. Clicar "Ready" em ambas
-5. Partida inicia automaticamente
-
-### Variáveis de Ambiente
-- `PORT` – Porta do servidor WebSocket (default: 8080)
 
 ---
 
-## 📝 Notas de Implementação
+## 📅 Histórico
 
-### Fluxo de Mensagens
-
-```
-Cliente A                    Servidor                    Cliente B
-    |                           |                           |
-    |-- join_room ------------->|                           |
-    |<-- match_start (seat:P) --|                           |
-    |                           |<-- join_room -------------|
-    |                           |-- match_start (seat:B) -->|
-    |-- ready ----------------->|                           |
-    |                           |<-- ready -----------------|
-    |                           |                           |
-    |<-- state_update ----------+-- state_update ---------->|
-    |                           |                           |
-    |-- intent_card_click ----->|                           |
-    |<-- prompt_request --------|                           |
-    |-- prompt_response ------->|                           |
-    |                           |                           |
-    |<-- state_update ----------+-- state_update ---------->|
-```
-
-### Serialização de Estado
-
-`Game.getPublicState(forPlayerId)` retorna:
-- Mão própria: cards completos
-- Mão oponente: apenas count
-- Campo próprio: cards completos
-- Campo oponente: cards face-down ocultam nome/stats
-- LP, fase, turno, contador de turno
-
-### Ações Suportadas
-
-Ver `MessageProtocol.js` → `ACTION_TYPES`:
-- `NORMAL_SUMMON`
-- `SET_MONSTER`
-- `SWITCH_POSITION`
-- `DECLARE_ATTACK`
-- `NEXT_PHASE`
-- `END_TURN`
-- `SET_SPELLTRAP`
-- `ACTIVATE_SPELL`
-- `ACTIVATE_EFFECT`
-
----
-
-## 📅 Histórico de Atualizações
-
-| Data | Versão | Mudanças |
-|------|--------|----------|
-| 2025-12-29 | 0.1.0 | Criação do roadmap, análise do estado atual |
+| Data | Mudança |
+|------|---------|
+| 2025-12-29 | Criação do roadmap |
+| 2025-12-29 | Repriorização: UX Online = UX Offline como Fase 1.0 |
+| 2025-12-29 | ✅ Implementado: Ataque Direto (1.1.1) |
+| 2025-12-29 | ✅ Implementado: Detectar Fim de Partida (1.1.2) |
+| 2025-12-29 | ✅ Implementado: Tela de Vitória/Derrota (1.1.3) + Feedback de Desconexão (1.1.4) |
+| 2025-12-29 | ✅ Implementado: Indicador visual de turno (1.2.1) – borda roxa brilhante |
+| 2025-12-29 | ✅ Implementado: Botão de Rematch (1.2.2) |
 

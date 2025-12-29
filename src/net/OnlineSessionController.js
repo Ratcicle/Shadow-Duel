@@ -6,6 +6,7 @@ export default class OnlineSessionController {
     this.seat = null;
     this.snapshot = null;
     this.connected = false;
+    this.gameEnded = false;
     this.handlers = {
       state: null,
       error: null,
@@ -13,6 +14,8 @@ export default class OnlineSessionController {
       info: null,
       prompt: null,
       status: null,
+      gameOver: null,
+      rematchStatus: null,
     };
   }
 
@@ -64,6 +67,19 @@ export default class OnlineSessionController {
     this.client.onPrompt((prompt) => {
       this.handlers.prompt?.(prompt, this.seat);
     });
+    this.client.onGameOver((msg) => {
+      console.log("[OnlineSession] game_over", msg);
+      this.gameEnded = true;
+      this.handlers.gameOver?.(msg, this.seat);
+    });
+    this.client.onRematchStatus((msg) => {
+      console.log("[OnlineSession] rematch_status", msg);
+      // Se rematch está pronto, resetar gameEnded
+      if (msg.ready) {
+        this.gameEnded = false;
+      }
+      this.handlers.rematchStatus?.(msg, this.seat);
+    });
 
     this.client.connect(roomId, playerName);
     this.handlers.status?.({
@@ -96,5 +112,9 @@ export default class OnlineSessionController {
 
   sendPromptResponse(promptId, choice) {
     this.client?.sendPromptResponse(promptId, choice);
+  }
+
+  sendRematchRequest() {
+    this.client?.sendRematchRequest();
   }
 }

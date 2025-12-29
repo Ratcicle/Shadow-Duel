@@ -177,6 +177,12 @@ body {
   background: rgba(255, 255, 255, 0.02);
   width: 100%;
   position: relative;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.player-area.active-turn {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 8px rgba(187, 134, 252, 0.3);
 }
 
 #bot-area,

@@ -26,6 +26,15 @@ export default class Renderer {
   updateTurn(player) {
     if (!this.elements.turnIndicator) return;
     this.elements.turnIndicator.textContent = `Turn: ${player.name}`;
+    
+    // Indicador visual de turno: borda brilhante no campo do jogador ativo
+    const playerAreaEl = document.getElementById("player-area");
+    const botAreaEl = document.getElementById("bot-area");
+    if (playerAreaEl && botAreaEl) {
+      const isPlayerTurn = player.id === "player";
+      playerAreaEl.classList.toggle("active-turn", isPlayerTurn);
+      botAreaEl.classList.toggle("active-turn", !isPlayerTurn);
+    }
   }
 
   updatePhaseTrack(currentPhase) {
