@@ -921,16 +921,28 @@ export class MatchManager {
         return;
       }
 
+      // D: Enhanced logging para card_select
       console.log("[Server] card_select resolved", {
         seat,
         requirementId,
         choiceValue,
+        choiceCount: choiceValue.length,
         pendingActionType: pending.actionType,
+        pendingSeat: pending.seat,
+        hasResumeData: !!pending.resumeData,
+        stateVersion: room.stateVersion,
       });
 
       // Construir seleções para o payload
       const selections = { [requirementId]: choiceValue };
       const nextPayload = { ...(pending.payload || {}), selections };
+
+      console.log("[Server] card_select applying action", {
+        seat: pending.seat || client.seat,
+        actionType: pending.actionType,
+        hasSelections: !!nextPayload.selections,
+        selectionKeys: Object.keys(nextPayload.selections || {}),
+      });
 
       const applyResult = await this.applyAction(
         room,
@@ -940,7 +952,21 @@ export class MatchManager {
         { pendingSelection: pending }
       );
 
+      console.log("[Server] card_select applyAction result", {
+        seat,
+        ok: applyResult.ok,
+        needsSelection: applyResult.needsSelection,
+        message: applyResult.message,
+        hint: applyResult.hint,
+      });
+
       if (!applyResult.ok) {
+        console.error("[Server] card_select failed", {
+          seat,
+          actionType: pending.actionType,
+          message: applyResult.message,
+          hint: applyResult.hint,
+        });
         this.sendError(
           client,
           applyResult.message || "Card selection failed",
@@ -952,6 +978,11 @@ export class MatchManager {
       }
 
       if (applyResult.needsSelection && applyResult.selection?.prompt) {
+        console.log("[Server] card_select needs more selection", {
+          seat,
+          promptType: applyResult.selection.prompt?.type,
+          requirementId: applyResult.selection.requirementId,
+        });
         const selectionInfo = applyResult.selection;
         this.storeAndSendPrompt(room, client, selectionInfo.prompt, {
           pendingSelection: {
@@ -967,6 +998,11 @@ export class MatchManager {
         return;
       }
 
+      console.log("[Server] card_select successfully resolved", {
+        seat,
+        actionType: pending.actionType,
+        stateVersionAfter: room.stateVersion,
+      });
       this.commitStateUpdate(room, "card_select_resolved");
       return;
     }

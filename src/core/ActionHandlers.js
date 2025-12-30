@@ -5613,13 +5613,59 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
     };
 
     const selectionKeys = resolveSelectionKeys();
+    
+    // D: Log quando há seleções disponíveis (resume)
+    console.log("[ActionHandlers] search_any resume check", {
+      player: player?.id,
+      sourceZone,
+      hasSelectionMap: !!selectionMap,
+      selectionKeys: selectionKeys,
+      candidatesCount: decoratedCandidates.length,
+    });
+
     if (selectionKeys && selectionKeys.length > 0) {
+      console.log("[ActionHandlers] search_any resuming with selections", {
+        player: player?.id,
+        selectionKeys,
+        candidatesAvailable: decoratedCandidates.map(c => c.key),
+      });
+
       const selectedCards = selectionKeys
-        .map((key) => decoratedCandidates.find((cand) => cand.key === key))
+        .map((key) => {
+          const found = decoratedCandidates.find((cand) => cand.key === key);
+          if (!found) {
+            console.warn("[ActionHandlers] search_any: key not found in candidates", {
+              key,
+              availableKeys: decoratedCandidates.map(c => c.key),
+            });
+          }
+          return found;
+        })
         .filter((cand) => !!cand?.cardRef)
         .map((cand) => cand.cardRef);
-      return finalizeSelection(selectedCards);
+
+      console.log("[ActionHandlers] search_any finalizing selection", {
+        player: player?.id,
+        selectedCount: selectedCards.length,
+        selectedNames: selectedCards.map(c => c.name),
+      });
+
+      const result = finalizeSelection(selectedCards);
+      console.log("[ActionHandlers] search_any finalized", {
+        player: player?.id,
+        result,
+      });
+      return result;
     }
+
+    // D: Log quando retorna needsSelection
+    console.log("[ActionHandlers] search_any returning needsSelection", {
+      player: player?.id,
+      sourceZone,
+      candidatesCount: decoratedCandidates.length,
+      minSelect,
+      maxSelect,
+    });
 
     // Retornar objeto especial indicando que precisa de seleção
     // O EffectEngine deve propagar isso para o servidor
