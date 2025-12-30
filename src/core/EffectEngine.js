@@ -1247,6 +1247,7 @@ export default class EffectEngine {
       method,
       fromZone: summonFromZone,
     } = payload;
+    const actionContext = payload?.actionContext || null;
     const opponent = this.game?.getOpponent?.(summoner);
     const participants = [];
 
@@ -1299,6 +1300,7 @@ export default class EffectEngine {
           summonMethod: method,
           summonFromZone,
           currentPhase,
+          actionContext,
         };
 
         for (const effect of sourceCard.effects) {
@@ -1458,6 +1460,7 @@ export default class EffectEngine {
 
     const attacker = payload.attacker;
     const destroyed = payload.destroyed;
+    const actionContext = payload?.actionContext || null;
     const attackerOwner =
       payload.attackerOwner || this.getOwnerByCard(attacker);
     const destroyedOwner =
@@ -1510,6 +1513,7 @@ export default class EffectEngine {
           attackerOwner,
           destroyedOwner,
           host: card.equippedTo || null,
+          actionContext,
         };
 
         for (const effect of card.effects) {
@@ -1602,6 +1606,7 @@ export default class EffectEngine {
       return { entries, orderRule };
     }
 
+    const actionContext = payload?.actionContext || null;
     const attackerOwner = payload.attackerOwner;
     const defenderOwner = payload.defenderOwner;
 
@@ -1780,6 +1785,7 @@ export default class EffectEngine {
             target: payload.defender || payload.target || null,
             attackerOwner: payload.attackerOwner,
             defenderOwner: payload.defenderOwner,
+            actionContext,
           };
 
           const activationContext = this.buildTriggerActivationContext(
@@ -1816,6 +1822,7 @@ export default class EffectEngine {
       return { entries, orderRule };
     }
 
+    const actionContext = payload?.actionContext || null;
     const targetCard = payload.target;
     const targetOwner = payload.targetOwner;
     const sourceCard = payload.source;
@@ -1922,6 +1929,7 @@ export default class EffectEngine {
           opponent: sourceOwner,
           targetedCard: targetCard,
           targetingSource: sourceCard,
+          actionContext,
         };
 
         const activationContext = this.buildTriggerActivationContext(
@@ -1953,6 +1961,7 @@ export default class EffectEngine {
     const orderRule = "card owner only; source: card";
 
     const { card, player, opponent, fromZone, toZone } = payload || {};
+    const actionContext = payload?.actionContext || null;
     if (!card || !player) return { entries, orderRule };
     if (!card.effects || !Array.isArray(card.effects)) {
       return { entries, orderRule };
@@ -1973,6 +1982,7 @@ export default class EffectEngine {
       opponent: resolvedOpponent,
       fromZone,
       toZone,
+      actionContext,
     };
 
     for (const effect of card.effects) {
@@ -2102,6 +2112,7 @@ export default class EffectEngine {
 
     if (!payload || !payload.player) return { entries, orderRule };
 
+    const actionContext = payload?.actionContext || null;
     const owner = payload.player;
     const opponent = payload.opponent || this.game?.getOpponent?.(owner);
 
@@ -2119,6 +2130,7 @@ export default class EffectEngine {
         player: owner,
         opponent,
         host: card.equippedTo || null,
+        actionContext,
       };
 
       for (const effect of card.effects) {
@@ -2313,6 +2325,7 @@ export default class EffectEngine {
       committed: activationContext?.committed === true,
       commitInfo: activationContext?.commitInfo || null,
       autoSelectSingleTarget: activationContext?.autoSelectSingleTarget,
+      actionContext: activationContext?.actionContext || null,
     };
 
     const ctx = {
@@ -2321,6 +2334,7 @@ export default class EffectEngine {
       opponent: this.game.getOpponent(player),
       activationZone: "graveyard",
       activationContext: normalizedActivationContext,
+      actionContext: normalizedActivationContext.actionContext || null,
     };
 
     const targetResult = this.resolveTargets(
@@ -2403,6 +2417,7 @@ export default class EffectEngine {
       committed: activationContext?.committed === true,
       commitInfo: activationContext?.commitInfo || null,
       autoSelectSingleTarget: activationContext?.autoSelectSingleTarget,
+      actionContext: activationContext?.actionContext || null,
     };
 
     const ctx = {
@@ -2411,6 +2426,7 @@ export default class EffectEngine {
       opponent: this.game.getOpponent(player),
       activationZone: "fieldSpell",
       activationContext: normalizedActivationContext,
+      actionContext: normalizedActivationContext.actionContext || null,
     };
 
     const targetResult = this.resolveTargets(
@@ -2491,6 +2507,7 @@ export default class EffectEngine {
       committed: activationContext?.committed === true,
       commitInfo: activationContext?.commitInfo || null,
       autoSelectSingleTarget: activationContext?.autoSelectSingleTarget,
+      actionContext: activationContext?.actionContext || null,
     };
     let effect = null;
 
@@ -2561,6 +2578,7 @@ export default class EffectEngine {
       opponent: this.game.getOpponent(player),
       activationZone,
       activationContext: normalizedActivationContext,
+      actionContext: normalizedActivationContext.actionContext || null,
     };
 
     const condCheck = this.evaluateConditions(effect.conditions, ctx);
@@ -2726,6 +2744,7 @@ export default class EffectEngine {
       committed: activationContext?.committed === true,
       commitInfo: activationContext?.commitInfo || null,
       autoSelectSingleTarget: activationContext?.autoSelectSingleTarget,
+      actionContext: activationContext?.actionContext || null,
     };
 
     const ctx = {
@@ -2734,6 +2753,7 @@ export default class EffectEngine {
       opponent: this.game.getOpponent(player),
       activationZone,
       activationContext: normalizedActivationContext,
+      actionContext: normalizedActivationContext.actionContext || null,
     };
 
     const condCheck = this.evaluateConditions(effect.conditions, ctx);
