@@ -3566,6 +3566,17 @@ export default class EffectEngine {
         try {
           // Pass filtered targets to handler instead of original targets
           const result = await handler(action, ctx, filteredTargets, this);
+
+          // INVARIANTE B1: Se handler retornou needsSelection, propagar para cima
+          if (result && typeof result === "object" && result.needsSelection) {
+            logDev?.("ACTION_NEEDS_SELECTION", {
+              ...actionInfo,
+              selectionKind: result.selectionContract?.kind || "unknown",
+            });
+            // Retornar imediatamente com o selectionContract
+            return result;
+          }
+
           executed = result || executed;
           logDev?.("ACTION_HANDLER_DONE", {
             ...actionInfo,

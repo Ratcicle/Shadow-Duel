@@ -3449,3 +3449,25 @@ body {
 .online-prompt-cancel:hover {
   background: #273549;
 }
+
+/* Fallback prompt warning styles */
+.fallback-warning {
+  margin: 0;
+  padding: 8px 12px;
+  background: rgba(251, 191, 36, 0.15);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  border-radius: 6px;
+  color: #fbbf24;
+  font-size: 13px;
+  text-align: center;
+}
+
+.generic-fallback-modal {
+  max-width: 320px;
+}
+
+.generic-fallback-modal p {
+  margin: 0;
+  font-size: 14px;
+  color: #9ca3af;
+}

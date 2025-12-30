@@ -143,7 +143,8 @@
     </div>
 
     <div id="game-container">
-      <div id="online-status-bar">
+      <!-- Online status bar hidden - using standard HUD instead -->
+      <div id="online-status-bar" class="hidden">
         <div id="online-action-status">Offline</div>
         <div class="online-controls">
           <button id="online-btn-next-phase">Next Phase</button>
@@ -322,13 +323,7 @@
             <option value="player">Player</option>
             <option value="bot">Bot</option>
           </select>
-          <input
-            type="number"
-            id="dev-draw-count"
-            min="1"
-            max="10"
-            value="1"
-          />
+          <input type="number" id="dev-draw-count" min="1" max="10" value="1" />
           <button id="dev-draw-btn">Comprar</button>
         </div>
       </div>
@@ -381,7 +376,9 @@
       <div class="dev-field">
         <label>Activation Pipeline Sanity Suite</label>
         <div class="dev-inline">
-          <button id="dev-sanity-a">Sanity A: Hand spell target + cancel</button>
+          <button id="dev-sanity-a">
+            Sanity A: Hand spell target + cancel
+          </button>
           <button id="dev-sanity-b">Sanity B: placementOnly</button>
           <button id="dev-sanity-c">
             Sanity C: committed field spell fail + restore
@@ -390,7 +387,9 @@
           <button id="dev-sanity-e">Sanity E: bot auto-select</button>
           <button id="dev-sanity-f">Sanity F: player strategy manual</button>
           <button id="dev-sanity-g">Sanity G: bot min=0 optional</button>
-          <button id="dev-sanity-h">Sanity H: Hydra Titan before_destroy</button>
+          <button id="dev-sanity-h">
+            Sanity H: Hydra Titan before_destroy
+          </button>
           <button id="dev-sanity-i">Sanity I: field full protection</button>
           <button id="dev-sanity-j">Sanity J: rollback invariants</button>
           <button id="dev-sanity-k">Sanity K: once per turn</button>
@@ -404,4 +403,3 @@
     </div>
   </body>
 </html>
-

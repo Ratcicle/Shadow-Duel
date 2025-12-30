@@ -183,7 +183,17 @@ export class MatchManager {
       this.handleGameOver(room, payload);
     });
 
-    this.broadcastState(room);
+    // INVARIANTE A: Escutar mudanças de estado do Game para sincronizar clientes
+    // Isso captura transições automáticas de fase (draw -> standby -> main1)
+    game.on("state_changed", (payload) => {
+      // Debounce: só emitir se não estiver em resolução de efeito
+      // Isso evita spam durante múltiplos updateBoard() seguidos
+      if (!room.isResolvingEffect) {
+        this.commitStateUpdate(room, `state_changed:${payload.phase}`);
+      }
+    });
+
+    this.commitStateUpdate(room, "match_start");
   }
 
   handleGameOver(room, payload) {
@@ -191,7 +201,12 @@ export class MatchManager {
     room.gameEnded = true;
 
     const { winnerId, loserId, reason } = payload;
-    console.log("[Server] game_over", { room: room.id, winnerId, loserId, reason });
+    console.log("[Server] game_over", {
+      room: room.id,
+      winnerId,
+      loserId,
+      reason,
+    });
 
     // Mapear seat para resultado
     const playerSeat = "player";
@@ -218,7 +233,7 @@ export class MatchManager {
     }
 
     // Enviar estado final também
-    this.broadcastState(room);
+    this.commitStateUpdate(room, "game_over");
   }
 
   async handleRematchRequest(client) {
@@ -300,18 +315,81 @@ export class MatchManager {
     this.storeAndSendPrompt(room, client, prompt);
   }
 
+  /**
+   * INVARIANTE C2: Todo prompt tem timeout para evitar soft-lock
+   * Armazena prompt e inicia timer de 30s para auto-cancel
+   */
   storeAndSendPrompt(room, client, prompt, extra = {}) {
     if (!prompt?.promptId) return;
-    room.prompts.set(prompt.promptId, { client, prompt, ...extra });
+
+    // Cancelar timeout anterior se existir
+    const existingEntry = room.prompts.get(prompt.promptId);
+    if (existingEntry?.timeoutId) {
+      clearTimeout(existingEntry.timeoutId);
+    }
+
+    // Configurar timeout de 30s
+    const PROMPT_TIMEOUT_MS = 30000;
+    const timeoutId = setTimeout(() => {
+      this.handlePromptTimeout(room, client, prompt.promptId);
+    }, PROMPT_TIMEOUT_MS);
+
+    room.prompts.set(prompt.promptId, {
+      client,
+      prompt,
+      timeoutId,
+      createdAt: Date.now(),
+      ...extra,
+    });
+    room.pendingPromptType = prompt.type;
+
     console.log("[Server] send prompt", {
       seat: client.seat,
       promptId: prompt.promptId,
       type: prompt.type,
+      timeoutMs: PROMPT_TIMEOUT_MS,
     });
     send(client.ws, {
       type: SERVER_MESSAGE_TYPES.PROMPT_REQUEST,
       prompt,
     });
+  }
+
+  /**
+   * INVARIANTE C2: Handler de timeout de prompt
+   * Auto-cancela prompt após 30s para evitar soft-lock
+   */
+  handlePromptTimeout(room, client, promptId) {
+    const promptEntry = room.prompts.get(promptId);
+    if (!promptEntry) return; // Já foi respondido
+
+    console.warn("[Server] prompt timeout", {
+      promptId,
+      type: promptEntry.prompt?.type,
+      seat: client?.seat,
+    });
+
+    // Remover prompt
+    room.prompts.delete(promptId);
+    room.pendingPromptType = null;
+
+    // Limpar estado de seleção se existir
+    if (room.game) {
+      if (typeof room.game.cancelTargetSelection === "function") {
+        room.game.cancelTargetSelection();
+      }
+      if (room.game.selectionState) {
+        room.game.selectionState = "idle";
+      }
+      room.game.targetSelection = null;
+      room.game.isResolvingEffect = false;
+      room.game.inputLocked = false;
+    }
+    room.isResolvingEffect = false;
+
+    // Notificar cliente
+    this.sendError(client, "Prompt timed out", "prompt_timeout");
+    this.commitStateUpdate(room, "prompt_timeout_cancelled");
   }
 
   buildCardActionMenu(room, client, intent) {
@@ -357,9 +435,14 @@ export class MatchManager {
         inMain &&
         (card.cardKind === "spell" || card.cardKind === "trap")
       ) {
-        addOption("set_spelltrap", "Set Spell/Trap", ACTION_TYPES.SET_SPELLTRAP, {
-          handIndex: idx,
-        });
+        addOption(
+          "set_spelltrap",
+          "Set Spell/Trap",
+          ACTION_TYPES.SET_SPELLTRAP,
+          {
+            handIndex: idx,
+          }
+        );
         const canActivate =
           game.effectEngine?.canActivateSpellFromHandPreview?.(card, actor)
             ?.ok === true;
@@ -378,6 +461,17 @@ export class MatchManager {
         zone,
         index: idx,
         options,
+        // Card data for visual rendering on client
+        cardData: {
+          id: card.id,
+          name: card.name,
+          cardKind: card.cardKind,
+          subtype: card.subtype || null,
+          image: card.image || null,
+          atk: card.atk,
+          def: card.def,
+          level: card.level,
+        },
       };
     }
 
@@ -395,12 +489,9 @@ export class MatchManager {
         );
       }
       if (isYourTurn && inMain && card.cardKind === "monster") {
-        addOption(
-          "switch",
-          "Switch Position",
-          ACTION_TYPES.SWITCH_POSITION,
-          { fieldIndex: idx }
-        );
+        addOption("switch", "Switch Position", ACTION_TYPES.SWITCH_POSITION, {
+          fieldIndex: idx,
+        });
         const canEffect =
           game.effectEngine?.canActivateMonsterEffectPreview?.(
             card,
@@ -425,6 +516,18 @@ export class MatchManager {
         zone,
         index: idx,
         options,
+        // Card data for visual rendering on client
+        cardData: {
+          id: card.id,
+          name: card.name,
+          cardKind: card.cardKind,
+          subtype: card.subtype || null,
+          image: card.image || null,
+          atk: card.atk,
+          def: card.def,
+          level: card.level,
+          position: card.position || "attack",
+        },
       };
     }
 
@@ -447,8 +550,14 @@ export class MatchManager {
       return;
     }
 
+    // INVARIANTE C2: Cancelar timeout ao receber resposta
+    if (promptEntry.timeoutId) {
+      clearTimeout(promptEntry.timeoutId);
+    }
+
     const { prompt } = promptEntry;
     room.prompts.delete(msg.promptId);
+    room.pendingPromptType = null;
 
     if (prompt.type === "card_action_menu") {
       const choice = prompt.options.find((opt) => opt.id === msg.choice);
@@ -460,7 +569,12 @@ export class MatchManager {
         return; // cancel
       }
       if (choice.requiresTarget) {
-        const targetPrompt = this.buildTargetPrompt(room, client, prompt, choice);
+        const targetPrompt = this.buildTargetPrompt(
+          room,
+          client,
+          prompt,
+          choice
+        );
         if (!targetPrompt) {
           this.sendError(client, "No valid targets", "action_rejected");
           return;
@@ -496,16 +610,25 @@ export class MatchManager {
             resumeData: selectionInfo.resumeData,
           },
         });
-        this.broadcastState(room);
+        this.commitStateUpdate(room, "menu_action_needs_selection");
         return;
       }
-      this.broadcastState(room);
+      this.commitStateUpdate(room, "menu_action_resolved");
       return;
     }
 
     if (prompt.type === "selection_contract") {
       if (msg.choice === "cancel") {
-        this.sendState(client, room.game);
+        // Clear the pending selection state in the game
+        if (typeof room.game.cancelTargetSelection === "function") {
+          room.game.cancelTargetSelection();
+        }
+        // Also reset selection state directly in case targetSelection is not set
+        if (room.game.selectionState) {
+          room.game.selectionState = "idle";
+        }
+        room.game.targetSelection = null;
+        this.commitStateUpdate(room, "selection_cancelled");
         return;
       }
       const pending = promptEntry.pendingSelection || {};
@@ -570,10 +693,10 @@ export class MatchManager {
             resumeData: selectionInfo.resumeData,
           },
         });
-        this.broadcastState(room);
+        this.commitStateUpdate(room, "contract_needs_more_selection");
         return;
       }
-      this.broadcastState(room);
+      this.commitStateUpdate(room, "contract_selection_resolved");
       return;
     }
 
@@ -584,6 +707,11 @@ export class MatchManager {
         return;
       }
       if (!option.actionType) {
+        // Cancel was selected - ensure selection state is cleared
+        if (typeof room.game.cancelTargetSelection === "function") {
+          room.game.cancelTargetSelection();
+        }
+        this.commitStateUpdate(room, "target_select_cancelled");
         return;
       }
       const applyResult = await this.applyAction(
@@ -614,10 +742,92 @@ export class MatchManager {
             resumeData: selectionInfo.resumeData,
           },
         });
-        this.broadcastState(room);
+        this.commitStateUpdate(room, "target_action_needs_selection");
         return;
       }
-      this.broadcastState(room);
+      this.commitStateUpdate(room, "target_action_resolved");
+      return;
+    }
+
+    // B2: Handler para card_select (search do deck/gy)
+    if (prompt.type === "card_select") {
+      if (msg.choice === "cancel") {
+        // Limpar estado de seleção
+        if (typeof room.game.cancelTargetSelection === "function") {
+          room.game.cancelTargetSelection();
+        }
+        if (room.game.selectionState) {
+          room.game.selectionState = "idle";
+        }
+        this.commitStateUpdate(room, "card_select_cancelled");
+        return;
+      }
+
+      const pending = promptEntry.pendingSelection || {};
+      const requirementId =
+        pending.requirementId || prompt.requirement?.id || "search_selection";
+
+      // Validar que a escolha é um dos candidatos válidos
+      const candidates = prompt.requirement?.candidates || [];
+      const choiceValue = Array.isArray(msg.choice) ? msg.choice : [msg.choice];
+      const min = prompt.requirement?.min ?? 1;
+      const max = prompt.requirement?.max ?? 1;
+
+      if (choiceValue.length < min || choiceValue.length > max) {
+        this.sendError(client, "Invalid selection count", "action_rejected");
+        this.sendState(client, room.game);
+        return;
+      }
+
+      // Validar que todas as escolhas são candidatos válidos
+      const validIds = new Set(candidates.map((c) => c.id));
+      const invalidChoices = choiceValue.filter((c) => !validIds.has(c));
+      if (invalidChoices.length > 0) {
+        this.sendError(client, "Invalid selection", "action_rejected");
+        this.sendState(client, room.game);
+        return;
+      }
+
+      // Construir seleções para o payload
+      const selections = { [requirementId]: choiceValue };
+      const nextPayload = { ...(pending.payload || {}), selections };
+
+      const applyResult = await this.applyAction(
+        room,
+        pending.seat || client.seat,
+        pending.actionType,
+        nextPayload,
+        { pendingSelection: pending }
+      );
+
+      if (!applyResult.ok) {
+        this.sendError(
+          client,
+          applyResult.message || "Card selection failed",
+          "action_rejected",
+          applyResult.hint
+        );
+        this.sendState(client, room.game);
+        return;
+      }
+
+      if (applyResult.needsSelection && applyResult.selection?.prompt) {
+        const selectionInfo = applyResult.selection;
+        this.storeAndSendPrompt(room, client, selectionInfo.prompt, {
+          pendingSelection: {
+            seat: pending.seat || client.seat,
+            actionType: pending.actionType,
+            payload: nextPayload,
+            selectionContract: selectionInfo.contract,
+            requirementId: selectionInfo.requirementId,
+            resumeData: selectionInfo.resumeData,
+          },
+        });
+        this.commitStateUpdate(room, "card_select_needs_more");
+        return;
+      }
+
+      this.commitStateUpdate(room, "card_select_resolved");
       return;
     }
   }
@@ -636,7 +846,7 @@ export class MatchManager {
             entry.card.cardKind === "monster" &&
             entry.card.isFacedown !== true
         );
-      
+
       const promptId = `p_${room.id}_${++this.promptCounter}`;
       const targetOptions = [];
 
@@ -665,12 +875,18 @@ export class MatchManager {
         });
       }
 
-      targetOptions.push({ id: "cancel", label: "Cancel", actionType: null, payload: null });
+      targetOptions.push({
+        id: "cancel",
+        label: "Cancel",
+        actionType: null,
+        payload: null,
+      });
 
       return {
         type: "target_select",
         promptId,
-        title: targets.length > 0 ? "Select attack target" : "No monsters to attack",
+        title:
+          targets.length > 0 ? "Select attack target" : "No monsters to attack",
         targets: targetOptions,
       };
     }
@@ -688,16 +904,27 @@ export class MatchManager {
       return null;
     }
     const promptId = `p_${room.id}_${++this.promptCounter}`;
+
+    // Determinar tipo de prompt baseado no kind do contrato
+    const contractKind = contract.kind || "selection_contract";
+    const isCardSelect = contractKind === "card_select";
+
     const candidates = requirement.candidates.map((cand, idx) => ({
       id: cand.key ?? idx,
       label: cand.name || `Target ${idx + 1}`,
       zone: cand.zone || null,
       controller: cand.controller || cand.owner || null,
       zoneIndex: cand.zoneIndex ?? null,
+      // Campos extras para card_select (search)
+      cardId: cand.cardId ?? null,
+      cardKind: cand.cardKind ?? null,
+      atk: cand.atk ?? null,
+      def: cand.def ?? null,
+      level: cand.level ?? null,
     }));
 
     return {
-      type: "selection_contract",
+      type: isCardSelect ? "card_select" : "selection_contract",
       promptId,
       title: contract.message || "Select target(s)",
       requirement: {
@@ -707,6 +934,7 @@ export class MatchManager {
         candidates,
       },
       actionType: actionContext.actionType || null,
+      sourceZone: selectionResult.sourceZone || null,
     };
   }
 
@@ -775,7 +1003,7 @@ export class MatchManager {
           resumeData: selectionInfo.resumeData,
         },
       });
-      this.broadcastState(room);
+      this.commitStateUpdate(room, "action_needs_selection");
       return;
     }
 
@@ -783,9 +1011,14 @@ export class MatchManager {
       seat: client.seat,
       actionType,
     });
-    this.broadcastState(room);
+    this.commitStateUpdate(room, `action_${actionType.toLowerCase()}`);
   }
 
+  /**
+   * INVARIANTE C1: EffectResolutionGuard
+   * Wrapper que garante cleanup em caso de erro durante resolução de efeitos.
+   * Toda execução de efeito passa por aqui para evitar soft-locks.
+   */
   async applyAction(room, seat, actionType, payload, context = null) {
     const game = room?.game;
     if (!game) {
@@ -802,6 +1035,60 @@ export class MatchManager {
     if (game.turn !== actor.id) {
       return { ok: false, message: "Not your turn" };
     }
+
+    // INVARIANTE C1: Marcar que estamos resolvendo
+    room.isResolvingEffect = true;
+    room.pendingPromptType = null;
+
+    try {
+      return await this._executeAction(
+        room,
+        actor,
+        opponent,
+        actionType,
+        payload,
+        context,
+        seat
+      );
+    } catch (error) {
+      console.error("[Server] applyAction error", {
+        actionType,
+        seat,
+        error: error.message || error,
+      });
+      return {
+        ok: false,
+        message: "Action failed due to internal error",
+        hint: error.message || null,
+      };
+    } finally {
+      // INVARIANTE C1: SEMPRE limpar estado de resolução
+      room.isResolvingEffect = false;
+      // Limpar pendingPrompt se não houve needsSelection
+      // (se houve, o prompt será gerenciado pelo fluxo de prompts)
+      if (game.selectionState === "idle" || !game.selectionState) {
+        room.pendingPromptType = null;
+      }
+      // Garantir que locks do game são liberados
+      if (game.isResolvingEffect) {
+        game.isResolvingEffect = false;
+      }
+      if (game.inputLocked) {
+        game.inputLocked = false;
+      }
+    }
+  }
+
+  async _executeAction(
+    room,
+    actor,
+    opponent,
+    actionType,
+    payload,
+    context,
+    seat
+  ) {
+    const game = room.game;
 
     const ensureMainPhase = () =>
       game.phase === "main1" || game.phase === "main2";
@@ -856,12 +1143,37 @@ export class MatchManager {
         summonedCard.setTurn = summonedCard.isFacedown
           ? game.turnCounter
           : null;
-        game.emit("after_summon", {
+
+        // IMPORTANTE: Aguardar resolução de efeitos after_summon
+        const emitResult = await game.emit("after_summon", {
           card: summonedCard,
           player: actor,
           method: "normal",
           fromZone: "hand",
         });
+
+        // Verificar se algum efeito precisa de seleção
+        if (emitResult?.needsSelection && emitResult.selectionContract) {
+          const prompt = this.buildSelectionPrompt(room, { seat }, emitResult, {
+            actionType: "after_summon_effect",
+          });
+          if (prompt) {
+            return {
+              ok: true,
+              needsSelection: true,
+              selection: {
+                prompt,
+                contract: emitResult.selectionContract,
+                requirementId:
+                  prompt?.requirement?.id ||
+                  emitResult.selectionContract?.requirements?.[0]?.id ||
+                  "selection",
+                resumeData: emitResult.resumeData || null,
+              },
+            };
+          }
+        }
+
         game.updateBoard();
         return { ok: true };
       }
@@ -883,12 +1195,37 @@ export class MatchManager {
         summonedCard.summonedTurn = game.turnCounter;
         summonedCard.positionChangedThisTurn = false;
         summonedCard.setTurn = game.turnCounter;
-        game.emit("after_summon", {
+
+        // IMPORTANTE: Aguardar resolução de efeitos after_summon (mesmo para set)
+        const emitResult = await game.emit("after_summon", {
           card: summonedCard,
           player: actor,
           method: "normal",
           fromZone: "hand",
         });
+
+        // Verificar se algum efeito precisa de seleção
+        if (emitResult?.needsSelection && emitResult.selectionContract) {
+          const prompt = this.buildSelectionPrompt(room, { seat }, emitResult, {
+            actionType: "after_summon_effect",
+          });
+          if (prompt) {
+            return {
+              ok: true,
+              needsSelection: true,
+              selection: {
+                prompt,
+                contract: emitResult.selectionContract,
+                requirementId:
+                  prompt?.requirement?.id ||
+                  emitResult.selectionContract?.requirements?.[0]?.id ||
+                  "selection",
+                resumeData: emitResult.resumeData || null,
+              },
+            };
+          }
+        }
+
         game.updateBoard();
         return { ok: true };
       }
@@ -928,10 +1265,15 @@ export class MatchManager {
           return { ok: false, message: "Only Spell/Trap can be activated" };
         }
         const selections = buildSelection(payload);
-        const result = await game.tryActivateSpell(card, handIndex, selections, {
-          owner: actor,
-          resume: context?.pendingSelection?.resumeData || null,
-        });
+        const result = await game.tryActivateSpell(
+          card,
+          handIndex,
+          selections,
+          {
+            owner: actor,
+            resume: context?.pendingSelection?.resumeData || null,
+          }
+        );
         if (result?.needsSelection && result.selectionContract) {
           const prompt = this.buildSelectionPrompt(room, { seat }, result, {
             actionType,
@@ -970,7 +1312,10 @@ export class MatchManager {
         const card = actor.field[fieldIndex];
         if (!card) return { ok: false, message: "No monster in that slot" };
         if (card.cardKind !== "monster") {
-          return { ok: false, message: "Only monster effects can be activated" };
+          return {
+            ok: false,
+            message: "Only monster effects can be activated",
+          };
         }
         const selections = buildSelection(payload);
         const result = await game.tryActivateMonsterEffect(
@@ -1045,7 +1390,10 @@ export class MatchManager {
           (c) => c && c.cardKind === "monster" && !c.isFacedown
         );
         if (hasTargets) {
-          return { ok: false, message: "Cannot direct attack: opponent has monsters" };
+          return {
+            ok: false,
+            message: "Cannot direct attack: opponent has monsters",
+          };
         }
         // Passar null como target para indicar ataque direto
         const result = await game.resolveCombat(attacker, null, {
@@ -1053,7 +1401,10 @@ export class MatchManager {
           allowDuringResolving: true,
         });
         if (result && result.ok === false) {
-          return { ok: false, message: result.reason || "Direct attack not allowed" };
+          return {
+            ok: false,
+            message: result.reason || "Direct attack not allowed",
+          };
         }
         return { ok: true };
       }
@@ -1073,6 +1424,39 @@ export class MatchManager {
       }
       default:
         return { ok: false, message: "Unsupported action" };
+    }
+  }
+
+  /**
+   * INVARIANTE A: Toda mutação de estado relevante passa por aqui.
+   * Incrementa stateVersion e broadcast para ambos os jogadores.
+   * @param {Object} room - The room object
+   * @param {string} reason - Why state is being committed (for debugging)
+   */
+  commitStateUpdate(room, reason = "unknown") {
+    if (!room?.game) return;
+    room.stateVersion = (room.stateVersion || 0) + 1;
+    console.log("[Server] commitStateUpdate", {
+      room: room.id,
+      version: room.stateVersion,
+      phase: room.game.phase,
+      turn: room.game.turn,
+      reason,
+    });
+    const payloadForSeat = (seat) => ({
+      type: SERVER_MESSAGE_TYPES.STATE_UPDATE,
+      state: {
+        ...room.game.getPublicState(seat),
+        stateVersion: room.stateVersion,
+        isResolvingEffect: room.isResolvingEffect || false,
+        pendingPromptType: room.pendingPromptType || null,
+      },
+    });
+    if (room.clients.player) {
+      send(room.clients.player.ws, payloadForSeat("player"));
+    }
+    if (room.clients.bot) {
+      send(room.clients.bot.ws, payloadForSeat("bot"));
     }
   }
 
@@ -1116,23 +1500,23 @@ export class MatchManager {
   handleDisconnect(client) {
     const room = this.getRoom(client);
     if (!room) return;
-    
+
     const disconnectedSeat = client.seat;
-    
+
     // Identificar o outro jogador ANTES de remover o cliente
     const otherSeat = disconnectedSeat === "player" ? "bot" : "player";
     const otherClient = room.clients[otherSeat];
-    
+
     // Remover o cliente que desconectou
     if (disconnectedSeat && room.clients[disconnectedSeat] === client) {
       room.clients[disconnectedSeat] = null;
     }
-    
+
     // Notificar o outro jogador se ainda estiver conectado
     if (otherClient?.ws?.readyState === otherClient?.ws?.OPEN) {
       this.sendError(otherClient, "Opponent disconnected", "opponent_left");
     }
-    
+
     this.rooms.delete(room.id);
   }
 
@@ -1142,6 +1526,9 @@ export class MatchManager {
       clients: { player: null, bot: null },
       game: null,
       prompts: new Map(),
+      stateVersion: 0,
+      isResolvingEffect: false,
+      pendingPromptType: null,
     };
   }
 

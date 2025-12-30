@@ -5,6 +5,7 @@ import { cardDatabase, cardDatabaseById } from "./data/cards.js";
 import { validateCardDatabase } from "./core/CardDatabaseValidator.js";
 import OnlineSessionController from "./net/OnlineSessionController.js";
 import { ACTION_TYPES } from "./server/MessageProtocol.js";
+import { handlePromptWithVisualModal } from "./ui/OnlinePromptAdapter.js";
 
 import {
   initializeLocale,
@@ -155,12 +156,20 @@ let onlineSession = null;
 let onlineRenderer = null;
 let onlineSeat = null;
 let onlineSnapshot = null;
+let onlineSelectionActive = false; // Flag to block intent clicks during visual selection
+let lastRenderedStateVersion = -1; // INVARIANTE A2: só re-render se stateVersion mudou
 const onlineSelections = {
   handIndex: null,
   fieldIndex: null,
   targetIndex: null,
 };
 let activeOnlinePrompt = null;
+
+// Export setter for OnlinePromptAdapter to control selection state
+window.setOnlineSelectionActive = (active) => {
+  onlineSelectionActive = active;
+  console.log("[Online] Selection active:", active);
+};
 
 function getCardById(cardId) {
   return cardById.get(cardId);
@@ -825,6 +834,59 @@ function restartCurrentDuelFromDev() {
 }
 
 // Online mode helpers
+
+// Flag to track if online phase bindings are set up
+let onlinePhaseBindingActive = false;
+
+function bindOnlinePhaseTrack() {
+  if (onlinePhaseBindingActive) return;
+
+  const phaseTrack = document.getElementById("phase-track");
+  if (!phaseTrack) return;
+
+  phaseTrack.addEventListener("click", (e) => {
+    if (!onlineMode) return;
+
+    const li = e.target.closest("li[data-phase]");
+    if (!li) return;
+
+    const targetPhase = li.dataset.phase;
+    if (!targetPhase) return;
+
+    // Only allow phase changes during player's turn
+    if (!onlineSnapshot) return;
+    const isYourTurn = onlineSnapshot.currentPlayer === onlineSeat;
+    if (!isYourTurn) {
+      console.log("[Online] Phase click ignored - not your turn");
+      return;
+    }
+
+    const currentPhase = onlineSnapshot.phase;
+    const inActionablePhase =
+      currentPhase === "main1" ||
+      currentPhase === "battle" ||
+      currentPhase === "main2";
+    if (!inActionablePhase) {
+      console.log("[Online] Phase click ignored - not in actionable phase");
+      return;
+    }
+
+    // Map phase click to appropriate action
+    if (targetPhase === "battle" && currentPhase === "main1") {
+      console.log("[Online] Phase track: advancing to battle");
+      onlineSession?.sendAction(ACTION_TYPES.NEXT_PHASE, {});
+    } else if (targetPhase === "main2" && currentPhase === "battle") {
+      console.log("[Online] Phase track: advancing to main2");
+      onlineSession?.sendAction(ACTION_TYPES.NEXT_PHASE, {});
+    } else if (targetPhase === "end") {
+      console.log("[Online] Phase track: ending turn");
+      onlineSession?.sendAction(ACTION_TYPES.END_TURN, {});
+    }
+  });
+
+  onlinePhaseBindingActive = true;
+}
+
 function enterOnlineMode() {
   onlineMode = true;
   startScreen.classList.add("hidden");
@@ -834,6 +896,13 @@ function enterOnlineMode() {
     onlineSession = new OnlineSessionController();
   }
   onlineRenderer = onlineRenderer || new Renderer();
+
+  // Reset state version tracking for new session
+  lastRenderedStateVersion = -1;
+
+  // Set up phase track binding for online mode
+  bindOnlinePhaseTrack();
+
   updateOnlineStatus({
     connected: false,
     seat: null,
@@ -848,6 +917,7 @@ function exitOnlineMode() {
   onlineSession?.disconnect();
   onlineSnapshot = null;
   onlineSeat = null;
+  lastRenderedStateVersion = -1; // Reset for next session
   clearOnlineSelections();
   onlinePanel?.classList.add("hidden");
   startScreen.classList.remove("hidden");
@@ -880,6 +950,23 @@ function updateOnlineStatus(status = {}) {
 
 function renderOnlineSnapshot(snapshot, seat) {
   if (!snapshot || !seat) return;
+
+  // INVARIANTE A2: Só re-renderizar se stateVersion mudou
+  const incomingVersion = snapshot.stateVersion ?? 0;
+  if (incomingVersion > 0 && incomingVersion <= lastRenderedStateVersion) {
+    console.log("[Online] Skipping render, stateVersion not newer", {
+      incoming: incomingVersion,
+      last: lastRenderedStateVersion,
+    });
+    return;
+  }
+  lastRenderedStateVersion = incomingVersion;
+  console.log("[Online] Rendering state", {
+    version: incomingVersion,
+    phase: snapshot.phase,
+    turn: snapshot.turn,
+  });
+
   if (onlineInlineErrorEl) {
     onlineInlineErrorEl.textContent = "";
   }
@@ -893,13 +980,15 @@ function renderOnlineSnapshot(snapshot, seat) {
 
   const mapCardVisible = (cardView, isSelf, isSpellTrap = false) => {
     if (!cardView) return null;
+    // Determine visibility first - own cards are always visible, opponent's only if not facedown
+    const visible = isSelf || !cardView.faceDown;
+    // Get card data from database for visible cards (own or opponent's face-up)
     const baseData =
-      isSelf && cardView.cardId
+      visible && cardView.cardId
         ? cardDatabaseById.get(cardView.cardId) || {}
         : {};
     const baseImage =
       baseData && typeof baseData.image === "string" ? baseData.image : null;
-    const visible = isSelf || (!cardView.faceDown && !cardView.faceDown);
     const isFaceDown = !!cardView.faceDown;
     const card = {
       id: cardView.cardId ?? baseData.id ?? 0,
@@ -1005,7 +1094,98 @@ function renderOnlineSnapshot(snapshot, seat) {
 
   refreshOnlineActionAvailability();
   updateOnlineSelectionsText();
+  updateDebugHUD(snapshot);
 }
+
+/**
+ * E3: Debug HUD overlay para desenvolvimento
+ * Mostra stateVersion, phase, isResolvingEffect, pendingPromptType
+ * Ativado por Ctrl+Shift+D ou toggleDebugHUD()
+ */
+let debugHUDVisible = false;
+
+function updateDebugHUD(snapshot) {
+  // Mostrar se devMode está ativo OU se HUD foi explicitamente ativado
+  if (!devModeEnabled && !debugHUDVisible) return;
+
+  let debugHUD = document.getElementById("online-debug-hud");
+  if (!debugHUD) {
+    debugHUD = document.createElement("div");
+    debugHUD.id = "online-debug-hud";
+    debugHUD.style.cssText = `
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      background: rgba(0, 0, 0, 0.85);
+      color: #0f0;
+      font-family: monospace;
+      font-size: 11px;
+      padding: 8px 12px;
+      border-radius: 4px;
+      z-index: 9999;
+      min-width: 200px;
+      border: 1px solid #0f0;
+    `;
+    document.body.appendChild(debugHUD);
+  }
+
+  debugHUD.style.display = "block";
+
+  const version = snapshot?.stateVersion ?? "N/A";
+  const phase = snapshot?.phase ?? "N/A";
+  const turn = snapshot?.turn ?? "N/A";
+  const isResolving = snapshot?.isResolvingEffect ?? false;
+  const pendingPrompt =
+    snapshot?.pendingPromptType ?? activeOnlinePrompt?.type ?? "none";
+  const turnCounter = snapshot?.turnCounter ?? 0;
+  const isYourTurn = snapshot?.currentPlayer === onlineSeat;
+
+  debugHUD.innerHTML = `
+    <div style="font-weight: bold; margin-bottom: 4px; color: #ff0;">🔧 DEBUG HUD</div>
+    <div>stateVersion: <span style="color: #0ff;">${version}</span></div>
+    <div>phase: <span style="color: #0ff;">${phase}</span></div>
+    <div>turn: <span style="color: #0ff;">${turn}</span></div>
+    <div>turnCounter: <span style="color: #0ff;">${turnCounter}</span></div>
+    <div>yourTurn: <span style="color: ${isYourTurn ? "#0f0" : "#f00"};">${
+    isYourTurn ? "✓" : "✗"
+  }</span></div>
+    <div>isResolving: <span style="color: ${
+      isResolving ? "#f00" : "#0f0"
+    };">${isResolving}</span></div>
+    <div>pendingPrompt: <span style="color: ${
+      pendingPrompt !== "none" ? "#ff0" : "#0f0"
+    };">${pendingPrompt}</span></div>
+    <div>selectionActive: <span style="color: ${
+      onlineSelectionActive ? "#f00" : "#0f0"
+    };">${onlineSelectionActive}</span></div>
+    <div>lastRenderVer: <span style="color: #0ff;">${lastRenderedStateVersion}</span></div>
+    <div style="font-size: 9px; color: #888; margin-top: 4px;">Ctrl+Shift+D para toggle</div>
+  `;
+}
+
+function toggleDebugHUD() {
+  debugHUDVisible = !debugHUDVisible;
+  const debugHUD = document.getElementById("online-debug-hud");
+
+  if (!debugHUDVisible && debugHUD) {
+    debugHUD.style.display = "none";
+  } else if (debugHUDVisible && onlineSnapshot) {
+    updateDebugHUD(onlineSnapshot);
+  }
+
+  console.log("[Debug] HUD", debugHUDVisible ? "ENABLED" : "DISABLED");
+}
+
+// Expor globalmente para uso no console
+window.toggleDebugHUD = toggleDebugHUD;
+
+// Atalho de teclado: Ctrl+Shift+D
+document.addEventListener("keydown", (e) => {
+  if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "d") {
+    e.preventDefault();
+    toggleDebugHUD();
+  }
+});
 
 function refreshOnlineActionAvailability() {
   const hasSnapshot = !!onlineSnapshot;
@@ -1042,13 +1222,13 @@ function handleOnlineError(err) {
       ? `${message} (${hint})`
       : message
     : "Unknown error from server";
-  
+
   // Se o oponente desconectou, mostrar modal especial
   if (code === "opponent_left") {
     showDisconnectModal(finalMsg);
     return;
   }
-  
+
   if (onlineErrorEl) {
     onlineErrorEl.textContent = finalMsg;
   }
@@ -1060,28 +1240,28 @@ function handleOnlineError(err) {
 
 function showDisconnectModal(message) {
   closeOnlinePrompt();
-  
+
   const overlay = document.createElement("div");
   overlay.className = "online-prompt-overlay disconnect-overlay";
-  
+
   const modal = document.createElement("div");
   modal.className = "online-prompt-modal disconnect-modal";
-  
+
   const icon = document.createElement("div");
   icon.textContent = "⚠️";
   icon.className = "disconnect-icon";
   modal.appendChild(icon);
-  
+
   const title = document.createElement("h2");
   title.textContent = "Opponent Disconnected";
   title.className = "disconnect-title";
   modal.appendChild(title);
-  
+
   const desc = document.createElement("p");
   desc.textContent = message || "Your opponent has left the match.";
   desc.className = "disconnect-message";
   modal.appendChild(desc);
-  
+
   const closeBtn = document.createElement("button");
   closeBtn.textContent = "Return to Menu";
   closeBtn.onclick = () => {
@@ -1089,10 +1269,10 @@ function showDisconnectModal(message) {
     exitOnlineMode();
   };
   modal.appendChild(closeBtn);
-  
+
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
-  
+
   console.log("[Online] Opponent disconnected");
 }
 
@@ -1105,24 +1285,27 @@ function closeOnlinePrompt() {
 
 function showGameOverModal(msg) {
   closeOnlinePrompt();
-  
+
   const isVictory = msg.result === "victory";
-  const reasonText = msg.reason === "lp_zero" ? "LP reduced to 0" : 
-                     msg.reason === "deck_out" ? "Deck out" : 
-                     msg.reason || "Game ended";
-  
+  const reasonText =
+    msg.reason === "lp_zero"
+      ? "LP reduced to 0"
+      : msg.reason === "deck_out"
+      ? "Deck out"
+      : msg.reason || "Game ended";
+
   const overlay = document.createElement("div");
   overlay.className = "online-prompt-overlay game-over-overlay";
   overlay.id = "game-over-overlay";
-  
+
   const modal = document.createElement("div");
   modal.className = "online-prompt-modal game-over-modal";
-  
+
   const title = document.createElement("h2");
   title.textContent = isVictory ? "🏆 Victory!" : "💀 Defeat";
   title.className = isVictory ? "game-over-victory" : "game-over-defeat";
   modal.appendChild(title);
-  
+
   const reason = document.createElement("p");
   reason.textContent = reasonText;
   reason.className = "game-over-reason";
@@ -1140,7 +1323,7 @@ function showGameOverModal(msg) {
     onlineSession?.sendRematchRequest();
   };
   buttonsDiv.appendChild(rematchBtn);
-  
+
   const closeBtn = document.createElement("button");
   closeBtn.textContent = "Exit";
   closeBtn.onclick = () => {
@@ -1150,16 +1333,16 @@ function showGameOverModal(msg) {
   buttonsDiv.appendChild(closeBtn);
 
   modal.appendChild(buttonsDiv);
-  
+
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
-  
+
   console.log("[Online] Game Over:", msg);
 }
 
 function handleRematchStatus(msg) {
   const rematchBtn = document.getElementById("rematch-btn");
-  
+
   if (msg.ready) {
     // Rematch aceito por ambos - fechar modal, jogo vai reiniciar
     const overlay = document.getElementById("game-over-overlay");
@@ -1167,14 +1350,16 @@ function handleRematchStatus(msg) {
     console.log("[Online] Rematch starting!");
     return;
   }
-  
+
   // Atualizar texto do botão baseado no status
   if (rematchBtn) {
-    const iWantRematch = (onlineSeat === "player" && msg.playerWants) ||
-                         (onlineSeat === "bot" && msg.botWants);
-    const opponentWants = (onlineSeat === "player" && msg.botWants) ||
-                          (onlineSeat === "bot" && msg.playerWants);
-    
+    const iWantRematch =
+      (onlineSeat === "player" && msg.playerWants) ||
+      (onlineSeat === "bot" && msg.botWants);
+    const opponentWants =
+      (onlineSeat === "player" && msg.botWants) ||
+      (onlineSeat === "bot" && msg.playerWants);
+
     if (iWantRematch && !opponentWants) {
       rematchBtn.textContent = "⏳ Waiting for opponent...";
       rematchBtn.disabled = true;
@@ -1189,95 +1374,16 @@ function showOnlinePrompt(prompt) {
   closeOnlinePrompt();
   if (!prompt) return;
   console.log("[Online] prompt_request", prompt);
-  const overlay = document.createElement("div");
-  overlay.className = "online-prompt-overlay";
-  const modal = document.createElement("div");
-  modal.className = "online-prompt-modal";
 
-  const title = document.createElement("h3");
-  title.textContent = prompt.title || "Choose an action";
-  modal.appendChild(title);
-
-    const options = prompt.options || prompt.targets || [];
-    const list = document.createElement("div");
-    list.className = "online-prompt-options";
-
-    if (prompt.type === "selection_contract" && prompt.requirement) {
-    const requirement = prompt.requirement;
-    const min = Number.isInteger(requirement.min) ? requirement.min : 1;
-    const max = Number.isInteger(requirement.max) ? requirement.max : min;
-    const selected = new Set();
-
-    const updateConfirm = (btn) => {
-      if (!btn) return;
-      const count = selected.size;
-      btn.disabled = count < min || count > max;
-      btn.textContent =
-        count > 0 ? `Confirm (${count}/${max})` : `Confirm (${min})`;
-    };
-
-    requirement.candidates?.forEach((cand) => {
-      const btn = document.createElement("button");
-      btn.textContent = cand.label || cand.id || "Target";
-      btn.onclick = () => {
-        const key = cand.id;
-        if (selected.has(key)) {
-          selected.delete(key);
-          btn.classList.remove("selected");
-        } else {
-          if (selected.size >= max) return;
-          selected.add(key);
-          btn.classList.add("selected");
-        }
-        updateConfirm(confirmBtn);
-      };
-      list.appendChild(btn);
-    });
-
-    const confirmBtn = document.createElement("button");
-    confirmBtn.textContent = `Confirm (${min})`;
-    confirmBtn.disabled = min > 0;
-    confirmBtn.onclick = () => {
-      if (!prompt.promptId) return;
-      const payload =
-        min === 1 && max === 1 && selected.size === 1
-          ? Array.from(selected.values())[0]
-          : Array.from(selected.values());
-      onlineSession?.sendPromptResponse(prompt.promptId, payload);
-      closeOnlinePrompt();
-    };
-    modal.appendChild(list);
-    modal.appendChild(confirmBtn);
-  } else {
-    options.forEach((opt) => {
-      const btn = document.createElement("button");
-      btn.textContent = opt.label || opt.id || "Option";
-      btn.onclick = () => {
-        if (prompt.promptId && opt.id !== undefined) {
-          onlineSession?.sendPromptResponse(prompt.promptId, opt.id);
-        }
-        closeOnlinePrompt();
-      };
-      list.appendChild(btn);
-    });
-
-    modal.appendChild(list);
-  }
-
-  const cancel = document.createElement("button");
-  cancel.textContent = "Cancel";
-  cancel.className = "online-prompt-cancel";
-  cancel.onclick = () => {
-    if (prompt.promptId) {
-      onlineSession?.sendPromptResponse(prompt.promptId, "cancel");
+  // Use visual modals via adapter (mirrors offline experience)
+  handlePromptWithVisualModal(
+    prompt,
+    onlineRenderer,
+    onlineSnapshot,
+    (promptId, choice) => {
+      onlineSession?.sendPromptResponse(promptId, choice);
     }
-    closeOnlinePrompt();
-  };
-  modal.appendChild(cancel);
-
-  overlay.appendChild(modal);
-  document.body.appendChild(overlay);
-  activeOnlinePrompt = { overlay, prompt };
+  );
 }
 
 function requireOnlineState(options = {}) {
@@ -1286,8 +1392,7 @@ function requireOnlineState(options = {}) {
     handleOnlineError({ message: "Sem estado do servidor ainda." });
     return false;
   }
-  const isYourTurn =
-    onlineSnapshot.currentPlayer === (onlineSeat || "player");
+  const isYourTurn = onlineSnapshot.currentPlayer === (onlineSeat || "player");
   if (!isYourTurn) {
     handleOnlineError({ message: "Nao e seu turno." });
     return false;
@@ -1350,6 +1455,11 @@ function bindOnlineCardClicks() {
         return;
       }
       console.log("[Online] zone click", zoneId, "idx", idx);
+      // If visual selection is active, don't send intent to server
+      if (onlineSelectionActive) {
+        console.log("[Online] click ignored (selection active)", zoneId);
+        return;
+      }
       handler(idx, cardEl);
     });
   };
@@ -1680,5 +1790,3 @@ function requireActiveGameForDev() {
   }
   return true;
 }
-
-

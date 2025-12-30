@@ -39,7 +39,9 @@ export default class Game {
     this.botPreset = options.botPreset || "shadowheart";
     this.bot =
       options.opponentOverride ||
-      (this.networkMode ? new Player("bot", "Opponent") : new Bot(this.botPreset));
+      (this.networkMode
+        ? new Player("bot", "Opponent")
+        : new Bot(this.botPreset));
 
     this.renderer = options.renderer || null;
     this.ui = createUIAdapter(this.renderer);
@@ -1279,6 +1281,7 @@ export default class Game {
     });
 
     const results = [];
+    let pendingSelectionContract = null; // INVARIANTE B1: Capturar selectionContract para networkMode
     try {
       for (const entry of entries) {
         const config = entry?.config || entry?.pipeline || entry;
@@ -1290,7 +1293,18 @@ export default class Game {
           id: entry?.summary || entry?.effect?.id || entry?.card?.name || null,
           success: result?.success === true,
           needsSelection: result?.needsSelection === true,
+          selectionContract: result?.selectionContract || null,
         });
+
+        // INVARIANTE B1: Em networkMode, parar no primeiro que precisa seleção
+        if (
+          this.networkMode &&
+          result?.needsSelection &&
+          result?.selectionContract
+        ) {
+          pendingSelectionContract = result.selectionContract;
+          break; // Não processar mais triggers até resolver este
+        }
       }
 
       this.devLog("TRIGGERS_DONE", {
@@ -1354,6 +1368,17 @@ export default class Game {
         depth: this.eventResolutionDepth,
         id: eventId,
       });
+    }
+
+    // INVARIANTE B1: Propagar needsSelection e selectionContract para o servidor
+    if (pendingSelectionContract && this.networkMode) {
+      return {
+        ok: true,
+        triggerCount: entries.length,
+        results,
+        needsSelection: true,
+        selectionContract: pendingSelectionContract,
+      };
     }
 
     return {
@@ -1493,6 +1518,16 @@ export default class Game {
 
     this.updateActivationIndicators();
     this.updateAttackIndicators();
+
+    // INVARIANTE A: Em networkMode, emitir evento para o servidor atualizar clientes
+    if (this.networkMode) {
+      // Uso de void para não bloquear - emissão síncrona suficiente
+      void this.emit("state_changed", {
+        phase: this.phase,
+        turn: this.turn,
+        turnCounter: this.turnCounter,
+      });
+    }
   }
 
   updateActivationIndicators() {
@@ -3124,13 +3159,7 @@ export default class Game {
         effect: activationEffect,
       },
       activate: (chosen, ctx, zone) =>
-        this.effectEngine.activateMonsterEffect(
-          card,
-          owner,
-          chosen,
-          zone,
-          ctx
-        ),
+        this.effectEngine.activateMonsterEffect(card, owner, chosen, zone, ctx),
       finalize: () => {
         this.ui.log(`${card.name} effect activated.`);
         this.updateBoard();
@@ -3323,9 +3352,10 @@ export default class Game {
       fieldSpell: owner.fieldSpell
         ? {
             cardId: owner.fieldSpell.id,
-            name: isSelf || !owner.fieldSpell.isFacedown
-              ? owner.fieldSpell.name
-              : null,
+            name:
+              isSelf || !owner.fieldSpell.isFacedown
+                ? owner.fieldSpell.name
+                : null,
             faceDown: !!owner.fieldSpell.isFacedown,
           }
         : null,
@@ -3732,6 +3762,22 @@ export default class Game {
           config.useAutoSelector === true ||
           (!this.networkMode && owner === this.bot);
 
+        // INVARIANTE B1: No networkMode, NUNCA auto-selecionar.
+        // Retornar o selectionContract para o servidor gerar o prompt.
+        if (this.networkMode) {
+          logPipeline("PIPELINE_NETWORK_SELECTION", {
+            reason: "Network mode - returning selection contract to server",
+            candidateCount: contract.requirements?.[0]?.candidates?.length || 0,
+          });
+          // Retornar com needsSelection=true para que o servidor gere o prompt
+          normalized.needsSelection = true;
+          normalized.selectionContract = contract;
+          normalized.activationContext = activationContext;
+          normalized.commitInfo = activationContext.commitInfo || commitInfo;
+          normalized.activationZone = resolvedActivationZone;
+          return normalized;
+        }
+
         if (shouldAutoSelect) {
           const autoResult = this.autoSelector?.select(contract, {
             owner,
@@ -3898,7 +3944,11 @@ export default class Game {
 
     const initialResult = await this.runActivationPipeline(wrappedConfig);
 
-    if (
+    // INVARIANTE B1: Em networkMode, se precisa de seleção, retornar imediatamente
+    // O servidor vai gerar o prompt e a Promise não deve ficar pendente
+    if (this.networkMode && initialResult?.needsSelection === true) {
+      finishOnce(initialResult);
+    } else if (
       !finished &&
       (!initialResult || initialResult.needsSelection !== true)
     ) {
@@ -5661,7 +5711,7 @@ export default class Game {
 
   checkWinCondition() {
     if (this.gameOver) return; // Já terminou
-    
+
     if (this.player.lp <= 0) {
       this.ui?.showAlert?.("Game Over! You Lost.");
       this.gameOver = true;
@@ -6430,12 +6480,7 @@ export default class Game {
     return { ok: true, success: true, card };
   }
 
-  async tryActivateSpell(
-    card,
-    handIndex,
-    selections = null,
-    options = {}
-  ) {
+  async tryActivateSpell(card, handIndex, selections = null, options = {}) {
     const owner = options.owner || this.player;
     const resume = options.resume || null;
     const activationEffect = this.effectEngine?.getSpellTrapActivationEffect?.(
@@ -6480,7 +6525,8 @@ export default class Game {
         activationZone:
           resolvedActivationZone || baseActivationContext.activationZone,
         sourceZone: baseActivationContext.sourceZone || "hand",
-        commitInfo: baseActivationContext.commitInfo || resumeCommitInfo || null,
+        commitInfo:
+          baseActivationContext.commitInfo || resumeCommitInfo || null,
       },
       oncePerTurn: {
         card,

@@ -2673,6 +2673,45 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
     return false;
   }
 
+  // INVARIANTE B1: No networkMode, se há múltiplos candidatos, retornar selectionContract
+  // para o servidor gerar o prompt. NUNCA auto-selecionar.
+  if (game.networkMode && candidates.length > 1 && player.id !== "bot") {
+    const decoratedCandidates = candidates.map((card, idx) => ({
+      key: `search_${sourceZone}_${idx}_${card.id}`,
+      name: card.name,
+      cardId: card.id,
+      zone: sourceZone,
+      zoneIndex: zone.indexOf(card),
+      controller: player.id,
+      owner: player.id === game.player?.id ? "player" : "opponent",
+      cardKind: card.cardKind,
+      atk: card.atk,
+      def: card.def,
+      level: card.level,
+      cardRef: card,
+    }));
+
+    // Retornar objeto especial indicando que precisa de seleção
+    // O EffectEngine deve propagar isso para o servidor
+    return {
+      needsSelection: true,
+      selectionContract: {
+        kind: "card_select",
+        message: `Select card(s) from ${sourceZone}`,
+        requirements: [
+          {
+            id: "search_selection",
+            min: minSelect,
+            max: maxSelect,
+            candidates: decoratedCandidates,
+          },
+        ],
+      },
+      sourceZone,
+      actionType: action.type,
+    };
+  }
+
   const selection = await selectCardsFromZone({
     game,
     player,
