@@ -435,7 +435,8 @@ export function showCardSelectAsync(renderer, prompt) {
 
           if (!chosen) {
             console.warn(
-              "[OnlinePromptAdapter] No matching candidate for selected card"
+              "[OnlinePromptAdapter] No matching candidate for selected card",
+              { selectedName, selectedCard }
             );
             safeResolve(null);
             return;
@@ -444,11 +445,18 @@ export function showCardSelectAsync(renderer, prompt) {
           const choiceId = chosen._candidateId;
           if (!choiceId) {
             console.warn(
-              "[OnlinePromptAdapter] Missing candidate id for selection"
+              "[OnlinePromptAdapter] Missing candidate id for selection",
+              { chosen }
             );
             safeResolve(null);
             return;
           }
+
+          console.log("[OnlinePromptAdapter] Visual modal selection confirmed:", {
+            choiceId,
+            chosenName: chosen.name,
+            chosenCardId: chosen.id,
+          });
 
           safeResolve([choiceId]);
         }
@@ -525,6 +533,22 @@ export function showCardSelectAsync(renderer, prompt) {
           ? cardDatabaseById.get(cand.cardId)
           : null;
       const candidateId = cand.id ?? cand.key ?? String(idx);
+      
+      // D: Log candidate mapping
+      if (idx === 0) {
+        console.log("[OnlinePromptAdapter] showCardSelectAsync candidate mapping", {
+          hasCandId: !!cand.id,
+          hasCandKey: !!cand.key,
+          candidateId,
+          sampleCandidate: {
+            id: cand.id,
+            key: cand.key,
+            cardId: cand.cardId,
+            name: cand.name,
+          },
+        });
+      }
+      
       const displayName =
         getCardDisplayName(dbCard || cand) ||
         cand.label ||
@@ -621,7 +645,12 @@ export function showCardSelectAsync(renderer, prompt) {
       if (selectedIds.size >= min && selectedIds.size <= max) {
         overlay.remove();
         const result = Array.from(selectedIds);
-        console.log("[OnlinePromptAdapter] Card selection confirmed:", result);
+        console.log("[OnlinePromptAdapter] Card selection confirmed:", {
+          result,
+          count: result.length,
+          min,
+          max,
+        });
         safeResolve(result);
       }
     });
