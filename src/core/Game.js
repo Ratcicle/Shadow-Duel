@@ -66,6 +66,7 @@ export default class Game {
     this.isResolvingEffect = false; // Lock player actions while resolving an effect
     this.eventResolutionDepth = 0;
     this.eventResolutionCounter = 0;
+    this.pendingEventSelection = null;
     this.trapPromptInProgress = false; // Avoid multiple trap prompts simultaneously
     this.testModeEnabled = false;
     this.devModeEnabled = !!options.devMode;
@@ -1280,66 +1281,17 @@ export default class Game {
       depth,
     });
 
-    const results = [];
-    let pendingSelectionContract = null; // INVARIANTE B1: Capturar selectionContract para networkMode
+    let resolutionResult = null;
     try {
-      for (const entry of entries) {
-        const config = entry?.config || entry?.pipeline || entry;
-        if (!config || typeof config.activate !== "function") {
-          continue;
+      resolutionResult = await this.resolveEventEntries(
+        eventName,
+        payload,
+        entries,
+        {
+          onComplete,
+          orderRule,
         }
-        const result = await this.runActivationPipelineWait(config);
-        results.push({
-          id: entry?.summary || entry?.effect?.id || entry?.card?.name || null,
-          success: result?.success === true,
-          needsSelection: result?.needsSelection === true,
-          selectionContract: result?.selectionContract || null,
-        });
-
-        // INVARIANTE B1: Em networkMode, parar no primeiro que precisa seleção
-        if (
-          this.networkMode &&
-          result?.needsSelection &&
-          result?.selectionContract
-        ) {
-          pendingSelectionContract = result.selectionContract;
-          break; // Não processar mais triggers até resolver este
-        }
-      }
-
-      this.devLog("TRIGGERS_DONE", {
-        summary: `${eventName} (${entries.length})`,
-        event: eventName,
-        count: entries.length,
-        depth,
-      });
-
-      if (typeof onComplete === "function") {
-        try {
-          onComplete();
-        } catch (err) {
-          console.error(
-            `[Game] Error running onComplete for "${eventName}":`,
-            err
-          );
-        }
-      }
-
-      if (eventName === "after_summon" && payload?.player) {
-        const isOpponentSummon = payload.player.id !== "player";
-        await this.checkAndOfferTraps(eventName, {
-          ...payload,
-          isOpponentSummon,
-        });
-      } else if (eventName === "attack_declared") {
-        const defenderOwner = payload?.defenderOwner || null;
-        if (defenderOwner === this.player) {
-          await this.checkAndOfferTraps(eventName, {
-            ...payload,
-            isOpponentAttack: payload?.attackerOwner?.id === "bot",
-          });
-        }
-      }
+      );
     } catch (err) {
       console.error(`[Game] Error resolving event "${eventName}":`, err);
     } finally {
@@ -1370,22 +1322,160 @@ export default class Game {
       });
     }
 
-    // INVARIANTE B1: Propagar needsSelection e selectionContract para o servidor
-    if (pendingSelectionContract && this.networkMode) {
-      return {
+    return (
+      resolutionResult || {
         ok: true,
         triggerCount: entries.length,
-        results,
-        needsSelection: true,
-        selectionContract: pendingSelectionContract,
-      };
+        results: [],
+      }
+    );
+  }
+
+  async resolveEventEntries(
+    eventName,
+    payload,
+    entries,
+    { onComplete = null, orderRule = null, startIndex = 0, results = [], selections = null } = {}
+  ) {
+    const resolvedResults = Array.isArray(results) ? results : [];
+    const start = Math.max(0, startIndex);
+
+    for (let i = start; i < entries.length; i += 1) {
+      const entry = entries[i];
+      const config = entry?.config || entry?.pipeline || entry;
+      if (!config || typeof config.activate !== "function") {
+        continue;
+      }
+      const result = await this.runActivationPipelineWait({
+        ...config,
+        selections: i === start ? selections : null,
+      });
+      resolvedResults.push({
+        id: entry?.summary || entry?.effect?.id || entry?.card?.name || null,
+        success: result?.success === true,
+        needsSelection: result?.needsSelection === true,
+        selectionContract: result?.selectionContract || null,
+      });
+
+      // INVARIANTE B1: Em networkMode, parar no primeiro que precisa seleção
+      if (this.networkMode && result?.needsSelection && result?.selectionContract) {
+        this.pendingEventSelection = {
+          eventName,
+          payload,
+          entries,
+          entryIndex: i,
+          results: resolvedResults,
+          orderRule,
+          onComplete,
+        };
+        return {
+          ok: true,
+          triggerCount: entries.length,
+          results: resolvedResults,
+          needsSelection: true,
+          selectionContract: result.selectionContract,
+        };
+      }
+    }
+
+    this.devLog("TRIGGERS_DONE", {
+      summary: `${eventName} (${entries.length})`,
+      event: eventName,
+      count: entries.length,
+      depth: this.eventResolutionDepth,
+    });
+
+    if (typeof onComplete === "function") {
+      try {
+        onComplete();
+      } catch (err) {
+        console.error(`[Game] Error running onComplete for "${eventName}":`, err);
+      }
+    }
+
+    if (eventName === "after_summon" && payload?.player) {
+      const isOpponentSummon = payload.player.id !== "player";
+      await this.checkAndOfferTraps(eventName, {
+        ...payload,
+        isOpponentSummon,
+      });
+    } else if (eventName === "attack_declared") {
+      const defenderOwner = payload?.defenderOwner || null;
+      if (defenderOwner === this.player) {
+        await this.checkAndOfferTraps(eventName, {
+          ...payload,
+          isOpponentAttack: payload?.attackerOwner?.id === "bot",
+        });
+      }
     }
 
     return {
       ok: true,
       triggerCount: entries.length,
-      results,
+      results: resolvedResults,
     };
+  }
+
+  async resumePendingEventSelection(selections, { actionContext } = {}) {
+    const pending = this.pendingEventSelection;
+    if (!pending) {
+      return { ok: false, reason: "No pending event selection." };
+    }
+
+    this.pendingEventSelection = null;
+    this.eventResolutionDepth += 1;
+    this.eventResolutionCounter += 1;
+    const eventCounter = this.eventResolutionCounter;
+    const eventId = `${pending.eventName}:${eventCounter}`;
+
+    this.devLog("EVENT_RESUME_START", {
+      summary: `${pending.eventName} (resume #${eventCounter})`,
+      event: pending.eventName,
+      depth: this.eventResolutionDepth,
+      id: eventId,
+    });
+
+    let resolutionResult = null;
+    try {
+      const payload = {
+        ...(pending.payload || {}),
+        actionContext:
+          actionContext || pending.payload?.actionContext || null,
+      };
+      resolutionResult = await this.resolveEventEntries(
+        pending.eventName,
+        payload,
+        pending.entries || [],
+        {
+          onComplete: pending.onComplete || null,
+          orderRule: pending.orderRule || null,
+          startIndex: pending.entryIndex || 0,
+          results: pending.results || [],
+          selections,
+        }
+      );
+    } catch (err) {
+      console.error(
+        `[Game] Error resuming event "${pending.eventName}":`,
+        err
+      );
+    } finally {
+      this.eventResolutionDepth = Math.max(0, this.eventResolutionDepth - 1);
+      this.devLog("EVENT_RESUME_END", {
+        summary: `${pending.eventName} (resume #${eventCounter})`,
+        event: pending.eventName,
+        depth: this.eventResolutionDepth,
+        id: eventId,
+      });
+    }
+
+    return (
+      resolutionResult || {
+        ok: true,
+        triggerCount: pending.entries?.length || 0,
+        results: pending.results || [],
+      }
+    );
   }
 
   start(deckList = null, extraDeckList = null) {
@@ -3122,7 +3212,8 @@ export default class Game {
     card,
     selections = null,
     activationZone = "field",
-    owner = this.player
+    owner = this.player,
+    options = {}
   ) {
     if (this.disableEffectActivation) {
       this.ui?.log?.("Effect activations are disabled.");
@@ -3137,6 +3228,7 @@ export default class Game {
       activationZone,
       sourceZone: activationZone,
       committed: false,
+      actionContext: options.actionContext || null,
     };
     const activationEffect = this.effectEngine?.getMonsterIgnitionEffect?.(
       card,
@@ -6483,6 +6575,7 @@ export default class Game {
   async tryActivateSpell(card, handIndex, selections = null, options = {}) {
     const owner = options.owner || this.player;
     const resume = options.resume || null;
+    const actionContext = options.actionContext || null;
     const activationEffect = this.effectEngine?.getSpellTrapActivationEffect?.(
       card,
       { fromHand: true }
@@ -6497,6 +6590,7 @@ export default class Game {
       sourceZone: "hand",
       committed: false,
       commitInfo: resumeCommitInfo,
+      actionContext,
     };
 
     const pipelineResult = await this.runActivationPipeline({
@@ -6527,6 +6621,7 @@ export default class Game {
         sourceZone: baseActivationContext.sourceZone || "hand",
         commitInfo:
           baseActivationContext.commitInfo || resumeCommitInfo || null,
+        actionContext,
       },
       oncePerTurn: {
         card,

@@ -36,10 +36,12 @@ export class MatchManager {
   constructor() {
     this.rooms = new Map();
     this.promptCounter = 0;
+    this.clientCounter = 0;
   }
 
   attachConnection(ws) {
     const client = {
+      id: `c_${Date.now()}_${++this.clientCounter}`,
       ws,
       roomId: null,
       seat: null, // "player" | "bot"
@@ -82,6 +84,28 @@ export class MatchManager {
       default:
         this.sendError(client, "Unknown message type");
     }
+  }
+
+  buildActionContext(room, seat) {
+    const client = room?.clients?.[seat] || null;
+    const manager = this;
+    return {
+      roomId: room?.id || null,
+      seat,
+      clientId: client?.id || null,
+      sendPrompt(prompt, extra = {}) {
+        if (!room || !client) return;
+        manager.storeAndSendPrompt(room, client, prompt, extra);
+      },
+      sendError(message, code = "error", hint = null) {
+        if (!client) return;
+        manager.sendError(client, message, code, hint);
+      },
+      broadcastState(reason = "action_context_broadcast") {
+        if (!room) return;
+        manager.commitStateUpdate(room, reason);
+      },
+    };
   }
 
   safeParse(raw) {
@@ -1039,6 +1063,8 @@ export class MatchManager {
     // INVARIANTE C1: Marcar que estamos resolvendo
     room.isResolvingEffect = true;
     room.pendingPromptType = null;
+    let hadError = false;
+    const actionContext = this.buildActionContext(room, seat);
 
     try {
       return await this._executeAction(
@@ -1048,14 +1074,19 @@ export class MatchManager {
         actionType,
         payload,
         context,
-        seat
+        seat,
+        actionContext
       );
     } catch (error) {
+      hadError = true;
       console.error("[Server] applyAction error", {
         actionType,
         seat,
         error: error.message || error,
       });
+      if (error?.stack) {
+        console.error("[Server] applyAction stack", error.stack);
+      }
       return {
         ok: false,
         message: "Action failed due to internal error",
@@ -1068,6 +1099,15 @@ export class MatchManager {
       // (se houve, o prompt será gerenciado pelo fluxo de prompts)
       if (game.selectionState === "idle" || !game.selectionState) {
         room.pendingPromptType = null;
+      }
+      if (hadError) {
+        if (typeof game.cancelTargetSelection === "function") {
+          game.cancelTargetSelection();
+        }
+        game.selectionState = "idle";
+        game.targetSelection = null;
+        game.trapPromptInProgress = false;
+        game.pendingEventSelection = null;
       }
       // Garantir que locks do game são liberados
       if (game.isResolvingEffect) {
@@ -1086,7 +1126,8 @@ export class MatchManager {
     actionType,
     payload,
     context,
-    seat
+    seat,
+    actionContext
   ) {
     const game = room.game;
 
@@ -1150,12 +1191,13 @@ export class MatchManager {
           player: actor,
           method: "normal",
           fromZone: "hand",
+          actionContext,
         });
 
         // Verificar se algum efeito precisa de seleção
         if (emitResult?.needsSelection && emitResult.selectionContract) {
           const prompt = this.buildSelectionPrompt(room, { seat }, emitResult, {
-            actionType: "after_summon_effect",
+            actionType: "RESUME_EVENT_SELECTION",
           });
           if (prompt) {
             return {
@@ -1202,12 +1244,13 @@ export class MatchManager {
           player: actor,
           method: "normal",
           fromZone: "hand",
+          actionContext,
         });
 
         // Verificar se algum efeito precisa de seleção
         if (emitResult?.needsSelection && emitResult.selectionContract) {
           const prompt = this.buildSelectionPrompt(room, { seat }, emitResult, {
-            actionType: "after_summon_effect",
+            actionType: "RESUME_EVENT_SELECTION",
           });
           if (prompt) {
             return {
@@ -1272,6 +1315,7 @@ export class MatchManager {
           {
             owner: actor,
             resume: context?.pendingSelection?.resumeData || null,
+            actionContext,
           }
         );
         if (result?.needsSelection && result.selectionContract) {
@@ -1322,7 +1366,10 @@ export class MatchManager {
           card,
           selections,
           "field",
-          actor
+          actor,
+          {
+            actionContext,
+          }
         );
         if (result?.needsSelection && result.selectionContract) {
           const prompt = this.buildSelectionPrompt(room, { seat }, result, {
@@ -1374,6 +1421,44 @@ export class MatchManager {
         if (result && result.ok === false) {
           return { ok: false, message: result.reason || "Attack not allowed" };
         }
+        return { ok: true };
+      }
+      case "RESUME_EVENT_SELECTION": {
+        const selections = payload?.selections || null;
+        if (!selections || typeof selections !== "object") {
+          return { ok: false, message: "Missing selections" };
+        }
+        const resumeResult = await game.resumePendingEventSelection(
+          selections,
+          { actionContext }
+        );
+        if (resumeResult?.needsSelection && resumeResult.selectionContract) {
+          const prompt = this.buildSelectionPrompt(room, { seat }, resumeResult, {
+            actionType: "RESUME_EVENT_SELECTION",
+          });
+          if (prompt) {
+            return {
+              ok: true,
+              needsSelection: true,
+              selection: {
+                prompt,
+                contract: resumeResult.selectionContract,
+                requirementId:
+                  prompt?.requirement?.id ||
+                  resumeResult.selectionContract?.requirements?.[0]?.id ||
+                  "selection",
+                resumeData: null,
+              },
+            };
+          }
+        }
+        if (!resumeResult?.ok) {
+          return {
+            ok: false,
+            message: resumeResult?.reason || "Event resolution failed",
+          };
+        }
+        game.updateBoard();
         return { ok: true };
       }
       case ACTION_TYPES.DIRECT_ATTACK: {
