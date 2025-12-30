@@ -312,6 +312,11 @@ export class MatchManager {
     room.gameEnded = false;
     room.rematchRequests = null;
     room.prompts.clear();
+    // A1: Limpar prompts per-seat
+    room.pendingPromptsBySeat = {
+      player: null,
+      bot: null,
+    };
 
     // Reiniciar partida
     await this.startMatch(room);
@@ -323,6 +328,25 @@ export class MatchManager {
       this.sendError(client, "Match not ready");
       return;
     }
+
+    const seat = client?.seat;
+    if (!seat) {
+      this.sendError(client, "Client has no seat", "invalid_action");
+      return;
+    }
+
+    // A2: Input lock - bloquear card clicks se houver prompt pendente
+    const pendingPrompt = room.pendingPromptsBySeat[seat];
+    if (pendingPrompt) {
+      console.warn("[Server] intent blocked - pending prompt", {
+        seat,
+        promptId: pendingPrompt.promptId,
+        promptType: pendingPrompt.prompt?.type,
+      });
+      this.sendError(client, "Please respond to the current prompt first", "input_locked");
+      return;
+    }
+
     console.log("[Server] intent_card_click", {
       seat: client.seat,
       zone: msg.zone,
@@ -341,12 +365,33 @@ export class MatchManager {
 
   /**
    * INVARIANTE C2: Todo prompt tem timeout para evitar soft-lock
+   * A1: Armazena prompt POR SEAT e inclui stateVersion (A3)
    * Armazena prompt e inicia timer de 30s para auto-cancel
    */
   storeAndSendPrompt(room, client, prompt, extra = {}) {
     if (!prompt?.promptId) return;
 
-    // Cancelar timeout anterior se existir
+    const seat = client?.seat;
+    if (!seat) {
+      console.warn("[Server] storeAndSendPrompt: client has no seat");
+      return;
+    }
+
+    // A1: Verificar se já existe prompt pendente para este seat
+    const existingPrompt = room.pendingPromptsBySeat[seat];
+    if (existingPrompt) {
+      console.warn("[Server] storeAndSendPrompt: overwriting pending prompt for seat", {
+        seat,
+        oldPromptId: existingPrompt.promptId,
+        newPromptId: prompt.promptId,
+      });
+      // Cancelar timeout anterior se existir
+      if (existingPrompt.timeoutId) {
+        clearTimeout(existingPrompt.timeoutId);
+      }
+    }
+
+    // Também limpar da estrutura antiga (compatibilidade)
     const existingEntry = room.prompts.get(prompt.promptId);
     if (existingEntry?.timeoutId) {
       clearTimeout(existingEntry.timeoutId);
@@ -358,42 +403,66 @@ export class MatchManager {
       this.handlePromptTimeout(room, client, prompt.promptId);
     }, PROMPT_TIMEOUT_MS);
 
-    room.prompts.set(prompt.promptId, {
+    // A3: Adicionar stateVersion ao prompt
+    const stateVersion = room.stateVersion || 0;
+    const enrichedPrompt = {
+      ...prompt,
+      stateVersion,
+    };
+
+    const promptEntry = {
       client,
-      prompt,
+      prompt: enrichedPrompt,
+      promptId: prompt.promptId,
+      seat,
       timeoutId,
       createdAt: Date.now(),
+      stateVersion,
       ...extra,
-    });
+    };
+
+    // A1: Armazenar por seat
+    room.pendingPromptsBySeat[seat] = promptEntry;
+
+    // Manter compatibilidade com estrutura antiga
+    room.prompts.set(prompt.promptId, promptEntry);
     room.pendingPromptType = prompt.type;
 
     console.log("[Server] send prompt", {
       seat: client.seat,
       promptId: prompt.promptId,
       type: prompt.type,
+      stateVersion,
       timeoutMs: PROMPT_TIMEOUT_MS,
     });
     send(client.ws, {
       type: SERVER_MESSAGE_TYPES.PROMPT_REQUEST,
-      prompt,
+      prompt: enrichedPrompt,
     });
   }
 
   /**
    * INVARIANTE C2: Handler de timeout de prompt
+   * A1: Limpa prompt do seat específico
    * Auto-cancela prompt após 30s para evitar soft-lock
    */
   handlePromptTimeout(room, client, promptId) {
+    const seat = client?.seat;
     const promptEntry = room.prompts.get(promptId);
     if (!promptEntry) return; // Já foi respondido
 
     console.warn("[Server] prompt timeout", {
       promptId,
       type: promptEntry.prompt?.type,
-      seat: client?.seat,
+      seat: seat || client?.seat,
     });
 
-    // Remover prompt
+    // A1: Remover prompt do seat específico
+    if (seat && room.pendingPromptsBySeat[seat]?.promptId === promptId) {
+      room.pendingPromptsBySeat[seat] = null;
+    }
+
+    // Remover da estrutura antiga também
     room.prompts.delete(promptId);
     room.pendingPromptType = null;
 
@@ -564,6 +633,14 @@ export class MatchManager {
       this.sendError(client, "Match not ready");
       return;
     }
+
+    const seat = client?.seat;
+    if (!seat) {
+      this.sendError(client, "Client has no seat", "action_rejected");
+      return;
+    }
+
+    // A1: Buscar prompt do seat específico
     const promptEntry = room.prompts.get(msg.promptId);
     if (!promptEntry) {
       this.sendError(client, "Prompt not found", "action_rejected");
@@ -574,14 +651,37 @@ export class MatchManager {
       return;
     }
 
+    // A3: Validar stateVersion
+    if (promptEntry.stateVersion !== undefined && room.stateVersion !== promptEntry.stateVersion) {
+      console.warn("[Server] prompt response stateVersion mismatch", {
+        promptId: msg.promptId,
+        seat,
+        promptVersion: promptEntry.stateVersion,
+        currentVersion: room.stateVersion,
+      });
+      // Rejeitar resposta e limpar prompt
+      this.clearPromptForSeat(room, seat, msg.promptId);
+      this.sendError(client, "Game state changed, please try again", "state_mismatch");
+      this.commitStateUpdate(room, "prompt_state_mismatch");
+      return;
+    }
+
+    console.log("[Server] prompt_response received", {
+      promptId: msg.promptId,
+      seat,
+      choice: Array.isArray(msg.choice) ? `[${msg.choice.length} items]` : msg.choice,
+      stateVersion: promptEntry.stateVersion,
+    });
+
     // INVARIANTE C2: Cancelar timeout ao receber resposta
     if (promptEntry.timeoutId) {
       clearTimeout(promptEntry.timeoutId);
     }
 
     const { prompt } = promptEntry;
-    room.prompts.delete(msg.promptId);
-    room.pendingPromptType = null;
+
+    // A1: Limpar prompt do seat após processar
+    this.clearPromptForSeat(room, seat, msg.promptId);
 
     if (prompt.type === "card_action_menu") {
       const choice = prompt.options.find((opt) => opt.id === msg.choice);
@@ -791,7 +891,7 @@ export class MatchManager {
       const requirementId =
         pending.requirementId || prompt.requirement?.id || "search_selection";
 
-      // Validar que a escolha é um dos candidatos válidos
+      // B1: Validar que a escolha é um dos candidatos válidos (por key)
       const candidates = prompt.requirement?.candidates || [];
       const choiceValue = Array.isArray(msg.choice) ? msg.choice : [msg.choice];
       const min = prompt.requirement?.min ?? 1;
@@ -803,18 +903,46 @@ export class MatchManager {
         return;
       }
 
-      // Validar que todas as escolhas são candidatos válidos
-      const validIds = new Set(candidates.map((c) => c.id));
-      const invalidChoices = choiceValue.filter((c) => !validIds.has(c));
+      // B1: Validar que todas as escolhas são candidatos válidos (por key ou id)
+      const validKeys = new Set();
+      candidates.forEach((c) => {
+        if (c.key) validKeys.add(c.key);
+        if (c.id !== undefined) validKeys.add(c.id);
+      });
+      const invalidChoices = choiceValue.filter((c) => !validKeys.has(c));
       if (invalidChoices.length > 0) {
+        console.warn("[Server] Invalid card_select choices", {
+          choiceValue,
+          validKeys: Array.from(validKeys),
+          invalidChoices,
+        });
         this.sendError(client, "Invalid selection", "action_rejected");
         this.sendState(client, room.game);
         return;
       }
 
+      // D: Enhanced logging para card_select
+      console.log("[Server] card_select resolved", {
+        seat,
+        requirementId,
+        choiceValue,
+        choiceCount: choiceValue.length,
+        pendingActionType: pending.actionType,
+        pendingSeat: pending.seat,
+        hasResumeData: !!pending.resumeData,
+        stateVersion: room.stateVersion,
+      });
+
       // Construir seleções para o payload
       const selections = { [requirementId]: choiceValue };
       const nextPayload = { ...(pending.payload || {}), selections };
+
+      console.log("[Server] card_select applying action", {
+        seat: pending.seat || client.seat,
+        actionType: pending.actionType,
+        hasSelections: !!nextPayload.selections,
+        selectionKeys: Object.keys(nextPayload.selections || {}),
+      });
 
       const applyResult = await this.applyAction(
         room,
@@ -824,7 +952,21 @@ export class MatchManager {
         { pendingSelection: pending }
       );
 
+      console.log("[Server] card_select applyAction result", {
+        seat,
+        ok: applyResult.ok,
+        needsSelection: applyResult.needsSelection,
+        message: applyResult.message,
+        hint: applyResult.hint,
+      });
+
       if (!applyResult.ok) {
+        console.error("[Server] card_select failed", {
+          seat,
+          actionType: pending.actionType,
+          message: applyResult.message,
+          hint: applyResult.hint,
+        });
         this.sendError(
           client,
           applyResult.message || "Card selection failed",
@@ -836,6 +978,11 @@ export class MatchManager {
       }
 
       if (applyResult.needsSelection && applyResult.selection?.prompt) {
+        console.log("[Server] card_select needs more selection", {
+          seat,
+          promptType: applyResult.selection.prompt?.type,
+          requirementId: applyResult.selection.requirementId,
+        });
         const selectionInfo = applyResult.selection;
         this.storeAndSendPrompt(room, client, selectionInfo.prompt, {
           pendingSelection: {
@@ -851,8 +998,30 @@ export class MatchManager {
         return;
       }
 
+      console.log("[Server] card_select successfully resolved", {
+        seat,
+        actionType: pending.actionType,
+        stateVersionAfter: room.stateVersion,
+      });
       this.commitStateUpdate(room, "card_select_resolved");
       return;
+    }
+  }
+
+  /**
+   * A1: Helper para limpar prompt de um seat específico
+   */
+  clearPromptForSeat(room, seat, promptId) {
+    // Limpar da estrutura per-seat
+    if (room.pendingPromptsBySeat[seat]?.promptId === promptId) {
+      room.pendingPromptsBySeat[seat] = null;
+    }
+    // Limpar da estrutura antiga
+    room.prompts.delete(promptId);
+    // Só limpar pendingPromptType se não houver outros prompts pendentes
+    const hasOtherPending = Object.values(room.pendingPromptsBySeat).some((p) => p !== null);
+    if (!hasOtherPending) {
+      room.pendingPromptType = null;
     }
   }
 
@@ -966,6 +1135,24 @@ export class MatchManager {
     const room = this.getRoom(client);
     if (!room || !room.game) {
       this.sendError(client, "Match not ready");
+      return;
+    }
+
+    const seat = client?.seat;
+    if (!seat) {
+      this.sendError(client, "Client has no seat", "invalid_action");
+      return;
+    }
+
+    // A2: Input lock - bloquear novas ações se houver prompt pendente para este seat
+    const pendingPrompt = room.pendingPromptsBySeat[seat];
+    if (pendingPrompt) {
+      console.warn("[Server] action blocked - pending prompt", {
+        seat,
+        promptId: pendingPrompt.promptId,
+        promptType: pendingPrompt.prompt?.type,
+      });
+      this.sendError(client, "Please respond to the current prompt first", "input_locked");
       return;
     }
 
@@ -1619,6 +1806,11 @@ export class MatchManager {
       clients: { player: null, bot: null },
       game: null,
       prompts: new Map(),
+      // A1: Per-seat prompt tracking to prevent overwriting prompts
+      pendingPromptsBySeat: {
+        player: null,
+        bot: null,
+      },
       stateVersion: 0,
       isResolvingEffect: false,
       pendingPromptType: null,
