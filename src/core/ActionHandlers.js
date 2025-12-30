@@ -824,7 +824,13 @@ async function selectCards({
 
 
 
-  if (player.id === "bot") {
+  // C: Só auto-selecionar se for realmente IA (não apenas por id === "bot")
+  // Em online mode, seat "bot" pode ser humano
+  const isAI = game.networkMode 
+    ? false  // No networkMode, nunca auto-selecionar (sempre humano)
+    : player.id === "bot";  // Offline mantém comportamento original
+
+  if (isAI) {
 
     const autoResult =
 
