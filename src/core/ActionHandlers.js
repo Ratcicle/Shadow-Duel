@@ -2596,6 +2596,7 @@ export async function handlePayLP(action, ctx, targets, engine) {
 export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
   const { player, source } = ctx;
   const game = engine.game;
+  const promptPlayer = action.promptPlayer !== false;
 
   if (!player || !game) return false;
 
@@ -2675,12 +2676,16 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
 
   // INVARIANTE B1: No networkMode, se há múltiplos candidatos, retornar selectionContract
   // para o servidor gerar o prompt. NUNCA auto-selecionar.
-  if (
-    game.networkMode &&
-    promptPlayer !== false &&
-    candidates.length > 0 &&
-    player.id !== "bot"
-  ) {
+    console.log("[ActionHandlers] add_from_zone_to_hand", {
+      actionType: action.type,
+      player: player?.id,
+      sourceZone,
+      networkMode: !!game.networkMode,
+      candidates: candidates.length,
+      promptPlayer,
+    });
+
+    if (game.networkMode && promptPlayer && candidates.length > 0 && player.id !== "bot") {
     const decoratedCandidates = candidates.map((card, idx) => ({
       key: `search_${sourceZone}_${idx}_${card.id}`,
       name: card.name,

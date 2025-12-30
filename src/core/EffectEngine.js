@@ -2617,11 +2617,19 @@ export default class EffectEngine {
       player: player.id,
       actionCount: (effect.actions || []).length,
     });
-    await this.applyActions(
+    const actionsResult = await this.applyActions(
       effect.actions || [],
       ctx,
       targetResult.targets || {}
     );
+    if (actionsResult && typeof actionsResult === "object" && actionsResult.needsSelection) {
+      return {
+        success: false,
+        needsSelection: true,
+        selectionContract: actionsResult.selectionContract,
+        ...actionsResult,
+      };
+    }
     this.registerOncePerTurnUsage(card, player, effect);
     this.game.checkWinCondition();
     logDev?.("SPELL_TRAP_ACTIVATION_RESOLVED", {
@@ -2631,7 +2639,7 @@ export default class EffectEngine {
     return { success: true, needsSelection: false };
   }
 
-  activateMonsterEffect(
+  async activateMonsterEffect(
     card,
     player,
     selections = null,
@@ -2791,7 +2799,19 @@ export default class EffectEngine {
       };
     }
 
-    this.applyActions(effect.actions || [], ctx, targetResult.targets || {});
+    const actionsResult = await this.applyActions(
+      effect.actions || [],
+      ctx,
+      targetResult.targets || {}
+    );
+    if (actionsResult && typeof actionsResult === "object" && actionsResult.needsSelection) {
+      return {
+        success: false,
+        needsSelection: true,
+        selectionContract: actionsResult.selectionContract,
+        ...actionsResult,
+      };
+    }
     this.registerOncePerTurnUsage(card, player, effect);
     this.registerOncePerDuelUsage(card, player, effect);
     this.game.checkWinCondition();
