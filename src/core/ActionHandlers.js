@@ -2675,7 +2675,12 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
 
   // INVARIANTE B1: No networkMode, se há múltiplos candidatos, retornar selectionContract
   // para o servidor gerar o prompt. NUNCA auto-selecionar.
-  if (game.networkMode && candidates.length > 1 && player.id !== "bot") {
+  if (
+    game.networkMode &&
+    promptPlayer !== false &&
+    candidates.length > 0 &&
+    player.id !== "bot"
+  ) {
     const decoratedCandidates = candidates.map((card, idx) => ({
       key: `search_${sourceZone}_${idx}_${card.id}`,
       name: card.name,

@@ -835,8 +835,90 @@ function restartCurrentDuelFromDev() {
 
 // Online mode helpers
 
-// Flag to track if online phase bindings are set up
+function mapPublicCardView(
+  cardView,
+  { isSelf = false, treatAsSpellTrap = false } = {}
+) {
+  if (!cardView) return null;
+
+  const visible = isSelf || !cardView.faceDown;
+  const baseData =
+    visible && cardView.cardId
+      ? cardDatabaseById.get(cardView.cardId) || {}
+      : {};
+  const isFaceDown = !!cardView.faceDown;
+
+  const card = {
+    id: cardView.cardId ?? baseData.id ?? 0,
+    name:
+      visible && (cardView.name || baseData.name)
+        ? cardView.name || baseData.name
+        : isFaceDown
+        ? "Face-down"
+        : baseData.name || "Unknown",
+    cardKind: cardView.cardKind || baseData.cardKind || "monster",
+    subtype: visible ? cardView.subtype ?? baseData.subtype ?? null : null,
+    position: cardView.position || "attack",
+    atk: visible ? cardView.atk ?? baseData.atk ?? 0 : null,
+    def: visible ? cardView.def ?? baseData.def ?? 0 : null,
+    level: visible ? cardView.level ?? baseData.level ?? 0 : null,
+    isFacedown: isFaceDown,
+    faceDown: isFaceDown,
+    image: visible
+      ? typeof baseData.image === "string"
+        ? baseData.image
+        : null
+      : null,
+  };
+
+  if (treatAsSpellTrap && card.cardKind === "monster") {
+    card.cardKind = "spell";
+  }
+
+  return card;
+}
+
+function getOnlineViewByOwner(ownerId) {
+  if (!onlineSnapshot?.players) return null;
+  return ownerId === "player"
+    ? onlineSnapshot.players.self
+    : onlineSnapshot.players.opponent;
+}
+
+function buildGraveyardCardsFor(ownerId) {
+  const view = getOnlineViewByOwner(ownerId);
+  if (!view || !Array.isArray(view.graveyard)) return [];
+  return view.graveyard.map((card) =>
+    mapPublicCardView(card, { isSelf: true })
+  );
+}
+
+function openOnlineGraveyard(ownerId, options = {}) {
+  if (!onlineRenderer) return;
+  if (!onlineSnapshot?.players) {
+    if (onlineInlineErrorEl) {
+      onlineInlineErrorEl.textContent = "Aguardando estado do servidor.";
+    }
+    return;
+  }
+
+  const cards = buildGraveyardCardsFor(ownerId);
+  const isOpponent = ownerId === "bot";
+  const finalOptions = { ...options };
+
+  if (isOpponent && !options.allowOpponentSelection) {
+    finalOptions.selectable = false;
+    finalOptions.onSelect = null;
+  }
+
+  onlineRenderer.renderGraveyardModal(cards, finalOptions);
+  onlineRenderer.toggleModal(true);
+}
+
 let onlinePhaseBindingActive = false;
+let onlineGraveyardBindingActive = false;
+
+// Flag to track if online phase bindings are set up
 
 function bindOnlinePhaseTrack() {
   if (onlinePhaseBindingActive) return;
@@ -887,6 +969,31 @@ function bindOnlinePhaseTrack() {
   onlinePhaseBindingActive = true;
 }
 
+function bindOnlineGraveyardClicks() {
+  if (onlineGraveyardBindingActive || !onlineRenderer) return;
+
+  onlineRenderer.bindPlayerGraveyardClick(() => openOnlineGraveyard("player"));
+  onlineRenderer.bindBotGraveyardClick(() => openOnlineGraveyard("bot"));
+
+  onlineRenderer.bindGraveyardModalClose(() => {
+    onlineRenderer.toggleModal(false);
+  });
+
+  onlineRenderer.bindModalOverlayClick((modalKind) => {
+    if (modalKind === "graveyard") {
+      onlineRenderer.toggleModal(false);
+    }
+  });
+
+  onlineRenderer.bindGlobalKeydown((e) => {
+    if (e.key === "Escape") {
+      onlineRenderer.toggleModal(false);
+    }
+  });
+
+  onlineGraveyardBindingActive = true;
+}
+
 function enterOnlineMode() {
   onlineMode = true;
   startScreen.classList.add("hidden");
@@ -902,6 +1009,7 @@ function enterOnlineMode() {
 
   // Set up phase track binding for online mode
   bindOnlinePhaseTrack();
+  bindOnlineGraveyardClicks();
 
   updateOnlineStatus({
     connected: false,
@@ -978,45 +1086,9 @@ function renderOnlineSnapshot(snapshot, seat) {
   // Clamp selections if indices no longer exist
   // No selection clamping needed in modal-driven flow
 
-  const mapCardVisible = (cardView, isSelf, isSpellTrap = false) => {
-    if (!cardView) return null;
-    // Determine visibility first - own cards are always visible, opponent's only if not facedown
-    const visible = isSelf || !cardView.faceDown;
-    // Get card data from database for visible cards (own or opponent's face-up)
-    const baseData =
-      visible && cardView.cardId
-        ? cardDatabaseById.get(cardView.cardId) || {}
-        : {};
-    const baseImage =
-      baseData && typeof baseData.image === "string" ? baseData.image : null;
-    const isFaceDown = !!cardView.faceDown;
-    const card = {
-      id: cardView.cardId ?? baseData.id ?? 0,
-      name:
-        visible && cardView.name
-          ? cardView.name
-          : isFaceDown
-          ? "Face-down"
-          : baseData.name || cardView.name || "Unknown",
-      cardKind: cardView.cardKind || baseData.cardKind || "monster",
-      subtype: cardView.subtype || baseData.subtype || null,
-      position: cardView.position || "attack",
-      atk: visible ? cardView.atk ?? baseData.atk ?? 0 : null,
-      def: visible ? cardView.def ?? baseData.def ?? 0 : null,
-      level: visible ? cardView.level ?? baseData.level ?? 0 : null,
-      isFacedown: isFaceDown,
-      faceDown: isFaceDown,
-      image: visible ? baseImage : null,
-    };
-    if (isSpellTrap && card.cardKind === "monster") {
-      card.cardKind = "spell";
-    }
-    return card;
-  };
-
   const buildHand = (view, isSelf) => {
     if (Array.isArray(view.hand)) {
-      return view.hand.map((h) => mapCardVisible(h, isSelf));
+      return view.hand.map((h) => mapPublicCardView(h, { isSelf }));
     }
     const count = view.handCount || (view.hand && view.hand.count) || 0;
     return Array.from({ length: count }, () => ({
@@ -1029,11 +1101,28 @@ function renderOnlineSnapshot(snapshot, seat) {
   };
 
   const buildField = (view, isSelf) =>
-    (view.field || []).map((slot) => mapCardVisible(slot, isSelf));
+    (view.field || []).map((slot) =>
+      mapPublicCardView(slot, { isSelf })
+    );
 
   const buildSpellTrap = (view, isSelf) =>
     Array.isArray(view.spellTrap)
-      ? view.spellTrap.map((slot) => mapCardVisible(slot, isSelf, true))
+      ? view.spellTrap.map((slot) =>
+          mapPublicCardView(slot, { isSelf, treatAsSpellTrap: true })
+        )
+      : [];
+
+  const buildFieldSpell = (view, isSelf) =>
+    view.fieldSpell
+      ? mapPublicCardView(view.fieldSpell, {
+          isSelf,
+          treatAsSpellTrap: true,
+        })
+      : null;
+
+  const buildGraveyard = (view) =>
+    Array.isArray(view.graveyard)
+      ? view.graveyard.map((gy) => mapPublicCardView(gy, { isSelf: true }))
       : [];
 
   const selfPlayer = {
@@ -1043,9 +1132,11 @@ function renderOnlineSnapshot(snapshot, seat) {
     hand: buildHand(selfView, true),
     field: buildField(selfView, true),
     spellTrap: buildSpellTrap(selfView, true),
-    fieldSpell: selfView.fieldSpell
-      ? mapCardVisible(selfView.fieldSpell, true, true)
-      : null,
+    fieldSpell: buildFieldSpell(selfView, true),
+    graveyard: buildGraveyard(selfView),
+    graveyardCount:
+      selfView.graveyardCount ??
+      (Array.isArray(selfView.graveyard) ? selfView.graveyard.length : 0),
   };
 
   const oppPlayer = {
@@ -1055,9 +1146,11 @@ function renderOnlineSnapshot(snapshot, seat) {
     hand: buildHand(oppView, false),
     field: buildField(oppView, false),
     spellTrap: buildSpellTrap(oppView, false),
-    fieldSpell: oppView.fieldSpell
-      ? mapCardVisible(oppView.fieldSpell, false, true)
-      : null,
+    fieldSpell: buildFieldSpell(oppView, false),
+    graveyard: buildGraveyard(oppView),
+    graveyardCount:
+      oppView.graveyardCount ??
+      (Array.isArray(oppView.graveyard) ? oppView.graveyard.length : 0),
   };
 
   // Render using existing renderer pipeline
@@ -1073,6 +1166,8 @@ function renderOnlineSnapshot(snapshot, seat) {
 
   onlineRenderer.updateLP(selfPlayer);
   onlineRenderer.updateLP(oppPlayer);
+  onlineRenderer.updateGYPreview(selfPlayer);
+  onlineRenderer.updateGYPreview(oppPlayer);
 
   const activeIsSelf = snapshot.currentPlayer === seat;
   const currentTurnPlayer = activeIsSelf ? selfPlayer : oppPlayer;

@@ -12,6 +12,7 @@
  */
 
 import { getCardDisplayName } from "../core/i18n.js";
+import { cardDatabaseById } from "../data/cards.js";
 
 // ============================================================================
 // Constants & Mappings
@@ -585,13 +586,173 @@ export function showCardSelectAsync(renderer, prompt) {
 }
 
 /**
- * Visual selection for effect targets (equip spells, destruction effects, etc.)
- * Mirrors offline behavior: highlight candidates, select by clicking, confirm to execute
+ * Graveyard selection using the existing graveyard modal.
+ * Works with serialized candidates (no object references) and returns candidate keys.
  * @param {Renderer} renderer - Renderer instance
  * @param {Object} prompt - Server prompt with requirement containing candidates
- * @returns {Promise<Array>} Array of selected candidate IDs or null for cancel
+ * @param {Object} snapshot - Current online snapshot (for card data resolution)
+ * @returns {Promise<Array|null>} Array of selected candidate IDs or null for cancel
  */
-export function showSelectionContractAsync(renderer, prompt) {
+function showGraveyardSelectionAsync(renderer, prompt, snapshot) {
+  return new Promise((resolve) => {
+    let resolved = false;
+    const selectedIds = new Set();
+    const cleanup = [];
+
+    const requirement = prompt?.requirement || {};
+    const min = requirement.min ?? 1;
+    const max = requirement.max ?? 1;
+    const entries = buildGraveyardCandidateEntries(requirement, snapshot).filter(
+      (entry) => entry.card
+    );
+
+    const safeResolve = (result) => {
+      if (resolved) return;
+      resolved = true;
+      if (typeof window.setOnlineSelectionActive === "function") {
+        window.setOnlineSelectionActive(false);
+      }
+      renderer.hideFieldTargetingControls?.();
+      renderer.setSelectionDimming?.(false);
+      renderer.toggleModal(false);
+      cleanup.forEach((fn) => fn());
+      resolve(result);
+    };
+
+    if (entries.length === 0) {
+      console.warn(
+        "[OnlinePromptAdapter] No graveyard candidates for selection"
+      );
+      safeResolve(null);
+      return;
+    }
+
+    if (typeof window.setOnlineSelectionActive === "function") {
+      window.setOnlineSelectionActive(true);
+    }
+    renderer.setSelectionDimming?.(true);
+
+    const cards = entries.slice().sort((a, b) => {
+      const aIdx =
+        typeof a.zoneIndex === "number" ? a.zoneIndex : Number.MAX_SAFE_INTEGER;
+      const bIdx =
+        typeof b.zoneIndex === "number" ? b.zoneIndex : Number.MAX_SAFE_INTEGER;
+      return aIdx - bIdx;
+    });
+
+    const owners = new Set(cards.map((entry) => entry.owner));
+    const ownerLabel =
+      owners.size === 1
+        ? owners.has("player")
+          ? "Cemiterio do jogador"
+          : "Cemiterio do oponente"
+        : "Cemiterio";
+    const filterMessage =
+      prompt.title || requirement.message || `${ownerLabel}: selecione as cartas`;
+
+    const controls = renderer.showFieldTargetingControls(
+      () => {
+        if (selectedIds.size >= min && selectedIds.size <= max) {
+          safeResolve(Array.from(selectedIds));
+        }
+      },
+      () => safeResolve(null),
+      { allowCancel: true }
+    );
+    cleanup.push(() => controls?.close?.());
+
+    const updateControls = () => {
+      controls?.updateState?.({
+        selected: selectedIds.size,
+        min,
+        max,
+        allowEmpty: min === 0,
+      });
+    };
+
+    const markSelection = (cardEl, isSelected) => {
+      if (!cardEl) return;
+      if (isSelected) {
+        cardEl.classList.add("selected");
+      } else {
+        cardEl.classList.remove("selected");
+      }
+    };
+
+    renderer.renderGraveyardModal(
+      cards.map((entry) => entry.card),
+      {
+        selectable: true,
+        filterMessage,
+        onSelect: (_card, index, cardEl) => {
+          const entry = cards[index];
+          if (!entry || !entry.candidateId) return;
+
+          if (selectedIds.has(entry.candidateId)) {
+            selectedIds.delete(entry.candidateId);
+            markSelection(cardEl, false);
+          } else {
+            if (max === 1) {
+              selectedIds.clear();
+              document
+                .querySelectorAll("#gy-grid .gy-selectable.selected")
+                .forEach((el) => el.classList.remove("selected"));
+            }
+            if (selectedIds.size < max) {
+              selectedIds.add(entry.candidateId);
+              markSelection(cardEl, true);
+            }
+          }
+          updateControls();
+        },
+        isSelected: (_card, index) => {
+          const entry = cards[index];
+          return entry ? selectedIds.has(entry.candidateId) : false;
+        },
+      }
+    );
+    renderer.toggleModal(true);
+    updateControls();
+
+    const escHandler = (e) => {
+      if (e.key === "Escape") {
+        safeResolve(null);
+      }
+    };
+    document.addEventListener("keydown", escHandler);
+    cleanup.push(() => document.removeEventListener("keydown", escHandler));
+
+    const closeBtn = document.querySelector(".close-modal");
+    if (closeBtn) {
+      const closeHandler = () => safeResolve(null);
+      closeBtn.addEventListener("click", closeHandler);
+      cleanup.push(() =>
+        closeBtn.removeEventListener("click", closeHandler)
+      );
+    }
+
+    const modal = document.getElementById("gy-modal");
+    if (modal) {
+      const overlayHandler = (e) => {
+        if (e.target === modal) {
+          safeResolve(null);
+        }
+      };
+      modal.addEventListener("click", overlayHandler);
+      cleanup.push(() => modal.removeEventListener("click", overlayHandler));
+    }
+  });
+}
+
+/**
+ * Visual selection for effect targets (field/hand/spell zones).
+ * Uses field targeting highlights; graveyard selections are handled separately.
+ * @param {Renderer} renderer - Renderer instance
+ * @param {Object} prompt - Server prompt with requirement containing candidates
+ * @param {Object} snapshot - Current online snapshot (for resolving card data)
+ * @returns {Promise<Array|null>} Selected candidate IDs or null for cancel
+ */
+export function showSelectionContractAsync(renderer, prompt, snapshot) {
   return new Promise((resolve) => {
     let resolved = false;
     const selectedIds = new Set();
@@ -601,6 +762,24 @@ export function showSelectionContractAsync(renderer, prompt) {
     const candidates = requirement.candidates || [];
     const min = requirement.min ?? 1;
     const max = requirement.max ?? 1;
+
+    const candidateZones = new Set(
+      candidates
+        .map((cand) => cand.zone || requirement.zone || null)
+        .filter(Boolean)
+    );
+    if (candidateZones.size === 1 && candidateZones.has("graveyard")) {
+      showGraveyardSelectionAsync(renderer, prompt, snapshot)
+        .then(resolve)
+        .catch((error) => {
+          console.error(
+            "[OnlinePromptAdapter] Graveyard selection error",
+            error
+          );
+          resolve(null);
+        });
+      return;
+    }
 
     console.log("[OnlinePromptAdapter] showSelectionContractAsync", {
       prompt,
@@ -768,9 +947,8 @@ function findCandidateElement(cand) {
   } else if (zone === "hand") {
     containerId = controller === "player" ? "player-hand" : "bot-hand";
   } else if (zone === "graveyard") {
-    // Graveyard selection might need a different approach
     console.log(
-      "[OnlinePromptAdapter] Graveyard zone not supported for element finding"
+      "[OnlinePromptAdapter] Graveyard selection handled via modal; no DOM element."
     );
     return null;
   }
@@ -798,6 +976,88 @@ function findCandidateElement(cand) {
   );
 
   return element;
+}
+
+function resolveControllerOwner(controller, snapshot) {
+  const normalized = controller || "player";
+  const selfId = snapshot?.players?.self?.id;
+  const oppId = snapshot?.players?.opponent?.id;
+
+  if (normalized === "player" || normalized === selfId) return "player";
+  if (normalized === "opponent" || normalized === "bot" || normalized === oppId)
+    return "opponent";
+  return "player";
+}
+
+function mapGraveyardCardView(cardView) {
+  if (!cardView) return null;
+  const baseData =
+    cardView.cardId && cardDatabaseById.get(cardView.cardId)
+      ? cardDatabaseById.get(cardView.cardId)
+      : {};
+  const kind = cardView.cardKind ?? baseData.cardKind ?? "monster";
+  return {
+    id: cardView.cardId ?? baseData.id ?? 0,
+    cardId: cardView.cardId ?? baseData.id ?? 0,
+    name: cardView.name ?? baseData.name ?? "Unknown",
+    cardKind: kind,
+    subtype: cardView.subtype ?? baseData.subtype ?? null,
+    atk: kind === "monster" ? cardView.atk ?? baseData.atk ?? null : null,
+    def: kind === "monster" ? cardView.def ?? baseData.def ?? null : null,
+    level: kind === "monster" ? cardView.level ?? baseData.level ?? null : null,
+    description: cardView.description ?? baseData.description ?? "",
+    image:
+      typeof baseData.image === "string"
+        ? baseData.image
+        : cardView.image || null,
+  };
+}
+
+function buildGraveyardCandidateEntries(requirement, snapshot) {
+  const candidates = Array.isArray(requirement?.candidates)
+    ? requirement.candidates
+    : [];
+
+  return candidates.map((cand, idx) => {
+    const owner = resolveControllerOwner(
+      cand.controller || cand.owner,
+      snapshot
+    );
+    const view =
+      owner === "player"
+        ? snapshot?.players?.self
+        : snapshot?.players?.opponent;
+    const zoneIndex =
+      typeof cand.zoneIndex === "number" ? cand.zoneIndex : idx;
+    const viewCard =
+      view && Array.isArray(view?.graveyard)
+        ? view.graveyard[zoneIndex]
+        : null;
+
+    const fallbackCard =
+      cand.cardId || cand.cardKind
+        ? {
+            cardId: cand.cardId,
+            cardKind: cand.cardKind,
+            name: cand.name || cand.label,
+            atk: cand.atk,
+            def: cand.def,
+            level: cand.level,
+            description: cand.description,
+          }
+        : null;
+
+    const card = mapGraveyardCardView(
+      viewCard || cand.cardData || fallbackCard
+    );
+
+    return {
+      candidateId: cand.id ?? cand.key ?? String(idx),
+      card,
+      owner,
+      zoneIndex,
+    };
+  });
 }
 
 // ============================================================================
@@ -876,6 +1136,13 @@ export function extractCardData(prompt, snapshot) {
 
   if (zone === "field") {
     return selfView.field?.[index] || null;
+  }
+
+  if (zone === "graveyard") {
+    const ownerHint = prompt.owner || prompt.controller || "player";
+    const targetView =
+      ownerHint === "opponent" ? snapshot.players?.opponent : selfView;
+    return targetView?.graveyard?.[index] || null;
   }
 
   return null;
@@ -1137,7 +1404,11 @@ export async function handlePromptWithVisualModal(
 
       case "selection": {
         // Visual selection for effect targets (equip spells, destruction effects, etc.)
-        const selectedIds = await showSelectionContractAsync(renderer, prompt);
+        const selectedIds = await showSelectionContractAsync(
+          renderer,
+          prompt,
+          snapshot
+        );
 
         if (selectedIds && selectedIds.length > 0) {
           // For single selection, send the ID directly; for multiple, send array

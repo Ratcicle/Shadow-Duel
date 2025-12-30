@@ -3433,6 +3433,17 @@ export default class Game {
         };
       });
 
+    const serializeGraveyard = (owner) =>
+      (owner.graveyard || []).map((card) => ({
+        cardId: card.id,
+        name: card.name,
+        cardKind: card.cardKind,
+        subtype: card.subtype ?? null,
+        atk: card.cardKind === "monster" ? card.atk ?? null : null,
+        def: card.cardKind === "monster" ? card.def ?? null : null,
+        level: card.cardKind === "monster" ? card.level ?? null : null,
+      }));
+
     const buildPlayerView = (owner, isSelf) => ({
       id: owner.id,
       name: owner.name,
@@ -3452,6 +3463,7 @@ export default class Game {
           }
         : null,
       graveyardCount: (owner.graveyard || []).length,
+      graveyard: serializeGraveyard(owner),
     });
 
     return {

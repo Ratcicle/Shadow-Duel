@@ -1370,11 +1370,22 @@ export default class Renderer {
       const cardEl = this.createCardElement(card, true);
       if (options.selectable) {
         cardEl.classList.add("gy-selectable");
-        const disabled = options.isDisabled ? options.isDisabled(card) : false;
+        const disabled = options.isDisabled
+          ? options.isDisabled(card, index)
+          : false;
         if (disabled) {
           cardEl.classList.add("disabled");
-        } else if (typeof options.onSelect === "function") {
-          cardEl.addEventListener("click", () => options.onSelect(card, index));
+        } else {
+          if (typeof options.isSelected === "function") {
+            if (options.isSelected(card, index)) {
+              cardEl.classList.add("selected");
+            }
+          }
+          if (typeof options.onSelect === "function") {
+            cardEl.addEventListener("click", (e) =>
+              options.onSelect(card, index, cardEl, e)
+            );
+          }
         }
       }
       // Adiciona indicador visual de efeito ativável
@@ -1406,10 +1417,28 @@ export default class Renderer {
       return;
     }
 
+    if (!gyZone.dataset.gyInitialized) {
+      gyZone.textContent = "";
+      gyZone.dataset.gyInitialized = "true";
+    }
+
+    const count =
+      (Array.isArray(player.graveyard) && player.graveyard.length) ||
+      player.graveyardCount ||
+      0;
+
+    let counter = gyZone.querySelector(".zone-counter");
+    if (!counter) {
+      counter = document.createElement("div");
+      counter.className = "zone-counter";
+      gyZone.appendChild(counter);
+    }
+    counter.textContent = count > 0 ? `GY\n${count}` : "GY";
+
     const existing = gyZone.querySelector(".gy-preview");
     if (existing) existing.remove();
 
-    if (player.graveyard.length > 0) {
+    if (Array.isArray(player.graveyard) && player.graveyard.length > 0) {
       const lastCard = player.graveyard[player.graveyard.length - 1];
       const preview = this.createCardElement(lastCard, true);
       preview.className = "card gy-preview";
