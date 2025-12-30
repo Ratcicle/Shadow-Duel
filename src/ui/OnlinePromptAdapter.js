@@ -357,10 +357,11 @@ export function showTargetSelectionAsync(renderer, prompt) {
 export function showCardSelectAsync(renderer, prompt) {
   return new Promise((resolve) => {
     let resolved = false;
-    const selectedIds = new Set();
 
     const requirement = prompt.requirement || {};
-    const candidates = requirement.candidates || [];
+    const candidates = Array.isArray(requirement.candidates)
+      ? requirement.candidates
+      : [];
     const min = requirement.min ?? 1;
     const max = requirement.max ?? 1;
     const title = prompt.title || "Select card(s)";
@@ -385,7 +386,78 @@ export function showCardSelectAsync(renderer, prompt) {
       return;
     }
 
-    // Create modal overlay
+    const searchModal = renderer?.getSearchModalElements?.();
+    const canUseVisualModal =
+      max === 1 &&
+      searchModal &&
+      typeof renderer?.showSearchModalVisual === "function";
+
+    if (canUseVisualModal) {
+      const visualCandidates = candidates.map((cand, idx) => {
+        const dbCard =
+          cand.cardId !== undefined && cand.cardId !== null
+            ? cardDatabaseById.get(cand.cardId)
+            : null;
+        const candidateId = cand.id ?? cand.key ?? String(idx);
+        const displayName =
+          getCardDisplayName(dbCard || cand) ||
+          cand.label ||
+          cand.name ||
+          `Card ${idx + 1}`;
+
+        return {
+          id: dbCard?.id ?? cand.cardId ?? candidateId,
+          name: displayName,
+          cardKind: cand.cardKind ?? dbCard?.cardKind ?? null,
+          type: dbCard?.type ?? cand.type ?? dbCard?.subtype ?? null,
+          atk: cand.atk ?? dbCard?.atk ?? null,
+          def: cand.def ?? dbCard?.def ?? null,
+          level: cand.level ?? dbCard?.level ?? null,
+          description: dbCard?.description ?? cand.description ?? "",
+          image:
+            typeof dbCard?.image === "string"
+              ? dbCard.image
+              : cand.image || null,
+          _candidateId: candidateId,
+        };
+      });
+
+      const defaultCardName = visualCandidates[0]?.name || "";
+
+      renderer.showSearchModalVisual(
+        searchModal,
+        visualCandidates,
+        defaultCardName,
+        (selectedName, selectedCard) => {
+          const chosen =
+            selectedCard ||
+            visualCandidates.find((card) => card && card.name === selectedName);
+
+          if (!chosen) {
+            console.warn(
+              "[OnlinePromptAdapter] No matching candidate for selected card"
+            );
+            safeResolve(null);
+            return;
+          }
+
+          const choiceId = chosen._candidateId;
+          if (!choiceId) {
+            console.warn(
+              "[OnlinePromptAdapter] Missing candidate id for selection"
+            );
+            safeResolve(null);
+            return;
+          }
+
+          safeResolve([choiceId]);
+        }
+      );
+
+      return;
+    }
+
+    // Fallback: lightweight overlay (multi-select or missing offline modal)
     const overlay = document.createElement("div");
     overlay.className = "online-prompt-overlay card-select-overlay";
     overlay.style.cssText = `
@@ -414,7 +486,8 @@ export function showCardSelectAsync(renderer, prompt) {
       color: white;
     `;
 
-    // Title
+    const selectedIds = new Set();
+
     const titleEl = document.createElement("h2");
     titleEl.textContent = title;
     titleEl.style.cssText = `
@@ -424,7 +497,6 @@ export function showCardSelectAsync(renderer, prompt) {
     `;
     modal.appendChild(titleEl);
 
-    // Selection info
     const infoEl = document.createElement("div");
     infoEl.className = "card-select-info";
     infoEl.style.cssText = `
@@ -438,7 +510,6 @@ export function showCardSelectAsync(renderer, prompt) {
     updateInfo();
     modal.appendChild(infoEl);
 
-    // Card list container
     const listContainer = document.createElement("div");
     listContainer.className = "card-select-list";
     listContainer.style.cssText = `
@@ -448,11 +519,24 @@ export function showCardSelectAsync(renderer, prompt) {
       margin-bottom: 15px;
     `;
 
-    // Create card items
-    candidates.forEach((cand) => {
+    candidates.forEach((cand, idx) => {
+      const dbCard =
+        cand.cardId !== undefined && cand.cardId !== null
+          ? cardDatabaseById.get(cand.cardId)
+          : null;
+      const candidateId = cand.id ?? cand.key ?? String(idx);
+      const displayName =
+        getCardDisplayName(dbCard || cand) ||
+        cand.label ||
+        cand.name ||
+        `Card ${idx + 1}`;
+      const atk = cand.atk ?? dbCard?.atk;
+      const def = cand.def ?? dbCard?.def;
+      const cardKind = cand.cardKind ?? dbCard?.cardKind;
+
       const cardItem = document.createElement("div");
       cardItem.className = "card-select-item";
-      cardItem.dataset.id = cand.id;
+      cardItem.dataset.id = candidateId;
       cardItem.style.cssText = `
         background: #2a2a4e;
         border: 2px solid #444;
@@ -464,7 +548,7 @@ export function showCardSelectAsync(renderer, prompt) {
       `;
 
       const nameEl = document.createElement("div");
-      nameEl.textContent = cand.label || cand.name || "Unknown";
+      nameEl.textContent = displayName;
       nameEl.style.cssText = `
         font-weight: bold;
         font-size: 12px;
@@ -473,28 +557,25 @@ export function showCardSelectAsync(renderer, prompt) {
       `;
       cardItem.appendChild(nameEl);
 
-      // Card info (ATK/DEF or card kind)
-      if (cand.atk !== null && cand.atk !== undefined) {
+      if (atk !== null && atk !== undefined) {
         const statsEl = document.createElement("div");
-        statsEl.textContent = `ATK ${cand.atk} / DEF ${cand.def || 0}`;
+        statsEl.textContent = `ATK ${atk} / DEF ${def || 0}`;
         statsEl.style.cssText = `font-size: 10px; color: #888;`;
         cardItem.appendChild(statsEl);
-      } else if (cand.cardKind) {
+      } else if (cardKind) {
         const kindEl = document.createElement("div");
-        kindEl.textContent = cand.cardKind.toUpperCase();
+        kindEl.textContent = String(cardKind).toUpperCase();
         kindEl.style.cssText = `font-size: 10px; color: #888;`;
         cardItem.appendChild(kindEl);
       }
 
-      // Click handler
       cardItem.addEventListener("click", () => {
-        if (selectedIds.has(cand.id)) {
-          selectedIds.delete(cand.id);
+        if (selectedIds.has(candidateId)) {
+          selectedIds.delete(candidateId);
           cardItem.style.borderColor = "#444";
           cardItem.style.background = "#2a2a4e";
         } else {
           if (max === 1) {
-            // Single selection - clear others
             selectedIds.clear();
             listContainer
               .querySelectorAll(".card-select-item")
@@ -504,7 +585,7 @@ export function showCardSelectAsync(renderer, prompt) {
               });
           }
           if (selectedIds.size < max) {
-            selectedIds.add(cand.id);
+            selectedIds.add(candidateId);
             cardItem.style.borderColor = "#4a9eff";
             cardItem.style.background = "#3a3a6e";
           }
@@ -517,7 +598,6 @@ export function showCardSelectAsync(renderer, prompt) {
     });
     modal.appendChild(listContainer);
 
-    // Buttons container
     const buttonContainer = document.createElement("div");
     buttonContainer.style.cssText = `
       display: flex;
@@ -525,7 +605,6 @@ export function showCardSelectAsync(renderer, prompt) {
       justify-content: flex-end;
     `;
 
-    // Confirm button
     const confirmBtn = document.createElement("button");
     confirmBtn.textContent = "Confirm";
     confirmBtn.disabled = min > 0;
@@ -547,7 +626,6 @@ export function showCardSelectAsync(renderer, prompt) {
       }
     });
 
-    // Cancel button
     const cancelBtn = document.createElement("button");
     cancelBtn.textContent = "Cancel";
     cancelBtn.className = "secondary";
@@ -573,7 +651,6 @@ export function showCardSelectAsync(renderer, prompt) {
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
 
-    // ESC to cancel
     const escHandler = (e) => {
       if (e.key === "Escape") {
         overlay.remove();

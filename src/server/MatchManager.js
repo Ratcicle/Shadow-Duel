@@ -1302,7 +1302,15 @@ export class MatchManager {
         const guard = mainPhaseGuard("Activate only in Main Phase");
         if (guard) return guard;
         const { handIndex } = payload;
-        const card = actor.hand[handIndex];
+        const resumeInfo = context?.pendingSelection?.resumeData || null;
+        const resumeCardRef =
+          resumeInfo?.commitInfo?.cardRef ||
+          resumeInfo?.activationContext?.commitInfo?.cardRef ||
+          null;
+        let card = actor.hand[handIndex];
+        if (!card && resumeCardRef) {
+          card = resumeCardRef;
+        }
         if (!card) return { ok: false, message: "No card in that hand slot" };
         if (card.cardKind !== "spell" && card.cardKind !== "trap") {
           return { ok: false, message: "Only Spell/Trap can be activated" };

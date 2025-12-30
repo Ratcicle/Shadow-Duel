@@ -3756,6 +3756,7 @@ export default class Game {
       committed,
       commitInfo: config.activationContext?.commitInfo || commitInfo || null,
       autoSelectSingleTarget: explicitAutoSelect,
+      selections: config.selections || null,
     };
 
     const safeActivate = async (selections) => {

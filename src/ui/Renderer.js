@@ -2477,29 +2477,33 @@ export default class Renderer {
       overlay.remove();
     };
 
+    const findCandidateByName = (name) =>
+      candidates.find((c) => c && c.name === name) || null;
+
     confirmBtn.onclick = () => {
       cleanup();
       if (selectedCard) {
-        onConfirm(selectedCard.name);
+        onConfirm(selectedCard.name, selectedCard);
       }
     };
 
     cancelBtn.onclick = () => {
       cleanup();
       if (defaultCard) {
-        onConfirm(defaultCard);
+        onConfirm(defaultCard, findCandidateByName(defaultCard));
       } else if (selectedCard) {
-        onConfirm(selectedCard.name);
+        onConfirm(selectedCard.name, selectedCard);
       }
     };
 
     overlay.onclick = (e) => {
       if (e.target === overlay) {
         cleanup();
-        if (defaultCard) {
-          onConfirm(defaultCard);
-        } else if (selectedCard) {
-          onConfirm(selectedCard.name);
+        const choiceName = defaultCard || (selectedCard && selectedCard.name);
+        if (choiceName) {
+          const choiceCard =
+            findCandidateByName(choiceName) || selectedCard || null;
+          onConfirm(choiceName, choiceCard);
         }
       }
     };

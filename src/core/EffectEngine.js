@@ -2579,7 +2579,12 @@ export default class EffectEngine {
       activationZone,
       activationContext: normalizedActivationContext,
       actionContext: normalizedActivationContext.actionContext || null,
+      selections: selections || normalizedActivationContext.selections || null,
     };
+
+    // Ensure selections propagate through activation context for network resume.
+    normalizedActivationContext.selections =
+      normalizedActivationContext.selections || selections || null;
 
     const condCheck = this.evaluateConditions(effect.conditions, ctx);
     if (!condCheck.ok) {
@@ -3553,6 +3558,16 @@ export default class EffectEngine {
     const logDev =
       this.game?.devLog &&
       ((tag, detail) => this.game.devLog(tag, detail || {}));
+
+    // Propagate selection results (from network resume) into ctx so handlers can consume them.
+    const selectionMap =
+      ctx?.selections ||
+      ctx?.activationContext?.selections ||
+      ctx?.actionContext?.selections ||
+      null;
+    if (ctx && selectionMap && !ctx.selections) {
+      ctx.selections = selectionMap;
+    }
 
     try {
       for (const action of actions) {
