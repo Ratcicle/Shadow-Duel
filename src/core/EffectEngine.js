@@ -1111,7 +1111,34 @@ export default class EffectEngine {
       };
     }
 
-    this.applyActions(effect.actions || [], ctx, targetResult.targets || {});
+    if (selections && typeof selections === "object") {
+      ctx.selections = selections;
+      if (
+        ctx.activationContext &&
+        typeof ctx.activationContext === "object" &&
+        !ctx.activationContext.selections
+      ) {
+        ctx.activationContext.selections = selections;
+      }
+    }
+
+    const actionsResult = await this.applyActions(
+      effect.actions || [],
+      ctx,
+      targetResult.targets || {}
+    );
+    if (
+      actionsResult &&
+      typeof actionsResult === "object" &&
+      actionsResult.needsSelection
+    ) {
+      return {
+        success: false,
+        needsSelection: true,
+        selectionContract: actionsResult.selectionContract,
+        ...actionsResult,
+      };
+    }
 
     // Record material effect activation for ascension tracking
     const owner = ctx?.player;
@@ -2508,6 +2535,7 @@ export default class EffectEngine {
       commitInfo: activationContext?.commitInfo || null,
       autoSelectSingleTarget: activationContext?.autoSelectSingleTarget,
       actionContext: activationContext?.actionContext || null,
+      resolvedTargets: activationContext?.resolvedTargets || null,
     };
     let effect = null;
 
@@ -2918,6 +2946,7 @@ export default class EffectEngine {
     const autoSelectSingleTarget =
       activationContext.autoSelectSingleTarget === true;
     const isBot = ctx?.player?.id === "bot";
+    const resolvedTargets = activationContext.resolvedTargets || null;
 
     // ✅ DRAGON SPIRIT SANCTUARY: Inject targetMap into context for compareAttribute support
     const enhancedCtx = {
@@ -2973,6 +3002,19 @@ export default class EffectEngine {
             }": ${namesToExclude.join(", ")}`
           );
         }
+      }
+
+      const hasResolved =
+        resolvedTargets &&
+        Object.prototype.hasOwnProperty.call(resolvedTargets, def.id);
+      if (hasResolved) {
+        const resolved = resolvedTargets[def.id];
+        targetMap[def.id] = Array.isArray(resolved)
+          ? resolved
+          : resolved
+          ? [resolved]
+          : [];
+        continue;
       }
 
       const { zoneName, candidates } = this.selectCandidates(
@@ -3063,6 +3105,15 @@ export default class EffectEngine {
         }
         if (chosen.length >= min && chosen.length <= max) {
           targetMap[def.id] = chosen;
+          if (activationContext) {
+            const nextResolved =
+              activationContext.resolvedTargets &&
+              typeof activationContext.resolvedTargets === "object"
+                ? activationContext.resolvedTargets
+                : {};
+            nextResolved[def.id] = chosen;
+            activationContext.resolvedTargets = nextResolved;
+          }
           continue;
         }
         return {

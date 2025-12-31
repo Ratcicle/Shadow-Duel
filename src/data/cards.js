@@ -806,13 +806,10 @@ export const cardDatabase = [
         ],
         actions: [
           {
-            type: "move",
+            type: "special_summon_from_zone",
             targetRef: "imp_special_from_hand",
-            player: "self",
-            to: "field",
-            position: "attack",
-            isFacedown: false,
-            resetAttackFlags: true,
+            zone: "hand",
+            position: "choice",
           },
         ],
       },

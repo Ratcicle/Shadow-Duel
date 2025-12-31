@@ -1342,6 +1342,61 @@ export async function handleSpecialSummonFromZone(
 
     .filter((entry) => Array.isArray(entry.list));
 
+  const selectionMap =
+    ctx?.selections ||
+    ctx?.activationContext?.selections ||
+    ctx?.actionContext?.selections ||
+    null;
+
+  const resolveSelectionKeys = (requirementId) => {
+    if (!selectionMap) return null;
+    if (Array.isArray(selectionMap)) return selectionMap;
+    if (typeof selectionMap !== "object") return null;
+    if (requirementId && Array.isArray(selectionMap[requirementId])) {
+      return selectionMap[requirementId];
+    }
+    return null;
+  };
+
+  const allowsPositionChoice =
+    !action.position || action.position === "choice";
+
+  const resolvePositionChoice = () => {
+    const raw = resolveSelectionKeys("special_summon_position");
+    const value = Array.isArray(raw) ? raw[0] : raw;
+    if (value === "attack" || value === "defense") {
+      return value;
+    }
+    return null;
+  };
+
+  const buildPositionSelectionContract = (cardRef) => ({
+    kind: "position_select",
+    message: "Choose Special Summon position",
+    requirements: [
+      {
+        id: "special_summon_position",
+        min: 1,
+        max: 1,
+        zone: "field",
+        candidates: [
+          { id: "attack", label: "Attack", position: "attack" },
+          { id: "defense", label: "Defense", position: "defense" },
+        ],
+      },
+    ],
+    metadata: {
+      cardData: {
+        cardId: cardRef?.id ?? null,
+        name: cardRef?.name ?? "Special Summon",
+        image: cardRef?.image ?? null,
+        cardKind: cardRef?.cardKind ?? "monster",
+        atk: cardRef?.atk ?? null,
+        def: cardRef?.def ?? null,
+        level: cardRef?.level ?? null,
+      },
+    },
+  });
 
 
   // Check for targetRef - use pre-resolved targets if available
@@ -1409,6 +1464,31 @@ export async function handleSpecialSummonFromZone(
     }
 
 
+
+    if (
+      game.networkMode &&
+      promptPlayer !== false &&
+      allowsPositionChoice
+    ) {
+      const positionChoice = resolvePositionChoice();
+      if (!positionChoice) {
+        return {
+          needsSelection: true,
+          selectionContract: buildPositionSelectionContract(validCards[0]),
+          sourceZone: zoneSpec,
+          actionType: action.type,
+          activationContext: ctx?.activationContext || null,
+        };
+      }
+      const summonAction = { ...action, position: positionChoice };
+      return await summonCards(
+        validCards,
+        zoneEntries,
+        player,
+        summonAction,
+        engine
+      );
+    }
 
     return await summonCards(validCards, zoneEntries, player, action, engine);
 
@@ -1708,32 +1788,6 @@ export async function handleSpecialSummonFromZone(
 
 
 
-  const selectionMap =
-
-    ctx?.selections ||
-
-    ctx?.activationContext?.selections ||
-
-    ctx?.actionContext?.selections ||
-
-    null;
-
-
-
-  const resolveSelectionKeys = () => {
-
-    if (!selectionMap) return null;
-
-    if (Array.isArray(selectionMap)) return selectionMap;
-
-    const firstArray = Object.values(selectionMap).find(Array.isArray);
-
-    return firstArray || null;
-
-  };
-
-
-
   // Single card summon (original behavior)
 
   if (count.max === 1 || maxSelect === 1) {
@@ -1743,8 +1797,6 @@ export async function handleSpecialSummonFromZone(
       game.networkMode &&
 
       promptPlayer !== false &&
-
-      player.id !== "bot" &&
 
       candidates.length > 0
 
@@ -1778,7 +1830,7 @@ export async function handleSpecialSummonFromZone(
 
 
 
-      const selectionKeys = resolveSelectionKeys();
+      const selectionKeys = resolveSelectionKeys("special_summon_single");
 
       if (selectionKeys && selectionKeys.length > 0) {
 
@@ -1789,6 +1841,32 @@ export async function handleSpecialSummonFromZone(
           .filter((cand) => !!cand?.cardRef)
 
           .map((cand) => cand.cardRef);
+        if (
+          game.networkMode &&
+          promptPlayer !== false &&
+          allowsPositionChoice
+        ) {
+          const positionChoice = resolvePositionChoice();
+          if (!positionChoice) {
+            return {
+              needsSelection: true,
+              selectionContract: buildPositionSelectionContract(
+                selectedCards[0]
+              ),
+              sourceZone: zoneSpec,
+              actionType: action.type,
+              activationContext: ctx?.activationContext || null,
+            };
+          }
+          const summonAction = { ...action, position: positionChoice };
+          return await summonCards(
+            selectedCards,
+            zoneEntries,
+            player,
+            summonAction,
+            engine
+          );
+        }
 
         return await summonCards(
 
@@ -1976,8 +2054,6 @@ export async function handleSpecialSummonFromZone(
 
       promptPlayer !== false &&
 
-      player.id !== "bot" &&
-
       candidates.length > 0
 
     ) {
@@ -2010,7 +2086,7 @@ export async function handleSpecialSummonFromZone(
 
 
 
-      const selectionKeys = resolveSelectionKeys();
+      const selectionKeys = resolveSelectionKeys("special_summon_multi");
 
       if (selectionKeys && selectionKeys.length > 0) {
 
@@ -2021,6 +2097,32 @@ export async function handleSpecialSummonFromZone(
           .filter((cand) => !!cand?.cardRef)
 
           .map((cand) => cand.cardRef);
+        if (
+          game.networkMode &&
+          promptPlayer !== false &&
+          allowsPositionChoice
+        ) {
+          const positionChoice = resolvePositionChoice();
+          if (!positionChoice) {
+            return {
+              needsSelection: true,
+              selectionContract: buildPositionSelectionContract(
+                selectedCards[0]
+              ),
+              sourceZone: zoneSpec,
+              actionType: action.type,
+              activationContext: ctx?.activationContext || null,
+            };
+          }
+          const summonAction = { ...action, position: positionChoice };
+          return await summonCards(
+            selectedCards,
+            zoneEntries,
+            player,
+            summonAction,
+            engine
+          );
+        }
 
         return await summonCards(
 

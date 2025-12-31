@@ -727,7 +727,7 @@ export class MatchManager {
         this.storeAndSendPrompt(room, client, selectionInfo.prompt, {
           pendingSelection: {
             seat: client.seat,
-            actionType: choice.actionType,
+            actionType: selectionInfo.actionType || choice.actionType,
             payload: choice.payload || {},
             selectionContract: selectionInfo.contract,
             requirementId: selectionInfo.requirementId,
@@ -788,7 +788,56 @@ export class MatchManager {
         this.sendState(client, room.game);
         return;
       }
-      const selections = { [requirementId]: choiceValue };
+      if (pending?.resumeData && requirementDef?.candidates) {
+        const resolved = [];
+        const seen = new Set();
+        const candidates = Array.isArray(requirementDef.candidates)
+          ? requirementDef.candidates
+          : [];
+        choiceValue.forEach((entry) => {
+          let match = null;
+          if (typeof entry === "number") {
+            match = candidates[entry];
+          } else if (typeof entry === "string") {
+            match =
+              candidates.find((cand) => cand.key === entry) ||
+              candidates.find((cand) => cand.id === entry);
+          } else if (entry && typeof entry === "object") {
+            if (typeof entry.key === "string") {
+              match = candidates.find((cand) => cand.key === entry.key);
+            } else if (typeof entry.id !== "undefined") {
+              match = candidates.find((cand) => cand.id === entry.id);
+            }
+          }
+          const cardRef = match?.cardRef;
+          if (cardRef && !seen.has(cardRef)) {
+            seen.add(cardRef);
+            resolved.push(cardRef);
+          }
+        });
+        if (resolved.length > 0) {
+          const resumeContext =
+            pending.resumeData.activationContext &&
+            typeof pending.resumeData.activationContext === "object"
+              ? pending.resumeData.activationContext
+              : {};
+          const resolvedTargets =
+            resumeContext.resolvedTargets &&
+            typeof resumeContext.resolvedTargets === "object"
+              ? resumeContext.resolvedTargets
+              : {};
+          resolvedTargets[requirementId] = resolved;
+          resumeContext.resolvedTargets = resolvedTargets;
+          pending.resumeData.activationContext = resumeContext;
+        }
+      }
+      const existingSelections =
+        pending.payload?.selections &&
+        typeof pending.payload.selections === "object" &&
+        !Array.isArray(pending.payload.selections)
+          ? pending.payload.selections
+          : {};
+      const selections = { ...existingSelections, [requirementId]: choiceValue };
       const nextPayload = { ...(pending.payload || {}), selections };
       const applyResult = await this.applyAction(
         room,
@@ -940,7 +989,13 @@ export class MatchManager {
       });
 
       // Construir seleções para o payload
-      const selections = { [requirementId]: choiceValue };
+      const existingSelections =
+        pending.payload?.selections &&
+        typeof pending.payload.selections === "object" &&
+        !Array.isArray(pending.payload.selections)
+          ? pending.payload.selections
+          : {};
+      const selections = { ...existingSelections, [requirementId]: choiceValue };
       const nextPayload = { ...(pending.payload || {}), selections };
 
       console.log("[Server] card_select applying action", {
@@ -1105,47 +1160,50 @@ export class MatchManager {
       return null;
     }
     const promptId = `p_${room.id}_${++this.promptCounter}`;
+    const cardData = contract.metadata?.cardData || null;
 
     // Determinar tipo de prompt baseado no kind do contrato
     const contractKind = contract.kind || "selection_contract";
     const isCardSelect = contractKind === "card_select";
 
-    const candidates = requirement.candidates.map((cand, idx) => {
-      const ownerLabel =
-        cand.owner === "player" || cand.owner === "opponent"
-          ? cand.owner
-          : null;
-      return {
-        id: cand.key ?? idx,
-        label: cand.name || `Target ${idx + 1}`,
-        zone: cand.zone || null,
-        controller: ownerLabel || cand.controller || null,
-        zoneIndex: cand.zoneIndex ?? null,
-        // Campos extras para card_select (search)
-        cardId: cand.cardId ?? null,
-        cardKind: cand.cardKind ?? null,
-        atk: cand.atk ?? null,
-        def: cand.def ?? null,
-        level: cand.level ?? null,
-      };
-    });
+      const candidates = requirement.candidates.map((cand, idx) => {
+        const ownerLabel =
+          cand.owner === "player" || cand.owner === "opponent"
+            ? cand.owner
+            : null;
+        return {
+          id: cand.key ?? idx,
+          label: cand.name || `Target ${idx + 1}`,
+          name: cand.name || null,
+          zone: cand.zone || null,
+          controller: ownerLabel || cand.controller || null,
+          zoneIndex: cand.zoneIndex ?? null,
+          // Campos extras para card_select (search)
+          cardId: cand.cardId ?? cand.cardRef?.id ?? null,
+          cardKind: cand.cardKind ?? null,
+          atk: cand.atk ?? null,
+          def: cand.def ?? null,
+          level: cand.level ?? null,
+        };
+      });
 
-    return {
-      type: isCardSelect ? "card_select" : "selection_contract",
-      promptId,
-      title: contract.message || "Select target(s)",
-      requirement: {
-        id: requirement.id || "selection",
-        min: requirement.min ?? 1,
-        max: requirement.max ?? 1,
-        candidates,
-      },
-      kind: contractKind,
-      ui: contract.ui || null,
-      actionType: actionContext.actionType || null,
-      sourceZone: selectionResult.sourceZone || null,
-    };
-  }
+      return {
+        type: isCardSelect ? "card_select" : "selection_contract",
+        promptId,
+        title: contract.message || "Select target(s)",
+        requirement: {
+          id: requirement.id || "selection",
+          min: requirement.min ?? 1,
+          max: requirement.max ?? 1,
+          candidates,
+        },
+        kind: contractKind,
+        ui: contract.ui || null,
+        actionType: actionContext.actionType || null,
+        sourceZone: selectionResult.sourceZone || null,
+        cardData,
+      };
+    }
 
   async handleAction(client, msg) {
     const room = this.getRoom(client);
@@ -1411,6 +1469,7 @@ export class MatchManager {
               selection: {
                 prompt,
                 contract: emitResult.selectionContract,
+                actionType: "RESUME_EVENT_SELECTION",
                 requirementId:
                   prompt?.requirement?.id ||
                   emitResult.selectionContract?.requirements?.[0]?.id ||
@@ -1464,6 +1523,7 @@ export class MatchManager {
               selection: {
                 prompt,
                 contract: emitResult.selectionContract,
+                actionType: "RESUME_EVENT_SELECTION",
                 requirementId:
                   prompt?.requirement?.id ||
                   emitResult.selectionContract?.requirements?.[0]?.id ||
@@ -1513,7 +1573,9 @@ export class MatchManager {
           resumeInfo?.activationContext?.commitInfo?.cardRef ||
           null;
         let card = actor.hand[handIndex];
-        if (!card && resumeCardRef) {
+        if (resumeCardRef && card !== resumeCardRef) {
+          card = resumeCardRef;
+        } else if (!card && resumeCardRef) {
           card = resumeCardRef;
         }
         if (!card) return { ok: false, message: "No card in that hand slot" };

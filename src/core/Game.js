@@ -3483,6 +3483,7 @@ export default class Game {
       contract && typeof contract === "object" && !Array.isArray(contract)
         ? contract
         : {};
+    const contractKind = base.kind || overrides.kind || "target";
     const rawRequirements = Array.isArray(base.requirements)
       ? base.requirements
       : base.requirements
@@ -3502,11 +3503,14 @@ export default class Game {
         return { ok: false, reason: "Selection requirements are invalid." };
       }
 
-      const zones = Array.isArray(req.zones)
+      let zones = Array.isArray(req.zones)
         ? req.zones.filter(Boolean)
         : req.zone
         ? [req.zone]
         : [];
+      if (zones.length === 0 && contractKind === "position_select") {
+        zones = ["field"];
+      }
       if (zones.length === 0) {
         return { ok: false, reason: "Selection requirements missing zones." };
       }
@@ -3558,7 +3562,7 @@ export default class Game {
       overrides.ui && typeof overrides.ui === "object" ? overrides.ui : {};
 
     const normalizedContract = {
-      kind: base.kind || overrides.kind || "target",
+      kind: contractKind,
       message: overrides.message ?? base.message ?? null,
       requirements: normalizedRequirements,
       ui: {

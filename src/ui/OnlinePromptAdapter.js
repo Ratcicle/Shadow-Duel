@@ -204,6 +204,35 @@ export function showPositionChoiceModalAsync(
   });
 }
 
+function showSpecialSummonPositionModalAsync(renderer, card) {
+  return new Promise((resolve) => {
+    let resolved = false;
+    const safeResolve = (choice) => {
+      if (!resolved) {
+        resolved = true;
+        resolve(choice);
+      }
+    };
+
+    if (!renderer?.showSpecialSummonPositionModal) {
+      safeResolve("attack");
+      return;
+    }
+
+    try {
+      renderer.showSpecialSummonPositionModal(card, (choice) => {
+        safeResolve(choice === "defense" ? "defense" : "attack");
+      });
+    } catch (error) {
+      console.error(
+        "[OnlinePromptAdapter] showSpecialSummonPositionModal error",
+        error
+      );
+      safeResolve("attack");
+    }
+  });
+}
+
 function observeModalRemoval(selector, onClose) {
   if (typeof document === "undefined") {
     return null;
@@ -950,25 +979,49 @@ function resolveCandidateCardView(cand, snapshot, requirement) {
     };
   }
 
-  const cardId = viewCard?.cardId ?? cand.cardId ?? null;
+  const candidateCardId = cand.cardId ?? null;
+  const candidateBase = candidateCardId
+    ? cardDatabaseById.get(candidateCardId)
+    : null;
+  const useCandidateData =
+    candidateCardId ||
+    cand.name ||
+    cand.cardKind ||
+    cand.atk != null ||
+    cand.def != null ||
+    cand.level != null;
+
+  if (useCandidateData) {
+    return {
+      cardId: candidateCardId ?? candidateBase?.id ?? null,
+      name: cand.name ?? safeName ?? candidateBase?.name ?? "Unknown card",
+      cardKind:
+        cand.cardKind ?? candidateBase?.cardKind ?? viewCard?.cardKind ?? null,
+      atk: cand.atk ?? candidateBase?.atk ?? viewCard?.atk ?? null,
+      def: cand.def ?? candidateBase?.def ?? viewCard?.def ?? null,
+      level: cand.level ?? candidateBase?.level ?? viewCard?.level ?? null,
+      description:
+        cand.description ??
+        candidateBase?.description ??
+        viewCard?.description ??
+        "",
+      image:
+        typeof candidateBase?.image === "string"
+          ? candidateBase.image
+          : cand.image || null,
+    };
+  }
+
+  const cardId = viewCard?.cardId ?? null;
   const baseData = cardId ? cardDatabaseById.get(cardId) : null;
   return {
     cardId: cardId ?? baseData?.id ?? null,
-    name:
-      viewCard?.name ??
-      safeName ??
-      baseData?.name ??
-      "Unknown card",
-    cardKind:
-      viewCard?.cardKind ??
-      cand.cardKind ??
-      baseData?.cardKind ??
-      null,
-    atk: viewCard?.atk ?? cand.atk ?? baseData?.atk ?? null,
-    def: viewCard?.def ?? cand.def ?? baseData?.def ?? null,
-    level: viewCard?.level ?? cand.level ?? baseData?.level ?? null,
-    description:
-      viewCard?.description ?? cand.description ?? baseData?.description ?? "",
+    name: viewCard?.name ?? safeName ?? baseData?.name ?? "Unknown card",
+    cardKind: viewCard?.cardKind ?? baseData?.cardKind ?? null,
+    atk: viewCard?.atk ?? baseData?.atk ?? null,
+    def: viewCard?.def ?? baseData?.def ?? null,
+    level: viewCard?.level ?? baseData?.level ?? null,
+    description: viewCard?.description ?? baseData?.description ?? "",
     image:
       typeof baseData?.image === "string"
         ? baseData.image
@@ -1427,6 +1480,9 @@ export function determineModalType(prompt, cardData = {}) {
   }
 
   if (type === "selection_contract") {
+    if (prompt.kind === "position_select") {
+      return "special_summon_position";
+    }
     return "selection";
   }
 
@@ -1755,6 +1811,18 @@ export async function handlePromptWithVisualModal(
         );
         sendResponse(prompt.promptId, responseValue);
         return; // Early return - already sent response
+      }
+
+      case "special_summon_position": {
+        const positionChoice = await showSpecialSummonPositionModalAsync(
+          renderer,
+          prompt.cardData || cardData || null
+        );
+        sendResponse(
+          prompt.promptId,
+          positionChoice === "defense" ? "defense" : "attack"
+        );
+        return;
       }
 
       case "card_select": {
