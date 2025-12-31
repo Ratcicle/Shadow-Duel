@@ -3072,12 +3072,11 @@ export default class EffectEngine {
       }
 
       const autoSelectExplicit = def.autoSelect === true;
-      const allowAutoSelectForPlayer =
-        !isBot && autoSelectSingleTarget && autoSelectExplicit;
+      const allowAutoSelectForPlayer = !isBot && autoSelectExplicit;
       const allowAutoSelectForBot =
         isBot &&
-        autoSelectSingleTarget &&
-        (autoSelectExplicit || (min === 1 && max === 1));
+        (autoSelectExplicit ||
+          (autoSelectSingleTarget && min === 1 && max === 1));
       const shouldAutoSelect =
         allowAutoSelectForPlayer || allowAutoSelectForBot;
       if (shouldAutoSelect) {

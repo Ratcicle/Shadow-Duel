@@ -862,6 +862,7 @@ function mapPublicCardView(
     atk: visible ? cardView.atk ?? baseData.atk ?? 0 : null,
     def: visible ? cardView.def ?? baseData.def ?? 0 : null,
     level: visible ? cardView.level ?? baseData.level ?? 0 : null,
+    description: visible ? baseData.description ?? null : null,
     isFacedown: isFaceDown,
     faceDown: isFaceDown,
     image: visible

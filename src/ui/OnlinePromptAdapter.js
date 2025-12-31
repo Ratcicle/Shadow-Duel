@@ -73,10 +73,15 @@ const SUPPORTED_PROMPT_TYPES = new Set([
 export function showSummonModalAsync(renderer, cardIndex, options = {}) {
   return new Promise((resolve) => {
     let resolved = false;
+    let observer = null;
 
     const safeResolve = (choice) => {
       if (!resolved) {
         resolved = true;
+        if (observer) {
+          observer.disconnect();
+          observer = null;
+        }
         resolve(choice);
       }
     };
@@ -86,6 +91,10 @@ export function showSummonModalAsync(renderer, cardIndex, options = {}) {
         cardIndex,
         (choice) => safeResolve(choice || "cancel"),
         options
+      );
+      observer = observeModalRemoval(
+        ".summon-choice-modal",
+        () => safeResolve("cancel")
       );
     } catch (error) {
       console.error("[OnlinePromptAdapter] showSummonModal error", error);
@@ -104,10 +113,15 @@ export function showSummonModalAsync(renderer, cardIndex, options = {}) {
 export function showSpellChoiceModalAsync(renderer, cardIndex, options = {}) {
   return new Promise((resolve) => {
     let resolved = false;
+    let observer = null;
 
     const safeResolve = (choice) => {
       if (!resolved) {
         resolved = true;
+        if (observer) {
+          observer.disconnect();
+          observer = null;
+        }
         resolve(choice);
       }
     };
@@ -117,6 +131,10 @@ export function showSpellChoiceModalAsync(renderer, cardIndex, options = {}) {
         cardIndex,
         (choice) => safeResolve(choice || "cancel"),
         options
+      );
+      observer = observeModalRemoval(
+        ".spell-choice-modal",
+        () => safeResolve("cancel")
       );
     } catch (error) {
       console.error("[OnlinePromptAdapter] showSpellChoiceModal error", error);
@@ -141,10 +159,15 @@ export function showPositionChoiceModalAsync(
 ) {
   return new Promise((resolve) => {
     let resolved = false;
+    let observer = null;
 
     const safeResolve = (choice) => {
       if (!resolved) {
         resolved = true;
+        if (observer) {
+          observer.disconnect();
+          observer = null;
+        }
         resolve(choice);
       }
     };
@@ -167,6 +190,10 @@ export function showPositionChoiceModalAsync(
         (choice) => safeResolve(choice || "cancel"),
         wrappedOptions
       );
+      observer = observeModalRemoval(
+        ".position-choice-modal",
+        () => safeResolve("cancel")
+      );
     } catch (error) {
       console.error(
         "[OnlinePromptAdapter] showPositionChoiceModal error",
@@ -175,6 +202,24 @@ export function showPositionChoiceModalAsync(
       safeResolve("cancel");
     }
   });
+}
+
+function observeModalRemoval(selector, onClose) {
+  if (typeof document === "undefined") {
+    return null;
+  }
+  const modal = document.querySelector(selector);
+  if (!modal || !document.body) {
+    return null;
+  }
+  const observer = new MutationObserver(() => {
+    if (!document.body.contains(modal)) {
+      observer.disconnect();
+      onClose();
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+  return observer;
 }
 
 /**
@@ -850,6 +895,177 @@ function showGraveyardSelectionAsync(renderer, prompt, snapshot) {
   });
 }
 
+function shouldUseFieldTargetingForSelection(prompt, requirement, candidates) {
+  const ui = prompt?.ui || {};
+  if (typeof ui.useFieldTargeting === "boolean") {
+    return ui.useFieldTargeting;
+  }
+
+  const allowedZones = new Set(["field", "spellTrap", "fieldSpell"]);
+  const zones = candidates
+    .map((cand) => cand.zone || requirement.zone || null)
+    .filter(Boolean);
+  if (zones.length === 0) return false;
+  return zones.every((zone) => allowedZones.has(zone));
+}
+
+function resolveCandidateCardView(cand, snapshot, requirement) {
+  const zone = cand.zone || requirement.zone || "field";
+  const owner = resolveControllerOwner(cand.controller || cand.owner, snapshot);
+  const view =
+    owner === "player" ? snapshot?.players?.self : snapshot?.players?.opponent;
+  const zoneIndex = typeof cand.zoneIndex === "number" ? cand.zoneIndex : 0;
+
+  let viewCard = null;
+  if (view) {
+    if (zone === "hand" && Array.isArray(view.hand)) {
+      viewCard = view.hand[zoneIndex] || null;
+    } else if (zone === "field") {
+      viewCard = view.field?.[zoneIndex] || null;
+    } else if (zone === "spellTrap") {
+      viewCard = view.spellTrap?.[zoneIndex] || null;
+    } else if (zone === "fieldSpell") {
+      viewCard = view.fieldSpell || null;
+    }
+  }
+
+  const isOpponentHiddenHand =
+    owner === "opponent" && zone === "hand" && !Array.isArray(view?.hand);
+  const isOpponentHiddenCard =
+    owner === "opponent" && viewCard && viewCard.name == null;
+
+  const safeName =
+    cand.label || cand.name || (isOpponentHiddenCard ? "Face-down card" : null);
+
+  if (isOpponentHiddenHand || isOpponentHiddenCard) {
+    return {
+      cardId: null,
+      name: safeName || "Unknown card",
+      cardKind: null,
+      atk: null,
+      def: null,
+      level: null,
+      description: "",
+      image: null,
+    };
+  }
+
+  const cardId = viewCard?.cardId ?? cand.cardId ?? null;
+  const baseData = cardId ? cardDatabaseById.get(cardId) : null;
+  return {
+    cardId: cardId ?? baseData?.id ?? null,
+    name:
+      viewCard?.name ??
+      safeName ??
+      baseData?.name ??
+      "Unknown card",
+    cardKind:
+      viewCard?.cardKind ??
+      cand.cardKind ??
+      baseData?.cardKind ??
+      null,
+    atk: viewCard?.atk ?? cand.atk ?? baseData?.atk ?? null,
+    def: viewCard?.def ?? cand.def ?? baseData?.def ?? null,
+    level: viewCard?.level ?? cand.level ?? baseData?.level ?? null,
+    description:
+      viewCard?.description ?? cand.description ?? baseData?.description ?? "",
+    image:
+      typeof baseData?.image === "string"
+        ? baseData.image
+        : cand.image || null,
+  };
+}
+
+function buildSelectionModalContract(prompt, snapshot, allowEmpty) {
+  const requirement = prompt.requirement || {};
+  const candidates = Array.isArray(requirement.candidates)
+    ? requirement.candidates
+    : [];
+  const min = requirement.min ?? 1;
+  const max = requirement.max ?? 1;
+  const requirementId = requirement.id || "selection";
+
+  const modalCandidates = candidates.map((cand, idx) => {
+    const cardView = resolveCandidateCardView(cand, snapshot, requirement);
+    return {
+      key: cand.id ?? cand.key ?? String(idx),
+      name: cardView.name || cand.label || cand.name || `Target ${idx + 1}`,
+      owner: resolveControllerOwner(cand.controller || cand.owner, snapshot),
+      controller: cand.controller || cand.owner || "player",
+      zone: cand.zone || requirement.zone || "field",
+      zoneIndex: cand.zoneIndex ?? idx,
+      position: cand.position || "",
+      atk: cardView.atk ?? cand.atk ?? null,
+      def: cardView.def ?? cand.def ?? null,
+      cardKind: cardView.cardKind ?? cand.cardKind ?? null,
+      cardRef: cardView,
+    };
+  });
+
+  return {
+    kind: prompt.kind || "selection",
+    message: prompt.title || "Select target(s)",
+    requirements: [
+      {
+        id: requirementId,
+        min,
+        max,
+        candidates: modalCandidates,
+      },
+    ],
+    ui: { allowCancel: true, allowEmpty },
+  };
+}
+
+function showSelectionContractModalAsync(renderer, prompt, snapshot) {
+  return new Promise((resolve) => {
+    let resolved = false;
+    const requirement = prompt.requirement || {};
+    const min = requirement.min ?? 1;
+    const allowEmpty = prompt?.ui?.allowEmpty === true || min === 0;
+
+    const safeResolve = (result) => {
+      if (!resolved) {
+        resolved = true;
+        if (typeof window.setOnlineSelectionActive === "function") {
+          window.setOnlineSelectionActive(false);
+        }
+        resolve(result);
+      }
+    };
+
+    if (typeof window.setOnlineSelectionActive === "function") {
+      window.setOnlineSelectionActive(true);
+    }
+
+    if (!renderer?.showTargetSelection) {
+      safeResolve(null);
+      return;
+    }
+
+    try {
+      const contract = buildSelectionModalContract(prompt, snapshot, allowEmpty);
+      const requirementId = contract.requirements?.[0]?.id || "selection";
+
+      renderer.showTargetSelection(
+        contract,
+        (selections) => {
+          const selected = selections?.[requirementId] || [];
+          safeResolve(selected);
+        },
+        () => safeResolve(null),
+        { allowCancel: true, allowEmpty }
+      );
+    } catch (error) {
+      console.error(
+        "[OnlinePromptAdapter] showSelectionContractModalAsync error",
+        error
+      );
+      safeResolve(null);
+    }
+  });
+}
+
 /**
  * Visual selection for effect targets (field/hand/spell zones).
  * Uses field targeting highlights; graveyard selections are handled separately.
@@ -859,33 +1075,39 @@ function showGraveyardSelectionAsync(renderer, prompt, snapshot) {
  * @returns {Promise<Array|null>} Selected candidate IDs or null for cancel
  */
 export function showSelectionContractAsync(renderer, prompt, snapshot) {
+  const requirement = prompt.requirement || {};
+  const candidates = requirement.candidates || [];
+  const min = requirement.min ?? 1;
+  const max = requirement.max ?? 1;
+  const allowEmpty = prompt?.ui?.allowEmpty === true || min === 0;
+
+  const candidateZones = new Set(
+    candidates
+      .map((cand) => cand.zone || requirement.zone || null)
+      .filter(Boolean)
+  );
+  if (candidateZones.size === 1 && candidateZones.has("graveyard")) {
+    return showGraveyardSelectionAsync(renderer, prompt, snapshot).catch(
+      (error) => {
+        console.error("[OnlinePromptAdapter] Graveyard selection error", error);
+        return null;
+      }
+    );
+  }
+
+  const useFieldTargeting = shouldUseFieldTargetingForSelection(
+    prompt,
+    requirement,
+    candidates
+  );
+  if (!useFieldTargeting) {
+    return showSelectionContractModalAsync(renderer, prompt, snapshot);
+  }
+
   return new Promise((resolve) => {
     let resolved = false;
     const selectedIds = new Set();
     const cleanup = [];
-
-    const requirement = prompt.requirement || {};
-    const candidates = requirement.candidates || [];
-    const min = requirement.min ?? 1;
-    const max = requirement.max ?? 1;
-
-    const candidateZones = new Set(
-      candidates
-        .map((cand) => cand.zone || requirement.zone || null)
-        .filter(Boolean)
-    );
-    if (candidateZones.size === 1 && candidateZones.has("graveyard")) {
-      showGraveyardSelectionAsync(renderer, prompt, snapshot)
-        .then(resolve)
-        .catch((error) => {
-          console.error(
-            "[OnlinePromptAdapter] Graveyard selection error",
-            error
-          );
-          resolve(null);
-        });
-      return;
-    }
 
     console.log("[OnlinePromptAdapter] showSelectionContractAsync", {
       prompt,
@@ -893,6 +1115,7 @@ export function showSelectionContractAsync(renderer, prompt, snapshot) {
       candidates,
       min,
       max,
+      useFieldTargeting,
     });
 
     // Block intent clicks while selection is active
@@ -933,7 +1156,7 @@ export function showSelectionContractAsync(renderer, prompt, snapshot) {
           selected: selectedIds.size,
           min,
           max,
-          allowEmpty: min === 0,
+          allowEmpty,
         });
       }
     };
@@ -1516,19 +1739,21 @@ export async function handlePromptWithVisualModal(
           snapshot
         );
 
-        if (selectedIds && selectedIds.length > 0) {
-          // For single selection, send the ID directly; for multiple, send array
-          const responseValue =
-            selectedIds.length === 1 ? selectedIds[0] : selectedIds;
-          console.log(
-            "[OnlinePromptAdapter] Selection confirmed:",
-            responseValue
-          );
-          sendResponse(prompt.promptId, responseValue);
-        } else {
+        if (selectedIds === null) {
           console.log("[OnlinePromptAdapter] Selection cancelled");
           sendResponse(prompt.promptId, "cancel");
+          return;
         }
+
+        const responseValue =
+          Array.isArray(selectedIds) && selectedIds.length === 1
+            ? selectedIds[0]
+            : selectedIds;
+        console.log(
+          "[OnlinePromptAdapter] Selection confirmed:",
+          responseValue
+        );
+        sendResponse(prompt.promptId, responseValue);
         return; // Early return - already sent response
       }
 

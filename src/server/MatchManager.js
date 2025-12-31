@@ -734,7 +734,9 @@ export class MatchManager {
             resumeData: selectionInfo.resumeData,
           },
         });
-        this.commitStateUpdate(room, "menu_action_needs_selection");
+        this.commitStateUpdate(room, "menu_action_needs_selection", {
+          syncPendingPrompts: true,
+        });
         return;
       }
       this.commitStateUpdate(room, "menu_action_resolved");
@@ -817,7 +819,9 @@ export class MatchManager {
             resumeData: selectionInfo.resumeData,
           },
         });
-        this.commitStateUpdate(room, "contract_needs_more_selection");
+        this.commitStateUpdate(room, "contract_needs_more_selection", {
+          syncPendingPrompts: true,
+        });
         return;
       }
       this.commitStateUpdate(room, "contract_selection_resolved");
@@ -866,7 +870,9 @@ export class MatchManager {
             resumeData: selectionInfo.resumeData,
           },
         });
-        this.commitStateUpdate(room, "target_action_needs_selection");
+        this.commitStateUpdate(room, "target_action_needs_selection", {
+          syncPendingPrompts: true,
+        });
         return;
       }
       this.commitStateUpdate(room, "target_action_resolved");
@@ -994,7 +1000,9 @@ export class MatchManager {
             resumeData: selectionInfo.resumeData,
           },
         });
-        this.commitStateUpdate(room, "card_select_needs_more");
+        this.commitStateUpdate(room, "card_select_needs_more", {
+          syncPendingPrompts: true,
+        });
         return;
       }
 
@@ -1102,19 +1110,25 @@ export class MatchManager {
     const contractKind = contract.kind || "selection_contract";
     const isCardSelect = contractKind === "card_select";
 
-    const candidates = requirement.candidates.map((cand, idx) => ({
-      id: cand.key ?? idx,
-      label: cand.name || `Target ${idx + 1}`,
-      zone: cand.zone || null,
-      controller: cand.controller || cand.owner || null,
-      zoneIndex: cand.zoneIndex ?? null,
-      // Campos extras para card_select (search)
-      cardId: cand.cardId ?? null,
-      cardKind: cand.cardKind ?? null,
-      atk: cand.atk ?? null,
-      def: cand.def ?? null,
-      level: cand.level ?? null,
-    }));
+    const candidates = requirement.candidates.map((cand, idx) => {
+      const ownerLabel =
+        cand.owner === "player" || cand.owner === "opponent"
+          ? cand.owner
+          : null;
+      return {
+        id: cand.key ?? idx,
+        label: cand.name || `Target ${idx + 1}`,
+        zone: cand.zone || null,
+        controller: ownerLabel || cand.controller || null,
+        zoneIndex: cand.zoneIndex ?? null,
+        // Campos extras para card_select (search)
+        cardId: cand.cardId ?? null,
+        cardKind: cand.cardKind ?? null,
+        atk: cand.atk ?? null,
+        def: cand.def ?? null,
+        level: cand.level ?? null,
+      };
+    });
 
     return {
       type: isCardSelect ? "card_select" : "selection_contract",
@@ -1126,6 +1140,8 @@ export class MatchManager {
         max: requirement.max ?? 1,
         candidates,
       },
+      kind: contractKind,
+      ui: contract.ui || null,
       actionType: actionContext.actionType || null,
       sourceZone: selectionResult.sourceZone || null,
     };
@@ -1214,7 +1230,9 @@ export class MatchManager {
           resumeData: selectionInfo.resumeData,
         },
       });
-      this.commitStateUpdate(room, "action_needs_selection");
+      this.commitStateUpdate(room, "action_needs_selection", {
+        syncPendingPrompts: true,
+      });
       return;
     }
 
@@ -1713,9 +1731,19 @@ export class MatchManager {
    * @param {Object} room - The room object
    * @param {string} reason - Why state is being committed (for debugging)
    */
-  commitStateUpdate(room, reason = "unknown") {
+  commitStateUpdate(room, reason = "unknown", options = {}) {
     if (!room?.game) return;
     room.stateVersion = (room.stateVersion || 0) + 1;
+    const { syncPendingPrompts = false } = options;
+    if (syncPendingPrompts && room.pendingPromptsBySeat) {
+      Object.values(room.pendingPromptsBySeat).forEach((entry) => {
+        if (!entry) return;
+        entry.stateVersion = room.stateVersion;
+        if (entry.prompt) {
+          entry.prompt.stateVersion = room.stateVersion;
+        }
+      });
+    }
     console.log("[Server] commitStateUpdate", {
       room: room.id,
       version: room.stateVersion,
