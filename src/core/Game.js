@@ -1423,9 +1423,11 @@ export default class Game {
     } else if (eventName === "attack_declared") {
       const defenderOwner = payload?.defenderOwner || null;
       if (defenderOwner === this.player) {
+        // Determine if opponent is attacking by checking if attacker owner differs from defender (player)
+        const attackerOwnerId = payload?.attackerOwner?.id;
         await this.checkAndOfferTraps(eventName, {
           ...payload,
-          isOpponentAttack: payload?.attackerOwner?.id === "bot",
+          isOpponentAttack: attackerOwnerId && attackerOwnerId !== this.player.id,
         });
       }
     }
@@ -1935,7 +1937,8 @@ export default class Game {
     if (actionPosition === "attack" || actionPosition === "defense") {
       return Promise.resolve(actionPosition);
     }
-    return Promise.resolve(player?.id === "bot" ? "attack" : "attack");
+    // AI defaults to "attack", human also defaults to "attack" in this fallback
+    return Promise.resolve("attack");
   }
 
   /**

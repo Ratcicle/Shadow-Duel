@@ -12,6 +12,8 @@
  * Chain Resolution: Last In, First Out (LIFO)
  */
 
+import { isAI } from "./Player.js";
+
 /**
  * Valid chain window contexts where cards can be activated in response
  */
@@ -476,17 +478,23 @@ export default class ChainSystem {
               effect.requireOpponentAttack &&
               context?.type === "attack_declaration"
             ) {
-              // Only valid if opponent is attacking (check from player's perspective)
+              // Only valid if opponent is attacking (check from card owner's perspective)
+              // Use isOpponentAttack flag, or check if attacker owner differs from card owner
+              const attackerOwnerId = context.attackerOwner?.id;
+              const cardOwnerId = ownerPlayer?.id || card.owner;
               const attackerIsOpponent =
-                context.attackerOwner?.id === "bot" ||
-                context.isOpponentAttack === true;
+                context.isOpponentAttack === true ||
+                (attackerOwnerId && cardOwnerId && attackerOwnerId !== cardOwnerId);
               if (!attackerIsOpponent) continue;
             }
             if (effect.requireOpponentSummon && context?.type === "summon") {
-              // Only valid if opponent summoned (check from player's perspective)
+              // Only valid if opponent summoned (check from card owner's perspective)
+              // Use isOpponentSummon flag, or check if summoner differs from card owner
+              const summonerOwnerId = context.player?.id;
+              const cardOwnerId = ownerPlayer?.id || card.owner;
               const summonerIsOpponent =
-                context.player?.id === "bot" ||
-                context.isOpponentSummon === true;
+                context.isOpponentSummon === true ||
+                (summonerOwnerId && cardOwnerId && summonerOwnerId !== cardOwnerId);
               if (!summonerIsOpponent) continue;
             }
             // Check requireDefenderIsSelf (e.g., Dragon Spirit Sanctuary)
@@ -861,8 +869,8 @@ export default class ChainSystem {
       return null;
     }
 
-    // Bot logic
-    if (player.id === "bot") {
+    // AI logic - use controllerType instead of player.id to support online PvP
+    if (isAI(player)) {
       return this.botChooseChainResponse(player, activatable, context);
     }
 
