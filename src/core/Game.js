@@ -1,4 +1,4 @@
-import Player from "./Player.js";
+import Player, { isAI } from "./Player.js";
 import Bot from "./Bot.js";
 import EffectEngine from "./EffectEngine.js";
 import ChainSystem from "./ChainSystem.js";
@@ -35,17 +35,25 @@ export default class Game {
     this.disableTraps = !!options.disableTraps || this.networkMode;
     this.disableEffectActivation = !!options.disableEffectActivation;
 
-    this.player = new Player("player", options.playerName || "You");
+    this.player = new Player("player", options.playerName || "You", "human");
     this.botPreset = options.botPreset || "shadowheart";
     this.bot =
       options.opponentOverride ||
       (this.networkMode
-        ? new Player("bot", "Opponent")
+        ? new Player("bot", "Opponent", "human")
         : new Bot(this.botPreset));
 
     this.renderer = options.renderer || null;
     this.ui = createUIAdapter(this.renderer);
     this.autoSelector = new AutoSelector(this);
+
+    // Ensure controllerType defaults (opponentOverride may not set it)
+    if (!this.player.controllerType) {
+      this.player.controllerType = "human";
+    }
+    if (!this.bot.controllerType) {
+      this.bot.controllerType = this.networkMode ? "human" : "ai";
+    }
 
     this.player.game = this;
     this.bot.game = this;
@@ -1335,7 +1343,13 @@ export default class Game {
     eventName,
     payload,
     entries,
-    { onComplete = null, orderRule = null, startIndex = 0, results = [], selections = null } = {}
+    {
+      onComplete = null,
+      orderRule = null,
+      startIndex = 0,
+      results = [],
+      selections = null,
+    } = {}
   ) {
     const resolvedResults = Array.isArray(results) ? results : [];
     const start = Math.max(0, startIndex);
@@ -1358,7 +1372,11 @@ export default class Game {
       });
 
       // INVARIANTE B1: Em networkMode, parar no primeiro que precisa seleção
-      if (this.networkMode && result?.needsSelection && result?.selectionContract) {
+      if (
+        this.networkMode &&
+        result?.needsSelection &&
+        result?.selectionContract
+      ) {
         this.pendingEventSelection = {
           eventName,
           payload,
@@ -1389,7 +1407,10 @@ export default class Game {
       try {
         onComplete();
       } catch (err) {
-        console.error(`[Game] Error running onComplete for "${eventName}":`, err);
+        console.error(
+          `[Game] Error running onComplete for "${eventName}":`,
+          err
+        );
       }
     }
 
@@ -1439,8 +1460,7 @@ export default class Game {
     try {
       const payload = {
         ...(pending.payload || {}),
-        actionContext:
-          actionContext || pending.payload?.actionContext || null,
+        actionContext: actionContext || pending.payload?.actionContext || null,
       };
       resolutionResult = await this.resolveEventEntries(
         pending.eventName,
@@ -1455,10 +1475,7 @@ export default class Game {
         }
       );
     } catch (err) {
-      console.error(
-        `[Game] Error resuming event "${pending.eventName}":`,
-        err
-      );
+      console.error(`[Game] Error resuming event "${pending.eventName}":`, err);
     } finally {
       this.eventResolutionDepth = Math.max(0, this.eventResolutionDepth - 1);
       this.devLog("EVENT_RESUME_END", {
@@ -1980,6 +1997,7 @@ export default class Game {
     this.phase = "main1";
     this.updateBoard();
     if (
+      isAI(this.bot) &&
       this.turn === "bot" &&
       !this.gameOver &&
       typeof this.bot?.makeMove === "function"
@@ -2025,6 +2043,7 @@ export default class Game {
     this.updateBoard();
 
     if (
+      isAI(this.bot) &&
       this.turn === "bot" &&
       !this.gameOver &&
       typeof this.bot?.makeMove === "function"
@@ -2080,6 +2099,7 @@ export default class Game {
     }
     this.updateBoard();
     if (
+      isAI(this.bot) &&
       this.turn === "bot" &&
       this.phase !== "draw" &&
       !this.gameOver &&
@@ -3103,7 +3123,7 @@ export default class Game {
           return { destroyed: false, replaced: true };
         }
 
-        const moveResult = this.moveCard(card, owner, "graveyard", {
+        const moveResult = await this.moveCard(card, owner, "graveyard", {
           fromZone: fromZone || undefined,
           wasDestroyed: true,
           destroyCause: cause,
@@ -3113,6 +3133,15 @@ export default class Game {
           return {
             destroyed: false,
             reason: moveResult?.reason || "move_failed",
+          };
+        }
+
+        // Propagar needsSelection se o moveCard retornou isso
+        if (moveResult.needsSelection) {
+          return {
+            destroyed: true,
+            needsSelection: true,
+            selectionContract: moveResult.selectionContract,
           };
         }
 
@@ -3508,6 +3537,16 @@ export default class Game {
         : req.zone
         ? [req.zone]
         : [];
+      // Tentativa de inferir zona a partir dos candidatos quando o contrato
+      // chega sem zones explícitas (ex.: prompts gerados no servidor).
+      if (zones.length === 0 && Array.isArray(req.candidates)) {
+        const inferred = req.candidates
+          .map((cand) => cand?.zone || cand?.zoneName)
+          .filter((z) => typeof z === "string" && z.length > 0);
+        if (inferred.length > 0) {
+          zones = Array.from(new Set(inferred));
+        }
+      }
       if (zones.length === 0 && contractKind === "position_select") {
         zones = ["field"];
       }
@@ -3749,7 +3788,7 @@ export default class Game {
     const explicitAutoSelect =
       typeof config.activationContext?.autoSelectSingleTarget === "boolean"
         ? config.activationContext.autoSelectSingleTarget
-        : owner === this.bot;
+        : !this.networkMode && owner === this.bot;
     const activationContext = {
       ...(config.activationContext || {}),
       fromHand,
@@ -3851,10 +3890,12 @@ export default class Game {
             (req) => Number(req.min ?? 0) === 0
           );
         }
+        // Padrão: evitar field targeting em prompts genéricos (target_select),
+        // a menos que o contrato peça explicitamente.
         const usingFieldTargeting =
           typeof contract.ui.useFieldTargeting === "boolean"
             ? contract.ui.useFieldTargeting
-            : this.canUseFieldTargeting(contract.requirements);
+            : false;
         contract.ui.useFieldTargeting = usingFieldTargeting;
 
         if (typeof config.onSelectionStart === "function") {
@@ -4096,10 +4137,12 @@ export default class Game {
       return;
     }
 
+    // Por padrão, evitamos field-targeting em prompts genéricos de alvo,
+    // exceto quando explicitamente habilitado pelo contrato (ex.: combate).
     const usingFieldTargeting =
       typeof selectionContract.ui.useFieldTargeting === "boolean"
         ? selectionContract.ui.useFieldTargeting
-        : this.canUseFieldTargeting(selectionContract.requirements);
+        : false;
     selectionContract.ui.useFieldTargeting = usingFieldTargeting;
 
     this.selectionSessionCounter += 1;
@@ -5037,11 +5080,16 @@ export default class Game {
     const result = await this.runZoneOp(
       "ASCENSION_SUMMON",
       async () => {
-        const sendResult = this.moveCard(materialCard, player, "graveyard", {
-          fromZone: "field",
-          contextLabel: "ascension_material",
-          wasDestroyed: false,
-        });
+        const sendResult = await this.moveCard(
+          materialCard,
+          player,
+          "graveyard",
+          {
+            fromZone: "field",
+            contextLabel: "ascension_material",
+            wasDestroyed: false,
+          }
+        );
         if (sendResult?.success === false) {
           return {
             success: false,
@@ -5050,19 +5098,33 @@ export default class Game {
           };
         }
 
-        const summonResult = this.moveCard(ascensionCard, player, "field", {
-          fromZone: "extraDeck",
-          position: resolvedPosition,
-          isFacedown: false,
-          resetAttackFlags: true,
-          summonMethodOverride: "ascension",
-          contextLabel: "ascension_summon",
-        });
+        const summonResult = await this.moveCard(
+          ascensionCard,
+          player,
+          "field",
+          {
+            fromZone: "extraDeck",
+            position: resolvedPosition,
+            isFacedown: false,
+            resetAttackFlags: true,
+            summonMethodOverride: "ascension",
+            contextLabel: "ascension_summon",
+          }
+        );
         if (summonResult?.success === false) {
           return {
             success: false,
             needsSelection: false,
             reason: summonResult.reason || "Ascension summon failed.",
+          };
+        }
+
+        // Propagar needsSelection do after_summon
+        if (summonResult.needsSelection) {
+          return {
+            success: true,
+            needsSelection: true,
+            selectionContract: summonResult.selectionContract,
           };
         }
 
@@ -5479,7 +5541,11 @@ export default class Game {
       await new Promise((resolve) => setTimeout(resolve, 600));
     }
 
-    await this.finishCombat(attacker, target);
+    const combatResult = await this.finishCombat(attacker, target);
+    // Propagate needsSelection from battle_destroy effects
+    if (combatResult?.needsSelection && combatResult?.selectionContract) {
+      return combatResult;
+    }
     return { ok: true };
   }
 
@@ -5489,6 +5555,9 @@ export default class Game {
       attacker?.battleDamageHealsControllerThisTurn || false;
     const defenderHealsOnBattleDamage =
       target?.battleDamageHealsControllerThisTurn || false;
+
+    // Collect battle_destroy event results for networkMode selection handling
+    const battleDestroyResults = [];
 
     const applyBattleDamage = (
       player,
@@ -5548,7 +5617,11 @@ export default class Game {
             sourceCard: attacker,
           });
           if (result?.destroyed) {
-            this.applyBattleDestroyEffect(attacker, target);
+            const bdResult = await this.applyBattleDestroyEffect(
+              attacker,
+              target
+            );
+            if (bdResult) battleDestroyResults.push(bdResult);
           }
         }
       } else if (attacker.atk < target.atk) {
@@ -5571,7 +5644,11 @@ export default class Game {
             sourceCard: target,
           });
           if (result?.destroyed) {
-            this.applyBattleDestroyEffect(attacker, attacker);
+            const bdResult = await this.applyBattleDestroyEffect(
+              attacker,
+              attacker
+            );
+            if (bdResult) battleDestroyResults.push(bdResult);
           }
         }
       } else {
@@ -5582,7 +5659,11 @@ export default class Game {
             sourceCard: target,
           });
           if (result?.destroyed) {
-            this.applyBattleDestroyEffect(attacker, attacker);
+            const bdResult = await this.applyBattleDestroyEffect(
+              attacker,
+              attacker
+            );
+            if (bdResult) battleDestroyResults.push(bdResult);
           }
         }
 
@@ -5593,7 +5674,11 @@ export default class Game {
             sourceCard: attacker,
           });
           if (result?.destroyed) {
-            this.applyBattleDestroyEffect(attacker, target);
+            const bdResult = await this.applyBattleDestroyEffect(
+              attacker,
+              target
+            );
+            if (bdResult) battleDestroyResults.push(bdResult);
           }
         }
         logBattleResult(
@@ -5622,7 +5707,11 @@ export default class Game {
             sourceCard: attacker,
           });
           if (result?.destroyed) {
-            this.applyBattleDestroyEffect(attacker, target);
+            const bdResult = await this.applyBattleDestroyEffect(
+              attacker,
+              target
+            );
+            if (bdResult) battleDestroyResults.push(bdResult);
           }
         }
         if (!attacker.piercing) {
@@ -5651,6 +5740,16 @@ export default class Game {
     this.checkWinCondition();
     this.clearAttackResolutionIndicators();
     this.updateBoard();
+
+    // Return first needsSelection result for networkMode handling
+    const pendingResult = battleDestroyResults.find(
+      (r) => r?.needsSelection && r?.selectionContract
+    );
+    if (pendingResult) {
+      return pendingResult;
+    }
+
+    return { ok: true };
   }
 
   performFusionSummon(
@@ -6009,7 +6108,7 @@ export default class Game {
     );
   }
 
-  moveCardInternal(card, destPlayer, toZone, options = {}) {
+  async moveCardInternal(card, destPlayer, toZone, options = {}) {
     if (!card || !destPlayer || !toZone) {
       return { success: false, reason: "invalid_args" };
     }
@@ -6481,13 +6580,33 @@ export default class Game {
       const ownerPlayer = card.owner === "player" ? this.player : this.bot;
       const otherPlayer = ownerPlayer === this.player ? this.bot : this.player;
       const summonMethod = options.summonMethodOverride || "special";
-      void this.emit("after_summon", {
-        card,
-        player: ownerPlayer,
-        opponent: otherPlayer,
-        method: summonMethod,
-        fromZone,
-      });
+      // Em networkMode, aguardar o emit para capturar pendingEventSelection
+      if (this.networkMode) {
+        const emitResult = await this.emit("after_summon", {
+          card,
+          player: ownerPlayer,
+          opponent: otherPlayer,
+          method: summonMethod,
+          fromZone,
+        });
+        if (emitResult?.needsSelection) {
+          return {
+            success: true,
+            fromZone,
+            toZone,
+            needsSelection: true,
+            selectionContract: emitResult.selectionContract,
+          };
+        }
+      } else {
+        void this.emit("after_summon", {
+          card,
+          player: ownerPlayer,
+          opponent: otherPlayer,
+          method: summonMethod,
+          fromZone,
+        });
+      }
     }
 
     if (toZone === "graveyard") {
@@ -6498,21 +6617,43 @@ export default class Game {
         `[moveCard] Emitting card_to_grave event for ${card.name} (fromZone: ${fromZone})`
       );
 
-      void this.emit("card_to_grave", {
-        card,
-        fromZone: fromZone || options.fromZone || null,
-        toZone: "graveyard",
-        player: ownerPlayer,
-        opponent: otherPlayer,
-        wasDestroyed: options.wasDestroyed || false,
-        destroyCause: options.destroyCause || null,
-      });
+      // Em networkMode, aguardar o emit para capturar pendingEventSelection
+      if (this.networkMode) {
+        const emitResult = await this.emit("card_to_grave", {
+          card,
+          fromZone: fromZone || options.fromZone || null,
+          toZone: "graveyard",
+          player: ownerPlayer,
+          opponent: otherPlayer,
+          wasDestroyed: options.wasDestroyed || false,
+          destroyCause: options.destroyCause || null,
+        });
+        if (emitResult?.needsSelection) {
+          return {
+            success: true,
+            fromZone,
+            toZone,
+            needsSelection: true,
+            selectionContract: emitResult.selectionContract,
+          };
+        }
+      } else {
+        void this.emit("card_to_grave", {
+          card,
+          fromZone: fromZone || options.fromZone || null,
+          toZone: "graveyard",
+          player: ownerPlayer,
+          opponent: otherPlayer,
+          wasDestroyed: options.wasDestroyed || false,
+          destroyCause: options.destroyCause || null,
+        });
+      }
     }
 
     return { success: true, fromZone, toZone };
   }
 
-  applyBattleDestroyEffect(attacker, destroyed) {
+  async applyBattleDestroyEffect(attacker, destroyed) {
     // Legacy: onBattleDestroy direct damage effects tied to the attacker
     if (
       attacker &&
@@ -6533,14 +6674,14 @@ export default class Game {
 
     // New: global battle_destroy event for cards like Shadow-Heart Gecko
     if (!destroyed) {
-      return;
+      return { ok: true };
     }
 
     const destroyedOwner =
       destroyed.owner === "player" ? this.player : this.bot;
     const attackerOwner = attacker.owner === "player" ? this.player : this.bot;
 
-    void this.emit("battle_destroy", {
+    const emitResult = await this.emit("battle_destroy", {
       player: attackerOwner, // o dono do atacante (quem causou a destruição)
       opponent: destroyedOwner, // o jogador que perdeu o monstro
       attacker,
@@ -6548,6 +6689,8 @@ export default class Game {
       attackerOwner,
       destroyedOwner,
     });
+
+    return emitResult || { ok: true };
   }
 
   setSpellOrTrap(card, handIndex, actor = this.player) {
@@ -8218,7 +8361,7 @@ export default class Game {
       player: {
         hand: ["Shadow-Heart Griffin", "Shadow-Heart Covenant"],
         field: [
-          { name: "Shadow-Heart Observer", position: "attack" },
+          { name: "Shadow-Heart Coward", position: "attack" },
           { name: "Shadow-Heart Abyssal Eel", position: "attack" },
           { name: "Shadow-Heart Specter", position: "attack" },
           { name: "Shadow-Heart Imp", position: "attack" },
@@ -8229,7 +8372,7 @@ export default class Game {
           "Shadow-Heart Shield",
           "Shadow-Heart Covenant",
           "Shadow-Heart Purge",
-          "Shadow-Heart Coat",
+          "Shadow-Heart Infusion",
         ],
       },
       bot: { field: [] },
@@ -8251,9 +8394,14 @@ export default class Game {
     }
 
     const beforeField = this.captureZoneSnapshot("sanity_i_before_field");
-    const moveFieldResult = this.moveCard(extraMonster, this.player, "field", {
-      fromZone: "hand",
-    });
+    const moveFieldResult = await this.moveCard(
+      extraMonster,
+      this.player,
+      "field",
+      {
+        fromZone: "hand",
+      }
+    );
     const afterField = this.captureZoneSnapshot("sanity_i_after_field");
     const fieldStateOk = this.compareZoneSnapshot(
       beforeField,
@@ -8265,7 +8413,7 @@ export default class Game {
     const moveFieldRejected = moveFieldResult?.success === false;
 
     const beforeSpell = this.captureZoneSnapshot("sanity_i_before_spell");
-    const moveSpellResult = this.moveCard(
+    const moveSpellResult = await this.moveCard(
       extraSpell,
       this.player,
       "spellTrap",
@@ -8341,7 +8489,7 @@ export default class Game {
       turn: "player",
       phase: "main1",
       player: {
-        hand: ["Shadow-Heart Observer"],
+        hand: ["Shadow-Heart Coward"],
         field: [],
       },
       bot: { field: [] },
@@ -8360,7 +8508,7 @@ export default class Game {
     let moveResult = null;
     this.devFailAfterZoneMutation = true;
     try {
-      moveResult = this.moveCard(card, this.player, "field", {
+      moveResult = await this.moveCard(card, this.player, "field", {
         fromZone: "hand",
       });
     } catch (err) {

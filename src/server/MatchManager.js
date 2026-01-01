@@ -4,6 +4,8 @@ import {
   CLIENT_MESSAGE_TYPES,
   SERVER_MESSAGE_TYPES,
   validateActionPayload,
+  normalizeSeat,
+  legacySeat,
 } from "./MessageProtocol.js";
 
 function send(ws, payload) {
@@ -31,6 +33,14 @@ function serverRendererStub() {
     setPlayerFieldTributeable: noop,
   };
 }
+
+// Seat helpers -------------------------------------------------------------
+const promptSlotsForSeat = (seat) => {
+  const norm = normalizeSeat(seat);
+  if (norm === "p1") return ["p1", "player"];
+  if (norm === "p2") return ["p2", "bot"];
+  return [seat];
+};
 
 export class MatchManager {
   constructor() {
@@ -131,10 +141,10 @@ export class MatchManager {
     }
 
     let seat = null;
-    if (!room.clients.player) {
-      seat = "player";
-    } else if (!room.clients.bot) {
-      seat = "bot";
+    if (!room.clients.p1) {
+      seat = "p1";
+    } else if (!room.clients.p2) {
+      seat = "p2";
     } else {
       this.sendError(client, "Room full", "room_full");
       return;
@@ -142,13 +152,21 @@ export class MatchManager {
 
     client.roomId = roomId;
     client.seat = seat;
+    client.seatLegacy = legacySeat(seat);
     client.name = name;
     client.ready = false;
     room.clients[seat] = client;
+    // Aliases for compatibility
+    if (seat === "p1") {
+      room.clients.player = client;
+    } else if (seat === "p2") {
+      room.clients.bot = client;
+    }
 
     send(client.ws, {
       type: SERVER_MESSAGE_TYPES.MATCH_START,
       youAre: seat,
+      youAreLegacy: legacySeat(seat),
       roomId,
     });
   }
@@ -275,19 +293,22 @@ export class MatchManager {
     if (!room.rematchRequests) {
       room.rematchRequests = new Set();
     }
-    room.rematchRequests.add(client.seat);
+    const seat = normalizeSeat(client.seat);
+    room.rematchRequests.add(seat);
 
     console.log("[Server] rematch_request", {
       room: room.id,
-      seat: client.seat,
+      seat,
       requests: Array.from(room.rematchRequests),
     });
 
     // Notificar ambos sobre o status do rematch
     const status = {
       type: SERVER_MESSAGE_TYPES.REMATCH_STATUS,
-      playerWants: room.rematchRequests.has("player"),
-      botWants: room.rematchRequests.has("bot"),
+      playerWants:
+        room.rematchRequests.has("p1") || room.rematchRequests.has("player"),
+      botWants:
+        room.rematchRequests.has("p2") || room.rematchRequests.has("bot"),
       ready: room.rematchRequests.size >= 2,
     };
 
@@ -299,7 +320,11 @@ export class MatchManager {
     }
 
     // Se ambos querem rematch, reiniciar
-    if (room.rematchRequests.has("player") && room.rematchRequests.has("bot")) {
+    const p1Ready =
+      room.rematchRequests.has("p1") || room.rematchRequests.has("player");
+    const p2Ready =
+      room.rematchRequests.has("p2") || room.rematchRequests.has("bot");
+    if (p1Ready && p2Ready) {
       await this.restartMatch(room);
     }
   }
@@ -316,6 +341,8 @@ export class MatchManager {
     room.pendingPromptsBySeat = {
       player: null,
       bot: null,
+      p1: null,
+      p2: null,
     };
 
     // Reiniciar partida
@@ -329,21 +356,27 @@ export class MatchManager {
       return;
     }
 
-    const seat = client?.seat;
+    const seat = normalizeSeat(client?.seat);
     if (!seat) {
       this.sendError(client, "Client has no seat", "invalid_action");
       return;
     }
 
     // A2: Input lock - bloquear card clicks se houver prompt pendente
-    const pendingPrompt = room.pendingPromptsBySeat[seat];
+    const slots = promptSlotsForSeat(seat);
+    const pendingPrompt =
+      slots.map((s) => room.pendingPromptsBySeat[s]).find(Boolean) || null;
     if (pendingPrompt) {
       console.warn("[Server] intent blocked - pending prompt", {
         seat,
         promptId: pendingPrompt.promptId,
         promptType: pendingPrompt.prompt?.type,
       });
-      this.sendError(client, "Please respond to the current prompt first", "input_locked");
+      this.sendError(
+        client,
+        "Please respond to the current prompt first",
+        "input_locked"
+      );
       return;
     }
 
@@ -371,20 +404,25 @@ export class MatchManager {
   storeAndSendPrompt(room, client, prompt, extra = {}) {
     if (!prompt?.promptId) return;
 
-    const seat = client?.seat;
+    const seat = normalizeSeat(client?.seat);
     if (!seat) {
       console.warn("[Server] storeAndSendPrompt: client has no seat");
       return;
     }
 
     // A1: Verificar se já existe prompt pendente para este seat
-    const existingPrompt = room.pendingPromptsBySeat[seat];
+    const slots = promptSlotsForSeat(seat);
+    const existingPrompt =
+      slots.map((s) => room.pendingPromptsBySeat[s]).find(Boolean) || null;
     if (existingPrompt) {
-      console.warn("[Server] storeAndSendPrompt: overwriting pending prompt for seat", {
-        seat,
-        oldPromptId: existingPrompt.promptId,
-        newPromptId: prompt.promptId,
-      });
+      console.warn(
+        "[Server] storeAndSendPrompt: overwriting pending prompt for seat",
+        {
+          seat,
+          oldPromptId: existingPrompt.promptId,
+          newPromptId: prompt.promptId,
+        }
+      );
       // Cancelar timeout anterior se existir
       if (existingPrompt.timeoutId) {
         clearTimeout(existingPrompt.timeoutId);
@@ -422,7 +460,9 @@ export class MatchManager {
     };
 
     // A1: Armazenar por seat
-    room.pendingPromptsBySeat[seat] = promptEntry;
+    slots.forEach((s) => {
+      room.pendingPromptsBySeat[s] = promptEntry;
+    });
 
     // Manter compatibilidade com estrutura antiga
     room.prompts.set(prompt.promptId, promptEntry);
@@ -447,7 +487,7 @@ export class MatchManager {
    * Auto-cancela prompt após 30s para evitar soft-lock
    */
   handlePromptTimeout(room, client, promptId) {
-    const seat = client?.seat;
+    const seat = normalizeSeat(client?.seat);
     const promptEntry = room.prompts.get(promptId);
     if (!promptEntry) return; // Já foi respondido
 
@@ -458,9 +498,12 @@ export class MatchManager {
     });
 
     // A1: Remover prompt do seat específico
-    if (seat && room.pendingPromptsBySeat[seat]?.promptId === promptId) {
-      room.pendingPromptsBySeat[seat] = null;
-    }
+    const slots = promptSlotsForSeat(seat);
+    slots.forEach((s) => {
+      if (room.pendingPromptsBySeat[s]?.promptId === promptId) {
+        room.pendingPromptsBySeat[s] = null;
+      }
+    });
 
     // Remover da estrutura antiga também
     room.prompts.delete(promptId);
@@ -487,7 +530,8 @@ export class MatchManager {
 
   buildCardActionMenu(room, client, intent) {
     const game = room.game;
-    const actor = client.seat === "bot" ? game.bot : game.player;
+    const seatNorm = normalizeSeat(client.seat);
+    const actor = seatNorm === "p2" ? game.bot : game.player;
     const options = [];
     const promptId = `p_${room.id}_${++this.promptCounter}`;
 
@@ -634,7 +678,7 @@ export class MatchManager {
       return;
     }
 
-    const seat = client?.seat;
+    const seat = normalizeSeat(client?.seat);
     if (!seat) {
       this.sendError(client, "Client has no seat", "action_rejected");
       return;
@@ -652,7 +696,10 @@ export class MatchManager {
     }
 
     // A3: Validar stateVersion
-    if (promptEntry.stateVersion !== undefined && room.stateVersion !== promptEntry.stateVersion) {
+    if (
+      promptEntry.stateVersion !== undefined &&
+      room.stateVersion !== promptEntry.stateVersion
+    ) {
       console.warn("[Server] prompt response stateVersion mismatch", {
         promptId: msg.promptId,
         seat,
@@ -661,7 +708,11 @@ export class MatchManager {
       });
       // Rejeitar resposta e limpar prompt
       this.clearPromptForSeat(room, seat, msg.promptId);
-      this.sendError(client, "Game state changed, please try again", "state_mismatch");
+      this.sendError(
+        client,
+        "Game state changed, please try again",
+        "state_mismatch"
+      );
       this.commitStateUpdate(room, "prompt_state_mismatch");
       return;
     }
@@ -669,7 +720,9 @@ export class MatchManager {
     console.log("[Server] prompt_response received", {
       promptId: msg.promptId,
       seat,
-      choice: Array.isArray(msg.choice) ? `[${msg.choice.length} items]` : msg.choice,
+      choice: Array.isArray(msg.choice)
+        ? `[${msg.choice.length} items]`
+        : msg.choice,
       stateVersion: promptEntry.stateVersion,
     });
 
@@ -837,7 +890,10 @@ export class MatchManager {
         !Array.isArray(pending.payload.selections)
           ? pending.payload.selections
           : {};
-      const selections = { ...existingSelections, [requirementId]: choiceValue };
+      const selections = {
+        ...existingSelections,
+        [requirementId]: choiceValue,
+      };
       const nextPayload = { ...(pending.payload || {}), selections };
       const applyResult = await this.applyAction(
         room,
@@ -995,7 +1051,10 @@ export class MatchManager {
         !Array.isArray(pending.payload.selections)
           ? pending.payload.selections
           : {};
-      const selections = { ...existingSelections, [requirementId]: choiceValue };
+      const selections = {
+        ...existingSelections,
+        [requirementId]: choiceValue,
+      };
       const nextPayload = { ...(pending.payload || {}), selections };
 
       console.log("[Server] card_select applying action", {
@@ -1076,13 +1135,18 @@ export class MatchManager {
    */
   clearPromptForSeat(room, seat, promptId) {
     // Limpar da estrutura per-seat
-    if (room.pendingPromptsBySeat[seat]?.promptId === promptId) {
-      room.pendingPromptsBySeat[seat] = null;
-    }
+    const slots = promptSlotsForSeat(seat);
+    slots.forEach((s) => {
+      if (room.pendingPromptsBySeat[s]?.promptId === promptId) {
+        room.pendingPromptsBySeat[s] = null;
+      }
+    });
     // Limpar da estrutura antiga
     room.prompts.delete(promptId);
     // Só limpar pendingPromptType se não houver outros prompts pendentes
-    const hasOtherPending = Object.values(room.pendingPromptsBySeat).some((p) => p !== null);
+    const hasOtherPending = Object.values(room.pendingPromptsBySeat).some(
+      (p) => p !== null
+    );
     if (!hasOtherPending) {
       room.pendingPromptType = null;
     }
@@ -1090,7 +1154,8 @@ export class MatchManager {
 
   buildTargetPrompt(room, client, sourcePrompt, choice) {
     const game = room.game;
-    const actor = client.seat === "bot" ? game.bot : game.player;
+    const seatNorm = normalizeSeat(client.seat);
+    const actor = seatNorm === "p2" ? game.bot : game.player;
     const opponent = actor === game.player ? game.bot : game.player;
 
     if (choice.actionType === ACTION_TYPES.DECLARE_ATTACK) {
@@ -1166,44 +1231,52 @@ export class MatchManager {
     const contractKind = contract.kind || "selection_contract";
     const isCardSelect = contractKind === "card_select";
 
-      const candidates = requirement.candidates.map((cand, idx) => {
-        const ownerLabel =
-          cand.owner === "player" || cand.owner === "opponent"
-            ? cand.owner
-            : null;
-        return {
-          id: cand.key ?? idx,
-          label: cand.name || `Target ${idx + 1}`,
-          name: cand.name || null,
-          zone: cand.zone || null,
-          controller: ownerLabel || cand.controller || null,
-          zoneIndex: cand.zoneIndex ?? null,
-          // Campos extras para card_select (search)
-          cardId: cand.cardId ?? cand.cardRef?.id ?? null,
-          cardKind: cand.cardKind ?? null,
-          atk: cand.atk ?? null,
-          def: cand.def ?? null,
-          level: cand.level ?? null,
-        };
-      });
-
+    const candidates = requirement.candidates.map((cand, idx) => {
+      const ownerLabel =
+        cand.owner === "player" || cand.owner === "opponent"
+          ? cand.owner
+          : null;
       return {
-        type: isCardSelect ? "card_select" : "selection_contract",
-        promptId,
-        title: contract.message || "Select target(s)",
-        requirement: {
-          id: requirement.id || "selection",
-          min: requirement.min ?? 1,
-          max: requirement.max ?? 1,
-          candidates,
-        },
-        kind: contractKind,
-        ui: contract.ui || null,
-        actionType: actionContext.actionType || null,
-        sourceZone: selectionResult.sourceZone || null,
-        cardData,
+        id: cand.key ?? idx,
+        label: cand.name || `Target ${idx + 1}`,
+        name: cand.name || null,
+        zone: cand.zone || null,
+        controller: ownerLabel || cand.controller || null,
+        zoneIndex: cand.zoneIndex ?? null,
+        // Campos extras para card_select (search)
+        cardId: cand.cardId ?? cand.cardRef?.id ?? null,
+        cardKind: cand.cardKind ?? null,
+        atk: cand.atk ?? null,
+        def: cand.def ?? null,
+        level: cand.level ?? null,
       };
+    });
+
+    // Default: use modal selection unless the contract explicitly asks for
+    // field targeting (e.g., combat). This prevents silent timeouts when the
+    // client expects a modal and no field overlay is shown.
+    const promptUi = { ...(contract.ui || {}) };
+    if (typeof promptUi.useFieldTargeting !== "boolean") {
+      promptUi.useFieldTargeting = false;
     }
+
+    return {
+      type: isCardSelect ? "card_select" : "selection_contract",
+      promptId,
+      title: contract.message || "Select target(s)",
+      requirement: {
+        id: requirement.id || "selection",
+        min: requirement.min ?? 1,
+        max: requirement.max ?? 1,
+        candidates,
+      },
+      kind: contractKind,
+      ui: promptUi,
+      actionType: actionContext.actionType || null,
+      sourceZone: selectionResult.sourceZone || null,
+      cardData,
+    };
+  }
 
   async handleAction(client, msg) {
     const room = this.getRoom(client);
@@ -1212,21 +1285,28 @@ export class MatchManager {
       return;
     }
 
-    const seat = client?.seat;
+    const seat = normalizeSeat(client?.seat);
     if (!seat) {
       this.sendError(client, "Client has no seat", "invalid_action");
       return;
     }
 
     // A2: Input lock - bloquear novas ações se houver prompt pendente para este seat
-    const pendingPrompt = room.pendingPromptsBySeat[seat];
+    const pendingPrompt =
+      promptSlotsForSeat(seat)
+        .map((s) => room.pendingPromptsBySeat[s])
+        .find(Boolean) || null;
     if (pendingPrompt) {
       console.warn("[Server] action blocked - pending prompt", {
         seat,
         promptId: pendingPrompt.promptId,
         promptType: pendingPrompt.prompt?.type,
       });
-      this.sendError(client, "Please respond to the current prompt first", "input_locked");
+      this.sendError(
+        client,
+        "Please respond to the current prompt first",
+        "input_locked"
+      );
       return;
     }
 
@@ -1278,10 +1358,12 @@ export class MatchManager {
 
     if (applyResult.needsSelection && applyResult.selection?.prompt) {
       const selectionInfo = applyResult.selection;
+      // Use selectionInfo.actionType when available (e.g., RESUME_EVENT_SELECTION for triggered effects)
+      const resumeActionType = selectionInfo.actionType || actionType;
       this.storeAndSendPrompt(room, client, selectionInfo.prompt, {
         pendingSelection: {
           seat: client.seat,
-          actionType,
+          actionType: resumeActionType,
           payload,
           selectionContract: selectionInfo.contract,
           requirementId: selectionInfo.requirementId,
@@ -1311,8 +1393,9 @@ export class MatchManager {
     if (!game) {
       return { ok: false, message: "Match not ready" };
     }
-    const actor = seat === "bot" ? game.bot : game.player;
-    const opponent = seat === "bot" ? game.player : game.bot;
+    const seatNorm = normalizeSeat(seat);
+    const actor = seatNorm === "p2" ? game.bot : game.player;
+    const opponent = actor === game.player ? game.bot : game.player;
     if (!actor) {
       return { ok: false, message: "Invalid player" };
     }
@@ -1330,7 +1413,7 @@ export class MatchManager {
     const actionContext = this.buildActionContext(room, seat);
 
     try {
-      return await this._executeAction(
+      const result = await this._executeAction(
         room,
         actor,
         opponent,
@@ -1340,6 +1423,51 @@ export class MatchManager {
         seat,
         actionContext
       );
+
+      // INVARIANTE B2: Check for pending event selections from internal events (e.g., moveCard emits)
+      // This handles cases where void emit() was used and pendingEventSelection was set
+      if (
+        result?.ok &&
+        !result?.needsSelection &&
+        game.pendingEventSelection &&
+        game.pendingEventSelection.entries?.length > 0
+      ) {
+        const pending = game.pendingEventSelection;
+        // Build selection contract from pending event results (not entries)
+        // The selectionContract is stored in results, not in the raw entries
+        const entryIdx = pending.entryIndex || 0;
+        const contract =
+          pending.results?.[entryIdx]?.selectionContract ||
+          pending.entries?.[entryIdx]?.selectionContract;
+        if (contract) {
+          const prompt = this.buildSelectionPrompt(
+            room,
+            { seat },
+            { selectionContract: contract },
+            {
+              actionType: "RESUME_EVENT_SELECTION",
+            }
+          );
+          if (prompt) {
+            return {
+              ok: true,
+              needsSelection: true,
+              selection: {
+                prompt,
+                contract,
+                actionType: "RESUME_EVENT_SELECTION",
+                requirementId:
+                  prompt?.requirement?.id ||
+                  contract?.requirements?.[0]?.id ||
+                  "selection",
+                resumeData: null,
+              },
+            };
+          }
+        }
+      }
+
+      return result;
     } catch (error) {
       hadError = true;
       console.error("[Server] applyAction error", {
@@ -1696,6 +1824,28 @@ export class MatchManager {
         if (result && result.ok === false) {
           return { ok: false, message: result.reason || "Attack not allowed" };
         }
+        // Handle battle_destroy triggered effects that need selection
+        if (result?.needsSelection && result?.selectionContract) {
+          const prompt = this.buildSelectionPrompt(room, { seat }, result, {
+            actionType: "RESUME_EVENT_SELECTION",
+          });
+          if (prompt) {
+            return {
+              ok: true,
+              needsSelection: true,
+              selection: {
+                prompt,
+                contract: result.selectionContract,
+                actionType: "RESUME_EVENT_SELECTION",
+                requirementId:
+                  prompt?.requirement?.id ||
+                  result.selectionContract?.requirements?.[0]?.id ||
+                  "selection",
+                resumeData: result.resumeData || null,
+              },
+            };
+          }
+        }
         return { ok: true };
       }
       case "RESUME_EVENT_SELECTION": {
@@ -1708,9 +1858,14 @@ export class MatchManager {
           { actionContext }
         );
         if (resumeResult?.needsSelection && resumeResult.selectionContract) {
-          const prompt = this.buildSelectionPrompt(room, { seat }, resumeResult, {
-            actionType: "RESUME_EVENT_SELECTION",
-          });
+          const prompt = this.buildSelectionPrompt(
+            room,
+            { seat },
+            resumeResult,
+            {
+              actionType: "RESUME_EVENT_SELECTION",
+            }
+          );
           if (prompt) {
             return {
               ok: true,
@@ -1816,17 +1971,17 @@ export class MatchManager {
     const payloadForSeat = (seat) => ({
       type: SERVER_MESSAGE_TYPES.STATE_UPDATE,
       state: {
-        ...room.game.getPublicState(seat),
+        ...room.game.getPublicState(legacySeat(seat)),
         stateVersion: room.stateVersion,
         isResolvingEffect: room.isResolvingEffect || false,
         pendingPromptType: room.pendingPromptType || null,
       },
     });
-    if (room.clients.player) {
-      send(room.clients.player.ws, payloadForSeat("player"));
+    if (room.clients.p1) {
+      send(room.clients.p1.ws, payloadForSeat("p1"));
     }
-    if (room.clients.bot) {
-      send(room.clients.bot.ws, payloadForSeat("bot"));
+    if (room.clients.p2) {
+      send(room.clients.p2.ws, payloadForSeat("p2"));
     }
   }
 
@@ -1839,21 +1994,22 @@ export class MatchManager {
     });
     const payloadForSeat = (seat) => ({
       type: SERVER_MESSAGE_TYPES.STATE_UPDATE,
-      state: room.game.getPublicState(seat),
+      state: room.game.getPublicState(legacySeat(seat)),
     });
-    if (room.clients.player) {
-      send(room.clients.player.ws, payloadForSeat("player"));
+    if (room.clients.p1) {
+      send(room.clients.p1.ws, payloadForSeat("p1"));
     }
-    if (room.clients.bot) {
-      send(room.clients.bot.ws, payloadForSeat("bot"));
+    if (room.clients.p2) {
+      send(room.clients.p2.ws, payloadForSeat("p2"));
     }
   }
 
   sendState(client, game) {
     if (!client?.ws || !game) return;
+    const viewerSeat = legacySeat(client.seat || "player");
     send(client.ws, {
       type: SERVER_MESSAGE_TYPES.STATE_UPDATE,
-      state: game.getPublicState(client.seat || "player"),
+      state: game.getPublicState(viewerSeat),
     });
   }
 
@@ -1871,15 +2027,25 @@ export class MatchManager {
     const room = this.getRoom(client);
     if (!room) return;
 
-    const disconnectedSeat = client.seat;
+    const disconnectedSeat = normalizeSeat(client.seat);
 
     // Identificar o outro jogador ANTES de remover o cliente
-    const otherSeat = disconnectedSeat === "player" ? "bot" : "player";
-    const otherClient = room.clients[otherSeat];
+    const otherSeat = disconnectedSeat === "p1" ? "p2" : "p1";
+    const otherClient =
+      room.clients[otherSeat] ||
+      room.clients[otherSeat === "p1" ? "player" : "bot"];
 
     // Remover o cliente que desconectou
-    if (disconnectedSeat && room.clients[disconnectedSeat] === client) {
-      room.clients[disconnectedSeat] = null;
+    if (disconnectedSeat) {
+      if (room.clients[disconnectedSeat] === client) {
+        room.clients[disconnectedSeat] = null;
+      }
+      // limpar alias legacy
+      if (disconnectedSeat === "p1" && room.clients.player === client) {
+        room.clients.player = null;
+      } else if (disconnectedSeat === "p2" && room.clients.bot === client) {
+        room.clients.bot = null;
+      }
     }
 
     // Notificar o outro jogador se ainda estiver conectado
@@ -1893,13 +2059,15 @@ export class MatchManager {
   createRoom(id) {
     return {
       id,
-      clients: { player: null, bot: null },
+      clients: { player: null, bot: null, p1: null, p2: null },
       game: null,
       prompts: new Map(),
       // A1: Per-seat prompt tracking to prevent overwriting prompts
       pendingPromptsBySeat: {
         player: null,
         bot: null,
+        p1: null,
+        p2: null,
       },
       stateVersion: 0,
       isResolvingEffect: false,

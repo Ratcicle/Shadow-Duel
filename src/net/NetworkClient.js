@@ -1,3 +1,16 @@
+const seatMap = {
+  player: "p1",
+  bot: "p2",
+  p1: "p1",
+  p2: "p2",
+};
+
+function normalizeSeat(seat) {
+  if (!seat) return null;
+  const key = String(seat).toLowerCase();
+  return seatMap[key] || seat;
+}
+
 export default class NetworkClient {
   constructor(url) {
     this.url = url;
@@ -13,6 +26,8 @@ export default class NetworkClient {
     };
     this.seq = 0;
     this.seat = null;
+    this.seatCanonical = null;
+    this.seatLegacy = null;
   }
 
   connect(roomId = "default", playerName = null) {
@@ -89,7 +104,12 @@ export default class NetworkClient {
         : null;
     switch (msg.type) {
       case "match_start":
-        this.seat = msg.youAre;
+        this.seatCanonical = normalizeSeat(
+          msg.youAre || msg.seat || msg.youAreLegacy
+        );
+        this.seatLegacy = msg.youAreLegacy || msg.youAre || null;
+        // Maintain backward compatibility: seat stays legacy if provided
+        this.seat = this.seatLegacy || this.seatCanonical;
         this.handlers.start?.(msg);
         break;
       case "state_update":

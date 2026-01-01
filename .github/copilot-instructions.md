@@ -2,10 +2,10 @@
 
 ### Run & Debug
 
-- **No build step**: Static site; serve root with `npx serve` or `python -m http.server`, open `index.html`.
-- **Dev mode**: `localStorage.setItem("shadow_duel_dev_mode", "true")` enables dev panel (phase forcing, manual draws, setup JSON, duel reset). Check via `game.devLog()`.
-- **Test mode**: `shadow_duel_test_mode` in localStorage for additional sanity checks.
-- **Validation**: `CardDatabaseValidator.validateCardDatabase()` runs at startup—blocks duels if card definitions are invalid or use unregistered action types.
+- **Static client**: No build; serve root with `npx serve` or `python -m http.server` and open `index.html`.
+- **Local flags**: `shadow_duel_dev_mode` shows dev panel (force phase, manual draw/give, setup JSON, sanity buttons, reset duel); `shadow_duel_test_mode` enables extra guards. Toggle via `localStorage.setItem(key, "true")`.
+- **Validation gate**: `CardDatabaseValidator.validateCardDatabase()` runs on load and blocks duels if definitions are invalid or use unregistered `action.type`; warnings surface in dev mode.
+- **Deck state**: Deck/extra deck and bot preset are persisted in `shadow_duel_deck`, `shadow_duel_extra_deck`, `shadow_duel_bot_preset` with sorting by card kind/level/name.
 
 ### Architecture Overview
 
@@ -17,11 +17,11 @@ main.js --> Game (turn/phase/combat) --> EffectEngine (effects) --> ActionHandle
 
 | Component           | Responsibility                                                                                     |
 | ------------------- | -------------------------------------------------------------------------------------------------- |
-| `Game.js`           | Turn flow, combat, event bus (`on`/`emit`), zone operations (`moveCard`), once-per-turn tracking   |
-| `EffectEngine.js`   | Effect resolution, passive buffs, chain-based targeting, position modals                           |
-| `ActionHandlers.js` | Registry of action handlers—pure logic, no UI, signature: `(action, ctx, targets, engine) => bool` |
+| `Game.js`           | Turn flow, phases, combat, event bus (`on`/`emit`), zone ops (`moveCard`), once-per-turn/duel guards, delayed actions, board refresh |
+| `EffectEngine.js`   | Resolves triggers/ignitions, passive buffs, chain-aware targeting, special summon position modal, once-per-turn/duel enforcement |
+| `ActionHandlers.js` | Registry of action handlers—pure logic, no UI; signature `(action, ctx, targets, engine) => bool`  |
 | `AutoSelector.js`   | Fulfills selection contracts for bot targeting decisions                                           |
-| `ChainSystem.js`    | Chain windows, spell speed validation (Speed 1/2/3), LIFO resolution                               |
+| `ChainSystem.js`    | Chain windows, spell speed validation (Speed 1/2/3), LIFO resolution; auto-disabled in network mode |
 
 ### Adding Cards (`src/data/cards.js`)
 
@@ -58,8 +58,8 @@ effects: [{
 ### Action Handler Contract
 
 - Handlers registered via `registry.register("action_type", handler)` in `ActionHandlers.js`.
-- **Validation gate**: `CardDatabaseValidator` blocks duels if any card uses an unregistered `action.type`.
-- No UI calls inside handlers—selection comes from `targets` --> `targetRef`.
+- Validation gate: registry must contain every `action.type` used in cards.
+- No UI inside handlers—selections come from `targets` → `targetRef`.
 - After zone mutations: call `game.updateBoard()` (triggers `updatePassiveBuffs`).
 
 **Handler signature:**
@@ -82,8 +82,10 @@ async function handleMyAction(action, ctx, targets, engine) {
 | Move cards              | `game.moveCard(card, player, zone, {fromZone})`                | Direct array manipulation   |
 | Damage/heal             | `game.inflictDamage()` or `heal` action                        | Mutate `player.lp` directly |
 | Special summon position | `engine.chooseSpecialSummonPosition(card, player, {position})` | Hardcode position           |
-| Once-per-turn           | Set `oncePerTurn: true` + `oncePerTurnName` in effect          | Ad-hoc flags on cards       |
+| Once-per-turn/duel      | Use `oncePerTurn` / `oncePerDuel` flags; Game tracks usage     | Ad-hoc flags on cards       |
 | Emit events             | `game.emit("after_summon", payload)` after summons             | Skip event emission         |
+| Chains                  | Respect `speed` and `canRespondTo` on effects; see `ChainSystem` contexts | Ignore chain validation |
+| Buffs/cleanup           | Use `applyTurnBasedBuff` and `cleanupExpiredBuffs` hooks        | Manually tweak `atk/def`    |
 
 ### Archetypes
 
@@ -96,6 +98,14 @@ async function handleMyAction(action, ctx, targets, engine) {
 - Presets: `Bot.getAvailablePresets()` returns `[{ id: "shadowheart", label: "Shadow-Heart" }, ...]`.
 - Strategies extend `BaseStrategy` in `src/core/ai/`; register via `registerStrategy("id", Class)` in `StrategyRegistry.js`.
 - Add decklists as methods: `getShadowHeartDeck()`, `getLuminarchDeck()`.
+- AutoSelector fulfills selection contracts for AI paths; keep handler targets declarative.
+
+### Online Mode (MVP)
+
+- Client uses `OnlineSessionController` + `NetworkClient`; canonical seats are `p1`/`p2` (`normalizeSeat`).
+- Actions sent via `sendAction(actionType, payload)` where `actionType` is from `server/MessageProtocol.ACTION_TYPES` (NORMAL_SUMMON, ACTIVATE_SPELL, ACTIVATE_EFFECT, etc.); payloads validated by `validateActionPayload`.
+- Prompts go through `OnlinePromptAdapter` (modal selection) and intent clicks through `sendIntentCardClick(zone, index)`.
+- Chains/Traps auto-disable in network mode to avoid desync.
 
 ### i18n
 

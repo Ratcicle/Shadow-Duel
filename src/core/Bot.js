@@ -5,7 +5,7 @@ import { getStrategyFor } from "./ai/StrategyRegistry.js";
 
 export default class Bot extends Player {
   constructor(archetype = "shadowheart") {
-    super("bot", "Opponent");
+    super("bot", "Opponent", "ai");
     this.maxSimulationsPerPhase = 20;
     this.maxChainedActions = 3;
     this.setPreset(archetype);
@@ -67,8 +67,6 @@ export default class Bot extends Player {
       53, // Shadow-Heart Specter (recursão GY - 2x)
       62,
       62, // Shadow-Heart Coward (discard value - 2x)
-      51,
-      51, // Shadow-Heart Observer (special summon - 2x)
       52,
       52, // Shadow-Heart Abyssal Eel (utility - 2x)
       70, // Shadow-Heart Leviathan (burn beater - 1x)

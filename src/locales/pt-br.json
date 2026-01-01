@@ -60,10 +60,6 @@
       "name": "Chamado dos Assombrados",
       "description": "Ative este card ao escolher 1 monstro no seu Cemitério; Invoque o alvo por Invocação-Especial em Posição de Ataque. Quando este card deixar o campo, destrua esse monstro. Quando esse monstro for destruído, destrua este card."
     },
-    "51": {
-      "name": "Observador do Coração Sombrio",
-      "description": "Se esse card for invocado por invocação-Normal: você pode escolher 1 monstro que seu oponente controla de nível 4 ou menor; invoque por invocação-Especial 1 monstro da sua mão do mesmo nível do alvo."
-    },
     "52": {
       "name": "Enguia Abissal do Coração Sombrio",
       "description": "Se esse card for atacado em posição de defesa: cause 600 de dano ao oponente. Se esse card for destruído em batalha: você pode adicionar 1 Magia/Armadilha 'Coração Sombrio' do seu cemitério à sua mão."
@@ -75,14 +71,6 @@
     "54": {
       "name": "Purificação do Coração Sombrio",
       "description": "Discarte 1 card, e então escolha 1 monstro que seu oponente controla; destrua-o."
-    },
-    "55": {
-      "name": "Capa do Coração Sombrio",
-      "description": "Escolha 1 monstro 'Coração Sombrio' que você controla: ele ganha 600 de ATK até o final do turno."
-    },
-    "56": {
-      "name": "Recuo do Coração Sombrio",
-      "description": "Escolha 1 monstro que você controla: adicione o alvo à sua mão."
     },
     "57": {
       "name": "Demônio Arctroth do Coração Sombrio",
@@ -330,3 +318,5 @@
     }
   }
 }
+
+

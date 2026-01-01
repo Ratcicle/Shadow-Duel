@@ -1,6 +1,7 @@
 ﻿import Card from "./Card.js";
 import { cardDatabase } from "../data/cards.js";
 import { getCardDisplayName } from "./i18n.js";
+import { isAI } from "./Player.js";
 import {
   ActionHandlerRegistry,
   registerDefaultHandlers,
@@ -72,8 +73,8 @@ export default class EffectEngine {
       return actionPosition;
     }
 
-    // CHOICE ALLOWED: Bot auto-selects "attack"
-    if (player?.id === "bot") {
+    // CHOICE ALLOWED: AI auto-selects "attack"
+    if (isAI(player)) {
       this.game?.devLog?.("SS_POSITION", {
         summary: `Bot auto-chooses attack for ${card?.name || "unknown"}`,
         player: player?.id,
@@ -2945,7 +2946,7 @@ export default class EffectEngine {
     const activationContext = ctx?.activationContext || {};
     const autoSelectSingleTarget =
       activationContext.autoSelectSingleTarget === true;
-    const isBot = ctx?.player?.id === "bot";
+    const isAIPlayer = isAI(ctx?.player);
     const resolvedTargets = activationContext.resolvedTargets || null;
 
     // ✅ DRAGON SPIRIT SANCTUARY: Inject targetMap into context for compareAttribute support
@@ -3061,9 +3062,12 @@ export default class EffectEngine {
         return candidate;
       });
 
-      const hasSelections = selections && typeof selections === "object";
-      const provided = hasSelections ? selections[def.id] : null;
-      if (hasSelections) {
+      const hasSelections =
+        selections && typeof selections === "object" && !Array.isArray(selections);
+      const hasSelectionForDef =
+        hasSelections && Object.prototype.hasOwnProperty.call(selections, def.id);
+      const provided = hasSelectionForDef ? selections[def.id] : null;
+      if (hasSelectionForDef) {
         const providedList = Array.isArray(provided)
           ? provided
           : provided != null
@@ -3123,9 +3127,9 @@ export default class EffectEngine {
       }
 
       const autoSelectExplicit = def.autoSelect === true;
-      const allowAutoSelectForPlayer = !isBot && autoSelectExplicit;
+      const allowAutoSelectForPlayer = !isAIPlayer && autoSelectExplicit;
       const allowAutoSelectForBot =
-        isBot &&
+        isAIPlayer &&
         (autoSelectExplicit ||
           (autoSelectSingleTarget && min === 1 && max === 1));
       const shouldAutoSelect =
@@ -5266,7 +5270,7 @@ export default class EffectEngine {
     }
 
     // BOT AUTO-FUSION: Se Ã© o bot, executar fusÃ£o automaticamente
-    if (ctx.player.id === "bot") {
+    if (isAI(ctx.player)) {
       return await this.performBotFusion(
         ctx,
         summonableFusions,

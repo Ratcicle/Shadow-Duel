@@ -188,20 +188,6 @@ export default class ShadowHeartStrategy extends BaseStrategy {
         ],
         value: 7,
       },
-      "Shadow-Heart Observer": {
-        role: "special_summoner",
-        priority: 6,
-        summonCondition: "normal",
-        effect:
-          "Ao ser Normal Summoned, Special Summon monstro da mão com mesmo nível de monstro oponente lv4-",
-        synergies: ["campo do oponente", "extender"],
-        playPatterns: [
-          "Usar quando oponente tem monstro lv4 ou menor",
-          "Gera 2 corpos no campo para tribute/batalha",
-        ],
-        value: 5,
-      },
-
       // ===== SPELLS =====
       Polymerization: {
         role: "fusion_enabler",

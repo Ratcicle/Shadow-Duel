@@ -4,17 +4,16 @@ Fonte dos textos: `src/data/cards.js` (1x cada carta).
 
 ## Resumo
 
-- Total: 26
-- Monstros (Main Deck): 12
+- Total: 23
+- Monstros (Main Deck): 11
 - Extra Deck: 3 (1 Fusão, 2 Ascension)
-- Magias: 11
+- Magias: 9
 - Armadilhas: 0
 
 ## Decklist Completa (1x cada)
 
 ### Monstros (Main Deck)
 
-- 1x Shadow-Heart Observer (51)
 - 1x Shadow-Heart Abyssal Eel (52)
 - 1x Shadow-Heart Specter (53)
 - 1x Shadow-Heart Demon Arctroth (57)
@@ -36,8 +35,6 @@ Fonte dos textos: `src/data/cards.js` (1x cada carta).
 ### Magias
 
 - Shadow-Heart Purge (54)
-- Shadow-Heart Coat (55)
-- Shadow-Heart Recall (56)
 - Shadow-Heart Battle Hymn (58)
 - Shadow-Heart Covenant (59)
 - Shadow-Heart Infusion (63)
@@ -54,8 +51,6 @@ Fonte dos textos: `src/data/cards.js` (1x cada carta).
 ## Efeitos & Detalhes
 
 ### Monstros (Main Deck)
-
-**Shadow-Heart Observer (51)** — Nível 3, Fiend, 1000/1000. Ao ser Invocada por Invocação-Normal: escolha 1 monstro do oponente de Nível 4 ou menos; Invoque da sua mão 1 monstro com o mesmo Nível.
 
 **Shadow-Heart Abyssal Eel (52)** — Nível 4, Sea Serpent, 1600/1700. Se for atacada em Posição de Defesa: cause 600 de dano. Se for destruída em batalha: adicione 1 Magia/Armadilha "Shadow-Heart" do Cemitério à mão.
 
@@ -91,11 +86,7 @@ Fonte dos textos: `src/data/cards.js` (1x cada carta).
 
 **Shadow-Heart Purge (54)** — Magia Normal. Descarte 1; destrua 1 monstro do oponente.
 
-**Shadow-Heart Coat (55)** — Magia Normal. +600 ATK para 1 monstro "Shadow-Heart" face-up até o fim do turno.
-
-**Shadow-Heart Recall (56)** — Magia Normal. Devolva 1 monstro que você controla para a mão.
-
-**Shadow-Heart Battle Hymn (58)** — Magia Normal. Todos os seus "Shadow-Heart" ganham 500 ATK até o fim do turno.
+**Shadow-Heart Battle Hymn (58)** – Magia Normal. Todos os seus "Shadow-Heart" ganham 500 ATK até o fim do turno.
 
 **Shadow-Heart Covenant (59)** — Magia Normal. Pague 800 LP; adicione 1 carta "Shadow-Heart" (OPT por nome).
 

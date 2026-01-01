@@ -431,47 +431,6 @@ export const cardDatabase = [
     ],
   },
   {
-    id: 51,
-    name: "Shadow-Heart Observer",
-    cardKind: "monster",
-    atk: 1000,
-    def: 1000,
-    level: 3,
-    type: "Fiend",
-    archetype: "Shadow-Heart",
-    description:
-      "If this card is Normal Summoned: You can target 1 monster your opponent controls with Level 4 or lower; Special Summon 1 monster from your hand with the same Level as the target.",
-    image: "assets/Shadow-Heart Observer.png",
-    effects: [
-      {
-        id: "shadow_heart_observer_special_summon",
-        timing: "on_event",
-        event: "after_summon",
-        summonMethods: ["normal"],
-        targets: [
-          {
-            id: "observer_target",
-            owner: "opponent",
-            zone: "field",
-            cardKind: "monster",
-            maxLevel: 4,
-            count: { min: 1, max: 1 },
-          },
-        ],
-        actions: [
-          {
-            type: "special_summon_matching_level",
-            zone: "hand",
-            matchLevelRef: "summonedCard",
-            position: "attack",
-            cannotAttackThisTurn: false,
-            negateEffects: false,
-          },
-        ],
-      },
-    ],
-  },
-  {
     id: 52,
     name: "Shadow-Heart Abyssal Eel",
     cardKind: "monster",
@@ -603,69 +562,6 @@ export const cardDatabase = [
             to: "graveyard",
           },
           { type: "destroy", targetRef: "purge_target_monster" },
-        ],
-      },
-    ],
-  },
-  {
-    id: 55,
-    name: "Shadow-Heart Coat",
-    cardKind: "spell",
-    subtype: "normal",
-    archetype: "Shadow-Heart",
-    description:
-      "Target 1 'Shadow-Heart' monster you control; it gains 600 ATK until the end of this turn.",
-    image: "assets/Shadow Coat.png",
-    effects: [
-      {
-        id: "shadow_coat_buff",
-        timing: "on_play",
-        speed: 1,
-        targets: [
-          {
-            id: "buff_target",
-            owner: "self",
-            zone: "field",
-            cardKind: "monster",
-            requireFaceup: true,
-            count: { min: 1, max: 1 },
-          },
-        ],
-        actions: [
-          { type: "buff_atk_temp", amount: 600, targetRef: "buff_target" },
-        ],
-      },
-    ],
-  },
-  {
-    id: 56,
-    name: "Shadow-Heart Recall",
-    cardKind: "spell",
-    subtype: "normal",
-    archetype: "Shadow-Heart",
-    description: "Target 1 monster you control; return it to your hand.",
-    image: "assets/Shadow Recall.png",
-    effects: [
-      {
-        id: "shadow_recall_effect",
-        timing: "on_play",
-        speed: 1,
-        targets: [
-          {
-            id: "bounce_target",
-            owner: "self",
-            zone: "field",
-            cardKind: "monster",
-            count: { min: 1, max: 1 },
-          },
-        ],
-        actions: [
-          {
-            type: "move",
-            targetRef: "bounce_target",
-            player: "self",
-            to: "hand",
-          },
         ],
       },
     ],

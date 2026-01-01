@@ -4,6 +4,8 @@ export default class OnlineSessionController {
   constructor() {
     this.client = null;
     this.seat = null;
+    this.seatCanonical = null;
+    this.seatLegacy = null;
     this.snapshot = null;
     this.connected = false;
     this.gameEnded = false;
@@ -23,6 +25,14 @@ export default class OnlineSessionController {
     this.handlers = { ...this.handlers, ...handlers };
   }
 
+  normalizeSeat(seat) {
+    if (!seat) return null;
+    const key = String(seat).toLowerCase();
+    if (key === "player" || key === "p1") return "p1";
+    if (key === "bot" || key === "p2") return "p2";
+    return seat;
+  }
+
   connect(url, roomId, playerName) {
     if (this.client) {
       this.disconnect();
@@ -30,12 +40,18 @@ export default class OnlineSessionController {
     this.client = new NetworkClient(url);
     this.client.onStart((msg) => {
       console.log("[OnlineSession] match_start", msg);
-      this.seat = msg.youAre;
+      this.seatCanonical = this.normalizeSeat(
+        msg.youAre || msg.seat || msg.youAreLegacy
+      );
+      this.seatLegacy = msg.youAreLegacy || msg.youAre || null;
+      this.seat = this.seatLegacy || this.seatCanonical;
       this.connected = true;
       this.handlers.start?.(msg);
       this.handlers.status?.({
         connected: true,
         seat: this.seat,
+        seatCanonical: this.seatCanonical,
+        seatLegacy: this.seatLegacy,
         roomId: msg.roomId,
       });
     });

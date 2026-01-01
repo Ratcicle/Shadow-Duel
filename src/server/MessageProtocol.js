@@ -30,6 +30,27 @@ export const ACTION_TYPES = {
   ACTIVATE_EFFECT: "ACTIVATE_EFFECT",
 };
 
+// Seat normalization helpers (canonical seats are "p1" and "p2")
+const SEAT_CANON_MAP = {
+  player: "p1",
+  bot: "p2",
+  p1: "p1",
+  p2: "p2",
+};
+
+export function normalizeSeat(seat) {
+  if (!seat) return null;
+  const key = String(seat).toLowerCase();
+  return SEAT_CANON_MAP[key] || seat;
+}
+
+export function legacySeat(seat) {
+  const norm = normalizeSeat(seat);
+  if (norm === "p2") return "bot";
+  if (norm === "p1") return "player";
+  return seat || null;
+}
+
 export function parseMessage(raw) {
   try {
     return JSON.parse(raw.toString());

@@ -6,9 +6,10 @@ import {
 import Card from "./Card.js";
 
 export default class Player {
-  constructor(id, name) {
+  constructor(id, name, controllerType = "human") {
     this.id = id;
     this.name = name;
+    this.controllerType = controllerType; // "human" | "ai"
     this.lp = 8000;
     this.deck = [];
     this.extraDeck = [];
@@ -461,4 +462,13 @@ export default class Player {
     // Example: this.damageReduction = ...
     // Example: this.extraDraws = ...
   }
+}
+
+// Helpers to avoid string-based bot checks
+export function isAI(player) {
+  return player?.controllerType === "ai";
+}
+
+export function isHuman(player) {
+  return player?.controllerType !== "ai";
 }
