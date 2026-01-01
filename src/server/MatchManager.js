@@ -42,11 +42,36 @@ const promptSlotsForSeat = (seat) => {
   return [seat];
 };
 
+// Get the canonical seat slots for looking up clients
+const clientSlotsForSeat = (seat) => {
+  const norm = normalizeSeat(seat);
+  if (norm === "p1") return ["p1", "player"];
+  if (norm === "p2") return ["p2", "bot"];
+  return [seat];
+};
+
 export class MatchManager {
   constructor() {
     this.rooms = new Map();
     this.promptCounter = 0;
     this.clientCounter = 0;
+  }
+
+  /**
+   * Get the client for a specific seat
+   * @param {Object} room - The room object
+   * @param {string} seat - The seat identifier (p1, p2, player, bot)
+   * @returns {Object|null} The client object or null if not found
+   */
+  getClientForSeat(room, seat) {
+    if (!room || !room.clients) return null;
+    const slots = clientSlotsForSeat(seat);
+    for (const slot of slots) {
+      if (room.clients[slot]) {
+        return room.clients[slot];
+      }
+    }
+    return null;
   }
 
   attachConnection(ws) {
@@ -708,6 +733,10 @@ export class MatchManager {
       });
       // Rejeitar resposta e limpar prompt
       this.clearPromptForSeat(room, seat, msg.promptId);
+      // CRITICAL: Clear pendingEventSelection to prevent stale triggered effects
+      if (room.game) {
+        room.game.pendingEventSelection = null;
+      }
       this.sendError(
         client,
         "Game state changed, please try again",
@@ -777,9 +806,12 @@ export class MatchManager {
       }
       if (applyResult.needsSelection && applyResult.selection?.prompt) {
         const selectionInfo = applyResult.selection;
-        this.storeAndSendPrompt(room, client, selectionInfo.prompt, {
+        // CRITICAL: Send prompt to the correct client (effect owner, not action executor)
+        const targetSeat = applyResult.effectOwnerSeat || client.seat;
+        const targetClient = this.getClientForSeat(room, targetSeat) || client;
+        this.storeAndSendPrompt(room, targetClient, selectionInfo.prompt, {
           pendingSelection: {
-            seat: client.seat,
+            seat: targetSeat,
             actionType: selectionInfo.actionType || choice.actionType,
             payload: choice.payload || {},
             selectionContract: selectionInfo.contract,
@@ -807,6 +839,8 @@ export class MatchManager {
           room.game.selectionState = "idle";
         }
         room.game.targetSelection = null;
+        // CRITICAL: Clear pendingEventSelection to stop triggered effects from re-prompting
+        room.game.pendingEventSelection = null;
         this.commitStateUpdate(room, "selection_cancelled");
         return;
       }
@@ -895,6 +929,12 @@ export class MatchManager {
         [requirementId]: choiceValue,
       };
       const nextPayload = { ...(pending.payload || {}), selections };
+      console.log("[Server] selection_contract calling applyAction", {
+        seat: pending.seat || client.seat,
+        actionType: pending.actionType,
+        selectionsKeys: Object.keys(selections),
+        hasResumeData: !!pending.resumeData,
+      });
       const applyResult = await this.applyAction(
         room,
         pending.seat || client.seat,
@@ -902,6 +942,12 @@ export class MatchManager {
         nextPayload,
         { pendingSelection: pending }
       );
+      console.log("[Server] selection_contract applyAction result", {
+        ok: applyResult.ok,
+        message: applyResult.message,
+        hint: applyResult.hint,
+        needsSelection: applyResult.needsSelection,
+      });
       if (!applyResult.ok) {
         this.sendError(
           client,
@@ -914,9 +960,13 @@ export class MatchManager {
       }
       if (applyResult.needsSelection && applyResult.selection?.prompt) {
         const selectionInfo = applyResult.selection;
-        this.storeAndSendPrompt(room, client, selectionInfo.prompt, {
+        // CRITICAL: Send prompt to the correct client (effect owner, not action executor)
+        const targetSeat =
+          applyResult.effectOwnerSeat || pending.seat || client.seat;
+        const targetClient = this.getClientForSeat(room, targetSeat) || client;
+        this.storeAndSendPrompt(room, targetClient, selectionInfo.prompt, {
           pendingSelection: {
-            seat: pending.seat || client.seat,
+            seat: targetSeat,
             actionType: pending.actionType,
             payload: nextPayload,
             selectionContract: selectionInfo.contract,
@@ -965,9 +1015,12 @@ export class MatchManager {
       }
       if (applyResult.needsSelection && applyResult.selection?.prompt) {
         const selectionInfo = applyResult.selection;
-        this.storeAndSendPrompt(room, client, selectionInfo.prompt, {
+        // CRITICAL: Send prompt to the correct client (effect owner, not action executor)
+        const targetSeat = applyResult.effectOwnerSeat || client.seat;
+        const targetClient = this.getClientForSeat(room, targetSeat) || client;
+        this.storeAndSendPrompt(room, targetClient, selectionInfo.prompt, {
           pendingSelection: {
-            seat: client.seat,
+            seat: targetSeat,
             actionType: option.actionType,
             payload: option.payload || {},
             selectionContract: selectionInfo.contract,
@@ -1098,15 +1151,20 @@ export class MatchManager {
       }
 
       if (applyResult.needsSelection && applyResult.selection?.prompt) {
+        // CRITICAL: Send prompt to the correct client (effect owner, not action executor)
+        const targetSeat =
+          applyResult.effectOwnerSeat || pending.seat || client.seat;
+        const targetClient = this.getClientForSeat(room, targetSeat) || client;
         console.log("[Server] card_select needs more selection", {
           seat,
+          targetSeat,
           promptType: applyResult.selection.prompt?.type,
           requirementId: applyResult.selection.requirementId,
         });
         const selectionInfo = applyResult.selection;
-        this.storeAndSendPrompt(room, client, selectionInfo.prompt, {
+        this.storeAndSendPrompt(room, targetClient, selectionInfo.prompt, {
           pendingSelection: {
-            seat: pending.seat || client.seat,
+            seat: targetSeat,
             actionType: pending.actionType,
             payload: nextPayload,
             selectionContract: selectionInfo.contract,
@@ -1159,23 +1217,23 @@ export class MatchManager {
     const opponent = actor === game.player ? game.bot : game.player;
 
     if (choice.actionType === ACTION_TYPES.DECLARE_ATTACK) {
+      // Incluir TODOS os monstros do oponente como alvos (face-up E face-down)
+      // No jogo de cartas, monstros virados para baixo também podem ser atacados
       const targets = (opponent.field || [])
         .map((card, idx) => ({ card, idx }))
-        .filter(
-          (entry) =>
-            entry.card &&
-            entry.card.cardKind === "monster" &&
-            entry.card.isFacedown !== true
-        );
+        .filter((entry) => entry.card && entry.card.cardKind === "monster");
 
       const promptId = `p_${room.id}_${++this.promptCounter}`;
       const targetOptions = [];
 
-      // Adicionar monstros face-up como alvos
+      // Adicionar monstros como alvos (face-up ou face-down)
       targets.forEach((t) => {
+        const label = t.card.isFacedown
+          ? "Face-down Monster"
+          : t.card.name || `Target ${t.idx}`;
         targetOptions.push({
           id: t.idx,
-          label: t.card.name || `Target ${t.idx}`,
+          label: label,
           actionType: ACTION_TYPES.DECLARE_ATTACK,
           payload: {
             attackerIndex: choice.payload?.attackerIndex,
@@ -1184,7 +1242,7 @@ export class MatchManager {
         });
       });
 
-      // Se não há monstros face-up, oferecer ataque direto
+      // Se não há monstros no campo do oponente, oferecer ataque direto
       if (targets.length === 0) {
         targetOptions.push({
           id: "direct",
@@ -1310,6 +1368,28 @@ export class MatchManager {
       return;
     }
 
+    // A3: Global lock - bloquear TODAS as ações de QUALQUER jogador quando há um pendingEventSelection ativo
+    // Isso garante que efeitos triggered sejam resolvidos antes de qualquer outra ação do jogo
+    const pendingEvent = room.game.pendingEventSelection;
+    if (pendingEvent && pendingEvent.entries?.length > 0) {
+      const entryIdx = pendingEvent.entryIndex || 0;
+      const currentEntry = pendingEvent.entries?.[entryIdx];
+      const effectOwner = currentEntry?.owner || currentEntry?.config?.owner;
+      const effectOwnerSeat = effectOwner?.id === "player" ? "p1" : "p2";
+      console.warn("[Server] action blocked - pending event selection", {
+        actionSeat: seat,
+        effectOwnerSeat,
+        effectCard: currentEntry?.card?.name,
+        effectId: currentEntry?.effect?.id,
+      });
+      this.sendError(
+        client,
+        "Waiting for triggered effect to resolve",
+        "effect_pending"
+      );
+      return;
+    }
+
     const seq = Number(msg.seq);
     if (!Number.isInteger(seq) || seq <= client.lastSeq) {
       this.sendError(client, "Invalid sequence", "invalid_seq");
@@ -1360,9 +1440,12 @@ export class MatchManager {
       const selectionInfo = applyResult.selection;
       // Use selectionInfo.actionType when available (e.g., RESUME_EVENT_SELECTION for triggered effects)
       const resumeActionType = selectionInfo.actionType || actionType;
-      this.storeAndSendPrompt(room, client, selectionInfo.prompt, {
+      // CRITICAL: Send prompt to the correct client (effect owner, not action executor)
+      const targetSeat = applyResult.effectOwnerSeat || client.seat;
+      const targetClient = this.getClientForSeat(room, targetSeat) || client;
+      this.storeAndSendPrompt(room, targetClient, selectionInfo.prompt, {
         pendingSelection: {
-          seat: client.seat,
+          seat: targetSeat,
           actionType: resumeActionType,
           payload,
           selectionContract: selectionInfo.contract,
@@ -1436,13 +1519,30 @@ export class MatchManager {
         // Build selection contract from pending event results (not entries)
         // The selectionContract is stored in results, not in the raw entries
         const entryIdx = pending.entryIndex || 0;
+        const currentEntry = pending.entries?.[entryIdx];
         const contract =
           pending.results?.[entryIdx]?.selectionContract ||
-          pending.entries?.[entryIdx]?.selectionContract;
+          currentEntry?.selectionContract;
         if (contract) {
+          // CRITICAL: Determine the correct seat for the effect owner
+          // The prompt should go to the owner of the triggered effect, not whoever executed the action
+          const effectOwner =
+            currentEntry?.owner || currentEntry?.config?.owner;
+          let effectOwnerSeat = seat; // fallback to action executor
+          if (effectOwner) {
+            // owner.id is "player" or "bot" - convert to canonical seat
+            effectOwnerSeat = effectOwner.id === "player" ? "p1" : "p2";
+          }
+          console.log("[Server] effectOwnerSeat calculation", {
+            actionExecutorSeat: seat,
+            effectOwnerId: effectOwner?.id,
+            effectOwnerSeat,
+            entryCard: currentEntry?.card?.name,
+          });
+
           const prompt = this.buildSelectionPrompt(
             room,
-            { seat },
+            { seat: effectOwnerSeat },
             { selectionContract: contract },
             {
               actionType: "RESUME_EVENT_SELECTION",
@@ -1452,6 +1552,7 @@ export class MatchManager {
             return {
               ok: true,
               needsSelection: true,
+              effectOwnerSeat, // Include the correct seat for the client to know who should respond
               selection: {
                 prompt,
                 contract,
@@ -1587,13 +1688,31 @@ export class MatchManager {
 
         // Verificar se algum efeito precisa de seleção
         if (emitResult?.needsSelection && emitResult.selectionContract) {
-          const prompt = this.buildSelectionPrompt(room, { seat }, emitResult, {
-            actionType: "RESUME_EVENT_SELECTION",
-          });
+          // CRITICAL: Determine the correct seat for the effect owner
+          let effectOwnerSeat = seat; // fallback to summoner
+          const pending = game.pendingEventSelection;
+          if (pending?.entries?.length > 0) {
+            const entryIdx = pending.entryIndex || 0;
+            const currentEntry = pending.entries?.[entryIdx];
+            const effectOwner =
+              currentEntry?.owner || currentEntry?.config?.owner;
+            if (effectOwner) {
+              effectOwnerSeat = effectOwner.id === "player" ? "p1" : "p2";
+            }
+          }
+          const prompt = this.buildSelectionPrompt(
+            room,
+            { seat: effectOwnerSeat },
+            emitResult,
+            {
+              actionType: "RESUME_EVENT_SELECTION",
+            }
+          );
           if (prompt) {
             return {
               ok: true,
               needsSelection: true,
+              effectOwnerSeat,
               selection: {
                 prompt,
                 contract: emitResult.selectionContract,
@@ -1641,13 +1760,31 @@ export class MatchManager {
 
         // Verificar se algum efeito precisa de seleção
         if (emitResult?.needsSelection && emitResult.selectionContract) {
-          const prompt = this.buildSelectionPrompt(room, { seat }, emitResult, {
-            actionType: "RESUME_EVENT_SELECTION",
-          });
+          // CRITICAL: Determine the correct seat for the effect owner
+          let effectOwnerSeat = seat; // fallback to summoner
+          const pending = game.pendingEventSelection;
+          if (pending?.entries?.length > 0) {
+            const entryIdx = pending.entryIndex || 0;
+            const currentEntry = pending.entries?.[entryIdx];
+            const effectOwner =
+              currentEntry?.owner || currentEntry?.config?.owner;
+            if (effectOwner) {
+              effectOwnerSeat = effectOwner.id === "player" ? "p1" : "p2";
+            }
+          }
+          const prompt = this.buildSelectionPrompt(
+            room,
+            { seat: effectOwnerSeat },
+            emitResult,
+            {
+              actionType: "RESUME_EVENT_SELECTION",
+            }
+          );
           if (prompt) {
             return {
               ok: true,
               needsSelection: true,
+              effectOwnerSeat,
               selection: {
                 prompt,
                 contract: emitResult.selectionContract,
@@ -1814,9 +1951,7 @@ export class MatchManager {
         if (!target || target.cardKind !== "monster") {
           return { ok: false, message: "Invalid target" };
         }
-        if (target.isFacedown) {
-          return { ok: false, message: "Target must be face-up" };
-        }
+        // Monstros face-down podem ser atacados - o flip é tratado em resolveCombat
         const result = await game.resolveCombat(attacker, target, {
           allowDuringSelection: true,
           allowDuringResolving: true,
@@ -1826,13 +1961,38 @@ export class MatchManager {
         }
         // Handle battle_destroy triggered effects that need selection
         if (result?.needsSelection && result?.selectionContract) {
-          const prompt = this.buildSelectionPrompt(room, { seat }, result, {
-            actionType: "RESUME_EVENT_SELECTION",
-          });
+          // CRITICAL: Determine the correct seat for the effect owner
+          // The prompt should go to the owner of the triggered effect, not whoever executed the attack
+          let effectOwnerSeat = seat; // fallback to action executor (attacker)
+          const pending = game.pendingEventSelection;
+          if (pending?.entries?.length > 0) {
+            const entryIdx = pending.entryIndex || 0;
+            const currentEntry = pending.entries?.[entryIdx];
+            const effectOwner =
+              currentEntry?.owner || currentEntry?.config?.owner;
+            if (effectOwner) {
+              effectOwnerSeat = effectOwner.id === "player" ? "p1" : "p2";
+            }
+            console.log("[Server] DECLARE_ATTACK effectOwnerSeat calculation", {
+              actionExecutorSeat: seat,
+              effectOwnerId: effectOwner?.id,
+              effectOwnerSeat,
+              entryCard: currentEntry?.card?.name,
+            });
+          }
+          const prompt = this.buildSelectionPrompt(
+            room,
+            { seat: effectOwnerSeat },
+            result,
+            {
+              actionType: "RESUME_EVENT_SELECTION",
+            }
+          );
           if (prompt) {
             return {
               ok: true,
               needsSelection: true,
+              effectOwnerSeat,
               selection: {
                 prompt,
                 contract: result.selectionContract,
@@ -1850,6 +2010,11 @@ export class MatchManager {
       }
       case "RESUME_EVENT_SELECTION": {
         const selections = payload?.selections || null;
+        console.log("[Server] RESUME_EVENT_SELECTION", {
+          selections,
+          hasPendingEventSelection: !!game.pendingEventSelection,
+          pendingEntryCount: game.pendingEventSelection?.entries?.length || 0,
+        });
         if (!selections || typeof selections !== "object") {
           return { ok: false, message: "Missing selections" };
         }
@@ -1857,10 +2022,37 @@ export class MatchManager {
           selections,
           { actionContext }
         );
+        console.log("[Server] RESUME_EVENT_SELECTION result", {
+          ok: resumeResult?.ok,
+          needsSelection: resumeResult?.needsSelection,
+          reason: resumeResult?.reason,
+        });
         if (resumeResult?.needsSelection && resumeResult.selectionContract) {
+          // CRITICAL: Determine the correct seat for the effect owner
+          // The prompt should go to the owner of the triggered effect
+          let effectOwnerSeat = seat; // fallback to current responder
+          const pending = game.pendingEventSelection;
+          if (pending?.entries?.length > 0) {
+            const entryIdx = pending.entryIndex || 0;
+            const currentEntry = pending.entries?.[entryIdx];
+            const effectOwner =
+              currentEntry?.owner || currentEntry?.config?.owner;
+            if (effectOwner) {
+              effectOwnerSeat = effectOwner.id === "player" ? "p1" : "p2";
+            }
+            console.log(
+              "[Server] RESUME_EVENT_SELECTION effectOwnerSeat calculation",
+              {
+                currentResponderSeat: seat,
+                effectOwnerId: effectOwner?.id,
+                effectOwnerSeat,
+                entryCard: currentEntry?.card?.name,
+              }
+            );
+          }
           const prompt = this.buildSelectionPrompt(
             room,
-            { seat },
+            { seat: effectOwnerSeat },
             resumeResult,
             {
               actionType: "RESUME_EVENT_SELECTION",
@@ -1870,6 +2062,7 @@ export class MatchManager {
             return {
               ok: true,
               needsSelection: true,
+              effectOwnerSeat,
               selection: {
                 prompt,
                 contract: resumeResult.selectionContract,

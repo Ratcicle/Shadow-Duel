@@ -2210,6 +2210,15 @@ export default class EffectEngine {
     if (!card || !Array.isArray(card.effects)) {
       return null;
     }
+    // For field spells, also check on_field_activate timing
+    if (card.subtype === "field") {
+      return (
+        card.effects.find(
+          (e) =>
+            e && (e.timing === "on_play" || e.timing === "on_field_activate")
+        ) || null
+      );
+    }
     return card.effects.find((e) => e && e.timing === "on_play") || null;
   }
 
@@ -2656,7 +2665,11 @@ export default class EffectEngine {
       ctx,
       targetResult.targets || {}
     );
-    if (actionsResult && typeof actionsResult === "object" && actionsResult.needsSelection) {
+    if (
+      actionsResult &&
+      typeof actionsResult === "object" &&
+      actionsResult.needsSelection
+    ) {
       return {
         success: false,
         needsSelection: true,
@@ -2838,7 +2851,11 @@ export default class EffectEngine {
       ctx,
       targetResult.targets || {}
     );
-    if (actionsResult && typeof actionsResult === "object" && actionsResult.needsSelection) {
+    if (
+      actionsResult &&
+      typeof actionsResult === "object" &&
+      actionsResult.needsSelection
+    ) {
       return {
         success: false,
         needsSelection: true,
@@ -3063,10 +3080,25 @@ export default class EffectEngine {
       });
 
       const hasSelections =
-        selections && typeof selections === "object" && !Array.isArray(selections);
+        selections &&
+        typeof selections === "object" &&
+        !Array.isArray(selections);
       const hasSelectionForDef =
-        hasSelections && Object.prototype.hasOwnProperty.call(selections, def.id);
+        hasSelections &&
+        Object.prototype.hasOwnProperty.call(selections, def.id);
       const provided = hasSelectionForDef ? selections[def.id] : null;
+      console.log("[resolveTargets] checking selections", {
+        targetDefId: def.id,
+        hasSelections,
+        hasSelectionForDef,
+        provided: provided
+          ? Array.isArray(provided)
+            ? provided
+            : [provided]
+          : null,
+        candidateCount: decoratedCandidates.length,
+        candidateKeys: decoratedCandidates.slice(0, 5).map((c) => c.key),
+      });
       if (hasSelectionForDef) {
         const providedList = Array.isArray(provided)
           ? provided

@@ -1439,6 +1439,12 @@ export default class Game {
 
   async resumePendingEventSelection(selections, { actionContext } = {}) {
     const pending = this.pendingEventSelection;
+    console.log("[Game] resumePendingEventSelection called", {
+      hasPending: !!pending,
+      selectionsKeys: selections ? Object.keys(selections) : null,
+      entryCount: pending?.entries?.length || 0,
+      eventName: pending?.eventName,
+    });
     if (!pending) {
       return { ok: false, reason: "No pending event selection." };
     }
@@ -1484,6 +1490,34 @@ export default class Game {
         depth: this.eventResolutionDepth,
         id: eventId,
       });
+    }
+
+    // After resolving the event, check if there's a pending tie destruction to continue
+    if (
+      this.pendingTieDestruction &&
+      resolutionResult?.ok &&
+      !resolutionResult?.needsSelection
+    ) {
+      const tieInfo = this.pendingTieDestruction;
+      this.pendingTieDestruction = null;
+      console.log(
+        "[Game] Resuming pending tie destruction for target:",
+        tieInfo.target?.name
+      );
+
+      // Continue the combat by destroying the target
+      const tieResult = await this.finishCombat(
+        tieInfo.attacker,
+        tieInfo.target,
+        {
+          resumeFromTie: true,
+        }
+      );
+
+      // If this also needs selection, return that
+      if (tieResult?.needsSelection) {
+        return tieResult;
+      }
     }
 
     return (
@@ -5549,12 +5583,16 @@ export default class Game {
     return { ok: true };
   }
 
-  async finishCombat(attacker, target) {
+  async finishCombat(attacker, target, options = {}) {
     // Capture healing flags at the start of combat resolution to avoid race conditions
     const attackerHealsOnBattleDamage =
       attacker?.battleDamageHealsControllerThisTurn || false;
     const defenderHealsOnBattleDamage =
       target?.battleDamageHealsControllerThisTurn || false;
+
+    // Check if we're resuming from a pending tie destruction
+    const resumeFromTie = options.resumeFromTie === true;
+    const skipAttackerDestruction = resumeFromTie;
 
     // Collect battle_destroy event results for networkMode selection handling
     const battleDestroyResults = [];
@@ -5623,6 +5661,17 @@ export default class Game {
             );
             if (bdResult) battleDestroyResults.push(bdResult);
           }
+          // CRITICAL: In networkMode, if destruction triggered a selection, return it
+          if (this.networkMode && result?.needsSelection) {
+            this.markAttackUsed(attacker, target);
+            this.clearAttackResolutionIndicators();
+            this.updateBoard();
+            return {
+              ok: true,
+              needsSelection: true,
+              selectionContract: result.selectionContract,
+            };
+          }
         }
       } else if (attacker.atk < target.atk) {
         const attPlayer = attacker.owner === "player" ? this.player : this.bot;
@@ -5650,10 +5699,23 @@ export default class Game {
             );
             if (bdResult) battleDestroyResults.push(bdResult);
           }
+          // CRITICAL: In networkMode, if destruction triggered a selection, return it
+          if (this.networkMode && result?.needsSelection) {
+            this.markAttackUsed(attacker, target);
+            this.clearAttackResolutionIndicators();
+            this.updateBoard();
+            return {
+              ok: true,
+              needsSelection: true,
+              selectionContract: result.selectionContract,
+            };
+          }
         }
       } else {
+        // In networkMode with tie, we need to pause between destructions
+        // to allow each triggered effect to be resolved before the next
         logBattleDestroyCheck("tie - attacker destruction check");
-        if (this.canDestroyByBattle(attacker)) {
+        if (!skipAttackerDestruction && this.canDestroyByBattle(attacker)) {
           const result = await this.destroyCard(attacker, {
             cause: "battle",
             sourceCard: target,
@@ -5664,6 +5726,26 @@ export default class Game {
               attacker
             );
             if (bdResult) battleDestroyResults.push(bdResult);
+          }
+          // CRITICAL: In networkMode, if attacker destruction triggered a selection,
+          // we need to pause and let that resolve before destroying target
+          if (this.networkMode && result?.needsSelection) {
+            // Store pending tie info so we can resume after selection
+            this.pendingTieDestruction = {
+              attacker,
+              target,
+              attackerHealsOnBattleDamage,
+              defenderHealsOnBattleDamage,
+            };
+            this.markAttackUsed(attacker, target);
+            this.clearAttackResolutionIndicators();
+            this.updateBoard();
+            return {
+              ok: true,
+              needsSelection: true,
+              selectionContract: result.selectionContract,
+              pendingTieDestruction: true,
+            };
           }
         }
 
@@ -5680,7 +5762,20 @@ export default class Game {
             );
             if (bdResult) battleDestroyResults.push(bdResult);
           }
+          // If target destruction also needs selection, return it
+          if (this.networkMode && result?.needsSelection) {
+            this.markAttackUsed(attacker, target);
+            this.clearAttackResolutionIndicators();
+            this.updateBoard();
+            return {
+              ok: true,
+              needsSelection: true,
+              selectionContract: result.selectionContract,
+            };
+          }
         }
+        // Clear pending tie destruction if we completed successfully
+        this.pendingTieDestruction = null;
         logBattleResult(
           `${attacker.name} and ${target.name} destroyed each other.`
         );
@@ -5712,6 +5807,17 @@ export default class Game {
               target
             );
             if (bdResult) battleDestroyResults.push(bdResult);
+          }
+          // CRITICAL: In networkMode, if destruction triggered a selection, return it
+          if (this.networkMode && result?.needsSelection) {
+            this.markAttackUsed(attacker, target);
+            this.clearAttackResolutionIndicators();
+            this.updateBoard();
+            return {
+              ok: true,
+              needsSelection: true,
+              selectionContract: result.selectionContract,
+            };
           }
         }
         if (!attacker.piercing) {
@@ -6610,6 +6716,12 @@ export default class Game {
     }
 
     if (toZone === "graveyard") {
+      // Don't emit card_to_grave if the card is already in graveyard (moving within same zone)
+      // This prevents infinite loops where effects like Specter trigger repeatedly
+      if (fromZone === "graveyard") {
+        return { success: true, fromZone, toZone };
+      }
+
       const ownerPlayer = card.owner === "player" ? this.player : this.bot;
       const otherPlayer = ownerPlayer === this.player ? this.bot : this.player;
 
