@@ -32,9 +32,6 @@
           <button id="btn-toggle-dev-mode" class="dev-mode-toggle">
             Dev Mode: desligado
           </button>
-          <button id="btn-online-mode" class="online-mode-toggle">
-            Modo Online (MVP)
-          </button>
         </div>
         <div
           class="language-toggle"
@@ -108,50 +105,7 @@
       </div>
     </div>
 
-    <!-- Online Connection Panel -->
-    <div id="online-panel" class="overlay hidden">
-      <div class="start-panel">
-        <h2>Modo Online</h2>
-        <p>Conecte em um servidor Shadow Duel (MVP headless)</p>
-        <div class="online-form">
-          <label>
-            Server URL
-            <input
-              id="online-server-url"
-              type="text"
-              value="ws://localhost:8080"
-            />
-          </label>
-          <label>
-            Room ID
-            <input id="online-room-id" type="text" value="default" />
-          </label>
-          <label>
-            Player Name
-            <input id="online-player-name" type="text" placeholder="Nome" />
-          </label>
-        </div>
-        <div class="start-actions">
-          <button id="online-connect">Connect</button>
-          <button id="online-ready">Ready</button>
-          <button id="online-disconnect">Disconnect</button>
-          <button id="btn-back-to-start">Voltar</button>
-        </div>
-        <div id="online-status" class="online-status">Disconnected</div>
-        <div id="online-error" class="online-error"></div>
-      </div>
-    </div>
-
     <div id="game-container">
-      <!-- Online status bar hidden - using standard HUD instead -->
-      <div id="online-status-bar" class="hidden">
-        <div id="online-action-status">Offline</div>
-        <div class="online-controls">
-          <button id="online-btn-next-phase">Next Phase</button>
-          <button id="online-btn-end-turn">End Turn</button>
-        </div>
-        <div id="online-inline-error" class="online-inline-error"></div>
-      </div>
 
       <!-- Bot Area (Top) -->
       <div id="bot-area" class="player-area">
@@ -191,8 +145,6 @@
           </div>
         </div>
       </div>
-
-      <div id="online-action-panel" class="online-action-panel hidden"></div>
 
       <!-- Center Info / Phase Indicator -->
       <div id="center-info">

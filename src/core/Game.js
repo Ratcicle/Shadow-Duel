@@ -30,18 +30,13 @@ function getCostTypeDescription(costFilters, count) {
 export default class Game {
   constructor(options = {}) {
     // Mode flags must be ready before any subsystem or player/bot creation
-    this.networkMode = !!options.networkMode;
-    this.disableChains = !!options.disableChains || this.networkMode;
-    this.disableTraps = !!options.disableTraps || this.networkMode;
+    this.disableChains = !!options.disableChains;
+    this.disableTraps = !!options.disableTraps;
     this.disableEffectActivation = !!options.disableEffectActivation;
 
     this.player = new Player("player", options.playerName || "You", "human");
     this.botPreset = options.botPreset || "shadowheart";
-    this.bot =
-      options.opponentOverride ||
-      (this.networkMode
-        ? new Player("bot", "Opponent", "human")
-        : new Bot(this.botPreset));
+    this.bot = options.opponentOverride || new Bot(this.botPreset);
 
     this.renderer = options.renderer || null;
     this.ui = createUIAdapter(this.renderer);
@@ -52,7 +47,7 @@ export default class Game {
       this.player.controllerType = "human";
     }
     if (!this.bot.controllerType) {
-      this.bot.controllerType = this.networkMode ? "human" : "ai";
+      this.bot.controllerType = "ai";
     }
 
     this.player.game = this;
@@ -1370,10 +1365,7 @@ export default class Game {
         needsSelection: result?.needsSelection === true,
         selectionContract: result?.selectionContract || null,
       });
-
-      // INVARIANTE B1: Em networkMode, parar no primeiro que precisa seleção
       if (
-        this.networkMode &&
         result?.needsSelection &&
         result?.selectionContract
       ) {
@@ -1661,16 +1653,6 @@ export default class Game {
 
     this.updateActivationIndicators();
     this.updateAttackIndicators();
-
-    // INVARIANTE A: Em networkMode, emitir evento para o servidor atualizar clientes
-    if (this.networkMode) {
-      // Uso de void para não bloquear - emissão síncrona suficiente
-      void this.emit("state_changed", {
-        phase: this.phase,
-        turn: this.turn,
-        turnCounter: this.turnCounter,
-      });
-    }
   }
 
   updateActivationIndicators() {
@@ -3825,7 +3807,7 @@ export default class Game {
     const explicitAutoSelect =
       typeof config.activationContext?.autoSelectSingleTarget === "boolean"
         ? config.activationContext.autoSelectSingleTarget
-        : !this.networkMode && owner === this.bot;
+        : !owner === this.bot;
     const activationContext = {
       ...(config.activationContext || {}),
       fromHand,
@@ -3947,23 +3929,7 @@ export default class Game {
 
         const shouldAutoSelect =
           config.useAutoSelector === true ||
-          (!this.networkMode && owner === this.bot);
-
-        // INVARIANTE B1: No networkMode, NUNCA auto-selecionar.
-        // Retornar o selectionContract para o servidor gerar o prompt.
-        if (this.networkMode) {
-          logPipeline("PIPELINE_NETWORK_SELECTION", {
-            reason: "Network mode - returning selection contract to server",
-            candidateCount: contract.requirements?.[0]?.candidates?.length || 0,
-          });
-          // Retornar com needsSelection=true para que o servidor gere o prompt
-          normalized.needsSelection = true;
-          normalized.selectionContract = contract;
-          normalized.activationContext = activationContext;
-          normalized.commitInfo = activationContext.commitInfo || commitInfo;
-          normalized.activationZone = resolvedActivationZone;
-          return normalized;
-        }
+          (!owner === this.bot);
 
         if (shouldAutoSelect) {
           const autoResult = this.autoSelector?.select(contract, {
@@ -4130,10 +4096,8 @@ export default class Game {
     };
 
     const initialResult = await this.runActivationPipeline(wrappedConfig);
-
-    // INVARIANTE B1: Em networkMode, se precisa de seleção, retornar imediatamente
     // O servidor vai gerar o prompt e a Promise não deve ficar pendente
-    if (this.networkMode && initialResult?.needsSelection === true) {
+    if (initialResult?.needsSelection === true) {
       finishOnce(initialResult);
     } else if (
       !finished &&
@@ -5596,8 +5560,6 @@ export default class Game {
     // Check if we're resuming from a pending tie destruction
     const resumeFromTie = options.resumeFromTie === true;
     const skipAttackerDestruction = resumeFromTie;
-
-    // Collect battle_destroy event results for networkMode selection handling
     const battleDestroyResults = [];
 
     const applyBattleDamage = (
@@ -5664,8 +5626,7 @@ export default class Game {
             );
             if (bdResult) battleDestroyResults.push(bdResult);
           }
-          // CRITICAL: In networkMode, if destruction triggered a selection, return it
-          if (this.networkMode && result?.needsSelection) {
+          if (result?.needsSelection) {
             this.markAttackUsed(attacker, target);
             this.clearAttackResolutionIndicators();
             this.updateBoard();
@@ -5702,8 +5663,7 @@ export default class Game {
             );
             if (bdResult) battleDestroyResults.push(bdResult);
           }
-          // CRITICAL: In networkMode, if destruction triggered a selection, return it
-          if (this.networkMode && result?.needsSelection) {
+          if (result?.needsSelection) {
             this.markAttackUsed(attacker, target);
             this.clearAttackResolutionIndicators();
             this.updateBoard();
@@ -5715,7 +5675,6 @@ export default class Game {
           }
         }
       } else {
-        // In networkMode with tie, we need to pause between destructions
         // to allow each triggered effect to be resolved before the next
         logBattleDestroyCheck("tie - attacker destruction check");
         if (!skipAttackerDestruction && this.canDestroyByBattle(attacker)) {
@@ -5730,9 +5689,8 @@ export default class Game {
             );
             if (bdResult) battleDestroyResults.push(bdResult);
           }
-          // CRITICAL: In networkMode, if attacker destruction triggered a selection,
           // we need to pause and let that resolve before destroying target
-          if (this.networkMode && result?.needsSelection) {
+          if (result?.needsSelection) {
             // Store pending tie info so we can resume after selection
             this.pendingTieDestruction = {
               attacker,
@@ -5766,7 +5724,7 @@ export default class Game {
             if (bdResult) battleDestroyResults.push(bdResult);
           }
           // If target destruction also needs selection, return it
-          if (this.networkMode && result?.needsSelection) {
+          if (result?.needsSelection) {
             this.markAttackUsed(attacker, target);
             this.clearAttackResolutionIndicators();
             this.updateBoard();
@@ -5811,8 +5769,7 @@ export default class Game {
             );
             if (bdResult) battleDestroyResults.push(bdResult);
           }
-          // CRITICAL: In networkMode, if destruction triggered a selection, return it
-          if (this.networkMode && result?.needsSelection) {
+          if (result?.needsSelection) {
             this.markAttackUsed(attacker, target);
             this.clearAttackResolutionIndicators();
             this.updateBoard();
@@ -5849,8 +5806,6 @@ export default class Game {
     this.checkWinCondition();
     this.clearAttackResolutionIndicators();
     this.updateBoard();
-
-    // Return first needsSelection result for networkMode handling
     const pendingResult = battleDestroyResults.find(
       (r) => r?.needsSelection && r?.selectionContract
     );
@@ -6689,33 +6644,13 @@ export default class Game {
       const ownerPlayer = card.owner === "player" ? this.player : this.bot;
       const otherPlayer = ownerPlayer === this.player ? this.bot : this.player;
       const summonMethod = options.summonMethodOverride || "special";
-      // Em networkMode, aguardar o emit para capturar pendingEventSelection
-      if (this.networkMode) {
-        const emitResult = await this.emit("after_summon", {
-          card,
-          player: ownerPlayer,
-          opponent: otherPlayer,
-          method: summonMethod,
-          fromZone,
-        });
-        if (emitResult?.needsSelection) {
-          return {
-            success: true,
-            fromZone,
-            toZone,
-            needsSelection: true,
-            selectionContract: emitResult.selectionContract,
-          };
-        }
-      } else {
-        void this.emit("after_summon", {
-          card,
-          player: ownerPlayer,
-          opponent: otherPlayer,
-          method: summonMethod,
-          fromZone,
-        });
-      }
+      void this.emit("after_summon", {
+        card,
+        player: ownerPlayer,
+        opponent: otherPlayer,
+        method: summonMethod,
+        fromZone,
+      });
     }
 
     if (toZone === "graveyard") {
@@ -6731,38 +6666,15 @@ export default class Game {
       console.log(
         `[moveCard] Emitting card_to_grave event for ${card.name} (fromZone: ${fromZone})`
       );
-
-      // Em networkMode, aguardar o emit para capturar pendingEventSelection
-      if (this.networkMode) {
-        const emitResult = await this.emit("card_to_grave", {
-          card,
-          fromZone: fromZone || options.fromZone || null,
-          toZone: "graveyard",
-          player: ownerPlayer,
-          opponent: otherPlayer,
-          wasDestroyed: options.wasDestroyed || false,
-          destroyCause: options.destroyCause || null,
-        });
-        if (emitResult?.needsSelection) {
-          return {
-            success: true,
-            fromZone,
-            toZone,
-            needsSelection: true,
-            selectionContract: emitResult.selectionContract,
-          };
-        }
-      } else {
-        void this.emit("card_to_grave", {
-          card,
-          fromZone: fromZone || options.fromZone || null,
-          toZone: "graveyard",
-          player: ownerPlayer,
-          opponent: otherPlayer,
-          wasDestroyed: options.wasDestroyed || false,
-          destroyCause: options.destroyCause || null,
-        });
-      }
+      void this.emit("card_to_grave", {
+        card,
+        fromZone: fromZone || options.fromZone || null,
+        toZone: "graveyard",
+        player: ownerPlayer,
+        opponent: otherPlayer,
+        wasDestroyed: options.wasDestroyed || false,
+        destroyCause: options.destroyCause || null,
+      });
     }
 
     return { success: true, fromZone, toZone };

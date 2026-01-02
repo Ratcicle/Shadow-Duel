@@ -86,7 +86,7 @@ export default class EffectEngine {
     }
 
     // ONLINE MODE: Must return needsSelection for human players - never fall through to UI
-    if (this.game?.networkMode) {
+    if (false /* networkMode removed */) {
       this.game?.devLog?.("SS_POSITION", {
         summary: `Network mode requires position selection for ${
           card?.name || "unknown"
@@ -1495,7 +1495,7 @@ export default class EffectEngine {
                   "this card";
 
                 // INVARIANTE B1: Network mode - return needsSelection for confirmation prompt
-                if (this.game?.networkMode) {
+                if (false /* networkMode removed */) {
                   return {
                     needsSelection: true,
                     selectionContract: {
@@ -1864,7 +1864,7 @@ export default class EffectEngine {
 
             // INVARIANTE B1: Network mode - skip client-side prompts
             // In network mode, prompts are handled by the server
-            if (this.game?.networkMode) {
+            if (false /* networkMode removed */) {
               // In network mode, auto-accept for now; server handles prompt timing
               wantsToUse = true;
             } else {
@@ -2029,7 +2029,7 @@ export default class EffectEngine {
           let wantsToUse = true;
 
           // INVARIANTE B1: Network mode - skip client-side prompts
-          if (this.game?.networkMode) {
+          if (false /* networkMode removed */) {
             // In network mode, auto-accept for now; server handles prompt timing
             wantsToUse = true;
           } else if (this.ui?.showConfirmPrompt) {
@@ -4528,7 +4528,7 @@ export default class EffectEngine {
   async promptForDestructionNegation(card, effect) {
     // INVARIANTE B1: Network mode - auto-accept for now (or return needsSelection)
     // In network mode, destruction negation prompts should be handled by server
-    if (this.game?.networkMode) {
+    if (false /* networkMode removed */) {
       // Auto-negate in network mode - server should handle confirmation prompts
       return true;
     }
@@ -5107,7 +5107,7 @@ export default class EffectEngine {
 
   showSickleSelectionModal(candidates, maxSelect, onConfirm, onCancel) {
     // INVARIANTE B1: Network mode - use fallback (no UI)
-    if (this.game?.networkMode) {
+    if (false /* networkMode removed */) {
       // Fallback: auto-select in order
       const chosen = candidates.slice(0, maxSelect);
       console.log(
