@@ -493,6 +493,15 @@ async function selectCardsFromZone({
   // CRITICAL: In network mode for human players, NEVER auto-select
   // This should be caught earlier by handlers returning needsSelection
   // If we reach here, it's a bug - log warning but don't auto-select
+  if (game?.networkMode && !isAI(player)) {
+    console.warn(
+      "[selectCardsFromZone] CRITICAL: Reached fallback in networkMode for human player. This should not happen.",
+      {
+        candidatesCount: resolvedCandidates.length,
+        player: player?.id,
+        min: resolvedMin,
+        max: resolvedMax,
+      }
     );
     // Return as cancelled to prevent silent auto-selection
     return {
@@ -578,6 +587,14 @@ async function selectCards({
 
   // CRITICAL: In network mode, human players MUST go through server prompts
   // Never use client-side startTargetSelectionSession in network mode
+  if (game.networkMode) {
+    console.warn(
+      "[selectCards] CRITICAL: Human player selection in networkMode should be handled by server prompts.",
+      {
+        player: player?.id,
+        requirementId,
+        kind,
+      }
     );
     // Return null to indicate selection was not completed - let the handler return needsSelection
     return null;
@@ -924,7 +941,10 @@ export async function handleSpecialSummonFromZone(
   const { player, source, destroyed } = ctx;
 
   const game = engine.game;
-  const promptPlayer = false;
+  // Em networkMode sempre consideramos promptPlayer para permitir escolha humana mesmo no seat "bot".
+  const promptPlayer = game.networkMode
+    ? action.promptPlayer !== false
+    : action.promptPlayer !== false && !isAI(player);
 
   if (!player || !game) return false;
 
@@ -1036,7 +1056,18 @@ export async function handleSpecialSummonFromZone(
       getUI(game)?.log("Target cards are no longer in the specified zone.");
 
       return false;
-    };
+    }
+
+    if (game.networkMode && promptPlayer !== false && allowsPositionChoice) {
+      const positionChoice = resolvePositionChoice();
+      if (!positionChoice) {
+        return {
+          needsSelection: true,
+          selectionContract: buildPositionSelectionContract(validCards[0]),
+          sourceZone: zoneSpec,
+          actionType: action.type,
+          activationContext: ctx?.activationContext || null,
+        };
       }
       const summonAction = { ...action, position: positionChoice };
       return await summonCards(
@@ -1254,7 +1285,10 @@ export async function handleSpecialSummonFromZone(
 
   // Single card summon (original behavior)
 
-  if (count.max === 1 || maxSelect === 1) {_${card.id ?? idx}`,
+  if (count.max === 1 || maxSelect === 1) {
+    if (game.networkMode && promptPlayer !== false && candidates.length > 0) {
+      const decorated = candidates.map((card, idx) => ({
+        key: `ss_zone_single_${idx}_${card.id ?? idx}`,
 
         name: card.name,
 
@@ -1288,6 +1322,7 @@ export async function handleSpecialSummonFromZone(
 
           .map((cand) => cand.cardRef);
         if (
+          game.networkMode &&
           promptPlayer !== false &&
           allowsPositionChoice
         ) {
@@ -1438,7 +1473,11 @@ export async function handleSpecialSummonFromZone(
   const dynamicMaxSelect =
     dynamicMax !== null
       ? Math.min(dynamicMax, dynamicCap, 5 - player.field.length)
-      : maxSelect;_${card.id ?? idx}`,
+      : maxSelect;
+
+  if (game.networkMode && promptPlayer !== false && candidates.length > 0) {
+    const decorated = candidates.map((card, idx) => ({
+      key: `ss_zone_multi_${idx}_${card.id ?? idx}`,
 
       name: card.name,
 
@@ -1470,7 +1509,17 @@ export async function handleSpecialSummonFromZone(
 
         .filter((cand) => !!cand?.cardRef)
 
-        .map((cand) => cand.cardRef);;
+        .map((cand) => cand.cardRef);
+      if (game.networkMode && promptPlayer !== false && allowsPositionChoice) {
+        const positionChoice = resolvePositionChoice();
+        if (!positionChoice) {
+          return {
+            needsSelection: true,
+            selectionContract: buildPositionSelectionContract(selectedCards[0]),
+            sourceZone: zoneSpec,
+            actionType: action.type,
+            activationContext: ctx?.activationContext || null,
+          };
         }
         const summonAction = { ...action, position: positionChoice };
         return await summonCards(
@@ -2092,7 +2141,25 @@ export async function handleSpecialSummonFromHandWithCost(
 
   if (isAI(player)) {
     chosenCount = allowedMax;
-  } else
+  } else if (game.networkMode) {
+    // INVARIANTE B1: Network mode for human players - return selectionContract for tier choice
+    // Check if tier selection was already provided (resume from network prompt)
+    const selectionMap =
+      ctx?.selections ||
+      ctx?.activationContext?.selections ||
+      ctx?.actionContext?.selections ||
+      null;
+
+    const resolveTierChoice = () => {
+      if (!selectionMap) return null;
+      if (typeof selectionMap.tier_choice === "number")
+        return selectionMap.tier_choice;
+      if (
+        Array.isArray(selectionMap.tier_choice) &&
+        selectionMap.tier_choice.length > 0
+      ) {
+        return selectionMap.tier_choice[0];
+      }
       return null;
     };
 
@@ -2480,7 +2547,10 @@ export async function handleBounceAndSummon(action, ctx, targets, engine) {
     return await bounceAndSummonCard(source, best, player, action, engine);
   }
 
-  // INVARIANTE B1: Network mode for human players - return selectionContract_${card.id ?? idx}`,
+  // INVARIANTE B1: Network mode for human players - return selectionContract
+  if (game.networkMode) {
+    const decoratedCandidates = validTargets.map((card, idx) => ({
+      key: `bounce_summon_${idx}_${card.id ?? idx}`,
       name: card.name,
       cardId: card.id ?? null,
       zone: "hand",
@@ -3436,7 +3506,10 @@ async function promptTieBreaker(
 
   modalConfig = {}
 ) {
-  // INVARIANTE B1: Network mode - return selectionContract instead of showing UI_${idx}_${card.id ?? card.name}`,
+  // INVARIANTE B1: Network mode - return selectionContract instead of showing UI
+  if (game?.networkMode) {
+    const decoratedCandidates = candidates.map((card, idx) => ({
+      key: `tiebreaker_${sideDescription}_${idx}_${card.id ?? card.name}`,
       name: card.name,
       cardId: card.id ?? null,
       atk: card.atk,
@@ -4098,11 +4171,16 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
     actionType: action.type,
     player: player?.id,
     sourceZone,
-    
+    networkMode: !!game.networkMode,
     candidates: candidates.length,
     promptPlayer,
   });
-  // para o servidor gerar o prompt. NUNCA auto-selecionar._${idx}_${card.id}`,
+
+  // INVARIANTE B1: No networkMode, se há múltiplos candidatos, retornar selectionContract
+  // para o servidor gerar o prompt. NUNCA auto-selecionar.
+  if (game.networkMode && promptPlayer && candidates.length > 0) {
+    const decoratedCandidates = candidates.map((card, idx) => ({
+      key: `search_${sourceZone}_${idx}_${card.id}`,
       name: card.name,
       cardId: card.id,
       zone: sourceZone,
