@@ -1,5 +1,7 @@
 ## Shadow Duel — Instruções para agentes
 
+- Regra principal do projeto: Todo código adicionado ou alterado deve seguir o padrão Shadow Duel: genérico, flexível e pensando nas adições futuras.
+
 ### Executar / Debug
 
 - Sem build: sirva a raiz (ex.: `npx serve` ou `python -m http.server`) e abra `index.html`.
