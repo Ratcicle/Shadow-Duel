@@ -71,23 +71,39 @@ core/actionHandlers/
 ### 3.2 `ui/renderer/`
 ```
 ui/renderer/
-├── domRefs.js            # Captura de elementos DOM, getters seguros
-├── zones.js              # renderHand, renderField, renderSpellTrap, renderFieldSpell,
-│                         # updateGYPreview, updateExtraDeckPreview, renderGraveyardModal
-├── cardElement.js        # createCardElement, bindPreviewForElement
+├── index.js              # Barrel export (re-exporta todos os módulos)
+├── board.js              # renderHand, renderField, renderSpellTrap, renderFieldSpell,
+│                         # updateGYPreview, updateExtraDeckPreview, renderGraveyardModal,
+│                         # renderHand_ (8 métodos, ~260 linhas)
+├── preview.js            # createCardElement, bindPreviewForElement, hidePreview,
+│                         # previewCard (4 métodos, ~109 linhas)
 ├── indicators.js         # applyActivationIndicators, applyAttackReadyIndicators,
-│                         # applyTargetHighlights, clearTargetHighlights, setSelectionDimming
+│                         # applyTargetHighlights, clearTargetHighlights, setSelectionDimming,
+│                         # highlightTargetable*, addTargetOverlay, etc. (18 métodos, ~361 linhas)
 ├── log.js                # log, updateLP, showLpChange, updateTurn, updatePhaseTrack
-├── modals.js             # showSummonModal, showSpellChoiceModal, showPositionChoiceModal,
-│                         # showSpecialSummonPositionModal, showTargetSelection,
-│                         # showFieldTargetingControls, showFusionTargetModal,
-│                         # showFusionMaterialSelection, showCardGridSelectionModal,
-│                         # showUnifiedTrapModal, showChainResponseModal, etc.
+│                         # (5 métodos, ~67 linhas)
+├── animations.js         # applyLpChangeAnimation (1 método, ~42 linhas)
 ├── bindings.js           # bindPhaseClick, bindCardHover, bindZoneCardClick, bind*Click
-└── animations.js         # applyFlipAnimation (futuro: mais animações)
+│                         # (12 métodos, ~157 linhas)
+├── modals.js             # hideAllModals, showConfirmModal, showModal, showGameOverModal
+│                         # (modais base, ~239 linhas)
+├── summonModals.js       # showSummonModal, showSpellChoiceModal, showPositionChoiceModal,
+│                         # showSpecialSummonPositionModal, showFusionTargetModal,
+│                         # showFusionMaterialSelection (14 métodos, ~473 linhas)
+├── selectionModals.js    # showTargetSelection, showFieldTargetingControls,
+│                         # showCardGridSelectionModal, showConditionalCardSelectionModal,
+│                         # resolveTargetSelection*, etc. (12 métodos, ~766 linhas)
+└── trapModals.js         # showUnifiedTrapModal, showChainResponseModal,
+│                         # _getContextDescription (4 métodos, ~198 linhas)
 ```
 
 **Nota:** `ui/Renderer.js` permanece como classe canônica e importa/anexa esses módulos.
+
+**Desvios do plano original (justificados):**
+1. `domRefs.js` não criado — constructor permanece em `Renderer.js` (regra: classe canônica no lugar)
+2. `modals.js` dividido em 4 arquivos (seria ~1500 linhas se unificado)
+3. `zones.js` renomeado para `board.js` (semântica mais clara)
+4. `cardElement.js` combinado em `preview.js` (alto acoplamento)
 
 ### 3.3 `core/game/`
 ```
@@ -184,47 +200,35 @@ core/effects/
 
 ## 4) Passo Zero: Inventário de Métodos Consumidos
 
-**Antes de modularizar `Game` e `EffectEngine`**, rodar um mapa de consumo completo.
+✅ **CONCLUÍDO (v2)** — Ver documento completo: **[`docs/Inventario-APIs.md`](./Inventario-APIs.md)**
 
-### 4.1 Checklist de Inventário
+### Resumo do Inventário (atualizado)
 
-- [ ] Buscar todos os usos de `game.` em:
-  - [ ] `EffectEngine.js`
-  - [ ] `ActionHandlers.js` (e submódulos)
-  - [ ] `ChainSystem.js`
-  - [ ] `Bot.js`
-  - [ ] `Player.js`
-  - [ ] `AutoSelector.js`
-  - [ ] `UIAdapter.js`
+| Categoria                 | Quantidade | Alta Criticidade |
+| ------------------------- | ---------- | ---------------- |
+| Métodos de `Game`         | 35         | 15               |
+| Propriedades de `Game`    | 14         | 6                |
+| Métodos de `EffectEngine` | 32+        | 15               |
+| Action types registrados  | **51**     | —                |
+| **Total APIs mapeadas**   | **~80**    | **36**           |
 
-- [ ] Buscar todos os usos de `engine.` / `effectEngine.` em:
-  - [ ] `Game.js`
-  - [ ] `ChainSystem.js`
-  - [ ] `ActionHandlers.js` (via proxy)
+### APIs de Alta Criticidade (não podem quebrar)
 
-- [ ] Buscar todos os usos de `this.game.` em:
-  - [ ] `EffectEngine.js`
-  - [ ] `Player.js`
-  - [ ] `ChainSystem.js`
+**Game (22):** `on`, `emit`, `moveCard`, `destroyCard`, `updateBoard`, `getOpponent`, `checkWinCondition`, `startTargetSelectionSession`, `resolveCombat`, `nextPhase`, `endTurn`, `performFusionSummon`, `performAscensionSummon`, `runActivationPipeline`, `chooseSpecialSummonPosition`, `player`, `bot`, `turn`, `phase`, `effectEngine`, `chainSystem`
 
-- [ ] Listar métodos encontrados e marcar como **"API congelada interna"**
+**EffectEngine (15):** `collectEventTriggers`, `chooseSpecialSummonPosition`, `applyDamage`, `activateMonsterEffect`, `activateSpellTrapEffect`, `activateFieldSpell`, `resolveTrapEffects`, `resolveTargets`, `canActivate`, `applyActions`, `updatePassiveBuffs`, `checkOncePerTurn`, `engine.game`
 
-- [ ] Verificar propriedades acessadas diretamente:
-  - [ ] `game.player`, `game.bot`
-  - [ ] `game.phase`, `game.turn`, `game.turnCounter`
-  - [ ] `game.ui`
-  - [ ] `game.effectEngine`
+### Checklist
 
-### 4.2 Output Esperado
-
-Tabela com:
-| Método/Propriedade | Consumidores                         | Criticidade |
-| ------------------ | ------------------------------------ | ----------- |
-| `game.moveCard()`  | EffectEngine, ActionHandlers, Player | Alta        |
-| `game.emit()`      | EffectEngine, Game interno           | Alta        |
-| ...                | ...                                  | ...         |
-
-**Esse inventário deve ser salvo** (pode ser neste documento ou em arquivo separado) e consultado durante cada extração.
+- [x] Buscar todos os usos de `game.*` em consumidores (incluindo Strategies)
+- [x] Buscar todos os usos de `engine.*` / `effectEngine.*` em consumidores
+- [x] Listar métodos únicos com contagem de ocorrências
+- [x] Classificar por criticidade
+- [x] Indicar módulo destino provável
+- [x] APIs faltantes adicionadas (`game.on`, `devLog`, `lastAttackNegated`, `updatePassiveBuffs`, `checkOncePerTurn`)
+- [x] Escopo expandido para Strategies (ai/*.js)
+- [x] Lista dourada de action.type incluída (51 types)
+- [ ] Revisão manual de itens críticos/estranhos (opcional antes de A.1)
 
 ---
 
@@ -350,6 +354,86 @@ engine.checkBeforeDestroyNegations(card, ctx)
 engine.chooseSpecialSummonPosition(card, player, options)
 engine.updatePassiveBuffs()
 ```
+
+---
+
+## 6.5 Status da Fase A.1: ActionHandlers Modularizado ✅
+
+**Concluído em:** 01/02/2026
+
+### Estrutura Final
+```
+core/actionHandlers/
+├── index.js          # Barrel export (~70 linhas)
+├── registry.js       # ActionHandlerRegistry + proxyEngineMethod (~60 linhas)
+├── shared.js         # Helpers compartilhados (~380 linhas)
+├── movement.js       # handleReturnToHand, handleBounceAndSummon (~230 linhas)
+├── summon.js         # 7 handlers de summon + 3 helpers locais (~700 linhas)
+├── destruction.js    # 4 handlers + 2 helpers locais (~550 linhas)
+├── stats.js          # 10 handlers de stats/buffs (~750 linhas)
+├── resources.js      # 6 handlers de recursos (~330 linhas)
+└── wiring.js         # registerDefaultHandlers (~180 linhas)
+```
+
+### Validação
+- [x] Todos os 9 arquivos criados
+- [x] Fachada `ActionHandlers.js` atualizada (re-exporta do index.js)
+- [x] Import de `i18n.js` preservado na fachada
+- [x] Servidor carrega todos os módulos (HTTP 200)
+- [x] Nenhum erro de TypeScript/ESLint
+- [x] Consumidores (`EffectEngine.js`, `CardDatabaseValidator.js`) sem alteração
+
+### Observações de Implementação
+1. **handleTransmutate** foi movido para `summon.js` (chama `handleSpecialSummonFromZone` internamente)
+2. **handleBanishAndBuff** foi movido para `stats.js` (envolve buff, não só banimento)
+3. Helpers locais (`summonCards`, `performSummon`, `performSummonFromDeck`, `destroySelectiveField`, `promptTieBreaker`, `bounceAndSummonCard`) permaneceram nos seus módulos (não exportados)
+4. **proxyEngineMethod** exportado do `registry.js` e acessível via `index.js`
+
+### Próxima Fase
+~~**A.2: Renderer.js** — Modularizar UI seguindo mesmo padrão (facade + módulos em `ui/renderer/`)~~
+
+---
+
+## 6.6 Status da Fase A.2: Renderer Modularizado ✅
+
+**Concluído em:** 02/01/2026
+
+### Estrutura Final
+```
+ui/renderer/
+├── index.js          # Barrel export (~117 linhas)
+├── board.js          # Renderização de zonas (~260 linhas)
+├── preview.js        # Preview de cartas + createCardElement (~109 linhas)
+├── indicators.js     # Highlights visuais (~361 linhas)
+├── log.js            # Action log + LP/turno/fase (~67 linhas)
+├── animations.js     # Animação de LP change (~42 linhas)
+├── bindings.js       # Event listeners (~157 linhas)
+├── modals.js         # Modais base (~239 linhas)
+├── summonModals.js   # Modais de summon/fusion (~473 linhas)
+├── selectionModals.js # Modais de seleção de alvos (~766 linhas)
+└── trapModals.js     # Modais de trap/chain (~198 linhas)
+
+ui/Renderer.js        # Fachada com constructor (~133 linhas)
+```
+
+### Validação
+- [x] Todos os 11 arquivos criados
+- [x] Fachada `Renderer.js` atualizada (importa módulos, anexa ao prototype)
+- [x] Constructor permanece em `Renderer.js` (17 elementos DOM cacheados)
+- [x] Servidor carrega todos os módulos (HTTP 200)
+- [x] Nenhum erro de TypeScript/ESLint
+- [x] Sem ciclos de import (única dependência externa: `core/i18n.js`)
+- [x] 84 métodos preservados com mesmas assinaturas
+
+### Observações de Implementação
+1. **modals.js** dividido em 4 arquivos por categoria (seria ~1500 linhas se unificado)
+2. **zones.js** renomeado para **board.js** (semântica mais clara para renderização de zonas)
+3. **cardElement.js** combinado em **preview.js** (alto acoplamento com preview de carta)
+4. **domRefs.js** não criado — constructor permanece em `Renderer.js` conforme regra canônica
+5. Padrão de anexação: funções exportadas + `Object.assign(Renderer.prototype, ...)` preservando `this`
+
+### Próxima Fase
+**B.1: Game.js — DevTools** — Mover devSanity* para `core/game/devTools/`
 
 ---
 

@@ -1,31 +1,22 @@
 /**
- * ActionHandlers.js
+ * actionHandlers/index.js
  *
- * FACADE - This file re-exports from the modularized actionHandlers package.
- * All implementation has been moved to src/core/actionHandlers/*.js
- *
- * This facade exists for backward compatibility with existing imports.
- * New code should import directly from "./actionHandlers/index.js".
+ * Barrel export for the actionHandlers package.
+ * All consumers should import from this file.
  */
 
-// Preserve i18n import for future localization of handler messages
-// eslint-disable-next-line no-unused-vars
-import { getCardDisplayName } from "./i18n.js";
+// Registry
+export { ActionHandlerRegistry, proxyEngineMethod } from "./registry.js";
 
-// Re-export everything from the actionHandlers package
+// Wiring function
+export { registerDefaultHandlers } from "./wiring.js";
+
+// Re-export all handlers for direct access if needed
+// Movement
+export { handleReturnToHand, handleBounceAndSummon } from "./movement.js";
+
+// Summon
 export {
-  // Registry
-  ActionHandlerRegistry,
-  proxyEngineMethod,
-
-  // Wiring function
-  registerDefaultHandlers,
-
-  // Movement handlers
-  handleReturnToHand,
-  handleBounceAndSummon,
-
-  // Summon handlers
   handleSpecialSummonFromZone,
   handleTransmutate,
   handleSpecialSummonFromHandWithCost,
@@ -33,14 +24,18 @@ export {
   handleDrawAndSummon,
   handleAbyssalSerpentDelayedSummon,
   handleSpecialSummonFromDeckWithCounterLimit,
+} from "./summon.js";
 
-  // Destruction handlers
+// Destruction
+export {
   handleBanish,
   handleBanishCardFromGraveyard,
   handleDestroyTargetedCards,
   handleDestroyAttackerOnArchetypeDestruction,
+} from "./destruction.js";
 
-  // Stats handlers
+// Stats
+export {
   handleSetStatsToZeroAndNegate,
   handleBuffStatsTemp,
   handleGrantAttackAllMonsters,
@@ -51,16 +46,20 @@ export {
   handleSwitchDefenderPositionOnAttack,
   handlePermanentBuffNamed,
   handleRemovePermanentBuffNamed,
+} from "./stats.js";
 
-  // Resources handlers
+// Resources
+export {
   handlePayLP,
   handleAddFromZoneToHand,
   handleHealFromDestroyedAtk,
   handleHealFromDestroyedLevel,
   handleGrantAdditionalNormalSummon,
   handleUpkeepPayOrSendToGrave,
+} from "./resources.js";
 
-  // Shared helpers
+// Shared helpers (for advanced use cases)
+export {
   getUI,
   resolveTargetCards,
   sendCardsToGraveyard,
@@ -71,4 +70,4 @@ export {
   selectCards,
   summonFromHandCore,
   STATUS_DISPLAY_NAMES,
-} from "./actionHandlers/index.js";
+} from "./shared.js";
