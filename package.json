@@ -1,11 +1,5 @@
 {
   "name": "shadow-duel",
   "version": "0.1.0",
-  "type": "module",
-  "scripts": {
-    "server": "node src/server/ServerMain.js"
-  },
-  "dependencies": {
-    "ws": "^8.18.0"
-  }
+  "type": "module"
 }
