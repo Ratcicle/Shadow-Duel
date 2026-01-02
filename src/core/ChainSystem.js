@@ -91,6 +91,20 @@ export const CHAIN_CONTEXTS = {
  * @property {string} [method] - Summon method (for summon)
  */
 
+/**
+ * Helper to determine if an action was performed by the opponent
+ * relative to a card's owner. Checks both explicit flag and owner ID comparison.
+ * @param {string|null} actionOwnerId - ID of the player who performed the action
+ * @param {string|null} cardOwnerId - ID of the card's owner
+ * @param {boolean} isOpponentFlag - Explicit flag indicating opponent action
+ * @returns {boolean} True if action was by opponent
+ */
+function isOpponentAction(actionOwnerId, cardOwnerId, isOpponentFlag) {
+  if (isOpponentFlag === true) return true;
+  if (!actionOwnerId || !cardOwnerId) return false;
+  return actionOwnerId !== cardOwnerId;
+}
+
 export default class ChainSystem {
   constructor(game) {
     /** @type {Object} Reference to main Game instance */
@@ -479,23 +493,17 @@ export default class ChainSystem {
               context?.type === "attack_declaration"
             ) {
               // Only valid if opponent is attacking (check from card owner's perspective)
-              // Use isOpponentAttack flag, or check if attacker owner differs from card owner
-              const attackerOwnerId = context.attackerOwner?.id;
               const cardOwnerId = ownerPlayer?.id || card.owner;
-              const attackerIsOpponent =
-                context.isOpponentAttack === true ||
-                (attackerOwnerId && cardOwnerId && attackerOwnerId !== cardOwnerId);
-              if (!attackerIsOpponent) continue;
+              if (!isOpponentAction(context.attackerOwner?.id, cardOwnerId, context.isOpponentAttack)) {
+                continue;
+              }
             }
             if (effect.requireOpponentSummon && context?.type === "summon") {
               // Only valid if opponent summoned (check from card owner's perspective)
-              // Use isOpponentSummon flag, or check if summoner differs from card owner
-              const summonerOwnerId = context.player?.id;
               const cardOwnerId = ownerPlayer?.id || card.owner;
-              const summonerIsOpponent =
-                context.isOpponentSummon === true ||
-                (summonerOwnerId && cardOwnerId && summonerOwnerId !== cardOwnerId);
-              if (!summonerIsOpponent) continue;
+              if (!isOpponentAction(context.player?.id, cardOwnerId, context.isOpponentSummon)) {
+                continue;
+              }
             }
             // Check requireDefenderIsSelf (e.g., Dragon Spirit Sanctuary)
             if (
