@@ -85,17 +85,6 @@ export default class EffectEngine {
       return "attack";
     }
 
-    // ONLINE MODE: Must return needsSelection for human players - never fall through to UI
-    if (this.game?.networkMode) {
-      this.game?.devLog?.("SS_POSITION", {
-        summary: `Network mode requires position selection for ${
-          card?.name || "unknown"
-        }`,
-        player: player?.id,
-        card: card?.name,
-        actionPosition,
-        networkMode: true,
-      });
       // Return a special marker that handlers can check to emit selectionContract
       return {
         needsSelection: true,
@@ -1494,36 +1483,6 @@ export default class EffectEngine {
                   sourceCard?.name ||
                   "this card";
 
-                // INVARIANTE B1: Network mode - return needsSelection for confirmation prompt
-                if (this.game?.networkMode) {
-                  return {
-                    needsSelection: true,
-                    selectionContract: {
-                      kind: "confirm",
-                      message:
-                        effect.promptMessage ||
-                        `Activate ${promptName}'s effect?`,
-                      requirements: [
-                        {
-                          id: "confirm_activation",
-                          min: 1,
-                          max: 1,
-                          candidates: [
-                            { key: "yes", label: "Yes", value: true },
-                            { key: "no", label: "No", value: false },
-                          ],
-                        },
-                      ],
-                      metadata: {
-                        cardData: {
-                          cardId: sourceCard?.id ?? null,
-                          name: sourceCard?.name ?? "Card",
-                        },
-                      },
-                    },
-                    actionType: "confirm_effect_activation",
-                    activationContext: activationCtx,
-                  };
                 }
 
                 if (
@@ -1864,10 +1823,6 @@ export default class EffectEngine {
 
             // INVARIANTE B1: Network mode - skip client-side prompts
             // In network mode, prompts are handled by the server
-            if (this.game?.networkMode) {
-              // In network mode, auto-accept for now; server handles prompt timing
-              wantsToUse = true;
-            } else {
               const customPromptMethod = effect.customPromptMethod;
               if (customPromptMethod && this.ui?.[customPromptMethod]) {
                 wantsToUse = await this.ui[customPromptMethod]();
@@ -2028,11 +1983,6 @@ export default class EffectEngine {
         if (targetOwner.id === "player" && card.cardType === "trap") {
           let wantsToUse = true;
 
-          // INVARIANTE B1: Network mode - skip client-side prompts
-          if (this.game?.networkMode) {
-            // In network mode, auto-accept for now; server handles prompt timing
-            wantsToUse = true;
-          } else if (this.ui?.showConfirmPrompt) {
             const confirmResult = this.ui.showConfirmPrompt(
               `Activate ${card.name} in response to targeting?`,
               { kind: "trap_activation", cardName: card.name }
@@ -4528,10 +4478,6 @@ export default class EffectEngine {
   async promptForDestructionNegation(card, effect) {
     // INVARIANTE B1: Network mode - auto-accept for now (or return needsSelection)
     // In network mode, destruction negation prompts should be handled by server
-    if (this.game?.networkMode) {
-      // Auto-negate in network mode - server should handle confirmation prompts
-      return true;
-    }
 
     if (!this.ui) {
       return false;
@@ -5106,12 +5052,6 @@ export default class EffectEngine {
   }
 
   showSickleSelectionModal(candidates, maxSelect, onConfirm, onCancel) {
-    // INVARIANTE B1: Network mode - use fallback (no UI)
-    if (this.game?.networkMode) {
-      // Fallback: auto-select in order
-      const chosen = candidates.slice(0, maxSelect);
-      console.log(
-        `[NETWORK] Sickle: Auto-selecting ${chosen.length} Luminarch monsters in order.`
       );
       onConfirm(chosen);
       return;
