@@ -490,6 +490,28 @@ async function selectCardsFromZone({
     return { candidates: resolvedCandidates, selected: chosen || [] };
   }
 
+  // CRITICAL: In network mode for human players, NEVER auto-select
+  // This should be caught earlier by handlers returning needsSelection
+  // If we reach here, it's a bug - log warning but don't auto-select
+  if (game?.networkMode && !isAI(player)) {
+    console.warn(
+      "[selectCardsFromZone] CRITICAL: Reached fallback in networkMode for human player. This should not happen.",
+      {
+        candidatesCount: resolvedCandidates.length,
+        player: player?.id,
+        min: resolvedMin,
+        max: resolvedMax,
+      }
+    );
+    // Return as cancelled to prevent silent auto-selection
+    return {
+      candidates: resolvedCandidates,
+      selected: [],
+      cancelled: true,
+      needsSelection: true,
+    };
+  }
+
   return {
     candidates: resolvedCandidates,
 
@@ -563,6 +585,22 @@ async function selectCards({
     return [];
   }
 
+  // CRITICAL: In network mode, human players MUST go through server prompts
+  // Never use client-side startTargetSelectionSession in network mode
+  if (game.networkMode) {
+    console.warn(
+      "[selectCards] CRITICAL: Human player selection in networkMode should be handled by server prompts.",
+      {
+        player: player?.id,
+        requirementId,
+        kind,
+      }
+    );
+    // Return null to indicate selection was not completed - let the handler return needsSelection
+    return null;
+  }
+
+  // OFFLINE MODE ONLY: Use client-side target selection
   return new Promise((resolve) => {
     game.startTargetSelectionSession({
       kind,
@@ -2103,6 +2141,63 @@ export async function handleSpecialSummonFromHandWithCost(
 
   if (isAI(player)) {
     chosenCount = allowedMax;
+  } else if (game.networkMode) {
+    // INVARIANTE B1: Network mode for human players - return selectionContract for tier choice
+    // Check if tier selection was already provided (resume from network prompt)
+    const selectionMap =
+      ctx?.selections ||
+      ctx?.activationContext?.selections ||
+      ctx?.actionContext?.selections ||
+      null;
+
+    const resolveTierChoice = () => {
+      if (!selectionMap) return null;
+      if (typeof selectionMap.tier_choice === "number")
+        return selectionMap.tier_choice;
+      if (
+        Array.isArray(selectionMap.tier_choice) &&
+        selectionMap.tier_choice.length > 0
+      ) {
+        return selectionMap.tier_choice[0];
+      }
+      return null;
+    };
+
+    const tierChoice = resolveTierChoice();
+    if (
+      tierChoice !== null &&
+      tierChoice >= minCost &&
+      tierChoice <= allowedMax
+    ) {
+      chosenCount = tierChoice;
+    } else {
+      // Return selectionContract for server to generate tier choice prompt
+      const tierCandidates = tierOptions.map((opt, idx) => ({
+        key: `tier_${opt.count}`,
+        name: opt.label,
+        description: opt.description,
+        count: opt.count,
+        idx,
+      }));
+
+      return {
+        needsSelection: true,
+        selectionContract: {
+          kind: "tier_choice",
+          message: "Choose tier level",
+          requirements: [
+            {
+              id: "tier_choice",
+              min: 1,
+              max: 1,
+              candidates: tierCandidates,
+            },
+          ],
+        },
+        actionType: action.type,
+        activationContext: ctx?.activationContext || null,
+      };
+    }
   } else if (getUI(game)?.showTierChoiceModal) {
     chosenCount = await getUI(game).showTierChoiceModal({
       title: action.tierTitle || source.name,
@@ -2452,7 +2547,79 @@ export async function handleBounceAndSummon(action, ctx, targets, engine) {
     return await bounceAndSummonCard(source, best, player, action, engine);
   }
 
-  // Player selection
+  // INVARIANTE B1: Network mode for human players - return selectionContract
+  if (game.networkMode) {
+    const decoratedCandidates = validTargets.map((card, idx) => ({
+      key: `bounce_summon_${idx}_${card.id ?? idx}`,
+      name: card.name,
+      cardId: card.id ?? null,
+      zone: "hand",
+      controller: player.id,
+      owner: player.id === game.player?.id ? "player" : "opponent",
+      cardKind: card.cardKind,
+      atk: card.atk,
+      def: card.def,
+      level: card.level,
+      cardRef: card,
+    }));
+
+    // Check if selections are already provided (resume from network prompt)
+    const selectionMap =
+      ctx?.selections ||
+      ctx?.activationContext?.selections ||
+      ctx?.actionContext?.selections ||
+      null;
+
+    const resolveSelectionKeys = () => {
+      if (!selectionMap) return null;
+      if (Array.isArray(selectionMap)) return selectionMap;
+      if (Array.isArray(selectionMap.bounce_summon_single)) {
+        return selectionMap.bounce_summon_single;
+      }
+      const firstArray = Object.values(selectionMap).find(Array.isArray);
+      return firstArray || null;
+    };
+
+    const selectionKeys = resolveSelectionKeys();
+
+    if (selectionKeys && selectionKeys.length > 0) {
+      const selected = decoratedCandidates.find(
+        (cand) => cand.key === selectionKeys[0]
+      );
+      if (selected?.cardRef) {
+        return await bounceAndSummonCard(
+          source,
+          selected.cardRef,
+          player,
+          action,
+          engine
+        );
+      }
+    }
+
+    // Return selectionContract for server to generate prompt
+    return {
+      needsSelection: true,
+      selectionContract: {
+        kind: "card_select",
+        message: "Select a monster to Special Summon from hand",
+        requirements: [
+          {
+            id: "bounce_summon_single",
+            min: 1,
+            max: 1,
+            candidates: decoratedCandidates,
+            zone: "hand",
+          },
+        ],
+      },
+      sourceZone: "hand",
+      actionType: action.type,
+      activationContext: ctx?.activationContext || null,
+    };
+  }
+
+  // Player selection (offline only)
 
   const renderer = getUI(game);
 
@@ -3146,7 +3313,7 @@ async function destroySelectiveField(action, ctx, targets, engine) {
       if (isAI(player)) {
         playerToKeep = playerHighest.slice(0, keepPerSide);
       } else {
-        playerToKeep = await promptTieBreaker(
+        const tieBreakerResult = await promptTieBreaker(
           game,
 
           playerHighest,
@@ -3157,6 +3324,15 @@ async function destroySelectiveField(action, ctx, targets, engine) {
 
           modalConfig
         );
+        // Check if this is a needsSelection result (network mode)
+        if (tieBreakerResult?.needsSelection) {
+          return {
+            ...tieBreakerResult,
+            actionType: action.type,
+            activationContext: ctx?.activationContext || null,
+          };
+        }
+        playerToKeep = tieBreakerResult;
       }
     } else {
       playerToKeep = playerHighest.slice(0, keepPerSide);
@@ -3170,7 +3346,7 @@ async function destroySelectiveField(action, ctx, targets, engine) {
       if (isAI(player)) {
         opponentToKeep = opponentHighest.slice(0, keepPerSide);
       } else {
-        opponentToKeep = await promptTieBreaker(
+        const opponentTieBreakerResult = await promptTieBreaker(
           game,
 
           opponentHighest,
@@ -3181,6 +3357,15 @@ async function destroySelectiveField(action, ctx, targets, engine) {
 
           modalConfig
         );
+        // Check if this is a needsSelection result (network mode)
+        if (opponentTieBreakerResult?.needsSelection) {
+          return {
+            ...opponentTieBreakerResult,
+            actionType: action.type,
+            activationContext: ctx?.activationContext || null,
+          };
+        }
+        opponentToKeep = opponentTieBreakerResult;
       }
     } else {
       opponentToKeep = opponentHighest.slice(0, keepPerSide);
@@ -3321,6 +3506,40 @@ async function promptTieBreaker(
 
   modalConfig = {}
 ) {
+  // INVARIANTE B1: Network mode - return selectionContract instead of showing UI
+  if (game?.networkMode) {
+    const decoratedCandidates = candidates.map((card, idx) => ({
+      key: `tiebreaker_${sideDescription}_${idx}_${card.id ?? card.name}`,
+      name: card.name,
+      cardId: card.id ?? null,
+      atk: card.atk,
+      def: card.def,
+      cardRef: card,
+    }));
+
+    // Return a special marker that the caller must handle
+    return {
+      needsSelection: true,
+      selectionContract: {
+        kind: "card_select",
+        message:
+          modalConfig.subtitle ||
+          `Multiple monsters on ${sideDescription} side have ${
+            candidates[0]?.atk || 0
+          } ATK. Choose ${keepCount} to keep on the field.`,
+        requirements: [
+          {
+            id: `tiebreaker_${sideDescription}`,
+            min: keepCount,
+            max: keepCount,
+            candidates: decoratedCandidates,
+          },
+        ],
+      },
+      sideDescription,
+    };
+  }
+
   if (!getUI(game)?.showCardGridSelectionModal) {
     // Fallback: auto-select first N
 

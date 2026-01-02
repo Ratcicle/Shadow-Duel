@@ -806,13 +806,20 @@ export class MatchManager {
       }
       if (applyResult.needsSelection && applyResult.selection?.prompt) {
         const selectionInfo = applyResult.selection;
+        // CRITICAL: Only use selectionInfo.actionType for special resume types
+        const isSpecialResumeType =
+          selectionInfo.actionType === "RESUME_EVENT_SELECTION" ||
+          selectionInfo.actionType === ACTION_TYPES.RESUME_EVENT_SELECTION;
+        const resumeActionType = isSpecialResumeType
+          ? selectionInfo.actionType
+          : choice.actionType;
         // CRITICAL: Send prompt to the correct client (effect owner, not action executor)
         const targetSeat = applyResult.effectOwnerSeat || client.seat;
         const targetClient = this.getClientForSeat(room, targetSeat) || client;
         this.storeAndSendPrompt(room, targetClient, selectionInfo.prompt, {
           pendingSelection: {
             seat: targetSeat,
-            actionType: selectionInfo.actionType || choice.actionType,
+            actionType: resumeActionType,
             payload: choice.payload || {},
             selectionContract: selectionInfo.contract,
             requirementId: selectionInfo.requirementId,
@@ -1438,8 +1445,14 @@ export class MatchManager {
 
     if (applyResult.needsSelection && applyResult.selection?.prompt) {
       const selectionInfo = applyResult.selection;
-      // Use selectionInfo.actionType when available (e.g., RESUME_EVENT_SELECTION for triggered effects)
-      const resumeActionType = selectionInfo.actionType || actionType;
+      // CRITICAL: Only use selectionInfo.actionType for special resume types (e.g., RESUME_EVENT_SELECTION)
+      // For regular handlers, always use the original actionType to ensure proper resume
+      const isSpecialResumeType =
+        selectionInfo.actionType === "RESUME_EVENT_SELECTION" ||
+        selectionInfo.actionType === ACTION_TYPES.RESUME_EVENT_SELECTION;
+      const resumeActionType = isSpecialResumeType
+        ? selectionInfo.actionType
+        : actionType;
       // CRITICAL: Send prompt to the correct client (effect owner, not action executor)
       const targetSeat = applyResult.effectOwnerSeat || client.seat;
       const targetClient = this.getClientForSeat(room, targetSeat) || client;
@@ -2184,10 +2197,17 @@ export class MatchManager {
       room: room.id,
       phase: room.game.phase,
       turn: room.game.turn,
+      stateVersion: room.stateVersion,
     });
+    // INVARIANTE A: Always include stateVersion in STATE_UPDATE
     const payloadForSeat = (seat) => ({
       type: SERVER_MESSAGE_TYPES.STATE_UPDATE,
-      state: room.game.getPublicState(legacySeat(seat)),
+      state: {
+        ...room.game.getPublicState(legacySeat(seat)),
+        stateVersion: room.stateVersion || 0,
+        isResolvingEffect: room.isResolvingEffect || false,
+        pendingPromptType: room.pendingPromptType || null,
+      },
     });
     if (room.clients.p1) {
       send(room.clients.p1.ws, payloadForSeat("p1"));
@@ -2199,10 +2219,17 @@ export class MatchManager {
 
   sendState(client, game) {
     if (!client?.ws || !game) return;
+    const room = this.getRoom(client);
     const viewerSeat = legacySeat(client.seat || "player");
+    // INVARIANTE A: Always include stateVersion in STATE_UPDATE
     send(client.ws, {
       type: SERVER_MESSAGE_TYPES.STATE_UPDATE,
-      state: game.getPublicState(viewerSeat),
+      state: {
+        ...game.getPublicState(viewerSeat),
+        stateVersion: room?.stateVersion || 0,
+        isResolvingEffect: room?.isResolvingEffect || false,
+        pendingPromptType: room?.pendingPromptType || null,
+      },
     });
   }
 
