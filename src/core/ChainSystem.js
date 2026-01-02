@@ -12,6 +12,8 @@
  * Chain Resolution: Last In, First Out (LIFO)
  */
 
+import { isAI } from "./Player.js";
+
 /**
  * Valid chain window contexts where cards can be activated in response
  */
@@ -88,6 +90,20 @@ export const CHAIN_CONTEXTS = {
  * @property {string} [toPhase] - New phase (for phase_change)
  * @property {string} [method] - Summon method (for summon)
  */
+
+/**
+ * Helper to determine if an action was performed by the opponent
+ * relative to a card's owner. Checks both explicit flag and owner ID comparison.
+ * @param {string|null} actionOwnerId - ID of the player who performed the action
+ * @param {string|null} cardOwnerId - ID of the card's owner
+ * @param {boolean} isOpponentFlag - Explicit flag indicating opponent action
+ * @returns {boolean} True if action was by opponent
+ */
+function isOpponentAction(actionOwnerId, cardOwnerId, isOpponentFlag) {
+  if (isOpponentFlag === true) return true;
+  if (!actionOwnerId || !cardOwnerId) return false;
+  return actionOwnerId !== cardOwnerId;
+}
 
 export default class ChainSystem {
   constructor(game) {
@@ -476,18 +492,18 @@ export default class ChainSystem {
               effect.requireOpponentAttack &&
               context?.type === "attack_declaration"
             ) {
-              // Only valid if opponent is attacking (check from player's perspective)
-              const attackerIsOpponent =
-                context.attackerOwner?.id === "bot" ||
-                context.isOpponentAttack === true;
-              if (!attackerIsOpponent) continue;
+              // Only valid if opponent is attacking (check from card owner's perspective)
+              const cardOwnerId = ownerPlayer?.id || card.owner;
+              if (!isOpponentAction(context.attackerOwner?.id, cardOwnerId, context.isOpponentAttack)) {
+                continue;
+              }
             }
             if (effect.requireOpponentSummon && context?.type === "summon") {
-              // Only valid if opponent summoned (check from player's perspective)
-              const summonerIsOpponent =
-                context.player?.id === "bot" ||
-                context.isOpponentSummon === true;
-              if (!summonerIsOpponent) continue;
+              // Only valid if opponent summoned (check from card owner's perspective)
+              const cardOwnerId = ownerPlayer?.id || card.owner;
+              if (!isOpponentAction(context.player?.id, cardOwnerId, context.isOpponentSummon)) {
+                continue;
+              }
             }
             // Check requireDefenderIsSelf (e.g., Dragon Spirit Sanctuary)
             if (
@@ -861,8 +877,8 @@ export default class ChainSystem {
       return null;
     }
 
-    // Bot logic
-    if (player.id === "bot") {
+    // AI logic - use controllerType instead of player.id to support online PvP
+    if (isAI(player)) {
       return this.botChooseChainResponse(player, activatable, context);
     }
 
