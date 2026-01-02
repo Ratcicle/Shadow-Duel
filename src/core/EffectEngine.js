@@ -85,61 +85,7 @@ export default class EffectEngine {
       return "attack";
     }
 
-    // ONLINE MODE: Must return needsSelection for human players - never fall through to UI
-    if (false /* networkMode removed */) {
-      this.game?.devLog?.("SS_POSITION", {
-        summary: `Network mode requires position selection for ${
-          card?.name || "unknown"
-        }`,
-        player: player?.id,
-        card: card?.name,
-        actionPosition,
-        networkMode: true,
-      });
-      // Return a special marker that handlers can check to emit selectionContract
-      return {
-        needsSelection: true,
-        selectionContract: {
-          kind: "position_select",
-          message: "Choose Special Summon position",
-          requirements: [
-            {
-              id: "special_summon_position",
-              min: 1,
-              max: 1,
-              zone: "field",
-              candidates: [
-                {
-                  id: "attack",
-                  key: "attack",
-                  label: "Attack Position",
-                  position: "attack",
-                },
-                {
-                  id: "defense",
-                  key: "defense",
-                  label: "Defense Position",
-                  position: "defense",
-                },
-              ],
-            },
-          ],
-          metadata: {
-            cardData: {
-              cardId: card?.id ?? null,
-              name: card?.name ?? "Monster",
-              image: card?.image ?? null,
-              cardKind: "monster",
-              atk: card?.atk ?? null,
-              def: card?.def ?? null,
-              level: card?.level ?? null,
-            },
-          },
-        },
-      };
-    }
-
-    // OFFLINE MODE: Player gets modal
+    // Player gets modal for position choice
     if (
       this.ui &&
       typeof this.ui.showSpecialSummonPositionModal === "function"
@@ -1494,38 +1440,6 @@ export default class EffectEngine {
                   sourceCard?.name ||
                   "this card";
 
-                // INVARIANTE B1: Network mode - return needsSelection for confirmation prompt
-                if (false /* networkMode removed */) {
-                  return {
-                    needsSelection: true,
-                    selectionContract: {
-                      kind: "confirm",
-                      message:
-                        effect.promptMessage ||
-                        `Activate ${promptName}'s effect?`,
-                      requirements: [
-                        {
-                          id: "confirm_activation",
-                          min: 1,
-                          max: 1,
-                          candidates: [
-                            { key: "yes", label: "Yes", value: true },
-                            { key: "no", label: "No", value: false },
-                          ],
-                        },
-                      ],
-                      metadata: {
-                        cardData: {
-                          cardId: sourceCard?.id ?? null,
-                          name: sourceCard?.name ?? "Card",
-                        },
-                      },
-                    },
-                    actionType: "confirm_effect_activation",
-                    activationContext: activationCtx,
-                  };
-                }
-
                 if (
                   this.ui &&
                   typeof this.ui.showConditionalSummonPrompt === "function"
@@ -1862,34 +1776,27 @@ export default class EffectEngine {
           if (player.id === "player" && shouldPrompt) {
             let wantsToUse = true;
 
-            // INVARIANTE B1: Network mode - skip client-side prompts
-            // In network mode, prompts are handled by the server
-            if (false /* networkMode removed */) {
-              // In network mode, auto-accept for now; server handles prompt timing
-              wantsToUse = true;
-            } else {
-              const customPromptMethod = effect.customPromptMethod;
-              if (customPromptMethod && this.ui?.[customPromptMethod]) {
-                wantsToUse = await this.ui[customPromptMethod]();
-              } else if (this.ui?.showConfirmPrompt) {
-                const promptMessage =
+            const customPromptMethod = effect.customPromptMethod;
+            if (customPromptMethod && this.ui?.[customPromptMethod]) {
+              wantsToUse = await this.ui[customPromptMethod]();
+            } else if (this.ui?.showConfirmPrompt) {
+              const promptMessage =
+                card.cardType === "trap"
+                  ? `Activate ${card.name} in response to the attack?`
+                  : `Use ${card.name}'s effect to negate the attack?`;
+              const confirmResult = this.ui.showConfirmPrompt(promptMessage, {
+                kind:
                   card.cardType === "trap"
-                    ? `Activate ${card.name} in response to the attack?`
-                    : `Use ${card.name}'s effect to negate the attack?`;
-                const confirmResult = this.ui.showConfirmPrompt(promptMessage, {
-                  kind:
-                    card.cardType === "trap"
-                      ? "trap_activation"
-                      : "attack_negation",
-                  cardName: card.name,
-                });
-                wantsToUse =
-                  confirmResult && typeof confirmResult.then === "function"
-                    ? await confirmResult
-                    : !!confirmResult;
-              } else {
-                wantsToUse = true;
-              }
+                    ? "trap_activation"
+                    : "attack_negation",
+                cardName: card.name,
+              });
+              wantsToUse =
+                confirmResult && typeof confirmResult.then === "function"
+                  ? await confirmResult
+                  : !!confirmResult;
+            } else {
+              wantsToUse = true;
             }
 
             if (!wantsToUse) {
@@ -2028,11 +1935,7 @@ export default class EffectEngine {
         if (targetOwner.id === "player" && card.cardType === "trap") {
           let wantsToUse = true;
 
-          // INVARIANTE B1: Network mode - skip client-side prompts
-          if (false /* networkMode removed */) {
-            // In network mode, auto-accept for now; server handles prompt timing
-            wantsToUse = true;
-          } else if (this.ui?.showConfirmPrompt) {
+          if (this.ui?.showConfirmPrompt) {
             const confirmResult = this.ui.showConfirmPrompt(
               `Activate ${card.name} in response to targeting?`,
               { kind: "trap_activation", cardName: card.name }
@@ -4526,13 +4429,6 @@ export default class EffectEngine {
    * @returns {Promise<boolean>} - Whether player wants to activate negation
    */
   async promptForDestructionNegation(card, effect) {
-    // INVARIANTE B1: Network mode - auto-accept for now (or return needsSelection)
-    // In network mode, destruction negation prompts should be handled by server
-    if (false /* networkMode removed */) {
-      // Auto-negate in network mode - server should handle confirmation prompts
-      return true;
-    }
-
     if (!this.ui) {
       return false;
     }
@@ -5106,17 +5002,6 @@ export default class EffectEngine {
   }
 
   showSickleSelectionModal(candidates, maxSelect, onConfirm, onCancel) {
-    // INVARIANTE B1: Network mode - use fallback (no UI)
-    if (false /* networkMode removed */) {
-      // Fallback: auto-select in order
-      const chosen = candidates.slice(0, maxSelect);
-      console.log(
-        `[NETWORK] Sickle: Auto-selecting ${chosen.length} Luminarch monsters in order.`
-      );
-      onConfirm(chosen);
-      return;
-    }
-
     if (this.ui && typeof this.ui.showSickleSelectionModal === "function") {
       this.ui.showSickleSelectionModal(
         candidates,

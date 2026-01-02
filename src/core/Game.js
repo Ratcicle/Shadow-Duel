@@ -1365,10 +1365,7 @@ export default class Game {
         needsSelection: result?.needsSelection === true,
         selectionContract: result?.selectionContract || null,
       });
-      if (
-        result?.needsSelection &&
-        result?.selectionContract
-      ) {
+      if (result?.needsSelection && result?.selectionContract) {
         this.pendingEventSelection = {
           eventName,
           payload,
@@ -1419,7 +1416,8 @@ export default class Game {
         const attackerOwnerId = payload?.attackerOwner?.id;
         await this.checkAndOfferTraps(eventName, {
           ...payload,
-          isOpponentAttack: attackerOwnerId && attackerOwnerId !== this.player.id,
+          isOpponentAttack:
+            attackerOwnerId && attackerOwnerId !== this.player.id,
         });
       }
     }
@@ -3807,7 +3805,7 @@ export default class Game {
     const explicitAutoSelect =
       typeof config.activationContext?.autoSelectSingleTarget === "boolean"
         ? config.activationContext.autoSelectSingleTarget
-        : !owner === this.bot;
+        : isAI(owner);
     const activationContext = {
       ...(config.activationContext || {}),
       fromHand,
@@ -3927,9 +3925,7 @@ export default class Game {
           requirementCount: contract.requirements.length,
         });
 
-        const shouldAutoSelect =
-          config.useAutoSelector === true ||
-          (!owner === this.bot);
+        const shouldAutoSelect = config.useAutoSelector === true || isAI(owner);
 
         if (shouldAutoSelect) {
           const autoResult = this.autoSelector?.select(contract, {

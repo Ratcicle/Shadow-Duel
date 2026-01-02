@@ -1,102 +1,43 @@
-## Shadow Duel – Copilot Instructions
+## Shadow Duel — Instruções para agentes
 
-### Run & Debug
+### Executar / Debug
 
-- **No build step**: Serve root with `npx serve` or `python -m http.server`, open `index.html`.
-- **Dev flags** (via `localStorage.setItem(key, "true")`):
-  - `shadow_duel_dev_mode` – dev panel (force phase, manual draw, reset duel)
-  - `shadow_duel_test_mode` – extra runtime guards
-- **Validation**: `CardDatabaseValidator` runs on load and blocks play if cards use unregistered `action.type`.
+- Sem build: sirva a raiz (ex.: `npx serve` ou `python -m http.server`) e abra `index.html`.
+- Flags via `localStorage.setItem(key, "true")` (ver `src/main.js`):
+  - `shadow_duel_dev_mode`: mostra painel dev + logs (ex.: `ChainSystem`)
+  - `shadow_duel_test_mode`: habilita guardas extras de runtime
+  - `shadow_duel_bot_preset`: preset do bot (`shadowheart` | `luminarch`)
+- Validação de cartas roda no load e bloqueia iniciar duelo se houver erros (`src/core/CardDatabaseValidator.js`).
 
-### Architecture
+### Arquitetura (fluxo principal)
 
-```
-main.js → Game (turn/phase/combat) → EffectEngine (effects) → ActionHandlers (actions)
-             ↓                           ↓
-        UIAdapter ← Renderer         AutoSelector (bot AI)
-```
+`src/main.js` (UI/deck builder) → `src/core/Game.js` (turno/fases/event bus) → `src/core/EffectEngine.js` (resolver efeitos) → `src/core/ActionHandlers.js` (ações genéricas)
+UI: `src/ui/Renderer.js` + `src/core/UIAdapter.js` • Bot/seleção: `src/core/Bot.js`, `src/core/AutoSelector.js`, `src/core/ai/*` • Chains: `src/core/ChainSystem.js` (ou `NullChainSystem.js`)
 
-| File                | Role                                                                                       |
-| ------------------- | ------------------------------------------------------------------------------------------ |
-| `Game.js`           | Turn flow, event bus (`on`/`emit`), `moveCard()`, once-per-turn tracking                   |
-| `EffectEngine.js`   | Resolves triggers, passives, targeting, summon position modals                             |
-| `ActionHandlers.js` | Generic action handlers (no UI); signature: `async (action, ctx, targets, engine) => bool` |
-| `ChainSystem.js`    | Chain windows, spell speed 1/2/3, LIFO resolution (disabled in network mode)               |
+### Cartas: tudo declarativo
 
-### Card Definitions (`src/data/cards.js`)
+- Definições ficam em `src/data/cards.js`. Não hardcode nomes de cartas no engine/handlers.
+- Schema é validado por `validateCardDatabase()` (timings/eventos e principalmente `action.type` registrado).
+- Extra Deck: use `monsterType: "fusion"` ou `monsterType: "ascension"` + `ascension: { materialId, requirements }` (ver validações em `CardDatabaseValidator.js`).
 
-Declarative effects—never hardcode card names in engine. Validated at startup.
+### Padrões críticos (estado do jogo)
 
-```js
-{
-  id: 123, name: "Card Name", cardKind: "monster"|"spell"|"trap",
-  effects: [{
-    id: "effect_id", timing: "on_play"|"on_event"|"ignition"|"passive",
-    event: "after_summon"|"battle_destroy"|"card_to_grave"|...,
-    speed: 1|2|3,
-    targets: [{ id: "ref", owner: "self"|"opponent"|"any", zone: "field", count: { min: 1, max: 1 } }],
-    actions: [{ type: "draw", amount: 2, player: "self" }]
-  }]
-}
-```
+- Para mover cartas entre zonas, prefira `game.moveCard(card, player, zone, { fromZone })` (vários handlers já tentam usar isso).
+- Posição de Special Summon: use `engine.chooseSpecialSummonPosition(card, player, { position })` (semântica: `attack`/`defense` forçado; `undefined`/`choice` abre escolha pro humano, bot escolhe ataque).
+- Gatilhos/limites: use `oncePerTurn` / `oncePerDuel` nos efeitos; o controle vive em `Game`/`EffectEngine`.
 
-**Summon triggers**: Use `summonMethods: ["normal"]`, `summonFrom: "hand"`, `requireSelfAsSummoned: true`.
+### Adicionar/editar action handlers
 
-**Extra Deck**: Use `monsterType: "fusion"` or `monsterType: "ascension"` with `ascension: { materialId, requirements }`.
-
-### Critical Patterns
-
-| Do                                                             | Don't                     |
-| -------------------------------------------------------------- | ------------------------- |
-| `game.moveCard(card, player, zone, {fromZone})`                | Direct array manipulation |
-| `game.inflictDamage()` or `heal` action                        | Mutate `player.lp`        |
-| `engine.chooseSpecialSummonPosition(card, player, {position})` | Hardcode position         |
-| `oncePerTurn`/`oncePerDuel` flags on effects                   | Ad-hoc per-card flags     |
-| `game.emit("after_summon", payload)`                           | Skip event emission       |
-| `game.updateBoard()` after state changes                       | Forget board refresh      |
-
-### Adding Action Handlers
-
-Register in `ActionHandlers.js` via `registry.register("type", handler)`. Handler must:
-
-- Accept `(action, ctx, targets, engine)` — no UI; selections via `targets[targetRef]`
-- Return `true`/`false` for success/failure
-- Call `game.updateBoard()` after zone mutations
-
-Common types: `draw`, `heal`, `move`, `destroy`, `special_summon_from_zone`, `bounce`, `apply_buff`, `inflict_damage`.
-
-### Archetypes
-
-- Tag: `archetype: "Shadow-Heart"` or `archetypes: ["Void"]`
-- Filters: `filters: { archetype: "Shadow-Heart" }` in actions
-- Passives: `passive: { type: "archetype_count_buff", archetype: "Void", amountPerCard: 100, stats: ["atk"] }`
-
-### Bot/AI
-
-- Presets: `Bot.getAvailablePresets()` → `shadowheart`, `luminarch`
-- Strategies extend `BaseStrategy` in `src/core/ai/`, register in `StrategyRegistry.js`
-- Decklists: `getShadowHeartDeck()`, `getLuminarchDeck()` in `Bot.js`
-
-### Online Mode
-
-- `OnlineSessionController` + `NetworkClient`; seats normalized to `p1`/`p2`
-- Actions via `sendAction(ACTION_TYPES.*, payload)` from `MessageProtocol.js`
-- Chains/Traps disabled in network mode to avoid desync
+- Registro via `registerDefaultHandlers(registry)` em `src/core/ActionHandlers.js`.
+- Assinatura padrão: `async (action, ctx, targets, engine) => boolean`.
+- Se seu card precisar de um `action.type` novo, ele _precisa_ estar registrado, senão o jogo bloqueia o duelo.
 
 ### i18n
 
-Use `getCardDisplayName(card)` and `getCardDisplayDescription(card)` from `src/core/i18n.js`.
+- Use `getCardDisplayName(card)` / `getCardDisplayDescription(card)` de `src/core/i18n.js`; fontes em `src/locales/en.json` e `src/locales/pt-br.json`.
 
-### Deck Rules
+### Regras de deck (implementadas)
 
-- Main Deck: 20–30 cards (max 3 copies)
-- Extra Deck: Up to 10 fusion/ascension (1 copy each)
+- Main Deck: 20–30 (max 3 cópias) • Extra Deck: até 10 (fusão/ascensão, 1 cópia por id) — ver constantes/validações em `src/main.js`.
 
-### Key Docs
-
-| Document                                 | Purpose                             |
-| ---------------------------------------- | ----------------------------------- |
-| `docs/Como criar uma carta.md`           | Card schema, timing/event reference |
-| `docs/Como criar um handler.md`          | Handler creation guide              |
-| `docs/Como adicionar um arquetipo.md`    | Archetype patterns                  |
-| `docs/Regras para Invocação-Ascensão.md` | Ascension summon mechanics          |
+Docs úteis: `docs/Como criar uma carta.md`, `docs/Como criar um handler.md`, `docs/Como adicionar um arquetipo.md`, `docs/Regras para Invocação-Ascensão.md`.

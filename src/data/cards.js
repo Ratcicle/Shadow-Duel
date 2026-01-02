@@ -622,10 +622,10 @@ export const cardDatabase = [
             owner: "self",
             zone: "field",
             cardKind: "monster",
-            archetype: "Shadow-Heart", // <<< filtro de arqu+�tipo
+            archetype: "Shadow-Heart", // <<< filtro de arquétipo
             requireFaceup: true,
             count: { min: 1, max: 5 },
-            autoSelect: true, // pega automaticamente todos os v+�lidos
+            autoSelect: true, // pega automaticamente todos os válidos
           },
         ],
         actions: [
@@ -2136,7 +2136,7 @@ export const cardDatabase = [
     archetype: "Luminarch",
     image: "assets/Luminarch Enchanted Halberd.png",
     description:
-      'Uma vez por turno, se um monstro "Luminarch" for invocado por invoca+�+�o especial no seu campo; voc+� pode invocar essa carta por invoca+�+�o especial da sua m+�o, mas ela n+�o pode declarar um ataque neste turno.',
+      'Uma vez por turno, se um monstro "Luminarch" for invocado por invocação especial no seu campo; você pode invocar essa carta por invocação especial da sua mão, mas ela não pode declarar um ataque neste turno.',
     effects: [
       {
         id: "luminarch_enchanted_halberd_conditional_summon",
@@ -2151,7 +2151,7 @@ export const cardDatabase = [
         },
         promptUser: true,
         promptMessage:
-          "Um monstro Luminarch foi invocado por invoca+�+�o especial. Deseja invocar Luminarch Enchanted Halberd da sua m+�o?",
+          "Um monstro Luminarch foi invocado por invocação especial. Deseja invocar Luminarch Enchanted Halberd da sua mão?",
         actions: [
           {
             type: "conditional_summon_from_hand",
@@ -2789,7 +2789,7 @@ export const cardDatabase = [
     type: "Winged Beast",
     archetype: "Void",
     description:
-      "Se um monstro de fus+�o 'Void' for Invocado por Invoca+�+�o-Fus+�o: voc+� pode descartar esta carta da m+�o; esse monstro fica imune aos efeitos de cartas do oponente at+� o final do pr+�ximo turno.",
+      "Se um monstro de fusão 'Void' for Invocado por Invocação-Fusão: você pode descartar esta carta da mão; esse monstro fica imune aos efeitos de cartas do oponente até o final do próximo turno.",
     image: "assets/Void Raven.png",
     effects: [
       {
@@ -2799,7 +2799,7 @@ export const cardDatabase = [
         summonMethods: ["fusion"],
         promptUser: true,
         promptMessage:
-          "Descartar Void Raven para proteger o monstro 'Void' rec+�m-invocado?",
+          "Descartar Void Raven para proteger o monstro 'Void' recém-invocado?",
         oncePerTurn: true,
         oncePerTurnName: "void_raven_fusion_immunity",
         condition: {
@@ -2843,7 +2843,7 @@ export const cardDatabase = [
     type: "Fiend",
     archetype: "Void",
     description:
-      "Ganha 100 ATK/DEF para cada carta 'Void' no campo. Uma vez por duelo, se esta carta estiver no seu Cemit+�rio, voc+� pode Invoc+�-la por Invoca+�+�o-Especial.",
+      "Ganha 100 ATK/DEF para cada carta 'Void' no campo. Uma vez por duelo, se esta carta estiver no seu Cemitário, você pode Invocá-la por Invocação-Especial.",
     image: "assets/Void Tenebris Horn.png",
     effects: [
       {
@@ -2971,7 +2971,7 @@ export const cardDatabase = [
         oncePerTurnName: "void_berserker_bounce_on_destroy",
         promptUser: true,
         promptMessage:
-          "Ativar Void Berserker para devolver 1 carta do oponente para a m+�o?",
+          "Ativar Void Berserker para devolver 1 carta do oponente para a mão?",
         targets: [
           {
             id: "void_berserker_bounce_target",
