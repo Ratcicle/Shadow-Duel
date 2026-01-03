@@ -41,6 +41,22 @@ import * as combatResolution from "./game/combat/resolution.js";
 // Summon modules (moved from inline methods)
 import * as summonTracking from "./game/summon/tracking.js";
 import * as summonExecution from "./game/summon/execution.js";
+import * as summonAscension from "./game/summon/ascension.js";
+
+// Deck modules (moved from inline methods)
+import * as deckDraw from "./game/deck/draw.js";
+
+// Graveyard modules (moved from inline methods)
+import * as graveyardModal from "./game/graveyard/modal.js";
+
+// Extra Deck modules (moved from inline methods)
+import * as extraDeckModal from "./game/extraDeck/modal.js";
+
+// Turn modules (moved from inline methods)
+import * as turnScheduling from "./game/turn/scheduling.js";
+import * as turnCleanup from "./game/turn/cleanup.js";
+import * as turnLifecycle from "./game/turn/lifecycle.js";
+import * as turnTransitions from "./game/turn/transitions.js";
 
 // Helper to construct user-friendly cost type descriptions
 function getCostTypeDescription(costFilters, count) {
@@ -155,109 +171,7 @@ export default class Game {
   // → Moved to src/core/game/summon/tracking.js
   // ─────────────────────────────────────────────────────────────────────────────
 
-  /**
-   * ✅ FASE 2: Adicionar ação agendada (delayed action)
-   * Suporta qualquer tipo de ação futura: summons, damage, draw, etc.
-   * @param {string} actionType - Tipo de ação (ex: "delayed_summon")
-   * @param {Object} triggerCondition - Condição de trigger (ex: {phase: "standby", player: "opponent"})
-   * @param {Object} payload - Dados da ação
-   * @param {number} priority - Prioridade de execução (padrão: 0)
-   * @returns {number} ID da ação agendada
-   */
-  scheduleDelayedAction(actionType, triggerCondition, payload, priority = 0) {
-    if (!actionType || !triggerCondition || !payload) {
-      console.error("Invalid delayed action parameters");
-      return null;
-    }
-
-    const action = {
-      id: Math.random().toString(36).substr(2, 9),
-      actionType,
-      triggerCondition,
-      payload,
-      scheduledTurn: this.turnCounter,
-      priority,
-    };
-
-    this.delayedActions.push(action);
-    this.devLog?.("DELAYED_ACTION_SCHEDULED", {
-      summary: `${actionType} scheduled for ${triggerCondition.phase} (${triggerCondition.player})`,
-      actionType,
-      trigger: triggerCondition,
-      turn: this.turnCounter,
-    });
-
-    return action.id;
-  }
-
-  /**
-   * ✅ FASE 2: Processar delayed actions que devem ser resolvidas agora
-   * Filtra ações pelo trigger atual e executa resolvers apropriados
-   * @param {string} phase - Fase atual (ex: "standby")
-   * @param {string} activePlayer - Player ativo ("player" ou "bot")
-   */
-  processDelayedActions(phase, activePlayer) {
-    if (
-      !Array.isArray(this.delayedActions) ||
-      this.delayedActions.length === 0
-    ) {
-      return;
-    }
-
-    // Filtrar ações que devem ser resolvidas nesta fase/player
-    const actionsToResolve = this.delayedActions.filter((action) => {
-      const trigger = action.triggerCondition;
-      if (!trigger) return false;
-
-      // Verificar se a fase corresponde
-      if (trigger.phase && trigger.phase !== phase) return false;
-
-      // Verificar se o player corresponde
-      if (trigger.player) {
-        const triggerPlayer =
-          trigger.player === "opponent"
-            ? activePlayer === "player"
-              ? "bot"
-              : "player"
-            : trigger.player;
-        if (triggerPlayer !== activePlayer) return false;
-      }
-
-      return true;
-    });
-
-    // Ordenar por prioridade e executar
-    actionsToResolve.sort((a, b) => b.priority - a.priority);
-
-    for (const action of actionsToResolve) {
-      this.resolveDelayedAction(action);
-    }
-
-    // Remover ações resolvidas
-    this.delayedActions = this.delayedActions.filter(
-      (action) => !actionsToResolve.includes(action)
-    );
-  }
-
-  /**
-   * ✅ FASE 2: Resolver uma ação agendada individual
-   * Chama o resolver apropriado baseado no tipo de ação
-   * @param {Object} action - Ação a resolver
-   */
-  resolveDelayedAction(action) {
-    try {
-      switch (action.actionType) {
-        case "delayed_summon":
-          this.resolveDelayedSummon(action.payload);
-          break;
-        // Futuros tipos de ações podem ser adicionados aqui
-        default:
-          console.warn(`Unknown delayed action type: ${action.actionType}`);
-      }
-    } catch (err) {
-      console.error("Error resolving delayed action:", err);
-    }
-  }
+  // → scheduleDelayedAction, processDelayedActions, resolveDelayedAction → Moved to src/core/game/turn/scheduling.js
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Summon delayed: resolveDelayedSummon
@@ -316,50 +230,7 @@ export default class Game {
     return true;
   }
 
-  /**
-   * ✅ FASE 4: Limpar buffs temporários expirados
-   * Chamado no início de startTurn() para remover buffs cujo turno de expiração foi atingido
-   */
-  cleanupExpiredBuffs() {
-    const allMonsters = [
-      ...(this.player?.field || []),
-      ...(this.bot?.field || []),
-    ].filter(Boolean);
-
-    for (const card of allMonsters) {
-      if (
-        !Array.isArray(card.turnBasedBuffs) ||
-        card.turnBasedBuffs.length === 0
-      ) {
-        continue;
-      }
-
-      const expiredBuffs = card.turnBasedBuffs.filter(
-        (buff) => this.turnCounter > buff.expiresOnTurn
-      );
-
-      for (const buff of expiredBuffs) {
-        // Remover valor do stat
-        if (buff.stat === "atk") {
-          card.atk = Math.max(0, card.atk - buff.value);
-        } else if (buff.stat === "def") {
-          card.def = Math.max(0, card.def - buff.value);
-        }
-
-        this.devLog?.("TURN_BASED_BUFF_EXPIRED", {
-          summary: `${card.name} buff expired (${buff.id})`,
-          card: card.name,
-          buffId: buff.id,
-          stat: buff.stat,
-        });
-      }
-
-      // Remover buffs expirados da lista
-      card.turnBasedBuffs = card.turnBasedBuffs.filter(
-        (buff) => this.turnCounter <= buff.expiresOnTurn
-      );
-    }
-  }
+  // → cleanupExpiredBuffs → Moved to src/core/game/turn/cleanup.js
 
   incrementMaterialStat(playerId, mapName, materialCardId, delta = 1) {
     const store = this.materialDuelStats?.[playerId]?.[mapName];
@@ -653,54 +524,8 @@ export default class Game {
     this.bindCardInteractions();
   }
 
-  drawCards(player, count = 1, options = {}) {
-    if (!player) {
-      return { ok: false, reason: "invalid_player", drawn: [] };
-    }
-
-    const drawCount = Math.max(0, Number(count) || 0);
-    if (drawCount === 0) {
-      return { ok: true, drawn: [] };
-    }
-
-    const drawn = [];
-    for (let i = 0; i < drawCount; i += 1) {
-      const card = player.draw();
-      if (!card) {
-        if (!options.silent && this.ui?.log) {
-          this.ui.log(options.message || "Deck is empty.");
-        }
-        this.devLog("DRAW_FAIL", {
-          summary: `${player.id} deck empty`,
-          player: player.id,
-          requested: drawCount,
-          drawn: drawn.length,
-        });
-        return { ok: false, reason: "deck_empty", drawn };
-      }
-      drawn.push(card);
-    }
-
-    return { ok: true, drawn };
-  }
-
-  forceOpeningHand(cardName, count) {
-    if (!cardName || count <= 0) return;
-    const data = cardDatabaseByName.get(cardName);
-    if (!data || !this.player || !Array.isArray(this.player.deck)) return;
-
-    const ensured = [];
-    for (let i = 0; i < count; i++) {
-      const idx = this.player.deck.findIndex((card) => card?.name === cardName);
-      if (idx !== -1) {
-        ensured.push(this.player.deck.splice(idx, 1)[0]);
-      } else {
-        ensured.push(new Card(data, this.player.id));
-      }
-    }
-
-    ensured.forEach((card) => this.player.deck.push(card));
-  }
+  // → drawCards → Moved to src/core/game/deck/draw.js
+  // → forceOpeningHand → Moved to src/core/game/deck/draw.js
 
   updateBoard() {
     // Update passive effects before rendering
@@ -962,170 +787,12 @@ export default class Game {
   // → Moved to src/core/game/combat/damage.js
   // ─────────────────────────────────────────────────────────────────────────────
 
-  async startTurn() {
-    this.turnCounter += 1;
-    this.resetOncePerTurnUsage("start_turn");
-
-    // ✅ FASE 4: Limpar buffs temporários expirados no início do turno
-    this.cleanupExpiredBuffs();
-
-    this.phase = "draw";
-
-    const activePlayer = this.turn === "player" ? this.player : this.bot;
-    const opponent = activePlayer === this.player ? this.bot : this.player;
-    activePlayer.field.forEach((card) => {
-      card.hasAttacked = false;
-      card.attacksUsedThisTurn = 0;
-      card.positionChangedThisTurn = false;
-      card.canMakeSecondAttackThisTurn = false;
-      card.secondAttackUsedThisTurn = false;
-      card.battleIndestructibleOncePerTurnUsed = false;
-
-      const shouldRestrictAttack =
-        card.cannotAttackUntilTurn &&
-        this.turnCounter <= card.cannotAttackUntilTurn;
-      card.cannotAttackThisTurn = shouldRestrictAttack;
-
-      if (!shouldRestrictAttack && card.cannotAttackUntilTurn) {
-        card.cannotAttackUntilTurn = null;
-      }
-      if (
-        card.immuneToOpponentEffectsUntilTurn &&
-        this.turnCounter > card.immuneToOpponentEffectsUntilTurn
-      ) {
-        card.immuneToOpponentEffectsUntilTurn = null;
-      }
-    });
-    activePlayer.summonCount = 0;
-    activePlayer.additionalNormalSummons = 0;
-
-    this.updateBoard();
-
-    this.drawCards(activePlayer, 1);
-    this.updateBoard();
-    await this.waitForPhaseDelay();
-
-    this.phase = "standby";
-
-    // ✅ FASE 2 & 5: Processar delayed actions na standby phase ANTES de emitir o evento
-    this.processDelayedActions("standby", activePlayer.id || this.turn);
-
-    this.updateBoard();
-    await this.emit("standby_phase", { player: activePlayer, opponent });
-    await this.waitForPhaseDelay();
-
-    this.phase = "main1";
-    this.updateBoard();
-    if (
-      isAI(this.bot) &&
-      this.turn === "bot" &&
-      !this.gameOver &&
-      typeof this.bot?.makeMove === "function"
-    ) {
-      this.bot.makeMove(this);
-    }
-  }
-
-  waitForPhaseDelay() {
-    return new Promise((resolve) =>
-      setTimeout(resolve, this.phaseDelayMs || 0)
-    );
-  }
-
-  async nextPhase() {
-    if (this.gameOver) return;
-    const actor = this.turn === "player" ? this.player : this.bot;
-    const guard = this.guardActionStart(
-      { actor, kind: "phase_change" },
-      actor === this.player
-    );
-    if (!guard.ok) return guard;
-
-    // Oferecer ativacao de traps genericas no final da fase atual
-    await this.checkAndOfferTraps("phase_end", {
-      currentPhase: this.phase,
-    });
-
-    const order = ["draw", "standby", "main1", "battle", "main2", "end"];
-    const idx = order.indexOf(this.phase);
-    if (idx === -1) return;
-    const next = order[idx + 1];
-    if (!next) {
-      this.endTurn();
-      return;
-    }
-    this.phase = next;
-
-    // Clear attack indicators when leaving battle phase
-    this.clearAttackResolutionIndicators();
-    this.clearAttackReadyIndicators();
-
-    this.updateBoard();
-
-    if (
-      isAI(this.bot) &&
-      this.turn === "bot" &&
-      !this.gameOver &&
-      typeof this.bot?.makeMove === "function"
-    ) {
-      this.bot.makeMove(this);
-    }
-  }
-
-  endTurn() {
-    const actor = this.turn === "player" ? this.player : this.bot;
-    const guard = this.guardActionStart(
-      { actor, kind: "phase_change" },
-      actor === this.player
-    );
-    if (!guard.ok) return guard;
-    this.cleanupTempBoosts(this.player);
-    this.cleanupTempBoosts(this.bot);
-
-    // Clear all attack indicators at end of turn
-    this.clearAttackResolutionIndicators();
-    this.clearAttackReadyIndicators();
-
-    this.turn = this.turn === "player" ? "bot" : "player";
-    this.startTurn();
-  }
+  // → startTurn, endTurn, waitForPhaseDelay → Moved to src/core/game/turn/lifecycle.js
+  // → nextPhase, skipToPhase → Moved to src/core/game/turn/transitions.js
 
   showIgnitionActivateModal(card, onActivate) {
     if (this.ui && typeof this.ui.showIgnitionActivateModal === "function") {
       this.ui.showIgnitionActivateModal(card, onActivate);
-    }
-  }
-
-  skipToPhase(targetPhase) {
-    const guard = this.guardActionStart({
-      actor: this.player,
-      kind: "phase_change",
-    });
-    if (!guard.ok) return guard;
-    const order = ["draw", "standby", "main1", "battle", "main2", "end"];
-    const currentIdx = order.indexOf(this.phase);
-    const targetIdx = order.indexOf(targetPhase);
-    if (currentIdx === -1 || targetIdx === -1) return;
-    if (targetIdx <= currentIdx) return;
-    this.phase = targetPhase;
-
-    // Clear attack indicators when skipping phases
-    this.clearAttackResolutionIndicators();
-    this.clearAttackReadyIndicators();
-
-    if (this.phase === "end") {
-      this.endTurn();
-      return;
-    }
-    this.updateBoard();
-    if (
-      isAI(this.bot) &&
-      this.turn === "bot" &&
-      this.phase !== "draw" &&
-      !this.gameOver &&
-      typeof this.bot?.makeMove === "function"
-    ) {
-      this.bot.makeMove(this);
     }
   }
 
@@ -3001,517 +2668,9 @@ export default class Game {
   // → Moved to src/core/game/combat/targeting.js
   // ─────────────────────────────────────────────────────────────────────────────
 
-  openGraveyardModal(player, options = {}) {
-    if (options.selectable) {
-      this.graveyardSelection = { onCancel: options.onCancel || null };
-    } else {
-      this.graveyardSelection = null;
-    }
-
-    // Se não está em modo de seleção, mostrar indicador de efeitos ativáveis
-    if (
-      !options.selectable &&
-      player.id === "player" &&
-      this.turn === "player"
-    ) {
-      options.showActivatable = true;
-      options.isActivatable = (card) => {
-        return this.effectEngine.hasActivatableGraveyardEffect(card);
-      };
-
-      // Se não tem onSelect customizado, usar o padrão para ativar efeitos
-      if (!options.onSelect) {
-        options.onSelect = (card) => {
-          if (!this.effectEngine.hasActivatableGraveyardEffect(card)) {
-            return;
-          }
-          const activationContext = {
-            fromHand: false,
-            activationZone: "graveyard",
-            sourceZone: "graveyard",
-            committed: false,
-          };
-          const activationEffect =
-            this.effectEngine?.getMonsterIgnitionEffect?.(card, "graveyard");
-          this.runActivationPipeline({
-            card,
-            owner: player,
-            activationZone: "graveyard",
-            activationContext,
-            selectionKind: "graveyardEffect",
-            selectionMessage: "Select target(s) for the graveyard effect.",
-            guardKind: "graveyard_effect",
-            phaseReq: ["main1", "main2"],
-            oncePerTurn: {
-              card,
-              player,
-              effect: activationEffect,
-            },
-            onSelectionStart: () => this.closeGraveyardModal(false),
-            activate: (chosen, ctx) =>
-              this.effectEngine.activateMonsterFromGraveyard(
-                card,
-                player,
-                chosen,
-                ctx
-              ),
-            finalize: () => {
-              this.closeGraveyardModal(false);
-              this.ui.log(`${card.name} activates from the Graveyard.`);
-              this.updateBoard();
-            },
-          });
-        };
-        options.selectable = true;
-      }
-    }
-
-    this.ui.renderGraveyardModal(player.graveyard, options);
-    this.ui.toggleModal(true);
-  }
-
-  closeGraveyardModal(triggerCancel = true) {
-    this.ui.toggleModal(false);
-    if (triggerCancel && this.graveyardSelection?.onCancel) {
-      this.graveyardSelection.onCancel();
-    }
-    this.graveyardSelection = null;
-  }
-
-  openExtraDeckModal(player) {
-    this.ui.renderExtraDeckModal(player.extraDeck);
-    this.ui.toggleExtraDeckModal(true);
-  }
-
-  closeExtraDeckModal() {
-    this.ui.toggleExtraDeckModal(false);
-  }
-
-  getMaterialFieldAgeTurnCounter(card) {
-    if (!card) return this.turnCounter;
-    const entered = card.enteredFieldTurn ?? null;
-    const summoned = card.summonedTurn ?? null;
-    const setTurn = card.setTurn ?? null;
-    const values = [entered, summoned, setTurn].filter((v) =>
-      Number.isFinite(v)
-    );
-    if (values.length === 0) return this.turnCounter;
-    return Math.max(...values);
-  }
-
-  getAscensionCandidatesForMaterial(player, materialCard) {
-    if (!player || !materialCard) return [];
-    if (!Array.isArray(player.extraDeck)) return [];
-    if (typeof materialCard.id !== "number") return [];
-
-    const candidates = player.extraDeck.filter((card) => {
-      const asc = card?.ascension;
-      if (!card || card.cardKind !== "monster") return false;
-      if (card.monsterType !== "ascension") return false;
-      if (!asc || typeof asc !== "object") return false;
-      return asc.materialId === materialCard.id;
-    });
-
-    this.devLog("ASCENSION_CANDIDATES", {
-      summary: `Material ${materialCard.name} (ID: ${materialCard.id}) -> ${candidates.length} candidates`,
-      materialId: materialCard.id,
-      materialName: materialCard.name,
-      candidates: candidates.map((c) => ({
-        name: c.name,
-        id: c.id,
-        requiredMaterial: c.ascension?.materialId,
-      })),
-    });
-
-    return candidates;
-  }
-
-  checkAscensionRequirements(player, ascensionCard) {
-    const asc = ascensionCard?.ascension;
-    if (!player || !ascensionCard || !asc) {
-      return { ok: false, reason: "Invalid ascension card." };
-    }
-    const materialId = asc.materialId;
-    if (typeof materialId !== "number") {
-      return { ok: false, reason: "Missing ascension materialId." };
-    }
-
-    const reqs = Array.isArray(asc.requirements) ? asc.requirements : [];
-    for (const req of reqs) {
-      if (!req || !req.type) continue;
-      switch (req.type) {
-        case "material_destroyed_opponent_monsters": {
-          const need = Math.max(0, req.count ?? req.min ?? 0);
-          const got =
-            this.materialDuelStats?.[
-              player.id
-            ]?.destroyedOpponentMonstersByMaterialId?.get?.(materialId) || 0;
-          if (got < need) {
-            return {
-              ok: false,
-              reason: `Ascension requirement not met: ${need} opponent monster(s) destroyed (current: ${got}).`,
-            };
-          }
-          break;
-        }
-        case "material_effect_activations": {
-          const need = Math.max(0, req.count ?? req.min ?? 0);
-          const got =
-            this.materialDuelStats?.[
-              player.id
-            ]?.effectActivationsByMaterialId?.get?.(materialId) || 0;
-          this.devLog("ASCENSION_REQUIREMENT_CHECK", {
-            summary: `Material ID ${materialId} effect activations: ${got}/${need}`,
-            requirementType: "material_effect_activations",
-            materialId,
-            need,
-            got,
-            passed: got >= need,
-          });
-          if (got < need) {
-            return {
-              ok: false,
-              reason: `Ascension requirement not met: material effect activated ${need} time(s) (current: ${got}).`,
-            };
-          }
-          break;
-        }
-        case "player_lp_gte": {
-          const need = Math.max(0, req.amount ?? req.min ?? 0);
-          if ((player.lp ?? 0) < need) {
-            return { ok: false, reason: `Need at least ${need} LP.` };
-          }
-          break;
-        }
-        case "player_lp_lte": {
-          const need = Math.max(0, req.amount ?? req.max ?? 0);
-          if ((player.lp ?? 0) > need) {
-            return { ok: false, reason: `Need at most ${need} LP.` };
-          }
-          break;
-        }
-        case "player_hand_gte": {
-          const need = Math.max(0, req.count ?? req.min ?? 0);
-          if ((player.hand?.length || 0) < need) {
-            return {
-              ok: false,
-              reason: `Need at least ${need} card(s) in hand.`,
-            };
-          }
-          break;
-        }
-        case "player_graveyard_gte": {
-          const need = Math.max(0, req.count ?? req.min ?? 0);
-          if ((player.graveyard?.length || 0) < need) {
-            return {
-              ok: false,
-              reason: `Need at least ${need} card(s) in graveyard.`,
-            };
-          }
-          break;
-        }
-        default:
-          break;
-      }
-    }
-
-    return { ok: true };
-  }
-
-  canUseAsAscensionMaterial(player, materialCard) {
-    if (!player || !materialCard) {
-      return { ok: false, reason: "Missing material." };
-    }
-    if (!player.field?.includes(materialCard)) {
-      return { ok: false, reason: "Material must be on the field." };
-    }
-    if (materialCard.cardKind !== "monster") {
-      return { ok: false, reason: "Material must be a monster." };
-    }
-    if (materialCard.isFacedown) {
-      return { ok: false, reason: "Material must be face-up." };
-    }
-
-    const enteredTurn = this.getMaterialFieldAgeTurnCounter(materialCard);
-    if (this.turnCounter <= enteredTurn) {
-      return {
-        ok: false,
-        reason: "Material must have been on the field for at least 1 turn.",
-      };
-    }
-
-    return { ok: true };
-  }
-
-  async performAscensionSummon(player, materialCard, ascensionCard) {
-    const game = this;
-    if (!player || !materialCard || !ascensionCard) {
-      return {
-        success: false,
-        needsSelection: false,
-        reason: "Invalid summon.",
-      };
-    }
-
-    const materialCheck = this.canUseAsAscensionMaterial(player, materialCard);
-    if (!materialCheck.ok) {
-      return {
-        success: false,
-        needsSelection: false,
-        reason: materialCheck.reason,
-      };
-    }
-
-    const reqCheck = this.checkAscensionRequirements(player, ascensionCard);
-    if (!reqCheck.ok) {
-      return { success: false, needsSelection: false, reason: reqCheck.reason };
-    }
-
-    if ((player.field?.length || 0) >= 5) {
-      return {
-        success: false,
-        needsSelection: false,
-        reason: "Field is full.",
-      };
-    }
-
-    const positionPref = ascensionCard.ascension?.position || "choice";
-    const resolvedPosition =
-      positionPref === "choice" &&
-      typeof this.effectEngine?.chooseSpecialSummonPosition === "function"
-        ? await this.effectEngine.chooseSpecialSummonPosition(
-            ascensionCard,
-            player
-          )
-        : positionPref === "defense"
-        ? "defense"
-        : "attack";
-
-    const result = await this.runZoneOp(
-      "ASCENSION_SUMMON",
-      async () => {
-        const sendResult = await this.moveCard(
-          materialCard,
-          player,
-          "graveyard",
-          {
-            fromZone: "field",
-            contextLabel: "ascension_material",
-            wasDestroyed: false,
-          }
-        );
-        if (sendResult?.success === false) {
-          return {
-            success: false,
-            needsSelection: false,
-            reason: "Failed to pay material.",
-          };
-        }
-
-        const summonResult = await this.moveCard(
-          ascensionCard,
-          player,
-          "field",
-          {
-            fromZone: "extraDeck",
-            position: resolvedPosition,
-            isFacedown: false,
-            resetAttackFlags: true,
-            summonMethodOverride: "ascension",
-            contextLabel: "ascension_summon",
-          }
-        );
-        if (summonResult?.success === false) {
-          return {
-            success: false,
-            needsSelection: false,
-            reason: summonResult.reason || "Ascension summon failed.",
-          };
-        }
-
-        // Propagar needsSelection do after_summon
-        if (summonResult.needsSelection) {
-          return {
-            success: true,
-            needsSelection: true,
-            selectionContract: summonResult.selectionContract,
-          };
-        }
-
-        return { success: true, needsSelection: false };
-      },
-      {
-        contextLabel: "ascension_summon",
-        card: ascensionCard,
-        fromZone: "extraDeck",
-        toZone: "field",
-      }
-    );
-
-    if (result?.success) {
-      game.ui.log(
-        `${player.name || player.id} Ascension Summoned ${
-          ascensionCard.name
-        } by sending ${materialCard.name} to the Graveyard.`
-      );
-      game.updateBoard();
-    } else if (result?.reason) {
-      game.ui.log(result.reason);
-    }
-
-    return (
-      result || {
-        success: false,
-        needsSelection: false,
-        reason: "Ascension summon failed.",
-      }
-    );
-  }
-
-  async tryAscensionSummon(materialCard, options = {}) {
-    const player = this.player;
-    const guard = this.guardActionStart({
-      actor: player,
-      kind: "ascension_summon",
-      phaseReq: ["main1", "main2"],
-    });
-    if (!guard.ok) return guard;
-
-    const materialCheck = this.canUseAsAscensionMaterial(player, materialCard);
-    if (!materialCheck.ok) {
-      this.ui.log(materialCheck.reason);
-      return { success: false, reason: materialCheck.reason };
-    }
-
-    const allAscensions = this.getAscensionCandidatesForMaterial(
-      player,
-      materialCard
-    );
-    if (allAscensions.length === 0) {
-      let hint = "";
-      try {
-        const extra = Array.isArray(player.extraDeck) ? player.extraDeck : [];
-        const ascInExtra = extra.filter(
-          (c) => c && c.cardKind === "monster" && c.monsterType === "ascension"
-        );
-        if (ascInExtra.length === 0) {
-          hint = " No ascension monsters in Extra Deck.";
-        } else {
-          const missingMeta = ascInExtra.filter((c) => !c.ascension).length;
-          const wrongMaterial = ascInExtra.filter(
-            (c) => c.ascension && c.ascension.materialId !== materialCard.id
-          ).length;
-          if (missingMeta > 0) {
-            hint += ` ${missingMeta} ascension card(s) missing metadata.`;
-          }
-          if (wrongMaterial > 0) {
-            hint += ` ${wrongMaterial} ascension card(s) require a different material.`;
-          }
-        }
-      } catch (_) {
-        // best-effort diagnostics only
-      }
-
-      const reason =
-        `No Ascension monsters available for this material.${hint}`.trim();
-      this.ui.log(reason);
-      return { success: false, reason };
-    }
-
-    const eligible = [];
-    let lastFailure = null;
-    for (const asc of allAscensions) {
-      const req = this.checkAscensionRequirements(player, asc);
-      if (req.ok) {
-        eligible.push(asc);
-      } else {
-        lastFailure = req.reason;
-      }
-    }
-
-    if (eligible.length === 0) {
-      const reason = lastFailure || "Ascension requirements not met.";
-      this.ui.log(reason);
-      return { success: false, reason };
-    }
-
-    if (eligible.length === 1) {
-      return await this.performAscensionSummon(
-        player,
-        materialCard,
-        eligible[0]
-      );
-    }
-
-    const candidates = eligible
-      .map((card) => {
-        const zoneIndex = player.extraDeck.indexOf(card);
-        return {
-          name: card.name,
-          owner: "player",
-          controller: player.id,
-          zone: "extraDeck",
-          zoneIndex,
-          atk: card.atk || 0,
-          def: card.def || 0,
-          level: card.level || 0,
-          cardKind: card.cardKind,
-          cardRef: card,
-        };
-      })
-      .map((cand, idx) => ({
-        ...cand,
-        key: this.buildSelectionCandidateKey(cand, idx),
-      }));
-
-    return new Promise((resolve) => {
-      const requirementId = "ascension_choice";
-      const requirement = {
-        id: requirementId,
-        min: 1,
-        max: 1,
-        zones: ["extraDeck"],
-        owner: "player",
-        filters: {},
-        allowSelf: true,
-        distinct: true,
-        candidates,
-      };
-      const selectionContract = {
-        kind: "choice",
-        message: "Select an Ascension Monster to Summon.",
-        requirements: [requirement],
-        ui: { useFieldTargeting: false, allowCancel: true },
-        metadata: { context: "ascension_choice" },
-      };
-
-      this.startTargetSelectionSession({
-        kind: "ascension",
-        selectionContract,
-        onCancel: () =>
-          resolve({ success: false, reason: "Ascension cancelled." }),
-        execute: async (selections) => {
-          const chosenKey = (selections?.[requirementId] || [])[0];
-          const chosenCard =
-            candidates.find((cand) => cand.key === chosenKey)?.cardRef || null;
-          if (!chosenCard) {
-            return {
-              success: false,
-              needsSelection: false,
-              reason: "No Ascension selected.",
-            };
-          }
-          const res = await this.performAscensionSummon(
-            player,
-            materialCard,
-            chosenCard
-          );
-          resolve(res);
-          return res;
-        },
-      });
-    });
-  }
+  // → openGraveyardModal, closeGraveyardModal → Moved to src/core/game/graveyard/modal.js
+  // → openExtraDeckModal, closeExtraDeckModal → Moved to src/core/game/extraDeck/modal.js
+  // → getMaterialFieldAgeTurnCounter, getAscensionCandidatesForMaterial, checkAscensionRequirements, canUseAsAscensionMaterial, performAscensionSummon, tryAscensionSummon → Moved to src/core/game/summon/ascension.js
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Combat availability: getAttackAvailability, markAttackUsed, registerAttackNegated, canDestroyByBattle
@@ -3608,41 +2767,7 @@ export default class Game {
     return player.id === "player" ? this.bot : this.player;
   }
 
-  cleanupTempBoosts(player) {
-    player.field.forEach((card) => {
-      if (card.tempAtkBoost) {
-        card.atk -= card.tempAtkBoost;
-        if (card.atk < 0) card.atk = 0;
-        card.tempAtkBoost = 0;
-      }
-      if (card.tempDefBoost) {
-        card.def -= card.tempDefBoost;
-        if (card.def < 0) card.def = 0;
-        card.tempDefBoost = 0;
-      }
-
-      // Restore stats if they were set to zero
-      if (card.originalAtk != null) {
-        card.atk = card.originalAtk;
-        card.originalAtk = null;
-      }
-      if (card.originalDef != null) {
-        card.def = card.originalDef;
-        card.originalDef = null;
-      }
-
-      // Remove effect negation
-      card.effectsNegated = false;
-
-      card.tempBattleIndestructible = false;
-      card.battleDamageHealsControllerThisTurn = false;
-      card.canAttackDirectlyThisTurn = false;
-
-      // Reset multi-attack flags
-      delete card.canAttackAllOpponentMonstersThisTurn;
-      delete card.attackedMonstersThisTurn;
-    });
-  }
+  // → cleanupTempBoosts → Moved to src/core/game/turn/cleanup.js
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Zone methods (ownership, snapshot, invariants, operations, movement)
@@ -4291,3 +3416,61 @@ Game.prototype.resolveDelayedSummon = summonTracking.resolveDelayedSummon;
 Game.prototype.flipSummon = summonExecution.flipSummon;
 Game.prototype.performFusionSummon = summonExecution.performFusionSummon;
 Game.prototype.performSpecialSummon = summonExecution.performSpecialSummon;
+
+// Ascension: getMaterialFieldAgeTurnCounter, getAscensionCandidatesForMaterial, checkAscensionRequirements, canUseAsAscensionMaterial, performAscensionSummon, tryAscensionSummon
+Game.prototype.getMaterialFieldAgeTurnCounter =
+  summonAscension.getMaterialFieldAgeTurnCounter;
+Game.prototype.getAscensionCandidatesForMaterial =
+  summonAscension.getAscensionCandidatesForMaterial;
+Game.prototype.checkAscensionRequirements =
+  summonAscension.checkAscensionRequirements;
+Game.prototype.canUseAsAscensionMaterial =
+  summonAscension.canUseAsAscensionMaterial;
+Game.prototype.performAscensionSummon = summonAscension.performAscensionSummon;
+Game.prototype.tryAscensionSummon = summonAscension.tryAscensionSummon;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Deck: Attach methods from modular deck/ folder
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Draw: drawCards, forceOpeningHand
+Game.prototype.drawCards = deckDraw.drawCards;
+Game.prototype.forceOpeningHand = deckDraw.forceOpeningHand;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Graveyard: Attach methods from modular graveyard/ folder
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Modal: openGraveyardModal, closeGraveyardModal
+Game.prototype.openGraveyardModal = graveyardModal.openGraveyardModal;
+Game.prototype.closeGraveyardModal = graveyardModal.closeGraveyardModal;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Extra Deck: Attach methods from modular extraDeck/ folder
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Modal: openExtraDeckModal, closeExtraDeckModal
+Game.prototype.openExtraDeckModal = extraDeckModal.openExtraDeckModal;
+Game.prototype.closeExtraDeckModal = extraDeckModal.closeExtraDeckModal;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Turn: Attach methods from modular turn/ folder
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Scheduling: scheduleDelayedAction, processDelayedActions, resolveDelayedAction
+Game.prototype.scheduleDelayedAction = turnScheduling.scheduleDelayedAction;
+Game.prototype.processDelayedActions = turnScheduling.processDelayedActions;
+Game.prototype.resolveDelayedAction = turnScheduling.resolveDelayedAction;
+
+// Cleanup: cleanupExpiredBuffs, cleanupTempBoosts
+Game.prototype.cleanupExpiredBuffs = turnCleanup.cleanupExpiredBuffs;
+Game.prototype.cleanupTempBoosts = turnCleanup.cleanupTempBoosts;
+
+// Lifecycle: startTurn, endTurn, waitForPhaseDelay
+Game.prototype.startTurn = turnLifecycle.startTurn;
+Game.prototype.endTurn = turnLifecycle.endTurn;
+Game.prototype.waitForPhaseDelay = turnLifecycle.waitForPhaseDelay;
+
+// Transitions: nextPhase, skipToPhase
+Game.prototype.nextPhase = turnTransitions.nextPhase;
+Game.prototype.skipToPhase = turnTransitions.skipToPhase;
