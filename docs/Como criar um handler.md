@@ -1,10 +1,21 @@
 ﻿# Como criar um handler
 
-Handlers vivem em `src/core/ActionHandlers.js` e são responsáveis por aplicar as actions de forma genérica.
+Handlers são responsáveis por aplicar as actions de forma genérica.
+
+**Estrutura atual:**
+- `src/core/actionHandlers/` — Pasta com handlers organizados por categoria
+  - `destruction.js` — destroy, banish
+  - `movement.js` — return_to_hand, bounce
+  - `resources.js` — draw, heal, pay_lp, search
+  - `stats.js` — buff_stats_temp, add_status, switch_position
+  - `summon.js` — special_summon_from_zone, transmutate
+  - `shared.js` — helpers comuns
+  - `wiring.js` — registro de todos os handlers
+- `src/core/ActionHandlers.js` — Facade que re-exporta tudo (compatibilidade)
 
 ## Assinatura
 
-```
+```js
 export async function handleMinhaAction(action, ctx, targets, engine) {
   // return true/false
 }
@@ -24,15 +35,20 @@ Regra: o handler **não abre UI**. Se precisa seleção, ela deve vir de `target
 - Usar `game.updateBoard()` ao final se alterou o estado.
 - Log opcional com `game.ui?.log(...)`.
 
-## Registro no registry
+## Registro no wiring.js
 
-No final do arquivo, adicionar:
+1. Adicione o handler no arquivo de categoria apropriado (ex: `stats.js`, `destruction.js`)
+2. Exporte-o no `index.js` da pasta
+3. Registre em `wiring.js`:
 
-```
+```js
+import { handleMinhaAction } from "./stats.js";
+
+// dentro de registerDefaultHandlers(registry):
 registry.register("minha_action", handleMinhaAction);
 ```
 
-O validador (`CardDatabaseValidator`) exige que todo `action.type` exista no registry.
+O validador (`CardDatabaseValidator`) exige que todo `action.type` exista no registry — o jogo bloqueia se faltar.
 
 ## Exemplo real (pay_lp)
 

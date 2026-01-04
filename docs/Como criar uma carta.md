@@ -37,13 +37,14 @@ Campos comuns por tipo:
 
 ### Eventos suportados
 
-- `after_summon`
-- `battle_destroy`
-- `card_to_grave`
-- `standby_phase`
-- `attack_declared`
-- `opponent_damage`
-- `before_destroy`
+- `after_summon` — quando um monstro é invocado
+- `battle_destroy` — quando um monstro é destruído em batalha
+- `card_to_grave` — quando uma carta vai para o Cemitério
+- `standby_phase` — durante a Standby Phase
+- `attack_declared` — quando um ataque é declarado
+- `opponent_damage` — quando o oponente recebe dano
+- `before_destroy` — antes de uma carta ser destruída
+- `effect_targeted` — quando uma carta é alvo de efeito
 
 ### Regras de summon (para `after_summon`)
 
@@ -104,8 +105,26 @@ Cada target descreve um requisito:
 
 ### Actions
 
-`actions` usam handlers registrados em `ActionHandlers.js`.
-Exemplos de tipos comuns: `draw`, `destroy`, `move`, `special_summon_from_zone`, `buff_stats_temp`.
+`actions` usam handlers registrados em `src/core/actionHandlers/wiring.js`.
+
+**Tipos principais:**
+
+| Tipo                       | Uso                                        |
+| -------------------------- | ------------------------------------------ |
+| `draw`                     | Comprar cartas                             |
+| `heal` / `damage`          | Alterar LP                                 |
+| `pay_lp`                   | Custo de LP                                |
+| `destroy` / `banish`       | Remover cartas                             |
+| `special_summon_from_zone` | Invocar de deck/grave/hand                 |
+| `special_summon_token`     | Criar token                                |
+| `add_from_zone_to_hand`    | Buscar carta no deck                       |
+| `buff_stats_temp`          | Buff temporário ATK/DEF                    |
+| `add_status`               | Adicionar status (ex: cannot_be_destroyed) |
+| `switch_position`          | Mudar posição de batalha                   |
+| `return_to_hand`           | Devolver carta à mão                       |
+| `transmutate`              | Enviar ao GY e invocar mesmo nível         |
+
+Veja a lista completa em `wiring.js`. Se usar um tipo não registrado, o jogo bloqueia.
 
 ## Exemplo 1: Spell simples (Arcane Surge)
 
