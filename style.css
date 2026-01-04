@@ -1206,8 +1206,25 @@ body {
   }
 }
 
+/* Flip animation for defense position (preserve horizontal orientation) */
+@keyframes flip-card-defense {
+  0% {
+    transform: rotate(-90deg) rotateY(0deg);
+  }
+  50% {
+    transform: rotate(-90deg) rotateY(90deg);
+  }
+  100% {
+    transform: rotate(-90deg) rotateY(0deg);
+  }
+}
+
 .card.flipping {
   animation: flip-card 0.6s ease-in-out;
+}
+
+.card.defense.flipping {
+  animation: flip-card-defense 0.6s ease-in-out;
 }
 
 /* Start/Deck overlays (new) */

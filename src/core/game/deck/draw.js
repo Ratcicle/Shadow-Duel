@@ -7,7 +7,7 @@
  * Methods: drawCards, forceOpeningHand
  */
 
-import { cardDatabaseByName } from "../../data/cards.js";
+import { cardDatabaseByName } from "../../../data/cards.js";
 import Card from "../../Card.js";
 
 /**

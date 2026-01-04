@@ -428,19 +428,38 @@ export async function handleAddStatus(action, ctx, targets, engine) {
 
   const affectedCards = [];
 
+  // Status properties that should be additive (sum values) instead of replacing
+  const ADDITIVE_STATUS = ["extraAttacks"];
+
   for (const card of targetCards) {
     if (!card) continue;
 
     if (remove) {
       if (card[status] !== undefined) {
-        delete card[status];
+        // For additive status, subtract instead of delete
+        if (
+          ADDITIVE_STATUS.includes(status) &&
+          typeof card[status] === "number"
+        ) {
+          card[status] = Math.max(
+            0,
+            card[status] - (typeof value === "number" ? value : 1)
+          );
+        } else {
+          delete card[status];
+        }
 
         modified = true;
 
         affectedCards.push(card.name);
       }
     } else {
-      card[status] = value;
+      // For additive status, sum values instead of replacing
+      if (ADDITIVE_STATUS.includes(status) && typeof value === "number") {
+        card[status] = (card[status] || 0) + value;
+      } else {
+        card[status] = value;
+      }
 
       modified = true;
 

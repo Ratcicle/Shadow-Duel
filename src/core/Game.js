@@ -58,6 +58,21 @@ import * as turnCleanup from "./game/turn/cleanup.js";
 import * as turnLifecycle from "./game/turn/lifecycle.js";
 import * as turnTransitions from "./game/turn/transitions.js";
 
+// Spell/Trap modules (moved from inline methods)
+import * as spellTrapSet from "./game/spellTrap/set.js";
+import * as spellTrapActivation from "./game/spellTrap/activation.js";
+import * as spellTrapFinalization from "./game/spellTrap/finalization.js";
+import * as spellTrapVerification from "./game/spellTrap/verification.js";
+import * as spellTrapTriggers from "./game/spellTrap/triggers.js";
+
+// UI modules (moved from inline methods)
+import * as uiBoard from "./game/ui/board.js";
+import * as uiIndicators from "./game/ui/indicators.js";
+import * as uiModals from "./game/ui/modals.js";
+import * as uiPrompts from "./game/ui/prompts.js";
+import * as uiWinCondition from "./game/ui/winCondition.js";
+import * as uiInteractions from "./game/ui/interactions.js";
+
 // Helper to construct user-friendly cost type descriptions
 function getCostTypeDescription(costFilters, count) {
   if (costFilters.archetype) {
@@ -527,64 +542,11 @@ export default class Game {
   // → drawCards → Moved to src/core/game/deck/draw.js
   // → forceOpeningHand → Moved to src/core/game/deck/draw.js
 
-  updateBoard() {
-    // Update passive effects before rendering
-    this.effectEngine?.updatePassiveBuffs();
-    if (typeof this.player.updatePassiveEffects === "function") {
-      this.player.updatePassiveEffects();
-    }
-    if (typeof this.bot.updatePassiveEffects === "function") {
-      this.bot.updatePassiveEffects();
-    }
+  // → updateBoard → Moved to src/core/game/ui/board.js
+  // → highlightReadySpecialSummon → Moved to src/core/game/ui/board.js
 
-    this.ui.renderHand(this.player);
-    this.ui.renderField(this.player);
-    this.ui.renderFieldSpell(this.player);
-
-    if (typeof this.ui.renderSpellTrap === "function") {
-      this.ui.renderSpellTrap(this.player);
-      this.ui.renderSpellTrap(this.bot);
-    } else {
-      console.warn("Renderer missing renderSpellTrap implementation.");
-    }
-
-    this.ui.renderHand(this.bot);
-    this.ui.renderField(this.bot);
-    this.ui.renderFieldSpell(this.bot);
-    this.ui.updateLP(this.player);
-    this.ui.updateLP(this.bot);
-    this.ui.updatePhaseTrack(this.phase);
-    this.ui.updateTurn(this.turn === "player" ? this.player : this.bot);
-    this.ui.updateGYPreview(this.player);
-    this.ui.updateGYPreview(this.bot);
-
-    if (typeof this.ui.updateExtraDeckPreview === "function") {
-      this.ui.updateExtraDeckPreview(this.player);
-      this.ui.updateExtraDeckPreview(this.bot);
-    }
-
-    if (this.targetSelection?.usingFieldTargeting) {
-      this.highlightTargetCandidates();
-    }
-
-    // Highlight cards ready for special summon after rendering
-    if (this.pendingSpecialSummon) {
-      this.highlightReadySpecialSummon();
-    }
-
-    this.updateActivationIndicators();
-    this.updateAttackIndicators();
-  }
-
-  updateActivationIndicators() {
-    if (!this.ui || typeof this.ui.applyActivationIndicators !== "function") {
-      return;
-    }
-
-    const indicators = this.buildActivationIndicatorsForPlayer(this.player);
-    if (!indicators) return;
-    this.ui.applyActivationIndicators("player", indicators);
-  }
+  // → updateActivationIndicators → Moved to src/core/game/ui/indicators.js
+  // → buildActivationIndicatorsForPlayer → Moved to src/core/game/ui/indicators.js
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Combat indicators: updateAttackIndicators, clearAttackReadyIndicators,
@@ -592,195 +554,7 @@ export default class Game {
   // → Moved to src/core/game/combat/indicators.js
   // ─────────────────────────────────────────────────────────────────────────────
 
-  buildActivationIndicatorsForPlayer(player) {
-    if (!player || player.id !== "player") return null;
-
-    const activationContext = {
-      autoSelectSingleTarget: false,
-      logTargets: false,
-    };
-
-    const mapGuardHint = (guard) => {
-      if (!guard || guard.ok) return null;
-      if (guard.code === "BLOCKED_WRONG_PHASE") {
-        return "bloqueado por fase";
-      }
-      if (guard.code === "BLOCKED_NOT_YOUR_TURN") {
-        return "fora do seu turno";
-      }
-      return null;
-    };
-
-    const mapReasonHint = (reason) => {
-      if (!reason) return null;
-      const lower = reason.toLowerCase();
-      if (lower.includes("1/turn") || lower.includes("once per turn")) {
-        return "1/turn ja usado";
-      }
-      if (lower.includes("main phase") || lower.includes("phase")) {
-        return "bloqueado por fase";
-      }
-      if (lower.includes("no valid targets")) {
-        return "sem alvos validos";
-      }
-      if (lower.includes("not your turn")) {
-        return "fora do seu turno";
-      }
-      return null;
-    };
-
-    const canStart = (kind, phaseReq) =>
-      this.canStartAction({
-        actor: player,
-        kind,
-        phaseReq,
-        silent: true,
-      });
-
-    const buildHint = (guard, preview, readyLabel) => {
-      const guardHint = mapGuardHint(guard);
-      if (guardHint) {
-        return { canActivate: false, label: guardHint };
-      }
-      if (!preview) return null;
-      if (preview.ok) {
-        return { canActivate: true, label: readyLabel };
-      }
-      const reasonHint = mapReasonHint(preview.reason);
-      if (reasonHint) {
-        return { canActivate: false, label: reasonHint };
-      }
-      return null;
-    };
-
-    const indicators = {
-      hand: {},
-      field: {},
-      spellTrap: {},
-      fieldSpell: null,
-    };
-
-    (player.hand || []).forEach((card, index) => {
-      if (!card) return;
-      if (card.cardKind === "spell") {
-        const guard = canStart("spell_from_hand", ["main1", "main2"]);
-        const preview = this.effectEngine?.canActivateSpellFromHandPreview?.(
-          card,
-          player,
-          {
-            activationContext,
-          }
-        ) || { ok: false };
-        let ok = !!preview.ok;
-        if (ok && card.name === "Polymerization") {
-          ok = this.canActivatePolymerization();
-        }
-        const previewResult = { ...preview, ok };
-        const hint = buildHint(guard, previewResult, "ativacao disponivel");
-        if (!hint && card.name === "Polymerization" && !ok) {
-          indicators.hand[index] = {
-            canActivate: false,
-            label: "sem alvos validos",
-          };
-          return;
-        }
-        if (hint) {
-          indicators.hand[index] = hint;
-        }
-      } else if (card.cardKind === "monster") {
-        const guard = canStart("monster_effect", ["main1", "main2"]);
-        const preview = this.effectEngine?.canActivateMonsterEffectPreview?.(
-          card,
-          player,
-          "hand",
-          null,
-          { activationContext }
-        ) || { ok: false };
-        const hint = buildHint(guard, preview, "ignition disponivel");
-        if (hint) {
-          indicators.hand[index] = hint;
-        }
-      }
-    });
-
-    (player.field || []).forEach((card, index) => {
-      if (!card || card.cardKind !== "monster") return;
-      const guard = canStart("monster_effect", ["main1", "main2"]);
-      const preview = this.effectEngine?.canActivateMonsterEffectPreview?.(
-        card,
-        player,
-        "field",
-        null,
-        { activationContext }
-      ) || { ok: false };
-      const hint = buildHint(guard, preview, "ignition disponivel");
-      if (hint) {
-        indicators.field[index] = hint;
-      }
-    });
-
-    (player.spellTrap || []).forEach((card, index) => {
-      if (!card) return;
-      const guard = canStart("spelltrap_effect", ["main1", "main2"]);
-      const preview = this.effectEngine?.canActivateSpellTrapEffectPreview?.(
-        card,
-        player,
-        "spellTrap",
-        null,
-        { activationContext }
-      ) || { ok: false };
-      const hint = buildHint(guard, preview, "ignition disponivel");
-      if (hint) {
-        indicators.spellTrap[index] = hint;
-      }
-    });
-
-    if (player.fieldSpell) {
-      const guard = canStart("fieldspell_effect", ["main1", "main2"]);
-      const preview = this.effectEngine?.canActivateFieldSpellEffectPreview?.(
-        player.fieldSpell,
-        player,
-        null,
-        { activationContext }
-      ) || { ok: false };
-      const hint = buildHint(guard, preview, "ignition disponivel");
-      if (hint) {
-        indicators.fieldSpell = hint;
-      }
-    }
-
-    return indicators;
-  }
-
-  /**
-   * WRAPPER for unified Special Summon position resolver.
-   * Delegates to EffectEngine.chooseSpecialSummonPosition for consistent behavior.
-   *
-   * @param {Object} player - Player summoning the card
-   * @param {Object} card - Card being summoned (optional)
-   * @param {Object} options - Position options (position: undefined/"choice"/"attack"/"defense")
-   * @returns {Promise<string>} - Resolved position ('attack' or 'defense')
-   */
-  chooseSpecialSummonPosition(player, card = null, options = {}) {
-    if (
-      this.effectEngine &&
-      typeof this.effectEngine.chooseSpecialSummonPosition === "function"
-    ) {
-      return this.effectEngine.chooseSpecialSummonPosition(
-        card,
-        player,
-        options
-      );
-    }
-
-    // Fallback if EffectEngine not available
-    const actionPosition = options.position;
-    if (actionPosition === "attack" || actionPosition === "defense") {
-      return Promise.resolve(actionPosition);
-    }
-    // AI defaults to "attack", human also defaults to "attack" in this fallback
-    return Promise.resolve("attack");
-  }
+  // → chooseSpecialSummonPosition → Moved to src/core/game/ui/prompts.js
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Combat damage: inflictDamage
@@ -790,708 +564,9 @@ export default class Game {
   // → startTurn, endTurn, waitForPhaseDelay → Moved to src/core/game/turn/lifecycle.js
   // → nextPhase, skipToPhase → Moved to src/core/game/turn/transitions.js
 
-  showIgnitionActivateModal(card, onActivate) {
-    if (this.ui && typeof this.ui.showIgnitionActivateModal === "function") {
-      this.ui.showIgnitionActivateModal(card, onActivate);
-    }
-  }
+  // → showIgnitionActivateModal → Moved to src/core/game/ui/modals.js
 
-  bindCardInteractions() {
-    this.devLog("BIND_INTERACTIONS", {
-      summary: "Binding card interaction handlers",
-    });
-
-    let tributeSelectionMode = false;
-    let selectedTributes = [];
-    let pendingSummon = null;
-
-    if (this.ui && typeof this.ui.bindPlayerHandClick === "function") {
-      this.ui.bindPlayerHandClick((e, cardEl, index) => {
-        if (this.targetSelection) return;
-
-        if (tributeSelectionMode) return;
-        const card = this.player.hand[index];
-
-        if (!card) return;
-
-        // If resolving an effect, only allow the specific pending action
-        if (this.isResolvingEffect) {
-          if (
-            this.pendingSpecialSummon &&
-            card.name === this.pendingSpecialSummon.cardName
-          ) {
-            // Use unified position resolver
-            this.chooseSpecialSummonPosition(this.player, card, {})
-              .then((position) => {
-                this.performSpecialSummon(index, position);
-              })
-              .catch(() => {
-                this.performSpecialSummon(index, "attack");
-              });
-          } else {
-            this.ui.log(
-              "Finalize o efeito pendente antes de fazer outra acao."
-            );
-          }
-          return;
-        }
-
-        if (card.cardKind === "monster") {
-          const guard = this.guardActionStart({
-            actor: this.player,
-            kind: "summon",
-            phaseReq: ["main1", "main2"],
-          });
-          if (!guard.ok) return;
-
-          const canSanctumSpecialFromAegis =
-            card.name === "Luminarch Sanctum Protector" &&
-            this.player.field.length < 5 &&
-            this.player.field.some(
-              (c) => c && c.name === "Luminarch Aegisbearer" && !c.isFacedown
-            );
-
-          const tributeInfo = this.player.getTributeRequirement(card);
-          const tributesNeeded = tributeInfo.tributesNeeded;
-
-          const handEffect = (card.effects || []).find(
-            (e) => e && e.timing === "ignition" && e.requireZone === "hand"
-          );
-
-          // Generic pre-check for hand effects (filters, OPT, targets, phase/turn)
-          const handEffectPreview = handEffect
-            ? this.effectEngine.canActivateMonsterEffectPreview(
-                card,
-                this.player,
-                "hand"
-              )
-            : { ok: false };
-
-          const canUseHandEffect = handEffectPreview.ok;
-          const handEffectLabel = "Special Summon";
-
-          if (
-            !canUseHandEffect &&
-            tributesNeeded > 0 &&
-            this.player.field.length < tributesNeeded &&
-            !canSanctumSpecialFromAegis
-          ) {
-            this.ui.log(`Not enough tributes for Level ${card.level} monster.`);
-            return;
-          }
-
-          this.ui.showSummonModal(
-            index,
-            (choice) => {
-              if (choice === "special_from_aegisbearer") {
-                this.specialSummonSanctumProtectorFromHand(index);
-                return;
-              }
-
-              if (choice === "special_from_void_forgotten") {
-                this.tryActivateMonsterEffect(card, null, "hand");
-                return;
-              }
-
-              if (choice === "special_from_hand_effect") {
-                console.log("[Game] Activating hand effect for:", card.name);
-                this.tryActivateMonsterEffect(card, null, "hand");
-                return;
-              }
-              if (choice === "attack" || choice === "defense") {
-                const position = choice;
-                const isFacedown = choice === "defense";
-
-                if (tributesNeeded > 0) {
-                  tributeSelectionMode = true;
-                  selectedTributes = [];
-                  pendingSummon = {
-                    cardIndex: index,
-                    position,
-                    isFacedown,
-                    tributesNeeded,
-                    altTribute: tributeInfo.usingAlt ? tributeInfo.alt : null,
-                  };
-
-                  // Filter tributeable monsters based on altTribute requirements
-                  let tributeableIndices = this.player.field
-                    .map((card, idx) => (card ? idx : null))
-                    .filter((idx) => idx !== null);
-
-                  // If using alt tribute with type requirement, only allow that type
-                  if (tributeInfo.usingAlt && tributeInfo.alt?.requiresType) {
-                    const requiredType = tributeInfo.alt.requiresType;
-                    tributeableIndices = tributeableIndices.filter((idx) => {
-                      const fieldCard = this.player.field[idx];
-                      if (!fieldCard || fieldCard.isFacedown) return false;
-                      if (Array.isArray(fieldCard.types)) {
-                        return fieldCard.types.includes(requiredType);
-                      }
-                      return fieldCard.type === requiredType;
-                    });
-                  }
-
-                  pendingSummon.tributeableIndices = tributeableIndices;
-                  if (
-                    this.ui &&
-                    typeof this.ui.setPlayerFieldTributeable === "function"
-                  ) {
-                    this.ui.setPlayerFieldTributeable(
-                      pendingSummon.tributeableIndices
-                    );
-                  }
-
-                  this.ui.log(
-                    `Select ${tributesNeeded} monster(s) to tribute.`
-                  );
-                } else {
-                  const before = this.player.field.length;
-                  const result = this.player.summon(
-                    index,
-                    position,
-                    isFacedown
-                  );
-                  if (!result && this.player.field.length === before) {
-                    this.updateBoard();
-                    return;
-                  }
-                  const summonedCard =
-                    this.player.field[this.player.field.length - 1];
-                  summonedCard.summonedTurn = this.turnCounter;
-                  summonedCard.positionChangedThisTurn = false;
-                  if (summonedCard.isFacedown) {
-                    summonedCard.setTurn = this.turnCounter;
-                  } else {
-                    summonedCard.setTurn = null;
-                  }
-                  this.emit("after_summon", {
-                    card: summonedCard,
-                    player: this.player,
-                    method: "normal",
-                    fromZone: "hand",
-                  });
-                  this.updateBoard();
-                }
-              }
-            },
-            {
-              canSanctumSpecialFromAegis,
-              specialSummonFromHand: false,
-              specialSummonFromHandEffect: canUseHandEffect,
-              specialSummonFromHandEffectLabel: handEffectLabel,
-            }
-          );
-          return;
-        }
-
-        if (card.cardKind === "spell") {
-          const guard = this.guardActionStart({
-            actor: this.player,
-            kind: "spell_from_hand",
-            phaseReq: ["main1", "main2"],
-          });
-          if (!guard.ok) return;
-
-          // Special check for Polymerization
-          const spellPreview =
-            this.effectEngine?.canActivateSpellFromHandPreview(
-              card,
-              this.player
-            ) || { ok: true };
-          let canActivateFromHand = !!spellPreview.ok;
-
-          if (card.name === "Polymerization") {
-            if (!this.canActivatePolymerization()) {
-              canActivateFromHand = false;
-            }
-          }
-
-          const handleSpellChoice = (choice) => {
-            if (choice === "activate") {
-              this.tryActivateSpell(card, index);
-            } else if (choice === "set") {
-              this.setSpellOrTrap(card, index);
-            }
-          };
-
-          if (this.ui && typeof this.ui.showSpellChoiceModal === "function") {
-            this.ui.showSpellChoiceModal(index, handleSpellChoice, {
-              canActivate: canActivateFromHand,
-            });
-          } else {
-            const shouldActivate =
-              this.ui?.showConfirmPrompt?.(
-                "OK: Activate this Spell. Cancel: Set it face-down in your Spell/Trap Zone.",
-                { kind: "spell_choice", cardName: card.name }
-              ) ?? false;
-            handleSpellChoice(shouldActivate ? "activate" : "set");
-          }
-          return;
-        }
-
-        if (card.cardKind === "trap") {
-          const guard = this.guardActionStart({
-            actor: this.player,
-            kind: "set_trap",
-            phaseReq: ["main1", "main2"],
-          });
-          if (!guard.ok) return;
-          this.setSpellOrTrap(card, index);
-          return;
-        }
-      });
-    }
-
-    if (this.ui && typeof this.ui.bindPlayerFieldClick === "function") {
-      this.ui.bindPlayerFieldClick(async (e, cardEl, index) => {
-        if (
-          this.targetSelection &&
-          this.handleTargetSelectionClick("player", index, cardEl, "field")
-        ) {
-          return;
-        }
-
-        if (tributeSelectionMode && pendingSummon) {
-          const allowed = pendingSummon.tributeableIndices || [];
-          if (!allowed.includes(index)) return;
-
-          if (selectedTributes.includes(index)) {
-            selectedTributes = selectedTributes.filter((i) => i !== index);
-            if (
-              this.ui &&
-              typeof this.ui.setPlayerFieldSelected === "function"
-            ) {
-              this.ui.setPlayerFieldSelected(index, false);
-            }
-          } else if (selectedTributes.length < pendingSummon.tributesNeeded) {
-            selectedTributes.push(index);
-            if (
-              this.ui &&
-              typeof this.ui.setPlayerFieldSelected === "function"
-            ) {
-              this.ui.setPlayerFieldSelected(index, true);
-            }
-          }
-
-          if (selectedTributes.length === pendingSummon.tributesNeeded) {
-            if (
-              this.ui &&
-              typeof this.ui.clearPlayerFieldTributeable === "function"
-            ) {
-              this.ui.clearPlayerFieldTributeable();
-            }
-
-            const before = this.player.field.length;
-            const result = this.player.summon(
-              pendingSummon.cardIndex,
-              pendingSummon.position,
-              pendingSummon.isFacedown,
-              selectedTributes
-            );
-
-            if (!result && this.player.field.length === before) {
-              tributeSelectionMode = false;
-              selectedTributes = [];
-              pendingSummon = null;
-              this.updateBoard();
-              return;
-            }
-
-            const summonedCard =
-              this.player.field[this.player.field.length - 1];
-            summonedCard.summonedTurn = this.turnCounter;
-            summonedCard.positionChangedThisTurn = false;
-            if (summonedCard.isFacedown) {
-              summonedCard.setTurn = this.turnCounter;
-            } else {
-              summonedCard.setTurn = null;
-            }
-
-            this.emit("after_summon", {
-              card: summonedCard,
-              player: this.player,
-              method: pendingSummon.tributesNeeded > 0 ? "tribute" : "normal",
-              fromZone: "hand",
-            });
-
-            tributeSelectionMode = false;
-            selectedTributes = [];
-            pendingSummon = null;
-
-            this.updateBoard();
-          }
-          return;
-        }
-
-        if (
-          this.turn === "player" &&
-          (this.phase === "main1" || this.phase === "main2")
-        ) {
-          const guard = this.guardActionStart({
-            actor: this.player,
-            kind: "monster_action",
-            phaseReq: ["main1", "main2"],
-          });
-          if (!guard.ok) return;
-
-          const card = this.player.field[index];
-          if (!card || card.cardKind !== "monster") return;
-
-          // Verificar se tem efeito ignition ativavel
-          const hasIgnition =
-            card.effects &&
-            card.effects.some((eff) => eff && eff.timing === "ignition");
-
-          const canFlip = this.canFlipSummon(card);
-          const canPosChange = this.canChangePosition(card);
-
-          // Verificar se pode fazer Ascension Summon
-          let hasAscension = false;
-          const materialCheck = this.canUseAsAscensionMaterial(
-            this.player,
-            card
-          );
-          if (materialCheck.ok) {
-            const candidates = this.getAscensionCandidatesForMaterial(
-              this.player,
-              card
-            );
-            hasAscension = candidates.some(
-              (asc) => this.checkAscensionRequirements(this.player, asc).ok
-            );
-          }
-
-          // Se tem qualquer opcao disponivel, mostrar o modal unificado
-          if (hasIgnition || canFlip || canPosChange || hasAscension) {
-            if (e && typeof e.stopImmediatePropagation === "function") {
-              e.stopImmediatePropagation();
-            }
-
-            this.ui.showPositionChoiceModal(
-              cardEl,
-              card,
-              (choice) => {
-                if (choice === "flip" && canFlip) {
-                  this.flipSummon(card);
-                } else if (
-                  choice === "to_attack" &&
-                  canPosChange &&
-                  card.position !== "attack"
-                ) {
-                  this.changeMonsterPosition(card, "attack");
-                } else if (
-                  choice === "to_defense" &&
-                  canPosChange &&
-                  card.position !== "defense"
-                ) {
-                  this.changeMonsterPosition(card, "defense");
-                }
-              },
-              {
-                canFlip,
-                canChangePosition: canPosChange,
-                hasIgnitionEffect: hasIgnition,
-                onActivateEffect: hasIgnition
-                  ? () => this.tryActivateMonsterEffect(card)
-                  : null,
-                hasAscensionSummon: hasAscension,
-                onAscensionSummon: hasAscension
-                  ? () => this.tryAscensionSummon(card)
-                  : null,
-              }
-            );
-            return;
-          }
-        }
-
-        if (this.turn !== "player" || this.phase !== "battle") return;
-
-        const attacker = this.player.field[index];
-
-        if (attacker) {
-          const guard = this.guardActionStart({
-            actor: this.player,
-            kind: "attack",
-            phaseReq: "battle",
-          });
-          if (!guard.ok) return;
-
-          const availability = this.getAttackAvailability(attacker);
-          if (!availability.ok) {
-            this.ui.log(availability.reason);
-            return;
-          }
-
-          const canUseSecondAttack =
-            attacker.canMakeSecondAttackThisTurn &&
-            !attacker.secondAttackUsedThisTurn;
-
-          // Multi-attack mode bypasses the hasAttacked check
-          const isMultiAttackMode =
-            attacker.canAttackAllOpponentMonstersThisTurn;
-
-          if (
-            attacker.hasAttacked &&
-            !canUseSecondAttack &&
-            !isMultiAttackMode
-          ) {
-            this.ui.log("This monster has already attacked!");
-            return;
-          }
-
-          const opponentTargets = this.bot.field.filter(
-            (card) => card && card.cardKind === "monster"
-          );
-
-          let attackCandidates =
-            opponentTargets.filter((card) => card && card.mustBeAttacked)
-              .length > 0
-              ? opponentTargets.filter((card) => card && card.mustBeAttacked)
-              : opponentTargets;
-
-          // For multi-attack mode, filter out monsters already attacked this turn
-          if (attacker.canAttackAllOpponentMonstersThisTurn) {
-            const attackedMonsters =
-              attacker.attackedMonstersThisTurn || new Set();
-            attackCandidates = attackCandidates.filter((card) => {
-              const cardId = card.instanceId || card.id || card.name;
-              return !attackedMonsters.has(cardId);
-            });
-          }
-
-          // ✅ CORREÇÃO: Detecta extra attacks para AMBOS os sistemas (extraAttacks E canMakeSecondAttackThisTurn)
-          // Um ataque é considerado "extra" se o monstro já atacou antes neste turno
-          // Multi-attack mode allows multiple attacks, so it's not considered "extra" for direct attack purposes
-          const attacksUsed = attacker.attacksUsedThisTurn || 0;
-          const isExtraAttack = attacksUsed > 0 && !isMultiAttackMode;
-          const canDirect =
-            !attacker.cannotAttackDirectly &&
-            !isExtraAttack && // Extra attacks (2nd, 3rd, etc.) cannot be direct
-            !isMultiAttackMode && // Multi-attack can only target monsters, not direct
-            (attacker.canAttackDirectlyThisTurn === true ||
-              attackCandidates.length === 0);
-
-          // Always start selection; "Direct Attack" option added when allowed
-          if (!canDirect && attackCandidates.length === 0) {
-            this.ui.log("No valid attack targets and cannot attack directly!");
-            return;
-          }
-          this.startAttackTargetSelection(attacker, attackCandidates);
-        }
-      });
-    }
-
-    if (this.ui && typeof this.ui.bindPlayerSpellTrapClick === "function") {
-      this.ui.bindPlayerSpellTrapClick(async (e, cardEl, index) => {
-        console.log(`[Game] Spell/Trap zone clicked! Target:`, e.target);
-
-        if (this.targetSelection) {
-          const handled = this.handleTargetSelectionClick(
-            "player",
-            index,
-            cardEl,
-            "spellTrap"
-          );
-          if (handled) return;
-          console.log(`[Game] Returning: targetSelection active`);
-          return;
-        }
-
-        const card = this.player.spellTrap[index];
-        if (!card) return;
-
-        console.log(
-          `[Game] Clicked spell/trap: ${card.name}, isFacedown: ${card.isFacedown}, cardKind: ${card.cardKind}`
-        );
-
-        // Handle traps - can be activated on opponent's turn and during battle phase
-        if (card.cardKind === "trap") {
-          const guard = this.guardActionStart({
-            actor: this.player,
-            kind: "trap_activation",
-            phaseReq: ["main1", "battle", "main2"],
-            allowDuringOpponentTurn: true,
-          });
-          if (!guard.ok) return;
-
-          const hasActivateEffect = (card.effects || []).some(
-            (e) => e && e.timing === "on_activate"
-          );
-
-          if (hasActivateEffect) {
-            // Check if trap can be activated (waited at least 1 turn)
-            if (!this.canActivateTrap(card)) {
-              this.ui.log("Esta armadilha nao pode ser ativada neste turno.");
-              return;
-            }
-
-            console.log(`[Game] Activating trap: ${card.name}`);
-            await this.tryActivateSpellTrapEffect(card);
-          }
-          return;
-        }
-
-        // Spells can only be activated on your turn during Main Phase
-        const guard = this.guardActionStart({
-          actor: this.player,
-          kind: "spelltrap_zone",
-          phaseReq: ["main1", "main2"],
-        });
-        if (!guard.ok) return;
-
-        // For spells, don't allow clicking facedown cards
-        if (card.isFacedown) return;
-
-        // Handle continuous spells and ignition effects
-        if (card.cardKind === "spell") {
-          const hasIgnition = (card.effects || []).some(
-            (e) => e.timing === "ignition"
-          );
-          if (hasIgnition) {
-            console.log(
-              `[Game] Clicking continuous spell/ignition: ${card.name}`
-            );
-            await this.tryActivateSpellTrapEffect(card);
-          }
-        }
-      });
-    }
-
-    if (this.ui && typeof this.ui.bindBotFieldClick === "function") {
-      this.ui.bindBotFieldClick((e, cardEl, index) => {
-        if (!this.targetSelection) return;
-        this.handleTargetSelectionClick("bot", index, cardEl, "field");
-      });
-    }
-
-    // Direcionar ataque direto: clicar na mao do oponente quando houver alvo "Direct Attack"
-    if (this.ui && typeof this.ui.bindBotSpellTrapClick === "function") {
-      this.ui.bindBotSpellTrapClick((e, cardEl, index) => {
-        if (!this.targetSelection) return;
-        this.handleTargetSelectionClick("bot", index, cardEl, "spellTrap");
-      });
-    }
-
-    if (this.ui && typeof this.ui.bindBotHandClick === "function") {
-      this.ui.bindBotHandClick((e) => {
-        if (!this.targetSelection) return;
-        if (this.targetSelection.kind !== "attack") return;
-        const requirement = this.targetSelection.requirements?.[0];
-        if (!requirement) return;
-
-        const directCandidate = requirement.candidates.find(
-          (c) => c && c.isDirectAttack
-        );
-        if (!directCandidate) return;
-
-        // Seleciona o indice do ataque direto e finaliza selecao
-        this.targetSelection.selections[requirement.id] = [directCandidate.key];
-        this.targetSelection.currentRequirement =
-          this.targetSelection.requirements.length;
-        this.setSelectionState("confirming");
-        this.finishTargetSelection();
-        e.stopPropagation();
-      });
-    }
-
-    // Field spell effects for player
-    if (this.ui && typeof this.ui.bindPlayerFieldSpellClick === "function") {
-      this.ui.bindPlayerFieldSpellClick((e, cardEl) => {
-        if (this.targetSelection) {
-          this.handleTargetSelectionClick("player", 0, cardEl, "fieldSpell");
-          return;
-        }
-        const card = this.player.fieldSpell;
-        if (card) {
-          this.activateFieldSpellEffect(card);
-        }
-      });
-    }
-
-    if (this.ui && typeof this.ui.bindBotFieldSpellClick === "function") {
-      this.ui.bindBotFieldSpellClick((e, cardEl) => {
-        if (!this.targetSelection) return;
-        this.handleTargetSelectionClick("bot", 0, cardEl, "fieldSpell");
-      });
-    }
-    this.ui.bindCardHover((owner, location, index) => {
-      let card = null;
-      const playerObj = owner === "player" ? this.player : this.bot;
-
-      if (location === "hand") {
-        card = playerObj.hand[index];
-      } else if (location === "field") {
-        card = playerObj.field[index];
-      } else if (location === "spellTrap") {
-        card = playerObj.spellTrap[index];
-      } else if (location === "fieldSpell") {
-        card = playerObj.fieldSpell;
-      }
-
-      if (card) {
-        if (card.isFacedown && owner === "bot") {
-          this.ui.renderPreview(null);
-        } else {
-          this.ui.renderPreview(card);
-        }
-      }
-    });
-
-    const showGY = (player) => {
-      this.openGraveyardModal(player);
-    };
-
-    if (this.ui && typeof this.ui.bindPlayerGraveyardClick === "function") {
-      this.ui.bindPlayerGraveyardClick(() => showGY(this.player));
-    }
-    if (this.ui && typeof this.ui.bindBotGraveyardClick === "function") {
-      this.ui.bindBotGraveyardClick(() => showGY(this.bot));
-    }
-
-    const showExtraDeck = (player) => {
-      if (player.id !== "player") return; // Only player can view their Extra Deck
-      this.openExtraDeckModal(player);
-    };
-
-    if (this.ui && typeof this.ui.bindPlayerExtraDeckClick === "function") {
-      this.ui.bindPlayerExtraDeckClick(() => showExtraDeck(this.player));
-    }
-
-    if (this.ui && typeof this.ui.bindGraveyardModalClose === "function") {
-      this.ui.bindGraveyardModalClose(() => {
-        this.closeGraveyardModal();
-      });
-    }
-
-    if (this.ui && typeof this.ui.bindExtraDeckModalClose === "function") {
-      this.ui.bindExtraDeckModalClose(() => {
-        this.closeExtraDeckModal();
-      });
-    }
-
-    if (this.ui && typeof this.ui.bindModalOverlayClick === "function") {
-      this.ui.bindModalOverlayClick((modalKind) => {
-        if (modalKind === "graveyard") {
-          this.closeGraveyardModal();
-        }
-        if (modalKind === "extradeck") {
-          this.closeExtraDeckModal();
-        }
-      });
-    }
-
-    if (this.ui && typeof this.ui.bindGlobalKeydown === "function") {
-      this.ui.bindGlobalKeydown((e) => {
-        if (e.key === "Escape") {
-          if (this.graveyardSelection) {
-            this.closeGraveyardModal();
-          } else {
-            this.cancelTargetSelection();
-          }
-        }
-      });
-    }
-  }
+  // → bindCardInteractions → Moved to src/core/game/ui/interactions.js
 
   specialSummonSanctumProtectorFromHand(handIndex) {
     const guard = this.guardActionStart({
@@ -1895,19 +970,7 @@ export default class Game {
     this.updateBoard();
   }
 
-  finalizeSpellTrapActivation(card, owner, activationZone = null) {
-    if (!card || !owner) return;
-    const subtype = card.subtype || "";
-    const kind = card.cardKind || "";
-    const shouldSendToGY =
-      (kind === "spell" &&
-        (subtype === "normal" || subtype === "quick-play")) ||
-      (kind === "trap" && subtype === "normal");
-
-    if (shouldSendToGY) {
-      this.moveCard(card, owner, "graveyard", { fromZone: activationZone });
-    }
-  }
+  // → finalizeSpellTrapActivation → Moved to src/core/game/spellTrap/finalization.js
 
   async tryActivateMonsterEffect(
     card,
@@ -1961,107 +1024,7 @@ export default class Game {
     return pipelineResult;
   }
 
-  async tryActivateSpellTrapEffect(card, selections = null) {
-    if (this.disableEffectActivation || this.disableTraps) {
-      this.ui?.log?.("Spell/Trap activations are disabled in network mode.");
-      return { success: false, reason: "effects_disabled" };
-    }
-    if (!card) return;
-    console.log(`[Game] tryActivateSpellTrapEffect called for: ${card.name}`);
-
-    // Traps can be activated on opponent's turn and during battle phase
-    const isTrap = card.cardKind === "trap";
-    const guardConfig = isTrap
-      ? {
-          actor: this.player,
-          kind: "trap_activation",
-          phaseReq: ["main1", "battle", "main2"],
-          allowDuringOpponentTurn: true,
-        }
-      : {
-          actor: this.player,
-          kind: "spelltrap_effect",
-          phaseReq: ["main1", "main2"],
-        };
-
-    const guard = this.guardActionStart(guardConfig);
-    if (!guard.ok) return guard;
-
-    // If it's a trap, show confirmation modal first
-    if (card.cardKind === "trap") {
-      const confirmed = await this.ui.showTrapActivationModal(
-        card,
-        "manual_activation"
-      );
-
-      if (!confirmed) {
-        console.log(`[Game] User cancelled trap activation`);
-        return;
-      }
-
-      // Flip the trap face-up after confirmation
-      if (card.isFacedown) {
-        card.isFacedown = false;
-        this.ui.log(`${this.player.name} ativa ${card.name}!`);
-        this.updateBoard();
-      }
-    }
-
-    const activationContext = {
-      fromHand: false,
-      activationZone: "spellTrap",
-      sourceZone: "spellTrap",
-      committed: false,
-    };
-    const activationEffect = this.effectEngine?.getSpellTrapActivationEffect?.(
-      card,
-      { fromHand: false }
-    );
-
-    const pipelinePhaseReq = isTrap
-      ? ["main1", "battle", "main2"]
-      : ["main1", "main2"];
-
-    const pipelineResult = await this.runActivationPipeline({
-      card,
-      owner: this.player,
-      activationZone: "spellTrap",
-      activationContext,
-      selections,
-      selectionKind: "spellTrapEffect",
-      selectionMessage: "Select target(s) for the continuous spell effect.",
-      guardKind: isTrap ? "trap_activation" : "spelltrap_effect",
-      phaseReq: pipelinePhaseReq,
-      allowDuringOpponentTurn: isTrap,
-      oncePerTurn: {
-        card,
-        player: this.player,
-        effect: activationEffect,
-      },
-      activate: (chosen, ctx, zone) =>
-        this.effectEngine.activateSpellTrapEffect(
-          card,
-          this.player,
-          chosen,
-          zone,
-          ctx
-        ),
-      finalize: (result, info) => {
-        if (result.placementOnly) {
-          this.ui.log(`${card.name} is placed on the field.`);
-        } else {
-          this.finalizeSpellTrapActivation(
-            card,
-            this.player,
-            info.activationZone
-          );
-          this.ui.log(`${card.name} effect activated.`);
-        }
-        this.updateBoard();
-      },
-    });
-    return pipelineResult;
-  }
+  // → tryActivateSpellTrapEffect → Moved to src/core/game/spellTrap/activation.js
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Selection: Methods moved to src/core/game/selection/*.js
@@ -2620,48 +1583,7 @@ export default class Game {
     return waitForFinish;
   }
 
-  activateFieldSpellEffect(card) {
-    const owner = card.owner === "player" ? this.player : this.bot;
-    const guard = this.guardActionStart(
-      {
-        actor: owner,
-        kind: "fieldspell_effect",
-        phaseReq: ["main1", "main2"],
-      },
-      owner === this.player
-    );
-    if (!guard.ok) return guard;
-    const activationContext = {
-      fromHand: false,
-      activationZone: "fieldSpell",
-      sourceZone: "fieldSpell",
-      committed: false,
-    };
-    const activationEffect =
-      this.effectEngine?.getFieldSpellActivationEffect?.(card);
-    const pipelineResult = this.runActivationPipeline({
-      card,
-      owner,
-      activationZone: "fieldSpell",
-      activationContext,
-      selectionKind: "fieldSpell",
-      selectionMessage: "Select target(s) for the field spell effect.",
-      guardKind: "fieldspell_effect",
-      phaseReq: ["main1", "main2"],
-      oncePerTurn: {
-        card,
-        player: owner,
-        effect: activationEffect,
-      },
-      activate: (selections, ctx) =>
-        this.effectEngine.activateFieldSpell(card, owner, selections, ctx),
-      finalize: () => {
-        this.ui.log(`${card.name} field effect activated.`);
-        this.updateBoard();
-      },
-    });
-    return pipelineResult;
-  }
+  // → activateFieldSpellEffect → Moved to src/core/game/spellTrap/activation.js
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Combat targeting: startAttackTargetSelection
@@ -2686,42 +1608,7 @@ export default class Game {
 
   // → performSpecialSummon → Moved to src/core/game/summon/execution.js
 
-  canActivatePolymerization() {
-    // Check if player has Extra Deck with Fusion Monsters
-    if (!this.player.extraDeck || this.player.extraDeck.length === 0) {
-      return false;
-    }
-
-    // Check field space
-    if (this.player.field.length >= 5) {
-      return false;
-    }
-
-    // Get available materials (hand + field)
-    const availableMaterials = [
-      ...(this.player.hand || []),
-      ...(this.player.field || []),
-    ].filter((card) => card && card.cardKind === "monster");
-
-    if (availableMaterials.length === 0) {
-      return false;
-    }
-
-    // Check if at least one Fusion Monster can be summoned
-    for (const fusion of this.player.extraDeck) {
-      if (
-        this.effectEngine.canSummonFusion(
-          fusion,
-          availableMaterials,
-          this.player
-        )
-      ) {
-        return true;
-      }
-    }
-
-    return false;
-  }
+  // → canActivatePolymerization → Moved to src/core/game/spellTrap/verification.js
 
   highlightReadySpecialSummon() {
     // Find and highlight the card ready for special summon in hand
@@ -2779,216 +1666,13 @@ export default class Game {
   // → Moved to src/core/game/combat/resolution.js
   // ─────────────────────────────────────────────────────────────────────────────
 
-  setSpellOrTrap(card, handIndex, actor = this.player) {
-    const guard = this.guardActionStart({
-      actor,
-      kind: "set_spell_trap",
-      phaseReq: ["main1", "main2"],
-    });
-    if (!guard.ok) return guard;
-    if (!card) return { ok: false, reason: "no_card" };
-    if (card.cardKind !== "spell" && card.cardKind !== "trap") {
-      return { ok: false, reason: "not_spell_trap" };
-    }
+  // → setSpellOrTrap → Moved to src/core/game/spellTrap/set.js
 
-    if (card.cardKind === "spell" && card.subtype === "field") {
-      this.ui.log("Field Spells cannot be Set.");
-      return { ok: false, reason: "cannot_set_field_spell" };
-    }
+  // → tryActivateSpell → Moved to src/core/game/spellTrap/activation.js
 
-    const zone = actor.spellTrap;
-    if (zone.length >= 5) {
-      this.ui.log("Spell/Trap zone is full (max 5 cards).");
-      return { ok: false, reason: "zone_full" };
-    }
+  // → rollbackSpellActivation → Moved to src/core/game/spellTrap/finalization.js
 
-    card.isFacedown = true;
-    card.turnSetOn = this.turnCounter;
-
-    if (typeof this.moveCard === "function") {
-      this.moveCard(card, actor, "spellTrap", { fromZone: "hand" });
-    } else {
-      if (handIndex >= 0 && handIndex < actor.hand.length) {
-        actor.hand.splice(handIndex, 1);
-      }
-      actor.spellTrap.push(card);
-    }
-
-    this.updateBoard();
-    return { ok: true, success: true, card };
-  }
-
-  async tryActivateSpell(card, handIndex, selections = null, options = {}) {
-    const owner = options.owner || this.player;
-    const resume = options.resume || null;
-    const actionContext = options.actionContext || null;
-    const activationEffect = this.effectEngine?.getSpellTrapActivationEffect?.(
-      card,
-      { fromHand: true }
-    );
-
-    const resumeCommitInfo = resume?.commitInfo || null;
-    const resolvedActivationZone =
-      resume?.activationZone || resumeCommitInfo?.activationZone || null;
-    const baseActivationContext = resume?.activationContext || {
-      fromHand: true,
-      activationZone: resolvedActivationZone,
-      sourceZone: "hand",
-      committed: false,
-      commitInfo: resumeCommitInfo,
-      actionContext,
-    };
-
-    const pipelineResult = await this.runActivationPipeline({
-      card,
-      owner,
-      selections,
-      selectionKind: "spellTrapEffect",
-      selectionMessage: "Select target(s) for the continuous spell effect.",
-      guardKind: "spell_from_hand",
-      phaseReq: ["main1", "main2"],
-      preview: resume
-        ? null
-        : () =>
-            this.effectEngine?.canActivateSpellFromHandPreview?.(card, owner),
-      commit: resume
-        ? () =>
-            resumeCommitInfo || {
-              cardRef: card,
-              activationZone: resolvedActivationZone || "spellTrap",
-              fromIndex: handIndex,
-            }
-        : () => this.commitCardActivationFromHand(owner, handIndex),
-      activationContext: {
-        ...baseActivationContext,
-        committed: resume ? true : baseActivationContext.committed,
-        activationZone:
-          resolvedActivationZone || baseActivationContext.activationZone,
-        sourceZone: baseActivationContext.sourceZone || "hand",
-        commitInfo:
-          baseActivationContext.commitInfo || resumeCommitInfo || null,
-        actionContext,
-      },
-      oncePerTurn: {
-        card,
-        player: owner,
-        effect: activationEffect,
-      },
-      activate: (chosen, ctx, zone, resolvedCard) =>
-        this.effectEngine.activateSpellTrapEffect(
-          resolvedCard,
-          owner,
-          chosen,
-          zone,
-          ctx
-        ),
-      finalize: async (result, info) => {
-        if (result.placementOnly) {
-          this.ui.log(`${info.card.name} is placed on the field.`);
-        } else {
-          this.finalizeSpellTrapActivation(
-            info.card,
-            owner,
-            info.activationZone
-          );
-          this.ui.log(`${info.card.name} effect activated.`);
-
-          // Offer chain window for opponent to respond to spell activation
-          await this.checkAndOfferTraps("card_activation", {
-            card: info.card,
-            player: owner,
-            activationType: "spell",
-          });
-        }
-        this.updateBoard();
-      },
-    });
-    return pipelineResult;
-  }
-
-  rollbackSpellActivation(player, commitInfo) {
-    if (!player || !commitInfo || !commitInfo.cardRef) return;
-    const { cardRef, activationZone, fromIndex, replacedFieldSpell } =
-      commitInfo;
-    const sourceZone = activationZone || "spellTrap";
-    this.moveCard(cardRef, player, "hand", { fromZone: sourceZone });
-
-    if (
-      typeof fromIndex === "number" &&
-      fromIndex >= 0 &&
-      fromIndex < player.hand.length
-    ) {
-      const currentIndex = player.hand.indexOf(cardRef);
-      if (currentIndex > -1 && currentIndex !== fromIndex) {
-        player.hand.splice(currentIndex, 1);
-        player.hand.splice(fromIndex, 0, cardRef);
-      }
-    }
-
-    if (
-      activationZone === "fieldSpell" &&
-      replacedFieldSpell &&
-      player.graveyard?.includes(replacedFieldSpell)
-    ) {
-      this.moveCard(replacedFieldSpell, player, "fieldSpell", {
-        fromZone: "graveyard",
-      });
-    }
-
-    this.updateBoard();
-    this.assertStateInvariants("rollbackSpellActivation", { failFast: false });
-  }
-
-  /**
-   * Move a Spell/Trap from hand to the appropriate zone before resolving
-   * activation. Returns the committed card reference and activation zone.
-   */
-  commitCardActivationFromHand(player, handIndex) {
-    if (!player || handIndex == null) return null;
-    const card = player.hand?.[handIndex];
-    if (!card) return null;
-    if (card.cardKind !== "spell" && card.cardKind !== "trap") return null;
-
-    const isFieldSpell = card.subtype === "field";
-    const activationZone = isFieldSpell ? "fieldSpell" : "spellTrap";
-    const replacedFieldSpell = isFieldSpell ? player.fieldSpell : null;
-
-    // Check zone capacity
-    if (!isFieldSpell && player.spellTrap.length >= 5) {
-      this.ui.log("Spell/Trap zone is full (max 5 cards).");
-      return null;
-    }
-
-    // Ensure face-up when placed
-    card.isFacedown = false;
-
-    // Move to destination
-    if (typeof this.moveCard === "function") {
-      this.moveCard(card, player, activationZone, { fromZone: "hand" });
-    } else {
-      // Fallback (should not happen)
-      player.hand.splice(handIndex, 1);
-      if (isFieldSpell) {
-        player.fieldSpell = card;
-      } else {
-        player.spellTrap.push(card);
-      }
-    }
-
-    // Determine zone index if in S/T array
-    const zoneIndex =
-      activationZone === "spellTrap" ? player.spellTrap.indexOf(card) : null;
-
-    this.updateBoard();
-
-    return {
-      cardRef: card,
-      activationZone,
-      zoneIndex,
-      fromIndex: handIndex,
-      replacedFieldSpell,
-    };
-  }
+  // → commitCardActivationFromHand → Moved to src/core/game/spellTrap/finalization.js
 
   showShadowHeartCathedralModal(validMonsters, maxAtk, counterCount, callback) {
     console.log(
@@ -3012,155 +1696,13 @@ export default class Game {
     callback(null);
   }
 
-  canActivateTrap(card) {
-    console.log(
-      `[canActivateTrap] Checking: ${card?.name}, cardKind: ${card?.cardKind}, isFacedown: ${card?.isFacedown}, turnSetOn: ${card?.turnSetOn}, currentTurn: ${this.turnCounter}`
-    );
-    if (!card || card.cardKind !== "trap") return false;
-    if (!card.isFacedown) return false;
-    if (!card.turnSetOn) return false;
+  // → canActivateTrap → Moved to src/core/game/spellTrap/verification.js
 
-    // Trap só pode ser ativada a partir do próximo turno
-    const result = this.turnCounter > card.turnSetOn;
-    console.log(
-      `[canActivateTrap] Result: ${result} (${this.turnCounter} > ${card.turnSetOn})`
-    );
-    return result;
-  }
+  // → checkAndOfferTraps → Moved to src/core/game/spellTrap/triggers.js
 
-  async checkAndOfferTraps(event, eventData = {}) {
-    if (!this.player || this.disableTraps || this.disableChains) return;
+  // → _mapEventToChainContext → Moved to src/core/game/spellTrap/triggers.js
 
-    // Evitar reentrância: se já existe um modal de trap aberto, não abrir outro
-    if (this.trapPromptInProgress) return;
-
-    // Se o ChainSystem já está resolvendo, não interromper
-    if (this.chainSystem?.isChainResolving()) return;
-
-    // Prevenir abrir nova chain window enquanto outra já está aberta
-    if (this.chainSystem?.isChainWindowOpen?.()) return;
-
-    this.trapPromptInProgress = true;
-
-    try {
-      // Mapear evento para contexto de chain
-      const contextType = this._mapEventToChainContext(event);
-
-      // Usar ChainSystem para abrir chain window
-      const attacker = eventData.attacker || null;
-      const defender = eventData.defender ?? eventData.target ?? null;
-      const attackerOwner =
-        eventData.attackerOwner ??
-        (attacker
-          ? attacker.owner === "player"
-            ? this.player
-            : this.bot
-          : null);
-      const defenderOwner =
-        eventData.defenderOwner ??
-        (defender
-          ? defender.owner === "player"
-            ? this.player
-            : this.bot
-          : null);
-
-      const context = {
-        type: contextType,
-        event,
-        ...eventData,
-        attacker,
-        defender,
-        target: defender ?? eventData.target ?? null,
-        attackerOwner,
-        defenderOwner,
-        targetOwner: eventData.targetOwner ?? defenderOwner ?? null,
-        isOpponentAttack:
-          eventData.isOpponentAttack ??
-          (attackerOwner && defenderOwner
-            ? attackerOwner.id !== defenderOwner.id &&
-              defenderOwner.id === "player"
-            : false),
-        triggerPlayer:
-          attackerOwner ||
-          eventData.player ||
-          (this.turn === "player" ? this.player : this.bot),
-      };
-
-      // Verificar se há cartas ativáveis antes de abrir chain window
-      const playerActivatable = this.chainSystem.getActivatableCardsInChain(
-        this.player,
-        context
-      );
-      const botActivatable = this.chainSystem.getActivatableCardsInChain(
-        this.bot,
-        context
-      );
-
-      if (playerActivatable.length === 0 && botActivatable.length === 0) {
-        return; // Nenhuma carta pode responder
-      }
-
-      // Abrir chain window através do ChainSystem
-      await this.chainSystem.openChainWindow(context);
-    } finally {
-      this.trapPromptInProgress = false;
-      this.testModeEnabled = false;
-    }
-  }
-
-  /**
-   * Map game events to chain context types
-   * @param {string} event
-   * @returns {string}
-   */
-  _mapEventToChainContext(event) {
-    const eventToContext = {
-      attack_declared: "attack_declaration",
-      after_summon: "summon",
-      phase_end: "phase_change",
-      phase_start: "phase_change",
-      card_activation: "card_activation",
-      effect_activation: "effect_activation",
-      battle_damage: "battle_damage",
-      effect_targeted: "effect_targeted",
-    };
-    return eventToContext[event] || "card_activation";
-  }
-
-  async activateTrapFromZone(card, eventData = {}) {
-    if (!card || card.cardKind !== "trap") return;
-
-    const trapIndex = this.player.spellTrap.indexOf(card);
-    if (trapIndex === -1) return;
-
-    const guard = this.guardActionStart({
-      actor: this.player,
-      kind: "trap_activation",
-      allowDuringOpponentTurn: true,
-      allowDuringResolving: true,
-    });
-    if (!guard.ok) return guard;
-
-    // Virar a carta face-up
-    card.isFacedown = false;
-    this.ui.log(`${this.player.name} ativa ${card.name}!`);
-
-    // Resolver efeitos
-    const result = await this.effectEngine.resolveTrapEffects(
-      card,
-      this.player,
-      eventData
-    );
-
-    // Se for trap normal, mover para o cemitério após resolver
-    if (card.subtype === "normal") {
-      this.moveCard(card, this.player, "graveyard", { fromZone: "spellTrap" });
-    }
-    // Se for continuous, permanece no campo face-up
-
-    this.updateBoard();
-    return result;
-  }
+  // → activateTrapFromZone → Moved to src/core/game/spellTrap/triggers.js
 
   resolvePlayerById(id = "player") {
     return id === "bot" ? this.bot : this.player;
@@ -3474,3 +2016,66 @@ Game.prototype.waitForPhaseDelay = turnLifecycle.waitForPhaseDelay;
 // Transitions: nextPhase, skipToPhase
 Game.prototype.nextPhase = turnTransitions.nextPhase;
 Game.prototype.skipToPhase = turnTransitions.skipToPhase;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Spell/Trap: Attach methods from modular spellTrap/ folder
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Set: setSpellOrTrap
+Game.prototype.setSpellOrTrap = spellTrapSet.setSpellOrTrap;
+
+// Activation: tryActivateSpellTrapEffect, tryActivateSpell, activateFieldSpellEffect
+Game.prototype.tryActivateSpellTrapEffect =
+  spellTrapActivation.tryActivateSpellTrapEffect;
+Game.prototype.tryActivateSpell = spellTrapActivation.tryActivateSpell;
+Game.prototype.activateFieldSpellEffect =
+  spellTrapActivation.activateFieldSpellEffect;
+
+// Finalization: finalizeSpellTrapActivation, commitCardActivationFromHand, rollbackSpellActivation
+Game.prototype.finalizeSpellTrapActivation =
+  spellTrapFinalization.finalizeSpellTrapActivation;
+Game.prototype.commitCardActivationFromHand =
+  spellTrapFinalization.commitCardActivationFromHand;
+Game.prototype.rollbackSpellActivation =
+  spellTrapFinalization.rollbackSpellActivation;
+
+// Verification: canActivateTrap, canActivatePolymerization
+Game.prototype.canActivateTrap = spellTrapVerification.canActivateTrap;
+Game.prototype.canActivatePolymerization =
+  spellTrapVerification.canActivatePolymerization;
+
+// Triggers: checkAndOfferTraps, _mapEventToChainContext, activateTrapFromZone
+Game.prototype.checkAndOfferTraps = spellTrapTriggers.checkAndOfferTraps;
+Game.prototype._mapEventToChainContext =
+  spellTrapTriggers._mapEventToChainContext;
+Game.prototype.activateTrapFromZone = spellTrapTriggers.activateTrapFromZone;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UI: Attach methods from modular ui/ folder
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Board: updateBoard, highlightReadySpecialSummon
+Game.prototype.updateBoard = uiBoard.updateBoard;
+Game.prototype.highlightReadySpecialSummon =
+  uiBoard.highlightReadySpecialSummon;
+
+// Indicators: updateActivationIndicators, buildActivationIndicatorsForPlayer
+Game.prototype.updateActivationIndicators =
+  uiIndicators.updateActivationIndicators;
+Game.prototype.buildActivationIndicatorsForPlayer =
+  uiIndicators.buildActivationIndicatorsForPlayer;
+
+// Modals: showIgnitionActivateModal, showShadowHeartCathedralModal
+Game.prototype.showIgnitionActivateModal = uiModals.showIgnitionActivateModal;
+Game.prototype.showShadowHeartCathedralModal =
+  uiModals.showShadowHeartCathedralModal;
+
+// Prompts: chooseSpecialSummonPosition
+Game.prototype.chooseSpecialSummonPosition =
+  uiPrompts.chooseSpecialSummonPosition;
+
+// WinCondition: checkWinCondition
+Game.prototype.checkWinCondition = uiWinCondition.checkWinCondition;
+
+// Interactions: bindCardInteractions
+Game.prototype.bindCardInteractions = uiInteractions.bindCardInteractions;

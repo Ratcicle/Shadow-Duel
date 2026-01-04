@@ -67,9 +67,12 @@ export async function resolveCombat(attacker, target, options = {}) {
 
   if (this.lastAttackNegated) {
     attacker.attacksUsedThisTurn = (attacker.attacksUsedThisTurn || 0) + 1;
+    // Check if all attacks are exhausted, considering extraAttacks
+    const extraAttacks = attacker.extraAttacks || 0;
+    const maxAttacks = 1 + extraAttacks;
     // For multi-attack mode, don't block further attacks when one is negated
     if (!attacker.canAttackAllOpponentMonstersThisTurn) {
-      attacker.hasAttacked = true;
+      attacker.hasAttacked = attacker.attacksUsedThisTurn >= maxAttacks;
     }
     this.clearAttackResolutionIndicators();
     this.updateBoard();
