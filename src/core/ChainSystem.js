@@ -494,14 +494,26 @@ export default class ChainSystem {
             ) {
               // Only valid if opponent is attacking (check from card owner's perspective)
               const cardOwnerId = ownerPlayer?.id || card.owner;
-              if (!isOpponentAction(context.attackerOwner?.id, cardOwnerId, context.isOpponentAttack)) {
+              if (
+                !isOpponentAction(
+                  context.attackerOwner?.id,
+                  cardOwnerId,
+                  context.isOpponentAttack
+                )
+              ) {
                 continue;
               }
             }
             if (effect.requireOpponentSummon && context?.type === "summon") {
               // Only valid if opponent summoned (check from card owner's perspective)
               const cardOwnerId = ownerPlayer?.id || card.owner;
-              if (!isOpponentAction(context.player?.id, cardOwnerId, context.isOpponentSummon)) {
+              if (
+                !isOpponentAction(
+                  context.player?.id,
+                  cardOwnerId,
+                  context.isOpponentSummon
+                )
+              ) {
                 continue;
               }
             }
@@ -1450,7 +1462,27 @@ export default class ChainSystem {
             resolvedSelections || {}
           );
         } catch (error) {
-          console.error(`[ChainSystem] Action error:`, error);
+          // Enhanced error logging with chain link context for easier debugging
+          const linkContext = {
+            cardName: card?.name || "Unknown",
+            cardId: card?.id,
+            effectId: effect?.id || "unknown",
+            effectTiming: effect?.timing,
+            chainLevel: link.chainLevel,
+            activationZone: activationZone,
+            player: player?.id,
+            actionsCount: effect.actions?.length || 0,
+            actionTypes: effect.actions?.map((a) => a?.type).filter(Boolean),
+          };
+          console.error(
+            `[ChainSystem] Action error resolving chain link:`,
+            linkContext,
+            error
+          );
+          this.log(
+            `Chain resolution failed for ${linkContext.cardName} (CL${linkContext.chainLevel}):`,
+            error.message
+          );
         }
       }
 

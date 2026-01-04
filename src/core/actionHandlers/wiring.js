@@ -49,6 +49,7 @@ import {
   handleAddFromZoneToHand,
   handleHealFromDestroyedAtk,
   handleHealFromDestroyedLevel,
+  handleHealPerFieldCount,
   handleGrantAdditionalNormalSummon,
   handleUpkeepPayOrSendToGrave,
 } from "./resources.js";
@@ -129,6 +130,8 @@ export function registerDefaultHandlers(registry) {
   registry.register("heal_from_destroyed_atk", handleHealFromDestroyedAtk);
 
   registry.register("heal_from_destroyed_level", handleHealFromDestroyedLevel);
+
+  registry.register("heal_per_field_count", handleHealPerFieldCount);
 
   registry.register("grant_protection", handleGrantProtection);
 

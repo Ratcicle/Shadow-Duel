@@ -316,6 +316,64 @@ export async function handleHealFromDestroyedLevel(
 }
 
 /**
+ * Handler for healing LP based on count of matching cards on field
+ *
+ * Action properties:
+ * - amountPerCard: LP to heal per matching card (required)
+ * - filters: { owner, zone, cardKind, archetype, type, etc. }
+ * - player: who gains LP ("self" default)
+ */
+export async function handleHealPerFieldCount(action, ctx, targets, engine) {
+  const { player, opponent } = ctx;
+  const game = engine.game;
+
+  if (!player || !game) return false;
+
+  const amountPerCard = action.amountPerCard || 0;
+  if (amountPerCard <= 0) return false;
+
+  const filters = action.filters || {};
+  const ownerFilter = filters.owner || "self";
+  const zoneFilter = filters.zone || "field";
+
+  // Determine which player's zone to check
+  const targetPlayer = ownerFilter === "opponent" ? opponent : player;
+  if (!targetPlayer) return false;
+
+  const zone = targetPlayer[zoneFilter];
+  if (!Array.isArray(zone)) return false;
+
+  // Count matching cards
+  let count = 0;
+  for (const card of zone) {
+    if (!card) continue;
+    if (filters.cardKind && card.cardKind !== filters.cardKind) continue;
+    if (filters.archetype && card.archetype !== filters.archetype) continue;
+    if (filters.type && card.type !== filters.type) continue;
+    if (filters.name && card.name !== filters.name) continue;
+    if (filters.requireFaceup && card.isFacedown) continue;
+    count++;
+  }
+
+  if (count === 0) {
+    getUI(game)?.log("No matching cards found on field.");
+    return true; // Valid execution, just 0 heal
+  }
+
+  const healAmount = count * amountPerCard;
+  player.gainLP(healAmount);
+
+  getUI(game)?.log(
+    `${
+      player.name || player.id
+    } gained ${healAmount} LP (${count} card(s) x ${amountPerCard} LP).`
+  );
+
+  game.updateBoard();
+  return true;
+}
+
+/**
  * Generic handler for granting additional normal summons
  *
  * Action properties:

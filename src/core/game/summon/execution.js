@@ -10,6 +10,7 @@
 export function flipSummon(card) {
   if (!this.canFlipSummon(card)) return;
   card.isFacedown = false;
+  card.revealedTurn = this.turnCounter; // Track when monster was revealed for Ascension timing
   card.position = "attack";
   card.positionChangedThisTurn = true;
   card.cannotAttackThisTurn = true;

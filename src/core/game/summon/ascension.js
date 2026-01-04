@@ -14,17 +14,33 @@
  */
 
 /**
- * Gets the turn counter when a material entered the field.
- * Used to check if material has been on field for at least 1 turn.
+ * Gets the turn counter when a material became face-up on the field.
+ * Used to check if material has been face-up on field for at least 1 turn.
+ *
+ * RULE: Facedown (set) monsters do NOT count turns for Ascension.
+ * Only face-up monsters count — whether summoned face-up or flipped/revealed.
+ *
  * @param {Object} card - The material card
- * @returns {number} The turn counter when card entered field
+ * @returns {number} The turn counter when card became face-up on field
  */
 export function getMaterialFieldAgeTurnCounter(card) {
   if (!card) return this.turnCounter;
-  const entered = card.enteredFieldTurn ?? null;
+
+  // If card is currently facedown, it cannot be used as Ascension material anyway
+  // (canUseAsAscensionMaterial checks for isFacedown separately)
+
+  // For face-up monsters, we use:
+  // - revealedTurn: when a set monster was flipped/revealed
+  // - summonedTurn: when monster was summoned face-up (not set)
+  // We ignore setTurn because set monsters don't count turns for Ascension
+
+  const revealed = card.revealedTurn ?? null;
   const summoned = card.summonedTurn ?? null;
-  const setTurn = card.setTurn ?? null;
-  const values = [entered, summoned, setTurn].filter((v) => Number.isFinite(v));
+
+  // If monster was set then flipped, use revealedTurn
+  // If monster was summoned face-up, use summonedTurn
+  // Use the most recent relevant event
+  const values = [revealed, summoned].filter((v) => Number.isFinite(v));
   if (values.length === 0) return this.turnCounter;
   return Math.max(...values);
 }
@@ -148,6 +164,38 @@ export function checkAscensionRequirements(player, ascensionCard) {
           return {
             ok: false,
             reason: `Need at least ${need} card(s) in graveyard.`,
+          };
+        }
+        break;
+      }
+      case "material_turns_on_field": {
+        // Check how many turns the material has been face-up on field
+        const need = Math.max(1, req.count ?? req.min ?? 1);
+        const materialCard = player.field?.find(
+          (c) => c?.id === materialId && !c.isFacedown
+        );
+        if (!materialCard) {
+          return {
+            ok: false,
+            reason: `Material not found face-up on field.`,
+          };
+        }
+        const enteredTurn = this.getMaterialFieldAgeTurnCounter(materialCard);
+        const turnsOnField = this.turnCounter - enteredTurn;
+        this.devLog("ASCENSION_REQUIREMENT_CHECK", {
+          summary: `Material ID ${materialId} turns on field: ${turnsOnField}/${need}`,
+          requirementType: "material_turns_on_field",
+          materialId,
+          enteredTurn,
+          currentTurn: this.turnCounter,
+          turnsOnField,
+          need,
+          passed: turnsOnField >= need,
+        });
+        if (turnsOnField < need) {
+          return {
+            ok: false,
+            reason: `Material must be face-up on field for ${need} turn(s) (current: ${turnsOnField}).`,
           };
         }
         break;

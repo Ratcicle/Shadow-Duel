@@ -572,8 +572,12 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     card.positionChangedThisTurn = false;
     if (card.isFacedown) {
       card.setTurn = this.turnCounter;
+      // Facedown monsters don't have revealedTurn yet - will be set when flipped
+      card.revealedTurn = null;
     } else {
       card.setTurn = null;
+      // Face-up summons don't need revealedTurn - summonedTurn is used for Ascension timing
+      card.revealedTurn = null;
     }
 
     // Assign field presence ID for field_presence_type_summon_count_buff tracking

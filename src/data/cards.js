@@ -1631,7 +1631,7 @@ export const cardDatabase = [
     name: "Luminarch Celestial Marshal",
     cardKind: "monster",
     atk: 2500,
-    def: 2000,
+    def: 2100,
     level: 7,
     type: "Warrior",
     archetype: "Luminarch",
@@ -1724,7 +1724,7 @@ export const cardDatabase = [
     name: "Luminarch Radiant Lancer",
     cardKind: "monster",
     atk: 2600,
-    def: 2000,
+    def: 2100,
     level: 8,
     type: "Warrior",
     archetype: "Luminarch",
@@ -2308,6 +2308,80 @@ export const cardDatabase = [
             targetRef: "barbarias_switch_target",
             atkBoost: 800,
             markChanged: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 121,
+    name: "Luminarch Fortress Aegis",
+    cardKind: "monster",
+    monsterType: "ascension",
+    atk: 1500,
+    def: 2500,
+    level: 6,
+    type: "Warrior",
+    archetype: "Luminarch",
+    mustBeAttacked: true,
+    ascension: {
+      materialId: 103,
+      requirements: [{ type: "material_turns_on_field", count: 2 }],
+      position: "defense",
+    },
+    description:
+      "Ascension Material: 'Luminarch Aegisbearer'. Requirement: The material must have been face-up on the field for 2 turns. Your opponent must attack this card, if possible. If this card is Ascension Summoned: Gain 500 LP for each 'Luminarch' monster you control. Once per turn: You can pay 1000 LP, then target 1 'Luminarch' monster with 2000 or less DEF in your GY; Special Summon it.",
+    image: "assets/Luminarch Fortress Aegis.png",
+    effects: [
+      {
+        id: "luminarch_fortress_aegis_heal_on_summon",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethods: ["ascension"],
+        requireSelfAsSummoned: true,
+        actions: [
+          {
+            type: "heal_per_field_count",
+            player: "self",
+            amountPerCard: 500,
+            filters: {
+              owner: "self",
+              zone: "field",
+              cardKind: "monster",
+              archetype: "Luminarch",
+            },
+          },
+        ],
+      },
+      {
+        id: "luminarch_fortress_aegis_revive",
+        timing: "ignition",
+        requireZone: "field",
+        requirePhase: ["main1", "main2"],
+        oncePerTurn: true,
+        oncePerTurnName: "luminarch_fortress_aegis_revive",
+        oncePerTurnScope: "card",
+        targets: [
+          {
+            id: "fortress_aegis_revive_target",
+            owner: "self",
+            zone: "graveyard",
+            cardKind: "monster",
+            archetype: "Luminarch",
+            maxDef: 2000,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "pay_lp",
+            amount: 1000,
+          },
+          {
+            type: "special_summon_from_zone",
+            zone: "graveyard",
+            targetRef: "fortress_aegis_revive_target",
+            position: "defense",
           },
         ],
       },
@@ -4232,11 +4306,11 @@ export const cardDatabase = [
     type: "Dragon",
     ascension: {
       materialId: 194,
-      requirements: [{ type: "material_effect_activations", count: 2 }],
+      requirements: [{ type: "material_effect_activations", count: 1 }],
       position: "choice",
     },
     description:
-      "Ascension Material: 'Tech-Void Dragon'. Requirement: The material activated all of its effects during this duel. If this card would be destroyed: You can banish 'Tech-Void Dragon' from your GY instead. Once per turn: You can banish 1 Dragon monster from your GY; this card can attack all monsters your opponent controls, once each, this turn. You can only use each effect of 'Tech-Void Cosmic Dragon' once per turn.",
+      "Ascension Material: 'Tech-Void Dragon'. Requirement: The material activated at least 1 of its effects during this duel. If this card would be destroyed: You can banish 'Tech-Void Dragon' from your GY instead. Once per turn: You can banish 1 Dragon monster from your GY; this card can attack all monsters your opponent controls, once each, this turn. You can only use each effect of 'Tech-Void Cosmic Dragon' once per turn.",
     image: "assets/Tech-Void Cosmic Dragon.png",
     effects: [
       {

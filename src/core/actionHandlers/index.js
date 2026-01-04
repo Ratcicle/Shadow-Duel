@@ -54,6 +54,7 @@ export {
   handleAddFromZoneToHand,
   handleHealFromDestroyedAtk,
   handleHealFromDestroyedLevel,
+  handleHealPerFieldCount,
   handleGrantAdditionalNormalSummon,
   handleUpkeepPayOrSendToGrave,
 } from "./resources.js";

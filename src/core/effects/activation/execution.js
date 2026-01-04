@@ -6,8 +6,9 @@
 
 /**
  * Activate a monster's ignition effect from the graveyard.
+ * @returns {Promise<Object>} Result with success/needsSelection status
  */
-export function activateMonsterFromGraveyard(
+export async function activateMonsterFromGraveyard(
   card,
   player,
   selections = null,
@@ -117,7 +118,26 @@ export function activateMonsterFromGraveyard(
     };
   }
 
-  this.applyActions(effect.actions || [], ctx, targetResult.targets);
+  // Await applyActions and propagate needsSelection if returned
+  const actionsResult = await this.applyActions(
+    effect.actions || [],
+    ctx,
+    targetResult.targets || {}
+  );
+  if (
+    actionsResult &&
+    typeof actionsResult === "object" &&
+    actionsResult.needsSelection
+  ) {
+    return {
+      success: false,
+      needsSelection: true,
+      selectionContract: actionsResult.selectionContract,
+      ...actionsResult,
+    };
+  }
+
+  // Only register usage and check win after successful resolution
   this.registerOncePerTurnUsage(card, player, effect);
   this.registerOncePerDuelUsage(card, player, effect);
   this.game.checkWinCondition();
@@ -126,8 +146,9 @@ export function activateMonsterFromGraveyard(
 
 /**
  * Activate a Field Spell's effect while on the field.
+ * @returns {Promise<Object>} Result with success/needsSelection status
  */
-export function activateFieldSpell(
+export async function activateFieldSpell(
   card,
   player,
   selections = null,
@@ -217,7 +238,26 @@ export function activateFieldSpell(
     };
   }
 
-  this.applyActions(effect.actions || [], ctx, targetResult.targets);
+  // Await applyActions and propagate needsSelection if returned
+  const actionsResult = await this.applyActions(
+    effect.actions || [],
+    ctx,
+    targetResult.targets || {}
+  );
+  if (
+    actionsResult &&
+    typeof actionsResult === "object" &&
+    actionsResult.needsSelection
+  ) {
+    return {
+      success: false,
+      needsSelection: true,
+      selectionContract: actionsResult.selectionContract,
+      ...actionsResult,
+    };
+  }
+
+  // Only register usage and check win after successful resolution
   this.registerOncePerTurnUsage(card, player, effect);
   this.game.checkWinCondition();
 

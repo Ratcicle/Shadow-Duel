@@ -49,13 +49,16 @@ _Nenhuma trap no arquétipo atualmente._
 
 ---
 
-## Extra Deck (1)
+## Extra Deck (2)
 
-| ID  | Nome                           | Tipo   | Nível | ATK  | DEF  |
-| --- | ------------------------------ | ------ | ----- | ---- | ---- |
-| 120 | Luminarch Megashield Barbarias | Fusion | 9     | 2500 | 3000 |
+| ID  | Nome                           | Tipo      | Nível | ATK  | DEF  |
+| --- | ------------------------------ | --------- | ----- | ---- | ---- |
+| 120 | Luminarch Megashield Barbarias | Fusion    | 9     | 2500 | 3000 |
+| 121 | Luminarch Fortress Aegis       | Ascension | 6     | 1500 | 2500 |
 
-**Materiais de Fusão:** "Luminarch Sanctum Protector" + 1 monstro "Luminarch" de Nível 5 ou maior
+**Materiais de Fusão (120):** "Luminarch Sanctum Protector" + 1 monstro "Luminarch" de Nível 5 ou maior
+
+**Material de Ascensão (121):** "Luminarch Aegisbearer" (requisito: 2 turnos face-up no campo)
 
 ---
 
@@ -130,3 +133,6 @@ _Nenhuma trap no arquétipo atualmente._
 
 **120 - Luminarch Megashield Barbarias** (L9 Fusion Warrior | ATK 2500 / DEF 3000)
 > "Luminarch Sanctum Protector" + 1 Level 5 or higher "Luminarch" monster. All LP you would gain is doubled. Once per turn: You can target 1 monster you control; switch its battle position, and if you do, it gains 800 ATK until the end of this turn.
+
+**121 - Luminarch Fortress Aegis** (L6 Ascension Warrior | ATK 1500 / DEF 2500)
+> Ascension Material: "Luminarch Aegisbearer". Requirement: The material must have been face-up on the field for 2 turns. Your opponent must attack this card, if possible. If this card is Ascension Summoned: Gain 500 LP for each "Luminarch" monster you control. Once per turn: You can pay 1000 LP, then target 1 "Luminarch" monster with 2000 or less DEF in your GY; Special Summon it.

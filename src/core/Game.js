@@ -958,8 +958,13 @@ export default class Game {
     if (!this.canChangePosition(card)) return;
     if (!card || card.position === newPosition) return;
 
+    // Track reveal for Ascension timing if monster was facedown
+    const wasFlipped = card.isFacedown;
     card.position = newPosition;
     card.isFacedown = false;
+    if (wasFlipped) {
+      card.revealedTurn = this.turnCounter;
+    }
     card.positionChangedThisTurn = true;
     card.cannotAttackThisTurn = newPosition === "defense";
     this.ui.log(

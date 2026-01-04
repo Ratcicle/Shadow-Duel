@@ -80,9 +80,9 @@ export function applyHealPerArchetypeMonster(action, ctx) {
  * Apply damage action
  * @param {Object} action - Action configuration
  * @param {Object} ctx - Context object
- * @returns {boolean} Whether damage was dealt
+ * @returns {Promise<boolean>} Whether damage was dealt
  */
-export function applyDamage(action, ctx) {
+export async function applyDamage(action, ctx) {
   const targetPlayer = action.player === "self" ? ctx.player : ctx.opponent;
   const amount = action.amount ?? 0;
 
@@ -113,7 +113,10 @@ export function applyDamage(action, ctx) {
 
         const optCheck = this.checkOncePerTurn(card, other, effect);
         if (!optCheck.ok) {
-          console.log(optCheck.reason);
+          this.game?.devLog?.("OPPONENT_DAMAGE_SKIP", {
+            card: card.name,
+            reason: optCheck.reason,
+          });
           continue;
         }
 
@@ -124,8 +127,34 @@ export function applyDamage(action, ctx) {
           damageAmount: amount, // Pass damage amount for counter calculation
         };
 
-        // Apply the actual effect actions instead of hardcoding draw
-        this.applyActions(effect.actions || [], ctx2, {});
+        // Await applyActions to properly handle async effects
+        // NOTE: opponent_damage triggers should NOT require selection (design rule)
+        // If needsSelection is returned, log warning and skip to avoid blocking damage resolution
+        const actionsResult = await this.applyActions(
+          effect.actions || [],
+          ctx2,
+          {}
+        );
+        if (
+          actionsResult &&
+          typeof actionsResult === "object" &&
+          actionsResult.needsSelection
+        ) {
+          // Design rule violation: opponent_damage effects must not require selection
+          // Log detailed warning for debugging and skip this effect
+          console.warn(
+            `[applyDamage] opponent_damage effect on "${card.name}" returned needsSelection. ` +
+              `This violates design rules - opponent_damage triggers must not require manual selection. ` +
+              `Effect skipped to avoid blocking damage resolution.`
+          );
+          this.game?.devLog?.("OPPONENT_DAMAGE_SELECTION_VIOLATION", {
+            card: card.name,
+            effectId: effect.id,
+            selectionContract: actionsResult.selectionContract,
+          });
+          continue;
+        }
+
         this.registerOncePerTurnUsage(card, other, effect);
 
         if (this.game && typeof this.game.updateBoard === "function") {
