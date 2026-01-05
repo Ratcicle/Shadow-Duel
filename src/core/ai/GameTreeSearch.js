@@ -48,6 +48,8 @@ function hashGameState(gameState) {
 function cloneGameStateDeep(gameState) {
   try {
     const cloned = JSON.parse(JSON.stringify(gameState));
+    // CRITICAL: Mark as simulated state to prevent infinite recursion in P2
+    cloned._isPerspectiveState = true;
     return cloned;
   } catch {
     // Fallback: shallow copy se JSON falhar
@@ -55,6 +57,7 @@ function cloneGameStateDeep(gameState) {
       ...gameState,
       bot: { ...gameState.bot },
       player: { ...gameState.player },
+      _isPerspectiveState: true,
     };
   }
 }
@@ -198,6 +201,10 @@ function simulateAction(gameState, action, perspective) {
  */
 function generateCandidateActions(gameState, strategy, perspective) {
   try {
+    // CRITICAL: Ensure gameState is marked as simulated to prevent infinite P2 recursion
+    if (!gameState._isPerspectiveState) {
+      gameState._isPerspectiveState = true;
+    }
     // Retorna top 2-3 ações por scoring (beam width)
     const allActions = strategy.generateMainPhaseActions(gameState);
     return allActions.slice(0, 3); // Limita a 3 para reduzir branching

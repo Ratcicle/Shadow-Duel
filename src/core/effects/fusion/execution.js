@@ -18,8 +18,8 @@ export async function performBotFusion(
   // Bot AI: choose best fusion
   // For now, just pick the first available fusion with highest ATK
   const sorted = [...summonableFusions].sort((a, b) => {
-    const atkA = a.fusion.attack || 0;
-    const atkB = b.fusion.attack || 0;
+    const atkA = a.fusion.atk || 0;
+    const atkB = b.fusion.atk || 0;
     return atkB - atkA;
   });
 

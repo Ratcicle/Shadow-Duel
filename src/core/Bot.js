@@ -190,6 +190,11 @@ export default class Bot extends Player {
   }
 
   async playMainPhase(game) {
+    // Verificar se o jogo já acabou
+    if (game.gameOver) {
+      return;
+    }
+    
     let chainCount = 0;
     const maxChains = this.maxChainedActions || 2;
 
@@ -206,7 +211,8 @@ export default class Bot extends Player {
         }
       }
 
-      const actions = this.sequenceActions(this.generateMainPhaseActions(game));
+      const rawActions = this.generateMainPhaseActions(game);
+      const actions = this.sequenceActions(rawActions);
       if (!actions.length) break;
 
       let bestAction = null;
@@ -268,7 +274,9 @@ export default class Bot extends Player {
     const minDeltaToAttack = 0.05;
 
     const performAttack = () => {
+      // Verificar se ainda podemos atacar
       if (game.gameOver) return;
+      if (game.phase !== "battle") return; // Fase mudou durante resolução
 
       const availableAttackers = this.field.filter(
         (m) =>
@@ -384,12 +392,29 @@ export default class Bot extends Player {
         0.05
       );
       if (bestAttack && bestDelta > finalThreshold) {
-        game.resolveCombat(bestAttack.attacker, bestAttack.target);
-        if (!game.gameOver) {
-            setTimeout(() => performAttack(), battleDelayMs);
+        // Verificar se atacante ainda está no campo antes de atacar
+        const attackerStillOnField = this.field.includes(bestAttack.attacker);
+        const targetStillOnField = bestAttack.target === null || opponent.field.includes(bestAttack.target);
+        
+        if (!attackerStillOnField || !targetStillOnField) {
+          // Cartas foram removidas, recalcular na próxima iteração
+          setTimeout(() => performAttack(), battleDelayMs);
+          return;
         }
+
+        // IMPORTANTE: resolveCombat é async, devemos aguardar antes de verificar gameOver
+        Promise.resolve(game.resolveCombat(bestAttack.attacker, bestAttack.target))
+          .then(() => {
+            // Verificar todas as condições antes de continuar atacando
+            if (!game.gameOver && game.phase === "battle") {
+              setTimeout(() => performAttack(), battleDelayMs);
+            }
+          })
+          .catch((err) => {
+            console.error("[Bot.playBattlePhase] resolveCombat error:", err);
+          });
       } else {
-          setTimeout(() => game.nextPhase(), battleDelayMs);
+        setTimeout(() => game.nextPhase(), battleDelayMs);
       }
     };
 

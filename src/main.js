@@ -929,22 +929,24 @@ function updateArenaProgress(progress) {
     if (result.type === "error") {
       addArenaLogEntry(`❌ ${result.message}`, "error");
     } else {
-      const symbol =
-        result.winner === "player"
-          ? "✅"
-          : result.winner === "bot"
-          ? "❌"
-          : "🔄";
-      const className =
-        result.winner === "player"
-          ? "win-1"
-          : result.winner === "bot"
-          ? "win-2"
-          : "draw";
+      let symbol, className, winnerText;
+      
+      if (result.winner === "player") {
+        symbol = "✅";
+        className = "win-1";
+        winnerText = "Bot 1 venceu";
+      } else if (result.winner === "bot") {
+        symbol = "❌";
+        className = "win-2";
+        winnerText = "Bot 2 venceu";
+      } else {
+        symbol = "🔄";
+        className = "draw";
+        winnerText = "Empate";
+      }
+      
       addArenaLogEntry(
-        `Duel ${result.duelNumber}: ${symbol} ${result.winner.toUpperCase()} (${
-          result.turns
-        } turnos)`,
+        `Duel ${result.duelNumber}: ${symbol} ${winnerText} (${result.turns} turnos)`,
         className
       );
     }

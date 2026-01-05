@@ -45,15 +45,8 @@ export function findFusionMaterialCombos(
   options = {}
 ) {
   const requirements = this.getFusionRequirements(fusionMonster);
-  console.log(
-    `[findFusionMaterialCombos] Fusion: ${fusionMonster.name}, requirements:`,
-    requirements
-  );
 
   if (!requirements || requirements.length === 0) {
-    console.log(
-      `[findFusionMaterialCombos] No requirements found for ${fusionMonster.name}`
-    );
     return [];
   }
 
@@ -66,15 +59,8 @@ export function findFusionMaterialCombos(
     }
   }
 
-  console.log(
-    `[findFusionMaterialCombos] Expanded requirements count: ${expandedRequirements.length}`
-  );
-
   // Check if we have enough materials
   if (materials.length < expandedRequirements.length) {
-    console.log(
-      `[findFusionMaterialCombos] Not enough materials: have ${materials.length}, need ${expandedRequirements.length}`
-    );
     return [];
   }
 
@@ -89,11 +75,6 @@ export function findFusionMaterialCombos(
     zone: materialInfo[idx]?.zone || materialZone,
   }));
 
-  console.log(
-    `[findFusionMaterialCombos] Indexed materials:`,
-    indexedMaterials.map((m) => `${m.card.name} (zone: ${m.zone})`)
-  );
-
   // Recursive function to find all valid combinations
   const findCombos = (reqIndex, usedMaterials, remainingIndexed) => {
     // All requirements satisfied
@@ -104,17 +85,10 @@ export function findFusionMaterialCombos(
 
     const requirement = expandedRequirements[reqIndex];
     const reqString = requirementToString(requirement);
-    console.log(
-      `[findFusionMaterialCombos] Req ${reqIndex}: ${JSON.stringify(
-        requirement
-      )} -> reqString: "${reqString}"`
-    );
 
     // Check for zone restrictions on this requirement
     const allowedZones =
       typeof requirement === "object" ? requirement.allowedZones : null;
-
-    console.log(`[findFusionMaterialCombos] allowedZones:`, allowedZones);
 
     // Try each available material
     for (let i = 0; i < remainingIndexed.length; i++) {
@@ -124,11 +98,6 @@ export function findFusionMaterialCombos(
 
       // Check zone restriction if specified
       if (allowedZones && !allowedZones.includes(matZone)) {
-        console.log(
-          `[findFusionMaterialCombos] ${
-            material.name
-          } rejected: zone ${matZone} not in ${JSON.stringify(allowedZones)}`
-        );
         continue;
       }
 
@@ -136,9 +105,6 @@ export function findFusionMaterialCombos(
         material,
         reqString,
         matZone
-      );
-      console.log(
-        `[findFusionMaterialCombos] ${material.name} matches "${reqString}": ${matches}`
       );
 
       if (matches) {
@@ -153,9 +119,6 @@ export function findFusionMaterialCombos(
   };
 
   findCombos(0, [], indexedMaterials);
-  console.log(
-    `[findFusionMaterialCombos] Found ${combos.length} combos for ${fusionMonster.name}`
-  );
   return combos;
 }
 
