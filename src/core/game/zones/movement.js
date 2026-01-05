@@ -624,5 +624,10 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     });
   }
 
+  // Limpar cache de targeting após mover cartas (estado do jogo mudou)
+  if (this.effectEngine?.clearTargetingCache) {
+    this.effectEngine.clearTargetingCache();
+  }
+
   return { success: true, fromZone, toZone };
 }

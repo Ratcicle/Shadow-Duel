@@ -20,7 +20,10 @@ export async function handlePayLP(action, ctx, targets, engine) {
 
   const game = engine.game;
 
-  if (!player || !game) return false;
+  if (!player || !game) {
+    console.log("[handlePayLP] Missing player or game");
+    return false;
+  }
 
   let amount = action.amount || 0;
 
@@ -28,15 +31,19 @@ export async function handlePayLP(action, ctx, targets, engine) {
     amount = Math.floor(player.lp * action.fraction);
   }
 
-  if (amount <= 0) return false;
+  if (amount <= 0) {
+    console.log("[handlePayLP] Amount is zero or negative:", amount);
+    return false;
+  }
 
   if (player.lp < amount) {
+    console.log(`[handlePayLP] Not enough LP: ${player.lp} < ${amount}`);
     getUI(game)?.log("Not enough LP to pay cost.");
-
     return false;
   }
 
   player.lp -= amount;
+  console.log(`[handlePayLP] SUCCESS: Paid ${amount} LP, remaining ${player.lp}`);
 
   getUI(game)?.log(`${player.name || player.id} paid ${amount} LP.`);
 
@@ -124,7 +131,10 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
     extraFilter,
   });
 
+  console.log(`[handleAddFromZoneToHand] Zone: ${sourceZone}, Candidates: ${candidates.length}, Filters:`, filters);
+
   if (candidates.length === 0) {
+    console.log(`[handleAddFromZoneToHand] No candidates found in ${sourceZone}`);
     getUI(game)?.log(`No valid cards in ${sourceZone} matching filters.`);
     return false;
   }
@@ -175,6 +185,8 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
     return true;
   };
 
+  console.log(`[handleAddFromZoneToHand] Calling selectCardsFromZone: maxSelect=${maxSelect}, minSelect=${minSelect}, promptPlayer=${promptPlayer !== false}`);
+
   const selection = await selectCardsFromZone({
     game,
     player,
@@ -184,7 +196,7 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
     candidates,
     maxSelect,
     minSelect,
-    promptPlayer: action.promptPlayer !== false,
+    promptPlayer: promptPlayer !== false,
     botSelect: (cards, max) =>
       cards[0]?.cardKind === "monster"
         ? cards
@@ -232,7 +244,10 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
     },
   });
 
-  return finalizeSelection(selection.selected || []);
+  console.log(`[handleAddFromZoneToHand] Selection result:`, { selected: selection.selected?.length || 0, cancelled: selection.cancelled });
+  const result = finalizeSelection(selection.selected || []);
+  console.log(`[handleAddFromZoneToHand] finalizeSelection returned:`, result);
+  return result;
 }
 
 /**

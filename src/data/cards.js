@@ -984,10 +984,8 @@ export const cardDatabase = [
     image: "assets/Darkness Valley.png",
     effects: [
       {
-        id: "darkness_valley_activate",
-        timing: "on_field_activate",
-        oncePerTurn: true,
-        oncePerTurnName: "Darkness Valley Buff",
+        id: "darkness_valley_on_place",
+        timing: "on_play",
         actions: [
           {
             type: "permanent_buff_named",

@@ -5,6 +5,32 @@
  * All functions assume `this` = EffectEngine instance
  */
 
+import { botLogger } from "../../BotLogger.js";
+
+// Track duplicate selectCandidates calls per turn
+const selectCandidatesCallTracker = {};
+
+/**
+ * Build a unique cache key for targeting lookups.
+ * @param {Object} def - Target definition
+ * @param {Object} ctx - Context with player, opponent, source
+ * @returns {string} Cache key
+ */
+function buildTargetingCacheKey(def, ctx) {
+  const parts = [
+    def.id || "unknown",
+    def.zone || "field",
+    def.owner || "self",
+    def.cardKind || "any",
+    def.archetype || "any",
+    def.excludeCardName || "",
+    def.requireThisCard ? "this" : "",
+    ctx.source?.name || "",
+    ctx.player?.id || "p",
+  ];
+  return parts.join("|");
+}
+
 /**
  * Build a unique key for a selection candidate
  * @param {Object} candidate - The candidate object
@@ -40,6 +66,39 @@ export function selectCandidates(def, ctx) {
   const zoneName = def.zone || "field";
   const zoneList =
     Array.isArray(def.zones) && def.zones.length > 0 ? def.zones : [zoneName];
+
+  // ✅ CACHE: Gerar chave única baseada na definição do target
+  const cacheKey = buildTargetingCacheKey(def, ctx);
+  
+  // 🔍 Duplicate Detection
+  const turnKey = `turn_${(ctx?.player?.id || 'unknown')}`;
+  if (!selectCandidatesCallTracker[turnKey]) {
+    selectCandidatesCallTracker[turnKey] = {};
+  }
+  const callKey = `${def.id}_${zoneName}`;
+  selectCandidatesCallTracker[turnKey][callKey] = (selectCandidatesCallTracker[turnKey][callKey] || 0) + 1;
+  
+  if (selectCandidatesCallTracker[turnKey][callKey] > 1 && botLogger) {
+    botLogger.logDuplicate(
+      'selectCandidates',
+      `Target "${def.id}" in zone "${zoneName}"`,
+      selectCandidatesCallTracker[turnKey][callKey],
+      ctx.source?.name || 'unknown'
+    );
+  }
+  
+  const cached = this._targetingCache?.get(cacheKey);
+  
+  if (cached) {
+    if (this._targetingCacheHits !== undefined) {
+      this._targetingCacheHits++;
+    }
+    return { zoneName: cached.zoneName, candidates: cached.candidates };
+  }
+  
+  if (this._targetingCacheMisses !== undefined) {
+    this._targetingCacheMisses++;
+  }
 
   log(
     `[selectCandidates] Starting search for target "${def.id}": owner="${def.owner}", zone="${zoneName}", archetype="${def.archetype}", excludeCardName="${def.excludeCardName}"`
@@ -297,5 +356,11 @@ export function selectCandidates(def, ctx) {
     candidates = [...candidates].sort((a, b) => (a.atk || 0) - (b.atk || 0));
   }
 
-  return { zoneName, candidates };
+  // ✅ CACHE: Salvar resultado no cache
+  const result = { zoneName, candidates };
+  if (this._targetingCache) {
+    this._targetingCache.set(cacheKey, result);
+  }
+
+  return result;
 }

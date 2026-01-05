@@ -29,6 +29,12 @@ export default class EffectEngine {
     this.actionHandlers = new ActionHandlerRegistry();
     registerDefaultHandlers(this.actionHandlers);
 
+    // Cache de targeting para evitar buscas redundantes
+    // Formato: { "cacheKey": { zoneName, candidates, timestamp } }
+    this._targetingCache = new Map();
+    this._targetingCacheHits = 0;
+    this._targetingCacheMisses = 0;
+
     // Track per-card counters for special summon by type (used by passives like Metal Armored Dragon)
     // Defer listener registration until game is fully initialized
     if (game && typeof game.on === "function") {
@@ -41,6 +47,32 @@ export default class EffectEngine {
 
   get ui() {
     return this.game?.ui || this.game?.renderer || null;
+  }
+
+  /**
+   * Limpa o cache de targeting. Deve ser chamado:
+   * - No início de cada turno
+   * - Após ações que modificam o estado do jogo (summon, destroy, move)
+   */
+  clearTargetingCache() {
+    if (this._targetingCache) {
+      this._targetingCache.clear();
+    }
+  }
+
+  /**
+   * Log de estatísticas do cache (para debug).
+   */
+  logTargetingCacheStats() {
+    const hits = this._targetingCacheHits || 0;
+    const misses = this._targetingCacheMisses || 0;
+    const total = hits + misses;
+    if (total > 0) {
+      const hitRate = ((hits / total) * 100).toFixed(1);
+      console.log(
+        `[TargetingCache] Hits: ${hits} | Misses: ${misses} | Hit Rate: ${hitRate}%`
+      );
+    }
   }
 
   /**

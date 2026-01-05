@@ -304,6 +304,13 @@ export default class BotArena {
       if (logEl) logEl.innerHTML = "";
     }
 
+    // Log de início do duelo
+    console.log(`\n${'═'.repeat(50)}`);
+    console.log(`🎮 DUELO #${duelNumber} INICIADO`);
+    console.log(`   Bot 1: ${arch1} vs Bot 2: ${arch2}`);
+    console.log(`   LP: ${game.player?.lp ?? 8000} vs ${game.bot?.lp ?? 8000}`);
+    console.log(`${'═'.repeat(50)}\n`);
+
     const duelStartTime = Date.now();
     game.start();
 
@@ -316,6 +323,21 @@ export default class BotArena {
 
     const winner = this.resolveWinner(game, outcome);
     const totalTimeMs = Date.now() - duelStartTime;
+
+    // Log de fim do duelo
+    const winnerName = winner === 'player' ? 'Bot 1' : winner === 'bot' ? 'Bot 2' : 'Empate';
+    const reasonText = outcome.reason || 'LP zerou';
+    console.log(`\n${'═'.repeat(50)}`);
+    console.log(`🏆 DUELO #${duelNumber} FINALIZADO - ${winnerName}${winner !== 'draw' ? ' venceu!' : ''}`);
+    console.log(`   Turnos: ${game.turnCounter || 0} | LP Final: ${game.player?.lp ?? 0} vs ${game.bot?.lp ?? 0}`);
+    console.log(`   Razão: ${reasonText} | Tempo: ${(totalTimeMs/1000).toFixed(1)}s`);
+    
+    // Log de estatísticas do cache de targeting
+    if (game.effectEngine?.logTargetingCacheStats) {
+      game.effectEngine.logTargetingCacheStats();
+    }
+    
+    console.log(`${'═'.repeat(50)}\n`);
 
     // Finalizar tracker e registrar no analytics
     const duelResult = tracker.finalize(winner, outcome.reason, {

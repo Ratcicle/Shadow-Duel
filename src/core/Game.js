@@ -506,7 +506,7 @@ export default class Game {
   // Methods are attached to prototype after class definition
   // ─────────────────────────────────────────────────────────────────────────────
 
-  start(deckList = null, extraDeckList = null) {
+  async start(deckList = null, extraDeckList = null) {
     // BUG #9 FIX: Reset once-per-duel usage between duels
     // This ensures effects like "once per duel" are available in new matches
     this.player.oncePerDuelUsageByName = Object.create(null);
@@ -526,7 +526,7 @@ export default class Game {
     this.drawCards(this.bot, 4);
 
     this.updateBoard();
-    this.startTurn();
+    await this.startTurn();
     this.ui.bindPhaseClick((phase) => {
       if (this.turn !== "player") return;
       if (

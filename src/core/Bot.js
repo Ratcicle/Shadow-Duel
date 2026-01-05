@@ -3,6 +3,7 @@ import { cardDatabase, cardDatabaseById } from "../data/cards.js";
 import Card from "./Card.js";
 import { getStrategyFor } from "./ai/StrategyRegistry.js";
 import { beamSearchTurn, greedySearchWithEvalV2 } from "./ai/BeamSearch.js";
+import { botLogger } from "./BotLogger.js";
 
 export default class Bot extends Player {
   constructor(archetype = "shadowheart") {
@@ -164,9 +165,14 @@ export default class Bot extends Player {
   async makeMove(game) {
     if (!game || game.gameOver) return;
     const guard = game.canStartAction({ actor: this, kind: "bot_turn" });
-    if (!guard.ok) return;
+    console.log(`[Bot.makeMove] Guard check:`, guard);
+    if (!guard.ok) {
+      console.log(`[Bot.makeMove] ❌ Guard blocked: ${guard.reason}`);
+      return;
+    }
 
     const phase = game.phase;
+    console.log(`[Bot.makeMove] Phase: ${phase}`);
 
     if (phase === "main1" || phase === "main2") {
       await this.playMainPhase(game);
@@ -213,7 +219,30 @@ export default class Bot extends Player {
 
       const rawActions = this.generateMainPhaseActions(game);
       const actions = this.sequenceActions(rawActions);
-      if (!actions.length) break;
+      
+      console.log(`[Bot.playMainPhase] Generated ${rawActions.length} raw actions, ${actions.length} sequenced actions`);
+      if (actions.length > 0) {
+        console.log(`[Bot.playMainPhase] Actions:`, actions.map(a => `${a.type}:${a.card?.name || a.index}`));
+      }
+      
+      // 📊 Log de fase vazia
+      if (!actions.length) {
+        if (botLogger) {
+          botLogger.logEmptyPhase(
+            this.id,
+            game.turnCounter || 0,
+            game.phase || 'unknown',
+            'NO_ACTIONS_GENERATED',
+            {
+              lp: game.player?.lp,
+              handSize: (game.player?.hand || []).length,
+              fieldSize: (game.player?.field || []).length,
+              gySize: (game.player?.graveyard || []).length,
+            }
+          );
+        }
+        break;
+      }
 
       let bestAction = null;
 
@@ -221,6 +250,7 @@ export default class Bot extends Player {
       // Se tem 2+ opções, usa beam search. Senão, greedy.
       if (actions.length >= 2) {
         // Beam search: lookahead 2 plies
+        console.log(`[Bot.playMainPhase] Running beam search with ${actions.length} actions...`);
         const searchResult = await beamSearchTurn(game, this, {
           beamWidth: 2,
           maxDepth: 2,
@@ -228,26 +258,73 @@ export default class Bot extends Player {
           useV2Evaluation,
         });
 
+        console.log(`[Bot.playMainPhase] Beam search result:`, searchResult);
         if (searchResult && searchResult.action) {
           bestAction = searchResult.action;
+          console.log(`[Bot.playMainPhase] ✅ Beam search chose:`, bestAction);
+        } else {
+          console.log(`[Bot.playMainPhase] ❌ Beam search returned no action`);
         }
       }
 
       // Fallback: se beam search não retornou nada, ou só tem 1 opção, usa greedy
       if (!bestAction) {
+        console.log(`[Bot.playMainPhase] Running greedy search...`);
         const greedyResult = await greedySearchWithEvalV2(game, this, {
           useV2Evaluation,
         });
 
+        console.log(`[Bot.playMainPhase] Greedy search result:`, greedyResult);
         if (greedyResult && greedyResult.action) {
           bestAction = greedyResult.action;
+          console.log(`[Bot.playMainPhase] ✅ Greedy chose:`, bestAction);
+        } else {
+          console.log(`[Bot.playMainPhase] ❌ Greedy returned no action`);
         }
       }
 
       // Se ainda não tem ação, break
-      if (!bestAction) break;
+      if (!bestAction) {
+        console.log(`[Bot.playMainPhase] ⚠️ No action selected, breaking loop`);
+        break;
+      }
 
-      await this.executeMainPhaseAction(game, bestAction);
+      // 📊 Log de decisão (ranking e coerência)
+      if (botLogger && actions.length > 0) {
+        const sorted = [...actions].sort((a, b) => (b.priority || 0) - (a.priority || 0));
+        let ranking = -1;
+        for (let i = 0; i < sorted.length; i++) {
+          if (sorted[i].type === bestAction.type && sorted[i].index === bestAction.index) {
+            ranking = i;
+            break;
+          }
+        }
+        if (ranking >= 0) {
+          let coherence = ranking === 0 ? 1.0 : ranking < 3 ? 0.7 : 0.4;
+          botLogger.logDecision(
+            this.id,
+            game.turnCounter || 0,
+            game.phase || 'unknown',
+            actions.length,
+            ranking,
+            coherence,
+            bestAction
+          );
+        }
+      }
+
+      const actionSuccess = await this.executeMainPhaseAction(game, bestAction);
+      if (!actionSuccess) {
+        if (botLogger?.logEmptyPhase) {
+          botLogger.logEmptyPhase(this.id, game.turnCounter, game.phase, "ACTION_FAILED", {
+            lp: this.lp,
+            handSize: this.hand.length,
+            fieldSize: this.field.length,
+            gySize: this.graveyard.length,
+          });
+        }
+        break;
+      }
       chainCount += 1;
 
       if (typeof game.waitForPhaseDelay === "function") {
@@ -430,7 +507,25 @@ export default class Bot extends Player {
   }
 
   generateMainPhaseActions(game) {
-    return this.strategy.generateMainPhaseActions(game);
+    const actions = this.strategy.generateMainPhaseActions(game);
+    
+    // 📊 Log de geração de ações
+    if (botLogger) {
+      const hand = game.player?.hand || [];
+      const field = game.player?.field || [];
+      const summonAvailable = (game.player?.summonCount || 0) < 1;
+      botLogger.logActionGeneration(
+        this.id,
+        game.turnCounter || 0,
+        game.phase || 'unknown',
+        hand,
+        field,
+        summonAvailable,
+        actions || []
+      );
+    }
+
+    return actions;
   }
 
   sequenceActions(actions) {
@@ -571,6 +666,8 @@ export default class Bot extends Player {
       const card = this.hand[action.index];
       if (!card) return false;
 
+      console.log(`[Bot.executeMainPhaseAction] 📝 Attempting spell: ${card.name}`);
+
       if (
         game.effectEngine &&
         typeof game.effectEngine.canActivateSpellFromHandPreview === "function"
@@ -579,7 +676,9 @@ export default class Bot extends Player {
           card,
           this
         );
+        console.log(`[Bot.executeMainPhaseAction] 🔍 Preview check:`, preview);
         if (preview && !preview.ok) {
+          console.log(`[Bot.executeMainPhaseAction] ❌ Preview rejected:`, preview.reason);
           return false;
         }
       }
@@ -589,7 +688,7 @@ export default class Bot extends Player {
           fromHand: true,
         });
 
-      await game.runActivationPipeline({
+      const pipelineResult = await game.runActivationPipeline({
         card,
         owner: this,
         selectionKind: "spellTrapEffect",
@@ -630,7 +729,7 @@ export default class Bot extends Player {
           game.updateBoard();
         },
       });
-      return true;
+      return pipelineResult !== false;
     }
 
     if (action.type === "fieldEffect" && this.fieldSpell) {

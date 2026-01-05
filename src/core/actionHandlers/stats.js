@@ -946,6 +946,17 @@ export async function handlePermanentBuffNamed(action, ctx, targets, engine) {
       card.permanentBuffsBySource = {};
     }
 
+    // If cumulative is false and card already has this buff, skip it
+    if (!cumulative && card.permanentBuffsBySource[sourceName]) {
+      const existingAtk = card.permanentBuffsBySource[sourceName]?.atk || 0;
+      const existingDef = card.permanentBuffsBySource[sourceName]?.def || 0;
+      
+      // Already has the exact buff, skip
+      if (existingAtk === atkBoost && existingDef === defBoost) {
+        continue;
+      }
+    }
+
     let cardBuffed = false;
 
     if (atkBoost !== 0) {
