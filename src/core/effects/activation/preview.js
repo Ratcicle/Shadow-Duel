@@ -67,12 +67,16 @@ export function canActivateSpellFromHandPreview(card, player, options = {}) {
   const opdCheck = this.checkOncePerDuel(card, player, effect);
   if (!opdCheck.ok) return { ok: false, reason: opdCheck.reason };
 
+  const activationContext = {
+    ...(options.activationContext || {}),
+    preview: true,
+  };
   const ctx = {
     source: card,
     player,
     opponent: this.game?.getOpponent?.(player),
     activationZone: "hand",
-    activationContext: options.activationContext || {},
+    activationContext,
   };
 
   if (effect.conditions) {
@@ -157,12 +161,16 @@ export function canActivateMonsterEffectPreview(
     return { ok: false, reason: "No ignition effect defined for this zone." };
   }
 
+  const activationContext = {
+    ...(options.activationContext || {}),
+    preview: true,
+  };
   const ctx = {
     source: card,
     player,
     opponent: this.game.getOpponent(player),
     activationZone,
-    activationContext: options.activationContext || {},
+    activationContext,
   };
 
   const optCheck = this.checkOncePerTurn(card, player, effect);
@@ -273,12 +281,16 @@ export function canActivateSpellTrapEffectPreview(
   const opdCheck = this.checkOncePerDuel(card, player, effect);
   if (!opdCheck.ok) return { ok: false, reason: opdCheck.reason };
 
+  const activationContext = {
+    ...(options.activationContext || {}),
+    preview: true,
+  };
   const ctx = {
     source: card,
     player,
     opponent: this.game?.getOpponent?.(player),
     activationZone,
-    activationContext: options.activationContext || {},
+    activationContext,
   };
 
   if (effect.conditions) {
@@ -353,12 +365,16 @@ export function canActivateFieldSpellEffectPreview(
   const opdCheck = this.checkOncePerDuel(card, player, effect);
   if (!opdCheck.ok) return { ok: false, reason: opdCheck.reason };
 
+  const activationContext = {
+    ...(options.activationContext || {}),
+    preview: true,
+  };
   const ctx = {
     source: card,
     player,
     opponent: this.game?.getOpponent?.(player),
     activationZone: "fieldSpell",
-    activationContext: options.activationContext || {},
+    activationContext,
   };
 
   if (effect.conditions) {

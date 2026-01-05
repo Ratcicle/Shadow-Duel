@@ -22,6 +22,14 @@ export function resolveTargets(targetDefs, ctx, selections) {
   const autoSelectSingleTarget =
     activationContext.autoSelectSingleTarget === true;
   const isAIPlayer = isAI(ctx?.player);
+  const isPreview =
+    activationContext.preview === true || activationContext.isPreview === true;
+  const allowAutoSelectTargets =
+    !isPreview && activationContext.autoSelectTargets === true;
+  const shouldLogTargets =
+    activationContext.logTargets === true ||
+    this.game?.devModeEnabled === true ||
+    ctx?.player?.debug === true;
   const resolvedTargets = activationContext.resolvedTargets || null;
 
   // ✅ DRAGON SPIRIT SANCTUARY: Inject targetMap into context for compareAttribute support
@@ -40,18 +48,22 @@ export function resolveTargets(targetDefs, ctx, selections) {
         targetMap[def.id] = Array.isArray(contextTarget)
           ? contextTarget
           : [contextTarget];
-        console.log(
-          `[resolveTargets] Using targetFromContext "${contextKey}" for target "${
-            def.id
-          }": ${contextTarget.name || contextTarget}`
-        );
+        if (shouldLogTargets) {
+          console.log(
+            `[resolveTargets] Using targetFromContext "${contextKey}" for target "${
+              def.id
+            }": ${contextTarget.name || contextTarget}`
+          );
+        }
         continue;
       } else {
         // Context target not available - fail or continue based on optional flag
         if (def.optional) {
-          console.log(
-            `[resolveTargets] Context target "${contextKey}" not found but optional, skipping target "${def.id}"`
-          );
+          if (shouldLogTargets) {
+            console.log(
+              `[resolveTargets] Context target "${contextKey}" not found but optional, skipping target "${def.id}"`
+            );
+          }
           targetMap[def.id] = [];
           continue;
         }
@@ -72,11 +84,13 @@ export function resolveTargets(targetDefs, ctx, selections) {
           ...def,
           excludeCardNames: namesToExclude,
         };
-        console.log(
-          `[resolveTargets] Excluding card names from ref "${
-            def.excludeNameRef
-          }": ${namesToExclude.join(", ")}`
-        );
+        if (shouldLogTargets) {
+          console.log(
+            `[resolveTargets] Excluding card names from ref "${
+              def.excludeNameRef
+            }": ${namesToExclude.join(", ")}`
+          );
+        }
       }
     }
 
@@ -144,18 +158,20 @@ export function resolveTargets(targetDefs, ctx, selections) {
     const hasSelectionForDef =
       hasSelections && Object.prototype.hasOwnProperty.call(selections, def.id);
     const provided = hasSelectionForDef ? selections[def.id] : null;
-    console.log("[resolveTargets] checking selections", {
-      targetDefId: def.id,
-      hasSelections,
-      hasSelectionForDef,
-      provided: provided
-        ? Array.isArray(provided)
-          ? provided
-          : [provided]
-        : null,
-      candidateCount: decoratedCandidates.length,
-      candidateKeys: decoratedCandidates.slice(0, 5).map((c) => c.key),
-    });
+    if (shouldLogTargets) {
+      console.log("[resolveTargets] checking selections", {
+        targetDefId: def.id,
+        hasSelections,
+        hasSelectionForDef,
+        provided: provided
+          ? Array.isArray(provided)
+            ? provided
+            : [provided]
+          : null,
+        candidateCount: decoratedCandidates.length,
+        candidateKeys: decoratedCandidates.slice(0, 5).map((c) => c.key),
+      });
+    }
     if (hasSelectionForDef) {
       const providedList = Array.isArray(provided)
         ? provided
@@ -216,9 +232,10 @@ export function resolveTargets(targetDefs, ctx, selections) {
     }
 
     const autoSelectExplicit = def.autoSelect === true;
-    const allowAutoSelectForPlayer = !isAIPlayer && autoSelectExplicit;
+    const allowAutoSelectForPlayer =
+      !isPreview && !isAIPlayer && autoSelectExplicit;
     const allowAutoSelectForBot =
-      isAIPlayer &&
+      allowAutoSelectTargets &&
       (autoSelectExplicit ||
         (autoSelectSingleTarget && min === 1 && max === 1));
     const shouldAutoSelect = allowAutoSelectForPlayer || allowAutoSelectForBot;
@@ -287,17 +304,71 @@ export function resolveTargets(targetDefs, ctx, selections) {
   }
 
   if (needsSelection) {
+    const selectionContract = {
+      kind: "target",
+      message: null,
+      requirements,
+      ui: {},
+      metadata: {
+        sourceCardId: ctx?.source?.id,
+      },
+    };
+
+    if (
+      allowAutoSelectTargets &&
+      this.game?.autoSelector &&
+      typeof this.game.autoSelector.select === "function" &&
+      activationContext._autoSelectAttempted !== true
+    ) {
+      activationContext._autoSelectAttempted = true;
+      try {
+        const autoResult = this.game.autoSelector.select(selectionContract, {
+          owner: ctx?.player,
+          activationContext,
+          selectionKind: "target",
+        });
+
+        if (autoResult?.ok && autoResult.selections) {
+          const resolved = this.resolveTargets(
+            targetDefs,
+            ctx,
+            autoResult.selections
+          );
+          if (resolved?.ok) {
+            return resolved;
+          }
+        }
+
+        const fallbackSelections = {};
+        for (const req of selectionContract.requirements || []) {
+          const min = Number(req.min ?? 0);
+          const max = Number(req.max ?? min);
+          const candidates = Array.isArray(req.candidates) ? req.candidates : [];
+          const pickCount = min > 0 ? Math.min(min, candidates.length) : 0;
+          fallbackSelections[req.id] = candidates
+            .slice(0, Math.min(pickCount, max, candidates.length))
+            .map((cand) => cand.key)
+            .filter(Boolean);
+        }
+
+        if (Object.keys(fallbackSelections).length > 0) {
+          const resolvedFallback = this.resolveTargets(
+            targetDefs,
+            ctx,
+            fallbackSelections
+          );
+          if (resolvedFallback?.ok) {
+            return resolvedFallback;
+          }
+        }
+      } finally {
+        delete activationContext._autoSelectAttempted;
+      }
+    }
+
     return {
       needsSelection: true,
-      selectionContract: {
-        kind: "target",
-        message: null,
-        requirements,
-        ui: {},
-        metadata: {
-          sourceCardId: ctx?.source?.id,
-        },
-      },
+      selectionContract,
       // Preserve already resolved targets (e.g., targetFromContext) so they
       // survive downstream selection flows like ChainSystem.addToChain.
       targets: targetMap,
@@ -306,7 +377,7 @@ export function resolveTargets(targetDefs, ctx, selections) {
 
   // ✅ DRAGON SPIRIT SANCTUARY: Emit effect_targeted event for opponent's cards
   // This allows traps like Dragon Spirit Sanctuary to respond before effect resolves
-  if (this.game && ctx?.source && ctx?.player) {
+  if (!isPreview && this.game && ctx?.source && ctx?.player) {
     for (const [targetId, targetCards] of Object.entries(targetMap)) {
       if (!Array.isArray(targetCards)) continue;
 
@@ -318,9 +389,11 @@ export function resolveTargets(targetDefs, ctx, selections) {
           targetCard.owner === "player" ? this.game.player : this.game.bot;
         if (targetOwner && targetOwner.id !== ctx.player.id) {
           // Emit event for opponent's targeted card
-          console.log(
-            `[resolveTargets] Emitting effect_targeted: ${ctx.source.name} targets ${targetCard.name}`
-          );
+          if (shouldLogTargets) {
+            console.log(
+              `[resolveTargets] Emitting effect_targeted: ${ctx.source.name} targets ${targetCard.name}`
+            );
+          }
 
           // Emit event asynchronously (don't wait for it to avoid blocking)
           void this.game.emit("effect_targeted", {

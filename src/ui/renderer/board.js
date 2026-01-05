@@ -16,6 +16,7 @@ export function renderHand(player) {
   const fragment = document.createDocumentFragment();
 
   player.hand.forEach((card, index) => {
+    if (!card) return; // Defensive: skip empty slots
     const cardEl = this.createCardElement(card, player.id === "player");
     cardEl.dataset.index = index;
     cardEl.dataset.location = "hand";
@@ -46,6 +47,7 @@ export function renderField(player) {
   const fragment = document.createDocumentFragment();
 
   player.field.forEach((card, index) => {
+    if (!card) return; // Defensive: skip empty slots
     const cardEl = this.createCardElement(card, true);
     cardEl.dataset.index = index;
     cardEl.dataset.location = "field";
@@ -83,6 +85,7 @@ export function renderSpellTrap(player) {
   const fragment = document.createDocumentFragment();
 
   player.spellTrap.forEach((card, index) => {
+    if (!card) return; // Defensive: skip empty slots
     const isVisible = player.id === "player" || !card.isFacedown;
     const cardEl = this.createCardElement(card, isVisible);
     cardEl.dataset.index = index;

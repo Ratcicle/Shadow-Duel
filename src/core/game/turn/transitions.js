@@ -45,13 +45,8 @@ export async function nextPhase() {
 
   this.updateBoard();
 
-  if (
-    isAI(this.bot) &&
-    this.turn === "bot" &&
-    !this.gameOver &&
-    typeof this.bot?.makeMove === "function"
-  ) {
-    this.bot.makeMove(this);
+  if (isAI(actor) && !this.gameOver && typeof actor?.makeMove === "function") {
+    actor.makeMove(this);
   }
 }
 
@@ -61,10 +56,11 @@ export async function nextPhase() {
  * @param {string} targetPhase - The phase to skip to
  */
 export function skipToPhase(targetPhase) {
-  const guard = this.guardActionStart({
-    actor: this.player,
-    kind: "phase_change",
-  });
+  const actor = this.turn === "player" ? this.player : this.bot;
+  const guard = this.guardActionStart(
+    { actor, kind: "phase_change" },
+    actor === this.player
+  );
   if (!guard.ok) return guard;
   const order = ["draw", "standby", "main1", "battle", "main2", "end"];
   const currentIdx = order.indexOf(this.phase);
@@ -83,12 +79,11 @@ export function skipToPhase(targetPhase) {
   }
   this.updateBoard();
   if (
-    isAI(this.bot) &&
-    this.turn === "bot" &&
+    isAI(actor) &&
     this.phase !== "draw" &&
     !this.gameOver &&
-    typeof this.bot?.makeMove === "function"
+    typeof actor?.makeMove === "function"
   ) {
-    this.bot.makeMove(this);
+    actor.makeMove(this);
   }
 }

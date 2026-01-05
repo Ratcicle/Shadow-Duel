@@ -99,6 +99,7 @@ export function validateCardDatabase() {
           const allowedReqs = new Set([
             "material_destroyed_opponent_monsters",
             "material_effect_activations",
+            "material_turns_on_field",
             "player_lp_gte",
             "player_lp_lte",
             "player_hand_gte",

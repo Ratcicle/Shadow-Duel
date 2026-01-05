@@ -12,6 +12,7 @@ export function checkWinCondition() {
   if (this.player.lp <= 0) {
     this.ui?.showAlert?.("Game Over! You Lost.");
     this.gameOver = true;
+    this.winner = "bot";
     this.emit("game_over", {
       winner: this.bot,
       winnerId: this.bot.id,
@@ -22,6 +23,7 @@ export function checkWinCondition() {
   } else if (this.bot.lp <= 0) {
     this.ui?.showAlert?.("Victory! You Won.");
     this.gameOver = true;
+    this.winner = "player";
     this.emit("game_over", {
       winner: this.player,
       winnerId: this.player.id,

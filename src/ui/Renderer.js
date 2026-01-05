@@ -1,6 +1,6 @@
 /**
  * Renderer - Main UI rendering class for Shadow Duel
- * 
+ *
  * This is the facade that maintains backward compatibility.
  * The class owns the constructor; methods are attached from modules.
  */
@@ -52,21 +52,31 @@ Renderer.prototype.renderGraveyardModal = board.renderGraveyardModal;
 Renderer.prototype.renderExtraDeckModal = board.renderExtraDeckModal;
 
 // Attach indicator methods
-Renderer.prototype.applyActivationIndicators = indicators.applyActivationIndicators;
-Renderer.prototype.applyAttackReadyIndicators = indicators.applyAttackReadyIndicators;
-Renderer.prototype.clearAttackReadyIndicators = indicators.clearAttackReadyIndicators;
-Renderer.prototype.applyAttackResolutionIndicators = indicators.applyAttackResolutionIndicators;
-Renderer.prototype.clearAttackResolutionIndicators = indicators.clearAttackResolutionIndicators;
+Renderer.prototype.applyActivationIndicators =
+  indicators.applyActivationIndicators;
+Renderer.prototype.applyAttackReadyIndicators =
+  indicators.applyAttackReadyIndicators;
+Renderer.prototype.clearAttackReadyIndicators =
+  indicators.clearAttackReadyIndicators;
+Renderer.prototype.applyAttackResolutionIndicators =
+  indicators.applyAttackResolutionIndicators;
+Renderer.prototype.clearAttackResolutionIndicators =
+  indicators.clearAttackResolutionIndicators;
 Renderer.prototype.applyFlipAnimation = indicators.applyFlipAnimation;
-Renderer.prototype.setPlayerFieldTributeable = indicators.setPlayerFieldTributeable;
+Renderer.prototype.setPlayerFieldTributeable =
+  indicators.setPlayerFieldTributeable;
 Renderer.prototype.setPlayerFieldSelected = indicators.setPlayerFieldSelected;
-Renderer.prototype.clearPlayerFieldTributeable = indicators.clearPlayerFieldTributeable;
+Renderer.prototype.clearPlayerFieldTributeable =
+  indicators.clearPlayerFieldTributeable;
 Renderer.prototype.applyTargetHighlights = indicators.applyTargetHighlights;
 Renderer.prototype.clearTargetHighlights = indicators.clearTargetHighlights;
 Renderer.prototype.setSelectionDimming = indicators.setSelectionDimming;
-Renderer.prototype.applyHandTargetableIndices = indicators.applyHandTargetableIndices;
-Renderer.prototype.getSelectionCleanupState = indicators.getSelectionCleanupState;
-Renderer.prototype.applyZoneActivationIndicators = indicators.applyZoneActivationIndicators;
+Renderer.prototype.applyHandTargetableIndices =
+  indicators.applyHandTargetableIndices;
+Renderer.prototype.getSelectionCleanupState =
+  indicators.getSelectionCleanupState;
+Renderer.prototype.applyZoneActivationIndicators =
+  indicators.applyZoneActivationIndicators;
 Renderer.prototype.decorateActivatableCard = indicators.decorateActivatableCard;
 Renderer.prototype.setActivationHint = indicators.setActivationHint;
 Renderer.prototype.clearActivationHint = indicators.clearActivationHint;
@@ -93,7 +103,8 @@ Renderer.prototype.bindZoneClick = bindings.bindZoneClick;
 Renderer.prototype.bindPlayerHandClick = bindings.bindPlayerHandClick;
 Renderer.prototype.bindPlayerFieldClick = bindings.bindPlayerFieldClick;
 Renderer.prototype.bindPlayerSpellTrapClick = bindings.bindPlayerSpellTrapClick;
-Renderer.prototype.bindPlayerFieldSpellClick = bindings.bindPlayerFieldSpellClick;
+Renderer.prototype.bindPlayerFieldSpellClick =
+  bindings.bindPlayerFieldSpellClick;
 Renderer.prototype.bindBotFieldClick = bindings.bindBotFieldClick;
 Renderer.prototype.bindBotSpellTrapClick = bindings.bindBotSpellTrapClick;
 Renderer.prototype.bindBotHandClick = bindings.bindBotHandClick;
@@ -118,24 +129,37 @@ Renderer.prototype.showSearchModalVisual = modals.showSearchModalVisual;
 
 // Attach summon modal methods
 Renderer.prototype.showSummonModal = summonModals.showSummonModal;
-Renderer.prototype.showConditionalSummonPrompt = summonModals.showConditionalSummonPrompt;
+Renderer.prototype.showConditionalSummonPrompt =
+  summonModals.showConditionalSummonPrompt;
 Renderer.prototype.showTierChoiceModal = summonModals.showTierChoiceModal;
 Renderer.prototype.showSpellChoiceModal = summonModals.showSpellChoiceModal;
-Renderer.prototype.showPositionChoiceModal = summonModals.showPositionChoiceModal;
-Renderer.prototype.showSpecialSummonPositionModal = summonModals.showSpecialSummonPositionModal;
+Renderer.prototype.showPositionChoiceModal =
+  summonModals.showPositionChoiceModal;
+Renderer.prototype.showSpecialSummonPositionModal =
+  summonModals.showSpecialSummonPositionModal;
 
 // Attach selection modal methods
 Renderer.prototype.showTargetSelection = selectionModals.showTargetSelection;
-Renderer.prototype.showFieldTargetingControls = selectionModals.showFieldTargetingControls;
-Renderer.prototype.hideFieldTargetingControls = selectionModals.hideFieldTargetingControls;
-Renderer.prototype.showDestructionNegationPrompt = selectionModals.showDestructionNegationPrompt;
-Renderer.prototype.showFusionTargetModal = selectionModals.showFusionTargetModal;
-Renderer.prototype.showFusionMaterialSelection = selectionModals.showFusionMaterialSelection;
-Renderer.prototype.showCardGridSelectionModal = selectionModals.showCardGridSelectionModal;
-Renderer.prototype.showIgnitionActivateModal = selectionModals.showIgnitionActivateModal;
-Renderer.prototype.showShadowHeartCathedralModal = selectionModals.showShadowHeartCathedralModal;
-Renderer.prototype.showSickleSelectionModal = selectionModals.showSickleSelectionModal;
-Renderer.prototype.showTieBreakerSelection = selectionModals.showTieBreakerSelection;
+Renderer.prototype.showFieldTargetingControls =
+  selectionModals.showFieldTargetingControls;
+Renderer.prototype.hideFieldTargetingControls =
+  selectionModals.hideFieldTargetingControls;
+Renderer.prototype.showDestructionNegationPrompt =
+  selectionModals.showDestructionNegationPrompt;
+Renderer.prototype.showFusionTargetModal =
+  selectionModals.showFusionTargetModal;
+Renderer.prototype.showFusionMaterialSelection =
+  selectionModals.showFusionMaterialSelection;
+Renderer.prototype.showCardGridSelectionModal =
+  selectionModals.showCardGridSelectionModal;
+Renderer.prototype.showIgnitionActivateModal =
+  selectionModals.showIgnitionActivateModal;
+Renderer.prototype.showShadowHeartCathedralModal =
+  selectionModals.showShadowHeartCathedralModal;
+Renderer.prototype.showSickleSelectionModal =
+  selectionModals.showSickleSelectionModal;
+Renderer.prototype.showTieBreakerSelection =
+  selectionModals.showTieBreakerSelection;
 Renderer.prototype.showMultiSelectModal = selectionModals.showMultiSelectModal;
 
 // Attach trap modal methods

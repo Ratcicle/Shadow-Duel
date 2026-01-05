@@ -98,6 +98,14 @@ export function bindPreviewForElement(element, card, visible = true) {
  * @this {import('../Renderer.js').default}
  */
 export function createCardElement(card, visible) {
+  // Defensive: skip rendering when card data is missing to avoid UI crashes
+  if (!card) {
+    const placeholder = document.createElement("div");
+    placeholder.className = "card placeholder";
+    placeholder.dataset.previewable = "false";
+    return placeholder;
+  }
+
   const el = document.createElement("div");
   el.className = "card";
   this.bindPreviewForElement(el, card, visible);

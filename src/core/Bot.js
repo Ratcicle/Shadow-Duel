@@ -2,6 +2,7 @@
 import { cardDatabase, cardDatabaseById } from "../data/cards.js";
 import Card from "./Card.js";
 import { getStrategyFor } from "./ai/StrategyRegistry.js";
+import { beamSearchTurn, greedySearchWithEvalV2 } from "./ai/BeamSearch.js";
 
 export default class Bot extends Player {
   constructor(archetype = "shadowheart") {
@@ -152,6 +153,14 @@ export default class Bot extends Player {
     return [];
   }
 
+  resolveOpponent(game) {
+    if (!game) return null;
+    if (typeof game.getOpponent === "function") {
+      return game.getOpponent(this);
+    }
+    return this.id === "player" ? game.bot : game.player;
+  }
+
   async makeMove(game) {
     if (!game || game.gameOver) return;
     const guard = game.canStartAction({ actor: this, kind: "bot_turn" });
@@ -162,7 +171,10 @@ export default class Bot extends Player {
     if (phase === "main1" || phase === "main2") {
       await this.playMainPhase(game);
       if (!game.gameOver && game.phase === phase) {
-        setTimeout(() => game.nextPhase(), 500);
+        const actionDelayMs = Number.isFinite(game?.aiActionDelayMs)
+          ? game.aiActionDelayMs
+          : 500;
+        setTimeout(() => game.nextPhase(), actionDelayMs);
       }
       return;
     }
@@ -181,6 +193,9 @@ export default class Bot extends Player {
     let chainCount = 0;
     const maxChains = this.maxChainedActions || 2;
 
+    // Flag para usar evaluateBoardV2
+    const useV2Evaluation = true;
+
     while (chainCount < maxChains) {
       // Try Ascension before other actions if available
       const ascended = await this.tryAscensionIfAvailable(game);
@@ -194,20 +209,36 @@ export default class Bot extends Player {
       const actions = this.sequenceActions(this.generateMainPhaseActions(game));
       if (!actions.length) break;
 
-      const baseScore = this.evaluateBoard(game, this);
       let bestAction = null;
-      let bestScore = baseScore;
 
-      for (const action of actions) {
-        const simState = this.cloneGameState(game);
-        this.simulateMainPhaseAction(simState, action);
-        const score = this.evaluateBoard(simState, simState.bot);
-        if (score > bestScore + 0.001) {
-          bestScore = score;
-          bestAction = action;
+      // DECISÃO: Usar beam search ou greedy?
+      // Se tem 2+ opções, usa beam search. Senão, greedy.
+      if (actions.length >= 2) {
+        // Beam search: lookahead 2 plies
+        const searchResult = await beamSearchTurn(game, this, {
+          beamWidth: 2,
+          maxDepth: 2,
+          nodeBudget: 100,
+          useV2Evaluation,
+        });
+
+        if (searchResult && searchResult.action) {
+          bestAction = searchResult.action;
         }
       }
 
+      // Fallback: se beam search não retornou nada, ou só tem 1 opção, usa greedy
+      if (!bestAction) {
+        const greedyResult = await greedySearchWithEvalV2(game, this, {
+          useV2Evaluation,
+        });
+
+        if (greedyResult && greedyResult.action) {
+          bestAction = greedyResult.action;
+        }
+      }
+
+      // Se ainda não tem ação, break
       if (!bestAction) break;
 
       await this.executeMainPhaseAction(game, bestAction);
@@ -229,6 +260,11 @@ export default class Bot extends Player {
       phaseReq: "battle",
     });
     if (!guard.ok) return;
+    const opponent = this.resolveOpponent(game);
+    if (!opponent) return;
+    const battleDelayMs = Number.isFinite(game?.aiBattleDelayMs)
+      ? game.aiBattleDelayMs
+      : 800;
     const minDeltaToAttack = 0.05;
 
     const performAttack = () => {
@@ -244,7 +280,7 @@ export default class Bot extends Player {
       );
 
       if (!availableAttackers.length) {
-        setTimeout(() => game.nextPhase(), 800);
+          setTimeout(() => game.nextPhase(), battleDelayMs);
         return;
       }
 
@@ -252,7 +288,7 @@ export default class Bot extends Player {
       let bestDelta = -Infinity;
       let bestAttackerAtk = 0;
       const baseScore = this.evaluateBoard(game, this);
-      const opponentLp = game.player.lp || 0;
+      const opponentLp = opponent.lp || 0;
       const totalAtkPotential = availableAttackers.reduce(
         (sum, m) => sum + (m.atk || 0),
         0
@@ -262,23 +298,23 @@ export default class Bot extends Player {
         const isSecondAttack = (attacker.attacksUsedThisTurn || 0) >= 1;
         const attackThreshold = isSecondAttack ? 0.0 : minDeltaToAttack;
 
-        const tauntTargets = game.player.field.filter(
-          (card) =>
-            card &&
-            card.cardKind === "monster" &&
-            !card.isFacedown &&
-            card.mustBeAttacked
-        );
+          const tauntTargets = opponent.field.filter(
+            (card) =>
+              card &&
+              card.cardKind === "monster" &&
+              !card.isFacedown &&
+              card.mustBeAttacked
+          );
 
-        const possibleTargets =
-          tauntTargets.length > 0
-            ? [...tauntTargets]
-            : game.player.field.length
-            ? [...game.player.field, null]
-            : [null];
+          const possibleTargets =
+            tauntTargets.length > 0
+              ? [...tauntTargets]
+              : opponent.field.length
+              ? [...opponent.field, null]
+              : [null];
 
-        for (const target of possibleTargets) {
-          if (target === null && game.player.field.length > 0) continue;
+          for (const target of possibleTargets) {
+            if (target === null && opponent.field.length > 0) continue;
 
           const simState = this.cloneGameState(game);
           const simAttacker = simState.bot.field.find(
@@ -350,10 +386,10 @@ export default class Bot extends Player {
       if (bestAttack && bestDelta > finalThreshold) {
         game.resolveCombat(bestAttack.attacker, bestAttack.target);
         if (!game.gameOver) {
-          setTimeout(() => performAttack(), 800);
+            setTimeout(() => performAttack(), battleDelayMs);
         }
       } else {
-        setTimeout(() => game.nextPhase(), 800);
+          setTimeout(() => game.nextPhase(), battleDelayMs);
       }
     };
 
@@ -362,6 +398,10 @@ export default class Bot extends Player {
 
   evaluateBoard(gameOrState, perspectivePlayer) {
     return this.strategy.evaluateBoard(gameOrState, perspectivePlayer);
+  }
+
+  evaluateBoardV2(gameOrState, perspectivePlayer) {
+    return this.strategy.evaluateBoardV2(gameOrState, perspectivePlayer);
   }
 
   generateMainPhaseActions(game) {
@@ -620,9 +660,10 @@ export default class Bot extends Player {
         summonCount: p.summonCount || 0,
       };
     };
+    const opponent = this.resolveOpponent(game) || game.player;
 
     return {
-      player: clonePlayer(game.player),
+      player: clonePlayer(opponent),
       bot: clonePlayer(this),
       turn: game.turn,
       phase: game.phase,
@@ -637,25 +678,25 @@ export default class Bot extends Player {
   async tryAscensionIfAvailable(game) {
     try {
       // Find a material on bot field eligible for ascension
-      const materials = (game.bot.field || []).filter(
+      const materials = (this.field || []).filter(
         (m) => m && m.cardKind === "monster" && !m.isFacedown
       );
       for (const material of materials) {
-        const matCheck = game.canUseAsAscensionMaterial(game.bot, material);
+        const matCheck = game.canUseAsAscensionMaterial(this, material);
         if (!matCheck.ok) continue;
         const candidates =
-          game.getAscensionCandidatesForMaterial(game.bot, material) || [];
+          game.getAscensionCandidatesForMaterial(this, material) || [];
         if (!candidates.length) continue;
         // Filter by requirements
         const eligible = candidates.filter(
-          (asc) => game.checkAscensionRequirements(game.bot, asc).ok
+          (asc) => game.checkAscensionRequirements(this, asc).ok
         );
         if (!eligible.length) continue;
         // Pick highest ATK ascension monster
         const best = eligible
           .slice()
           .sort((a, b) => (b.atk || 0) - (a.atk || 0))[0];
-        const res = await game.performAscensionSummon(game.bot, material, best);
+        const res = await game.performAscensionSummon(this, material, best);
         if (res?.success) {
           return true;
         }

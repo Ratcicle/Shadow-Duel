@@ -1031,38 +1031,58 @@ export default class ChainSystem {
       return null;
     }
 
-    const selections = {};
     const effectEngine = this.game?.effectEngine;
+    if (!effectEngine) return null;
 
-    for (const targetDef of effect.targets) {
-      if (!targetDef.id) continue;
+    const ctx = {
+      source: card,
+      player,
+      opponent: this.getOpponent(player),
+      defender: context?.defender || context?.target,
+      attacker: context?.attacker,
+      attackerOwner: context?.attackerOwner,
+      defenderOwner: context?.defenderOwner,
+      activationContext: { autoSelectSingleTarget: true, logTargets: false },
+    };
 
-      // Use AutoSelector if available
-      if (this.game?.autoSelector) {
-        try {
-          const candidates = effectEngine?.resolveTargets?.(targetDef, {
-            source: card,
-            player,
-            opponent: this.getOpponent(player),
-          });
-
-          if (candidates && candidates.length > 0) {
-            // Bot selects best target (first one for simplicity, or highest ATK for monsters)
-            const count = targetDef.count?.max || targetDef.count?.min || 1;
-            const selected = this.selectBestTargets(
-              candidates,
-              count,
-              targetDef
-            );
-            selections[targetDef.id] = selected;
-          }
-        } catch (error) {
-          this.log(`Error getting bot selections: ${error.message}`);
-        }
-      }
+    const targetResult = effectEngine.resolveTargets(effect.targets, ctx, null);
+    if (targetResult?.ok === false) {
+      return null;
     }
 
-    return Object.keys(selections).length > 0 ? selections : null;
+    const baseTargets = targetResult?.targets || {};
+    if (!targetResult?.needsSelection) {
+      return Object.keys(baseTargets).length > 0 ? baseTargets : null;
+    }
+
+    if (
+      !targetResult.selectionContract ||
+      typeof this.game?.autoSelector?.select !== "function"
+    ) {
+      return Object.keys(baseTargets).length > 0 ? baseTargets : null;
+    }
+
+    const autoResult = this.game.autoSelector.select(
+      targetResult.selectionContract,
+      { owner: player, activationContext: ctx.activationContext, selectionKind: "target" }
+    );
+
+    if (!autoResult?.ok) {
+      return Object.keys(baseTargets).length > 0 ? baseTargets : null;
+    }
+
+    const resolvedSelections = this.resolveSelectionsToCards(
+      autoResult.selections || {},
+      targetResult.selectionContract.requirements || [],
+      player
+    );
+
+    const mergedSelections = {
+      ...baseTargets,
+      ...resolvedSelections,
+    };
+
+    return Object.keys(mergedSelections).length > 0 ? mergedSelections : null;
   }
 
   /**
@@ -1431,6 +1451,7 @@ export default class ChainSystem {
           chainLevel: link.chainLevel,
           context: link.context,
           autoSelectSingleTarget: true,
+          autoSelectTargets: isAI(player),
         },
       };
 

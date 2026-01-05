@@ -6,6 +6,28 @@ import {
   hasArchetype,
   selectSimulatedTargets,
 } from "./StrategyUtils.js";
+import {
+  detectLethalOpportunity,
+  detectDefensiveNeed,
+  detectComeback,
+  decideMacroStrategy,
+  calculateMacroPriorityBonus,
+} from "./MacroPlanning.js";
+import {
+  evaluateActionBlockingRisk,
+  calculateBlockingRiskPenalty,
+  assessActionSafety,
+} from "./ChainAwareness.js";
+import {
+  gameTreeSearch,
+  shouldUseGameTreeSearch,
+  estimateSearchComplexity,
+} from "./GameTreeSearch.js";
+import {
+  analyzeOpponent,
+  predictOppAction,
+  estimateTurnsToOppLethal,
+} from "./OpponentPredictor.js";
 
 export default class LuminarchStrategy extends BaseStrategy {
   evaluateBoard(gameOrState, perspectivePlayer) {
@@ -74,9 +96,7 @@ export default class LuminarchStrategy extends BaseStrategy {
     score -= (opponent?.spellTrap || []).length * 0.15;
 
     score +=
-      ((perspective?.hand || []).length -
-        (opponent?.hand || []).length) *
-      0.25;
+      ((perspective?.hand || []).length - (opponent?.hand || []).length) * 0.25;
 
     const handValue = (perspective?.hand || []).reduce(
       (sum, card) =>
@@ -108,11 +128,32 @@ export default class LuminarchStrategy extends BaseStrategy {
   generateMainPhaseActions(game) {
     const actions = [];
     const bot = this.bot;
+    const opponent = this.getOpponent(game, bot);
     const activationContext = {
       autoSelectSingleTarget: true,
       logTargets: false,
     };
 
+    // === P1: MACRO PLANNING ===
+    const macroStrategy = this.evaluateMacroStrategy(game);
+
+    // === P1: CHAIN AWARENESS ===
+    const chainRisks = {
+      spell: evaluateActionBlockingRisk(
+        { bot, player: opponent },
+        bot,
+        opponent,
+        "spell"
+      ),
+      summon: evaluateActionBlockingRisk(
+        { bot, player: opponent },
+        bot,
+        opponent,
+        "summon"
+      ),
+    };
+
+    // === SUMMON ACTIONS ===
     if (bot.summonCount < 1) {
       bot.hand.forEach((card, index) => {
         if (card.cardKind !== "monster") return;
@@ -120,17 +161,53 @@ export default class LuminarchStrategy extends BaseStrategy {
         if (bot.field.length < tributeInfo.tributesNeeded) return;
         if (bot.field.length >= 5) return;
 
-        const preferredPosition = this.chooseSummonPosition(card, game);
+        // === SUICIDE CHECK ===
+        const shouldSummon = this.shouldSummonMonsterSafely(
+          card,
+          game,
+          opponent
+        );
+        if (!shouldSummon.yes) return;
+
+        const preferredPosition =
+          shouldSummon.position || this.chooseSummonPosition(card, game);
         const facedown = this.shouldSetFacedown(card, preferredPosition);
+
+        // === P1: Aplicar bônus de macro strategy ===
+        let priority = shouldSummon.priority || 2;
+        const macroBuff = calculateMacroPriorityBonus(
+          "summon",
+          card,
+          macroStrategy
+        );
+        priority += macroBuff;
+
+        // === P1: Penalidade de chain risk ===
+        const summonSafety = assessActionSafety(
+          { bot, player: opponent },
+          bot,
+          opponent,
+          "summon",
+          card
+        );
+        if (summonSafety.recommendation === "very_risky") {
+          priority -= 10;
+        }
+
         actions.push({
           type: "summon",
           index,
           position: preferredPosition,
           facedown,
+          priority,
+          cardName: card.name,
+          macroBuff,
+          safetyScore: summonSafety.riskScore,
         });
       });
     }
 
+    // === SPELL ACTIONS ===
     bot.hand.forEach((card, index) => {
       if (card.cardKind !== "spell") return;
 
@@ -149,9 +226,40 @@ export default class LuminarchStrategy extends BaseStrategy {
         if (check && !check.ok) return;
       }
 
-      actions.push({ type: "spell", index });
+      // === P1: Aplicar bônus de macro strategy ===
+      let priority = 1;
+      const macroBuff = calculateMacroPriorityBonus(
+        "spell",
+        card,
+        macroStrategy
+      );
+      priority += macroBuff;
+
+      // === P1: Penalidade de chain risk ===
+      const spellSafety = assessActionSafety(
+        { bot, player: opponent },
+        bot,
+        opponent,
+        "spell",
+        card
+      );
+      if (spellSafety.recommendation === "very_risky") {
+        priority -= 15;
+      } else if (spellSafety.recommendation === "risky") {
+        priority -= 8;
+      }
+
+      actions.push({
+        type: "spell",
+        index,
+        priority,
+        cardName: card.name,
+        macroBuff,
+        safetyScore: spellSafety.riskScore,
+      });
     });
 
+    // === FIELD EFFECT ===
     if (bot.fieldSpell) {
       const effect = (bot.fieldSpell.effects || []).find(
         (e) => e.timing === "on_field_activate"
@@ -164,26 +272,39 @@ export default class LuminarchStrategy extends BaseStrategy {
           { activationContext }
         );
         if (!preview || preview.ok) {
-          actions.push({ type: "fieldEffect" });
+          actions.push({ type: "fieldEffect", priority: 0 });
         }
       }
     }
 
-    return this.sequenceActions(actions);
+    // === P2: GAME TREE SEARCH (OPCIONAL, SÓ SE CRÍTICO) ===
+    const finalActions = this.integrateP2IntoActionSelection(
+      game,
+      this.sequenceActions(actions)
+    );
+
+    return finalActions;
   }
 
   sequenceActions(actions) {
-    const typePriority = {
-      fieldEffect: 0,
-      spell: 1,
-      summon: 2,
-    };
-    return [...actions].sort((a, b) => {
-      const priorityA = typePriority[a.type] ?? 9;
-      const priorityB = typePriority[b.type] ?? 9;
-      if (priorityA !== priorityB) return priorityA - priorityB;
-      return 0;
+    // Ordena por prioridade (P1 priority bonuses aplicados)
+    const sorted = actions.sort((a, b) => {
+      const priorityA = a.priority ?? 0;
+      const priorityB = b.priority ?? 0;
+      if (priorityA !== priorityB) return priorityB - priorityA; // Maior priority primeiro
+
+      // Fallback: tipo
+      const typePriority = {
+        fieldEffect: 0,
+        spell: 1,
+        summon: 2,
+      };
+      const typeA = typePriority[a.type] ?? 9;
+      const typeB = typePriority[b.type] ?? 9;
+      return typeA - typeB;
     });
+
+    return sorted;
   }
 
   getTributeRequirementFor(card, playerState) {
@@ -379,5 +500,198 @@ export default class LuminarchStrategy extends BaseStrategy {
       selfId: "bot",
       options: { archetype: "Luminarch", preferDefense: true },
     });
+  }
+
+  /**
+   * === P1: MACRO STRATEGY ===
+   * Avalia situação do jogo e decide estratégia macro (lethal, defend, setup, grind)
+   */
+  evaluateMacroStrategy(game) {
+    try {
+      const bot = this.bot;
+      const opponent = this.getOpponent(game, bot);
+
+      if (!bot || !opponent) {
+        return { strategy: "grind", priority: 30, detail: {} };
+      }
+
+      // Detectar oportunidades
+      const lethal = detectLethalOpportunity(game, bot, opponent);
+      const defensive = detectDefensiveNeed(game, bot, opponent);
+      const comeback = detectComeback(game, bot, opponent);
+
+      // Decidir estratégia
+      const macro = decideMacroStrategy(lethal, defensive, comeback);
+
+      return macro;
+    } catch (e) {
+      if (this.bot?.debug !== false) {
+        console.warn(`[LuminarchStrategy] evaluateMacroStrategy erro:`, e);
+      }
+      return { strategy: "grind", priority: 30, detail: {} };
+    }
+  }
+
+  /**
+   * === SUICIDE PREVENTION ===
+   * Valida se é seguro summon monstro contra ameaças do oponente
+   */
+  shouldSummonMonsterSafely(card, game, opponent) {
+    try {
+      const cardATK = card.atk || 0;
+      const cardDEF = card.def || 0;
+      const oppField = opponent?.field || [];
+      const oppStrongestATK = oppField.reduce(
+        (max, m) => Math.max(max, m.atk || 0),
+        0
+      );
+      const oppHasThreats = oppField.length > 0;
+
+      // Se oponente tem monstro mais forte, avaliar risk
+      const isSuicideSummon =
+        oppHasThreats && cardATK < oppStrongestATK && cardATK > 0;
+      const shouldDefensivePosition = isSuicideSummon && cardDEF >= cardATK;
+
+      // Luminarch é mais defensivo: prefere DEF se unsafe
+      if (isSuicideSummon) {
+        // Opção 1: Summon em defense se DEF > ATK
+        if (shouldDefensivePosition) {
+          return {
+            yes: true,
+            position: "defense",
+            priority: 2,
+            reason: `DEF ${cardDEF} vs oponente ${oppStrongestATK} ATK`,
+          };
+        }
+
+        // Opção 2: Skip summon se muito perigoso
+        if (cardATK < oppStrongestATK - 500) {
+          return {
+            yes: false,
+            reason: `${cardATK} ATK vs oponente ${oppStrongestATK} ATK = suicide`,
+          };
+        }
+
+        // Opção 3: Summon em DEF mesmo se DEF < ATK (Luminarch é defensivo)
+        return {
+          yes: true,
+          position: "defense",
+          priority: 1,
+          reason: `Posição defensiva por safety (opp ${oppStrongestATK} ATK)`,
+        };
+      }
+
+      // Seguro: summon normalmente
+      return {
+        yes: true,
+        priority: 3,
+        reason: "Summon seguro",
+      };
+    } catch (e) {
+      if (this.bot?.debug !== false) {
+        console.warn(`[LuminarchStrategy] shouldSummonMonsterSafely erro:`, e);
+      }
+      return { yes: true, priority: 2 };
+    }
+  }
+
+  /**
+   * === P2: GAME TREE SEARCH ===
+   * Acionado apenas em situações críticas (lethal check, defensive emergency)
+   */
+  evaluateCriticalSituationWithGameTree(game) {
+    try {
+      const opponent = this.getOpponent(game, this.bot) || game.opponent;
+      if (!opponent) return null;
+
+      // Verificar se vale a pena rodar minimax pesado
+      if (!shouldUseGameTreeSearch(game, this.bot)) {
+        return null;
+      }
+
+      // Rodar minimax
+      const result = gameTreeSearch(game, this, this.bot, 4);
+
+      if (result.action) {
+        return result;
+      }
+
+      return null;
+    } catch (e) {
+      if (this.bot?.debug !== false) {
+        console.warn(`[LuminarchStrategy] Game Tree Search erro:`, e);
+      }
+      return null;
+    }
+  }
+
+  /**
+   * === P2: OPPONENT ANALYSIS ===
+   */
+  analyzeOpponentPosition(game) {
+    try {
+      const opponent = this.getOpponent(game, this.bot) || game.opponent;
+      if (!opponent) return null;
+
+      const analysis = analyzeOpponent(opponent, this.bot);
+      const turnsToKill = estimateTurnsToOppLethal(
+        opponent,
+        this.bot.lp || 8000
+      );
+
+      return {
+        ...analysis,
+        turnsToLethal: turnsToKill,
+      };
+    } catch (e) {
+      if (this.bot?.debug !== false) {
+        console.warn(`[LuminarchStrategy] Opponent Analysis erro:`, e);
+      }
+      return null;
+    }
+  }
+
+  /**
+   * === P2: INTEGRAÇÃO ===
+   */
+  integrateP2IntoActionSelection(game, actions) {
+    try {
+      if (!actions || actions.length === 0) return actions;
+
+      // Análise crítica
+      const oppAnalysis = this.analyzeOpponentPosition(game);
+      if (!oppAnalysis) return actions;
+
+      // Game Tree Search apenas se crítico
+      const gameTreeResult = this.evaluateCriticalSituationWithGameTree(game);
+      if (!gameTreeResult || !gameTreeResult.action) {
+        return actions;
+      }
+
+      // Se Game Tree encontrou ação melhor: priorizar
+      const gameTreeAction = gameTreeResult.action;
+      const gameTreeScore = gameTreeResult.score;
+
+      // Encontrar ação Game Tree nos actions P0/P1 e mover para frente
+      const indexInActions = actions.findIndex(
+        (a) =>
+          a.type === gameTreeAction.type && a.index === gameTreeAction.index
+      );
+
+      if (indexInActions >= 0) {
+        const action = actions[indexInActions];
+        action.p2Score = gameTreeScore;
+        action.p2Approved = true;
+        actions.splice(indexInActions, 1);
+        actions.unshift(action);
+      }
+
+      return actions;
+    } catch (e) {
+      if (this.bot?.debug !== false) {
+        console.warn(`[LuminarchStrategy] P2 Integration erro:`, e);
+      }
+      return actions;
+    }
   }
 }

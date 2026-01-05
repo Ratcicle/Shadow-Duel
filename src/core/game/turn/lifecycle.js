@@ -71,12 +71,11 @@ export async function startTurn() {
   this.phase = "main1";
   this.updateBoard();
   if (
-    isAI(this.bot) &&
-    this.turn === "bot" &&
+    isAI(activePlayer) &&
     !this.gameOver &&
-    typeof this.bot?.makeMove === "function"
+    typeof activePlayer?.makeMove === "function"
   ) {
-    this.bot.makeMove(this);
+    activePlayer.makeMove(this);
   }
 }
 

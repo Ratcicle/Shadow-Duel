@@ -5,6 +5,8 @@
  * All functions assume `this` = EffectEngine instance
  */
 
+import { isAI } from "../../Player.js";
+
 /**
  * Perform bot fusion summon
  */
@@ -104,8 +106,8 @@ export async function applyPolymerizationFusion(action, ctx) {
     return false;
   }
 
-  // For bot, use AI selection
-  if (player.isBot) {
+  // For bot/AI, use AI selection
+  if (isAI(player)) {
     return await this.performBotFusion(ctx, availableFusions, {
       field: fieldMonsters,
       hand: handMonsters,

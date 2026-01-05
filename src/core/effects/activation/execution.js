@@ -84,6 +84,7 @@ export async function activateMonsterFromGraveyard(
     committed: activationContext?.committed === true,
     commitInfo: activationContext?.commitInfo || null,
     autoSelectSingleTarget: activationContext?.autoSelectSingleTarget,
+    autoSelectTargets: activationContext?.autoSelectTargets,
     actionContext: activationContext?.actionContext || null,
   };
 
@@ -204,6 +205,7 @@ export async function activateFieldSpell(
     committed: activationContext?.committed === true,
     commitInfo: activationContext?.commitInfo || null,
     autoSelectSingleTarget: activationContext?.autoSelectSingleTarget,
+    autoSelectTargets: activationContext?.autoSelectTargets,
     actionContext: activationContext?.actionContext || null,
   };
 
@@ -315,6 +317,7 @@ export async function activateSpellTrapEffect(
     committed: activationContext?.committed === true,
     commitInfo: activationContext?.commitInfo || null,
     autoSelectSingleTarget: activationContext?.autoSelectSingleTarget,
+    autoSelectTargets: activationContext?.autoSelectTargets,
     actionContext: activationContext?.actionContext || null,
     resolvedTargets: activationContext?.resolvedTargets || null,
   };
@@ -572,6 +575,7 @@ export async function activateMonsterEffect(
     committed: activationContext?.committed === true,
     commitInfo: activationContext?.commitInfo || null,
     autoSelectSingleTarget: activationContext?.autoSelectSingleTarget,
+    autoSelectTargets: activationContext?.autoSelectTargets,
     actionContext: activationContext?.actionContext || null,
   };
 

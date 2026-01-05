@@ -25,6 +25,7 @@
         </p>
         <div class="start-actions">
           <button id="btn-start-duel">Duelar</button>
+          <button id="btn-bot-arena">Bot Arena</button>
           <button id="btn-deck-builder">Meu Deck</button>
           <button id="btn-toggle-test-mode" class="test-mode-toggle">
             Modo teste: desligado
@@ -105,8 +106,100 @@
       </div>
     </div>
 
-    <div id="game-container">
+    <!-- Bot Arena -->
+    <div id="bot-arena-modal" class="overlay hidden">
+      <div class="bot-arena-panel">
+        <div class="arena-header">
+          <h2>Bot Arena</h2>
+          <button type="button" class="close-arena" aria-label="Close">
+            &times;
+          </button>
+        </div>
+        <div class="arena-body">
+          <div class="arena-setup">
+            <div class="arena-section">
+              <h3>Decks</h3>
+              <div class="config-row">
+                <label for="arena-deck-seat1">Bot 1 (Player)</label>
+                <select id="arena-deck-seat1"></select>
+              </div>
+              <div class="config-row">
+                <label for="arena-deck-seat2">Bot 2 (Opponent)</label>
+                <select id="arena-deck-seat2"></select>
+              </div>
+            </div>
+            <div class="arena-section">
+              <h3>Config</h3>
+              <div class="config-row">
+                <label for="arena-num-duels">Numero de duelos</label>
+                <select id="arena-num-duels">
+                  <option value="1">1</option>
+                  <option value="5">5</option>
+                  <option value="10">10</option>
+                  <option value="20">20</option>
+                  <option value="30">30</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                </select>
+              </div>
+              <div class="config-row">
+                <label for="arena-speed">Velocidade</label>
+                <select id="arena-speed">
+                  <option value="1x">1x</option>
+                  <option value="2x">2x</option>
+                  <option value="4x">4x</option>
+                  <option value="instant">Instant</option>
+                </select>
+              </div>
+              <div class="config-row checkbox">
+                <label for="arena-auto-pause">
+                  Auto pause em empate/erro
+                </label>
+                <input type="checkbox" id="arena-auto-pause" />
+              </div>
+            </div>
+          </div>
+          <div class="arena-stats">
+            <h3>Resultados</h3>
+            <div class="stats-grid">
+              <div class="stat-box">
+                <div class="stat-label">Concluidos</div>
+                <div class="stat-value" id="arena-completed">0</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-label">Status</div>
+                <div class="stat-value" id="arena-status">Pronto</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-label">Vitorias Bot 1</div>
+                <div class="stat-value" id="arena-wins-1">0</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-label">Vitorias Bot 2</div>
+                <div class="stat-value" id="arena-wins-2">0</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-label">Empates</div>
+                <div class="stat-value" id="arena-draws">0</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-label">Media de turnos</div>
+                <div class="stat-value" id="arena-avg-turns">-</div>
+              </div>
+            </div>
+            <div class="arena-log" id="arena-log">
+              <p class="log-entry">Aguardando inicio...</p>
+            </div>
+          </div>
+        </div>
+        <div class="arena-footer">
+          <button id="btn-arena-start" class="primary">Iniciar</button>
+          <button id="btn-arena-cancel" class="secondary">Cancelar</button>
+        </div>
+      </div>
+    </div>
 
+    <div id="game-container">
       <!-- Bot Area (Top) -->
       <div id="bot-area" class="player-area">
         <div class="player-info">

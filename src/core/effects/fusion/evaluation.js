@@ -7,21 +7,30 @@
 
 /**
  * Convert a requirement object to the string format expected by matchesFusionRequirement
+ * For complex requirements with multiple conditions (archetype + minLevel), returns an object
  */
 function requirementToString(requirement) {
   if (typeof requirement === "string") {
     return requirement;
   }
   if (typeof requirement === "object" && requirement !== null) {
-    // Object format: { name: "Card Name" } or { archetype: "Archetype" }
+    // Object format: { name: "Card Name" } or { archetype: "Archetype", minLevel: 5 }
     if (requirement.name) {
       return `name:${requirement.name}`;
+    }
+    // For requirements with multiple conditions (archetype + minLevel or type + minLevel)
+    // return the object itself so matchesFusionRequirement can handle it
+    if (
+      (requirement.archetype || requirement.type) &&
+      requirement.minLevel !== undefined
+    ) {
+      return requirement; // Return object for complex matching
     }
     if (requirement.archetype) {
       return `archetype:${requirement.archetype}`;
     }
     if (requirement.type) {
-      return requirement.type;
+      return `type:${requirement.type}`;
     }
   }
   return null;

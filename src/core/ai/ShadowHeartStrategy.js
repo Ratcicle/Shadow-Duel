@@ -1,5 +1,27 @@
 import BaseStrategy from "./BaseStrategy.js";
 import { cardDatabase } from "../../data/cards.js";
+import {
+  detectLethalOpportunity,
+  detectDefensiveNeed,
+  detectComeback,
+  decideMacroStrategy,
+  calculateMacroPriorityBonus,
+} from "./MacroPlanning.js";
+import {
+  evaluateActionBlockingRisk,
+  calculateBlockingRiskPenalty,
+  assessActionSafety,
+} from "./ChainAwareness.js";
+import {
+  gameTreeSearch,
+  shouldUseGameTreeSearch,
+  estimateSearchComplexity,
+} from "./GameTreeSearch.js";
+import {
+  analyzeOpponent,
+  predictOppAction,
+  estimateTurnsToOppLethal,
+} from "./OpponentPredictor.js";
 
 /**
  * Estratégia Shadow-Heart - IA avançada que pensa como um jogador humano experiente.
@@ -383,7 +405,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
   analyzeGameState(game) {
     this.thoughtProcess = [];
     const bot = this.bot;
-    const opponent = game.player;
+    const opponent = this.getOpponent(game, bot);
 
     const analysis = {
       // Recursos próprios
@@ -461,6 +483,9 @@ export default class ShadowHeartStrategy extends BaseStrategy {
    */
   think(thought) {
     this.thoughtProcess.push(thought);
+    if (this.bot && this.bot.debug === false) {
+      return;
+    }
     console.log(`[Shadow-Heart AI] ${thought}`);
   }
 
@@ -725,14 +750,90 @@ export default class ShadowHeartStrategy extends BaseStrategy {
   }
 
   /**
+   * Avalia macro strategy usando MacroPlanning.
+   * @param {Object} game - Referência ao game original
+   * @param {Object} analysis - Resultado de analyzeGameState
+   * @returns {Object} - { strategy, priority, detail }
+   */
+  evaluateMacroStrategy(game, analysis) {
+    const actualGame = game._gameRef || game;
+    const bot = this.bot;
+    const opponent = this.getOpponent(actualGame, bot);
+
+    // Chamar macro planning functions
+    const lethal = detectLethalOpportunity(
+      { bot, player: opponent, field: {} },
+      bot,
+      opponent,
+      2
+    );
+
+    const defensive = detectDefensiveNeed(
+      { bot, player: opponent },
+      bot,
+      opponent
+    );
+
+    const comeback = detectComeback({ bot, player: opponent }, bot, opponent);
+
+    const macro = decideMacroStrategy({ bot, player: opponent }, bot, opponent);
+
+    // Log de debugging
+    if (this.bot.debug) {
+      this.think(
+        `    Lethal: ${
+          lethal.canLethal ? "YES (in " + lethal.turnsNeeded + " turns)" : "NO"
+        }`
+      );
+      this.think(
+        `    Threat: ${defensive.threatLevel} (${defensive.turnsToKill} turns to kill)`
+      );
+      this.think(`    Comeback: ${comeback.isVirada ? "YES" : "NO"}`);
+    }
+
+    return macro;
+  }
+
+  /**
    * Gera ações de main phase com análise profunda
    */
   generateMainPhaseActions(game) {
     const analysis = this.analyzeGameState(game);
     const actions = [];
     const bot = this.bot;
+    const actualGame = game._gameRef || game;
+    const opponent = this.getOpponent(actualGame, bot);
 
     this.think(`\n🧠 Gerando ações possíveis...`);
+
+    // === P1: MACRO PLANNING ===
+    const macroStrategy = this.evaluateMacroStrategy(game, analysis);
+    this.think(
+      `  📊 Macro Strategy: ${macroStrategy.strategy} (Priority: ${macroStrategy.priority})`
+    );
+
+    // === P1: CHAIN AWARENESS ===
+    // Avaliar risco de bloqueio do oponente
+    const chainRisks = {
+      spell: evaluateActionBlockingRisk(
+        { bot, player: opponent },
+        bot,
+        opponent,
+        "spell"
+      ),
+      summon: evaluateActionBlockingRisk(
+        { bot, player: opponent },
+        bot,
+        opponent,
+        "summon"
+      ),
+      attack: evaluateActionBlockingRisk(
+        { bot, player: opponent },
+        bot,
+        opponent,
+        "attack"
+      ),
+    };
 
     // === PRIORIDADE 1: COMBOS DE ALTA PRIORIDADE ===
     for (const combo of analysis.availableCombos.sort(
@@ -747,19 +848,48 @@ export default class ShadowHeartStrategy extends BaseStrategy {
     bot.hand.forEach((card, index) => {
       if (card.cardKind !== "spell") return;
 
-      const check = game.effectEngine.canActivate(card, bot);
-      if (!check.ok) return;
+      // Se game é um estado clonado, tentar obter referência ao game original
+      const actualGame = game._gameRef || game;
+      const check = actualGame.effectEngine?.canActivate?.(card, bot);
+      if (!check?.ok) return;
 
       const knowledge = this.cardKnowledge[card.name];
       const shouldPlay = this.shouldPlaySpell(card, analysis, knowledge);
 
       if (shouldPlay.yes) {
         this.think(`  ✅ Spell válida: ${card.name} - ${shouldPlay.reason}`);
+
+        // === P1: Aplicar bônus de macro strategy ===
+        let finalPriority = shouldPlay.priority;
+        const macroBuff = calculateMacroPriorityBonus(
+          "spell",
+          card,
+          macroStrategy
+        );
+        finalPriority += macroBuff;
+
+        // === P1: Penalidade de chain risk ===
+        const spellSafety = assessActionSafety(
+          { bot, player: opponent },
+          bot,
+          opponent,
+          "spell",
+          card
+        );
+        if (spellSafety.recommendation === "very_risky") {
+          finalPriority -= 15;
+          this.think(`    ⚠️  Very risky (chain blocking): -15 priority`);
+        } else if (spellSafety.recommendation === "risky") {
+          finalPriority -= 8;
+        }
+
         actions.push({
           type: "spell",
           index,
-          priority: shouldPlay.priority,
+          priority: finalPriority,
           cardName: card.name,
+          macroBuff,
+          safetyScore: spellSafety.riskScore,
         });
       } else {
         this.think(
@@ -788,13 +918,36 @@ export default class ShadowHeartStrategy extends BaseStrategy {
           this.think(
             `  ✅ Summon válido: ${card.name} - ${shouldSummon.reason}`
           );
+
+          // === P1: Aplicar bônus de macro strategy ===
+          let finalPriority = shouldSummon.priority;
+          const macroBuff = calculateMacroPriorityBonus(
+            "summon",
+            card,
+            macroStrategy
+          );
+          finalPriority += macroBuff;
+
+          // === P1: Penalidade de chain risk (summon) ===
+          const summonSafety = assessActionSafety(
+            { bot, player: opponent },
+            bot,
+            opponent,
+            "summon",
+            card
+          );
+          if (summonSafety.recommendation === "very_risky") {
+            finalPriority -= 10;
+          }
           actions.push({
             type: "summon",
             index,
             position: shouldSummon.position,
             facedown: shouldSummon.position === "defense",
-            priority: shouldSummon.priority,
+            priority: finalPriority,
             cardName: card.name,
+            macroBuff,
+            safetyScore: summonSafety.riskScore,
           });
         }
       });
@@ -806,18 +959,26 @@ export default class ShadowHeartStrategy extends BaseStrategy {
         (e) => e.timing === "on_field_activate"
       );
       if (effect) {
-        const check = game.effectEngine.checkOncePerTurn(
+        const actualGame = game._gameRef || game;
+        const check = actualGame.effectEngine?.checkOncePerTurn?.(
           bot.fieldSpell,
           bot,
           effect
         );
-        if (check.ok) {
+        if (check?.ok) {
           actions.push({ type: "fieldEffect", priority: 5 });
         }
       }
     }
 
-    return this.sequenceActions(actions);
+    // === P2: GAME TREE SEARCH (OPCIONAL, SÓ SE CRÍTICO) ===
+    const finalActions = this.integrateP2IntoActionSelection(
+      game,
+      this.sequenceActions(actions),
+      analysis
+    );
+
+    return finalActions;
   }
 
   /**
@@ -970,6 +1131,26 @@ export default class ShadowHeartStrategy extends BaseStrategy {
     const name = card.name;
     const tributeInfo = this.getTributeRequirementFor(card, this.bot);
 
+    // === SAFETY CHECK: Avaliar se é seguro summon em ATK ===
+    const cardATK = card.atk || 0;
+    const cardDEF = card.def || 0;
+    const oppStrongestATK = analysis.oppField.reduce(
+      (max, m) => Math.max(max, m.atk || 0),
+      0
+    );
+    const oppHasThreats = analysis.oppField.length > 0;
+
+    // Se oponente tem monstro mais forte, não summon em ATK (só se for extender/combo)
+    const isSuicideSummon =
+      oppHasThreats && cardATK < oppStrongestATK && cardATK > 0;
+    const shouldDefensivePosition = isSuicideSummon && cardDEF >= cardATK;
+
+    if (isSuicideSummon) {
+      this.think(
+        `  ⚠️  SAFETY: ${name} (${cardATK} ATK) vs Opp strongest (${oppStrongestATK} ATK)`
+      );
+    }
+
     // Imp - Extender de alta prioridade
     if (name === "Shadow-Heart Imp") {
       const hasTarget = analysis.hand.some(
@@ -980,11 +1161,25 @@ export default class ShadowHeartStrategy extends BaseStrategy {
           c.name !== "Shadow-Heart Imp"
       );
       if (hasTarget) {
+        // Extender é importante, mas verificar safety
+        if (isSuicideSummon && !shouldDefensivePosition) {
+          return {
+            yes: false,
+            reason: `Imp seria destruído por ${oppStrongestATK} ATK oponente`,
+          };
+        }
         return {
           yes: true,
-          position: "attack",
+          position: shouldDefensivePosition ? "defense" : "attack",
           priority: 9,
           reason: "Extender para 2 corpos",
+        };
+      }
+      // Sem target: só vale se não for suicide
+      if (isSuicideSummon) {
+        return {
+          yes: false,
+          reason: `Imp 1500 ATK vs oponente ${oppStrongestATK} ATK = suicide`,
         };
       }
       return {
@@ -1037,6 +1232,15 @@ export default class ShadowHeartStrategy extends BaseStrategy {
     // Gecko - Draw engine
     if (name === "Shadow-Heart Gecko") {
       if (analysis.field.some((c) => (c.atk || 0) >= 1800)) {
+        // Gecko weak: verificar safety
+        if (isSuicideSummon) {
+          return {
+            yes: true,
+            position: "defense",
+            priority: 4,
+            reason: "Draw engine (defesa por safety)",
+          };
+        }
         return {
           yes: true,
           position: "attack",
@@ -1049,18 +1253,60 @@ export default class ShadowHeartStrategy extends BaseStrategy {
     // Specter - Recursão
     if (name === "Shadow-Heart Specter") {
       if (analysis.graveyard.length > 0) {
+        // Specter weak: safety check
+        if (isSuicideSummon && !shouldDefensivePosition) {
+          return {
+            yes: false,
+            reason: `Specter 1500 ATK seria destruído por ${oppStrongestATK} ATK`,
+          };
+        }
         return {
           yes: true,
-          position: "attack",
+          position: shouldDefensivePosition ? "defense" : "attack",
           priority: 5,
           reason: "Futuro recurso de GY",
         };
       }
     }
 
+    // Abyssal Eel - CASO ESPECÍFICO (1600 ATK burn)
+    if (name === "Shadow-Heart Abyssal Eel") {
+      // Se oponente tem monstro mais forte: NÃO SUMMON
+      if (isSuicideSummon) {
+        return {
+          yes: false,
+          reason: `Eel 1600 ATK vs oponente ${oppStrongestATK} ATK = perda de monstro + burn inútil`,
+        };
+      }
+      // Só summon se seguro
+      return {
+        yes: true,
+        position: "attack",
+        priority: 4,
+        reason: "Beater 1600 + burn",
+      };
+    }
+
     // Monstro genérico
     const baseAtk = card.atk || 0;
     if (baseAtk >= 1500 && tributeInfo.tributesNeeded === 0) {
+      // Safety check: Se oponente tem monstro mais forte
+      if (isSuicideSummon) {
+        // Opção 1: Summon em defesa se DEF > ATK
+        if (shouldDefensivePosition) {
+          return {
+            yes: true,
+            position: "defense",
+            priority: 3,
+            reason: `DEF ${cardDEF} vs oponente ${oppStrongestATK} ATK`,
+          };
+        }
+        // Opção 2: Skip summon (não vale a pena perder monstro)
+        return {
+          yes: false,
+          reason: `${baseAtk} ATK vs oponente ${oppStrongestATK} ATK = suicide`,
+        };
+      }
       return {
         yes: true,
         position: "attack",
@@ -1381,6 +1627,150 @@ export default class ShadowHeartStrategy extends BaseStrategy {
         player.hand.push({ placeholder: true });
         break;
       }
+    }
+  }
+
+  /**
+   * === P2: GAME TREE SEARCH ===
+   * Acionado apenas em situações críticas (lethal check, defensive emergency)
+   * Realiza minimax 4-6 ply para decidir melhor ação estratégica
+   */
+  evaluateCriticalSituationWithGameTree(game, analysis) {
+    try {
+      const opponent = this.getOpponent(game, this.bot) || game.opponent;
+      if (!opponent) return null;
+
+      // Verificar se vale a pena rodar minimax pesado
+      if (!shouldUseGameTreeSearch(game, this.bot)) {
+        return null; // Situação não é crítica
+      }
+
+      this.think(
+        `\n🔮 [P2] Situação crítica detectada! Rodando Game Tree Search (4-ply)...`
+      );
+
+      // Complexidade: log informativo
+      const complexity = estimateSearchComplexity(4, 3);
+      this.think(`  📊 Nodes estimados: ~${complexity}`);
+
+      // Rodar minimax
+      const result = gameTreeSearch(game, this, this.bot, 4);
+
+      if (result.action) {
+        this.think(
+          `  ✅ Game Tree melhor ação: ${
+            result.action.type || "unknown"
+          } (score: ${result.score.toFixed(2)}, conf: ${(
+            result.confidence * 100
+          ).toFixed(0)}%)`
+        );
+        return result;
+      }
+
+      return null;
+    } catch (e) {
+      if (this.bot?.debug !== false) {
+        console.warn(`[ShadowHeartStrategy] Game Tree Search erro:`, e);
+      }
+      return null;
+    }
+  }
+
+  /**
+   * === P2: OPPONENT ANALYSIS ===
+   * Analisa oponente e prediz próximas ações
+   */
+  analyzeOpponentPosition(game) {
+    try {
+      const opponent = this.getOpponent(game, this.bot) || game.opponent;
+      if (!opponent) return null;
+
+      const analysis = analyzeOpponent(opponent, this.bot);
+      const turnsToKill = estimateTurnsToOppLethal(
+        opponent,
+        this.bot.lp || 8000
+      );
+
+      this.think(`\n📍 [P2] Análise do Oponente:`);
+      this.think(`  🏛️  Arquétipo: ${analysis.archetype}`);
+      this.think(`  ⚔️  Estilo: ${analysis.playstyle}`);
+      this.think(
+        `  🎯 Próxima ação provável: ${
+          analysis.nextMove.card?.name || "desconhecida"
+        } (${analysis.nextMove.role})`
+      );
+      this.think(
+        `  ⏱️  Turnos até lethal: ${
+          turnsToKill === Infinity ? "∞" : turnsToKill
+        }`
+      );
+      this.think(`  ⚡ Nível de ameaça: ${analysis.threat_level}/3`);
+
+      return {
+        ...analysis,
+        turnsToLethal: turnsToKill,
+      };
+    } catch (e) {
+      if (this.bot?.debug !== false) {
+        console.warn(`[ShadowHeartStrategy] Opponent Analysis erro:`, e);
+      }
+      return null;
+    }
+  }
+
+  /**
+   * === P2: INTEGRADO EM generateMainPhaseActions ===
+   * Após sequenciar P0/P1, tentar rodar Game Tree para situações críticas
+   */
+  integrateP2IntoActionSelection(game, actions, analysis) {
+    try {
+      // Se temos ações de P0/P1, verificar se P2 sugere algo melhor
+      if (!actions || actions.length === 0) return actions;
+
+      // Análise crítica
+      const oppAnalysis = this.analyzeOpponentPosition(game);
+      if (!oppAnalysis) return actions; // Sem análise, continuar com P0/P1
+
+      // Game Tree Search apenas se crítico
+      const gameTreeResult = this.evaluateCriticalSituationWithGameTree(
+        game,
+        analysis
+      );
+      if (!gameTreeResult || !gameTreeResult.action) {
+        return actions; // Game Tree não encontrou resultado, usar P0/P1
+      }
+
+      // Se Game Tree encontrou ação melhor: priorizar
+      const gameTreeAction = gameTreeResult.action;
+      const gameTreeScore = gameTreeResult.score;
+
+      this.think(
+        `\n🎯 [P2] Game Tree sobrescreve: score=+${gameTreeScore.toFixed(
+          2
+        )} vs P1`
+      );
+
+      // Encontrar ação Game Tree nos actions P0/P1 e mover para frente
+      const indexInActions = actions.findIndex(
+        (a) =>
+          a.type === gameTreeAction.type && a.index === gameTreeAction.index
+      );
+
+      if (indexInActions >= 0) {
+        // Existe em P0/P1, mover para topo com bonus P2
+        const action = actions[indexInActions];
+        action.p2Score = gameTreeScore;
+        action.p2Approved = true;
+        actions.splice(indexInActions, 1);
+        actions.unshift(action);
+      }
+
+      return actions;
+    } catch (e) {
+      if (this.bot?.debug !== false) {
+        console.warn(`[ShadowHeartStrategy] P2 Integration erro:`, e);
+      }
+      return actions;
     }
   }
 }

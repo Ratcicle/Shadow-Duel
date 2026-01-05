@@ -1,8 +1,11 @@
 import Game from "./core/Game.js";
 import Bot from "./core/Bot.js";
+import BotArena from "./core/BotArena.js";
 import Renderer from "./ui/Renderer.js";
 import { cardDatabase, cardDatabaseById } from "./data/cards.js";
 import { validateCardDatabase } from "./core/CardDatabaseValidator.js";
+import ShadowHeartStrategy from "./core/ai/ShadowHeartStrategy.js";
+import LuminarchStrategy from "./core/ai/LuminarchStrategy.js";
 
 import {
   initializeLocale,
@@ -81,6 +84,23 @@ const previewEls = {
 };
 
 const btnStartDuel = document.getElementById("btn-start-duel");
+const btnBotArena = document.getElementById("btn-bot-arena");
+const botArenaModal = document.getElementById("bot-arena-modal");
+const arenaDeckSeat1Select = document.getElementById("arena-deck-seat1");
+const arenaDeckSeat2Select = document.getElementById("arena-deck-seat2");
+const arenaNumDuelsSelect = document.getElementById("arena-num-duels");
+const arenaSpeedSelect = document.getElementById("arena-speed");
+const arenaAutoPauseCheckbox = document.getElementById("arena-auto-pause");
+const btnArenaStart = document.getElementById("btn-arena-start");
+const btnArenaCancel = document.getElementById("btn-arena-cancel");
+const closeArenaBtn = document.querySelector(".close-arena");
+const arenaCompleted = document.getElementById("arena-completed");
+const arenaWins1 = document.getElementById("arena-wins-1");
+const arenaWins2 = document.getElementById("arena-wins-2");
+const arenaDraws = document.getElementById("arena-draws");
+const arenaAvgTurns = document.getElementById("arena-avg-turns");
+const arenaStatus = document.getElementById("arena-status");
+const arenaLog = document.getElementById("arena-log");
 const btnDeckBuilder = document.getElementById("btn-deck-builder");
 const btnDeckSave = document.getElementById("deck-save");
 const btnDeckCancel = document.getElementById("deck-cancel");
@@ -793,6 +813,169 @@ function restartCurrentDuelFromDev() {
   bootGame();
 }
 
+// ============ Bot Arena ============
+
+let botArenaInstance = null;
+
+function openBotArenaModal() {
+  startScreen.classList.add("hidden");
+  botArenaModal.classList.remove("hidden");
+  populateBotArenaDecks();
+  resetBotArenaStats();
+}
+
+function closeBotArenaModal() {
+  botArenaModal.classList.add("hidden");
+  startScreen.classList.remove("hidden");
+  if (botArenaInstance?.isRunning) {
+    botArenaInstance.stop();
+  }
+}
+
+function populateBotArenaDecks() {
+  const options = [
+    { id: "default", label: "Deck Padrão" },
+    ...Bot.getAvailablePresets().map((preset) => ({
+      id: preset.id,
+      label: preset.label,
+    })),
+  ];
+
+  arenaDeckSeat1Select.innerHTML = "";
+  arenaDeckSeat2Select.innerHTML = "";
+
+  options.forEach((opt) => {
+    const opt1 = document.createElement("option");
+    opt1.value = opt.id;
+    opt1.textContent = opt.label;
+    arenaDeckSeat1Select.appendChild(opt1);
+
+    const opt2 = document.createElement("option");
+    opt2.value = opt.id;
+    opt2.textContent = opt.label;
+    arenaDeckSeat2Select.appendChild(opt2);
+  });
+
+  arenaDeckSeat1Select.value = "shadowheart";
+  arenaDeckSeat2Select.value = "luminarch";
+}
+
+function resetBotArenaStats() {
+  arenaCompleted.textContent = "0";
+  arenaWins1.textContent = "0";
+  arenaWins2.textContent = "0";
+  arenaDraws.textContent = "0";
+  arenaAvgTurns.textContent = "-";
+  arenaStatus.textContent = "Pronto";
+  arenaLog.innerHTML = '<p class="log-entry">Aguardando início...</p>';
+}
+
+async function startBotArena() {
+  if (!runCardDatabaseValidation()) {
+    return;
+  }
+
+  const preset1 = arenaDeckSeat1Select.value;
+  const preset2 = arenaDeckSeat2Select.value;
+  const numDuels = parseInt(arenaNumDuelsSelect.value) || 10;
+  const speed = arenaSpeedSelect.value || "1x";
+  const autoPause = arenaAutoPauseCheckbox?.checked || false;
+
+  // Desabilitar botões
+  btnArenaStart.disabled = true;
+  btnArenaCancel.disabled = true;
+  arenaStatus.textContent = "Executando...";
+  resetBotArenaStats();
+
+  // Fechar o modal para exibir o tabuleiro em modo espectador
+  botArenaModal.classList.add("hidden");
+  startScreen.classList.add("hidden");
+
+  botArenaInstance = new BotArena(
+    Game,
+    Bot,
+    ShadowHeartStrategy,
+    LuminarchStrategy
+  );
+
+  try {
+    await botArenaInstance.startArena(
+      preset1,
+      preset2,
+      numDuels,
+      speed,
+      autoPause,
+      (progress) => updateArenaProgress(progress),
+      (result) => finishBotArena(result)
+    );
+  } catch (err) {
+    console.error("Bot Arena error:", err);
+    alert(`Erro na arena: ${err.message}`);
+    arenaStatus.textContent = "Erro";
+    btnArenaStart.disabled = false;
+    btnArenaCancel.disabled = false;
+  }
+}
+
+function updateArenaProgress(progress) {
+  arenaCompleted.textContent = progress.completed.toString();
+  arenaWins1.textContent = progress.wins1.toString();
+  arenaWins2.textContent = progress.wins2.toString();
+  arenaDraws.textContent = progress.draws.toString();
+  arenaAvgTurns.textContent = progress.avgTurns;
+
+  const result = progress.lastResult;
+  if (result) {
+    if (result.type === "error") {
+      addArenaLogEntry(`❌ ${result.message}`, "error");
+    } else {
+      const symbol =
+        result.winner === "player"
+          ? "✅"
+          : result.winner === "bot"
+          ? "❌"
+          : "🔄";
+      const className =
+        result.winner === "player"
+          ? "win-1"
+          : result.winner === "bot"
+          ? "win-2"
+          : "draw";
+      addArenaLogEntry(
+        `Duel ${result.duelNumber}: ${symbol} ${result.winner.toUpperCase()} (${
+          result.turns
+        } turnos)`,
+        className
+      );
+    }
+  }
+}
+
+function addArenaLogEntry(text, className = "") {
+  if (!arenaLog) return;
+
+  // Se a única entrada é "Aguardando início...", remover
+  if (
+    arenaLog.children.length === 1 &&
+    arenaLog.children[0].textContent === "Aguardando início..."
+  ) {
+    arenaLog.innerHTML = "";
+  }
+
+  const entry = document.createElement("p");
+  entry.className = `log-entry ${className}`;
+  entry.textContent = text;
+  arenaLog.appendChild(entry);
+  arenaLog.scrollTop = arenaLog.scrollHeight;
+}
+
+function finishBotArena(result) {
+  btnArenaStart.disabled = false;
+  btnArenaCancel.disabled = false;
+  arenaStatus.textContent = "Concluído";
+  addArenaLogEntry(`✔️ Arena concluída! ${result.completed} duelos.`);
+  botArenaModal.classList.remove("hidden");
+}
 
 btnDeckBuilder?.addEventListener("click", openDeckBuilder);
 btnDeckCancel?.addEventListener("click", closeDeckBuilder);
@@ -818,6 +1001,10 @@ btnPoolFilterShadowHeart?.addEventListener("click", () => {
   renderDeckBuilder();
 });
 btnStartDuel?.addEventListener("click", startDuel);
+btnBotArena?.addEventListener("click", openBotArenaModal);
+btnArenaStart?.addEventListener("click", startBotArena);
+btnArenaCancel?.addEventListener("click", closeBotArenaModal);
+closeArenaBtn?.addEventListener("click", closeBotArenaModal);
 botPresetSelect?.addEventListener("change", (e) => {
   const value = e.target.value;
   currentBotPreset = value;

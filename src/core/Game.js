@@ -121,6 +121,7 @@ export default class Game {
     this.phase = "draw";
     this.turnCounter = 0;
     this.gameOver = false;
+    this.winner = null; // Will be set by checkWinCondition()
     this.targetSelection = null;
     this.selectionState = "idle";
     this.graveyardSelection = null;
@@ -1289,6 +1290,10 @@ export default class Game {
       typeof config.activationContext?.autoSelectSingleTarget === "boolean"
         ? config.activationContext.autoSelectSingleTarget
         : isAI(owner);
+    const explicitAutoSelectTargets =
+      typeof config.activationContext?.autoSelectTargets === "boolean"
+        ? config.activationContext.autoSelectTargets
+        : isAI(owner);
     const activationContext = {
       ...(config.activationContext || {}),
       fromHand,
@@ -1299,6 +1304,7 @@ export default class Game {
       committed,
       commitInfo: config.activationContext?.commitInfo || commitInfo || null,
       autoSelectSingleTarget: explicitAutoSelect,
+      autoSelectTargets: explicitAutoSelectTargets,
       selections: config.selections || null,
     };
 
@@ -1626,32 +1632,6 @@ export default class Game {
     });
     if (this.ui && typeof this.ui.applyHandTargetableIndices === "function") {
       this.ui.applyHandTargetableIndices("player", indices);
-    }
-  }
-
-  checkWinCondition() {
-    if (this.gameOver) return; // Já terminou
-
-    if (this.player.lp <= 0) {
-      this.ui?.showAlert?.("Game Over! You Lost.");
-      this.gameOver = true;
-      this.emit("game_over", {
-        winner: this.bot,
-        winnerId: this.bot.id,
-        loser: this.player,
-        loserId: this.player.id,
-        reason: "lp_zero",
-      });
-    } else if (this.bot.lp <= 0) {
-      this.ui?.showAlert?.("Victory! You Won.");
-      this.gameOver = true;
-      this.emit("game_over", {
-        winner: this.player,
-        winnerId: this.player.id,
-        loser: this.bot,
-        loserId: this.bot.id,
-        reason: "lp_zero",
-      });
     }
   }
 
