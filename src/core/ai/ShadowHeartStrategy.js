@@ -729,8 +729,8 @@ export default class ShadowHeartStrategy extends BaseStrategy {
     return getTributeRequirementFor(card, playerState);
   }
 
-  selectBestTributes(field, tributesNeeded, cardToSummon) {
-    return selectBestTributes(field, tributesNeeded, cardToSummon);
+  selectBestTributes(field, tributesNeeded, cardToSummon, context) {
+    return selectBestTributes(field, tributesNeeded, cardToSummon, context);
   }
 
   simulateMainPhaseAction(state, action) {

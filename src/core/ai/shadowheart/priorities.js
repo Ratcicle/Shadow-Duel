@@ -588,6 +588,20 @@ export function shouldSummonMonster(card, analysis, tributeInfo) {
       tributeInfo.tributesNeeded <= analysis.field.length &&
       analysis.oppField.length > 0
     ) {
+      // PRIORIDADE ALTA: Ameaça battle-indestructible que só pode ser removida por efeito
+      const hasBattleIndestructible = analysis.oppField.some(
+        (m) => m.battleIndestructible || m.cannotBeDestroyedByBattle
+      );
+      
+      if (hasBattleIndestructible) {
+        return {
+          yes: true,
+          position: "attack",
+          priority: 15, // Prioridade muito alta - única forma de remover
+          reason: "Remover ameaça battle-indestructible (única solução)",
+        };
+      }
+
       // Verificar se já temos lethal com os monstros atuais
       const fieldMonsters = analysis.field.filter(
         (c) => c?.cardKind === "monster"
@@ -762,12 +776,21 @@ export function shouldSummonMonster(card, analysis, tributeInfo) {
  * @param {Array} field
  * @param {number} tributesNeeded
  * @param {Object} [cardToSummon]
+ * @param {Object} [context] - Contexto adicional (oppField, game state)
  * @returns {number[]} Índices dos monstros a tributar
  */
-export function selectBestTributes(field, tributesNeeded, cardToSummon = null) {
+export function selectBestTributes(field, tributesNeeded, cardToSummon = null, context = {}) {
   if (tributesNeeded <= 0 || !field || field.length < tributesNeeded) {
     return [];
   }
+
+  // CASO ESPECIAL: Demon Arctroth vs battle-indestructible
+  // Permitir tributar monstros mais fortes se for a única forma de remover ameaça
+  const isDemonArctroth = cardToSummon?.name === "Shadow-Heart Demon Arctroth";
+  const hasBattleIndestructibleThreat = context.oppField?.some(
+    (m) => m.battleIndestructible || m.cannotBeDestroyedByBattle
+  );
+  const isEmergencyRemoval = isDemonArctroth && hasBattleIndestructibleThreat;
 
   const monstersWithValue = field.map((monster, index) => {
     let value = 0;
@@ -777,9 +800,16 @@ export function selectBestTributes(field, tributesNeeded, cardToSummon = null) {
     value += (monster.atk || 0) / 400;
     value += (monster.level || 0) * 0.15;
 
-    // Monstros importantes: NÃO tributar
-    if (knowledge?.role === "boss" || knowledge?.role === "fusion_boss")
-      value += 20;
+    // Monstros importantes: NÃO tributar (exceto em emergências)
+    if (knowledge?.role === "boss" || knowledge?.role === "fusion_boss") {
+      // Se é situação de emergência (battle-indestructible), reduzir penalidade
+      value += isEmergencyRemoval ? 10 : 20;
+    }
+    
+    if (monster.name === "Shadow-Heart Demon Dragon") {
+      // Em emergência ainda é caro, mas não impossível
+      value += isEmergencyRemoval ? 15 : 25;
+    }
     if (monster.name === "Shadow-Heart Scale Dragon") value += 15;
     if (monster.name === "Shadow-Heart Demon Arctroth") value += 12; // Material de Ascensão
     if (monster.name === "Shadow-Heart Gecko") value += 3;

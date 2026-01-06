@@ -594,11 +594,12 @@ export default class Bot extends Player {
   }
 
   // Seleciona os melhores monstros para usar como tributo (os PIORES do campo)
-  selectBestTributes(field, tributesNeeded, cardToSummon) {
+  selectBestTributes(field, tributesNeeded, cardToSummon, context) {
     return this.strategy.selectBestTributes(
       field,
       tributesNeeded,
-      cardToSummon
+      cardToSummon,
+      context
     );
   }
 
@@ -696,10 +697,12 @@ export default class Bot extends Player {
       let tributeIndices = null;
 
       if (tributeInfo.tributesNeeded > 0) {
+        const opponent = this === game.player ? game.bot : game.player;
         tributeIndices = this.selectBestTributes(
           this.field,
           tributeInfo.tributesNeeded,
-          cardToSummon
+          cardToSummon,
+          { oppField: opponent.field, game }
         );
       }
 

@@ -1236,7 +1236,7 @@ export const cardDatabase = [
     effects: [
       {
         id: "the_shadow_heart_summon_and_equip",
-        timing: "ignition",
+        timing: "on_play",
         oncePerTurn: true,
         oncePerTurnName: "the_shadow_heart_summon_and_equip",
         requireEmptyField: true,
