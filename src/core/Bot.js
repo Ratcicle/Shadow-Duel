@@ -842,6 +842,63 @@ export default class Bot extends Player {
       });
       return true;
     }
+
+    // Handler para ativação de efeitos ignition de monstros na mão
+    if (action.type === "handIgnition") {
+      const card = this.hand[action.index];
+      if (!card) return false;
+
+      console.log(
+        `[Bot.executeMainPhaseAction] 🔥 Attempting hand ignition: ${card.name}`
+      );
+
+      // Verificar se o efeito pode ser ativado
+      const handIgnitionEffect = (card.effects || []).find(
+        (e) => e && e.timing === "ignition" && e.requireZone === "hand"
+      );
+      if (!handIgnitionEffect) {
+        console.log(
+          `[Bot.executeMainPhaseAction] ❌ No hand ignition effect found`
+        );
+        return false;
+      }
+
+      const activationContext = {
+        fromHand: true,
+        activationZone: "hand",
+        sourceZone: "hand",
+      };
+
+      const pipelineResult = await game.runActivationPipeline({
+        card,
+        owner: this,
+        activationZone: "hand",
+        activationContext,
+        selectionKind: "monsterEffect",
+        selectionMessage: "Select target(s) for the monster effect.",
+        guardKind: "bot_hand_ignition",
+        phaseReq: ["main1", "main2"],
+        oncePerTurn: {
+          card,
+          player: this,
+          effect: handIgnitionEffect,
+        },
+        activate: (chosen, ctx, zone) =>
+          game.effectEngine.activateMonsterEffect(
+            card,
+            this,
+            chosen,
+            "hand",
+            ctx
+          ),
+        finalize: () => {
+          game.ui?.log?.(`Bot activates ${card.name}'s effect from hand`);
+          game.updateBoard();
+        },
+      });
+      return pipelineResult !== false;
+    }
+
     return false;
   }
 

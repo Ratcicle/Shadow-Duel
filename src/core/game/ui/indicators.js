@@ -109,7 +109,7 @@ export function buildActivationIndicatorsForPlayer(player) {
       if (!hint && card.name === "Polymerization" && !ok) {
         indicators.hand[index] = {
           canActivate: false,
-          label: "sem alvos validos",
+          label: "sem materiais de fusao",
         };
         return;
       }

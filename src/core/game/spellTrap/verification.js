@@ -31,11 +31,13 @@ export function canActivateTrap(card) {
 export function canActivatePolymerization() {
   // Check if player has Extra Deck with Fusion Monsters
   if (!this.player.extraDeck || this.player.extraDeck.length === 0) {
+    console.log("[canActivatePolymerization] ❌ Bloqueado: sem Extra Deck");
     return false;
   }
 
   // Check field space
   if (this.player.field.length >= 5) {
+    console.log("[canActivatePolymerization] ❌ Bloqueado: campo cheio (5/5)");
     return false;
   }
 
@@ -46,6 +48,7 @@ export function canActivatePolymerization() {
   ].filter((card) => card && card.cardKind === "monster");
 
   if (availableMaterials.length === 0) {
+    console.log("[canActivatePolymerization] ❌ Bloqueado: sem monstros disponíveis");
     return false;
   }
 
@@ -54,9 +57,11 @@ export function canActivatePolymerization() {
     if (
       this.effectEngine.canSummonFusion(fusion, availableMaterials, this.player)
     ) {
+      console.log(`[canActivatePolymerization] ✅ Permitido: pode invocar ${fusion.name}`);
       return true;
     }
   }
 
+  console.log("[canActivatePolymerization] ❌ Bloqueado: nenhuma fusão possível com materiais disponíveis");
   return false;
 }

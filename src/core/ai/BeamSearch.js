@@ -150,7 +150,9 @@ export async function beamSearchTurn(game, strategy, options = {}) {
     }
 
     // Limitar ao beam width
-    const topCandidates = candidates.slice(0, beamWidth);
+    // MELHORIA: No primeiro ply (depth=0), explorar mais candidatos para melhor seleção inicial
+    const effectiveBeamWidth = depth === 0 ? Math.min(beamWidth + 1, candidates.length) : beamWidth;
+    const topCandidates = candidates.slice(0, effectiveBeamWidth);
     const branches = [];
 
     for (const action of topCandidates) {

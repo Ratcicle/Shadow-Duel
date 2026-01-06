@@ -79,6 +79,17 @@ export const COMBO_DATABASE = [
     result: "+300 ATK por monstro",
     priority: 8,
   },
+  {
+    name: "Eel to Leviathan",
+    description:
+      "Summon Abyssal Eel → Ativar efeito ignition do Leviathan na mão → Enviar Eel ao GY → Special Summon Leviathan 2200 ATK",
+    requires: [
+      "Shadow-Heart Abyssal Eel no campo",
+      "Shadow-Heart Leviathan na mão",
+    ],
+    result: "2200 ATK + burn effects imediato (sem usar Normal Summon extra)",
+    priority: 9,
+  },
 ];
 
 /**
@@ -201,6 +212,20 @@ export function detectAvailableCombos(analysis, logFn = null) {
       action: { type: "spell", cardName: "Darkness Valley" },
     });
     log(`💡 Field Spell disponível: Darkness Valley`);
+  }
+
+  // Eel to Leviathan Combo
+  // Leviathan na mão + Abyssal Eel no campo = pode ativar ignition da mão
+  if (
+    handNames.includes("Shadow-Heart Leviathan") &&
+    fieldNames.includes("Shadow-Heart Abyssal Eel")
+  ) {
+    available.push({
+      name: "Eel to Leviathan",
+      priority: 9,
+      action: { type: "handIgnition", cardName: "Shadow-Heart Leviathan" },
+    });
+    log(`🔥 Combo detectado: Eel → Leviathan (2200 ATK + burn)!`);
   }
 
   return available;

@@ -105,6 +105,38 @@ export function simulateMainPhaseAction(state, action, placeSpellCard) {
       }
       break;
     }
+    case "handIgnition": {
+      // Simula ativação de efeito ignition de monstro da mão
+      const player = state.bot;
+      const card = player.hand[action.index];
+      if (!card) break;
+
+      // Caso específico: Shadow-Heart Leviathan (envia Eel ao GY, special summon Leviathan)
+      if (card.name === "Shadow-Heart Leviathan") {
+        // Encontrar Abyssal Eel no campo para usar como custo
+        const eelIdx = player.field.findIndex(
+          (c) => c.name === "Shadow-Heart Abyssal Eel"
+        );
+        if (eelIdx === -1 || player.field.length >= 5) break; // Sem custo válido ou campo cheio
+
+        // Enviar Eel ao GY
+        const eel = player.field[eelIdx];
+        player.graveyard.push(eel);
+        player.field.splice(eelIdx, 1);
+
+        // Remover Leviathan da mão e special summon
+        player.hand.splice(action.index, 1);
+        const newCard = { ...card };
+        newCard.position = "attack";
+        newCard.isFacedown = false;
+        newCard.hasAttacked = false;
+        newCard.attacksUsedThisTurn = 0;
+        newCard.cannotAttackThisTurn = false; // Special summon pode atacar
+        player.field.push(newCard);
+      }
+      // Adicionar outros monstros com hand ignition aqui conforme necessário
+      break;
+    }
   }
 
   return state;

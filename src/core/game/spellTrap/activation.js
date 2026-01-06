@@ -145,6 +145,22 @@ export async function tryActivateSpell(
     actionContext,
   };
 
+  // VALIDAÇÃO EXTRA: Polymerization requer materiais válidos
+  if (card.name === "Polymerization" && !resume) {
+    if (!this.canActivatePolymerization?.()) {
+      this.ui?.showMessage?.(
+        "Você não tem materiais válidos para Fusion Summon!"
+      );
+      this.ui?.log?.(
+        `${owner.name || "Jogador"} não pode ativar Polymerization: sem materiais de fusão válidos.`
+      );
+      return {
+        success: false,
+        reason: "no_valid_fusion_materials",
+      };
+    }
+  }
+
   const pipelineResult = await this.runActivationPipeline({
     card,
     owner,

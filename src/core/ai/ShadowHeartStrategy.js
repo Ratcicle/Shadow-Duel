@@ -328,6 +328,15 @@ export default class ShadowHeartStrategy extends BaseStrategy {
         const actualGame = game._gameRef || game;
         const check = actualGame.effectEngine?.canActivate?.(card, bot);
         if (!check?.ok) return;
+        
+        // VALIDAÇÃO EXTRA: Polymerization requer materiais válidos
+        if (card.name === "Polymerization") {
+          const canActivate = actualGame.canActivatePolymerization?.() ?? false;
+          if (!canActivate) {
+            log(`  ⚠️ Polymerization bloqueado: sem materiais válidos`);
+            return;
+          }
+        }
       }
 
       const decision = shouldPlaySpell(card, analysis);
@@ -380,6 +389,9 @@ export default class ShadowHeartStrategy extends BaseStrategy {
       (bot.hand || []).forEach((card, index) => {
         if (card.cardKind !== "monster") return;
 
+        // BUGFIX: Não gerar summon se já invocou neste turno
+        if ((bot.summonCount || 0) >= 1) return;
+
         const tributeInfo = this.getTributeRequirementFor(card, bot);
         if ((bot.field?.length || 0) < tributeInfo.tributesNeeded) return;
         if (analysis.fieldCapacity <= 0) return;
@@ -426,14 +438,98 @@ export default class ShadowHeartStrategy extends BaseStrategy {
       });
     }
 
+    // === GERAR AÇÕES DE IGNITION DA MÃO ===
+    // Monstros com efeito ignition ativável da mão (ex: Leviathan)
+    (bot.hand || []).forEach((card, index) => {
+      if (card.cardKind !== "monster") return;
+      
+      // Verificar se o monstro tem efeito ignition com requireZone: "hand"
+      const handIgnitionEffect = (card.effects || []).find(
+        (e) => e && e.timing === "ignition" && e.requireZone === "hand"
+      );
+      if (!handIgnitionEffect) return;
+
+      // Verificar se pode ativar (tem alvos válidos no campo)
+      // Para Leviathan: precisa de Abyssal Eel no campo
+      const targets = handIgnitionEffect.targets || [];
+      const costTarget = targets.find((t) => t.zone === "field");
+      
+      if (costTarget) {
+        // Verificar se existe carta válida no campo para o custo
+        const fieldCards = bot.field || [];
+        const hasValidCost = fieldCards.some((fieldCard) => {
+          if (fieldCard.cardKind !== "monster") return false;
+          if (costTarget.cardName && fieldCard.name !== costTarget.cardName) return false;
+          if (costTarget.archetype && fieldCard.archetype !== costTarget.archetype) return false;
+          return true;
+        });
+
+        if (!hasValidCost) {
+          log(`  ⏭️ Hand ignition ${card.name}: sem custo válido no campo`);
+          return;
+        }
+      }
+
+      // Verificar once-per-turn
+      if (!isSimulatedState) {
+        const actualGame = game._gameRef || game;
+        if (actualGame.effectEngine) {
+          const optCheck = actualGame.effectEngine.checkOncePerTurn(
+            card,
+            bot,
+            handIgnitionEffect
+          );
+          if (!optCheck.ok) {
+            log(`  ⏭️ Hand ignition ${card.name}: já usado neste turno`);
+            return;
+          }
+        }
+      }
+
+      // Verificar se há espaço no campo para o special summon
+      if (analysis.fieldCapacity <= 0) {
+        log(`  ⏭️ Hand ignition ${card.name}: campo cheio`);
+        return;
+      }
+
+      // Calcular prioridade baseada no valor do monstro
+      let priority = 8; // Base alta para efeitos que geram vantagem
+      
+      // Bonus se for combo conhecido (Eel -> Leviathan)
+      if (card.name === "Shadow-Heart Leviathan") {
+        priority = 9; // Combo forte: 2200 ATK + burn
+        log(`  ✅ Hand ignition: ${card.name} (Eel -> Leviathan combo)`);
+      } else {
+        log(`  ✅ Hand ignition: ${card.name}`);
+      }
+
+      const macroBuff = calculateMacroPriorityBonus(
+        "handIgnition",
+        card,
+        macroStrategy
+      );
+      priority += macroBuff;
+
+      actions.push({
+        type: "handIgnition",
+        index,
+        priority,
+        cardName: card.name,
+        effectId: handIgnitionEffect.id,
+        macroBuff,
+      });
+    });
+
     // === STALEMATE BREAKER ===
     // Se não há ações e há capacidade de campo, forçar summon mesmo que já tenha invocado
     // Isso evita que o jogo fique travado quando o bot acumula cartas na mão
     // BUGFIX: Skip durante simulação (BeamSearch lookahead) - não é um stalemate real
+    // BUGFIX: Só ativar se summon ainda está disponível (evita tentar invocar em Main2 após já ter invocado)
     if (
       actions.length === 0 &&
       analysis.fieldCapacity > 0 &&
-      !isSimulatedState
+      !isSimulatedState &&
+      (bot.summonCount || 0) < 1 // Só força summon se ainda pode invocar
     ) {
       // CRITICAL: Usar estado REAL (this.bot) para fallback, não simulado
       const realBot = this.bot || bot;
@@ -510,6 +606,18 @@ export default class ShadowHeartStrategy extends BaseStrategy {
         let spellsFound = 0;
         (realBot2.hand || []).forEach((card, index) => {
           if (card.cardKind !== "spell") return;
+          
+          // VALIDAÇÃO: Polymerization só pode ser ativado se tiver materiais válidos
+          if (card.name === "Polymerization") {
+            const canActivate = actualGame.canActivatePolymerization?.() ?? false;
+            if (!canActivate) {
+              console.log(
+                `[ShadowHeartStrategy] ⚠️ Polymerization bloqueado: sem materiais válidos`
+              );
+              return; // Skip Polymerization sem materiais
+            }
+          }
+          
           spellsFound++;
 
           // Tentar qualquer spell, mesmo sem validação prévia
