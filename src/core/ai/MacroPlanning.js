@@ -219,13 +219,15 @@ export function decideMacroStrategy(gameState, botPlayer, opponentPlayer) {
  * Calcula bônus de prioridade para uma ação com base em macro strategy.
  * @param {string} actionType - Tipo de ação (spell, summon, etc)
  * @param {Object} card - Carta sendo avaliada
- * @param {string} macroStrategy - Estratégia macro decidida
+ * @param {Object} macroStrategy - Estratégia macro decidida {strategy, priority, detail}
  * @returns {number} - Bônus de prioridade (0 a +20)
  */
 export function calculateMacroPriorityBonus(actionType, card, macroStrategy) {
   let bonus = 0;
+  const strategy =
+    typeof macroStrategy === "string" ? macroStrategy : macroStrategy?.strategy;
 
-  if (macroStrategy === "lethal") {
+  if (strategy === "lethal") {
     // Ações que aumentam ATK/dano
     if (actionType === "spell" && card.effects) {
       for (const effect of card.effects) {
@@ -233,6 +235,9 @@ export function calculateMacroPriorityBonus(actionType, card, macroStrategy) {
           for (const action of effect.actions) {
             if (action.type === "buff_stats_temp" && action.stat === "atk") {
               bonus += 15;
+            }
+            if (action.type === "damage") {
+              bonus += 12; // Burn direto
             }
           }
         }
@@ -242,21 +247,35 @@ export function calculateMacroPriorityBonus(actionType, card, macroStrategy) {
     if (actionType === "summon" && card.atk >= 2000) {
       bonus += 12;
     }
-  } else if (macroStrategy === "defend") {
-    // Ações defensivas
-    if (actionType === "spell" && card.effects) {
-      for (const effect of card.effects) {
-        const desc = (card.description || "").toLowerCase();
-        if (desc.includes("protect") || desc.includes("defense")) {
-          bonus += 15;
-        }
+    // Spells de remoção ajudam a abrir caminho para lethal
+    if (actionType === "spell") {
+      const desc = (card.description || "").toLowerCase();
+      if (desc.includes("destroy") || desc.includes("remove")) {
+        bonus += 8;
       }
     }
-    // Monstros com DEF alta
-    if (actionType === "summon" && card.def >= 2000) {
-      bonus += 10;
+  } else if (strategy === "defend") {
+    // Ações defensivas
+    if (actionType === "spell") {
+      const desc = (card.description || "").toLowerCase();
+      if (
+        desc.includes("protect") ||
+        desc.includes("defense") ||
+        desc.includes("negate")
+      ) {
+        bonus += 15;
+      }
+      // Remoção também é defensiva
+      if (desc.includes("destroy") || desc.includes("remove")) {
+        bonus += 12;
+      }
     }
-  } else if (macroStrategy === "setup") {
+    // Monstros com DEF alta OU taunt
+    if (actionType === "summon") {
+      if (card.def >= 2000) bonus += 10;
+      if (card.mustBeAttacked) bonus += 8; // Taunt ajuda defesa
+    }
+  } else if (strategy === "setup") {
     // Ações que preparam combos
     if (actionType === "spell" && card.effects) {
       for (const effect of card.effects) {
@@ -264,6 +283,29 @@ export function calculateMacroPriorityBonus(actionType, card, macroStrategy) {
           for (const action of effect.actions) {
             if (action.type === "add_from_zone_to_hand") {
               bonus += 12; // Buscas são importantes para setup
+            }
+            if (action.type === "draw") {
+              bonus += 8; // Card advantage
+            }
+          }
+        }
+      }
+    }
+    // Field spells para synergy
+    if (actionType === "spell" && card.subtype === "field") {
+      bonus += 10;
+    }
+  } else if (strategy === "grind") {
+    // Card advantage e resource accrual
+    if (actionType === "spell" && card.effects) {
+      for (const effect of card.effects) {
+        if (effect.actions) {
+          for (const action of effect.actions) {
+            if (
+              action.type === "draw" ||
+              action.type === "add_from_zone_to_hand"
+            ) {
+              bonus += 10;
             }
           }
         }

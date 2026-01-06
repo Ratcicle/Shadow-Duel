@@ -16,14 +16,22 @@ export const CARD_KNOWLEDGE = {
     priority: 10,
     summonCondition: "3_tributes",
     effect: "Ao destruir por batalha, recupera 1 Shadow-Heart do GY",
-    synergies: ["Darkness Valley", "Shadow-Heart Rage", "Polymerization"],
+    synergies: [
+      "Darkness Valley",
+      "Shadow-Heart Rage",
+      "Polymerization",
+      "Shadow-Heart Apocalypse Dragon",
+    ],
     playPatterns: [
       "Invocar quando tiver 3 tributos disponíveis",
       "Proteger com Shadow-Heart Shield",
       "Usar Shadow-Heart Rage para 3700 ATK + 2 ataques",
       "Usar como material para Demon Dragon Fusion",
+      "Ativar efeito 3+ vezes para qualificar Ascensão para Apocalypse Dragon",
+      "Ascender para Apocalypse Dragon (3300 ATK + remoção recorrente)",
     ],
     value: 15,
+    ascensionTarget: "Shadow-Heart Apocalypse Dragon",
   },
   "Shadow-Heart Demon Dragon": {
     role: "fusion_boss",
@@ -43,13 +51,20 @@ export const CARD_KNOWLEDGE = {
     priority: 8,
     summonCondition: "2_tributes",
     effect: "Ao ser Tribute Summoned, destrói 1 monstro do oponente",
-    synergies: ["Shadow-Heart Imp", "tributes"],
+    synergies: [
+      "Shadow-Heart Imp",
+      "tributes",
+      "Shadow-Heart Armored Arctroth",
+    ],
     playPatterns: [
       "Tribute Summon quando oponente tem monstro forte no campo",
       "Usar Imp + outro monstro como tributo",
       "Combina remoção com presença de 2600 ATK",
+      "Destruir 2+ monstros oponentes para qualificar Ascensão",
+      "Ascender para Armored Arctroth (2800 ATK + zero stats de boss oponente)",
     ],
     value: 10,
+    ascensionTarget: "Shadow-Heart Armored Arctroth",
   },
   "Shadow-Heart Griffin": {
     role: "beater",
@@ -167,6 +182,56 @@ export const CARD_KNOWLEDGE = {
     ],
     value: 7,
   },
+  "Shadow-Heart Void Mage": {
+    role: "searcher",
+    priority: 9,
+    summonCondition: "normal",
+    effect:
+      "Ao ser Normal Summoned, busca 1 Spell/Trap Shadow-Heart. Draw quando oponente perde LP",
+    synergies: [
+      "Darkness Valley",
+      "Shadow-Heart Covenant",
+      "Shadow-Heart Shield",
+      "setup de longo prazo",
+    ],
+    playPatterns: [
+      "Normal Summon T1 para buscar Darkness Valley ou Covenant",
+      "Buscar Shield se tiver boss no campo",
+      "Buscar Infusion se tiver setup no GY",
+      "Efeito passivo de draw combina com burn (Leviathan/Eel)",
+    ],
+    value: 8,
+  },
+  "Shadow-Heart Armored Arctroth": {
+    role: "ascension_boss",
+    priority: 10,
+    summonCondition: "ascension_from_demon_arctroth",
+    effect:
+      "Ascensão de Demon Arctroth (2+ destruições). Ao ser Ascension Summoned: reduz ATK/DEF de 1 monstro oponente a 0. Força defensores a posição de ataque",
+    synergies: ["Shadow-Heart Demon Arctroth", "remoção", "OTK"],
+    playPatterns: [
+      "Ascender Demon Arctroth após ele destruir 2+ monstros",
+      "Usar efeito para neutralizar boss do oponente (ATK/DEF 0)",
+      "Forçar defensores a ATK para limpar campo facilmente",
+      "2800 ATK sólido + efeitos de controle",
+    ],
+    value: 12,
+  },
+  "Shadow-Heart Apocalypse Dragon": {
+    role: "ascension_boss",
+    priority: 11,
+    summonCondition: "ascension_from_scale_dragon",
+    effect:
+      "Ascensão de Scale Dragon (3+ ativações). 1x/turno: descarta 1 para destruir 1 monstro oponente. Se sair do campo: destrói todos os monstros",
+    synergies: ["Shadow-Heart Scale Dragon", "remoção", "board wipe"],
+    playPatterns: [
+      "Ascender Scale Dragon após 3+ ativações de efeito",
+      "Usar efeito ignition para remoção pontual (custo: 1 descarte)",
+      "Board wipe ao sair do campo = jogo virado ou OTK negado",
+      "3300 ATK altíssimo + pressão constante",
+    ],
+    value: 14,
+  },
 
   // ===== SPELLS =====
   Polymerization: {
@@ -249,14 +314,15 @@ export const CARD_KNOWLEDGE = {
   },
   "Shadow-Heart Shield": {
     role: "protection",
-    priority: 6,
-    playCondition: "has_monster_to_protect",
+    priority: 4,
+    playCondition: "has_face_up_monster_to_protect",
     effect: "+500 ATK/DEF, indestrutível por batalha, custo 800 LP/turno",
     synergies: ["bosses", "proteção"],
     playPatterns: [
-      "Equipar em Scale Dragon ou Arctroth",
+      "Equipar em Scale Dragon ou Arctroth face-up",
       "Considerar custo de LP a longo prazo",
       "Bom se estiver ganhando e quer manter vantagem",
+      "NÃO equipar em monstros facedown",
     ],
     value: 5,
   },

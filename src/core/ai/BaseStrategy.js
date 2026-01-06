@@ -33,15 +33,17 @@ export default class BaseStrategy {
 
     // === 1. LP ADVANTAGE ===
     const lpDiff = (perspective?.lp || 0) - (opponent?.lp || 0);
-    score += lpDiff / 800; // 3200 LP diff = +4.0 score
+    score += lpDiff / 600; // 3600 LP diff = +6.0 score (mais agressivo)
 
-    // Lethal proximity bonuses
-    if ((opponent?.lp || 0) <= 2000) score += 2.5;
-    else if ((opponent?.lp || 0) <= 4000) score += 1.0;
+    // Lethal proximity bonuses (incentivo para fechar o jogo)
+    if ((opponent?.lp || 0) <= 2000) score += 3.5;
+    else if ((opponent?.lp || 0) <= 3000) score += 2.0;
+    else if ((opponent?.lp || 0) <= 4000) score += 0.8;
 
-    // Danger penalties
-    if ((perspective?.lp || 0) <= 2000) score -= 2.0;
-    else if ((perspective?.lp || 0) <= 4000) score -= 0.8;
+    // Danger penalties (reduzidas para evitar defensividade excessiva)
+    if ((perspective?.lp || 0) <= 1500) score -= 2.5;
+    else if ((perspective?.lp || 0) <= 3000) score -= 1.2;
+    else if ((perspective?.lp || 0) <= 5000) score -= 0.4;
 
     // === 2. FIELD PRESENCE — Usando threat score ===
     const myField = perspective?.field || [];
@@ -109,17 +111,32 @@ export default class BaseStrategy {
     ).length;
     score += recursionTargets * 0.15; // GY com alvos = recurso futuro
 
-    // === 7. LETHAL CHECK ===
-    if (canOpponentLethal(oppField, perspective?.lp || 8000)) {
-      score -= 5.0; // DANGER CRITICAL
+    // === 7. READY ATTACKERS — Bônus para monstros prontos para atacar ===
+    const readyAttackers = myField.filter(
+      (m) =>
+        m?.position === "attack" && !m?.hasAttacked && !m?.cannotAttackThisTurn
+    );
+    for (const attacker of readyAttackers) {
+      const atkValue =
+        ((attacker?.atk || 0) + (attacker?.tempAtkBoost || 0)) / 1200;
+      score += atkValue * 0.6; // 3000 ATK = +1.5 score
+      // Bônus se oponente tem campo vazio (direct attack potential)
+      if (oppField.length === 0) {
+        score += atkValue * 0.4;
+      }
     }
 
-    // === 8. TEMPO — Campo vazio = vulnerável ===
+    // === 8. LETHAL CHECK ===
+    if (canOpponentLethal(oppField, perspective?.lp || 8000)) {
+      score -= 6.0; // DANGER CRITICAL (aumentado)
+    }
+
+    // === 9. TEMPO — Campo vazio = vulnerável ===
     if (myField.length === 0 && oppField.length > 0) {
-      score -= 1.5;
+      score -= 2.0; // Mais penalidade (era 1.5)
     }
     if (oppField.length === 0 && myField.length > 0) {
-      score += 1.0; // Controle do tabuleiro
+      score += 1.5; // Mais bônus para controle de tabuleiro (era 1.0)
     }
 
     return score;
@@ -285,17 +302,26 @@ export default class BaseStrategy {
    * @returns {Object} - Oponente
    */
   getOpponent(gameOrState, perspectivePlayer) {
-    if (!gameOrState || !perspectivePlayer) return null;
-
-    // Se é o bot, oponente é player
-    if (
-      perspectivePlayer.id === "bot" ||
-      perspectivePlayer === gameOrState.bot
-    ) {
-      return gameOrState.player;
+    if (!gameOrState || !perspectivePlayer) {
+      console.warn("[BaseStrategy] getOpponent: invalid args", {
+        gameOrState: !!gameOrState,
+        perspectivePlayer: !!perspectivePlayer,
+      });
+      return null;
     }
 
-    // Se é o player, oponente é bot
-    return gameOrState.bot;
+    // Se é o bot, oponente é player
+    const isBot =
+      perspectivePlayer.id === "bot" || perspectivePlayer === gameOrState.bot;
+    const opponent = isBot ? gameOrState.player : gameOrState.bot;
+
+    if (!opponent) {
+      console.warn("[BaseStrategy] getOpponent: opponent not found", {
+        perspective: perspectivePlayer.id,
+        gameState: { player: !!gameOrState.player, bot: !!gameOrState.bot },
+      });
+    }
+
+    return opponent || null;
   }
 }

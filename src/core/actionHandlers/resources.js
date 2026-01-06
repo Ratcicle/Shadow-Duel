@@ -43,7 +43,9 @@ export async function handlePayLP(action, ctx, targets, engine) {
   }
 
   player.lp -= amount;
-  console.log(`[handlePayLP] SUCCESS: Paid ${amount} LP, remaining ${player.lp}`);
+  console.log(
+    `[handlePayLP] SUCCESS: Paid ${amount} LP, remaining ${player.lp}`
+  );
 
   getUI(game)?.log(`${player.name || player.id} paid ${amount} LP.`);
 
@@ -105,6 +107,75 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
       if (!filters.name.includes(card.name)) return false;
     }
     if (action.cardName) {
+      const field = player.field || [];
+
+      const hasBoss = field.some((c) =>
+        [
+          "Shadow-Heart Scale Dragon",
+          "Shadow-Heart Demon Arctroth",
+          "Shadow-Heart Demon Dragon",
+        ].includes(c?.name)
+      );
+
+      const strongBody = field.some((c) => (c?.atk || 0) >= 1800);
+
+      const hasBoard = field.length > 0;
+
+      // Heurística de manutenção: pagar só se o benefício justificar o custo
+      const lpAfterPay = player.lp - lpCost;
+
+      const shouldPay =
+        player.lp >= lpCost &&
+        ((hasBoss && lpAfterPay >= 1200) ||
+          (strongBody && lpAfterPay >= 2000) ||
+          (hasBoard && lpAfterPay >= 3000));
+
+      // Se não vamos pagar (LP insuficiente ou heurística decide largar), envia
+      if (!shouldPay) {
+        const sourceZone =
+          typeof engine.findCardZone === "function"
+            ? engine.findCardZone(player, source)
+            : null;
+
+        if (sourceZone) {
+          if (
+            failureZone === "graveyard" &&
+            typeof game.moveCard === "function"
+          ) {
+            game.moveCard(source, player, "graveyard", {
+              fromZone: sourceZone,
+            });
+          } else {
+            const zoneArr = player[sourceZone] || [];
+
+            const idx = zoneArr.indexOf(source);
+
+            if (idx !== -1) {
+              zoneArr.splice(idx, 1);
+
+              if (failureZone === "graveyard") {
+                player.graveyard = player.graveyard || [];
+
+                player.graveyard.push(source);
+              } else if (failureZone === "banished") {
+                player.banished = player.banished || [];
+                player.banished.push(source);
+              }
+            }
+          }
+        }
+
+        game.updateBoard();
+
+        return true;
+      }
+
+      // Pagar LP
+      player.lp -= lpCost;
+
+      game.updateBoard();
+
+      return true;
       const match = action.cardName.toLowerCase();
       if ((card.name || "").toLowerCase() !== match) return false;
     }
@@ -131,10 +202,15 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
     extraFilter,
   });
 
-  console.log(`[handleAddFromZoneToHand] Zone: ${sourceZone}, Candidates: ${candidates.length}, Filters:`, filters);
+  console.log(
+    `[handleAddFromZoneToHand] Zone: ${sourceZone}, Candidates: ${candidates.length}, Filters:`,
+    filters
+  );
 
   if (candidates.length === 0) {
-    console.log(`[handleAddFromZoneToHand] No candidates found in ${sourceZone}`);
+    console.log(
+      `[handleAddFromZoneToHand] No candidates found in ${sourceZone}`
+    );
     getUI(game)?.log(`No valid cards in ${sourceZone} matching filters.`);
     return false;
   }
@@ -185,7 +261,11 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
     return true;
   };
 
-  console.log(`[handleAddFromZoneToHand] Calling selectCardsFromZone: maxSelect=${maxSelect}, minSelect=${minSelect}, promptPlayer=${promptPlayer !== false}`);
+  console.log(
+    `[handleAddFromZoneToHand] Calling selectCardsFromZone: maxSelect=${maxSelect}, minSelect=${minSelect}, promptPlayer=${
+      promptPlayer !== false
+    }`
+  );
 
   const selection = await selectCardsFromZone({
     game,
@@ -244,7 +324,10 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
     },
   });
 
-  console.log(`[handleAddFromZoneToHand] Selection result:`, { selected: selection.selected?.length || 0, cancelled: selection.cancelled });
+  console.log(`[handleAddFromZoneToHand] Selection result:`, {
+    selected: selection.selected?.length || 0,
+    cancelled: selection.cancelled,
+  });
   const result = finalizeSelection(selection.selected || []);
   console.log(`[handleAddFromZoneToHand] finalizeSelection returned:`, result);
   return result;

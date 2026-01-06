@@ -39,10 +39,7 @@ import {
   isShadowHeart,
   isShadowHeartByName,
 } from "./shadowheart/knowledge.js";
-import {
-  COMBO_DATABASE,
-  detectAvailableCombos,
-} from "./shadowheart/combos.js";
+import { COMBO_DATABASE, detectAvailableCombos } from "./shadowheart/combos.js";
 import {
   shouldPlaySpell,
   shouldSummonMonster,
@@ -90,7 +87,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
     // FIDELIDADE: Usar o bot do game/state em vez de this.bot
     // Isso permite que lookahead (BeamSearch/GameTree) funcione corretamente
     const isSimulatedState = game._isPerspectiveState === true;
-    const bot = isSimulatedState ? game.bot : (this.bot || game.bot);
+    const bot = isSimulatedState ? game.bot : this.bot || game.bot;
     const opponent = this.getOpponent(game, bot);
 
     const analysis = {
@@ -132,7 +129,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
     };
 
     // Identificar ameaças do oponente
-    opponent.field.forEach((c) => {
+    (opponent?.field || []).forEach((c) => {
       if (c.atk > 2000 || c.isFacedown) {
         analysis.threatsOnBoard.push({
           card: c.name,
@@ -257,7 +254,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
 
     // FIDELIDADE: Usar bot do game/state para simulação correta
     const isSimulatedState = game._isPerspectiveState === true;
-    const bot = isSimulatedState ? game.bot : (this.bot || game.bot);
+    const bot = isSimulatedState ? game.bot : this.bot || game.bot;
     const actualGame = game._gameRef || game;
     const opponent = this.getOpponent(actualGame, bot);
 
@@ -306,8 +303,21 @@ export default class ShadowHeartStrategy extends BaseStrategy {
 
     // === GERAR AÇÕES DE SPELL ===
     // Em simulação, não verificar canActivate (não temos effectEngine)
+    // Track spells already added to avoid duplicates (for 1/turn effects)
+    const addedSpellNames = new Set();
+
     (bot.hand || []).forEach((card, index) => {
       if (card.cardKind !== "spell") return;
+
+      // BUGFIX: Só adicionar uma cópia de cada spell (evitar duplicatas com 1/turn)
+      // Spells com efeitos 1/turn não devem ter múltiplas ações geradas
+      const hasOncePerTurn = (card.effects || []).some(
+        (e) => e.oncePerTurn || e.oncePerTurnName
+      );
+      if (hasOncePerTurn && addedSpellNames.has(card.name)) {
+        log(`  ⏭️ Skipping duplicate 1/turn spell: ${card.name}`);
+        return;
+      }
 
       // Só verificar canActivate em game real (não simulado)
       if (!isSimulatedState) {
@@ -320,6 +330,11 @@ export default class ShadowHeartStrategy extends BaseStrategy {
 
       if (decision.yes) {
         log(`  ✅ Spell válida: ${card.name} - ${decision.reason}`);
+
+        // Mark spell as added if it has 1/turn effect
+        if (hasOncePerTurn) {
+          addedSpellNames.add(card.name);
+        }
 
         let finalPriority = decision.priority;
         const macroBuff = calculateMacroPriorityBonus(
@@ -352,9 +367,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
           safetyScore: spellSafety.riskScore,
         });
       } else {
-        log(
-          `  ❌ Spell descartada: ${card.name} - ${decision.reason}`
-        );
+        log(`  ❌ Spell descartada: ${card.name} - ${decision.reason}`);
       }
     });
 
@@ -370,9 +383,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
         const decision = shouldSummonMonster(card, analysis, tributeInfo);
 
         if (decision.yes) {
-          log(
-            `  ✅ Summon válido: ${card.name} - ${decision.reason}`
-          );
+          log(`  ✅ Summon válido: ${card.name} - ${decision.reason}`);
 
           let finalPriority = decision.priority;
           const macroBuff = calculateMacroPriorityBonus(
@@ -396,7 +407,12 @@ export default class ShadowHeartStrategy extends BaseStrategy {
             type: "summon",
             index,
             position: decision.position,
-            facedown: decision.position === "defense",
+            // Respect explicit facedown decision from priorities.js
+            // Default to facedown only if position is defense AND no explicit decision
+            facedown:
+              decision.facedown !== undefined
+                ? decision.facedown
+                : decision.position === "defense",
             priority: finalPriority,
             cardName: card.name,
             macroBuff,
@@ -404,6 +420,123 @@ export default class ShadowHeartStrategy extends BaseStrategy {
           });
         }
       });
+    }
+
+    // === STALEMATE BREAKER ===
+    // Se não há ações e há capacidade de campo, forçar summon mesmo que já tenha invocado
+    // Isso evita que o jogo fique travado quando o bot acumula cartas na mão
+    if (actions.length === 0 && analysis.fieldCapacity > 0) {
+      // CRITICAL: Usar estado REAL (this.bot) para fallback, não simulado
+      const realBot = this.bot || bot;
+      const realFieldCapacity = 5 - (realBot.field?.length || 0);
+
+      // Log SEMPRE (mesmo em simulação) para debug crítico
+      console.log(
+        `[ShadowHeartStrategy] ⚠️ STALEMATE BREAKER ativado! Hand=${realBot.hand?.length}, Field=${realBot.field?.length}`
+      );
+      log(`  ⚠️ STALEMATE BREAKER: Forçando summon alternativo...`);
+      let monstersChecked = 0;
+      let monstersBlocked = 0;
+
+      (realBot.hand || []).forEach((card, index) => {
+        if (card.cardKind !== "monster") return;
+        monstersChecked++;
+
+        const tributeInfo = this.getTributeRequirementFor(card, realBot);
+        if ((realBot.field?.length || 0) < tributeInfo.tributesNeeded) {
+          monstersBlocked++;
+          console.log(
+            `[ShadowHeartStrategy] ❌ ${card.name} requer ${
+              tributeInfo.tributesNeeded
+            } tributos (tenho ${realBot.field?.length || 0})`
+          );
+          log(
+            `    ❌ ${card.name} requer ${
+              tributeInfo.tributesNeeded
+            } tributos (tenho ${realBot.field?.length || 0})`
+          );
+          return;
+        }
+
+        // Forçar summon em defesa com prioridade baixa
+        console.log(
+          `[ShadowHeartStrategy] 🔧 Fallback summon: ${card.name} em defesa`
+        );
+        log(`    🔧 Fallback summon: ${card.name} em defesa`);
+        actions.push({
+          type: "summon",
+          index,
+          position: "defense",
+          facedown: true,
+          priority: 1,
+          cardName: card.name,
+          isStalemateBreaker: true,
+        });
+      });
+
+      if (monstersChecked > 0 && monstersBlocked === monstersChecked) {
+        console.log(
+          `[ShadowHeartStrategy] ⚠️ Todos ${monstersChecked} monstros na mão requerem tributos!`
+        );
+        log(
+          `  ⚠️ Todos ${monstersChecked} monstros na mão requerem tributos! Tentando spells...`
+        );
+      }
+    }
+
+    // === FALLBACK SECUNDÁRIO: Forçar qualquer spell se ainda não há ações ===
+    // CRITICAL: Usar estado REAL (this.bot) para fallback, não simulado
+    const realBot2 = this.bot || bot;
+    if (actions.length === 0 && (realBot2.hand?.length || 0) > 3) {
+      // Log SEMPRE para debug crítico
+      console.log(
+        `[ShadowHeartStrategy] 🚨 FALLBACK CRÍTICO! Hand=${realBot2.hand?.length}, Field=${realBot2.field?.length}, LP=${realBot2.lifePoints}`
+      );
+      log(
+        `  🆘 FALLBACK CRÍTICO: ${realBot2.hand.length} cartas na mão, 0 ações! Forçando spell...`
+      );
+
+      let spellsFound = 0;
+      (realBot2.hand || []).forEach((card, index) => {
+        if (card.cardKind !== "spell") return;
+        spellsFound++;
+
+        // Tentar qualquer spell, mesmo sem validação prévia
+        console.log(
+          `[ShadowHeartStrategy] 🔧 Fallback spell: ${card.name} (prioridade 0.5)`
+        );
+        log(`    🔧 Fallback spell: ${card.name} (prioridade forçada: 0.5)`);
+        actions.push({
+          type: "spell",
+          index,
+          priority: 0.5,
+          cardName: card.name,
+          isCriticalFallback: true,
+        });
+      });
+
+      // Se ainda não há ações e não há spells, reportar situação crítica
+      if (spellsFound === 0 && actions.length === 0) {
+        const monsterCount = (realBot2.hand || []).filter(
+          (c) => c.cardKind === "monster"
+        ).length;
+        const trapCount = (realBot2.hand || []).filter(
+          (c) => c.cardKind === "trap"
+        ).length;
+
+        console.log(
+          `[ShadowHeartStrategy] ⚠️ Situação crítica: ${monsterCount}M ${trapCount}T`
+        );
+        console.log(
+          `[ShadowHeartStrategy] Mão completa: ${(realBot2.hand || [])
+            .map((c) => c.name)
+            .join(", ")}`
+        );
+        log(
+          `  ⚠️ Situação crítica: ${monsterCount} monstros (todos precisam tributos?), ${trapCount} traps na mão`
+        );
+        log(`  📋 Mão: ${(realBot2.hand || []).map((c) => c.name).join(", ")}`);
+      }
     }
 
     // === EFEITOS DE CAMPO ===

@@ -93,6 +93,7 @@ export async function resolveCombat(attacker, target, options = {}) {
     return { ok: true };
   }
 
+  // Check if flip is needed (might have been flipped by attack_declared effects)
   const needsFlip = target.isFacedown;
 
   if (needsFlip) {

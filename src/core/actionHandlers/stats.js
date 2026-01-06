@@ -799,6 +799,7 @@ export async function handleSwitchPosition(action, ctx, targets, engine) {
 
 /**
  * Handler for switching defender position on attack
+ * If defender is face-down, flip it first, then switch to attack position.
  */
 export async function handleSwitchDefenderPositionOnAttack(
   action,
@@ -819,16 +820,30 @@ export async function handleSwitchDefenderPositionOnAttack(
     return false;
   }
 
+  // If face-down, flip it first
   if (defender.isFacedown) {
-    getUI(game)?.log("Cannot switch position of face-down card.");
+    const defenderOwner = defender.owner === "player" ? "player" : "bot";
+    const defenderField =
+      defender.owner === "player" ? game.player.field : game.bot.field;
+    const defenderIndex = defenderField.indexOf(defender);
 
-    return false;
+    if (game.ui && typeof game.ui.applyFlipAnimation === "function") {
+      game.ui.applyFlipAnimation(defenderOwner, defenderIndex);
+    }
+
+    defender.isFacedown = false;
+    defender.revealedTurn = game.turnCounter;
+    getUI(game)?.log(`${defender.name} was flipped!`);
+    game.updateBoard();
+
+    // Small delay for animation
+    await new Promise((resolve) => setTimeout(resolve, 300));
   }
 
   if (defender.position !== "defense") {
-    getUI(game)?.log("Defender is not in defense position.");
+    getUI(game)?.log(`${defender.name} is already in attack position.`);
 
-    return false;
+    return true; // Not an error, just already in attack
   }
 
   // Switch position to attack
@@ -950,7 +965,7 @@ export async function handlePermanentBuffNamed(action, ctx, targets, engine) {
     if (!cumulative && card.permanentBuffsBySource[sourceName]) {
       const existingAtk = card.permanentBuffsBySource[sourceName]?.atk || 0;
       const existingDef = card.permanentBuffsBySource[sourceName]?.def || 0;
-      
+
       // Already has the exact buff, skip
       if (existingAtk === atkBoost && existingDef === defBoost) {
         continue;

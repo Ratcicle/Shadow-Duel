@@ -50,8 +50,7 @@ export function evaluateMonster(monster, owner, opponent) {
   // Vulnerabilidade
   if (monster.position === "attack") {
     const canBeDestroyed = (opponent?.field || []).some(
-      (opp) =>
-        opp.position === "attack" && (opp.atk || 0) > (monster.atk || 0)
+      (opp) => opp.position === "attack" && (opp.atk || 0) > (monster.atk || 0)
     );
     if (canBeDestroyed) value -= 0.5;
   }
@@ -66,7 +65,11 @@ export function evaluateMonster(monster, owner, opponent) {
  * @param {Function} getOpponent - Função para resolver oponente
  * @returns {number}
  */
-export function evaluateBoardShadowHeart(gameOrState, perspectivePlayer, getOpponent) {
+export function evaluateBoardShadowHeart(
+  gameOrState,
+  perspectivePlayer,
+  getOpponent
+) {
   const opponent = getOpponent(gameOrState, perspectivePlayer);
   const perspective = perspectivePlayer.id
     ? perspectivePlayer
@@ -76,15 +79,16 @@ export function evaluateBoardShadowHeart(gameOrState, perspectivePlayer, getOppo
 
   // === AVALIAÇÃO DE LP ===
   const lpDiff = perspective.lp - opponent.lp;
-  score += lpDiff / 600;
+  score += lpDiff / 550; // Mais agressivo (era 600)
 
-  // Bônus por estar perto de vencer
-  if (opponent.lp <= 3000) score += 2;
-  if (opponent.lp <= 1500) score += 3;
+  // Bônus por estar perto de vencer (aumentados)
+  if (opponent.lp <= 2000) score += 4; // Era 3 para 1500
+  if (opponent.lp <= 3000) score += 2.5; // Era 2 para 3000
+  if (opponent.lp <= 4500) score += 1;
 
-  // Penalidade por estar em perigo
-  if (perspective.lp <= 2000) score -= 1;
-  if (perspective.lp <= 1000) score -= 2;
+  // Penalidade por estar em perigo (reduzidas)
+  if (perspective.lp <= 1500) score -= 2; // Era 2 para 1000
+  if (perspective.lp <= 3000) score -= 0.8; // Era 1 para 2000
 
   // === AVALIAÇÃO DE CAMPO ===
   for (const monster of perspective.field) {
@@ -98,9 +102,7 @@ export function evaluateBoardShadowHeart(gameOrState, perspectivePlayer, getOppo
   // === AVALIAÇÃO DE FIELD SPELL ===
   if (perspective.fieldSpell) {
     if (perspective.fieldSpell.name === "Darkness Valley") {
-      const shCount = perspective.field.filter((m) =>
-        isShadowHeart(m)
-      ).length;
+      const shCount = perspective.field.filter((m) => isShadowHeart(m)).length;
       score += 1.5 + shCount * 0.3;
     } else {
       score += 1;
@@ -111,7 +113,7 @@ export function evaluateBoardShadowHeart(gameOrState, perspectivePlayer, getOppo
   // === AVALIAÇÃO DE RECURSOS ===
   const handAdvantage =
     (perspective.hand?.length || 0) - (opponent.hand?.length || 0);
-  score += handAdvantage * 0.4;
+  score += handAdvantage * 0.6; // Era 0.4
 
   // Bônus por ter revivers/searchers na mão
   const hasKeySpells = (perspective.hand || []).some((c) =>
@@ -122,7 +124,7 @@ export function evaluateBoardShadowHeart(gameOrState, perspectivePlayer, getOppo
       "Monster Reborn",
     ].includes(c.name)
   );
-  if (hasKeySpells) score += 0.5;
+  if (hasKeySpells) score += 0.8; // Era 0.5
 
   // === AVALIAÇÃO DE GY ===
   const shInGY = (perspective.graveyard || []).filter(
@@ -139,18 +141,21 @@ export function evaluateBoardShadowHeart(gameOrState, perspectivePlayer, getOppo
 
   // === AVALIAÇÃO DE PRESSÃO ===
   const readyAttackers = perspective.field.filter(
-    (m) =>
-      m.position === "attack" && !m.hasAttacked && !m.cannotAttackThisTurn
+    (m) => m.position === "attack" && !m.hasAttacked && !m.cannotAttackThisTurn
   );
   for (const attacker of readyAttackers) {
+    // Direct attack potential (campo vazio)
     if (opponent.field.length === 0) {
-      score += (attacker.atk || 0) / 1500;
+      score += (attacker.atk || 0) / 1200; // Era 1500
     }
+    // Pode destruir monstros do oponente
     const canDestroy = opponent.field.some(
-      (def) =>
-        def.position === "attack" && (def.atk || 0) < (attacker.atk || 0)
+      (def) => def.position === "attack" && (def.atk || 0) < (attacker.atk || 0)
     );
-    if (canDestroy) score += 0.3;
+    if (canDestroy) score += 0.5; // Era 0.3
+
+    // Bônus geral por ter attacker pronto
+    score += 0.2;
   }
 
   return score;

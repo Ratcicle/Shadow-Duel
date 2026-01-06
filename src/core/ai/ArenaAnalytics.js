@@ -57,6 +57,38 @@ export class ArenaAnalytics {
     /** @type {Map<string, number>} Contagem de ações por tipo */
     this.actionTypeCounts = new Map();
 
+    /** @type {Map<string, {success: number, fail: number}>} Taxa de falhas por tipo de ação */
+    this.actionFailureRates = new Map();
+
+    /** @type {Object} Distribuição de duração de duelos */
+    this.duelDurationDistribution = {
+      veryShort: 0, // 1-5 turnos
+      short: 0, // 6-10 turnos
+      medium: 0, // 11-20 turnos
+      long: 0, // 21-35 turnos
+      veryLong: 0, // 36+ turnos
+    };
+
+    /** @type {Object} Win conditions breakdown */
+    this.winConditions = {
+      lpZero: 0,
+      deckOut: 0,
+      timeout: 0,
+      maxTurns: 0,
+      error: 0,
+      surrender: 0,
+    };
+
+    /** @type {Object} Game phase metrics */
+    this.phaseMetrics = {
+      earlyGameWins: 0, // 1-7 turnos
+      midGameWins: 0, // 8-15 turnos
+      lateGameWins: 0, // 16+ turnos
+      earlyGameLosses: 0,
+      midGameLosses: 0,
+      lateGameLosses: 0,
+    };
+
     /** @type {OpeningBook} */
     this.openingBook = {
       sequences: new Map(), // "arch" -> Map<sequenceHash, { wins, total }>
@@ -125,6 +157,9 @@ export class ArenaAnalytics {
     this.updateMatchupStats(record);
     this.updateCardCounts(record);
     this.updateActionCounts(record);
+    this.updateDuelDurationDistribution(record);
+    this.updateWinConditions(record);
+    this.updatePhaseMetrics(record);
 
     if (this.trackOpeningBook && record.openingSequence) {
       this.updateOpeningBook(record);
@@ -226,6 +261,54 @@ export class ArenaAnalytics {
   }
 
   /**
+   * Atualiza distribuição de duração de duelos.
+   * @private
+   */
+  updateDuelDurationDistribution(record) {
+    const turns = record.turns || 0;
+    if (turns <= 5) this.duelDurationDistribution.veryShort += 1;
+    else if (turns <= 10) this.duelDurationDistribution.short += 1;
+    else if (turns <= 20) this.duelDurationDistribution.medium += 1;
+    else if (turns <= 35) this.duelDurationDistribution.long += 1;
+    else this.duelDurationDistribution.veryLong += 1;
+  }
+
+  /**
+   * Atualiza win conditions breakdown.
+   * @private
+   */
+  updateWinConditions(record) {
+    const reason = record.endReason || END_REASONS.LP_ZERO;
+    if (reason === END_REASONS.LP_ZERO) this.winConditions.lpZero += 1;
+    else if (reason === END_REASONS.DECK_OUT) this.winConditions.deckOut += 1;
+    else if (reason === END_REASONS.TIMEOUT) this.winConditions.timeout += 1;
+    else if (reason === END_REASONS.MAX_TURNS) this.winConditions.maxTurns += 1;
+    else if (reason === END_REASONS.ERROR) this.winConditions.error += 1;
+    else if (reason === END_REASONS.SURRENDER)
+      this.winConditions.surrender += 1;
+  }
+
+  /**
+   * Atualiza métricas de fase do jogo.
+   * @private
+   */
+  updatePhaseMetrics(record) {
+    const turns = record.turns || 0;
+    const isWin = record.winner === "player";
+
+    if (turns <= 7) {
+      if (isWin) this.phaseMetrics.earlyGameWins += 1;
+      else if (record.winner === "bot") this.phaseMetrics.earlyGameLosses += 1;
+    } else if (turns <= 15) {
+      if (isWin) this.phaseMetrics.midGameWins += 1;
+      else if (record.winner === "bot") this.phaseMetrics.midGameLosses += 1;
+    } else {
+      if (isWin) this.phaseMetrics.lateGameWins += 1;
+      else if (record.winner === "bot") this.phaseMetrics.lateGameLosses += 1;
+    }
+  }
+
+  /**
    * Atualiza opening book com sequência de abertura.
    * @private
    */
@@ -279,6 +362,40 @@ export class ArenaAnalytics {
     this.nodesPerTurn.push(nodes);
   }
 
+  /**
+   * Calcula métrica de aggressiveness baseado em duração de duelos.
+   * @private
+   * @returns {Object}
+   */
+  calculateAggressiveness() {
+    const total = this.duelRecords.length;
+    if (total === 0) return { score: 0, rating: "unknown" };
+
+    const dist = this.duelDurationDistribution;
+    const shortGames = dist.veryShort + dist.short;
+    const longGames = dist.long + dist.veryLong;
+
+    // Score: quanto menor a duração média, mais agressivo
+    const avgTurns =
+      this.duelRecords.reduce((sum, r) => sum + (r.turns || 0), 0) / total;
+    const score = Math.max(0, 100 - avgTurns * 3); // 10 turnos = 70 score
+
+    let rating = "balanced";
+    if (score >= 80) rating = "very_aggressive";
+    else if (score >= 60) rating = "aggressive";
+    else if (score >= 40) rating = "balanced";
+    else if (score >= 20) rating = "defensive";
+    else rating = "very_defensive";
+
+    return {
+      score: score.toFixed(1),
+      rating,
+      avgTurns: avgTurns.toFixed(1),
+      shortGamesPercent: ((shortGames / total) * 100).toFixed(1),
+      longGamesPercent: ((longGames / total) * 100).toFixed(1),
+    };
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // Getters de métricas agregadas
   // ─────────────────────────────────────────────────────────────────────────
@@ -328,7 +445,8 @@ export class ArenaAnalytics {
 
     const avgNodes =
       this.nodesPerTurn.length > 0
-        ? this.nodesPerTurn.reduce((a, b) => a + b, 0) / this.nodesPerTurn.length
+        ? this.nodesPerTurn.reduce((a, b) => a + b, 0) /
+          this.nodesPerTurn.length
         : null;
 
     return {
@@ -344,8 +462,12 @@ export class ArenaAnalytics {
       batchDurationMs:
         this.batchEndTime && this.batchStartTime
           ? this.batchEndTime - this.batchStartTime
-          : Date.now() - (this.batchStartTime || Date.now()),
+          : null,
       endReasonBreakdown: endReasons,
+      duelDurationDistribution: { ...this.duelDurationDistribution },
+      winConditionsBreakdown: { ...this.winConditions },
+      phaseMetrics: { ...this.phaseMetrics },
+      aggressiveness: this.calculateAggressiveness(),
     };
   }
 

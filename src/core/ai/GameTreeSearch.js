@@ -15,7 +15,7 @@
  */
 
 const DEFAULT_MAX_PLY = 4;
-const TRANSPOSITION_MAX_SIZE = 1000;
+const TRANSPOSITION_MAX_SIZE = 2000; // Aumentado de 1000
 const ALPHA_INIT = -Infinity;
 const BETA_INIT = Infinity;
 const FUTURE_DISCOUNT = 0.85; // Desconto por ply: score_ply_n = score * (0.85 ^ n)

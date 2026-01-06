@@ -50,6 +50,18 @@ export function estimateCardValue(card, options = {}) {
   }
 
   let value = 0.25;
+
+  // BUGFIX: Protect high-value spells from being discarded
+  const cardName = card.name || "";
+  if (cardName === "Polymerization") {
+    // Polymerization is extremely valuable - never discard if possible
+    value += 2.0;
+  }
+  // Other valuable spells that shouldn't be discarded easily
+  if (cardName.includes("Covenant") || cardName.includes("Purge")) {
+    value += 0.8;
+  }
+
   const effects = Array.isArray(card.effects) ? card.effects : [];
   effects.forEach((effect) => {
     const actions = Array.isArray(effect.actions) ? effect.actions : [];
@@ -68,6 +80,8 @@ export function estimateCardValue(card, options = {}) {
       }
       if (type === "special_summon_from_zone") value += 0.6;
       if (type === "special_summon_token") value += 0.4;
+      // Fusion effects are very valuable
+      if (type === "fusion_summon") value += 1.5;
     });
   });
 
@@ -280,7 +294,8 @@ function findCardOwner(state, card) {
   for (const player of players) {
     if (!player) continue;
     if (player.fieldSpell === card) return player;
-    if (Array.isArray(player.field) && player.field.includes(card)) return player;
+    if (Array.isArray(player.field) && player.field.includes(card))
+      return player;
     if (Array.isArray(player.hand) && player.hand.includes(card)) return player;
     if (Array.isArray(player.graveyard) && player.graveyard.includes(card)) {
       return player;
@@ -426,12 +441,10 @@ export function applySimulatedActions({
         targets.forEach((card) => {
           if (!card) return;
           if (Number.isFinite(action.atkBonus)) {
-            card.tempAtkBoost =
-              (card.tempAtkBoost || 0) + action.atkBonus;
+            card.tempAtkBoost = (card.tempAtkBoost || 0) + action.atkBonus;
           }
           if (Number.isFinite(action.defBonus)) {
-            card.tempDefBoost =
-              (card.tempDefBoost || 0) + action.defBonus;
+            card.tempDefBoost = (card.tempDefBoost || 0) + action.defBonus;
           }
         });
         break;

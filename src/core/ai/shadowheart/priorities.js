@@ -3,7 +3,11 @@
 // Lógica de priorização: spell decisions, summon decisions, safety checks.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { CARD_KNOWLEDGE, isShadowHeartByName, isShadowHeart } from "./knowledge.js";
+import {
+  CARD_KNOWLEDGE,
+  isShadowHeartByName,
+  isShadowHeart,
+} from "./knowledge.js";
 
 /**
  * @typedef {Object} SpellDecision
@@ -101,58 +105,205 @@ export function shouldPlaySpell(card, analysis) {
     };
   }
 
-  // Shadow-Heart Covenant - Searcher genérico
+  // Shadow-Heart Covenant - Searcher genérico (custo: 800 LP)
   if (name === "Shadow-Heart Covenant") {
-    if (analysis.lp < 1500) {
-      return { yes: false, reason: "LP muito baixo para pagar 800" };
+    // BUGFIX: Threshold aumentado para 2000 LP (800 custo + 1200 margem de segurança)
+    if (analysis.lp <= 2000) {
+      return {
+        yes: false,
+        reason: `LP muito baixo (${analysis.lp}) para pagar 800`,
+      };
     }
+
+    // Se LP < 4000, só ativar se realmente necessário (sem outras plays)
+    if (analysis.lp < 4000) {
+      const hasOtherPlays = analysis.hand.some(
+        (c) =>
+          c.cardKind === "monster" ||
+          (c.cardKind === "spell" && c.name !== "Shadow-Heart Covenant")
+      );
+      if (hasOtherPlays) {
+        return {
+          yes: false,
+          priority: 2, // Baixa prioridade
+          reason: `LP baixo (${analysis.lp}), preservar recursos (tenho outras plays)`,
+        };
+      }
+    }
+
     return { yes: true, priority: 7, reason: "Buscar peça chave do combo" };
   }
 
-  // Shadow-Heart Battle Hymn - Só com múltiplos monstros
+  // Shadow-Heart Battle Hymn - Buff em monstros Shadow-Heart
   if (name === "Shadow-Heart Battle Hymn") {
-    const shOnField = analysis.field.filter((c) =>
-      isShadowHeartByName(c.name)
-    );
-    if (shOnField.length >= 2) {
+    const shOnField = analysis.field.filter((c) => isShadowHeartByName(c.name));
+
+    if (shOnField.length === 0) {
+      return { yes: false, reason: "Preciso de Shadow-Heart no campo" };
+    }
+
+    // Calcular potencial de dano com buff
+    const totalATKBuff = shOnField.length * 500;
+    const oppLP = analysis.oppLp || 8000;
+    const currentATK = shOnField.reduce((sum, m) => sum + (m.atk || 0), 0);
+    const buffedATK = currentATK + totalATKBuff;
+    const canPushLethal = analysis.oppField.length === 0 && buffedATK >= oppLP;
+
+    // Se pode fazer lethal com o buff, usar mesmo com 1 monstro
+    if (canPushLethal) {
       return {
         yes: true,
-        priority: 5,
-        reason: `+500 ATK para ${shOnField.length} monstros`,
+        priority: 12,
+        reason: `+${totalATKBuff} ATK total = ${buffedATK} ATK (LETHAL!)`,
       };
     }
-    return { yes: false, reason: "Preciso de 2+ Shadow-Heart no campo" };
+
+    // Senão, exigir 2+ monstros para não desperdiçar
+    if (shOnField.length >= 2) {
+      const priority = totalATKBuff >= oppLP / 2 ? 8 : 5;
+      return {
+        yes: true,
+        priority,
+        reason: `+500 ATK para ${shOnField.length} monstros${
+          totalATKBuff >= oppLP / 2 ? " (LETHAL PUSH)" : ""
+        }`,
+      };
+    }
+
+    return {
+      yes: false,
+      reason: "Preciso de 2+ Shadow-Heart no campo (ou lethal opportunity)",
+    };
   }
 
   // Shadow-Heart Purge - Remoção
   if (name === "Shadow-Heart Purge") {
+    if (analysis.oppField.length === 0) {
+      return { yes: false, reason: "Oponente sem monstros (DESPERDÍCIO)" };
+    }
     if (analysis.oppField.length > 0) {
       const strongestThreat = analysis.oppField.reduce(
         (max, c) => ((c.atk || 0) > (max.atk || 0) ? c : max),
         { atk: 0 }
       );
+      // Prioridade baseada no threat
+      const threatATK = strongestThreat.atk || 0;
+      const priority = threatATK >= 2500 ? 9 : threatATK >= 2000 ? 7 : 5;
       return {
         yes: true,
-        priority: 7,
-        reason: `Destruir ${strongestThreat.name || "ameaça"}`,
+        priority,
+        reason: `Destruir ${
+          strongestThreat.name || "ameaça"
+        } (${threatATK} ATK)`,
       };
     }
     return { yes: false, reason: "Oponente sem monstros" };
   }
 
-  // Shadow-Heart Shield - Proteção para boss
+  // Shadow-Heart Shield - Proteção flexível (não só boss)
   if (name === "Shadow-Heart Shield") {
-    const hasBoss = analysis.field.some((c) =>
+    // Verificar se há monstros face-up disponíveis
+    const hasFaceUpMonsters = analysis.field.some(
+      (c) => c.cardKind === "monster" && !c.isFacedown
+    );
+
+    if (!hasFaceUpMonsters) {
+      return { yes: false, reason: "Sem monstros face-up para equipar" };
+    }
+
+    const hasBoss = analysis.field.some(
+      (c) =>
+        !c.isFacedown &&
+        [
+          "Shadow-Heart Scale Dragon",
+          "Shadow-Heart Demon Arctroth",
+          "Shadow-Heart Demon Dragon",
+        ].includes(c.name)
+    );
+
+    const strongBody = analysis.field.some(
+      (c) => !c.isFacedown && (c.atk || 0) >= 1800
+    );
+
+    const anyMonster = analysis.field.some(
+      (c) => c.cardKind === "monster" && !c.isFacedown
+    );
+
+    if (hasBoss) {
+      return { yes: true, priority: 5, reason: "Proteger boss com shield" };
+    }
+
+    if (strongBody) {
+      return {
+        yes: true,
+        priority: 4,
+        reason: "Proteger atacante/defensor >1800 ATK",
+      };
+    }
+
+    if (anyMonster && analysis.oppField.some((m) => (m.atk || 0) > 0)) {
+      return {
+        yes: true,
+        priority: 3,
+        reason: "Proteger board pequeno de troca ruim",
+      };
+    }
+
+    return { yes: false, reason: "Sem alvo útil para o shield" };
+  }
+
+  // The Shadow Heart - Comeback card (requer campo vazio)
+  if (name === "The Shadow Heart") {
+    // Só ativar se campo estiver vazio (requisito da carta)
+    if (analysis.field.length > 0) {
+      return { yes: false, reason: "Requer campo vazio para ativar" };
+    }
+
+    // Verificar se há Shadow-Heart no cemitério
+    const shInGY = analysis.graveyard.filter(
+      (c) => c.cardKind === "monster" && isShadowHeartByName(c.name)
+    );
+
+    if (shInGY.length === 0) {
+      return { yes: false, reason: "Sem Shadow-Heart no GY para reviver" };
+    }
+
+    // Priorizar se há boss no cemitério
+    const hasBossInGY = shInGY.some((c) =>
       [
         "Shadow-Heart Scale Dragon",
         "Shadow-Heart Demon Arctroth",
-        "Shadow-Heart Demon Dragon",
+        "Shadow-Heart Leviathan",
+        "Shadow-Heart Death Wyrm",
       ].includes(c.name)
     );
-    if (hasBoss) {
-      return { yes: true, priority: 6, reason: "Proteger meu boss" };
+
+    const targetName = shInGY[0].name;
+    const targetATK = shInGY[0].atk || 0;
+
+    if (hasBossInGY) {
+      return {
+        yes: true,
+        priority: 11,
+        reason: `COMEBACK! Reviver ${targetName} (${targetATK} ATK) após board wipe`,
+      };
     }
-    return { yes: false, reason: "Sem boss para proteger" };
+
+    // Se não há boss, mas há monstro médio/alto ATK, ainda vale
+    if (targetATK >= 1800) {
+      return {
+        yes: true,
+        priority: 9,
+        reason: `Reviver ${targetName} (${targetATK} ATK) - recovery sólido`,
+      };
+    }
+
+    // Monstro fraco só se não tiver outra opção
+    return {
+      yes: true,
+      priority: 6,
+      reason: `Reviver ${targetName} (última opção)`,
+    };
   }
 
   // Spells genéricos com knowledge
@@ -229,6 +380,55 @@ export function shouldSummonMonster(card, analysis, tributeInfo) {
     };
   }
 
+  // Void Mage - Searcher de spell/trap com prioridade alta
+  if (name === "Shadow-Heart Void Mage") {
+    // Prioridade alta T1 ou quando não temos spells-chave
+    const hasKeySpells = analysis.hand.some((c) =>
+      [
+        "Darkness Valley",
+        "Shadow-Heart Covenant",
+        "Shadow-Heart Shield",
+      ].includes(c.name)
+    );
+    const hasDarknessValley = (analysis.spellTrapZone || []).some(
+      (c) => c.name === "Darkness Valley"
+    );
+
+    if (!hasDarknessValley && !hasKeySpells) {
+      // Altíssima prioridade se não temos setup
+      // SEMPRE face-up para disparar efeito de busca (on_event after_summon requires face-up)
+      return {
+        yes: true,
+        position:
+          isSuicideSummon && shouldDefensivePosition ? "defense" : "attack",
+        facedown: false, // Force face-up to trigger search effect
+        priority: 9,
+        reason: "Buscar spell-chave (Darkness Valley/Covenant/Shield)",
+      };
+    }
+
+    // Prioridade média se já temos spells
+    if (isSuicideSummon) {
+      return {
+        yes: shouldDefensivePosition,
+        position: "defense",
+        facedown: false, // Still face-up if summoning for value
+        priority: shouldDefensivePosition ? 5 : 0,
+        reason: shouldDefensivePosition
+          ? "Searcher em DEF"
+          : "Void Mage seria destruído",
+      };
+    }
+
+    return {
+      yes: true,
+      position: "attack",
+      facedown: false, // Always face-up for search effect
+      priority: 7,
+      reason: "Searcher de spells + draw engine",
+    };
+  }
+
   // Scale Dragon - Boss principal
   if (name === "Shadow-Heart Scale Dragon") {
     if (tributeInfo.tributesNeeded <= analysis.field.length) {
@@ -247,6 +447,49 @@ export function shouldSummonMonster(card, analysis, tributeInfo) {
       tributeInfo.tributesNeeded <= analysis.field.length &&
       analysis.oppField.length > 0
     ) {
+      // Verificar se já temos lethal com os monstros atuais
+      const fieldMonsters = analysis.field.filter(
+        (c) => c?.cardKind === "monster"
+      );
+      const totalCurrentATK = fieldMonsters.reduce(
+        (sum, m) => sum + (m.atk || 0),
+        0
+      );
+      const oppTotalDEF = analysis.oppField.reduce((sum, m) => {
+        const isDefense = m.position === "defense";
+        return sum + (isDefense ? m.def || 0 : m.atk || 0);
+      }, 0);
+      const potentialDamage = Math.max(0, totalCurrentATK - oppTotalDEF);
+
+      // Se já temos lethal com o campo atual, não tributar desnecessariamente
+      if (potentialDamage >= analysis.oppLp && fieldMonsters.length > 0) {
+        return {
+          yes: false,
+          reason: `Já tenho lethal com campo atual (${potentialDamage} dano >= ${analysis.oppLp} LP)`,
+        };
+      }
+
+      // Se tributos reduzem muito ATK, só invocar se realmente necessário
+      const tributeATK = fieldMonsters
+        .slice(0, tributeInfo.tributesNeeded)
+        .reduce((sum, m) => sum + (m.atk || 0), 0);
+      const summonATK = card.atk || 0;
+      const atkLoss = tributeATK - summonATK;
+
+      if (atkLoss > 1000) {
+        // Perdendo muito ATK no trade, só vale se remove ameaça crítica
+        const strongestThreat = analysis.oppField.reduce(
+          (max, c) => ((c.atk || 0) > (max.atk || 0) ? c : max),
+          { atk: 0 }
+        );
+        if ((strongestThreat.atk || 0) < 2000) {
+          return {
+            yes: false,
+            reason: `Perderia ${atkLoss} ATK tributando, ameaça não é crítica`,
+          };
+        }
+      }
+
       return {
         yes: true,
         position: "attack",
@@ -397,9 +640,13 @@ export function selectBestTributes(field, tributesNeeded, cardToSummon = null) {
     if (knowledge?.role === "boss" || knowledge?.role === "fusion_boss")
       value += 20;
     if (monster.name === "Shadow-Heart Scale Dragon") value += 15;
+    if (monster.name === "Shadow-Heart Demon Arctroth") value += 12; // Material de Ascensão
     if (monster.name === "Shadow-Heart Gecko") value += 3;
     if (monster.name === "Shadow-Heart Leviathan") value += 6;
     if (monster.name === "Shadow-Heart Death Wyrm") value += 8;
+
+    // Materiais de Ascensão: EVITAR tributar (podem ascender)
+    if (knowledge?.ascensionTarget) value += 10;
 
     // Specter é BOM tributo (ativa efeito)
     if (monster.name === "Shadow-Heart Specter") value -= 5;

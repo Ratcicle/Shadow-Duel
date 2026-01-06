@@ -79,6 +79,8 @@ export default class Bot extends Player {
       57, // Shadow-Heart Demon Arctroth (boss com remoção - 1x)
       67,
       67, // Shadow-Heart Griffin (sem tributo - 2x)
+      71,
+      71, // Shadow-Heart Void Mage (buscador de spell/trap - 2x)
       // === SPELLS ===
       13,
       13, // Polymerization (fusão - 2x)
@@ -92,6 +94,8 @@ export default class Bot extends Player {
       65, // Shadow-Heart Rage (OTK enabler - 1x)
       54, // Shadow-Heart Purge (remoção - 1x)
       66, // Shadow-Heart Shield (proteção - 1x)
+      73,
+      73, // The Shadow Heart (recuperação de board - 2x)
     ];
   }
 
@@ -146,6 +150,8 @@ export default class Bot extends Player {
   getShadowHeartExtraDeck() {
     return [
       74, // Shadow-Heart Demon Dragon (fusão principal)
+      75, // Shadow-Heart Armored Arctroth (ascensão de Demon Arctroth)
+      76, // Shadow-Heart Apocalypse Dragon (ascensão de Scale Dragon)
     ];
   }
 
@@ -164,34 +170,48 @@ export default class Bot extends Player {
 
   async makeMove(game) {
     if (!game || game.gameOver) return;
-    const guard = game.canStartAction({ actor: this, kind: "bot_turn" });
-    console.log(`[Bot.makeMove] Guard check:`, guard);
-    if (!guard.ok) {
-      console.log(`[Bot.makeMove] ❌ Guard blocked: ${guard.reason}`);
-      return;
-    }
 
-    const phase = game.phase;
-    console.log(`[Bot.makeMove] Phase: ${phase}`);
-
-    if (phase === "main1" || phase === "main2") {
-      await this.playMainPhase(game);
-      if (!game.gameOver && game.phase === phase) {
-        const actionDelayMs = Number.isFinite(game?.aiActionDelayMs)
-          ? game.aiActionDelayMs
-          : 500;
-        setTimeout(() => game.nextPhase(), actionDelayMs);
+    try {
+      const guard = game.canStartAction({ actor: this, kind: "bot_turn" });
+      console.log(`[Bot.makeMove] Guard check:`, guard);
+      if (!guard.ok) {
+        console.log(`[Bot.makeMove] ❌ Guard blocked: ${guard.reason}`);
+        return;
       }
-      return;
-    }
 
-    if (phase === "battle") {
-      this.playBattlePhase(game);
-      return;
-    }
+      const phase = game.phase;
+      console.log(`[Bot.makeMove] Phase: ${phase}`);
 
-    if (phase === "end") {
-      game.endTurn();
+      if (phase === "main1" || phase === "main2") {
+        await this.playMainPhase(game);
+        if (!game.gameOver && game.phase === phase) {
+          const actionDelayMs = Number.isFinite(game?.aiActionDelayMs)
+            ? game.aiActionDelayMs
+            : 500;
+          setTimeout(() => game.nextPhase(), actionDelayMs);
+        }
+        return;
+      }
+
+      if (phase === "battle") {
+        this.playBattlePhase(game);
+        return;
+      }
+
+      if (phase === "end") {
+        game.endTurn();
+      }
+    } catch (error) {
+      console.error(
+        `[Bot.makeMove] ❌ FATAL ERROR in ${game.phase} phase:`,
+        error
+      );
+      console.error("[Bot.makeMove] Stack trace:", error.stack);
+      // Fallback: forçar nextPhase para não travar o jogo
+      if (!game.gameOver && typeof game.nextPhase === "function") {
+        console.log("[Bot.makeMove] ⚠️ Forcing nextPhase() after error");
+        game.nextPhase();
+      }
     }
   }
 
@@ -200,7 +220,7 @@ export default class Bot extends Player {
     if (game.gameOver) {
       return;
     }
-    
+
     let chainCount = 0;
     const maxChains = this.maxChainedActions || 2;
 
@@ -219,20 +239,25 @@ export default class Bot extends Player {
 
       const rawActions = this.generateMainPhaseActions(game);
       const actions = this.sequenceActions(rawActions);
-      
-      console.log(`[Bot.playMainPhase] Generated ${rawActions.length} raw actions, ${actions.length} sequenced actions`);
+
+      console.log(
+        `[Bot.playMainPhase] Generated ${rawActions.length} raw actions, ${actions.length} sequenced actions`
+      );
       if (actions.length > 0) {
-        console.log(`[Bot.playMainPhase] Actions:`, actions.map(a => `${a.type}:${a.card?.name || a.index}`));
+        console.log(
+          `[Bot.playMainPhase] Actions:`,
+          actions.map((a) => `${a.type}:${a.card?.name || a.index}`)
+        );
       }
-      
+
       // 📊 Log de fase vazia
       if (!actions.length) {
         if (botLogger) {
           botLogger.logEmptyPhase(
             this.id,
             game.turnCounter || 0,
-            game.phase || 'unknown',
-            'NO_ACTIONS_GENERATED',
+            game.phase || "unknown",
+            "NO_ACTIONS_GENERATED",
             {
               lp: game.player?.lp,
               handSize: (game.player?.hand || []).length,
@@ -249,13 +274,20 @@ export default class Bot extends Player {
       // DECISÃO: Usar beam search ou greedy?
       // Se tem 2+ opções, usa beam search. Senão, greedy.
       if (actions.length >= 2) {
-        // Beam search: lookahead 2 plies
-        console.log(`[Bot.playMainPhase] Running beam search with ${actions.length} actions...`);
+        // Beam search com parâmetros do Arena (ou defaults)
+        const beamWidth = game.arenaBeamWidth ?? 2;
+        const maxDepth = game.arenaMaxDepth ?? 2;
+        const nodeBudget = game.arenaNodeBudget ?? 100;
+
+        console.log(
+          `[Bot.playMainPhase] Running beam search with ${actions.length} actions (width=${beamWidth}, depth=${maxDepth}, budget=${nodeBudget})...`
+        );
         const searchResult = await beamSearchTurn(game, this, {
-          beamWidth: 2,
-          maxDepth: 2,
-          nodeBudget: 100,
+          beamWidth,
+          maxDepth,
+          nodeBudget,
           useV2Evaluation,
+          preGeneratedActions: actions, // BUGFIX: Pass pre-generated actions as fallback
         });
 
         console.log(`[Bot.playMainPhase] Beam search result:`, searchResult);
@@ -272,6 +304,7 @@ export default class Bot extends Player {
         console.log(`[Bot.playMainPhase] Running greedy search...`);
         const greedyResult = await greedySearchWithEvalV2(game, this, {
           useV2Evaluation,
+          preGeneratedActions: actions, // BUGFIX: Pass pre-generated actions as fallback
         });
 
         console.log(`[Bot.playMainPhase] Greedy search result:`, greedyResult);
@@ -283,6 +316,15 @@ export default class Bot extends Player {
         }
       }
 
+      // BUGFIX: Ultimate fallback - Se search falhou mas temos ações, usar a primeira
+      if (!bestAction && actions.length > 0) {
+        bestAction = actions[0];
+        console.log(
+          `[Bot.playMainPhase] ⚠️ Using ultimate fallback: first action`,
+          bestAction
+        );
+      }
+
       // Se ainda não tem ação, break
       if (!bestAction) {
         console.log(`[Bot.playMainPhase] ⚠️ No action selected, breaking loop`);
@@ -291,10 +333,15 @@ export default class Bot extends Player {
 
       // 📊 Log de decisão (ranking e coerência)
       if (botLogger && actions.length > 0) {
-        const sorted = [...actions].sort((a, b) => (b.priority || 0) - (a.priority || 0));
+        const sorted = [...actions].sort(
+          (a, b) => (b.priority || 0) - (a.priority || 0)
+        );
         let ranking = -1;
         for (let i = 0; i < sorted.length; i++) {
-          if (sorted[i].type === bestAction.type && sorted[i].index === bestAction.index) {
+          if (
+            sorted[i].type === bestAction.type &&
+            sorted[i].index === bestAction.index
+          ) {
             ranking = i;
             break;
           }
@@ -304,7 +351,7 @@ export default class Bot extends Player {
           botLogger.logDecision(
             this.id,
             game.turnCounter || 0,
-            game.phase || 'unknown',
+            game.phase || "unknown",
             actions.length,
             ranking,
             coherence,
@@ -316,12 +363,18 @@ export default class Bot extends Player {
       const actionSuccess = await this.executeMainPhaseAction(game, bestAction);
       if (!actionSuccess) {
         if (botLogger?.logEmptyPhase) {
-          botLogger.logEmptyPhase(this.id, game.turnCounter, game.phase, "ACTION_FAILED", {
-            lp: this.lp,
-            handSize: this.hand.length,
-            fieldSize: this.field.length,
-            gySize: this.graveyard.length,
-          });
+          botLogger.logEmptyPhase(
+            this.id,
+            game.turnCounter,
+            game.phase,
+            "ACTION_FAILED",
+            {
+              lp: this.lp,
+              handSize: this.hand.length,
+              fieldSize: this.field.length,
+              gySize: this.graveyard.length,
+            }
+          );
         }
         break;
       }
@@ -365,7 +418,7 @@ export default class Bot extends Player {
       );
 
       if (!availableAttackers.length) {
-          setTimeout(() => game.nextPhase(), battleDelayMs);
+        setTimeout(() => game.nextPhase(), battleDelayMs);
         return;
       }
 
@@ -383,23 +436,23 @@ export default class Bot extends Player {
         const isSecondAttack = (attacker.attacksUsedThisTurn || 0) >= 1;
         const attackThreshold = isSecondAttack ? 0.0 : minDeltaToAttack;
 
-          const tauntTargets = opponent.field.filter(
-            (card) =>
-              card &&
-              card.cardKind === "monster" &&
-              !card.isFacedown &&
-              card.mustBeAttacked
-          );
+        const tauntTargets = opponent.field.filter(
+          (card) =>
+            card &&
+            card.cardKind === "monster" &&
+            !card.isFacedown &&
+            card.mustBeAttacked
+        );
 
-          const possibleTargets =
-            tauntTargets.length > 0
-              ? [...tauntTargets]
-              : opponent.field.length
-              ? [...opponent.field, null]
-              : [null];
+        const possibleTargets =
+          tauntTargets.length > 0
+            ? [...tauntTargets]
+            : opponent.field.length
+            ? [...opponent.field, null]
+            : [null];
 
-          for (const target of possibleTargets) {
-            if (target === null && opponent.field.length > 0) continue;
+        for (const target of possibleTargets) {
+          if (target === null && opponent.field.length > 0) continue;
 
           const simState = this.cloneGameState(game);
           const simAttacker = simState.bot.field.find(
@@ -471,8 +524,10 @@ export default class Bot extends Player {
       if (bestAttack && bestDelta > finalThreshold) {
         // Verificar se atacante ainda está no campo antes de atacar
         const attackerStillOnField = this.field.includes(bestAttack.attacker);
-        const targetStillOnField = bestAttack.target === null || opponent.field.includes(bestAttack.target);
-        
+        const targetStillOnField =
+          bestAttack.target === null ||
+          opponent.field.includes(bestAttack.target);
+
         if (!attackerStillOnField || !targetStillOnField) {
           // Cartas foram removidas, recalcular na próxima iteração
           setTimeout(() => performAttack(), battleDelayMs);
@@ -480,7 +535,9 @@ export default class Bot extends Player {
         }
 
         // IMPORTANTE: resolveCombat é async, devemos aguardar antes de verificar gameOver
-        Promise.resolve(game.resolveCombat(bestAttack.attacker, bestAttack.target))
+        Promise.resolve(
+          game.resolveCombat(bestAttack.attacker, bestAttack.target)
+        )
           .then(() => {
             // Verificar todas as condições antes de continuar atacando
             if (!game.gameOver && game.phase === "battle") {
@@ -508,7 +565,7 @@ export default class Bot extends Player {
 
   generateMainPhaseActions(game) {
     const actions = this.strategy.generateMainPhaseActions(game);
-    
+
     // 📊 Log de geração de ações
     if (botLogger) {
       const hand = game.player?.hand || [];
@@ -517,7 +574,7 @@ export default class Bot extends Player {
       botLogger.logActionGeneration(
         this.id,
         game.turnCounter || 0,
-        game.phase || 'unknown',
+        game.phase || "unknown",
         hand,
         field,
         summonAvailable,
@@ -653,6 +710,18 @@ export default class Bot extends Player {
         tributeIndices
       );
       if (card) {
+        // Emit after_summon event for trigger effects (e.g., Void Mage search)
+        // Only trigger if summoned face-up (facedown set doesn't trigger "when Normal Summoned" effects)
+        const isFacedownSet = action.facedown === true;
+        if (!isFacedownSet && game && typeof game.emit === "function") {
+          game.emit("after_summon", {
+            card,
+            player: this,
+            method: tributeInfo.tributesNeeded > 0 ? "tribute" : "normal",
+            fromZone: "hand",
+          });
+        }
+
         game.ui?.log(
           `Bot summons ${action.facedown ? "a monster in defense" : card.name}`
         );
@@ -666,7 +735,9 @@ export default class Bot extends Player {
       const card = this.hand[action.index];
       if (!card) return false;
 
-      console.log(`[Bot.executeMainPhaseAction] 📝 Attempting spell: ${card.name}`);
+      console.log(
+        `[Bot.executeMainPhaseAction] 📝 Attempting spell: ${card.name}`
+      );
 
       if (
         game.effectEngine &&
@@ -678,7 +749,10 @@ export default class Bot extends Player {
         );
         console.log(`[Bot.executeMainPhaseAction] 🔍 Preview check:`, preview);
         if (preview && !preview.ok) {
-          console.log(`[Bot.executeMainPhaseAction] ❌ Preview rejected:`, preview.reason);
+          console.log(
+            `[Bot.executeMainPhaseAction] ❌ Preview rejected:`,
+            preview.reason
+          );
           return false;
         }
       }
@@ -816,10 +890,9 @@ export default class Bot extends Player {
           (asc) => game.checkAscensionRequirements(this, asc).ok
         );
         if (!eligible.length) continue;
-        // Pick highest ATK ascension monster
-        const best = eligible
-          .slice()
-          .sort((a, b) => (b.atk || 0) - (a.atk || 0))[0];
+
+        // Priorização inteligente de Ascensão
+        const best = this.selectBestAscension(eligible, material, game);
         const res = await game.performAscensionSummon(this, material, best);
         if (res?.success) {
           return true;
@@ -829,5 +902,53 @@ export default class Bot extends Player {
       // Silent fail; bot ascension is opportunistic
     }
     return false;
+  }
+
+  /**
+   * Seleciona a melhor Ascensão baseada no contexto do jogo.
+   * @param {Array} eligible - Lista de ascensões elegíveis
+   * @param {Object} material - Monstro material
+   * @param {Object} game - Instância do jogo
+   * @returns {Object} Melhor ascensão
+   */
+  selectBestAscension(eligible, material, game) {
+    if (eligible.length === 1) return eligible[0];
+
+    const opponent = this.resolveOpponent(game);
+    const oppField = opponent?.field || [];
+    const oppHasThreats = oppField.some((m) => (m?.atk || 0) >= 2000);
+    const oppFieldSize = oppField.length;
+
+    // Calcular score para cada ascensão
+    const scored = eligible.map((asc) => {
+      let score = 0;
+
+      // Base: ATK
+      score += (asc.atk || 0) / 100;
+
+      // Shadow-Heart Armored Arctroth (75): melhor contra ameaças únicas fortes
+      if (asc.id === 75 && oppHasThreats) {
+        score += 5; // Efeito de zerar ATK/DEF é ótimo contra bosses
+      }
+
+      // Shadow-Heart Apocalypse Dragon (76): melhor para pressão/remoção contínua
+      if (asc.id === 76) {
+        score += 3; // Remoção 1x/turno é sempre útil
+        if (oppFieldSize >= 2) {
+          score += 2; // Board wipe ao sair = seguro contra swarm
+        }
+      }
+
+      // Priorizar ATK maior se não há contexto específico
+      if (!oppHasThreats && oppFieldSize === 0) {
+        score += (asc.atk || 0) / 200; // Peso extra para ATK se campo vazio
+      }
+
+      return { asc, score };
+    });
+
+    // Ordenar por score decrescente e retornar o melhor
+    scored.sort((a, b) => b.score - a.score);
+    return scored[0].asc;
   }
 }

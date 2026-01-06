@@ -13,6 +13,7 @@
  * @param {number} options.maxDepth - Profundidade máxima (default: 2)
  * @param {number} options.nodeBudget - Máximo de nós a simular (default: 100)
  * @param {boolean} options.useV2Evaluation - Usar evaluateBoardV2 (default: true)
+ * @param {Array} options.preGeneratedActions - Ações pré-geradas como fallback
  * @returns {Object|null} - { action, score, sequence } ou null
  */
 export async function beamSearchTurn(game, strategy, options = {}) {
@@ -21,6 +22,7 @@ export async function beamSearchTurn(game, strategy, options = {}) {
     maxDepth = 2,
     nodeBudget = 100,
     useV2Evaluation = true,
+    preGeneratedActions = null, // BUGFIX: Fallback actions from caller
   } = options;
 
   let nodesEvaluated = 0;
@@ -194,9 +196,17 @@ export async function beamSearchTurn(game, strategy, options = {}) {
       });
     }
 
-    // Sem branches válidas? Retornar estado atual
+    // Sem branches válidas? Retornar estado atual com primeira ação como fallback
     if (branches.length === 0) {
       const score = evaluateState(currentState, currentState.bot);
+      // BUGFIX: Se temos candidatos mas nenhum branch válido, usar primeira ação como fallback
+      if (topCandidates.length > 0 && currentSequence.length === 0) {
+        return {
+          sequence: [topCandidates[0]],
+          score,
+          finalState: currentState,
+        };
+      }
       return { sequence: currentSequence, score, finalState: currentState };
     }
 
@@ -212,16 +222,28 @@ export async function beamSearchTurn(game, strategy, options = {}) {
 
   const result = await search(initialState, 0, []);
 
-  // Se não encontrou sequência melhor que o estado base, retornar null
+  // BUGFIX: Se não encontrou sequência mas temos candidatos, usar primeira ação como último recurso
   if (!result || !result.sequence || result.sequence.length === 0) {
+    // BUGFIX: Usar preGeneratedActions primeiro, depois regenerar como último recurso
+    const fallbackCandidates =
+      preGeneratedActions || strategy.generateMainPhaseActions(game);
+    if (fallbackCandidates && fallbackCandidates.length > 0) {
+      console.log(
+        `[BeamSearch] Using fallback action:`,
+        fallbackCandidates[0]?.cardName || fallbackCandidates[0]?.type
+      );
+      return {
+        action: fallbackCandidates[0],
+        score: baseScore,
+        sequence: [fallbackCandidates[0]],
+        nodesEvaluated,
+      };
+    }
     return null;
   }
 
-  // Se score não melhorou significativamente, pode ser que a busca não valeu a pena
-  if (result.score <= baseScore + 0.01) {
-    return null;
-  }
-
+  // BUGFIX: Sempre retornar melhor ação encontrada, mesmo se score não melhorou muito
+  // Isso evita bots ficarem presos sem ação quando BeamSearch explora mas não encontra melhoria significativa
   return {
     action: result.sequence[0], // Primeira ação da sequência
     score: result.score,
@@ -235,10 +257,11 @@ export async function beamSearchTurn(game, strategy, options = {}) {
  * @param {Object} game
  * @param {Object} strategy
  * @param {Object} options
+ * @param {Array} options.preGeneratedActions - Ações pré-geradas como fallback
  * @returns {Object|null}
  */
 export async function greedySearchWithEvalV2(game, strategy, options = {}) {
-  const { useV2Evaluation = true } = options;
+  const { useV2Evaluation = true, preGeneratedActions = null } = options;
   const perspectiveBot = strategy?.bot || (strategy?.id ? strategy : null);
   const resolveOpponent = (state) => {
     if (!state) return null;
@@ -289,13 +312,15 @@ export async function greedySearchWithEvalV2(game, strategy, options = {}) {
     };
   }
 
-  const candidates = strategy.generateMainPhaseActions(game);
+  // BUGFIX: Usar preGeneratedActions primeiro, depois regenerar como fallback
+  const candidates =
+    preGeneratedActions || strategy.generateMainPhaseActions(game);
   if (!candidates || candidates.length === 0) {
     return null;
   }
 
   const baseScore = evaluateState(game, perspectiveBot || strategy.bot);
-  let bestAction = null;
+  let bestAction = candidates[0]; // BUGFIX: Inicializar com primeira ação como fallback
   let bestScore = baseScore;
 
   for (const action of candidates) {
@@ -305,16 +330,15 @@ export async function greedySearchWithEvalV2(game, strategy, options = {}) {
     }
     const score = evaluateState(simState, simState.bot);
 
-    if (score > bestScore + 0.001) {
+    // BUGFIX: Usar >= em vez de > para sempre ter uma ação escolhida
+    if (score >= bestScore) {
       bestScore = score;
       bestAction = action;
     }
   }
 
-  if (!bestAction) {
-    return null;
-  }
-
+  // BUGFIX: Sempre retornar melhor ação (mesmo que não melhore score)
+  // Isso garante que o bot não fique preso
   return {
     action: bestAction,
     score: bestScore,

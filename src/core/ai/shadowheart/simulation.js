@@ -23,13 +23,24 @@ export function simulateMainPhaseAction(state, action, placeSpellCard) {
       if (!card) break;
 
       const tributeInfo = getTributeRequirementFor(card, player);
-      const tributeIndices = selectBestTributes(
-        player.field,
-        tributeInfo.tributesNeeded,
-        card
-      );
+      let tributeIndices = [];
 
-      // Remove tributos
+      // Só seleciona tributos se necessário E há monstros suficientes
+      if (
+        tributeInfo.tributesNeeded > 0 &&
+        player.field.length >= tributeInfo.tributesNeeded
+      ) {
+        tributeIndices = selectBestTributes(
+          player.field,
+          tributeInfo.tributesNeeded,
+          card
+        );
+      } else if (tributeInfo.tributesNeeded > 0) {
+        // Não pode summon (falta tributos)
+        break;
+      }
+
+      // Remove tributos (do maior índice para o menor)
       tributeIndices.sort((a, b) => b - a);
       tributeIndices.forEach((idx) => {
         const t = player.field[idx];
@@ -39,12 +50,14 @@ export function simulateMainPhaseAction(state, action, placeSpellCard) {
         }
       });
 
+      // Remove carta da mão e adiciona ao campo
       player.hand.splice(action.index, 1);
       const newCard = { ...card };
-      newCard.position = action.position;
-      newCard.isFacedown = action.facedown;
+      newCard.position = action.position || "attack";
+      newCard.isFacedown = action.facedown || false;
       newCard.hasAttacked = false;
       newCard.attacksUsedThisTurn = 0;
+      newCard.cannotAttackThisTurn = true; // Normal summon não ataca no turno
       player.field.push(newCard);
       player.summonCount = (player.summonCount || 0) + 1;
       break;
@@ -53,11 +66,30 @@ export function simulateMainPhaseAction(state, action, placeSpellCard) {
       const player = state.bot;
       const card = player.hand[action.index];
       if (!card) break;
+
+      // Remove da mão
       player.hand.splice(action.index, 1);
       const placedCard = { ...card };
-      simulateSpellEffect(state, placedCard);
-      const placement = placeSpellCard(state, placedCard);
-      if (!placement.placed) {
+
+      // Simula efeito (inclui LP costs)
+      const effectResult = simulateSpellEffect(state, placedCard);
+
+      // Spell placement (field spell fica no campo, resto vai pro GY)
+      if (placedCard.subtype === "field") {
+        player.fieldSpell = placedCard;
+      } else if (
+        placedCard.subtype === "continuous" ||
+        placedCard.subtype === "equip"
+      ) {
+        // Continuous/Equip ficam na spell/trap zone
+        if (!player.spellTrap) player.spellTrap = [];
+        if (player.spellTrap.length < 5) {
+          player.spellTrap.push(placedCard);
+        } else {
+          player.graveyard.push(placedCard);
+        }
+      } else {
+        // Normal spells vão direto pro GY
         player.graveyard.push(placedCard);
       }
       break;
@@ -94,8 +126,7 @@ export function simulateSpellEffect(state, card) {
         (c) => c.name === "Shadow-Heart Scale Dragon"
       );
       const materialIdx = player.field.findIndex(
-        (c, i) =>
-          i !== scaleIdx && isShadowHeart(c) && (c.level || 0) >= 5
+        (c, i) => i !== scaleIdx && isShadowHeart(c) && (c.level || 0) >= 5
       );
 
       if (scaleIdx !== -1) {
@@ -123,7 +154,20 @@ export function simulateSpellEffect(state, card) {
       }
       break;
     }
+    case "Shadow-Heart Covenant": {
+      // Searcher: Paga 800 LP, adiciona 1 Shadow-Heart da deck à mão
+      player.lp = Math.max(0, (player.lp || 8000) - 800);
+
+      // Simula adicionar melhor carta Shadow-Heart (placeholder)
+      player.hand.push({
+        placeholder: true,
+        archetype: "Shadow-Heart",
+        name: "Shadow-Heart (searched)",
+      });
+      break;
+    }
     case "Shadow-Heart Infusion": {
+      // Revive: Descarta 2, special summon Shadow-Heart do GY
       if (player.hand.length >= 2 && player.field.length < 5) {
         const discards = player.hand.splice(0, 2);
         player.graveyard.push(...discards);
@@ -136,7 +180,7 @@ export function simulateSpellEffect(state, card) {
           const idx = player.graveyard.indexOf(target);
           player.graveyard.splice(idx, 1);
           target.position = "attack";
-          target.cannotAttackThisTurn = true;
+          target.cannotAttackThisTurn = true; // Special summon restriction
           player.field.push(target);
         }
       }
@@ -162,22 +206,23 @@ export function simulateSpellEffect(state, card) {
       break;
     }
     case "Shadow-Heart Battle Hymn": {
+      // Buff: +500 ATK para todos Shadow-Heart
       player.field.forEach((m) => {
         if (isShadowHeart(m)) {
-          m.atk = (m.atk || 0) + 500;
           m.tempAtkBoost = (m.tempAtkBoost || 0) + 500;
         }
       });
       break;
     }
     case "Shadow-Heart Rage": {
+      // OTK spell: Se Scale Dragon está sozinho, +700/+700 e 1 ataque extra
       const scale = player.field.find(
         (c) => c.name === "Shadow-Heart Scale Dragon"
       );
       if (scale && player.field.length === 1) {
-        scale.atk = (scale.atk || 0) + 700;
-        scale.def = (scale.def || 0) + 700;
-        scale.extraAttacks = 1;
+        scale.tempAtkBoost = (scale.tempAtkBoost || 0) + 700;
+        scale.tempDefBoost = (scale.tempDefBoost || 0) + 700;
+        scale.extraAttacks = (scale.extraAttacks || 0) + 1;
       }
       break;
     }

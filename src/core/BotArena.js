@@ -23,8 +23,9 @@ const SPEED_PRESETS = {
     pollIntervalMs: 50,
     useRenderer: true,
     timeoutMs: 60000, // 60s para velocidade normal
-    beamWidth: 2,
+    beamWidth: 3, // Aumentado de 2 para melhor exploração
     maxDepth: 2,
+    nodeBudget: 120, // Aumentado de 100
   },
   "2x": {
     phaseDelayMs: 200,
@@ -32,19 +33,21 @@ const SPEED_PRESETS = {
     battleDelayMs: 400,
     pollIntervalMs: 25,
     useRenderer: true,
-    timeoutMs: 45000, // 45s
+    timeoutMs: 50000, // 50s (era 45s)
     beamWidth: 2,
     maxDepth: 2,
+    nodeBudget: 100,
   },
   "4x": {
     phaseDelayMs: 100,
     actionDelayMs: 125,
     battleDelayMs: 200,
     pollIntervalMs: 15,
-    useRenderer: false,
-    timeoutMs: 30000, // 30s
+    useRenderer: true, // Agora renderiza cartas no campo
+    timeoutMs: 40000, // 40s (era 30s)
     beamWidth: 2,
     maxDepth: 2,
+    nodeBudget: 80,
   },
   instant: {
     phaseDelayMs: 0,
@@ -52,9 +55,10 @@ const SPEED_PRESETS = {
     battleDelayMs: 0,
     pollIntervalMs: 5,
     useRenderer: false,
-    timeoutMs: 20000, // 20s - mais agressivo para instant
+    timeoutMs: 120000, // 120s (2min) - Permitir duelos mais longos
     beamWidth: 2,
     maxDepth: 2,
+    nodeBudget: 60,
   },
 };
 
@@ -180,6 +184,8 @@ export default class BotArena {
     // Configurar parâmetros de busca na game (para bots usarem)
     game.arenaBeamWidth = this.customBeamWidth ?? speedConfig.beamWidth ?? 2;
     game.arenaMaxDepth = this.customMaxDepth ?? speedConfig.maxDepth ?? 2;
+    game.arenaNodeBudget = speedConfig.nodeBudget ?? 100;
+    game.arenaNodeBudget = speedConfig.nodeBudget ?? 100;
 
     if (game.ui) {
       game.ui.showAlert = () => {};
@@ -258,27 +264,30 @@ export default class BotArena {
 
   resolveWinner(game, outcome) {
     if (outcome.type === "cancelled") return "draw";
-    
+
     // Se o jogo já determinou um vencedor
     if (game.winner === "player" || game.winner === "bot") {
       return game.winner;
     }
-    
+
     // Se alguém ficou sem LP
     if ((game.player?.lp || 0) <= 0) return "bot";
     if ((game.bot?.lp || 0) <= 0) return "player";
-    
+
     // Se terminou por MAX_TURNS ou TIMEOUT, vence quem tem mais LP
-    if (outcome.reason === END_REASONS.MAX_TURNS || outcome.reason === END_REASONS.TIMEOUT) {
+    if (
+      outcome.reason === END_REASONS.MAX_TURNS ||
+      outcome.reason === END_REASONS.TIMEOUT
+    ) {
       const playerLP = game.player?.lp || 0;
       const botLP = game.bot?.lp || 0;
-      
+
       if (playerLP > botLP) return "player";
       if (botLP > playerLP) return "bot";
       // Se LP igual, é empate
       return "draw";
     }
-    
+
     return "draw";
   }
 
@@ -305,11 +314,11 @@ export default class BotArena {
     }
 
     // Log de início do duelo
-    console.log(`\n${'═'.repeat(50)}`);
+    console.log(`\n${"═".repeat(50)}`);
     console.log(`🎮 DUELO #${duelNumber} INICIADO`);
     console.log(`   Bot 1: ${arch1} vs Bot 2: ${arch2}`);
     console.log(`   LP: ${game.player?.lp ?? 8000} vs ${game.bot?.lp ?? 8000}`);
-    console.log(`${'═'.repeat(50)}\n`);
+    console.log(`${"═".repeat(50)}\n`);
 
     const duelStartTime = Date.now();
     game.start();
@@ -325,19 +334,30 @@ export default class BotArena {
     const totalTimeMs = Date.now() - duelStartTime;
 
     // Log de fim do duelo
-    const winnerName = winner === 'player' ? 'Bot 1' : winner === 'bot' ? 'Bot 2' : 'Empate';
-    const reasonText = outcome.reason || 'LP zerou';
-    console.log(`\n${'═'.repeat(50)}`);
-    console.log(`🏆 DUELO #${duelNumber} FINALIZADO - ${winnerName}${winner !== 'draw' ? ' venceu!' : ''}`);
-    console.log(`   Turnos: ${game.turnCounter || 0} | LP Final: ${game.player?.lp ?? 0} vs ${game.bot?.lp ?? 0}`);
-    console.log(`   Razão: ${reasonText} | Tempo: ${(totalTimeMs/1000).toFixed(1)}s`);
-    
+    const winnerName =
+      winner === "player" ? "Bot 1" : winner === "bot" ? "Bot 2" : "Empate";
+    const reasonText = outcome.reason || "LP zerou";
+    console.log(`\n${"═".repeat(50)}`);
+    console.log(
+      `🏆 DUELO #${duelNumber} FINALIZADO - ${winnerName}${
+        winner !== "draw" ? " venceu!" : ""
+      }`
+    );
+    console.log(
+      `   Turnos: ${game.turnCounter || 0} | LP Final: ${
+        game.player?.lp ?? 0
+      } vs ${game.bot?.lp ?? 0}`
+    );
+    console.log(
+      `   Razão: ${reasonText} | Tempo: ${(totalTimeMs / 1000).toFixed(1)}s`
+    );
+
     // Log de estatísticas do cache de targeting
     if (game.effectEngine?.logTargetingCacheStats) {
       game.effectEngine.logTargetingCacheStats();
     }
-    
-    console.log(`${'═'.repeat(50)}\n`);
+
+    console.log(`${"═".repeat(50)}\n`);
 
     // Finalizar tracker e registrar no analytics
     const duelResult = tracker.finalize(winner, outcome.reason, {
@@ -401,13 +421,7 @@ export default class BotArena {
 
       let result;
       try {
-        result = await this.runDuel(
-          preset1,
-          preset2,
-          speedConfig,
-          i,
-          deckData
-        );
+        result = await this.runDuel(preset1, preset2, speedConfig, i, deckData);
       } catch (err) {
         result = {
           duelNumber: i,
