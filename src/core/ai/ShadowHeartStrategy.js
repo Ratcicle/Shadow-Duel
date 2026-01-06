@@ -425,12 +425,12 @@ export default class ShadowHeartStrategy extends BaseStrategy {
     // === STALEMATE BREAKER ===
     // Se não há ações e há capacidade de campo, forçar summon mesmo que já tenha invocado
     // Isso evita que o jogo fique travado quando o bot acumula cartas na mão
-    if (actions.length === 0 && analysis.fieldCapacity > 0) {
-      // CRITICAL: Usar estado REAL (this.bot) para fallback, não simulado
+    // BUGFIX: Skip durante simulação (BeamSearch lookahead) - não é um stalemate real
+    if (actions.length === 0 && analysis.fieldCapacity > 0 && !isSimulatedState) {
+      // Usar estado REAL (this.bot) para fallback
       const realBot = this.bot || bot;
-      const realFieldCapacity = 5 - (realBot.field?.length || 0);
 
-      // Log SEMPRE (mesmo em simulação) para debug crítico
+      // Log para debug
       console.log(
         `[ShadowHeartStrategy] ⚠️ STALEMATE BREAKER ativado! Hand=${realBot.hand?.length}, Field=${realBot.field?.length}`
       );
@@ -485,57 +485,59 @@ export default class ShadowHeartStrategy extends BaseStrategy {
     }
 
     // === FALLBACK SECUNDÁRIO: Forçar qualquer spell se ainda não há ações ===
-    // CRITICAL: Usar estado REAL (this.bot) para fallback, não simulado
-    const realBot2 = this.bot || bot;
-    if (actions.length === 0 && (realBot2.hand?.length || 0) > 3) {
-      // Log SEMPRE para debug crítico
-      console.log(
-        `[ShadowHeartStrategy] 🚨 FALLBACK CRÍTICO! Hand=${realBot2.hand?.length}, Field=${realBot2.field?.length}, LP=${realBot2.lifePoints}`
-      );
-      log(
-        `  🆘 FALLBACK CRÍTICO: ${realBot2.hand.length} cartas na mão, 0 ações! Forçando spell...`
-      );
-
-      let spellsFound = 0;
-      (realBot2.hand || []).forEach((card, index) => {
-        if (card.cardKind !== "spell") return;
-        spellsFound++;
-
-        // Tentar qualquer spell, mesmo sem validação prévia
+    // BUGFIX: Skip durante simulação (BeamSearch lookahead) - usar lógica normal
+    if (actions.length === 0 && !isSimulatedState) {
+      const realBot2 = this.bot || bot;
+      if ((realBot2.hand?.length || 0) > 3) {
+        // Log para debug
         console.log(
-          `[ShadowHeartStrategy] 🔧 Fallback spell: ${card.name} (prioridade 0.5)`
-        );
-        log(`    🔧 Fallback spell: ${card.name} (prioridade forçada: 0.5)`);
-        actions.push({
-          type: "spell",
-          index,
-          priority: 0.5,
-          cardName: card.name,
-          isCriticalFallback: true,
-        });
-      });
-
-      // Se ainda não há ações e não há spells, reportar situação crítica
-      if (spellsFound === 0 && actions.length === 0) {
-        const monsterCount = (realBot2.hand || []).filter(
-          (c) => c.cardKind === "monster"
-        ).length;
-        const trapCount = (realBot2.hand || []).filter(
-          (c) => c.cardKind === "trap"
-        ).length;
-
-        console.log(
-          `[ShadowHeartStrategy] ⚠️ Situação crítica: ${monsterCount}M ${trapCount}T`
-        );
-        console.log(
-          `[ShadowHeartStrategy] Mão completa: ${(realBot2.hand || [])
-            .map((c) => c.name)
-            .join(", ")}`
+          `[ShadowHeartStrategy] 🚨 FALLBACK CRÍTICO! Hand=${realBot2.hand?.length}, Field=${realBot2.field?.length}, LP=${realBot2.lp}`
         );
         log(
-          `  ⚠️ Situação crítica: ${monsterCount} monstros (todos precisam tributos?), ${trapCount} traps na mão`
+          `  🆘 FALLBACK CRÍTICO: ${realBot2.hand.length} cartas na mão, 0 ações! Forçando spell...`
         );
-        log(`  📋 Mão: ${(realBot2.hand || []).map((c) => c.name).join(", ")}`);
+
+        let spellsFound = 0;
+        (realBot2.hand || []).forEach((card, index) => {
+          if (card.cardKind !== "spell") return;
+          spellsFound++;
+
+          // Tentar qualquer spell, mesmo sem validação prévia
+          console.log(
+            `[ShadowHeartStrategy] 🔧 Fallback spell: ${card.name} (prioridade 0.5)`
+          );
+          log(`    🔧 Fallback spell: ${card.name} (prioridade forçada: 0.5)`);
+          actions.push({
+            type: "spell",
+            index,
+            priority: 0.5,
+            cardName: card.name,
+            isCriticalFallback: true,
+          });
+        });
+
+        // Se ainda não há ações e não há spells, reportar situação crítica
+        if (spellsFound === 0 && actions.length === 0) {
+          const monsterCount = (realBot2.hand || []).filter(
+            (c) => c.cardKind === "monster"
+          ).length;
+          const trapCount = (realBot2.hand || []).filter(
+            (c) => c.cardKind === "trap"
+          ).length;
+
+          console.log(
+            `[ShadowHeartStrategy] ⚠️ Situação crítica: ${monsterCount}M ${trapCount}T`
+          );
+          console.log(
+            `[ShadowHeartStrategy] Mão completa: ${(realBot2.hand || [])
+              .map((c) => c.name)
+              .join(", ")}`
+          );
+          log(
+            `  ⚠️ Situação crítica: ${monsterCount} monstros (todos precisam tributos?), ${trapCount} traps na mão`
+          );
+          log(`  📋 Mão: ${(realBot2.hand || []).map((c) => c.name).join(", ")}`);
+        }
       }
     }
 
