@@ -34,22 +34,51 @@ export function shouldPlaySpell(card, analysis) {
   const name = card.name;
   const knowledge = CARD_KNOWLEDGE[name];
 
-  // Polymerization - Só se tiver setup completo
+  // Polymerization - Detecta TODAS as fusões viáveis
   if (name === "Polymerization") {
-    const hasScaleDragon =
-      analysis.field.some((c) => c.name === "Shadow-Heart Scale Dragon") ||
-      analysis.hand.some((c) => c.name === "Shadow-Heart Scale Dragon");
-    const hasMaterial = [...analysis.hand, ...analysis.field].some(
-      (c) =>
-        isShadowHeartByName(c.name) &&
-        c.level >= 5 &&
-        c.name !== "Shadow-Heart Scale Dragon"
+    const allCards = [...analysis.hand, ...analysis.field];
+    const shMonsters = allCards.filter(
+      (c) => isShadowHeartByName(c.name) && c.cardKind === "monster"
     );
 
-    if (hasScaleDragon && hasMaterial) {
-      return { yes: true, priority: 12, reason: "Setup de fusão completo!" };
+    // Demon Dragon: Scale Dragon + Leviathan
+    const hasScaleDragon = allCards.some(
+      (c) => c.name === "Shadow-Heart Scale Dragon"
+    );
+    const hasLeviathan = allCards.some(
+      (c) => c.name === "Shadow-Heart Leviathan"
+    );
+    if (hasScaleDragon && hasLeviathan) {
+      return {
+        yes: true,
+        priority: 12,
+        reason: "Fusion: Demon Dragon (3000 ATK, destroy 2)",
+      };
     }
-    return { yes: false, reason: "Falta Scale Dragon ou material lv5+" };
+
+    // Armored Arctroth: 2 Shadow-Heart monsters
+    if (shMonsters.length >= 2) {
+      const materials = shMonsters.slice(0, 2);
+      return {
+        yes: true,
+        priority: 11,
+        reason: `Fusion: Armored Arctroth (2800 ATK) com ${materials[0].name}+${materials[1].name}`,
+      };
+    }
+
+    // Apocalypse Dragon: 3 Shadow-Heart monsters
+    if (shMonsters.length >= 3) {
+      return {
+        yes: true,
+        priority: 13,
+        reason: "Fusion: Apocalypse Dragon (3500 ATK, 3 materiais)",
+      };
+    }
+
+    return {
+      yes: false,
+      reason: "Sem materiais suficientes (precisa 2+ Shadow-Heart monsters)",
+    };
   }
 
   // Darkness Valley - Primeiro se tiver monstros Shadow-Heart
@@ -84,7 +113,7 @@ export function shouldPlaySpell(card, analysis) {
     return { yes: false, reason: "Scale Dragon não está sozinho" };
   }
 
-  // Shadow-Heart Infusion - Precisa de custo e target
+  // Shadow-Heart Infusion - Avaliação dinâmica de custo/benefício
   if (name === "Shadow-Heart Infusion") {
     if (analysis.hand.length < 3) {
       return { yes: false, reason: "Preciso de 2 cartas para descartar" };
@@ -93,44 +122,75 @@ export function shouldPlaySpell(card, analysis) {
     if (shInGY.length === 0) {
       return { yes: false, reason: "Sem Shadow-Heart no GY para reviver" };
     }
-    // Verificar se temos discards com valor
-    const hasValueDiscard = analysis.hand.some(
-      (c) =>
-        c.name === "Shadow-Heart Specter" || c.name === "Shadow-Heart Coward"
-    );
+
+    // Avaliar valor das cartas na mão (usando CARD_KNOWLEDGE)
+    const handValues = analysis.hand
+      .filter((c) => c.name !== "Shadow-Heart Infusion")
+      .map((c) => ({
+        card: c,
+        value: CARD_KNOWLEDGE[c.name]?.value || 0,
+      }))
+      .sort((a, b) => a.value - b.value); // Menor valor primeiro
+
+    // Avaliar valor do revival (melhor monstro no GY)
+    const bestRevival = shInGY
+      .sort((a, b) => {
+        const valA = CARD_KNOWLEDGE[a.name]?.value || 0;
+        const valB = CARD_KNOWLEDGE[b.name]?.value || 0;
+        return valB - valA;
+      })[0];
+    const revivalValue = CARD_KNOWLEDGE[bestRevival.name]?.value || 0;
+
+    // Precisamos descartar 1 carta. Pegar a de MENOR valor.
+    const worstCard = handValues[0];
+    const discardCost = worstCard.value;
+
+    // Só ativar se o revival vale MAIS que o descarte
+    // Bônus: cartas com "discard value" (Specter, Coward)
+    const hasValueDiscard =
+      worstCard.card.name === "Shadow-Heart Specter" ||
+      worstCard.card.name === "Shadow-Heart Coward";
+    const netValue = revivalValue - discardCost + (hasValueDiscard ? 1 : 0);
+
+    if (netValue > 0) {
+      return {
+        yes: true,
+        priority: hasValueDiscard ? 8 : 6,
+        reason: `Reviver ${bestRevival.name} (val:${revivalValue}) > descartar ${worstCard.card.name} (val:${discardCost})`,
+      };
+    }
+
     return {
-      yes: true,
-      priority: hasValueDiscard ? 8 : 6,
-      reason: `Reviver ${shInGY[0].name}`,
+      yes: false,
+      reason: `Revival ${bestRevival.name} (${revivalValue}) NÃO vale descartar ${worstCard.card.name} (${discardCost})`,
     };
   }
 
   // Shadow-Heart Covenant - Searcher genérico (custo: 800 LP)
   if (name === "Shadow-Heart Covenant") {
-    // BUGFIX: Threshold aumentado para 2000 LP (800 custo + 1200 margem de segurança)
-    if (analysis.lp <= 2000) {
+    // Prioridade MÁXIMA em T1-T2 para buscar peças antes de outras ações
+    const turnCounter = analysis.game?.turnCounter || 0;
+    const isEarlyGame = turnCounter <= 2;
+    
+    // Threshold reduzido: 1200 LP (800 custo + 400 margem mínima)
+    if (analysis.lp <= 1200) {
       return {
         yes: false,
-        reason: `LP muito baixo (${analysis.lp}) para pagar 800`,
+        reason: `LP crítico (${analysis.lp}) para pagar 800`,
       };
     }
 
-    // Se LP < 4000, só ativar se realmente necessário (sem outras plays)
-    if (analysis.lp < 4000) {
-      const hasOtherPlays = analysis.hand.some(
-        (c) =>
-          c.cardKind === "monster" ||
-          (c.cardKind === "spell" && c.name !== "Shadow-Heart Covenant")
-      );
-      if (hasOtherPlays) {
-        return {
-          yes: false,
-          priority: 2, // Baixa prioridade
-          reason: `LP baixo (${analysis.lp}), preservar recursos (tenho outras plays)`,
-        };
-      }
+    // Em T1-T2, SEMPRE ativar (priority 15 > Polymerization 12)
+    // Garante buscar peças ANTES de fazer fusion
+    if (isEarlyGame) {
+      return {
+        yes: true,
+        priority: 15,
+        reason: `T${turnCounter}: Buscar peça PRIMEIRO (setup ideal)`,
+      };
     }
 
+    // T3+: Priority normal (7), sem bloqueio por LP
     return { yes: true, priority: 7, reason: "Buscar peça chave do combo" };
   }
 
@@ -377,6 +437,63 @@ export function shouldSummonMonster(card, analysis, tributeInfo) {
       position: "attack",
       priority: 6,
       reason: "Beater de 1500",
+    };
+  }
+
+  // Leviathan - Boss 2600 ATK com efeitos de burn
+  if (name === "Shadow-Heart Leviathan") {
+    if (tributeInfo.tributesNeeded > analysis.field.length) {
+      return {
+        yes: false,
+        reason: `Requer ${tributeInfo.tributesNeeded} tributos (tenho ${analysis.field.length})`,
+      };
+    }
+    return {
+      yes: true,
+      position: "attack",
+      priority: 8,
+      reason: "Boss 2600 ATK + burn damage",
+    };
+  }
+
+  // Griffin - 2000 ATK, pode invocar sem tributo sob certas condições
+  if (name === "Shadow-Heart Griffin") {
+    // Griffin tem altTribute que permite invocar com menos tributos
+    const actualTributes = tributeInfo.usingAlt
+      ? tributeInfo.alt.tributes
+      : tributeInfo.tributesNeeded;
+    if (actualTributes > analysis.field.length) {
+      return {
+        yes: false,
+        reason: `Requer ${actualTributes} tributos (tenho ${analysis.field.length})`,
+      };
+    }
+    return {
+      yes: true,
+      position: "attack",
+      priority: 7,
+      reason: actualTributes === 0 ? "2000 ATK sem tributo!" : "2000 ATK",
+    };
+  }
+
+  // Specter - Recursivo (adiciona do GY à mão)
+  if (name === "Shadow-Heart Specter") {
+    const hasGYTargets = analysis.graveyard.filter(
+      (c) => isShadowHeartByName(c.name) && c.name !== "Shadow-Heart Specter"
+    );
+    if (hasGYTargets.length > 0) {
+      return {
+        yes: true,
+        position: "attack",
+        priority: 7,
+        reason: "Recursão: adiciona Shadow-Heart do GY à mão",
+      };
+    }
+    return {
+      yes: true,
+      position: "attack",
+      priority: 5,
+      reason: "1800 ATK (setup futuro para recursão)",
     };
   }
 
