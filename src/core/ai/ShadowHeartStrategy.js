@@ -107,6 +107,10 @@ export default class ShadowHeartStrategy extends BaseStrategy {
       fieldSpell: bot.fieldSpell?.name || null,
       lp: bot.lp,
       summonCount: bot.summonCount || 0,
+      
+      // Informações de timing (para evitar desperdício de recursos)
+      phase: game.phase || "main1",
+      turnCounter: game.turnCounter || 0,
 
       // Recursos do oponente
       oppField: (opponent?.field || []).map((c) => ({

@@ -1,6 +1,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // src/core/ai/shadowheart/priorities.js
 // Lógica de priorização: spell decisions, summon decisions, safety checks.
+//
+// RESOURCE CONSERVATION PATTERN:
+// - Spells de buff ATK/combat (Battle Hymn, Rage) só ativam em Main Phase 1
+// - Evita desperdiçar recursos em Main Phase 2 (pós-Battle)
+// - Use analysis.phase para detectar timing apropriado
 // ─────────────────────────────────────────────────────────────────────────────
 
 import {
@@ -100,6 +105,14 @@ export function shouldPlaySpell(card, analysis) {
 
   // Shadow-Heart Rage - Só com Scale Dragon sozinho
   if (name === "Shadow-Heart Rage") {
+    // ⚠️ TIMING: Rage é buff de ATK - só útil antes da Battle Phase
+    if (analysis.phase === "main2") {
+      return {
+        yes: false,
+        reason: "Main2: Battle Phase já passou (buff ATK inútil)",
+      };
+    }
+
     if (
       analysis.field.length === 1 &&
       analysis.field[0].name === "Shadow-Heart Scale Dragon"
@@ -196,6 +209,15 @@ export function shouldPlaySpell(card, analysis) {
 
   // Shadow-Heart Battle Hymn - Buff em monstros Shadow-Heart
   if (name === "Shadow-Heart Battle Hymn") {
+    // ⚠️ TIMING: Battle Hymn só é útil ANTES da Battle Phase
+    // Se estamos em main2, já passou a battle phase - desperdiçar recurso!
+    if (analysis.phase === "main2") {
+      return {
+        yes: false,
+        reason: "Main2: Battle Phase já passou (buff inútil)",
+      };
+    }
+
     const shOnField = analysis.field.filter((c) => isShadowHeartByName(c.name));
 
     if (shOnField.length === 0) {
