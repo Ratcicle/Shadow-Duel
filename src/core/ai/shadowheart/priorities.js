@@ -39,50 +39,53 @@ export function shouldPlaySpell(card, analysis) {
   const name = card.name;
   const knowledge = CARD_KNOWLEDGE[name];
 
-  // Polymerization - Detecta TODAS as fusões viáveis
+  // Polymerization - Detecta APENAS fusões viáveis (não Ascensões!)
+  // CORREÇÃO: Armored Arctroth e Apocalypse Dragon são monstros de ASCENSÃO, não Fusão!
   if (name === "Polymerization") {
     const allCards = [...analysis.hand, ...analysis.field];
     const shMonsters = allCards.filter(
       (c) => isShadowHeartByName(c.name) && c.cardKind === "monster"
     );
 
-    // Demon Dragon: Scale Dragon + Leviathan
+    // ===== ÚNICA FUSÃO SHADOW-HEART: Demon Dragon =====
+    // Materiais: 1 "Shadow-Heart Scale Dragon" + 1 monstro Shadow-Heart Level 5+
     const hasScaleDragon = allCards.some(
       (c) => c.name === "Shadow-Heart Scale Dragon"
     );
-    const hasLeviathan = allCards.some(
-      (c) => c.name === "Shadow-Heart Leviathan"
-    );
-    if (hasScaleDragon && hasLeviathan) {
+
+    // Encontrar monstros Shadow-Heart Level 5+ que NÃO sejam Scale Dragon
+    const validLevel5Plus = shMonsters.filter((c) => {
+      if (c.name === "Shadow-Heart Scale Dragon") return false; // Não contar o próprio Scale Dragon
+      const level = c.level || 0;
+      return level >= 5;
+    });
+
+    // Também aceita segundo Scale Dragon como material
+    const scaleCount = allCards.filter(
+      (c) => c.name === "Shadow-Heart Scale Dragon"
+    ).length;
+
+    if (hasScaleDragon && (validLevel5Plus.length > 0 || scaleCount >= 2)) {
+      const materialName =
+        validLevel5Plus.length > 0
+          ? validLevel5Plus[0].name
+          : "Shadow-Heart Scale Dragon";
       return {
         yes: true,
         priority: 12,
-        reason: "Fusion: Demon Dragon (3000 ATK, destroy 2)",
+        reason: `Fusion: Demon Dragon (3000 ATK, destroy 2) com Scale Dragon + ${materialName}`,
       };
     }
 
-    // Armored Arctroth: 2 Shadow-Heart monsters
-    if (shMonsters.length >= 2) {
-      const materials = shMonsters.slice(0, 2);
-      return {
-        yes: true,
-        priority: 11,
-        reason: `Fusion: Armored Arctroth (2800 ATK) com ${materials[0].name}+${materials[1].name}`,
-      };
-    }
-
-    // Apocalypse Dragon: 3 Shadow-Heart monsters
-    if (shMonsters.length >= 3) {
-      return {
-        yes: true,
-        priority: 13,
-        reason: "Fusion: Apocalypse Dragon (3500 ATK, 3 materiais)",
-      };
-    }
+    // NOTE: Armored Arctroth e Apocalypse Dragon são ASCENSÕES, não Fusões!
+    // Eles requerem Invocação-Ascensão, não Polymerization.
+    // - Armored Arctroth: Ascende de Shadow-Heart Demon Arctroth
+    // - Apocalypse Dragon: Ascende de Shadow-Heart Scale Dragon
 
     return {
       yes: false,
-      reason: "Sem materiais suficientes (precisa 2+ Shadow-Heart monsters)",
+      reason:
+        "Sem materiais para Demon Dragon (precisa Scale Dragon + monstro Shadow-Heart Lv5+)",
     };
   }
 
@@ -146,12 +149,11 @@ export function shouldPlaySpell(card, analysis) {
       .sort((a, b) => a.value - b.value); // Menor valor primeiro
 
     // Avaliar valor do revival (melhor monstro no GY)
-    const bestRevival = shInGY
-      .sort((a, b) => {
-        const valA = CARD_KNOWLEDGE[a.name]?.value || 0;
-        const valB = CARD_KNOWLEDGE[b.name]?.value || 0;
-        return valB - valA;
-      })[0];
+    const bestRevival = shInGY.sort((a, b) => {
+      const valA = CARD_KNOWLEDGE[a.name]?.value || 0;
+      const valB = CARD_KNOWLEDGE[b.name]?.value || 0;
+      return valB - valA;
+    })[0];
     const revivalValue = CARD_KNOWLEDGE[bestRevival.name]?.value || 0;
 
     // Precisamos descartar 1 carta. Pegar a de MENOR valor.
@@ -184,7 +186,7 @@ export function shouldPlaySpell(card, analysis) {
     // Prioridade MÁXIMA em T1-T2 para buscar peças antes de outras ações
     const turnCounter = analysis.game?.turnCounter || 0;
     const isEarlyGame = turnCounter <= 2;
-    
+
     // Threshold reduzido: 1200 LP (800 custo + 400 margem mínima)
     if (analysis.lp <= 1200) {
       return {

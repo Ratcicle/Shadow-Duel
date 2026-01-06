@@ -430,7 +430,11 @@ export default class ShadowHeartStrategy extends BaseStrategy {
     // Se não há ações e há capacidade de campo, forçar summon mesmo que já tenha invocado
     // Isso evita que o jogo fique travado quando o bot acumula cartas na mão
     // BUGFIX: Skip durante simulação (BeamSearch lookahead) - não é um stalemate real
-    if (actions.length === 0 && analysis.fieldCapacity > 0 && !isSimulatedState) {
+    if (
+      actions.length === 0 &&
+      analysis.fieldCapacity > 0 &&
+      !isSimulatedState
+    ) {
       // CRITICAL: Usar estado REAL (this.bot) para fallback, não simulado
       const realBot = this.bot || bot;
 
@@ -492,10 +496,12 @@ export default class ShadowHeartStrategy extends BaseStrategy {
     // BUGFIX: Skip durante simulação (BeamSearch lookahead) - usar lógica normal
     if (actions.length === 0 && !isSimulatedState) {
       const realBot2 = this.bot || bot;
+      // BUGFIX: Garantir que LP está sempre definido (buscar do game se necessário)
+      const botLP = realBot2.lp ?? this.game?.bot?.lp ?? 8000;
       if ((realBot2.hand?.length || 0) > 3) {
         // Log para debug
         console.log(
-          `[ShadowHeartStrategy] 🚨 FALLBACK CRÍTICO! Hand=${realBot2.hand?.length}, Field=${realBot2.field?.length}, LP=${realBot2.lp}`
+          `[ShadowHeartStrategy] 🚨 FALLBACK CRÍTICO! Hand=${realBot2.hand?.length}, Field=${realBot2.field?.length}, LP=${botLP}`
         );
         log(
           `  🆘 FALLBACK CRÍTICO: ${realBot2.hand.length} cartas na mão, 0 ações! Forçando spell...`
@@ -540,7 +546,9 @@ export default class ShadowHeartStrategy extends BaseStrategy {
           log(
             `  ⚠️ Situação crítica: ${monsterCount} monstros (todos precisam tributos?), ${trapCount} traps na mão`
           );
-          log(`  📋 Mão: ${(realBot2.hand || []).map((c) => c.name).join(", ")}`);
+          log(
+            `  📋 Mão: ${(realBot2.hand || []).map((c) => c.name).join(", ")}`
+          );
         }
       }
     }
