@@ -427,7 +427,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
     // Isso evita que o jogo fique travado quando o bot acumula cartas na mão
     // BUGFIX: Skip durante simulação (BeamSearch lookahead) - não é um stalemate real
     if (actions.length === 0 && analysis.fieldCapacity > 0 && !isSimulatedState) {
-      // Usar estado REAL (this.bot) para fallback
+      // CRITICAL: Usar estado REAL (this.bot) para fallback, não simulado
       const realBot = this.bot || bot;
 
       // Log para debug
