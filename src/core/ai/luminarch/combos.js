@@ -402,31 +402,84 @@ export function detectAvailableCombos(analysis) {
         });
       }
     }
-            "Ascension Summon Fortress Aegis",
-            "Enviar Aegisbearer como material",
-            "Heal 500 LP por Luminarch no campo",
-            "Pode reviver monsters DEF 2000- pagando 1000 LP",
-          ],
-          conditions: {
-            canAscendNow: canAscend,
-            fortressInExtra: hasFortressInExtra,
-          },
-        });
-      } else {
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // COMBO: SACRED JUDGMENT COMEBACK
+    // ═════════════════════════════════════════════════════════════════════════
+    const hasSacredJudgment = analysis.hand.some(
+      (c) => c && c.name === "Luminarch Sacred Judgment"
+    );
+    const myFieldCount = analysis.field.length;
+    const oppFieldCount = (analysis.oppField || []).length;
+    const lp = analysis.lp || 8000;
+    const gyLuminarchSJ = analysis.graveyard.filter(
+      (c) => c && isLuminarch(c) && c.cardKind === "monster"
+    );
+
+    if (hasSacredJudgment && myFieldCount === 0 && oppFieldCount >= 2 && lp >= 2500 && gyLuminarchSJ.length >= 2) {
+      // Avaliar qualidade dos monstros no GY
+      const highValueMonsters = gyLuminarchSJ.filter((c) => {
+        return (
+          c.name?.includes("Aegisbearer") ||
+          c.name?.includes("Sanctum Protector") ||
+          c.name?.includes("Aurora Seraph") ||
+          c.name?.includes("Fortress Aegis") ||
+          (c.def && c.def >= 2000) ||
+          (c.atk && c.atk >= 2000)
+        );
+      });
+
+      const potentialSummons = Math.min(gyLuminarchSJ.length, oppFieldCount, 5);
+      const lpGain = potentialSummons * 500;
+      const netLpCost = 2000 - lpGain;
+      const finalLp = lp - netLpCost;
+
+      // Detectar se é situação crítica que justifica o risco
+      const isCritical = oppFieldCount >= 3;
+      const hasQuality = highValueMonsters.length >= 1;
+      
+      if (isCritical && hasQuality) {
         combos.push({
-          id: "fortress_aegis_setup",
-          name: "Fortress Aegis Setup (Aguardando)",
-          priority: 5,
-          cards: ["Luminarch Aegisbearer"],
-          description: `Aegis no campo (${aegisFieldAge}/2 turnos) - manter vivo para Ascensão`,
+          id: "sacred_judgment_comeback",
+          name: "⚡ SACRED JUDGMENT COMEBACK",
+          priority: oppFieldCount >= 4 ? 19 : oppFieldCount >= 3 ? 17 : 15,
+          cards: ["Luminarch Sacred Judgment", ...highValueMonsters.slice(0, potentialSummons).map(c => c.name)],
+          description: `DESPERATION PLAY: Pagar 2000 LP → SS ${potentialSummons} Luminarch da GY (${highValueMonsters.length} high-value) → heal ${lpGain} LP`,
           steps: [
-            "Proteger Aegisbearer por mais turnos",
-            "Usar Holy Shield/Crescent Shield",
-            "Após 2 turnos: Ascension Summon disponível",
+            `Ativar Sacred Judgment (custo 2000 LP)`,
+            `SS até ${potentialSummons} Luminarch da GY`,
+            `Priorizar: ${highValueMonsters.slice(0, 3).map(c => c.name?.split(" - ")[0] || c.name).join(", ")}`,
+            `Heal ${lpGain} LP (500 por monstro)`,
+            `LP final: ${finalLp} (net cost: ${netLpCost})`,
+            `Igualar/superar board do oponente`
           ],
           conditions: {
-            setupInProgress: !canAscend && aegisFieldAge >= 1,
-          },
+            fieldEmpty: myFieldCount === 0,
+            oppDominates: oppFieldCount >= 3,
+            hasResources: gyLuminarchSJ.length >= 2,
+            hasQuality: highValueMonsters.length >= 1,
+            survives: finalLp >= 1000,
+            critical: isCritical
+          }
+        });
+      } else if (gyLuminarchSJ.length >= 3 && finalLp >= 1500) {
+        // Situação menos crítica mas ainda válida
+        combos.push({
+          id: "sacred_judgment_recovery",
+          name: "Sacred Judgment - Recovery Play",
+          priority: 13,
+          cards: ["Luminarch Sacred Judgment"],
+          description: `Pagar 2000 LP → SS ${potentialSummons} Luminarch da GY → rebuild board`,
+          steps: [
+            `Ativar Sacred Judgment`,
+            `SS ${potentialSummons} monstros (LP final: ${finalLp})`,
+            `Reconstruir presença de board`
+          ],
+          conditions: {
+            fieldEmpty: myFieldCount === 0,
+            hasResources: gyLuminarchSJ.length >= 3,
+            survives: finalLp >= 1500
+          }
         });
       }
     }

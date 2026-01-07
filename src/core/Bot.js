@@ -239,6 +239,31 @@ export default class Bot extends Player {
       return;
     }
 
+    const bot = this;
+    const opponent = game.player.id === bot.id ? game.bot : game.player;
+
+    // === LOG DE ESTADO (DEV MODE) ===
+    if (bot.debug) {
+      console.log(
+        `\n[Bot.playMainPhase] 📊 Estado de ${bot.id} no início da main phase:`
+      );
+      console.log(
+        `  Hand (${bot.hand.length}): ${bot.hand.map((c) => c.name).join(", ") || "(vazia)"}`
+      );
+      console.log(
+        `  Field (${bot.field.length}): ${bot.field.map((c) => `${c.name}${c.isFacedown ? "(↓)" : c.position === "attack" ? "(↑ATK)" : "(↑DEF)"}`).join(", ") || "(vazio)"}`
+      );
+      console.log(
+        `  Graveyard (${bot.graveyard.length}): ${bot.graveyard.map((c) => c.name).join(", ") || "(vazio)"}`
+      );
+      console.log(
+        `  Field Spell: ${bot.fieldSpell?.name || "(nenhum)"}`
+      );
+      console.log(
+        `  LP: ${bot.lp} | Summon Count: ${bot.summonCount}`
+      );
+    }
+
     let chainCount = 0;
     const maxChains = this.maxChainedActions || 2;
 

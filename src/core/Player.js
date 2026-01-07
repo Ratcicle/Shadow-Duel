@@ -354,6 +354,9 @@ export default class Player {
       }
       card.hasAttacked = false;
       card.attacksUsedThisTurn = 0;
+      card.cannotAttackThisTurn = false; // Normal Summon pode atacar no mesmo turno
+      card.positionChangedThisTurn = false;
+      card.summonedTurn = this.game?.turnCounter || null;
       this.field.push(card);
       this.summonCount++;
       return card;

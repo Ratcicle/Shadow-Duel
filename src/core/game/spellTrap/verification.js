@@ -29,15 +29,27 @@ export function canActivateTrap(card) {
  * @returns {boolean} True if Polymerization can be activated.
  */
 export function canActivatePolymerization() {
+  // Rate limiting de logs para evitar spam em bot arena
+  const now = Date.now();
+  this._polyLogCache = this._polyLogCache || { lastLog: 0, count: 0 };
+  const LOG_COOLDOWN_MS = 1000; // Max 1 log por segundo
+  const shouldLog = now - this._polyLogCache.lastLog > LOG_COOLDOWN_MS;
+  
   // Check if player has Extra Deck with Fusion Monsters
   if (!this.player.extraDeck || this.player.extraDeck.length === 0) {
-    console.log("[canActivatePolymerization] ❌ Bloqueado: sem Extra Deck");
+    if (shouldLog) {
+      console.log("[canActivatePolymerization] ❌ Bloqueado: sem Extra Deck");
+      this._polyLogCache.lastLog = now;
+    }
     return false;
   }
 
   // Check field space
   if (this.player.field.length >= 5) {
-    console.log("[canActivatePolymerization] ❌ Bloqueado: campo cheio (5/5)");
+    if (shouldLog) {
+      console.log("[canActivatePolymerization] ❌ Bloqueado: campo cheio (5/5)");
+      this._polyLogCache.lastLog = now;
+    }
     return false;
   }
 
@@ -48,7 +60,10 @@ export function canActivatePolymerization() {
   ].filter((card) => card && card.cardKind === "monster");
 
   if (availableMaterials.length === 0) {
-    console.log("[canActivatePolymerization] ❌ Bloqueado: sem monstros disponíveis");
+    if (shouldLog) {
+      console.log("[canActivatePolymerization] ❌ Bloqueado: sem monstros disponíveis");
+      this._polyLogCache.lastLog = now;
+    }
     return false;
   }
 
@@ -57,11 +72,15 @@ export function canActivatePolymerization() {
     if (
       this.effectEngine.canSummonFusion(fusion, availableMaterials, this.player)
     ) {
+      // Sempre loga sucessos (raros e importantes)
       console.log(`[canActivatePolymerization] ✅ Permitido: pode invocar ${fusion.name}`);
       return true;
     }
   }
 
-  console.log("[canActivatePolymerization] ❌ Bloqueado: nenhuma fusão possível com materiais disponíveis");
+  if (shouldLog) {
+    console.log("[canActivatePolymerization] ❌ Bloqueado: nenhuma fusão possível com materiais disponíveis");
+    this._polyLogCache.lastLog = now;
+  }
   return false;
 }

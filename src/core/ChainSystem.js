@@ -987,10 +987,16 @@ export default class ChainSystem {
     // Get best option
     const bestOption = evaluatedOptions[0];
 
+    // Se a melhor opção tem priority <= 0, passar automaticamente
+    if (bestOption.priority <= 0) {
+      this.log(`Bot passing (best option priority: ${bestOption.priority} - too low)`);
+      return null;
+    }
+
     // Activation threshold based on priority
     // High priority (70+): 80% chance to activate
     // Medium priority (40-69): 50% chance to activate
-    // Low priority (<40): 20% chance to activate
+    // Low priority (1-39): 20% chance to activate
     let activationChance = 0.2;
     if (bestOption.priority >= 70) {
       activationChance = 0.8;
@@ -1014,7 +1020,7 @@ export default class ChainSystem {
       return { ...bestOption, selections };
     }
 
-    this.log(`Bot passing (best option priority: ${bestOption.priority})`);
+    this.log(`Bot passing (best option priority: ${bestOption.priority})`)
     return null;
   }
 

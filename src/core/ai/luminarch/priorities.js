@@ -77,6 +77,15 @@ export function shouldPlaySpell(card, analysis) {
       const luminarchOnField = (analysis.field || []).filter(
         (c) => c && isLuminarch(c)
       );
+      
+      // CRITICAL: Sem monstros no campo = NÃO PODE ATIVAR (requer targets)
+      if (luminarchOnField.length === 0) {
+        return {
+          yes: false,
+          reason: "Sem monstros Luminarch no campo para proteger",
+        };
+      }
+      
       const oppHasThreats = (analysis.oppField || []).some(
         (m) => m && m.atk && m.atk >= 2000
       );
@@ -104,19 +113,6 @@ export function shouldPlaySpell(card, analysis) {
       return {
         yes: false,
         reason: "Quick Spell - segurar para ativar no turno do oponente (uso reativo)",
-      };
-    }
-      if ((analysis.lp || 8000) <= 3000 && luminarchOnField.length >= 1) {
-        return {
-          yes: true,
-          priority: 13,
-          reason: "LP baixo - proteção + lifegain necessário",
-        };
-      }
-
-      return {
-        yes: false,
-        reason: "Sem urgência para proteção ainda",
       };
     }
 
@@ -359,28 +355,76 @@ export function shouldPlaySpell(card, analysis) {
       const myField = analysis.field.length;
       const oppField = (analysis.oppField || []).length;
       const lp = analysis.lp || 8000;
+      const oppLp = analysis.oppLp || 8000;
 
-      // Desperation play: campo vazio + opp 2+ monstros
-      if (myField === 0 && oppField >= 2 && lp >= 3000) {
-        const gyLuminarch = (analysis.graveyard || []).filter(
-          (c) => c && isLuminarch(c) && c.cardKind === "monster"
-        ).length;
+      // Avaliação: qualidade dos monstros no GY
+      const gyLuminarch = (analysis.graveyard || []).filter(
+        (c) => c && isLuminarch(c) && c.cardKind === "monster"
+      );
 
-        if (gyLuminarch >= 2) {
+      const highValueMonsters = gyLuminarch.filter((c) => {
+        // Aegisbearer (tank), Protector (DEF high), Aurora (LP gain), Fortress (Ascension boss)
+        return (
+          c.name?.includes("Aegisbearer") ||
+          c.name?.includes("Sanctum Protector") ||
+          c.name?.includes("Aurora Seraph") ||
+          c.name?.includes("Fortress Aegis") ||
+          (c.def && c.def >= 2000) ||
+          (c.atk && c.atk >= 2000)
+        );
+      }).length;
+
+      // === SITUAÇÃO CRÍTICA: Campo vazio + opp domina ===
+      // Precisa: campo vazio, opp 2+, LP >= 2500 (sobra 500 após custo), GY com recursos
+      if (myField === 0 && oppField >= 2 && lp >= 2500 && gyLuminarch.length >= 2) {
+        // Calcular power swing potencial
+        const potentialSummons = Math.min(gyLuminarch.length, oppField, 5);
+        const lpGain = potentialSummons * 500; // heal de volta
+        const netLpCost = 2000 - lpGain; // custo real após heal
+        const finalLp = lp - netLpCost;
+
+        // Avaliar se é worth it
+        const isCritical = oppField >= 3 || oppLp > lp + 2000; // opp domina
+        const hasQuality = highValueMonsters >= 1; // pelo menos 1 bom monstro
+        const survives = finalLp >= 1000; // sobrevive após custo
+
+        if (isCritical && hasQuality && survives) {
+          // Prioridade MUITO ALTA: é carta de comeback
+          const priority = oppField >= 4 ? 19 : oppField >= 3 ? 17 : 15;
           return {
             yes: true,
-            priority: 9,
-            reason: `COMEBACK: SS ${Math.min(
-              gyLuminarch,
-              oppField
-            )} monstros da GY (custo 2000 LP)`,
+            priority,
+            reason: `COMEBACK CRÍTICO: SS ${potentialSummons} monstros (${highValueMonsters} high-value), net cost ${netLpCost} LP, final ${finalLp} LP`,
+          };
+        }
+
+        if (survives && gyLuminarch.length >= 3) {
+          // Situação menos crítica mas ainda válida
+          return {
+            yes: true,
+            priority: 13,
+            reason: `Comeback: SS ${potentialSummons} monstros da GY (LP final: ${finalLp})`,
           };
         }
       }
 
+      // Bloquear: não é situação de desperation ou muito arriscado
+      if (myField > 0) {
+        return { yes: false, reason: "Precisa campo vazio (situação crítica)" };
+      }
+      if (oppField < 2) {
+        return { yes: false, reason: "Opp precisa ter 2+ monstros" };
+      }
+      if (lp < 2500) {
+        return { yes: false, reason: "LP insuficiente (precisa 2500+ para sobreviver custo)" };
+      }
+      if (gyLuminarch.length < 2) {
+        return { yes: false, reason: "GY sem recursos (precisa 2+ Luminarch)" };
+      }
+
       return {
         yes: false,
-        reason: "Não é situação de desperation (precisa campo vazio + opp 2+)",
+        reason: "Não justifica risco (falta criticalidade ou qualidade no GY)",
       };
     }
 
@@ -588,7 +632,7 @@ export function shouldSummonMonster(card, analysis) {
       // Valiant busca MONSTRO Lv4- (geralmente Aegisbearer ou Arbiter)
       
       // CRITICAL: Se não temos field spell E não temos Arbiter na mão,
-      // bloquear Valiant para não buscar Aegis quando deveríamos buscar field
+      // preferir invocar Arbiter primeiro (se tiver) ou aceitar Valiant como plano B
       const currentTurn = analysis.currentTurn || 1;
       const isVeryEarly = currentTurn <= 2;
       
@@ -596,20 +640,17 @@ export function shouldSummonMonster(card, analysis) {
         const hasArbiterInHand = (analysis.hand || []).some(
           (c) => c && c.name === "Luminarch Sanctified Arbiter"
         );
-        if (!hasArbiterInHand) {
-          // MELHOR: Invocar Arbiter se ele estiver na mão
-          // Mas Valiant só busca monstros, não pode buscar Arbiter!
-          // Então: só usar Valiant se JÁ temos Arbiter ou Citadel na mão
-          const hasCitadelInHand = (analysis.hand || []).some(
-            (c) => c && c.name === "Sanctum of the Luminarch Citadel"
-          );
-          if (!hasCitadelInHand) {
-            return {
-              yes: false,
-              reason: "T1-2: PRECISO de field spell - Valiant não ajuda nisso",
-            };
-          }
+        
+        // Se temos Arbiter na mão, preferir invocar ele ao invés de Valiant
+        if (hasArbiterInHand) {
+          return {
+            yes: false,
+            reason: "T1-2: Tenho Arbiter na mão - invocar ele primeiro (busca field spell)",
+          };
         }
+        
+        // Se não temos Arbiter nem Citadel, invocar Valiant é aceitável
+        // (buscar Aegisbearer é melhor que passar o turno sem fazer nada)
       }
 
       // Se não temos tank, Valiant pode buscar Aegisbearer
@@ -773,6 +814,31 @@ export function shouldSummonMonster(card, analysis) {
     // ═════════════════════════════════════════════════════════════════════════
     // FALLBACK
     // ═════════════════════════════════════════════════════════════════════════
+
+    // EMERGENCY FALLBACK: Campo vazio T1-2 e monstro Lv4- = SEMPRE summon em DEF
+    // Previne situação onde bot tem monstros na mão mas gera 0 actions
+    const currentTurn = analysis.currentTurn || 1;
+    const isVeryEarly = currentTurn <= 2;
+    const isLowLevel = (card.level || 0) <= 4;
+    
+    if (bot.field.length === 0 && isVeryEarly && isLowLevel) {
+      return {
+        yes: true,
+        position: "defense",
+        priority: 9,
+        reason: "EMERGENCY T1-2: Campo vazio + Lv4- = summon em DEF (melhor que passar turno vazio)",
+      };
+    }
+
+    // EMERGENCY FALLBACK geral: Campo vazio = SEMPRE summon
+    if (analysis.field.length === 0 && isLowLevel) {
+      return {
+        yes: true,
+        position: "defense",
+        priority: 8,
+        reason: "EMERGENCY: Campo vazio, summon para não passar turno vazio",
+      };
+    }
 
     return {
       yes: true,

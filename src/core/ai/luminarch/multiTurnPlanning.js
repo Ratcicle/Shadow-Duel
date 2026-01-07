@@ -270,12 +270,27 @@ export function shouldCommitResourcesNow(card, analysis, stance) {
   // DEFAULT: Avaliar custo vs benefício
   // ═════════════════════════════════════════════════════════════════════════
 
-  // Cartas caras (LP): só se LP alto
-  if (cardName.includes("Sacred Judgment") && lp < 5000) {
-    return {
-      shouldPlay: false,
-      reason: "LP baixo demais para custo (2000 LP)",
-    };
+  // Cartas caras (LP): avaliar situação
+  if (cardName.includes("Sacred Judgment")) {
+    // Sacred Judgment é carta de DESPERATION: campo vazio + opp domina
+    const myField = field.length;
+    const oppField = (analysis.oppField || []).length;
+    
+    // Se é situação crítica (campo vazio + opp 3+), permitir com LP >= 2500
+    if (myField === 0 && oppField >= 3 && lp >= 2500) {
+      return {
+        shouldPlay: true,
+        reason: "Situação crítica justifica risco (campo vazio + opp domina)",
+      };
+    }
+    
+    // Caso contrário, exigir LP >= 4500 (conservador)
+    if (lp < 4500) {
+      return {
+        shouldPlay: false,
+        reason: "LP insuficiente para custo (2000 LP) sem situação crítica",
+      };
+    }
   }
 
   if (cardName.includes("Holy Ascension") && lp < 4000) {

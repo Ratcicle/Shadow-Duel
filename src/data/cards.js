@@ -2069,6 +2069,7 @@ export const cardDatabase = [
             cardKind: "monster",
             archetype: "Luminarch",
             count: { min: 1, max: 1 },
+            filters: { isFaceup: true },
           },
         ],
         actions: [

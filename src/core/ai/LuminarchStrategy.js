@@ -164,6 +164,22 @@ export default class LuminarchStrategy extends BaseStrategy {
       logTargets: false,
     };
 
+    if (bot?.debug) {
+      console.log(
+        `\n[LuminarchStrategy] 🎴 Avaliando ${bot.hand.length} cartas na mão:`
+      );
+      bot.hand.forEach((c, i) => {
+        console.log(
+          `  [${i}] ${c.name} (${c.cardKind}${c.cardKind === "monster" ? ` Lv${c.level || "?"}` : c.subtype ? ` ${c.subtype}` : ""})`
+        );
+      });
+    }
+
+    // Declarar variáveis no escopo da função
+    let gameStance = { stance: "balanced", reason: "default" };
+    let turnPlan = { plan: ["Jogar normalmente"] };
+    let fusionOpportunity = null;
+
     // === COMBO DETECTION ===
     try {
       const analysis = {
@@ -179,8 +195,8 @@ export default class LuminarchStrategy extends BaseStrategy {
       };
 
       // === MULTI-TURN PLANNING ===
-      const gameStance = evaluateGameStance(analysis);
-      const turnPlan = planNextTurns(analysis);
+      gameStance = evaluateGameStance(analysis);
+      turnPlan = planNextTurns(analysis);
 
       if (bot?.debug) {
         console.log(
@@ -190,7 +206,7 @@ export default class LuminarchStrategy extends BaseStrategy {
       }
 
       // === FUSION PRIORITY EVALUATION ===
-      const fusionOpportunity = evaluateFusionPriority({
+      fusionOpportunity = evaluateFusionPriority({
         hand: analysis.hand,
         field: analysis.field,
         opponent: {
@@ -265,11 +281,28 @@ export default class LuminarchStrategy extends BaseStrategy {
         const tributeInfo = this.getTributeRequirementFor(card, bot);
         if (bot?.debug) {
           console.log(
-            `[LuminarchStrategy] Monster ${card.name}: tributes=${tributeInfo.tributesNeeded}, field=${bot.field.length}`
+            `\n[LuminarchStrategy] 🔍 Avaliando monstro: ${card.name}`
+          );
+          console.log(
+            `  Tributos necessários: ${tributeInfo.tributesNeeded}, Field atual: ${bot.field.length}`
           );
         }
-        if (bot.field.length < tributeInfo.tributesNeeded) return;
-        if (bot.field.length >= 5) return;
+        if (bot.field.length < tributeInfo.tributesNeeded) {
+          if (bot?.debug) {
+            console.log(
+              `  ❌ REJEITADO: Tributos insuficientes (precisa ${tributeInfo.tributesNeeded}, tem ${bot.field.length})`
+            );
+          }
+          return;
+        }
+        if (bot.field.length >= 5) {
+          if (bot?.debug) {
+            console.log(
+              `  ❌ REJEITADO: Campo cheio (${bot.field.length}/5)`
+            );
+          }
+          return;
+        }
 
         // === SUICIDE CHECK ===
         const shouldSummon = this.shouldSummonMonsterSafely(
@@ -279,8 +312,7 @@ export default class LuminarchStrategy extends BaseStrategy {
         );
         if (bot?.debug) {
           console.log(
-            `[LuminarchStrategy] Monster ${card.name} shouldSummon:`,
-            shouldSummon
+            `  Safety check: ${shouldSummon.yes ? "✅ APROVADO" : "❌ REJEITADO"} - ${shouldSummon.reason || "sem motivo"}`
           );
         }
         if (!shouldSummon.yes) return;
@@ -330,7 +362,7 @@ export default class LuminarchStrategy extends BaseStrategy {
       try {
         if (bot?.debug) {
           console.log(
-            `[LuminarchStrategy] Avaliando spell: ${card.name} (index ${index})`
+            `\n[LuminarchStrategy] 🔍 Avaliando spell: ${card.name} (${card.subtype || "normal"})`
           );
         }
 
@@ -346,13 +378,17 @@ export default class LuminarchStrategy extends BaseStrategy {
           );
           if (bot?.debug) {
             console.log(
-              `[LuminarchStrategy] Spell preview ${card.name}:`,
-              preview
+              `  Preview: ${preview?.ok ? "✅" : "❌"} ${preview?.reason || ""}`
             );
           }
           if (preview && preview.ok === false) return;
         } else {
           const check = game.effectEngine?.canActivate?.(card, bot);
+          if (bot?.debug && check) {
+            console.log(
+              `  CanActivate: ${check.ok ? "✅" : "❌"} ${check.reason || ""}`
+            );
+          }
           if (check && !check.ok) return;
         }
 
@@ -369,6 +405,11 @@ export default class LuminarchStrategy extends BaseStrategy {
         };
 
         const decision = shouldPlaySpell(card, analysis);
+        if (bot?.debug) {
+          console.log(
+            `  shouldPlaySpell: ${decision.yes ? "✅" : "❌"} ${decision.reason || ""}`
+          );
+        }
 
         if (!decision.yes) {
           // Módulo bloqueou a ativação (ex: Citadel já tem field spell)
@@ -381,6 +422,11 @@ export default class LuminarchStrategy extends BaseStrategy {
           analysis,
           gameStance
         );
+        if (bot?.debug) {
+          console.log(
+            `  shouldCommitResourcesNow: ${resourceCheck.shouldPlay ? "✅" : "⏳"} ${resourceCheck.reason || ""}`
+          );
+        }
         if (!resourceCheck.shouldPlay) {
           if (bot?.debug) {
             console.log(
@@ -435,13 +481,12 @@ export default class LuminarchStrategy extends BaseStrategy {
           reason: decision.reason,
         });
       } catch (e) {
-        console.error(
-          `[LuminarchStrategy] ❌ ERRO ao avaliar spell ${card.name}:`,
-          e.message,
-          e.stack
-        );
+        if (bot?.debug) {
+          console.warn(
+            `[LuminarchStrategy] ⚠️ Erro ao avaliar spell ${card.name}: ${e.message}`
+          );
+        }
         // NÃO adicionar ao actions - pular esta carta completamente
-        // (Adicionar causaria loop infinito de erros)
       }
     });
 
@@ -516,6 +561,22 @@ export default class LuminarchStrategy extends BaseStrategy {
     if (game._isPerspectiveState) {
       // Estamos dentro de uma simulação - apenas retornar ações ordenadas sem P2
       return this.sequenceActions(actions);
+    }
+
+    if (bot?.debug) {
+      console.log(
+        `\n[LuminarchStrategy] 📊 Resumo: ${bot.hand.length} cartas avaliadas → ${actions.length} ações geradas`
+      );
+      if (actions.length > 0) {
+        console.log("  Ações:");
+        actions.forEach((a) => {
+          console.log(
+            `    - ${a.type}: ${a.cardName || `index ${a.index}`} (priority: ${a.priority || 0})`
+          );
+        });
+      } else {
+        console.log("  ⚠️ NENHUMA AÇÃO GERADA");
+      }
     }
 
     const finalActions = this.integrateP2IntoActionSelection(

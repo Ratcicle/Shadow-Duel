@@ -161,7 +161,13 @@ export default class BotArena {
     bot.id = seatId;
     bot.name = seatId === "player" ? "Bot 1" : "Bot 2";
     bot.controllerType = "ai";
-    bot.debug = false;
+    
+    // Ativar debug se devMode ou localStorage flag ativo
+    const devMode = typeof localStorage !== 'undefined' 
+      ? localStorage.getItem('shadow_duel_dev_mode') === 'true'
+      : false;
+    bot.debug = devMode;
+    
     if (isDefault) {
       this.applyCustomDeck(bot, deckData);
     }

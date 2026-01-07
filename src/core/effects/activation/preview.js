@@ -46,6 +46,15 @@ export function canActivateSpellFromHandPreview(card, player, options = {}) {
     return { ok: false, reason: "Card not in hand." };
   }
 
+  // FIX: Polymerization requer materiais válidos (chamada antes do baseCheck)
+  // Causa: Bot ativando Polymerization com "Available fusions: []"
+  if (card.name === "Polymerization") {
+    const canActivatePoly = this.game?.canActivatePolymerization?.();
+    if (!canActivatePoly) {
+      return { ok: false, reason: "No valid fusion materials available." };
+    }
+  }
+
   const baseCheck = this.canActivate(card, player);
   if (!baseCheck.ok) {
     return baseCheck;

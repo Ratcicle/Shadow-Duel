@@ -449,23 +449,29 @@ export async function collectAttackDeclaredTriggers(payload) {
         if (!effect || effect.timing !== "on_event") continue;
         if (effect.event !== "attack_declared") continue;
 
-        console.log(
-          `[collectAttackDeclaredTriggers] Found attack_declared effect on ${card.name}:`,
-          {
-            effectId: effect.id,
-            requireDefenderType: effect.requireDefenderType,
-            requireDefenderIsSelf: effect.requireDefenderIsSelf,
-            defenderName: payload.defender?.name,
-            defenderType: payload.defender?.type,
-            defenderOwnerId: payload.defenderOwner?.id,
-            playerId: player.id,
-            isFacedown: card.isFacedown,
-          }
-        );
+        // Rate limiting de logs (reduz spam em bot arena)
+        const devMode = this.game?.devModeEnabled || false;
+        if (devMode) {
+          console.log(
+            `[collectAttackDeclaredTriggers] Found attack_declared effect on ${card.name}:`,
+            {
+              effectId: effect.id,
+              requireDefenderType: effect.requireDefenderType,
+              requireDefenderIsSelf: effect.requireDefenderIsSelf,
+              defenderName: payload.defender?.name,
+              defenderType: payload.defender?.type,
+              defenderOwnerId: payload.defenderOwner?.id,
+              playerId: player.id,
+              isFacedown: card.isFacedown,
+            }
+          );
+        }
 
         // For face-down traps, skip negation check
         if (!card.isFacedown && this.isEffectNegated(card)) {
-          console.log(`${card.name} effects are negated, skipping effect.`);
+          if (devMode) {
+            console.log(`${card.name} effects are negated, skipping effect.`);
+          }
           continue;
         }
 
@@ -786,12 +792,21 @@ export async function collectCardToGraveTriggers(payload) {
 
   const resolvedOpponent = opponent || this.game?.getOpponent?.(player);
 
-  console.log(
-    `[handleCardToGraveEvent] ${card.name} entered graveyard. card.owner="${card.owner}", ctx.player.id="${player.id}", ctx.opponent.id="${resolvedOpponent?.id}", wasDestroyed=${payload?.wasDestroyed}`
-  );
-  console.log(
-    `[handleCardToGraveEvent] ${card.name} entered graveyard from ${fromZone}. Card has ${card.effects.length} effects.`
-  );
+  // Rate limiting de logs (reduz spam em bot arena)
+  const devMode = this.game?.devModeEnabled || false;
+  const now = Date.now();
+  this._graveLogCache = this._graveLogCache || { lastLog: 0 };
+  const shouldLog = devMode || (now - this._graveLogCache.lastLog > 500);
+  
+  if (shouldLog) {
+    console.log(
+      `[handleCardToGraveEvent] ${card.name} entered graveyard. card.owner="${card.owner}", ctx.player.id="${player.id}", ctx.opponent.id="${resolvedOpponent?.id}", wasDestroyed=${payload?.wasDestroyed}`
+    );
+    console.log(
+      `[handleCardToGraveEvent] ${card.name} entered graveyard from ${fromZone}. Card has ${card.effects.length} effects.`
+    );
+    this._graveLogCache.lastLog = now;
+  }
 
   const ctx = {
     source: card,
@@ -804,13 +819,17 @@ export async function collectCardToGraveTriggers(payload) {
 
   for (const effect of card.effects) {
     if (!effect || effect.timing !== "on_event") {
-      console.log(`[handleCardToGraveEvent] Skipping effect: not on_event`);
+      if (devMode) {
+        console.log(`[handleCardToGraveEvent] Skipping effect: not on_event`);
+      }
       continue;
     }
     if (effect.event !== "card_to_grave") {
-      console.log(
-        `[handleCardToGraveEvent] Skipping effect: event is ${effect.event}, not card_to_grave`
-      );
+      if (devMode) {
+        console.log(
+          `[handleCardToGraveEvent] Skipping effect: event is ${effect.event}, not card_to_grave`
+        );
+      }
       continue;
     }
 
