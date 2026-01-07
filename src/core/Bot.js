@@ -136,7 +136,7 @@ export default class Bot extends Player {
       105, // Luminarch Celestial Marshal (boss 2500 ATK, priority 15)
 
       // ═════════════════════════════════════════════════════════════════════
-      // B-TIER SUPPORT & UTILITY — 9 cards
+      // B-TIER SUPPORT & UTILITY — 11 cards
       // ═════════════════════════════════════════════════════════════════════
       107,
       107, // Luminarch Sanctum Protector (2800 DEF tank, priority 14)
@@ -144,6 +144,8 @@ export default class Bot extends Player {
       106, // Luminarch Magic Sickle (recursion engine, priority 12)
       115,
       115, // Luminarch Crescent Shield (equip, priority 10)
+      13,
+      13, // Polymerization (fusion para Megashield, priority 10)
       111, // Luminarch Knights Convocation (Special Summon, priority 9)
       119, // Luminarch Sacred Judgment (comeback, priority 8)
       113, // Luminarch Holy Ascension (ATK buff, priority 7)
@@ -655,8 +657,14 @@ export default class Bot extends Player {
       return;
     }
 
+    // 🎭 REGRA: Bot não pode ver DEF de monstros facedown
+    // Estimar DEF baseado em média (1500) ao invés de usar valor real
     const targetStat =
-      target.position === "attack" ? target.atk || 0 : target.def || 0;
+      target.position === "attack"
+        ? target.atk || 0
+        : target.isFacedown
+        ? 1500 // Estimativa: DEF médio de monstros
+        : target.def || 0;
     if (target.position === "attack") {
       if (attackStat > targetStat) {
         defenderOwner.lp -= attackStat - targetStat;
@@ -703,6 +711,49 @@ export default class Bot extends Player {
       phaseReq: ["main1", "main2"],
     });
     if (!baseGuard.ok) return false;
+
+    // === ASCENSION SUMMON ===
+    if (action.type === "ascension") {
+      try {
+        const material = this.field[action.materialIndex];
+        if (!material) {
+          console.log(
+            `[Bot.executeMainPhaseAction] ❌ Ascension: material not found at index ${action.materialIndex}`
+          );
+          return false;
+        }
+
+        console.log(
+          `[Bot.executeMainPhaseAction] 🔥 Attempting Ascension: ${material.name} → ${action.ascensionCard.name}`
+        );
+
+        const result = await game.performAscensionSummon(
+          this,
+          material,
+          action.ascensionCard
+        );
+
+        if (result?.success) {
+          console.log(
+            `[Bot.executeMainPhaseAction] ✅ Ascension successful: ${action.ascensionCard.name}`
+          );
+          game.updateBoard();
+          return true;
+        } else {
+          console.log(
+            `[Bot.executeMainPhaseAction] ❌ Ascension failed:`,
+            result?.reason
+          );
+          return false;
+        }
+      } catch (e) {
+        console.error(
+          `[Bot.executeMainPhaseAction] ❌ Ascension error:`,
+          e.message
+        );
+        return false;
+      }
+    }
 
     if (action.type === "summon") {
       const cardToSummon = this.hand[action.index];

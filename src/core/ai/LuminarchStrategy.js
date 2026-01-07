@@ -42,7 +42,22 @@ import {
   shouldExecuteCombo,
   shouldPrioritizeDefense,
   canAttemptLethal,
+  shouldTurtleStrategy,
 } from "./luminarch/combos.js";
+import {
+  evaluateGameStance,
+  shouldCommitResourcesNow,
+  planNextTurns,
+} from "./luminarch/multiTurnPlanning.js";
+import {
+  evaluateFusionPriority,
+} from "./luminarch/fusionPriority.js";
+import {
+  evaluateCardExpendability,
+  evaluateFieldSpellUrgency,
+  detectSacrificialProtection,
+  evaluateRiskWithProtection,
+} from "./luminarch/cardValue.js";
 
 export default class LuminarchStrategy extends BaseStrategy {
   evaluateBoard(gameOrState, perspectivePlayer) {
@@ -160,7 +175,35 @@ export default class LuminarchStrategy extends BaseStrategy {
         lp: bot?.lp || 8000,
         oppField: opponent?.field || [],
         oppLp: opponent?.lp || 8000,
+        currentTurn: game?.turnCounter || 1,
       };
+
+      // === MULTI-TURN PLANNING ===
+      const gameStance = evaluateGameStance(analysis);
+      const turnPlan = planNextTurns(analysis);
+
+      if (bot?.debug) {
+        console.log(
+          `[LuminarchStrategy] 🎯 Stance: ${gameStance.stance.toUpperCase()} - ${gameStance.reason}`
+        );
+        console.log(`[LuminarchStrategy] 📋 Plano:`, turnPlan.plan[0]);
+      }
+
+      // === FUSION PRIORITY EVALUATION ===
+      const fusionOpportunity = evaluateFusionPriority({
+        hand: analysis.hand,
+        field: analysis.field,
+        opponent: {
+          field: analysis.oppField,
+          lp: analysis.oppLp
+        }
+      });
+
+      if (fusionOpportunity && bot?.debug) {
+        console.log(
+          `[LuminarchStrategy] 🔮 Fusão detectada: ${fusionOpportunity.fusionName} - ${fusionOpportunity.decision.reason}`
+        );
+      }
 
       const availableCombos = detectAvailableCombos(analysis);
       if (availableCombos.length > 0 && bot?.debug) {
@@ -173,12 +216,15 @@ export default class LuminarchStrategy extends BaseStrategy {
       // Detectar se deve priorizar defesa ou tentar lethal
       const shouldDefend = shouldPrioritizeDefense(analysis);
       const canLethal = canAttemptLethal(analysis);
+      const turtleAnalysis = shouldTurtleStrategy(analysis);
 
       if (bot?.debug) {
         console.log(
           `[LuminarchStrategy] Situação: ${
             canLethal
               ? "⚔️ LETHAL POSSIBLE"
+              : turtleAnalysis.shouldTurtle
+              ? `🐢 TURTLE MODE: ${turtleAnalysis.reason}`
               : shouldDefend
               ? "🛡️ DEFENSIVE"
               : "⚖️ BALANCED"
@@ -319,6 +365,7 @@ export default class LuminarchStrategy extends BaseStrategy {
           lp: bot?.lp || 8000,
           oppField: opponent?.field || [],
           oppLp: opponent?.lp || 8000,
+          currentTurn: game?.turnCounter || 1,
         };
 
         const decision = shouldPlaySpell(card, analysis);
@@ -326,6 +373,21 @@ export default class LuminarchStrategy extends BaseStrategy {
         if (!decision.yes) {
           // Módulo bloqueou a ativação (ex: Citadel já tem field spell)
           return;
+        }
+
+        // === MULTI-TURN: Avaliar se deve gastar recursos agora ===
+        const resourceCheck = shouldCommitResourcesNow(
+          card,
+          analysis,
+          gameStance
+        );
+        if (!resourceCheck.shouldPlay) {
+          if (bot?.debug) {
+            console.log(
+              `[LuminarchStrategy] ⏳ Segurar ${card.name}: ${resourceCheck.reason}`
+            );
+          }
+          return; // Segurar carta para próximo turno
         }
 
         // === P1: Aplicar bônus de macro strategy ===
@@ -336,6 +398,18 @@ export default class LuminarchStrategy extends BaseStrategy {
           macroStrategy
         );
         priority += macroBuff;
+
+        // === FUSION PRIORITY: Override para Polymerization ===
+        if (card.name === "Polymerization" && fusionOpportunity) {
+          if (fusionOpportunity.decision.shouldPrioritize) {
+            priority = fusionOpportunity.decision.priority;
+            if (bot?.debug) {
+              console.log(
+                `[LuminarchStrategy] 🔮 Polymerization priority override: ${priority} (${fusionOpportunity.decision.reason})`
+              );
+            }
+          }
+        }
 
         // === P1: Penalidade de chain risk ===
         const spellSafety = assessActionSafety(
@@ -394,6 +468,46 @@ export default class LuminarchStrategy extends BaseStrategy {
             cardName: bot.fieldSpell.name,
           });
         }
+      }
+    }
+
+    // === ASCENSION SUMMONS ===
+    // Detectar materiais prontos para Ascension (especialmente Fortress Aegis)
+    try {
+      const ascensionActions = this.detectAscensionOpportunities(game, bot);
+      if (ascensionActions.length > 0 && bot?.debug) {
+        console.log(
+          `[LuminarchStrategy] 🔥 Ascension opportunities:`,
+          ascensionActions.map((a) => `${a.cardName} (pri ${a.priority})`)
+        );
+      }
+      actions.push(...ascensionActions);
+    } catch (e) {
+      if (bot?.debug) {
+        console.warn(
+          `[LuminarchStrategy] Erro ao detectar Ascensions:`,
+          e.message
+        );
+      }
+    }
+
+    // === FUSION SUMMONS ===
+    // Detectar oportunidades de fusão (Megashield Barbarias)
+    try {
+      const fusionActions = this.detectFusionOpportunities(game, bot);
+      if (fusionActions.length > 0 && bot?.debug) {
+        console.log(
+          `[LuminarchStrategy] ⚡ Fusion opportunities:`,
+          fusionActions.map((a) => `${a.cardName} (pri ${a.priority})`)
+        );
+      }
+      actions.push(...fusionActions);
+    } catch (e) {
+      if (bot?.debug) {
+        console.warn(
+          `[LuminarchStrategy] Erro ao detectar Fusions:`,
+          e.message
+        );
       }
     }
 
@@ -650,6 +764,248 @@ export default class LuminarchStrategy extends BaseStrategy {
       }
       return { strategy: "grind", priority: 30, detail: {} };
     }
+  }
+
+  /**
+   * === FUSION DETECTION ===
+   * Detecta oportunidades de Fusion Summons (Megashield Barbarias).
+   */
+  detectFusionOpportunities(game, bot) {
+    const actions = [];
+    const opponent = this.getOpponent(game, bot);
+
+    try {
+      // Verificar se tem Polymerization na mão
+      const polyInHand = bot.hand.findIndex(
+        (c) => c && c.name === "Polymerization"
+      );
+      if (polyInHand === -1) return actions;
+
+      // Verificar se tem Megashield no Extra Deck
+      const hasMegashield = bot.extraDeck.some(
+        (c) => c && c.name === "Luminarch Megashield Barbarias"
+      );
+      if (!hasMegashield) return actions;
+
+      // Megashield precisa: Luminarch Sanctum Protector + Luminarch Lv5+
+      const hasProtector = bot.field.some(
+        (c) => c && c.name === "Luminarch Sanctum Protector"
+      );
+      const lv5Plus = bot.field.filter(
+        (c) =>
+          c &&
+          c.cardKind === "monster" &&
+          c.archetype === "Luminarch" &&
+          (c.level || 0) >= 5
+      );
+
+      if (hasProtector && lv5Plus.length > 0) {
+        const priority = this.evaluateFusionPriority(
+          "Luminarch Megashield Barbarias",
+          bot,
+          opponent,
+          game
+        );
+
+        if (priority > 0) {
+          actions.push({
+            type: "spell", // Polymerization é tratado como spell normal
+            index: polyInHand,
+            priority: priority,
+            cardName: "Polymerization",
+            fusionTarget: "Luminarch Megashield Barbarias",
+            reason: `Fusion para Megashield (3000 DEF tank)`,
+          });
+        }
+      }
+    } catch (e) {
+      console.warn(
+        `[LuminarchStrategy] detectFusionOpportunities error:`,
+        e.message
+      );
+    }
+
+    return actions;
+  }
+
+  /**
+   * Avalia prioridade de uma Fusion específica.
+   */
+  evaluateFusionPriority(fusionName, bot, opponent, game) {
+    // MEGASHIELD BARBARIAS - 3000 DEF tank + lifegain x2
+    if (fusionName === "Luminarch Megashield Barbarias") {
+      // Prioridade BASE: 10 (alta, tanque supremo)
+      let priority = 10;
+
+      // Boost se LP MUITO baixo (desesperado por tank)
+      const lp = bot.lp || 8000;
+      if (lp <= 2000) priority += 4; // 14
+      else if (lp <= 3500) priority += 2; // 12
+
+      // Boost se oponente dominando board
+      const oppStrength = (opponent?.field || []).reduce(
+        (sum, m) => sum + (m && m.atk ? m.atk : 0),
+        0
+      );
+      if (oppStrength >= 8000) priority += 3; // Opp overwhelmingly strong
+      else if (oppStrength >= 6000) priority += 1;
+
+      // Boost se tem Citadel ativo (lifegain dobrado: 500 → 1000)
+      const hasCitadel = bot.fieldSpell?.name?.includes("Citadel");
+      if (hasCitadel) priority += 2; // Synergy suprema
+
+      // Penalty se já tem tank forte no campo
+      const hasFortress = bot.field.some(
+        (c) => c && c.name === "Luminarch Fortress Aegis"
+      );
+      const has2800Tank = bot.field.some(
+        (c) =>
+          c &&
+          c.cardKind === "monster" &&
+          c.position === "defense" &&
+          (c.def || 0) >= 2800
+      );
+      if (hasFortress || has2800Tank) priority -= 3; // Já tem wall supremo
+
+      // Penalty se vai sacrificar material importante
+      const willLoseProtector = bot.field.some(
+        (c) => c && c.name === "Luminarch Sanctum Protector"
+      );
+      const protectorAge = willLoseProtector
+        ? bot.field.find((c) => c && c.name === "Luminarch Sanctum Protector")
+            ?.fieldAgeTurns || 0
+        : 0;
+      if (protectorAge >= 2) priority -= 1; // Protector veterano é valioso
+
+      return priority;
+    }
+
+    // Fallback
+    return 6;
+  }
+
+  /**
+   * === ASCENSION DETECTION ===
+   * Detecta materiais prontos para Ascension e avalia prioridade.
+   */
+  detectAscensionOpportunities(game, bot) {
+    const actions = [];
+    const opponent = this.getOpponent(game, bot);
+
+    try {
+      // Iterar pelos monstros no campo
+      bot.field.forEach((material, fieldIndex) => {
+        if (!material || material.cardKind !== "monster") return;
+
+        // Verificar se pode ser usado como material
+        const canUse = game.canUseAsAscensionMaterial?.(bot, material);
+        if (!canUse?.ok) return;
+
+        // Obter candidatos à Ascension
+        const candidates =
+          game.getAscensionCandidatesForMaterial?.(bot, material) || [];
+        if (candidates.length === 0) return;
+
+        // Filtrar por requirements
+        const eligible = candidates.filter(
+          (asc) => game.checkAscensionRequirements?.(bot, asc)?.ok
+        );
+        if (eligible.length === 0) return;
+
+        // Avaliar prioridade de cada Ascension elegível
+        eligible.forEach((ascensionCard) => {
+          const priority = this.evaluateAscensionPriority(
+            material,
+            ascensionCard,
+            bot,
+            opponent,
+            game
+          );
+
+          if (priority > 0) {
+            actions.push({
+              type: "ascension",
+              materialIndex: fieldIndex,
+              ascensionCard: ascensionCard,
+              priority: priority,
+              cardName: ascensionCard.name,
+              materialName: material.name,
+            });
+          }
+        });
+      });
+    } catch (e) {
+      console.warn(
+        `[LuminarchStrategy] detectAscensionOpportunities error:`,
+        e.message
+      );
+    }
+
+    return actions;
+  }
+
+  /**
+   * Avalia prioridade de uma Ascension específica.
+   */
+  evaluateAscensionPriority(material, ascensionCard, bot, opponent, game) {
+    const name = ascensionCard.name;
+    const materialAge = material.fieldAgeTurns || 0;
+
+    // FORTRESS AEGIS - Tank supremo 2500 DEF + recursion
+    if (name === "Luminarch Fortress Aegis") {
+      // Prioridade BASE: 11 (alta, mas não bloqueia setup crítico)
+      let priority = 11;
+
+      // Boost se LP baixo (precisa de tank sustain)
+      const lp = bot.lp || 8000;
+      if (lp <= 3000) priority += 3; // 14
+      else if (lp <= 5000) priority += 1; // 12
+
+      // Boost se oponente tem board forte (precisa de wall)
+      const oppStrength = (opponent?.field || []).reduce(
+        (sum, m) => sum + (m && m.atk ? m.atk : 0),
+        0
+      );
+      if (oppStrength >= 6000) priority += 2; // +2 se opp muito forte
+
+      // Boost se material está veterano (3+ turnos) - aproveitar antes de perder
+      if (materialAge >= 3) priority += 2;
+
+      // Penalty se ainda temos poucas opções de recursion na GY
+      const gyLuminarch = (bot.graveyard || []).filter(
+        (c) =>
+          c &&
+          c.cardKind === "monster" &&
+          c.archetype === "Luminarch" &&
+          (c.def || 0) <= 2000
+      ).length;
+      if (gyLuminarch < 2) priority -= 2; // Fortress precisa de GY setup
+
+      return priority;
+    }
+
+    // MEGASHIELD BARBARIAS - Fusion tank 3000 DEF
+    if (name === "Luminarch Megashield Barbarias") {
+      let priority = 9;
+
+      const lp = bot.lp || 8000;
+      if (lp <= 2500) priority += 3; // Desesperado por tank
+
+      const oppStrength = (opponent?.field || []).reduce(
+        (sum, m) => sum + (m && m.atk ? m.atk : 0),
+        0
+      );
+      if (oppStrength >= 7000) priority += 2;
+
+      return priority;
+    }
+
+    // Fallback genérico
+    const ascDef = ascensionCard.def || 0;
+    const ascAtk = ascensionCard.atk || 0;
+    const isTank = ascDef >= 2500;
+
+    return isTank ? 8 : 6;
   }
 
   /**

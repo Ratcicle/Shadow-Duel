@@ -30,8 +30,10 @@ export function calculateThreatScore(card, context = {}) {
   // 1. BASE STATS
   const atk =
     (card.atk || 0) + (card.tempAtkBoost || 0) + (card.equipAtkBonus || 0);
-  const def =
-    (card.def || 0) + (card.tempDefBoost || 0) + (card.equipDefBonus || 0);
+  // 🎭 REGRA: Não pode ver DEF real de facedown (usar estimativa)
+  const def = card.isFacedown
+    ? 1500
+    : (card.def || 0) + (card.tempDefBoost || 0) + (card.equipDefBonus || 0);
   const stat = card.position === "defense" ? def : atk;
 
   score += stat / 1000; // 2000 ATK = +2.0 score
@@ -158,7 +160,8 @@ export function calculateResourceValue(card, context = {}) {
 
   // Base stats
   const atk = (card.atk || 0) + (card.tempAtkBoost || 0);
-  const def = (card.def || 0) + (card.tempDefBoost || 0);
+  // 🎭 REGRA: Não pode ver DEF real de facedown
+  const def = card.isFacedown ? 1500 : (card.def || 0) + (card.tempDefBoost || 0);
   value += Math.max(atk, def) / 1000;
   value += (card.level || 0) * 0.1;
 

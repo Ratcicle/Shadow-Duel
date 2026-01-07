@@ -4,6 +4,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { CARD_KNOWLEDGE, isLuminarchByName, isLuminarch } from "./knowledge.js";
+import { evaluateFieldSpellUrgency } from "./cardValue.js";
 
 // Rastrear erros já logados para evitar spam
 const _loggedErrors = new Set();
@@ -57,22 +58,14 @@ export function shouldPlaySpell(card, analysis) {
       if (analysis.fieldSpell) {
         return { yes: false, reason: "Já tenho field spell ativo" };
       }
-      // SEMPRE ativar se não tiver field
-      const luminarchCount = analysis.field.filter(
-        (c) => c && isLuminarch(c)
-      ).length;
-      if (luminarchCount > 0) {
-        return {
-          yes: true,
-          priority: 15,
-          reason: "Field spell CORE - heal passivo + buff ativo",
-        };
-      }
-      // Mesmo sem monstros, é importante
+      
+      // Usar sistema de avaliação de urgência
+      const urgency = evaluateFieldSpellUrgency(analysis);
+      
       return {
         yes: true,
-        priority: 12,
-        reason: "Field spell core (ativar antes de setup)",
+        priority: urgency.priority,
+        reason: urgency.reason,
       };
     }
 
@@ -88,16 +81,31 @@ export function shouldPlaySpell(card, analysis) {
         (m) => m && m.atk && m.atk >= 2000
       );
 
-      // Usar se oponente tem ameaças fortes
-      if (oppHasThreats && luminarchOnField.length >= 2) {
+      // CRÍTICO: Holy Shield agora é QUICK SPELL (speed 2)
+      // Ideal é SETAR e ativar no turno do oponente como reação
+      // Só ativar proativamente em Main Phase se situação desesperadora
+
+      // Situação desesperadora: LP crítico + múltiplas ameaças
+      const lpCritical = (analysis.lp || 8000) <= 2000;
+      const multipleThreats = (analysis.oppField || []).filter(
+        (m) => m && m.atk && m.atk >= 1800
+      ).length >= 2;
+
+      if (lpCritical && multipleThreats && luminarchOnField.length >= 2) {
         return {
           yes: true,
-          priority: 14,
-          reason: `Proteção contra ameaças (${luminarchOnField.length} alvos) + heal`,
+          priority: 16,
+          reason: `LP crítico + ${luminarchOnField.length} alvos - ativar AGORA`,
         };
       }
 
-      // Ou se LP baixo
+      // Caso contrário: SEGURAR para uso reativo
+      // A IA deve SET esta carta para usar no turno do oponente
+      return {
+        yes: false,
+        reason: "Quick Spell - segurar para ativar no turno do oponente (uso reativo)",
+      };
+    }
       if ((analysis.lp || 8000) <= 3000 && luminarchOnField.length >= 1) {
         return {
           yes: true,
@@ -261,40 +269,63 @@ export function shouldPlaySpell(card, analysis) {
 
     if (name === "Luminarch Holy Ascension") {
       const lp = analysis.lp || 8000;
+      const oppLp = analysis.oppLp || 8000;
       const luminarchMonsters = (analysis.field || []).filter(
-        (c) => c && isLuminarch(c) && c.cardKind === "monster"
+        (c) => c && isLuminarch(c) && c.cardKind === "monster" && !c.isFacedown
       );
       const oppMaxAtk = Math.max(
-        ...(analysis.oppField || []).map((m) => (m && m.atk) || 0),
+        ...(analysis.oppField || []).map((m) => (m && !m.isFacedown && m.atk) || 0),
         0
       );
 
+      // CRITICAL: Holy Ascension custa 1000 LP - gerenciar budget
       // Só usar se LP alto (custo 1000 LP é pesado)
       if (lp < 4000) {
         return { yes: false, reason: "LP muito baixo (custo 1000 LP)" };
       }
 
-      // Usar se pode fechar jogo
-      const canLethal = luminarchMonsters.some((m) => {
-        const boostedAtk = (m.atk || 0) + 800;
-        return boostedAtk >= (analysis.oppLp || 8000);
-      });
-
-      if (canLethal) {
+      // Prioridade 1: LETHAL
+      // Se pode fechar jogo com buff, SEMPRE usar
+      const totalAtk = luminarchMonsters.reduce((sum, m) => sum + (m.atk || 0), 0);
+      const buffedAtk = totalAtk + (luminarchMonsters.length * 800);
+      const directDamage = Math.max(buffedAtk - oppMaxAtk * Math.min(analysis.oppField.length, luminarchMonsters.length), 0);
+      
+      if (directDamage >= oppLp) {
         return {
           yes: true,
-          priority: 12,
-          reason: "Buff para LETHAL",
+          priority: 15,
+          reason: `LETHAL! ${directDamage} damage = WIN (custo 1000 LP OK)`,
         };
       }
 
-      // Ou se precisa passar por wall
-      if (luminarchMonsters.length > 0 && oppMaxAtk >= 2500) {
-        return {
-          yes: true,
-          priority: 6,
-          reason: `Buff para superar wall (opp ${oppMaxAtk} ATK)`,
-        };
+      // Prioridade 2: Fechar gap crítico
+      // Se pode ultrapassar wall defensiva forte e tem LP sobrando
+      if (lp >= 5000 && luminarchMonsters.length > 0 && oppMaxAtk >= 2500) {
+        const wouldWin = luminarchMonsters.some((m) => {
+          const boostedAtk = (m.atk || 0) + 800;
+          return boostedAtk > oppMaxAtk + 300;
+        });
+        
+        if (wouldWin) {
+          return {
+            yes: true,
+            priority: 8,
+            reason: `Buff para superar wall ${oppMaxAtk} ATK (LP saudável: ${lp})`,
+          };
+        }
+      }
+
+      // Prioridade 3: Setup de comeback
+      // Se LP crítico mas pode virar jogo
+      if (lp <= 3000 && lp >= 2000 && oppLp <= 3000) {
+        const canPush = luminarchMonsters.length >= 2;
+        if (canPush) {
+          return {
+            yes: true,
+            priority: 6,
+            reason: "ALL-IN: ambos LP baixo, buff para push final",
+          };
+        }
       }
 
       return {
@@ -460,6 +491,22 @@ export function shouldSummonMonster(card, analysis) {
           reason: "Setup defensivo CRÍTICO - 2000 DEF + taunt",
         };
       }
+      
+      // Verificar se deve ser mantido para Ascension
+      const aegisOnField = analysis.field.find(
+        (c) => c && c.name === "Luminarch Aegisbearer"
+      );
+      if (aegisOnField) {
+        const fieldAge = aegisOnField.fieldAgeTurns || 0;
+        if (fieldAge >= 1) {
+          // Já tem um Aegis veterano - não invocar outro (diluir field)
+          return {
+            yes: false,
+            reason: `Aegis no campo (${fieldAge}/2 turnos para Ascension) - preservar field`,
+          };
+        }
+      }
+      
       // Já tem tank, ainda é bom mas menor prioridade
       return {
         yes: true,
@@ -538,12 +585,35 @@ export function shouldSummonMonster(card, analysis) {
     }
 
     if (name === "Luminarch Valiant - Knight of the Dawn") {
-      // Valiant busca MONSTRO - NÃO priorizar no early game!
-      // Problema: loop de Valiants não ganha jogo
+      // Valiant busca MONSTRO Lv4- (geralmente Aegisbearer ou Arbiter)
+      
+      // CRITICAL: Se não temos field spell E não temos Arbiter na mão,
+      // bloquear Valiant para não buscar Aegis quando deveríamos buscar field
+      const currentTurn = analysis.currentTurn || 1;
+      const isVeryEarly = currentTurn <= 2;
+      
+      if (!hasFieldSpell && isVeryEarly) {
+        const hasArbiterInHand = (analysis.hand || []).some(
+          (c) => c && c.name === "Luminarch Sanctified Arbiter"
+        );
+        if (!hasArbiterInHand) {
+          // MELHOR: Invocar Arbiter se ele estiver na mão
+          // Mas Valiant só busca monstros, não pode buscar Arbiter!
+          // Então: só usar Valiant se JÁ temos Arbiter ou Citadel na mão
+          const hasCitadelInHand = (analysis.hand || []).some(
+            (c) => c && c.name === "Sanctum of the Luminarch Citadel"
+          );
+          if (!hasCitadelInHand) {
+            return {
+              yes: false,
+              reason: "T1-2: PRECISO de field spell - Valiant não ajuda nisso",
+            };
+          }
+        }
+      }
 
-      // Se não temos tank, NÃO invocar Valiant - precisamos de defesa primeiro
+      // Se não temos tank, Valiant pode buscar Aegisbearer
       if (!hasTank && isEarlyGame) {
-        // Verificar se temos Aegisbearer na mão para buscar
         const hasAegisInHand = (analysis.hand || []).some(
           (c) => c && c.name === "Luminarch Aegisbearer"
         );
@@ -558,7 +628,7 @@ export function shouldSummonMonster(card, analysis) {
         return {
           yes: true,
           position: "defense", // Defesa porque não temos tank!
-          priority: 6,
+          priority: 7,
           reason: "Buscar Aegisbearer (setup defensivo)",
         };
       }
@@ -586,33 +656,59 @@ export function shouldSummonMonster(card, analysis) {
     // ═════════════════════════════════════════════════════════════════════════
 
     if (name === "Luminarch Celestial Marshal") {
-      const isSafe = 2500 > oppStrongest;
+      // Marshal é 2500 ATK / 2300 DEF com proteção de batalha
+      const isSafeAttack = (card.atk || 2500) > oppStrongest + 100;
+      const isSafeDefense = (card.def || 2300) >= oppStrongest - 200;
+      
+      // CRITICAL: Se opp tem ameaças fortes e não temos defesa, não suicide
+      if (oppStrongest >= 2600 && !hasTank) {
+        return {
+          yes: false,
+          reason: `Oponente tem ${oppStrongest} ATK - preciso de tank primeiro`,
+        };
+      }
+      
       return {
         yes: true,
-        position: isSafe ? "attack" : "defense",
-        priority: 6,
-        reason: isSafe
+        position: isSafeAttack ? "attack" : "defense",
+        priority: isSafeAttack ? 7 : 5,
+        reason: isSafeAttack
           ? "Boss beater 2500 ATK (seguro)"
           : "Defense até limpar board",
       };
     }
 
     if (name === "Luminarch Radiant Lancer") {
-      const isSafe = 2600 > oppStrongest;
+      const isSafe = (card.atk || 2600) > oppStrongest;
+      const hasSnowball = analysis.field.some(
+        (c) => c && c.cardKind === "monster" && c.position === "attack"
+      );
+      
+      // Lancer ganha ATK ao destruir - avaliar potencial
+      if (isSafe && hasSnowball) {
+        return {
+          yes: true,
+          position: "attack",
+          priority: 6,
+          reason: "Beater 2600 ATK (snowball após destroy)",
+        };
+      }
+      
       return {
         yes: true,
         position: isSafe ? "attack" : "defense",
-        priority: 5,
-        reason: isSafe ? "Beater 2600 ATK (snowball)" : "Defense position",
+        priority: 4,
+        reason: isSafe ? "Beater 2600 ATK" : "Defense position",
       };
     }
 
     if (name === "Luminarch Aurora Seraph") {
-      const isSafe = 2800 > oppStrongest;
+      // Seraph é 2800 ATK / 2400 DEF + heal on summon
+      const isSafe = (card.atk || 2800) > oppStrongest + 100;
       return {
         yes: true,
         position: isSafe ? "attack" : "defense",
-        priority: 6,
+        priority: isSafe ? 7 : 5,
         reason: isSafe
           ? "Boss 2800 ATK + lifegain"
           : "Defense (2400 DEF sólido)",

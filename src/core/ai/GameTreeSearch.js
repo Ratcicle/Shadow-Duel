@@ -167,7 +167,12 @@ function simulateAction(gameState, action, perspective) {
         opp.lp = Math.max(0, (opp.lp || 0) - (attacker?.atk || 0));
       } else {
         // Batalha simplificada: maior ATK vence
-        const defValue = target?.def || target?.atk || 0;
+        // 🎭 REGRA: Não pode ver DEF real de facedown (usar estimativa)
+        const defValue = target?.isFacedown
+          ? 1500
+          : target?.position === "defense"
+          ? target?.def || 0
+          : target?.atk || 0;
         if ((attacker?.atk || 0) > defValue) {
           opp.lp = Math.max(
             0,

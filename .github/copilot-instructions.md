@@ -17,10 +17,13 @@ src/data/cards.js             # Banco de cartas 100% declarativo
 
 **Fluxo de dados:** `Game.js` emite eventos → `EffectEngine` avalia triggers → handlers executam actions.
 
+**Event Bus:** `Game.js` usa padrão pub/sub centralizado. Eventos como `after_summon`, `battle_destroy`, `card_to_grave` disparam efeitos. Listeners registrados via `game.on(event, handler)`, emissão via `game.emit(event, payload)`.
+
 **Módulos auxiliares:**
 - **UI:** `src/ui/Renderer.js`, `src/core/UIAdapter.js`
 - **Bot/AI:** `src/core/Bot.js`, `src/core/ai/*.js` (estratégias por arquétipo)
 - **Validação:** `CardDatabaseValidator.js` — bloqueia duelo se cartas tiverem erros
+- **Modularização:** `src/core/game/` agrupa lógica por domínio (combat, zones, summon, turn). Cada módulo expõe funções puras importadas no `Game.js`
 
 ---
 
@@ -38,6 +41,8 @@ node test-ai-p0-validation.js # Validação de decisões da AI
 - Detecta bugs em efeitos, valida decisões da IA e testa balanceamento
 - Gera analytics: win rate, tempo de decisão, nós visitados, opening book
 - Use presets (`shadowheart`, `luminarch`) ou deck customizado (`default`)
+
+**Testes headless:** Todos os `test-*.js` usam um `mockRenderer` proxy que ignora chamadas UI. Timeout padrão: 30s por duelo. Duelos retornam `{ winner, reason, turns, botLP, playerLP, macroStrategy }`.
 
 **Flags de dev** (via `localStorage.setItem(key, "true")` no browser):
 - `shadow_duel_dev_mode` — Painel dev + logs detalhados
@@ -73,6 +78,10 @@ node test-ai-p0-validation.js # Validação de decisões da AI
 **Timings:** `on_play`, `on_event`, `ignition`, `passive`, `on_activate`, `on_field_activate`
 
 **Eventos:** `after_summon`, `battle_destroy`, `card_to_grave`, `standby_phase`, `attack_declared`, `opponent_damage`, `before_destroy`, `effect_targeted`
+
+**Targets:** Sistema de query declarativo. Ex: `{ id: "t1", owner: "self", zone: "field", cardKind: "monster", filters: { archetype: "Shadow-Heart" } }`. Engine resolve automaticamente.
+
+**Conditions:** Validações antes de executar efeito. Ex: `{ type: "card_count", zone: "field", owner: "self", cardKind: "monster", min: 2 }`.
 
 **Extra Deck:** `monsterType: "fusion"` ou `monsterType: "ascension"` + objeto `ascension: { materialId, requirements }`
 
@@ -135,6 +144,17 @@ await engine.chooseSpecialSummonPosition(card, player, { position });
 ```js
 oncePerTurn: true, oncePerTurnName: "Unique Effect Name"
 ```
+
+**Registrar listener de evento:**
+```js
+game.on("after_summon", (payload) => {
+  // payload: { card, player, method }
+});
+```
+
+**Targeting Cache:** `EffectEngine` cacheia buscas de targeting. `clearTargetingCache()` deve ser chamado após mudanças de estado (summon, destroy, move).
+
+**Validação de runtime:** `CardDatabaseValidator` roda na inicialização. Se cartas tiverem `action.type` não registrado em `wiring.js`, o jogo não inicia.
 
 ---
 

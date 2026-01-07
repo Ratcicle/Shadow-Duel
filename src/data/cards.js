@@ -1490,16 +1490,16 @@ export const cardDatabase = [
     id: 102,
     name: "Luminarch Holy Shield",
     cardKind: "spell",
-    subtype: "normal",
+    subtype: "quick",
     archetype: "Luminarch",
     description:
-      'Target up to 3 "Luminarch" monsters you control; until the end of this turn, they cannot be destroyed by battle, and any battle damage you would take involving those monsters is gained instead.',
+      '(Quick Effect) Target up to 3 "Luminarch" monsters you control; until the end of this turn, they cannot be destroyed by battle, and any battle damage you would take involving those monsters is gained instead.',
     image: "assets/Luminarch Holy Shield.png",
     effects: [
       {
         id: "luminarch_holy_shield_effect",
         timing: "on_play",
-        speed: 1,
+        speed: 2,
         targets: [
           {
             id: "holy_shield_targets",

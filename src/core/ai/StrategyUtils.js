@@ -17,7 +17,8 @@ export function estimateMonsterValue(monster, options = {}) {
   const fieldSpell = options.fieldSpell || null;
 
   const atk = (monster.atk || 0) + (monster.tempAtkBoost || 0);
-  const def = (monster.def || 0) + (monster.tempDefBoost || 0);
+  // 🎭 REGRA: Não pode ver DEF real de monstros facedown (usar estimativa)
+  const def = monster.isFacedown ? 1500 : (monster.def || 0) + (monster.tempDefBoost || 0);
   const level = monster.level || 0;
   const base = monster.position === "defense" || preferDefense ? def : atk;
 

@@ -29,6 +29,10 @@ export function detectAvailableCombos(analysis) {
     analysis.extraDeck = Array.isArray(analysis.extraDeck)
       ? analysis.extraDeck
       : [];
+    
+    // Detectar turno do jogo (aproximado)
+    const currentTurn = analysis.currentTurn || 1;
+    const isEarlyGame = currentTurn <= 3;
 
     // ═════════════════════════════════════════════════════════════════════════
     // COMBO 1: Tank Setup (Valiant → Aegisbearer → Citadel)
@@ -37,32 +41,60 @@ export function detectAvailableCombos(analysis) {
       (c) => c && c.name === "Luminarch Valiant - Knight of the Dawn"
     );
     const hasAegisInDeck = true; // Assumimos que está no deck
+    const hasAegisInHand = analysis.hand.some(
+      (c) => c && c.name === "Luminarch Aegisbearer"
+    );
     const hasCitadelInHand = analysis.hand.some(
       (c) => c && c.name === "Sanctum of the Luminarch Citadel"
     );
     const hasCitadelActive =
       analysis.fieldSpell?.name?.includes("Citadel") ?? false;
 
-    if (hasValiant && !hasCitadelActive) {
+    // Prioridade MÁXIMA no Turn 1: setup completo
+    if (hasValiant && !hasCitadelActive && isEarlyGame) {
+      const hasFullCombo = hasCitadelInHand;
       combos.push({
         id: "tank_setup",
-        name: "Tank Setup",
-        priority: 10,
+        name: hasFullCombo ? "Tank Setup COMPLETO" : "Tank Setup",
+        priority: hasFullCombo ? 15 : 12,
         cards: [
           "Luminarch Valiant - Knight of the Dawn",
           "Luminarch Aegisbearer",
+          ...(hasFullCombo ? ["Sanctum of the Luminarch Citadel"] : []),
         ],
-        description:
-          "T1: Valiant search Aegisbearer → SS Aegis (2500 DEF taunt)",
+        description: hasFullCombo
+          ? "T1 IDEAL: Valiant → Aegis → Citadel = 2500 DEF tank + field buff"
+          : "T1: Valiant search Aegisbearer → SS Aegis (2500 DEF taunt)",
         steps: [
           "Normal Summon Valiant",
           "Efeito: add Aegisbearer",
           "Special Summon Aegisbearer (DEF)",
-          "Ativar Citadel se tiver",
+          ...(hasFullCombo ? ["Ativar Citadel"] : ["Buscar Citadel depois"]),
         ],
         conditions: {
           hasValiantInHand: hasValiant,
           fieldNotFull: analysis.field.length < 4,
+          fullCombo: hasFullCombo,
+        },
+      });
+    }
+    
+    // Se já tem Aegis na mão + Citadel, pode pular Valiant
+    if (hasAegisInHand && hasCitadelInHand && !hasCitadelActive && isEarlyGame) {
+      combos.push({
+        id: "aegis_citadel_direct",
+        name: "Aegis + Citadel Setup Direto",
+        priority: 13,
+        cards: ["Luminarch Aegisbearer", "Sanctum of the Luminarch Citadel"],
+        description: "SS Aegis direto → Citadel = 2500 DEF tank imediato",
+        steps: [
+          "Special Summon Aegisbearer",
+          "Ativar Citadel",
+          "Tank setup completo T1",
+        ],
+        conditions: {
+          aegisInHand: hasAegisInHand,
+          citadelInHand: hasCitadelInHand,
         },
       });
     }
@@ -75,16 +107,20 @@ export function detectAvailableCombos(analysis) {
     );
 
     if (hasArbiter && !hasCitadelActive) {
+      // Prioridade EXTRA alta se T1 e ainda não tem field spell
+      const priorityBoost = isEarlyGame && !analysis.fieldSpell ? 3 : 0;
       combos.push({
         id: "arbiter_citadel",
         name: "Arbiter → Citadel",
-        priority: 11,
+        priority: 11 + priorityBoost,
         cards: ["Luminarch Sanctified Arbiter"],
-        description: "T1: Arbiter search Citadel field spell",
+        description: isEarlyGame
+          ? "T1 PRIORITY: Arbiter search Citadel field spell"
+          : "Arbiter search Citadel field spell",
         steps: [
           "Normal Summon Arbiter",
           "Efeito: search Citadel",
-          "Ativar Citadel",
+          "Ativar Citadel no mesmo turno",
         ],
         conditions: {
           hasArbiterInHand: hasArbiter,
@@ -291,7 +327,7 @@ export function detectAvailableCombos(analysis) {
     }
 
     // ═════════════════════════════════════════════════════════════════════════
-    // COMBO 9: Ascension Setup (Aegis 2 turnos)
+    // COMBO 9: Fortress Aegis Ascension Chain (AVANÇADO)
     // ═════════════════════════════════════════════════════════════════════════
     const aegisFieldAge = hasAegisOnField
       ? analysis.field.find((c) => c && c.name === "Luminarch Aegisbearer")
@@ -301,17 +337,71 @@ export function detectAvailableCombos(analysis) {
     const hasFortressInExtra = (analysis.extraDeck || []).some(
       (c) => c && c.name === "Luminarch Fortress Aegis"
     );
+    const hasHalberdInHand = analysis.hand.some(
+      (c) => c && c.name === "Luminarch Enchanted Halberd"
+    );
 
     if (hasAegisOnField && hasFortressInExtra) {
       if (canAscend) {
+        const hasFullChain = hasHalberdInHand;
         combos.push({
-          id: "fortress_aegis_ascension",
-          name: "Fortress Aegis Ascension PRONTA",
-          priority: 9,
+          id: "fortress_aegis_ascension_chain",
+          name: hasFullChain
+            ? "🔥 FORTRESS AEGIS CHAIN COMPLETA"
+            : "Fortress Aegis Ascension PRONTA",
+          priority: hasFullChain ? 14 : 9,
+          cards: [
+            "Luminarch Aegisbearer",
+            "Luminarch Fortress Aegis",
+            ...(hasFullChain ? ["Luminarch Enchanted Halberd"] : []),
+          ],
+          description: hasFullChain
+            ? "Ascend → Fortress revive Aegis (2500 DEF) → Halberd auto-SS → 3 TANKS!"
+            : "Aegis 2+ turnos → Ascend para Fortress (2500 DEF + recursion)",
+          steps: hasFullChain
+            ? [
+                "Perform Ascension Summon (Aegis → Fortress Aegis)",
+                "Fortress efeito: revive Aegis do GY",
+                "Aegis revive como Special Summon (2500 DEF taunt)",
+                "🎯 Halberd vê Special Summon → auto-SS da mão!",
+                "Resultado: 2 tanks taunt (Aegis 2500 + Fortress 2500) + Halberd",
+              ]
+            : [
+                "Perform Ascension Summon (Aegis → Fortress Aegis)",
+                "Fortress efeito: revive Aegis do GY",
+                "Aegis volta com 2500 DEF (taunt)",
+                "Setup defensivo completo",
+              ],
+          conditions: {
+            aegisOnField: hasAegisOnField,
+            aegisReady: canAscend,
+            fortressInExtra: hasFortressInExtra,
+            halberdInHand: hasHalberdInHand,
+            fullChain: hasFullChain,
+          },
+        });
+      } else {
+        // Aegis ainda não pronto - avisar quantos turnos faltam
+        const turnsLeft = Math.max(0, 2 - aegisFieldAge);
+        combos.push({
+          id: "fortress_aegis_prep",
+          name: "Fortress Aegis - Aguardando Maturidade",
+          priority: 0, // Não executar, apenas informativo
           cards: ["Luminarch Aegisbearer", "Luminarch Fortress Aegis"],
-          description:
-            "Aegis 2+ turnos → Ascend para Fortress (2500 DEF + recursion)",
+          description: `Aegis precisa ${turnsLeft} turno(s) no campo para Ascend`,
           steps: [
+            `Aguardar ${turnsLeft} turno(s)`,
+            "Proteger Aegis até ficar pronto",
+            "Então fazer Ascension Summon",
+          ],
+          conditions: {
+            aegisOnField: hasAegisOnField,
+            aegisNotReady: !canAscend,
+            turnsLeft,
+          },
+        });
+      }
+    }
             "Ascension Summon Fortress Aegis",
             "Enviar Aegisbearer como material",
             "Heal 500 LP por Luminarch no campo",
@@ -376,19 +466,83 @@ export function shouldPrioritizeDefense(analysis) {
     (sum, m) => sum + (m && m.atk ? m.atk : 0),
     0
   );
+  
+  const myFieldStrength = (analysis.field || []).reduce(
+    (sum, m) => sum + (m && m.atk ? m.atk : 0),
+    0
+  );
 
-  // LP baixo = defensivo
-  if (lp <= 3000) return true;
+  // LP crítico = SEMPRE defensivo
+  if (lp <= 2500) return true;
 
-  // Oponente com board forte = defensivo
-  if (oppFieldStrength >= 6000) return true;
+  // LP baixo-médio + oponente forte = defensivo
+  if (lp <= 4000 && oppFieldStrength >= 5000) return true;
 
-  // Campo vazio + oponente com monstros = defensivo
+  // Oponente com board muito forte = defensivo
+  if (oppFieldStrength >= 7500) return true;
+
+  // Campo vazio + oponente com 2+ monstros = defensivo
   if (analysis.field.length === 0 && (analysis.oppField || []).length >= 2) {
+    return true;
+  }
+  
+  // Oponente dominando board (strength 2x maior)
+  if (oppFieldStrength >= myFieldStrength * 2 && myFieldStrength > 0) {
     return true;
   }
 
   return false;
+}
+
+/**
+ * Helper: detecta se deve fazer turtle/heal loop strategy.
+ * Luminarch pode ganhar via stall + Citadel heal + Holy Shield.
+ * @param {Object} analysis
+ * @returns {Object} { shouldTurtle: boolean, reason: string }
+ */
+export function shouldTurtleStrategy(analysis) {
+  const lp = analysis.lp || 8000;
+  const oppLp = analysis.oppLp || 8000;
+  const hasCitadel = analysis.fieldSpell?.name?.includes("Citadel") ?? false;
+  const hasAegis = analysis.field.some(
+    (c) => c && c.name === "Luminarch Aegisbearer"
+  );
+  const hasHolyShield = analysis.hand.some(
+    (c) => c && c.name === "Luminarch Holy Shield"
+  );
+  
+  // Condição 1: LP crítico mas tenho engine de heal
+  if (lp <= 3000 && hasCitadel && hasAegis) {
+    return {
+      shouldTurtle: true,
+      reason: "LP baixo + Citadel + Aegis taunt = heal loop viável",
+    };
+  }
+  
+  // Condição 2: Oponente muito forte, preciso ganhar tempo
+  const oppStrength = (analysis.oppField || []).reduce(
+    (sum, m) => sum + (m && m.atk ? m.atk : 0),
+    0
+  );
+  if (oppStrength >= 7000 && hasCitadel) {
+    return {
+      shouldTurtle: true,
+      reason: "Oponente muito forte - stall + heal para sobreviver",
+    };
+  }
+  
+  // Condição 3: Tenho full combo defensivo (Aegis + Citadel + Holy Shield)
+  if (hasCitadel && hasAegis && hasHolyShield) {
+    return {
+      shouldTurtle: true,
+      reason: "COMBO DEFENSIVO COMPLETO - maximize heal loop",
+    };
+  }
+  
+  return {
+    shouldTurtle: false,
+    reason: "Sem engine de turtle/heal suficiente",
+  };
 }
 
 /**
@@ -399,16 +553,32 @@ export function shouldPrioritizeDefense(analysis) {
 export function canAttemptLethal(analysis) {
   const oppLp = analysis.oppLp || 8000;
   const myAttackers = analysis.field.filter(
-    (m) => m && m.cardKind === "monster" && m.position === "attack"
+    (m) => m && m.cardKind === "monster" && m.position === "attack" && !m.isFacedown
   );
   const totalAtk = myAttackers.reduce((sum, m) => sum + (m.atk || 0), 0);
+  
+  // Calcular damage direto potencial
+  const oppDefenders = (analysis.oppField || []).filter(
+    (m) => m && m.cardKind === "monster" && !m.isFacedown
+  ).length;
+  
+  // Cenário 1: Damage direto suficiente (sem defenders ou passa por todos)
+  const directDamage = oppDefenders === 0 ? totalAtk : 0;
+  if (directDamage >= oppLp) return true;
 
-  // Damage direto suficiente?
-  if (totalAtk >= oppLp) return true;
+  // Cenário 2: Com buff (Holy Ascension +800 ATK/monstro)
+  const luminarchCount = myAttackers.filter((m) => isLuminarch(m)).length;
+  const withBuff = totalAtk + (luminarchCount * 800);
+  const canAffordBuff = (analysis.lp || 8000) >= 1000;
+  
+  if (canAffordBuff && withBuff >= oppLp + (oppDefenders * 1000)) {
+    return true;
+  }
 
-  // Com buff pode fechar?
-  const withBuff = totalAtk + 800; // Holy Ascension
-  if (withBuff >= oppLp && (analysis.lp || 8000) >= 1000) return true;
+  // Cenário 3: Oponente LP crítico (<= 2000) e tenho board
+  if (oppLp <= 2000 && myAttackers.length >= 2) {
+    return true;
+  }
 
   return false;
 }
