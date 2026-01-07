@@ -427,75 +427,162 @@ export function shouldSummonMonster(card, analysis) {
     );
 
     // ═════════════════════════════════════════════════════════════════════════
-    // SEARCHERS - ALTA PRIORIDADE
+    // LUMINARCH STRATEGY: DEFENSIVE CONTROL
+    // Early game: Setup defenses (Aegisbearer, Sanctum Protector)
+    // Mid game: Accumulate resources (spells, hand advantage)
+    // Late game: Push with buffed monsters or Marshal
     // ═════════════════════════════════════════════════════════════════════════
 
-    if (name === "Luminarch Valiant - Knight of the Dawn") {
-      // Sempre invocar turn 1-2
-      return {
-        yes: true,
-        position: "attack",
-        priority: 9,
-        reason: "Searcher T1 (add Aegisbearer ou outro Lv4-)",
-      };
-    }
-
-    if (name === "Luminarch Sanctified Arbiter") {
-      const hasCitadel =
-        analysis.fieldSpell?.name?.includes("Citadel") ?? false;
-      if (!hasCitadel) {
-        return {
-          yes: true,
-          position: "attack",
-          priority: 10,
-          reason: "Search Sanctum Citadel (field spell core!)",
-        };
-      }
-      return {
-        yes: true,
-        position: "attack",
-        priority: 6,
-        reason: "Search spell útil (Holy Shield, Moonlit Blessing)",
-      };
-    }
+    // Calcular fase do jogo baseado em recursos
+    // Early game: campo vazio/1 monstro E poucos recursos usados (graveyard pequeno)
+    const gyCount = analysis.graveyard?.length || 0;
+    const fieldCount = analysis.field.length;
+    const isEarlyGame = fieldCount <= 1 && gyCount <= 2;
+    const hasTank = analysis.field.some(
+      (c) =>
+        c &&
+        (c.name === "Luminarch Aegisbearer" ||
+          c.name === "Luminarch Sanctum Protector")
+    );
+    const hasFieldSpell = !!analysis.fieldSpell;
 
     // ═════════════════════════════════════════════════════════════════════════
-    // TANKS - POSIÇÃO DEFENSIVA
+    // TANKS - PRIORIDADE MÁXIMA NO EARLY GAME
     // ═════════════════════════════════════════════════════════════════════════
 
     if (name === "Luminarch Aegisbearer") {
-      // SEMPRE boa (taunt tank)
+      // Aegisbearer é SEMPRE prioridade máxima se não temos tank
+      if (!hasTank) {
+        return {
+          yes: true,
+          position: "defense",
+          priority: 12, // Máxima prioridade
+          reason: "Setup defensivo CRÍTICO - 2000 DEF + taunt",
+        };
+      }
+      // Já tem tank, ainda é bom mas menor prioridade
       return {
         yes: true,
         position: "defense",
-        priority: 10,
-        reason: "Taunt tank (força ataques) - 2000 DEF base",
+        priority: 7,
+        reason: "Reforço defensivo (já tem tank)",
       };
     }
 
     if (name === "Luminarch Sanctum Protector") {
+      // Sanctum Protector é o tank definitivo - 2800 DEF + negar ataque
+      if (!hasTank) {
+        return {
+          yes: true,
+          position: "defense",
+          priority: 11,
+          reason: "Wall máximo - 2800 DEF + negar ataque",
+        };
+      }
+      // Combo com Aegis: pode usar SS effect
       const hasAegis = analysis.field.some(
         (c) => c && c.name === "Luminarch Aegisbearer"
       );
-      // Melhor com Aegis no campo (pode usar como custo)
       if (hasAegis) {
         return {
           yes: true,
           position: "defense",
-          priority: 8,
-          reason: "Com Aegis: pode SS usando ela como custo (2800 DEF wall)",
+          priority: 9,
+          reason: "SS grátis via Aegis (wall supremo)",
         };
       }
       return {
         yes: true,
         position: "defense",
-        priority: 5,
-        reason: "Tank 2800 DEF + negar ataque",
+        priority: 6,
+        reason: "Tank extra (já estável)",
       };
     }
 
     // ═════════════════════════════════════════════════════════════════════════
-    // BEATERS - POSIÇÃO OFENSIVA (SE SEGURO)
+    // SEARCHERS - CONTEXTUAIS
+    // ═════════════════════════════════════════════════════════════════════════
+
+    if (name === "Luminarch Sanctified Arbiter") {
+      // Arbiter busca SPELL/TRAP - priorizar se não temos field spell
+      if (!hasFieldSpell) {
+        return {
+          yes: true,
+          position: hasTank ? "attack" : "defense",
+          priority: 10,
+          reason: "Buscar Sanctum Citadel (field spell core!)",
+        };
+      }
+      // Já tem field spell - buscar proteção se não temos
+      const hasProtection = (analysis.hand || []).some(
+        (c) =>
+          c &&
+          (c.name === "Luminarch Holy Shield" ||
+            c.name === "Luminarch Crescent Shield")
+      );
+      if (!hasProtection && hasTank) {
+        return {
+          yes: true,
+          position: "attack",
+          priority: 7,
+          reason: "Buscar spell de proteção",
+        };
+      }
+      // Low priority se já temos setup
+      return {
+        yes: true,
+        position: "attack",
+        priority: 4,
+        reason: "Buscar spell utility",
+      };
+    }
+
+    if (name === "Luminarch Valiant - Knight of the Dawn") {
+      // Valiant busca MONSTRO - NÃO priorizar no early game!
+      // Problema: loop de Valiants não ganha jogo
+
+      // Se não temos tank, NÃO invocar Valiant - precisamos de defesa primeiro
+      if (!hasTank && isEarlyGame) {
+        // Verificar se temos Aegisbearer na mão para buscar
+        const hasAegisInHand = (analysis.hand || []).some(
+          (c) => c && c.name === "Luminarch Aegisbearer"
+        );
+        if (hasAegisInHand) {
+          // Já temos Aegis na mão, não precisamos de Valiant
+          return {
+            yes: false,
+            reason: "Já tenho Aegisbearer na mão - invocar ele primeiro",
+          };
+        }
+        // Não temos Aegis - Valiant pode buscar
+        return {
+          yes: true,
+          position: "defense", // Defesa porque não temos tank!
+          priority: 6,
+          reason: "Buscar Aegisbearer (setup defensivo)",
+        };
+      }
+
+      // Mid/late game: Valiant é bom para manter recursos
+      if (hasTank) {
+        return {
+          yes: true,
+          position: "attack",
+          priority: 5,
+          reason: "Buscar monstro (já estável)",
+        };
+      }
+
+      return {
+        yes: true,
+        position: "defense",
+        priority: 4,
+        reason: "Searcher conservador",
+      };
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // BEATERS - SÓ QUANDO SEGURO
     // ═════════════════════════════════════════════════════════════════════════
 
     if (name === "Luminarch Celestial Marshal") {
