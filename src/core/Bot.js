@@ -99,41 +99,54 @@ export default class Bot extends Player {
     ];
   }
 
-  // Deck Luminarch fixo e balanceado
+  // Deck Luminarch otimizado (Tank/Control - S/A-tier focus)
   getLuminarchDeck() {
     return [
-      // Monstros principais (nível baixo - searchers/utility)
-      101,
-      101,
-      101, // Luminarch Valiant – Knight of the Dawn (searcher)
-      103,
-      103,
-      103, // Luminarch Aegisbearer (taunt/tank)
-      110,
-      110, // Luminarch Sanctified Arbiter (busca Convocation)
-      106,
-      106, // Luminarch Magic Sickle (baixo nível)
-      117,
-      117, // Luminarch Enchanted Halberd
-      // Monstros médios/altos (bosses)
-      104,
-      104, // Luminarch Moonblade Captain (revive + double attack)
-      105,
-      105, // Luminarch Celestial Marshal (boss lv7)
-      108, // Luminarch Radiant Lancer (boss lv8)
-      109, // Luminarch Aurora Seraph (boss lv8)
-      107, // Luminarch Sanctum Protector (lv7 defesa)
-      // Magias
-      111,
-      111, // Luminarch Knights Convocation
+      // ═════════════════════════════════════════════════════════════════════
+      // S-TIER CORE (máx cópias) — 9 cards
+      // ═════════════════════════════════════════════════════════════════════
       112,
-      112, // Sanctum of the Luminarch Citadel (field spell)
-      118,
-      118, // Luminarch Moonlit Blessing (recovery)
+      112,
+      112, // Sanctum of the Luminarch Citadel (field spell S-tier, priority 22)
+      103,
+      103,
+      103, // Luminarch Aegisbearer (taunt tank S-tier, priority 20)
       102,
-      102, // Luminarch Holy Shield (proteção)
-      115, // Luminarch Crescent Shield (equip)
-      119, // Luminarch Sacred Judgment (comeback)
+      102,
+      102, // Luminarch Holy Shield (proteção S-tier, priority 20)
+
+      // ═════════════════════════════════════════════════════════════════════
+      // A-TIER SEARCHERS & RECURSION — 8 cards
+      // ═════════════════════════════════════════════════════════════════════
+      101,
+      101,
+      101, // Luminarch Valiant – Knight of the Dawn (searcher A-tier, priority 18)
+      118,
+      118, // Luminarch Moonlit Blessing (recursion A-tier, priority 17)
+      110,
+      110,
+      110, // Luminarch Sanctified Arbiter (busca Citadel, A-tier, priority 16)
+
+      // ═════════════════════════════════════════════════════════════════════
+      // A-TIER BOSS BEATERS — 4 cards
+      // ═════════════════════════════════════════════════════════════════════
+      104,
+      104, // Luminarch Moonblade Captain (recursion + double atk, priority 16)
+      105,
+      105, // Luminarch Celestial Marshal (boss 2500 ATK, priority 15)
+
+      // ═════════════════════════════════════════════════════════════════════
+      // B-TIER SUPPORT & UTILITY — 9 cards
+      // ═════════════════════════════════════════════════════════════════════
+      107,
+      107, // Luminarch Sanctum Protector (2800 DEF tank, priority 14)
+      106,
+      106, // Luminarch Magic Sickle (recursion engine, priority 12)
+      115,
+      115, // Luminarch Crescent Shield (equip, priority 10)
+      111, // Luminarch Knights Convocation (Special Summon, priority 9)
+      119, // Luminarch Sacred Judgment (comeback, priority 8)
+      113, // Luminarch Holy Ascension (ATK buff, priority 7)
     ];
   }
 
@@ -155,9 +168,12 @@ export default class Bot extends Player {
     ];
   }
 
-  // Extra Deck Luminarch (placeholder para futuras fusões)
+  // Extra Deck Luminarch (Fusion + Ascension)
   getLuminarchExtraDeck() {
-    return [];
+    return [
+      120, // Luminarch Megashield Barbarias (fusion tank, 3000 DEF)
+      121, // Luminarch Fortress Aegis (ascensão de Aegisbearer)
+    ];
   }
 
   resolveOpponent(game) {

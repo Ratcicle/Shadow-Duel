@@ -346,7 +346,9 @@ export default class Player {
 
       this.hand.splice(cardIndex, 1);
       card.position = position === "defense" ? "defense" : "attack";
-      card.isFacedown = isFacedown === true;
+      // REGRA DO JOGO: defense = sempre facedown (set)
+      // facedown = true força defense, e defense força facedown
+      card.isFacedown = isFacedown === true || card.position === "defense";
       if (card.isFacedown) {
         card.position = "defense";
       }

@@ -538,11 +538,13 @@ export function shouldSummonMonster(card, analysis, tributeInfo) {
     if (!hasDarknessValley && !hasKeySpells) {
       // Altíssima prioridade se não temos setup
       // SEMPRE face-up para disparar efeito de busca (on_event after_summon requires face-up)
+      // REGRA: facedown só existe com position="defense", então invocamos em attack para efeito
+      const needsDefense = isSuicideSummon && shouldDefensivePosition;
       return {
         yes: true,
-        position:
-          isSuicideSummon && shouldDefensivePosition ? "defense" : "attack",
-        facedown: false, // Force face-up to trigger search effect
+        // Se precisamos de defesa, invocamos em attack mesmo assim para buscar
+        // O efeito de busca é mais importante que sobreviver
+        position: "attack",
         priority: 9,
         reason: "Buscar spell-chave (Darkness Valley/Covenant/Shield)",
       };
@@ -550,13 +552,15 @@ export function shouldSummonMonster(card, analysis, tributeInfo) {
 
     // Prioridade média se já temos spells
     if (isSuicideSummon) {
+      // Se já temos as spells, podemos setar em defesa (facedown)
+      // Nesse caso perdemos o efeito de busca, mas já temos o que precisamos
       return {
         yes: shouldDefensivePosition,
         position: "defense",
-        facedown: false, // Still face-up if summoning for value
+        // REGRA DO JOGO: defense = sempre facedown
         priority: shouldDefensivePosition ? 5 : 0,
         reason: shouldDefensivePosition
-          ? "Searcher em DEF"
+          ? "Searcher em DEF (set)"
           : "Void Mage seria destruído",
       };
     }
@@ -564,7 +568,6 @@ export function shouldSummonMonster(card, analysis, tributeInfo) {
     return {
       yes: true,
       position: "attack",
-      facedown: false, // Always face-up for search effect
       priority: 7,
       reason: "Searcher de spells + draw engine",
     };
@@ -592,7 +595,7 @@ export function shouldSummonMonster(card, analysis, tributeInfo) {
       const hasBattleIndestructible = analysis.oppField.some(
         (m) => m.battleIndestructible || m.cannotBeDestroyedByBattle
       );
-      
+
       if (hasBattleIndestructible) {
         return {
           yes: true,
@@ -779,7 +782,12 @@ export function shouldSummonMonster(card, analysis, tributeInfo) {
  * @param {Object} [context] - Contexto adicional (oppField, game state)
  * @returns {number[]} Índices dos monstros a tributar
  */
-export function selectBestTributes(field, tributesNeeded, cardToSummon = null, context = {}) {
+export function selectBestTributes(
+  field,
+  tributesNeeded,
+  cardToSummon = null,
+  context = {}
+) {
   if (tributesNeeded <= 0 || !field || field.length < tributesNeeded) {
     return [];
   }
@@ -805,7 +813,7 @@ export function selectBestTributes(field, tributesNeeded, cardToSummon = null, c
       // Se é situação de emergência (battle-indestructible), reduzir penalidade
       value += isEmergencyRemoval ? 10 : 20;
     }
-    
+
     if (monster.name === "Shadow-Heart Demon Dragon") {
       // Em emergência ainda é caro, mas não impossível
       value += isEmergencyRemoval ? 15 : 25;
