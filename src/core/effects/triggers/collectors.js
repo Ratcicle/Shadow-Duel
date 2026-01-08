@@ -120,6 +120,14 @@ export async function collectAfterSummonTriggers(payload) {
           continue;
         }
 
+        // Check requireFaceup condition
+        if (effect.requireFaceup === true && sourceCard.isFacedown === true) {
+          console.log(
+            `[after_summon] Skipping effect on ${sourceCard.name}: requireFaceup=true but card is facedown`
+          );
+          continue;
+        }
+
         if (sourceZone === "hand") {
           const requiresSelfInHand =
             effect?.condition?.requires === "self_in_hand";
@@ -331,6 +339,14 @@ export async function collectBattleDestroyTriggers(payload) {
           continue;
         }
 
+        // Check requireFaceup condition
+        if (effect.requireFaceup === true && card.isFacedown === true) {
+          console.log(
+            `[battle_destroy] Skipping effect on ${card.name}: requireFaceup=true but card is facedown`
+          );
+          continue;
+        }
+
         const optCheck = this.checkOncePerTurn(card, owner, effect);
         if (!optCheck.ok) {
           console.log(optCheck.reason);
@@ -471,6 +487,16 @@ export async function collectAttackDeclaredTriggers(payload) {
         if (!card.isFacedown && this.isEffectNegated(card)) {
           if (devMode) {
             console.log(`${card.name} effects are negated, skipping effect.`);
+          }
+          continue;
+        }
+
+        // Check requireFaceup condition
+        if (effect.requireFaceup === true && card.isFacedown === true) {
+          if (devMode) {
+            console.log(
+              `[attack_declared] Skipping effect on ${card.name}: requireFaceup=true but card is facedown`
+            );
           }
           continue;
         }
@@ -695,6 +721,14 @@ export async function collectEffectTargetedTriggers(payload) {
         continue;
       }
 
+      // Check requireFaceup condition
+      if (effect.requireFaceup === true && card.isFacedown === true) {
+        console.log(
+          `[effect_targeted] Skipping effect on ${card.name}: requireFaceup=true but card is facedown`
+        );
+        continue;
+      }
+
       const optCheck = this.checkOncePerTurn(card, targetOwner, effect);
       if (!optCheck.ok) {
         console.log(optCheck.reason);
@@ -840,6 +874,14 @@ export async function collectCardToGraveTriggers(payload) {
       continue;
     }
 
+    // Check requireFaceup condition (rare case: card destroyed while facedown)
+    if (effect.requireFaceup === true && card.isFacedown === true) {
+      console.log(
+        `[card_to_grave] Skipping effect on ${card.name}: requireFaceup=true but card was facedown`
+      );
+      continue;
+    }
+
     console.log(
       `[handleCardToGraveEvent] Found card_to_grave effect: ${effect.id}`
     );
@@ -980,6 +1022,14 @@ export async function collectStandbyPhaseTriggers(payload) {
 
       if (this.isEffectNegated(card)) {
         console.log(`${card.name} effects are negated, skipping effect.`);
+        continue;
+      }
+
+      // Check requireFaceup condition
+      if (effect.requireFaceup === true && card.isFacedown === true) {
+        console.log(
+          `[standby_phase] Skipping effect on ${card.name}: requireFaceup=true but card is facedown`
+        );
         continue;
       }
 

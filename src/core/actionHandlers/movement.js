@@ -110,6 +110,14 @@ async function bounceAndSummonCard(source, target, player, action, engine) {
     }
   }
 
+  // 🚨 CRITICAL VALIDATION: Only monsters can be summoned to field
+  if (!target || target.cardKind !== "monster") {
+    console.error(
+      `[bounceAndSummonCard] ❌ BLOCKED: Attempted to summon non-monster "${target?.name}" (kind: ${target?.cardKind})`
+    );
+    return false;
+  }
+
   // Determine position
   let position = action.position || "choice";
   if (position === "choice") {

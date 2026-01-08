@@ -486,6 +486,14 @@ export async function summonFromHandCore({
     return { success: false, position };
   }
 
+  // 🚨 CRITICAL VALIDATION: Only monsters can be summoned to field
+  if (card.cardKind !== "monster") {
+    console.error(
+      `[summonFromHandCore] ❌ BLOCKED: Attempted to summon non-monster "${card.name}" (kind: ${card.cardKind})`
+    );
+    return { success: false, position };
+  }
+
   // Unified semantics: undefined ? choice, use EffectEngine resolver
   const resolvedPosition = await engine.chooseSpecialSummonPosition(
     card,

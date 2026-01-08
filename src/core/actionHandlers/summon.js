@@ -421,6 +421,14 @@ async function summonCards(cards, sourceZoneEntries, player, action, engine) {
   for (const card of cards) {
     if (!card || player.field.length >= 5) break;
 
+    // 🚨 CRITICAL VALIDATION: Only monsters can be special summoned to field
+    if (card.cardKind !== "monster") {
+      console.error(
+        `[handleSpecialSummonFromZone] ❌ BLOCKED: Attempted to summon non-monster "${card.name}" (kind: ${card.cardKind}) from zone: ${fromZoneName}`
+      );
+      continue; // Skip this card, continue with others
+    }
+
     const resolvedFromZone =
       typeof action.fromZone === "string"
         ? action.fromZone
@@ -1235,6 +1243,14 @@ export async function handleConditionalSummonFromHand(
   let targetCards = [];
 
   if (targetRef === "self" && source) {
+    // 🚨 CRITICAL: "self" should only be used for monster sources (e.g., monsters summoning themselves)
+    // If source is a spell/trap, this is a bug - log and reject
+    if (source.cardKind !== "monster") {
+      console.error(
+        `[handleConditionalSummonFromHand] ❌ BUG: targetRef="self" but source is ${source.cardKind} "${source.name}". Only monsters can summon themselves.`
+      );
+      return false;
+    }
     targetCards = [source];
   } else if (targetRef && targets?.[targetRef]) {
     targetCards = targets?.[targetRef];
@@ -1245,9 +1261,24 @@ export async function handleConditionalSummonFromHand(
     }
   }
 
-  if (!targetCards || targetCards.length === 0) return false;
+  if (!targetCards || targetCards.length === 0) {
+    if (game.devMode) {
+      console.log(
+        `[handleConditionalSummonFromHand] No target cards found for targetRef="${targetRef}"`
+      );
+    }
+    return false;
+  }
 
   const card = Array.isArray(targetCards) ? targetCards[0] : targetCards;
+
+  // 🚨 EARLY VALIDATION: Check if the resolved card is a monster
+  if (!card || card.cardKind !== "monster") {
+    console.error(
+      `[handleConditionalSummonFromHand] ❌ BLOCKED: targetRef="${targetRef}" resolved to non-monster "${card?.name}" (kind: ${card?.cardKind})`
+    );
+    return false;
+  }
 
   // Find card in hand (might be different reference if moved by previous action)
   const handCard = player.hand.find((c) => c === card || c.name === card.name);
@@ -1397,6 +1428,14 @@ export async function handleConditionalSummonFromHand(
 async function performSummonFromHand(card, handIndex, player, action, engine) {
   const game = engine.game;
 
+  // 🚨 CRITICAL VALIDATION: Only monsters can be summoned to field
+  if (!card || card.cardKind !== "monster") {
+    console.error(
+      `[performSummonFromHand] ❌ BLOCKED: Attempted to summon non-monster "${card?.name}" (kind: ${card?.cardKind})`
+    );
+    return false;
+  }
+
   // Unified semantics: use EffectEngine resolver with action.position
   const position = await engine.chooseSpecialSummonPosition(card, player, {
     position: action.position,
@@ -1436,6 +1475,12 @@ async function performSummonFromHand(card, handIndex, player, action, engine) {
   );
 
   game.updateBoard();
+
+  // 🔧 CRITICAL FIX: Clear any pending selection state to prevent "Finalize o efeito pendente" freeze
+  // This ensures that if another effect (e.g., Halberd's after_summon) triggers, it won't be blocked
+  if (game.finishSelection && typeof game.finishSelection === "function") {
+    game.finishSelection();
+  }
 
   return true;
 }
@@ -1567,6 +1612,14 @@ async function performSummonFromDeck(
   const game = engine.game;
 
   if (!card || !deck.includes(card)) return false;
+
+  // 🚨 CRITICAL VALIDATION: Only monsters can be summoned to field
+  if (card.cardKind !== "monster") {
+    console.error(
+      `[performSummonFromDeck] ❌ BLOCKED: Attempted to summon non-monster "${card.name}" (kind: ${card.cardKind})`
+    );
+    return false;
+  }
 
   // Check field space
   if (player.field.length >= 5) {

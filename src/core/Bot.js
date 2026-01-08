@@ -9,7 +9,7 @@ export default class Bot extends Player {
   constructor(archetype = "shadowheart") {
     super("bot", "Opponent", "ai");
     this.maxSimulationsPerPhase = 20;
-    this.maxChainedActions = 3;
+    this.maxChainedActions = 6; // Aumentado de 3 para 6 - permite múltiplas ações + efeitos
     this.setPreset(archetype);
   }
   static getAvailablePresets() {
@@ -445,11 +445,8 @@ export default class Bot extends Player {
         break;
       }
       
-      // 🔧 FIX: Efeitos de cartas já em campo não contam para limite de ações
-      // Apenas jogadas proativas (summon, spell, set) consomem o "action budget"
-      if (bestAction.type !== "spellTrapEffect" && bestAction.type !== "monsterEffect") {
-        chainCount += 1;
-      }
+      // Incrementar chainCount - todas as ações proativas contam
+      chainCount += 1;
 
       if (typeof game.waitForPhaseDelay === "function") {
         await game.waitForPhaseDelay();
@@ -466,7 +463,11 @@ export default class Bot extends Player {
       kind: "bot_attack",
       phaseReq: "battle",
     });
-    if (!guard.ok) return;
+    if (!guard.ok) {
+      console.log(`[Bot.playBattlePhase] ⚠️ Guard blocked:`, guard);
+      return;
+    }
+    console.log(`[Bot.playBattlePhase] ✅ Starting battle phase evaluation`);
     const opponent = this.resolveOpponent(game);
     if (!opponent) return;
     const battleDelayMs = Number.isFinite(game?.aiBattleDelayMs)
@@ -532,6 +533,12 @@ export default class Bot extends Player {
           const simTarget = target
             ? simState.player.field.find((c) => c.id === target.id)
             : null;
+          
+          // 🎯 BOOST: Atacar monstros facedown é geralmente vantajoso
+          // - DEF estimado = 1500, então ATK >= 1600 provavelmente vence
+          // - Remove ameaça desconhecida do campo
+          const attackingFacedown = target && target.isFacedown;
+          const highAtkAttacker = (attacker.atk || 0) >= 1600;
 
           if (!simAttacker) continue;
 
@@ -550,6 +557,14 @@ export default class Bot extends Player {
           if (target === null) delta += 0.5;
           if (target && attackerSurvived) {
             delta += 0.3;
+          }
+          // 🎯 Bonus para atacar monstros facedown com atacante forte
+          // Limpar ameaças desconhecidas é estratégico
+          if (attackingFacedown && highAtkAttacker) {
+            delta += 0.4; // Incentivar atacar facedowns
+            if (!targetSurvived) {
+              delta += 0.3; // Bonus extra se conseguiu destruir
+            }
           }
           if (target === null && simState.player.field.length === 0) {
             if ((attacker.atk || 0) >= opponentLp) {

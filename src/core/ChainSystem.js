@@ -1171,6 +1171,12 @@ export default class ChainSystem {
    * @returns {Promise<Object|null>}
    */
   async playerChooseChainResponse(player, activatable, context) {
+    // 🔧 CRITICAL FIX: Don't show prompts to AI/bots - they should auto-pass
+    if (isAI(player)) {
+      this.log(`Player ${player.id} is AI - auto-passing chain response`);
+      return null;
+    }
+
     const ui = this.getUI();
 
     if (!ui) {

@@ -129,10 +129,27 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     return { success: false, reason: "invalid_args" };
   }
 
+  // 🔍 DEBUG: Log EVERY moveCard attempt to catch spells going to field
+  if (card.cardKind !== "monster" && toZone === "field") {
+    console.error(
+      `[moveCardInternal] 🚨 ATTEMPT: ${card.cardKind} "${card.name}" → field zone`,
+      { fromZone: options.fromZone, toZone, cardKind: card.cardKind }
+    );
+  }
+
   const destArr = this.getZone(destPlayer, toZone);
   if (!destArr) {
     console.warn("moveCard: destination zone not found", toZone);
     return { success: false, reason: "invalid_zone" };
+  }
+
+  // 🚨 CRITICAL VALIDATION: Monster field zone only accepts monsters
+  if (toZone === "field" && card.cardKind !== "monster") {
+    console.error(
+      `[moveCardInternal] ❌ BLOCKED: Attempted to move non-monster "${card.name}" (kind: ${card.cardKind}) to monster field zone`
+    );
+    this.ui?.log?.(`ERROR: Cannot place ${card.cardKind} in monster zone.`);
+    return { success: false, reason: "invalid_card_kind_for_zone" };
   }
 
   if (toZone === "field" && destArr.length >= 5) {
@@ -553,6 +570,17 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
       }
       return { success: true, fromZone, toZone: "extraDeck" };
     }
+  }
+
+  // 🔍 FINAL VALIDATION: Double-check before push (defensive programming)
+  if (toZone === "field" && card.cardKind !== "monster") {
+    console.error(
+      `[moveCardInternal] 🚨 CRITICAL: About to push non-monster to field!`,
+      { card: card.name, cardKind: card.cardKind, toZone, stack: new Error().stack }
+    );
+    // Block it here too as last resort
+    this.ui?.log?.(`CRITICAL ERROR: ${card.cardKind} cannot go to monster zone`);
+    return { success: false, reason: "invalid_card_kind_final_check" };
   }
 
   destArr.push(card);

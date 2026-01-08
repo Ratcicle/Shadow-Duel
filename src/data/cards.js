@@ -1711,6 +1711,7 @@ export const cardDatabase = [
         timing: "on_event",
         event: "attack_declared",
         speed: 2,
+        requireFaceup: true,
         oncePerTurn: true,
         oncePerTurnName: "luminarch_sanctum_protector_negate",
         oncePerTurnScope: "card",
@@ -2151,16 +2152,13 @@ export const cardDatabase = [
           triggerArchetype: "Luminarch",
           requires: "self_in_hand",
         },
-        promptUser: true,
-        promptMessage:
-          "Um monstro Luminarch foi invocado por invocação especial. Deseja invocar Luminarch Enchanted Halberd da sua mão?",
         actions: [
           {
             type: "conditional_summon_from_hand",
             targetRef: "self",
             position: "attack",
             restrictAttackThisTurn: true,
-            optional: false,
+            optional: true,
           },
         ],
       },

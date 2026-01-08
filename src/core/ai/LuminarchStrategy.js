@@ -871,16 +871,30 @@ export default class LuminarchStrategy extends BaseStrategy {
     });
 
     // === SPELL/TRAP SET ACTIONS (fallback setup) ===
+    // 📋 REGRA: Só faz sentido setar cartas que podem ser ativadas no turno do oponente
+    //   - Quick-Spells (speed 2): Holy Shield
+    //   - Traps: qualquer trap
+    //   - NÃO setar: Normal spells, Continuous spells, Equip spells, Field spells
     const canSetSpellTrap = (bot.spellTrap || []).length < 5;
     if (canSetSpellTrap) {
       const baseSetPriority = -1;
 
       bot.hand.forEach((card, index) => {
         if (!card) return;
-        if (card.cardKind !== "spell" && card.cardKind !== "trap") return;
-        if (card.cardKind === "spell" && card.subtype === "field") return;
-        // 🚫 NEVER set Equip Spells - keep in hand for flexibility and safety
-        if (card.cardKind === "spell" && card.subtype === "equip") return;
+        
+        // ✅ Traps sempre podem ser setados
+        if (card.cardKind === "trap") {
+          // OK, continua
+        }
+        // ✅ Quick-Spells (speed 2) podem ser setados para uso no turno do oponente
+        else if (card.cardKind === "spell" && card.subtype === "quick") {
+          // OK, continua
+        }
+        // ❌ Todas outras spells devem ser ativadas diretamente da mão
+        else {
+          return; // Skip: normal, continuous, equip, field spells
+        }
+        
         if (spellIndicesActivated.has(index)) return;
 
         const valueEstimate = estimateCardValue(card, {
@@ -1150,6 +1164,14 @@ export default class LuminarchStrategy extends BaseStrategy {
   simulateMainPhaseAction(state, action) {
     if (!action) return state;
 
+    // 🔍 DEBUG: Log se state é o jogo real ou simulado
+    if (!state._isPerspectiveState && state.player && state.bot) {
+      console.error(
+        `[🚨 LuminarchStrategy.simulateMainPhaseAction] CRITICAL: Simulating on REAL game state!`,
+        { action: action.type, card: action.cardName || state.bot?.hand?.[action.index]?.name }
+      );
+    }
+
     switch (action.type) {
       case "summon": {
         const player = state.bot;
@@ -1179,7 +1201,13 @@ export default class LuminarchStrategy extends BaseStrategy {
         newCard.isFacedown = action.facedown;
         newCard.hasAttacked = false;
         newCard.attacksUsedThisTurn = 0;
-        player.field.push(newCard);
+        // 🚨 VALIDATION: Only monsters can go to field
+        if (newCard.cardKind !== "monster") {
+          console.error(`[🚨 LuminarchStrategy] BLOCKED sim: ${newCard.cardKind} "${newCard.name}" tried to enter field!`);
+          player.graveyard.push(newCard); // Send to GY instead
+        } else {
+          player.field.push(newCard);
+        }
         player.summonCount = (player.summonCount || 0) + 1;
         break;
       }
@@ -1211,7 +1239,13 @@ export default class LuminarchStrategy extends BaseStrategy {
         newCard.isFacedown = false;
         newCard.hasAttacked = false;
         newCard.attacksUsedThisTurn = 0;
-        player.field.push(newCard);
+        // 🚨 VALIDATION: Only monsters can go to field
+        if (newCard.cardKind !== "monster") {
+          console.error(`[🚨 LuminarchStrategy] BLOCKED sim protector: ${newCard.cardKind} "${newCard.name}" tried to enter field!`);
+          player.graveyard.push(newCard);
+        } else {
+          player.field.push(newCard);
+        }
         break;
       }
       case "spell": {
