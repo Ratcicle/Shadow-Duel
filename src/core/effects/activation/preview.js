@@ -245,6 +245,13 @@ export function canActivateSpellTrapEffectPreview(
         reason: "Spell can only be activated during Main Phase.",
       };
     }
+    // 🚫 Equip Spells cannot be activated from spellTrap zone
+    if (card.subtype === "equip" && activationZone === "spellTrap") {
+      return {
+        ok: false,
+        reason: "Equip Spell can only be activated from hand.",
+      };
+    }
   } else if (card.cardKind === "trap") {
     const validPhases = ["main1", "battle", "main2"];
     if (!validPhases.includes(this.game?.phase)) {
