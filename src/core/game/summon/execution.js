@@ -56,9 +56,14 @@ export function performFusionSummon(
     return false;
   }
 
-  // Check field space
-  if (activePlayer.field.length >= 5) {
-    this.ui.log("Field is full (max 5 monsters).");
+  // Check field space after using any field materials
+  const fieldMaterialCount = materials.filter((mat) =>
+    activePlayer.field.includes(mat)
+  ).length;
+  const projectedFieldSize =
+    activePlayer.field.length - fieldMaterialCount + 1;
+  if (projectedFieldSize > 5) {
+    this.ui.log("Field is full after using materials.");
     return false;
   }
 

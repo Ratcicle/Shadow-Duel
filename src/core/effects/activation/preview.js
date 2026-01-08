@@ -274,13 +274,25 @@ export function canActivateSpellTrapEffectPreview(
       return { ok: false, reason: "Trap cannot be activated this turn." };
     }
   } else if (card.cardKind === "spell" && card.isFacedown) {
-    return { ok: false, reason: "Card must be face-up to activate." };
+    if (activationZone !== "spellTrap") {
+      return { ok: false, reason: "Card must be face-up to activate." };
+    }
+    const setTurn = card.setTurn ?? card.turnSetOn ?? null;
+    if (setTurn === null || setTurn >= this.game?.turnCounter) {
+      return { ok: false, reason: "Spell cannot be activated this turn." };
+    }
   }
 
   const effect = this.getSpellTrapActivationEffect(card, {
     fromHand: false,
   });
   if (!effect) {
+    const placementOnly =
+      card.cardKind === "spell" &&
+      (card.subtype === "continuous" || card.subtype === "field");
+    if (placementOnly) {
+      return { ok: true, placementOnly: true };
+    }
     return { ok: false, reason: "No ignition effect defined for this card." };
   }
 

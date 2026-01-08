@@ -282,6 +282,10 @@ export default class Bot extends Player {
 
       const rawActions = this.generateMainPhaseActions(game);
       const actions = this.sequenceActions(rawActions);
+      const fallbackActions = this.filterValidActionsForCurrentState(
+        actions,
+        game
+      );
 
       console.log(
         `[Bot.playMainPhase] Generated ${rawActions.length} raw actions, ${actions.length} sequenced actions`
@@ -360,12 +364,25 @@ export default class Bot extends Player {
       }
 
       // BUGFIX: Ultimate fallback - Se search falhou mas temos ações, usar a primeira
-      if (!bestAction && actions.length > 0) {
-        bestAction = actions[0];
-        console.log(
-          `[Bot.playMainPhase] ⚠️ Using ultimate fallback: first action`,
-          bestAction
-        );
+      if (!bestAction) {
+        let finalFallback = fallbackActions;
+        if (!finalFallback.length && actions.length > 0) {
+          const regenerated = this.sequenceActions(
+            this.generateMainPhaseActions(game)
+          );
+          finalFallback = this.filterValidActionsForCurrentState(
+            regenerated,
+            game
+          );
+        }
+
+        if (finalFallback.length > 0) {
+          bestAction = finalFallback[0];
+          console.log(
+            `[Bot.playMainPhase] ?? Using ultimate fallback: first valid action`,
+            bestAction
+          );
+        }
       }
 
       // Se ainda não tem ação, break
@@ -728,6 +745,93 @@ export default class Bot extends Player {
     attacker.hasAttacked = attacker.attacksUsedThisTurn >= effectiveMax;
   }
 
+  resolveHandIndexForAction(action, expectedKind) {
+    if (!action) return -1;
+    const hand = this.hand || [];
+    const nameHint = action.cardName || action.card?.name || null;
+    const expectedKinds = Array.isArray(expectedKind)
+      ? expectedKind
+      : expectedKind
+      ? [expectedKind]
+      : null;
+    const matchesCard = (card) => {
+      if (!card) return false;
+      if (expectedKinds && !expectedKinds.includes(card.cardKind)) return false;
+      if (nameHint && card.name !== nameHint) return false;
+      return true;
+    };
+
+    if (Number.isInteger(action.index)) {
+      const direct = hand[action.index];
+      if (matchesCard(direct)) return action.index;
+    }
+
+    if (nameHint) {
+      const foundIndex = hand.findIndex((card) => matchesCard(card));
+      if (foundIndex >= 0) return foundIndex;
+    }
+
+    return -1;
+  }
+
+  filterValidActionsForCurrentState(actions, game) {
+    if (!Array.isArray(actions)) return [];
+    return actions.filter((action) => {
+      if (!action || !action.type) return false;
+      if (action.type === "summon") {
+        return this.resolveHandIndexForAction(action, "monster") >= 0;
+      }
+      if (action.type === "spell") {
+        return this.resolveHandIndexForAction(action, "spell") >= 0;
+      }
+      if (action.type === "set_spell_trap") {
+        return (
+          this.resolveHandIndexForAction(action, ["spell", "trap"]) >= 0
+        );
+      }
+      if (action.type === "spellTrapEffect") {
+        const zoneIndex =
+          Number.isInteger(action.zoneIndex) ? action.zoneIndex : action.index;
+        const card = this.spellTrap?.[zoneIndex];
+        return !!(card && card.cardKind === "spell");
+      }
+      if (action.type === "special_summon_sanctum_protector") {
+        const handIndex = this.resolveHandIndexForAction(action, "monster");
+        if (handIndex < 0) return false;
+        const materialIndex = Number.isInteger(action.materialIndex)
+          ? action.materialIndex
+          : this.field.findIndex(
+              (c) =>
+                c &&
+                c.name === "Luminarch Aegisbearer" &&
+                !c.isFacedown
+            );
+        const material = this.field[materialIndex];
+        return !!(
+          material &&
+          material.name === "Luminarch Aegisbearer" &&
+          !material.isFacedown
+        );
+      }
+      if (action.type === "handIgnition") {
+        return this.resolveHandIndexForAction(action, "monster") >= 0;
+      }
+      if (action.type === "ascension") {
+        const material = this.field[action.materialIndex];
+        if (!material) return false;
+        if (game?.canUseAsAscensionMaterial) {
+          const check = game.canUseAsAscensionMaterial(this, material);
+          if (check && check.ok === false) return false;
+        }
+        return true;
+      }
+      if (action.type === "fieldEffect") {
+        return !!this.fieldSpell;
+      }
+      return true;
+    });
+  }
+
   async executeMainPhaseAction(game, action) {
     if (!action) return false;
     const baseGuard = game.canStartAction({
@@ -780,9 +884,94 @@ export default class Bot extends Player {
       }
     }
 
+    if (action.type === "special_summon_sanctum_protector") {
+      const resolvedIndex = this.resolveHandIndexForAction(action, "monster");
+      if (resolvedIndex < 0) {
+        console.log(
+          `[Bot.executeMainPhaseAction] Invalid Sanctum Protector action: no matching card in hand (index=${action.index}, card=${action.cardName || "unknown"})`
+        );
+        return false;
+      }
+
+      const card = this.hand[resolvedIndex];
+      if (!card || card.name !== "Luminarch Sanctum Protector") {
+        console.log(
+          `[Bot.executeMainPhaseAction] Invalid Sanctum Protector action: card mismatch`
+        );
+        return false;
+      }
+
+      const materialIndex = Number.isInteger(action.materialIndex)
+        ? action.materialIndex
+        : this.field.findIndex(
+            (c) =>
+              c && c.name === "Luminarch Aegisbearer" && !c.isFacedown
+          );
+      const material = this.field[materialIndex];
+      if (
+        !material ||
+        material.name !== "Luminarch Aegisbearer" ||
+        material.isFacedown
+      ) {
+        console.log(
+          `[Bot.executeMainPhaseAction] Invalid Sanctum Protector action: no face-up Aegisbearer`
+        );
+        return false;
+      }
+
+      const sendResult = await game.moveCard(material, this, "graveyard", {
+        fromZone: "field",
+        contextLabel: "sanctum_protector_cost",
+      });
+      if (sendResult?.success === false) {
+        console.log(
+          `[Bot.executeMainPhaseAction] Sanctum Protector cost failed:`,
+          sendResult?.reason
+        );
+        return false;
+      }
+
+      const position = action.position === "attack" ? "attack" : "defense";
+      const summonResult = await game.moveCard(card, this, "field", {
+        fromZone: "hand",
+        position,
+        isFacedown: false,
+        resetAttackFlags: true,
+        contextLabel: "sanctum_protector_special",
+      });
+      if (summonResult?.success === false) {
+        console.log(
+          `[Bot.executeMainPhaseAction] Sanctum Protector summon failed:`,
+          summonResult?.reason
+        );
+        return false;
+      }
+
+      if (game && typeof game.emit === "function") {
+        game.emit("after_summon", {
+          card,
+          player: this,
+          method: "special",
+          fromZone: "hand",
+        });
+      }
+
+      game.ui?.log(
+        `Bot special summoned ${card.name} by sending ${material.name} to the GY.`
+      );
+      game.updateBoard();
+      return true;
+    }
+
     if (action.type === "summon") {
-      const cardToSummon = this.hand[action.index];
-      if (!cardToSummon) return false;
+      const resolvedIndex = this.resolveHandIndexForAction(action, "monster");
+      if (resolvedIndex < 0) {
+        console.log(
+          `[Bot.executeMainPhaseAction] Invalid summon action: no matching monster in hand (index=${action.index}, card=${action.cardName || "unknown"})`
+        );
+        return false;
+      }
+      const cardToSummon = this.hand[resolvedIndex];
 
       // Calcular tributos necessários e selecionar os melhores (piores monstros)
       const tributeInfo = this.getTributeRequirementFor(cardToSummon, this);
@@ -799,7 +988,7 @@ export default class Bot extends Player {
       }
 
       const card = this.summon(
-        action.index,
+        resolvedIndex,
         action.position,
         action.facedown,
         tributeIndices
@@ -827,8 +1016,14 @@ export default class Bot extends Player {
     }
 
     if (action.type === "spell") {
-      const card = this.hand[action.index];
-      if (!card) return false;
+      const resolvedIndex = this.resolveHandIndexForAction(action, "spell");
+      if (resolvedIndex < 0) {
+        console.log(
+          `[Bot.executeMainPhaseAction] Invalid spell action: no matching spell in hand (index=${action.index}, card=${action.cardName || "unknown"})`
+        );
+        return false;
+      }
+      const card = this.hand[resolvedIndex];
 
       console.log(
         `[Bot.executeMainPhaseAction] 📝 Attempting spell: ${card.name}`
@@ -866,7 +1061,7 @@ export default class Bot extends Player {
         phaseReq: ["main1", "main2"],
         preview: () =>
           game.effectEngine?.canActivateSpellFromHandPreview?.(card, this),
-        commit: () => game.commitCardActivationFromHand(this, action.index),
+        commit: () => game.commitCardActivationFromHand(this, resolvedIndex),
         activationContext: {
           fromHand: true,
           sourceZone: "hand",
@@ -899,6 +1094,99 @@ export default class Bot extends Player {
         },
       });
       return pipelineResult !== false;
+    }
+
+    if (action.type === "set_spell_trap") {
+      const resolvedIndex = this.resolveHandIndexForAction(action, [
+        "spell",
+        "trap",
+      ]);
+      if (resolvedIndex < 0) {
+        console.log(
+          `[Bot.executeMainPhaseAction] Invalid set action: no matching card in hand (index=${action.index}, card=${action.cardName || "unknown"})`
+        );
+        return false;
+      }
+      const card = this.hand[resolvedIndex];
+      const result = game.setSpellOrTrap(card, resolvedIndex, this);
+      if (result && result.ok === false) {
+        console.log(
+          `[Bot.executeMainPhaseAction] Set spell/trap failed:`,
+          result.reason
+        );
+        return false;
+      }
+      game.ui?.log?.(`Bot sets a card.`);
+      game.updateBoard();
+      return true;
+    }
+
+    if (action.type === "spellTrapEffect") {
+      const zoneIndex =
+        Number.isInteger(action.zoneIndex) ? action.zoneIndex : action.index;
+      const card = this.spellTrap?.[zoneIndex];
+      if (!card || card.cardKind !== "spell") {
+        console.log(
+          `[Bot.executeMainPhaseAction] Invalid spellTrapEffect action: no spell at index ${zoneIndex}`
+        );
+        return false;
+      }
+
+      const activationEffect =
+        game.effectEngine?.getSpellTrapActivationEffect?.(card, {
+          fromHand: false,
+        });
+
+      const activationContext = {
+        fromHand: false,
+        activationZone: "spellTrap",
+        sourceZone: "spellTrap",
+      };
+
+      const pipelineResult = await game.runActivationPipeline({
+        card,
+        owner: this,
+        activationZone: "spellTrap",
+        activationContext,
+        selectionKind: "spellTrapEffect",
+        selectionMessage: "Select target(s) for the spell effect.",
+        guardKind: "bot_spelltrap_effect",
+        phaseReq: ["main1", "main2"],
+        preview: () =>
+          game.effectEngine?.canActivateSpellTrapEffectPreview?.(
+            card,
+            this,
+            "spellTrap"
+          ),
+        oncePerTurn: {
+          card,
+          player: this,
+          effect: activationEffect,
+        },
+        activate: (chosen, ctx, zone) =>
+          game.effectEngine.activateSpellTrapEffect(
+            card,
+            this,
+            chosen,
+            zone,
+            ctx
+          ),
+        finalize: (result, info) => {
+          if (result.placementOnly) {
+            game.ui?.log?.(`Bot places ${info.card.name}.`);
+          } else {
+            game.finalizeSpellTrapActivation(
+              info.card,
+              this,
+              info.activationZone
+            );
+            game.ui?.log?.(`Bot activates ${info.card.name}`);
+          }
+          game.updateBoard();
+        },
+      });
+
+      return !!pipelineResult && pipelineResult.success !== false;
     }
 
     if (action.type === "fieldEffect" && this.fieldSpell) {
@@ -940,8 +1228,9 @@ export default class Bot extends Player {
 
     // Handler para ativação de efeitos ignition de monstros na mão
     if (action.type === "handIgnition") {
-      const card = this.hand[action.index];
-      if (!card) return false;
+      const resolvedIndex = this.resolveHandIndexForAction(action, "monster");
+      if (resolvedIndex < 0) return false;
+      const card = this.hand[resolvedIndex];
 
       console.log(
         `[Bot.executeMainPhaseAction] 🔥 Attempting hand ignition: ${card.name}`

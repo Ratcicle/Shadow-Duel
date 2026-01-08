@@ -39,7 +39,9 @@ export function getSpellTrapActivationEffect(card, options = {}) {
     if (fromHand) {
       return this.getHandActivationEffect(card);
     }
-    return card.effects.find((e) => e && e.timing === "ignition") || null;
+    const ignition = card.effects.find((e) => e && e.timing === "ignition");
+    if (ignition) return ignition;
+    return card.effects.find((e) => e && e.timing === "on_play") || null;
   }
   return null;
 }

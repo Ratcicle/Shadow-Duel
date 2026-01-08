@@ -155,6 +155,184 @@ export default class LuminarchStrategy extends BaseStrategy {
     return score;
   }
 
+  evaluateBoardV2(gameOrState, perspectivePlayer) {
+    const perspective = perspectivePlayer?.id
+      ? perspectivePlayer
+      : gameOrState.bot;
+    const opponent = this.getOpponent(gameOrState, perspective);
+    if (!perspective || !opponent) return 0;
+
+    const archetype = "Luminarch";
+    const fieldSpell = perspective.fieldSpell || null;
+    const preferDefense = true;
+
+    const myLP = perspective.lp || 0;
+    const oppLP = opponent.lp || 0;
+    const myField = perspective.field || [];
+    const oppField = opponent.field || [];
+    const myBackrow = perspective.spellTrap || [];
+    const oppBackrow = opponent.spellTrap || [];
+    const myHand = perspective.hand || [];
+    const oppHand = opponent.hand || [];
+    const myGY = perspective.graveyard || [];
+
+    let score = 0;
+
+    // LP matters more for a defensive/control archetype.
+    score += (myLP - oppLP) / 550;
+    if (myLP <= 2000) score -= 3.2;
+    else if (myLP <= 3000) score -= 2.0;
+    else if (myLP <= 4000) score -= 1.0;
+    if (oppLP <= 2000) score += 2.0;
+    else if (oppLP <= 3000) score += 1.0;
+
+    const ownMonstersValue = myField.reduce(
+      (sum, monster) =>
+        sum +
+        estimateMonsterValue(monster, {
+          archetype,
+          fieldSpell,
+          preferDefense,
+        }),
+      0
+    );
+    const oppMonstersValue = oppField.reduce(
+      (sum, monster) =>
+        sum +
+        estimateMonsterValue(monster, {
+          fieldSpell: opponent.fieldSpell || null,
+          preferDefense: false,
+        }),
+      0
+    );
+    score += ownMonstersValue - oppMonstersValue * 0.9;
+
+    const opponentStrongestAtk = oppField.reduce((max, monster) => {
+      if (!monster || monster.cardKind !== "monster") return max;
+      const atk = monster.isFacedown ? 1500 : monster.atk || 0;
+      return Math.max(max, atk);
+    }, 0);
+
+    const myStrongestDef = myField.reduce((max, monster) => {
+      if (!monster || monster.cardKind !== "monster") return max;
+      const def =
+        (monster.def || 0) +
+        (monster.tempDefBoost || 0) +
+        (monster.equipDefBonus || 0);
+      return Math.max(max, def);
+    }, 0);
+
+    const defenseCount = myField.filter(
+      (monster) =>
+        monster &&
+        monster.cardKind === "monster" &&
+        monster.position === "defense"
+    ).length;
+    score += defenseCount * 0.25;
+
+    const tauntWalls = myField.filter(
+      (monster) =>
+        monster &&
+        monster.cardKind === "monster" &&
+        !monster.isFacedown &&
+        monster.mustBeAttacked
+    );
+    if (tauntWalls.length > 0) {
+      const bestTauntDef = tauntWalls.reduce((max, monster) => {
+        const def = (monster.def || 0) + (monster.tempDefBoost || 0);
+        return Math.max(max, def);
+      }, 0);
+      score += opponentStrongestAtk > 0 ? 0.6 : 0.2;
+      if (opponentStrongestAtk > 0) {
+        if (bestTauntDef >= opponentStrongestAtk) score += 0.6;
+        else if (bestTauntDef >= opponentStrongestAtk - 300) score += 0.3;
+      }
+    }
+
+    if (myStrongestDef > 0 && opponentStrongestAtk > 0) {
+      if (myStrongestDef >= opponentStrongestAtk + 300) score += 0.7;
+      else if (myStrongestDef >= opponentStrongestAtk) score += 0.4;
+    }
+
+    const exposedAttackers = myField.filter((monster) => {
+      if (!monster || monster.cardKind !== "monster") return false;
+      if (monster.position !== "attack") return false;
+      const atk = (monster.atk || 0) + (monster.tempAtkBoost || 0);
+      return atk < Math.max(500, opponentStrongestAtk - 200);
+    }).length;
+    score -= exposedAttackers * 0.45;
+
+    const hasCitadel = fieldSpell?.name?.includes("Citadel") ?? false;
+    if (fieldSpell) {
+      score += hasCitadel ? 1.4 : 0.6;
+    }
+    if (hasCitadel) {
+      const luminarchCount = myField.filter((c) => c && isLuminarch(c)).length;
+      score += Math.min(1.2, luminarchCount * 0.2);
+      if (myField.some((c) => c && c.name === "Luminarch Aegisbearer")) {
+        score += 0.8;
+      }
+      if (myField.some((c) => c && c.name === "Luminarch Fortress Aegis")) {
+        score += 0.6;
+      }
+      if (
+        myField.some((c) => c && c.name === "Luminarch Megashield Barbarias")
+      ) {
+        score += 0.5;
+      }
+    }
+    if (opponent.fieldSpell) score -= 0.9;
+
+    score += myBackrow.length * 0.35;
+    score -= oppBackrow.length * 0.25;
+
+    score += (myHand.length - oppHand.length) * 0.3;
+    const handValue = myHand.reduce(
+      (sum, card) =>
+        sum +
+        estimateCardValue(card, {
+          archetype,
+          fieldSpell,
+          preferDefense,
+        }),
+      0
+    );
+    score += handValue * 0.12;
+
+    const gyLuminarch = myGY.filter(
+      (card) =>
+        card && card.cardKind === "monster" && isLuminarch(card)
+    );
+    score += gyLuminarch.length * 0.18;
+    if (gyLuminarch.length >= 2) score += 0.35;
+
+    const hasLuminarchOnField = myField.some((card) => card && isLuminarch(card));
+    const hasHolyShieldInHand = myHand.some(
+      (card) => card && card.name === "Luminarch Holy Shield"
+    );
+    const hasHolyShieldSet = myBackrow.some(
+      (card) => card && card.name === "Luminarch Holy Shield" && card.isFacedown
+    );
+    const hasCrescentShield = myBackrow.some(
+      (card) => card && card.name === "Luminarch Crescent Shield"
+    );
+    if (hasLuminarchOnField && (hasHolyShieldInHand || hasHolyShieldSet)) {
+      score += 0.6;
+    }
+    if (hasLuminarchOnField && hasCrescentShield) score += 0.3;
+
+    const overfillPenalty = Math.max(0, myField.length - 3) * 0.35;
+    score -= overfillPenalty;
+
+    if (myField.length === 0 && oppField.length > 0) {
+      score -= 2.6;
+    } else if (oppField.length === 0 && myField.length > 0) {
+      score += 0.6;
+    }
+
+    return score;
+  }
+
   generateMainPhaseActions(game) {
     const actions = [];
     const bot = this.bot;
@@ -163,6 +341,7 @@ export default class LuminarchStrategy extends BaseStrategy {
       autoSelectSingleTarget: true,
       logTargets: false,
     };
+    const spellIndicesActivated = new Set();
 
     if (bot?.debug) {
       console.log(
@@ -295,10 +474,12 @@ export default class LuminarchStrategy extends BaseStrategy {
           }
           return;
         }
-        if (bot.field.length >= 5) {
+        const projectedFieldCount =
+          (bot.field?.length || 0) - tributeInfo.tributesNeeded + 1;
+        if (projectedFieldCount > 5) {
           if (bot?.debug) {
             console.log(
-              `  ❌ REJEITADO: Campo cheio (${bot.field.length}/5)`
+              `  ❌ REJEITADO: Sem espaço após tributos (${bot.field.length}/5)`
             );
           }
           return;
@@ -353,6 +534,103 @@ export default class LuminarchStrategy extends BaseStrategy {
           safetyScore: summonSafety.riskScore,
         });
       });
+    }
+
+    // === SPECIAL SUMMON: SANCTUM PROTECTOR (Aegisbearer -> Protector) ===
+    const protectorIndices = [];
+    bot.hand.forEach((card, index) => {
+      if (card && card.name === "Luminarch Sanctum Protector") {
+        protectorIndices.push(index);
+      }
+    });
+
+    if (protectorIndices.length > 0) {
+      const aegisCandidates = (bot.field || [])
+        .map((card, fieldIndex) => ({ card, fieldIndex }))
+        .filter(
+          (entry) =>
+            entry.card &&
+            entry.card.name === "Luminarch Aegisbearer" &&
+            !entry.card.isFacedown
+        );
+
+      const canCheckAscension =
+        typeof game?.canUseAsAscensionMaterial === "function" &&
+        typeof game?.getAscensionCandidatesForMaterial === "function" &&
+        typeof game?.checkAscensionRequirements === "function";
+
+      const isAscensionReady = (material) => {
+        if (!canCheckAscension) return false;
+        const check = game.canUseAsAscensionMaterial(bot, material);
+        if (!check?.ok) return false;
+        const candidates = game.getAscensionCandidatesForMaterial(
+          bot,
+          material
+        );
+        if (!Array.isArray(candidates) || candidates.length === 0) return false;
+        return candidates.some(
+          (asc) => game.checkAscensionRequirements(bot, asc)?.ok
+        );
+      };
+
+      const usableAegis = aegisCandidates.filter(
+        (entry) => !isAscensionReady(entry.card)
+      );
+
+      if (usableAegis.length > 0) {
+        const chosenAegis = usableAegis[0];
+        const protectorIndex = protectorIndices[0];
+        const protectorCard = bot.hand[protectorIndex];
+
+        const oppStrongest = (opponent?.field || []).reduce(
+          (max, monster) => {
+            if (!monster || monster.cardKind !== "monster") return max;
+            const atk = monster.isFacedown ? 1500 : monster.atk || 0;
+            return Math.max(max, atk);
+          },
+          0
+        );
+
+        const hasOtherTank = (bot.field || []).some(
+          (card) =>
+            card &&
+            card.cardKind === "monster" &&
+            !card.isFacedown &&
+            card.name !== "Luminarch Aegisbearer" &&
+            ((card.def || 0) >= 2500 ||
+              card.name === "Luminarch Sanctum Protector" ||
+              card.name === "Luminarch Fortress Aegis")
+        );
+
+        let priority = 7;
+        if (!hasOtherTank) priority += 1;
+        if (oppStrongest >= 2200) priority += 2;
+        if (oppStrongest >= 2600) priority += 1;
+        if ((bot.lp || 0) <= 4000) priority += 1;
+        if ((opponent?.field || []).length === 0) priority -= 2;
+
+        const macroBuff = calculateMacroPriorityBonus(
+          "summon",
+          protectorCard,
+          macroStrategy
+        );
+        priority += macroBuff;
+
+        actions.push({
+          type: "special_summon_sanctum_protector",
+          index: protectorIndex,
+          materialIndex: chosenAegis.fieldIndex,
+          position: "defense",
+          priority,
+          cardName: protectorCard?.name || "Luminarch Sanctum Protector",
+          macroBuff,
+          reason: "upgrade_tank",
+        });
+      } else if (bot?.debug && aegisCandidates.length > 0) {
+        console.log(
+          "[LuminarchStrategy] Skip Protector SS: ascension ready for Aegis"
+        );
+      }
     }
 
     // === SPELL ACTIONS ===
@@ -480,6 +758,7 @@ export default class LuminarchStrategy extends BaseStrategy {
           safetyScore: spellSafety.riskScore,
           reason: decision.reason,
         });
+        spellIndicesActivated.add(index);
       } catch (e) {
         if (bot?.debug) {
           console.warn(
@@ -489,6 +768,121 @@ export default class LuminarchStrategy extends BaseStrategy {
         // NÃO adicionar ao actions - pular esta carta completamente
       }
     });
+
+    // === SPELL/TRAP ZONE SPELL ACTIVATIONS ===
+    (bot.spellTrap || []).forEach((card, index) => {
+      if (!card || card.cardKind !== "spell") return;
+      if (card.subtype === "field") return;
+
+      try {
+        if (
+          game.effectEngine?.canActivateSpellTrapEffectPreview &&
+          typeof game.effectEngine.canActivateSpellTrapEffectPreview ===
+            "function"
+        ) {
+          const preview = game.effectEngine.canActivateSpellTrapEffectPreview(
+            card,
+            bot,
+            "spellTrap",
+            null,
+            { activationContext }
+          );
+          if (bot?.debug) {
+            console.log(
+              `  SpellTrap Preview: ${preview?.ok ? "ƒo." : "ƒ?O"} ${preview?.reason || ""}`
+            );
+          }
+          if (preview && preview.ok === false) return;
+        }
+
+        const analysis = {
+          hand: bot?.hand || [],
+          field: bot?.field || [],
+          fieldSpell: bot?.fieldSpell || null,
+          graveyard: bot?.graveyard || [],
+          lp: bot?.lp || 8000,
+          oppField: opponent?.field || [],
+          oppLp: opponent?.lp || 8000,
+          currentTurn: game?.turnCounter || 1,
+        };
+
+        const decision = shouldPlaySpell(card, analysis);
+        if (!decision.yes) return;
+
+        const resourceCheck = shouldCommitResourcesNow(
+          card,
+          analysis,
+          gameStance
+        );
+        if (!resourceCheck.shouldPlay) return;
+
+        let priority = decision.priority || 1;
+        const macroBuff = calculateMacroPriorityBonus(
+          "spell",
+          card,
+          macroStrategy
+        );
+        priority += macroBuff;
+
+        const spellSafety = assessActionSafety(
+          { bot, player: opponent },
+          bot,
+          opponent,
+          "spell",
+          card
+        );
+        if (spellSafety.recommendation === "very_risky") {
+          priority -= 15;
+        } else if (spellSafety.recommendation === "risky") {
+          priority -= 8;
+        }
+
+        actions.push({
+          type: "spellTrapEffect",
+          index,
+          zoneIndex: index,
+          priority,
+          cardName: card.name,
+          macroBuff,
+          safetyScore: spellSafety.riskScore,
+          reason: decision.reason,
+        });
+      } catch (e) {
+        if (bot?.debug) {
+          console.warn(
+            `[LuminarchStrategy] ƒsÿ‹÷? Erro ao avaliar spell/trap ${card?.name}: ${e.message}`
+          );
+        }
+      }
+    });
+
+    // === SPELL/TRAP SET ACTIONS (fallback setup) ===
+    const canSetSpellTrap = (bot.spellTrap || []).length < 5;
+    if (canSetSpellTrap) {
+      const baseSetPriority = -1;
+
+      bot.hand.forEach((card, index) => {
+        if (!card) return;
+        if (card.cardKind !== "spell" && card.cardKind !== "trap") return;
+        if (card.cardKind === "spell" && card.subtype === "field") return;
+        if (spellIndicesActivated.has(index)) return;
+
+        const valueEstimate = estimateCardValue(card, {
+          archetype: "Luminarch",
+          fieldSpell: bot?.fieldSpell || null,
+          preferDefense: true,
+        });
+        const setPriority = baseSetPriority + valueEstimate * 0.2;
+
+        actions.push({
+          type: "set_spell_trap",
+          index,
+          priority: setPriority,
+          cardName: card.name,
+          reason: "setup_backrow",
+        });
+      });
+    }
 
     // === FIELD EFFECT ===
     if (bot.fieldSpell) {
@@ -598,7 +992,10 @@ export default class LuminarchStrategy extends BaseStrategy {
       const typePriority = {
         fieldEffect: 0,
         spell: 1,
-        summon: 2,
+        spellTrapEffect: 2,
+        summon: 3,
+        special_summon_sanctum_protector: 3,
+        set_spell_trap: 4,
       };
       const typeA = typePriority[a.type] ?? 9;
       const typeB = typePriority[b.type] ?? 9;
@@ -729,6 +1126,40 @@ export default class LuminarchStrategy extends BaseStrategy {
         player.summonCount = (player.summonCount || 0) + 1;
         break;
       }
+      case "special_summon_sanctum_protector": {
+        const player = state.bot;
+        const handIndex = Number.isInteger(action.index)
+          ? action.index
+          : player.hand.findIndex(
+              (c) => c && c.name === "Luminarch Sanctum Protector"
+            );
+        if (handIndex < 0) break;
+        const materialIndex = Number.isInteger(action.materialIndex)
+          ? action.materialIndex
+          : player.field.findIndex(
+              (c) =>
+                c &&
+                c.name === "Luminarch Aegisbearer" &&
+                !c.isFacedown
+            );
+        if (materialIndex < 0) break;
+
+        const material = player.field[materialIndex];
+        if (material) {
+          player.field.splice(materialIndex, 1);
+          player.graveyard.push(material);
+        }
+
+        const protector = player.hand[handIndex];
+        player.hand.splice(handIndex, 1);
+        const newCard = { ...protector };
+        newCard.position = action.position || "defense";
+        newCard.isFacedown = false;
+        newCard.hasAttacked = false;
+        newCard.attacksUsedThisTurn = 0;
+        player.field.push(newCard);
+        break;
+      }
       case "spell": {
         const player = state.bot;
         const card = player.hand[action.index];
@@ -739,6 +1170,68 @@ export default class LuminarchStrategy extends BaseStrategy {
         const placement = this.placeSpellCard(state, placedCard);
         if (!placement.placed) {
           player.graveyard.push(placedCard);
+        }
+        break;
+      }
+      case "set_spell_trap": {
+        const player = state.bot;
+        const card = player.hand[action.index];
+        if (!card) break;
+        if (card.cardKind === "spell" && card.subtype === "field") break;
+        player.hand.splice(action.index, 1);
+        const setCard = { ...card, isFacedown: true };
+        if (typeof state.turnCounter === "number") {
+          setCard.turnSetOn = state.turnCounter;
+        }
+        player.spellTrap = player.spellTrap || [];
+        if (player.spellTrap.length < 5) {
+          player.spellTrap.push(setCard);
+        } else {
+          player.graveyard.push(setCard);
+        }
+        break;
+      }
+      case "spellTrapEffect": {
+        const player = state.bot;
+        const zoneIndex =
+          Number.isInteger(action.zoneIndex) ? action.zoneIndex : action.index;
+        const card = player.spellTrap?.[zoneIndex];
+        if (!card) break;
+        card.isFacedown = false;
+
+        const effect = (card.effects || []).find(
+          (entry) =>
+            entry &&
+            (entry.timing === "ignition" || entry.timing === "on_play")
+        );
+        if (effect) {
+          const selections = selectSimulatedTargets({
+            targets: effect.targets || [],
+            actions: effect.actions || [],
+            state,
+            sourceCard: card,
+            selfId: "bot",
+            options: { archetype: "Luminarch", preferDefense: true },
+          });
+          applySimulatedActions({
+            actions: effect.actions || [],
+            selections,
+            state,
+            selfId: "bot",
+            options: { archetype: "Luminarch", preferDefense: true },
+          });
+        }
+
+        if (
+          card.cardKind === "spell" &&
+          (card.subtype === "normal" ||
+            card.subtype === "quick" ||
+            card.subtype === "quick-play")
+        ) {
+          player.graveyard.push(card);
+          if (Array.isArray(player.spellTrap)) {
+            player.spellTrap.splice(zoneIndex, 1);
+          }
         }
         break;
       }
@@ -841,12 +1334,46 @@ export default class LuminarchStrategy extends BaseStrategy {
         (c) => c && c.name === "Polymerization"
       );
       if (polyInHand === -1) return actions;
+      const polyCard = bot.hand[polyInHand];
+      if (!polyCard) return actions;
 
       // Verificar se tem Megashield no Extra Deck
-      const hasMegashield = bot.extraDeck.some(
+      const megashield = bot.extraDeck.find(
         (c) => c && c.name === "Luminarch Megashield Barbarias"
       );
-      if (!hasMegashield) return actions;
+      if (!megashield) return actions;
+
+      if (game?.effectEngine?.canSummonFusion) {
+        const handMaterials = (bot.hand || [])
+          .filter((c) => c && c.cardKind === "monster")
+          .map((card) => ({ card, zone: "hand" }));
+        const fieldMaterials = (bot.field || [])
+          .filter((c) => c && c.cardKind === "monster")
+          .map((card) => ({ card, zone: "field" }));
+        const combined = [...handMaterials, ...fieldMaterials];
+        const materials = combined.map((entry) => entry.card);
+        const materialInfo = combined.map((entry) => ({ zone: entry.zone }));
+        const canFuse = game.effectEngine.canSummonFusion(
+          megashield,
+          materials,
+          bot,
+          { materialInfo }
+        );
+        if (!canFuse) return actions;
+      }
+
+      if (game?.effectEngine?.canActivateSpellFromHandPreview) {
+        const activationContext = {
+          autoSelectSingleTarget: true,
+          logTargets: false,
+        };
+        const preview = game.effectEngine.canActivateSpellFromHandPreview(
+          polyCard,
+          bot,
+          { activationContext }
+        );
+        if (preview && preview.ok === false) return actions;
+      }
 
       // Megashield precisa: Luminarch Sanctum Protector + Luminarch Lv5+
       const hasProtector = bot.field.some(
@@ -1085,6 +1612,7 @@ export default class LuminarchStrategy extends BaseStrategy {
         lp: bot?.lp || 8000,
         oppField: opponent?.field || [],
         oppLp: opponent?.lp || 8000,
+        currentTurn: game?.turnCounter || 1,
       };
 
       const decision = shouldSummonMonster(card, analysis);

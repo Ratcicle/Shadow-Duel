@@ -298,8 +298,20 @@ export async function activateSpellTrapEffect(
   if (card.cardKind !== "spell" && card.cardKind !== "trap") {
     return fail("Only Spell/Trap cards can use this effect.");
   }
+  const isSetSpell =
+    card.cardKind === "spell" &&
+    card.isFacedown === true &&
+    activationZone === "spellTrap";
+  let flipAfterChecks = false;
   if (card.isFacedown) {
-    return fail("Card must be face-up to activate.");
+    if (!isSetSpell) {
+      return fail("Card must be face-up to activate.");
+    }
+    const setTurn = card.setTurn ?? card.turnSetOn ?? null;
+    if (setTurn === null || this.game?.turnCounter <= setTurn) {
+      return fail("Spell cannot be activated this turn.");
+    }
+    flipAfterChecks = true;
   }
   if (this.game.turn !== player.id) {
     return fail("Not your turn.");
@@ -371,8 +383,20 @@ export async function activateSpellTrapEffect(
         return fail("No on_play effect defined.");
       }
     } else {
-      effect = (card.effects || []).find((e) => e && e.timing === "ignition");
+      effect = this.getSpellTrapActivationEffect(card, { fromHand: false });
       if (!effect) {
+        const placementOnly =
+          card.subtype === "continuous" || card.subtype === "field";
+        if (placementOnly) {
+          if (flipAfterChecks) {
+            card.isFacedown = false;
+          }
+          return {
+            success: true,
+            needsSelection: false,
+            placementOnly: true,
+          };
+        }
         return fail("No ignition effect defined.");
       }
     }
@@ -426,6 +450,10 @@ export async function activateSpellTrapEffect(
 
   if (targetResult.ok === false) {
     return fail(targetResult.reason);
+  }
+
+  if (flipAfterChecks) {
+    card.isFacedown = false;
   }
 
   logDev?.("SPELL_TRAP_ACTIONS_START", {

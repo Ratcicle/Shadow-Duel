@@ -119,13 +119,17 @@ export function shouldPlaySpell(card, analysis) {
     if (name === "Luminarch Crescent Shield") {
       // Crescent Shield é equip que requer um monstro Luminarch no campo
       const luminarchMonsters = (analysis.field || []).filter(
-        (c) => c && c.archetype === "Luminarch" && c.cardKind === "monster"
+        (c) =>
+          c &&
+          c.archetype === "Luminarch" &&
+          c.cardKind === "monster" &&
+          !c.isFacedown
       );
 
       if (luminarchMonsters.length === 0) {
         return {
           yes: false,
-          reason: "Sem monstro Luminarch no campo para equipar",
+          reason: "Sem monstro Luminarch face-up para equipar",
         };
       }
 
@@ -821,7 +825,7 @@ export function shouldSummonMonster(card, analysis) {
     const isVeryEarly = currentTurn <= 2;
     const isLowLevel = (card.level || 0) <= 4;
     
-    if (bot.field.length === 0 && isVeryEarly && isLowLevel) {
+    if (analysis.field.length === 0 && isVeryEarly && isLowLevel) {
       return {
         yes: true,
         position: "defense",

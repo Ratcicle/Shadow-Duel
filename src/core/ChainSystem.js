@@ -377,6 +377,38 @@ export default class ChainSystem {
       }
     }
 
+    // Check set Quick-Play Spells in spellTrap zone
+    if (Array.isArray(player.spellTrap)) {
+      for (const card of player.spellTrap) {
+        if (!card || card.cardKind !== "spell") continue;
+        if (card.subtype !== "quick") continue;
+        if (!card.isFacedown) continue; // Must be set
+
+        if (cardsInChain.has(card)) continue;
+
+        const setTurn = card.setTurn ?? card.turnSetOn ?? null;
+        if (setTurn === null || setTurn >= this.game.turnCounter) {
+          continue;
+        }
+
+        const effect = this.findActivatableEffect(card, context, player);
+        if (effect) {
+          const chainCheck = this.canActivateInChain(effect, card, context);
+          if (chainCheck.ok) {
+            const useMainPhaseRules = context?.type === "main_phase_action";
+            if (useMainPhaseRules) {
+              const canActivate = this.game.effectEngine?.canActivate?.(
+                card,
+                player
+              );
+              if (canActivate && canActivate.ok === false) continue;
+            }
+            activatable.push({ card, effect, zone: "spellTrap" });
+          }
+        }
+      }
+    }
+
     // Check Quick-Play Spells in hand
     // Quick-Play can be activated:
     // - During your own Main Phase (like a normal spell)
@@ -394,14 +426,15 @@ export default class ChainSystem {
         if (effect) {
           const chainCheck = this.canActivateInChain(effect, card, context);
           if (chainCheck.ok) {
-            // Apply canActivate check for consistency
-            const canActivate = this.game.effectEngine?.canActivate?.(
-              card,
-              player
-            );
-            if (!canActivate || canActivate.ok !== false) {
-              activatable.push({ card, effect, zone: "hand" });
+            const useMainPhaseRules = context?.type === "main_phase_action";
+            if (useMainPhaseRules) {
+              const canActivate = this.game.effectEngine?.canActivate?.(
+                card,
+                player
+              );
+              if (canActivate && canActivate.ok === false) continue;
             }
+            activatable.push({ card, effect, zone: "hand" });
           }
         }
       }
@@ -978,6 +1011,24 @@ export default class ChainSystem {
         }
       }
 
+      if (card.cardKind === "spell" && card.subtype === "quick") {
+        priority += 10;
+        if (card.name === "Luminarch Holy Shield") {
+          if (context?.type === "attack_declaration") {
+            priority += 70;
+          } else if (context?.type === "battle_damage") {
+            priority += 55;
+          } else if (context?.type === "effect_targeted") {
+            priority += 40;
+          } else {
+            priority += 25;
+          }
+          if (player?.lp < 3000) {
+            priority += 10;
+          }
+        }
+      }
+
       return { ...option, priority };
     });
 
@@ -1425,6 +1476,13 @@ export default class ChainSystem {
     try {
       // Mark trap as face-up when activated (but don't move to GY yet)
       if (card.cardKind === "trap" && card.isFacedown) {
+        card.isFacedown = false;
+      }
+      if (
+        card.cardKind === "spell" &&
+        card.isFacedown &&
+        activationZone === "spellTrap"
+      ) {
         card.isFacedown = false;
       }
 

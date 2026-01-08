@@ -274,7 +274,7 @@ export async function performAscensionSummon(
     return { success: false, needsSelection: false, reason: reqCheck.reason };
   }
 
-  if ((player.field?.length || 0) >= 5) {
+  if ((player.field?.length || 0) > 5) {
     return {
       success: false,
       needsSelection: false,

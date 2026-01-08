@@ -548,20 +548,22 @@ export function bindCardInteractions() {
       });
       if (!guard.ok) return;
 
-      // For spells, don't allow clicking facedown cards
-      if (card.isFacedown) return;
-
-      // Handle continuous spells and ignition effects
       if (card.cardKind === "spell") {
-        const hasIgnition = (card.effects || []).some(
-          (e) => e.timing === "ignition"
+        const preview = this.effectEngine?.canActivateSpellTrapEffectPreview?.(
+          card,
+          this.player,
+          "spellTrap",
+          null,
+          { activationContext: { autoSelectSingleTarget: true } }
         );
-        if (hasIgnition) {
-          console.log(
-            `[Game] Clicking continuous spell/ignition: ${card.name}`
-          );
-          await this.tryActivateSpellTrapEffect(card);
+        if (preview && preview.ok === false) {
+          if (preview.reason) {
+            this.ui.log(preview.reason);
+          }
+          return;
         }
+        console.log(`[Game] Activating spell from zone: ${card.name}`);
+        await this.tryActivateSpellTrapEffect(card);
       }
     });
   }

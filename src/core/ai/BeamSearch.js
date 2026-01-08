@@ -1,5 +1,51 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // src/core/ai/BeamSearch.js
+function actionRequiresHand(actionType) {
+  return (
+    actionType === "summon" ||
+    actionType === "spell" ||
+    actionType === "handIgnition" ||
+    actionType === "set_spell_trap" ||
+    actionType === "special_summon_sanctum_protector"
+  );
+}
+
+function expectedHandKind(actionType) {
+  if (
+    actionType === "summon" ||
+    actionType === "handIgnition" ||
+    actionType === "special_summon_sanctum_protector"
+  ) {
+    return "monster";
+  }
+  if (actionType === "spell") return "spell";
+  if (actionType === "set_spell_trap") return ["spell", "trap"];
+  return null;
+}
+
+function actionIsValidForHand(action, hand) {
+  if (!action) return false;
+  if (!actionRequiresHand(action.type)) return true;
+  if (!Array.isArray(hand)) return false;
+  if (!Number.isInteger(action.index)) return false;
+  const card = hand[action.index];
+  if (!card) return false;
+  const requiredKind = expectedHandKind(action.type);
+  if (requiredKind) {
+    const requiredKinds = Array.isArray(requiredKind)
+      ? requiredKind
+      : [requiredKind];
+    if (!requiredKinds.includes(card.cardKind)) return false;
+  }
+  if (action.cardName && card.name !== action.cardName) return false;
+  return true;
+}
+
+function filterValidHandActions(actions, hand) {
+  if (!Array.isArray(actions)) return [];
+  if (!Array.isArray(hand)) return actions.slice();
+  return actions.filter((action) => actionIsValidForHand(action, hand));
+}
 // Beam search lookahead system — shallow tree search (2–3 plies)
 // Com travas: depth fixo, budget de nós, anti-repetição
 // ─────────────────────────────────────────────────────────────────────────────
@@ -143,7 +189,14 @@ export async function beamSearchTurn(game, strategy, options = {}) {
     }
 
     // Gerar ações candidatas
-    const candidates = strategy.generateMainPhaseActions(currentState);
+    let candidates = null;
+    if (depth === 0 && Array.isArray(preGeneratedActions)) {
+      const handForValidation = currentState?.bot?.hand || [];
+      candidates = filterValidHandActions(preGeneratedActions, handForValidation);
+    }
+    if (!candidates || candidates.length === 0) {
+      candidates = strategy.generateMainPhaseActions(currentState);
+    }
     if (!candidates || candidates.length === 0) {
       const score = evaluateState(currentState, currentState.bot);
       return { sequence: currentSequence, score, finalState: currentState };
@@ -227,8 +280,18 @@ export async function beamSearchTurn(game, strategy, options = {}) {
   // BUGFIX: Se não encontrou sequência mas temos candidatos, usar primeira ação como último recurso
   if (!result || !result.sequence || result.sequence.length === 0) {
     // BUGFIX: Usar preGeneratedActions primeiro, depois regenerar como último recurso
-    const fallbackCandidates =
-      preGeneratedActions || strategy.generateMainPhaseActions(game);
+    const handForValidation =
+      perspectiveBot?.hand || game?.bot?.hand || game?.player?.hand || [];
+    let fallbackCandidates = filterValidHandActions(
+      preGeneratedActions,
+      handForValidation
+    );
+    if (!fallbackCandidates.length) {
+      fallbackCandidates = filterValidHandActions(
+        strategy.generateMainPhaseActions(game),
+        handForValidation
+      );
+    }
     if (fallbackCandidates && fallbackCandidates.length > 0) {
       console.log(
         `[BeamSearch] Using fallback action:`,
@@ -315,9 +378,16 @@ export async function greedySearchWithEvalV2(game, strategy, options = {}) {
   }
 
   // BUGFIX: Usar preGeneratedActions primeiro, depois regenerar como fallback
-  const candidates =
-    preGeneratedActions || strategy.generateMainPhaseActions(game);
-  if (!candidates || candidates.length === 0) {
+  const handForValidation =
+    perspectiveBot?.hand || game?.bot?.hand || game?.player?.hand || [];
+  let candidates = filterValidHandActions(preGeneratedActions, handForValidation);
+  if (!candidates.length) {
+    candidates = filterValidHandActions(
+      strategy.generateMainPhaseActions(game),
+      handForValidation
+    );
+  }
+  if (!candidates.length) {
     return null;
   }
 
