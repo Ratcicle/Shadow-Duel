@@ -130,6 +130,72 @@ export function detectAvailableCombos(analysis) {
     }
 
     // ═════════════════════════════════════════════════════════════════════════
+    // COMBO 2.5: Knights Convocation Brick Escape
+    // Quando mão está "brickada" com muitos Lv7+, usar Convocation para converter
+    // ═════════════════════════════════════════════════════════════════════════
+    const hasConvocationInHand = analysis.hand.some(
+      (c) => c && c.name === "Luminarch Knights Convocation"
+    );
+    const hasConvocationOnField = analysis.field.some(
+      (c) => c && c.name === "Luminarch Knights Convocation"
+    ) || (analysis.spellTrap || []).some(
+      (c) => c && c.name === "Luminarch Knights Convocation"
+    );
+    const lv7PlusInHand = analysis.hand.filter(
+      (c) => c && isLuminarch(c) && c.cardKind === "monster" && (c.level || 0) >= 7
+    );
+    const hasSearcherInDeck = true; // Assumimos Valiant/Arbiter no deck
+    const noSearchersInHand = !hasValiant && !hasArbiter;
+
+    // BRICK DETECTION: 2+ monstros Lv7+ na mão SEM searchers = brick
+    const isBricked = lv7PlusInHand.length >= 2 && noSearchersInHand;
+    const hasBrickEscape = hasConvocationInHand || hasConvocationOnField;
+
+    if (isBricked && hasBrickEscape) {
+      const brickNames = lv7PlusInHand.slice(0, 2).map((c) => c.name?.split(" - ")[0] || c.name).join(", ");
+      combos.push({
+        id: "convocation_brick_escape",
+        name: "⚠️ BRICK ESCAPE: Convocation",
+        priority: 16, // Alta prioridade - resolver brick é crítico
+        cards: ["Luminarch Knights Convocation", ...lv7PlusInHand.map((c) => c.name)],
+        description: `Mão brickada (${lv7PlusInHand.length}x Lv7+) → Discard boss → Search Valiant/Arbiter`,
+        steps: [
+          hasConvocationInHand ? "Setar/Ativar Knights Convocation" : "Convocation já no campo",
+          `Discard ${brickNames} (Lv7+)`,
+          "Search Valiant ou Arbiter (Lv4-)",
+          "Iniciar combo principal (Valiant → Aegis ou Arbiter → Citadel)",
+          "Moonlit Blessing depois recupera bosses da GY",
+        ],
+        conditions: {
+          isBricked: isBricked,
+          hasConvocation: hasBrickEscape,
+          lv7Count: lv7PlusInHand.length,
+          noSearchers: noSearchersInHand,
+        },
+      });
+    }
+
+    // Mesmo sem brick, Convocation é útil se tem 1 Lv7+ e quer cycle
+    if ((hasConvocationInHand || hasConvocationOnField) && lv7PlusInHand.length >= 1 && !isBricked) {
+      combos.push({
+        id: "convocation_cycle",
+        name: "Convocation Cycle",
+        priority: 6,
+        cards: ["Luminarch Knights Convocation"],
+        description: "Discard Lv7+ → Search Lv4- (cycle para searchers)",
+        steps: [
+          "Ativar Convocation",
+          `Discard ${lv7PlusInHand[0]?.name?.split(" - ")[0] || "Lv7+"}`,
+          "Search Valiant/Arbiter/Sickle (Lv4-)",
+        ],
+        conditions: {
+          hasConvocation: hasConvocationInHand || hasConvocationOnField,
+          hasLv7Plus: lv7PlusInHand.length >= 1,
+        },
+      });
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
     // COMBO 3: Citadel + Aegis = Heal Loop
     // ═════════════════════════════════════════════════════════════════════════
     const hasAegisOnField = analysis.field.some(
@@ -288,6 +354,99 @@ export function detectAvailableCombos(analysis) {
     }
 
     // ═════════════════════════════════════════════════════════════════════════
+    // COMBO 7.5: Moonblade Captain + Enchanted Halberd Chain
+    // Captain revive → Aegis SS → Halberd trigger → 3 monstros em 1 turno
+    // ═════════════════════════════════════════════════════════════════════════
+    const hasMoonbladeInHand = analysis.hand.some(
+      (c) => c && c.name === "Luminarch Moonblade Captain"
+    );
+    const hasHalberdInHand = analysis.hand.some(
+      (c) => c && c.name === "Luminarch Enchanted Halberd"
+    );
+    const gyHasLv4Luminarch = (analysis.graveyard || []).some(
+      (c) => c && isLuminarch(c) && c.cardKind === "monster" && (c.level || 0) <= 4
+    );
+
+    if (hasMoonbladeInHand && hasHalberdInHand && gyHasLv4Luminarch) {
+      const bestReviveTarget = (analysis.graveyard || [])
+        .filter((c) => c && isLuminarch(c) && c.cardKind === "monster" && (c.level || 0) <= 4)
+        .sort((a, b) => {
+          // Priorizar Aegisbearer (melhor target)
+          if (a.name === "Luminarch Aegisbearer") return -1;
+          if (b.name === "Luminarch Aegisbearer") return 1;
+          return (b.def || 0) - (a.def || 0);
+        })[0];
+
+      combos.push({
+        id: "moonblade_halberd_chain",
+        name: "🔗 Moonblade + Halberd Chain",
+        priority: 13,
+        cards: ["Luminarch Moonblade Captain", "Luminarch Enchanted Halberd", bestReviveTarget?.name],
+        description: "Captain → Revive Lv4- → Halberd auto-SS = 3 monstros em 1 turno!",
+        steps: [
+          "Normal/Tribute Summon Moonblade Captain",
+          `Efeito Captain: Revive ${bestReviveTarget?.name || "Lv4-"} da GY (SS)`,
+          "TRIGGER: Halberd vê Luminarch SS → auto-SS da mão",
+          "Resultado: 3 monstros no campo (Captain + Revive + Halberd)",
+          bestReviveTarget?.name === "Luminarch Aegisbearer" ? "Aegis 2500 DEF taunt ativo!" : "Board presence forte",
+        ],
+        conditions: {
+          hasMoonblade: hasMoonbladeInHand,
+          hasHalberd: hasHalberdInHand,
+          gyHasTarget: gyHasLv4Luminarch,
+          bestTarget: bestReviveTarget?.name,
+        },
+      });
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // COMBO 7.6: Spear of Dawnfall + Piercing Lethal
+    // Zerar stats de defender → Piercing para dano direto
+    // ═════════════════════════════════════════════════════════════════════════
+    const hasSpearInHand = analysis.hand.some(
+      (c) => c && c.name === "Luminarch Spear of Dawnfall"
+    );
+    const hasPiercingMonster = analysis.field.some(
+      (c) => c && c.cardKind === "monster" && !c.isFacedown && c.piercing
+    );
+    const oppHasDefenders = (analysis.oppField || []).some(
+      (c) => c && c.cardKind === "monster" && c.position === "defense"
+    );
+    const oppLp = analysis.oppLp || 8000;
+
+    if (hasSpearInHand && hasPiercingMonster && oppHasDefenders) {
+      const piercers = analysis.field.filter(
+        (c) => c && c.cardKind === "monster" && !c.isFacedown && c.piercing
+      );
+      const totalPiercingAtk = piercers.reduce((sum, m) => sum + (m.atk || 0), 0);
+      const canLethal = totalPiercingAtk >= oppLp;
+
+      combos.push({
+        id: "spear_piercing_setup",
+        name: canLethal ? "⚔️ SPEAR + PIERCING LETHAL" : "Spear + Piercing Setup",
+        priority: canLethal ? 18 : 9,
+        cards: ["Luminarch Spear of Dawnfall", ...piercers.map((c) => c.name)],
+        description: canLethal
+          ? `LETHAL! Spear zera DEF → Piercing ${totalPiercingAtk} damage = WIN`
+          : `Zerar DEF de defender → Piercing damage (${totalPiercingAtk} ATK disponível)`,
+        steps: [
+          "Ativar Spear of Dawnfall",
+          "Target: Monstro oponente em DEF",
+          "ATK/DEF do target viram 0",
+          `Atacar com ${piercers.map((c) => c.name?.split(" - ")[0] || c.name).join(", ")} (piercing)`,
+          canLethal ? "DANO DIRETO = VITÓRIA" : "Dano massivo ao LP oponente",
+        ],
+        conditions: {
+          hasSpear: hasSpearInHand,
+          hasPiercing: hasPiercingMonster,
+          oppInDefense: oppHasDefenders,
+          canLethal: canLethal,
+          totalDamage: totalPiercingAtk,
+        },
+      });
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
     // COMBO 8: Fusion Setup (Sanctum Protector + Lv5+)
     // ═════════════════════════════════════════════════════════════════════════
     const hasProtectorOnField = analysis.field.some(
@@ -337,9 +496,7 @@ export function detectAvailableCombos(analysis) {
     const hasFortressInExtra = (analysis.extraDeck || []).some(
       (c) => c && c.name === "Luminarch Fortress Aegis"
     );
-    const hasHalberdInHand = analysis.hand.some(
-      (c) => c && c.name === "Luminarch Enchanted Halberd"
-    );
+    // hasHalberdInHand já declarado no combo 7.5
 
     if (hasAegisOnField && hasFortressInExtra) {
       if (canAscend) {

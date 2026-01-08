@@ -378,13 +378,14 @@ export async function greedySearchWithEvalV2(game, strategy, options = {}) {
   }
 
   // BUGFIX: Usar preGeneratedActions primeiro, depois regenerar como fallback
-  const handForValidation =
+  // 🔧 FIX: Validar contra mão ORIGINAL (não simulada) para evitar index invalidation
+  const originalHand =
     perspectiveBot?.hand || game?.bot?.hand || game?.player?.hand || [];
-  let candidates = filterValidHandActions(preGeneratedActions, handForValidation);
+  let candidates = filterValidHandActions(preGeneratedActions, originalHand);
   if (!candidates.length) {
     candidates = filterValidHandActions(
       strategy.generateMainPhaseActions(game),
-      handForValidation
+      originalHand
     );
   }
   if (!candidates.length) {

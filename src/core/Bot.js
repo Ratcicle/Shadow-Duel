@@ -99,11 +99,11 @@ export default class Bot extends Player {
     ];
   }
 
-  // Deck Luminarch otimizado (Tank/Control - S/A-tier focus)
+  // Deck Luminarch completo (Tank/Control/Versatility) — 30 cards
   getLuminarchDeck() {
     return [
       // ═════════════════════════════════════════════════════════════════════
-      // S-TIER CORE (máx cópias) — 9 cards
+      // S-TIER CORE — 8 cards
       // ═════════════════════════════════════════════════════════════════════
       112,
       112,
@@ -112,42 +112,40 @@ export default class Bot extends Player {
       103,
       103, // Luminarch Aegisbearer (taunt tank S-tier, priority 20)
       102,
-      102,
       102, // Luminarch Holy Shield (proteção S-tier, priority 20)
 
       // ═════════════════════════════════════════════════════════════════════
-      // A-TIER SEARCHERS & RECURSION — 8 cards
+      // A-TIER SEARCHERS & RECURSION — 6 cards
       // ═════════════════════════════════════════════════════════════════════
-      101,
       101,
       101, // Luminarch Valiant – Knight of the Dawn (searcher A-tier, priority 18)
       118,
       118, // Luminarch Moonlit Blessing (recursion A-tier, priority 17)
       110,
-      110,
       110, // Luminarch Sanctified Arbiter (busca Citadel, A-tier, priority 16)
 
       // ═════════════════════════════════════════════════════════════════════
-      // A-TIER BOSS BEATERS — 4 cards
+      // A-TIER BOSS BEATERS — 5 cards (Lv6-8)
       // ═════════════════════════════════════════════════════════════════════
       104,
-      104, // Luminarch Moonblade Captain (recursion + double atk, priority 16)
-      105,
-      105, // Luminarch Celestial Marshal (boss 2500 ATK, priority 15)
+      104, // Luminarch Moonblade Captain (Lv6 recursion + double atk, priority 16)
+      105, // Luminarch Celestial Marshal (Lv7 boss 2500 ATK, priority 15)
+      108, // Luminarch Radiant Lancer (Lv8 2600 ATK + ATK gain, priority 14)
+      109, // Luminarch Aurora Seraph (Lv8 2800 ATK + heal + protection, priority 14)
 
       // ═════════════════════════════════════════════════════════════════════
       // B-TIER SUPPORT & UTILITY — 11 cards
       // ═════════════════════════════════════════════════════════════════════
       107,
-      107, // Luminarch Sanctum Protector (2800 DEF tank, priority 14)
-      106,
-      106, // Luminarch Magic Sickle (recursion engine, priority 12)
-      115,
+      107, // Luminarch Sanctum Protector (Lv7 2800 DEF tank, priority 14)
+      106, // Luminarch Magic Sickle (Lv3 recursion engine, priority 12)
+      117, // Luminarch Enchanted Halberd (Lv4 SS trigger, priority 11)
       115, // Luminarch Crescent Shield (equip, priority 10)
-      13,
       13, // Polymerization (fusion para Megashield, priority 10)
-      111, // Luminarch Knights Convocation (Special Summon, priority 9)
+      111, // Luminarch Knights Convocation (discard Lv7+ → search Lv4-, priority 9)
       119, // Luminarch Sacred Judgment (comeback, priority 8)
+      114, // Luminarch Radiant Wave (removal, priority 8)
+      116, // Luminarch Spear of Dawnfall (ATK/DEF zero, priority 7)
       113, // Luminarch Holy Ascension (ATK buff, priority 7)
     ];
   }
@@ -360,6 +358,14 @@ export default class Bot extends Player {
           console.log(`[Bot.playMainPhase] ✅ Greedy chose:`, bestAction);
         } else {
           console.log(`[Bot.playMainPhase] ❌ Greedy returned no action`);
+          
+          // 🔧 EMERGENCY FIX: Se greedy falhou mas temos ações, forçar primeira
+          if (!bestAction && actions.length > 0) {
+            bestAction = actions[0];
+            console.warn(
+              `[Bot.playMainPhase] 🚨 EMERGENCY FALLBACK: Forcing first action to avoid pass`
+            );
+          }
         }
       }
 
@@ -438,7 +444,12 @@ export default class Bot extends Player {
         }
         break;
       }
-      chainCount += 1;
+      
+      // 🔧 FIX: Efeitos de cartas já em campo não contam para limite de ações
+      // Apenas jogadas proativas (summon, spell, set) consomem o "action budget"
+      if (bestAction.type !== "spellTrapEffect" && bestAction.type !== "monsterEffect") {
+        chainCount += 1;
+      }
 
       if (typeof game.waitForPhaseDelay === "function") {
         await game.waitForPhaseDelay();

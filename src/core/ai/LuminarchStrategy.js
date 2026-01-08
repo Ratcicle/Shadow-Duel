@@ -1033,21 +1033,60 @@ export default class LuminarchStrategy extends BaseStrategy {
     return { tributesNeeded, usingAlt, alt };
   }
 
-  selectBestTributes(field, tributesNeeded, cardToSummon) {
+  selectBestTributes(field, tributesNeeded, cardToSummon, context = {}) {
     if (tributesNeeded <= 0 || !field || field.length < tributesNeeded) {
       return [];
     }
 
-    const monstersWithValue = field.map((monster, index) => {
-      const value = estimateMonsterValue(monster, {
-        archetype: "Luminarch",
-        fieldSpell: this.bot.fieldSpell,
-        preferDefense: true,
-      });
-      return { monster, index, value };
-    });
+    const botState = this.bot || {};
+    const evaluationContext = {
+      field: field || [],
+      graveyard: botState.graveyard || [],
+      hand: botState.hand || [],
+      spellTrap: botState.spellTrap || [],
+      fieldSpell: botState.fieldSpell || null,
+      usedEffects: botState.usedEffects || [],
+    };
 
-    monstersWithValue.sort((a, b) => a.value - b.value);
+    const oppField = Array.isArray(context.oppField) ? context.oppField : [];
+    const oppStrongest = oppField.reduce((max, monster) => {
+      if (!monster || monster.cardKind !== "monster") return max;
+      return Math.max(max, monster.atk || 0);
+    }, 0);
+
+    const monstersWithValue = (field || [])
+      .map((monster, index) => {
+        if (!monster || monster.cardKind !== "monster") return null;
+
+        const atk = (monster.atk || 0) + (monster.tempAtkBoost || 0);
+        const def = (monster.def || 0) + (monster.tempDefBoost || 0);
+        const hiddenDef = monster.isFacedown ? 1500 : 0;
+        const combatStat = Math.max(atk, def, hiddenDef);
+
+        const expendability = evaluateCardExpendability(
+          monster,
+          evaluationContext
+        );
+
+        // keepScore alto = queremos manter; ordenar ASC para tributar o menor
+        let keepScore = combatStat / 1000;
+        keepScore += (monster.level || 0) * 0.12;
+        keepScore += (expendability.value ?? 5) * 0.4;
+        if (!expendability.expendable) keepScore += 1.0;
+        if (monster.mustBeAttacked) keepScore += 1.2;
+
+        const solidDefender =
+          monster.position === "defense" &&
+          def >= Math.max(1800, oppStrongest - 200);
+        if (solidDefender) keepScore += 0.6;
+
+        if (monster.isFacedown) keepScore -= 0.5;
+
+        return { monster, index, keepScore };
+      })
+      .filter(Boolean);
+
+    monstersWithValue.sort((a, b) => a.keepScore - b.keepScore);
     return monstersWithValue.slice(0, tributesNeeded).map((t) => t.index);
   }
 

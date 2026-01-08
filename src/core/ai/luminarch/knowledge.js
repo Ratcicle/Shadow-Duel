@@ -68,13 +68,16 @@ export const CARD_KNOWLEDGE = {
       "Luminarch Aegisbearer",
       "Luminarch Valiant - Knight of the Dawn",
       "Luminarch Enchanted Halberd",
+      "Luminarch Magic Sickle",
     ],
     playPatterns: [
       "Reviver Aegisbearer para taunt imediato",
       "Duplo ataque para limpar board",
+      "COMBO: Captain revive Lv4- → Halberd auto-SS = 3 monstros em 1 turno!",
       "Boa no mid-game quando GY tem recursos",
     ],
     value: 14,
+    comboWith: ["Luminarch Enchanted Halberd"],
   },
 
   "Luminarch Celestial Marshal": {
@@ -139,13 +142,20 @@ export const CARD_KNOWLEDGE = {
     priority: 5,
     summonCondition: "when_ahead",
     effect: "Destrói monstro → +200 ATK. Destruído → pop backrow oponente",
-    synergies: ["Luminarch Holy Ascension", "Sanctum of the Luminarch Citadel"],
+    synergies: [
+      "Luminarch Holy Ascension",
+      "Sanctum of the Luminarch Citadel",
+      "Luminarch Spear of Dawnfall",
+    ],
     playPatterns: [
-      "Snowball ATK ao destruir",
+      "Snowball ATK ao destruir (+200 permanente)",
       "Floating effect (pop backrow)",
       "Pressão em board control",
+      "PROTEGER após buffs - quanto mais tempo vivo, mais forte",
+      "Combinar com Spear para garantir kills em defenders",
     ],
     value: 10,
+    snowballPotential: true, // Bot deve valorizar manter vivo
   },
 
   "Luminarch Aurora Seraph": {
@@ -158,13 +168,17 @@ export const CARD_KNOWLEDGE = {
       "Sanctum of the Luminarch Citadel",
       "Luminarch Holy Shield",
       "Luminarch Megashield Barbarias",
+      "Luminarch Magic Sickle",
     ],
     playPatterns: [
       "Lifegain engine ao destruir",
       "Proteção built-in (mandar ally para GY)",
+      "PREFERIR Magic Sickle como substituto (vai para GY → recicla 2 cartas)",
       "Sinergiza com LP-gain strategy",
+      "Sacrificar Halberd/Sickle > Aegis/Protector como custo de proteção",
     ],
     value: 13,
+    preferredSacrificeTargets: ["Luminarch Magic Sickle", "Luminarch Enchanted Halberd"],
   },
 
   "Luminarch Sanctified Arbiter": {
@@ -236,13 +250,22 @@ export const CARD_KNOWLEDGE = {
     role: "continuous_search",
     priority: 5,
     effect: "1x/turn: discard Lv7+ Luminarch → add Lv4- da deck",
-    synergies: ["Luminarch Celestial Marshal", "Luminarch Sanctum Protector"],
+    synergies: [
+      "Luminarch Celestial Marshal",
+      "Luminarch Sanctum Protector",
+      "Luminarch Aurora Seraph",
+      "Luminarch Valiant - Knight of the Dawn",
+      "Luminarch Sanctified Arbiter",
+    ],
     playPatterns: [
-      "Continuous searcher",
+      "⚠️ BRICK ESCAPE: 2+ Lv7+ na mão sem searchers → ALTA PRIORIDADE",
+      "Discard boss → search Valiant/Arbiter → iniciar combo principal",
+      "Bosses na GY = setup para Moonlit Blessing recursão",
+      "Continuous searcher para mid-game",
       "Dump high-levels para GY recursion",
-      "Filtrar mão",
     ],
     value: 8,
+    brickEscape: true, // Sinaliza papel de escape para mãos ruins
   },
 
   "Sanctum of the Luminarch Citadel": {
@@ -293,10 +316,12 @@ export const CARD_KNOWLEDGE = {
     ],
     playPatterns: [
       "Removal targeted",
-      "Usar boss como custo para pop ameaça",
+      "PREFERIR boss que JÁ USOU EFEITO como custo (gerou valor)",
       "Trade favorável",
+      "Boss menor que ameaça = bom custo",
     ],
     value: 12,
+    preferUsedBossesAsCost: true,
   },
 
   "Luminarch Crescent Shield": {
@@ -316,13 +341,19 @@ export const CARD_KNOWLEDGE = {
     role: "debuff",
     priority: 6,
     effect: "Controle Luminarch → ATK/DEF de 1 monstro oponente vira 0",
-    synergies: ["Luminarch Valiant - Knight of the Dawn"],
+    synergies: [
+      "Luminarch Valiant - Knight of the Dawn",
+      "Luminarch Celestial Marshal",
+      "Luminarch Radiant Lancer",
+    ],
     playPatterns: [
       "Remoção indireta (zerar stats)",
-      "Setup para piercing kill",
-      "Neutralizar boss oponente",
+      "COMBO PIERCING: Zerar DEF de defender → Valiant/Marshal piercing = dano direto",
+      "Neutralizar boss oponente (2800+ ATK → 0)",
+      "Setup para lethal quando oponente está em DEF mode",
     ],
     value: 10,
+    piercingCombo: true, // Sinaliza sinergia com piercing
   },
 
   "Luminarch Moonlit Blessing": {

@@ -151,6 +151,61 @@ export function evaluateCardExpendability(card, context) {
     };
   }
 
+  // Radiant Lancer: SNOWBALL EFFECT - valor AUMENTA com buffs acumulados
+  if (name === "Luminarch Radiant Lancer") {
+    const baseAtk = 2200; // ATK original do Lancer
+    const currentAtk = card.atk || baseAtk;
+    const atkGain = currentAtk - baseAtk;
+    const killCount = Math.floor(atkGain / 200); // +200 por kill
+    
+    if (atkGain > 0) {
+      // Quanto mais buff acumulado, MENOS gastável
+      const snowballValue = Math.min(10, 6 + killCount); // 6 base + 1 por kill, máx 10
+      return {
+        expendable: false,
+        reason: `SNOWBALL: +${atkGain} ATK acumulado (${killCount} kills) - PROTEGER`,
+        value: snowballValue,
+      };
+    }
+    // Sem buffs ainda: valor médio, pode ser material
+    return {
+      expendable: true,
+      reason: "Lancer sem buffs - pode ser gastável se necessário",
+      value: 5,
+    };
+  }
+
+  // Aurora Seraph: Boss lifegain, alto valor, mas efeito OPT
+  if (name === "Luminarch Aurora Seraph") {
+    const hasUsedEffect = (context.usedEffects || []).includes(card.id);
+    if (hasUsedEffect) {
+      // Já usou proteção este turno - valor cai um pouco
+      return {
+        expendable: false, // Ainda é boss 2800 ATK
+        reason: "Usou proteção - ainda é boss valioso mas sem OPT",
+        value: 7,
+      };
+    }
+    return {
+      expendable: false,
+      reason: "Boss 2800 ATK + lifegain + proteção OPT - NÚCLEO",
+      value: 9,
+    };
+  }
+
+  // ═════════════════════════════════════════════════════════════════════════
+  // HALBERD - Extender baixo valor próprio (veio de graça)
+  // ═════════════════════════════════════════════════════════════════════════
+
+  // Enchanted Halberd: Veio de SS automático - ótimo custo
+  if (name === "Luminarch Enchanted Halberd") {
+    return {
+      expendable: true,
+      reason: "Extender que veio de graça - excelente custo de sacrifício",
+      value: 3,
+    };
+  }
+
   // ═════════════════════════════════════════════════════════════════════════
   // EQUIPS - São PROTEÇÃO SACRIFICIAL (valor = absorver dano)
   // ═════════════════════════════════════════════════════════════════════════

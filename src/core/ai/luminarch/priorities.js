@@ -228,10 +228,27 @@ export function shouldPlaySpell(card, analysis) {
       );
 
       if (luminarch2kPlus.length > 0 && oppThreats.length > 0) {
+        // NOVO: Priorizar bosses que já usaram efeitos OPT como custo
+        // Esses já geraram valor e são melhores custos que bosses frescos
+        const usedBosses = luminarch2kPlus.filter((c) => c.usedEffectThisTurn);
+        const expendableBosses = luminarch2kPlus.filter((c) => {
+          // Bosses que são bons custos: já usaram efeito OU são menores que o alvo
+          const alreadyActed = c.usedEffectThisTurn || c.hasAttacked;
+          const smallerThanThreat = (c.atk || 0) < (oppThreats[0]?.atk || 0);
+          return alreadyActed || smallerThanThreat;
+        });
+
+        const bestCost = usedBosses[0] || expendableBosses[0] || luminarch2kPlus[0];
+        const costReason = usedBosses.length > 0
+          ? `${bestCost.name} (já usou efeito = bom custo)`
+          : expendableBosses.length > 0
+          ? `${bestCost.name} (expendable)`
+          : `${bestCost.name} (2000+ ATK)`;
+
         return {
           yes: true,
           priority: 11,
-          reason: `Destruir ameaça (custo: ${luminarch2kPlus[0].name})`,
+          reason: `Destruir ameaça ${oppThreats[0]?.name} (custo: ${costReason})`,
         };
       }
 
@@ -248,6 +265,29 @@ export function shouldPlaySpell(card, analysis) {
       const oppBiggest = (analysis.oppField || [])
         .filter((m) => m && !m.isFacedown)
         .sort((a, b) => (b.atk || 0) - (a.atk || 0))[0];
+      const oppDefenders = (analysis.oppField || []).filter(
+        (m) => m && m.position === "defense"
+      );
+
+      // NOVO: Prioridade alta se tem monstros com Piercing e oponente em DEF
+      const piercingMonsters = (analysis.field || []).filter(
+        (c) => c && c.cardKind === "monster" && !c.isFacedown && c.piercing
+      );
+      const hasPiercingSetup = piercingMonsters.length > 0 && oppDefenders.length > 0;
+
+      if (hasLuminarch && hasPiercingSetup) {
+        const totalPiercingAtk = piercingMonsters.reduce((sum, m) => sum + (m.atk || 0), 0);
+        const oppLp = analysis.oppLp || 8000;
+        const canLethal = totalPiercingAtk >= oppLp;
+
+        return {
+          yes: true,
+          priority: canLethal ? 18 : 12, // LETHAL = máxima prioridade
+          reason: canLethal
+            ? `LETHAL! Spear → Zerar DEF → Piercing ${totalPiercingAtk} = WIN`
+            : `Piercing setup: zerar DEF de defender → ${piercingMonsters.map(m => m.name?.split(" - ")[0]).join(", ")} (${totalPiercingAtk} dmg)`,
+        };
+      }
 
       if (hasLuminarch && oppBiggest && (oppBiggest.atk || 0) >= 2000) {
         return {
@@ -343,6 +383,22 @@ export function shouldPlaySpell(card, analysis) {
         (c) =>
           c && isLuminarch(c) && c.cardKind === "monster" && (c.level || 0) >= 7
       );
+
+      // NOVO: Detectar situação de BRICK (muitos Lv7+ sem searchers)
+      const hasSearcherInHand = (analysis.hand || []).some(
+        (c) =>
+          c &&
+          (c.name?.includes("Valiant") || c.name?.includes("Arbiter"))
+      );
+      const isBricked = lv7Plus.length >= 2 && !hasSearcherInHand;
+
+      if (isBricked) {
+        return {
+          yes: true,
+          priority: 14, // Alta prioridade - resolver brick é crítico
+          reason: `BRICK ESCAPE: ${lv7Plus.length}x Lv7+ na mão sem searchers → discard boss → search Valiant/Arbiter`,
+        };
+      }
 
       if (lv7Plus.length > 0) {
         return {
@@ -599,13 +655,18 @@ export function shouldSummonMonster(card, analysis) {
     // ═════════════════════════════════════════════════════════════════════════
 
     if (name === "Luminarch Sanctified Arbiter") {
+      // ═══════════════════════════════════════════════════════════════════════
+      // CRÍTICO: Arbiter DEVE ser invocado face-UP (attack) para ativar busca!
+      // Face-down = sem trigger = valor perdido. O search vale mais que DEF.
+      // ═══════════════════════════════════════════════════════════════════════
+      
       // Arbiter busca SPELL/TRAP - priorizar se não temos field spell
       if (!hasFieldSpell) {
         return {
           yes: true,
-          position: hasTank ? "attack" : "defense",
+          position: "attack", // SEMPRE attack para buscar!
           priority: 10,
-          reason: "Buscar Sanctum Citadel (field spell core!)",
+          reason: "Buscar Sanctum Citadel (field spell core!) - FACE-UP para trigger",
         };
       }
       // Já tem field spell - buscar proteção se não temos
@@ -615,18 +676,18 @@ export function shouldSummonMonster(card, analysis) {
           (c.name === "Luminarch Holy Shield" ||
             c.name === "Luminarch Crescent Shield")
       );
-      if (!hasProtection && hasTank) {
+      if (!hasProtection) {
         return {
           yes: true,
-          position: "attack",
+          position: "attack", // SEMPRE attack para buscar!
           priority: 7,
-          reason: "Buscar spell de proteção",
+          reason: "Buscar spell de proteção - FACE-UP para trigger",
         };
       }
-      // Low priority se já temos setup
+      // Low priority se já temos setup (mas ainda busca algo útil)
       return {
         yes: true,
-        position: "attack",
+        position: "attack", // SEMPRE attack para buscar!
         priority: 4,
         reason: "Buscar spell utility",
       };
@@ -658,6 +719,10 @@ export function shouldSummonMonster(card, analysis) {
       }
 
       // Se não temos tank, Valiant pode buscar Aegisbearer
+      // ═══════════════════════════════════════════════════════════════════════
+      // CRÍTICO: Valiant DEVE ser invocado face-UP (attack) para ativar busca!
+      // Face-down = sem trigger = valor perdido. O search vale mais que DEF.
+      // ═══════════════════════════════════════════════════════════════════════
       if (!hasTank && isEarlyGame) {
         const hasAegisInHand = (analysis.hand || []).some(
           (c) => c && c.name === "Luminarch Aegisbearer"
@@ -669,12 +734,12 @@ export function shouldSummonMonster(card, analysis) {
             reason: "Já tenho Aegisbearer na mão - invocar ele primeiro",
           };
         }
-        // Não temos Aegis - Valiant pode buscar
+        // Não temos Aegis - Valiant busca - SEMPRE attack para trigger!
         return {
           yes: true,
-          position: "defense", // Defesa porque não temos tank!
+          position: "attack", // SEMPRE attack para buscar!
           priority: 7,
-          reason: "Buscar Aegisbearer (setup defensivo)",
+          reason: "Buscar Aegisbearer (setup) - FACE-UP para trigger",
         };
       }
 
@@ -688,9 +753,10 @@ export function shouldSummonMonster(card, analysis) {
         };
       }
 
+      // Fallback: ainda busca algo útil
       return {
         yes: true,
-        position: "defense",
+        position: "attack", // SEMPRE attack para buscar!
         priority: 4,
         reason: "Searcher conservador",
       };
