@@ -19,11 +19,15 @@ import { botLogger } from "../../BotLogger.js";
  */
 export async function startTurn() {
   this.turnCounter += 1;
-  
+
   // Log separador de turno
-  const activePlayerName = this.turn === 'player' ? 'Bot 1' : 'Bot 2';
-  console.log(`\n${'─'.repeat(20)} TURNO ${this.turnCounter}: ${activePlayerName} ${'─'.repeat(20)}`);
-  
+  const activePlayerName = this.turn === "player" ? "Bot 1" : "Bot 2";
+  console.log(
+    `\n${"─".repeat(20)} TURNO ${
+      this.turnCounter
+    }: ${activePlayerName} ${"─".repeat(20)}`
+  );
+
   this.resetOncePerTurnUsage("start_turn");
 
   // Clean up expired turn-based buffs at the start of the turn
@@ -65,7 +69,6 @@ export async function startTurn() {
   activePlayer.additionalNormalSummons = 0;
 
   this.updateBoard();
-
   this.drawCards(activePlayer, 1);
   this.updateBoard();
   await this.waitForPhaseDelay();
@@ -81,19 +84,19 @@ export async function startTurn() {
 
   this.phase = "main1";
   this.updateBoard();
-  
+
   // 📊 Log de transição para main1
   if (botLogger && isAI(activePlayer)) {
     botLogger.logPhaseTransition(
-      activePlayer.id || 'bot',
+      activePlayer.id || "bot",
       this.turnCounter,
-      'standby',
-      'main1',
+      "standby",
+      "main1",
       0,
       0
     );
   }
-  
+
   if (
     isAI(activePlayer) &&
     !this.gameOver &&

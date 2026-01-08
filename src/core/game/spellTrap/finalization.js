@@ -26,7 +26,6 @@ export function finalizeSpellTrapActivation(
     this.moveCard(card, owner, "graveyard", { fromZone: activationZone });
   }
 }
-
 /**
  * Move a Spell/Trap from hand to the appropriate zone before resolving
  * activation. Returns the committed card reference and activation zone.

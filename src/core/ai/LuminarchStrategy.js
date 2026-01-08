@@ -49,9 +49,7 @@ import {
   shouldCommitResourcesNow,
   planNextTurns,
 } from "./luminarch/multiTurnPlanning.js";
-import {
-  evaluateFusionPriority,
-} from "./luminarch/fusionPriority.js";
+import { evaluateFusionPriority } from "./luminarch/fusionPriority.js";
 import {
   evaluateCardExpendability,
   evaluateFieldSpellUrgency,
@@ -300,13 +298,14 @@ export default class LuminarchStrategy extends BaseStrategy {
     score += handValue * 0.12;
 
     const gyLuminarch = myGY.filter(
-      (card) =>
-        card && card.cardKind === "monster" && isLuminarch(card)
+      (card) => card && card.cardKind === "monster" && isLuminarch(card)
     );
     score += gyLuminarch.length * 0.18;
     if (gyLuminarch.length >= 2) score += 0.35;
 
-    const hasLuminarchOnField = myField.some((card) => card && isLuminarch(card));
+    const hasLuminarchOnField = myField.some(
+      (card) => card && isLuminarch(card)
+    );
     const hasHolyShieldInHand = myHand.some(
       (card) => card && card.name === "Luminarch Holy Shield"
     );
@@ -349,7 +348,13 @@ export default class LuminarchStrategy extends BaseStrategy {
       );
       bot.hand.forEach((c, i) => {
         console.log(
-          `  [${i}] ${c.name} (${c.cardKind}${c.cardKind === "monster" ? ` Lv${c.level || "?"}` : c.subtype ? ` ${c.subtype}` : ""})`
+          `  [${i}] ${c.name} (${c.cardKind}${
+            c.cardKind === "monster"
+              ? ` Lv${c.level || "?"}`
+              : c.subtype
+              ? ` ${c.subtype}`
+              : ""
+          })`
         );
       });
     }
@@ -379,7 +384,9 @@ export default class LuminarchStrategy extends BaseStrategy {
 
       if (bot?.debug) {
         console.log(
-          `[LuminarchStrategy] 🎯 Stance: ${gameStance.stance.toUpperCase()} - ${gameStance.reason}`
+          `[LuminarchStrategy] 🎯 Stance: ${gameStance.stance.toUpperCase()} - ${
+            gameStance.reason
+          }`
         );
         console.log(`[LuminarchStrategy] 📋 Plano:`, turnPlan.plan[0]);
       }
@@ -390,8 +397,8 @@ export default class LuminarchStrategy extends BaseStrategy {
         field: analysis.field,
         opponent: {
           field: analysis.oppField,
-          lp: analysis.oppLp
-        }
+          lp: analysis.oppLp,
+        },
       });
 
       if (fusionOpportunity && bot?.debug) {
@@ -493,7 +500,9 @@ export default class LuminarchStrategy extends BaseStrategy {
         );
         if (bot?.debug) {
           console.log(
-            `  Safety check: ${shouldSummon.yes ? "✅ APROVADO" : "❌ REJEITADO"} - ${shouldSummon.reason || "sem motivo"}`
+            `  Safety check: ${
+              shouldSummon.yes ? "✅ APROVADO" : "❌ REJEITADO"
+            } - ${shouldSummon.reason || "sem motivo"}`
           );
         }
         if (!shouldSummon.yes) return;
@@ -582,14 +591,11 @@ export default class LuminarchStrategy extends BaseStrategy {
         const protectorIndex = protectorIndices[0];
         const protectorCard = bot.hand[protectorIndex];
 
-        const oppStrongest = (opponent?.field || []).reduce(
-          (max, monster) => {
-            if (!monster || monster.cardKind !== "monster") return max;
-            const atk = monster.isFacedown ? 1500 : monster.atk || 0;
-            return Math.max(max, atk);
-          },
-          0
-        );
+        const oppStrongest = (opponent?.field || []).reduce((max, monster) => {
+          if (!monster || monster.cardKind !== "monster") return max;
+          const atk = monster.isFacedown ? 1500 : monster.atk || 0;
+          return Math.max(max, atk);
+        }, 0);
 
         const hasOtherTank = (bot.field || []).some(
           (card) =>
@@ -640,7 +646,9 @@ export default class LuminarchStrategy extends BaseStrategy {
       try {
         if (bot?.debug) {
           console.log(
-            `\n[LuminarchStrategy] 🔍 Avaliando spell: ${card.name} (${card.subtype || "normal"})`
+            `\n[LuminarchStrategy] 🔍 Avaliando spell: ${card.name} (${
+              card.subtype || "normal"
+            })`
           );
         }
 
@@ -685,7 +693,9 @@ export default class LuminarchStrategy extends BaseStrategy {
         const decision = shouldPlaySpell(card, analysis);
         if (bot?.debug) {
           console.log(
-            `  shouldPlaySpell: ${decision.yes ? "✅" : "❌"} ${decision.reason || ""}`
+            `  shouldPlaySpell: ${decision.yes ? "✅" : "❌"} ${
+              decision.reason || ""
+            }`
           );
         }
 
@@ -702,7 +712,9 @@ export default class LuminarchStrategy extends BaseStrategy {
         );
         if (bot?.debug) {
           console.log(
-            `  shouldCommitResourcesNow: ${resourceCheck.shouldPlay ? "✅" : "⏳"} ${resourceCheck.reason || ""}`
+            `  shouldCommitResourcesNow: ${
+              resourceCheck.shouldPlay ? "✅" : "⏳"
+            } ${resourceCheck.reason || ""}`
           );
         }
         if (!resourceCheck.shouldPlay) {
@@ -789,7 +801,9 @@ export default class LuminarchStrategy extends BaseStrategy {
           );
           if (bot?.debug) {
             console.log(
-              `  SpellTrap Preview: ${preview?.ok ? "ƒo." : "ƒ?O"} ${preview?.reason || ""}`
+              `  SpellTrap Preview: ${preview?.ok ? "ƒo." : "ƒ?O"} ${
+                preview?.reason || ""
+              }`
             );
           }
           if (preview && preview.ok === false) return;
@@ -865,6 +879,8 @@ export default class LuminarchStrategy extends BaseStrategy {
         if (!card) return;
         if (card.cardKind !== "spell" && card.cardKind !== "trap") return;
         if (card.cardKind === "spell" && card.subtype === "field") return;
+        // 🚫 NEVER set Equip Spells - keep in hand for flexibility and safety
+        if (card.cardKind === "spell" && card.subtype === "equip") return;
         if (spellIndicesActivated.has(index)) return;
 
         const valueEstimate = estimateCardValue(card, {
@@ -965,7 +981,9 @@ export default class LuminarchStrategy extends BaseStrategy {
         console.log("  Ações:");
         actions.forEach((a) => {
           console.log(
-            `    - ${a.type}: ${a.cardName || `index ${a.index}`} (priority: ${a.priority || 0})`
+            `    - ${a.type}: ${a.cardName || `index ${a.index}`} (priority: ${
+              a.priority || 0
+            })`
           );
         });
       } else {
@@ -1176,10 +1194,7 @@ export default class LuminarchStrategy extends BaseStrategy {
         const materialIndex = Number.isInteger(action.materialIndex)
           ? action.materialIndex
           : player.field.findIndex(
-              (c) =>
-                c &&
-                c.name === "Luminarch Aegisbearer" &&
-                !c.isFacedown
+              (c) => c && c.name === "Luminarch Aegisbearer" && !c.isFacedown
             );
         if (materialIndex < 0) break;
 
@@ -1232,16 +1247,16 @@ export default class LuminarchStrategy extends BaseStrategy {
       }
       case "spellTrapEffect": {
         const player = state.bot;
-        const zoneIndex =
-          Number.isInteger(action.zoneIndex) ? action.zoneIndex : action.index;
+        const zoneIndex = Number.isInteger(action.zoneIndex)
+          ? action.zoneIndex
+          : action.index;
         const card = player.spellTrap?.[zoneIndex];
         if (!card) break;
         card.isFacedown = false;
 
         const effect = (card.effects || []).find(
           (entry) =>
-            entry &&
-            (entry.timing === "ignition" || entry.timing === "on_play")
+            entry && (entry.timing === "ignition" || entry.timing === "on_play")
         );
         if (effect) {
           const selections = selectSimulatedTargets({
