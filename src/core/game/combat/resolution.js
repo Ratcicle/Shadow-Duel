@@ -117,6 +117,18 @@ export async function resolveCombat(attacker, target, options = {}) {
   }
 
   const combatResult = await this.finishCombat(attacker, target);
+  
+  // Emit combat resolution event for replay capture
+  await this.emit("combat_resolved", {
+    attacker,
+    target,
+    attackerOwner,
+    defenderOwner,
+    damageDealt: combatResult?.damageDealt || 0,
+    targetDestroyed: combatResult?.targetDestroyed || false,
+    attackerDestroyed: combatResult?.attackerDestroyed || false,
+  });
+  
   // Propagate needsSelection from battle_destroy effects
   if (combatResult?.needsSelection && combatResult?.selectionContract) {
     return combatResult;
@@ -142,6 +154,11 @@ export async function finishCombat(attacker, target, options = {}) {
   const resumeFromTie = options.resumeFromTie === true;
   const skipAttackerDestruction = resumeFromTie;
   const battleDestroyResults = [];
+  
+  // Track combat results for replay
+  let totalDamageDealt = 0;
+  let targetWasDestroyed = false;
+  let attackerWasDestroyed = false;
 
   const applyBattleDamage = (
     player,
@@ -185,6 +202,7 @@ export async function finishCombat(attacker, target, options = {}) {
     if (attacker.atk > target.atk) {
       const defender = target.owner === "player" ? this.player : this.bot;
       const damage = attacker.atk - target.atk;
+      totalDamageDealt = damage;
       applyBattleDamage(defender, target, damage, defenderHealsOnBattleDamage);
       logBattleResult(
         `${attacker.name} destroyed ${target.name} and dealt ${damage} damage.`
@@ -197,6 +215,7 @@ export async function finishCombat(attacker, target, options = {}) {
           sourceCard: attacker,
         });
         if (result?.destroyed) {
+          targetWasDestroyed = true;
           const bdResult = await this.applyBattleDestroyEffect(
             attacker,
             target
@@ -211,12 +230,16 @@ export async function finishCombat(attacker, target, options = {}) {
             ok: true,
             needsSelection: true,
             selectionContract: result.selectionContract,
+            damageDealt: totalDamageDealt,
+            targetDestroyed: targetWasDestroyed,
+            attackerDestroyed: attackerWasDestroyed,
           };
         }
       }
     } else if (attacker.atk < target.atk) {
       const attPlayer = attacker.owner === "player" ? this.player : this.bot;
       const damage = target.atk - attacker.atk;
+      totalDamageDealt = damage;
       applyBattleDamage(
         attPlayer,
         attacker,
@@ -234,6 +257,7 @@ export async function finishCombat(attacker, target, options = {}) {
           sourceCard: target,
         });
         if (result?.destroyed) {
+          attackerWasDestroyed = true;
           const bdResult = await this.applyBattleDestroyEffect(
             target,
             attacker
@@ -248,6 +272,9 @@ export async function finishCombat(attacker, target, options = {}) {
             ok: true,
             needsSelection: true,
             selectionContract: result.selectionContract,
+            damageDealt: totalDamageDealt,
+            targetDestroyed: targetWasDestroyed,
+            attackerDestroyed: attackerWasDestroyed,
           };
         }
       }
@@ -387,10 +414,20 @@ export async function finishCombat(attacker, target, options = {}) {
     (r) => r?.needsSelection && r?.selectionContract
   );
   if (pendingResult) {
-    return pendingResult;
+    return {
+      ...pendingResult,
+      damageDealt: totalDamageDealt,
+      targetDestroyed: targetWasDestroyed,
+      attackerDestroyed: attackerWasDestroyed,
+    };
   }
 
-  return { ok: true };
+  return {
+    ok: true,
+    damageDealt: totalDamageDealt,
+    targetDestroyed: targetWasDestroyed,
+    attackerDestroyed: attackerWasDestroyed,
+  };
 }
 
 /**

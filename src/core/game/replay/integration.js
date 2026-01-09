@@ -92,6 +92,31 @@ export function integrateReplayCapture(game) {
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
+  // Captura de Resultado de Combate (dano, destruição)
+  // ─────────────────────────────────────────────────────────────────────────────
+  game.on("combat_resolved", (payload) => {
+    const actor = payload.attacker?.owner === "player" ? "human" : "bot";
+    const boardState = captureMinimalBoardState(game);
+
+    ReplayCapture.capture("attack", {
+      actor,
+      attackerName: payload.attacker?.name,
+      attackerId: payload.attacker?.id,
+      attackerAtk: payload.attacker?.atk,
+      targetName: payload.target?.name || null,
+      targetId: payload.target?.id,
+      targetAtk: payload.target?.atk,
+      targetDef: payload.target?.def,
+      targetPosition: payload.target?.position,
+      isDirectAttack: !payload.target,
+      damageDealt: payload.damageDealt || 0,
+      targetDestroyed: payload.targetDestroyed || false,
+      attackerDestroyed: payload.attackerDestroyed || false,
+      board: boardState,
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
   // Captura de Ativação de Spells/Traps
   // ─────────────────────────────────────────────────────────────────────────────
   game.on("spell_activated", (payload) => {
@@ -119,6 +144,31 @@ export function integrateReplayCapture(game) {
       cardId: payload.card?.id,
       trigger: payload.trigger,
       chainLink: payload.chainLink,
+      board: boardState,
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Captura de Buffs de Status
+  // ─────────────────────────────────────────────────────────────────────────────
+  game.on("stat_buff_applied", (payload) => {
+    const actor = getActorType(payload, game);
+    const boardState = captureMinimalBoardState(game);
+
+    ReplayCapture.captureEffectResolution({
+      actor,
+      turn: game.turnCounter,
+      phase: game.phase,
+      sourceCard: payload.sourceCard,
+      effectType: "buff",
+      targets: [{
+        name: payload.card?.name,
+        previousAtk: payload.previousAtk,
+        newAtk: payload.newAtk,
+        previousDef: payload.previousDef,
+        newDef: payload.newDef,
+      }],
+      description: `${payload.card?.name} ${payload.atkChange > 0 ? "+" : ""}${payload.atkChange} ATK, ${payload.defChange > 0 ? "+" : ""}${payload.defChange} DEF${payload.permanent ? "" : " (temp)"}`,
       board: boardState,
     });
   });

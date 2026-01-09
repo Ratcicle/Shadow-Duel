@@ -410,10 +410,10 @@ export default class ChainSystem {
     }
 
     // Check Quick-Play Spells in hand
-    // Quick-Play can be activated:
+    // Quick-Play can be activated FROM HAND only:
     // - During your own Main Phase (like a normal spell)
-    // - During opponent's turn as a response
-    // - In response to any chain (Speed 2)
+    // - NOT during opponent's turn (must be set on field first)
+    // Note: Once set on field, they can be activated as Speed 2 during opponent's turn
     if (Array.isArray(player.hand)) {
       for (const card of player.hand) {
         if (!card || card.cardKind !== "spell") continue;
@@ -421,6 +421,13 @@ export default class ChainSystem {
 
         // Skip cards already in the current chain
         if (cardsInChain.has(card)) continue;
+
+        // CRITICAL: Quick-Play Spells can only be activated from hand during YOUR OWN turn
+        const isPlayerTurn = this.game?.turn === player.id;
+        if (!isPlayerTurn) {
+          // Quick spells in hand cannot be activated during opponent's turn
+          continue;
+        }
 
         const effect = this.findActivatableEffect(card, context, player);
         if (effect) {
@@ -821,11 +828,11 @@ export default class ChainSystem {
    */
   async openChainWindow(context) {
     if (!this.game || this.isResolving) {
-      this.log("Cannot open chain window: game missing or chain resolving");
+      console.log("[ChainSystem] Cannot open chain window: game missing or chain resolving");
       return;
     }
 
-    this.log(`Opening chain window: ${context?.type}`, context);
+    console.log(`[ChainSystem] Opening chain window: ${context?.type}`, context);
 
     this.chainWindowOpen = true;
     this.chainWindowContext = context;
@@ -852,17 +859,22 @@ export default class ChainSystem {
     const respondingPlayer = this.getOpponent(triggerPlayer);
 
     // Offer response to non-trigger player first
+    console.log(`[ChainSystem] Offering chain responses (first: ${respondingPlayer?.id}, second: ${triggerPlayer?.id})`);
     await this.offerChainResponses(respondingPlayer, triggerPlayer, context);
+    console.log(`[ChainSystem] Chain responses complete, resolving chain (${this.chainStack.length} links)`);
 
     // Resolve the chain
     await this.resolveChain();
+    console.log(`[ChainSystem] Chain resolution complete`);
 
     // Clean up
+    console.log(`[ChainSystem] Cleaning up chain window`);
     this.chainWindowOpen = false;
     this.chainWindowContext = null;
     this.chainStack = [];
     this.currentChainLevel = 0;
     this.cardsBeingResolved.clear();
+    console.log(`[ChainSystem] Chain window closed successfully`);
   }
 
   /**
@@ -1400,7 +1412,7 @@ export default class ChainSystem {
       attacker: context?.attacker,
       attackerOwner: context?.attackerOwner,
       defenderOwner: context?.defenderOwner,
-      activationContext: { autoSelectSingleTarget: true },
+      activationContext: { autoSelectSingleTarget: isAI(player) },
     };
 
     // Use resolveTargets to check what selections are needed

@@ -1,0 +1,2648 @@
+{
+  "id": "duel_1767979126875_8",
+  "timestamp": "2026-01-09T17:18:46.875Z",
+  "playerDeck": {
+    "playerDeck": [
+      "Luminarch Radiant Lancer",
+      "Luminarch Sacred Judgment",
+      "Luminarch Celestial Marshal",
+      "Luminarch Aegisbearer",
+      "Sanctum of the Luminarch Citadel",
+      "Luminarch Aurora Seraph",
+      "Luminarch Sanctum Protector",
+      "Luminarch Holy Ascension",
+      "Luminarch Aegisbearer",
+      "Sanctum of the Luminarch Citadel"
+    ],
+    "playerExtraDeck": [
+      "Luminarch Megashield Barbarias",
+      "Luminarch Fortress Aegis"
+    ],
+    "botPreset": "shadowheart",
+    "timestamp": 1767979126875
+  },
+  "botDeck": "unknown",
+  "botArchetype": "unknown",
+  "decisions": [
+    {
+      "type": "summon",
+      "turn": 1,
+      "phase": "main1",
+      "timestamp": 1767979131296,
+      "actor": "human",
+      "card": {
+        "name": "Luminarch Sanctified Arbiter",
+        "id": 110
+      },
+      "gameState": {
+        "playerLP": 8000,
+        "botLP": 8000,
+        "playerField": [
+          {
+            "name": "Luminarch Sanctified Arbiter",
+            "atk": 1500,
+            "def": 1000,
+            "position": "attack"
+          }
+        ],
+        "botField": [],
+        "playerHandCount": 4,
+        "botHandCount": 4,
+        "playerGraveCount": 0,
+        "botGraveCount": 0,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 1,
+        "phase": "main1"
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 1,
+      "phase": "end",
+      "timestamp": 1767979134303,
+      "actor": "human",
+      "availableActions": [],
+      "gameState": {
+        "playerLP": 8000,
+        "botLP": 8000,
+        "playerField": [
+          {
+            "name": "Luminarch Sanctified Arbiter",
+            "atk": 1500,
+            "def": 1000,
+            "position": "attack"
+          }
+        ],
+        "botField": [],
+        "playerHandCount": 4,
+        "botHandCount": 4,
+        "playerGraveCount": 0,
+        "botGraveCount": 0,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 1,
+        "phase": "end"
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 2,
+      "phase": "main1",
+      "timestamp": 1767979135154,
+      "actor": "bot",
+      "card": {
+        "name": "Shadow-Heart Griffin",
+        "id": 67
+      },
+      "gameState": {
+        "playerLP": 8000,
+        "botLP": 8000,
+        "playerField": [
+          {
+            "name": "Luminarch Sanctified Arbiter",
+            "atk": 1500,
+            "def": 1000,
+            "position": "attack"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Griffin",
+            "atk": 2000,
+            "def": 1500,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerHandCount": 4,
+        "botHandCount": 4,
+        "playerGraveCount": 0,
+        "botGraveCount": 0,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 2,
+        "phase": "main1"
+      }
+    },
+    {
+      "type": "effect",
+      "timestamp": 1767979135622,
+      "actor": "bot",
+      "cardName": "Darkness Valley",
+      "cardId": 68,
+      "cardKind": "spell",
+      "effectId": "darkness_valley_on_place",
+      "effectTiming": "on_play",
+      "activationZone": "fieldSpell",
+      "effectType": "on_play",
+      "actions": [
+        "permanent_buff_named"
+      ],
+      "gameState": {
+        "playerLP": 8000,
+        "botLP": 8000,
+        "playerField": [
+          {
+            "name": "Luminarch Sanctified Arbiter",
+            "atk": 1500,
+            "def": 1000,
+            "position": "attack"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Griffin",
+            "atk": 2300,
+            "def": 1500,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerHandCount": 4,
+        "botHandCount": 3,
+        "playerGraveCount": 0,
+        "botGraveCount": 0,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 2,
+        "phase": "main1"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 2,
+      "phase": "battle",
+      "timestamp": 1767979136563,
+      "actor": "bot",
+      "attacker": {
+        "name": "Shadow-Heart Griffin",
+        "id": 67,
+        "atk": 2300
+      },
+      "target": {
+        "name": "Luminarch Sanctified Arbiter",
+        "id": 110,
+        "atk": 1500,
+        "def": 1000,
+        "position": "attack",
+        "isFacedown": false
+      },
+      "directAttack": false,
+      "combatResult": {
+        "damageDealt": 0,
+        "targetDestroyed": false,
+        "attackerDestroyed": false,
+        "wasNegated": false
+      },
+      "gameState": {
+        "playerLP": 8000,
+        "botLP": 8000,
+        "playerField": [
+          {
+            "name": "Luminarch Sanctified Arbiter",
+            "atk": 1500,
+            "def": 1000,
+            "position": "attack"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Griffin",
+            "atk": 2300,
+            "def": 1500,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerHandCount": 4,
+        "botHandCount": 3,
+        "playerGraveCount": 0,
+        "botGraveCount": 0,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 2,
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 2,
+      "phase": "battle",
+      "timestamp": 1767979136581,
+      "actor": "bot",
+      "attacker": {
+        "name": "Shadow-Heart Griffin",
+        "id": 67,
+        "atk": 2300
+      },
+      "target": {
+        "name": "Luminarch Sanctified Arbiter",
+        "id": 110,
+        "atk": 1500,
+        "def": 1000,
+        "position": "attack"
+      },
+      "directAttack": false,
+      "combatResult": {
+        "damageDealt": 800,
+        "targetDestroyed": true,
+        "attackerDestroyed": false,
+        "wasNegated": false
+      },
+      "gameState": {
+        "playerLP": 7700,
+        "botLP": 8000,
+        "playerField": [],
+        "botField": [
+          {
+            "name": "Shadow-Heart Griffin",
+            "atk": 2300,
+            "def": 1500,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerHandCount": 4,
+        "botHandCount": 3,
+        "playerGraveCount": 1,
+        "botGraveCount": 0,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 2,
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 3,
+      "phase": "main1",
+      "timestamp": 1767979148591,
+      "actor": "human",
+      "card": {
+        "name": "Luminarch Valiant - Knight of the Dawn",
+        "id": 101
+      },
+      "gameState": {
+        "playerLP": 7700,
+        "botLP": 8000,
+        "playerField": [
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Griffin",
+            "atk": 2300,
+            "def": 1500,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerHandCount": 4,
+        "botHandCount": 3,
+        "playerGraveCount": 1,
+        "botGraveCount": 0,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 3,
+        "phase": "main1"
+      }
+    },
+    {
+      "type": "effect",
+      "timestamp": 1767979154833,
+      "actor": "human",
+      "cardName": "Luminarch Crescent Shield",
+      "cardId": 115,
+      "cardKind": "spell",
+      "effectId": "luminarch_crescent_shield_equip",
+      "effectTiming": "on_play",
+      "activationZone": "spellTrap",
+      "effectType": "on_play",
+      "actions": [
+        "equip"
+      ],
+      "gameState": {
+        "playerLP": 7700,
+        "botLP": 8000,
+        "playerField": [
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1700,
+            "position": "attack"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Griffin",
+            "atk": 2300,
+            "def": 1500,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerHandCount": 4,
+        "botHandCount": 3,
+        "playerGraveCount": 1,
+        "botGraveCount": 0,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 3,
+        "phase": "main1"
+      }
+    },
+    {
+      "type": "spell",
+      "turn": 3,
+      "phase": "main1",
+      "timestamp": 1767979154838,
+      "actor": "human",
+      "card": {
+        "name": "Luminarch Crescent Shield",
+        "id": 115
+      },
+      "targets": [],
+      "gameState": {
+        "playerLP": 7700,
+        "botLP": 8000,
+        "playerField": [
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1700,
+            "position": "attack"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Griffin",
+            "atk": 2300,
+            "def": 1500,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerHandCount": 4,
+        "botHandCount": 3,
+        "playerGraveCount": 1,
+        "botGraveCount": 0,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 3,
+        "phase": "main1"
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 3,
+      "phase": "end",
+      "timestamp": 1767979155791,
+      "actor": "human",
+      "availableActions": [],
+      "gameState": {
+        "playerLP": 7700,
+        "botLP": 8000,
+        "playerField": [
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1700,
+            "position": "attack"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Griffin",
+            "atk": 2300,
+            "def": 1500,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerHandCount": 4,
+        "botHandCount": 3,
+        "playerGraveCount": 1,
+        "botGraveCount": 0,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 3,
+        "phase": "end"
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 4,
+      "phase": "main1",
+      "timestamp": 1767979156630,
+      "actor": "bot",
+      "card": {
+        "name": "Shadow-Heart Specter",
+        "id": 53
+      },
+      "gameState": {
+        "playerLP": 7700,
+        "botLP": 8000,
+        "playerField": [
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1700,
+            "position": "attack"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Griffin",
+            "atk": 2300,
+            "def": 1500,
+            "position": "attack",
+            "isFacedown": false
+          },
+          {
+            "name": "Shadow-Heart Specter",
+            "atk": 800,
+            "def": 800,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerHandCount": 4,
+        "botHandCount": 3,
+        "playerGraveCount": 1,
+        "botGraveCount": 0,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 4,
+        "phase": "main1"
+      }
+    },
+    {
+      "type": "effect",
+      "timestamp": 1767979157090,
+      "actor": "bot",
+      "cardName": "Shadow-Heart Battle Hymn",
+      "cardId": 58,
+      "cardKind": "spell",
+      "effectId": "shadow_heart_battle_hymn",
+      "effectTiming": "on_play",
+      "activationZone": "spellTrap",
+      "effectType": "on_play",
+      "actions": [
+        "buff_atk_temp"
+      ],
+      "gameState": {
+        "playerLP": 7700,
+        "botLP": 8000,
+        "playerField": [
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1700,
+            "position": "attack"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Griffin",
+            "atk": 2800,
+            "def": 1500,
+            "position": "attack",
+            "isFacedown": false
+          },
+          {
+            "name": "Shadow-Heart Specter",
+            "atk": 1600,
+            "def": 800,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerHandCount": 4,
+        "botHandCount": 2,
+        "playerGraveCount": 1,
+        "botGraveCount": 0,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 4,
+        "phase": "main1"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 4,
+      "phase": "battle",
+      "timestamp": 1767979158059,
+      "actor": "bot",
+      "attacker": {
+        "name": "Shadow-Heart Griffin",
+        "id": 67,
+        "atk": 2800
+      },
+      "target": {
+        "name": "Luminarch Valiant - Knight of the Dawn",
+        "id": 101,
+        "atk": 1600,
+        "def": 1700,
+        "position": "attack",
+        "isFacedown": false
+      },
+      "directAttack": false,
+      "combatResult": {
+        "damageDealt": 0,
+        "targetDestroyed": false,
+        "attackerDestroyed": false,
+        "wasNegated": false
+      },
+      "gameState": {
+        "playerLP": 7700,
+        "botLP": 8000,
+        "playerField": [
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1700,
+            "position": "attack"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Griffin",
+            "atk": 2800,
+            "def": 1500,
+            "position": "attack",
+            "isFacedown": false
+          },
+          {
+            "name": "Shadow-Heart Specter",
+            "atk": 1600,
+            "def": 800,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerHandCount": 4,
+        "botHandCount": 2,
+        "playerGraveCount": 1,
+        "botGraveCount": 1,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 4,
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 4,
+      "phase": "battle",
+      "timestamp": 1767979158072,
+      "actor": "bot",
+      "attacker": {
+        "name": "Shadow-Heart Griffin",
+        "id": 67,
+        "atk": 2800
+      },
+      "target": {
+        "name": "Luminarch Valiant - Knight of the Dawn",
+        "id": 101,
+        "atk": 1600,
+        "def": 1200,
+        "position": "attack"
+      },
+      "directAttack": false,
+      "combatResult": {
+        "damageDealt": 1200,
+        "targetDestroyed": false,
+        "attackerDestroyed": false,
+        "wasNegated": false
+      },
+      "gameState": {
+        "playerLP": 7000,
+        "botLP": 8000,
+        "playerField": [
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Griffin",
+            "atk": 2800,
+            "def": 1500,
+            "position": "attack",
+            "isFacedown": false
+          },
+          {
+            "name": "Shadow-Heart Specter",
+            "atk": 1600,
+            "def": 800,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerHandCount": 4,
+        "botHandCount": 2,
+        "playerGraveCount": 2,
+        "botGraveCount": 1,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 4,
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 5,
+      "phase": "main1",
+      "timestamp": 1767979163961,
+      "actor": "human",
+      "card": {
+        "name": "Luminarch Moonblade Captain",
+        "id": 104
+      },
+      "gameState": {
+        "playerLP": 7000,
+        "botLP": 8000,
+        "playerField": [
+          {
+            "name": "Luminarch Moonblade Captain",
+            "atk": 2200,
+            "def": 1700,
+            "position": "attack"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Griffin",
+            "atk": 2300,
+            "def": 1500,
+            "position": "attack",
+            "isFacedown": false
+          },
+          {
+            "name": "Shadow-Heart Specter",
+            "atk": 1100,
+            "def": 800,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerHandCount": 4,
+        "botHandCount": 2,
+        "playerGraveCount": 3,
+        "botGraveCount": 1,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 5,
+        "phase": "main1"
+      }
+    },
+    {
+      "type": "position_choice",
+      "turn": 0,
+      "phase": "main1",
+      "timestamp": 1767979166848,
+      "actor": "human",
+      "card": {
+        "name": "Luminarch Valiant - Knight of the Dawn",
+        "id": 101
+      },
+      "chosenPosition": "attack",
+      "summonType": "special",
+      "gameState": {
+        "playerLP": 0,
+        "botLP": 0,
+        "playerField": [],
+        "botField": [],
+        "playerHandCount": 0,
+        "botHandCount": 0,
+        "playerGraveCount": 0,
+        "botGraveCount": 0,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 0,
+        "phase": "unknown"
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 5,
+      "phase": "main1",
+      "timestamp": 1767979166849,
+      "actor": "human",
+      "card": {
+        "name": "Luminarch Valiant - Knight of the Dawn",
+        "id": 101
+      },
+      "gameState": {
+        "playerLP": 7000,
+        "botLP": 8000,
+        "playerField": [
+          {
+            "name": "Luminarch Moonblade Captain",
+            "atk": 2200,
+            "def": 1700,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Griffin",
+            "atk": 2300,
+            "def": 1500,
+            "position": "attack",
+            "isFacedown": false
+          },
+          {
+            "name": "Shadow-Heart Specter",
+            "atk": 1100,
+            "def": 800,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerHandCount": 4,
+        "botHandCount": 2,
+        "playerGraveCount": 2,
+        "botGraveCount": 1,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 5,
+        "phase": "main1"
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 5,
+      "phase": "main1",
+      "timestamp": 1767979176328,
+      "actor": "human",
+      "card": {
+        "name": "Luminarch Enchanted Halberd",
+        "id": 117
+      },
+      "gameState": {
+        "playerLP": 7000,
+        "botLP": 8000,
+        "playerField": [
+          {
+            "name": "Luminarch Moonblade Captain",
+            "atk": 2200,
+            "def": 1700,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Enchanted Halberd",
+            "atk": 1600,
+            "def": 1400,
+            "position": "attack"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Griffin",
+            "atk": 2300,
+            "def": 1500,
+            "position": "attack",
+            "isFacedown": false
+          },
+          {
+            "name": "Shadow-Heart Specter",
+            "atk": 1100,
+            "def": 800,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerHandCount": 4,
+        "botHandCount": 2,
+        "playerGraveCount": 2,
+        "botGraveCount": 1,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 5,
+        "phase": "main1"
+      }
+    },
+    {
+      "type": "effect_resolution",
+      "turn": 5,
+      "phase": "main1",
+      "timestamp": 1767979188448,
+      "actor": "human",
+      "sourceCard": {
+        "name": "Sanctum of the Luminarch Citadel",
+        "id": 112
+      },
+      "effectResult": {
+        "type": "buff",
+        "targets": [
+          {
+            "name": "Luminarch Moonblade Captain",
+            "previousAtk": 2200,
+            "newAtk": 2700,
+            "previousDef": 1700,
+            "newDef": 2200
+          }
+        ],
+        "cardsDrawn": 0,
+        "cardsAdded": 0,
+        "lpChange": 0,
+        "description": "Luminarch Moonblade Captain +500 ATK, +500 DEF (temp)"
+      },
+      "gameState": {
+        "playerLP": 6000,
+        "botLP": 8000,
+        "playerField": [
+          {
+            "name": "Luminarch Moonblade Captain",
+            "atk": 2700,
+            "def": 2200,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Enchanted Halberd",
+            "atk": 1600,
+            "def": 1400,
+            "position": "attack"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Griffin",
+            "atk": 2300,
+            "def": 1500,
+            "position": "attack",
+            "isFacedown": false
+          },
+          {
+            "name": "Shadow-Heart Specter",
+            "atk": 1100,
+            "def": 800,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerHandCount": 4,
+        "botHandCount": 2,
+        "playerGraveCount": 2,
+        "botGraveCount": 1,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 5,
+        "phase": "main1"
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 5,
+      "phase": "battle",
+      "timestamp": 1767979189366,
+      "actor": "human",
+      "availableActions": [],
+      "gameState": {
+        "playerLP": 6000,
+        "botLP": 8000,
+        "playerField": [
+          {
+            "name": "Luminarch Moonblade Captain",
+            "atk": 2700,
+            "def": 2200,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Enchanted Halberd",
+            "atk": 1600,
+            "def": 1400,
+            "position": "attack"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Griffin",
+            "atk": 2300,
+            "def": 1500,
+            "position": "attack",
+            "isFacedown": false
+          },
+          {
+            "name": "Shadow-Heart Specter",
+            "atk": 1100,
+            "def": 800,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerHandCount": 4,
+        "botHandCount": 2,
+        "playerGraveCount": 2,
+        "botGraveCount": 1,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 5,
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 5,
+      "phase": "battle",
+      "timestamp": 1767979191518,
+      "actor": "human",
+      "attacker": {
+        "name": "Luminarch Moonblade Captain",
+        "id": 104,
+        "atk": 2700
+      },
+      "target": {
+        "name": "Shadow-Heart Griffin",
+        "id": 67,
+        "atk": 2300,
+        "def": 1500,
+        "position": "attack",
+        "isFacedown": false
+      },
+      "directAttack": false,
+      "combatResult": {
+        "damageDealt": 0,
+        "targetDestroyed": false,
+        "attackerDestroyed": false,
+        "wasNegated": false
+      },
+      "gameState": {
+        "playerLP": 6000,
+        "botLP": 8000,
+        "playerField": [
+          {
+            "name": "Luminarch Moonblade Captain",
+            "atk": 2700,
+            "def": 2200,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Enchanted Halberd",
+            "atk": 1600,
+            "def": 1400,
+            "position": "attack"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Griffin",
+            "atk": 2300,
+            "def": 1500,
+            "position": "attack",
+            "isFacedown": false
+          },
+          {
+            "name": "Shadow-Heart Specter",
+            "atk": 1100,
+            "def": 800,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerHandCount": 4,
+        "botHandCount": 2,
+        "playerGraveCount": 2,
+        "botGraveCount": 1,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 5,
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 5,
+      "phase": "battle",
+      "timestamp": 1767979191534,
+      "actor": "human",
+      "attacker": {
+        "name": "Luminarch Moonblade Captain",
+        "id": 104,
+        "atk": 2700
+      },
+      "target": {
+        "name": "Shadow-Heart Griffin",
+        "id": 67,
+        "atk": 2000,
+        "def": 1500,
+        "position": "attack"
+      },
+      "directAttack": false,
+      "combatResult": {
+        "damageDealt": 400,
+        "targetDestroyed": true,
+        "attackerDestroyed": false,
+        "wasNegated": false
+      },
+      "gameState": {
+        "playerLP": 6000,
+        "botLP": 7600,
+        "playerField": [
+          {
+            "name": "Luminarch Moonblade Captain",
+            "atk": 2700,
+            "def": 2200,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Enchanted Halberd",
+            "atk": 1600,
+            "def": 1400,
+            "position": "attack"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Specter",
+            "atk": 1100,
+            "def": 800,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerHandCount": 4,
+        "botHandCount": 2,
+        "playerGraveCount": 2,
+        "botGraveCount": 2,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 5,
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 5,
+      "phase": "battle",
+      "timestamp": 1767979193374,
+      "actor": "human",
+      "attacker": {
+        "name": "Luminarch Moonblade Captain",
+        "id": 104,
+        "atk": 2700
+      },
+      "target": {
+        "name": "Shadow-Heart Specter",
+        "id": 53,
+        "atk": 1100,
+        "def": 800,
+        "position": "attack",
+        "isFacedown": false
+      },
+      "directAttack": false,
+      "combatResult": {
+        "damageDealt": 0,
+        "targetDestroyed": false,
+        "attackerDestroyed": false,
+        "wasNegated": false
+      },
+      "gameState": {
+        "playerLP": 6000,
+        "botLP": 7600,
+        "playerField": [
+          {
+            "name": "Luminarch Moonblade Captain",
+            "atk": 2700,
+            "def": 2200,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Enchanted Halberd",
+            "atk": 1600,
+            "def": 1400,
+            "position": "attack"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Specter",
+            "atk": 1100,
+            "def": 800,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerHandCount": 4,
+        "botHandCount": 2,
+        "playerGraveCount": 2,
+        "botGraveCount": 2,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 5,
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 5,
+      "phase": "battle",
+      "timestamp": 1767979193407,
+      "actor": "human",
+      "attacker": {
+        "name": "Luminarch Moonblade Captain",
+        "id": 104,
+        "atk": 2700
+      },
+      "target": {
+        "name": "Shadow-Heart Specter",
+        "id": 53,
+        "atk": 800,
+        "def": 800,
+        "position": "attack"
+      },
+      "directAttack": false,
+      "combatResult": {
+        "damageDealt": 1600,
+        "targetDestroyed": true,
+        "attackerDestroyed": false,
+        "wasNegated": false
+      },
+      "gameState": {
+        "playerLP": 6000,
+        "botLP": 6000,
+        "playerField": [
+          {
+            "name": "Luminarch Moonblade Captain",
+            "atk": 2700,
+            "def": 2200,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Enchanted Halberd",
+            "atk": 1600,
+            "def": 1400,
+            "position": "attack"
+          }
+        ],
+        "botField": [],
+        "playerHandCount": 4,
+        "botHandCount": 3,
+        "playerGraveCount": 2,
+        "botGraveCount": 2,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 5,
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 5,
+      "phase": "battle",
+      "timestamp": 1767979196340,
+      "actor": "human",
+      "attacker": {
+        "name": "Luminarch Valiant - Knight of the Dawn",
+        "id": 101,
+        "atk": 1600
+      },
+      "target": null,
+      "directAttack": true,
+      "combatResult": {
+        "damageDealt": 0,
+        "targetDestroyed": false,
+        "attackerDestroyed": false,
+        "wasNegated": false
+      },
+      "gameState": {
+        "playerLP": 6000,
+        "botLP": 6000,
+        "playerField": [
+          {
+            "name": "Luminarch Moonblade Captain",
+            "atk": 2700,
+            "def": 2200,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Enchanted Halberd",
+            "atk": 1600,
+            "def": 1400,
+            "position": "attack"
+          }
+        ],
+        "botField": [],
+        "playerHandCount": 4,
+        "botHandCount": 3,
+        "playerGraveCount": 2,
+        "botGraveCount": 2,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 5,
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 5,
+      "phase": "main2",
+      "timestamp": 1767979201454,
+      "actor": "human",
+      "availableActions": [],
+      "gameState": {
+        "playerLP": 6000,
+        "botLP": 4400,
+        "playerField": [
+          {
+            "name": "Luminarch Moonblade Captain",
+            "atk": 2700,
+            "def": 2200,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Enchanted Halberd",
+            "atk": 1600,
+            "def": 1400,
+            "position": "attack"
+          }
+        ],
+        "botField": [],
+        "playerHandCount": 4,
+        "botHandCount": 3,
+        "playerGraveCount": 2,
+        "botGraveCount": 2,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 5,
+        "phase": "main2"
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 5,
+      "phase": "end",
+      "timestamp": 1767979201990,
+      "actor": "human",
+      "availableActions": [],
+      "gameState": {
+        "playerLP": 6000,
+        "botLP": 4400,
+        "playerField": [
+          {
+            "name": "Luminarch Moonblade Captain",
+            "atk": 2700,
+            "def": 2200,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Enchanted Halberd",
+            "atk": 1600,
+            "def": 1400,
+            "position": "attack"
+          }
+        ],
+        "botField": [],
+        "playerHandCount": 4,
+        "botHandCount": 3,
+        "playerGraveCount": 2,
+        "botGraveCount": 2,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 5,
+        "phase": "end"
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 6,
+      "phase": "main1",
+      "timestamp": 1767979202830,
+      "actor": "bot",
+      "card": {
+        "name": "Shadow-Heart Griffin",
+        "id": 67
+      },
+      "gameState": {
+        "playerLP": 6000,
+        "botLP": 4400,
+        "playerField": [
+          {
+            "name": "Luminarch Moonblade Captain",
+            "atk": 2200,
+            "def": 1700,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Enchanted Halberd",
+            "atk": 1600,
+            "def": 1400,
+            "position": "attack"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Griffin",
+            "atk": 2000,
+            "def": 1500,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerHandCount": 4,
+        "botHandCount": 3,
+        "playerGraveCount": 2,
+        "botGraveCount": 2,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 6,
+        "phase": "main1"
+      }
+    },
+    {
+      "type": "effect",
+      "timestamp": 1767979203325,
+      "actor": "bot",
+      "cardName": "Shadow-Heart Covenant",
+      "cardId": 59,
+      "cardKind": "spell",
+      "effectId": "shadow_heart_covenant",
+      "effectTiming": "on_play",
+      "activationZone": "spellTrap",
+      "effectType": "on_play",
+      "actions": [
+        "pay_lp",
+        "search_any"
+      ],
+      "gameState": {
+        "playerLP": 6000,
+        "botLP": 3600,
+        "playerField": [
+          {
+            "name": "Luminarch Moonblade Captain",
+            "atk": 2200,
+            "def": 1700,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Enchanted Halberd",
+            "atk": 1600,
+            "def": 1400,
+            "position": "attack"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Griffin",
+            "atk": 2300,
+            "def": 1500,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerHandCount": 4,
+        "botHandCount": 3,
+        "playerGraveCount": 2,
+        "botGraveCount": 2,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 6,
+        "phase": "main1"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 6,
+      "phase": "battle",
+      "timestamp": 1767979204315,
+      "actor": "bot",
+      "attacker": {
+        "name": "Shadow-Heart Griffin",
+        "id": 67,
+        "atk": 2300
+      },
+      "target": {
+        "name": "Luminarch Valiant - Knight of the Dawn",
+        "id": 101,
+        "atk": 1600,
+        "def": 1200,
+        "position": "attack",
+        "isFacedown": false
+      },
+      "directAttack": false,
+      "combatResult": {
+        "damageDealt": 0,
+        "targetDestroyed": false,
+        "attackerDestroyed": false,
+        "wasNegated": false
+      },
+      "gameState": {
+        "playerLP": 6000,
+        "botLP": 3600,
+        "playerField": [
+          {
+            "name": "Luminarch Moonblade Captain",
+            "atk": 2200,
+            "def": 1700,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Enchanted Halberd",
+            "atk": 1600,
+            "def": 1400,
+            "position": "attack"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Griffin",
+            "atk": 2300,
+            "def": 1500,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerHandCount": 4,
+        "botHandCount": 3,
+        "playerGraveCount": 2,
+        "botGraveCount": 3,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 6,
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 6,
+      "phase": "battle",
+      "timestamp": 1767979204331,
+      "actor": "bot",
+      "attacker": {
+        "name": "Shadow-Heart Griffin",
+        "id": 67,
+        "atk": 2300
+      },
+      "target": {
+        "name": "Luminarch Valiant - Knight of the Dawn",
+        "id": 101,
+        "atk": 1600,
+        "def": 1200,
+        "position": "attack"
+      },
+      "directAttack": false,
+      "combatResult": {
+        "damageDealt": 700,
+        "targetDestroyed": true,
+        "attackerDestroyed": false,
+        "wasNegated": false
+      },
+      "gameState": {
+        "playerLP": 5800,
+        "botLP": 3600,
+        "playerField": [
+          {
+            "name": "Luminarch Moonblade Captain",
+            "atk": 2200,
+            "def": 1700,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Enchanted Halberd",
+            "atk": 1600,
+            "def": 1400,
+            "position": "attack"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Griffin",
+            "atk": 2300,
+            "def": 1500,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerHandCount": 4,
+        "botHandCount": 3,
+        "playerGraveCount": 3,
+        "botGraveCount": 3,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 6,
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "effect",
+      "timestamp": 1767979219061,
+      "actor": "human",
+      "cardName": "Luminarch Radiant Wave",
+      "cardId": 114,
+      "cardKind": "spell",
+      "effectId": "luminarch_radiant_wave_effect",
+      "effectTiming": "on_play",
+      "activationZone": "spellTrap",
+      "effectType": "on_play",
+      "actions": [
+        "move",
+        "destroy"
+      ],
+      "gameState": {
+        "playerLP": 5800,
+        "botLP": 3600,
+        "playerField": [
+          {
+            "name": "Luminarch Enchanted Halberd",
+            "atk": 1600,
+            "def": 1400,
+            "position": "attack"
+          }
+        ],
+        "botField": [],
+        "playerHandCount": 4,
+        "botHandCount": 3,
+        "playerGraveCount": 4,
+        "botGraveCount": 4,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 7,
+        "phase": "main1"
+      }
+    },
+    {
+      "type": "spell",
+      "turn": 7,
+      "phase": "main1",
+      "timestamp": 1767979219079,
+      "actor": "human",
+      "card": {
+        "name": "Luminarch Radiant Wave",
+        "id": 114
+      },
+      "targets": [],
+      "gameState": {
+        "playerLP": 5800,
+        "botLP": 3600,
+        "playerField": [
+          {
+            "name": "Luminarch Enchanted Halberd",
+            "atk": 1600,
+            "def": 1400,
+            "position": "attack"
+          }
+        ],
+        "botField": [],
+        "playerHandCount": 4,
+        "botHandCount": 3,
+        "playerGraveCount": 5,
+        "botGraveCount": 4,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 7,
+        "phase": "main1"
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 7,
+      "phase": "main1",
+      "timestamp": 1767979221872,
+      "actor": "human",
+      "card": {
+        "name": "Luminarch Valiant - Knight of the Dawn",
+        "id": 101
+      },
+      "gameState": {
+        "playerLP": 5800,
+        "botLP": 3600,
+        "playerField": [
+          {
+            "name": "Luminarch Enchanted Halberd",
+            "atk": 1600,
+            "def": 1400,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          }
+        ],
+        "botField": [],
+        "playerHandCount": 3,
+        "botHandCount": 3,
+        "playerGraveCount": 5,
+        "botGraveCount": 4,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 7,
+        "phase": "main1"
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 7,
+      "phase": "battle",
+      "timestamp": 1767979225126,
+      "actor": "human",
+      "availableActions": [],
+      "gameState": {
+        "playerLP": 5800,
+        "botLP": 3600,
+        "playerField": [
+          {
+            "name": "Luminarch Enchanted Halberd",
+            "atk": 1600,
+            "def": 1400,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          }
+        ],
+        "botField": [],
+        "playerHandCount": 4,
+        "botHandCount": 3,
+        "playerGraveCount": 5,
+        "botGraveCount": 4,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 7,
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 7,
+      "phase": "battle",
+      "timestamp": 1767979226497,
+      "actor": "human",
+      "attacker": {
+        "name": "Luminarch Enchanted Halberd",
+        "id": 117,
+        "atk": 1600
+      },
+      "target": null,
+      "directAttack": true,
+      "combatResult": {
+        "damageDealt": 0,
+        "targetDestroyed": false,
+        "attackerDestroyed": false,
+        "wasNegated": false
+      },
+      "gameState": {
+        "playerLP": 5800,
+        "botLP": 3600,
+        "playerField": [
+          {
+            "name": "Luminarch Enchanted Halberd",
+            "atk": 1600,
+            "def": 1400,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          }
+        ],
+        "botField": [],
+        "playerHandCount": 4,
+        "botHandCount": 3,
+        "playerGraveCount": 5,
+        "botGraveCount": 4,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 7,
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 7,
+      "phase": "battle",
+      "timestamp": 1767979227815,
+      "actor": "human",
+      "attacker": {
+        "name": "Luminarch Valiant - Knight of the Dawn",
+        "id": 101,
+        "atk": 1600
+      },
+      "target": null,
+      "directAttack": true,
+      "combatResult": {
+        "damageDealt": 0,
+        "targetDestroyed": false,
+        "attackerDestroyed": false,
+        "wasNegated": false
+      },
+      "gameState": {
+        "playerLP": 5800,
+        "botLP": 2000,
+        "playerField": [
+          {
+            "name": "Luminarch Enchanted Halberd",
+            "atk": 1600,
+            "def": 1400,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          }
+        ],
+        "botField": [],
+        "playerHandCount": 4,
+        "botHandCount": 3,
+        "playerGraveCount": 5,
+        "botGraveCount": 4,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 7,
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 7,
+      "phase": "end",
+      "timestamp": 1767979228662,
+      "actor": "human",
+      "availableActions": [],
+      "gameState": {
+        "playerLP": 5800,
+        "botLP": 400,
+        "playerField": [
+          {
+            "name": "Luminarch Enchanted Halberd",
+            "atk": 1600,
+            "def": 1400,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          }
+        ],
+        "botField": [],
+        "playerHandCount": 4,
+        "botHandCount": 3,
+        "playerGraveCount": 5,
+        "botGraveCount": 4,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 7,
+        "phase": "end"
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 8,
+      "phase": "main1",
+      "timestamp": 1767979229488,
+      "actor": "bot",
+      "card": {
+        "name": "Shadow-Heart Griffin",
+        "id": 67
+      },
+      "gameState": {
+        "playerLP": 5800,
+        "botLP": 400,
+        "playerField": [
+          {
+            "name": "Luminarch Enchanted Halberd",
+            "atk": 1600,
+            "def": 1400,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Griffin",
+            "atk": 2000,
+            "def": 1500,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerHandCount": 4,
+        "botHandCount": 3,
+        "playerGraveCount": 5,
+        "botGraveCount": 4,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 8,
+        "phase": "main1"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 8,
+      "phase": "battle",
+      "timestamp": 1767979230455,
+      "actor": "bot",
+      "attacker": {
+        "name": "Shadow-Heart Griffin",
+        "id": 67,
+        "atk": 2300
+      },
+      "target": {
+        "name": "Luminarch Enchanted Halberd",
+        "id": 117,
+        "atk": 1600,
+        "def": 1400,
+        "position": "attack",
+        "isFacedown": false
+      },
+      "directAttack": false,
+      "combatResult": {
+        "damageDealt": 0,
+        "targetDestroyed": false,
+        "attackerDestroyed": false,
+        "wasNegated": false
+      },
+      "gameState": {
+        "playerLP": 5800,
+        "botLP": 400,
+        "playerField": [
+          {
+            "name": "Luminarch Enchanted Halberd",
+            "atk": 1600,
+            "def": 1400,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Griffin",
+            "atk": 2300,
+            "def": 1500,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerHandCount": 4,
+        "botHandCount": 3,
+        "playerGraveCount": 5,
+        "botGraveCount": 4,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 8,
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 8,
+      "phase": "battle",
+      "timestamp": 1767979230469,
+      "actor": "bot",
+      "attacker": {
+        "name": "Shadow-Heart Griffin",
+        "id": 67,
+        "atk": 2300
+      },
+      "target": {
+        "name": "Luminarch Enchanted Halberd",
+        "id": 117,
+        "atk": 1600,
+        "def": 1400,
+        "position": "attack"
+      },
+      "directAttack": false,
+      "combatResult": {
+        "damageDealt": 700,
+        "targetDestroyed": true,
+        "attackerDestroyed": false,
+        "wasNegated": false
+      },
+      "gameState": {
+        "playerLP": 5600,
+        "botLP": 400,
+        "playerField": [
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Griffin",
+            "atk": 2300,
+            "def": 1500,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerHandCount": 4,
+        "botHandCount": 3,
+        "playerGraveCount": 6,
+        "botGraveCount": 4,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 8,
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 9,
+      "phase": "main1",
+      "timestamp": 1767979249383,
+      "actor": "human",
+      "card": {
+        "name": "Luminarch Aegisbearer",
+        "id": 103
+      },
+      "gameState": {
+        "playerLP": 5600,
+        "botLP": 400,
+        "playerField": [
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "defense"
+          },
+          {
+            "name": "Luminarch Aegisbearer",
+            "atk": 1000,
+            "def": 2000,
+            "position": "defense"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Griffin",
+            "atk": 2300,
+            "def": 1500,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerHandCount": 4,
+        "botHandCount": 3,
+        "playerGraveCount": 6,
+        "botGraveCount": 4,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 9,
+        "phase": "main1"
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 9,
+      "phase": "end",
+      "timestamp": 1767979250087,
+      "actor": "human",
+      "availableActions": [],
+      "gameState": {
+        "playerLP": 5600,
+        "botLP": 400,
+        "playerField": [
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "defense"
+          },
+          {
+            "name": "Luminarch Aegisbearer",
+            "atk": 1000,
+            "def": 2000,
+            "position": "defense"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Griffin",
+            "atk": 2300,
+            "def": 1500,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerHandCount": 4,
+        "botHandCount": 3,
+        "playerGraveCount": 6,
+        "botGraveCount": 4,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 9,
+        "phase": "end"
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 10,
+      "phase": "main1",
+      "timestamp": 1767979250932,
+      "actor": "bot",
+      "card": {
+        "name": "Shadow-Heart Leviathan",
+        "id": 70
+      },
+      "gameState": {
+        "playerLP": 5600,
+        "botLP": 400,
+        "playerField": [
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "defense"
+          },
+          {
+            "name": "Luminarch Aegisbearer",
+            "atk": 1000,
+            "def": 2000,
+            "position": "defense"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Leviathan",
+            "atk": 2200,
+            "def": 1800,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerHandCount": 4,
+        "botHandCount": 3,
+        "playerGraveCount": 6,
+        "botGraveCount": 5,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 10,
+        "phase": "main1"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 10,
+      "phase": "battle",
+      "timestamp": 1767979251911,
+      "actor": "bot",
+      "attacker": {
+        "name": "Shadow-Heart Leviathan",
+        "id": 70,
+        "atk": 2500
+      },
+      "target": {
+        "name": "Luminarch Aegisbearer",
+        "id": 103,
+        "atk": 1000,
+        "def": 2000,
+        "position": "defense",
+        "isFacedown": true
+      },
+      "directAttack": false,
+      "combatResult": {
+        "damageDealt": 0,
+        "targetDestroyed": false,
+        "attackerDestroyed": false,
+        "wasNegated": false
+      },
+      "gameState": {
+        "playerLP": 5600,
+        "botLP": 400,
+        "playerField": [
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "defense"
+          },
+          {
+            "name": "Luminarch Aegisbearer",
+            "atk": 1000,
+            "def": 2000,
+            "position": "defense"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Leviathan",
+            "atk": 2500,
+            "def": 1800,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerHandCount": 4,
+        "botHandCount": 3,
+        "playerGraveCount": 6,
+        "botGraveCount": 5,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 10,
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 10,
+      "phase": "battle",
+      "timestamp": 1767979252545,
+      "actor": "bot",
+      "attacker": {
+        "name": "Shadow-Heart Leviathan",
+        "id": 70,
+        "atk": 2500
+      },
+      "target": {
+        "name": "Luminarch Aegisbearer",
+        "id": 103,
+        "atk": 1000,
+        "def": 2000,
+        "position": "defense"
+      },
+      "directAttack": false,
+      "combatResult": {
+        "damageDealt": 0,
+        "targetDestroyed": false,
+        "attackerDestroyed": false,
+        "wasNegated": false
+      },
+      "gameState": {
+        "playerLP": 5600,
+        "botLP": 400,
+        "playerField": [
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "defense"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Leviathan",
+            "atk": 2500,
+            "def": 1800,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerHandCount": 4,
+        "botHandCount": 3,
+        "playerGraveCount": 7,
+        "botGraveCount": 5,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 10,
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 11,
+      "phase": "main1",
+      "timestamp": 1767979256782,
+      "actor": "human",
+      "card": {
+        "name": "Luminarch Valiant - Knight of the Dawn",
+        "id": 101
+      },
+      "gameState": {
+        "playerLP": 5600,
+        "botLP": 400,
+        "playerField": [
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "defense"
+          },
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Leviathan",
+            "atk": 2500,
+            "def": 1800,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerHandCount": 4,
+        "botHandCount": 3,
+        "playerGraveCount": 7,
+        "botGraveCount": 5,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 11,
+        "phase": "main1"
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 11,
+      "phase": "end",
+      "timestamp": 1767979263768,
+      "actor": "human",
+      "availableActions": [],
+      "gameState": {
+        "playerLP": 5600,
+        "botLP": 400,
+        "playerField": [
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Leviathan",
+            "atk": 2500,
+            "def": 1800,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerHandCount": 5,
+        "botHandCount": 3,
+        "playerGraveCount": 7,
+        "botGraveCount": 5,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 11,
+        "phase": "end"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 12,
+      "phase": "battle",
+      "timestamp": 1767979265574,
+      "actor": "bot",
+      "attacker": {
+        "name": "Shadow-Heart Leviathan",
+        "id": 70,
+        "atk": 2500
+      },
+      "target": {
+        "name": "Luminarch Valiant - Knight of the Dawn",
+        "id": 101,
+        "atk": 1600,
+        "def": 1200,
+        "position": "attack",
+        "isFacedown": false
+      },
+      "directAttack": false,
+      "combatResult": {
+        "damageDealt": 0,
+        "targetDestroyed": false,
+        "attackerDestroyed": false,
+        "wasNegated": false
+      },
+      "gameState": {
+        "playerLP": 5600,
+        "botLP": 400,
+        "playerField": [
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Leviathan",
+            "atk": 2500,
+            "def": 1800,
+            "position": "attack",
+            "isFacedown": false
+          },
+          {
+            "name": "Shadow-Heart Imp",
+            "atk": 1500,
+            "def": 800,
+            "position": "defense",
+            "isFacedown": true
+          }
+        ],
+        "playerHandCount": 5,
+        "botHandCount": 3,
+        "playerGraveCount": 7,
+        "botGraveCount": 5,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 12,
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 12,
+      "phase": "battle",
+      "timestamp": 1767979265590,
+      "actor": "bot",
+      "attacker": {
+        "name": "Shadow-Heart Leviathan",
+        "id": 70,
+        "atk": 2500
+      },
+      "target": {
+        "name": "Luminarch Valiant - Knight of the Dawn",
+        "id": 101,
+        "atk": 1600,
+        "def": 1200,
+        "position": "attack"
+      },
+      "directAttack": false,
+      "combatResult": {
+        "damageDealt": 900,
+        "targetDestroyed": true,
+        "attackerDestroyed": false,
+        "wasNegated": false
+      },
+      "gameState": {
+        "playerLP": 4700,
+        "botLP": 400,
+        "playerField": [
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Leviathan",
+            "atk": 2500,
+            "def": 1800,
+            "position": "attack",
+            "isFacedown": false
+          },
+          {
+            "name": "Shadow-Heart Imp",
+            "atk": 1500,
+            "def": 800,
+            "position": "defense",
+            "isFacedown": true
+          }
+        ],
+        "playerHandCount": 5,
+        "botHandCount": 3,
+        "playerGraveCount": 8,
+        "botGraveCount": 5,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 12,
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 13,
+      "phase": "battle",
+      "timestamp": 1767979276399,
+      "actor": "human",
+      "availableActions": [],
+      "gameState": {
+        "playerLP": 4700,
+        "botLP": 400,
+        "playerField": [
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Leviathan",
+            "atk": 2500,
+            "def": 1800,
+            "position": "attack",
+            "isFacedown": false
+          },
+          {
+            "name": "Shadow-Heart Imp",
+            "atk": 1500,
+            "def": 800,
+            "position": "defense",
+            "isFacedown": true
+          }
+        ],
+        "playerHandCount": 5,
+        "botHandCount": 3,
+        "playerGraveCount": 8,
+        "botGraveCount": 5,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 13,
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 13,
+      "phase": "battle",
+      "timestamp": 1767979277712,
+      "actor": "human",
+      "attacker": {
+        "name": "Luminarch Valiant - Knight of the Dawn",
+        "id": 101,
+        "atk": 1600
+      },
+      "target": {
+        "name": "Shadow-Heart Imp",
+        "id": 60,
+        "atk": 1500,
+        "def": 800,
+        "position": "defense",
+        "isFacedown": true
+      },
+      "directAttack": false,
+      "combatResult": {
+        "damageDealt": 0,
+        "targetDestroyed": false,
+        "attackerDestroyed": false,
+        "wasNegated": false
+      },
+      "gameState": {
+        "playerLP": 4700,
+        "botLP": 400,
+        "playerField": [
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Leviathan",
+            "atk": 2500,
+            "def": 1800,
+            "position": "attack",
+            "isFacedown": false
+          },
+          {
+            "name": "Shadow-Heart Imp",
+            "atk": 1500,
+            "def": 800,
+            "position": "defense",
+            "isFacedown": true
+          }
+        ],
+        "playerHandCount": 5,
+        "botHandCount": 3,
+        "playerGraveCount": 8,
+        "botGraveCount": 5,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "turn": 13,
+        "phase": "battle"
+      }
+    }
+  ],
+  "result": {
+    "winner": {
+      "winner": "human",
+      "reason": "lp_zero",
+      "finalLP": {
+        "player": 4700,
+        "bot": 0
+      },
+      "totalTurns": 13,
+      "botPreset": "shadowheart"
+    }
+  },
+  "finalLP": {}
+}

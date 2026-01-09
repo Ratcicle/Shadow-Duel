@@ -66,6 +66,9 @@ class ReplayCapture {
   endDuel(winner, reason, playerLP, botLP, turns) {
     if (!this.isEnabled() || !this.currentDuel) return;
 
+    // Ordenar decisões por timestamp para garantir ordem cronológica correta
+    this.currentDuel.decisions.sort((a, b) => a.timestamp - b.timestamp);
+
     this.currentDuel.result = {
       winner: winner,
       reason: reason,
@@ -481,15 +484,76 @@ class ReplayCapture {
 
       directAttack: !context.target,
 
+      // Resultado do combate
+      combatResult: {
+        damageDealt: context.damageDealt || 0,
+        targetDestroyed: context.targetDestroyed || false,
+        attackerDestroyed: context.attackerDestroyed || false,
+        wasNegated: context.wasNegated || false,
+      },
+
+      // Contexto do jogo
+      gameState: this._captureGameState(context),
+    };
+
+    this.currentDuel.decisions.push(decision);
+    
+    // Log mais descritivo
+    const resultDesc = context.wasNegated ? "(NEGADO)" :
+      context.targetDestroyed ? `(+${context.damageDealt} dano, DESTRUIU)` :
+      context.damageDealt > 0 ? `(+${context.damageDealt} dano)` : "";
+    
+    this._logDecision(
+      "ATTACK",
+      context.attacker?.name,
+      `${context.target?.name || "DIRETO"} ${resultDesc} [${decision.actor}]`
+    );
+  }
+
+  /**
+   * Captura detalhes de um efeito resolvido
+   */
+  captureEffectResolution(context) {
+    if (!this.isEnabled() || !this.currentDuel) return;
+
+    const decision = {
+      type: "effect_resolution",
+      turn: context.turn || 0,
+      phase: context.phase || "unknown",
+      timestamp: Date.now(),
+      actor: context.actor || "unknown",
+
+      // Carta que gerou o efeito
+      sourceCard: {
+        name: context.sourceCard?.name,
+        id: context.sourceCard?.id,
+      },
+
+      // Resultado do efeito
+      effectResult: {
+        type: context.effectType, // "buff", "draw", "destroy", "heal", "damage", etc
+        targets: (context.targets || []).map((t) => ({
+          name: t?.name,
+          previousAtk: t?.previousAtk,
+          newAtk: t?.newAtk,
+          previousDef: t?.previousDef,
+          newDef: t?.newDef,
+        })),
+        cardsDrawn: context.cardsDrawn || 0,
+        cardsAdded: context.cardsAdded || 0,
+        lpChange: context.lpChange || 0,
+        description: context.description || "",
+      },
+
       // Contexto do jogo
       gameState: this._captureGameState(context),
     };
 
     this.currentDuel.decisions.push(decision);
     this._logDecision(
-      "ATTACK",
-      context.attacker?.name,
-      `${context.target?.name || "DIRETO"} [${decision.actor}]`
+      "EFFECT",
+      context.sourceCard?.name,
+      context.description || "resolvido"
     );
   }
 

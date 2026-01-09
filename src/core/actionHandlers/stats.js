@@ -193,6 +193,10 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
     if (!card || card.cardKind !== "monster") continue;
 
     let cardBuffed = false;
+    
+    // Track original stats for replay
+    const originalAtk = card.atk;
+    const originalDef = card.def;
 
     if (atkBoost !== 0) {
       if (!permanent) {
@@ -220,6 +224,20 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
 
     if (cardBuffed) {
       buffedCards.push(card.name);
+      
+      // Emit buff event for replay capture
+      game.emit?.("stat_buff_applied", {
+        card,
+        previousAtk: originalAtk,
+        newAtk: card.atk,
+        previousDef: originalDef,
+        newDef: card.def,
+        atkChange: atkBoost,
+        defChange: defBoost,
+        permanent,
+        sourceCard: ctx.source,
+        player: ctx.player,
+      });
     }
 
     if (grantSecondAttack) {
