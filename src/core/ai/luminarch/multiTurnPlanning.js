@@ -35,14 +35,11 @@ export function evaluateGameStance(analysis) {
   const ownStrongest = Math.max(
     ...ownField
       .filter((m) => m && m.cardKind === "monster" && !m.isFacedown)
-      .map((m) =>
-        m.position === "defense" ? m.def || 0 : m.atk || 0
-      ),
+      .map((m) => (m.position === "defense" ? m.def || 0 : m.atk || 0)),
     0
   );
   const ownDefCount = ownField.filter(
-    (m) =>
-      m && m.cardKind === "monster" && m.position === "defense"
+    (m) => m && m.cardKind === "monster" && m.position === "defense"
   ).length;
 
   // ═════════════════════════════════════════════════════════════════════════
@@ -77,10 +74,7 @@ export function evaluateGameStance(analysis) {
   }
 
   // Oponente fraco e temos campo: AGGRESSIVE
-  if (
-    oppMonsterCount === 0 ||
-    (oppStrongest <= 1800 && ownStrongest >= 2000)
-  ) {
+  if (oppMonsterCount === 0 || (oppStrongest <= 1800 && ownStrongest >= 2000)) {
     return {
       stance: "aggressive",
       reason: `Oponente fraco (${oppStrongest} ATK) - pressionar`,
@@ -139,9 +133,7 @@ export function estimateNextTurnResources(analysis) {
   });
 
   if (valueGenerators.length > 0) {
-    resources.push(
-      `${valueGenerators.length} monstros com efeitos ativos`
-    );
+    resources.push(`${valueGenerators.length} monstros com efeitos ativos`);
   }
 
   return {
@@ -187,11 +179,67 @@ export function shouldCommitResourcesNow(card, analysis, stance) {
     };
   }
 
+  // Convocation: jogar quando houver Lv7+ na mão (destrava recursos)
+  if (cardName.includes("Convocation")) {
+    const hasHighLevel = (hand || []).some(
+      (c) =>
+        c && c.cardKind === "monster" && isLuminarch(c) && (c.level || 0) >= 7
+    );
+    if (hasHighLevel) {
+      return {
+        shouldPlay: true,
+        reason: "Convocation com Lv7+ na mão = destravar recursos",
+      };
+    }
+  }
+
   // ═════════════════════════════════════════════════════════════════════════
-  // STANCE: DEFENSIVE - Segurar resources ofensivos
+  // STANCE: DEFENSIVE - Segurar resources ofensivos (com exceções)
   // ═════════════════════════════════════════════════════════════════════════
   if (stance.stance === "defensive") {
-    // Spells de buff: segurar até ter lethal/necessidade
+    const oppField = analysis.oppField || [];
+    const myField = analysis.field || [];
+
+    // Calcular ATK mais alto do oponente (face-up)
+    const oppStrongestAtk = oppField.reduce((max, m) => {
+      if (!m || m.cardKind !== "monster" || m.isFacedown) return max;
+      return Math.max(max, m.atk || 0);
+    }, 0);
+
+    // Radiant Wave: permitir se oponente tem monstro ATK >= 2000 (ameaça real)
+    if (cardName.includes("Radiant Wave")) {
+      const hasHighThreat = oppField.some(
+        (m) =>
+          m && m.cardKind === "monster" && !m.isFacedown && (m.atk || 0) >= 2000
+      );
+      if (hasHighThreat) {
+        return {
+          shouldPlay: true,
+          reason: `Defensive stance + ameaça ATK >= 2000 = remover blocker`,
+        };
+      }
+    }
+
+    // Holy Ascension: permitir se buff +800 faz meu monstro superar ameaça do oponente
+    if (cardName.includes("Holy Ascension")) {
+      const canOvercome = myField.some((m) => {
+        if (!m || m.cardKind !== "monster" || m.isFacedown) return false;
+        const myAtk =
+          (m.atk || 0) + (m.tempAtkBoost || 0) + (m.equipAtkBonus || 0);
+        const myDef =
+          (m.def || 0) + (m.tempDefBoost || 0) + (m.equipDefBonus || 0);
+        // +800 de buff supera o ATK mais alto do oponente?
+        return myAtk + 800 > oppStrongestAtk || myDef + 800 > oppStrongestAtk;
+      });
+      if (canOvercome && oppStrongestAtk >= 2000) {
+        return {
+          shouldPlay: true,
+          reason: `Defensive stance + buff supera ameaça (${oppStrongestAtk} ATK)`,
+        };
+      }
+    }
+
+    // Spells de buff sem condição especial: segurar
     if (
       cardName.includes("Holy Ascension") ||
       cardName.includes("Radiant Wave")
@@ -207,9 +255,8 @@ export function shouldCommitResourcesNow(card, analysis, stance) {
       cardName.includes("Holy Shield") ||
       cardName.includes("Crescent Shield")
     ) {
-      const hasValuableTargets = (analysis.field || []).filter(
-        (c) => c && isLuminarch(c)
-      ).length >= 2;
+      const hasValuableTargets =
+        (analysis.field || []).filter((c) => c && isLuminarch(c)).length >= 2;
       if (hasValuableTargets) {
         return {
           shouldPlay: true,
@@ -244,10 +291,7 @@ export function shouldCommitResourcesNow(card, analysis, stance) {
     if (cardName.includes("Holy Ascension")) {
       const canPush = (analysis.field || []).some(
         (c) =>
-          c &&
-          c.cardKind === "monster" &&
-          !c.isFacedown &&
-          (c.atk || 0) >= 1800
+          c && c.cardKind === "monster" && !c.isFacedown && (c.atk || 0) >= 1800
       );
       if (canPush && lp >= 4000) {
         return {
@@ -275,7 +319,7 @@ export function shouldCommitResourcesNow(card, analysis, stance) {
     // Sacred Judgment é carta de DESPERATION: campo vazio + opp domina
     const myField = field.length;
     const oppField = (analysis.oppField || []).length;
-    
+
     // Se é situação crítica (campo vazio + opp 3+), permitir com LP >= 2500
     if (myField === 0 && oppField >= 3 && lp >= 2500) {
       return {
@@ -283,7 +327,7 @@ export function shouldCommitResourcesNow(card, analysis, stance) {
         reason: "Situação crítica justifica risco (campo vazio + opp domina)",
       };
     }
-    
+
     // Caso contrário, exigir LP >= 4500 (conservador)
     if (lp < 4500) {
       return {

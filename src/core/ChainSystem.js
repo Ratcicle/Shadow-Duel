@@ -943,6 +943,95 @@ export default class ChainSystem {
 
     const game = this.game;
     const opponent = this.getOpponent(player);
+    const holyShieldOption = activatable.find(
+      (option) => option?.card?.name === "Luminarch Holy Shield"
+    );
+    if (holyShieldOption) {
+      const luminarchTargets = (player?.field || []).filter(
+        (card) =>
+          card &&
+          card.cardKind === "monster" &&
+          card.archetype === "Luminarch" &&
+          !card.isFacedown
+      );
+      const oppAttackers = (opponent?.field || []).filter(
+        (card) =>
+          card &&
+          card.cardKind === "monster" &&
+          !card.isFacedown &&
+          card.position === "attack"
+      );
+
+      const wouldLoseOrTakeDamage = (attacker, defender) => {
+        if (!attacker || !defender) return { loseMonster: false, takeDamage: false };
+        const atk = attacker.atk || 0;
+        const isDefense = defender.position === "defense";
+        const defStat = isDefense ? defender.def || 0 : defender.atk || 0;
+
+        if (!isDefense) {
+          if (atk > defStat) return { loseMonster: true, takeDamage: true };
+          if (atk === defStat) return { loseMonster: true, takeDamage: false };
+          return { loseMonster: false, takeDamage: false };
+        }
+
+        if (atk > defStat) {
+          return {
+            loseMonster: true,
+            takeDamage: !!attacker.piercing,
+          };
+        }
+        return { loseMonster: false, takeDamage: false };
+      };
+
+      const attacker = context?.attacker || null;
+      const defender = context?.defender || context?.target || null;
+      const defenderOwnerId =
+        context?.defenderOwner?.id ||
+        context?.targetOwner?.id ||
+        (defender?.owner === "player"
+          ? this.game?.player?.id
+          : this.game?.bot?.id);
+      const attackerOwnerId = context?.attackerOwner?.id || attacker?.owner;
+
+      const isDefendingSelf =
+        defender && defenderOwnerId && defenderOwnerId === player.id;
+      const isOpponentAttack =
+        attacker && attackerOwnerId && attackerOwnerId !== player.id;
+
+      let directBattleThreat = false;
+      if (
+        isDefendingSelf &&
+        isOpponentAttack &&
+        (context?.type === "attack_declaration" ||
+          context?.type === "battle_damage")
+      ) {
+        const outcome = wouldLoseOrTakeDamage(attacker, defender);
+        directBattleThreat = outcome.loseMonster || outcome.takeDamage;
+      }
+
+      const multipleAttackers = oppAttackers.length >= 2;
+      const anyVulnerableTarget =
+        multipleAttackers &&
+        luminarchTargets.some((monster) =>
+          oppAttackers.some((opp) => {
+            const outcome = wouldLoseOrTakeDamage(opp, monster);
+            return outcome.loseMonster || outcome.takeDamage;
+          })
+        );
+
+      if (
+        luminarchTargets.length > 0 &&
+        (directBattleThreat || anyVulnerableTarget)
+      ) {
+        const selections = await this.getBotSelectionsForEffect(
+          holyShieldOption.card,
+          holyShieldOption.effect,
+          player,
+          context
+        );
+        return { ...holyShieldOption, selections };
+      }
+    }
 
     // Evaluate each activatable card for strategic value
     const evaluatedOptions = activatable.map((option) => {

@@ -535,6 +535,7 @@ export default class LuminarchStrategy extends BaseStrategy {
         actions.push({
           type: "summon",
           index,
+          cardId: card.id,
           position: preferredPosition,
           facedown,
           priority,
@@ -625,6 +626,7 @@ export default class LuminarchStrategy extends BaseStrategy {
         actions.push({
           type: "special_summon_sanctum_protector",
           index: protectorIndex,
+          cardId: protectorCard?.id,
           materialIndex: chosenAegis.fieldIndex,
           position: "defense",
           priority,
@@ -764,6 +766,7 @@ export default class LuminarchStrategy extends BaseStrategy {
         actions.push({
           type: "spell",
           index,
+          cardId: card.id,
           priority,
           cardName: card.name,
           macroBuff,
@@ -855,6 +858,7 @@ export default class LuminarchStrategy extends BaseStrategy {
           type: "spellTrapEffect",
           index,
           zoneIndex: index,
+          cardId: card.id,
           priority,
           cardName: card.name,
           macroBuff,
@@ -881,7 +885,7 @@ export default class LuminarchStrategy extends BaseStrategy {
 
       bot.hand.forEach((card, index) => {
         if (!card) return;
-        
+
         // ✅ Traps sempre podem ser setados
         if (card.cardKind === "trap") {
           // OK, continua
@@ -894,7 +898,7 @@ export default class LuminarchStrategy extends BaseStrategy {
         else {
           return; // Skip: normal, continuous, equip, field spells
         }
-        
+
         if (spellIndicesActivated.has(index)) return;
 
         const valueEstimate = estimateCardValue(card, {
@@ -907,6 +911,7 @@ export default class LuminarchStrategy extends BaseStrategy {
         actions.push({
           type: "set_spell_trap",
           index,
+          cardId: card.id,
           priority: setPriority,
           cardName: card.name,
           reason: "setup_backrow",
@@ -930,7 +935,60 @@ export default class LuminarchStrategy extends BaseStrategy {
         if (bot?.debug) {
           console.log(`[LuminarchStrategy] Field Effect Preview:`, preview);
         }
-        if (preview && preview.ok) {
+        let shouldUseFieldEffect = true;
+        if (bot.fieldSpell?.name?.includes("Citadel")) {
+          const myMonsters = (bot.field || []).filter(
+            (card) =>
+              card &&
+              card.cardKind === "monster" &&
+              !card.isFacedown &&
+              isLuminarch(card)
+          );
+          if (!myMonsters.length) {
+            shouldUseFieldEffect = false;
+          } else {
+            const oppField = opponent?.field || [];
+            const oppLP = opponent?.lp || 0;
+            const oppStrongestAtk = oppField.reduce((max, monster) => {
+              if (!monster || monster.cardKind !== "monster") return max;
+              const atk = monster.isFacedown ? 1500 : monster.atk || 0;
+              return Math.max(max, atk);
+            }, 0);
+            const lp = bot.lp || 0;
+            const canPay = lp > 1000;
+            const wouldBeCritical = lp <= 2000;
+
+            const getAtk = (card) =>
+              (card.atk || 0) +
+              (card.tempAtkBoost || 0) +
+              (card.equipAtkBonus || 0);
+            const getDef = (card) =>
+              (card.def || 0) +
+              (card.tempDefBoost || 0) +
+              (card.equipDefBonus || 0);
+
+            const bestAtk = Math.max(...myMonsters.map(getAtk), 0);
+            const lethalWithBuff =
+              oppField.length === 0 && bestAtk + 500 >= oppLP;
+
+            const improvesMatchup = myMonsters.some((monster) => {
+              const atk = getAtk(monster);
+              const def = getDef(monster);
+              const atkImproves =
+                atk <= oppStrongestAtk && atk + 500 > oppStrongestAtk;
+              const defImproves =
+                def <= oppStrongestAtk && def + 500 > oppStrongestAtk;
+              return atkImproves || defImproves;
+            });
+
+            shouldUseFieldEffect =
+              canPay &&
+              (lethalWithBuff || improvesMatchup) &&
+              !(wouldBeCritical && !lethalWithBuff);
+          }
+        }
+
+        if (preview && preview.ok && shouldUseFieldEffect) {
           actions.push({
             type: "fieldEffect",
             priority: 0,
@@ -985,6 +1043,107 @@ export default class LuminarchStrategy extends BaseStrategy {
     if (game._isPerspectiveState) {
       // Estamos dentro de uma simulação - apenas retornar ações ordenadas sem P2
       return this.sequenceActions(actions);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // FALLBACK: Se nenhuma ação foi gerada, reavaliar cartas de emergência
+    // ═══════════════════════════════════════════════════════════════════════
+    if (actions.length === 0) {
+      if (bot?.debug) {
+        console.log(
+          `[LuminarchStrategy] 🆘 Fallback: reavaliando cartas de emergência...`
+        );
+      }
+
+      // === FALLBACK 1: Spells de buff/removal ignorando shouldCommitResourcesNow ===
+      const emergencySpellNames = [
+        "Luminarch Radiant Wave",
+        "Luminarch Holy Ascension",
+      ];
+      bot.hand.forEach((card, index) => {
+        if (card.cardKind !== "spell") return;
+        if (!emergencySpellNames.includes(card.name)) return;
+
+        try {
+          // Verificar se o EffectEngine permite a ativação
+          if (
+            game.effectEngine?.canActivateSpellFromHandPreview &&
+            typeof game.effectEngine.canActivateSpellFromHandPreview ===
+              "function"
+          ) {
+            const preview = game.effectEngine.canActivateSpellFromHandPreview(
+              card,
+              bot,
+              { activationContext }
+            );
+            if (preview && preview.ok === false) return;
+          }
+
+          // Adicionar com prioridade baixa/moderada
+          const priority = card.name.includes("Radiant Wave") ? 3 : 2;
+          actions.push({
+            type: "spell",
+            index,
+            cardId: card.id,
+            priority,
+            cardName: card.name,
+            reason: "emergency_fallback",
+          });
+
+          if (bot?.debug) {
+            console.log(
+              `  ✅ Fallback adicionou: ${card.name} (priority ${priority})`
+            );
+          }
+        } catch (e) {
+          if (bot?.debug) {
+            console.warn(
+              `  ⚠️ Fallback erro ao avaliar ${card.name}: ${e.message}`
+            );
+          }
+        }
+      });
+
+      // === FALLBACK 2: Summon defensivo se ainda não invocou ===
+      if (actions.length === 0 && bot.summonCount < 1) {
+        const defensiveSummonNames = [
+          "Luminarch Aegisbearer",
+          "Luminarch Sanctified Arbiter",
+        ];
+
+        for (const targetName of defensiveSummonNames) {
+          const cardIndex = bot.hand.findIndex(
+            (c) => c && c.name === targetName
+          );
+          if (cardIndex === -1) continue;
+
+          const card = bot.hand[cardIndex];
+          const tributeInfo = this.getTributeRequirementFor(card, bot);
+
+          // Verificar tributos e espaço
+          if (bot.field.length < tributeInfo.tributesNeeded) continue;
+          const projectedFieldCount =
+            (bot.field?.length || 0) - tributeInfo.tributesNeeded + 1;
+          if (projectedFieldCount > 5) continue;
+
+          // Adicionar summon defensivo
+          actions.push({
+            type: "summon",
+            index: cardIndex,
+            cardId: card.id,
+            position: "defense",
+            facedown: true,
+            priority: 1,
+            cardName: card.name,
+            reason: "defensive_fallback",
+          });
+
+          if (bot?.debug) {
+            console.log(`  ✅ Fallback summon defensivo: ${card.name} (set)`);
+          }
+          break; // Apenas um summon fallback
+        }
+      }
     }
 
     if (bot?.debug) {
@@ -1168,7 +1327,10 @@ export default class LuminarchStrategy extends BaseStrategy {
     if (!state._isPerspectiveState && state.player && state.bot) {
       console.error(
         `[🚨 LuminarchStrategy.simulateMainPhaseAction] CRITICAL: Simulating on REAL game state!`,
-        { action: action.type, card: action.cardName || state.bot?.hand?.[action.index]?.name }
+        {
+          action: action.type,
+          card: action.cardName || state.bot?.hand?.[action.index]?.name,
+        }
       );
     }
 
@@ -1203,7 +1365,9 @@ export default class LuminarchStrategy extends BaseStrategy {
         newCard.attacksUsedThisTurn = 0;
         // 🚨 VALIDATION: Only monsters can go to field
         if (newCard.cardKind !== "monster") {
-          console.error(`[🚨 LuminarchStrategy] BLOCKED sim: ${newCard.cardKind} "${newCard.name}" tried to enter field!`);
+          console.error(
+            `[🚨 LuminarchStrategy] BLOCKED sim: ${newCard.cardKind} "${newCard.name}" tried to enter field!`
+          );
           player.graveyard.push(newCard); // Send to GY instead
         } else {
           player.field.push(newCard);
@@ -1241,7 +1405,9 @@ export default class LuminarchStrategy extends BaseStrategy {
         newCard.attacksUsedThisTurn = 0;
         // 🚨 VALIDATION: Only monsters can go to field
         if (newCard.cardKind !== "monster") {
-          console.error(`[🚨 LuminarchStrategy] BLOCKED sim protector: ${newCard.cardKind} "${newCard.name}" tried to enter field!`);
+          console.error(
+            `[🚨 LuminarchStrategy] BLOCKED sim protector: ${newCard.cardKind} "${newCard.name}" tried to enter field!`
+          );
           player.graveyard.push(newCard);
         } else {
           player.field.push(newCard);

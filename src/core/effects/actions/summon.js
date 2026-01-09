@@ -52,16 +52,28 @@ export async function applySpecialSummonToken(action, ctx) {
   // Try moveCard first for consistent pipeline
   let moved = false;
   if (this.game && typeof this.game.moveCard === "function") {
-    const moveResult = this.game.moveCard(tokenCard, targetPlayer, "field", {
-      position,
-      isFacedown: false,
-      resetAttackFlags: true,
-    });
+    const moveResult = await this.game.moveCard(
+      tokenCard,
+      targetPlayer,
+      "field",
+      {
+        position,
+        isFacedown: false,
+        resetAttackFlags: true,
+      }
+    );
+    if (moveResult?.success === false) {
+      return false;
+    }
     moved = moveResult?.success === true;
   }
 
   // Fallback for tokens (not present in any zone initially)
   if (!moved) {
+    if (targetPlayer.field.length >= 5) {
+      console.log("No space to special summon token.");
+      return false;
+    }
     tokenCard.position = position;
     tokenCard.isFacedown = false;
     tokenCard.hasAttacked = false;
@@ -148,17 +160,24 @@ export async function applyCallOfTheHauntedSummon(action, ctx, targets) {
   // Use moveCard for consistent pipeline (handles zones, flags, events)
   let usedMoveCard = false;
   if (game && typeof game.moveCard === "function") {
-    const moveResult = game.moveCard(targetMonster, player, "field", {
+    const moveResult = await game.moveCard(targetMonster, player, "field", {
       fromZone: "graveyard",
       position,
       isFacedown: false,
       resetAttackFlags: true,
     });
+    if (moveResult?.success === false) {
+      return false;
+    }
     usedMoveCard = moveResult?.success === true;
   }
 
   // Fallback if moveCard not available or failed
   if (!usedMoveCard) {
+    if (player.field.length >= 5) {
+      game.ui.log("Field is full. Cannot summon.");
+      return false;
+    }
     // Manual removal from graveyard
     const gyIndex = player.graveyard.indexOf(targetMonster);
     if (gyIndex > -1) {

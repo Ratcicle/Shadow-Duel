@@ -45,21 +45,62 @@ function hashGameState(gameState) {
 /**
  * Clona o game state para simulação profunda
  */
-function cloneGameStateDeep(gameState) {
-  try {
-    const cloned = JSON.parse(JSON.stringify(gameState));
-    // CRITICAL: Mark as simulated state to prevent infinite recursion in P2
-    cloned._isPerspectiveState = true;
-    return cloned;
-  } catch {
-    // Fallback: shallow copy se JSON falhar
-    return {
-      ...gameState,
-      bot: { ...gameState.bot },
-      player: { ...gameState.player },
-      _isPerspectiveState: true,
-    };
+function cloneCardForSim(card) {
+  if (!card || typeof card !== "object") return card;
+  const clone = { ...card };
+
+  if (Array.isArray(card.archetypes)) {
+    clone.archetypes = [...card.archetypes];
   }
+  if (Array.isArray(card.effects)) {
+    clone.effects = card.effects.slice();
+  }
+  if (card.counters instanceof Map) {
+    clone.counters = new Map(card.counters);
+  }
+
+  // Break circular refs that can exist in live cards.
+  clone.equippedTo = null;
+  clone.equipTarget = null;
+  clone.equips = [];
+  clone.callOfTheHauntedTarget = null;
+  clone.callOfTheHauntedTrap = null;
+
+  return clone;
+}
+
+function clonePlayerForSim(player) {
+  const safe = player || {};
+  return {
+    id: safe.id || "unknown",
+    name: safe.name,
+    lp: safe.lp || 0,
+    hand: (safe.hand || []).map(cloneCardForSim),
+    field: (safe.field || []).map(cloneCardForSim),
+    graveyard: (safe.graveyard || []).map(cloneCardForSim),
+    extraDeck: (safe.extraDeck || []).map(cloneCardForSim),
+    spellTrap: (safe.spellTrap || []).map(cloneCardForSim),
+    fieldSpell: safe.fieldSpell ? cloneCardForSim(safe.fieldSpell) : null,
+    summonCount: safe.summonCount || 0,
+    debug: safe.debug,
+  };
+}
+
+function cloneGameStateDeep(gameState) {
+  const safeGame = gameState || {};
+  const sourceBot = safeGame.bot || safeGame.currentPlayer || safeGame.player;
+  const sourcePlayer =
+    safeGame.player || safeGame.opponent || safeGame.currentPlayer;
+
+  return {
+    bot: clonePlayerForSim(sourceBot),
+    player: clonePlayerForSim(sourcePlayer),
+    turn: safeGame.turn,
+    phase: safeGame.phase,
+    turnCounter: safeGame.turnCounter || 0,
+    _isPerspectiveState: true,
+    _gameRef: safeGame._gameRef || safeGame,
+  };
 }
 
 /**
@@ -206,12 +247,17 @@ function simulateAction(gameState, action, perspective) {
  */
 function generateCandidateActions(gameState, strategy, perspective) {
   try {
-    // CRITICAL: Ensure gameState is marked as simulated to prevent infinite P2 recursion
-    if (!gameState._isPerspectiveState) {
-      gameState._isPerspectiveState = true;
+    // Avoid mutating the real game object; wrap when we need the flag.
+    let stateForActions = gameState;
+    if (!stateForActions || typeof stateForActions !== "object") {
+      return [];
+    }
+    if (!stateForActions._isPerspectiveState) {
+      stateForActions = Object.create(stateForActions);
+      stateForActions._isPerspectiveState = true;
     }
     // Retorna top 2-3 ações por scoring (beam width)
-    const allActions = strategy.generateMainPhaseActions(gameState);
+    const allActions = strategy.generateMainPhaseActions(stateForActions);
     return allActions.slice(0, 3); // Limita a 3 para reduzir branching
   } catch {
     return [];
@@ -422,3 +468,4 @@ export function estimateSearchComplexity(maxPly, beamWidth = 3) {
   }
   return nodes;
 }
+

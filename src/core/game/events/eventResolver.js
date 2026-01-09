@@ -24,6 +24,36 @@ export async function resolveEvent(eventName, payload) {
     depth,
     id: eventId,
   });
+  if (eventName === "after_summon" && payload?.card && payload?.player) {
+    const methodMap = {
+      normal: "Normal",
+      tribute: "Tribute",
+      special: "Special",
+      fusion: "Fusion",
+      ascension: "Ascension",
+      flip: "Flip",
+    };
+    const zoneMap = {
+      hand: "Hand",
+      field: "Field",
+      graveyard: "Graveyard",
+      deck: "Deck",
+      extraDeck: "Extra Deck",
+      spellTrap: "Spell/Trap",
+      fieldSpell: "Field Spell",
+      banished: "Banished",
+      token: "Token",
+    };
+    const methodRaw = payload.method || "unknown";
+    const methodLabel = methodMap[methodRaw] || methodRaw;
+    const fromZoneRaw = payload.fromZone || null;
+    const fromZoneLabel = fromZoneRaw ? zoneMap[fromZoneRaw] || fromZoneRaw : null;
+    const ownerLabel = payload.player.name || payload.player.id || "Unknown";
+    const fromZoneText = fromZoneLabel ? ` | From: ${fromZoneLabel}` : "";
+    this.ui?.log?.(
+      `Summon Method: ${methodLabel}${fromZoneText} | ${ownerLabel} -> ${payload.card.name}`
+    );
+  }
 
   let triggerPackage = null;
   try {

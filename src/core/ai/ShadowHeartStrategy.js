@@ -374,6 +374,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
         actions.push({
           type: "spell",
           index,
+          cardId: card.id,
           priority: finalPriority,
           cardName: card.name,
           macroBuff,
@@ -422,6 +423,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
           actions.push({
             type: "summon",
             index,
+            cardId: card.id,
             position: decision.position,
             // Respect explicit facedown decision from priorities.js
             // Default to facedown only if position is defense AND no explicit decision
@@ -513,6 +515,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
       actions.push({
         type: "handIgnition",
         index,
+        cardId: card.id,
         priority,
         cardName: card.name,
         effectId: handIgnitionEffect.id,
@@ -570,6 +573,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
         actions.push({
           type: "summon",
           index,
+          cardId: card.id,
           position: "defense",
           facedown: true,
           priority: 1,
@@ -628,6 +632,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
           actions.push({
             type: "spell",
             index,
+            cardId: card.id,
             priority: 0.5,
             cardName: card.name,
             isCriticalFallback: true,

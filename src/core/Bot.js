@@ -361,7 +361,8 @@ export default class Bot extends Player {
           
           // 🔧 EMERGENCY FIX: Se greedy falhou mas temos ações, forçar primeira
           if (!bestAction && actions.length > 0) {
-            bestAction = actions[0];
+            bestAction =
+              fallbackActions.length > 0 ? fallbackActions[0] : actions[0];
             console.warn(
               `[Bot.playMainPhase] 🚨 EMERGENCY FALLBACK: Forcing first action to avoid pass`
             );
@@ -441,6 +442,9 @@ export default class Bot extends Player {
               gySize: this.graveyard.length,
             }
           );
+        }
+        if (typeof game.updateBoard === "function") {
+          game.updateBoard();
         }
         break;
       }
@@ -774,26 +778,56 @@ export default class Bot extends Player {
   resolveHandIndexForAction(action, expectedKind) {
     if (!action) return -1;
     const hand = this.hand || [];
+    const idHint = action.cardId ?? action.card?.id ?? null;
     const nameHint = action.cardName || action.card?.name || null;
     const expectedKinds = Array.isArray(expectedKind)
       ? expectedKind
       : expectedKind
       ? [expectedKind]
       : null;
-    const matchesCard = (card) => {
+    const matchesKind = (card) => {
       if (!card) return false;
       if (expectedKinds && !expectedKinds.includes(card.cardKind)) return false;
-      if (nameHint && card.name !== nameHint) return false;
       return true;
+    };
+    const matchesById = (card) => {
+      if (!matchesKind(card)) return false;
+      if (idHint === null || idHint === undefined) return false;
+      return card.id === idHint;
+    };
+    const matchesByName = (card) => {
+      if (!matchesKind(card)) return false;
+      if (!nameHint) return true;
+      return card.name === nameHint;
     };
 
     if (Number.isInteger(action.index)) {
       const direct = hand[action.index];
-      if (matchesCard(direct)) return action.index;
+      if (matchesById(direct)) return action.index;
+      if (
+        (idHint === null || idHint === undefined) &&
+        !nameHint &&
+        matchesKind(direct)
+      ) {
+        return action.index;
+      }
+      if (
+        (idHint === null || idHint === undefined) &&
+        nameHint &&
+        matchesByName(direct)
+      ) {
+        return action.index;
+      }
+      if (nameHint && matchesByName(direct)) return action.index;
+    }
+
+    if (idHint !== null && idHint !== undefined) {
+      const foundIndex = hand.findIndex((card) => matchesById(card));
+      if (foundIndex >= 0) return foundIndex;
     }
 
     if (nameHint) {
-      const foundIndex = hand.findIndex((card) => matchesCard(card));
+      const foundIndex = hand.findIndex((card) => matchesByName(card));
       if (foundIndex >= 0) return foundIndex;
     }
 
