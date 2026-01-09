@@ -1,6 +1,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 // ReplayCapture.js - Sistema de captura de decisões do jogador humano
 // Objetivo: Registrar padrões de jogo para ensinar a IA
+// Versão 2.0: Otimizado com snapshots, deltas e dicionário de cartas
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
@@ -12,13 +13,30 @@
  *   3. Ao terminar, será perguntado se quer salvar o replay
  *   4. Se sim, o JSON do duelo será baixado individualmente
  *   5. Duelos ruins podem ser descartados sem salvar
+ *
+ * Formato v2:
+ *   - cardDictionary: { id → name } para evitar repetição de nomes
+ *   - snapshots: { turnNumber → gameState completo } a cada 5 turnos
+ *   - decisions: usam delta (apenas campos alterados) e referências ao dicionário
+ *   - timestamps relativos (dt) após o primeiro evento (t0)
  */
+
+// Configuração de otimização
+const SNAPSHOT_INTERVAL = 5; // Snapshot completo a cada N turnos
+const REPLAY_VERSION = 2;
+
 class ReplayCapture {
   constructor() {
     this.enabled = false;
     this.currentDuel = null;
     this.lastCompletedDuel = null; // Guarda o último duelo finalizado para exportação
     this.duelCounter = 0;
+
+    // Estado para otimização v2
+    this._lastState = null; // Último gameState capturado (para calcular delta)
+    this._lastTimestamp = null; // Último timestamp (para delta de tempo)
+    this._cardDictionary = {}; // id → name
+    this._lastSnapshotTurn = -1; // Último turno com snapshot
 
     // Carregar contador do localStorage (apenas para numeração)
     this._loadCounter();
@@ -41,12 +59,21 @@ class ReplayCapture {
     this.duelCounter++;
     this._saveCounter();
 
+    // Reset estado de otimização
+    this._lastState = null;
+    this._lastTimestamp = null;
+    this._cardDictionary = {};
+    this._lastSnapshotTurn = -1;
+
     this.currentDuel = {
+      version: REPLAY_VERSION,
       id: `duel_${Date.now()}_${this.duelCounter}`,
       timestamp: new Date().toISOString(),
       playerDeck: playerDeck || "Luminarch",
       botDeck: botDeck || "unknown",
       botArchetype: botArchetype || "unknown",
+      cardDictionary: {}, // Será preenchido durante a captura
+      snapshots: {}, // { turnNumber: gameState completo }
       decisions: [],
       result: null,
       totalTurns: 0,
@@ -54,7 +81,7 @@ class ReplayCapture {
     };
 
     console.log(
-      `%c[ReplayCapture] 🎬 Iniciando captura do duelo #${this.duelCounter}`,
+      `%c[ReplayCapture] 🎬 Iniciando captura do duelo #${this.duelCounter} (v${REPLAY_VERSION} otimizado)`,
       "color: #00ff00; font-weight: bold"
     );
   }
@@ -191,6 +218,11 @@ class ReplayCapture {
   capture(type, data) {
     if (!this.isEnabled() || !this.currentDuel) return;
 
+    // Filtrar eventos que não agregam valor (v2)
+    if (this._shouldFilterEvent(type, data)) {
+      return;
+    }
+
     // Normalizar dados - adaptar formato da integração para formato interno
     const normalized = this._normalizeData(type, data);
 
@@ -296,14 +328,15 @@ class ReplayCapture {
   captureSetSpellTrap(context) {
     if (!this.isEnabled() || !this.currentDuel) return;
 
+    // Registrar carta no dicionário
+    const card = { id: context.cardId, name: context.cardName };
+    this._registerCard(card);
+
     const decision = {
       type: "set_spell_trap",
       timestamp: Date.now(),
       actor: context.actor || "human",
-      cardName: context.cardName,
-      cardId: context.cardId,
-      cardKind: context.cardKind,
-      subtype: context.subtype,
+      card: { c: context.cardId },
       gameState: this._captureGameState(context),
     };
 
@@ -317,12 +350,15 @@ class ReplayCapture {
   captureTrapActivation(context) {
     if (!this.isEnabled() || !this.currentDuel) return;
 
+    // Registrar carta no dicionário
+    const card = { id: context.cardId, name: context.cardName };
+    this._registerCard(card);
+
     const decision = {
       type: "trap_activation",
       timestamp: Date.now(),
       actor: context.actor || "human",
-      cardName: context.cardName,
-      cardId: context.cardId,
+      card: { c: context.cardId },
       trigger: context.trigger,
       chainLink: context.chainLink,
       gameState: this._captureGameState(context),
@@ -342,17 +378,21 @@ class ReplayCapture {
   captureEffect(context) {
     if (!this.isEnabled() || !this.currentDuel) return;
 
+    // Registrar carta no dicionário
+    const card = {
+      id: context.cardId || context.card?.id,
+      name: context.cardName || context.card?.name,
+    };
+    this._registerCard(card);
+
     const decision = {
       type: "effect",
       timestamp: Date.now(),
       actor: context.actor || "human",
-      cardName: context.cardName || context.card?.name,
-      cardId: context.cardId || context.card?.id,
-      cardKind: context.cardKind || context.card?.cardKind,
+      card: { c: card.id },
       effectId: context.effectId,
       effectTiming: context.effectTiming,
-      activationZone: context.activationZone, // "field", "hand", "graveyard", "spellTrap", "fieldSpell"
-      effectType: context.effectType,
+      activationZone: context.activationZone,
       actions: context.actions || [],
       gameState: this._captureGameState(context),
     };
@@ -368,10 +408,66 @@ class ReplayCapture {
   }
 
   /**
-   * Adiciona decisão ao duelo atual
+   * Adiciona decisão ao duelo atual com otimizações v2
    */
   _addDecision(decision) {
     if (!this.currentDuel) return;
+
+    // Adicionar timestamp relativo
+    const timeRef = this._getRelativeTimestamp();
+    if (timeRef.t0) {
+      decision.t0 = timeRef.t0;
+    } else {
+      decision.dt = timeRef.dt;
+    }
+    delete decision.timestamp; // Remover timestamp absoluto redundante
+
+    // Substituir gameState por delta (se não for turno de snapshot)
+    if (decision.gameState) {
+      const turn = decision.turn || decision.gameState.turn || 0;
+
+      if (this._shouldSnapshot(turn)) {
+        this._createSnapshot(decision.gameState, turn);
+        delete decision.gameState; // Estado está no snapshot
+      } else {
+        const delta = this._computeDelta(decision.gameState);
+        delete decision.gameState;
+        if (delta && Object.keys(delta).length > 0) {
+          decision.delta = delta;
+        }
+      }
+    }
+
+    // Omitir valores default comuns
+    const defaults = {
+      directAttack: false,
+      facedown: false,
+    };
+    for (const [key, defaultValue] of Object.entries(defaults)) {
+      if (decision[key] === defaultValue) {
+        delete decision[key];
+      }
+    }
+
+    // Compactar combatResult removendo valores default
+    if (decision.combatResult) {
+      const combatDefaults = {
+        damageDealt: 0,
+        targetDestroyed: false,
+        attackerDestroyed: false,
+        wasNegated: false,
+      };
+      for (const [key, defaultValue] of Object.entries(combatDefaults)) {
+        if (decision.combatResult[key] === defaultValue) {
+          delete decision.combatResult[key];
+        }
+      }
+      // Se combatResult ficou vazio, remover
+      if (Object.keys(decision.combatResult).length === 0) {
+        delete decision.combatResult;
+      }
+    }
+
     this.currentDuel.decisions.push(decision);
   }
 
@@ -381,6 +477,9 @@ class ReplayCapture {
   captureSummon(context) {
     if (!this.isEnabled() || !this.currentDuel) return;
 
+    // Registrar carta no dicionário
+    this._registerCard(context.card);
+
     const decision = {
       type: "summon",
       turn: context.turn || 0,
@@ -388,26 +487,14 @@ class ReplayCapture {
       timestamp: Date.now(),
       actor: context.actor || "human",
 
-      // Carta escolhida
-      card: {
-        name: context.card?.name,
-        id: context.card?.id,
-        level: context.card?.level,
-        atk: context.card?.atk,
-        def: context.card?.def,
-        type: context.card?.type,
-        archetype: context.card?.archetype,
-      },
-
-      // Escolha de posição
-      position: context.position,
-      facedown: context.facedown,
+      // Carta usando referência compacta
+      card: this._compactCardRef(context.card),
 
       // Contexto do jogo
       gameState: this._captureGameState(context),
     };
 
-    this.currentDuel.decisions.push(decision);
+    this._addDecision(decision);
     this._logDecision(
       "SUMMON",
       context.card?.name,
@@ -423,6 +510,9 @@ class ReplayCapture {
   captureSpell(context) {
     if (!this.isEnabled() || !this.currentDuel) return;
 
+    // Registrar carta no dicionário
+    this._registerCard(context.card);
+
     const decision = {
       type: "spell",
       turn: context.turn || 0,
@@ -430,13 +520,8 @@ class ReplayCapture {
       timestamp: Date.now(),
       actor: context.actor || "human",
 
-      // Carta escolhida
-      card: {
-        name: context.card?.name,
-        id: context.card?.id,
-        subtype: context.card?.subtype,
-        cardKind: context.card?.cardKind,
-      },
+      // Carta usando referência compacta
+      card: this._compactCardRef(context.card),
 
       // Targets selecionados
       targets: this._serializeTargets(context.targets),
@@ -445,7 +530,7 @@ class ReplayCapture {
       gameState: this._captureGameState(context),
     };
 
-    this.currentDuel.decisions.push(decision);
+    this._addDecision(decision);
     this._logDecision("SPELL", context.card?.name, `[${decision.actor}]`);
   }
 
@@ -455,6 +540,10 @@ class ReplayCapture {
   captureAttack(context) {
     if (!this.isEnabled() || !this.currentDuel) return;
 
+    // Registrar cartas no dicionário
+    this._registerCard(context.attacker);
+    if (context.target) this._registerCard(context.target);
+
     const decision = {
       type: "attack",
       turn: context.turn || 0,
@@ -462,25 +551,11 @@ class ReplayCapture {
       timestamp: Date.now(),
       actor: context.actor || "human",
 
-      // Atacante
-      attacker: {
-        name: context.attacker?.name,
-        id: context.attacker?.id,
-        atk: context.attacker?.atk,
-        position: context.attacker?.position,
-      },
+      // Atacante compacto
+      attacker: this._compactCardRef(context.attacker),
 
-      // Alvo (null = ataque direto)
-      target: context.target
-        ? {
-            name: context.target.name,
-            id: context.target.id,
-            atk: context.target.atk,
-            def: context.target.def,
-            position: context.target.position,
-            isFacedown: context.target.isFacedown,
-          }
-        : null,
+      // Alvo compacto (null = ataque direto)
+      target: context.target ? this._compactCardRef(context.target) : null,
 
       directAttack: !context.target,
 
@@ -496,13 +571,17 @@ class ReplayCapture {
       gameState: this._captureGameState(context),
     };
 
-    this.currentDuel.decisions.push(decision);
-    
+    this._addDecision(decision);
+
     // Log mais descritivo
-    const resultDesc = context.wasNegated ? "(NEGADO)" :
-      context.targetDestroyed ? `(+${context.damageDealt} dano, DESTRUIU)` :
-      context.damageDealt > 0 ? `(+${context.damageDealt} dano)` : "";
-    
+    const resultDesc = context.wasNegated
+      ? "(NEGADO)"
+      : context.targetDestroyed
+      ? `(+${context.damageDealt} dano, DESTRUIU)`
+      : context.damageDealt > 0
+      ? `(+${context.damageDealt} dano)`
+      : "";
+
     this._logDecision(
       "ATTACK",
       context.attacker?.name,
@@ -516,6 +595,9 @@ class ReplayCapture {
   captureEffectResolution(context) {
     if (!this.isEnabled() || !this.currentDuel) return;
 
+    // Registrar carta fonte no dicionário
+    this._registerCard(context.sourceCard);
+
     const decision = {
       type: "effect_resolution",
       turn: context.turn || 0,
@@ -523,22 +605,28 @@ class ReplayCapture {
       timestamp: Date.now(),
       actor: context.actor || "unknown",
 
-      // Carta que gerou o efeito
-      sourceCard: {
-        name: context.sourceCard?.name,
-        id: context.sourceCard?.id,
-      },
+      // Carta que gerou o efeito (compacta)
+      sourceCard: this._compactCardRef(context.sourceCard),
 
-      // Resultado do efeito
+      // Resultado do efeito (compacto)
       effectResult: {
-        type: context.effectType, // "buff", "draw", "destroy", "heal", "damage", etc
-        targets: (context.targets || []).map((t) => ({
-          name: t?.name,
-          previousAtk: t?.previousAtk,
-          newAtk: t?.newAtk,
-          previousDef: t?.previousDef,
-          newDef: t?.newDef,
-        })),
+        type: context.effectType,
+        targets: (context.targets || [])
+          .map((t) => {
+            this._registerCard(t);
+            return {
+              c: t?.id,
+              atkDelta:
+                t?.newAtk !== undefined && t?.previousAtk !== undefined
+                  ? t.newAtk - t.previousAtk
+                  : undefined,
+              defDelta:
+                t?.newDef !== undefined && t?.previousDef !== undefined
+                  ? t.newDef - t.previousDef
+                  : undefined,
+            };
+          })
+          .filter((t) => t.c),
         cardsDrawn: context.cardsDrawn || 0,
         cardsAdded: context.cardsAdded || 0,
         lpChange: context.lpChange || 0,
@@ -549,7 +637,7 @@ class ReplayCapture {
       gameState: this._captureGameState(context),
     };
 
-    this.currentDuel.decisions.push(decision);
+    this._addDecision(decision);
     this._logDecision(
       "EFFECT",
       context.sourceCard?.name,
@@ -563,6 +651,10 @@ class ReplayCapture {
   captureChainResponse(context) {
     if (!this.isEnabled() || !this.currentDuel) return;
 
+    // Registrar cartas no dicionário
+    if (context.responseCard) this._registerCard(context.responseCard);
+    if (context.triggerCard) this._registerCard(context.triggerCard);
+
     const decision = {
       type: "chain_response",
       turn: context.turn || 0,
@@ -570,29 +662,33 @@ class ReplayCapture {
       timestamp: Date.now(),
       actor: context.actor || "human",
 
-      // Trigger que causou a chain window
-      trigger: {
-        type: context.triggerType,
-        card: context.triggerCard?.name,
-      },
+      // Trigger compacto
+      trigger: context.triggerCard
+        ? {
+            type: context.triggerType,
+            c: context.triggerCard?.id,
+          }
+        : null,
 
       // Resposta do jogador
       responded: context.responded,
       responseCard: context.responseCard
-        ? {
-            name: context.responseCard.name,
-            id: context.responseCard.id,
-          }
+        ? this._compactCardRef(context.responseCard)
         : null,
 
-      // Cartas disponíveis para responder
-      availableResponses: (context.availableCards || []).map((c) => c?.name),
+      // Cartas disponíveis (apenas IDs)
+      availableResponses: (context.availableCards || [])
+        .map((c) => {
+          this._registerCard(c);
+          return c?.id;
+        })
+        .filter(Boolean),
 
       // Contexto do jogo
       gameState: this._captureGameState(context),
     };
 
-    this.currentDuel.decisions.push(decision);
+    this._addDecision(decision);
     this._logDecision(
       "CHAIN",
       context.responded ? context.responseCard?.name : "PASS",
@@ -606,6 +702,9 @@ class ReplayCapture {
   captureFieldEffect(context) {
     if (!this.isEnabled() || !this.currentDuel) return;
 
+    // Registrar carta no dicionário
+    this._registerCard(context.fieldSpell);
+
     const decision = {
       type: "field_effect",
       turn: context.turn || 0,
@@ -613,10 +712,7 @@ class ReplayCapture {
       timestamp: Date.now(),
       actor: context.actor || "human",
 
-      fieldSpell: {
-        name: context.fieldSpell?.name,
-        id: context.fieldSpell?.id,
-      },
+      fieldSpell: this._compactCardRef(context.fieldSpell),
 
       // Targets selecionados
       targets: this._serializeTargets(context.targets),
@@ -625,7 +721,7 @@ class ReplayCapture {
       gameState: this._captureGameState(context),
     };
 
-    this.currentDuel.decisions.push(decision);
+    this._addDecision(decision);
     this._logDecision(
       "FIELD_EFFECT",
       context.fieldSpell?.name,
@@ -645,14 +741,11 @@ class ReplayCapture {
       timestamp: Date.now(),
       actor: context.actor || "human",
 
-      // O que o jogador tinha disponível mas escolheu não usar
-      availableActions: context.availableActions || [],
-
       // Contexto do jogo
       gameState: this._captureGameState(context),
     };
 
-    this.currentDuel.decisions.push(decision);
+    this._addDecision(decision);
     this._logDecision("PASS", context.phase, `[${decision.actor}]`);
   }
 
@@ -662,6 +755,9 @@ class ReplayCapture {
   capturePositionChoice(context) {
     if (!this.isEnabled() || !this.currentDuel) return;
 
+    // Registrar carta no dicionário
+    this._registerCard(context.card);
+
     const decision = {
       type: "position_choice",
       turn: context.turn || 0,
@@ -669,21 +765,16 @@ class ReplayCapture {
       timestamp: Date.now(),
       actor: context.actor || "human",
 
-      card: {
-        name: context.card?.name,
-        id: context.card?.id,
-        atk: context.card?.atk,
-        def: context.card?.def,
-      },
+      card: this._compactCardRef(context.card),
 
-      chosenPosition: context.position,
-      summonType: context.summonType || "special", // special, fusion, ascension
+      chosenPosition: context.position === "attack" ? "a" : "d",
+      summonType: context.summonType || "special",
 
       // Contexto do jogo
       gameState: this._captureGameState(context),
     };
 
-    this.currentDuel.decisions.push(decision);
+    this._addDecision(decision);
     this._logDecision(
       "POSITION",
       context.card?.name,
@@ -826,6 +917,232 @@ class ReplayCapture {
     );
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // MÉTODOS DE OTIMIZAÇÃO v2
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Registra uma carta no dicionário e retorna seu ID
+   */
+  _registerCard(card) {
+    if (!card || !card.id) return null;
+
+    const id = card.id;
+    if (!this._cardDictionary[id]) {
+      this._cardDictionary[id] = card.name;
+      if (this.currentDuel) {
+        this.currentDuel.cardDictionary[id] = card.name;
+      }
+    }
+    return id;
+  }
+
+  /**
+   * Converte referência de carta para formato compacto
+   * { name: "Luminarch Aegis", id: 107, atk: 2500 } → { c: 107, atk: 2500 }
+   */
+  _compactCardRef(card) {
+    if (!card) return null;
+
+    this._registerCard(card);
+
+    const compact = { c: card.id };
+
+    // Incluir apenas atributos dinâmicos relevantes
+    if (card.atk !== undefined) compact.atk = card.atk;
+    if (card.def !== undefined) compact.def = card.def;
+    if (card.position) compact.pos = card.position === "attack" ? "a" : "d";
+    if (card.isFacedown) compact.fd = true;
+
+    return compact;
+  }
+
+  /**
+   * Calcula timestamp relativo
+   */
+  _getRelativeTimestamp() {
+    const now = Date.now();
+
+    if (this._lastTimestamp === null) {
+      this._lastTimestamp = now;
+      return { t0: now };
+    }
+
+    const delta = now - this._lastTimestamp;
+    this._lastTimestamp = now;
+    return { dt: delta };
+  }
+
+  /**
+   * Verifica se precisa criar um snapshot neste turno
+   */
+  _shouldSnapshot(turn) {
+    if (turn === 0 || turn === 1) return true; // Sempre snapshot no início
+    if (this._lastSnapshotTurn < 0) return true; // Primeiro evento
+    if (turn - this._lastSnapshotTurn >= SNAPSHOT_INTERVAL) return true;
+    return false;
+  }
+
+  /**
+   * Cria um snapshot completo do estado do jogo
+   */
+  _createSnapshot(gameState, turn) {
+    if (!this.currentDuel) return;
+
+    // Evitar snapshots duplicados no mesmo turno
+    if (this.currentDuel.snapshots[turn]) return;
+
+    this.currentDuel.snapshots[turn] = { ...gameState };
+    this._lastSnapshotTurn = turn;
+    this._lastState = { ...gameState };
+  }
+
+  /**
+   * Calcula delta entre estado atual e anterior
+   */
+  _computeDelta(currentState) {
+    if (!this._lastState) {
+      // Primeiro estado - retornar completo
+      this._lastState = { ...currentState };
+      return currentState;
+    }
+
+    const delta = {};
+
+    // Comparar cada campo
+    for (const key of Object.keys(currentState)) {
+      const current = currentState[key];
+      const previous = this._lastState[key];
+
+      // Arrays (fields) - comparar por JSON
+      if (Array.isArray(current)) {
+        if (JSON.stringify(current) !== JSON.stringify(previous)) {
+          delta[key] = current;
+        }
+      }
+      // Valores primitivos
+      else if (current !== previous) {
+        delta[key] = current;
+      }
+    }
+
+    // Atualizar último estado
+    this._lastState = { ...currentState };
+
+    // Se nada mudou, retornar null
+    return Object.keys(delta).length > 0 ? delta : null;
+  }
+
+  /**
+   * Verifica se um evento deve ser filtrado (não gravado)
+   */
+  _shouldFilterEvent(type, context) {
+    // Filtrar chain_response vazios (não respondeu E não tinha opções)
+    if (type === "chain_response") {
+      if (
+        !context.responded &&
+        (!context.availableCards || context.availableCards.length === 0)
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Remove valores default de um objeto para compactação
+   */
+  _omitDefaults(obj, defaults) {
+    const result = { ...obj };
+
+    for (const [key, defaultValue] of Object.entries(defaults)) {
+      if (result[key] === defaultValue) {
+        delete result[key];
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Reconstrói estado completo a partir de snapshots e deltas
+   * @param {number} eventIndex - Índice do evento para reconstruir
+   * @returns {Object} Estado completo do jogo naquele momento
+   */
+  reconstructStateAtEvent(eventIndex) {
+    const duel = this.lastCompletedDuel || this.currentDuel;
+    if (!duel) return null;
+
+    const decisions = duel.decisions;
+
+    if (eventIndex < 0 || eventIndex >= decisions.length) return null;
+
+    // Encontrar snapshot mais recente antes do evento
+    const event = decisions[eventIndex];
+    const eventTurn = event.turn || 0;
+
+    let baseState = null;
+
+    // Procurar snapshot mais próximo (menor ou igual ao turno do evento)
+    const snapshotTurns = Object.keys(duel.snapshots)
+      .map(Number)
+      .sort((a, b) => b - a);
+
+    for (const turn of snapshotTurns) {
+      if (turn <= eventTurn) {
+        baseState = { ...duel.snapshots[turn] };
+        break;
+      }
+    }
+
+    if (!baseState && duel.snapshots["0"]) {
+      baseState = { ...duel.snapshots["0"] };
+    }
+    if (!baseState && duel.snapshots["1"]) {
+      baseState = { ...duel.snapshots["1"] };
+    }
+    if (!baseState) {
+      baseState = {};
+    }
+
+    // Aplicar deltas sequencialmente até o evento
+    for (let i = 0; i <= eventIndex; i++) {
+      const decision = decisions[i];
+      if (decision.delta) {
+        Object.assign(baseState, decision.delta);
+      }
+      // Se evento tem gameState completo (compatibilidade v1), usar
+      if (decision.gameState && Object.keys(decision.gameState).length > 5) {
+        baseState = { ...decision.gameState };
+      }
+    }
+
+    return baseState;
+  }
+
+  /**
+   * Converte nome de carta para ID usando dicionário reverso
+   */
+  getCardIdByName(name) {
+    const duel = this.lastCompletedDuel || this.currentDuel;
+    if (!duel) return null;
+
+    const dict = duel.cardDictionary;
+    for (const [id, cardName] of Object.entries(dict)) {
+      if (cardName === name) return Number(id);
+    }
+    return null;
+  }
+
+  /**
+   * Converte ID de carta para nome usando dicionário
+   */
+  getCardNameById(id) {
+    const duel = this.lastCompletedDuel || this.currentDuel;
+    if (!duel) return null;
+    return duel.cardDictionary[id] || null;
+  }
+
   /**
    * Salva contador de duelos no localStorage
    */
@@ -898,13 +1215,21 @@ class ReplayCapture {
     for (const d of duel.decisions) {
       stats.decisionsByType[d.type] = (stats.decisionsByType[d.type] || 0) + 1;
 
-      if (d.type === "summon" && d.card?.name) {
-        stats.cardsSummoned.push(d.card.name);
+      if (d.type === "summon" && d.card) {
+        // v2: card.c é o ID, usar dicionário para nome
+        const cardName =
+          d.card.name || duel.cardDictionary[d.card.c] || `Card#${d.card.c}`;
+        stats.cardsSummoned.push(cardName);
       }
       if (d.type === "attack") {
         stats.attacksMade++;
       }
     }
+
+    // Adicionar info sobre otimização v2
+    stats.version = duel.version || 1;
+    stats.snapshotCount = Object.keys(duel.snapshots || {}).length;
+    stats.cardDictionarySize = Object.keys(duel.cardDictionary || {}).length;
 
     return stats;
   }
@@ -933,9 +1258,19 @@ class ReplayCapture {
       "color: #00ff00"
     );
     console.log(`ID: ${stats.duelId}`);
+    console.log(
+      `Versão: ${stats.version} ${
+        stats.version >= 2 ? "(otimizado)" : "(legado)"
+      }`
+    );
     console.log(`Resultado: ${stats.winner} (${stats.reason})`);
     console.log(`Turnos: ${stats.turns}`);
     console.log(`Total de decisões: ${stats.totalDecisions}`);
+    if (stats.version >= 2) {
+      console.log(
+        `Snapshots: ${stats.snapshotCount} | Cartas no dicionário: ${stats.cardDictionarySize}`
+      );
+    }
 
     console.log("\n%cDecisões por tipo:", "font-weight: bold");
     for (const [type, count] of Object.entries(stats.decisionsByType)) {

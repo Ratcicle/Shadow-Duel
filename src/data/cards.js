@@ -1284,11 +1284,11 @@ export const cardDatabase = [
     archetype: "Shadow-Heart",
     archetypes: ["Shadow-Heart"],
     description:
-      "Shadow-Heart Scale Dragon + 1 level 5+ 'Shadow-Heart' monster. If this card is Fusion Summoned: target 2 cards your opponent controls; destroy them. If this card is destroyed by battle or card effect: You can Special Summon 1 'Shadow-Heart Scale Dragon' from your GY.",
+      "Shadow-Heart Scale Dragon + 1 level 8+ 'Shadow-Heart' monster. If this card is Fusion Summoned: target 2 cards your opponent controls; destroy them. If this card is destroyed by battle or card effect: You can Special Summon 1 'Shadow-Heart Scale Dragon' from your GY.",
     image: "assets/Shadow-Heart Demon Dragon.png",
     fusionMaterials: [
       { name: "Shadow-Heart Scale Dragon", count: 1 },
-      { archetype: "Shadow-Heart", minLevel: 5, count: 1 },
+      { archetype: "Shadow-Heart", minLevel: 8, count: 1 },
     ],
     effects: [
       {

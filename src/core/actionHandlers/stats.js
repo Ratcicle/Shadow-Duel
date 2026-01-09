@@ -193,7 +193,7 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
     if (!card || card.cardKind !== "monster") continue;
 
     let cardBuffed = false;
-    
+
     // Track original stats for replay
     const originalAtk = card.atk;
     const originalDef = card.def;
@@ -224,7 +224,7 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
 
     if (cardBuffed) {
       buffedCards.push(card.name);
-      
+
       // Emit buff event for replay capture
       game.emit?.("stat_buff_applied", {
         card,
@@ -777,6 +777,12 @@ export async function handleSwitchPosition(action, ctx, targets, engine) {
 
     if (action.markChanged !== false) {
       card.hasChangedPosition = true;
+    }
+
+    // Clear attack restriction when switching to attack position via effect
+    // (manual position change to defense sets cannotAttackThisTurn, but effects can override this)
+    if (newPosition === "attack") {
+      card.cannotAttackThisTurn = false;
     }
 
     // Apply stat boosts if specified
