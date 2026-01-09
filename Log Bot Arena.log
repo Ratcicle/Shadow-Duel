@@ -1,0 +1,123 @@
+main.js:1082 [ReplayCapture] Modo de captura ATIVADO - suas decisões serão gravadas nos próximos duelos
+integration.js:44 [ReplayCapture] Integração ativada para este duelo (captura completa)
+ReplayCapture.js:56 [ReplayCapture] 🎬 Iniciando captura do duelo #2
+integration.js:297 [ReplayCapture] Novo duelo iniciado - captura completa ativa
+lifecycle.js:25 
+──────────────────── TURNO 1: Bot 1 ────────────────────
+log.js:10 Luminarch Knights Convocation is placed on the field.
+ReplayCapture.js:757 [ReplayCapture] 🎴 SUMMON: Luminarch Aegisbearer → undefined [human]
+log.js:10 Summon Method: Normal | From: Hand | You -> Luminarch Aegisbearer
+ReplayCapture.js:757 [ReplayCapture] 📝 SET: Luminarch Holy Shield → [human]
+ReplayCapture.js:757 [ReplayCapture] ⏭️ PASS: end → [human]
+lifecycle.js:25 
+──────────────────── TURNO 2: Bot 2 ────────────────────
+BotLogger.js:139 
+[Phase] ⏭️ bot | T2 standby → main1 (0 actions, 0ms)
+Bot.js:192 [Bot.makeMove] Guard check: {ok: true}
+Bot.js:199 [Bot.makeMove] Phase: main1
+Bot.js:288 [Bot.playMainPhase] Generated 4 raw actions, 4 sequenced actions
+Bot.js:292 [Bot.playMainPhase] Actions: (4) ['spell:3', 'summon:4', 'summon:0', 'summon:1']
+Bot.js:327 [Bot.playMainPhase] Running beam search with 4 actions (width=2, depth=2, budget=100)...
+Bot.js:338 [Bot.playMainPhase] Beam search result: {action: {…}, score: 2.528946666666667, sequence: Array(1), nodesEvaluated: 5}
+Bot.js:341 [Bot.playMainPhase] ✅ Beam search chose: {type: 'summon', index: 4, cardId: 71, position: 'attack', facedown: false, …}
+BotLogger.js:110 
+[Decision] bot | T2:main1 🥈
+BotLogger.js:111   Chosen: #2/4 - summon:Shadow-Heart Void Mage (p:7)
+BotLogger.js:112   Coherence: 70%
+ReplayCapture.js:757 [ReplayCapture] 🎴 SUMMON: Shadow-Heart Void Mage → undefined [bot]
+log.js:10 Summon Method: Normal | From: Hand | Opponent -> Shadow-Heart Void Mage
+log.js:10 Bot summons Shadow-Heart Void Mage
+log.js:10 Opponent added 1 card(s) to hand from deck.
+Bot.js:288 [Bot.playMainPhase] Generated 1 raw actions, 1 sequenced actions
+Bot.js:292 [Bot.playMainPhase] Actions: ['spell:3']
+Bot.js:349 [Bot.playMainPhase] Running greedy search...
+Bot.js:355 [Bot.playMainPhase] Greedy search result: {action: {…}, score: 6.2622800000000005, sequence: Array(1)}
+Bot.js:358 [Bot.playMainPhase] ✅ Greedy chose: {type: 'spell', index: 3, cardId: 68, priority: 9, cardName: 'Darkness Valley', …}
+BotLogger.js:110 
+[Decision] bot | T2:main1 🥇
+BotLogger.js:111   Chosen: #1/1 - spell:Darkness Valley (p:9)
+BotLogger.js:112   Coherence: 100%
+Bot.js:1088 [Bot.executeMainPhaseAction] 📝 Attempting spell: Darkness Valley
+Bot.js:1100 [Bot.executeMainPhaseAction] 🔍 Preview check: {ok: true, needsSelection: false}
+log.js:10 Darkness Valley applied +300 ATK buff.
+ReplayCapture.js:757 [ReplayCapture] 📝 EFFECT: Darkness Valley → zone: fieldSpell [bot]
+log.js:10 Bot activates Darkness Valley
+Bot.js:288 [Bot.playMainPhase] Generated 1 raw actions, 1 sequenced actions
+Bot.js:292 [Bot.playMainPhase] Actions: ['spell:3']
+Bot.js:349 [Bot.playMainPhase] Running greedy search...
+Bot.js:355 [Bot.playMainPhase] Greedy search result: {action: {…}, score: 6.2622800000000005, sequence: Array(1)}
+Bot.js:358 [Bot.playMainPhase] ✅ Greedy chose: {type: 'spell', index: 3, cardId: 65, priority: 0.5, cardName: 'Shadow-Heart Rage', …}
+BotLogger.js:110 
+[Decision] bot | T2:main1 🥇
+BotLogger.js:111   Chosen: #1/1 - spell:Shadow-Heart Rage (p:1)
+BotLogger.js:112   Coherence: 100%
+Bot.js:1088 [Bot.executeMainPhaseAction] 📝 Attempting spell: Shadow-Heart Rage
+Bot.js:1100 [Bot.executeMainPhaseAction] 🔍 Preview check: {ok: true, needsSelection: false}
+ReplayCapture.js:757 [ReplayCapture] 📝 EFFECT: Shadow-Heart Rage → zone: spellTrap [bot]
+movement.js:641 [moveCard] Emitting card_to_grave event for Shadow-Heart Rage (fromZone: spellTrap)
+collectors.js:836 [handleCardToGraveEvent] Shadow-Heart Rage entered graveyard. card.owner="bot", ctx.player.id="bot", ctx.opponent.id="player", wasDestroyed=false
+collectors.js:839 [handleCardToGraveEvent] Shadow-Heart Rage entered graveyard from spellTrap. Card has 1 effects.
+log.js:10 Bot activates Shadow-Heart Rage
+Bot.js:288 [Bot.playMainPhase] Generated 0 raw actions, 0 sequenced actions
+BotLogger.js:123 
+[EmptyPhase] ⚠️  bot | T2:main1
+BotLogger.js:124   Reason: NO_ACTIONS_GENERATED
+BotLogger.js:126   Context: LP=8000 | Hand=2 | Field=1 | GY=0
+Bot.js:192 [Bot.makeMove] Guard check: {ok: true}
+Bot.js:199 [Bot.makeMove] Phase: battle
+Bot.js:474 [Bot.playBattlePhase] ✅ Starting battle phase evaluation
+log.js:10 Shadow-Heart Void Mage attacks Luminarch Aegisbearer!
+ReplayCapture.js:757 [ReplayCapture] ⚔️ ATTACK: Shadow-Heart Void Mage → Luminarch Aegisbearer [bot]
+log.js:10 Luminarch Aegisbearer was flipped!
+log.js:10 Shadow-Heart Void Mage took 200 damage attacking Luminarch Aegisbearer.
+Bot.js:192 [Bot.makeMove] Guard check: {ok: true}
+Bot.js:199 [Bot.makeMove] Phase: main2
+Bot.js:288 [Bot.playMainPhase] Generated 0 raw actions, 0 sequenced actions
+BotLogger.js:123 
+[EmptyPhase] ⚠️  bot | T2:main2
+BotLogger.js:124   Reason: NO_ACTIONS_GENERATED
+BotLogger.js:126   Context: LP=8000 | Hand=2 | Field=1 | GY=0
+Bot.js:192 [Bot.makeMove] Guard check: {ok: true}
+Bot.js:199 [Bot.makeMove] Phase: end
+lifecycle.js:25 
+──────────────────── TURNO 3: Bot 1 ────────────────────
+ReplayCapture.js:757 [ReplayCapture] ⏭️ PASS: end → [human]
+lifecycle.js:25 
+──────────────────── TURNO 4: Bot 2 ────────────────────
+BotLogger.js:139 
+[Phase] ⏭️ bot | T4 standby → main1 (0 actions, 0ms)
+Bot.js:192 [Bot.makeMove] Guard check: {ok: true}
+Bot.js:199 [Bot.makeMove] Phase: main1
+Bot.js:288 [Bot.playMainPhase] Generated 3 raw actions, 3 sequenced actions
+Bot.js:292 [Bot.playMainPhase] Actions: (3) ['spell:3', 'summon:0', 'summon:1']
+Bot.js:327 [Bot.playMainPhase] Running beam search with 3 actions (width=2, depth=2, budget=100)...
+Bot.js:338 [Bot.playMainPhase] Beam search result: {action: {…}, score: 6.198177777777778, sequence: Array(1), nodesEvaluated: 7}
+Bot.js:341 [Bot.playMainPhase] ✅ Beam search chose: {type: 'summon', index: 0, cardId: 61, position: 'attack', facedown: false, …}
+BotLogger.js:110 
+[Decision] bot | T4:main1 🥈
+BotLogger.js:111   Chosen: #2/3 - summon:Shadow-Heart Gecko (p:5)
+BotLogger.js:112   Coherence: 70%
+ReplayCapture.js:757 [ReplayCapture] 🎴 SUMMON: Shadow-Heart Gecko → undefined [bot]
+log.js:10 Summon Method: Normal | From: Hand | Opponent -> Shadow-Heart Gecko
+log.js:10 Bot summons Shadow-Heart Gecko
+log.js:10 Darkness Valley applied +300 ATK buff.
+Bot.js:288 [Bot.playMainPhase] Generated 1 raw actions, 1 sequenced actions
+Bot.js:292 [Bot.playMainPhase] Actions: ['spell:2']
+Bot.js:349 [Bot.playMainPhase] Running greedy search...
+Bot.js:355 [Bot.playMainPhase] Greedy search result: {action: {…}, score: 7.981511111111111, sequence: Array(1)}
+Bot.js:358 [Bot.playMainPhase] ✅ Greedy chose: {type: 'spell', index: 2, cardId: 59, priority: 15, cardName: 'Shadow-Heart Covenant', …}
+BotLogger.js:110 
+[Decision] bot | T4:main1 🥇
+BotLogger.js:111   Chosen: #1/1 - spell:Shadow-Heart Covenant (p:15)
+BotLogger.js:112   Coherence: 100%
+BotLogger.js:123 
+[EmptyPhase] ⚠️  bot | T4:main1
+BotLogger.js:124   Reason: ACTION_FAILED
+BotLogger.js:126   Context: LP=7800 | Hand=3 | Field=2 | GY=1
+ReplayCapture.js:757 [ReplayCapture] 🔗 CHAIN: PASS → [human]
+interactions.js:498 [Game] Spell/Trap zone clicked! Target: <div class=​"card facedown" data-previewable=​"true" data-index=​"1" data-location=​"spellTrap" style=​"background-image:​ none;​ background-color:​ rgb(51, 51, 51)​;​ border:​ 1px solid rgb(85, 85, 85)​;​" title=​"fora do seu turno" data-activation-hint=​"true">​…​</div>​flex
+interactions.js:515 [Game] Clicked spell/trap: Luminarch Holy Shield, isFacedown: true, cardKind: spell
+log.js:10 Nao e o seu turno.
+interactions.js:498 [Game] Spell/Trap zone clicked! Target: <div class=​"card-image" style=​"background-image:​ url('assets/​Luminarch Knights Convocation.png')​;​ background-size:​ cover;​ background-position:​ center;​">​</div>​
+interactions.js:515 [Game] Clicked spell/trap: Luminarch Knights Convocation, isFacedown: false, cardKind: spell
+log.js:10 Nao e o seu turno.

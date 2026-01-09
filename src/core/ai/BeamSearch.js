@@ -192,7 +192,10 @@ export async function beamSearchTurn(game, strategy, options = {}) {
     let candidates = null;
     if (depth === 0 && Array.isArray(preGeneratedActions)) {
       const handForValidation = currentState?.bot?.hand || [];
-      candidates = filterValidHandActions(preGeneratedActions, handForValidation);
+      candidates = filterValidHandActions(
+        preGeneratedActions,
+        handForValidation
+      );
     }
     if (!candidates || candidates.length === 0) {
       candidates = strategy.generateMainPhaseActions(currentState);
@@ -204,7 +207,8 @@ export async function beamSearchTurn(game, strategy, options = {}) {
 
     // Limitar ao beam width
     // MELHORIA: No primeiro ply (depth=0), explorar mais candidatos para melhor seleção inicial
-    const effectiveBeamWidth = depth === 0 ? Math.min(beamWidth + 1, candidates.length) : beamWidth;
+    const effectiveBeamWidth =
+      depth === 0 ? Math.min(beamWidth + 1, candidates.length) : beamWidth;
     const topCandidates = candidates.slice(0, effectiveBeamWidth);
     const branches = [];
 
@@ -293,10 +297,6 @@ export async function beamSearchTurn(game, strategy, options = {}) {
       );
     }
     if (fallbackCandidates && fallbackCandidates.length > 0) {
-      console.log(
-        `[BeamSearch] Using fallback action:`,
-        fallbackCandidates[0]?.cardName || fallbackCandidates[0]?.type
-      );
       return {
         action: fallbackCandidates[0],
         score: baseScore,

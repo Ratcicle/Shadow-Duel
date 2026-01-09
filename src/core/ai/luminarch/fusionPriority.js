@@ -9,8 +9,8 @@ const LUMINARCH_FUSIONS = {
   "Luminarch Megashield Barbarias": {
     materials: ["Luminarch Sanctum Protector", "Luminarch Aegisbearer"], // ou qualquer Lv5+ Luminarch
     stats: { atk: 2500, def: 3000 }, // Base stats (pode chegar 3300 ATK com switch effect)
-    effects: ["LP gains doubled", "Switch position + 800 ATK boost"]
-  }
+    effects: ["LP gains doubled", "Switch position + 800 ATK boost"],
+  },
   // Nota: Fortress Aegis é ASCENSION (não usa Polymerization), não está aqui
 };
 
@@ -24,27 +24,32 @@ export function detectFusionOpportunities(context) {
   const opportunities = [];
 
   // Verificar se tem Polymerization na mão
-  const poly = hand.find(c => c.name === "Polymerization");
+  const poly = hand.find((c) => c.name === "Polymerization");
   if (!poly) return opportunities;
 
   // Pool de materiais disponíveis (mão + campo)
-  const availableCards = [...hand, ...field.filter(c => c.controller === "bot")];
+  const availableCards = [
+    ...hand,
+    ...field.filter((c) => c.controller === "bot"),
+  ];
 
   // Verificar cada fusão conhecida do Luminarch
   for (const fusionName in LUMINARCH_FUSIONS) {
     const fusionData = LUMINARCH_FUSIONS[fusionName];
-    
+
     // Buscar materiais no pool disponível
     const foundMaterials = [];
     const requiredMaterials = [...fusionData.materials]; // cópia para não modificar original
 
     for (const card of availableCards) {
-      const materialIndex = requiredMaterials.findIndex(mat => card.name === mat);
+      const materialIndex = requiredMaterials.findIndex(
+        (mat) => card.name === mat
+      );
       if (materialIndex !== -1) {
         foundMaterials.push(card);
         requiredMaterials.splice(materialIndex, 1); // remove material encontrado
       }
-      
+
       // Se encontrou todos os materiais, registrar oportunidade
       if (requiredMaterials.length === 0) {
         opportunities.push({
@@ -52,7 +57,7 @@ export function detectFusionOpportunities(context) {
           fusionData,
           materials: foundMaterials,
           poly,
-          stats: fusionData.stats
+          stats: fusionData.stats,
         });
         break;
       }
@@ -76,34 +81,37 @@ export function calculatePowerSwing(opportunity, context) {
   // === CENÁRIO ATUAL ===
   // ATK total disponível no campo atual
   const currentBoardATK = field
-    .filter(c => c.controller === "bot" && c.cardKind === "monster")
+    .filter((c) => c.controller === "bot" && c.cardKind === "monster")
     .reduce((sum, c) => sum + (c.atk || 0), 0);
 
   // Materiais que estão no campo contribuem para currentBoardATK
-  const materialsOnField = materials.filter(m => field.includes(m));
-  const currentMaterialATK = materialsOnField.reduce((sum, m) => sum + (m.atk || 0), 0);
+  const materialsOnField = materials.filter((m) => field.includes(m));
+  const currentMaterialATK = materialsOnField.reduce(
+    (sum, m) => sum + (m.atk || 0),
+    0
+  );
 
   // === CENÁRIO PÓS-FUSÃO ===
   // ATK do boss de fusão
   const fusionATK = fusionData.stats?.atk || 0;
 
   // ATK total pós-fusão = (board atual - materiais usados) + fusão boss
-  const postFusionBoardATK = (currentBoardATK - currentMaterialATK) + fusionATK;
+  const postFusionBoardATK = currentBoardATK - currentMaterialATK + fusionATK;
 
   // Power swing = diferença de ATK total
   const atkSwing = postFusionBoardATK - currentBoardATK;
 
   // === AMEAÇAS DO OPONENTE ===
   const opponentThreats = opponent.field
-    .filter(c => c.cardKind === "monster")
-    .map(c => ({
+    .filter((c) => c.cardKind === "monster")
+    .map((c) => ({
       name: c.name,
-      atk: c.position === "attack" ? (c.atk || 0) : 0,
-      def: c.position === "defense" ? (c.isFacedown ? 1500 : (c.def || 0)) : 0,
-      position: c.position
+      atk: c.position === "attack" ? c.atk || 0 : 0,
+      def: c.position === "defense" ? (c.isFacedown ? 1500 : c.def || 0) : 0,
+      position: c.position,
     }));
 
-  const opponentMaxATK = Math.max(...opponentThreats.map(t => t.atk), 0);
+  const opponentMaxATK = Math.max(...opponentThreats.map((t) => t.atk), 0);
   const opponentTotalATK = opponentThreats.reduce((sum, t) => sum + t.atk, 0);
 
   // === AVALIAÇÃO DE DOMINÂNCIA ===
@@ -111,13 +119,14 @@ export function calculatePowerSwing(opportunity, context) {
   // 1. ATK do boss > maior ameaça do oponente (pode destruir tudo)
   // 2. ATK do boss sozinho >= 60% do ATK total do oponente
   const bossDominatesMaxThreat = fusionATK > opponentMaxATK;
-  const bossDominatesBoard = opponentTotalATK === 0 || (fusionATK / opponentTotalATK) >= 0.6;
+  const bossDominatesBoard =
+    opponentTotalATK === 0 || fusionATK / opponentTotalATK >= 0.6;
   const dominates = bossDominatesMaxThreat && bossDominatesBoard;
 
   // === REMOÇÕES POTENCIAIS ===
   // Quantos monstros do oponente o boss pode destruir em combate
-  const potentialKills = opponentThreats.filter(t => 
-    t.position === "attack" && fusionATK > t.atk
+  const potentialKills = opponentThreats.filter(
+    (t) => t.position === "attack" && fusionATK > t.atk
   ).length;
 
   return {
@@ -134,8 +143,8 @@ export function calculatePowerSwing(opportunity, context) {
       bossDominatesMaxThreat,
       bossDominatesBoard,
       materialsUsed: materials.length,
-      materialsFromField: materialsOnField.length
-    }
+      materialsFromField: materialsOnField.length,
+    },
   };
 }
 
@@ -169,7 +178,7 @@ export function isMaterialExpendable(material, opportunity, context) {
   // Aegisbearer específico: se está na mão, pode ir direto pra fusão sem summon
   if (material.name === "Luminarch Aegisbearer") {
     const { hand } = context;
-    if (hand && hand.some(c => c.name === material.name)) {
+    if (hand && hand.some((c) => c.name === material.name)) {
       return true; // Não precisa summon primeiro, vai direto pra fusão
     }
   }
@@ -190,19 +199,19 @@ export function shouldPrioritizeFusion(opportunity, context) {
   const { swing, dominates, details } = powerSwing;
 
   // Verificar se materiais são expendable
-  const allMaterialsExpendable = opportunity.materials.every(mat => 
+  const allMaterialsExpendable = opportunity.materials.every((mat) =>
     isMaterialExpendable(mat, opportunity, context)
   );
 
   // === DECISÃO DE PRIORIDADE ===
-  
+
   // Caso 1: Boss DOMINA + materiais expendable + swing positivo
   // → PRIORIDADE MÁXIMA (18-19)
   if (dominates && allMaterialsExpendable && swing >= 0) {
     return {
       shouldPrioritize: true,
       priority: 19,
-      reason: `Fusion domina board (${details.fusionATK} ATK > ${details.opponentMaxATK} opp max), swing +${swing}, materiais expendable`
+      reason: `Fusion domina board (${details.fusionATK} ATK > ${details.opponentMaxATK} opp max), swing +${swing}, materiais expendable`,
     };
   }
 
@@ -212,7 +221,7 @@ export function shouldPrioritizeFusion(opportunity, context) {
     return {
       shouldPrioritize: true,
       priority: 17,
-      reason: `Boss domina ameaças (${details.fusionATK} > ${details.opponentMaxATK}) apesar de swing ${swing}`
+      reason: `Boss domina ameaças (${details.fusionATK} > ${details.opponentMaxATK}) apesar de swing ${swing}`,
     };
   }
 
@@ -222,7 +231,7 @@ export function shouldPrioritizeFusion(opportunity, context) {
     return {
       shouldPrioritize: true,
       priority: 16,
-      reason: `Power swing significativo (+${swing}), materiais expendable`
+      reason: `Power swing significativo (+${swing}), materiais expendable`,
     };
   }
 
@@ -232,7 +241,7 @@ export function shouldPrioritizeFusion(opportunity, context) {
     return {
       shouldPrioritize: true,
       priority: 14,
-      reason: `Swing positivo (+${swing}), materiais expendable`
+      reason: `Swing positivo (+${swing}), materiais expendable`,
     };
   }
 
@@ -241,7 +250,7 @@ export function shouldPrioritizeFusion(opportunity, context) {
   return {
     shouldPrioritize: false,
     priority: 8,
-    reason: `Swing insuficiente (${swing}), boss não domina, ou materiais não expendable`
+    reason: `Swing insuficiente (${swing}), boss não domina, ou materiais não expendable`,
   };
 }
 
@@ -255,26 +264,23 @@ export function evaluateFusionPriority(context) {
   if (opportunities.length === 0) return null;
 
   // Avaliar cada oportunidade
-  const evaluatedOpportunities = opportunities.map(opp => {
+  const evaluatedOpportunities = opportunities.map((opp) => {
     const decision = shouldPrioritizeFusion(opp, context);
     const powerSwing = calculatePowerSwing(opp, context);
     return {
       ...opp,
       decision,
-      powerSwing
+      powerSwing,
     };
   });
 
   // Ordenar por prioridade (maior primeiro)
-  evaluatedOpportunities.sort((a, b) => b.decision.priority - a.decision.priority);
+  evaluatedOpportunities.sort(
+    (a, b) => b.decision.priority - a.decision.priority
+  );
 
   // Retornar melhor oportunidade (maior prioridade)
   const best = evaluatedOpportunities[0];
-  
-  // Log para debug
-  if (best.decision.shouldPrioritize) {
-    console.log(`[FusionPriority] ${best.fusionName}: Priority ${best.decision.priority} - ${best.decision.reason}`);
-  }
 
   return best;
 }

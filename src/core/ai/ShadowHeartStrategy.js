@@ -107,7 +107,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
       fieldSpell: bot.fieldSpell?.name || null,
       lp: bot.lp,
       summonCount: bot.summonCount || 0,
-      
+
       // Informações de timing (para evitar desperdício de recursos)
       phase: game.phase || "main1",
       turnCounter: game.turnCounter || 0,
@@ -172,7 +172,8 @@ export default class ShadowHeartStrategy extends BaseStrategy {
    */
   think(thought) {
     this.thoughtProcess.push(thought);
-    if (this.bot && this.bot.debug === false) {
+    // Só loga se debug estiver explicitamente ativado
+    if (!this.bot?.debug) {
       return;
     }
     console.log(`[Shadow-Heart AI] ${thought}`);
@@ -328,7 +329,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
         const actualGame = game._gameRef || game;
         const check = actualGame.effectEngine?.canActivate?.(card, bot);
         if (!check?.ok) return;
-        
+
         // VALIDAÇÃO EXTRA: Polymerization requer materiais válidos
         if (card.name === "Polymerization") {
           const canActivate = actualGame.canActivatePolymerization?.() ?? false;
@@ -444,7 +445,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
     // Monstros com efeito ignition ativável da mão (ex: Leviathan)
     (bot.hand || []).forEach((card, index) => {
       if (card.cardKind !== "monster") return;
-      
+
       // Verificar se o monstro tem efeito ignition com requireZone: "hand"
       const handIgnitionEffect = (card.effects || []).find(
         (e) => e && e.timing === "ignition" && e.requireZone === "hand"
@@ -455,14 +456,19 @@ export default class ShadowHeartStrategy extends BaseStrategy {
       // Para Leviathan: precisa de Abyssal Eel no campo
       const targets = handIgnitionEffect.targets || [];
       const costTarget = targets.find((t) => t.zone === "field");
-      
+
       if (costTarget) {
         // Verificar se existe carta válida no campo para o custo
         const fieldCards = bot.field || [];
         const hasValidCost = fieldCards.some((fieldCard) => {
           if (fieldCard.cardKind !== "monster") return false;
-          if (costTarget.cardName && fieldCard.name !== costTarget.cardName) return false;
-          if (costTarget.archetype && fieldCard.archetype !== costTarget.archetype) return false;
+          if (costTarget.cardName && fieldCard.name !== costTarget.cardName)
+            return false;
+          if (
+            costTarget.archetype &&
+            fieldCard.archetype !== costTarget.archetype
+          )
+            return false;
           return true;
         });
 
@@ -496,7 +502,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
 
       // Calcular prioridade baseada no valor do monstro
       let priority = 8; // Base alta para efeitos que geram vantagem
-      
+
       // Bonus se for combo conhecido (Eel -> Leviathan)
       if (card.name === "Shadow-Heart Leviathan") {
         priority = 9; // Combo forte: 2200 ATK + burn
@@ -538,9 +544,11 @@ export default class ShadowHeartStrategy extends BaseStrategy {
       const realBot = this.bot || bot;
 
       // Log para debug
-      console.log(
-        `[ShadowHeartStrategy] ⚠️ STALEMATE BREAKER ativado! Hand=${realBot.hand?.length}, Field=${realBot.field?.length}`
-      );
+      if (bot?.debug) {
+        console.log(
+          `[ShadowHeartStrategy] ⚠️ STALEMATE BREAKER ativado! Hand=${realBot.hand?.length}, Field=${realBot.field?.length}`
+        );
+      }
       log(`  ⚠️ STALEMATE BREAKER: Forçando summon alternativo...`);
       let monstersChecked = 0;
       let monstersBlocked = 0;
@@ -552,11 +560,13 @@ export default class ShadowHeartStrategy extends BaseStrategy {
         const tributeInfo = this.getTributeRequirementFor(card, realBot);
         if ((realBot.field?.length || 0) < tributeInfo.tributesNeeded) {
           monstersBlocked++;
-          console.log(
-            `[ShadowHeartStrategy] ❌ ${card.name} requer ${
-              tributeInfo.tributesNeeded
-            } tributos (tenho ${realBot.field?.length || 0})`
-          );
+          if (bot?.debug) {
+            console.log(
+              `[ShadowHeartStrategy] ❌ ${card.name} requer ${
+                tributeInfo.tributesNeeded
+              } tributos (tenho ${realBot.field?.length || 0})`
+            );
+          }
           log(
             `    ❌ ${card.name} requer ${
               tributeInfo.tributesNeeded
@@ -566,9 +576,11 @@ export default class ShadowHeartStrategy extends BaseStrategy {
         }
 
         // Forçar summon em defesa com prioridade baixa
-        console.log(
-          `[ShadowHeartStrategy] 🔧 Fallback summon: ${card.name} em defesa`
-        );
+        if (bot?.debug) {
+          console.log(
+            `[ShadowHeartStrategy] 🔧 Fallback summon: ${card.name} em defesa`
+          );
+        }
         log(`    🔧 Fallback summon: ${card.name} em defesa`);
         actions.push({
           type: "summon",
@@ -583,9 +595,11 @@ export default class ShadowHeartStrategy extends BaseStrategy {
       });
 
       if (monstersChecked > 0 && monstersBlocked === monstersChecked) {
-        console.log(
-          `[ShadowHeartStrategy] ⚠️ Todos ${monstersChecked} monstros na mão requerem tributos!`
-        );
+        if (bot?.debug) {
+          console.log(
+            `[ShadowHeartStrategy] ⚠️ Todos ${monstersChecked} monstros na mão requerem tributos!`
+          );
+        }
         log(
           `  ⚠️ Todos ${monstersChecked} monstros na mão requerem tributos! Tentando spells...`
         );
@@ -600,9 +614,11 @@ export default class ShadowHeartStrategy extends BaseStrategy {
       const botLP = realBot2.lp ?? this.game?.bot?.lp ?? 8000;
       if ((realBot2.hand?.length || 0) > 3) {
         // Log para debug
-        console.log(
-          `[ShadowHeartStrategy] 🚨 FALLBACK CRÍTICO! Hand=${realBot2.hand?.length}, Field=${realBot2.field?.length}, LP=${botLP}`
-        );
+        if (bot?.debug) {
+          console.log(
+            `[ShadowHeartStrategy] 🚨 FALLBACK CRÍTICO! Hand=${realBot2.hand?.length}, Field=${realBot2.field?.length}, LP=${botLP}`
+          );
+        }
         log(
           `  🆘 FALLBACK CRÍTICO: ${realBot2.hand.length} cartas na mão, 0 ações! Forçando spell...`
         );
@@ -610,24 +626,29 @@ export default class ShadowHeartStrategy extends BaseStrategy {
         let spellsFound = 0;
         (realBot2.hand || []).forEach((card, index) => {
           if (card.cardKind !== "spell") return;
-          
+
           // VALIDAÇÃO: Polymerization só pode ser ativado se tiver materiais válidos
           if (card.name === "Polymerization") {
-            const canActivate = actualGame.canActivatePolymerization?.() ?? false;
+            const canActivate =
+              actualGame.canActivatePolymerization?.() ?? false;
             if (!canActivate) {
-              console.log(
-                `[ShadowHeartStrategy] ⚠️ Polymerization bloqueado: sem materiais válidos`
-              );
+              if (bot?.debug) {
+                console.log(
+                  `[ShadowHeartStrategy] ⚠️ Polymerization bloqueado: sem materiais válidos`
+                );
+              }
               return; // Skip Polymerization sem materiais
             }
           }
-          
+
           spellsFound++;
 
           // Tentar qualquer spell, mesmo sem validação prévia
-          console.log(
-            `[ShadowHeartStrategy] 🔧 Fallback spell: ${card.name} (prioridade 0.5)`
-          );
+          if (bot?.debug) {
+            console.log(
+              `[ShadowHeartStrategy] 🔧 Fallback spell: ${card.name} (prioridade 0.5)`
+            );
+          }
           log(`    🔧 Fallback spell: ${card.name} (prioridade forçada: 0.5)`);
           actions.push({
             type: "spell",
@@ -648,14 +669,16 @@ export default class ShadowHeartStrategy extends BaseStrategy {
             (c) => c.cardKind === "trap"
           ).length;
 
-          console.log(
-            `[ShadowHeartStrategy] ⚠️ Situação crítica: ${monsterCount}M ${trapCount}T`
-          );
-          console.log(
-            `[ShadowHeartStrategy] Mão completa: ${(realBot2.hand || [])
-              .map((c) => c.name)
-              .join(", ")}`
-          );
+          if (bot?.debug) {
+            console.log(
+              `[ShadowHeartStrategy] ⚠️ Situação crítica: ${monsterCount}M ${trapCount}T`
+            );
+            console.log(
+              `[ShadowHeartStrategy] Mão completa: ${(realBot2.hand || [])
+                .map((c) => c.name)
+                .join(", ")}`
+            );
+          }
           log(
             `  ⚠️ Situação crítica: ${monsterCount} monstros (todos precisam tributos?), ${trapCount} traps na mão`
           );

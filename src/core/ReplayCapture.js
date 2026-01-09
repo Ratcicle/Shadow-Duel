@@ -9,18 +9,19 @@
  * Uso:
  *   1. localStorage.setItem('shadow_duel_capture_mode', 'true')
  *   2. Jogue normalmente contra o bot
- *   3. Ao terminar, chame ReplayCapture.exportReplays() no console
- *   4. O JSON será baixado para análise
+ *   3. Ao terminar, será perguntado se quer salvar o replay
+ *   4. Se sim, o JSON do duelo será baixado individualmente
+ *   5. Duelos ruins podem ser descartados sem salvar
  */
 class ReplayCapture {
   constructor() {
     this.enabled = false;
     this.currentDuel = null;
-    this.replays = [];
+    this.lastCompletedDuel = null; // Guarda o último duelo finalizado para exportação
     this.duelCounter = 0;
 
-    // Carregar replays salvos do localStorage
-    this._loadFromStorage();
+    // Carregar contador do localStorage (apenas para numeração)
+    this._loadCounter();
   }
 
   /**
@@ -38,6 +39,8 @@ class ReplayCapture {
     if (!this.isEnabled()) return;
 
     this.duelCounter++;
+    this._saveCounter();
+
     this.currentDuel = {
       id: `duel_${Date.now()}_${this.duelCounter}`,
       timestamp: new Date().toISOString(),
@@ -57,7 +60,8 @@ class ReplayCapture {
   }
 
   /**
-   * Finaliza o duelo atual e salva
+   * Finaliza o duelo atual (não salva automaticamente)
+   * O duelo fica disponível para exportação ou descarte
    */
   endDuel(winner, reason, playerLP, botLP, turns) {
     if (!this.isEnabled() || !this.currentDuel) return;
@@ -69,11 +73,8 @@ class ReplayCapture {
     this.currentDuel.totalTurns = turns;
     this.currentDuel.finalLP = { player: playerLP, bot: botLP };
 
-    // Adicionar à lista de replays
-    this.replays.push(this.currentDuel);
-
-    // Salvar no localStorage
-    this._saveToStorage();
+    // Guardar para possível exportação
+    this.lastCompletedDuel = this.currentDuel;
 
     const decisions = this.currentDuel.decisions.length;
     console.log(
@@ -83,9 +84,100 @@ class ReplayCapture {
     console.log(
       `   Winner: ${winner} | Turns: ${turns} | Decisões capturadas: ${decisions}`
     );
-    console.log(`   Total de duelos salvos: ${this.replays.length}`);
+    console.log(
+      `%c[ReplayCapture] 💾 Use o botão "Salvar Replay" ou ReplayCapture.exportCurrentDuel() para salvar`,
+      "color: #ffaa00"
+    );
+    console.log(
+      `%c[ReplayCapture] 🗑️  Ou clique "Descartar" / ReplayCapture.discardLastDuel() para descartar`,
+      "color: #ff8800"
+    );
 
     this.currentDuel = null;
+  }
+
+  /**
+   * Exporta o último duelo finalizado como arquivo JSON individual
+   * @param {string} customName - Nome customizado para o arquivo (opcional)
+   */
+  exportCurrentDuel(customName = null) {
+    if (!this.lastCompletedDuel) {
+      console.warn("[ReplayCapture] Nenhum duelo para exportar");
+      return null;
+    }
+
+    const duel = this.lastCompletedDuel;
+    const data = JSON.stringify(duel, null, 2);
+    const blob = new Blob([data], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+
+    // Gerar nome do arquivo
+    const date = new Date().toISOString().slice(0, 10);
+    const result = duel.result?.winner === "player" ? "win" : "loss";
+    const turns = duel.totalTurns || 0;
+    const defaultName = `replay_${date}_${result}_${turns}turns`;
+    const fileName = customName || defaultName;
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${fileName}.json`;
+    a.click();
+
+    URL.revokeObjectURL(url);
+
+    console.log(
+      `%c[ReplayCapture] 📥 Replay exportado: ${fileName}.json`,
+      "color: #00ff00; font-weight: bold"
+    );
+    console.log(`   Decisões: ${duel.decisions.length} | Turnos: ${turns}`);
+
+    // Limpar após exportar
+    this.lastCompletedDuel = null;
+
+    return duel;
+  }
+
+  /**
+   * Descarta o último duelo sem salvar
+   */
+  discardLastDuel() {
+    if (!this.lastCompletedDuel) {
+      console.warn("[ReplayCapture] Nenhum duelo para descartar");
+      return;
+    }
+
+    const duelId = this.lastCompletedDuel.id;
+    this.lastCompletedDuel = null;
+
+    console.log(
+      `%c[ReplayCapture] 🗑️ Duelo descartado: ${duelId}`,
+      "color: #ff8800"
+    );
+  }
+
+  /**
+   * Verifica se há um duelo pendente para salvar
+   */
+  hasPendingDuel() {
+    return this.lastCompletedDuel !== null;
+  }
+
+  /**
+   * Retorna info do duelo pendente (para UI)
+   */
+  getPendingDuelInfo() {
+    if (!this.lastCompletedDuel) return null;
+
+    const duel = this.lastCompletedDuel;
+    return {
+      id: duel.id,
+      winner: duel.result?.winner,
+      reason: duel.result?.reason,
+      turns: duel.totalTurns,
+      decisions: duel.decisions.length,
+      playerLP: duel.finalLP?.player,
+      botLP: duel.finalLP?.bot,
+    };
   }
 
   /**
@@ -145,15 +237,13 @@ class ReplayCapture {
    * Normaliza dados da integração para o formato interno
    */
   _normalizeData(type, data) {
-    // Se já tem 'card' objeto, retorna como está
-    if (data.card && typeof data.card === "object") {
-      return data;
-    }
+    // Se já tem 'card' objeto, retorna como está (mas ainda precisa processar attack)
+    const hasCardObject = data.card && typeof data.card === "object";
 
     // Adaptar cardName/cardId para card objeto
     const normalized = { ...data };
 
-    if (data.cardName || data.cardId) {
+    if (!hasCardObject && (data.cardName || data.cardId)) {
       normalized.card = {
         name: data.cardName,
         id: data.cardId,
@@ -162,14 +252,36 @@ class ReplayCapture {
       };
     }
 
-    // Adaptar board para gameState se necessário
-    if (data.board && !data.gameState) {
-      normalized.turn = data.board.turnNumber;
+    // Adaptar attacker/target para formato esperado pelo captureAttack
+    if (type === "attack") {
+      // Só criar attacker se temos dados válidos
+      if (data.attackerName || data.attackerId) {
+        normalized.attacker = {
+          name: data.attackerName,
+          id: data.attackerId,
+          atk: data.attackerAtk,
+        };
+      }
+      // Se não é ataque direto e tem nome de alvo, criar objeto target
+      if (!data.isDirectAttack && data.targetName) {
+        normalized.target = {
+          name: data.targetName,
+          id: data.targetId,
+          atk: data.targetAtk,
+          def: data.targetDef,
+          position: data.targetPosition,
+          isFacedown: data.targetIsFacedown,
+        };
+      } else {
+        normalized.target = null;
+      }
+    }
+
+    // Manter board intacto para _captureGameState usar
+    // Os campos individuais são apenas fallback adicional
+    if (data.board) {
+      normalized.turn = data.board.turnNumber || data.board.turn;
       normalized.phase = data.board.phase;
-      normalized.playerLP = data.board.playerLP;
-      normalized.botLP = data.board.botLP;
-      normalized.playerField = data.board.playerField;
-      normalized.botField = data.board.botField;
     }
 
     return normalized;
@@ -184,6 +296,7 @@ class ReplayCapture {
     const decision = {
       type: "set_spell_trap",
       timestamp: Date.now(),
+      actor: context.actor || "human",
       cardName: context.cardName,
       cardId: context.cardId,
       cardKind: context.cardKind,
@@ -192,7 +305,7 @@ class ReplayCapture {
     };
 
     this._addDecision(decision);
-    this._logDecision("SET", context.cardName);
+    this._logDecision("SET", context.cardName, `[${decision.actor}]`);
   }
 
   /**
@@ -204,6 +317,7 @@ class ReplayCapture {
     const decision = {
       type: "trap_activation",
       timestamp: Date.now(),
+      actor: context.actor || "human",
       cardName: context.cardName,
       cardId: context.cardId,
       trigger: context.trigger,
@@ -212,7 +326,11 @@ class ReplayCapture {
     };
 
     this._addDecision(decision);
-    this._logDecision("TRAP", context.cardName, `trigger: ${context.trigger}`);
+    this._logDecision(
+      "TRAP",
+      context.cardName,
+      `trigger: ${context.trigger} [${decision.actor}]`
+    );
   }
 
   /**
@@ -224,6 +342,7 @@ class ReplayCapture {
     const decision = {
       type: "effect",
       timestamp: Date.now(),
+      actor: context.actor || "human",
       cardName: context.cardName || context.card?.name,
       cardId: context.cardId || context.card?.id,
       cardKind: context.cardKind || context.card?.cardKind,
@@ -241,7 +360,7 @@ class ReplayCapture {
     this._logDecision(
       "EFFECT",
       context.cardName || context.card?.name,
-      `zone: ${zoneLabel}`
+      `zone: ${zoneLabel} [${decision.actor}]`
     );
   }
 
@@ -264,6 +383,7 @@ class ReplayCapture {
       turn: context.turn || 0,
       phase: context.phase || "main1",
       timestamp: Date.now(),
+      actor: context.actor || "human",
 
       // Carta escolhida
       card: {
@@ -288,7 +408,9 @@ class ReplayCapture {
     this._logDecision(
       "SUMMON",
       context.card?.name,
-      `${context.position}${context.facedown ? " (set)" : ""}`
+      `${context.position}${context.facedown ? " (set)" : ""} [${
+        decision.actor
+      }]`
     );
   }
 
@@ -303,6 +425,7 @@ class ReplayCapture {
       turn: context.turn || 0,
       phase: context.phase || "main1",
       timestamp: Date.now(),
+      actor: context.actor || "human",
 
       // Carta escolhida
       card: {
@@ -320,7 +443,7 @@ class ReplayCapture {
     };
 
     this.currentDuel.decisions.push(decision);
-    this._logDecision("SPELL", context.card?.name);
+    this._logDecision("SPELL", context.card?.name, `[${decision.actor}]`);
   }
 
   /**
@@ -334,6 +457,7 @@ class ReplayCapture {
       turn: context.turn || 0,
       phase: "battle",
       timestamp: Date.now(),
+      actor: context.actor || "human",
 
       // Atacante
       attacker: {
@@ -365,7 +489,7 @@ class ReplayCapture {
     this._logDecision(
       "ATTACK",
       context.attacker?.name,
-      context.target?.name || "DIRETO"
+      `${context.target?.name || "DIRETO"} [${decision.actor}]`
     );
   }
 
@@ -380,6 +504,7 @@ class ReplayCapture {
       turn: context.turn || 0,
       phase: context.phase || "unknown",
       timestamp: Date.now(),
+      actor: context.actor || "human",
 
       // Trigger que causou a chain window
       trigger: {
@@ -406,7 +531,8 @@ class ReplayCapture {
     this.currentDuel.decisions.push(decision);
     this._logDecision(
       "CHAIN",
-      context.responded ? context.responseCard?.name : "PASS"
+      context.responded ? context.responseCard?.name : "PASS",
+      `[${decision.actor}]`
     );
   }
 
@@ -421,6 +547,7 @@ class ReplayCapture {
       turn: context.turn || 0,
       phase: context.phase || "main1",
       timestamp: Date.now(),
+      actor: context.actor || "human",
 
       fieldSpell: {
         name: context.fieldSpell?.name,
@@ -435,9 +562,12 @@ class ReplayCapture {
     };
 
     this.currentDuel.decisions.push(decision);
-    this._logDecision("FIELD_EFFECT", context.fieldSpell?.name);
+    this._logDecision(
+      "FIELD_EFFECT",
+      context.fieldSpell?.name,
+      `[${decision.actor}]`
+    );
   }
-
   /**
    * Captura quando o jogador passa a fase (não faz nada)
    */
@@ -449,6 +579,7 @@ class ReplayCapture {
       turn: context.turn || 0,
       phase: context.phase || "unknown",
       timestamp: Date.now(),
+      actor: context.actor || "human",
 
       // O que o jogador tinha disponível mas escolheu não usar
       availableActions: context.availableActions || [],
@@ -458,7 +589,7 @@ class ReplayCapture {
     };
 
     this.currentDuel.decisions.push(decision);
-    this._logDecision("PASS", context.phase);
+    this._logDecision("PASS", context.phase, `[${decision.actor}]`);
   }
 
   /**
@@ -472,6 +603,7 @@ class ReplayCapture {
       turn: context.turn || 0,
       phase: context.phase || "main1",
       timestamp: Date.now(),
+      actor: context.actor || "human",
 
       card: {
         name: context.card?.name,
@@ -488,70 +620,96 @@ class ReplayCapture {
     };
 
     this.currentDuel.decisions.push(decision);
-    this._logDecision("POSITION", context.card?.name, context.position);
+    this._logDecision(
+      "POSITION",
+      context.card?.name,
+      `${context.position} [${decision.actor}]`
+    );
   }
 
   /**
    * Captura estado completo do jogo
+   * Usa dados do player/bot se disponíveis, ou do board normalizado
    */
   _captureGameState(context) {
     const player = context.player || context.game?.player;
     const bot = context.bot || context.opponent || context.game?.bot;
 
+    // Se temos os objetos player/bot, usar dados completos
+    if (player || bot) {
+      return {
+        // LP
+        playerLP: player?.lp || 0,
+        botLP: bot?.lp || 0,
+
+        // Mão do jogador
+        playerHand: (player?.hand || []).map((c) => ({
+          name: c?.name,
+          cardKind: c?.cardKind,
+          level: c?.level,
+          atk: c?.atk,
+          def: c?.def,
+        })),
+
+        // Campo do jogador
+        playerField: (player?.field || []).map((c) => ({
+          name: c?.name,
+          atk: c?.atk,
+          def: c?.def,
+          position: c?.position,
+          isFacedown: c?.isFacedown,
+          hasAttacked: c?.hasAttacked,
+        })),
+
+        // Campo do oponente
+        botField: (bot?.field || []).map((c) => ({
+          name: c?.name,
+          atk: c?.atk,
+          def: c?.def,
+          position: c?.position,
+          isFacedown: c?.isFacedown,
+        })),
+
+        // Backrow
+        playerBackrow: (player?.spellTrap || []).map((c) => ({
+          name: c?.name,
+          isFacedown: c?.isFacedown,
+        })),
+        botBackrowCount: (bot?.spellTrap || []).length,
+
+        // Field Spell
+        playerFieldSpell: player?.fieldSpell?.name || null,
+        botFieldSpell: bot?.fieldSpell?.name || null,
+
+        // Graveyard
+        playerGraveyard: (player?.graveyard || []).map((c) => c?.name),
+        botGraveyardCount: (bot?.graveyard || []).length,
+
+        // Turno
+        turn: context.turn || context.game?.turnCounter || 0,
+        phase: context.phase || context.game?.phase || "unknown",
+
+        // Summon count
+        summonCount: player?.summonCount || 0,
+      };
+    }
+
+    // Usar dados do board (vindos da integração via captureMinimalBoardState)
+    const board = context.board || context;
+
     return {
-      // LP
-      playerLP: player?.lp || 0,
-      botLP: bot?.lp || 0,
-
-      // Mão do jogador
-      playerHand: (player?.hand || []).map((c) => ({
-        name: c?.name,
-        cardKind: c?.cardKind,
-        level: c?.level,
-        atk: c?.atk,
-        def: c?.def,
-      })),
-
-      // Campo do jogador
-      playerField: (player?.field || []).map((c) => ({
-        name: c?.name,
-        atk: c?.atk,
-        def: c?.def,
-        position: c?.position,
-        isFacedown: c?.isFacedown,
-        hasAttacked: c?.hasAttacked,
-      })),
-
-      // Campo do oponente
-      botField: (bot?.field || []).map((c) => ({
-        name: c?.name,
-        atk: c?.atk,
-        def: c?.def,
-        position: c?.position,
-        isFacedown: c?.isFacedown,
-      })),
-
-      // Backrow
-      playerBackrow: (player?.spellTrap || []).map((c) => ({
-        name: c?.name,
-        isFacedown: c?.isFacedown,
-      })),
-      botBackrowCount: (bot?.spellTrap || []).length,
-
-      // Field Spell
-      playerFieldSpell: player?.fieldSpell?.name || null,
-      botFieldSpell: bot?.fieldSpell?.name || null,
-
-      // Graveyard
-      playerGraveyard: (player?.graveyard || []).map((c) => c?.name),
-      botGraveyardCount: (bot?.graveyard || []).length,
-
-      // Turno
-      turn: context.turn || context.game?.turnCounter || 0,
-      phase: context.phase || context.game?.phase || "unknown",
-
-      // Summon count
-      summonCount: player?.summonCount || 0,
+      playerLP: board.playerLP || 0,
+      botLP: board.botLP || 0,
+      playerField: board.playerField || [],
+      botField: board.botField || [],
+      playerHandCount: board.playerHandCount || 0,
+      botHandCount: board.botHandCount || 0,
+      playerGraveCount: board.playerGraveCount || 0,
+      botGraveCount: board.botGraveCount || 0,
+      playerSpellTrapCount: board.playerSpellTrapCount || 0,
+      botSpellTrapCount: board.botSpellTrapCount || 0,
+      turn: board.turnNumber || board.turn || 0,
+      phase: board.phase || "unknown",
     };
   }
 
@@ -605,161 +763,136 @@ class ReplayCapture {
   }
 
   /**
-   * Salva replays no localStorage
+   * Salva contador de duelos no localStorage
    */
-  _saveToStorage() {
-    try {
-      const data = JSON.stringify(this.replays);
-      localStorage.setItem("shadow_duel_replays", data);
-    } catch (e) {
-      console.warn("[ReplayCapture] Erro ao salvar:", e.message);
-    }
-  }
-
-  /**
-   * Carrega replays do localStorage
-   */
-  _loadFromStorage() {
+  _saveCounter() {
     try {
       if (typeof localStorage === "undefined") return;
-      const data = localStorage.getItem("shadow_duel_replays");
-      if (data) {
-        this.replays = JSON.parse(data);
-        this.duelCounter = this.replays.length;
-        if (this.replays.length > 0) {
-          console.log(
-            `%c[ReplayCapture] 📂 ${this.replays.length} replays carregados`,
-            "color: #00ff00"
-          );
-        }
+      localStorage.setItem("shadow_duel_counter", String(this.duelCounter));
+    } catch (e) {
+      // Ignorar erros de storage
+    }
+  }
+
+  /**
+   * Carrega contador de duelos do localStorage
+   */
+  _loadCounter() {
+    try {
+      if (typeof localStorage === "undefined") return;
+      const counter = localStorage.getItem("shadow_duel_counter");
+      if (counter) {
+        this.duelCounter = parseInt(counter, 10) || 0;
       }
     } catch (e) {
-      console.warn("[ReplayCapture] Erro ao carregar:", e.message);
-      this.replays = [];
+      this.duelCounter = 0;
     }
   }
 
   /**
-   * Exporta todos os replays como JSON
+   * Exporta o último duelo (alias para compatibilidade)
+   * @deprecated Use exportCurrentDuel() em vez disso
    */
   exportReplays() {
-    const data = JSON.stringify(this.replays, null, 2);
-    const blob = new Blob([data], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `shadow_duel_replays_${new Date()
-      .toISOString()
-      .slice(0, 10)}.json`;
-    a.click();
-
-    URL.revokeObjectURL(url);
     console.log(
-      `%c[ReplayCapture] 📥 Exportados ${this.replays.length} replays`,
-      "color: #00ff00; font-weight: bold"
+      "%c[ReplayCapture] ⚠️ exportReplays() está obsoleto. Usando exportCurrentDuel()...",
+      "color: #ffaa00"
     );
-
-    return this.replays;
+    return this.exportCurrentDuel();
   }
 
   /**
-   * Limpa todos os replays salvos
+   * Limpa dados de replay (apenas o contador agora)
    */
   clearReplays() {
-    this.replays = [];
+    this.lastCompletedDuel = null;
     this.duelCounter = 0;
-    localStorage.removeItem("shadow_duel_replays");
-    console.log("%c[ReplayCapture] 🗑️ Replays limpos", "color: #ff8800");
+    localStorage.removeItem("shadow_duel_counter");
+    console.log("%c[ReplayCapture] 🗑️ Dados limpos", "color: #ff8800");
   }
 
   /**
-   * Retorna estatísticas dos replays
+   * Retorna estatísticas do duelo pendente (se houver)
    */
   getStats() {
-    const stats = {
-      totalDuels: this.replays.length,
-      totalDecisions: 0,
-      wins: 0,
-      losses: 0,
-      decisionsByType: {},
-      avgDecisionsPerDuel: 0,
-      avgTurns: 0,
-      mostPlayedCards: {},
-    };
-
-    for (const duel of this.replays) {
-      stats.totalDecisions += duel.decisions.length;
-      stats.avgTurns += duel.totalTurns || 0;
-
-      if (duel.result?.winner === "player") stats.wins++;
-      else if (duel.result?.winner === "bot") stats.losses++;
-
-      for (const d of duel.decisions) {
-        stats.decisionsByType[d.type] =
-          (stats.decisionsByType[d.type] || 0) + 1;
-
-        // Contar cartas mais jogadas
-        const cardName =
-          d.card?.name ||
-          d.attacker?.name ||
-          d.responseCard?.name ||
-          d.fieldSpell?.name;
-        if (cardName) {
-          stats.mostPlayedCards[cardName] =
-            (stats.mostPlayedCards[cardName] || 0) + 1;
-        }
-      }
+    if (!this.lastCompletedDuel) {
+      return { message: "Nenhum duelo pendente para análise" };
     }
 
-    if (stats.totalDuels > 0) {
-      stats.avgDecisionsPerDuel = Math.round(
-        stats.totalDecisions / stats.totalDuels
-      );
-      stats.avgTurns = Math.round(stats.avgTurns / stats.totalDuels);
+    const duel = this.lastCompletedDuel;
+    const stats = {
+      duelId: duel.id,
+      totalDecisions: duel.decisions.length,
+      turns: duel.totalTurns,
+      winner: duel.result?.winner,
+      reason: duel.result?.reason,
+      decisionsByType: {},
+      cardsSummoned: [],
+      attacksMade: 0,
+    };
+
+    for (const d of duel.decisions) {
+      stats.decisionsByType[d.type] = (stats.decisionsByType[d.type] || 0) + 1;
+
+      if (d.type === "summon" && d.card?.name) {
+        stats.cardsSummoned.push(d.card.name);
+      }
+      if (d.type === "attack") {
+        stats.attacksMade++;
+      }
     }
 
     return stats;
   }
 
   /**
-   * Mostra resumo dos replays no console
+   * Mostra resumo do duelo pendente no console
    */
   showSummary() {
     const stats = this.getStats();
+
+    if (stats.message) {
+      console.log(`%c[ReplayCapture] ${stats.message}`, "color: #ffaa00");
+      return stats;
+    }
+
     console.log(
       "\n%c═══════════════════════════════════════════════════",
       "color: #00ff00"
     );
     console.log(
-      "%c📊 REPLAY CAPTURE - RESUMO",
+      "%c📊 REPLAY - DUELO PENDENTE",
       "color: #00ff00; font-weight: bold; font-size: 14px"
     );
     console.log(
       "%c═══════════════════════════════════════════════════",
       "color: #00ff00"
     );
-    console.log(`Total de duelos: ${stats.totalDuels}`);
-    console.log(`Vitórias: ${stats.wins} | Derrotas: ${stats.losses}`);
+    console.log(`ID: ${stats.duelId}`);
+    console.log(`Resultado: ${stats.winner} (${stats.reason})`);
+    console.log(`Turnos: ${stats.turns}`);
     console.log(`Total de decisões: ${stats.totalDecisions}`);
-    console.log(`Média por duelo: ${stats.avgDecisionsPerDuel} decisões`);
-    console.log(`Média de turnos: ${stats.avgTurns}`);
+
     console.log("\n%cDecisões por tipo:", "font-weight: bold");
     for (const [type, count] of Object.entries(stats.decisionsByType)) {
       console.log(`  ${type}: ${count}`);
     }
 
-    // Top 5 cartas mais jogadas
-    const topCards = Object.entries(stats.mostPlayedCards)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5);
-    if (topCards.length > 0) {
-      console.log("\n%cTop 5 cartas mais jogadas:", "font-weight: bold");
-      topCards.forEach(([name, count], i) => {
-        console.log(`  ${i + 1}. ${name}: ${count}x`);
+    if (stats.cardsSummoned.length > 0) {
+      console.log("\n%cCartas invocadas:", "font-weight: bold");
+      stats.cardsSummoned.forEach((name, i) => {
+        console.log(`  ${i + 1}. ${name}`);
       });
     }
 
+    console.log(
+      "\n%c💾 ReplayCapture.exportCurrentDuel() para salvar",
+      "color: #00ff00"
+    );
+    console.log(
+      "%c🗑️  ReplayCapture.discardLastDuel() para descartar",
+      "color: #ff8800"
+    );
     console.log(
       "%c═══════════════════════════════════════════════════\n",
       "color: #00ff00"

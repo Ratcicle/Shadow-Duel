@@ -19,6 +19,9 @@ export function checkWinCondition() {
         playerLP: this.player.lp,
         botLP: this.bot.lp,
         turns: this.turnCounter,
+        // Info do replay pendente
+        replayPending: ReplayCapture.hasPendingDuel(),
+        replayInfo: ReplayCapture.getPendingDuelInfo(),
         onMenu: () => {
           // Voltar ao menu principal
           document.getElementById("start-screen")?.classList.remove("hidden");
@@ -27,19 +30,25 @@ export function checkWinCondition() {
           // Reiniciar duelo - dispara evento para main.js tratar
           window.dispatchEvent(new CustomEvent("shadow-duel-rematch"));
         },
+        onSaveReplay: () => {
+          // Salvar replay do duelo atual
+          if (ReplayCapture.hasPendingDuel()) {
+            const info = ReplayCapture.getPendingDuelInfo();
+            ReplayCapture.exportCurrentDuel();
+            return info;
+          }
+          return null;
+        },
+        onDiscardReplay: () => {
+          // Descartar replay sem salvar
+          ReplayCapture.discardLastDuel();
+        },
+        // Manter onExport para compatibilidade
         onExport: () => {
-          // Exportar replay do duelo atual
-          if (ReplayCapture.isEnabled() && ReplayCapture.currentDuel) {
-            const duel = ReplayCapture.currentDuel;
-            const decisions = duel.decisions?.length || 0;
-            ReplayCapture.exportReplays();
-            return { decisions };
-          } else if (ReplayCapture.replays?.length > 0) {
-            const lastDuel =
-              ReplayCapture.replays[ReplayCapture.replays.length - 1];
-            const decisions = lastDuel?.decisions?.length || 0;
-            ReplayCapture.exportReplays();
-            return { decisions };
+          if (ReplayCapture.hasPendingDuel()) {
+            const info = ReplayCapture.getPendingDuelInfo();
+            ReplayCapture.exportCurrentDuel();
+            return { decisions: info?.decisions || 0 };
           }
           return null;
         },

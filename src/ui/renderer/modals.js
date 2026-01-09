@@ -68,9 +68,13 @@ export function showAlert(message) {
  * @param {number} options.playerLP - Player's final LP
  * @param {number} options.botLP - Bot's final LP
  * @param {number} options.turns - Number of turns
+ * @param {boolean} options.replayPending - Whether there's a replay pending to save
+ * @param {Object} options.replayInfo - Info about pending replay
  * @param {Function} options.onMenu - Callback for menu button
  * @param {Function} options.onRematch - Callback for rematch button
- * @param {Function} options.onExport - Callback for export button
+ * @param {Function} options.onSaveReplay - Callback for save replay button
+ * @param {Function} options.onDiscardReplay - Callback for discard replay button
+ * @param {Function} options.onExport - Legacy callback for export button
  */
 export function showGameOverModal(options = {}) {
   const modal = document.getElementById("game-over-modal");
@@ -101,10 +105,44 @@ export function showGameOverModal(options = {}) {
   botLP.textContent = options.botLP ?? 0;
   turns.textContent = options.turns ?? 0;
 
-  // Reset export button state
-  exportBtn.textContent = "📥 Exportar Replay";
-  exportBtn.classList.remove("exported");
-  replayStatus.classList.add("hidden");
+  // Configure replay buttons based on whether there's a pending replay
+  const hasPendingReplay = options.replayPending;
+  const replayInfo = options.replayInfo;
+
+  if (hasPendingReplay && replayInfo) {
+    // Show save/discard buttons for replay
+    exportBtn.textContent = "💾 Salvar Replay";
+    exportBtn.classList.remove("exported", "hidden");
+    replayStatus.textContent = `📊 ${replayInfo.decisions} decisões capturadas`;
+    replayStatus.classList.remove("hidden");
+
+    // Create discard button if it doesn't exist
+    let discardBtn = document.getElementById("btn-game-over-discard");
+    if (!discardBtn) {
+      discardBtn = document.createElement("button");
+      discardBtn.id = "btn-game-over-discard";
+      discardBtn.className = "btn-secondary";
+      exportBtn.parentNode.insertBefore(discardBtn, exportBtn.nextSibling);
+    }
+    discardBtn.textContent = "🗑️ Descartar";
+    discardBtn.classList.remove("hidden");
+    discardBtn.onclick = () => {
+      if (typeof options.onDiscardReplay === "function") {
+        options.onDiscardReplay();
+      }
+      discardBtn.classList.add("hidden");
+      exportBtn.classList.add("hidden");
+      replayStatus.textContent = "Replay descartado";
+    };
+  } else {
+    // No replay pending - hide export button
+    exportBtn.classList.add("hidden");
+    replayStatus.classList.add("hidden");
+
+    // Hide discard button if exists
+    const discardBtn = document.getElementById("btn-game-over-discard");
+    if (discardBtn) discardBtn.classList.add("hidden");
+  }
 
   // Button handlers
   const cleanup = () => {
@@ -112,6 +150,8 @@ export function showGameOverModal(options = {}) {
     menuBtn.onclick = null;
     rematchBtn.onclick = null;
     exportBtn.onclick = null;
+    const discardBtn = document.getElementById("btn-game-over-discard");
+    if (discardBtn) discardBtn.onclick = null;
   };
 
   menuBtn.onclick = () => {
@@ -125,15 +165,20 @@ export function showGameOverModal(options = {}) {
   };
 
   exportBtn.onclick = () => {
-    if (typeof options.onExport === "function") {
-      const result = options.onExport();
+    // Use new onSaveReplay if available, fallback to onExport
+    const saveHandler = options.onSaveReplay || options.onExport;
+    if (typeof saveHandler === "function") {
+      const result = saveHandler();
       if (result) {
-        exportBtn.textContent = "✅ Exportado!";
+        exportBtn.textContent = "✅ Salvo!";
         exportBtn.classList.add("exported");
-        replayStatus.textContent = `Replay salvo com ${
+        replayStatus.textContent = `Replay salvo: ${
           result.decisions || 0
         } decisões`;
-        replayStatus.classList.remove("hidden");
+
+        // Hide discard button after save
+        const discardBtn = document.getElementById("btn-game-over-discard");
+        if (discardBtn) discardBtn.classList.add("hidden");
       }
     }
   };
