@@ -246,20 +246,33 @@ export default class Bot extends Player {
         `\n[Bot.playMainPhase] 📊 Estado de ${bot.id} no início da main phase:`
       );
       console.log(
-        `  Hand (${bot.hand.length}): ${bot.hand.map((c) => c.name).join(", ") || "(vazia)"}`
+        `  Hand (${bot.hand.length}): ${
+          bot.hand.map((c) => c.name).join(", ") || "(vazia)"
+        }`
       );
       console.log(
-        `  Field (${bot.field.length}): ${bot.field.map((c) => `${c.name}${c.isFacedown ? "(↓)" : c.position === "attack" ? "(↑ATK)" : "(↑DEF)"}`).join(", ") || "(vazio)"}`
+        `  Field (${bot.field.length}): ${
+          bot.field
+            .map(
+              (c) =>
+                `${c.name}${
+                  c.isFacedown
+                    ? "(↓)"
+                    : c.position === "attack"
+                    ? "(↑ATK)"
+                    : "(↑DEF)"
+                }`
+            )
+            .join(", ") || "(vazio)"
+        }`
       );
       console.log(
-        `  Graveyard (${bot.graveyard.length}): ${bot.graveyard.map((c) => c.name).join(", ") || "(vazio)"}`
+        `  Graveyard (${bot.graveyard.length}): ${
+          bot.graveyard.map((c) => c.name).join(", ") || "(vazio)"
+        }`
       );
-      console.log(
-        `  Field Spell: ${bot.fieldSpell?.name || "(nenhum)"}`
-      );
-      console.log(
-        `  LP: ${bot.lp} | Summon Count: ${bot.summonCount}`
-      );
+      console.log(`  Field Spell: ${bot.fieldSpell?.name || "(nenhum)"}`);
+      console.log(`  LP: ${bot.lp} | Summon Count: ${bot.summonCount}`);
     }
 
     let chainCount = 0;
@@ -358,7 +371,7 @@ export default class Bot extends Player {
           console.log(`[Bot.playMainPhase] ✅ Greedy chose:`, bestAction);
         } else {
           console.log(`[Bot.playMainPhase] ❌ Greedy returned no action`);
-          
+
           // 🔧 EMERGENCY FIX: Se greedy falhou mas temos ações, forçar primeira
           if (!bestAction && actions.length > 0) {
             bestAction =
@@ -448,7 +461,7 @@ export default class Bot extends Player {
         }
         break;
       }
-      
+
       // Incrementar chainCount - todas as ações proativas contam
       chainCount += 1;
 
@@ -537,7 +550,7 @@ export default class Bot extends Player {
           const simTarget = target
             ? simState.player.field.find((c) => c.id === target.id)
             : null;
-          
+
           // 🎯 BOOST: Atacar monstros facedown é geralmente vantajoso
           // - DEF estimado = 1500, então ATK >= 1600 provavelmente vence
           // - Remove ameaça desconhecida do campo
@@ -845,13 +858,12 @@ export default class Bot extends Player {
         return this.resolveHandIndexForAction(action, "spell") >= 0;
       }
       if (action.type === "set_spell_trap") {
-        return (
-          this.resolveHandIndexForAction(action, ["spell", "trap"]) >= 0
-        );
+        return this.resolveHandIndexForAction(action, ["spell", "trap"]) >= 0;
       }
       if (action.type === "spellTrapEffect") {
-        const zoneIndex =
-          Number.isInteger(action.zoneIndex) ? action.zoneIndex : action.index;
+        const zoneIndex = Number.isInteger(action.zoneIndex)
+          ? action.zoneIndex
+          : action.index;
         const card = this.spellTrap?.[zoneIndex];
         return !!(card && card.cardKind === "spell");
       }
@@ -861,10 +873,7 @@ export default class Bot extends Player {
         const materialIndex = Number.isInteger(action.materialIndex)
           ? action.materialIndex
           : this.field.findIndex(
-              (c) =>
-                c &&
-                c.name === "Luminarch Aegisbearer" &&
-                !c.isFacedown
+              (c) => c && c.name === "Luminarch Aegisbearer" && !c.isFacedown
             );
         const material = this.field[materialIndex];
         return !!(
@@ -948,7 +957,9 @@ export default class Bot extends Player {
       const resolvedIndex = this.resolveHandIndexForAction(action, "monster");
       if (resolvedIndex < 0) {
         console.log(
-          `[Bot.executeMainPhaseAction] Invalid Sanctum Protector action: no matching card in hand (index=${action.index}, card=${action.cardName || "unknown"})`
+          `[Bot.executeMainPhaseAction] Invalid Sanctum Protector action: no matching card in hand (index=${
+            action.index
+          }, card=${action.cardName || "unknown"})`
         );
         return false;
       }
@@ -964,8 +975,7 @@ export default class Bot extends Player {
       const materialIndex = Number.isInteger(action.materialIndex)
         ? action.materialIndex
         : this.field.findIndex(
-            (c) =>
-              c && c.name === "Luminarch Aegisbearer" && !c.isFacedown
+            (c) => c && c.name === "Luminarch Aegisbearer" && !c.isFacedown
           );
       const material = this.field[materialIndex];
       if (
@@ -1008,7 +1018,7 @@ export default class Bot extends Player {
       }
 
       if (game && typeof game.emit === "function") {
-        game.emit("after_summon", {
+        await game.emit("after_summon", {
           card,
           player: this,
           method: "special",
@@ -1027,7 +1037,9 @@ export default class Bot extends Player {
       const resolvedIndex = this.resolveHandIndexForAction(action, "monster");
       if (resolvedIndex < 0) {
         console.log(
-          `[Bot.executeMainPhaseAction] Invalid summon action: no matching monster in hand (index=${action.index}, card=${action.cardName || "unknown"})`
+          `[Bot.executeMainPhaseAction] Invalid summon action: no matching monster in hand (index=${
+            action.index
+          }, card=${action.cardName || "unknown"})`
         );
         return false;
       }
@@ -1058,7 +1070,7 @@ export default class Bot extends Player {
         // Only trigger if summoned face-up (facedown set doesn't trigger "when Normal Summoned" effects)
         const isFacedownSet = action.facedown === true;
         if (!isFacedownSet && game && typeof game.emit === "function") {
-          game.emit("after_summon", {
+          await game.emit("after_summon", {
             card,
             player: this,
             method: tributeInfo.tributesNeeded > 0 ? "tribute" : "normal",
@@ -1079,7 +1091,9 @@ export default class Bot extends Player {
       const resolvedIndex = this.resolveHandIndexForAction(action, "spell");
       if (resolvedIndex < 0) {
         console.log(
-          `[Bot.executeMainPhaseAction] Invalid spell action: no matching spell in hand (index=${action.index}, card=${action.cardName || "unknown"})`
+          `[Bot.executeMainPhaseAction] Invalid spell action: no matching spell in hand (index=${
+            action.index
+          }, card=${action.cardName || "unknown"})`
         );
         return false;
       }
@@ -1163,7 +1177,9 @@ export default class Bot extends Player {
       ]);
       if (resolvedIndex < 0) {
         console.log(
-          `[Bot.executeMainPhaseAction] Invalid set action: no matching card in hand (index=${action.index}, card=${action.cardName || "unknown"})`
+          `[Bot.executeMainPhaseAction] Invalid set action: no matching card in hand (index=${
+            action.index
+          }, card=${action.cardName || "unknown"})`
         );
         return false;
       }
@@ -1182,8 +1198,9 @@ export default class Bot extends Player {
     }
 
     if (action.type === "spellTrapEffect") {
-      const zoneIndex =
-        Number.isInteger(action.zoneIndex) ? action.zoneIndex : action.index;
+      const zoneIndex = Number.isInteger(action.zoneIndex)
+        ? action.zoneIndex
+        : action.index;
       const card = this.spellTrap?.[zoneIndex];
       if (!card || card.cardKind !== "spell") {
         console.log(
