@@ -142,8 +142,8 @@ export async function activateMonsterFromGraveyard(
   this.registerOncePerTurnUsage(card, player, effect);
   this.registerOncePerDuelUsage(card, player, effect);
 
-  // Emitir evento para captura de replay
-  this.game?.emit?.("effect_activated", {
+  // Emitir evento informativo para captura de replay (não bloqueia)
+  this.game?.notify?.("effect_activated", {
     card,
     player,
     effect,
@@ -495,8 +495,8 @@ export async function activateSpellTrapEffect(
     player: player.id,
   });
 
-  // Emitir evento para captura de replay
-  this.game?.emit?.("effect_activated", {
+  // Emitir evento informativo para captura de replay (não bloqueia)
+  this.game?.notify?.("effect_activated", {
     card,
     player,
     effect,
@@ -691,8 +691,8 @@ export async function activateMonsterEffect(
   this.registerOncePerTurnUsage(card, player, effect);
   this.registerOncePerDuelUsage(card, player, effect);
 
-  // Emitir evento para captura de replay
-  this.game?.emit?.("effect_activated", {
+  // Emitir evento informativo para captura de replay (não bloqueia)
+  this.game?.notify?.("effect_activated", {
     card,
     player,
     effect,

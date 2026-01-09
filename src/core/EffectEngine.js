@@ -140,8 +140,8 @@ export default class EffectEngine {
             playerChoice: choice,
           });
 
-          // Emitir evento para captura de replay
-          this.game?.emit?.("position_chosen", {
+          // Emitir evento informativo para captura de replay (não bloqueia)
+          this.game?.notify?.("position_chosen", {
             card,
             player,
             position: resolved,

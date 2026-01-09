@@ -171,13 +171,15 @@ export function bindCardInteractions() {
                 } else {
                   summonedCard.setTurn = null;
                 }
+                // Aguarda o evento after_summon antes de atualizar o board
                 this.emit("after_summon", {
                   card: summonedCard,
                   player: this.player,
                   method: "normal",
                   fromZone: "hand",
+                }).then(() => {
+                  this.updateBoard();
                 });
-                this.updateBoard();
               }
             }
           },
@@ -309,18 +311,19 @@ export function bindCardInteractions() {
             summonedCard.setTurn = null;
           }
 
+          // Aguarda o evento after_summon antes de atualizar o board
           this.emit("after_summon", {
             card: summonedCard,
             player: this.player,
             method: pendingSummon.tributesNeeded > 0 ? "tribute" : "normal",
             fromZone: "hand",
+          }).then(() => {
+            this.updateBoard();
           });
 
           tributeSelectionMode = false;
           selectedTributes = [];
           pendingSummon = null;
-
-          this.updateBoard();
         }
         return;
       }

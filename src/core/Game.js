@@ -1829,9 +1829,10 @@ Game.prototype.applyManualSetup = devToolsSetup.applyManualSetup;
 // Events: Attach methods from modular events/ folder
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Event Bus: on, emit
+// Event Bus: on, emit, notify
 Game.prototype.on = eventBus.on;
 Game.prototype.emit = eventBus.emit;
+Game.prototype.notify = eventBus.notify;
 
 // Event Resolver: resolveEvent, resolveEventEntries, resumePendingEventSelection
 Game.prototype.resolveEvent = eventResolver.resolveEvent;

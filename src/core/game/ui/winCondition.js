@@ -32,13 +32,13 @@ export function checkWinCondition() {
           if (ReplayCapture.isEnabled() && ReplayCapture.currentDuel) {
             const duel = ReplayCapture.currentDuel;
             const decisions = duel.decisions?.length || 0;
-            ReplayCapture.exportToFile();
+            ReplayCapture.exportReplays();
             return { decisions };
           } else if (ReplayCapture.replays?.length > 0) {
             const lastDuel =
               ReplayCapture.replays[ReplayCapture.replays.length - 1];
             const decisions = lastDuel?.decisions?.length || 0;
-            ReplayCapture.exportToFile();
+            ReplayCapture.exportReplays();
             return { decisions };
           }
           return null;

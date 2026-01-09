@@ -1,6 +1,6 @@
 /**
  * Event Bus for Game
- * Handles: on, emit
+ * Handles: on, emit, notify
  */
 
 /**
@@ -30,4 +30,22 @@ export async function emit(eventName, payload) {
     }
   }
   return await this.resolveEvent(eventName, payload);
+}
+
+/**
+ * Notify listeners without resolving triggers or incrementing eventResolutionDepth.
+ * Use this for informational events that should not block game actions.
+ * @this {import('../../Game.js').default}
+ */
+export function notify(eventName, payload) {
+  const list = this.eventListeners[eventName];
+  if (list) {
+    for (const fn of list) {
+      try {
+        fn(payload);
+      } catch (err) {
+        console.error("Error in notify handler for " + eventName + ":", err);
+      }
+    }
+  }
 }
