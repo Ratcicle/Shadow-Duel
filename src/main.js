@@ -2,6 +2,7 @@ import Game from "./core/Game.js";
 import Bot from "./core/Bot.js";
 import BotArena from "./core/BotArena.js";
 import Renderer from "./ui/Renderer.js";
+import ReplayCapture from "./core/ReplayCapture.js";
 import { cardDatabase, cardDatabaseById } from "./data/cards.js";
 import { validateCardDatabase } from "./core/CardDatabaseValidator.js";
 import ShadowHeartStrategy from "./core/ai/ShadowHeartStrategy.js";
@@ -21,9 +22,11 @@ let game = null;
 const cardKindOrder = { monster: 0, spell: 1, trap: 2 };
 const TEST_MODE_KEY = "shadow_duel_test_mode";
 const DEV_MODE_KEY = "shadow_duel_dev_mode";
+const REPLAY_MODE_KEY = "shadow_duel_capture_mode";
 const BOT_PRESET_KEY = "shadow_duel_bot_preset";
 let testModeEnabled = loadTestModeFlag();
 let devModeEnabled = loadDevModeFlag();
+let replayModeEnabled = loadReplayModeFlag();
 let currentBotPreset = loadBotPreset();
 let latestValidationResult = null;
 // Use the imported indexed map instead of creating a new one
@@ -114,6 +117,7 @@ const btnPoolFilterLuminarch = document.getElementById("deck-filter-luminarch");
 const btnPoolFilterVoid = document.getElementById("deck-filter-void");
 const btnToggleTestMode = document.getElementById("btn-toggle-test-mode");
 const btnToggleDevMode = document.getElementById("btn-toggle-dev-mode");
+const btnToggleReplay = document.getElementById("btn-toggle-replay");
 const validationMessagesEl = document.getElementById("validation-messages");
 const devPanel = document.getElementById("dev-panel");
 const devDrawPlayerSelect = document.getElementById("dev-draw-player");
@@ -149,6 +153,7 @@ let currentExtraDeck = loadExtraDeck();
 let poolFilterMode = "all"; // all | no_archetype | void | luminarch | shadow_heart
 updateTestModeButton();
 updateDevModeButton();
+updateReplayModeButton();
 runCardDatabaseValidation({ silent: true });
 
 function getCardById(cardId) {
@@ -311,6 +316,34 @@ function updateDevModeButton() {
   }`;
   btnToggleDevMode.classList.toggle("active", devModeEnabled);
   updateDevPanelVisibility();
+}
+
+function loadReplayModeFlag() {
+  try {
+    return localStorage.getItem(REPLAY_MODE_KEY) === "true";
+  } catch (e) {
+    console.warn("Failed to load replay mode flag", e);
+    return false;
+  }
+}
+
+function saveReplayModeFlag(enabled) {
+  try {
+    localStorage.setItem(REPLAY_MODE_KEY, enabled ? "true" : "false");
+  } catch (e) {
+    console.warn("Failed to save replay mode flag", e);
+  }
+}
+
+function updateReplayModeButton() {
+  if (!btnToggleReplay) return;
+  const stats = ReplayCapture.getStats();
+  const duelCount = stats.totalDuels || 0;
+  const label = replayModeEnabled
+    ? `🔴 Gravando (${duelCount})`
+    : `🎬 Replay: desligado`;
+  btnToggleReplay.textContent = label;
+  btnToggleReplay.classList.toggle("active", replayModeEnabled);
 }
 
 function updateDevPanelVisibility() {
@@ -813,6 +846,18 @@ function restartCurrentDuelFromDev() {
   bootGame();
 }
 
+// Listener para rematch via evento do game over modal
+window.addEventListener("shadow-duel-rematch", () => {
+  if (!runCardDatabaseValidation({ silent: true })) {
+    alert("Corrija os erros do Card DB antes de reiniciar o duelo.");
+    return;
+  }
+  startScreen.classList.add("hidden");
+  deckBuilder.classList.add("hidden");
+  bootGame();
+  updateReplayModeButton(); // Atualizar contador de replays
+});
+
 // ============ Bot Arena ============
 
 let botArenaInstance = null;
@@ -930,7 +975,7 @@ function updateArenaProgress(progress) {
       addArenaLogEntry(`❌ ${result.message}`, "error");
     } else {
       let symbol, className, winnerText;
-      
+
       if (result.winner === "player") {
         symbol = "✅";
         className = "win-1";
@@ -944,7 +989,7 @@ function updateArenaProgress(progress) {
         className = "draw";
         winnerText = "Empate";
       }
-      
+
       addArenaLogEntry(
         `Duel ${result.duelNumber}: ${symbol} ${winnerText} (${result.turns} turnos)`,
         className
@@ -1026,6 +1071,27 @@ btnToggleDevMode?.addEventListener("click", () => {
     game.setDevMode(devModeEnabled);
   }
   showValidationMessages(latestValidationResult);
+});
+
+btnToggleReplay?.addEventListener("click", () => {
+  replayModeEnabled = !replayModeEnabled;
+  saveReplayModeFlag(replayModeEnabled);
+  updateReplayModeButton();
+
+  if (replayModeEnabled) {
+    console.log(
+      "[ReplayCapture] Modo de captura ATIVADO - suas decisões serão gravadas nos próximos duelos"
+    );
+  } else {
+    // Mostrar resumo ao desativar
+    const stats = ReplayCapture.getStats();
+    if (stats.totalDuels > 0) {
+      console.log(
+        `[ReplayCapture] Modo de captura DESATIVADO - ${stats.totalDuels} duelos gravados`
+      );
+      ReplayCapture.showSummary();
+    }
+  }
 });
 
 devDrawBtn?.addEventListener("click", () => {

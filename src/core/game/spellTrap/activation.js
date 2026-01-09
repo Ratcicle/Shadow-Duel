@@ -152,7 +152,9 @@ export async function tryActivateSpell(
         "Você não tem materiais válidos para Fusion Summon!"
       );
       this.ui?.log?.(
-        `${owner.name || "Jogador"} não pode ativar Polymerization: sem materiais de fusão válidos.`
+        `${
+          owner.name || "Jogador"
+        } não pode ativar Polymerization: sem materiais de fusão válidos.`
       );
       return {
         success: false,
@@ -208,6 +210,14 @@ export async function tryActivateSpell(
       } else {
         this.finalizeSpellTrapActivation(info.card, owner, info.activationZone);
         this.ui.log(`${info.card.name} effect activated.`);
+
+        // Emitir evento para captura de replay
+        this.emit("spell_activated", {
+          card: info.card,
+          player: owner,
+          fromHand: baseActivationContext.fromHand,
+          activationZone: info.activationZone,
+        });
 
         // Offer chain window for opponent to respond to spell activation
         await this.checkAndOfferTraps("card_activation", {

@@ -73,6 +73,9 @@ import * as uiPrompts from "./game/ui/prompts.js";
 import * as uiWinCondition from "./game/ui/winCondition.js";
 import * as uiInteractions from "./game/ui/interactions.js";
 
+// Replay capture integration
+import * as replayIntegration from "./game/replay/integration.js";
+
 // Helper to construct user-friendly cost type descriptions
 function getCostTypeDescription(costFilters, count) {
   if (costFilters.archetype) {
@@ -517,6 +520,11 @@ export default class Game {
     this.player.buildExtraDeck(extraDeckList);
     this.bot.buildDeck();
     this.bot.buildExtraDeck();
+
+    // Integração do sistema de captura de replay (se habilitado)
+    replayIntegration.integrateReplayCapture(this);
+    replayIntegration.startReplayCapture(this);
+
     if (this.testModeEnabled) {
       this.forceOpeningHand("Infinity Searcher", 4);
       this.ui.log("Modo teste: adicionando 4 Infinity Searcher a mao inicial.");

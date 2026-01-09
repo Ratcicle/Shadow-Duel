@@ -123,6 +123,7 @@ Renderer.prototype.toggleExtraDeckModal = modals.toggleExtraDeckModal;
 Renderer.prototype.showConfirmPrompt = modals.showConfirmPrompt;
 Renderer.prototype.showNumberPrompt = modals.showNumberPrompt;
 Renderer.prototype.showAlert = modals.showAlert;
+Renderer.prototype.showGameOverModal = modals.showGameOverModal;
 Renderer.prototype.getSearchModalElements = modals.getSearchModalElements;
 Renderer.prototype.showSearchModal = modals.showSearchModal;
 Renderer.prototype.showSearchModalVisual = modals.showSearchModalVisual;

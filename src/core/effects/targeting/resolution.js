@@ -158,20 +158,6 @@ export function resolveTargets(targetDefs, ctx, selections) {
     const hasSelectionForDef =
       hasSelections && Object.prototype.hasOwnProperty.call(selections, def.id);
     const provided = hasSelectionForDef ? selections[def.id] : null;
-    if (shouldLogTargets) {
-      console.log("[resolveTargets] checking selections", {
-        targetDefId: def.id,
-        hasSelections,
-        hasSelectionForDef,
-        provided: provided
-          ? Array.isArray(provided)
-            ? provided
-            : [provided]
-          : null,
-        candidateCount: decoratedCandidates.length,
-        candidateKeys: decoratedCandidates.slice(0, 5).map((c) => c.key),
-      });
-    }
     if (hasSelectionForDef) {
       const providedList = Array.isArray(provided)
         ? provided
@@ -343,7 +329,9 @@ export function resolveTargets(targetDefs, ctx, selections) {
         for (const req of selectionContract.requirements || []) {
           const min = Number(req.min ?? 0);
           const max = Number(req.max ?? min);
-          const candidates = Array.isArray(req.candidates) ? req.candidates : [];
+          const candidates = Array.isArray(req.candidates)
+            ? req.candidates
+            : [];
           const pickCount = min > 0 ? Math.min(min, candidates.length) : 0;
           fallbackSelections[req.id] = candidates
             .slice(0, Math.min(pickCount, max, candidates.length))

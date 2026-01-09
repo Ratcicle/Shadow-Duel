@@ -466,9 +466,12 @@ export default class ChainSystem {
       }
     }
 
-    this.log(
-      `Found ${activatable.length} activatable cards for ${player.id} in ${context?.type} context`
-    );
+    // Only log when there are activatable cards (reduce log noise)
+    if (activatable.length > 0) {
+      this.log(
+        `Found ${activatable.length} activatable cards for ${player.id} in ${context?.type} context`
+      );
+    }
 
     return activatable;
   }
@@ -963,7 +966,8 @@ export default class ChainSystem {
       );
 
       const wouldLoseOrTakeDamage = (attacker, defender) => {
-        if (!attacker || !defender) return { loseMonster: false, takeDamage: false };
+        if (!attacker || !defender)
+          return { loseMonster: false, takeDamage: false };
         const atk = attacker.atk || 0;
         const isDefense = defender.position === "defense";
         const defStat = isDefense ? defender.def || 0 : defender.atk || 0;
@@ -1103,16 +1107,27 @@ export default class ChainSystem {
       if (card.cardKind === "spell" && card.subtype === "quick") {
         priority += 10;
         if (card.name === "Luminarch Holy Shield") {
-          if (context?.type === "attack_declaration") {
+          // CRITICAL: Holy Shield só deve ser ativado em contextos de batalha do OPONENTE
+          // Nunca ativar no próprio turno ou em resposta aos próprios summons
+          const isOpponentAction = context?.player?.id !== player?.id;
+          const isBattleContext =
+            context?.type === "attack_declaration" ||
+            context?.type === "battle_damage";
+
+          if (!isOpponentAction) {
+            // Próprio turno ou própria ação = NÃO ATIVAR
+            priority = -100;
+          } else if (context?.type === "attack_declaration") {
             priority += 70;
           } else if (context?.type === "battle_damage") {
             priority += 55;
           } else if (context?.type === "effect_targeted") {
             priority += 40;
           } else {
-            priority += 25;
+            // Contexto não-battle do oponente = baixa prioridade
+            priority -= 20;
           }
-          if (player?.lp < 3000) {
+          if (isOpponentAction && isBattleContext && player?.lp < 3000) {
             priority += 10;
           }
         }
@@ -1129,7 +1144,9 @@ export default class ChainSystem {
 
     // Se a melhor opção tem priority <= 0, passar automaticamente
     if (bestOption.priority <= 0) {
-      this.log(`Bot passing (best option priority: ${bestOption.priority} - too low)`);
+      this.log(
+        `Bot passing (best option priority: ${bestOption.priority} - too low)`
+      );
       return null;
     }
 
@@ -1160,7 +1177,7 @@ export default class ChainSystem {
       return { ...bestOption, selections };
     }
 
-    this.log(`Bot passing (best option priority: ${bestOption.priority})`)
+    this.log(`Bot passing (best option priority: ${bestOption.priority})`);
     return null;
   }
 
@@ -1210,7 +1227,11 @@ export default class ChainSystem {
 
     const autoResult = this.game.autoSelector.select(
       targetResult.selectionContract,
-      { owner: player, activationContext: ctx.activationContext, selectionKind: "target" }
+      {
+        owner: player,
+        activationContext: ctx.activationContext,
+        selectionKind: "target",
+      }
     );
 
     if (!autoResult?.ok) {
@@ -1313,8 +1334,26 @@ export default class ChainSystem {
         return null;
       }
 
+      // Emitir evento para captura de replay
+      this.game?.emit?.("chain_response", {
+        player,
+        responded: true,
+        card: chosenOption.card,
+        chainLength: this.chainStack?.length || 0,
+        triggerCard: context?.card || null,
+      });
+
       return { ...chosenOption, selections };
     }
+
+    // Emitir evento para captura de replay (jogador passou)
+    this.game?.emit?.("chain_response", {
+      player,
+      responded: false,
+      card: null,
+      chainLength: this.chainStack?.length || 0,
+      triggerCard: context?.card || null,
+    });
 
     return null;
   }

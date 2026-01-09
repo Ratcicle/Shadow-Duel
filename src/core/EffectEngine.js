@@ -139,6 +139,15 @@ export default class EffectEngine {
             actionPosition,
             playerChoice: choice,
           });
+
+          // Emitir evento para captura de replay
+          this.game?.emit?.("position_chosen", {
+            card,
+            player,
+            position: resolved,
+            context: "special_summon",
+          });
+
           resolve(resolved);
         });
       });

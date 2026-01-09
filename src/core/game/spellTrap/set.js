@@ -46,6 +46,13 @@ export function setSpellOrTrap(card, handIndex, actor = this.player) {
     actor.spellTrap.push(card);
   }
 
+  // Emitir evento para captura de replay
+  this.emit("card_set", {
+    card,
+    player: actor,
+    zone: "spellTrap",
+  });
+
   this.updateBoard();
   return { ok: true, success: true, card };
 }

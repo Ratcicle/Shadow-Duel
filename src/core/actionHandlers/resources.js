@@ -202,15 +202,7 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
     extraFilter,
   });
 
-  console.log(
-    `[handleAddFromZoneToHand] Zone: ${sourceZone}, Candidates: ${candidates.length}, Filters:`,
-    filters
-  );
-
   if (candidates.length === 0) {
-    console.log(
-      `[handleAddFromZoneToHand] No candidates found in ${sourceZone}`
-    );
     getUI(game)?.log(`No valid cards in ${sourceZone} matching filters.`);
     return false;
   }
@@ -260,12 +252,6 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
     game.updateBoard();
     return true;
   };
-
-  console.log(
-    `[handleAddFromZoneToHand] Calling selectCardsFromZone: maxSelect=${maxSelect}, minSelect=${minSelect}, promptPlayer=${
-      promptPlayer !== false
-    }`
-  );
 
   const selection = await selectCardsFromZone({
     game,
@@ -324,12 +310,7 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
     },
   });
 
-  console.log(`[handleAddFromZoneToHand] Selection result:`, {
-    selected: selection.selected?.length || 0,
-    cancelled: selection.cancelled,
-  });
   const result = finalizeSelection(selection.selected || []);
-  console.log(`[handleAddFromZoneToHand] finalizeSelection returned:`, result);
   return result;
 }
 

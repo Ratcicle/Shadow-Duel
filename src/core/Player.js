@@ -137,17 +137,6 @@ export default class Player {
     let usingAlt = false;
     const alt = card.altTribute;
 
-    console.log("[getTributeRequirement] Card:", card.name, {
-      level: card.level,
-      initialTributes: tributesNeeded,
-      altTribute: alt,
-      fieldMonsters: this.field.map((c) => ({
-        name: c?.name,
-        type: c?.type,
-        types: c?.types,
-      })),
-    });
-
     if (
       alt?.type === "no_tribute_if_empty_field" &&
       this.field.length === 0 &&
@@ -170,46 +159,18 @@ export default class Player {
 
     // Check if player has card of specific type
     if (alt?.requiresType && !usingAlt) {
-      console.log(
-        "[getTributeRequirement] Checking requiresType:",
-        alt.requiresType
-      );
       const hasRequiredType = this.field.some((c) => {
         if (!c || c.isFacedown) return false;
-        const hasType = Array.isArray(c.types)
+        return Array.isArray(c.types)
           ? c.types.includes(alt.requiresType)
           : c.type === alt.requiresType;
-        console.log(
-          "[getTributeRequirement] Monster check:",
-          c.name,
-          "type:",
-          c.type,
-          "hasType:",
-          hasType
-        );
-        return hasType;
       });
-
-      console.log(
-        "[getTributeRequirement] hasRequiredType:",
-        hasRequiredType,
-        "alt.tributes:",
-        alt.tributes,
-        "tributesNeeded:",
-        tributesNeeded
-      );
 
       if (hasRequiredType && alt.tributes < tributesNeeded) {
         tributesNeeded = alt.tributes;
         usingAlt = true;
       }
     }
-
-    console.log("[getTributeRequirement] Final result:", {
-      tributesNeeded,
-      usingAlt,
-      alt,
-    });
 
     if (
       typeof card.requiredTributes === "number" &&

@@ -61,6 +61,88 @@ export function showAlert(message) {
 }
 
 /**
+ * Shows the game over modal with stats and options.
+ * @this {import('../Renderer.js').default}
+ * @param {Object} options - Game over options
+ * @param {boolean} options.victory - Whether player won
+ * @param {number} options.playerLP - Player's final LP
+ * @param {number} options.botLP - Bot's final LP
+ * @param {number} options.turns - Number of turns
+ * @param {Function} options.onMenu - Callback for menu button
+ * @param {Function} options.onRematch - Callback for rematch button
+ * @param {Function} options.onExport - Callback for export button
+ */
+export function showGameOverModal(options = {}) {
+  const modal = document.getElementById("game-over-modal");
+  const title = document.getElementById("game-over-title");
+  const message = document.getElementById("game-over-message");
+  const playerLP = document.getElementById("game-over-player-lp");
+  const botLP = document.getElementById("game-over-bot-lp");
+  const turns = document.getElementById("game-over-turns");
+  const menuBtn = document.getElementById("btn-game-over-menu");
+  const rematchBtn = document.getElementById("btn-game-over-rematch");
+  const exportBtn = document.getElementById("btn-game-over-export");
+  const replayStatus = document.getElementById("game-over-replay-status");
+
+  if (!modal) return;
+
+  // Set content
+  if (options.victory) {
+    title.textContent = "Victory!";
+    title.className = "victory";
+    message.textContent = "Você venceu o duelo!";
+  } else {
+    title.textContent = "Defeat";
+    title.className = "defeat";
+    message.textContent = "Você perdeu o duelo.";
+  }
+
+  playerLP.textContent = options.playerLP ?? 0;
+  botLP.textContent = options.botLP ?? 0;
+  turns.textContent = options.turns ?? 0;
+
+  // Reset export button state
+  exportBtn.textContent = "📥 Exportar Replay";
+  exportBtn.classList.remove("exported");
+  replayStatus.classList.add("hidden");
+
+  // Button handlers
+  const cleanup = () => {
+    modal.classList.add("hidden");
+    menuBtn.onclick = null;
+    rematchBtn.onclick = null;
+    exportBtn.onclick = null;
+  };
+
+  menuBtn.onclick = () => {
+    cleanup();
+    if (typeof options.onMenu === "function") options.onMenu();
+  };
+
+  rematchBtn.onclick = () => {
+    cleanup();
+    if (typeof options.onRematch === "function") options.onRematch();
+  };
+
+  exportBtn.onclick = () => {
+    if (typeof options.onExport === "function") {
+      const result = options.onExport();
+      if (result) {
+        exportBtn.textContent = "✅ Exportado!";
+        exportBtn.classList.add("exported");
+        replayStatus.textContent = `Replay salvo com ${
+          result.decisions || 0
+        } decisões`;
+        replayStatus.classList.remove("hidden");
+      }
+    }
+  };
+
+  // Show modal
+  modal.classList.remove("hidden");
+}
+
+/**
  * @this {import('../Renderer.js').default}
  */
 export function getSearchModalElements() {

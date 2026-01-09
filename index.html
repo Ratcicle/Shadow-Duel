@@ -33,6 +33,13 @@
           <button id="btn-toggle-dev-mode" class="dev-mode-toggle">
             Dev Mode: desligado
           </button>
+          <button
+            id="btn-toggle-replay"
+            class="replay-toggle"
+            title="Grava suas decisões para análise posterior"
+          >
+            🎬 Replay: desligado
+          </button>
         </div>
         <div
           class="language-toggle"
@@ -445,6 +452,40 @@
         </div>
       </div>
       <button id="dev-reset-duel" class="dev-reset-btn">Resetar Duelo</button>
+    </div>
+
+    <!-- Game Over Modal -->
+    <div id="game-over-modal" class="overlay hidden">
+      <div class="game-over-panel">
+        <h1 id="game-over-title">Victory!</h1>
+        <p id="game-over-message">Você venceu o duelo!</p>
+        <div class="game-over-stats">
+          <div class="stat-row">
+            <span>Seus LP:</span>
+            <span id="game-over-player-lp">8000</span>
+          </div>
+          <div class="stat-row">
+            <span>LP do Bot:</span>
+            <span id="game-over-bot-lp">0</span>
+          </div>
+          <div class="stat-row">
+            <span>Turnos:</span>
+            <span id="game-over-turns">5</span>
+          </div>
+        </div>
+        <div class="game-over-actions">
+          <button id="btn-game-over-menu">Menu Principal</button>
+          <button id="btn-game-over-rematch">Revanche</button>
+          <button
+            id="btn-game-over-export"
+            class="export-btn"
+            title="Exportar replay deste duelo"
+          >
+            📥 Exportar Replay
+          </button>
+        </div>
+        <p id="game-over-replay-status" class="replay-status hidden"></p>
+      </div>
     </div>
   </body>
 </html>

@@ -80,6 +80,7 @@ export {
   showConfirmPrompt,
   showNumberPrompt,
   showAlert,
+  showGameOverModal,
   getSearchModalElements,
   showSearchModal,
   showSearchModalVisual,

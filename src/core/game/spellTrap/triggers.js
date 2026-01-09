@@ -133,6 +133,14 @@ export async function activateTrapFromZone(card, eventData = {}) {
   card.isFacedown = false;
   this.ui.log(`${this.player.name} ativa ${card.name}!`);
 
+  // Emitir evento para captura de replay
+  this.emit("trap_activated", {
+    card,
+    player: this.player,
+    trigger: eventData.trigger || eventData.eventType,
+    chainLink: eventData.chainLink,
+  });
+
   // Resolver efeitos
   const result = await this.effectEngine.resolveTrapEffects(
     card,

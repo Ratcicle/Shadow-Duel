@@ -67,7 +67,18 @@ export function skipToPhase(targetPhase) {
   const targetIdx = order.indexOf(targetPhase);
   if (currentIdx === -1 || targetIdx === -1) return;
   if (targetIdx <= currentIdx) return;
+
+  const fromPhase = this.phase;
   this.phase = targetPhase;
+
+  // Emitir evento para captura de replay (apenas para humano)
+  if (actor.controllerType === "human") {
+    this.emit("phase_skip", {
+      player: this.turn,
+      fromPhase,
+      toPhase: targetPhase,
+    });
+  }
 
   // Clear attack indicators when skipping phases
   this.clearAttackResolutionIndicators();

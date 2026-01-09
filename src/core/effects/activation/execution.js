@@ -141,6 +141,16 @@ export async function activateMonsterFromGraveyard(
   // Only register usage and check win after successful resolution
   this.registerOncePerTurnUsage(card, player, effect);
   this.registerOncePerDuelUsage(card, player, effect);
+
+  // Emitir evento para captura de replay
+  this.game?.emit?.("effect_activated", {
+    card,
+    player,
+    effect,
+    activationZone: "graveyard",
+    effectType: "ignition",
+  });
+
   this.game.checkWinCondition();
   return { success: true, needsSelection: false };
 }
@@ -484,6 +494,16 @@ export async function activateSpellTrapEffect(
     card: card.name,
     player: player.id,
   });
+
+  // Emitir evento para captura de replay
+  this.game?.emit?.("effect_activated", {
+    card,
+    player,
+    effect,
+    activationZone: card.subtype === "field" ? "fieldSpell" : "spellTrap",
+    effectType: effect?.timing || "spell_trap",
+  });
+
   return { success: true, needsSelection: false };
 }
 
@@ -670,6 +690,16 @@ export async function activateMonsterEffect(
   }
   this.registerOncePerTurnUsage(card, player, effect);
   this.registerOncePerDuelUsage(card, player, effect);
+
+  // Emitir evento para captura de replay
+  this.game?.emit?.("effect_activated", {
+    card,
+    player,
+    effect,
+    activationZone,
+    effectType: "ignition",
+  });
+
   this.game.checkWinCondition();
   return { success: true, needsSelection: false };
 }

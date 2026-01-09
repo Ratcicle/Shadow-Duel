@@ -57,6 +57,10 @@ import {
   evaluateRiskWithProtection,
 } from "./luminarch/cardValue.js";
 
+// Flag para logs detalhados de avaliação por carta (muito verboso - ~6000 linhas/10 duelos)
+// Desligar para logs mais limpos, ligar para debug de prioridades
+const VERBOSE_EVAL = false;
+
 export default class LuminarchStrategy extends BaseStrategy {
   evaluateBoard(gameOrState, perspectivePlayer) {
     const perspective = perspectivePlayer?.id
@@ -279,6 +283,19 @@ export default class LuminarchStrategy extends BaseStrategy {
         score += 0.5;
       }
     }
+
+    // SIMULATION BONUS: Searchers que buscaram cartas
+    // Valiant que buscou Aegis = +1.5 (Aegis é peça core do arquétipo)
+    const searchedAegis = myField.some((c) => c && c._searchedAegis);
+    if (searchedAegis) {
+      score += 1.5;
+    }
+    // Arbiter que buscou spell = +1.0 (spell utility/field spell)
+    const searchedSpell = myField.some((c) => c && c._searchedSpell);
+    if (searchedSpell) {
+      score += 1.0;
+    }
+
     if (opponent.fieldSpell) score -= 0.9;
 
     score += myBackrow.length * 0.35;
@@ -465,7 +482,7 @@ export default class LuminarchStrategy extends BaseStrategy {
       bot.hand.forEach((card, index) => {
         if (card.cardKind !== "monster") return;
         const tributeInfo = this.getTributeRequirementFor(card, bot);
-        if (bot?.debug) {
+        if (VERBOSE_EVAL && bot?.debug) {
           console.log(
             `\n[LuminarchStrategy] 🔍 Avaliando monstro: ${card.name}`
           );
@@ -474,7 +491,7 @@ export default class LuminarchStrategy extends BaseStrategy {
           );
         }
         if (bot.field.length < tributeInfo.tributesNeeded) {
-          if (bot?.debug) {
+          if (VERBOSE_EVAL && bot?.debug) {
             console.log(
               `  ❌ REJEITADO: Tributos insuficientes (precisa ${tributeInfo.tributesNeeded}, tem ${bot.field.length})`
             );
@@ -484,7 +501,7 @@ export default class LuminarchStrategy extends BaseStrategy {
         const projectedFieldCount =
           (bot.field?.length || 0) - tributeInfo.tributesNeeded + 1;
         if (projectedFieldCount > 5) {
-          if (bot?.debug) {
+          if (VERBOSE_EVAL && bot?.debug) {
             console.log(
               `  ❌ REJEITADO: Sem espaço após tributos (${bot.field.length}/5)`
             );
@@ -498,7 +515,7 @@ export default class LuminarchStrategy extends BaseStrategy {
           game,
           opponent
         );
-        if (bot?.debug) {
+        if (VERBOSE_EVAL && bot?.debug) {
           console.log(
             `  Safety check: ${
               shouldSummon.yes ? "✅ APROVADO" : "❌ REJEITADO"
@@ -646,7 +663,7 @@ export default class LuminarchStrategy extends BaseStrategy {
       if (card.cardKind !== "spell") return;
 
       try {
-        if (bot?.debug) {
+        if (VERBOSE_EVAL && bot?.debug) {
           console.log(
             `\n[LuminarchStrategy] 🔍 Avaliando spell: ${card.name} (${
               card.subtype || "normal"
@@ -664,7 +681,7 @@ export default class LuminarchStrategy extends BaseStrategy {
             bot,
             { activationContext }
           );
-          if (bot?.debug) {
+          if (VERBOSE_EVAL && bot?.debug) {
             console.log(
               `  Preview: ${preview?.ok ? "✅" : "❌"} ${preview?.reason || ""}`
             );
@@ -672,7 +689,7 @@ export default class LuminarchStrategy extends BaseStrategy {
           if (preview && preview.ok === false) return;
         } else {
           const check = game.effectEngine?.canActivate?.(card, bot);
-          if (bot?.debug && check) {
+          if (VERBOSE_EVAL && bot?.debug && check) {
             console.log(
               `  CanActivate: ${check.ok ? "✅" : "❌"} ${check.reason || ""}`
             );
@@ -693,7 +710,7 @@ export default class LuminarchStrategy extends BaseStrategy {
         };
 
         const decision = shouldPlaySpell(card, analysis);
-        if (bot?.debug) {
+        if (VERBOSE_EVAL && bot?.debug) {
           console.log(
             `  shouldPlaySpell: ${decision.yes ? "✅" : "❌"} ${
               decision.reason || ""
@@ -712,7 +729,7 @@ export default class LuminarchStrategy extends BaseStrategy {
           analysis,
           gameStance
         );
-        if (bot?.debug) {
+        if (VERBOSE_EVAL && bot?.debug) {
           console.log(
             `  shouldCommitResourcesNow: ${
               resourceCheck.shouldPlay ? "✅" : "⏳"
@@ -720,11 +737,6 @@ export default class LuminarchStrategy extends BaseStrategy {
           );
         }
         if (!resourceCheck.shouldPlay) {
-          if (bot?.debug) {
-            console.log(
-              `[LuminarchStrategy] ⏳ Segurar ${card.name}: ${resourceCheck.reason}`
-            );
-          }
           return; // Segurar carta para próximo turno
         }
 
@@ -775,12 +787,7 @@ export default class LuminarchStrategy extends BaseStrategy {
         });
         spellIndicesActivated.add(index);
       } catch (e) {
-        if (bot?.debug) {
-          console.warn(
-            `[LuminarchStrategy] ⚠️ Erro ao avaliar spell ${card.name}: ${e.message}`
-          );
-        }
-        // NÃO adicionar ao actions - pular esta carta completamente
+        // Silent spell evaluation error
       }
     });
 
@@ -802,13 +809,6 @@ export default class LuminarchStrategy extends BaseStrategy {
             null,
             { activationContext }
           );
-          if (bot?.debug) {
-            console.log(
-              `  SpellTrap Preview: ${preview?.ok ? "ƒo." : "ƒ?O"} ${
-                preview?.reason || ""
-              }`
-            );
-          }
           if (preview && preview.ok === false) return;
         }
 
@@ -866,11 +866,7 @@ export default class LuminarchStrategy extends BaseStrategy {
           reason: decision.reason,
         });
       } catch (e) {
-        if (bot?.debug) {
-          console.warn(
-            `[LuminarchStrategy] ƒsÿ‹÷? Erro ao avaliar spell/trap ${card?.name}: ${e.message}`
-          );
-        }
+        // Silent spell/trap evaluation error
       }
     });
 
@@ -931,10 +927,6 @@ export default class LuminarchStrategy extends BaseStrategy {
           null,
           { activationContext }
         );
-        // DEBUG: Log preview result
-        if (bot?.debug) {
-          console.log(`[LuminarchStrategy] Field Effect Preview:`, preview);
-        }
         let shouldUseFieldEffect = true;
         if (bot.fieldSpell?.name?.includes("Citadel")) {
           const myMonsters = (bot.field || []).filter(
@@ -1010,12 +1002,7 @@ export default class LuminarchStrategy extends BaseStrategy {
       }
       actions.push(...ascensionActions);
     } catch (e) {
-      if (bot?.debug) {
-        console.warn(
-          `[LuminarchStrategy] Erro ao detectar Ascensions:`,
-          e.message
-        );
-      }
+      // Silent ascension detection error
     }
 
     // === FUSION SUMMONS ===
@@ -1030,12 +1017,7 @@ export default class LuminarchStrategy extends BaseStrategy {
       }
       actions.push(...fusionActions);
     } catch (e) {
-      if (bot?.debug) {
-        console.warn(
-          `[LuminarchStrategy] Erro ao detectar Fusions:`,
-          e.message
-        );
-      }
+      // Silent fusion detection error
     }
 
     // === P2: GAME TREE SEARCH (OPCIONAL, SÓ SE CRÍTICO) ===
@@ -1049,7 +1031,7 @@ export default class LuminarchStrategy extends BaseStrategy {
     // FALLBACK: Se nenhuma ação foi gerada, reavaliar cartas de emergência
     // ═══════════════════════════════════════════════════════════════════════
     if (actions.length === 0) {
-      if (bot?.debug) {
+      if (VERBOSE_EVAL && bot?.debug) {
         console.log(
           `[LuminarchStrategy] 🆘 Fallback: reavaliando cartas de emergência...`
         );
@@ -1089,18 +1071,8 @@ export default class LuminarchStrategy extends BaseStrategy {
             cardName: card.name,
             reason: "emergency_fallback",
           });
-
-          if (bot?.debug) {
-            console.log(
-              `  ✅ Fallback adicionou: ${card.name} (priority ${priority})`
-            );
-          }
         } catch (e) {
-          if (bot?.debug) {
-            console.warn(
-              `  ⚠️ Fallback erro ao avaliar ${card.name}: ${e.message}`
-            );
-          }
+          // Silent fallback error
         }
       });
 
@@ -1138,9 +1110,6 @@ export default class LuminarchStrategy extends BaseStrategy {
             reason: "defensive_fallback",
           });
 
-          if (bot?.debug) {
-            console.log(`  ✅ Fallback summon defensivo: ${card.name} (set)`);
-          }
           break; // Apenas um summon fallback
         }
       }
@@ -1371,6 +1340,26 @@ export default class LuminarchStrategy extends BaseStrategy {
           player.graveyard.push(newCard); // Send to GY instead
         } else {
           player.field.push(newCard);
+
+          // SIMULATE ON-SUMMON EFFECTS (searchers)
+          // Valiant busca Aegisbearer quando Normal Summoned
+          if (
+            card.name === "Luminarch Valiant - Knight of the Dawn" &&
+            !action.facedown
+          ) {
+            // Simular busca do Aegisbearer do deck para mão
+            // (simplificado: apenas adicionar valor à avaliação implicitamente)
+            // Na simulação, marcamos que o efeito foi usado
+            newCard._searchedAegis = true;
+          }
+
+          // Arbiter busca spell Luminarch quando Normal Summoned
+          if (
+            card.name === "Luminarch Sanctified Arbiter" &&
+            !action.facedown
+          ) {
+            newCard._searchedSpell = true;
+          }
         }
         player.summonCount = (player.summonCount || 0) + 1;
         break;
