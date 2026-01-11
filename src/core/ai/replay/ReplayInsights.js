@@ -6,7 +6,7 @@
 import { replayDatabase } from "./ReplayDatabase.js";
 
 // Configuração de anti-viés
-const DEFAULT_MIN_SAMPLE = 5;
+const DEFAULT_MIN_SAMPLE = 3;
 const DEFAULT_CONFIDENCE_THRESHOLD = 0.6;
 
 /**

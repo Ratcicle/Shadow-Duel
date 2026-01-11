@@ -315,10 +315,13 @@ export function integrateReplayCapture(game) {
 
     ReplayCapture.capture("position_choice", {
       actor,
+      turn: payload.turn || game.turnCounter,
+      phase: payload.phase || game.phase,
       cardName: payload.card?.name,
       cardId: payload.card?.id,
+      card: payload.card,
       position: payload.position,
-      context: payload.context, // "summon", "effect", etc.
+      summonType: payload.context === "special_summon" ? "special" : "normal",
     });
   });
 
@@ -381,16 +384,13 @@ export function integrateReplayCapture(game) {
       payload.winner?.id === "player" ||
       payload.winner === "player";
 
-    ReplayCapture.endDuel({
-      winner: humanWon ? "human" : "bot",
-      reason: payload.reason,
-      finalLP: {
-        player: game.player.lp,
-        bot: game.bot.lp,
-      },
-      totalTurns: game.turnCounter,
-      botPreset: game.botPreset,
-    });
+    ReplayCapture.endDuel(
+      humanWon ? "human" : "bot", // winner
+      payload.reason, // reason
+      game.player.lp, // playerLP
+      game.bot.lp, // botLP
+      game.turnCounter // turns
+    );
   });
 
   // ═══════════════════════════════════════════════════════════════════════════

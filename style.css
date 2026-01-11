@@ -3744,7 +3744,7 @@ body {
   border-radius: 10px;
   max-width: 1200px;
   width: 95%;
-  max-height: 90vh;
+  max-height: 95vh;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
   display: flex;
   flex-direction: column;
@@ -3795,7 +3795,7 @@ body {
   display: flex;
   flex-direction: column;
   height: 100%;
-  min-height: 500px;
+  min-height: 700px;
 }
 
 .replay-header {
@@ -4087,7 +4087,7 @@ body {
   flex: 1;
   padding: 16px 20px;
   overflow-y: auto;
-  border-bottom: 1px solid var(--border-color);
+  min-height: 400px;
 }
 
 .insights-panel h3 {
@@ -4120,6 +4120,16 @@ body {
   color: #666;
   font-size: 12px;
   font-style: italic;
+}
+
+.insight-section .low-confidence-warning {
+  color: #f39c12;
+  font-size: 11px;
+  margin: 0 0 8px 0;
+  padding: 4px 8px;
+  background: rgba(243, 156, 18, 0.1);
+  border-left: 2px solid #f39c12;
+  border-radius: 3px;
 }
 
 .top-cards-list,
@@ -4216,7 +4226,7 @@ body {
 .replay-details {
   padding: 16px 20px;
   background: #252525;
-  max-height: 200px;
+  max-height: 300px;
   overflow-y: auto;
 }
 

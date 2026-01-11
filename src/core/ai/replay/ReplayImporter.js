@@ -221,15 +221,8 @@ class ReplayImporter {
     }
 
     // ── Estado inicial zerado ──
-    const snap0 = replay.snapshots?.["0"];
-    if (snap0) {
-      if (snap0.playerLP === 0 && snap0.botLP === 0 && snap0.turn === 0) {
-        // Estado inicial zerado é esperado no turno 0
-        // Só marca issue se for snapshot de turno posterior
-      }
-    }
-
-    // ── Verificar primeiro snapshot com LP ──
+    // Turno 0 com LP=0 é esperado (estado antes do primeiro draw)
+    // Apenas verificar snapshots de turnos reais (turn > 0)
     const firstRealSnapshot = Object.entries(replay.snapshots || {})
       .filter(([turn]) => parseInt(turn) > 0)
       .sort((a, b) => parseInt(a[0]) - parseInt(b[0]))[0];
@@ -291,7 +284,12 @@ class ReplayImporter {
     }
 
     // ── Deck info ──
-    if (!replay.playerDeck && !replay.playerDeck?.playerDeck) {
+    // Aceitar ambos schemas: playerDeck.playerDeck (aninhado) ou playerDeck como array direto
+    const hasDeck =
+      replay.playerDeck &&
+      (Array.isArray(replay.playerDeck.playerDeck) ||
+        Array.isArray(replay.playerDeck));
+    if (!hasDeck) {
       issues.push("missing_player_deck");
     }
 

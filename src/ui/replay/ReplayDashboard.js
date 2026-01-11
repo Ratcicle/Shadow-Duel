@@ -282,8 +282,13 @@ class ReplayDashboard {
           <h4>Top Cards by Win Rate</h4>
           ${
             topCards.length === 0
-              ? '<p class="placeholder">Insufficient data</p>'
+              ? '<p class="placeholder">Insufficient data (need 3+ replays)</p>'
               : `
+            ${
+              topCards[0]?.sampleSize < 5
+                ? '<p class="low-confidence-warning">⚠️ Low sample size - results may vary</p>'
+                : ""
+            }
             <ul class="top-cards-list">
               ${topCards
                 .map(
@@ -306,8 +311,13 @@ class ReplayDashboard {
           <h4>Opening Patterns</h4>
           ${
             openings.length === 0
-              ? '<p class="placeholder">Insufficient data</p>'
+              ? '<p class="placeholder">Insufficient data (need 3+ replays)</p>'
               : `
+            ${
+              openings[0]?.sampleSize < 5
+                ? '<p class="low-confidence-warning">⚠️ Low sample size - results may vary</p>'
+                : ""
+            }
             <ul class="openings-list">
               ${openings
                 .slice(0, 3)

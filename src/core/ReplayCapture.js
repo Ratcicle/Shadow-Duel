@@ -209,14 +209,14 @@ class ReplayCapture {
    * Verifica se há um duelo pendente para salvar
    */
   hasPendingDuel() {
-    return this.lastCompletedDuel !== null;
+    return this.isEnabled() && this.lastCompletedDuel !== null;
   }
 
   /**
    * Retorna info do duelo pendente (para UI)
    */
   getPendingDuelInfo() {
-    if (!this.lastCompletedDuel) return null;
+    if (!this.isEnabled() || !this.lastCompletedDuel) return null;
 
     const duel = this.lastCompletedDuel;
     return {
@@ -357,6 +357,8 @@ class ReplayCapture {
 
     const decision = {
       type: "set_spell_trap",
+      turn: this._extractTurn(context),
+      phase: context.phase || "main1",
       timestamp: Date.now(),
       actor: context.actor || "human",
       card: { c: context.cardId },
@@ -379,6 +381,8 @@ class ReplayCapture {
 
     const decision = {
       type: "trap_activation",
+      turn: this._extractTurn(context),
+      phase: context.phase || "unknown",
       timestamp: Date.now(),
       actor: context.actor || "human",
       card: { c: context.cardId },
@@ -410,6 +414,8 @@ class ReplayCapture {
 
     const decision = {
       type: "effect",
+      turn: this._extractTurn(context),
+      phase: context.phase || "unknown",
       timestamp: Date.now(),
       actor: context.actor || "human",
       card: { c: card.id },
@@ -525,7 +531,7 @@ class ReplayCapture {
 
     const decision = {
       type: "summon",
-      turn: context.turn || 0,
+      turn: this._extractTurn(context),
       phase: context.phase || "main1",
       timestamp: Date.now(),
       actor: context.actor || "human",
@@ -564,7 +570,7 @@ class ReplayCapture {
 
     const decision = {
       type: "spell",
-      turn: context.turn || 0,
+      turn: this._extractTurn(context),
       phase: context.phase || "main1",
       timestamp: Date.now(),
       actor: context.actor || "human",
@@ -595,7 +601,7 @@ class ReplayCapture {
 
     const decision = {
       type: "attack",
-      turn: context.turn || 0,
+      turn: this._extractTurn(context),
       phase: "battle",
       timestamp: Date.now(),
       actor: context.actor || "human",
@@ -649,7 +655,7 @@ class ReplayCapture {
 
     const decision = {
       type: "effect_resolution",
-      turn: context.turn || 0,
+      turn: this._extractTurn(context),
       phase: context.phase || "unknown",
       timestamp: Date.now(),
       actor: context.actor || "unknown",
@@ -722,7 +728,7 @@ class ReplayCapture {
 
     const decision = {
       type: "chain_response",
-      turn: context.turn || 0,
+      turn: this._extractTurn(context),
       phase: context.phase || "unknown",
       timestamp: Date.now(),
       actor: context.actor || "human",
@@ -772,7 +778,7 @@ class ReplayCapture {
 
     const decision = {
       type: "field_effect",
-      turn: context.turn || 0,
+      turn: this._extractTurn(context),
       phase: context.phase || "main1",
       timestamp: Date.now(),
       actor: context.actor || "human",
@@ -801,7 +807,7 @@ class ReplayCapture {
 
     const decision = {
       type: "pass",
-      turn: context.turn || 0,
+      turn: this._extractTurn(context),
       phase: context.phase || "unknown",
       timestamp: Date.now(),
       actor: context.actor || "human",
@@ -825,7 +831,7 @@ class ReplayCapture {
 
     const decision = {
       type: "position_choice",
-      turn: context.turn || 0,
+      turn: this._extractTurn(context),
       phase: context.phase || "main1",
       timestamp: Date.now(),
       actor: context.actor || "human",
@@ -859,7 +865,7 @@ class ReplayCapture {
 
     const decision = {
       type: "position_change",
-      turn: context.turn || context.board?.turnNumber || 0,
+      turn: this._extractTurn(context),
       phase: context.phase || context.board?.phase || "main1",
       timestamp: Date.now(),
       actor: context.actor || "human",
@@ -1059,7 +1065,7 @@ class ReplayCapture {
         botGraveCount: (bot?.graveyard || []).length,
 
         // Turno
-        turn: context.turn || context.game?.turnCounter || 0,
+        turn: this._extractTurn(context),
         phase: context.phase || context.game?.phase || "unknown",
 
         // Summon count
@@ -1091,7 +1097,7 @@ class ReplayCapture {
       botExtraDeckCount: board.botExtraDeckCount || 0,
       playerFieldSpell: board.playerFieldSpell || null,
       botFieldSpell: board.botFieldSpell || null,
-      turn: board.turnNumber || board.turn || 0,
+      turn: this._extractTurn({ board }),
       phase: board.phase || "unknown",
     };
   }
@@ -1121,6 +1127,50 @@ class ReplayCapture {
       return result;
     }
     return targets;
+  }
+
+  /**
+   * Extrai turno de múltiplas fontes possíveis (com fallback robusto)
+   * Ordem de prioridade: context.turn > board.turnNumber > game.turnCounter > último snapshot > 1 (fallback seguro)
+   */
+  _extractTurn(context) {
+    // 1. Turno direto no contexto
+    if (context.turn !== undefined && context.turn !== null) {
+      return context.turn;
+    }
+
+    // 2. Board state
+    if (
+      context.board?.turnNumber !== undefined &&
+      context.board.turnNumber !== null
+    ) {
+      return context.board.turnNumber;
+    }
+
+    // 3. Game object
+    if (
+      context.game?.turnCounter !== undefined &&
+      context.game.turnCounter !== null
+    ) {
+      return context.game.turnCounter;
+    }
+
+    // 4. Último snapshot registrado
+    if (this.currentDuel?.snapshots) {
+      const snapKeys = Object.keys(this.currentDuel.snapshots)
+        .map(Number)
+        .filter((n) => !isNaN(n));
+      if (snapKeys.length > 0) {
+        const lastSnap = Math.max(...snapKeys);
+        if (lastSnap > 0) return lastSnap;
+      }
+    }
+
+    // 5. Fallback seguro: turno 1 (nunca usar 0 pois indica "não inicializado")
+    console.warn(
+      "[ReplayCapture] ⚠️ Turno não encontrado no contexto, usando fallback: turno 1"
+    );
+    return 1;
   }
 
   /**

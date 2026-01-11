@@ -146,6 +146,8 @@ export default class EffectEngine {
             player,
             position: resolved,
             context: "special_summon",
+            turn: this.game?.turnCounter,
+            phase: this.game?.phase,
           });
 
           resolve(resolved);
