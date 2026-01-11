@@ -23,7 +23,7 @@
 
 // Configuração de otimização
 const SNAPSHOT_INTERVAL = 5; // Snapshot completo a cada N turnos
-const REPLAY_VERSION = 2;
+const REPLAY_VERSION = 3; // v3: mão completa, graveyard, summonType, cardsAdded, botDeckList
 
 class ReplayCapture {
   constructor() {
@@ -37,6 +37,9 @@ class ReplayCapture {
     this._lastTimestamp = null; // Último timestamp (para delta de tempo)
     this._cardDictionary = {}; // id → name
     this._lastSnapshotTurn = -1; // Último turno com snapshot
+
+    // v4: Armazenamento temporário de availableActions para vincular com decisão
+    this._pendingAvailableActions = null; // { promptId, actor, actions[] }
 
     // Carregar contador do localStorage (apenas para numeração)
     this._loadCounter();
@@ -65,12 +68,29 @@ class ReplayCapture {
     this._cardDictionary = {};
     this._lastSnapshotTurn = -1;
 
+    // Extrair lista de cartas do deck do bot se disponível
+    let botDeckList = null;
+    if (
+      botDeck &&
+      typeof botDeck === "object" &&
+      Array.isArray(botDeck.cards)
+    ) {
+      botDeckList = botDeck.cards.map((c) => c?.name || c);
+    } else if (
+      botDeck &&
+      typeof botDeck === "object" &&
+      Array.isArray(botDeck.deck)
+    ) {
+      botDeckList = botDeck.deck.map((c) => c?.name || c);
+    }
+
     this.currentDuel = {
       version: REPLAY_VERSION,
       id: `duel_${Date.now()}_${this.duelCounter}`,
       timestamp: new Date().toISOString(),
       playerDeck: playerDeck || "Luminarch",
-      botDeck: botDeck || "unknown",
+      botDeck: typeof botDeck === "string" ? botDeck : "unknown",
+      botDeckList: botDeckList, // v3: lista completa de cartas do bot
       botArchetype: botArchetype || "unknown",
       cardDictionary: {}, // Será preenchido durante a captura
       snapshots: {}, // { turnNumber: gameState completo }
@@ -257,6 +277,9 @@ class ReplayCapture {
       case "trap_activation":
         this.captureTrapActivation(normalized);
         break;
+      case "position_change":
+        this.capturePositionChange(normalized);
+        break;
       default:
         // Captura genérica para tipos não mapeados
         this._addDecision({
@@ -413,6 +436,12 @@ class ReplayCapture {
   _addDecision(decision) {
     if (!this.currentDuel) return;
 
+    // v4: Vincular availableActions pendentes (se houver e for do mesmo ator)
+    const pendingActions = this._consumePendingActions();
+    if (pendingActions && pendingActions.length > 0) {
+      decision.availableActions = pendingActions;
+    }
+
     // Adicionar timestamp relativo
     const timeRef = this._getRelativeTimestamp();
     if (timeRef.t0) {
@@ -480,6 +509,20 @@ class ReplayCapture {
     // Registrar carta no dicionário
     this._registerCard(context.card);
 
+    // v3: Determinar tipo de summon
+    let summonType = context.summonType || "normal";
+    if (context.isAscension || context.card?.monsterType === "ascension") {
+      summonType = "ascension";
+    } else if (context.isFusion || context.card?.monsterType === "fusion") {
+      summonType = "fusion";
+    } else if (
+      context.isSpecial ||
+      context.fromZone === "graveyard" ||
+      context.fromZone === "extraDeck"
+    ) {
+      summonType = "special";
+    }
+
     const decision = {
       type: "summon",
       turn: context.turn || 0,
@@ -490,6 +533,12 @@ class ReplayCapture {
       // Carta usando referência compacta
       card: this._compactCardRef(context.card),
 
+      // v3: Tipo de invocação (normal, special, ascension, fusion)
+      summonType: summonType,
+
+      // v3: Zona de origem (hand, graveyard, deck, extraDeck)
+      fromZone: context.fromZone || "hand",
+
       // Contexto do jogo
       gameState: this._captureGameState(context),
     };
@@ -498,9 +547,9 @@ class ReplayCapture {
     this._logDecision(
       "SUMMON",
       context.card?.name,
-      `${context.position}${context.facedown ? " (set)" : ""} [${
-        decision.actor
-      }]`
+      `[${summonType}] ${context.position || ""}${
+        context.facedown ? " (set)" : ""
+      } [${decision.actor}]`
     );
   }
 
@@ -627,8 +676,24 @@ class ReplayCapture {
             };
           })
           .filter((t) => t.c),
-        cardsDrawn: context.cardsDrawn || 0,
-        cardsAdded: context.cardsAdded || 0,
+        // v3: cardsDrawn agora é array de nomes das cartas sacadas
+        cardsDrawn: Array.isArray(context.cardsDrawn)
+          ? context.cardsDrawn.map((c) => c?.name || c)
+          : typeof context.cardsDrawn === "number"
+          ? context.cardsDrawn
+          : 0,
+        // v3: cardsAdded é array de nomes das cartas adicionadas (search, etc)
+        cardsAdded: Array.isArray(context.cardsAdded)
+          ? context.cardsAdded.map((c) => c?.name || c)
+          : context.cardAdded
+          ? [context.cardAdded?.name || context.cardAdded]
+          : [],
+        // v3: cardsSearched para ações de search específico
+        cardsSearched: context.cardsSearched
+          ? Array.isArray(context.cardsSearched)
+            ? context.cardsSearched.map((c) => c?.name || c)
+            : [context.cardsSearched?.name || context.cardsSearched]
+          : undefined,
         lpChange: context.lpChange || 0,
         description: context.description || "",
       },
@@ -783,6 +848,142 @@ class ReplayCapture {
   }
 
   /**
+   * Captura mudança de posição manual (não por efeito)
+   */
+  capturePositionChange(context) {
+    if (!this.isEnabled() || !this.currentDuel) return;
+
+    // Registrar carta no dicionário
+    const card = { id: context.cardId, name: context.cardName };
+    this._registerCard(card);
+
+    const decision = {
+      type: "position_change",
+      turn: context.turn || context.board?.turnNumber || 0,
+      phase: context.phase || context.board?.phase || "main1",
+      timestamp: Date.now(),
+      actor: context.actor || "human",
+
+      card: this._compactCardRef(card),
+
+      fromPosition: context.fromPosition === "attack" ? "a" : "d",
+      toPosition: context.toPosition === "attack" ? "a" : "d",
+      wasFlipped: context.wasFlipped || false,
+
+      // Contexto do jogo
+      gameState: this._captureGameState(context),
+    };
+
+    this._addDecision(decision);
+    this._logDecision(
+      "POS_CHANGE",
+      context.cardName,
+      `${context.fromPosition} → ${context.toPosition} [${decision.actor}]`
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CAPTURA DE AVAILABLE ACTIONS (v4)
+  // Para treino de IA: registra opções disponíveis no momento da decisão
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Registra ações disponíveis ANTES da decisão ser tomada
+   * Deve ser chamado quando o menu/modal é apresentado (humano) ou ações são geradas (bot)
+   *
+   * @param {Object} context
+   * @param {string} context.actor - "human" ou "bot"
+   * @param {string} context.promptType - Tipo de prompt ("main_phase", "battle", "chain", etc)
+   * @param {Array} context.actions - Array de ações disponíveis
+   * @param {number} context.turn - Turno atual
+   * @param {string} context.phase - Fase atual
+   */
+  registerAvailableActions(context) {
+    if (!this.isEnabled() || !this.currentDuel) return;
+
+    // Compactar ações para armazenamento
+    const compactActions = (context.actions || []).map((action) => {
+      const compact = {
+        type: action.type,
+      };
+
+      // Adicionar cardId se disponível
+      if (action.card?.id !== undefined) {
+        compact.cardId = action.card.id;
+        this._registerCard(action.card);
+      } else if (action.cardId !== undefined) {
+        compact.cardId = action.cardId;
+      } else if (action.index !== undefined) {
+        compact.index = action.index;
+      }
+
+      // Adicionar effectId se for efeito
+      if (action.effectId) {
+        compact.effectId = action.effectId;
+      }
+
+      // Adicionar target info se disponível
+      if (action.target?.id !== undefined) {
+        compact.targetId = action.target.id;
+      }
+
+      // Adicionar posição se relevante
+      if (action.position) {
+        compact.position = action.position === "attack" ? "a" : "d";
+      }
+
+      // Adicionar summonType se for summon
+      if (action.summonType) {
+        compact.summonType = action.summonType;
+      }
+
+      // Adicionar fromZone se disponível
+      if (action.fromZone) {
+        compact.fromZone = action.fromZone;
+      }
+
+      return compact;
+    });
+
+    // Armazenar pendente para vincular com próxima decisão
+    this._pendingAvailableActions = {
+      promptType: context.promptType || "unknown",
+      actor: context.actor || "unknown",
+      turn: context.turn,
+      phase: context.phase,
+      actions: compactActions,
+      timestamp: Date.now(),
+    };
+
+    console.log(
+      `%c[ReplayCapture] 📋 Available actions: ${compactActions.length} options for ${context.actor}`,
+      "color: #88ccff"
+    );
+  }
+
+  /**
+   * Consome e retorna ações pendentes, limpando o armazenamento
+   * Chamado internamente por _addDecision para vincular
+   */
+  _consumePendingActions() {
+    if (!this._pendingAvailableActions) return null;
+
+    const pending = this._pendingAvailableActions;
+    this._pendingAvailableActions = null;
+
+    // Verificar se não está muito antigo (máx 30 segundos)
+    const age = Date.now() - pending.timestamp;
+    if (age > 30000) {
+      console.warn(
+        "[ReplayCapture] Descartando availableActions antigas (>30s)"
+      );
+      return null;
+    }
+
+    return pending.actions;
+  }
+
+  /**
    * Captura estado completo do jogo
    * Usa dados do player/bot se disponíveis, ou do board normalizado
    */
@@ -797,8 +998,12 @@ class ReplayCapture {
         playerLP: player?.lp || 0,
         botLP: bot?.lp || 0,
 
-        // Mão do jogador
-        playerHand: (player?.hand || []).map((c) => ({
+        // v3: Mão do jogador (lista completa de nomes para análise de timing)
+        playerHand: (player?.hand || []).map((c) => c?.name).filter(Boolean),
+        playerHandCount: (player?.hand || []).length,
+
+        // Mão detalhada (para análise de opções disponíveis)
+        playerHandDetails: (player?.hand || []).map((c) => ({
           name: c?.name,
           cardKind: c?.cardKind,
           level: c?.level,
@@ -836,9 +1041,22 @@ class ReplayCapture {
         playerFieldSpell: player?.fieldSpell?.name || null,
         botFieldSpell: bot?.fieldSpell?.name || null,
 
-        // Graveyard
-        playerGraveyard: (player?.graveyard || []).map((c) => c?.name),
-        botGraveyardCount: (bot?.graveyard || []).length,
+        // v3: Mão do bot (apenas contagem - não revelamos cartas)
+        botHandCount: (bot?.hand || []).length,
+
+        // v3: Extra deck info
+        playerExtraDeckCount: (player?.extraDeck || []).length,
+        botExtraDeckCount: (bot?.extraDeck || []).length,
+
+        // v3: Graveyard completo (ambos os lados)
+        playerGraveyard: (player?.graveyard || [])
+          .map((c) => c?.name)
+          .filter(Boolean),
+        playerGraveCount: (player?.graveyard || []).length,
+        botGraveyard: (bot?.graveyard || [])
+          .map((c) => c?.name)
+          .filter(Boolean),
+        botGraveCount: (bot?.graveyard || []).length,
 
         // Turno
         turn: context.turn || context.game?.turnCounter || 0,
@@ -857,12 +1075,22 @@ class ReplayCapture {
       botLP: board.botLP || 0,
       playerField: board.playerField || [],
       botField: board.botField || [],
+      // v3: Mão completa do jogador
+      playerHand: board.playerHand || [],
       playerHandCount: board.playerHandCount || 0,
       botHandCount: board.botHandCount || 0,
+      // v3: Graveyard completo
+      playerGraveyard: board.playerGraveyard || [],
       playerGraveCount: board.playerGraveCount || 0,
+      botGraveyard: board.botGraveyard || [],
       botGraveCount: board.botGraveCount || 0,
       playerSpellTrapCount: board.playerSpellTrapCount || 0,
       botSpellTrapCount: board.botSpellTrapCount || 0,
+      // v3: Extra deck e field spell
+      playerExtraDeckCount: board.playerExtraDeckCount || 0,
+      botExtraDeckCount: board.botExtraDeckCount || 0,
+      playerFieldSpell: board.playerFieldSpell || null,
+      botFieldSpell: board.botFieldSpell || null,
       turn: board.turnNumber || board.turn || 0,
       phase: board.phase || "unknown",
     };
@@ -946,7 +1174,18 @@ class ReplayCapture {
 
     this._registerCard(card);
 
-    const compact = { c: card.id };
+    // v3: Lidar com cards que podem ter apenas name ou apenas id
+    const compact = {};
+
+    if (card.id !== undefined) {
+      compact.c = card.id;
+    } else if (card.name) {
+      // Fallback: usar nome se não tiver ID
+      compact.name = card.name;
+    }
+
+    // Se não tem nem id nem name, retornar null
+    if (!compact.c && !compact.name) return null;
 
     // Incluir apenas atributos dinâmicos relevantes
     if (card.atk !== undefined) compact.atk = card.atk;

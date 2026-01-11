@@ -58,10 +58,10 @@ export function shouldPlaySpell(card, analysis) {
       if (analysis.fieldSpell) {
         return { yes: false, reason: "Já tenho field spell ativo" };
       }
-      
+
       // Usar sistema de avaliação de urgência
       const urgency = evaluateFieldSpellUrgency(analysis);
-      
+
       return {
         yes: true,
         priority: urgency.priority,
@@ -77,7 +77,7 @@ export function shouldPlaySpell(card, analysis) {
       const luminarchOnField = (analysis.field || []).filter(
         (c) => c && isLuminarch(c)
       );
-      
+
       // CRITICAL: Sem monstros no campo = NÃO PODE ATIVAR (requer targets)
       if (luminarchOnField.length === 0) {
         return {
@@ -85,7 +85,7 @@ export function shouldPlaySpell(card, analysis) {
           reason: "Sem monstros Luminarch no campo para proteger",
         };
       }
-      
+
       const oppHasThreats = (analysis.oppField || []).some(
         (m) => m && m.atk && m.atk >= 2000
       );
@@ -96,9 +96,9 @@ export function shouldPlaySpell(card, analysis) {
 
       // Situação desesperadora: LP crítico + múltiplas ameaças
       const lpCritical = (analysis.lp || 8000) <= 2000;
-      const multipleThreats = (analysis.oppField || []).filter(
-        (m) => m && m.atk && m.atk >= 1800
-      ).length >= 2;
+      const multipleThreats =
+        (analysis.oppField || []).filter((m) => m && m.atk && m.atk >= 1800)
+          .length >= 2;
 
       if (lpCritical && multipleThreats && luminarchOnField.length >= 2) {
         return {
@@ -112,7 +112,8 @@ export function shouldPlaySpell(card, analysis) {
       // A IA deve SET esta carta para usar no turno do oponente
       return {
         yes: false,
-        reason: "Quick Spell - segurar para ativar no turno do oponente (uso reativo)",
+        reason:
+          "Quick Spell - segurar para ativar no turno do oponente (uso reativo)",
       };
     }
 
@@ -238,12 +239,14 @@ export function shouldPlaySpell(card, analysis) {
           return alreadyActed || smallerThanThreat;
         });
 
-        const bestCost = usedBosses[0] || expendableBosses[0] || luminarch2kPlus[0];
-        const costReason = usedBosses.length > 0
-          ? `${bestCost.name} (já usou efeito = bom custo)`
-          : expendableBosses.length > 0
-          ? `${bestCost.name} (expendable)`
-          : `${bestCost.name} (2000+ ATK)`;
+        const bestCost =
+          usedBosses[0] || expendableBosses[0] || luminarch2kPlus[0];
+        const costReason =
+          usedBosses.length > 0
+            ? `${bestCost.name} (já usou efeito = bom custo)`
+            : expendableBosses.length > 0
+            ? `${bestCost.name} (expendable)`
+            : `${bestCost.name} (2000+ ATK)`;
 
         return {
           yes: true,
@@ -273,10 +276,14 @@ export function shouldPlaySpell(card, analysis) {
       const piercingMonsters = (analysis.field || []).filter(
         (c) => c && c.cardKind === "monster" && !c.isFacedown && c.piercing
       );
-      const hasPiercingSetup = piercingMonsters.length > 0 && oppDefenders.length > 0;
+      const hasPiercingSetup =
+        piercingMonsters.length > 0 && oppDefenders.length > 0;
 
       if (hasLuminarch && hasPiercingSetup) {
-        const totalPiercingAtk = piercingMonsters.reduce((sum, m) => sum + (m.atk || 0), 0);
+        const totalPiercingAtk = piercingMonsters.reduce(
+          (sum, m) => sum + (m.atk || 0),
+          0
+        );
         const oppLp = analysis.oppLp || 8000;
         const canLethal = totalPiercingAtk >= oppLp;
 
@@ -285,7 +292,9 @@ export function shouldPlaySpell(card, analysis) {
           priority: canLethal ? 18 : 12, // LETHAL = máxima prioridade
           reason: canLethal
             ? `LETHAL! Spear → Zerar DEF → Piercing ${totalPiercingAtk} = WIN`
-            : `Piercing setup: zerar DEF de defender → ${piercingMonsters.map(m => m.name?.split(" - ")[0]).join(", ")} (${totalPiercingAtk} dmg)`,
+            : `Piercing setup: zerar DEF de defender → ${piercingMonsters
+                .map((m) => m.name?.split(" - ")[0])
+                .join(", ")} (${totalPiercingAtk} dmg)`,
         };
       }
 
@@ -314,7 +323,9 @@ export function shouldPlaySpell(card, analysis) {
         (c) => c && isLuminarch(c) && c.cardKind === "monster" && !c.isFacedown
       );
       const oppMaxAtk = Math.max(
-        ...(analysis.oppField || []).map((m) => (m && !m.isFacedown && m.atk) || 0),
+        ...(analysis.oppField || []).map(
+          (m) => (m && !m.isFacedown && m.atk) || 0
+        ),
         0
       );
 
@@ -326,10 +337,18 @@ export function shouldPlaySpell(card, analysis) {
 
       // Prioridade 1: LETHAL
       // Se pode fechar jogo com buff, SEMPRE usar
-      const totalAtk = luminarchMonsters.reduce((sum, m) => sum + (m.atk || 0), 0);
-      const buffedAtk = totalAtk + (luminarchMonsters.length * 800);
-      const directDamage = Math.max(buffedAtk - oppMaxAtk * Math.min(analysis.oppField.length, luminarchMonsters.length), 0);
-      
+      const totalAtk = luminarchMonsters.reduce(
+        (sum, m) => sum + (m.atk || 0),
+        0
+      );
+      const buffedAtk = totalAtk + luminarchMonsters.length * 800;
+      const directDamage = Math.max(
+        buffedAtk -
+          oppMaxAtk *
+            Math.min(analysis.oppField.length, luminarchMonsters.length),
+        0
+      );
+
       if (directDamage >= oppLp) {
         return {
           yes: true,
@@ -345,7 +364,7 @@ export function shouldPlaySpell(card, analysis) {
           const boostedAtk = (m.atk || 0) + 800;
           return boostedAtk > oppMaxAtk + 300;
         });
-        
+
         if (wouldWin) {
           return {
             yes: true,
@@ -386,9 +405,7 @@ export function shouldPlaySpell(card, analysis) {
 
       // NOVO: Detectar situação de BRICK (muitos Lv7+ sem searchers)
       const hasSearcherInHand = (analysis.hand || []).some(
-        (c) =>
-          c &&
-          (c.name?.includes("Valiant") || c.name?.includes("Arbiter"))
+        (c) => c && (c.name?.includes("Valiant") || c.name?.includes("Arbiter"))
       );
       const isBricked = lv7Plus.length >= 2 && !hasSearcherInHand;
 
@@ -436,7 +453,12 @@ export function shouldPlaySpell(card, analysis) {
 
       // === SITUAÇÃO CRÍTICA: Campo vazio + opp domina ===
       // Precisa: campo vazio, opp 2+, LP >= 2500 (sobra 500 após custo), GY com recursos
-      if (myField === 0 && oppField >= 2 && lp >= 2500 && gyLuminarch.length >= 2) {
+      if (
+        myField === 0 &&
+        oppField >= 2 &&
+        lp >= 2500 &&
+        gyLuminarch.length >= 2
+      ) {
         // Calcular power swing potencial
         const potentialSummons = Math.min(gyLuminarch.length, oppField, 5);
         const lpGain = potentialSummons * 500; // heal de volta
@@ -476,7 +498,10 @@ export function shouldPlaySpell(card, analysis) {
         return { yes: false, reason: "Opp precisa ter 2+ monstros" };
       }
       if (lp < 2500) {
-        return { yes: false, reason: "LP insuficiente (precisa 2500+ para sobreviver custo)" };
+        return {
+          yes: false,
+          reason: "LP insuficiente (precisa 2500+ para sobreviver custo)",
+        };
       }
       if (gyLuminarch.length < 2) {
         return { yes: false, reason: "GY sem recursos (precisa 2+ Luminarch)" };
@@ -595,7 +620,7 @@ export function shouldSummonMonster(card, analysis) {
           reason: "Setup defensivo CRÍTICO - 2000 DEF + taunt",
         };
       }
-      
+
       // Verificar se deve ser mantido para Ascension
       const aegisOnField = analysis.field.find(
         (c) => c && c.name === "Luminarch Aegisbearer"
@@ -610,7 +635,7 @@ export function shouldSummonMonster(card, analysis) {
           };
         }
       }
-      
+
       // Já tem tank, ainda é bom mas menor prioridade
       return {
         yes: true,
@@ -659,14 +684,15 @@ export function shouldSummonMonster(card, analysis) {
       // CRÍTICO: Arbiter DEVE ser invocado face-UP (attack) para ativar busca!
       // Face-down = sem trigger = valor perdido. O search vale mais que DEF.
       // ═══════════════════════════════════════════════════════════════════════
-      
+
       // Arbiter busca SPELL/TRAP - priorizar se não temos field spell
       if (!hasFieldSpell) {
         return {
           yes: true,
           position: "attack", // SEMPRE attack para buscar!
           priority: 10,
-          reason: "Buscar Sanctum Citadel (field spell core!) - FACE-UP para trigger",
+          reason:
+            "Buscar Sanctum Citadel (field spell core!) - FACE-UP para trigger",
         };
       }
       // Já tem field spell - buscar proteção se não temos
@@ -695,25 +721,26 @@ export function shouldSummonMonster(card, analysis) {
 
     if (name === "Luminarch Valiant - Knight of the Dawn") {
       // Valiant busca MONSTRO Lv4- (geralmente Aegisbearer ou Arbiter)
-      
+
       // CRITICAL: Se não temos field spell E não temos Arbiter na mão,
       // preferir invocar Arbiter primeiro (se tiver) ou aceitar Valiant como plano B
       const currentTurn = analysis.currentTurn || 1;
       const isVeryEarly = currentTurn <= 2;
-      
+
       if (!hasFieldSpell && isVeryEarly) {
         const hasArbiterInHand = (analysis.hand || []).some(
           (c) => c && c.name === "Luminarch Sanctified Arbiter"
         );
-        
+
         // Se temos Arbiter na mão, preferir invocar ele ao invés de Valiant
         if (hasArbiterInHand) {
           return {
             yes: false,
-            reason: "T1-2: Tenho Arbiter na mão - invocar ele primeiro (busca field spell)",
+            reason:
+              "T1-2: Tenho Arbiter na mão - invocar ele primeiro (busca field spell)",
           };
         }
-        
+
         // Se não temos Arbiter nem Citadel, invocar Valiant é aceitável
         // (buscar Aegisbearer é melhor que passar o turno sem fazer nada)
       }
@@ -770,7 +797,7 @@ export function shouldSummonMonster(card, analysis) {
       // Marshal é 2500 ATK / 2300 DEF com proteção de batalha
       const isSafeAttack = (card.atk || 2500) > oppStrongest + 100;
       const isSafeDefense = (card.def || 2300) >= oppStrongest - 200;
-      
+
       // CRITICAL: Se opp tem ameaças fortes e não temos defesa, não suicide
       if (oppStrongest >= 2600 && !hasTank) {
         return {
@@ -778,7 +805,7 @@ export function shouldSummonMonster(card, analysis) {
           reason: `Oponente tem ${oppStrongest} ATK - preciso de tank primeiro`,
         };
       }
-      
+
       return {
         yes: true,
         position: isSafeAttack ? "attack" : "defense",
@@ -794,7 +821,7 @@ export function shouldSummonMonster(card, analysis) {
       const hasSnowball = analysis.field.some(
         (c) => c && c.cardKind === "monster" && c.position === "attack"
       );
-      
+
       // Lancer ganha ATK ao destruir - avaliar potencial
       if (isSafe && hasSnowball) {
         return {
@@ -804,7 +831,7 @@ export function shouldSummonMonster(card, analysis) {
           reason: "Beater 2600 ATK (snowball após destroy)",
         };
       }
-      
+
       return {
         yes: true,
         position: isSafe ? "attack" : "defense",
@@ -890,13 +917,14 @@ export function shouldSummonMonster(card, analysis) {
     const currentTurn = analysis.currentTurn || 1;
     const isVeryEarly = currentTurn <= 2;
     const isLowLevel = (card.level || 0) <= 4;
-    
+
     if (analysis.field.length === 0 && isVeryEarly && isLowLevel) {
       return {
         yes: true,
         position: "defense",
         priority: 9,
-        reason: "EMERGENCY T1-2: Campo vazio + Lv4- = summon em DEF (melhor que passar turno vazio)",
+        reason:
+          "EMERGENCY T1-2: Campo vazio + Lv4- = summon em DEF (melhor que passar turno vazio)",
       };
     }
 
@@ -926,5 +954,147 @@ export function shouldSummonMonster(card, analysis) {
       );
     }
     return { yes: false, reason: `Erro interno: ${e.message}` };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// REPLAY INSIGHTS INTEGRATION (v4)
+// Ajusta scores baseado em dados de replays com guardrails
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Cache de insights para evitar queries repetidas
+let _insightsCache = null;
+let _insightsCacheTime = 0;
+const INSIGHTS_CACHE_TTL = 60000; // 1 minuto
+
+/**
+ * Obtém modificador de score baseado em insights de replays
+ * Com guardrails: caps, confidence check, feature flag
+ *
+ * @param {Object} action - { type, card, cardId, cardName, ... }
+ * @param {Object} gameState - Estado atual do jogo
+ * @returns {number} Modificador entre -0.1 e +0.1 (±10%)
+ */
+export async function getReplayModifier(action, gameState) {
+  // 1. Check feature flag
+  if (typeof localStorage !== "undefined") {
+    const enabled = localStorage.getItem("shadow_duel_replay_insights");
+    if (enabled !== "true") return 0;
+  } else {
+    return 0;
+  }
+
+  // 2. Lazy load insights (evita import circular)
+  let replayInsights;
+  try {
+    const module = await import("../replay/ReplayInsights.js");
+    replayInsights = module.replayInsights;
+  } catch (e) {
+    console.warn(
+      "[getReplayModifier] Não foi possível carregar ReplayInsights:",
+      e.message
+    );
+    return 0; // Fallback: sem modificação
+  }
+
+  // 3. Try get insight (com fallback)
+  let insight;
+  try {
+    insight = await replayInsights.getActionInsight(action, {
+      playerArchetype: "Luminarch",
+      opponentArchetype: gameState?.opponentArchetype,
+      lpDiff: (gameState?.playerLP || 8000) - (gameState?.opponentLP || 8000),
+    });
+  } catch (e) {
+    console.warn("[getReplayModifier] Erro ao consultar insights:", e.message);
+    return 0; // Fallback: sem modificação
+  }
+
+  // 4. Validate confidence
+  if (!insight || insight.sampleSize < 5 || insight.confidence < 0.6) {
+    return 0;
+  }
+
+  // 5. Apply with cap (±10% máximo)
+  const rawModifier = insight.value; // -1.0 to +1.0
+  const cappedModifier = Math.max(-0.1, Math.min(0.1, rawModifier * 0.1));
+
+  if (Math.abs(cappedModifier) > 0.01) {
+    console.log(
+      `[ReplayInsights] Action ${action.type}:${
+        action.card?.name || action.cardId
+      } → modifier: ${(cappedModifier * 100).toFixed(1)}% (confidence: ${(
+        insight.confidence * 100
+      ).toFixed(0)}%, samples: ${insight.sampleSize})`
+    );
+  }
+
+  return cappedModifier;
+}
+
+/**
+ * Versão síncrona que usa cache (para uso em hot paths)
+ * @param {Object} action
+ * @param {Object} gameState
+ * @returns {number}
+ */
+export function getReplayModifierSync(action, gameState) {
+  // Feature flag check
+  if (typeof localStorage !== "undefined") {
+    const enabled = localStorage.getItem("shadow_duel_replay_insights");
+    if (enabled !== "true") return 0;
+  }
+
+  // Se não tem cache válido, retorna 0 (versão async vai preencher depois)
+  const now = Date.now();
+  if (!_insightsCache || now - _insightsCacheTime > INSIGHTS_CACHE_TTL) {
+    return 0;
+  }
+
+  // Tentar usar cache
+  const cacheKey = `${action.type}_${action.card?.name || action.cardId}`;
+  const cached = _insightsCache.get(cacheKey);
+
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  return 0;
+}
+
+/**
+ * Pré-carrega insights comuns para cache
+ * @param {string} archetype
+ */
+export async function preloadReplayInsights(archetype = "Luminarch") {
+  if (typeof localStorage !== "undefined") {
+    const enabled = localStorage.getItem("shadow_duel_replay_insights");
+    if (enabled !== "true") return;
+  }
+
+  try {
+    const module = await import("../replay/ReplayInsights.js");
+    const replayInsights = module.replayInsights;
+
+    // Pré-carregar top cards
+    const topCards = await replayInsights.getTopCardsByWinRate(
+      { archetype },
+      20
+    );
+
+    _insightsCache = new Map();
+    for (const card of topCards) {
+      const modifier = Math.max(
+        -0.1,
+        Math.min(0.1, (card.winRate - 0.5) * 0.2)
+      );
+      _insightsCache.set(`summon_${card.cardName}`, modifier);
+      _insightsCache.set(`effect_${card.cardName}`, modifier);
+    }
+
+    _insightsCacheTime = Date.now();
+    console.log(`[ReplayInsights] Cache preloaded: ${topCards.length} cards`);
+  } catch (e) {
+    console.warn("[preloadReplayInsights] Erro:", e.message);
   }
 }

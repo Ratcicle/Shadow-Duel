@@ -16,6 +16,16 @@ export function applyDraw(action, ctx) {
     const result = this.game.drawCards(targetPlayer, amount);
     if (ctx && result && Array.isArray(result.drawn)) {
       ctx.lastDrawnCards = result.drawn.slice();
+
+      // v3: Emit event for replay capture - track drawn cards from effects
+      if (typeof this.game.emit === "function" && result.drawn.length > 0) {
+        this.game.emit("cards_added_to_hand", {
+          player: targetPlayer,
+          cards: result.drawn,
+          fromZone: "deck",
+          sourceCard: ctx.source,
+        });
+      }
     }
     return result?.ok || (result?.drawn?.length || 0) > 0;
   }

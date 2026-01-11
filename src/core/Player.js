@@ -320,6 +320,13 @@ export default class Player {
       card.summonedTurn = this.game?.turnCounter || null;
       this.field.push(card);
       this.summonCount++;
+
+      // 🔧 FIX: Clear targeting cache after Normal Summon to ensure new monsters
+      // are visible for field spell effects and other targeting
+      if (this.game?.effectEngine?.clearTargetingCache) {
+        this.game.effectEngine.clearTargetingCache();
+      }
+
       return card;
     }
     return null;

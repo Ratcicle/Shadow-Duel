@@ -967,6 +967,9 @@ export default class Game {
     if (!this.canChangePosition(card)) return;
     if (!card || card.position === newPosition) return;
 
+    // Track previous position for replay capture
+    const previousPosition = card.position;
+
     // Track reveal for Ascension timing if monster was facedown
     const wasFlipped = card.isFacedown;
     card.position = newPosition;
@@ -981,6 +984,16 @@ export default class Game {
         newPosition === "attack" ? "Attack" : "Defense"
       } Position.`
     );
+
+    // Emit event for replay capture
+    this.emit("position_change", {
+      card,
+      player: card.owner === "player" ? this.player : this.bot,
+      fromPosition: previousPosition,
+      toPosition: newPosition,
+      wasFlipped,
+    });
+
     this.updateBoard();
   }
 

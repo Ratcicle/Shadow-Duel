@@ -249,6 +249,17 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
         ? `Added ${selected[0].name} to hand from ${sourceZone}.`
         : `Added ${selected.length} card(s) to hand from ${sourceZone}.`;
     getUI(game)?.log(addedText);
+
+    // v3: Emit event for replay capture - track which cards were added to hand
+    if (typeof game.emit === "function") {
+      game.emit("cards_added_to_hand", {
+        player,
+        cards: selected,
+        fromZone: sourceZone,
+        sourceCard: source,
+      });
+    }
+
     game.updateBoard();
     return true;
   };

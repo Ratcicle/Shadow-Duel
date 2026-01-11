@@ -26,6 +26,7 @@
         <div class="start-actions">
           <button id="btn-start-duel">Duelar</button>
           <button id="btn-bot-arena">Bot Arena</button>
+          <button id="btn-replay-dashboard">Replay Analytics</button>
           <button id="btn-deck-builder">Meu Deck</button>
           <button id="btn-toggle-test-mode" class="test-mode-toggle">
             Modo teste: desligado
@@ -38,7 +39,7 @@
             class="replay-toggle"
             title="Grava suas decisões para análise posterior"
           >
-            🎬 Replay: desligado
+            Gravando: desligado
           </button>
         </div>
         <div
@@ -452,6 +453,26 @@
         </div>
       </div>
       <button id="dev-reset-duel" class="dev-reset-btn">Resetar Duelo</button>
+    </div>
+
+    <!-- Replay Dashboard Modal -->
+    <div id="replay-dashboard-modal" class="overlay hidden">
+      <div class="replay-dashboard-panel">
+        <div class="replay-dashboard-header">
+          <h2>📊 Replay Analytics</h2>
+          <button
+            type="button"
+            class="close-replay-dashboard"
+            aria-label="Close"
+          >
+            &times;
+          </button>
+        </div>
+        <div
+          id="replay-dashboard-container"
+          class="replay-dashboard-body"
+        ></div>
+      </div>
     </div>
 
     <!-- Game Over Modal -->
