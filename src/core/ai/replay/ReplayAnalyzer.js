@@ -145,6 +145,14 @@ class ReplayAnalyzer {
       botSpellTrapCount: snapshot?.botSpellTrapCount ?? 0,
       playerFieldSpell: snapshot?.playerFieldSpell ?? null,
       botFieldSpell: snapshot?.botFieldSpell ?? null,
+      // Novos campos para contexto completo
+      playerHand: snapshot?.playerHand ? [...snapshot.playerHand] : [],
+      playerGraveyard: snapshot?.playerGraveyard
+        ? [...snapshot.playerGraveyard]
+        : [],
+      botGraveyard: snapshot?.botGraveyard ? [...snapshot.botGraveyard] : [],
+      playerExtraDeckCount: snapshot?.playerExtraDeckCount ?? 0,
+      botExtraDeckCount: snapshot?.botExtraDeckCount ?? 0,
     };
 
     // 2. Encontrar índice da primeira decisão após o snapshot
@@ -197,6 +205,12 @@ class ReplayAnalyzer {
       botSpellTrapCount: state.botSpellTrapCount,
       playerFieldSpell: state.playerFieldSpell,
       botFieldSpell: state.botFieldSpell,
+      // Contexto completo para análise precisa
+      playerHand: state.playerHand,
+      playerGraveyard: state.playerGraveyard,
+      botGraveyard: state.botGraveyard,
+      playerExtraDeckCount: state.playerExtraDeckCount,
+      botExtraDeckCount: state.botExtraDeckCount,
       matchup: {
         player: replay.archetype || "unknown",
         opponent: replay.botArchetype || "unknown",
@@ -230,6 +244,17 @@ class ReplayAnalyzer {
       state.playerFieldSpell = delta.playerFieldSpell;
     if (delta.botFieldSpell !== undefined)
       state.botFieldSpell = delta.botFieldSpell;
+    // Novos campos para contexto completo
+    if (delta.playerHand !== undefined)
+      state.playerHand = [...delta.playerHand];
+    if (delta.playerGraveyard !== undefined)
+      state.playerGraveyard = [...delta.playerGraveyard];
+    if (delta.botGraveyard !== undefined)
+      state.botGraveyard = [...delta.botGraveyard];
+    if (delta.playerExtraDeckCount !== undefined)
+      state.playerExtraDeckCount = delta.playerExtraDeckCount;
+    if (delta.botExtraDeckCount !== undefined)
+      state.botExtraDeckCount = delta.botExtraDeckCount;
   }
 
   /**
@@ -419,14 +444,22 @@ class ReplayAnalyzer {
 
     // Se não encontrou próximo turno, usar resultado final
     // Suportar ambos formatos: normalizado (result = "win") e raw (result.winner = "human")
-    const isWin =
+    const playerWon =
       replay.result === "win" ||
       replay.result?.winner === "human" ||
       replay.result?.winner === "player";
 
+    // Para decisões do bot, inverter o resultado (bot ganhou = loss para player)
+    let gameResult;
+    if (actor === "bot") {
+      gameResult = playerWon ? "loss" : "win"; // Do ponto de vista do bot
+    } else {
+      gameResult = playerWon ? "win" : "loss"; // Do ponto de vista do player
+    }
+
     if (!nextSnapshot && !foundNextTurn) {
       return {
-        gameResult: isWin ? "win" : "loss",
+        gameResult,
         lpDelta: null,
         boardDelta: null,
       };

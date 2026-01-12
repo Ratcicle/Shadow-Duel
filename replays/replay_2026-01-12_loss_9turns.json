@@ -1,0 +1,1333 @@
+{
+  "version": 3,
+  "id": "duel_1768251996575_72",
+  "timestamp": "2026-01-12T21:06:36.575Z",
+  "playerDeck": {
+    "playerDeck": [
+      "Luminarch Sacred Judgment",
+      "Luminarch Aegisbearer",
+      "Luminarch Celestial Marshal",
+      "Luminarch Moonblade Captain",
+      "Luminarch Moonblade Captain",
+      "Luminarch Sanctified Arbiter",
+      "Luminarch Aegisbearer",
+      "Luminarch Valiant - Knight of the Dawn",
+      "Luminarch Knights Convocation",
+      "Sanctum of the Luminarch Citadel"
+    ],
+    "playerExtraDeck": [
+      "Luminarch Megashield Barbarias",
+      "Luminarch Fortress Aegis",
+      "Luminarch Pure Knight"
+    ],
+    "botPreset": "shadowheart",
+    "timestamp": 1768251996575
+  },
+  "botDeck": "unknown",
+  "botDeckList": [
+    "Shadow-Heart Specter",
+    "Shadow-Heart Covenant",
+    "Shadow-Heart Scale Dragon",
+    "Shadow-Heart Void Mage",
+    "Polymerization",
+    "Shadow-Heart Rage",
+    "Shadow-Heart Abyssal Eel",
+    "Shadow-Heart Void Mage",
+    "Shadow-Heart Griffin",
+    "Shadow-Heart Purge",
+    "Shadow-Heart Imp",
+    "Polymerization",
+    "Darkness Valley",
+    "Shadow-Heart Leviathan",
+    "Shadow-Heart Imp",
+    "Shadow-Heart Death Wyrm",
+    "Shadow-Heart Scale Dragon",
+    "Shadow-Heart Imp",
+    "Shadow-Heart Griffin",
+    "Darkness Valley",
+    "Shadow-Heart Infusion",
+    "Shadow-Heart Covenant",
+    "Shadow-Heart Gecko",
+    "Shadow-Heart Coward",
+    "Shadow-Heart Coward",
+    "Shadow-Heart Abyssal Eel",
+    "Shadow-Heart Battle Hymn",
+    "Shadow-Heart Infusion",
+    "Shadow-Heart Specter",
+    "Shadow-Heart Demon Arctroth"
+  ],
+  "botArchetype": "shadowheart",
+  "cardDictionary": {
+    "13": "Polymerization",
+    "53": "Shadow-Heart Specter",
+    "57": "Shadow-Heart Demon Arctroth",
+    "58": "Shadow-Heart Battle Hymn",
+    "62": "Shadow-Heart Coward",
+    "63": "Shadow-Heart Infusion",
+    "102": "Luminarch Holy Shield",
+    "109": "Luminarch Aurora Seraph",
+    "110": "Luminarch Sanctified Arbiter",
+    "112": "Sanctum of the Luminarch Citadel",
+    "114": "Luminarch Radiant Wave",
+    "116": "Luminarch Spear of Dawnfall",
+    "118": "Luminarch Moonlit Blessing",
+    "122": "Luminarch Pure Knight"
+  },
+  "snapshots": {
+    "1": {
+      "playerLP": 8000,
+      "botLP": 8000,
+      "playerHand": [
+        "Luminarch Valiant - Knight of the Dawn",
+        "Luminarch Holy Shield",
+        "Sanctum of the Luminarch Citadel",
+        "Luminarch Aurora Seraph"
+      ],
+      "playerHandCount": 4,
+      "playerHandDetails": [
+        {
+          "name": "Luminarch Valiant - Knight of the Dawn",
+          "cardKind": "monster",
+          "level": 4,
+          "atk": 1600,
+          "def": 1200
+        },
+        {
+          "name": "Luminarch Holy Shield",
+          "cardKind": "spell",
+          "level": 0,
+          "atk": 0,
+          "def": 0
+        },
+        {
+          "name": "Sanctum of the Luminarch Citadel",
+          "cardKind": "spell",
+          "level": 0,
+          "atk": 0,
+          "def": 0
+        },
+        {
+          "name": "Luminarch Aurora Seraph",
+          "cardKind": "monster",
+          "level": 8,
+          "atk": 2800,
+          "def": 2400
+        }
+      ],
+      "playerField": [],
+      "botField": [],
+      "playerBackrow": [
+        {
+          "name": "Polymerization",
+          "isFacedown": false
+        }
+      ],
+      "botBackrowCount": 0,
+      "playerFieldSpell": null,
+      "botFieldSpell": null,
+      "botHandCount": 4,
+      "playerExtraDeckCount": 3,
+      "botExtraDeckCount": 3,
+      "playerGraveyard": [],
+      "playerGraveCount": 0,
+      "botGraveyard": [],
+      "botGraveCount": 0,
+      "turn": 1,
+      "phase": "main1",
+      "summonCount": 0
+    },
+    "7": {
+      "playerLP": 8400,
+      "botLP": 4300,
+      "playerField": [
+        {
+          "name": "Luminarch Pure Knight",
+          "atk": 2000,
+          "def": 2000,
+          "position": "attack"
+        },
+        {
+          "name": "Luminarch Aurora Seraph",
+          "atk": 2800,
+          "def": 2400,
+          "position": "attack"
+        }
+      ],
+      "botField": [
+        {
+          "name": "Shadow-Heart Coward",
+          "atk": 800,
+          "def": 1000,
+          "position": "defense",
+          "isFacedown": true
+        }
+      ],
+      "playerHand": [
+        "Sanctum of the Luminarch Citadel",
+        "Luminarch Sanctified Arbiter"
+      ],
+      "playerHandCount": 2,
+      "botHandCount": 1,
+      "playerGraveyard": [
+        "Luminarch Valiant - Knight of the Dawn",
+        "Polymerization",
+        "Luminarch Spear of Dawnfall",
+        "Luminarch Moonlit Blessing"
+      ],
+      "playerGraveCount": 4,
+      "botGraveyard": [
+        "Shadow-Heart Infusion",
+        "Shadow-Heart Battle Hymn",
+        "Shadow-Heart Demon Arctroth",
+        "Shadow-Heart Coward",
+        "Shadow-Heart Specter"
+      ],
+      "botGraveCount": 5,
+      "playerSpellTrapCount": 0,
+      "botSpellTrapCount": 0,
+      "playerExtraDeckCount": 2,
+      "botExtraDeckCount": 3,
+      "playerFieldSpell": "Sanctum of the Luminarch Citadel",
+      "botFieldSpell": null,
+      "turn": 7,
+      "phase": "battle"
+    }
+  },
+  "decisions": [
+    {
+      "type": "position_choice",
+      "turn": 1,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 122,
+        "atk": 2000,
+        "def": 2000,
+        "pos": "a"
+      },
+      "chosenPosition": "a",
+      "summonType": "special",
+      "availableActions": [
+        {
+          "type": "activate_spell",
+          "cardId": 13
+        },
+        {
+          "type": "set_spell",
+          "cardId": 13
+        }
+      ],
+      "t0": 1768252002942
+    },
+    {
+      "type": "summon",
+      "turn": 1,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 122
+      },
+      "summonType": "fusion",
+      "fromZone": "extraDeck",
+      "dt": 14
+    },
+    {
+      "type": "effect_resolution",
+      "turn": 1,
+      "phase": "main1",
+      "actor": "human",
+      "sourceCard": {
+        "c": 122,
+        "atk": 2000,
+        "def": 2000,
+        "pos": "a"
+      },
+      "effectResult": {
+        "type": "search",
+        "targets": [],
+        "cardsDrawn": 0,
+        "cardsAdded": [
+          "Sanctum of the Luminarch Citadel"
+        ],
+        "lpChange": 0,
+        "description": "Added 1 card(s) to hand from deck"
+      },
+      "dt": 38
+    },
+    {
+      "type": "effect",
+      "turn": 1,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 13
+      },
+      "effectId": "polymerization_fusion",
+      "effectTiming": "on_play",
+      "activationZone": "spellTrap",
+      "actions": [
+        "polymerization_fusion_summon"
+      ],
+      "dt": 6
+    },
+    {
+      "type": "spell",
+      "turn": 1,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 13
+      },
+      "targets": [],
+      "dt": 26
+    },
+    {
+      "type": "pass",
+      "turn": 1,
+      "phase": "end",
+      "actor": "human",
+      "availableActions": [
+        {
+          "type": "activate_spell",
+          "cardId": 112
+        },
+        {
+          "type": "set_spell",
+          "cardId": 112
+        }
+      ],
+      "dt": 4081
+    },
+    {
+      "type": "summon",
+      "turn": 2,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 53
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "availableActions": [
+        {
+          "type": "summon",
+          "cardId": 53,
+          "position": "a"
+        }
+      ],
+      "dt": 826,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Luminarch Pure Knight",
+            "atk": 2000,
+            "def": 2000,
+            "position": "attack"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Specter",
+            "atk": 800,
+            "def": 800,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerHand": [
+          "Luminarch Holy Shield",
+          "Sanctum of the Luminarch Citadel"
+        ],
+        "playerHandCount": 2,
+        "playerGraveyard": [
+          "Luminarch Aurora Seraph",
+          "Luminarch Valiant - Knight of the Dawn",
+          "Polymerization"
+        ],
+        "playerGraveCount": 3,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "playerExtraDeckCount": 2,
+        "playerFieldSpell": "Sanctum of the Luminarch Citadel",
+        "turn": 2
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 2,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 57
+      },
+      "summonType": "special",
+      "fromZone": "graveyard",
+      "availableActions": [
+        {
+          "type": "spell",
+          "cardId": 63
+        },
+        {
+          "type": "spell",
+          "cardId": 58
+        }
+      ],
+      "dt": 469,
+      "delta": {
+        "botField": [
+          {
+            "name": "Shadow-Heart Specter",
+            "atk": 800,
+            "def": 800,
+            "position": "attack",
+            "isFacedown": false
+          },
+          {
+            "name": "Shadow-Heart Demon Arctroth",
+            "atk": 2600,
+            "def": 1800,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "botHandCount": 1,
+        "botGraveyard": [
+          "Shadow-Heart Abyssal Eel"
+        ],
+        "botGraveCount": 1
+      }
+    },
+    {
+      "type": "effect",
+      "turn": 2,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 63
+      },
+      "effectId": "shadow_heart_infusion",
+      "effectTiming": "on_play",
+      "activationZone": "spellTrap",
+      "actions": [
+        "move",
+        "special_summon_from_zone"
+      ],
+      "dt": 20
+    },
+    {
+      "type": "effect",
+      "turn": 2,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 58
+      },
+      "effectId": "shadow_heart_battle_hymn",
+      "effectTiming": "on_play",
+      "activationZone": "spellTrap",
+      "actions": [
+        "buff_atk_temp"
+      ],
+      "availableActions": [
+        {
+          "type": "spell",
+          "cardId": 58
+        }
+      ],
+      "dt": 441,
+      "delta": {
+        "botField": [
+          {
+            "name": "Shadow-Heart Specter",
+            "atk": 1300,
+            "def": 800,
+            "position": "attack",
+            "isFacedown": false
+          },
+          {
+            "name": "Shadow-Heart Demon Arctroth",
+            "atk": 3100,
+            "def": 1800,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "botHandCount": 0,
+        "botGraveyard": [
+          "Shadow-Heart Abyssal Eel",
+          "Shadow-Heart Infusion"
+        ],
+        "botGraveCount": 2
+      }
+    },
+    {
+      "type": "effect",
+      "turn": 3,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 116
+      },
+      "effectId": "luminarch_spear_dawnfall",
+      "effectTiming": "on_play",
+      "activationZone": "spellTrap",
+      "actions": [
+        "modify_stats_temp"
+      ],
+      "availableActions": [
+        {
+          "type": "activate_spell",
+          "cardId": 116
+        },
+        {
+          "type": "set_spell",
+          "cardId": 116
+        }
+      ],
+      "dt": 5461,
+      "delta": {
+        "botField": [
+          {
+            "name": "Shadow-Heart Specter",
+            "atk": 800,
+            "def": 800,
+            "position": "attack",
+            "isFacedown": false
+          },
+          {
+            "name": "Shadow-Heart Demon Arctroth",
+            "atk": 0,
+            "def": 0,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "botGraveyard": [
+          "Shadow-Heart Abyssal Eel",
+          "Shadow-Heart Infusion",
+          "Shadow-Heart Battle Hymn"
+        ],
+        "botGraveCount": 3,
+        "turn": 3
+      }
+    },
+    {
+      "type": "spell",
+      "turn": 3,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 116
+      },
+      "targets": [],
+      "dt": 8,
+      "delta": {
+        "playerGraveyard": [
+          "Luminarch Aurora Seraph",
+          "Luminarch Valiant - Knight of the Dawn",
+          "Polymerization",
+          "Luminarch Spear of Dawnfall"
+        ],
+        "playerGraveCount": 4
+      }
+    },
+    {
+      "type": "effect_resolution",
+      "turn": 3,
+      "phase": "main1",
+      "actor": "human",
+      "sourceCard": {
+        "c": 112,
+        "atk": 0,
+        "def": 0,
+        "pos": "a"
+      },
+      "effectResult": {
+        "type": "buff",
+        "targets": [],
+        "cardsDrawn": 0,
+        "cardsAdded": [],
+        "lpChange": 0,
+        "description": "Luminarch Pure Knight +500 ATK, +500 DEF (temp)"
+      },
+      "dt": 3043,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Luminarch Pure Knight",
+            "atk": 2500,
+            "def": 2500,
+            "position": "attack"
+          }
+        ]
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 3,
+      "phase": "battle",
+      "actor": "human",
+      "dt": 1737,
+      "delta": {
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 3,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 122,
+        "atk": 2500
+      },
+      "target": {
+        "c": 57,
+        "atk": 0,
+        "def": 0,
+        "pos": "a"
+      },
+      "availableActions": [
+        {
+          "type": "attack",
+          "cardId": 122,
+          "targetId": 53
+        },
+        {
+          "type": "attack",
+          "cardId": 122,
+          "targetId": 57
+        },
+        {
+          "type": "cancel_attack"
+        }
+      ],
+      "dt": 1516
+    },
+    {
+      "type": "attack",
+      "turn": 3,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 122,
+        "atk": 2500
+      },
+      "target": {
+        "c": 57,
+        "atk": 2600,
+        "def": 1800,
+        "pos": "a"
+      },
+      "combatResult": {
+        "damageDealt": 2500,
+        "targetDestroyed": true
+      },
+      "dt": 37,
+      "delta": {
+        "botLP": 5500,
+        "botField": [
+          {
+            "name": "Shadow-Heart Specter",
+            "atk": 800,
+            "def": 800,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "botGraveyard": [
+          "Shadow-Heart Abyssal Eel",
+          "Shadow-Heart Infusion",
+          "Shadow-Heart Battle Hymn",
+          "Shadow-Heart Demon Arctroth"
+        ],
+        "botGraveCount": 4
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 3,
+      "phase": "end",
+      "actor": "human",
+      "dt": 1034,
+      "delta": {
+        "phase": "end"
+      }
+    },
+    {
+      "type": "position_choice",
+      "turn": 5,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 109,
+        "atk": 2800,
+        "def": 2400,
+        "pos": "a"
+      },
+      "chosenPosition": "a",
+      "summonType": "special",
+      "availableActions": [
+        {
+          "type": "activate_spell",
+          "cardId": 118
+        },
+        {
+          "type": "set_spell",
+          "cardId": 118
+        }
+      ],
+      "dt": 8450,
+      "delta": {
+        "playerHand": [
+          "Luminarch Holy Shield",
+          "Sanctum of the Luminarch Citadel",
+          "Luminarch Aurora Seraph"
+        ],
+        "playerHandCount": 3,
+        "playerHandDetails": [
+          {
+            "name": "Luminarch Holy Shield",
+            "cardKind": "spell",
+            "level": 0,
+            "atk": 0,
+            "def": 0
+          },
+          {
+            "name": "Sanctum of the Luminarch Citadel",
+            "cardKind": "spell",
+            "level": 0,
+            "atk": 0,
+            "def": 0
+          },
+          {
+            "name": "Luminarch Aurora Seraph",
+            "cardKind": "monster",
+            "level": 8,
+            "atk": 2800,
+            "def": 2400
+          }
+        ],
+        "playerField": [
+          {
+            "name": "Luminarch Pure Knight",
+            "atk": 2000,
+            "def": 2000,
+            "position": "attack",
+            "isFacedown": false,
+            "hasAttacked": false
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Specter",
+            "atk": 800,
+            "def": 800,
+            "position": "attack",
+            "isFacedown": false
+          },
+          {
+            "name": "Shadow-Heart Coward",
+            "atk": 800,
+            "def": 1000,
+            "position": "defense",
+            "isFacedown": true
+          }
+        ],
+        "playerBackrow": [
+          {
+            "name": "Luminarch Moonlit Blessing",
+            "isFacedown": false
+          }
+        ],
+        "botBackrowCount": 0,
+        "playerGraveyard": [
+          "Luminarch Valiant - Knight of the Dawn",
+          "Polymerization",
+          "Luminarch Spear of Dawnfall"
+        ],
+        "playerGraveCount": 3,
+        "turn": 5,
+        "phase": "main1",
+        "summonCount": 0
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 5,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 109
+      },
+      "summonType": "special",
+      "fromZone": "hand",
+      "dt": 5,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Luminarch Pure Knight",
+            "atk": 2000,
+            "def": 2000,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Aurora Seraph",
+            "atk": 2800,
+            "def": 2400,
+            "position": "attack"
+          }
+        ],
+        "playerHand": [
+          "Luminarch Holy Shield",
+          "Sanctum of the Luminarch Citadel"
+        ],
+        "playerHandCount": 2,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0
+      }
+    },
+    {
+      "type": "effect",
+      "turn": 5,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 118
+      },
+      "effectId": "luminarch_moonlit_blessing_effect",
+      "effectTiming": "on_play",
+      "activationZone": "spellTrap",
+      "actions": [
+        "move",
+        "conditional_summon_from_hand"
+      ],
+      "dt": 31
+    },
+    {
+      "type": "spell",
+      "turn": 5,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 118
+      },
+      "targets": [],
+      "dt": 12,
+      "delta": {
+        "playerGraveyard": [
+          "Luminarch Valiant - Knight of the Dawn",
+          "Polymerization",
+          "Luminarch Spear of Dawnfall",
+          "Luminarch Moonlit Blessing"
+        ],
+        "playerGraveCount": 4
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 5,
+      "phase": "battle",
+      "actor": "human",
+      "dt": 2278,
+      "delta": {
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 5,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 109,
+        "atk": 2800
+      },
+      "target": {
+        "c": 62,
+        "atk": 800,
+        "def": 1000,
+        "pos": "d",
+        "fd": true
+      },
+      "availableActions": [
+        {
+          "type": "attack",
+          "cardId": 109,
+          "targetId": 53
+        },
+        {
+          "type": "attack",
+          "cardId": 109,
+          "targetId": 62
+        },
+        {
+          "type": "cancel_attack"
+        }
+      ],
+      "dt": 1729
+    },
+    {
+      "type": "attack",
+      "turn": 5,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 109,
+        "atk": 2800
+      },
+      "target": {
+        "c": 62,
+        "atk": 800,
+        "def": 1000,
+        "pos": "d"
+      },
+      "dt": 661,
+      "delta": {
+        "playerLP": 8400,
+        "botField": [
+          {
+            "name": "Shadow-Heart Specter",
+            "atk": 800,
+            "def": 800,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "botGraveyard": [
+          "Shadow-Heart Abyssal Eel",
+          "Shadow-Heart Infusion",
+          "Shadow-Heart Battle Hymn",
+          "Shadow-Heart Demon Arctroth",
+          "Shadow-Heart Coward"
+        ],
+        "botGraveCount": 5
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 5,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 122,
+        "atk": 2000
+      },
+      "target": {
+        "c": 53,
+        "atk": 800,
+        "def": 800,
+        "pos": "a"
+      },
+      "availableActions": [
+        {
+          "type": "attack",
+          "cardId": 122,
+          "targetId": 53
+        },
+        {
+          "type": "cancel_attack"
+        }
+      ],
+      "dt": 1733
+    },
+    {
+      "type": "attack",
+      "turn": 5,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 122,
+        "atk": 2000
+      },
+      "target": {
+        "c": 53,
+        "atk": 800,
+        "def": 800,
+        "pos": "a"
+      },
+      "combatResult": {
+        "damageDealt": 1200,
+        "targetDestroyed": true
+      },
+      "dt": 48,
+      "delta": {
+        "botLP": 4300,
+        "botField": [],
+        "botHandCount": 1,
+        "botGraveyard": [
+          "Shadow-Heart Infusion",
+          "Shadow-Heart Battle Hymn",
+          "Shadow-Heart Demon Arctroth",
+          "Shadow-Heart Coward",
+          "Shadow-Heart Specter"
+        ]
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 5,
+      "phase": "main2",
+      "actor": "human",
+      "dt": 574,
+      "delta": {
+        "phase": "main2"
+      }
+    },
+    {
+      "type": "set_spell_trap",
+      "turn": 5,
+      "phase": "main2",
+      "actor": "human",
+      "card": {
+        "c": 102
+      },
+      "availableActions": [
+        {
+          "type": "activate_spell",
+          "cardId": 102
+        },
+        {
+          "type": "set_spell",
+          "cardId": 102
+        }
+      ],
+      "dt": 1000,
+      "delta": {
+        "playerHand": [
+          "Sanctum of the Luminarch Citadel"
+        ],
+        "playerHandCount": 1
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 5,
+      "phase": "end",
+      "actor": "human",
+      "dt": 822,
+      "delta": {
+        "phase": "end"
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 7,
+      "phase": "battle",
+      "actor": "human",
+      "dt": 9820
+    },
+    {
+      "type": "attack",
+      "turn": 7,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 122,
+        "atk": 2000
+      },
+      "target": {
+        "c": 62,
+        "atk": 800,
+        "def": 1000,
+        "pos": "d",
+        "fd": true
+      },
+      "availableActions": [
+        {
+          "type": "attack",
+          "cardId": 122,
+          "targetId": 62
+        },
+        {
+          "type": "cancel_attack"
+        }
+      ],
+      "dt": 5575
+    },
+    {
+      "type": "attack",
+      "turn": 7,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 122,
+        "atk": 2000
+      },
+      "target": {
+        "c": 62,
+        "atk": 800,
+        "def": 1000,
+        "pos": "d"
+      },
+      "dt": 631,
+      "delta": {
+        "botField": [],
+        "botGraveyard": [
+          "Shadow-Heart Infusion",
+          "Shadow-Heart Battle Hymn",
+          "Shadow-Heart Demon Arctroth",
+          "Shadow-Heart Coward",
+          "Shadow-Heart Specter",
+          "Shadow-Heart Coward"
+        ],
+        "botGraveCount": 6
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 7,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 109,
+        "atk": 2800
+      },
+      "target": null,
+      "directAttack": true,
+      "availableActions": [
+        {
+          "type": "direct_attack",
+          "cardId": 109
+        },
+        {
+          "type": "cancel_attack"
+        }
+      ],
+      "dt": 1122
+    },
+    {
+      "type": "pass",
+      "turn": 7,
+      "phase": "end",
+      "actor": "human",
+      "dt": 822,
+      "delta": {
+        "botLP": 1500,
+        "phase": "end"
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 9,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 110
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "availableActions": [
+        {
+          "type": "normal_summon",
+          "cardId": 110,
+          "position": "a"
+        },
+        {
+          "type": "set",
+          "cardId": 110,
+          "position": "d"
+        }
+      ],
+      "dt": 8080,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Luminarch Pure Knight",
+            "atk": 2000,
+            "def": 2000,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Aurora Seraph",
+            "atk": 2800,
+            "def": 2400,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Sanctified Arbiter",
+            "atk": 1500,
+            "def": 1000,
+            "position": "attack"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Gecko",
+            "atk": 1000,
+            "def": 1000,
+            "position": "defense",
+            "isFacedown": true
+          }
+        ],
+        "playerHand": [
+          "Sanctum of the Luminarch Citadel",
+          "Luminarch Sanctum Protector"
+        ],
+        "turn": 9,
+        "phase": "main1"
+      }
+    },
+    {
+      "type": "effect_resolution",
+      "turn": 9,
+      "phase": "main1",
+      "actor": "human",
+      "sourceCard": {
+        "c": 110,
+        "atk": 1500,
+        "def": 1000,
+        "pos": "a"
+      },
+      "effectResult": {
+        "type": "search",
+        "targets": [],
+        "cardsDrawn": 0,
+        "cardsAdded": [
+          "Luminarch Radiant Wave"
+        ],
+        "lpChange": 0,
+        "description": "Added 1 card(s) to hand from deck"
+      },
+      "dt": 3465,
+      "delta": {
+        "playerHand": [
+          "Sanctum of the Luminarch Citadel",
+          "Luminarch Sanctum Protector",
+          "Luminarch Radiant Wave"
+        ],
+        "playerHandCount": 3
+      }
+    },
+    {
+      "type": "effect",
+      "turn": 9,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 114
+      },
+      "effectId": "luminarch_radiant_wave_effect",
+      "effectTiming": "on_play",
+      "activationZone": "spellTrap",
+      "actions": [
+        "move",
+        "destroy"
+      ],
+      "availableActions": [
+        {
+          "type": "activate_spell",
+          "cardId": 114
+        },
+        {
+          "type": "set_spell",
+          "cardId": 114
+        }
+      ],
+      "dt": 4420,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Luminarch Aurora Seraph",
+            "atk": 2800,
+            "def": 2400,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Sanctified Arbiter",
+            "atk": 1500,
+            "def": 1000,
+            "position": "attack"
+          }
+        ],
+        "botField": [],
+        "playerHand": [
+          "Sanctum of the Luminarch Citadel",
+          "Luminarch Sanctum Protector"
+        ],
+        "playerHandCount": 2,
+        "playerGraveyard": [
+          "Luminarch Valiant - Knight of the Dawn",
+          "Polymerization",
+          "Luminarch Spear of Dawnfall",
+          "Luminarch Moonlit Blessing",
+          "Luminarch Pure Knight"
+        ],
+        "playerGraveCount": 5,
+        "botGraveyard": [
+          "Shadow-Heart Infusion",
+          "Shadow-Heart Battle Hymn",
+          "Shadow-Heart Demon Arctroth",
+          "Shadow-Heart Coward",
+          "Shadow-Heart Specter",
+          "Shadow-Heart Coward",
+          "Shadow-Heart Gecko"
+        ],
+        "botGraveCount": 7
+      }
+    },
+    {
+      "type": "spell",
+      "turn": 9,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 114
+      },
+      "targets": [],
+      "dt": 8,
+      "delta": {
+        "playerGraveyard": [
+          "Luminarch Valiant - Knight of the Dawn",
+          "Polymerization",
+          "Luminarch Spear of Dawnfall",
+          "Luminarch Moonlit Blessing",
+          "Luminarch Pure Knight",
+          "Luminarch Radiant Wave"
+        ],
+        "playerGraveCount": 6
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 9,
+      "phase": "battle",
+      "actor": "human",
+      "dt": 1802,
+      "delta": {
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 9,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 109,
+        "atk": 2800
+      },
+      "target": null,
+      "directAttack": true,
+      "availableActions": [
+        {
+          "type": "direct_attack",
+          "cardId": 109
+        },
+        {
+          "type": "cancel_attack"
+        }
+      ],
+      "dt": 978
+    }
+  ],
+  "result": {
+    "winner": "human",
+    "reason": "lp_zero"
+  },
+  "totalTurns": 9,
+  "finalLP": {
+    "player": 8400,
+    "bot": 0
+  }
+}

@@ -33,6 +33,14 @@ class ReplayInsights {
   // ─────────────────────────────────────────────────────────────────────────
 
   /**
+   * Retorna filtro de qualidade padrão (inclui clean + partial)
+   * @returns {Array<string>}
+   */
+  _getQualityFilter() {
+    return ["clean", "partial"]; // Incluir replays partial (issues menores não críticos)
+  }
+
+  /**
    * Verifica se o replay foi uma vitória (suporta ambos formatos)
    * @param {Object} replay
    * @returns {boolean}
@@ -303,10 +311,17 @@ class ReplayInsights {
       return cached.results;
     }
 
-    const replays = await this.db.listReplays({
-      archetype,
-      quality: "clean",
-    });
+    // Buscar replays clean + partial (excluir apenas noisy)
+    const allReplays = [];
+    for (const quality of this._getQualityFilter()) {
+      const batch = await this.db.listReplays({ archetype, quality });
+      allReplays.push(...batch);
+    }
+    const replays = allReplays;
+
+    console.log(
+      `[OpeningPatterns] Processing ${replays.length} replays (clean+partial) for archetype: ${archetype}`
+    );
 
     // Agregar sequências de abertura
     const patternStats = new Map();
@@ -327,11 +342,18 @@ class ReplayInsights {
         }
       }
 
-      if (opening.length === 0) continue;
+      if (opening.length === 0) {
+        console.log(`[OpeningPatterns] Replay ${r.id} has no opening moves`);
+        continue;
+      }
 
       // Criar key do padrão (primeiras 3 ações)
       const patternKey = opening.slice(0, 3).join(" → ");
       const isWin = this._isWin(r);
+      console.log(
+        `[OpeningPatterns] Pattern: ${patternKey}, isWin: ${isWin}, result:`,
+        r.result
+      );
 
       if (!patternStats.has(patternKey)) {
         patternStats.set(patternKey, {
@@ -346,21 +368,37 @@ class ReplayInsights {
     }
 
     // Filtrar e calcular
+    // Usar minSample adaptativo: para bases pequenas (<10 replays), aceitar 2+ ocorrências
+    const adaptiveMinSample = replays.length < 10 ? 2 : this.minSample;
     const results = [];
+    console.log(
+      `[OpeningPatterns] Found ${patternStats.size} unique patterns, minSample=${this.minSample}, adaptive=${adaptiveMinSample}`
+    );
+
     for (const [key, stat] of patternStats) {
-      if (stat.total < this.minSample) continue;
+      console.log(
+        `[OpeningPatterns] Pattern "${key}": ${stat.total} occurrences, ${stat.wins} wins`
+      );
+      if (stat.total < adaptiveMinSample) {
+        console.log(`[OpeningPatterns] Skipping pattern (below minSample)`);
+        continue;
+      }
 
       results.push({
         pattern: key,
         sequence: stat.sequence,
         winRate: stat.wins / stat.total,
         frequency: stat.total / replays.length,
-        confidence: Math.min(1, stat.total / (this.minSample * 3)),
+        confidence: Math.min(1, stat.total / (adaptiveMinSample * 3)),
         sampleSize: stat.total,
       });
     }
 
     results.sort((a, b) => b.winRate - a.winRate);
+
+    console.log(
+      `[OpeningPatterns] Returning ${results.length} patterns after filtering`
+    );
 
     // Salvar no cache
     await this._saveToCache(cacheKey, { results });
@@ -386,10 +424,13 @@ class ReplayInsights {
       return cached.result;
     }
 
-    const replays = await this.db.listReplays({
-      archetype,
-      quality: "clean",
-    });
+    // Buscar replays clean + partial
+    const allReplays = [];
+    for (const quality of this._getQualityFilter()) {
+      const batch = await this.db.listReplays({ archetype, quality });
+      allReplays.push(...batch);
+    }
+    const replays = allReplays;
 
     const phases = {
       main1: { summons: 0, effects: 0, sets: 0, count: 0 },
@@ -550,10 +591,13 @@ class ReplayInsights {
    * @returns {Promise<Array>}
    */
   async getMatchupStats(archetype) {
-    const replays = await this.db.listReplays({
-      archetype,
-      quality: "clean",
-    });
+    // Buscar replays clean + partial
+    const allReplays = [];
+    for (const quality of this._getQualityFilter()) {
+      const batch = await this.db.listReplays({ archetype, quality });
+      allReplays.push(...batch);
+    }
+    const replays = allReplays;
 
     const matchupStats = new Map();
 
@@ -601,8 +645,13 @@ class ReplayInsights {
     const cached = await this.db.getAggregate(cacheKey);
     if (cached) return cached;
 
-    // Calcular
-    const replays = await this.db.listReplays({ archetype, quality: "clean" });
+    // Calcular (incluir clean + partial)
+    const allReplays = [];
+    for (const quality of this._getQualityFilter()) {
+      const batch = await this.db.listReplays({ archetype, quality });
+      allReplays.push(...batch);
+    }
+    const replays = allReplays;
 
     const stats = {
       totalReplays: replays.length,

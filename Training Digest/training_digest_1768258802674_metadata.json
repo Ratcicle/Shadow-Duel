@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "exportedAt": "2026-01-12T23:00:02.700Z",
+  "filters": {
+    "archetype": null,
+    "matchup": null,
+    "result": null,
+    "quality": "clean"
+  },
+  "totalRows": 1077,
+  "features": [
+    "turn",
+    "phase",
+    "actor",
+    "promptType",
+    "chosenAction",
+    "availableActions",
+    "context",
+    "outcome"
+  ],
+  "contextFields": [
+    "playerLP",
+    "botLP",
+    "lpDiff",
+    "playerHandCount",
+    "botHandCount",
+    "playerHand",
+    "playerFieldCount",
+    "botFieldCount",
+    "playerFieldSummary",
+    "botFieldSummary",
+    "playerGraveCount",
+    "botGraveCount",
+    "playerGraveyard",
+    "botGraveyard",
+    "playerSpellTrapCount",
+    "botSpellTrapCount",
+    "playerFieldSpell",
+    "botFieldSpell",
+    "playerExtraDeckCount",
+    "botExtraDeckCount",
+    "matchup"
+  ]
+}
