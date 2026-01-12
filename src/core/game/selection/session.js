@@ -100,6 +100,10 @@ export function startTargetSelectionSession(session) {
   if (this.turn === "player" && selectionContract.requirements?.length > 0) {
     const firstReq = selectionContract.requirements[0];
     if (firstReq?.candidates?.length > 0) {
+      // Usar primeiro efeito como ID padrão, ou kind da sessão como fallback
+      // Na maioria dos casos, o primeiro efeito é o que está sendo ativado
+      const effectId = session.card?.effects?.[0]?.id || session.kind;
+      
       this.emit("target_selection_options", {
         player: "player",
         candidates: firstReq.candidates.map(c => ({
@@ -108,7 +112,7 @@ export function startTargetSelectionSession(session) {
           zone: c.zone || "field",
           key: c.key,
         })),
-        effectId: session.card?.effects?.[0]?.id || session.kind,
+        effectId,
         sourceCard: session.card,
         allowCancel: selectionContract.ui.allowCancel !== false,
       });
@@ -224,10 +228,13 @@ export async function finishTargetSelection() {
         .filter(Boolean);
       
       if (selectedCards.length > 0) {
+        // Usar primeiro efeito como ID padrão, ou kind da sessão como fallback
+        const effectId = selection.card?.effects?.[0]?.id || selection.kind;
+        
         this.emit("target_selected", {
           player: "player",
           sourceCard: selection.card,
-          effectId: selection.card?.effects?.[0]?.id || selection.kind,
+          effectId,
           selectedTargets: selectedCards.map(c => ({
             id: c.id,
             name: c.name,
