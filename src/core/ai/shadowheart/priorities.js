@@ -407,11 +407,14 @@ export function shouldPlaySpell(card, analysis) {
  * @param {Object} card
  * @param {Object} analysis
  * @param {Object} tributeInfo - { tributesNeeded, alt }
+ * @param {Object} [context]
  * @returns {SummonDecision}
  */
-export function shouldSummonMonster(card, analysis, tributeInfo) {
+export function shouldSummonMonster(card, analysis, tributeInfo, context = {}) {
   const name = card.name;
   const knowledge = CARD_KNOWLEDGE[name];
+  const fieldState = context.field || analysis?.field || [];
+  const oppFieldState = context.oppField || analysis?.oppField || [];
 
   // === SAFETY CHECK: Avaliar se é seguro summon em ATK ===
   const cardATK = card.atk || 0;
@@ -750,8 +753,20 @@ export function shouldSummonMonster(card, analysis, tributeInfo) {
 
   if (
     tributeInfo.tributesNeeded > 0 &&
-    tributeInfo.tributesNeeded <= analysis.field.length
+    tributeInfo.tributesNeeded <= fieldState.length
   ) {
+    const tradeCheck = evaluateTributeTrade(
+      card,
+      fieldState,
+      tributeInfo.tributesNeeded,
+      { oppField: oppFieldState }
+    );
+    if (!tradeCheck.ok) {
+      return {
+        yes: false,
+        reason: tradeCheck.reason,
+      };
+    }
     return {
       yes: true,
       position: "attack",
@@ -801,70 +816,151 @@ export function selectBestTributes(
   const isEmergencyRemoval = isDemonArctroth && hasBattleIndestructibleThreat;
 
   const monstersWithValue = field.map((monster, index) => {
-    let value = 0;
-    const knowledge = CARD_KNOWLEDGE[monster.name];
-
-    // Valor base
-    value += (monster.atk || 0) / 400;
-    value += (monster.level || 0) * 0.15;
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // PROTEÇÃO EXTRA FORTE: Nunca tributar monstros premium (exceto emergência crítica)
-    // ═══════════════════════════════════════════════════════════════════════
-
-    // Demon Dragon (3000 ATK, destroy 2) - NUNCA tributar
-    if (monster.name === "Shadow-Heart Demon Dragon") {
-      value += isEmergencyRemoval ? 40 : 100;
-    }
-
-    // Scale Dragon (3000 ATK) - NUNCA tributar
-    if (monster.name === "Shadow-Heart Scale Dragon") {
-      value += isEmergencyRemoval ? 35 : 80;
-    }
-
-    // Demon Arctroth (material de Ascensão para Armored Arctroth) - NUNCA tributar
-    if (monster.name === "Shadow-Heart Demon Arctroth") {
-      value += isEmergencyRemoval ? 30 : 70;
-    }
-
-    // Death Wyrm (2500 ATK) - Evitar fortemente
-    if (monster.name === "Shadow-Heart Death Wyrm") {
-      value += isEmergencyRemoval ? 20 : 50;
-    }
-
-    // Leviathan (2400 ATK) - Evitar fortemente
-    if (monster.name === "Shadow-Heart Leviathan") {
-      value += isEmergencyRemoval ? 18 : 45;
-    }
-
-    // Monstros importantes genéricos (boss/fusion_boss)
-    if (knowledge?.role === "boss" || knowledge?.role === "fusion_boss") {
-      value += isEmergencyRemoval ? 25 : 60;
-    }
-
-    // Materiais de Ascensão: EVITAR tributar (podem ascender)
-    if (knowledge?.ascensionTarget) {
-      value += isEmergencyRemoval ? 20 : 50;
-    }
-
-    // Griffin e Gecko são tributos aceitáveis (ATK médio-baixo)
-    if (monster.name === "Shadow-Heart Griffin") value += 3;
-    if (monster.name === "Shadow-Heart Gecko") value += 2;
-
-    // Specter é BOM tributo (ativa efeito de draw)
-    if (monster.name === "Shadow-Heart Specter") value -= 5;
-
-    // Tokens são ótimos tributos
-    if (monster.isToken || monster.name.includes("Token")) value -= 10;
-
-    // Monstros que já atacaram valem menos
-    if (monster.hasAttacked) value -= 2;
-
+    const value = getTributeValue(monster, { isEmergencyRemoval });
     return { monster, index, value };
   });
 
   monstersWithValue.sort((a, b) => a.value - b.value);
   return monstersWithValue.slice(0, tributesNeeded).map((t) => t.index);
+}
+
+
+function getTributeValue(monster, context = {}) {
+  const isEmergencyRemoval = !!context.isEmergencyRemoval;
+  let value = 0;
+  const knowledge = CARD_KNOWLEDGE[monster.name];
+
+  value += (monster.atk || 0) / 400;
+  value += (monster.level || 0) * 0.15;
+
+  if (monster.name === "Shadow-Heart Demon Dragon") {
+    value += isEmergencyRemoval ? 40 : 100;
+  }
+
+  if (monster.name === "Shadow-Heart Scale Dragon") {
+    value += isEmergencyRemoval ? 35 : 80;
+  }
+
+  if (monster.name === "Shadow-Heart Demon Arctroth") {
+    value += isEmergencyRemoval ? 30 : 70;
+  }
+
+  if (monster.name === "Shadow-Heart Death Wyrm") {
+    value += isEmergencyRemoval ? 20 : 50;
+  }
+
+  if (monster.name === "Shadow-Heart Leviathan") {
+    value += isEmergencyRemoval ? 18 : 45;
+  }
+
+  if (
+    knowledge?.role === "boss" ||
+    knowledge?.role === "fusion_boss" ||
+    knowledge?.role === "ascension_boss"
+  ) {
+    value += isEmergencyRemoval ? 25 : 60;
+  }
+
+  if (knowledge?.ascensionTarget) {
+    value += isEmergencyRemoval ? 20 : 50;
+  }
+
+  if (monster.name === "Shadow-Heart Griffin") value += 3;
+  if (monster.name === "Shadow-Heart Gecko") value += 2;
+
+  if (monster.name === "Shadow-Heart Specter") value -= 5;
+
+  if (monster.isToken || monster.name.includes("Token")) value -= 10;
+
+  if (monster.hasAttacked) value -= 2;
+
+  return value;
+}
+
+export function evaluateTributeTrade(
+  cardToSummon,
+  field,
+  tributesNeeded,
+  context = {}
+) {
+  if (!cardToSummon || tributesNeeded <= 0) {
+    return { ok: true };
+  }
+
+  const fieldMonsters = (field || []).filter(
+    (card) => card && card.cardKind !== "spell" && card.cardKind !== "trap"
+  );
+  if (fieldMonsters.length < tributesNeeded) {
+    return { ok: false, reason: "Tributos insuficientes" };
+  }
+
+  const isDemonArctroth = cardToSummon?.name === "Shadow-Heart Demon Arctroth";
+  const hasBattleIndestructibleThreat = context.oppField?.some(
+    (m) => m.battleIndestructible || m.cannotBeDestroyedByBattle
+  );
+  const isEmergencyRemoval = isDemonArctroth && hasBattleIndestructibleThreat;
+
+  const tributeIndices = selectBestTributes(
+    fieldMonsters,
+    tributesNeeded,
+    cardToSummon,
+    context
+  );
+
+  if (tributeIndices.length < tributesNeeded) {
+    return { ok: false, reason: "Sem tributos validos" };
+  }
+
+  const tributes = tributeIndices
+    .map((index) => fieldMonsters[index])
+    .filter(Boolean);
+
+  const tributeCost = tributes.reduce(
+    (sum, monster) => sum + getTributeValue(monster, { isEmergencyRemoval }),
+    0
+  );
+  const summonValue = getTributeValue(cardToSummon, {});
+
+  const knowledge = CARD_KNOWLEDGE[cardToSummon?.name];
+  const summonIsPremium =
+    knowledge?.role === "boss" ||
+    knowledge?.role === "fusion_boss" ||
+    knowledge?.role === "ascension_boss";
+
+  const tributeHasPremium = tributes.some((monster) => {
+    const tribKnowledge = CARD_KNOWLEDGE[monster.name];
+    const tribIsPremium =
+      tribKnowledge?.role === "boss" ||
+      tribKnowledge?.role === "fusion_boss" ||
+      tribKnowledge?.role === "ascension_boss" ||
+      tribKnowledge?.ascensionTarget;
+    return (
+      tribIsPremium ||
+      monster.name === "Shadow-Heart Demon Dragon" ||
+      monster.name === "Shadow-Heart Scale Dragon" ||
+      monster.name === "Shadow-Heart Demon Arctroth"
+    );
+  });
+
+  if (tributeHasPremium && !summonIsPremium) {
+    return {
+      ok: false,
+      reason: "Nao vale tributar boss para invocar monstro menor",
+    };
+  }
+
+  const costRatio = tributeCost / Math.max(1, summonValue);
+  const costDelta = tributeCost - summonValue;
+  const badValueTrade = costDelta >= 25 && costRatio >= 1.4;
+
+  if (badValueTrade) {
+    return {
+      ok: false,
+      reason: "Tribute Summon com custo alto demais",
+    };
+  }
+
+  return { ok: true };
 }
 
 /**

@@ -44,6 +44,7 @@ import {
   shouldPlaySpell,
   shouldSummonMonster,
   selectBestTributes,
+  evaluateTributeTrade,
   getTributeRequirementFor,
 } from "./shadowheart/priorities.js";
 import {
@@ -101,7 +102,14 @@ export default class ShadowHeartStrategy extends BaseStrategy {
       field: (bot.field || []).map((c) => ({
         name: c.name,
         atk: c.atk,
+        def: c.def,
+        level: c.level,
+        cardKind: c.cardKind,
         position: c.position,
+        isFacedown: c.isFacedown,
+        hasAttacked: c.hasAttacked,
+        battleIndestructible: c.battleIndestructible,
+        cannotBeDestroyedByBattle: c.cannotBeDestroyedByBattle,
       })),
       graveyard: (bot.graveyard || []).filter((c) => isShadowHeart(c)),
       fieldSpell: bot.fieldSpell?.name || null,
@@ -117,8 +125,12 @@ export default class ShadowHeartStrategy extends BaseStrategy {
         name: c.name,
         atk: c.atk,
         def: c.def,
+        level: c.level,
+        cardKind: c.cardKind,
         position: c.position,
         isFacedown: c.isFacedown,
+        battleIndestructible: c.battleIndestructible,
+        cannotBeDestroyedByBattle: c.cannotBeDestroyedByBattle,
       })),
       oppBackrow: opponent?.spellTrap?.length || 0,
       oppHand: opponent?.hand?.length || 0,
@@ -398,7 +410,10 @@ export default class ShadowHeartStrategy extends BaseStrategy {
         if ((bot.field?.length || 0) < tributeInfo.tributesNeeded) return;
         if (analysis.fieldCapacity <= 0) return;
 
-        const decision = shouldSummonMonster(card, analysis, tributeInfo);
+        const decision = shouldSummonMonster(card, analysis, tributeInfo, {
+          field: bot.field || [],
+          oppField: opponent?.field || [],
+        });
 
         if (decision.yes) {
           log(`  ✅ Summon válido: ${card.name} - ${decision.reason}`);
@@ -573,6 +588,26 @@ export default class ShadowHeartStrategy extends BaseStrategy {
             } tributos (tenho ${realBot.field?.length || 0})`
           );
           return;
+        }
+
+        if (tributeInfo.tributesNeeded > 0) {
+          const tradeCheck = evaluateTributeTrade(
+            card,
+            realBot.field || [],
+            tributeInfo.tributesNeeded,
+            { oppField: opponent?.field || [] }
+          );
+          if (!tradeCheck.ok) {
+            if (bot?.debug) {
+              console.log(
+                `[ShadowHeartStrategy] ❌ Tribute ruim: ${card.name} (${tradeCheck.reason})`
+              );
+            }
+            log(
+              `    ❌ Tribute ruim: ${card.name} (${tradeCheck.reason})`
+            );
+            return;
+          }
         }
 
         // Forçar summon em defesa com prioridade baixa
