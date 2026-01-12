@@ -1,0 +1,1943 @@
+{
+  "version": 3,
+  "id": "duel_1768237754914_16",
+  "timestamp": "2026-01-12T17:09:14.914Z",
+  "playerDeck": {
+    "playerDeck": [
+      "Luminarch Aegisbearer",
+      "Sanctum of the Luminarch Citadel",
+      "Luminarch Spear of Dawnfall",
+      "Luminarch Moonblade Captain",
+      "Luminarch Radiant Wave",
+      "Luminarch Valiant - Knight of the Dawn",
+      "Luminarch Moonlit Blessing",
+      "Luminarch Crescent Shield",
+      "Luminarch Holy Ascension",
+      "Luminarch Enchanted Halberd"
+    ],
+    "playerExtraDeck": [
+      "Luminarch Megashield Barbarias",
+      "Luminarch Fortress Aegis"
+    ],
+    "botPreset": "shadowheart",
+    "timestamp": 1768237754914
+  },
+  "botDeck": "unknown",
+  "botDeckList": [
+    "Shadow-Heart Abyssal Eel",
+    "Shadow-Heart Demon Arctroth",
+    "Polymerization",
+    "Shadow-Heart Scale Dragon",
+    "Shadow-Heart Infusion",
+    "Shadow-Heart Specter",
+    "Shadow-Heart Coward",
+    "Shadow-Heart Griffin",
+    "Shadow-Heart Imp",
+    "Shadow-Heart Death Wyrm",
+    "Shadow-Heart Leviathan",
+    "Shadow-Heart Abyssal Eel",
+    "Darkness Valley",
+    "Shadow-Heart Covenant",
+    "Shadow-Heart Infusion",
+    "Polymerization",
+    "Shadow-Heart Gecko",
+    "Shadow-Heart Scale Dragon",
+    "Shadow-Heart Imp",
+    "Shadow-Heart Purge",
+    "Shadow-Heart Griffin",
+    "Shadow-Heart Battle Hymn",
+    "Shadow-Heart Imp",
+    "Shadow-Heart Covenant",
+    "Shadow-Heart Void Mage",
+    "Darkness Valley",
+    "Shadow-Heart Specter",
+    "Shadow-Heart Rage",
+    "Shadow-Heart Void Mage",
+    "Shadow-Heart Coward"
+  ],
+  "botArchetype": "shadowheart",
+  "cardDictionary": {
+    "53": "Shadow-Heart Specter",
+    "59": "Shadow-Heart Covenant",
+    "62": "Shadow-Heart Coward",
+    "63": "Shadow-Heart Infusion",
+    "65": "Shadow-Heart Rage",
+    "67": "Shadow-Heart Griffin",
+    "68": "Darkness Valley",
+    "71": "Shadow-Heart Void Mage",
+    "101": "Luminarch Valiant - Knight of the Dawn",
+    "103": "Luminarch Aegisbearer",
+    "107": "Luminarch Sanctum Protector",
+    "108": "Luminarch Radiant Lancer",
+    "110": "Luminarch Sanctified Arbiter",
+    "112": "Sanctum of the Luminarch Citadel"
+  },
+  "snapshots": {
+    "1": {
+      "playerLP": 8000,
+      "botLP": 8000,
+      "playerField": [
+        {
+          "name": "Luminarch Sanctified Arbiter",
+          "atk": 1500,
+          "def": 1000,
+          "position": "attack"
+        }
+      ],
+      "botField": [],
+      "playerHand": [
+        "Luminarch Sacred Judgment",
+        "Luminarch Sanctum Protector",
+        "Luminarch Celestial Marshal",
+        "Luminarch Aurora Seraph"
+      ],
+      "playerHandCount": 4,
+      "botHandCount": 4,
+      "playerGraveyard": [],
+      "playerGraveCount": 0,
+      "botGraveyard": [],
+      "botGraveCount": 0,
+      "playerSpellTrapCount": 0,
+      "botSpellTrapCount": 0,
+      "playerExtraDeckCount": 2,
+      "botExtraDeckCount": 3,
+      "playerFieldSpell": null,
+      "botFieldSpell": null,
+      "turn": 1,
+      "phase": "main1"
+    },
+    "6": {
+      "playerLP": 6450,
+      "botLP": 6100,
+      "playerField": [
+        {
+          "name": "Luminarch Valiant - Knight of the Dawn",
+          "atk": 1600,
+          "def": 1200,
+          "position": "attack"
+        },
+        {
+          "name": "Luminarch Sanctum Protector",
+          "atk": 1800,
+          "def": 2800,
+          "position": "attack"
+        }
+      ],
+      "botField": [
+        {
+          "name": "Shadow-Heart Void Mage",
+          "atk": 1500,
+          "def": 1500,
+          "position": "attack",
+          "isFacedown": false
+        }
+      ],
+      "playerHand": [
+        "Luminarch Sacred Judgment",
+        "Luminarch Celestial Marshal",
+        "Luminarch Aurora Seraph",
+        "Sanctum of the Luminarch Citadel"
+      ],
+      "playerHandCount": 4,
+      "botHandCount": 4,
+      "playerGraveyard": [
+        "Luminarch Sanctified Arbiter",
+        "Luminarch Aegisbearer"
+      ],
+      "playerGraveCount": 2,
+      "botGraveyard": [
+        "Shadow-Heart Infusion",
+        "Shadow-Heart Covenant",
+        "Shadow-Heart Specter",
+        "Shadow-Heart Void Mage"
+      ],
+      "botGraveCount": 4,
+      "playerSpellTrapCount": 0,
+      "botSpellTrapCount": 0,
+      "playerExtraDeckCount": 2,
+      "botExtraDeckCount": 3,
+      "playerFieldSpell": "Sanctum of the Luminarch Citadel",
+      "botFieldSpell": "Darkness Valley",
+      "turn": 6,
+      "phase": "main1"
+    },
+    "11": {
+      "playerLP": 6950,
+      "botLP": 800,
+      "playerField": [
+        {
+          "name": "Luminarch Sanctum Protector",
+          "atk": 1800,
+          "def": 2800,
+          "position": "attack"
+        },
+        {
+          "name": "Luminarch Radiant Lancer",
+          "atk": 2800,
+          "def": 2100,
+          "position": "attack"
+        },
+        {
+          "name": "Luminarch Sanctified Arbiter",
+          "atk": 1500,
+          "def": 1000,
+          "position": "attack"
+        }
+      ],
+      "botField": [
+        {
+          "name": "Shadow-Heart Griffin",
+          "atk": 2300,
+          "def": 1500,
+          "position": "attack",
+          "isFacedown": false
+        }
+      ],
+      "playerHand": [
+        "Luminarch Sacred Judgment",
+        "Luminarch Celestial Marshal",
+        "Luminarch Aurora Seraph",
+        "Sanctum of the Luminarch Citadel",
+        "Luminarch Magic Sickle"
+      ],
+      "playerHandCount": 5,
+      "botHandCount": 3,
+      "playerGraveyard": [
+        "Luminarch Sanctified Arbiter",
+        "Luminarch Aegisbearer",
+        "Luminarch Valiant - Knight of the Dawn",
+        "Luminarch Valiant - Knight of the Dawn"
+      ],
+      "playerGraveCount": 4,
+      "botGraveyard": [
+        "Shadow-Heart Infusion",
+        "Shadow-Heart Covenant",
+        "Shadow-Heart Specter",
+        "Shadow-Heart Void Mage",
+        "Shadow-Heart Rage",
+        "Darkness Valley",
+        "Shadow-Heart Void Mage",
+        "Shadow-Heart Coward"
+      ],
+      "botGraveCount": 8,
+      "playerSpellTrapCount": 0,
+      "botSpellTrapCount": 0,
+      "playerExtraDeckCount": 2,
+      "botExtraDeckCount": 3,
+      "playerFieldSpell": "Sanctum of the Luminarch Citadel",
+      "botFieldSpell": "Darkness Valley",
+      "turn": 11,
+      "phase": "main1"
+    }
+  },
+  "decisions": [
+    {
+      "type": "summon",
+      "turn": 1,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 110
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "availableActions": [
+        {
+          "type": "normal_summon",
+          "cardId": 110,
+          "position": "a"
+        },
+        {
+          "type": "set",
+          "cardId": 110,
+          "position": "d"
+        }
+      ],
+      "t0": 1768237792933
+    },
+    {
+      "type": "effect_resolution",
+      "turn": 1,
+      "phase": "main1",
+      "actor": "human",
+      "sourceCard": {
+        "c": 110,
+        "atk": 1500,
+        "def": 1000,
+        "pos": "a"
+      },
+      "effectResult": {
+        "type": "search",
+        "targets": [],
+        "cardsDrawn": 0,
+        "cardsAdded": [
+          "Sanctum of the Luminarch Citadel"
+        ],
+        "lpChange": 0,
+        "description": "Added 1 card(s) to hand from deck"
+      },
+      "dt": 1283
+    },
+    {
+      "type": "pass",
+      "turn": 1,
+      "phase": "main2",
+      "actor": "human",
+      "availableActions": [
+        {
+          "type": "activate_spell",
+          "cardId": 112
+        },
+        {
+          "type": "set_spell",
+          "cardId": 112
+        }
+      ],
+      "dt": 2044
+    },
+    {
+      "type": "pass",
+      "turn": 1,
+      "phase": "end",
+      "actor": "human",
+      "dt": 393
+    },
+    {
+      "type": "summon",
+      "turn": 2,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 71
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "availableActions": [
+        {
+          "type": "spell",
+          "cardId": 68
+        },
+        {
+          "type": "summon",
+          "cardId": 71,
+          "position": "a"
+        },
+        {
+          "type": "summon",
+          "cardId": 53,
+          "position": "a"
+        },
+        {
+          "type": "summon",
+          "cardId": 62,
+          "position": "d"
+        }
+      ],
+      "dt": 838,
+      "delta": {
+        "botField": [
+          {
+            "name": "Shadow-Heart Void Mage",
+            "atk": 1500,
+            "def": 1500,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerFieldSpell": "Sanctum of the Luminarch Citadel",
+        "turn": 2
+      }
+    },
+    {
+      "type": "effect_resolution",
+      "turn": 2,
+      "phase": "main1",
+      "actor": "bot",
+      "sourceCard": {
+        "c": 71,
+        "atk": 1500,
+        "def": 1500,
+        "pos": "a"
+      },
+      "effectResult": {
+        "type": "search",
+        "targets": [],
+        "cardsDrawn": 0,
+        "cardsAdded": [
+          "Shadow-Heart Infusion"
+        ],
+        "lpChange": 0,
+        "description": "Added 1 card(s) to hand from deck"
+      },
+      "dt": 6,
+      "delta": {
+        "botHandCount": 5
+      }
+    },
+    {
+      "type": "effect",
+      "turn": 2,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 68
+      },
+      "effectId": "darkness_valley_on_place",
+      "effectTiming": "on_play",
+      "activationZone": "fieldSpell",
+      "actions": [
+        "permanent_buff_named"
+      ],
+      "availableActions": [
+        {
+          "type": "spell",
+          "cardId": 68
+        }
+      ],
+      "dt": 429,
+      "delta": {
+        "botField": [
+          {
+            "name": "Shadow-Heart Void Mage",
+            "atk": 1800,
+            "def": 1500,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "botHandCount": 4,
+        "botFieldSpell": "Darkness Valley"
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 2,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 53
+      },
+      "summonType": "special",
+      "fromZone": "graveyard",
+      "availableActions": [
+        {
+          "type": "spell",
+          "cardId": 65
+        },
+        {
+          "type": "spell",
+          "cardId": 63
+        }
+      ],
+      "dt": 458,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Luminarch Sanctified Arbiter",
+            "atk": 750,
+            "def": 500,
+            "position": "attack"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Void Mage",
+            "atk": 1800,
+            "def": 1500,
+            "position": "attack",
+            "isFacedown": false
+          },
+          {
+            "name": "Shadow-Heart Specter",
+            "atk": 800,
+            "def": 800,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "botHandCount": 2
+      }
+    },
+    {
+      "type": "effect",
+      "turn": 2,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 63
+      },
+      "effectId": "shadow_heart_infusion",
+      "effectTiming": "on_play",
+      "activationZone": "spellTrap",
+      "actions": [
+        "move",
+        "special_summon_from_zone"
+      ],
+      "dt": 10,
+      "delta": {
+        "botField": [
+          {
+            "name": "Shadow-Heart Void Mage",
+            "atk": 1800,
+            "def": 1500,
+            "position": "attack",
+            "isFacedown": false
+          },
+          {
+            "name": "Shadow-Heart Specter",
+            "atk": 1100,
+            "def": 800,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ]
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 2,
+      "phase": "battle",
+      "actor": "bot",
+      "attacker": {
+        "c": 71,
+        "atk": 1800
+      },
+      "target": {
+        "c": 110,
+        "atk": 750,
+        "def": 500,
+        "pos": "a"
+      },
+      "availableActions": [
+        {
+          "type": "attack",
+          "cardId": 71,
+          "targetId": 110
+        }
+      ],
+      "dt": 946,
+      "delta": {
+        "botGraveyard": [
+          "Shadow-Heart Infusion"
+        ],
+        "botGraveCount": 1,
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "effect_resolution",
+      "turn": 2,
+      "phase": "battle",
+      "actor": "bot",
+      "sourceCard": {
+        "c": 71,
+        "atk": 1800,
+        "def": 1500,
+        "pos": "a"
+      },
+      "effectResult": {
+        "type": "search",
+        "targets": [],
+        "cardsDrawn": 0,
+        "cardsAdded": [
+          "Shadow-Heart Void Mage"
+        ],
+        "lpChange": 0,
+        "description": "Added 1 card(s) to hand from deck"
+      },
+      "dt": 5,
+      "delta": {
+        "playerLP": 7450,
+        "botHandCount": 3
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 2,
+      "phase": "battle",
+      "actor": "bot",
+      "attacker": {
+        "c": 71,
+        "atk": 1800
+      },
+      "target": {
+        "c": 110,
+        "atk": 1500,
+        "def": 1000,
+        "pos": "a"
+      },
+      "combatResult": {
+        "damageDealt": 1050,
+        "targetDestroyed": true
+      },
+      "dt": 10,
+      "delta": {
+        "playerField": [],
+        "playerGraveyard": [
+          "Luminarch Sanctified Arbiter"
+        ],
+        "playerGraveCount": 1
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 3,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 101
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "availableActions": [
+        {
+          "type": "normal_summon",
+          "cardId": 101,
+          "position": "a"
+        },
+        {
+          "type": "set",
+          "cardId": 101,
+          "position": "d"
+        }
+      ],
+      "dt": 51857,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          }
+        ],
+        "turn": 3,
+        "phase": "main1"
+      }
+    },
+    {
+      "type": "effect_resolution",
+      "turn": 3,
+      "phase": "main1",
+      "actor": "human",
+      "sourceCard": {
+        "c": 101,
+        "atk": 1600,
+        "def": 1200,
+        "pos": "a"
+      },
+      "effectResult": {
+        "type": "search",
+        "targets": [],
+        "cardsDrawn": 0,
+        "cardsAdded": [
+          "Luminarch Aegisbearer"
+        ],
+        "lpChange": 0,
+        "description": "Added 1 card(s) to hand from deck"
+      },
+      "dt": 2818,
+      "delta": {
+        "playerHand": [
+          "Luminarch Sacred Judgment",
+          "Luminarch Sanctum Protector",
+          "Luminarch Celestial Marshal",
+          "Luminarch Aurora Seraph",
+          "Luminarch Aegisbearer"
+        ],
+        "playerHandCount": 5
+      }
+    },
+    {
+      "type": "effect_resolution",
+      "turn": 3,
+      "phase": "main1",
+      "actor": "human",
+      "sourceCard": {
+        "c": 112,
+        "atk": 0,
+        "def": 0,
+        "pos": "a"
+      },
+      "effectResult": {
+        "type": "buff",
+        "targets": [],
+        "cardsDrawn": 0,
+        "cardsAdded": [],
+        "lpChange": 0,
+        "description": "Luminarch Valiant - Knight of the Dawn +500 ATK, +500 DEF (temp)"
+      },
+      "dt": 2236,
+      "delta": {
+        "playerLP": 6450,
+        "playerField": [
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 2100,
+            "def": 1700,
+            "position": "attack"
+          }
+        ]
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 3,
+      "phase": "battle",
+      "actor": "human",
+      "dt": 569,
+      "delta": {
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 3,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 101,
+        "atk": 2100
+      },
+      "target": {
+        "c": 71,
+        "atk": 1800,
+        "def": 1500,
+        "pos": "a"
+      },
+      "availableActions": [
+        {
+          "type": "attack",
+          "cardId": 101,
+          "targetId": 71
+        },
+        {
+          "type": "attack",
+          "cardId": 101,
+          "targetId": 53
+        },
+        {
+          "type": "cancel_attack"
+        }
+      ],
+      "dt": 1580
+    },
+    {
+      "type": "attack",
+      "turn": 3,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 101,
+        "atk": 2100
+      },
+      "target": {
+        "c": 71,
+        "atk": 1500,
+        "def": 1500,
+        "pos": "a"
+      },
+      "combatResult": {
+        "damageDealt": 300,
+        "targetDestroyed": true
+      },
+      "dt": 6,
+      "delta": {
+        "botLP": 7700,
+        "botField": [
+          {
+            "name": "Shadow-Heart Specter",
+            "atk": 1100,
+            "def": 800,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "botGraveyard": [
+          "Shadow-Heart Infusion",
+          "Shadow-Heart Void Mage"
+        ],
+        "botGraveCount": 2
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 3,
+      "phase": "end",
+      "actor": "human",
+      "dt": 1390,
+      "delta": {
+        "phase": "end"
+      }
+    },
+    {
+      "type": "effect_resolution",
+      "turn": 4,
+      "phase": "main1",
+      "actor": "bot",
+      "sourceCard": {
+        "c": 59,
+        "atk": 0,
+        "def": 0,
+        "pos": "a"
+      },
+      "effectResult": {
+        "type": "search",
+        "targets": [],
+        "cardsDrawn": 0,
+        "cardsAdded": [
+          "Shadow-Heart Scale Dragon"
+        ],
+        "lpChange": 0,
+        "description": "Added 1 card(s) to hand from deck"
+      },
+      "availableActions": [
+        {
+          "type": "spell",
+          "cardId": 59
+        }
+      ],
+      "dt": 1270,
+      "delta": {
+        "botLP": 6900,
+        "playerField": [
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Specter",
+            "atk": 1100,
+            "def": 800,
+            "position": "attack",
+            "isFacedown": false
+          },
+          {
+            "name": "Shadow-Heart Void Mage",
+            "atk": 1500,
+            "def": 1500,
+            "position": "defense",
+            "isFacedown": true
+          }
+        ],
+        "turn": 4,
+        "phase": "main1"
+      }
+    },
+    {
+      "type": "effect",
+      "turn": 4,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 59
+      },
+      "effectId": "shadow_heart_covenant",
+      "effectTiming": "on_play",
+      "activationZone": "spellTrap",
+      "actions": [
+        "pay_lp",
+        "search_any"
+      ],
+      "dt": 3
+    },
+    {
+      "type": "summon",
+      "turn": 5,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 103
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "availableActions": [
+        {
+          "type": "normal_summon",
+          "cardId": 103,
+          "position": "a"
+        },
+        {
+          "type": "set",
+          "cardId": 103,
+          "position": "d"
+        }
+      ],
+      "dt": 68744,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Aegisbearer",
+            "atk": 1000,
+            "def": 2000,
+            "position": "attack"
+          }
+        ],
+        "playerHand": [
+          "Luminarch Sacred Judgment",
+          "Luminarch Sanctum Protector",
+          "Luminarch Celestial Marshal",
+          "Luminarch Aurora Seraph",
+          "Sanctum of the Luminarch Citadel"
+        ],
+        "botGraveyard": [
+          "Shadow-Heart Infusion",
+          "Shadow-Heart Void Mage",
+          "Shadow-Heart Covenant"
+        ],
+        "botGraveCount": 3,
+        "turn": 5
+      }
+    },
+    {
+      "type": "position_choice",
+      "turn": 5,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 107,
+        "atk": 1800,
+        "def": 2800,
+        "pos": "a"
+      },
+      "chosenPosition": "a",
+      "summonType": "special",
+      "availableActions": [
+        {
+          "type": "normal_summon",
+          "cardId": 107,
+          "position": "a"
+        },
+        {
+          "type": "set",
+          "cardId": 107,
+          "position": "d"
+        },
+        {
+          "type": "special_from_aegisbearer",
+          "cardId": 107
+        }
+      ],
+      "dt": 1887,
+      "delta": {
+        "playerHand": [
+          "Luminarch Sacred Judgment",
+          "Luminarch Celestial Marshal",
+          "Luminarch Aurora Seraph",
+          "Sanctum of the Luminarch Citadel"
+        ],
+        "playerHandCount": 4,
+        "playerHandDetails": [
+          {
+            "name": "Luminarch Sacred Judgment",
+            "cardKind": "spell",
+            "level": 0,
+            "atk": 0,
+            "def": 0
+          },
+          {
+            "name": "Luminarch Celestial Marshal",
+            "cardKind": "monster",
+            "level": 7,
+            "atk": 2500,
+            "def": 2100
+          },
+          {
+            "name": "Luminarch Aurora Seraph",
+            "cardKind": "monster",
+            "level": 8,
+            "atk": 2800,
+            "def": 2400
+          },
+          {
+            "name": "Sanctum of the Luminarch Citadel",
+            "cardKind": "spell",
+            "level": 0,
+            "atk": 0,
+            "def": 0
+          }
+        ],
+        "playerField": [
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack",
+            "isFacedown": false,
+            "hasAttacked": false
+          }
+        ],
+        "playerBackrow": [],
+        "botBackrowCount": 0,
+        "playerGraveyard": [
+          "Luminarch Sanctified Arbiter",
+          "Luminarch Aegisbearer"
+        ],
+        "playerGraveCount": 2,
+        "summonCount": 1
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 5,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 107
+      },
+      "summonType": "special",
+      "fromZone": "hand",
+      "dt": 1,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Sanctum Protector",
+            "atk": 1800,
+            "def": 2800,
+            "position": "attack"
+          }
+        ],
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 5,
+      "phase": "battle",
+      "actor": "human",
+      "dt": 551,
+      "delta": {
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 5,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 107,
+        "atk": 1800
+      },
+      "target": {
+        "c": 53,
+        "atk": 1100,
+        "def": 800,
+        "pos": "a"
+      },
+      "availableActions": [
+        {
+          "type": "attack",
+          "cardId": 107,
+          "targetId": 53
+        },
+        {
+          "type": "attack",
+          "cardId": 107,
+          "targetId": 71
+        },
+        {
+          "type": "cancel_attack"
+        }
+      ],
+      "dt": 1853
+    },
+    {
+      "type": "attack",
+      "turn": 5,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 107,
+        "atk": 1800
+      },
+      "target": {
+        "c": 53,
+        "atk": 800,
+        "def": 800,
+        "pos": "a"
+      },
+      "combatResult": {
+        "damageDealt": 700,
+        "targetDestroyed": true
+      },
+      "dt": 16,
+      "delta": {
+        "botLP": 6200,
+        "botField": [
+          {
+            "name": "Shadow-Heart Void Mage",
+            "atk": 1500,
+            "def": 1500,
+            "position": "defense",
+            "isFacedown": true
+          }
+        ],
+        "botHandCount": 4,
+        "botGraveyard": [
+          "Shadow-Heart Infusion",
+          "Shadow-Heart Covenant",
+          "Shadow-Heart Specter"
+        ]
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 5,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 101,
+        "atk": 1600
+      },
+      "target": {
+        "c": 71,
+        "atk": 1500,
+        "def": 1500,
+        "pos": "d",
+        "fd": true
+      },
+      "availableActions": [
+        {
+          "type": "attack",
+          "cardId": 101,
+          "targetId": 71
+        },
+        {
+          "type": "cancel_attack"
+        }
+      ],
+      "dt": 1654
+    },
+    {
+      "type": "attack",
+      "turn": 5,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 101,
+        "atk": 1600
+      },
+      "target": {
+        "c": 71,
+        "atk": 1500,
+        "def": 1500,
+        "pos": "d"
+      },
+      "dt": 612,
+      "delta": {
+        "botLP": 6100,
+        "botField": [],
+        "botGraveyard": [
+          "Shadow-Heart Infusion",
+          "Shadow-Heart Covenant",
+          "Shadow-Heart Specter",
+          "Shadow-Heart Void Mage"
+        ],
+        "botGraveCount": 4
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 5,
+      "phase": "end",
+      "actor": "human",
+      "dt": 832,
+      "delta": {
+        "phase": "end"
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 6,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 71
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "availableActions": [
+        {
+          "type": "summon",
+          "cardId": 71,
+          "position": "a"
+        },
+        {
+          "type": "summon",
+          "cardId": 62,
+          "position": "d"
+        }
+      ],
+      "dt": 835
+    },
+    {
+      "type": "effect_resolution",
+      "turn": 6,
+      "phase": "main1",
+      "actor": "bot",
+      "sourceCard": {
+        "c": 71,
+        "atk": 1500,
+        "def": 1500,
+        "pos": "a"
+      },
+      "effectResult": {
+        "type": "search",
+        "targets": [],
+        "cardsDrawn": 0,
+        "cardsAdded": [
+          "Darkness Valley"
+        ],
+        "lpChange": 0,
+        "description": "Added 1 card(s) to hand from deck"
+      },
+      "dt": 12,
+      "delta": {
+        "botHandCount": 5
+      }
+    },
+    {
+      "type": "effect",
+      "turn": 6,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 65
+      },
+      "effectId": "shadow_heart_rage_scale_buff_effect",
+      "effectTiming": "on_play",
+      "activationZone": "spellTrap",
+      "actions": [
+        "buff_stats_temp_with_second_attack"
+      ],
+      "availableActions": [
+        {
+          "type": "spell",
+          "cardId": 65
+        },
+        {
+          "type": "spell",
+          "cardId": 68
+        }
+      ],
+      "dt": 439,
+      "delta": {
+        "botField": [
+          {
+            "name": "Shadow-Heart Void Mage",
+            "atk": 1800,
+            "def": 1500,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "botHandCount": 4
+      }
+    },
+    {
+      "type": "effect",
+      "turn": 6,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 68
+      },
+      "effectId": "darkness_valley_on_place",
+      "effectTiming": "on_play",
+      "activationZone": "fieldSpell",
+      "actions": [
+        "permanent_buff_named"
+      ],
+      "availableActions": [
+        {
+          "type": "spell",
+          "cardId": 68
+        }
+      ],
+      "dt": 449,
+      "delta": {
+        "botField": [
+          {
+            "name": "Shadow-Heart Void Mage",
+            "atk": 1500,
+            "def": 1500,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "botHandCount": 3,
+        "botGraveyard": [
+          "Shadow-Heart Infusion",
+          "Shadow-Heart Covenant",
+          "Shadow-Heart Specter",
+          "Shadow-Heart Void Mage",
+          "Shadow-Heart Rage",
+          "Darkness Valley"
+        ],
+        "botGraveCount": 6
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 7,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 101
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "availableActions": [
+        {
+          "type": "normal_summon",
+          "cardId": 101,
+          "position": "a"
+        },
+        {
+          "type": "set",
+          "cardId": 101,
+          "position": "d"
+        }
+      ],
+      "dt": 27489,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Sanctum Protector",
+            "atk": 1800,
+            "def": 2800,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          }
+        ],
+        "turn": 7
+      }
+    },
+    {
+      "type": "effect_resolution",
+      "turn": 7,
+      "phase": "main1",
+      "actor": "human",
+      "sourceCard": {
+        "c": 101,
+        "atk": 1600,
+        "def": 1200,
+        "pos": "a"
+      },
+      "effectResult": {
+        "type": "search",
+        "targets": [],
+        "cardsDrawn": 0,
+        "cardsAdded": [
+          "Luminarch Sanctified Arbiter"
+        ],
+        "lpChange": 0,
+        "description": "Added 1 card(s) to hand from deck"
+      },
+      "dt": 2227,
+      "delta": {
+        "playerHand": [
+          "Luminarch Sacred Judgment",
+          "Luminarch Celestial Marshal",
+          "Luminarch Aurora Seraph",
+          "Sanctum of the Luminarch Citadel",
+          "Luminarch Sanctified Arbiter"
+        ],
+        "playerHandCount": 5
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 7,
+      "phase": "battle",
+      "actor": "human",
+      "dt": 1741,
+      "delta": {
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 7,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 101,
+        "atk": 1600
+      },
+      "target": {
+        "c": 71,
+        "atk": 1500,
+        "def": 1500,
+        "pos": "a"
+      },
+      "availableActions": [
+        {
+          "type": "attack",
+          "cardId": 101,
+          "targetId": 71
+        },
+        {
+          "type": "cancel_attack"
+        }
+      ],
+      "dt": 3076
+    },
+    {
+      "type": "attack",
+      "turn": 7,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 101,
+        "atk": 1600
+      },
+      "target": {
+        "c": 71,
+        "atk": 1500,
+        "def": 1500,
+        "pos": "a"
+      },
+      "combatResult": {
+        "damageDealt": 100,
+        "targetDestroyed": true
+      },
+      "dt": 8,
+      "delta": {
+        "botLP": 6000,
+        "botField": [],
+        "botGraveyard": [
+          "Shadow-Heart Infusion",
+          "Shadow-Heart Covenant",
+          "Shadow-Heart Specter",
+          "Shadow-Heart Void Mage",
+          "Shadow-Heart Rage",
+          "Darkness Valley",
+          "Shadow-Heart Void Mage"
+        ],
+        "botGraveCount": 7
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 7,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 107,
+        "atk": 1800
+      },
+      "target": null,
+      "directAttack": true,
+      "availableActions": [
+        {
+          "type": "direct_attack",
+          "cardId": 107
+        },
+        {
+          "type": "cancel_attack"
+        }
+      ],
+      "dt": 2296
+    },
+    {
+      "type": "attack",
+      "turn": 7,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 101,
+        "atk": 1600
+      },
+      "target": null,
+      "directAttack": true,
+      "availableActions": [
+        {
+          "type": "direct_attack",
+          "cardId": 101
+        },
+        {
+          "type": "cancel_attack"
+        }
+      ],
+      "dt": 1220,
+      "delta": {
+        "botLP": 4200
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 7,
+      "phase": "end",
+      "actor": "human",
+      "dt": 1472,
+      "delta": {
+        "botLP": 2600,
+        "phase": "end"
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 9,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 108
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "tributes": [
+        "Luminarch Valiant - Knight of the Dawn",
+        "Luminarch Valiant - Knight of the Dawn"
+      ],
+      "availableActions": [
+        {
+          "type": "normal_summon",
+          "cardId": 108,
+          "position": "a"
+        },
+        {
+          "type": "set",
+          "cardId": 108,
+          "position": "d"
+        }
+      ],
+      "dt": 11513,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Luminarch Sanctum Protector",
+            "atk": 1800,
+            "def": 2800,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Radiant Lancer",
+            "atk": 2600,
+            "def": 2100,
+            "position": "attack"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Coward",
+            "atk": 800,
+            "def": 1000,
+            "position": "defense",
+            "isFacedown": true
+          }
+        ],
+        "playerGraveyard": [
+          "Luminarch Sanctified Arbiter",
+          "Luminarch Aegisbearer",
+          "Luminarch Valiant - Knight of the Dawn",
+          "Luminarch Valiant - Knight of the Dawn"
+        ],
+        "playerGraveCount": 4,
+        "turn": 9,
+        "phase": "main1"
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 9,
+      "phase": "battle",
+      "actor": "human",
+      "dt": 1319,
+      "delta": {
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 9,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 108,
+        "atk": 2600
+      },
+      "target": {
+        "c": 62,
+        "atk": 800,
+        "def": 1000,
+        "pos": "d",
+        "fd": true
+      },
+      "availableActions": [
+        {
+          "type": "attack",
+          "cardId": 108,
+          "targetId": 62
+        },
+        {
+          "type": "cancel_attack"
+        }
+      ],
+      "dt": 1669
+    },
+    {
+      "type": "attack",
+      "turn": 9,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 108,
+        "atk": 2800
+      },
+      "target": {
+        "c": 62,
+        "atk": 800,
+        "def": 1000,
+        "pos": "d"
+      },
+      "dt": 631,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Luminarch Sanctum Protector",
+            "atk": 1800,
+            "def": 2800,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Radiant Lancer",
+            "atk": 2800,
+            "def": 2100,
+            "position": "attack"
+          }
+        ],
+        "botField": [],
+        "botGraveyard": [
+          "Shadow-Heart Infusion",
+          "Shadow-Heart Covenant",
+          "Shadow-Heart Specter",
+          "Shadow-Heart Void Mage",
+          "Shadow-Heart Rage",
+          "Darkness Valley",
+          "Shadow-Heart Void Mage",
+          "Shadow-Heart Coward"
+        ],
+        "botGraveCount": 8
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 9,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 107,
+        "atk": 1800
+      },
+      "target": null,
+      "directAttack": true,
+      "availableActions": [
+        {
+          "type": "direct_attack",
+          "cardId": 107
+        },
+        {
+          "type": "cancel_attack"
+        }
+      ],
+      "dt": 1144
+    },
+    {
+      "type": "pass",
+      "turn": 9,
+      "phase": "end",
+      "actor": "human",
+      "dt": 1004,
+      "delta": {
+        "botLP": 800,
+        "phase": "end"
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 10,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 67
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "availableActions": [
+        {
+          "type": "summon",
+          "cardId": 67,
+          "position": "a"
+        }
+      ],
+      "dt": 815,
+      "delta": {
+        "botField": [
+          {
+            "name": "Shadow-Heart Griffin",
+            "atk": 2000,
+            "def": 1500,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "turn": 10,
+        "phase": "main1"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 10,
+      "phase": "battle",
+      "actor": "bot",
+      "attacker": {
+        "c": 67,
+        "atk": 2300
+      },
+      "target": {
+        "c": 107,
+        "atk": 1800,
+        "def": 2800,
+        "pos": "a"
+      },
+      "availableActions": [
+        {
+          "type": "attack",
+          "cardId": 67,
+          "targetId": 107
+        },
+        {
+          "type": "attack",
+          "cardId": 67,
+          "targetId": 108
+        }
+      ],
+      "dt": 942,
+      "delta": {
+        "botField": [
+          {
+            "name": "Shadow-Heart Griffin",
+            "atk": 2300,
+            "def": 1500,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 11,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 110
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "availableActions": [
+        {
+          "type": "normal_summon",
+          "cardId": 110,
+          "position": "a"
+        },
+        {
+          "type": "set",
+          "cardId": 110,
+          "position": "d"
+        }
+      ],
+      "dt": 37091
+    },
+    {
+      "type": "effect_resolution",
+      "turn": 11,
+      "phase": "main1",
+      "actor": "human",
+      "sourceCard": {
+        "c": 110,
+        "atk": 1500,
+        "def": 1000,
+        "pos": "a"
+      },
+      "effectResult": {
+        "type": "search",
+        "targets": [],
+        "cardsDrawn": 0,
+        "cardsAdded": [
+          "Luminarch Moonlit Blessing"
+        ],
+        "lpChange": 0,
+        "description": "Added 1 card(s) to hand from deck"
+      },
+      "dt": 1993,
+      "delta": {
+        "playerHand": [
+          "Luminarch Sacred Judgment",
+          "Luminarch Celestial Marshal",
+          "Luminarch Aurora Seraph",
+          "Sanctum of the Luminarch Citadel",
+          "Luminarch Magic Sickle",
+          "Luminarch Moonlit Blessing"
+        ],
+        "playerHandCount": 6
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 11,
+      "phase": "battle",
+      "actor": "human",
+      "dt": 3231,
+      "delta": {
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 11,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 108,
+        "atk": 2800
+      },
+      "target": {
+        "c": 67,
+        "atk": 2300,
+        "def": 1500,
+        "pos": "a"
+      },
+      "availableActions": [
+        {
+          "type": "attack",
+          "cardId": 108,
+          "targetId": 67
+        },
+        {
+          "type": "cancel_attack"
+        }
+      ],
+      "dt": 2720
+    },
+    {
+      "type": "attack",
+      "turn": 11,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 108,
+        "atk": 3000
+      },
+      "target": {
+        "c": 67,
+        "atk": 2000,
+        "def": 1500,
+        "pos": "a"
+      },
+      "combatResult": {
+        "damageDealt": 500,
+        "targetDestroyed": true
+      },
+      "dt": 24,
+      "delta": {
+        "botLP": 300,
+        "playerField": [
+          {
+            "name": "Luminarch Sanctum Protector",
+            "atk": 1800,
+            "def": 2800,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Radiant Lancer",
+            "atk": 3000,
+            "def": 2100,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Sanctified Arbiter",
+            "atk": 1500,
+            "def": 1000,
+            "position": "attack"
+          }
+        ],
+        "botField": [],
+        "botGraveyard": [
+          "Shadow-Heart Infusion",
+          "Shadow-Heart Covenant",
+          "Shadow-Heart Specter",
+          "Shadow-Heart Void Mage",
+          "Shadow-Heart Rage",
+          "Darkness Valley",
+          "Shadow-Heart Void Mage",
+          "Shadow-Heart Coward",
+          "Shadow-Heart Griffin"
+        ],
+        "botGraveCount": 9
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 11,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 110,
+        "atk": 1500
+      },
+      "target": null,
+      "directAttack": true,
+      "availableActions": [
+        {
+          "type": "direct_attack",
+          "cardId": 110
+        },
+        {
+          "type": "cancel_attack"
+        }
+      ],
+      "dt": 2277
+    }
+  ],
+  "result": {
+    "winner": "human",
+    "reason": "lp_zero"
+  },
+  "totalTurns": 11,
+  "finalLP": {
+    "player": 6950,
+    "bot": 0
+  }
+}

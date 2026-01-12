@@ -104,7 +104,18 @@ export function bindBotSpellTrapClick(handler) {
  * @this {import('../Renderer.js').default}
  */
 export function bindBotHandClick(handler) {
-  this.bindZoneCardClick("bot-hand", handler);
+  const zone = document.getElementById("bot-hand");
+  if (!zone) return;
+  zone.addEventListener("click", (e) => {
+    const cardEl = e.target.closest(".card");
+    if (!cardEl) {
+      handler(e, null, -1);
+      return;
+    }
+    const index = Number.parseInt(cardEl.dataset.index, 10);
+    if (Number.isNaN(index)) return;
+    handler(e, cardEl, index);
+  });
 }
 
 /**

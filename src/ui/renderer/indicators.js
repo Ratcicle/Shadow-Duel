@@ -296,6 +296,13 @@ export function clearTargetHighlights() {
 
   containers.forEach((container) => {
     if (!container) return;
+    container.classList.remove(
+      "targetable",
+      "selected-target",
+      "attack-attacker",
+      "attack-target",
+      "direct-attack-target"
+    );
     container
       .querySelectorAll(
         ".card.targetable, .card.selected-target, .card.attack-attacker, .card.attack-target, .direct-attack-target"
