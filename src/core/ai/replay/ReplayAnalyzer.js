@@ -418,10 +418,11 @@ class ReplayAnalyzer {
     }
 
     // Se não encontrou próximo turno, usar resultado final
+    // Suportar ambos formatos: normalizado (result = "win") e raw (result.winner = "human")
     const isWin =
       replay.result === "win" ||
       replay.result?.winner === "human" ||
-      replay.result?.winner?.winner === "human";
+      replay.result?.winner === "player";
 
     if (!nextSnapshot && !foundNextTurn) {
       return {

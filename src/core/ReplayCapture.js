@@ -545,6 +545,12 @@ class ReplayCapture {
       // v3: Zona de origem (hand, graveyard, deck, extraDeck)
       fromZone: context.fromZone || "hand",
 
+      // v3: Tributos usados (para Tribute Summon tracking)
+      ...(context.tributes &&
+        context.tributes.length > 0 && {
+          tributes: context.tributes,
+        }),
+
       // Contexto do jogo
       gameState: this._captureGameState(context),
     };

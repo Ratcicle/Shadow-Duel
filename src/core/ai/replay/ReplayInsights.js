@@ -29,6 +29,27 @@ class ReplayInsights {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
+  // Helpers
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Verifica se o replay foi uma vitória (suporta ambos formatos)
+   * @param {Object} replay
+   * @returns {boolean}
+   */
+  _isWin(replay) {
+    // Formato normalizado (após import): result = "win" | "loss"
+    if (replay.result === "win") return true;
+    if (replay.result === "loss") return false;
+
+    // Formato original (antes de import): result.winner = "human" | "player" | "bot"
+    if (replay.result?.winner === "human" || replay.result?.winner === "player")
+      return true;
+
+    return false;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   // Configuração
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -132,7 +153,10 @@ class ReplayInsights {
     let totalImpact = 0;
 
     for (const r of relevantReplays) {
-      if (r.result === "win") wins++;
+      // Verificar vitória: result.winner pode ser "human", "player" ou "bot"
+      const isWin =
+        r.result?.winner === "human" || r.result?.winner === "player";
+      if (isWin) wins++;
 
       // Contar ativações
       const decisions = r.decisions || [];
@@ -211,7 +235,7 @@ class ReplayInsights {
     for (const r of replays) {
       const decisions = r.decisions || [];
       const dict = r.cardDictionary || {};
-      const isWin = r.result === "win";
+      const isWin = this._isWin(r);
       const seenCards = new Set();
 
       for (const d of decisions) {
@@ -307,7 +331,7 @@ class ReplayInsights {
 
       // Criar key do padrão (primeiras 3 ações)
       const patternKey = opening.slice(0, 3).join(" → ");
-      const isWin = r.result === "win";
+      const isWin = this._isWin(r);
 
       if (!patternStats.has(patternKey)) {
         patternStats.set(patternKey, {
@@ -535,7 +559,7 @@ class ReplayInsights {
 
     for (const r of replays) {
       const opponent = r.botArchetype || "unknown";
-      const isWin = r.result === "win";
+      const isWin = this._isWin(r);
 
       if (!matchupStats.has(opponent)) {
         matchupStats.set(opponent, { wins: 0, total: 0 });
@@ -582,14 +606,14 @@ class ReplayInsights {
 
     const stats = {
       totalReplays: replays.length,
-      wins: replays.filter((r) => r.result === "win").length,
-      losses: replays.filter((r) => r.result === "loss").length,
+      wins: replays.filter((r) => this._isWin(r)).length,
+      losses: replays.filter((r) => !this._isWin(r) && r.result).length,
       avgTurns:
         replays.reduce((sum, r) => sum + (r.totalTurns || 0), 0) /
         (replays.length || 1),
       winRate:
         replays.length > 0
-          ? replays.filter((r) => r.result === "win").length / replays.length
+          ? replays.filter((r) => this._isWin(r)).length / replays.length
           : 0,
     };
 

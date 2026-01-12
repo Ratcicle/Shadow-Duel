@@ -258,7 +258,11 @@ class PatternMatcher {
 
     for (const replay of replays) {
       const patterns = this.detectPatterns(replay);
-      const isWin = replay.result === "win";
+      // Suportar ambos formatos: normalizado (result = "win") e raw (result.winner = "human")
+      const isWin =
+        replay.result === "win" ||
+        replay.result?.winner === "human" ||
+        replay.result?.winner === "player";
 
       for (const p of patterns) {
         if (!patternStats.has(p.patternName)) {
@@ -354,7 +358,12 @@ class PatternMatcher {
 
             const stat = sequenceCounts.get(seqKey);
             stat.count++;
-            if (replay.result === "win") stat.wins++;
+            // Suportar ambos formatos: normalizado (result = "win") e raw (result.winner = "human")
+            const isWin =
+              replay.result === "win" ||
+              replay.result?.winner === "human" ||
+              replay.result?.winner === "player";
+            if (isWin) stat.wins++;
           }
         }
       }
