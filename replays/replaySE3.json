@@ -1,0 +1,1613 @@
+{
+  "version": 3,
+  "id": "duel_1768238939387_18",
+  "timestamp": "2026-01-12T17:28:59.387Z",
+  "playerDeck": {
+    "playerDeck": [
+      "Luminarch Radiant Wave",
+      "Luminarch Aegisbearer",
+      "Luminarch Magic Sickle",
+      "Luminarch Valiant - Knight of the Dawn",
+      "Sanctum of the Luminarch Citadel",
+      "Luminarch Valiant - Knight of the Dawn",
+      "Luminarch Holy Ascension",
+      "Luminarch Sanctified Arbiter",
+      "Luminarch Spear of Dawnfall",
+      "Luminarch Knights Convocation"
+    ],
+    "playerExtraDeck": [
+      "Luminarch Megashield Barbarias",
+      "Luminarch Fortress Aegis"
+    ],
+    "botPreset": "shadowheart",
+    "timestamp": 1768238939386
+  },
+  "botDeck": "unknown",
+  "botDeckList": [
+    "Shadow-Heart Covenant",
+    "Darkness Valley",
+    "Shadow-Heart Battle Hymn",
+    "Shadow-Heart Infusion",
+    "Shadow-Heart Demon Arctroth",
+    "Shadow-Heart Specter",
+    "Shadow-Heart Imp",
+    "Shadow-Heart Void Mage",
+    "Shadow-Heart Griffin",
+    "Shadow-Heart Imp",
+    "Shadow-Heart Abyssal Eel",
+    "Shadow-Heart Scale Dragon",
+    "Shadow-Heart Leviathan",
+    "Shadow-Heart Coward",
+    "Shadow-Heart Rage",
+    "Shadow-Heart Void Mage",
+    "Shadow-Heart Specter",
+    "Shadow-Heart Infusion",
+    "Shadow-Heart Griffin",
+    "Polymerization",
+    "Shadow-Heart Imp",
+    "Shadow-Heart Gecko",
+    "Shadow-Heart Coward",
+    "Shadow-Heart Covenant",
+    "Shadow-Heart Abyssal Eel",
+    "Shadow-Heart Scale Dragon",
+    "Shadow-Heart Purge",
+    "Shadow-Heart Death Wyrm",
+    "Polymerization",
+    "Darkness Valley"
+  ],
+  "botArchetype": "shadowheart",
+  "cardDictionary": {
+    "13": "Polymerization",
+    "52": "Shadow-Heart Abyssal Eel",
+    "54": "Shadow-Heart Purge",
+    "59": "Shadow-Heart Covenant",
+    "61": "Shadow-Heart Gecko",
+    "62": "Shadow-Heart Coward",
+    "68": "Darkness Valley",
+    "69": "Shadow-Heart Death Wyrm",
+    "101": "Luminarch Valiant - Knight of the Dawn",
+    "102": "Luminarch Holy Shield",
+    "103": "Luminarch Aegisbearer",
+    "104": "Luminarch Moonblade Captain",
+    "112": "Sanctum of the Luminarch Citadel",
+    "115": "Luminarch Crescent Shield",
+    "117": "Luminarch Enchanted Halberd",
+    "118": "Luminarch Moonlit Blessing",
+    "120": "Luminarch Megashield Barbarias"
+  },
+  "snapshots": {
+    "1": {
+      "playerLP": 8000,
+      "botLP": 8000,
+      "playerHand": [
+        "Luminarch Holy Shield",
+        "Sanctum of the Luminarch Citadel",
+        "Luminarch Sanctum Protector",
+        "Luminarch Moonblade Captain"
+      ],
+      "playerHandCount": 4,
+      "playerHandDetails": [
+        {
+          "name": "Luminarch Holy Shield",
+          "cardKind": "spell",
+          "level": 0,
+          "atk": 0,
+          "def": 0
+        },
+        {
+          "name": "Sanctum of the Luminarch Citadel",
+          "cardKind": "spell",
+          "level": 0,
+          "atk": 0,
+          "def": 0
+        },
+        {
+          "name": "Luminarch Sanctum Protector",
+          "cardKind": "monster",
+          "level": 7,
+          "atk": 1800,
+          "def": 2800
+        },
+        {
+          "name": "Luminarch Moonblade Captain",
+          "cardKind": "monster",
+          "level": 6,
+          "atk": 2200,
+          "def": 1700
+        }
+      ],
+      "playerField": [],
+      "botField": [],
+      "playerBackrow": [
+        {
+          "name": "Polymerization",
+          "isFacedown": false
+        }
+      ],
+      "botBackrowCount": 0,
+      "playerFieldSpell": null,
+      "botFieldSpell": null,
+      "botHandCount": 4,
+      "playerExtraDeckCount": 2,
+      "botExtraDeckCount": 3,
+      "playerGraveyard": [],
+      "playerGraveCount": 0,
+      "botGraveyard": [],
+      "botGraveCount": 0,
+      "turn": 1,
+      "phase": "main1",
+      "summonCount": 0
+    },
+    "6": {
+      "playerLP": 8000,
+      "botLP": 5800,
+      "playerField": [
+        {
+          "name": "Luminarch Moonblade Captain",
+          "atk": 2200,
+          "def": 1700,
+          "position": "attack"
+        },
+        {
+          "name": "Luminarch Aegisbearer",
+          "atk": 1000,
+          "def": 2000,
+          "position": "defense"
+        }
+      ],
+      "botField": [
+        {
+          "name": "Shadow-Heart Death Wyrm",
+          "atk": 2400,
+          "def": 2000,
+          "position": "attack",
+          "isFacedown": false
+        }
+      ],
+      "playerHand": [],
+      "playerHandCount": 0,
+      "botHandCount": 2,
+      "playerGraveyard": [
+        "Luminarch Sanctum Protector",
+        "Polymerization",
+        "Luminarch Megashield Barbarias",
+        "Luminarch Moonlit Blessing",
+        "Luminarch Valiant - Knight of the Dawn"
+      ],
+      "playerGraveCount": 5,
+      "botGraveyard": [
+        "Darkness Valley",
+        "Shadow-Heart Abyssal Eel",
+        "Polymerization"
+      ],
+      "botGraveCount": 3,
+      "playerSpellTrapCount": 0,
+      "botSpellTrapCount": 0,
+      "playerExtraDeckCount": 1,
+      "botExtraDeckCount": 3,
+      "playerFieldSpell": "Sanctum of the Luminarch Citadel",
+      "botFieldSpell": null,
+      "turn": 6,
+      "phase": "main1"
+    },
+    "11": {
+      "playerLP": 7500,
+      "botLP": 1700,
+      "playerField": [
+        {
+          "name": "Luminarch Moonblade Captain",
+          "atk": 2200,
+          "def": 1700,
+          "position": "attack"
+        },
+        {
+          "name": "Luminarch Enchanted Halberd",
+          "atk": 1600,
+          "def": 1400,
+          "position": "attack"
+        },
+        {
+          "name": "Luminarch Aegisbearer",
+          "atk": 1000,
+          "def": 2000,
+          "position": "attack"
+        }
+      ],
+      "botField": [
+        {
+          "name": "Shadow-Heart Gecko",
+          "atk": 1000,
+          "def": 1000,
+          "position": "defense",
+          "isFacedown": true
+        }
+      ],
+      "playerHand": [
+        "Luminarch Crescent Shield"
+      ],
+      "playerHandCount": 1,
+      "botHandCount": 1,
+      "playerGraveyard": [
+        "Luminarch Sanctum Protector",
+        "Polymerization",
+        "Luminarch Megashield Barbarias",
+        "Luminarch Moonlit Blessing",
+        "Luminarch Valiant - Knight of the Dawn",
+        "Luminarch Holy Shield",
+        "Luminarch Aegisbearer"
+      ],
+      "playerGraveCount": 7,
+      "botGraveyard": [
+        "Darkness Valley",
+        "Shadow-Heart Abyssal Eel",
+        "Polymerization",
+        "Shadow-Heart Purge",
+        "Shadow-Heart Covenant",
+        "Shadow-Heart Death Wyrm",
+        "Shadow-Heart Covenant",
+        "Shadow-Heart Coward"
+      ],
+      "botGraveCount": 8,
+      "playerSpellTrapCount": 0,
+      "botSpellTrapCount": 0,
+      "playerExtraDeckCount": 1,
+      "botExtraDeckCount": 3,
+      "playerFieldSpell": "Sanctum of the Luminarch Citadel",
+      "botFieldSpell": "Darkness Valley",
+      "turn": 11,
+      "phase": "main1"
+    }
+  },
+  "decisions": [
+    {
+      "type": "position_choice",
+      "turn": 1,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 120,
+        "atk": 2500,
+        "def": 3000,
+        "pos": "a"
+      },
+      "chosenPosition": "a",
+      "summonType": "special",
+      "availableActions": [
+        {
+          "type": "activate_spell",
+          "cardId": 13
+        },
+        {
+          "type": "set_spell",
+          "cardId": 13
+        }
+      ],
+      "t0": 1768238945206
+    },
+    {
+      "type": "summon",
+      "turn": 1,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 120
+      },
+      "summonType": "fusion",
+      "fromZone": "extraDeck",
+      "dt": 6
+    },
+    {
+      "type": "effect",
+      "turn": 1,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 13
+      },
+      "effectId": "polymerization_fusion",
+      "effectTiming": "on_play",
+      "activationZone": "spellTrap",
+      "actions": [
+        "polymerization_fusion_summon"
+      ],
+      "dt": 23
+    },
+    {
+      "type": "spell",
+      "turn": 1,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 13
+      },
+      "targets": [],
+      "dt": 3
+    },
+    {
+      "type": "set_spell_trap",
+      "turn": 1,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 102
+      },
+      "availableActions": [
+        {
+          "type": "activate_spell",
+          "cardId": 102
+        },
+        {
+          "type": "set_spell",
+          "cardId": 102
+        }
+      ],
+      "dt": 3054
+    },
+    {
+      "type": "pass",
+      "turn": 1,
+      "phase": "end",
+      "actor": "human",
+      "availableActions": [
+        {
+          "type": "activate_spell",
+          "cardId": 112
+        },
+        {
+          "type": "set_spell",
+          "cardId": 112
+        }
+      ],
+      "dt": 1976
+    },
+    {
+      "type": "effect",
+      "turn": 2,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 54
+      },
+      "effectId": "shadow_heart_purge_destroy",
+      "effectTiming": "on_play",
+      "activationZone": "spellTrap",
+      "actions": [
+        "move",
+        "destroy"
+      ],
+      "availableActions": [
+        {
+          "type": "spell",
+          "cardId": 68
+        },
+        {
+          "type": "spell",
+          "cardId": 54
+        }
+      ],
+      "dt": 861,
+      "delta": {
+        "playerHand": [],
+        "playerHandCount": 0,
+        "botHandCount": 3,
+        "playerGraveyard": [
+          "Luminarch Sanctum Protector",
+          "Luminarch Moonblade Captain",
+          "Polymerization",
+          "Luminarch Megashield Barbarias"
+        ],
+        "playerGraveCount": 4,
+        "botGraveyard": [
+          "Darkness Valley"
+        ],
+        "botGraveCount": 1,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0,
+        "playerExtraDeckCount": 1,
+        "playerFieldSpell": "Sanctum of the Luminarch Citadel",
+        "turn": 2
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 3,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 101
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "availableActions": [
+        {
+          "type": "normal_summon",
+          "cardId": 101,
+          "position": "a"
+        },
+        {
+          "type": "set",
+          "cardId": 101,
+          "position": "d"
+        }
+      ],
+      "dt": 8419,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          }
+        ],
+        "botGraveyard": [
+          "Darkness Valley",
+          "Shadow-Heart Purge"
+        ],
+        "botGraveCount": 2,
+        "turn": 3
+      }
+    },
+    {
+      "type": "effect_resolution",
+      "turn": 3,
+      "phase": "main1",
+      "actor": "human",
+      "sourceCard": {
+        "c": 101,
+        "atk": 1600,
+        "def": 1200,
+        "pos": "a"
+      },
+      "effectResult": {
+        "type": "search",
+        "targets": [],
+        "cardsDrawn": 0,
+        "cardsAdded": [
+          "Luminarch Aegisbearer"
+        ],
+        "lpChange": 0,
+        "description": "Added 1 card(s) to hand from deck"
+      },
+      "dt": 1954,
+      "delta": {
+        "playerHand": [
+          "Luminarch Aegisbearer"
+        ],
+        "playerHandCount": 1
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 3,
+      "phase": "battle",
+      "actor": "human",
+      "dt": 1661,
+      "delta": {
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 3,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 101,
+        "atk": 1600
+      },
+      "target": null,
+      "directAttack": true,
+      "availableActions": [
+        {
+          "type": "direct_attack",
+          "cardId": 101
+        },
+        {
+          "type": "cancel_attack"
+        }
+      ],
+      "dt": 998
+    },
+    {
+      "type": "pass",
+      "turn": 3,
+      "phase": "end",
+      "actor": "human",
+      "dt": 1746,
+      "delta": {
+        "botLP": 6400,
+        "phase": "end"
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 4,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 52
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "availableActions": [
+        {
+          "type": "summon",
+          "cardId": 52,
+          "position": "a"
+        }
+      ],
+      "dt": 817,
+      "delta": {
+        "botField": [
+          {
+            "name": "Shadow-Heart Abyssal Eel",
+            "atk": 1600,
+            "def": 1700,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "turn": 4,
+        "phase": "main1"
+      }
+    },
+    {
+      "type": "position_choice",
+      "turn": 5,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 104,
+        "atk": 2200,
+        "def": 1700,
+        "pos": "a"
+      },
+      "chosenPosition": "a",
+      "summonType": "special",
+      "availableActions": [
+        {
+          "type": "activate_spell",
+          "cardId": 118
+        },
+        {
+          "type": "set_spell",
+          "cardId": 118
+        }
+      ],
+      "dt": 36505,
+      "delta": {
+        "playerHand": [
+          "Luminarch Aegisbearer",
+          "Luminarch Moonblade Captain"
+        ],
+        "playerHandCount": 2,
+        "playerHandDetails": [
+          {
+            "name": "Luminarch Aegisbearer",
+            "cardKind": "monster",
+            "level": 4,
+            "atk": 1000,
+            "def": 2000
+          },
+          {
+            "name": "Luminarch Moonblade Captain",
+            "cardKind": "monster",
+            "level": 6,
+            "atk": 2200,
+            "def": 1700
+          }
+        ],
+        "playerField": [
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack",
+            "isFacedown": false,
+            "hasAttacked": false
+          }
+        ],
+        "playerBackrow": [
+          {
+            "name": "Luminarch Holy Shield",
+            "isFacedown": true
+          },
+          {
+            "name": "Luminarch Moonlit Blessing",
+            "isFacedown": false
+          }
+        ],
+        "botBackrowCount": 0,
+        "playerGraveyard": [
+          "Luminarch Sanctum Protector",
+          "Polymerization",
+          "Luminarch Megashield Barbarias"
+        ],
+        "playerGraveCount": 3,
+        "turn": 5,
+        "summonCount": 0
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 5,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 104
+      },
+      "summonType": "special",
+      "fromZone": "hand",
+      "dt": 2,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Moonblade Captain",
+            "atk": 2200,
+            "def": 1700,
+            "position": "attack"
+          }
+        ],
+        "playerHand": [
+          "Luminarch Aegisbearer"
+        ],
+        "playerHandCount": 1,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0
+      }
+    },
+    {
+      "type": "effect",
+      "turn": 5,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 118
+      },
+      "effectId": "luminarch_moonlit_blessing_effect",
+      "effectTiming": "on_play",
+      "activationZone": "spellTrap",
+      "actions": [
+        "move",
+        "conditional_summon_from_hand"
+      ],
+      "dt": 12
+    },
+    {
+      "type": "spell",
+      "turn": 5,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 118
+      },
+      "targets": [],
+      "dt": 3,
+      "delta": {
+        "playerGraveyard": [
+          "Luminarch Sanctum Protector",
+          "Polymerization",
+          "Luminarch Megashield Barbarias",
+          "Luminarch Moonlit Blessing"
+        ],
+        "playerGraveCount": 4
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 5,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 103
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "availableActions": [
+        {
+          "type": "normal_summon",
+          "cardId": 103,
+          "position": "a"
+        },
+        {
+          "type": "set",
+          "cardId": 103,
+          "position": "d"
+        }
+      ],
+      "dt": 2469,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Moonblade Captain",
+            "atk": 2200,
+            "def": 1700,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Aegisbearer",
+            "atk": 1000,
+            "def": 2000,
+            "position": "defense"
+          }
+        ],
+        "playerHand": [],
+        "playerHandCount": 0
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 5,
+      "phase": "battle",
+      "actor": "human",
+      "dt": 2113,
+      "delta": {
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 5,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 104,
+        "atk": 2200
+      },
+      "target": {
+        "c": 52,
+        "atk": 1600,
+        "def": 1700,
+        "pos": "a"
+      },
+      "availableActions": [
+        {
+          "type": "attack",
+          "cardId": 104,
+          "targetId": 52
+        },
+        {
+          "type": "cancel_attack"
+        }
+      ],
+      "dt": 1234
+    },
+    {
+      "type": "summon",
+      "turn": 5,
+      "phase": "battle",
+      "actor": "bot",
+      "card": {
+        "c": 69
+      },
+      "summonType": "special",
+      "fromZone": "hand",
+      "dt": 11,
+      "delta": {
+        "botLP": 5800,
+        "botField": [
+          {
+            "name": "Shadow-Heart Death Wyrm",
+            "atk": 2400,
+            "def": 2000,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "botHandCount": 2,
+        "botGraveyard": [
+          "Darkness Valley",
+          "Shadow-Heart Purge",
+          "Shadow-Heart Abyssal Eel"
+        ],
+        "botGraveCount": 3
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 5,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 104,
+        "atk": 2200
+      },
+      "target": {
+        "c": 52,
+        "atk": 1600,
+        "def": 1700,
+        "pos": "a"
+      },
+      "combatResult": {
+        "damageDealt": 600,
+        "targetDestroyed": true
+      },
+      "dt": 28,
+      "delta": {
+        "botHandCount": 3,
+        "botGraveyard": [
+          "Darkness Valley",
+          "Shadow-Heart Abyssal Eel"
+        ],
+        "botGraveCount": 2
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 5,
+      "phase": "end",
+      "actor": "human",
+      "dt": 3886,
+      "delta": {
+        "phase": "end"
+      }
+    },
+    {
+      "type": "effect",
+      "turn": 6,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 54
+      },
+      "effectId": "shadow_heart_purge_destroy",
+      "effectTiming": "on_play",
+      "activationZone": "spellTrap",
+      "actions": [
+        "move",
+        "destroy"
+      ],
+      "availableActions": [
+        {
+          "type": "spell",
+          "cardId": 54
+        },
+        {
+          "type": "spell",
+          "cardId": 59
+        }
+      ],
+      "dt": 843
+    },
+    {
+      "type": "effect_resolution",
+      "turn": 6,
+      "phase": "main1",
+      "actor": "bot",
+      "sourceCard": {
+        "c": 59,
+        "atk": 0,
+        "def": 0,
+        "pos": "a"
+      },
+      "effectResult": {
+        "type": "search",
+        "targets": [],
+        "cardsDrawn": 0,
+        "cardsAdded": [
+          "Shadow-Heart Covenant"
+        ],
+        "lpChange": 0,
+        "description": "Added 1 card(s) to hand from deck"
+      },
+      "availableActions": [
+        {
+          "type": "spell",
+          "cardId": 59
+        }
+      ],
+      "dt": 443,
+      "delta": {
+        "botLP": 5000,
+        "botGraveyard": [
+          "Darkness Valley",
+          "Shadow-Heart Abyssal Eel",
+          "Polymerization",
+          "Shadow-Heart Purge"
+        ],
+        "botGraveCount": 4
+      }
+    },
+    {
+      "type": "effect",
+      "turn": 6,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 59
+      },
+      "effectId": "shadow_heart_covenant",
+      "effectTiming": "on_play",
+      "activationZone": "spellTrap",
+      "actions": [
+        "pay_lp",
+        "search_any"
+      ],
+      "dt": 4
+    },
+    {
+      "type": "attack",
+      "turn": 6,
+      "phase": "battle",
+      "actor": "bot",
+      "attacker": {
+        "c": 69,
+        "atk": 2400
+      },
+      "target": {
+        "c": 103,
+        "atk": 1000,
+        "def": 2000,
+        "pos": "d",
+        "fd": true
+      },
+      "availableActions": [
+        {
+          "type": "attack",
+          "cardId": 69,
+          "targetId": 104
+        },
+        {
+          "type": "attack",
+          "cardId": 69,
+          "targetId": 103
+        }
+      ],
+      "dt": 2014,
+      "delta": {
+        "botGraveyard": [
+          "Darkness Valley",
+          "Shadow-Heart Abyssal Eel",
+          "Polymerization",
+          "Shadow-Heart Purge",
+          "Shadow-Heart Covenant"
+        ],
+        "botGraveCount": 5,
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "chain_response",
+      "turn": 6,
+      "phase": "battle",
+      "actor": "human",
+      "trigger": null,
+      "responded": true,
+      "responseCard": null,
+      "availableResponses": [],
+      "dt": 1953,
+      "delta": {
+        "playerLP": 8500
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 6,
+      "phase": "battle",
+      "actor": "bot",
+      "attacker": {
+        "c": 69,
+        "atk": 2400
+      },
+      "target": {
+        "c": 103,
+        "atk": 1000,
+        "def": 2000,
+        "pos": "d"
+      },
+      "dt": 629,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Luminarch Moonblade Captain",
+            "atk": 2200,
+            "def": 1700,
+            "position": "attack"
+          }
+        ],
+        "playerGraveyard": [
+          "Luminarch Sanctum Protector",
+          "Polymerization",
+          "Luminarch Megashield Barbarias",
+          "Luminarch Moonlit Blessing",
+          "Luminarch Valiant - Knight of the Dawn",
+          "Luminarch Holy Shield",
+          "Luminarch Aegisbearer"
+        ],
+        "playerGraveCount": 7
+      }
+    },
+    {
+      "type": "effect_resolution",
+      "turn": 7,
+      "phase": "main1",
+      "actor": "human",
+      "sourceCard": {
+        "c": 112,
+        "atk": 0,
+        "def": 0,
+        "pos": "a"
+      },
+      "effectResult": {
+        "type": "buff",
+        "targets": [],
+        "cardsDrawn": 0,
+        "cardsAdded": [],
+        "lpChange": 0,
+        "description": "Luminarch Moonblade Captain +500 ATK, +500 DEF (temp)"
+      },
+      "dt": 19022,
+      "delta": {
+        "playerLP": 7500,
+        "playerField": [
+          {
+            "name": "Luminarch Moonblade Captain",
+            "atk": 2700,
+            "def": 2200,
+            "position": "attack"
+          }
+        ],
+        "playerHand": [
+          "Luminarch Enchanted Halberd"
+        ],
+        "playerHandCount": 1,
+        "turn": 7,
+        "phase": "main1"
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 7,
+      "phase": "battle",
+      "actor": "human",
+      "dt": 556,
+      "delta": {
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 7,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 104,
+        "atk": 2700
+      },
+      "target": {
+        "c": 69,
+        "atk": 2400,
+        "def": 2000,
+        "pos": "a"
+      },
+      "availableActions": [
+        {
+          "type": "attack",
+          "cardId": 104,
+          "targetId": 69
+        },
+        {
+          "type": "cancel_attack"
+        }
+      ],
+      "dt": 2276
+    },
+    {
+      "type": "attack",
+      "turn": 7,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 104,
+        "atk": 2700
+      },
+      "target": {
+        "c": 69,
+        "atk": 2400,
+        "def": 2000,
+        "pos": "a"
+      },
+      "combatResult": {
+        "damageDealt": 300,
+        "targetDestroyed": true
+      },
+      "dt": 8,
+      "delta": {
+        "botLP": 4700,
+        "botField": [],
+        "botGraveyard": [
+          "Darkness Valley",
+          "Shadow-Heart Abyssal Eel",
+          "Polymerization",
+          "Shadow-Heart Purge",
+          "Shadow-Heart Covenant",
+          "Shadow-Heart Death Wyrm"
+        ],
+        "botGraveCount": 6
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 7,
+      "phase": "end",
+      "actor": "human",
+      "dt": 1124,
+      "delta": {
+        "phase": "end"
+      }
+    },
+    {
+      "type": "effect_resolution",
+      "turn": 8,
+      "phase": "main1",
+      "actor": "bot",
+      "sourceCard": {
+        "c": 59,
+        "atk": 0,
+        "def": 0,
+        "pos": "a"
+      },
+      "effectResult": {
+        "type": "search",
+        "targets": [],
+        "cardsDrawn": 0,
+        "cardsAdded": [
+          "Darkness Valley"
+        ],
+        "lpChange": 0,
+        "description": "Added 1 card(s) to hand from deck"
+      },
+      "availableActions": [
+        {
+          "type": "spell",
+          "cardId": 59
+        }
+      ],
+      "dt": 1264,
+      "delta": {
+        "botLP": 3900,
+        "playerField": [
+          {
+            "name": "Luminarch Moonblade Captain",
+            "atk": 2200,
+            "def": 1700,
+            "position": "attack"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Coward",
+            "atk": 800,
+            "def": 1000,
+            "position": "defense",
+            "isFacedown": true
+          }
+        ],
+        "turn": 8,
+        "phase": "main1"
+      }
+    },
+    {
+      "type": "effect",
+      "turn": 8,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 59
+      },
+      "effectId": "shadow_heart_covenant",
+      "effectTiming": "on_play",
+      "activationZone": "spellTrap",
+      "actions": [
+        "pay_lp",
+        "search_any"
+      ],
+      "dt": 2
+    },
+    {
+      "type": "effect",
+      "turn": 8,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 68
+      },
+      "effectId": "darkness_valley_on_place",
+      "effectTiming": "on_play",
+      "activationZone": "fieldSpell",
+      "actions": [
+        "permanent_buff_named"
+      ],
+      "availableActions": [
+        {
+          "type": "spell",
+          "cardId": 68
+        }
+      ],
+      "dt": 431,
+      "delta": {
+        "botHandCount": 1,
+        "botGraveyard": [
+          "Darkness Valley",
+          "Shadow-Heart Abyssal Eel",
+          "Polymerization",
+          "Shadow-Heart Purge",
+          "Shadow-Heart Covenant",
+          "Shadow-Heart Death Wyrm",
+          "Shadow-Heart Covenant"
+        ],
+        "botGraveCount": 7,
+        "botFieldSpell": "Darkness Valley"
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 9,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 117
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "availableActions": [
+        {
+          "type": "normal_summon",
+          "cardId": 117,
+          "position": "a"
+        },
+        {
+          "type": "set",
+          "cardId": 117,
+          "position": "d"
+        }
+      ],
+      "dt": 5151,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Luminarch Moonblade Captain",
+            "atk": 2200,
+            "def": 1700,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Enchanted Halberd",
+            "atk": 1600,
+            "def": 1400,
+            "position": "attack"
+          }
+        ],
+        "playerHand": [
+          "Luminarch Aegisbearer"
+        ],
+        "turn": 9
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 9,
+      "phase": "battle",
+      "actor": "human",
+      "dt": 1049,
+      "delta": {
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 9,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 117,
+        "atk": 1600
+      },
+      "target": {
+        "c": 62,
+        "atk": 800,
+        "def": 1000,
+        "pos": "d",
+        "fd": true
+      },
+      "availableActions": [
+        {
+          "type": "attack",
+          "cardId": 117,
+          "targetId": 62
+        },
+        {
+          "type": "cancel_attack"
+        }
+      ],
+      "dt": 1780
+    },
+    {
+      "type": "attack",
+      "turn": 9,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 117,
+        "atk": 1600
+      },
+      "target": {
+        "c": 62,
+        "atk": 800,
+        "def": 1000,
+        "pos": "d"
+      },
+      "dt": 617,
+      "delta": {
+        "botField": [],
+        "botGraveyard": [
+          "Darkness Valley",
+          "Shadow-Heart Abyssal Eel",
+          "Polymerization",
+          "Shadow-Heart Purge",
+          "Shadow-Heart Covenant",
+          "Shadow-Heart Death Wyrm",
+          "Shadow-Heart Covenant",
+          "Shadow-Heart Coward"
+        ],
+        "botGraveCount": 8
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 9,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 104,
+        "atk": 2200
+      },
+      "target": null,
+      "directAttack": true,
+      "availableActions": [
+        {
+          "type": "direct_attack",
+          "cardId": 104
+        },
+        {
+          "type": "cancel_attack"
+        }
+      ],
+      "dt": 998
+    },
+    {
+      "type": "pass",
+      "turn": 9,
+      "phase": "end",
+      "actor": "human",
+      "dt": 1260,
+      "delta": {
+        "botLP": 1700,
+        "phase": "end"
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 11,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 103
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "availableActions": [
+        {
+          "type": "normal_summon",
+          "cardId": 103,
+          "position": "a"
+        },
+        {
+          "type": "set",
+          "cardId": 103,
+          "position": "d"
+        }
+      ],
+      "dt": 18487
+    },
+    {
+      "type": "effect",
+      "turn": 11,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 115
+      },
+      "effectId": "luminarch_crescent_shield_equip",
+      "effectTiming": "on_play",
+      "activationZone": "spellTrap",
+      "actions": [
+        "equip"
+      ],
+      "availableActions": [
+        {
+          "type": "activate_spell",
+          "cardId": 115
+        },
+        {
+          "type": "set_spell",
+          "cardId": 115
+        }
+      ],
+      "dt": 2042,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Luminarch Moonblade Captain",
+            "atk": 2200,
+            "def": 1700,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Enchanted Halberd",
+            "atk": 1600,
+            "def": 1400,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Aegisbearer",
+            "atk": 1000,
+            "def": 2500,
+            "position": "attack"
+          }
+        ],
+        "playerHand": [],
+        "playerHandCount": 0
+      }
+    },
+    {
+      "type": "spell",
+      "turn": 11,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 115
+      },
+      "targets": [],
+      "dt": 4
+    },
+    {
+      "type": "pass",
+      "turn": 11,
+      "phase": "battle",
+      "actor": "human",
+      "dt": 1051,
+      "delta": {
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 11,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 117,
+        "atk": 1600
+      },
+      "target": {
+        "c": 61,
+        "atk": 1000,
+        "def": 1000,
+        "pos": "d",
+        "fd": true
+      },
+      "availableActions": [
+        {
+          "type": "attack",
+          "cardId": 117,
+          "targetId": 61
+        },
+        {
+          "type": "cancel_attack"
+        }
+      ],
+      "dt": 4460
+    },
+    {
+      "type": "effect_resolution",
+      "turn": 11,
+      "phase": "battle",
+      "actor": "bot",
+      "sourceCard": {
+        "c": 61,
+        "atk": 1000,
+        "def": 1000,
+        "pos": "d"
+      },
+      "effectResult": {
+        "type": "search",
+        "targets": [],
+        "cardsDrawn": 0,
+        "cardsAdded": [
+          "Shadow-Heart Imp"
+        ],
+        "lpChange": 0,
+        "description": "Added 1 card(s) to hand from deck"
+      },
+      "dt": 608,
+      "delta": {
+        "botField": [],
+        "botHandCount": 2,
+        "botGraveyard": [
+          "Darkness Valley",
+          "Shadow-Heart Abyssal Eel",
+          "Polymerization",
+          "Shadow-Heart Purge",
+          "Shadow-Heart Covenant",
+          "Shadow-Heart Death Wyrm",
+          "Shadow-Heart Covenant",
+          "Shadow-Heart Coward",
+          "Shadow-Heart Gecko"
+        ],
+        "botGraveCount": 9
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 11,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 117,
+        "atk": 1600
+      },
+      "target": {
+        "c": 61,
+        "atk": 1000,
+        "def": 1000,
+        "pos": "d"
+      },
+      "dt": 9
+    },
+    {
+      "type": "attack",
+      "turn": 11,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 104,
+        "atk": 2200
+      },
+      "target": null,
+      "directAttack": true,
+      "availableActions": [
+        {
+          "type": "direct_attack",
+          "cardId": 104
+        },
+        {
+          "type": "cancel_attack"
+        }
+      ],
+      "dt": 2025
+    }
+  ],
+  "result": {
+    "winner": "human",
+    "reason": "lp_zero"
+  },
+  "totalTurns": 11,
+  "finalLP": {
+    "player": 7500,
+    "bot": 0
+  }
+}

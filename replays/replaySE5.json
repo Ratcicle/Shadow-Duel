@@ -1,0 +1,1714 @@
+{
+  "version": 3,
+  "id": "duel_1768239808082_20",
+  "timestamp": "2026-01-12T17:43:28.082Z",
+  "playerDeck": {
+    "playerDeck": [
+      "Luminarch Enchanted Halberd",
+      "Luminarch Holy Shield",
+      "Sanctum of the Luminarch Citadel",
+      "Luminarch Sacred Judgment",
+      "Luminarch Valiant - Knight of the Dawn",
+      "Luminarch Knights Convocation",
+      "Luminarch Celestial Marshal",
+      "Luminarch Aurora Seraph",
+      "Luminarch Spear of Dawnfall",
+      "Luminarch Aegisbearer"
+    ],
+    "playerExtraDeck": [
+      "Luminarch Megashield Barbarias",
+      "Luminarch Fortress Aegis"
+    ],
+    "botPreset": "shadowheart",
+    "timestamp": 1768239808081
+  },
+  "botDeck": "unknown",
+  "botDeckList": [
+    "Shadow-Heart Purge",
+    "Shadow-Heart Scale Dragon",
+    "Shadow-Heart Coward",
+    "Shadow-Heart Void Mage",
+    "Shadow-Heart Rage",
+    "Shadow-Heart Covenant",
+    "Darkness Valley",
+    "Shadow-Heart Scale Dragon",
+    "Polymerization",
+    "Shadow-Heart Leviathan",
+    "Darkness Valley",
+    "Shadow-Heart Void Mage",
+    "Shadow-Heart Griffin",
+    "Shadow-Heart Griffin",
+    "Shadow-Heart Imp",
+    "Shadow-Heart Gecko",
+    "Shadow-Heart Imp",
+    "Shadow-Heart Abyssal Eel",
+    "Shadow-Heart Infusion",
+    "Polymerization",
+    "Shadow-Heart Battle Hymn",
+    "Shadow-Heart Death Wyrm",
+    "Shadow-Heart Infusion",
+    "Shadow-Heart Imp",
+    "Shadow-Heart Covenant",
+    "Shadow-Heart Specter",
+    "Shadow-Heart Coward",
+    "Shadow-Heart Demon Arctroth",
+    "Shadow-Heart Abyssal Eel",
+    "Shadow-Heart Specter"
+  ],
+  "botArchetype": "shadowheart",
+  "cardDictionary": {
+    "52": "Shadow-Heart Abyssal Eel",
+    "53": "Shadow-Heart Specter",
+    "54": "Shadow-Heart Purge",
+    "57": "Shadow-Heart Demon Arctroth",
+    "59": "Shadow-Heart Covenant",
+    "62": "Shadow-Heart Coward",
+    "63": "Shadow-Heart Infusion",
+    "101": "Luminarch Valiant - Knight of the Dawn",
+    "103": "Luminarch Aegisbearer",
+    "104": "Luminarch Moonblade Captain",
+    "110": "Luminarch Sanctified Arbiter",
+    "112": "Sanctum of the Luminarch Citadel",
+    "114": "Luminarch Radiant Wave",
+    "121": "Luminarch Fortress Aegis"
+  },
+  "snapshots": {
+    "1": {
+      "playerLP": 8000,
+      "botLP": 8000,
+      "playerField": [
+        {
+          "name": "Luminarch Aegisbearer",
+          "atk": 1000,
+          "def": 2000,
+          "position": "defense"
+        }
+      ],
+      "botField": [],
+      "playerHand": [
+        "Luminarch Valiant - Knight of the Dawn",
+        "Luminarch Moonlit Blessing",
+        "Luminarch Radiant Wave",
+        "Luminarch Moonblade Captain"
+      ],
+      "playerHandCount": 4,
+      "botHandCount": 4,
+      "playerGraveyard": [],
+      "playerGraveCount": 0,
+      "botGraveyard": [],
+      "botGraveCount": 0,
+      "playerSpellTrapCount": 0,
+      "botSpellTrapCount": 0,
+      "playerExtraDeckCount": 2,
+      "botExtraDeckCount": 3,
+      "playerFieldSpell": null,
+      "botFieldSpell": null,
+      "turn": 1,
+      "phase": "main1"
+    },
+    "6": {
+      "playerLP": 7500,
+      "botLP": 5400,
+      "playerField": [
+        {
+          "name": "Luminarch Fortress Aegis",
+          "atk": 1500,
+          "def": 2500,
+          "position": "defense"
+        },
+        {
+          "name": "Luminarch Moonblade Captain",
+          "atk": 2200,
+          "def": 1700,
+          "position": "defense"
+        },
+        {
+          "name": "Luminarch Valiant - Knight of the Dawn",
+          "atk": 1600,
+          "def": 1200,
+          "position": "attack"
+        }
+      ],
+      "botField": [
+        {
+          "name": "Shadow-Heart Specter",
+          "atk": 800,
+          "def": 800,
+          "position": "attack",
+          "isFacedown": false
+        }
+      ],
+      "playerHand": [
+        "Luminarch Moonlit Blessing",
+        "Luminarch Radiant Wave",
+        "Luminarch Magic Sickle",
+        "Luminarch Aegisbearer",
+        "Luminarch Sanctified Arbiter"
+      ],
+      "playerHandCount": 5,
+      "botHandCount": 3,
+      "playerGraveyard": [
+        "Luminarch Aegisbearer"
+      ],
+      "playerGraveCount": 1,
+      "botGraveyard": [
+        "Shadow-Heart Covenant",
+        "Shadow-Heart Demon Arctroth",
+        "Shadow-Heart Purge",
+        "Shadow-Heart Specter"
+      ],
+      "botGraveCount": 4,
+      "playerSpellTrapCount": 0,
+      "botSpellTrapCount": 0,
+      "playerExtraDeckCount": 1,
+      "botExtraDeckCount": 3,
+      "playerFieldSpell": null,
+      "botFieldSpell": null,
+      "turn": 6,
+      "phase": "main1"
+    }
+  },
+  "decisions": [
+    {
+      "type": "summon",
+      "turn": 1,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 103
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "availableActions": [
+        {
+          "type": "normal_summon",
+          "cardId": 103,
+          "position": "a"
+        },
+        {
+          "type": "set",
+          "cardId": 103,
+          "position": "d"
+        }
+      ],
+      "t0": 1768239810726
+    },
+    {
+      "type": "pass",
+      "turn": 1,
+      "phase": "end",
+      "actor": "human",
+      "dt": 624
+    },
+    {
+      "type": "summon",
+      "turn": 2,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 52
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "availableActions": [
+        {
+          "type": "summon",
+          "cardId": 53,
+          "position": "a"
+        },
+        {
+          "type": "summon",
+          "cardId": 53,
+          "position": "a"
+        },
+        {
+          "type": "summon",
+          "cardId": 52,
+          "position": "a"
+        },
+        {
+          "type": "summon",
+          "cardId": 62,
+          "position": "d"
+        }
+      ],
+      "dt": 816,
+      "delta": {
+        "botField": [
+          {
+            "name": "Shadow-Heart Abyssal Eel",
+            "atk": 1600,
+            "def": 1700,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "turn": 2
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 2,
+      "phase": "battle",
+      "actor": "bot",
+      "attacker": {
+        "c": 52,
+        "atk": 1600
+      },
+      "target": {
+        "c": 103,
+        "atk": 1000,
+        "def": 2000,
+        "pos": "d",
+        "fd": true
+      },
+      "availableActions": [
+        {
+          "type": "attack",
+          "cardId": 52,
+          "targetId": 103
+        }
+      ],
+      "dt": 938,
+      "delta": {
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 2,
+      "phase": "battle",
+      "actor": "bot",
+      "attacker": {
+        "c": 52,
+        "atk": 1600
+      },
+      "target": {
+        "c": 103,
+        "atk": 1000,
+        "def": 2000,
+        "pos": "d"
+      },
+      "dt": 615,
+      "delta": {
+        "botLP": 7600
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 3,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 104
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "tributes": [
+        "Luminarch Aegisbearer"
+      ],
+      "availableActions": [
+        {
+          "type": "normal_summon",
+          "cardId": 104,
+          "position": "a"
+        },
+        {
+          "type": "set",
+          "cardId": 104,
+          "position": "d"
+        }
+      ],
+      "dt": 39202,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Luminarch Moonblade Captain",
+            "atk": 2200,
+            "def": 1700,
+            "position": "attack"
+          }
+        ],
+        "playerHand": [
+          "Luminarch Valiant - Knight of the Dawn",
+          "Luminarch Moonlit Blessing",
+          "Luminarch Radiant Wave",
+          "Luminarch Magic Sickle"
+        ],
+        "playerGraveyard": [
+          "Luminarch Aegisbearer"
+        ],
+        "playerGraveCount": 1,
+        "turn": 3,
+        "phase": "main1"
+      }
+    },
+    {
+      "type": "position_choice",
+      "turn": 3,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 103,
+        "atk": 1000,
+        "def": 2000,
+        "pos": "d"
+      },
+      "chosenPosition": "d",
+      "summonType": "special",
+      "dt": 1765,
+      "delta": {
+        "playerHandDetails": [
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "cardKind": "monster",
+            "level": 4,
+            "atk": 1600,
+            "def": 1200
+          },
+          {
+            "name": "Luminarch Moonlit Blessing",
+            "cardKind": "spell",
+            "level": 0,
+            "atk": 0,
+            "def": 0
+          },
+          {
+            "name": "Luminarch Radiant Wave",
+            "cardKind": "spell",
+            "level": 0,
+            "atk": 0,
+            "def": 0
+          },
+          {
+            "name": "Luminarch Magic Sickle",
+            "cardKind": "monster",
+            "level": 3,
+            "atk": 1000,
+            "def": 1000
+          }
+        ],
+        "playerField": [
+          {
+            "name": "Luminarch Moonblade Captain",
+            "atk": 2200,
+            "def": 1700,
+            "position": "attack",
+            "isFacedown": false,
+            "hasAttacked": false
+          }
+        ],
+        "playerBackrow": [],
+        "botBackrowCount": 0,
+        "summonCount": 1
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 3,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 103
+      },
+      "summonType": "special",
+      "fromZone": "graveyard",
+      "dt": 1,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Luminarch Moonblade Captain",
+            "atk": 2200,
+            "def": 1700,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Aegisbearer",
+            "atk": 1000,
+            "def": 2000,
+            "position": "defense"
+          }
+        ],
+        "playerGraveyard": [],
+        "playerGraveCount": 0,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 3,
+      "phase": "battle",
+      "actor": "human",
+      "dt": 670,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Luminarch Moonblade Captain",
+            "atk": 2200,
+            "def": 1700,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Aegisbearer",
+            "atk": 1000,
+            "def": 2500,
+            "position": "defense"
+          }
+        ],
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 3,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 104,
+        "atk": 2200
+      },
+      "target": {
+        "c": 52,
+        "atk": 1600,
+        "def": 1700,
+        "pos": "a"
+      },
+      "availableActions": [
+        {
+          "type": "attack",
+          "cardId": 104,
+          "targetId": 52
+        },
+        {
+          "type": "cancel_attack"
+        }
+      ],
+      "dt": 1603
+    },
+    {
+      "type": "attack",
+      "turn": 3,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 104,
+        "atk": 2200
+      },
+      "target": {
+        "c": 52,
+        "atk": 1600,
+        "def": 1700,
+        "pos": "a"
+      },
+      "combatResult": {
+        "damageDealt": 600,
+        "targetDestroyed": true
+      },
+      "dt": 8,
+      "delta": {
+        "botLP": 7000,
+        "botField": [],
+        "botGraveyard": [
+          "Shadow-Heart Abyssal Eel"
+        ],
+        "botGraveCount": 1
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 3,
+      "phase": "end",
+      "actor": "human",
+      "dt": 9285,
+      "delta": {
+        "phase": "end"
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 4,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 53
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "availableActions": [
+        {
+          "type": "spell",
+          "cardId": 59
+        },
+        {
+          "type": "summon",
+          "cardId": 53,
+          "position": "a"
+        },
+        {
+          "type": "summon",
+          "cardId": 53,
+          "position": "a"
+        },
+        {
+          "type": "summon",
+          "cardId": 62,
+          "position": "d"
+        }
+      ],
+      "dt": 822,
+      "delta": {
+        "botField": [
+          {
+            "name": "Shadow-Heart Specter",
+            "atk": 800,
+            "def": 800,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "turn": 4,
+        "phase": "main1"
+      }
+    },
+    {
+      "type": "effect_resolution",
+      "turn": 4,
+      "phase": "main1",
+      "actor": "bot",
+      "sourceCard": {
+        "c": 59,
+        "atk": 0,
+        "def": 0,
+        "pos": "a"
+      },
+      "effectResult": {
+        "type": "search",
+        "targets": [],
+        "cardsDrawn": 0,
+        "cardsAdded": [
+          "Shadow-Heart Purge"
+        ],
+        "lpChange": 0,
+        "description": "Added 1 card(s) to hand from deck"
+      },
+      "availableActions": [
+        {
+          "type": "spell",
+          "cardId": 59
+        }
+      ],
+      "dt": 438,
+      "delta": {
+        "botLP": 6200
+      }
+    },
+    {
+      "type": "effect",
+      "turn": 4,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 59
+      },
+      "effectId": "shadow_heart_covenant",
+      "effectTiming": "on_play",
+      "activationZone": "spellTrap",
+      "actions": [
+        "pay_lp",
+        "search_any"
+      ],
+      "dt": 2
+    },
+    {
+      "type": "effect",
+      "turn": 4,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 54
+      },
+      "effectId": "shadow_heart_purge_destroy",
+      "effectTiming": "on_play",
+      "activationZone": "spellTrap",
+      "actions": [
+        "move",
+        "destroy"
+      ],
+      "availableActions": [
+        {
+          "type": "spell",
+          "cardId": 54
+        }
+      ],
+      "dt": 434,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Luminarch Aegisbearer",
+            "atk": 1000,
+            "def": 2500,
+            "position": "defense"
+          }
+        ],
+        "botHandCount": 2,
+        "playerGraveyard": [
+          "Luminarch Moonblade Captain"
+        ],
+        "playerGraveCount": 1,
+        "botGraveyard": [
+          "Shadow-Heart Abyssal Eel",
+          "Shadow-Heart Covenant",
+          "Shadow-Heart Demon Arctroth"
+        ],
+        "botGraveCount": 3
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 5,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 121
+      },
+      "summonType": "ascension",
+      "fromZone": "extraDeck",
+      "dt": 9481,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Luminarch Fortress Aegis",
+            "atk": 1500,
+            "def": 2500,
+            "position": "defense"
+          }
+        ],
+        "playerHand": [
+          "Luminarch Valiant - Knight of the Dawn",
+          "Luminarch Moonlit Blessing",
+          "Luminarch Radiant Wave",
+          "Luminarch Magic Sickle",
+          "Luminarch Aegisbearer"
+        ],
+        "playerHandCount": 5,
+        "playerGraveyard": [
+          "Luminarch Moonblade Captain",
+          "Luminarch Aegisbearer"
+        ],
+        "playerGraveCount": 2,
+        "botGraveyard": [
+          "Shadow-Heart Abyssal Eel",
+          "Shadow-Heart Covenant",
+          "Shadow-Heart Demon Arctroth",
+          "Shadow-Heart Purge"
+        ],
+        "botGraveCount": 4,
+        "playerExtraDeckCount": 1,
+        "turn": 5
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 5,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 104
+      },
+      "summonType": "special",
+      "fromZone": "graveyard",
+      "dt": 10291,
+      "delta": {
+        "playerLP": 7500,
+        "playerField": [
+          {
+            "name": "Luminarch Fortress Aegis",
+            "atk": 1500,
+            "def": 2500,
+            "position": "defense"
+          },
+          {
+            "name": "Luminarch Moonblade Captain",
+            "atk": 2200,
+            "def": 1700,
+            "position": "defense"
+          }
+        ],
+        "playerGraveyard": [
+          "Luminarch Aegisbearer"
+        ],
+        "playerGraveCount": 1
+      }
+    },
+    {
+      "type": "effect",
+      "turn": 5,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 121
+      },
+      "effectId": "luminarch_fortress_aegis_revive",
+      "effectTiming": "ignition",
+      "activationZone": "field",
+      "actions": [
+        "pay_lp",
+        "special_summon_from_zone"
+      ],
+      "dt": 10
+    },
+    {
+      "type": "summon",
+      "turn": 5,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 101
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "availableActions": [
+        {
+          "type": "normal_summon",
+          "cardId": 101,
+          "position": "a"
+        },
+        {
+          "type": "set",
+          "cardId": 101,
+          "position": "d"
+        }
+      ],
+      "dt": 2978,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Luminarch Fortress Aegis",
+            "atk": 1500,
+            "def": 2500,
+            "position": "defense"
+          },
+          {
+            "name": "Luminarch Moonblade Captain",
+            "atk": 2200,
+            "def": 1700,
+            "position": "defense"
+          },
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          }
+        ],
+        "playerHand": [
+          "Luminarch Moonlit Blessing",
+          "Luminarch Radiant Wave",
+          "Luminarch Magic Sickle",
+          "Luminarch Aegisbearer"
+        ],
+        "playerHandCount": 4
+      }
+    },
+    {
+      "type": "effect_resolution",
+      "turn": 5,
+      "phase": "main1",
+      "actor": "human",
+      "sourceCard": {
+        "c": 101,
+        "atk": 1600,
+        "def": 1200,
+        "pos": "a"
+      },
+      "effectResult": {
+        "type": "search",
+        "targets": [],
+        "cardsDrawn": 0,
+        "cardsAdded": [
+          "Luminarch Sanctified Arbiter"
+        ],
+        "lpChange": 0,
+        "description": "Added 1 card(s) to hand from deck"
+      },
+      "dt": 2211,
+      "delta": {
+        "playerHand": [
+          "Luminarch Moonlit Blessing",
+          "Luminarch Radiant Wave",
+          "Luminarch Magic Sickle",
+          "Luminarch Aegisbearer",
+          "Luminarch Sanctified Arbiter"
+        ],
+        "playerHandCount": 5
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 5,
+      "phase": "battle",
+      "actor": "human",
+      "dt": 6229,
+      "delta": {
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 5,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 101,
+        "atk": 1600
+      },
+      "target": {
+        "c": 53,
+        "atk": 800,
+        "def": 800,
+        "pos": "a"
+      },
+      "availableActions": [
+        {
+          "type": "attack",
+          "cardId": 101,
+          "targetId": 53
+        },
+        {
+          "type": "cancel_attack"
+        }
+      ],
+      "dt": 1731
+    },
+    {
+      "type": "attack",
+      "turn": 5,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 101,
+        "atk": 1600
+      },
+      "target": {
+        "c": 53,
+        "atk": 800,
+        "def": 800,
+        "pos": "a"
+      },
+      "combatResult": {
+        "damageDealt": 800,
+        "targetDestroyed": true
+      },
+      "dt": 13,
+      "delta": {
+        "botLP": 5400,
+        "botField": [],
+        "botHandCount": 3,
+        "botGraveyard": [
+          "Shadow-Heart Covenant",
+          "Shadow-Heart Demon Arctroth",
+          "Shadow-Heart Purge",
+          "Shadow-Heart Specter"
+        ]
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 5,
+      "phase": "end",
+      "actor": "human",
+      "dt": 872,
+      "delta": {
+        "phase": "end"
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 6,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 53
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "availableActions": [
+        {
+          "type": "summon",
+          "cardId": 53,
+          "position": "a"
+        },
+        {
+          "type": "summon",
+          "cardId": 62,
+          "position": "d"
+        }
+      ],
+      "dt": 820
+    },
+    {
+      "type": "summon",
+      "turn": 7,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 110
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "availableActions": [
+        {
+          "type": "normal_summon",
+          "cardId": 110,
+          "position": "a"
+        },
+        {
+          "type": "set",
+          "cardId": 110,
+          "position": "d"
+        }
+      ],
+      "dt": 19076,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Luminarch Fortress Aegis",
+            "atk": 1500,
+            "def": 2500,
+            "position": "defense"
+          },
+          {
+            "name": "Luminarch Moonblade Captain",
+            "atk": 2200,
+            "def": 1700,
+            "position": "defense"
+          },
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Sanctified Arbiter",
+            "atk": 1500,
+            "def": 1000,
+            "position": "attack"
+          }
+        ],
+        "turn": 7
+      }
+    },
+    {
+      "type": "effect_resolution",
+      "turn": 7,
+      "phase": "main1",
+      "actor": "human",
+      "sourceCard": {
+        "c": 110,
+        "atk": 1500,
+        "def": 1000,
+        "pos": "a"
+      },
+      "effectResult": {
+        "type": "search",
+        "targets": [],
+        "cardsDrawn": 0,
+        "cardsAdded": [
+          "Sanctum of the Luminarch Citadel"
+        ],
+        "lpChange": 0,
+        "description": "Added 1 card(s) to hand from deck"
+      },
+      "dt": 1925,
+      "delta": {
+        "playerHand": [
+          "Luminarch Moonlit Blessing",
+          "Luminarch Radiant Wave",
+          "Luminarch Magic Sickle",
+          "Luminarch Aegisbearer",
+          "Luminarch Sanctified Arbiter",
+          "Sanctum of the Luminarch Citadel"
+        ],
+        "playerHandCount": 6
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 7,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 103
+      },
+      "summonType": "special",
+      "fromZone": "graveyard",
+      "availableActions": [
+        {
+          "type": "activate_spell",
+          "cardId": 112
+        },
+        {
+          "type": "set_spell",
+          "cardId": 112
+        }
+      ],
+      "dt": 3735,
+      "delta": {
+        "playerLP": 6500,
+        "playerField": [
+          {
+            "name": "Luminarch Fortress Aegis",
+            "atk": 1500,
+            "def": 2500,
+            "position": "defense"
+          },
+          {
+            "name": "Luminarch Moonblade Captain",
+            "atk": 2200,
+            "def": 1700,
+            "position": "defense"
+          },
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Sanctified Arbiter",
+            "atk": 1500,
+            "def": 1000,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Aegisbearer",
+            "atk": 1000,
+            "def": 2000,
+            "position": "defense"
+          }
+        ],
+        "playerHand": [
+          "Luminarch Moonlit Blessing",
+          "Luminarch Radiant Wave",
+          "Luminarch Magic Sickle",
+          "Luminarch Aegisbearer",
+          "Luminarch Sanctified Arbiter"
+        ],
+        "playerHandCount": 5,
+        "playerGraveyard": [],
+        "playerGraveCount": 0,
+        "playerFieldSpell": "Sanctum of the Luminarch Citadel"
+      }
+    },
+    {
+      "type": "effect",
+      "turn": 7,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 121
+      },
+      "effectId": "luminarch_fortress_aegis_revive",
+      "effectTiming": "ignition",
+      "activationZone": "field",
+      "actions": [
+        "pay_lp",
+        "special_summon_from_zone"
+      ],
+      "dt": 30,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Luminarch Fortress Aegis",
+            "atk": 1500,
+            "def": 2500,
+            "position": "defense"
+          },
+          {
+            "name": "Luminarch Moonblade Captain",
+            "atk": 2200,
+            "def": 1700,
+            "position": "defense"
+          },
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Sanctified Arbiter",
+            "atk": 1500,
+            "def": 1000,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Aegisbearer",
+            "atk": 1000,
+            "def": 2500,
+            "position": "defense"
+          }
+        ]
+      }
+    },
+    {
+      "type": "position_change",
+      "turn": 7,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 104
+      },
+      "fromPosition": "d",
+      "toPosition": "a",
+      "wasFlipped": false,
+      "dt": 3832,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Luminarch Fortress Aegis",
+            "atk": 1500,
+            "def": 2500,
+            "position": "defense"
+          },
+          {
+            "name": "Luminarch Moonblade Captain",
+            "atk": 2200,
+            "def": 1700,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Sanctified Arbiter",
+            "atk": 1500,
+            "def": 1000,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Aegisbearer",
+            "atk": 1000,
+            "def": 2500,
+            "position": "defense"
+          }
+        ]
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 7,
+      "phase": "battle",
+      "actor": "human",
+      "dt": 2167,
+      "delta": {
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 7,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 110,
+        "atk": 1500
+      },
+      "target": {
+        "c": 53,
+        "atk": 800,
+        "def": 800,
+        "pos": "a"
+      },
+      "availableActions": [
+        {
+          "type": "attack",
+          "cardId": 110,
+          "targetId": 53
+        },
+        {
+          "type": "cancel_attack"
+        }
+      ],
+      "dt": 4626
+    },
+    {
+      "type": "attack",
+      "turn": 7,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 110,
+        "atk": 1500
+      },
+      "target": {
+        "c": 53,
+        "atk": 800,
+        "def": 800,
+        "pos": "a"
+      },
+      "combatResult": {
+        "damageDealt": 700,
+        "targetDestroyed": true
+      },
+      "dt": 16,
+      "delta": {
+        "botLP": 4700,
+        "botField": [],
+        "botHandCount": 4,
+        "botGraveyard": [
+          "Shadow-Heart Covenant",
+          "Shadow-Heart Purge",
+          "Shadow-Heart Specter",
+          "Shadow-Heart Specter"
+        ]
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 7,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 101,
+        "atk": 1600
+      },
+      "target": null,
+      "directAttack": true,
+      "availableActions": [
+        {
+          "type": "direct_attack",
+          "cardId": 101
+        },
+        {
+          "type": "cancel_attack"
+        }
+      ],
+      "dt": 1234
+    },
+    {
+      "type": "attack",
+      "turn": 7,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 104,
+        "atk": 2200
+      },
+      "target": null,
+      "directAttack": true,
+      "availableActions": [
+        {
+          "type": "direct_attack",
+          "cardId": 104
+        },
+        {
+          "type": "cancel_attack"
+        }
+      ],
+      "dt": 1504,
+      "delta": {
+        "botLP": 3100
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 7,
+      "phase": "end",
+      "actor": "human",
+      "dt": 1594,
+      "delta": {
+        "botLP": 900,
+        "phase": "end"
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 8,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 57
+      },
+      "summonType": "special",
+      "fromZone": "graveyard",
+      "availableActions": [
+        {
+          "type": "spell",
+          "cardId": 63
+        },
+        {
+          "type": "summon",
+          "cardId": 62,
+          "position": "d"
+        }
+      ],
+      "dt": 853,
+      "delta": {
+        "botField": [
+          {
+            "name": "Shadow-Heart Demon Arctroth",
+            "atk": 2600,
+            "def": 1800,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "botHandCount": 2,
+        "botGraveyard": [
+          "Shadow-Heart Covenant",
+          "Shadow-Heart Purge",
+          "Shadow-Heart Specter",
+          "Shadow-Heart Specter",
+          "Shadow-Heart Abyssal Eel"
+        ],
+        "botGraveCount": 5,
+        "turn": 8,
+        "phase": "main1"
+      }
+    },
+    {
+      "type": "effect",
+      "turn": 8,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 63
+      },
+      "effectId": "shadow_heart_infusion",
+      "effectTiming": "on_play",
+      "activationZone": "spellTrap",
+      "actions": [
+        "move",
+        "special_summon_from_zone"
+      ],
+      "dt": 16
+    },
+    {
+      "type": "effect",
+      "turn": 9,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 114
+      },
+      "effectId": "luminarch_radiant_wave_effect",
+      "effectTiming": "on_play",
+      "activationZone": "spellTrap",
+      "actions": [
+        "move",
+        "destroy"
+      ],
+      "availableActions": [
+        {
+          "type": "activate_spell",
+          "cardId": 114
+        },
+        {
+          "type": "set_spell",
+          "cardId": 114
+        }
+      ],
+      "dt": 8524,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Luminarch Fortress Aegis",
+            "atk": 1500,
+            "def": 2500,
+            "position": "defense"
+          },
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Sanctified Arbiter",
+            "atk": 1500,
+            "def": 1000,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Aegisbearer",
+            "atk": 1000,
+            "def": 2500,
+            "position": "defense"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Coward",
+            "atk": 800,
+            "def": 1000,
+            "position": "defense",
+            "isFacedown": true
+          }
+        ],
+        "playerHand": [
+          "Luminarch Moonlit Blessing",
+          "Luminarch Magic Sickle",
+          "Luminarch Aegisbearer",
+          "Luminarch Sanctified Arbiter",
+          "Luminarch Crescent Shield"
+        ],
+        "botHandCount": 1,
+        "playerGraveyard": [
+          "Luminarch Moonblade Captain"
+        ],
+        "playerGraveCount": 1,
+        "botGraveyard": [
+          "Shadow-Heart Covenant",
+          "Shadow-Heart Purge",
+          "Shadow-Heart Specter",
+          "Shadow-Heart Specter",
+          "Shadow-Heart Abyssal Eel",
+          "Shadow-Heart Infusion",
+          "Shadow-Heart Demon Arctroth"
+        ],
+        "botGraveCount": 7,
+        "turn": 9
+      }
+    },
+    {
+      "type": "spell",
+      "turn": 9,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 114
+      },
+      "targets": [],
+      "dt": 9,
+      "delta": {
+        "playerGraveyard": [
+          "Luminarch Moonblade Captain",
+          "Luminarch Radiant Wave"
+        ],
+        "playerGraveCount": 2
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 9,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 104
+      },
+      "summonType": "special",
+      "fromZone": "graveyard",
+      "dt": 5446,
+      "delta": {
+        "playerLP": 5500,
+        "playerField": [
+          {
+            "name": "Luminarch Fortress Aegis",
+            "atk": 1500,
+            "def": 2500,
+            "position": "defense"
+          },
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Sanctified Arbiter",
+            "atk": 1500,
+            "def": 1000,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Aegisbearer",
+            "atk": 1000,
+            "def": 2500,
+            "position": "defense"
+          },
+          {
+            "name": "Luminarch Moonblade Captain",
+            "atk": 2200,
+            "def": 1700,
+            "position": "defense"
+          }
+        ],
+        "playerGraveyard": [
+          "Luminarch Radiant Wave"
+        ],
+        "playerGraveCount": 1
+      }
+    },
+    {
+      "type": "effect",
+      "turn": 9,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 121
+      },
+      "effectId": "luminarch_fortress_aegis_revive",
+      "effectTiming": "ignition",
+      "activationZone": "field",
+      "actions": [
+        "pay_lp",
+        "special_summon_from_zone"
+      ],
+      "dt": 12
+    },
+    {
+      "type": "position_change",
+      "turn": 9,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 121
+      },
+      "fromPosition": "d",
+      "toPosition": "a",
+      "wasFlipped": false,
+      "dt": 1628,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Luminarch Fortress Aegis",
+            "atk": 1500,
+            "def": 2500,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Sanctified Arbiter",
+            "atk": 1500,
+            "def": 1000,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Aegisbearer",
+            "atk": 1000,
+            "def": 2500,
+            "position": "defense"
+          },
+          {
+            "name": "Luminarch Moonblade Captain",
+            "atk": 2200,
+            "def": 1700,
+            "position": "defense"
+          }
+        ]
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 9,
+      "phase": "battle",
+      "actor": "human",
+      "dt": 881,
+      "delta": {
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 9,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 101,
+        "atk": 1600
+      },
+      "target": {
+        "c": 62,
+        "atk": 800,
+        "def": 1000,
+        "pos": "d",
+        "fd": true
+      },
+      "availableActions": [
+        {
+          "type": "attack",
+          "cardId": 101,
+          "targetId": 62
+        },
+        {
+          "type": "cancel_attack"
+        }
+      ],
+      "dt": 1590
+    },
+    {
+      "type": "attack",
+      "turn": 9,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 101,
+        "atk": 1600
+      },
+      "target": {
+        "c": 62,
+        "atk": 800,
+        "def": 1000,
+        "pos": "d"
+      },
+      "dt": 626,
+      "delta": {
+        "botLP": 300,
+        "botField": [],
+        "botGraveyard": [
+          "Shadow-Heart Covenant",
+          "Shadow-Heart Purge",
+          "Shadow-Heart Specter",
+          "Shadow-Heart Specter",
+          "Shadow-Heart Abyssal Eel",
+          "Shadow-Heart Infusion",
+          "Shadow-Heart Demon Arctroth",
+          "Shadow-Heart Coward"
+        ],
+        "botGraveCount": 8
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 9,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 121,
+        "atk": 1500
+      },
+      "target": null,
+      "directAttack": true,
+      "availableActions": [
+        {
+          "type": "direct_attack",
+          "cardId": 121
+        },
+        {
+          "type": "cancel_attack"
+        }
+      ],
+      "dt": 1340
+    }
+  ],
+  "result": {
+    "winner": "human",
+    "reason": "lp_zero"
+  },
+  "totalTurns": 9,
+  "finalLP": {
+    "player": 5500,
+    "bot": 0
+  }
+}
