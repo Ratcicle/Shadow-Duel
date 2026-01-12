@@ -31,9 +31,6 @@ class ReplayAnalyzer {
     
     // Contador para IDs únicos de digest
     this._nextDigestId = 1;
-    
-    // Track de warnings para evitar spam
-    this._warnedAboutMissingActions = new Set();
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -111,14 +108,7 @@ class ReplayAnalyzer {
     const hasAvailableActions = !!(decision.availableActions && decision.availableActions.length > 0);
     
     // Decisões proativas (summon, spell, attack) devem ter availableActions para serem úteis para ML
-    const isProactiveDecision = ['summon', 'attack', 'spell', 'effect', 'set_spell_trap'].includes(decision.type);
-    if (isProactiveDecision && !hasAvailableActions && actor === 'human') {
-      // Log apenas uma vez por replay para não spam
-      if (!this._warnedAboutMissingActions?.has?.(replay.id + '_' + decision.type)) {
-        this._warnedAboutMissingActions = this._warnedAboutMissingActions || new Set();
-        this._warnedAboutMissingActions.add(replay.id + '_' + decision.type);
-      }
-    }
+    // A métrica de qualidade será reportada pelo calculateDigestQualityMetrics()
 
     return {
       replayId: replay.id,
@@ -549,15 +539,17 @@ class ReplayAnalyzer {
         let accPlayerLP = 0, accBotLP = 0;
         let accPlayerField = 0, accBotField = 0;
         
-        for (let i = currentIndex; i < nextDecisionIndex; i++) {
+        // Começar a partir de currentIndex + 1 para evitar acesso a índice negativo
+        for (let i = currentIndex + 1; i < nextDecisionIndex; i++) {
           const d = decisions[i];
-          if (d.delta) {
+          const prev = decisions[i - 1];
+          if (d.delta && prev?.delta) {
             // Se temos delta de LP, acumular a diferença
-            if (d.delta.playerLP !== undefined && decisions[i - 1]?.delta?.playerLP !== undefined) {
-              accPlayerLP += d.delta.playerLP - decisions[i - 1].delta.playerLP;
+            if (d.delta.playerLP !== undefined && prev.delta.playerLP !== undefined) {
+              accPlayerLP += d.delta.playerLP - prev.delta.playerLP;
             }
-            if (d.delta.botLP !== undefined && decisions[i - 1]?.delta?.botLP !== undefined) {
-              accBotLP += d.delta.botLP - decisions[i - 1].delta.botLP;
+            if (d.delta.botLP !== undefined && prev.delta.botLP !== undefined) {
+              accBotLP += d.delta.botLP - prev.delta.botLP;
             }
           }
         }
@@ -585,12 +577,12 @@ class ReplayAnalyzer {
 
     // Cálculo normal com snapshots disponíveis
     const basePlayerLP = currentSnapshot?.playerLP ?? 8000;
-    const baseBottLP = currentSnapshot?.botLP ?? 8000;
+    const baseBotLP = currentSnapshot?.botLP ?? 8000;
     const nextPlayerLP = nextSnapshot?.playerLP ?? basePlayerLP;
-    const nextBotLP = nextSnapshot?.botLP ?? baseBottLP;
+    const nextBotLP = nextSnapshot?.botLP ?? baseBotLP;
 
     const playerLPDelta = nextPlayerLP - basePlayerLP;
-    const botLPDelta = nextBotLP - baseBottLP;
+    const botLPDelta = nextBotLP - baseBotLP;
 
     const playerFieldDelta =
       (nextSnapshot?.playerField?.length || 0) -
