@@ -443,7 +443,7 @@ class ReplayCapture {
     if (!this.currentDuel) return;
 
     // v4: Vincular availableActions pendentes (se houver e for do mesmo ator)
-    const pendingActions = this._consumePendingActions();
+    const pendingActions = this._consumePendingActions(decision.actor);
     if (pendingActions && pendingActions.length > 0) {
       decision.availableActions = pendingActions;
     }
@@ -970,12 +970,13 @@ class ReplayCapture {
   /**
    * Consome e retorna ações pendentes, limpando o armazenamento
    * Chamado internamente por _addDecision para vincular
+   * @param {string} decisionActor - Actor da decisão atual ("human" ou "bot")
+   * @returns {Array|null} Ações disponíveis ou null se inválido/expirado
    */
-  _consumePendingActions() {
+  _consumePendingActions(decisionActor) {
     if (!this._pendingAvailableActions) return null;
 
     const pending = this._pendingAvailableActions;
-    this._pendingAvailableActions = null;
 
     // Verificar se não está muito antigo (máx 30 segundos)
     const age = Date.now() - pending.timestamp;
@@ -983,9 +984,22 @@ class ReplayCapture {
       console.warn(
         "[ReplayCapture] Descartando availableActions antigas (>30s)"
       );
+      this._pendingAvailableActions = null;
       return null;
     }
 
+    // Validar correspondência de actor (obrigatório)
+    if (pending.actor && decisionActor && pending.actor !== decisionActor) {
+      console.warn(
+        `[ReplayCapture] ⚠️ Actor mismatch: pending.actor="${pending.actor}" vs decision.actor="${decisionActor}" - descartando actions`
+      );
+      // Não limpar - pode ser consumido pela próxima decisão correta
+      // Mas se já passou muito tempo, descartar na próxima chamada via age check
+      return null;
+    }
+
+    // Match válido - consumir
+    this._pendingAvailableActions = null;
     return pending.actions;
   }
 

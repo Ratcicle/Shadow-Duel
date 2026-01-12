@@ -247,6 +247,9 @@ export default class Player {
         return null;
       }
 
+      // Track tributed cards for replay/event system
+      const tributedCards = [];
+
       if (tributesNeeded > 0) {
         if (tributeIndices && tributeIndices.length === tributesNeeded) {
           const sortedIndices = [...tributeIndices].sort((a, b) => b - a);
@@ -275,7 +278,11 @@ export default class Player {
             return null;
           }
 
-          tributes.forEach((sacrificed) => sendToGrave(sacrificed));
+          // Copy cards to tributedCards before sending to grave
+          tributes.forEach((sacrificed) => {
+            if (sacrificed) tributedCards.push({ ...sacrificed });
+            sendToGrave(sacrificed);
+          });
         } else {
           if (usingAlt && alt) {
             const matchesAltRequirement = (c) => {
@@ -295,10 +302,12 @@ export default class Player {
               return null;
             }
             const sacrificed = this.field[altIdx];
+            if (sacrificed) tributedCards.push({ ...sacrificed });
             sendToGrave(sacrificed);
           } else {
             for (let i = 0; i < tributesNeeded; i++) {
               const sacrificed = this.field[0];
+              if (sacrificed) tributedCards.push({ ...sacrificed });
               sendToGrave(sacrificed);
             }
           }
@@ -327,7 +336,8 @@ export default class Player {
         this.game.effectEngine.clearTargetingCache();
       }
 
-      return card;
+      // Return object with card and tributes for replay/event tracking
+      return { card, tributes: tributedCards };
     }
     return null;
   }

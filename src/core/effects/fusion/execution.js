@@ -8,6 +8,62 @@
 import { isAI } from "../../Player.js";
 
 /**
+ * Select the best material combo for fusion (prioritize sacrificing weak monsters)
+ */
+function selectBestMaterialCombo(materialCombos) {
+  if (!materialCombos || materialCombos.length === 0) {
+    return null;
+  }
+
+  // If only one combo, use it
+  if (materialCombos.length === 1) {
+    return materialCombos[0];
+  }
+
+  // Define material value priorities
+  // Higher value = more important to preserve, lower value = better tribute candidate
+  const getMaterialValue = (monster) => {
+    const name = monster.name || "";
+
+    // Protect boss monsters and extra deck materials
+    if (name.includes("Demon Dragon")) return 100; // Never sacrifice unless emergency
+    if (name.includes("Demon Arctroth")) return 90; // Extra deck material
+    if (name.includes("Death Wyrm")) return 70;
+    if (name.includes("Leviathan")) return 60;
+
+    // Scale Dragon can be used for fusion (it's the intended fusion material)
+    if (name.includes("Scale Dragon")) return 40;
+
+    // Lower-tier monsters are good fusion materials
+    if (name.includes("Specter")) return 20;
+    if (name.includes("Griffin")) return 10;
+    if (name.includes("Gecko")) return 5;
+
+    // Default: base on ATK
+    return (monster.atk || 0) / 100;
+  };
+
+  // Evaluate each combo by total material value (lower = better)
+  const evaluatedCombos = materialCombos.map((combo) => ({
+    combo,
+    totalValue: combo.reduce((sum, mat) => sum + getMaterialValue(mat), 0),
+  }));
+
+  // Sort by total value (ascending - sacrifice weakest monsters first)
+  evaluatedCombos.sort((a, b) => a.totalValue - b.totalValue);
+
+  console.log(
+    "[Bot Fusion] Evaluating material combos:",
+    evaluatedCombos.map((ec) => ({
+      materials: ec.combo.map((m) => m.name),
+      totalValue: ec.totalValue,
+    }))
+  );
+
+  return evaluatedCombos[0].combo;
+}
+
+/**
  * Perform bot fusion summon
  */
 export async function performBotFusion(
@@ -27,7 +83,9 @@ export async function performBotFusion(
   if (!chosen) return false;
 
   const { fusion, materialCombos } = chosen;
-  const materials = materialCombos[0]; // Use first valid combo
+
+  // Select the best material combo (prioritize sacrificing weak monsters)
+  const materials = selectBestMaterialCombo(materialCombos);
 
   // Log bot fusion decision
   console.log(

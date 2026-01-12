@@ -9,6 +9,9 @@ import { replayDatabase } from "./ReplayDatabase.js";
 const DEFAULT_MIN_SAMPLE = 3;
 const DEFAULT_CONFIDENCE_THRESHOLD = 0.6;
 
+// Cache TTL (Time To Live) em ms - 5 minutos
+const CACHE_TTL_MS = 5 * 60 * 1000;
+
 /**
  * ReplayInsights - Queries agregadas com métricas anti-viés
  *
@@ -16,6 +19,7 @@ const DEFAULT_CONFIDENCE_THRESHOLD = 0.6;
  *   - Amostra mínima configurável
  *   - Segmentação por matchup/phase
  *   - Impact score contextual
+ *   - Cache via aggregates store (invalidado por imports)
  *   - Retorna { value, confidence, sampleSize } para consumidores validarem
  */
 class ReplayInsights {
@@ -33,6 +37,55 @@ class ReplayInsights {
    */
   setMinSample(n) {
     this.minSample = n;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Cache Helpers
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Gera chave de cache para uma query
+   */
+  _cacheKey(queryName, params = {}) {
+    const paramStr = Object.entries(params)
+      .filter(([, v]) => v !== undefined)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([k, v]) => `${k}=${v}`)
+      .join("&");
+    return `insights:${queryName}:${paramStr}`;
+  }
+
+  /**
+   * Tenta obter resultado do cache
+   * @returns {Object|null} Cached result ou null se miss/dirty/expired
+   */
+  async _getFromCache(key) {
+    try {
+      const cached = await this.db.getAggregate(key);
+      if (!cached) return null;
+
+      // Verificar TTL
+      if (cached._cachedAt && Date.now() - cached._cachedAt > CACHE_TTL_MS) {
+        return null; // Expired
+      }
+
+      return cached;
+    } catch (e) {
+      console.warn("[ReplayInsights] Cache read error:", e);
+      return null;
+    }
+  }
+
+  /**
+   * Salva resultado no cache
+   */
+  async _saveToCache(key, result) {
+    try {
+      const toCache = { ...result, _cachedAt: Date.now() };
+      await this.db.saveAggregate(key, toCache);
+    } catch (e) {
+      console.warn("[ReplayInsights] Cache write error:", e);
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -134,6 +187,19 @@ class ReplayInsights {
    * @returns {Promise<Array>}
    */
   async getTopCardsByWinRate(filters = {}, limit = 10) {
+    // Tentar cache primeiro
+    const cacheKey = this._cacheKey("topCardsByWinRate", {
+      quality: filters.quality || "clean",
+      archetype: filters.archetype,
+      matchup: filters.matchup,
+      limit,
+    });
+    const cached = await this._getFromCache(cacheKey);
+    if (cached?.results) {
+      console.log("[ReplayInsights] Cache hit: topCardsByWinRate");
+      return cached.results;
+    }
+
     const replays = await this.db.listReplays({
       quality: filters.quality || "clean",
       ...filters,
@@ -187,7 +253,12 @@ class ReplayInsights {
     // Ordenar por win rate * confidence (evita viés de amostra pequena)
     results.sort((a, b) => b.winRate * b.confidence - a.winRate * a.confidence);
 
-    return results.slice(0, limit);
+    const finalResults = results.slice(0, limit);
+
+    // Salvar no cache
+    await this._saveToCache(cacheKey, { results: finalResults });
+
+    return finalResults;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -200,6 +271,14 @@ class ReplayInsights {
    * @returns {Promise<Array>}
    */
   async getOpeningPatterns(archetype) {
+    // Tentar cache primeiro
+    const cacheKey = this._cacheKey("openingPatterns", { archetype });
+    const cached = await this._getFromCache(cacheKey);
+    if (cached?.results) {
+      console.log("[ReplayInsights] Cache hit: openingPatterns");
+      return cached.results;
+    }
+
     const replays = await this.db.listReplays({
       archetype,
       quality: "clean",
@@ -258,6 +337,10 @@ class ReplayInsights {
     }
 
     results.sort((a, b) => b.winRate - a.winRate);
+
+    // Salvar no cache
+    await this._saveToCache(cacheKey, { results });
+
     return results;
   }
 
@@ -271,6 +354,14 @@ class ReplayInsights {
    * @returns {Promise<Object>}
    */
   async getPhasePreferences(archetype) {
+    // Tentar cache primeiro
+    const cacheKey = this._cacheKey("phasePreferences", { archetype });
+    const cached = await this._getFromCache(cacheKey);
+    if (cached?.result) {
+      console.log("[ReplayInsights] Cache hit: phasePreferences");
+      return cached.result;
+    }
+
     const replays = await this.db.listReplays({
       archetype,
       quality: "clean",
@@ -316,7 +407,7 @@ class ReplayInsights {
     // Calcular médias
     const totalReplays = replays.length || 1;
 
-    return {
+    const result = {
       main1: {
         avgSummons: phases.main1.summons / totalReplays,
         avgEffects: phases.main1.effects / totalReplays,
@@ -333,6 +424,11 @@ class ReplayInsights {
       sampleSize: totalReplays,
       confidence: Math.min(1, totalReplays / (this.minSample * 3)),
     };
+
+    // Salvar no cache
+    await this._saveToCache(cacheKey, { result });
+
+    return result;
   }
 
   // ─────────────────────────────────────────────────────────────────────────

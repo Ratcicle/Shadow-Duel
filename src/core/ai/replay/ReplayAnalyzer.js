@@ -77,12 +77,12 @@ class ReplayAnalyzer {
     const phase = decision.phase || "unknown";
     const actor = decision.actor || "unknown";
 
-    // Buscar contexto do snapshot mais próximo (mesmo turno ou anterior)
-    const context = this._extractContext(
-      turn,
+    // Reconstruir contexto via rolling state (snapshot + deltas acumulados)
+    const context = this._extractContextRolling(
       snapshotByTurn,
       replay,
-      decision
+      decisions,
+      index
     );
 
     // Extrair ação escolhida
@@ -114,7 +114,127 @@ class ReplayAnalyzer {
   }
 
   /**
-   * Extrai contexto compacto para uma decisão
+   * Extrai contexto via reconstrução rolling (snapshot + deltas acumulados)
+   * Aplica deltas sequencialmente desde o snapshot até o índice da decisão
+   */
+  _extractContextRolling(snapshotByTurn, replay, decisions, targetIndex) {
+    const targetDecision = decisions[targetIndex];
+    const targetTurn = targetDecision.turn || 0;
+
+    // 1. Encontrar snapshot mais recente <= targetTurn
+    let snapshotTurn = -1;
+    for (let t = targetTurn; t >= 0; t--) {
+      if (snapshotByTurn[t]) {
+        snapshotTurn = t;
+        break;
+      }
+    }
+
+    // Estado base: snapshot ou defaults
+    const snapshot = snapshotTurn >= 0 ? snapshotByTurn[snapshotTurn] : null;
+    const state = {
+      playerLP: snapshot?.playerLP ?? 8000,
+      botLP: snapshot?.botLP ?? 8000,
+      playerField: snapshot?.playerField ? [...snapshot.playerField] : [],
+      botField: snapshot?.botField ? [...snapshot.botField] : [],
+      playerHandCount: snapshot?.playerHandCount ?? 0,
+      botHandCount: snapshot?.botHandCount ?? 0,
+      playerGraveCount: snapshot?.playerGraveCount ?? 0,
+      botGraveCount: snapshot?.botGraveCount ?? 0,
+      playerSpellTrapCount: snapshot?.playerSpellTrapCount ?? 0,
+      botSpellTrapCount: snapshot?.botSpellTrapCount ?? 0,
+      playerFieldSpell: snapshot?.playerFieldSpell ?? null,
+      botFieldSpell: snapshot?.botFieldSpell ?? null,
+    };
+
+    // 2. Encontrar índice da primeira decisão após o snapshot
+    let startIndex = 0;
+    if (snapshotTurn >= 0) {
+      for (let i = 0; i < decisions.length; i++) {
+        const d = decisions[i];
+        // Primeira decisão após o snapshot (mesmo turno conta se após snapshot)
+        if ((d.turn || 0) > snapshotTurn) {
+          startIndex = i;
+          break;
+        }
+        // Se é o mesmo turno do snapshot, usar o índice após as decisões daquele turno
+        if ((d.turn || 0) === snapshotTurn) {
+          startIndex = i + 1;
+        }
+      }
+    }
+
+    // 3. Aplicar deltas sequencialmente até ANTES da decisão atual
+    // O contexto deve refletir o estado ANTES da decisão ser tomada
+    for (let i = startIndex; i < targetIndex; i++) {
+      const delta = decisions[i].delta;
+      if (delta) {
+        this._applyDelta(state, delta);
+      }
+    }
+
+    // 4. Gerar contexto a partir do estado reconstruído
+    const playerFieldSummary = state.playerField.map((m) =>
+      this._summarizeMonster(m, replay.cardDictionary)
+    );
+    const botFieldSummary = state.botField.map((m) =>
+      this._summarizeMonster(m, replay.cardDictionary)
+    );
+
+    return {
+      playerLP: state.playerLP,
+      botLP: state.botLP,
+      lpDiff: state.playerLP - state.botLP,
+      playerHandCount: state.playerHandCount,
+      botHandCount: state.botHandCount,
+      playerFieldCount: state.playerField.length,
+      botFieldCount: state.botField.length,
+      playerFieldSummary,
+      botFieldSummary,
+      playerGraveCount: state.playerGraveCount,
+      botGraveCount: state.botGraveCount,
+      playerSpellTrapCount: state.playerSpellTrapCount,
+      botSpellTrapCount: state.botSpellTrapCount,
+      playerFieldSpell: state.playerFieldSpell,
+      botFieldSpell: state.botFieldSpell,
+      matchup: {
+        player: replay.archetype || "unknown",
+        opponent: replay.botArchetype || "unknown",
+      },
+    };
+  }
+
+  /**
+   * Aplica um delta ao estado acumulado
+   */
+  _applyDelta(state, delta) {
+    // Aplicar apenas campos presentes no delta
+    if (delta.playerLP !== undefined) state.playerLP = delta.playerLP;
+    if (delta.botLP !== undefined) state.botLP = delta.botLP;
+    if (delta.playerField !== undefined)
+      state.playerField = [...delta.playerField];
+    if (delta.botField !== undefined) state.botField = [...delta.botField];
+    if (delta.playerHandCount !== undefined)
+      state.playerHandCount = delta.playerHandCount;
+    if (delta.botHandCount !== undefined)
+      state.botHandCount = delta.botHandCount;
+    if (delta.playerGraveCount !== undefined)
+      state.playerGraveCount = delta.playerGraveCount;
+    if (delta.botGraveCount !== undefined)
+      state.botGraveCount = delta.botGraveCount;
+    if (delta.playerSpellTrapCount !== undefined)
+      state.playerSpellTrapCount = delta.playerSpellTrapCount;
+    if (delta.botSpellTrapCount !== undefined)
+      state.botSpellTrapCount = delta.botSpellTrapCount;
+    if (delta.playerFieldSpell !== undefined)
+      state.playerFieldSpell = delta.playerFieldSpell;
+    if (delta.botFieldSpell !== undefined)
+      state.botFieldSpell = delta.botFieldSpell;
+  }
+
+  /**
+   * Extrai contexto compacto para uma decisão (DEPRECATED - use _extractContextRolling)
+   * Mantido para retrocompatibilidade
    */
   _extractContext(turn, snapshotByTurn, replay, decision) {
     // Buscar snapshot mais recente <= turn

@@ -312,6 +312,7 @@ export function integrateReplayCapture(game) {
   // ─────────────────────────────────────────────────────────────────────────────
   game.on("position_chosen", (payload) => {
     const actor = getActorType(payload, game);
+    const boardState = captureMinimalBoardState(game);
 
     ReplayCapture.capture("position_choice", {
       actor,
@@ -322,6 +323,9 @@ export function integrateReplayCapture(game) {
       card: payload.card,
       position: payload.position,
       summonType: payload.context === "special_summon" ? "special" : "normal",
+      board: boardState,
+      player: game.player,
+      bot: game.bot,
     });
   });
 

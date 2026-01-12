@@ -30,15 +30,27 @@ src/data/cards.js             # Banco de cartas 100% declarativo (~4500 linhas)
 - **Validação:** `CardDatabaseValidator.js` — bloqueia duelo se cartas tiverem erros
 - **Modularização:** `src/core/game/` agrupa lógica por domínio. Cada módulo expõe funções puras importadas no `Game.js`
 
+**Estrutura modular de `src/core/game/`:**
+
+- **zones/**: `ownership.js`, `movement.js`, `operations.js` — Gerencia zonas e movimento de cartas
+- **combat/**: `resolution.js`, `damage.js`, `targeting.js` — Sistema de batalha
+- **summon/**: `execution.js`, `tracking.js`, `ascension.js` — Invocações
+- **turn/**: `lifecycle.js`, `transitions.js`, `cleanup.js` — Controle de turnos
+- **spellTrap/**: `activation.js`, `set.js`, `finalization.js` — Spell/Trap logic
+- **selection/**: `handlers.js`, `session.js`, `highlighting.js` — Seleção de cartas/alvos
+- **ui/**: `board.js`, `modals.js`, `prompts.js` — Interface e modals
+
+Módulos expõem funções puras; `Game.js` importa e chama com `this` context.
+
 ---
 
 ### Executar / Testar
 
 ```bash
 npx serve                     # Servidor local (porta 3000)
-node test-duels-full.js       # Testes de duelos completos bot vs bot
-node test-targeting-cache.js  # Validação do cache de targeting
 ```
+
+**Não há package.json** — projeto usa ES modules nativos do navegador. Serve qualquer servidor HTTP estático.
 
 **Bot Arena** — Modo de teste visual (`BotArena.js`):
 
@@ -47,19 +59,21 @@ node test-targeting-cache.js  # Validação do cache de targeting
 - Gera analytics: win rate, tempo de decisão, opening book
 - Presets: `shadowheart`, `luminarch`
 
-**Testes headless:** Todos os `test-*.js` usam um `mockRenderer` proxy:
-
-```js
-const mockRenderer = new Proxy({}, { get: () => () => {} });
-```
-
-Timeout: 30s/duelo. Retorno: `{ winner, reason, turns, botLP, playerLP }`.
-
 **Flags de dev** (via `localStorage.setItem(key, "true")`):
 
 - `shadow_duel_dev_mode` — Painel dev + logs detalhados
 - `shadow_duel_test_mode` — Guardas extras de runtime
 - `shadow_duel_bot_preset` — Preset: `"shadowheart"` | `"luminarch"`
+- `shadow_duel_capture_mode` — Ativa captura de replays (veja Sistema de Replays)
+
+**Sistema de Replays** — Captura e análise de partidas:
+
+- Ativar: botão `🎬 Replay` no menu principal
+- Captura todas as decisões de ambos jogadores + availableActions
+- Ao fim do duelo: modal para salvar/descartar replay `.json`
+- Dashboard: botão `📊 Replay Analytics` — importa replays, gera training digests, analytics
+- Storage: IndexedDB com stores `replays`, `digests`, `aggregates`
+- Arquivos: `ReplayCapture.js`, `src/core/ai/replay/ReplayAnalyzer.js`, `ReplayDatabase.js`
 
 ---
 
@@ -178,6 +192,8 @@ oncePerTurn: true, oncePerTurnName: "Unique Effect Name"
 - `StrategyRegistry.js` — Registro de estratégias
 - `BeamSearch.js` — Busca de ações ótimas
 - `ThreatEvaluation.js` — Score de ameaças do oponente
+- Subpastas: `shadowheart/`, `luminarch/` — Knowledge base e combos por arquétipo
+- `replay/` — Análise de replays para training digests
 
 **Criar nova estratégia:**
 
@@ -188,6 +204,13 @@ oncePerTurn: true, oncePerTurnName: "Unique Effect Name"
 import MyStrategy from "./MyStrategy.js";
 registerStrategy("my_archetype", MyStrategy);
 ```
+
+**Padrões de AI:**
+
+- Strategies retornam scores para ações: `{ action, score, reasoning }`
+- `BeamSearch` explora árvore de jogadas com beam width
+- Knowledge bases em subpastas definem prioridades e combos (ex: `luminarch/fusionPriority.js`)
+- AI usa `game.autoSelector` (AutoSelector.js) para escolhas automáticas em targeting
 
 ---
 

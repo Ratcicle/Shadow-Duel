@@ -808,26 +808,50 @@ export function selectBestTributes(
     value += (monster.atk || 0) / 400;
     value += (monster.level || 0) * 0.15;
 
-    // Monstros importantes: NÃO tributar (exceto em emergências)
-    if (knowledge?.role === "boss" || knowledge?.role === "fusion_boss") {
-      // Se é situação de emergência (battle-indestructible), reduzir penalidade
-      value += isEmergencyRemoval ? 10 : 20;
+    // ═══════════════════════════════════════════════════════════════════════
+    // PROTEÇÃO EXTRA FORTE: Nunca tributar monstros premium (exceto emergência crítica)
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // Demon Dragon (3000 ATK, destroy 2) - NUNCA tributar
+    if (monster.name === "Shadow-Heart Demon Dragon") {
+      value += isEmergencyRemoval ? 40 : 100;
     }
 
-    if (monster.name === "Shadow-Heart Demon Dragon") {
-      // Em emergência ainda é caro, mas não impossível
-      value += isEmergencyRemoval ? 15 : 25;
+    // Scale Dragon (3000 ATK) - NUNCA tributar
+    if (monster.name === "Shadow-Heart Scale Dragon") {
+      value += isEmergencyRemoval ? 35 : 80;
     }
-    if (monster.name === "Shadow-Heart Scale Dragon") value += 15;
-    if (monster.name === "Shadow-Heart Demon Arctroth") value += 12; // Material de Ascensão
-    if (monster.name === "Shadow-Heart Gecko") value += 3;
-    if (monster.name === "Shadow-Heart Leviathan") value += 6;
-    if (monster.name === "Shadow-Heart Death Wyrm") value += 8;
+
+    // Demon Arctroth (material de Ascensão para Armored Arctroth) - NUNCA tributar
+    if (monster.name === "Shadow-Heart Demon Arctroth") {
+      value += isEmergencyRemoval ? 30 : 70;
+    }
+
+    // Death Wyrm (2500 ATK) - Evitar fortemente
+    if (monster.name === "Shadow-Heart Death Wyrm") {
+      value += isEmergencyRemoval ? 20 : 50;
+    }
+
+    // Leviathan (2400 ATK) - Evitar fortemente
+    if (monster.name === "Shadow-Heart Leviathan") {
+      value += isEmergencyRemoval ? 18 : 45;
+    }
+
+    // Monstros importantes genéricos (boss/fusion_boss)
+    if (knowledge?.role === "boss" || knowledge?.role === "fusion_boss") {
+      value += isEmergencyRemoval ? 25 : 60;
+    }
 
     // Materiais de Ascensão: EVITAR tributar (podem ascender)
-    if (knowledge?.ascensionTarget) value += 10;
+    if (knowledge?.ascensionTarget) {
+      value += isEmergencyRemoval ? 20 : 50;
+    }
 
-    // Specter é BOM tributo (ativa efeito)
+    // Griffin e Gecko são tributos aceitáveis (ATK médio-baixo)
+    if (monster.name === "Shadow-Heart Griffin") value += 3;
+    if (monster.name === "Shadow-Heart Gecko") value += 2;
+
+    // Specter é BOM tributo (ativa efeito de draw)
     if (monster.name === "Shadow-Heart Specter") value -= 5;
 
     // Tokens são ótimos tributos

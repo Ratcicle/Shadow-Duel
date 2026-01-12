@@ -130,14 +130,29 @@ function logCoverageIfNeeded(locale) {
   if (locale !== "pt-br") return;
   if (lastCoverageLogLocale === locale) return;
   lastCoverageLogLocale = locale;
-  const translatedCount = Object.keys(
-    normalizedLocales["pt-br"].cards || {}
-  ).length;
+  const ptCards = normalizedLocales["pt-br"].cards || {};
   const totalCount = cardDatabase.length;
+  let translatedCount = 0;
+  let extraCount = 0;
+
+  const dbIds = new Set(cardDatabase.map((card) => String(card?.id)));
+
+  for (const cardId of Object.keys(ptCards)) {
+    if (!dbIds.has(cardId)) extraCount += 1;
+  }
+
+  for (const card of cardDatabase) {
+    const idKey = String(card?.id);
+    const entry = ptCards[idKey];
+    if (!entry) continue;
+    if (typeof entry.name === "string" || typeof entry.description === "string")
+      translatedCount += 1;
+  }
+
   console.info(
     `[i18n] pt-br translations: ${translatedCount}/${totalCount} cards (${
       totalCount - translatedCount
-    } missing).`
+    } missing, ${extraCount} extra).`
   );
 }
 

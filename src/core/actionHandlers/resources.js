@@ -36,6 +36,24 @@ export async function handlePayLP(action, ctx, targets, engine) {
     return false;
   }
 
+  const baseAmount = amount;
+  if (engine && typeof engine.resolveLpCost === "function") {
+    const costResult = engine.resolveLpCost(action, ctx, amount);
+    if (costResult && typeof costResult.finalAmount === "number") {
+      amount = costResult.finalAmount;
+    }
+    if (costResult?.reduction > 0) {
+      console.log(
+        `[handlePayLP] Cost reduced: ${baseAmount} -> ${amount} (reduced ${costResult.reduction})`
+      );
+    }
+  }
+
+  if (amount <= 0) {
+    getUI(game)?.log("LP cost reduced to 0.");
+    return true;
+  }
+
   if (player.lp < amount) {
     console.log(`[handlePayLP] Not enough LP: ${player.lp} < ${amount}`);
     getUI(game)?.log("Not enough LP to pay cost.");
@@ -107,75 +125,6 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
       if (!filters.name.includes(card.name)) return false;
     }
     if (action.cardName) {
-      const field = player.field || [];
-
-      const hasBoss = field.some((c) =>
-        [
-          "Shadow-Heart Scale Dragon",
-          "Shadow-Heart Demon Arctroth",
-          "Shadow-Heart Demon Dragon",
-        ].includes(c?.name)
-      );
-
-      const strongBody = field.some((c) => (c?.atk || 0) >= 1800);
-
-      const hasBoard = field.length > 0;
-
-      // Heurística de manutenção: pagar só se o benefício justificar o custo
-      const lpAfterPay = player.lp - lpCost;
-
-      const shouldPay =
-        player.lp >= lpCost &&
-        ((hasBoss && lpAfterPay >= 1200) ||
-          (strongBody && lpAfterPay >= 2000) ||
-          (hasBoard && lpAfterPay >= 3000));
-
-      // Se não vamos pagar (LP insuficiente ou heurística decide largar), envia
-      if (!shouldPay) {
-        const sourceZone =
-          typeof engine.findCardZone === "function"
-            ? engine.findCardZone(player, source)
-            : null;
-
-        if (sourceZone) {
-          if (
-            failureZone === "graveyard" &&
-            typeof game.moveCard === "function"
-          ) {
-            game.moveCard(source, player, "graveyard", {
-              fromZone: sourceZone,
-            });
-          } else {
-            const zoneArr = player[sourceZone] || [];
-
-            const idx = zoneArr.indexOf(source);
-
-            if (idx !== -1) {
-              zoneArr.splice(idx, 1);
-
-              if (failureZone === "graveyard") {
-                player.graveyard = player.graveyard || [];
-
-                player.graveyard.push(source);
-              } else if (failureZone === "banished") {
-                player.banished = player.banished || [];
-                player.banished.push(source);
-              }
-            }
-          }
-        }
-
-        game.updateBoard();
-
-        return true;
-      }
-
-      // Pagar LP
-      player.lp -= lpCost;
-
-      game.updateBoard();
-
-      return true;
       const match = action.cardName.toLowerCase();
       if ((card.name || "").toLowerCase() !== match) return false;
     }

@@ -1947,8 +1947,7 @@ export const cardDatabase = [
         ],
         actions: [
           {
-            type: "damage",
-            player: "self",
+            type: "pay_lp",
             amount: 1000,
           },
           {
@@ -1988,8 +1987,7 @@ export const cardDatabase = [
         ],
         actions: [
           {
-            type: "damage",
-            player: "self",
+            type: "pay_lp",
             amount: 1000,
           },
           {
@@ -2384,6 +2382,61 @@ export const cardDatabase = [
             position: "defense",
           },
         ],
+      },
+    ],
+  },
+  {
+    id: 122,
+    name: "Luminarch Pure Knight",
+    cardKind: "monster",
+    monsterType: "fusion",
+    atk: 2000,
+    def: 2000,
+    level: 6,
+    type: "Warrior",
+    archetype: "Luminarch",
+    archetypes: ["Luminarch"],
+    description:
+      "2 'Luminarch' monsters. If this card is Fusion Summoned: You can add 1 'Sanctum of the Luminarch Citadel' from your Deck to your hand. Once per turn, when you activate the effect of a 'Luminarch' Spell/Trap that requires paying LP: reduce that cost by 1000. You can only use each effect of 'Luminarch Pure Knight' once per turn.",
+    image: "assets/Luminarch Pure Knight.png",
+    fusionMaterials: [{ archetype: "Luminarch", count: 2 }],
+    effects: [
+      {
+        id: "luminarch_pure_knight_fusion_search",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethods: ["fusion"],
+        requireSelfAsSummoned: true,
+        oncePerTurn: true,
+        oncePerTurnName: "luminarch_pure_knight_fusion_search",
+        oncePerTurnScope: "card",
+        actions: [
+          {
+            type: "search_any",
+            cardName: "Sanctum of the Luminarch Citadel",
+            cardKind: "spell",
+            player: "self",
+          },
+        ],
+      },
+      {
+        id: "luminarch_pure_knight_lp_discount",
+        timing: "passive",
+        oncePerTurn: true,
+        oncePerTurnName: "luminarch_pure_knight_lp_discount",
+        oncePerTurnScope: "card",
+        requireFaceup: true,
+        passive: {
+          type: "lp_cost_reduction",
+          amount: 1000,
+          stackMode: "max",
+          appliesTo: "self",
+          actionTypes: ["pay_lp"],
+          sourceFilters: {
+            archetype: "Luminarch",
+            cardKind: ["spell", "trap"],
+          },
+        },
       },
     ],
   },

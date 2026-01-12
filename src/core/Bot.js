@@ -1107,13 +1107,17 @@ export default class Bot extends Player {
         );
       }
 
-      const card = this.summon(
+      const summonResult = this.summon(
         resolvedIndex,
         action.position,
         action.facedown,
         tributeIndices
       );
-      if (card) {
+      if (summonResult) {
+        // Handle both old (card) and new ({card, tributes}) return formats
+        const card = summonResult.card || summonResult;
+        const tributes = summonResult.tributes || [];
+
         // Emit after_summon event for trigger effects (e.g., Void Mage search)
         // Only trigger if summoned face-up (facedown set doesn't trigger "when Normal Summoned" effects)
         const isFacedownSet = action.facedown === true;
@@ -1123,6 +1127,7 @@ export default class Bot extends Player {
             player: this,
             method: tributeInfo.tributesNeeded > 0 ? "tribute" : "normal",
             fromZone: "hand",
+            tributes: tributes,
           });
         }
 

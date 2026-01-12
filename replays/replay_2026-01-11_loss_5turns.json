@@ -1,0 +1,761 @@
+{
+  "version": 3,
+  "id": "duel_1768165272904_46",
+  "timestamp": "2026-01-11T21:01:12.904Z",
+  "playerDeck": {
+    "playerDeck": [
+      "Luminarch Sanctum Protector",
+      "Luminarch Magic Sickle",
+      "Luminarch Crescent Shield",
+      "Luminarch Celestial Marshal",
+      "Luminarch Moonblade Captain",
+      "Luminarch Aegisbearer",
+      "Luminarch Moonblade Captain",
+      "Luminarch Valiant - Knight of the Dawn",
+      "Luminarch Enchanted Halberd",
+      "Luminarch Sacred Judgment"
+    ],
+    "playerExtraDeck": [
+      "Luminarch Megashield Barbarias",
+      "Luminarch Fortress Aegis"
+    ],
+    "botPreset": "shadowheart",
+    "timestamp": 1768165272904
+  },
+  "botDeck": "unknown",
+  "botDeckList": [
+    "Shadow-Heart Griffin",
+    "Shadow-Heart Purge",
+    "Shadow-Heart Void Mage",
+    "Shadow-Heart Scale Dragon",
+    "Shadow-Heart Demon Arctroth",
+    "Shadow-Heart Infusion",
+    "Shadow-Heart Scale Dragon",
+    "Shadow-Heart Death Wyrm",
+    "Darkness Valley",
+    "Shadow-Heart Imp",
+    "Shadow-Heart Specter",
+    "Shadow-Heart Griffin",
+    "Shadow-Heart Gecko",
+    "Shadow-Heart Coward",
+    "Shadow-Heart Rage",
+    "Shadow-Heart Void Mage",
+    "Shadow-Heart Specter",
+    "Shadow-Heart Imp",
+    "Shadow-Heart Leviathan",
+    "Shadow-Heart Coward",
+    "Shadow-Heart Imp",
+    "Shadow-Heart Abyssal Eel",
+    "Shadow-Heart Abyssal Eel",
+    "Shadow-Heart Covenant",
+    "Polymerization",
+    "Shadow-Heart Covenant",
+    "Shadow-Heart Infusion",
+    "Shadow-Heart Battle Hymn",
+    "Darkness Valley",
+    "Polymerization"
+  ],
+  "botArchetype": "shadowheart",
+  "cardDictionary": {
+    "59": "Shadow-Heart Covenant",
+    "68": "Darkness Valley",
+    "101": "Luminarch Valiant - Knight of the Dawn",
+    "102": "Luminarch Holy Shield",
+    "103": "Luminarch Aegisbearer",
+    "109": "Luminarch Aurora Seraph",
+    "110": "Luminarch Sanctified Arbiter",
+    "111": "Luminarch Knights Convocation",
+    "112": "Sanctum of the Luminarch Citadel",
+    "118": "Luminarch Moonlit Blessing"
+  },
+  "snapshots": {
+    "1": {
+      "playerLP": 8000,
+      "botLP": 8000,
+      "playerField": [
+        {
+          "name": "Luminarch Aegisbearer",
+          "atk": 1000,
+          "def": 2000,
+          "position": "defense"
+        }
+      ],
+      "botField": [],
+      "playerHand": [
+        "Luminarch Aurora Seraph",
+        "Luminarch Radiant Lancer",
+        "Luminarch Knights Convocation"
+      ],
+      "playerHandCount": 3,
+      "botHandCount": 4,
+      "playerGraveyard": [],
+      "playerGraveCount": 0,
+      "botGraveyard": [],
+      "botGraveCount": 0,
+      "playerSpellTrapCount": 0,
+      "botSpellTrapCount": 0,
+      "playerExtraDeckCount": 2,
+      "botExtraDeckCount": 3,
+      "playerFieldSpell": "Sanctum of the Luminarch Citadel",
+      "botFieldSpell": null,
+      "turn": 1,
+      "phase": "main1"
+    }
+  },
+  "decisions": [
+    {
+      "type": "summon",
+      "turn": 1,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 103
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "availableActions": [
+        {
+          "type": "normal_summon",
+          "cardId": 103,
+          "position": "a"
+        },
+        {
+          "type": "set",
+          "cardId": 103,
+          "position": "d"
+        }
+      ],
+      "t0": 1768165275956
+    },
+    {
+      "type": "pass",
+      "turn": 1,
+      "phase": "end",
+      "actor": "human",
+      "availableActions": [
+        {
+          "type": "activate_spell",
+          "cardId": 111
+        },
+        {
+          "type": "set_spell",
+          "cardId": 111
+        }
+      ],
+      "dt": 1767
+    },
+    {
+      "type": "effect_resolution",
+      "turn": 2,
+      "phase": "main1",
+      "actor": "bot",
+      "sourceCard": {
+        "c": 59,
+        "atk": 0,
+        "def": 0,
+        "pos": "a"
+      },
+      "effectResult": {
+        "type": "search",
+        "targets": [],
+        "cardsDrawn": 0,
+        "cardsAdded": [
+          "Shadow-Heart Scale Dragon"
+        ],
+        "lpChange": 0,
+        "description": "Added 1 card(s) to hand from deck"
+      },
+      "availableActions": [
+        {
+          "type": "spell",
+          "cardId": 59
+        }
+      ],
+      "dt": 813,
+      "delta": {
+        "botLP": 7200,
+        "playerHand": [
+          "Luminarch Aurora Seraph",
+          "Luminarch Radiant Lancer"
+        ],
+        "playerHandCount": 2,
+        "botHandCount": 5,
+        "turn": 2
+      }
+    },
+    {
+      "type": "effect",
+      "turn": 2,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 59
+      },
+      "effectId": "shadow_heart_covenant",
+      "effectTiming": "on_play",
+      "activationZone": "spellTrap",
+      "actions": [
+        "pay_lp",
+        "search_any"
+      ],
+      "dt": 0
+    },
+    {
+      "type": "effect",
+      "turn": 2,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 68
+      },
+      "effectId": "darkness_valley_on_place",
+      "effectTiming": "on_play",
+      "activationZone": "fieldSpell",
+      "actions": [
+        "permanent_buff_named"
+      ],
+      "availableActions": [
+        {
+          "type": "spell",
+          "cardId": 68
+        }
+      ],
+      "dt": 418,
+      "delta": {
+        "botHandCount": 4,
+        "botGraveyard": [
+          "Shadow-Heart Covenant"
+        ],
+        "botGraveCount": 1,
+        "botFieldSpell": "Darkness Valley"
+      }
+    },
+    {
+      "type": "effect_resolution",
+      "turn": 3,
+      "phase": "main1",
+      "actor": "human",
+      "sourceCard": {
+        "c": 111,
+        "atk": 0,
+        "def": 0,
+        "pos": "a"
+      },
+      "effectResult": {
+        "type": "search",
+        "targets": [],
+        "cardsDrawn": 0,
+        "cardsAdded": [
+          "Luminarch Valiant - Knight of the Dawn"
+        ],
+        "lpChange": 0,
+        "description": "Added 1 card(s) to hand from deck"
+      },
+      "availableActions": [
+        {
+          "type": "spell",
+          "cardId": 58
+        },
+        {
+          "type": "spell",
+          "cardId": 63
+        }
+      ],
+      "dt": 11479,
+      "delta": {
+        "playerHand": [
+          "Luminarch Radiant Lancer",
+          "Luminarch Holy Shield",
+          "Luminarch Valiant - Knight of the Dawn"
+        ],
+        "playerHandCount": 3,
+        "playerGraveyard": [
+          "Luminarch Aurora Seraph"
+        ],
+        "playerGraveCount": 1,
+        "turn": 3
+      }
+    },
+    {
+      "type": "effect",
+      "turn": 3,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 111
+      },
+      "effectId": "luminarch_knights_convocation_effect",
+      "effectTiming": "ignition",
+      "activationZone": "spellTrap",
+      "actions": [
+        "move",
+        "search_any"
+      ],
+      "dt": 1
+    },
+    {
+      "type": "summon",
+      "turn": 3,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 101
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "availableActions": [
+        {
+          "type": "normal_summon",
+          "cardId": 101,
+          "position": "a"
+        },
+        {
+          "type": "set",
+          "cardId": 101,
+          "position": "d"
+        }
+      ],
+      "dt": 953,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Luminarch Aegisbearer",
+            "atk": 1000,
+            "def": 2000,
+            "position": "defense"
+          },
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          }
+        ],
+        "playerHand": [
+          "Luminarch Radiant Lancer",
+          "Luminarch Holy Shield"
+        ],
+        "playerHandCount": 2
+      }
+    },
+    {
+      "type": "effect_resolution",
+      "turn": 3,
+      "phase": "main1",
+      "actor": "human",
+      "sourceCard": {
+        "c": 101,
+        "atk": 1600,
+        "def": 1200,
+        "pos": "a"
+      },
+      "effectResult": {
+        "type": "search",
+        "targets": [],
+        "cardsDrawn": 0,
+        "cardsAdded": [
+          "Luminarch Sanctified Arbiter"
+        ],
+        "lpChange": 0,
+        "description": "Added 1 card(s) to hand from deck"
+      },
+      "dt": 2218,
+      "delta": {
+        "playerHand": [
+          "Luminarch Radiant Lancer",
+          "Luminarch Holy Shield",
+          "Luminarch Sanctified Arbiter"
+        ],
+        "playerHandCount": 3
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 3,
+      "phase": "battle",
+      "actor": "human",
+      "dt": 1364,
+      "delta": {
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 3,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 101,
+        "atk": 1600
+      },
+      "target": null,
+      "directAttack": true,
+      "availableActions": [
+        {
+          "type": "direct_attack",
+          "cardId": 101
+        },
+        {
+          "type": "cancel_attack"
+        }
+      ],
+      "dt": 633
+    },
+    {
+      "type": "pass",
+      "turn": 3,
+      "phase": "main2",
+      "actor": "human",
+      "dt": 1188,
+      "delta": {
+        "botLP": 5600,
+        "phase": "main2"
+      }
+    },
+    {
+      "type": "set_spell_trap",
+      "turn": 3,
+      "phase": "main2",
+      "actor": "human",
+      "card": {
+        "c": 102
+      },
+      "availableActions": [
+        {
+          "type": "activate_spell",
+          "cardId": 102
+        },
+        {
+          "type": "set_spell",
+          "cardId": 102
+        }
+      ],
+      "dt": 1130,
+      "delta": {
+        "playerHand": [
+          "Luminarch Radiant Lancer",
+          "Luminarch Sanctified Arbiter"
+        ],
+        "playerHandCount": 2
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 3,
+      "phase": "end",
+      "actor": "human",
+      "dt": 723,
+      "delta": {
+        "phase": "end"
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 5,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 110
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "availableActions": [
+        {
+          "type": "normal_summon",
+          "cardId": 110,
+          "position": "a"
+        },
+        {
+          "type": "set",
+          "cardId": 110,
+          "position": "d"
+        }
+      ],
+      "dt": 12789,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Luminarch Aegisbearer",
+            "atk": 1000,
+            "def": 2000,
+            "position": "defense"
+          },
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Sanctified Arbiter",
+            "atk": 1500,
+            "def": 1000,
+            "position": "attack"
+          }
+        ],
+        "playerHand": [
+          "Luminarch Radiant Lancer",
+          "Luminarch Radiant Wave"
+        ],
+        "botHandCount": 5,
+        "turn": 5,
+        "phase": "main1"
+      }
+    },
+    {
+      "type": "effect_resolution",
+      "turn": 5,
+      "phase": "main1",
+      "actor": "human",
+      "sourceCard": {
+        "c": 110,
+        "atk": 1500,
+        "def": 1000,
+        "pos": "a"
+      },
+      "effectResult": {
+        "type": "search",
+        "targets": [],
+        "cardsDrawn": 0,
+        "cardsAdded": [
+          "Luminarch Moonlit Blessing"
+        ],
+        "lpChange": 0,
+        "description": "Added 1 card(s) to hand from deck"
+      },
+      "dt": 1736,
+      "delta": {
+        "playerHand": [
+          "Luminarch Radiant Lancer",
+          "Luminarch Radiant Wave",
+          "Luminarch Moonlit Blessing"
+        ],
+        "playerHandCount": 3
+      }
+    },
+    {
+      "type": "position_choice",
+      "turn": 5,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 109,
+        "atk": 2800,
+        "def": 2400,
+        "pos": "a"
+      },
+      "chosenPosition": "a",
+      "summonType": "special",
+      "availableActions": [
+        {
+          "type": "activate_spell",
+          "cardId": 118
+        },
+        {
+          "type": "set_spell",
+          "cardId": 118
+        }
+      ],
+      "dt": 4501,
+      "delta": {
+        "playerLP": 0,
+        "botLP": 0,
+        "playerField": [],
+        "playerHand": [],
+        "playerHandCount": 0,
+        "botHandCount": 0,
+        "playerGraveyard": [],
+        "playerGraveCount": 0,
+        "botGraveyard": [],
+        "botGraveCount": 0,
+        "playerExtraDeckCount": 0,
+        "botExtraDeckCount": 0,
+        "playerFieldSpell": null,
+        "botFieldSpell": null,
+        "turn": 1
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 5,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 109
+      },
+      "summonType": "special",
+      "fromZone": "hand",
+      "dt": 0,
+      "delta": {
+        "playerLP": 8000,
+        "botLP": 5600,
+        "playerField": [
+          {
+            "name": "Luminarch Aegisbearer",
+            "atk": 1000,
+            "def": 2000,
+            "position": "defense"
+          },
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Sanctified Arbiter",
+            "atk": 1500,
+            "def": 1000,
+            "position": "attack"
+          },
+          {
+            "name": "Luminarch Aurora Seraph",
+            "atk": 2800,
+            "def": 2400,
+            "position": "attack"
+          }
+        ],
+        "playerHand": [
+          "Luminarch Radiant Lancer",
+          "Luminarch Radiant Wave"
+        ],
+        "playerHandCount": 2,
+        "botHandCount": 5,
+        "botGraveyard": [
+          "Shadow-Heart Covenant"
+        ],
+        "botGraveCount": 1,
+        "playerExtraDeckCount": 2,
+        "botExtraDeckCount": 3,
+        "playerFieldSpell": "Sanctum of the Luminarch Citadel",
+        "botFieldSpell": "Darkness Valley",
+        "turn": 5
+      }
+    },
+    {
+      "type": "effect",
+      "turn": 5,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 118
+      },
+      "effectId": "luminarch_moonlit_blessing_effect",
+      "effectTiming": "on_play",
+      "activationZone": "spellTrap",
+      "actions": [
+        "move",
+        "conditional_summon_from_hand"
+      ],
+      "dt": 3
+    },
+    {
+      "type": "spell",
+      "turn": 5,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 118
+      },
+      "targets": [],
+      "dt": 2,
+      "delta": {
+        "playerGraveyard": [
+          "Luminarch Moonlit Blessing"
+        ],
+        "playerGraveCount": 1
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 5,
+      "phase": "battle",
+      "actor": "human",
+      "dt": 2429,
+      "delta": {
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 5,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 101,
+        "atk": 1600
+      },
+      "target": null,
+      "directAttack": true,
+      "availableActions": [
+        {
+          "type": "direct_attack",
+          "cardId": 101
+        },
+        {
+          "type": "cancel_attack"
+        }
+      ],
+      "dt": 829
+    },
+    {
+      "type": "attack",
+      "turn": 5,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 110,
+        "atk": 1500
+      },
+      "target": null,
+      "directAttack": true,
+      "availableActions": [
+        {
+          "type": "direct_attack",
+          "cardId": 110
+        },
+        {
+          "type": "cancel_attack"
+        }
+      ],
+      "dt": 969,
+      "delta": {
+        "botLP": 4000
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 5,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 109,
+        "atk": 2800
+      },
+      "target": null,
+      "directAttack": true,
+      "availableActions": [
+        {
+          "type": "direct_attack",
+          "cardId": 109
+        },
+        {
+          "type": "cancel_attack"
+        }
+      ],
+      "dt": 1326,
+      "delta": {
+        "botLP": 2500
+      }
+    }
+  ],
+  "result": {
+    "winner": "human",
+    "reason": "lp_zero"
+  },
+  "totalTurns": 5,
+  "finalLP": {
+    "player": 8000,
+    "bot": 0
+  }
+}

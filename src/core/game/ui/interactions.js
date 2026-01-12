@@ -194,11 +194,19 @@ export function bindCardInteractions() {
                 this.ui.log(`Select ${tributesNeeded} monster(s) to tribute.`);
               } else {
                 const before = this.player.field.length;
-                const result = this.player.summon(index, position, isFacedown);
-                if (!result && this.player.field.length === before) {
+                const summonResult = this.player.summon(
+                  index,
+                  position,
+                  isFacedown
+                );
+                if (!summonResult && this.player.field.length === before) {
                   this.updateBoard();
                   return;
                 }
+                // Handle both old (card) and new ({card, tributes}) return formats
+                const card = summonResult.card || summonResult;
+                const tributes = summonResult.tributes || [];
+
                 const summonedCard =
                   this.player.field[this.player.field.length - 1];
                 summonedCard.summonedTurn = this.turnCounter;
@@ -214,6 +222,7 @@ export function bindCardInteractions() {
                   player: this.player,
                   method: "normal",
                   fromZone: "hand",
+                  tributes: tributes,
                 }).then(() => {
                   this.updateBoard();
                 });
@@ -344,20 +353,24 @@ export function bindCardInteractions() {
           }
 
           const before = this.player.field.length;
-          const result = this.player.summon(
+          const summonResult = this.player.summon(
             pendingSummon.cardIndex,
             pendingSummon.position,
             pendingSummon.isFacedown,
             selectedTributes
           );
 
-          if (!result && this.player.field.length === before) {
+          if (!summonResult && this.player.field.length === before) {
             tributeSelectionMode = false;
             selectedTributes = [];
             pendingSummon = null;
             this.updateBoard();
             return;
           }
+
+          // Handle both old (card) and new ({card, tributes}) return formats
+          const card = summonResult.card || summonResult;
+          const tributes = summonResult.tributes || [];
 
           const summonedCard = this.player.field[this.player.field.length - 1];
           summonedCard.summonedTurn = this.turnCounter;
@@ -374,6 +387,7 @@ export function bindCardInteractions() {
             player: this.player,
             method: pendingSummon.tributesNeeded > 0 ? "tribute" : "normal",
             fromZone: "hand",
+            tributes: tributes,
           }).then(() => {
             this.updateBoard();
           });
