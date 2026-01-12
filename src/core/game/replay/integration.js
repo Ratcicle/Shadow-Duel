@@ -366,6 +366,24 @@ export function integrateReplayCapture(game) {
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
+  // Captura de Seleção de Alvo (v4)
+  // ─────────────────────────────────────────────────────────────────────────────
+  game.on("target_selected", (payload) => {
+    const actor = payload.player === "player" ? "human" : "bot";
+    const boardState = captureMinimalBoardState(game);
+
+    ReplayCapture.capture("target_selection", {
+      actor,
+      sourceCard: payload.sourceCard?.name,
+      sourceCardId: payload.sourceCard?.id,
+      effectId: payload.effectId,
+      selectedTargets: payload.selectedTargets || [],
+      selectedCount: payload.selectedCount || 0,
+      board: boardState,
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
   // Captura de Dano Infligido
   // ─────────────────────────────────────────────────────────────────────────────
   game.on("damage_inflicted", (payload) => {

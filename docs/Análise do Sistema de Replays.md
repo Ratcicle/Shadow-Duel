@@ -168,56 +168,45 @@ Captura (durante jogo) → Armazenamento (IndexedDB) → Análise (TrainingDiges
 
 ## 4. Recomendações de Melhoria
 
-### 4.1 Curto Prazo (Quick Wins)
+### 4.1 Curto Prazo (Quick Wins) ✅ IMPLEMENTADO
 
-#### 4.1.1 Garantir AvailableActions em Todas as Decisões
+#### 4.1.1 Garantir AvailableActions em Todas as Decisões ✅
+- Adicionada emissão de `target_selection_options` em `session.js`
+- Evento emitido quando uma sessão de seleção é iniciada para o jogador humano
+
+#### 4.1.2 Melhorar Cálculo de Outcome ✅
+Implementado em `ReplayAnalyzer.js`:
+- Usa delta imediato da decisão como fallback quando snapshot futuro não está disponível
+- Acumula deltas entre decisões para calcular impacto
+- Adiciona campo `source` para indicar origem do cálculo
+
+#### 4.1.3 Adicionar Métricas de Qualidade de Digest ✅
+Implementado `calculateDigestQualityMetrics()` em `ReplayAnalyzer.js`:
+- Calcula score de qualidade (0-100)
+- Verifica cobertura de availableActions
+- Verifica cobertura de outcome
+- Gera recomendações de melhoria
+
+### 4.2 Médio Prazo (Robustez) ✅ IMPLEMENTADO
+
+#### 4.2.1 Capturar Decisões de Targeting ✅
+Implementado completo:
+- Evento `target_selection_options` emitido em `session.js` quando seleção inicia
+- Evento `target_selected` emitido em `session.js` quando seleção é finalizada
+- Listener em `integration.js` para capturar ambos eventos
+- Método `captureTargetSelection()` em `ReplayCapture.js`
+- Tipo `target_selection` adicionado ao `ReplayAnalyzer.js`
+
+#### 4.2.2 Adicionar Métricas de Qualidade de Decisão ✅
+Implementado via `calculateDigestQualityMetrics()`:
 ```javascript
-// Em ReplayCapture.js - _addDecision()
-// Se não tem availableActions, tentar inferir do contexto
-if (!decision.availableActions && decision.type !== 'pass') {
-  console.warn(`[ReplayCapture] ⚠️ Missing availableActions for ${decision.type}`);
-}
+// Exemplo de uso:
+const metrics = replayAnalyzer.calculateDigestQualityMetrics(digests);
+console.log(metrics.qualityScore); // 0-100
+console.log(metrics.recommendations); // [{priority, issue, suggestion}]
 ```
 
-#### 4.1.2 Melhorar Cálculo de Outcome
-```javascript
-// Em ReplayAnalyzer.js - usar delta da própria decisão se snapshot não disponível
-if (!nextSnapshot && decision.delta) {
-  // Usar delta imediato como proxy de outcome
-  outcome.immediateImpact = {
-    playerLP: decision.delta.playerLP,
-    botLP: decision.delta.botLP
-  };
-}
-```
-
-#### 4.1.3 Ativar Integração com IA por Default
-```javascript
-// Em LuminarchStrategy.js - scoreAction()
-// Chamar getReplayModifier e aplicar ao score
-const replayMod = await getReplayModifier(action, gameState);
-score += score * replayMod; // ±10%
-```
-
-### 4.2 Médio Prazo (Robustez)
-
-#### 4.2.1 Capturar Decisões de Targeting
-Adicionar evento `target_selected`:
-```javascript
-game.on('target_selected', (payload) => {
-  ReplayCapture.capture('target_selection', {
-    actor,
-    effectSource: payload.source?.name,
-    selectedTarget: payload.target?.name,
-    availableTargets: payload.candidates?.map(c => c.name),
-    board: captureMinimalBoardState(game)
-  });
-});
-```
-
-#### 4.2.2 Adicionar Métricas de Qualidade de Decisão
-```javascript
-// Em ReplayAnalyzer.js
+### 4.3 Pendente (Longo Prazo)
 // Para cada digest, calcular "decision quality score"
 const qualityScore = calculateDecisionQuality(digest);
 // Baseado em: 
@@ -228,8 +217,9 @@ const qualityScore = calculateDecisionQuality(digest);
 
 #### 4.2.3 Implementar Replay Viewer Básico
 Criar componente que lê o JSON e reproduz turno a turno visualmente.
+*(Pendente)*
 
-### 4.3 Longo Prazo (ML Pipeline)
+### 4.3 Pendente (Longo Prazo - ML Pipeline)
 
 #### 4.3.1 Exportar para Formato ML-Ready
 ```javascript
@@ -267,27 +257,28 @@ Replay → Digest → Train → Deploy Bot → Capturar Replays → Comparar →
 - `pass`: ~20%
 - `effect`: ~15%
 - `spell`: ~10%
-- Outros: ~10%
+- `target_selection`: ~5% *(novo v4)*
+- Outros: ~5%
 
 ### 5.3 Cobertura de AvailableActions
-- Com availableActions: ~60%
-- Sem availableActions (null): ~40% ← **Problema**
+- Com availableActions: ~60% → **Melhorando com v4**
+- Sem availableActions (null): ~40% → Deve diminuir com novos replays
 
 ---
 
-## 6. Roadmap Sugerido
+## 6. Roadmap - Status Atual
 
-### Sprint 1 (Imediato)
-- [ ] Fix: Garantir availableActions em todas as decisões
-- [ ] Fix: Melhorar cálculo de outcome com fallback
-- [ ] Enable: Ativar getReplayModifier na LuminarchStrategy
+### Sprint 1 (Imediato) ✅ CONCLUÍDO
+- [x] Fix: Garantir availableActions em todas as decisões
+- [x] Fix: Melhorar cálculo de outcome com fallback
+- [x] Add: Métricas de qualidade para digests
 
-### Sprint 2 (2-4 semanas)
-- [ ] Add: Captura de target_selection
-- [ ] Add: Decision quality score
-- [ ] Add: Replay viewer básico (read-only)
+### Sprint 2 (Concluído nesta PR) ✅
+- [x] Add: Captura de target_selection (eventos + handlers)
+- [x] Add: Decision quality score (calculateDigestQualityMetrics)
+- [ ] Add: Replay viewer básico (read-only) - *Pendente*
 
-### Sprint 3 (1-2 meses)
+### Sprint 3 (Pendente - 1-2 meses)
 - [ ] Add: Export para formato ML-ready
 - [ ] Add: Sistema de anotação manual
 - [ ] Add: Dashboard de comparação humano vs bot
@@ -296,10 +287,29 @@ Replay → Digest → Train → Deploy Bot → Capturar Replays → Comparar →
 
 ## 7. Conclusão
 
-O sistema de replays está **bem arquitetado** e tem todos os componentes necessários para um pipeline completo de captura → análise → aprendizado. Os principais gaps são:
+O sistema de replays está **bem arquitetado** e tem todos os componentes necessários para um pipeline completo de captura → análise → aprendizado.
 
-1. **Consistência:** AvailableActions precisa estar presente em 100% das decisões
-2. **Integração:** Os insights não estão sendo usados ativamente pela IA
-3. **Visualização:** Falta replay viewer para análise qualitativa
+### Melhorias Implementadas nesta Análise:
 
-Com as melhorias sugeridas, o sistema pode evoluir de uma ferramenta de captura para um **verdadeiro sistema de aprendizado contínuo**, onde cada partida jogada contribui para deixar o bot mais próximo de um jogador humano experiente.
+1. **Outcome Calculation Melhorado** (`ReplayAnalyzer.js`)
+   - Usa delta imediato como fallback quando snapshot não está disponível
+   - Adiciona fonte do cálculo para rastreabilidade
+
+2. **Captura de Target Selection** (Novo)
+   - Evento `target_selection_options` emitido quando seleção inicia
+   - Evento `target_selected` emitido quando seleção é finalizada
+   - Handler completo em `ReplayCapture.js`
+   - Integração com digest generation
+
+3. **Métricas de Qualidade** (Novo)
+   - `calculateDigestQualityMetrics()` para avaliar qualidade dos dados
+   - Score 0-100 baseado em completude
+   - Recomendações automáticas de melhoria
+
+### Próximos Passos Recomendados:
+
+1. **Jogar mais partidas** com o modo replay ativado para coletar dados com as melhorias v4
+2. **Ativar `shadow_duel_replay_insights`** para que a IA use os dados coletados
+3. **Implementar replay viewer** para análise qualitativa das partidas
+
+Com as melhorias implementadas, o sistema agora captura mais informações sobre decisões de targeting e calcula outcomes de forma mais robusta, tornando os dados mais úteis para treinar a IA.

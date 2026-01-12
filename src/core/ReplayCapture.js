@@ -280,6 +280,9 @@ class ReplayCapture {
       case "position_change":
         this.capturePositionChange(normalized);
         break;
+      case "target_selection":
+        this.captureTargetSelection(normalized);
+        break;
       default:
         // Captura genérica para tipos não mapeados
         this._addDecision({
@@ -891,6 +894,53 @@ class ReplayCapture {
       "POS_CHANGE",
       context.cardName,
       `${context.fromPosition} → ${context.toPosition} [${decision.actor}]`
+    );
+  }
+
+  /**
+   * Captura seleção de alvo (v4)
+   * Registra quando o jogador escolhe alvos para efeitos
+   */
+  captureTargetSelection(context) {
+    if (!this.isEnabled() || !this.currentDuel) return;
+
+    // Registrar carta fonte no dicionário
+    if (context.sourceCard) {
+      this._registerCard({
+        id: context.sourceCardId,
+        name: context.sourceCard,
+      });
+    }
+
+    // Registrar alvos selecionados
+    const selectedTargets = (context.selectedTargets || []).map((t) => {
+      this._registerCard(t);
+      return { c: t.id, name: t.name };
+    });
+
+    const decision = {
+      type: "target_selection",
+      turn: this._extractTurn(context),
+      phase: context.phase || context.board?.phase || "unknown",
+      timestamp: Date.now(),
+      actor: context.actor || "human",
+
+      sourceCard: context.sourceCardId
+        ? { c: context.sourceCardId }
+        : { name: context.sourceCard },
+      effectId: context.effectId,
+      selectedTargets,
+      selectedCount: context.selectedCount || selectedTargets.length,
+
+      // Contexto do jogo
+      gameState: this._captureGameState(context),
+    };
+
+    this._addDecision(decision);
+    this._logDecision(
+      "TARGET",
+      context.sourceCard,
+      `→ ${selectedTargets.map((t) => t.name).join(", ")} [${decision.actor}]`
     );
   }
 

@@ -26,6 +26,7 @@ class ReplayAnalyzer {
       "chain_response",
       "fusion_summon",
       "ascension_summon",
+      "target_selection", // v4: captura de seleção de alvos
     ]);
     
     // Contador para IDs únicos de digest
@@ -428,6 +429,18 @@ class ReplayAnalyzer {
           ...base,
           activated: decision.activated,
           cardId: decision.card?.c || decision.card?.id,
+        };
+
+      case "target_selection":
+        return {
+          ...base,
+          sourceCardId: decision.sourceCard?.c || decision.sourceCard?.id,
+          effectId: decision.effectId,
+          selectedTargets: (decision.selectedTargets || []).map(t => ({
+            id: t.c || t.id,
+            name: t.name,
+          })),
+          selectedCount: decision.selectedCount || 0,
         };
 
       case "pass":
