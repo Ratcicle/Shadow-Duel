@@ -59,6 +59,8 @@ export function bindCardInteractions() {
         });
         if (!guard.ok) return;
 
+        // LEGACY: Hardcoded check for "Luminarch Sanctum Protector" card.
+        // TODO: This should be replaced with a declarative ignition effect on the card definition.
         const canSanctumSpecialFromAegis =
           card.name === "Luminarch Sanctum Protector" &&
           this.player.field.length < 5 &&
@@ -247,14 +249,20 @@ export function bindCardInteractions() {
         });
         if (!guard.ok) return;
 
-        // Special check for Polymerization
+        // Check for fusion spell (has polymerization_fusion_summon action) - generic instead of hardcoded name
         const spellPreview = this.effectEngine?.canActivateSpellFromHandPreview(
           card,
           this.player
         ) || { ok: true };
         let canActivateFromHand = !!spellPreview.ok;
 
-        if (card.name === "Polymerization") {
+        const hasFusionAction = (card.effects || []).some(
+          (e) =>
+            e &&
+            Array.isArray(e.actions) &&
+            e.actions.some((a) => a && a.type === "polymerization_fusion_summon")
+        );
+        if (hasFusionAction) {
           if (!this.canActivatePolymerization()) {
             canActivateFromHand = false;
           }

@@ -2282,6 +2282,10 @@ export const cardDatabase = [
       {
         id: "megashield_barbarias_lp_doubling",
         timing: "passive",
+        passive: {
+          type: "lp_gain_multiplier",
+          multiplier: 2.0,
+        },
         actions: [],
       },
       {
@@ -2954,6 +2958,7 @@ export const cardDatabase = [
           },
           {
             type: "grant_void_fusion_immunity",
+            archetype: "Void",
             durationTurns: 1,
           },
         ],

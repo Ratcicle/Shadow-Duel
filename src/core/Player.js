@@ -428,17 +428,20 @@ export default class Player {
     // Reset to defaults
     this.lpGainMultiplier = 1.0;
 
-    // Check for Megashield Barbarias LP doubling passive
-    const hasMegashieldBarbarias = (this.field || []).some(
-      (card) =>
-        card &&
-        !card.isFacedown &&
-        card.cardKind === "monster" &&
-        card.name === "Luminarch Megashield Barbarias"
-    );
-
-    if (hasMegashieldBarbarias) {
-      this.lpGainMultiplier = 2.0;
+    // Check for LP gain multiplier passive effects on field monsters
+    // Generic implementation - no hardcoded card names
+    for (const card of this.field || []) {
+      if (!card || card.isFacedown || card.cardKind !== "monster") continue;
+      
+      for (const effect of card.effects || []) {
+        if (!effect || effect.timing !== "passive" || !effect.passive) continue;
+        
+        if (effect.passive.type === "lp_gain_multiplier") {
+          const multiplier = Number(effect.passive.multiplier) || 1.0;
+          // Apply the highest multiplier (stacking could be added later)
+          this.lpGainMultiplier = Math.max(this.lpGainMultiplier, multiplier);
+        }
+      }
     }
 
     // Future: Add more passive effects here

@@ -264,7 +264,11 @@ export async function applyDestroyOtherDragonsAndBuff(action, ctx) {
     return false;
   }
 
-  const typeName = action?.typeName || "Dragon";
+  const typeName = action?.typeName;
+  if (!typeName) {
+    console.warn("[applyDestroyOtherDragonsAndBuff] typeName is required in action");
+    return false;
+  }
   const atkPerDestroyed = Number.isFinite(action?.atkPerDestroyed)
     ? action.atkPerDestroyed
     : 200;

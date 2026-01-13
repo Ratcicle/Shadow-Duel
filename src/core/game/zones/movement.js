@@ -372,10 +372,12 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
       }
     }
 
-    // Special case: "The Shadow Heart" - if it leaves the field, destroy the equipped monster
-    // Process this AFTER removing bonuses to ensure clean state
-    // State is already consistent (refs cleared, bonuses removed), so destroy result doesn't affect cleanup
-    if (card.name === "The Shadow Heart" && host) {
+    // Generalized equip cleanup: if an equip card has destroyEquippedOnLeave, destroy the equipped monster
+    // Check for passive effect with id pattern or explicit flag on card
+    const hasDestroyOnLeaveEffect = (card.effects || []).some(
+      (e) => e && e.timing === "passive" && e.id && e.id.includes("destroy_on_leave")
+    );
+    if ((card.destroyEquippedOnLeave || hasDestroyOnLeaveEffect) && host) {
       const hostOwner = host.owner === "player" ? this.player : this.bot;
       this.destroyCard(host, {
         cause: "effect",
@@ -508,22 +510,50 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     }
   }
 
-  // Se Call of the Haunted sai do campo (para qualquer destino), destruir o monstro revivido
-  // Generalized: trap leaving spellTrap to ANY zone triggers cleanup (consistent with equip rules)
+  // If a continuous trap with a bound target leaves spellTrap zone, destroy the bound target
+  // This implements the generic "destroy bound monster when trap leaves field" pattern
+  // Used by: Call of the Haunted, and any future traps with similar mechanics
   if (
     fromZone === "spellTrap" &&
     toZone !== "spellTrap" &&
     card.cardKind === "trap" &&
     card.subtype === "continuous" &&
-    card.name === "Call of the Haunted" &&
-    card.callOfTheHauntedTarget
+    card.boundMonsterTarget
   ) {
-    const revivedMonster = card.callOfTheHauntedTarget;
-    card.callOfTheHauntedTarget = null; // Clear reference BEFORE destroy - state is consistent
+    const revivedMonster = card.boundMonsterTarget;
+    card.boundMonsterTarget = null; // Clear reference BEFORE destroy - state is consistent
 
     const monsterOwner =
       revivedMonster.owner === "player" ? this.player : this.bot;
     // Destroy is fire-and-forget but safe - ref already cleared, state is consistent
+    this.destroyCard(revivedMonster, {
+      cause: "effect",
+      sourceCard: card,
+      opponent: this.getOpponent(monsterOwner),
+    }).then((result) => {
+      if (result?.destroyed) {
+        this.ui.log(
+          `${revivedMonster.name} was destroyed as ${card.name} left the field.`
+        );
+        this.updateBoard();
+      }
+    });
+  }
+
+  // LEGACY SUPPORT: Also check callOfTheHauntedTarget for backwards compatibility
+  // TODO: Migrate cards using callOfTheHauntedTarget to use boundMonsterTarget instead
+  if (
+    fromZone === "spellTrap" &&
+    toZone !== "spellTrap" &&
+    card.cardKind === "trap" &&
+    card.subtype === "continuous" &&
+    card.callOfTheHauntedTarget
+  ) {
+    const revivedMonster = card.callOfTheHauntedTarget;
+    card.callOfTheHauntedTarget = null;
+
+    const monsterOwner =
+      revivedMonster.owner === "player" ? this.player : this.bot;
     this.destroyCard(revivedMonster, {
       cause: "effect",
       sourceCard: card,

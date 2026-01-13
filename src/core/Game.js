@@ -577,6 +577,12 @@ export default class Game {
 
   // → bindCardInteractions → Moved to src/core/game/ui/interactions.js
 
+  /**
+   * @deprecated LEGACY CODE - Hardcoded logic for "Luminarch Sanctum Protector" card.
+   * This should be replaced with a declarative effect on the card using the
+   * `special_summon_from_hand_with_cost` handler type.
+   * TODO: Add ignition effect to "Luminarch Sanctum Protector" card definition and remove this method.
+   */
   specialSummonSanctumProtectorFromHand(handIndex) {
     const guard = this.guardActionStart({
       actor: this.player,
