@@ -4,12 +4,16 @@
  */
 
 /**
- * Apply grant fusion immunity action
- * Can be configured via action.archetype to apply to any archetype's fusion monsters
+ * Apply grant fusion immunity action to a Fusion Monster of a specified archetype.
+ * Grants temporary immunity to opponent's effects.
+ * 
+ * Note: Function name kept as applyGrantVoidFusionImmunity for backwards compatibility
+ * with wiring.js, but the implementation is now generic and uses action.archetype.
+ * 
  * @param {Object} action - Action configuration
- * @param {Object} action.archetype - Required archetype filter (e.g., "Void")
+ * @param {string} action.archetype - Required archetype filter (e.g., "Void")
  * @param {number} [action.durationTurns=1] - Duration of immunity in turns
- * @param {Object} ctx - Context object
+ * @param {Object} ctx - Context object with summonedCard and player
  * @returns {boolean} Whether immunity was granted
  */
 export function applyGrantVoidFusionImmunity(action, ctx) {
