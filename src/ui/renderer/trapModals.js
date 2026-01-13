@@ -65,8 +65,8 @@ export function showUnifiedTrapModal(options = {}) {
       cardName.textContent = getCardDisplayName(card) || card.name || "";
       const cardDesc = document.createElement("div");
       cardDesc.className = "trap-card-description";
-      cardDesc.textContent =
-        getCardDisplayDescription(card) || card.description || "";
+      const descText = getCardDisplayDescription(card) || card.description || "";
+      cardDesc.innerHTML = descText.replace(/\n/g, '<br>');
       cardInfo.appendChild(cardName);
       cardInfo.appendChild(cardDesc);
       modal.appendChild(cardInfo);

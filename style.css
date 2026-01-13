@@ -30,16 +30,17 @@ body {
   background-color: var(--bg-color);
   color: var(--text-color);
   font-family: var(--font-main);
-  height: 100vh;
+  height: 100dvh; /* Dynamic viewport height (respects mobile/taskbars) */
   overflow: hidden;
   display: flex;
   justify-content: center;
   align-items: center;
+  font-size: 16px; /* Base for responsive scaling */
 }
 
 #game-container {
   flex: 1;
-  height: 100vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -47,24 +48,26 @@ body {
   gap: 12px;
   padding: 10px 14px 12px;
   position: relative;
+  min-width: 0; /* Allow flex children to shrink below content size */
 }
 
 #sidebar {
-  width: 300px;
+  width: 280px;
   height: 100vh;
   background: #1a1a1a;
   border-left: 1px solid var(--border-color);
-  padding: 20px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 14px;
   position: relative;
   z-index: 500;
+  transition: width 0.3s ease;
 }
 
 #card-preview {
-  flex: 0 0 320px;
-  min-width: 280px;
+  flex: 0 0 260px;
+  min-width: 260px;
   min-height: 0;
   height: 100%;
   display: flex;
@@ -73,8 +76,52 @@ body {
   justify-content: space-between;
   align-items: center;
   border-left: 1px solid var(--border-color);
-  padding-left: 16px;
-  padding-right: 16px;
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
+/* Responsive: Collapse sidebar on smaller viewports */
+@media (max-width: 1400px) {
+  #sidebar {
+    width: 250px;
+    padding: 12px;
+  }
+  
+  #card-preview {
+    flex: 0 0 240px;
+    min-width: 240px;
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+  
+  #preview-image {
+    max-width: 220px !important;
+  }
+}
+
+@media (max-width: 1200px) {
+  #sidebar {
+    width: 220px;
+    padding: 10px;
+  }
+  
+  #card-preview {
+    flex: 0 0 210px;
+    min-width: 210px;
+  }
+  
+  #preview-image {
+    max-width: 190px !important;
+  }
+  
+  #preview-info h2 {
+    font-size: 0.95rem;
+  }
+  
+  #preview-stats {
+    gap: 12px;
+    font-size: 0.9rem;
+  }
 }
 
 #preview-image {
@@ -2013,26 +2060,64 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 6px 10px;
+  padding: 8px 12px;
   font-weight: bold;
   font-size: 1rem;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.75);
+  border-radius: 8px;
+  background: var(--zone-bg);
   backdrop-filter: blur(6px);
   gap: 12px;
+  z-index: 100;
+  box-shadow: 0 0 10px rgba(187, 134, 252, 0.2);
+  border: 1px solid rgba(187, 134, 252, 0.2);
 }
 
-/* HUD-style placement for Life Points */
+.player-info .name {
+  min-width: 60px;
+  color: #ccc;
+}
+
+.lp-counter {
+  white-space: nowrap;
+  font-size: 1.1rem;
+  color: #bb86fc;
+  font-weight: 900;
+}
+
+/* HUD-style placement for Life Points - inside player areas */
 #bot-area .player-info {
   position: absolute;
-  top: 8px;
-  right: 16px;
+  bottom: 8px;
+  right: 8px;
 }
 
 #player-area .player-info {
   position: absolute;
-  bottom: 8px;
-  left: 16px;
+  top: 8px;
+  left: 8px;
+}
+
+/* Ensure LP is always visible even at zoom levels */
+@media (max-width: 1400px) {
+  .player-info {
+    font-size: 0.95rem;
+    padding: 6px 10px;
+  }
+  
+  .lp-counter {
+    font-size: 1rem;
+  }
+}
+
+@media (max-height: 900px) {
+  .player-info {
+    font-size: 0.9rem;
+    padding: 5px 8px;
+  }
+  
+  .lp-counter {
+    font-size: 0.95rem;
+  }
 }
 
 @media (max-height: 900px) {

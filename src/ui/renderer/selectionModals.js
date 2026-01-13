@@ -313,7 +313,7 @@ export function showDestructionNegationPrompt(
   title.textContent = `Deseja ativar o efeito de "${cardName}"?`;
 
   const desc = document.createElement("p");
-  desc.textContent = costDescription ? `Custo: ${costDescription}` : "";
+  desc.innerHTML = costDescription ? `Custo: ${costDescription}`.replace(/\n/g, '<br>') : "";
 
   const actions = document.createElement("div");
   actions.className = "target-actions";

@@ -3133,7 +3133,7 @@ export const cardDatabase = [
     type: "Dragon",
     archetype: "Void",
     description:
-      'If this card is in your hand: You can send 1-3 "Void Hollow" you control to the GY, then Special Summon this card. Gains effects based on how many were sent: 1+: +300 ATK until end of turn; 2+: also cannot be destroyed by battle; 3: also destroy 1 card your opponent controls. You can only use this effect of "Void Serpent Drake" once per turn.',
+      'If this card is in your hand: You can send 1 to 3 "Void Hollow" you control to the GY; Special Summon this card, and if you do, it gains the following effects based on the number sent:\n- 1+: This card gains 300 ATK for each "Void Hollow" sent, until the end of the turn.\n- 2+: Also, this card cannot be destroyed by battle.\n- 3: Also, destroy 1 card your opponent controls.\nYou can only use this effect of "Void Serpent Drake" once per turn.',
     image: "assets/Void Serpent Drake.png",
     effects: [
       {

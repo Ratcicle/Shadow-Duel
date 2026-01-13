@@ -236,7 +236,7 @@ export function showTierChoiceModal({
 
       const desc = document.createElement("div");
       desc.className = "tier-choice-desc";
-      desc.textContent = opt.description || "";
+      desc.innerHTML = (opt.description || "").replace(/\n/g, '<br>');
 
       btn.appendChild(label);
       btn.appendChild(desc);

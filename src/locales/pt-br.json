@@ -294,7 +294,7 @@
     },
     "164": {
       "name": "Draco Serpente do Vazio",
-      "description": "Se este card estiver na sua mão: você pode enviar de 1 a 3 'Oco do Vazio' que você controla para o Cemitério e, depois, Invocar por Invocação-Especial este card. Ele ganha efeitos de acordo com a quantidade enviada: 1+: ele ganha 300 de ATK até o final do turno; 2+: além disso, não pode ser destruído em batalha; 3+: além disso, destrua 1 card que seu oponente controla. Você só pode usar este efeito de 'Draco Serpente do Vazio' uma vez por turno."
+      "description": "Se este card estiver na sua mão: você pode enviar 1 a 3 'Oco do Vazio' que você controla para o Cemitério; Invoque este card por Invocação-Especial e, se isso acontecer, ele ganha os seguintes efeitos, de acordo com o número enviado.\n\n● **1+:** Este card ganha 300 de ATK para cada 'Oco do Vazio' enviado, até o final do turno.\n● **2+:** Além disso, este card não pode ser destruído em batalha.\n● **3:** Além disso, destrua 1 card que seu oponente controla.\n\nVocê só pode usar este efeito de 'Draco Serpente do Vazio' uma vez por turno."
     },
     "165": {
       "name": "Titã Hidra do Vazio",

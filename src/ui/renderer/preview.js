@@ -58,10 +58,10 @@ export function renderPreview(card) {
     previewDef.textContent = "";
     previewLevel.textContent = "";
   }
-  previewDesc.textContent =
-    getCardDisplayDescription(card) ||
+  const desc = getCardDisplayDescription(card) ||
     card.description ||
     "No description available.";
+  previewDesc.innerHTML = desc.replace(/\n/g, '<br>');
 }
 
 /**
