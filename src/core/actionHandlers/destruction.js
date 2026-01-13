@@ -808,7 +808,11 @@ export async function handleDestroyAttackerOnArchetypeDestruction(
 
   if (!destroyed || !attacker || !game) return false;
 
-  const archetype = action.archetype || "Shadow-Heart";
+  const archetype = action.archetype;
+  if (!archetype) {
+    console.warn("[handleDestroyAttackerOnArchetypeDestruction] archetype is required in action");
+    return false;
+  }
 
   const minLevel = action.minLevel || 1;
 

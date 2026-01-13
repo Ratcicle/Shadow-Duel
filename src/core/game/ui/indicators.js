@@ -101,12 +101,19 @@ export function buildActivationIndicatorsForPlayer(player) {
         }
       ) || { ok: false };
       let ok = !!preview.ok;
-      if (ok && card.name === "Polymerization") {
+      // Check for fusion spell (has polymerization_fusion_summon action) - generic instead of hardcoded name
+      const hasFusionAction = (card.effects || []).some(
+        (e) =>
+          e &&
+          Array.isArray(e.actions) &&
+          e.actions.some((a) => a && a.type === "polymerization_fusion_summon")
+      );
+      if (ok && hasFusionAction) {
         ok = this.canActivatePolymerization();
       }
       const previewResult = { ...preview, ok };
       const hint = buildHint(guard, previewResult, "ativacao disponivel");
-      if (!hint && card.name === "Polymerization" && !ok) {
+      if (!hint && hasFusionAction && !ok) {
         indicators.hand[index] = {
           canActivate: false,
           label: "sem materiais de fusao",
