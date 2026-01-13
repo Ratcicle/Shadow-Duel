@@ -26,7 +26,11 @@ class ReplayAnalyzer {
       "chain_response",
       "fusion_summon",
       "ascension_summon",
+      "target_selection", // v4: captura de seleção de alvos
     ]);
+    
+    // Contador para IDs únicos de digest
+    this._nextDigestId = 1;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -97,6 +101,15 @@ class ReplayAnalyzer {
       replay
     );
 
+    // MELHORIA: Gerar ID único para o digest
+    const digestId = this._nextDigestId++;
+
+    // MELHORIA: Track availableActions completeness para métricas de qualidade
+    const hasAvailableActions = !!(decision.availableActions && decision.availableActions.length > 0);
+    
+    // Decisões proativas (summon, spell, attack) devem ter availableActions para serem úteis para ML
+    // A métrica de qualidade será reportada pelo calculateDigestQualityMetrics()
+
     return {
       replayId: replay.id,
       archetype: replay.archetype,
@@ -110,6 +123,7 @@ class ReplayAnalyzer {
       context,
       outcome,
       decisionTime: decision.dt || null, // Tempo de decisão em ms
+      id: digestId, // ID único para referência
     };
   }
 
@@ -407,6 +421,18 @@ class ReplayAnalyzer {
           cardId: decision.card?.c || decision.card?.id,
         };
 
+      case "target_selection":
+        return {
+          ...base,
+          sourceCardId: decision.sourceCard?.c || decision.sourceCard?.id,
+          effectId: decision.effectId,
+          selectedTargets: (decision.selectedTargets || []).map(t => ({
+            id: t.c || t.id,
+            name: t.name,
+          })),
+          selectedCount: decision.selectedCount || 0,
+        };
+
       case "pass":
         return base;
 
@@ -417,6 +443,7 @@ class ReplayAnalyzer {
 
   /**
    * Calcula outcome da decisão (delta após 1 turno)
+   * Melhorado: usa delta imediato como fallback quando snapshot futuro não está disponível
    */
   _calculateOutcome(decisions, currentIndex, actor, snapshotByTurn, replay) {
     const currentDecision = decisions[currentIndex];
@@ -425,11 +452,13 @@ class ReplayAnalyzer {
     // Buscar próxima decisão do mesmo ator ou fim
     let nextSnapshot = null;
     let foundNextTurn = false;
+    let nextDecisionIndex = -1;
 
     for (let i = currentIndex + 1; i < decisions.length; i++) {
       const d = decisions[i];
       // Próximo turno do mesmo jogador
       if (d.actor === actor && d.turn > currentTurn) {
+        nextDecisionIndex = i;
         // Buscar snapshot desse turno
         for (let t = d.turn; t >= currentTurn + 1; t--) {
           if (snapshotByTurn[t]) {
@@ -442,7 +471,6 @@ class ReplayAnalyzer {
       }
     }
 
-    // Se não encontrou próximo turno, usar resultado final
     // Suportar ambos formatos: normalizado (result = "win") e raw (result.winner = "human")
     const playerWon =
       replay.result === "win" ||
@@ -457,7 +485,43 @@ class ReplayAnalyzer {
       gameResult = playerWon ? "win" : "loss"; // Do ponto de vista do player
     }
 
+    // MELHORIA: Se não encontrou snapshot futuro, tentar usar delta imediato da decisão
     if (!nextSnapshot && !foundNextTurn) {
+      // Usar delta imediato da própria decisão como proxy do impacto
+      const immediateDelta = currentDecision.delta;
+      if (immediateDelta) {
+        // Calcular impacto imediato baseado no delta
+        const playerLPChange = immediateDelta.playerLP !== undefined
+          ? immediateDelta.playerLP - (snapshotByTurn[currentTurn]?.playerLP || 8000)
+          : 0;
+        const botLPChange = immediateDelta.botLP !== undefined
+          ? immediateDelta.botLP - (snapshotByTurn[currentTurn]?.botLP || 8000)
+          : 0;
+        
+        const playerFieldChange = immediateDelta.playerField !== undefined
+          ? immediateDelta.playerField.length - (snapshotByTurn[currentTurn]?.playerField?.length || 0)
+          : 0;
+        const botFieldChange = immediateDelta.botField !== undefined
+          ? immediateDelta.botField.length - (snapshotByTurn[currentTurn]?.botField?.length || 0)
+          : 0;
+
+        return {
+          gameResult,
+          lpDelta: (playerLPChange !== 0 || botLPChange !== 0) ? {
+            player: playerLPChange,
+            bot: botLPChange,
+            advantage: playerLPChange - botLPChange,
+          } : null,
+          boardDelta: (playerFieldChange !== 0 || botFieldChange !== 0) ? {
+            player: playerFieldChange,
+            bot: botFieldChange,
+            advantage: playerFieldChange - botFieldChange,
+          } : null,
+          source: "immediate_delta", // Indicar que veio do delta imediato
+        };
+      }
+      
+      // Sem delta disponível - retornar apenas o resultado final
       return {
         gameResult,
         lpDelta: null,
@@ -465,9 +529,45 @@ class ReplayAnalyzer {
       };
     }
 
-    // Calcular deltas
+    // MELHORIA: Acumular deltas se não temos snapshot exato
+    // Calcular estado no momento da decisão e no próximo turno
     const currentSnapshot = snapshotByTurn[currentTurn];
-    if (!currentSnapshot || !nextSnapshot) {
+    
+    if (!currentSnapshot && !nextSnapshot) {
+      // Fallback: acumular deltas entre a decisão atual e a próxima do mesmo ator
+      if (nextDecisionIndex > currentIndex) {
+        let accPlayerLP = 0, accBotLP = 0;
+        let accPlayerField = 0, accBotField = 0;
+        
+        // Começar a partir de currentIndex + 1 para evitar acesso a índice negativo
+        for (let i = currentIndex + 1; i < nextDecisionIndex; i++) {
+          const d = decisions[i];
+          const prev = decisions[i - 1];
+          if (d.delta && prev?.delta) {
+            // Se temos delta de LP, acumular a diferença
+            if (d.delta.playerLP !== undefined && prev.delta.playerLP !== undefined) {
+              accPlayerLP += d.delta.playerLP - prev.delta.playerLP;
+            }
+            if (d.delta.botLP !== undefined && prev.delta.botLP !== undefined) {
+              accBotLP += d.delta.botLP - prev.delta.botLP;
+            }
+          }
+        }
+        
+        if (accPlayerLP !== 0 || accBotLP !== 0) {
+          return {
+            gameResult: null,
+            lpDelta: {
+              player: accPlayerLP,
+              bot: accBotLP,
+              advantage: accPlayerLP - accBotLP,
+            },
+            boardDelta: null,
+            source: "accumulated_deltas",
+          };
+        }
+      }
+      
       return {
         gameResult: null,
         lpDelta: null,
@@ -475,17 +575,21 @@ class ReplayAnalyzer {
       };
     }
 
-    const playerLPDelta =
-      (nextSnapshot.playerLP || 8000) - (currentSnapshot.playerLP || 8000);
-    const botLPDelta =
-      (nextSnapshot.botLP || 8000) - (currentSnapshot.botLP || 8000);
+    // Cálculo normal com snapshots disponíveis
+    const basePlayerLP = currentSnapshot?.playerLP ?? 8000;
+    const baseBotLP = currentSnapshot?.botLP ?? 8000;
+    const nextPlayerLP = nextSnapshot?.playerLP ?? basePlayerLP;
+    const nextBotLP = nextSnapshot?.botLP ?? baseBotLP;
+
+    const playerLPDelta = nextPlayerLP - basePlayerLP;
+    const botLPDelta = nextBotLP - baseBotLP;
 
     const playerFieldDelta =
-      (nextSnapshot.playerField?.length || 0) -
-      (currentSnapshot.playerField?.length || 0);
+      (nextSnapshot?.playerField?.length || 0) -
+      (currentSnapshot?.playerField?.length || 0);
     const botFieldDelta =
-      (nextSnapshot.botField?.length || 0) -
-      (currentSnapshot.botField?.length || 0);
+      (nextSnapshot?.botField?.length || 0) -
+      (currentSnapshot?.botField?.length || 0);
 
     return {
       gameResult: null, // Ainda não terminou
@@ -677,6 +781,137 @@ class ReplayAnalyzer {
     }
 
     return opening;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Digest Quality Metrics
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Calcula métricas de qualidade para um conjunto de digests
+   * Útil para avaliar se os dados são bons para ML
+   * @param {Array} digests - Array de training digests
+   * @returns {Object} Métricas de qualidade
+   */
+  calculateDigestQualityMetrics(digests) {
+    if (!digests || digests.length === 0) {
+      return { 
+        totalDigests: 0,
+        quality: "no_data",
+        message: "Nenhum digest para analisar"
+      };
+    }
+
+    // Métricas de completude
+    const withAvailableActions = digests.filter(d => d.availableActions && d.availableActions.length > 0);
+    const withOutcome = digests.filter(d => d.outcome?.lpDelta !== null || d.outcome?.boardDelta !== null || d.outcome?.gameResult !== null);
+    const withDecisionTime = digests.filter(d => d.decisionTime !== null && d.decisionTime > 0);
+    const withContext = digests.filter(d => d.context && d.context.playerLP !== undefined);
+
+    // Decisões proativas (mais úteis para ML)
+    const proactiveTypes = ['summon', 'attack', 'spell', 'effect', 'set_spell_trap'];
+    const proactiveDigests = digests.filter(d => proactiveTypes.includes(d.promptType));
+    const proactiveWithActions = proactiveDigests.filter(d => d.availableActions && d.availableActions.length > 0);
+
+    // Distribuição por tipo
+    const typeDistribution = {};
+    digests.forEach(d => {
+      typeDistribution[d.promptType] = (typeDistribution[d.promptType] || 0) + 1;
+    });
+
+    // Distribuição por actor
+    const actorDistribution = {};
+    digests.forEach(d => {
+      actorDistribution[d.actor] = (actorDistribution[d.actor] || 0) + 1;
+    });
+
+    // Calcular score de qualidade (0-100)
+    const availableActionsScore = (withAvailableActions.length / digests.length) * 30;
+    const outcomeScore = (withOutcome.length / digests.length) * 25;
+    const proactiveActionsScore = proactiveDigests.length > 0 
+      ? (proactiveWithActions.length / proactiveDigests.length) * 25 
+      : 25;
+    const contextScore = (withContext.length / digests.length) * 20;
+    
+    const qualityScore = availableActionsScore + outcomeScore + proactiveActionsScore + contextScore;
+
+    // Classificar qualidade
+    let quality = "low";
+    if (qualityScore >= 80) quality = "high";
+    else if (qualityScore >= 60) quality = "good";
+    else if (qualityScore >= 40) quality = "medium";
+
+    return {
+      totalDigests: digests.length,
+      quality,
+      qualityScore: Math.round(qualityScore),
+      completeness: {
+        withAvailableActions: withAvailableActions.length,
+        withAvailableActionsPercent: Math.round((withAvailableActions.length / digests.length) * 100),
+        withOutcome: withOutcome.length,
+        withOutcomePercent: Math.round((withOutcome.length / digests.length) * 100),
+        withDecisionTime: withDecisionTime.length,
+        withDecisionTimePercent: Math.round((withDecisionTime.length / digests.length) * 100),
+        withContext: withContext.length,
+        withContextPercent: Math.round((withContext.length / digests.length) * 100),
+      },
+      proactiveDecisions: {
+        total: proactiveDigests.length,
+        withAvailableActions: proactiveWithActions.length,
+        coveragePercent: proactiveDigests.length > 0 
+          ? Math.round((proactiveWithActions.length / proactiveDigests.length) * 100)
+          : 0,
+      },
+      typeDistribution,
+      actorDistribution,
+      recommendations: this._generateQualityRecommendations(
+        withAvailableActions.length / digests.length,
+        withOutcome.length / digests.length,
+        proactiveDigests.length > 0 ? proactiveWithActions.length / proactiveDigests.length : 1
+      ),
+    };
+  }
+
+  /**
+   * Gera recomendações baseadas nas métricas de qualidade
+   * @private
+   */
+  _generateQualityRecommendations(availableActionsRatio, outcomeRatio, proactiveActionsRatio) {
+    const recommendations = [];
+
+    if (availableActionsRatio < 0.5) {
+      recommendations.push({
+        priority: "high",
+        issue: "Baixa cobertura de availableActions",
+        suggestion: "Verificar se registerAvailableActions está sendo chamado antes de cada decisão no Game.js",
+      });
+    }
+
+    if (outcomeRatio < 0.3) {
+      recommendations.push({
+        priority: "medium",
+        issue: "Muitos digests sem outcome calculado",
+        suggestion: "Aumentar frequência de snapshots (SNAPSHOT_INTERVAL menor) para melhorar cálculo de outcome",
+      });
+    }
+
+    if (proactiveActionsRatio < 0.6) {
+      recommendations.push({
+        priority: "high",
+        issue: "Decisões proativas sem opções disponíveis",
+        suggestion: "Emitir eventos main_phase_options e battle_phase_options no Game.js",
+      });
+    }
+
+    if (recommendations.length === 0) {
+      recommendations.push({
+        priority: "info",
+        issue: "Dados de boa qualidade",
+        suggestion: "Continue coletando mais replays para melhorar a confiança estatística",
+      });
+    }
+
+    return recommendations;
   }
 }
 

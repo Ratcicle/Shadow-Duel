@@ -95,6 +95,30 @@ export function startTargetSelectionSession(session) {
   };
   this.setSelectionState("selecting");
 
+  // v4 REPLAY: Emitir evento de opções de targeting para captura
+  // Apenas para jogador humano e se tem um requirement com candidatos
+  if (this.turn === "player" && selectionContract.requirements?.length > 0) {
+    const firstReq = selectionContract.requirements[0];
+    if (firstReq?.candidates?.length > 0) {
+      // Usar primeiro efeito como ID padrão, ou kind da sessão como fallback
+      // Na maioria dos casos, o primeiro efeito é o que está sendo ativado
+      const effectId = session.card?.effects?.[0]?.id || session.kind;
+      
+      this.emit("target_selection_options", {
+        player: "player",
+        candidates: firstReq.candidates.map(c => ({
+          id: c.cardRef?.id,
+          name: c.cardRef?.name,
+          zone: c.zone || "field",
+          key: c.key,
+        })),
+        effectId,
+        sourceCard: session.card,
+        allowCancel: selectionContract.ui.allowCancel !== false,
+      });
+    }
+  }
+
   if (usingFieldTargeting) {
     if (this.ui && typeof this.ui.showFieldTargetingControls === "function") {
       const allowCancel =
@@ -191,6 +215,34 @@ export async function finishTargetSelection() {
   }
   if (selection?.closeModal) {
     selection.closeModal();
+  }
+
+  // v4 REPLAY: Emitir evento de seleção concluída para captura
+  // Apenas para jogador humano e se houve seleções
+  if (this.turn === "player" && selection.selections) {
+    const selectedKeys = Object.values(selection.selections).flat();
+    if (selectedKeys.length > 0 && selection.requirements?.length > 0) {
+      const firstReq = selection.requirements[0];
+      const selectedCards = selectedKeys
+        .map(key => firstReq?.candidates?.find(c => c.key === key)?.cardRef)
+        .filter(Boolean);
+      
+      if (selectedCards.length > 0) {
+        // Usar primeiro efeito como ID padrão, ou kind da sessão como fallback
+        const effectId = selection.card?.effects?.[0]?.id || selection.kind;
+        
+        this.emit("target_selected", {
+          player: "player",
+          sourceCard: selection.card,
+          effectId,
+          selectedTargets: selectedCards.map(c => ({
+            id: c.id,
+            name: c.name,
+          })),
+          selectedCount: selectedCards.length,
+        });
+      }
+    }
   }
 
   let normalized = {
