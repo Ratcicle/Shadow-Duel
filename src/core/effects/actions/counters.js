@@ -16,8 +16,8 @@ export function applyAddCounter(action, ctx, targets) {
   const targetRef = action.targetRef || "self";
 
   // If damagePerCounter is specified, calculate amount based on damage
-  if (action.damagePerCounter && ctx.damageAmount) {
-    // Add 1 counter per instance of damage that meets the threshold
+  if (action.damagePerCounter && ctx.damageAmount !== undefined) {
+    // Add 1 counter per damage instance that meets the threshold.
     amount = ctx.damageAmount >= action.damagePerCounter ? 1 : 0;
     if (amount <= 0) return false;
   }

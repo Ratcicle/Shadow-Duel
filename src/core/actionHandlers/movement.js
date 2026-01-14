@@ -174,7 +174,7 @@ async function bounceAndSummonCard(source, target, player, action, engine) {
  *
  * Action properties:
  * - bounceSource: boolean (if true, bounce the source card)
- * - filters: { archetype, name, level, levelOp, excludeSelf }
+ * - filters: { archetype, name, excludeCardName, excludeCardNames, level, levelOp, excludeSelf }
  * - position: "attack" | "defense" | "choice"
  */
 export async function handleBounceAndSummon(action, ctx, targets, engine) {
@@ -200,6 +200,15 @@ export async function handleBounceAndSummon(action, ctx, targets, engine) {
 
     if (filters.excludeSelf && card === source) return false;
     if (filters.name && card.name !== filters.name) return false;
+    if (filters.excludeCardName && card.name === filters.excludeCardName) {
+      return false;
+    }
+    if (
+      Array.isArray(filters.excludeCardNames) &&
+      filters.excludeCardNames.includes(card.name)
+    ) {
+      return false;
+    }
 
     if (filters.level !== undefined) {
       const cardLevel = card.level || 0;

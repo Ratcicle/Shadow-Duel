@@ -94,3 +94,17 @@ export function applyAllowDirectAttackThisTurn(action, ctx, targets) {
 
   return true;
 }
+
+/**
+ * Apply forbid direct attacks this turn action (player-level restriction).
+ * @param {Object} action - Action configuration
+ * @param {Object} ctx - Context object
+ * @returns {boolean} Whether restriction was applied
+ */
+export function applyForbidDirectAttackThisTurn(action, ctx) {
+  if (!this.game || !ctx?.player) return false;
+  const targetPlayer = action.player === "opponent" ? ctx.opponent : ctx.player;
+  if (!targetPlayer) return false;
+  targetPlayer.forbidDirectAttacksThisTurn = true;
+  return true;
+}

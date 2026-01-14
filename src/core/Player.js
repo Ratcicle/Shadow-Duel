@@ -20,6 +20,7 @@ export default class Player {
     this.fieldSpell = null;
     this.summonCount = 0;
     this.additionalNormalSummons = 0; // Extra normal summons granted this turn
+    this.forbidDirectAttacksThisTurn = false;
     this.maxDeckSize = 30;
     this.minDeckSize = 20;
     this.maxExtraDeckSize = 10;

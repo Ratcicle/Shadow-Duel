@@ -893,19 +893,44 @@ export const cardDatabase = [
     subtype: "normal",
     archetype: "Shadow-Heart",
     description:
-      'If "Shadow-Heart Scale Dragon" is the only monster you control: It gains 700 ATK/DEF until the end of this turn, and it can make a second attack during this Battle Phase.',
+      'If "Shadow-Heart Scale Dragon" is the only monster you control: It gains 700 ATK/DEF until the end of this turn, and it can make a second attack during this Battle Phase. You cannot attack directly the turn you activate this effect. You cannot attack directly the turn you activate this effect.',
     image: "assets/Shadow-Heart Rage.png",
     effects: [
       {
         id: "shadow_heart_rage_scale_buff_effect",
         timing: "on_play",
         speed: 1,
+        conditions: [
+          { type: "playerFieldCount", count: 1 },
+          {
+            type: "control_card",
+            cardName: "Shadow-Heart Scale Dragon",
+            zone: "field",
+            requireFaceup: true,
+          },
+        ],
+        targets: [
+          {
+            id: "rage_scale_target",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            cardName: "Shadow-Heart Scale Dragon",
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+            autoSelect: true,
+          },
+        ],
         actions: [
           {
             type: "buff_stats_temp_with_second_attack",
-            targetRef: "self",
+            targetRef: "rage_scale_target",
             atkBoost: 700,
             defBoost: 700,
+          },
+          {
+            type: "forbid_direct_attack_this_turn",
+            player: "self",
           },
         ],
       },
@@ -1191,7 +1216,7 @@ export const cardDatabase = [
     subtype: "continuous",
     archetype: "Shadow-Heart",
     description:
-      'Each time your opponent takes damage: place 1 Judgment Counter on this card for each 500 damage they took. During your Main Phase: You can send this face-up card to the GY; Special Summon 1 "Shadow-Heart" monster from your Deck with ATK less than or equal to 500 x the number of Judgment Counters on this card. You can only use this effect of "Shadow-Heart Cathedral" once per turn.',
+      'Each time your opponent takes 500 or more damage: place 1 Judgment Counter on this card. During your Main Phase: You can send this face-up card to the GY; Special Summon 1 "Shadow-Heart" monster from your Deck with ATK less than or equal to 500 x the number of Judgment Counters on this card. You can only use this effect of "Shadow-Heart Cathedral" once per turn.',
     image: "assets/Shadow-Heart Cathedral.png",
     effects: [
       {
@@ -2529,6 +2554,7 @@ export const cardDatabase = [
         timing: "on_event",
         event: "after_summon",
         summonMethods: ["normal", "special"],
+        requireSelfAsSummoned: true,
         actions: [
           {
             type: "forbid_attack_this_turn",
@@ -2550,6 +2576,7 @@ export const cardDatabase = [
               level: 4,
               levelOp: "lte",
               excludeSelf: true,
+              excludeCardName: "Void Walker",
             },
             position: "choice",
             cannotAttackThisTurn: false,
@@ -2568,7 +2595,7 @@ export const cardDatabase = [
     type: "Beast",
     archetype: "Void",
     description:
-      "If this card destroys an opponent's monster by battle: You can add 1 'Void Hollow' from your Deck to your hand. You can only use this effect of 'Void Beast' once per turn.",
+      "3 'Void Hollow' monsters. If this card is destroyed by battle or card effect: You can Special Summon up to 3 'Void Hollow' from your GY. If this card destroys an opponent's monster by battle: You can Special Summon 1 'Void Hollow' from your GY. (Quick Effect) You can send 1 'Void Hollow' you control to the GY; this card gains 1000 ATK until the end of this turn.",
     image: "assets/Void Beast.png",
     effects: [
       {
@@ -2638,7 +2665,7 @@ export const cardDatabase = [
     type: "Fiend",
     archetype: "Void",
     description:
-      "You can send 1 'Void Hollow' from your field to your GY; Special Summon this card from your hand. You can banish this card from your GY, then target up to 2 'Void Hollow' in your GY; Special Summon those targets, but their ATK/DEF become 0. You can only use each effect of 'Void Haunter' once per turn.",
+      "You can send 1 'Void Hollow' from your field to your GY; Special Summon this card from your hand. You can banish this card from your GY, then target up to 3 'Void Hollow' in your GY; Special Summon those targets, but their ATK/DEF become 0. You can only use each effect of 'Void Haunter' once per turn.",
     image: "assets/Void Haunter.png",
     effects: [
       {
@@ -2746,7 +2773,7 @@ export const cardDatabase = [
     type: "Fiend",
     archetype: "Void",
     description:
-      "3 'Void Hollow' monsters. If this card is destroyed by battle or card effect: You can Special Summon up to 3 'Void Hollow' from your GY.",
+      "3 'Void Hollow' monsters. If this card is destroyed by battle or card effect: You can Special Summon up to 3 'Void Hollow' from your GY. If this card destroys an opponent's monster by battle: You can Special Summon 1 'Void Hollow' from your GY. (Quick Effect) You can send 1 'Void Hollow' you control to the GY; this card gains 1000 ATK until the end of this turn.",
     image: "assets/Void Hollow King.png",
     monsterType: "fusion",
     fusionMaterials: [{ name: "Void Hollow", count: 3 }],
@@ -2771,6 +2798,76 @@ export const cardDatabase = [
           },
         ],
       },
+      {
+        id: "void_hollow_king_revive_on_battle_destroy",
+        timing: "on_event",
+        event: "battle_destroy",
+        requireSelfAsAttacker: true,
+        requireDestroyedIsOpponent: true,
+        actions: [
+          {
+            type: "special_summon_from_zone",
+            zone: "graveyard",
+            requireSource: false,
+            filters: { name: "Void Hollow", cardKind: "monster" },
+            count: { min: 1, max: 1 },
+            position: "choice",
+            promptPlayer: true,
+          },
+        ],
+      },
+      {
+        id: "void_hollow_king_quick_boost_attack",
+        timing: "on_event",
+        event: "attack_declared",
+        speed: 2,
+        requireFaceup: true,
+        requireSelfAsAttacker: true,
+        promptMessage:
+          "Ativar Void Hollow King para enviar 1 Void Hollow e ganhar +1000 ATK ate o final do turno?",
+        targets: [
+          {
+            id: "void_hollow_king_boost_cost",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            cardName: "Void Hollow",
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+            autoSelect: true,
+          },
+        ],
+        actions: [
+          { type: "move", targetRef: "void_hollow_king_boost_cost", player: "self", to: "graveyard" },
+          { type: "buff_stats_temp", atkBoost: 1000, defBoost: 0 },
+        ],
+      },
+      {
+        id: "void_hollow_king_quick_boost_defense",
+        timing: "on_event",
+        event: "attack_declared",
+        speed: 2,
+        requireFaceup: true,
+        requireSelfAsDefender: true,
+        promptMessage:
+          "Ativar Void Hollow King para enviar 1 Void Hollow e ganhar +1000 ATK ate o final do turno?",
+        targets: [
+          {
+            id: "void_hollow_king_boost_cost",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            cardName: "Void Hollow",
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+            autoSelect: true,
+          },
+        ],
+        actions: [
+          { type: "move", targetRef: "void_hollow_king_boost_cost", player: "self", to: "graveyard" },
+          { type: "buff_stats_temp", atkBoost: 1000, defBoost: 0 },
+        ],
+      },
     ],
   },
   {
@@ -2783,7 +2880,7 @@ export const cardDatabase = [
     type: "Insect",
     archetype: "Void",
     description:
-      "Target 1 monster your opponent controls; it cannot attack until the end of the next turn. If this card is sent from the field to the Graveyard: Special Summon a 'Void Little Spider' token (Level 1, 500 ATK/DEF).",
+      "Once per turn: Target 1 face-up monster your opponent controls; it cannot attack until the end of the next turn. If this card is sent from the field to the Graveyard: Special Summon a 'Void Little Spider' token (Level 1, 500 ATK/DEF).",
     image: "assets/Void Bone Spider.png",
     effects: [
       {
@@ -2843,7 +2940,7 @@ export const cardDatabase = [
     type: "Fiend",
     archetype: "Void",
     description:
-      "You can send a 'Void' monster you control to the GY; Special Summon this card from your hand. You can banish this card from your GY; destroy 1 Spell/Trap your opponent controls. You can only use each effect of 'Void Forgotten Knight' once per turn.",
+      "You can send a face-up 'Void' monster you control to the GY; Special Summon this card from your hand. You can banish this card from your GY; target 1 face-up Spell/Trap your opponent controls; destroy it. You can only use each effect of 'Void Forgotten Knight' once per turn.",
     image: "assets/Void Forgotten Knight.png",
     effects: [
       {
@@ -2975,7 +3072,7 @@ export const cardDatabase = [
     type: "Fiend",
     archetype: "Void",
     description:
-      "Ganha 100 ATK/DEF para cada carta 'Void' no campo. Uma vez por duelo, se esta carta estiver no seu Cemitário, você pode Invocá-la por Invocação-Especial.",
+      "Ganha 100 ATK/DEF para cada monstro 'Void' no campo. Uma vez por duelo, se esta carta estiver no seu Cemit�rio, voc� pode Invoc�-la por Invoca��o-Especial.",
     image: "assets/Void Tenebris Horn.png",
     effects: [
       {
@@ -3031,7 +3128,7 @@ export const cardDatabase = [
     type: "Fiend",
     archetype: "Void",
     description:
-      'You can Special Summon this card from your hand by sending 2 "Void" monsters you control to the GY. If this card destroys an opponent\'s monster by battle: banish that monster.',
+      'Once per turn: You can Special Summon this card from your hand by sending 2 face-up "Void" monsters you control to the GY. If this card destroys an opponent\'s monster by battle: banish that monster.',
     image: "assets/Void Slayer Brute.png",
     effects: [
       {
@@ -3133,7 +3230,7 @@ export const cardDatabase = [
     type: "Dragon",
     archetype: "Void",
     description:
-      'If this card is in your hand: You can send 1 to 3 "Void Hollow" you control to the GY; Special Summon this card, and if you do, it gains the following effects based on the number sent:\n- 1+: This card gains 300 ATK for each "Void Hollow" sent, until the end of the turn.\n- 2+: Also, this card cannot be destroyed by battle.\n- 3: Also, destroy 1 card your opponent controls.\nYou can only use this effect of "Void Serpent Drake" once per turn.',
+      'If this card is in your hand: You can send 1 to 3 "Void Hollow" you control to the GY; Special Summon this card, and if you do, it gains the following effects based on the number sent:\n- 1+: This card gains 300 ATK until the end of the turn.\n- 2+: Also, this card cannot be destroyed by battle.\n- 3: Also, destroy 1 card your opponent controls.\nYou can only use this effect of "Void Serpent Drake" once per turn.',
     image: "assets/Void Serpent Drake.png",
     effects: [
       {
@@ -3236,7 +3333,7 @@ export const cardDatabase = [
     effects: [
       {
         id: "sealing_the_void_effect",
-        timing: "on_activate",
+        timing: "on_play",
         oncePerTurn: true,
         oncePerTurnName: "sealing_the_void_effect",
         targets: [
@@ -3308,7 +3405,7 @@ export const cardDatabase = [
     subtype: "continuous",
     archetype: "Void",
     description:
-      "Once per turn: You can target 1 monster you control and 1 monster your opponent controls; return those targets to the hand.",
+      "Once per turn: You can target 1 face-up 'Void' monster you control and 1 monster your opponent controls; return those targets to the hand.",
     image: "assets/Void Gravitational pull.png",
     effects: [
       {
@@ -3324,6 +3421,7 @@ export const cardDatabase = [
             owner: "self",
             zone: "field",
             cardKind: "monster",
+            archetype: "Void",
             requireFaceup: true,
             count: { min: 1, max: 1 },
           },
@@ -3332,7 +3430,6 @@ export const cardDatabase = [
             owner: "opponent",
             zone: "field",
             cardKind: "monster",
-            requireFaceup: true,
             count: { min: 1, max: 1 },
           },
         ],
@@ -3426,7 +3523,7 @@ export const cardDatabase = [
       position: "choice",
     },
     description:
-      "Ascension Material: 'Void Walker'. Requirement: The effect of the material being activated twice in this duel. Once per turn: You can send 1 'Void' monster you control to the Graveyard; Special Summon 1 Level 5 or lower 'Void' monster from your hand. If this card is sent from the field to the Graveyard: You can Special Summon up to 3 'Void Hollow' from your hand or Deck.",
+      "Ascension Material: 'Void Walker'. Requirement: The effect of the material being activated twice in this duel. Once per turn: You can send 1 face-up 'Void' monster you control to the Graveyard; Special Summon 1 Level 5 or lower 'Void' monster from your hand. If this card is sent from the field to the Graveyard: You can Special Summon up to 3 'Void Hollow' from your hand or Deck.",
     image: "assets/Void Cosmic Walker.png",
     effects: [
       {

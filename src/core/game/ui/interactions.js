@@ -554,6 +554,7 @@ export function bindCardInteractions() {
           canUseSecondAttack;
         const canDirect =
           !attacker.cannotAttackDirectly &&
+          !this.player?.forbidDirectAttacksThisTurn &&
           !isEffectGrantedExtraAttack && // Effect-granted extra attacks cannot be direct
           !isMultiAttackMode && // Multi-attack can only target monsters, not direct
           (attacker.canAttackDirectlyThisTurn === true ||

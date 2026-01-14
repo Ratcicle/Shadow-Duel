@@ -732,7 +732,7 @@ export function showShadowHeartCathedralModal(
     modalClass: "cathedral-modal",
     gridClass: "cathedral-grid",
     cardClass: "cathedral-card",
-    infoText: "Only Shadow-Heart monsters in your GY are valid.",
+    infoText: "Only Shadow-Heart monsters in your Deck are valid.",
     onConfirm: (chosen) => {
       const card = Array.isArray(chosen) ? chosen[0] : null;
       if (callback) callback(card || null);

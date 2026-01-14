@@ -31,6 +31,7 @@ export {
   applyForbidAttackThisTurn,
   applyForbidAttackNextTurn,
   applyAllowDirectAttackThisTurn,
+  applyForbidDirectAttackThisTurn,
 } from "./combat.js";
 
 // Summon actions

@@ -582,6 +582,47 @@ export async function collectAttackDeclaredTriggers(payload) {
           }
         }
 
+        const ctx = {
+          source: card,
+          player,
+          opponent,
+          attacker: payload.attacker,
+          defender: payload.defender || null,
+          target: payload.defender || payload.target || null,
+          attackerOwner: payload.attackerOwner,
+          defenderOwner: payload.defenderOwner,
+          actionContext,
+        };
+
+        // Avoid prompting/adding triggers that have impossible target requirements.
+        // This keeps UX clean for effects that require a cost/target (e.g., send 1 monster),
+        // but have no valid candidates at the moment.
+        if (Array.isArray(effect.targets) && effect.targets.length > 0) {
+          const previewCtx = {
+            ...ctx,
+            activationContext: { isPreview: true, preview: true },
+          };
+          const targetPreview = this.resolveTargets(effect.targets, previewCtx);
+          if (targetPreview?.ok === false && !targetPreview?.needsSelection) {
+            continue;
+          }
+          const requirements =
+            targetPreview?.selectionContract?.requirements || [];
+          if (requirements.length === 0 && targetPreview?.needsSelection) {
+            continue;
+          }
+          const impossible = requirements.some((req) => {
+            const min = Number(req?.min ?? 0);
+            const candidates = Array.isArray(req?.candidates)
+              ? req.candidates
+              : [];
+            return min > 0 && candidates.length < min;
+          });
+          if (impossible) {
+            continue;
+          }
+        }
+
         const shouldPrompt =
           (card.cardType === "trap" || effect.speed === 2) &&
           effect.promptOnAttackDeclared !== false;
@@ -593,9 +634,10 @@ export async function collectAttackDeclaredTriggers(payload) {
             wantsToUse = await this.ui[customPromptMethod]();
           } else if (this.ui?.showConfirmPrompt) {
             const promptMessage =
-              card.cardType === "trap"
+              effect.promptMessage ||
+              (card.cardType === "trap"
                 ? `Activate ${card.name} in response to the attack?`
-                : `Use ${card.name}'s effect to negate the attack?`;
+                : `Use ${card.name}'s effect to negate the attack?`);
             const confirmResult = this.ui.showConfirmPrompt(promptMessage, {
               kind:
                 card.cardType === "trap"
@@ -616,18 +658,6 @@ export async function collectAttackDeclaredTriggers(payload) {
             continue;
           }
         }
-
-        const ctx = {
-          source: card,
-          player,
-          opponent,
-          attacker: payload.attacker,
-          defender: payload.defender || null,
-          target: payload.defender || payload.target || null,
-          attackerOwner: payload.attackerOwner,
-          defenderOwner: payload.defenderOwner,
-          actionContext,
-        };
 
         const activationContext = this.buildTriggerActivationContext(
           card,

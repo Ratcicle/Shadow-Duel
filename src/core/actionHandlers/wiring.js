@@ -252,6 +252,12 @@ export function registerDefaultHandlers(registry) {
   );
 
   registry.register(
+    "forbid_direct_attack_this_turn",
+
+    proxyEngineMethod("applyForbidDirectAttackThisTurn")
+  );
+
+  registry.register(
     "special_summon_token",
 
     proxyEngineMethod("applySpecialSummonToken")

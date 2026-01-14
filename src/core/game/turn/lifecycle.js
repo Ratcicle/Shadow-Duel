@@ -42,6 +42,7 @@ export async function startTurn() {
 
   const activePlayer = this.turn === "player" ? this.player : this.bot;
   const opponent = activePlayer === this.player ? this.bot : this.player;
+  activePlayer.forbidDirectAttacksThisTurn = false;
   activePlayer.field.forEach((card) => {
     card.hasAttacked = false;
     card.attacksUsedThisTurn = 0;
@@ -118,6 +119,8 @@ export function endTurn() {
   if (!guard.ok) return guard;
   this.cleanupTempBoosts(this.player);
   this.cleanupTempBoosts(this.bot);
+  this.player.forbidDirectAttacksThisTurn = false;
+  this.bot.forbidDirectAttacksThisTurn = false;
 
   // Clear all attack indicators at end of turn
   this.clearAttackResolutionIndicators();

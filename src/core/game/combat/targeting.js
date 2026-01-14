@@ -22,8 +22,10 @@ export function startAttackTargetSelection(attacker, candidates) {
   const nativeMaxAttacks = 1 + (attacker.extraAttacks || 0);
   const isEffectGrantedExtraAttack =
     attacksUsed > 0 && attacksUsed >= nativeMaxAttacks && canUseSecondAttack;
+  const attackerOwner = attacker.owner === "player" ? this.player : this.bot;
   const canDirect =
     !attacker.cannotAttackDirectly &&
+    !attackerOwner?.forbidDirectAttacksThisTurn &&
     !isEffectGrantedExtraAttack && // Effect-granted extra attacks cannot be direct
     !isMultiAttackMode && // Multi-attack can only target monsters, not direct
     (attacker.canAttackDirectlyThisTurn === true || candidates.length === 0);

@@ -450,6 +450,84 @@ export default class EffectEngine {
             return { ok: false, reason: "You must control no monsters." };
           }
           break;
+        case "playerFieldCount": {
+          const monstersOnly = cond.monstersOnly !== false;
+          const zone = player?.field || [];
+          const count = monstersOnly
+            ? zone.filter((c) => c && c.cardKind === "monster").length
+            : zone.filter(Boolean).length;
+          if (cond.count !== undefined && count !== cond.count) {
+            return {
+              ok: false,
+              reason:
+                cond.reason ||
+                `You must control exactly ${cond.count} monster(s).`,
+            };
+          }
+          if (cond.min !== undefined && count < cond.min) {
+            return {
+              ok: false,
+              reason:
+                cond.reason ||
+                `You must control at least ${cond.min} monster(s).`,
+            };
+          }
+          if (cond.max !== undefined && count > cond.max) {
+            return {
+              ok: false,
+              reason:
+                cond.reason ||
+                `You must control at most ${cond.max} monster(s).`,
+            };
+          }
+          break;
+        }
+        case "control_card": {
+          const ownerKey = cond.owner === "opponent" ? "opponent" : "player";
+          const owner = ownerKey === "opponent" ? opponent : player;
+          const zoneName = cond.zone || "field";
+          const requireFaceup = cond.requireFaceup !== false;
+          const zone = owner?.[zoneName] || [];
+          const found = zone.some((card) => {
+            if (!card) return false;
+            if (requireFaceup && card.isFacedown) return false;
+            return card.name === cond.cardName;
+          });
+          if (!found) {
+            return {
+              ok: false,
+              reason: cond.reason || `You must control "${cond.cardName}".`,
+            };
+          }
+          break;
+        }
+        case "control_card_type": {
+          const ownerKey = cond.owner === "opponent" ? "opponent" : "player";
+          const owner = ownerKey === "opponent" ? opponent : player;
+          const zoneName = cond.zone || "field";
+          const requireFaceup = cond.requireFaceup !== false;
+          const typeName = cond.typeName || cond.cardType;
+          if (!typeName) {
+            return { ok: false, reason: "Invalid condition configuration." };
+          }
+          const zone = owner?.[zoneName] || [];
+          const found = zone.some((card) => {
+            if (!card || card.cardKind !== "monster") return false;
+            if (requireFaceup && card.isFacedown) return false;
+            if (Array.isArray(card.types)) {
+              return card.types.includes(typeName);
+            }
+            return card.type === typeName;
+          });
+          if (!found) {
+            return {
+              ok: false,
+              reason:
+                cond.reason || `You must control a ${typeName} monster.`,
+            };
+          }
+          break;
+        }
         case "opponentMonstersMin":
           if ((opponent?.field?.length || 0) < (cond.min ?? 1)) {
             return {
@@ -1027,6 +1105,8 @@ EffectEngine.prototype.applyForbidAttackNextTurn =
   actions.applyForbidAttackNextTurn;
 EffectEngine.prototype.applyAllowDirectAttackThisTurn =
   actions.applyAllowDirectAttackThisTurn;
+EffectEngine.prototype.applyForbidDirectAttackThisTurn =
+  actions.applyForbidDirectAttackThisTurn;
 // Summon
 EffectEngine.prototype.applySpecialSummonToken =
   actions.applySpecialSummonToken;

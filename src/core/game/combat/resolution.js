@@ -81,6 +81,18 @@ export async function resolveCombat(attacker, target, options = {}) {
   }
 
   if (!target) {
+    if (attacker.cannotAttackDirectly) {
+      this.ui?.log?.(`${attacker.name} cannot attack directly.`);
+      this.clearAttackResolutionIndicators();
+      this.updateBoard();
+      return { ok: false, reason: "cannot_attack_directly" };
+    }
+    if (attackerOwner?.forbidDirectAttacksThisTurn) {
+      this.ui?.log?.(`You cannot attack directly this turn.`);
+      this.clearAttackResolutionIndicators();
+      this.updateBoard();
+      return { ok: false, reason: "direct_attack_forbidden" };
+    }
     const defender = attacker.owner === "player" ? this.bot : this.player;
     this.inflictDamage(defender, attacker.atk, {
       sourceCard: attacker,

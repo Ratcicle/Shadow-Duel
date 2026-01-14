@@ -509,21 +509,23 @@ export default class Bot extends Player {
       if (game.gameOver) return;
       if (game.phase !== "battle") return; // Fase mudou durante resolução
 
-      const availableAttackers = this.field.filter(
-        (m) =>
-          m &&
-          m.cardKind === "monster" &&
-          m.position === "attack" &&
-          !m.cannotAttackThisTurn &&
-          (m.attacksUsedThisTurn || 0) < 1 + (m.extraAttacks || 0)
-      );
+      const availableAttackers = this.field.filter((m) => {
+        if (!m || m.cardKind !== "monster") return false;
+        if (m.position !== "attack") return false;
+        if (m.cannotAttackThisTurn) return false;
+        return game.getAttackAvailability?.(m)?.ok ?? true;
+      });
 
       // v4: Registrar availableActions de batalha
       if (ReplayCapture.isEnabled() && availableAttackers.length > 0) {
         const attackActions = [];
         for (const attacker of availableAttackers) {
           // Ação de ataque direto
-          if (opponent.field.length === 0) {
+          if (
+            opponent.field.length === 0 &&
+            !this.forbidDirectAttacksThisTurn &&
+            !attacker.cannotAttackDirectly
+          ) {
             attackActions.push({
               type: "attack",
               card: attacker,
@@ -572,6 +574,19 @@ export default class Bot extends Player {
       for (const attacker of availableAttackers) {
         const isSecondAttack = (attacker.attacksUsedThisTurn || 0) >= 1;
         const attackThreshold = isSecondAttack ? 0.0 : minDeltaToAttack;
+        const canUseSecondAttack =
+          attacker.canMakeSecondAttackThisTurn &&
+          !attacker.secondAttackUsedThisTurn;
+        const nativeMaxAttacks = 1 + (attacker.extraAttacks || 0);
+        const isEffectGrantedExtraAttack =
+          (attacker.attacksUsedThisTurn || 0) >= nativeMaxAttacks &&
+          canUseSecondAttack;
+        const canDirectAttackNow =
+          opponent.field.length === 0 &&
+          !this.forbidDirectAttacksThisTurn &&
+          !attacker.cannotAttackDirectly &&
+          !attacker.canAttackAllOpponentMonstersThisTurn &&
+          !isEffectGrantedExtraAttack;
 
         const tauntTargets = opponent.field.filter(
           (card) =>
@@ -586,7 +601,9 @@ export default class Bot extends Player {
             ? [...tauntTargets]
             : opponent.field.length
             ? [...opponent.field, null]
-            : [null];
+            : canDirectAttackNow
+            ? [null]
+            : [];
 
         for (const target of possibleTargets) {
           if (target === null && opponent.field.length > 0) continue;

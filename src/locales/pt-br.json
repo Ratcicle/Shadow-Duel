@@ -106,7 +106,7 @@
     },
     "65": {
       "name": "Fúria do Coração Sombrio",
-      "description": "Se 'Dragão de Escamas do Coração Sombrio' for o único monstro que você controla: ele ganha 700 de ATK/DEF até o final do turno, e pode realizar um segundo ataque durante essa fase de batalha."
+      "description": "Se 'Dragão de Escamas do Coração Sombrio' for o único monstro que você controla: ele ganha 700 de ATK/DEF até o final do turno, e pode realizar um segundo ataque durante essa fase de batalha. Você não pode atacar diretamente no turno em que ativar esse efeito."
     },
     "66": {
       "name": "Escudo do Coração Sombrio",
@@ -266,7 +266,7 @@
     },
     "157": {
       "name": "Rei Oco do Vazio",
-      "description": "3 monstros 'Oco do Vazio'. Se este card for destruído em batalha ou por efeito de card: você pode Invocar por Invocação-Especial até 3 'Oco do Vazio' do seu Cemitério."
+      "description": "3 monstros \"Oco do Vazio\". Se este card for destruido em batalha ou por efeito de card: voce pode Invocar por Invocacao-Especial ate 3 \"Oco do Vazio\" do seu Cemiterio. Se este card destruir um monstro do oponente em batalha: voce pode Invocar por Invocacao-Especial 1 \"Oco do Vazio\" do seu Cemiterio. (Efeito Rapido) Voce pode enviar 1 \"Oco do Vazio\" que voce controla para o Cemiterio; este card ganha 1000 ATK ate o final deste turno."
     },
     "158": {
       "name": "Aranha Óssea do Vazio",
@@ -310,7 +310,7 @@
     },
     "168": {
       "name": "Atração Gravitacional do Vazio",
-      "description": "Uma vez por turno: você pode escolher 1 monstro que você controla e 1 monstro que seu oponente controla; devolva os alvos para a mão."
+      "description": "Uma vez por turno: você pode escolher 1 monstro \"void\" com a face para cima que você controla e 1 monstro que seu oponente controla; devolva os alvos para a mão."
     },
     "169": {
       "name": "Trono Perdido do Vazio",

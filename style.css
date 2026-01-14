@@ -2447,6 +2447,14 @@ body {
   box-shadow: 0 4px 12px rgba(187, 134, 252, 0.4);
 }
 
+.cathedral-card-item.selected,
+.cathedral-card.selected {
+  background: rgba(187, 134, 252, 0.2);
+  border-color: #f0d7ff;
+  box-shadow: 0 0 0 2px rgba(240, 215, 255, 0.6),
+    0 6px 16px rgba(187, 134, 252, 0.45);
+}
+
 .cathedral-card-img {
   width: 60px;
   height: 87px;

@@ -1509,11 +1509,19 @@ export async function handleSpecialSummonFromDeckWithCounterLimit(
 
   const counterType = action.counterType || "judgment_marker";
   const counterMultiplier = action.counterMultiplier || 500;
-  const filters = action.filters || {};
+  const filters = { ...(action.filters || {}) };
+  if (action.archetype && !filters.archetype) {
+    filters.archetype = action.archetype;
+  }
   const position = action.position || "choice";
 
   // Calculate max ATK based on counters
-  const counterCount = source[counterType] || 0;
+  const counterCount =
+    typeof source.getCounter === "function"
+      ? source.getCounter(counterType)
+      : source?.counters?.get
+      ? source.counters.get(counterType)
+      : 0;
   const maxAtk = counterCount * counterMultiplier;
 
   if (maxAtk === 0) {
@@ -1565,9 +1573,38 @@ export async function handleSpecialSummonFromDeckWithCounterLimit(
 
   // Human player: show selection modal with counter info
   return new Promise((resolve) => {
+    const onSelected = async (selected) => {
+      const chosen = Array.isArray(selected) ? selected[0] : selected;
+      if (!chosen) {
+        resolve(false);
+        return;
+      }
+
+      const result = await performSummonFromDeck(
+        chosen,
+        deck,
+        player,
+        action,
+        engine,
+        source
+      );
+
+      resolve(result);
+    };
+
+    if (typeof game.showShadowHeartCathedralModal === "function") {
+      game.showShadowHeartCathedralModal(
+        candidates,
+        maxAtk,
+        counterCount,
+        onSelected
+      );
+      return;
+    }
+
     const modalConfig = {
       title: `Select 1 monster (Max ATK: ${maxAtk}, ${counterCount}x ${counterType})`,
-      subtitle: `Monsters with ATK ≤ ${maxAtk}`,
+      subtitle: `Monsters with ATK <= ${maxAtk}`,
       infoText: `You have ${counterCount} ${counterType} counters. After summoning, this card will be sent to the Graveyard.`,
     };
 
@@ -1575,25 +1612,7 @@ export async function handleSpecialSummonFromDeckWithCounterLimit(
       candidates,
       modalConfig.title,
       1,
-      async (selected) => {
-        if (!selected || selected.length === 0) {
-          resolve(false);
-          return;
-        }
-
-        const chosen = selected[0];
-
-        const result = await performSummonFromDeck(
-          chosen,
-          deck,
-          player,
-          action,
-          engine,
-          source
-        );
-
-        resolve(result);
-      }
+      onSelected
     );
   });
 }
