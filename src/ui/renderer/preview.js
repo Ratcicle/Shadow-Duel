@@ -109,6 +109,19 @@ export function createCardElement(card, visible) {
   const el = document.createElement("div");
   el.className = "card";
   this.bindPreviewForElement(el, card, visible);
+  if (card.cardKind === "spell") {
+    el.classList.add("card-spell");
+  } else if (card.cardKind === "trap") {
+    el.classList.add("card-trap");
+  } else {
+    el.classList.add("card-monster");
+    const monsterType = (card.monsterType || "").toLowerCase();
+    if (monsterType === "fusion") {
+      el.classList.add("card-monster-fusion");
+    } else if (monsterType === "ascension") {
+      el.classList.add("card-monster-ascension");
+    }
+  }
 
   if (visible) {
     const isMonster = card.cardKind !== "spell" && card.cardKind !== "trap";
@@ -133,16 +146,15 @@ export function createCardElement(card, visible) {
     el.innerHTML = `
       <div class="card-header">
         <div class="card-name">${displayName}</div>
-        <div class="card-level">${typeLabel}</div>
       </div>
       <div class="card-image" style="${bgStyle}"></div>
       ${
         isMonster
           ? `<div class="card-stats">
-               <span class="stat-atk">ATK ${card.atk}</span>
-               <span class="stat-def">DEF ${card.def}</span>
+               <span class="stat-atk">${card.atk}</span>
+               <span class="stat-def">${card.def}</span>
              </div>`
-          : `<div class="card-text">${displayDescription}</div>`
+          : `<div class="card-type">${typeLabel}</div>`
       }
     `;
   }

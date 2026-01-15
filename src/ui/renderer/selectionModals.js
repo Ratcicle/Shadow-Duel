@@ -371,7 +371,7 @@ export function showFusionTargetModal(availableFusions, onSelect, onCancel) {
 
   availableFusions.forEach(({ fusion, index }) => {
     const cardEl = this.createCardElement(fusion, true);
-    cardEl.className = "card fusion-selectable";
+    cardEl.classList.add("fusion-selectable");
     cardEl.addEventListener("click", () => {
       document.body.removeChild(overlay);
       onSelect(index);
@@ -443,7 +443,7 @@ export function showFusionMaterialSelection(
 
   availableMaterials.forEach((material) => {
     const cardEl = this.createCardElement(material, true);
-    cardEl.className = "card fusion-material-selectable";
+    cardEl.classList.add("fusion-material-selectable");
 
     cardEl.addEventListener("click", () => {
       if (selectedMaterials.includes(material)) {

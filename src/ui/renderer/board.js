@@ -14,6 +14,7 @@ export function renderHand(player) {
 
   // Batch DOM updates with DocumentFragment to minimize reflows
   const fragment = document.createDocumentFragment();
+  container.classList.toggle("hand-overlap", player.hand.length > 5);
 
   player.hand.forEach((card, index) => {
     if (!card) return; // Defensive: skip empty slots
@@ -174,8 +175,11 @@ export function updateGYPreview(player) {
   if (Array.isArray(player.graveyard) && player.graveyard.length > 0) {
     const lastCard = player.graveyard[player.graveyard.length - 1];
     const preview = this.createCardElement(lastCard, true);
-    preview.className = "card gy-preview";
+    preview.classList.add("gy-preview");
     gyZone.appendChild(preview);
+    gyZone.onmouseenter = () => this.renderPreview(lastCard);
+  } else {
+    gyZone.onmouseenter = null;
   }
 }
 
@@ -199,19 +203,7 @@ export function updateExtraDeckPreview(player) {
   counter.textContent = count > 0 ? `Extra\n${count}` : "Extra";
   extraZone.appendChild(counter);
 
-  // Show preview of top card (only for player)
-  if (player.id === "player" && count > 0) {
-    const topCard = player.extraDeck[0];
-    const preview = this.createCardElement(topCard, true);
-    preview.className = "card extra-preview";
-    preview.style.width = "60px";
-    preview.style.height = "87px";
-    preview.style.position = "absolute";
-    preview.style.bottom = "5px";
-    preview.style.right = "5px";
-    preview.style.opacity = "0.3";
-    extraZone.appendChild(preview);
-  }
+  // Extra deck preview intentionally hidden for cleaner UI.
 }
 
 /**

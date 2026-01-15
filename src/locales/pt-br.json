@@ -1,4 +1,4 @@
-{
+﻿{
   "cards": {
     "1": {
       "name": "Corcel Pesadelo",
@@ -142,15 +142,15 @@
     },
     "74": {
       "name": "Dragão Demônio do Coração Sombrio",
-      "description": "Dragão de Escamas do Coração Sombrio + Um monstro 'Coração Sombrio' de nível 5 ou superior. Se esse card for invocado por invocação-Fusão: Escolha 2 cards no campo do oponente; destrua-os. Se esse card for destruído em batalha ou por efeitos de card: Você pode invocar um 'Dragão de Escamas do Coração Sombrio' do seu cemitério."
+      "description": "Materiais: Dragão de Escamas do Coração Sombrio + Um monstro 'Coração Sombrio' de nível 5 ou superior\nSe esse card for invocado por invocação-Fusão: Escolha 2 cards no campo do oponente; destrua-os. Se esse card for destruído em batalha ou por efeitos de card: Você pode invocar um 'Dragão de Escamas do Coração Sombrio' do seu cemitério."
     },
     "75": {
       "name": "Arctroth Blindado do Coração Sombrio",
-      "description": "Invocação de Ascensão: Envie 1 'Demônio Arctroth do Coração Sombrio' que você controla para o Cemitério. Requisito: esse monstro deve ter destruído 2 monstros do oponente em batalha ou por efeito de card. Se este card for Invocado por Ascensão: Escolha 1 monstro que seu oponente controla; o ATK/DEF dele se tornam 0. Se este card atacar um monstro em Posição de Defesa: mude esse monstro para Posição de Ataque."
+      "description": "Material de Ascens\u00e3o: 'Dem\u00f4nio Arctroth do Cora\u00e7\u00e3o Sombrio'.\nRequisito: esse monstro deve ter destru\u00eddo 2 monstros do oponente em batalha ou por efeito de card.\nSe este card for Invocado por Ascens\u00e3o: Escolha 1 monstro que seu oponente controla; o ATK/DEF dele se tornam 0. Se este card atacar um monstro em Posi\u00e7\u00e3o de Defesa: mude esse monstro para Posi\u00e7\u00e3o de Ataque."
     },
     "76": {
       "name": "Dragão Apocalipse do Coração Sombrio",
-      "description": "Invocação de Ascensão: Envie 1 'Dragão de Escamas do Coração Sombrio' que você controla para o Cemitério. Requisito: o efeito desse monstro foi ativado pelo menos 3 vezes neste duelo. Uma vez por turno: Você pode descartar 1 card; destrua 1 monstro que seu oponente controla. Se este card deixar o campo: destrua todos os monstros no campo."
+      "description": "Material de Ascens\u00e3o: 'Drag\u00e3o de Escamas do Cora\u00e7\u00e3o Sombrio'.\nRequisito: o efeito desse monstro foi ativado pelo menos 3 vezes neste duelo.\nUma vez por turno: Voc\u00ea pode descartar 1 card; destrua 1 monstro que seu oponente controla. Se este card deixar o campo: destrua todos os monstros no campo."
     },
     "101": {
       "name": "Luminarca Valente - Cavaleiro da Aurora",
@@ -230,15 +230,15 @@
     },
     "120": {
       "name": "Megaescudo Barbarias Luminarca",
-      "description": "'Protetor do Santuário Luminarca' + 1 monstro 'Luminarca' de nível 5 ou maior. Todo o PV ganho é dobrado. Uma vez por turno, você pode escolher 1 monstro que você controla; troque sua posição de batalha, e se isso acontecer, ele ganha 800 de ATK até o final do turno."
+      "description": "Materiais: 'Protetor do Santuário Luminarca' + 1 monstro 'Luminarca' de nível 5 ou maior\nTodo o PV ganho é dobrado. Uma vez por turno, você pode escolher 1 monstro que você controla; troque sua posição de batalha, e se isso acontecer, ele ganha 800 de ATK até o final do turno."
     },
     "121": {
       "name": "Fortaleza Égide Luminarca",
-      "description": "Material de Ascensão: 'Portador da Égide Luminarca'. Requisito: o material deve ter ficado com a face para cima no campo por 2 turnos. Seu oponente deve atacar este card, se possível. Se este card for Invocado por Ascensão: ganhe 500 PV para cada monstro 'Luminarca' que você controla. Uma vez por turno: você pode pagar 1000 PV e, depois, escolher 1 monstro 'Luminarca' com 2000 ou menos de DEF no seu Cemitério; Invoque-o por Invocação-Especial."
+      "description": "Material de Ascens\u00e3o: 'Portador da \u00c9gide Luminarca'.\nRequisito: o material deve ter ficado com a face para cima no campo por 2 turnos.\nSeu oponente deve atacar este card, se poss\u00edvel. Se este card for Invocado por Ascens\u00e3o: ganhe 500 PV para cada monstro 'Luminarca' que voc\u00ea controla. Uma vez por turno: voc\u00ea pode pagar 1000 PV e, depois, escolher 1 monstro 'Luminarca' com 2000 ou menos de DEF no seu Cemit\u00e9rio; Invoque-o por Invoca\u00e7\u00e3o-Especial."
     },
     "122": {
       "name": "Cavaleiro Puro Luminarca",
-      "description": "2 monstros 'Luminarca'. Se este card for Invocado por Invocação-Fusão: você pode adicionar 1 'Santuário da Cidadela Luminarca' do seu Deck à sua mão. Uma vez por turno, quando você ativar o efeito de uma Magia/Armadilha 'Luminarca' que exija pagar PV: reduza esse custo em 1000. Você só pode usar cada efeito de 'Cavaleiro Puro Luminarca' uma vez por turno."
+      "description": "Materiais: 2 monstros 'Luminarca'\nSe este card for Invocado por Invocação-Fusão: você pode adicionar 1 'Santuário da Cidadela Luminarca' do seu Deck à sua mão. Uma vez por turno, quando você ativar o efeito de uma Magia/Armadilha 'Luminarca' que exija pagar PV: reduza esse custo em 1000. Você só pode usar cada efeito de 'Cavaleiro Puro Luminarca' uma vez por turno."
     },
     "151": {
       "name": "Conjurador do Vazio",
@@ -266,7 +266,7 @@
     },
     "157": {
       "name": "Rei Oco do Vazio",
-      "description": "3 monstros \"Oco do Vazio\". Se este card for destruido em batalha ou por efeito de card: voce pode Invocar por Invocacao-Especial ate 3 \"Oco do Vazio\" do seu Cemiterio. Se este card destruir um monstro do oponente em batalha: voce pode Invocar por Invocacao-Especial 1 \"Oco do Vazio\" do seu Cemiterio. (Efeito Rapido) Voce pode enviar 1 \"Oco do Vazio\" que voce controla para o Cemiterio; este card ganha 1000 ATK ate o final deste turno."
+      "description": "Materiais: 3 monstros \"Oco do Vazio\"\nSe este card for destruido em batalha ou por efeito de card: voce pode Invocar por Invocacao-Especial ate 3 \"Oco do Vazio\" do seu Cemiterio. Se este card destruir um monstro do oponente em batalha: voce pode Invocar por Invocacao-Especial 1 \"Oco do Vazio\" do seu Cemiterio. (Efeito Rapido) Voce pode enviar 1 \"Oco do Vazio\" que voce controla para o Cemiterio; este card ganha 1000 ATK ate o final deste turno."
     },
     "158": {
       "name": "Aranha Óssea do Vazio",
@@ -290,7 +290,7 @@
     },
     "163": {
       "name": "Berserker do Vazio",
-      "description": "Brutamontes Matador do Vazio (no campo) + 1 monstro 'Vazio'. Este card pode realizar até 2 ataques durante cada Fase de Batalha. Uma vez por turno, se este card destruir um monstro do oponente em batalha: você pode escolher 1 card que seu oponente controla; devolva-o para a mão."
+      "description": "Materiais: Brutamontes Matador do Vazio (no campo) + 1 monstro 'Vazio'\nEste card pode realizar até 2 ataques durante cada Fase de Batalha. Uma vez por turno, se este card destruir um monstro do oponente em batalha: você pode escolher 1 card que seu oponente controla; devolva-o para a mão."
     },
     "164": {
       "name": "Draco Serpente do Vazio",
@@ -298,7 +298,7 @@
     },
     "165": {
       "name": "Titã Hidra do Vazio",
-      "description": "6 monstros 'Vazio'. Se este card for Invocado por Invocação-Fusão: destrua todos os outros monstros que você controla; compre 1 card para cada monstro destruído. Uma vez por turno: se este card seria destruído em batalha ou por efeitos de card: você pode reduzir o ATK dele em 700; negue a destruição deste card."
+      "description": "Materiais: 6 monstros 'Vazio'\nSe este card for Invocado por Invocação-Fusão: destrua todos os outros monstros que você controla; compre 1 card para cada monstro destruído. Uma vez por turno: se este card seria destruído em batalha ou por efeitos de card: você pode reduzir o ATK dele em 700; negue a destruição deste card."
     },
     "166": {
       "name": "Selando o Vazio",
@@ -322,7 +322,7 @@
     },
     "171": {
       "name": "Andarilho Cósmico do Vazio",
-      "description": "Material de Ascensão: 'Andarilho do Vazio'. Requisito: o efeito do material foi ativado duas vezes neste duelo. Uma vez por turno: você pode enviar 1 monstro 'Vazio' que você controla para o Cemitério; Invoque por Invocação-Especial 1 monstro 'Vazio' de Nível 5 ou menor da sua mão. Se este card for enviado do campo para o Cemitério: você pode Invocar por Invocação-Especial até 3 'Oco do Vazio' da sua mão ou do Deck."
+      "description": "Material de Ascens\u00e3o: 'Andarilho do Vazio'.\nRequisito: o efeito do material foi ativado duas vezes neste duelo.\nUma vez por turno: voc\u00ea pode enviar 1 monstro 'Vazio' que voc\u00ea controla para o Cemit\u00e9rio; Invoque por Invoca\u00e7\u00e3o-Especial 1 monstro 'Vazio' de N\u00edvel 5 ou menor da sua m\u00e3o. Se este card for enviado do campo para o Cemit\u00e9rio: voc\u00ea pode Invocar por Invoca\u00e7\u00e3o-Especial at\u00e9 3 'Oco do Vazio' da sua m\u00e3o ou do Deck."
     },
     "180": {
       "name": "Dragão Blindado",
@@ -330,7 +330,7 @@
     },
     "181": {
       "name": "Dragão Blindado Metálico",
-      "description": "Enquanto estiver em Posição de Defesa, este card não pode ser destruído em batalha. Este card ganha 100 de ATK/DEF para cada monstro Dragão Invocado por Invocação-Especial enquanto este card estiver com a face para cima no campo."
+      "description": "Material de Ascens\u00e3o: 'Drag\u00e3o Blindado'.\nRequisito: Nenhum.\nEnquanto estiver em Posi\u00e7\u00e3o de Defesa, este card n\u00e3o pode ser destru\u00eddo em batalha. Este card ganha 100 de ATK/DEF para cada monstro Drag\u00e3o Invocado por Invoca\u00e7\u00e3o-Especial enquanto este card estiver com a face para cima no campo."
     },
     "182": {
       "name": "Dragão Cinzento",
@@ -382,11 +382,11 @@
     },
     "194": {
       "name": "Dragão Tecno-Vazio",
-      "description": "Dragão Voltaico + 1 monstro Dragão de Nível 5 ou maior. Se este card for Invocado por Invocação-Fusão: você pode escolher 1 monstro Dragão de Nível 4 ou menor no seu Cemitério; bana-o e, se fizer isso, este card ganha ATK igual ao ATK do monstro banido até o final deste turno. Se este card for destruído em batalha: você pode Invocar por Invocação-Especial 1 'Dragão Voltaico' do seu Cemitério. Você só pode usar cada efeito de 'Dragão Tecno-Vazio' uma vez por turno."
+      "description": "Materiais: Dragão Voltaico + 1 monstro Dragão de Nível 5 ou maior\nSe este card for Invocado por Invocação-Fusão: você pode escolher 1 monstro Dragão de Nível 4 ou menor no seu Cemitério; bana-o e, se fizer isso, este card ganha ATK igual ao ATK do monstro banido até o final deste turno. Se este card for destruído em batalha: você pode Invocar por Invocação-Especial 1 'Dragão Voltaico' do seu Cemitério. Você só pode usar cada efeito de 'Dragão Tecno-Vazio' uma vez por turno."
     },
     "195": {
       "name": "Dragão Cósmico Tecno-Vazio",
-      "description": "Material de Ascensão: 'Dragão Tecno-Vazio'. Requisito: O material ativou todos os seus efeitos durante este duelo. Se este card seria destruído: você pode banir 'Dragão Tecno-Vazio' do seu Cemitério em vez disso. Uma vez por turno: você pode banir 1 monstro Dragão do seu Cemitério; este card pode atacar todos os monstros que seu oponente controla, uma vez cada, neste turno. Você só pode usar cada efeito de 'Dragão Cósmico Tecno-Vazio' uma vez por turno."
+      "description": "Material de Ascens\u00e3o: 'Drag\u00e3o Tecno-Vazio'.\nRequisito: O material ativou todos os seus efeitos durante este duelo.\nSe este card seria destru\u00eddo: voc\u00ea pode banir 'Drag\u00e3o Tecno-Vazio' do seu Cemit\u00e9rio em vez disso. Uma vez por turno: voc\u00ea pode banir 1 monstro Drag\u00e3o do seu Cemit\u00e9rio; este card pode atacar todos os monstros que seu oponente controla, uma vez cada, neste turno. Voc\u00ea s\u00f3 pode usar cada efeito de 'Drag\u00e3o C\u00f3smico Tecno-Vazio' uma vez por turno."
     },
     "196": {
       "name": "Santuário do Espírito do Dragão",
