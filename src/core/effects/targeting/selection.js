@@ -7,8 +7,51 @@
 
 import { botLogger } from "../../BotLogger.js";
 
-// Track duplicate selectCandidates calls per turn
-const selectCandidatesCallTracker = {};
+/**
+ * Track duplicate selectCandidates calls per turn with auto-cleanup.
+ * Prevents memory leak by clearing old turn data automatically.
+ */
+class CallTracker {
+  constructor() {
+    this.data = new Map();
+    this.currentTurn = -1;
+  }
+
+  /**
+   * Track a call and return the count for this turn.
+   * Automatically clears data from previous turns.
+   * @param {string} turnKey - Key identifying the turn (e.g., "turn_player")
+   * @param {string} callKey - Key identifying the call type
+   * @returns {number} Call count for this key in current turn
+   */
+  track(turnKey, callKey) {
+    // Extract turn number from key
+    const turnMatch = turnKey.match(/turn_(\d+)/);
+    const turn = turnMatch ? parseInt(turnMatch[1], 10) : 0;
+
+    // Clear data from previous turns to prevent memory leak
+    if (turn !== this.currentTurn) {
+      this.data.clear();
+      this.currentTurn = turn;
+    }
+
+    const count = (this.data.get(callKey) || 0) + 1;
+    this.data.set(callKey, count);
+    return count;
+  }
+
+  /**
+   * Get count for a specific call key.
+   * @param {string} callKey - Key identifying the call type
+   * @returns {number} Call count
+   */
+  getCount(callKey) {
+    return this.data.get(callKey) || 0;
+  }
+}
+
+// Singleton instance for duplicate tracking
+const selectCandidatesCallTracker = new CallTracker();
 
 /**
  * Build a unique cache key for targeting lookups.
@@ -69,21 +112,23 @@ export function selectCandidates(def, ctx) {
 
   // ✅ CACHE: Gerar chave única baseada na definição do target
   const cacheKey = buildTargetingCacheKey(def, ctx);
-  
-  // 🔍 Duplicate Detection
-  const turnKey = `turn_${(ctx?.player?.id || 'unknown')}`;
-  if (!selectCandidatesCallTracker[turnKey]) {
-    selectCandidatesCallTracker[turnKey] = {};
-  }
+
+  // 🔍 Duplicate Detection - using CallTracker with auto-cleanup
+  // Turn key includes turn counter for proper memory management
+  const turnCounter =
+    ctx?.activationContext?.turnCounter ??
+    this?.game?.turnCounter ??
+    0;
+  const turnKey = `turn_${turnCounter}_${ctx?.player?.id || "unknown"}`;
   const callKey = `${def.id}_${zoneName}`;
-  selectCandidatesCallTracker[turnKey][callKey] = (selectCandidatesCallTracker[turnKey][callKey] || 0) + 1;
-  
-  if (selectCandidatesCallTracker[turnKey][callKey] > 1 && botLogger) {
+  const callCount = selectCandidatesCallTracker.track(turnKey, callKey);
+
+  if (callCount > 1 && botLogger) {
     botLogger.logDuplicate(
-      'selectCandidates',
+      "selectCandidates",
       `Target "${def.id}" in zone "${zoneName}"`,
-      selectCandidatesCallTracker[turnKey][callKey],
-      ctx.source?.name || 'unknown'
+      callCount,
+      ctx.source?.name || "unknown"
     );
   }
   
