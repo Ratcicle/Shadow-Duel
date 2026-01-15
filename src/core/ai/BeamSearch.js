@@ -1,5 +1,95 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // src/core/ai/BeamSearch.js
+
+// Configuration constants for beam search
+const DECISIVE_ADVANTAGE_THRESHOLD = 10.0; // Score indicating clear win
+const DECISIVE_DISADVANTAGE_THRESHOLD = -10.0; // Score indicating clear loss
+
+/**
+ * Creates a lazy player object that implements copy-on-write for zones.
+ * Zones are only cloned when first accessed via getter (lazy cloning).
+ * This significantly reduces memory allocations during beam search.
+ *
+ * @param {Object} source - Source player object to wrap
+ * @returns {Object} Lazy player with copy-on-write semantics
+ */
+function createLazyPlayer(source) {
+  const safe = source || {};
+  return {
+    id: safe.id || "unknown",
+    lp: safe.lp || 0,
+    summonCount: safe.summonCount || 0,
+    // Lazy references - will be cloned on first modification
+    _handRef: safe.hand || [],
+    _fieldRef: safe.field || [],
+    _graveyardRef: safe.graveyard || [],
+    _spellTrapRef: safe.spellTrap || [],
+    _fieldSpellRef: safe.fieldSpell,
+    // Flags to track which zones have been cloned
+    _handCloned: false,
+    _fieldCloned: false,
+    _graveyardCloned: false,
+    _spellTrapCloned: false,
+    _fieldSpellCloned: false,
+    // Getters for lazy access
+    get hand() {
+      if (!this._handCloned) {
+        this._handRef = this._handRef.map((c) => ({ ...c }));
+        this._handCloned = true;
+      }
+      return this._handRef;
+    },
+    set hand(val) {
+      this._handRef = val;
+      this._handCloned = true;
+    },
+    get field() {
+      if (!this._fieldCloned) {
+        this._fieldRef = this._fieldRef.map((c) => ({ ...c }));
+        this._fieldCloned = true;
+      }
+      return this._fieldRef;
+    },
+    set field(val) {
+      this._fieldRef = val;
+      this._fieldCloned = true;
+    },
+    get graveyard() {
+      if (!this._graveyardCloned) {
+        this._graveyardRef = this._graveyardRef.map((c) => ({ ...c }));
+        this._graveyardCloned = true;
+      }
+      return this._graveyardRef;
+    },
+    set graveyard(val) {
+      this._graveyardRef = val;
+      this._graveyardCloned = true;
+    },
+    get spellTrap() {
+      if (!this._spellTrapCloned) {
+        this._spellTrapRef = this._spellTrapRef.map((c) => ({ ...c }));
+        this._spellTrapCloned = true;
+      }
+      return this._spellTrapRef;
+    },
+    set spellTrap(val) {
+      this._spellTrapRef = val;
+      this._spellTrapCloned = true;
+    },
+    get fieldSpell() {
+      if (!this._fieldSpellCloned && this._fieldSpellRef) {
+        this._fieldSpellRef = { ...this._fieldSpellRef };
+        this._fieldSpellCloned = true;
+      }
+      return this._fieldSpellRef;
+    },
+    set fieldSpell(val) {
+      this._fieldSpellRef = val;
+      this._fieldSpellCloned = true;
+    },
+  };
+}
+
 function actionRequiresHand(actionType) {
   return (
     actionType === "summon" ||
@@ -122,87 +212,6 @@ export async function beamSearchTurn(game, strategy, options = {}) {
    * Isso reduz significativamente a alocação de memória durante beam search.
    */
   function cloneGameState(gameState) {
-    /**
-     * Cria um proxy que implementa copy-on-write para zonas.
-     * A zona é clonada apenas quando uma modificação é detectada.
-     */
-    const createLazyPlayer = (source) => {
-      const safe = source || {};
-      return {
-        id: safe.id || "unknown",
-        lp: safe.lp || 0,
-        summonCount: safe.summonCount || 0,
-        // Lazy references - will be cloned on first modification
-        _handRef: safe.hand || [],
-        _fieldRef: safe.field || [],
-        _graveyardRef: safe.graveyard || [],
-        _spellTrapRef: safe.spellTrap || [],
-        _fieldSpellRef: safe.fieldSpell,
-        // Flags to track which zones have been cloned
-        _handCloned: false,
-        _fieldCloned: false,
-        _graveyardCloned: false,
-        _spellTrapCloned: false,
-        _fieldSpellCloned: false,
-        // Getters for lazy access
-        get hand() {
-          if (!this._handCloned) {
-            this._handRef = this._handRef.map((c) => ({ ...c }));
-            this._handCloned = true;
-          }
-          return this._handRef;
-        },
-        set hand(val) {
-          this._handRef = val;
-          this._handCloned = true;
-        },
-        get field() {
-          if (!this._fieldCloned) {
-            this._fieldRef = this._fieldRef.map((c) => ({ ...c }));
-            this._fieldCloned = true;
-          }
-          return this._fieldRef;
-        },
-        set field(val) {
-          this._fieldRef = val;
-          this._fieldCloned = true;
-        },
-        get graveyard() {
-          if (!this._graveyardCloned) {
-            this._graveyardRef = this._graveyardRef.map((c) => ({ ...c }));
-            this._graveyardCloned = true;
-          }
-          return this._graveyardRef;
-        },
-        set graveyard(val) {
-          this._graveyardRef = val;
-          this._graveyardCloned = true;
-        },
-        get spellTrap() {
-          if (!this._spellTrapCloned) {
-            this._spellTrapRef = this._spellTrapRef.map((c) => ({ ...c }));
-            this._spellTrapCloned = true;
-          }
-          return this._spellTrapRef;
-        },
-        set spellTrap(val) {
-          this._spellTrapRef = val;
-          this._spellTrapCloned = true;
-        },
-        get fieldSpell() {
-          if (!this._fieldSpellCloned && this._fieldSpellRef) {
-            this._fieldSpellRef = { ...this._fieldSpellRef };
-            this._fieldSpellCloned = true;
-          }
-          return this._fieldSpellRef;
-        },
-        set fieldSpell(val) {
-          this._fieldSpellRef = val;
-          this._fieldSpellCloned = true;
-        },
-      };
-    };
-
     const isPerspectiveState = gameState && gameState._isPerspectiveState;
     const sourceBot = isPerspectiveState
       ? gameState.bot
@@ -261,10 +270,6 @@ export async function beamSearchTurn(game, strategy, options = {}) {
     // If we're already winning clearly (depth > 0), no need to explore further
     if (depth > 0 && currentSequence.length > 0) {
       const currentScore = evaluateState(currentState, currentState.bot);
-      // Score >= 10.0 indicates decisive advantage (lethal or near-lethal)
-      // Score <= -10.0 indicates we're losing badly (opponent has lethal)
-      const DECISIVE_ADVANTAGE_THRESHOLD = 10.0;
-      const DECISIVE_DISADVANTAGE_THRESHOLD = -10.0;
 
       if (currentScore >= DECISIVE_ADVANTAGE_THRESHOLD) {
         // Already winning, stop exploring
@@ -442,84 +447,6 @@ export async function greedySearchWithEvalV2(game, strategy, options = {}) {
     const sourcePlayer = isPerspectiveState
       ? gameState.player
       : resolveOpponent(gameState) || gameState.player || gameState.bot;
-
-    /**
-     * Cria um proxy que implementa copy-on-write para zonas.
-     * Similar ao beamSearchTurn, mas otimizado para greedy (1 ply).
-     */
-    const createLazyPlayer = (source) => {
-      const safe = source || {};
-      return {
-        id: safe.id || "unknown",
-        lp: safe.lp || 0,
-        summonCount: safe.summonCount || 0,
-        _handRef: safe.hand || [],
-        _fieldRef: safe.field || [],
-        _graveyardRef: safe.graveyard || [],
-        _spellTrapRef: safe.spellTrap || [],
-        _fieldSpellRef: safe.fieldSpell,
-        _handCloned: false,
-        _fieldCloned: false,
-        _graveyardCloned: false,
-        _spellTrapCloned: false,
-        _fieldSpellCloned: false,
-        get hand() {
-          if (!this._handCloned) {
-            this._handRef = this._handRef.map((c) => ({ ...c }));
-            this._handCloned = true;
-          }
-          return this._handRef;
-        },
-        set hand(val) {
-          this._handRef = val;
-          this._handCloned = true;
-        },
-        get field() {
-          if (!this._fieldCloned) {
-            this._fieldRef = this._fieldRef.map((c) => ({ ...c }));
-            this._fieldCloned = true;
-          }
-          return this._fieldRef;
-        },
-        set field(val) {
-          this._fieldRef = val;
-          this._fieldCloned = true;
-        },
-        get graveyard() {
-          if (!this._graveyardCloned) {
-            this._graveyardRef = this._graveyardRef.map((c) => ({ ...c }));
-            this._graveyardCloned = true;
-          }
-          return this._graveyardRef;
-        },
-        set graveyard(val) {
-          this._graveyardRef = val;
-          this._graveyardCloned = true;
-        },
-        get spellTrap() {
-          if (!this._spellTrapCloned) {
-            this._spellTrapRef = this._spellTrapRef.map((c) => ({ ...c }));
-            this._spellTrapCloned = true;
-          }
-          return this._spellTrapRef;
-        },
-        set spellTrap(val) {
-          this._spellTrapRef = val;
-          this._spellTrapCloned = true;
-        },
-        get fieldSpell() {
-          if (!this._fieldSpellCloned && this._fieldSpellRef) {
-            this._fieldSpellRef = { ...this._fieldSpellRef };
-            this._fieldSpellCloned = true;
-          }
-          return this._fieldSpellRef;
-        },
-        set fieldSpell(val) {
-          this._fieldSpellRef = val;
-          this._fieldSpellCloned = true;
-        },
-      };
-    };
 
     return {
       player: createLazyPlayer(sourcePlayer),

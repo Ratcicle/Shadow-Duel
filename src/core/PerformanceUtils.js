@@ -214,14 +214,22 @@ export function getMemoryUsage() {
 
 /**
  * Simple profiling decorator for class methods.
+ *
+ * NOTE: This uses the legacy decorator syntax (Stage 2).
+ * For TypeScript projects, enable "experimentalDecorators" in tsconfig.
+ * For vanilla JS, use the wrapper function alternative below.
+ *
  * @param {string} className - Name of the class for logging
  * @returns {Function} Decorator function
  *
- * Usage:
+ * Usage with decorators (requires transpiler):
  *   class MyClass {
  *     @profile('MyClass')
  *     myMethod() { ... }
  *   }
+ *
+ * Alternative without decorators:
+ *   const profiledMethod = profileWrap('MyClass', 'myMethod', myMethod);
  */
 export function profile(className) {
   return function (target, propertyKey, descriptor) {
@@ -241,6 +249,31 @@ export function profile(className) {
     };
 
     return descriptor;
+  };
+}
+
+/**
+ * Wrapper function alternative to the decorator (works without transpiler).
+ * @param {string} className - Name of the class for logging
+ * @param {string} methodName - Name of the method for logging
+ * @param {Function} fn - Function to wrap
+ * @returns {Function} Wrapped function with profiling
+ *
+ * Usage:
+ *   const originalMethod = myInstance.myMethod.bind(myInstance);
+ *   myInstance.myMethod = profileWrap('MyClass', 'myMethod', originalMethod);
+ */
+export function profileWrap(className, methodName, fn) {
+  return function (...args) {
+    const start = performance.now();
+    const result = fn.apply(this, args);
+    const elapsed = performance.now() - start;
+
+    if (elapsed > 10) {
+      console.log(`[Profile] ${className}.${methodName}: ${elapsed.toFixed(2)}ms`);
+    }
+
+    return result;
   };
 }
 
@@ -270,4 +303,5 @@ export default {
   getMemoryUsage,
   measureMemory,
   profile,
+  profileWrap,
 };

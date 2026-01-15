@@ -20,14 +20,24 @@ class CallTracker {
   /**
    * Track a call and return the count for this turn.
    * Automatically clears data from previous turns.
-   * @param {string} turnKey - Key identifying the turn (e.g., "turn_player")
+   * @param {string} turnKey - Key identifying the turn (e.g., "turn_5_player")
    * @param {string} callKey - Key identifying the call type
    * @returns {number} Call count for this key in current turn
    */
   track(turnKey, callKey) {
-    // Extract turn number from key
-    const turnMatch = turnKey.match(/turn_(\d+)/);
-    const turn = turnMatch ? parseInt(turnMatch[1], 10) : 0;
+    // Extract turn number from key using string operations (faster than regex)
+    // Format: "turn_<number>_<player>"
+    let turn = 0;
+    const firstUnderscore = turnKey.indexOf("_");
+    if (firstUnderscore !== -1) {
+      const secondUnderscore = turnKey.indexOf("_", firstUnderscore + 1);
+      const endPos = secondUnderscore !== -1 ? secondUnderscore : turnKey.length;
+      const turnStr = turnKey.substring(firstUnderscore + 1, endPos);
+      const parsed = parseInt(turnStr, 10);
+      if (!isNaN(parsed)) {
+        turn = parsed;
+      }
+    }
 
     // Clear data from previous turns to prevent memory leak
     if (turn !== this.currentTurn) {
