@@ -26,6 +26,7 @@ import {
   handleBanish,
   handleBanishCardFromGraveyard,
   handleDestroyTargetedCards,
+  handleDestroyAndDamageByTargetAtk,
   handleDestroyAttackerOnArchetypeDestruction,
 } from "./destruction.js";
 
@@ -53,6 +54,12 @@ import {
   handleGrantAdditionalNormalSummon,
   handleUpkeepPayOrSendToGrave,
 } from "./resources.js";
+
+// Blueprint handlers
+import { handleActivateStoredBlueprint } from "./blueprints.js";
+
+// Conditional handlers
+import { handleConditionalTargetActions } from "./conditional.js";
 
 /**
  * Initialize default handlers
@@ -186,6 +193,10 @@ export function registerDefaultHandlers(registry) {
   // FASE 3: New handlers for complex Shadow-Heart methods
 
   registry.register("destroy_targeted_cards", handleDestroyTargetedCards);
+  registry.register(
+    "destroy_and_damage_by_target_atk",
+    handleDestroyAndDamageByTargetAtk
+  );
 
   registry.register("buff_stats_temp_with_second_attack", handleBuffStatsTemp);
 
@@ -202,6 +213,11 @@ export function registerDefaultHandlers(registry) {
   // Legacy/common actions migrated into the registry (proxy to EffectEngine methods)
 
   registry.register("draw", proxyEngineMethod("applyDraw"));
+
+  registry.register(
+    "conditional_target_actions",
+    handleConditionalTargetActions
+  );
 
   registry.register("heal", proxyEngineMethod("applyHeal"));
 
@@ -298,4 +314,7 @@ export function registerDefaultHandlers(registry) {
 
     proxyEngineMethod("applyDestroyOtherDragonsAndBuff")
   );
+
+  // Blueprint actions
+  registry.register("activate_stored_blueprint", handleActivateStoredBlueprint);
 }

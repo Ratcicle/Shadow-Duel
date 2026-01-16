@@ -18,6 +18,7 @@ import {
 import * as fusion from "./effects/fusion/index.js";
 import * as targeting from "./effects/targeting/index.js";
 import * as triggers from "./effects/triggers/index.js";
+import * as blueprints from "./effects/blueprints/index.js";
 import * as actions from "./effects/actions/index.js";
 import * as activation from "./effects/activation/index.js";
 
@@ -497,6 +498,134 @@ export default class EffectEngine {
             return {
               ok: false,
               reason: cond.reason || `You must control "${cond.cardName}".`,
+            };
+          }
+          break;
+        }
+        case "control_card_max": {
+          const ownerKey = cond.owner === "opponent" ? "opponent" : "player";
+          const owner = ownerKey === "opponent" ? opponent : player;
+          const zoneName = cond.zone || "field";
+          const includeFacedown = cond.includeFacedown !== false;
+          const max = cond.max ?? 0;
+          const zone =
+            zoneName === "fieldSpell"
+              ? owner?.fieldSpell
+                ? [owner.fieldSpell]
+                : []
+              : owner?.[zoneName] || [];
+          const count = zone.filter((card) => {
+            if (!card) return false;
+            if (!includeFacedown && card.isFacedown) return false;
+            return card.name === cond.cardName;
+          }).length;
+          if (count > max) {
+            return {
+              ok: false,
+              reason:
+                cond.reason ||
+                `You can only control up to ${max} "${cond.cardName}".`,
+            };
+          }
+          break;
+        }
+        case "control_card_filters": {
+          const ownerKey = cond.owner === "opponent" ? "opponent" : "player";
+          const owner = ownerKey === "opponent" ? opponent : player;
+          const zoneList = Array.isArray(cond.zones) && cond.zones.length > 0
+            ? cond.zones
+            : [cond.zone || "field"];
+          const filters = cond.filters || {};
+          const cardKind = filters.cardKind ?? cond.cardKind;
+          const subtype = filters.subtype ?? cond.subtype;
+          const archetype = filters.archetype ?? cond.archetype;
+          const cardName = filters.cardName ?? filters.name ?? cond.cardName ?? cond.name;
+          const includeFacedown = cond.includeFacedown === true;
+          const requireFaceup = cond.requireFaceup !== false && !includeFacedown;
+          const min = filters.min ?? cond.min;
+          const max = filters.max ?? cond.max;
+          const requiredMin = min !== undefined ? min : max !== undefined ? 0 : 1;
+
+          const matchesFilters = (card) => {
+            if (!card) return false;
+            if (requireFaceup && card.isFacedown) return false;
+            if (cardKind) {
+              const requiredKinds = Array.isArray(cardKind)
+                ? cardKind
+                : [cardKind];
+              if (!requiredKinds.includes(card.cardKind)) return false;
+            }
+            if (subtype) {
+              const requiredSubtypes = Array.isArray(subtype)
+                ? subtype
+                : [subtype];
+              if (!requiredSubtypes.includes(card.subtype)) return false;
+            }
+            if (archetype) {
+              const requiredArchetypes = Array.isArray(archetype)
+                ? archetype
+                : [archetype];
+              const cardArchetypes = card.archetypes
+                ? card.archetypes
+                : card.archetype
+                ? [card.archetype]
+                : [];
+              const hasMatch = requiredArchetypes.some((arc) =>
+                cardArchetypes.includes(arc)
+              );
+              if (!hasMatch) return false;
+            }
+            if (cardName) {
+              const requiredNames = Array.isArray(cardName)
+                ? cardName
+                : [cardName];
+              if (!requiredNames.includes(card.name)) return false;
+            }
+            return true;
+          };
+
+          let count = 0;
+          for (const zoneKey of zoneList) {
+            const zone =
+              zoneKey === "fieldSpell"
+                ? owner?.fieldSpell
+                  ? [owner.fieldSpell]
+                  : []
+                : owner?.[zoneKey] || [];
+            count += zone.filter(matchesFilters).length;
+          }
+
+          if (Number.isFinite(requiredMin) && count < requiredMin) {
+            return {
+              ok: false,
+              reason:
+                cond.reason ||
+                `You must control at least ${requiredMin} matching card(s).`,
+            };
+          }
+          if (max !== undefined && count > max) {
+            return {
+              ok: false,
+              reason:
+                cond.reason ||
+                `You can only control up to ${max} matching card(s).`,
+            };
+          }
+          break;
+        }
+        case "has_stored_blueprint": {
+          const sourceCard = ctx?.source || null;
+          const min = Number(cond.min ?? 1);
+          const storageState = this.getBlueprintStorageState?.(
+            sourceCard,
+            false
+          );
+          const storedCount =
+            storageState?.storedBlueprints?.length || 0;
+          if (storedCount < min) {
+            return {
+              ok: false,
+              reason: cond.reason || "No stored effect available.",
             };
           }
           break;
@@ -1069,6 +1198,25 @@ EffectEngine.prototype.collectCardToGraveTriggers =
   triggers.collectCardToGraveTriggers;
 EffectEngine.prototype.collectStandbyPhaseTriggers =
   triggers.collectStandbyPhaseTriggers;
+
+// ============================================================
+// Blueprints Module - Prototype Assignments
+// ============================================================
+EffectEngine.prototype.getBlueprintStorageConfig =
+  blueprints.getBlueprintStorageConfig;
+EffectEngine.prototype.getBlueprintStorageState =
+  blueprints.getBlueprintStorageState;
+EffectEngine.prototype.getStoredBlueprints = blueprints.getStoredBlueprints;
+EffectEngine.prototype.clearBlueprintStorage = blueprints.clearBlueprintStorage;
+EffectEngine.prototype.buildEffectBlueprint = blueprints.buildEffectBlueprint;
+EffectEngine.prototype.resolveEffectBlueprint =
+  blueprints.resolveEffectBlueprint;
+EffectEngine.prototype.executeEffectBlueprint =
+  blueprints.executeEffectBlueprint;
+EffectEngine.prototype.activateStoredBlueprint =
+  blueprints.activateStoredBlueprint;
+EffectEngine.prototype.handleBlueprintStorageAfterResolution =
+  blueprints.handleBlueprintStorageAfterResolution;
 
 // ============================================================
 // Actions Module - Prototype Assignments

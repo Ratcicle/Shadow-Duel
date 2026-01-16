@@ -77,6 +77,7 @@ export default class Card {
     // Turn-based temporary buffs (for expirations like "until end of next turn")
     // Structure: Array of {stat, value, expiresOnTurn, id}
     this.turnBasedBuffs = [];
+    this.tempStatuses = {};
 
     // Field presence tracking (for mechanics like "while this card is face-up on field")
     this.fieldPresenceId = null;
@@ -89,6 +90,11 @@ export default class Card {
 
     // Counter system
     this.counters = new Map(); // counterType -> amount
+
+    // Blueprint storage config (used by cards like Arcanist Grimoires)
+    this.blueprintStorage = data.blueprintStorage
+      ? JSON.parse(JSON.stringify(data.blueprintStorage))
+      : null;
 
     this.description = data.description;
     this.effects = data.effects || [];

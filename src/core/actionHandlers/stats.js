@@ -437,6 +437,7 @@ export async function handleAddStatus(action, ctx, targets, engine) {
   const value = action.value !== undefined ? action.value : true;
 
   const remove = action.remove || false;
+  const untilEndOfTurn = action.untilEndOfTurn === true;
 
   if (!status) {
     return false;
@@ -451,6 +452,15 @@ export async function handleAddStatus(action, ctx, targets, engine) {
 
   for (const card of targetCards) {
     if (!card) continue;
+
+    if (!remove && untilEndOfTurn) {
+      if (!card.tempStatuses) {
+        card.tempStatuses = {};
+      }
+      if (!Object.prototype.hasOwnProperty.call(card.tempStatuses, status)) {
+        card.tempStatuses[status] = card[status];
+      }
+    }
 
     if (remove) {
       if (card[status] !== undefined) {
@@ -470,6 +480,12 @@ export async function handleAddStatus(action, ctx, targets, engine) {
         modified = true;
 
         affectedCards.push(card.name);
+      }
+      if (
+        card.tempStatuses &&
+        Object.prototype.hasOwnProperty.call(card.tempStatuses, status)
+      ) {
+        delete card.tempStatuses[status];
       }
     } else {
       // For additive status, sum values instead of replacing

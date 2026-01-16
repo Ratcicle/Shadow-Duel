@@ -1,0 +1,317 @@
+i18n.js:152 [i18n] pt-br translations: 102/102 cards (0 missing, 0 extra).
+assets/Debug%20Dragon.png:1  Failed to load resource: the server responded with a status of 404 (Not Found)
+integration.js:44 [ReplayCapture] Integração ativada para este duelo (captura completa)
+ReplayCapture.js:103 [ReplayCapture] 🎬 Iniciando captura do duelo #144 (v3 otimizado)
+integration.js:691 [ReplayCapture] Novo duelo iniciado - captura completa ativa
+log.js:10 Modo teste: adicionando 4 Infinity Searcher a mao inicial.
+lifecycle.js:25 
+──────────────────── TURNO 1: Bot 1 ────────────────────
+ReplayCapture.js:1020 [ReplayCapture] 📋 Available actions: 2 options for human
+log.js:10 Added Arcanist Apprentice to hand from deck.
+ReplayCapture.js:1260 [ReplayCapture] 📝 EFFECT: Infinity Searcher → Added 1 card(s) to hand from deck
+ReplayCapture.js:1260 [ReplayCapture] 📝 EFFECT: Infinity Searcher → zone: spellTrap [human]
+movement.js:679 [moveCard] Emitting card_to_grave event for Infinity Searcher (fromZone: spellTrap)
+collectors.js:866 [handleCardToGraveEvent] Infinity Searcher entered graveyard. card.owner="player", ctx.player.id="player", ctx.opponent.id="bot", wasDestroyed=false
+collectors.js:869 [handleCardToGraveEvent] Infinity Searcher entered graveyard from spellTrap. Card has 1 effects.
+log.js:10 Infinity Searcher effect activated.
+ReplayCapture.js:1260 [ReplayCapture] ✨ SPELL: Infinity Searcher → [human]
+triggers.js:14 [checkAndOfferTraps] Called for event: card_activation Object
+triggers.js:38 [checkAndOfferTraps] Proceeding to open chain window
+triggers.js:106 [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+ReplayCapture.js:1020 [ReplayCapture] 📋 Available actions: 2 options for human
+log.js:10 Added Crimson Magic Explosion to hand from deck.
+ReplayCapture.js:1260 [ReplayCapture] 📝 EFFECT: Infinity Searcher → Added 1 card(s) to hand from deck
+ReplayCapture.js:1260 [ReplayCapture] 📝 EFFECT: Infinity Searcher → zone: spellTrap [human]
+movement.js:679 [moveCard] Emitting card_to_grave event for Infinity Searcher (fromZone: spellTrap)
+collectors.js:866 [handleCardToGraveEvent] Infinity Searcher entered graveyard. card.owner="player", ctx.player.id="player", ctx.opponent.id="bot", wasDestroyed=false
+collectors.js:869 [handleCardToGraveEvent] Infinity Searcher entered graveyard from spellTrap. Card has 1 effects.
+log.js:10 Infinity Searcher effect activated.
+ReplayCapture.js:1260 [ReplayCapture] ✨ SPELL: Infinity Searcher → [human]
+triggers.js:14 [checkAndOfferTraps] Called for event: card_activation Object
+triggers.js:38 [checkAndOfferTraps] Proceeding to open chain window
+triggers.js:106 [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+ReplayCapture.js:1020 [ReplayCapture] 📋 Available actions: 2 options for human
+ReplayCapture.js:1260 [ReplayCapture] 🎴 SUMMON: Arcanist Apprentice → [normal]  [human]
+log.js:10 Summon Method: Normal | From: Hand | You -> Arcanist Apprentice
+log.js:10 Added Grimoire of the Apprentice Arcanist to hand from deck.
+ReplayCapture.js:1260 [ReplayCapture] 📝 EFFECT: Arcanist Apprentice → Added 1 card(s) to hand from deck
+triggers.js:14 [checkAndOfferTraps] Called for event: after_summon Object
+triggers.js:38 [checkAndOfferTraps] Proceeding to open chain window
+triggers.js:106 [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+ReplayCapture.js:1020 [ReplayCapture] 📋 Available actions: 2 options for human
+selection.js:63 [selectCandidates] Starting search for target "grimoire_equip_target": owner="self", zone="field", archetype="Arcanist", excludeCardName="undefined"
+selection.js:63 [selectCandidates] Using 1 owners: player
+selection.js:63 [selectCandidates] Checking zone "field" for owner player: 1 cards (Arcanist Apprentice)
+selection.js:63 [selectCandidates] Evaluating card: Arcanist Apprentice (archetype: Arcanist, owner: player)
+selection.js:63 [selectCandidates] ACCEPTED: Arcanist Apprentice
+selection.js:63 [selectCandidates] Found 1 candidates for target "grimoire_equip_target" (archetype: Arcanist, zone: field, exclude: undefined)
+ReplayCapture.js:1020 [ReplayCapture] 📋 Available actions: 1 options for human
+log.js:10 Select target(s) for the continuous spell effect.
+ReplayCapture.js:1260 [ReplayCapture] 📝 TARGET: Grimoire of the Apprentice Arcanist → → Arcanist Apprentice [human]
+ReplayCapture.js:1260 [ReplayCapture] 📝 EFFECT: Grimoire of the Apprentice Arcanist → zone: spellTrap [human]
+log.js:10 Grimoire of the Apprentice Arcanist effect activated.
+ReplayCapture.js:1260 [ReplayCapture] ✨ SPELL: Grimoire of the Apprentice Arcanist → [human]
+triggers.js:14 [checkAndOfferTraps] Called for event: card_activation Object
+triggers.js:38 [checkAndOfferTraps] Proceeding to open chain window
+triggers.js:106 [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+ReplayCapture.js:1260 [ReplayCapture] ⏭️ PASS: end → [human]
+lifecycle.js:25 
+──────────────────── TURNO 2: Bot 2 ────────────────────
+BotLogger.js:139 
+[Phase] ⏭️ bot | T2 standby → main1 (0 actions, 0ms)
+Bot.js:193 [Bot.makeMove] Guard check: Object
+Bot.js:200 [Bot.makeMove] Phase: main1
+ReplayCapture.js:1020 [ReplayCapture] 📋 Available actions: 3 options for bot
+Bot.js:313 [Bot.playMainPhase] Generated 3 raw actions, 3 sequenced actions
+Bot.js:317 [Bot.playMainPhase] Actions: Array(3)
+Bot.js:352 [Bot.playMainPhase] Running beam search with 3 actions (width=2, depth=2, budget=100)...
+Bot.js:363 [Bot.playMainPhase] Beam search result: Object
+Bot.js:366 [Bot.playMainPhase] ✅ Beam search chose: Object
+BotLogger.js:110 
+[Decision] bot | T2:main1 🥈
+BotLogger.js:111   Chosen: #3/3 - summon:Shadow-Heart Specter (p:5)
+BotLogger.js:112   Coherence: 70%
+ReplayCapture.js:1260 [ReplayCapture] 🎴 SUMMON: Shadow-Heart Specter → [normal]  [bot]
+log.js:10 Summon Method: Normal | From: Hand | Opponent -> Shadow-Heart Specter
+triggers.js:14 [checkAndOfferTraps] Called for event: after_summon Object
+triggers.js:38 [checkAndOfferTraps] Proceeding to open chain window
+triggers.js:106 [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+log.js:10 Bot summons Shadow-Heart Specter
+ReplayCapture.js:1020 [ReplayCapture] 📋 Available actions: 2 options for bot
+Bot.js:313 [Bot.playMainPhase] Generated 2 raw actions, 2 sequenced actions
+Bot.js:317 [Bot.playMainPhase] Actions: Array(2)
+Bot.js:352 [Bot.playMainPhase] Running beam search with 2 actions (width=2, depth=2, budget=100)...
+Bot.js:363 [Bot.playMainPhase] Beam search result: Object
+Bot.js:366 [Bot.playMainPhase] ✅ Beam search chose: Object
+BotLogger.js:110 
+[Decision] bot | T2:main1 🥇
+BotLogger.js:111   Chosen: #1/2 - spell:Shadow-Heart Covenant (p:15)
+BotLogger.js:112   Coherence: 100%
+Bot.js:1172 [Bot.executeMainPhaseAction] 📝 Attempting spell: Shadow-Heart Covenant
+Bot.js:1184 [Bot.executeMainPhaseAction] 🔍 Preview check: Object
+resources.js:64 [handlePayLP] SUCCESS: Paid 800 LP, remaining 7200
+log.js:10 Opponent paid 800 LP.
+log.js:10 Opponent added 1 card(s) to hand from deck.
+ReplayCapture.js:1260 [ReplayCapture] 📝 EFFECT: Shadow-Heart Covenant → Added 1 card(s) to hand from deck
+ReplayCapture.js:1260 [ReplayCapture] 📝 EFFECT: Shadow-Heart Covenant → zone: spellTrap [bot]
+movement.js:679 [moveCard] Emitting card_to_grave event for Shadow-Heart Covenant (fromZone: spellTrap)
+collectors.js:866 [handleCardToGraveEvent] Shadow-Heart Covenant entered graveyard. card.owner="bot", ctx.player.id="bot", ctx.opponent.id="player", wasDestroyed=false
+collectors.js:869 [handleCardToGraveEvent] Shadow-Heart Covenant entered graveyard from spellTrap. Card has 1 effects.
+log.js:10 Bot activates Shadow-Heart Covenant
+ReplayCapture.js:1020 [ReplayCapture] 📋 Available actions: 1 options for bot
+Bot.js:313 [Bot.playMainPhase] Generated 1 raw actions, 1 sequenced actions
+Bot.js:317 [Bot.playMainPhase] Actions: Array(1)
+Bot.js:374 [Bot.playMainPhase] Running greedy search...
+Bot.js:380 [Bot.playMainPhase] Greedy search result: Object
+Bot.js:383 [Bot.playMainPhase] ✅ Greedy chose: Object
+BotLogger.js:110 
+[Decision] bot | T2:main1 🥇
+BotLogger.js:111   Chosen: #1/1 - spell:Darkness Valley (p:9)
+BotLogger.js:112   Coherence: 100%
+Bot.js:1172 [Bot.executeMainPhaseAction] 📝 Attempting spell: Darkness Valley
+Bot.js:1184 [Bot.executeMainPhaseAction] 🔍 Preview check: Object
+log.js:10 Darkness Valley applied +300 ATK buff.
+ReplayCapture.js:1260 [ReplayCapture] 📝 EFFECT: Darkness Valley → zone: fieldSpell [bot]
+log.js:10 Bot activates Darkness Valley
+Bot.js:313 [Bot.playMainPhase] Generated 0 raw actions, 0 sequenced actions
+BotLogger.js:123 
+[EmptyPhase] ⚠️  bot | T2:main1
+BotLogger.js:124   Reason: NO_ACTIONS_GENERATED
+BotLogger.js:126   Context: LP=8000 | Hand=4 | Field=1 | GY=2
+triggers.js:14 [checkAndOfferTraps] Called for event: phase_end Object
+triggers.js:38 [checkAndOfferTraps] Proceeding to open chain window
+triggers.js:106 [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+Bot.js:193 [Bot.makeMove] Guard check: Object
+Bot.js:200 [Bot.makeMove] Phase: battle
+Bot.js:499 [Bot.playBattlePhase] ✅ Starting battle phase evaluation
+ReplayCapture.js:1020 [ReplayCapture] 📋 Available actions: 1 options for bot
+triggers.js:14 [checkAndOfferTraps] Called for event: phase_end Object
+triggers.js:38 [checkAndOfferTraps] Proceeding to open chain window
+triggers.js:106 [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+Bot.js:193 [Bot.makeMove] Guard check: Object
+Bot.js:200 [Bot.makeMove] Phase: main2
+Bot.js:313 [Bot.playMainPhase] Generated 0 raw actions, 0 sequenced actions
+BotLogger.js:123 
+[EmptyPhase] ⚠️  bot | T2:main2
+BotLogger.js:124   Reason: NO_ACTIONS_GENERATED
+BotLogger.js:126   Context: LP=8000 | Hand=4 | Field=1 | GY=2
+triggers.js:14 [checkAndOfferTraps] Called for event: phase_end Object
+triggers.js:38 [checkAndOfferTraps] Proceeding to open chain window
+triggers.js:106 [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+Bot.js:193 [Bot.makeMove] Guard check: Object
+Bot.js:200 [Bot.makeMove] Phase: end
+lifecycle.js:25 
+──────────────────── TURNO 3: Bot 1 ────────────────────
+ReplayCapture.js:1020 [ReplayCapture] 📋 Available actions: 2 options for human
+log.js:10 Added Arcanist Apprentice to hand from deck.
+ReplayCapture.js:1260 [ReplayCapture] 📝 EFFECT: Infinity Searcher → Added 1 card(s) to hand from deck
+ReplayCapture.js:1260 [ReplayCapture] 📝 EFFECT: Infinity Searcher → zone: spellTrap [human]
+movement.js:679 [moveCard] Emitting card_to_grave event for Infinity Searcher (fromZone: spellTrap)
+collectors.js:866 [handleCardToGraveEvent] Infinity Searcher entered graveyard. card.owner="player", ctx.player.id="player", ctx.opponent.id="bot", wasDestroyed=false
+collectors.js:869 [handleCardToGraveEvent] Infinity Searcher entered graveyard from spellTrap. Card has 1 effects.
+log.js:10 Infinity Searcher effect activated.
+ReplayCapture.js:1260 [ReplayCapture] ✨ SPELL: Infinity Searcher → [human]
+triggers.js:14 [checkAndOfferTraps] Called for event: card_activation Object
+triggers.js:38 [checkAndOfferTraps] Proceeding to open chain window
+triggers.js:106 [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+ReplayCapture.js:1020 [ReplayCapture] 📋 Available actions: 2 options for human
+ReplayCapture.js:1260 [ReplayCapture] 🎴 SUMMON: Arcanist Apprentice → [normal]  [human]
+log.js:10 Summon Method: Normal | From: Hand | You -> Arcanist Apprentice
+log.js:10 Added Crimson Magic Explosion to hand from deck.
+ReplayCapture.js:1260 [ReplayCapture] 📝 EFFECT: Arcanist Apprentice → Added 1 card(s) to hand from deck
+triggers.js:14 [checkAndOfferTraps] Called for event: after_summon Object
+triggers.js:38 [checkAndOfferTraps] Proceeding to open chain window
+triggers.js:106 [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+ReplayCapture.js:1020 [ReplayCapture] 📋 Available actions: 2 options for human
+ReplayCapture.js:1020 [ReplayCapture] 📋 Available actions: 2 options for human
+log.js:10 Select target(s) for the continuous spell effect.
+ReplayCapture.js:1260 [ReplayCapture] 📝 TARGET: Crimson Magic Explosion → → Arcanist Apprentice [human]
+collectors.js:727 [collectEffectTargetedTriggers] Shadow-Heart Specter was targeted. Checking 2 sources for triggers.
+movement.js:679 [moveCard] Emitting card_to_grave event for Arcanist Apprentice (fromZone: field)
+collectors.js:866 [handleCardToGraveEvent] Arcanist Apprentice entered graveyard. card.owner="player", ctx.player.id="player", ctx.opponent.id="bot", wasDestroyed=true
+collectors.js:869 [handleCardToGraveEvent] Arcanist Apprentice entered graveyard from field. Card has 2 effects.
+movement.js:679 [moveCard] Emitting card_to_grave event for Shadow-Heart Specter (fromZone: field)
+collectors.js:915 [handleCardToGraveEvent] Found card_to_grave effect: shadow_heart_specter_recycle
+collectors.js:971 [handleCardToGraveEvent] fromZone check: effect.fromZone="any", actual fromZone="field"
+collectors.js:986 [card_to_grave] About to resolve targets for Shadow-Heart Specter. Targets definition: [{"id":"specter_recycle_target","owner":"self","zone":"graveyard","cardKind":"monster","archetype":"Shadow-Heart","excludeCardName":"Shadow-Heart Specter","count":{"min":1,"max":1}}]
+selection.js:63 [selectCandidates] Starting search for target "specter_recycle_target": owner="self", zone="graveyard", archetype="Shadow-Heart", excludeCardName="Shadow-Heart Specter"
+selection.js:63 [selectCandidates] Using 1 owners: bot
+selection.js:63 [selectCandidates] Checking zone "graveyard" for owner bot: 2 cards (Shadow-Heart Covenant, Shadow-Heart Specter)
+selection.js:63 [selectCandidates] Evaluating card: Shadow-Heart Covenant (archetype: Shadow-Heart, owner: bot)
+selection.js:63 [selectCandidates] Rejecting: cardKind mismatch (spell !== monster)
+selection.js:63 [selectCandidates] Evaluating card: Shadow-Heart Specter (archetype: Shadow-Heart, owner: bot)
+selection.js:63 [selectCandidates] Excluding Shadow-Heart Specter (matches excludeCardName)
+selection.js:63 [selectCandidates] Found 0 candidates for target "specter_recycle_target" (archetype: Shadow-Heart, zone: graveyard, exclude: Shadow-Heart Specter)
+log.js:10 Damage prevented by effect.
+ReplayCapture.js:1260 [ReplayCapture] 📝 EFFECT: Crimson Magic Explosion → zone: spellTrap [human]
+movement.js:679 [moveCard] Emitting card_to_grave event for Crimson Magic Explosion (fromZone: spellTrap)
+collectors.js:866 [handleCardToGraveEvent] Crimson Magic Explosion entered graveyard. card.owner="player", ctx.player.id="player", ctx.opponent.id="bot", wasDestroyed=false
+collectors.js:869 [handleCardToGraveEvent] Crimson Magic Explosion entered graveyard from spellTrap. Card has 1 effects.
+log.js:10 Crimson Magic Explosion effect activated.
+ReplayCapture.js:1260 [ReplayCapture] ✨ SPELL: Crimson Magic Explosion → [human]
+triggers.js:14 [checkAndOfferTraps] Called for event: card_activation Object
+triggers.js:38 [checkAndOfferTraps] Proceeding to open chain window
+triggers.js:106 [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+interactions.js:612 [Game] Spell/Trap zone clicked! Target: <div class=​"card-image" style=​"background-image:​ url('assets/​Grimoire of the Apprentice Arcanist.png')​;​ background-size:​ cover;​ background-position:​ center;​">​</div>​
+interactions.js:629 [Game] Clicked spell/trap: Grimoire of the Apprentice Arcanist, isFacedown: false, cardKind: spell
+log.js:10 Equip Spell can only be activated from hand.
+ReplayCapture.js:1260 [ReplayCapture] ⏭️ PASS: end → [human]
+lifecycle.js:25 
+──────────────────── TURNO 4: Bot 2 ────────────────────
+BotLogger.js:139 
+[Phase] ⏭️ bot | T4 standby → main1 (0 actions, 0ms)
+Bot.js:193 [Bot.makeMove] Guard check: Object
+Bot.js:200 [Bot.makeMove] Phase: main1
+ReplayCapture.js:1020 [ReplayCapture] 📋 Available actions: 2 options for bot
+Bot.js:313 [Bot.playMainPhase] Generated 2 raw actions, 2 sequenced actions
+Bot.js:317 [Bot.playMainPhase] Actions: Array(2)
+Bot.js:352 [Bot.playMainPhase] Running beam search with 2 actions (width=2, depth=2, budget=100)...
+Bot.js:363 [Bot.playMainPhase] Beam search result: Object
+Bot.js:366 [Bot.playMainPhase] ✅ Beam search chose: Object
+BotLogger.js:110 
+[Decision] bot | T4:main1 🥇
+BotLogger.js:111   Chosen: #1/2 - spell:Shadow-Heart Infusion (p:1)
+BotLogger.js:112   Coherence: 100%
+Bot.js:1172 [Bot.executeMainPhaseAction] 📝 Attempting spell: Shadow-Heart Infusion
+selection.js:63 [selectCandidates] Starting search for target "infusion_discard": owner="self", zone="hand", archetype="undefined", excludeCardName="undefined"
+selection.js:63 [selectCandidates] Using 1 owners: bot
+selection.js:63 [selectCandidates] Checking zone "hand" for owner bot: 4 cards (Shadow-Heart Leviathan, Shadow-Heart Infusion, Shadow-Heart Scale Dragon, Shadow-Heart Rage)
+selection.js:63 [selectCandidates] Evaluating card: Shadow-Heart Leviathan (archetype: Shadow-Heart, owner: bot)
+selection.js:63 [selectCandidates] ACCEPTED: Shadow-Heart Leviathan
+selection.js:63 [selectCandidates] Evaluating card: Shadow-Heart Infusion (archetype: Shadow-Heart, owner: bot)
+selection.js:63 [selectCandidates] Rejecting: card is source in hand zone
+selection.js:63 [selectCandidates] Evaluating card: Shadow-Heart Scale Dragon (archetype: Shadow-Heart, owner: bot)
+selection.js:63 [selectCandidates] ACCEPTED: Shadow-Heart Scale Dragon
+selection.js:63 [selectCandidates] Evaluating card: Shadow-Heart Rage (archetype: Shadow-Heart, owner: bot)
+selection.js:63 [selectCandidates] ACCEPTED: Shadow-Heart Rage
+selection.js:63 [selectCandidates] Found 3 candidates for target "infusion_discard" (archetype: undefined, zone: hand, exclude: undefined)
+Bot.js:1184 [Bot.executeMainPhaseAction] 🔍 Preview check: Object
+selection.js:63 [selectCandidates] Starting search for target "infusion_discard": owner="self", zone="hand", archetype="undefined", excludeCardName="undefined"
+selection.js:63 [selectCandidates] Using 1 owners: bot
+selection.js:63 [selectCandidates] Checking zone "hand" for owner bot: 3 cards (Shadow-Heart Leviathan, Shadow-Heart Scale Dragon, Shadow-Heart Rage)
+selection.js:63 [selectCandidates] Evaluating card: Shadow-Heart Leviathan (archetype: Shadow-Heart, owner: bot)
+selection.js:63 [selectCandidates] ACCEPTED: Shadow-Heart Leviathan
+selection.js:63 [selectCandidates] Evaluating card: Shadow-Heart Scale Dragon (archetype: Shadow-Heart, owner: bot)
+selection.js:63 [selectCandidates] ACCEPTED: Shadow-Heart Scale Dragon
+selection.js:63 [selectCandidates] Evaluating card: Shadow-Heart Rage (archetype: Shadow-Heart, owner: bot)
+selection.js:63 [selectCandidates] ACCEPTED: Shadow-Heart Rage
+selection.js:63 [selectCandidates] Found 3 candidates for target "infusion_discard" (archetype: undefined, zone: hand, exclude: undefined)
+movement.js:679 [moveCard] Emitting card_to_grave event for Shadow-Heart Scale Dragon (fromZone: hand)
+collectors.js:866 [handleCardToGraveEvent] Shadow-Heart Scale Dragon entered graveyard. card.owner="bot", ctx.player.id="bot", ctx.opponent.id="player", wasDestroyed=false
+collectors.js:869 [handleCardToGraveEvent] Shadow-Heart Scale Dragon entered graveyard from hand. Card has 1 effects.
+log.js:10 Shadow-Heart Scale Dragon moved to graveyard.
+movement.js:679 [moveCard] Emitting card_to_grave event for Shadow-Heart Leviathan (fromZone: hand)
+log.js:10 Shadow-Heart Leviathan moved to graveyard.
+ReplayCapture.js:1260 [ReplayCapture] 🎴 SUMMON: Shadow-Heart Scale Dragon → [special]  [bot]
+log.js:10 Summon Method: Special | From: Graveyard | Opponent -> Shadow-Heart Scale Dragon
+log.js:10 Darkness Valley applied +300 ATK buff.
+log.js:10 Opponent Special Summoned Shadow-Heart Scale Dragon from graveyard (cannot attack this turn).
+ReplayCapture.js:1260 [ReplayCapture] 📝 EFFECT: Shadow-Heart Infusion → zone: spellTrap [bot]
+movement.js:679 [moveCard] Emitting card_to_grave event for Shadow-Heart Infusion (fromZone: spellTrap)
+log.js:10 Bot activates Shadow-Heart Infusion
+triggers.js:14 [checkAndOfferTraps] Called for event: after_summon Object
+triggers.js:38 [checkAndOfferTraps] Proceeding to open chain window
+triggers.js:106 [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+ReplayCapture.js:1020 [ReplayCapture] 📋 Available actions: 1 options for bot
+Bot.js:313 [Bot.playMainPhase] Generated 1 raw actions, 1 sequenced actions
+Bot.js:317 [Bot.playMainPhase] Actions: Array(1)
+Bot.js:374 [Bot.playMainPhase] Running greedy search...
+Bot.js:380 [Bot.playMainPhase] Greedy search result: Object
+Bot.js:383 [Bot.playMainPhase] ✅ Greedy chose: Object
+BotLogger.js:110 
+[Decision] bot | T4:main1 🥇
+BotLogger.js:111   Chosen: #1/1 - spell:Shadow-Heart Rage (p:10)
+BotLogger.js:112   Coherence: 100%
+Bot.js:1172 [Bot.executeMainPhaseAction] 📝 Attempting spell: Shadow-Heart Rage
+selection.js:63 [selectCandidates] Starting search for target "rage_scale_target": owner="self", zone="field", archetype="undefined", excludeCardName="undefined"
+selection.js:63 [selectCandidates] Using 1 owners: bot
+selection.js:63 [selectCandidates] Checking zone "field" for owner bot: 1 cards (Shadow-Heart Scale Dragon)
+selection.js:63 [selectCandidates] Evaluating card: Shadow-Heart Scale Dragon (archetype: Shadow-Heart, owner: bot)
+selection.js:63 [selectCandidates] ACCEPTED: Shadow-Heart Scale Dragon
+selection.js:63 [selectCandidates] Found 1 candidates for target "rage_scale_target" (archetype: undefined, zone: field, exclude: undefined)
+Bot.js:1184 [Bot.executeMainPhaseAction] 🔍 Preview check: Object
+selection.js:63 [selectCandidates] Starting search for target "rage_scale_target": owner="self", zone="field", archetype="undefined", excludeCardName="undefined"
+selection.js:63 [selectCandidates] Using 1 owners: bot
+selection.js:63 [selectCandidates] Checking zone "field" for owner bot: 1 cards (Shadow-Heart Scale Dragon)
+selection.js:63 [selectCandidates] Evaluating card: Shadow-Heart Scale Dragon (archetype: Shadow-Heart, owner: bot)
+selection.js:63 [selectCandidates] ACCEPTED: Shadow-Heart Scale Dragon
+selection.js:63 [selectCandidates] Found 1 candidates for target "rage_scale_target" (archetype: undefined, zone: field, exclude: undefined)
+ReplayCapture.js:1260 [ReplayCapture] 📝 EFFECT: Shadow-Heart Rage → Shadow-Heart Scale Dragon +700 ATK, +700 DEF (temp)
+log.js:10 Shadow-Heart Scale Dragon gained +700 ATK and +700 DEF until end of turn and can make a second attack!
+ReplayCapture.js:1260 [ReplayCapture] 📝 EFFECT: Shadow-Heart Rage → zone: spellTrap [bot]
+movement.js:679 [moveCard] Emitting card_to_grave event for Shadow-Heart Rage (fromZone: spellTrap)
+log.js:10 Bot activates Shadow-Heart Rage
+Bot.js:313 [Bot.playMainPhase] Generated 0 raw actions, 0 sequenced actions
+BotLogger.js:123 
+[EmptyPhase] ⚠️  bot | T4:main1
+BotLogger.js:124   Reason: NO_ACTIONS_GENERATED
+BotLogger.js:126   Context: LP=8000 | Hand=4 | Field=1 | GY=5
+triggers.js:14 [checkAndOfferTraps] Called for event: phase_end Object
+triggers.js:38 [checkAndOfferTraps] Proceeding to open chain window
+triggers.js:106 [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+Bot.js:193 [Bot.makeMove] Guard check: Object
+Bot.js:200 [Bot.makeMove] Phase: battle
+Bot.js:499 [Bot.playBattlePhase] ✅ Starting battle phase evaluation
+triggers.js:14 [checkAndOfferTraps] Called for event: phase_end Object
+triggers.js:38 [checkAndOfferTraps] Proceeding to open chain window
+triggers.js:106 [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+Bot.js:193 [Bot.makeMove] Guard check: Object
+Bot.js:200 [Bot.makeMove] Phase: main2
+Bot.js:313 [Bot.playMainPhase] Generated 0 raw actions, 0 sequenced actions
+BotLogger.js:123 
+[EmptyPhase] ⚠️  bot | T4:main2
+BotLogger.js:124   Reason: NO_ACTIONS_GENERATED
+BotLogger.js:126   Context: LP=8000 | Hand=4 | Field=1 | GY=5
+triggers.js:14 [checkAndOfferTraps] Called for event: phase_end Object
+triggers.js:38 [checkAndOfferTraps] Proceeding to open chain window
+triggers.js:106 [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+Bot.js:193 [Bot.makeMove] Guard check: Object
+Bot.js:200 [Bot.makeMove] Phase: end
+lifecycle.js:25 
+──────────────────── TURNO 5: Bot 1 ────────────────────
+interactions.js:612 [Game] Spell/Trap zone clicked! Target: <div class=​"card-image" style=​"background-image:​ url('assets/​Grimoire of the Apprentice Arcanist.png')​;​ background-size:​ cover;​ background-position:​ center;​">​</div>​
+interactions.js:629 [Game] Clicked spell/trap: Grimoire of the Apprentice Arcanist, isFacedown: false, cardKind: spell
+log.js:10 Equip Spell can only be activated from hand.
+interactions.js:612 [Game] Spell/Trap zone clicked! Target: <div class=​"card-image" style=​"background-image:​ url('assets/​Grimoire of the Apprentice Arcanist.png')​;​ background-size:​ cover;​ background-position:​ center;​">​</div>​
+interactions.js:629 [Game] Clicked spell/trap: Grimoire of the Apprentice Arcanist, isFacedown: false, cardKind: spell
+log.js:10 Equip Spell can only be activated from hand.

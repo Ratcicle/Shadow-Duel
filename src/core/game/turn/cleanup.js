@@ -92,5 +92,16 @@ export function cleanupTempBoosts(player) {
     // Reset multi-attack flags
     delete card.canAttackAllOpponentMonstersThisTurn;
     delete card.attackedMonstersThisTurn;
+
+    if (card.tempStatuses && Object.keys(card.tempStatuses).length > 0) {
+      for (const [status, previousValue] of Object.entries(card.tempStatuses)) {
+        if (previousValue === undefined) {
+          delete card[status];
+        } else {
+          card[status] = previousValue;
+        }
+      }
+      card.tempStatuses = {};
+    }
   });
 }

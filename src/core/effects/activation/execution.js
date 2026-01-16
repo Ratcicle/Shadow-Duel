@@ -273,6 +273,8 @@ export async function activateFieldSpell(
   this.registerOncePerTurnUsage(card, player, effect);
   this.game.checkWinCondition();
 
+  await this.handleBlueprintStorageAfterResolution(card, effect, ctx);
+
   return { success: true, needsSelection: false };
 }
 
@@ -490,6 +492,9 @@ export async function activateSpellTrapEffect(
   }
   this.registerOncePerTurnUsage(card, player, effect);
   this.game.checkWinCondition();
+
+  await this.handleBlueprintStorageAfterResolution(card, effect, ctx);
+
   logDev?.("SPELL_TRAP_ACTIVATION_RESOLVED", {
     card: card.name,
     player: player.id,

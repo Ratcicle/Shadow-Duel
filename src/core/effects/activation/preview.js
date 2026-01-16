@@ -253,10 +253,20 @@ export function canActivateSpellTrapEffectPreview(
     }
     // 🚫 Equip Spells cannot be activated from spellTrap zone
     if (card.subtype === "equip" && activationZone === "spellTrap") {
-      return {
-        ok: false,
-        reason: "Equip Spell can only be activated from hand.",
-      };
+      const hasFieldIgnition = (card.effects || []).some(
+        (e) =>
+          e &&
+          e.timing === "ignition" &&
+          (!e.requireZone ||
+            e.requireZone === "spellTrap" ||
+            e.requireZone === "field")
+      );
+      if (!hasFieldIgnition) {
+        return {
+          ok: false,
+          reason: "Equip Spell can only be activated from hand.",
+        };
+      }
     }
   } else if (card.cardKind === "trap") {
     const validPhases = ["main1", "battle", "main2"];

@@ -219,6 +219,7 @@ export function inferEffectType(actionType) {
   const typeMap = {
     destroy_targeted_cards: "destruction",
     destroy: "destruction",
+    destroy_and_damage_by_target_atk: "destruction",
     banish: "banish",
     banish_destroyed_monster: "banish",
     switch_position: "target",

@@ -13,6 +13,123 @@ import {
   selectCards,
 } from "./shared.js";
 
+function resolveDamagePlayerKey(entry, card, player, opponent) {
+  const damagePlayer = entry?.damagePlayer || entry?.player || "opponent";
+  if (damagePlayer === "self" || damagePlayer === "opponent") {
+    return damagePlayer;
+  }
+  if (damagePlayer === "owner" || damagePlayer === "target_owner") {
+    if (card?.owner === player?.id) return "self";
+    if (card?.owner === opponent?.id) return "opponent";
+  }
+  return "opponent";
+}
+
+function resolveDamageAmount(entry, card) {
+  if (Number.isFinite(entry?.amount)) {
+    return Math.max(0, Math.floor(entry.amount));
+  }
+  const multiplier = Number.isFinite(entry?.multiplier) ? entry.multiplier : 1;
+  const damageFrom = entry?.damageFrom || "target_atk";
+  let base = 0;
+  if (damageFrom === "target_def") {
+    base = card?.def || 0;
+  } else if (damageFrom === "target_level") {
+    base = card?.level || 0;
+  } else {
+    base = card?.atk || 0;
+  }
+  return Math.max(0, Math.floor(base * multiplier));
+}
+
+function shouldSkipDamage(action, ctx, engine, playerKey) {
+  const conditions = action?.skipDamageIf?.[playerKey];
+  if (!Array.isArray(conditions) || conditions.length === 0) {
+    return false;
+  }
+  const targetPlayer = playerKey === "self" ? ctx.player : ctx.opponent;
+  const targetOpponent = playerKey === "self" ? ctx.opponent : ctx.player;
+  const condCtx = {
+    ...ctx,
+    player: targetPlayer,
+    opponent: targetOpponent,
+  };
+  const result = engine.evaluateConditions(conditions, condCtx);
+  return result.ok;
+}
+
+export async function handleDestroyAndDamageByTargetAtk(
+  action,
+  ctx,
+  targets,
+  engine
+) {
+  const { player, opponent, source } = ctx;
+  const game = engine.game;
+
+  if (!player || !opponent || !game) return false;
+
+  const entries =
+    Array.isArray(action?.entries) && action.entries.length > 0
+      ? action.entries
+      : action?.targetRef
+      ? [{ targetRef: action.targetRef, damagePlayer: action.player }]
+      : [];
+
+  if (entries.length === 0) return false;
+
+  const damageTotals = { self: 0, opponent: 0 };
+  let destroyedAny = false;
+
+  for (const entry of entries) {
+    const targetCards = resolveTargetCards(action, ctx, targets, {
+      targetRef: entry.targetRef,
+      requireArray: true,
+    });
+    if (!targetCards.length) continue;
+
+    const { allowed } = engine.filterCardsListByImmunity(targetCards, player, {
+      actionType: action.type,
+      effectType: entry.effectType || "destruction",
+    });
+
+    for (const card of allowed) {
+      const result = await game.destroyCard(card, {
+        cause: "effect",
+        sourceCard: source || null,
+        opponent,
+      });
+
+      if (!result?.destroyed) continue;
+
+      destroyedAny = true;
+      const damageKey = resolveDamagePlayerKey(entry, card, player, opponent);
+      const amount = resolveDamageAmount(entry, card);
+      if (amount > 0 && damageKey in damageTotals) {
+        damageTotals[damageKey] += amount;
+      }
+    }
+  }
+
+  let dealtDamage = false;
+  for (const playerKey of ["self", "opponent"]) {
+    const amount = damageTotals[playerKey] || 0;
+    if (amount <= 0) continue;
+    if (shouldSkipDamage(action, ctx, engine, playerKey)) {
+      getUI(game)?.log("Damage prevented by effect.");
+      continue;
+    }
+    await engine.applyDamage({ player: playerKey, amount }, ctx);
+    dealtDamage = true;
+  }
+
+  if ((destroyedAny || dealtDamage) && typeof game.updateBoard === "function") {
+    game.updateBoard();
+  }
+
+  return destroyedAny || dealtDamage;
+}
+
 /**
  * Generic handler for banishing cards
  */

@@ -31,6 +31,7 @@ export {
   handleBanish,
   handleBanishCardFromGraveyard,
   handleDestroyTargetedCards,
+  handleDestroyAndDamageByTargetAtk,
   handleDestroyAttackerOnArchetypeDestruction,
 } from "./destruction.js";
 
@@ -48,6 +49,9 @@ export {
   handleRemovePermanentBuffNamed,
 } from "./stats.js";
 
+// Conditional
+export { handleConditionalTargetActions } from "./conditional.js";
+
 // Resources
 export {
   handlePayLP,
@@ -58,6 +62,9 @@ export {
   handleGrantAdditionalNormalSummon,
   handleUpkeepPayOrSendToGrave,
 } from "./resources.js";
+
+// Blueprints
+export { handleActivateStoredBlueprint } from "./blueprints.js";
 
 // Shared helpers (for advanced use cases)
 export {

@@ -350,6 +350,39 @@ export function integrateReplayCapture(game) {
     });
   });
 
+  game.on("grimoire_storage_decision", (payload) => {
+    const actor = getActorType(payload, game);
+    const boardState = captureMinimalBoardState(game);
+
+    ReplayCapture.capture("grimoire_storage", {
+      actor,
+      cardName: payload.storageCard?.name,
+      cardId: payload.storageCard?.id,
+      sourceCardName: payload.sourceCard?.name,
+      sourceCardId: payload.sourceCard?.id,
+      blueprintId: payload.blueprint?.blueprintId,
+      blueprintName: payload.blueprint?.displayName,
+      stored: payload.stored === true,
+      replaced: payload.replaced === true,
+      replacedBlueprintId: payload.replacedBlueprintId || null,
+      board: boardState,
+    });
+  });
+
+  game.on("grimoire_blueprint_activated", (payload) => {
+    const actor = getActorType(payload, game);
+    const boardState = captureMinimalBoardState(game);
+
+    ReplayCapture.capture("grimoire_activate", {
+      actor,
+      cardName: payload.storageCard?.name,
+      cardId: payload.storageCard?.id,
+      blueprintId: payload.blueprint?.blueprintId,
+      blueprintName: payload.blueprint?.displayName,
+      board: boardState,
+    });
+  });
+
   // ─────────────────────────────────────────────────────────────────────────────
   // Captura de Destruição de Cartas (para contexto)
   // ─────────────────────────────────────────────────────────────────────────────

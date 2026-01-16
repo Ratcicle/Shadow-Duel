@@ -158,5 +158,15 @@ export function createCardElement(card, visible) {
       }
     `;
   }
+
+  const storedBlueprints = card?.state?.blueprintStorage?.storedBlueprints;
+  if (visible && Array.isArray(storedBlueprints) && storedBlueprints.length) {
+    const storedNames = storedBlueprints
+      .map((bp) => bp.displayName || bp.sourceCardName || bp.blueprintId)
+      .filter(Boolean);
+    if (storedNames.length) {
+      el.title = `Efeito armazenado: ${storedNames.join(", ")}`;
+    }
+  }
   return el;
 }

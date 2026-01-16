@@ -38,6 +38,7 @@ export {
   handleBanish,
   handleBanishCardFromGraveyard,
   handleDestroyTargetedCards,
+  handleDestroyAndDamageByTargetAtk,
   handleDestroyAttackerOnArchetypeDestruction,
 
   // Stats handlers
@@ -59,6 +60,9 @@ export {
   handleHealFromDestroyedLevel,
   handleGrantAdditionalNormalSummon,
   handleUpkeepPayOrSendToGrave,
+
+  // Blueprint handlers
+  handleActivateStoredBlueprint,
 
   // Shared helpers
   getUI,

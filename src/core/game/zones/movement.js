@@ -394,6 +394,14 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     }
   }
 
+  if (
+    fromZone === "spellTrap" &&
+    toZone !== "spellTrap" &&
+    (card?.state?.blueprintStorage || card?.blueprintStorage)
+  ) {
+    this.effectEngine?.clearBlueprintStorage?.(card);
+  }
+
   if (toZone === "fieldSpell") {
     if (destPlayer.fieldSpell) {
       this.moveCard(destPlayer.fieldSpell, destPlayer, "graveyard", {

@@ -2838,7 +2838,12 @@ export const cardDatabase = [
           },
         ],
         actions: [
-          { type: "move", targetRef: "void_hollow_king_boost_cost", player: "self", to: "graveyard" },
+          {
+            type: "move",
+            targetRef: "void_hollow_king_boost_cost",
+            player: "self",
+            to: "graveyard",
+          },
           { type: "buff_stats_temp", atkBoost: 1000, defBoost: 0 },
         ],
       },
@@ -2864,7 +2869,12 @@ export const cardDatabase = [
           },
         ],
         actions: [
-          { type: "move", targetRef: "void_hollow_king_boost_cost", player: "self", to: "graveyard" },
+          {
+            type: "move",
+            targetRef: "void_hollow_king_boost_cost",
+            player: "self",
+            to: "graveyard",
+          },
           { type: "buff_stats_temp", atkBoost: 1000, defBoost: 0 },
         ],
       },
@@ -3586,7 +3596,7 @@ export const cardDatabase = [
     ],
   },
   {
-    id: 180,
+    id: 16,
     name: "Armored Dragon",
     cardKind: "monster",
     type: "Dragon",
@@ -3638,7 +3648,7 @@ export const cardDatabase = [
     ],
   },
   {
-    id: 181,
+    id: 17,
     name: "Metal Armored Dragon",
     cardKind: "monster",
     type: "Dragon",
@@ -3647,7 +3657,7 @@ export const cardDatabase = [
     def: 2000,
     monsterType: "ascension",
     ascension: {
-      materialId: 180,
+      materialId: 16,
       requirements: [],
       position: "choice",
     },
@@ -3679,7 +3689,7 @@ export const cardDatabase = [
     ],
   },
   {
-    id: 182,
+    id: 18,
     name: "Grey Dragon",
     cardKind: "monster",
     type: "Dragon",
@@ -3753,7 +3763,7 @@ export const cardDatabase = [
     ],
   },
   {
-    id: 183,
+    id: 19,
     name: "Voltaic Dragon",
     cardKind: "monster",
     type: "Dragon",
@@ -3803,7 +3813,7 @@ export const cardDatabase = [
     ],
   },
   {
-    id: 184,
+    id: 20,
     name: "Luminescent Dragon",
     cardKind: "monster",
     type: "Dragon",
@@ -3867,7 +3877,7 @@ export const cardDatabase = [
     ],
   },
   {
-    id: 185,
+    id: 21,
     name: "Majestic Silver Dragon",
     cardKind: "monster",
     type: "Dragon",
@@ -3906,7 +3916,7 @@ export const cardDatabase = [
     ],
   },
   {
-    id: 186,
+    id: 22,
     name: "Darkness Dragon",
     cardKind: "monster",
     type: "Dragon",
@@ -3973,7 +3983,7 @@ export const cardDatabase = [
     ],
   },
   {
-    id: 187,
+    id: 23,
     name: "Debug Dragon",
     cardKind: "monster",
     type: "Dragon",
@@ -4002,7 +4012,7 @@ export const cardDatabase = [
     ],
   },
   {
-    id: 188,
+    id: 24,
     name: "Black Bull Dragon",
     cardKind: "monster",
     type: "Dragon",
@@ -4077,7 +4087,7 @@ export const cardDatabase = [
     ],
   },
   {
-    id: 189,
+    id: 25,
     name: "Hellkite Dragon",
     cardKind: "monster",
     type: "Dragon",
@@ -4139,7 +4149,7 @@ export const cardDatabase = [
     ],
   },
   {
-    id: 190,
+    id: 26,
     name: "Hellkite Roar",
     cardKind: "spell",
     subtype: "normal",
@@ -4188,7 +4198,7 @@ export const cardDatabase = [
     ],
   },
   {
-    id: 191,
+    id: 27,
     name: "Jagged Peak of the Dragons",
     cardKind: "spell",
     subtype: "field",
@@ -4262,7 +4272,7 @@ export const cardDatabase = [
     ],
   },
   {
-    id: 192,
+    id: 28,
     name: "Abyssal Serpent Dragon",
     cardKind: "monster",
     type: "Dragon",
@@ -4301,7 +4311,7 @@ export const cardDatabase = [
     ],
   },
   {
-    id: 193,
+    id: 29,
     name: "Purified Crystal Dragon",
     cardKind: "monster",
     type: "Dragon",
@@ -4382,7 +4392,7 @@ export const cardDatabase = [
     ],
   },
   {
-    id: 194,
+    id: 30,
     name: "Tech-Void Dragon",
     cardKind: "monster",
     monsterType: "fusion",
@@ -4451,7 +4461,7 @@ export const cardDatabase = [
     ],
   },
   {
-    id: 195,
+    id: 31,
     name: "Tech-Void Cosmic Dragon",
     cardKind: "monster",
     monsterType: "ascension",
@@ -4460,7 +4470,7 @@ export const cardDatabase = [
     def: 1500,
     type: "Dragon",
     ascension: {
-      materialId: 194,
+      materialId: 30,
       requirements: [{ type: "material_effect_activations", count: 1 }],
       position: "choice",
     },
@@ -4513,7 +4523,7 @@ export const cardDatabase = [
     ],
   },
   {
-    id: 196,
+    id: 32,
     name: "Dragon Spirit Sanctuary",
     cardKind: "trap",
     subtype: "normal",
@@ -4611,7 +4621,7 @@ export const cardDatabase = [
     ],
   },
   {
-    id: 197,
+    id: 33,
     name: "Boneflame Dragon",
     cardKind: "monster",
     type: "Dragon",
@@ -4665,6 +4675,258 @@ export const cardDatabase = [
           amountPerCard: 300,
           stats: ["atk"],
         },
+      },
+    ],
+  },
+  {
+    id: 201,
+    name: "Grimoire of the Apprentice Arcanist",
+    cardKind: "spell",
+    subtype: "equip",
+    archetype: "Arcanist",
+    description:
+      'Equip only to an "Arcanist" monster you control.\nOnce per turn: you can activate 1 of the effects stored in this card.\nIf an "Arcanist" Spell you activated resolves: you can store that Spell\'s effect in this card (max. 1).\nIf this card already has 1 stored effect, you can store the new effect instead.\nYou can only control 1 "Grimoire of the Apprentice Arcanist".',
+    image: "assets/Grimoire of the Apprentice Arcanist.png",
+    blueprintStorage: {
+      maxSlots: 1,
+      allowedArchetypes: ["Arcanist"],
+      allowedCardKinds: ["spell"],
+      storableEffectFlag: "storableByGrimoire",
+      allowOverwrite: true,
+      promptOnStore: true,
+    },
+    effects: [
+      {
+        id: "arcanist_grimoire_equip",
+        timing: "on_play",
+        speed: 1,
+        conditions: [
+          {
+            type: "control_card_max",
+            cardName: "Grimório do Arcanista Aprendiz",
+            zone: "spellTrap",
+            max: 0,
+            includeFacedown: true,
+            reason: 'You can only control 1 "Grimório do Arcanista Aprendiz".',
+          },
+        ],
+        targets: [
+          {
+            id: "grimoire_equip_target",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            archetype: "Arcanist",
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "equip",
+            targetRef: "grimoire_equip_target",
+          },
+        ],
+      },
+      {
+        id: "arcanist_grimoire_activate_stored",
+        timing: "ignition",
+        requireZone: "spellTrap",
+        oncePerTurn: true,
+        oncePerTurnName: "arcanist_grimoire_activate_stored",
+        conditions: [{ type: "has_stored_blueprint" }],
+        actions: [{ type: "activate_stored_blueprint" }],
+      },
+    ],
+  },
+  {
+    id: 202,
+    name: "Arcanist Apprentice",
+    cardKind: "monster",
+    atk: 1500,
+    def: 1000,
+    level: 3,
+    type: "Spellcaster",
+    archetype: "Arcanist",
+    description:
+      'If this card is Normal Summoned: You can add 1 "Arcanist" Spell from your Deck to your hand. If this card is in your GY: You can send 1 "Arcanist" Spell you control to the GY; add this card to your hand.',
+    image: "assets/Arcanist Apprentice.png",
+    effects: [
+      {
+        id: "arcanist_apprentice_search_spell",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethods: ["normal"],
+        actions: [
+          {
+            type: "search_any",
+            archetype: "Arcanist",
+            cardKind: "spell",
+            player: "self",
+          },
+        ],
+      },
+      {
+        id: "arcanist_apprentice_gy_return",
+        timing: "ignition",
+        requireZone: "graveyard",
+        targets: [
+          {
+            id: "arcanist_apprentice_cost",
+            owner: "self",
+            zones: ["spellTrap", "fieldSpell"],
+            cardKind: "spell",
+            archetype: "Arcanist",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "arcanist_apprentice_cost",
+            player: "self",
+            to: "graveyard",
+          },
+          {
+            type: "move",
+            targetRef: "self",
+            player: "self",
+            to: "hand",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 203,
+    name: "Crimson Magic Explosion",
+    cardKind: "spell",
+    subtype: "normal",
+    archetype: "Arcanist",
+    description:
+      'Target 1 "Arcanist" monster you control and 1 monster your opponent controls; destroy those targets, and if you do, each player takes damage equal to the ATK of the monster they controlled that was destroyed. If you control an "Arcanist" Equip Spell, you take no damage from this effect.',
+    image: "assets/Crimson Magic Explosion.png",
+    effects: [
+      {
+        id: "crimson_magic_explosion_effect",
+        timing: "on_play",
+        speed: 1,
+        storableByGrimoire: true,
+        targets: [
+          {
+            id: "crimson_magic_self_target",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            archetype: "Arcanist",
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+          {
+            id: "crimson_magic_opponent_target",
+            owner: "opponent",
+            zone: "field",
+            cardKind: "monster",
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "destroy_and_damage_by_target_atk",
+            entries: [
+              {
+                targetRef: "crimson_magic_self_target",
+                damagePlayer: "owner",
+              },
+              {
+                targetRef: "crimson_magic_opponent_target",
+                damagePlayer: "owner",
+              },
+            ],
+            skipDamageIf: {
+              self: [
+                {
+                  type: "control_card_filters",
+                  owner: "self",
+                  zone: "spellTrap",
+                  cardKind: "spell",
+                  subtype: "equip",
+                  archetype: "Arcanist",
+                  requireFaceup: true,
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 204,
+    name: "Lightning Magic Lance",
+    cardKind: "spell",
+    subtype: "normal",
+    archetype: "Arcanist",
+    description:
+      'Target 1 face-up monster on the field; apply the appropriate effect depending on who controls that target. If it is an "Arcanist" monster you control: it gains 700 ATK and if it battles a Defense Position monster this turn, inflict piercing battle damage to your opponent. If it is a monster your opponent controls: it cannot declare an attack until the end of your opponent\'s next turn.',
+    image: "assets/Lightning Magic Lance.png",
+    effects: [
+      {
+        id: "lightning_magic_lance_effect",
+        timing: "on_play",
+        speed: 1,
+        storableByGrimoire: true,
+        targets: [
+          {
+            id: "lightning_magic_lance_target",
+            owner: "any",
+            zone: "field",
+            cardKind: "monster",
+            requireFaceup: true,
+            anyOf: [
+              { owner: "self", archetype: "Arcanist" },
+              { owner: "opponent" },
+            ],
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "conditional_target_actions",
+            targetRef: "lightning_magic_lance_target",
+            cases: [
+              {
+                filters: { owner: "self", archetype: "Arcanist" },
+                actions: [
+                  {
+                    type: "buff_stats_temp",
+                    targetRef: "lightning_magic_lance_target",
+                    atkBoost: 700,
+                    defBoost: 0,
+                  },
+                  {
+                    type: "add_status",
+                    targetRef: "lightning_magic_lance_target",
+                    status: "piercing",
+                    value: true,
+                    untilEndOfTurn: true,
+                  },
+                ],
+              },
+              {
+                filters: { owner: "opponent" },
+                actions: [
+                  {
+                    type: "forbid_attack_next_turn",
+                    targetRef: "lightning_magic_lance_target",
+                    turns: 1,
+                  },
+                ],
+              },
+            ],
+          },
+        ],
       },
     ],
   },

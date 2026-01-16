@@ -17,12 +17,14 @@ const selectCandidatesCallTracker = {};
  * @returns {string} Cache key
  */
 function buildTargetingCacheKey(def, ctx) {
+  const anyOfKey = Array.isArray(def.anyOf) ? JSON.stringify(def.anyOf) : "";
   const parts = [
     def.id || "unknown",
     def.zone || "field",
     def.owner || "self",
     def.cardKind || "any",
     def.archetype || "any",
+    anyOfKey,
     def.excludeCardName || "",
     def.requireThisCard ? "this" : "",
     ctx.source?.name || "",
@@ -112,6 +114,79 @@ export function selectCandidates(def, ctx) {
   } else {
     owners.push(ctx.player);
   }
+
+  const anyOf = Array.isArray(def.anyOf) ? def.anyOf : null;
+  const matchesFilter = (card, filter) => {
+    if (!card || !filter) return false;
+    if (filter.owner === "self" && card.owner !== ctx?.player?.id) return false;
+    if (filter.owner === "opponent" && card.owner !== ctx?.opponent?.id)
+      return false;
+    if (filter.cardKind) {
+      const requiredKinds = Array.isArray(filter.cardKind)
+        ? filter.cardKind
+        : [filter.cardKind];
+      if (!requiredKinds.includes(card.cardKind)) return false;
+    }
+    if (filter.requireFaceup && card.isFacedown) return false;
+    if (filter.position && filter.position !== "any") {
+      if (card.position !== filter.position) return false;
+    }
+    if (filter.level !== undefined && (card.level || 0) !== filter.level)
+      return false;
+    if (filter.minLevel !== undefined && (card.level || 0) < filter.minLevel)
+      return false;
+    if (filter.maxLevel !== undefined && (card.level || 0) > filter.maxLevel)
+      return false;
+    if (filter.minAtk !== undefined && (card.atk || 0) < filter.minAtk)
+      return false;
+    if (filter.maxAtk !== undefined && (card.atk || 0) > filter.maxAtk)
+      return false;
+    if (filter.archetype) {
+      const requiredArchetypes = Array.isArray(filter.archetype)
+        ? filter.archetype
+        : [filter.archetype];
+      const cardArchetypes = card.archetypes
+        ? card.archetypes
+        : card.archetype
+        ? [card.archetype]
+        : [];
+      const hasMatch = requiredArchetypes.some((arc) =>
+        cardArchetypes.includes(arc)
+      );
+      if (!hasMatch) return false;
+    }
+    const nameFilter = filter.cardName || filter.name;
+    if (nameFilter) {
+      const requiredNames = Array.isArray(nameFilter)
+        ? nameFilter
+        : [nameFilter];
+      if (!requiredNames.includes(card.name)) return false;
+    }
+    if (filter.type) {
+      const requiredTypes = Array.isArray(filter.type) ? filter.type : [filter.type];
+      const cardTypeRaw = card.type || null;
+      const cardTypesRaw = Array.isArray(card.types) ? card.types : null;
+      const norm = (v) => (v ? String(v).toLowerCase() : v);
+      const requiredTypesNorm = requiredTypes.map(norm);
+      const hasType = cardTypesRaw
+        ? requiredTypesNorm.some((t) =>
+            cardTypesRaw.some((ct) => norm(ct) === t)
+          )
+        : requiredTypesNorm.includes(norm(cardTypeRaw));
+      if (!hasType) return false;
+    }
+    if (filter.subtype) {
+      const requiredSubtypes = Array.isArray(filter.subtype)
+        ? filter.subtype
+        : [filter.subtype];
+      if (!requiredSubtypes.includes(card.subtype)) return false;
+    }
+    return true;
+  };
+  const matchesAnyOf =
+    !anyOf || anyOf.length === 0
+      ? () => true
+      : (card) => anyOf.some((filter) => matchesFilter(card, filter));
 
   let candidates = [];
   log(
@@ -262,6 +337,11 @@ export function selectCandidates(def, ctx) {
             );
             continue;
           }
+        }
+
+        if (!matchesAnyOf(card)) {
+          log(`[selectCandidates] Rejecting: anyOf filter mismatch`);
+          continue;
         }
 
         // Filter by monster type (Dragon, Warrior, etc.) with case-insensitive match

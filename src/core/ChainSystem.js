@@ -1717,6 +1717,17 @@ export default class ChainSystem {
         }
       }
 
+      if (
+        card.cardKind === "spell" &&
+        typeof effectEngine.handleBlueprintStorageAfterResolution === "function"
+      ) {
+        await effectEngine.handleBlueprintStorageAfterResolution(
+          card,
+          effect,
+          ctx
+        );
+      }
+
       // AFTER resolution: Move non-continuous traps and quick-play spells to graveyard
       if (card.cardKind === "trap" && card.subtype !== "continuous") {
         const idx = player.spellTrap?.indexOf(card);

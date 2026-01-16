@@ -324,77 +324,93 @@
       "name": "Andarilho Cósmico do Vazio",
       "description": "Material de Ascens\u00e3o: 'Andarilho do Vazio'.\nRequisito: o efeito do material foi ativado duas vezes neste duelo.\nUma vez por turno: voc\u00ea pode enviar 1 monstro 'Vazio' que voc\u00ea controla para o Cemit\u00e9rio; Invoque por Invoca\u00e7\u00e3o-Especial 1 monstro 'Vazio' de N\u00edvel 5 ou menor da sua m\u00e3o. Se este card for enviado do campo para o Cemit\u00e9rio: voc\u00ea pode Invocar por Invoca\u00e7\u00e3o-Especial at\u00e9 3 'Oco do Vazio' da sua m\u00e3o ou do Deck."
     },
-    "180": {
+    "16": {
       "name": "Dragão Blindado",
       "description": "Se este card for Invocado por Invocação-Normal: você pode adicionar 1 monstro Dragão de Nível 4 ou menor do seu Deck à sua mão. Se este card for destruído em batalha: compre 1 card e, se ele for um monstro Dragão de Nível 4 ou menor, você pode Invocá-lo por Invocação-Especial."
     },
-    "181": {
+    "17": {
       "name": "Dragão Blindado Metálico",
       "description": "Material de Ascens\u00e3o: 'Drag\u00e3o Blindado'.\nRequisito: Nenhum.\nEnquanto estiver em Posi\u00e7\u00e3o de Defesa, este card n\u00e3o pode ser destru\u00eddo em batalha. Este card ganha 100 de ATK/DEF para cada monstro Drag\u00e3o Invocado por Invoca\u00e7\u00e3o-Especial enquanto este card estiver com a face para cima no campo."
     },
-    "182": {
+    "18": {
       "name": "Dragão Cinzento",
       "description": "Não pode atacar diretamente. Se este card for Invocado por Invocação-Especial: você pode escolher 1 outro monstro Dragão que você controla; ele ganha 500 de ATK até o final deste turno. Se este card estiver no seu Cemitério: você pode descartar 1 monstro Dragão; adicione este card à sua mão."
     },
-    "183": {
+    "19": {
       "name": "Dragão Voltaico",
       "description": "Se este card for descartado da sua mão para o Cemitério: cause 800 de dano ao seu oponente. Se você controlar um monstro Dragão: você pode Invocar por Invocação-Especial este card da sua mão. Você só pode usar cada efeito de 'Dragão Voltaico' uma vez por turno."
     },
-    "184": {
+    "20": {
       "name": "Dragão Luminescente",
       "description": "Se este card for Invocado por Invocação-Normal: você pode escolher 1 monstro Dragão de Nível 4 ou menor no seu Cemitério; Invoque-o por Invocação-Especial. Você pode banir este card do seu Cemitério e, depois, escolher 1 monstro que seu oponente controla; ele perde 600 de ATK/DEF até o final deste turno."
     },
-    "185": {
+    "21": {
       "name": "Dragão de Prata Majestoso",
       "description": "Pode ser Invocado por Invocação-Tributo com 1 Tributo se você Tributar um monstro Dragão. Uma vez por turno: você pode escolher 1 monstro que seu oponente controla; mude sua posição de batalha."
     },
-    "186": {
+    "22": {
       "name": "Dragão das Trevas",
       "description": "Se este card for Invocado por Invocação-Normal ou Especial: destrua todos os outros monstros Dragão que você controla e, se isso acontecer, este card ganha 200 de ATK para cada monstro destruído por este efeito. Uma vez por turno: você pode descartar 1 card e, depois, escolher 1 monstro que seu oponente controla; negue os efeitos dele até o final deste turno."
     },
-    "187": {
+    "23": {
       "name": "Dragão Debug",
       "description": "Você pode Invocar por Invocação-Especial este card da sua mão."
     },
-    "188": {
+    "24": {
       "name": "Dragão Touro Negro",
       "description": "Você pode enviar 2 monstros Dragão da sua mão para o Cemitério; Invoque por Invocação-Especial este card da sua mão, mas ele não pode atacar no turno em que for Invocado por este efeito. Este card pode realizar até 2 ataques em monstros do oponente durante cada Fase de Batalha. Você pode banir este card do seu Cemitério; adicione 1 monstro Dragão de Nível 7 ou 8 do seu Deck à sua mão."
     },
-    "189": {
+    "25": {
       "name": "Dragão Infernal",
       "description": "Você pode enviar 1 monstro Dragão que você controla para o Cemitério; Invoque por Invocação-Especial este card da sua mão. Uma vez por turno: você pode enviar este card com a face para cima para o Cemitério; Invoque por Invocação-Especial 1 monstro Dragão de Nível 7 ou menor do seu Cemitério."
     },
-    "190": {
+    "26": {
       "name": "Rugido Infernal",
       "description": "Se você controlar um monstro Dragão de Nível 7 ou maior: destrua até 2 cards de Magia/Armadilha que seu oponente controla. Você pode banir este card do seu Cemitério; adicione 1 'Pico Escarpado dos Dragões' do seu Deck à sua mão."
     },
-    "191": {
+    "27": {
       "name": "Pico Escarpado dos Dragões",
       "description": "Quando este card é ativado: você pode adicionar 1 monstro Dragão de Nível 4 ou menor do seu Cemitério à sua mão. Cada vez que um monstro Dragão destruir um monstro do oponente em batalha, coloque 1 Contador Pico Dragão neste card. Uma vez por turno: se este card tiver 5 ou mais Contadores Pico Dragão; você pode enviá-lo para o Cemitério e, se fizer isso, Invoque por Invocação-Especial 1 monstro Dragão da sua mão, Deck ou Cemitério."
     },
-    "192": {
+    "28": {
       "name": "Dragão Serpente Abissal",
       "description": "Não pode ser Invocado por Invocação-Especial. Durante sua Fase Principal: você pode escolher 1 monstro que seu oponente controla; envie este card e o alvo para o Cemitério e, durante a próxima Fase de Espera do seu oponente, Invoque-os por Invocação-Especial. Se você escolheu um Monstro de Fusão ou de Ascensão como alvo: este card ganha 800 de ATK até o final do seu próximo turno. Você pode usar cada efeito de 'Dragão Serpente Abissal' uma vez por turno."
     },
-    "193": {
+    "29": {
       "name": "Dragão de Cristal Purificado",
       "description": "Você pode Invocar por Invocação-Especial este card da sua mão ao banir 3 monstros Dragão do seu Cemitério. Se este card destruir um monstro em batalha: ganhe PV igual ao Nível do monstro destruído x100. Uma vez por turno: você pode escolher 1 outro monstro Dragão que você controla; ele não pode ser destruído por efeitos de cards enquanto estiver com a face para cima no campo."
     },
-    "194": {
+    "30": {
       "name": "Dragão Tecno-Vazio",
       "description": "Materiais: Dragão Voltaico + 1 monstro Dragão de Nível 5 ou maior\nSe este card for Invocado por Invocação-Fusão: você pode escolher 1 monstro Dragão de Nível 4 ou menor no seu Cemitério; bana-o e, se fizer isso, este card ganha ATK igual ao ATK do monstro banido até o final deste turno. Se este card for destruído em batalha: você pode Invocar por Invocação-Especial 1 'Dragão Voltaico' do seu Cemitério. Você só pode usar cada efeito de 'Dragão Tecno-Vazio' uma vez por turno."
     },
-    "195": {
+    "31": {
       "name": "Dragão Cósmico Tecno-Vazio",
       "description": "Material de Ascens\u00e3o: 'Drag\u00e3o Tecno-Vazio'.\nRequisito: O material ativou todos os seus efeitos durante este duelo.\nSe este card seria destru\u00eddo: voc\u00ea pode banir 'Drag\u00e3o Tecno-Vazio' do seu Cemit\u00e9rio em vez disso. Uma vez por turno: voc\u00ea pode banir 1 monstro Drag\u00e3o do seu Cemit\u00e9rio; este card pode atacar todos os monstros que seu oponente controla, uma vez cada, neste turno. Voc\u00ea s\u00f3 pode usar cada efeito de 'Drag\u00e3o C\u00f3smico Tecno-Vazio' uma vez por turno."
     },
-    "196": {
+    "32": {
       "name": "Santuário do Espírito do Dragão",
       "description": "Quando um monstro Dragão que você controla for alvo de um ataque ou efeito de card do oponente: devolva esse monstro para a mão; então Invoque por Invocação-Especial 1 monstro Dragão da sua mão com Nível menor ou igual ao do monstro devolvido. Você só pode ativar 1 'Santuário do Espírito Dragão' por turno."
     },
-    "197": {
+    "33": {
       "name": "Dragão da Chama Óssea",
       "description": "Não pode ser Invocado por Invocação-Normal/Baixado. Uma vez por turno, se este card estiver no seu Cemitério: você pode enviar 1 monstro Dragão que você controla para o Cemitério; Invoque por Invocação-Especial este card. Ganha 300 de ATK para cada monstro Dragão no seu Cemitério."
+    },
+    "201": {
+      "name": "Grimório do Arcanista Aprendiz",
+      "description": "Equipe apenas a um monstro \"Arcanista\" que voc\u00ea controla.\nUma vez por turno: voc\u00ea pode ativar 1 dos efeitos armazenados neste card.\nSe uma Magia \"Arcanist\" que voc\u00ea ativou resolver: voc\u00ea pode armazenar o efeito dessa Magia neste card (m\u00e1ximo 1).\nSe este card j\u00e1 tiver 1 efeito armazenado, voc\u00ea pode armazenar o novo efeito em vez disso.\nVoc\u00ea s\u00f3 pode controlar 1 \"Grim\u00f3rio do Arcanista Aprendiz\"."
+    },
+    "202": {
+      "name": "Aprendiz Arcanista",
+      "description": "Se esse card for invocado por invoca\u00e7\u00e3o-Normal: voc\u00ea pode adicionar 1 Magia \"Arcanista\" do seu Deck \u00e0 sua m\u00e3o. Se esse card estiver no seu cemit\u00e9rio: voc\u00ea pode enviar 1 Magia \"Arcanista\" que voc\u00ea controla para o cemit\u00e9rio; adicione esse card \u00e0 sua m\u00e3o."
+    },
+    "203": {
+      "name": "Explos\u00e3o de Magia Carmesim",
+      "description": "Escolha 1 monstro \"Arcanista\" que voc\u00ea controla e 1 monstro que seu oponente controla: destrua os alvos e, se isso acontecer, cada jogador sofre dano igual ao ATK do monstro que ele controlava que foi destru\u00eddo. Se voc\u00ea controlar uma Magia de Equipamento \"Arcanista\", voc\u00ea n\u00e3o sofre dano desse efeito."
+    },
+    "204": {
+      "name": "Lan\u00e7a M\u00e1gica Rel\u00e2mpago",
+      "description": "Escolha 1 monstro com a face para cima no campo; aplique o efeito apropriado, dependendo de quem controla esse alvo. Se for um monstro \"Arcanista\" que voc\u00ea controla: ele ganha 700 de ATK e, se ele batalhar um monstro em Posi\u00e7\u00e3o de Defesa neste turno, cause dano perfurante ao seu oponente. Se for um monstro que seu oponente controla: ele n\u00e3o pode declarar um ataque at\u00e9 o final do pr\u00f3ximo turno do seu oponente."
     }
   }
 }

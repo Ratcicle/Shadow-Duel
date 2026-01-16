@@ -122,6 +122,7 @@ const btnPoolFilterNoArchetype = document.getElementById(
 const btnPoolFilterShadowHeart = document.getElementById(
   "deck-filter-shadow-heart"
 );
+const btnPoolFilterArcanist = document.getElementById("deck-filter-arcanist");
 const btnPoolFilterLuminarch = document.getElementById("deck-filter-luminarch");
 const btnPoolFilterVoid = document.getElementById("deck-filter-void");
 const btnToggleTestMode = document.getElementById("btn-toggle-test-mode");
@@ -159,7 +160,7 @@ const devResetDuelBtn = document.getElementById("dev-reset-duel");
 
 let currentDeck = loadDeck();
 let currentExtraDeck = loadExtraDeck();
-let poolFilterMode = "all"; // all | no_archetype | void | luminarch | shadow_heart
+let poolFilterMode = "all"; // all | no_archetype | void | luminarch | shadow_heart | arcanist
 updateTestModeButton();
 updateDevModeButton();
 updateReplayModeButton();
@@ -569,6 +570,7 @@ function updatePoolFilterButtons() {
   const isVoid = poolFilterMode === "void";
   const isShadowHeart = poolFilterMode === "shadow_heart";
   const isLuminarch = poolFilterMode === "luminarch";
+  const isArcanist = poolFilterMode === "arcanist";
 
   btnPoolFilterNoArchetype.classList.toggle("active", isNoArchetype);
   btnPoolFilterNoArchetype.textContent = "Sem arqu�tipo";
@@ -586,6 +588,11 @@ function updatePoolFilterButtons() {
   if (btnPoolFilterShadowHeart) {
     btnPoolFilterShadowHeart.classList.toggle("active", isShadowHeart);
     btnPoolFilterShadowHeart.textContent = "Shadow-Heart";
+  }
+
+  if (btnPoolFilterArcanist) {
+    btnPoolFilterArcanist.classList.toggle("active", isArcanist);
+    btnPoolFilterArcanist.textContent = "Arcanist";
   }
 }
 
@@ -718,6 +725,9 @@ function renderDeckBuilder() {
     }
     if (poolFilterMode === "shadow_heart") {
       return cardHasArchetypeName(card, "Shadow-Heart");
+    }
+    if (poolFilterMode === "arcanist") {
+      return cardHasArchetypeName(card, "Arcanist");
     }
     return true;
   };
@@ -1078,6 +1088,10 @@ btnPoolFilterLuminarch?.addEventListener("click", () => {
 });
 btnPoolFilterShadowHeart?.addEventListener("click", () => {
   poolFilterMode = poolFilterMode === "shadow_heart" ? "all" : "shadow_heart";
+  renderDeckBuilder();
+});
+btnPoolFilterArcanist?.addEventListener("click", () => {
+  poolFilterMode = poolFilterMode === "arcanist" ? "all" : "arcanist";
   renderDeckBuilder();
 });
 btnStartDuel?.addEventListener("click", startDuel);
