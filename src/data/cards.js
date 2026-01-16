@@ -4799,13 +4799,13 @@ export const cardDatabase = [
   },
   {
     id: 203,
-    name: "Crimson Magic Explosion",
+    name: "Arcanist Crimson Explosion",
     cardKind: "spell",
     subtype: "normal",
     archetype: "Arcanist",
     description:
       'Target 1 "Arcanist" monster you control and 1 monster your opponent controls; destroy those targets, and if you do, each player takes damage equal to the ATK of the monster they controlled that was destroyed. If you control an "Arcanist" Equip Spell, you take no damage from this effect.',
-    image: "assets/Crimson Magic Explosion.png",
+    image: "assets/Arcanist Crimson Explosion.png",
     effects: [
       {
         id: "crimson_magic_explosion_effect",
@@ -4925,6 +4925,77 @@ export const cardDatabase = [
                 ],
               },
             ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 205,
+    name: "Viridis, Arcanist of Life",
+    cardKind: "monster",
+    atk: 1600,
+    def: 1500,
+    level: 4,
+    type: "Spellcaster",
+    archetype: "Arcanist",
+    description:
+      'Once per turn: You can target 1 face-up Spell your opponent controls; return it to the hand, and if you do, gain 500 LP.\nIf this card becomes equipped with an "Arcanist" Equip Spell: You can target 1 Spell in your GY; add it to your hand.\nYou can only use each effect of "Viridis, Arcanist of Life" once per turn.',
+    image: "assets/Viridis, Arcanist of Life.png",
+    effects: [
+      {
+        id: "viridis_arcanist_life_bounce",
+        timing: "ignition",
+        oncePerTurn: true,
+        oncePerTurnName: "viridis_arcanist_life_bounce",
+        targets: [
+          {
+            id: "viridis_bounce_target",
+            owner: "opponent",
+            zones: ["spellTrap", "fieldSpell"],
+            cardKind: "spell",
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "return_to_hand",
+            targetRef: "viridis_bounce_target",
+          },
+          {
+            type: "heal",
+            player: "self",
+            amount: 500,
+          },
+        ],
+      },
+      {
+        id: "viridis_arcanist_life_recover",
+        timing: "on_event",
+        event: "card_equipped",
+        oncePerTurn: true,
+        oncePerTurnName: "viridis_arcanist_life_recover",
+        requireEquipCardFilters: {
+          cardKind: "spell",
+          subtype: "equip",
+          archetype: "Arcanist",
+        },
+        targets: [
+          {
+            id: "viridis_recover_target",
+            owner: "self",
+            zone: "graveyard",
+            cardKind: "spell",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "viridis_recover_target",
+            player: "self",
+            to: "hand",
           },
         ],
       },

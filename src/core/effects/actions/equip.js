@@ -8,9 +8,9 @@
  * @param {Object} action - Action configuration
  * @param {Object} ctx - Context object
  * @param {Object} targets - Resolved targets
- * @returns {boolean} Whether equip was successful
+ * @returns {Promise<boolean>} Whether equip was successful
  */
-export function applyEquip(action, ctx, targets) {
+export async function applyEquip(action, ctx, targets) {
   const equipCard = ctx.source;
   const player = ctx.player;
 
@@ -125,6 +125,17 @@ export function applyEquip(action, ctx, targets) {
   const maxAttacksAfterEquip = 1 + (target.extraAttacks || 0);
   target.hasAttacked =
     (target.attacksUsedThisTurn || 0) >= maxAttacksAfterEquip;
+
+  if (this.game && typeof this.game.emit === "function") {
+    const targetOwner =
+      target.owner === "player" ? this.game.player : this.game.bot;
+    await this.game.emit("card_equipped", {
+      equipCard,
+      equipOwner: player,
+      target,
+      targetOwner,
+    });
+  }
   return true;
 }
 

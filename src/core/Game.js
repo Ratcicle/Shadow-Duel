@@ -1,4 +1,4 @@
-﻿import Player, { isAI } from "./Player.js";
+import Player, { isAI } from "./Player.js";
 import Bot from "./Bot.js";
 import EffectEngine from "./EffectEngine.js";
 import ChainSystem from "./ChainSystem.js";
@@ -152,9 +152,9 @@ export default class Game {
     this.oncePerTurnTurnCounter = this.turnCounter;
     this.resetMaterialDuelStats("init");
 
-    // ✅ FASE 2: Sistema global de delayed actions
-    // Estrutura genérica para rastrear ações agendadas (summons, damage, etc.)
-    // Cada entrada contém: actionType, triggerCondition, payload, scheduledTurn, priority
+    // ? FASE 2: Sistema global de delayed actions
+    // Estrutura gen�rica para rastrear a��es agendadas (summons, damage, etc.)
+    // Cada entrada cont�m: actionType, triggerCondition, payload, scheduledTurn, priority
     this.delayedActions = [];
 
     // Track counts of special-summoned monsters by type per player
@@ -185,26 +185,26 @@ export default class Game {
     this.devLog("MATERIAL_STATS_RESET", { summary: reason });
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
+  // -----------------------------------------------------------------------------
   // Summon tracking: _trackSpecialSummonType, getSpecialSummonedTypeCount
-  // → Moved to src/core/game/summon/tracking.js
-  // ─────────────────────────────────────────────────────────────────────────────
+  // ? Moved to src/core/game/summon/tracking.js
+  // -----------------------------------------------------------------------------
 
-  // → scheduleDelayedAction, processDelayedActions, resolveDelayedAction → Moved to src/core/game/turn/scheduling.js
+  // ? scheduleDelayedAction, processDelayedActions, resolveDelayedAction ? Moved to src/core/game/turn/scheduling.js
 
-  // ─────────────────────────────────────────────────────────────────────────────
+  // -----------------------------------------------------------------------------
   // Summon delayed: resolveDelayedSummon
-  // → Moved to src/core/game/summon/tracking.js
-  // ─────────────────────────────────────────────────────────────────────────────
+  // ? Moved to src/core/game/summon/tracking.js
+  // -----------------------------------------------------------------------------
 
   /**
-   * ✅ FASE 4: Aplicar buff temporário com expiração baseada em turno
-   * Suporta múltiplos buffs simultâneos com expiração em turnos diferentes
+   * ? FASE 4: Aplicar buff tempor�rio com expira��o baseada em turno
+   * Suporta m�ltiplos buffs simult�neos com expira��o em turnos diferentes
    * @param {Object} card - Carta a receber o buff
    * @param {string} stat - Stat afetado ("atk" ou "def")
    * @param {number} value - Valor do buff
    * @param {number} expiresOnTurn - Turno em que o buff expira
-   * @param {string} id - ID único do buff (opcional)
+   * @param {string} id - ID �nico do buff (opcional)
    */
   applyTurnBasedBuff(card, stat, value, expiresOnTurn, id = null) {
     if (
@@ -231,7 +231,7 @@ export default class Game {
 
     card.turnBasedBuffs.push(buffEntry);
 
-    // Aplicar modificação imediata ao stat
+    // Aplicar modifica��o imediata ao stat
     if (stat === "atk") {
       card.atk += value;
     } else if (stat === "def") {
@@ -249,7 +249,7 @@ export default class Game {
     return true;
   }
 
-  // → cleanupExpiredBuffs → Moved to src/core/game/turn/cleanup.js
+  // ? cleanupExpiredBuffs ? Moved to src/core/game/turn/cleanup.js
 
   incrementMaterialStat(playerId, mapName, materialCardId, delta = 1) {
     const store = this.materialDuelStats?.[playerId]?.[mapName];
@@ -328,10 +328,10 @@ export default class Game {
     }
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
+  // -----------------------------------------------------------------------------
   // Zones: Methods moved to src/core/game/zones/*.js
   // See: ownership.js, snapshot.js, invariants.js, operations.js, movement.js
-  // ─────────────────────────────────────────────────────────────────────────────
+  // -----------------------------------------------------------------------------
 
   resetOncePerTurnUsage(reason = "reset") {
     this.oncePerTurnUsage = {
@@ -503,11 +503,11 @@ export default class Game {
     return result;
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
+  // -----------------------------------------------------------------------------
   // Events methods moved to core/game/events/
   // See: eventBus.js, eventResolver.js
   // Methods are attached to prototype after class definition
-  // ─────────────────────────────────────────────────────────────────────────────
+  // -----------------------------------------------------------------------------
 
   async start(deckList = null, extraDeckList = null) {
     // BUG #9 FIX: Reset once-per-duel usage between duels
@@ -521,7 +521,7 @@ export default class Game {
     this.bot.buildDeck();
     this.bot.buildExtraDeck();
 
-    // Integração do sistema de captura de replay (se habilitado)
+    // Integra��o do sistema de captura de replay (se habilitado)
     replayIntegration.integrateReplayCapture(this);
     replayIntegration.startReplayCapture(this);
 
@@ -548,34 +548,34 @@ export default class Game {
     this.bindCardInteractions();
   }
 
-  // → drawCards → Moved to src/core/game/deck/draw.js
-  // → forceOpeningHand → Moved to src/core/game/deck/draw.js
+  // ? drawCards ? Moved to src/core/game/deck/draw.js
+  // ? forceOpeningHand ? Moved to src/core/game/deck/draw.js
 
-  // → updateBoard → Moved to src/core/game/ui/board.js
-  // → highlightReadySpecialSummon → Moved to src/core/game/ui/board.js
+  // ? updateBoard ? Moved to src/core/game/ui/board.js
+  // ? highlightReadySpecialSummon ? Moved to src/core/game/ui/board.js
 
-  // → updateActivationIndicators → Moved to src/core/game/ui/indicators.js
-  // → buildActivationIndicatorsForPlayer → Moved to src/core/game/ui/indicators.js
+  // ? updateActivationIndicators ? Moved to src/core/game/ui/indicators.js
+  // ? buildActivationIndicatorsForPlayer ? Moved to src/core/game/ui/indicators.js
 
-  // ─────────────────────────────────────────────────────────────────────────────
+  // -----------------------------------------------------------------------------
   // Combat indicators: updateAttackIndicators, clearAttackReadyIndicators,
   // applyAttackResolutionIndicators, clearAttackResolutionIndicators
-  // → Moved to src/core/game/combat/indicators.js
-  // ─────────────────────────────────────────────────────────────────────────────
+  // ? Moved to src/core/game/combat/indicators.js
+  // -----------------------------------------------------------------------------
 
-  // → chooseSpecialSummonPosition → Moved to src/core/game/ui/prompts.js
+  // ? chooseSpecialSummonPosition ? Moved to src/core/game/ui/prompts.js
 
-  // ─────────────────────────────────────────────────────────────────────────────
+  // -----------------------------------------------------------------------------
   // Combat damage: inflictDamage
-  // → Moved to src/core/game/combat/damage.js
-  // ─────────────────────────────────────────────────────────────────────────────
+  // ? Moved to src/core/game/combat/damage.js
+  // -----------------------------------------------------------------------------
 
-  // → startTurn, endTurn, waitForPhaseDelay → Moved to src/core/game/turn/lifecycle.js
-  // → nextPhase, skipToPhase → Moved to src/core/game/turn/transitions.js
+  // ? startTurn, endTurn, waitForPhaseDelay ? Moved to src/core/game/turn/lifecycle.js
+  // ? nextPhase, skipToPhase ? Moved to src/core/game/turn/transitions.js
 
-  // → showIgnitionActivateModal → Moved to src/core/game/ui/modals.js
+  // ? showIgnitionActivateModal ? Moved to src/core/game/ui/modals.js
 
-  // → bindCardInteractions → Moved to src/core/game/ui/interactions.js
+  // ? bindCardInteractions ? Moved to src/core/game/ui/interactions.js
 
   /**
    * @deprecated LEGACY CODE - Hardcoded logic for "Luminarch Sanctum Protector" card.
@@ -840,7 +840,7 @@ export default class Game {
           return { destroyed: false, reason: "not_in_zone" };
         }
 
-        // ✅ Check protection effects before destruction
+        // ? Check protection effects before destruction
         if (
           Array.isArray(card.protectionEffects) &&
           card.protectionEffects.length > 0
@@ -966,7 +966,7 @@ export default class Game {
     return true;
   }
 
-  // → flipSummon → Moved to src/core/game/summon/execution.js
+  // ? flipSummon ? Moved to src/core/game/summon/execution.js
 
   changeMonsterPosition(card, newPosition) {
     if (newPosition !== "attack" && newPosition !== "defense") return;
@@ -1003,7 +1003,7 @@ export default class Game {
     this.updateBoard();
   }
 
-  // → finalizeSpellTrapActivation → Moved to src/core/game/spellTrap/finalization.js
+  // ? finalizeSpellTrapActivation ? Moved to src/core/game/spellTrap/finalization.js
 
   async tryActivateMonsterEffect(
     card,
@@ -1057,12 +1057,12 @@ export default class Game {
     return pipelineResult;
   }
 
-  // → tryActivateSpellTrapEffect → Moved to src/core/game/spellTrap/activation.js
+  // ? tryActivateSpellTrapEffect ? Moved to src/core/game/spellTrap/activation.js
 
-  // ─────────────────────────────────────────────────────────────────────────────
+  // -----------------------------------------------------------------------------
   // Selection: Methods moved to src/core/game/selection/*.js
   // See: contract.js, highlighting.js, session.js, handlers.js
-  // ─────────────────────────────────────────────────────────────────────────────
+  // -----------------------------------------------------------------------------
 
   /**
    * Build a serialized, public-safe snapshot of the current game state.
@@ -1423,8 +1423,8 @@ export default class Game {
             (req) => Number(req.min ?? 0) === 0
           );
         }
-        // Padrão: evitar field targeting em prompts genéricos (target_select),
-        // a menos que o contrato peça explicitamente.
+        // Padr�o: evitar field targeting em prompts gen�ricos (target_select),
+        // a menos que o contrato pe�a explicitamente.
         const usingFieldTargeting =
           typeof contract.ui.useFieldTargeting === "boolean"
             ? contract.ui.useFieldTargeting
@@ -1608,8 +1608,16 @@ export default class Game {
     };
 
     const initialResult = await this.runActivationPipeline(wrappedConfig);
-    // O servidor vai gerar o prompt e a Promise não deve ficar pendente
-    if (initialResult?.needsSelection === true) {
+    const hasSelectionUi =
+      !!this.ui &&
+      (typeof this.ui.showTargetSelection === "function" ||
+        typeof this.ui.showFieldTargetingControls === "function");
+    const finishOnSelection =
+      typeof config.finishOnSelection === "boolean"
+        ? config.finishOnSelection
+        : !hasSelectionUi;
+
+    if (initialResult?.needsSelection === true && finishOnSelection) {
       finishOnce(initialResult);
     } else if (
       !finished &&
@@ -1621,32 +1629,32 @@ export default class Game {
     return waitForFinish;
   }
 
-  // → activateFieldSpellEffect → Moved to src/core/game/spellTrap/activation.js
+  // ? activateFieldSpellEffect ? Moved to src/core/game/spellTrap/activation.js
 
-  // ─────────────────────────────────────────────────────────────────────────────
+  // -----------------------------------------------------------------------------
   // Combat targeting: startAttackTargetSelection
-  // → Moved to src/core/game/combat/targeting.js
-  // ─────────────────────────────────────────────────────────────────────────────
+  // ? Moved to src/core/game/combat/targeting.js
+  // -----------------------------------------------------------------------------
 
-  // → openGraveyardModal, closeGraveyardModal → Moved to src/core/game/graveyard/modal.js
-  // → openExtraDeckModal, closeExtraDeckModal → Moved to src/core/game/extraDeck/modal.js
-  // → getMaterialFieldAgeTurnCounter, getAscensionCandidatesForMaterial, checkAscensionRequirements, canUseAsAscensionMaterial, performAscensionSummon, tryAscensionSummon → Moved to src/core/game/summon/ascension.js
+  // ? openGraveyardModal, closeGraveyardModal ? Moved to src/core/game/graveyard/modal.js
+  // ? openExtraDeckModal, closeExtraDeckModal ? Moved to src/core/game/extraDeck/modal.js
+  // ? getMaterialFieldAgeTurnCounter, getAscensionCandidatesForMaterial, checkAscensionRequirements, canUseAsAscensionMaterial, performAscensionSummon, tryAscensionSummon ? Moved to src/core/game/summon/ascension.js
 
-  // ─────────────────────────────────────────────────────────────────────────────
+  // -----------------------------------------------------------------------------
   // Combat availability: getAttackAvailability, markAttackUsed, registerAttackNegated, canDestroyByBattle
-  // → Moved to src/core/game/combat/availability.js
-  // ─────────────────────────────────────────────────────────────────────────────
+  // ? Moved to src/core/game/combat/availability.js
+  // -----------------------------------------------------------------------------
 
-  // ─────────────────────────────────────────────────────────────────────────────
+  // -----------------------------------------------------------------------------
   // Combat resolution: resolveCombat, finishCombat
-  // → Moved to src/core/game/combat/resolution.js
-  // ─────────────────────────────────────────────────────────────────────────────
+  // ? Moved to src/core/game/combat/resolution.js
+  // -----------------------------------------------------------------------------
 
-  // → performFusionSummon → Moved to src/core/game/summon/execution.js
+  // ? performFusionSummon ? Moved to src/core/game/summon/execution.js
 
-  // → performSpecialSummon → Moved to src/core/game/summon/execution.js
+  // ? performSpecialSummon ? Moved to src/core/game/summon/execution.js
 
-  // → canActivatePolymerization → Moved to src/core/game/spellTrap/verification.js
+  // ? canActivatePolymerization ? Moved to src/core/game/spellTrap/verification.js
 
   highlightReadySpecialSummon() {
     // Find and highlight the card ready for special summon in hand
@@ -1666,25 +1674,25 @@ export default class Game {
     return player.id === "player" ? this.bot : this.player;
   }
 
-  // → cleanupTempBoosts → Moved to src/core/game/turn/cleanup.js
+  // ? cleanupTempBoosts ? Moved to src/core/game/turn/cleanup.js
 
-  // ─────────────────────────────────────────────────────────────────────────────
+  // -----------------------------------------------------------------------------
   // Zone methods (ownership, snapshot, invariants, operations, movement)
-  // → Moved to src/core/game/zones/*.js
-  // ─────────────────────────────────────────────────────────────────────────────
+  // ? Moved to src/core/game/zones/*.js
+  // -----------------------------------------------------------------------------
 
-  // ─────────────────────────────────────────────────────────────────────────────
+  // -----------------------------------------------------------------------------
   // Combat applyBattleDestroyEffect
-  // → Moved to src/core/game/combat/resolution.js
-  // ─────────────────────────────────────────────────────────────────────────────
+  // ? Moved to src/core/game/combat/resolution.js
+  // -----------------------------------------------------------------------------
 
-  // → setSpellOrTrap → Moved to src/core/game/spellTrap/set.js
+  // ? setSpellOrTrap ? Moved to src/core/game/spellTrap/set.js
 
-  // → tryActivateSpell → Moved to src/core/game/spellTrap/activation.js
+  // ? tryActivateSpell ? Moved to src/core/game/spellTrap/activation.js
 
-  // → rollbackSpellActivation → Moved to src/core/game/spellTrap/finalization.js
+  // ? rollbackSpellActivation ? Moved to src/core/game/spellTrap/finalization.js
 
-  // → commitCardActivationFromHand → Moved to src/core/game/spellTrap/finalization.js
+  // ? commitCardActivationFromHand ? Moved to src/core/game/spellTrap/finalization.js
 
   showShadowHeartCathedralModal(validMonsters, maxAtk, counterCount, callback) {
     console.log(
@@ -1708,13 +1716,13 @@ export default class Game {
     callback(null);
   }
 
-  // → canActivateTrap → Moved to src/core/game/spellTrap/verification.js
+  // ? canActivateTrap ? Moved to src/core/game/spellTrap/verification.js
 
-  // → checkAndOfferTraps → Moved to src/core/game/spellTrap/triggers.js
+  // ? checkAndOfferTraps ? Moved to src/core/game/spellTrap/triggers.js
 
-  // → _mapEventToChainContext → Moved to src/core/game/spellTrap/triggers.js
+  // ? _mapEventToChainContext ? Moved to src/core/game/spellTrap/triggers.js
 
-  // → activateTrapFromZone → Moved to src/core/game/spellTrap/triggers.js
+  // ? activateTrapFromZone ? Moved to src/core/game/spellTrap/triggers.js
 
   resolvePlayerById(id = "player") {
     return id === "bot" ? this.bot : this.player;
@@ -1802,16 +1810,16 @@ export default class Game {
     }
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
+  // -----------------------------------------------------------------------------
   // DevTools methods moved to core/game/devTools/
   // See: commands.js, sanity.js, setup.js
   // Methods are attached to prototype after class definition
-  // ─────────────────────────────────────────────────────────────────────────────
+  // -----------------------------------------------------------------------------
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // DevTools: Attach methods from modular devTools/ folder
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 // Commands: devDraw, devGiveCard, devForcePhase, devGetSelectionCleanupState,
 //           devForceTargetCleanup, devAutoConfirmTargetSelection
@@ -1844,9 +1852,9 @@ Game.prototype.devRunSanityO = devToolsSanity.devRunSanityO;
 // Setup: applyManualSetup
 Game.prototype.applyManualSetup = devToolsSetup.applyManualSetup;
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Events: Attach methods from modular events/ folder
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 // Event Bus: on, emit, notify
 Game.prototype.on = eventBus.on;
@@ -1859,9 +1867,9 @@ Game.prototype.resolveEventEntries = eventResolver.resolveEventEntries;
 Game.prototype.resumePendingEventSelection =
   eventResolver.resumePendingEventSelection;
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Selection: Attach methods from modular selection/ folder
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 // Contract: buildSelectionCandidateKey, normalizeSelectionContract, canUseFieldTargeting
 Game.prototype.buildSelectionCandidateKey =
@@ -1895,9 +1903,9 @@ Game.prototype.handleTargetSelectionClick =
 Game.prototype.askPlayerToSelectCards =
   selectionHandlers.askPlayerToSelectCards;
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Zones: Attach methods from modular zones/ folder
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 // Ownership: normalizeRelativePlayerId, normalizeCardOwnership, normalizeZoneCardOwnership
 Game.prototype.normalizeRelativePlayerId =
@@ -1925,9 +1933,9 @@ Game.prototype.cleanupTokenReferences = zonesMovement.cleanupTokenReferences;
 Game.prototype.moveCard = zonesMovement.moveCard;
 Game.prototype.moveCardInternal = zonesMovement.moveCardInternal;
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Combat: Attach methods from modular combat/ folder
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 // Indicators: updateAttackIndicators, clearAttackReadyIndicators, applyAttackResolutionIndicators, clearAttackResolutionIndicators
 Game.prototype.updateAttackIndicators = combatIndicators.updateAttackIndicators;
@@ -1957,9 +1965,9 @@ Game.prototype.finishCombat = combatResolution.finishCombat;
 Game.prototype.applyBattleDestroyEffect =
   combatResolution.applyBattleDestroyEffect;
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Summon: Attach methods from modular summon/ folder
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 // Tracking: _trackSpecialSummonType, getSpecialSummonedTypeCount, resolveDelayedSummon
 Game.prototype._trackSpecialSummonType = summonTracking._trackSpecialSummonType;
@@ -1984,33 +1992,33 @@ Game.prototype.canUseAsAscensionMaterial =
 Game.prototype.performAscensionSummon = summonAscension.performAscensionSummon;
 Game.prototype.tryAscensionSummon = summonAscension.tryAscensionSummon;
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Deck: Attach methods from modular deck/ folder
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 // Draw: drawCards, forceOpeningHand
 Game.prototype.drawCards = deckDraw.drawCards;
 Game.prototype.forceOpeningHand = deckDraw.forceOpeningHand;
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Graveyard: Attach methods from modular graveyard/ folder
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 // Modal: openGraveyardModal, closeGraveyardModal
 Game.prototype.openGraveyardModal = graveyardModal.openGraveyardModal;
 Game.prototype.closeGraveyardModal = graveyardModal.closeGraveyardModal;
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Extra Deck: Attach methods from modular extraDeck/ folder
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 // Modal: openExtraDeckModal, closeExtraDeckModal
 Game.prototype.openExtraDeckModal = extraDeckModal.openExtraDeckModal;
 Game.prototype.closeExtraDeckModal = extraDeckModal.closeExtraDeckModal;
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Turn: Attach methods from modular turn/ folder
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 // Scheduling: scheduleDelayedAction, processDelayedActions, resolveDelayedAction
 Game.prototype.scheduleDelayedAction = turnScheduling.scheduleDelayedAction;
@@ -2030,9 +2038,9 @@ Game.prototype.waitForPhaseDelay = turnLifecycle.waitForPhaseDelay;
 Game.prototype.nextPhase = turnTransitions.nextPhase;
 Game.prototype.skipToPhase = turnTransitions.skipToPhase;
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Spell/Trap: Attach methods from modular spellTrap/ folder
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 // Set: setSpellOrTrap
 Game.prototype.setSpellOrTrap = spellTrapSet.setSpellOrTrap;
@@ -2063,9 +2071,9 @@ Game.prototype._mapEventToChainContext =
   spellTrapTriggers._mapEventToChainContext;
 Game.prototype.activateTrapFromZone = spellTrapTriggers.activateTrapFromZone;
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // UI: Attach methods from modular ui/ folder
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 // Board: updateBoard, highlightReadySpecialSummon
 Game.prototype.updateBoard = uiBoard.updateBoard;
@@ -2092,3 +2100,5 @@ Game.prototype.checkWinCondition = uiWinCondition.checkWinCondition;
 
 // Interactions: bindCardInteractions
 Game.prototype.bindCardInteractions = uiInteractions.bindCardInteractions;
+
+

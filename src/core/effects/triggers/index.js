@@ -31,6 +31,7 @@ export {
   collectBattleDestroyTriggers,
   collectAttackDeclaredTriggers,
   collectEffectTargetedTriggers,
+  collectCardEquippedTriggers,
   collectCardToGraveTriggers,
   collectStandbyPhaseTriggers,
 } from "./collectors.js";

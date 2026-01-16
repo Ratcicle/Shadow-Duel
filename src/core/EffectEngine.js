@@ -613,6 +613,40 @@ export default class EffectEngine {
           }
           break;
         }
+        case "equipped_with_filters": {
+          const source = ctx?.source;
+          const filters = cond.filters || {};
+          const requireFaceup = cond.requireFaceup !== false;
+          const min = cond.min ?? 1;
+          const max = cond.max;
+          const equips = Array.isArray(source?.equips) ? source.equips : [];
+          let count = 0;
+
+          for (const equip of equips) {
+            if (!equip) continue;
+            if (requireFaceup && equip.isFacedown) continue;
+            if (!this.cardMatchesFilters(equip, filters)) continue;
+            count += 1;
+          }
+
+          if (Number.isFinite(min) && count < min) {
+            return {
+              ok: false,
+              reason:
+                cond.reason ||
+                "This card is not equipped with a matching card.",
+            };
+          }
+          if (max !== undefined && count > max) {
+            return {
+              ok: false,
+              reason:
+                cond.reason ||
+                "This card has too many matching equip cards.",
+            };
+          }
+          break;
+        }
         case "has_stored_blueprint": {
           const sourceCard = ctx?.source || null;
           const min = Number(cond.min ?? 1);
@@ -1194,6 +1228,8 @@ EffectEngine.prototype.collectAttackDeclaredTriggers =
   triggers.collectAttackDeclaredTriggers;
 EffectEngine.prototype.collectEffectTargetedTriggers =
   triggers.collectEffectTargetedTriggers;
+EffectEngine.prototype.collectCardEquippedTriggers =
+  triggers.collectCardEquippedTriggers;
 EffectEngine.prototype.collectCardToGraveTriggers =
   triggers.collectCardToGraveTriggers;
 EffectEngine.prototype.collectStandbyPhaseTriggers =
