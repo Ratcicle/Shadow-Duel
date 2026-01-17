@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -372,7 +372,12 @@
     <script type="module" src="src/main.js"></script>
 
     <div id="dev-panel" class="dev-panel hidden">
-      <h3>Dev Harness</h3>
+      <div class="dev-panel-header">
+        <h3>Dev Harness</h3>
+        <button id="dev-panel-toggle" type="button" class="dev-panel-toggle">
+          Minimizar
+        </button>
+      </div>
       <div class="dev-field">
         <label for="dev-draw-player">Comprar cartas</label>
         <div class="dev-inline">
@@ -514,4 +519,3 @@
     </div>
   </body>
 </html>
-

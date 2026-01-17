@@ -1572,14 +1572,40 @@ body {
   font-size: 0.85rem;
 }
 
+.dev-panel.minimized {
+  max-height: none;
+  overflow: hidden;
+}
+
+.dev-panel.minimized .dev-field,
+.dev-panel.minimized .dev-reset-btn {
+  display: none;
+}
+
 .dev-panel.hidden {
   display: none;
 }
 
+.dev-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
 .dev-panel h3 {
-  margin: 0 0 10px;
+  margin: 0;
   font-size: 1rem;
   color: var(--accent-color);
+}
+
+.dev-panel-toggle {
+  padding: 4px 10px;
+  font-size: 0.8rem;
+  background: #2b2b2b;
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
 }
 
 .dev-panel label {

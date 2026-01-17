@@ -843,6 +843,22 @@ export default class EffectEngine {
               return { ok: false, reason: "Attacker type mismatch." };
             }
           }
+          if (cond.archetype) {
+            const requiredArchetypes = Array.isArray(cond.archetype)
+              ? cond.archetype
+              : [cond.archetype];
+            const cardArchetypes = attacker.archetypes
+              ? attacker.archetypes
+              : attacker.archetype
+                ? [attacker.archetype]
+                : [];
+            const hasMatch = requiredArchetypes.some((arc) =>
+              cardArchetypes.includes(arc),
+            );
+            if (!hasMatch) {
+              return { ok: false, reason: "Attacker archetype mismatch." };
+            }
+          }
           const lvl = attacker.level || 0;
           if (cond.minLevel !== undefined && lvl < cond.minLevel) {
             return { ok: false, reason: "Attacker level too low." };
@@ -1278,6 +1294,8 @@ EffectEngine.prototype.buildTriggerEntry = triggers.buildTriggerEntry;
 EffectEngine.prototype.collectEventTriggers = triggers.collectEventTriggers;
 EffectEngine.prototype.collectAfterSummonTriggers =
   triggers.collectAfterSummonTriggers;
+EffectEngine.prototype.collectSpellActivatedTriggers =
+  triggers.collectSpellActivatedTriggers;
 EffectEngine.prototype.collectBattleDestroyTriggers =
   triggers.collectBattleDestroyTriggers;
 EffectEngine.prototype.collectAttackDeclaredTriggers =
@@ -1323,6 +1341,7 @@ EffectEngine.prototype.applyShuffleDeck = actions.applyShuffleDeck;
 EffectEngine.prototype.applyHeal = actions.applyHeal;
 EffectEngine.prototype.applyHealPerArchetypeMonster =
   actions.applyHealPerArchetypeMonster;
+EffectEngine.prototype.applyRemoveCounter = actions.applyRemoveCounter;
 EffectEngine.prototype.applyDamage = actions.applyDamage;
 // Destroy
 EffectEngine.prototype.applyDestroy = actions.applyDestroy;

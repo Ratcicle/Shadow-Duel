@@ -20,9 +20,21 @@ export async function nextPhase() {
   const actor = this.turn === "player" ? this.player : this.bot;
   const guard = this.guardActionStart(
     { actor, kind: "phase_change" },
-    actor === this.player
+    actor === this.player,
   );
-  if (!guard.ok) return guard;
+  if (!guard.ok) {
+    if (
+      isAI(actor) &&
+      (guard.code === "BLOCKED_RESOLVING" ||
+        guard.code === "BLOCKED_SELECTION_ACTIVE")
+    ) {
+      const retryDelayMs = Number.isFinite(this?.aiActionDelayMs)
+        ? this.aiActionDelayMs
+        : 250;
+      setTimeout(() => this.nextPhase(), retryDelayMs);
+    }
+    return guard;
+  }
 
   // Offer generic trap activation at the end of current phase
   await this.checkAndOfferTraps("phase_end", {
@@ -59,7 +71,7 @@ export function skipToPhase(targetPhase) {
   const actor = this.turn === "player" ? this.player : this.bot;
   const guard = this.guardActionStart(
     { actor, kind: "phase_change" },
-    actor === this.player
+    actor === this.player,
   );
   if (!guard.ok) return guard;
   const order = ["draw", "standby", "main1", "battle", "main2", "end"];

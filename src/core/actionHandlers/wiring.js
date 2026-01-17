@@ -256,6 +256,7 @@ export function registerDefaultHandlers(registry) {
   );
 
   registry.register("add_counter", proxyEngineMethod("applyAddCounter"));
+  registry.register("remove_counter", proxyEngineMethod("applyRemoveCounter"));
 
   registry.register(
     "forbid_attack_this_turn",

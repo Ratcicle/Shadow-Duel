@@ -50,12 +50,14 @@
 - Efeito:
 	- Alvo 1 monstro "Arcanist" que você controla e 1 monstro do oponente; destrua ambos e cada jogador sofre dano igual ao ATK do monstro que controlava.
 	- Se você controla uma Magia de Equipamento "Arcanist": você não recebe dano.
+	- Uma vez por turno.
 
 ### Lightning Magic Lance (Normal)
 - Efeito:
 	- Alvo 1 monstro com a face para cima.
-	- Se for seu "Arcanist": +700 ATK e dano perfurante neste turno.
+	- Se for seu "Arcanist": +500 ATK e dano perfurante neste turno.
 	- Se for do oponente: ele não pode declarar ataque até o final do próximo turno do oponente.
+	- Uma vez por turno.
 
 ### Meeting of the Arcanists (Continuous)
 - Efeito (1x por turno, escolha 1):

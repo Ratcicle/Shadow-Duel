@@ -24,6 +24,7 @@ const VALID_EVENTS = new Set([
   "before_destroy",
   "effect_targeted",
   "card_equipped",
+  "spell_activated",
 ]);
 
 function formatIssue(card, message, effectIndex = null, actionIndex = null) {
@@ -62,27 +63,27 @@ export function validateCardDatabase() {
             card,
             'Ascension card should have cardKind "monster".',
             null,
-            null
-          )
+            null,
+          ),
         );
       }
       const asc = card.ascension;
       if (!asc || typeof asc !== "object") {
         errors.push(
-          formatIssue(card, "Ascension cards must define ascension metadata.")
+          formatIssue(card, "Ascension cards must define ascension metadata."),
         );
       } else {
         const materialId = asc.materialId;
         if (!Number.isFinite(materialId)) {
           errors.push(
-            formatIssue(card, "Ascension.materialId must be a finite number.")
+            formatIssue(card, "Ascension.materialId must be a finite number."),
           );
         } else if (!cardDatabaseById.get(materialId)) {
           errors.push(
             formatIssue(
               card,
-              `Ascension.materialId ${materialId} not found in card database.`
-            )
+              `Ascension.materialId ${materialId} not found in card database.`,
+            ),
           );
         }
         const reqs = Array.isArray(asc.requirements) ? asc.requirements : [];
@@ -93,8 +94,8 @@ export function validateCardDatabase() {
                 card,
                 "Ascension.requirements entries must be objects.",
                 null,
-                idx
-              )
+                idx,
+              ),
             );
             return;
           }
@@ -113,8 +114,8 @@ export function validateCardDatabase() {
                 card,
                 `Unknown or unsupported ascension requirement type "${req.type}".`,
                 null,
-                idx
-              )
+                idx,
+              ),
             );
           }
         });
@@ -122,7 +123,7 @@ export function validateCardDatabase() {
     }
     if (typeof card.id !== "number" || !Number.isFinite(card.id)) {
       errors.push(
-        formatIssue(card, "Card id must be a finite number.", null, null)
+        formatIssue(card, "Card id must be a finite number.", null, null),
       );
     } else if (card.id <= 0) {
       errors.push(formatIssue(card, "Card id must be greater than zero."));
@@ -130,8 +131,8 @@ export function validateCardDatabase() {
       errors.push(
         formatIssue(
           card,
-          `Duplicated id. Also used by "${seenIds.get(card.id)}".`
-        )
+          `Duplicated id. Also used by "${seenIds.get(card.id)}".`,
+        ),
       );
     } else {
       seenIds.set(card.id, card.name || `ID ${card.id}`);
@@ -139,14 +140,14 @@ export function validateCardDatabase() {
 
     if (!card.name || typeof card.name !== "string") {
       errors.push(
-        formatIssue(card, "Card name must be a non-empty string.", null, null)
+        formatIssue(card, "Card name must be a non-empty string.", null, null),
       );
     } else if (seenNames.has(card.name)) {
       errors.push(
         formatIssue(
           card,
-          `Duplicated name. Also used by id ${seenNames.get(card.name)}.`
-        )
+          `Duplicated name. Also used by id ${seenNames.get(card.name)}.`,
+        ),
       );
     } else {
       seenNames.set(card.name, card.id);
@@ -160,7 +161,7 @@ export function validateCardDatabase() {
       effects = rawEffects;
     } else {
       errors.push(
-        formatIssue(card, "Effects must be an array when defined.", null, null)
+        formatIssue(card, "Effects must be an array when defined.", null, null),
       );
       continue;
     }
@@ -168,7 +169,7 @@ export function validateCardDatabase() {
     effects.forEach((effect, effectIndex) => {
       if (!effect || typeof effect !== "object") {
         errors.push(
-          formatIssue(card, "Effect must be an object.", effectIndex, null)
+          formatIssue(card, "Effect must be an object.", effectIndex, null),
         );
         return;
       }
@@ -179,8 +180,8 @@ export function validateCardDatabase() {
             card,
             `Invalid timing "${effect.timing}".`,
             effectIndex,
-            null
-          )
+            null,
+          ),
         );
       }
 
@@ -191,8 +192,8 @@ export function validateCardDatabase() {
               card,
               "Effects with timing 'on_event' must declare an event.",
               effectIndex,
-              null
-            )
+              null,
+            ),
           );
         } else if (!VALID_EVENTS.has(effect.event)) {
           errors.push(
@@ -200,8 +201,8 @@ export function validateCardDatabase() {
               card,
               `Invalid event "${effect.event}".`,
               effectIndex,
-              null
-            )
+              null,
+            ),
           );
         }
       } else if (effect.event) {
@@ -211,8 +212,8 @@ export function validateCardDatabase() {
               card,
               `Invalid event "${effect.event}".`,
               effectIndex,
-              null
-            )
+              null,
+            ),
           );
         } else {
           warnings.push(
@@ -222,8 +223,8 @@ export function validateCardDatabase() {
                 effect.timing || "undefined"
               }".`,
               effectIndex,
-              null
-            )
+              null,
+            ),
           );
         }
       }
@@ -234,8 +235,8 @@ export function validateCardDatabase() {
             card,
             'Use "summonMethods" (array) instead of "summonMethod".',
             effectIndex,
-            null
-          )
+            null,
+          ),
         );
       }
 
@@ -245,8 +246,8 @@ export function validateCardDatabase() {
             card,
             'Use "summonFrom" instead of "requireSummonedFrom".',
             effectIndex,
-            null
-          )
+            null,
+          ),
         );
       }
 
@@ -259,8 +260,8 @@ export function validateCardDatabase() {
             card,
             'Effect "summonMethods" must be an array.',
             effectIndex,
-            null
-          )
+            null,
+          ),
         );
       }
 
@@ -273,8 +274,8 @@ export function validateCardDatabase() {
               card,
               "Action must be an object.",
               effectIndex,
-              actionIndex
-            )
+              actionIndex,
+            ),
           );
           return;
         }
@@ -285,8 +286,8 @@ export function validateCardDatabase() {
               card,
               "Action type must be a non-empty string.",
               effectIndex,
-              actionIndex
-            )
+              actionIndex,
+            ),
           );
           return;
         }
@@ -297,8 +298,8 @@ export function validateCardDatabase() {
               card,
               `Action type "${action.type}" is not registered.`,
               effectIndex,
-              actionIndex
-            )
+              actionIndex,
+            ),
           );
         }
       });

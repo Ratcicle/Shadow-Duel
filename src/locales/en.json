@@ -3,6 +3,14 @@
     "200": {
       "name": "Dragon Spirit Sanctuary",
       "description": "When a Dragon monster you control is targeted by an opponent's attack or card effect: return that monster to the hand; then Special Summon 1 Dragon monster from your hand with Level less than or equal to the returned monster. You can only activate 1 'Dragon Spirit Sanctuary' per turn."
+    },
+    "211": {
+      "name": "Arcanist Ink River",
+      "description": "Each time you activate an \"Arcanist\" Spell: place 1 Ink counter on this card. You can remove 2 Ink counters from this card; add 1 \"Arcanist\" Spell from your GY to your hand."
+    },
+    "212": {
+      "name": "Arcanist Grand Library",
+      "description": "Once per turn, if you control no monsters: you can pay 2000 LP; Special Summon 1 Level 4 or lower \"Arcanist\" monster from your Deck. The first time each turn an \"Arcanist\" monster you control destroys an opponent's monster by battle: draw 1 card."
     }
   }
 }

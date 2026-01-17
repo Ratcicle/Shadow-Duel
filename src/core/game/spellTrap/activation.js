@@ -39,7 +39,7 @@ export async function tryActivateSpellTrapEffect(card, selections = null) {
   if (card.cardKind === "trap") {
     const confirmed = await this.ui.showTrapActivationModal(
       card,
-      "manual_activation"
+      "manual_activation",
     );
 
     if (!confirmed) {
@@ -63,7 +63,7 @@ export async function tryActivateSpellTrapEffect(card, selections = null) {
   };
   const activationEffect = this.effectEngine?.getSpellTrapActivationEffect?.(
     card,
-    { fromHand: false }
+    { fromHand: false },
   );
 
   const pipelinePhaseReq = isTrap
@@ -92,7 +92,7 @@ export async function tryActivateSpellTrapEffect(card, selections = null) {
         this.player,
         chosen,
         zone,
-        ctx
+        ctx,
       ),
     finalize: (result, info) => {
       if (result.placementOnly) {
@@ -101,7 +101,7 @@ export async function tryActivateSpellTrapEffect(card, selections = null) {
         this.finalizeSpellTrapActivation(
           card,
           this.player,
-          info.activationZone
+          info.activationZone,
         );
         this.ui.log(`${card.name} effect activated.`);
       }
@@ -123,14 +123,14 @@ export async function tryActivateSpell(
   card,
   handIndex,
   selections = null,
-  options = {}
+  options = {},
 ) {
   const owner = options.owner || this.player;
   const resume = options.resume || null;
   const actionContext = options.actionContext || null;
   const activationEffect = this.effectEngine?.getSpellTrapActivationEffect?.(
     card,
-    { fromHand: true }
+    { fromHand: true },
   );
 
   const resumeCommitInfo = resume?.commitInfo || null;
@@ -151,17 +151,17 @@ export async function tryActivateSpell(
     (e) =>
       e &&
       Array.isArray(e.actions) &&
-      e.actions.some((a) => a && a.type === "polymerization_fusion_summon")
+      e.actions.some((a) => a && a.type === "polymerization_fusion_summon"),
   );
   if (hasFusionAction && !resume) {
     if (!this.canActivatePolymerization?.()) {
       this.ui?.showMessage?.(
-        "Você não tem materiais válidos para Fusion Summon!"
+        "Você não tem materiais válidos para Fusion Summon!",
       );
       this.ui?.log?.(
         `${
           owner.name || "Jogador"
-        } não pode ativar ${card.name}: sem materiais de fusão válidos.`
+        } não pode ativar ${card.name}: sem materiais de fusão válidos.`,
       );
       return {
         success: false,
@@ -209,7 +209,7 @@ export async function tryActivateSpell(
         owner,
         chosen,
         zone,
-        ctx
+        ctx,
       ),
     finalize: async (result, info) => {
       if (result.placementOnly) {
@@ -252,7 +252,7 @@ export function activateFieldSpellEffect(card) {
       kind: "fieldspell_effect",
       phaseReq: ["main1", "main2"],
     },
-    owner === this.player
+    owner === this.player,
   );
   if (!guard.ok) return guard;
   const activationContext = {
@@ -272,6 +272,8 @@ export function activateFieldSpellEffect(card) {
     selectionMessage: "Select target(s) for the field spell effect.",
     guardKind: "fieldspell_effect",
     phaseReq: ["main1", "main2"],
+    preview: () =>
+      this.effectEngine?.canActivateFieldSpellEffectPreview?.(card, owner),
     oncePerTurn: {
       card,
       player: owner,

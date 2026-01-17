@@ -23,10 +23,12 @@ let game = null;
 const cardKindOrder = { monster: 0, spell: 1, trap: 2 };
 const TEST_MODE_KEY = "shadow_duel_test_mode";
 const DEV_MODE_KEY = "shadow_duel_dev_mode";
+const DEV_PANEL_MINIMIZED_KEY = "shadow_duel_dev_panel_minimized";
 const REPLAY_MODE_KEY = "shadow_duel_capture_mode";
 const BOT_PRESET_KEY = "shadow_duel_bot_preset";
 let testModeEnabled = loadTestModeFlag();
 let devModeEnabled = loadDevModeFlag();
+let devPanelMinimized = loadDevPanelMinimizedFlag();
 let replayModeEnabled = loadReplayModeFlag();
 let currentBotPreset = loadBotPreset();
 let latestValidationResult = null;
@@ -92,10 +94,10 @@ const btnBotArena = document.getElementById("btn-bot-arena");
 const btnReplayDashboard = document.getElementById("btn-replay-dashboard");
 const replayDashboardModal = document.getElementById("replay-dashboard-modal");
 const replayDashboardContainer = document.getElementById(
-  "replay-dashboard-container"
+  "replay-dashboard-container",
 );
 const closeReplayDashboardBtn = document.querySelector(
-  ".close-replay-dashboard"
+  ".close-replay-dashboard",
 );
 const botArenaModal = document.getElementById("bot-arena-modal");
 const arenaDeckSeat1Select = document.getElementById("arena-deck-seat1");
@@ -117,10 +119,10 @@ const btnDeckBuilder = document.getElementById("btn-deck-builder");
 const btnDeckSave = document.getElementById("deck-save");
 const btnDeckCancel = document.getElementById("deck-cancel");
 const btnPoolFilterNoArchetype = document.getElementById(
-  "deck-filter-no-archetype"
+  "deck-filter-no-archetype",
 );
 const btnPoolFilterShadowHeart = document.getElementById(
-  "deck-filter-shadow-heart"
+  "deck-filter-shadow-heart",
 );
 const btnPoolFilterArcanist = document.getElementById("deck-filter-arcanist");
 const btnPoolFilterLuminarch = document.getElementById("deck-filter-luminarch");
@@ -130,6 +132,7 @@ const btnToggleDevMode = document.getElementById("btn-toggle-dev-mode");
 const btnToggleReplay = document.getElementById("btn-toggle-replay");
 const validationMessagesEl = document.getElementById("validation-messages");
 const devPanel = document.getElementById("dev-panel");
+const devPanelToggleBtn = document.getElementById("dev-panel-toggle");
 const devDrawPlayerSelect = document.getElementById("dev-draw-player");
 const devDrawCountInput = document.getElementById("dev-draw-count");
 const devDrawBtn = document.getElementById("dev-draw-btn");
@@ -229,7 +232,7 @@ function saveExtraDeck(extraDeck) {
   currentExtraDeck = [...extraDeck];
   localStorage.setItem(
     "shadow_duel_extra_deck",
-    JSON.stringify(currentExtraDeck)
+    JSON.stringify(currentExtraDeck),
   );
 }
 
@@ -319,6 +322,33 @@ function saveDevModeFlag(enabled) {
   }
 }
 
+function loadDevPanelMinimizedFlag() {
+  try {
+    return localStorage.getItem(DEV_PANEL_MINIMIZED_KEY) === "true";
+  } catch (e) {
+    console.warn("Failed to load dev panel minimized flag", e);
+    return false;
+  }
+}
+
+function saveDevPanelMinimizedFlag(enabled) {
+  try {
+    localStorage.setItem(DEV_PANEL_MINIMIZED_KEY, enabled ? "true" : "false");
+  } catch (e) {
+    console.warn("Failed to save dev panel minimized flag", e);
+  }
+}
+
+function updateDevPanelMinimizedState() {
+  if (!devPanel || !devPanelToggleBtn) return;
+  devPanel.classList.toggle("minimized", devPanelMinimized);
+  devPanelToggleBtn.textContent = devPanelMinimized ? "Expandir" : "Minimizar";
+  devPanelToggleBtn.setAttribute(
+    "aria-pressed",
+    devPanelMinimized ? "true" : "false",
+  );
+}
+
 function updateDevModeButton() {
   if (!btnToggleDevMode) return;
   btnToggleDevMode.textContent = `Dev Mode: ${
@@ -359,6 +389,9 @@ function updateReplayModeButton() {
 function updateDevPanelVisibility() {
   if (!devPanel) return;
   devPanel.classList.toggle("hidden", !devModeEnabled);
+  if (devModeEnabled) {
+    updateDevPanelMinimizedState();
+  }
 }
 
 function runCardDatabaseValidation(options = {}) {
@@ -368,11 +401,11 @@ function runCardDatabaseValidation(options = {}) {
   if (latestValidationResult.errors.length) {
     console.error(
       "Card database validation errors:",
-      latestValidationResult.errors
+      latestValidationResult.errors,
     );
     if (!silent) {
       alert(
-        "N�o � poss�vel iniciar o duelo: h� erros no banco de cartas. Verifique os detalhes acima."
+        "N�o � poss�vel iniciar o duelo: h� erros no banco de cartas. Verifique os detalhes acima.",
       );
     }
     return false;
@@ -380,7 +413,7 @@ function runCardDatabaseValidation(options = {}) {
   if (latestValidationResult.warnings.length) {
     console.warn(
       "Card database validation warnings:",
-      latestValidationResult.warnings
+      latestValidationResult.warnings,
     );
   }
   return true;
@@ -405,13 +438,13 @@ function showValidationMessages(result) {
   const messages = [];
   if (shouldShowErrors) {
     messages.push(
-      `<strong>${result.errors.length} erro(s) na base de cartas.</strong>`
+      `<strong>${result.errors.length} erro(s) na base de cartas.</strong>`,
     );
     messages.push(renderIssueList(result.errors, "error"));
   }
   if (shouldShowWarnings) {
     messages.push(
-      `<strong>${result.warnings.length} aviso(s) encontrados.</strong>`
+      `<strong>${result.warnings.length} aviso(s) encontrados.</strong>`,
     );
     messages.push(renderIssueList(result.warnings, "warning"));
   }
@@ -428,13 +461,13 @@ function renderIssueList(issues, cssClass) {
       (issue) =>
         `<li class="${
           cssClass === "warning" ? "warning" : ""
-        }">${formatIssueForDisplay(issue)}</li>`
+        }">${formatIssueForDisplay(issue)}</li>`,
     );
   if (issues.length > MAX_ITEMS) {
     listItems.push(
       `<li class="${cssClass === "warning" ? "warning" : ""}">+ ${
         issues.length - MAX_ITEMS
-      } mais...</li>`
+      } mais...</li>`,
     );
   }
   return `<ul>${listItems.join("")}</ul>`;
@@ -463,9 +496,9 @@ function sanitizeExtraDeck(extraDeck) {
   const valid = new Set(
     cardDatabase
       .filter(
-        (c) => c.monsterType === "fusion" || c.monsterType === "ascension"
+        (c) => c.monsterType === "fusion" || c.monsterType === "ascension",
       )
-      .map((c) => c.id)
+      .map((c) => c.id),
   );
   const seen = new Set();
   const result = [];
@@ -503,7 +536,7 @@ function topUpDeck(deck) {
   const filled = [...deck];
   const targetSize = Math.max(
     MIN_DECK_SIZE,
-    Math.min(MAX_DECK_SIZE, filled.length)
+    Math.min(MAX_DECK_SIZE, filled.length),
   );
   while (filled.length < targetSize) {
     for (const card of cardDatabase) {
@@ -536,8 +569,8 @@ function setPreview(card) {
   previewEls.def.textContent = isMonster
     ? `DEF: ${card.def}`
     : card.subtype
-    ? card.subtype.toUpperCase()
-    : "";
+      ? card.subtype.toUpperCase()
+      : "";
   previewEls.level.textContent = isMonster ? `Level: ${card.level}` : "";
   previewEls.desc.textContent =
     getCardDisplayDescription(card) || card.description || "Sem descricao.";
@@ -548,8 +581,8 @@ function cardHasArchetype(card) {
   const archetypes = Array.isArray(card.archetypes)
     ? card.archetypes
     : card.archetype
-    ? [card.archetype]
-    : [];
+      ? [card.archetype]
+      : [];
   return archetypes.length > 0;
 }
 
@@ -558,8 +591,8 @@ function cardHasArchetypeName(card, archetypeName) {
   const archetypes = Array.isArray(card.archetypes)
     ? card.archetypes
     : card.archetype
-    ? [card.archetype]
-    : [];
+      ? [card.archetype]
+      : [];
   return archetypes.includes(archetypeName);
 }
 
@@ -639,7 +672,7 @@ function getSortedCardPool(cards) {
 
   const sortedTraps = traps.sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
   const sortedOthers = others.sort((a, b) =>
-    nameOf(a).localeCompare(nameOf(b))
+    nameOf(a).localeCompare(nameOf(b)),
   );
 
   return [...sortedMonsters, ...sortedSpells, ...sortedTraps, ...sortedOthers];
@@ -707,10 +740,10 @@ function renderDeckBuilder() {
   const baseMainPool = cardDatabase.filter(
     (c) =>
       !c.monsterType ||
-      (c.monsterType !== "fusion" && c.monsterType !== "ascension")
+      (c.monsterType !== "fusion" && c.monsterType !== "ascension"),
   );
   const baseExtraPool = cardDatabase.filter(
-    (c) => c.monsterType === "fusion" || c.monsterType === "ascension"
+    (c) => c.monsterType === "fusion" || c.monsterType === "ascension",
   );
 
   const poolFilter = (card) => {
@@ -833,7 +866,7 @@ function startDuel() {
     currentDeck.length > MAX_DECK_SIZE
   ) {
     alert(
-      `O deck precisa ter entre ${MIN_DECK_SIZE} e ${MAX_DECK_SIZE} cartas.`
+      `O deck precisa ter entre ${MIN_DECK_SIZE} e ${MAX_DECK_SIZE} cartas.`,
     );
     return;
   }
@@ -983,7 +1016,7 @@ async function startBotArena() {
     Game,
     Bot,
     ShadowHeartStrategy,
-    LuminarchStrategy
+    LuminarchStrategy,
   );
 
   try {
@@ -994,7 +1027,7 @@ async function startBotArena() {
       speed,
       autoPause,
       (progress) => updateArenaProgress(progress),
-      (result) => finishBotArena(result)
+      (result) => finishBotArena(result),
     );
   } catch (err) {
     console.error("Bot Arena error:", err);
@@ -1035,7 +1068,7 @@ function updateArenaProgress(progress) {
 
       addArenaLogEntry(
         `Duel ${result.duelNumber}: ${symbol} ${winnerText} (${result.turns} turnos)`,
-        className
+        className,
       );
     }
   }
@@ -1122,6 +1155,13 @@ btnToggleDevMode?.addEventListener("click", () => {
   showValidationMessages(latestValidationResult);
 });
 
+devPanelToggleBtn?.addEventListener("click", () => {
+  if (!devModeEnabled) return;
+  devPanelMinimized = !devPanelMinimized;
+  saveDevPanelMinimizedFlag(devPanelMinimized);
+  updateDevPanelMinimizedState();
+});
+
 btnToggleReplay?.addEventListener("click", () => {
   replayModeEnabled = !replayModeEnabled;
   saveReplayModeFlag(replayModeEnabled);
@@ -1129,14 +1169,14 @@ btnToggleReplay?.addEventListener("click", () => {
 
   if (replayModeEnabled) {
     console.log(
-      "[ReplayCapture] Modo de captura ATIVADO - suas decisões serão gravadas nos próximos duelos"
+      "[ReplayCapture] Modo de captura ATIVADO - suas decisões serão gravadas nos próximos duelos",
     );
   } else {
     // Mostrar resumo ao desativar
     const stats = ReplayCapture.getStats();
     if (stats.totalDuels > 0) {
       console.log(
-        `[ReplayCapture] Modo de captura DESATIVADO - ${stats.totalDuels} duelos gravados`
+        `[ReplayCapture] Modo de captura DESATIVADO - ${stats.totalDuels} duelos gravados`,
       );
       ReplayCapture.showSummary();
     }
@@ -1338,6 +1378,7 @@ function ensureDomReady(fn) {
 ensureDomReady(() => {
   startScreen.classList.remove("hidden");
   updateDevPanelVisibility();
+  updateDevPanelMinimizedState();
 });
 
 function requireActiveGameForDev() {

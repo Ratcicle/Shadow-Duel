@@ -47,11 +47,13 @@ export async function resolveEvent(eventName, payload) {
     const methodRaw = payload.method || "unknown";
     const methodLabel = methodMap[methodRaw] || methodRaw;
     const fromZoneRaw = payload.fromZone || null;
-    const fromZoneLabel = fromZoneRaw ? zoneMap[fromZoneRaw] || fromZoneRaw : null;
+    const fromZoneLabel = fromZoneRaw
+      ? zoneMap[fromZoneRaw] || fromZoneRaw
+      : null;
     const ownerLabel = payload.player.name || payload.player.id || "Unknown";
     const fromZoneText = fromZoneLabel ? ` | From: ${fromZoneLabel}` : "";
     this.ui?.log?.(
-      `Summon Method: ${methodLabel}${fromZoneText} | ${ownerLabel} -> ${payload.card.name}`
+      `Summon Method: ${methodLabel}${fromZoneText} | ${ownerLabel} -> ${payload.card.name}`,
     );
   }
 
@@ -63,7 +65,7 @@ export async function resolveEvent(eventName, payload) {
     ) {
       triggerPackage = await this.effectEngine.collectEventTriggers(
         eventName,
-        payload
+        payload,
       );
     }
   } catch (err) {
@@ -111,7 +113,7 @@ export async function resolveEvent(eventName, payload) {
       {
         onComplete,
         orderRule,
-      }
+      },
     );
   } catch (err) {
     console.error(`[Game] Error resolving event "${eventName}":`, err);
@@ -123,17 +125,30 @@ export async function resolveEvent(eventName, payload) {
         typeof this.devGetSelectionCleanupState === "function"
           ? this.devGetSelectionCleanupState()
           : {};
+      const selectionActive =
+        cleanupState.selectionActive === true ||
+        this.selectionState === "selecting" ||
+        this.selectionState === "confirming" ||
+        this.pendingEventSelection != null;
       if (
-        cleanupState.selectionActive ||
+        (eventName !== "target_selection_options" &&
+          cleanupState.selectionActive) ||
         cleanupState.controlsVisible ||
         cleanupState.highlightCount > 0
       ) {
-        this.devLog("EVENT_CLEANUP_FORCED", {
-          summary: `${eventName} cleanup`,
-          cleanupState,
-        });
-        if (typeof this.devForceTargetCleanup === "function") {
-          this.devForceTargetCleanup();
+        if (selectionActive) {
+          this.devLog("EVENT_CLEANUP_SKIPPED", {
+            summary: `${eventName} cleanup skipped (selection active)`,
+            cleanupState,
+          });
+        } else {
+          this.devLog("EVENT_CLEANUP_FORCED", {
+            summary: `${eventName} cleanup`,
+            cleanupState,
+          });
+          if (typeof this.devForceTargetCleanup === "function") {
+            this.devForceTargetCleanup();
+          }
         }
       }
     }
@@ -171,7 +186,7 @@ export async function resolveEventEntries(
     startIndex = 0,
     results = [],
     selections = null,
-  } = {}
+  } = {},
 ) {
   const resolvedResults = Array.isArray(results) ? results : [];
   const start = Math.max(0, startIndex);
@@ -258,7 +273,7 @@ export async function resolveEventEntries(
  */
 export async function resumePendingEventSelection(
   selections,
-  { actionContext } = {}
+  { actionContext } = {},
 ) {
   const pending = this.pendingEventSelection;
   if (this.devModeEnabled) {
@@ -302,7 +317,7 @@ export async function resumePendingEventSelection(
         startIndex: pending.entryIndex || 0,
         results: pending.results || [],
         selections,
-      }
+      },
     );
   } catch (err) {
     console.error(`[Game] Error resuming event "${pending.eventName}":`, err);
@@ -326,7 +341,7 @@ export async function resumePendingEventSelection(
     this.pendingTieDestruction = null;
     console.log(
       "[Game] Resuming pending tie destruction for target:",
-      tieInfo.target?.name
+      tieInfo.target?.name,
     );
 
     // Continue the combat by destroying the target
@@ -335,7 +350,7 @@ export async function resumePendingEventSelection(
       tieInfo.target,
       {
         resumeFromTie: true,
-      }
+      },
     );
 
     // If this also needs selection, return that

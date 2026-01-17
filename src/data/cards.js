@@ -5414,6 +5414,140 @@ export const cardDatabase = [
       },
     ],
   },
+  {
+    id: 211,
+    name: "Arcanist Ink River",
+    cardKind: "spell",
+    subtype: "continuous",
+    archetype: "Arcanist",
+    description:
+      'Each time you activate an "Arcanist" Spell: place 1 Ink counter on this card. You can remove 2 Ink counters from this card; add 1 "Arcanist" Spell from your GY to your hand.',
+    image: "assets/Arcanist Ink River.png",
+    effects: [
+      {
+        id: "arcanist_ink_river_counter",
+        timing: "on_event",
+        event: "spell_activated",
+        requireZone: "spellTrap",
+        requireFaceup: true,
+        triggerPlayer: "self",
+        activatedCardFilters: {
+          cardKind: "spell",
+          archetype: "Arcanist",
+        },
+        actions: [
+          {
+            type: "add_counter",
+            targetRef: "self",
+            counterType: "ink",
+            amount: 1,
+          },
+        ],
+      },
+      {
+        id: "arcanist_ink_river_recover",
+        timing: "ignition",
+        requireZone: "spellTrap",
+        requirePhase: ["main1", "main2"],
+        conditions: [
+          {
+            type: "source_counters_at_least",
+            counterType: "ink",
+            min: 2,
+          },
+        ],
+        actions: [
+          {
+            type: "remove_counter",
+            targetRef: "self",
+            counterType: "ink",
+            amount: 2,
+          },
+          {
+            type: "add_from_zone_to_hand",
+            zone: "graveyard",
+            filters: { cardKind: "spell", archetype: "Arcanist" },
+            count: { min: 1, max: 1 },
+            promptPlayer: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 212,
+    name: "Arcanist Grand Library",
+    cardKind: "spell",
+    subtype: "field",
+    archetype: "Arcanist",
+    description:
+      'Onece per turn, if you control no monsters: you can pay 2000 LP; Special Summon 1 Level 4 or lower "Arcanist" monster from your Deck. The first time each turn an "Arcanist" monster you control destroys an opponent\'s monster by battle: draw 1 card.',
+    image: "assets/Arcanist Grand Library.png",
+    effects: [
+      {
+        id: "arcanist_grand_library_summon",
+        timing: "ignition",
+        requireZone: "fieldSpell",
+        requirePhase: ["main1", "main2"],
+        oncePerTurn: true,
+        oncePerTurnName: "arcanist_grand_library_summon",
+        conditions: [
+          {
+            type: "control_card_filters",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            includeFacedown: true,
+            max: 0,
+          },
+        ],
+        actions: [
+          {
+            type: "pay_lp",
+            amount: 2000,
+          },
+          {
+            type: "special_summon_from_zone",
+            zone: "deck",
+            filters: {
+              cardKind: "monster",
+              archetype: "Arcanist",
+              level: 4,
+              levelOp: "lte",
+            },
+            count: { min: 1, max: 1 },
+            position: "choice",
+            promptPlayer: true,
+          },
+        ],
+      },
+      {
+        id: "arcanist_grand_library_battle_draw",
+        timing: "on_event",
+        event: "battle_destroy",
+        requireZone: "fieldSpell",
+        requireFaceup: true,
+        requireDestroyedIsOpponent: true,
+        oncePerTurn: true,
+        oncePerTurnName: "arcanist_grand_library_battle_draw",
+        conditions: [
+          {
+            type: "attacker_matches",
+            owner: "self",
+            cardKind: "monster",
+            archetype: "Arcanist",
+          },
+        ],
+        actions: [
+          {
+            type: "draw",
+            player: "self",
+            amount: 1,
+          },
+        ],
+      },
+    ],
+  },
 ];
 
 // Performance optimization: Create indexed maps for O(1) lookups

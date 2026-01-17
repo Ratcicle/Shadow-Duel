@@ -16,6 +16,9 @@ export async function collectEventTriggers(eventName, payload) {
   if (eventName === "after_summon") {
     return await this.collectAfterSummonTriggers(payload);
   }
+  if (eventName === "spell_activated") {
+    return await this.collectSpellActivatedTriggers(payload);
+  }
   if (eventName === "battle_destroy") {
     return await this.collectBattleDestroyTriggers(payload);
   }
@@ -35,6 +38,146 @@ export async function collectEventTriggers(eventName, payload) {
     return await this.collectStandbyPhaseTriggers(payload);
   }
   return { entries: [], orderRule: "no_triggers" };
+}
+
+/**
+ * Collects trigger entries for spell_activated event.
+ * @param {Object} payload - Spell activated payload
+ * @returns {Promise<Object>} Collected entries and order rule
+ */
+export async function collectSpellActivatedTriggers(payload) {
+  const entries = [];
+  const orderRule =
+    "spell controller -> opponent; sources: fieldSpell -> spellTrap";
+
+  if (!payload || !payload.card || !payload.player) {
+    return { entries, orderRule };
+  }
+
+  const activatedCard = payload.card;
+  const activator = payload.player;
+  const opponent = this.game?.getOpponent?.(activator);
+  const participants = [];
+
+  if (activator) {
+    participants.push({ owner: activator, opponent });
+  }
+  if (opponent) {
+    participants.push({ owner: opponent, opponent: activator });
+  }
+
+  const currentPhase = this.game?.phase;
+
+  for (const side of participants) {
+    const owner = side.owner;
+    const other = side.opponent;
+    if (!owner) continue;
+
+    const sources = [];
+    if (owner.fieldSpell) {
+      sources.push(owner.fieldSpell);
+    }
+    if (Array.isArray(owner.spellTrap)) {
+      sources.push(...owner.spellTrap);
+    }
+
+    for (const sourceCard of sources) {
+      if (!sourceCard?.effects || !Array.isArray(sourceCard.effects)) continue;
+
+      const sourceZone = this.findCardZone(owner, sourceCard);
+      const isFaceDownOnBoard =
+        sourceCard?.isFacedown === true &&
+        ["field", "spellTrap", "fieldSpell"].includes(sourceZone);
+      const ctx = {
+        source: sourceCard,
+        player: owner,
+        opponent: other,
+        activatedCard,
+        activatedPlayer: activator,
+        currentPhase,
+      };
+
+      for (const effect of sourceCard.effects) {
+        if (!effect || effect.timing !== "on_event") continue;
+        if (effect.event !== "spell_activated") continue;
+
+        if (isFaceDownOnBoard) {
+          continue;
+        }
+
+        if (this.isEffectNegated(sourceCard)) {
+          console.log(
+            `${sourceCard.name} effects are negated, skipping effect.`,
+          );
+          continue;
+        }
+
+        if (effect.requireFaceup === true && sourceCard.isFacedown === true) {
+          continue;
+        }
+
+        if (effect.requireZone && sourceZone !== effect.requireZone) {
+          continue;
+        }
+
+        const triggerPlayer = effect.triggerPlayer || "any";
+        if (triggerPlayer === "self" && owner !== activator) continue;
+        if (triggerPlayer === "opponent" && owner === activator) continue;
+
+        const activatedFilters =
+          effect.activatedCardFilters || effect.requireActivatedCardFilters;
+        if (
+          activatedFilters &&
+          !this.cardMatchesFilters(activatedCard, activatedFilters)
+        ) {
+          continue;
+        }
+
+        const optCheck = this.checkOncePerTurn(sourceCard, owner, effect);
+        if (!optCheck.ok) {
+          console.log(optCheck.reason);
+          continue;
+        }
+
+        const duelCheck = this.checkOncePerDuel(sourceCard, owner, effect);
+        if (!duelCheck.ok) {
+          console.log(duelCheck.reason);
+          continue;
+        }
+
+        if (effect.requirePhase) {
+          const allowedPhases = Array.isArray(effect.requirePhase)
+            ? effect.requirePhase
+            : [effect.requirePhase];
+          if (!allowedPhases.includes(currentPhase)) {
+            continue;
+          }
+        }
+
+        const activationContext = this.buildTriggerActivationContext(
+          sourceCard,
+          owner,
+          sourceZone,
+        );
+
+        const entry = this.buildTriggerEntry({
+          sourceCard,
+          owner,
+          effect,
+          ctx,
+          activationContext,
+          selectionKind: "triggered",
+          selectionMessage: "Select target(s) for the triggered effect.",
+        });
+
+        if (entry) {
+          entries.push(entry);
+        }
+      }
+    }
+  }
+
+  return { entries, orderRule, onComplete: () => this.updatePassiveBuffs() };
 }
 
 /**
@@ -118,7 +261,7 @@ export async function collectAfterSummonTriggers(payload) {
 
         if (this.isEffectNegated(sourceCard)) {
           console.log(
-            `${sourceCard.name} effects are negated, skipping effect.`
+            `${sourceCard.name} effects are negated, skipping effect.`,
           );
           continue;
         }
@@ -126,7 +269,7 @@ export async function collectAfterSummonTriggers(payload) {
         // Check requireFaceup condition
         if (effect.requireFaceup === true && sourceCard.isFacedown === true) {
           console.log(
-            `[after_summon] Skipping effect on ${sourceCard.name}: requireFaceup=true but card is facedown`
+            `[after_summon] Skipping effect on ${sourceCard.name}: requireFaceup=true but card is facedown`,
           );
           continue;
         }
@@ -135,7 +278,7 @@ export async function collectAfterSummonTriggers(payload) {
           const requiresSelfInHand =
             effect?.condition?.requires === "self_in_hand";
           const isConditionalSummonFromHand = (effect.actions || []).some(
-            (a) => a?.type === "conditional_summon_from_hand"
+            (a) => a?.type === "conditional_summon_from_hand",
           );
           if (!requiresSelfInHand && !isConditionalSummonFromHand) {
             continue;
@@ -194,7 +337,7 @@ export async function collectAfterSummonTriggers(payload) {
             owner,
             card,
             sourceZone,
-            summonFromZone
+            summonFromZone,
           );
           if (!conditionMet) continue;
         }
@@ -202,7 +345,7 @@ export async function collectAfterSummonTriggers(payload) {
         const activationContext = this.buildTriggerActivationContext(
           sourceCard,
           owner,
-          sourceZone
+          sourceZone,
         );
 
         const entry = this.buildTriggerEntry({
@@ -231,7 +374,7 @@ export async function collectAfterSummonTriggers(payload) {
                 const shouldActivate =
                   await this.ui.showConditionalSummonPrompt(
                     promptName,
-                    effect.promptMessage || `Activate ${promptName}'s effect?`
+                    effect.promptMessage || `Activate ${promptName}'s effect?`,
                   );
                 if (!shouldActivate) {
                   return {
@@ -247,7 +390,7 @@ export async function collectAfterSummonTriggers(payload) {
               sourceCard,
               effect,
               resolvedCtx,
-              selections
+              selections,
             );
           },
         });
@@ -295,7 +438,7 @@ export async function collectBattleDestroyTriggers(payload) {
     if (!owner) continue;
 
     const equipSpells = (owner.spellTrap || []).filter(
-      (c) => c && c.subtype === "equip" && c.equippedTo
+      (c) => c && c.subtype === "equip" && c.equippedTo,
     );
 
     const fieldCards = [
@@ -345,7 +488,7 @@ export async function collectBattleDestroyTriggers(payload) {
         // Check requireFaceup condition
         if (effect.requireFaceup === true && card.isFacedown === true) {
           console.log(
-            `[battle_destroy] Skipping effect on ${card.name}: requireFaceup=true but card is facedown`
+            `[battle_destroy] Skipping effect on ${card.name}: requireFaceup=true but card is facedown`,
           );
           continue;
         }
@@ -392,7 +535,7 @@ export async function collectBattleDestroyTriggers(payload) {
 
         const activationContext = this.buildTriggerActivationContext(
           card,
-          owner
+          owner,
         );
 
         const entry = this.buildTriggerEntry({
@@ -482,7 +625,7 @@ export async function collectAttackDeclaredTriggers(payload) {
               defenderOwnerId: payload.defenderOwner?.id,
               playerId: player.id,
               isFacedown: card.isFacedown,
-            }
+            },
           );
         }
 
@@ -498,7 +641,7 @@ export async function collectAttackDeclaredTriggers(payload) {
         if (effect.requireFaceup === true && card.isFacedown === true) {
           if (devMode) {
             console.log(
-              `[attack_declared] Skipping effect on ${card.name}: requireFaceup=true but card is facedown`
+              `[attack_declared] Skipping effect on ${card.name}: requireFaceup=true but card is facedown`,
             );
           }
           continue;
@@ -541,7 +684,7 @@ export async function collectAttackDeclaredTriggers(payload) {
               effectId: effect.id,
               cardName: card.name,
               attackerName: payload.attacker?.name,
-            }
+            },
           );
           continue;
         }
@@ -557,7 +700,7 @@ export async function collectAttackDeclaredTriggers(payload) {
                 hasDefender: !!defenderCard,
                 defenderName: defenderCard?.name,
                 defenderPosition: defenderCard?.position,
-              }
+              },
             );
             continue;
           }
@@ -579,7 +722,7 @@ export async function collectAttackDeclaredTriggers(payload) {
                 defenderName: defenderCard?.name,
                 defenderType: defenderCard?.type,
                 requiredTypes,
-              }
+              },
             );
             continue;
           }
@@ -664,7 +807,7 @@ export async function collectAttackDeclaredTriggers(payload) {
 
         const activationContext = this.buildTriggerActivationContext(
           card,
-          player
+          player,
         );
 
         const entry = this.buildTriggerEntry({
@@ -728,7 +871,7 @@ export async function collectEffectTargetedTriggers(payload) {
   }
 
   console.log(
-    `[collectEffectTargetedTriggers] ${targetCard.name} was targeted. Checking ${sources.length} sources for triggers.`
+    `[collectEffectTargetedTriggers] ${targetCard.name} was targeted. Checking ${sources.length} sources for triggers.`,
   );
 
   for (const card of sources) {
@@ -745,7 +888,7 @@ export async function collectEffectTargetedTriggers(payload) {
           isFacedown: card.isFacedown,
           targetFromContext: effect.targetFromContext,
           targetCardName: targetCard.name,
-        }
+        },
       );
 
       // For face-down traps, skip negation check (they can activate even if negated before being flipped)
@@ -757,7 +900,7 @@ export async function collectEffectTargetedTriggers(payload) {
       // Check requireFaceup condition
       if (effect.requireFaceup === true && card.isFacedown === true) {
         console.log(
-          `[effect_targeted] Skipping effect on ${card.name}: requireFaceup=true but card is facedown`
+          `[effect_targeted] Skipping effect on ${card.name}: requireFaceup=true but card is facedown`,
         );
         continue;
       }
@@ -781,7 +924,7 @@ export async function collectEffectTargetedTriggers(payload) {
               cardName: card.name,
               targetType: targetCard.type,
               requiredTypes,
-            }
+            },
           );
           continue;
         }
@@ -794,7 +937,7 @@ export async function collectEffectTargetedTriggers(payload) {
         if (this.ui?.showConfirmPrompt) {
           const confirmResult = this.ui.showConfirmPrompt(
             `Activate ${card.name} in response to targeting?`,
-            { kind: "trap_activation", cardName: card.name }
+            { kind: "trap_activation", cardName: card.name },
           );
           wantsToUse =
             confirmResult && typeof confirmResult.then === "function"
@@ -819,7 +962,7 @@ export async function collectEffectTargetedTriggers(payload) {
 
       const activationContext = this.buildTriggerActivationContext(
         card,
-        targetOwner
+        targetOwner,
       );
 
       const entry = this.buildTriggerEntry({
@@ -863,14 +1006,14 @@ export async function collectCardToGraveTriggers(payload) {
   const devMode = this.game?.devModeEnabled || false;
   const now = Date.now();
   this._graveLogCache = this._graveLogCache || { lastLog: 0 };
-  const shouldLog = devMode || (now - this._graveLogCache.lastLog > 500);
-  
+  const shouldLog = devMode || now - this._graveLogCache.lastLog > 500;
+
   if (shouldLog) {
     console.log(
-      `[handleCardToGraveEvent] ${card.name} entered graveyard. card.owner="${card.owner}", ctx.player.id="${player.id}", ctx.opponent.id="${resolvedOpponent?.id}", wasDestroyed=${payload?.wasDestroyed}`
+      `[handleCardToGraveEvent] ${card.name} entered graveyard. card.owner="${card.owner}", ctx.player.id="${player.id}", ctx.opponent.id="${resolvedOpponent?.id}", wasDestroyed=${payload?.wasDestroyed}`,
     );
     console.log(
-      `[handleCardToGraveEvent] ${card.name} entered graveyard from ${fromZone}. Card has ${card.effects.length} effects.`
+      `[handleCardToGraveEvent] ${card.name} entered graveyard from ${fromZone}. Card has ${card.effects.length} effects.`,
     );
     this._graveLogCache.lastLog = now;
   }
@@ -894,7 +1037,7 @@ export async function collectCardToGraveTriggers(payload) {
     if (effect.event !== "card_to_grave") {
       if (devMode) {
         console.log(
-          `[handleCardToGraveEvent] Skipping effect: event is ${effect.event}, not card_to_grave`
+          `[handleCardToGraveEvent] Skipping effect: event is ${effect.event}, not card_to_grave`,
         );
       }
       continue;
@@ -902,7 +1045,7 @@ export async function collectCardToGraveTriggers(payload) {
 
     if (this.isEffectNegated(card)) {
       console.log(
-        `[handleCardToGraveEvent] ${card.name} effects are negated, skipping effect.`
+        `[handleCardToGraveEvent] ${card.name} effects are negated, skipping effect.`,
       );
       continue;
     }
@@ -910,18 +1053,18 @@ export async function collectCardToGraveTriggers(payload) {
     // Check requireFaceup condition (rare case: card destroyed while facedown)
     if (effect.requireFaceup === true && card.isFacedown === true) {
       console.log(
-        `[card_to_grave] Skipping effect on ${card.name}: requireFaceup=true but card was facedown`
+        `[card_to_grave] Skipping effect on ${card.name}: requireFaceup=true but card was facedown`,
       );
       continue;
     }
 
     console.log(
-      `[handleCardToGraveEvent] Found card_to_grave effect: ${effect.id}`
+      `[handleCardToGraveEvent] Found card_to_grave effect: ${effect.id}`,
     );
 
     if (effect.requireSelfAsDestroyed && !payload?.wasDestroyed) {
       console.log(
-        `[handleCardToGraveEvent] Skipping ${effect.id}: requires destruction.`
+        `[handleCardToGraveEvent] Skipping ${effect.id}: requires destruction.`,
       );
       continue;
     }
@@ -934,21 +1077,21 @@ export async function collectCardToGraveTriggers(payload) {
       if (condType === "destroyed_by_battle") {
         if (destroyCause !== "battle") {
           console.log(
-            `[handleCardToGraveEvent] Skipping ${effect.id}: requires destruction by battle, but cause was "${destroyCause}".`
+            `[handleCardToGraveEvent] Skipping ${effect.id}: requires destruction by battle, but cause was "${destroyCause}".`,
           );
           continue;
         }
       } else if (condType === "destroyed_by_effect") {
         if (destroyCause !== "effect") {
           console.log(
-            `[handleCardToGraveEvent] Skipping ${effect.id}: requires destruction by effect, but cause was "${destroyCause}".`
+            `[handleCardToGraveEvent] Skipping ${effect.id}: requires destruction by effect, but cause was "${destroyCause}".`,
           );
           continue;
         }
       } else if (condType === "destroyed_by_battle_or_effect") {
         if (destroyCause !== "battle" && destroyCause !== "effect") {
           console.log(
-            `[handleCardToGraveEvent] Skipping ${effect.id}: requires destruction by battle or effect, but cause was "${destroyCause}".`
+            `[handleCardToGraveEvent] Skipping ${effect.id}: requires destruction by battle or effect, but cause was "${destroyCause}".`,
           );
           continue;
         }
@@ -958,7 +1101,7 @@ export async function collectCardToGraveTriggers(payload) {
     const optCheck = this.checkOncePerTurn(card, player, effect);
     if (!optCheck.ok) {
       console.log(
-        `[handleCardToGraveEvent] Once per turn check failed: ${optCheck.reason}`
+        `[handleCardToGraveEvent] Once per turn check failed: ${optCheck.reason}`,
       );
       continue;
     }
@@ -966,13 +1109,13 @@ export async function collectCardToGraveTriggers(payload) {
     const duelCheck = this.checkOncePerDuel(card, player, effect);
     if (!duelCheck.ok) {
       console.log(
-        `[handleCardToGraveEvent] Once per duel check failed: ${duelCheck.reason}`
+        `[handleCardToGraveEvent] Once per duel check failed: ${duelCheck.reason}`,
       );
       continue;
     }
 
     console.log(
-      `[handleCardToGraveEvent] fromZone check: effect.fromZone="${effect.fromZone}", actual fromZone="${fromZone}"`
+      `[handleCardToGraveEvent] fromZone check: effect.fromZone="${effect.fromZone}", actual fromZone="${fromZone}"`,
     );
 
     if (
@@ -981,7 +1124,7 @@ export async function collectCardToGraveTriggers(payload) {
       effect.fromZone !== fromZone
     ) {
       console.log(
-        `[handleCardToGraveEvent] Skipping: fromZone mismatch (${effect.fromZone} !== ${fromZone})`
+        `[handleCardToGraveEvent] Skipping: fromZone mismatch (${effect.fromZone} !== ${fromZone})`,
       );
       continue;
     }
@@ -989,13 +1132,13 @@ export async function collectCardToGraveTriggers(payload) {
     console.log(
       `[card_to_grave] About to resolve targets for ${
         card.name
-      }. Targets definition: ${JSON.stringify(effect.targets)}`
+      }. Targets definition: ${JSON.stringify(effect.targets)}`,
     );
 
     const activationContext = this.buildTriggerActivationContext(
       card,
       player,
-      toZone || this.findCardZone(player, card) || "graveyard"
+      toZone || this.findCardZone(player, card) || "graveyard",
     );
 
     const entry = this.buildTriggerEntry({
@@ -1093,7 +1236,7 @@ export async function collectCardEquippedTriggers(payload) {
       // Check requireFaceup condition
       if (effect.requireFaceup === true && card.isFacedown === true) {
         console.log(
-          `[card_equipped] Skipping effect on ${card.name}: requireFaceup=true but card is facedown`
+          `[card_equipped] Skipping effect on ${card.name}: requireFaceup=true but card is facedown`,
         );
         continue;
       }
@@ -1111,14 +1254,19 @@ export async function collectCardEquippedTriggers(payload) {
       }
 
       if (effect.requireEquipCardFilters) {
-        if (!this.cardMatchesFilters(equipCard, effect.requireEquipCardFilters)) {
+        if (
+          !this.cardMatchesFilters(equipCard, effect.requireEquipCardFilters)
+        ) {
           continue;
         }
       }
 
       if (effect.requireEquippedCardFilters) {
         if (
-          !this.cardMatchesFilters(equippedCard, effect.requireEquippedCardFilters)
+          !this.cardMatchesFilters(
+            equippedCard,
+            effect.requireEquippedCardFilters,
+          )
         ) {
           continue;
         }
@@ -1127,7 +1275,7 @@ export async function collectCardEquippedTriggers(payload) {
       const activationContext = this.buildTriggerActivationContext(
         card,
         owner,
-        sourceZone
+        sourceZone,
       );
 
       const entry = this.buildTriggerEntry({
@@ -1194,7 +1342,7 @@ export async function collectStandbyPhaseTriggers(payload) {
       // Check requireFaceup condition
       if (effect.requireFaceup === true && card.isFacedown === true) {
         console.log(
-          `[standby_phase] Skipping effect on ${card.name}: requireFaceup=true but card is facedown`
+          `[standby_phase] Skipping effect on ${card.name}: requireFaceup=true but card is facedown`,
         );
         continue;
       }
