@@ -456,18 +456,11 @@ export default class ChainSystem {
         // Skip cards already in the current chain
         if (cardsInChain.has(card)) continue;
 
-        const effect = this.findQuickMonsterEffect(card, context);
+        const effect = this.findQuickMonsterEffect(card, context, player);
         if (effect) {
           const chainCheck = this.canActivateInChain(effect, card, context);
           if (chainCheck.ok) {
-            // Apply canActivate check for consistency (same as traps)
-            const canActivate = this.game.effectEngine?.canActivate?.(
-              card,
-              player
-            );
-            if (!canActivate || canActivate.ok !== false) {
-              activatable.push({ card, effect, zone: "field" });
-            }
+            activatable.push({ card, effect, zone: "field" });
           }
         }
       }
@@ -801,17 +794,106 @@ export default class ChainSystem {
    * Find a quick effect on a monster
    * @param {Object} card
    * @param {ChainContext} context
+   * @param {Object} player
    * @returns {Object|null}
    */
-  findQuickMonsterEffect(card, context) {
+  findQuickMonsterEffect(card, context, player) {
     if (!card?.effects || !Array.isArray(card.effects)) return null;
+
+    const effectEngine = this.game?.effectEngine;
+    const owner =
+      player || (card.owner === "player" ? this.game.player : this.game.bot);
+    const opponent = owner ? this.getOpponent(owner) : null;
 
     for (const effect of card.effects) {
       if (!effect) continue;
 
-      if (effect.isQuickEffect || effect.speed === 2) {
-        return effect;
+      if (!(effect.isQuickEffect || effect.speed === 2)) {
+        continue;
       }
+
+      if (effect.timing === "on_event" && effect.allowManualActivation !== true) {
+        continue;
+      }
+
+      if (effect.requireZone && effect.requireZone !== "field") {
+        continue;
+      }
+
+      if (effect.requireFaceup && card.isFacedown) {
+        continue;
+      }
+
+      if (effect.requirePhase) {
+        const allowedPhases = Array.isArray(effect.requirePhase)
+          ? effect.requirePhase
+          : [effect.requirePhase];
+        if (!allowedPhases.includes(this.game?.phase)) {
+          continue;
+        }
+      }
+
+      if (effectEngine?.isEffectNegated && effectEngine.isEffectNegated(card)) {
+        continue;
+      }
+
+      if (effect.oncePerTurn && effectEngine?.checkOncePerTurn && owner) {
+        const optCheck = effectEngine.checkOncePerTurn(card, owner, effect);
+        if (!optCheck.ok) {
+          continue;
+        }
+      }
+
+      const ctx = {
+        source: card,
+        player: owner,
+        opponent,
+        activationZone: "field",
+        activationContext: {
+          isPreview: true,
+          preview: true,
+          autoSelectSingleTarget: true,
+          logTargets: false,
+        },
+        attacker: context?.attacker,
+        defender: context?.defender,
+        target: context?.target,
+      };
+
+      if (effect.conditions && effectEngine?.evaluateConditions) {
+        const condCheck = effectEngine.evaluateConditions(effect.conditions, ctx);
+        if (!condCheck.ok) {
+          continue;
+        }
+      }
+
+      if (effect.targets && effect.targets.length > 0 && effectEngine) {
+        const targetPreview = effectEngine.resolveTargets(
+          effect.targets,
+          ctx,
+          null
+        );
+        if (targetPreview?.ok === false && !targetPreview?.needsSelection) {
+          continue;
+        }
+        const requirements =
+          targetPreview?.selectionContract?.requirements || [];
+        if (requirements.length === 0 && targetPreview?.needsSelection) {
+          continue;
+        }
+        const impossible = requirements.some((req) => {
+          const min = Number(req?.min ?? 0);
+          const candidates = Array.isArray(req?.candidates)
+            ? req.candidates
+            : [];
+          return min > 0 && candidates.length < min;
+        });
+        if (impossible) {
+          continue;
+        }
+      }
+
+      return effect;
     }
 
     return null;

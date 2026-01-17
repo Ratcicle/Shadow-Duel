@@ -80,6 +80,39 @@ export async function resolveCombat(attacker, target, options = {}) {
     return { ok: true };
   }
 
+  const attackerStillOnField =
+    attackerOwner && Array.isArray(attackerOwner.field)
+      ? attackerOwner.field.includes(attacker)
+      : false;
+  if (!attackerStillOnField) {
+    this.ui.log("Attack stopped because the attacker left the field.");
+    this.clearAttackResolutionIndicators();
+    this.updateBoard();
+    return { ok: true };
+  }
+
+  if (attacker.position !== "attack" || attacker.isFacedown) {
+    this.ui.log(
+      "Attack stopped because the attacker is no longer in Attack Position."
+    );
+    this.markAttackUsed(attacker, target);
+    this.clearAttackResolutionIndicators();
+    this.updateBoard();
+    return { ok: true };
+  }
+
+  if (target) {
+    const targetOwnerField =
+      target.owner === "player" ? this.player.field : this.bot.field;
+    if (!targetOwnerField.includes(target)) {
+      this.ui.log("Attack stopped because the target left the field.");
+      this.markAttackUsed(attacker, target);
+      this.clearAttackResolutionIndicators();
+      this.updateBoard();
+      return { ok: true };
+    }
+  }
+
   if (!target) {
     if (attacker.cannotAttackDirectly) {
       this.ui?.log?.(`${attacker.name} cannot attack directly.`);

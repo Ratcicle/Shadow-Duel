@@ -9,6 +9,7 @@ export { applyActions, checkActionPreviewRequirements } from "./core.js";
 // Resource actions (draw, heal, damage)
 export {
   applyDraw,
+  applyShuffleDeck,
   applyHeal,
   applyHealPerArchetypeMonster,
   applyDamage,

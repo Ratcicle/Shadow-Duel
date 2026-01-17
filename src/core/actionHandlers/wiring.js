@@ -60,6 +60,7 @@ import { handleActivateStoredBlueprint } from "./blueprints.js";
 
 // Conditional handlers
 import { handleConditionalTargetActions } from "./conditional.js";
+import { handleChooseActionCase } from "./choice.js";
 
 /**
  * Initialize default handlers
@@ -213,11 +214,13 @@ export function registerDefaultHandlers(registry) {
   // Legacy/common actions migrated into the registry (proxy to EffectEngine methods)
 
   registry.register("draw", proxyEngineMethod("applyDraw"));
+  registry.register("shuffle_deck", proxyEngineMethod("applyShuffleDeck"));
 
   registry.register(
     "conditional_target_actions",
     handleConditionalTargetActions
   );
+  registry.register("choose_action_case", handleChooseActionCase);
 
   registry.register("heal", proxyEngineMethod("applyHeal"));
 

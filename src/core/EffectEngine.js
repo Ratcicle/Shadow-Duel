@@ -529,6 +529,35 @@ export default class EffectEngine {
           }
           break;
         }
+        case "any_of": {
+          const options = Array.isArray(cond.conditions)
+            ? cond.conditions
+            : Array.isArray(cond.anyOf)
+            ? cond.anyOf
+            : [];
+          if (options.length === 0) {
+            break;
+          }
+          let anyOk = false;
+          let lastReason = null;
+          for (const option of options) {
+            const result = this.evaluateConditions([option], ctx);
+            if (result.ok) {
+              anyOk = true;
+              break;
+            }
+            if (result.reason) {
+              lastReason = result.reason;
+            }
+          }
+          if (!anyOk) {
+            return {
+              ok: false,
+              reason: cond.reason || lastReason || "No valid options.",
+            };
+          }
+          break;
+        }
         case "control_card_filters": {
           const ownerKey = cond.owner === "opponent" ? "opponent" : "player";
           const owner = ownerKey === "opponent" ? opponent : player;
@@ -617,7 +646,12 @@ export default class EffectEngine {
           const source = ctx?.source;
           const filters = cond.filters || {};
           const requireFaceup = cond.requireFaceup !== false;
-          const min = cond.min ?? 1;
+          const min =
+            cond.min !== undefined
+              ? cond.min
+              : cond.max !== undefined
+              ? 0
+              : 1;
           const max = cond.max;
           const equips = Array.isArray(source?.equips) ? source.equips : [];
           let count = 0;
@@ -643,6 +677,25 @@ export default class EffectEngine {
               reason:
                 cond.reason ||
                 "This card has too many matching equip cards.",
+            };
+          }
+          break;
+        }
+        case "turn_player": {
+          const expected = cond.player || cond.turn || cond.owner;
+          const expectedId =
+            expected === "self"
+              ? player?.id
+              : expected === "opponent"
+              ? opponent?.id
+              : expected;
+          if (!expectedId) {
+            return { ok: false, reason: "Invalid condition configuration." };
+          }
+          if (this.game?.turn !== expectedId) {
+            return {
+              ok: false,
+              reason: cond.reason || "Not the correct turn.",
             };
           }
           break;
@@ -1263,6 +1316,7 @@ EffectEngine.prototype.checkActionPreviewRequirements =
   actions.checkActionPreviewRequirements;
 // Resources
 EffectEngine.prototype.applyDraw = actions.applyDraw;
+EffectEngine.prototype.applyShuffleDeck = actions.applyShuffleDeck;
 EffectEngine.prototype.applyHeal = actions.applyHeal;
 EffectEngine.prototype.applyHealPerArchetypeMonster =
   actions.applyHealPerArchetypeMonster;

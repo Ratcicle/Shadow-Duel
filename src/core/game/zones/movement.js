@@ -657,7 +657,7 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     const ownerPlayer = card.owner === "player" ? this.player : this.bot;
     const otherPlayer = ownerPlayer === this.player ? this.bot : this.player;
     const summonMethod = options.summonMethodOverride || "special";
-    void this.emit("after_summon", {
+    await this.emit("after_summon", {
       card,
       player: ownerPlayer,
       opponent: otherPlayer,

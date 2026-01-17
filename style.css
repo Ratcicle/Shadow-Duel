@@ -117,7 +117,7 @@ body {
   #preview-info h2 {
     font-size: 0.95rem;
   }
-  
+
   #preview-stats {
     gap: 12px;
     font-size: 0.9rem;
@@ -234,7 +234,9 @@ body {
   background: rgba(255, 255, 255, 0.02);
   width: 100%;
   position: relative;
-  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  transition:
+    border-color 0.3s ease,
+    box-shadow 0.3s ease;
 }
 
 .player-area.active-turn {
@@ -491,7 +493,9 @@ body {
   padding: 4px;
   font-size: clamp(0.6rem, 0.65vw, 0.75rem);
   cursor: pointer;
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
   user-select: none;
   position: relative;
 }
@@ -540,7 +544,11 @@ body {
 
 .card.facedown {
   background:
-    radial-gradient(circle at 30% 30%, rgba(187, 134, 252, 0.22), transparent 55%),
+    radial-gradient(
+      circle at 30% 30%,
+      rgba(187, 134, 252, 0.22),
+      transparent 55%
+    ),
     linear-gradient(135deg, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.05));
   border-color: rgba(187, 134, 252, 0.45);
 }
@@ -548,7 +556,11 @@ body {
 /* Cards rendered without inner HTML (e.g., opponent facedown hand) */
 .card:empty:not(.placeholder) {
   background:
-    radial-gradient(circle at 30% 30%, rgba(187, 134, 252, 0.22), transparent 55%),
+    radial-gradient(
+      circle at 30% 30%,
+      rgba(187, 134, 252, 0.22),
+      transparent 55%
+    ),
     linear-gradient(135deg, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.05));
   border-color: rgba(187, 134, 252, 0.45);
 }
@@ -975,7 +987,8 @@ body {
 .protector-backdrop {
   position: absolute;
   inset: 0;
-  background: radial-gradient(
+  background:
+    radial-gradient(
       circle at 18% 22%,
       rgba(187, 134, 252, 0.18),
       transparent 55%
@@ -990,7 +1003,8 @@ body {
   pointer-events: all;
   background: linear-gradient(135deg, #0a0a11 10%, #1a1326 75%);
   border: 1px solid rgba(187, 134, 252, 0.45);
-  box-shadow: 0 25px 45px rgba(0, 0, 0, 0.85),
+  box-shadow:
+    0 25px 45px rgba(0, 0, 0, 0.85),
     0 0 32px rgba(149, 108, 255, 0.25);
   border-radius: 18px;
   padding: 28px 30px 26px;
@@ -1003,7 +1017,8 @@ body {
 .protector-glow {
   position: absolute;
   inset: -35% -12% 0 -12%;
-  background: radial-gradient(
+  background:
+    radial-gradient(
       circle at 30% 25%,
       rgba(255, 221, 157, 0.35),
       transparent 55%
@@ -1090,7 +1105,9 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.15s ease,
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
     border-color 0.15s ease;
 }
 
@@ -1267,7 +1284,9 @@ body {
   border-radius: 10px;
   color: #f5f2ff;
   cursor: pointer;
-  transition: transform 0.12s ease, border-color 0.12s ease,
+  transition:
+    transform 0.12s ease,
+    border-color 0.12s ease,
     box-shadow 0.12s ease;
 }
 
@@ -1442,7 +1461,10 @@ body {
   border-radius: 6px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s, color 0.2s, border-color 0.2s;
+  transition:
+    background 0.2s,
+    color 0.2s,
+    border-color 0.2s;
 }
 
 .language-toggle .lang-toggle-btn.active {
@@ -1475,7 +1497,9 @@ body {
   background: #2d2d2d;
   color: #f0f0f0;
   border: 1px solid var(--border-color);
-  transition: background 0.2s, color 0.2s;
+  transition:
+    background 0.2s,
+    color 0.2s;
 }
 
 .start-actions .test-mode-toggle.active,
@@ -1717,7 +1741,9 @@ body {
   border: 1px solid var(--accent-color);
   position: relative;
   cursor: pointer;
-  transition: transform 0.15s, box-shadow 0.15s;
+  transition:
+    transform 0.15s,
+    box-shadow 0.15s;
 }
 
 .card-thumb:hover {
@@ -1916,7 +1942,8 @@ body {
 #bot-hand.direct-attack-target {
   position: relative;
   outline: 2px dashed #ff6bd6;
-  box-shadow: 0 0 16px rgba(255, 107, 214, 0.65),
+  box-shadow:
+    0 0 16px rgba(255, 107, 214, 0.65),
     0 0 28px rgba(100, 215, 255, 0.35);
   animation: pulse-direct-hand 1.2s ease-in-out infinite;
   cursor: pointer;
@@ -1925,7 +1952,9 @@ body {
 #bot-hand.direct-attack-active {
   position: relative;
   outline: 2px solid rgba(255, 80, 80, 0.9);
-  box-shadow: 0 0 18px rgba(255, 80, 80, 0.8), 0 0 32px rgba(255, 120, 80, 0.5);
+  box-shadow:
+    0 0 18px rgba(255, 80, 80, 0.8),
+    0 0 32px rgba(255, 120, 80, 0.5);
 }
 
 .lp-float {
@@ -2023,12 +2052,14 @@ body {
   0%,
   100% {
     outline-color: #ff6bd6;
-    box-shadow: 0 0 12px rgba(255, 107, 214, 0.6),
+    box-shadow:
+      0 0 12px rgba(255, 107, 214, 0.6),
       0 0 22px rgba(100, 215, 255, 0.3);
   }
   50% {
     outline-color: #64d7ff;
-    box-shadow: 0 0 18px rgba(255, 107, 214, 0.85),
+    box-shadow:
+      0 0 18px rgba(255, 107, 214, 0.85),
       0 0 30px rgba(100, 215, 255, 0.5);
   }
 }
@@ -2185,7 +2216,7 @@ body {
     font-size: 0.95rem;
     padding: 6px 10px;
   }
-  
+
   .lp-counter {
     font-size: 1rem;
   }
@@ -2196,7 +2227,7 @@ body {
     font-size: 0.9rem;
     padding: 5px 8px;
   }
-  
+
   .lp-counter {
     font-size: 0.95rem;
   }
@@ -2355,7 +2386,8 @@ body {
 
 .sacred-judgment-card.selected {
   border-color: #bb86fc;
-  box-shadow: 0 0 16px rgba(187, 134, 252, 0.6),
+  box-shadow:
+    0 0 16px rgba(187, 134, 252, 0.6),
     inset 0 0 16px rgba(187, 134, 252, 0.2);
   transform: scale(1.05);
 }
@@ -2533,7 +2565,8 @@ body {
 .cathedral-card.selected {
   background: rgba(187, 134, 252, 0.2);
   border-color: #f0d7ff;
-  box-shadow: 0 0 0 2px rgba(240, 215, 255, 0.6),
+  box-shadow:
+    0 0 0 2px rgba(240, 215, 255, 0.6),
     0 6px 16px rgba(187, 134, 252, 0.45);
 }
 
@@ -2603,11 +2636,22 @@ body {
   pointer-events: all;
 }
 
+.target-content-choice {
+  max-width: 650px;
+  padding: 20px 28px;
+  background: linear-gradient(135deg, #16213e 0%, #1a1a2e 100%);
+}
+
 .target-content h2 {
   color: var(--accent-color);
   margin-bottom: 20px;
   font-size: 1.4rem;
   text-align: center;
+}
+
+.target-content-choice h2 {
+  font-size: 1.2rem;
+  margin-bottom: 16px;
 }
 
 .close-target {
@@ -2629,6 +2673,10 @@ body {
   margin-bottom: 24px;
 }
 
+.target-block-choice {
+  margin-bottom: 16px;
+}
+
 .target-block p {
   color: var(--accent-color);
   margin-bottom: 12px;
@@ -2636,10 +2684,23 @@ body {
   font-weight: 500;
 }
 
+.target-block-choice p {
+  font-size: 0.85rem;
+  margin-bottom: 8px;
+}
+
 .target-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: 12px;
+}
+
+.target-list-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 600px;
+  margin: 0 auto;
 }
 
 .target-btn {
@@ -2657,6 +2718,48 @@ body {
   min-height: 200px;
   text-align: center;
   overflow: hidden;
+}
+
+/* Compact choice button layout */
+.target-btn-choice {
+  min-height: auto;
+  padding: 16px 20px;
+  text-align: left;
+  align-items: flex-start;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  border: 2px solid #0f3460;
+}
+
+.target-btn-choice:hover {
+  border-color: var(--accent-color);
+  background: linear-gradient(135deg, #1f2940 0%, #1a2942 100%);
+  box-shadow: 0 0 16px rgba(187, 134, 252, 0.3);
+}
+
+.target-btn-choice.selected {
+  background: linear-gradient(135deg, #2d1b4e 0%, #3d2463 100%);
+  border-color: var(--accent-color);
+  box-shadow:
+    0 0 20px rgba(187, 134, 252, 0.5),
+    inset 0 0 20px rgba(187, 134, 252, 0.1);
+}
+
+.choice-header {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--accent-color);
+  margin-bottom: 8px;
+  width: 100%;
+  text-align: left;
+}
+
+.choice-desc {
+  font-size: 0.85rem;
+  color: #ccc;
+  line-height: 1.5;
+  width: 100%;
+  text-align: left;
+  opacity: 0.9;
 }
 
 .target-btn::before {
@@ -2685,7 +2788,8 @@ body {
 .target-btn.selected {
   background: linear-gradient(135deg, var(--accent-color) 0%, #9c5ed9 100%);
   border-color: var(--accent-color);
-  box-shadow: 0 0 20px rgba(187, 134, 252, 0.6),
+  box-shadow:
+    0 0 20px rgba(187, 134, 252, 0.6),
     inset 0 0 10px rgba(0, 0, 0, 0.3);
   transform: scale(1.05);
 }
@@ -2707,6 +2811,18 @@ body {
   font-size: 14px;
 }
 
+.target-btn-choice.selected::after {
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  font-size: 16px;
+  background: var(--accent-color);
+  color: #000;
+  box-shadow: 0 0 12px rgba(187, 134, 252, 0.6);
+}
+
 .target-name {
   color: #fff;
   font-weight: bold;
@@ -2726,6 +2842,22 @@ body {
   color: #bbb;
   font-size: 0.8rem;
   z-index: 1;
+}
+
+.target-counter {
+  text-align: center;
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: rgba(187, 134, 252, 0.1);
+  border: 1px solid rgba(187, 134, 252, 0.3);
+  border-radius: 4px;
+  color: var(--accent-color);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.target-block-choice .target-counter {
+  display: none; /* Hide counter for choice modals since it's always 0/1 */
 }
 
 .target-actions {
@@ -2926,7 +3058,8 @@ body {
 .search-modal-visual .search-card-btn.selected {
   background: linear-gradient(135deg, var(--accent-color) 0%, #9c5ed9 100%);
   border-color: var(--accent-color);
-  box-shadow: 0 0 20px rgba(187, 134, 252, 0.6),
+  box-shadow:
+    0 0 20px rgba(187, 134, 252, 0.6),
     inset 0 0 10px rgba(0, 0, 0, 0.3);
   transform: scale(1.05);
 }
@@ -3429,7 +3562,10 @@ body {
   flex-direction: column;
   gap: 10px;
   cursor: pointer;
-  transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s,
+    transform 0.15s;
 }
 
 .card-grid-item:hover {
@@ -3779,7 +3915,9 @@ body {
   padding: 40px;
   text-align: center;
   max-width: 420px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 40px rgba(255, 215, 0, 0.1);
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.5),
+    0 0 40px rgba(255, 215, 0, 0.1);
   animation: gameOverAppear 0.4s ease-out;
 }
 

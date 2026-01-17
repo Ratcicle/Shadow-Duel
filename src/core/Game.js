@@ -646,7 +646,7 @@ export default class Game {
   }
 
   async resolveDestructionWithReplacement(card, options = {}) {
-    if (!card || card.cardKind !== "monster") {
+    if (!card) {
       return { replaced: false };
     }
 
@@ -656,9 +656,13 @@ export default class Game {
     }
 
     const cause = options.cause || options.reason || "effect";
+    const fromZone =
+      options.fromZone ||
+      this.effectEngine?.findCardZone?.(ownerPlayer, card) ||
+      null;
 
     // Check for Equip Spell protection (e.g., Crescent Shield Guard)
-    if (cause === "battle") {
+    if (cause === "battle" && card.cardKind === "monster") {
       const guardEquip = (card.equips || []).find(
         (equip) =>
           equip && equip.grantsCrescentShieldGuard && equip.equippedTo === card
@@ -682,139 +686,284 @@ export default class Game {
       }
     }
 
-    // Generic destruction replacement system
-    // Look for effects with replacementEffect property
-    const replacementEffect = (card.effects || []).find(
-      (eff) =>
-        eff.replacementEffect && eff.replacementEffect.type === "destruction"
-    );
+    const formatReplacementText = (text, sourceCardName) => {
+      if (!text) return text;
+      return text
+        .replace("{target}", card.name)
+        .replace("{source}", sourceCardName || "");
+    };
 
-    if (!replacementEffect) {
-      return { replaced: false };
-    }
-
-    const replacement = replacementEffect.replacementEffect;
-
-    // Check once per turn
-    const onceCheck = this.canUseOncePerTurn(
-      card,
-      ownerPlayer,
-      replacementEffect
-    );
-    if (!onceCheck.ok) {
-      return { replaced: false };
-    }
-
-    // Check if reason matches (battle/effect/any)
-    if (
-      replacement.reason &&
-      replacement.reason !== "any" &&
-      replacement.reason !== cause
-    ) {
-      return { replaced: false };
-    }
-
-    // Build filter function for cost candidates
-    const costFilters = replacement.costFilters || {};
-    const filterCandidates = (candidate) => {
-      if (!candidate || candidate === card) return false;
-
-      if (costFilters.cardKind && candidate.cardKind !== costFilters.cardKind)
-        return false;
-
-      if (costFilters.archetype) {
-        const hasArchetype =
-          candidate.archetype === costFilters.archetype ||
-          (Array.isArray(candidate.archetypes) &&
-            candidate.archetypes.includes(costFilters.archetype));
-        if (!hasArchetype) return false;
+    const matchesTargetFilters = (target, filters) => {
+      if (!filters || Object.keys(filters).length === 0) return true;
+      if (this.effectEngine?.cardMatchesFilters) {
+        return this.effectEngine.cardMatchesFilters(target, filters);
       }
 
-      if (costFilters.name && candidate.name !== costFilters.name) return false;
-
+      const nameFilter = filters.name || filters.cardName;
+      if (nameFilter && target.name !== nameFilter) return false;
+      if (filters.cardKind) {
+        const requiredKinds = Array.isArray(filters.cardKind)
+          ? filters.cardKind
+          : [filters.cardKind];
+        if (!requiredKinds.includes(target.cardKind)) return false;
+      }
+      if (filters.subtype) {
+        const requiredSubtypes = Array.isArray(filters.subtype)
+          ? filters.subtype
+          : [filters.subtype];
+        if (!requiredSubtypes.includes(target.subtype)) return false;
+      }
+      if (filters.archetype) {
+        const archetypes = Array.isArray(target.archetypes)
+          ? target.archetypes
+          : target.archetype
+          ? [target.archetype]
+          : [];
+        if (!archetypes.includes(filters.archetype)) return false;
+      }
       return true;
     };
 
-    // Find candidates in the specified zone (default: field)
-    const costZone = replacement.costZone || "field";
-    const candidateZone = ownerPlayer[costZone] || [];
-    const candidates = candidateZone.filter(filterCandidates);
-
-    const costCount = replacement.costCount || 1;
-
-    if (candidates.length < costCount) {
-      return { replaced: false };
-    }
-
-    // Bot auto-selection (lowest ATK for cost)
-    if (ownerPlayer.id !== "player") {
-      const chosen = [...candidates]
-        .sort((a, b) => (a.atk || 0) - (b.atk || 0))
-        .slice(0, costCount);
-
-      for (const costCard of chosen) {
-        this.moveCard(costCard, ownerPlayer, "graveyard", {
-          fromZone: costZone,
-        });
+    const tryReplacement = async (sourceCard, sourceOwner, effect) => {
+      if (!sourceCard || !effect?.replacementEffect) {
+        return { replaced: false };
       }
 
-      this.markOncePerTurnUsed(card, ownerPlayer, replacementEffect);
+      const replacement = effect.replacementEffect;
+      if (replacement.type && replacement.type !== "destruction") {
+        return { replaced: false };
+      }
 
-      const costNames = chosen.map((c) => c.name).join(", ");
-      this.ui.log(
-        `${card.name} avoided destruction by sending ${costNames} to the Graveyard.`
-      );
-      return { replaced: true };
-    }
+      const sourceRequireFaceup = effect.requireFaceup !== false;
+      if (sourceRequireFaceup && sourceCard.isFacedown) {
+        return { replaced: false };
+      }
 
-    // Player confirmation
-    const costDescription = getCostTypeDescription(costFilters, costCount);
-    const prompt =
-      replacement.prompt ||
-      `Send ${costCount} ${costDescription} to the GY to save ${card.name}?`;
+      const targetOwnerKey =
+        replacement.targetOwner ||
+        replacement.appliesTo ||
+        (sourceCard === card ? "self" : null);
+      if (!targetOwnerKey) {
+        return { replaced: false };
+      }
 
-    const wantsToReplace =
-      this.ui?.showConfirmPrompt?.(prompt, {
-        kind: "destruction_replacement",
-        cardName: card.name,
-      }) ?? false;
-    if (!wantsToReplace) {
-      return { replaced: false };
-    }
+      if (targetOwnerKey !== "any") {
+        const expectedOwner =
+          targetOwnerKey === "self"
+            ? sourceOwner
+            : this.getOpponent(sourceOwner);
+        if (expectedOwner !== ownerPlayer) {
+          return { replaced: false };
+        }
+      }
 
-    // Player selection
-    const selections = await this.askPlayerToSelectCards({
-      owner: "player",
-      zone: costZone,
-      min: costCount,
-      max: costCount,
-      filter: filterCandidates,
-      message:
-        replacement.selectionMessage ||
+      const targetZones = replacement.targetZones
+        ? replacement.targetZones
+        : replacement.targetZone
+        ? [replacement.targetZone]
+        : null;
+      if (targetZones && targetZones.length > 0) {
+        if (!fromZone || !targetZones.includes(fromZone)) {
+          return { replaced: false };
+        }
+      }
+
+      const allowFacedown = replacement.allowFacedown === true;
+      const targetRequireFaceup =
+        replacement.targetRequireFaceup !== false && !allowFacedown;
+      if (targetRequireFaceup && card.isFacedown) {
+        return { replaced: false };
+      }
+
+      const targetFilters = replacement.targetFilters || null;
+      if (targetFilters && !matchesTargetFilters(card, targetFilters)) {
+        return { replaced: false };
+      }
+
+      const onceCheck = this.canUseOncePerTurn(sourceCard, sourceOwner, effect);
+      if (!onceCheck.ok) {
+        return { replaced: false };
+      }
+
+      if (
+        replacement.reason &&
+        replacement.reason !== "any" &&
+        replacement.reason !== cause
+      ) {
+        return { replaced: false };
+      }
+
+      const costCount = replacement.costCount ?? 0;
+      if (replacement.auto === true || costCount === 0) {
+        this.markOncePerTurnUsed(sourceCard, sourceOwner, effect);
+        const logMessage = formatReplacementText(
+          replacement.logMessage,
+          sourceCard.name
+        );
+        if (logMessage) {
+          this.ui?.log?.(logMessage);
+        } else {
+          this.ui?.log?.(
+            `${card.name} avoided destruction due to ${sourceCard.name}.`
+          );
+        }
+        return { replaced: true };
+      }
+
+      const costOwnerKey = replacement.costOwner || "source";
+      const costOwner =
+        costOwnerKey === "target" ? ownerPlayer : sourceOwner;
+
+      if (!costOwner) {
+        return { replaced: false };
+      }
+
+      const costFilters = replacement.costFilters || {};
+      const filterCandidates = (candidate) => {
+        if (!candidate || candidate === card) return false;
+
+        if (costFilters.cardKind && candidate.cardKind !== costFilters.cardKind)
+          return false;
+
+        if (costFilters.archetype) {
+          const hasArchetype =
+            candidate.archetype === costFilters.archetype ||
+            (Array.isArray(candidate.archetypes) &&
+              candidate.archetypes.includes(costFilters.archetype));
+          if (!hasArchetype) return false;
+        }
+
+        if (costFilters.name && candidate.name !== costFilters.name) return false;
+
+        return true;
+      };
+
+      const costZone = replacement.costZone || "field";
+      const candidateZone =
+        costZone === "fieldSpell"
+          ? costOwner.fieldSpell
+            ? [costOwner.fieldSpell]
+            : []
+          : costOwner[costZone] || [];
+      const candidates = candidateZone.filter(filterCandidates);
+
+      if (candidates.length < costCount) {
+        return { replaced: false };
+      }
+
+      // Bot auto-selection (lowest ATK for cost)
+      if (costOwner.id !== "player") {
+        const chosen = [...candidates]
+          .sort((a, b) => (a.atk || 0) - (b.atk || 0))
+          .slice(0, costCount);
+
+        for (const costCard of chosen) {
+          this.moveCard(costCard, costOwner, "graveyard", {
+            fromZone: costZone,
+          });
+        }
+
+        this.markOncePerTurnUsed(sourceCard, sourceOwner, effect);
+
+        const costNames = chosen.map((c) => c.name).join(", ");
+        const logMessage = formatReplacementText(
+          replacement.logMessage,
+          sourceCard.name
+        );
+        if (logMessage) {
+          this.ui?.log?.(logMessage);
+        } else {
+          this.ui?.log?.(
+            `${card.name} avoided destruction by sending ${costNames} to the Graveyard.`
+          );
+        }
+        return { replaced: true };
+      }
+
+      const costDescription = getCostTypeDescription(costFilters, costCount);
+      const prompt =
+        formatReplacementText(replacement.prompt, sourceCard.name) ||
+        `Send ${costCount} ${costDescription} to the GY to save ${card.name}?`;
+
+      const wantsToReplace =
+        this.ui?.showConfirmPrompt?.(prompt, {
+          kind: "destruction_replacement",
+          cardName: card.name,
+        }) ?? false;
+      if (!wantsToReplace) {
+        return { replaced: false };
+      }
+
+      const selectionMessage =
+        formatReplacementText(replacement.selectionMessage, sourceCard.name) ||
         `Choose ${costCount} ${
           costCount > 1 ? "cards" : "card"
-        } to send to the Graveyard for ${card.name}'s protection.`,
-    });
+        } to send to the Graveyard for ${card.name}'s protection.`;
 
-    if (!selections || selections.length < costCount) {
-      this.ui.log("Protection cancelled.");
-      return { replaced: false };
+      const selections = await this.askPlayerToSelectCards({
+        owner: "player",
+        zone: costZone,
+        min: costCount,
+        max: costCount,
+        filter: filterCandidates,
+        message: selectionMessage,
+      });
+
+      if (!selections || selections.length < costCount) {
+        this.ui.log("Protection cancelled.");
+        return { replaced: false };
+      }
+
+      // Pay cost
+      for (const costCard of selections) {
+        this.moveCard(costCard, costOwner, "graveyard", { fromZone: costZone });
+      }
+
+      this.markOncePerTurnUsed(sourceCard, sourceOwner, effect);
+
+      const costNames = selections.map((c) => c.name).join(", ");
+      const logMessage = formatReplacementText(
+        replacement.logMessage,
+        sourceCard.name
+      );
+      if (logMessage) {
+        this.ui?.log?.(logMessage);
+      } else {
+        this.ui.log(
+          `${card.name} avoided destruction by sending ${costNames} to the Graveyard.`
+        );
+      }
+      return { replaced: true };
+    };
+
+    const collectSources = (player) => {
+      if (!player) return [];
+      const field = Array.isArray(player.field) ? player.field : [];
+      const spellTrap = Array.isArray(player.spellTrap) ? player.spellTrap : [];
+      const fieldSpell = player.fieldSpell ? [player.fieldSpell] : [];
+      return [...field, ...spellTrap, ...fieldSpell].filter(Boolean);
+    };
+
+    const sourcePool = [
+      ...collectSources(ownerPlayer),
+      ...collectSources(this.getOpponent(ownerPlayer)),
+    ];
+
+    for (const sourceCard of sourcePool) {
+      const sourceOwner = sourceCard.owner === "player" ? this.player : this.bot;
+      if (!sourceOwner) continue;
+      const effects = sourceCard.effects || [];
+      for (const effect of effects) {
+        if (!effect?.replacementEffect) continue;
+        const result = await tryReplacement(sourceCard, sourceOwner, effect);
+        if (result?.replaced) {
+          return result;
+        }
+      }
     }
 
-    // Pay cost
-    for (const costCard of selections) {
-      this.moveCard(costCard, ownerPlayer, "graveyard", { fromZone: costZone });
-    }
-
-    this.markOncePerTurnUsed(card, ownerPlayer, replacementEffect);
-
-    const costNames = selections.map((c) => c.name).join(", ");
-    this.ui.log(
-      `${card.name} avoided destruction by sending ${costNames} to the Graveyard.`
-    );
-    return { replaced: true };
+    return { replaced: false };
   }
-
   async destroyCard(card, options = {}) {
     const result = await this.runZoneOp(
       "DESTROY_CARD",
@@ -893,6 +1042,7 @@ export default class Game {
           {
             cause,
             sourceCard,
+            fromZone,
           }
         )) || { replaced: false };
 
@@ -2100,5 +2250,6 @@ Game.prototype.checkWinCondition = uiWinCondition.checkWinCondition;
 
 // Interactions: bindCardInteractions
 Game.prototype.bindCardInteractions = uiInteractions.bindCardInteractions;
+
 
 

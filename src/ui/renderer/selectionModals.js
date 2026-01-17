@@ -40,11 +40,21 @@ export function showTargetSelection(
   const allowEmpty =
     contract.ui?.allowEmpty === true || config.allowEmpty === true;
 
+  // Check if this is a choice modal
+  const isChoiceModal =
+    contract.kind === "choice" ||
+    requirements.some((req) =>
+      req.candidates?.some((c) => c.zone === "choice")
+    );
+
   const content = document.createElement("div");
-  content.className = "modal-content target-content";
+  content.className = isChoiceModal
+    ? "modal-content target-content target-content-choice"
+    : "modal-content target-content";
+  const titleText = contract.message || "Select target(s)";
   content.innerHTML = `<span class="close-target">${
     allowCancel ? "&times;" : ""
-  }</span><h2>Select target(s)</h2>`;
+  }</span><h2>${titleText}</h2>`;
 
   const selectionState = {};
   const counterById = new Map();
@@ -72,9 +82,17 @@ export function showTargetSelection(
     block.className = "target-block";
     const min = Number(req.min ?? 0);
     const max = Number(req.max ?? min);
+    const label = req.label || req.id;
+
+    // Check if this is a choice-based selection
+    const isChoiceBlock = req.candidates?.some((c) => c.zone === "choice");
+    if (isChoiceBlock) {
+      block.classList.add("target-block-choice");
+    }
+
     block.innerHTML = `<p>Choose ${
       min === max ? min : `${min}-${max}`
-    } target(s) for ${req.id}</p>`;
+    } target(s) for ${label}</p>`;
 
     const counter = document.createElement("div");
     counter.className = "target-counter";
@@ -82,7 +100,9 @@ export function showTargetSelection(
     counterById.set(req.id, counter);
 
     const list = document.createElement("div");
-    list.className = "target-list";
+    list.className = isChoiceBlock
+      ? "target-list target-list-choice"
+      : "target-list";
 
     req.candidates.forEach((cand, candIndex) => {
       const btn = document.createElement("button");
@@ -90,6 +110,10 @@ export function showTargetSelection(
       btn.dataset.targetId = req.id;
       const selectionKey = cand.key || `${req.id}_${candIndex}`;
       btn.dataset.key = selectionKey;
+      const isChoiceCandidate = cand.zone === "choice";
+      if (isChoiceCandidate) {
+        btn.classList.add("target-btn-choice");
+      }
 
       // Create card visual
       const targetCard = cand.cardRef || cand;
@@ -98,32 +122,51 @@ export function showTargetSelection(
         (targetCard?.name && targetCard.name) ||
         cand.name ||
         "Card";
-      const cardImage = document.createElement("img");
-      cardImage.src =
-        targetCard.image || cand.cardRef?.image || "assets/card-back.png";
-      cardImage.alt = displayName;
-      cardImage.style.width = "100px";
-      cardImage.style.height = "auto";
-      cardImage.style.borderRadius = "4px";
-      cardImage.style.marginBottom = "8px";
-      cardImage.style.boxShadow = "0 2px 8px rgba(0, 0, 0, 0.5)";
 
-      const nameDiv = document.createElement("div");
-      nameDiv.className = "target-name";
-      nameDiv.textContent = displayName;
+      if (isChoiceCandidate) {
+        // Compact choice layout (no card image)
+        const choiceHeader = document.createElement("div");
+        choiceHeader.className = "choice-header";
+        choiceHeader.textContent = targetCard.label || displayName;
 
-      const metaDiv = document.createElement("div");
-      metaDiv.className = "target-meta";
-      metaDiv.textContent = `${cand.owner} ${cand.position || ""}`.trim();
+        btn.appendChild(choiceHeader);
 
-      const statsDiv = document.createElement("div");
-      statsDiv.className = "target-stats";
-      statsDiv.textContent = `ATK ${cand.atk ?? "-"} / DEF ${cand.def ?? "-"}`;
+        if (targetCard?.description) {
+          const descDiv = document.createElement("div");
+          descDiv.className = "choice-desc";
+          descDiv.textContent = targetCard.description;
+          btn.appendChild(descDiv);
+        }
+      } else {
+        // Standard card layout with image
+        const cardImage = document.createElement("img");
+        cardImage.src =
+          targetCard.image || cand.cardRef?.image || "assets/card-back.png";
+        cardImage.alt = displayName;
+        cardImage.style.width = "100px";
+        cardImage.style.height = "auto";
+        cardImage.style.borderRadius = "4px";
+        cardImage.style.marginBottom = "8px";
+        cardImage.style.boxShadow = "0 2px 8px rgba(0, 0, 0, 0.5)";
 
-      btn.appendChild(cardImage);
-      btn.appendChild(nameDiv);
-      btn.appendChild(metaDiv);
-      btn.appendChild(statsDiv);
+        const nameDiv = document.createElement("div");
+        nameDiv.className = "target-name";
+        nameDiv.textContent = displayName;
+
+        btn.appendChild(cardImage);
+        btn.appendChild(nameDiv);
+
+        const metaDiv = document.createElement("div");
+        metaDiv.className = "target-meta";
+        metaDiv.textContent = `${cand.owner} ${cand.position || ""}`.trim();
+
+        const statsDiv = document.createElement("div");
+        statsDiv.className = "target-stats";
+        statsDiv.textContent = `ATK ${cand.atk ?? "-"} / DEF ${cand.def ?? "-"}`;
+
+        btn.appendChild(metaDiv);
+        btn.appendChild(statsDiv);
+      }
 
       btn.addEventListener("click", () => {
         const arr = selectionState[req.id] || [];
@@ -313,7 +356,9 @@ export function showDestructionNegationPrompt(
   title.textContent = `Deseja ativar o efeito de "${cardName}"?`;
 
   const desc = document.createElement("p");
-  desc.innerHTML = costDescription ? `Custo: ${costDescription}`.replace(/\n/g, '<br>') : "";
+  desc.innerHTML = costDescription
+    ? `Custo: ${costDescription}`.replace(/\n/g, "<br>")
+    : "";
 
   const actions = document.createElement("div");
   actions.className = "target-actions";
@@ -426,8 +471,8 @@ export function showFusionMaterialSelection(
     const zones = Array.isArray(req.allowedZones)
       ? req.allowedZones
       : typeof req.zone === "string"
-      ? [req.zone]
-      : null;
+        ? [req.zone]
+        : null;
     const zoneSuffix =
       zones && zones.length > 0 ? ` (${zones.join(" or ")})` : "";
     hint.innerHTML += `${count}x ${desc}${zoneSuffix}<br>`;

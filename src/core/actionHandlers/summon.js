@@ -42,8 +42,24 @@ export async function handleSpecialSummonFromZone(
   const { player, source, destroyed } = ctx;
   const game = engine.game;
   const promptPlayer = action.promptPlayer !== false && !isAI(player);
+  const optName = action.oncePerTurnName;
+  const optEffect = optName
+    ? {
+        oncePerTurn: true,
+        oncePerTurnName: optName,
+        oncePerTurnScope: action.oncePerTurnScope,
+      }
+    : null;
 
   if (!player || !game) return false;
+
+  if (optEffect && typeof game.canUseOncePerTurn === "function") {
+    const optCheck = game.canUseOncePerTurn(source, player, optEffect);
+    if (!optCheck.ok) {
+      getUI(game)?.log(optCheck.reason || "Effect already used this turn.");
+      return false;
+    }
+  }
 
   const zoneSpec = action.zone || "deck";
   const zoneNames = Array.isArray(zoneSpec) ? zoneSpec : [zoneSpec];
@@ -330,13 +346,17 @@ export async function handleSpecialSummonFromZone(
       return false;
     }
 
-    return await summonCards(
+    const success = await summonCards(
       selection.selected,
       zoneEntries,
       player,
       action,
       engine
     );
+    if (success && optEffect && typeof game.markOncePerTurnUsed === "function") {
+      game.markOncePerTurnUsed(source, player, optEffect);
+    }
+    return success;
   }
 
   // Multi-card summon (graveyard revival pattern)
@@ -394,7 +414,11 @@ export async function handleSpecialSummonFromZone(
     return false;
   }
 
-  return await summonCards(selected, zoneEntries, player, action, engine);
+  const success = await summonCards(selected, zoneEntries, player, action, engine);
+  if (success && optEffect && typeof game.markOncePerTurnUsed === "function") {
+    game.markOncePerTurnUsed(source, player, optEffect);
+  }
+  return success;
 }
 
 /**

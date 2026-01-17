@@ -4902,7 +4902,7 @@ export const cardDatabase = [
                   {
                     type: "buff_stats_temp",
                     targetRef: "lightning_magic_lance_target",
-                    atkBoost: 700,
+                    atkBoost: 600,
                     defBoost: 0,
                   },
                   {
@@ -4996,6 +4996,368 @@ export const cardDatabase = [
             targetRef: "viridis_recover_target",
             player: "self",
             to: "hand",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 206,
+    name: "Tera, Arcanist of Earth",
+    cardKind: "monster",
+    atk: 1500,
+    def: 1800,
+    level: 4,
+    type: "Spellcaster",
+    archetype: "Arcanist",
+    description:
+      'During your opponent\'s turn (Quick Effect): you can target 1 face-up monster your opponent controls; change its battle position. If this card is equipped with an "Arcanist" Equip Spell, you can target up to 2 face-up monsters instead. You can only use this effect of "Tera, Arcanist of Earth" once per turn.',
+    image: "assets/Tera, Arcanist of Earth.png",
+    effects: [
+      {
+        id: "tera_arcanist_earth_quick_single",
+        timing: "manual",
+        speed: 2,
+        isQuickEffect: true,
+        requireFaceup: true,
+        oncePerTurn: true,
+        oncePerTurnName: "tera_arcanist_earth_quick",
+        conditions: [
+          {
+            type: "turn_player",
+            player: "opponent",
+            reason: "Effect can only be used during your opponent's turn.",
+          },
+          {
+            type: "equipped_with_filters",
+            min: 0,
+            max: 0,
+            filters: {
+              cardKind: "spell",
+              subtype: "equip",
+              archetype: "Arcanist",
+            },
+          },
+        ],
+        targets: [
+          {
+            id: "tera_arcanist_earth_targets",
+            owner: "opponent",
+            zone: "field",
+            cardKind: "monster",
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "switch_position",
+            targetRef: "tera_arcanist_earth_targets",
+          },
+        ],
+      },
+      {
+        id: "tera_arcanist_earth_quick_double",
+        timing: "manual",
+        speed: 2,
+        isQuickEffect: true,
+        requireFaceup: true,
+        oncePerTurn: true,
+        oncePerTurnName: "tera_arcanist_earth_quick",
+        conditions: [
+          {
+            type: "turn_player",
+            player: "opponent",
+            reason: "Effect can only be used during your opponent's turn.",
+          },
+          {
+            type: "equipped_with_filters",
+            min: 1,
+            filters: {
+              cardKind: "spell",
+              subtype: "equip",
+              archetype: "Arcanist",
+            },
+          },
+        ],
+        targets: [
+          {
+            id: "tera_arcanist_earth_targets",
+            owner: "opponent",
+            zone: "field",
+            cardKind: "monster",
+            requireFaceup: true,
+            count: { min: 1, max: 2 },
+          },
+        ],
+        actions: [
+          {
+            type: "switch_position",
+            targetRef: "tera_arcanist_earth_targets",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 207,
+    name: "Albus, Arcanist of Ice",
+    cardKind: "monster",
+    atk: 1500,
+    def: 1200,
+    level: 4,
+    type: "Spellcaster",
+    archetype: "Arcanist",
+    description:
+      'If you control an "Arcanist" monster, you can Special Summon this card from your hand. You can only Special Summon "Albus, Arcanist of Ice" once per turn this way. The first time each turn an "Arcanist" Spell you control would be destroyed, it is not destroyed.',
+    image: "assets/Albus, Arcanist of Ice.png",
+    effects: [
+      {
+        id: "albus_arcanist_ice_special_summon",
+        timing: "ignition",
+        requireZone: "hand",
+        requirePhase: ["main1", "main2"],
+        oncePerTurn: true,
+        oncePerTurnName: "albus_arcanist_ice_special_summon",
+        conditions: [
+          {
+            type: "control_card_filters",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            archetype: "Arcanist",
+            min: 1,
+          },
+        ],
+        actions: [
+          {
+            type: "special_summon_from_zone",
+            zone: "hand",
+            filters: { name: "Albus, Arcanist of Ice" },
+            count: { min: 0, max: 1 },
+            position: "choice",
+            promptPlayer: true,
+            oncePerTurnName: "albus_arcanist_ice_special_summon",
+          },
+        ],
+      },
+      {
+        id: "albus_arcanist_ice_spell_guard",
+        timing: "passive",
+        requireFaceup: true,
+        oncePerTurn: true,
+        oncePerTurnName: "albus_arcanist_ice_spell_guard",
+        replacementEffect: {
+          type: "destruction",
+          reason: "any",
+          targetOwner: "self",
+          targetZones: ["spellTrap", "fieldSpell"],
+          targetFilters: {
+            cardKind: "spell",
+            archetype: "Arcanist",
+          },
+          targetRequireFaceup: false,
+          auto: true,
+          logMessage:
+            "An Arcanist Spell you control avoided destruction due to {source}.",
+        },
+      },
+    ],
+  },
+  {
+    id: 208,
+    name: "Master of Mirrors Arcanist",
+    cardKind: "monster",
+    atk: 2200,
+    def: 2200,
+    level: 7,
+    type: "Spellcaster",
+    archetype: "Arcanist",
+    description:
+      'If this card is Normal Summoned: You can target 1 to 3 "Arcanist" Spells in your GY; shuffle them into the Deck, then draw 1 card.\nIf this card is equipped with an "Arcanist" Equip Spell: You can target 1 Level 4 or lower "Arcanist" monster in your GY; Special Summon it.\nYou can only activate each effect of "Master of Mirrors Arcanist" once per turn.',
+    image: "assets/Master of Mirrors Arcanist.png",
+    effects: [
+      {
+        id: "master_mirrors_arcanist_shuffle_draw",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethods: ["normal"],
+        requireSelfAsSummoned: true,
+        oncePerTurn: true,
+        oncePerTurnName: "master_mirrors_arcanist_shuffle_draw",
+        promptUser: true,
+        promptMessage:
+          'Activate "Master of Mirrors Arcanist" to shuffle 1 to 3 "Arcanist" Spells from your GY into the Deck, then draw 1 card?',
+        targets: [
+          {
+            id: "master_mirrors_arcanist_spell_targets",
+            owner: "self",
+            zone: "graveyard",
+            cardKind: "spell",
+            archetype: "Arcanist",
+            count: { min: 1, max: 3 },
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "master_mirrors_arcanist_spell_targets",
+            player: "self",
+            to: "deck",
+          },
+          {
+            type: "shuffle_deck",
+            player: "self",
+          },
+          {
+            type: "draw",
+            player: "self",
+            amount: 1,
+          },
+        ],
+      },
+      {
+        id: "master_mirrors_arcanist_revive",
+        timing: "ignition",
+        requireFaceup: true,
+        oncePerTurn: true,
+        oncePerTurnName: "master_mirrors_arcanist_revive",
+        conditions: [
+          {
+            type: "equipped_with_filters",
+            min: 1,
+            filters: {
+              cardKind: "spell",
+              subtype: "equip",
+              archetype: "Arcanist",
+            },
+          },
+        ],
+        targets: [
+          {
+            id: "master_mirrors_arcanist_revive_target",
+            owner: "self",
+            zone: "graveyard",
+            cardKind: "monster",
+            archetype: "Arcanist",
+            maxLevel: 4,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "special_summon_from_zone",
+            targetRef: "master_mirrors_arcanist_revive_target",
+            zone: "graveyard",
+            position: "choice",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 209,
+    name: "Meeting of the Arcanists",
+    cardKind: "spell",
+    subtype: "continuous",
+    archetype: "Arcanist",
+    description:
+      'Once per turn: You can apply 1 of these effects;\n- Discard 2 "Arcanist" monsters; add 1 "Arcanist" Spell from your Deck to your hand.\n- Discard 2 "Arcanist" Spells; add 1 Level 4 or lower "Arcanist" monster from your Deck to your hand.',
+    image: "assets/Meeting of the Arcanists.png",
+    effects: [
+      {
+        id: "meeting_arcanists_choose_effect",
+        timing: "ignition",
+        oncePerTurn: true,
+        oncePerTurnName: "meeting_arcanists_choose_effect",
+        conditions: [
+          {
+            type: "any_of",
+            conditions: [
+              {
+                type: "control_card_filters",
+                owner: "self",
+                zone: "hand",
+                filters: { cardKind: "monster", archetype: "Arcanist" },
+                min: 2,
+              },
+              {
+                type: "control_card_filters",
+                owner: "self",
+                zone: "hand",
+                filters: { cardKind: "spell", archetype: "Arcanist" },
+                min: 2,
+              },
+            ],
+          },
+        ],
+        actions: [
+          {
+            type: "choose_action_case",
+            selectionMessage: "Choose an effect to apply.",
+            cases: [
+              {
+                id: "meeting_arcanists_discard_monsters",
+                label: 'Discard 2 "Arcanist" monsters',
+                description:
+                  'Discard 2 "Arcanist" monsters; add 1 "Arcanist" Spell from your Deck to your hand.',
+                targets: [
+                  {
+                    id: "meeting_arcanists_discard_monsters",
+                    owner: "self",
+                    zone: "hand",
+                    cardKind: "monster",
+                    archetype: "Arcanist",
+                    count: { min: 2, max: 2 },
+                  },
+                ],
+                actions: [
+                  {
+                    type: "move",
+                    targetRef: "meeting_arcanists_discard_monsters",
+                    player: "self",
+                    to: "graveyard",
+                  },
+                  {
+                    type: "search_any",
+                    player: "self",
+                    archetype: "Arcanist",
+                    cardKind: "spell",
+                  },
+                ],
+              },
+              {
+                id: "meeting_arcanists_discard_spells",
+                label: 'Discard 2 "Arcanist" Spells',
+                description:
+                  'Discard 2 "Arcanist" Spells; add 1 Level 4 or lower "Arcanist" monster from your Deck to your hand.',
+                targets: [
+                  {
+                    id: "meeting_arcanists_discard_spells",
+                    owner: "self",
+                    zone: "hand",
+                    cardKind: "spell",
+                    archetype: "Arcanist",
+                    count: { min: 2, max: 2 },
+                  },
+                ],
+                actions: [
+                  {
+                    type: "move",
+                    targetRef: "meeting_arcanists_discard_spells",
+                    player: "self",
+                    to: "graveyard",
+                  },
+                  {
+                    type: "search_any",
+                    player: "self",
+                    archetype: "Arcanist",
+                    cardKind: "monster",
+                    maxLevel: 4,
+                  },
+                ],
+              },
+            ],
           },
         ],
       },

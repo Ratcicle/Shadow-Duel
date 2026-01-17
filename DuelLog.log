@@ -1,0 +1,64 @@
+i18n.js:152 [i18n] pt-br translations: 106/106 cards (0 missing, 0 extra).
+lifecycle.js:25 
+──────────────────── TURNO 1: Bot 1 ────────────────────
+log.js:10 Summon Method: Normal | From: Hand | You -> Tera, Arcanist of Earth
+triggers.js:14 [checkAndOfferTraps] Called for event: after_summon Object
+triggers.js:38 [checkAndOfferTraps] Proceeding to open chain window
+triggers.js:106 [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+lifecycle.js:25 
+──────────────────── TURNO 2: Bot 2 ────────────────────
+BotLogger.js:139 
+[Phase] ⏭️ bot | T2 standby → main1 (0 actions, 0ms)
+Bot.js:193 [Bot.makeMove] Guard check: Object
+Bot.js:200 [Bot.makeMove] Phase: main1
+Bot.js:313 [Bot.playMainPhase] Generated 4 raw actions, 4 sequenced actions
+Bot.js:317 [Bot.playMainPhase] Actions: Array(4)
+Bot.js:352 [Bot.playMainPhase] Running beam search with 4 actions (width=2, depth=2, budget=100)...
+Bot.js:363 [Bot.playMainPhase] Beam search result: Object
+Bot.js:366 [Bot.playMainPhase] ✅ Beam search chose: Object
+BotLogger.js:110 
+[Decision] bot | T2:main1 🥈
+BotLogger.js:111   Chosen: #2/4 - summon:Shadow-Heart Imp (p:9)
+BotLogger.js:112   Coherence: 70%
+log.js:10 Summon Method: Normal | From: Hand | Opponent -> Shadow-Heart Imp
+selection.js:65 [selectCandidates] Starting search for target "imp_special_from_hand": owner="self", zone="hand", archetype="Shadow-Heart", excludeCardName="undefined"
+selection.js:65 [selectCandidates] Using 1 owners: bot
+selection.js:65 [selectCandidates] Checking zone "hand" for owner bot: 4 cards (Shadow-Heart Abyssal Eel, Shadow-Heart Coward, Darkness Valley, Shadow-Heart Battle Hymn)
+selection.js:65 [selectCandidates] Evaluating card: Shadow-Heart Abyssal Eel (archetype: Shadow-Heart, owner: bot)
+selection.js:65 [selectCandidates] ACCEPTED: Shadow-Heart Abyssal Eel
+selection.js:65 [selectCandidates] Evaluating card: Shadow-Heart Coward (archetype: Shadow-Heart, owner: bot)
+selection.js:65 [selectCandidates] ACCEPTED: Shadow-Heart Coward
+selection.js:65 [selectCandidates] Evaluating card: Darkness Valley (archetype: Shadow-Heart, owner: bot)
+selection.js:65 [selectCandidates] Rejecting: cardKind mismatch (spell !== monster)
+selection.js:65 [selectCandidates] Evaluating card: Shadow-Heart Battle Hymn (archetype: Shadow-Heart, owner: bot)
+selection.js:65 [selectCandidates] Rejecting: cardKind mismatch (spell !== monster)
+selection.js:65 [selectCandidates] Found 2 candidates for target "imp_special_from_hand" (archetype: Shadow-Heart, zone: hand, exclude: undefined)
+log.js:10 Summon Method: Special | From: Hand | Opponent -> Shadow-Heart Abyssal Eel
+triggers.js:14 [checkAndOfferTraps] Called for event: after_summon Object
+triggers.js:38 [checkAndOfferTraps] Proceeding to open chain window
+triggers.js:100 [checkAndOfferTraps] Opening chain window via ChainSystem
+ChainSystem.js:917 [ChainSystem] Opening chain window: summon Object
+ChainSystem.js:944 [ChainSystem] Offering chain responses (first: player, second: bot)
+log.js:10 Opponent Special Summoned Shadow-Heart Abyssal Eel from hand.
+triggers.js:14 [checkAndOfferTraps] Called for event: after_summon Object
+triggers.js:22 [checkAndOfferTraps] Skipped: trapPromptInProgress=true
+log.js:10 Bot summons Shadow-Heart Imp
+Bot.js:313 [Bot.playMainPhase] Generated 2 raw actions, 2 sequenced actions
+Bot.js:317 [Bot.playMainPhase] Actions: Array(2)
+Bot.js:352 [Bot.playMainPhase] Running beam search with 2 actions (width=2, depth=2, budget=100)...
+Bot.js:363 [Bot.playMainPhase] Beam search result: Object
+Bot.js:366 [Bot.playMainPhase] ✅ Beam search chose: Object
+BotLogger.js:110 
+[Decision] bot | T2:main1 🥇
+BotLogger.js:111   Chosen: #1/2 - spell:Darkness Valley (p:9)
+BotLogger.js:112   Coherence: 100%
+BotLogger.js:123 
+[EmptyPhase] ⚠️  bot | T2:main1
+BotLogger.js:124   Reason: ACTION_FAILED
+BotLogger.js:126   Context: LP=8000 | Hand=3 | Field=2 | GY=0
+ChainSystem.js:946 [ChainSystem] Chain responses complete, resolving chain (0 links)
+ChainSystem.js:950 [ChainSystem] Chain resolution complete
+ChainSystem.js:953 [ChainSystem] Cleaning up chain window
+ChainSystem.js:959 [ChainSystem] Chain window closed successfully
+triggers.js:102 [checkAndOfferTraps] Chain window closed, cleaning up
+triggers.js:106 [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false

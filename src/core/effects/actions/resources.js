@@ -37,6 +37,37 @@ export function applyDraw(action, ctx) {
 }
 
 /**
+ * Apply shuffle deck action
+ * @param {Object} action - Action configuration
+ * @param {Object} ctx - Context object
+ * @returns {boolean} Whether the deck was shuffled
+ */
+export function applyShuffleDeck(action, ctx) {
+  const targetPlayer = action.player === "opponent" ? ctx.opponent : ctx.player;
+  if (!targetPlayer) return false;
+
+  if (typeof targetPlayer.shuffleDeck === "function") {
+    targetPlayer.shuffleDeck();
+  } else if (Array.isArray(targetPlayer.deck)) {
+    for (let i = targetPlayer.deck.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [targetPlayer.deck[i], targetPlayer.deck[j]] = [
+        targetPlayer.deck[j],
+        targetPlayer.deck[i],
+      ];
+    }
+  }
+
+  if (!action.silent && this.game?.ui?.log) {
+    const ownerLabel = targetPlayer.name || targetPlayer.id || "Player";
+    this.game.ui.log(`${ownerLabel} shuffled their Deck.`);
+  }
+
+  this.game?.updateBoard?.();
+  return true;
+}
+
+/**
  * Apply heal action
  * @param {Object} action - Action configuration
  * @param {Object} ctx - Context object

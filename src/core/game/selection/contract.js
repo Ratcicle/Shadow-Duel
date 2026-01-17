@@ -97,6 +97,7 @@ export function normalizeSelectionContract(contract, overrides = {}) {
 
     const normalized = {
       id: req.id || `selection_${i + 1}`,
+      label: req.label || req.title || null,
       min,
       max,
       zones,

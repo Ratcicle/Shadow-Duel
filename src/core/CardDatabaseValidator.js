@@ -11,6 +11,7 @@ const VALID_TIMINGS = new Set([
   "ignition",
   "on_field_activate",
   "passive",
+  "manual",
 ]);
 
 const VALID_EVENTS = new Set([
