@@ -2639,7 +2639,7 @@ body {
 .target-content-choice {
   max-width: 650px;
   padding: 20px 28px;
-  background: linear-gradient(135deg, #16213e 0%, #1a1a2e 100%);
+  background: linear-gradient(135deg, #151515 0%, #1f1f1f 100%);
 }
 
 .target-content h2 {
@@ -2710,7 +2710,7 @@ body {
   align-items: center;
   justify-content: center;
   background: linear-gradient(135deg, #2a2a2a 0%, #1e1e1e 100%);
-  border: 2px solid #444;
+  border: 2px solid #2f2f2f;
   border-radius: 8px;
   padding: 12px;
   cursor: pointer;
@@ -2726,22 +2726,20 @@ body {
   padding: 16px 20px;
   text-align: left;
   align-items: flex-start;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-  border: 2px solid #0f3460;
+  background: linear-gradient(135deg, #1e1e1e 0%, #161616 100%);
+  border: 2px solid #2f2f2f;
 }
 
 .target-btn-choice:hover {
-  border-color: var(--accent-color);
-  background: linear-gradient(135deg, #1f2940 0%, #1a2942 100%);
-  box-shadow: 0 0 16px rgba(187, 134, 252, 0.3);
+  border-color: #3a3a3a;
+  background: linear-gradient(135deg, #242424 0%, #1b1b1b 100%);
+  box-shadow: none;
 }
 
 .target-btn-choice.selected {
-  background: linear-gradient(135deg, #2d1b4e 0%, #3d2463 100%);
+  background: linear-gradient(135deg, #202020 0%, #181818 100%);
   border-color: var(--accent-color);
-  box-shadow:
-    0 0 20px rgba(187, 134, 252, 0.5),
-    inset 0 0 20px rgba(187, 134, 252, 0.1);
+  box-shadow: none;
 }
 
 .choice-header {
@@ -2779,6 +2777,29 @@ body {
   opacity: 0;
 }
 
+.target-modal .target-btn {
+  background: linear-gradient(135deg, #2a2a2a 0%, #1e1e1e 100%);
+  border-color: #2f2f2f;
+  box-shadow: none;
+}
+
+.target-modal .target-btn::before {
+  opacity: 0;
+}
+
+.target-modal .target-btn:hover {
+  border-color: #3a3a3a;
+  box-shadow: none;
+  transform: none;
+}
+
+.target-modal .target-btn.selected {
+  background: linear-gradient(135deg, #2a2a2a 0%, #1e1e1e 100%);
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 2px var(--accent-color);
+  transform: none;
+}
+
 .target-btn:hover {
   border-color: var(--accent-color);
   box-shadow: 0 0 12px rgba(187, 134, 252, 0.4);
@@ -2786,41 +2807,63 @@ body {
 }
 
 .target-btn.selected {
-  background: linear-gradient(135deg, var(--accent-color) 0%, #9c5ed9 100%);
+  background: linear-gradient(135deg, #2a2a2a 0%, #1e1e1e 100%);
   border-color: var(--accent-color);
-  box-shadow:
-    0 0 20px rgba(187, 134, 252, 0.6),
-    inset 0 0 10px rgba(0, 0, 0, 0.3);
-  transform: scale(1.05);
+  box-shadow: 0 0 0 2px var(--accent-color);
+  transform: none;
+}
+
+.target-btn.target-btn-choice:hover {
+  border-color: #3a3a3a;
+  box-shadow: none;
+  transform: none;
+}
+
+.target-btn.target-btn-choice.selected {
+  background: linear-gradient(135deg, #202020 0%, #181818 100%);
+  border-color: var(--accent-color);
+  box-shadow: none;
+  transform: none;
+}
+
+.target-content-choice .target-btn {
+  background: linear-gradient(135deg, #1e1e1e 0%, #161616 100%);
+  border-color: #2f2f2f;
+  box-shadow: none;
+  transform: none;
+}
+
+.target-content-choice .target-btn::before {
+  opacity: 0;
+}
+
+.target-content-choice .target-btn:hover {
+  background: linear-gradient(135deg, #242424 0%, #1b1b1b 100%);
+  border-color: #3a3a3a;
+  box-shadow: none;
+  transform: none;
+}
+
+.target-content-choice .target-btn.selected {
+  background: linear-gradient(135deg, #1e1e1e 0%, #161616 100%);
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 1px var(--accent-color);
+  transform: none;
+}
+
+.target-content-choice .target-btn.selected:hover {
+  background: linear-gradient(135deg, #1e1e1e 0%, #161616 100%);
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 1px var(--accent-color);
+  transform: none;
 }
 
 .target-btn.selected::after {
-  content: "✓";
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 24px;
-  height: 24px;
-  background: #000;
-  color: var(--accent-color);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: bold;
-  font-size: 14px;
+  content: none;
 }
 
 .target-btn-choice.selected::after {
-  right: 16px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 28px;
-  height: 28px;
-  font-size: 16px;
-  background: var(--accent-color);
-  color: #000;
-  box-shadow: 0 0 12px rgba(187, 134, 252, 0.6);
+  content: none;
 }
 
 .target-name {
@@ -2873,32 +2916,38 @@ body {
   padding: 12px 28px;
   font-size: 0.95rem;
   font-weight: 600;
-  border: none;
+  border: 1px solid #3a3a3a;
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.3s;
   min-width: 120px;
+  background: #262626;
+  color: var(--text-color);
 }
 
 .target-actions button:first-child {
-  background: var(--accent-color);
-  color: #000;
+  background: #262626;
+  color: var(--text-color);
 }
 
 .target-actions button:first-child:hover {
-  opacity: 0.9;
-  box-shadow: 0 4px 12px rgba(187, 134, 252, 0.4);
+  background: var(--accent-color);
+  color: #000;
+  border-color: var(--accent-color);
+  box-shadow: 0 4px 12px rgba(187, 134, 252, 0.35);
 }
 
 .target-actions button:last-child {
-  background: #333;
+  background: #262626;
   color: var(--text-color);
-  border: 1px solid #555;
+  border: 1px solid #3a3a3a;
 }
 
 .target-actions button:last-child:hover {
-  background: #444;
+  background: var(--accent-color);
+  color: #000;
   border-color: var(--accent-color);
+  box-shadow: 0 4px 12px rgba(187, 134, 252, 0.35);
 }
 
 #game-container.selection-dim .card {
@@ -3056,29 +3105,14 @@ body {
 }
 
 .search-modal-visual .search-card-btn.selected {
-  background: linear-gradient(135deg, var(--accent-color) 0%, #9c5ed9 100%);
+  background: linear-gradient(135deg, #2a2a2a 0%, #1e1e1e 100%);
   border-color: var(--accent-color);
-  box-shadow:
-    0 0 20px rgba(187, 134, 252, 0.6),
-    inset 0 0 10px rgba(0, 0, 0, 0.3);
-  transform: scale(1.05);
+  box-shadow: 0 0 0 2px var(--accent-color);
+  transform: none;
 }
 
 .search-modal-visual .search-card-btn.selected::after {
-  content: "✓";
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 24px;
-  height: 24px;
-  background: #000;
-  color: var(--accent-color);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: bold;
-  font-size: 14px;
+  content: none;
 }
 
 .search-modal-visual .search-card-image {
