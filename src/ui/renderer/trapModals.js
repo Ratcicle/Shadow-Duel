@@ -22,8 +22,28 @@ export function showUnifiedTrapModal(options = {}) {
   const { cards = [], context = null, mode = "single" } = options;
 
   return new Promise((resolve) => {
+    let resolved = false;
+    const finalize = (result) => {
+      if (resolved) return;
+      resolved = true;
+      document.removeEventListener("keydown", handleKeydown);
+      overlay.remove();
+      resolve(result);
+    };
+
+    const handleKeydown = (event) => {
+      if (event.key === "Escape") {
+        finalize(null);
+      }
+    };
+
     const overlay = document.createElement("div");
     overlay.className = "trap-activation-overlay";
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) {
+        finalize(null);
+      }
+    });
 
     const modal = document.createElement("div");
     modal.className = "trap-activation-modal";
@@ -65,8 +85,9 @@ export function showUnifiedTrapModal(options = {}) {
       cardName.textContent = getCardDisplayName(card) || card.name || "";
       const cardDesc = document.createElement("div");
       cardDesc.className = "trap-card-description";
-      const descText = getCardDisplayDescription(card) || card.description || "";
-      cardDesc.innerHTML = descText.replace(/\n/g, '<br>');
+      const descText =
+        getCardDisplayDescription(card) || card.description || "";
+      cardDesc.innerHTML = descText.replace(/\n/g, "<br>");
       cardInfo.appendChild(cardName);
       cardInfo.appendChild(cardDesc);
       modal.appendChild(cardInfo);
@@ -79,16 +100,14 @@ export function showUnifiedTrapModal(options = {}) {
       cancelBtn.textContent = mode === "chain" ? "Passar" : "Não Ativar";
       cancelBtn.className = "trap-btn-cancel";
       cancelBtn.onclick = () => {
-        overlay.remove();
-        resolve(null);
+        finalize(null);
       };
 
       const confirmBtn = document.createElement("button");
       confirmBtn.textContent = "Ativar Armadilha";
       confirmBtn.className = "trap-btn-confirm";
       confirmBtn.onclick = () => {
-        overlay.remove();
-        resolve({ card, effect: item.effect || null, activate: true });
+        finalize({ card, effect: item.effect || null, activate: true });
       };
 
       actions.appendChild(cancelBtn);
@@ -97,6 +116,7 @@ export function showUnifiedTrapModal(options = {}) {
 
       overlay.appendChild(modal);
       document.body.appendChild(overlay);
+      document.addEventListener("keydown", handleKeydown);
       confirmBtn.focus();
     } else if (cards.length > 1) {
       // Multiple cards - show list with same styling
@@ -131,8 +151,7 @@ export function showUnifiedTrapModal(options = {}) {
         activateBtn.textContent = "Ativar";
         activateBtn.className = "trap-btn-confirm";
         activateBtn.onclick = () => {
-          overlay.remove();
-          resolve({ card, effect, activate: true });
+          finalize({ card, effect, activate: true });
         };
 
         cardOption.appendChild(preview);
@@ -151,14 +170,14 @@ export function showUnifiedTrapModal(options = {}) {
       passBtn.className = "trap-btn-cancel";
       passBtn.style.width = "100%";
       passBtn.onclick = () => {
-        overlay.remove();
-        resolve(null);
+        finalize(null);
       };
       actions.appendChild(passBtn);
       modal.appendChild(actions);
 
       overlay.appendChild(modal);
       document.body.appendChild(overlay);
+      document.addEventListener("keydown", handleKeydown);
       passBtn.focus();
     } else {
       // No cards - just resolve null

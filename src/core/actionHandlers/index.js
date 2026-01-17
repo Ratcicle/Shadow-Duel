@@ -33,6 +33,7 @@ export {
   handleDestroyTargetedCards,
   handleDestroyAndDamageByTargetAtk,
   handleDestroyAttackerOnArchetypeDestruction,
+  handleRegisterReplacementEffect,
 } from "./destruction.js";
 
 // Stats

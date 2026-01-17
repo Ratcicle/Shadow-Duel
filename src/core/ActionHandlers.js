@@ -40,6 +40,7 @@ export {
   handleDestroyTargetedCards,
   handleDestroyAndDamageByTargetAtk,
   handleDestroyAttackerOnArchetypeDestruction,
+  handleRegisterReplacementEffect,
 
   // Stats handlers
   handleSetStatsToZeroAndNegate,

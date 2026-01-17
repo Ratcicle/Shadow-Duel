@@ -4804,7 +4804,7 @@ export const cardDatabase = [
     subtype: "normal",
     archetype: "Arcanist",
     description:
-      'Target 1 "Arcanist" monster you control and 1 monster your opponent controls; destroy those targets, and if you do, each player takes damage equal to the ATK of the monster they controlled that was destroyed. If you control an "Arcanist" Equip Spell, you take no damage from this effect.',
+      'Target 1 "Arcanist" monster you control and 1 monster your opponent controls; destroy those targets, and if you do, each player takes damage equal to half the ATK of the monster they controlled that was destroyed. If you control an "Arcanist" Equip Spell, you take no damage from this effect.',
     image: "assets/Arcanist Crimson Explosion.png",
     effects: [
       {
@@ -4838,10 +4838,12 @@ export const cardDatabase = [
               {
                 targetRef: "crimson_magic_self_target",
                 damagePlayer: "owner",
+                multiplier: 0.5,
               },
               {
                 targetRef: "crimson_magic_opponent_target",
                 damagePlayer: "owner",
+                multiplier: 0.5,
               },
             ],
             skipDamageIf: {
@@ -4864,18 +4866,20 @@ export const cardDatabase = [
   },
   {
     id: 204,
-    name: "Lightning Magic Lance",
+    name: "Arcanist Lightning Lance",
     cardKind: "spell",
     subtype: "normal",
     archetype: "Arcanist",
     description:
-      'Target 1 face-up monster on the field; apply the appropriate effect depending on who controls that target. If it is an "Arcanist" monster you control: it gains 700 ATK and if it battles a Defense Position monster this turn, inflict piercing battle damage to your opponent. If it is a monster your opponent controls: it cannot declare an attack until the end of your opponent\'s next turn.',
+      'Target 1 face-up monster on the field; apply the appropriate effect depending on who controls that target. If it is an "Arcanist" monster you control: it gains 500 ATK and if it battles a Defense Position monster this turn, inflict piercing battle damage to your opponent. If it is a monster your opponent controls: it cannot declare an attack until the end of your opponent\'s next turn. You can only activate 1 "Arcanist Lightning Lance" per turn.',
     image: "assets/Lightning Magic Lance.png",
     effects: [
       {
         id: "lightning_magic_lance_effect",
         timing: "on_play",
         speed: 1,
+        oncePerTurn: true,
+        oncePerTurnName: "lightning_magic_lance_effect",
         storableByGrimoire: true,
         targets: [
           {
@@ -4902,7 +4906,7 @@ export const cardDatabase = [
                   {
                     type: "buff_stats_temp",
                     targetRef: "lightning_magic_lance_target",
-                    atkBoost: 600,
+                    atkBoost: 500,
                     defBoost: 0,
                   },
                   {
@@ -5181,7 +5185,7 @@ export const cardDatabase = [
         id: "master_mirrors_arcanist_shuffle_draw",
         timing: "on_event",
         event: "after_summon",
-        summonMethods: ["normal"],
+        summonMethods: ["normal", "tribute"],
         requireSelfAsSummoned: true,
         oncePerTurn: true,
         oncePerTurnName: "master_mirrors_arcanist_shuffle_draw",
@@ -5363,12 +5367,59 @@ export const cardDatabase = [
       },
     ],
   },
+  {
+    id: 210,
+    name: "Arcanist Ice Barrier",
+    cardKind: "spell",
+    subtype: "normal",
+    archetype: "Arcanist",
+    description:
+      'Until the end of your next turn, the first time an "Arcanist" monster you control that is equipped with an "Arcanist" Equip Spell would be destroyed, it is not destroyed.',
+    image: "assets/Arcanist Ice Barrier.png",
+    effects: [
+      {
+        id: "arcanist_ice_barrier_guard",
+        timing: "on_play",
+        speed: 1,
+        storableByGrimoire: true,
+        actions: [
+          {
+            type: "register_replacement_effect",
+            duration: "end_of_next_turn",
+            uses: 1,
+            sourceName: "Arcanist Ice Barrier",
+            uniqueKey: "arcanist_ice_barrier_guard",
+            replacementEffect: {
+              type: "destruction",
+              reason: "any",
+              targetOwner: "self",
+              targetZones: ["field"],
+              targetFilters: {
+                cardKind: "monster",
+                archetype: "Arcanist",
+                equippedWithFilters: {
+                  cardKind: "spell",
+                  subtype: "equip",
+                  archetype: "Arcanist",
+                  requireFaceup: true,
+                },
+              },
+              targetRequireFaceup: true,
+              auto: true,
+              logMessage:
+                "An equipped Arcanist monster you control avoided destruction due to {source}.",
+            },
+          },
+        ],
+      },
+    ],
+  },
 ];
 
 // Performance optimization: Create indexed maps for O(1) lookups
 export const cardDatabaseById = new Map(
-  cardDatabase.map((card) => [card.id, card])
+  cardDatabase.map((card) => [card.id, card]),
 );
 export const cardDatabaseByName = new Map(
-  cardDatabase.map((card) => [card.name, card])
+  cardDatabase.map((card) => [card.name, card]),
 );

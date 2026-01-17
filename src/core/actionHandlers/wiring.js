@@ -28,6 +28,7 @@ import {
   handleDestroyTargetedCards,
   handleDestroyAndDamageByTargetAtk,
   handleDestroyAttackerOnArchetypeDestruction,
+  handleRegisterReplacementEffect,
 } from "./destruction.js";
 
 // Stats handlers
@@ -74,13 +75,13 @@ export function registerDefaultHandlers(registry) {
   registry.register(
     "special_summon_from_hand_with_cost",
 
-    handleSpecialSummonFromHandWithCost
+    handleSpecialSummonFromHandWithCost,
   );
 
   registry.register(
     "special_summon_from_hand_with_tiered_cost",
 
-    handleSpecialSummonFromHandWithCost
+    handleSpecialSummonFromHandWithCost,
   );
 
   registry.register("bounce_and_summon", handleBounceAndSummon);
@@ -88,7 +89,7 @@ export function registerDefaultHandlers(registry) {
   registry.register(
     "special_summon_matching_level",
 
-    handleSpecialSummonFromZone
+    handleSpecialSummonFromZone,
   );
 
   registry.register("return_to_hand", handleReturnToHand);
@@ -102,7 +103,7 @@ export function registerDefaultHandlers(registry) {
   registry.register(
     "banish_card_from_graveyard",
 
-    handleBanishCardFromGraveyard
+    handleBanishCardFromGraveyard,
   );
 
   // Stat modification and effect negation handlers
@@ -110,13 +111,13 @@ export function registerDefaultHandlers(registry) {
   registry.register(
     "set_stats_to_zero_and_negate",
 
-    handleSetStatsToZeroAndNegate
+    handleSetStatsToZeroAndNegate,
   );
 
   registry.register(
     "grant_additional_normal_summon",
 
-    handleGrantAdditionalNormalSummon
+    handleGrantAdditionalNormalSummon,
   );
 
   // Field control handlers
@@ -150,7 +151,7 @@ export function registerDefaultHandlers(registry) {
   registry.register(
     "switch_defender_position_on_attack",
 
-    handleSwitchDefenderPositionOnAttack
+    handleSwitchDefenderPositionOnAttack,
   );
 
   registry.register("permanent_buff_named", handlePermanentBuffNamed);
@@ -158,7 +159,7 @@ export function registerDefaultHandlers(registry) {
   registry.register(
     "remove_permanent_buff_named",
 
-    handleRemovePermanentBuffNamed
+    handleRemovePermanentBuffNamed,
   );
 
   registry.register("grant_second_attack", handleBuffStatsTemp);
@@ -168,7 +169,7 @@ export function registerDefaultHandlers(registry) {
   registry.register(
     "conditional_summon_from_hand",
 
-    handleConditionalSummonFromHand
+    handleConditionalSummonFromHand,
   );
 
   // FASE 2: New handlers for Shadow-Heart refactoring
@@ -176,19 +177,19 @@ export function registerDefaultHandlers(registry) {
   registry.register(
     "destroy_attacker_on_archetype_destruction",
 
-    handleDestroyAttackerOnArchetypeDestruction
+    handleDestroyAttackerOnArchetypeDestruction,
   );
 
   registry.register(
     "upkeep_pay_or_send_to_grave",
 
-    handleUpkeepPayOrSendToGrave
+    handleUpkeepPayOrSendToGrave,
   );
 
   registry.register(
     "special_summon_from_deck_with_counter_limit",
 
-    handleSpecialSummonFromDeckWithCounterLimit
+    handleSpecialSummonFromDeckWithCounterLimit,
   );
 
   // FASE 3: New handlers for complex Shadow-Heart methods
@@ -196,7 +197,11 @@ export function registerDefaultHandlers(registry) {
   registry.register("destroy_targeted_cards", handleDestroyTargetedCards);
   registry.register(
     "destroy_and_damage_by_target_atk",
-    handleDestroyAndDamageByTargetAtk
+    handleDestroyAndDamageByTargetAtk,
+  );
+  registry.register(
+    "register_replacement_effect",
+    handleRegisterReplacementEffect,
   );
 
   registry.register("buff_stats_temp_with_second_attack", handleBuffStatsTemp);
@@ -208,7 +213,7 @@ export function registerDefaultHandlers(registry) {
   registry.register(
     "abyssal_serpent_delayed_summon",
 
-    handleAbyssalSerpentDelayedSummon
+    handleAbyssalSerpentDelayedSummon,
   );
 
   // Legacy/common actions migrated into the registry (proxy to EffectEngine methods)
@@ -218,7 +223,7 @@ export function registerDefaultHandlers(registry) {
 
   registry.register(
     "conditional_target_actions",
-    handleConditionalTargetActions
+    handleConditionalTargetActions,
   );
   registry.register("choose_action_case", handleChooseActionCase);
 
@@ -227,7 +232,7 @@ export function registerDefaultHandlers(registry) {
   registry.register(
     "heal_per_archetype_monster",
 
-    proxyEngineMethod("applyHealPerArchetypeMonster")
+    proxyEngineMethod("applyHealPerArchetypeMonster"),
   );
 
   registry.register("damage", proxyEngineMethod("applyDamage"));
@@ -247,7 +252,7 @@ export function registerDefaultHandlers(registry) {
   registry.register(
     "modify_stats_temp",
 
-    proxyEngineMethod("applyModifyStatsTemp")
+    proxyEngineMethod("applyModifyStatsTemp"),
   );
 
   registry.register("add_counter", proxyEngineMethod("applyAddCounter"));
@@ -255,67 +260,67 @@ export function registerDefaultHandlers(registry) {
   registry.register(
     "forbid_attack_this_turn",
 
-    proxyEngineMethod("applyForbidAttackThisTurn")
+    proxyEngineMethod("applyForbidAttackThisTurn"),
   );
 
   registry.register(
     "forbid_attack_next_turn",
 
-    proxyEngineMethod("applyForbidAttackNextTurn")
+    proxyEngineMethod("applyForbidAttackNextTurn"),
   );
 
   registry.register(
     "allow_direct_attack_this_turn",
 
-    proxyEngineMethod("applyAllowDirectAttackThisTurn")
+    proxyEngineMethod("applyAllowDirectAttackThisTurn"),
   );
 
   registry.register(
     "forbid_direct_attack_this_turn",
 
-    proxyEngineMethod("applyForbidDirectAttackThisTurn")
+    proxyEngineMethod("applyForbidDirectAttackThisTurn"),
   );
 
   registry.register(
     "special_summon_token",
 
-    proxyEngineMethod("applySpecialSummonToken")
+    proxyEngineMethod("applySpecialSummonToken"),
   );
 
   registry.register(
     "grant_void_fusion_immunity",
 
-    proxyEngineMethod("applyGrantVoidFusionImmunity")
+    proxyEngineMethod("applyGrantVoidFusionImmunity"),
   );
 
   registry.register(
     "destroy_self_monsters_and_draw",
 
-    proxyEngineMethod("applyDestroyAllOthersAndDraw")
+    proxyEngineMethod("applyDestroyAllOthersAndDraw"),
   );
 
   registry.register(
     "polymerization_fusion_summon",
 
-    proxyEngineMethod("applyPolymerizationFusion")
+    proxyEngineMethod("applyPolymerizationFusion"),
   );
 
   registry.register(
     "call_of_haunted_summon_and_bind",
 
-    proxyEngineMethod("applyCallOfTheHauntedSummon")
+    proxyEngineMethod("applyCallOfTheHauntedSummon"),
   );
 
   registry.register(
     "mirror_force_destroy_all",
 
-    proxyEngineMethod("applyMirrorForceDestroy")
+    proxyEngineMethod("applyMirrorForceDestroy"),
   );
 
   registry.register(
     "destroy_other_dragons_and_buff",
 
-    proxyEngineMethod("applyDestroyOtherDragonsAndBuff")
+    proxyEngineMethod("applyDestroyOtherDragonsAndBuff"),
   );
 
   // Blueprint actions

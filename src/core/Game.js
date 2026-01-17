@@ -138,6 +138,7 @@ export default class Game {
     this.eventResolutionDepth = 0;
     this.eventResolutionCounter = 0;
     this.pendingEventSelection = null;
+    this.temporaryReplacementEffects = [];
     this.trapPromptInProgress = false; // Avoid multiple trap prompts simultaneously
     this.testModeEnabled = false;
     this.devModeEnabled = !!options.devMode;
@@ -153,8 +154,8 @@ export default class Game {
     this.resetMaterialDuelStats("init");
 
     // ? FASE 2: Sistema global de delayed actions
-    // Estrutura genérica para rastrear ações agendadas (summons, damage, etc.)
-    // Cada entrada contém: actionType, triggerCondition, payload, scheduledTurn, priority
+    // Estrutura genï¿½rica para rastrear aï¿½ï¿½es agendadas (summons, damage, etc.)
+    // Cada entrada contï¿½m: actionType, triggerCondition, payload, scheduledTurn, priority
     this.delayedActions = [];
 
     // Track counts of special-summoned monsters by type per player
@@ -198,13 +199,13 @@ export default class Game {
   // -----------------------------------------------------------------------------
 
   /**
-   * ? FASE 4: Aplicar buff temporário com expiração baseada em turno
-   * Suporta múltiplos buffs simultâneos com expiração em turnos diferentes
+   * ? FASE 4: Aplicar buff temporï¿½rio com expiraï¿½ï¿½o baseada em turno
+   * Suporta mï¿½ltiplos buffs simultï¿½neos com expiraï¿½ï¿½o em turnos diferentes
    * @param {Object} card - Carta a receber o buff
    * @param {string} stat - Stat afetado ("atk" ou "def")
    * @param {number} value - Valor do buff
    * @param {number} expiresOnTurn - Turno em que o buff expira
-   * @param {string} id - ID único do buff (opcional)
+   * @param {string} id - ID ï¿½nico do buff (opcional)
    */
   applyTurnBasedBuff(card, stat, value, expiresOnTurn, id = null) {
     if (
@@ -231,7 +232,7 @@ export default class Game {
 
     card.turnBasedBuffs.push(buffEntry);
 
-    // Aplicar modificação imediata ao stat
+    // Aplicar modificaï¿½ï¿½o imediata ao stat
     if (stat === "atk") {
       card.atk += value;
     } else if (stat === "def") {
@@ -269,7 +270,7 @@ export default class Game {
       playerId,
       "effectActivationsByMaterialId",
       sourceCard.id,
-      1
+      1,
     );
     this.devLog("MATERIAL_EFFECT_ACTIVATION", {
       summary: `${playerId}:${sourceCard.name} (${sourceCard.id})`,
@@ -296,7 +297,7 @@ export default class Game {
       sourcePlayerId,
       "destroyedOpponentMonstersByMaterialId",
       sourceCard.id,
-      1
+      1,
     );
     this.devLog("MATERIAL_DESTROY_COUNT", {
       summary: `${sourcePlayerId}:${sourceCard.name} -> ${destroyedCard.name}`,
@@ -462,14 +463,14 @@ export default class Game {
     if (selectionInteractive && !allowDuringSelection) {
       return blocked(
         "BLOCKED_SELECTION_ACTIVE",
-        "Finalize a selecao atual antes de iniciar outra acao."
+        "Finalize a selecao atual antes de iniciar outra acao.",
       );
     }
 
     if (resolvingActive && !allowDuringResolving) {
       return blocked(
         "BLOCKED_RESOLVING",
-        "Finalize o efeito pendente antes de fazer outra acao."
+        "Finalize o efeito pendente antes de fazer outra acao.",
       );
     }
 
@@ -487,7 +488,7 @@ export default class Game {
       if (!phases.includes(this.phase)) {
         return blocked(
           "BLOCKED_WRONG_PHASE",
-          "Esta acao nao pode ser usada nesta fase."
+          "Esta acao nao pode ser usada nesta fase.",
         );
       }
     }
@@ -521,7 +522,7 @@ export default class Game {
     this.bot.buildDeck();
     this.bot.buildExtraDeck();
 
-    // Integração do sistema de captura de replay (se habilitado)
+    // Integraï¿½ï¿½o do sistema de captura de replay (se habilitado)
     replayIntegration.integrateReplayCapture(this);
     replayIntegration.startReplayCapture(this);
 
@@ -599,7 +600,7 @@ export default class Game {
     if (!card || card.name !== "Luminarch Sanctum Protector") return;
 
     const aegis = this.player.field.find(
-      (c) => c && c.name === "Luminarch Aegisbearer" && !c.isFacedown
+      (c) => c && c.name === "Luminarch Aegisbearer" && !c.isFacedown,
     );
 
     if (!aegis) {
@@ -665,12 +666,12 @@ export default class Game {
     if (cause === "battle" && card.cardKind === "monster") {
       const guardEquip = (card.equips || []).find(
         (equip) =>
-          equip && equip.grantsCrescentShieldGuard && equip.equippedTo === card
+          equip && equip.grantsCrescentShieldGuard && equip.equippedTo === card,
       );
 
       if (guardEquip) {
         this.ui.log(
-          `${guardEquip.name} was destroyed to protect ${card.name}.`
+          `${guardEquip.name} was destroyed to protect ${card.name}.`,
         );
         const guardResult = await this.destroyCard(guardEquip, {
           cause,
@@ -717,8 +718,8 @@ export default class Game {
         const archetypes = Array.isArray(target.archetypes)
           ? target.archetypes
           : target.archetype
-          ? [target.archetype]
-          : [];
+            ? [target.archetype]
+            : [];
         if (!archetypes.includes(filters.archetype)) return false;
       }
       return true;
@@ -760,8 +761,8 @@ export default class Game {
       const targetZones = replacement.targetZones
         ? replacement.targetZones
         : replacement.targetZone
-        ? [replacement.targetZone]
-        : null;
+          ? [replacement.targetZone]
+          : null;
       if (targetZones && targetZones.length > 0) {
         if (!fromZone || !targetZones.includes(fromZone)) {
           return { replaced: false };
@@ -798,21 +799,20 @@ export default class Game {
         this.markOncePerTurnUsed(sourceCard, sourceOwner, effect);
         const logMessage = formatReplacementText(
           replacement.logMessage,
-          sourceCard.name
+          sourceCard.name,
         );
         if (logMessage) {
           this.ui?.log?.(logMessage);
         } else {
           this.ui?.log?.(
-            `${card.name} avoided destruction due to ${sourceCard.name}.`
+            `${card.name} avoided destruction due to ${sourceCard.name}.`,
           );
         }
         return { replaced: true };
       }
 
       const costOwnerKey = replacement.costOwner || "source";
-      const costOwner =
-        costOwnerKey === "target" ? ownerPlayer : sourceOwner;
+      const costOwner = costOwnerKey === "target" ? ownerPlayer : sourceOwner;
 
       if (!costOwner) {
         return { replaced: false };
@@ -833,7 +833,8 @@ export default class Game {
           if (!hasArchetype) return false;
         }
 
-        if (costFilters.name && candidate.name !== costFilters.name) return false;
+        if (costFilters.name && candidate.name !== costFilters.name)
+          return false;
 
         return true;
       };
@@ -868,13 +869,13 @@ export default class Game {
         const costNames = chosen.map((c) => c.name).join(", ");
         const logMessage = formatReplacementText(
           replacement.logMessage,
-          sourceCard.name
+          sourceCard.name,
         );
         if (logMessage) {
           this.ui?.log?.(logMessage);
         } else {
           this.ui?.log?.(
-            `${card.name} avoided destruction by sending ${costNames} to the Graveyard.`
+            `${card.name} avoided destruction by sending ${costNames} to the Graveyard.`,
           );
         }
         return { replaced: true };
@@ -924,13 +925,13 @@ export default class Game {
       const costNames = selections.map((c) => c.name).join(", ");
       const logMessage = formatReplacementText(
         replacement.logMessage,
-        sourceCard.name
+        sourceCard.name,
       );
       if (logMessage) {
         this.ui?.log?.(logMessage);
       } else {
         this.ui.log(
-          `${card.name} avoided destruction by sending ${costNames} to the Graveyard.`
+          `${card.name} avoided destruction by sending ${costNames} to the Graveyard.`,
         );
       }
       return { replaced: true };
@@ -949,8 +950,59 @@ export default class Game {
       ...collectSources(this.getOpponent(ownerPlayer)),
     ];
 
+    const currentTurn = this.turnCounter;
+    if (Array.isArray(this.temporaryReplacementEffects)) {
+      this.temporaryReplacementEffects =
+        this.temporaryReplacementEffects.filter((entry) => {
+          if (!entry) return false;
+          if (
+            Number.isFinite(entry.expiresOnTurn) &&
+            currentTurn > entry.expiresOnTurn
+          ) {
+            return false;
+          }
+          if (
+            Number.isFinite(entry.usesRemaining) &&
+            entry.usesRemaining <= 0
+          ) {
+            return false;
+          }
+          return true;
+        });
+
+      for (const entry of this.temporaryReplacementEffects) {
+        const sourceOwner =
+          entry.ownerId === this.player.id ? this.player : this.bot;
+        if (!sourceOwner) continue;
+        const sourceCard = {
+          name: entry.sourceName || "Temporary Effect",
+          owner: sourceOwner.id,
+          isFacedown: false,
+        };
+        const effect = {
+          replacementEffect: entry.replacementEffect,
+          requireFaceup: false,
+        };
+        const result = await tryReplacement(sourceCard, sourceOwner, effect);
+        if (result?.replaced) {
+          if (Number.isFinite(entry.usesRemaining)) {
+            entry.usesRemaining -= 1;
+          }
+          if (
+            Number.isFinite(entry.usesRemaining) &&
+            entry.usesRemaining <= 0
+          ) {
+            this.temporaryReplacementEffects =
+              this.temporaryReplacementEffects.filter((e) => e !== entry);
+          }
+          return result;
+        }
+      }
+    }
+
     for (const sourceCard of sourcePool) {
-      const sourceOwner = sourceCard.owner === "player" ? this.player : this.bot;
+      const sourceOwner =
+        sourceCard.owner === "player" ? this.player : this.bot;
       if (!sourceOwner) continue;
       const effects = sourceCard.effects || [];
       for (const effect of effects) {
@@ -1017,7 +1069,7 @@ export default class Game {
             this.ui?.log?.(
               `${card.name} is protected from destruction by ${
                 cause === "battle" ? "battle" : "card effects"
-              }!`
+              }!`,
             );
             return { destroyed: false, reason: "protected", protectionType };
           }
@@ -1043,7 +1095,7 @@ export default class Game {
             cause,
             sourceCard,
             fromZone,
-          }
+          },
         )) || { replaced: false };
 
         if (replaced) {
@@ -1079,7 +1131,7 @@ export default class Game {
         card,
         fromZone: options.fromZone,
         toZone: "graveyard",
-      }
+      },
     );
     if (result?.destroyed) {
       const sourceCard = options.sourceCard || options.source || null;
@@ -1138,7 +1190,7 @@ export default class Game {
     this.ui.log(
       `${card.name} changes to ${
         newPosition === "attack" ? "Attack" : "Defense"
-      } Position.`
+      } Position.`,
     );
 
     // Emit event for replay capture
@@ -1160,7 +1212,7 @@ export default class Game {
     selections = null,
     activationZone = "field",
     owner = this.player,
-    options = {}
+    options = {},
   ) {
     if (this.disableEffectActivation) {
       this.ui?.log?.("Effect activations are disabled.");
@@ -1168,7 +1220,7 @@ export default class Game {
     }
     if (!card) return;
     console.log(
-      `[Game] tryActivateMonsterEffect called for: ${card.name} (zone: ${activationZone})`
+      `[Game] tryActivateMonsterEffect called for: ${card.name} (zone: ${activationZone})`,
     );
     const activationContext = {
       fromHand: activationZone === "hand",
@@ -1179,7 +1231,7 @@ export default class Game {
     };
     const activationEffect = this.effectEngine?.getMonsterIgnitionEffect?.(
       card,
-      activationZone
+      activationZone,
     );
 
     const pipelineResult = await this.runActivationPipeline({
@@ -1278,9 +1330,9 @@ export default class Game {
         name: card.name,
         cardKind: card.cardKind,
         subtype: card.subtype ?? null,
-        atk: card.cardKind === "monster" ? card.atk ?? null : null,
-        def: card.cardKind === "monster" ? card.def ?? null : null,
-        level: card.cardKind === "monster" ? card.level ?? null : null,
+        atk: card.cardKind === "monster" ? (card.atk ?? null) : null,
+        def: card.cardKind === "monster" ? (card.def ?? null) : null,
+        level: card.cardKind === "monster" ? (card.level ?? null) : null,
       }));
 
     const buildPlayerView = (owner, isSelf) => ({
@@ -1417,7 +1469,7 @@ export default class Game {
         optCard,
         optPlayer,
         oncePerTurnConfig.effect,
-        oncePerTurnConfig
+        oncePerTurnConfig,
       );
       if (!optCheck.ok) {
         logPipeline("PIPELINE_OPT_BLOCKED", {
@@ -1492,7 +1544,7 @@ export default class Game {
           activationContext,
           resolvedActivationZone,
           resolvedCard,
-          owner
+          owner,
         );
       } catch (err) {
         console.error("[Game] Activation pipeline error:", err);
@@ -1539,8 +1591,8 @@ export default class Game {
           activationContext.committed || config.preventCancel === true
             ? false
             : typeof config.allowCancel === "boolean"
-            ? config.allowCancel
-            : true;
+              ? config.allowCancel
+              : true;
 
         const normalizedContract = this.normalizeSelectionContract(
           selectionContract,
@@ -1555,7 +1607,7 @@ export default class Game {
               useFieldTargeting: config.useFieldTargeting,
               allowEmpty: config.allowEmpty,
             },
-          }
+          },
         );
 
         if (!normalizedContract.ok) {
@@ -1570,11 +1622,11 @@ export default class Game {
         const contract = normalizedContract.contract;
         if (typeof contract.ui.allowEmpty !== "boolean") {
           contract.ui.allowEmpty = contract.requirements.some(
-            (req) => Number(req.min ?? 0) === 0
+            (req) => Number(req.min ?? 0) === 0,
           );
         }
-        // Padrão: evitar field targeting em prompts genéricos (target_select),
-        // a menos que o contrato peça explicitamente.
+        // Padrï¿½o: evitar field targeting em prompts genï¿½ricos (target_select),
+        // a menos que o contrato peï¿½a explicitamente.
         const usingFieldTargeting =
           typeof contract.ui.useFieldTargeting === "boolean"
             ? contract.ui.useFieldTargeting
@@ -1699,7 +1751,7 @@ export default class Game {
           oncePerTurnInfo.card,
           oncePerTurnInfo.player,
           oncePerTurnInfo.effect,
-          { lockKey: oncePerTurnInfo.lockKey }
+          { lockKey: oncePerTurnInfo.lockKey },
         );
       }
       logPipeline("PIPELINE_FINALIZE", {
@@ -1846,7 +1898,7 @@ export default class Game {
 
   showShadowHeartCathedralModal(validMonsters, maxAtk, counterCount, callback) {
     console.log(
-      `[Cathedral Modal] Opening with ${validMonsters.length} valid monsters, Max ATK: ${maxAtk}, Counters: ${counterCount}`
+      `[Cathedral Modal] Opening with ${validMonsters.length} valid monsters, Max ATK: ${maxAtk}, Counters: ${counterCount}`,
     );
 
     if (
@@ -1857,7 +1909,7 @@ export default class Game {
         validMonsters,
         maxAtk,
         counterCount,
-        callback
+        callback,
       );
       return;
     }
@@ -2250,6 +2302,3 @@ Game.prototype.checkWinCondition = uiWinCondition.checkWinCondition;
 
 // Interactions: bindCardInteractions
 Game.prototype.bindCardInteractions = uiInteractions.bindCardInteractions;
-
-
-

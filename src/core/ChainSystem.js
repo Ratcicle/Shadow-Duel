@@ -286,7 +286,7 @@ export default class ChainSystem {
         return {
           ok: false,
           reason: `Effect can only respond to: ${effect.canRespondTo.join(
-            ", "
+            ", ",
           )}`,
         };
       }
@@ -341,37 +341,37 @@ export default class ChainSystem {
         const setTurn = card.setTurn ?? card.turnSetOn ?? null;
         if (setTurn === null || setTurn >= this.game.turnCounter) {
           console.log(
-            `[getActivatableCardsInChain] ${card.name}: cannot activate yet (setTurn=${setTurn}, currentTurn=${this.game.turnCounter})`
+            `[getActivatableCardsInChain] ${card.name}: cannot activate yet (setTurn=${setTurn}, currentTurn=${this.game.turnCounter})`,
           );
           continue;
         }
 
         console.log(
-          `[getActivatableCardsInChain] Checking trap ${card.name} for context ${context?.type}`
+          `[getActivatableCardsInChain] Checking trap ${card.name} for context ${context?.type}`,
         );
 
         const effect = this.findActivatableEffect(card, context, player);
         if (effect) {
           console.log(
             `[getActivatableCardsInChain] Found effect for ${card.name}:`,
-            effect.id
+            effect.id,
           );
           const chainCheck = this.canActivateInChain(effect, card, context);
           console.log(
             `[getActivatableCardsInChain] Chain check for ${card.name}:`,
-            chainCheck
+            chainCheck,
           );
           if (chainCheck.ok) {
             // Skip the canActivate check for traps - it's only meant for spells
             // Traps have their own validation in findActivatableEffect
             console.log(
-              `[getActivatableCardsInChain] ${card.name} is ACTIVATABLE`
+              `[getActivatableCardsInChain] ${card.name} is ACTIVATABLE`,
             );
             activatable.push({ card, effect, zone: "spellTrap" });
           }
         } else {
           console.log(
-            `[getActivatableCardsInChain] No activatable effect found for ${card.name}`
+            `[getActivatableCardsInChain] No activatable effect found for ${card.name}`,
           );
         }
       }
@@ -399,7 +399,7 @@ export default class ChainSystem {
             if (useMainPhaseRules) {
               const canActivate = this.game.effectEngine?.canActivate?.(
                 card,
-                player
+                player,
               );
               if (canActivate && canActivate.ok === false) continue;
             }
@@ -437,7 +437,7 @@ export default class ChainSystem {
             if (useMainPhaseRules) {
               const canActivate = this.game.effectEngine?.canActivate?.(
                 card,
-                player
+                player,
               );
               if (canActivate && canActivate.ok === false) continue;
             }
@@ -469,7 +469,7 @@ export default class ChainSystem {
     // Only log when there are activatable cards (reduce log noise)
     if (activatable.length > 0) {
       this.log(
-        `Found ${activatable.length} activatable cards for ${player.id} in ${context?.type} context`
+        `Found ${activatable.length} activatable cards for ${player.id} in ${context?.type} context`,
       );
     }
 
@@ -519,7 +519,7 @@ export default class ChainSystem {
                   cardOwner: ownerPlayer?.id || card.owner,
                   effectEvent: effect.event,
                   expectedEvent,
-                }
+                },
               );
             }
 
@@ -534,7 +534,7 @@ export default class ChainSystem {
                 !isOpponentAction(
                   context.attackerOwner?.id,
                   cardOwnerId,
-                  context.isOpponentAttack
+                  context.isOpponentAttack,
                 )
               ) {
                 continue;
@@ -547,7 +547,7 @@ export default class ChainSystem {
                 !isOpponentAction(
                   context.player?.id,
                   cardOwnerId,
-                  context.isOpponentSummon
+                  context.isOpponentSummon,
                 )
               ) {
                 continue;
@@ -564,8 +564,8 @@ export default class ChainSystem {
                 (card.owner === "player"
                   ? this.game.player
                   : card.owner === "bot"
-                  ? this.game.bot
-                  : null);
+                    ? this.game.bot
+                    : null);
               const ctxDefenderOwner =
                 context.defenderOwner ||
                 context.targetOwner ||
@@ -581,7 +581,7 @@ export default class ChainSystem {
                     inferredOwner: inferredOwner?.id,
                     ctxDefenderOwner: ctxDefenderOwner?.id,
                     defender: context.defender?.name || context.target?.name,
-                  }
+                  },
                 );
                 continue;
               }
@@ -599,7 +599,7 @@ export default class ChainSystem {
                 ? String(defender.type).toLowerCase()
                 : null;
               const requiredTypesNorm = requiredTypes.map((t) =>
-                String(t).toLowerCase()
+                String(t).toLowerCase(),
               );
               if (!defender || !requiredTypesNorm.includes(defenderTypeNorm)) {
                 console.log(
@@ -608,7 +608,7 @@ export default class ChainSystem {
                     defender: defender?.name,
                     defenderType: defender?.type,
                     requiredTypes,
-                  }
+                  },
                 );
                 continue;
               }
@@ -625,8 +625,8 @@ export default class ChainSystem {
                 (card.owner === "player"
                   ? this.game.player
                   : card.owner === "bot"
-                  ? this.game.bot
-                  : null);
+                    ? this.game.bot
+                    : null);
               const ctx = {
                 source: card,
                 player: cardOwner,
@@ -652,13 +652,13 @@ export default class ChainSystem {
                     targetFromContext: t.targetFromContext,
                     type: t.type,
                   })),
-                }
+                },
               );
 
               const targetResult = this.game.effectEngine.resolveTargets(
                 effect.targets,
                 ctx,
-                null
+                null,
               );
 
               console.log(
@@ -667,12 +667,12 @@ export default class ChainSystem {
                   ok: targetResult.ok,
                   reason: targetResult.reason,
                   needsSelection: targetResult.needsSelection,
-                }
+                },
               );
 
               if (targetResult.ok === false) {
                 this.log(
-                  `[findActivatableEffect] ${card.name}: targets not available - ${targetResult.reason}`
+                  `[findActivatableEffect] ${card.name}: targets not available - ${targetResult.reason}`,
                 );
                 continue;
               }
@@ -724,12 +724,12 @@ export default class ChainSystem {
             const targetResult = this.game.effectEngine.resolveTargets(
               effect.targets,
               ctx,
-              null
+              null,
             );
 
             if (targetResult.ok === false) {
               this.log(
-                `[findActivatableEffect] ${card.name}: targets not available for on_activate - ${targetResult.reason}`
+                `[findActivatableEffect] ${card.name}: targets not available for on_activate - ${targetResult.reason}`,
               );
               continue;
             }
@@ -772,12 +772,12 @@ export default class ChainSystem {
             const targetResult = this.game.effectEngine.resolveTargets(
               effect.targets,
               ctx,
-              null
+              null,
             );
 
             if (targetResult.ok === false) {
               this.log(
-                `[findActivatableEffect] ${card.name}: targets not available for quick-play - ${targetResult.reason}`
+                `[findActivatableEffect] ${card.name}: targets not available for quick-play - ${targetResult.reason}`,
               );
               continue;
             }
@@ -812,7 +812,10 @@ export default class ChainSystem {
         continue;
       }
 
-      if (effect.timing === "on_event" && effect.allowManualActivation !== true) {
+      if (
+        effect.timing === "on_event" &&
+        effect.allowManualActivation !== true
+      ) {
         continue;
       }
 
@@ -861,7 +864,10 @@ export default class ChainSystem {
       };
 
       if (effect.conditions && effectEngine?.evaluateConditions) {
-        const condCheck = effectEngine.evaluateConditions(effect.conditions, ctx);
+        const condCheck = effectEngine.evaluateConditions(
+          effect.conditions,
+          ctx,
+        );
         if (!condCheck.ok) {
           continue;
         }
@@ -871,7 +877,7 @@ export default class ChainSystem {
         const targetPreview = effectEngine.resolveTargets(
           effect.targets,
           ctx,
-          null
+          null,
         );
         if (targetPreview?.ok === false && !targetPreview?.needsSelection) {
           continue;
@@ -910,11 +916,16 @@ export default class ChainSystem {
    */
   async openChainWindow(context) {
     if (!this.game || this.isResolving) {
-      console.log("[ChainSystem] Cannot open chain window: game missing or chain resolving");
+      console.log(
+        "[ChainSystem] Cannot open chain window: game missing or chain resolving",
+      );
       return;
     }
 
-    console.log(`[ChainSystem] Opening chain window: ${context?.type}`, context);
+    console.log(
+      `[ChainSystem] Opening chain window: ${context?.type}`,
+      context,
+    );
 
     this.chainWindowOpen = true;
     this.chainWindowContext = context;
@@ -931,7 +942,7 @@ export default class ChainSystem {
         context.effect,
         context,
         null,
-        triggerZone
+        triggerZone,
       );
     }
 
@@ -941,9 +952,13 @@ export default class ChainSystem {
     const respondingPlayer = this.getOpponent(triggerPlayer);
 
     // Offer response to non-trigger player first
-    console.log(`[ChainSystem] Offering chain responses (first: ${respondingPlayer?.id}, second: ${triggerPlayer?.id})`);
+    console.log(
+      `[ChainSystem] Offering chain responses (first: ${respondingPlayer?.id}, second: ${triggerPlayer?.id})`,
+    );
     await this.offerChainResponses(respondingPlayer, triggerPlayer, context);
-    console.log(`[ChainSystem] Chain responses complete, resolving chain (${this.chainStack.length} links)`);
+    console.log(
+      `[ChainSystem] Chain responses complete, resolving chain (${this.chainStack.length} links)`,
+    );
 
     // Resolve the chain
     await this.resolveChain();
@@ -983,11 +998,11 @@ export default class ChainSystem {
           response.effect,
           context,
           response.selections,
-          response.zone
+          response.zone,
         );
 
         this.log(
-          `${currentResponder.id} added ${response.card.name} to chain (Level ${this.currentChainLevel})`
+          `${currentResponder.id} added ${response.card.name} to chain (Level ${this.currentChainLevel})`,
         );
       } else {
         // Player passed
@@ -1041,7 +1056,7 @@ export default class ChainSystem {
     const game = this.game;
     const opponent = this.getOpponent(player);
     const holyShieldOption = activatable.find(
-      (option) => option?.card?.name === "Luminarch Holy Shield"
+      (option) => option?.card?.name === "Luminarch Holy Shield",
     );
     if (holyShieldOption) {
       const luminarchTargets = (player?.field || []).filter(
@@ -1049,14 +1064,14 @@ export default class ChainSystem {
           card &&
           card.cardKind === "monster" &&
           card.archetype === "Luminarch" &&
-          !card.isFacedown
+          !card.isFacedown,
       );
       const oppAttackers = (opponent?.field || []).filter(
         (card) =>
           card &&
           card.cardKind === "monster" &&
           !card.isFacedown &&
-          card.position === "attack"
+          card.position === "attack",
       );
 
       const wouldLoseOrTakeDamage = (attacker, defender) => {
@@ -1114,7 +1129,7 @@ export default class ChainSystem {
           oppAttackers.some((opp) => {
             const outcome = wouldLoseOrTakeDamage(opp, monster);
             return outcome.loseMonster || outcome.takeDamage;
-          })
+          }),
         );
 
       if (
@@ -1125,7 +1140,7 @@ export default class ChainSystem {
           holyShieldOption.card,
           holyShieldOption.effect,
           player,
-          context
+          context,
         );
         return { ...holyShieldOption, selections };
       }
@@ -1149,7 +1164,7 @@ export default class ChainSystem {
       ) {
         const opponentAttackMonsters =
           opponent?.field?.filter(
-            (m) => m && !m.isFacedown && m.position === "attack"
+            (m) => m && !m.isFacedown && m.position === "attack",
           ).length || 0;
         priority += 50 + opponentAttackMonsters * 20;
       }
@@ -1163,7 +1178,7 @@ export default class ChainSystem {
           ...(player?.graveyard || [])
             .filter((c) => c.cardKind === "monster")
             .map((c) => c.atk || 0),
-          0
+          0,
         );
         priority +=
           30 +
@@ -1176,7 +1191,7 @@ export default class ChainSystem {
         const summonedLevel = context.card?.level || 0;
         const matchingMonsters =
           player?.hand?.filter(
-            (c) => c.cardKind === "monster" && c.level === summonedLevel
+            (c) => c.cardKind === "monster" && c.level === summonedLevel,
           ).length || 0;
         if (matchingMonsters > 0) {
           priority += 60 + matchingMonsters * 10;
@@ -1239,7 +1254,7 @@ export default class ChainSystem {
     // Se a melhor opção tem priority <= 0, passar automaticamente
     if (bestOption.priority <= 0) {
       this.log(
-        `Bot passing (best option priority: ${bestOption.priority} - too low)`
+        `Bot passing (best option priority: ${bestOption.priority} - too low)`,
       );
       return null;
     }
@@ -1257,7 +1272,7 @@ export default class ChainSystem {
 
     if (Math.random() < activationChance) {
       this.log(
-        `Bot activating ${bestOption.card.name} (priority: ${bestOption.priority})`
+        `Bot activating ${bestOption.card.name} (priority: ${bestOption.priority})`,
       );
 
       // Get selections if the effect requires targets
@@ -1265,7 +1280,7 @@ export default class ChainSystem {
         bestOption.card,
         bestOption.effect,
         player,
-        context
+        context,
       );
 
       return { ...bestOption, selections };
@@ -1325,7 +1340,7 @@ export default class ChainSystem {
         owner: player,
         activationContext: ctx.activationContext,
         selectionKind: "target",
-      }
+      },
     );
 
     if (!autoResult?.ok) {
@@ -1335,7 +1350,7 @@ export default class ChainSystem {
     const resolvedSelections = this.resolveSelectionsToCards(
       autoResult.selections || {},
       targetResult.selectionContract.requirements || [],
-      player
+      player,
     );
 
     const mergedSelections = {
@@ -1391,23 +1406,31 @@ export default class ChainSystem {
     let chosenOption = null;
 
     // Use existing trap offering system or create new modal
-    if (typeof ui.showChainResponseModal === "function") {
-      chosenOption = await ui.showChainResponseModal(
-        activatable,
-        context,
-        this.chainStack
-      );
-    } else if (typeof ui.offerTrapActivation === "function") {
-      // Fallback: Use existing trap selection if available
-      const cards = activatable.map((a) => a.card);
-      const result = await ui.offerTrapActivation(
-        cards,
-        `Respond to ${context?.type || "action"}?`
-      );
+    try {
+      if (typeof ui.showChainResponseModal === "function") {
+        const timeoutMs = 30000;
+        const timeoutPromise = new Promise((resolve) => {
+          setTimeout(() => resolve(null), timeoutMs);
+        });
+        chosenOption = await Promise.race([
+          ui.showChainResponseModal(activatable, context, this.chainStack),
+          timeoutPromise,
+        ]);
+      } else if (typeof ui.offerTrapActivation === "function") {
+        const cards = activatable.map((a) => a.card);
+        const result = await ui.offerTrapActivation(
+          cards,
+          `Respond to ${context?.type || "action"}?`,
+        );
 
-      if (result && result.card) {
-        chosenOption = activatable.find((a) => a.card === result.card) || null;
+        if (result && result.card) {
+          chosenOption =
+            activatable.find((a) => a.card === result.card) || null;
+        }
       }
+    } catch (error) {
+      console.error("[ChainSystem] playerChooseChainResponse failed:", error);
+      chosenOption = null;
     }
 
     // If player chose a card, get target selections if needed
@@ -1416,7 +1439,7 @@ export default class ChainSystem {
         chosenOption.card,
         chosenOption.effect,
         player,
-        context
+        context,
       );
 
       if (
@@ -1528,7 +1551,7 @@ export default class ChainSystem {
               const resolvedSelections = this.resolveSelectionsToCards(
                 selections,
                 contract.requirements,
-                player
+                player,
               );
               // Merge auto-resolved targets (e.g., targetFromContext) so they
               // are preserved alongside player-chosen selections.
@@ -1606,7 +1629,7 @@ export default class ChainSystem {
     this.chainStack.push(chainLink);
 
     this.log(
-      `Chain Link ${this.currentChainLevel}: ${card.name} (${player.id})`
+      `Chain Link ${this.currentChainLevel}: ${card.name} (${player.id})`,
     );
 
     // Notify UI
@@ -1652,7 +1675,7 @@ export default class ChainSystem {
       } catch (error) {
         console.error(
           `[ChainSystem] Error resolving ${link.card.name}:`,
-          error
+          error,
         );
       }
     }
@@ -1691,7 +1714,7 @@ export default class ChainSystem {
 
     if (!cardStillValid) {
       this.log(
-        `${card.name} is no longer valid in ${activationZone}, effect fizzles`
+        `${card.name} is no longer valid in ${activationZone}, effect fizzles`,
       );
       const ui = this.getUI();
       if (ui?.log) {
@@ -1754,13 +1777,13 @@ export default class ChainSystem {
         const targetResult = effectEngine.resolveTargets(
           effect.targets || [],
           ctx,
-          null
+          null,
         );
         if (targetResult.ok !== false && targetResult.targets) {
           resolvedSelections = targetResult.targets;
         } else if (targetResult.needsSelection) {
           this.log(
-            `${card.name} requires selection but none provided, effect may fail`
+            `${card.name} requires selection but none provided, effect may fail`,
           );
           resolvedSelections = {};
         }
@@ -1772,7 +1795,7 @@ export default class ChainSystem {
           await effectEngine.applyActions(
             effect.actions,
             ctx,
-            resolvedSelections || {}
+            resolvedSelections || {},
           );
         } catch (error) {
           // Enhanced error logging with chain link context for easier debugging
@@ -1790,11 +1813,11 @@ export default class ChainSystem {
           console.error(
             `[ChainSystem] Action error resolving chain link:`,
             linkContext,
-            error
+            error,
           );
           this.log(
             `Chain resolution failed for ${linkContext.cardName} (CL${linkContext.chainLevel}):`,
-            error.message
+            error.message,
           );
         }
       }
@@ -1806,7 +1829,7 @@ export default class ChainSystem {
         await effectEngine.handleBlueprintStorageAfterResolution(
           card,
           effect,
-          ctx
+          ctx,
         );
       }
 

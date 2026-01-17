@@ -62,7 +62,7 @@ export async function handleDestroyAndDamageByTargetAtk(
   action,
   ctx,
   targets,
-  engine
+  engine,
 ) {
   const { player, opponent, source } = ctx;
   const game = engine.game;
@@ -73,8 +73,8 @@ export async function handleDestroyAndDamageByTargetAtk(
     Array.isArray(action?.entries) && action.entries.length > 0
       ? action.entries
       : action?.targetRef
-      ? [{ targetRef: action.targetRef, damagePlayer: action.player }]
-      : [];
+        ? [{ targetRef: action.targetRef, damagePlayer: action.player }]
+        : [];
 
   if (entries.length === 0) return false;
 
@@ -128,6 +128,115 @@ export async function handleDestroyAndDamageByTargetAtk(
   }
 
   return destroyedAny || dealtDamage;
+}
+
+export async function handleRegisterReplacementEffect(
+  action,
+  ctx,
+  targets,
+  engine,
+) {
+  const { player, opponent, source } = ctx;
+  const game = engine.game;
+
+  if (!player || !game) return false;
+
+  const sourceName = action?.sourceName || source?.name || "Effect";
+  const rawEntries =
+    Array.isArray(action?.entries) && action.entries.length > 0
+      ? action.entries
+      : action?.replacementEffect
+        ? [{ ...action }]
+        : [];
+
+  if (rawEntries.length === 0) return false;
+
+  const resolveOwnerId = (ownerKey) => {
+    if (ownerKey === "opponent") return opponent?.id || null;
+    return player?.id || null;
+  };
+
+  const resolveExpiresOnTurn = (entry) => {
+    if (Number.isFinite(entry?.expiresOnTurn)) {
+      return entry.expiresOnTurn;
+    }
+    const duration = entry?.duration || null;
+    const durationTurnsRaw = entry?.durationTurns ?? entry?.turns ?? null;
+    if (duration === "end_of_turn") return game.turnCounter;
+    if (duration === "end_of_next_turn") return game.turnCounter + 1;
+    if (Number.isFinite(Number(durationTurnsRaw))) {
+      return game.turnCounter + Number(durationTurnsRaw);
+    }
+    return null;
+  };
+
+  const normalizeUses = (entry) => {
+    if (entry?.uses === undefined && entry?.usesRemaining === undefined) {
+      return Infinity;
+    }
+    const usesRaw = entry?.uses ?? entry?.usesRemaining;
+    return Number.isFinite(Number(usesRaw))
+      ? Math.max(0, Number(usesRaw))
+      : Infinity;
+  };
+
+  if (!Array.isArray(game.temporaryReplacementEffects)) {
+    game.temporaryReplacementEffects = [];
+  }
+
+  let addedAny = false;
+
+  for (const entryInput of rawEntries) {
+    const replacementEffect = entryInput?.replacementEffect;
+    if (!replacementEffect || typeof replacementEffect !== "object") {
+      continue;
+    }
+
+    const ownerKey = entryInput?.owner || entryInput?.targetOwner || "self";
+    const ownerIds =
+      ownerKey === "both"
+        ? [player?.id, opponent?.id]
+        : [resolveOwnerId(ownerKey)];
+
+    for (const ownerId of ownerIds) {
+      if (!ownerId) continue;
+
+      const uniqueKey = entryInput?.uniqueKey || entryInput?.key || null;
+      if (uniqueKey) {
+        game.temporaryReplacementEffects =
+          game.temporaryReplacementEffects.filter(
+            (existing) =>
+              !existing ||
+              existing.uniqueKey !== uniqueKey ||
+              existing.ownerId !== ownerId,
+          );
+      }
+
+      const entry = {
+        id: entryInput?.id || `${sourceName}:${Date.now()}`,
+        uniqueKey,
+        ownerId,
+        sourceName: entryInput?.sourceName || sourceName,
+        replacementEffect,
+        usesRemaining: normalizeUses(entryInput),
+        expiresOnTurn: resolveExpiresOnTurn(entryInput),
+      };
+
+      game.temporaryReplacementEffects.push(entry);
+      addedAny = true;
+    }
+  }
+
+  if (addedAny) {
+    const logMessage = action?.logMessage;
+    if (logMessage) {
+      getUI(game)?.log(logMessage);
+    } else {
+      getUI(game)?.log(`${sourceName} is now protecting your cards.`);
+    }
+  }
+
+  return addedAny;
 }
 
 /**
@@ -234,7 +343,7 @@ export async function handleBanish(action, ctx, targets, engine) {
 
     if (action.fromZone && !ownerPlayer[action.fromZone]?.includes(tgt)) {
       getUI(game)?.log(
-        `${tgt.name} não está mais em ${action.fromZone}; não pode ser banida.`
+        `${tgt.name} não está mais em ${action.fromZone}; não pode ser banida.`,
       );
 
       continue;
@@ -285,7 +394,7 @@ export async function handleBanishCardFromGraveyard(
 
   targets,
 
-  engine
+  engine,
 ) {
   const { player } = ctx;
 
@@ -317,7 +426,7 @@ export async function handleBanishCardFromGraveyard(
     const filterDesc = cardName || cardType || "matching card";
 
     getUI(game)?.log(
-      `Not enough ${filterDesc} in graveyard to banish (need ${count}, found ${candidates.length}).`
+      `Not enough ${filterDesc} in graveyard to banish (need ${count}, found ${candidates.length}).`,
     );
 
     return false;
@@ -430,11 +539,11 @@ async function destroySelectiveField(action, ctx, targets, engine) {
   // Get all monsters on both sides
 
   const playerMonsters = (player.field || []).filter(
-    (card) => card && card.cardKind === "monster" && !card.isFacedown
+    (card) => card && card.cardKind === "monster" && !card.isFacedown,
   );
 
   const opponentMonsters = (opponent.field || []).filter(
-    (card) => card && card.cardKind === "monster" && !card.isFacedown
+    (card) => card && card.cardKind === "monster" && !card.isFacedown,
   );
 
   if (playerMonsters.length === 0 && opponentMonsters.length === 0) {
@@ -493,7 +602,7 @@ async function destroySelectiveField(action, ctx, targets, engine) {
 
           "your",
 
-          modalConfig
+          modalConfig,
         );
         // Check if this is a needsSelection result (network mode)
         if (tieBreakerResult?.needsSelection) {
@@ -526,7 +635,7 @@ async function destroySelectiveField(action, ctx, targets, engine) {
 
           "opponent's",
 
-          modalConfig
+          modalConfig,
         );
         // Check if this is a needsSelection result (network mode)
         if (opponentTieBreakerResult?.needsSelection) {
@@ -580,7 +689,7 @@ async function destroySelectiveField(action, ctx, targets, engine) {
 
     if (isImmune && getUI(game)?.log) {
       getUI(game)?.log(
-        `${card.name} is immune to opponent's effects and was not destroyed.`
+        `${card.name} is immune to opponent's effects and was not destroyed.`,
       );
     }
 
@@ -596,7 +705,7 @@ async function destroySelectiveField(action, ctx, targets, engine) {
   // Destroy all marked monsters
 
   getUI(game)?.log(
-    `Destroying ${toDestroyFiltered.length} monster(s) on the field...`
+    `Destroying ${toDestroyFiltered.length} monster(s) on the field...`,
   );
 
   for (const { card, owner } of toDestroyFiltered) {
@@ -639,7 +748,7 @@ async function promptTieBreaker(
 
   sideDescription,
 
-  modalConfig = {}
+  modalConfig = {},
 ) {
   if (!getUI(game)?.showCardGridSelectionModal) {
     // Fallback: auto-select first N
@@ -759,7 +868,7 @@ export async function handleDestroyTargetedCards(action, ctx, targets, engine) {
       : [action.cardKind];
 
     opponentCards = opponentCards.filter(
-      (c) => c && allowedKinds.includes(c.cardKind)
+      (c) => c && allowedKinds.includes(c.cardKind),
     );
   }
 
@@ -771,7 +880,7 @@ export async function handleDestroyTargetedCards(action, ctx, targets, engine) {
       : [action.subtype];
 
     opponentCards = opponentCards.filter(
-      (c) => c && c.subtype && allowedSubtypes.includes(c.subtype)
+      (c) => c && c.subtype && allowedSubtypes.includes(c.subtype),
     );
   }
 
@@ -786,7 +895,7 @@ export async function handleDestroyTargetedCards(action, ctx, targets, engine) {
   const maxTargets = Math.min(action.maxTargets || 1, opponentCards.length);
 
   getUI(game)?.log(
-    `${source.name}: Select up to ${maxTargets} opponent cards to destroy.`
+    `${source.name}: Select up to ${maxTargets} opponent cards to destroy.`,
   );
 
   // Build candidates list for selection contract
@@ -796,7 +905,7 @@ export async function handleDestroyTargetedCards(action, ctx, targets, engine) {
 
     game,
 
-    opponentCards
+    opponentCards,
   );
 
   const selectionContract = {
@@ -879,7 +988,7 @@ export async function handleDestroyTargetedCards(action, ctx, targets, engine) {
 
     player,
 
-    { actionType: "destroy_targeted_cards" }
+    { actionType: "destroy_targeted_cards" },
   );
 
   if (nonImmuneTargets.length === 0) {
@@ -917,7 +1026,7 @@ export async function handleDestroyAttackerOnArchetypeDestruction(
 
   targets,
 
-  engine
+  engine,
 ) {
   const { destroyed, attacker } = ctx;
 
@@ -927,7 +1036,9 @@ export async function handleDestroyAttackerOnArchetypeDestruction(
 
   const archetype = action.archetype;
   if (!archetype) {
-    console.warn("[handleDestroyAttackerOnArchetypeDestruction] archetype is required in action");
+    console.warn(
+      "[handleDestroyAttackerOnArchetypeDestruction] archetype is required in action",
+    );
     return false;
   }
 
@@ -938,8 +1049,8 @@ export async function handleDestroyAttackerOnArchetypeDestruction(
   const destroyedArchetypes = Array.isArray(destroyed.archetypes)
     ? destroyed.archetypes
     : destroyed.archetype
-    ? [destroyed.archetype]
-    : [];
+      ? [destroyed.archetype]
+      : [];
 
   if (!destroyedArchetypes.includes(archetype)) return false;
 

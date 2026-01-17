@@ -71,7 +71,7 @@ export default class EffectEngine {
     if (total > 0) {
       const hitRate = ((hits / total) * 100).toFixed(1);
       console.log(
-        `[TargetingCache] Hits: ${hits} | Misses: ${misses} | Hit Rate: ${hitRate}%`
+        `[TargetingCache] Hits: ${hits} | Misses: ${misses} | Hit Rate: ${hitRate}%`,
       );
     }
   }
@@ -182,7 +182,7 @@ export default class EffectEngine {
     }
     if (!this.game || typeof this.game.canUseOncePerTurn !== "function") {
       console.error(
-        "[EffectEngine] checkOncePerTurn: Game instance or canUseOncePerTurn not available"
+        "[EffectEngine] checkOncePerTurn: Game instance or canUseOncePerTurn not available",
       );
       return { ok: false, reason: "Game not initialized" };
     }
@@ -247,8 +247,8 @@ export default class EffectEngine {
       const archetypes = Array.isArray(card.archetypes)
         ? card.archetypes
         : card.archetype
-        ? [card.archetype]
-        : [];
+          ? [card.archetype]
+          : [];
       if (!archetypes.includes(filters.archetype)) return false;
     }
     if (filters.level !== undefined) {
@@ -259,6 +259,17 @@ export default class EffectEngine {
       if (op === "gte" && lvl < filters.level) return false;
       if (op === "lt" && lvl >= filters.level) return false;
       if (op === "gt" && lvl <= filters.level) return false;
+    }
+    if (filters.equippedWithFilters) {
+      const equipFilters = filters.equippedWithFilters || {};
+      const requireEquipFaceup = equipFilters.requireFaceup !== false;
+      const equips = Array.isArray(card.equips) ? card.equips : [];
+      const hasMatchingEquip = equips.some((equip) => {
+        if (!equip) return false;
+        if (requireEquipFaceup && equip.isFacedown) return false;
+        return this.cardMatchesFilters(equip, equipFilters);
+      });
+      if (!hasMatchingEquip) return false;
     }
     return true;
   }
@@ -341,7 +352,7 @@ export default class EffectEngine {
           if (!optCheck.ok) continue;
 
           const reductionValue = Number(
-            passive.amount ?? passive.reduction ?? passive.value ?? 0
+            passive.amount ?? passive.reduction ?? passive.value ?? 0,
           );
           if (reductionValue <= 0) continue;
 
@@ -386,26 +397,21 @@ export default class EffectEngine {
         Number(
           maxReducer.passive.minFinalAmount ??
             maxReducer.passive.minAmount ??
-            0
-        )
+            0,
+        ),
       );
     }
     for (const reducer of sumReducers) {
       minFinalAmount = Math.max(
         minFinalAmount,
         Number(
-          reducer.passive.minFinalAmount ??
-            reducer.passive.minAmount ??
-            0
-        )
+          reducer.passive.minFinalAmount ?? reducer.passive.minAmount ?? 0,
+        ),
       );
     }
 
     const totalReduction = sumReduction + maxReduction;
-    const finalAmount = Math.max(
-      minFinalAmount,
-      resolvedBase - totalReduction
-    );
+    const finalAmount = Math.max(minFinalAmount, resolvedBase - totalReduction);
 
     if (finalAmount >= resolvedBase) {
       return result;
@@ -533,8 +539,8 @@ export default class EffectEngine {
           const options = Array.isArray(cond.conditions)
             ? cond.conditions
             : Array.isArray(cond.anyOf)
-            ? cond.anyOf
-            : [];
+              ? cond.anyOf
+              : [];
           if (options.length === 0) {
             break;
           }
@@ -561,19 +567,23 @@ export default class EffectEngine {
         case "control_card_filters": {
           const ownerKey = cond.owner === "opponent" ? "opponent" : "player";
           const owner = ownerKey === "opponent" ? opponent : player;
-          const zoneList = Array.isArray(cond.zones) && cond.zones.length > 0
-            ? cond.zones
-            : [cond.zone || "field"];
+          const zoneList =
+            Array.isArray(cond.zones) && cond.zones.length > 0
+              ? cond.zones
+              : [cond.zone || "field"];
           const filters = cond.filters || {};
           const cardKind = filters.cardKind ?? cond.cardKind;
           const subtype = filters.subtype ?? cond.subtype;
           const archetype = filters.archetype ?? cond.archetype;
-          const cardName = filters.cardName ?? filters.name ?? cond.cardName ?? cond.name;
+          const cardName =
+            filters.cardName ?? filters.name ?? cond.cardName ?? cond.name;
           const includeFacedown = cond.includeFacedown === true;
-          const requireFaceup = cond.requireFaceup !== false && !includeFacedown;
+          const requireFaceup =
+            cond.requireFaceup !== false && !includeFacedown;
           const min = filters.min ?? cond.min;
           const max = filters.max ?? cond.max;
-          const requiredMin = min !== undefined ? min : max !== undefined ? 0 : 1;
+          const requiredMin =
+            min !== undefined ? min : max !== undefined ? 0 : 1;
 
           const matchesFilters = (card) => {
             if (!card) return false;
@@ -597,10 +607,10 @@ export default class EffectEngine {
               const cardArchetypes = card.archetypes
                 ? card.archetypes
                 : card.archetype
-                ? [card.archetype]
-                : [];
+                  ? [card.archetype]
+                  : [];
               const hasMatch = requiredArchetypes.some((arc) =>
-                cardArchetypes.includes(arc)
+                cardArchetypes.includes(arc),
               );
               if (!hasMatch) return false;
             }
@@ -647,11 +657,7 @@ export default class EffectEngine {
           const filters = cond.filters || {};
           const requireFaceup = cond.requireFaceup !== false;
           const min =
-            cond.min !== undefined
-              ? cond.min
-              : cond.max !== undefined
-              ? 0
-              : 1;
+            cond.min !== undefined ? cond.min : cond.max !== undefined ? 0 : 1;
           const max = cond.max;
           const equips = Array.isArray(source?.equips) ? source.equips : [];
           let count = 0;
@@ -675,8 +681,7 @@ export default class EffectEngine {
             return {
               ok: false,
               reason:
-                cond.reason ||
-                "This card has too many matching equip cards.",
+                cond.reason || "This card has too many matching equip cards.",
             };
           }
           break;
@@ -687,8 +692,8 @@ export default class EffectEngine {
             expected === "self"
               ? player?.id
               : expected === "opponent"
-              ? opponent?.id
-              : expected;
+                ? opponent?.id
+                : expected;
           if (!expectedId) {
             return { ok: false, reason: "Invalid condition configuration." };
           }
@@ -705,10 +710,9 @@ export default class EffectEngine {
           const min = Number(cond.min ?? 1);
           const storageState = this.getBlueprintStorageState?.(
             sourceCard,
-            false
+            false,
           );
-          const storedCount =
-            storageState?.storedBlueprints?.length || 0;
+          const storedCount = storageState?.storedBlueprints?.length || 0;
           if (storedCount < min) {
             return {
               ok: false,
@@ -738,8 +742,7 @@ export default class EffectEngine {
           if (!found) {
             return {
               ok: false,
-              reason:
-                cond.reason || `You must control a ${typeName} monster.`,
+              reason: cond.reason || `You must control a ${typeName} monster.`,
             };
           }
           break;
@@ -768,7 +771,7 @@ export default class EffectEngine {
           const zoneName = cond.zone || "graveyard";
           const zone = owner?.[zoneName] || [];
           const found = zone.some((card) =>
-            this.cardMatchesFilters(card, cond.filters || {})
+            this.cardMatchesFilters(card, cond.filters || {}),
           );
           if (!found) {
             return {
@@ -834,8 +837,8 @@ export default class EffectEngine {
                 ? cond.type.some((t) => aTypes.includes(t))
                 : cond.type.includes(aType)
               : aTypes
-              ? aTypes.includes(cond.type)
-              : aType === cond.type;
+                ? aTypes.includes(cond.type)
+                : aType === cond.type;
             if (!ok) {
               return { ok: false, reason: "Attacker type mismatch." };
             }
@@ -881,7 +884,7 @@ export default class EffectEngine {
     player,
     summonedCard,
     sourceZone,
-    summonFromZone
+    summonFromZone,
   ) {
     if (!condition) return true;
 
@@ -897,8 +900,8 @@ export default class EffectEngine {
       const archetypes = summonedCard.archetypes
         ? summonedCard.archetypes
         : summonedCard.archetype
-        ? [summonedCard.archetype]
-        : [];
+          ? [summonedCard.archetype]
+          : [];
       if (!archetypes.includes(condition.triggerArchetype)) {
         return false;
       }
@@ -1048,7 +1051,7 @@ export default class EffectEngine {
             card,
             buffKey,
             typeCount * perCard,
-            stats
+            stats,
           );
           if (applied) updated = true;
           return;
@@ -1090,7 +1093,7 @@ export default class EffectEngine {
             card,
             buffKey,
             count * perCard,
-            stats
+            stats,
           );
           if (applied) updated = true;
           return;
@@ -1118,7 +1121,7 @@ export default class EffectEngine {
             card,
             buffKey,
             count * perCard,
-            stats
+            stats,
           );
           if (applied) updated = true;
           return;
@@ -1156,7 +1159,7 @@ export default class EffectEngine {
           card,
           buffKey,
           count * perCard,
-          stats
+          stats,
         );
         if (applied) {
           updated = true;

@@ -10,7 +10,7 @@
     },
     "3": {
       "name": "Mosquito Chupa-Sangue",
-      "description": "Ganhe 1000 PV."
+      "description": "Restaure 1000 PV."
     },
     "4": {
       "name": "Necromancia Barata",
@@ -406,11 +406,11 @@
     },
     "203": {
       "name": "Explosão Carmesim Arcanista",
-      "description": "Escolha 1 monstro \"Arcanista\" que voc\u00ea controla e 1 monstro que seu oponente controla: destrua os alvos e, se isso acontecer, cada jogador sofre dano igual ao ATK do monstro que ele controlava que foi destru\u00eddo. Se voc\u00ea controlar uma Magia de Equipamento \"Arcanista\", voc\u00ea n\u00e3o sofre dano desse efeito."
+      "description": "Escolha 1 monstro \"Arcanista\" que voc\u00ea controla e 1 monstro que seu oponente controla: destrua os alvos e, se isso acontecer, cada jogador sofre dano igual a metade do ATK do monstro que ele controlava que foi destru\u00eddo. Se voc\u00ea controlar uma Magia de Equipamento \"Arcanista\", voc\u00ea n\u00e3o sofre dano desse efeito."
     },
     "204": {
       "name": "Lança Relâmpago Arcanista",
-      "description": "Escolha 1 monstro com a face para cima no campo; aplique o efeito apropriado, dependendo de quem controla esse alvo. Se for um monstro \"Arcanista\" que voc\u00ea controla: ele ganha 700 de ATK e, se ele batalhar um monstro em Posi\u00e7\u00e3o de Defesa neste turno, cause dano perfurante ao seu oponente. Se for um monstro que seu oponente controla: ele n\u00e3o pode declarar um ataque at\u00e9 o final do pr\u00f3ximo turno do seu oponente."
+      "description": "Escolha 1 monstro com a face para cima no campo; aplique o efeito apropriado, dependendo de quem controla esse alvo. Se for um monstro \"Arcanista\" que você controla: ele ganha 500 de ATK e, se ele batalhar um monstro em Posi\u00e7\u00e3o de Defesa neste turno, cause dano perfurante ao seu oponente. Se for um monstro que seu oponente controla: ele n\u00e3o pode declarar um ataque at\u00e9 o final do pr\u00f3ximo turno do seu oponente. Você só pode ativar 1 \"Lança Relâmpago Arcanista\" por turno."
     },
     "205": {
       "name": "Viridis, Arcanista da Vida",
