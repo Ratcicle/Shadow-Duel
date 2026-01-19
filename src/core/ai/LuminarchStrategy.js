@@ -82,7 +82,7 @@ export default class LuminarchStrategy extends BaseStrategy {
           fieldSpell,
           preferDefense,
         }),
-      0
+      0,
     );
     const oppMonstersValue = (opponent?.field || []).reduce(
       (sum, monster) =>
@@ -91,7 +91,7 @@ export default class LuminarchStrategy extends BaseStrategy {
           fieldSpell: opponent?.fieldSpell || null,
           preferDefense: false,
         }),
-      0
+      0,
     );
     score += ownMonstersValue - oppMonstersValue;
 
@@ -107,7 +107,7 @@ export default class LuminarchStrategy extends BaseStrategy {
         monster.cardKind === "monster" &&
         monster.position === "attack" &&
         (monster.atk || 0) + (monster.tempAtkBoost || 0) <
-          Math.max(500, opponentStrongest - 200)
+          Math.max(500, opponentStrongest - 200),
     ).length;
     score -= exposedAttackers * 0.25;
 
@@ -138,7 +138,7 @@ export default class LuminarchStrategy extends BaseStrategy {
           fieldSpell,
           preferDefense,
         }),
-      0
+      0,
     );
     score += handValue * 0.2;
 
@@ -196,7 +196,7 @@ export default class LuminarchStrategy extends BaseStrategy {
           fieldSpell,
           preferDefense,
         }),
-      0
+      0,
     );
     const oppMonstersValue = oppField.reduce(
       (sum, monster) =>
@@ -205,7 +205,7 @@ export default class LuminarchStrategy extends BaseStrategy {
           fieldSpell: opponent.fieldSpell || null,
           preferDefense: false,
         }),
-      0
+      0,
     );
     score += ownMonstersValue - oppMonstersValue * 0.9;
 
@@ -228,7 +228,7 @@ export default class LuminarchStrategy extends BaseStrategy {
       (monster) =>
         monster &&
         monster.cardKind === "monster" &&
-        monster.position === "defense"
+        monster.position === "defense",
     ).length;
     score += defenseCount * 0.25;
 
@@ -237,7 +237,7 @@ export default class LuminarchStrategy extends BaseStrategy {
         monster &&
         monster.cardKind === "monster" &&
         !monster.isFacedown &&
-        monster.mustBeAttacked
+        monster.mustBeAttacked,
     );
     if (tauntWalls.length > 0) {
       const bestTauntDef = tauntWalls.reduce((max, monster) => {
@@ -310,27 +310,28 @@ export default class LuminarchStrategy extends BaseStrategy {
           fieldSpell,
           preferDefense,
         }),
-      0
+      0,
     );
     score += handValue * 0.12;
 
     const gyLuminarch = myGY.filter(
-      (card) => card && card.cardKind === "monster" && isLuminarch(card)
+      (card) => card && card.cardKind === "monster" && isLuminarch(card),
     );
     score += gyLuminarch.length * 0.18;
     if (gyLuminarch.length >= 2) score += 0.35;
 
     const hasLuminarchOnField = myField.some(
-      (card) => card && isLuminarch(card)
+      (card) => card && isLuminarch(card),
     );
     const hasHolyShieldInHand = myHand.some(
-      (card) => card && card.name === "Luminarch Holy Shield"
+      (card) => card && card.name === "Luminarch Holy Shield",
     );
     const hasHolyShieldSet = myBackrow.some(
-      (card) => card && card.name === "Luminarch Holy Shield" && card.isFacedown
+      (card) =>
+        card && card.name === "Luminarch Holy Shield" && card.isFacedown,
     );
     const hasCrescentShield = myBackrow.some(
-      (card) => card && card.name === "Luminarch Crescent Shield"
+      (card) => card && card.name === "Luminarch Crescent Shield",
     );
     if (hasLuminarchOnField && (hasHolyShieldInHand || hasHolyShieldSet)) {
       score += 0.6;
@@ -361,7 +362,7 @@ export default class LuminarchStrategy extends BaseStrategy {
 
     if (bot?.debug) {
       console.log(
-        `\n[LuminarchStrategy] 🎴 Avaliando ${bot.hand.length} cartas na mão:`
+        `\n[LuminarchStrategy] 🎴 Avaliando ${bot.hand.length} cartas na mão:`,
       );
       bot.hand.forEach((c, i) => {
         console.log(
@@ -369,9 +370,9 @@ export default class LuminarchStrategy extends BaseStrategy {
             c.cardKind === "monster"
               ? ` Lv${c.level || "?"}`
               : c.subtype
-              ? ` ${c.subtype}`
-              : ""
-          })`
+                ? ` ${c.subtype}`
+                : ""
+          })`,
         );
       });
     }
@@ -403,7 +404,7 @@ export default class LuminarchStrategy extends BaseStrategy {
         console.log(
           `[LuminarchStrategy] 🎯 Stance: ${gameStance.stance.toUpperCase()} - ${
             gameStance.reason
-          }`
+          }`,
         );
         console.log(`[LuminarchStrategy] 📋 Plano:`, turnPlan.plan[0]);
       }
@@ -420,7 +421,7 @@ export default class LuminarchStrategy extends BaseStrategy {
 
       if (fusionOpportunity && bot?.debug) {
         console.log(
-          `[LuminarchStrategy] 🔮 Fusão detectada: ${fusionOpportunity.fusionName} - ${fusionOpportunity.decision.reason}`
+          `[LuminarchStrategy] 🔮 Fusão detectada: ${fusionOpportunity.fusionName} - ${fusionOpportunity.decision.reason}`,
         );
       }
 
@@ -428,7 +429,7 @@ export default class LuminarchStrategy extends BaseStrategy {
       if (availableCombos.length > 0 && bot?.debug) {
         console.log(
           `[LuminarchStrategy] 🎯 Combos detectados:`,
-          availableCombos.map((c) => `${c.name} (priority ${c.priority})`)
+          availableCombos.map((c) => `${c.name} (priority ${c.priority})`),
         );
       }
 
@@ -443,18 +444,18 @@ export default class LuminarchStrategy extends BaseStrategy {
             canLethal
               ? "⚔️ LETHAL POSSIBLE"
               : turtleAnalysis.shouldTurtle
-              ? `🐢 TURTLE MODE: ${turtleAnalysis.reason}`
-              : shouldDefend
-              ? "🛡️ DEFENSIVE"
-              : "⚖️ BALANCED"
-          }`
+                ? `🐢 TURTLE MODE: ${turtleAnalysis.reason}`
+                : shouldDefend
+                  ? "🛡️ DEFENSIVE"
+                  : "⚖️ BALANCED"
+          }`,
         );
       }
     } catch (e) {
       console.warn(
         `[LuminarchStrategy] Erro na detecção de combos:`,
         e.message,
-        e.stack
+        e.stack,
       );
     }
 
@@ -467,13 +468,13 @@ export default class LuminarchStrategy extends BaseStrategy {
         { bot, player: opponent },
         bot,
         opponent,
-        "spell"
+        "spell",
       ),
       summon: evaluateActionBlockingRisk(
         { bot, player: opponent },
         bot,
         opponent,
-        "summon"
+        "summon",
       ),
     };
 
@@ -484,16 +485,16 @@ export default class LuminarchStrategy extends BaseStrategy {
         const tributeInfo = this.getTributeRequirementFor(card, bot);
         if (VERBOSE_EVAL && bot?.debug) {
           console.log(
-            `\n[LuminarchStrategy] 🔍 Avaliando monstro: ${card.name}`
+            `\n[LuminarchStrategy] 🔍 Avaliando monstro: ${card.name}`,
           );
           console.log(
-            `  Tributos necessários: ${tributeInfo.tributesNeeded}, Field atual: ${bot.field.length}`
+            `  Tributos necessários: ${tributeInfo.tributesNeeded}, Field atual: ${bot.field.length}`,
           );
         }
         if (bot.field.length < tributeInfo.tributesNeeded) {
           if (VERBOSE_EVAL && bot?.debug) {
             console.log(
-              `  ❌ REJEITADO: Tributos insuficientes (precisa ${tributeInfo.tributesNeeded}, tem ${bot.field.length})`
+              `  ❌ REJEITADO: Tributos insuficientes (precisa ${tributeInfo.tributesNeeded}, tem ${bot.field.length})`,
             );
           }
           return;
@@ -503,7 +504,7 @@ export default class LuminarchStrategy extends BaseStrategy {
         if (projectedFieldCount > 5) {
           if (VERBOSE_EVAL && bot?.debug) {
             console.log(
-              `  ❌ REJEITADO: Sem espaço após tributos (${bot.field.length}/5)`
+              `  ❌ REJEITADO: Sem espaço após tributos (${bot.field.length}/5)`,
             );
           }
           return;
@@ -513,13 +514,13 @@ export default class LuminarchStrategy extends BaseStrategy {
         const shouldSummon = this.shouldSummonMonsterSafely(
           card,
           game,
-          opponent
+          opponent,
         );
         if (VERBOSE_EVAL && bot?.debug) {
           console.log(
             `  Safety check: ${
               shouldSummon.yes ? "✅ APROVADO" : "❌ REJEITADO"
-            } - ${shouldSummon.reason || "sem motivo"}`
+            } - ${shouldSummon.reason || "sem motivo"}`,
           );
         }
         if (!shouldSummon.yes) return;
@@ -533,7 +534,7 @@ export default class LuminarchStrategy extends BaseStrategy {
         const macroBuff = calculateMacroPriorityBonus(
           "summon",
           card,
-          macroStrategy
+          macroStrategy,
         );
         priority += macroBuff;
 
@@ -543,7 +544,7 @@ export default class LuminarchStrategy extends BaseStrategy {
           bot,
           opponent,
           "summon",
-          card
+          card,
         );
         if (summonSafety.recommendation === "very_risky") {
           priority -= 10;
@@ -578,7 +579,7 @@ export default class LuminarchStrategy extends BaseStrategy {
           (entry) =>
             entry.card &&
             entry.card.name === "Luminarch Aegisbearer" &&
-            !entry.card.isFacedown
+            !entry.card.isFacedown,
         );
 
       const canCheckAscension =
@@ -592,16 +593,16 @@ export default class LuminarchStrategy extends BaseStrategy {
         if (!check?.ok) return false;
         const candidates = game.getAscensionCandidatesForMaterial(
           bot,
-          material
+          material,
         );
         if (!Array.isArray(candidates) || candidates.length === 0) return false;
         return candidates.some(
-          (asc) => game.checkAscensionRequirements(bot, asc)?.ok
+          (asc) => game.checkAscensionRequirements(bot, asc)?.ok,
         );
       };
 
       const usableAegis = aegisCandidates.filter(
-        (entry) => !isAscensionReady(entry.card)
+        (entry) => !isAscensionReady(entry.card),
       );
 
       if (usableAegis.length > 0) {
@@ -623,7 +624,7 @@ export default class LuminarchStrategy extends BaseStrategy {
             card.name !== "Luminarch Aegisbearer" &&
             ((card.def || 0) >= 2500 ||
               card.name === "Luminarch Sanctum Protector" ||
-              card.name === "Luminarch Fortress Aegis")
+              card.name === "Luminarch Fortress Aegis"),
         );
 
         let priority = 7;
@@ -636,7 +637,7 @@ export default class LuminarchStrategy extends BaseStrategy {
         const macroBuff = calculateMacroPriorityBonus(
           "summon",
           protectorCard,
-          macroStrategy
+          macroStrategy,
         );
         priority += macroBuff;
 
@@ -653,7 +654,7 @@ export default class LuminarchStrategy extends BaseStrategy {
         });
       } else if (bot?.debug && aegisCandidates.length > 0) {
         console.log(
-          "[LuminarchStrategy] Skip Protector SS: ascension ready for Aegis"
+          "[LuminarchStrategy] Skip Protector SS: ascension ready for Aegis",
         );
       }
     }
@@ -667,7 +668,7 @@ export default class LuminarchStrategy extends BaseStrategy {
           console.log(
             `\n[LuminarchStrategy] 🔍 Avaliando spell: ${card.name} (${
               card.subtype || "normal"
-            })`
+            })`,
           );
         }
 
@@ -679,11 +680,11 @@ export default class LuminarchStrategy extends BaseStrategy {
           const preview = game.effectEngine.canActivateSpellFromHandPreview(
             card,
             bot,
-            { activationContext }
+            { activationContext },
           );
           if (VERBOSE_EVAL && bot?.debug) {
             console.log(
-              `  Preview: ${preview?.ok ? "✅" : "❌"} ${preview?.reason || ""}`
+              `  Preview: ${preview?.ok ? "✅" : "❌"} ${preview?.reason || ""}`,
             );
           }
           if (preview && preview.ok === false) return;
@@ -691,7 +692,7 @@ export default class LuminarchStrategy extends BaseStrategy {
           const check = game.effectEngine?.canActivate?.(card, bot);
           if (VERBOSE_EVAL && bot?.debug && check) {
             console.log(
-              `  CanActivate: ${check.ok ? "✅" : "❌"} ${check.reason || ""}`
+              `  CanActivate: ${check.ok ? "✅" : "❌"} ${check.reason || ""}`,
             );
           }
           if (check && !check.ok) return;
@@ -714,7 +715,7 @@ export default class LuminarchStrategy extends BaseStrategy {
           console.log(
             `  shouldPlaySpell: ${decision.yes ? "✅" : "❌"} ${
               decision.reason || ""
-            }`
+            }`,
           );
         }
 
@@ -727,13 +728,13 @@ export default class LuminarchStrategy extends BaseStrategy {
         const resourceCheck = shouldCommitResourcesNow(
           card,
           analysis,
-          gameStance
+          gameStance,
         );
         if (VERBOSE_EVAL && bot?.debug) {
           console.log(
             `  shouldCommitResourcesNow: ${
               resourceCheck.shouldPlay ? "✅" : "⏳"
-            } ${resourceCheck.reason || ""}`
+            } ${resourceCheck.reason || ""}`,
           );
         }
         if (!resourceCheck.shouldPlay) {
@@ -745,7 +746,7 @@ export default class LuminarchStrategy extends BaseStrategy {
         const macroBuff = calculateMacroPriorityBonus(
           "spell",
           card,
-          macroStrategy
+          macroStrategy,
         );
         priority += macroBuff;
 
@@ -755,7 +756,7 @@ export default class LuminarchStrategy extends BaseStrategy {
             priority = fusionOpportunity.decision.priority;
             if (bot?.debug) {
               console.log(
-                `[LuminarchStrategy] 🔮 Polymerization priority override: ${priority} (${fusionOpportunity.decision.reason})`
+                `[LuminarchStrategy] 🔮 Polymerization priority override: ${priority} (${fusionOpportunity.decision.reason})`,
               );
             }
           }
@@ -767,7 +768,7 @@ export default class LuminarchStrategy extends BaseStrategy {
           bot,
           opponent,
           "spell",
-          card
+          card,
         );
         if (spellSafety.recommendation === "very_risky") {
           priority -= 15;
@@ -807,7 +808,7 @@ export default class LuminarchStrategy extends BaseStrategy {
             bot,
             "spellTrap",
             null,
-            { activationContext }
+            { activationContext },
           );
           if (preview && preview.ok === false) return;
         }
@@ -829,7 +830,7 @@ export default class LuminarchStrategy extends BaseStrategy {
         const resourceCheck = shouldCommitResourcesNow(
           card,
           analysis,
-          gameStance
+          gameStance,
         );
         if (!resourceCheck.shouldPlay) return;
 
@@ -837,7 +838,7 @@ export default class LuminarchStrategy extends BaseStrategy {
         const macroBuff = calculateMacroPriorityBonus(
           "spell",
           card,
-          macroStrategy
+          macroStrategy,
         );
         priority += macroBuff;
 
@@ -846,7 +847,7 @@ export default class LuminarchStrategy extends BaseStrategy {
           bot,
           opponent,
           "spell",
-          card
+          card,
         );
         if (spellSafety.recommendation === "very_risky") {
           priority -= 15;
@@ -918,14 +919,14 @@ export default class LuminarchStrategy extends BaseStrategy {
     // === FIELD EFFECT ===
     if (bot.fieldSpell) {
       const effect = (bot.fieldSpell.effects || []).find(
-        (e) => e.timing === "on_field_activate"
+        (e) => e.timing === "on_field_activate",
       );
       if (effect) {
         const preview = game.effectEngine?.canActivateFieldSpellEffectPreview?.(
           bot.fieldSpell,
           bot,
           null,
-          { activationContext }
+          { activationContext },
         );
         let shouldUseFieldEffect = true;
         if (bot.fieldSpell?.name?.includes("Citadel")) {
@@ -934,7 +935,7 @@ export default class LuminarchStrategy extends BaseStrategy {
               card &&
               card.cardKind === "monster" &&
               !card.isFacedown &&
-              isLuminarch(card)
+              isLuminarch(card),
           );
           if (!myMonsters.length) {
             shouldUseFieldEffect = false;
@@ -990,6 +991,11 @@ export default class LuminarchStrategy extends BaseStrategy {
       }
     }
 
+    const positionActions = this.getPositionChangeActions(game, bot, opponent);
+    if (positionActions.length > 0) {
+      actions.push(...positionActions);
+    }
+
     // === ASCENSION SUMMONS ===
     // Detectar materiais prontos para Ascension (especialmente Fortress Aegis)
     try {
@@ -997,7 +1003,7 @@ export default class LuminarchStrategy extends BaseStrategy {
       if (ascensionActions.length > 0 && bot?.debug) {
         console.log(
           `[LuminarchStrategy] 🔥 Ascension opportunities:`,
-          ascensionActions.map((a) => `${a.cardName} (pri ${a.priority})`)
+          ascensionActions.map((a) => `${a.cardName} (pri ${a.priority})`),
         );
       }
       actions.push(...ascensionActions);
@@ -1012,7 +1018,7 @@ export default class LuminarchStrategy extends BaseStrategy {
       if (fusionActions.length > 0 && bot?.debug) {
         console.log(
           `[LuminarchStrategy] ⚡ Fusion opportunities:`,
-          fusionActions.map((a) => `${a.cardName} (pri ${a.priority})`)
+          fusionActions.map((a) => `${a.cardName} (pri ${a.priority})`),
         );
       }
       actions.push(...fusionActions);
@@ -1033,7 +1039,7 @@ export default class LuminarchStrategy extends BaseStrategy {
     if (actions.length === 0) {
       if (VERBOSE_EVAL && bot?.debug) {
         console.log(
-          `[LuminarchStrategy] 🆘 Fallback: reavaliando cartas de emergência...`
+          `[LuminarchStrategy] 🆘 Fallback: reavaliando cartas de emergência...`,
         );
       }
 
@@ -1056,7 +1062,7 @@ export default class LuminarchStrategy extends BaseStrategy {
             const preview = game.effectEngine.canActivateSpellFromHandPreview(
               card,
               bot,
-              { activationContext }
+              { activationContext },
             );
             if (preview && preview.ok === false) return;
           }
@@ -1085,7 +1091,7 @@ export default class LuminarchStrategy extends BaseStrategy {
 
         for (const targetName of defensiveSummonNames) {
           const cardIndex = bot.hand.findIndex(
-            (c) => c && c.name === targetName
+            (c) => c && c.name === targetName,
           );
           if (cardIndex === -1) continue;
 
@@ -1117,7 +1123,7 @@ export default class LuminarchStrategy extends BaseStrategy {
 
     if (bot?.debug) {
       console.log(
-        `\n[LuminarchStrategy] 📊 Resumo: ${bot.hand.length} cartas avaliadas → ${actions.length} ações geradas`
+        `\n[LuminarchStrategy] 📊 Resumo: ${bot.hand.length} cartas avaliadas → ${actions.length} ações geradas`,
       );
       if (actions.length > 0) {
         console.log("  Ações:");
@@ -1125,7 +1131,7 @@ export default class LuminarchStrategy extends BaseStrategy {
           console.log(
             `    - ${a.type}: ${a.cardName || `index ${a.index}`} (priority: ${
               a.priority || 0
-            })`
+            })`,
           );
         });
       } else {
@@ -1135,7 +1141,7 @@ export default class LuminarchStrategy extends BaseStrategy {
 
     const finalActions = this.integrateP2IntoActionSelection(
       game,
-      this.sequenceActions(actions)
+      this.sequenceActions(actions),
     );
 
     return finalActions;
@@ -1153,6 +1159,7 @@ export default class LuminarchStrategy extends BaseStrategy {
         fieldEffect: 0,
         spell: 1,
         spellTrapEffect: 2,
+        position_change: 2.5,
         summon: 3,
         special_summon_sanctum_protector: 3,
         set_spell_trap: 4,
@@ -1225,7 +1232,7 @@ export default class LuminarchStrategy extends BaseStrategy {
 
         const expendability = evaluateCardExpendability(
           monster,
-          evaluationContext
+          evaluationContext,
         );
 
         // keepScore alto = queremos manter; ordenar ASC para tributar o menor
@@ -1299,7 +1306,7 @@ export default class LuminarchStrategy extends BaseStrategy {
         {
           action: action.type,
           card: action.cardName || state.bot?.hand?.[action.index]?.name,
-        }
+        },
       );
     }
 
@@ -1314,7 +1321,7 @@ export default class LuminarchStrategy extends BaseStrategy {
         const tributeIndices = this.selectBestTributes(
           player.field,
           tributesNeeded,
-          card
+          card,
         );
 
         tributeIndices.sort((a, b) => b - a);
@@ -1335,7 +1342,7 @@ export default class LuminarchStrategy extends BaseStrategy {
         // 🚨 VALIDATION: Only monsters can go to field
         if (newCard.cardKind !== "monster") {
           console.error(
-            `[🚨 LuminarchStrategy] BLOCKED sim: ${newCard.cardKind} "${newCard.name}" tried to enter field!`
+            `[🚨 LuminarchStrategy] BLOCKED sim: ${newCard.cardKind} "${newCard.name}" tried to enter field!`,
           );
           player.graveyard.push(newCard); // Send to GY instead
         } else {
@@ -1369,13 +1376,13 @@ export default class LuminarchStrategy extends BaseStrategy {
         const handIndex = Number.isInteger(action.index)
           ? action.index
           : player.hand.findIndex(
-              (c) => c && c.name === "Luminarch Sanctum Protector"
+              (c) => c && c.name === "Luminarch Sanctum Protector",
             );
         if (handIndex < 0) break;
         const materialIndex = Number.isInteger(action.materialIndex)
           ? action.materialIndex
           : player.field.findIndex(
-              (c) => c && c.name === "Luminarch Aegisbearer" && !c.isFacedown
+              (c) => c && c.name === "Luminarch Aegisbearer" && !c.isFacedown,
             );
         if (materialIndex < 0) break;
 
@@ -1395,12 +1402,32 @@ export default class LuminarchStrategy extends BaseStrategy {
         // 🚨 VALIDATION: Only monsters can go to field
         if (newCard.cardKind !== "monster") {
           console.error(
-            `[🚨 LuminarchStrategy] BLOCKED sim protector: ${newCard.cardKind} "${newCard.name}" tried to enter field!`
+            `[🚨 LuminarchStrategy] BLOCKED sim protector: ${newCard.cardKind} "${newCard.name}" tried to enter field!`,
           );
           player.graveyard.push(newCard);
         } else {
           player.field.push(newCard);
         }
+        break;
+      }
+      case "position_change": {
+        const player = state.bot;
+        const target = (player.field || []).find(
+          (c) =>
+            c &&
+            (c.id === action.cardId ||
+              (!action.cardId && c.name === action.cardName)),
+        );
+        if (!target) break;
+        if (target.isFacedown) break;
+        if (target.positionChangedThisTurn) break;
+        if (target.hasAttacked) break;
+        const newPosition =
+          action.toPosition === "defense" ? "defense" : "attack";
+        if (target.position === newPosition) break;
+        target.position = newPosition;
+        target.positionChangedThisTurn = true;
+        target.cannotAttackThisTurn = newPosition === "defense";
         break;
       }
       case "spell": {
@@ -1445,7 +1472,8 @@ export default class LuminarchStrategy extends BaseStrategy {
 
         const effect = (card.effects || []).find(
           (entry) =>
-            entry && (entry.timing === "ignition" || entry.timing === "on_play")
+            entry &&
+            (entry.timing === "ignition" || entry.timing === "on_play"),
         );
         if (effect) {
           const selections = selectSimulatedTargets({
@@ -1483,7 +1511,7 @@ export default class LuminarchStrategy extends BaseStrategy {
         const fieldSpell = player.fieldSpell;
         if (!fieldSpell) break;
         const effect = (fieldSpell.effects || []).find(
-          (entry) => entry && entry.timing === "on_field_activate"
+          (entry) => entry && entry.timing === "on_field_activate",
         );
         if (!effect) break;
         const selections = selectSimulatedTargets({
@@ -1513,7 +1541,7 @@ export default class LuminarchStrategy extends BaseStrategy {
   simulateSpellEffect(state, card) {
     if (!card || !Array.isArray(card.effects)) return;
     const effect = card.effects.find(
-      (entry) => entry && entry.timing === "on_play"
+      (entry) => entry && entry.timing === "on_play",
     );
     if (!effect) return;
     const selections = selectSimulatedTargets({
@@ -1574,7 +1602,7 @@ export default class LuminarchStrategy extends BaseStrategy {
     try {
       // Verificar se tem Polymerization na mão
       const polyInHand = bot.hand.findIndex(
-        (c) => c && c.name === "Polymerization"
+        (c) => c && c.name === "Polymerization",
       );
       if (polyInHand === -1) return actions;
       const polyCard = bot.hand[polyInHand];
@@ -1582,7 +1610,7 @@ export default class LuminarchStrategy extends BaseStrategy {
 
       // Verificar se tem Megashield no Extra Deck
       const megashield = bot.extraDeck.find(
-        (c) => c && c.name === "Luminarch Megashield Barbarias"
+        (c) => c && c.name === "Luminarch Megashield Barbarias",
       );
       if (!megashield) return actions;
 
@@ -1600,7 +1628,7 @@ export default class LuminarchStrategy extends BaseStrategy {
           megashield,
           materials,
           bot,
-          { materialInfo }
+          { materialInfo },
         );
         if (!canFuse) return actions;
       }
@@ -1613,21 +1641,21 @@ export default class LuminarchStrategy extends BaseStrategy {
         const preview = game.effectEngine.canActivateSpellFromHandPreview(
           polyCard,
           bot,
-          { activationContext }
+          { activationContext },
         );
         if (preview && preview.ok === false) return actions;
       }
 
       // Megashield precisa: Luminarch Sanctum Protector + Luminarch Lv5+
       const hasProtector = bot.field.some(
-        (c) => c && c.name === "Luminarch Sanctum Protector"
+        (c) => c && c.name === "Luminarch Sanctum Protector",
       );
       const lv5Plus = bot.field.filter(
         (c) =>
           c &&
           c.cardKind === "monster" &&
           c.archetype === "Luminarch" &&
-          (c.level || 0) >= 5
+          (c.level || 0) >= 5,
       );
 
       if (hasProtector && lv5Plus.length > 0) {
@@ -1635,7 +1663,7 @@ export default class LuminarchStrategy extends BaseStrategy {
           "Luminarch Megashield Barbarias",
           bot,
           opponent,
-          game
+          game,
         );
 
         if (priority > 0) {
@@ -1652,7 +1680,7 @@ export default class LuminarchStrategy extends BaseStrategy {
     } catch (e) {
       console.warn(
         `[LuminarchStrategy] detectFusionOpportunities error:`,
-        e.message
+        e.message,
       );
     }
 
@@ -1670,15 +1698,17 @@ export default class LuminarchStrategy extends BaseStrategy {
 
       // Boost se LP MUITO baixo (desesperado por tank)
       const lp = bot.lp || 8000;
-      if (lp <= 2000) priority += 4; // 14
+      if (lp <= 2000)
+        priority += 4; // 14
       else if (lp <= 3500) priority += 2; // 12
 
       // Boost se oponente dominando board
       const oppStrength = (opponent?.field || []).reduce(
         (sum, m) => sum + (m && m.atk ? m.atk : 0),
-        0
+        0,
       );
-      if (oppStrength >= 8000) priority += 3; // Opp overwhelmingly strong
+      if (oppStrength >= 8000)
+        priority += 3; // Opp overwhelmingly strong
       else if (oppStrength >= 6000) priority += 1;
 
       // Boost se tem Citadel ativo (lifegain dobrado: 500 → 1000)
@@ -1687,20 +1717,20 @@ export default class LuminarchStrategy extends BaseStrategy {
 
       // Penalty se já tem tank forte no campo
       const hasFortress = bot.field.some(
-        (c) => c && c.name === "Luminarch Fortress Aegis"
+        (c) => c && c.name === "Luminarch Fortress Aegis",
       );
       const has2800Tank = bot.field.some(
         (c) =>
           c &&
           c.cardKind === "monster" &&
           c.position === "defense" &&
-          (c.def || 0) >= 2800
+          (c.def || 0) >= 2800,
       );
       if (hasFortress || has2800Tank) priority -= 3; // Já tem wall supremo
 
       // Penalty se vai sacrificar material importante
       const willLoseProtector = bot.field.some(
-        (c) => c && c.name === "Luminarch Sanctum Protector"
+        (c) => c && c.name === "Luminarch Sanctum Protector",
       );
       const protectorAge = willLoseProtector
         ? bot.field.find((c) => c && c.name === "Luminarch Sanctum Protector")
@@ -1739,7 +1769,7 @@ export default class LuminarchStrategy extends BaseStrategy {
 
         // Filtrar por requirements
         const eligible = candidates.filter(
-          (asc) => game.checkAscensionRequirements?.(bot, asc)?.ok
+          (asc) => game.checkAscensionRequirements?.(bot, asc)?.ok,
         );
         if (eligible.length === 0) return;
 
@@ -1750,7 +1780,7 @@ export default class LuminarchStrategy extends BaseStrategy {
             ascensionCard,
             bot,
             opponent,
-            game
+            game,
           );
 
           if (priority > 0) {
@@ -1768,7 +1798,7 @@ export default class LuminarchStrategy extends BaseStrategy {
     } catch (e) {
       console.warn(
         `[LuminarchStrategy] detectAscensionOpportunities error:`,
-        e.message
+        e.message,
       );
     }
 
@@ -1789,13 +1819,14 @@ export default class LuminarchStrategy extends BaseStrategy {
 
       // Boost se LP baixo (precisa de tank sustain)
       const lp = bot.lp || 8000;
-      if (lp <= 3000) priority += 3; // 14
+      if (lp <= 3000)
+        priority += 3; // 14
       else if (lp <= 5000) priority += 1; // 12
 
       // Boost se oponente tem board forte (precisa de wall)
       const oppStrength = (opponent?.field || []).reduce(
         (sum, m) => sum + (m && m.atk ? m.atk : 0),
-        0
+        0,
       );
       if (oppStrength >= 6000) priority += 2; // +2 se opp muito forte
 
@@ -1808,7 +1839,7 @@ export default class LuminarchStrategy extends BaseStrategy {
           c &&
           c.cardKind === "monster" &&
           c.archetype === "Luminarch" &&
-          (c.def || 0) <= 2000
+          (c.def || 0) <= 2000,
       ).length;
       if (gyLuminarch < 2) priority -= 2; // Fortress precisa de GY setup
 
@@ -1824,7 +1855,7 @@ export default class LuminarchStrategy extends BaseStrategy {
 
       const oppStrength = (opponent?.field || []).reduce(
         (sum, m) => sum + (m && m.atk ? m.atk : 0),
-        0
+        0,
       );
       if (oppStrength >= 7000) priority += 2;
 
@@ -1881,7 +1912,7 @@ export default class LuminarchStrategy extends BaseStrategy {
       const cardDEF = card.def || 0;
       const oppStrongestATK = (opponent?.field || []).reduce(
         (max, m) => Math.max(max, m.atk || 0),
-        0
+        0,
       );
       const safePosition =
         cardDEF >= oppStrongestATK - 300 ? "defense" : "defense";
@@ -1930,7 +1961,7 @@ export default class LuminarchStrategy extends BaseStrategy {
       const analysis = analyzeOpponent(opponent, this.bot);
       const turnsToKill = estimateTurnsToOppLethal(
         opponent,
-        this.bot.lp || 8000
+        this.bot.lp || 8000,
       );
 
       return {
@@ -1969,7 +2000,7 @@ export default class LuminarchStrategy extends BaseStrategy {
       // Encontrar ação Game Tree nos actions P0/P1 e mover para frente
       const indexInActions = actions.findIndex(
         (a) =>
-          a.type === gameTreeAction.type && a.index === gameTreeAction.index
+          a.type === gameTreeAction.type && a.index === gameTreeAction.index,
       );
 
       if (indexInActions >= 0) {

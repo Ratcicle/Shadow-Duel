@@ -256,8 +256,27 @@ export async function handleBanish(action, ctx, targets, engine) {
   const useDestroyed =
     action.useDestroyed === true || action.type === "banish_destroyed_monster";
 
+  // DEBUG: Log para diagnóstico do banish
+  console.log(
+    `[handleBanish DEBUG] action.type: ${action.type}, useDestroyed: ${useDestroyed}`,
+  );
+  console.log(
+    `[handleBanish DEBUG] ctx.destroyed: ${ctx?.destroyed?.name || "undefined"}`,
+  );
+  console.log(
+    `[handleBanish DEBUG] ctx.destroyedOwner: ${ctx?.destroyedOwner?.id || "undefined"}`,
+  );
+  console.log(
+    `[handleBanish DEBUG] resolved before useDestroyed check:`,
+    resolved,
+  );
+
   if ((!Array.isArray(resolved) || resolved.length === 0) && useDestroyed) {
     resolved = ctx?.destroyed ? [ctx.destroyed] : [];
+    console.log(
+      `[handleBanish DEBUG] resolved after useDestroyed check:`,
+      resolved?.map((c) => c?.name),
+    );
   }
 
   // Allow banishing the source card when targetRef is "self" and no targets were pre-resolved
@@ -335,13 +354,56 @@ export async function handleBanish(action, ctx, targets, engine) {
         ? engine.getOwnerOfCard(tgt)
         : fallbackOwner;
 
-    if (!ownerPlayer) {
+    let resolvedOwner = ownerPlayer;
+
+    if (!resolvedOwner && ctx?.destroyedOwner && tgt === ctx.destroyed) {
+      resolvedOwner =
+        typeof ctx.destroyedOwner === "string"
+          ? ctx.destroyedOwner === game.player?.id
+            ? game.player
+            : ctx.destroyedOwner === game.bot?.id
+              ? game.bot
+              : null
+          : ctx.destroyedOwner;
+    }
+
+    if (!resolvedOwner) {
+      const allZones = [
+        "hand",
+        "field",
+        "graveyard",
+        "deck",
+        "spellTrap",
+        "fieldSpell",
+        "banished",
+      ];
+      const candidates = [game.player, game.bot].filter(Boolean);
+      for (const candidate of candidates) {
+        for (const zoneName of allZones) {
+          if (zoneName === "fieldSpell") {
+            if (candidate.fieldSpell === tgt) {
+              resolvedOwner = candidate;
+              break;
+            }
+            continue;
+          }
+          const zoneArr = candidate?.[zoneName];
+          if (Array.isArray(zoneArr) && zoneArr.includes(tgt)) {
+            resolvedOwner = candidate;
+            break;
+          }
+        }
+        if (resolvedOwner) break;
+      }
+    }
+
+    if (!resolvedOwner) {
       getUI(game)?.log(`Não foi possível determinar o dono de ${tgt.name}.`);
 
       continue;
     }
 
-    if (action.fromZone && !ownerPlayer[action.fromZone]?.includes(tgt)) {
+    if (action.fromZone && !resolvedOwner[action.fromZone]?.includes(tgt)) {
       getUI(game)?.log(
         `${tgt.name} não está mais em ${action.fromZone}; não pode ser banida.`,
       );
@@ -349,18 +411,18 @@ export async function handleBanish(action, ctx, targets, engine) {
       continue;
     }
 
-    removeCardFromOwnerZones(ownerPlayer, tgt);
+    removeCardFromOwnerZones(resolvedOwner, tgt);
 
-    ownerPlayer.banished = ownerPlayer.banished || [];
+    resolvedOwner.banished = resolvedOwner.banished || [];
 
-    ownerPlayer.banished.push(tgt);
+    resolvedOwner.banished.push(tgt);
 
     tgt.location = "banished";
 
-    if (ownerPlayer?.id) {
-      tgt.owner = ownerPlayer.id;
+    if (resolvedOwner?.id) {
+      tgt.owner = resolvedOwner.id;
 
-      tgt.controller = ownerPlayer.id;
+      tgt.controller = resolvedOwner.id;
     }
 
     banishedCount += 1;

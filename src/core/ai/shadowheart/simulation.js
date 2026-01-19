@@ -33,7 +33,7 @@ export function simulateMainPhaseAction(state, action, placeSpellCard) {
         tributeIndices = selectBestTributes(
           player.field,
           tributeInfo.tributesNeeded,
-          card
+          card,
         );
       } else if (tributeInfo.tributesNeeded > 0) {
         // Não pode summon (falta tributos)
@@ -94,6 +94,26 @@ export function simulateMainPhaseAction(state, action, placeSpellCard) {
       }
       break;
     }
+    case "position_change": {
+      const player = state.bot;
+      const target = (player.field || []).find(
+        (c) =>
+          c &&
+          (c.id === action.cardId ||
+            (!action.cardId && c.name === action.cardName)),
+      );
+      if (!target) break;
+      if (target.isFacedown) break;
+      if (target.positionChangedThisTurn) break;
+      if (target.hasAttacked) break;
+      const newPosition =
+        action.toPosition === "defense" ? "defense" : "attack";
+      if (target.position === newPosition) break;
+      target.position = newPosition;
+      target.positionChangedThisTurn = true;
+      target.cannotAttackThisTurn = newPosition === "defense";
+      break;
+    }
     case "fieldEffect": {
       const player = state.bot;
       if (player.fieldSpell?.name === "Darkness Valley") {
@@ -115,7 +135,7 @@ export function simulateMainPhaseAction(state, action, placeSpellCard) {
       if (card.name === "Shadow-Heart Leviathan") {
         // Encontrar Abyssal Eel no campo para usar como custo
         const eelIdx = player.field.findIndex(
-          (c) => c.name === "Shadow-Heart Abyssal Eel"
+          (c) => c.name === "Shadow-Heart Abyssal Eel",
         );
         if (eelIdx === -1 || player.field.length >= 5) break; // Sem custo válido ou campo cheio
 
@@ -155,10 +175,10 @@ export function simulateSpellEffect(state, card) {
     case "Polymerization": {
       // Simula fusão
       const scaleIdx = player.field.findIndex(
-        (c) => c.name === "Shadow-Heart Scale Dragon"
+        (c) => c.name === "Shadow-Heart Scale Dragon",
       );
       const materialIdx = player.field.findIndex(
-        (c, i) => i !== scaleIdx && isShadowHeart(c) && (c.level || 0) >= 5
+        (c, i) => i !== scaleIdx && isShadowHeart(c) && (c.level || 0) >= 5,
       );
 
       if (scaleIdx !== -1) {
@@ -249,7 +269,7 @@ export function simulateSpellEffect(state, card) {
     case "Shadow-Heart Rage": {
       // OTK spell: Se Scale Dragon está sozinho, +700/+700 e 1 ataque extra
       const scale = player.field.find(
-        (c) => c.name === "Shadow-Heart Scale Dragon"
+        (c) => c.name === "Shadow-Heart Scale Dragon",
       );
       if (scale && player.field.length === 1) {
         scale.tempAtkBoost = (scale.tempAtkBoost || 0) + 700;

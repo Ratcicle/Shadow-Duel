@@ -1073,6 +1073,39 @@ export default class EffectEngine {
           return;
         }
 
+        // Passive: buff based on count of monsters of an archetype in controller's graveyard
+        if (passive.type === "graveyard_archetype_count_buff") {
+          const archetypeName = passive.archetype || null;
+          if (!archetypeName) return;
+
+          const owner = this.getOwnerByCard(card);
+          const gy = owner?.graveyard || [];
+          const archetypeCount = gy.filter((c) => {
+            if (!c || c.cardKind !== "monster") return false;
+            return (
+              c.archetype === archetypeName ||
+              (c.archetypes && c.archetypes.includes(archetypeName))
+            );
+          }).length;
+
+          const perCard =
+            passive.amountPerCard ??
+            passive.perCard ??
+            passive.buffPerCard ??
+            0;
+          const stats = passive.stats || ["atk", "def"];
+          const buffKey =
+            effect.id || `passive_${card.id}_${index}_gy_archetype`;
+          const applied = this.applyPassiveBuffValue(
+            card,
+            buffKey,
+            archetypeCount * perCard,
+            stats,
+          );
+          if (applied) updated = true;
+          return;
+        }
+
         // Passive: buff per count of special-summoned monsters of a given type
         // Supports per-card scope (card.state) or game-level fallback for future uses
         if (passive.type === "type_special_summoned_count_buff") {

@@ -2546,14 +2546,14 @@ export const cardDatabase = [
     type: "Fiend",
     archetype: "Void",
     description:
-      "Cannot attack the turn it is Summoned. Once per turn: You can return this card to your hand; Special Summon 1 Level 4 or lower 'Void' monster from your hand, except 'Void Walker'.",
+      "Cannot attack the turn it is Special Summoned. Once per turn: You can return this card to your hand; Special Summon 1 Level 4 or lower 'Void' monster from your hand, except 'Void Walker'.",
     image: "assets/Void Walker.png",
     effects: [
       {
         id: "void_walker_no_attack_when_summoned",
         timing: "on_event",
         event: "after_summon",
-        summonMethods: ["normal", "special"],
+        summonMethods: ["special"],
         requireSelfAsSummoned: true,
         actions: [
           {
@@ -2595,20 +2595,48 @@ export const cardDatabase = [
     type: "Beast",
     archetype: "Void",
     description:
-      "3 'Void Hollow' monsters. If this card is destroyed by battle or card effect: You can Special Summon up to 3 'Void Hollow' from your GY. If this card destroys an opponent's monster by battle: You can Special Summon 1 'Void Hollow' from your GY. (Quick Effect) You can send 1 'Void Hollow' you control to the GY; this card gains 1000 ATK until the end of this turn.",
+      "If this card is Normal Summoned: You can add 1 'Void Hollow' from your Deck to your hand. If this card destroys an opponent's monster by battle: You can Special Summon 1 'Void Hollow' from your hand. You can only use each effect of 'Void Beast' once per turn.",
     image: "assets/Void Beast.png",
     effects: [
       {
-        id: "void_beast_search",
+        id: "void_beast_normal_summon_search",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethods: ["normal"],
+        requireSelfAsSummoned: true,
+        oncePerTurn: true,
+        oncePerTurnName: "void_beast_normal_summon_search",
+        actions: [
+          {
+            type: "add_from_zone_to_hand",
+            zone: "deck",
+            filters: {
+              name: "Void Hollow",
+              cardKind: "monster",
+            },
+            count: { min: 0, max: 1 },
+            player: "self",
+          },
+        ],
+      },
+      {
+        id: "void_beast_battle_destroy_summon",
         timing: "on_event",
         event: "battle_destroy",
         requireSelfAsAttacker: true,
         oncePerTurn: true,
-        oncePerTurnName: "void_beast_search",
+        oncePerTurnName: "void_beast_battle_destroy_summon",
         actions: [
           {
-            type: "search_any",
-            cardName: "Void Hollow",
+            type: "special_summon_from_zone",
+            zone: "hand",
+            filters: {
+              name: "Void Hollow",
+              cardKind: "monster",
+            },
+            count: { min: 0, max: 1 },
+            position: "choice",
+            cannotAttackThisTurn: false,
           },
         ],
       },
@@ -2665,7 +2693,7 @@ export const cardDatabase = [
     type: "Fiend",
     archetype: "Void",
     description:
-      "You can send 1 'Void Hollow' from your field to your GY; Special Summon this card from your hand. You can banish this card from your GY, then target up to 3 'Void Hollow' in your GY; Special Summon those targets, but their ATK/DEF become 0. You can only use each effect of 'Void Haunter' once per turn.",
+      "You can send 1 'Void' monster you control to the GY; Special Summon this card from your hand. You can banish this card from your GY, then target up to 3 'Void Hollow' in your GY; Special Summon those targets, but their ATK/DEF become 0. You can only use each effect of 'Void Haunter' once per turn.",
     image: "assets/Void Haunter.png",
     effects: [
       {
@@ -2680,7 +2708,7 @@ export const cardDatabase = [
             owner: "self",
             zone: "field",
             cardKind: "monster",
-            cardName: "Void Hollow",
+            archetype: "Void",
             count: { min: 1, max: 1 },
           },
         ],
@@ -2950,9 +2978,19 @@ export const cardDatabase = [
     type: "Fiend",
     archetype: "Void",
     description:
-      "You can send a face-up 'Void' monster you control to the GY; Special Summon this card from your hand. You can banish this card from your GY; target 1 face-up Spell/Trap your opponent controls; destroy it. You can only use each effect of 'Void Forgotten Knight' once per turn.",
+      "You can send a face-up 'Void' monster you control to the GY; Special Summon this card from your hand. This card gains 100 ATK for each 'Void' monster in your GY. You can banish this card from your GY; target 1 face-up Spell/Trap your opponent controls; destroy it. You can only use each effect of 'Void Forgotten Knight' once per turn.",
     image: "assets/Void Forgotten Knight.png",
     effects: [
+      {
+        id: "void_forgotten_knight_atk_boost",
+        timing: "passive",
+        passive: {
+          type: "graveyard_archetype_count_buff",
+          archetype: "Void",
+          amountPerCard: 100,
+          stats: ["atk"],
+        },
+      },
       {
         id: "void_forgotten_knight_hand_summon",
         timing: "ignition",
@@ -3489,19 +3527,18 @@ export const cardDatabase = [
   {
     id: 170,
     name: "Void Mirror Dimension",
-    cardKind: "trap",
-    subtype: "normal",
-    speed: 2,
+    cardKind: "spell",
+    subtype: "continuous",
     archetype: "Void",
     description:
-      "During the Main Phase, if your opponent Special Summons a monster: You can Special Summon 1 monster from your hand with the same Level as that monster, but its effects are negated until the end of this turn. You can only activate 1 'Mirror Dimension of the Void' per turn",
+      "Quick Effect: During the Main Phase, if your opponent Summons a monster: You can Special Summon 1 monster from your hand with the same Level as that monster, but until the end of this turn, its effects are negated. You can only activate 1 'Void Mirror Dimension' per turn.",
     image: "assets/Void Mirror Dimension.png",
     effects: [
       {
         id: "void_mirror_dimension_effect",
         timing: "on_event",
         event: "after_summon",
-        summonMethods: ["special"],
+        summonMethods: ["normal", "special"],
         requireOpponentSummon: true,
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
@@ -3509,6 +3546,7 @@ export const cardDatabase = [
         actions: [
           {
             type: "special_summon_matching_level",
+            zone: "hand",
             matchLevelRef: "summonedCard",
             negateEffects: true,
             cannotAttackThisTurn: false,

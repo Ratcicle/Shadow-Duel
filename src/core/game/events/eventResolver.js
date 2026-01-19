@@ -95,6 +95,17 @@ export async function resolveEvent(eventName, payload) {
     .map((entry) => entry?.summary)
     .filter((value) => typeof value === "string" && value.trim().length > 0);
 
+  // DEBUG: Log para battle_destroy
+  if (eventName === "battle_destroy") {
+    console.log(
+      `[resolveEvent DEBUG] battle_destroy - entries.length: ${entries.length}`,
+    );
+    console.log(
+      `[resolveEvent DEBUG] entries:`,
+      entries.map((e) => e?.summary || e?.effect?.id),
+    );
+  }
+
   this.devLog("TRIGGERS_COLLECTED", {
     summary: `${eventName} (${entries.length})`,
     event: eventName,
@@ -194,9 +205,27 @@ export async function resolveEventEntries(
   for (let i = start; i < entries.length; i += 1) {
     const entry = entries[i];
     const config = entry?.config || entry?.pipeline || entry;
+
+    // DEBUG: Log para verificar se config.activate existe
+    if (eventName === "battle_destroy") {
+      console.log(`[resolveEventEntries DEBUG] entry[${i}]:`, entry?.summary);
+      console.log(`  - config exists: ${!!config}`);
+      console.log(`  - config.activate type: ${typeof config?.activate}`);
+    }
+
     if (!config || typeof config.activate !== "function") {
+      if (eventName === "battle_destroy") {
+        console.log(
+          `[resolveEventEntries DEBUG] SKIPPING entry[${i}] - no activate function`,
+        );
+      }
       continue;
     }
+
+    if (eventName === "battle_destroy") {
+      console.log(`[resolveEventEntries DEBUG] EXECUTING entry[${i}]`);
+    }
+
     const result = await this.runActivationPipelineWait({
       ...config,
       selections: i === start ? selections : null,

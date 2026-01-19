@@ -21,7 +21,7 @@ export async function resolveCombat(attacker, target, options = {}) {
       allowDuringSelection: options.allowDuringSelection === true,
       allowDuringResolving: options.allowDuringResolving === true,
     },
-    attackerOwner === this.player
+    attackerOwner === this.player,
   );
   if (!guard.ok) return guard;
 
@@ -52,8 +52,8 @@ export async function resolveCombat(attacker, target, options = {}) {
       ? this.player
       : this.bot
     : attacker.owner === "player"
-    ? this.bot
-    : this.player;
+      ? this.bot
+      : this.player;
   const targetOwner = defenderOwner;
 
   await this.emit("attack_declared", {
@@ -93,7 +93,7 @@ export async function resolveCombat(attacker, target, options = {}) {
 
   if (attacker.position !== "attack" || attacker.isFacedown) {
     this.ui.log(
-      "Attack stopped because the attacker is no longer in Attack Position."
+      "Attack stopped because the attacker is no longer in Attack Position.",
     );
     this.markAttackUsed(attacker, target);
     this.clearAttackResolutionIndicators();
@@ -162,7 +162,7 @@ export async function resolveCombat(attacker, target, options = {}) {
   }
 
   const combatResult = await this.finishCombat(attacker, target);
-  
+
   // Emit combat resolution event for replay capture
   await this.emit("combat_resolved", {
     attacker,
@@ -173,7 +173,7 @@ export async function resolveCombat(attacker, target, options = {}) {
     targetDestroyed: combatResult?.targetDestroyed || false,
     attackerDestroyed: combatResult?.attackerDestroyed || false,
   });
-  
+
   // Propagate needsSelection from battle_destroy effects
   if (combatResult?.needsSelection && combatResult?.selectionContract) {
     return combatResult;
@@ -199,7 +199,7 @@ export async function finishCombat(attacker, target, options = {}) {
   const resumeFromTie = options.resumeFromTie === true;
   const skipAttackerDestruction = resumeFromTie;
   const battleDestroyResults = [];
-  
+
   // Track combat results for replay
   let totalDamageDealt = 0;
   let targetWasDestroyed = false;
@@ -209,7 +209,7 @@ export async function finishCombat(attacker, target, options = {}) {
     player,
     cardInvolved,
     amount,
-    shouldHeal = false
+    shouldHeal = false,
   ) => {
     if (!player || amount <= 0) return;
     if (shouldHeal && player.id === cardInvolved?.owner) {
@@ -250,11 +250,14 @@ export async function finishCombat(attacker, target, options = {}) {
       totalDamageDealt = damage;
       applyBattleDamage(defender, target, damage, defenderHealsOnBattleDamage);
       logBattleResult(
-        `${attacker.name} destroyed ${target.name} and dealt ${damage} damage.`
+        `${attacker.name} destroyed ${target.name} and dealt ${damage} damage.`,
       );
 
       logBattleDestroyCheck("attacker over atk target");
       if (this.canDestroyByBattle(target)) {
+        const preDestroyedOwnerId = target.owner;
+        const preDestroyedOwner =
+          preDestroyedOwnerId === "player" ? this.player : this.bot;
         const result = await this.destroyCard(target, {
           cause: "battle",
           sourceCard: attacker,
@@ -263,7 +266,11 @@ export async function finishCombat(attacker, target, options = {}) {
           targetWasDestroyed = true;
           const bdResult = await this.applyBattleDestroyEffect(
             attacker,
-            target
+            target,
+            {
+              destroyedOwner: preDestroyedOwner,
+              destroyedOwnerId: preDestroyedOwnerId,
+            },
           );
           if (bdResult) battleDestroyResults.push(bdResult);
         }
@@ -289,14 +296,17 @@ export async function finishCombat(attacker, target, options = {}) {
         attPlayer,
         attacker,
         damage,
-        attackerHealsOnBattleDamage
+        attackerHealsOnBattleDamage,
       );
       logBattleResult(
-        `${attacker.name} was destroyed by ${target.name} and took ${damage} damage.`
+        `${attacker.name} was destroyed by ${target.name} and took ${damage} damage.`,
       );
 
       logBattleDestroyCheck("attacker loses to atk target");
       if (this.canDestroyByBattle(attacker)) {
+        const preDestroyedOwnerId = attacker.owner;
+        const preDestroyedOwner =
+          preDestroyedOwnerId === "player" ? this.player : this.bot;
         const result = await this.destroyCard(attacker, {
           cause: "battle",
           sourceCard: target,
@@ -305,7 +315,11 @@ export async function finishCombat(attacker, target, options = {}) {
           attackerWasDestroyed = true;
           const bdResult = await this.applyBattleDestroyEffect(
             target,
-            attacker
+            attacker,
+            {
+              destroyedOwner: preDestroyedOwner,
+              destroyedOwnerId: preDestroyedOwnerId,
+            },
           );
           if (bdResult) battleDestroyResults.push(bdResult);
         }
@@ -327,6 +341,9 @@ export async function finishCombat(attacker, target, options = {}) {
       // to allow each triggered effect to be resolved before the next
       logBattleDestroyCheck("tie - attacker destruction check");
       if (!skipAttackerDestruction && this.canDestroyByBattle(attacker)) {
+        const preDestroyedOwnerId = attacker.owner;
+        const preDestroyedOwner =
+          preDestroyedOwnerId === "player" ? this.player : this.bot;
         const result = await this.destroyCard(attacker, {
           cause: "battle",
           sourceCard: target,
@@ -334,7 +351,11 @@ export async function finishCombat(attacker, target, options = {}) {
         if (result?.destroyed) {
           const bdResult = await this.applyBattleDestroyEffect(
             target,
-            attacker
+            attacker,
+            {
+              destroyedOwner: preDestroyedOwner,
+              destroyedOwnerId: preDestroyedOwnerId,
+            },
           );
           if (bdResult) battleDestroyResults.push(bdResult);
         }
@@ -368,7 +389,7 @@ export async function finishCombat(attacker, target, options = {}) {
         if (result?.destroyed) {
           const bdResult = await this.applyBattleDestroyEffect(
             attacker,
-            target
+            target,
           );
           if (bdResult) battleDestroyResults.push(bdResult);
         }
@@ -387,7 +408,7 @@ export async function finishCombat(attacker, target, options = {}) {
       // Clear pending tie destruction if we completed successfully
       this.pendingTieDestruction = null;
       logBattleResult(
-        `${attacker.name} and ${target.name} destroyed each other.`
+        `${attacker.name} and ${target.name} destroyed each other.`,
       );
     }
   } else {
@@ -399,10 +420,10 @@ export async function finishCombat(attacker, target, options = {}) {
           defender,
           target,
           damage,
-          defenderHealsOnBattleDamage
+          defenderHealsOnBattleDamage,
         );
         logBattleResult(
-          `${attacker.name} pierced ${target.name} for ${damage} damage.`
+          `${attacker.name} pierced ${target.name} for ${damage} damage.`,
         );
       }
       logBattleDestroyCheck("defense target destruction check");
@@ -414,7 +435,7 @@ export async function finishCombat(attacker, target, options = {}) {
         if (result?.destroyed) {
           const bdResult = await this.applyBattleDestroyEffect(
             attacker,
-            target
+            target,
           );
           if (bdResult) battleDestroyResults.push(bdResult);
         }
@@ -439,14 +460,14 @@ export async function finishCombat(attacker, target, options = {}) {
         attPlayer,
         attacker,
         damage,
-        attackerHealsOnBattleDamage
+        attackerHealsOnBattleDamage,
       );
       logBattleResult(
-        `${attacker.name} took ${damage} damage attacking ${target.name}.`
+        `${attacker.name} took ${damage} damage attacking ${target.name}.`,
       );
     } else {
       logBattleResult(
-        `${attacker.name} could not break ${target.name}'s defense.`
+        `${attacker.name} could not break ${target.name}'s defense.`,
       );
     }
   }
@@ -456,7 +477,7 @@ export async function finishCombat(attacker, target, options = {}) {
   this.clearAttackResolutionIndicators();
   this.updateBoard();
   const pendingResult = battleDestroyResults.find(
-    (r) => r?.needsSelection && r?.selectionContract
+    (r) => r?.needsSelection && r?.selectionContract,
   );
   if (pendingResult) {
     return {
@@ -481,7 +502,11 @@ export async function finishCombat(attacker, target, options = {}) {
  * @param {Object} destroyed - The destroyed monster
  * @returns {Object} Result with ok status and any pending selections
  */
-export async function applyBattleDestroyEffect(attacker, destroyed) {
+export async function applyBattleDestroyEffect(
+  attacker,
+  destroyed,
+  extras = {},
+) {
   // Legacy: onBattleDestroy direct damage effects tied to the attacker
   if (attacker && attacker.onBattleDestroy && attacker.onBattleDestroy.damage) {
     const defender = attacker.owner === "player" ? this.bot : this.player;
@@ -490,7 +515,7 @@ export async function applyBattleDestroyEffect(attacker, destroyed) {
       cause: "effect",
     });
     this.ui.log(
-      `${attacker.name} inflicts an extra ${attacker.onBattleDestroy.damage} damage!`
+      `${attacker.name} inflicts an extra ${attacker.onBattleDestroy.damage} damage!`,
     );
     this.checkWinCondition();
     this.updateBoard();
@@ -501,7 +526,9 @@ export async function applyBattleDestroyEffect(attacker, destroyed) {
     return { ok: true };
   }
 
-  const destroyedOwner = destroyed.owner === "player" ? this.player : this.bot;
+  const destroyedOwner =
+    extras?.destroyedOwner ||
+    (destroyed.owner === "player" ? this.player : this.bot);
   const attackerOwner = attacker.owner === "player" ? this.player : this.bot;
 
   const emitResult = await this.emit("battle_destroy", {
@@ -509,6 +536,9 @@ export async function applyBattleDestroyEffect(attacker, destroyed) {
     opponent: destroyedOwner, // o jogador que perdeu o monstro
     attacker,
     destroyed,
+    destroyedOwner: destroyedOwner || extras?.destroyedOwner || null,
+    destroyedOwnerId:
+      extras?.destroyedOwnerId || destroyedOwner?.id || destroyed?.owner,
     attackerOwner,
     destroyedOwner,
   });

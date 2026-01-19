@@ -37,7 +37,7 @@ export async function handleSpecialSummonFromZone(
   action,
   ctx,
   targets,
-  engine
+  engine,
 ) {
   const { player, source, destroyed } = ctx;
   const game = engine.game;
@@ -161,7 +161,7 @@ export async function handleSpecialSummonFromZone(
 
   if (!zoneHasCards) {
     getUI(game)?.log(
-      `No cards in ${Array.isArray(zoneSpec) ? zoneSpec.join("/") : zoneSpec}.`
+      `No cards in ${Array.isArray(zoneSpec) ? zoneSpec.join("/") : zoneSpec}.`,
     );
     return false;
   }
@@ -243,7 +243,7 @@ export async function handleSpecialSummonFromZone(
       collectZoneCandidates(entry.list, filters, {
         source,
         excludeSummonRestrict,
-      })
+      }),
     );
   }
 
@@ -263,7 +263,7 @@ export async function handleSpecialSummonFromZone(
     getUI(game)?.log(
       `No valid cards in ${
         Array.isArray(zoneSpec) ? zoneSpec.join("/") : zoneSpec
-      } matching filters.`
+      } matching filters.`,
     );
     return false;
   }
@@ -281,8 +281,8 @@ export async function handleSpecialSummonFromZone(
   const dynamicCap = Number.isFinite(count.cap)
     ? count.cap
     : Number.isFinite(count.maxCap)
-    ? count.maxCap
-    : 5;
+      ? count.maxCap
+      : 5;
 
   const baseMax = Number.isFinite(count.max) ? count.max : 1;
 
@@ -292,13 +292,44 @@ export async function handleSpecialSummonFromZone(
   const maxSelect = Math.min(
     resolvedMax,
     candidates.length,
-    5 - player.field.length
+    5 - player.field.length,
   );
 
   if (maxSelect === 0) {
     getUI(game)?.log("Field is full, cannot Special Summon.");
     return false;
   }
+
+  // Helper: Escolhe carta usando estratégia do bot se disponível
+  const smartBotSelect = (cards) => {
+    // Tentar usar estratégia específica do bot se existir
+    const botPlayer = game?.bot;
+    const strategy = botPlayer?.strategy;
+
+    if (
+      strategy &&
+      typeof strategy.evaluateRecruitCandidate === "function" &&
+      player === botPlayer
+    ) {
+      const evaluation = strategy.evaluateRecruitCandidate(cards, {
+        game,
+        player,
+        source,
+      });
+      if (evaluation?.best) {
+        return [evaluation.best];
+      }
+    }
+
+    // Fallback: maior ATK
+    return [
+      cards.reduce((top, card) => {
+        const cardAtk = card.atk || 0;
+        const topAtk = top.atk || 0;
+        return cardAtk >= topAtk ? card : top;
+      }, cards[0]),
+    ];
+  };
 
   // Single card summon (original behavior)
   if (count.max === 1 || maxSelect === 1) {
@@ -308,13 +339,7 @@ export async function handleSpecialSummonFromZone(
       candidates,
       maxSelect: 1,
       promptPlayer: action.promptPlayer !== false,
-      botSelect: (cards) => [
-        cards.reduce((top, card) => {
-          const cardAtk = card.atk || 0;
-          const topAtk = top.atk || 0;
-          return cardAtk >= topAtk ? card : top;
-        }, cards[0]),
-      ],
+      botSelect: smartBotSelect,
       selectSingle: (cards) => {
         const renderer = getUI(game);
         const searchModal = renderer?.getSearchModalElements?.();
@@ -336,7 +361,7 @@ export async function handleSpecialSummonFromZone(
                 cards.find((c) => c && c.name === selectedName) || cards[0];
               game.isResolvingEffect = false;
               resolve(chosen);
-            }
+            },
           );
         });
       },
@@ -351,16 +376,20 @@ export async function handleSpecialSummonFromZone(
       zoneEntries,
       player,
       action,
-      engine
+      engine,
     );
-    if (success && optEffect && typeof game.markOncePerTurnUsed === "function") {
+    if (
+      success &&
+      optEffect &&
+      typeof game.markOncePerTurnUsed === "function"
+    ) {
       game.markOncePerTurnUsed(source, player, optEffect);
     }
     return success;
   }
 
   // Multi-card summon (graveyard revival pattern)
-  // Bot: auto-select best cards (highest ATK)
+  // Bot: usar estratégia se disponível, senão maior ATK
   const minRequired = Number(count.min ?? 0);
 
   const dynamicMaxSelect =
@@ -368,17 +397,42 @@ export async function handleSpecialSummonFromZone(
       ? Math.min(dynamicMax, dynamicCap, 5 - player.field.length)
       : maxSelect;
 
+  // Helper para multi-select inteligente
+  const smartBotSelectMulti = (cards, max) => {
+    const botPlayer = game?.bot;
+    const strategy = botPlayer?.strategy;
+
+    if (
+      strategy &&
+      typeof strategy.evaluateRecruitCandidate === "function" &&
+      player === botPlayer
+    ) {
+      const evaluation = strategy.evaluateRecruitCandidate(cards, {
+        game,
+        player,
+        source,
+      });
+      // Ordenar pelos scores e pegar os melhores
+      const sorted = evaluation.scores
+        .sort((a, b) => b.score - a.score)
+        .map((s) => s.card);
+      return sorted.slice(0, max);
+    }
+
+    // Fallback: maior ATK
+    return cards
+      .slice()
+      .sort((a, b) => (b.atk || 0) - (a.atk || 0))
+      .slice(0, max);
+  };
+
   const selection = await selectCardsFromZone({
     game,
     player,
     candidates,
     maxSelect: dynamicMaxSelect,
     minSelect: minRequired,
-    botSelect: (cards, max) =>
-      cards
-        .slice()
-        .sort((a, b) => (b.atk || 0) - (a.atk || 0))
-        .slice(0, max),
+    botSelect: smartBotSelectMulti,
     selectMulti: (cards, range) => {
       if (!getUI(game)?.showMultiSelectModal) {
         return cards
@@ -393,7 +447,7 @@ export async function handleSpecialSummonFromZone(
           { min: range.min, max: range.max },
           (selected) => {
             resolve(selected || []);
-          }
+          },
         );
       });
     },
@@ -414,7 +468,13 @@ export async function handleSpecialSummonFromZone(
     return false;
   }
 
-  const success = await summonCards(selected, zoneEntries, player, action, engine);
+  const success = await summonCards(
+    selected,
+    zoneEntries,
+    player,
+    action,
+    engine,
+  );
   if (success && optEffect && typeof game.markOncePerTurnUsed === "function") {
     game.markOncePerTurnUsed(source, player, optEffect);
   }
@@ -439,8 +499,8 @@ async function summonCards(cards, sourceZoneEntries, player, action, engine) {
   const fromZoneName = Array.isArray(fromZoneSpec)
     ? null
     : typeof fromZoneSpec === "string"
-    ? fromZoneSpec
-    : null;
+      ? fromZoneSpec
+      : null;
 
   for (const card of cards) {
     if (!card || player.field.length >= 5) break;
@@ -448,7 +508,7 @@ async function summonCards(cards, sourceZoneEntries, player, action, engine) {
     // 🚨 CRITICAL VALIDATION: Only monsters can be special summoned to field
     if (card.cardKind !== "monster") {
       console.error(
-        `[handleSpecialSummonFromZone] ❌ BLOCKED: Attempted to summon non-monster "${card.name}" (kind: ${card.cardKind}) from zone: ${fromZoneName}`
+        `[handleSpecialSummonFromZone] ❌ BLOCKED: Attempted to summon non-monster "${card.name}" (kind: ${card.cardKind}) from zone: ${fromZoneName}`,
       );
       continue; // Skip this card, continue with others
     }
@@ -457,8 +517,8 @@ async function summonCards(cards, sourceZoneEntries, player, action, engine) {
       typeof action.fromZone === "string"
         ? action.fromZone
         : typeof engine.findCardZone === "function"
-        ? engine.findCardZone(player, card)
-        : fromZoneName;
+          ? engine.findCardZone(player, card)
+          : fromZoneName;
 
     // Unified semantics: delegate to unified resolver
     const position = await engine.chooseSpecialSummonPosition(card, player, {
@@ -547,8 +607,8 @@ async function summonCards(cards, sourceZoneEntries, player, action, engine) {
       action.position === "defense"
         ? "Defense"
         : action.position === "attack"
-        ? "Attack"
-        : "";
+          ? "Attack"
+          : "";
     const restrictText = action.cannotAttackThisTurn
       ? " (cannot attack this turn)"
       : "";
@@ -559,7 +619,7 @@ async function summonCards(cards, sourceZoneEntries, player, action, engine) {
         player.name || player.id
       } Special Summoned ${cardText} from ${zoneName}${
         positionText ? ` in ${positionText} Position` : ""
-      }${restrictText}${negateText}.`
+      }${restrictText}${negateText}.`,
     );
 
     game.updateBoard();
@@ -659,7 +719,7 @@ export async function handleSpecialSummonFromHandWithCost(
   action,
   ctx,
   targets,
-  engine
+  engine,
 ) {
   const { player, source } = ctx;
   const game = engine.game;
@@ -736,7 +796,7 @@ export async function handleSpecialSummonFromHandWithCost(
       }
 
       getUI(game)?.log(
-        `Banished ${costTargets.length} card(s) (removed from game).`
+        `Banished ${costTargets.length} card(s) (removed from game).`,
       );
     } else {
       // Default: Move cost cards to graveyard
@@ -757,7 +817,7 @@ export async function handleSpecialSummonFromHandWithCost(
     }
 
     getUI(game)?.log(
-      `${player.name || player.id} Special Summoned ${source.name} from hand.`
+      `${player.name || player.id} Special Summoned ${source.name} from hand.`,
     );
 
     game.updateBoard();
@@ -815,7 +875,7 @@ export async function handleSpecialSummonFromHandWithCost(
   ];
 
   const tierOptions = (action.tierOptions || defaultTierOptions).filter(
-    (opt) => opt.count >= minCost && opt.count <= allowedMax
+    (opt) => opt.count >= minCost && opt.count <= allowedMax,
   );
 
   let chosenCount = null;
@@ -830,7 +890,7 @@ export async function handleSpecialSummonFromHandWithCost(
   } else if (getUI(game)?.showNumberPrompt) {
     const parsed = getUI(game).showNumberPrompt(
       `Choose how many Void Hollow to send (1-${allowedMax}):`,
-      String(allowedMax)
+      String(allowedMax),
     );
 
     if (parsed !== null && parsed >= minCost && parsed <= allowedMax) {
@@ -865,7 +925,7 @@ export async function handleSpecialSummonFromHandWithCost(
               player,
               game,
               cards,
-              { ownerLabel: player.id }
+              { ownerLabel: player.id },
             );
 
             return {
@@ -913,14 +973,14 @@ export async function handleSpecialSummonFromHandWithCost(
       getUI(game)?.log(
         `${
           player.name || player.id
-        } enviou ${chosenCount} custo(s) para invocar ${source.name}.`
+        } enviou ${chosenCount} custo(s) para invocar ${source.name}.`,
       );
 
       const buffAmount = action.tier1AtkBoost ?? 300;
       if (chosenCount >= 1 && buffAmount !== 0) {
         engine.applyBuffAtkTemp(
           { targetRef: "tier_self", amount: buffAmount },
-          { tier_self: [source] }
+          { tier_self: [source] },
         );
       }
 
@@ -943,7 +1003,7 @@ export async function handleSpecialSummonFromHandWithCost(
             opponent,
             game,
             opponentCards,
-            { ownerLabel: opponent.id }
+            { ownerLabel: opponent.id },
           );
 
           const selectionContract = {
@@ -988,7 +1048,7 @@ export async function handleSpecialSummonFromHandWithCost(
             // Check immunity before destroying
             if (engine.isImmuneToOpponentEffects(targetToDestroy, player)) {
               getUI(game)?.log(
-                `${targetToDestroy.name} is immune to opponent's effects.`
+                `${targetToDestroy.name} is immune to opponent's effects.`,
               );
             } else {
               const result = await game.destroyCard(targetToDestroy, {
@@ -999,7 +1059,7 @@ export async function handleSpecialSummonFromHandWithCost(
 
               if (result?.destroyed) {
                 getUI(game)?.log(
-                  `${source.name} destruiu ${targetToDestroy.name}.`
+                  `${source.name} destruiu ${targetToDestroy.name}.`,
                 );
               }
             }
@@ -1009,7 +1069,7 @@ export async function handleSpecialSummonFromHandWithCost(
 
       game.updateBoard();
       return true;
-    }
+    },
   );
 
   return costPaid;
@@ -1022,7 +1082,7 @@ export async function handleAbyssalSerpentDelayedSummon(
   action,
   ctx,
   targets,
-  engine
+  engine,
 ) {
   const { player, source } = ctx;
   const game = engine?.game;
@@ -1069,7 +1129,7 @@ export async function handleAbyssalSerpentDelayedSummon(
   await game.moveCard(target, opponent, "graveyard");
 
   ui?.log?.(
-    `${source.name} and ${target.name} are sent to the GY. They will be special summoned during the opponent's next Standby Phase.`
+    `${source.name} and ${target.name} are sent to the GY. They will be special summoned during the opponent's next Standby Phase.`,
   );
 
   // Agendar delayed summon para próxima standby phase do oponente
@@ -1101,7 +1161,7 @@ export async function handleAbyssalSerpentDelayedSummon(
       player: opponentPlayerId,
     },
     summonPayload,
-    1 // Prioridade 1 para processar antes de outros efeitos
+    1, // Prioridade 1 para processar antes de outros efeitos
   );
 
   return true;
@@ -1206,7 +1266,7 @@ export async function handleDrawAndSummon(action, ctx, targets, engine) {
         handIndex,
         player,
         action,
-        engine
+        engine,
       );
     }
     // Bot chooses to summon (always optimal)
@@ -1215,7 +1275,7 @@ export async function handleDrawAndSummon(action, ctx, targets, engine) {
       handIndex,
       player,
       action,
-      engine
+      engine,
     );
   }
 
@@ -1224,7 +1284,7 @@ export async function handleDrawAndSummon(action, ctx, targets, engine) {
     const wantsToSummon =
       getUI(game)?.showConfirmPrompt?.(
         `You drew "${drawnCard.name}". Do you want to Special Summon it from your hand?`,
-        { kind: "draw_and_summon", cardName: drawnCard.name }
+        { kind: "draw_and_summon", cardName: drawnCard.name },
       ) ?? false;
 
     if (!wantsToSummon) {
@@ -1237,7 +1297,7 @@ export async function handleDrawAndSummon(action, ctx, targets, engine) {
     handIndex,
     player,
     action,
-    engine
+    engine,
   );
 }
 
@@ -1255,7 +1315,7 @@ export async function handleConditionalSummonFromHand(
   action,
   ctx,
   targets,
-  engine
+  engine,
 ) {
   const { player, source } = ctx;
   const game = engine.game;
@@ -1271,7 +1331,7 @@ export async function handleConditionalSummonFromHand(
     // If source is a spell/trap, this is a bug - log and reject
     if (source.cardKind !== "monster") {
       console.error(
-        `[handleConditionalSummonFromHand] ❌ BUG: targetRef="self" but source is ${source.cardKind} "${source.name}". Only monsters can summon themselves.`
+        `[handleConditionalSummonFromHand] ❌ BUG: targetRef="self" but source is ${source.cardKind} "${source.name}". Only monsters can summon themselves.`,
       );
       return false;
     }
@@ -1288,7 +1348,7 @@ export async function handleConditionalSummonFromHand(
   if (!targetCards || targetCards.length === 0) {
     if (game.devMode) {
       console.log(
-        `[handleConditionalSummonFromHand] No target cards found for targetRef="${targetRef}"`
+        `[handleConditionalSummonFromHand] No target cards found for targetRef="${targetRef}"`,
       );
     }
     return false;
@@ -1299,7 +1359,7 @@ export async function handleConditionalSummonFromHand(
   // 🚨 EARLY VALIDATION: Check if the resolved card is a monster
   if (!card || card.cardKind !== "monster") {
     console.error(
-      `[handleConditionalSummonFromHand] ❌ BLOCKED: targetRef="${targetRef}" resolved to non-monster "${card?.name}" (kind: ${card?.cardKind})`
+      `[handleConditionalSummonFromHand] ❌ BLOCKED: targetRef="${targetRef}" resolved to non-monster "${card?.name}" (kind: ${card?.cardKind})`,
     );
     return false;
   }
@@ -1407,7 +1467,7 @@ export async function handleConditionalSummonFromHand(
         handIndex,
         player,
         action,
-        engine
+        engine,
       );
     }
     // Bot chooses to summon (always optimal)
@@ -1416,7 +1476,7 @@ export async function handleConditionalSummonFromHand(
       handIndex,
       player,
       action,
-      engine
+      engine,
     );
   }
 
@@ -1429,7 +1489,7 @@ export async function handleConditionalSummonFromHand(
     const wantsToSummon =
       getUI(game)?.showConfirmPrompt?.(
         `${conditionText} Do you want to Special Summon "${handCard.name}" from your hand?`,
-        { kind: "conditional_summon", cardName: handCard.name }
+        { kind: "conditional_summon", cardName: handCard.name },
       ) ?? false;
 
     if (!wantsToSummon) {
@@ -1442,7 +1502,7 @@ export async function handleConditionalSummonFromHand(
     handIndex,
     player,
     action,
-    engine
+    engine,
   );
 }
 
@@ -1455,7 +1515,7 @@ async function performSummonFromHand(card, handIndex, player, action, engine) {
   // 🚨 CRITICAL VALIDATION: Only monsters can be summoned to field
   if (!card || card.cardKind !== "monster") {
     console.error(
-      `[performSummonFromHand] ❌ BLOCKED: Attempted to summon non-monster "${card?.name}" (kind: ${card?.cardKind})`
+      `[performSummonFromHand] ❌ BLOCKED: Attempted to summon non-monster "${card?.name}" (kind: ${card?.cardKind})`,
     );
     return false;
   }
@@ -1495,7 +1555,7 @@ async function performSummonFromHand(card, handIndex, player, action, engine) {
     action.restrictAttackThisTurn || action.cannotAttackThisTurn || false;
 
   getUI(game)?.log(
-    `${player.name || player.id} Special Summoned ${card.name} from hand.`
+    `${player.name || player.id} Special Summoned ${card.name} from hand.`,
   );
 
   game.updateBoard();
@@ -1524,7 +1584,7 @@ export async function handleSpecialSummonFromDeckWithCounterLimit(
   action,
   ctx,
   targets,
-  engine
+  engine,
 ) {
   const { player, source } = ctx;
   const game = engine.game;
@@ -1544,13 +1604,13 @@ export async function handleSpecialSummonFromDeckWithCounterLimit(
     typeof source.getCounter === "function"
       ? source.getCounter(counterType)
       : source?.counters?.get
-      ? source.counters.get(counterType)
-      : 0;
+        ? source.counters.get(counterType)
+        : 0;
   const maxAtk = counterCount * counterMultiplier;
 
   if (maxAtk === 0) {
     getUI(game)?.log(
-      `No ${counterType} counters on ${source.name}. Cannot summon.`
+      `No ${counterType} counters on ${source.name}. Cannot summon.`,
     );
     return false;
   }
@@ -1582,7 +1642,7 @@ export async function handleSpecialSummonFromDeckWithCounterLimit(
   // AI: auto-select best card (highest ATK)
   if (isAI(player)) {
     const chosen = candidates.reduce((best, card) =>
-      card.atk > best.atk ? card : best
+      card.atk > best.atk ? card : best,
     );
 
     return await performSummonFromDeck(
@@ -1591,7 +1651,7 @@ export async function handleSpecialSummonFromDeckWithCounterLimit(
       player,
       action,
       engine,
-      source
+      source,
     );
   }
 
@@ -1610,7 +1670,7 @@ export async function handleSpecialSummonFromDeckWithCounterLimit(
         player,
         action,
         engine,
-        source
+        source,
       );
 
       resolve(result);
@@ -1621,7 +1681,7 @@ export async function handleSpecialSummonFromDeckWithCounterLimit(
         candidates,
         maxAtk,
         counterCount,
-        onSelected
+        onSelected,
       );
       return;
     }
@@ -1636,7 +1696,7 @@ export async function handleSpecialSummonFromDeckWithCounterLimit(
       candidates,
       modalConfig.title,
       1,
-      onSelected
+      onSelected,
     );
   });
 }
@@ -1650,7 +1710,7 @@ async function performSummonFromDeck(
   player,
   action,
   engine,
-  source
+  source,
 ) {
   const game = engine.game;
 
@@ -1659,7 +1719,7 @@ async function performSummonFromDeck(
   // 🚨 CRITICAL VALIDATION: Only monsters can be summoned to field
   if (card.cardKind !== "monster") {
     console.error(
-      `[performSummonFromDeck] ❌ BLOCKED: Attempted to summon non-monster "${card.name}" (kind: ${card.cardKind})`
+      `[performSummonFromDeck] ❌ BLOCKED: Attempted to summon non-monster "${card.name}" (kind: ${card.cardKind})`,
     );
     return false;
   }
@@ -1674,7 +1734,7 @@ async function performSummonFromDeck(
   const summonPosition = await engine.chooseSpecialSummonPosition(
     card,
     player,
-    { position: action.position }
+    { position: action.position },
   );
 
   let usedMoveCard = false;
@@ -1713,7 +1773,7 @@ async function performSummonFromDeck(
   getUI(game)?.log(
     `${player.name} Special Summoned ${card.name} from deck in ${
       summonPosition === "defense" ? "Defense" : "Attack"
-    } Position.`
+    } Position.`,
   );
 
   if (!usedMoveCard) {

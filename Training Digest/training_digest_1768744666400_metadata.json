@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
-  "exportedAt": "2026-01-12T23:00:02.700Z",
+  "exportedAt": "2026-01-18T13:57:46.403Z",
   "filters": {
     "archetype": null,
     "matchup": null,
     "result": null,
     "quality": "clean"
   },
-  "totalRows": 1077,
+  "totalRows": 99,
   "features": [
     "turn",
     "phase",

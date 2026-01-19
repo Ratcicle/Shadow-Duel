@@ -52,7 +52,7 @@ export default class BaseStrategy {
     const context = {
       myStrongestAtk: Math.max(
         ...myField.map((m) => (m?.atk || 0) + (m?.tempAtkBoost || 0)),
-        0
+        0,
       ),
       hasDefenses: myField.some((m) => m?.position === "defense"),
       myArchetype: this.getMainArchetype(perspective),
@@ -81,7 +81,7 @@ export default class BaseStrategy {
 
     // Hand quality (geradores de vantagem = +bônus)
     const myAdvantageEngines = myHand.filter((c) =>
-      isAdvantageEngine(c)
+      isAdvantageEngine(c),
     ).length;
     score += myAdvantageEngines * 0.4;
 
@@ -107,14 +107,14 @@ export default class BaseStrategy {
     // === 6. GRAVEYARD RESOURCES ===
     const myGY = perspective?.graveyard || [];
     const recursionTargets = myGY.filter(
-      (c) => c?.cardKind === "monster" && inferRole(c) !== "beater"
+      (c) => c?.cardKind === "monster" && inferRole(c) !== "beater",
     ).length;
     score += recursionTargets * 0.15; // GY com alvos = recurso futuro
 
     // === 7. READY ATTACKERS — Bônus para monstros prontos para atacar ===
     const readyAttackers = myField.filter(
       (m) =>
-        m?.position === "attack" && !m?.hasAttacked && !m?.cannotAttackThisTurn
+        m?.position === "attack" && !m?.hasAttacked && !m?.cannotAttackThisTurn,
     );
     for (const attacker of readyAttackers) {
       const atkValue =
@@ -222,8 +222,8 @@ export default class BaseStrategy {
       const archetypes = Array.isArray(card.archetypes)
         ? card.archetypes
         : card.archetype
-        ? [card.archetype]
-        : [];
+          ? [card.archetype]
+          : [];
 
       for (const arch of archetypes) {
         archetypeCounts[arch] = (archetypeCounts[arch] || 0) + 1;
@@ -293,6 +293,105 @@ export default class BaseStrategy {
   // Pick tribute indices from field
   selectBestTributes(_field, _tributesNeeded, _cardToSummon) {
     return [];
+  }
+
+  /**
+   * Gera ações de troca de posição quando houver vantagem clara.
+   * @param {Object} game
+   * @param {Object} bot
+   * @param {Object} opponent
+   * @returns {Array}
+   */
+  getPositionChangeActions(game, bot, opponent) {
+    const actions = [];
+    if (!bot || !opponent) return actions;
+
+    const oppField = Array.isArray(opponent.field) ? opponent.field : [];
+    const estimateOpponentStat = (card) => {
+      if (!card || card.cardKind !== "monster") return 0;
+      if (card.isFacedown) return 1500;
+      const atk =
+        (card.atk || 0) + (card.tempAtkBoost || 0) + (card.equipAtkBonus || 0);
+      const def =
+        (card.def || 0) + (card.tempDefBoost || 0) + (card.equipDefBonus || 0);
+      return card.position === "attack" ? atk : def;
+    };
+
+    const strongestOpponentStat = oppField.reduce((max, card) => {
+      const stat = estimateOpponentStat(card);
+      return Math.max(max, stat);
+    }, 0);
+
+    const canChangePosition = (card) => {
+      if (!card || card.cardKind !== "monster") return false;
+      if (typeof game?.canChangePosition === "function") {
+        return game.canChangePosition(card);
+      }
+      const turnCounter = game?.turnCounter ?? 0;
+      if (card.isFacedown) return false;
+      if (card.positionChangedThisTurn) return false;
+      if (card.summonedTurn && turnCounter <= card.summonedTurn) return false;
+      if (card.hasAttacked) return false;
+      return true;
+    };
+
+    for (const card of bot.field || []) {
+      if (!card || card.cardKind !== "monster") continue;
+      if (!canChangePosition(card)) continue;
+
+      const atk =
+        (card.atk || 0) + (card.tempAtkBoost || 0) + (card.equipAtkBonus || 0);
+      const def =
+        (card.def || 0) + (card.tempDefBoost || 0) + (card.equipDefBonus || 0);
+
+      if (card.position === "defense") {
+        if (card.cannotAttackThisTurn) continue;
+        const hasNoOpponents = oppField.length === 0;
+        const advantage = atk - strongestOpponentStat;
+        const canPressure = hasNoOpponents || advantage >= 100;
+        if (!canPressure) continue;
+
+        const priorityBase = hasNoOpponents ? 2.2 : 1.6;
+        const priority = Math.max(
+          0.5,
+          priorityBase + Math.min(2, Math.max(-0.5, advantage / 1000)),
+        );
+
+        actions.push({
+          type: "position_change",
+          cardId: card.id,
+          cardName: card.name,
+          toPosition: "attack",
+          priority,
+        });
+        continue;
+      }
+
+      if (card.position === "attack") {
+        if (oppField.length === 0) continue;
+        const threatened = atk + 50 < strongestOpponentStat;
+        const canHoldDefense = def >= strongestOpponentStat + 50;
+        const prefersDefense = def > atk + 200;
+        if (!threatened || (!canHoldDefense && !prefersDefense)) continue;
+
+        const priorityBase = canHoldDefense ? 1.4 : 1.1;
+        const safetyDelta = def - strongestOpponentStat;
+        const priority = Math.max(
+          0.4,
+          priorityBase + Math.min(1.5, Math.max(-0.3, safetyDelta / 1200)),
+        );
+
+        actions.push({
+          type: "position_change",
+          cardId: card.id,
+          cardName: card.name,
+          toPosition: "defense",
+          priority,
+        });
+      }
+    }
+
+    return actions;
   }
 
   /**

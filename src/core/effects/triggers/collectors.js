@@ -228,6 +228,9 @@ export async function collectAfterSummonTriggers(payload) {
     if (owner.fieldSpell) {
       sources.push(owner.fieldSpell);
     }
+    if (Array.isArray(owner.spellTrap)) {
+      sources.push(...owner.spellTrap);
+    }
     if (Array.isArray(owner.hand)) {
       sources.push(...owner.hand);
     }
@@ -450,6 +453,15 @@ export async function collectBattleDestroyTriggers(payload) {
     const handCards = owner.hand || [];
     const triggerSources = [...fieldCards, ...handCards];
 
+    // DEBUG: Log de triggerSources para battle_destroy
+    console.log(
+      `[battle_destroy DEBUG] Side owner: ${owner?.id}, triggerSources:`,
+      triggerSources.map((c) => c?.name),
+    );
+    console.log(
+      `[battle_destroy DEBUG] attacker in triggerSources: ${triggerSources.includes(attacker)}`,
+    );
+
     // Add destroyed card to trigger sources only once (avoid double processing in mutual destruction)
     if (
       destroyed &&
@@ -480,6 +492,26 @@ export async function collectBattleDestroyTriggers(payload) {
         if (!effect || effect.timing !== "on_event") continue;
         if (effect.event !== "battle_destroy") continue;
 
+        // DEBUG: Log de diagnóstico para battle_destroy
+        console.log(
+          `[battle_destroy DEBUG] Checking effect ${effect.id} on ${card.name}`,
+        );
+        console.log(
+          `  - attacker: ${attacker?.name}, destroyed: ${destroyed?.name}`,
+        );
+        console.log(
+          `  - attackerOwner: ${attackerOwner?.id}, destroyedOwner: ${destroyedOwner?.id}`,
+        );
+        console.log(
+          `  - side.owner: ${owner?.id}, side.other: ${side.other?.id}`,
+        );
+        console.log(
+          `  - requireSelfAsAttacker: ${effect.requireSelfAsAttacker}, ctx.attacker === card: ${ctx.attacker === card}`,
+        );
+        console.log(
+          `  - requireDestroyedIsOpponent: ${effect.requireDestroyedIsOpponent}`,
+        );
+
         if (this.isEffectNegated(card)) {
           console.log(`${card.name} effects are negated, skipping effect.`);
           continue;
@@ -505,14 +537,39 @@ export async function collectBattleDestroyTriggers(payload) {
           continue;
         }
 
-        if (effect.requireSelfAsAttacker && ctx.attacker !== card) continue;
-        if (effect.requireSelfAsDestroyed && ctx.destroyed !== card) continue;
+        if (effect.requireSelfAsAttacker && ctx.attacker !== card) {
+          console.log(
+            `[battle_destroy DEBUG] SKIPPED: requireSelfAsAttacker but ctx.attacker !== card`,
+          );
+          continue;
+        }
+        if (effect.requireSelfAsDestroyed && ctx.destroyed !== card) {
+          console.log(
+            `[battle_destroy DEBUG] SKIPPED: requireSelfAsDestroyed but ctx.destroyed !== card`,
+          );
+          continue;
+        }
         if (effect.requireDestroyedIsOpponent) {
           const destroyedOwnerId =
             (ctx.destroyedOwner && ctx.destroyedOwner.id) || ctx.destroyedOwner;
           const opponentId = side.other?.id;
-          if (!destroyedOwnerId || destroyedOwnerId !== opponentId) continue;
+          console.log(
+            `[battle_destroy DEBUG] requireDestroyedIsOpponent check:`,
+          );
+          console.log(
+            `  - destroyedOwnerId: ${destroyedOwnerId}, opponentId: ${opponentId}`,
+          );
+          if (!destroyedOwnerId || destroyedOwnerId !== opponentId) {
+            console.log(
+              `[battle_destroy DEBUG] SKIPPED: requireDestroyedIsOpponent failed`,
+            );
+            continue;
+          }
         }
+
+        console.log(
+          `[battle_destroy DEBUG] PASSED ALL CHECKS for ${effect.id}, creating entry`,
+        );
         if (effect.requireOwnMonsterArchetype) {
           const destroyedCard = ctx.destroyed;
           const destroyedOwnerId =

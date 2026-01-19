@@ -157,22 +157,22 @@ export default class ShadowHeartStrategy extends BaseStrategy {
 
     this.think(`📊 Analisando situação: ${bot.lp} LP vs ${opponent.lp} LP`);
     this.think(
-      `🃏 Minha mão: ${analysis.hand.map((c) => c.name).join(", ") || "vazia"}`
+      `🃏 Minha mão: ${analysis.hand.map((c) => c.name).join(", ") || "vazia"}`,
     );
     this.think(
-      `⚔️ Meu campo: ${analysis.field.map((c) => c.name).join(", ") || "vazio"}`
+      `⚔️ Meu campo: ${analysis.field.map((c) => c.name).join(", ") || "vazio"}`,
     );
     this.think(
       `🎯 Campo oponente: ${
         analysis.oppField
           .map((c) => (c.isFacedown ? "???" : c.name))
           .join(", ") || "vazio"
-      }`
+      }`,
     );
 
     // Detectar combos disponíveis
     analysis.availableCombos = detectAvailableCombos(analysis, (msg) =>
-      this.think(msg)
+      this.think(msg),
     );
 
     this.currentAnalysis = analysis;
@@ -202,7 +202,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
     return evaluateBoardShadowHeart(
       gameOrState,
       perspectivePlayer,
-      this.getOpponent.bind(this)
+      this.getOpponent.bind(this),
     );
   }
 
@@ -229,13 +229,13 @@ export default class ShadowHeartStrategy extends BaseStrategy {
       { bot, player: opponent, field: {} },
       bot,
       opponent,
-      2
+      2,
     );
 
     const defensive = detectDefensiveNeed(
       { bot, player: opponent },
       bot,
-      opponent
+      opponent,
     );
 
     const comeback = detectComeback({ bot, player: opponent }, bot, opponent);
@@ -246,10 +246,10 @@ export default class ShadowHeartStrategy extends BaseStrategy {
       this.think(
         `    Lethal: ${
           lethal.canLethal ? "YES (in " + lethal.turnsNeeded + " turns)" : "NO"
-        }`
+        }`,
       );
       this.think(
-        `    Threat: ${defensive.threatLevel} (${defensive.turnsToKill} turns to kill)`
+        `    Threat: ${defensive.threatLevel} (${defensive.turnsToKill} turns to kill)`,
       );
       this.think(`    Comeback: ${comeback.isVirada ? "YES" : "NO"}`);
     }
@@ -284,7 +284,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
     // === P1: MACRO PLANNING ===
     const macroStrategy = this.evaluateMacroStrategy(game, analysis);
     log(
-      `  📊 Macro Strategy: ${macroStrategy.strategy} (Priority: ${macroStrategy.priority})`
+      `  📊 Macro Strategy: ${macroStrategy.strategy} (Priority: ${macroStrategy.priority})`,
     );
 
     // === P1: CHAIN AWARENESS ===
@@ -293,28 +293,28 @@ export default class ShadowHeartStrategy extends BaseStrategy {
         { bot, player: opponent },
         bot,
         opponent,
-        "spell"
+        "spell",
       ),
       summon: evaluateActionBlockingRisk(
         { bot, player: opponent },
         bot,
         opponent,
-        "summon"
+        "summon",
       ),
       attack: evaluateActionBlockingRisk(
         { bot, player: opponent },
         bot,
         opponent,
-        "attack"
+        "attack",
       ),
     };
 
     // === PRIORIDADE 1: COMBOS DE ALTA PRIORIDADE ===
     for (const combo of analysis.availableCombos.sort(
-      (a, b) => b.priority - a.priority
+      (a, b) => b.priority - a.priority,
     )) {
       log(
-        `  📌 Considerando combo: ${combo.name} (prioridade ${combo.priority})`
+        `  📌 Considerando combo: ${combo.name} (prioridade ${combo.priority})`,
       );
     }
 
@@ -329,7 +329,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
       // BUGFIX: Só adicionar uma cópia de cada spell (evitar duplicatas com 1/turn)
       // Spells com efeitos 1/turn não devem ter múltiplas ações geradas
       const hasOncePerTurn = (card.effects || []).some(
-        (e) => e.oncePerTurn || e.oncePerTurnName
+        (e) => e.oncePerTurn || e.oncePerTurnName,
       );
       if (hasOncePerTurn && addedSpellNames.has(card.name)) {
         log(`  ⏭️ Skipping duplicate 1/turn spell: ${card.name}`);
@@ -366,7 +366,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
         const macroBuff = calculateMacroPriorityBonus(
           "spell",
           card,
-          macroStrategy
+          macroStrategy,
         );
         finalPriority += macroBuff;
 
@@ -375,7 +375,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
           bot,
           opponent,
           "spell",
-          card
+          card,
         );
         if (spellSafety.recommendation === "very_risky") {
           finalPriority -= 15;
@@ -422,7 +422,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
           const macroBuff = calculateMacroPriorityBonus(
             "summon",
             card,
-            macroStrategy
+            macroStrategy,
           );
           finalPriority += macroBuff;
 
@@ -431,7 +431,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
             bot,
             opponent,
             "summon",
-            card
+            card,
           );
           if (summonSafety.recommendation === "very_risky") {
             finalPriority -= 10;
@@ -463,7 +463,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
 
       // Verificar se o monstro tem efeito ignition com requireZone: "hand"
       const handIgnitionEffect = (card.effects || []).find(
-        (e) => e && e.timing === "ignition" && e.requireZone === "hand"
+        (e) => e && e.timing === "ignition" && e.requireZone === "hand",
       );
       if (!handIgnitionEffect) return;
 
@@ -500,7 +500,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
           const optCheck = actualGame.effectEngine.checkOncePerTurn(
             card,
             bot,
-            handIgnitionEffect
+            handIgnitionEffect,
           );
           if (!optCheck.ok) {
             log(`  ⏭️ Hand ignition ${card.name}: já usado neste turno`);
@@ -529,7 +529,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
       const macroBuff = calculateMacroPriorityBonus(
         "handIgnition",
         card,
-        macroStrategy
+        macroStrategy,
       );
       priority += macroBuff;
 
@@ -561,7 +561,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
       // Log para debug
       if (bot?.debug) {
         console.log(
-          `[ShadowHeartStrategy] ⚠️ STALEMATE BREAKER ativado! Hand=${realBot.hand?.length}, Field=${realBot.field?.length}`
+          `[ShadowHeartStrategy] ⚠️ STALEMATE BREAKER ativado! Hand=${realBot.hand?.length}, Field=${realBot.field?.length}`,
         );
       }
       log(`  ⚠️ STALEMATE BREAKER: Forçando summon alternativo...`);
@@ -579,13 +579,13 @@ export default class ShadowHeartStrategy extends BaseStrategy {
             console.log(
               `[ShadowHeartStrategy] ❌ ${card.name} requer ${
                 tributeInfo.tributesNeeded
-              } tributos (tenho ${realBot.field?.length || 0})`
+              } tributos (tenho ${realBot.field?.length || 0})`,
             );
           }
           log(
             `    ❌ ${card.name} requer ${
               tributeInfo.tributesNeeded
-            } tributos (tenho ${realBot.field?.length || 0})`
+            } tributos (tenho ${realBot.field?.length || 0})`,
           );
           return;
         }
@@ -595,17 +595,15 @@ export default class ShadowHeartStrategy extends BaseStrategy {
             card,
             realBot.field || [],
             tributeInfo.tributesNeeded,
-            { oppField: opponent?.field || [] }
+            { oppField: opponent?.field || [] },
           );
           if (!tradeCheck.ok) {
             if (bot?.debug) {
               console.log(
-                `[ShadowHeartStrategy] ❌ Tribute ruim: ${card.name} (${tradeCheck.reason})`
+                `[ShadowHeartStrategy] ❌ Tribute ruim: ${card.name} (${tradeCheck.reason})`,
               );
             }
-            log(
-              `    ❌ Tribute ruim: ${card.name} (${tradeCheck.reason})`
-            );
+            log(`    ❌ Tribute ruim: ${card.name} (${tradeCheck.reason})`);
             return;
           }
         }
@@ -613,7 +611,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
         // Forçar summon em defesa com prioridade baixa
         if (bot?.debug) {
           console.log(
-            `[ShadowHeartStrategy] 🔧 Fallback summon: ${card.name} em defesa`
+            `[ShadowHeartStrategy] 🔧 Fallback summon: ${card.name} em defesa`,
           );
         }
         log(`    🔧 Fallback summon: ${card.name} em defesa`);
@@ -632,11 +630,11 @@ export default class ShadowHeartStrategy extends BaseStrategy {
       if (monstersChecked > 0 && monstersBlocked === monstersChecked) {
         if (bot?.debug) {
           console.log(
-            `[ShadowHeartStrategy] ⚠️ Todos ${monstersChecked} monstros na mão requerem tributos!`
+            `[ShadowHeartStrategy] ⚠️ Todos ${monstersChecked} monstros na mão requerem tributos!`,
           );
         }
         log(
-          `  ⚠️ Todos ${monstersChecked} monstros na mão requerem tributos! Tentando spells...`
+          `  ⚠️ Todos ${monstersChecked} monstros na mão requerem tributos! Tentando spells...`,
         );
       }
     }
@@ -651,11 +649,11 @@ export default class ShadowHeartStrategy extends BaseStrategy {
         // Log para debug
         if (bot?.debug) {
           console.log(
-            `[ShadowHeartStrategy] 🚨 FALLBACK CRÍTICO! Hand=${realBot2.hand?.length}, Field=${realBot2.field?.length}, LP=${botLP}`
+            `[ShadowHeartStrategy] 🚨 FALLBACK CRÍTICO! Hand=${realBot2.hand?.length}, Field=${realBot2.field?.length}, LP=${botLP}`,
           );
         }
         log(
-          `  🆘 FALLBACK CRÍTICO: ${realBot2.hand.length} cartas na mão, 0 ações! Forçando spell...`
+          `  🆘 FALLBACK CRÍTICO: ${realBot2.hand.length} cartas na mão, 0 ações! Forçando spell...`,
         );
 
         let spellsFound = 0;
@@ -669,7 +667,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
             if (!canActivate) {
               if (bot?.debug) {
                 console.log(
-                  `[ShadowHeartStrategy] ⚠️ Polymerization bloqueado: sem materiais válidos`
+                  `[ShadowHeartStrategy] ⚠️ Polymerization bloqueado: sem materiais válidos`,
                 );
               }
               return; // Skip Polymerization sem materiais
@@ -681,7 +679,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
           // Tentar qualquer spell, mesmo sem validação prévia
           if (bot?.debug) {
             console.log(
-              `[ShadowHeartStrategy] 🔧 Fallback spell: ${card.name} (prioridade 0.5)`
+              `[ShadowHeartStrategy] 🔧 Fallback spell: ${card.name} (prioridade 0.5)`,
             );
           }
           log(`    🔧 Fallback spell: ${card.name} (prioridade forçada: 0.5)`);
@@ -698,27 +696,27 @@ export default class ShadowHeartStrategy extends BaseStrategy {
         // Se ainda não há ações e não há spells, reportar situação crítica
         if (spellsFound === 0 && actions.length === 0) {
           const monsterCount = (realBot2.hand || []).filter(
-            (c) => c.cardKind === "monster"
+            (c) => c.cardKind === "monster",
           ).length;
           const trapCount = (realBot2.hand || []).filter(
-            (c) => c.cardKind === "trap"
+            (c) => c.cardKind === "trap",
           ).length;
 
           if (bot?.debug) {
             console.log(
-              `[ShadowHeartStrategy] ⚠️ Situação crítica: ${monsterCount}M ${trapCount}T`
+              `[ShadowHeartStrategy] ⚠️ Situação crítica: ${monsterCount}M ${trapCount}T`,
             );
             console.log(
               `[ShadowHeartStrategy] Mão completa: ${(realBot2.hand || [])
                 .map((c) => c.name)
-                .join(", ")}`
+                .join(", ")}`,
             );
           }
           log(
-            `  ⚠️ Situação crítica: ${monsterCount} monstros (todos precisam tributos?), ${trapCount} traps na mão`
+            `  ⚠️ Situação crítica: ${monsterCount} monstros (todos precisam tributos?), ${trapCount} traps na mão`,
           );
           log(
-            `  📋 Mão: ${(realBot2.hand || []).map((c) => c.name).join(", ")}`
+            `  📋 Mão: ${(realBot2.hand || []).map((c) => c.name).join(", ")}`,
           );
         }
       }
@@ -728,19 +726,24 @@ export default class ShadowHeartStrategy extends BaseStrategy {
     // Em simulação, não verificar checkOncePerTurn
     if (bot.fieldSpell && !isSimulatedState) {
       const effect = (bot.fieldSpell.effects || []).find(
-        (e) => e.timing === "on_field_activate"
+        (e) => e.timing === "on_field_activate",
       );
       if (effect) {
         const actualGame = game._gameRef || game;
         const check = actualGame.effectEngine?.checkOncePerTurn?.(
           bot.fieldSpell,
           bot,
-          effect
+          effect,
         );
         if (check?.ok) {
           actions.push({ type: "fieldEffect", priority: 5 });
         }
       }
+    }
+
+    const positionActions = this.getPositionChangeActions(game, bot, opponent);
+    if (positionActions.length > 0) {
+      actions.push(...positionActions);
     }
 
     // === P2: GAME TREE SEARCH (OPCIONAL) ===
@@ -752,7 +755,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
     const finalActions = this.integrateP2IntoActionSelection(
       game,
       this.sequenceActions(actions),
-      analysis
+      analysis,
     );
 
     return finalActions;
@@ -763,13 +766,13 @@ export default class ShadowHeartStrategy extends BaseStrategy {
    */
   sequenceActions(actions) {
     const sorted = actions.sort(
-      (a, b) => (b.priority || 0) - (a.priority || 0)
+      (a, b) => (b.priority || 0) - (a.priority || 0),
     );
 
     this.think(`\n📋 Sequência de ações ordenada:`);
     sorted.forEach((a, i) => {
       this.think(
-        `  ${i + 1}. ${a.type}: ${a.cardName || "?"} (pri: ${a.priority || 0})`
+        `  ${i + 1}. ${a.type}: ${a.cardName || "?"} (pri: ${a.priority || 0})`,
       );
     });
 
@@ -821,7 +824,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
       }
 
       this.think(
-        `\n🔮 [P2] Situação crítica detectada! Rodando Game Tree Search (4-ply)...`
+        `\n🔮 [P2] Situação crítica detectada! Rodando Game Tree Search (4-ply)...`,
       );
 
       const complexity = estimateSearchComplexity(4, 3);
@@ -835,7 +838,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
             result.action.type || "unknown"
           } (score: ${result.score.toFixed(2)}, conf: ${(
             result.confidence * 100
-          ).toFixed(0)}%)`
+          ).toFixed(0)}%)`,
         );
         return result;
       }
@@ -860,7 +863,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
       const analysis = analyzeOpponent(opponent, this.bot);
       const turnsToKill = estimateTurnsToOppLethal(
         opponent,
-        this.bot.lp || 8000
+        this.bot.lp || 8000,
       );
 
       this.think(`\n📍 [P2] Análise do Oponente:`);
@@ -869,12 +872,12 @@ export default class ShadowHeartStrategy extends BaseStrategy {
       this.think(
         `  🎯 Próxima ação provável: ${
           analysis.nextMove.card?.name || "desconhecida"
-        } (${analysis.nextMove.role})`
+        } (${analysis.nextMove.role})`,
       );
       this.think(
         `  ⏱️  Turnos até lethal: ${
           turnsToKill === Infinity ? "∞" : turnsToKill
-        }`
+        }`,
       );
       this.think(`  ⚡ Nível de ameaça: ${analysis.threat_level}/3`);
 
@@ -902,7 +905,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
 
       const gameTreeResult = this.evaluateCriticalSituationWithGameTree(
         game,
-        analysis
+        analysis,
       );
       if (!gameTreeResult || !gameTreeResult.action) {
         return actions;
@@ -913,13 +916,13 @@ export default class ShadowHeartStrategy extends BaseStrategy {
 
       this.think(
         `\n🎯 [P2] Game Tree sobrescreve: score=+${gameTreeScore.toFixed(
-          2
-        )} vs P1`
+          2,
+        )} vs P1`,
       );
 
       const indexInActions = actions.findIndex(
         (a) =>
-          a.type === gameTreeAction.type && a.index === gameTreeAction.index
+          a.type === gameTreeAction.type && a.index === gameTreeAction.index,
       );
 
       if (indexInActions >= 0) {

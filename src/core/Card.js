@@ -10,8 +10,8 @@ export default class Card {
     this.archetypes = Array.isArray(data.archetypes)
       ? [...data.archetypes]
       : typeof data.archetype === "string"
-      ? [data.archetype]
-      : [];
+        ? [data.archetype]
+        : [];
     this.archetype = this.archetypes[0] || null;
 
     this.atk = data.atk ?? 0;
@@ -134,5 +134,83 @@ export default class Card {
 
   hasCounter(counterType) {
     return this.counters.has(counterType) && this.counters.get(counterType) > 0;
+  }
+
+  /**
+   * Calcula o ATK/DEF total incluindo boosts dinâmicos.
+   * @param {string} stat - 'atk' ou 'def'
+   * @param {Object} game - Referência ao Game para acessar estado
+   * @returns {number}
+   */
+  calculateDynamicStat(stat, game) {
+    if (!game || this.cardKind !== "monster") return this[stat] || 0;
+
+    let base = this[stat] || 0;
+
+    // Aplicar dynamic stat boosts
+    for (const boost of this.dynamicStatBoosts) {
+      if (boost.stat !== stat) continue;
+
+      const { formula } = boost;
+      let boostValue = 0;
+
+      switch (formula.type) {
+        case "count_gy_archetype": {
+          // Contar monstros de um arquétipo no cemitério do dono
+          const owner = this.owner;
+          if (!owner || !owner.graveyard) break;
+
+          const count = owner.graveyard.filter((c) => {
+            if (!c || c.cardKind !== "monster") return false;
+            if (formula.archetype) {
+              return (
+                c.archetype === formula.archetype ||
+                (c.archetypes && c.archetypes.includes(formula.archetype))
+              );
+            }
+            return true;
+          }).length;
+
+          boostValue = count * (formula.perCard || 0);
+          break;
+        }
+
+        case "count_field_archetype": {
+          // Contar monstros de um arquétipo no campo do dono
+          const owner = this.owner;
+          if (!owner || !owner.field) break;
+
+          const count = owner.field.filter((c) => {
+            if (!c || c.cardKind !== "monster") return false;
+            if (c.id === this.id) return false; // Excluir a si mesmo
+            if (formula.archetype) {
+              return (
+                c.archetype === formula.archetype ||
+                (c.archetypes && c.archetypes.includes(formula.archetype))
+              );
+            }
+            return true;
+          }).length;
+
+          boostValue = count * (formula.perCard || 0);
+          break;
+        }
+
+        case "fixed": {
+          // Boost fixo
+          boostValue = formula.value || 0;
+          break;
+        }
+
+        default:
+          console.warn(
+            `[Card.calculateDynamicStat] Unknown formula type: ${formula.type}`,
+          );
+      }
+
+      base += boostValue;
+    }
+
+    return base;
   }
 }

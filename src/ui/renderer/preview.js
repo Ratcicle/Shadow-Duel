@@ -49,7 +49,7 @@ export function renderPreview(card) {
     previewAtk.textContent = `ATK: ${card.atk}`;
     previewDef.textContent = `DEF: ${card.def}`;
     previewLevel.textContent = `Level: ${card.level} ${"*".repeat(
-      card.level || 0
+      card.level || 0,
     )}`;
   } else {
     previewAtk.textContent = `${(card.cardKind || "").toUpperCase()}${
@@ -58,10 +58,11 @@ export function renderPreview(card) {
     previewDef.textContent = "";
     previewLevel.textContent = "";
   }
-  const desc = getCardDisplayDescription(card) ||
+  const desc =
+    getCardDisplayDescription(card) ||
     card.description ||
     "No description available.";
-  previewDesc.innerHTML = desc.replace(/\n/g, '<br>');
+  previewDesc.innerHTML = desc.replace(/\n/g, "<br>");
 }
 
 /**

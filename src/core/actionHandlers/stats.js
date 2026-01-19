@@ -25,7 +25,7 @@ export async function handleSetStatsToZeroAndNegate(
 
   targets,
 
-  engine
+  engine,
 ) {
   const { player } = ctx;
 
@@ -114,7 +114,7 @@ export async function handleSetStatsToZeroAndNegate(
       const cardList = affectedCards.join(", ");
 
       const message = `${cardList}'s ${effects.join(
-        " and "
+        " and ",
       )} until end of turn.`;
 
       getUI(game)?.log(message);
@@ -272,12 +272,12 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
     if (combineSecondAttack) {
       getUI(game)?.log(
         `${cardList} gained ${boosts.join(
-          " and "
-        )}${duration} and can make a second attack!`
+          " and ",
+        )}${duration} and can make a second attack!`,
       );
     } else {
       getUI(game)?.log(
-        `${cardList} gained ${boosts.join(" and ")}${duration}.`
+        `${cardList} gained ${boosts.join(" and ")}${duration}.`,
       );
     }
   }
@@ -317,7 +317,7 @@ export async function handleGrantAttackAllMonsters(
 
   targets,
 
-  engine
+  engine,
 ) {
   const { player } = ctx;
 
@@ -338,7 +338,7 @@ export async function handleGrantAttackAllMonsters(
   const opponent = player.id === "player" ? game.bot : game.player;
 
   const opponentMonsterCount = (opponent?.field || []).filter(
-    (m) => m && !m.isFacedown
+    (m) => m && !m.isFacedown,
   ).length;
 
   // Check if opponent has monsters when required
@@ -376,8 +376,8 @@ export async function handleGrantAttackAllMonsters(
       action.attackCount === "all"
         ? Math.max(1, opponentMonsterCount)
         : typeof action.attackCount === "number"
-        ? action.attackCount
-        : opponentMonsterCount;
+          ? action.attackCount
+          : opponentMonsterCount;
 
     card.multiAttackLimit = attackLimit;
 
@@ -391,11 +391,11 @@ export async function handleGrantAttackAllMonsters(
 
     if (opponentMonsterCount > 0) {
       getUI(game)?.log(
-        `${cardList} can attack all opponent monsters this turn!`
+        `${cardList} can attack all opponent monsters this turn!`,
       );
     } else {
       getUI(game)?.log(
-        `${cardList} gained multi-attack ability, but opponent has no monsters.`
+        `${cardList} gained multi-attack ability, but opponent has no monsters.`,
       );
     }
 
@@ -471,7 +471,7 @@ export async function handleAddStatus(action, ctx, targets, engine) {
         ) {
           card[status] = Math.max(
             0,
-            card[status] - (typeof value === "number" ? value : 1)
+            card[status] - (typeof value === "number" ? value : 1),
           );
         } else {
           delete card[status];
@@ -573,7 +573,7 @@ export async function handleGrantProtection(action, ctx, targets, engine) {
     });
 
     getUI(game)?.log(
-      `${target.name} is now protected from destruction by card effects!`
+      `${target.name} is now protected from destruction by card effects!`,
     );
   }
 
@@ -740,7 +740,7 @@ export async function handleBanishAndBuff(action, ctx, targets, engine) {
     const statText = buffType === "both" ? "ATK/DEF" : buffType.toUpperCase();
 
     getUI(game)?.log(
-      `${recipient.name} gains ${totalBuffValue} ${statText}${durationText}!`
+      `${recipient.name} gains ${totalBuffValue} ${statText}${durationText}!`,
     );
   }
 
@@ -827,7 +827,7 @@ export async function handleSwitchPosition(action, ctx, targets, engine) {
   if (switched && affectedCards.length > 0) {
     for (const info of affectedCards) {
       getUI(game)?.log(
-        `${info.name} switched to ${info.position.toUpperCase()} Position.`
+        `${info.name} switched to ${info.position.toUpperCase()} Position.`,
       );
     }
 
@@ -848,7 +848,7 @@ export async function handleSwitchDefenderPositionOnAttack(
 
   targets,
 
-  engine
+  engine,
 ) {
   const { player, defender } = ctx;
 
@@ -946,8 +946,8 @@ export async function handlePermanentBuffNamed(action, ctx, targets, engine) {
         const cardArchetypes = Array.isArray(card.archetypes)
           ? card.archetypes
           : card.archetype
-          ? [card.archetype]
-          : [];
+            ? [card.archetype]
+            : [];
 
         if (!cardArchetypes.includes(action.archetype)) return false;
       }
@@ -985,8 +985,8 @@ export async function handlePermanentBuffNamed(action, ctx, targets, engine) {
       const cardArchetypes = Array.isArray(card.archetypes)
         ? card.archetypes
         : card.archetype
-        ? [card.archetype]
-        : [];
+          ? [card.archetype]
+          : [];
 
       if (!cardArchetypes.includes(action.archetype)) continue;
     }
@@ -1093,7 +1093,7 @@ export async function handleRemovePermanentBuffNamed(
 
   targets,
 
-  engine
+  engine,
 ) {
   const { player, source } = ctx;
 
@@ -1117,8 +1117,8 @@ export async function handleRemovePermanentBuffNamed(
         const cardArchetypes = Array.isArray(card.archetypes)
           ? card.archetypes
           : card.archetype
-          ? [card.archetype]
-          : [];
+            ? [card.archetype]
+            : [];
 
         if (!cardArchetypes.includes(action.archetype)) return false;
       }

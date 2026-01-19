@@ -68,7 +68,7 @@ function createNullRenderer() {
     {},
     {
       get: () => noop,
-    }
+    },
   );
 }
 
@@ -161,13 +161,14 @@ export default class BotArena {
     bot.id = seatId;
     bot.name = seatId === "player" ? "Bot 1" : "Bot 2";
     bot.controllerType = "ai";
-    
+
     // Ativar debug se devMode ou localStorage flag ativo
-    const devMode = typeof localStorage !== 'undefined' 
-      ? localStorage.getItem('shadow_duel_dev_mode') === 'true'
-      : false;
+    const devMode =
+      typeof localStorage !== "undefined"
+        ? localStorage.getItem("shadow_duel_dev_mode") === "true"
+        : false;
     bot.debug = devMode;
-    
+
     if (isDefault) {
       this.applyCustomDeck(bot, deckData);
     }
@@ -195,6 +196,7 @@ export default class BotArena {
 
     if (game.ui) {
       game.ui.showAlert = () => {};
+      game.ui.showGameOverModal = () => {}; // Desabilitar modal de vitória/derrota no BotArena
     }
 
     game.bindCardInteractions = () => {};
@@ -347,15 +349,15 @@ export default class BotArena {
     console.log(
       `🏆 DUELO #${duelNumber} FINALIZADO - ${winnerName}${
         winner !== "draw" ? " venceu!" : ""
-      }`
+      }`,
     );
     console.log(
       `   Turnos: ${game.turnCounter || 0} | LP Final: ${
         game.player?.lp ?? 0
-      } vs ${game.bot?.lp ?? 0}`
+      } vs ${game.bot?.lp ?? 0}`,
     );
     console.log(
-      `   Razão: ${reasonText} | Tempo: ${(totalTimeMs / 1000).toFixed(1)}s`
+      `   Razão: ${reasonText} | Tempo: ${(totalTimeMs / 1000).toFixed(1)}s`,
     );
 
     // Log de estatísticas do cache de targeting
@@ -400,7 +402,7 @@ export default class BotArena {
     speed,
     autoPause,
     onProgress,
-    onComplete
+    onComplete,
   ) {
     this.isRunning = true;
     this.stopRequested = false;

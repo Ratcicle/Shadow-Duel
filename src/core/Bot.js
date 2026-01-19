@@ -17,6 +17,7 @@ export default class Bot extends Player {
     return [
       { id: "shadowheart", label: "Shadow-Heart" },
       { id: "luminarch", label: "Luminarch" },
+      { id: "void", label: "Void" },
     ];
   }
 
@@ -45,7 +46,9 @@ export default class Bot extends Player {
     const deckList =
       this.archetype === "shadowheart"
         ? this.getShadowHeartDeck()
-        : this.getLuminarchDeck();
+        : this.archetype === "void"
+          ? this.getVoidDeck()
+          : this.getLuminarchDeck();
 
     for (const cardId of deckList) {
       const data = cardDatabaseById.get(cardId);
@@ -151,12 +154,21 @@ export default class Bot extends Player {
     ];
   }
 
+  getVoidDeck() {
+    return [
+      151, 151, 151, 154, 154, 154, 155, 152, 152, 153, 156, 158, 159, 160, 161,
+      161, 162, 162, 164, 13, 13, 166, 167, 168, 169, 169, 170,
+    ];
+  }
+
   // Sobrescreve buildExtraDeck para usar fusões do arquétipo
   buildExtraDeck() {
     const extraDeckList =
       this.archetype === "shadowheart"
         ? this.getShadowHeartExtraDeck()
-        : this.getLuminarchExtraDeck();
+        : this.archetype === "void"
+          ? this.getVoidExtraDeck()
+          : this.getLuminarchExtraDeck();
     super.buildExtraDeck(extraDeckList);
   }
 
@@ -174,6 +186,15 @@ export default class Bot extends Player {
     return [
       120, // Luminarch Megashield Barbarias (fusion tank, 3000 DEF)
       121, // Luminarch Fortress Aegis (ascensão de Aegisbearer)
+    ];
+  }
+
+  getVoidExtraDeck() {
+    return [
+      157, // Void Hollow King (fusion)
+      163, // Void Berserker (fusion)
+      165, // Void Hydra Titan (fusion)
+      171, // Void Cosmic Walker (ascension)
     ];
   }
 
@@ -221,7 +242,7 @@ export default class Bot extends Player {
     } catch (error) {
       console.error(
         `[Bot.makeMove] ❌ FATAL ERROR in ${game.phase} phase:`,
-        error
+        error,
       );
       console.error("[Bot.makeMove] Stack trace:", error.stack);
       // Fallback: forçar nextPhase para não travar o jogo
@@ -244,12 +265,12 @@ export default class Bot extends Player {
     // === LOG DE ESTADO (DEV MODE) ===
     if (bot.debug) {
       console.log(
-        `\n[Bot.playMainPhase] 📊 Estado de ${bot.id} no início da main phase:`
+        `\n[Bot.playMainPhase] 📊 Estado de ${bot.id} no início da main phase:`,
       );
       console.log(
         `  Hand (${bot.hand.length}): ${
           bot.hand.map((c) => c.name).join(", ") || "(vazia)"
-        }`
+        }`,
       );
       console.log(
         `  Field (${bot.field.length}): ${
@@ -260,29 +281,41 @@ export default class Bot extends Player {
                   c.isFacedown
                     ? "(↓)"
                     : c.position === "attack"
-                    ? "(↑ATK)"
-                    : "(↑DEF)"
-                }`
+                      ? "(↑ATK)"
+                      : "(↑DEF)"
+                }`,
             )
             .join(", ") || "(vazio)"
-        }`
+        }`,
       );
       console.log(
         `  Graveyard (${bot.graveyard.length}): ${
           bot.graveyard.map((c) => c.name).join(", ") || "(vazio)"
-        }`
+        }`,
       );
       console.log(`  Field Spell: ${bot.fieldSpell?.name || "(nenhum)"}`);
-      console.log(`  LP: ${bot.lp} | Summon Count: ${bot.summonCount}`);
+      console.log(
+        `  LP: ${bot.lp} | Summon Count: ${bot.summonCount}/${1 + (bot.additionalNormalSummons || 0)}`,
+      );
     }
 
-    let chainCount = 0;
-    const maxChains = this.maxChainedActions || 2;
+    let successfulActions = 0;
+    let totalAttempts = 0;
+    const maxSuccessfulActions = this.maxChainedActions || 2;
+    const maxTotalAttempts = 10; // Limite de segurança contra loops infinitos
+
+    // Track de ações que já falharam neste turno para não tentar novamente
+    const failedActionsThisTurn = new Set();
 
     // Flag para usar evaluateBoardV2
     const useV2Evaluation = true;
 
-    while (chainCount < maxChains) {
+    while (
+      successfulActions < maxSuccessfulActions &&
+      totalAttempts < maxTotalAttempts
+    ) {
+      totalAttempts++;
+
       // Try Ascension before other actions if available
       const ascended = await this.tryAscensionIfAvailable(game);
       if (ascended) {
@@ -293,10 +326,17 @@ export default class Bot extends Player {
       }
 
       const rawActions = this.generateMainPhaseActions(game);
-      const actions = this.sequenceActions(rawActions);
+      const sequencedActions = this.sequenceActions(rawActions);
+
+      // Filtrar ações que já falharam neste turno
+      const actions = sequencedActions.filter((a) => {
+        const actionKey = `${a.type}:${a.cardId || a.card?.id || a.index}`;
+        return !failedActionsThisTurn.has(actionKey);
+      });
+
       const fallbackActions = this.filterValidActionsForCurrentState(
         actions,
-        game
+        game,
       );
 
       // v4: Registrar availableActions para captura de replay
@@ -311,12 +351,12 @@ export default class Bot extends Player {
       }
 
       console.log(
-        `[Bot.playMainPhase] Generated ${rawActions.length} raw actions, ${actions.length} sequenced actions`
+        `[Bot.playMainPhase] Generated ${rawActions.length} raw actions, ${actions.length} sequenced actions (${failedActionsThisTurn.size} filtered)`,
       );
       if (actions.length > 0) {
         console.log(
           `[Bot.playMainPhase] Actions:`,
-          actions.map((a) => `${a.type}:${a.card?.name || a.index}`)
+          actions.map((a) => `${a.type}:${a.card?.name || a.index}`),
         );
       }
 
@@ -333,7 +373,7 @@ export default class Bot extends Player {
               handSize: (game.player?.hand || []).length,
               fieldSize: (game.player?.field || []).length,
               gySize: (game.player?.graveyard || []).length,
-            }
+            },
           );
         }
         break;
@@ -350,7 +390,7 @@ export default class Bot extends Player {
         const nodeBudget = game.arenaNodeBudget ?? 100;
 
         console.log(
-          `[Bot.playMainPhase] Running beam search with ${actions.length} actions (width=${beamWidth}, depth=${maxDepth}, budget=${nodeBudget})...`
+          `[Bot.playMainPhase] Running beam search with ${actions.length} actions (width=${beamWidth}, depth=${maxDepth}, budget=${nodeBudget})...`,
         );
         const searchResult = await beamSearchTurn(game, this, {
           beamWidth,
@@ -389,7 +429,7 @@ export default class Bot extends Player {
             bestAction =
               fallbackActions.length > 0 ? fallbackActions[0] : actions[0];
             console.warn(
-              `[Bot.playMainPhase] 🚨 EMERGENCY FALLBACK: Forcing first action to avoid pass`
+              `[Bot.playMainPhase] 🚨 EMERGENCY FALLBACK: Forcing first action to avoid pass`,
             );
           }
         }
@@ -400,11 +440,11 @@ export default class Bot extends Player {
         let finalFallback = fallbackActions;
         if (!finalFallback.length && actions.length > 0) {
           const regenerated = this.sequenceActions(
-            this.generateMainPhaseActions(game)
+            this.generateMainPhaseActions(game),
           );
           finalFallback = this.filterValidActionsForCurrentState(
             regenerated,
-            game
+            game,
           );
         }
 
@@ -412,7 +452,7 @@ export default class Bot extends Player {
           bestAction = finalFallback[0];
           console.log(
             `[Bot.playMainPhase] ?? Using ultimate fallback: first valid action`,
-            bestAction
+            bestAction,
           );
         }
       }
@@ -426,7 +466,7 @@ export default class Bot extends Player {
       // 📊 Log de decisão (ranking e coerência)
       if (botLogger && actions.length > 0) {
         const sorted = [...actions].sort(
-          (a, b) => (b.priority || 0) - (a.priority || 0)
+          (a, b) => (b.priority || 0) - (a.priority || 0),
         );
         let ranking = -1;
         for (let i = 0; i < sorted.length; i++) {
@@ -447,13 +487,20 @@ export default class Bot extends Player {
             actions.length,
             ranking,
             coherence,
-            bestAction
+            bestAction,
           );
         }
       }
 
       const actionSuccess = await this.executeMainPhaseAction(game, bestAction);
       if (!actionSuccess) {
+        // Marcar ação como falhada para não tentar novamente
+        const failedKey = `${bestAction.type}:${bestAction.cardId || bestAction.card?.id || bestAction.index}`;
+        failedActionsThisTurn.add(failedKey);
+        console.log(
+          `[Bot.playMainPhase] ❌ Action failed, added to blacklist: ${failedKey}`,
+        );
+
         if (botLogger?.logEmptyPhase) {
           botLogger.logEmptyPhase(
             this.id,
@@ -465,17 +512,18 @@ export default class Bot extends Player {
               handSize: this.hand.length,
               fieldSize: this.field.length,
               gySize: this.graveyard.length,
-            }
+            },
           );
         }
         if (typeof game.updateBoard === "function") {
           game.updateBoard();
         }
-        break;
+        // NÃO dar break aqui - tentar próxima ação disponível
+        continue;
       }
 
-      // Incrementar chainCount - todas as ações proativas contam
-      chainCount += 1;
+      // Incrementar contador de ações bem-sucedidas
+      successfulActions += 1;
 
       if (typeof game.waitForPhaseDelay === "function") {
         await game.waitForPhaseDelay();
@@ -568,7 +616,7 @@ export default class Bot extends Player {
       const opponentLp = opponent.lp || 0;
       const totalAtkPotential = availableAttackers.reduce(
         (sum, m) => sum + (m.atk || 0),
-        0
+        0,
       );
 
       for (const attacker of availableAttackers) {
@@ -593,24 +641,24 @@ export default class Bot extends Player {
             card &&
             card.cardKind === "monster" &&
             !card.isFacedown &&
-            card.mustBeAttacked
+            card.mustBeAttacked,
         );
 
         const possibleTargets =
           tauntTargets.length > 0
             ? [...tauntTargets]
             : opponent.field.length
-            ? [...opponent.field, null]
-            : canDirectAttackNow
-            ? [null]
-            : [];
+              ? [...opponent.field, null]
+              : canDirectAttackNow
+                ? [null]
+                : [];
 
         for (const target of possibleTargets) {
           if (target === null && opponent.field.length > 0) continue;
 
           const simState = this.cloneGameState(game);
           const simAttacker = simState.bot.field.find(
-            (c) => c.id === attacker.id
+            (c) => c.id === attacker.id,
           );
           const simTarget = target
             ? simState.player.field.find((c) => c.id === target.id)
@@ -629,7 +677,7 @@ export default class Bot extends Player {
           let delta = scoreAfter - baseScore;
           const opponentLpAfter = simState.player.lp || 0;
           const attackerSurvived = simState.bot.field.some(
-            (c) => c.id === attacker.id
+            (c) => c.id === attacker.id,
           );
           const targetSurvived = target
             ? simState.player.field.some((c) => c.id === target.id)
@@ -687,7 +735,7 @@ export default class Bot extends Player {
 
       const finalThreshold = Math.max(
         bestAttack?.threshold ?? minDeltaToAttack,
-        0.05
+        0.05,
       );
       if (bestAttack && bestDelta > finalThreshold) {
         // Verificar se atacante ainda está no campo antes de atacar
@@ -704,7 +752,7 @@ export default class Bot extends Player {
 
         // IMPORTANTE: resolveCombat é async, devemos aguardar antes de verificar gameOver
         Promise.resolve(
-          game.resolveCombat(bestAttack.attacker, bestAttack.target)
+          game.resolveCombat(bestAttack.attacker, bestAttack.target),
         )
           .then(() => {
             // Verificar todas as condições antes de continuar atacando
@@ -746,7 +794,7 @@ export default class Bot extends Player {
         hand,
         field,
         summonAvailable,
-        actions || []
+        actions || [],
       );
     }
 
@@ -767,7 +815,7 @@ export default class Bot extends Player {
       field,
       tributesNeeded,
       cardToSummon,
-      context
+      context,
     );
   }
 
@@ -813,8 +861,8 @@ export default class Bot extends Player {
       target.position === "attack"
         ? target.atk || 0
         : target.isFacedown
-        ? 1500 // Estimativa: DEF médio de monstros
-        : target.def || 0;
+          ? 1500 // Estimativa: DEF médio de monstros
+          : target.def || 0;
     if (target.position === "attack") {
       if (attackStat > targetStat) {
         defenderOwner.lp -= attackStat - targetStat;
@@ -861,8 +909,8 @@ export default class Bot extends Player {
     const expectedKinds = Array.isArray(expectedKind)
       ? expectedKind
       : expectedKind
-      ? [expectedKind]
-      : null;
+        ? [expectedKind]
+        : null;
     const matchesKind = (card) => {
       if (!card) return false;
       if (expectedKinds && !expectedKinds.includes(card.cardKind)) return false;
@@ -938,7 +986,7 @@ export default class Bot extends Player {
         const materialIndex = Number.isInteger(action.materialIndex)
           ? action.materialIndex
           : this.field.findIndex(
-              (c) => c && c.name === "Luminarch Aegisbearer" && !c.isFacedown
+              (c) => c && c.name === "Luminarch Aegisbearer" && !c.isFacedown,
             );
         const material = this.field[materialIndex];
         return !!(
@@ -962,6 +1010,29 @@ export default class Bot extends Player {
       if (action.type === "fieldEffect") {
         return !!this.fieldSpell;
       }
+      if (action.type === "position_change") {
+        const target = (this.field || []).find(
+          (c) =>
+            c &&
+            (c.id === action.cardId ||
+              (!action.cardId && c.name === action.cardName)),
+        );
+        if (!target) return false;
+        if (
+          typeof game?.canChangePosition === "function" &&
+          !game.canChangePosition(target)
+        ) {
+          return false;
+        }
+        if (
+          action.toPosition &&
+          (action.toPosition === "attack" || action.toPosition === "defense") &&
+          target.position === action.toPosition
+        ) {
+          return false;
+        }
+        return true;
+      }
       return true;
     });
   }
@@ -981,38 +1052,38 @@ export default class Bot extends Player {
         const material = this.field[action.materialIndex];
         if (!material) {
           console.log(
-            `[Bot.executeMainPhaseAction] ❌ Ascension: material not found at index ${action.materialIndex}`
+            `[Bot.executeMainPhaseAction] ❌ Ascension: material not found at index ${action.materialIndex}`,
           );
           return false;
         }
 
         console.log(
-          `[Bot.executeMainPhaseAction] 🔥 Attempting Ascension: ${material.name} → ${action.ascensionCard.name}`
+          `[Bot.executeMainPhaseAction] 🔥 Attempting Ascension: ${material.name} → ${action.ascensionCard.name}`,
         );
 
         const result = await game.performAscensionSummon(
           this,
           material,
-          action.ascensionCard
+          action.ascensionCard,
         );
 
         if (result?.success) {
           console.log(
-            `[Bot.executeMainPhaseAction] ✅ Ascension successful: ${action.ascensionCard.name}`
+            `[Bot.executeMainPhaseAction] ✅ Ascension successful: ${action.ascensionCard.name}`,
           );
           game.updateBoard();
           return true;
         } else {
           console.log(
             `[Bot.executeMainPhaseAction] ❌ Ascension failed:`,
-            result?.reason
+            result?.reason,
           );
           return false;
         }
       } catch (e) {
         console.error(
           `[Bot.executeMainPhaseAction] ❌ Ascension error:`,
-          e.message
+          e.message,
         );
         return false;
       }
@@ -1024,7 +1095,7 @@ export default class Bot extends Player {
         console.log(
           `[Bot.executeMainPhaseAction] Invalid Sanctum Protector action: no matching card in hand (index=${
             action.index
-          }, card=${action.cardName || "unknown"})`
+          }, card=${action.cardName || "unknown"})`,
         );
         return false;
       }
@@ -1032,7 +1103,7 @@ export default class Bot extends Player {
       const card = this.hand[resolvedIndex];
       if (!card || card.name !== "Luminarch Sanctum Protector") {
         console.log(
-          `[Bot.executeMainPhaseAction] Invalid Sanctum Protector action: card mismatch`
+          `[Bot.executeMainPhaseAction] Invalid Sanctum Protector action: card mismatch`,
         );
         return false;
       }
@@ -1040,7 +1111,7 @@ export default class Bot extends Player {
       const materialIndex = Number.isInteger(action.materialIndex)
         ? action.materialIndex
         : this.field.findIndex(
-            (c) => c && c.name === "Luminarch Aegisbearer" && !c.isFacedown
+            (c) => c && c.name === "Luminarch Aegisbearer" && !c.isFacedown,
           );
       const material = this.field[materialIndex];
       if (
@@ -1049,7 +1120,7 @@ export default class Bot extends Player {
         material.isFacedown
       ) {
         console.log(
-          `[Bot.executeMainPhaseAction] Invalid Sanctum Protector action: no face-up Aegisbearer`
+          `[Bot.executeMainPhaseAction] Invalid Sanctum Protector action: no face-up Aegisbearer`,
         );
         return false;
       }
@@ -1061,7 +1132,7 @@ export default class Bot extends Player {
       if (sendResult?.success === false) {
         console.log(
           `[Bot.executeMainPhaseAction] Sanctum Protector cost failed:`,
-          sendResult?.reason
+          sendResult?.reason,
         );
         return false;
       }
@@ -1077,7 +1148,7 @@ export default class Bot extends Player {
       if (summonResult?.success === false) {
         console.log(
           `[Bot.executeMainPhaseAction] Sanctum Protector summon failed:`,
-          summonResult?.reason
+          summonResult?.reason,
         );
         return false;
       }
@@ -1092,9 +1163,30 @@ export default class Bot extends Player {
       }
 
       game.ui?.log(
-        `Bot special summoned ${card.name} by sending ${material.name} to the GY.`
+        `Bot special summoned ${card.name} by sending ${material.name} to the GY.`,
       );
       game.updateBoard();
+      return true;
+    }
+
+    if (action.type === "position_change") {
+      const target = (this.field || []).find(
+        (c) =>
+          c &&
+          (c.id === action.cardId ||
+            (!action.cardId && c.name === action.cardName)),
+      );
+      if (!target) return false;
+      const newPosition =
+        action.toPosition === "defense" ? "defense" : "attack";
+      if (
+        typeof game?.canChangePosition === "function" &&
+        !game.canChangePosition(target)
+      ) {
+        return false;
+      }
+      if (target.position === newPosition) return false;
+      game.changeMonsterPosition(target, newPosition);
       return true;
     }
 
@@ -1104,7 +1196,7 @@ export default class Bot extends Player {
         console.log(
           `[Bot.executeMainPhaseAction] Invalid summon action: no matching monster in hand (index=${
             action.index
-          }, card=${action.cardName || "unknown"})`
+          }, card=${action.cardName || "unknown"})`,
         );
         return false;
       }
@@ -1120,7 +1212,7 @@ export default class Bot extends Player {
           this.field,
           tributeInfo.tributesNeeded,
           cardToSummon,
-          { oppField: opponent.field, game }
+          { oppField: opponent.field, game },
         );
       }
 
@@ -1128,7 +1220,7 @@ export default class Bot extends Player {
         resolvedIndex,
         action.position,
         action.facedown,
-        tributeIndices
+        tributeIndices,
       );
       if (summonResult) {
         // Handle both old (card) and new ({card, tributes}) return formats
@@ -1149,7 +1241,7 @@ export default class Bot extends Player {
         }
 
         game.ui?.log(
-          `Bot summons ${action.facedown ? "a monster in defense" : card.name}`
+          `Bot summons ${action.facedown ? "a monster in defense" : card.name}`,
         );
         game.updateBoard();
         return true;
@@ -1163,14 +1255,14 @@ export default class Bot extends Player {
         console.log(
           `[Bot.executeMainPhaseAction] Invalid spell action: no matching spell in hand (index=${
             action.index
-          }, card=${action.cardName || "unknown"})`
+          }, card=${action.cardName || "unknown"})`,
         );
         return false;
       }
       const card = this.hand[resolvedIndex];
 
       console.log(
-        `[Bot.executeMainPhaseAction] 📝 Attempting spell: ${card.name}`
+        `[Bot.executeMainPhaseAction] 📝 Attempting spell: ${card.name}`,
       );
 
       if (
@@ -1179,13 +1271,13 @@ export default class Bot extends Player {
       ) {
         const preview = game.effectEngine.canActivateSpellFromHandPreview(
           card,
-          this
+          this,
         );
         console.log(`[Bot.executeMainPhaseAction] 🔍 Preview check:`, preview);
         if (preview && !preview.ok) {
           console.log(
             `[Bot.executeMainPhaseAction] ❌ Preview rejected:`,
-            preview.reason
+            preview.reason,
           );
           return false;
         }
@@ -1221,7 +1313,7 @@ export default class Bot extends Player {
             this,
             chosen,
             zone,
-            ctx
+            ctx,
           ),
         finalize: (result, info) => {
           if (result.placementOnly) {
@@ -1230,14 +1322,19 @@ export default class Bot extends Player {
             game.finalizeSpellTrapActivation(
               info.card,
               this,
-              info.activationZone
+              info.activationZone,
             );
             game.ui?.log?.(`Bot activates ${info.card.name}`);
           }
           game.updateBoard();
         },
       });
-      return pipelineResult !== false;
+      // Pipeline retorna false, null, ou {success: false} quando falha
+      return (
+        pipelineResult !== false &&
+        pipelineResult !== null &&
+        pipelineResult?.success !== false
+      );
     }
 
     if (action.type === "set_spell_trap") {
@@ -1249,7 +1346,7 @@ export default class Bot extends Player {
         console.log(
           `[Bot.executeMainPhaseAction] Invalid set action: no matching card in hand (index=${
             action.index
-          }, card=${action.cardName || "unknown"})`
+          }, card=${action.cardName || "unknown"})`,
         );
         return false;
       }
@@ -1258,7 +1355,7 @@ export default class Bot extends Player {
       if (result && result.ok === false) {
         console.log(
           `[Bot.executeMainPhaseAction] Set spell/trap failed:`,
-          result.reason
+          result.reason,
         );
         return false;
       }
@@ -1274,7 +1371,7 @@ export default class Bot extends Player {
       const card = this.spellTrap?.[zoneIndex];
       if (!card || card.cardKind !== "spell") {
         console.log(
-          `[Bot.executeMainPhaseAction] Invalid spellTrapEffect action: no spell at index ${zoneIndex}`
+          `[Bot.executeMainPhaseAction] Invalid spellTrapEffect action: no spell at index ${zoneIndex}`,
         );
         return false;
       }
@@ -1303,7 +1400,7 @@ export default class Bot extends Player {
           game.effectEngine?.canActivateSpellTrapEffectPreview?.(
             card,
             this,
-            "spellTrap"
+            "spellTrap",
           ),
         oncePerTurn: {
           card,
@@ -1316,7 +1413,7 @@ export default class Bot extends Player {
             this,
             chosen,
             zone,
-            ctx
+            ctx,
           ),
         finalize: (result, info) => {
           if (result.placementOnly) {
@@ -1325,7 +1422,7 @@ export default class Bot extends Player {
             game.finalizeSpellTrapActivation(
               info.card,
               this,
-              info.activationZone
+              info.activationZone,
             );
             game.ui?.log?.(`Bot activates ${info.card.name}`);
           }
@@ -1344,7 +1441,7 @@ export default class Bot extends Player {
       };
       const activationEffect =
         game.effectEngine?.getFieldSpellActivationEffect?.(this.fieldSpell);
-      await game.runActivationPipeline({
+      const pipelineResult = await game.runActivationPipeline({
         card: this.fieldSpell,
         owner: this,
         activationZone: "fieldSpell",
@@ -1363,14 +1460,19 @@ export default class Bot extends Player {
             this.fieldSpell,
             this,
             selections,
-            ctx
+            ctx,
           ),
         finalize: () => {
           game.ui?.log?.(`Bot activates ${this.fieldSpell.name}'s effect`);
           game.updateBoard();
         },
       });
-      return true;
+      // Pipeline retorna false, null, ou {success: false} quando falha
+      return (
+        pipelineResult !== false &&
+        pipelineResult !== null &&
+        pipelineResult?.success !== false
+      );
     }
 
     // Handler para ativação de efeitos ignition de monstros na mão
@@ -1380,16 +1482,16 @@ export default class Bot extends Player {
       const card = this.hand[resolvedIndex];
 
       console.log(
-        `[Bot.executeMainPhaseAction] 🔥 Attempting hand ignition: ${card.name}`
+        `[Bot.executeMainPhaseAction] 🔥 Attempting hand ignition: ${card.name}`,
       );
 
       // Verificar se o efeito pode ser ativado
       const handIgnitionEffect = (card.effects || []).find(
-        (e) => e && e.timing === "ignition" && e.requireZone === "hand"
+        (e) => e && e.timing === "ignition" && e.requireZone === "hand",
       );
       if (!handIgnitionEffect) {
         console.log(
-          `[Bot.executeMainPhaseAction] ❌ No hand ignition effect found`
+          `[Bot.executeMainPhaseAction] ❌ No hand ignition effect found`,
         );
         return false;
       }
@@ -1420,14 +1522,19 @@ export default class Bot extends Player {
             this,
             chosen,
             "hand",
-            ctx
+            ctx,
           ),
         finalize: () => {
           game.ui?.log?.(`Bot activates ${card.name}'s effect from hand`);
           game.updateBoard();
         },
       });
-      return pipelineResult !== false;
+      // Pipeline retorna false, null, ou {success: false} quando falha
+      return (
+        pipelineResult !== false &&
+        pipelineResult !== null &&
+        pipelineResult?.success !== false
+      );
     }
 
     return false;
@@ -1465,7 +1572,7 @@ export default class Bot extends Player {
     try {
       // Find a material on bot field eligible for ascension
       const materials = (this.field || []).filter(
-        (m) => m && m.cardKind === "monster" && !m.isFacedown
+        (m) => m && m.cardKind === "monster" && !m.isFacedown,
       );
       for (const material of materials) {
         const matCheck = game.canUseAsAscensionMaterial(this, material);
@@ -1475,7 +1582,7 @@ export default class Bot extends Player {
         if (!candidates.length) continue;
         // Filter by requirements
         const eligible = candidates.filter(
-          (asc) => game.checkAscensionRequirements(this, asc).ok
+          (asc) => game.checkAscensionRequirements(this, asc).ok,
         );
         if (!eligible.length) continue;
 

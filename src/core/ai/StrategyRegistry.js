@@ -1,5 +1,6 @@
 import LuminarchStrategy from "./LuminarchStrategy.js";
 import ShadowHeartStrategy from "./ShadowHeartStrategy.js";
+import VoidStrategy from "./VoidStrategy.js";
 
 const registry = new Map();
 
@@ -19,3 +20,4 @@ export function getRegisteredStrategyIds() {
 
 registerStrategy("shadowheart", ShadowHeartStrategy);
 registerStrategy("luminarch", LuminarchStrategy);
+registerStrategy("void", VoidStrategy);

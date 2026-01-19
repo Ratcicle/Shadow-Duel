@@ -8,12 +8,12 @@
 
 ```
 src/main.js                   # UI do deck builder e inicialização
-src/core/Game.js              # Turnos, fases, event bus central (~2000 linhas)
-src/core/EffectEngine.js      # Resolução de efeitos declarativos (~900 linhas)
-src/core/ChainSystem.js       # Chain windows + Spell Speed (LIFO resolution)
+src/core/Game.js              # Turnos, fases, event bus central (~2300 linhas)
+src/core/EffectEngine.js      # Resolução de efeitos declarativos (~1400 linhas)
+src/core/ChainSystem.js       # Chain windows + Spell Speed LIFO (~2000 linhas)
 src/core/actionHandlers/      # Handlers genéricos por categoria
-src/core/game/                # Lógica modular (combat/, summon/, zones/, turn/, etc.)
-src/data/cards.js             # Banco de cartas 100% declarativo (~4500 linhas)
+src/core/game/                # Lógica modular (13 subpastas por domínio)
+src/data/cards.js             # Banco de cartas 100% declarativo (~5500 linhas)
 ```
 
 **Fluxo de dados:** `Game.js` emite eventos → `EffectEngine` avalia triggers → handlers executam actions.
@@ -32,13 +32,21 @@ src/data/cards.js             # Banco de cartas 100% declarativo (~4500 linhas)
 
 **Estrutura modular de `src/core/game/`:**
 
-- **zones/**: `ownership.js`, `movement.js`, `operations.js` — Gerencia zonas e movimento de cartas
-- **combat/**: `resolution.js`, `damage.js`, `targeting.js` — Sistema de batalha
-- **summon/**: `execution.js`, `tracking.js`, `ascension.js` — Invocações
-- **turn/**: `lifecycle.js`, `transitions.js`, `cleanup.js` — Controle de turnos
-- **spellTrap/**: `activation.js`, `set.js`, `finalization.js` — Spell/Trap logic
-- **selection/**: `handlers.js`, `session.js`, `highlighting.js` — Seleção de cartas/alvos
-- **ui/**: `board.js`, `modals.js`, `prompts.js` — Interface e modals
+| Pasta        | Responsabilidade                            |
+| ------------ | ------------------------------------------- |
+| `zones/`     | Ownership, movement, snapshot, invariants   |
+| `combat/`    | Damage, targeting, resolution, availability |
+| `summon/`    | Execution, tracking, ascension              |
+| `turn/`      | Lifecycle, transitions, cleanup, scheduling |
+| `spellTrap/` | Activation, set, finalization, verification |
+| `selection/` | Handlers, session, highlighting, contract   |
+| `ui/`        | Board, modals, prompts, win condition       |
+| `events/`    | Event bus, event resolver                   |
+| `deck/`      | Draw logic                                  |
+| `graveyard/` | Modal logic                                 |
+| `extraDeck/` | Modal logic                                 |
+| `devTools/`  | Commands, sanity checks, setup              |
+| `replay/`    | Integration with ReplayCapture              |
 
 Módulos expõem funções puras; `Game.js` importa e chama com `this` context.
 
@@ -57,23 +65,25 @@ npx serve                     # Servidor local (porta 3000)
 - Acesse pelo botão "Bot Arena" na tela inicial
 - Testa AI vs AI com velocidades: 1x, 2x, 4x, instant
 - Gera analytics: win rate, tempo de decisão, opening book
-- Presets: `shadowheart`, `luminarch`
+- Presets disponíveis: `shadowheart`, `luminarch`, `void`
 
 **Flags de dev** (via `localStorage.setItem(key, "true")`):
 
-- `shadow_duel_dev_mode` — Painel dev + logs detalhados
-- `shadow_duel_test_mode` — Guardas extras de runtime
-- `shadow_duel_bot_preset` — Preset: `"shadowheart"` | `"luminarch"`
-- `shadow_duel_capture_mode` — Ativa captura de replays (veja Sistema de Replays)
+| Flag                       | Efeito                                             |
+| -------------------------- | -------------------------------------------------- |
+| `shadow_duel_dev_mode`     | Painel dev + logs detalhados                       |
+| `shadow_duel_test_mode`    | Guardas extras de runtime                          |
+| `shadow_duel_bot_preset`   | Define arquétipo: `shadowheart`/`luminarch`/`void` |
+| `shadow_duel_capture_mode` | Ativa captura de replays                           |
 
 **Sistema de Replays** — Captura e análise de partidas:
 
 - Ativar: botão `🎬 Replay` no menu principal
 - Captura todas as decisões de ambos jogadores + availableActions
 - Ao fim do duelo: modal para salvar/descartar replay `.json`
-- Dashboard: botão `📊 Replay Analytics` — importa replays, gera training digests, analytics
+- Dashboard: botão `📊 Replay Analytics` — importa replays, gera training digests
 - Storage: IndexedDB com stores `replays`, `digests`, `aggregates`
-- Arquivos: `ReplayCapture.js`, `src/core/ai/replay/ReplayAnalyzer.js`, `ReplayDatabase.js`
+- Arquivos: `ReplayCapture.js`, `src/core/ai/replay/ReplayAnalyzer.js`
 
 ---
 
@@ -188,11 +198,11 @@ oncePerTurn: true, oncePerTurnName: "Unique Effect Name"
 **Estrutura:** `src/core/ai/`
 
 - `BaseStrategy.js` — Avaliação de board genérica (`evaluateBoardV2`)
-- `ShadowHeartStrategy.js`, `LuminarchStrategy.js` — Heurísticas por arquétipo
+- `ShadowHeartStrategy.js`, `LuminarchStrategy.js`, `VoidStrategy.js` — Heurísticas por arquétipo
 - `StrategyRegistry.js` — Registro de estratégias
 - `BeamSearch.js` — Busca de ações ótimas
 - `ThreatEvaluation.js` — Score de ameaças do oponente
-- Subpastas: `shadowheart/`, `luminarch/` — Knowledge base e combos por arquétipo
+- Subpastas: `shadowheart/`, `luminarch/`, `void/` — Knowledge base e combos por arquétipo
 - `replay/` — Análise de replays para training digests
 
 **Criar nova estratégia:**

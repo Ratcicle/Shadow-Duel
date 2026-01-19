@@ -254,11 +254,11 @@
     },
     "152": {
       "name": "Andarilho do Vazio",
-      "description": "Não pode atacar no turno em que é Invocado. Uma vez por turno: você pode devolver este card à sua mão; Invoque por Invocação-Especial 1 monstro 'Vazio' de Nível 4 ou menor da sua mão, exceto 'Caminhante do Vazio'."
+      "description": "Não pode atacar no turno em que é Invocado por Invocação-Especial. Uma vez por turno: você pode devolver este card à sua mão; Invoque por Invocação-Especial 1 monstro 'Vazio' de Nível 4 ou menor da sua mão, exceto 'Andarilho do Vazio'."
     },
     "153": {
       "name": "Fera do Vazio",
-      "description": "Se este card destruir um monstro do oponente em batalha: você pode adicionar 1 'Oco do Vazio' do seu Deck à sua mão. Você só pode usar este efeito de 'Fera do Vazio' uma vez por turno."
+      "description": "Se este card for Invocado por Invocação-Normal: você pode adicionar 1 'Oco do Vazio' do seu Deck à sua mão. Se este card destruir um monstro do oponente em batalha: você pode Invocar por Invocação-Especial 1 'Oco do Vazio' da sua mão. Você só pode usar cada efeito de 'Fera do Vazio' uma vez por turno."
     },
     "154": {
       "name": "Oco do Vazio",
@@ -266,7 +266,7 @@
     },
     "155": {
       "name": "Assombração do Vazio",
-      "description": "Você pode enviar 1 'Oco do Vazio' do seu campo para o seu Cemitério; Invoque por Invocação-Especial este card da sua mão. Você pode banir este card do seu Cemitério e, depois, escolher até 2 'Oco do Vazio' no seu Cemitério; Invoque por Invocação-Especial esses alvos, mas o ATK/DEF deles se tornam 0. Você só pode usar cada efeito de 'Assombrador do Vazio' uma vez por turno."
+      "description": "Você pode enviar 1 monstro 'Vazio' que você controla para o Cemitério; Invoque por Invocação-Especial este card da sua mão. Você pode banir este card do seu Cemitério e, depois, escolher até 3 'Oco do Vazio' no seu Cemitério; Invoque por Invocação-Especial esses alvos, mas o ATK/DEF deles se tornam 0. Você só pode usar cada efeito de 'Assombração do Vazio' uma vez por turno."
     },
     "156": {
       "name": "Lobo Fantasma do Vazio",
@@ -282,7 +282,7 @@
     },
     "159": {
       "name": "Cavaleiro Esquecido do Vazio",
-      "description": "Você pode enviar 1 monstro 'Vazio' que você controla para o Cemitério; Invoque por Invocação-Especial este card da sua mão. Você pode banir este card do seu Cemitério; destrua 1 Magia/Armadilha que seu oponente controla. Você só pode usar cada efeito de 'Cavaleiro Esquecido do Vazio' uma vez por turno."
+      "description": "Você pode enviar 1 monstro 'Vazio' com a face para cima que você controla para o Cemitério; Invoque por Invocação-Especial este card da sua mão. Este card ganha 100 de ATK para cada monstro 'Vazio' no seu Cemitério. Você pode banir este card do seu Cemitério; escolha 1 Magia/Armadilha com a face para cima que seu oponente controla; destrua-a. Você só pode usar cada efeito de 'Cavaleiro Esquecido do Vazio' uma vez por turno."
     },
     "160": {
       "name": "Corvo do Vazio",
@@ -302,7 +302,7 @@
     },
     "164": {
       "name": "Draco Serpente do Vazio",
-      "description": "Se este card estiver na sua mão: você pode enviar 1 a 3 'Oco do Vazio' que você controla para o Cemitério; Invoque este card por Invocação-Especial e, se isso acontecer, ele ganha os seguintes efeitos, de acordo com o número enviado.\n\n? **1+:** Este card ganha 300 de ATK para cada 'Oco do Vazio' enviado, até o final do turno.\n? **2+:** Além disso, este card não pode ser destruído em batalha.\n? **3:** Além disso, destrua 1 card que seu oponente controla.\n\nVocê só pode usar este efeito de 'Draco Serpente do Vazio' uma vez por turno."
+      "description": "Se este card estiver na sua mão: você pode enviar 1 a 3 'Oco do Vazio' que você controla para o Cemitério; Invoque este card por Invocação-Especial e, se isso acontecer, ele ganha os seguintes efeitos, de acordo com o número enviado.\n\n? 1+: Este card ganha 300 de ATK para cada 'Oco do Vazio' enviado, até o final do turno.\n? 2+: Além disso, este card não pode ser destruído em batalha.\n? 3: Além disso, destrua 1 card que seu oponente controla.\n\nVocê só pode usar este efeito de 'Draco Serpente do Vazio' uma vez por turno."
     },
     "165": {
       "name": "Titã Hidra do Vazio",
@@ -326,7 +326,7 @@
     },
     "170": {
       "name": "Dimensão Espelho do Vazio",
-      "description": "Durante a Fase Principal, se seu oponente Invocar por Invocação-Especial um monstro: você pode Invocar por Invocação-Especial 1 monstro da sua mão com o mesmo Nível que esse monstro, mas, até o final deste turno, seus efeitos são negados. Você só pode ativar 1 'Dimensão Espelho do Vazio' por turno."
+      "description": "Efeito Rápido: Durante a Fase Principal, se seu oponente Invocar um monstro: você pode Invocar por Invocação-Especial 1 monstro da sua mão com o mesmo Nível que esse monstro, mas, até o final deste turno, seus efeitos são negados. Você só pode ativar 1 'Dimensão Espelho do Vazio' por turno."
     },
     "171": {
       "name": "Andarilho Cósmico do Vazio",

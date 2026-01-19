@@ -1,0 +1,3773 @@
+{
+  "version": 3,
+  "id": "duel_1768744432309_214",
+  "timestamp": "2026-01-18T13:53:52.309Z",
+  "playerDeck": {
+    "playerDeck": [
+      "Void Conjurer",
+      "Void Gravitational Pull",
+      "Sealing the Void",
+      "Void Serpent Drake",
+      "Void Forgotten Knight",
+      "The Void",
+      "Void Walker",
+      "Void Hollow",
+      "Void Haunter",
+      "Void Bone Spider"
+    ],
+    "playerExtraDeck": [
+      "Void Hollow King",
+      "Void Berserker",
+      "Void Hydra Titan",
+      "Void Cosmic Walker"
+    ],
+    "botPreset": "luminarch",
+    "timestamp": 1768744432309
+  },
+  "botDeck": "unknown",
+  "botDeckList": [
+    "Polymerization",
+    "Luminarch Celestial Marshal",
+    "Luminarch Sanctum Protector",
+    "Luminarch Valiant - Knight of the Dawn",
+    "Luminarch Sanctified Arbiter",
+    "Sanctum of the Luminarch Citadel",
+    "Luminarch Enchanted Halberd",
+    "Luminarch Knights Convocation",
+    "Luminarch Moonblade Captain",
+    "Luminarch Aegisbearer",
+    "Luminarch Aurora Seraph",
+    "Luminarch Moonlit Blessing",
+    "Luminarch Spear of Dawnfall",
+    "Luminarch Aegisbearer",
+    "Luminarch Holy Shield",
+    "Luminarch Aegisbearer",
+    "Luminarch Radiant Wave",
+    "Luminarch Sacred Judgment",
+    "Luminarch Moonlit Blessing",
+    "Luminarch Sanctum Protector",
+    "Luminarch Magic Sickle",
+    "Luminarch Holy Ascension",
+    "Luminarch Moonblade Captain",
+    "Luminarch Sanctified Arbiter",
+    "Sanctum of the Luminarch Citadel",
+    "Sanctum of the Luminarch Citadel",
+    "Luminarch Holy Shield",
+    "Luminarch Crescent Shield",
+    "Luminarch Radiant Lancer",
+    "Luminarch Valiant - Knight of the Dawn"
+  ],
+  "botArchetype": "luminarch",
+  "cardDictionary": {
+    "101": "Luminarch Valiant - Knight of the Dawn",
+    "102": "Luminarch Holy Shield",
+    "104": "Luminarch Moonblade Captain",
+    "106": "Luminarch Magic Sickle",
+    "110": "Luminarch Sanctified Arbiter",
+    "111": "Luminarch Knights Convocation",
+    "112": "Sanctum of the Luminarch Citadel",
+    "113": "Luminarch Holy Ascension",
+    "115": "Luminarch Crescent Shield",
+    "117": "Luminarch Enchanted Halberd",
+    "118": "Luminarch Moonlit Blessing",
+    "151": "Void Conjurer",
+    "153": "Void Beast",
+    "154": "Void Hollow",
+    "156": "Void Ghost Wolf",
+    "161": "Void Tenebris Horn",
+    "162": "Void Slayer Brute",
+    "167": "The Void",
+    "168": "Void Gravitational Pull",
+    "169": "Void Lost Throne",
+    "170": "Void Mirror Dimension"
+  },
+  "snapshots": {
+    "1": {
+      "playerLP": 8000,
+      "botLP": 8000,
+      "playerField": [
+        {
+          "name": "Void Tenebris Horn",
+          "atk": 1600,
+          "def": 900,
+          "position": "attack"
+        }
+      ],
+      "botField": [],
+      "playerHand": [
+        "Void Conjurer",
+        "Void Ghost Wolf",
+        "Void Lost Throne"
+      ],
+      "playerHandCount": 3,
+      "botHandCount": 4,
+      "playerGraveyard": [],
+      "playerGraveCount": 0,
+      "botGraveyard": [],
+      "botGraveCount": 0,
+      "playerSpellTrapCount": 0,
+      "botSpellTrapCount": 0,
+      "playerExtraDeckCount": 4,
+      "botExtraDeckCount": 2,
+      "playerFieldSpell": null,
+      "botFieldSpell": null,
+      "turn": 1,
+      "phase": "main1"
+    },
+    "6": {
+      "playerLP": 7100,
+      "botLP": 6200,
+      "playerField": [
+        {
+          "name": "Void Slayer Brute",
+          "atk": 2500,
+          "def": 2000,
+          "position": "attack"
+        }
+      ],
+      "botField": [
+        {
+          "name": "Luminarch Valiant - Knight of the Dawn",
+          "atk": 1600,
+          "def": 1200,
+          "position": "attack",
+          "isFacedown": false
+        },
+        {
+          "name": "Luminarch Sanctified Arbiter",
+          "atk": 1500,
+          "def": 1000,
+          "position": "attack",
+          "isFacedown": false
+        }
+      ],
+      "playerHand": [
+        "Void Ghost Wolf",
+        "Void Lost Throne"
+      ],
+      "playerHandCount": 2,
+      "botHandCount": 3,
+      "playerGraveyard": [
+        "Void Conjurer",
+        "Void Beast",
+        "Void Tenebris Horn"
+      ],
+      "playerGraveCount": 3,
+      "botGraveyard": [
+        "Luminarch Holy Shield",
+        "Luminarch Valiant - Knight of the Dawn",
+        "Luminarch Crescent Shield"
+      ],
+      "botGraveCount": 3,
+      "playerSpellTrapCount": 0,
+      "botSpellTrapCount": 0,
+      "playerExtraDeckCount": 4,
+      "botExtraDeckCount": 2,
+      "playerFieldSpell": "The Void",
+      "botFieldSpell": "Sanctum of the Luminarch Citadel",
+      "turn": 6,
+      "phase": "main1"
+    },
+    "11": {
+      "playerLP": 3300,
+      "botLP": 2600,
+      "playerField": [
+        {
+          "name": "Void Hollow",
+          "atk": 1300,
+          "def": 1200,
+          "position": "attack"
+        }
+      ],
+      "botField": [
+        {
+          "name": "Luminarch Moonblade Captain",
+          "atk": 2200,
+          "def": 1700,
+          "position": "attack",
+          "isFacedown": false
+        },
+        {
+          "name": "Luminarch Sanctified Arbiter",
+          "atk": 1500,
+          "def": 1000,
+          "position": "attack",
+          "isFacedown": false
+        }
+      ],
+      "playerHand": [
+        "Void Hollow"
+      ],
+      "playerHandCount": 1,
+      "botHandCount": 3,
+      "playerGraveyard": [
+        "Void Conjurer",
+        "Void Tenebris Horn",
+        "Void Slayer Brute",
+        "Void Ghost Wolf",
+        "Void Lost Throne",
+        "Void Beast"
+      ],
+      "playerGraveCount": 6,
+      "botGraveyard": [
+        "Luminarch Holy Shield",
+        "Luminarch Crescent Shield",
+        "Luminarch Valiant - Knight of the Dawn",
+        "Luminarch Sanctified Arbiter",
+        "Luminarch Valiant - Knight of the Dawn",
+        "Luminarch Enchanted Halberd",
+        "Luminarch Radiant Lancer",
+        "Luminarch Holy Ascension"
+      ],
+      "botGraveCount": 8,
+      "playerSpellTrapCount": 0,
+      "botSpellTrapCount": 0,
+      "playerExtraDeckCount": 4,
+      "botExtraDeckCount": 2,
+      "playerFieldSpell": "The Void",
+      "botFieldSpell": "Sanctum of the Luminarch Citadel",
+      "turn": 11,
+      "phase": "main1"
+    },
+    "16": {
+      "playerLP": 3300,
+      "botLP": 200,
+      "playerField": [
+        {
+          "name": "Void Slayer Brute",
+          "atk": 2500,
+          "def": 2000,
+          "position": "attack"
+        }
+      ],
+      "botField": [
+        {
+          "name": "Luminarch Valiant - Knight of the Dawn",
+          "atk": 1600,
+          "def": 1200,
+          "position": "attack",
+          "isFacedown": false
+        }
+      ],
+      "playerHand": [
+        "Void Hollow",
+        "Void Mirror Dimension",
+        "Void Conjurer"
+      ],
+      "playerHandCount": 3,
+      "botHandCount": 5,
+      "playerGraveyard": [
+        "Void Tenebris Horn",
+        "Void Slayer Brute",
+        "Void Ghost Wolf",
+        "Void Lost Throne",
+        "Void Beast",
+        "Void Hollow",
+        "Void Hollow"
+      ],
+      "playerGraveCount": 7,
+      "botGraveyard": [
+        "Luminarch Holy Shield",
+        "Luminarch Crescent Shield",
+        "Luminarch Sanctified Arbiter",
+        "Luminarch Valiant - Knight of the Dawn",
+        "Luminarch Enchanted Halberd",
+        "Luminarch Radiant Lancer",
+        "Luminarch Holy Ascension",
+        "Luminarch Sanctified Arbiter",
+        "Luminarch Magic Sickle",
+        "Luminarch Sanctum Protector"
+      ],
+      "botGraveCount": 10,
+      "playerSpellTrapCount": 0,
+      "botSpellTrapCount": 0,
+      "playerExtraDeckCount": 4,
+      "botExtraDeckCount": 2,
+      "playerFieldSpell": "The Void",
+      "botFieldSpell": "Sanctum of the Luminarch Citadel",
+      "turn": 16,
+      "phase": "main1"
+    }
+  },
+  "decisions": [
+    {
+      "type": "summon",
+      "turn": 1,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 161
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "availableActions": [
+        {
+          "type": "normal_summon",
+          "cardId": 161,
+          "position": "a"
+        },
+        {
+          "type": "set",
+          "cardId": 161,
+          "position": "d"
+        }
+      ],
+      "t0": 1768744437042
+    },
+    {
+      "type": "pass",
+      "turn": 1,
+      "phase": "end",
+      "actor": "human",
+      "dt": 1
+    },
+    {
+      "type": "effect_resolution",
+      "turn": 2,
+      "phase": "main1",
+      "actor": "bot",
+      "sourceCard": {
+        "c": 101,
+        "atk": 1600,
+        "def": 1200,
+        "pos": "a"
+      },
+      "effectResult": {
+        "type": "search",
+        "targets": [],
+        "cardsDrawn": 0,
+        "cardsAdded": [
+          "Luminarch Valiant - Knight of the Dawn"
+        ],
+        "lpChange": 0,
+        "description": "Added 1 card(s) to hand from deck"
+      },
+      "dt": 1,
+      "delta": {
+        "botHandCount": 5
+      }
+    },
+    {
+      "type": "set_spell_trap",
+      "turn": 2,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 102
+      },
+      "availableActions": [
+        {
+          "type": "set_spell_trap",
+          "cardId": 102
+        }
+      ],
+      "dt": 403,
+      "delta": {
+        "botHandCount": 2
+      }
+    },
+    {
+      "type": "effect_resolution",
+      "turn": 2,
+      "phase": "main1",
+      "actor": "bot",
+      "sourceCard": {
+        "c": 112,
+        "atk": 0,
+        "def": 0,
+        "pos": "a"
+      },
+      "effectResult": {
+        "type": "buff",
+        "targets": [],
+        "cardsDrawn": 0,
+        "cardsAdded": [],
+        "lpChange": 0,
+        "description": "Luminarch Valiant - Knight of the Dawn +500 ATK, +500 DEF (temp)"
+      },
+      "availableActions": [
+        {
+          "type": "fieldEffect"
+        },
+        {
+          "type": "set_spell_trap",
+          "cardId": 102
+        }
+      ],
+      "dt": 407,
+      "delta": {
+        "botLP": 7000,
+        "botField": [
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 2100,
+            "def": 2200,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ]
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 2,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 101
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "availableActions": [
+        {
+          "type": "spell",
+          "cardId": 112
+        },
+        {
+          "type": "summon",
+          "cardId": 101,
+          "position": "a"
+        },
+        {
+          "type": "set_spell_trap",
+          "cardId": 102
+        }
+      ],
+      "dt": 818,
+      "delta": {
+        "playerLP": 8000,
+        "botLP": 8000,
+        "playerField": [
+          {
+            "name": "Void Tenebris Horn",
+            "atk": 1600,
+            "def": 900,
+            "position": "attack"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerHand": [
+          "Void Conjurer",
+          "Void Ghost Wolf",
+          "Void Lost Throne"
+        ],
+        "playerHandCount": 3,
+        "botHandCount": 4,
+        "playerGraveyard": [],
+        "playerGraveCount": 0,
+        "botGraveyard": [],
+        "botGraveCount": 0,
+        "playerFieldSpell": null,
+        "botFieldSpell": null,
+        "turn": 2,
+        "phase": "main1"
+      }
+    },
+    {
+      "type": "effect",
+      "turn": 2,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 115
+      },
+      "effectId": "luminarch_crescent_shield_equip",
+      "effectTiming": "on_play",
+      "activationZone": "spellTrap",
+      "actions": [
+        "equip"
+      ],
+      "availableActions": [
+        {
+          "type": "spell",
+          "cardId": 115
+        },
+        {
+          "type": "fieldEffect"
+        },
+        {
+          "type": "set_spell_trap",
+          "cardId": 102
+        }
+      ],
+      "dt": 825,
+      "delta": {
+        "botField": [
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1700,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "botHandCount": 3,
+        "botFieldSpell": "Sanctum of the Luminarch Citadel"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 2,
+      "phase": "battle",
+      "actor": "bot",
+      "attacker": {
+        "c": 101,
+        "atk": 2100
+      },
+      "target": {
+        "c": 161,
+        "atk": 1500,
+        "def": 800,
+        "pos": "a"
+      },
+      "combatResult": {
+        "damageDealt": 500,
+        "targetDestroyed": true
+      },
+      "dt": 1,
+      "delta": {
+        "playerLP": 7500,
+        "playerField": [],
+        "playerGraveyard": [
+          "Void Tenebris Horn"
+        ],
+        "playerGraveCount": 1
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 2,
+      "phase": "battle",
+      "actor": "bot",
+      "attacker": {
+        "c": 101,
+        "atk": 2100
+      },
+      "target": {
+        "c": 161,
+        "atk": 1600,
+        "def": 900,
+        "pos": "a"
+      },
+      "availableActions": [
+        {
+          "type": "attack",
+          "cardId": 101,
+          "targetId": 161
+        }
+      ],
+      "dt": 913,
+      "delta": {
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 3,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 153
+      },
+      "summonType": "special",
+      "fromZone": "deck",
+      "dt": 0,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Void Conjurer",
+            "atk": 1700,
+            "def": 800,
+            "position": "attack"
+          },
+          {
+            "name": "Void Beast",
+            "atk": 1600,
+            "def": 1300,
+            "position": "attack"
+          }
+        ],
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0
+      }
+    },
+    {
+      "type": "effect",
+      "turn": 3,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 151
+      },
+      "effectId": "void_conjurer_field_summon",
+      "effectTiming": "ignition",
+      "activationZone": "field",
+      "actions": [
+        "special_summon_from_zone"
+      ],
+      "dt": 2,
+      "delta": {
+        "botGraveyard": [
+          "Luminarch Holy Shield"
+        ],
+        "botGraveCount": 1
+      }
+    },
+    {
+      "type": "position_choice",
+      "turn": 3,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 153,
+        "atk": 1600,
+        "def": 1300,
+        "pos": "a"
+      },
+      "chosenPosition": "a",
+      "summonType": "special",
+      "dt": 4518,
+      "delta": {
+        "playerHandDetails": [
+          {
+            "name": "Void Ghost Wolf",
+            "cardKind": "monster",
+            "level": 3,
+            "atk": 1400,
+            "def": 600
+          },
+          {
+            "name": "Void Lost Throne",
+            "cardKind": "spell",
+            "level": 0,
+            "atk": 0,
+            "def": 0
+          },
+          {
+            "name": "Void Slayer Brute",
+            "cardKind": "monster",
+            "level": 8,
+            "atk": 2500,
+            "def": 2000
+          }
+        ],
+        "playerField": [
+          {
+            "name": "Void Conjurer",
+            "atk": 1700,
+            "def": 800,
+            "position": "attack",
+            "isFacedown": false,
+            "hasAttacked": false
+          }
+        ],
+        "playerBackrow": [
+          {
+            "name": "Void Mirror Dimension",
+            "isFacedown": false
+          }
+        ],
+        "botBackrowCount": 2,
+        "summonCount": 1
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 3,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 151
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "availableActions": [
+        {
+          "type": "normal_summon",
+          "cardId": 151,
+          "position": "a"
+        },
+        {
+          "type": "set",
+          "cardId": 151,
+          "position": "d"
+        }
+      ],
+      "dt": 8154,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Void Conjurer",
+            "atk": 1700,
+            "def": 800,
+            "position": "attack"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1700,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerHand": [
+          "Void Ghost Wolf",
+          "Void Lost Throne",
+          "Void Slayer Brute"
+        ],
+        "turn": 3,
+        "phase": "main1"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 3,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 151,
+        "atk": 1700
+      },
+      "target": {
+        "c": 101,
+        "atk": 1600,
+        "def": 1700,
+        "pos": "a"
+      },
+      "dt": 0
+    },
+    {
+      "type": "attack",
+      "turn": 3,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 151,
+        "atk": 1700
+      },
+      "target": {
+        "c": 101,
+        "atk": 1600,
+        "def": 1700,
+        "pos": "a"
+      },
+      "combatResult": {
+        "damageDealt": 100
+      },
+      "dt": 1,
+      "delta": {
+        "botLP": 7600
+      }
+    },
+    {
+      "type": "target_selection",
+      "turn": 3,
+      "phase": "battle",
+      "actor": "human",
+      "sourceCard": {},
+      "effectId": "attack",
+      "selectedTargets": [
+        {
+          "c": 101,
+          "name": "Luminarch Valiant - Knight of the Dawn"
+        }
+      ],
+      "selectedCount": 1,
+      "availableActions": [
+        {
+          "type": "select_target",
+          "targetId": 101
+        },
+        {
+          "type": "cancel"
+        }
+      ],
+      "dt": 1364
+    },
+    {
+      "type": "pass",
+      "turn": 3,
+      "phase": "battle",
+      "actor": "human",
+      "dt": 3165,
+      "delta": {
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 3,
+      "phase": "end",
+      "actor": "human",
+      "dt": 3853,
+      "delta": {
+        "phase": "end"
+      }
+    },
+    {
+      "type": "effect_resolution",
+      "turn": 4,
+      "phase": "main1",
+      "actor": "bot",
+      "sourceCard": {
+        "c": 101,
+        "atk": 1600,
+        "def": 1200,
+        "pos": "a"
+      },
+      "effectResult": {
+        "type": "search",
+        "targets": [],
+        "cardsDrawn": 0,
+        "cardsAdded": [
+          "Luminarch Enchanted Halberd"
+        ],
+        "lpChange": 0,
+        "description": "Added 1 card(s) to hand from deck"
+      },
+      "dt": 0,
+      "delta": {
+        "botHandCount": 3
+      }
+    },
+    {
+      "type": "effect_resolution",
+      "turn": 4,
+      "phase": "main1",
+      "actor": "bot",
+      "sourceCard": {
+        "c": 112,
+        "atk": 0,
+        "def": 0,
+        "pos": "a"
+      },
+      "effectResult": {
+        "type": "buff",
+        "targets": [],
+        "cardsDrawn": 0,
+        "cardsAdded": [],
+        "lpChange": 0,
+        "description": "Luminarch Valiant - Knight of the Dawn +500 ATK, +500 DEF (temp)"
+      },
+      "availableActions": [
+        {
+          "type": "fieldEffect"
+        }
+      ],
+      "dt": 405,
+      "delta": {
+        "botLP": 6600,
+        "botField": [
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 2100,
+            "def": 2200,
+            "position": "attack",
+            "isFacedown": false
+          },
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ]
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 4,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 101
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "availableActions": [
+        {
+          "type": "summon",
+          "cardId": 101,
+          "position": "a"
+        },
+        {
+          "type": "fieldEffect"
+        }
+      ],
+      "dt": 810,
+      "delta": {
+        "botField": [
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1700,
+            "position": "attack",
+            "isFacedown": false
+          },
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "turn": 4,
+        "phase": "main1"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 4,
+      "phase": "battle",
+      "actor": "bot",
+      "attacker": {
+        "c": 101,
+        "atk": 2100
+      },
+      "target": {
+        "c": 151,
+        "atk": 1700,
+        "def": 800,
+        "pos": "a"
+      },
+      "combatResult": {
+        "damageDealt": 400,
+        "targetDestroyed": true
+      },
+      "dt": 1,
+      "delta": {
+        "playerLP": 7100,
+        "playerField": [
+          {
+            "name": "Void Beast",
+            "atk": 1600,
+            "def": 1300,
+            "position": "attack"
+          }
+        ],
+        "playerGraveyard": [
+          "Void Tenebris Horn",
+          "Void Conjurer"
+        ],
+        "playerGraveCount": 2
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 4,
+      "phase": "battle",
+      "actor": "bot",
+      "attacker": {
+        "c": 101,
+        "atk": 1600
+      },
+      "target": {
+        "c": 153,
+        "atk": 1600,
+        "def": 1300,
+        "pos": "a"
+      },
+      "dt": 2,
+      "delta": {
+        "playerField": [],
+        "botField": [
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 2100,
+            "def": 2200,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerGraveyard": [
+          "Void Tenebris Horn",
+          "Void Conjurer",
+          "Void Beast"
+        ],
+        "playerGraveCount": 3,
+        "botGraveyard": [
+          "Luminarch Holy Shield",
+          "Luminarch Valiant - Knight of the Dawn"
+        ],
+        "botGraveCount": 2
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 4,
+      "phase": "battle",
+      "actor": "bot",
+      "attacker": {
+        "c": 101,
+        "atk": 1600
+      },
+      "target": {
+        "c": 153,
+        "atk": 1600,
+        "def": 1300,
+        "pos": "a"
+      },
+      "availableActions": [
+        {
+          "type": "attack",
+          "cardId": 101,
+          "targetId": 153
+        }
+      ],
+      "dt": 803
+    },
+    {
+      "type": "attack",
+      "turn": 4,
+      "phase": "battle",
+      "actor": "bot",
+      "attacker": {
+        "c": 101,
+        "atk": 2100
+      },
+      "target": {
+        "c": 151,
+        "atk": 1700,
+        "def": 800,
+        "pos": "a"
+      },
+      "availableActions": [
+        {
+          "type": "attack",
+          "cardId": 101,
+          "targetId": 151
+        },
+        {
+          "type": "attack",
+          "cardId": 101,
+          "targetId": 153
+        },
+        {
+          "type": "attack",
+          "cardId": 101,
+          "targetId": 151
+        },
+        {
+          "type": "attack",
+          "cardId": 101,
+          "targetId": 153
+        }
+      ],
+      "dt": 917,
+      "delta": {
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 5,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 153
+      },
+      "summonType": "special",
+      "fromZone": "graveyard",
+      "dt": 0,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Void Beast",
+            "atk": 1600,
+            "def": 1300,
+            "position": "defense"
+          }
+        ],
+        "playerGraveyard": [
+          "Void Tenebris Horn",
+          "Void Conjurer"
+        ],
+        "playerGraveCount": 2,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 5,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 161
+      },
+      "summonType": "special",
+      "fromZone": "graveyard",
+      "dt": 1,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Void Beast",
+            "atk": 1600,
+            "def": 1300,
+            "position": "defense"
+          },
+          {
+            "name": "Void Tenebris Horn",
+            "atk": 1700,
+            "def": 1000,
+            "position": "defense"
+          }
+        ],
+        "playerGraveyard": [
+          "Void Conjurer"
+        ],
+        "playerGraveCount": 1,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0
+      }
+    },
+    {
+      "type": "effect",
+      "turn": 5,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 161
+      },
+      "effectId": "void_tenebris_horn_revive",
+      "effectTiming": "ignition",
+      "activationZone": "graveyard",
+      "actions": [
+        "special_summon_from_zone"
+      ],
+      "dt": 1
+    },
+    {
+      "type": "summon",
+      "turn": 5,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 162
+      },
+      "summonType": "special",
+      "fromZone": "hand",
+      "dt": 1,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Void Slayer Brute",
+            "atk": 2500,
+            "def": 2000,
+            "position": "attack"
+          }
+        ],
+        "playerHand": [
+          "Void Ghost Wolf",
+          "Void Lost Throne"
+        ],
+        "playerHandCount": 2,
+        "playerGraveyard": [
+          "Void Conjurer",
+          "Void Beast",
+          "Void Tenebris Horn"
+        ],
+        "playerGraveCount": 3
+      }
+    },
+    {
+      "type": "effect",
+      "turn": 5,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 162
+      },
+      "effectId": "void_slayer_brute_hand_summon",
+      "effectTiming": "ignition",
+      "activationZone": "hand",
+      "actions": [
+        "special_summon_from_hand_with_cost"
+      ],
+      "dt": 1
+    },
+    {
+      "type": "position_choice",
+      "turn": 5,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 161,
+        "atk": 1500,
+        "def": 800,
+        "pos": "a"
+      },
+      "chosenPosition": "d",
+      "summonType": "special",
+      "dt": 2012,
+      "delta": {
+        "playerHandDetails": [
+          {
+            "name": "Void Ghost Wolf",
+            "cardKind": "monster",
+            "level": 3,
+            "atk": 1400,
+            "def": 600
+          },
+          {
+            "name": "Void Lost Throne",
+            "cardKind": "spell",
+            "level": 0,
+            "atk": 0,
+            "def": 0
+          },
+          {
+            "name": "Void Slayer Brute",
+            "cardKind": "monster",
+            "level": 8,
+            "atk": 2500,
+            "def": 2000
+          }
+        ],
+        "playerField": [
+          {
+            "name": "Void Beast",
+            "atk": 1600,
+            "def": 1300,
+            "position": "defense",
+            "isFacedown": false,
+            "hasAttacked": false
+          }
+        ],
+        "playerBackrow": [
+          {
+            "name": "Void Mirror Dimension",
+            "isFacedown": false
+          }
+        ],
+        "botBackrowCount": 1,
+        "summonCount": 0
+      }
+    },
+    {
+      "type": "target_selection",
+      "turn": 5,
+      "phase": "main1",
+      "actor": "human",
+      "sourceCard": {
+        "c": 162
+      },
+      "effectId": "void_slayer_brute_hand_summon",
+      "selectedTargets": [
+        {
+          "c": 153,
+          "name": "Void Beast"
+        },
+        {
+          "c": 161,
+          "name": "Void Tenebris Horn"
+        }
+      ],
+      "selectedCount": 2,
+      "availableActions": [
+        {
+          "type": "select_target",
+          "targetId": 153
+        },
+        {
+          "type": "select_target",
+          "targetId": 161
+        },
+        {
+          "type": "cancel"
+        }
+      ],
+      "dt": 2552
+    },
+    {
+      "type": "position_choice",
+      "turn": 5,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 153,
+        "atk": 1600,
+        "def": 1300,
+        "pos": "a"
+      },
+      "chosenPosition": "d",
+      "summonType": "special",
+      "availableActions": [
+        {
+          "type": "activate_spell",
+          "cardId": 167
+        },
+        {
+          "type": "set_spell",
+          "cardId": 167
+        }
+      ],
+      "dt": 7884,
+      "delta": {
+        "playerHandDetails": [
+          {
+            "name": "Void Ghost Wolf",
+            "cardKind": "monster",
+            "level": 3,
+            "atk": 1400,
+            "def": 600
+          },
+          {
+            "name": "Void Lost Throne",
+            "cardKind": "spell",
+            "level": 0,
+            "atk": 0,
+            "def": 0
+          },
+          {
+            "name": "Void Slayer Brute",
+            "cardKind": "monster",
+            "level": 8,
+            "atk": 2500,
+            "def": 2000
+          }
+        ],
+        "botField": [
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1700,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerBackrow": [
+          {
+            "name": "Void Mirror Dimension",
+            "isFacedown": false
+          }
+        ],
+        "botBackrowCount": 1,
+        "playerFieldSpell": "The Void",
+        "turn": 5,
+        "phase": "main1",
+        "summonCount": 0
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 5,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 162,
+        "atk": 2500
+      },
+      "target": {
+        "c": 101,
+        "atk": 1600,
+        "def": 1700,
+        "pos": "a"
+      },
+      "dt": 0
+    },
+    {
+      "type": "attack",
+      "turn": 5,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 162,
+        "atk": 2500
+      },
+      "target": {
+        "c": 101,
+        "atk": 1600,
+        "def": 1200,
+        "pos": "a"
+      },
+      "combatResult": {
+        "damageDealt": 900
+      },
+      "dt": 1,
+      "delta": {
+        "botLP": 6200,
+        "botField": [
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "botGraveyard": [
+          "Luminarch Holy Shield",
+          "Luminarch Valiant - Knight of the Dawn",
+          "Luminarch Crescent Shield"
+        ],
+        "botGraveCount": 3
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 5,
+      "phase": "battle",
+      "actor": "human",
+      "dt": 1616,
+      "delta": {
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "target_selection",
+      "turn": 5,
+      "phase": "battle",
+      "actor": "human",
+      "sourceCard": {},
+      "effectId": "attack",
+      "selectedTargets": [
+        {
+          "c": 101,
+          "name": "Luminarch Valiant - Knight of the Dawn"
+        }
+      ],
+      "selectedCount": 1,
+      "availableActions": [
+        {
+          "type": "select_target",
+          "targetId": 101
+        },
+        {
+          "type": "cancel"
+        }
+      ],
+      "dt": 1655
+    },
+    {
+      "type": "pass",
+      "turn": 5,
+      "phase": "end",
+      "actor": "human",
+      "dt": 580,
+      "delta": {
+        "playerLP": 7600,
+        "botLP": 0,
+        "playerField": [
+          {
+            "name": "Void Conjurer",
+            "atk": 1700,
+            "def": 800,
+            "position": "attack"
+          },
+          {
+            "name": "Void Haunter",
+            "atk": 2100,
+            "def": 1500,
+            "position": "attack"
+          },
+          {
+            "name": "Void Serpent Drake",
+            "atk": 2300,
+            "def": 1800,
+            "position": "attack"
+          },
+          {
+            "name": "Void Walker",
+            "atk": 1800,
+            "def": 200,
+            "position": "attack"
+          },
+          {
+            "name": "Void Tenebris Horn",
+            "atk": 2000,
+            "def": 1300,
+            "position": "attack"
+          }
+        ],
+        "playerHand": [
+          "Void Raven",
+          "Void Conjurer"
+        ],
+        "playerHandCount": 2,
+        "botHandCount": 2,
+        "playerGraveyard": [
+          "Void Hollow",
+          "Void Hollow",
+          "Void Hollow"
+        ],
+        "playerGraveCount": 3,
+        "botGraveyard": [
+          "Luminarch Celestial Marshal",
+          "Luminarch Holy Shield",
+          "Luminarch Valiant - Knight of the Dawn",
+          "Luminarch Magic Sickle"
+        ],
+        "botGraveCount": 4,
+        "playerFieldSpell": "The Void",
+        "botFieldSpell": "Sanctum of the Luminarch Citadel",
+        "turn": 5,
+        "phase": "end"
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 5,
+      "phase": "end",
+      "actor": "human",
+      "dt": 3053,
+      "delta": {
+        "phase": "end"
+      }
+    },
+    {
+      "type": "effect_resolution",
+      "turn": 6,
+      "phase": "main1",
+      "actor": "bot",
+      "sourceCard": {
+        "c": 110,
+        "atk": 1500,
+        "def": 1000,
+        "pos": "a"
+      },
+      "effectResult": {
+        "type": "search",
+        "targets": [],
+        "cardsDrawn": 0,
+        "cardsAdded": [
+          "Sanctum of the Luminarch Citadel"
+        ],
+        "lpChange": 0,
+        "description": "Added 1 card(s) to hand from deck"
+      },
+      "dt": 1,
+      "delta": {
+        "botHandCount": 4
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 6,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 110
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "availableActions": [
+        {
+          "type": "summon",
+          "cardId": 110,
+          "position": "a"
+        },
+        {
+          "type": "summon",
+          "cardId": 117,
+          "position": "d"
+        }
+      ],
+      "dt": 805
+    },
+    {
+      "type": "effect",
+      "turn": 7,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 156
+      },
+      "effectId": "void_ghost_wolf_direct",
+      "effectTiming": "ignition",
+      "activationZone": "field",
+      "actions": [
+        "modify_stats_temp",
+        "allow_direct_attack_this_turn"
+      ],
+      "dt": 2981,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Void Slayer Brute",
+            "atk": 2500,
+            "def": 2000,
+            "position": "attack"
+          },
+          {
+            "name": "Void Ghost Wolf",
+            "atk": 700,
+            "def": 600,
+            "position": "attack"
+          }
+        ]
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 7,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 156
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "availableActions": [
+        {
+          "type": "normal_summon",
+          "cardId": 156,
+          "position": "a"
+        },
+        {
+          "type": "set",
+          "cardId": 156,
+          "position": "d"
+        }
+      ],
+      "dt": 19270,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Void Slayer Brute",
+            "atk": 2500,
+            "def": 2000,
+            "position": "attack"
+          },
+          {
+            "name": "Void Ghost Wolf",
+            "atk": 1400,
+            "def": 600,
+            "position": "attack"
+          }
+        ],
+        "playerHand": [
+          "Void Lost Throne",
+          "Void Hollow"
+        ],
+        "turn": 7
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 7,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 162,
+        "atk": 2500
+      },
+      "target": {
+        "c": 101,
+        "atk": 1600,
+        "def": 1200,
+        "pos": "a"
+      },
+      "dt": 1
+    },
+    {
+      "type": "attack",
+      "turn": 7,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 162,
+        "atk": 2500
+      },
+      "target": {
+        "c": 101,
+        "atk": 1600,
+        "def": 1200,
+        "pos": "a"
+      },
+      "combatResult": {
+        "damageDealt": 900,
+        "targetDestroyed": true
+      },
+      "dt": 2,
+      "delta": {
+        "botLP": 5800,
+        "botField": [
+          {
+            "name": "Luminarch Sanctified Arbiter",
+            "atk": 1500,
+            "def": 1000,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "botGraveyard": [
+          "Luminarch Holy Shield",
+          "Luminarch Valiant - Knight of the Dawn",
+          "Luminarch Crescent Shield",
+          "Luminarch Valiant - Knight of the Dawn"
+        ],
+        "botGraveCount": 4
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 7,
+      "phase": "battle",
+      "actor": "human",
+      "dt": 879,
+      "delta": {
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "target_selection",
+      "turn": 7,
+      "phase": "battle",
+      "actor": "human",
+      "sourceCard": {},
+      "effectId": "attack",
+      "selectedTargets": [
+        {
+          "c": 101,
+          "name": "Luminarch Valiant - Knight of the Dawn"
+        }
+      ],
+      "selectedCount": 1,
+      "availableActions": [
+        {
+          "type": "select_target",
+          "targetId": 101
+        },
+        {
+          "type": "select_target",
+          "targetId": 110
+        },
+        {
+          "type": "cancel"
+        }
+      ],
+      "dt": 1234
+    },
+    {
+      "type": "attack",
+      "turn": 7,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 156,
+        "atk": 700
+      },
+      "target": null,
+      "directAttack": true,
+      "availableActions": [
+        {
+          "type": "select_target",
+          "targetId": 110
+        },
+        {
+          "type": "select_target"
+        },
+        {
+          "type": "cancel"
+        }
+      ],
+      "dt": 1605
+    },
+    {
+      "type": "pass",
+      "turn": 7,
+      "phase": "end",
+      "actor": "human",
+      "dt": 647,
+      "delta": {
+        "botLP": 5600,
+        "phase": "end"
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 8,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 101
+      },
+      "summonType": "special",
+      "fromZone": "graveyard",
+      "dt": 1,
+      "delta": {
+        "botField": [
+          {
+            "name": "Luminarch Moonblade Captain",
+            "atk": 2200,
+            "def": 1700,
+            "position": "attack",
+            "isFacedown": false
+          },
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "botGraveyard": [
+          "Luminarch Holy Shield",
+          "Luminarch Crescent Shield",
+          "Luminarch Valiant - Knight of the Dawn",
+          "Luminarch Sanctified Arbiter"
+        ],
+        "botGraveCount": 4
+      }
+    },
+    {
+      "type": "effect_resolution",
+      "turn": 8,
+      "phase": "main1",
+      "actor": "bot",
+      "sourceCard": {
+        "c": 101,
+        "atk": 1600,
+        "def": 1200,
+        "pos": "a"
+      },
+      "effectResult": {
+        "type": "search",
+        "targets": [],
+        "cardsDrawn": 0,
+        "cardsAdded": [
+          "Luminarch Sanctified Arbiter"
+        ],
+        "lpChange": 0,
+        "description": "Added 1 card(s) to hand from deck"
+      },
+      "dt": 1,
+      "delta": {
+        "botHandCount": 5
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 8,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 117
+      },
+      "summonType": "special",
+      "fromZone": "hand",
+      "dt": 1,
+      "delta": {
+        "botField": [
+          {
+            "name": "Luminarch Moonblade Captain",
+            "atk": 2200,
+            "def": 1700,
+            "position": "attack",
+            "isFacedown": false
+          },
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack",
+            "isFacedown": false
+          },
+          {
+            "name": "Luminarch Enchanted Halberd",
+            "atk": 1600,
+            "def": 1400,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "botHandCount": 4
+      }
+    },
+    {
+      "type": "effect_resolution",
+      "turn": 8,
+      "phase": "main1",
+      "actor": "bot",
+      "sourceCard": {
+        "c": 112,
+        "atk": 0,
+        "def": 0,
+        "pos": "a"
+      },
+      "effectResult": {
+        "type": "buff",
+        "targets": [],
+        "cardsDrawn": 0,
+        "cardsAdded": [],
+        "lpChange": 0,
+        "description": "Luminarch Moonblade Captain +500 ATK, +500 DEF (temp)"
+      },
+      "availableActions": [
+        {
+          "type": "fieldEffect"
+        }
+      ],
+      "dt": 409,
+      "delta": {
+        "botLP": 4600,
+        "botField": [
+          {
+            "name": "Luminarch Moonblade Captain",
+            "atk": 2700,
+            "def": 2200,
+            "position": "attack",
+            "isFacedown": false
+          },
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack",
+            "isFacedown": false
+          },
+          {
+            "name": "Luminarch Enchanted Halberd",
+            "atk": 1600,
+            "def": 1400,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ]
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 8,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 104
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "tributes": [
+        "Luminarch Sanctified Arbiter"
+      ],
+      "availableActions": [
+        {
+          "type": "summon",
+          "cardId": 104,
+          "position": "a"
+        },
+        {
+          "type": "summon",
+          "cardId": 117,
+          "position": "d"
+        }
+      ],
+      "dt": 815,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Void Slayer Brute",
+            "atk": 2500,
+            "def": 2000,
+            "position": "attack"
+          },
+          {
+            "name": "Void Ghost Wolf",
+            "atk": 1400,
+            "def": 600,
+            "position": "attack"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Luminarch Moonblade Captain",
+            "atk": 2200,
+            "def": 1700,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "botGraveyard": [
+          "Luminarch Holy Shield",
+          "Luminarch Valiant - Knight of the Dawn",
+          "Luminarch Crescent Shield",
+          "Luminarch Valiant - Knight of the Dawn",
+          "Luminarch Sanctified Arbiter"
+        ],
+        "botGraveCount": 5,
+        "turn": 8,
+        "phase": "main1"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 8,
+      "phase": "battle",
+      "actor": "bot",
+      "attacker": {
+        "c": 101,
+        "atk": 1600
+      },
+      "target": {
+        "c": 156,
+        "atk": 1400,
+        "def": 600,
+        "pos": "a"
+      },
+      "combatResult": {
+        "damageDealt": 200,
+        "targetDestroyed": true
+      },
+      "dt": 1,
+      "delta": {
+        "playerLP": 6700,
+        "playerField": [],
+        "playerGraveyard": [
+          "Void Conjurer",
+          "Void Beast",
+          "Void Tenebris Horn",
+          "Void Slayer Brute",
+          "Void Ghost Wolf"
+        ],
+        "playerGraveCount": 5
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 8,
+      "phase": "battle",
+      "actor": "bot",
+      "attacker": {
+        "c": 104,
+        "atk": 2700
+      },
+      "target": {
+        "c": 162,
+        "atk": 2500,
+        "def": 2000,
+        "pos": "a"
+      },
+      "combatResult": {
+        "damageDealt": 200,
+        "targetDestroyed": true
+      },
+      "dt": 2,
+      "delta": {
+        "playerLP": 6900,
+        "playerField": [
+          {
+            "name": "Void Ghost Wolf",
+            "atk": 1400,
+            "def": 600,
+            "position": "attack"
+          }
+        ],
+        "playerGraveyard": [
+          "Void Conjurer",
+          "Void Beast",
+          "Void Tenebris Horn",
+          "Void Slayer Brute"
+        ],
+        "playerGraveCount": 4
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 8,
+      "phase": "battle",
+      "actor": "bot",
+      "attacker": {
+        "c": 101,
+        "atk": 1600
+      },
+      "target": {
+        "c": 156,
+        "atk": 1400,
+        "def": 600,
+        "pos": "a"
+      },
+      "availableActions": [
+        {
+          "type": "attack",
+          "cardId": 104,
+          "targetId": 156
+        },
+        {
+          "type": "attack",
+          "cardId": 101,
+          "targetId": 156
+        }
+      ],
+      "dt": 805
+    },
+    {
+      "type": "attack",
+      "turn": 8,
+      "phase": "battle",
+      "actor": "bot",
+      "attacker": {
+        "c": 104,
+        "atk": 2700
+      },
+      "target": {
+        "c": 162,
+        "atk": 2500,
+        "def": 2000,
+        "pos": "a"
+      },
+      "availableActions": [
+        {
+          "type": "attack",
+          "cardId": 104,
+          "targetId": 162
+        },
+        {
+          "type": "attack",
+          "cardId": 104,
+          "targetId": 156
+        },
+        {
+          "type": "attack",
+          "cardId": 101,
+          "targetId": 162
+        },
+        {
+          "type": "attack",
+          "cardId": 101,
+          "targetId": 156
+        }
+      ],
+      "dt": 929,
+      "delta": {
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "spell",
+      "turn": 9,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 169
+      },
+      "targets": [],
+      "dt": 0,
+      "delta": {
+        "playerGraveyard": [
+          "Void Conjurer",
+          "Void Beast",
+          "Void Tenebris Horn",
+          "Void Slayer Brute",
+          "Void Ghost Wolf",
+          "Void Lost Throne"
+        ],
+        "playerGraveCount": 6
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 9,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 153
+      },
+      "summonType": "special",
+      "fromZone": "graveyard",
+      "dt": 0,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Void Beast",
+            "atk": 1600,
+            "def": 1300,
+            "position": "attack"
+          }
+        ],
+        "playerGraveyard": [
+          "Void Conjurer",
+          "Void Tenebris Horn",
+          "Void Slayer Brute",
+          "Void Ghost Wolf",
+          "Void Lost Throne"
+        ],
+        "playerGraveCount": 5,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0
+      }
+    },
+    {
+      "type": "effect",
+      "turn": 9,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 169
+      },
+      "effectId": "void_lost_throne_effect",
+      "effectTiming": "on_play",
+      "activationZone": "spellTrap",
+      "actions": [
+        "selective_field_destruction"
+      ],
+      "availableActions": [
+        {
+          "type": "activate_spell",
+          "cardId": 169
+        },
+        {
+          "type": "set_spell",
+          "cardId": 169
+        }
+      ],
+      "dt": 5144,
+      "delta": {
+        "botField": [
+          {
+            "name": "Luminarch Moonblade Captain",
+            "atk": 2200,
+            "def": 1700,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerHand": [
+          "Void Hollow",
+          "Void Hollow"
+        ],
+        "botGraveyard": [
+          "Luminarch Holy Shield",
+          "Luminarch Crescent Shield",
+          "Luminarch Valiant - Knight of the Dawn",
+          "Luminarch Sanctified Arbiter",
+          "Luminarch Valiant - Knight of the Dawn",
+          "Luminarch Enchanted Halberd"
+        ],
+        "botGraveCount": 6,
+        "turn": 9,
+        "phase": "main1"
+      }
+    },
+    {
+      "type": "position_choice",
+      "turn": 9,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 153,
+        "atk": 1600,
+        "def": 1300,
+        "pos": "d"
+      },
+      "chosenPosition": "a",
+      "summonType": "special",
+      "dt": 6636,
+      "delta": {
+        "playerHandDetails": [
+          {
+            "name": "Void Hollow",
+            "cardKind": "monster",
+            "level": 3,
+            "atk": 1300,
+            "def": 1200
+          },
+          {
+            "name": "Void Hollow",
+            "cardKind": "monster",
+            "level": 3,
+            "atk": 1300,
+            "def": 1200
+          }
+        ],
+        "playerBackrow": [
+          {
+            "name": "Void Mirror Dimension",
+            "isFacedown": false
+          }
+        ],
+        "botBackrowCount": 0,
+        "summonCount": 0
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 9,
+      "phase": "end",
+      "actor": "human",
+      "dt": 4042,
+      "delta": {
+        "phase": "end"
+      }
+    },
+    {
+      "type": "effect_resolution",
+      "turn": 10,
+      "phase": "main1",
+      "actor": "bot",
+      "sourceCard": {
+        "c": 110,
+        "atk": 1500,
+        "def": 1000,
+        "pos": "a"
+      },
+      "effectResult": {
+        "type": "search",
+        "targets": [],
+        "cardsDrawn": 0,
+        "cardsAdded": [
+          "Luminarch Knights Convocation"
+        ],
+        "lpChange": 0,
+        "description": "Added 1 card(s) to hand from deck"
+      },
+      "dt": 0,
+      "delta": {
+        "botHandCount": 5
+      }
+    },
+    {
+      "type": "effect",
+      "turn": 10,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 111
+      },
+      "effectId": "luminarch_knights_convocation_effect",
+      "effectTiming": "ignition",
+      "activationZone": "spellTrap",
+      "actions": [
+        "move",
+        "search_any"
+      ],
+      "dt": 0
+    },
+    {
+      "type": "effect",
+      "turn": 10,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 113
+      },
+      "effectId": "luminarch_holy_ascension_boost",
+      "effectTiming": "on_play",
+      "activationZone": "spellTrap",
+      "actions": [
+        "pay_lp",
+        "buff_stats_temp"
+      ],
+      "dt": 1
+    },
+    {
+      "type": "effect_resolution",
+      "turn": 10,
+      "phase": "main1",
+      "actor": "bot",
+      "sourceCard": {
+        "c": 112,
+        "atk": 0,
+        "def": 0,
+        "pos": "a"
+      },
+      "effectResult": {
+        "type": "buff",
+        "targets": [],
+        "cardsDrawn": 0,
+        "cardsAdded": [],
+        "lpChange": 0,
+        "description": "Luminarch Moonblade Captain +500 ATK, +500 DEF (temp)"
+      },
+      "availableActions": [
+        {
+          "type": "fieldEffect"
+        }
+      ],
+      "dt": 405,
+      "delta": {
+        "botLP": 3600,
+        "botField": [
+          {
+            "name": "Luminarch Moonblade Captain",
+            "atk": 2700,
+            "def": 2200,
+            "position": "attack",
+            "isFacedown": false
+          },
+          {
+            "name": "Luminarch Sanctified Arbiter",
+            "atk": 1500,
+            "def": 1000,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ]
+      }
+    },
+    {
+      "type": "effect_resolution",
+      "turn": 10,
+      "phase": "main1",
+      "actor": "bot",
+      "sourceCard": {
+        "c": 113,
+        "atk": 0,
+        "def": 0,
+        "pos": "a"
+      },
+      "effectResult": {
+        "type": "buff",
+        "targets": [],
+        "cardsDrawn": 0,
+        "cardsAdded": [],
+        "lpChange": 0,
+        "description": "Luminarch Moonblade Captain +800 ATK, +800 DEF (temp)"
+      },
+      "availableActions": [
+        {
+          "type": "spell",
+          "cardId": 113
+        }
+      ],
+      "dt": 413,
+      "delta": {
+        "botLP": 2600,
+        "botField": [
+          {
+            "name": "Luminarch Moonblade Captain",
+            "atk": 3500,
+            "def": 3000,
+            "position": "attack",
+            "isFacedown": false
+          },
+          {
+            "name": "Luminarch Sanctified Arbiter",
+            "atk": 1500,
+            "def": 1000,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "botHandCount": 3
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 10,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 110
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "availableActions": [
+        {
+          "type": "summon",
+          "cardId": 110,
+          "position": "a"
+        }
+      ],
+      "dt": 809,
+      "delta": {
+        "botField": [
+          {
+            "name": "Luminarch Moonblade Captain",
+            "atk": 2200,
+            "def": 1700,
+            "position": "attack",
+            "isFacedown": false
+          },
+          {
+            "name": "Luminarch Sanctified Arbiter",
+            "atk": 1500,
+            "def": 1000,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "turn": 10,
+        "phase": "main1"
+      }
+    },
+    {
+      "type": "effect_resolution",
+      "turn": 10,
+      "phase": "main1",
+      "actor": "bot",
+      "sourceCard": {
+        "c": 111,
+        "atk": 0,
+        "def": 0,
+        "pos": "a"
+      },
+      "effectResult": {
+        "type": "search",
+        "targets": [],
+        "cardsDrawn": 0,
+        "cardsAdded": [
+          "Luminarch Aegisbearer"
+        ],
+        "lpChange": 0,
+        "description": "Added 1 card(s) to hand from deck"
+      },
+      "availableActions": [
+        {
+          "type": "spellTrapEffect",
+          "cardId": 111
+        },
+        {
+          "type": "fieldEffect"
+        }
+      ],
+      "dt": 817,
+      "delta": {
+        "botHandCount": 4,
+        "botGraveyard": [
+          "Luminarch Holy Shield",
+          "Luminarch Crescent Shield",
+          "Luminarch Valiant - Knight of the Dawn",
+          "Luminarch Sanctified Arbiter",
+          "Luminarch Valiant - Knight of the Dawn",
+          "Luminarch Enchanted Halberd",
+          "Luminarch Radiant Lancer"
+        ],
+        "botGraveCount": 7
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 10,
+      "phase": "battle",
+      "actor": "bot",
+      "attacker": {
+        "c": 104,
+        "atk": 3500
+      },
+      "target": {
+        "c": 153,
+        "atk": 1600,
+        "def": 1300,
+        "pos": "a"
+      },
+      "combatResult": {
+        "damageDealt": 1900,
+        "targetDestroyed": true
+      },
+      "dt": 1,
+      "delta": {
+        "playerLP": 4800,
+        "playerField": [],
+        "playerGraveyard": [
+          "Void Conjurer",
+          "Void Tenebris Horn",
+          "Void Slayer Brute",
+          "Void Ghost Wolf",
+          "Void Lost Throne",
+          "Void Beast"
+        ],
+        "playerGraveCount": 6
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 10,
+      "phase": "battle",
+      "actor": "bot",
+      "attacker": {
+        "c": 110,
+        "atk": 1500
+      },
+      "target": null,
+      "directAttack": true,
+      "availableActions": [
+        {
+          "type": "attack",
+          "cardId": 104
+        },
+        {
+          "type": "attack",
+          "cardId": 110
+        }
+      ],
+      "dt": 801
+    },
+    {
+      "type": "attack",
+      "turn": 10,
+      "phase": "battle",
+      "actor": "bot",
+      "attacker": {
+        "c": 104,
+        "atk": 3500
+      },
+      "target": {
+        "c": 153,
+        "atk": 1600,
+        "def": 1300,
+        "pos": "a"
+      },
+      "availableActions": [
+        {
+          "type": "attack",
+          "cardId": 104,
+          "targetId": 153
+        },
+        {
+          "type": "attack",
+          "cardId": 110,
+          "targetId": 153
+        }
+      ],
+      "dt": 912,
+      "delta": {
+        "botGraveyard": [
+          "Luminarch Holy Shield",
+          "Luminarch Crescent Shield",
+          "Luminarch Valiant - Knight of the Dawn",
+          "Luminarch Sanctified Arbiter",
+          "Luminarch Valiant - Knight of the Dawn",
+          "Luminarch Enchanted Halberd",
+          "Luminarch Radiant Lancer",
+          "Luminarch Holy Ascension"
+        ],
+        "botGraveCount": 8,
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 11,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 151
+      },
+      "summonType": "special",
+      "fromZone": "graveyard",
+      "dt": 1,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Void Conjurer",
+            "atk": 1700,
+            "def": 800,
+            "position": "attack"
+          }
+        ],
+        "playerGraveyard": [
+          "Void Tenebris Horn",
+          "Void Slayer Brute",
+          "Void Ghost Wolf",
+          "Void Lost Throne",
+          "Void Beast"
+        ],
+        "playerGraveCount": 5,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0
+      }
+    },
+    {
+      "type": "effect",
+      "turn": 11,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 168
+      },
+      "effectId": "void_gravitational_pull_bounce",
+      "effectTiming": "ignition",
+      "activationZone": "spellTrap",
+      "actions": [
+        "move",
+        "move"
+      ],
+      "dt": 2,
+      "delta": {
+        "playerField": [],
+        "botField": [
+          {
+            "name": "Luminarch Sanctified Arbiter",
+            "atk": 1500,
+            "def": 1000,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerHand": [
+          "Void Hollow",
+          "Void Hollow"
+        ],
+        "playerHandCount": 2,
+        "botHandCount": 4
+      }
+    },
+    {
+      "type": "position_choice",
+      "turn": 11,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 151,
+        "atk": 1700,
+        "def": 800,
+        "pos": "a"
+      },
+      "chosenPosition": "a",
+      "summonType": "special",
+      "dt": 4019,
+      "delta": {
+        "playerHandDetails": [
+          {
+            "name": "Void Hollow",
+            "cardKind": "monster",
+            "level": 3,
+            "atk": 1300,
+            "def": 1200
+          },
+          {
+            "name": "Void Hollow",
+            "cardKind": "monster",
+            "level": 3,
+            "atk": 1300,
+            "def": 1200
+          }
+        ],
+        "playerBackrow": [
+          {
+            "name": "Void Mirror Dimension",
+            "isFacedown": false
+          },
+          {
+            "name": "Void Gravitational Pull",
+            "isFacedown": false
+          }
+        ],
+        "botBackrowCount": 1,
+        "summonCount": 1
+      }
+    },
+    {
+      "type": "target_selection",
+      "turn": 11,
+      "phase": "main1",
+      "actor": "human",
+      "sourceCard": {
+        "c": 168
+      },
+      "effectId": "void_gravitational_pull_bounce",
+      "selectedTargets": [
+        {
+          "c": 154,
+          "name": "Void Hollow"
+        }
+      ],
+      "selectedCount": 1,
+      "availableActions": [
+        {
+          "type": "select_target",
+          "targetId": 154
+        },
+        {
+          "type": "cancel"
+        }
+      ],
+      "dt": 4370
+    },
+    {
+      "type": "summon",
+      "turn": 11,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 154
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "availableActions": [
+        {
+          "type": "normal_summon",
+          "cardId": 154,
+          "position": "a"
+        },
+        {
+          "type": "set",
+          "cardId": 154,
+          "position": "d"
+        }
+      ],
+      "dt": 6038
+    },
+    {
+      "type": "attack",
+      "turn": 11,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 151,
+        "atk": 1700
+      },
+      "target": {
+        "c": 110,
+        "atk": 1500,
+        "def": 1000,
+        "pos": "a"
+      },
+      "dt": 0
+    },
+    {
+      "type": "attack",
+      "turn": 11,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 151,
+        "atk": 1700
+      },
+      "target": {
+        "c": 110,
+        "atk": 1500,
+        "def": 1000,
+        "pos": "a"
+      },
+      "combatResult": {
+        "damageDealt": 200,
+        "targetDestroyed": true
+      },
+      "dt": 2,
+      "delta": {
+        "botLP": 2900,
+        "botField": [],
+        "botGraveyard": [
+          "Luminarch Holy Shield",
+          "Luminarch Crescent Shield",
+          "Luminarch Valiant - Knight of the Dawn",
+          "Luminarch Sanctified Arbiter",
+          "Luminarch Valiant - Knight of the Dawn",
+          "Luminarch Enchanted Halberd",
+          "Luminarch Radiant Lancer",
+          "Luminarch Holy Ascension",
+          "Luminarch Sanctified Arbiter"
+        ],
+        "botGraveCount": 9
+      }
+    },
+    {
+      "type": "target_selection",
+      "turn": 11,
+      "phase": "battle",
+      "actor": "human",
+      "sourceCard": {},
+      "effectId": "attack",
+      "selectedTargets": [
+        {
+          "c": 110,
+          "name": "Luminarch Sanctified Arbiter"
+        }
+      ],
+      "selectedCount": 1,
+      "availableActions": [
+        {
+          "type": "select_target",
+          "targetId": 110
+        },
+        {
+          "type": "cancel"
+        }
+      ],
+      "dt": 1942
+    },
+    {
+      "type": "pass",
+      "turn": 11,
+      "phase": "battle",
+      "actor": "human",
+      "dt": 3447,
+      "delta": {
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 11,
+      "phase": "end",
+      "actor": "human",
+      "dt": 1061,
+      "delta": {
+        "phase": "end"
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 13,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 154
+      },
+      "summonType": "special",
+      "fromZone": "deck",
+      "dt": 0,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Void Conjurer",
+            "atk": 1700,
+            "def": 800,
+            "position": "attack"
+          },
+          {
+            "name": "Void Hollow",
+            "atk": 1300,
+            "def": 1200,
+            "position": "defense"
+          }
+        ],
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0
+      }
+    },
+    {
+      "type": "effect",
+      "turn": 13,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 151
+      },
+      "effectId": "void_conjurer_field_summon",
+      "effectTiming": "ignition",
+      "activationZone": "field",
+      "actions": [
+        "special_summon_from_zone"
+      ],
+      "dt": 1
+    },
+    {
+      "type": "summon",
+      "turn": 13,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 162
+      },
+      "summonType": "special",
+      "fromZone": "hand",
+      "dt": 1,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Void Conjurer",
+            "atk": 1700,
+            "def": 800,
+            "position": "attack"
+          },
+          {
+            "name": "Void Slayer Brute",
+            "atk": 2500,
+            "def": 2000,
+            "position": "attack"
+          }
+        ],
+        "playerHand": [
+          "Void Hollow"
+        ],
+        "playerHandCount": 1,
+        "playerGraveyard": [
+          "Void Tenebris Horn",
+          "Void Slayer Brute",
+          "Void Ghost Wolf",
+          "Void Lost Throne",
+          "Void Beast",
+          "Void Hollow",
+          "Void Hollow"
+        ],
+        "playerGraveCount": 7
+      }
+    },
+    {
+      "type": "effect",
+      "turn": 13,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 162
+      },
+      "effectId": "void_slayer_brute_hand_summon",
+      "effectTiming": "ignition",
+      "activationZone": "hand",
+      "actions": [
+        "special_summon_from_hand_with_cost"
+      ],
+      "dt": 1
+    },
+    {
+      "type": "summon",
+      "turn": 13,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 154
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "availableActions": [
+        {
+          "type": "normal_summon",
+          "cardId": 154,
+          "position": "a"
+        },
+        {
+          "type": "set",
+          "cardId": 154,
+          "position": "d"
+        }
+      ],
+      "dt": 1792,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Void Conjurer",
+            "atk": 1700,
+            "def": 800,
+            "position": "attack"
+          },
+          {
+            "name": "Void Hollow",
+            "atk": 1300,
+            "def": 1200,
+            "position": "defense"
+          },
+          {
+            "name": "Void Hollow",
+            "atk": 1300,
+            "def": 1200,
+            "position": "attack"
+          }
+        ],
+        "playerHand": [
+          "Void Hollow",
+          "Void Slayer Brute"
+        ],
+        "playerHandCount": 2
+      }
+    },
+    {
+      "type": "target_selection",
+      "turn": 13,
+      "phase": "main1",
+      "actor": "human",
+      "sourceCard": {
+        "c": 162
+      },
+      "effectId": "void_slayer_brute_hand_summon",
+      "selectedTargets": [
+        {
+          "c": 154,
+          "name": "Void Hollow"
+        },
+        {
+          "c": 154,
+          "name": "Void Hollow"
+        }
+      ],
+      "selectedCount": 2,
+      "availableActions": [
+        {
+          "type": "select_target",
+          "targetId": 151
+        },
+        {
+          "type": "select_target",
+          "targetId": 154
+        },
+        {
+          "type": "select_target",
+          "targetId": 154
+        },
+        {
+          "type": "cancel"
+        }
+      ],
+      "dt": 2223
+    },
+    {
+      "type": "position_choice",
+      "turn": 13,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 154,
+        "atk": 1300,
+        "def": 1200,
+        "pos": "a"
+      },
+      "chosenPosition": "d",
+      "summonType": "special",
+      "availableActions": [
+        {
+          "type": "select_target",
+          "targetId": 151
+        },
+        {
+          "type": "cancel"
+        }
+      ],
+      "dt": 22566,
+      "delta": {
+        "playerHand": [
+          "Void Hollow",
+          "Void Hollow",
+          "Void Slayer Brute"
+        ],
+        "playerHandCount": 3,
+        "playerHandDetails": [
+          {
+            "name": "Void Hollow",
+            "cardKind": "monster",
+            "level": 3,
+            "atk": 1300,
+            "def": 1200
+          },
+          {
+            "name": "Void Hollow",
+            "cardKind": "monster",
+            "level": 3,
+            "atk": 1300,
+            "def": 1200
+          },
+          {
+            "name": "Void Slayer Brute",
+            "cardKind": "monster",
+            "level": 8,
+            "atk": 2500,
+            "def": 2000
+          }
+        ],
+        "playerField": [
+          {
+            "name": "Void Conjurer",
+            "atk": 1700,
+            "def": 800,
+            "position": "attack",
+            "isFacedown": false,
+            "hasAttacked": false
+          }
+        ],
+        "botField": [
+          {
+            "name": "Luminarch Magic Sickle",
+            "atk": 1000,
+            "def": 1000,
+            "position": "defense",
+            "isFacedown": true
+          }
+        ],
+        "playerBackrow": [
+          {
+            "name": "Void Mirror Dimension",
+            "isFacedown": false
+          },
+          {
+            "name": "Void Gravitational Pull",
+            "isFacedown": false
+          }
+        ],
+        "botBackrowCount": 1,
+        "turn": 13,
+        "phase": "main1",
+        "summonCount": 0
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 13,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 162,
+        "atk": 2500
+      },
+      "target": {
+        "c": 106,
+        "atk": 1000,
+        "def": 1000,
+        "pos": "d",
+        "fd": true
+      },
+      "dt": 0
+    },
+    {
+      "type": "attack",
+      "turn": 13,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 162,
+        "atk": 2500
+      },
+      "target": {
+        "c": 106,
+        "atk": 1000,
+        "def": 1000,
+        "pos": "d"
+      },
+      "dt": 607,
+      "delta": {
+        "botLP": 3400,
+        "botField": [],
+        "botGraveyard": [
+          "Luminarch Holy Shield",
+          "Luminarch Crescent Shield",
+          "Luminarch Valiant - Knight of the Dawn",
+          "Luminarch Sanctified Arbiter",
+          "Luminarch Valiant - Knight of the Dawn",
+          "Luminarch Enchanted Halberd",
+          "Luminarch Radiant Lancer",
+          "Luminarch Holy Ascension",
+          "Luminarch Sanctified Arbiter",
+          "Luminarch Magic Sickle"
+        ],
+        "botGraveCount": 10
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 13,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 151,
+        "atk": 1700
+      },
+      "target": null,
+      "directAttack": true,
+      "availableActions": [
+        {
+          "type": "select_target"
+        },
+        {
+          "type": "cancel"
+        }
+      ],
+      "dt": 997
+    },
+    {
+      "type": "pass",
+      "turn": 13,
+      "phase": "battle",
+      "actor": "human",
+      "dt": 1976,
+      "delta": {
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "target_selection",
+      "turn": 13,
+      "phase": "battle",
+      "actor": "human",
+      "sourceCard": {},
+      "effectId": "attack",
+      "selectedTargets": [
+        {
+          "c": 106,
+          "name": "Luminarch Magic Sickle"
+        }
+      ],
+      "selectedCount": 1,
+      "availableActions": [
+        {
+          "type": "select_target",
+          "targetId": 106
+        },
+        {
+          "type": "cancel"
+        }
+      ],
+      "dt": 5736
+    },
+    {
+      "type": "pass",
+      "turn": 13,
+      "phase": "end",
+      "actor": "human",
+      "dt": 805,
+      "delta": {
+        "botLP": 2200,
+        "phase": "end"
+      }
+    },
+    {
+      "type": "effect",
+      "turn": 14,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 111
+      },
+      "effectId": "luminarch_knights_convocation_effect",
+      "effectTiming": "ignition",
+      "activationZone": "spellTrap",
+      "actions": [
+        "move",
+        "search_any"
+      ],
+      "dt": 0
+    },
+    {
+      "type": "effect_resolution",
+      "turn": 14,
+      "phase": "main1",
+      "actor": "bot",
+      "sourceCard": {
+        "c": 111,
+        "atk": 0,
+        "def": 0,
+        "pos": "a"
+      },
+      "effectResult": {
+        "type": "search",
+        "targets": [],
+        "cardsDrawn": 0,
+        "cardsAdded": [
+          "Luminarch Aegisbearer"
+        ],
+        "lpChange": 0,
+        "description": "Added 1 card(s) to hand from deck"
+      },
+      "availableActions": [
+        {
+          "type": "spellTrapEffect",
+          "cardId": 111
+        }
+      ],
+      "dt": 1230,
+      "delta": {
+        "botField": [
+          {
+            "name": "Luminarch Aegisbearer",
+            "atk": 1000,
+            "def": 2000,
+            "position": "defense",
+            "isFacedown": true
+          }
+        ],
+        "botGraveyard": [
+          "Luminarch Holy Shield",
+          "Luminarch Crescent Shield",
+          "Luminarch Valiant - Knight of the Dawn",
+          "Luminarch Sanctified Arbiter",
+          "Luminarch Valiant - Knight of the Dawn",
+          "Luminarch Enchanted Halberd",
+          "Luminarch Radiant Lancer",
+          "Luminarch Holy Ascension",
+          "Luminarch Sanctified Arbiter",
+          "Luminarch Magic Sickle",
+          "Luminarch Sanctum Protector"
+        ],
+        "botGraveCount": 11,
+        "turn": 14,
+        "phase": "main1"
+      }
+    },
+    {
+      "type": "effect",
+      "turn": 15,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 168
+      },
+      "effectId": "void_gravitational_pull_bounce",
+      "effectTiming": "ignition",
+      "activationZone": "spellTrap",
+      "actions": [
+        "move",
+        "move"
+      ],
+      "dt": 2,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Void Slayer Brute",
+            "atk": 2500,
+            "def": 2000,
+            "position": "attack"
+          }
+        ],
+        "botField": [],
+        "playerHand": [
+          "Void Hollow",
+          "Void Mirror Dimension",
+          "Void Conjurer"
+        ],
+        "playerHandCount": 3,
+        "botHandCount": 5
+      }
+    },
+    {
+      "type": "target_selection",
+      "turn": 15,
+      "phase": "main1",
+      "actor": "human",
+      "sourceCard": {
+        "c": 168
+      },
+      "effectId": "void_gravitational_pull_bounce",
+      "selectedTargets": [
+        {
+          "c": 151,
+          "name": "Void Conjurer"
+        }
+      ],
+      "selectedCount": 1,
+      "availableActions": [
+        {
+          "type": "select_target",
+          "targetId": 151
+        },
+        {
+          "type": "select_target",
+          "targetId": 162
+        },
+        {
+          "type": "cancel"
+        }
+      ],
+      "dt": 16674,
+      "delta": {
+        "playerHand": [
+          "Void Hollow",
+          "Void Mirror Dimension"
+        ],
+        "playerHandCount": 2,
+        "turn": 15
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 15,
+      "phase": "battle",
+      "actor": "human",
+      "dt": 800,
+      "delta": {
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 15,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 162,
+        "atk": 2500
+      },
+      "target": null,
+      "directAttack": true,
+      "availableActions": [
+        {
+          "type": "select_target"
+        },
+        {
+          "type": "cancel"
+        }
+      ],
+      "dt": 1017
+    },
+    {
+      "type": "pass",
+      "turn": 15,
+      "phase": "end",
+      "actor": "human",
+      "dt": 3032,
+      "delta": {
+        "botLP": 200,
+        "phase": "end"
+      }
+    },
+    {
+      "type": "effect_resolution",
+      "turn": 16,
+      "phase": "main1",
+      "actor": "bot",
+      "sourceCard": {
+        "c": 101,
+        "atk": 1600,
+        "def": 1200,
+        "pos": "a"
+      },
+      "effectResult": {
+        "type": "search",
+        "targets": [],
+        "cardsDrawn": 0,
+        "cardsAdded": [
+          "Luminarch Aegisbearer"
+        ],
+        "lpChange": 0,
+        "description": "Added 1 card(s) to hand from deck"
+      },
+      "dt": 0,
+      "delta": {
+        "botHandCount": 6
+      }
+    },
+    {
+      "type": "effect",
+      "turn": 16,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 118
+      },
+      "effectId": "luminarch_moonlit_blessing_effect",
+      "effectTiming": "on_play",
+      "activationZone": "spellTrap",
+      "actions": [
+        "move",
+        "conditional_summon_from_hand"
+      ],
+      "dt": 1
+    },
+    {
+      "type": "summon",
+      "turn": 16,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 101
+      },
+      "summonType": "special",
+      "fromZone": "hand",
+      "availableActions": [
+        {
+          "type": "spell",
+          "cardId": 118
+        },
+        {
+          "type": "summon",
+          "cardId": 103,
+          "position": "d"
+        },
+        {
+          "type": "summon",
+          "cardId": 103,
+          "position": "d"
+        }
+      ],
+      "dt": 812
+    },
+    {
+      "type": "effect",
+      "turn": 17,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 168
+      },
+      "effectId": "void_gravitational_pull_bounce",
+      "effectTiming": "ignition",
+      "activationZone": "spellTrap",
+      "actions": [
+        "move",
+        "move"
+      ],
+      "dt": 2,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Void Slayer Brute",
+            "atk": 2500,
+            "def": 2000,
+            "position": "attack"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerHand": [
+          "Void Hollow",
+          "Void Mirror Dimension",
+          "Void Conjurer",
+          "Void Tenebris Horn"
+        ],
+        "playerHandCount": 4,
+        "botHandCount": 6
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 17,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 161
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "availableActions": [
+        {
+          "type": "normal_summon",
+          "cardId": 161,
+          "position": "a"
+        },
+        {
+          "type": "set",
+          "cardId": 161,
+          "position": "d"
+        }
+      ],
+      "dt": 4487,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Void Slayer Brute",
+            "atk": 2500,
+            "def": 2000,
+            "position": "attack"
+          },
+          {
+            "name": "Void Tenebris Horn",
+            "atk": 1700,
+            "def": 1000,
+            "position": "attack"
+          }
+        ],
+        "botField": [
+          {
+            "name": "Luminarch Valiant - Knight of the Dawn",
+            "atk": 1600,
+            "def": 1200,
+            "position": "attack",
+            "isFacedown": false
+          },
+          {
+            "name": "Luminarch Aegisbearer",
+            "atk": 1000,
+            "def": 2000,
+            "position": "defense",
+            "isFacedown": true
+          }
+        ],
+        "botHandCount": 5,
+        "botGraveyard": [
+          "Luminarch Holy Shield",
+          "Luminarch Crescent Shield",
+          "Luminarch Sanctified Arbiter",
+          "Luminarch Valiant - Knight of the Dawn",
+          "Luminarch Enchanted Halberd",
+          "Luminarch Radiant Lancer",
+          "Luminarch Holy Ascension",
+          "Luminarch Sanctified Arbiter",
+          "Luminarch Magic Sickle",
+          "Luminarch Sanctum Protector",
+          "Luminarch Moonlit Blessing"
+        ],
+        "botGraveCount": 11,
+        "turn": 17
+      }
+    },
+    {
+      "type": "target_selection",
+      "turn": 17,
+      "phase": "main1",
+      "actor": "human",
+      "sourceCard": {
+        "c": 168
+      },
+      "effectId": "void_gravitational_pull_bounce",
+      "selectedTargets": [
+        {
+          "c": 161,
+          "name": "Void Tenebris Horn"
+        }
+      ],
+      "selectedCount": 1,
+      "availableActions": [
+        {
+          "type": "select_target",
+          "targetId": 162
+        },
+        {
+          "type": "select_target",
+          "targetId": 161
+        },
+        {
+          "type": "cancel"
+        }
+      ],
+      "dt": 5983
+    },
+    {
+      "type": "attack",
+      "turn": 17,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 162,
+        "atk": 2500
+      },
+      "target": {
+        "c": 101,
+        "atk": 1600,
+        "def": 1200,
+        "pos": "a"
+      },
+      "dt": 0
+    },
+    {
+      "type": "pass",
+      "turn": 17,
+      "phase": "battle",
+      "actor": "human",
+      "dt": 605,
+      "delta": {
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "target_selection",
+      "turn": 17,
+      "phase": "battle",
+      "actor": "human",
+      "sourceCard": {},
+      "effectId": "attack",
+      "selectedTargets": [
+        {
+          "c": 101,
+          "name": "Luminarch Valiant - Knight of the Dawn"
+        }
+      ],
+      "selectedCount": 1,
+      "availableActions": [
+        {
+          "type": "select_target",
+          "targetId": 101
+        },
+        {
+          "type": "cancel"
+        }
+      ],
+      "dt": 1747
+    }
+  ],
+  "result": {
+    "winner": "human",
+    "reason": "lp_zero"
+  },
+  "totalTurns": 17,
+  "finalLP": {
+    "player": 3300,
+    "bot": 0
+  }
+}
