@@ -1,0 +1,1937 @@
+{
+  "version": 3,
+  "id": "duel_1768748678871_227",
+  "timestamp": "2026-01-18T15:04:38.871Z",
+  "playerDeck": {
+    "playerDeck": [
+      "Void Beast",
+      "Void Forgotten Knight",
+      "Void Lost Throne",
+      "Void Mirror Dimension",
+      "Void Conjurer",
+      "Void Hollow",
+      "Void Gravitational Pull",
+      "Void Conjurer",
+      "Void Tenebris Horn",
+      "Void Walker"
+    ],
+    "playerExtraDeck": [
+      "Void Hollow King",
+      "Void Berserker",
+      "Void Hydra Titan",
+      "Void Cosmic Walker"
+    ],
+    "botPreset": "shadowheart",
+    "timestamp": 1768748678870
+  },
+  "botDeck": "unknown",
+  "botDeckList": [
+    "Shadow-Heart Imp",
+    "Shadow-Heart Gecko",
+    "Shadow-Heart Infusion",
+    "Shadow-Heart Leviathan",
+    "Shadow-Heart Specter",
+    "Shadow-Heart Abyssal Eel",
+    "Shadow-Heart Griffin",
+    "Shadow-Heart Griffin",
+    "Polymerization",
+    "Shadow-Heart Scale Dragon",
+    "Shadow-Heart Imp",
+    "Darkness Valley",
+    "Shadow-Heart Demon Arctroth",
+    "Shadow-Heart Imp",
+    "Shadow-Heart Infusion",
+    "Shadow-Heart Void Mage",
+    "Shadow-Heart Covenant",
+    "Shadow-Heart Void Mage",
+    "Shadow-Heart Covenant",
+    "Shadow-Heart Rage",
+    "Shadow-Heart Coward",
+    "Shadow-Heart Abyssal Eel",
+    "Shadow-Heart Specter",
+    "Darkness Valley",
+    "Polymerization",
+    "Shadow-Heart Battle Hymn",
+    "Shadow-Heart Scale Dragon",
+    "Shadow-Heart Coward",
+    "Shadow-Heart Purge",
+    "Shadow-Heart Death Wyrm"
+  ],
+  "botArchetype": "shadowheart",
+  "cardDictionary": {
+    "13": "Polymerization",
+    "52": "Shadow-Heart Abyssal Eel",
+    "53": "Shadow-Heart Specter",
+    "54": "Shadow-Heart Purge",
+    "58": "Shadow-Heart Battle Hymn",
+    "62": "Shadow-Heart Coward",
+    "68": "Darkness Valley",
+    "69": "Shadow-Heart Death Wyrm",
+    "74": "Shadow-Heart Demon Dragon",
+    "151": "Void Conjurer",
+    "152": "Void Walker",
+    "154": "Void Hollow",
+    "155": "Void Haunter",
+    "158": "Void Bone Spider",
+    "160": "Void Raven",
+    "161": "Void Tenebris Horn",
+    "162": "Void Slayer Brute",
+    "166": "Sealing the Void",
+    "167": "The Void",
+    "168": "Void Gravitational Pull"
+  },
+  "snapshots": {
+    "1": {
+      "playerLP": 8000,
+      "botLP": 8000,
+      "playerField": [
+        {
+          "name": "Void Raven",
+          "atk": 300,
+          "def": 300,
+          "position": "attack"
+        }
+      ],
+      "botField": [],
+      "playerHand": [
+        "Void Haunter",
+        "Sealing the Void",
+        "Void Slayer Brute"
+      ],
+      "playerHandCount": 3,
+      "botHandCount": 4,
+      "playerGraveyard": [],
+      "playerGraveCount": 0,
+      "botGraveyard": [],
+      "botGraveCount": 0,
+      "playerSpellTrapCount": 0,
+      "botSpellTrapCount": 0,
+      "playerExtraDeckCount": 4,
+      "botExtraDeckCount": 3,
+      "playerFieldSpell": "The Void",
+      "botFieldSpell": null,
+      "turn": 1,
+      "phase": "main1"
+    },
+    "6": {
+      "playerLP": 8000,
+      "botLP": 6200,
+      "playerField": [
+        {
+          "name": "Void Walker",
+          "atk": 1800,
+          "def": 200,
+          "position": "attack"
+        },
+        {
+          "name": "Void Slayer Brute",
+          "atk": 2500,
+          "def": 2000,
+          "position": "attack"
+        }
+      ],
+      "botField": [],
+      "playerHand": [
+        "Sealing the Void"
+      ],
+      "playerHandCount": 1,
+      "botHandCount": 3,
+      "playerGraveyard": [
+        "Void Haunter",
+        "Void Hollow",
+        "Void Raven"
+      ],
+      "playerGraveCount": 3,
+      "botGraveyard": [
+        "Shadow-Heart Death Wyrm",
+        "Shadow-Heart Purge",
+        "Shadow-Heart Coward"
+      ],
+      "botGraveCount": 3,
+      "playerSpellTrapCount": 0,
+      "botSpellTrapCount": 0,
+      "playerExtraDeckCount": 4,
+      "botExtraDeckCount": 3,
+      "playerFieldSpell": "The Void",
+      "botFieldSpell": "Darkness Valley",
+      "turn": 6,
+      "phase": "main1"
+    },
+    "11": {
+      "playerLP": 1800,
+      "botLP": 500,
+      "playerHand": [
+        "Sealing the Void",
+        "The Void",
+        "Void Bone Spider"
+      ],
+      "playerHandCount": 3,
+      "playerHandDetails": [
+        {
+          "name": "Sealing the Void",
+          "cardKind": "spell",
+          "level": 0,
+          "atk": 0,
+          "def": 0
+        },
+        {
+          "name": "The Void",
+          "cardKind": "spell",
+          "level": 0,
+          "atk": 0,
+          "def": 0
+        },
+        {
+          "name": "Void Bone Spider",
+          "cardKind": "monster",
+          "level": 6,
+          "atk": 2200,
+          "def": 1400
+        }
+      ],
+      "playerField": [],
+      "botField": [
+        {
+          "name": "Shadow-Heart Demon Dragon",
+          "atk": 3300,
+          "def": 3000,
+          "position": "attack",
+          "isFacedown": false
+        },
+        {
+          "name": "Shadow-Heart Abyssal Eel",
+          "atk": 1900,
+          "def": 1700,
+          "position": "attack",
+          "isFacedown": false
+        }
+      ],
+      "playerBackrow": [
+        {
+          "name": "Void Gravitational Pull",
+          "isFacedown": false
+        }
+      ],
+      "botBackrowCount": 0,
+      "playerFieldSpell": "The Void",
+      "botFieldSpell": "Darkness Valley",
+      "botHandCount": 0,
+      "playerExtraDeckCount": 4,
+      "botExtraDeckCount": 2,
+      "playerGraveyard": [
+        "Void Haunter",
+        "Void Hollow",
+        "Void Raven",
+        "Void Slayer Brute",
+        "Void Walker"
+      ],
+      "playerGraveCount": 5,
+      "botGraveyard": [
+        "Shadow-Heart Purge",
+        "Shadow-Heart Coward",
+        "Shadow-Heart Specter",
+        "Shadow-Heart Scale Dragon",
+        "Shadow-Heart Death Wyrm",
+        "Polymerization",
+        "Shadow-Heart Battle Hymn"
+      ],
+      "botGraveCount": 7,
+      "turn": 11,
+      "phase": "main1",
+      "summonCount": 0
+    }
+  },
+  "decisions": [
+    {
+      "type": "summon",
+      "turn": 1,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 160
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "availableActions": [
+        {
+          "type": "normal_summon",
+          "cardId": 160,
+          "position": "a"
+        },
+        {
+          "type": "set",
+          "cardId": 160,
+          "position": "d"
+        }
+      ],
+      "t0": 1768748683926
+    },
+    {
+      "type": "target_selection",
+      "turn": 1,
+      "phase": "main1",
+      "actor": "human",
+      "sourceCard": {
+        "c": 155
+      },
+      "effectId": "void_haunter_special_summon_hand",
+      "selectedTargets": [
+        {
+          "c": 160,
+          "name": "Void Raven"
+        }
+      ],
+      "selectedCount": 1,
+      "availableActions": [
+        {
+          "type": "select_target",
+          "targetId": 160
+        },
+        {
+          "type": "cancel"
+        }
+      ],
+      "dt": 1871
+    },
+    {
+      "type": "summon",
+      "turn": 1,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 155
+      },
+      "summonType": "special",
+      "fromZone": "hand",
+      "dt": 1
+    },
+    {
+      "type": "effect",
+      "turn": 1,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 155
+      },
+      "effectId": "void_haunter_special_summon_hand",
+      "effectTiming": "ignition",
+      "activationZone": "hand",
+      "actions": [
+        "special_summon_from_hand_with_cost"
+      ],
+      "dt": 1
+    },
+    {
+      "type": "pass",
+      "turn": 1,
+      "phase": "end",
+      "actor": "human",
+      "dt": 1303
+    },
+    {
+      "type": "effect",
+      "turn": 2,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 54
+      },
+      "effectId": "shadow_heart_purge_destroy",
+      "effectTiming": "on_play",
+      "activationZone": "spellTrap",
+      "actions": [
+        "move",
+        "destroy"
+      ],
+      "availableActions": [
+        {
+          "type": "spell",
+          "cardId": 54
+        },
+        {
+          "type": "summon",
+          "cardId": 62,
+          "position": "d"
+        }
+      ],
+      "dt": 810,
+      "delta": {
+        "playerField": [],
+        "playerHand": [
+          "Sealing the Void",
+          "Void Slayer Brute"
+        ],
+        "playerHandCount": 2,
+        "botHandCount": 3,
+        "playerGraveyard": [
+          "Void Raven",
+          "Void Haunter"
+        ],
+        "playerGraveCount": 2,
+        "botGraveyard": [
+          "Shadow-Heart Death Wyrm"
+        ],
+        "botGraveCount": 1,
+        "turn": 2
+      }
+    },
+    {
+      "type": "position_choice",
+      "turn": 3,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 160,
+        "atk": 300,
+        "def": 300,
+        "pos": "a"
+      },
+      "chosenPosition": "d",
+      "summonType": "special",
+      "dt": 4280,
+      "delta": {
+        "playerHand": [
+          "Sealing the Void",
+          "Void Slayer Brute",
+          "Void Hollow"
+        ],
+        "playerHandCount": 3,
+        "playerHandDetails": [
+          {
+            "name": "Sealing the Void",
+            "cardKind": "spell",
+            "level": 0,
+            "atk": 0,
+            "def": 0
+          },
+          {
+            "name": "Void Slayer Brute",
+            "cardKind": "monster",
+            "level": 8,
+            "atk": 2500,
+            "def": 2000
+          },
+          {
+            "name": "Void Hollow",
+            "cardKind": "monster",
+            "level": 3,
+            "atk": 1300,
+            "def": 1200
+          }
+        ],
+        "botField": [
+          {
+            "name": "Shadow-Heart Coward",
+            "atk": 800,
+            "def": 1000,
+            "position": "defense",
+            "isFacedown": true
+          }
+        ],
+        "playerBackrow": [],
+        "botBackrowCount": 0,
+        "botHandCount": 2,
+        "botGraveyard": [
+          "Shadow-Heart Death Wyrm",
+          "Shadow-Heart Purge"
+        ],
+        "botGraveCount": 2,
+        "turn": 3,
+        "summonCount": 0
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 3,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 160
+      },
+      "summonType": "special",
+      "fromZone": "graveyard",
+      "dt": 0,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Void Raven",
+            "atk": 300,
+            "def": 300,
+            "position": "defense"
+          }
+        ],
+        "playerGraveyard": [
+          "Void Haunter"
+        ],
+        "playerGraveCount": 1,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 3,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 154
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "availableActions": [
+        {
+          "type": "normal_summon",
+          "cardId": 154,
+          "position": "a"
+        },
+        {
+          "type": "set",
+          "cardId": 154,
+          "position": "d"
+        }
+      ],
+      "dt": 1866,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Void Raven",
+            "atk": 300,
+            "def": 300,
+            "position": "defense"
+          },
+          {
+            "name": "Void Hollow",
+            "atk": 1300,
+            "def": 1200,
+            "position": "defense"
+          }
+        ],
+        "playerHand": [
+          "Sealing the Void",
+          "Void Slayer Brute"
+        ],
+        "playerHandCount": 2
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 3,
+      "phase": "end",
+      "actor": "human",
+      "dt": 904,
+      "delta": {
+        "phase": "end"
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 5,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 154
+      },
+      "summonType": "special",
+      "fromZone": "hand",
+      "availableActions": [
+        {
+          "type": "normal_summon",
+          "cardId": 152,
+          "position": "a"
+        },
+        {
+          "type": "set",
+          "cardId": 152,
+          "position": "d"
+        }
+      ],
+      "dt": 13164,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Void Raven",
+            "atk": 300,
+            "def": 300,
+            "position": "defense"
+          },
+          {
+            "name": "Void Hollow",
+            "atk": 1300,
+            "def": 1200,
+            "position": "attack"
+          }
+        ],
+        "playerHand": [
+          "Sealing the Void",
+          "Void Slayer Brute",
+          "Void Walker"
+        ],
+        "playerHandCount": 3,
+        "botHandCount": 3,
+        "turn": 5,
+        "phase": "main1"
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 5,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 152
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "availableActions": [
+        {
+          "type": "normal_summon",
+          "cardId": 152,
+          "position": "a"
+        },
+        {
+          "type": "set",
+          "cardId": 152,
+          "position": "d"
+        }
+      ],
+      "dt": 1025,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Void Raven",
+            "atk": 300,
+            "def": 300,
+            "position": "defense"
+          },
+          {
+            "name": "Void Hollow",
+            "atk": 1300,
+            "def": 1200,
+            "position": "attack"
+          },
+          {
+            "name": "Void Walker",
+            "atk": 1800,
+            "def": 200,
+            "position": "attack"
+          }
+        ],
+        "playerHand": [
+          "Sealing the Void",
+          "Void Slayer Brute"
+        ],
+        "playerHandCount": 2
+      }
+    },
+    {
+      "type": "target_selection",
+      "turn": 5,
+      "phase": "main1",
+      "actor": "human",
+      "sourceCard": {
+        "c": 162
+      },
+      "effectId": "void_slayer_brute_hand_summon",
+      "selectedTargets": [
+        {
+          "c": 154,
+          "name": "Void Hollow"
+        },
+        {
+          "c": 160,
+          "name": "Void Raven"
+        }
+      ],
+      "selectedCount": 2,
+      "availableActions": [
+        {
+          "type": "select_target",
+          "targetId": 160
+        },
+        {
+          "type": "select_target",
+          "targetId": 154
+        },
+        {
+          "type": "select_target",
+          "targetId": 152
+        },
+        {
+          "type": "cancel"
+        }
+      ],
+      "dt": 2569
+    },
+    {
+      "type": "summon",
+      "turn": 5,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 162
+      },
+      "summonType": "special",
+      "fromZone": "hand",
+      "dt": 2,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Void Walker",
+            "atk": 1800,
+            "def": 200,
+            "position": "attack"
+          },
+          {
+            "name": "Void Slayer Brute",
+            "atk": 2500,
+            "def": 2000,
+            "position": "attack"
+          }
+        ],
+        "playerHand": [
+          "Sealing the Void"
+        ],
+        "playerHandCount": 1,
+        "playerGraveyard": [
+          "Void Haunter",
+          "Void Hollow",
+          "Void Raven"
+        ],
+        "playerGraveCount": 3
+      }
+    },
+    {
+      "type": "effect",
+      "turn": 5,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 162
+      },
+      "effectId": "void_slayer_brute_hand_summon",
+      "effectTiming": "ignition",
+      "activationZone": "hand",
+      "actions": [
+        "special_summon_from_hand_with_cost"
+      ],
+      "dt": 0
+    },
+    {
+      "type": "pass",
+      "turn": 5,
+      "phase": "battle",
+      "actor": "human",
+      "dt": 1185,
+      "delta": {
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "target_selection",
+      "turn": 5,
+      "phase": "battle",
+      "actor": "human",
+      "sourceCard": {},
+      "effectId": "attack",
+      "selectedTargets": [
+        {
+          "c": 62,
+          "name": "Shadow-Heart Coward"
+        }
+      ],
+      "selectedCount": 1,
+      "availableActions": [
+        {
+          "type": "select_target",
+          "targetId": 62
+        },
+        {
+          "type": "cancel"
+        }
+      ],
+      "dt": 2962
+    },
+    {
+      "type": "attack",
+      "turn": 5,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 162,
+        "atk": 2500
+      },
+      "target": {
+        "c": 62,
+        "atk": 800,
+        "def": 1000,
+        "pos": "d",
+        "fd": true
+      },
+      "dt": 0
+    },
+    {
+      "type": "attack",
+      "turn": 5,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 162,
+        "atk": 2500
+      },
+      "target": {
+        "c": 62,
+        "atk": 800,
+        "def": 1000,
+        "pos": "d"
+      },
+      "dt": 606,
+      "delta": {
+        "botField": [],
+        "botGraveyard": [
+          "Shadow-Heart Death Wyrm",
+          "Shadow-Heart Purge",
+          "Shadow-Heart Coward"
+        ],
+        "botGraveCount": 3
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 5,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 152,
+        "atk": 1800
+      },
+      "target": null,
+      "directAttack": true,
+      "availableActions": [
+        {
+          "type": "select_target"
+        },
+        {
+          "type": "cancel"
+        }
+      ],
+      "dt": 47578
+    },
+    {
+      "type": "pass",
+      "turn": 5,
+      "phase": "end",
+      "actor": "human",
+      "dt": 606,
+      "delta": {
+        "botLP": 6200,
+        "phase": "end"
+      }
+    },
+    {
+      "type": "effect",
+      "turn": 6,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 68
+      },
+      "effectId": "darkness_valley_on_place",
+      "effectTiming": "on_play",
+      "activationZone": "fieldSpell",
+      "actions": [
+        "permanent_buff_named"
+      ],
+      "availableActions": [
+        {
+          "type": "spell",
+          "cardId": 68
+        }
+      ],
+      "dt": 809
+    },
+    {
+      "type": "pass",
+      "turn": 7,
+      "phase": "battle",
+      "actor": "human",
+      "availableActions": [
+        {
+          "type": "activate_spell",
+          "cardId": 168
+        },
+        {
+          "type": "set_spell",
+          "cardId": 168
+        }
+      ],
+      "dt": 8015,
+      "delta": {
+        "turn": 7,
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 7,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 162,
+        "atk": 2500
+      },
+      "target": null,
+      "directAttack": true,
+      "availableActions": [
+        {
+          "type": "select_target"
+        },
+        {
+          "type": "cancel"
+        }
+      ],
+      "dt": 471
+    },
+    {
+      "type": "attack",
+      "turn": 7,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 152,
+        "atk": 1800
+      },
+      "target": null,
+      "directAttack": true,
+      "availableActions": [
+        {
+          "type": "select_target"
+        },
+        {
+          "type": "cancel"
+        }
+      ],
+      "dt": 507,
+      "delta": {
+        "botLP": 3700
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 7,
+      "phase": "end",
+      "actor": "human",
+      "dt": 579,
+      "delta": {
+        "botLP": 1900,
+        "phase": "end"
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 8,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 53
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "availableActions": [
+        {
+          "type": "summon",
+          "cardId": 53,
+          "position": "a"
+        }
+      ],
+      "dt": 810,
+      "delta": {
+        "botField": [
+          {
+            "name": "Shadow-Heart Specter",
+            "atk": 800,
+            "def": 800,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "turn": 8,
+        "phase": "main1"
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 9,
+      "phase": "battle",
+      "actor": "human",
+      "dt": 7712,
+      "delta": {
+        "botField": [
+          {
+            "name": "Shadow-Heart Specter",
+            "atk": 1100,
+            "def": 800,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerHand": [
+          "Sealing the Void",
+          "The Void"
+        ],
+        "playerHandCount": 2,
+        "turn": 9,
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "target_selection",
+      "turn": 9,
+      "phase": "battle",
+      "actor": "human",
+      "sourceCard": {},
+      "effectId": "attack",
+      "selectedTargets": [
+        {
+          "c": 53,
+          "name": "Shadow-Heart Specter"
+        }
+      ],
+      "selectedCount": 1,
+      "availableActions": [
+        {
+          "type": "select_target",
+          "targetId": 53
+        },
+        {
+          "type": "cancel"
+        }
+      ],
+      "dt": 2015
+    },
+    {
+      "type": "attack",
+      "turn": 9,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 162,
+        "atk": 2500
+      },
+      "target": {
+        "c": 53,
+        "atk": 1100,
+        "def": 800,
+        "pos": "a"
+      },
+      "dt": 0
+    },
+    {
+      "type": "summon",
+      "turn": 9,
+      "phase": "battle",
+      "actor": "bot",
+      "card": {
+        "c": 69
+      },
+      "summonType": "special",
+      "fromZone": "hand",
+      "dt": 3,
+      "delta": {
+        "botLP": 500,
+        "botField": [
+          {
+            "name": "Shadow-Heart Death Wyrm",
+            "atk": 2400,
+            "def": 2000,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "botGraveyard": [
+          "Shadow-Heart Purge",
+          "Shadow-Heart Coward",
+          "Shadow-Heart Specter"
+        ]
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 9,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 162,
+        "atk": 2500
+      },
+      "target": {
+        "c": 53,
+        "atk": 800,
+        "def": 800,
+        "pos": "a"
+      },
+      "combatResult": {
+        "damageDealt": 1400,
+        "targetDestroyed": true
+      },
+      "dt": 2,
+      "delta": {
+        "botField": [
+          {
+            "name": "Shadow-Heart Death Wyrm",
+            "atk": 2700,
+            "def": 2000,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ]
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 9,
+      "phase": "end",
+      "actor": "human",
+      "dt": 3035,
+      "delta": {
+        "phase": "end"
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 10,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 74
+      },
+      "summonType": "fusion",
+      "fromZone": "extraDeck",
+      "availableActions": [
+        {
+          "type": "spell",
+          "cardId": 13
+        }
+      ],
+      "dt": 817,
+      "delta": {
+        "botField": [
+          {
+            "name": "Shadow-Heart Demon Dragon",
+            "atk": 3000,
+            "def": 3000,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "botHandCount": 2,
+        "botGraveyard": [
+          "Shadow-Heart Purge",
+          "Shadow-Heart Coward",
+          "Shadow-Heart Specter",
+          "Shadow-Heart Scale Dragon",
+          "Shadow-Heart Death Wyrm"
+        ],
+        "botGraveCount": 5,
+        "botExtraDeckCount": 2,
+        "turn": 10,
+        "phase": "main1"
+      }
+    },
+    {
+      "type": "effect",
+      "turn": 10,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 13
+      },
+      "effectId": "polymerization_fusion",
+      "effectTiming": "on_play",
+      "activationZone": "spellTrap",
+      "actions": [
+        "polymerization_fusion_summon"
+      ],
+      "dt": 1,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Void Walker",
+            "atk": 1800,
+            "def": 200,
+            "position": "attack"
+          }
+        ],
+        "playerGraveyard": [
+          "Void Haunter",
+          "Void Hollow",
+          "Void Raven",
+          "Void Slayer Brute"
+        ],
+        "playerGraveCount": 4
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 10,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 52
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "availableActions": [
+        {
+          "type": "summon",
+          "cardId": 52,
+          "position": "a"
+        }
+      ],
+      "dt": 401,
+      "delta": {
+        "playerField": [],
+        "botField": [
+          {
+            "name": "Shadow-Heart Demon Dragon",
+            "atk": 3300,
+            "def": 3000,
+            "position": "attack",
+            "isFacedown": false
+          },
+          {
+            "name": "Shadow-Heart Abyssal Eel",
+            "atk": 1600,
+            "def": 1700,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "botHandCount": 1,
+        "playerGraveyard": [
+          "Void Haunter",
+          "Void Hollow",
+          "Void Raven",
+          "Void Slayer Brute",
+          "Void Walker"
+        ],
+        "playerGraveCount": 5,
+        "botGraveyard": [
+          "Shadow-Heart Purge",
+          "Shadow-Heart Coward",
+          "Shadow-Heart Specter",
+          "Shadow-Heart Scale Dragon",
+          "Shadow-Heart Death Wyrm",
+          "Polymerization"
+        ],
+        "botGraveCount": 6
+      }
+    },
+    {
+      "type": "effect",
+      "turn": 10,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 58
+      },
+      "effectId": "shadow_heart_battle_hymn",
+      "effectTiming": "on_play",
+      "activationZone": "spellTrap",
+      "actions": [
+        "buff_atk_temp"
+      ],
+      "availableActions": [
+        {
+          "type": "spell",
+          "cardId": 58
+        }
+      ],
+      "dt": 418,
+      "delta": {
+        "botField": [
+          {
+            "name": "Shadow-Heart Demon Dragon",
+            "atk": 3800,
+            "def": 3000,
+            "position": "attack",
+            "isFacedown": false
+          },
+          {
+            "name": "Shadow-Heart Abyssal Eel",
+            "atk": 2400,
+            "def": 1700,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "botHandCount": 0
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 10,
+      "phase": "battle",
+      "actor": "bot",
+      "attacker": {
+        "c": 74,
+        "atk": 3800
+      },
+      "target": null,
+      "directAttack": true,
+      "availableActions": [
+        {
+          "type": "attack",
+          "cardId": 74
+        },
+        {
+          "type": "attack",
+          "cardId": 52
+        }
+      ],
+      "dt": 907,
+      "delta": {
+        "botGraveyard": [
+          "Shadow-Heart Purge",
+          "Shadow-Heart Coward",
+          "Shadow-Heart Specter",
+          "Shadow-Heart Scale Dragon",
+          "Shadow-Heart Death Wyrm",
+          "Polymerization",
+          "Shadow-Heart Battle Hymn"
+        ],
+        "botGraveCount": 7,
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 10,
+      "phase": "battle",
+      "actor": "bot",
+      "attacker": {
+        "c": 52,
+        "atk": 2400
+      },
+      "target": null,
+      "directAttack": true,
+      "availableActions": [
+        {
+          "type": "attack",
+          "cardId": 52
+        }
+      ],
+      "dt": 804,
+      "delta": {
+        "playerLP": 4200
+      }
+    },
+    {
+      "type": "position_choice",
+      "turn": 11,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 160,
+        "atk": 300,
+        "def": 300,
+        "pos": "d"
+      },
+      "chosenPosition": "d",
+      "summonType": "special",
+      "dt": 8926
+    },
+    {
+      "type": "summon",
+      "turn": 11,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 160
+      },
+      "summonType": "special",
+      "fromZone": "graveyard",
+      "dt": 0,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Void Raven",
+            "atk": 300,
+            "def": 300,
+            "position": "defense"
+          }
+        ],
+        "playerGraveyard": [
+          "Void Haunter",
+          "Void Hollow",
+          "Void Slayer Brute",
+          "Void Walker"
+        ],
+        "playerGraveCount": 4,
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0
+      }
+    },
+    {
+      "type": "target_selection",
+      "turn": 11,
+      "phase": "main1",
+      "actor": "human",
+      "sourceCard": {
+        "c": 168
+      },
+      "effectId": "void_gravitational_pull_bounce",
+      "selectedTargets": [
+        {
+          "c": 160,
+          "name": "Void Raven"
+        }
+      ],
+      "selectedCount": 1,
+      "availableActions": [
+        {
+          "type": "select_target",
+          "targetId": 160
+        },
+        {
+          "type": "cancel"
+        }
+      ],
+      "dt": 4062
+    },
+    {
+      "type": "effect",
+      "turn": 11,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 168
+      },
+      "effectId": "void_gravitational_pull_bounce",
+      "effectTiming": "ignition",
+      "activationZone": "spellTrap",
+      "actions": [
+        "move",
+        "move"
+      ],
+      "dt": 2,
+      "delta": {
+        "playerField": [],
+        "botField": [
+          {
+            "name": "Shadow-Heart Abyssal Eel",
+            "atk": 1900,
+            "def": 1700,
+            "position": "attack",
+            "isFacedown": false
+          }
+        ],
+        "playerHand": [
+          "Sealing the Void",
+          "The Void",
+          "Void Bone Spider",
+          "Void Raven"
+        ],
+        "playerHandCount": 4,
+        "botExtraDeckCount": 3
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 11,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 160
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "availableActions": [
+        {
+          "type": "normal_summon",
+          "cardId": 160,
+          "position": "a"
+        },
+        {
+          "type": "set",
+          "cardId": 160,
+          "position": "d"
+        }
+      ],
+      "dt": 14447,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Void Raven",
+            "atk": 300,
+            "def": 300,
+            "position": "attack"
+          }
+        ],
+        "playerHand": [
+          "Sealing the Void",
+          "The Void",
+          "Void Bone Spider"
+        ],
+        "playerHandCount": 3
+      }
+    },
+    {
+      "type": "target_selection",
+      "turn": 11,
+      "phase": "main1",
+      "actor": "human",
+      "sourceCard": {
+        "c": 166
+      },
+      "effectId": "sealing_the_void_effect",
+      "selectedTargets": [
+        {
+          "c": 160,
+          "name": "Void Raven"
+        }
+      ],
+      "selectedCount": 1,
+      "availableActions": [
+        {
+          "type": "select_target",
+          "targetId": 160
+        }
+      ],
+      "dt": 1818,
+      "delta": {
+        "playerHand": [
+          "The Void",
+          "Void Bone Spider"
+        ],
+        "playerHandCount": 2
+      }
+    },
+    {
+      "type": "effect",
+      "turn": 11,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 166
+      },
+      "effectId": "sealing_the_void_effect",
+      "effectTiming": "on_play",
+      "activationZone": "spellTrap",
+      "actions": [
+        "set_stats_to_zero_and_negate",
+        "grant_additional_normal_summon"
+      ],
+      "dt": 2,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Void Raven",
+            "atk": 0,
+            "def": 0,
+            "position": "attack"
+          }
+        ]
+      }
+    },
+    {
+      "type": "spell",
+      "turn": 11,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 166
+      },
+      "targets": [],
+      "dt": 0,
+      "delta": {
+        "playerGraveyard": [
+          "Void Haunter",
+          "Void Hollow",
+          "Void Slayer Brute",
+          "Void Walker",
+          "Sealing the Void"
+        ],
+        "playerGraveCount": 5
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 11,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 158
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "tributes": [
+        "Void Raven"
+      ],
+      "availableActions": [
+        {
+          "type": "normal_summon",
+          "cardId": 158,
+          "position": "a"
+        },
+        {
+          "type": "set",
+          "cardId": 158,
+          "position": "d"
+        }
+      ],
+      "dt": 1463,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Void Bone Spider",
+            "atk": 2200,
+            "def": 1400,
+            "position": "attack"
+          }
+        ],
+        "playerHand": [
+          "The Void"
+        ],
+        "playerHandCount": 1,
+        "playerGraveyard": [
+          "Void Haunter",
+          "Void Hollow",
+          "Void Slayer Brute",
+          "Void Walker",
+          "Sealing the Void",
+          "Void Raven"
+        ],
+        "playerGraveCount": 6
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 11,
+      "phase": "battle",
+      "actor": "human",
+      "dt": 510,
+      "delta": {
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "target_selection",
+      "turn": 11,
+      "phase": "battle",
+      "actor": "human",
+      "sourceCard": {},
+      "effectId": "attack",
+      "selectedTargets": [
+        {
+          "c": 52,
+          "name": "Shadow-Heart Abyssal Eel"
+        }
+      ],
+      "selectedCount": 1,
+      "availableActions": [
+        {
+          "type": "select_target",
+          "targetId": 52
+        },
+        {
+          "type": "cancel"
+        }
+      ],
+      "dt": 1479
+    },
+    {
+      "type": "attack",
+      "turn": 11,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 158,
+        "atk": 2200
+      },
+      "target": {
+        "c": 52,
+        "atk": 1900,
+        "def": 1700,
+        "pos": "a"
+      },
+      "dt": 1
+    },
+    {
+      "type": "attack",
+      "turn": 11,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 158,
+        "atk": 2200
+      },
+      "target": {
+        "c": 52,
+        "atk": 1600,
+        "def": 1700,
+        "pos": "a"
+      },
+      "combatResult": {
+        "damageDealt": 300,
+        "targetDestroyed": true
+      },
+      "dt": 2,
+      "delta": {
+        "botLP": 200,
+        "botField": [],
+        "botHandCount": 1,
+        "botGraveyard": [
+          "Shadow-Heart Coward",
+          "Shadow-Heart Specter",
+          "Shadow-Heart Scale Dragon",
+          "Shadow-Heart Death Wyrm",
+          "Polymerization",
+          "Shadow-Heart Battle Hymn",
+          "Shadow-Heart Abyssal Eel"
+        ]
+      }
+    },
+    {
+      "type": "pass",
+      "turn": 11,
+      "phase": "end",
+      "actor": "human",
+      "dt": 821,
+      "delta": {
+        "phase": "end"
+      }
+    },
+    {
+      "type": "effect",
+      "turn": 12,
+      "phase": "main1",
+      "actor": "bot",
+      "card": {
+        "c": 54
+      },
+      "effectId": "shadow_heart_purge_destroy",
+      "effectTiming": "on_play",
+      "activationZone": "spellTrap",
+      "actions": [
+        "move",
+        "destroy"
+      ],
+      "availableActions": [
+        {
+          "type": "spell",
+          "cardId": 54
+        },
+        {
+          "type": "summon",
+          "cardId": 62,
+          "position": "d"
+        }
+      ],
+      "dt": 815,
+      "delta": {
+        "playerField": [],
+        "botHandCount": 0,
+        "playerGraveyard": [
+          "Void Haunter",
+          "Void Hollow",
+          "Void Slayer Brute",
+          "Void Walker",
+          "Sealing the Void",
+          "Void Raven",
+          "Void Bone Spider"
+        ],
+        "playerGraveCount": 7,
+        "botGraveyard": [
+          "Shadow-Heart Coward",
+          "Shadow-Heart Specter",
+          "Shadow-Heart Scale Dragon",
+          "Shadow-Heart Death Wyrm",
+          "Polymerization",
+          "Shadow-Heart Battle Hymn",
+          "Shadow-Heart Abyssal Eel",
+          "Shadow-Heart Coward"
+        ],
+        "botGraveCount": 8,
+        "turn": 12,
+        "phase": "main1"
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 13,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 151
+      },
+      "summonType": "normal",
+      "fromZone": "hand",
+      "availableActions": [
+        {
+          "type": "normal_summon",
+          "cardId": 151,
+          "position": "a"
+        },
+        {
+          "type": "set",
+          "cardId": 151,
+          "position": "d"
+        }
+      ],
+      "dt": 3760,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Void Conjurer",
+            "atk": 1700,
+            "def": 800,
+            "position": "attack"
+          }
+        ],
+        "botGraveyard": [
+          "Shadow-Heart Coward",
+          "Shadow-Heart Specter",
+          "Shadow-Heart Scale Dragon",
+          "Shadow-Heart Death Wyrm",
+          "Polymerization",
+          "Shadow-Heart Battle Hymn",
+          "Shadow-Heart Abyssal Eel",
+          "Shadow-Heart Coward",
+          "Shadow-Heart Purge"
+        ],
+        "botGraveCount": 9,
+        "turn": 13
+      }
+    },
+    {
+      "type": "position_choice",
+      "turn": 13,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 161,
+        "atk": 1500,
+        "def": 800,
+        "pos": "a"
+      },
+      "chosenPosition": "a",
+      "summonType": "special",
+      "dt": 2983,
+      "delta": {
+        "playerHandDetails": [
+          {
+            "name": "The Void",
+            "cardKind": "spell",
+            "level": 0,
+            "atk": 0,
+            "def": 0
+          }
+        ],
+        "playerField": [
+          {
+            "name": "Void Conjurer",
+            "atk": 1700,
+            "def": 800,
+            "position": "attack",
+            "isFacedown": false,
+            "hasAttacked": false
+          }
+        ],
+        "playerBackrow": [
+          {
+            "name": "Void Gravitational Pull",
+            "isFacedown": false
+          }
+        ],
+        "botBackrowCount": 0,
+        "summonCount": 1
+      }
+    },
+    {
+      "type": "summon",
+      "turn": 13,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 161
+      },
+      "summonType": "special",
+      "fromZone": "deck",
+      "dt": 1,
+      "delta": {
+        "playerField": [
+          {
+            "name": "Void Conjurer",
+            "atk": 1700,
+            "def": 800,
+            "position": "attack"
+          },
+          {
+            "name": "Void Tenebris Horn",
+            "atk": 1700,
+            "def": 1000,
+            "position": "attack"
+          }
+        ],
+        "playerSpellTrapCount": 0,
+        "botSpellTrapCount": 0
+      }
+    },
+    {
+      "type": "effect",
+      "turn": 13,
+      "phase": "main1",
+      "actor": "human",
+      "card": {
+        "c": 151
+      },
+      "effectId": "void_conjurer_field_summon",
+      "effectTiming": "ignition",
+      "activationZone": "field",
+      "actions": [
+        "special_summon_from_zone"
+      ],
+      "dt": 1
+    },
+    {
+      "type": "pass",
+      "turn": 13,
+      "phase": "battle",
+      "actor": "human",
+      "dt": 362,
+      "delta": {
+        "phase": "battle"
+      }
+    },
+    {
+      "type": "attack",
+      "turn": 13,
+      "phase": "battle",
+      "actor": "human",
+      "attacker": {
+        "c": 151,
+        "atk": 1700
+      },
+      "target": null,
+      "directAttack": true,
+      "availableActions": [
+        {
+          "type": "select_target"
+        },
+        {
+          "type": "cancel"
+        }
+      ],
+      "dt": 622
+    }
+  ],
+  "result": {
+    "winner": "human",
+    "reason": "lp_zero"
+  },
+  "totalTurns": 13,
+  "finalLP": {
+    "player": 1800,
+    "bot": 0
+  }
+}
