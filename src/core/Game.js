@@ -887,10 +887,10 @@ export default class Game {
         `Send ${costCount} ${costDescription} to the GY to save ${card.name}?`;
 
       const wantsToReplace =
-        this.ui?.showConfirmPrompt?.(prompt, {
+        (await this.ui?.showConfirmPrompt?.(prompt, {
           kind: "destruction_replacement",
           cardName: card.name,
-        }) ?? false;
+        })) ?? false;
       if (!wantsToReplace) {
         return { replaced: false };
       }

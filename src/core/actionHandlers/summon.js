@@ -1282,10 +1282,10 @@ export async function handleDrawAndSummon(action, ctx, targets, engine) {
   // For human player
   if (optional) {
     const wantsToSummon =
-      getUI(game)?.showConfirmPrompt?.(
+      (await getUI(game)?.showConfirmPrompt?.(
         `You drew "${drawnCard.name}". Do you want to Special Summon it from your hand?`,
         { kind: "draw_and_summon", cardName: drawnCard.name },
-      ) ?? false;
+      )) ?? false;
 
     if (!wantsToSummon) {
       return false;
@@ -1487,10 +1487,10 @@ export async function handleConditionalSummonFromHand(
       : "Condition met.";
 
     const wantsToSummon =
-      getUI(game)?.showConfirmPrompt?.(
+      (await getUI(game)?.showConfirmPrompt?.(
         `${conditionText} Do you want to Special Summon "${handCard.name}" from your hand?`,
         { kind: "conditional_summon", cardName: handCard.name },
-      ) ?? false;
+      )) ?? false;
 
     if (!wantsToSummon) {
       return false;

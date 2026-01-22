@@ -1,3 +1,62 @@
+import { getCardDisplayName } from "../../i18n.js";
+
+function shouldPromptTriggeredEffect(effect, owner, ctx) {
+  if (!effect || effect.timing !== "on_event") return false;
+  if (!owner || owner.id !== "player") return false;
+  if (effect.promptUser === false) return false;
+  if (ctx?.activationContext?.skipPrompt === true) return false;
+  if (ctx?.activationContext?.preview === true) return false;
+  if (ctx?.activationContext?.isPreview === true) return false;
+  if (
+    effect.event === "attack_declared" &&
+    effect.promptOnAttackDeclared === false
+  ) {
+    return false;
+  }
+  if (effect.event === "effect_targeted" && effect.promptOnTargeted === false) {
+    return false;
+  }
+  return true;
+}
+
+async function confirmTriggeredEffect(effect, sourceCard, owner, ui, ctx) {
+  if (!shouldPromptTriggeredEffect(effect, owner, ctx)) return true;
+
+  let wantsToUse = true;
+  const promptName =
+    getCardDisplayName(sourceCard) || sourceCard?.name || "this card";
+
+  if (effect.customPromptMethod && ui?.[effect.customPromptMethod]) {
+    wantsToUse = await ui[effect.customPromptMethod]();
+  } else if (ui?.showConfirmPrompt) {
+    let promptMessage = effect.promptMessage;
+    if (!promptMessage) {
+      if (effect.event === "attack_declared") {
+        promptMessage =
+          sourceCard?.cardKind === "trap"
+            ? `Activate ${promptName} in response to the attack?`
+            : `Activate ${promptName}'s effect?`;
+      } else if (effect.event === "effect_targeted") {
+        promptMessage = `Activate ${promptName} in response to targeting?`;
+      } else {
+        promptMessage = `Activate ${promptName}'s effect?`;
+      }
+    }
+    const confirmResult = ui.showConfirmPrompt(promptMessage, {
+      kind: "triggered_effect",
+      cardName: promptName,
+      effectId: effect.id,
+      event: effect.event,
+    });
+    wantsToUse =
+      confirmResult && typeof confirmResult.then === "function"
+        ? await confirmResult
+        : !!confirmResult;
+  }
+
+  return !!wantsToUse;
+}
+
 /**
  * Trigger core handling - handleTriggeredEffect, buildTriggerActivationContext, buildTriggerEntry
  * Extracted from EffectEngine.js – preserving original logic and signatures.
@@ -167,12 +226,28 @@ export function buildTriggerEntry(options = {}) {
       player: owner,
       effect,
     },
-    activate: (selections, activationCtx) => {
+    activate: async (selections, activationCtx) => {
       const resolvedCtx = {
         ...baseCtx,
         activationZone: activationCtx.activationZone,
         activationContext: activationCtx,
       };
+      if (selections == null) {
+        const wantsToUse = await confirmTriggeredEffect(
+          effect,
+          sourceCard,
+          owner,
+          this.ui,
+          resolvedCtx
+        );
+        if (!wantsToUse) {
+          return {
+            success: false,
+            needsSelection: false,
+            reason: "Effect activation cancelled.",
+          };
+        }
+      }
       return activateImpl(selections, activationCtx, resolvedCtx);
     },
     onSuccess: (result, activationCtx) => {

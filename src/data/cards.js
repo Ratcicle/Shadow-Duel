@@ -1,4 +1,4 @@
-export const cardDatabase = [
+﻿export const cardDatabase = [
   {
     id: 1,
     name: "Nightmare Steed",
@@ -622,10 +622,10 @@ export const cardDatabase = [
             owner: "self",
             zone: "field",
             cardKind: "monster",
-            archetype: "Shadow-Heart", // <<< filtro de arquétipo
+            archetype: "Shadow-Heart", // <<< filtro de arquÃ©tipo
             requireFaceup: true,
             count: { min: 1, max: 5 },
-            autoSelect: true, // pega automaticamente todos os válidos
+            autoSelect: true, // pega automaticamente todos os vÃ¡lidos
           },
         ],
         actions: [
@@ -1491,7 +1491,7 @@ export const cardDatabase = [
     piercing: true,
     description:
       'If this card is Normal or Special Summoned: Add 1 Level 4 or lower "Luminarch" monster from your Deck to your hand. If this card battles a Defense Position monster, inflict piercing battle damage to your opponent.',
-    image: "assets/Luminarch Valiant – Knight of the Dawn.png",
+    image: "assets/Luminarch Valiant â€“ Knight of the Dawn.png",
     effects: [
       {
         id: "luminarch_valiant_search",
@@ -2162,7 +2162,7 @@ export const cardDatabase = [
     archetype: "Luminarch",
     image: "assets/Luminarch Enchanted Halberd.png",
     description:
-      'Uma vez por turno, se um monstro "Luminarch" for invocado por invocação especial no seu campo; você pode invocar essa carta por invocação especial da sua mão, mas ela não pode declarar um ataque neste turno.',
+      'Uma vez por turno, se um monstro "Luminarch" for invocado por invocaÃ§Ã£o especial no seu campo; vocÃª pode invocar essa carta por invocaÃ§Ã£o especial da sua mÃ£o, mas ela nÃ£o pode declarar um ataque neste turno.',
     effects: [
       {
         id: "luminarch_enchanted_halberd_conditional_summon",
@@ -2751,7 +2751,7 @@ export const cardDatabase = [
     id: 156,
     name: "Void Ghost Wolf",
     cardKind: "monster",
-    atk: 1400,
+    atk: 1800,
     def: 600,
     level: 3,
     type: "Beast",
@@ -3065,7 +3065,7 @@ export const cardDatabase = [
     type: "Winged Beast",
     archetype: "Void",
     description:
-      "Se um monstro de fusão 'Void' for Invocado por Invocação-Fusão: você pode descartar esta carta da mão; esse monstro fica imune aos efeitos de cartas do oponente até o final do próximo turno.",
+      "Se um monstro de fusÃ£o 'Void' for Invocado por InvocaÃ§Ã£o-FusÃ£o: vocÃª pode descartar esta carta da mÃ£o; esse monstro fica imune aos efeitos de cartas do oponente atÃ© o final do prÃ³ximo turno.",
     image: "assets/Void Raven.png",
     effects: [
       {
@@ -3075,7 +3075,7 @@ export const cardDatabase = [
         summonMethods: ["fusion"],
         promptUser: true,
         promptMessage:
-          "Descartar Void Raven para proteger o monstro 'Void' recém-invocado?",
+          "Descartar Void Raven para proteger o monstro 'Void' recÃ©m-invocado?",
         oncePerTurn: true,
         oncePerTurnName: "void_raven_fusion_immunity",
         condition: {
@@ -3120,7 +3120,7 @@ export const cardDatabase = [
     type: "Fiend",
     archetype: "Void",
     description:
-      "Ganha 100 ATK/DEF para cada monstro 'Void' no campo. Uma vez por duelo, se esta carta estiver no seu Cemit�rio, voc� pode Invoc�-la por Invoca��o-Especial.",
+      "Ganha 100 ATK/DEF para cada monstro 'Void' no campo. Uma vez por duelo, se esta carta estiver no seu Cemitï¿½rio, vocï¿½ pode Invocï¿½-la por Invocaï¿½ï¿½o-Especial.",
     image: "assets/Void Tenebris Horn.png",
     effects: [
       {
@@ -3170,8 +3170,8 @@ export const cardDatabase = [
     id: 162,
     name: "Void Slayer Brute",
     cardKind: "monster",
-    atk: 2500,
-    def: 2000,
+    atk: 2700,
+    def: 2200,
     level: 8,
     type: "Fiend",
     archetype: "Void",
@@ -3248,7 +3248,7 @@ export const cardDatabase = [
         oncePerTurnName: "void_berserker_bounce_on_destroy",
         promptUser: true,
         promptMessage:
-          "Ativar Void Berserker para devolver 1 carta do oponente para a mão?",
+          "Ativar Void Berserker para devolver 1 carta do oponente para a mÃ£o?",
         targets: [
           {
             id: "void_berserker_bounce_target",
@@ -4741,11 +4741,13 @@ export const cardDatabase = [
         conditions: [
           {
             type: "control_card_max",
-            cardName: "Grimório do Arcanista Aprendiz",
             zone: "spellTrap",
             max: 0,
             includeFacedown: true,
-            reason: 'You can only control 1 "Grimório do Arcanista Aprendiz".',
+            filters: { cardId: 201 },
+            excludeSource: true,
+            reason:
+              'You can only control 1 "Grimoire of the Apprentice Arcanist".',
           },
         ],
         targets: [
@@ -5260,21 +5262,15 @@ export const cardDatabase = [
       },
       {
         id: "master_mirrors_arcanist_revive",
-        timing: "ignition",
-        requireFaceup: true,
+        timing: "on_event",
+        event: "card_equipped",
         oncePerTurn: true,
         oncePerTurnName: "master_mirrors_arcanist_revive",
-        conditions: [
-          {
-            type: "equipped_with_filters",
-            min: 1,
-            filters: {
-              cardKind: "spell",
-              subtype: "equip",
-              archetype: "Arcanist",
-            },
-          },
-        ],
+        requireEquipCardFilters: {
+          cardKind: "spell",
+          subtype: "equip",
+          archetype: "Arcanist",
+        },
         targets: [
           {
             id: "master_mirrors_arcanist_revive_target",
@@ -5586,6 +5582,89 @@ export const cardDatabase = [
       },
     ],
   },
+  {
+    id: 213,
+    name: "Elementalist Master Arcanist",
+    cardKind: "monster",
+    atk: 2500,
+    def: 2400,
+    level: 9,
+    type: "Spellcaster",
+    archetype: "Arcanist",
+    description:
+      'Cannot be destroyed by card effects. This card gains 100 ATK for each "Arcanist" Spell activated this turn. Once per turn, if this card is equipped with an "Arcanist" Equip Spell: you can target 1 monster your opponent controls; destroy it.',
+    image: "assets/Elementalist Master Arcanist.png",
+    effects: [
+      {
+        id: "elementalist_master_protection",
+        timing: "on_event",
+        event: "after_summon",
+        requireSelfAsSummoned: true,
+        requireFaceup: true,
+        promptUser: false,
+        actions: [
+          {
+            type: "grant_protection",
+            targetRef: "self",
+            protectionType: "effect_destruction",
+            duration: "while_faceup",
+          },
+        ],
+      },
+      {
+        id: "elementalist_master_spell_buff",
+        timing: "on_event",
+        event: "spell_activated",
+        requireZone: "field",
+        requireFaceup: true,
+        promptUser: false,
+        activatedCardFilters: {
+          cardKind: "spell",
+          archetype: "Arcanist",
+        },
+        actions: [
+          {
+            type: "buff_stats_temp",
+            targetRef: "self",
+            atkBoost: 100,
+          },
+        ],
+      },
+      {
+        id: "elementalist_master_destroy",
+        timing: "ignition",
+        requireZone: "field",
+        oncePerTurn: true,
+        oncePerTurnName: "elementalist_master_destroy",
+        conditions: [
+          {
+            type: "equipped_with_filters",
+            filters: {
+              cardKind: "spell",
+              subtype: "equip",
+              archetype: "Arcanist",
+            },
+          },
+        ],
+        targets: [
+          {
+            id: "elementalist_destroy_target",
+            owner: "opponent",
+            zone: "field",
+            cardKind: "monster",
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "destroy",
+            targetRef: "elementalist_destroy_target",
+          },
+        ],
+      },
+    ],
+  },
 ];
 
 // Performance optimization: Create indexed maps for O(1) lookups
@@ -5595,3 +5674,4 @@ export const cardDatabaseById = new Map(
 export const cardDatabaseByName = new Map(
   cardDatabase.map((card) => [card.name, card]),
 );
+

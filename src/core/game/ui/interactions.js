@@ -23,7 +23,7 @@ export function bindCardInteractions() {
   // Player Hand Click
   // ─────────────────────────────────────────────────────────────────────────────
   if (this.ui && typeof this.ui.bindPlayerHandClick === "function") {
-    this.ui.bindPlayerHandClick((e, cardEl, index) => {
+    this.ui.bindPlayerHandClick(async (e, cardEl, index) => {
       if (this.targetSelection) return;
 
       if (tributeSelectionMode) return;
@@ -218,7 +218,8 @@ export function bindCardInteractions() {
                 } else {
                   summonedCard.setTurn = null;
                 }
-                // Aguarda o evento after_summon antes de atualizar o board
+                // Update before after_summon so confirm prompts show after the summon is visible.
+                this.updateBoard();
                 this.emit("after_summon", {
                   card: summonedCard,
                   player: this.player,
@@ -302,10 +303,10 @@ export function bindCardInteractions() {
           });
         } else {
           const shouldActivate =
-            this.ui?.showConfirmPrompt?.(
+            (await this.ui?.showConfirmPrompt?.(
               "OK: Activate this Spell. Cancel: Set it face-down in your Spell/Trap Zone.",
               { kind: "spell_choice", cardName: card.name }
-            ) ?? false;
+            )) ?? false;
           handleSpellChoice(shouldActivate ? "activate" : "set");
         }
         return;
@@ -389,7 +390,8 @@ export function bindCardInteractions() {
             summonedCard.setTurn = null;
           }
 
-          // Aguarda o evento after_summon antes de atualizar o board
+          // Update before after_summon so confirm prompts show after the summon is visible.
+          this.updateBoard();
           this.emit("after_summon", {
             card: summonedCard,
             player: this.player,

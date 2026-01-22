@@ -6,6 +6,8 @@
 
 import { getCardDisplayName } from "../../core/i18n.js";
 
+let activeConfirmPrompt = null;
+
 /**
  * @this {import('../Renderer.js').default}
  */
@@ -35,11 +37,118 @@ export function toggleExtraDeckModal(show) {
  */
 export function showConfirmPrompt(message, options = {}) {
   if (!message) return false;
-  const { confirmLabel, cancelLabel } = options;
-  if (confirmLabel || cancelLabel) {
-    // TODO: replace with styled modal if we need custom labels.
+  if (typeof document === "undefined" || !document.body) {
+    if (typeof window !== "undefined" && typeof window.confirm === "function") {
+      return window.confirm(message);
+    }
+    return false;
   }
-  return window.confirm(message);
+
+  if (activeConfirmPrompt && typeof activeConfirmPrompt.resolve === "function") {
+    activeConfirmPrompt.resolve(false);
+    if (typeof activeConfirmPrompt.cleanup === "function") {
+      activeConfirmPrompt.cleanup();
+    }
+  }
+
+  const confirmLabel = options.confirmLabel || "OK";
+  const cancelLabel = options.cancelLabel || "Cancel";
+  const title = options.title || "Confirm";
+  const detailText = String(message);
+
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "modal confirm-modal";
+
+    const content = document.createElement("div");
+    content.className = "modal-content confirm-modal-content";
+
+    const header = document.createElement("div");
+    header.className = "confirm-modal-header";
+
+    const titleEl = document.createElement("div");
+    titleEl.className = "confirm-modal-title";
+    titleEl.textContent = title;
+
+    const closeBtn = document.createElement("button");
+    closeBtn.type = "button";
+    closeBtn.className = "confirm-modal-close";
+    closeBtn.textContent = "x";
+
+    header.appendChild(titleEl);
+    header.appendChild(closeBtn);
+
+    const messageEl = document.createElement("div");
+    messageEl.className = "confirm-modal-message";
+    messageEl.textContent = detailText;
+
+    const actions = document.createElement("div");
+    actions.className = "confirm-modal-actions";
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.type = "button";
+    cancelBtn.className = "secondary";
+    cancelBtn.textContent = cancelLabel;
+
+    const confirmBtn = document.createElement("button");
+    confirmBtn.type = "button";
+    confirmBtn.className = "primary";
+    confirmBtn.textContent = confirmLabel;
+
+    actions.appendChild(confirmBtn);
+    actions.appendChild(cancelBtn);
+
+    content.appendChild(header);
+    content.appendChild(messageEl);
+    content.appendChild(actions);
+    overlay.appendChild(content);
+    document.body.appendChild(overlay);
+
+    let resolved = false;
+    const cleanup = () => {
+      if (overlay.parentNode) {
+        overlay.parentNode.removeChild(overlay);
+      }
+    };
+
+    const finish = (value) => {
+      if (resolved) return;
+      resolved = true;
+      document.removeEventListener("keydown", onKeyDown);
+      cleanup();
+      if (activeConfirmPrompt && activeConfirmPrompt.overlay === overlay) {
+        activeConfirmPrompt = null;
+      }
+      resolve(value);
+    };
+
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") {
+        finish(false);
+      }
+      if (event.key === "Enter") {
+        finish(true);
+      }
+    };
+
+    activeConfirmPrompt = {
+      overlay,
+      resolve: finish,
+      cleanup,
+    };
+
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) {
+        finish(false);
+      }
+    });
+
+    cancelBtn.addEventListener("click", () => finish(false));
+    confirmBtn.addEventListener("click", () => finish(true));
+    closeBtn.addEventListener("click", () => finish(false));
+    document.addEventListener("keydown", onKeyDown);
+    confirmBtn.focus();
+  });
 }
 
 /**

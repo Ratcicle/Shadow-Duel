@@ -208,6 +208,18 @@ export default class EffectEngine {
 
   cardMatchesFilters(card, filters = {}) {
     if (!card) return false;
+    const idFilter = filters.cardId ?? filters.id;
+    if (idFilter !== undefined && idFilter !== null && card.id !== idFilter) {
+      return false;
+    }
+    const idsFilter = filters.cardIds ?? filters.ids;
+    if (
+      Array.isArray(idsFilter) &&
+      idsFilter.length > 0 &&
+      !idsFilter.includes(card.id)
+    ) {
+      return false;
+    }
     const nameFilter = filters.name || filters.cardName;
     if (nameFilter && card.name !== nameFilter) return false;
     if (filters.cardKind) {
@@ -494,16 +506,56 @@ export default class EffectEngine {
           const owner = ownerKey === "opponent" ? opponent : player;
           const zoneName = cond.zone || "field";
           const requireFaceup = cond.requireFaceup !== false;
+          const source = ctx?.source || null;
+          const normalizedFilters = { ...(cond.filters || {}) };
+          if (
+            cond.cardName &&
+            !normalizedFilters.cardName &&
+            !normalizedFilters.name
+          ) {
+            normalizedFilters.cardName = cond.cardName;
+          }
+          if (
+            cond.cardId !== undefined &&
+            cond.cardId !== null &&
+            normalizedFilters.cardId === undefined &&
+            normalizedFilters.id === undefined
+          ) {
+            normalizedFilters.cardId = cond.cardId;
+          }
+          if (
+            Array.isArray(cond.cardIds) &&
+            cond.cardIds.length > 0 &&
+            !Array.isArray(normalizedFilters.cardIds) &&
+            !Array.isArray(normalizedFilters.ids)
+          ) {
+            normalizedFilters.cardIds = cond.cardIds;
+          }
+          if (cond.name && !normalizedFilters.name && !normalizedFilters.cardName) {
+            normalizedFilters.name = cond.name;
+          }
+          const hasFilters = Object.keys(normalizedFilters).length > 0;
+          if (!hasFilters) {
+            return {
+              ok: false,
+              reason: "Invalid condition configuration.",
+            };
+          }
           const zone = owner?.[zoneName] || [];
           const found = zone.some((card) => {
             if (!card) return false;
             if (requireFaceup && card.isFacedown) return false;
-            return card.name === cond.cardName;
+            if (cond.excludeSource === true && source && card === source) {
+              return false;
+            }
+            return this.cardMatchesFilters(card, normalizedFilters);
           });
           if (!found) {
             return {
               ok: false,
-              reason: cond.reason || `You must control "${cond.cardName}".`,
+              reason:
+                cond.reason ||
+                `You must control "${normalizedFilters.cardName || "this card"}".`,
             };
           }
           break;
@@ -514,6 +566,41 @@ export default class EffectEngine {
           const zoneName = cond.zone || "field";
           const includeFacedown = cond.includeFacedown !== false;
           const max = cond.max ?? 0;
+          const source = ctx?.source || null;
+          const normalizedFilters = { ...(cond.filters || {}) };
+          if (
+            cond.cardName &&
+            !normalizedFilters.cardName &&
+            !normalizedFilters.name
+          ) {
+            normalizedFilters.cardName = cond.cardName;
+          }
+          if (
+            cond.cardId !== undefined &&
+            cond.cardId !== null &&
+            normalizedFilters.cardId === undefined &&
+            normalizedFilters.id === undefined
+          ) {
+            normalizedFilters.cardId = cond.cardId;
+          }
+          if (
+            Array.isArray(cond.cardIds) &&
+            cond.cardIds.length > 0 &&
+            !Array.isArray(normalizedFilters.cardIds) &&
+            !Array.isArray(normalizedFilters.ids)
+          ) {
+            normalizedFilters.cardIds = cond.cardIds;
+          }
+          if (cond.name && !normalizedFilters.name && !normalizedFilters.cardName) {
+            normalizedFilters.name = cond.name;
+          }
+          const hasFilters = Object.keys(normalizedFilters).length > 0;
+          if (!hasFilters) {
+            return {
+              ok: false,
+              reason: "Invalid condition configuration.",
+            };
+          }
           const zone =
             zoneName === "fieldSpell"
               ? owner?.fieldSpell
@@ -523,14 +610,19 @@ export default class EffectEngine {
           const count = zone.filter((card) => {
             if (!card) return false;
             if (!includeFacedown && card.isFacedown) return false;
-            return card.name === cond.cardName;
+            if (cond.excludeSource === true && source && card === source) {
+              return false;
+            }
+            return this.cardMatchesFilters(card, normalizedFilters);
           }).length;
           if (count > max) {
             return {
               ok: false,
               reason:
                 cond.reason ||
-                `You can only control up to ${max} "${cond.cardName}".`,
+                `You can only control up to ${max} "${
+                  normalizedFilters.cardName || "this card"
+                }".`,
             };
           }
           break;

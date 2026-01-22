@@ -1,0 +1,109 @@
+i18n.js:152 [i18n] pt-br translations: 110/111 cards (1 missing, 0 extra).
+log.js:10 [DEV] MATERIAL_STATS_RESET: init
+log.js:10 [DEV] MATERIAL_STATS_RESET: start
+lifecycle.js:25 
+──────────────────── TURNO 1: Bot 1 ────────────────────
+log.js:10 [DEV] OPT_RESET: start_turn
+log.js:10 [DEV] EVENT_START: standby_phase (#1)
+log.js:10 [DEV] TRIGGERS_COLLECTED: standby_phase (0)
+log.js:10 [DEV] TRIGGERS_DONE: standby_phase (0)
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to player for Master of Mirrors Arcanist
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to player for Arcanist Crimson Explosion
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to player for Arcanist Grand Library
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to player for Viridis, Arcanist of Life
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to player for Arcanist Apprentice
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to player for Arcanist Ice Barrier
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to player for Tera, Arcanist of Earth
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to player for Tera, Arcanist of Earth
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to player for Arcanist Crimson Explosion
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to player for Arcanist Grand Library
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to player for Tera, Arcanist of Earth
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to player for Arcanist Lightning Lance
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to player for Grimoire of the Apprentice Arcanist
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to player for Viridis, Arcanist of Life
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to player for Arcanist Ink River
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to player for Meeting of the Arcanists
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to player for Arcanist Lightning Lance
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to player for Grimoire of the Apprentice Arcanist
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to player for Grimoire of the Apprentice Arcanist
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to player for Arcanist Apprentice
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to player for Meeting of the Arcanists
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to player for Viridis, Arcanist of Life
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to player for Arcanist Ice Barrier
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to player for Albus, Arcanist of Ice
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to player for Arcanist Ink River
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to player for Arcanist Apprentice
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to bot for Luminarch Holy Ascension
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to bot for Luminarch Holy Shield
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to bot for Luminarch Sacred Judgment
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to bot for Luminarch Sanctum Protector
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to bot for Luminarch Sanctified Arbiter
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to bot for Polymerization
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to bot for Luminarch Aegisbearer
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to bot for Luminarch Radiant Wave
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to bot for Luminarch Aurora Seraph
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to bot for Luminarch Spear of Dawnfall
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to bot for Luminarch Moonlit Blessing
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to bot for Luminarch Moonlit Blessing
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to bot for Luminarch Knights Convocation
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to bot for Luminarch Moonblade Captain
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to bot for Luminarch Valiant - Knight of the Dawn
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to bot for Luminarch Holy Shield
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to bot for Luminarch Valiant - Knight of the Dawn
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to bot for Luminarch Sanctum Protector
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to bot for Luminarch Celestial Marshal
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to bot for Luminarch Sanctified Arbiter
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to bot for Luminarch Crescent Shield
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to bot for Sanctum of the Luminarch Citadel
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to bot for Sanctum of the Luminarch Citadel
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to bot for Luminarch Magic Sickle
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to bot for Luminarch Aegisbearer
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to bot for Luminarch Aegisbearer
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to bot for Sanctum of the Luminarch Citadel
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to bot for Luminarch Radiant Lancer
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to bot for Luminarch Enchanted Halberd
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to bot for Luminarch Moonblade Captain
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to bot for Luminarch Megashield Barbarias
+log.js:10 [DEV] ZONE_CONTROLLER_CORRECTED: Controller corrected to bot for Luminarch Fortress Aegis
+log.js:10 [DEV] EVENT_END: standby_phase (#1)
+log.js:10 [DEV] BIND_INTERACTIONS: Binding card interaction handlers
+log.js:10 [DEV] EVENT_START: after_summon (#2)
+log.js:10 Summon Method: Normal | From: Hand | You -> Arcanist Apprentice
+log.js:10 [DEV] TRIGGERS_COLLECTED: after_summon (1)
+log.js:10 [DEV] PIPELINE_PREVIEW_OK: Arcanist Apprentice | triggered | field
+log.js:10 [DEV] ACTION_START: {"type":"search_any","source":"Arcanist Apprentice","player":"player"}
+log.js:10 [DEV] ZONE_OP_START: MOVE_CARD
+log.js:10 Added Grimoire of the Apprentice Arcanist to hand from deck.
+log.js:10 [DEV] EVENT_START: cards_added_to_hand (#3)
+log.js:10 [DEV] ZONE_OP_COMMIT: MOVE_CARD
+log.js:10 [DEV] TRIGGERS_COLLECTED: cards_added_to_hand (0)
+log.js:10 [DEV] TRIGGERS_DONE: cards_added_to_hand (0)
+log.js:10 [DEV] ACTION_HANDLER_DONE: {"type":"search_any","source":"Arcanist Apprentice","player":"player","handler":true,"result":true}
+log.js:10 [DEV] EVENT_END: cards_added_to_hand (#3)
+log.js:10 [DEV] MATERIAL_EFFECT_ACTIVATION: player:Arcanist Apprentice (202)
+log.js:10 [DEV] PIPELINE_FINALIZE: Arcanist Apprentice | triggered | field
+log.js:10 [DEV] TRIGGERS_DONE: after_summon (1)
+triggers.js:14 [checkAndOfferTraps] Called for event: after_summon {card: Card, player: Player, method: 'normal', fromZone: 'hand', tributes: Array(0), …}
+triggers.js:38 [checkAndOfferTraps] Proceeding to open chain window
+triggers.js:106 [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+log.js:10 [DEV] EVENT_END: after_summon (#2)
+log.js:10 [DEV] PIPELINE_PREVIEW_OK: Grimoire of the Apprentice Arcanist | spellTrapEffect | zone
+log.js:10 [DEV] ZONE_OP_START: MOVE_CARD
+log.js:10 [DEV] PIPELINE_COMMIT: Grimoire of the Apprentice Arcanist | spellTrapEffect | spellTrap
+log.js:10 [DEV] SPELL_TRAP_ACTIVATION_ATTEMPT: {"card":"Grimoire of the Apprentice Arcanist","player":"player","fromHand":true,"activationZone":"spellTrap"}
+log.js:10 [DEV] SPELL_TRAP_ACTIVATION_FAILED: {"card":"Grimoire of the Apprentice Arcanist","player":"player","reason":"You can only control 1 \"Grimoire of the Apprentice Arcanist\"."}
+log.js:10 [DEV] ZONE_OP_COMMIT: MOVE_CARD
+log.js:10 You can only control 1 "Grimoire of the Apprentice Arcanist".
+log.js:10 [DEV] ZONE_OP_START: MOVE_CARD
+log.js:10 [DEV] PIPELINE_ROLLBACK: Grimoire of the Apprentice Arcanist | spellTrapEffect | spellTrap
+log.js:10 [DEV] ZONE_OP_COMMIT: MOVE_CARD
+log.js:10 [DEV] PIPELINE_PREVIEW_OK: Grimoire of the Apprentice Arcanist | spellTrapEffect | zone
+log.js:10 [DEV] ZONE_OP_START: MOVE_CARD
+log.js:10 [DEV] PIPELINE_COMMIT: Grimoire of the Apprentice Arcanist | spellTrapEffect | spellTrap
+log.js:10 [DEV] SPELL_TRAP_ACTIVATION_ATTEMPT: {"card":"Grimoire of the Apprentice Arcanist","player":"player","fromHand":true,"activationZone":"spellTrap"}
+log.js:10 [DEV] SPELL_TRAP_ACTIVATION_FAILED: {"card":"Grimoire of the Apprentice Arcanist","player":"player","reason":"You can only control 1 \"Grimoire of the Apprentice Arcanist\"."}
+log.js:10 [DEV] ZONE_OP_COMMIT: MOVE_CARD
+log.js:10 You can only control 1 "Grimoire of the Apprentice Arcanist".
+log.js:10 [DEV] ZONE_OP_START: MOVE_CARD
+log.js:10 [DEV] PIPELINE_ROLLBACK: Grimoire of the Apprentice Arcanist | spellTrapEffect | spellTrap
+log.js:10 [DEV] ZONE_OP_COMMIT: MOVE_CARD

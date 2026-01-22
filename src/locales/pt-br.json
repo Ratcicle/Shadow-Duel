@@ -192,6 +192,10 @@
       "name": "Grande Biblioteca Arcanista",
       "description": "Uma vez por turno, se você não controlar monstros: você pode pagar 2000 PV; Invoque por Invocação-Especial 1 monstro \"Arcanista\" de Nível 4 ou menor do seu Deck. A primeira vez em cada turno que um monstro \"Arcanista\" que você controla destruir um monstro do oponente em batalha: compre 1 card."
     },
+    "213": {
+      "name": "Mestre Elementalista Arcanista",
+      "description": "Não pode ser destruído por efeitos de card. Este card ganha 100 de ATK para cada Magia \"Arcanista\" ativada neste turno. Uma vez por turno, se este card estiver equipado com uma Magia de Equipamento \"Arcanista\": você pode escolher 1 monstro que seu oponente controla; destrua-o."
+    },
     "109": {
       "name": "Aurora Serafim Luminarca",
       "description": "Se este card destruir um monstro do oponente em batalha: ganhe PV igual a metade do ATK do monstro destruído. Uma vez por turno, se esse card seria destruído por batalha ou efeitos de card: você pode enviar 1 monstro 'Luminarca' do seu cemitério para o cemitério; negue a destruição."

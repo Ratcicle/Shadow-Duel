@@ -3,7 +3,6 @@
  * Extracted from EffectEngine.js – preserving original logic and signatures.
  */
 
-import { getCardDisplayName } from "../../i18n.js";
 
 /**
  * Main dispatcher for event trigger collection.
@@ -48,7 +47,7 @@ export async function collectEventTriggers(eventName, payload) {
 export async function collectSpellActivatedTriggers(payload) {
   const entries = [];
   const orderRule =
-    "spell controller -> opponent; sources: fieldSpell -> spellTrap";
+    "spell controller -> opponent; sources: field -> fieldSpell -> spellTrap";
 
   if (!payload || !payload.card || !payload.player) {
     return { entries, orderRule };
@@ -76,6 +75,9 @@ export async function collectSpellActivatedTriggers(payload) {
     const sources = [];
     if (owner.fieldSpell) {
       sources.push(owner.fieldSpell);
+    }
+    if (Array.isArray(owner.field)) {
+      sources.push(...owner.field);
     }
     if (Array.isArray(owner.spellTrap)) {
       sources.push(...owner.spellTrap);
@@ -359,43 +361,6 @@ export async function collectAfterSummonTriggers(payload) {
           activationContext,
           selectionKind: "triggered",
           selectionMessage: "Select target(s) for the triggered effect.",
-          activate: async (selections, activationCtx, resolvedCtx) => {
-            if (
-              effect.promptUser === true &&
-              owner === this.game?.player &&
-              selections == null
-            ) {
-              const promptName =
-                getCardDisplayName(sourceCard) ||
-                sourceCard?.name ||
-                "this card";
-
-              if (
-                this.ui &&
-                typeof this.ui.showConditionalSummonPrompt === "function"
-              ) {
-                const shouldActivate =
-                  await this.ui.showConditionalSummonPrompt(
-                    promptName,
-                    effect.promptMessage || `Activate ${promptName}'s effect?`,
-                  );
-                if (!shouldActivate) {
-                  return {
-                    success: false,
-                    needsSelection: false,
-                    reason: "Effect activation cancelled.",
-                  };
-                }
-              }
-            }
-
-            return this.handleTriggeredEffect(
-              sourceCard,
-              effect,
-              resolvedCtx,
-              selections,
-            );
-          },
         });
 
         if (entry) {
@@ -826,42 +791,6 @@ export async function collectAttackDeclaredTriggers(payload) {
           }
         }
 
-        const shouldPrompt =
-          (card.cardType === "trap" || effect.speed === 2) &&
-          effect.promptOnAttackDeclared !== false;
-        if (player.id === "player" && shouldPrompt) {
-          let wantsToUse = true;
-
-          const customPromptMethod = effect.customPromptMethod;
-          if (customPromptMethod && this.ui?.[customPromptMethod]) {
-            wantsToUse = await this.ui[customPromptMethod]();
-          } else if (this.ui?.showConfirmPrompt) {
-            const promptMessage =
-              effect.promptMessage ||
-              (card.cardType === "trap"
-                ? `Activate ${card.name} in response to the attack?`
-                : `Use ${card.name}'s effect to negate the attack?`);
-            const confirmResult = this.ui.showConfirmPrompt(promptMessage, {
-              kind:
-                card.cardType === "trap"
-                  ? "trap_activation"
-                  : "attack_negation",
-              cardName: card.name,
-            });
-            wantsToUse =
-              confirmResult && typeof confirmResult.then === "function"
-                ? await confirmResult
-                : !!confirmResult;
-          } else {
-            wantsToUse = true;
-          }
-
-          if (!wantsToUse) {
-            console.log(`Player declined to activate ${card.name}`);
-            continue;
-          }
-        }
-
         const activationContext = this.buildTriggerActivationContext(
           card,
           player,
@@ -983,27 +912,6 @@ export async function collectEffectTargetedTriggers(payload) {
               requiredTypes,
             },
           );
-          continue;
-        }
-      }
-
-      // Prompt player to activate (traps only activate on confirmation)
-      if (targetOwner.id === "player" && card.cardType === "trap") {
-        let wantsToUse = true;
-
-        if (this.ui?.showConfirmPrompt) {
-          const confirmResult = this.ui.showConfirmPrompt(
-            `Activate ${card.name} in response to targeting?`,
-            { kind: "trap_activation", cardName: card.name },
-          );
-          wantsToUse =
-            confirmResult && typeof confirmResult.then === "function"
-              ? await confirmResult
-              : !!confirmResult;
-        }
-
-        if (!wantsToUse) {
-          console.log(`Player declined to activate ${card.name}`);
           continue;
         }
       }

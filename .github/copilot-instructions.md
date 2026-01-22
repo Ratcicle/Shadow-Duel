@@ -1,6 +1,6 @@
 ## Shadow Duel — Instruções para Agentes de IA
 
-**Regra de ouro:** Todo código deve ser genérico. Nunca hardcode nomes de cartas no engine/handlers.
+**Regra de ouro:** Todo código adicionado ou alterado deve seguir o padrão Shadow Duel: genérico, flexível e pensando nas adições futuras
 
 ---
 
