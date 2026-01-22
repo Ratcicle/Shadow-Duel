@@ -1491,7 +1491,7 @@
     piercing: true,
     description:
       'If this card is Normal or Special Summoned: Add 1 Level 4 or lower "Luminarch" monster from your Deck to your hand. If this card battles a Defense Position monster, inflict piercing battle damage to your opponent.',
-    image: "assets/Luminarch Valiant â€“ Knight of the Dawn.png",
+    image: "assets/Luminarch Valiant – Knight of the Dawn.png",
     effects: [
       {
         id: "luminarch_valiant_search",
@@ -5464,6 +5464,7 @@
         event: "spell_activated",
         requireZone: "spellTrap",
         requireFaceup: true,
+        promptUser: false,
         triggerPlayer: "self",
         activatedCardFilters: {
           cardKind: "spell",
@@ -5632,20 +5633,18 @@
       },
       {
         id: "elementalist_master_destroy",
-        timing: "ignition",
-        requireZone: "field",
+        timing: "on_event",
+        event: "card_equipped",
         oncePerTurn: true,
         oncePerTurnName: "elementalist_master_destroy",
-        conditions: [
-          {
-            type: "equipped_with_filters",
-            filters: {
-              cardKind: "spell",
-              subtype: "equip",
-              archetype: "Arcanist",
-            },
-          },
-        ],
+        requireEquipCardFilters: {
+          cardKind: "spell",
+          subtype: "equip",
+          archetype: "Arcanist",
+        },
+        promptUser: true,
+        promptMessage:
+          "Ativar Elementalist Master Arcanist para destruir 1 monstro do oponente?",
         targets: [
           {
             id: "elementalist_destroy_target",
@@ -5674,4 +5673,3 @@ export const cardDatabaseById = new Map(
 export const cardDatabaseByName = new Map(
   cardDatabase.map((card) => [card.name, card]),
 );
-

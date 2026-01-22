@@ -184,18 +184,6 @@
       "name": "Lanceiro Radiante Luminarca",
       "description": "Se esse card destruir um monstro do oponente em batalha: ele ganha 200 de ATK enquanto estiver com a face para cima no campo. Se esse card for destruído em batalha: escolha uma Magia/Armadilha que seu oponente controla; destrua-a."
     },
-    "211": {
-      "name": "Rio de Tinta Arcanista",
-      "description": "Cada vez que você ativar uma Magia \"Arcanista\": adicione 1 contador de Tinta a este card. Você pode remover 2 contadores de Tinta deste card; adicione 1 Magia \"Arcanista\" do seu Cemitério à sua mão."
-    },
-    "212": {
-      "name": "Grande Biblioteca Arcanista",
-      "description": "Uma vez por turno, se você não controlar monstros: você pode pagar 2000 PV; Invoque por Invocação-Especial 1 monstro \"Arcanista\" de Nível 4 ou menor do seu Deck. A primeira vez em cada turno que um monstro \"Arcanista\" que você controla destruir um monstro do oponente em batalha: compre 1 card."
-    },
-    "213": {
-      "name": "Mestre Elementalista Arcanista",
-      "description": "Não pode ser destruído por efeitos de card. Este card ganha 100 de ATK para cada Magia \"Arcanista\" ativada neste turno. Uma vez por turno, se este card estiver equipado com uma Magia de Equipamento \"Arcanista\": você pode escolher 1 monstro que seu oponente controla; destrua-o."
-    },
     "109": {
       "name": "Aurora Serafim Luminarca",
       "description": "Se este card destruir um monstro do oponente em batalha: ganhe PV igual a metade do ATK do monstro destruído. Uma vez por turno, se esse card seria destruído por batalha ou efeitos de card: você pode enviar 1 monstro 'Luminarca' do seu cemitério para o cemitério; negue a destruição."
@@ -438,11 +426,27 @@
     },
     "208": {
       "name": "Mestre dos Espelhos Arcanista",
-      "description": "Se este card for Invocado por Invoca\u00e7\u00e3o-Normal: voc\u00ea pode escolher de 1 a 3 Magias \"Arcanista\" no seu Cemit\u00e9rio; embaralhe-as no Deck e, depois, compre 1 card.\nSe este card estiver equipado com uma Magia de Equipamento \"Arcanista\": voc\u00ea pode escolher 1 monstro \"Arcanista\" de N\u00edvel 4 ou menor no seu Cemit\u00e9rio; Invoque-o por Invoca\u00e7\u00e3o-Especial.\nVoc\u00ea s\u00f3 pode ativar cada efeito de \"Mestre dos Espelhos Arcanista\" uma vez por turno."
+      "description": "Se este card for Invocado por Invoca\u00e7\u00e3o-Normal: voc\u00ea pode escolher de 1 a 3 Magias \"Arcanista\" no seu Cemit\u00e9rio; embaralhe-as no Deck e, depois, compre 1 card.\nSe este card for equipado com uma Magia de Equipamento \"Arcanista\": voc\u00ea pode escolher 1 monstro \"Arcanista\" de N\u00edvel 4 ou menor no seu Cemit\u00e9rio; Invoque-o por Invoca\u00e7\u00e3o-Especial.\nVoc\u00ea s\u00f3 pode ativar cada efeito de \"Mestre dos Espelhos Arcanista\" uma vez por turno."
     },
     "209": {
       "name": "Reunião dos Arcanistas",
       "description": "Uma vez por turno: voc\u00ea pode aplicar 1 destes efeitos;\n- Descarte 2 monstros \"Arcanista\"; adicione 1 Magia \"Arcanista\" do seu Deck \u00e0 sua m\u00e3o.\n- Descarte 2 Magias \"Arcanista\"; adicione 1 monstro \"Arcanista\" de N\u00edvel 4 ou menor do seu Deck \u00e0 sua m\u00e3o."
+    },
+    "210": {
+      "name": "Barreira de Gelo Arcanista",
+      "description": "Até o final do próximo turno, a primeira vez que um monstro \"Arcanista\" que você controla que estiver equipado com uma Magia de Equipamento \"Arcanista\" seria destruído por batalha ou efeito de card, ele não é destruído."
+    },
+    "211": {
+      "name": "Rio de Tinta Arcanista",
+      "description": "Cada vez que você ativar uma Magia \"Arcanista\": adicione 1 contador de Tinta a este card. Você pode remover 2 contadores de Tinta deste card; adicione 1 Magia \"Arcanista\" do seu Cemitério à sua mão."
+    },
+    "212": {
+      "name": "Grande Biblioteca Arcanista",
+      "description": "Uma vez por turno, se você não controlar monstros: você pode pagar 2000 PV; Invoque por Invocação-Especial 1 monstro \"Arcanista\" de Nível 4 ou menor do seu Deck. A primeira vez em cada turno que um monstro \"Arcanista\" que você controla destruir um monstro do oponente em batalha: compre 1 card."
+    },
+    "213": {
+      "name": "Mestre Elementalista Arcanista",
+      "description": "Não pode ser destruído por efeitos de card. Este card ganha 100 de ATK para cada Magia \"Arcanista\" ativada neste turno. Uma vez por turno, se este card estiver equipado com uma Magia de Equipamento \"Arcanista\": você pode escolher 1 monstro que seu oponente controla; destrua-o."
     }
   }
 }
