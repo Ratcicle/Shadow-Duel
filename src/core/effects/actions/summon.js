@@ -62,7 +62,10 @@ export async function applySpecialSummonToken(action, ctx) {
         resetAttackFlags: true,
       }
     );
-    if (moveResult?.success === false) {
+    if (
+      moveResult?.success === false &&
+      moveResult?.reason !== "card_not_found"
+    ) {
       return false;
     }
     moved = moveResult?.success === true;

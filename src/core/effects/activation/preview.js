@@ -105,6 +105,14 @@ export function canActivateSpellFromHandPreview(card, player, options = {}) {
     return { ok: false, reason: "You must control no monsters." };
   }
 
+  const actionCheck = this.checkActionPreviewRequirements(effect.actions || [], {
+    ...ctx,
+    effect,
+  });
+  if (!actionCheck.ok) {
+    return { ok: false, reason: actionCheck.reason };
+  }
+
   const targetResult = this.resolveTargets(effect.targets || [], ctx, null);
   if (targetResult.ok === false) {
     return { ok: false, reason: targetResult.reason };
@@ -191,6 +199,18 @@ export function canActivateMonsterEffectPreview(
   const optCheck = this.checkOncePerTurn(card, player, effect);
   if (!optCheck.ok) {
     return { ok: false, reason: optCheck.reason };
+  }
+
+  const opdCheck = this.checkOncePerDuel(card, player, effect);
+  if (!opdCheck.ok) {
+    return { ok: false, reason: opdCheck.reason };
+  }
+
+  if (effect.conditions) {
+    const condResult = this.evaluateConditions(effect.conditions, ctx);
+    if (!condResult.ok) {
+      return { ok: false, reason: condResult.reason };
+    }
   }
 
   const actionCheck = this.checkActionPreviewRequirements(

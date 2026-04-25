@@ -1,0 +1,15 @@
+{
+  "name": "shadow-duel",
+  "version": "1.0.0",
+  "description": "Um jogo de cartas digital inspirado na era clássica de Yu-Gi-Oh! Duela contra o bot, construa seu deck e reduza os Pontos de Vida do oponente a zero!",
+  "license": "ISC",
+  "author": "Ratccle",
+  "type": "module",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}

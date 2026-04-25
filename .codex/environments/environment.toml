@@ -4,3 +4,11 @@ name = "Shadow-Duel"
 
 [setup]
 script = ""
+<<<<<<< HEAD
+=======
+
+[[actions]]
+name = "Executar"
+icon = "run"
+command = "npx serve"
+>>>>>>> 4d73fa6be11cecb1852307199f40d2d16667f741
