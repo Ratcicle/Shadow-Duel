@@ -3,6 +3,10 @@ import {
   ActionHandlerRegistry,
   registerDefaultHandlers,
 } from "./ActionHandlers.js";
+import {
+  getActionCatalogEntry,
+  validateActionShape,
+} from "./actionHandlers/actionCatalog.js";
 
 const VALID_TIMINGS = new Set([
   "on_play",
@@ -266,6 +270,13 @@ export function validateCardDatabase() {
       }
 
       const effectActions = Array.isArray(effect.actions) ? effect.actions : [];
+      const targetIds = new Set(
+        Array.isArray(effect.targets)
+          ? effect.targets
+              .filter((target) => target && typeof target.id === "string")
+              .map((target) => target.id)
+          : [],
+      );
 
       effectActions.forEach((action, actionIndex) => {
         if (!action || typeof action !== "object") {
@@ -301,6 +312,27 @@ export function validateCardDatabase() {
               actionIndex,
             ),
           );
+          return;
+        }
+
+        if (!getActionCatalogEntry(action.type)) {
+          warnings.push(
+            formatIssue(
+              card,
+              `Action type "${action.type}" is registered but missing from ACTION_CATALOG.`,
+              effectIndex,
+              actionIndex,
+            ),
+          );
+          return;
+        }
+
+        const shapeResult = validateActionShape(action, { targetIds });
+        for (const message of shapeResult.errors) {
+          errors.push(formatIssue(card, message, effectIndex, actionIndex));
+        }
+        for (const message of shapeResult.warnings) {
+          warnings.push(formatIssue(card, message, effectIndex, actionIndex));
         }
       });
     });
