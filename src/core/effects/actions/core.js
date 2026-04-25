@@ -135,6 +135,13 @@ export function checkActionPreviewRequirements(actions, ctx) {
 
   for (const action of actions) {
     if (!action || !action.type) continue;
+    if (action.type === "special_summon_token") {
+      const targetPlayer = action.player === "opponent" ? ctx?.opponent : player;
+      if ((targetPlayer?.field || []).length >= 5) {
+        return { ok: false, reason: "Field is full." };
+      }
+    }
+
     if (action.type === "special_summon_from_hand_with_tiered_cost") {
       if ((player.field || []).length >= 5) {
         return { ok: false, reason: "Field is full." };

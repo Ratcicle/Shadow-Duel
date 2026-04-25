@@ -43,6 +43,27 @@ export function drawCards(player, count = 1, options = {}) {
       return { ok: false, reason: "deck_empty", drawn };
     }
     drawn.push(card);
+    if (
+      this.cardAnimationsReady &&
+      options.animateCards !== false &&
+      typeof this.queueCardAnimation === "function"
+    ) {
+      const source = this.ui?.captureCardAnimationSource?.(card, {
+        ownerId: player.id,
+        zone: "deck",
+      });
+      this.queueCardAnimation({
+        kind: "draw",
+        card,
+        fromOwnerId: player.id,
+        toOwnerId: player.id,
+        fromZone: "deck",
+        toZone: "hand",
+        fromRect: source?.rect || null,
+        fromHadCardElement: false,
+        fromVisual: source?.visual || null,
+      });
+    }
   }
 
   return { ok: true, drawn };

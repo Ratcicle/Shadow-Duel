@@ -1,5 +1,8 @@
+let nextCardInstanceId = 1;
+
 export default class Card {
   constructor(data, owner) {
+    this.instanceId = nextCardInstanceId++;
     this.id = data.id;
     this.name = data.name;
     this.cardKind = data.cardKind || "monster"; // monster | spell | trap

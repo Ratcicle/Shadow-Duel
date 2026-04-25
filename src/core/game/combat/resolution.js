@@ -56,6 +56,16 @@ export async function resolveCombat(attacker, target, options = {}) {
       : this.player;
   const targetOwner = defenderOwner;
 
+  if (attacker.instanceId != null && typeof this.ui?.playAttackLunge === "function") {
+    this.ui.playAttackLunge({
+      kind: "attack-lunge",
+      card: attacker,
+      cardKey: String(attacker.instanceId),
+      targetCardKey: target?.instanceId != null ? String(target.instanceId) : null,
+      targetOwnerId: defenderOwner?.id || null,
+    });
+  }
+
   await this.emit("attack_declared", {
     attacker,
     target: target || null,

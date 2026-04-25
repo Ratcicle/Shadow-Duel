@@ -1944,6 +1944,7 @@
         timing: "on_event",
         event: "attack_declared",
         requireOpponentAttack: true,
+        promptUser: false,
         actions: [
           {
             type: "heal",
@@ -2608,14 +2609,10 @@
         oncePerTurnName: "void_beast_normal_summon_search",
         actions: [
           {
-            type: "add_from_zone_to_hand",
-            zone: "deck",
-            filters: {
-              name: "Void Hollow",
-              cardKind: "monster",
-            },
-            count: { min: 0, max: 1 },
+            type: "search_any",
             player: "self",
+            cardName: "Void Hollow",
+            cardKind: "monster",
           },
         ],
       },

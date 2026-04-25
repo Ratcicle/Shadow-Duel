@@ -7,7 +7,28 @@
  * Updates the entire board display.
  * Refreshes all zones, LP, phase track, and indicators.
  */
-export function updateBoard() {
+export function updateBoard(options = {}) {
+  const shouldAnimateCards = options.animateCards !== false;
+  const shouldAnimateGhosts =
+    shouldAnimateCards && options.animateGhosts !== false;
+  const canPlayGhosts =
+    shouldAnimateGhosts &&
+    this.cardAnimationsReady &&
+    typeof this.ui.playQueuedCardAnimations === "function";
+  const queuedGhostAnimations =
+    canPlayGhosts && Array.isArray(this.pendingCardAnimations)
+      ? this.pendingCardAnimations.splice(0)
+      : [];
+
+  if (!canPlayGhosts && Array.isArray(this.pendingCardAnimations)) {
+    this.pendingCardAnimations.length = 0;
+  }
+
+  const previousCardRects =
+    shouldAnimateCards && typeof this.ui.captureCardRects === "function"
+      ? this.ui.captureCardRects()
+      : null;
+
   const renderNow = () => {
     // Defensive cleanup: drop undefined slots to avoid renderer crashes
     const cleanPlayerZones = (p) => {
@@ -69,6 +90,20 @@ export function updateBoard() {
   };
 
   renderNow();
+
+  if (
+    shouldAnimateCards &&
+    previousCardRects &&
+    typeof this.ui.animateCardLayout === "function"
+  ) {
+    this.ui.animateCardLayout(previousCardRects);
+  }
+
+  if (queuedGhostAnimations.length > 0) {
+    this.ui.playQueuedCardAnimations(queuedGhostAnimations, options);
+  }
+
+  this.cardAnimationsReady = true;
 }
 
 /**

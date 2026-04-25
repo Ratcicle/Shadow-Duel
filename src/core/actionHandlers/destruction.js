@@ -13,6 +13,46 @@ import {
   selectCards,
 } from "./shared.js";
 
+function findCardZoneInOwner(owner, card) {
+  if (!owner || !card) return null;
+  if (owner.fieldSpell === card) return "fieldSpell";
+  const zones = [
+    "hand",
+    "field",
+    "graveyard",
+    "deck",
+    "spellTrap",
+    "extraDeck",
+    "banished",
+  ];
+  return zones.find((zone) => Array.isArray(owner[zone]) && owner[zone].includes(card)) || null;
+}
+
+function queueBanishAnimation(game, owner, card, fromZone = null) {
+  if (!game?.cardAnimationsReady || typeof game.queueCardAnimation !== "function") {
+    return;
+  }
+  if (!owner || !card || card.instanceId == null) return;
+
+  const resolvedFromZone = fromZone || findCardZoneInOwner(owner, card);
+  const source = game.ui?.captureCardAnimationSource?.(card, {
+    ownerId: owner.id,
+    zone: resolvedFromZone,
+  });
+
+  game.queueCardAnimation({
+    kind: "banish",
+    card,
+    fromOwnerId: owner.id,
+    toOwnerId: owner.id,
+    fromZone: resolvedFromZone,
+    toZone: "banished",
+    fromRect: source?.rect || null,
+    fromHadCardElement: source?.hadCardElement === true,
+    fromVisual: source?.visual || null,
+  });
+}
+
 function resolveDamagePlayerKey(entry, card, player, opponent) {
   const damagePlayer = entry?.damagePlayer || entry?.player || "opponent";
   if (damagePlayer === "self" || damagePlayer === "opponent") {
@@ -411,6 +451,9 @@ export async function handleBanish(action, ctx, targets, engine) {
       continue;
     }
 
+    const fromZone = action.fromZone || findCardZoneInOwner(resolvedOwner, tgt);
+    queueBanishAnimation(game, resolvedOwner, tgt, fromZone);
+
     removeCardFromOwnerZones(resolvedOwner, tgt);
 
     resolvedOwner.banished = resolvedOwner.banished || [];
@@ -544,6 +587,8 @@ export async function handleBanishCardFromGraveyard(
     const idx = player.graveyard.indexOf(card);
 
     if (idx !== -1) {
+      queueBanishAnimation(game, player, card, "graveyard");
+
       player.graveyard.splice(idx, 1);
 
       player.banished = player.banished || [];

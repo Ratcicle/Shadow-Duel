@@ -8,6 +8,30 @@
 import { isAI } from "../Player.js";
 import { getUI, resolveTargetCards, STATUS_DISPLAY_NAMES } from "./shared.js";
 
+function queueBanishAnimation(game, owner, card, fromZone = null) {
+  if (!game?.cardAnimationsReady || typeof game.queueCardAnimation !== "function") {
+    return;
+  }
+  if (!owner || !card || card.instanceId == null) return;
+
+  const source = game.ui?.captureCardAnimationSource?.(card, {
+    ownerId: owner.id,
+    zone: fromZone,
+  });
+
+  game.queueCardAnimation({
+    kind: "banish",
+    card,
+    fromOwnerId: owner.id,
+    toOwnerId: owner.id,
+    fromZone,
+    toZone: "banished",
+    fromRect: source?.rect || null,
+    fromHadCardElement: source?.hadCardElement === true,
+    fromVisual: source?.visual || null,
+  });
+}
+
 /**
  * Generic handler for setting stats to zero and negating effects
  * Implements the "Sealing the Void" effect pattern
@@ -656,6 +680,8 @@ export async function handleBanishAndBuff(action, ctx, targets, engine) {
       typeof engine.findCardZone === "function"
         ? engine.findCardZone(player, banishCard)
         : "graveyard";
+
+    queueBanishAnimation(game, player, banishCard, fromZone);
 
     if (fromZone && Array.isArray(player[fromZone])) {
       const idx = player[fromZone].indexOf(banishCard);

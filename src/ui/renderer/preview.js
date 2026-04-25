@@ -109,6 +109,9 @@ export function createCardElement(card, visible) {
 
   const el = document.createElement("div");
   el.className = "card";
+  if (card.instanceId != null) {
+    el.dataset.cardKey = String(card.instanceId);
+  }
   this.bindPreviewForElement(el, card, visible);
   if (card.cardKind === "spell") {
     el.classList.add("card-spell");

@@ -67,6 +67,7 @@ import * as spellTrapTriggers from "./game/spellTrap/triggers.js";
 
 // UI modules (moved from inline methods)
 import * as uiBoard from "./game/ui/board.js";
+import * as uiCardAnimations from "./game/ui/cardAnimations.js";
 import * as uiIndicators from "./game/ui/indicators.js";
 import * as uiModals from "./game/ui/modals.js";
 import * as uiPrompts from "./game/ui/prompts.js";
@@ -145,6 +146,8 @@ export default class Game {
     this.zoneOpDepth = 0;
     this.zoneOpSnapshot = null;
     this.devFailAfterZoneMutation = false;
+    this.pendingCardAnimations = [];
+    this.cardAnimationsReady = false;
     this.oncePerTurnUsage = {
       player: new Map(),
       bot: new Map(),
@@ -2281,6 +2284,7 @@ Game.prototype.activateTrapFromZone = spellTrapTriggers.activateTrapFromZone;
 Game.prototype.updateBoard = uiBoard.updateBoard;
 Game.prototype.highlightReadySpecialSummon =
   uiBoard.highlightReadySpecialSummon;
+Game.prototype.queueCardAnimation = uiCardAnimations.queueCardAnimation;
 
 // Indicators: updateActivationIndicators, buildActivationIndicatorsForPlayer
 Game.prototype.updateActivationIndicators =

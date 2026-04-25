@@ -116,6 +116,38 @@ export function moveCard(card, destPlayer, toZone, options = {}) {
   );
 }
 
+function buildZoneMoveAnimationIntent(game, card, fromOwner, fromZone, destPlayer, toZone, options) {
+  if (!game?.cardAnimationsReady) return null;
+  if (!card || card.instanceId == null || !fromOwner || !destPlayer) return null;
+  if (options?.animateCards === false || options?.skipAnimation === true) return null;
+  if (fromZone === toZone) return null;
+
+  const source = game.ui?.captureCardAnimationSource?.(card, {
+    ownerId: fromOwner.id,
+    zone: fromZone,
+  });
+
+  return {
+    kind: "zone-move",
+    card,
+    fromOwnerId: fromOwner.id,
+    toOwnerId: destPlayer.id,
+    fromZone,
+    toZone,
+    fromRect: source?.rect || null,
+    fromHadCardElement: source?.hadCardElement === true,
+    fromVisual: source?.visual || null,
+  };
+}
+
+function queueZoneMoveAnimation(game, intent, toZoneOverride = null) {
+  if (!intent || typeof game?.queueCardAnimation !== "function") return;
+  game.queueCardAnimation({
+    ...intent,
+    toZone: toZoneOverride || intent.toZone,
+  });
+}
+
 /**
  * Internal implementation of card movement with all side effects.
  * @param {Object} card - The card to move
@@ -230,10 +262,27 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     return { success: false, reason: "card_not_found" };
   }
 
+  const animationToZone =
+    toZone === "hand" &&
+    (card.monsterType === "fusion" || card.monsterType === "ascension")
+      ? "extraDeck"
+      : toZone;
+  const cardAnimationIntent = buildZoneMoveAnimationIntent(
+    this,
+    card,
+    fromOwner,
+    fromZone,
+    destPlayer,
+    animationToZone,
+    options,
+  );
+
   // TOKEN RULE: Tokens cannot exist outside the field.
   // If a token is leaving the field to any other zone, remove it from the game entirely.
   // This handles: destruction, bounce to hand, banish, shuffle to deck, tribute, etc.
   if (card.isToken === true && fromZone === "field" && toZone !== "field") {
+    queueZoneMoveAnimation(this, cardAnimationIntent, toZone);
+
     // Clean up any references that might point to this token
     this.cleanupTokenReferences(card, fromOwner);
 
@@ -423,6 +472,7 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
       this.devFailAfterZoneMutation = false;
       throw new Error("DEV_ZONE_MUTATION_FAIL");
     }
+    queueZoneMoveAnimation(this, cardAnimationIntent, "fieldSpell");
     return { success: true, fromZone, toZone };
   }
 
@@ -606,6 +656,7 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
         this.devFailAfterZoneMutation = false;
         throw new Error("DEV_ZONE_MUTATION_FAIL");
       }
+      queueZoneMoveAnimation(this, cardAnimationIntent, "extraDeck");
       return { success: true, fromZone, toZone: "extraDeck" };
     }
   }
@@ -627,6 +678,8 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     this.devFailAfterZoneMutation = false;
     throw new Error("DEV_ZONE_MUTATION_FAIL");
   }
+
+  queueZoneMoveAnimation(this, cardAnimationIntent, toZone);
 
   if (
     toZone === "field" &&

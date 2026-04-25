@@ -56,6 +56,25 @@ body {
   min-width: 0; /* Allow flex children to shrink below content size */
 }
 
+.card-animation-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 250;
+}
+
+.card-animation-ghost {
+  pointer-events: none;
+  will-change: transform, opacity;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+}
+
+.card-animation-attack-ghost {
+  filter: brightness(1.16) saturate(1.12);
+  box-shadow: 0 0 18px rgba(255, 80, 80, 0.45), 0 10px 24px rgba(0, 0, 0, 0.45);
+}
+
 #bot-area,
 #player-area {
   align-self: stretch;
