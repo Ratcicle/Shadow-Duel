@@ -201,6 +201,18 @@ export function canActivateMonsterEffectPreview(
     return { ok: false, reason: optCheck.reason };
   }
 
+  const opdCheck = this.checkOncePerDuel(card, player, effect);
+  if (!opdCheck.ok) {
+    return { ok: false, reason: opdCheck.reason };
+  }
+
+  if (effect.conditions) {
+    const condResult = this.evaluateConditions(effect.conditions, ctx);
+    if (!condResult.ok) {
+      return { ok: false, reason: condResult.reason };
+    }
+  }
+
   const actionCheck = this.checkActionPreviewRequirements(
     effect.actions || [],
     { ...ctx, effect }
