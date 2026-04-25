@@ -105,6 +105,14 @@ export function canActivateSpellFromHandPreview(card, player, options = {}) {
     return { ok: false, reason: "You must control no monsters." };
   }
 
+  const actionCheck = this.checkActionPreviewRequirements(effect.actions || [], {
+    ...ctx,
+    effect,
+  });
+  if (!actionCheck.ok) {
+    return { ok: false, reason: actionCheck.reason };
+  }
+
   const targetResult = this.resolveTargets(effect.targets || [], ctx, null);
   if (targetResult.ok === false) {
     return { ok: false, reason: targetResult.reason };
