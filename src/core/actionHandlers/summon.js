@@ -513,6 +513,11 @@ async function summonCards(cards, sourceZoneEntries, player, action, engine) {
       continue; // Skip this card, continue with others
     }
 
+    if (card.cannotBeSpecialSummoned) {
+      getUI(game)?.log(`${card.name} cannot be Special Summoned.`);
+      continue;
+    }
+
     const resolvedFromZone =
       typeof action.fromZone === "string"
         ? action.fromZone

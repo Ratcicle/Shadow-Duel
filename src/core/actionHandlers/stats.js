@@ -32,6 +32,26 @@ function queueBanishAnimation(game, owner, card, fromZone = null) {
   });
 }
 
+function queueCardFeedback(game, kind, card, options = {}) {
+  if (typeof game?.queueVisualFeedback !== "function") return;
+  if (!card) return;
+
+  game.queueVisualFeedback({
+    kind,
+    sourceCard: options.sourceCard || null,
+    targetCard: card,
+    targetOwnerId: options.ownerId || card.owner || null,
+    targetZone: options.targetZone || "field",
+    tone: options.tone || "gold",
+  });
+}
+
+function isProtectiveStatus(status) {
+  return /protect|indestructible|immune|prevent|cannotBeDestroyed/i.test(
+    String(status || ""),
+  );
+}
+
 /**
  * Generic handler for setting stats to zero and negating effects
  * Implements the "Sealing the Void" effect pattern
@@ -114,6 +134,10 @@ export async function handleSetStatsToZeroAndNegate(
       modified = true;
 
       affectedCards.push(card.name);
+      queueCardFeedback(game, "negate", card, {
+        sourceCard: ctx.source,
+        tone: "violet",
+      });
     }
   }
 
@@ -248,6 +272,11 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
 
     if (cardBuffed) {
       buffedCards.push(card.name);
+      const weakensStats = atkBoost < 0 || defBoost < 0;
+      queueCardFeedback(game, weakensStats ? "debuff" : "buff", card, {
+        sourceCard: ctx.source,
+        tone: weakensStats ? "red" : "green",
+      });
 
       // Emit buff event for replay capture
       game.emit?.("stat_buff_applied", {
@@ -274,6 +303,12 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
       anySecondAttack = true;
 
       secondAttackCards.push(card.name);
+      if (!cardBuffed) {
+        queueCardFeedback(game, "buff", card, {
+          sourceCard: ctx.source,
+          tone: "green",
+        });
+      }
     }
   }
 
@@ -408,6 +443,10 @@ export async function handleGrantAttackAllMonsters(
     anyGranted = true;
 
     grantedCards.push(card.name);
+    queueCardFeedback(game, "buff", card, {
+      sourceCard: ctx.source,
+      tone: "green",
+    });
   }
 
   if (anyGranted && grantedCards.length > 0) {
@@ -504,6 +543,10 @@ export async function handleAddStatus(action, ctx, targets, engine) {
         modified = true;
 
         affectedCards.push(card.name);
+        queueCardFeedback(game, "debuff", card, {
+          sourceCard: ctx.source,
+          tone: "red",
+        });
       }
       if (
         card.tempStatuses &&
@@ -522,6 +565,17 @@ export async function handleAddStatus(action, ctx, targets, engine) {
       modified = true;
 
       affectedCards.push(card.name);
+      const disablesStatus = value === false || value === 0 || value === null;
+      const protective = isProtectiveStatus(status);
+      const feedbackKind = disablesStatus
+        ? "debuff"
+        : protective
+          ? "protect"
+          : "buff";
+      queueCardFeedback(game, feedbackKind, card, {
+        sourceCard: ctx.source,
+        tone: disablesStatus ? "red" : protective ? "blue" : "green",
+      });
     }
   }
 
@@ -599,6 +653,10 @@ export async function handleGrantProtection(action, ctx, targets, engine) {
     getUI(game)?.log(
       `${target.name} is now protected from destruction by card effects!`,
     );
+    queueCardFeedback(game, "protect", target, {
+      sourceCard: source,
+      tone: "blue",
+    });
   }
 
   game.updateBoard();
@@ -768,6 +826,10 @@ export async function handleBanishAndBuff(action, ctx, targets, engine) {
     getUI(game)?.log(
       `${recipient.name} gains ${totalBuffValue} ${statText}${durationText}!`,
     );
+    queueCardFeedback(game, "buff", recipient, {
+      sourceCard: source,
+      tone: "green",
+    });
   }
 
   game.updateBoard();
@@ -1082,6 +1144,11 @@ export async function handlePermanentBuffNamed(action, ctx, targets, engine) {
 
     if (cardBuffed) {
       anyBuffed = true;
+      const weakensStats = atkBoost < 0 || defBoost < 0;
+      queueCardFeedback(game, weakensStats ? "debuff" : "buff", card, {
+        sourceCard: source,
+        tone: weakensStats ? "red" : "green",
+      });
     }
   }
 
@@ -1187,6 +1254,10 @@ export async function handleRemovePermanentBuffNamed(
     delete card.permanentBuffsBySource[sourceName];
 
     anyRemoved = true;
+    queueCardFeedback(game, "debuff", card, {
+      sourceCard: source,
+      tone: "red",
+    });
   }
 
   if (anyRemoved) {

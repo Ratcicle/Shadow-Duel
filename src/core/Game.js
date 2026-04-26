@@ -133,6 +133,7 @@ export default class Game {
     this.lastSelectionSessionId = 0;
     this.eventListeners = {};
     this.phaseDelayMs = 400;
+    this.aiSuccessfulActionDelayMs = 1200;
     this.lastAttackNegated = false;
     this.pendingSpecialSummon = null; // Track pending special summon (e.g., Leviathan from Eel)
     this.isResolvingEffect = false; // Lock player actions while resolving an effect
@@ -147,6 +148,7 @@ export default class Game {
     this.zoneOpSnapshot = null;
     this.devFailAfterZoneMutation = false;
     this.pendingCardAnimations = [];
+    this.pendingVisualFeedback = [];
     this.cardAnimationsReady = false;
     this.oncePerTurnUsage = {
       player: new Map(),
@@ -1074,6 +1076,13 @@ export default class Game {
                 cause === "battle" ? "battle" : "card effects"
               }!`,
             );
+            this.queueVisualFeedback?.({
+              kind: "protect",
+              targetCard: card,
+              targetOwnerId: owner.id,
+              targetZone: fromZone,
+              tone: "blue",
+            });
             return { destroyed: false, reason: "protected", protectionType };
           }
         }
@@ -1088,6 +1097,13 @@ export default class Game {
               fromZone,
             });
           if (negationResult?.negated) {
+            this.queueVisualFeedback?.({
+              kind: "negate",
+              targetCard: card,
+              targetOwnerId: owner.id,
+              targetZone: fromZone,
+              tone: "blue",
+            });
             return { destroyed: false, negated: true };
           }
         }
@@ -1104,6 +1120,20 @@ export default class Game {
         if (replaced) {
           return { destroyed: false, replaced: true };
         }
+
+        const destroyVisualSource = this.ui?.captureCardAnimationSource?.(card, {
+          ownerId: owner.id,
+          zone: fromZone,
+        });
+        this.queueVisualFeedback?.({
+          kind: "destroy",
+          sourceCard,
+          targetCard: card,
+          targetOwnerId: owner.id,
+          targetZone: fromZone,
+          targetRect: destroyVisualSource?.rect || null,
+          tone: cause === "battle" ? "red" : "violet",
+        });
 
         const moveResult = await this.moveCard(card, owner, "graveyard", {
           fromZone: fromZone || undefined,
@@ -1256,6 +1286,13 @@ export default class Game {
         this.effectEngine.activateMonsterEffect(card, owner, chosen, zone, ctx),
       finalize: () => {
         this.ui.log(`${card.name} effect activated.`);
+        this.queueVisualFeedback?.({
+          kind: "effect-activation",
+          sourceCard: card,
+          ownerId: owner.id,
+          fromZone: activationZone,
+          tone: "violet",
+        });
         this.updateBoard();
       },
     });
@@ -2285,6 +2322,7 @@ Game.prototype.updateBoard = uiBoard.updateBoard;
 Game.prototype.highlightReadySpecialSummon =
   uiBoard.highlightReadySpecialSummon;
 Game.prototype.queueCardAnimation = uiCardAnimations.queueCardAnimation;
+Game.prototype.queueVisualFeedback = uiCardAnimations.queueVisualFeedback;
 
 // Indicators: updateActivationIndicators, buildActivationIndicatorsForPlayer
 Game.prototype.updateActivationIndicators =

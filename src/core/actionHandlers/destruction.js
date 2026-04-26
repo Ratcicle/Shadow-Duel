@@ -274,6 +274,16 @@ export async function handleRegisterReplacementEffect(
     } else {
       getUI(game)?.log(`${sourceName} is now protecting your cards.`);
     }
+    if (source && typeof game.queueVisualFeedback === "function") {
+      game.queueVisualFeedback({
+        kind: "protect",
+        sourceCard: source,
+        targetCard: source,
+        targetOwnerId: source.owner || player.id,
+        targetZone: "field",
+        tone: "blue",
+      });
+    }
   }
 
   return addedAny;

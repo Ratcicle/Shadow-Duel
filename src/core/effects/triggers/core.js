@@ -109,6 +109,19 @@ export async function handleTriggeredEffect(
     }
   }
 
+  const activationZone =
+    ctx?.activationContext?.activationZone ||
+    ctx?.activationContext?.sourceZone ||
+    (ctx?.player && this.findCardZone?.(ctx.player, sourceCard)) ||
+    null;
+  this.game?.queueVisualFeedback?.({
+    kind: "effect-activation",
+    sourceCard,
+    ownerId: ctx?.player?.id || sourceCard?.owner || null,
+    fromZone: activationZone,
+    tone: sourceCard?.cardKind === "monster" ? "violet" : "gold",
+  });
+
   const actionsResult = await this.applyActions(
     effect.actions || [],
     ctx,

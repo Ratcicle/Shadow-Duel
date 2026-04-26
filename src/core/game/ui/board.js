@@ -11,17 +11,30 @@ export function updateBoard(options = {}) {
   const shouldAnimateCards = options.animateCards !== false;
   const shouldAnimateGhosts =
     shouldAnimateCards && options.animateGhosts !== false;
+  const shouldAnimateFeedback =
+    shouldAnimateCards && options.animateFeedback !== false;
   const canPlayGhosts =
     shouldAnimateGhosts &&
     this.cardAnimationsReady &&
     typeof this.ui.playQueuedCardAnimations === "function";
+  const canPlayFeedback =
+    shouldAnimateFeedback &&
+    this.cardAnimationsReady &&
+    typeof this.ui.playVisualFeedback === "function";
   const queuedGhostAnimations =
     canPlayGhosts && Array.isArray(this.pendingCardAnimations)
       ? this.pendingCardAnimations.splice(0)
       : [];
+  const queuedVisualFeedback =
+    canPlayFeedback && Array.isArray(this.pendingVisualFeedback)
+      ? this.pendingVisualFeedback.splice(0)
+      : [];
 
   if (!canPlayGhosts && Array.isArray(this.pendingCardAnimations)) {
     this.pendingCardAnimations.length = 0;
+  }
+  if (!canPlayFeedback && Array.isArray(this.pendingVisualFeedback)) {
+    this.pendingVisualFeedback.length = 0;
   }
 
   const previousCardRects =
@@ -101,6 +114,10 @@ export function updateBoard(options = {}) {
 
   if (queuedGhostAnimations.length > 0) {
     this.ui.playQueuedCardAnimations(queuedGhostAnimations, options);
+  }
+
+  if (queuedVisualFeedback.length > 0) {
+    this.ui.playVisualFeedback(queuedVisualFeedback, options);
   }
 
   this.cardAnimationsReady = true;

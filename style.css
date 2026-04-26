@@ -75,6 +75,71 @@ body {
   box-shadow: 0 0 18px rgba(255, 80, 80, 0.45), 0 10px 24px rgba(0, 0, 0, 0.45);
 }
 
+.fx-ring,
+.fx-burst,
+.fx-player-flash {
+  position: fixed;
+  pointer-events: none;
+  z-index: 260;
+  will-change: transform, opacity;
+}
+
+.fx-ring,
+.fx-burst {
+  left: 0;
+  top: 0;
+  transform: translate(-50%, -50%);
+}
+
+.fx-ring {
+  border: 2px solid rgba(var(--fx-color), 0.82);
+  border-radius: 8px;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(var(--fx-color), 0.14) 0%,
+    rgba(var(--fx-color), 0.05) 42%,
+    rgba(var(--fx-color), 0) 70%
+  );
+  box-shadow:
+    0 0 16px rgba(var(--fx-color), 0.52),
+    inset 0 0 14px rgba(var(--fx-color), 0.18);
+}
+
+.fx-burst {
+  border-radius: 999px;
+  background: radial-gradient(
+    circle,
+    rgba(var(--fx-color), 0.95) 0%,
+    rgba(var(--fx-color), 0.46) 28%,
+    rgba(var(--fx-color), 0.16) 52%,
+    rgba(var(--fx-color), 0) 72%
+  );
+  filter: saturate(1.16);
+  mix-blend-mode: screen;
+}
+
+.fx-player-flash {
+  border-radius: 8px;
+  background: linear-gradient(
+    90deg,
+    rgba(var(--fx-color), 0),
+    rgba(var(--fx-color), 0.14),
+    rgba(var(--fx-color), 0)
+  );
+  box-shadow:
+    inset 0 0 28px rgba(var(--fx-color), 0.18),
+    0 0 18px rgba(var(--fx-color), 0.2);
+  transform-origin: center center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fx-ring,
+  .fx-burst,
+  .fx-player-flash {
+    animation: none;
+  }
+}
+
 #bot-area,
 #player-area {
   align-self: stretch;

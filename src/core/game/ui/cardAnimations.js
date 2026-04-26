@@ -19,3 +19,29 @@ export function queueCardAnimation(intent = {}) {
   return true;
 }
 
+export function queueVisualFeedback(intent = {}) {
+  if (!this.cardAnimationsReady) return false;
+  if (!intent || !intent.kind) return false;
+
+  if (!Array.isArray(this.pendingVisualFeedback)) {
+    this.pendingVisualFeedback = [];
+  }
+
+  const sourceCardKey =
+    intent.sourceCardKey ||
+    (intent.sourceCard?.instanceId != null
+      ? String(intent.sourceCard.instanceId)
+      : null);
+  const targetCardKey =
+    intent.targetCardKey ||
+    (intent.targetCard?.instanceId != null
+      ? String(intent.targetCard.instanceId)
+      : null);
+
+  this.pendingVisualFeedback.push({
+    ...intent,
+    sourceCardKey,
+    targetCardKey,
+  });
+  return true;
+}

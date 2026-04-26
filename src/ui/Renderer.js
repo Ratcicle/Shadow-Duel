@@ -12,6 +12,7 @@ import * as preview from "./renderer/preview.js";
 import * as log from "./renderer/log.js";
 import * as animations from "./renderer/animations.js";
 import * as cardAnimationManager from "./renderer/cardAnimationManager.js";
+import * as feedbackFx from "./renderer/feedbackFx.js";
 import * as bindings from "./renderer/bindings.js";
 import * as modals from "./renderer/modals.js";
 import * as summonModals from "./renderer/summonModals.js";
@@ -103,6 +104,7 @@ Renderer.prototype.playQueuedCardAnimations =
 Renderer.prototype.playAttackLunge = cardAnimationManager.playAttackLunge;
 Renderer.prototype.getCardZoneAnchorRect =
   cardAnimationManager.getCardZoneAnchorRect;
+Renderer.prototype.playVisualFeedback = feedbackFx.playVisualFeedback;
 Renderer.prototype.showLpChange = animations.showLpChange;
 
 // Attach binding methods

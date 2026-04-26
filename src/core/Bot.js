@@ -320,9 +320,14 @@ export default class Bot extends Player {
       const ascended = await this.tryAscensionIfAvailable(game);
       if (ascended) {
         // Allow subsequent actions after ascension
-        if (typeof game.waitForPhaseDelay === "function") {
-          await game.waitForPhaseDelay();
-        }
+        const successfulActionDelayMs = Number.isFinite(
+          game?.aiSuccessfulActionDelayMs,
+        )
+          ? game.aiSuccessfulActionDelayMs
+          : game?.phaseDelayMs || 0;
+        await new Promise((resolve) =>
+          setTimeout(resolve, successfulActionDelayMs),
+        );
       }
 
       const rawActions = this.generateMainPhaseActions(game);
@@ -525,9 +530,14 @@ export default class Bot extends Player {
       // Incrementar contador de ações bem-sucedidas
       successfulActions += 1;
 
-      if (typeof game.waitForPhaseDelay === "function") {
-        await game.waitForPhaseDelay();
-      }
+      const successfulActionDelayMs = Number.isFinite(
+        game?.aiSuccessfulActionDelayMs,
+      )
+        ? game.aiSuccessfulActionDelayMs
+        : game?.phaseDelayMs || 0;
+      await new Promise((resolve) =>
+        setTimeout(resolve, successfulActionDelayMs),
+      );
     }
 
     // Final chance to ascend if no actions left

@@ -150,6 +150,11 @@ export async function applyCallOfTheHauntedSummon(action, ctx, targets) {
     return false;
   }
 
+  if (targetMonster.cannotBeSpecialSummoned) {
+    game.ui.log(`${targetMonster.name} cannot be Special Summoned.`);
+    return false;
+  }
+
   // UNIFIED POSITION SEMANTICS: respect action.position
   // undefined/null → "choice" (default for Call of the Haunted)
   // "choice" → allow player/bot to choose

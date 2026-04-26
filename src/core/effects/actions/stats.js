@@ -4,6 +4,23 @@
  */
 
 /**
+ * Queues renderer-only stat feedback for legacy EffectEngine stat actions.
+ */
+function queueStatFeedback(engine, card, kind, tone, ctx) {
+  if (typeof engine?.game?.queueVisualFeedback !== "function") return;
+  if (!card) return;
+
+  engine.game.queueVisualFeedback({
+    kind,
+    sourceCard: ctx?.source || null,
+    targetCard: card,
+    targetOwnerId: card.owner || null,
+    targetZone: "field",
+    tone,
+  });
+}
+
+/**
  * Apply temporary ATK buff action
  * @param {Object} action - Action configuration
  * @param {Object} ctx - Context object
@@ -17,6 +34,15 @@ export function applyBuffAtkTemp(action, ctx, targets) {
     if (card.isFacedown) return;
     card.atk += amount;
     card.tempAtkBoost = (card.tempAtkBoost || 0) + amount;
+    if (amount !== 0) {
+      queueStatFeedback(
+        this,
+        card,
+        amount < 0 ? "debuff" : "buff",
+        amount < 0 ? "red" : "green",
+        ctx,
+      );
+    }
   });
   return targetCards.length > 0 && amount !== 0;
 }
@@ -35,17 +61,29 @@ export function applyModifyStatsTemp(action, ctx, targets) {
 
   targetCards.forEach((card) => {
     if (card.isFacedown) return;
+    let deltaTotal = 0;
     if (atkFactor !== 1) {
       const newAtk = Math.floor((card.atk || 0) * atkFactor);
       const deltaAtk = newAtk - card.atk;
       card.atk = newAtk;
       card.tempAtkBoost = (card.tempAtkBoost || 0) + deltaAtk;
+      deltaTotal += deltaAtk;
     }
     if (defFactor !== 1) {
       const newDef = Math.floor((card.def || 0) * defFactor);
       const deltaDef = newDef - card.def;
       card.def = newDef;
       card.tempDefBoost = (card.tempDefBoost || 0) + deltaDef;
+      deltaTotal += deltaDef;
+    }
+    if (deltaTotal !== 0) {
+      queueStatFeedback(
+        this,
+        card,
+        deltaTotal < 0 ? "debuff" : "buff",
+        deltaTotal < 0 ? "red" : "green",
+        ctx,
+      );
     }
   });
   return targetCards.length > 0 && (atkFactor !== 1 || defFactor !== 1);

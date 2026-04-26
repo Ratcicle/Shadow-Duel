@@ -7,8 +7,15 @@
 /**
  * Check if a monster has an activatable graveyard effect.
  */
-export function hasActivatableGraveyardEffect(card) {
+export function hasActivatableGraveyardEffect(card, player = null) {
   if (!card || card.cardKind !== "monster") return false;
+  if (player) {
+    return !!this.canActivateMonsterEffectPreview?.(
+      card,
+      player,
+      "graveyard"
+    )?.ok;
+  }
   return card.effects?.some(
     (e) => e.timing === "ignition" && e.requireZone === "graveyard"
   );
@@ -166,19 +173,22 @@ export function canActivateMonsterEffectPreview(
     if (!player.field || !player.field.includes(card)) {
       return { ok: false, reason: "Card is not on the field." };
     }
+  } else if (activationZone === "graveyard") {
+    if (!player.graveyard || !player.graveyard.includes(card)) {
+      return { ok: false, reason: "Card is not in your graveyard." };
+    }
   }
 
-  const effect =
-    activationZone === "hand"
-      ? (card.effects || []).find(
-          (e) => e && e.timing === "ignition" && e.requireZone === "hand"
-        )
-      : (card.effects || []).find(
-          (e) =>
-            e &&
-            e.timing === "ignition" &&
-            (!e.requireZone || e.requireZone === "field")
-        );
+  const effect = this.getMonsterIgnitionEffect
+    ? this.getMonsterIgnitionEffect(card, activationZone)
+    : (card.effects || []).find(
+        (e) =>
+          e &&
+          e.timing === "ignition" &&
+          (activationZone === "field"
+            ? !e.requireZone || e.requireZone === "field"
+            : e.requireZone === activationZone)
+      );
 
   if (!effect) {
     return { ok: false, reason: "No ignition effect defined for this zone." };
@@ -211,6 +221,10 @@ export function canActivateMonsterEffectPreview(
     if (!condResult.ok) {
       return { ok: false, reason: condResult.reason };
     }
+  }
+
+  if (effect.requireEmptyField && (player.field?.length || 0) > 0) {
+    return { ok: false, reason: "You must control no monsters." };
   }
 
   const actionCheck = this.checkActionPreviewRequirements(
@@ -364,6 +378,10 @@ export function canActivateSpellTrapEffectPreview(
     }
   }
 
+  if (effect.requireEmptyField && (player.field?.length || 0) > 0) {
+    return { ok: false, reason: "You must control no monsters." };
+  }
+
   const actionCheck = this.checkActionPreviewRequirements(
     effect.actions || [],
     { ...ctx, effect }
@@ -446,6 +464,10 @@ export function canActivateFieldSpellEffectPreview(
     if (!condResult.ok) {
       return { ok: false, reason: condResult.reason };
     }
+  }
+
+  if (effect.requireEmptyField && (player.field?.length || 0) > 0) {
+    return { ok: false, reason: "You must control no monsters." };
   }
 
   const actionCheck = this.checkActionPreviewRequirements(

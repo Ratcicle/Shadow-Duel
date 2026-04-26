@@ -408,6 +408,14 @@ export default class Player {
     if (actual > 0 && this.game?.ui?.showLpChange) {
       this.game.ui.showLpChange(this, -actual);
     }
+    if (actual > 0 && typeof this.game?.queueVisualFeedback === "function") {
+      this.game.queueVisualFeedback({
+        kind: "damage",
+        targetOwnerId: this.id,
+        amount: actual,
+        tone: "red",
+      });
+    }
   }
 
   gainLP(amount) {
@@ -418,6 +426,14 @@ export default class Player {
     this.lp += adjustedAmount;
     if (this.game?.ui?.showLpChange) {
       this.game.ui.showLpChange(this, adjustedAmount);
+    }
+    if (typeof this.game?.queueVisualFeedback === "function") {
+      this.game.queueVisualFeedback({
+        kind: "heal",
+        targetOwnerId: this.id,
+        amount: adjustedAmount,
+        tone: "green",
+      });
     }
   }
 

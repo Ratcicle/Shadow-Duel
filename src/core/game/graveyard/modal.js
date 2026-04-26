@@ -24,13 +24,13 @@ export function openGraveyardModal(player, options = {}) {
   if (!options.selectable && player.id === "player" && this.turn === "player") {
     options.showActivatable = true;
     options.isActivatable = (card) => {
-      return this.effectEngine.hasActivatableGraveyardEffect(card);
+      return this.effectEngine.hasActivatableGraveyardEffect(card, player);
     };
 
     // Se não tem onSelect customizado, usar o padrão para ativar efeitos
     if (!options.onSelect) {
       options.onSelect = (card) => {
-        if (!this.effectEngine.hasActivatableGraveyardEffect(card)) {
+        if (!this.effectEngine.hasActivatableGraveyardEffect(card, player)) {
           return;
         }
         const activationContext = {

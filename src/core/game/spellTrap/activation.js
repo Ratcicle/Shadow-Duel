@@ -35,6 +35,20 @@ export async function tryActivateSpellTrapEffect(card, selections = null) {
   const guard = this.guardActionStart(guardConfig);
   if (!guard.ok) return guard;
 
+  const preview = this.effectEngine?.canActivateSpellTrapEffectPreview?.(
+    card,
+    this.player,
+    "spellTrap",
+    selections,
+    { activationContext: { autoSelectSingleTarget: true } },
+  );
+  if (preview && preview.ok === false) {
+    if (preview.reason) {
+      this.ui.log(preview.reason);
+    }
+    return preview;
+  }
+
   // If it's a trap, show confirmation modal first
   if (card.cardKind === "trap") {
     const confirmed = await this.ui.showTrapActivationModal(
@@ -98,6 +112,18 @@ export async function tryActivateSpellTrapEffect(card, selections = null) {
       if (result.placementOnly) {
         this.ui.log(`${card.name} is placed on the field.`);
       } else {
+        const visualSource = this.ui?.captureCardAnimationSource?.(card, {
+          ownerId: this.player.id,
+          zone: info.activationZone || "spellTrap",
+        });
+        this.queueVisualFeedback?.({
+          kind: "effect-activation",
+          sourceCard: card,
+          ownerId: this.player.id,
+          fromZone: info.activationZone || "spellTrap",
+          sourceRect: visualSource?.rect || null,
+          tone: card.cardKind === "trap" ? "violet" : "gold",
+        });
         this.finalizeSpellTrapActivation(
           card,
           this.player,
@@ -215,6 +241,18 @@ export async function tryActivateSpell(
       if (result.placementOnly) {
         this.ui.log(`${info.card.name} is placed on the field.`);
       } else {
+        const visualSource = this.ui?.captureCardAnimationSource?.(info.card, {
+          ownerId: owner.id,
+          zone: info.activationZone,
+        });
+        this.queueVisualFeedback?.({
+          kind: "effect-activation",
+          sourceCard: info.card,
+          ownerId: owner.id,
+          fromZone: info.activationZone,
+          sourceRect: visualSource?.rect || null,
+          tone: info.card.cardKind === "trap" ? "violet" : "gold",
+        });
         this.finalizeSpellTrapActivation(info.card, owner, info.activationZone);
         this.ui.log(`${info.card.name} effect activated.`);
 
@@ -283,6 +321,13 @@ export function activateFieldSpellEffect(card) {
       this.effectEngine.activateFieldSpell(card, owner, selections, ctx),
     finalize: () => {
       this.ui.log(`${card.name} field effect activated.`);
+      this.queueVisualFeedback?.({
+        kind: "effect-activation",
+        sourceCard: card,
+        ownerId: owner.id,
+        fromZone: "fieldSpell",
+        tone: "gold",
+      });
       this.updateBoard();
     },
   });

@@ -118,6 +118,9 @@ export function selectCandidates(def, ctx) {
   const anyOf = Array.isArray(def.anyOf) ? def.anyOf : null;
   const matchesFilter = (card, filter) => {
     if (!card || !filter) return false;
+    if (filter.excludeCannotBeSpecialSummoned && card.cannotBeSpecialSummoned) {
+      return false;
+    }
     if (filter.owner === "self" && card.owner !== ctx?.player?.id) return false;
     if (filter.owner === "opponent" && card.owner !== ctx?.opponent?.id)
       return false;
@@ -221,6 +224,12 @@ export function selectCandidates(def, ctx) {
           !def.requireThisCard
         ) {
           log(`[selectCandidates] Rejecting: card is source in hand zone`);
+          continue;
+        }
+        if (def.excludeCannotBeSpecialSummoned && card.cannotBeSpecialSummoned) {
+          log(
+            `[selectCandidates] Rejecting: ${card.name} cannot be Special Summoned`
+          );
           continue;
         }
         if (def.cardKind) {

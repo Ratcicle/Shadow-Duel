@@ -137,6 +137,12 @@ export async function resolveCombat(attacker, target, options = {}) {
       return { ok: false, reason: "direct_attack_forbidden" };
     }
     const defender = attacker.owner === "player" ? this.bot : this.player;
+    this.queueVisualFeedback?.({
+      kind: "impact",
+      sourceCard: attacker,
+      targetOwnerId: defender.id,
+      tone: "red",
+    });
     this.inflictDamage(defender, attacker.atk, {
       sourceCard: attacker,
       cause: "battle",
@@ -199,6 +205,15 @@ export async function resolveCombat(attacker, target, options = {}) {
  * @returns {Object} Result with ok status and any pending selections
  */
 export async function finishCombat(attacker, target, options = {}) {
+  this.queueVisualFeedback?.({
+    kind: "impact",
+    sourceCard: attacker,
+    targetCard: target,
+    targetOwnerId: target?.owner,
+    targetZone: "field",
+    tone: "red",
+  });
+
   // Capture healing flags at the start of combat resolution to avoid race conditions
   const attackerHealsOnBattleDamage =
     attacker?.battleDamageHealsControllerThisTurn || false;

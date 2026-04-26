@@ -49,6 +49,7 @@ export { log, updateTurn, updatePhaseTrack, updateLP } from "./log.js";
 
 // Animations
 export { showLpChange } from "./animations.js";
+export { playVisualFeedback } from "./feedbackFx.js";
 
 // Event bindings
 export {
