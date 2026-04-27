@@ -468,6 +468,23 @@ export async function activateSpellTrapEffect(
     card.isFacedown = false;
   }
 
+  const visualSource = this.game?.ui?.captureCardAnimationSource?.(card, {
+    ownerId: player.id,
+    zone: activationZone,
+  });
+  this.game?.queueVisualFeedback?.({
+    kind: "effect-activation",
+    sourceCard: card,
+    ownerId: player.id,
+    fromZone: activationZone,
+    sourceRect: visualSource?.rect || null,
+    tone: card.cardKind === "trap" ? "violet" : "gold",
+  });
+  this.game?.updateBoard?.();
+  if (typeof this.game?.waitForAiPresentationStep === "function") {
+    await this.game.waitForAiPresentationStep(player);
+  }
+
   logDev?.("SPELL_TRAP_ACTIONS_START", {
     card: card.name,
     player: player.id,
@@ -490,6 +507,11 @@ export async function activateSpellTrapEffect(
       ...actionsResult,
     };
   }
+  this.game?.updateBoard?.();
+  if (typeof this.game?.waitForAiPresentationStep === "function") {
+    await this.game.waitForAiPresentationStep(player);
+  }
+
   this.registerOncePerTurnUsage(card, player, effect);
   this.game.checkWinCondition();
 

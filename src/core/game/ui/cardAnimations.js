@@ -1,3 +1,5 @@
+import { isAI } from "../../Player.js";
+
 /**
  * Runtime card animation queue helpers for Game.
  * The renderer owns playback; Game only records visual intents.
@@ -44,4 +46,18 @@ export function queueVisualFeedback(intent = {}) {
     targetCardKey,
   });
   return true;
+}
+
+export function waitForAiPresentationStep(player, options = {}) {
+  if (!isAI(player)) return Promise.resolve();
+  if (this.gameOver) return Promise.resolve();
+
+  const delayMs = Number.isFinite(options.delayMs)
+    ? options.delayMs
+    : this.aiPresentationStepDelayMs;
+  if (!Number.isFinite(delayMs) || delayMs <= 0) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve) => setTimeout(resolve, delayMs));
 }

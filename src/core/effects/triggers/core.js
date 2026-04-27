@@ -1,4 +1,5 @@
 import { getCardDisplayName } from "../../i18n.js";
+import { isAI } from "../../Player.js";
 
 function shouldPromptTriggeredEffect(effect, owner, ctx) {
   if (!effect || effect.timing !== "on_event") return false;
@@ -114,13 +115,19 @@ export async function handleTriggeredEffect(
     ctx?.activationContext?.sourceZone ||
     (ctx?.player && this.findCardZone?.(ctx.player, sourceCard)) ||
     null;
-  this.game?.queueVisualFeedback?.({
+  const queuedActivationFeedback = this.game?.queueVisualFeedback?.({
     kind: "effect-activation",
     sourceCard,
     ownerId: ctx?.player?.id || sourceCard?.owner || null,
     fromZone: activationZone,
     tone: sourceCard?.cardKind === "monster" ? "violet" : "gold",
   });
+  if (queuedActivationFeedback && isAI(ctx?.player)) {
+    this.game?.updateBoard?.();
+    if (typeof this.game?.waitForAiPresentationStep === "function") {
+      await this.game.waitForAiPresentationStep(ctx.player);
+    }
+  }
 
   const actionsResult = await this.applyActions(
     effect.actions || [],

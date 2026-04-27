@@ -10,7 +10,7 @@
  * @param {Player} owner - The card owner.
  * @param {string} activationZone - Zone where activation occurred.
  */
-export function finalizeSpellTrapActivation(
+export async function finalizeSpellTrapActivation(
   card,
   owner,
   activationZone = null
@@ -23,7 +23,8 @@ export function finalizeSpellTrapActivation(
     (kind === "trap" && subtype === "normal");
 
   if (shouldSendToGY) {
-    this.moveCard(card, owner, "graveyard", { fromZone: activationZone });
+    await this.moveCard(card, owner, "graveyard", { fromZone: activationZone });
+    this.updateBoard?.();
   }
 }
 /**

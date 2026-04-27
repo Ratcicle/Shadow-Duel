@@ -108,23 +108,11 @@ export async function tryActivateSpellTrapEffect(card, selections = null) {
         zone,
         ctx,
       ),
-    finalize: (result, info) => {
+    finalize: async (result, info) => {
       if (result.placementOnly) {
         this.ui.log(`${card.name} is placed on the field.`);
       } else {
-        const visualSource = this.ui?.captureCardAnimationSource?.(card, {
-          ownerId: this.player.id,
-          zone: info.activationZone || "spellTrap",
-        });
-        this.queueVisualFeedback?.({
-          kind: "effect-activation",
-          sourceCard: card,
-          ownerId: this.player.id,
-          fromZone: info.activationZone || "spellTrap",
-          sourceRect: visualSource?.rect || null,
-          tone: card.cardKind === "trap" ? "violet" : "gold",
-        });
-        this.finalizeSpellTrapActivation(
+        await this.finalizeSpellTrapActivation(
           card,
           this.player,
           info.activationZone,
@@ -241,19 +229,11 @@ export async function tryActivateSpell(
       if (result.placementOnly) {
         this.ui.log(`${info.card.name} is placed on the field.`);
       } else {
-        const visualSource = this.ui?.captureCardAnimationSource?.(info.card, {
-          ownerId: owner.id,
-          zone: info.activationZone,
-        });
-        this.queueVisualFeedback?.({
-          kind: "effect-activation",
-          sourceCard: info.card,
-          ownerId: owner.id,
-          fromZone: info.activationZone,
-          sourceRect: visualSource?.rect || null,
-          tone: info.card.cardKind === "trap" ? "violet" : "gold",
-        });
-        this.finalizeSpellTrapActivation(info.card, owner, info.activationZone);
+        await this.finalizeSpellTrapActivation(
+          info.card,
+          owner,
+          info.activationZone,
+        );
         this.ui.log(`${info.card.name} effect activated.`);
 
         // Emitir evento para captura de replay

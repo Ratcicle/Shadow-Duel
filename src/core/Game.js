@@ -134,6 +134,7 @@ export default class Game {
     this.eventListeners = {};
     this.phaseDelayMs = 400;
     this.aiSuccessfulActionDelayMs = 1200;
+    this.aiPresentationStepDelayMs = 650;
     this.lastAttackNegated = false;
     this.pendingSpecialSummon = null; // Track pending special summon (e.g., Leviathan from Eel)
     this.isResolvingEffect = false; // Lock player actions while resolving an effect
@@ -1536,7 +1537,7 @@ export default class Game {
 
     let commitInfo = null;
     if (typeof config.commit === "function") {
-      commitInfo = config.commit();
+      commitInfo = await config.commit();
       if (!commitInfo || !commitInfo.cardRef) {
         return null;
       }
@@ -1547,6 +1548,10 @@ export default class Game {
         fromIndex: commitInfo.fromIndex,
         replacedFieldSpell: commitInfo.replacedFieldSpell?.name || null,
       });
+      this.updateBoard?.();
+      if (typeof this.waitForAiPresentationStep === "function") {
+        await this.waitForAiPresentationStep(owner);
+      }
     }
 
     const committed =
@@ -1769,7 +1774,7 @@ export default class Game {
       }
 
       if (typeof config.finalize === "function") {
-        config.finalize(normalized, {
+        await config.finalize(normalized, {
           card: resolvedCard,
           owner,
           activationZone: resolvedActivationZone,
@@ -2323,6 +2328,8 @@ Game.prototype.highlightReadySpecialSummon =
   uiBoard.highlightReadySpecialSummon;
 Game.prototype.queueCardAnimation = uiCardAnimations.queueCardAnimation;
 Game.prototype.queueVisualFeedback = uiCardAnimations.queueVisualFeedback;
+Game.prototype.waitForAiPresentationStep =
+  uiCardAnimations.waitForAiPresentationStep;
 
 // Indicators: updateActivationIndicators, buildActivationIndicatorsForPlayer
 Game.prototype.updateActivationIndicators =

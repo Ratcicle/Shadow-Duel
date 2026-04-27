@@ -187,6 +187,7 @@ export default class BotArena {
     game.phaseDelayMs = speedConfig.phaseDelayMs;
     game.aiActionDelayMs = speedConfig.actionDelayMs;
     game.aiSuccessfulActionDelayMs = speedConfig.actionDelayMs;
+    game.aiPresentationStepDelayMs = speedConfig.actionDelayMs;
     game.aiBattleDelayMs = speedConfig.battleDelayMs;
 
     // Configurar parâmetros de busca na game (para bots usarem)

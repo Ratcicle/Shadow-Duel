@@ -1237,9 +1237,22 @@ export default class Bot extends Player {
         const card = summonResult.card || summonResult;
         const tributes = summonResult.tributes || [];
 
+        game.ui?.log(
+          `Bot summons ${action.facedown ? "a monster in defense" : card.name}`,
+        );
+        game.updateBoard();
+
+        // Let the summon become visible before resolving on-summon triggers.
+        const isFacedownSet = action.facedown === true;
+        if (
+          !isFacedownSet &&
+          typeof game?.waitForAiPresentationStep === "function"
+        ) {
+          await game.waitForAiPresentationStep(this);
+        }
+
         // Emit after_summon event for trigger effects (e.g., Void Mage search)
         // Only trigger if summoned face-up (facedown set doesn't trigger "when Normal Summoned" effects)
-        const isFacedownSet = action.facedown === true;
         if (!isFacedownSet && game && typeof game.emit === "function") {
           await game.emit("after_summon", {
             card,
@@ -1250,9 +1263,6 @@ export default class Bot extends Player {
           });
         }
 
-        game.ui?.log(
-          `Bot summons ${action.facedown ? "a monster in defense" : card.name}`,
-        );
         game.updateBoard();
         return true;
       }
@@ -1325,11 +1335,11 @@ export default class Bot extends Player {
             zone,
             ctx,
           ),
-        finalize: (result, info) => {
+        finalize: async (result, info) => {
           if (result.placementOnly) {
             game.ui?.log?.(`Bot places ${info.card.name}.`);
           } else {
-            game.finalizeSpellTrapActivation(
+            await game.finalizeSpellTrapActivation(
               info.card,
               this,
               info.activationZone,
@@ -1425,11 +1435,11 @@ export default class Bot extends Player {
             zone,
             ctx,
           ),
-        finalize: (result, info) => {
+        finalize: async (result, info) => {
           if (result.placementOnly) {
             game.ui?.log?.(`Bot places ${info.card.name}.`);
           } else {
-            game.finalizeSpellTrapActivation(
+            await game.finalizeSpellTrapActivation(
               info.card,
               this,
               info.activationZone,
