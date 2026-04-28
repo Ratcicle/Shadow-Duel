@@ -117,6 +117,7 @@ export function getBlueprintStorageConfig(card) {
     requireFaceup: raw.requireFaceup !== false,
     promptOnStore: raw.promptOnStore !== false,
     autoStoreForAI: raw.autoStoreForAI === true,
+    respectStoredEffectUsageLimits: raw.respectStoredEffectUsageLimits === true,
   };
 }
 
@@ -240,22 +241,25 @@ export async function executeEffectBlueprint(blueprint, ctx, selections = null) 
     };
   }
 
-  const optCheck = this.checkOncePerTurn(execCtx.source, execCtx.player, effect);
-  if (!optCheck.ok) {
-    return {
-      success: false,
-      needsSelection: false,
-      reason: optCheck.reason,
-    };
-  }
+  const respectUsageLimits = blueprint.respectUsageLimits === true;
+  if (respectUsageLimits) {
+    const optCheck = this.checkOncePerTurn(execCtx.source, execCtx.player, effect);
+    if (!optCheck.ok) {
+      return {
+        success: false,
+        needsSelection: false,
+        reason: optCheck.reason,
+      };
+    }
 
-  const duelCheck = this.checkOncePerDuel(execCtx.source, execCtx.player, effect);
-  if (!duelCheck.ok) {
-    return {
-      success: false,
-      needsSelection: false,
-      reason: duelCheck.reason,
-    };
+    const duelCheck = this.checkOncePerDuel(execCtx.source, execCtx.player, effect);
+    if (!duelCheck.ok) {
+      return {
+        success: false,
+        needsSelection: false,
+        reason: duelCheck.reason,
+      };
+    }
   }
 
   const selectionMap = selections || execCtx.selections || null;
@@ -299,8 +303,10 @@ export async function executeEffectBlueprint(blueprint, ctx, selections = null) 
     };
   }
 
-  this.registerOncePerTurnUsage(execCtx.source, execCtx.player, effect);
-  this.registerOncePerDuelUsage(execCtx.source, execCtx.player, effect);
+  if (respectUsageLimits) {
+    this.registerOncePerTurnUsage(execCtx.source, execCtx.player, effect);
+    this.registerOncePerDuelUsage(execCtx.source, execCtx.player, effect);
+  }
 
   return { success: true, needsSelection: false };
 }
@@ -429,6 +435,7 @@ export async function handleBlueprintStorageAfterResolution(
 
   const blueprint = this.buildEffectBlueprint(sourceCard, effect);
   if (!blueprint) return false;
+  blueprint.respectUsageLimits = config.respectStoredEffectUsageLimits === true;
 
   const storageState = this.getBlueprintStorageState(storageCard, true);
   const storedBlueprints = storageState?.storedBlueprints || [];

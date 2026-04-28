@@ -3119,7 +3119,7 @@
     type: "Fiend",
     archetype: "Void",
     description:
-      "Ganha 100 ATK/DEF para cada monstro 'Void' no campo. Uma vez por duelo, se esta carta estiver no seu Cemitï¿½rio, vocï¿½ pode Invocï¿½-la por Invocaï¿½ï¿½o-Especial.",
+      'Gains 100 ATK/DEF for each "Void" monster on the field. Once per Duel, if this card is in your GY: You can Special Summon it.',
     image: "assets/Void Tenebris Horn.png",
     effects: [
       {
@@ -4291,7 +4291,7 @@
           {
             type: "source_counters_at_least",
             counterType: "dragon_peak",
-            min: 8,
+            min: 5,
           },
         ],
         actions: [
@@ -4731,6 +4731,7 @@
       storableEffectFlag: "storableByGrimoire",
       allowOverwrite: true,
       promptOnStore: true,
+      autoStoreForAI: true,
     },
     effects: [
       {

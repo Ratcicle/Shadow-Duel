@@ -1,10 +1,35 @@
 import { getCardDisplayName } from "../../i18n.js";
 import { isAI } from "../../Player.js";
 
+const AUTOMATIC_TRIGGER_ACTION_TYPES = new Set([
+  "forbid_attack_this_turn",
+  "forbid_direct_attack_this_turn",
+]);
+
+function hasRegisteredTriggerActions(effect, actionHandlers) {
+  const actions = Array.isArray(effect?.actions) ? effect.actions : [];
+  if (actions.length === 0) return false;
+
+  return actions.some((action) => {
+    const actionType = action?.type;
+    if (!actionType || typeof actionType !== "string") return false;
+    if (!actionHandlers || typeof actionHandlers.has !== "function") return true;
+    return actionHandlers.has(actionType);
+  });
+}
+
+function isAutomaticTriggeredEffect(effect) {
+  const actions = Array.isArray(effect?.actions) ? effect.actions : [];
+  if (actions.length === 0) return false;
+
+  return actions.every((action) =>
+    AUTOMATIC_TRIGGER_ACTION_TYPES.has(action?.type)
+  );
+}
+
 function shouldPromptTriggeredEffect(effect, owner, ctx) {
   if (!effect || effect.timing !== "on_event") return false;
   if (!owner || owner.id !== "player") return false;
-  if (effect.promptUser === false) return false;
   if (ctx?.activationContext?.skipPrompt === true) return false;
   if (ctx?.activationContext?.preview === true) return false;
   if (ctx?.activationContext?.isPreview === true) return false;
@@ -17,6 +42,9 @@ function shouldPromptTriggeredEffect(effect, owner, ctx) {
   if (effect.event === "effect_targeted" && effect.promptOnTargeted === false) {
     return false;
   }
+  if (effect.promptUser === true) return true;
+  if (effect.promptUser === false) return false;
+  if (isAutomaticTriggeredEffect(effect)) return false;
   return true;
 }
 
@@ -208,6 +236,13 @@ export function buildTriggerEntry(options = {}) {
   const effect = options.effect;
 
   if (!sourceCard || !owner || !effect) {
+    return null;
+  }
+
+  if (
+    typeof options.activate !== "function" &&
+    !hasRegisteredTriggerActions(effect, this.actionHandlers)
+  ) {
     return null;
   }
 

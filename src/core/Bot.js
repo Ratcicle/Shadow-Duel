@@ -1454,15 +1454,16 @@ export default class Bot extends Player {
     }
 
     if (action.type === "fieldEffect" && this.fieldSpell) {
+      const fieldSpell = this.fieldSpell;
       const activationContext = {
         fromHand: false,
         activationZone: "fieldSpell",
         sourceZone: "fieldSpell",
       };
       const activationEffect =
-        game.effectEngine?.getFieldSpellActivationEffect?.(this.fieldSpell);
+        game.effectEngine?.getFieldSpellActivationEffect?.(fieldSpell);
       const pipelineResult = await game.runActivationPipeline({
-        card: this.fieldSpell,
+        card: fieldSpell,
         owner: this,
         activationZone: "fieldSpell",
         activationContext,
@@ -1471,19 +1472,19 @@ export default class Bot extends Player {
         guardKind: "bot_fieldspell_effect",
         phaseReq: ["main1", "main2"],
         oncePerTurn: {
-          card: this.fieldSpell,
+          card: fieldSpell,
           player: this,
           effect: activationEffect,
         },
         activate: (selections, ctx) =>
           game.effectEngine.activateFieldSpell(
-            this.fieldSpell,
+            fieldSpell,
             this,
             selections,
             ctx,
           ),
         finalize: () => {
-          game.ui?.log?.(`Bot activates ${this.fieldSpell.name}'s effect`);
+          game.ui?.log?.(`Bot activates ${fieldSpell.name}'s effect`);
           game.updateBoard();
         },
       });
