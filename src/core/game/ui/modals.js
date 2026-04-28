@@ -41,6 +41,16 @@ export function showShadowHeartCathedralModal(
     return;
   }
 
-  console.log("[Cathedral Modal] Renderer unavailable; skipping modal.");
-  callback(null);
+  if (this.ui && typeof this.ui.showCardSelectionModal === "function") {
+    this.ui.showCardSelectionModal(
+      validMonsters,
+      `Select 1 monster (Max ATK: ${maxAtk})`,
+      1,
+      callback,
+    );
+    return;
+  }
+
+  console.log("[Cathedral Modal] Renderer unavailable; using first valid monster.");
+  callback(validMonsters[0] || null);
 }

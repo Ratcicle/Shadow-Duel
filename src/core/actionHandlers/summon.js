@@ -61,7 +61,7 @@ export async function handleSpecialSummonFromZone(
     }
   }
 
-  const zoneSpec = action.zone || "deck";
+  const zoneSpec = action.zone || action.sourceZone || "deck";
   const zoneNames = Array.isArray(zoneSpec) ? zoneSpec : [zoneSpec];
 
   const zoneEntries = zoneNames
@@ -210,6 +210,14 @@ export async function handleSpecialSummonFromZone(
 
     if (action.cardKind) {
       filters.cardKind = action.cardKind;
+    }
+
+    if (Number.isFinite(action.minAtk)) {
+      filters.minAtk = action.minAtk;
+    }
+
+    if (Number.isFinite(action.maxAtk)) {
+      filters.maxAtk = action.maxAtk;
     }
 
     // Use monsterType for filtering by monster type (e.g., "Dragon")
@@ -495,7 +503,11 @@ async function summonCards(cards, sourceZoneEntries, player, action, engine) {
   const canUseMoveCard = game && typeof game.moveCard === "function";
 
   const fromZoneSpec =
-    action.fromZone || action.zone || action.summonZone || "deck";
+    action.fromZone ||
+    action.zone ||
+    action.sourceZone ||
+    action.summonZone ||
+    "deck";
   const fromZoneName = Array.isArray(fromZoneSpec)
     ? null
     : typeof fromZoneSpec === "string"
@@ -1799,7 +1811,9 @@ async function performSummonFromDeck(
 
     if (sourceZone) {
       if (typeof game.moveCard === "function") {
-        game.moveCard(source, player, "graveyard", { fromZone: sourceZone });
+        await game.moveCard(source, player, "graveyard", {
+          fromZone: sourceZone,
+        });
       } else {
         const sourceIdx = sourceZone.indexOf(source);
         if (sourceIdx !== -1) {

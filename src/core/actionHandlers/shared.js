@@ -196,6 +196,16 @@ export function collectZoneCandidates(zone, filters = {}, options = {}) {
 
     if (filters.name && card.name !== filters.name) return false;
 
+    if (filters.minAtk !== undefined) {
+      const cardAtk = card.atk || 0;
+      if (cardAtk < filters.minAtk) return false;
+    }
+
+    if (filters.maxAtk !== undefined) {
+      const cardAtk = card.atk || 0;
+      if (cardAtk > filters.maxAtk) return false;
+    }
+
     if (filters.level !== undefined) {
       const cardLevel = card.level || 0;
       const op = filters.levelOp || defaultLevelOp;

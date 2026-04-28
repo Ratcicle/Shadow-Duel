@@ -148,6 +148,101 @@ function queueZoneMoveAnimation(game, intent, toZoneOverride = null) {
   });
 }
 
+const FIELD_SOURCE_ZONES = new Set(["field", "spellTrap", "fieldSpell"]);
+
+function cardMatchesArchetype(card, archetype) {
+  if (!archetype) return true;
+  const archetypes = Array.isArray(card?.archetypes)
+    ? card.archetypes
+    : card?.archetype
+      ? [card.archetype]
+      : [];
+  return archetypes.includes(archetype);
+}
+
+function removeNamedBuffFromCard(card, sourceName) {
+  if (!card?.permanentBuffsBySource || !sourceName) return false;
+
+  const buffData = card.permanentBuffsBySource[sourceName];
+  if (!buffData) return false;
+
+  if (buffData.atk) {
+    card.atk = Math.max(0, (card.atk || 0) - buffData.atk);
+  }
+  if (buffData.def) {
+    card.def = Math.max(0, (card.def || 0) - buffData.def);
+  }
+
+  delete card.permanentBuffsBySource[sourceName];
+  return true;
+}
+
+function getLeaveFieldBuffCleanupActions(card, fromZone) {
+  const effects = Array.isArray(card?.effects) ? card.effects : [];
+  const cleanupActions = [];
+
+  for (const effect of effects) {
+    // Existing cards model "source left field" cleanup through card_to_grave.
+    // Zone movement also runs those named-buff removals for bounce/banish paths.
+    if (!effect || effect.timing !== "on_event") continue;
+    if (effect.event !== "card_to_grave") continue;
+    if (
+      effect.fromZone &&
+      effect.fromZone !== "any" &&
+      effect.fromZone !== fromZone
+    ) {
+      continue;
+    }
+
+    const actions = Array.isArray(effect.actions) ? effect.actions : [];
+    for (const action of actions) {
+      if (action?.type === "remove_permanent_buff_named") {
+        cleanupActions.push(action);
+      }
+    }
+  }
+
+  return cleanupActions;
+}
+
+function cleanupNamedBuffsWhenSourceLeavesField(
+  game,
+  card,
+  owner,
+  fromZone,
+  toZone,
+) {
+  if (!FIELD_SOURCE_ZONES.has(fromZone) || fromZone === toZone) return;
+  const cleanupActions = getLeaveFieldBuffCleanupActions(card, fromZone);
+  if (cleanupActions.length === 0) return;
+
+  let anyRemoved = false;
+
+  for (const action of cleanupActions) {
+    const sourceName = action.sourceName || card.name;
+    const targetRef = action.targetRef || "self";
+    let targetCards = [];
+
+    if (targetRef === "self" && action.removeFromAllField) {
+      targetCards = (owner.field || []).filter(
+        (target) =>
+          target?.cardKind === "monster" &&
+          cardMatchesArchetype(target, action.archetype),
+      );
+    } else if (targetRef === "self") {
+      targetCards = [card];
+    }
+
+    for (const target of targetCards) {
+      anyRemoved = removeNamedBuffFromCard(target, sourceName) || anyRemoved;
+    }
+  }
+
+  if (anyRemoved) {
+    game?.effectEngine?.clearTargetingCache?.();
+  }
+}
+
 /**
  * Internal implementation of card movement with all side effects.
  * @param {Object} card - The card to move
@@ -299,6 +394,14 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
   if (card.owner !== fromOwner.id) {
     card.owner = fromOwner.id;
   }
+
+  cleanupNamedBuffsWhenSourceLeavesField(
+    this,
+    card,
+    fromOwner,
+    fromZone,
+    toZone,
+  );
 
   if (fromZone === "field" && card.cardKind === "monster") {
     card.summonedTurn = null;
@@ -740,6 +843,8 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
       opponent: otherPlayer,
       wasDestroyed: options.wasDestroyed || false,
       destroyCause: options.destroyCause || null,
+      destroySource:
+        options.destroySource || options.sourceCard || options.source || null,
     });
   }
 

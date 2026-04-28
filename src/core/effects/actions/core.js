@@ -144,6 +144,54 @@ export function checkActionPreviewRequirements(actions, ctx) {
       }
     }
 
+    if (action.type === "special_summon_from_deck_with_counter_limit") {
+      if ((player.field || []).length >= 5) {
+        return { ok: false, reason: "Field is full." };
+      }
+
+      const source = ctx?.source;
+      const counterType = action.counterType || "judgment_marker";
+      const counterMultiplier = action.counterMultiplier || 500;
+      const counterCount =
+        typeof source?.getCounter === "function"
+          ? source.getCounter(counterType)
+          : source?.counters?.get
+            ? source.counters.get(counterType)
+            : 0;
+      const maxAtk = counterCount * counterMultiplier;
+      if (maxAtk <= 0) {
+        return {
+          ok: false,
+          reason: `No ${counterType} counters on ${source?.name || "source"}.`,
+        };
+      }
+
+      const filters = { ...(action.filters || {}) };
+      if (action.archetype && !filters.archetype) {
+        filters.archetype = action.archetype;
+      }
+      const hasCandidate = (player.deck || []).some((card) => {
+        if (!card || card.cardKind !== "monster") return false;
+        if ((card.atk || 0) > maxAtk) return false;
+        if (filters.archetype) {
+          const archetypes = Array.isArray(card.archetypes)
+            ? card.archetypes
+            : card.archetype
+              ? [card.archetype]
+              : [];
+          if (!archetypes.includes(filters.archetype)) return false;
+        }
+        return true;
+      });
+
+      if (!hasCandidate) {
+        return {
+          ok: false,
+          reason: `No valid monsters in deck with ATK <= ${maxAtk}.`,
+        };
+      }
+    }
+
     if (action.type === "special_summon_token") {
       const targetPlayer = action.player === "opponent" ? ctx?.opponent : player;
       if ((targetPlayer?.field || []).length >= 5) {

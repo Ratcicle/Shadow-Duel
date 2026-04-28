@@ -76,6 +76,9 @@ export default class Card {
     // Summon restrictions
     this.cannotBeSpecialSummoned = !!data.cannotBeSpecialSummoned;
     this.cannotBeNormalSummonedOrSet = !!data.cannotBeNormalSummonedOrSet;
+    this.lastSummonMethod = null;
+    this.lastSummonedFromZone = null;
+    this.lastSummonedTurn = null;
 
     // Turn-based temporary buffs (for expirations like "until end of next turn")
     // Structure: Array of {stat, value, expiresOnTurn, id}

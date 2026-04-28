@@ -1007,9 +1007,23 @@ export async function handleDestroyTargetedCards(action, ctx, targets, engine) {
     return false;
   }
 
-  // action.maxTargets: how many cards to target (default 1)
+  // action.maxTargets: maximum cards to target (default 1)
+  // action.minTargets: minimum required targets (default maxTargets)
 
-  const maxTargets = Math.min(action.maxTargets || 1, opponentCards.length);
+  const requestedMaxTargets = action.maxTargets || 1;
+  const requestedMinTargets = Number.isFinite(action.minTargets)
+    ? action.minTargets
+    : Math.min(requestedMaxTargets, opponentCards.length);
+
+  if (opponentCards.length < requestedMinTargets) {
+    getUI(game)?.log(
+      `${source.name} requires ${requestedMinTargets} valid target(s) to destroy.`,
+    );
+    return false;
+  }
+
+  const maxTargets = Math.min(requestedMaxTargets, opponentCards.length);
+  const minTargets = Math.min(requestedMinTargets, maxTargets);
 
   getUI(game)?.log(
     `${source.name}: Select up to ${maxTargets} opponent cards to destroy.`,
@@ -1034,7 +1048,7 @@ export async function handleDestroyTargetedCards(action, ctx, targets, engine) {
       {
         id: "destroy_targets",
 
-        min: maxTargets,
+        min: minTargets,
 
         max: maxTargets,
 

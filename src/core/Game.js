@@ -188,6 +188,10 @@ export default class Game {
         destroyedOpponentMonstersByMaterialId: new Map(),
         effectActivationsByMaterialId: new Map(),
       },
+      bot: {
+        destroyedOpponentMonstersByMaterialId: new Map(),
+        effectActivationsByMaterialId: new Map(),
+      },
     };
     this.devLog("MATERIAL_STATS_RESET", { summary: reason });
   }
@@ -1140,6 +1144,7 @@ export default class Game {
           fromZone: fromZone || undefined,
           wasDestroyed: true,
           destroyCause: cause,
+          destroySource: sourceCard,
         });
 
         if (!moveResult || moveResult.success === false) {

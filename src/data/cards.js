@@ -586,6 +586,7 @@
         timing: "on_event",
         event: "after_summon",
         summonMethods: ["tribute"],
+        requireSelfAsSummoned: true,
         targets: [
           {
             id: "destroy_target",
@@ -856,9 +857,8 @@
     level: 8,
     type: "Dragon",
     archetype: "Shadow-Heart",
-    requiredTributes: 3,
     description:
-      'Requires 3 tributes to Normal Summon/Set. Once per turn, if this card destroys a monster by battle: You can target 1 "Shadow-Heart" card in your Graveyard; add it to your hand.',
+      'If this card was Tribute Summoned, it gains the following effects. If this card destroys an opponent\'s monster by battle: You can target 1 "Shadow-Heart" card in your Graveyard; add it to your hand. If this card is destroyed by battle or by an opponent\'s card effect: You can Special Summon up to 3 "Shadow-Heart" monsters with 1600 or less ATK from your Graveyard. You can only use each effect of "Shadow-Heart Scale Dragon" once per turn.',
     image: "assets/Shadow-Heart Scale Dragon.png",
     effects: [
       {
@@ -866,6 +866,8 @@
         timing: "on_event",
         event: "battle_destroy",
         requireSelfAsAttacker: true,
+        requireDestroyedIsOpponent: true,
+        requireSelfWasSummonedBy: "tribute",
         oncePerTurn: true,
         oncePerTurnName: "shadow_heart_scale_dragon_recycle",
         targets: [
@@ -883,6 +885,30 @@
             targetRef: "shadow_heart_recycle_target",
             player: "self",
             to: "hand",
+          },
+        ],
+      },
+      {
+        id: "shadow_heart_scale_dragon_tribute_destroyed_revive",
+        timing: "on_event",
+        event: "card_to_grave",
+        fromZone: "field",
+        condition: { type: "destroyed_by_battle_or_effect" },
+        requireSelfWasSummonedBy: "tribute",
+        requireDestroyedByOpponent: true,
+        oncePerTurn: true,
+        oncePerTurnName: "shadow_heart_scale_dragon_tribute_destroyed_revive",
+        actions: [
+          {
+            type: "special_summon_from_zone",
+            zone: "graveyard",
+            filters: {
+              archetype: "Shadow-Heart",
+              cardKind: "monster",
+              maxAtk: 1600,
+            },
+            count: { min: 0, max: 3 },
+            position: "choice",
           },
         ],
       },
@@ -1311,7 +1337,7 @@
     archetype: "Shadow-Heart",
     archetypes: ["Shadow-Heart"],
     description:
-      "Shadow-Heart Scale Dragon + 1 level 8+ 'Shadow-Heart' monster. If this card is Fusion Summoned: target 2 cards your opponent controls; destroy them. If this card is destroyed by battle or card effect: You can Special Summon 1 'Shadow-Heart Scale Dragon' from your GY.",
+      "Shadow-Heart Scale Dragon + 1 level 8+ 'Shadow-Heart' monster. If this card is Fusion Summoned: target up to 2 cards your opponent controls; destroy them. If this card is destroyed by battle or card effect: You can Special Summon 1 'Shadow-Heart Scale Dragon' from your GY.",
     image: "assets/Shadow-Heart Demon Dragon.png",
     fusionMaterials: [
       { name: "Shadow-Heart Scale Dragon", count: 1 },
@@ -1323,6 +1349,7 @@
         timing: "on_event",
         event: "after_summon",
         summonMethods: ["fusion"],
+        requireSelfAsSummoned: true,
         actions: [
           {
             type: "destroy_targeted_cards",
@@ -1342,6 +1369,7 @@
             type: "special_summon_from_zone",
             targetRef: "self",
             sourceZone: "graveyard",
+            zone: "graveyard",
             cardName: "Shadow-Heart Scale Dragon",
             archetype: "Shadow-Heart",
             position: "choice",

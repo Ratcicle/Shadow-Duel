@@ -4,6 +4,16 @@
  */
 
 
+function getCardControllerId(card) {
+  return card?.controller || card?.owner || null;
+}
+
+function matchesLastSummonMethod(card, allowed) {
+  if (!allowed) return true;
+  const allowedMethods = Array.isArray(allowed) ? allowed : [allowed];
+  return allowedMethods.includes(card?.lastSummonMethod || null);
+}
+
 /**
  * Main dispatcher for event trigger collection.
  * Routes to specific collector based on event name.
@@ -486,6 +496,21 @@ export async function collectBattleDestroyTriggers(payload) {
         if (effect.requireFaceup === true && card.isFacedown === true) {
           console.log(
             `[battle_destroy] Skipping effect on ${card.name}: requireFaceup=true but card is facedown`,
+          );
+          continue;
+        }
+
+        if (
+          effect.requireSelfWasSummonedBy &&
+          !matchesLastSummonMethod(card, effect.requireSelfWasSummonedBy)
+        ) {
+          const allowedMethods = Array.isArray(effect.requireSelfWasSummonedBy)
+            ? effect.requireSelfWasSummonedBy
+            : [effect.requireSelfWasSummonedBy];
+          console.log(
+            `[battle_destroy DEBUG] SKIPPED: requires last summon method ${allowedMethods.join(
+              "/",
+            )}, but was "${card.lastSummonMethod || null}"`,
           );
           continue;
         }
@@ -1032,6 +1057,38 @@ export async function collectCardToGraveTriggers(payload) {
         `[handleCardToGraveEvent] Skipping ${effect.id}: requires destruction.`,
       );
       continue;
+    }
+
+    if (effect.requireSelfWasSummonedBy) {
+      const lastSummonMethod = card.lastSummonMethod || null;
+
+      if (!matchesLastSummonMethod(card, effect.requireSelfWasSummonedBy)) {
+        const allowedMethods = Array.isArray(effect.requireSelfWasSummonedBy)
+          ? effect.requireSelfWasSummonedBy
+          : [effect.requireSelfWasSummonedBy];
+        console.log(
+          `[handleCardToGraveEvent] Skipping ${effect.id}: requires last summon method ${allowedMethods.join(
+            "/",
+          )}, but was "${lastSummonMethod}".`,
+        );
+        continue;
+      }
+    }
+
+    if (effect.requireDestroyedByOpponent === true) {
+      const sourceControllerId = getCardControllerId(payload?.destroySource);
+      const opponentId = resolvedOpponent?.id || resolvedOpponent || null;
+
+      if (
+        !sourceControllerId ||
+        !opponentId ||
+        sourceControllerId !== opponentId
+      ) {
+        console.log(
+          `[handleCardToGraveEvent] Skipping ${effect.id}: destruction source was not controlled by opponent.`,
+        );
+        continue;
+      }
     }
 
     // ✅ Check condition for destruction type (battle vs effect)

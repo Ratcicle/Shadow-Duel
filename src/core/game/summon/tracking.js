@@ -10,7 +10,13 @@
 export function _trackSpecialSummonType(payload) {
   try {
     const { card, player, method } = payload || {};
-    if (!card || !player || method !== "special") return;
+    if (!card || !player) return;
+
+    card.lastSummonMethod = method || null;
+    card.lastSummonedFromZone = payload?.fromZone || null;
+    card.lastSummonedTurn = this.turnCounter ?? null;
+
+    if (method !== "special") return;
     const typeName = card.type || null;
     if (!typeName) return;
     const playerId = player?.id || player;

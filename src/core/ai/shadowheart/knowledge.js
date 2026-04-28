@@ -14,8 +14,9 @@ export const CARD_KNOWLEDGE = {
   "Shadow-Heart Scale Dragon": {
     role: "boss",
     priority: 10,
-    summonCondition: "3_tributes",
-    effect: "Ao destruir por batalha, recupera 1 Shadow-Heart do GY",
+    summonCondition: "2_tributes",
+    effect:
+      "Ao destruir monstro oponente por batalha, recupera 1 Shadow-Heart do GY; se foi Tribute Summoned e destruído pelo oponente, revive até 3 Shadow-Heart de ATK <= 1600",
     synergies: [
       "Darkness Valley",
       "Shadow-Heart Rage",
@@ -23,7 +24,7 @@ export const CARD_KNOWLEDGE = {
       "Shadow-Heart Apocalypse Dragon",
     ],
     playPatterns: [
-      "Invocar quando tiver 3 tributos disponíveis",
+      "Invocar quando tiver 2 tributos disponíveis",
       "Proteger com Shadow-Heart Shield",
       "Usar Shadow-Heart Rage para 3700 ATK + 2 ataques",
       "Usar como material para Demon Dragon Fusion",
