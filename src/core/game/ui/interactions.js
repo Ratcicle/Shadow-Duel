@@ -453,9 +453,9 @@ export function bindCardInteractions() {
           this.ui.showPositionChoiceModal(
             cardEl,
             card,
-            (choice) => {
+            async (choice) => {
               if (choice === "flip" && canFlip) {
-                this.flipSummon(card);
+                await this.flipSummon(card);
               } else if (
                 choice === "to_attack" &&
                 canPosChange &&

@@ -13,6 +13,9 @@
 - `AutoSelector` deve ser usado para bot/IA, não para pular decisões do jogador humano.
 - Não adicione efeitos de negar, hand traps ou interrupções similares sem pedido explícito do diretor criativo.
 - Para novas cartas, verifique também descrição, i18n e compatibilidade com os handlers existentes.
+- Modularize por domínio de jogo/responsabilidade, não por microfunções arbitrárias.
+- Evite criar arquivos novos quando a lógica pertence claramente a um módulo existente.
+- Fachadas como `Game.js`, `EffectEngine.js` e `ChainSystem.js` devem orquestrar e delegar; evite concentrar nova lógica complexa nelas.
 
 ---
 

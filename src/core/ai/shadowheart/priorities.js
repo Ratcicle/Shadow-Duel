@@ -495,6 +495,20 @@ export function shouldSummonMonster(card, analysis, tributeInfo, context = {}) {
         reason: `Requer ${actualTributes} tributos (tenho ${analysis.field.length})`,
       };
     }
+    if (actualTributes > 0) {
+      const tradeCheck = evaluateTributeTrade(
+        card,
+        fieldState,
+        actualTributes,
+        { oppField: oppFieldState }
+      );
+      if (!tradeCheck.ok) {
+        return {
+          yes: false,
+          reason: tradeCheck.reason,
+        };
+      }
+    }
     return {
       yes: true,
       position: "attack",

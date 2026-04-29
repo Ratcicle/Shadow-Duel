@@ -7,7 +7,7 @@
  * Perform a Flip Summon on a face-down monster.
  * @param {Object} card - The face-down monster to flip summon
  */
-export function flipSummon(card) {
+export async function flipSummon(card) {
   if (!this.canFlipSummon(card)) return;
   card.isFacedown = false;
   card.revealedTurn = this.turnCounter; // Track when monster was revealed for Ascension timing
@@ -16,7 +16,7 @@ export function flipSummon(card) {
   card.cannotAttackThisTurn = true;
   this.ui.log(`${card.name} is Flip Summoned!`);
 
-  this.emit("after_summon", {
+  await this.emit("after_summon", {
     card,
     player: card.owner === "player" ? this.player : this.bot,
     method: "flip",
