@@ -13,59 +13,13 @@
  */
 
 import { isAI } from "./Player.js";
+import * as chainSpellSpeed from "./chain/spellSpeed.js";
+import * as chainStack from "./chain/stack.js";
+import * as chainResolution from "./chain/resolution.js";
+import { CHAIN_CONTEXTS } from "./chain/contexts.js";
 
-/**
- * Valid chain window contexts where cards can be activated in response
- */
-export const CHAIN_CONTEXTS = {
-  card_activation: {
-    description: "In response to another card's activation",
-    allowedSpeeds: [2, 3],
-    requiresChainWindow: false,
-  },
-
-  attack_declaration: {
-    description: "When an attack is declared",
-    allowedSpeeds: [2, 3],
-    requiresChainWindow: true,
-  },
-
-  summon: {
-    description: "When a monster is summoned",
-    allowedSpeeds: [2, 3],
-    requiresChainWindow: true,
-  },
-
-  phase_change: {
-    description: "During phase transition",
-    allowedSpeeds: [2, 3],
-    requiresChainWindow: true,
-  },
-
-  main_phase_action: {
-    description: "During own Main Phase (quick action)",
-    allowedSpeeds: [1, 2, 3],
-    requiresChainWindow: false,
-  },
-
-  battle_damage: {
-    description: "When battle damage is about to be inflicted",
-    allowedSpeeds: [2, 3],
-    requiresChainWindow: true,
-  },
-
-  effect_activation: {
-    description: "In response to a monster effect activation",
-    allowedSpeeds: [2, 3],
-    requiresChainWindow: false,
-  },
-
-  effect_targeted: {
-    description: "When a card effect targets your card",
-    allowedSpeeds: [2, 3],
-    requiresChainWindow: true,
-  },
-};
+// Re-export for backwards compatibility (CHAIN_CONTEXTS used to live here)
+export { CHAIN_CONTEXTS };
 
 /**
  * @typedef {Object} ChainLink
@@ -182,118 +136,11 @@ export default class ChainSystem {
 
   // ============================================================
   // SPELL SPEED VALIDATION
+  // Methods moved to src/core/chain/spellSpeed.js
+  //   - getEffectSpellSpeed
+  //   - getRequiredSpellSpeed
+  //   - canActivateInChain
   // ============================================================
-
-  /**
-   * Get the spell speed of an effect
-   * @param {Object} effect - The effect to check
-   * @param {Object} card - The card containing the effect
-   * @returns {number} Spell speed (1, 2, or 3)
-   */
-  getEffectSpellSpeed(effect, card) {
-    // Explicit speed on effect takes priority
-    if (effect?.speed !== undefined) {
-      return effect.speed;
-    }
-
-    // Infer from card type
-    if (card?.cardKind === "trap") {
-      if (card.subtype === "counter") {
-        return 3; // Counter Traps are Speed 3
-      }
-      return 2; // Normal and Continuous Traps are Speed 2
-    }
-
-    if (card?.cardKind === "spell") {
-      if (card.subtype === "quick") {
-        return 2; // Quick-Play Spells are Speed 2
-      }
-      return 1; // Normal, Continuous, Field, Equip Spells are Speed 1
-    }
-
-    // Monster effects
-    if (card?.cardKind === "monster") {
-      // Quick effects are Speed 2, others are Speed 1
-      if (effect?.isQuickEffect) {
-        return 2;
-      }
-      return 1;
-    }
-
-    return 1; // Default to Speed 1
-  }
-
-  /**
-   * Get the minimum required spell speed to respond in current chain
-   * @param {ChainContext} context - Current chain context
-   * @returns {number} Minimum required spell speed
-   */
-  getRequiredSpellSpeed(context) {
-    // If chain is empty (Chain Link 1)
-    if (this.chainStack.length === 0) {
-      // During own Main Phase, Speed 1 is allowed
-      if (context?.type === "main_phase_action") {
-        return 1;
-      }
-      // Otherwise, need at least Speed 2
-      return 2;
-    }
-
-    // Chain Link 2+: Must be at least Speed 2 to chain
-    // AND must match or exceed last card's speed
-    const lastLink = this.chainStack[this.chainStack.length - 1];
-    const lastSpeed = this.getEffectSpellSpeed(lastLink.effect, lastLink.card);
-
-    // Minimum Speed 2 for any chain response (Speed 1 cannot respond)
-    return Math.max(2, lastSpeed);
-  }
-
-  /**
-   * Check if an effect can be activated in current chain context
-   * @param {Object} effect - Effect to check
-   * @param {Object} card - Card containing the effect
-   * @param {ChainContext} context - Current chain context
-   * @returns {{ok: boolean, reason?: string}}
-   */
-  canActivateInChain(effect, card, context) {
-    if (!effect || !card) {
-      return { ok: false, reason: "Missing effect or card." };
-    }
-
-    const effectSpeed = this.getEffectSpellSpeed(effect, card);
-    const requiredSpeed = this.getRequiredSpellSpeed(context);
-
-    // Check spell speed requirement
-    if (effectSpeed < requiredSpeed) {
-      return {
-        ok: false,
-        reason: `Spell Speed ${effectSpeed} cannot respond to Spell Speed ${requiredSpeed}.`,
-      };
-    }
-
-    // Check if context allows this speed
-    const contextDef = CHAIN_CONTEXTS[context?.type];
-    if (contextDef && !contextDef.allowedSpeeds.includes(effectSpeed)) {
-      return {
-        ok: false,
-        reason: `Spell Speed ${effectSpeed} not allowed in ${context?.type} context.`,
-      };
-    }
-
-    // Check if effect has specific chain response requirements
-    if (effect.canRespondTo && Array.isArray(effect.canRespondTo)) {
-      if (!effect.canRespondTo.includes(context?.type)) {
-        return {
-          ok: false,
-          reason: `Effect can only respond to: ${effect.canRespondTo.join(
-            ", ",
-          )}`,
-        };
-      }
-    }
-
-    return { ok: true };
-  }
 
   // ============================================================
   // ACTIVATABLE CARDS FILTERING
@@ -1602,384 +1449,49 @@ export default class ChainSystem {
     return resolved;
   }
 
-  /**
-   * Add a card to the chain stack
-   * @param {Object} card
-   * @param {Object} player
-   * @param {Object} effect
-   * @param {ChainContext} context
-   * @param {Object} [selections]
-   */
-  addToChain(card, player, effect, context, selections = null, zone = null) {
-    this.currentChainLevel++;
-
-    // Determine activation zone if not provided
-    const activationZone = zone || this.determineCardZone(card, player);
-
-    const chainLink = {
-      card,
-      player,
-      effect,
-      context,
-      zone: activationZone,
-      selections,
-      chainLevel: this.currentChainLevel,
-    };
-
-    this.chainStack.push(chainLink);
-
-    this.log(
-      `Chain Link ${this.currentChainLevel}: ${card.name} (${player.id})`,
-    );
-
-    // Notify UI
-    const ui = this.getUI();
-    if (ui?.log) {
-      ui.log(`Chain Link ${this.currentChainLevel}: ${card.name}`);
-    }
-  }
+  // addToChain moved to src/core/chain/stack.js
 
   // ============================================================
   // CHAIN RESOLUTION
   // ============================================================
 
-  /**
-   * Resolve the chain stack in LIFO order
-   * @returns {Promise<void>}
-   */
-  async resolveChain() {
-    if (this.chainStack.length === 0) {
-      this.log("No chain to resolve");
-      return;
-    }
-
-    this.isResolving = true;
-    this.log(`Resolving chain with ${this.chainStack.length} links`);
-
-    const ui = this.getUI();
-
-    // Resolve in reverse order (LIFO)
-    while (this.chainStack.length > 0) {
-      const link = this.chainStack.pop();
-
-      if (!link) continue;
-
-      this.log(`Resolving Chain Link ${link.chainLevel}: ${link.card.name}`);
-
-      if (ui?.log) {
-        ui.log(`Resolving: ${link.card.name}`);
-      }
-
-      try {
-        await this.resolveChainLink(link);
-      } catch (error) {
-        console.error(
-          `[ChainSystem] Error resolving ${link.card.name}:`,
-          error,
-        );
-      }
-    }
-
-    this.isResolving = false;
-    this.log("Chain resolution complete");
-  }
-
-  /**
-   * Resolve a single chain link
-   * @param {ChainLink} link
-   * @returns {Promise<void>}
-   */
-  async resolveChainLink(link) {
-    const { card, player, effect, selections } = link;
-
-    if (!card || !player || !effect) {
-      this.log("Invalid chain link, skipping");
-      return;
-    }
-
-    // Track that this card is being resolved (prevents re-offering during resolution)
-    this.cardsBeingResolved.add(card);
-
-    const effectEngine = this.game?.effectEngine;
-    if (!effectEngine) {
-      this.log("No effect engine available");
-      this.cardsBeingResolved.delete(card);
-      return;
-    }
-
-    // Check if the card was removed from the expected zone before resolution
-    // Use the zone stored in the chain link, not assumed 'spellTrap'
-    const activationZone = link.zone || "spellTrap";
-    const cardStillValid = this.isCardStillValid(card, player, activationZone);
-
-    if (!cardStillValid) {
-      this.log(
-        `${card.name} is no longer valid in ${activationZone}, effect fizzles`,
-      );
-      const ui = this.getUI();
-      if (ui?.log) {
-        ui.log(`${card.name}'s effect fizzles (card is no longer available).`);
-      }
-      this.cardsBeingResolved.delete(card);
-      return;
-    }
-
-    try {
-      // Mark trap as face-up when activated (but don't move to GY yet)
-      if (card.cardKind === "trap" && card.isFacedown) {
-        card.isFacedown = false;
-      }
-      if (
-        card.cardKind === "spell" &&
-        card.isFacedown &&
-        activationZone === "spellTrap"
-      ) {
-        card.isFacedown = false;
-      }
-
-      // For Quick-Play spells from hand, move to spellTrap zone before resolution
-      if (
-        card.cardKind === "spell" &&
-        card.subtype === "quick" &&
-        activationZone === "hand"
-      ) {
-        const handIdx = player.hand?.indexOf(card);
-        if (handIdx !== -1) {
-          player.hand.splice(handIdx, 1);
-          player.spellTrap = player.spellTrap || [];
-          player.spellTrap.push(card);
-        }
-      }
-
-      // Resolve the effect
-      const ctx = {
-        source: card,
-        player,
-        opponent: this.getOpponent(player),
-        activationZone: activationZone,
-        // Include attack context if available (for traps like Dragon Spirit Sanctuary)
-        defender: link.context?.defender || link.context?.target,
-        attacker: link.context?.attacker,
-        attackerOwner: link.context?.attackerOwner,
-        defenderOwner: link.context?.defenderOwner,
-        activationContext: {
-          chainLevel: link.chainLevel,
-          context: link.context,
-          autoSelectSingleTarget: true,
-          autoSelectTargets: isAI(player),
-        },
-      };
-
-      // If we have selections, use them directly; otherwise resolve targets
-      let resolvedSelections = selections;
-      if (!resolvedSelections || Object.keys(resolvedSelections).length === 0) {
-        // Resolve targets using the context (this handles targetFromContext)
-        const targetResult = effectEngine.resolveTargets(
-          effect.targets || [],
-          ctx,
-          null,
-        );
-        if (targetResult.ok !== false && targetResult.targets) {
-          resolvedSelections = targetResult.targets;
-        } else if (targetResult.needsSelection) {
-          this.log(
-            `${card.name} requires selection but none provided, effect may fail`,
-          );
-          resolvedSelections = {};
-        }
-      }
-
-      // Apply actions
-      if (Array.isArray(effect.actions)) {
-        try {
-          await effectEngine.applyActions(
-            effect.actions,
-            ctx,
-            resolvedSelections || {},
-          );
-        } catch (error) {
-          // Enhanced error logging with chain link context for easier debugging
-          const linkContext = {
-            cardName: card?.name || "Unknown",
-            cardId: card?.id,
-            effectId: effect?.id || "unknown",
-            effectTiming: effect?.timing,
-            chainLevel: link.chainLevel,
-            activationZone: activationZone,
-            player: player?.id,
-            actionsCount: effect.actions?.length || 0,
-            actionTypes: effect.actions?.map((a) => a?.type).filter(Boolean),
-          };
-          console.error(
-            `[ChainSystem] Action error resolving chain link:`,
-            linkContext,
-            error,
-          );
-          this.log(
-            `Chain resolution failed for ${linkContext.cardName} (CL${linkContext.chainLevel}):`,
-            error.message,
-          );
-        }
-      }
-
-      if (
-        card.cardKind === "spell" &&
-        typeof effectEngine.handleBlueprintStorageAfterResolution === "function"
-      ) {
-        await effectEngine.handleBlueprintStorageAfterResolution(
-          card,
-          effect,
-          ctx,
-        );
-      }
-
-      // AFTER resolution: Move non-continuous traps and quick-play spells to graveyard
-      if (card.cardKind === "trap" && card.subtype !== "continuous") {
-        const idx = player.spellTrap?.indexOf(card);
-        if (idx !== -1) {
-          player.spellTrap.splice(idx, 1);
-          player.graveyard = player.graveyard || [];
-          player.graveyard.push(card);
-          this.log(`${card.name} sent to graveyard after resolution`);
-        }
-      }
-
-      // Quick-Play spells also go to graveyard after resolution
-      if (card.cardKind === "spell" && card.subtype === "quick") {
-        const idx = player.spellTrap?.indexOf(card);
-        if (idx !== -1) {
-          player.spellTrap.splice(idx, 1);
-          player.graveyard = player.graveyard || [];
-          player.graveyard.push(card);
-          this.log(`${card.name} sent to graveyard after resolution`);
-        }
-      }
-
-      // Register once per turn usage using the game's method for consistency
-      if (effect.oncePerTurn) {
-        // Use game's method if available, otherwise fallback to effectEngine
-        if (this.game?.registerOncePerTurnUsage) {
-          this.game.registerOncePerTurnUsage(card, player, effect);
-        } else if (effectEngine?.registerOncePerTurnUsage) {
-          effectEngine.registerOncePerTurnUsage(card, player, effect);
-        }
-      }
-
-      this.game?.updateBoard?.();
-    } finally {
-      // Always remove from cardsBeingResolved to ensure cleanup
-      this.cardsBeingResolved.delete(card);
-    }
-  }
-
-  /**
-   * Check if a card is still valid for resolution
-   * @param {Object} card
-   * @param {Object} player
-   * @param {ChainContext} context
-   * @returns {boolean}
-   */
-  isCardStillValid(card, player, zone) {
-    if (!card || !player) return false;
-
-    // Check if card is still in expected zone
-    // zone is now passed directly, not extracted from context
-    const checkZone = zone || "spellTrap";
-
-    if (checkZone === "spellTrap") {
-      return player.spellTrap?.includes(card) === true;
-    }
-    if (checkZone === "hand") {
-      return player.hand?.includes(card) === true;
-    }
-    if (checkZone === "field") {
-      return player.field?.includes(card) === true;
-    }
-    if (checkZone === "graveyard") {
-      return player.graveyard?.includes(card) === true;
-    }
-
-    // Unknown zone - assume valid to avoid false fizzles
-    return true;
-  }
-
-  /**
-   * Determine which zone a card is currently in
-   * @param {Object} card
-   * @param {Object} player
-   * @returns {string}
-   */
-  determineCardZone(card, player) {
-    if (!card || !player) return "unknown";
-
-    if (player.hand?.includes(card)) return "hand";
-    if (player.field?.includes(card)) return "field";
-    if (player.spellTrap?.includes(card)) return "spellTrap";
-    if (player.graveyard?.includes(card)) return "graveyard";
-    if (player.banished?.includes(card)) return "banished";
-
-    return "unknown";
-  }
+  // Resolution methods moved to src/core/chain/resolution.js:
+  //   resolveChain, resolveChainLink, isCardStillValid, determineCardZone
 
   // ============================================================
   // UTILITY METHODS
+  // Stack queries moved to src/core/chain/stack.js:
+  //   isChainWindowOpen, getChainLength, getLastChainLink,
+  //   isChainResolving, cancelChain, getChainSummary
   // ============================================================
-
-  /**
-   * Check if a chain window is currently open
-   * @returns {boolean}
-   */
-  isChainWindowOpen() {
-    return this.chainWindowOpen;
-  }
-
-  /**
-   * Get current chain stack length
-   * @returns {number}
-   */
-  getChainLength() {
-    return this.chainStack.length;
-  }
-
-  /**
-   * Get the last card in the chain
-   * @returns {Object|null}
-   */
-  getLastChainLink() {
-    if (this.chainStack.length === 0) return null;
-    return this.chainStack[this.chainStack.length - 1];
-  }
-
-  /**
-   * Check if we're in the middle of resolving a chain
-   * @returns {boolean}
-   */
-  isChainResolving() {
-    return this.isResolving;
-  }
-
-  /**
-   * Cancel the current chain (for special effects that negate chains)
-   */
-  cancelChain() {
-    this.log("Chain cancelled");
-    this.chainStack = [];
-    this.chainWindowOpen = false;
-    this.chainWindowContext = null;
-    this.isResolving = false;
-    this.currentChainLevel = 0;
-    this.cardsBeingResolved.clear();
-  }
-
-  /**
-   * Get a summary of the current chain for UI display
-   * @returns {Array<{level: number, cardName: string, playerName: string}>}
-   */
-  getChainSummary() {
-    return this.chainStack.map((link) => ({
-      level: link.chainLevel,
-      cardName: link.card?.name || "Unknown",
-      playerName: link.player?.name || link.player?.id || "Unknown",
-    }));
-  }
 }
+
+// -----------------------------------------------------------------------------
+// Spell Speed: Attach methods from modular chain/spellSpeed.js
+// -----------------------------------------------------------------------------
+
+ChainSystem.prototype.getEffectSpellSpeed = chainSpellSpeed.getEffectSpellSpeed;
+ChainSystem.prototype.getRequiredSpellSpeed =
+  chainSpellSpeed.getRequiredSpellSpeed;
+ChainSystem.prototype.canActivateInChain = chainSpellSpeed.canActivateInChain;
+
+// -----------------------------------------------------------------------------
+// Stack: Attach methods from modular chain/stack.js
+// -----------------------------------------------------------------------------
+
+ChainSystem.prototype.addToChain = chainStack.addToChain;
+ChainSystem.prototype.isChainWindowOpen = chainStack.isChainWindowOpen;
+ChainSystem.prototype.getChainLength = chainStack.getChainLength;
+ChainSystem.prototype.getLastChainLink = chainStack.getLastChainLink;
+ChainSystem.prototype.isChainResolving = chainStack.isChainResolving;
+ChainSystem.prototype.cancelChain = chainStack.cancelChain;
+ChainSystem.prototype.getChainSummary = chainStack.getChainSummary;
+
+// -----------------------------------------------------------------------------
+// Resolution: Attach methods from modular chain/resolution.js
+// -----------------------------------------------------------------------------
+
+ChainSystem.prototype.resolveChain = chainResolution.resolveChain;
+ChainSystem.prototype.resolveChainLink = chainResolution.resolveChainLink;
+ChainSystem.prototype.isCardStillValid = chainResolution.isCardStillValid;
+ChainSystem.prototype.determineCardZone = chainResolution.determineCardZone;

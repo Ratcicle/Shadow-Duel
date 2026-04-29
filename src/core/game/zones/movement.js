@@ -357,11 +357,15 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     return { success: false, reason: "card_not_found" };
   }
 
-  const animationToZone =
-    toZone === "hand" &&
-    (card.monsterType === "fusion" || card.monsterType === "ascension")
-      ? "extraDeck"
-      : toZone;
+  const isExtraDeckMonster =
+    card.monsterType === "fusion" || card.monsterType === "ascension";
+  const allowExtraDeckMonsterToHand =
+    options.allowExtraDeckMonsterToHand === true;
+  const shouldRedirectExtraDeckMonsterToExtraDeck =
+    toZone === "hand" && isExtraDeckMonster && !allowExtraDeckMonsterToHand;
+  const animationToZone = shouldRedirectExtraDeckMonsterToExtraDeck
+    ? "extraDeck"
+    : toZone;
   const cardAnimationIntent = buildZoneMoveAnimationIntent(
     this,
     card,
@@ -747,10 +751,7 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
   card.controller = destPlayer.id;
 
   // Special case: Extra Deck monsters returning to hand go back to Extra Deck instead
-  if (
-    toZone === "hand" &&
-    (card.monsterType === "fusion" || card.monsterType === "ascension")
-  ) {
+  if (shouldRedirectExtraDeckMonsterToExtraDeck) {
     const extraDeck = this.getZone(destPlayer, "extraDeck");
     if (extraDeck) {
       extraDeck.push(card);

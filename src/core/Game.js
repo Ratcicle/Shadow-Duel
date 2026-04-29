@@ -30,6 +30,7 @@ import * as zonesSnapshot from "./game/zones/snapshot.js";
 import * as zonesInvariants from "./game/zones/invariants.js";
 import * as zonesOperations from "./game/zones/operations.js";
 import * as zonesMovement from "./game/zones/movement.js";
+import * as zonesDestruction from "./game/zones/destruction.js";
 
 // Combat modules (moved from inline methods)
 import * as combatIndicators from "./game/combat/indicators.js";
@@ -42,6 +43,8 @@ import * as combatResolution from "./game/combat/resolution.js";
 import * as summonTracking from "./game/summon/tracking.js";
 import * as summonExecution from "./game/summon/execution.js";
 import * as summonAscension from "./game/summon/ascension.js";
+import * as summonPosition from "./game/summon/position.js";
+import * as summonMaterialStats from "./game/summon/materialStats.js";
 
 // Deck modules (moved from inline methods)
 import * as deckDraw from "./game/deck/draw.js";
@@ -57,6 +60,17 @@ import * as turnScheduling from "./game/turn/scheduling.js";
 import * as turnCleanup from "./game/turn/cleanup.js";
 import * as turnLifecycle from "./game/turn/lifecycle.js";
 import * as turnTransitions from "./game/turn/transitions.js";
+import * as turnOncePerTurn from "./game/turn/oncePerTurn.js";
+
+// Actions modules (moved from inline methods)
+import * as actionsGuard from "./game/actions/guard.js";
+
+// State modules (moved from inline methods)
+import * as stateSerialization from "./game/state/serialization.js";
+
+// Helpers modules (moved from inline methods)
+import * as helpersPlayers from "./game/helpers/players.js";
+import * as helpersCards from "./game/helpers/cards.js";
 
 // Spell/Trap modules (moved from inline methods)
 import * as spellTrapSet from "./game/spellTrap/set.js";
@@ -77,23 +91,9 @@ import * as uiInteractions from "./game/ui/interactions.js";
 // Replay capture integration
 import * as replayIntegration from "./game/replay/integration.js";
 
-// Helper to construct user-friendly cost type descriptions
-function getCostTypeDescription(costFilters, count) {
-  if (costFilters.archetype) {
-    const baseType = costFilters.cardKind || "monster";
-    const singular = `"${costFilters.archetype}" ${baseType}`;
-    const plural = `"${costFilters.archetype}" ${baseType}s`;
-    return count > 1 ? plural : singular;
-  }
-
-  if (costFilters.cardKind) {
-    const singular = costFilters.cardKind;
-    const plural = costFilters.cardKind + "s";
-    return count > 1 ? plural : singular;
-  }
-
-  return count > 1 ? "cards" : "card";
-}
+// Effects modules (moved from inline methods)
+import * as effectsDestructionReplacement from "./game/effects/destructionReplacement.js";
+import * as effectsActivationPipeline from "./game/effects/activationPipeline.js";
 
 export default class Game {
   constructor(options = {}) {
@@ -182,141 +182,12 @@ export default class Game {
       : new ChainSystem(this);
   }
 
-  resetMaterialDuelStats(reason = "reset") {
-    this.materialDuelStats = {
-      player: {
-        destroyedOpponentMonstersByMaterialId: new Map(),
-        effectActivationsByMaterialId: new Map(),
-      },
-      bot: {
-        destroyedOpponentMonstersByMaterialId: new Map(),
-        effectActivationsByMaterialId: new Map(),
-      },
-    };
-    this.devLog("MATERIAL_STATS_RESET", { summary: reason });
-  }
-
-  // -----------------------------------------------------------------------------
-  // Summon tracking: _trackSpecialSummonType, getSpecialSummonedTypeCount
-  // ? Moved to src/core/game/summon/tracking.js
-  // -----------------------------------------------------------------------------
-
-  // ? scheduleDelayedAction, processDelayedActions, resolveDelayedAction ? Moved to src/core/game/turn/scheduling.js
-
-  // -----------------------------------------------------------------------------
-  // Summon delayed: resolveDelayedSummon
-  // ? Moved to src/core/game/summon/tracking.js
-  // -----------------------------------------------------------------------------
-
-  /**
-   * ? FASE 4: Aplicar buff tempor�rio com expira��o baseada em turno
-   * Suporta m�ltiplos buffs simult�neos com expira��o em turnos diferentes
-   * @param {Object} card - Carta a receber o buff
-   * @param {string} stat - Stat afetado ("atk" ou "def")
-   * @param {number} value - Valor do buff
-   * @param {number} expiresOnTurn - Turno em que o buff expira
-   * @param {string} id - ID �nico do buff (opcional)
-   */
-  applyTurnBasedBuff(card, stat, value, expiresOnTurn, id = null) {
-    if (
-      !card ||
-      !stat ||
-      !Number.isFinite(value) ||
-      !Number.isFinite(expiresOnTurn)
-    ) {
-      return false;
-    }
-
-    if (!Array.isArray(card.turnBasedBuffs)) {
-      card.turnBasedBuffs = [];
-    }
-
-    const buffId =
-      id || `buff_${card.id}_${Math.random().toString(36).substr(2, 9)}`;
-    const buffEntry = {
-      id: buffId,
-      stat,
-      value,
-      expiresOnTurn,
-    };
-
-    card.turnBasedBuffs.push(buffEntry);
-
-    // Aplicar modifica��o imediata ao stat
-    if (stat === "atk") {
-      card.atk += value;
-    } else if (stat === "def") {
-      card.def += value;
-    }
-
-    this.devLog?.("TURN_BASED_BUFF_APPLIED", {
-      summary: `${card.name} +${value} ${stat} (expires turn ${expiresOnTurn})`,
-      card: card.name,
-      stat,
-      value,
-      expiresOnTurn,
-    });
-
-    return true;
-  }
-
-  // ? cleanupExpiredBuffs ? Moved to src/core/game/turn/cleanup.js
-
-  incrementMaterialStat(playerId, mapName, materialCardId, delta = 1) {
-    const store = this.materialDuelStats?.[playerId]?.[mapName];
-    if (!store || !(store instanceof Map) || !Number.isFinite(materialCardId)) {
-      return;
-    }
-    const next = (store.get(materialCardId) || 0) + delta;
-    store.set(materialCardId, next);
-  }
-
-  recordMaterialEffectActivation(player, sourceCard, meta = {}) {
-    const playerId = player?.id || player;
-    if (playerId !== "player" && playerId !== "bot") return;
-    if (!sourceCard || sourceCard.cardKind !== "monster") return;
-    if (typeof sourceCard.id !== "number") return;
-    this.incrementMaterialStat(
-      playerId,
-      "effectActivationsByMaterialId",
-      sourceCard.id,
-      1,
-    );
-    this.devLog("MATERIAL_EFFECT_ACTIVATION", {
-      summary: `${playerId}:${sourceCard.name} (${sourceCard.id})`,
-      player: playerId,
-      card: sourceCard.name,
-      cardId: sourceCard.id,
-      context: meta.contextLabel,
-    });
-  }
-
-  recordMaterialDestroyedOpponentMonster(sourceCard, destroyedCard) {
-    if (!sourceCard || !destroyedCard) return;
-    if (sourceCard.cardKind !== "monster") return;
-    if (destroyedCard.cardKind !== "monster") return;
-    if (typeof sourceCard.id !== "number") return;
-
-    const sourcePlayerId = sourceCard.controller || sourceCard.owner;
-    const destroyedPlayerId = destroyedCard.controller || destroyedCard.owner;
-    if (sourcePlayerId !== "player" && sourcePlayerId !== "bot") return;
-    if (destroyedPlayerId !== "player" && destroyedPlayerId !== "bot") return;
-    if (sourcePlayerId === destroyedPlayerId) return;
-
-    this.incrementMaterialStat(
-      sourcePlayerId,
-      "destroyedOpponentMonstersByMaterialId",
-      sourceCard.id,
-      1,
-    );
-    this.devLog("MATERIAL_DESTROY_COUNT", {
-      summary: `${sourcePlayerId}:${sourceCard.name} -> ${destroyedCard.name}`,
-      player: sourcePlayerId,
-      source: sourceCard.name,
-      sourceId: sourceCard.id,
-      destroyed: destroyedCard.name,
-    });
-  }
+  // Material stats methods moved to src/core/game/summon/materialStats.js
+  // applyTurnBasedBuff moved to src/core/game/turn/cleanup.js (paired with cleanupExpiredBuffs)
+  // _trackSpecialSummonType, getSpecialSummonedTypeCount moved to src/core/game/summon/tracking.js
+  // scheduleDelayedAction, processDelayedActions, resolveDelayedAction moved to src/core/game/turn/scheduling.js
+  // resolveDelayedSummon moved to src/core/game/summon/tracking.js
+  // cleanupExpiredBuffs moved to src/core/game/turn/cleanup.js
 
   setDevMode(enabled) {
     this.devModeEnabled = !!enabled;
@@ -344,175 +215,8 @@ export default class Game {
   // See: ownership.js, snapshot.js, invariants.js, operations.js, movement.js
   // -----------------------------------------------------------------------------
 
-  resetOncePerTurnUsage(reason = "reset") {
-    this.oncePerTurnUsage = {
-      player: new Map(),
-      bot: new Map(),
-      card: new WeakMap(),
-    };
-    this.oncePerTurnTurnCounter = this.turnCounter;
-    this.devLog("OPT_RESET", { summary: reason, turn: this.turnCounter });
-  }
-
-  ensureOncePerTurnUsageFresh() {
-    if (this.oncePerTurnTurnCounter !== this.turnCounter) {
-      this.resetOncePerTurnUsage("turn_change");
-    }
-  }
-
-  getOncePerTurnLockKey(card, effect, options = {}) {
-    const explicit = options.lockKey || options.key || null;
-    if (explicit) {
-      return explicit.startsWith("once_per_turn:")
-        ? explicit
-        : `once_per_turn:${explicit}`;
-    }
-
-    const base =
-      effect?.oncePerTurnName ||
-      effect?.id ||
-      options.actionId ||
-      card?.name ||
-      "effect";
-    return `once_per_turn:${base}`;
-  }
-
-  getOncePerTurnStore(card, player, effect, options = {}) {
-    const useCardScope =
-      effect?.oncePerTurnScope === "card" ||
-      effect?.oncePerTurnPerCard === true;
-    if (useCardScope && card) {
-      let store = this.oncePerTurnUsage.card.get(card);
-      if (!store) {
-        store = new Map();
-        this.oncePerTurnUsage.card.set(card, store);
-      }
-      return store;
-    }
-
-    const playerId = player?.id || "player";
-    if (!this.oncePerTurnUsage[playerId]) {
-      this.oncePerTurnUsage[playerId] = new Map();
-    }
-    return this.oncePerTurnUsage[playerId];
-  }
-
-  canUseOncePerTurn(card, player, effect, options = {}) {
-    if (!effect || !effect.oncePerTurn) {
-      return { ok: true };
-    }
-    this.ensureOncePerTurnUsageFresh();
-    const lockKey = this.getOncePerTurnLockKey(card, effect, options);
-    const store = this.getOncePerTurnStore(card, player, effect, options);
-    const currentTurn = this.turnCounter;
-    const lastTurn = store.get(lockKey);
-    if (lastTurn === currentTurn) {
-      return {
-        ok: false,
-        reason: "Efeito 1/turn ja usado neste turno.",
-        lockKey,
-      };
-    }
-    return { ok: true, lockKey };
-  }
-
-  markOncePerTurnUsed(card, player, effect, options = {}) {
-    if (!effect || !effect.oncePerTurn) {
-      return;
-    }
-    this.ensureOncePerTurnUsageFresh();
-    const lockKey = this.getOncePerTurnLockKey(card, effect, options);
-    const store = this.getOncePerTurnStore(card, player, effect, options);
-    store.set(lockKey, this.turnCounter);
-    this.devLog("OPT_MARK_USED", {
-      summary: lockKey,
-      card: card?.name,
-      player: player?.id,
-      turn: this.turnCounter,
-    });
-  }
-
-  canStartAction(options = {}) {
-    const actor = options.actor || null;
-    const kind = options.kind || "action";
-    const silent = options.silent === true;
-    const allowDuringSelection =
-      options.allowDuringSelection === true || kind === "selection_interaction";
-    const allowDuringResolving =
-      options.allowDuringResolving === true || kind === "selection_interaction";
-    const allowDuringOpponentTurn = options.allowDuringOpponentTurn === true;
-    const phaseReq = options.phaseReq || null;
-    const selectionState = this.selectionState || "idle";
-    const selectionInteractive =
-      !!this.targetSelection ||
-      selectionState === "selecting" ||
-      selectionState === "confirming";
-    const resolvingActive =
-      this.isResolvingEffect ||
-      selectionState === "resolving" ||
-      this.eventResolutionDepth > 0;
-
-    const blocked = (code, reason) => {
-      const result = { ok: false, code, reason };
-      if (!silent) {
-        this.devLog("ACTION_GUARD_BLOCKED", {
-          summary: code,
-          kind,
-          reason,
-          phase: this.phase,
-          turn: this.turn,
-          actor: actor?.id,
-          selectionState: this.selectionState,
-          resolving: this.isResolvingEffect,
-          eventDepth: this.eventResolutionDepth,
-        });
-      }
-      return result;
-    };
-
-    if (selectionInteractive && !allowDuringSelection) {
-      return blocked(
-        "BLOCKED_SELECTION_ACTIVE",
-        "Finalize a selecao atual antes de iniciar outra acao.",
-      );
-    }
-
-    if (resolvingActive && !allowDuringResolving) {
-      return blocked(
-        "BLOCKED_RESOLVING",
-        "Finalize o efeito pendente antes de fazer outra acao.",
-      );
-    }
-
-    if (
-      actor &&
-      actor.id &&
-      actor.id !== this.turn &&
-      !allowDuringOpponentTurn
-    ) {
-      return blocked("BLOCKED_NOT_YOUR_TURN", "Nao e o seu turno.");
-    }
-
-    if (phaseReq) {
-      const phases = Array.isArray(phaseReq) ? phaseReq : [phaseReq];
-      if (!phases.includes(this.phase)) {
-        return blocked(
-          "BLOCKED_WRONG_PHASE",
-          "Esta acao nao pode ser usada nesta fase.",
-        );
-      }
-    }
-
-    return { ok: true };
-  }
-
-  guardActionStart(options = {}, logToRenderer = true) {
-    const result = this.canStartAction(options);
-    if (!result.ok && logToRenderer && result.reason && this.ui?.log) {
-      this.ui.log(result.reason);
-    }
-    return result;
-  }
+  // Once-per-turn methods moved to src/core/game/turn/oncePerTurn.js
+  // Action guard methods moved to src/core/game/actions/guard.js
 
   // -----------------------------------------------------------------------------
   // Events methods moved to core/game/events/
@@ -656,595 +360,11 @@ export default class Game {
     }
   }
 
-  async resolveDestructionWithReplacement(card, options = {}) {
-    if (!card) {
-      return { replaced: false };
-    }
-
-    const ownerPlayer = card.owner === "player" ? this.player : this.bot;
-    if (!ownerPlayer) {
-      return { replaced: false };
-    }
-
-    const cause = options.cause || options.reason || "effect";
-    const fromZone =
-      options.fromZone ||
-      this.effectEngine?.findCardZone?.(ownerPlayer, card) ||
-      null;
-
-    // Check for Equip Spell protection (e.g., Crescent Shield Guard)
-    if (cause === "battle" && card.cardKind === "monster") {
-      const guardEquip = (card.equips || []).find(
-        (equip) =>
-          equip && equip.grantsCrescentShieldGuard && equip.equippedTo === card,
-      );
-
-      if (guardEquip) {
-        this.ui.log(
-          `${guardEquip.name} was destroyed to protect ${card.name}.`,
-        );
-        const guardResult = await this.destroyCard(guardEquip, {
-          cause,
-          sourceCard: card,
-          opponent: this.getOpponent(ownerPlayer),
-          fromZone: "spellTrap",
-        });
-        if (guardResult?.destroyed) {
-          guardEquip.grantsCrescentShieldGuard = false;
-          return { replaced: true };
-        }
-        return { replaced: false };
-      }
-    }
-
-    const formatReplacementText = (text, sourceCardName) => {
-      if (!text) return text;
-      return text
-        .replace("{target}", card.name)
-        .replace("{source}", sourceCardName || "");
-    };
-
-    const matchesTargetFilters = (target, filters) => {
-      if (!filters || Object.keys(filters).length === 0) return true;
-      if (this.effectEngine?.cardMatchesFilters) {
-        return this.effectEngine.cardMatchesFilters(target, filters);
-      }
-
-      const nameFilter = filters.name || filters.cardName;
-      if (nameFilter && target.name !== nameFilter) return false;
-      if (filters.cardKind) {
-        const requiredKinds = Array.isArray(filters.cardKind)
-          ? filters.cardKind
-          : [filters.cardKind];
-        if (!requiredKinds.includes(target.cardKind)) return false;
-      }
-      if (filters.subtype) {
-        const requiredSubtypes = Array.isArray(filters.subtype)
-          ? filters.subtype
-          : [filters.subtype];
-        if (!requiredSubtypes.includes(target.subtype)) return false;
-      }
-      if (filters.archetype) {
-        const archetypes = Array.isArray(target.archetypes)
-          ? target.archetypes
-          : target.archetype
-            ? [target.archetype]
-            : [];
-        if (!archetypes.includes(filters.archetype)) return false;
-      }
-      return true;
-    };
-
-    const tryReplacement = async (sourceCard, sourceOwner, effect) => {
-      if (!sourceCard || !effect?.replacementEffect) {
-        return { replaced: false };
-      }
-
-      const replacement = effect.replacementEffect;
-      if (replacement.type && replacement.type !== "destruction") {
-        return { replaced: false };
-      }
-
-      const sourceRequireFaceup = effect.requireFaceup !== false;
-      if (sourceRequireFaceup && sourceCard.isFacedown) {
-        return { replaced: false };
-      }
-
-      const targetOwnerKey =
-        replacement.targetOwner ||
-        replacement.appliesTo ||
-        (sourceCard === card ? "self" : null);
-      if (!targetOwnerKey) {
-        return { replaced: false };
-      }
-
-      if (targetOwnerKey !== "any") {
-        const expectedOwner =
-          targetOwnerKey === "self"
-            ? sourceOwner
-            : this.getOpponent(sourceOwner);
-        if (expectedOwner !== ownerPlayer) {
-          return { replaced: false };
-        }
-      }
-
-      const targetZones = replacement.targetZones
-        ? replacement.targetZones
-        : replacement.targetZone
-          ? [replacement.targetZone]
-          : null;
-      if (targetZones && targetZones.length > 0) {
-        if (!fromZone || !targetZones.includes(fromZone)) {
-          return { replaced: false };
-        }
-      }
-
-      const allowFacedown = replacement.allowFacedown === true;
-      const targetRequireFaceup =
-        replacement.targetRequireFaceup !== false && !allowFacedown;
-      if (targetRequireFaceup && card.isFacedown) {
-        return { replaced: false };
-      }
-
-      const targetFilters = replacement.targetFilters || null;
-      if (targetFilters && !matchesTargetFilters(card, targetFilters)) {
-        return { replaced: false };
-      }
-
-      const onceCheck = this.canUseOncePerTurn(sourceCard, sourceOwner, effect);
-      if (!onceCheck.ok) {
-        return { replaced: false };
-      }
-
-      if (
-        replacement.reason &&
-        replacement.reason !== "any" &&
-        replacement.reason !== cause
-      ) {
-        return { replaced: false };
-      }
-
-      const costCount = replacement.costCount ?? 0;
-      if (replacement.auto === true || costCount === 0) {
-        this.markOncePerTurnUsed(sourceCard, sourceOwner, effect);
-        const logMessage = formatReplacementText(
-          replacement.logMessage,
-          sourceCard.name,
-        );
-        if (logMessage) {
-          this.ui?.log?.(logMessage);
-        } else {
-          this.ui?.log?.(
-            `${card.name} avoided destruction due to ${sourceCard.name}.`,
-          );
-        }
-        return { replaced: true };
-      }
-
-      const costOwnerKey = replacement.costOwner || "source";
-      const costOwner = costOwnerKey === "target" ? ownerPlayer : sourceOwner;
-
-      if (!costOwner) {
-        return { replaced: false };
-      }
-
-      const costFilters = replacement.costFilters || {};
-      const filterCandidates = (candidate) => {
-        if (!candidate || candidate === card) return false;
-
-        if (costFilters.cardKind && candidate.cardKind !== costFilters.cardKind)
-          return false;
-
-        if (costFilters.archetype) {
-          const hasArchetype =
-            candidate.archetype === costFilters.archetype ||
-            (Array.isArray(candidate.archetypes) &&
-              candidate.archetypes.includes(costFilters.archetype));
-          if (!hasArchetype) return false;
-        }
-
-        if (costFilters.name && candidate.name !== costFilters.name)
-          return false;
-
-        return true;
-      };
-
-      const costZone = replacement.costZone || "field";
-      const candidateZone =
-        costZone === "fieldSpell"
-          ? costOwner.fieldSpell
-            ? [costOwner.fieldSpell]
-            : []
-          : costOwner[costZone] || [];
-      const candidates = candidateZone.filter(filterCandidates);
-
-      if (candidates.length < costCount) {
-        return { replaced: false };
-      }
-
-      // Bot auto-selection (lowest ATK for cost)
-      if (costOwner.id !== "player") {
-        const chosen = [...candidates]
-          .sort((a, b) => (a.atk || 0) - (b.atk || 0))
-          .slice(0, costCount);
-
-        for (const costCard of chosen) {
-          this.moveCard(costCard, costOwner, "graveyard", {
-            fromZone: costZone,
-          });
-        }
-
-        this.markOncePerTurnUsed(sourceCard, sourceOwner, effect);
-
-        const costNames = chosen.map((c) => c.name).join(", ");
-        const logMessage = formatReplacementText(
-          replacement.logMessage,
-          sourceCard.name,
-        );
-        if (logMessage) {
-          this.ui?.log?.(logMessage);
-        } else {
-          this.ui?.log?.(
-            `${card.name} avoided destruction by sending ${costNames} to the Graveyard.`,
-          );
-        }
-        return { replaced: true };
-      }
-
-      const costDescription = getCostTypeDescription(costFilters, costCount);
-      const prompt =
-        formatReplacementText(replacement.prompt, sourceCard.name) ||
-        `Send ${costCount} ${costDescription} to the GY to save ${card.name}?`;
-
-      const wantsToReplace =
-        (await this.ui?.showConfirmPrompt?.(prompt, {
-          kind: "destruction_replacement",
-          cardName: card.name,
-        })) ?? false;
-      if (!wantsToReplace) {
-        return { replaced: false };
-      }
-
-      const selectionMessage =
-        formatReplacementText(replacement.selectionMessage, sourceCard.name) ||
-        `Choose ${costCount} ${
-          costCount > 1 ? "cards" : "card"
-        } to send to the Graveyard for ${card.name}'s protection.`;
-
-      const selections = await this.askPlayerToSelectCards({
-        owner: "player",
-        zone: costZone,
-        min: costCount,
-        max: costCount,
-        filter: filterCandidates,
-        message: selectionMessage,
-      });
-
-      if (!selections || selections.length < costCount) {
-        this.ui.log("Protection cancelled.");
-        return { replaced: false };
-      }
-
-      // Pay cost
-      for (const costCard of selections) {
-        this.moveCard(costCard, costOwner, "graveyard", { fromZone: costZone });
-      }
-
-      this.markOncePerTurnUsed(sourceCard, sourceOwner, effect);
-
-      const costNames = selections.map((c) => c.name).join(", ");
-      const logMessage = formatReplacementText(
-        replacement.logMessage,
-        sourceCard.name,
-      );
-      if (logMessage) {
-        this.ui?.log?.(logMessage);
-      } else {
-        this.ui.log(
-          `${card.name} avoided destruction by sending ${costNames} to the Graveyard.`,
-        );
-      }
-      return { replaced: true };
-    };
-
-    const collectSources = (player) => {
-      if (!player) return [];
-      const field = Array.isArray(player.field) ? player.field : [];
-      const spellTrap = Array.isArray(player.spellTrap) ? player.spellTrap : [];
-      const fieldSpell = player.fieldSpell ? [player.fieldSpell] : [];
-      return [...field, ...spellTrap, ...fieldSpell].filter(Boolean);
-    };
-
-    const sourcePool = [
-      ...collectSources(ownerPlayer),
-      ...collectSources(this.getOpponent(ownerPlayer)),
-    ];
-
-    const currentTurn = this.turnCounter;
-    if (Array.isArray(this.temporaryReplacementEffects)) {
-      this.temporaryReplacementEffects =
-        this.temporaryReplacementEffects.filter((entry) => {
-          if (!entry) return false;
-          if (
-            Number.isFinite(entry.expiresOnTurn) &&
-            currentTurn > entry.expiresOnTurn
-          ) {
-            return false;
-          }
-          if (
-            Number.isFinite(entry.usesRemaining) &&
-            entry.usesRemaining <= 0
-          ) {
-            return false;
-          }
-          return true;
-        });
-
-      for (const entry of this.temporaryReplacementEffects) {
-        const sourceOwner =
-          entry.ownerId === this.player.id ? this.player : this.bot;
-        if (!sourceOwner) continue;
-        const sourceCard = {
-          name: entry.sourceName || "Temporary Effect",
-          owner: sourceOwner.id,
-          isFacedown: false,
-        };
-        const effect = {
-          replacementEffect: entry.replacementEffect,
-          requireFaceup: false,
-        };
-        const result = await tryReplacement(sourceCard, sourceOwner, effect);
-        if (result?.replaced) {
-          if (Number.isFinite(entry.usesRemaining)) {
-            entry.usesRemaining -= 1;
-          }
-          if (
-            Number.isFinite(entry.usesRemaining) &&
-            entry.usesRemaining <= 0
-          ) {
-            this.temporaryReplacementEffects =
-              this.temporaryReplacementEffects.filter((e) => e !== entry);
-          }
-          return result;
-        }
-      }
-    }
-
-    for (const sourceCard of sourcePool) {
-      const sourceOwner =
-        sourceCard.owner === "player" ? this.player : this.bot;
-      if (!sourceOwner) continue;
-      const effects = sourceCard.effects || [];
-      for (const effect of effects) {
-        if (!effect?.replacementEffect) continue;
-        const result = await tryReplacement(sourceCard, sourceOwner, effect);
-        if (result?.replaced) {
-          return result;
-        }
-      }
-    }
-
-    return { replaced: false };
-  }
-  async destroyCard(card, options = {}) {
-    const result = await this.runZoneOp(
-      "DESTROY_CARD",
-      async () => {
-        if (!card) {
-          return { destroyed: false, reason: "invalid_card" };
-        }
-
-        const owner = card.owner === "player" ? this.player : this.bot;
-        if (!owner) {
-          return { destroyed: false, reason: "missing_owner" };
-        }
-
-        const cause = options.cause || options.reason || "effect";
-        const sourceCard = options.sourceCard || options.source || null;
-        const opponent = options.opponent || this.getOpponent(owner);
-        const fromZone =
-          options.fromZone ||
-          this.effectEngine?.findCardZone?.(owner, card) ||
-          null;
-
-        if (!fromZone) {
-          return { destroyed: false, reason: "not_in_zone" };
-        }
-
-        // ? Check protection effects before destruction
-        if (
-          Array.isArray(card.protectionEffects) &&
-          card.protectionEffects.length > 0
-        ) {
-          const protectionType =
-            cause === "battle" ? "battle_destruction" : "effect_destruction";
-
-          const activeProtection = card.protectionEffects.find((p) => {
-            if (p.type !== protectionType) return false;
-
-            // Check duration validity
-            if (p.duration === "while_faceup") {
-              return !card.isFacedown;
-            }
-            if (p.duration === "end_of_turn") {
-              return this.turnCounter === p.grantedOnTurn;
-            }
-            if (typeof p.duration === "number") {
-              return this.turnCounter <= p.duration;
-            }
-            return true; // "permanent" or unknown duration
-          });
-
-          if (activeProtection) {
-            this.ui?.log?.(
-              `${card.name} is protected from destruction by ${
-                cause === "battle" ? "battle" : "card effects"
-              }!`,
-            );
-            this.queueVisualFeedback?.({
-              kind: "protect",
-              targetCard: card,
-              targetOwnerId: owner.id,
-              targetZone: fromZone,
-              tone: "blue",
-            });
-            return { destroyed: false, reason: "protected", protectionType };
-          }
-        }
-
-        if (this.effectEngine?.checkBeforeDestroyNegations) {
-          const negationResult =
-            await this.effectEngine.checkBeforeDestroyNegations(card, {
-              source: sourceCard,
-              player: owner,
-              opponent,
-              cause,
-              fromZone,
-            });
-          if (negationResult?.negated) {
-            this.queueVisualFeedback?.({
-              kind: "negate",
-              targetCard: card,
-              targetOwnerId: owner.id,
-              targetZone: fromZone,
-              tone: "blue",
-            });
-            return { destroyed: false, negated: true };
-          }
-        }
-
-        const { replaced } = (await this.resolveDestructionWithReplacement(
-          card,
-          {
-            cause,
-            sourceCard,
-            fromZone,
-          },
-        )) || { replaced: false };
-
-        if (replaced) {
-          return { destroyed: false, replaced: true };
-        }
-
-        const destroyVisualSource = this.ui?.captureCardAnimationSource?.(card, {
-          ownerId: owner.id,
-          zone: fromZone,
-        });
-        this.queueVisualFeedback?.({
-          kind: "destroy",
-          sourceCard,
-          targetCard: card,
-          targetOwnerId: owner.id,
-          targetZone: fromZone,
-          targetRect: destroyVisualSource?.rect || null,
-          tone: cause === "battle" ? "red" : "violet",
-        });
-
-        const moveResult = await this.moveCard(card, owner, "graveyard", {
-          fromZone: fromZone || undefined,
-          wasDestroyed: true,
-          destroyCause: cause,
-          destroySource: sourceCard,
-        });
-
-        if (!moveResult || moveResult.success === false) {
-          return {
-            destroyed: false,
-            reason: moveResult?.reason || "move_failed",
-          };
-        }
-
-        // Propagar needsSelection se o moveCard retornou isso
-        if (moveResult.needsSelection) {
-          return {
-            destroyed: true,
-            needsSelection: true,
-            selectionContract: moveResult.selectionContract,
-          };
-        }
-
-        return { destroyed: true };
-      },
-      {
-        contextLabel: options.contextLabel || "destroyCard",
-        card,
-        fromZone: options.fromZone,
-        toZone: "graveyard",
-      },
-    );
-    if (result?.destroyed) {
-      const sourceCard = options.sourceCard || options.source || null;
-      this.recordMaterialDestroyedOpponentMonster(sourceCard, card);
-    }
-    return result;
-  }
-
-  canFlipSummon(card) {
-    if (!card) return false;
-    const isTurnPlayer = card.owner === this.turn;
-    const isMainPhase = this.phase === "main1" || this.phase === "main2";
-    if (!isTurnPlayer || !isMainPhase) return false;
-    if (!card.isFacedown) return false;
-    if (card.positionChangedThisTurn) return false;
-
-    const setTurn = card.setTurn ?? card.summonedTurn ?? 0;
-    if (this.turnCounter <= setTurn) return false;
-
-    return true;
-  }
-
-  canChangePosition(card) {
-    if (!card) return false;
-    const isTurnPlayer = card.owner === this.turn;
-    const isMainPhase = this.phase === "main1" || this.phase === "main2";
-    if (!isTurnPlayer || !isMainPhase) return false;
-    if (card.isFacedown) return false;
-    if (card.positionChangedThisTurn) return false;
-    if (card.summonedTurn && this.turnCounter <= card.summonedTurn)
-      return false;
-    if (card.hasAttacked) return false;
-
-    return true;
-  }
-
-  // ? flipSummon ? Moved to src/core/game/summon/execution.js
-
-  changeMonsterPosition(card, newPosition) {
-    if (newPosition !== "attack" && newPosition !== "defense") return;
-    if (!this.canChangePosition(card)) return;
-    if (!card || card.position === newPosition) return;
-
-    // Track previous position for replay capture
-    const previousPosition = card.position;
-
-    // Track reveal for Ascension timing if monster was facedown
-    const wasFlipped = card.isFacedown;
-    card.position = newPosition;
-    card.isFacedown = false;
-    if (wasFlipped) {
-      card.revealedTurn = this.turnCounter;
-    }
-    card.positionChangedThisTurn = true;
-    card.cannotAttackThisTurn = newPosition === "defense";
-    this.ui.log(
-      `${card.name} changes to ${
-        newPosition === "attack" ? "Attack" : "Defense"
-      } Position.`,
-    );
-
-    // Emit event for replay capture
-    this.emit("position_change", {
-      card,
-      player: card.owner === "player" ? this.player : this.bot,
-      fromPosition: previousPosition,
-      toPosition: newPosition,
-      wasFlipped,
-    });
-
-    this.updateBoard();
-  }
-
-  // ? finalizeSpellTrapActivation ? Moved to src/core/game/spellTrap/finalization.js
+  // resolveDestructionWithReplacement moved to src/core/game/effects/destructionReplacement.js
+  // destroyCard moved to src/core/game/zones/destruction.js
+  // canFlipSummon, canChangePosition, changeMonsterPosition moved to src/core/game/summon/position.js
+  // flipSummon ? Moved to src/core/game/summon/execution.js
+  // finalizeSpellTrapActivation ? Moved to src/core/game/spellTrap/finalization.js
 
   async tryActivateMonsterEffect(
     card,
@@ -1312,575 +432,10 @@ export default class Game {
   // See: contract.js, highlighting.js, session.js, handlers.js
   // -----------------------------------------------------------------------------
 
-  /**
-   * Build a serialized, public-safe snapshot of the current game state.
-   * Hides opponent hand contents and face-down card details.
-   * @param {"player"|"bot"} forPlayerId
-   * @returns {Object} snapshot JSON
-   */
-  getPublicState(forPlayerId = "player") {
-    const viewPlayer =
-      forPlayerId === this.bot.id || forPlayerId === "bot"
-        ? this.bot
-        : this.player;
-    const opp = viewPlayer === this.player ? this.bot : this.player;
+  // getPublicState moved to src/core/game/state/serialization.js
 
-    const serializeField = (owner, isSelf) =>
-      (owner.field || []).map((card) => {
-        if (!card) return null;
-        const hidden = card.isFacedown && !isSelf;
-        return {
-          cardId: card.id,
-          name: hidden ? null : card.name,
-          position: card.position,
-          atk: hidden ? null : card.atk,
-          def: hidden ? null : card.def,
-          level: hidden ? null : card.level,
-          faceDown: !!card.isFacedown,
-          status: {
-            cannotAttackThisTurn: !!card.cannotAttackThisTurn,
-            effectsNegated: !!card.effectsNegated,
-            canAttackAll: !!card.canAttackAllOpponentMonstersThisTurn,
-          },
-        };
-      });
-
-    const serializeHand = (owner, isSelf) =>
-      isSelf
-        ? (owner.hand || []).map((card) => ({
-            cardId: card.id,
-            name: card.name,
-            atk: card.atk,
-            def: card.def,
-            level: card.level,
-            cardKind: card.cardKind,
-          }))
-        : { count: (owner.hand || []).length };
-
-    const serializeSpells = (owner, isSelf) =>
-      (owner.spellTrap || []).map((card) => {
-        if (!card) return null;
-        const hidden = card.isFacedown && !isSelf;
-        return {
-          cardId: card.id,
-          name: hidden ? null : card.name,
-          faceDown: !!card.isFacedown,
-          cardKind: card.cardKind,
-          subtype: hidden ? null : card.subtype,
-        };
-      });
-
-    const serializeGraveyard = (owner) =>
-      (owner.graveyard || []).map((card) => ({
-        cardId: card.id,
-        name: card.name,
-        cardKind: card.cardKind,
-        subtype: card.subtype ?? null,
-        atk: card.cardKind === "monster" ? (card.atk ?? null) : null,
-        def: card.cardKind === "monster" ? (card.def ?? null) : null,
-        level: card.cardKind === "monster" ? (card.level ?? null) : null,
-      }));
-
-    const buildPlayerView = (owner, isSelf) => ({
-      id: owner.id,
-      name: owner.name,
-      lp: owner.lp,
-      hand: serializeHand(owner, isSelf),
-      handCount: (owner.hand || []).length,
-      field: serializeField(owner, isSelf),
-      spellTrap: serializeSpells(owner, isSelf),
-      fieldSpell: owner.fieldSpell
-        ? {
-            cardId: owner.fieldSpell.id,
-            name:
-              isSelf || !owner.fieldSpell.isFacedown
-                ? owner.fieldSpell.name
-                : null,
-            faceDown: !!owner.fieldSpell.isFacedown,
-          }
-        : null,
-      graveyardCount: (owner.graveyard || []).length,
-      graveyard: serializeGraveyard(owner),
-    });
-
-    return {
-      turn: this.turn,
-      phase: this.phase,
-      turnCounter: this.turnCounter,
-      currentPlayer: this.turn === "player" ? this.player.id : this.bot.id,
-      players: {
-        self: buildPlayerView(viewPlayer, true),
-        opponent: buildPlayerView(opp, false),
-      },
-    };
-  }
-
-  normalizeActivationResult(result) {
-    const base =
-      result && typeof result === "object" && !Array.isArray(result)
-        ? result
-        : {};
-    const needsSelection = base.needsSelection === true;
-    const success = needsSelection ? false : base.success === true;
-    const selectionContract = base.selectionContract;
-
-    return { ...base, success, needsSelection, selectionContract };
-  }
-
-  async runActivationPipeline(config = {}) {
-    if (!config || typeof config.activate !== "function") return null;
-
-    const owner = config.owner || this.player;
-    let resolvedCard = config.card;
-    if (!owner || !resolvedCard) return null;
-
-    const selectionKind = config.selectionKind || "activation";
-    let resolvedZone =
-      config.activationZone || config.activationContext?.activationZone || null;
-
-    const logPipeline = (tag, detail = {}) => {
-      if (typeof this.devLog !== "function") return;
-      const summaryBase = [
-        resolvedCard?.name,
-        selectionKind,
-        resolvedZone || "zone",
-      ]
-        .filter(Boolean)
-        .join(" | ");
-      const summary =
-        typeof detail.summary === "string" ? detail.summary : summaryBase;
-      this.devLog(tag, { summary, ...detail });
-    };
-
-    const guardResult = this.canStartAction({
-      actor: owner,
-      kind: config.guardKind || selectionKind || "activation",
-      phaseReq: config.phaseReq || null,
-      allowDuringSelection: config.allowDuringSelection === true,
-      allowDuringResolving: config.allowDuringResolving === true,
-      allowDuringOpponentTurn: config.allowDuringOpponentTurn === true,
-    });
-    if (!guardResult.ok) {
-      logPipeline("PIPELINE_GUARD_BLOCKED", {
-        reason: guardResult.reason,
-        code: guardResult.code,
-      });
-      if (
-        guardResult.reason &&
-        config.suppressFailureLog !== true &&
-        this.ui?.log
-      ) {
-        this.ui.log(guardResult.reason);
-      }
-      return {
-        success: false,
-        needsSelection: false,
-        reason: guardResult.reason,
-        code: guardResult.code,
-        blockedByGuard: true,
-      };
-    }
-
-    if (typeof config.gate === "function") {
-      const gateResult = config.gate();
-      if (gateResult && gateResult.ok === false) {
-        logPipeline("PIPELINE_PREVIEW_FAIL", { reason: gateResult.reason });
-        if (gateResult.reason) {
-          this.ui.log(gateResult.reason);
-        }
-        return gateResult;
-      }
-    }
-
-    if (typeof config.preview === "function") {
-      const previewResult = config.preview();
-      if (previewResult && previewResult.ok === false) {
-        logPipeline("PIPELINE_PREVIEW_FAIL", { reason: previewResult.reason });
-        if (previewResult.reason) {
-          this.ui.log(previewResult.reason);
-        }
-        return previewResult;
-      }
-      logPipeline("PIPELINE_PREVIEW_OK");
-    } else {
-      logPipeline("PIPELINE_PREVIEW_OK");
-    }
-
-    const oncePerTurnConfig = config.oncePerTurn || null;
-    let oncePerTurnInfo = null;
-    if (oncePerTurnConfig?.effect && oncePerTurnConfig.effect.oncePerTurn) {
-      const optCard = oncePerTurnConfig.card || resolvedCard;
-      const optPlayer = oncePerTurnConfig.player || owner;
-      const optCheck = this.canUseOncePerTurn(
-        optCard,
-        optPlayer,
-        oncePerTurnConfig.effect,
-        oncePerTurnConfig,
-      );
-      if (!optCheck.ok) {
-        logPipeline("PIPELINE_OPT_BLOCKED", {
-          reason: optCheck.reason,
-          lockKey: optCheck.lockKey,
-        });
-        if (optCheck.reason) {
-          this.ui.log(optCheck.reason);
-        }
-        return {
-          success: false,
-          needsSelection: false,
-          reason: optCheck.reason,
-          blockedOncePerTurn: true,
-        };
-      }
-      oncePerTurnInfo = {
-        card: optCard,
-        player: optPlayer,
-        effect: oncePerTurnConfig.effect,
-        lockKey: optCheck.lockKey,
-      };
-    }
-
-    let commitInfo = null;
-    if (typeof config.commit === "function") {
-      commitInfo = await config.commit();
-      if (!commitInfo || !commitInfo.cardRef) {
-        return null;
-      }
-      resolvedCard = commitInfo.cardRef;
-      resolvedZone = commitInfo.activationZone || resolvedZone;
-      logPipeline("PIPELINE_COMMIT", {
-        activationZone: resolvedZone,
-        fromIndex: commitInfo.fromIndex,
-        replacedFieldSpell: commitInfo.replacedFieldSpell?.name || null,
-      });
-      this.updateBoard?.();
-      if (typeof this.waitForAiPresentationStep === "function") {
-        await this.waitForAiPresentationStep(owner);
-      }
-    }
-
-    const committed =
-      config.activationContext?.committed === true || !!commitInfo;
-    const fromHand =
-      config.activationContext?.fromHand === true || !!commitInfo;
-    const resolvedActivationZone =
-      resolvedZone || config.activationContext?.activationZone || null;
-    const explicitAutoSelect =
-      typeof config.activationContext?.autoSelectSingleTarget === "boolean"
-        ? config.activationContext.autoSelectSingleTarget
-        : isAI(owner);
-    const explicitAutoSelectTargets =
-      typeof config.activationContext?.autoSelectTargets === "boolean"
-        ? config.activationContext.autoSelectTargets
-        : isAI(owner);
-    const activationContext = {
-      ...(config.activationContext || {}),
-      fromHand,
-      activationZone: resolvedActivationZone,
-      sourceZone:
-        config.activationContext?.sourceZone ||
-        (fromHand ? "hand" : resolvedActivationZone),
-      committed,
-      commitInfo: config.activationContext?.commitInfo || commitInfo || null,
-      autoSelectSingleTarget: explicitAutoSelect,
-      autoSelectTargets: explicitAutoSelectTargets,
-      selections: config.selections || null,
-    };
-
-    const safeActivate = async (selections) => {
-      try {
-        return await config.activate(
-          selections,
-          activationContext,
-          resolvedActivationZone,
-          resolvedCard,
-          owner,
-        );
-      } catch (err) {
-        console.error("[Game] Activation pipeline error:", err);
-        return {
-          success: false,
-          needsSelection: false,
-          reason: "Resolution failed.",
-        };
-      }
-    };
-
-    const handleResult = async (result, fromSelection = false) => {
-      const normalized = this.normalizeActivationResult(result);
-      normalized.commitInfo =
-        normalized.commitInfo || activationContext.commitInfo || commitInfo;
-      normalized.activationZone =
-        normalized.activationZone ||
-        resolvedActivationZone ||
-        activationContext.activationZone ||
-        null;
-      normalized.activationContext =
-        normalized.activationContext || activationContext;
-      normalized.cardRef = normalized.cardRef || resolvedCard;
-
-      if (fromSelection) {
-        logPipeline("PIPELINE_SELECTION_FINISH", {
-          success: normalized.success,
-          needsSelection: normalized.needsSelection,
-        });
-      }
-
-      if (normalized.needsSelection) {
-        const selectionContract = normalized.selectionContract;
-        if (!selectionContract) {
-          const selectionFailure = {
-            success: false,
-            needsSelection: false,
-            reason: "Target selection failed.",
-          };
-          return handleResult(selectionFailure, true);
-        }
-
-        const allowCancel =
-          activationContext.committed || config.preventCancel === true
-            ? false
-            : typeof config.allowCancel === "boolean"
-              ? config.allowCancel
-              : true;
-
-        const normalizedContract = this.normalizeSelectionContract(
-          selectionContract,
-          {
-            kind: selectionKind,
-            message:
-              config.selectionMessage || selectionContract.message || null,
-            ui: {
-              allowCancel,
-              preventCancel:
-                activationContext.committed || config.preventCancel === true,
-              useFieldTargeting: config.useFieldTargeting,
-              allowEmpty: config.allowEmpty,
-            },
-          },
-        );
-
-        if (!normalizedContract.ok) {
-          const selectionFailure = {
-            success: false,
-            needsSelection: false,
-            reason: normalizedContract.reason || "Target selection failed.",
-          };
-          return handleResult(selectionFailure, true);
-        }
-
-        const contract = normalizedContract.contract;
-        if (typeof contract.ui.allowEmpty !== "boolean") {
-          contract.ui.allowEmpty = contract.requirements.some(
-            (req) => Number(req.min ?? 0) === 0,
-          );
-        }
-        // Padr�o: evitar field targeting em prompts gen�ricos (target_select),
-        // a menos que o contrato pe�a explicitamente.
-        const usingFieldTargeting =
-          typeof contract.ui.useFieldTargeting === "boolean"
-            ? contract.ui.useFieldTargeting
-            : false;
-        contract.ui.useFieldTargeting = usingFieldTargeting;
-
-        if (typeof config.onSelectionStart === "function") {
-          config.onSelectionStart();
-        }
-
-        logPipeline("PIPELINE_SELECTION_START", {
-          mode: usingFieldTargeting ? "field" : "modal",
-          committed: activationContext.committed,
-          requirementCount: contract.requirements.length,
-        });
-
-        const shouldAutoSelect = config.useAutoSelector === true || isAI(owner);
-
-        if (shouldAutoSelect) {
-          const autoResult = this.autoSelector?.select(contract, {
-            owner,
-            activationContext,
-            selectionKind,
-          });
-          if (!autoResult?.ok) {
-            const selectionFailure = {
-              success: false,
-              needsSelection: false,
-              reason: autoResult?.reason || "Auto selection failed.",
-            };
-            return handleResult(selectionFailure, true);
-          }
-          const nextResult = await safeActivate(autoResult.selections || {});
-          const normalizedNext = this.normalizeActivationResult(nextResult);
-          if (normalizedNext.needsSelection) {
-            const selectionFailure = {
-              success: false,
-              needsSelection: false,
-              reason: "Auto selection failed.",
-            };
-            return handleResult(selectionFailure, true);
-          }
-          return handleResult(normalizedNext, true);
-        }
-
-        try {
-          this.startTargetSelectionSession({
-            kind: selectionKind,
-            card: resolvedCard,
-            owner,
-            selectionContract: contract,
-            activationZone: resolvedActivationZone,
-            activationContext,
-            preventCancel: contract.ui.preventCancel,
-            allowCancel: contract.ui.allowCancel,
-            message: contract.message,
-            execute: (selections) => safeActivate(selections),
-            onResult: (nextResult) => handleResult(nextResult, true),
-            onCancel: allowCancel ? config.onCancel : null,
-          });
-        } catch (err) {
-          console.error("[Game] Failed to start target selection:", err);
-          if (this.targetSelection?.closeModal) {
-            this.targetSelection.closeModal();
-          }
-          this.clearTargetHighlights();
-          if (
-            this.ui &&
-            typeof this.ui.hideFieldTargetingControls === "function"
-          ) {
-            this.ui.hideFieldTargetingControls();
-          }
-          this.targetSelection = null;
-          this.setSelectionState("idle");
-          const selectionFailure = {
-            success: false,
-            needsSelection: false,
-            reason: "Target selection failed.",
-          };
-          return handleResult(selectionFailure, true);
-        }
-
-        return normalized;
-      }
-
-      if (!normalized.success) {
-        if (normalized.reason && config.suppressFailureLog !== true) {
-          this.ui.log(normalized.reason);
-        }
-        if (activationContext.committed && activationContext.commitInfo) {
-          this.rollbackSpellActivation(owner, activationContext.commitInfo);
-          logPipeline("PIPELINE_ROLLBACK", {
-            activationZone: resolvedActivationZone,
-          });
-        }
-        if (typeof config.onFailure === "function") {
-          config.onFailure(normalized, activationContext);
-        }
-        return normalized;
-      }
-
-      if (typeof config.finalize === "function") {
-        await config.finalize(normalized, {
-          card: resolvedCard,
-          owner,
-          activationZone: resolvedActivationZone,
-          activationContext,
-        });
-      }
-
-      const shouldCountMaterialActivation =
-        resolvedCard?.cardKind === "monster" &&
-        (selectionKind === "monsterEffect" ||
-          selectionKind === "graveyardEffect");
-      if (shouldCountMaterialActivation) {
-        this.recordMaterialEffectActivation(owner, resolvedCard, {
-          contextLabel: selectionKind,
-        });
-      }
-      if (oncePerTurnInfo) {
-        this.markOncePerTurnUsed(
-          oncePerTurnInfo.card,
-          oncePerTurnInfo.player,
-          oncePerTurnInfo.effect,
-          { lockKey: oncePerTurnInfo.lockKey },
-        );
-      }
-      logPipeline("PIPELINE_FINALIZE", {
-        activationZone: resolvedActivationZone,
-      });
-      if (typeof config.onSuccess === "function") {
-        config.onSuccess(normalized, activationContext);
-      }
-      return normalized;
-    };
-
-    const initialResult = await safeActivate(config.selections || null);
-    return handleResult(initialResult, false);
-  }
-
-  async runActivationPipelineWait(config = {}) {
-    let finished = false;
-    let resolvePromise = null;
-
-    const waitForFinish = new Promise((resolve) => {
-      resolvePromise = resolve;
-    });
-
-    const finishOnce = (result) => {
-      if (finished) return;
-      finished = true;
-      if (typeof resolvePromise === "function") {
-        resolvePromise(result);
-      }
-    };
-
-    const wrappedConfig = {
-      ...config,
-      onSuccess: (result, ctx) => {
-        if (typeof config.onSuccess === "function") {
-          config.onSuccess(result, ctx);
-        }
-        finishOnce(result);
-      },
-      onFailure: (result, ctx) => {
-        if (typeof config.onFailure === "function") {
-          config.onFailure(result, ctx);
-        }
-        finishOnce(result);
-      },
-      onCancel: () => {
-        if (typeof config.onCancel === "function") {
-          config.onCancel();
-        }
-        finishOnce({
-          success: false,
-          needsSelection: false,
-          reason: "Selection cancelled.",
-        });
-      },
-    };
-
-    const initialResult = await this.runActivationPipeline(wrappedConfig);
-    const hasSelectionUi =
-      !!this.ui &&
-      (typeof this.ui.showTargetSelection === "function" ||
-        typeof this.ui.showFieldTargetingControls === "function");
-    const finishOnSelection =
-      typeof config.finishOnSelection === "boolean"
-        ? config.finishOnSelection
-        : !hasSelectionUi;
-
-    if (initialResult?.needsSelection === true && finishOnSelection) {
-      finishOnce(initialResult);
-    } else if (
-      !finished &&
-      (!initialResult || initialResult.needsSelection !== true)
-    ) {
-      finishOnce(initialResult);
-    }
-
-    return waitForFinish;
-  }
-
+  // normalizeActivationResult moved to src/core/game/effects/activationPipeline.js
+  // runActivationPipeline + runActivationPipelineWait moved to src/core/game/effects/activationPipeline.js
   // ? activateFieldSpellEffect ? Moved to src/core/game/spellTrap/activation.js
 
   // -----------------------------------------------------------------------------
@@ -1922,10 +477,7 @@ export default class Game {
     }
   }
 
-  getOpponent(player) {
-    return player.id === "player" ? this.bot : this.player;
-  }
-
+  // getOpponent moved to src/core/game/helpers/players.js
   // ? cleanupTempBoosts ? Moved to src/core/game/turn/cleanup.js
 
   // -----------------------------------------------------------------------------
@@ -1946,28 +498,7 @@ export default class Game {
 
   // ? commitCardActivationFromHand ? Moved to src/core/game/spellTrap/finalization.js
 
-  showShadowHeartCathedralModal(validMonsters, maxAtk, counterCount, callback) {
-    console.log(
-      `[Cathedral Modal] Opening with ${validMonsters.length} valid monsters, Max ATK: ${maxAtk}, Counters: ${counterCount}`,
-    );
-
-    if (
-      this.ui &&
-      typeof this.ui.showShadowHeartCathedralModal === "function"
-    ) {
-      this.ui.showShadowHeartCathedralModal(
-        validMonsters,
-        maxAtk,
-        counterCount,
-        callback,
-      );
-      return;
-    }
-
-    console.log("[Cathedral Modal] Renderer unavailable; skipping modal.");
-    callback(null);
-  }
-
+  // showShadowHeartCathedralModal moved to src/core/game/ui/modals.js (was already shadowed)
   // ? canActivateTrap ? Moved to src/core/game/spellTrap/verification.js
 
   // ? checkAndOfferTraps ? Moved to src/core/game/spellTrap/triggers.js
@@ -1976,91 +507,8 @@ export default class Game {
 
   // ? activateTrapFromZone ? Moved to src/core/game/spellTrap/triggers.js
 
-  resolvePlayerById(id = "player") {
-    return id === "bot" ? this.bot : this.player;
-  }
-
-  resolveCardData(identifier) {
-    if (identifier && typeof identifier === "object") {
-      if (typeof identifier.id === "number") {
-        const found = cardDatabaseById.get(identifier.id);
-        if (found) return found;
-      }
-      if (identifier.name) {
-        return this.resolveCardData(identifier.name);
-      }
-    }
-
-    if (typeof identifier === "number") {
-      return cardDatabaseById.get(identifier) || null;
-    }
-
-    if (typeof identifier !== "string") {
-      return null;
-    }
-
-    const trimmed = identifier.trim();
-    if (!trimmed) return null;
-
-    let data = cardDatabaseByName.get(trimmed);
-    if (data) return data;
-
-    const lower = trimmed.toLowerCase();
-    for (const [name, item] of cardDatabaseByName.entries()) {
-      if (typeof name === "string" && name.toLowerCase() === lower) {
-        return item;
-      }
-    }
-    return null;
-  }
-
-  createCardForOwner(identifier, owner, overrides = {}) {
-    const player =
-      typeof owner === "string" ? this.resolvePlayerById(owner) : owner;
-    if (!player) return null;
-    const data = this.resolveCardData(identifier);
-    if (!data) return null;
-
-    const card = new Card(data, player.id);
-    if (overrides.position) {
-      card.position = overrides.position === "defense" ? "defense" : "attack";
-    }
-    if (typeof overrides.isFacedown === "boolean") {
-      card.isFacedown = overrides.isFacedown;
-    } else if (overrides.facedown === true) {
-      card.isFacedown = true;
-    }
-    if (overrides.turnSetOn != null) {
-      card.turnSetOn = overrides.turnSetOn;
-    }
-    if (overrides.counters && card.counters instanceof Map) {
-      Object.entries(overrides.counters).forEach(([type, amount]) => {
-        if (typeof amount === "number" && amount > 0) {
-          card.counters.set(type, amount);
-        }
-      });
-    }
-    return card;
-  }
-
-  setMonsterFacing(card, options = {}) {
-    if (!card || card.cardKind !== "monster") return;
-    if (options.position) {
-      card.position = options.position === "defense" ? "defense" : "attack";
-    }
-    if (typeof options.facedown === "boolean") {
-      card.isFacedown = options.facedown;
-    }
-    if (card.isFacedown) {
-      card.position = "defense";
-    }
-    if (card.position !== "attack" && card.position !== "defense") {
-      card.position = "attack";
-    }
-    if (typeof card.isFacedown !== "boolean") {
-      card.isFacedown = false;
-    }
-  }
+  // resolvePlayerById moved to src/core/game/helpers/players.js
+  // resolveCardData, createCardForOwner, setMonsterFacing moved to src/core/game/helpers/cards.js
 
   // -----------------------------------------------------------------------------
   // DevTools methods moved to core/game/devTools/
@@ -2180,6 +628,25 @@ Game.prototype.assertStateInvariants = zonesInvariants.assertStateInvariants;
 Game.prototype.getZone = zonesOperations.getZone;
 Game.prototype.runZoneOp = zonesOperations.runZoneOp;
 
+// Destruction: destroyCard (orchestrates protection, negation, replacement, move-to-grave)
+Game.prototype.destroyCard = zonesDestruction.destroyCard;
+
+// -----------------------------------------------------------------------------
+// Effects: Attach methods from modular effects/ folder
+// -----------------------------------------------------------------------------
+
+// Destruction replacement: resolveDestructionWithReplacement
+Game.prototype.resolveDestructionWithReplacement =
+  effectsDestructionReplacement.resolveDestructionWithReplacement;
+
+// Activation pipeline: normalizeActivationResult, runActivationPipeline, runActivationPipelineWait
+Game.prototype.normalizeActivationResult =
+  effectsActivationPipeline.normalizeActivationResult;
+Game.prototype.runActivationPipeline =
+  effectsActivationPipeline.runActivationPipeline;
+Game.prototype.runActivationPipelineWait =
+  effectsActivationPipeline.runActivationPipelineWait;
+
 // Movement: cleanupTokenReferences, moveCard, moveCardInternal
 Game.prototype.cleanupTokenReferences = zonesMovement.cleanupTokenReferences;
 Game.prototype.moveCard = zonesMovement.moveCard;
@@ -2232,6 +699,20 @@ Game.prototype.flipSummon = summonExecution.flipSummon;
 Game.prototype.performFusionSummon = summonExecution.performFusionSummon;
 Game.prototype.performSpecialSummon = summonExecution.performSpecialSummon;
 
+// Position: canFlipSummon, canChangePosition, changeMonsterPosition
+Game.prototype.canFlipSummon = summonPosition.canFlipSummon;
+Game.prototype.canChangePosition = summonPosition.canChangePosition;
+Game.prototype.changeMonsterPosition = summonPosition.changeMonsterPosition;
+
+// Material stats: tracking material-aware effect counters
+Game.prototype.resetMaterialDuelStats =
+  summonMaterialStats.resetMaterialDuelStats;
+Game.prototype.incrementMaterialStat = summonMaterialStats.incrementMaterialStat;
+Game.prototype.recordMaterialEffectActivation =
+  summonMaterialStats.recordMaterialEffectActivation;
+Game.prototype.recordMaterialDestroyedOpponentMonster =
+  summonMaterialStats.recordMaterialDestroyedOpponentMonster;
+
 // Ascension: getMaterialFieldAgeTurnCounter, getAscensionCandidatesForMaterial, checkAscensionRequirements, canUseAsAscensionMaterial, performAscensionSummon, tryAscensionSummon
 Game.prototype.getMaterialFieldAgeTurnCounter =
   summonAscension.getMaterialFieldAgeTurnCounter;
@@ -2277,9 +758,47 @@ Game.prototype.scheduleDelayedAction = turnScheduling.scheduleDelayedAction;
 Game.prototype.processDelayedActions = turnScheduling.processDelayedActions;
 Game.prototype.resolveDelayedAction = turnScheduling.resolveDelayedAction;
 
-// Cleanup: cleanupExpiredBuffs, cleanupTempBoosts
+// Cleanup: applyTurnBasedBuff, cleanupExpiredBuffs, cleanupTempBoosts
+Game.prototype.applyTurnBasedBuff = turnCleanup.applyTurnBasedBuff;
 Game.prototype.cleanupExpiredBuffs = turnCleanup.cleanupExpiredBuffs;
 Game.prototype.cleanupTempBoosts = turnCleanup.cleanupTempBoosts;
+
+// Once-per-turn: usage tracking for oncePerTurn effects
+Game.prototype.resetOncePerTurnUsage = turnOncePerTurn.resetOncePerTurnUsage;
+Game.prototype.ensureOncePerTurnUsageFresh =
+  turnOncePerTurn.ensureOncePerTurnUsageFresh;
+Game.prototype.getOncePerTurnLockKey = turnOncePerTurn.getOncePerTurnLockKey;
+Game.prototype.getOncePerTurnStore = turnOncePerTurn.getOncePerTurnStore;
+Game.prototype.canUseOncePerTurn = turnOncePerTurn.canUseOncePerTurn;
+Game.prototype.markOncePerTurnUsed = turnOncePerTurn.markOncePerTurnUsed;
+
+// -----------------------------------------------------------------------------
+// Actions: Attach methods from modular actions/ folder
+// -----------------------------------------------------------------------------
+
+// Guard: canStartAction, guardActionStart
+Game.prototype.canStartAction = actionsGuard.canStartAction;
+Game.prototype.guardActionStart = actionsGuard.guardActionStart;
+
+// -----------------------------------------------------------------------------
+// State: Attach methods from modular state/ folder
+// -----------------------------------------------------------------------------
+
+// Serialization: getPublicState
+Game.prototype.getPublicState = stateSerialization.getPublicState;
+
+// -----------------------------------------------------------------------------
+// Helpers: Attach methods from modular helpers/ folder
+// -----------------------------------------------------------------------------
+
+// Players: getOpponent, resolvePlayerById
+Game.prototype.getOpponent = helpersPlayers.getOpponent;
+Game.prototype.resolvePlayerById = helpersPlayers.resolvePlayerById;
+
+// Cards: resolveCardData, createCardForOwner, setMonsterFacing
+Game.prototype.resolveCardData = helpersCards.resolveCardData;
+Game.prototype.createCardForOwner = helpersCards.createCardForOwner;
+Game.prototype.setMonsterFacing = helpersCards.setMonsterFacing;
 
 // Lifecycle: startTurn, endTurn, waitForPhaseDelay
 Game.prototype.startTurn = turnLifecycle.startTurn;

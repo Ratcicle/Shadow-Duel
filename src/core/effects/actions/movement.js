@@ -3,6 +3,30 @@
  * Extracted from EffectEngine.js – preserving original logic and signatures.
  */
 
+function checkControlCardCondition(condition, ctx) {
+  if (!condition || condition.type !== "control_card") return false;
+
+  const player = ctx?.player;
+  const cardName = condition.cardName;
+  if (!player || !cardName) return false;
+
+  const zoneName = condition.zone || "fieldSpell";
+  if (zoneName === "fieldSpell") {
+    return player.fieldSpell?.name === cardName;
+  }
+
+  const zone = player[zoneName] || [];
+  return Array.isArray(zone) && zone.some((card) => card?.name === cardName);
+}
+
+function shouldAllowExtraDeckMonsterToHand(action, ctx) {
+  if (action.allowExtraDeckMonsterToHand === true) return true;
+  if (action.allowExtraDeckMonsterToHandIf) {
+    return checkControlCardCondition(action.allowExtraDeckMonsterToHandIf, ctx);
+  }
+  return false;
+}
+
 /**
  * Apply move action - move cards between zones
  * @param {Object} action - Action configuration
@@ -76,6 +100,10 @@ export function applyMove(action, ctx, targets) {
           position: finalPosition,
           isFacedown: action.isFacedown,
           resetAttackFlags: action.resetAttackFlags,
+          allowExtraDeckMonsterToHand: shouldAllowExtraDeckMonsterToHand(
+            action,
+            ctx
+          ),
         });
       } else {
         const fromOwner =

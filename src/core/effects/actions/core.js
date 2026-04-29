@@ -133,6 +133,9 @@ export function checkActionPreviewRequirements(actions, ctx) {
     return { ok: false, reason: "Missing player." };
   }
 
+  const hasOtherActions = (action) =>
+    actions.some((candidate) => candidate && candidate !== action);
+
   for (const action of actions) {
     if (!action || !action.type) continue;
     if (
@@ -234,6 +237,10 @@ export function checkActionPreviewRequirements(actions, ctx) {
     }
 
     if (action.type === "conditional_summon_from_hand") {
+      if (action.optional !== false && hasOtherActions(action)) {
+        continue;
+      }
+
       // Check field space
       if ((player.field || []).length >= 5) {
         return { ok: false, reason: "Field is full." };

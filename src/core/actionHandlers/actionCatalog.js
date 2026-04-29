@@ -743,13 +743,25 @@ export const ACTION_CATALOG = {
     summary: "Moves target cards to another zone.",
     handler: "proxy:applyMove",
     required: ["targetRef", "to"],
-    optional: ["player", "isFacedown", "resetAttackFlags"],
+    optional: [
+      "player",
+      "isFacedown",
+      "resetAttackFlags",
+      "allowExtraDeckMonsterToHand",
+      "allowExtraDeckMonsterToHandIf",
+    ],
     fields: {
       ...COMMON_TARGET_FIELDS,
       to: field("to"),
       player: field("player"),
       isFacedown: { type: "boolean" },
       resetAttackFlags: { type: "boolean" },
+      allowExtraDeckMonsterToHand: { type: "boolean" },
+      allowExtraDeckMonsterToHandIf: {
+        type: "object",
+        description:
+          "Optional condition that lets an Extra Deck monster pass through hand instead of redirecting to Extra Deck.",
+      },
     },
     targetRef: "required",
     selection: "usesTargets",

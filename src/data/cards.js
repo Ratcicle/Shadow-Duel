@@ -858,7 +858,7 @@
     type: "Dragon",
     archetype: "Shadow-Heart",
     description:
-      'If this card was Tribute Summoned, it gains the following effects. If this card destroys an opponent\'s monster by battle: You can target 1 "Shadow-Heart" card in your Graveyard; add it to your hand. If this card is destroyed by battle or by an opponent\'s card effect: You can Special Summon up to 3 "Shadow-Heart" monsters with 1600 or less ATK from your Graveyard. You can only use each effect of "Shadow-Heart Scale Dragon" once per turn.',
+      'If this card was Tribute Summoned, it gains the following effects: \n●If this card destroys an opponent\'s monster by battle: You can target 1 "Shadow-Heart" card in your Graveyard; add it to your hand. \n●If this card is destroyed by battle or by an opponent\'s card effect: You can Special Summon up to 3 "Shadow-Heart" monsters with 1600 or less ATK from your Graveyard. You can only use each effect of "Shadow-Heart Scale Dragon" once per turn.',
     image: "assets/Shadow-Heart Scale Dragon.png",
     effects: [
       {
@@ -921,7 +921,7 @@
     subtype: "normal",
     archetype: "Shadow-Heart",
     description:
-      'If "Shadow-Heart Scale Dragon" is the only monster you control: It gains 700 ATK/DEF until the end of this turn, and it can make a second attack during this Battle Phase. You cannot attack directly the turn you activate this effect. You cannot attack directly the turn you activate this effect.',
+      'If "Shadow-Heart Scale Dragon" is the only monster you control: It gains 700 ATK/DEF until the end of this turn, and it can make a second attack during this Battle Phase. You cannot attack directly the turn you activate this effect.',
     image: "assets/Shadow-Heart Rage.png",
     effects: [
       {
@@ -1123,7 +1123,7 @@
           {
             type: "conditional_summon_from_hand",
             targetRef: "self",
-            position: "attack",
+            position: "choice",
             optional: true,
             cannotAttackThisTurn: false,
           },
@@ -2249,6 +2249,11 @@
             type: "move",
             targetRef: "moonlit_blessing_target",
             to: "hand",
+            allowExtraDeckMonsterToHandIf: {
+              type: "control_card",
+              cardName: "Sanctum of the Luminarch Citadel",
+              zone: "fieldSpell",
+            },
           },
           {
             type: "conditional_summon_from_hand",

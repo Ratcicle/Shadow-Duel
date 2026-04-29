@@ -102,7 +102,7 @@
     },
     "64": {
       "name": "Dragão de Escamas do Coração Sombrio",
-      "description": "Se este card foi Invocado por Invocação-Tributo, ele recebe os seguintes efeitos: se este card destruir um monstro do oponente em batalha: você pode escolher 1 card 'Coração Sombrio' no seu Cemitério; adicione-o à sua mão. Se este card for destruído em batalha ou por efeito de card do oponente: você pode Invocar por Invocação-Especial até 3 monstros 'Coração Sombrio' com 1600 ou menos de ATK do seu Cemitério. Você só pode usar cada efeito de 'Dragão de Escamas do Coração Sombrio' uma vez por turno."
+      "description": "Se este card foi Invocado por Invocação-Tributo, ele ganha os seguintes efeitos: \n●Se este card destruir um monstro do oponente em batalha: você pode escolher 1 card 'Coração Sombrio' no seu Cemitério; adicione-o à sua mão. \n●Se este card for destruído em batalha ou por efeito de card do oponente: você pode Invocar por Invocação-Especial até 3 monstros 'Coração Sombrio' com 1600 ou menos de ATK do seu Cemitério. Você só pode usar cada efeito de 'Dragão de Escamas do Coração Sombrio' uma vez por turno."
     },
     "65": {
       "name": "Fúria do Coração Sombrio",

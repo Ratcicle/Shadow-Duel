@@ -1,13 +1,60 @@
 /**
  * cleanup.js
  *
- * Turn cleanup methods extracted from Game.js.
- * Handles cleanup of temporary effects at end of turn.
+ * Turn cleanup and turn-based buff methods extracted from Game.js.
+ * Handles application and cleanup of temporary effects.
  *
  * Methods:
+ * - applyTurnBasedBuff
  * - cleanupExpiredBuffs
  * - cleanupTempBoosts
  */
+
+/**
+ * Applies a turn-based buff (atk/def) to a card with explicit expiration turn.
+ * Multiple buffs can stack on the same card.
+ */
+export function applyTurnBasedBuff(card, stat, value, expiresOnTurn, id = null) {
+  if (
+    !card ||
+    !stat ||
+    !Number.isFinite(value) ||
+    !Number.isFinite(expiresOnTurn)
+  ) {
+    return false;
+  }
+
+  if (!Array.isArray(card.turnBasedBuffs)) {
+    card.turnBasedBuffs = [];
+  }
+
+  const buffId =
+    id || `buff_${card.id}_${Math.random().toString(36).substr(2, 9)}`;
+  const buffEntry = {
+    id: buffId,
+    stat,
+    value,
+    expiresOnTurn,
+  };
+
+  card.turnBasedBuffs.push(buffEntry);
+
+  if (stat === "atk") {
+    card.atk += value;
+  } else if (stat === "def") {
+    card.def += value;
+  }
+
+  this.devLog?.("TURN_BASED_BUFF_APPLIED", {
+    summary: `${card.name} +${value} ${stat} (expires turn ${expiresOnTurn})`,
+    card: card.name,
+    stat,
+    value,
+    expiresOnTurn,
+  });
+
+  return true;
+}
 
 /**
  * Cleans up expired turn-based buffs.

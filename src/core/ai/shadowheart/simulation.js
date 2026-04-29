@@ -274,7 +274,9 @@ export function simulateSpellEffect(state, card) {
       if (scale && player.field.length === 1) {
         scale.tempAtkBoost = (scale.tempAtkBoost || 0) + 700;
         scale.tempDefBoost = (scale.tempDefBoost || 0) + 700;
-        scale.extraAttacks = (scale.extraAttacks || 0) + 1;
+        scale.canMakeSecondAttackThisTurn = true;
+        scale.secondAttackUsedThisTurn = false;
+        player.forbidDirectAttacksThisTurn = true;
       }
       break;
     }

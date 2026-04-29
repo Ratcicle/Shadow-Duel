@@ -4,6 +4,8 @@ import { isAI } from "../../Player.js";
 const AUTOMATIC_TRIGGER_ACTION_TYPES = new Set([
   "forbid_attack_this_turn",
   "forbid_direct_attack_this_turn",
+  "permanent_buff_named",
+  "remove_permanent_buff_named",
 ]);
 
 function hasRegisteredTriggerActions(effect, actionHandlers) {
