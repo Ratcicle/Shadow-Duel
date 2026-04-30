@@ -127,11 +127,13 @@ export function performFusionSummon(
  * @param {number} handIndex - Index in player's hand
  * @param {string} position - "attack" or "defense"
  */
-export function performSpecialSummon(handIndex, position) {
-  const card = this.player.hand[handIndex];
+export function performSpecialSummon(handIndex, position, actor = this.player) {
+  const player = actor || this.player;
+  const opponent = this.getOpponent?.(player) || this.bot;
+  const card = player.hand[handIndex];
   if (!card) return;
 
-  const limitCheck = this.canPlaceCardOnField?.(card, this.player, {
+  const limitCheck = this.canPlaceCardOnField?.(card, player, {
     isFacedown: false,
   });
   if (limitCheck && limitCheck.ok === false) {
@@ -139,15 +141,15 @@ export function performSpecialSummon(handIndex, position) {
   }
 
   // Remove from hand
-  this.player.hand.splice(handIndex, 1);
+  player.hand.splice(handIndex, 1);
 
   // Add to field
   card.position = position;
   card.isFacedown = false;
   card.hasAttacked = false;
   card.cannotAttackThisTurn = true; // Cannot attack this turn (from Eel effect)
-  card.owner = "player";
-  this.player.field.push(card);
+  card.owner = player.id;
+  player.field.push(card);
 
   this.ui.log(`Special Summoned ${card.name} from hand.`);
 
@@ -163,8 +165,8 @@ export function performSpecialSummon(handIndex, position) {
   // Emit after_summon for special summons performed directly from hand
   this.emit("after_summon", {
     card,
-    player: this.player,
-    opponent: this.bot,
+    player,
+    opponent,
     method: "special",
     fromZone: "hand",
   });

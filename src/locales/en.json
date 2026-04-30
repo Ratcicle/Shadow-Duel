@@ -15,6 +15,10 @@
     "214": {
       "name": "Fire Extreme Dragon",
       "description": "There can only be 1 face-up \"Extreme Dragon\" monster on the field. While this card is the only monster you control, it cannot be destroyed by card effects. If this card destroys an opponent's monster by battle: inflict damage to your opponent equal to half the destroyed monster's original ATK. Each time your opponent activates a card or effect: inflict 300 damage to your opponent. If this card is destroyed by battle: you can Special Summon 1 \"Volcanic Extreme Dragon\" from your hand or Deck."
+    },
+    "251": {
+      "name": "Volcanic Extreme Dragon",
+      "description": "There can only be 1 face-up \"Extreme Dragon\" monster on the field. While this card is the only monster you control, it cannot be destroyed by battle. If this card battles an opponent's monster: inflict 600 damage to your opponent. Once per turn: you can banish all cards in your Graveyard; inflict 500 damage to your opponent for each card banished by this effect."
     }
   }
 }

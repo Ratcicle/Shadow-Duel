@@ -21,14 +21,8 @@ initializeLocale();
 
 let game = null;
 const cardKindOrder = { monster: 0, spell: 1, trap: 2 };
-const TEST_MODE_KEY = "shadow_duel_test_mode";
-const DEV_MODE_KEY = "shadow_duel_dev_mode";
-const DEV_PANEL_MINIMIZED_KEY = "shadow_duel_dev_panel_minimized";
 const REPLAY_MODE_KEY = "shadow_duel_capture_mode";
 const BOT_PRESET_KEY = "shadow_duel_bot_preset";
-let testModeEnabled = loadTestModeFlag();
-let devModeEnabled = loadDevModeFlag();
-let devPanelMinimized = loadDevPanelMinimizedFlag();
 let replayModeEnabled = loadReplayModeFlag();
 let currentBotPreset = loadBotPreset();
 let latestValidationResult = null;
@@ -127,45 +121,59 @@ const btnPoolFilterShadowHeart = document.getElementById(
 const btnPoolFilterArcanist = document.getElementById("deck-filter-arcanist");
 const btnPoolFilterLuminarch = document.getElementById("deck-filter-luminarch");
 const btnPoolFilterVoid = document.getElementById("deck-filter-void");
-const btnToggleTestMode = document.getElementById("btn-toggle-test-mode");
-const btnToggleDevMode = document.getElementById("btn-toggle-dev-mode");
+const btnOpenLaboratory = document.getElementById("btn-open-laboratory");
 const btnToggleReplay = document.getElementById("btn-toggle-replay");
 const validationMessagesEl = document.getElementById("validation-messages");
-const devPanel = document.getElementById("dev-panel");
-const devPanelToggleBtn = document.getElementById("dev-panel-toggle");
-const devDrawPlayerSelect = document.getElementById("dev-draw-player");
-const devDrawCountInput = document.getElementById("dev-draw-count");
-const devDrawBtn = document.getElementById("dev-draw-btn");
-const devGiveNameInput = document.getElementById("dev-give-name");
-const devGivePlayerSelect = document.getElementById("dev-give-player");
-const devGiveZoneSelect = document.getElementById("dev-give-zone");
-const devGiveBtn = document.getElementById("dev-give-btn");
-const devForcePhaseSelect = document.getElementById("dev-force-phase");
-const devForcePhaseBtn = document.getElementById("dev-force-phase-btn");
-const devSetupInput = document.getElementById("dev-setup-json");
-const devApplySetupBtn = document.getElementById("dev-apply-setup");
-const devSanityABtn = document.getElementById("dev-sanity-a");
-const devSanityBBtn = document.getElementById("dev-sanity-b");
-const devSanityCBtn = document.getElementById("dev-sanity-c");
-const devSanityDBtn = document.getElementById("dev-sanity-d");
-const devSanityEBtn = document.getElementById("dev-sanity-e");
-const devSanityFBtn = document.getElementById("dev-sanity-f");
-const devSanityGBtn = document.getElementById("dev-sanity-g");
-const devSanityHBtn = document.getElementById("dev-sanity-h");
-const devSanityIBtn = document.getElementById("dev-sanity-i");
-const devSanityJBtn = document.getElementById("dev-sanity-j");
-const devSanityKBtn = document.getElementById("dev-sanity-k");
-const devSanityLBtn = document.getElementById("dev-sanity-l");
-const devSanityMBtn = document.getElementById("dev-sanity-m");
-const devSanityNBtn = document.getElementById("dev-sanity-n");
-const devSanityOBtn = document.getElementById("dev-sanity-o");
-const devResetDuelBtn = document.getElementById("dev-reset-duel");
+const laboratoryModal = document.getElementById("laboratory-modal");
+const laboratoryBody = document.getElementById("laboratory-body");
+const laboratoryCloseBtn = document.getElementById("laboratory-close");
+const laboratoryArchetypeSelect = document.getElementById(
+  "laboratory-archetype",
+);
+const laboratoryRandomAllBtn = document.getElementById(
+  "laboratory-random-all",
+);
+const laboratoryClearBtn = document.getElementById("laboratory-clear");
+const laboratoryAddOwnerSelect = document.getElementById(
+  "laboratory-add-owner",
+);
+const laboratoryAddZoneSelect = document.getElementById("laboratory-add-zone");
+const laboratoryCardSearchInput = document.getElementById(
+  "laboratory-card-search",
+);
+const laboratoryCardOptions = document.getElementById(
+  "laboratory-card-options",
+);
+const laboratoryPositionSelect = document.getElementById(
+  "laboratory-position",
+);
+const laboratoryFacedownInput = document.getElementById(
+  "laboratory-facedown",
+);
+const laboratoryAddCardBtn = document.getElementById("laboratory-add-card-btn");
+const laboratoryStartBtn = document.getElementById("laboratory-start");
 
 let currentDeck = loadDeck();
 let currentExtraDeck = loadExtraDeck();
 let poolFilterMode = "all"; // all | no_archetype | void | luminarch | shadow_heart | arcanist
-updateTestModeButton();
-updateDevModeButton();
+const LAB_ZONE_CONFIG = [
+  { id: "deck", label: "Deck", max: null, defaultCount: 20 },
+  { id: "extraDeck", label: "Extra Deck", max: MAX_EXTRA_DECK_SIZE, defaultCount: 5 },
+  { id: "hand", label: "Mão", max: null, defaultCount: 4 },
+  { id: "field", label: "Campo", max: 5, defaultCount: 2 },
+  { id: "spellTrap", label: "Magias/Armadilhas", max: 5, defaultCount: 1 },
+  { id: "fieldSpell", label: "Campo Mágico", max: 1, defaultCount: 1 },
+  { id: "graveyard", label: "Cemitério", max: null, defaultCount: 2 },
+];
+const LAB_ZONE_LABELS = Object.fromEntries(
+  LAB_ZONE_CONFIG.map((zone) => [zone.id, zone.label]),
+);
+const LAB_OWNER_LABELS = {
+  player: "Jogador 1",
+  bot: "Jogador 2",
+};
+let laboratorySetup = createEmptyLaboratorySetup();
+let laboratorySelection = { owner: "player", zone: "hand" };
 updateReplayModeButton();
 runCardDatabaseValidation({ silent: true });
 
@@ -280,84 +288,6 @@ function populateBotPresetDropdown() {
   });
 }
 
-function loadTestModeFlag() {
-  try {
-    return localStorage.getItem(TEST_MODE_KEY) === "true";
-  } catch (e) {
-    console.warn("Failed to load test mode flag", e);
-    return false;
-  }
-}
-
-function saveTestModeFlag(enabled) {
-  try {
-    localStorage.setItem(TEST_MODE_KEY, enabled ? "true" : "false");
-  } catch (e) {
-    console.warn("Failed to save test mode flag", e);
-  }
-}
-
-function updateTestModeButton() {
-  if (!btnToggleTestMode) return;
-  btnToggleTestMode.textContent = `Modo teste: ${
-    testModeEnabled ? "ligado" : "desligado"
-  }`;
-  btnToggleTestMode.classList.toggle("active", testModeEnabled);
-}
-
-function loadDevModeFlag() {
-  try {
-    return localStorage.getItem(DEV_MODE_KEY) === "true";
-  } catch (e) {
-    console.warn("Failed to load dev mode flag", e);
-    return false;
-  }
-}
-
-function saveDevModeFlag(enabled) {
-  try {
-    localStorage.setItem(DEV_MODE_KEY, enabled ? "true" : "false");
-  } catch (e) {
-    console.warn("Failed to save dev mode flag", e);
-  }
-}
-
-function loadDevPanelMinimizedFlag() {
-  try {
-    return localStorage.getItem(DEV_PANEL_MINIMIZED_KEY) === "true";
-  } catch (e) {
-    console.warn("Failed to load dev panel minimized flag", e);
-    return false;
-  }
-}
-
-function saveDevPanelMinimizedFlag(enabled) {
-  try {
-    localStorage.setItem(DEV_PANEL_MINIMIZED_KEY, enabled ? "true" : "false");
-  } catch (e) {
-    console.warn("Failed to save dev panel minimized flag", e);
-  }
-}
-
-function updateDevPanelMinimizedState() {
-  if (!devPanel || !devPanelToggleBtn) return;
-  devPanel.classList.toggle("minimized", devPanelMinimized);
-  devPanelToggleBtn.textContent = devPanelMinimized ? "Expandir" : "Minimizar";
-  devPanelToggleBtn.setAttribute(
-    "aria-pressed",
-    devPanelMinimized ? "true" : "false",
-  );
-}
-
-function updateDevModeButton() {
-  if (!btnToggleDevMode) return;
-  btnToggleDevMode.textContent = `Dev Mode: ${
-    devModeEnabled ? "ligado" : "desligado"
-  }`;
-  btnToggleDevMode.classList.toggle("active", devModeEnabled);
-  updateDevPanelVisibility();
-}
-
 function loadReplayModeFlag() {
   try {
     return localStorage.getItem(REPLAY_MODE_KEY) === "true";
@@ -384,14 +314,6 @@ function updateReplayModeButton() {
     : `Gravando: desligado`;
   btnToggleReplay.textContent = label;
   btnToggleReplay.classList.toggle("active", replayModeEnabled);
-}
-
-function updateDevPanelVisibility() {
-  if (!devPanel) return;
-  devPanel.classList.toggle("hidden", !devModeEnabled);
-  if (devModeEnabled) {
-    updateDevPanelMinimizedState();
-  }
 }
 
 function runCardDatabaseValidation(options = {}) {
@@ -424,10 +346,7 @@ function showValidationMessages(result) {
   const shouldShowErrors = Array.isArray(result.errors)
     ? result.errors.length > 0
     : false;
-  const shouldShowWarnings =
-    devModeEnabled && Array.isArray(result.warnings)
-      ? result.warnings.length > 0
-      : false;
+  const shouldShowWarnings = false;
 
   if (!shouldShowErrors && !shouldShowWarnings) {
     validationMessagesEl.classList.add("hidden");
@@ -846,6 +765,334 @@ function createCardThumb(card) {
   return el;
 }
 
+function createEmptyLaboratorySide() {
+  return {
+    lp: 8000,
+    deck: [],
+    extraDeck: [],
+    hand: [],
+    field: [],
+    spellTrap: [],
+    fieldSpell: [],
+    graveyard: [],
+  };
+}
+
+function createEmptyLaboratorySetup() {
+  return {
+    player: createEmptyLaboratorySide(),
+    bot: createEmptyLaboratorySide(),
+  };
+}
+
+function cloneLabEntry(entry) {
+  return entry && typeof entry === "object" ? { ...entry } : null;
+}
+
+function getLabZone(owner, zone) {
+  const side = laboratorySetup?.[owner];
+  const value = side?.[zone];
+  return Array.isArray(value) ? value : [];
+}
+
+function getLabZoneConfig(zone) {
+  return LAB_ZONE_CONFIG.find((item) => item.id === zone) || LAB_ZONE_CONFIG[0];
+}
+
+function getLabCard(entry) {
+  const id = typeof entry === "number" ? entry : entry?.id;
+  return cardDatabaseById.get(id) || null;
+}
+
+function cardMatchesLabArchetype(card, archetype) {
+  if (!archetype || archetype === "all") return true;
+  return cardHasArchetypeName(card, archetype);
+}
+
+function getLabCandidates(zone, archetype = "all") {
+  return cardDatabase.filter((card) => {
+    if (!cardMatchesLabArchetype(card, archetype)) return false;
+    if (zone === "extraDeck") {
+      return card.monsterType === "fusion" || card.monsterType === "ascension";
+    }
+    if (zone === "field") return card.cardKind === "monster";
+    if (zone === "spellTrap") {
+      return (
+        (card.cardKind === "spell" || card.cardKind === "trap") &&
+        card.subtype !== "field"
+      );
+    }
+    if (zone === "fieldSpell") {
+      return card.cardKind === "spell" && card.subtype === "field";
+    }
+    if (zone === "deck" || zone === "hand") {
+      return card.monsterType !== "fusion" && card.monsterType !== "ascension";
+    }
+    return true;
+  });
+}
+
+function getLabEntryForCard(card, zone) {
+  const entry = { id: card.id };
+  if (zone === "field") {
+    entry.position = laboratoryPositionSelect?.value || "attack";
+    entry.facedown = !!laboratoryFacedownInput?.checked;
+  } else if (zone === "spellTrap") {
+    entry.facedown = !!laboratoryFacedownInput?.checked;
+  }
+  return entry;
+}
+
+function applyLabZoneSelection(owner, zone) {
+  laboratorySelection = { owner, zone };
+  if (laboratoryAddOwnerSelect) laboratoryAddOwnerSelect.value = owner;
+  if (laboratoryAddZoneSelect) laboratoryAddZoneSelect.value = zone;
+  updateLaboratoryAddControls();
+  renderLaboratory();
+}
+
+function updateLaboratoryAddControls() {
+  const zone = laboratoryAddZoneSelect?.value || laboratorySelection.zone;
+  const needsPosition = zone === "field";
+  const canFacedown = zone === "field" || zone === "spellTrap";
+  if (laboratoryPositionSelect) {
+    laboratoryPositionSelect.disabled = !needsPosition;
+  }
+  if (laboratoryFacedownInput) {
+    laboratoryFacedownInput.disabled = !canFacedown;
+    if (!canFacedown) laboratoryFacedownInput.checked = false;
+    if (zone === "spellTrap" && !laboratoryFacedownInput.dataset.touched) {
+      laboratoryFacedownInput.checked = true;
+    }
+  }
+}
+
+function populateLaboratoryControls() {
+  if (laboratoryAddZoneSelect) {
+    laboratoryAddZoneSelect.innerHTML = "";
+    LAB_ZONE_CONFIG.forEach((zone) => {
+      const option = document.createElement("option");
+      option.value = zone.id;
+      option.textContent = zone.label;
+      laboratoryAddZoneSelect.appendChild(option);
+    });
+  }
+
+  if (laboratoryArchetypeSelect) {
+    const archetypes = new Set(["all"]);
+    cardDatabase.forEach((card) => {
+      const list = Array.isArray(card.archetypes)
+        ? card.archetypes
+        : card.archetype
+          ? [card.archetype]
+          : [];
+      list.forEach((name) => archetypes.add(name));
+    });
+    laboratoryArchetypeSelect.innerHTML = "";
+    [...archetypes].forEach((name) => {
+      const option = document.createElement("option");
+      option.value = name;
+      option.textContent = name === "all" ? "Todos" : name;
+      laboratoryArchetypeSelect.appendChild(option);
+    });
+  }
+
+  if (laboratoryCardOptions) {
+    laboratoryCardOptions.innerHTML = "";
+    getSortedCardPool(cardDatabase).forEach((card) => {
+      const option = document.createElement("option");
+      option.value = getCardDisplayName(card) || card.name;
+      option.dataset.cardId = String(card.id);
+      laboratoryCardOptions.appendChild(option);
+    });
+  }
+}
+
+function renderLaboratory() {
+  if (!laboratoryBody) return;
+  laboratoryBody.innerHTML = "";
+  ["player", "bot"].forEach((owner) => {
+    const side = laboratorySetup[owner];
+    const panel = document.createElement("section");
+    panel.className = "laboratory-side";
+    panel.dataset.owner = owner;
+
+    const header = document.createElement("div");
+    header.className = "laboratory-side-header";
+    header.innerHTML = `
+      <h3>${LAB_OWNER_LABELS[owner]}</h3>
+      <label class="laboratory-lp">LP
+        <input type="number" min="0" max="99999" value="${side.lp}" data-lab-lp="${owner}" />
+      </label>
+      <button type="button" data-lab-random-side="${owner}">Aleatorizar lado</button>
+    `;
+    panel.appendChild(header);
+
+    const zones = document.createElement("div");
+    zones.className = "laboratory-zones";
+    LAB_ZONE_CONFIG.forEach((zoneConfig) => {
+      const zone = document.createElement("div");
+      const isSelected =
+        laboratorySelection.owner === owner &&
+        laboratorySelection.zone === zoneConfig.id;
+      zone.className = `laboratory-zone${isSelected ? " selected" : ""}`;
+      zone.dataset.owner = owner;
+      zone.dataset.zone = zoneConfig.id;
+
+      const entries = getLabZone(owner, zoneConfig.id);
+      const maxText = zoneConfig.max ? ` / ${zoneConfig.max}` : "";
+      const headerEl = document.createElement("div");
+      headerEl.className = "laboratory-zone-header";
+      headerEl.innerHTML = `
+        <span>${zoneConfig.label} (${entries.length}${maxText})</span>
+        <button type="button" data-lab-random-zone="${owner}:${zoneConfig.id}">Sortear</button>
+      `;
+      zone.appendChild(headerEl);
+
+      const list = document.createElement("div");
+      list.className = "laboratory-card-list";
+      if (entries.length === 0) {
+        const empty = document.createElement("span");
+        empty.className = "laboratory-empty";
+        empty.textContent = "Vazio";
+        list.appendChild(empty);
+      } else {
+        entries.forEach((entry, index) => {
+          const card = getLabCard(entry);
+          const chip = document.createElement("div");
+          chip.className = "laboratory-card-chip";
+          const meta = [];
+          if (entry.position) meta.push(entry.position === "defense" ? "DEF" : "ATK");
+          if (entry.facedown) meta.push("baixada");
+          chip.innerHTML = `
+            <span title="${card?.name || "Carta desconhecida"}">${card?.name || "Carta desconhecida"}${
+              meta.length ? ` (${meta.join(", ")})` : ""
+            }</span>
+            <button type="button" data-lab-remove="${owner}:${zoneConfig.id}:${index}">&times;</button>
+          `;
+          list.appendChild(chip);
+        });
+      }
+      zone.appendChild(list);
+      zones.appendChild(zone);
+    });
+    panel.appendChild(zones);
+    laboratoryBody.appendChild(panel);
+  });
+}
+
+function addCardToLaboratoryZone(owner, zone, entry) {
+  const zoneConfig = getLabZoneConfig(zone);
+  const entries = getLabZone(owner, zone);
+  if (zoneConfig.max && entries.length >= zoneConfig.max) {
+    alert(`${zoneConfig.label} atingiu o limite de ${zoneConfig.max}.`);
+    return false;
+  }
+  const card = getLabCard(entry);
+  if (!card || getLabCandidates(zone, "all").every((candidate) => candidate.id !== card.id)) {
+    alert("Esta carta não é válida para a zona selecionada.");
+    return false;
+  }
+  entries.push(cloneLabEntry(entry));
+  return true;
+}
+
+function addSelectedLaboratoryCard() {
+  const owner = laboratoryAddOwnerSelect?.value || laboratorySelection.owner;
+  const zone = laboratoryAddZoneSelect?.value || laboratorySelection.zone;
+  const rawName = laboratoryCardSearchInput?.value?.trim();
+  if (!rawName) {
+    alert("Escolha uma carta para adicionar.");
+    return;
+  }
+  const lower = rawName.toLowerCase();
+  const card = cardDatabase.find(
+    (item) =>
+      item.name.toLowerCase() === lower ||
+      (getCardDisplayName(item) || "").toLowerCase() === lower,
+  );
+  if (!card) {
+    alert("Carta não encontrada.");
+    return;
+  }
+  if (addCardToLaboratoryZone(owner, zone, getLabEntryForCard(card, zone))) {
+    if (laboratoryCardSearchInput) laboratoryCardSearchInput.value = "";
+    laboratorySelection = { owner, zone };
+    renderLaboratory();
+  }
+}
+
+function randomizeLaboratoryZone(owner, zone) {
+  const side = laboratorySetup[owner];
+  const zoneConfig = getLabZoneConfig(zone);
+  const current = getLabZone(owner, zone);
+  const max = zoneConfig.max || Number.POSITIVE_INFINITY;
+  const count = Math.min(
+    current.length > 0 ? current.length : zoneConfig.defaultCount,
+    max,
+  );
+  const archetype = laboratoryArchetypeSelect?.value || "all";
+  const candidates = getLabCandidates(zone, archetype);
+  if (candidates.length === 0) {
+    side[zone] = [];
+    return;
+  }
+  side[zone] = Array.from({ length: count }, () => {
+    const card = candidates[Math.floor(Math.random() * candidates.length)];
+    if (zone === "field") {
+      return {
+        id: card.id,
+        position: Math.random() > 0.5 ? "attack" : "defense",
+        facedown: false,
+      };
+    }
+    if (zone === "spellTrap") {
+      return { id: card.id, facedown: Math.random() > 0.5 };
+    }
+    return { id: card.id };
+  });
+}
+
+function randomizeLaboratorySide(owner) {
+  LAB_ZONE_CONFIG.forEach((zone) => randomizeLaboratoryZone(owner, zone.id));
+  renderLaboratory();
+}
+
+function randomizeLaboratoryAll() {
+  randomizeLaboratorySide("player");
+  randomizeLaboratorySide("bot");
+}
+
+function buildLaboratorySetupForGame() {
+  const cloneSide = (side) => ({
+    lp: Math.max(0, Math.floor(Number(side.lp) || 0)),
+    deck: side.deck.map(cloneLabEntry).filter(Boolean),
+    extraDeck: side.extraDeck.map(cloneLabEntry).filter(Boolean),
+    hand: side.hand.map(cloneLabEntry).filter(Boolean),
+    field: side.field.map(cloneLabEntry).filter(Boolean),
+    spellTrap: side.spellTrap.map(cloneLabEntry).filter(Boolean),
+    fieldSpell: side.fieldSpell.map(cloneLabEntry).filter(Boolean)[0] || null,
+    graveyard: side.graveyard.map(cloneLabEntry).filter(Boolean),
+  });
+  return {
+    player: cloneSide(laboratorySetup.player),
+    bot: cloneSide(laboratorySetup.bot),
+  };
+}
+
+function openLaboratory() {
+  startScreen.classList.add("hidden");
+  laboratoryModal?.classList.remove("hidden");
+  populateLaboratoryControls();
+  updateLaboratoryAddControls();
+  renderLaboratory();
+}
+
+function closeLaboratory() {
+  laboratoryModal?.classList.add("hidden");
+  startScreen.classList.remove("hidden");
+}
+
 function openDeckBuilder() {
   startScreen.classList.add("hidden");
   deckBuilder.classList.remove("hidden");
@@ -881,21 +1128,28 @@ function bootGame() {
   const renderer = new Renderer();
   game = new Game({
     botPreset: currentBotPreset,
-    devMode: devModeEnabled,
+    devMode: false,
     renderer,
   });
-  game.testModeEnabled = !!testModeEnabled;
   game.start([...currentDeck], [...currentExtraDeck]);
 }
 
-function restartCurrentDuelFromDev() {
-  if (!runCardDatabaseValidation({ silent: true })) {
-    alert("Corrija os erros do Card DB antes de reiniciar o duelo.");
+async function startLaboratoryDuel() {
+  if (!runCardDatabaseValidation()) {
     return;
   }
+  const renderer = new Renderer();
+  game = new Game({
+    laboratoryMode: true,
+    devMode: false,
+    playerName: "Jogador 1",
+    opponentName: "Jogador 2",
+    renderer,
+  });
+  laboratoryModal?.classList.add("hidden");
   startScreen.classList.add("hidden");
   deckBuilder.classList.add("hidden");
-  bootGame();
+  await game.startLaboratory(buildLaboratorySetupForGame());
 }
 
 // Listener para rematch via evento do game over modal
@@ -1130,6 +1384,7 @@ btnPoolFilterArcanist?.addEventListener("click", () => {
 btnStartDuel?.addEventListener("click", startDuel);
 btnBotArena?.addEventListener("click", openBotArenaModal);
 btnReplayDashboard?.addEventListener("click", openReplayDashboard);
+btnOpenLaboratory?.addEventListener("click", openLaboratory);
 closeReplayDashboardBtn?.addEventListener("click", closeReplayDashboard);
 btnArenaStart?.addEventListener("click", startBotArena);
 btnArenaCancel?.addEventListener("click", closeBotArenaModal);
@@ -1140,26 +1395,65 @@ botPresetSelect?.addEventListener("change", (e) => {
   saveBotPreset(value);
   updateBotPresetStatus();
 });
-btnToggleTestMode?.addEventListener("click", () => {
-  testModeEnabled = !testModeEnabled;
-  saveTestModeFlag(testModeEnabled);
-  updateTestModeButton();
+laboratoryCloseBtn?.addEventListener("click", closeLaboratory);
+laboratoryClearBtn?.addEventListener("click", () => {
+  laboratorySetup = createEmptyLaboratorySetup();
+  renderLaboratory();
 });
-btnToggleDevMode?.addEventListener("click", () => {
-  devModeEnabled = !devModeEnabled;
-  saveDevModeFlag(devModeEnabled);
-  updateDevModeButton();
-  if (game && typeof game.setDevMode === "function") {
-    game.setDevMode(devModeEnabled);
+laboratoryRandomAllBtn?.addEventListener("click", randomizeLaboratoryAll);
+laboratoryStartBtn?.addEventListener("click", startLaboratoryDuel);
+laboratoryAddCardBtn?.addEventListener("click", addSelectedLaboratoryCard);
+laboratoryFacedownInput?.addEventListener("change", () => {
+  laboratoryFacedownInput.dataset.touched = "true";
+});
+laboratoryAddOwnerSelect?.addEventListener("change", () => {
+  laboratorySelection.owner = laboratoryAddOwnerSelect.value;
+  renderLaboratory();
+});
+laboratoryAddZoneSelect?.addEventListener("change", () => {
+  laboratorySelection.zone = laboratoryAddZoneSelect.value;
+  updateLaboratoryAddControls();
+  renderLaboratory();
+});
+laboratoryBody?.addEventListener("input", (event) => {
+  const owner = event.target?.dataset?.labLp;
+  if (!owner || !laboratorySetup[owner]) return;
+  laboratorySetup[owner].lp = Math.max(
+    0,
+    Math.floor(Number(event.target.value) || 0),
+  );
+});
+laboratoryBody?.addEventListener("click", (event) => {
+  const removeSpec = event.target?.dataset?.labRemove;
+  if (removeSpec) {
+    const [owner, zone, indexRaw] = removeSpec.split(":");
+    const index = Number.parseInt(indexRaw, 10);
+    const entries = getLabZone(owner, zone);
+    if (!Number.isNaN(index)) {
+      entries.splice(index, 1);
+      renderLaboratory();
+    }
+    return;
   }
-  showValidationMessages(latestValidationResult);
-});
 
-devPanelToggleBtn?.addEventListener("click", () => {
-  if (!devModeEnabled) return;
-  devPanelMinimized = !devPanelMinimized;
-  saveDevPanelMinimizedFlag(devPanelMinimized);
-  updateDevPanelMinimizedState();
+  const randomSpec = event.target?.dataset?.labRandomZone;
+  if (randomSpec) {
+    const [owner, zone] = randomSpec.split(":");
+    randomizeLaboratoryZone(owner, zone);
+    renderLaboratory();
+    return;
+  }
+
+  const randomSide = event.target?.dataset?.labRandomSide;
+  if (randomSide) {
+    randomizeLaboratorySide(randomSide);
+    return;
+  }
+
+  const zoneEl = event.target?.closest?.(".laboratory-zone");
+  if (zoneEl?.dataset?.owner && zoneEl?.dataset?.zone) {
+    applyLabZoneSelection(zoneEl.dataset.owner, zoneEl.dataset.zone);
+  }
 });
 
 btnToggleReplay?.addEventListener("click", () => {
@@ -1183,190 +1477,6 @@ btnToggleReplay?.addEventListener("click", () => {
   }
 });
 
-devDrawBtn?.addEventListener("click", () => {
-  if (!requireActiveGameForDev()) return;
-  const playerId = devDrawPlayerSelect?.value || "player";
-  const count = Math.max(1, parseInt(devDrawCountInput?.value, 10) || 1);
-  const result = game.devDraw(playerId, count);
-  if (!result.success) {
-    alert(result.reason || "N�o foi poss�vel comprar cartas.");
-  }
-});
-
-devGiveBtn?.addEventListener("click", () => {
-  if (!requireActiveGameForDev()) return;
-  const cardName = devGiveNameInput?.value?.trim();
-  if (!cardName) {
-    alert("Informe o nome da carta.");
-    return;
-  }
-  const options = {
-    playerId: devGivePlayerSelect?.value || "player",
-    cardName,
-    zone: devGiveZoneSelect?.value || "hand",
-  };
-  const result = game.devGiveCard(options);
-  if (!result.success) {
-    alert(result.reason || "N�o foi poss�vel adicionar a carta.");
-  }
-});
-
-devForcePhaseBtn?.addEventListener("click", () => {
-  if (!requireActiveGameForDev()) return;
-  const phase = devForcePhaseSelect?.value || "main1";
-  const result = game.devForcePhase(phase);
-  if (!result.success) {
-    alert(result.reason || "N�o foi poss�vel for�ar a fase.");
-  }
-});
-
-devApplySetupBtn?.addEventListener("click", () => {
-  if (!requireActiveGameForDev()) return;
-  const raw = devSetupInput?.value?.trim();
-  if (!raw) {
-    alert("Cole um JSON descrevendo o setup do board.");
-    return;
-  }
-  let parsed = null;
-  try {
-    parsed = JSON.parse(raw);
-  } catch (err) {
-    alert("JSON inv�lido para setup do board.");
-    return;
-  }
-  const result = game.applyManualSetup(parsed);
-  if (!result.success) {
-    alert(result.reason || "N�o foi poss�vel aplicar o setup.");
-  } else if (result.warnings?.length) {
-    alert(result.warnings.join("\n"));
-  }
-});
-
-devSanityABtn?.addEventListener("click", async () => {
-  if (!requireActiveGameForDev()) return;
-  const result = await game.devRunSanityA();
-  if (!result?.success) {
-    alert(result?.reason || "Sanity A failed.");
-  }
-});
-
-devSanityBBtn?.addEventListener("click", async () => {
-  if (!requireActiveGameForDev()) return;
-  const result = await game.devRunSanityB();
-  if (!result?.success) {
-    alert(result?.reason || "Sanity B failed.");
-  }
-});
-
-devSanityCBtn?.addEventListener("click", async () => {
-  if (!requireActiveGameForDev()) return;
-  const result = await game.devRunSanityC();
-  if (!result?.success) {
-    alert(result?.reason || "Sanity C failed.");
-  }
-});
-
-devSanityDBtn?.addEventListener("click", async () => {
-  if (!requireActiveGameForDev()) return;
-  const result = await game.devRunSanityD();
-  if (!result?.success) {
-    alert(result?.reason || "Sanity D failed.");
-  }
-});
-
-devSanityEBtn?.addEventListener("click", async () => {
-  if (!requireActiveGameForDev()) return;
-  const result = await game.devRunSanityE();
-  if (!result?.success) {
-    alert(result?.reason || "Sanity E failed.");
-  }
-});
-
-devSanityFBtn?.addEventListener("click", async () => {
-  if (!requireActiveGameForDev()) return;
-  const result = await game.devRunSanityF();
-  if (!result?.success) {
-    alert(result?.reason || "Sanity F failed.");
-  }
-});
-
-devSanityGBtn?.addEventListener("click", async () => {
-  if (!requireActiveGameForDev()) return;
-  const result = await game.devRunSanityG();
-  if (!result?.success) {
-    alert(result?.reason || "Sanity G failed.");
-  }
-});
-
-devSanityHBtn?.addEventListener("click", async () => {
-  if (!requireActiveGameForDev()) return;
-  const result = await game.devRunSanityH();
-  if (!result?.success) {
-    alert(result?.reason || "Sanity H failed.");
-  }
-});
-
-devSanityIBtn?.addEventListener("click", async () => {
-  if (!requireActiveGameForDev()) return;
-  const result = await game.devRunSanityI();
-  if (!result?.success) {
-    alert(result?.reason || "Sanity I failed.");
-  }
-});
-
-devSanityJBtn?.addEventListener("click", async () => {
-  if (!requireActiveGameForDev()) return;
-  const result = await game.devRunSanityJ();
-  if (!result?.success) {
-    alert(result?.reason || "Sanity J failed.");
-  }
-});
-
-devSanityKBtn?.addEventListener("click", async () => {
-  if (!requireActiveGameForDev()) return;
-  const result = await game.devRunSanityK();
-  if (!result?.success) {
-    alert(result?.reason || "Sanity K failed.");
-  }
-});
-
-devSanityLBtn?.addEventListener("click", async () => {
-  if (!requireActiveGameForDev()) return;
-  const result = await game.devRunSanityL();
-  if (!result?.success) {
-    alert(result?.reason || "Sanity L failed.");
-  }
-});
-
-devSanityMBtn?.addEventListener("click", async () => {
-  if (!requireActiveGameForDev()) return;
-  const result = await game.devRunSanityM();
-  if (!result?.success) {
-    alert(result?.reason || "Sanity M failed.");
-  }
-});
-devSanityNBtn?.addEventListener("click", async () => {
-  if (!requireActiveGameForDev()) return;
-  const result = await game.devRunSanityN();
-  if (!result?.success) {
-    alert(result?.reason || "Sanity N failed.");
-  }
-});
-devSanityOBtn?.addEventListener("click", async () => {
-  if (!requireActiveGameForDev()) return;
-  const result = await game.devRunSanityO();
-  if (!result?.success) {
-    alert(result?.reason || "Sanity O failed.");
-  }
-});
-devResetDuelBtn?.addEventListener("click", () => {
-  if (!devModeEnabled) {
-    alert("Ative o Dev Mode antes de reiniciar por aqui.");
-    return;
-  }
-  restartCurrentDuelFromDev();
-});
-
 function ensureDomReady(fn) {
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", fn, { once: true });
@@ -1377,18 +1487,4 @@ function ensureDomReady(fn) {
 
 ensureDomReady(() => {
   startScreen.classList.remove("hidden");
-  updateDevPanelVisibility();
-  updateDevPanelMinimizedState();
 });
-
-function requireActiveGameForDev() {
-  if (!devModeEnabled) {
-    alert("Ative o Dev Mode para usar o Dev Harness.");
-    return false;
-  }
-  if (!game) {
-    alert("Inicie um duelo primeiro.");
-    return false;
-  }
-  return true;
-}

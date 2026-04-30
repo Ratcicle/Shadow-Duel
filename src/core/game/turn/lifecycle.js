@@ -21,7 +21,8 @@ export async function startTurn() {
   this.turnCounter += 1;
 
   // Log separador de turno
-  const activePlayerName = this.turn === "player" ? "Bot 1" : "Bot 2";
+  const activePlayerName =
+    (this.turn === "player" ? this.player : this.bot)?.name || this.turn;
   console.log(
     `\n${"─".repeat(20)} TURNO ${
       this.turnCounter

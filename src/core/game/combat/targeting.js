@@ -22,7 +22,7 @@ export function startAttackTargetSelection(attacker, candidates) {
 
   if (candidates.length === 0 && !canDirect) return;
   const decorated = candidates.map((card, idx) => {
-    const ownerLabel = card.owner === "player" ? "player" : "opponent";
+    const ownerLabel = card.owner === attacker.owner ? "player" : "opponent";
     const ownerPlayer = card.owner === "player" ? this.player : this.bot;
     const zoneArr = this.getZone(ownerPlayer, "field") || [];
     const zoneIndex = zoneArr.indexOf(card);
@@ -45,11 +45,12 @@ export function startAttackTargetSelection(attacker, candidates) {
 
   // Adiciona alvo de ataque direto (clicar na mao do oponente) quando permitido
   if (canDirect) {
+    const opponentPlayer = attacker.owner === "player" ? this.bot : this.player;
     decorated.push({
       idx: decorated.length,
       name: "Direct Attack",
       owner: "opponent",
-      controller: this.bot.id,
+      controller: opponentPlayer.id,
       zone: "hand",
       zoneIndex: -1,
       position: "attack",
@@ -60,7 +61,7 @@ export function startAttackTargetSelection(attacker, candidates) {
       isDirectAttack: true,
       key: this.buildSelectionCandidateKey(
         {
-          controller: this.bot.id,
+          controller: opponentPlayer.id,
           zone: "hand",
           zoneIndex: -1,
           name: "Direct Attack",

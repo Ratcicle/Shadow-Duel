@@ -9,25 +9,33 @@
  * @param {Object} selections - Pre-selected targets if any.
  * @returns {Promise<Object>} Activation result with potential async selections.
  */
-export async function tryActivateSpellTrapEffect(card, selections = null) {
+export async function tryActivateSpellTrapEffect(
+  card,
+  selections = null,
+  options = {},
+) {
   if (this.disableEffectActivation || this.disableTraps) {
     this.ui?.log?.("Spell/Trap activations are disabled in network mode.");
     return { success: false, reason: "effects_disabled" };
   }
   if (!card) return;
+  const owner =
+    options.owner ||
+    (card.owner === "bot" ? this.bot : this.player) ||
+    this.player;
   console.log(`[Game] tryActivateSpellTrapEffect called for: ${card.name}`);
 
   // Traps can be activated on opponent's turn and during battle phase
   const isTrap = card.cardKind === "trap";
   const guardConfig = isTrap
     ? {
-        actor: this.player,
+        actor: owner,
         kind: "trap_activation",
         phaseReq: ["main1", "battle", "main2"],
         allowDuringOpponentTurn: true,
       }
     : {
-        actor: this.player,
+        actor: owner,
         kind: "spelltrap_effect",
         phaseReq: ["main1", "main2"],
       };
@@ -37,7 +45,7 @@ export async function tryActivateSpellTrapEffect(card, selections = null) {
 
   const preview = this.effectEngine?.canActivateSpellTrapEffectPreview?.(
     card,
-    this.player,
+    owner,
     "spellTrap",
     selections,
     { activationContext: { autoSelectSingleTarget: true } },
@@ -64,7 +72,7 @@ export async function tryActivateSpellTrapEffect(card, selections = null) {
     // Flip the trap face-up after confirmation
     if (card.isFacedown) {
       card.isFacedown = false;
-      this.ui.log(`${this.player.name} ativa ${card.name}!`);
+      this.ui.log(`${owner.name} ativa ${card.name}!`);
       this.updateBoard();
     }
   }
@@ -86,7 +94,7 @@ export async function tryActivateSpellTrapEffect(card, selections = null) {
 
   const pipelineResult = await this.runActivationPipeline({
     card,
-    owner: this.player,
+    owner,
     activationZone: "spellTrap",
     activationContext,
     selections,
@@ -97,13 +105,13 @@ export async function tryActivateSpellTrapEffect(card, selections = null) {
     allowDuringOpponentTurn: isTrap,
     oncePerTurn: {
       card,
-      player: this.player,
+      player: owner,
       effect: activationEffect,
     },
     activate: (chosen, ctx, zone) =>
       this.effectEngine.activateSpellTrapEffect(
         card,
-        this.player,
+        owner,
         chosen,
         zone,
         ctx,
@@ -114,7 +122,7 @@ export async function tryActivateSpellTrapEffect(card, selections = null) {
       } else {
         await this.finalizeSpellTrapActivation(
           card,
-          this.player,
+          owner,
           info.activationZone,
         );
         this.ui.log(`${card.name} effect activated.`);
@@ -168,7 +176,7 @@ export async function tryActivateSpell(
       e.actions.some((a) => a && a.type === "polymerization_fusion_summon"),
   );
   if (hasFusionAction && !resume) {
-    if (!this.canActivatePolymerization?.()) {
+    if (!this.canActivatePolymerization?.(owner)) {
       this.ui?.showMessage?.(
         "Você não tem materiais válidos para Fusion Summon!",
       );

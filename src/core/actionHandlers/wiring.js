@@ -25,6 +25,7 @@ import {
 import {
   handleBanish,
   handleBanishCardFromGraveyard,
+  handleBanishAllGraveyardAndBurn,
   handleDestroyTargetedCards,
   handleDestroyAndDamageByTargetAtk,
   handleDestroyAttackerOnArchetypeDestruction,
@@ -105,6 +106,12 @@ export function registerDefaultHandlers(registry) {
     "banish_card_from_graveyard",
 
     handleBanishCardFromGraveyard,
+  );
+
+  registry.register(
+    "banish_all_graveyard_and_burn",
+
+    handleBanishAllGraveyardAndBurn,
   );
 
   // Stat modification and effect negation handlers

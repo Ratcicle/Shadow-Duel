@@ -5699,7 +5699,7 @@
     ],
   },
   {
-    id: 214,
+    id: 250,
     name: "Fire Extreme Dragon",
     cardKind: "monster",
     atk: 3000,
@@ -5791,6 +5791,98 @@
             },
             count: { min: 1, max: 1 },
             position: "choice",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 251,
+    name: "Volcanic Extreme Dragon",
+    cardKind: "monster",
+    atk: 2600,
+    def: 3000,
+    level: 10,
+    type: "Dragon",
+    archetype: "Extreme Dragons",
+    fieldLimit: {
+      key: "extreme_dragons_faceup",
+      label: "Extreme Dragon",
+      scope: "global",
+      requireFaceup: true,
+      filters: {
+        cardKind: "monster",
+        archetype: "Extreme Dragons",
+      },
+    },
+    description:
+      'There can only be 1 face-up "Extreme Dragon" monster on the field. While this card is the only monster you control, it cannot be destroyed by battle. If this card battles an opponent\'s monster: inflict 600 damage to your opponent. Once per turn: you can banish all cards in your Graveyard; inflict 500 damage to your opponent for each card banished by this effect.',
+    image: "assets/Volcanic Extreme Dragon.png",
+    effects: [
+      {
+        id: "volcanic_extreme_dragon_lone_battle_protection",
+        timing: "passive",
+        requireZone: "field",
+        requireFaceup: true,
+        passive: {
+          type: "conditional_protection",
+          protectionType: "battle_destruction",
+        },
+        conditions: [
+          {
+            type: "control_card_filters",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            includeFacedown: true,
+            max: 1,
+          },
+        ],
+      },
+      {
+        id: "volcanic_extreme_dragon_battle_burn_attacker",
+        timing: "on_event",
+        event: "attack_declared",
+        requireZone: "field",
+        requireFaceup: true,
+        requireSelfAsAttacker: true,
+        promptUser: false,
+        actions: [
+          {
+            type: "damage",
+            player: "opponent",
+            amount: 600,
+          },
+        ],
+      },
+      {
+        id: "volcanic_extreme_dragon_battle_burn_defender",
+        timing: "on_event",
+        event: "attack_declared",
+        requireZone: "field",
+        requireFaceup: true,
+        requireSelfAsDefender: true,
+        promptUser: false,
+        actions: [
+          {
+            type: "damage",
+            player: "opponent",
+            amount: 600,
+          },
+        ],
+      },
+      {
+        id: "volcanic_extreme_dragon_banish_burn",
+        timing: "ignition",
+        requireZone: "field",
+        requireFaceup: true,
+        oncePerTurn: true,
+        oncePerTurnName: "volcanic_extreme_dragon_banish_burn",
+        actions: [
+          {
+            type: "banish_all_graveyard_and_burn",
+            damagePerCard: 500,
+            player: "opponent",
           },
         ],
       },

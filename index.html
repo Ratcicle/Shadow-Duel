@@ -28,11 +28,8 @@
           <button id="btn-bot-arena">Bot Arena</button>
           <button id="btn-replay-dashboard">Replay Analytics</button>
           <button id="btn-deck-builder">Meu Deck</button>
-          <button id="btn-toggle-test-mode" class="test-mode-toggle">
-            Modo teste: desligado
-          </button>
-          <button id="btn-toggle-dev-mode" class="dev-mode-toggle">
-            Dev Mode: desligado
+          <button id="btn-open-laboratory" class="laboratory-toggle">
+            Laboratório
           </button>
           <button
             id="btn-toggle-replay"
@@ -113,6 +110,75 @@
             <button id="deck-save">Salvar</button>
             <button id="deck-cancel">Fechar</button>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Laboratory -->
+    <div id="laboratory-modal" class="overlay hidden">
+      <div class="laboratory-panel">
+        <div class="laboratory-header">
+          <div>
+            <h2>Laboratório</h2>
+            <p>Monte um cenário manual para testar cartas dos dois lados.</p>
+          </div>
+          <button type="button" id="laboratory-close" aria-label="Fechar">
+            &times;
+          </button>
+        </div>
+
+        <div class="laboratory-toolbar">
+          <label for="laboratory-archetype">Aleatorizar por</label>
+          <select id="laboratory-archetype"></select>
+          <button type="button" id="laboratory-random-all">
+            Aleatorizar tudo
+          </button>
+          <button type="button" id="laboratory-clear">Limpar</button>
+        </div>
+
+        <div id="laboratory-body" class="laboratory-body"></div>
+
+        <div class="laboratory-add-card">
+          <div class="laboratory-add-grid">
+            <label>
+              Lado
+              <select id="laboratory-add-owner">
+                <option value="player">Jogador 1</option>
+                <option value="bot">Jogador 2</option>
+              </select>
+            </label>
+            <label>
+              Zona
+              <select id="laboratory-add-zone"></select>
+            </label>
+            <label>
+              Carta
+              <input
+                id="laboratory-card-search"
+                list="laboratory-card-options"
+                placeholder="Digite o nome da carta"
+              />
+            </label>
+            <label>
+              Posição
+              <select id="laboratory-position">
+                <option value="attack">Ataque</option>
+                <option value="defense">Defesa</option>
+              </select>
+            </label>
+            <label class="laboratory-check">
+              <input type="checkbox" id="laboratory-facedown" />
+              Baixada
+            </label>
+            <button type="button" id="laboratory-add-card-btn">
+              Adicionar
+            </button>
+          </div>
+          <datalist id="laboratory-card-options"></datalist>
+        </div>
+
+        <div class="laboratory-footer">
+          <button type="button" id="laboratory-start">Iniciar</button>
         </div>
       </div>
     </div>
@@ -370,99 +436,6 @@
     </div>
 
     <script type="module" src="src/main.js"></script>
-
-    <div id="dev-panel" class="dev-panel hidden">
-      <div class="dev-panel-header">
-        <h3>Dev Harness</h3>
-        <button id="dev-panel-toggle" type="button" class="dev-panel-toggle">
-          Minimizar
-        </button>
-      </div>
-      <div class="dev-field">
-        <label for="dev-draw-player">Comprar cartas</label>
-        <div class="dev-inline">
-          <select id="dev-draw-player">
-            <option value="player">Player</option>
-            <option value="bot">Bot</option>
-          </select>
-          <input type="number" id="dev-draw-count" min="1" max="10" value="1" />
-          <button id="dev-draw-btn">Comprar</button>
-        </div>
-      </div>
-      <div class="dev-field">
-        <label for="dev-give-name">Adicionar carta</label>
-        <input
-          type="text"
-          id="dev-give-name"
-          placeholder="Nome da carta ex.: Infinity Searcher"
-        />
-        <div class="dev-inline">
-          <select id="dev-give-player">
-            <option value="player">Player</option>
-            <option value="bot">Bot</option>
-          </select>
-          <select id="dev-give-zone">
-            <option value="hand">Hand</option>
-            <option value="field-attack">Field (ATK)</option>
-            <option value="field-defense">Field (DEF)</option>
-            <option value="spellTrap">Spell/Trap</option>
-            <option value="fieldSpell">Field Spell</option>
-            <option value="graveyard">Graveyard</option>
-          </select>
-          <button id="dev-give-btn">Adicionar</button>
-        </div>
-      </div>
-      <div class="dev-field">
-        <label for="dev-force-phase">Forçar fase</label>
-        <div class="dev-inline">
-          <select id="dev-force-phase">
-            <option value="draw">Draw</option>
-            <option value="standby">Standby</option>
-            <option value="main1">Main 1</option>
-            <option value="battle">Battle</option>
-            <option value="main2">Main 2</option>
-            <option value="end">End</option>
-          </select>
-          <button id="dev-force-phase-btn">Forçar</button>
-        </div>
-      </div>
-      <div class="dev-field">
-        <label for="dev-setup-json">Setup de board (JSON)</label>
-        <textarea
-          id="dev-setup-json"
-          rows="4"
-          placeholder='{"player":{"hand":["Infinity Searcher"]}}'
-        ></textarea>
-        <button id="dev-apply-setup">Aplicar Setup</button>
-      </div>
-      <div class="dev-field">
-        <label>Activation Pipeline Sanity Suite</label>
-        <div class="dev-inline">
-          <button id="dev-sanity-a">
-            Sanity A: Hand spell target + cancel
-          </button>
-          <button id="dev-sanity-b">Sanity B: placementOnly</button>
-          <button id="dev-sanity-c">
-            Sanity C: committed field spell fail + restore
-          </button>
-          <button id="dev-sanity-d">Sanity D: triggered target flow</button>
-          <button id="dev-sanity-e">Sanity E: bot auto-select</button>
-          <button id="dev-sanity-f">Sanity F: player strategy manual</button>
-          <button id="dev-sanity-g">Sanity G: bot min=0 optional</button>
-          <button id="dev-sanity-h">
-            Sanity H: Hydra Titan before_destroy
-          </button>
-          <button id="dev-sanity-i">Sanity I: field full protection</button>
-          <button id="dev-sanity-j">Sanity J: rollback invariants</button>
-          <button id="dev-sanity-k">Sanity K: once per turn</button>
-          <button id="dev-sanity-l">Sanity L: action while selecting</button>
-          <button id="dev-sanity-m">Sanity M: action while resolving</button>
-          <button id="dev-sanity-n">Sanity N: deck empty draw</button>
-          <button id="dev-sanity-o">Sanity O: stale target</button>
-        </div>
-      </div>
-      <button id="dev-reset-duel" class="dev-reset-btn">Resetar Duelo</button>
-    </div>
 
     <!-- Replay Dashboard Modal -->
     <div id="replay-dashboard-modal" class="overlay hidden">

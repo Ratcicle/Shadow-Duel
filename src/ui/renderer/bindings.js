@@ -149,6 +149,13 @@ export function bindPlayerExtraDeckClick(handler) {
 /**
  * @this {import('../Renderer.js').default}
  */
+export function bindBotExtraDeckClick(handler) {
+  this.bindZoneClick("bot-extradeck", handler);
+}
+
+/**
+ * @this {import('../Renderer.js').default}
+ */
 export function bindGraveyardModalClose(handler) {
   const closeBtn = document.querySelector(".close-modal");
   if (!closeBtn) return;

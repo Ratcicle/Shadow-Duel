@@ -102,7 +102,6 @@ export async function checkAndOfferTraps(event, eventData = {}) {
     console.log(`[checkAndOfferTraps] Chain window closed, cleaning up`);
   } finally {
     this.trapPromptInProgress = false;
-    this.testModeEnabled = false;
     console.log(`[checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false`);
   }
 }

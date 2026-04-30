@@ -6,6 +6,16 @@
 
 import { getCardDisplayName } from "../../core/i18n.js";
 
+function resolveHandCardElement(cardIndex, options = {}) {
+  if (options.anchorElement) {
+    return options.anchorElement;
+  }
+  const ownerId = options.ownerId === "bot" ? "bot" : "player";
+  return document.querySelector(
+    `#${ownerId}-hand .card[data-index="${cardIndex}"]`
+  );
+}
+
 /**
  * @this {import('../Renderer.js').default}
  */
@@ -15,9 +25,7 @@ export function showSummonModal(cardIndex, callback, options = {}) {
     existingModal.remove();
   }
 
-  const cardElement = document.querySelector(
-    `#player-hand .card[data-index="${cardIndex}"]`
-  );
+  const cardElement = resolveHandCardElement(cardIndex, options);
   const rect = cardElement ? cardElement.getBoundingClientRect() : null;
 
   const modal = document.createElement("div");
@@ -296,9 +304,7 @@ export function showSpellChoiceModal(cardIndex, callback, options = {}) {
   const canActivate =
     options.canActivate === undefined ? true : !!options.canActivate;
 
-  const cardElement = document.querySelector(
-    `#player-hand .card[data-index="${cardIndex}"]`
-  );
+  const cardElement = resolveHandCardElement(cardIndex, options);
   const rect = cardElement ? cardElement.getBoundingClientRect() : null;
 
   const modal = document.createElement("div");

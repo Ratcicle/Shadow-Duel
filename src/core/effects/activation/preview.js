@@ -62,7 +62,7 @@ export function canActivateSpellFromHandPreview(card, player, options = {}) {
       e.actions.some((a) => a && a.type === "polymerization_fusion_summon")
   );
   if (hasFusionAction) {
-    const canActivatePoly = this.game?.canActivatePolymerization?.();
+    const canActivatePoly = this.game?.canActivatePolymerization?.(player);
     if (!canActivatePoly) {
       return { ok: false, reason: "No valid fusion materials available." };
     }

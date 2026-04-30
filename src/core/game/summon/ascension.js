@@ -378,7 +378,7 @@ export async function performAscensionSummon(
  * @returns {Promise<{ success: boolean, reason?: string }>}
  */
 export async function tryAscensionSummon(materialCard, options = {}) {
-  const player = this.player;
+  const player = options.player || options.owner || this.player;
   const guard = this.guardActionStart({
     actor: player,
     kind: "ascension_summon",
@@ -453,7 +453,7 @@ export async function tryAscensionSummon(materialCard, options = {}) {
       const zoneIndex = player.extraDeck.indexOf(card);
       return {
         name: card.name,
-        owner: "player",
+        owner: player.id === "player" ? "player" : "opponent",
         controller: player.id,
         zone: "extraDeck",
         zoneIndex,
@@ -476,7 +476,7 @@ export async function tryAscensionSummon(materialCard, options = {}) {
       min: 1,
       max: 1,
       zones: ["extraDeck"],
-      owner: "player",
+      owner: player.id === "player" ? "player" : "opponent",
       filters: {},
       allowSelf: true,
       distinct: true,

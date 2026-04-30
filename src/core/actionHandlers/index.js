@@ -30,6 +30,7 @@ export {
 export {
   handleBanish,
   handleBanishCardFromGraveyard,
+  handleBanishAllGraveyardAndBurn,
   handleDestroyTargetedCards,
   handleDestroyAndDamageByTargetAtk,
   handleDestroyAttackerOnArchetypeDestruction,

@@ -448,9 +448,13 @@
       "name": "Mestre Elementalista Arcanista",
       "description": "Não pode ser destruído por efeitos de card. Este card ganha 100 de ATK para cada Magia \"Arcanista\" ativada neste turno. Uma vez por turno, se este card estiver equipado com uma Magia de Equipamento \"Arcanista\": você pode escolher 1 monstro que seu oponente controla; destrua-o."
     },
-    "214": {
+    "250": {
       "name": "Dragão Extremo de Fogo",
       "description": "Só pode haver 1 monstro \"Dragão Extremo\" com a face para cima no campo. Enquanto este card for o único monstro que você controla, ele não pode ser destruído por efeitos de cards. Se este card destruir um monstro do oponente em batalha: cause dano ao seu oponente igual à metade do ATK original do monstro destruído. Cada vez que seu oponente ativar um card ou efeito: cause 300 de dano ao seu oponente. Se este card for destruído em batalha: você pode Invocar por Invocação-Especial 1 \"Dragão Extremo Vulcânico\" da sua mão ou do Deck."
+    },
+    "251": {
+      "name": "Dragão Extremo Vulcânico",
+      "description": "Só pode haver 1 monstro \"Dragão Extremo\" com a face para cima no campo. Enquanto este card for o único monstro que você controla, ele não pode ser destruído em batalha. Se este card batalhar um monstro do oponente: cause 600 de dano ao seu oponente. Uma vez por turno: você pode banir todos os cards do seu Cemitério; cause 500 de dano ao seu oponente para cada card banido por este efeito."
     }
   }
 }

@@ -272,6 +272,19 @@ export const ACTION_CATALOG = {
     examples: [{ type: "banish_card_from_graveyard", filters: { cardKind: "monster" } }],
     notes: ["Registered but not currently used by card data."],
   }),
+  banish_all_graveyard_and_burn: action({
+    category: "destruction",
+    summary: "Banishes all cards in the controller's graveyard, then deals damage per card banished.",
+    handler: "handleBanishAllGraveyardAndBurn",
+    optional: ["damagePerCard", "player"],
+    fields: {
+      damagePerCard: field("amount"),
+      player: field("player"),
+    },
+    selection: "none",
+    mutates: ["graveyard", "banished", "lp"],
+    examples: [{ type: "banish_all_graveyard_and_burn", damagePerCard: 500, player: "opponent" }],
+  }),
   banish_destroyed_monster: action({
     category: "destruction",
     summary: "Banishes the monster destroyed in the current event context.",

@@ -19,12 +19,377 @@ export function bindCardInteractions() {
   let selectedTributes = [];
   let pendingSummon = null;
 
+  const isLaboratoryActive = (actor) =>
+    this.laboratoryModeEnabled === true && actor?.id === this.turn;
+  const getOpponentOf = (actor) => (actor?.id === "player" ? this.bot : this.player);
+  const handleDirectAttackHandClick = (ownerId, event) => {
+    if (!this.targetSelection || this.targetSelection.kind !== "attack") {
+      return false;
+    }
+    const requirement = this.targetSelection.requirements?.[0];
+    if (!requirement) return false;
+    const directCandidate = requirement.candidates.find(
+      (candidate) =>
+        candidate &&
+        candidate.isDirectAttack &&
+        candidate.controller === ownerId
+    );
+    if (!directCandidate) return false;
+    this.targetSelection.selections[requirement.id] = [directCandidate.key];
+    this.targetSelection.currentRequirement =
+      this.targetSelection.requirements.length;
+    this.setSelectionState("confirming");
+    this.finishTargetSelection();
+    event?.stopPropagation?.();
+    return true;
+  };
+
+  const setLaboratoryTributeHighlight = (actor, indices, selected = []) => {
+    if (actor?.id === "player") {
+      this.ui?.setPlayerFieldTributeable?.(indices);
+      selected.forEach((idx) => this.ui?.setPlayerFieldSelected?.(idx, true));
+      return;
+    }
+    const zone = document.getElementById("bot-field");
+    if (!zone) return;
+    zone.querySelectorAll(".card").forEach((el) => {
+      const idx = Number.parseInt(el.dataset.index, 10);
+      el.classList.toggle("tributeable", indices.includes(idx));
+      el.classList.toggle("selected", selected.includes(idx));
+    });
+  };
+
+  const clearLaboratoryTributeHighlight = (actor) => {
+    if (actor?.id === "player") {
+      this.ui?.clearPlayerFieldTributeable?.();
+      return;
+    }
+    const zone = document.getElementById("bot-field");
+    if (!zone) return;
+    zone
+      .querySelectorAll(".card")
+      .forEach((el) => el.classList.remove("tributeable", "selected"));
+  };
+
+  const handleLaboratoryHandClick = async (actor, index) => {
+    if (!isLaboratoryActive(actor)) return false;
+    if (this.targetSelection || tributeSelectionMode) return true;
+    const opponent = getOpponentOf(actor);
+    const card = actor.hand[index];
+    if (!card) return true;
+
+    if (this.isResolvingEffect) {
+      if (
+        this.pendingSpecialSummon &&
+        card.name === this.pendingSpecialSummon.cardName
+      ) {
+        this.chooseSpecialSummonPosition(actor, card, {})
+          .then((position) => this.performSpecialSummon(index, position, actor))
+          .catch(() => this.performSpecialSummon(index, "attack", actor));
+      } else {
+        this.ui.log("Finalize o efeito pendente antes de fazer outra acao.");
+      }
+      return true;
+    }
+
+    if (card.cardKind === "monster") {
+      const guard = this.guardActionStart({
+        actor,
+        kind: "summon",
+        phaseReq: ["main1", "main2"],
+      });
+      if (!guard.ok) return true;
+
+      const canSanctumSpecialFromAegis =
+        card.name === "Luminarch Sanctum Protector" &&
+        actor.field.length < 5 &&
+        actor.field.some(
+          (c) => c && c.name === "Luminarch Aegisbearer" && !c.isFacedown
+        );
+      const tributeInfo = actor.getTributeRequirement(card);
+      const tributesNeeded = tributeInfo.tributesNeeded;
+      const handEffect = (card.effects || []).find(
+        (effect) =>
+          effect && effect.timing === "ignition" && effect.requireZone === "hand"
+      );
+      const handEffectPreview = handEffect
+        ? this.effectEngine.canActivateMonsterEffectPreview(card, actor, "hand")
+        : { ok: false };
+      const canUseHandEffect = handEffectPreview.ok;
+
+      if (
+        !canUseHandEffect &&
+        tributesNeeded > 0 &&
+        actor.field.length < tributesNeeded &&
+        !canSanctumSpecialFromAegis
+      ) {
+        this.ui.log(`Not enough tributes for Level ${card.level} monster.`);
+        return true;
+      }
+
+      this.ui.showSummonModal(
+        index,
+        (choice) => {
+          if (choice === "special_from_aegisbearer") {
+            this.specialSummonSanctumProtectorFromHand(index, actor);
+            return;
+          }
+          if (
+            choice === "special_from_void_forgotten" ||
+            choice === "special_from_hand_effect"
+          ) {
+            this.tryActivateMonsterEffect(card, null, "hand", actor);
+            return;
+          }
+          if (choice !== "attack" && choice !== "defense") return;
+
+          const position = choice;
+          const isFacedown = choice === "defense";
+          if (tributesNeeded > 0) {
+            tributeSelectionMode = true;
+            selectedTributes = [];
+            let tributeableIndices = actor.field
+              .map((fieldCard, idx) => (fieldCard ? idx : null))
+              .filter((idx) => idx !== null);
+            if (tributeInfo.usingAlt && tributeInfo.alt?.requiresType) {
+              const requiredType = tributeInfo.alt.requiresType;
+              tributeableIndices = tributeableIndices.filter((idx) => {
+                const fieldCard = actor.field[idx];
+                if (!fieldCard || fieldCard.isFacedown) return false;
+                return Array.isArray(fieldCard.types)
+                  ? fieldCard.types.includes(requiredType)
+                  : fieldCard.type === requiredType;
+              });
+            }
+            pendingSummon = {
+              actor,
+              opponent,
+              cardIndex: index,
+              position,
+              isFacedown,
+              tributesNeeded,
+              tributeableIndices,
+            };
+            setLaboratoryTributeHighlight(actor, tributeableIndices);
+            this.ui.log(`Select ${tributesNeeded} monster(s) to tribute.`);
+            return;
+          }
+
+          const before = actor.field.length;
+          const summonResult = actor.summon(index, position, isFacedown);
+          if (!summonResult && actor.field.length === before) {
+            this.updateBoard();
+            return;
+          }
+          const summonedCard = actor.field[actor.field.length - 1];
+          const tributes = summonResult.tributes || [];
+          summonedCard.summonedTurn = this.turnCounter;
+          summonedCard.positionChangedThisTurn = false;
+          summonedCard.setTurn = summonedCard.isFacedown ? this.turnCounter : null;
+          this.updateBoard();
+          this.emit("after_summon", {
+            card: summonedCard,
+            player: actor,
+            opponent,
+            method: "normal",
+            fromZone: "hand",
+            tributes,
+          }).then(() => this.updateBoard());
+        },
+        {
+          canSanctumSpecialFromAegis,
+          specialSummonFromHand: false,
+          specialSummonFromHandEffect: canUseHandEffect,
+          specialSummonFromHandEffectLabel: "Special Summon",
+          ownerId: actor.id,
+        }
+      );
+      return true;
+    }
+
+    if (card.cardKind === "spell") {
+      const guard = this.guardActionStart({
+        actor,
+        kind: "spell_from_hand",
+        phaseReq: ["main1", "main2"],
+      });
+      if (!guard.ok) return true;
+      const spellPreview =
+        this.effectEngine?.canActivateSpellFromHandPreview(card, actor) || {
+          ok: true,
+        };
+      let canActivateFromHand = !!spellPreview.ok;
+      const hasFusionAction = (card.effects || []).some(
+        (effect) =>
+          effect &&
+          Array.isArray(effect.actions) &&
+          effect.actions.some(
+            (action) => action && action.type === "polymerization_fusion_summon"
+          )
+      );
+      if (hasFusionAction && !this.canActivatePolymerization(actor)) {
+        canActivateFromHand = false;
+      }
+      this.ui.showSpellChoiceModal(
+        index,
+        (choice) => {
+          if (choice === "activate" && canActivateFromHand) {
+            this.tryActivateSpell(card, index, null, { owner: actor });
+          } else if (choice === "set") {
+            this.setSpellOrTrap(card, index, actor);
+          }
+        },
+        { canActivate: canActivateFromHand, ownerId: actor.id }
+      );
+      return true;
+    }
+
+    if (card.cardKind === "trap") {
+      this.setSpellOrTrap(card, index, actor);
+      return true;
+    }
+    return true;
+  };
+
+  const handleLaboratoryFieldClick = async (actor, cardEl, index) => {
+    if (!isLaboratoryActive(actor)) return false;
+    const opponent = getOpponentOf(actor);
+    if (tributeSelectionMode && pendingSummon?.actor === actor) {
+      const allowed = pendingSummon.tributeableIndices || [];
+      if (!allowed.includes(index)) return true;
+      if (selectedTributes.includes(index)) {
+        selectedTributes = selectedTributes.filter((idx) => idx !== index);
+      } else if (selectedTributes.length < pendingSummon.tributesNeeded) {
+        selectedTributes.push(index);
+      }
+      setLaboratoryTributeHighlight(actor, allowed, selectedTributes);
+      if (selectedTributes.length === pendingSummon.tributesNeeded) {
+        clearLaboratoryTributeHighlight(actor);
+        const before = actor.field.length;
+        const summonResult = actor.summon(
+          pendingSummon.cardIndex,
+          pendingSummon.position,
+          pendingSummon.isFacedown,
+          selectedTributes
+        );
+        if (!summonResult && actor.field.length === before) {
+          tributeSelectionMode = false;
+          selectedTributes = [];
+          pendingSummon = null;
+          this.updateBoard();
+          return true;
+        }
+        const summonedCard = actor.field[actor.field.length - 1];
+        const tributes = summonResult.tributes || [];
+        summonedCard.summonedTurn = this.turnCounter;
+        summonedCard.positionChangedThisTurn = false;
+        summonedCard.setTurn = summonedCard.isFacedown ? this.turnCounter : null;
+        tributeSelectionMode = false;
+        selectedTributes = [];
+        pendingSummon = null;
+        this.updateBoard();
+        this.emit("after_summon", {
+          card: summonedCard,
+          player: actor,
+          opponent,
+          method: tributes.length > 0 ? "tribute" : "normal",
+          fromZone: "hand",
+          tributes,
+        }).then(() => this.updateBoard());
+      }
+      return true;
+    }
+
+    if (this.phase === "main1" || this.phase === "main2") {
+      const guard = this.guardActionStart({
+        actor,
+        kind: "monster_action",
+        phaseReq: ["main1", "main2"],
+      });
+      if (!guard.ok) return true;
+      const card = actor.field[index];
+      if (!card || card.cardKind !== "monster") return true;
+      const hasIgnition = (card.effects || []).some(
+        (effect) => effect && effect.timing === "ignition"
+      );
+      const canFlip = this.canFlipSummon(card);
+      const canPosChange = this.canChangePosition(card);
+      const materialCheck = this.canUseAsAscensionMaterial(actor, card);
+      const hasAscension =
+        materialCheck.ok &&
+        this
+          .getAscensionCandidatesForMaterial(actor, card)
+          .some((asc) => this.checkAscensionRequirements(actor, asc).ok);
+      if (hasIgnition || canFlip || canPosChange || hasAscension) {
+        this.ui.showPositionChoiceModal(
+          cardEl,
+          card,
+          async (choice) => {
+            if (choice === "flip" && canFlip) {
+              await this.flipSummon(card);
+            } else if (choice === "to_attack" && canPosChange) {
+              this.changeMonsterPosition(card, "attack");
+            } else if (choice === "to_defense" && canPosChange) {
+              this.changeMonsterPosition(card, "defense");
+            }
+          },
+          {
+            canFlip,
+            canChangePosition: canPosChange,
+            hasIgnitionEffect: hasIgnition,
+            onActivateEffect: hasIgnition
+              ? () => this.tryActivateMonsterEffect(card, null, "field", actor)
+              : null,
+            hasAscensionSummon: hasAscension,
+            onAscensionSummon: hasAscension
+              ? () => this.tryAscensionSummon(card, { player: actor })
+              : null,
+          }
+        );
+        return true;
+      }
+    }
+
+    if (this.phase !== "battle") return true;
+    const attacker = actor.field[index];
+    if (!attacker) return true;
+    const guard = this.guardActionStart({
+      actor,
+      kind: "attack",
+      phaseReq: "battle",
+    });
+    if (!guard.ok) return true;
+    const availability = this.getAttackAvailability(attacker);
+    if (!availability.ok) {
+      this.ui.log(availability.reason);
+      return true;
+    }
+    const opponentTargets = opponent.field.filter(
+      (card) => card && card.cardKind === "monster"
+    );
+    const forcedTargets = opponentTargets.filter((card) => card.mustBeAttacked);
+    const attackCandidates = forcedTargets.length ? forcedTargets : opponentTargets;
+    if (
+      attackCandidates.length === 0 &&
+      attacker.cannotAttackDirectly &&
+      attacker.canAttackDirectlyThisTurn !== true
+    ) {
+      this.ui.log("No valid attack targets and cannot attack directly!");
+      return true;
+    }
+    this.startAttackTargetSelection(attacker, attackCandidates);
+    return true;
+  };
+
   // ─────────────────────────────────────────────────────────────────────────────
   // Player Hand Click
   // ─────────────────────────────────────────────────────────────────────────────
   if (this.ui && typeof this.ui.bindPlayerHandClick === "function") {
     this.ui.bindPlayerHandClick(async (e, cardEl, index) => {
-      if (this.targetSelection) return;
+      if (this.targetSelection) {
+        handleDirectAttackHandClick("player", e);
+        return;
+      }
 
       if (tributeSelectionMode) return;
       const card = this.player.hand[index];
@@ -682,9 +1047,12 @@ export function bindCardInteractions() {
   // Bot Field Click (for target selection)
   // ─────────────────────────────────────────────────────────────────────────────
   if (this.ui && typeof this.ui.bindBotFieldClick === "function") {
-    this.ui.bindBotFieldClick((e, cardEl, index) => {
-      if (!this.targetSelection) return;
-      this.handleTargetSelectionClick("bot", index, cardEl, "field");
+    this.ui.bindBotFieldClick(async (e, cardEl, index) => {
+      if (this.targetSelection) {
+        this.handleTargetSelectionClick("bot", index, cardEl, "field");
+        return;
+      }
+      await handleLaboratoryFieldClick(this.bot, cardEl, index);
     });
   }
 
@@ -692,9 +1060,47 @@ export function bindCardInteractions() {
   // Bot Spell/Trap Click (for target selection)
   // ─────────────────────────────────────────────────────────────────────────────
   if (this.ui && typeof this.ui.bindBotSpellTrapClick === "function") {
-    this.ui.bindBotSpellTrapClick((e, cardEl, index) => {
-      if (!this.targetSelection) return;
-      this.handleTargetSelectionClick("bot", index, cardEl, "spellTrap");
+    this.ui.bindBotSpellTrapClick(async (e, cardEl, index) => {
+      if (this.targetSelection) {
+        this.handleTargetSelectionClick("bot", index, cardEl, "spellTrap");
+        return;
+      }
+      if (!isLaboratoryActive(this.bot)) return;
+      const card = this.bot.spellTrap[index];
+      if (!card) return;
+      if (card.cardKind === "trap") {
+        const guard = this.guardActionStart({
+          actor: this.bot,
+          kind: "trap_activation",
+          phaseReq: ["main1", "battle", "main2"],
+          allowDuringOpponentTurn: true,
+        });
+        if (!guard.ok) return;
+        if (!this.canActivateTrap(card)) {
+          this.ui.log("Esta armadilha nao pode ser ativada neste turno.");
+          return;
+        }
+        await this.tryActivateSpellTrapEffect(card, null, { owner: this.bot });
+        return;
+      }
+      const guard = this.guardActionStart({
+        actor: this.bot,
+        kind: "spelltrap_zone",
+        phaseReq: ["main1", "main2"],
+      });
+      if (!guard.ok) return;
+      const preview = this.effectEngine?.canActivateSpellTrapEffectPreview?.(
+        card,
+        this.bot,
+        "spellTrap",
+        null,
+        { activationContext: { autoSelectSingleTarget: true } }
+      );
+      if (preview && preview.ok === false) {
+        if (preview.reason) this.ui.log(preview.reason);
+        return;
+      }
+      await this.tryActivateSpellTrapEffect(card, null, { owner: this.bot });
     });
   }
 
@@ -702,24 +1108,12 @@ export function bindCardInteractions() {
   // Bot Hand Click (Direct Attack via target selection)
   // ─────────────────────────────────────────────────────────────────────────────
   if (this.ui && typeof this.ui.bindBotHandClick === "function") {
-    this.ui.bindBotHandClick((e) => {
-      if (!this.targetSelection) return;
-      if (this.targetSelection.kind !== "attack") return;
-      const requirement = this.targetSelection.requirements?.[0];
-      if (!requirement) return;
-
-      const directCandidate = requirement.candidates.find(
-        (c) => c && c.isDirectAttack
-      );
-      if (!directCandidate) return;
-
-      // Seleciona o indice do ataque direto e finaliza selecao
-      this.targetSelection.selections[requirement.id] = [directCandidate.key];
-      this.targetSelection.currentRequirement =
-        this.targetSelection.requirements.length;
-      this.setSelectionState("confirming");
-      this.finishTargetSelection();
-      e.stopPropagation();
+    this.ui.bindBotHandClick((e, cardEl, index) => {
+      if (this.targetSelection) {
+        handleDirectAttackHandClick("bot", e);
+        return;
+      }
+      handleLaboratoryHandClick(this.bot, index);
     });
   }
 
@@ -741,8 +1135,15 @@ export function bindCardInteractions() {
 
   if (this.ui && typeof this.ui.bindBotFieldSpellClick === "function") {
     this.ui.bindBotFieldSpellClick((e, cardEl) => {
-      if (!this.targetSelection) return;
-      this.handleTargetSelectionClick("bot", 0, cardEl, "fieldSpell");
+      if (this.targetSelection) {
+        this.handleTargetSelectionClick("bot", 0, cardEl, "fieldSpell");
+        return;
+      }
+      if (!isLaboratoryActive(this.bot)) return;
+      const card = this.bot.fieldSpell;
+      if (card) {
+        this.activateFieldSpellEffect(card);
+      }
     });
   }
 
@@ -764,7 +1165,7 @@ export function bindCardInteractions() {
     }
 
     if (card) {
-      if (card.isFacedown && owner === "bot") {
+      if (card.isFacedown && playerObj.controllerType === "ai") {
         this.ui.renderPreview(null);
       } else {
         this.ui.renderPreview(card);
@@ -790,12 +1191,15 @@ export function bindCardInteractions() {
   // Extra Deck Click
   // ─────────────────────────────────────────────────────────────────────────────
   const showExtraDeck = (player) => {
-    if (player.id !== "player") return; // Only player can view their Extra Deck
+    if (player.id !== "player" && !this.laboratoryModeEnabled) return;
     this.openExtraDeckModal(player);
   };
 
   if (this.ui && typeof this.ui.bindPlayerExtraDeckClick === "function") {
     this.ui.bindPlayerExtraDeckClick(() => showExtraDeck(this.player));
+  }
+  if (this.ui && typeof this.ui.bindBotExtraDeckClick === "function") {
+    this.ui.bindBotExtraDeckClick(() => showExtraDeck(this.bot));
   }
 
   // ─────────────────────────────────────────────────────────────────────────────

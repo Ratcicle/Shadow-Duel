@@ -7,7 +7,7 @@
 /**
  * @this {import('../Renderer.js').default}
  */
-export function renderHand(player) {
+export function renderHand(player, options = {}) {
   const container =
     player.id === "player" ? this.elements.playerHand : this.elements.botHand;
   if (!container) return;
@@ -18,11 +18,15 @@ export function renderHand(player) {
 
   player.hand.forEach((card, index) => {
     if (!card) return; // Defensive: skip empty slots
-    const cardEl = this.createCardElement(card, player.id === "player");
+    const isLaboratory = options.laboratoryMode === true;
+    const isVisible = isLaboratory
+      ? player.id === options.activeTurn
+      : player.controllerType !== "ai" && player.id === "player";
+    const cardEl = this.createCardElement(card, isVisible);
     cardEl.dataset.index = index;
     cardEl.dataset.location = "hand";
 
-    if (player.id === "bot") {
+    if (!isVisible) {
       cardEl.classList.add("hidden");
       cardEl.innerHTML = '<div class="card-back"></div>';
       cardEl.style.background = "#333";
@@ -87,7 +91,7 @@ export function renderSpellTrap(player) {
 
   player.spellTrap.forEach((card, index) => {
     if (!card) return; // Defensive: skip empty slots
-    const isVisible = player.id === "player" || !card.isFacedown;
+    const isVisible = player.controllerType !== "ai" || !card.isFacedown;
     const cardEl = this.createCardElement(card, isVisible);
     cardEl.dataset.index = index;
     cardEl.dataset.location = "spellTrap";
@@ -122,7 +126,7 @@ export function renderFieldSpell(player) {
   const card = player.fieldSpell;
   if (!card) return;
 
-  const isVisible = player.id === "player" || !card.isFacedown;
+  const isVisible = player.controllerType !== "ai" || !card.isFacedown;
   const cardEl = this.createCardElement(card, isVisible);
   cardEl.dataset.location = "fieldSpell";
   cardEl.dataset.index = 0;

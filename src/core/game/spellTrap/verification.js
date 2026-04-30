@@ -14,7 +14,7 @@ export function canActivateTrap(card) {
   );
   if (!card || card.cardKind !== "trap") return false;
   if (!card.isFacedown) return false;
-  if (!card.turnSetOn) return false;
+  if (card.turnSetOn === null || card.turnSetOn === undefined) return false;
 
   // Trap só pode ser ativada a partir do próximo turno
   const result = this.turnCounter > card.turnSetOn;

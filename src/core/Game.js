@@ -102,9 +102,14 @@ export default class Game {
     this.disableTraps = !!options.disableTraps;
     this.disableEffectActivation = !!options.disableEffectActivation;
 
+    this.laboratoryModeEnabled = !!options.laboratoryMode;
     this.player = new Player("player", options.playerName || "You", "human");
     this.botPreset = options.botPreset || "shadowheart";
-    this.bot = options.opponentOverride || new Bot(this.botPreset);
+    this.bot =
+      options.opponentOverride ||
+      (this.laboratoryModeEnabled
+        ? new Player("bot", options.opponentName || "Opponent", "human")
+        : new Bot(this.botPreset));
 
     this.renderer = options.renderer || null;
     this.ui = createUIAdapter(this.renderer);
@@ -143,7 +148,6 @@ export default class Game {
     this.pendingEventSelection = null;
     this.temporaryReplacementEffects = [];
     this.trapPromptInProgress = false; // Avoid multiple trap prompts simultaneously
-    this.testModeEnabled = false;
     this.devModeEnabled = !!options.devMode;
     this.zoneOpDepth = 0;
     this.zoneOpSnapshot = null;
@@ -240,11 +244,6 @@ export default class Game {
     replayIntegration.integrateReplayCapture(this);
     replayIntegration.startReplayCapture(this);
 
-    if (this.testModeEnabled) {
-      this.forceOpeningHand("Infinity Searcher", 4);
-      this.ui.log("Modo teste: adicionando 4 Infinity Searcher a mao inicial.");
-    }
-
     this.drawCards(this.player, 4);
     this.drawCards(this.bot, 4);
 
@@ -252,6 +251,47 @@ export default class Game {
     await this.startTurn();
     this.ui.bindPhaseClick((phase) => {
       if (this.turn !== "player") return;
+      if (
+        this.phase === "main1" ||
+        this.phase === "battle" ||
+        this.phase === "main2"
+      ) {
+        this.skipToPhase(phase);
+      }
+    });
+    this.bindCardInteractions();
+  }
+
+  async startLaboratory(setup = {}) {
+    this.laboratoryModeEnabled = true;
+    this.player.controllerType = "human";
+    this.bot.controllerType = "human";
+    this.player.oncePerDuelUsageByName = Object.create(null);
+    this.bot.oncePerDuelUsageByName = Object.create(null);
+
+    this.resetMaterialDuelStats("laboratory_start");
+    this.turn = "player";
+    this.phase = "main1";
+    this.turnCounter = 1;
+    this.gameOver = false;
+    this.winner = null;
+    this.isResolvingEffect = false;
+    this.eventResolutionDepth = 0;
+    this.pendingSpecialSummon = null;
+    this.cancelTargetSelection();
+
+    this.applyScenarioSetup?.(setup, {
+      logMessage: "Laboratory setup applied.",
+      updateBoard: false,
+      immediateActions: true,
+    });
+    this.resetOncePerTurnUsage("laboratory_start");
+    this.effectEngine?.clearTargetingCache?.();
+    this.effectEngine?.updatePassiveBuffs?.();
+    this.updateBoard();
+    this.ui.bindPhaseClick((phase) => {
+      const activePlayer = this.turn === "player" ? this.player : this.bot;
+      if (activePlayer.controllerType !== "human") return;
       if (
         this.phase === "main1" ||
         this.phase === "battle" ||
@@ -298,22 +338,22 @@ export default class Game {
    * `special_summon_from_hand_with_cost` handler type.
    * TODO: Add ignition effect to "Luminarch Sanctum Protector" card definition and remove this method.
    */
-  specialSummonSanctumProtectorFromHand(handIndex) {
+  specialSummonSanctumProtectorFromHand(handIndex, actor = this.player) {
     const guard = this.guardActionStart({
-      actor: this.player,
+      actor,
       kind: "special_summon",
       phaseReq: ["main1", "main2"],
     });
     if (!guard.ok) return guard;
-    if (this.player.field.length >= 5) {
+    if (actor.field.length >= 5) {
       this.ui.log("Field is full (max 5 monsters).");
       return;
     }
 
-    const card = this.player.hand[handIndex];
+    const card = actor.hand[handIndex];
     if (!card || card.name !== "Luminarch Sanctum Protector") return;
 
-    const aegis = this.player.field.find(
+    const aegis = actor.field.find(
       (c) => c && c.name === "Luminarch Aegisbearer" && !c.isFacedown,
     );
 
@@ -322,7 +362,7 @@ export default class Game {
       return;
     }
 
-    const limitCheck = this.canPlaceCardOnField?.(card, this.player, {
+    const limitCheck = this.canPlaceCardOnField?.(card, actor, {
       isFacedown: false,
       excludeCards: [aegis],
     });
@@ -330,11 +370,11 @@ export default class Game {
       return;
     }
 
-    this.moveCard(aegis, this.player, "graveyard", { fromZone: "field" });
+    this.moveCard(aegis, actor, "graveyard", { fromZone: "field" });
 
-    const idxInHand = this.player.hand.indexOf(card);
+    const idxInHand = actor.hand.indexOf(card);
     if (idxInHand === -1) return;
-    this.player.hand.splice(idxInHand, 1);
+    actor.hand.splice(idxInHand, 1);
 
     const finalizeSummon = (positionChoice) => {
       const position = positionChoice === "defense" ? "defense" : "attack";
@@ -346,13 +386,13 @@ export default class Game {
       card.positionChangedThisTurn = false;
       card.summonedTurn = this.turnCounter;
       card.setTurn = null;
-      card.owner = this.player.id;
+      card.owner = actor.id;
 
-      this.player.field.push(card);
+      actor.field.push(card);
 
       this.emit("after_summon", {
         card,
-        player: this.player,
+        player: actor,
         method: "special",
         fromZone: "hand",
       });
@@ -360,7 +400,7 @@ export default class Game {
       this.updateBoard();
     };
 
-    const positionChoice = this.chooseSpecialSummonPosition(this.player, card);
+    const positionChoice = this.chooseSpecialSummonPosition(actor, card);
     if (positionChoice && typeof positionChoice.then === "function") {
       positionChoice.then((resolved) => finalizeSummon(resolved));
     } else {
@@ -559,6 +599,7 @@ Game.prototype.devRunSanityO = devToolsSanity.devRunSanityO;
 
 // Setup: applyManualSetup
 Game.prototype.applyManualSetup = devToolsSetup.applyManualSetup;
+Game.prototype.applyScenarioSetup = devToolsSetup.applyScenarioSetup;
 
 // -----------------------------------------------------------------------------
 // Events: Attach methods from modular events/ folder

@@ -63,7 +63,12 @@ export function updateBoard(options = {}) {
       this.bot.updatePassiveEffects();
     }
 
-    this.ui.renderHand(this.player);
+    const handRenderContext = {
+      laboratoryMode: this.laboratoryModeEnabled === true,
+      activeTurn: this.turn,
+    };
+
+    this.ui.renderHand(this.player, handRenderContext);
     this.ui.renderField(this.player);
     this.ui.renderFieldSpell(this.player);
 
@@ -74,7 +79,7 @@ export function updateBoard(options = {}) {
       console.warn("Renderer missing renderSpellTrap implementation.");
     }
 
-    this.ui.renderHand(this.bot);
+    this.ui.renderHand(this.bot, handRenderContext);
     this.ui.renderField(this.bot);
     this.ui.renderFieldSpell(this.bot);
     this.ui.updateLP(this.player);
@@ -87,6 +92,18 @@ export function updateBoard(options = {}) {
     if (typeof this.ui.updateExtraDeckPreview === "function") {
       this.ui.updateExtraDeckPreview(this.player);
       this.ui.updateExtraDeckPreview(this.bot);
+    }
+
+    if (typeof document !== "undefined") {
+      document
+        .querySelectorAll(".laboratory-active-side")
+        .forEach((el) => el.classList.remove("laboratory-active-side"));
+    }
+    if (this.laboratoryModeEnabled && typeof document !== "undefined") {
+      const activeArea = document.getElementById(
+        this.turn === "bot" ? "bot-area" : "player-area",
+      );
+      activeArea?.classList.add("laboratory-active-side");
     }
 
     if (this.targetSelection?.usingFieldTargeting) {

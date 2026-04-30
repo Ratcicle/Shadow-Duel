@@ -124,6 +124,7 @@ Renderer.prototype.bindBotFieldSpellClick = bindings.bindBotFieldSpellClick;
 Renderer.prototype.bindPlayerGraveyardClick = bindings.bindPlayerGraveyardClick;
 Renderer.prototype.bindBotGraveyardClick = bindings.bindBotGraveyardClick;
 Renderer.prototype.bindPlayerExtraDeckClick = bindings.bindPlayerExtraDeckClick;
+Renderer.prototype.bindBotExtraDeckClick = bindings.bindBotExtraDeckClick;
 Renderer.prototype.bindGraveyardModalClose = bindings.bindGraveyardModalClose;
 Renderer.prototype.bindExtraDeckModalClose = bindings.bindExtraDeckModalClose;
 Renderer.prototype.bindModalOverlayClick = bindings.bindModalOverlayClick;

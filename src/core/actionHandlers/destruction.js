@@ -623,6 +623,52 @@ export async function handleBanishCardFromGraveyard(
 }
 
 /**
+ * Banishes all cards in the controlling player's graveyard, then inflicts
+ * damage to the target player equal to damagePerCard × number of cards banished.
+ *
+ * Action properties:
+ * - damagePerCard: LP damage per card banished (default: 0)
+ * - player: "self" | "opponent" — who takes the damage (default: "opponent")
+ */
+export async function handleBanishAllGraveyardAndBurn(action, ctx, _targets, engine) {
+  const { player } = ctx;
+  const game = engine.game;
+
+  if (!player || !game) return false;
+
+  const graveyard = player.graveyard || [];
+  if (graveyard.length === 0) {
+    getUI(game)?.log("No cards in graveyard to banish.");
+    return false;
+  }
+
+  const damagePerCard = action.damagePerCard ?? 0;
+  const targetPlayer = action.player === "self" ? player : ctx.opponent;
+
+  const toBanish = [...graveyard];
+  player.graveyard.length = 0;
+  player.banished = player.banished || [];
+
+  for (const card of toBanish) {
+    queueBanishAnimation(game, player, card, "graveyard");
+    player.banished.push(card);
+    card.location = "banished";
+    getUI(game)?.log(`${card.name} was banished from the graveyard.`);
+  }
+
+  const totalDamage = toBanish.length * damagePerCard;
+  if (totalDamage > 0 && targetPlayer) {
+    targetPlayer.takeDamage(totalDamage);
+    getUI(game)?.log(
+      `${targetPlayer.id} takes ${totalDamage} damage (${toBanish.length} × ${damagePerCard}).`,
+    );
+  }
+
+  game.updateBoard();
+  return true;
+}
+
+/**
  * Generic handler for selective field destruction based on highest ATK
  * Implements effects like "Void Lost Throne"
  *

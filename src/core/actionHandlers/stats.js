@@ -46,6 +46,31 @@ function queueCardFeedback(game, kind, card, options = {}) {
   });
 }
 
+function findCardOwner(game, fallbackOwner, card) {
+  if (!game || !card) return fallbackOwner || null;
+  const owners = [game.player, game.bot].filter(Boolean);
+  const zones = [
+    "hand",
+    "field",
+    "graveyard",
+    "deck",
+    "spellTrap",
+    "extraDeck",
+    "banished",
+  ];
+
+  for (const owner of owners) {
+    if (owner.fieldSpell === card) return owner;
+    for (const zone of zones) {
+      if (Array.isArray(owner[zone]) && owner[zone].includes(card)) {
+        return owner;
+      }
+    }
+  }
+
+  return fallbackOwner || null;
+}
+
 function isProtectiveStatus(status) {
   return /protect|indestructible|immune|prevent|cannotBeDestroyed/i.test(
     String(status || ""),
@@ -734,28 +759,40 @@ export async function handleBanishAndBuff(action, ctx, targets, engine) {
 
     // Banish the card (remove from game)
 
+    const banishOwner = findCardOwner(game, player, banishCard);
     const fromZone =
-      typeof engine.findCardZone === "function"
-        ? engine.findCardZone(player, banishCard)
+      typeof engine.findCardZone === "function" && banishOwner
+        ? engine.findCardZone(banishOwner, banishCard)
         : "graveyard";
 
-    queueBanishAnimation(game, player, banishCard, fromZone);
+    queueBanishAnimation(game, banishOwner || player, banishCard, fromZone);
 
-    if (fromZone && Array.isArray(player[fromZone])) {
-      const idx = player[fromZone].indexOf(banishCard);
+    if (fromZone && Array.isArray(banishOwner?.[fromZone])) {
+      const idx = banishOwner[fromZone].indexOf(banishCard);
 
       if (idx > -1) {
-        player[fromZone].splice(idx, 1);
+        banishOwner[fromZone].splice(idx, 1);
       }
     }
 
-    // Track banished cards
+    if (banishOwner) {
+      banishOwner.banished = banishOwner.banished || [];
+      if (!banishOwner.banished.includes(banishCard)) {
+        banishOwner.banished.push(banishCard);
+      }
+      banishCard.location = "banished";
+      banishCard.owner = banishOwner.id;
+      banishCard.controller = banishOwner.id;
+    }
 
+    // Keep legacy mirror for older diagnostics that still read game.banishedCards.
     if (!game.banishedCards) {
       game.banishedCards = [];
     }
 
-    game.banishedCards.push(banishCard);
+    if (!game.banishedCards.includes(banishCard)) {
+      game.banishedCards.push(banishCard);
+    }
 
     getUI(game)?.log(`${banishCard.name} was banished (removed from game).`);
   }

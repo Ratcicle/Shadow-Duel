@@ -10,11 +10,26 @@ export function applyManualSetup(definition = {}) {
   if (!this.devModeEnabled) {
     return { success: false, reason: "Dev Mode is disabled." };
   }
+  return applyScenarioSetup.call(this, definition, {
+    logMessage: "Dev setup applied.",
+  });
+}
+
+/**
+ * Applies an explicit scenario setup without requiring dev mode.
+ * Used by DevTools and the Laboratory setup flow.
+ * @this {import('../../Game.js').default}
+ */
+export function applyScenarioSetup(definition = {}, options = {}) {
   if (!definition || typeof definition !== "object") {
     return { success: false, reason: "Setup must be an object." };
   }
 
   const warnings = [];
+  const setupTurn =
+    options.immediateActions === true
+      ? Math.max(0, (this.turnCounter || 0) - 1)
+      : this.turnCounter;
   const normalizeEntry = (entry) => {
     if (typeof entry === "string") return { name: entry };
     if (entry && typeof entry === "object") return { ...entry };
@@ -52,9 +67,9 @@ export function applyManualSetup(definition = {}) {
         });
         card.hasAttacked = false;
         card.attacksUsedThisTurn = 0;
-        card.enteredFieldTurn = this.turnCounter;
-        card.summonedTurn = this.turnCounter;
-        card.setTurn = card.isFacedown ? this.turnCounter : null;
+        card.enteredFieldTurn = setupTurn;
+        card.summonedTurn = setupTurn;
+        card.setTurn = card.isFacedown ? setupTurn : null;
         player.field.push(card);
         break;
       case "spellTrap":
@@ -66,6 +81,8 @@ export function applyManualSetup(definition = {}) {
           warnings.push("Spell/Trap zone is full (max 5 cards).");
           return;
         }
+        card.isFacedown = normalized.facedown === true;
+        card.turnSetOn = normalized.facedown === true ? setupTurn : null;
         player.spellTrap.push(card);
         break;
       case "graveyard":
@@ -76,6 +93,7 @@ export function applyManualSetup(definition = {}) {
           warnings.push(`${card.name} is not a Field Spell.`);
           return;
         }
+        card.isFacedown = normalized.facedown === true;
         player.fieldSpell = card;
         break;
       case "extraDeck":
@@ -128,7 +146,12 @@ export function applyManualSetup(definition = {}) {
     }
 
     if (payload.fieldSpell) {
-      placeInZone(player, payload.fieldSpell, "fieldSpell");
+      const fieldSpell = Array.isArray(payload.fieldSpell)
+        ? payload.fieldSpell[0]
+        : payload.fieldSpell;
+      if (fieldSpell) {
+        placeInZone(player, fieldSpell, "fieldSpell");
+      }
     }
 
     if (Array.isArray(payload.extraDeck)) {
@@ -170,10 +193,12 @@ export function applyManualSetup(definition = {}) {
   this.pendingSpecialSummon = null;
   this.cancelTargetSelection();
   this.effectEngine?.updatePassiveBuffs();
-  this.updateBoard();
+  if (options.updateBoard !== false) {
+    this.updateBoard();
+  }
   this.resetOncePerTurnUsage("manual_setup");
   if (this.ui?.log) {
-    this.ui.log("Dev setup applied.");
+    this.ui.log(options.logMessage || "Scenario setup applied.");
   }
   this.devLog("DEV_SETUP_APPLIED", {
     summary: "Manual setup applied",
