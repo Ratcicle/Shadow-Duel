@@ -261,6 +261,18 @@ export function resolveTargets(targetDefs, ctx, selections) {
     if (def.levelOp) {
       filters.levelOp = def.levelOp;
     }
+    if (def.minAtk !== undefined) {
+      filters.minAtk = def.minAtk;
+    }
+    if (def.maxAtk !== undefined) {
+      filters.maxAtk = def.maxAtk;
+    }
+    if (def.minDef !== undefined) {
+      filters.minDef = def.minDef;
+    }
+    if (def.maxDef !== undefined) {
+      filters.maxDef = def.maxDef;
+    }
     if (def.strategy) {
       filters.strategy = def.strategy;
     }

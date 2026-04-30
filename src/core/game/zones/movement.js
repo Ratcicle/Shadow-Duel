@@ -150,6 +150,169 @@ function queueZoneMoveAnimation(game, intent, toZoneOverride = null) {
 
 const FIELD_SOURCE_ZONES = new Set(["field", "spellTrap", "fieldSpell"]);
 
+function asList(value) {
+  if (value === undefined || value === null) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+function matchesAny(value, required) {
+  const requiredValues = asList(required);
+  if (requiredValues.length === 0) return true;
+  const values = Array.isArray(value) ? value : [value];
+  return requiredValues.some((req) => values.includes(req));
+}
+
+function cardMatchesFieldLimitFilters(card, filters = {}) {
+  if (!card) return false;
+
+  const idFilter = filters.cardId ?? filters.id;
+  if (idFilter !== undefined && idFilter !== null && card.id !== idFilter) {
+    return false;
+  }
+
+  const idsFilter = filters.cardIds ?? filters.ids;
+  if (
+    Array.isArray(idsFilter) &&
+    idsFilter.length > 0 &&
+    !idsFilter.includes(card.id)
+  ) {
+    return false;
+  }
+
+  const nameFilter = filters.cardName ?? filters.name;
+  if (nameFilter && !matchesAny(card.name, nameFilter)) return false;
+
+  if (filters.cardKind && !matchesAny(card.cardKind, filters.cardKind)) {
+    return false;
+  }
+
+  if (filters.subtype && !matchesAny(card.subtype, filters.subtype)) {
+    return false;
+  }
+
+  if (
+    filters.monsterType &&
+    !matchesAny(card.monsterType, filters.monsterType)
+  ) {
+    return false;
+  }
+
+  if (filters.type) {
+    const cardTypes = Array.isArray(card.types) ? card.types : [card.type];
+    if (!matchesAny(cardTypes, filters.type)) return false;
+  }
+
+  if (filters.archetype) {
+    const archetypes = Array.isArray(card.archetypes)
+      ? card.archetypes
+      : card.archetype
+        ? [card.archetype]
+        : [];
+    if (!matchesAny(archetypes, filters.archetype)) return false;
+  }
+
+  if (filters.level !== undefined) {
+    const level = card.level || 0;
+    const op = filters.levelOp || "eq";
+    if (op === "eq" && level !== filters.level) return false;
+    if (op === "lte" && level > filters.level) return false;
+    if (op === "gte" && level < filters.level) return false;
+    if (op === "lt" && level >= filters.level) return false;
+    if (op === "gt" && level <= filters.level) return false;
+  }
+
+  if (filters.minAtk !== undefined && (card.atk || 0) < filters.minAtk) {
+    return false;
+  }
+  if (filters.maxAtk !== undefined && (card.atk || 0) > filters.maxAtk) {
+    return false;
+  }
+  if (filters.minDef !== undefined && (card.def || 0) < filters.minDef) {
+    return false;
+  }
+  if (filters.maxDef !== undefined && (card.def || 0) > filters.maxDef) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Generic field-limit check for declarative card rules.
+ * @this {import('../../Game.js').default}
+ */
+export function canPlaceCardOnField(card, destPlayer, options = {}) {
+  if (!card || !destPlayer) {
+    return { ok: false, reason: "Invalid field placement." };
+  }
+  if (card.cardKind !== "monster") {
+    return { ok: true };
+  }
+
+  const limit = card.fieldLimit;
+  if (!limit || typeof limit !== "object") {
+    return { ok: true };
+  }
+
+  const requireFaceup = limit.requireFaceup === true;
+  const willBeFacedown =
+    typeof options.isFacedown === "boolean"
+      ? options.isFacedown
+      : card.isFacedown === true;
+
+  if (requireFaceup && willBeFacedown) {
+    return { ok: true };
+  }
+
+  const filters = limit.filters || {};
+  if (!cardMatchesFieldLimitFilters(card, filters)) {
+    return { ok: true };
+  }
+
+  const scope = limit.scope === "global" ? "global" : "controller";
+  const players =
+    scope === "global"
+      ? [this?.player, this?.bot].filter(Boolean)
+      : [destPlayer];
+  const excludedCards = new Set(options.excludeCards || []);
+  excludedCards.add(card);
+
+  const max = Number.isFinite(Number(limit.max)) ? Number(limit.max) : 1;
+  let currentCount = 0;
+
+  for (const player of players) {
+    for (const fieldCard of player?.field || []) {
+      if (!fieldCard || excludedCards.has(fieldCard)) continue;
+      if (requireFaceup && fieldCard.isFacedown) continue;
+      if (!cardMatchesFieldLimitFilters(fieldCard, filters)) continue;
+      currentCount += 1;
+    }
+  }
+
+  if (currentCount + 1 <= max) {
+    return { ok: true };
+  }
+
+  const label = limit.label || limit.key || card.name || "matching monster";
+  const faceupText = requireFaceup ? "face-up " : "";
+  const scopeText = scope === "global" ? "on the field" : "you control";
+  const reason =
+    max === 1
+      ? `Only 1 ${faceupText}${label} can exist ${scopeText}.`
+      : `Only ${max} ${faceupText}${label} cards can exist ${scopeText}.`;
+
+  if (options.silent !== true) {
+    this?.ui?.log?.(reason);
+  }
+
+  return {
+    ok: false,
+    reason,
+    code: "field_limit",
+    fieldLimit: limit,
+  };
+}
+
 function cardMatchesArchetype(card, archetype) {
   if (!archetype) return true;
   const archetypes = Array.isArray(card?.archetypes)
@@ -282,6 +445,19 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
   if (toZone === "field" && destArr.length >= 5) {
     this.ui.log("Field is full (max 5 cards).");
     return { success: false, reason: "field_full" };
+  }
+  if (toZone === "field") {
+    const limitCheck = this.canPlaceCardOnField?.(card, destPlayer, {
+      isFacedown: options.isFacedown,
+      excludeCards: options.excludeCards || [],
+    });
+    if (limitCheck && limitCheck.ok === false) {
+      return {
+        success: false,
+        reason: limitCheck.reason || "field_limit",
+        code: limitCheck.code || "field_limit",
+      };
+    }
   }
   if (toZone === "spellTrap" && destArr.length >= 5) {
     this.ui.log("Spell/Trap zone is full (max 5 cards).");

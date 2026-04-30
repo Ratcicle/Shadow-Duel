@@ -248,75 +248,89 @@ export default class Player {
         return null;
       }
 
-      // Track tributed cards for replay/event system
-      const tributedCards = [];
+      const matchesAltRequirement = (c) => {
+        if (!c) return false;
+        if (alt?.requiresName) return c.name === alt.requiresName;
+        if (alt?.requiresType) {
+          const types = Array.isArray(c.types) ? c.types : [c.type];
+          return types.includes(alt.requiresType);
+        }
+        return true;
+      };
 
+      const tributeCards = [];
       if (tributesNeeded > 0) {
         if (tributeIndices && tributeIndices.length === tributesNeeded) {
           const sortedIndices = [...tributeIndices].sort((a, b) => b - a);
-          const tributes = [];
           for (const idx of sortedIndices) {
             if (idx >= 0 && idx < this.field.length) {
-              tributes.push(this.field[idx]);
+              tributeCards.push(this.field[idx]);
             }
           }
 
-          const matchesAltRequirement = (c) => {
-            if (!c) return false;
-            if (alt.requiresName) return c.name === alt.requiresName;
-            if (alt.requiresType) {
-              const types = Array.isArray(c.types) ? c.types : [c.type];
-              return types.includes(alt.requiresType);
-            }
-            return true;
-          };
+          if (tributeCards.length !== tributesNeeded) {
+            console.log("Invalid tribute selection.");
+            return null;
+          }
 
-          if (usingAlt && alt && !tributes.some(matchesAltRequirement)) {
+          if (usingAlt && alt && !tributeCards.some(matchesAltRequirement)) {
             const requirementLabel = alt.requiresName || alt.requiresType;
             console.log(
               `Must tribute ${requirementLabel} to use reduced tribute.`
             );
             return null;
           }
-
-          // Copy cards to tributedCards before sending to grave
-          tributes.forEach((sacrificed) => {
-            if (sacrificed) tributedCards.push({ ...sacrificed });
-            sendToGrave(sacrificed);
-          });
-        } else {
-          if (usingAlt && alt) {
-            const matchesAltRequirement = (c) => {
-              if (!c) return false;
-              if (alt.requiresName) return c.name === alt.requiresName;
-              if (alt.requiresType) {
-                const types = Array.isArray(c.types) ? c.types : [c.type];
-                return types.includes(alt.requiresType);
-              }
-              return true;
-            };
-
-            const altIdx = this.field.findIndex(matchesAltRequirement);
-            if (altIdx === -1) {
-              const requirementLabel = alt.requiresName || alt.requiresType;
-              console.log(`No ${requirementLabel} available for tribute.`);
-              return null;
-            }
-            const sacrificed = this.field[altIdx];
-            if (sacrificed) tributedCards.push({ ...sacrificed });
-            sendToGrave(sacrificed);
-          } else {
-            for (let i = 0; i < tributesNeeded; i++) {
-              const sacrificed = this.field[0];
-              if (sacrificed) tributedCards.push({ ...sacrificed });
-              sendToGrave(sacrificed);
-            }
+        } else if (usingAlt && alt) {
+          const altIdx = this.field.findIndex(matchesAltRequirement);
+          if (altIdx === -1) {
+            const requirementLabel = alt.requiresName || alt.requiresType;
+            console.log(`No ${requirementLabel} available for tribute.`);
+            return null;
           }
+          tributeCards.push(this.field[altIdx]);
+          for (const candidate of this.field) {
+            if (tributeCards.length >= tributesNeeded) break;
+            if (!candidate || tributeCards.includes(candidate)) continue;
+            tributeCards.push(candidate);
+          }
+        } else {
+          for (let i = 0; i < tributesNeeded; i++) {
+            tributeCards.push(this.field[i]);
+          }
+        }
+
+        if (
+          tributeCards.length !== tributesNeeded ||
+          tributeCards.some((c) => !c)
+        ) {
+          console.log(
+            `Not enough valid tributes for Level ${card.level} monster.`
+          );
+          return null;
         }
       }
 
+      const summonPosition = position === "defense" ? "defense" : "attack";
+      const willBeFacedown =
+        isFacedown === true || summonPosition === "defense";
+      const limitCheck = this.game?.canPlaceCardOnField?.(card, this, {
+        isFacedown: willBeFacedown,
+        excludeCards: tributeCards,
+      });
+      if (limitCheck && limitCheck.ok === false) {
+        console.log(limitCheck.reason || "Field limit prevents this summon.");
+        return null;
+      }
+
+      // Track tributed cards for replay/event system
+      const tributedCards = [];
+      for (const sacrificed of tributeCards) {
+        if (sacrificed) tributedCards.push({ ...sacrificed });
+        sendToGrave(sacrificed);
+      }
+
       this.hand.splice(cardIndex, 1);
-      card.position = position === "defense" ? "defense" : "attack";
+      card.position = summonPosition;
       // REGRA DO JOGO: defense = sempre facedown (set)
       // facedown = true força defense, e defense força facedown
       card.isFacedown = isFacedown === true || card.position === "defense";

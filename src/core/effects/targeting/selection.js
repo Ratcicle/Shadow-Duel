@@ -24,6 +24,12 @@ function buildTargetingCacheKey(def, ctx) {
     def.owner || "self",
     def.cardKind || "any",
     def.archetype || "any",
+    def.minAtk ?? "",
+    def.maxAtk ?? "",
+    def.minDef ?? "",
+    def.maxDef ?? "",
+    def.minLevel ?? "",
+    def.maxLevel ?? "",
     anyOfKey,
     def.excludeCardName || "",
     def.requireThisCard ? "this" : "",
@@ -143,6 +149,10 @@ export function selectCandidates(def, ctx) {
     if (filter.minAtk !== undefined && (card.atk || 0) < filter.minAtk)
       return false;
     if (filter.maxAtk !== undefined && (card.atk || 0) > filter.maxAtk)
+      return false;
+    if (filter.minDef !== undefined && (card.def || 0) < filter.minDef)
+      return false;
+    if (filter.maxDef !== undefined && (card.def || 0) > filter.maxDef)
       return false;
     if (filter.archetype) {
       const requiredArchetypes = Array.isArray(filter.archetype)
@@ -288,6 +298,19 @@ export function selectCandidates(def, ctx) {
         if (def.maxAtk !== undefined && cardAtk > def.maxAtk) {
           log(
             `[selectCandidates] Rejecting: ATK too high (${cardAtk} > ${def.maxAtk})`
+          );
+          continue;
+        }
+        const cardDef = card.def || 0;
+        if (def.minDef !== undefined && cardDef < def.minDef) {
+          log(
+            `[selectCandidates] Rejecting: DEF too low (${cardDef} < ${def.minDef})`
+          );
+          continue;
+        }
+        if (def.maxDef !== undefined && cardDef > def.maxDef) {
+          log(
+            `[selectCandidates] Rejecting: DEF too high (${cardDef} > ${def.maxDef})`
           );
           continue;
         }

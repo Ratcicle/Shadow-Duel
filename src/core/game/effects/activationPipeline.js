@@ -410,8 +410,23 @@ export async function runActivationPipeline(config = {}) {
     logPipeline("PIPELINE_FINALIZE", {
       activationZone: resolvedActivationZone,
     });
+    if (
+      config.emitEffectActivated !== false &&
+      selectionKind !== "triggered" &&
+      typeof this.emitEffectActivated === "function"
+    ) {
+      await this.emitEffectActivated({
+        card: resolvedCard,
+        player: owner,
+        effect: oncePerTurnInfo?.effect || config.effect || null,
+        activationZone: resolvedActivationZone,
+        activationContext,
+        effectType: selectionKind,
+        placementOnly: normalized.placementOnly === true,
+      });
+    }
     if (typeof config.onSuccess === "function") {
-      config.onSuccess(normalized, activationContext);
+      await config.onSuccess(normalized, activationContext);
     }
     return normalized;
   };
@@ -438,15 +453,15 @@ export async function runActivationPipelineWait(config = {}) {
 
   const wrappedConfig = {
     ...config,
-    onSuccess: (result, ctx) => {
+    onSuccess: async (result, ctx) => {
       if (typeof config.onSuccess === "function") {
-        config.onSuccess(result, ctx);
+        await config.onSuccess(result, ctx);
       }
       finishOnce(result);
     },
-    onFailure: (result, ctx) => {
+    onFailure: async (result, ctx) => {
       if (typeof config.onFailure === "function") {
-        config.onFailure(result, ctx);
+        await config.onFailure(result, ctx);
       }
       finishOnce(result);
     },

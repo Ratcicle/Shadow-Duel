@@ -220,6 +220,14 @@ export async function handleSpecialSummonFromZone(
       filters.maxAtk = action.maxAtk;
     }
 
+    if (Number.isFinite(action.minDef)) {
+      filters.minDef = action.minDef;
+    }
+
+    if (Number.isFinite(action.maxDef)) {
+      filters.maxDef = action.maxDef;
+    }
+
     // Use monsterType for filtering by monster type (e.g., "Dragon")
     // to avoid conflict with action.type which is the handler type
     if (action.monsterType) {

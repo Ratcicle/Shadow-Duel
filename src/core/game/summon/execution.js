@@ -67,6 +67,14 @@ export function performFusionSummon(
     return false;
   }
 
+  const limitCheck = this.canPlaceCardOnField?.(fusionMonster, activePlayer, {
+    isFacedown: false,
+    excludeCards: materials,
+  });
+  if (limitCheck && limitCheck.ok === false) {
+    return false;
+  }
+
   const requiredMaterials =
     requiredSubset && requiredSubset.length ? requiredSubset : materials;
   const requiredSet = new Set(requiredMaterials);
@@ -122,6 +130,13 @@ export function performFusionSummon(
 export function performSpecialSummon(handIndex, position) {
   const card = this.player.hand[handIndex];
   if (!card) return;
+
+  const limitCheck = this.canPlaceCardOnField?.(card, this.player, {
+    isFacedown: false,
+  });
+  if (limitCheck && limitCheck.ok === false) {
+    return;
+  }
 
   // Remove from hand
   this.player.hand.splice(handIndex, 1);

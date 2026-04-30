@@ -632,19 +632,11 @@ export default class Bot extends Player {
       for (const attacker of availableAttackers) {
         const isSecondAttack = (attacker.attacksUsedThisTurn || 0) >= 1;
         const attackThreshold = isSecondAttack ? 0.0 : minDeltaToAttack;
-        const canUseSecondAttack =
-          attacker.canMakeSecondAttackThisTurn &&
-          !attacker.secondAttackUsedThisTurn;
-        const nativeMaxAttacks = 1 + (attacker.extraAttacks || 0);
-        const isEffectGrantedExtraAttack =
-          (attacker.attacksUsedThisTurn || 0) >= nativeMaxAttacks &&
-          canUseSecondAttack;
         const canDirectAttackNow =
           opponent.field.length === 0 &&
           !this.forbidDirectAttacksThisTurn &&
           !attacker.cannotAttackDirectly &&
-          !attacker.canAttackAllOpponentMonstersThisTurn &&
-          !isEffectGrantedExtraAttack;
+          !attacker.canAttackAllOpponentMonstersThisTurn;
 
         const tauntTargets = opponent.field.filter(
           (card) =>

@@ -546,18 +546,9 @@ export function bindCardInteractions() {
           });
         }
 
-        // Determine if this is an "extra attack" that cannot be direct
-        // Native extra attacks (from card's extraAttacks property) CAN be direct
-        // Effect-granted extra attacks (canMakeSecondAttackThisTurn) CANNOT be direct
-        const nativeMaxAttacks = 1 + (attacker.extraAttacks || 0);
-        const isEffectGrantedExtraAttack =
-          attacksUsed > 0 &&
-          attacksUsed >= nativeMaxAttacks &&
-          canUseSecondAttack;
         const canDirect =
           !attacker.cannotAttackDirectly &&
           !this.player?.forbidDirectAttacksThisTurn &&
-          !isEffectGrantedExtraAttack && // Effect-granted extra attacks cannot be direct
           !isMultiAttackMode && // Multi-attack can only target monsters, not direct
           (attacker.canAttackDirectlyThisTurn === true ||
             attackCandidates.length === 0);

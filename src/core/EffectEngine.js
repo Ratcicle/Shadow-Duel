@@ -272,6 +272,18 @@ export default class EffectEngine {
       if (op === "lt" && lvl >= filters.level) return false;
       if (op === "gt" && lvl <= filters.level) return false;
     }
+    if (filters.minAtk !== undefined && (card.atk || 0) < filters.minAtk) {
+      return false;
+    }
+    if (filters.maxAtk !== undefined && (card.atk || 0) > filters.maxAtk) {
+      return false;
+    }
+    if (filters.minDef !== undefined && (card.def || 0) < filters.minDef) {
+      return false;
+    }
+    if (filters.maxDef !== undefined && (card.def || 0) > filters.maxDef) {
+      return false;
+    }
     if (filters.equippedWithFilters) {
       const equipFilters = filters.equippedWithFilters || {};
       const requireEquipFaceup = equipFilters.requireFaceup !== false;
@@ -1421,6 +1433,8 @@ EffectEngine.prototype.collectAfterSummonTriggers =
   triggers.collectAfterSummonTriggers;
 EffectEngine.prototype.collectSpellActivatedTriggers =
   triggers.collectSpellActivatedTriggers;
+EffectEngine.prototype.collectEffectActivatedTriggers =
+  triggers.collectEffectActivatedTriggers;
 EffectEngine.prototype.collectBattleDestroyTriggers =
   triggers.collectBattleDestroyTriggers;
 EffectEngine.prototype.collectAttackDeclaredTriggers =

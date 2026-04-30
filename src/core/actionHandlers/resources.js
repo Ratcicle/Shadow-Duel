@@ -308,6 +308,54 @@ export async function handleHealFromDestroyedAtk(action, ctx, targets, engine) {
 }
 
 /**
+ * Generic handler for damage based on the destroyed monster's ATK.
+ *
+ * Action properties:
+ * - fraction: fraction of ATK to deal (default: 1.0)
+ * - multiplier: alternative name for fraction
+ * - player: "self" or "opponent" from the resolving effect's perspective
+ * - useBaseAtk: when true, use printed ATK with fallback to current ATK
+ */
+export async function handleDamageFromDestroyedAtk(
+  action,
+  ctx,
+  targets,
+  engine,
+) {
+  const { player, opponent, destroyed } = ctx;
+  const game = engine.game;
+
+  if (!player || !game || !destroyed) return false;
+
+  const targetPlayer = action.player === "self" ? player : opponent;
+  if (!targetPlayer) return false;
+
+  const fraction = action.fraction ?? action.multiplier ?? 1.0;
+  const baseValue =
+    action.useBaseAtk === true && Number.isFinite(Number(destroyed.baseAtk))
+      ? Number(destroyed.baseAtk)
+      : Number.isFinite(Number(destroyed.atk))
+        ? Number(destroyed.atk)
+        : 0;
+  const damageAmount = Math.floor(baseValue * fraction);
+
+  if (damageAmount <= 0) return false;
+
+  targetPlayer.takeDamage(damageAmount);
+
+  getUI(game)?.log(
+    `${targetPlayer.name || targetPlayer.id} took ${damageAmount} damage from ${
+      destroyed.name
+    }'s ATK.`,
+  );
+
+  game.updateBoard();
+  game.checkWinCondition?.();
+
+  return true;
+}
+
+/**
  * Handler for healing LP based on the Level of the monster destroyed in battle
  *
  * Action properties:

@@ -17,6 +17,8 @@ export default class Card {
         : [];
     this.archetype = this.archetypes[0] || null;
 
+    this.baseAtk = data.atk ?? 0;
+    this.baseDef = data.def ?? 0;
     this.atk = data.atk ?? 0;
     this.def = data.def ?? 0;
     this.type = data.type; // monster race/attribute description
@@ -45,6 +47,9 @@ export default class Card {
     this.equippedTo = null;
     this.equips = [];
     this.summonRestrict = data.summonRestrict || null;
+    this.fieldLimit = data.fieldLimit
+      ? JSON.parse(JSON.stringify(data.fieldLimit))
+      : null;
 
     // Equip / status helpers
     this.equippedTo = this.equippedTo || null;

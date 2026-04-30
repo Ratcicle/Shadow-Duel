@@ -57,6 +57,7 @@ export {
   // Resources handlers
   handlePayLP,
   handleAddFromZoneToHand,
+  handleDamageFromDestroyedAtk,
   handleHealFromDestroyedAtk,
   handleHealFromDestroyedLevel,
   handleGrantAdditionalNormalSummon,

@@ -23,6 +23,14 @@ export function canFlipSummon(card) {
   const setTurn = card.setTurn ?? card.summonedTurn ?? 0;
   if (this.turnCounter <= setTurn) return false;
 
+  const owner = card.owner === "player" ? this.player : this.bot;
+  const limitCheck = this.canPlaceCardOnField?.(card, owner, {
+    isFacedown: false,
+    excludeCards: [card],
+    silent: true,
+  });
+  if (limitCheck && limitCheck.ok === false) return false;
+
   return true;
 }
 

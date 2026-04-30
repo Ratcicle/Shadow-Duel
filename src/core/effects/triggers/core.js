@@ -307,11 +307,23 @@ export function buildTriggerEntry(options = {}) {
       }
       return activateImpl(selections, activationCtx, resolvedCtx);
     },
-    onSuccess: (result, activationCtx) => {
+    onSuccess: async (result, activationCtx) => {
       this.registerOncePerTurnUsage(sourceCard, owner, effect);
       this.registerOncePerDuelUsage(sourceCard, owner, effect);
       if (typeof options.onSuccess === "function") {
-        options.onSuccess(result, activationCtx);
+        await options.onSuccess(result, activationCtx);
+      }
+      if (typeof this.game?.emitEffectActivated === "function") {
+        await this.game.emitEffectActivated({
+          card: sourceCard,
+          player: owner,
+          effect,
+          activationZone:
+            activationCtx?.activationZone || activationContext.activationZone,
+          activationContext: activationCtx,
+          effectType: "triggered",
+          sourceEvent: effect.event || null,
+        });
       }
     },
   };

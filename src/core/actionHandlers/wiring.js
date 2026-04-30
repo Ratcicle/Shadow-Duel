@@ -49,6 +49,7 @@ import {
 import {
   handlePayLP,
   handleAddFromZoneToHand,
+  handleDamageFromDestroyedAtk,
   handleHealFromDestroyedAtk,
   handleHealFromDestroyedLevel,
   handleHealPerFieldCount,
@@ -135,6 +136,8 @@ export function registerDefaultHandlers(registry) {
   registry.register("pay_lp", handlePayLP);
 
   registry.register("add_from_zone_to_hand", handleAddFromZoneToHand);
+
+  registry.register("damage_from_destroyed_atk", handleDamageFromDestroyedAtk);
 
   registry.register("heal_from_destroyed_atk", handleHealFromDestroyedAtk);
 

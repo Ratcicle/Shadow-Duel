@@ -322,6 +322,14 @@ export default class Game {
       return;
     }
 
+    const limitCheck = this.canPlaceCardOnField?.(card, this.player, {
+      isFacedown: false,
+      excludeCards: [aegis],
+    });
+    if (limitCheck && limitCheck.ok === false) {
+      return;
+    }
+
     this.moveCard(aegis, this.player, "graveyard", { fromZone: "field" });
 
     const idxInHand = this.player.hand.indexOf(card);
@@ -560,6 +568,7 @@ Game.prototype.applyManualSetup = devToolsSetup.applyManualSetup;
 Game.prototype.on = eventBus.on;
 Game.prototype.emit = eventBus.emit;
 Game.prototype.notify = eventBus.notify;
+Game.prototype.emitEffectActivated = eventBus.emitEffectActivated;
 
 // Event Resolver: resolveEvent, resolveEventEntries, resumePendingEventSelection
 Game.prototype.resolveEvent = eventResolver.resolveEvent;
@@ -647,8 +656,9 @@ Game.prototype.runActivationPipeline =
 Game.prototype.runActivationPipelineWait =
   effectsActivationPipeline.runActivationPipelineWait;
 
-// Movement: cleanupTokenReferences, moveCard, moveCardInternal
+// Movement: cleanupTokenReferences, field-limit checks, moveCard, moveCardInternal
 Game.prototype.cleanupTokenReferences = zonesMovement.cleanupTokenReferences;
+Game.prototype.canPlaceCardOnField = zonesMovement.canPlaceCardOnField;
 Game.prototype.moveCard = zonesMovement.moveCard;
 Game.prototype.moveCardInternal = zonesMovement.moveCardInternal;
 

@@ -58,6 +58,7 @@ export { handleChooseActionCase } from "./choice.js";
 export {
   handlePayLP,
   handleAddFromZoneToHand,
+  handleDamageFromDestroyedAtk,
   handleHealFromDestroyedAtk,
   handleHealFromDestroyedLevel,
   handleHealPerFieldCount,

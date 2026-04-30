@@ -1644,6 +1644,7 @@
         timing: "on_event",
         event: "after_summon",
         summonMethods: ["normal", "tribute"],
+        requireSelfAsSummoned: true,
         targets: [
           {
             id: "moonblade_revive_target",
@@ -1657,12 +1658,10 @@
         ],
         actions: [
           {
-            type: "move",
+            type: "special_summon_from_zone",
             targetRef: "moonblade_revive_target",
-            player: "self",
-            to: "field",
-            isFacedown: false,
-            resetAttackFlags: true,
+            zone: "graveyard",
+            position: "choice",
           },
         ],
       },
@@ -1671,8 +1670,10 @@
         timing: "on_event",
         event: "battle_destroy",
         requireSelfAsAttacker: true,
+        requireDestroyedIsOpponent: true,
         oncePerTurn: true,
         oncePerTurnName: "luminarch_moonblade_second_attack",
+        oncePerTurnScope: "card",
         actions: [
           {
             type: "grant_second_attack",
@@ -2444,7 +2445,7 @@
             type: "special_summon_from_zone",
             zone: "graveyard",
             targetRef: "fortress_aegis_revive_target",
-            position: "defense",
+            position: "choice",
           },
         ],
       },
@@ -5692,6 +5693,104 @@
           {
             type: "destroy",
             targetRef: "elementalist_destroy_target",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 214,
+    name: "Fire Extreme Dragon",
+    cardKind: "monster",
+    atk: 3000,
+    def: 2600,
+    level: 10,
+    type: "Dragon",
+    archetype: "Extreme Dragons",
+    fieldLimit: {
+      key: "extreme_dragons_faceup",
+      label: "Extreme Dragon",
+      scope: "global",
+      requireFaceup: true,
+      filters: {
+        cardKind: "monster",
+        archetype: "Extreme Dragons",
+      },
+    },
+    description:
+      'There can only be 1 face-up "Extreme Dragon" monster on the field. While this card is the only monster you control, it cannot be destroyed by card effects. If this card destroys an opponent\'s monster by battle: inflict damage to your opponent equal to half the destroyed monster\'s original ATK. Each time your opponent activates a card or effect: inflict 300 damage to your opponent. If this card is destroyed by battle: you can Special Summon 1 "Volcanic Extreme Dragon" from your hand or Deck.',
+    image: "assets/Fire Extreme Dragon.png",
+    effects: [
+      {
+        id: "fire_extreme_dragon_lone_protection",
+        timing: "passive",
+        requireZone: "field",
+        requireFaceup: true,
+        passive: {
+          type: "conditional_protection",
+          protectionType: "effect_destruction",
+        },
+        conditions: [
+          {
+            type: "control_card_filters",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            includeFacedown: true,
+            max: 1,
+          },
+        ],
+      },
+      {
+        id: "fire_extreme_dragon_battle_burn",
+        timing: "on_event",
+        event: "battle_destroy",
+        requireZone: "field",
+        requireFaceup: true,
+        requireSelfAsAttacker: true,
+        requireDestroyedIsOpponent: true,
+        promptUser: false,
+        actions: [
+          {
+            type: "damage_from_destroyed_atk",
+            player: "opponent",
+            fraction: 0.5,
+            useBaseAtk: true,
+          },
+        ],
+      },
+      {
+        id: "fire_extreme_dragon_activation_burn",
+        timing: "on_event",
+        event: "effect_activated",
+        requireZone: "field",
+        requireFaceup: true,
+        triggerPlayer: "opponent",
+        promptUser: false,
+        actions: [
+          {
+            type: "damage",
+            player: "opponent",
+            amount: 300,
+          },
+        ],
+      },
+      {
+        id: "fire_extreme_dragon_battle_destroy_float",
+        timing: "on_event",
+        event: "battle_destroy",
+        requireSelfAsDestroyed: true,
+        promptUser: false,
+        actions: [
+          {
+            type: "special_summon_from_zone",
+            zone: ["hand", "deck"],
+            cardName: "Volcanic Extreme Dragon",
+            filters: {
+              cardKind: "monster",
+            },
+            count: { min: 1, max: 1 },
+            position: "choice",
           },
         ],
       },

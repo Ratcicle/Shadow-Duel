@@ -29,6 +29,7 @@ const VALID_EVENTS = new Set([
   "effect_targeted",
   "card_equipped",
   "spell_activated",
+  "effect_activated",
 ]);
 
 function formatIssue(card, message, effectIndex = null, actionIndex = null) {

@@ -10,6 +10,85 @@
  *  - destroyCard
  */
 
+function asArray(value) {
+  if (value === undefined || value === null) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+function getDestructionProtectionType(cause) {
+  return cause === "battle" ? "battle_destruction" : "effect_destruction";
+}
+
+function findConditionalDestructionProtection(
+  game,
+  card,
+  owner,
+  opponent,
+  cause,
+  fromZone,
+) {
+  if (!game || !card || !owner) return null;
+  if (!Array.isArray(card.effects)) return null;
+
+  const protectionType = getDestructionProtectionType(cause);
+  for (const effect of card.effects) {
+    if (!effect || effect.timing !== "passive") continue;
+    const passive = effect.passive || {};
+    if (passive.type !== "conditional_protection") continue;
+
+    const protectedTypes = asArray(
+      passive.protectionType ||
+        passive.protectionTypes ||
+        effect.protectionType ||
+        effect.protectionTypes,
+    );
+    if (
+      protectedTypes.length > 0 &&
+      !protectedTypes.includes(protectionType)
+    ) {
+      continue;
+    }
+
+    if (
+      (effect.requireFaceup === true || passive.requireFaceup === true) &&
+      card.isFacedown
+    ) {
+      continue;
+    }
+    if (effect.requireZone && effect.requireZone !== fromZone) {
+      continue;
+    }
+
+    const conditions = Array.isArray(effect.conditions)
+      ? effect.conditions
+      : Array.isArray(passive.conditions)
+        ? passive.conditions
+        : passive.condition
+          ? [passive.condition]
+          : [];
+
+    if (conditions.length > 0) {
+      const conditionResult = game.effectEngine?.evaluateConditions?.(
+        conditions,
+        {
+          source: card,
+          player: owner,
+          opponent,
+          activationZone: fromZone,
+          sourceZone: fromZone,
+        },
+      );
+      if (conditionResult && conditionResult.ok === false) {
+        continue;
+      }
+    }
+
+    return { effect, passive, protectionType };
+  }
+
+  return null;
+}
+
 export async function destroyCard(card, options = {}) {
   const result = await this.runZoneOp(
     "DESTROY_CARD",
@@ -73,6 +152,34 @@ export async function destroyCard(card, options = {}) {
           });
           return { destroyed: false, reason: "protected", protectionType };
         }
+      }
+
+      const conditionalProtection = findConditionalDestructionProtection(
+        this,
+        card,
+        owner,
+        opponent,
+        cause,
+        fromZone,
+      );
+      if (conditionalProtection) {
+        this.ui?.log?.(
+          `${card.name} is protected from destruction by ${
+            cause === "battle" ? "battle" : "card effects"
+          }!`,
+        );
+        this.queueVisualFeedback?.({
+          kind: "protect",
+          targetCard: card,
+          targetOwnerId: owner.id,
+          targetZone: fromZone,
+          tone: "blue",
+        });
+        return {
+          destroyed: false,
+          reason: "protected",
+          protectionType: conditionalProtection.protectionType,
+        };
       }
 
       if (this.effectEngine?.checkBeforeDestroyNegations) {
