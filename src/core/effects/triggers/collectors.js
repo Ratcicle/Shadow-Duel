@@ -349,7 +349,7 @@ export async function collectEffectActivatedTriggers(payload) {
 export async function collectAfterSummonTriggers(payload) {
   const entries = [];
   const orderRule =
-    "summoner -> opponent; sources: summoned card -> fieldSpell -> hand";
+    "summoner -> opponent; sources: summoned card -> opposing field -> fieldSpell -> hand";
 
   if (!payload || !payload.card || !payload.player) {
     return { entries, orderRule };
@@ -388,6 +388,9 @@ export async function collectAfterSummonTriggers(payload) {
     }
     if (owner.fieldSpell) {
       sources.push(owner.fieldSpell);
+    }
+    if (!side.includeSummonedCard && Array.isArray(owner.field)) {
+      sources.push(...owner.field);
     }
     if (Array.isArray(owner.spellTrap)) {
       sources.push(...owner.spellTrap);

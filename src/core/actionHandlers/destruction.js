@@ -25,7 +25,43 @@ function findCardZoneInOwner(owner, card) {
     "extraDeck",
     "banished",
   ];
-  return zones.find((zone) => Array.isArray(owner[zone]) && owner[zone].includes(card)) || null;
+  return (
+    zones.find(
+      (zone) => Array.isArray(owner[zone]) && owner[zone].includes(card),
+    ) || null
+  );
+}
+
+function ownerZoneContainsCard(owner, zoneName, card) {
+  if (!owner || !zoneName || !card) return false;
+  if (zoneName === "fieldSpell") return owner.fieldSpell === card;
+  return Array.isArray(owner[zoneName]) && owner[zoneName].includes(card);
+}
+
+function findCardOwnerInGame(game, card) {
+  if (!game || !card) return null;
+
+  const zones = [
+    "hand",
+    "field",
+    "graveyard",
+    "deck",
+    "spellTrap",
+    "fieldSpell",
+    "extraDeck",
+    "banished",
+  ];
+  const players = [game.player, game.bot].filter(Boolean);
+
+  for (const candidate of players) {
+    for (const zoneName of zones) {
+      if (ownerZoneContainsCard(candidate, zoneName, card)) {
+        return candidate;
+      }
+    }
+  }
+
+  return null;
 }
 
 function queueBanishAnimation(game, owner, card, fromZone = null) {
@@ -306,27 +342,8 @@ export async function handleBanish(action, ctx, targets, engine) {
   const useDestroyed =
     action.useDestroyed === true || action.type === "banish_destroyed_monster";
 
-  // DEBUG: Log para diagnóstico do banish
-  console.log(
-    `[handleBanish DEBUG] action.type: ${action.type}, useDestroyed: ${useDestroyed}`,
-  );
-  console.log(
-    `[handleBanish DEBUG] ctx.destroyed: ${ctx?.destroyed?.name || "undefined"}`,
-  );
-  console.log(
-    `[handleBanish DEBUG] ctx.destroyedOwner: ${ctx?.destroyedOwner?.id || "undefined"}`,
-  );
-  console.log(
-    `[handleBanish DEBUG] resolved before useDestroyed check:`,
-    resolved,
-  );
-
   if ((!Array.isArray(resolved) || resolved.length === 0) && useDestroyed) {
     resolved = ctx?.destroyed ? [ctx.destroyed] : [];
-    console.log(
-      `[handleBanish DEBUG] resolved after useDestroyed check:`,
-      resolved?.map((c) => c?.name),
-    );
   }
 
   // Allow banishing the source card when targetRef is "self" and no targets were pre-resolved
@@ -363,6 +380,16 @@ export async function handleBanish(action, ctx, targets, engine) {
     ];
 
     for (const z of zones) {
+      if (z === "fieldSpell") {
+        if (owner?.fieldSpell === card) {
+          owner.fieldSpell = null;
+
+          return true;
+        }
+
+        continue;
+      }
+
       const zoneArr = owner?.[z];
 
       if (!Array.isArray(zoneArr)) continue;
@@ -384,6 +411,8 @@ export async function handleBanish(action, ctx, targets, engine) {
   const opponent =
     player && typeof engine.getOpponent === "function"
       ? engine.getOpponent(player)
+      : player && typeof game.getOpponent === "function"
+        ? game.getOpponent(player)
       : null;
 
   for (const tgt of resolved) {
@@ -400,9 +429,13 @@ export async function handleBanish(action, ctx, targets, engine) {
         : player);
 
     const ownerPlayer =
-      typeof engine.getOwnerOfCard === "function"
-        ? engine.getOwnerOfCard(tgt)
-        : fallbackOwner;
+      findCardOwnerInGame(game, tgt) ||
+      (typeof engine.getOwnerByCard === "function"
+        ? engine.getOwnerByCard(tgt)
+        : typeof engine.getOwnerOfCard === "function"
+          ? engine.getOwnerOfCard(tgt)
+          : null) ||
+      fallbackOwner;
 
     let resolvedOwner = ownerPlayer;
 
@@ -453,7 +486,10 @@ export async function handleBanish(action, ctx, targets, engine) {
       continue;
     }
 
-    if (action.fromZone && !resolvedOwner[action.fromZone]?.includes(tgt)) {
+    if (
+      action.fromZone &&
+      !ownerZoneContainsCard(resolvedOwner, action.fromZone, tgt)
+    ) {
       getUI(game)?.log(
         `${tgt.name} não está mais em ${action.fromZone}; não pode ser banida.`,
       );
@@ -468,7 +504,9 @@ export async function handleBanish(action, ctx, targets, engine) {
 
     resolvedOwner.banished = resolvedOwner.banished || [];
 
-    resolvedOwner.banished.push(tgt);
+    if (!resolvedOwner.banished.includes(tgt)) {
+      resolvedOwner.banished.push(tgt);
+    }
 
     tgt.location = "banished";
 
@@ -490,6 +528,80 @@ export async function handleBanish(action, ctx, targets, engine) {
   }
 
   return false;
+}
+
+/**
+ * Schedules a delayed return summon for a banished card.
+ * Used by effects that banish a card "until the end of the next turn"
+ * (e.g. Galaxy Extreme Dragon's once-per-Duel self-banish).
+ *
+ * Action properties:
+ * - cardRef: which card to return (default: "self" — the source card)
+ * - returnPhase: phase when the return happens (default: "end")
+ * - delayTurns: number of full turns to wait before returning (default: 1)
+ *   With delayTurns=1 from your own turn, the return fires on the next
+ *   end-of-opponent-turn, which is "the end of the next turn" by Yu-Gi-Oh!
+ *   timing rules.
+ */
+export async function handleScheduleReturnFromBanished(
+  action,
+  ctx,
+  targets,
+  engine,
+) {
+  const game = engine?.game;
+  const { player, source } = ctx || {};
+  if (!game || !player) return false;
+
+  const cardRef = action?.cardRef || "self";
+  let cardToReturn = null;
+  if (cardRef === "self") {
+    cardToReturn = source || null;
+  } else if (Array.isArray(targets?.[cardRef]) && targets[cardRef].length > 0) {
+    cardToReturn = targets[cardRef][0];
+  }
+
+  if (!cardToReturn) {
+    getUI(game)?.log("No card to schedule for return from banished.");
+    return false;
+  }
+
+  const returnPhase = action?.returnPhase || "end";
+  const delayTurns = Number.isFinite(action?.delayTurns) ? action.delayTurns : 1;
+
+  // "End of the next turn" means the end-phase of the turn that follows the
+  // current one. `game.turn` is the active player at the moment of scheduling,
+  // so the next turn belongs to the other player when delayTurns is odd.
+  const currentTurnPlayer = game.turn;
+  const otherTurnPlayer = currentTurnPlayer === "player" ? "bot" : "player";
+  const triggerPlayerId =
+    delayTurns % 2 === 1 ? otherTurnPlayer : currentTurnPlayer;
+
+  const summonPayload = {
+    summons: [
+      {
+        card: cardToReturn,
+        owner: player.id,
+        fromZone: "banished",
+      },
+    ],
+  };
+
+  game.scheduleDelayedAction(
+    "delayed_summon",
+    {
+      phase: returnPhase,
+      player: triggerPlayerId,
+    },
+    summonPayload,
+    1,
+  );
+
+  getUI(game)?.log(
+    `${cardToReturn.name} is banished until the end of the next turn.`,
+  );
+
+  return true;
 }
 
 /**

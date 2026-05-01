@@ -384,10 +384,6 @@
       "name": "Dragão Tecno-Vazio",
       "description": "Materiais: Dragão Voltaico + 1 monstro Dragão de Nível 5 ou maior\nSe este card for Invocado por Invocação-Fusão: você pode escolher 1 monstro Dragão de Nível 4 ou menor no seu Cemitério; bana-o e, se fizer isso, este card ganha ATK igual ao ATK do monstro banido até o final deste turno. Se este card for destruído em batalha: você pode Invocar por Invocação-Especial 1 'Dragão Voltaico' do seu Cemitério. Você só pode usar cada efeito de 'Dragão Tecno-Vazio' uma vez por turno."
     },
-    "31": {
-      "name": "Dragão Cósmico Tecno-Vazio",
-      "description": "Material de Ascens\u00e3o: 'Drag\u00e3o Tecno-Vazio'.\nRequisito: O material ativou todos os seus efeitos durante este duelo.\nSe este card seria destru\u00eddo: voc\u00ea pode banir 'Drag\u00e3o Tecno-Vazio' do seu Cemit\u00e9rio em vez disso. Uma vez por turno: voc\u00ea pode banir 1 monstro Drag\u00e3o do seu Cemit\u00e9rio; este card pode atacar todos os monstros que seu oponente controla, uma vez cada, neste turno. Voc\u00ea s\u00f3 pode usar cada efeito de 'Drag\u00e3o C\u00f3smico Tecno-Vazio' uma vez por turno."
-    },
     "32": {
       "name": "Santuário do Espírito do Dragão",
       "description": "Quando um monstro Dragão que você controla for alvo de um ataque ou efeito de card do oponente: devolva esse monstro para a mão; então Invoque por Invocação-Especial 1 monstro Dragão da sua mão com Nível menor ou igual ao do monstro devolvido. Você só pode ativar 1 'Santuário do Espírito Dragão' por turno."
@@ -455,6 +451,18 @@
     "251": {
       "name": "Dragão Extremo Vulcânico",
       "description": "Só pode haver 1 monstro \"Dragão Extremo\" com a face para cima no campo. Enquanto este card for o único monstro que você controla, ele não pode ser destruído em batalha. Se este card batalhar um monstro do oponente: cause 600 de dano ao seu oponente. Uma vez por turno: você pode banir todos os cards do seu Cemitério; cause 500 de dano ao seu oponente para cada card banido por este efeito."
+    },
+    "252": {
+      "name": "Dragão Extremo da Névoa",
+      "description": "Só pode haver 1 monstro \"Dragão Extremo\" com a face para cima no campo. Monstros Invocados pelo seu oponente não podem declarar ataques no turno em que forem Invocados. Uma vez por turno: você pode escolher 1 card que seu oponente controla; devolva-o para a mão. Se este card for destruído em batalha: embaralhe no Deck todos os cards que seu oponente controla."
+    },
+    "253": {
+      "name": "Dragão Extremo da Galáxia",
+      "description": "Só pode haver 1 monstro \"Dragão Extremo\" com a face para cima no campo. Qualquer card enviado ao Cemitério do seu oponente é banido em vez disso. Uma vez por Duelo, se este card seria destruído em batalha ou por efeito de card: você pode bani-lo até o final do próximo turno e, se isso acontecer, escolha 1 card que seu oponente controla; bana-o."
+    },
+    "254": {
+      "name": "Dragão Extremo da Floresta",
+      "description": "Só pode haver 1 monstro \"Dragão Extremo\" com a face para cima no campo. Durante cada Fase de Apoio: ganhe 200 PV para cada card que seu oponente controla e para cada card na mão dele. Cada vez que seu oponente Invocar um monstro ou ativar um card ou efeito: ganhe 100 PV. Uma vez por turno (Efeito Rápido): este card ganha ATK igual ao total de PV que você ganhou neste turno, até o final deste turno."
     }
   }
 }

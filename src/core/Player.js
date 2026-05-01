@@ -11,12 +11,14 @@ export default class Player {
     this.name = name;
     this.controllerType = controllerType; // "human" | "ai"
     this.lp = 8000;
+    this.lpGainedThisTurn = 0;
     this.deck = [];
     this.extraDeck = [];
     this.hand = [];
     this.field = [];
     this.spellTrap = [];
     this.graveyard = [];
+    this.banished = [];
     this.fieldSpell = null;
     this.summonCount = 0;
     this.additionalNormalSummons = 0; // Extra normal summons granted this turn
@@ -438,6 +440,7 @@ export default class Player {
     const adjustedAmount = Math.floor(amount * multiplier);
     if (!adjustedAmount || adjustedAmount <= 0) return;
     this.lp += adjustedAmount;
+    this.lpGainedThisTurn = (this.lpGainedThisTurn || 0) + adjustedAmount;
     if (this.game?.ui?.showLpChange) {
       this.game.ui.showLpChange(this, adjustedAmount);
     }

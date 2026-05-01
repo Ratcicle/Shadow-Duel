@@ -38,6 +38,7 @@ export function collectAllZoneCards() {
     addList(player.field);
     addList(player.spellTrap);
     addList(player.graveyard);
+    addList(player.banished);
     addList(player.deck);
     addList(player.extraDeck);
     if (player.fieldSpell) {
@@ -63,6 +64,7 @@ export function captureZoneSnapshot(contextLabel = "zone_op") {
         field: [...(this.player?.field || [])],
         spellTrap: [...(this.player?.spellTrap || [])],
         graveyard: [...(this.player?.graveyard || [])],
+        banished: [...(this.player?.banished || [])],
         deck: [...(this.player?.deck || [])],
         extraDeck: [...(this.player?.extraDeck || [])],
         fieldSpell: this.player?.fieldSpell || null,
@@ -72,6 +74,7 @@ export function captureZoneSnapshot(contextLabel = "zone_op") {
         field: [...(this.bot?.field || [])],
         spellTrap: [...(this.bot?.spellTrap || [])],
         graveyard: [...(this.bot?.graveyard || [])],
+        banished: [...(this.bot?.banished || [])],
         deck: [...(this.bot?.deck || [])],
         extraDeck: [...(this.bot?.extraDeck || [])],
         fieldSpell: this.bot?.fieldSpell || null,
@@ -103,6 +106,7 @@ export function restoreZoneSnapshot(snapshot) {
     player.field = [...(state.field || [])];
     player.spellTrap = [...(state.spellTrap || [])];
     player.graveyard = [...(state.graveyard || [])];
+    player.banished = [...(state.banished || [])];
     player.deck = [...(state.deck || [])];
     player.extraDeck = [...(state.extraDeck || [])];
     player.fieldSpell = state.fieldSpell || null;
@@ -156,6 +160,7 @@ export function compareZoneSnapshot(a, b, playerKey = "player") {
     listEqual(stateA.field || [], stateB.field || []) &&
     listEqual(stateA.spellTrap || [], stateB.spellTrap || []) &&
     listEqual(stateA.graveyard || [], stateB.graveyard || []) &&
+    listEqual(stateA.banished || [], stateB.banished || []) &&
     listEqual(stateA.deck || [], stateB.deck || []) &&
     listEqual(stateA.extraDeck || [], stateB.extraDeck || []) &&
     (stateA.fieldSpell || null) === (stateB.fieldSpell || null)

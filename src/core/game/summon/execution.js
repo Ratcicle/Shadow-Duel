@@ -34,7 +34,7 @@ export async function flipSummon(card) {
  * @param {Object|null} player - Player performing the summon
  * @returns {boolean} Success status
  */
-export function performFusionSummon(
+export async function performFusionSummon(
   materials,
   fusionMonsterIndex,
   position = "attack",
@@ -111,7 +111,7 @@ export function performFusionSummon(
   );
 
   // Emit after_summon event
-  this.emit("after_summon", {
+  await this.emit("after_summon", {
     card: fusionMonster,
     player: activePlayer,
     method: "fusion",

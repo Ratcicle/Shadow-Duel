@@ -19,6 +19,10 @@
     "251": {
       "name": "Volcanic Extreme Dragon",
       "description": "There can only be 1 face-up \"Extreme Dragon\" monster on the field. While this card is the only monster you control, it cannot be destroyed by battle. If this card battles an opponent's monster: inflict 600 damage to your opponent. Once per turn: you can banish all cards in your Graveyard; inflict 500 damage to your opponent for each card banished by this effect."
+    },
+    "254": {
+      "name": "Forest Extreme Dragon",
+      "description": "There can only be 1 face-up \"Extreme Dragon\" monster on the field. During each Standby Phase: gain 200 LP for each card your opponent controls and each card in their hand. Each time your opponent Summons a monster or activates a card or effect: gain 100 LP. Once per turn (Quick Effect): this card gains ATK equal to the total LP you gained this turn, until the end of this turn."
     }
   }
 }

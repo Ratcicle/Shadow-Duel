@@ -4532,68 +4532,6 @@
     ],
   },
   {
-    id: 31,
-    name: "Tech-Void Cosmic Dragon",
-    cardKind: "monster",
-    monsterType: "ascension",
-    level: 10,
-    atk: 3500,
-    def: 1500,
-    type: "Dragon",
-    ascension: {
-      materialId: 30,
-      requirements: [{ type: "material_effect_activations", count: 1 }],
-      position: "choice",
-    },
-    description:
-      "Ascension Material: 'Tech-Void Dragon'. Requirement: The material activated at least 1 of its effects during this duel. If this card would be destroyed: You can banish 'Tech-Void Dragon' from your GY instead. Once per turn: You can banish 1 Dragon monster from your GY; this card can attack all monsters your opponent controls, once each, this turn. You can only use each effect of 'Tech-Void Cosmic Dragon' once per turn.",
-    image: "assets/Tech-Void Cosmic Dragon.png",
-    effects: [
-      {
-        id: "tech_void_cosmic_negate_destruction",
-        timing: "on_event",
-        event: "before_destroy",
-        oncePerTurn: true,
-        oncePerTurnName: "tech_void_cosmic_negate_destruction",
-        negationCost: [
-          {
-            type: "banish_card_from_graveyard",
-            cardName: "Tech-Void Dragon",
-            count: 1,
-          },
-        ],
-      },
-      {
-        id: "tech_void_cosmic_attack_all",
-        timing: "ignition",
-        requireZone: "field",
-        requirePhase: ["main1", "battle"],
-        oncePerTurn: true,
-        oncePerTurnName: "tech_void_cosmic_attack_all",
-        targets: [
-          {
-            id: "tech_void_cosmic_banish_cost",
-            owner: "self",
-            zone: "graveyard",
-            type: "Dragon",
-            cardKind: "monster",
-            count: { min: 1, max: 1 },
-          },
-        ],
-        actions: [
-          {
-            type: "banish",
-            targetRef: "tech_void_cosmic_banish_cost",
-          },
-          {
-            type: "grant_attack_all_monsters",
-            targetRef: "self",
-          },
-        ],
-      },
-    ],
-  },
-  {
     id: 32,
     name: "Dragon Spirit Sanctuary",
     cardKind: "trap",
@@ -5888,6 +5826,210 @@
       },
     ],
   },
+  {
+    id: 252,
+    name: "Mist Extreme Dragon",
+    cardKind: "monster",
+    atk: 2800,
+    def: 2500,
+    level: 10,
+    type: "Dragon",
+    archetype: "Extreme Dragons",
+    fieldLimit: {
+      key: "extreme_dragons_faceup",
+      label: "Extreme Dragon",
+      scope: "global",
+      requireFaceup: true,
+      filters: {
+        cardKind: "monster",
+        archetype: "Extreme Dragons",
+      },
+    },
+    description:
+      'There can only be 1 face-up "Extreme Dragon" monster on the field. Monsters your opponent controls that were summoned this turn cannot declare attacks. Once per turn: you can target 1 card your opponent controls; return it to the hand. If this card is destroyed by battle: shuffle all cards your opponent controls into the Deck.',
+    image: "assets/Mist Extreme Dragon.png",
+    effects: [
+      {
+        id: "mist_extreme_dragon_restrict_summon_turn_attack",
+        timing: "passive",
+        requireZone: "field",
+        requireFaceup: true,
+        passive: { type: "restrict_opponent_summon_turn_attack" },
+      },
+      {
+        id: "mist_extreme_dragon_bounce",
+        timing: "ignition",
+        requireZone: "field",
+        requireFaceup: true,
+        oncePerTurn: true,
+        oncePerTurnName: "mist_extreme_dragon_bounce",
+        targets: [
+          {
+            id: "mist_bounce_target",
+            owner: "opponent",
+            zones: ["field", "spellTrap", "fieldSpell"],
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [{ type: "return_to_hand", targetRef: "mist_bounce_target" }],
+      },
+      {
+        id: "mist_extreme_dragon_battle_destroy_shuffle",
+        timing: "on_event",
+        event: "battle_destroy",
+        requireSelfAsDestroyed: true,
+        promptUser: false,
+        actions: [{ type: "shuffle_opponent_field_to_deck" }],
+      },
+    ],
+  },
+  {
+    id: 253,
+    name: "Galaxy Extreme Dragon",
+    cardKind: "monster",
+    atk: 2900,
+    def: 2900,
+    level: 10,
+    type: "Dragon",
+    archetype: "Extreme Dragons",
+    fieldLimit: {
+      key: "extreme_dragons_faceup",
+      label: "Extreme Dragon",
+      scope: "global",
+      requireFaceup: true,
+      filters: {
+        cardKind: "monster",
+        archetype: "Extreme Dragons",
+      },
+    },
+    description:
+      'There can only be 1 face-up "Extreme Dragon" monster on the field. Any card sent to your opponent\'s Graveyard is banished instead. Once per Duel, if this card would be destroyed by battle or by card effect: you can banish it until the end of the next turn instead, and if you do, choose 1 card your opponent controls; banish it.',
+    image: "assets/Galaxy Extreme Dragon.png",
+    effects: [
+      {
+        id: "galaxy_extreme_dragon_macro_cosmos",
+        timing: "passive",
+        requireZone: "field",
+        requireFaceup: true,
+        passive: {
+          type: "send_to_grave_replacement",
+          targetOwner: "opponent",
+          redirectTo: "banished",
+        },
+      },
+      {
+        id: "galaxy_extreme_dragon_self_banish",
+        oncePerDuel: true,
+        oncePerDuelName: "galaxy_extreme_dragon_self_banish",
+        requireFaceup: true,
+        replacementEffect: {
+          type: "destruction",
+          reason: "any",
+          targetOwner: "self",
+          targetZones: ["field"],
+          targetRequireFaceup: true,
+          auto: true,
+          logMessage:
+            "{source} banishes itself until the end of the next turn instead of being destroyed.",
+        },
+        targets: [
+          {
+            id: "galaxy_extreme_dragon_banish_target",
+            owner: "opponent",
+            zones: ["field", "spellTrap", "fieldSpell"],
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          { type: "banish", targetRef: "self", fromZone: "field" },
+          {
+            type: "schedule_return_from_banished",
+            cardRef: "self",
+            delayTurns: 1,
+            returnPhase: "end",
+          },
+          {
+            type: "banish",
+            targetRef: "galaxy_extreme_dragon_banish_target",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 254,
+    name: "Forest Extreme Dragon",
+    cardKind: "monster",
+    atk: 2500,
+    def: 2700,
+    level: 10,
+    type: "Dragon",
+    archetype: "Extreme Dragons",
+    fieldLimit: {
+      key: "extreme_dragons_faceup",
+      label: "Extreme Dragon",
+      scope: "global",
+      requireFaceup: true,
+      filters: {
+        cardKind: "monster",
+        archetype: "Extreme Dragons",
+      },
+    },
+    description:
+      'There can only be 1 face-up "Extreme Dragon" monster on the field. During each Standby Phase: gain 200 LP for each card your opponent controls and each card in their hand. Each time your opponent Summons a monster or activates a card or effect: gain 100 LP. Once per turn (Quick Effect): this card gains ATK equal to the total LP you gained this turn, until the end of this turn.',
+    image: "assets/Forest Extreme Dragon.png",
+    effects: [
+      {
+        id: "forest_extreme_dragon_standby_heal",
+        timing: "on_event",
+        event: "standby_phase",
+        requireZone: "field",
+        requireFaceup: true,
+        triggerPlayer: "self",
+        promptUser: false,
+        actions: [
+          {
+            type: "heal_per_opponent_cards_and_hand",
+            player: "self",
+            amountPerCard: 200,
+          },
+        ],
+      },
+      {
+        id: "forest_extreme_dragon_summon_heal",
+        timing: "on_event",
+        event: "after_summon",
+        requireZone: "field",
+        requireFaceup: true,
+        triggerPlayer: "opponent",
+        promptUser: false,
+        actions: [{ type: "heal", amount: 100, player: "self" }],
+      },
+      {
+        id: "forest_extreme_dragon_activation_heal",
+        timing: "on_event",
+        event: "effect_activated",
+        requireZone: "field",
+        requireFaceup: true,
+        triggerPlayer: "opponent",
+        promptUser: false,
+        actions: [{ type: "heal", amount: 100, player: "self" }],
+      },
+      {
+        id: "forest_extreme_dragon_lp_gain_boost",
+        timing: "manual",
+        speed: 2,
+        isQuickEffect: true,
+        requireZone: "field",
+        requireFaceup: true,
+        oncePerTurn: true,
+        oncePerTurnName: "forest_extreme_dragon_lp_gain_boost",
+        actions: [{ type: "buff_atk_by_lp_gained_this_turn" }],
+      },
+    ],
+  },
+
 ];
 
 // Performance optimization: Create indexed maps for O(1) lookups

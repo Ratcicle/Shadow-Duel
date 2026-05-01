@@ -9,7 +9,7 @@ O tema **Dragon** é um conjunto de cartas genéricas de tipo Dragão que funcio
 - **Sinergia de tipo**: Muitos efeitos buscam, invocam ou buffam outros Dragons
 - **Cemitério como recurso**: Vários efeitos funcionam a partir do GY
 - **Field Spell central**: Jagged Peak of the Dragons acumula contadores para SS gratuito
-- **Linha de Fusão/Ascensão**: Tech-Void Dragon → Tech-Void Cosmic Dragon
+- **Linha de Fusão**: Tech-Void Dragon
 
 ---
 
@@ -52,13 +52,10 @@ O tema **Dragon** é um conjunto de cartas genéricas de tipo Dragão que funcio
 | --- | ----------------------- | --------- | ----- | ---- | ---- |
 | 17 | Metal Armored Dragon    | Ascension | 6     | 2000 | 2000 |
 | 30 | Tech-Void Dragon        | Fusion    | 8     | 2500 | 1000 |
-| 31 | Tech-Void Cosmic Dragon | Ascension | 10    | 3500 | 1500 |
 
 **Materiais de Fusão (Tech-Void Dragon):** "Voltaic Dragon" + 1 monstro Dragon de Nível 5+
 
 **Material de Ascensão (Metal Armored Dragon):** Armored Dragon (ID 16)
-
-**Material de Ascensão (Tech-Void Cosmic Dragon):** Tech-Void Dragon (ID 30) — Requisito: O material ativou todos os seus efeitos durante o duelo
 
 ---
 
@@ -126,5 +123,3 @@ O tema **Dragon** é um conjunto de cartas genéricas de tipo Dragão que funcio
 **30 - Tech-Void Dragon** (L8 Fusion Dragon | ATK 2500 / DEF 1000)
 > Voltaic Dragon + 1 Level 5+ Dragon monster. If this card is Fusion Summoned: You can target 1 Level 4 or lower Dragon monster in your GY; banish it, and if you do, this card gains ATK equal to the banished monster's ATK until the end of this turn. If this card is destroyed by battle: You can Special Summon 1 'Voltaic Dragon' from your GY. You can only use each effect of 'Tech-Void Dragon' once per turn.
 
-**31 - Tech-Void Cosmic Dragon** (L10 Ascension Dragon | ATK 3500 / DEF 1500)
-> Ascension Material: 'Tech-Void Dragon'. Requirement: The material activated all of its effects during this duel. If this card would be destroyed: You can banish 'Tech-Void Dragon' from your GY instead. Once per turn: You can banish 1 Dragon monster from your GY; this card can attack all monsters your opponent controls, once each, this turn. You can only use each effect of 'Tech-Void Cosmic Dragon' once per turn.

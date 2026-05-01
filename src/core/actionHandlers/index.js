@@ -45,6 +45,7 @@ export {
   handleAddStatus,
   handleGrantProtection,
   handleBanishAndBuff,
+  handleBuffAtkByLpGainedThisTurn,
   handleSwitchPosition,
   handleSwitchDefenderPositionOnAttack,
   handlePermanentBuffNamed,
@@ -63,6 +64,7 @@ export {
   handleHealFromDestroyedAtk,
   handleHealFromDestroyedLevel,
   handleHealPerFieldCount,
+  handleHealPerOpponentCardsAndHand,
   handleGrantAdditionalNormalSummon,
   handleUpkeepPayOrSendToGrave,
 } from "./resources.js";

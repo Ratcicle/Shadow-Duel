@@ -18,6 +18,26 @@ export function getAttackAvailability(attacker) {
       reason: `${attacker.name} cannot attack this turn.`,
     };
   }
+
+  // Check passive "restrict_opponent_summon_turn_attack" from opponent's field cards
+  if (attacker.summonedTurn === this.turnCounter) {
+    const attackerOwner = attacker.owner === "player" ? this.player : this.bot;
+    const opponentOfAttacker = attacker.owner === "player" ? this.bot : this.player;
+    for (const fieldCard of (opponentOfAttacker?.field || [])) {
+      if (!fieldCard || fieldCard.isFacedown) continue;
+      for (const effect of (fieldCard.effects || [])) {
+        if (
+          effect?.timing === "passive" &&
+          effect?.passive?.type === "restrict_opponent_summon_turn_attack"
+        ) {
+          return {
+            ok: false,
+            reason: `${attacker.name} cannot attack on the turn it was summoned.`,
+          };
+        }
+      }
+    }
+  }
   if (attacker.position === "defense") {
     return {
       ok: false,

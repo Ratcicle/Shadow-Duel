@@ -134,6 +134,7 @@ export function normalizeZoneCardOwnership(
     addList(player, opponent, "field", player.field);
     addList(player, opponent, "spellTrap", player.spellTrap);
     addList(player, opponent, "graveyard", player.graveyard);
+    addList(player, opponent, "banished", player.banished);
     addList(player, opponent, "deck", player.deck);
     addList(player, opponent, "extraDeck", player.extraDeck);
     if (player.fieldSpell) {

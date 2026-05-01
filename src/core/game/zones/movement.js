@@ -150,6 +150,59 @@ function queueZoneMoveAnimation(game, intent, toZoneOverride = null) {
 
 const FIELD_SOURCE_ZONES = new Set(["field", "spellTrap", "fieldSpell"]);
 
+/**
+ * Look for any face-up card on the field whose passive `send_to_grave_replacement`
+ * effect matches a card being sent to the graveyard owned by `fromOwner`.
+ * Returns the redirect zone name (typically "banished") or null.
+ *
+ * This implements Macro Cosmos-style replacements (e.g. Galaxy Extreme Dragon's
+ * "any card sent to opponent's Graveyard is banished instead").
+ *
+ * @param {import('../../Game.js').default} game
+ * @param {Object} card - card being moved to the graveyard
+ * @param {Object} fromOwner - owner of the card before the move
+ * @returns {string|null}
+ */
+function findSendToGraveReplacementTarget(game, card, fromOwner) {
+  if (!game || !card || !fromOwner) return null;
+
+  const players = [game.player, game.bot].filter(Boolean);
+  for (const sourceOwner of players) {
+    const fieldCards = sourceOwner.field || [];
+    for (const sourceCard of fieldCards) {
+      if (!sourceCard || sourceCard.isFacedown) continue;
+      const effects = Array.isArray(sourceCard.effects) ? sourceCard.effects : [];
+      for (const effect of effects) {
+        if (!effect || effect.timing !== "passive") continue;
+        const passive = effect.passive;
+        if (!passive || passive.type !== "send_to_grave_replacement") continue;
+
+        // Determine which card-owner this replacement applies to.
+        // "self"     → cards owned by the source's controller
+        // "opponent" → cards owned by the source's opponent (most common)
+        // "any"      → any card
+        const targetOwnerKey = passive.targetOwner || "opponent";
+        if (targetOwnerKey !== "any") {
+          const expectedOwner =
+            targetOwnerKey === "self" ? sourceOwner : game.getOpponent(sourceOwner);
+          if (expectedOwner !== fromOwner) continue;
+        }
+
+        // Galaxy Extreme Dragon must not redirect cards going to its own
+        // controller's Graveyard. The check above already handles that, but
+        // also skip the source card itself (it should never end up redirected
+        // by its own passive).
+        if (sourceCard === card) continue;
+
+        const redirectTo = passive.redirectTo || "banished";
+        return redirectTo;
+      }
+    }
+  }
+
+  return null;
+}
+
 function asList(value) {
   if (value === undefined || value === null) return [];
   return Array.isArray(value) ? value : [value];
@@ -472,6 +525,7 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     "spellTrap",
     "fieldSpell",
     "extraDeck",
+    "banished",
   ];
   let fromOwner = null;
   let fromZone = null;
@@ -531,6 +585,35 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
 
   if (!fromZone || !fromOwner) {
     return { success: false, reason: "card_not_found" };
+  }
+
+  // Send-to-graveyard replacement (e.g. Galaxy Extreme Dragon): if any face-up
+  // card on the field has a `passive: { type: "send_to_grave_replacement" }`
+  // matching this transfer, redirect the card to its owner's banished zone.
+  // Tokens never get redirected — they leave play entirely (handled below).
+  let destArrRedirected = null;
+  if (
+    toZone === "graveyard" &&
+    !card.isToken &&
+    options?.skipSendToGraveReplacement !== true
+  ) {
+    const redirectTarget = findSendToGraveReplacementTarget(
+      this,
+      card,
+      fromOwner,
+    );
+    if (redirectTarget && redirectTarget !== "graveyard") {
+      destPlayer = fromOwner;
+      toZone = redirectTarget;
+      destArrRedirected = this.getZone(destPlayer, toZone);
+      if (!Array.isArray(destArrRedirected)) {
+        destArrRedirected = null;
+      } else {
+        this.ui?.log?.(
+          `${card.name} is banished instead of being sent to the Graveyard.`,
+        );
+      }
+    }
   }
 
   const isExtraDeckMonster =
@@ -952,7 +1035,11 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     return { success: false, reason: "invalid_card_kind_final_check" };
   }
 
-  destArr.push(card);
+  const finalDestArr = destArrRedirected || destArr;
+  finalDestArr.push(card);
+  if (toZone === "banished") {
+    card.location = "banished";
+  }
 
   if (this.devModeEnabled && this.devFailAfterZoneMutation) {
     this.devFailAfterZoneMutation = false;

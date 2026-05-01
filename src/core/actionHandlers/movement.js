@@ -169,6 +169,54 @@ async function bounceAndSummonCard(source, target, player, action, engine) {
 }
 
 /**
+ * Shuffles all cards the opponent controls (field monsters + spell/trap zone + field spell) into their Deck.
+ * Used by battle_destroy effects that punish the opponent for destroying this card.
+ */
+export function handleShuffleOpponentFieldToDeck(action, ctx, targets, engine) {
+  const game = engine?.game;
+  if (!game) return false;
+
+  const opponent =
+    typeof game.getOpponent === "function"
+      ? game.getOpponent(ctx.player)
+      : ctx.player?.id === "player"
+      ? game.bot
+      : game.player;
+
+  if (!opponent) return false;
+
+  const toMove = [
+    ...(opponent.field || []),
+    ...(opponent.spellTrap || []),
+    ...(opponent.fieldSpell ? [opponent.fieldSpell] : []),
+  ].filter(Boolean);
+
+  if (toMove.length === 0) {
+    getUI(game)?.log("Opponent controls no cards to shuffle into the Deck.");
+    return false;
+  }
+
+  for (const card of toMove) {
+    game.moveCard(card, opponent, "deck");
+  }
+
+  // Shuffle the opponent's deck
+  if (Array.isArray(opponent.deck)) {
+    for (let i = opponent.deck.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [opponent.deck[i], opponent.deck[j]] = [opponent.deck[j], opponent.deck[i]];
+    }
+  }
+
+  getUI(game)?.log(
+    `All cards ${opponent.id} controlled were shuffled into the Deck.`
+  );
+
+  if (typeof game.updateBoard === "function") game.updateBoard();
+  return true;
+}
+
+/**
  * Generic handler for bouncing source and summoning from hand
  * Replaces: applyVoidWalkerBounceAndSummon
  *

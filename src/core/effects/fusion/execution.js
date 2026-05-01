@@ -101,7 +101,7 @@ export async function performBotFusion(
   }
 
   // Use game.performFusionSummon to handle the actual fusion summon
-  const success = this.game.performFusionSummon(
+  const success = await this.game.performFusionSummon(
     materials,
     fusionIndex,
     "attack",
@@ -325,7 +325,7 @@ export async function applyPolymerizationFusion(action, ctx) {
     "attack";
 
   // Use game.performFusionSummon to handle the actual fusion summon
-  const success = this.game.performFusionSummon(
+  const success = await this.game.performFusionSummon(
     selectedMaterials,
     fusionIndex,
     position,

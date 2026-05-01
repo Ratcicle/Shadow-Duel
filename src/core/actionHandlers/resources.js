@@ -461,6 +461,54 @@ export async function handleHealPerFieldCount(action, ctx, targets, engine) {
 }
 
 /**
+ * Handler for healing LP based on opponent-controlled cards plus opponent hand.
+ *
+ * Action properties:
+ * - amountPerCard: LP to heal per counted card (required)
+ * - player: who gains LP ("self" default)
+ */
+export async function handleHealPerOpponentCardsAndHand(
+  action,
+  ctx,
+  targets,
+  engine,
+) {
+  const { player, opponent } = ctx;
+  const game = engine.game;
+
+  if (!player || !opponent || !game) return false;
+
+  const amountPerCard = action.amountPerCard || 0;
+  if (amountPerCard <= 0) return false;
+
+  const targetPlayer = action.player === "opponent" ? opponent : player;
+  const countedCards = [
+    ...(opponent.field || []),
+    ...(opponent.spellTrap || []),
+    ...(opponent.hand || []),
+  ];
+  if (opponent.fieldSpell) {
+    countedCards.push(opponent.fieldSpell);
+  }
+
+  const count = countedCards.filter(Boolean).length;
+  if (count === 0) {
+    getUI(game)?.log("Opponent has no cards to count for LP gain.");
+    return true;
+  }
+
+  const healAmount = count * amountPerCard;
+  targetPlayer.gainLP(healAmount);
+
+  getUI(game)?.log(
+    `${targetPlayer.name || targetPlayer.id} gained ${healAmount} LP (${count} opponent card(s) x ${amountPerCard} LP).`,
+  );
+
+  game.updateBoard();
+  return true;
+}
+
+/**
  * Generic handler for granting additional normal summons
  *
  * Action properties:

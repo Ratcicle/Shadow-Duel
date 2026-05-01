@@ -66,6 +66,116 @@ function matchesTargetFilters(game, target, filters) {
   return true;
 }
 
+function getCardZoneIndex(game, owner, zoneName, card) {
+  if (!owner || !zoneName || !card) return -1;
+  if (zoneName === "fieldSpell") {
+    return owner.fieldSpell === card ? 0 : -1;
+  }
+  const zone = game.getZone?.(owner, zoneName) || owner[zoneName] || [];
+  return Array.isArray(zone) ? zone.indexOf(card) : -1;
+}
+
+function decorateSelectionCandidates(game, owner, candidates, zones) {
+  return candidates.map((card, idx) => {
+    const zone =
+      zones.find(
+        (zoneName) => getCardZoneIndex(game, owner, zoneName, card) >= 0,
+      ) || "field";
+    const zoneIndex = getCardZoneIndex(game, owner, zone, card);
+    return {
+      idx,
+      name: card.name,
+      owner: card.owner === "player" ? "player" : "opponent",
+      controller: card.controller || card.owner || owner.id,
+      zone,
+      zoneIndex,
+      position: card.position,
+      atk: card.atk,
+      def: card.def,
+      cardKind: card.cardKind,
+      cardRef: card,
+    };
+  });
+}
+
+function askHumanToSelectReplacementTargets({
+  game,
+  sourceCard,
+  targetSpec,
+  targetOwner,
+  candidates,
+  zones,
+  minCount,
+  maxCount,
+}) {
+  if (
+    !game ||
+    typeof game.startTargetSelectionSession !== "function" ||
+    typeof game.buildSelectionCandidateKey !== "function"
+  ) {
+    return Promise.resolve([]);
+  }
+
+  const decorated = decorateSelectionCandidates(
+    game,
+    targetOwner,
+    candidates,
+    zones,
+  ).map((candidate, idx) => ({
+    ...candidate,
+    key: game.buildSelectionCandidateKey(candidate, idx),
+  }));
+
+  const requirement = {
+    id: targetSpec.id,
+    min: minCount,
+    max: maxCount,
+    zones,
+    owner: targetSpec.owner || "opponent",
+    filters: {},
+    allowSelf: true,
+    distinct: true,
+    candidates: decorated,
+  };
+
+  const message =
+    targetSpec.message ||
+    `Choose ${maxCount > 1 ? "cards" : "1 card"} to banish.`;
+
+  return new Promise((resolve) => {
+    game.startTargetSelectionSession({
+      kind: "destruction_replacement_target",
+      card: sourceCard,
+      selectionContract: {
+        kind: "target",
+        message,
+        requirements: [requirement],
+        ui: {
+          useFieldTargeting: true,
+          allowCancel: false,
+          preventCancel: true,
+        },
+        metadata: {
+          context: "destruction_replacement",
+          sourceCard: sourceCard?.name || null,
+        },
+      },
+      resolve,
+      autoAdvanceOnMax: true,
+      preventCancel: true,
+      execute: (selections) => {
+        const chosenKeys = selections[requirement.id] || [];
+        const chosen = chosenKeys
+          .map((key) => requirement.candidates.find((cand) => cand.key === key))
+          .map((candidate) => candidate?.cardRef)
+          .filter(Boolean);
+        resolve(chosen);
+        return { success: true, needsSelection: false };
+      },
+    });
+  });
+}
+
 /**
  * Attempt to apply a replacement effect from a source card to prevent
  * destruction of `ctx.card`. Returns `{ replaced: boolean }`.
@@ -139,6 +249,17 @@ async function tryReplacement(game, sourceCard, sourceOwner, effect, ctx) {
     return { replaced: false };
   }
 
+  // Once-per-Duel gating for replacement effects (e.g. Galaxy Extreme Dragon's
+  // self-banish). The flag persists across turns — it is reset only at game start.
+  if (effect.oncePerDuel) {
+    const duelKey = effect.oncePerDuelName || effect.id || sourceCard?.name;
+    sourceOwner.oncePerDuelUsageByName =
+      sourceOwner.oncePerDuelUsageByName || Object.create(null);
+    if (sourceOwner.oncePerDuelUsageByName[duelKey]) {
+      return { replaced: false };
+    }
+  }
+
   if (
     replacement.reason &&
     replacement.reason !== "any" &&
@@ -147,9 +268,119 @@ async function tryReplacement(game, sourceCard, sourceOwner, effect, ctx) {
     return { replaced: false };
   }
 
+  const markOncePerDuelUsedIfNeeded = () => {
+    if (!effect.oncePerDuel) return;
+    const duelKey = effect.oncePerDuelName || effect.id || sourceCard?.name;
+    sourceOwner.oncePerDuelUsageByName =
+      sourceOwner.oncePerDuelUsageByName || Object.create(null);
+    sourceOwner.oncePerDuelUsageByName[duelKey] = true;
+  };
+
+  const runFollowUpActions = async () => {
+    const followUpActions = Array.isArray(effect.actions) ? effect.actions : [];
+    if (followUpActions.length === 0) return;
+    const engine = game.effectEngine;
+    if (!engine || typeof engine.applyActions !== "function") return;
+    const opponent =
+      typeof game.getOpponent === "function"
+        ? game.getOpponent(sourceOwner)
+        : null;
+    const followUpCtx = {
+      player: sourceOwner,
+      opponent,
+      source: sourceCard,
+      destroyed: card,
+      destroyedOwner: ownerPlayer,
+      cause,
+      activationContext: { source: sourceCard, player: sourceOwner },
+    };
+
+    const resolvedTargets = {};
+    const declaredTargets = Array.isArray(effect.targets) ? effect.targets : [];
+
+    // Resolve declared targets for the follow-up actions. Replacement effects
+    // are not eligible to use the standard chain selection flow, so we run a
+    // simplified, synchronous-ish selection here:
+    //  - bot/AI source: auto-pick from candidates (deterministic).
+    //  - human source: open a manual field-targeting prompt.
+    for (const targetSpec of declaredTargets) {
+      if (!targetSpec || !targetSpec.id) continue;
+
+      const ownerKey = targetSpec.owner || "self";
+      const targetOwner =
+        ownerKey === "opponent"
+          ? opponent
+          : ownerKey === "self"
+            ? sourceOwner
+            : null;
+      if (!targetOwner) continue;
+
+      const zones = Array.isArray(targetSpec.zones)
+        ? targetSpec.zones
+        : targetSpec.zone
+          ? [targetSpec.zone]
+          : ["field"];
+
+      const candidates = [];
+      for (const zoneName of zones) {
+        if (zoneName === "fieldSpell") {
+          if (targetOwner.fieldSpell) candidates.push(targetOwner.fieldSpell);
+          continue;
+        }
+        const arr = targetOwner[zoneName];
+        if (Array.isArray(arr)) candidates.push(...arr);
+      }
+
+      const filtered = candidates.filter((cand) => {
+        if (!cand) return false;
+        if (targetSpec.requireFaceup && cand.isFacedown) return false;
+        if (targetSpec.cardKind && cand.cardKind !== targetSpec.cardKind) return false;
+        return true;
+      });
+
+      const minCount = targetSpec.count?.min ?? 1;
+      const maxCount = targetSpec.count?.max ?? minCount;
+
+      if (filtered.length < minCount) {
+        resolvedTargets[targetSpec.id] = [];
+        continue;
+      }
+
+      let chosen;
+      const sourceIsHuman = sourceOwner?.controllerType === "human";
+      if (sourceIsHuman) {
+        chosen = await askHumanToSelectReplacementTargets({
+          game,
+          sourceCard,
+          targetSpec,
+          targetOwner,
+          candidates: filtered,
+          zones,
+          minCount,
+          maxCount: Math.min(maxCount, filtered.length),
+        });
+      } else if (ownerKey === "opponent") {
+        chosen = [...filtered]
+          .sort((a, b) => (b.atk || 0) - (a.atk || 0))
+          .slice(0, Math.min(maxCount, filtered.length));
+      } else {
+        chosen = filtered.slice(0, Math.min(maxCount, filtered.length));
+      }
+
+      resolvedTargets[targetSpec.id] = chosen;
+    }
+
+    try {
+      await engine.applyActions(followUpActions, followUpCtx, resolvedTargets);
+    } catch (err) {
+      console.error("[tryReplacement] Follow-up actions failed:", err);
+    }
+  };
+
   const costCount = replacement.costCount ?? 0;
   if (replacement.auto === true || costCount === 0) {
     game.markOncePerTurnUsed(sourceCard, sourceOwner, effect);
+    markOncePerDuelUsedIfNeeded();
     const logMessage = formatReplacementText(
       replacement.logMessage,
       card.name,
@@ -162,6 +393,7 @@ async function tryReplacement(game, sourceCard, sourceOwner, effect, ctx) {
         `${card.name} avoided destruction due to ${sourceCard.name}.`,
       );
     }
+    await runFollowUpActions();
     return { replaced: true };
   }
 
@@ -219,6 +451,7 @@ async function tryReplacement(game, sourceCard, sourceOwner, effect, ctx) {
     }
 
     game.markOncePerTurnUsed(sourceCard, sourceOwner, effect);
+    markOncePerDuelUsedIfNeeded();
 
     const costNames = chosen.map((c) => c.name).join(", ");
     const logMessage = formatReplacementText(
@@ -279,6 +512,7 @@ async function tryReplacement(game, sourceCard, sourceOwner, effect, ctx) {
   }
 
   game.markOncePerTurnUsed(sourceCard, sourceOwner, effect);
+  markOncePerDuelUsedIfNeeded();
 
   const costNames = selections.map((c) => c.name).join(", ");
   const logMessage = formatReplacementText(

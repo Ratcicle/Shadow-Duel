@@ -86,6 +86,7 @@ export function assertStateInvariants(
     { name: "field", list: player?.field || [] },
     { name: "spellTrap", list: player?.spellTrap || [] },
     { name: "graveyard", list: player?.graveyard || [] },
+    { name: "banished", list: player?.banished || [] },
     { name: "deck", list: player?.deck || [] },
     { name: "extraDeck", list: player?.extraDeck || [] },
   ];

@@ -21,6 +21,9 @@ export function getZone(player, zone) {
       return player.spellTrap;
     case "graveyard":
       return player.graveyard;
+    case "banished":
+      player.banished = player.banished || [];
+      return player.banished;
     case "fieldSpell":
       return player.fieldSpell ? [player.fieldSpell] : [];
     case "field":

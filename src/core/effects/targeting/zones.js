@@ -8,7 +8,7 @@
 /**
  * Get a specific zone array from a player
  * @param {Object} player - The player object
- * @param {string} zone - Zone name: "field", "hand", "graveyard", "deck", "spellTrap", "fieldSpell"
+ * @param {string} zone - Zone name: "field", "hand", "graveyard", "deck", "extraDeck", "spellTrap", "fieldSpell", "banished"
  * @returns {Array} The zone array
  */
 export function getZone(player, zone) {
@@ -19,8 +19,13 @@ export function getZone(player, zone) {
       return player.graveyard;
     case "deck":
       return player.deck;
+    case "extraDeck":
+      return player.extraDeck;
     case "spellTrap":
       return player.spellTrap;
+    case "banished":
+      player.banished = player.banished || [];
+      return player.banished;
     case "fieldSpell":
       return player.fieldSpell ? [player.fieldSpell] : [];
     case "field":
@@ -43,6 +48,8 @@ export function findCardZone(player, card) {
   if (player.hand && player.hand.includes(card)) return "hand";
   if (player.graveyard && player.graveyard.includes(card)) return "graveyard";
   if (player.deck && player.deck.includes(card)) return "deck";
+  if (player.extraDeck && player.extraDeck.includes(card)) return "extraDeck";
+  if (player.banished && player.banished.includes(card)) return "banished";
   return null;
 }
 

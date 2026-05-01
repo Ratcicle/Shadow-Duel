@@ -339,6 +339,19 @@ export const ACTION_CATALOG = {
     mutates: ["stats"],
     examples: [{ type: "buff_stats_temp", targetRef: "sanctum_citadel_target", atkBoost: 500, defBoost: 500 }],
   }),
+  buff_atk_by_lp_gained_this_turn: action({
+    category: "stats",
+    summary: "Temporarily boosts ATK by the player's LP gained this turn.",
+    handler: "handleBuffAtkByLpGainedThisTurn",
+    optional: ["targetRef"],
+    fields: {
+      ...COMMON_TARGET_FIELDS,
+    },
+    targetRef: "optional",
+    selection: "usesTargets",
+    mutates: ["stats"],
+    examples: [{ type: "buff_atk_by_lp_gained_this_turn", targetRef: "self" }],
+  }),
   buff_stats_temp_with_second_attack: action({
     category: "stats",
     summary: "Applies a temporary stat buff and grants a second attack.",
@@ -749,6 +762,19 @@ export const ACTION_CATALOG = {
     mutates: ["lp"],
     examples: [{ type: "heal_per_field_count", player: "self", amountPerCard: 500, filters: { archetype: "Luminarch" } }],
   }),
+  heal_per_opponent_cards_and_hand: action({
+    category: "resources",
+    summary: "Heals for each card the opponent controls plus each card in their hand.",
+    handler: "handleHealPerOpponentCardsAndHand",
+    required: ["amountPerCard"],
+    optional: ["player"],
+    fields: {
+      amountPerCard: { type: "number" },
+      player: field("player"),
+    },
+    mutates: ["lp"],
+    examples: [{ type: "heal_per_opponent_cards_and_hand", player: "self", amountPerCard: 200 }],
+  }),
   mirror_force_destroy_all: action({
     category: "destruction",
     summary: "Destroys all opponent attack-position monsters for Mirror Force.",
@@ -899,6 +925,23 @@ export const ACTION_CATALOG = {
     preview: "missing",
     examples: [{ type: "register_replacement_effect", replacementEffect: { type: "negate_destruction" } }],
   }),
+  schedule_return_from_banished: action({
+    category: "summon",
+    summary:
+      "Schedules a banished card to return to the field at a future phase (default: end of next turn).",
+    handler: "handleScheduleReturnFromBanished",
+    optional: ["cardRef", "returnPhase", "delayTurns"],
+    fields: {
+      cardRef: { type: "string" },
+      returnPhase: { type: "string" },
+      delayTurns: { type: "number" },
+    },
+    mutates: ["delayedActions"],
+    preview: "missing",
+    examples: [
+      { type: "schedule_return_from_banished", cardRef: "self", delayTurns: 1, returnPhase: "end" },
+    ],
+  }),
   remove_counter: action({
     category: "counters",
     summary: "Removes counters from target or source card.",
@@ -944,6 +987,14 @@ export const ACTION_CATALOG = {
     selection: "usesTargets",
     mutates: ["hand", "field", "graveyard"],
     examples: [{ type: "return_to_hand", targetRef: "returning" }],
+  }),
+  shuffle_opponent_field_to_deck: action({
+    category: "movement",
+    summary: "Shuffles all cards the opponent controls into their Deck.",
+    handler: "handleShuffleOpponentFieldToDeck",
+    fields: {},
+    mutates: ["field", "spellTrap", "fieldSpell", "deck"],
+    examples: [{ type: "shuffle_opponent_field_to_deck" }],
   }),
   search_any: action({
     category: "resources",

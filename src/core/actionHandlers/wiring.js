@@ -8,7 +8,7 @@
 import { proxyEngineMethod } from "./registry.js";
 
 // Movement handlers
-import { handleReturnToHand, handleBounceAndSummon } from "./movement.js";
+import { handleReturnToHand, handleBounceAndSummon, handleShuffleOpponentFieldToDeck } from "./movement.js";
 
 // Summon handlers
 import {
@@ -30,6 +30,7 @@ import {
   handleDestroyAndDamageByTargetAtk,
   handleDestroyAttackerOnArchetypeDestruction,
   handleRegisterReplacementEffect,
+  handleScheduleReturnFromBanished,
 } from "./destruction.js";
 
 // Stats handlers
@@ -40,6 +41,7 @@ import {
   handleAddStatus,
   handleGrantProtection,
   handleBanishAndBuff,
+  handleBuffAtkByLpGainedThisTurn,
   handleSwitchPosition,
   handleSwitchDefenderPositionOnAttack,
   handlePermanentBuffNamed,
@@ -54,6 +56,7 @@ import {
   handleHealFromDestroyedAtk,
   handleHealFromDestroyedLevel,
   handleHealPerFieldCount,
+  handleHealPerOpponentCardsAndHand,
   handleGrantAdditionalNormalSummon,
   handleUpkeepPayOrSendToGrave,
 } from "./resources.js";
@@ -95,6 +98,7 @@ export function registerDefaultHandlers(registry) {
   );
 
   registry.register("return_to_hand", handleReturnToHand);
+  registry.register("shuffle_opponent_field_to_deck", handleShuffleOpponentFieldToDeck);
 
   registry.register("transmutate", handleTransmutate);
 
@@ -151,6 +155,10 @@ export function registerDefaultHandlers(registry) {
   registry.register("heal_from_destroyed_level", handleHealFromDestroyedLevel);
 
   registry.register("heal_per_field_count", handleHealPerFieldCount);
+  registry.register(
+    "heal_per_opponent_cards_and_hand",
+    handleHealPerOpponentCardsAndHand,
+  );
 
   registry.register("grant_protection", handleGrantProtection);
 
@@ -213,8 +221,16 @@ export function registerDefaultHandlers(registry) {
     "register_replacement_effect",
     handleRegisterReplacementEffect,
   );
+  registry.register(
+    "schedule_return_from_banished",
+    handleScheduleReturnFromBanished,
+  );
 
   registry.register("buff_stats_temp_with_second_attack", handleBuffStatsTemp);
+  registry.register(
+    "buff_atk_by_lp_gained_this_turn",
+    handleBuffAtkByLpGainedThisTurn,
+  );
 
   registry.register("draw_and_summon", handleDrawAndSummon);
 

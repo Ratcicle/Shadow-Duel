@@ -44,10 +44,14 @@ export function showConfirmPrompt(message, options = {}) {
     return false;
   }
 
-  if (activeConfirmPrompt && typeof activeConfirmPrompt.resolve === "function") {
-    activeConfirmPrompt.resolve(false);
-    if (typeof activeConfirmPrompt.cleanup === "function") {
-      activeConfirmPrompt.cleanup();
+  if (activeConfirmPrompt) {
+    const previousPrompt = activeConfirmPrompt;
+    activeConfirmPrompt = null;
+    if (typeof previousPrompt.resolve === "function") {
+      previousPrompt.resolve(false);
+    }
+    if (typeof previousPrompt.cleanup === "function") {
+      previousPrompt.cleanup();
     }
   }
 

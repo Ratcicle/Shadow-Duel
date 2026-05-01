@@ -49,6 +49,7 @@ export {
   handleAddStatus,
   handleGrantProtection,
   handleBanishAndBuff,
+  handleBuffAtkByLpGainedThisTurn,
   handleSwitchPosition,
   handleSwitchDefenderPositionOnAttack,
   handlePermanentBuffNamed,
@@ -60,6 +61,8 @@ export {
   handleDamageFromDestroyedAtk,
   handleHealFromDestroyedAtk,
   handleHealFromDestroyedLevel,
+  handleHealPerFieldCount,
+  handleHealPerOpponentCardsAndHand,
   handleGrantAdditionalNormalSummon,
   handleUpkeepPayOrSendToGrave,
 

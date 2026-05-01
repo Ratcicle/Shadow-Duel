@@ -382,6 +382,40 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
 }
 
 /**
+ * Temporarily boosts ATK by the amount of LP the player gained this turn.
+ */
+export async function handleBuffAtkByLpGainedThisTurn(
+  action,
+  ctx,
+  targets,
+  engine,
+) {
+  const { player } = ctx;
+  const game = engine.game;
+
+  if (!player || !game) return false;
+
+  const atkBoost = Math.max(0, Math.floor(player.lpGainedThisTurn || 0));
+  if (atkBoost <= 0) {
+    getUI(game)?.log("No LP gained this turn; no ATK gained.");
+    return true;
+  }
+
+  return handleBuffStatsTemp(
+    {
+      ...action,
+      type: "buff_stats_temp",
+      targetRef: action.targetRef || "self",
+      atkBoost,
+      defBoost: 0,
+    },
+    ctx,
+    targets,
+    engine,
+  );
+}
+
+/**
  * Generic handler for granting ability to attack all opponent monsters this turn
  *
  * Action properties:
@@ -392,7 +426,7 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
  * This sets a flag on the monster that allows it to attack each opponent monster once.
  * The attack limit is dynamically calculated based on opponent's field.
  *
- * Used by: Tech-Void Cosmic Dragon, future multi-attack effects
+ * Used by future multi-attack effects.
  */
 export async function handleGrantAttackAllMonsters(
   action,

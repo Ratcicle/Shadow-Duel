@@ -30,6 +30,8 @@ export async function startTurn() {
   );
 
   this.resetOncePerTurnUsage("start_turn");
+  this.player.lpGainedThisTurn = 0;
+  this.bot.lpGainedThisTurn = 0;
 
   // Clean up expired turn-based buffs at the start of the turn
   this.cleanupExpiredBuffs();
@@ -118,6 +120,11 @@ export function endTurn() {
     actor === this.player
   );
   if (!guard.ok) return guard;
+
+  // Resolve any actions scheduled for the end phase of the current turn
+  // (e.g. Galaxy Extreme Dragon returning from the banished zone).
+  this.processDelayedActions("end", this.turn);
+
   this.cleanupTempBoosts(this.player);
   this.cleanupTempBoosts(this.bot);
   this.player.forbidDirectAttacksThisTurn = false;
