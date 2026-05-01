@@ -3765,7 +3765,7 @@
     cardKind: "monster",
     type: "Dragon",
     level: 4,
-    atk: 1900,
+    atk: 1800,
     def: 800,
     cannotAttackDirectly: true,
     description:
@@ -3954,7 +3954,7 @@
     type: "Dragon",
     level: 7,
     atk: 2500,
-    def: 2000,
+    def: 2400,
     altTribute: { requiresType: "Dragon", tributes: 1 },
     description:
       "Can be Tribute Summoned with 1 Tribute if you Tribute a Dragon-type monster. Once per turn: You can target 1 monster your opponent controls; change its battle position.",
@@ -4053,42 +4053,14 @@
       },
     ],
   },
-  {
-    id: 23,
-    name: "Debug Dragon",
-    cardKind: "monster",
-    type: "Dragon",
-    level: 1,
-    atk: 0,
-    def: 0,
-    description: "You can Special Summon this card from your hand.",
-    image: "assets/Debug Dragon.png",
-    effects: [
-      {
-        id: "debug_dragon_self_summon",
-        timing: "ignition",
-        requireZone: "hand",
-        requirePhase: ["main1", "main2"],
-        actions: [
-          {
-            type: "special_summon_from_zone",
-            zone: "hand",
-            filters: { name: "Debug Dragon" },
-            count: { min: 0, max: 1 },
-            position: "choice",
-            promptPlayer: true,
-          },
-        ],
-      },
-    ],
-  },
+
   {
     id: 24,
     name: "Black Bull Dragon",
     cardKind: "monster",
     type: "Dragon",
     level: 8,
-    atk: 2600,
+    atk: 2500,
     def: 2000,
     description:
       "You can send 2 Dragon-type monsters from your hand to the GY; Special Summon this card from your hand, but it cannot attack the turn it is Special Summoned by this effect. This card can make up to 2 attacks on opponent's monsters during each Battle Phase. You can banish this card from your GY; add 1 Level 7 or 8 Dragon monster from your Deck to your hand.",
@@ -4163,8 +4135,8 @@
     cardKind: "monster",
     type: "Dragon",
     level: 7,
-    atk: 2400,
-    def: 2000,
+    atk: 2300,
+    def: 1900,
     description:
       "You can send 1 Dragon you control to the GY; Special Summon this card from your hand. Once per turn: You can send this face-up card to the GY; Special Summon 1 Level 7 or lower Dragon from your GY.",
     image: "assets/Hellkite Dragon.png",
@@ -4387,7 +4359,7 @@
     cardKind: "monster",
     type: "Dragon",
     level: 8,
-    atk: 2700,
+    atk: 2500,
     def: 1700,
     description:
       "You can Special Summon this card from your hand by banishing 3 Dragon monsters from your GY. If this card destroys a monster by battle: Gain LP equal to the destroyed monster's Level x100. Once per turn: You can target 1 other Dragon monster you control; it cannot be destroyed by card effects while it is face-up on the field.",
@@ -5656,7 +5628,7 @@
       },
     },
     description:
-      'There can only be 1 face-up "Extreme Dragon" monster on the field. While this card is the only monster you control, it cannot be destroyed by card effects. If this card destroys an opponent\'s monster by battle: inflict damage to your opponent equal to half the destroyed monster\'s original ATK. Each time your opponent activates a card or effect: inflict 300 damage to your opponent. If this card is destroyed by battle: you can Special Summon 1 "Volcanic Extreme Dragon" from your hand or Deck.',
+      'There can only be 1 face-up "Extreme Dragon" monster on the field. While this card is the only monster you control, it cannot be destroyed by card effects. If this card destroys an opponent\'s monster by battle: inflict damage to your opponent equal to half the destroyed monster\'s original ATK. Each time your opponent activates a card or effect: inflict 300 damage to your opponent.',
     image: "assets/Fire Extreme Dragon.png",
     effects: [
       {
@@ -5713,25 +5685,7 @@
           },
         ],
       },
-      {
-        id: "fire_extreme_dragon_battle_destroy_float",
-        timing: "on_event",
-        event: "battle_destroy",
-        requireSelfAsDestroyed: true,
-        promptUser: false,
-        actions: [
-          {
-            type: "special_summon_from_zone",
-            zone: ["hand", "deck"],
-            cardName: "Volcanic Extreme Dragon",
-            filters: {
-              cardKind: "monster",
-            },
-            count: { min: 1, max: 1 },
-            position: "choice",
-          },
-        ],
-      },
+
     ],
   },
   {
@@ -6029,7 +5983,56 @@
       },
     ],
   },
-
+  {
+    id: 255,
+    name: "Supreme Bahamut Dragon",
+    cardKind: "monster",
+    monsterType: "fusion",
+    atk: 5000,
+    def: 5000,
+    level: 12,
+    type: "Dragon",
+    specialSummonOnlyBy: ["graveyard_banish_fusion"],
+    fieldPresenceRestriction: {
+      type: "only_monster_you_control_while_faceup",
+    },
+    unaffectedByOtherCardEffects: true,
+    extraDeckSummonProcedure: {
+      type: "graveyard_banish_fusion",
+      summonMethod: "fusion",
+      materialDestination: "banished",
+      requiresManualMaterialSelection: true,
+      materials: [
+        {
+          zone: "graveyard",
+          cardKind: "monster",
+          archetype: "Extreme Dragons",
+          count: 5,
+        },
+      ],
+    },
+    description:
+      'Must be Fusion Summoned by banishing 5 "Extreme Dragons" monsters from your Graveyard, and cannot be Special Summoned by other ways. While this card is face-up on the field, you cannot control other monsters. Unaffected by other card effects. Once per turn, when a monster would be Summoned, or when a card or effect is activated (Quick Effect): negate the Summon or activation, and if you do, destroy that card.',
+    image: "assets/Supreme Bahamut Dragon.jpg",
+    effects: [
+      {
+        id: "supreme_bahamut_dragon_negate",
+        timing: "manual",
+        speed: 2,
+        isQuickEffect: true,
+        requireZone: "field",
+        requireFaceup: true,
+        oncePerTurn: true,
+        oncePerTurnName: "supreme_bahamut_dragon_negate",
+        canRespondTo: [
+          "summon_attempt",
+          "card_activation",
+          "effect_activation",
+        ],
+        actions: [{ type: "negate_summon_or_activation_and_destroy" }],
+      },
+    ],
+  },
 ];
 
 // Performance optimization: Create indexed maps for O(1) lookups

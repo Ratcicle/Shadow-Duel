@@ -463,6 +463,10 @@
     "254": {
       "name": "Dragão Extremo da Floresta",
       "description": "Só pode haver 1 monstro \"Dragão Extremo\" com a face para cima no campo. Durante cada Fase de Apoio: ganhe 200 PV para cada card que seu oponente controla e para cada card na mão dele. Cada vez que seu oponente Invocar um monstro ou ativar um card ou efeito: ganhe 100 PV. Uma vez por turno (Efeito Rápido): este card ganha ATK igual ao total de PV que você ganhou neste turno, até o final deste turno."
+    },
+    "255": {
+      "name": "Dragão Bahamut Supremo",
+      "description": "Deve ser Invocado por Invocação-Fusão banindo 5 monstros \"Dragão Extremo\" do seu Cemitério, e não pode ser Invocado por Invocação-Especial de outras formas. Enquanto este card estiver com a face para cima no campo, você não pode controlar outros monstros. Não é afetado por outros efeitos de cards. Uma vez por turno, quando um monstro seria Invocado, ou quando um card ou efeito for ativado (Efeito Rápido): negue a Invocação ou ativação e, se isso acontecer, destrua esse card."
     }
   }
 }

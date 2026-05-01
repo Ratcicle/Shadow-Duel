@@ -747,6 +747,8 @@ Game.prototype.resolveDelayedSummon = summonTracking.resolveDelayedSummon;
 
 // Execution: flipSummon, performFusionSummon, performSpecialSummon
 Game.prototype.flipSummon = summonExecution.flipSummon;
+Game.prototype.offerSummonAttempt = summonExecution.offerSummonAttempt;
+Game.prototype.performNormalSummon = summonExecution.performNormalSummon;
 Game.prototype.performFusionSummon = summonExecution.performFusionSummon;
 Game.prototype.performSpecialSummon = summonExecution.performSpecialSummon;
 
@@ -799,6 +801,10 @@ Game.prototype.closeGraveyardModal = graveyardModal.closeGraveyardModal;
 // Modal: openExtraDeckModal, closeExtraDeckModal
 Game.prototype.openExtraDeckModal = extraDeckModal.openExtraDeckModal;
 Game.prototype.closeExtraDeckModal = extraDeckModal.closeExtraDeckModal;
+Game.prototype.canSummonExtraDeckCardByProcedure =
+  extraDeckModal.canSummonExtraDeckCardByProcedure;
+Game.prototype.performExtraDeckSummonProcedure =
+  extraDeckModal.performExtraDeckSummonProcedure;
 
 // -----------------------------------------------------------------------------
 // Turn: Attach methods from modular turn/ folder

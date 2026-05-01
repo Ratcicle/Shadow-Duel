@@ -302,16 +302,60 @@ export function canPlaceCardOnField(card, destPlayer, options = {}) {
     return { ok: true };
   }
 
+  const excludedCards = new Set(options.excludeCards || []);
+  excludedCards.add(card);
+  const willBeFacedown =
+    typeof options.isFacedown === "boolean"
+      ? options.isFacedown
+      : card.isFacedown === true;
+
+  const hasOnlyMonsterRestriction = (fieldCard) =>
+    fieldCard?.fieldPresenceRestriction?.type ===
+      "only_monster_you_control_while_faceup" && !fieldCard.isFacedown;
+
+  const existingExclusive = (destPlayer.field || []).find(
+    (fieldCard) =>
+      fieldCard &&
+      !excludedCards.has(fieldCard) &&
+      hasOnlyMonsterRestriction(fieldCard),
+  );
+  if (existingExclusive) {
+    const reason = `You cannot control other monsters while ${existingExclusive.name} is face-up.`;
+    if (options.silent !== true) this?.ui?.log?.(reason);
+    return {
+      ok: false,
+      reason,
+      code: "field_presence_restriction",
+      restrictedBy: existingExclusive,
+    };
+  }
+
+  if (
+    card.fieldPresenceRestriction?.type ===
+      "only_monster_you_control_while_faceup" &&
+    !willBeFacedown
+  ) {
+    const otherMonsters = (destPlayer.field || []).filter(
+      (fieldCard) => fieldCard && !excludedCards.has(fieldCard),
+    );
+    if (otherMonsters.length > 0) {
+      const reason = `${card.name} must be the only monster you control.`;
+      if (options.silent !== true) this?.ui?.log?.(reason);
+      return {
+        ok: false,
+        reason,
+        code: "field_presence_restriction",
+        restrictedBy: card,
+      };
+    }
+  }
+
   const limit = card.fieldLimit;
   if (!limit || typeof limit !== "object") {
     return { ok: true };
   }
 
   const requireFaceup = limit.requireFaceup === true;
-  const willBeFacedown =
-    typeof options.isFacedown === "boolean"
-      ? options.isFacedown
-      : card.isFacedown === true;
 
   if (requireFaceup && willBeFacedown) {
     return { ok: true };
@@ -327,9 +371,6 @@ export function canPlaceCardOnField(card, destPlayer, options = {}) {
     scope === "global"
       ? [this?.player, this?.bot].filter(Boolean)
       : [destPlayer];
-  const excludedCards = new Set(options.excludeCards || []);
-  excludedCards.add(card);
-
   const max = Number.isFinite(Number(limit.max)) ? Number(limit.max) : 1;
   let currentCount = 0;
 
@@ -500,6 +541,20 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     return { success: false, reason: "field_full" };
   }
   if (toZone === "field") {
+    const summonProcedure = options.summonProcedure || null;
+    if (
+      Array.isArray(card.specialSummonOnlyBy) &&
+      !card.specialSummonOnlyBy.includes(summonProcedure)
+    ) {
+      const reason = `${card.name} cannot be Special Summoned this way.`;
+      this.ui?.log?.(reason);
+      return {
+        success: false,
+        reason,
+        code: "special_summon_restriction",
+      };
+    }
+
     const limitCheck = this.canPlaceCardOnField?.(card, destPlayer, {
       isFacedown: options.isFacedown,
       excludeCards: options.excludeCards || [],
@@ -1033,6 +1088,32 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     // Block it here too as last resort
     this.ui?.log?.(`CRITICAL ERROR: ${card.cardKind} cannot go to monster zone`);
     return { success: false, reason: "invalid_card_kind_final_check" };
+  }
+
+  if (
+    toZone === "field" &&
+    card.cardKind === "monster" &&
+    fromZone !== "field" &&
+    options.skipSummonAttempt !== true &&
+    typeof this.offerSummonAttempt === "function"
+  ) {
+    const summonMethod = options.summonMethodOverride || "special";
+    const attempt = await this.offerSummonAttempt(card, destPlayer, {
+      method: summonMethod,
+      fromZone,
+      summonProcedure: options.summonProcedure || null,
+    });
+    if (attempt?.negated) {
+      destPlayer.graveyard = destPlayer.graveyard || [];
+      if (!destPlayer.graveyard.includes(card)) {
+        destPlayer.graveyard.push(card);
+      }
+      card.owner = destPlayer.id;
+      card.controller = destPlayer.id;
+      card.location = "graveyard";
+      this.updateBoard?.();
+      return { success: false, negated: true, reason: "summon_negated" };
+    }
   }
 
   const finalDestArr = destArrRedirected || destArr;

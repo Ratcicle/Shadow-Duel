@@ -23,6 +23,10 @@
     "254": {
       "name": "Forest Extreme Dragon",
       "description": "There can only be 1 face-up \"Extreme Dragon\" monster on the field. During each Standby Phase: gain 200 LP for each card your opponent controls and each card in their hand. Each time your opponent Summons a monster or activates a card or effect: gain 100 LP. Once per turn (Quick Effect): this card gains ATK equal to the total LP you gained this turn, until the end of this turn."
+    },
+    "255": {
+      "name": "Supreme Bahamut Dragon",
+      "description": "Must be Fusion Summoned by banishing 5 \"Extreme Dragons\" monsters from your Graveyard, and cannot be Special Summoned by other ways. While this card is face-up on the field, you cannot control other monsters. Unaffected by other card effects. Once per turn, when a monster would be Summoned, or when a card or effect is activated (Quick Effect): negate the Summon or activation, and if you do, destroy that card."
     }
   }
 }

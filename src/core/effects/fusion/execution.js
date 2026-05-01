@@ -147,8 +147,11 @@ export async function applyPolymerizationFusion(action, ctx) {
   console.log("[Polymerization] Material info:", materialInfo);
 
   // Get available fusions from extra deck with zone info
+  const polymerizationFusions = player.extraDeck.filter(
+    (card) => !card.extraDeckSummonProcedure,
+  );
   const availableFusions = this.getAvailableFusions(
-    player.extraDeck,
+    polymerizationFusions,
     availableMaterials,
     player,
     { materialInfo }

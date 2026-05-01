@@ -1552,7 +1552,7 @@ async function performSummonFromHand(card, handIndex, player, action, engine) {
 
   const moveResult =
     typeof game.moveCard === "function"
-      ? game.moveCard(card, player, "field", {
+      ? await game.moveCard(card, player, "field", {
           fromZone: "hand",
           position,
           isFacedown: false,
@@ -1561,6 +1561,10 @@ async function performSummonFromHand(card, handIndex, player, action, engine) {
       : null;
 
   if (moveResult && moveResult.success === false) {
+    return false;
+  }
+
+  if (moveResult && moveResult.negated) {
     return false;
   }
 

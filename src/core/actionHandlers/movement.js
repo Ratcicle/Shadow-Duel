@@ -185,11 +185,17 @@ export function handleShuffleOpponentFieldToDeck(action, ctx, targets, engine) {
 
   if (!opponent) return false;
 
-  const toMove = [
+  const controlledCards = [
     ...(opponent.field || []),
     ...(opponent.spellTrap || []),
     ...(opponent.fieldSpell ? [opponent.fieldSpell] : []),
   ].filter(Boolean);
+  const toMove = engine?.filterCardsListByImmunity
+    ? engine.filterCardsListByImmunity(controlledCards, ctx.player, {
+        actionType: "shuffle_opponent_field_to_deck",
+        sourceCard: ctx.source || null,
+      }).allowed
+    : controlledCards;
 
   if (toMove.length === 0) {
     getUI(game)?.log("Opponent controls no cards to shuffle into the Deck.");

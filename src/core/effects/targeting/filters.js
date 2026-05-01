@@ -18,6 +18,13 @@ export function checkImmunity(card, sourcePlayer, options = {}) {
     return { immune: false, reason: null };
   }
 
+  const sourceCard = options.sourceCard || options.source || null;
+
+  // Check 0: Unaffected by every other card effect, including controller's.
+  if (card.unaffectedByOtherCardEffects && sourceCard !== card) {
+    return { immune: true, reason: "unaffected_by_other_card_effects" };
+  }
+
   // Check 1: Temporary immunity to opponent effects (turn-based)
   if (card.immuneToOpponentEffectsUntilTurn && card.owner) {
     const currentTurn = this.game?.turnCounter ?? 0;
@@ -110,6 +117,10 @@ export function filterCardsListByImmunity(
     } else {
       immunityResult = this.checkImmunity(card, sourcePlayer, {
         effectType: options.effectType,
+        sourceCard:
+          options.sourceCard !== undefined
+            ? options.sourceCard
+            : options.source || null,
       });
     }
 
@@ -169,6 +180,7 @@ export function filterTargetsByImmunity(action, ctx, targets) {
     {
       actionType: action.type,
       effectType,
+      sourceCard: ctx.source || null,
       customImmunityCheck: action.customImmunityCheck,
     }
   );

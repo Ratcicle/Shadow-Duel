@@ -2224,6 +2224,13 @@ body {
   animation: pulse-activatable 1.4s ease-in-out infinite;
 }
 
+.field-slot.zone-activatable {
+  border: 2px solid rgba(255, 215, 0, 0.85);
+  box-shadow: 0 0 16px rgba(255, 215, 0, 0.75);
+  animation: pulse-activatable 1.4s ease-in-out infinite;
+  cursor: pointer;
+}
+
 @keyframes pulse-activatable {
   0%,
   100% {
@@ -2424,23 +2431,10 @@ body {
   pointer-events: none;
 }
 
-.gy-activatable {
+.card.gy-activatable {
   box-shadow: 0 0 12px rgba(255, 215, 0, 0.6);
-  border: 2px solid rgba(255, 215, 0, 0.8);
-}
-
-.gy-activate-indicator {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  background: rgba(255, 215, 0, 0.9);
-  color: #000;
-  font-size: 18px;
-  padding: 2px 6px;
-  border-radius: 50%;
-  font-weight: bold;
-  z-index: 10;
-  pointer-events: none;
+  border: 2px solid rgba(255, 215, 0, 0.85);
+  border-color: rgba(255, 215, 0, 0.85);
 }
 
 .fusion-modal .modal-content,

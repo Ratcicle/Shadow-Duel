@@ -25,6 +25,10 @@ export function applyActivationIndicators(owner, indicators = {}) {
     this.elements[`${prefix}SpellTrap`],
     indicators.spellTrap || {}
   );
+  this.applyZoneActivationIndicators(
+    this.elements[`${prefix}Graveyard`],
+    indicators.graveyard || {}
+  );
 
   const fieldSpellContainer = this.elements[`${prefix}FieldSpell`];
   if (fieldSpellContainer) {
@@ -39,6 +43,39 @@ export function applyActivationIndicators(owner, indicators = {}) {
         this.decorateActivatableCard(cardEl);
       }
     }
+  }
+
+  this.applyZoneFrameActivationIndicators?.(owner, indicators.zones || {});
+}
+
+/**
+ * @this {import('../Renderer.js').default}
+ */
+export function applyZoneFrameActivationIndicators(owner, zones = {}) {
+  const isPlayer = owner === "player";
+  const graveyardEl = this.elements[`${owner}Graveyard`];
+  const extraDeckEl = document.getElementById(
+    isPlayer ? "player-extradeck" : "bot-extradeck",
+  );
+
+  graveyardEl?.classList.toggle("zone-activatable", !!zones.graveyard);
+  extraDeckEl?.classList.toggle("zone-activatable", !!zones.extraDeck);
+
+  if (zones.graveyard) {
+    graveyardEl?.setAttribute("title", "efeito disponivel no cemiterio");
+  } else if (
+    graveyardEl?.getAttribute("title") === "efeito disponivel no cemiterio"
+  ) {
+    graveyardEl.removeAttribute("title");
+  }
+
+  if (zones.extraDeck) {
+    extraDeckEl?.setAttribute("title", "invocacao disponivel no Extra Deck");
+  } else if (
+    extraDeckEl?.getAttribute("title") ===
+    "invocacao disponivel no Extra Deck"
+  ) {
+    extraDeckEl.removeAttribute("title");
   }
 }
 

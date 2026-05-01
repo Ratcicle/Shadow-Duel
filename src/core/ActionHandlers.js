@@ -54,6 +54,7 @@ export {
   handleSwitchDefenderPositionOnAttack,
   handlePermanentBuffNamed,
   handleRemovePermanentBuffNamed,
+  handleNegateSummonOrActivationAndDestroy,
 
   // Resources handlers
   handlePayLP,

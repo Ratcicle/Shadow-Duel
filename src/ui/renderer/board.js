@@ -180,6 +180,8 @@ export function updateGYPreview(player) {
     const lastCard = player.graveyard[player.graveyard.length - 1];
     const preview = this.createCardElement(lastCard, true);
     preview.classList.add("gy-preview");
+    preview.dataset.index = String(player.graveyard.length - 1);
+    preview.dataset.location = "graveyard";
     gyZone.appendChild(preview);
     gyZone.onmouseenter = () => this.renderPreview(lastCard);
   } else {
@@ -267,10 +269,6 @@ export function renderGraveyardModal(cards, options = {}) {
     ) {
       if (options.isActivatable(card)) {
         cardEl.classList.add("gy-activatable");
-        const indicator = document.createElement("div");
-        indicator.className = "gy-activate-indicator";
-        indicator.textContent = "⚡";
-        cardEl.appendChild(indicator);
       }
     }
     fragment.appendChild(cardEl);
@@ -282,7 +280,7 @@ export function renderGraveyardModal(cards, options = {}) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function renderExtraDeckModal(cards) {
+export function renderExtraDeckModal(cards, options = {}) {
   const grid = document.getElementById("extradeck-modal-grid");
 
   if (!grid) {
@@ -300,8 +298,26 @@ export function renderExtraDeckModal(cards) {
   // Use DocumentFragment to minimize reflows
   const fragment = document.createDocumentFragment();
 
-  cards.forEach((card) => {
+  cards.forEach((card, index) => {
     const cardEl = this.createCardElement(card, true);
+    const summonable =
+      typeof options.isSummonable === "function"
+        ? options.isSummonable(card, index)
+        : false;
+    const disabledReason =
+      typeof options.getDisabledReason === "function"
+        ? options.getDisabledReason(card, index)
+        : null;
+    if (summonable) {
+      cardEl.classList.add("extra-deck-summonable");
+      cardEl.addEventListener("click", (event) => {
+        event.stopPropagation();
+        options.onCardClick?.(card, index, event);
+      });
+    } else if (disabledReason) {
+      cardEl.classList.add("disabled");
+      cardEl.title = disabledReason;
+    }
     fragment.appendChild(cardEl);
   });
 

@@ -1218,7 +1218,8 @@ export default class Bot extends Player {
         );
       }
 
-      const summonResult = this.summon(
+      const summonResult = await game.performNormalSummon(
+        this,
         resolvedIndex,
         action.position,
         action.facedown,

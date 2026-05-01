@@ -105,6 +105,14 @@ export async function destroyCard(card, options = {}) {
       const cause = options.cause || options.reason || "effect";
       const sourceCard = options.sourceCard || options.source || null;
       const opponent = options.opponent || this.getOpponent(owner);
+      const sourcePlayer =
+        options.sourcePlayer ||
+        options.opponent ||
+        (sourceCard?.owner === "player"
+          ? this.player
+          : sourceCard?.owner === "bot"
+            ? this.bot
+            : opponent);
       const fromZone =
         options.fromZone ||
         this.effectEngine?.findCardZone?.(owner, card) ||
@@ -112,6 +120,17 @@ export async function destroyCard(card, options = {}) {
 
       if (!fromZone) {
         return { destroyed: false, reason: "not_in_zone" };
+      }
+
+      if (cause !== "battle" && sourceCard && sourcePlayer) {
+        const immunity = this.effectEngine?.checkImmunity?.(card, sourcePlayer, {
+          effectType: "destruction",
+          sourceCard,
+        });
+        if (immunity?.immune) {
+          this.ui?.log?.(`${card.name} is unaffected by that card effect.`);
+          return { destroyed: false, reason: immunity.reason || "immune" };
+        }
       }
 
       // Check protection effects before destruction

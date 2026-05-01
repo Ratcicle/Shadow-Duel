@@ -55,6 +55,7 @@ export {
 // Conditional
 export { handleConditionalTargetActions } from "./conditional.js";
 export { handleChooseActionCase } from "./choice.js";
+export { handleNegateSummonOrActivationAndDestroy } from "./negation.js";
 
 // Resources
 export {

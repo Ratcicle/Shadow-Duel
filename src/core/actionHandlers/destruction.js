@@ -1277,7 +1277,7 @@ export async function handleDestroyTargetedCards(action, ctx, targets, engine) {
 
     player,
 
-    { actionType: "destroy_targeted_cards" },
+    { actionType: "destroy_targeted_cards", sourceCard: source },
   );
 
   if (nonImmuneTargets.length === 0) {

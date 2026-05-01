@@ -86,7 +86,12 @@ export function buildActivationIndicatorsForPlayer(player) {
     hand: {},
     field: {},
     spellTrap: {},
+    graveyard: {},
     fieldSpell: null,
+    zones: {
+      graveyard: false,
+      extraDeck: false,
+    },
   };
 
   (player.hand || []).forEach((card, index) => {
@@ -184,6 +189,35 @@ export function buildActivationIndicatorsForPlayer(player) {
       indicators.fieldSpell = hint;
     }
   }
+
+  (player.graveyard || []).forEach((card, index) => {
+    if (!card || card.cardKind !== "monster") return;
+    const guard = canStart("graveyard_effect", ["main1", "main2"]);
+    const preview = this.effectEngine?.canActivateMonsterEffectPreview?.(
+      card,
+      player,
+      "graveyard",
+      null,
+      { activationContext },
+    ) || { ok: false };
+    const hint = buildHint(guard, preview, "efeito disponivel no cemiterio");
+    if (hint) {
+      indicators.graveyard[index] = hint;
+    }
+  });
+
+  indicators.zones.graveyard = Object.values(indicators.graveyard).some(
+    (hint) => hint?.canActivate,
+  );
+
+  indicators.zones.extraDeck = (player.extraDeck || []).some((card) => {
+    if (!card?.extraDeckSummonProcedure) return false;
+    return (
+      this.canSummonExtraDeckCardByProcedure?.(card, player, {
+        silent: true,
+      })?.ok === true
+    );
+  });
 
   return indicators;
 }

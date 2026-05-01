@@ -114,6 +114,7 @@ export async function checkAndOfferTraps(event, eventData = {}) {
 export function _mapEventToChainContext(event) {
   const eventToContext = {
     attack_declared: "attack_declaration",
+    summon_attempt: "summon_attempt",
     after_summon: "summon",
     phase_end: "phase_change",
     phase_start: "phase_change",

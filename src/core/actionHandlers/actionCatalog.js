@@ -840,6 +840,15 @@ export const ACTION_CATALOG = {
     mutates: ["combatState"],
     examples: [{ type: "negate_attack" }],
   }),
+  negate_summon_or_activation_and_destroy: action({
+    category: "combat",
+    summary: "Negates the current summon attempt or activation context, then destroys that card.",
+    handler: "handleNegateSummonOrActivationAndDestroy",
+    fields: {},
+    mutates: ["chain", "field", "graveyard"],
+    emits: ["card_to_grave"],
+    examples: [{ type: "negate_summon_or_activation_and_destroy" }],
+  }),
   pay_lp: action({
     category: "resources",
     summary: "Pays LP as a cost.",

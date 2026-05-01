@@ -56,6 +56,8 @@ Renderer.prototype.renderExtraDeckModal = board.renderExtraDeckModal;
 // Attach indicator methods
 Renderer.prototype.applyActivationIndicators =
   indicators.applyActivationIndicators;
+Renderer.prototype.applyZoneFrameActivationIndicators =
+  indicators.applyZoneFrameActivationIndicators;
 Renderer.prototype.applyAttackReadyIndicators =
   indicators.applyAttackReadyIndicators;
 Renderer.prototype.clearAttackReadyIndicators =

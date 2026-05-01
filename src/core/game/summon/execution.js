@@ -25,6 +25,66 @@ export async function flipSummon(card) {
   this.updateBoard();
 }
 
+export async function offerSummonAttempt(card, player, options = {}) {
+  if (!card || !player || !this.chainSystem || this.disableChains) {
+    return { ok: true };
+  }
+  if (this.chainSystem.isChainResolving?.() || this.chainSystem.isChainWindowOpen?.()) {
+    return { ok: true };
+  }
+
+  const attempt = {
+    card,
+    player,
+    method: options.method || "special",
+    fromZone: options.fromZone || null,
+    summonProcedure: options.summonProcedure || null,
+    negated: false,
+  };
+  const context = {
+    type: "summon_attempt",
+    event: "summon_attempt",
+    card,
+    player,
+    triggerPlayer: player,
+    summonMethod: attempt.method,
+    fromZone: attempt.fromZone,
+    summonAttempt: attempt,
+  };
+
+  await this.chainSystem.openChainWindow(context);
+  if (attempt.negated || context.negated) {
+    return { ok: false, negated: true, reason: "summon_negated" };
+  }
+  return { ok: true };
+}
+
+export async function performNormalSummon(
+  actor,
+  cardIndex,
+  position = "attack",
+  isFacedown = false,
+  tributeIndices = null,
+) {
+  const player = actor || this.player;
+  const card = player?.hand?.[cardIndex];
+  if (!player || !card) return null;
+
+  const tributeInfo =
+    typeof player.getTributeRequirement === "function"
+      ? player.getTributeRequirement(card)
+      : { tributesNeeded: 0 };
+  const method = tributeInfo?.tributesNeeded > 0 ? "tribute" : "normal";
+  const attempt = await this.offerSummonAttempt(card, player, {
+    method,
+    fromZone: "hand",
+  });
+  if (attempt?.negated) {
+    return null;
+  }
+  return player.summon(cardIndex, position, isFacedown, tributeIndices);
+}
+
 /**
  * Perform a Fusion Summon using materials from hand/field.
  * @param {Array} materials - Array of material cards
@@ -56,6 +116,11 @@ export async function performFusionSummon(
     return false;
   }
 
+  if (fusionMonster.extraDeckSummonProcedure) {
+    this.ui.log(`${fusionMonster.name} cannot be Fusion Summoned by this effect.`);
+    return false;
+  }
+
   // Check field space after using any field materials
   const fieldMaterialCount = materials.filter((mat) =>
     activePlayer.field.includes(mat)
@@ -84,6 +149,21 @@ export async function performFusionSummon(
   materials.forEach((material) => {
     this.moveCard(material, activePlayer, "graveyard");
   });
+
+  const attempt = await this.offerSummonAttempt(fusionMonster, activePlayer, {
+    method: "fusion",
+    fromZone: "extraDeck",
+  });
+  if (attempt?.negated) {
+    if (activePlayer.extraDeck.includes(fusionMonster)) {
+      activePlayer.extraDeck.splice(activePlayer.extraDeck.indexOf(fusionMonster), 1);
+      activePlayer.graveyard.push(fusionMonster);
+      fusionMonster.owner = activePlayer.id;
+      fusionMonster.controller = activePlayer.id;
+    }
+    this.updateBoard();
+    return false;
+  }
 
   // Remove fusion monster from Extra Deck
   activePlayer.extraDeck.splice(fusionMonsterIndex, 1);
@@ -127,11 +207,24 @@ export async function performFusionSummon(
  * @param {number} handIndex - Index in player's hand
  * @param {string} position - "attack" or "defense"
  */
-export function performSpecialSummon(handIndex, position, actor = this.player) {
+export async function performSpecialSummon(handIndex, position, actor = this.player) {
   const player = actor || this.player;
   const opponent = this.getOpponent?.(player) || this.bot;
   const card = player.hand[handIndex];
   if (!card) return;
+
+  if (Array.isArray(card.specialSummonOnlyBy)) {
+    this.ui?.log?.(`${card.name} cannot be Special Summoned this way.`);
+    return;
+  }
+
+  const attempt = await this.offerSummonAttempt(card, player, {
+    method: "special",
+    fromZone: "hand",
+  });
+  if (attempt?.negated) {
+    return;
+  }
 
   const limitCheck = this.canPlaceCardOnField?.(card, player, {
     isFacedown: false,
@@ -163,7 +256,7 @@ export function performSpecialSummon(handIndex, position, actor = this.player) {
   }
 
   // Emit after_summon for special summons performed directly from hand
-  this.emit("after_summon", {
+  await this.emit("after_summon", {
     card,
     player,
     opponent,

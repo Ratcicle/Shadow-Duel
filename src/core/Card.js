@@ -50,6 +50,12 @@ export default class Card {
     this.fieldLimit = data.fieldLimit
       ? JSON.parse(JSON.stringify(data.fieldLimit))
       : null;
+    this.fieldPresenceRestriction = data.fieldPresenceRestriction
+      ? JSON.parse(JSON.stringify(data.fieldPresenceRestriction))
+      : null;
+    this.extraDeckSummonProcedure = data.extraDeckSummonProcedure
+      ? JSON.parse(JSON.stringify(data.extraDeckSummonProcedure))
+      : null;
 
     // Equip / status helpers
     this.equippedTo = this.equippedTo || null;
@@ -81,6 +87,12 @@ export default class Card {
     // Summon restrictions
     this.cannotBeSpecialSummoned = !!data.cannotBeSpecialSummoned;
     this.cannotBeNormalSummonedOrSet = !!data.cannotBeNormalSummonedOrSet;
+    this.specialSummonOnlyBy = Array.isArray(data.specialSummonOnlyBy)
+      ? [...data.specialSummonOnlyBy]
+      : data.specialSummonOnlyBy
+        ? [data.specialSummonOnlyBy]
+        : null;
+    this.unaffectedByOtherCardEffects = !!data.unaffectedByOtherCardEffects;
     this.lastSummonMethod = null;
     this.lastSummonedFromZone = null;
     this.lastSummonedTurn = null;

@@ -210,6 +210,51 @@ export async function runActivationPipeline(config = {}) {
     }
   };
 
+  const opensNegationWindow = (effect) =>
+    Array.isArray(effect?.actions) &&
+    effect.actions.some(
+      (action) => action?.type === "negate_summon_or_activation_and_destroy",
+    );
+
+  const offerActivationNegationWindow = async () => {
+    if (
+      config.openActivationWindow === false ||
+      config.activationContext?.skipActivationWindow === true ||
+      opensNegationWindow(config.effect || oncePerTurnConfig?.effect) ||
+      this.disableChains ||
+      !this.chainSystem ||
+      this.chainSystem.isChainResolving?.() ||
+      this.chainSystem.isChainWindowOpen?.()
+    ) {
+      return { ok: true };
+    }
+
+    const activationType =
+      resolvedCard.cardKind === "monster" ? "effect_activation" : "card_activation";
+    const activationAttempt = {
+      card: resolvedCard,
+      player: owner,
+      effect: config.effect || oncePerTurnConfig?.effect || null,
+      activationZone: resolvedActivationZone,
+      negated: false,
+    };
+    const context = {
+      type: activationType,
+      event: activationType,
+      card: resolvedCard,
+      player: owner,
+      triggerPlayer: owner,
+      activationZone: resolvedActivationZone,
+      activationAttempt,
+    };
+
+    await this.chainSystem.openChainWindow(context);
+    if (activationAttempt.negated || context.negated) {
+      return { ok: false, negated: true, reason: "activation_negated" };
+    }
+    return { ok: true };
+  };
+
   const handleResult = async (result, fromSelection = false) => {
     const normalized = this.normalizeActivationResult(result);
     normalized.commitInfo =
@@ -430,6 +475,20 @@ export async function runActivationPipeline(config = {}) {
     }
     return normalized;
   };
+
+  const negationWindowResult = await offerActivationNegationWindow();
+  if (negationWindowResult?.negated) {
+    const negatedResult = {
+      success: false,
+      needsSelection: false,
+      reason: "Activation was negated.",
+      activationNegated: true,
+    };
+    if (typeof config.onFailure === "function") {
+      await config.onFailure(negatedResult, activationContext);
+    }
+    return negatedResult;
+  }
 
   const initialResult = await safeActivate(config.selections || null);
   return handleResult(initialResult, false);

@@ -67,6 +67,12 @@ export async function resolveChainLink(link) {
   const activationZone = link.zone || "spellTrap";
 
   try {
+    if (link.negated || link.context?.negatedLink === link) {
+      const ui = this.getUI();
+      this.log(`${card.name}'s activation was negated.`);
+      ui?.log?.(`${card.name}'s activation was negated.`);
+      return;
+    }
     if (!prepareForResolution(this, link, activationZone)) {
       return;
     }

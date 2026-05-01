@@ -25,6 +25,12 @@ export const CHAIN_CONTEXTS = {
     requiresChainWindow: true,
   },
 
+  summon_attempt: {
+    description: "When a monster would be summoned",
+    allowedSpeeds: [2, 3],
+    requiresChainWindow: true,
+  },
+
   phase_change: {
     description: "During phase transition",
     allowedSpeeds: [2, 3],

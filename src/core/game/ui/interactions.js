@@ -129,7 +129,7 @@ export function bindCardInteractions() {
 
       this.ui.showSummonModal(
         index,
-        (choice) => {
+        async (choice) => {
           if (choice === "special_from_aegisbearer") {
             this.specialSummonSanctumProtectorFromHand(index, actor);
             return;
@@ -176,7 +176,12 @@ export function bindCardInteractions() {
           }
 
           const before = actor.field.length;
-          const summonResult = actor.summon(index, position, isFacedown);
+          const summonResult = await this.performNormalSummon(
+            actor,
+            index,
+            position,
+            isFacedown,
+          );
           if (!summonResult && actor.field.length === before) {
             this.updateBoard();
             return;
@@ -266,7 +271,8 @@ export function bindCardInteractions() {
       if (selectedTributes.length === pendingSummon.tributesNeeded) {
         clearLaboratoryTributeHighlight(actor);
         const before = actor.field.length;
-        const summonResult = actor.summon(
+        const summonResult = await this.performNormalSummon(
+          actor,
           pendingSummon.cardIndex,
           pendingSummon.position,
           pendingSummon.isFacedown,
@@ -499,7 +505,7 @@ export function bindCardInteractions() {
 
         this.ui.showSummonModal(
           index,
-          (choice) => {
+          async (choice) => {
             if (choice === "special_from_aegisbearer") {
               this.specialSummonSanctumProtectorFromHand(index);
               return;
@@ -561,7 +567,8 @@ export function bindCardInteractions() {
                 this.ui.log(`Select ${tributesNeeded} monster(s) to tribute.`);
               } else {
                 const before = this.player.field.length;
-                const summonResult = this.player.summon(
+                const summonResult = await this.performNormalSummon(
+                  this.player,
                   index,
                   position,
                   isFacedown
@@ -727,7 +734,8 @@ export function bindCardInteractions() {
           }
 
           const before = this.player.field.length;
-          const summonResult = this.player.summon(
+          const summonResult = await this.performNormalSummon(
+            this.player,
             pendingSummon.cardIndex,
             pendingSummon.position,
             pendingSummon.isFacedown,

@@ -67,6 +67,7 @@ import { handleActivateStoredBlueprint } from "./blueprints.js";
 // Conditional handlers
 import { handleConditionalTargetActions } from "./conditional.js";
 import { handleChooseActionCase } from "./choice.js";
+import { handleNegateSummonOrActivationAndDestroy } from "./negation.js";
 
 /**
  * Initialize default handlers
@@ -270,6 +271,10 @@ export function registerDefaultHandlers(registry) {
   registry.register("equip", proxyEngineMethod("applyEquip"));
 
   registry.register("negate_attack", proxyEngineMethod("applyNegateAttack"));
+  registry.register(
+    "negate_summon_or_activation_and_destroy",
+    handleNegateSummonOrActivationAndDestroy,
+  );
 
   registry.register("search_any", handleAddFromZoneToHand);
 
