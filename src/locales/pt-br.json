@@ -350,7 +350,7 @@
     },
     "22": {
       "name": "Dragão das Trevas",
-      "description": "Se este card for Invocado por Invocação-Normal ou Especial: destrua todos os outros monstros Dragão que você controla e, se isso acontecer, este card ganha 200 de ATK para cada monstro destruído por este efeito. Uma vez por turno: você pode descartar 1 card e, depois, escolher 1 monstro que seu oponente controla; negue os efeitos dele até o final deste turno."
+      "description": "Se este card for Invocado por Invocação-Normal ou Especial: destrua todos os outros monstros Dragão que você controla e, se isso acontecer, este card ganha 300 de ATK para cada monstro destruído por este efeito. Uma vez por turno: você pode descartar 1 card e, depois, escolher 1 monstro que seu oponente controla; negue os efeitos dele até o final deste turno."
     },
     "23": {
       "name": "Dragão Debug",
@@ -463,6 +463,10 @@
     "254": {
       "name": "Dragão Extremo da Floresta",
       "description": "Só pode haver 1 monstro \"Dragão Extremo\" com a face para cima no campo. Durante cada Fase de Apoio: ganhe 200 PV para cada card que seu oponente controla e para cada card na mão dele. Cada vez que seu oponente Invocar um monstro ou ativar um card ou efeito: ganhe 100 PV. Uma vez por turno (Efeito Rápido): este card ganha ATK igual ao total de PV que você ganhou neste turno, até o final deste turno."
+    },
+    "256": {
+      "name": "Estrelas Convergentes",
+      "description": "Descarte 1 card; reduza o nível de todos os monstros na sua mão em 1 até o fim do turno."
     },
     "255": {
       "name": "Dragão Bahamut Supremo",

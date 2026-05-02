@@ -19,8 +19,9 @@ export function renderHand(player, options = {}) {
   player.hand.forEach((card, index) => {
     if (!card) return; // Defensive: skip empty slots
     const isLaboratory = options.laboratoryMode === true;
+    const isBotRevealed = options.revealBotHand === true && player.id === "bot";
     const isVisible = isLaboratory
-      ? player.id === options.activeTurn
+      ? player.id === options.activeTurn || isBotRevealed
       : player.controllerType !== "ai" && player.id === "player";
     const cardEl = this.createCardElement(card, isVisible);
     cardEl.dataset.index = index;

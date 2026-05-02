@@ -1339,3 +1339,26 @@ export async function handleRemovePermanentBuffNamed(
 
   return anyRemoved;
 }
+
+export async function handleReduceHandMonsterLevels(action, ctx, targets, engine) {
+  const { player } = ctx;
+  const game = engine.game;
+  if (!player || !game) return false;
+
+  const handMonsters = player.hand.filter((c) => c && c.cardKind === "monster");
+  if (handMonsters.length === 0) return false;
+
+  let modified = false;
+  for (const card of handMonsters) {
+    if (card.level <= 1) continue;
+    if (card.originalLevel == null) card.originalLevel = card.level;
+    card.level = Math.max(1, card.level - 1);
+    modified = true;
+  }
+
+  if (modified) {
+    getUI(game)?.log("Nível dos monstros na mão reduzido em 1 até o fim do turno.");
+    game.updateBoard();
+  }
+  return modified;
+}

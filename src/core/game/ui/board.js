@@ -66,6 +66,7 @@ export function updateBoard(options = {}) {
     const handRenderContext = {
       laboratoryMode: this.laboratoryModeEnabled === true,
       activeTurn: this.turn,
+      revealBotHand: this.laboratoryRevealBotHand === true,
     };
 
     this.ui.renderHand(this.player, handRenderContext);

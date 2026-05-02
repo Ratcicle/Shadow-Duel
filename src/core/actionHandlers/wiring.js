@@ -46,6 +46,7 @@ import {
   handleSwitchDefenderPositionOnAttack,
   handlePermanentBuffNamed,
   handleRemovePermanentBuffNamed,
+  handleReduceHandMonsterLevels,
 } from "./stats.js";
 
 // Resources handlers
@@ -144,6 +145,8 @@ export function registerDefaultHandlers(registry) {
   registry.register("reduce_self_atk", handleBuffStatsTemp);
 
   registry.register("add_status", handleAddStatus);
+
+  registry.register("reduce_hand_monster_levels", handleReduceHandMonsterLevels);
 
   registry.register("pay_lp", handlePayLP);
 

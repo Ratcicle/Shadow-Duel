@@ -1903,6 +1903,7 @@
         timing: "on_event",
         event: "after_summon",
         summonMethods: ["normal"],
+        requireSelfAsSummoned: true,
         oncePerTurn: true,
         oncePerTurnName: "luminarch_sanctified_arbiter_search",
         actions: [
@@ -3991,11 +3992,11 @@
     name: "Darkness Dragon",
     cardKind: "monster",
     type: "Dragon",
-    level: 6,
-    atk: 2100,
+    level: 5,
+    atk: 2000,
     def: 1700,
     description:
-      "If this card is Normal or Special Summoned: Destroy all other Dragon-typer monsters you control, and if you do, this card gains 200 ATK for each monster destroyed by this effect. Once per turn: You can discard 1 card, then target 1 monster your opponent controls; negate its effects until the end of this turn.",
+      "If this card is Normal or Special Summoned: Destroy all other Dragon-type monsters you control, and if you do, this card gains 300 ATK for each monster destroyed by this effect. Once per turn: You can discard 1 card, then target 1 monster your opponent controls; negate its effects until the end of this turn.",
     image: "assets/Darkness Dragon.png",
     effects: [
       {
@@ -4008,7 +4009,7 @@
           {
             type: "destroy_other_dragons_and_buff",
             typeName: "Dragon",
-            atkPerDestroyed: 200,
+            atkPerDestroyed: 300,
             buffSourceName: "Darkness Dragon self buff",
           },
         ],
@@ -6030,6 +6031,41 @@
           "effect_activation",
         ],
         actions: [{ type: "negate_summon_or_activation_and_destroy" }],
+      },
+    ],
+  },
+  {
+    id: 256,
+    name: "Converging Stars",
+    cardKind: "spell",
+    subtype: "normal",
+    description:
+      "Discard 1 card; reduce the Level of all monsters in your hand by 1 until the end of this turn.",
+    image: "assets/Converging Stars.png",
+    effects: [
+      {
+        id: "estrelas_convergentes_effect",
+        timing: "on_play",
+        speed: 1,
+        targets: [
+          {
+            id: "estrelas_convergentes_discard",
+            owner: "self",
+            zone: "hand",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "estrelas_convergentes_discard",
+            player: "self",
+            to: "graveyard",
+          },
+          {
+            type: "reduce_hand_monster_levels",
+          },
+        ],
       },
     ],
   },

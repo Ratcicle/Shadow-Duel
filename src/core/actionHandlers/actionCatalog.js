@@ -352,6 +352,15 @@ export const ACTION_CATALOG = {
     mutates: ["stats"],
     examples: [{ type: "buff_atk_by_lp_gained_this_turn", targetRef: "self" }],
   }),
+  reduce_hand_monster_levels: action({
+    category: "stats",
+    summary: "Reduces the Level of all monsters in the player's hand.",
+    handler: "handleReduceHandMonsterLevels",
+    fields: {},
+    selection: "none",
+    mutates: ["stats"],
+    examples: [{ type: "reduce_hand_monster_levels" }],
+  }),
   buff_stats_temp_with_second_attack: action({
     category: "stats",
     summary: "Applies a temporary stat buff and grants a second attack.",

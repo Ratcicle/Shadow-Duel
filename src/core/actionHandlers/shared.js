@@ -523,7 +523,7 @@ export async function summonFromHandCore({
 
   const moveResult =
     typeof game.moveCard === "function"
-      ? game.moveCard(card, player, "field", {
+      ? await game.moveCard(card, player, "field", {
           fromZone: "hand",
           position: resolvedPosition,
           isFacedown: false,
@@ -532,6 +532,10 @@ export async function summonFromHandCore({
       : null;
 
   if (moveResult && moveResult.success === false) {
+    return { success: false, position: resolvedPosition };
+  }
+
+  if (moveResult && moveResult.negated) {
     return { success: false, position: resolvedPosition };
   }
 

@@ -1946,6 +1946,53 @@ body {
   padding-bottom: 8px;
 }
 
+.laboratory-options {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 0;
+  border-top: 1px solid #333;
+  flex-wrap: wrap;
+}
+
+.laboratory-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.laboratory-mode-toggle button {
+  background: #181818;
+  color: var(--text-color);
+  border: 0;
+  border-right: 1px solid var(--border-color);
+  padding: 8px 12px;
+  font-family: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.laboratory-mode-toggle button:last-child {
+  border-right: 0;
+}
+
+.laboratory-mode-toggle button.active {
+  background: var(--accent-color);
+  color: #120414;
+}
+
+.laboratory-bot-archetype-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.laboratory-bot-archetype-wrap.hidden {
+  display: none;
+}
+
 .laboratory-footer {
   justify-content: flex-end;
 }

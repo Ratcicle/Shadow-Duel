@@ -103,11 +103,12 @@ export default class Game {
     this.disableEffectActivation = !!options.disableEffectActivation;
 
     this.laboratoryModeEnabled = !!options.laboratoryMode;
+    this.laboratoryRevealBotHand = !!options.laboratoryRevealBotHand;
     this.player = new Player("player", options.playerName || "You", "human");
     this.botPreset = options.botPreset || "shadowheart";
     this.bot =
       options.opponentOverride ||
-      (this.laboratoryModeEnabled
+      (this.laboratoryModeEnabled && !options.laboratoryUseBot
         ? new Player("bot", options.opponentName || "Opponent", "human")
         : new Bot(this.botPreset));
 
@@ -229,16 +230,46 @@ export default class Game {
   // -----------------------------------------------------------------------------
 
   async start(deckList = null, extraDeckList = null) {
+    await this.startWithDecks({
+      playerDeck: deckList,
+      playerExtraDeck: extraDeckList,
+    });
+  }
+
+  async startWithDecks(options = {}) {
+    const {
+      playerDeck = null,
+      playerExtraDeck = null,
+      botDeck = null,
+      botExtraDeck = null,
+      exactDecks = false,
+      startAtDrawPhase = false,
+      laboratoryMode = this.laboratoryModeEnabled,
+      revealBotHand,
+    } = options;
+
+    this.laboratoryModeEnabled = laboratoryMode === true;
+    if (revealBotHand !== undefined) {
+      this.laboratoryRevealBotHand = !!revealBotHand;
+    }
+    this.player.controllerType = "human";
     // BUG #9 FIX: Reset once-per-duel usage between duels
     // This ensures effects like "once per duel" are available in new matches
     this.player.oncePerDuelUsageByName = Object.create(null);
     this.bot.oncePerDuelUsageByName = Object.create(null);
 
     this.resetMaterialDuelStats("start");
-    this.player.buildDeck(deckList);
-    this.player.buildExtraDeck(extraDeckList);
-    this.bot.buildDeck();
-    this.bot.buildExtraDeck();
+    if (exactDecks) {
+      this.buildExactDeckForPlayer(this.player, playerDeck);
+      this.buildExactExtraDeckForPlayer(this.player, playerExtraDeck);
+      this.buildExactDeckForPlayer(this.bot, botDeck);
+      this.buildExactExtraDeckForPlayer(this.bot, botExtraDeck);
+    } else {
+      this.player.buildDeck(playerDeck);
+      this.player.buildExtraDeck(playerExtraDeck);
+      this.bot.buildDeck(botDeck);
+      this.bot.buildExtraDeck(botExtraDeck);
+    }
 
     // Integra��o do sistema de captura de replay (se habilitado)
     replayIntegration.integrateReplayCapture(this);
@@ -247,10 +278,42 @@ export default class Game {
     this.drawCards(this.player, 4);
     this.drawCards(this.bot, 4);
 
+    if (startAtDrawPhase) {
+      this.turn = "player";
+      this.phase = "draw";
+      this.turnCounter = 1;
+      this.resetOncePerTurnUsage("start_turn");
+      this.player.lpGainedThisTurn = 0;
+      this.bot.lpGainedThisTurn = 0;
+      this.effectEngine?.clearTargetingCache?.();
+      this.effectEngine?.updatePassiveBuffs?.();
+      this.updateBoard();
+      this.ui.bindPhaseClick((phase) => {
+        const activePlayer = this.turn === "player" ? this.player : this.bot;
+        if (this.laboratoryModeEnabled) {
+          if (activePlayer.controllerType !== "human") return;
+          this.skipToPhase(phase);
+          return;
+        }
+        if (this.turn === "player") {
+          this.skipToPhase(phase);
+        }
+      });
+      this.bindCardInteractions();
+      return;
+    }
+
     this.updateBoard();
     await this.startTurn();
     this.ui.bindPhaseClick((phase) => {
-      if (this.turn !== "player") return;
+      const activePlayer = this.turn === "player" ? this.player : this.bot;
+      if (this.laboratoryModeEnabled) {
+        if (activePlayer.controllerType !== "human") return;
+        this.skipToPhase(phase);
+        return;
+      } else if (this.turn !== "player") {
+        return;
+      }
       if (
         this.phase === "main1" ||
         this.phase === "battle" ||
@@ -262,10 +325,61 @@ export default class Game {
     this.bindCardInteractions();
   }
 
-  async startLaboratory(setup = {}) {
+  buildExactDeckForPlayer(player, deckList = []) {
+    player.deck = [];
+    player.hand = [];
+    player.field = [];
+    player.spellTrap = [];
+    player.graveyard = [];
+    player.banished = [];
+    player.fieldSpell = null;
+    player.oncePerTurnUsageByName = {};
+    if (!Array.isArray(deckList)) return;
+
+    deckList.forEach((entry) => {
+      const card = this.createCardForOwner(entry, player, entry);
+      if (
+        !card ||
+        card.monsterType === "fusion" ||
+        card.monsterType === "ascension"
+      ) {
+        return;
+      }
+      player.deck.push(card);
+    });
+    player.shuffleDeck();
+  }
+
+  buildExactExtraDeckForPlayer(player, extraDeckList = []) {
+    player.extraDeck = [];
+    if (!Array.isArray(extraDeckList)) return;
+
+    extraDeckList.forEach((entry) => {
+      const card = this.createCardForOwner(entry, player, entry);
+      if (
+        !card ||
+        (card.monsterType !== "fusion" && card.monsterType !== "ascension")
+      ) {
+        return;
+      }
+      player.extraDeck.push(card);
+    });
+  }
+
+  async startLaboratory(setup = {}, labOptions = {}) {
     this.laboratoryModeEnabled = true;
+    if (labOptions.revealBotHand !== undefined) {
+      this.laboratoryRevealBotHand = !!labOptions.revealBotHand;
+    }
     this.player.controllerType = "human";
-    this.bot.controllerType = "human";
+    const useBot = labOptions.useBot || false;
+    if (useBot && typeof this.bot.buildDeck === "function") {
+      this.bot.buildDeck();
+      this.bot.buildExtraDeck();
+      // controllerType is already "ai" from Bot constructor
+    } else {
+      this.bot.controllerType = "human";
+    }
     this.player.oncePerDuelUsageByName = Object.create(null);
     this.bot.oncePerDuelUsageByName = Object.create(null);
 

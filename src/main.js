@@ -133,6 +133,11 @@ const laboratoryArchetypeSelect = document.getElementById(
 const laboratoryRandomAllBtn = document.getElementById(
   "laboratory-random-all",
 );
+const laboratoryExportBtn = document.getElementById("laboratory-export");
+const laboratoryImportBtn = document.getElementById("laboratory-import");
+const laboratoryImportFileInput = document.getElementById(
+  "laboratory-import-file",
+);
 const laboratoryClearBtn = document.getElementById("laboratory-clear");
 const laboratoryAddOwnerSelect = document.getElementById(
   "laboratory-add-owner",
@@ -152,6 +157,10 @@ const laboratoryFacedownInput = document.getElementById(
 );
 const laboratoryAddCardBtn = document.getElementById("laboratory-add-card-btn");
 const laboratoryStartBtn = document.getElementById("laboratory-start");
+const laboratoryUseBotInput = document.getElementById("laboratory-use-bot");
+const laboratoryBotArchetypeSelect = document.getElementById("laboratory-bot-archetype");
+const laboratoryRevealBotHandInput = document.getElementById("laboratory-reveal-bot-hand");
+const laboratoryModeButtons = document.querySelectorAll("[data-laboratory-mode]");
 
 let currentDeck = loadDeck();
 let currentExtraDeck = loadExtraDeck();
@@ -174,6 +183,7 @@ const LAB_OWNER_LABELS = {
 };
 let laboratorySetup = createEmptyLaboratorySetup();
 let laboratorySelection = { owner: "player", zone: "hand" };
+let laboratoryMode = "test";
 updateReplayModeButton();
 runCardDatabaseValidation({ silent: true });
 
@@ -714,7 +724,7 @@ function renderDeckBuilder() {
         return;
       }
       if (count >= 1) {
-        alert("Apenas 1 c f3pia de cada monstro do Extra Deck por id.");
+        alert("Apenas 1 copia de cada monstro do Extra Deck por id.");
         return;
       }
       currentExtraDeck.push(card.id);
@@ -802,6 +812,26 @@ function getLabZoneConfig(zone) {
 function getLabCard(entry) {
   const id = typeof entry === "number" ? entry : entry?.id;
   return cardDatabaseById.get(id) || null;
+}
+
+function resolveLabCardData(entry) {
+  if (typeof entry === "number") return cardDatabaseById.get(entry) || null;
+  if (typeof entry === "string") {
+    const lower = entry.trim().toLowerCase();
+    return (
+      cardDatabase.find(
+        (card) =>
+          card.name.toLowerCase() === lower ||
+          (getCardDisplayName(card) || "").toLowerCase() === lower,
+      ) || null
+    );
+  }
+  if (!entry || typeof entry !== "object") return null;
+  if (typeof entry.id === "number") {
+    return cardDatabaseById.get(entry.id) || null;
+  }
+  if (entry.name) return resolveLabCardData(entry.name);
+  return null;
 }
 
 function cardMatchesLabArchetype(card, archetype) {
@@ -1080,6 +1110,242 @@ function buildLaboratorySetupForGame() {
   };
 }
 
+function getLaboratoryDeckIds(owner, zone) {
+  return getLabZone(owner, zone)
+    .map((entry) => getLabCard(entry)?.id)
+    .filter((id) => typeof id === "number");
+}
+
+function buildLaboratoryDuelDecks() {
+  return {
+    playerDeck: getLaboratoryDeckIds("player", "deck"),
+    playerExtraDeck: getLaboratoryDeckIds("player", "extraDeck"),
+    botDeck: getLaboratoryDeckIds("bot", "deck"),
+    botExtraDeck: getLaboratoryDeckIds("bot", "extraDeck"),
+  };
+}
+
+function setLaboratoryMode(mode) {
+  laboratoryMode = mode === "duel" ? "duel" : "test";
+  laboratoryModeButtons.forEach((button) => {
+    button.classList.toggle(
+      "active",
+      button.dataset.laboratoryMode === laboratoryMode,
+    );
+  });
+}
+
+function normalizeLabEntryForExport(entry, zone) {
+  const card = getLabCard(entry);
+  if (!card) return null;
+  const out = { id: card.id };
+  if (zone === "field") {
+    out.position = entry.position === "defense" ? "defense" : "attack";
+    out.facedown = entry.facedown === true;
+  } else if (zone === "spellTrap" || zone === "fieldSpell") {
+    out.facedown = entry.facedown === true;
+  }
+  return out;
+}
+
+function buildLaboratoryExportPayload() {
+  const exportSide = (side) => {
+    const result = {
+      lp: Math.max(0, Math.floor(Number(side.lp) || 0)),
+    };
+    LAB_ZONE_CONFIG.forEach((zoneConfig) => {
+      const zone = zoneConfig.id;
+      const entries = Array.isArray(side[zone]) ? side[zone] : [];
+      const exported = entries
+        .map((entry) => normalizeLabEntryForExport(entry, zone))
+        .filter(Boolean);
+      result[zone] =
+        zone === "fieldSpell" ? exported[0] || null : exported;
+    });
+    return result;
+  };
+
+  const options = {
+    laboratoryMode,
+    useBot: laboratoryUseBotInput?.checked === true,
+    revealBotHand: laboratoryRevealBotHandInput?.checked === true,
+    botPreset: laboratoryBotArchetypeSelect?.value || "shadowheart",
+  };
+
+  return {
+    version: 1,
+    type: "shadow-duel-laboratory-state",
+    exportedAt: new Date().toISOString(),
+    laboratoryMode: options.laboratoryMode,
+    useBot: options.useBot,
+    revealBotHand: options.revealBotHand,
+    botPreset: options.botPreset,
+    options,
+    setup: {
+      player: exportSide(laboratorySetup.player),
+      bot: exportSide(laboratorySetup.bot),
+    },
+  };
+}
+
+function downloadLaboratoryState() {
+  const payload = buildLaboratoryExportPayload();
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {
+    type: "application/json",
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+  link.href = url;
+  link.download = `shadow-duel-laboratory-${stamp}.json`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function normalizeImportedLabEntry(entry, zone, warnings) {
+  const card = resolveLabCardData(entry);
+  if (!card) {
+    warnings.push(`Carta invalida ignorada em ${LAB_ZONE_LABELS[zone]}.`);
+    return null;
+  }
+  const validForZone = getLabCandidates(zone, "all").some(
+    (candidate) => candidate.id === card.id,
+  );
+  if (!validForZone) {
+    warnings.push(`${card.name} nao e valido para ${LAB_ZONE_LABELS[zone]}.`);
+    return null;
+  }
+  const normalized = { id: card.id };
+  if (zone === "field") {
+    normalized.position =
+      entry?.position === "defense" ? "defense" : "attack";
+    normalized.facedown = entry?.facedown === true;
+  } else if (zone === "spellTrap" || zone === "fieldSpell") {
+    normalized.facedown = entry?.facedown === true;
+  }
+  return normalized;
+}
+
+function normalizeImportedLaboratoryState(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new Error("Arquivo de Laboratorio deve conter um objeto JSON.");
+  }
+
+  let setupPayload = null;
+  let optionsPayload = {};
+  if (payload.type === "shadow-duel-laboratory-state") {
+    setupPayload = payload.setup;
+    optionsPayload = { ...payload, ...(payload.options || {}) };
+  } else if (payload.player || payload.bot) {
+    setupPayload = payload;
+    optionsPayload = payload;
+  } else {
+    throw new Error("Formato de Laboratorio invalido.");
+  }
+  if (!setupPayload || typeof setupPayload !== "object") {
+    throw new Error("Setup de Laboratorio ausente ou invalido.");
+  }
+
+  const warnings = [];
+  const normalizedSetup = createEmptyLaboratorySetup();
+  const normalizeSide = (owner) => {
+    const source = setupPayload[owner] || {};
+    const target = normalizedSetup[owner];
+    if (typeof source.lp === "number" && Number.isFinite(source.lp)) {
+      target.lp = Math.max(0, Math.floor(source.lp));
+    }
+
+    LAB_ZONE_CONFIG.forEach((zoneConfig) => {
+      const zone = zoneConfig.id;
+      const raw =
+        zone === "fieldSpell" && !Array.isArray(source[zone])
+          ? source[zone]
+            ? [source[zone]]
+            : []
+          : Array.isArray(source[zone])
+            ? source[zone]
+            : [];
+      const limit = zoneConfig.max || Number.POSITIVE_INFINITY;
+      const entries = [];
+      for (const rawEntry of raw) {
+        if (entries.length >= limit) {
+          warnings.push(`${LAB_ZONE_LABELS[zone]} excedeu o limite e foi cortado.`);
+          break;
+        }
+        const normalizedEntry = normalizeImportedLabEntry(
+          rawEntry,
+          zone,
+          warnings,
+        );
+        if (normalizedEntry) entries.push(normalizedEntry);
+      }
+      target[zone] = entries;
+    });
+  };
+
+  normalizeSide("player");
+  normalizeSide("bot");
+
+  return {
+    setup: normalizedSetup,
+    options: {
+      useBot:
+        typeof optionsPayload.useBot === "boolean"
+          ? optionsPayload.useBot
+          : laboratoryUseBotInput?.checked === true,
+      laboratoryMode:
+        optionsPayload.laboratoryMode === "duel" ? "duel" : "test",
+      revealBotHand:
+        typeof optionsPayload.revealBotHand === "boolean"
+          ? optionsPayload.revealBotHand
+          : laboratoryRevealBotHandInput?.checked === true,
+      botPreset:
+        typeof optionsPayload.botPreset === "string"
+          ? optionsPayload.botPreset
+          : laboratoryBotArchetypeSelect?.value || null,
+    },
+    warnings,
+  };
+}
+
+async function importLaboratoryStateFromFile(file) {
+  if (!file) return;
+  let parsed;
+  try {
+    parsed = JSON.parse(await file.text());
+  } catch (err) {
+    alert(`Erro ao ler JSON do Laboratorio: ${err.message}`);
+    return;
+  }
+
+  try {
+    const result = normalizeImportedLaboratoryState(parsed);
+    laboratorySetup = result.setup;
+    if (laboratoryUseBotInput) {
+      laboratoryUseBotInput.checked = result.options.useBot;
+    }
+    if (laboratoryRevealBotHandInput) {
+      laboratoryRevealBotHandInput.checked = result.options.revealBotHand;
+    }
+    if (laboratoryBotArchetypeSelect && result.options.botPreset) {
+      laboratoryBotArchetypeSelect.value = result.options.botPreset;
+    }
+    setLaboratoryMode(result.options.laboratoryMode);
+    const wrap = document.getElementById("laboratory-bot-archetype-wrap");
+    wrap?.classList.toggle("hidden", !laboratoryUseBotInput?.checked);
+    updateLaboratoryAddControls();
+    renderLaboratory();
+    const warningText = result.warnings.length
+      ? `\n\nAvisos:\n- ${result.warnings.join("\n- ")}`
+      : "";
+    alert(`Estado do Laboratorio importado com sucesso.${warningText}`);
+  } catch (err) {
+    alert(`Erro ao importar estado do Laboratorio: ${err.message}`);
+  }
+}
+
 function openLaboratory() {
   startScreen.classList.add("hidden");
   laboratoryModal?.classList.remove("hidden");
@@ -1138,18 +1404,35 @@ async function startLaboratoryDuel() {
   if (!runCardDatabaseValidation()) {
     return;
   }
+  const useBot = laboratoryUseBotInput?.checked || false;
+  const botPreset = laboratoryBotArchetypeSelect?.value || "shadowheart";
+  const revealBotHand = laboratoryRevealBotHandInput?.checked || false;
   const renderer = new Renderer();
   game = new Game({
     laboratoryMode: true,
+    laboratoryUseBot: useBot,
+    laboratoryRevealBotHand: revealBotHand,
     devMode: false,
     playerName: "Jogador 1",
     opponentName: "Jogador 2",
+    botPreset,
     renderer,
   });
   laboratoryModal?.classList.add("hidden");
   startScreen.classList.add("hidden");
   deckBuilder.classList.add("hidden");
-  await game.startLaboratory(buildLaboratorySetupForGame());
+  if (laboratoryMode === "duel") {
+    await game.startWithDecks({
+      ...buildLaboratoryDuelDecks(),
+      useBot,
+      revealBotHand,
+      laboratoryMode: true,
+      exactDecks: true,
+      startAtDrawPhase: true,
+    });
+    return;
+  }
+  await game.startLaboratory(buildLaboratorySetupForGame(), { useBot, revealBotHand });
 }
 
 // Listener para rematch via evento do game over modal
@@ -1401,7 +1684,25 @@ laboratoryClearBtn?.addEventListener("click", () => {
   renderLaboratory();
 });
 laboratoryRandomAllBtn?.addEventListener("click", randomizeLaboratoryAll);
+laboratoryExportBtn?.addEventListener("click", downloadLaboratoryState);
+laboratoryImportBtn?.addEventListener("click", () => {
+  laboratoryImportFileInput?.click();
+});
+laboratoryImportFileInput?.addEventListener("change", async () => {
+  const file = laboratoryImportFileInput.files?.[0] || null;
+  await importLaboratoryStateFromFile(file);
+  laboratoryImportFileInput.value = "";
+});
 laboratoryStartBtn?.addEventListener("click", startLaboratoryDuel);
+laboratoryUseBotInput?.addEventListener("change", () => {
+  const wrap = document.getElementById("laboratory-bot-archetype-wrap");
+  wrap?.classList.toggle("hidden", !laboratoryUseBotInput.checked);
+});
+laboratoryModeButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    setLaboratoryMode(button.dataset.laboratoryMode);
+  });
+});
 laboratoryAddCardBtn?.addEventListener("click", addSelectedLaboratoryCard);
 laboratoryFacedownInput?.addEventListener("change", () => {
   laboratoryFacedownInput.dataset.touched = "true";

@@ -133,6 +133,14 @@
           <button type="button" id="laboratory-random-all">
             Aleatorizar tudo
           </button>
+          <button type="button" id="laboratory-export">Exportar</button>
+          <button type="button" id="laboratory-import">Importar</button>
+          <input
+            type="file"
+            id="laboratory-import-file"
+            accept="application/json,.json"
+            hidden
+          />
           <button type="button" id="laboratory-clear">Limpar</button>
         </div>
 
@@ -175,6 +183,33 @@
             </button>
           </div>
           <datalist id="laboratory-card-options"></datalist>
+        </div>
+
+        <div class="laboratory-options">
+          <div class="laboratory-mode-toggle" role="group" aria-label="Modo do Laboratório">
+            <button type="button" class="active" data-laboratory-mode="test">
+              Modo Teste
+            </button>
+            <button type="button" data-laboratory-mode="duel">
+              Modo Duelo
+            </button>
+          </div>
+          <label class="laboratory-check">
+            <input type="checkbox" id="laboratory-use-bot" />
+            Jogar contra bot
+          </label>
+          <span id="laboratory-bot-archetype-wrap" class="laboratory-bot-archetype-wrap hidden">
+            <select id="laboratory-bot-archetype">
+              <option value="shadowheart">Shadow-Heart</option>
+              <option value="luminarch">Luminarch</option>
+              <option value="void">Void</option>
+              <option value="dragon">Dragon</option>
+            </select>
+          </span>
+          <label class="laboratory-check">
+            <input type="checkbox" id="laboratory-reveal-bot-hand" />
+            Revelar mão do bot
+          </label>
         </div>
 
         <div class="laboratory-footer">

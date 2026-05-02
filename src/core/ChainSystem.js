@@ -1385,6 +1385,38 @@ export default class ChainSystem {
     if (targetResult.needsSelection && targetResult.selectionContract) {
       const contract = targetResult.selectionContract;
 
+      // Bot must never open the human selection UI — auto-select from candidates
+      if (isAI(player) && this.game?.autoSelector) {
+        const autoResult = this.game.autoSelector.select(contract, {
+          owner: player,
+          selectionContract: contract,
+          selectionKind: "target",
+        });
+        const fallbackSelections = {};
+        for (const req of contract.requirements || []) {
+          const candidates = Array.isArray(req.candidates) ? req.candidates : [];
+          const min = Number(req.min ?? 0);
+          const max = Number(req.max ?? min);
+          const pickCount = Math.min(
+            autoResult?.ok && autoResult.selections?.[req.id]?.length >= min
+              ? max
+              : min,
+            candidates.length,
+          );
+          const keys =
+            autoResult?.ok && autoResult.selections?.[req.id]
+              ? autoResult.selections[req.id]
+              : candidates.slice(0, pickCount).map((c) => c.key).filter(Boolean);
+          fallbackSelections[req.id] = keys;
+        }
+        const resolvedFallback = this.resolveSelectionsToCards(
+          fallbackSelections,
+          contract.requirements,
+          player,
+        );
+        return { ...baseTargets, ...resolvedFallback };
+      }
+
       // Use the game's target selection system
       if (this.game?.startTargetSelectionSession) {
         return new Promise((resolve) => {

@@ -151,4 +151,13 @@ export function cleanupTempBoosts(player) {
       card.tempStatuses = {};
     }
   });
+
+  // Restore temporarily reduced levels for hand monsters
+  player.hand.forEach((card) => {
+    if (!card) return;
+    if (card.originalLevel != null) {
+      card.level = card.originalLevel;
+      card.originalLevel = null;
+    }
+  });
 }

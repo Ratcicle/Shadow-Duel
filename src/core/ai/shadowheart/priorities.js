@@ -986,8 +986,14 @@ export function evaluateTributeTrade(
 export function getTributeRequirementFor(card, playerState) {
   let tributesNeeded = 0;
   if (card.level >= 5 && card.level <= 6) tributesNeeded = 1;
-  else if (card.level >= 7 && card.level <= 8) tributesNeeded = 2;
-  else if (card.level >= 9) tributesNeeded = card.requiredTributes || 3;
+  else if (card.level >= 7) tributesNeeded = 2;
+
+  if (
+    typeof card.requiredTributes === "number" &&
+    card.requiredTributes >= 0
+  ) {
+    tributesNeeded = card.requiredTributes;
+  }
 
   // Alt tribute conditions
   const alt = card.altTribute;

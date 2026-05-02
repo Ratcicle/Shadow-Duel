@@ -18,6 +18,7 @@ export default class Bot extends Player {
       { id: "shadowheart", label: "Shadow-Heart" },
       { id: "luminarch", label: "Luminarch" },
       { id: "void", label: "Void" },
+      { id: "dragon", label: "Dragon" },
     ];
   }
 
@@ -48,7 +49,9 @@ export default class Bot extends Player {
         ? this.getShadowHeartDeck()
         : this.archetype === "void"
           ? this.getVoidDeck()
-          : this.getLuminarchDeck();
+          : this.archetype === "dragon"
+            ? this.getDragonDeck()
+            : this.getLuminarchDeck();
 
     for (const cardId of deckList) {
       const data = cardDatabaseById.get(cardId);
@@ -161,6 +164,39 @@ export default class Bot extends Player {
     ];
   }
 
+  getDragonDeck() {
+    return [
+      // === MONSTERS ===
+      // Extreme Dragons (1x each — fieldLimit allows only 1 face-up at a time)
+      250, // Fire Extreme Dragon (3000 ATK — burn on activation + battle destroy)
+      251, // Volcanic Extreme Dragon (2600 ATK — battle-indestructible alone + GY burn)
+      252, // Mist Extreme Dragon (2800 ATK — bounce + restrict summon-turn attacks)
+      253, // Galaxy Extreme Dragon (2900 ATK — opp GY banish + once per duel survival)
+      254, // Forest Extreme Dragon (2500 ATK — standby LP heal + ATK gain)
+      // Big Dragons
+      24,  // Black Bull Dragon (2500 ATK — SS by discarding 2 Dragons, double attack)
+      29,  // Purified Crystal Dragon (2500 ATK — SS by banishing 3 GY Dragons, heal)
+      28,  // Abyssal Serpent Dragon (2200 ATK — cannot be SS'd, stall exchange effect)
+      25,  // Hellkite Dragon (2300 ATK — SS from hand by sending field Dragon to GY)
+      21,  // Majestic Silver Dragon (2500 ATK — alt tribute 1 Dragon, position switch)
+      22,  // Darkness Dragon (2000+ ATK — destroys field dragons to gain ATK)
+      // Mid Dragons
+      16, 16, 16, // Armored Dragon (1600 ATK — search lv4 Dragon on normal summon)
+      18, 18,     // Grey Dragon (1800 ATK — SS buff +500, GY return self)
+      20, 20,     // Luminescent Dragon (1500 ATK — NS revives lv4- from GY)
+      33,         // Boneflame Dragon (GY ignition — send field Dragon, gains 300 per GY Dragon)
+      19, 19,     // Voltaic Dragon (1200 ATK — SS if control Dragon, 800 burn on discard)
+      // === SPELLS ===
+      256, 256,   // Converging Stars (discard 1; reduce hand monster levels -1 until EOT)
+      26, 26,     // Hellkite Roar (control lv7+ Dragon: destroy up to 2 opp spell/trap)
+      13,         // Polymerization (fusion: Voltaic + lv5+ = Tech-Void; 5 Extreme GY = Bahamut)
+      15,         // Call of the Haunted (trap: revive from GY)
+      27, 27,     // Jagged Peak of the Dragons (field: GY search + counter + SS on 5 counters)
+      // === TRAPS ===
+      32, 32,     // Dragon Spirit Sanctuary (Dragon targeted: return to hand + SS from hand)
+    ];
+  }
+
   // Sobrescreve buildExtraDeck para usar fusões do arquétipo
   buildExtraDeck() {
     const extraDeckList =
@@ -168,7 +204,9 @@ export default class Bot extends Player {
         ? this.getShadowHeartExtraDeck()
         : this.archetype === "void"
           ? this.getVoidExtraDeck()
-          : this.getLuminarchExtraDeck();
+          : this.archetype === "dragon"
+            ? this.getDragonExtraDeck()
+            : this.getLuminarchExtraDeck();
     super.buildExtraDeck(extraDeckList);
   }
 
@@ -195,6 +233,14 @@ export default class Bot extends Player {
       163, // Void Berserker (fusion)
       165, // Void Hydra Titan (fusion)
       171, // Void Cosmic Walker (ascension)
+    ];
+  }
+
+  getDragonExtraDeck() {
+    return [
+      17,  // Metal Armored Dragon (ascension from Armored Dragon)
+      30,  // Tech-Void Dragon (fusion: Voltaic Dragon + lv5+ Dragon)
+      255, // Supreme Bahamut Dragon (fusion: banish 5 Extreme Dragons from GY)
     ];
   }
 

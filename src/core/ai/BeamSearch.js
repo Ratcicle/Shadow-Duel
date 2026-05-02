@@ -101,8 +101,10 @@ export async function beamSearchTurn(game, strategy, options = {}) {
       .join(",");
     const botLP = bot.lp || 0;
     const oppLP = player.lp || 0;
+    const botHandLen = (bot.hand || []).length;
+    const botSTLen = (bot.spellTrap || []).length;
 
-    return `${botField}|${oppField}|${botLP}|${oppLP}`;
+    return `${botField}|${oppField}|${botLP}|${oppLP}|${botHandLen}|${botSTLen}`;
   }
 
   /**
