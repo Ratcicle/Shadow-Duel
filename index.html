@@ -60,7 +60,24 @@
     <div id="deck-builder" class="overlay hidden">
       <div class="deck-panel">
         <div class="deck-header">
-          <h2>Meu Deck</h2>
+          <div class="deck-title-area">
+            <h2>Meu Deck</h2>
+            <div
+              id="deck-slot-tabs"
+              class="deck-slot-tabs"
+              aria-label="Deck presets"
+            ></div>
+            <label class="deck-slot-name-label" for="deck-slot-name">
+              Nome
+              <input
+                id="deck-slot-name"
+                class="deck-slot-name-input"
+                type="text"
+                maxlength="24"
+                autocomplete="off"
+              />
+            </label>
+          </div>
           <span id="deck-count">0 / 30</span>
         </div>
         <p class="deck-hint">Maximo de 3 cópias por carta.</p>

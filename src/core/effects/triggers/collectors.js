@@ -644,6 +644,11 @@ export async function collectBattleDestroyTriggers(payload) {
           continue;
         }
 
+        if (effect.requireZone) {
+          const sourceZone = this.findCardZone?.(owner, card) || null;
+          if (sourceZone !== effect.requireZone) continue;
+        }
+
         // Check requireFaceup condition
         if (effect.requireFaceup === true && card.isFacedown === true) {
           console.log(

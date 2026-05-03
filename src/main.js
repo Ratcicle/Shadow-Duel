@@ -23,6 +23,11 @@ let game = null;
 const cardKindOrder = { monster: 0, spell: 1, trap: 2 };
 const REPLAY_MODE_KEY = "shadow_duel_capture_mode";
 const BOT_PRESET_KEY = "shadow_duel_bot_preset";
+const LEGACY_DECK_KEY = "shadow_duel_deck";
+const LEGACY_EXTRA_DECK_KEY = "shadow_duel_extra_deck";
+const DECK_PRESETS_KEY = "shadow_duel_deck_presets";
+const ACTIVE_DECK_SLOT_KEY = "shadow_duel_active_deck_slot";
+const DECK_PRESET_COUNT = 5;
 let replayModeEnabled = loadReplayModeFlag();
 let currentBotPreset = loadBotPreset();
 let latestValidationResult = null;
@@ -39,6 +44,8 @@ const extraDeckGrid = document.getElementById("extradeck-grid");
 const poolGrid = document.getElementById("pool-grid");
 const deckCountEl = document.getElementById("deck-count");
 const extraDeckCountEl = document.getElementById("extradeck-count");
+const deckSlotTabs = document.getElementById("deck-slot-tabs");
+const deckSlotNameInput = document.getElementById("deck-slot-name");
 const botPresetSelect = document.getElementById("bot-preset-select");
 const botPresetStatus = document.getElementById("bot-preset-status");
 populateBotPresetDropdown();
@@ -162,6 +169,8 @@ const laboratoryBotArchetypeSelect = document.getElementById("laboratory-bot-arc
 const laboratoryRevealBotHandInput = document.getElementById("laboratory-reveal-bot-hand");
 const laboratoryModeButtons = document.querySelectorAll("[data-laboratory-mode]");
 
+let deckPresets = loadDeckPresets();
+let activeDeckSlot = loadActiveDeckSlot();
 let currentDeck = loadDeck();
 let currentExtraDeck = loadExtraDeck();
 let poolFilterMode = "all"; // all | no_archetype | void | luminarch | shadow_heart | arcanist
@@ -221,37 +230,164 @@ function sortDeck(deckIds = []) {
   });
 }
 
-function loadDeck() {
+function getDefaultDeckPreset(index) {
+  return {
+    name: `Deck ${index + 1}`,
+    deck: buildDefaultDeck(),
+    extraDeck: [],
+  };
+}
+
+function normalizeDeckPreset(rawPreset, index) {
+  const fallback = getDefaultDeckPreset(index);
+  const rawName =
+    typeof rawPreset?.name === "string" ? rawPreset.name.trim() : "";
+  return {
+    name: rawName || fallback.name,
+    deck: Array.isArray(rawPreset?.deck)
+      ? sanitizeDeck(rawPreset.deck)
+      : fallback.deck,
+    extraDeck: Array.isArray(rawPreset?.extraDeck)
+      ? sanitizeExtraDeck(rawPreset.extraDeck)
+      : fallback.extraDeck,
+  };
+}
+
+function readLegacyDeckPreset() {
+  const preset = {};
   try {
-    const stored = localStorage.getItem("shadow_duel_deck");
-    if (stored) return sanitizeDeck(JSON.parse(stored));
+    const storedDeck = localStorage.getItem(LEGACY_DECK_KEY);
+    if (storedDeck) {
+      preset.deck = JSON.parse(storedDeck);
+    }
   } catch (e) {
-    console.warn("Failed to load deck", e);
+    console.warn("Failed to load legacy deck", e);
   }
-  return buildDefaultDeck();
+  try {
+    const storedExtraDeck = localStorage.getItem(LEGACY_EXTRA_DECK_KEY);
+    if (storedExtraDeck) {
+      preset.extraDeck = JSON.parse(storedExtraDeck);
+    }
+  } catch (e) {
+    console.warn("Failed to load legacy extra deck", e);
+  }
+  return preset.deck || preset.extraDeck ? preset : null;
+}
+
+function loadDeckPresets() {
+  try {
+    const stored = localStorage.getItem(DECK_PRESETS_KEY);
+    const parsed = stored ? JSON.parse(stored) : null;
+    if (Array.isArray(parsed)) {
+      return Array.from({ length: DECK_PRESET_COUNT }, (_, index) =>
+        normalizeDeckPreset(parsed[index], index),
+      );
+    }
+  } catch (e) {
+    console.warn("Failed to load deck presets", e);
+  }
+
+  const presets = Array.from({ length: DECK_PRESET_COUNT }, (_, index) =>
+    getDefaultDeckPreset(index),
+  );
+  const legacyPreset = readLegacyDeckPreset();
+  if (legacyPreset) {
+    presets[0] = normalizeDeckPreset(
+      { name: "Deck 1", ...legacyPreset },
+      0,
+    );
+    persistDeckPresets(presets);
+  }
+  return presets;
+}
+
+function persistDeckPresets(presets = deckPresets) {
+  try {
+    localStorage.setItem(DECK_PRESETS_KEY, JSON.stringify(presets));
+  } catch (e) {
+    console.warn("Failed to save deck presets", e);
+  }
+}
+
+function loadActiveDeckSlot() {
+  try {
+    const stored = Number(localStorage.getItem(ACTIVE_DECK_SLOT_KEY));
+    if (Number.isInteger(stored) && stored >= 0 && stored < DECK_PRESET_COUNT) {
+      return stored;
+    }
+  } catch (e) {
+    console.warn("Failed to load active deck slot", e);
+  }
+  return 0;
+}
+
+function persistActiveDeckSlot() {
+  try {
+    localStorage.setItem(ACTIVE_DECK_SLOT_KEY, String(activeDeckSlot));
+  } catch (e) {
+    console.warn("Failed to save active deck slot", e);
+  }
+}
+
+function loadDeck() {
+  return [...(deckPresets[activeDeckSlot]?.deck || buildDefaultDeck())];
 }
 
 function saveDeck(deck) {
   currentDeck = sortDeck(deck);
-  localStorage.setItem("shadow_duel_deck", JSON.stringify(currentDeck));
+  saveActiveDeckPreset();
 }
 
 function loadExtraDeck() {
-  try {
-    const stored = localStorage.getItem("shadow_duel_extra_deck");
-    if (stored) return sanitizeExtraDeck(JSON.parse(stored));
-  } catch (e) {
-    console.warn("Failed to load extra deck", e);
-  }
-  return [];
+  return [...(deckPresets[activeDeckSlot]?.extraDeck || [])];
 }
 
 function saveExtraDeck(extraDeck) {
-  currentExtraDeck = [...extraDeck];
-  localStorage.setItem(
-    "shadow_duel_extra_deck",
-    JSON.stringify(currentExtraDeck),
+  currentExtraDeck = sanitizeExtraDeck(extraDeck);
+  saveActiveDeckPreset();
+}
+
+function saveLegacyDeckFallback() {
+  try {
+    localStorage.setItem(LEGACY_DECK_KEY, JSON.stringify(currentDeck));
+    localStorage.setItem(
+      LEGACY_EXTRA_DECK_KEY,
+      JSON.stringify(currentExtraDeck),
+    );
+  } catch (e) {
+    console.warn("Failed to save legacy deck fallback", e);
+  }
+}
+
+function saveActiveDeckPreset() {
+  const currentName =
+    typeof deckSlotNameInput?.value === "string"
+      ? deckSlotNameInput.value
+      : deckPresets[activeDeckSlot]?.name;
+  deckPresets[activeDeckSlot] = normalizeDeckPreset(
+    {
+      name: currentName,
+      deck: currentDeck,
+      extraDeck: currentExtraDeck,
+    },
+    activeDeckSlot,
   );
+  currentDeck = [...deckPresets[activeDeckSlot].deck];
+  currentExtraDeck = [...deckPresets[activeDeckSlot].extraDeck];
+  persistDeckPresets();
+  persistActiveDeckSlot();
+  saveLegacyDeckFallback();
+}
+
+function switchDeckSlot(slotIndex) {
+  if (slotIndex === activeDeckSlot) return;
+  if (slotIndex < 0 || slotIndex >= DECK_PRESET_COUNT) return;
+  saveActiveDeckPreset();
+  activeDeckSlot = slotIndex;
+  currentDeck = loadDeck();
+  currentExtraDeck = loadExtraDeck();
+  persistActiveDeckSlot();
+  renderDeckBuilder();
 }
 
 function loadBotPreset() {
@@ -607,8 +743,30 @@ function getSortedCardPool(cards) {
   return [...sortedMonsters, ...sortedSpells, ...sortedTraps, ...sortedOthers];
 }
 
+function renderDeckSlotControls() {
+  if (deckSlotTabs) {
+    deckSlotTabs.innerHTML = "";
+    deckPresets.forEach((preset, index) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "deck-slot-tab";
+      button.classList.toggle("active", index === activeDeckSlot);
+      button.textContent = preset?.name || `Deck ${index + 1}`;
+      button.title = button.textContent;
+      button.addEventListener("click", () => switchDeckSlot(index));
+      deckSlotTabs.appendChild(button);
+    });
+  }
+
+  if (deckSlotNameInput) {
+    deckSlotNameInput.value =
+      deckPresets[activeDeckSlot]?.name || `Deck ${activeDeckSlot + 1}`;
+  }
+}
+
 function renderDeckBuilder() {
   updatePoolFilterButtons();
+  renderDeckSlotControls();
   currentDeck = sortDeck(currentDeck);
   deckGrid.innerHTML = "";
   poolGrid.innerHTML = "";
@@ -1366,6 +1524,7 @@ function openDeckBuilder() {
 }
 
 function closeDeckBuilder() {
+  saveActiveDeckPreset();
   deckBuilder.classList.add("hidden");
   startScreen.classList.remove("hidden");
 }
@@ -1649,6 +1808,17 @@ btnDeckSave?.addEventListener("click", () => {
   saveExtraDeck(currentExtraDeck);
   closeDeckBuilder();
 });
+deckSlotNameInput?.addEventListener("input", () => {
+  const fallbackName = `Deck ${activeDeckSlot + 1}`;
+  const name = deckSlotNameInput.value.trim() || fallbackName;
+  deckPresets[activeDeckSlot].name = name;
+  const activeTab = deckSlotTabs?.children?.[activeDeckSlot];
+  if (activeTab) {
+    activeTab.textContent = name;
+    activeTab.title = name;
+  }
+});
+deckSlotNameInput?.addEventListener("change", saveActiveDeckPreset);
 btnPoolFilterNoArchetype?.addEventListener("click", () => {
   poolFilterMode = poolFilterMode === "no_archetype" ? "all" : "no_archetype";
   renderDeckBuilder();

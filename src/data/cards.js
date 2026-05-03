@@ -5463,7 +5463,7 @@
     subtype: "field",
     archetype: "Arcanist",
     description:
-      'Onece per turn, if you control no monsters: you can pay 2000 LP; Special Summon 1 Level 4 or lower "Arcanist" monster from your Deck. The first time each turn an "Arcanist" monster you control destroys an opponent\'s monster by battle: draw 1 card.',
+      'Once per turn, if you control no monsters: you can pay 2000 LP; Special Summon 1 Level 4 or lower "Arcanist" monster from your Deck. The first time each turn an "Arcanist" monster you control destroys an opponent\'s monster by battle: draw 1 card.',
     image: "assets/Arcanist Grand Library.png",
     effects: [
       {
@@ -5835,7 +5835,7 @@
       },
     },
     description:
-      'There can only be 1 face-up "Extreme Dragon" monster on the field. While this card is the only monster you control, it cannot be destroyed by card effects. If this card destroys an opponent\'s monster by battle: inflict damage to your opponent equal to half the destroyed monster\'s original ATK. Each time your opponent activates a card or effect: inflict 300 damage to your opponent.',
+      "There can only be 1 face-up \"Extreme Dragon\" monster on the field. While this card is the only monster you control, it cannot be destroyed by card effects. If this card destroys an opponent's monster by battle: inflict damage to your opponent equal to half the destroyed monster's original ATK. Each time your opponent activates a card or effect: inflict 300 damage to your opponent.",
     image: "assets/Fire Extreme Dragon.png",
     effects: [
       {
@@ -5892,7 +5892,6 @@
           },
         ],
       },
-
     ],
   },
   {
