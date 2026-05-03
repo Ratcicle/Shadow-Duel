@@ -414,7 +414,7 @@
     },
     "206": {
       "name": "Tera, Arcanista da Terra",
-      "description": "Durante o turno do seu oponente (Efeito R\u00e1pido): voc\u00ea pode escolher 1 monstro com a face para cima que seu oponente controla; mude a posi\u00e7\u00e3o de batalha dele. Se este card estiver equipado com uma Magia de Equipamento \"Arcanista\", voc\u00ea pode escolher at\u00e9 2 monstros com a face para cima em vez disso. Voc\u00ea s\u00f3 pode usar este efeito de \"Tera, Arcanista da Terra\" uma vez por turno."
+      "description": "Voc\u00ea pode escolher 1 monstro com a face para cima que seu oponente controla; mude a posi\u00e7\u00e3o de batalha dele. Se este card estiver equipado com uma Magia de Equipamento \"Arcanista\", este efeito pode ser ativado como um Efeito R\u00e1pido. Voc\u00ea s\u00f3 pode usar este efeito de \"Tera, Arcanista da Terra\" uma vez por turno."
     },
     "207": {
       "name": "Albus, Arcanista do Gelo",
@@ -444,6 +444,18 @@
       "name": "Mestre Elementalista Arcanista",
       "description": "Não pode ser destruído por efeitos de card. Este card ganha 100 de ATK para cada Magia \"Arcanista\" ativada neste turno. Uma vez por turno, se este card estiver equipado com uma Magia de Equipamento \"Arcanista\": você pode escolher 1 monstro que seu oponente controla; destrua-o."
     },
+    "214": {
+      "name": "Azrath, Arcanista Corrompido",
+      "description": "Monstros que seu oponente controla perdem 100 de ATK/DEF para cada Magia \"Arcanista\" que você ativou até o final do turno. Se este card for equipado com uma Magia de Equipamento \"Arcanista\": escolha 1 monstro que seu oponente controla; o ATK/DEF dele se tornam 0. Você só pode usar este efeito de \"Azrath, Arcanista Corrompido\" uma vez por turno."
+    },
+    "215": {
+      "name": "Tornado Destruidor de Glifos",
+      "description": "Se você controlar um monstro \"Arcanista\" equipado com uma Magia de Equipamento \"Arcanista\": escolha 1 Magia/Armadilha que seu oponente controla; destrua o alvo."
+    },
+    "216": {
+      "name": "Impacto Sísmico Arcanista",
+      "description": "Se você controlar um monstro \"Arcanista\" equipado com uma Magia de Equipamento \"Arcanista\": envie 1 monstro que você controla e 1 Magia \"Arcanista\" que você controla para o Cemitério e, se isso acontecer, escolha 1 card que seu oponente controla; bana-o."
+    },
     "250": {
       "name": "Dragão Extremo de Fogo",
       "description": "Só pode haver 1 monstro \"Dragão Extremo\" com a face para cima no campo. Enquanto este card for o único monstro que você controla, ele não pode ser destruído por efeitos de cards. Se este card destruir um monstro do oponente em batalha: cause dano ao seu oponente igual à metade do ATK original do monstro destruído. Cada vez que seu oponente ativar um card ou efeito: cause 300 de dano ao seu oponente. Se este card for destruído em batalha: você pode Invocar por Invocação-Especial 1 \"Dragão Extremo Vulcânico\" da sua mão ou do Deck."
@@ -467,6 +479,10 @@
     "256": {
       "name": "Estrelas Convergentes",
       "description": "Descarte 1 card; reduza o nível de todos os monstros na sua mão em 1 até o fim do turno."
+    },
+    "257": {
+      "name": "Despertar do Dragão Extremo",
+      "description": "Você pode enviar 2 monstros do Tipo Dragão que você controla para o Cemitério; Invoque por Invocação-Especial 1 monstro do Tipo Dragão de Nível 9 ou maior da sua mão. Você só pode usar este efeito de \"Despertar do Dragão Extremo\" uma vez por turno."
     },
     "255": {
       "name": "Dragão Bahamut Supremo",

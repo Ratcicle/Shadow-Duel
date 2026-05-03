@@ -295,6 +295,7 @@ export function resolveTargets(targetDefs, ctx, selections) {
       zones,
       owner,
       filters,
+      intent: def.intent || null,
       allowSelf: def.allowSelf !== false || def.requireThisCard === true,
       distinct: def.distinct !== false,
       candidates: decoratedCandidates,

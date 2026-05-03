@@ -223,13 +223,30 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
     maxSelect,
     minSelect,
     promptPlayer: promptPlayer !== false,
-    botSelect: (cards, max) =>
-      cards[0]?.cardKind === "monster"
+    botSelect: (cards, max) => {
+      // Apply botPrefer rules: if hand contains a trigger card, prefer a specific search target
+      if (Array.isArray(action.botPrefer) && action.botPrefer.length > 0) {
+        const hand = player.hand || [];
+        for (const rule of action.botPrefer) {
+          const triggerInHand =
+            !rule.ifHandHas ||
+            hand.some((c) => c.name === rule.ifHandHas);
+          if (triggerInHand) {
+            const preferred = cards.find((c) => c.name === rule.prefer);
+            if (preferred) {
+              const rest = cards.filter((c) => c !== preferred);
+              return [preferred, ...rest].slice(0, max);
+            }
+          }
+        }
+      }
+      return cards[0]?.cardKind === "monster"
         ? cards
             .slice()
             .sort((a, b) => (b.atk || 0) - (a.atk || 0))
             .slice(0, max)
-        : cards.slice(0, max),
+        : cards.slice(0, max);
+    },
     selectSingle: (cards) => {
       const renderer = getUI(game);
       const searchModal = renderer?.getSearchModalElements?.();

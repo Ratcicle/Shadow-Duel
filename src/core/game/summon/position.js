@@ -62,6 +62,7 @@ export function changeMonsterPosition(card, newPosition) {
   }
   card.positionChangedThisTurn = true;
   card.cannotAttackThisTurn = newPosition === "defense";
+  this.effectEngine?.clearTargetingCache?.();
   this.ui.log(
     `${card.name} changes to ${
       newPosition === "attack" ? "Attack" : "Defense"

@@ -181,6 +181,7 @@
         id: "arcane_scholar_on_normal_summon",
         timing: "on_event",
         event: "after_summon",
+        requireSelfAsSummoned: true,
         summonMethods: ["normal"],
         actions: [
           {
@@ -326,6 +327,7 @@
         id: "radiant_dragon_search_luminarch",
         timing: "on_event",
         event: "after_summon",
+        requireSelfAsSummoned: true,
         summonMethods: ["normal", "tribute"],
         actions: [
           {
@@ -688,6 +690,7 @@
         id: "shadow_heart_imp_on_summon",
         timing: "on_event",
         event: "after_summon",
+        requireSelfAsSummoned: true,
         summonMethods: ["normal"],
         oncePerTurn: true,
         oncePerTurnName: "shadow_heart_imp_on_summon",
@@ -1527,6 +1530,7 @@
         id: "luminarch_valiant_search",
         timing: "on_event",
         event: "after_summon",
+        requireSelfAsSummoned: true,
         summonMethods: ["normal", "special"],
         actions: [
           {
@@ -1601,6 +1605,7 @@
         id: "luminarch_aegisbearer_def_boost",
         timing: "on_event",
         event: "after_summon",
+        requireSelfAsSummoned: true,
         summonMethods: ["special"],
         actions: [
           {
@@ -3693,6 +3698,9 @@
             maxLevel: 4,
             count: { min: 0, max: 1 },
             promptPlayer: true,
+            botPrefer: [
+              { ifHandHas: "Polymerization", prefer: "Voltaic Dragon" },
+            ],
           },
         ],
       },
@@ -3813,6 +3821,7 @@
             cardKind: "monster",
             filters: { type: "Dragon" },
             count: { min: 1, max: 1 },
+            intent: "cost",
           },
         ],
         actions: [
@@ -3842,6 +3851,7 @@
     level: 3,
     atk: 1200,
     def: 800,
+    goodDiscard: true,
     description:
       "If this card is discarded from your hand to the GY: Inflict 800 damage to your opponent. If you control a Dragon monster: You can Special Summon this card from your hand. You can only use each effect of 'Voltaic Dragon' once per turn.",
     image: "assets/Voltaic Dragon.png",
@@ -4027,6 +4037,7 @@
             owner: "self",
             zone: "hand",
             count: { min: 1, max: 1 },
+            intent: "cost",
           },
           {
             id: "darkness_dragon_negate_target",
@@ -4080,6 +4091,7 @@
             cardKind: "monster",
             filters: { type: "Dragon" },
             count: { min: 2, max: 2 },
+            intent: "cost",
           },
         ],
         actions: [
@@ -4155,6 +4167,7 @@
             cardKind: "monster",
             filters: { type: "Dragon" },
             count: { min: 1, max: 1 },
+            intent: "cost",
           },
         ],
         actions: [
@@ -4741,6 +4754,7 @@
         id: "arcanist_apprentice_search_spell",
         timing: "on_event",
         event: "after_summon",
+        requireSelfAsSummoned: true,
         summonMethods: ["normal"],
         actions: [
           {
@@ -5000,23 +5014,16 @@
     type: "Spellcaster",
     archetype: "Arcanist",
     description:
-      'During your opponent\'s turn (Quick Effect): you can target 1 face-up monster your opponent controls; change its battle position. If this card is equipped with an "Arcanist" Equip Spell, you can target up to 2 face-up monsters instead. You can only use this effect of "Tera, Arcanist of Earth" once per turn.',
+      'You can target 1 face-up monster your opponent controls; change its battle position. If this card is equipped with an "Arcanist" Equip Spell, this effect can be activated as a Quick Effect. You can only use this effect of "Tera, Arcanist of Earth" once per turn.',
     image: "assets/Tera, Arcanist of Earth.png",
     effects: [
       {
-        id: "tera_arcanist_earth_quick_single",
-        timing: "manual",
-        speed: 2,
-        isQuickEffect: true,
+        id: "tera_arcanist_earth_ignition",
+        timing: "ignition",
         requireFaceup: true,
         oncePerTurn: true,
-        oncePerTurnName: "tera_arcanist_earth_quick",
+        oncePerTurnName: "tera_arcanist_earth",
         conditions: [
-          {
-            type: "turn_player",
-            player: "opponent",
-            reason: "Effect can only be used during your opponent's turn.",
-          },
           {
             type: "equipped_with_filters",
             min: 0,
@@ -5046,19 +5053,14 @@
         ],
       },
       {
-        id: "tera_arcanist_earth_quick_double",
+        id: "tera_arcanist_earth_quick",
         timing: "manual",
         speed: 2,
         isQuickEffect: true,
         requireFaceup: true,
         oncePerTurn: true,
-        oncePerTurnName: "tera_arcanist_earth_quick",
+        oncePerTurnName: "tera_arcanist_earth",
         conditions: [
-          {
-            type: "turn_player",
-            player: "opponent",
-            reason: "Effect can only be used during your opponent's turn.",
-          },
           {
             type: "equipped_with_filters",
             min: 1,
@@ -5076,7 +5078,7 @@
             zone: "field",
             cardKind: "monster",
             requireFaceup: true,
-            count: { min: 1, max: 2 },
+            count: { min: 1, max: 1 },
           },
         ],
         actions: [
@@ -5610,6 +5612,210 @@
     ],
   },
   {
+    id: 214,
+    name: "Azrath, Corrupted Arcanist",
+    cardKind: "monster",
+    atk: 1700,
+    def: 1400,
+    level: 4,
+    type: "Spellcaster",
+    archetype: "Arcanist",
+    description:
+      'Monsters your opponent controls lose 100 ATK/DEF for each "Arcanist" Spell you activated until the end of this turn. If this card is equipped with an "Arcanist" Equip Spell: target 1 monster your opponent controls; its ATK/DEF become 0. You can only use this effect of "Azrath, Arcanista Corrompido" once per turn.',
+    image: "assets/Azrath, Corrupted Arcanist.png",
+    effects: [
+      {
+        id: "azrath_spell_debuff",
+        timing: "on_event",
+        event: "spell_activated",
+        requireZone: "field",
+        requireFaceup: true,
+        triggerPlayer: "self",
+        promptUser: false,
+        activatedCardFilters: {
+          cardKind: "spell",
+          archetype: "Arcanist",
+        },
+        actions: [
+          {
+            type: "buff_stats_temp",
+            targetRef: "opponent_field",
+            atkBoost: -100,
+            defBoost: -100,
+          },
+        ],
+      },
+      {
+        id: "azrath_equip_zero",
+        timing: "on_event",
+        event: "card_equipped",
+        oncePerTurn: true,
+        oncePerTurnName: "azrath_equip_zero",
+        requireZone: "field",
+        requireFaceup: true,
+        requireEquipCardFilters: {
+          cardKind: "spell",
+          subtype: "equip",
+          archetype: "Arcanist",
+        },
+        promptUser: true,
+        promptMessage:
+          'Activate "Azrath, Arcanista Corrompido" to set 1 opponent\'s monster ATK/DEF to 0?',
+        targets: [
+          {
+            id: "azrath_zero_target",
+            owner: "opponent",
+            zone: "field",
+            cardKind: "monster",
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "set_stats_to_zero_and_negate",
+            targetRef: "azrath_zero_target",
+            setAtkToZero: true,
+            setDefToZero: true,
+            negateEffects: false,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 215,
+    name: "Glyph-Destroying Tornado",
+    cardKind: "spell",
+    subtype: "normal",
+    archetype: "Arcanist",
+    description:
+      'If you control an "Arcanist" monster equipped with an "Arcanist" Equip Spell: target 1 Spell/Trap your opponent controls; destroy it.',
+    image: "assets/Glyph-Destroying Tornado.png",
+    effects: [
+      {
+        id: "glyph_destroying_tornado_effect",
+        timing: "on_play",
+        speed: 1,
+        conditions: [
+          {
+            type: "control_card_filters",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            archetype: "Arcanist",
+            requireFaceup: true,
+            reason: 'You must control an "Arcanist" monster.',
+          },
+          {
+            type: "control_card_filters",
+            owner: "self",
+            zone: "spellTrap",
+            cardKind: "spell",
+            subtype: "equip",
+            archetype: "Arcanist",
+            requireFaceup: true,
+            reason: 'You must control an "Arcanist" Equip Spell.',
+          },
+        ],
+        targets: [
+          {
+            id: "glyph_tornado_target",
+            owner: "opponent",
+            zones: ["spellTrap", "fieldSpell"],
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "destroy",
+            targetRef: "glyph_tornado_target",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 216,
+    name: "Arcanist Seismic Impact",
+    cardKind: "spell",
+    subtype: "normal",
+    archetype: "Arcanist",
+    description:
+      'If you control an "Arcanist" monster equipped with an "Arcanist" Equip Spell: send 1 monster you control and 1 "Arcanist" Spell you control to the GY, and if you do, target 1 card your opponent controls; banish it.',
+    image: "assets/Arcanist Seismic Impact.png",
+    effects: [
+      {
+        id: "seismic_impact_effect",
+        timing: "on_play",
+        speed: 1,
+        conditions: [
+          {
+            type: "control_card_filters",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            archetype: "Arcanist",
+            requireFaceup: true,
+            reason: 'You must control an "Arcanist" monster.',
+          },
+          {
+            type: "control_card_filters",
+            owner: "self",
+            zone: "spellTrap",
+            cardKind: "spell",
+            subtype: "equip",
+            archetype: "Arcanist",
+            requireFaceup: true,
+            reason: 'You must control an "Arcanist" Equip Spell.',
+          },
+        ],
+        targets: [
+          {
+            id: "seismic_cost_monster",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+          {
+            id: "seismic_cost_spell",
+            owner: "self",
+            zones: ["spellTrap", "fieldSpell"],
+            cardKind: "spell",
+            archetype: "Arcanist",
+            count: { min: 1, max: 1 },
+          },
+          {
+            id: "seismic_banish_target",
+            owner: "opponent",
+            zones: ["field", "spellTrap", "fieldSpell"],
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "seismic_cost_monster",
+            player: "self",
+            to: "graveyard",
+          },
+          {
+            type: "move",
+            targetRef: "seismic_cost_spell",
+            player: "self",
+            to: "graveyard",
+          },
+          {
+            type: "banish",
+            targetRef: "seismic_banish_target",
+          },
+        ],
+      },
+    ],
+  },
+  {
     id: 250,
     name: "Fire Extreme Dragon",
     cardKind: "monster",
@@ -6064,6 +6270,60 @@
           },
           {
             type: "reduce_hand_monster_levels",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 257,
+    name: "Extreme Dragon Awakening",
+    cardKind: "spell",
+    subtype: "continuous",
+    description:
+      'You can send 2 Dragon-type monsters you control to the GY; Special Summon 1 Level 9 or higher Dragon-type monster from your hand. You can only use this effect of "Extreme Dragon Awakening" once per turn.',
+    image: "assets/Extreme Dragon Awakening.png",
+    effects: [
+      {
+        id: "extreme_dragon_awakening_summon",
+        timing: "ignition",
+        requireZone: "spellTrap",
+        requirePhase: ["main1", "main2"],
+        oncePerTurn: true,
+        oncePerTurnName: "extreme_dragon_awakening_summon",
+        targets: [
+          {
+            id: "awakening_cost_dragons",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            filters: { type: "Dragon" },
+            count: { min: 2, max: 2 },
+            intent: "cost",
+          },
+          {
+            id: "awakening_summon_dragon",
+            owner: "self",
+            zone: "hand",
+            cardKind: "monster",
+            filters: { type: "Dragon" },
+            minLevel: 9,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "awakening_cost_dragons",
+            player: "self",
+            to: "graveyard",
+          },
+          {
+            type: "special_summon_from_zone",
+            targetRef: "awakening_summon_dragon",
+            zone: "hand",
+            position: "choice",
+            promptPlayer: true,
           },
         ],
       },

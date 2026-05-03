@@ -14,6 +14,7 @@ export async function flipSummon(card) {
   card.position = "attack";
   card.positionChangedThisTurn = true;
   card.cannotAttackThisTurn = true;
+  this.effectEngine?.clearTargetingCache?.();
   this.ui.log(`${card.name} is Flip Summoned!`);
 
   await this.emit("after_summon", {

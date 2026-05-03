@@ -97,6 +97,20 @@ export const COMBO_DATABASE = [
     result: "Abyssal Serpent on field — stalls opponent's biggest threat",
     priority: 9,
   },
+  {
+    name: "Awakening Setup",
+    description: "Activate Awakening (cont. spell) while holding Extreme Dragon + lining up 2 fodder",
+    requires: ["Awakening in hand", "Extreme Dragon in hand", "2 non-Extreme field Dragons OR extenders"],
+    result: "Continuous spell live; Extreme can hit field via ignition without spending NS",
+    priority: 11,
+  },
+  {
+    name: "Awakening Ignition",
+    description: "Face-up Awakening + Extreme in hand + 2 fodder field Dragons → SS Extreme",
+    requires: ["Awakening face-up", "Extreme Dragon in hand", "2+ non-Extreme field Dragons", "No Extreme face-up"],
+    result: "Extreme Dragon on field without using Normal Summon",
+    priority: 13,
+  },
 ];
 
 /**
@@ -263,6 +277,54 @@ export function detectAvailableCombos(analysis, logFn = null) {
       action: { type: "gyIgnition", cardName: "Boneflame Dragon" },
     });
     log(`💡 Combo: Boneflame Dragon GY ignition`);
+  }
+
+  // ── Extreme Dragon Awakening ──────────────────────────────────────────────
+  const awakeningInHand = handNames.includes("Extreme Dragon Awakening");
+  const awakeningFaceup = (analysis.spellTrap || []).some(
+    (c) => !c.isFacedown && c.name === "Extreme Dragon Awakening"
+  );
+  const extremeInHand = analysis.hand.some((c) =>
+    EXTREME_DRAGON_NAMES.includes(c.name)
+  );
+  const fieldDragonMons = analysis.field.filter(
+    (c) => c.cardKind === "monster" && c.type === "Dragon"
+  );
+  const nonExtremeField = fieldDragonMons.filter(
+    (c) => !EXTREME_DRAGON_NAMES.includes(c.name)
+  );
+  const hasExtremeFaceupField = fieldDragonMons.some((c) =>
+    EXTREME_DRAGON_NAMES.includes(c.name)
+  );
+
+  if (
+    awakeningInHand &&
+    extremeInHand &&
+    !hasExtremeFaceupField &&
+    (nonExtremeField.length >= 2 ||
+      handNames.some((n) =>
+        ["Luminescent Dragon", "Hellkite Dragon", "Voltaic Dragon"].includes(n)
+      ))
+  ) {
+    available.push({
+      name: "Awakening Setup",
+      priority: 11,
+      action: { type: "spell", cardName: "Extreme Dragon Awakening" },
+    });
+    log(`💡 Combo: Awakening Setup`);
+  }
+  if (
+    awakeningFaceup &&
+    extremeInHand &&
+    nonExtremeField.length >= 2 &&
+    !hasExtremeFaceupField
+  ) {
+    available.push({
+      name: "Awakening Ignition",
+      priority: 13,
+      action: { type: "spellTrapEffect", cardName: "Extreme Dragon Awakening" },
+    });
+    log(`🐉 Combo: Awakening Ignition → SS Extreme Dragon`);
   }
 
   return available;

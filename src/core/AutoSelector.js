@@ -195,6 +195,7 @@ export default class AutoSelector {
     const baseCard =
       candidate?.cardRef ||
       {
+        name: candidate?.name,
         cardKind: candidate?.cardKind,
         atk: candidate?.atk,
         def: candidate?.def,
@@ -202,6 +203,8 @@ export default class AutoSelector {
         position: candidate?.position,
         archetype: candidate?.archetype,
         archetypes: candidate?.archetypes,
+        goodDiscard: candidate?.goodDiscard,
+        cannotBeNormalSummonedOrSet: candidate?.cannotBeNormalSummonedOrSet,
       };
     const options = {
       fieldSpell: ownerPlayer?.fieldSpell || null,
@@ -220,6 +223,18 @@ export default class AutoSelector {
     }
     if (intent === "benefit") {
       return baseValue + (isSelf ? 0.4 : -0.4);
+    }
+    if (intent === "cost") {
+      // Prefer cards that are cheap to lose from hand:
+      // - goodDiscard: has a beneficial effect when sent to GY (e.g. Voltaic burn)
+      // - cannotBeNormalSummonedOrSet: no hand utility, only useful from GY (e.g. Boneflame)
+      // Lower score = picked first as cost
+      let costScore = baseValue;
+      if (baseCard?.goodDiscard === true) costScore -= 1.5;
+      if (baseCard?.cannotBeNormalSummonedOrSet === true) costScore -= 2.0;
+      // Preserve Extreme Dragons — needed for Bahamut win condition (5 in GY)
+      if (baseCard?.archetype === "Extreme Dragons") costScore += 100;
+      return costScore;
     }
     return baseValue;
   }

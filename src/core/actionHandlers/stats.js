@@ -241,6 +241,7 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
 
   const targetCards = resolveTargetCards(action, ctx, targets, {
     defaultRef: "self",
+    game,
   });
 
   if (targetCards.length === 0) {
@@ -1032,6 +1033,7 @@ export async function handleSwitchDefenderPositionOnAttack(
 
     defender.isFacedown = false;
     defender.revealedTurn = game.turnCounter;
+    game.effectEngine?.clearTargetingCache?.();
     getUI(game)?.log(`${defender.name} was flipped!`);
     game.updateBoard();
 

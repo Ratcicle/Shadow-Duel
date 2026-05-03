@@ -130,6 +130,11 @@ export default class DragonStrategy extends BaseStrategy {
       })),
       graveyard: gyCards,
       fieldSpell: bot.fieldSpell || null,
+      spellTrap: (bot.spellTrap || []).map((c) => ({
+        name: c.name,
+        cardKind: c.cardKind,
+        isFacedown: c.isFacedown,
+      })),
       lp: bot.lp,
       summonCount: bot.summonCount || 0,
       phase: game.phase || "main1",
@@ -322,13 +327,77 @@ export default class DragonStrategy extends BaseStrategy {
       });
     }
 
+    // === EXTREME DRAGON TRIBUTE SUMMON ===
+    // Evaluate tributing 2 field monsters for an Extreme Dragon (level 10 = 2 tributes).
+    // This must be checked BEFORE normal summons so it can outbid lower-priority summons.
+    if (analysis.canNormalSummon) {
+      const fieldMonsters = (bot.field || []).filter((c) => c && c.cardKind === "monster");
+      const hasExtremeOnField = fieldMonsters.some((c) => isExtremeDragon(c));
+
+      if (!hasExtremeOnField && fieldMonsters.length >= 2) {
+        const oppField = opponent?.field || [];
+        const oppStrongestATK = oppField.reduce((max, m) => Math.max(max, m.atk || 0), 0);
+
+        (bot.hand || []).forEach((card, index) => {
+          if (!isExtremeDragon(card)) return;
+          if ((bot.summonCount || 0) >= 1) return;
+
+          // Level 10 → 2 tributes (standard lv7+ rule)
+          const tributesNeeded = 2;
+          if (fieldMonsters.length < tributesNeeded) return;
+
+          // Don't waste the tribute summon if extreme dragon's ATK won't dominate
+          const extremeATK = card.atk || 0;
+
+          // Always worth it if ATK beats opponent's strongest, or opp field is dangerous (2+ threats)
+          const beatsThreat = extremeATK > oppStrongestATK;
+          const oppHasMultipleThreats = oppField.length >= 2;
+          const oppHasBigThreat = oppStrongestATK >= 2000;
+
+          if (!beatsThreat && !oppHasMultipleThreats && !oppHasBigThreat) {
+            log(`  ❌ Extreme Tribute: ${card.name} — no pressure justifies the cost`);
+            return;
+          }
+
+          // Don't tribute another Extreme Dragon
+          const tributeIndices = selectBestTributes(fieldMonsters, tributesNeeded, card);
+          const tributedCards = tributeIndices.map((i) => fieldMonsters[i]).filter(Boolean);
+          if (tributedCards.some((m) => isExtremeDragon(m))) {
+            log(`  ❌ Extreme Tribute: ${card.name} — would tribute another Extreme Dragon`);
+            return;
+          }
+
+          // High priority: extreme dragon tribute is almost always the best play when available
+          let priority = 13;
+          if (beatsThreat && oppHasMultipleThreats) priority = 15;
+          else if (beatsThreat) priority = 14;
+          else if (oppHasMultipleThreats) priority = 12;
+
+          log(`  ✅ Extreme Tribute: ${card.name} (${extremeATK} ATK) — tributing ${tributedCards.map((m) => m.name).join(", ")} (priority ${priority})`);
+
+          const macroBuff = calculateMacroPriorityBonus("summon", card, macroStrategy);
+          actions.push({
+            type: "summon",
+            index,
+            cardId: card.id,
+            position: "attack",
+            facedown: false,
+            priority: priority + macroBuff,
+            cardName: card.name,
+            macroBuff,
+            isExtremeTribute: true,
+          });
+        });
+      }
+    }
+
     // === NORMAL SUMMON ACTIONS ===
     if (analysis.canNormalSummon) {
       (bot.hand || []).forEach((card, index) => {
         if (card.cardKind !== "monster") return;
         if ((bot.summonCount || 0) >= 1) return;
 
-        // Extreme Dragons cannot be Normal Summoned (level 10 needs 3 tributes, not practical)
+        // Extreme Dragons are handled in the dedicated tribute section above
         if (isExtremeDragon(card)) return;
 
         const tributeInfo = this.getTributeRequirementFor(card, bot);
@@ -447,6 +516,15 @@ export default class DragonStrategy extends BaseStrategy {
       let priority = 7;
 
       if (card.name === "Hellkite Dragon") {
+        // Only worthwhile if there's a field Dragon weaker than Hellkite (2300) to sacrifice
+        const fieldDragons = (bot.field || []).filter(
+          (c) => c && c.cardKind === "monster" && c.type === "Dragon"
+        );
+        const hasCheapCost = fieldDragons.some((c) => (c.atk || 0) < (card.atk || 2300));
+        if (!hasCheapCost) {
+          log(`  ⏭️ Hand ignition: Hellkite Dragon — all field Dragons (${fieldDragons.map((c) => `${c.name} ${c.atk}`).join(", ")}) are >= Hellkite's 2300 ATK (bad trade)`);
+          return;
+        }
         priority = 8;
         log(`  ✅ Hand ignition: Hellkite Dragon → 2300 ATK, GY setup`);
       } else if (card.name === "Voltaic Dragon") {
@@ -483,6 +561,60 @@ export default class DragonStrategy extends BaseStrategy {
         effectId: handIgnitionEffect.id,
         macroBuff,
       });
+    });
+
+    // === SPELL/TRAP-ZONE IGNITION ACTIONS ===
+    // Face-up continuous spells with ignition effects (e.g. Extreme Dragon Awakening).
+    (bot.spellTrap || []).forEach((card, zoneIndex) => {
+      if (!card || card.isFacedown || card.cardKind !== "spell") return;
+      const ignition = (card.effects || []).find(
+        (e) => e && e.timing === "ignition" && e.requireZone === "spellTrap"
+      );
+      if (!ignition) return;
+
+      if (!isSimulatedState && actualGame.effectEngine) {
+        const opt = actualGame.effectEngine.checkOncePerTurn(card, bot, ignition);
+        if (!opt?.ok) return;
+      }
+
+      if (card.name === "Extreme Dragon Awakening") {
+        const fieldDragons = (bot.field || []).filter(
+          (c) => c?.cardKind === "monster" && !c.isFacedown && c.type === "Dragon"
+        );
+        const nonExtreme = fieldDragons.filter((c) => !isExtremeDragon(c));
+        const extremeInHand = (bot.hand || []).filter((c) => isExtremeDragon(c));
+        const hasExtremeFaceup = fieldDragons.some(isExtremeDragon);
+        if (nonExtreme.length < 2 || extremeInHand.length === 0 || hasExtremeFaceup) return;
+
+        const oppStrongest = (opponent?.field || []).reduce(
+          (m, c) => Math.max(m, c.atk || 0),
+          0
+        );
+        const bestExtreme = selectBestExtremeDragon(extremeInHand, analysis);
+        let priority = 12;
+        if ((bestExtreme?.atk || 0) > oppStrongest) priority = 14;
+
+        if (
+          analysis.canNormalSummon &&
+          (bot.hand || []).some(
+            (c) => c.name === "Armored Dragon" || c.name === "Luminescent Dragon"
+          )
+        ) {
+          priority += 1;
+        }
+
+        log(
+          `  ✅ Awakening ignition: SS ${bestExtreme?.name} via 2 Dragon cost (priority ${priority})`
+        );
+        actions.push({
+          type: "spellTrapEffect",
+          zoneIndex,
+          cardId: card.id,
+          cardName: card.name,
+          priority,
+          effectId: ignition.id,
+        });
+      }
     });
 
     // === STALEMATE BREAKER ===

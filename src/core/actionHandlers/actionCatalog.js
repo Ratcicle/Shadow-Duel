@@ -1289,6 +1289,7 @@ const CONTEXT_TARGET_REFS = new Set([
   "target",
   "targetedCard",
   "host",
+  "opponent_field",
 ]);
 
 export function listCatalogActionTypes() {

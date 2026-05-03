@@ -187,11 +187,12 @@ export default class Bot extends Player {
       33,         // Boneflame Dragon (GY ignition — send field Dragon, gains 300 per GY Dragon)
       19, 19,     // Voltaic Dragon (1200 ATK — SS if control Dragon, 800 burn on discard)
       // === SPELLS ===
-      256, 256,   // Converging Stars (discard 1; reduce hand monster levels -1 until EOT)
+      256,        // Converging Stars (discard 1; reduce hand monster levels -1 until EOT)
       26, 26,     // Hellkite Roar (control lv7+ Dragon: destroy up to 2 opp spell/trap)
       13,         // Polymerization (fusion: Voltaic + lv5+ = Tech-Void; 5 Extreme GY = Bahamut)
       15,         // Call of the Haunted (trap: revive from GY)
-      27, 27,     // Jagged Peak of the Dragons (field: GY search + counter + SS on 5 counters)
+      27,         // Jagged Peak of the Dragons (field: GY search + counter + SS on 5 counters)
+      257,        // Extreme Dragon Awakening (cont. spell — tribute 2 Dragons → SS lv9+ Dragon from hand)
       // === TRAPS ===
       32, 32,     // Dragon Spirit Sanctuary (Dragon targeted: return to hand + SS from hand)
     ];

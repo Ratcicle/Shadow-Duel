@@ -1436,13 +1436,18 @@ async function startLaboratoryDuel() {
 }
 
 // Listener para rematch via evento do game over modal
-window.addEventListener("shadow-duel-rematch", () => {
+window.addEventListener("shadow-duel-rematch", async () => {
   if (!runCardDatabaseValidation({ silent: true })) {
     alert("Corrija os erros do Card DB antes de reiniciar o duelo.");
     return;
   }
+  const wasLaboratoryDuel = game?.laboratoryModeEnabled === true;
   startScreen.classList.add("hidden");
   deckBuilder.classList.add("hidden");
+  if (wasLaboratoryDuel) {
+    await startLaboratoryDuel();
+    return;
+  }
   bootGame();
   updateReplayModeButton(); // Atualizar contador de replays
 });

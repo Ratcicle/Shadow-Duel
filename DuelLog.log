@@ -1,86 +1,1036 @@
-i18n.js:152 [i18n] pt-br translations: 114/114 cards (0 missing, 0 extra).
-Debug%20Dragon.png:1  Failed to load resource: the server responded with a status of 404 (Not Found)
-lifecycle.js:26 
-──────────────────── TURNO 1: You ────────────────────
-log.js:10 Added Voltaic Dragon to hand from deck.
-movement.js:1012 [moveCard] Emitting card_to_grave event for Infinity Searcher (fromZone: spellTrap)
-collectors.js:1151 [handleCardToGraveEvent] Infinity Searcher entered graveyard. card.owner="player", ctx.player.id="player", ctx.opponent.id="bot", wasDestroyed=false
-collectors.js:1154 [handleCardToGraveEvent] Infinity Searcher entered graveyard from spellTrap. Card has 1 effects.
-log.js:10 Infinity Searcher effect activated.
-triggers.js:14 [checkAndOfferTraps] Called for event: card_activation Object
-triggers.js:38 [checkAndOfferTraps] Proceeding to open chain window
-triggers.js:105 [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
-movement.js:1012 [moveCard] Emitting card_to_grave event for Arcane Surge (fromZone: spellTrap)
-collectors.js:1151 [handleCardToGraveEvent] Arcane Surge entered graveyard. card.owner="player", ctx.player.id="player", ctx.opponent.id="bot", wasDestroyed=false
-collectors.js:1154 [handleCardToGraveEvent] Arcane Surge entered graveyard from spellTrap. Card has 1 effects.
-log.js:10 Arcane Surge effect activated.
-triggers.js:14 [checkAndOfferTraps] Called for event: card_activation Object
-triggers.js:38 [checkAndOfferTraps] Proceeding to open chain window
-triggers.js:105 [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
-log.js:10 Added Polymerization to hand from deck.
-verification.js:114 [canActivatePolymerization] ❌ Bloqueado: nenhuma fusão possível com materiais disponíveis
-movement.js:1012 [moveCard] Emitting card_to_grave event for Infinity Searcher (fromZone: spellTrap)
-collectors.js:1151 [handleCardToGraveEvent] Infinity Searcher entered graveyard. card.owner="player", ctx.player.id="player", ctx.opponent.id="bot", wasDestroyed=false
-collectors.js:1154 [handleCardToGraveEvent] Infinity Searcher entered graveyard from spellTrap. Card has 1 effects.
-log.js:10 Infinity Searcher effect activated.
-triggers.js:14 [checkAndOfferTraps] Called for event: card_activation Object
-triggers.js:38 [checkAndOfferTraps] Proceeding to open chain window
-triggers.js:105 [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
-verification.js:114 [canActivatePolymerization] ❌ Bloqueado: nenhuma fusão possível com materiais disponíveis
-log.js:10 Added Black Bull Dragon to hand from deck.
-verification.js:97 [canActivatePolymerization] ✅ Permitido: pode invocar Tech-Void Dragon
-verification.js:97 [canActivatePolymerization] ✅ Permitido: pode invocar Tech-Void Dragon
-verification.js:97 [canActivatePolymerization] ✅ Permitido: pode invocar Tech-Void Dragon
-verification.js:97 [canActivatePolymerization] ✅ Permitido: pode invocar Tech-Void Dragon
-movement.js:1012 [moveCard] Emitting card_to_grave event for Infinity Searcher (fromZone: spellTrap)
-collectors.js:1151 [handleCardToGraveEvent] Infinity Searcher entered graveyard. card.owner="player", ctx.player.id="player", ctx.opponent.id="bot", wasDestroyed=false
-collectors.js:1154 [handleCardToGraveEvent] Infinity Searcher entered graveyard from spellTrap. Card has 1 effects.
-verification.js:97 [canActivatePolymerization] ✅ Permitido: pode invocar Tech-Void Dragon
-verification.js:97 [canActivatePolymerization] ✅ Permitido: pode invocar Tech-Void Dragon
-log.js:10 Infinity Searcher effect activated.
-triggers.js:14 [checkAndOfferTraps] Called for event: card_activation Object
-triggers.js:38 [checkAndOfferTraps] Proceeding to open chain window
-triggers.js:105 [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
-verification.js:97 [canActivatePolymerization] ✅ Permitido: pode invocar Tech-Void Dragon
-verification.js:97 [canActivatePolymerization] ✅ Permitido: pode invocar Tech-Void Dragon
-verification.js:97 [canActivatePolymerization] ✅ Permitido: pode invocar Tech-Void Dragon
-verification.js:97 [canActivatePolymerization] ✅ Permitido: pode invocar Tech-Void Dragon
-verification.js:97 [canActivatePolymerization] ✅ Permitido: pode invocar Tech-Void Dragon
-verification.js:97 [canActivatePolymerization] ✅ Permitido: pode invocar Tech-Void Dragon
-execution.js:128 [Polymerization] Field monsters: Array(0)
-execution.js:132 [Polymerization] Hand monsters: Array(4)
-execution.js:136 [Polymerization] Extra deck: Array(3)
-execution.js:147 [Polymerization] Material info: Array(4)
-execution.js:157 [Polymerization] Available fusions: Array(1)
-execution.js:179 [Polymerization] Showing fusion selection for human player
-execution.js:229 [Polymerization] Selected fusion: Tech-Void Dragon
-execution.js:310 [Polymerization] Selected materials: Array(2)
-movement.js:1012 [moveCard] Emitting card_to_grave event for Voltaic Dragon (fromZone: hand)
-collectors.js:1151 [handleCardToGraveEvent] Voltaic Dragon entered graveyard. card.owner="player", ctx.player.id="player", ctx.opponent.id="bot", wasDestroyed=false
-collectors.js:1154 [handleCardToGraveEvent] Voltaic Dragon entered graveyard from hand. Card has 2 effects.
-collectors.js:1200 [handleCardToGraveEvent] Found card_to_grave effect: voltaic_dragon_discard_damage
-collectors.js:1288 [handleCardToGraveEvent] fromZone check: effect.fromZone="hand", actual fromZone="hand"
-collectors.js:1303 [card_to_grave] About to resolve targets for Voltaic Dragon. Targets definition: undefined
-movement.js:1012 [moveCard] Emitting card_to_grave event for Black Bull Dragon (fromZone: hand)
-log.js:10 Fusion Summoned Tech-Void Dragon using Voltaic Dragon, Black Bull Dragon.
-log.js:10 Summon Method: Fusion | From: Extra Deck | You -> Tech-Void Dragon
-activationPipeline.js:204 [Game] Activation pipeline error: TypeError: Cannot read properties of null (reading 'cleanup')
-    at Renderer.showConfirmPrompt (modals.js:49:36)
-    at Proxy.showConfirmPrompt (UIAdapter.js:6:20)
-    at confirmTriggeredEffect (core.js:76:30)
-    at Object.activate (core.js:293:34)
-    at safeActivate (activationPipeline.js:196:27)
-    at Game.runActivationPipeline (activationPipeline.js:434:31)
-    at Game.runActivationPipelineWait (activationPipeline.js:480:36)
-    at Game.resolveEventEntries (eventResolver.js:229:31)
-    at Game.resolveEvent (eventResolver.js:120:35)
-    at async Game.emit (eventBus.js:32:10)
-safeActivate @ activationPipeline.js:204
+ [getActivatableCardsInChain] Checking trap Dragon Spirit Sanctuary for context attack_declaration
+ [findActivatableEffect] trap=Dragon Spirit Sanctuary ctx attackers/defenders Object
+ [findActivatableEffect] requireDefenderIsSelf mismatch for Dragon Spirit Sanctuary Object
+ [getActivatableCardsInChain] No activatable effect found for Dragon Spirit Sanctuary
+ [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+ Volcanic Extreme Dragon attacks Luminarch Sanctum Protector!
+ Efeito 1/turn ja usado neste turno.
+ [ChainSystem] Opening chain window: effect_activation Object
+ [ChainSystem] Offering chain responses (first: player, second: bot)
+ [getActivatableCardsInChain] Checking trap Dragon Spirit Sanctuary for context effect_activation
+ [getActivatableCardsInChain] No activatable effect found for Dragon Spirit Sanctuary
+ [getActivatableCardsInChain] Checking trap Dragon Spirit Sanctuary for context effect_activation
+ [getActivatableCardsInChain] No activatable effect found for Dragon Spirit Sanctuary
+ [ChainSystem] Chain responses complete, resolving chain (0 links)
+ [ChainSystem] Chain resolution complete
+ [ChainSystem] Cleaning up chain window
+ [ChainSystem] Chain window closed successfully
+ [checkAndOfferTraps] Called for event: attack_declared Object
+ [checkAndOfferTraps] Proceeding to open chain window
+ [getActivatableCardsInChain] Checking trap Dragon Spirit Sanctuary for context attack_declaration
+ [findActivatableEffect] trap=Dragon Spirit Sanctuary ctx attackers/defenders Object
+ [findActivatableEffect] requireDefenderIsSelf mismatch for Dragon Spirit Sanctuary Object
+ [getActivatableCardsInChain] No activatable effect found for Dragon Spirit Sanctuary
+ [getActivatableCardsInChain] Checking trap Dragon Spirit Sanctuary for context attack_declaration
+ [findActivatableEffect] trap=Dragon Spirit Sanctuary ctx attackers/defenders Object
+ [findActivatableEffect] requireDefenderIsSelf mismatch for Dragon Spirit Sanctuary Object
+ [getActivatableCardsInChain] No activatable effect found for Dragon Spirit Sanctuary
+ [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+ Volcanic Extreme Dragon destroyed Luminarch Sanctum Protector and dealt 800 damage.
+ [moveCard] Emitting card_to_grave event for Luminarch Sanctum Protector (fromZone: field)
+ [handleCardToGraveEvent] Luminarch Sanctum Protector entered graveyard. card.owner="player", ctx.player.id="player", ctx.opponent.id="bot", wasDestroyed=true
+ [handleCardToGraveEvent] Luminarch Sanctum Protector entered graveyard from field. Card has 1 effects.
+ [battle_destroy DEBUG] Side owner: bot, triggerSources: Array(5)
+ [battle_destroy DEBUG] attacker in triggerSources: true
+ [battle_destroy DEBUG] Side owner: player, triggerSources: Array(4)
+ [battle_destroy DEBUG] attacker in triggerSources: false
+ [battle_destroy DEBUG] Checking effect moonblade_captain_second_attack on Luminarch Moonblade Captain
+   - attacker: Volcanic Extreme Dragon, destroyed: Luminarch Sanctum Protector
+   - attackerOwner: bot, destroyedOwner: player
+   - side.owner: player, side.other: bot
+   - requireSelfAsAttacker: true, ctx.attacker === card: false
+   - requireDestroyedIsOpponent: true
+ [battle_destroy DEBUG] SKIPPED: requireSelfAsAttacker but ctx.attacker !== card
+ [resolveEvent DEBUG] battle_destroy - entries.length: 0
+ [resolveEvent DEBUG] entries: Array(0)
+ [checkAndOfferTraps] Called for event: phase_end Object
+ [checkAndOfferTraps] Proceeding to open chain window
+ [getActivatableCardsInChain] Checking trap Dragon Spirit Sanctuary for context phase_change
+ [getActivatableCardsInChain] No activatable effect found for Dragon Spirit Sanctuary
+ [getActivatableCardsInChain] Checking trap Dragon Spirit Sanctuary for context phase_change
+ [getActivatableCardsInChain] No activatable effect found for Dragon Spirit Sanctuary
+ [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+ [Bot.makeMove] Guard check: Object
+ [Bot.makeMove] Phase: main2
+ [Bot.playMainPhase] Generated 0 raw actions, 0 sequenced actions (0 filtered)
+ 
+[EmptyPhase] ⚠️  bot | T8:main2
+   Reason: NO_ACTIONS_GENERATED
+   Context: LP=5200 | Hand=4 | Field=0 | GY=3
+ [checkAndOfferTraps] Called for event: phase_end Object
+ [checkAndOfferTraps] Proceeding to open chain window
+ [getActivatableCardsInChain] Checking trap Dragon Spirit Sanctuary for context phase_change
+ [getActivatableCardsInChain] No activatable effect found for Dragon Spirit Sanctuary
+ [getActivatableCardsInChain] Checking trap Dragon Spirit Sanctuary for context phase_change
+ [getActivatableCardsInChain] No activatable effect found for Dragon Spirit Sanctuary
+ [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+ [Bot.makeMove] Guard check: Object
+ [Bot.makeMove] Phase: end
+ 
+──────────────────── TURNO 9: Jogador 1 ────────────────────
+ [ChainSystem] Opening chain window: summon_attempt Object
+ [ChainSystem] Offering chain responses (first: bot, second: player)
+ [getActivatableCardsInChain] Checking trap Dragon Spirit Sanctuary for context summon_attempt
+ [getActivatableCardsInChain] No activatable effect found for Dragon Spirit Sanctuary
+ [getActivatableCardsInChain] Checking trap Dragon Spirit Sanctuary for context summon_attempt
+ [getActivatableCardsInChain] No activatable effect found for Dragon Spirit Sanctuary
+ [ChainSystem] Chain responses complete, resolving chain (0 links)
+ [ChainSystem] Chain resolution complete
+ [ChainSystem] Cleaning up chain window
+ [ChainSystem] Chain window closed successfully
+ Summon Method: Normal | From: Hand | Jogador 1 -> Luminarch Enchanted Halberd
+ [checkAndOfferTraps] Called for event: after_summon Object
+ [checkAndOfferTraps] Proceeding to open chain window
+ [getActivatableCardsInChain] Checking trap Dragon Spirit Sanctuary for context summon
+ [getActivatableCardsInChain] No activatable effect found for Dragon Spirit Sanctuary
+ [getActivatableCardsInChain] Checking trap Dragon Spirit Sanctuary for context summon
+ [getActivatableCardsInChain] No activatable effect found for Dragon Spirit Sanctuary
+ [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+ Nao e o seu turno.
+ [ChainSystem] Opening chain window: card_activation Object
+ [ChainSystem] Offering chain responses (first: bot, second: player)
+ [getActivatableCardsInChain] Checking trap Dragon Spirit Sanctuary for context card_activation
+ [getActivatableCardsInChain] No activatable effect found for Dragon Spirit Sanctuary
+ [getActivatableCardsInChain] Checking trap Dragon Spirit Sanctuary for context card_activation
+ [getActivatableCardsInChain] No activatable effect found for Dragon Spirit Sanctuary
+ [ChainSystem] Chain responses complete, resolving chain (0 links)
+ [ChainSystem] Chain resolution complete
+ [ChainSystem] Cleaning up chain window
+ [ChainSystem] Chain window closed successfully
+ Select target(s) for the continuous spell effect.
+ [handlePayLP] SUCCESS: Paid 1000 LP, remaining 4200
+ Jogador 1 paid 1000 LP.
+ Luminarch Enchanted Halberd gained +800 ATK and +800 DEF until end of turn.
+ [moveCard] Emitting card_to_grave event for Luminarch Holy Ascension (fromZone: spellTrap)
+ [handleCardToGraveEvent] Luminarch Holy Ascension entered graveyard. card.owner="player", ctx.player.id="player", ctx.opponent.id="bot", wasDestroyed=false
+ [handleCardToGraveEvent] Luminarch Holy Ascension entered graveyard from spellTrap. Card has 1 effects.
+ Luminarch Holy Ascension effect activated.
+ [checkAndOfferTraps] Called for event: card_activation Object
+ [checkAndOfferTraps] Proceeding to open chain window
+ [getActivatableCardsInChain] Checking trap Dragon Spirit Sanctuary for context card_activation
+ [getActivatableCardsInChain] No activatable effect found for Dragon Spirit Sanctuary
+ [getActivatableCardsInChain] Checking trap Dragon Spirit Sanctuary for context card_activation
+ [getActivatableCardsInChain] No activatable effect found for Dragon Spirit Sanctuary
+ [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+ Select a monster to attack.
+ [Game] Highlighting targets: Object
+ [Game] Target selection click: Object
+ [Game] Looking for candidate: Object
+ [Game] Selected card, total: 1 / 1
+ [Game] Highlighting targets: Object
+ Luminarch Enchanted Halberd attacks Grey Dragon!
+ [attack_declared] Skipping effect: requireSelfAsAttacker not met Object
+ Luminarch Enchanted Halberd destroyed Grey Dragon and dealt 600 damage.
+ [moveCard] Emitting card_to_grave event for Grey Dragon (fromZone: field)
+ [handleCardToGraveEvent] Grey Dragon entered graveyard. card.owner="bot", ctx.player.id="bot", ctx.opponent.id="player", wasDestroyed=true
+ [handleCardToGraveEvent] Grey Dragon entered graveyard from field. Card has 2 effects.
+ [battle_destroy DEBUG] Side owner: player, triggerSources: Array(4)
+ [battle_destroy DEBUG] attacker in triggerSources: true
+ [battle_destroy DEBUG] Checking effect moonblade_captain_second_attack on Luminarch Moonblade Captain
+   - attacker: Luminarch Enchanted Halberd, destroyed: Grey Dragon
+   - attackerOwner: player, destroyedOwner: bot
+   - side.owner: player, side.other: bot
+   - requireSelfAsAttacker: true, ctx.attacker === card: false
+   - requireDestroyedIsOpponent: true
+ [battle_destroy DEBUG] SKIPPED: requireSelfAsAttacker but ctx.attacker !== card
+ [battle_destroy DEBUG] Side owner: bot, triggerSources: Array(4)
+ [battle_destroy DEBUG] attacker in triggerSources: false
+ [resolveEvent DEBUG] battle_destroy - entries.length: 0
+ [resolveEvent DEBUG] entries: Array(0)
+ 
+──────────────────── TURNO 10: Opponent ────────────────────
+ 
+[Phase] ⏭️ bot | T10 standby → main1 (0 actions, 0ms)
+ [Bot.makeMove] Guard check: Object
+ [Bot.makeMove] Phase: main1
+ [Bot.playMainPhase] Generated 2 raw actions, 2 sequenced actions (0 filtered)
+ [Bot.playMainPhase] Actions: Array(2)
+ [Bot.playMainPhase] Running beam search with 2 actions (width=2, depth=2, budget=100)...
+ [Bot.playMainPhase] Beam search result: Object
+ [Bot.playMainPhase] ✅ Beam search chose: Object
+ 
+[Decision] bot | T10:main1 🥇
+   Chosen: #1/2 - summon:Luminescent Dragon (p:9)
+   Coherence: 100%
+ [ChainSystem] Opening chain window: summon_attempt Object
+ [ChainSystem] Offering chain responses (first: player, second: bot)
+ [getActivatableCardsInChain] Checking trap Dragon Spirit Sanctuary for context summon_attempt
+ [getActivatableCardsInChain] No activatable effect found for Dragon Spirit Sanctuary
+ [getActivatableCardsInChain] Checking trap Dragon Spirit Sanctuary for context summon_attempt
+ [getActivatableCardsInChain] No activatable effect found for Dragon Spirit Sanctuary
+ [ChainSystem] Chain responses complete, resolving chain (0 links)
+ [ChainSystem] Chain resolution complete
+ [ChainSystem] Cleaning up chain window
+ [ChainSystem] Chain window closed successfully
+ Bot summons Luminescent Dragon
+ Summon Method: Normal | From: Hand | Opponent -> Luminescent Dragon
+ [ChainSystem] Opening chain window: effect_activation Object
+ [ChainSystem] Offering chain responses (first: player, second: bot)
+ [getActivatableCardsInChain] Checking trap Dragon Spirit Sanctuary for context effect_activation
+ [getActivatableCardsInChain] No activatable effect found for Dragon Spirit Sanctuary
+ [getActivatableCardsInChain] Checking trap Dragon Spirit Sanctuary for context effect_activation
+ [getActivatableCardsInChain] No activatable effect found for Dragon Spirit Sanctuary
+ [ChainSystem] Chain responses complete, resolving chain (0 links)
+ [ChainSystem] Chain resolution complete
+ [ChainSystem] Cleaning up chain window
+ [ChainSystem] Chain window closed successfully
+ [ChainSystem] Opening chain window: summon_attempt Object
+ [ChainSystem] Offering chain responses (first: player, second: bot)
+ [getActivatableCardsInChain] Checking trap Dragon Spirit Sanctuary for context summon_attempt
+ [getActivatableCardsInChain] No activatable effect found for Dragon Spirit Sanctuary
+ [getActivatableCardsInChain] Checking trap Dragon Spirit Sanctuary for context summon_attempt
+ [getActivatableCardsInChain] No activatable effect found for Dragon Spirit Sanctuary
+ [ChainSystem] Chain responses complete, resolving chain (0 links)
+ [ChainSystem] Chain resolution complete
+ [ChainSystem] Cleaning up chain window
+ [ChainSystem] Chain window closed successfully
+ Summon Method: Special | From: Graveyard | Opponent -> Grey Dragon
+ [ChainSystem] Opening chain window: effect_activation Object
+ [ChainSystem] Offering chain responses (first: player, second: bot)
+ [getActivatableCardsInChain] Checking trap Dragon Spirit Sanctuary for context effect_activation
+ [getActivatableCardsInChain] No activatable effect found for Dragon Spirit Sanctuary
+ [getActivatableCardsInChain] Checking trap Dragon Spirit Sanctuary for context effect_activation
+ [getActivatableCardsInChain] No activatable effect found for Dragon Spirit Sanctuary
+ [ChainSystem] Chain responses complete, resolving chain (0 links)
+ [ChainSystem] Chain resolution complete
+ [ChainSystem] Cleaning up chain window
+ [ChainSystem] Chain window closed successfully
+ [selectCandidates] Starting search for target "grey_dragon_buff_target": owner="self", zone="field", archetype="undefined", excludeCardName="undefined"
+ [selectCandidates] Using 1 owners: bot
+ [selectCandidates] Checking zone "field" for owner bot: 5 cards (Grey Dragon, Volcanic Extreme Dragon, Tech-Void Dragon, Luminescent Dragon, Grey Dragon)
+ [selectCandidates] Evaluating card: Grey Dragon (archetype: null, owner: bot)
+ [selectCandidates] ACCEPTED: Grey Dragon
+ [selectCandidates] Evaluating card: Volcanic Extreme Dragon (archetype: Extreme Dragons, owner: bot)
+ [selectCandidates] ACCEPTED: Volcanic Extreme Dragon
+ [selectCandidates] Evaluating card: Tech-Void Dragon (archetype: null, owner: bot)
+ [selectCandidates] ACCEPTED: Tech-Void Dragon
+ [selectCandidates] Evaluating card: Luminescent Dragon (archetype: null, owner: bot)
+ [selectCandidates] ACCEPTED: Luminescent Dragon
+ [selectCandidates] Evaluating card: Grey Dragon (archetype: null, owner: bot)
+ [selectCandidates] ACCEPTED: Grey Dragon
+ [selectCandidates] Found 5 candidates for target "grey_dragon_buff_target" (archetype: undefined, zone: field, exclude: undefined)
+ Volcanic Extreme Dragon gained +500 ATK until end of turn.
+ [checkAndOfferTraps] Called for event: after_summon Object
+ [checkAndOfferTraps] Proceeding to open chain window
+ [getActivatableCardsInChain] Checking trap Dragon Spirit Sanctuary for context summon
+ [getActivatableCardsInChain] No activatable effect found for Dragon Spirit Sanctuary
+ [getActivatableCardsInChain] Checking trap Dragon Spirit Sanctuary for context summon
+ [getActivatableCardsInChain] No activatable effect found for Dragon Spirit Sanctuary
+ [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+ Opponent Special Summoned Grey Dragon from graveyard.
+ [checkAndOfferTraps] Called for event: after_summon Object
+ [checkAndOfferTraps] Proceeding to open chain window
+ [getActivatableCardsInChain] Checking trap Dragon Spirit Sanctuary for context summon
+ [getActivatableCardsInChain] No activatable effect found for Dragon Spirit Sanctuary
+ [getActivatableCardsInChain] Checking trap Dragon Spirit Sanctuary for context summon
+ [getActivatableCardsInChain] No activatable effect found for Dragon Spirit Sanctuary
+ [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+ [Bot.playMainPhase] Generated 0 raw actions, 0 sequenced actions (0 filtered)
+ 
+[EmptyPhase] ⚠️  bot | T10:main1
+   Reason: NO_ACTIONS_GENERATED
+   Context: LP=4200 | Hand=3 | Field=1 | GY=4
+ [checkAndOfferTraps] Called for event: phase_end Object
+ [checkAndOfferTraps] Proceeding to open chain window
+ [getActivatableCardsInChain] Checking trap Dragon Spirit Sanctuary for context phase_change
+ [getActivatableCardsInChain] No activatable effect found for Dragon Spirit Sanctuary
+ [getActivatableCardsInChain] Checking trap Dragon Spirit Sanctuary for context phase_change
+ [getActivatableCardsInChain] No activatable effect found for Dragon Spirit Sanctuary
+ [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+ [Bot.makeMove] Guard check: Object
+ [Bot.makeMove] Phase: battle
+ [Bot.playBattlePhase] ✅ Starting battle phase evaluation
+ Volcanic Extreme Dragon attacks Luminarch Enchanted Halberd!
+ [ChainSystem] Opening chain window: effect_activation Object
+ [ChainSystem] Offering chain responses (first: player, second: bot)
+ [getActivatableCardsInChain] Checking trap Dragon Spirit Sanctuary for context effect_activation
+ [getActivatableCardsInChain] No activatable effect found for Dragon Spirit Sanctuary
+ [getActivatableCardsInChain] Checking trap Dragon Spirit Sanctuary for context effect_activation
+ [getActivatableCardsInChain] No activatable effect found for Dragon Spirit Sanctuary
+ [ChainSystem] Chain responses complete, resolving chain (0 links)
+ [ChainSystem] Chain resolution complete
+ [ChainSystem] Cleaning up chain window
+ [ChainSystem] Chain window closed successfully
+ [checkAndOfferTraps] Called for event: attack_declared Object
+ [checkAndOfferTraps] Proceeding to open chain window
+ [getActivatableCardsInChain] Checking trap Dragon Spirit Sanctuary for context attack_declaration
+ [findActivatableEffect] trap=Dragon Spirit Sanctuary ctx attackers/defenders Object
+ [findActivatableEffect] requireDefenderIsSelf mismatch for Dragon Spirit Sanctuary Object
+ [getActivatableCardsInChain] No activatable effect found for Dragon Spirit Sanctuary
+ [getActivatableCardsInChain] Checking trap Dragon Spirit Sanctuary for context attack_declaration
+ [findActivatableEffect] trap=Dragon Spirit Sanctuary ctx attackers/defenders Object
+ [findActivatableEffect] requireDefenderIsSelf mismatch for Dragon Spirit Sanctuary Object
+ [getActivatableCardsInChain] No activatable effect found for Dragon Spirit Sanctuary
+ [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+ Volcanic Extreme Dragon destroyed Luminarch Enchanted Halberd and dealt 1500 damage.
+ [moveCard] Emitting card_to_grave event for Luminarch Enchanted Halberd (fromZone: field)
+ [handleCardToGraveEvent] Luminarch Enchanted Halberd entered graveyard. card.owner="player", ctx.player.id="player", ctx.opponent.id="bot", wasDestroyed=true
+ [handleCardToGraveEvent] Luminarch Enchanted Halberd entered graveyard from field. Card has 1 effects.
+ [battle_destroy DEBUG] Side owner: bot, triggerSources: Array(6)
+ [battle_destroy DEBUG] attacker in triggerSources: true
+ [battle_destroy DEBUG] Side owner: player, triggerSources: Array(3)
+ [battle_destroy DEBUG] attacker in triggerSources: false
+ [battle_destroy DEBUG] Checking effect moonblade_captain_second_attack on Luminarch Moonblade Captain
+   - attacker: Volcanic Extreme Dragon, destroyed: Luminarch Enchanted Halberd
+   - attackerOwner: bot, destroyedOwner: player
+   - side.owner: player, side.other: bot
+   - requireSelfAsAttacker: true, ctx.attacker === card: false
+   - requireDestroyedIsOpponent: true
+ [battle_destroy DEBUG] SKIPPED: requireSelfAsAttacker but ctx.attacker !== card
+ [resolveEvent DEBUG] battle_destroy - entries.length: 0
+ [resolveEvent DEBUG] entries: Array(0)
+ Tech-Void Dragon attacks directly!
+ [attack_declared] Skipping effect: requireSelfAsAttacker not met Object
+ [checkAndOfferTraps] Called for event: attack_declared Object
+ [checkAndOfferTraps] Proceeding to open chain window
+ [getActivatableCardsInChain] Checking trap Dragon Spirit Sanctuary for context attack_declaration
+ [findActivatableEffect] trap=Dragon Spirit Sanctuary ctx attackers/defenders Object
+ [findActivatableEffect] requireDefenderIsSelf mismatch for Dragon Spirit Sanctuary Object
+ [getActivatableCardsInChain] No activatable effect found for Dragon Spirit Sanctuary
+ [getActivatableCardsInChain] Checking trap Dragon Spirit Sanctuary for context attack_declaration
+ [findActivatableEffect] trap=Dragon Spirit Sanctuary ctx attackers/defenders Object
+ [findActivatableEffect] requireDefenderIsSelf mismatch for Dragon Spirit Sanctuary Object
+ [getActivatableCardsInChain] No activatable effect found for Dragon Spirit Sanctuary
+ [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+ [ChainSystem] Opening chain window: summon_attempt Object
+ [ChainSystem] Offering chain responses (first: bot, second: player)
+ [ChainSystem] Chain responses complete, resolving chain (0 links)
+ [ChainSystem] Chain resolution complete
+ [ChainSystem] Cleaning up chain window
+ [ChainSystem] Chain window closed successfully
+ Summon Method: Normal | From: Hand | Jogador 1 -> Luminarch Sanctified Arbiter
+ [ChainSystem] Opening chain window: effect_activation Object
+ [ChainSystem] Offering chain responses (first: bot, second: player)
+ [ChainSystem] Chain responses complete, resolving chain (0 links)
+ [ChainSystem] Chain resolution complete
+ [ChainSystem] Cleaning up chain window
+ [ChainSystem] Chain window closed successfully
+ Added Sanctum of the Luminarch Citadel to hand from deck.
+ [checkAndOfferTraps] Called for event: after_summon Object
+ [checkAndOfferTraps] Proceeding to open chain window
+ [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+ [ChainSystem] Opening chain window: card_activation Object
+ [ChainSystem] Offering chain responses (first: bot, second: player)
+ [ChainSystem] Chain responses complete, resolving chain (0 links)
+ [ChainSystem] Chain resolution complete
+ [ChainSystem] Cleaning up chain window
+ [ChainSystem] Chain window closed successfully
+ Sanctum of the Luminarch Citadel is placed on the field.
+ 
+──────────────────── TURNO 2: Opponent ────────────────────
+ 
+[Phase] ⏭️ bot | T2 standby → main1 (0 actions, 0ms)
+ [Bot.makeMove] Guard check: Object
+ [Bot.makeMove] Phase: main1
+ [Bot.playMainPhase] Generated 1 raw actions, 1 sequenced actions (0 filtered)
+ [Bot.playMainPhase] Actions: Array(1)
+ [Bot.playMainPhase] Running greedy search...
+ [Bot.playMainPhase] Greedy search result: Object
+ [Bot.playMainPhase] ✅ Greedy chose: Object
+ 
+[Decision] bot | T2:main1 🥇
+   Chosen: #1/1 - handIgnition:Black Bull Dragon (p:9)
+   Coherence: 100%
+ [Bot.executeMainPhaseAction] 🔥 Attempting hand ignition: Black Bull Dragon
+ [ChainSystem] Opening chain window: effect_activation Object
+ [ChainSystem] Offering chain responses (first: player, second: bot)
+ [ChainSystem] Chain responses complete, resolving chain (0 links)
+ [ChainSystem] Chain resolution complete
+ [ChainSystem] Cleaning up chain window
+ [ChainSystem] Chain window closed successfully
+ [selectCandidates] Starting search for target "bbd_cost": owner="self", zone="hand", archetype="undefined", excludeCardName="undefined"
+ [selectCandidates] Using 1 owners: bot
+ [selectCandidates] Checking zone "hand" for owner bot: 5 cards (Darkness Dragon, Forest Extreme Dragon, Galaxy Extreme Dragon, Majestic Silver Dragon, Black Bull Dragon)
+ [selectCandidates] Evaluating card: Darkness Dragon (archetype: null, owner: bot)
+ [selectCandidates] ACCEPTED: Darkness Dragon
+ [selectCandidates] Evaluating card: Forest Extreme Dragon (archetype: Extreme Dragons, owner: bot)
+ [selectCandidates] ACCEPTED: Forest Extreme Dragon
+ [selectCandidates] Evaluating card: Galaxy Extreme Dragon (archetype: Extreme Dragons, owner: bot)
+ [selectCandidates] ACCEPTED: Galaxy Extreme Dragon
+ [selectCandidates] Evaluating card: Majestic Silver Dragon (archetype: null, owner: bot)
+ [selectCandidates] ACCEPTED: Majestic Silver Dragon
+ [selectCandidates] Evaluating card: Black Bull Dragon (archetype: null, owner: bot)
+ [selectCandidates] Rejecting: card is source in hand zone
+ [selectCandidates] Found 4 candidates for target "bbd_cost" (archetype: undefined, zone: hand, exclude: undefined)
+ [moveCard] Emitting card_to_grave event for Galaxy Extreme Dragon (fromZone: hand)
+ [handleCardToGraveEvent] Galaxy Extreme Dragon entered graveyard. card.owner="bot", ctx.player.id="bot", ctx.opponent.id="player", wasDestroyed=false
+ [handleCardToGraveEvent] Galaxy Extreme Dragon entered graveyard from hand. Card has 2 effects.
+ [moveCard] Emitting card_to_grave event for Forest Extreme Dragon (fromZone: hand)
+ [ChainSystem] Opening chain window: summon_attempt Object
+ [ChainSystem] Offering chain responses (first: player, second: bot)
+ [ChainSystem] Chain responses complete, resolving chain (0 links)
+ [ChainSystem] Chain resolution complete
+ [ChainSystem] Cleaning up chain window
+ [ChainSystem] Chain window closed successfully
+ Summon Method: Special | From: Hand | Opponent -> Black Bull Dragon
+ [ChainSystem] Opening chain window: effect_activation Object
+ [ChainSystem] Offering chain responses (first: player, second: bot)
+ [ChainSystem] Chain responses complete, resolving chain (0 links)
+ [ChainSystem] Chain resolution complete
+ [ChainSystem] Cleaning up chain window
+ [ChainSystem] Chain window closed successfully
+ Black Bull Dragon gained extraAttacks.
+ [checkAndOfferTraps] Called for event: after_summon Object
+ [checkAndOfferTraps] Proceeding to open chain window
+ [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+ Opponent Special Summoned Black Bull Dragon from hand.
+ Bot activates Black Bull Dragon's effect from hand
+ [Bot.playMainPhase] Generated 2 raw actions, 2 sequenced actions (0 filtered)
+ [Bot.playMainPhase] Actions: Array(2)
+ [Bot.playMainPhase] Running beam search with 2 actions (width=2, depth=2, budget=100)...
+ [Bot.playMainPhase] Beam search result: Object
+ [Bot.playMainPhase] ✅ Beam search chose: Object
+ 
+[Decision] bot | T2:main1 🥈
+   Chosen: #2/2 - summon:Majestic Silver Dragon (p:20)
+   Coherence: 70%
+ [ChainSystem] Opening chain window: summon_attempt Object
+ [ChainSystem] Offering chain responses (first: player, second: bot)
+ [ChainSystem] Chain responses complete, resolving chain (0 links)
+ [ChainSystem] Chain resolution complete
+ [ChainSystem] Cleaning up chain window
+ [ChainSystem] Chain window closed successfully
+ [moveCard] Emitting card_to_grave event for Black Bull Dragon (fromZone: field)
+ [handleCardToGraveEvent] Black Bull Dragon entered graveyard. card.owner="bot", ctx.player.id="bot", ctx.opponent.id="player", wasDestroyed=false
+ [handleCardToGraveEvent] Black Bull Dragon entered graveyard from field. Card has 3 effects.
+ Bot summons Majestic Silver Dragon
+ Summon Method: Tribute | From: Hand | Opponent -> Majestic Silver Dragon
+ [checkAndOfferTraps] Called for event: after_summon Object
+ [checkAndOfferTraps] Proceeding to open chain window
+ [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+ [Bot.playMainPhase] Generated 0 raw actions, 0 sequenced actions (0 filtered)
+ 
+[EmptyPhase] ⚠️  bot | T2:main1
+   Reason: NO_ACTIONS_GENERATED
+   Context: LP=8000 | Hand=3 | Field=1 | GY=0
+ [checkAndOfferTraps] Called for event: phase_end Object
+ [checkAndOfferTraps] Proceeding to open chain window
+ [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+ [Bot.makeMove] Guard check: Object
+ [Bot.makeMove] Phase: battle
+ [Bot.playBattlePhase] ✅ Starting battle phase evaluation
+ Majestic Silver Dragon attacks Luminarch Sanctified Arbiter!
+ [ChainSystem] Opening chain window: card_activation Object
+ [ChainSystem] Offering chain responses (first: bot, second: player)
+ [ChainSystem] Chain responses complete, resolving chain (0 links)
+ [ChainSystem] Chain resolution complete
+ [ChainSystem] Cleaning up chain window
+ [ChainSystem] Chain window closed successfully
+ [checkAndOfferTraps] Called for event: attack_declared Object
+ [checkAndOfferTraps] Proceeding to open chain window
+ [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+ Majestic Silver Dragon destroyed Luminarch Sanctified Arbiter and dealt 1000 damage.
+ [moveCard] Emitting card_to_grave event for Luminarch Sanctified Arbiter (fromZone: field)
+ [handleCardToGraveEvent] Luminarch Sanctified Arbiter entered graveyard. card.owner="player", ctx.player.id="player", ctx.opponent.id="bot", wasDestroyed=true
+ [handleCardToGraveEvent] Luminarch Sanctified Arbiter entered graveyard from field. Card has 1 effects.
+ [battle_destroy DEBUG] Side owner: bot, triggerSources: Array(2)
+ [battle_destroy DEBUG] attacker in triggerSources: true
+ [battle_destroy DEBUG] Side owner: player, triggerSources: Array(4)
+ [battle_destroy DEBUG] attacker in triggerSources: false
+ [battle_destroy DEBUG] Checking effect moonblade_captain_second_attack on Luminarch Moonblade Captain
+   - attacker: Majestic Silver Dragon, destroyed: Luminarch Sanctified Arbiter
+   - attackerOwner: bot, destroyedOwner: player
+   - side.owner: player, side.other: bot
+   - requireSelfAsAttacker: true, ctx.attacker === card: false
+   - requireDestroyedIsOpponent: true
+ [battle_destroy DEBUG] SKIPPED: requireSelfAsAttacker but ctx.attacker !== card
+ [resolveEvent DEBUG] battle_destroy - entries.length: 0
+ [resolveEvent DEBUG] entries: Array(0)
+ [checkAndOfferTraps] Called for event: phase_end Object
+ [checkAndOfferTraps] Proceeding to open chain window
+ [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+ [Bot.makeMove] Guard check: Object
+ [Bot.makeMove] Phase: main2
+ [Bot.playMainPhase] Generated 0 raw actions, 0 sequenced actions (0 filtered)
+ 
+[EmptyPhase] ⚠️  bot | T2:main2
+   Reason: NO_ACTIONS_GENERATED
+   Context: LP=7500 | Hand=3 | Field=0 | GY=1
+ [checkAndOfferTraps] Called for event: phase_end Object
+ [checkAndOfferTraps] Proceeding to open chain window
+ [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+ [Bot.makeMove] Guard check: Object
+ [Bot.makeMove] Phase: end
+ 
+──────────────────── TURNO 3: Jogador 1 ────────────────────
+ Nao e o seu turno.
+ Nao e o seu turno.
+ [ChainSystem] Opening chain window: summon_attempt Object
+ [ChainSystem] Offering chain responses (first: bot, second: player)
+ [ChainSystem] Chain responses complete, resolving chain (0 links)
+ [ChainSystem] Chain resolution complete
+ [ChainSystem] Cleaning up chain window
+ [ChainSystem] Chain window closed successfully
+ Summon Method: Normal | From: Hand | Jogador 1 -> Luminarch Enchanted Halberd
+ [checkAndOfferTraps] Called for event: after_summon Object
+ [checkAndOfferTraps] Proceeding to open chain window
+ [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+ Nao e o seu turno.
+ Nao e o seu turno.
+ [ChainSystem] Opening chain window: card_activation Object
+ [ChainSystem] Offering chain responses (first: bot, second: player)
+ [ChainSystem] Chain responses complete, resolving chain (0 links)
+ [ChainSystem] Chain resolution complete
+ [ChainSystem] Cleaning up chain window
+ [ChainSystem] Chain window closed successfully
+ Select target(s) for the continuous spell effect.
+ [collectEffectTargetedTriggers] Majestic Silver Dragon was targeted. Checking 1 sources for triggers.
+ [moveCard] Emitting card_to_grave event for Luminarch Spear of Dawnfall (fromZone: spellTrap)
+ [handleCardToGraveEvent] Luminarch Spear of Dawnfall entered graveyard. card.owner="player", ctx.player.id="player", ctx.opponent.id="bot", wasDestroyed=false
+ [handleCardToGraveEvent] Luminarch Spear of Dawnfall entered graveyard from spellTrap. Card has 1 effects.
+ Luminarch Spear of Dawnfall effect activated.
+ [checkAndOfferTraps] Called for event: card_activation Object
+ [checkAndOfferTraps] Proceeding to open chain window
+ [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+ Select a monster to attack.
+ [Game] Highlighting targets: Object
+ No valid attack targets and cannot attack directly!
+ [Game] Target selection click: Object
+ [Game] Looking for candidate: Object
+ [Game] Selected card, total: 1 / 1
+ [Game] Highlighting targets: Object
+ Luminarch Enchanted Halberd attacks Majestic Silver Dragon!
+ Luminarch Enchanted Halberd destroyed Majestic Silver Dragon and dealt 1600 damage.
+ [moveCard] Emitting card_to_grave event for Majestic Silver Dragon (fromZone: field)
+ [handleCardToGraveEvent] Majestic Silver Dragon entered graveyard. card.owner="bot", ctx.player.id="bot", ctx.opponent.id="player", wasDestroyed=true
+ [handleCardToGraveEvent] Majestic Silver Dragon entered graveyard from field. Card has 1 effects.
+ [battle_destroy DEBUG] Side owner: player, triggerSources: Array(4)
+ [battle_destroy DEBUG] attacker in triggerSources: true
+ [battle_destroy DEBUG] Checking effect moonblade_captain_second_attack on Luminarch Moonblade Captain
+   - attacker: Luminarch Enchanted Halberd, destroyed: Majestic Silver Dragon
+   - attackerOwner: player, destroyedOwner: bot
+   - side.owner: player, side.other: bot
+   - requireSelfAsAttacker: true, ctx.attacker === card: false
+   - requireDestroyedIsOpponent: true
+ [battle_destroy DEBUG] SKIPPED: requireSelfAsAttacker but ctx.attacker !== card
+ [battle_destroy DEBUG] Side owner: bot, triggerSources: Array(1)
+ [battle_destroy DEBUG] attacker in triggerSources: false
+ [resolveEvent DEBUG] battle_destroy - entries.length: 0
+ [resolveEvent DEBUG] entries: Array(0)
+ 
+──────────────────── TURNO 4: Opponent ────────────────────
+ 
+[Phase] ⏭️ bot | T4 standby → main1 (0 actions, 0ms)
+ [Bot.makeMove] Guard check: Object
+ [Bot.makeMove] Phase: main1
+ [Bot.playMainPhase] Generated 1 raw actions, 1 sequenced actions (0 filtered)
+ [Bot.playMainPhase] Actions: Array(1)
+ [Bot.playMainPhase] Running greedy search...
+ [Bot.playMainPhase] Greedy search result: Object
+ [Bot.playMainPhase] ✅ Greedy chose: Object
+ 
+[Decision] bot | T4:main1 🥇
+   Chosen: #1/1 - summon:Armored Dragon (p:8)
+   Coherence: 100%
+ [ChainSystem] Opening chain window: summon_attempt Object
+ [ChainSystem] Offering chain responses (first: player, second: bot)
+ [ChainSystem] Chain responses complete, resolving chain (0 links)
+ [ChainSystem] Chain resolution complete
+ [ChainSystem] Cleaning up chain window
+ [ChainSystem] Chain window closed successfully
+ Bot summons Armored Dragon
+ Summon Method: Normal | From: Hand | Opponent -> Armored Dragon
+ [ChainSystem] Opening chain window: effect_activation Object
+ [ChainSystem] Offering chain responses (first: player, second: bot)
+ [ChainSystem] Chain responses complete, resolving chain (0 links)
+ [ChainSystem] Chain resolution complete
+ [ChainSystem] Cleaning up chain window
+ [ChainSystem] Chain window closed successfully
+ Opponent added 1 card(s) to hand from deck.
+ [checkAndOfferTraps] Called for event: after_summon Object
+ [checkAndOfferTraps] Proceeding to open chain window
+ [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+ [Bot.playMainPhase] Generated 0 raw actions, 0 sequenced actions (0 filtered)
+ 
+[EmptyPhase] ⚠️  bot | T4:main1
+   Reason: NO_ACTIONS_GENERATED
+   Context: LP=7500 | Hand=2 | Field=1 | GY=2
+ [checkAndOfferTraps] Called for event: phase_end Object
+ [checkAndOfferTraps] Proceeding to open chain window
+ [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+ [Bot.makeMove] Guard check: Object
+ [Bot.makeMove] Phase: battle
+ [Bot.playBattlePhase] ✅ Starting battle phase evaluation
+ [checkAndOfferTraps] Called for event: phase_end Object
+ [checkAndOfferTraps] Proceeding to open chain window
+ [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+ [Bot.makeMove] Guard check: Object
+ [Bot.makeMove] Phase: main2
+ [Bot.playMainPhase] Generated 0 raw actions, 0 sequenced actions (0 filtered)
+ 
+[EmptyPhase] ⚠️  bot | T4:main2
+   Reason: NO_ACTIONS_GENERATED
+   Context: LP=7500 | Hand=2 | Field=1 | GY=2
+ [checkAndOfferTraps] Called for event: phase_end Object
+ [checkAndOfferTraps] Proceeding to open chain window
+ [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+ [Bot.makeMove] Guard check: Object
+ [Bot.makeMove] Phase: end
+ 
+──────────────────── TURNO 5: Jogador 1 ────────────────────
+ Nao e o seu turno.
+ Nao e o seu turno.
+ Nao e o seu turno.
+ Nao e o seu turno.
+ Select 1 monster(s) to tribute.
+ [ChainSystem] Opening chain window: summon_attempt Object
+ [ChainSystem] Offering chain responses (first: bot, second: player)
+ [ChainSystem] Chain responses complete, resolving chain (0 links)
+ [ChainSystem] Chain resolution complete
+ [ChainSystem] Cleaning up chain window
+ [ChainSystem] Chain window closed successfully
+ [moveCard] Emitting card_to_grave event for Luminarch Enchanted Halberd (fromZone: field)
+ [handleCardToGraveEvent] Luminarch Enchanted Halberd entered graveyard. card.owner="player", ctx.player.id="player", ctx.opponent.id="bot", wasDestroyed=false
+ [handleCardToGraveEvent] Luminarch Enchanted Halberd entered graveyard from field. Card has 1 effects.
+ Summon Method: Tribute | From: Hand | Jogador 1 -> Luminarch Moonblade Captain
+ [ChainSystem] Opening chain window: effect_activation Object
+ [ChainSystem] Offering chain responses (first: bot, second: player)
+ [ChainSystem] Chain responses complete, resolving chain (0 links)
+ [ChainSystem] Chain resolution complete
+ [ChainSystem] Cleaning up chain window
+ [ChainSystem] Chain window closed successfully
+ [selectCandidates] Starting search for target "moonblade_revive_target": owner="self", zone="graveyard", archetype="Luminarch", excludeCardName="undefined"
+ [selectCandidates] Using 1 owners: player
+ [selectCandidates] Checking zone "graveyard" for owner player: 3 cards (Luminarch Sanctified Arbiter, Luminarch Spear of Dawnfall, Luminarch Enchanted Halberd)
+ [selectCandidates] Evaluating card: Luminarch Sanctified Arbiter (archetype: Luminarch, owner: player)
+ [selectCandidates] ACCEPTED: Luminarch Sanctified Arbiter
+ [selectCandidates] Evaluating card: Luminarch Spear of Dawnfall (archetype: Luminarch, owner: player)
+ [selectCandidates] Rejecting: cardKind mismatch (spell !== monster)
+ [selectCandidates] Evaluating card: Luminarch Enchanted Halberd (archetype: Luminarch, owner: player)
+ [selectCandidates] ACCEPTED: Luminarch Enchanted Halberd
+ [selectCandidates] Found 2 candidates for target "moonblade_revive_target" (archetype: Luminarch, zone: graveyard, exclude: undefined)
+ Select target(s) for the triggered effect.
+ [ChainSystem] Opening chain window: summon_attempt Object
+ [ChainSystem] Offering chain responses (first: bot, second: player)
+ [ChainSystem] Chain responses complete, resolving chain (0 links)
+ [ChainSystem] Chain resolution complete
+ [ChainSystem] Cleaning up chain window
+ [ChainSystem] Chain window closed successfully
+ Summon Method: Special | From: Graveyard | Jogador 1 -> Luminarch Enchanted Halberd
+ [checkAndOfferTraps] Called for event: after_summon Object
+ [checkAndOfferTraps] Proceeding to open chain window
+ [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+ Jogador 1 Special Summoned Luminarch Enchanted Halberd from graveyard.
+ [checkAndOfferTraps] Called for event: after_summon Object
+ [checkAndOfferTraps] Proceeding to open chain window
+ [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+ Select a monster to attack.
+ [Game] Highlighting targets: Object
+ No valid attack targets and cannot attack directly!
+ [Game] Target selection click: Object
+ [Game] Looking for candidate: Object
+ [Game] Selected card, total: 1 / 1
+ [Game] Highlighting targets: Object
+ Luminarch Moonblade Captain attacks Armored Dragon!
+ Luminarch Moonblade Captain destroyed Armored Dragon and dealt 600 damage.
+ [moveCard] Emitting card_to_grave event for Armored Dragon (fromZone: field)
+ [handleCardToGraveEvent] Armored Dragon entered graveyard. card.owner="bot", ctx.player.id="bot", ctx.opponent.id="player", wasDestroyed=true
+ [handleCardToGraveEvent] Armored Dragon entered graveyard from field. Card has 2 effects.
+ [battle_destroy DEBUG] Side owner: player, triggerSources: Array(5)
+ [battle_destroy DEBUG] attacker in triggerSources: true
+ [battle_destroy DEBUG] Checking effect moonblade_captain_second_attack on Luminarch Moonblade Captain
+   - attacker: Luminarch Moonblade Captain, destroyed: Armored Dragon
+   - attackerOwner: player, destroyedOwner: bot
+   - side.owner: player, side.other: bot
+   - requireSelfAsAttacker: true, ctx.attacker === card: true
+   - requireDestroyedIsOpponent: true
+ [battle_destroy DEBUG] requireDestroyedIsOpponent check:
+   - destroyedOwnerId: bot, opponentId: bot
+ [battle_destroy DEBUG] PASSED ALL CHECKS for moonblade_captain_second_attack, creating entry
+ [battle_destroy DEBUG] Side owner: bot, triggerSources: Array(2)
+ [battle_destroy DEBUG] attacker in triggerSources: false
+ [battle_destroy DEBUG] Checking effect armored_dragon_battle_destroy_draw_summon on Armored Dragon
+   - attacker: Luminarch Moonblade Captain, destroyed: Armored Dragon
+   - attackerOwner: player, destroyedOwner: bot
+   - side.owner: bot, side.other: player
+   - requireSelfAsAttacker: undefined, ctx.attacker === card: false
+   - requireDestroyedIsOpponent: undefined
+ [battle_destroy DEBUG] PASSED ALL CHECKS for armored_dragon_battle_destroy_draw_summon, creating entry
+ [resolveEvent DEBUG] battle_destroy - entries.length: 2
+ [resolveEvent DEBUG] entries: Array(2)
+ [resolveEventEntries DEBUG] entry[0]: player:Luminarch Moonblade Captain:moonblade_captain_second_attack
+   - config exists: true
+   - config.activate type: function
+ [resolveEventEntries DEBUG] EXECUTING entry[0]
+ [ChainSystem] Opening chain window: effect_activation Object
+ [ChainSystem] Offering chain responses (first: bot, second: player)
+ [ChainSystem] Chain responses complete, resolving chain (0 links)
+ [ChainSystem] Chain resolution complete
+ [ChainSystem] Cleaning up chain window
+ [ChainSystem] Chain window closed successfully
+ Luminarch Moonblade Captain can attack again this turn.
+ [resolveEventEntries DEBUG] entry[1]: bot:Armored Dragon:armored_dragon_battle_destroy_draw_summon
+   - config exists: true
+   - config.activate type: function
+ [resolveEventEntries DEBUG] EXECUTING entry[1]
+ [ChainSystem] Opening chain window: effect_activation Object
+ [ChainSystem] Offering chain responses (first: player, second: bot)
+ [ChainSystem] Chain responses complete, resolving chain (0 links)
+ [ChainSystem] Chain resolution complete
+ [ChainSystem] Cleaning up chain window
+ [ChainSystem] Chain window closed successfully
+ Select a monster to attack.
+ [Game] Highlighting targets: Object
+ Not enough tributes for Level 10 monster.
+ Luminarch Moonblade Captain attacks directly!
+ Select a monster to attack.
+ [Game] Highlighting targets: Object
+ Not enough tributes for Level 10 monster.
+ Luminarch Enchanted Halberd attacks directly!
+ 
+──────────────────── TURNO 6: Opponent ────────────────────
+ 
+[Phase] ⏭️ bot | T6 standby → main1 (0 actions, 0ms)
+ [Bot.makeMove] Guard check: Object
+ [Bot.makeMove] Phase: main1
+ [Bot.playMainPhase] Generated 3 raw actions, 3 sequenced actions (0 filtered)
+ [Bot.playMainPhase] Actions: Array(3)
+ [Bot.playMainPhase] Running beam search with 3 actions (width=2, depth=2, budget=100)...
+ [Bot.playMainPhase] Beam search result: Object
+ [Bot.playMainPhase] ✅ Beam search chose: Object
+ 
+[Decision] bot | T6:main1 🥈
+   Chosen: #2/3 - summon:Armored Dragon (p:8)
+   Coherence: 70%
+ [ChainSystem] Opening chain window: summon_attempt Object
+ [ChainSystem] Offering chain responses (first: player, second: bot)
+ [ChainSystem] Chain responses complete, resolving chain (0 links)
+ [ChainSystem] Chain resolution complete
+ [ChainSystem] Cleaning up chain window
+ [ChainSystem] Chain window closed successfully
+ Bot summons Armored Dragon
+ Summon Method: Normal | From: Hand | Opponent -> Armored Dragon
+ [ChainSystem] Opening chain window: effect_activation Object
+ [ChainSystem] Offering chain responses (first: player, second: bot)
+ [ChainSystem] Chain responses complete, resolving chain (0 links)
+ [ChainSystem] Chain resolution complete
+ [ChainSystem] Cleaning up chain window
+ [ChainSystem] Chain window closed successfully
+ Opponent added 1 card(s) to hand from deck.
+ [checkAndOfferTraps] Called for event: after_summon Object
+ [checkAndOfferTraps] Proceeding to open chain window
+ [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+ [Bot.playMainPhase] Generated 1 raw actions, 1 sequenced actions (0 filtered)
+ [Bot.playMainPhase] Actions: Array(1)
+ [Bot.playMainPhase] Running greedy search...
+ [Bot.playMainPhase] Greedy search result: Object
+ [Bot.playMainPhase] ✅ Greedy chose: Object
+ 
+[Decision] bot | T6:main1 🥇
+   Chosen: #1/1 - spell:Jagged Peak of the Dragons (p:22)
+   Coherence: 100%
+ [Bot.executeMainPhaseAction] 📝 Attempting spell: Jagged Peak of the Dragons
+ [Bot.executeMainPhaseAction] 🔍 Preview check: Object
+ [ChainSystem] Opening chain window: card_activation Object
+ [ChainSystem] Offering chain responses (first: player, second: bot)
+ [ChainSystem] Chain responses complete, resolving chain (0 links)
+ [ChainSystem] Chain resolution complete
+ [ChainSystem] Cleaning up chain window
+ [ChainSystem] Chain window closed successfully
+ Opponent added 1 card(s) to hand from graveyard.
+ Bot activates Jagged Peak of the Dragons
+ [Bot.playMainPhase] Generated 0 raw actions, 0 sequenced actions (0 filtered)
+ 
+[EmptyPhase] ⚠️  bot | T6:main1
+   Reason: NO_ACTIONS_GENERATED
+   Context: LP=7500 | Hand=2 | Field=2 | GY=2
+ [checkAndOfferTraps] Called for event: phase_end Object
+ [checkAndOfferTraps] Proceeding to open chain window
+ [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+ [Bot.makeMove] Guard check: Object
+ [Bot.makeMove] Phase: battle
+ [Bot.playBattlePhase] ✅ Starting battle phase evaluation
+ [checkAndOfferTraps] Called for event: phase_end Object
+ [checkAndOfferTraps] Proceeding to open chain window
+ [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+ [Bot.makeMove] Guard check: Object
+ [Bot.makeMove] Phase: main2
+ [Bot.playMainPhase] Generated 0 raw actions, 0 sequenced actions (0 filtered)
+ 
+[EmptyPhase] ⚠️  bot | T6:main2
+   Reason: NO_ACTIONS_GENERATED
+   Context: LP=7500 | Hand=2 | Field=2 | GY=2
+ [checkAndOfferTraps] Called for event: phase_end Object
+ [checkAndOfferTraps] Proceeding to open chain window
+ [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+ [Bot.makeMove] Guard check: Object
+ [Bot.makeMove] Phase: end
+ 
+──────────────────── TURNO 7: Jogador 1 ────────────────────
+ Nao e o seu turno.
+ Nao e o seu turno.
+ [ChainSystem] Opening chain window: summon_attempt Object
+ [ChainSystem] Offering chain responses (first: bot, second: player)
+ [ChainSystem] Chain responses complete, resolving chain (0 links)
+ [ChainSystem] Chain resolution complete
+ [ChainSystem] Cleaning up chain window
+ [ChainSystem] Chain window closed successfully
+ Summon Method: Normal | From: Hand | Jogador 1 -> Luminarch Valiant - Knight of the Dawn
+ [ChainSystem] Opening chain window: effect_activation Object
+ [ChainSystem] Offering chain responses (first: bot, second: player)
+ [ChainSystem] Chain responses complete, resolving chain (0 links)
+ [ChainSystem] Chain resolution complete
+ [ChainSystem] Cleaning up chain window
+ [ChainSystem] Chain window closed successfully
+ Added Luminarch Aegisbearer to hand from deck.
+ [checkAndOfferTraps] Called for event: after_summon Object
+ [checkAndOfferTraps] Proceeding to open chain window
+ [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+ Select a monster to attack.
+ [Game] Highlighting targets: Object
+ No valid attack targets and cannot attack directly!
+ [Game] Target selection click: Object
+ [Game] Looking for candidate: Object
+ [Game] Selected card, total: 1 / 1
+ [Game] Highlighting targets: Object
+ Luminarch Moonblade Captain attacks Armored Dragon!
+ Luminarch Moonblade Captain destroyed Armored Dragon and dealt 600 damage.
+ [moveCard] Emitting card_to_grave event for Armored Dragon (fromZone: field)
+ [handleCardToGraveEvent] Armored Dragon entered graveyard. card.owner="bot", ctx.player.id="bot", ctx.opponent.id="player", wasDestroyed=true
+ [handleCardToGraveEvent] Armored Dragon entered graveyard from field. Card has 2 effects.
+ [battle_destroy DEBUG] Side owner: player, triggerSources: Array(7)
+ [battle_destroy DEBUG] attacker in triggerSources: true
+ [battle_destroy DEBUG] Checking effect moonblade_captain_second_attack on Luminarch Moonblade Captain
+   - attacker: Luminarch Moonblade Captain, destroyed: Armored Dragon
+   - attackerOwner: player, destroyedOwner: bot
+   - side.owner: player, side.other: bot
+   - requireSelfAsAttacker: true, ctx.attacker === card: true
+   - requireDestroyedIsOpponent: true
+ [battle_destroy DEBUG] requireDestroyedIsOpponent check:
+   - destroyedOwnerId: bot, opponentId: bot
+ [battle_destroy DEBUG] PASSED ALL CHECKS for moonblade_captain_second_attack, creating entry
+ [battle_destroy DEBUG] Side owner: bot, triggerSources: Array(5)
+ [battle_destroy DEBUG] attacker in triggerSources: false
+ [battle_destroy DEBUG] Checking effect dragon_peak_battle_counter on Jagged Peak of the Dragons
+   - attacker: Luminarch Moonblade Captain, destroyed: Armored Dragon
+   - attackerOwner: player, destroyedOwner: bot
+   - side.owner: bot, side.other: player
+   - requireSelfAsAttacker: undefined, ctx.attacker === card: false
+   - requireDestroyedIsOpponent: true
+ [battle_destroy DEBUG] requireDestroyedIsOpponent check:
+   - destroyedOwnerId: bot, opponentId: player
+ [battle_destroy DEBUG] SKIPPED: requireDestroyedIsOpponent failed
+ [battle_destroy DEBUG] Checking effect armored_dragon_battle_destroy_draw_summon on Armored Dragon
+   - attacker: Luminarch Moonblade Captain, destroyed: Armored Dragon
+   - attackerOwner: player, destroyedOwner: bot
+   - side.owner: bot, side.other: player
+   - requireSelfAsAttacker: undefined, ctx.attacker === card: false
+   - requireDestroyedIsOpponent: undefined
+ [battle_destroy DEBUG] SKIPPED: requireSelfAsDestroyed but ctx.destroyed !== card
+ [battle_destroy DEBUG] Checking effect armored_dragon_battle_destroy_draw_summon on Armored Dragon
+   - attacker: Luminarch Moonblade Captain, destroyed: Armored Dragon
+   - attackerOwner: player, destroyedOwner: bot
+   - side.owner: bot, side.other: player
+   - requireSelfAsAttacker: undefined, ctx.attacker === card: false
+   - requireDestroyedIsOpponent: undefined
+ [battle_destroy DEBUG] PASSED ALL CHECKS for armored_dragon_battle_destroy_draw_summon, creating entry
+ [resolveEvent DEBUG] battle_destroy - entries.length: 2
+ [resolveEvent DEBUG] entries: Array(2)
+ [resolveEventEntries DEBUG] entry[0]: player:Luminarch Moonblade Captain:moonblade_captain_second_attack
+   - config exists: true
+   - config.activate type: function
+ [resolveEventEntries DEBUG] EXECUTING entry[0]
+ [ChainSystem] Opening chain window: effect_activation Object
+ [ChainSystem] Offering chain responses (first: bot, second: player)
+ [ChainSystem] Chain responses complete, resolving chain (0 links)
+ [ChainSystem] Chain resolution complete
+ [ChainSystem] Cleaning up chain window
+ [ChainSystem] Chain window closed successfully
+ Luminarch Moonblade Captain can attack again this turn.
+ [resolveEventEntries DEBUG] entry[1]: bot:Armored Dragon:armored_dragon_battle_destroy_draw_summon
+   - config exists: true
+   - config.activate type: function
+ [resolveEventEntries DEBUG] EXECUTING entry[1]
+ [ChainSystem] Opening chain window: effect_activation Object
+ [ChainSystem] Offering chain responses (first: player, second: bot)
+ [ChainSystem] Chain responses complete, resolving chain (0 links)
+ [ChainSystem] Chain resolution complete
+ [ChainSystem] Cleaning up chain window
+ [ChainSystem] Chain window closed successfully
+ Finalize o efeito pendente antes de fazer outra acao.
+ Select a monster to attack.
+ [Game] Highlighting targets: Object
+ Not enough tributes for Level 5 monster.
+ Luminarch Moonblade Captain attacks directly!
+ Nao e o seu turno.
+ Nao e o seu turno.
+ Esta acao nao pode ser usada nesta fase.
+ [ChainSystem] Opening chain window: summon_attempt Object
+ [ChainSystem] Offering chain responses (first: bot, second: player)
+ [ChainSystem] Chain responses complete, resolving chain (0 links)
+ [ChainSystem] Chain resolution complete
+ [ChainSystem] Cleaning up chain window
+ [ChainSystem] Chain window closed successfully
+ Summon Method: Normal | From: Hand | Jogador 1 -> Luminarch Valiant - Knight of the Dawn
+ [ChainSystem] Opening chain window: effect_activation Object
+ [ChainSystem] Offering chain responses (first: bot, second: player)
+ [ChainSystem] Chain responses complete, resolving chain (0 links)
+ [ChainSystem] Chain resolution complete
+ [ChainSystem] Cleaning up chain window
+ [ChainSystem] Chain window closed successfully
+ Added Luminarch Aegisbearer to hand from deck.
+ [checkAndOfferTraps] Called for event: after_summon Object
+ [checkAndOfferTraps] Proceeding to open chain window
+ [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+ 
+──────────────────── TURNO 8: Opponent ────────────────────
+ 
+──────────────────── TURNO 2: Opponent ────────────────────
+ 
+[Phase] ⏭️ bot | T8 standby → main1 (0 actions, 0ms)
+ 
+[Phase] ⏭️ bot | T2 standby → main1 (0 actions, 0ms)
+ [Bot.makeMove] Guard check: Object
+ [Bot.makeMove] Phase: main1
+ [Bot.playMainPhase] Generated 5 raw actions, 5 sequenced actions (0 filtered)
+ [Bot.playMainPhase] Actions: Array(5)
+ [Bot.playMainPhase] Running beam search with 5 actions (width=2, depth=2, budget=100)...
+ [Bot.playMainPhase] Beam search result: Object
+ [Bot.playMainPhase] ✅ Beam search chose: Object
+ 
+[Decision] bot | T2:main1 🥈
+   Chosen: #2/5 - summon:Armored Dragon (p:8)
+   Coherence: 70%
+ [ChainSystem] Opening chain window: summon_attempt Object
+ [ChainSystem] Offering chain responses (first: player, second: bot)
+ [ChainSystem] Chain responses complete, resolving chain (0 links)
+ [ChainSystem] Chain resolution complete
+ [ChainSystem] Cleaning up chain window
+ [ChainSystem] Chain window closed successfully
+ Bot summons Armored Dragon
+ Summon Method: Normal | From: Hand | Opponent -> Armored Dragon
+ [ChainSystem] Opening chain window: effect_activation Object
+ [ChainSystem] Offering chain responses (first: player, second: bot)
+ [ChainSystem] Chain responses complete, resolving chain (0 links)
+ [ChainSystem] Chain resolution complete
+ [ChainSystem] Cleaning up chain window
+ [ChainSystem] Chain window closed successfully
+ Opponent added 1 card(s) to hand from deck.
+ [ChainSystem] Opening chain window: effect_activation Object
+ [ChainSystem] Offering chain responses (first: bot, second: player)
+ [ChainSystem] Chain responses complete, resolving chain (0 links)
+ [ChainSystem] Chain resolution complete
+ [ChainSystem] Cleaning up chain window
+ [ChainSystem] Chain window closed successfully
+ [checkAndOfferTraps] Called for event: after_summon Object
+ [checkAndOfferTraps] Proceeding to open chain window
+ [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+ [Bot.playMainPhase] Generated 2 raw actions, 2 sequenced actions (0 filtered)
+Bot.js:408 [Bot.playMainPhase] Actions: Array(2)
+Bot.js:443 [Bot.playMainPhase] Running beam search with 2 actions (width=2, depth=2, budget=100)...
+Bot.js:454 [Bot.playMainPhase] Beam search result: Object
+Bot.js:457 [Bot.playMainPhase] ✅ Beam search chose: Object
+BotLogger.js:110 
+[Decision] bot | T2:main1 🥈
+BotLogger.js:111   Chosen: #2/2 - handIgnition:Voltaic Dragon (p:7)
+BotLogger.js:112   Coherence: 70%
+Bot.js:1544 [Bot.executeMainPhaseAction] 🔥 Attempting hand ignition: Voltaic Dragon
+ChainSystem.js:772 [ChainSystem] Opening chain window: effect_activation Object
+ChainSystem.js:802 [ChainSystem] Offering chain responses (first: player, second: bot)
+ChainSystem.js:806 [ChainSystem] Chain responses complete, resolving chain (0 links)
+ChainSystem.js:812 [ChainSystem] Chain resolution complete
+ChainSystem.js:815 [ChainSystem] Cleaning up chain window
+ChainSystem.js:821 [ChainSystem] Chain window closed successfully
+ChainSystem.js:772 [ChainSystem] Opening chain window: summon_attempt Object
+ChainSystem.js:802 [ChainSystem] Offering chain responses (first: player, second: bot)
+ChainSystem.js:806 [ChainSystem] Chain responses complete, resolving chain (0 links)
+ChainSystem.js:812 [ChainSystem] Chain resolution complete
+ChainSystem.js:815 [ChainSystem] Cleaning up chain window
+ChainSystem.js:821 [ChainSystem] Chain window closed successfully
+log.js:10 Summon Method: Special | From: Hand | Opponent -> Voltaic Dragon
+ChainSystem.js:772 [ChainSystem] Opening chain window: effect_activation Object
+ChainSystem.js:802 [ChainSystem] Offering chain responses (first: bot, second: player)
+ChainSystem.js:806 [ChainSystem] Chain responses complete, resolving chain (0 links)
+ChainSystem.js:812 [ChainSystem] Chain resolution complete
+ChainSystem.js:815 [ChainSystem] Cleaning up chain window
+ChainSystem.js:821 [ChainSystem] Chain window closed successfully
 triggers.js:14 [checkAndOfferTraps] Called for event: after_summon Object
 triggers.js:38 [checkAndOfferTraps] Proceeding to open chain window
 triggers.js:105 [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
-movement.js:1012 [moveCard] Emitting card_to_grave event for Polymerization (fromZone: spellTrap)
-log.js:10 Polymerization effect activated.
-triggers.js:14 [checkAndOfferTraps] Called for event: card_activation Object
+log.js:10 Opponent Special Summoned Voltaic Dragon from hand.
+log.js:10 Bot activates Voltaic Dragon's effect from hand
+Bot.js:404 [Bot.playMainPhase] Generated 1 raw actions, 1 sequenced actions (0 filtered)
+Bot.js:408 [Bot.playMainPhase] Actions: Array(1)
+Bot.js:465 [Bot.playMainPhase] Running greedy search...
+Bot.js:471 [Bot.playMainPhase] Greedy search result: Object
+Bot.js:474 [Bot.playMainPhase] ✅ Greedy chose: Object
+BotLogger.js:110 
+[Decision] bot | T2:main1 🥇
+BotLogger.js:111   Chosen: #1/1 - handIgnition:Black Bull Dragon (p:9)
+BotLogger.js:112   Coherence: 100%
+Bot.js:1544 [Bot.executeMainPhaseAction] 🔥 Attempting hand ignition: Black Bull Dragon
+ChainSystem.js:772 [ChainSystem] Opening chain window: effect_activation Object
+ChainSystem.js:802 [ChainSystem] Offering chain responses (first: player, second: bot)
+ChainSystem.js:806 [ChainSystem] Chain responses complete, resolving chain (0 links)
+ChainSystem.js:812 [ChainSystem] Chain resolution complete
+ChainSystem.js:815 [ChainSystem] Cleaning up chain window
+ChainSystem.js:821 [ChainSystem] Chain window closed successfully
+selection.js:71 [selectCandidates] Starting search for target "bbd_cost": owner="self", zone="hand", archetype="undefined", excludeCardName="undefined"
+selection.js:71 [selectCandidates] Using 1 owners: bot
+selection.js:71 [selectCandidates] Checking zone "hand" for owner bot: 4 cards (Black Bull Dragon, Luminescent Dragon, Boneflame Dragon, Grey Dragon)
+selection.js:71 [selectCandidates] Evaluating card: Black Bull Dragon (archetype: null, owner: bot)
+selection.js:71 [selectCandidates] Rejecting: card is source in hand zone
+selection.js:71 [selectCandidates] Evaluating card: Luminescent Dragon (archetype: null, owner: bot)
+selection.js:71 [selectCandidates] ACCEPTED: Luminescent Dragon
+selection.js:71 [selectCandidates] Evaluating card: Boneflame Dragon (archetype: null, owner: bot)
+selection.js:71 [selectCandidates] ACCEPTED: Boneflame Dragon
+selection.js:71 [selectCandidates] Evaluating card: Grey Dragon (archetype: null, owner: bot)
+selection.js:71 [selectCandidates] ACCEPTED: Grey Dragon
+selection.js:71 [selectCandidates] Found 3 candidates for target "bbd_cost" (archetype: undefined, zone: hand, exclude: undefined)
+movement.js:1180 [moveCard] Emitting card_to_grave event for Grey Dragon (fromZone: hand)
+collectors.js:1154 [handleCardToGraveEvent] Grey Dragon entered graveyard. card.owner="bot", ctx.player.id="bot", ctx.opponent.id="player", wasDestroyed=false
+collectors.js:1157 [handleCardToGraveEvent] Grey Dragon entered graveyard from hand. Card has 2 effects.
+movement.js:1180 [moveCard] Emitting card_to_grave event for Luminescent Dragon (fromZone: hand)
+ChainSystem.js:772 [ChainSystem] Opening chain window: summon_attempt Object
+ChainSystem.js:802 [ChainSystem] Offering chain responses (first: player, second: bot)
+ChainSystem.js:806 [ChainSystem] Chain responses complete, resolving chain (0 links)
+ChainSystem.js:812 [ChainSystem] Chain resolution complete
+ChainSystem.js:815 [ChainSystem] Cleaning up chain window
+ChainSystem.js:821 [ChainSystem] Chain window closed successfully
+log.js:10 Summon Method: Special | From: Hand | Opponent -> Black Bull Dragon
+ChainSystem.js:772 [ChainSystem] Opening chain window: effect_activation Object
+ChainSystem.js:802 [ChainSystem] Offering chain responses (first: player, second: bot)
+ChainSystem.js:806 [ChainSystem] Chain responses complete, resolving chain (0 links)
+ChainSystem.js:812 [ChainSystem] Chain resolution complete
+ChainSystem.js:815 [ChainSystem] Cleaning up chain window
+ChainSystem.js:821 [ChainSystem] Chain window closed successfully
+log.js:10 Black Bull Dragon gained extraAttacks.
+ChainSystem.js:772 [ChainSystem] Opening chain window: effect_activation Object
+ChainSystem.js:802 [ChainSystem] Offering chain responses (first: bot, second: player)
+ChainSystem.js:806 [ChainSystem] Chain responses complete, resolving chain (0 links)
+ChainSystem.js:812 [ChainSystem] Chain resolution complete
+ChainSystem.js:815 [ChainSystem] Cleaning up chain window
+ChainSystem.js:821 [ChainSystem] Chain window closed successfully
+triggers.js:14 [checkAndOfferTraps] Called for event: after_summon Object
 triggers.js:38 [checkAndOfferTraps] Proceeding to open chain window
 triggers.js:105 [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+log.js:10 Opponent Special Summoned Black Bull Dragon from hand.
+log.js:10 Bot activates Black Bull Dragon's effect from hand
+Bot.js:404 [Bot.playMainPhase] Generated 0 raw actions, 0 sequenced actions (0 filtered)
+BotLogger.js:123 
+[EmptyPhase] ⚠️  bot | T2:main1
+BotLogger.js:124   Reason: NO_ACTIONS_GENERATED
+BotLogger.js:126   Context: LP=8000 | Hand=4 | Field=1 | GY=0
+triggers.js:14 [checkAndOfferTraps] Called for event: phase_end Object
+triggers.js:38 [checkAndOfferTraps] Proceeding to open chain window
+triggers.js:105 [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+Bot.js:260 [Bot.makeMove] Guard check: Object
+Bot.js:267 [Bot.makeMove] Phase: battle
+Bot.js:603 [Bot.playBattlePhase] ✅ Starting battle phase evaluation
+triggers.js:14 [checkAndOfferTraps] Called for event: phase_end Object
+triggers.js:38 [checkAndOfferTraps] Proceeding to open chain window
+triggers.js:105 [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+Bot.js:260 [Bot.makeMove] Guard check: Object
+Bot.js:267 [Bot.makeMove] Phase: main2
+Bot.js:404 [Bot.playMainPhase] Generated 0 raw actions, 0 sequenced actions (0 filtered)
+BotLogger.js:123 
+[EmptyPhase] ⚠️  bot | T2:main2
+BotLogger.js:124   Reason: NO_ACTIONS_GENERATED
+BotLogger.js:126   Context: LP=8000 | Hand=4 | Field=1 | GY=0
+triggers.js:14 [checkAndOfferTraps] Called for event: phase_end Object
+triggers.js:38 [checkAndOfferTraps] Proceeding to open chain window
+triggers.js:105 [checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false
+Bot.js:260 [Bot.makeMove] Guard check: Object
+Bot.js:267 [Bot.makeMove] Phase: end
+lifecycle.js:26 
+──────────────────── TURNO 3: Jogador 1 ────────────────────

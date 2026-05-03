@@ -13,6 +13,18 @@
       "description": "Once per turn, if you control no monsters: you can pay 2000 LP; Special Summon 1 Level 4 or lower \"Arcanist\" monster from your Deck. The first time each turn an \"Arcanist\" monster you control destroys an opponent's monster by battle: draw 1 card."
     },
     "214": {
+      "name": "Azrath, Corrupted Arcanist",
+      "description": "Monsters your opponent controls lose 100 ATK/DEF for each \"Arcanist\" Spell you activated until the end of this turn. If this card is equipped with an \"Arcanist\" Equip Spell: target 1 monster your opponent controls; its ATK/DEF become 0. You can only use this effect of \"Azrath, Corrupted Arcanist\" once per turn."
+    },
+    "215": {
+      "name": "Glyph-Destroying Tornado",
+      "description": "If you control an \"Arcanist\" monster equipped with an \"Arcanist\" Equip Spell: target 1 Spell/Trap your opponent controls; destroy it."
+    },
+    "216": {
+      "name": "Arcanist Seismic Impact",
+      "description": "If you control an \"Arcanist\" monster equipped with an \"Arcanist\" Equip Spell: send 1 monster you control and 1 \"Arcanist\" Spell you control to the GY, and if you do, target 1 card your opponent controls; banish it."
+    },
+    "250": {
       "name": "Fire Extreme Dragon",
       "description": "There can only be 1 face-up \"Extreme Dragon\" monster on the field. While this card is the only monster you control, it cannot be destroyed by card effects. If this card destroys an opponent's monster by battle: inflict damage to your opponent equal to half the destroyed monster's original ATK. Each time your opponent activates a card or effect: inflict 300 damage to your opponent. If this card is destroyed by battle: you can Special Summon 1 \"Volcanic Extreme Dragon\" from your hand or Deck."
     },
@@ -23,6 +35,10 @@
     "254": {
       "name": "Forest Extreme Dragon",
       "description": "There can only be 1 face-up \"Extreme Dragon\" monster on the field. During each Standby Phase: gain 200 LP for each card your opponent controls and each card in their hand. Each time your opponent Summons a monster or activates a card or effect: gain 100 LP. Once per turn (Quick Effect): this card gains ATK equal to the total LP you gained this turn, until the end of this turn."
+    },
+    "257": {
+      "name": "Extreme Dragon Awakening",
+      "description": "You can send 2 Dragon-type monsters you control to the GY; Special Summon 1 Level 9 or higher Dragon-type monster from your hand. You can only use this effect of \"Extreme Dragon Awakening\" once per turn."
     },
     "255": {
       "name": "Supreme Bahamut Dragon",

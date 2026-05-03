@@ -369,6 +369,21 @@ export const CARD_KNOWLEDGE = {
     ],
     value: 10,
   },
+  "Extreme Dragon Awakening": {
+    role: "extreme_enabler",
+    priority: 11,
+    playCondition: "extreme_in_hand_AND_2_nonExtreme_dragons_on_field_AND_no_extreme_faceup",
+    effect: "Continuous spell. Ignition (1/turn): send 2 field Dragons to GY → SS 1 lv9+ Dragon from hand.",
+    synergies: ["All Extreme Dragons", "Hellkite Dragon", "Luminescent Dragon", "Boneflame Dragon", "Voltaic Dragon", "Armored Dragon"],
+    playPatterns: [
+      "Activate from hand to set up; ignition can resolve same turn or later",
+      "Saves Normal Summon for Armored/Luminescent searcher",
+      "Best fodder: Voltaic, Boneflame, Grey, used-up Armored — preserves real value",
+      "NEVER use if Extreme Dragon already face-up (fieldLimit blocks the SS)",
+      "Pairs well with Luminescent revive / Hellkite SS to manufacture 2 fodder bodies cheaply",
+    ],
+    value: 13,
+  },
   "Dragon Spirit Sanctuary": {
     role: "protection",
     priority: 4,

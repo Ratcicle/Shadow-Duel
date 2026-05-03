@@ -169,6 +169,7 @@ export async function resolveCombat(attacker, target, options = {}) {
 
     target.isFacedown = false;
     target.revealedTurn = this.turnCounter; // Track when monster was revealed for Ascension timing
+    this.effectEngine?.clearTargetingCache?.();
     this.ui.log(`${target.name} was flipped!`);
 
     this.updateBoard();

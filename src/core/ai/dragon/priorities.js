@@ -182,6 +182,33 @@ export function shouldPlaySpell(card, analysis) {
     return { yes: false, reason: "No opponent backrow to destroy (waste)" };
   }
 
+  // ── Extreme Dragon Awakening ───────────────────────────────────────────────
+  if (name === "Extreme Dragon Awakening") {
+    const hasExtremeInHand = analysis.hand.some((c) => isExtremeDragon(c));
+    if (!hasExtremeInHand) {
+      return { yes: false, reason: "No lv9+ Dragon in hand to summon" };
+    }
+    const fieldDragons = analysis.field.filter(
+      (c) => c.cardKind === "monster" && !c.isFacedown && c.type === "Dragon"
+    );
+    const nonExtremeFieldDragons = fieldDragons.filter((c) => !isExtremeDragon(c));
+    const hasExtremeFaceup = fieldDragons.some((c) => isExtremeDragon(c));
+
+    if (hasExtremeFaceup) {
+      return { yes: false, reason: "Extreme Dragon already face-up — Awakening's SS would be blocked by fieldLimit" };
+    }
+    if (nonExtremeFieldDragons.length < 2) {
+      const canBuildFodder = analysis.hand.some((c) =>
+        ["Luminescent Dragon", "Hellkite Dragon", "Voltaic Dragon", "Boneflame Dragon"].includes(c.name)
+      );
+      if (!canBuildFodder) {
+        return { yes: false, reason: "Need 2 non-Extreme field Dragons (or extenders to produce them)" };
+      }
+      return { yes: true, priority: 7, reason: "Setup: extenders in hand will produce fodder" };
+    }
+    return { yes: true, priority: 11, reason: "Activate to enable ignition: 2 Dragon fodder + Extreme in hand" };
+  }
+
   // ── Call of the Haunted ────────────────────────────────────────────────────
   if (name === "Call of the Haunted") {
     // For AI, treat as set-and-react — but in main phase, check if worth activating

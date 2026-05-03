@@ -65,6 +65,15 @@ export function resolveTargetCards(action, ctx, targets, options = {}) {
     if (ctx?.summonedCard) {
       resolved = [ctx.summonedCard];
     }
+  } else if (targetRef === "opponent_field") {
+    const game = options?.game || ctx?.game;
+    const player = ctx?.player;
+    if (game && player) {
+      const opponent = player.id === "player" ? game.bot : game.player;
+      resolved = (opponent?.field || []).filter(
+        (c) => c && c.cardKind === "monster" && !c.isFacedown
+      );
+    }
   } else if (Array.isArray(targetRef)) {
     resolved = targetRef;
   } else if (targetRef && targets && targetRef in targets) {
