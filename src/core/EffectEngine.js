@@ -1182,6 +1182,23 @@ export default class EffectEngine {
           const archetypeName = passive.archetype || null;
           if (!archetypeName) return;
 
+          // Optional: only apply buff when this card is the sole face-up monster its controller has
+          if (passive.requireSoleMonster) {
+            const owner = this.getOwnerByCard(card);
+            const faceUpMonsters = (owner?.field || []).filter(
+              (c) => c && c.cardKind === "monster" && !c.isFacedown,
+            );
+            if (faceUpMonsters.length !== 1 || faceUpMonsters[0] !== card) {
+              this.applyPassiveBuffValue(
+                card,
+                effect.id || `passive_${card.id}_${index}_gy_archetype`,
+                0,
+                passive.stats || ["atk", "def"],
+              );
+              return;
+            }
+          }
+
           const owner = this.getOwnerByCard(card);
           const gy = owner?.graveyard || [];
           const archetypeCount = gy.filter((c) => {
@@ -1323,6 +1340,29 @@ export default class EffectEngine {
       if (card.dynamicBuffs && Object.keys(card.dynamicBuffs).length === 0) {
         card.dynamicBuffs = null;
       }
+    }
+
+    // PHASE 3: Apply non-stat passive flags (e.g., battle phase activation lock)
+    // Clear first, then set based on current field state
+    if (this.game.player) this.game.player.opponentCannotActivateDuringBattle = false;
+    if (this.game.bot) this.game.bot.opponentCannotActivateDuringBattle = false;
+
+    for (const card of fieldCards) {
+      const effects = card.effects || [];
+      effects.forEach((effect) => {
+        if (!effect || effect.timing !== "passive") return;
+        const passive = effect.passive;
+        if (!passive || passive.type !== "battle_phase_activation_lock") return;
+        if (card.isFacedown) return;
+
+        const owner = this.getOwnerByCard(card);
+        const opponent =
+          owner === this.game.player ? this.game.bot : this.game.player;
+        if (opponent) {
+          opponent.opponentCannotActivateDuringBattle = true;
+          updated = true;
+        }
+      });
     }
 
     return updated;

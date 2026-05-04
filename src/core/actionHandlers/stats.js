@@ -277,7 +277,7 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
         card.tempAtkBoost = (card.tempAtkBoost || 0) + atkBoost;
       }
 
-      card.atk = (card.atk || 0) + atkBoost;
+      card.atk = Math.max(0, (card.atk || 0) + atkBoost);
 
       cardBuffed = true;
 
@@ -289,7 +289,7 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
         card.tempDefBoost = (card.tempDefBoost || 0) + defBoost;
       }
 
-      card.def = (card.def || 0) + defBoost;
+      card.def = Math.max(0, (card.def || 0) + defBoost);
 
       cardBuffed = true;
 

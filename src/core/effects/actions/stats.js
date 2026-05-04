@@ -32,7 +32,7 @@ export function applyBuffAtkTemp(action, ctx, targets) {
   const amount = action.amount ?? 0;
   targetCards.forEach((card) => {
     if (card.isFacedown) return;
-    card.atk += amount;
+    card.atk = Math.max(0, card.atk + amount);
     card.tempAtkBoost = (card.tempAtkBoost || 0) + amount;
     if (amount !== 0) {
       queueStatFeedback(

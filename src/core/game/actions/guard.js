@@ -81,6 +81,21 @@ export function canStartAction(options = {}) {
     }
   }
 
+  // Battle phase activation lock: opponent cannot activate cards/effects
+  if (
+    this.phase === "battle" &&
+    actor &&
+    actor.opponentCannotActivateDuringBattle &&
+    kind !== "bot_attack" &&
+    kind !== "bot_turn" &&
+    kind !== "bot_main_action"
+  ) {
+    return blocked(
+      "BLOCKED_BATTLE_PHASE_LOCK",
+      "Seu oponente nao pode ativar cards ou efeitos durante a Fase de Batalha.",
+    );
+  }
+
   return { ok: true };
 }
 

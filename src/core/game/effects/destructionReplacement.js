@@ -438,6 +438,8 @@ async function tryReplacement(game, sourceCard, sourceOwner, effect, ctx) {
     return { replaced: false };
   }
 
+  const costDestination = replacement.costDestination || "graveyard";
+
   // Bot auto-selection (lowest ATK for cost)
   if (costOwner.id !== "player") {
     const chosen = [...candidates]
@@ -445,7 +447,7 @@ async function tryReplacement(game, sourceCard, sourceOwner, effect, ctx) {
       .slice(0, costCount);
 
     for (const costCard of chosen) {
-      game.moveCard(costCard, costOwner, "graveyard", {
+      game.moveCard(costCard, costOwner, costDestination, {
         fromZone: costZone,
       });
     }
@@ -470,9 +472,12 @@ async function tryReplacement(game, sourceCard, sourceOwner, effect, ctx) {
   }
 
   const costDescription = getCostTypeDescription(costFilters, costCount);
+  const costActionVerb = costDestination === "banished" ? "Banish" : "Send";
+  const costActionSuffix =
+    costDestination === "banished" ? "to save" : "to the GY to save";
   const prompt =
     formatReplacementText(replacement.prompt, card.name, sourceCard.name) ||
-    `Send ${costCount} ${costDescription} to the GY to save ${card.name}?`;
+    `${costActionVerb} ${costCount} ${costDescription} ${costActionSuffix} ${card.name}?`;
 
   const wantsToReplace =
     (await game.ui?.showConfirmPrompt?.(prompt, {
@@ -508,7 +513,7 @@ async function tryReplacement(game, sourceCard, sourceOwner, effect, ctx) {
   }
 
   for (const costCard of selections) {
-    game.moveCard(costCard, costOwner, "graveyard", { fromZone: costZone });
+    game.moveCard(costCard, costOwner, costDestination, { fromZone: costZone });
   }
 
   game.markOncePerTurnUsed(sourceCard, sourceOwner, effect);

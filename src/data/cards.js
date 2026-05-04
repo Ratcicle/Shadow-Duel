@@ -6441,6 +6441,65 @@
       },
     ],
   },
+  {
+    id: 258,
+    name: "Arturus, Lord of the Void",
+    cardKind: "monster",
+    atk: 2800,
+    def: 2500,
+    level: 10,
+    type: "Warrior",
+    archetype: "Void",
+    description:
+      "While this card is the only face-up monster you control, it gains 100 ATK for each 'Void' monster in your GY. Your opponent cannot activate cards or effects during the Battle Phase. If this card would be destroyed by a card effect: you can banish 2 'Void' monsters from your GY instead.",
+    image: "assets/Arturus Lord of the Void.png",
+    effects: [
+      {
+        id: "arturus_atk_gy_buff",
+        timing: "passive",
+        passive: {
+          type: "graveyard_archetype_count_buff",
+          archetype: "Void",
+          amountPerCard: 100,
+          stats: ["atk"],
+          requireSoleMonster: true,
+        },
+      },
+      {
+        id: "arturus_battle_phase_lock",
+        timing: "passive",
+        passive: {
+          type: "battle_phase_activation_lock",
+        },
+      },
+      {
+        id: "arturus_destruction_sub",
+        timing: "passive",
+        requireFaceup: true,
+        replacementEffect: {
+          type: "destruction",
+          reason: "effect",
+          targetOwner: "self",
+          targetZones: ["field"],
+          targetRequireFaceup: true,
+          costCount: 2,
+          costOwner: "source",
+          costZone: "graveyard",
+          costDestination: "banished",
+          costFilters: {
+            cardKind: "monster",
+            archetype: "Void",
+          },
+          prompt:
+            "Banish 2 'Void' monsters from your GY to save {target} from destruction?",
+          selectionMessage:
+            "Choose 2 'Void' monsters in your GY to banish.",
+          logMessage:
+            "{target} avoided destruction by banishing 2 'Void' monsters from the GY.",
+        },
+      },
+    ],
+  },
 ];
 
 // Performance optimization: Create indexed maps for O(1) lookups
