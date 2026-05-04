@@ -487,6 +487,18 @@
     "255": {
       "name": "Dragão Bahamut Supremo",
       "description": "Deve ser Invocado por Invocação-Fusão banindo 5 monstros \"Dragão Extremo\" do seu Cemitério, e não pode ser Invocado por Invocação-Especial de outras formas. Enquanto este card estiver com a face para cima no campo, você não pode controlar outros monstros. Não é afetado por outros efeitos de cards. Uma vez por turno, quando um monstro seria Invocado, ou quando um card ou efeito for ativado (Efeito Rápido): negue a Invocação ou ativação e, se isso acontecer, destrua esse card."
+    },
+    "172": {
+      "name": "Mil-Braços do Vazio",
+      "description": "Você pode enviar 1 monstro 'Vazio' que você controla para o Cemitério; Invoque por Invocação-Especial este card da sua mão. Você pode devolver este card do campo para a sua mão; Invoque por Invocação-Especial até 2 'Oco do Vazio' do seu Cemitério e, se isso acontecer, eles ganham 700 de ATK/DEF até o final deste turno. Você só pode usar cada efeito de 'Mil-Braços do Vazio' uma vez por turno."
+    },
+    "173": {
+      "name": "Demônio Malicioso do Vazio",
+      "description": "Material de Ascensão: 'Mil-Braços do Vazio'. Requisito: ambos os efeitos do material foram ativados neste Duelo. O número de ataques que este card pode declarar por Fase de Batalha é igual ao número de 'Oco do Vazio' no seu Cemitério. Se este card no campo for enviado para o Cemitério: você pode Invocar por Invocação-Especial até 3 'Oco do Vazio' do seu Cemitério e, se isso acontecer, adicione 1 'Polimerização' do seu Deck à sua mão."
+    },
+    "258": {
+      "name": "Arcturus, Senhor do Vazio",
+      "description": "Enquanto este card for o único monstro com a face para cima que você controla, ele ganha 100 de ATK para cada monstro 'Vazio' no seu Cemitério. Seu oponente não pode ativar cards ou efeitos durante a Fase de Batalha. Se este card seria destruído por um efeito de card: você pode banir 2 monstros 'Vazio' do seu Cemitério em vez disso."
     }
   }
 }

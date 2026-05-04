@@ -108,6 +108,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
         position: c.position,
         isFacedown: c.isFacedown,
         hasAttacked: c.hasAttacked,
+        cannotAttackThisTurn: c.cannotAttackThisTurn || false,
         battleIndestructible: c.battleIndestructible,
         cannotBeDestroyedByBattle: c.cannotBeDestroyedByBattle,
       })),

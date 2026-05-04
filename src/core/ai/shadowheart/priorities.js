@@ -118,7 +118,8 @@ export function shouldPlaySpell(card, analysis) {
 
     if (
       analysis.field.length === 1 &&
-      analysis.field[0].name === "Shadow-Heart Scale Dragon"
+      analysis.field[0].name === "Shadow-Heart Scale Dragon" &&
+      !analysis.field[0].cannotAttackThisTurn
     ) {
       return {
         yes: true,
@@ -126,7 +127,7 @@ export function shouldPlaySpell(card, analysis) {
         reason: "OTK potencial com Scale Dragon!",
       };
     }
-    return { yes: false, reason: "Scale Dragon não está sozinho" };
+    return { yes: false, reason: "Scale Dragon não está sozinho ou não pode atacar" };
   }
 
   // Shadow-Heart Infusion - Avaliação dinâmica de custo/benefício
@@ -220,10 +221,12 @@ export function shouldPlaySpell(card, analysis) {
       };
     }
 
-    const shOnField = analysis.field.filter((c) => isShadowHeartByName(c.name));
+    const shOnField = analysis.field.filter(
+      (c) => isShadowHeartByName(c.name) && !c.cannotAttackThisTurn,
+    );
 
     if (shOnField.length === 0) {
-      return { yes: false, reason: "Preciso de Shadow-Heart no campo" };
+      return { yes: false, reason: "Sem Shadow-Heart que possa atacar este turno" };
     }
 
     // Calcular potencial de dano com buff

@@ -81,14 +81,15 @@ export function canStartAction(options = {}) {
     }
   }
 
-  // Battle phase activation lock: opponent cannot activate cards/effects
+  // Battle phase activation lock: blocks the opponent of the Arturus controller
+  // from activating cards/effects during the controller's own battle phase.
+  // Crucially, this only applies when the actor is NOT the current turn player —
+  // i.e., it never blocks the turn player's own actions during their own phase.
   if (
     this.phase === "battle" &&
-    actor &&
+    actor?.id &&
     actor.opponentCannotActivateDuringBattle &&
-    kind !== "bot_attack" &&
-    kind !== "bot_turn" &&
-    kind !== "bot_main_action"
+    actor.id !== this.turn
   ) {
     return blocked(
       "BLOCKED_BATTLE_PHASE_LOCK",

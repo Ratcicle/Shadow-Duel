@@ -6443,7 +6443,7 @@
   },
   {
     id: 258,
-    name: "Arturus, Lord of the Void",
+    name: "Arcturus, Lord of the Void",
     cardKind: "monster",
     atk: 2800,
     def: 2500,
@@ -6452,7 +6452,7 @@
     archetype: "Void",
     description:
       "While this card is the only face-up monster you control, it gains 100 ATK for each 'Void' monster in your GY. Your opponent cannot activate cards or effects during the Battle Phase. If this card would be destroyed by a card effect: you can banish 2 'Void' monsters from your GY instead.",
-    image: "assets/Arturus Lord of the Void.png",
+    image: "assets/Arcturus, Lord of the Void.png",
     effects: [
       {
         id: "arturus_atk_gy_buff",
