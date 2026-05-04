@@ -3209,7 +3209,7 @@
     id: 162,
     name: "Void Slayer Brute",
     cardKind: "monster",
-    atk: 2700,
+    atk: 2500,
     def: 2200,
     level: 8,
     type: "Fiend",
@@ -3397,6 +3397,7 @@
         event: "before_destroy",
         description:
           "[Once per turn]: You can negate the destruction of this card; reduce its ATK by 700.",
+        oncePerTurn: true,
         oncePerTurnScope: "card",
         oncePerTurnName: "void_hydra_titan_negate_destruction",
         negationCost: [
@@ -3596,6 +3597,74 @@
     ],
   },
   {
+    id: 172,
+    name: "Thousand-Arms of the Void",
+    cardKind: "monster",
+    atk: 2100,
+    def: 1600,
+    level: 6,
+    type: "Fiend",
+    archetype: "Void",
+    description:
+      "You can send 1 'Void' monster you control to the GY; Special Summon this card from your hand. You can return this card from the field to your hand; Special Summon up to 2 'Void Hollow' from your GY, and if you do, they gain 700 ATK/DEF until the end of this turn. You can only use each effect of 'Thousand-Arms of the Void' once per turn.",
+    image: "assets/Thousand-Arms of the Void.png",
+    effects: [
+      {
+        id: "thousand_arms_summon_from_hand",
+        timing: "ignition",
+        requireZone: "hand",
+        oncePerTurn: true,
+        oncePerTurnName: "thousand_arms_summon_from_hand",
+        targets: [
+          {
+            id: "thousand_arms_cost",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            archetype: "Void",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "special_summon_from_hand_with_cost",
+            costTargetRef: "thousand_arms_cost",
+            position: "choice",
+            cannotAttackThisTurn: false,
+          },
+        ],
+      },
+      {
+        id: "thousand_arms_bounce_and_revive",
+        timing: "ignition",
+        requireZone: "field",
+        oncePerTurn: true,
+        oncePerTurnName: "thousand_arms_bounce_and_revive",
+        actions: [
+          {
+            type: "move",
+            targetRef: "self",
+            player: "self",
+            to: "hand",
+          },
+          {
+            type: "special_summon_from_zone",
+            zone: "graveyard",
+            filters: {
+              name: "Void Hollow",
+              cardKind: "monster",
+            },
+            count: { min: 0, max: 2 },
+            position: "choice",
+            cannotAttackThisTurn: false,
+            atkBoostAfterSummon: 700,
+            defBoostAfterSummon: 700,
+          },
+        ],
+      },
+    ],
+  },
+  {
     id: 171,
     name: "Void Cosmic Walker",
     cardKind: "monster",
@@ -3667,6 +3736,50 @@
             count: { min: 0, max: 3 },
             position: "choice",
             promptPlayer: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 173,
+    name: "Malicious Demon of the Void",
+    cardKind: "monster",
+    level: 8,
+    atk: 2600,
+    def: 2400,
+    type: "Fiend",
+    archetype: "Void",
+    monsterType: "ascension",
+    ascension: {
+      materialId: 172,
+      requirements: [{ type: "material_effect_activations", count: 2 }],
+      position: "choice",
+    },
+    dynamicExtraAttacks: { source: "graveyard_count", name: "Void Hollow" },
+    description:
+      "Ascension Material: 'Thousand-Arms of the Void'. Requirement: Both effects of the material activated in this Duel. The number of attacks this card can declare per Battle Phase equals the number of 'Void Hollow' in your Graveyard. If this card on the field is sent to the Graveyard: You can Special Summon up to 3 'Void Hollow' from your Graveyard, and if you do, add 1 'Polymerization' from your Deck to your hand.",
+    image: "assets/Malicious Demon of the Void.png",
+    effects: [
+      {
+        id: "malicious_demon_to_grave",
+        timing: "on_event",
+        event: "card_to_grave",
+        fromZone: "field",
+        actions: [
+          {
+            type: "special_summon_from_zone",
+            zone: "graveyard",
+            filters: { name: "Void Hollow", cardKind: "monster" },
+            count: { min: 0, max: 3 },
+            position: "choice",
+            promptPlayer: true,
+          },
+          {
+            type: "search_any",
+            player: "self",
+            cardName: "Polymerization",
+            cardKind: "spell",
           },
         ],
       },

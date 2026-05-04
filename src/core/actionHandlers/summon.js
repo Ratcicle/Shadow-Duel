@@ -507,6 +507,8 @@ async function summonCards(cards, sourceZoneEntries, player, action, engine) {
 
   const setAtkToZero = action.setAtkToZeroAfterSummon === true;
   const setDefToZero = action.setDefToZeroAfterSummon === true;
+  const atkBoostAfterSummon = Number.isFinite(action.atkBoostAfterSummon) ? action.atkBoostAfterSummon : 0;
+  const defBoostAfterSummon = Number.isFinite(action.defBoostAfterSummon) ? action.defBoostAfterSummon : 0;
 
   const canUseMoveCard = game && typeof game.moveCard === "function";
 
@@ -608,6 +610,16 @@ async function summonCards(cards, sourceZoneEntries, player, action, engine) {
         card.originalDef = card.def;
       }
       card.def = 0;
+    }
+
+    if (atkBoostAfterSummon !== 0) {
+      card.tempAtkBoost = (card.tempAtkBoost || 0) + atkBoostAfterSummon;
+      card.atk = (card.atk || 0) + atkBoostAfterSummon;
+    }
+
+    if (defBoostAfterSummon !== 0) {
+      card.tempDefBoost = (card.tempDefBoost || 0) + defBoostAfterSummon;
+      card.def = (card.def || 0) + defBoostAfterSummon;
     }
 
     if (!usedMoveCard) {

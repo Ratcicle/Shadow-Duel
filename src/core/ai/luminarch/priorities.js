@@ -604,6 +604,9 @@ export function shouldSummonMonster(card, analysis) {
         (c.name === "Luminarch Aegisbearer" ||
           c.name === "Luminarch Sanctum Protector")
     );
+    const hasSanctumProtectorInHand = analysis.hand.some(
+      (c) => c && c.name === "Luminarch Sanctum Protector"
+    );
     const hasFieldSpell = !!analysis.fieldSpell;
 
     // ═════════════════════════════════════════════════════════════════════════
@@ -613,11 +616,14 @@ export function shouldSummonMonster(card, analysis) {
     if (name === "Luminarch Aegisbearer") {
       // Aegisbearer é SEMPRE prioridade máxima se não temos tank
       if (!hasTank) {
+        const opensProtectorLine = hasSanctumProtectorInHand;
         return {
           yes: true,
-          position: "defense",
+          position: opensProtectorLine ? "attack" : "defense",
           priority: 12, // Máxima prioridade
-          reason: "Setup defensivo CRÍTICO - 2000 DEF + taunt",
+          reason: opensProtectorLine
+            ? "Abrir face-up para descer Sanctum Protector imediatamente"
+            : "Setup defensivo CRÍTICO - baixar Aegisbearer para sobreviver e virar depois",
         };
       }
 

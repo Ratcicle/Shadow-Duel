@@ -100,7 +100,7 @@ async function bounceAndSummonCard(source, target, player, action, engine) {
   // Bounce source to hand
   if (action.bounceSource !== false) {
     if (typeof game.moveCard === "function") {
-      game.moveCard(source, player, "hand", { fromZone: "field" });
+      await game.moveCard(source, player, "hand", { fromZone: "field" });
     } else {
       const fieldIndex = player.field.indexOf(source);
       if (fieldIndex !== -1) {
@@ -126,7 +126,7 @@ async function bounceAndSummonCard(source, target, player, action, engine) {
 
   const moveResult =
     typeof game.moveCard === "function"
-      ? game.moveCard(target, player, "field", {
+      ? await game.moveCard(target, player, "field", {
           fromZone: "hand",
           position,
           isFacedown: false,

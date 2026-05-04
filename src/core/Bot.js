@@ -881,7 +881,13 @@ export default class Bot extends Player {
     if (attacker.cannotAttackThisTurn) return;
     if (attacker.position === "defense") return;
 
-    const maxAttacks = 1 + (attacker.extraAttacks || 0);
+    let _extra = attacker.extraAttacks || 0;
+    if (attacker.dynamicExtraAttacks?.source === "graveyard_count") {
+      const dea = attacker.dynamicExtraAttacks;
+      _extra = (state.bot?.graveyard || []).filter(c => c && c.name === dea.name).length;
+      _extra -= 1;
+    }
+    const maxAttacks = 1 + _extra;
     const usedAttacks = attacker.attacksUsedThisTurn || 0;
 
     // Multi-attack mode allows more attacks

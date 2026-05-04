@@ -1169,6 +1169,8 @@ export const ACTION_CATALOG = {
       "oncePerTurnName",
       "setAtkToZeroAfterSummon",
       "setDefToZeroAfterSummon",
+      "atkBoostAfterSummon",
+      "defBoostAfterSummon",
     ],
     fields: {
       ...COMMON_TARGET_FIELDS,
@@ -1184,6 +1186,8 @@ export const ACTION_CATALOG = {
       position: field("position"),
       setAtkToZeroAfterSummon: { type: "boolean" },
       setDefToZeroAfterSummon: { type: "boolean" },
+      atkBoostAfterSummon: { type: "number" },
+      defBoostAfterSummon: { type: "number" },
     },
     targetRef: "optional",
     selection: "dynamic",

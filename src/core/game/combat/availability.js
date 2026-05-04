@@ -45,7 +45,15 @@ export function getAttackAvailability(attacker) {
     };
   }
 
-  const extraAttacks = attacker.extraAttacks || 0;
+  let extraAttacks = attacker.extraAttacks || 0;
+  if (attacker.dynamicExtraAttacks?.source === "graveyard_count") {
+    const dea = attacker.dynamicExtraAttacks;
+    const owner = attacker.owner === "player" ? this.player : this.bot;
+    const dynamicAttackLimit = (owner?.graveyard || []).filter(
+      (c) => c && c.name === dea.name,
+    ).length;
+    extraAttacks = dynamicAttackLimit - 1;
+  }
   const maxAttacks = 1 + extraAttacks;
   const attacksUsed = attacker.attacksUsedThisTurn || 0;
   const canUseSecondAttack =
@@ -101,7 +109,15 @@ export function getAttackAvailability(attacker) {
  */
 export function markAttackUsed(attacker, target = null) {
   if (!attacker) return;
-  const extraAttacks = attacker.extraAttacks || 0;
+  let extraAttacks = attacker.extraAttacks || 0;
+  if (attacker.dynamicExtraAttacks?.source === "graveyard_count") {
+    const dea = attacker.dynamicExtraAttacks;
+    const owner = attacker.owner === "player" ? this.player : this.bot;
+    const dynamicAttackLimit = (owner?.graveyard || []).filter(
+      (c) => c && c.name === dea.name,
+    ).length;
+    extraAttacks = dynamicAttackLimit - 1;
+  }
   const maxAttacks = 1 + extraAttacks;
   attacker.attacksUsedThisTurn = (attacker.attacksUsedThisTurn || 0) + 1;
 
