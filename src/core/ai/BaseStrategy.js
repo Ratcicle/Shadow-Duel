@@ -6,15 +6,37 @@ import {
 } from "./ThreatEvaluation.js";
 import { inferRole, isAdvantageEngine } from "./RoleAnalyzer.js";
 import { estimateMonsterValue, estimateCardValue } from "./StrategyUtils.js";
+import {
+  gameTreeSearch,
+  shouldUseGameTreeSearch,
+  estimateSearchComplexity,
+} from "./GameTreeSearch.js";
+import {
+  analyzeOpponent,
+  estimateTurnsToOppLethal,
+} from "./OpponentPredictor.js";
 
 export default class BaseStrategy {
   constructor(bot) {
     this.bot = bot;
   }
 
-  // Evaluate board state from the bot's perspective (LEGACY)
-  evaluateBoard(_gameOrState, _perspectivePlayer) {
-    return 0;
+  // Label usado em logs/warnings de P2. Estratégias podem override (ex: "Luminarch").
+  get archetypeLabel() {
+    return this.constructor?.name || "BaseStrategy";
+  }
+
+  // Hook de logging. Default é silencioso. ShadowHeartStrategy faz override
+  // para empurrar para `thoughtProcess` e logar quando `bot.debug` está ativo.
+  think(_thought) {}
+
+  // Evaluate board state from the bot's perspective.
+  // Antes era um stub que retornava 0, mas isso fazia com que callers como
+  // playBattlePhase e BeamSearch recebessem score 0 para Lumi/SH/Dragon.
+  // Agora delega para evaluateBoardV2. Estratégias que querem comportamento
+  // específico (VoidStrategy → evaluateBoardVoid) continuam podendo override.
+  evaluateBoard(gameOrState, perspectivePlayer) {
+    return this.evaluateBoardV2(gameOrState, perspectivePlayer);
   }
 
   /**
@@ -127,7 +149,7 @@ export default class BaseStrategy {
     }
 
     // === 8. LETHAL CHECK ===
-    if (canOpponentLethal(oppField, perspective?.lp || 8000)) {
+    if (canOpponentLethal(oppField, perspective?.lp || 8000, opponent)) {
       score -= 6.0; // DANGER CRITICAL (aumentado)
     }
 
@@ -422,5 +444,133 @@ export default class BaseStrategy {
     }
 
     return opponent || null;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // P2: Análise do oponente + Game Tree Search (minimax 4-ply)
+  // Hoisted from LuminarchStrategy/ShadowHeartStrategy. Disponível para
+  // todas as estratégias inclusive Void e Dragon, que antes não tinham minimax.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  evaluateCriticalSituationWithGameTree(game, _analysis = null) {
+    try {
+      const opponent = this.getOpponent(game, this.bot) || game.opponent;
+      if (!opponent) return null;
+
+      if (!shouldUseGameTreeSearch(game, this.bot)) {
+        return null;
+      }
+
+      this.think(
+        `\n🔮 [P2] Situação crítica detectada! Rodando Game Tree Search (4-ply)...`,
+      );
+
+      const complexity = estimateSearchComplexity(4, 3);
+      this.think(`  📊 Nodes estimados: ~${complexity}`);
+
+      const result = gameTreeSearch(game, this, this.bot, 4);
+
+      if (result?.action) {
+        this.think(
+          `  ✅ Game Tree melhor ação: ${
+            result.action.type || "unknown"
+          } (score: ${result.score.toFixed(2)}, conf: ${(
+            result.confidence * 100
+          ).toFixed(0)}%)`,
+        );
+        return result;
+      }
+
+      return null;
+    } catch (e) {
+      if (this.bot?.debug !== false) {
+        console.warn(`[${this.archetypeLabel}] Game Tree Search erro:`, e);
+      }
+      return null;
+    }
+  }
+
+  analyzeOpponentPosition(game) {
+    try {
+      const opponent = this.getOpponent(game, this.bot) || game.opponent;
+      if (!opponent) return null;
+
+      const analysis = analyzeOpponent(opponent, this.bot);
+      const turnsToKill = estimateTurnsToOppLethal(
+        opponent,
+        this.bot.lp || 8000,
+      );
+
+      this.think(`\n📍 [P2] Análise do Oponente:`);
+      this.think(`  🏛️  Arquétipo: ${analysis.archetype}`);
+      this.think(`  ⚔️  Estilo: ${analysis.playstyle}`);
+      this.think(
+        `  🎯 Próxima ação provável: ${
+          analysis.nextMove?.card?.name || "desconhecida"
+        } (${analysis.nextMove?.role || "?"})`,
+      );
+      this.think(
+        `  ⏱️  Turnos até lethal: ${
+          turnsToKill === Infinity ? "∞" : turnsToKill
+        }`,
+      );
+      this.think(`  ⚡ Nível de ameaça: ${analysis.threat_level}/3`);
+
+      return {
+        ...analysis,
+        turnsToLethal: turnsToKill,
+      };
+    } catch (e) {
+      if (this.bot?.debug !== false) {
+        console.warn(`[${this.archetypeLabel}] Opponent Analysis erro:`, e);
+      }
+      return null;
+    }
+  }
+
+  integrateP2IntoActionSelection(game, actions, analysis = null) {
+    try {
+      if (!actions || actions.length === 0) return actions;
+
+      const oppAnalysis = this.analyzeOpponentPosition(game);
+      if (!oppAnalysis) return actions;
+
+      const gameTreeResult = this.evaluateCriticalSituationWithGameTree(
+        game,
+        analysis,
+      );
+      if (!gameTreeResult || !gameTreeResult.action) {
+        return actions;
+      }
+
+      const gameTreeAction = gameTreeResult.action;
+      const gameTreeScore = gameTreeResult.score;
+
+      this.think(
+        `\n🎯 [P2] Game Tree sobrescreve: score=+${gameTreeScore.toFixed(
+          2,
+        )} vs P1`,
+      );
+
+      const indexInActions = actions.findIndex(
+        (a) =>
+          a.type === gameTreeAction.type && a.index === gameTreeAction.index,
+      );
+
+      if (indexInActions >= 0) {
+        const action = actions[indexInActions];
+        action.p2Score = gameTreeScore;
+        action.p2Approved = true;
+        actions.splice(indexInActions, 1);
+        actions.unshift(action);
+      }
+
+      return actions;
+    } catch (e) {
+      if (this.bot?.debug !== false) {
+        console.warn(`[${this.archetypeLabel}] P2 Integration erro:`, e);
+      }
+      return actions;
+    }
   }
 }

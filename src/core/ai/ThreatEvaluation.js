@@ -9,7 +9,7 @@ import {
   calculateActionImpact,
   isAdvantageEngine,
 } from "./RoleAnalyzer.js";
-import { hasArchetype } from "./StrategyUtils.js";
+import { hasArchetype, getMaxAttacks } from "./StrategyUtils.js";
 
 /**
  * Calcula o threat score de uma carta no contexto atual do jogo.
@@ -232,7 +232,7 @@ export function rankByResourceValue(cards, context = {}, ascending = true) {
  * @param {number} myLP - Meus LP atuais
  * @returns {number} - Turnos até lethal (Infinity se não pode)
  */
-export function estimateTurnsToKill(card, myLP = 8000) {
+export function estimateTurnsToKill(card, myLP = 8000, owner = null) {
   if (!card || card.cardKind !== "monster") return Infinity;
   if (card.position !== "attack") return Infinity;
 
@@ -240,9 +240,7 @@ export function estimateTurnsToKill(card, myLP = 8000) {
     (card.atk || 0) + (card.tempAtkBoost || 0) + (card.equipAtkBonus || 0);
   if (atk <= 0) return Infinity;
 
-  const extraAttacks = (card.extraAttacks || 0) + (card.equipExtraAttacks || 0);
-  const attacksPerTurn = 1 + extraAttacks;
-  const damagePerTurn = atk * attacksPerTurn;
+  const damagePerTurn = atk * getMaxAttacks(card, owner);
 
   return Math.ceil(myLP / damagePerTurn);
 }
@@ -253,7 +251,7 @@ export function estimateTurnsToKill(card, myLP = 8000) {
  * @param {number} myLP
  * @returns {boolean}
  */
-export function canOpponentLethal(opponentField, myLP = 8000) {
+export function canOpponentLethal(opponentField, myLP = 8000, opponent = null) {
   if (!Array.isArray(opponentField)) return false;
 
   let totalDamage = 0;
@@ -263,11 +261,8 @@ export function canOpponentLethal(opponentField, myLP = 8000) {
 
     const atk =
       (card.atk || 0) + (card.tempAtkBoost || 0) + (card.equipAtkBonus || 0);
-    const extraAttacks =
-      (card.extraAttacks || 0) + (card.equipExtraAttacks || 0);
-    const attacksPerTurn = 1 + extraAttacks;
 
-    totalDamage += atk * attacksPerTurn;
+    totalDamage += atk * getMaxAttacks(card, opponent);
   }
 
   return totalDamage >= myLP;

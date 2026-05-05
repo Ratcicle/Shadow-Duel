@@ -18,16 +18,7 @@ import {
   calculateBlockingRiskPenalty,
   assessActionSafety,
 } from "./ChainAwareness.js";
-import {
-  gameTreeSearch,
-  shouldUseGameTreeSearch,
-  estimateSearchComplexity,
-} from "./GameTreeSearch.js";
-import {
-  analyzeOpponent,
-  predictOppAction,
-  estimateTurnsToOppLethal,
-} from "./OpponentPredictor.js";
+// P2 (gameTreeSearch, analyzeOpponent etc.) está em BaseStrategy.
 import {
   isLuminarch,
   getCardKnowledge,
@@ -1920,103 +1911,6 @@ export default class LuminarchStrategy extends BaseStrategy {
     }
   }
 
-  /**
-   * === P2: GAME TREE SEARCH ===
-   * Acionado apenas em situações críticas (lethal check, defensive emergency)
-   */
-  evaluateCriticalSituationWithGameTree(game) {
-    try {
-      const opponent = this.getOpponent(game, this.bot) || game.opponent;
-      if (!opponent) return null;
-
-      // Verificar se vale a pena rodar minimax pesado
-      if (!shouldUseGameTreeSearch(game, this.bot)) {
-        return null;
-      }
-
-      // Rodar minimax
-      const result = gameTreeSearch(game, this, this.bot, 4);
-
-      if (result.action) {
-        return result;
-      }
-
-      return null;
-    } catch (e) {
-      if (this.bot?.debug !== false) {
-        console.warn(`[LuminarchStrategy] Game Tree Search erro:`, e);
-      }
-      return null;
-    }
-  }
-
-  /**
-   * === P2: OPPONENT ANALYSIS ===
-   */
-  analyzeOpponentPosition(game) {
-    try {
-      const opponent = this.getOpponent(game, this.bot) || game.opponent;
-      if (!opponent) return null;
-
-      const analysis = analyzeOpponent(opponent, this.bot);
-      const turnsToKill = estimateTurnsToOppLethal(
-        opponent,
-        this.bot.lp || 8000,
-      );
-
-      return {
-        ...analysis,
-        turnsToLethal: turnsToKill,
-      };
-    } catch (e) {
-      if (this.bot?.debug !== false) {
-        console.warn(`[LuminarchStrategy] Opponent Analysis erro:`, e);
-      }
-      return null;
-    }
-  }
-
-  /**
-   * === P2: INTEGRAÇÃO ===
-   */
-  integrateP2IntoActionSelection(game, actions) {
-    try {
-      if (!actions || actions.length === 0) return actions;
-
-      // Análise crítica
-      const oppAnalysis = this.analyzeOpponentPosition(game);
-      if (!oppAnalysis) return actions;
-
-      // Game Tree Search apenas se crítico
-      const gameTreeResult = this.evaluateCriticalSituationWithGameTree(game);
-      if (!gameTreeResult || !gameTreeResult.action) {
-        return actions;
-      }
-
-      // Se Game Tree encontrou ação melhor: priorizar
-      const gameTreeAction = gameTreeResult.action;
-      const gameTreeScore = gameTreeResult.score;
-
-      // Encontrar ação Game Tree nos actions P0/P1 e mover para frente
-      const indexInActions = actions.findIndex(
-        (a) =>
-          a.type === gameTreeAction.type && a.index === gameTreeAction.index,
-      );
-
-      if (indexInActions >= 0) {
-        const action = actions[indexInActions];
-        action.p2Score = gameTreeScore;
-        action.p2Approved = true;
-        actions.splice(indexInActions, 1);
-        actions.unshift(action);
-      }
-
-      return actions;
-    } catch (e) {
-      if (this.bot?.debug !== false) {
-        console.warn(`[LuminarchStrategy] P2 Integration erro:`, e);
-      }
-      return actions;
-    }
-  }
+  // P2 (evaluateCriticalSituationWithGameTree, analyzeOpponentPosition,
+  // integrateP2IntoActionSelection) foi hoisted para BaseStrategy.
 }

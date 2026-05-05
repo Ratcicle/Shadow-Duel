@@ -685,6 +685,6 @@ export default class DragonStrategy extends BaseStrategy {
     }
 
     log(`  📋 Total actions generated: ${actions.length}`);
-    return actions;
+    return this.integrateP2IntoActionSelection(game, actions);
   }
 }

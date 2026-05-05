@@ -5,6 +5,21 @@ export function getCardArchetypes(card) {
   return [];
 }
 
+// Resolves the number of attacks a monster can declare per Battle Phase,
+// including the dynamicExtraAttacks passive (e.g. Malicious Demon of the Void).
+// `owner` is required for dynamic resolution; without it falls back to static.
+export function getMaxAttacks(card, owner = null) {
+  if (!card) return 1;
+  let extra = (card.extraAttacks || 0) + (card.equipExtraAttacks || 0);
+  if (card.dynamicExtraAttacks?.source === "graveyard_count" && owner) {
+    const dea = card.dynamicExtraAttacks;
+    extra = (owner.graveyard || []).filter(
+      (c) => c && c.name === dea.name
+    ).length;
+  }
+  return 1 + extra;
+}
+
 export function hasArchetype(card, archetype) {
   if (!card || !archetype) return false;
   return getCardArchetypes(card).includes(archetype);
@@ -28,7 +43,8 @@ export function estimateMonsterValue(monster, options = {}) {
   if (monster.cannotAttackThisTurn) value -= 0.2;
   if (monster.hasAttacked) value -= 0.1;
   if (monster.piercing) value += 0.2;
-  if (monster.extraAttacks) value += 0.2 * monster.extraAttacks;
+  const bonusAttacks = getMaxAttacks(monster, options.owner || null) - 1;
+  if (bonusAttacks > 0) value += 0.2 * bonusAttacks;
   if (monster.battleIndestructibleOncePerTurn) value += 0.25;
   if (monster.mustBeAttacked) {
     value += 0.25 + def / 2500;

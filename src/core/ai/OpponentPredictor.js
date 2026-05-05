@@ -33,32 +33,33 @@ function identifyOpponentArchetype(opponentState) {
     const field = safeList(opponentState.field);
     const graveyard = safeList(opponentState.graveyard);
 
-    // Contador de cartas por tipo
-    const cardNames = [
-      ...hand.map((c) => c?.name || ""),
-      ...field.map((c) => c?.name || ""),
-    ].join(" ");
-
-    // Heurísticos de arquétipo
-    if (
-      cardNames.includes("Luminarch") ||
-      cardNames.includes("Light") ||
-      cardNames.includes("Ascension")
-    ) {
-      return "Luminarch"; // ou "light"
-    }
-    if (
-      cardNames.includes("Shadow-Heart") ||
-      cardNames.includes("Darkness") ||
-      cardNames.includes("Void")
-    ) {
-      return "Shadow-Heart"; // ou "shadow"
-    }
-    if (cardNames.includes("Dragon") || cardNames.includes("Fusion")) {
-      return "Dragon"; // genérico
+    // Conta cartas por archetype usando o próprio campo declarado em cards.js.
+    // Mais confiável que substring matching (Void deixava de ser detectado
+    // porque o nome contém "Void" e a regra de Shadow-Heart casava antes).
+    const counts = {};
+    for (const card of [...hand, ...field, ...graveyard]) {
+      if (!card) continue;
+      const archetypes = Array.isArray(card.archetypes)
+        ? card.archetypes
+        : card.archetype
+          ? [card.archetype]
+          : [];
+      for (const arch of archetypes) {
+        if (!arch) continue;
+        counts[arch] = (counts[arch] || 0) + 1;
+      }
     }
 
-    return "unknown";
+    let bestArch = null;
+    let bestCount = 0;
+    for (const [arch, count] of Object.entries(counts)) {
+      if (count > bestCount) {
+        bestArch = arch;
+        bestCount = count;
+      }
+    }
+
+    return bestArch || "unknown";
   } catch {
     return "unknown";
   }
@@ -168,76 +169,6 @@ function predictNextOppMove(opponentState, myState) {
 }
 
 /**
- * Modelo simplificado: "qual ação o oponente faria em resposta a X?"
- * Retorna array de ações preditas com confiança
- */
-function predictOppResponse(myLastAction, opponentState, myState) {
-  try {
-    const responses = [];
-    const playstyle = assessOpponentPlaystyle(opponentState);
-    const {
-      card: nextCard,
-      role: nextRole,
-      confidence,
-    } = predictNextOppMove(opponentState, myState);
-
-    if (!nextCard) {
-      return { mostLikelyResponse: null, allResponses: [], confidence: 0 };
-    }
-
-    // Ações preditas conforme playstyle
-    if (playstyle === "aggressive") {
-      // Provavelmente summon + attack
-      responses.push({
-        action: "summon_and_attack",
-        card: nextCard,
-        priority: 1,
-      });
-      responses.push({ action: "search", card: nextCard, priority: 0.5 });
-    } else if (playstyle === "defensive") {
-      // Provavelmente summon em def ou set backrow
-      responses.push({
-        action: "summon_defensive",
-        card: nextCard,
-        priority: 1,
-      });
-      responses.push({ action: "set_trap", card: nextCard, priority: 0.7 });
-    } else if (playstyle === "generator") {
-      // Provavelmente search, extend, setup
-      responses.push({ action: "search", card: nextCard, priority: 1 });
-      responses.push({
-        action: "setup_field_spell",
-        card: nextCard,
-        priority: 0.8,
-      });
-    }
-
-    // Remove ações duplicadas, ordena por prioridade
-    const unique = [];
-    const seen = new Set();
-    for (const r of responses) {
-      const key = `${r.action}`;
-      if (!seen.has(key)) {
-        unique.push(r);
-        seen.add(key);
-      }
-    }
-    unique.sort((a, b) => b.priority - a.priority);
-
-    return {
-      mostLikelyResponse: unique[0],
-      allResponses: unique,
-      confidence,
-    };
-  } catch (e) {
-    if (shouldLogWarnings(opponentState, myState)) {
-      console.warn(`[OpponentPredictor] predictOppResponse erro:`, e);
-    }
-    return { mostLikelyResponse: null, allResponses: [], confidence: 0 };
-  }
-}
-
-/**
  * API Pública: Análise completa do oponente
  */
 export function analyzeOpponent(opponentState, myState = null) {
@@ -286,13 +217,6 @@ export function analyzeOpponent(opponentState, myState = null) {
       threat_level: 0,
     };
   }
-}
-
-/**
- * Prediz melhor resposta do oponente (usada em minimax para descontar confiança)
- */
-export function predictOppAction(myLastAction, opponentState, myState) {
-  return predictOppResponse(myLastAction, opponentState, myState);
 }
 
 /**

@@ -4,6 +4,8 @@
 // win conditions (lethal em 2-3 turnos, defensiva necessária, aproveitamento de oportunidade)
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { getMaxAttacks } from "./StrategyUtils.js";
+
 /**
  * Calcula se o bot pode forçar lethal num número específico de turnos.
  * @param {Object} gameState - Estado clonado do jogo
@@ -42,8 +44,7 @@ export function detectLethalOpportunity(
 
   for (const attacker of directAttackers) {
     const atk = (attacker.atk || 0) + (attacker.tempAtkBoost || 0);
-    const extraAttacks = attacker.extraAttacks || 0;
-    totalDamage += atk * (1 + extraAttacks);
+    totalDamage += atk * getMaxAttacks(attacker, botPlayer);
   }
 
   const oppLP = opponentPlayer.lp || 8000;

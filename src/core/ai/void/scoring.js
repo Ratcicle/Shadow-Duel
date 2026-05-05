@@ -418,7 +418,7 @@ export function evaluateBoardVoid(gameOrState, perspectivePlayer) {
   // ═══════════════════════════════════════════════════════════════════════════
   // 9. LETHAL CHECK
   // ═══════════════════════════════════════════════════════════════════════════
-  if (canOpponentLethal(oppField, myLP)) {
+  if (canOpponentLethal(oppField, myLP, opponent)) {
     score -= 5.0;
   }
 

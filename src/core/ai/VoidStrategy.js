@@ -958,7 +958,10 @@ export default class VoidStrategy extends BaseStrategy {
       actions.push(...positionActions);
     }
 
-    return this.sequenceActions(actions);
+    return this.integrateP2IntoActionSelection(
+      game,
+      this.sequenceActions(actions),
+    );
   }
 
   /**
