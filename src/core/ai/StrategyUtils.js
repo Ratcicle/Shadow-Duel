@@ -92,7 +92,11 @@ export function estimateCardValue(card, options = {}) {
       if (type === "heal_per_archetype_monster") value += 0.4;
       if (type === "destroy") value += 0.5;
       if (type === "equip") value += 0.3;
-      if (type === "buff_stats_temp" || type === "modify_stats_temp") {
+      if (
+        type === "buff_stats_temp" ||
+        type === "modify_stats_temp" ||
+        type === "modify_stats_temp_then_destroy_if_zeroed"
+      ) {
         value += 0.25;
       }
       if (type === "special_summon_from_zone") value += 0.6;
@@ -198,6 +202,11 @@ function inferTargetIntent(action) {
     const defFactor = Number.isFinite(action.defFactor) ? action.defFactor : 1;
     return atkFactor < 1 || defFactor < 1 ? "harm" : "benefit";
   }
+  if (type === "modify_stats_temp_then_destroy_if_zeroed") {
+    const atkChange = Number.isFinite(action.atkChange) ? action.atkChange : 0;
+    const defChange = Number.isFinite(action.defChange) ? action.defChange : 0;
+    return atkChange < 0 || defChange < 0 ? "harm" : "benefit";
+  }
   if (type.startsWith("special_summon")) return "benefit";
   if (type === "add_from_zone_to_hand") return "benefit";
   if (type === "search_any") return "benefit";
@@ -217,12 +226,225 @@ function buildTargetIntents(actions) {
 function rankCandidates(candidates, intent, options) {
   const scored = candidates.map((card) => ({
     card,
-    score: estimateCardValue(card, options),
+    score:
+      intent === "benefit" && options?.targetPreference?.role === "recursion"
+        ? estimateRecursionTargetValue(card, options.targetPreference)
+        : intent === "benefit" &&
+            options?.targetPreference?.role === "temporary_stat_buff" &&
+            options?.targetPreference?.purpose === "offense"
+          ? estimateOffensiveTemporaryBuffValue(card, {
+              atkBoost: options.targetPreference.atkBoost,
+              opponentField: options.opponentField,
+              opponentLp: options.opponentLp,
+            })
+          : intent === "harm" &&
+            options?.targetPreference?.role === "temporary_stat_debuff" &&
+            options?.targetPreference?.purpose === "combat"
+          ? estimateTemporaryCombatDebuffTargetValue(card, {
+              attackers: options.targetPreference.attackers || [],
+              opponentLp: options.opponentLp || 0,
+              atkReduction: options.targetPreference.atkReduction,
+              defReduction: options.targetPreference.defReduction,
+              destroyIfAtkZeroedByThisEffect:
+                options.targetPreference.destroyIfAtkZeroedByThisEffect,
+              destroyIfDefZeroedByThisEffect:
+                options.targetPreference.destroyIfDefZeroedByThisEffect,
+            })
+        : estimateCardValue(card, options),
   }));
   scored.sort((a, b) => {
     return intent === "cost" ? a.score - b.score : b.score - a.score;
   });
   return scored.map((entry) => entry.card);
+}
+
+export function estimateRecursionTargetValue(card, preference = {}) {
+  if (!card || card.cardKind !== "monster") return -100;
+  const atk = getEffectiveAtk(card);
+  const def =
+    (card.def || 0) +
+    (card.tempDefBoost || 0) +
+    (card.equipDefBonus || 0);
+  const purpose = preference.purpose || "value";
+  const defensiveNames = preference.defensiveNames || [];
+  const offensiveNames = preference.offensiveNames || [];
+  let score = (card.level || 0) * 0.2 + Math.max(atk, def) / 1000;
+
+  if (purpose === "stabilize" || purpose === "defense") {
+    score += def / 450;
+    if (def >= atk + 500 || card.mustBeAttacked) score += 2;
+    if (defensiveNames.includes(card.name)) score += 3;
+    if (offensiveNames.includes(card.name) && def < 2000) score -= 1;
+  } else if (purpose === "pressure" || purpose === "offense") {
+    score += atk / 450;
+    if (atk >= 2000 || card.piercing) score += 2;
+    if (offensiveNames.includes(card.name)) score += 2;
+    if (defensiveNames.includes(card.name) && atk < 1800) score -= 3;
+  } else {
+    if (defensiveNames.includes(card.name)) score += 0.8;
+    if (offensiveNames.includes(card.name)) score += 0.8;
+  }
+
+  return score;
+}
+
+export function estimateOffensiveTemporaryBuffValue(
+  card,
+  { atkBoost = 0, opponentField = [], opponentLp = 0 } = {},
+) {
+  if (!card || card.cardKind !== "monster") return -100;
+  if (atkBoost <= 0) return -100;
+  if (card.position !== "attack") return -80 + getEffectiveAtk(card) / 10000;
+  if (card.cannotAttackThisTurn || card.hasAttacked) {
+    return -40 + getEffectiveAtk(card) / 10000;
+  }
+
+  const opponents = (opponentField || []).filter(
+    (monster) => monster && monster.cardKind === "monster"
+  );
+  const atk = getEffectiveAtk(card);
+  const buffedAtk = atk + atkBoost;
+  if (opponents.length === 0) {
+    if (opponentLp > 0 && atk < opponentLp && buffedAtk >= opponentLp) {
+      return 120;
+    }
+    return opponentLp > 0 && opponentLp <= 2500 ? 12 : 0;
+  }
+
+  let bestScore = 0;
+  opponents.forEach((opposing) => {
+    const opposingStat = getBattleStatForAttackingInto(opposing);
+    if (atk <= opposingStat && buffedAtk > opposingStat) {
+      bestScore = Math.max(bestScore, 80 + opposingStat / 100);
+    } else if (atk > opposingStat) {
+      bestScore = Math.max(bestScore, 10 + opposingStat / 250);
+    }
+  });
+  return bestScore;
+}
+
+export function getBattleStat(card) {
+  return getBattleStatForAttackingInto(card);
+}
+
+export function isBattleReadyAttacker(card, { archetype = null } = {}) {
+  if (!card || card.cardKind !== "monster") return false;
+  if (card.isFacedown) return false;
+  if (card.position !== "attack") return false;
+  if (card.cannotAttackThisTurn || card.hasAttacked) return false;
+  if (archetype && !hasArchetype(card, archetype)) return false;
+  return getEffectiveAtk(card) > 0;
+}
+
+export function estimateTemporaryCombatDebuffTargetValue(
+  target,
+  {
+    attackers = [],
+    opponentLp = 0,
+    atkReduction = null,
+    defReduction = null,
+    destroyIfAtkZeroedByThisEffect = false,
+    destroyIfDefZeroedByThisEffect = false,
+  } = {},
+) {
+  if (!target || target.cardKind !== "monster" || target.isFacedown) return 0;
+  const readyAttackers = (attackers || []).filter((card) =>
+    isBattleReadyAttacker(card)
+  );
+  const targetAtk = getEffectiveAtk(target);
+  const targetDef =
+    (target.def || 0) +
+    (target.tempDefBoost || 0) +
+    (target.equipDefBonus || 0);
+  const atkDropsToZero =
+    destroyIfAtkZeroedByThisEffect === true &&
+    Number.isFinite(atkReduction) &&
+    targetAtk > 0 &&
+    Math.max(0, targetAtk - atkReduction) === 0;
+  const defDropsToZero =
+    destroyIfDefZeroedByThisEffect === true &&
+    Number.isFinite(defReduction) &&
+    targetDef > 0 &&
+    Math.max(0, targetDef - defReduction) === 0;
+
+  if (atkDropsToZero || defDropsToZero) {
+    return 100 + estimateMonsterValue(target);
+  }
+  if (readyAttackers.length === 0) return 0;
+
+  const currentStat = getBattleStatForAttackingInto(target);
+  let debuffedStat = 0;
+  if (Number.isFinite(atkReduction) || Number.isFinite(defReduction)) {
+    const reduction =
+      target.position === "defense"
+        ? Number.isFinite(defReduction)
+          ? defReduction
+          : 0
+        : Number.isFinite(atkReduction)
+          ? atkReduction
+          : 0;
+    debuffedStat = Math.max(0, currentStat - reduction);
+  }
+  let bestScore = 0;
+  let totalDamageGain = 0;
+  let totalDamageAfter = 0;
+
+  readyAttackers.forEach((attacker) => {
+    const atk = getEffectiveAtk(attacker);
+    const canDestroyBefore = atk > currentStat;
+    const canDestroyAfter = atk > debuffedStat;
+    const damageBefore =
+      target.position === "attack" && atk > currentStat
+        ? atk - currentStat
+        : attacker.piercing && target.position === "defense" && atk > currentStat
+          ? atk - currentStat
+          : 0;
+    const damageAfter =
+      target.position === "attack" && atk > debuffedStat
+        ? atk - debuffedStat
+        : attacker.piercing && target.position === "defense" && atk > debuffedStat
+          ? atk - debuffedStat
+          : 0;
+
+    totalDamageGain += Math.max(0, damageAfter - damageBefore);
+    totalDamageAfter = Math.max(totalDamageAfter, damageAfter);
+
+    if (!canDestroyBefore && canDestroyAfter) {
+      bestScore = Math.max(bestScore, 80 + currentStat / 100);
+    } else if (canDestroyAfter && damageAfter >= 1000) {
+      bestScore = Math.max(bestScore, 18 + damageAfter / 200);
+    }
+  });
+
+  if (opponentLp > 0 && totalDamageAfter >= opponentLp) {
+    bestScore = Math.max(bestScore, 120);
+  }
+  if (totalDamageGain >= 1000) {
+    bestScore = Math.max(bestScore, 20 + totalDamageGain / 250);
+  }
+
+  return bestScore;
+}
+
+function getEffectiveAtk(card) {
+  return (
+    (card?.atk || 0) +
+    (card?.tempAtkBoost || 0) +
+    (card?.equipAtkBonus || 0)
+  );
+}
+
+function getBattleStatForAttackingInto(card) {
+  if (!card || card.cardKind !== "monster") return 0;
+  if (card.isFacedown) return 1500;
+  if (card.position === "defense") {
+    return (
+      (card.def || 0) +
+      (card.tempDefBoost || 0) +
+      (card.equipDefBonus || 0)
+    );
+  }
+  return getEffectiveAtk(card);
 }
 
 export function selectSimulatedTargets({
@@ -486,6 +708,36 @@ export function applySimulatedActions({
           }
           if (Number.isFinite(action.defFactor)) {
             card.def = Math.floor((card.def || 0) * action.defFactor);
+          }
+        });
+        break;
+      }
+      case "modify_stats_temp_then_destroy_if_zeroed": {
+        targets.forEach((card) => {
+          if (!card) return;
+          const previousAtk = card.atk || 0;
+          const previousDef = card.def || 0;
+          if (Number.isFinite(action.atkChange)) {
+            const newAtk = Math.max(0, previousAtk + action.atkChange);
+            card.atk = newAtk;
+            card.tempAtkBoost = (card.tempAtkBoost || 0) + newAtk - previousAtk;
+          }
+          if (Number.isFinite(action.defChange)) {
+            const newDef = Math.max(0, previousDef + action.defChange);
+            card.def = newDef;
+            card.tempDefBoost = (card.tempDefBoost || 0) + newDef - previousDef;
+          }
+          const atkZeroed =
+            action.destroyIfAtkZeroedByThisEffect === true &&
+            previousAtk > 0 &&
+            (card.atk || 0) === 0;
+          const defZeroed =
+            action.destroyIfDefZeroedByThisEffect === true &&
+            previousDef > 0 &&
+            (card.def || 0) === 0;
+          if (atkZeroed || defZeroed) {
+            const owner = findCardOwner(state, card);
+            if (owner) moveCardToZone(owner, card, "graveyard");
           }
         });
         break;

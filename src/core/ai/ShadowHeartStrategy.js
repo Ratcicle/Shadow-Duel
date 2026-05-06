@@ -48,6 +48,39 @@ import {
   simulateSpellEffect,
 } from "./shadowheart/simulation.js";
 
+function buildShadowHeartSpellActivationContext(card, bot, opponent) {
+  if (card?.name !== "Shadow-Heart Purge") return null;
+
+  const attackers = (bot?.field || []).filter(
+    (monster) =>
+      monster &&
+      monster.cardKind === "monster" &&
+      isShadowHeart(monster) &&
+      !monster.isFacedown &&
+      monster.position === "attack" &&
+      !monster.cannotAttackThisTurn &&
+      !monster.hasAttacked,
+  );
+
+  return {
+    autoSelectSingleTarget: true,
+    logTargets: false,
+    actionContext: {
+      targetPreferences: {
+        purge_target_monster: {
+          role: "temporary_stat_debuff",
+          purpose: "combat",
+          attackers,
+          opponentLp: opponent?.lp || 0,
+          atkReduction: 1000,
+          defReduction: 0,
+          destroyIfAtkZeroedByThisEffect: true,
+        },
+      },
+    },
+  };
+}
+
 /**
  * Estratégia Shadow-Heart - IA avançada que pensa como um jogador humano experiente.
  */
@@ -377,6 +410,12 @@ export default class ShadowHeartStrategy extends BaseStrategy {
           finalPriority -= 8;
         }
 
+        const activationContext = buildShadowHeartSpellActivationContext(
+          card,
+          bot,
+          opponent,
+        );
+
         actions.push({
           type: "spell",
           index,
@@ -385,6 +424,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
           cardName: card.name,
           macroBuff,
           safetyScore: spellSafety.riskScore,
+          ...(activationContext ? { activationContext } : {}),
         });
       } else {
         log(`  ❌ Spell descartada: ${card.name} - ${decision.reason}`);
@@ -667,7 +707,17 @@ export default class ShadowHeartStrategy extends BaseStrategy {
             }
           }
 
+          if (card.name === "Shadow-Heart Purge") {
+            const purgeDecision = shouldPlaySpell(card, analysis);
+            if (!purgeDecision.yes) return;
+          }
+
           spellsFound++;
+          const activationContext = buildShadowHeartSpellActivationContext(
+            card,
+            realBot2,
+            opponent,
+          );
 
           // Tentar qualquer spell, mesmo sem validação prévia
           if (bot?.debug) {
@@ -683,6 +733,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
             priority: 0.5,
             cardName: card.name,
             isCriticalFallback: true,
+            ...(activationContext ? { activationContext } : {}),
           });
         });
 

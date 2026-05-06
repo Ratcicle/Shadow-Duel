@@ -199,7 +199,7 @@ Sistema de gatilhos (on-summon, on-destroy, on-attack, etc.): [registration.js](
 | [actions/](../src/core/game/actions/) | `guard.js` — validação de ações permitidas por fase/turno. |
 | [combat/](../src/core/game/combat/) | Sistema de batalha: `availability.js`, `targeting.js`, `damage.js`, `resolution.js`, `indicators.js`. |
 | [deck/](../src/core/game/deck/) | `draw.js` — compra de cartas e checagem de deck-out. |
-| [devTools/](../src/core/game/devTools/) | Comandos de debug: `commands.js`, `sanity.js`, `setup.js`. |
+| [devTools/](../src/core/game/devTools/) | Comandos de debug e setup: `commands.js`, `setup.js`. Testes de cards e efeitos rodam no Laboratório. |
 | [effects/](../src/core/game/effects/) | Pipeline de ativação (`activationPipeline.js`) e replacement effects para destruição (`destructionReplacement.js`). |
 | [events/](../src/core/game/events/) | `eventBus.js` (pub/sub) e `eventResolver.js` (encadeamento). |
 | [extraDeck/](../src/core/game/extraDeck/) | `modal.js` — abertura/seleção do extra deck. |

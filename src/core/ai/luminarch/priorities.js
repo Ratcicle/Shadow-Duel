@@ -8,6 +8,10 @@ import {
   evaluateCardExpendability,
   evaluateFieldSpellUrgency,
 } from "./cardValue.js";
+import {
+  estimateTemporaryCombatDebuffTargetValue,
+  isBattleReadyAttacker,
+} from "../StrategyUtils.js";
 
 // Rastrear erros já logados para evitar spam
 const _loggedErrors = new Set();
@@ -73,6 +77,111 @@ function getRemovalTargetScore(card, analysis) {
   );
   if (oppTotalAtk >= (analysis.lp || 8000) && atk >= 2000) score += 2;
   return score;
+}
+
+function getBattleReadyLuminarchAttackers(analysis) {
+  return (analysis.field || []).filter((card) =>
+    isBattleReadyAttacker(card, { archetype: "Luminarch" })
+  );
+}
+
+function getBestTemporaryCombatDebuffTarget(analysis) {
+  const attackers = getBattleReadyLuminarchAttackers(analysis);
+  if (attackers.length === 0) return { target: null, score: 0 };
+
+  return (analysis.oppField || [])
+    .filter((card) => card && card.cardKind === "monster" && !card.isFacedown)
+    .map((target) => ({
+      target,
+      score: estimateTemporaryCombatDebuffTargetValue(target, {
+        attackers,
+        opponentLp: analysis.oppLp || 0,
+      }),
+    }))
+    .sort((a, b) => b.score - a.score)[0] || { target: null, score: 0 };
+}
+
+function isDefensiveLuminarch(card) {
+  if (!card || card.cardKind !== "monster") return false;
+  if (card.mustBeAttacked) return true;
+  if ((card.def || 0) >= (card.atk || 0) + 500) return true;
+  return (
+    card.name === "Luminarch Aegisbearer" ||
+    card.name === "Luminarch Sanctum Protector" ||
+    card.name === "Luminarch Fortress Aegis" ||
+    card.name === "Luminarch Megashield Barbarias"
+  );
+}
+
+function getMoonlitTargetPlan(analysis) {
+  const gyMonsters = (analysis.graveyard || []).filter(
+    (card) => card && card.cardKind === "monster" && isLuminarch(card)
+  );
+  if (gyMonsters.length === 0) {
+    return { target: null, score: 0, purpose: "none", position: "attack" };
+  }
+
+  const oppMonsters = (analysis.oppField || []).filter(
+    (card) => card && card.cardKind === "monster"
+  );
+  const oppStrongest = oppMonsters.reduce(
+    (max, card) => Math.max(max, card?.isFacedown ? 1500 : card?.atk || 0),
+    0
+  );
+  const oppTotalAtk = oppMonsters.reduce(
+    (sum, card) => sum + (card?.isFacedown ? 1500 : card?.atk || 0),
+    0
+  );
+  const hasTank = (analysis.field || []).some(
+    (card) =>
+      card &&
+      card.cardKind === "monster" &&
+      !card.isFacedown &&
+      isLuminarch(card) &&
+      (isDefensiveLuminarch(card) || getVisibleDef(card) >= oppStrongest)
+  );
+  const pressure =
+    (analysis.lp || 8000) <= 3500 ||
+    oppTotalAtk >= (analysis.lp || 8000) ||
+    (oppStrongest >= 2200 && !hasTank);
+  const bestDebuffTarget = getBestTemporaryCombatDebuffTarget({
+    ...analysis,
+    field: [...(analysis.field || []), ...gyMonsters],
+  });
+  const wantsPressure =
+    !pressure &&
+    ((analysis.oppLp || 8000) <= 3000 || bestDebuffTarget.score > 0);
+
+  const scored = gyMonsters.map((card) => {
+    const atk = getVisibleAtk(card);
+    const def = getVisibleDef(card);
+    const defensive = isDefensiveLuminarch(card);
+    let score = (card.level || 0) * 0.2 + Math.max(atk, def) / 1000;
+    let position = atk >= def ? "attack" : "defense";
+    let purpose = "value";
+
+    if (pressure) {
+      purpose = "stabilize";
+      score += def / 450;
+      if (defensive) score += 4;
+      position = "defense";
+    } else if (wantsPressure) {
+      purpose = "pressure";
+      score += atk / 450;
+      if (atk >= 2000 || card.piercing) score += 2;
+      if (defensive && atk < 1800) score -= 3;
+      position = score > 0 && atk >= 1600 ? "attack" : "defense";
+    } else {
+      if (defensive) {
+        score += 1.2;
+        position = "defense";
+      }
+    }
+
+    return { target: card, score, purpose, position };
+  });
+
+  return scored.sort((a, b) => b.score - a.score)[0];
 }
 
 /**
@@ -248,21 +357,15 @@ export function shouldPlaySpell(card, analysis) {
 
       // COM CITADEL = prioridade altíssima (GY → campo direto)
       if (hasCitadel && analysis.field.length < 5) {
-        const bestTarget = gyLuminarch
-          .filter((c) => c.cardKind === "monster")
-          .sort((a, b) => {
-            // Priorizar: Aegisbearer > Valiant > outros
-            if (a.name === "Luminarch Aegisbearer") return -1;
-            if (b.name === "Luminarch Aegisbearer") return 1;
-            if (a.name.includes("Valiant")) return -1;
-            if (b.name.includes("Valiant")) return 1;
-            return (b.level || 0) - (a.level || 0);
-          })[0];
+        const plan = getMoonlitTargetPlan(analysis);
+        if (!plan.target) {
+          return { yes: false, reason: "Sem monstro Luminarch valido na GY" };
+        }
 
         return {
           yes: true,
-          priority: 13,
-          reason: `COM CITADEL: revive ${bestTarget?.name} direto no campo!`,
+          priority: plan.purpose === "stabilize" ? 14 : 12,
+          reason: `COM CITADEL: recuperar ${plan.target.name} para ${plan.purpose} em ${plan.position}`,
         };
       }
 
@@ -344,6 +447,26 @@ export function shouldPlaySpell(card, analysis) {
     }
 
     if (name === "Luminarch Spear of Dawnfall") {
+      const attackers = getBattleReadyLuminarchAttackers(analysis);
+      if (attackers.length === 0) {
+        return {
+          yes: false,
+          reason: "Sem atacante Luminarch apto para aproveitar o debuff",
+        };
+      }
+
+      const combatTarget = getBestTemporaryCombatDebuffTarget(analysis);
+      return combatTarget.target && combatTarget.score > 0
+        ? {
+            yes: true,
+            priority: combatTarget.score >= 100 ? 18 : 11,
+            reason: `Spear em ${combatTarget.target.name}: janela real de combate`,
+          }
+        : {
+            yes: false,
+            reason: "Spear segurada: nenhum alvo gera ganho real de batalha",
+          };
+
       const hasLuminarch = (analysis.field || []).some(
         (c) => c && isLuminarch(c)
       );

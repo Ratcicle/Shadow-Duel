@@ -265,13 +265,24 @@ export function simulateSpellEffect(state, card) {
               c.archetypes.includes("Shadow-Heart"))),
       );
       const target = opponent.field
+        .filter((c) => c && !c.isFacedown)
         .slice()
-        .sort((a, b) => (b.atk || 0) - (a.atk || 0))[0];
+        .sort((a, b) => {
+          const aDestroyed = (a.atk || 0) > 0 && (a.atk || 0) <= 1000;
+          const bDestroyed = (b.atk || 0) > 0 && (b.atk || 0) <= 1000;
+          if (aDestroyed !== bDestroyed) return bDestroyed - aDestroyed;
+          return (b.atk || 0) - (a.atk || 0);
+        })[0];
       if (discard && target) {
         player.hand.splice(player.hand.indexOf(discard), 1);
         player.graveyard.push(discard);
-        opponent.field.splice(opponent.field.indexOf(target), 1);
-        opponent.graveyard.push(target);
+        const previousAtk = target.atk || 0;
+        target.atk = Math.max(0, previousAtk - 1000);
+        target.tempAtkBoost = (target.tempAtkBoost || 0) + target.atk - previousAtk;
+        if (previousAtk > 0 && target.atk === 0) {
+          opponent.field.splice(opponent.field.indexOf(target), 1);
+          opponent.graveyard.push(target);
+        }
       }
       break;
     }

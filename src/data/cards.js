@@ -536,11 +536,11 @@
     subtype: "normal",
     archetype: "Shadow-Heart",
     description:
-      'Discard 1 "Shadow-Heart" card, then target 1 monster your opponent controls; destroy it. You can only activate 1 "Shadow-Heart Purge" per turn.',
+      'Discard 1 "Shadow-Heart" card, then target 1 face-up monster your opponent controls; it loses 1000 ATK until the end of this turn. If that monster\'s ATK becomes 0 by this effect, destroy it. You can only activate 1 "Shadow-Heart Purge" per turn.',
     image: "assets/Shadow-Heart Purge.png",
     effects: [
       {
-        id: "shadow_heart_purge_destroy",
+        id: "shadow_heart_purge_debuff",
         timing: "on_play",
         speed: 1,
         oncePerTurn: true,
@@ -558,6 +558,7 @@
             owner: "opponent",
             zone: "field",
             cardKind: "monster",
+            requireFaceup: true,
             count: { min: 1, max: 1 },
           },
         ],
@@ -568,7 +569,12 @@
             player: "self",
             to: "graveyard",
           },
-          { type: "destroy", targetRef: "purge_target_monster" },
+          {
+            type: "modify_stats_temp_then_destroy_if_zeroed",
+            targetRef: "purge_target_monster",
+            atkChange: -1000,
+            destroyIfAtkZeroedByThisEffect: true,
+          },
         ],
       },
     ],

@@ -2,8 +2,11 @@ import BaseStrategy from "./BaseStrategy.js";
 import {
   applySimulatedActions,
   estimateCardValue,
+  estimateOffensiveTemporaryBuffValue,
+  estimateTemporaryCombatDebuffTargetValue,
   estimateMonsterValue,
   hasArchetype,
+  isBattleReadyAttacker,
   selectSimulatedTargets,
 } from "./StrategyUtils.js";
 import {
@@ -51,6 +54,148 @@ import {
 // Flag para logs detalhados de avaliação por carta (muito verboso - ~6000 linhas/10 duelos)
 // Desligar para logs mais limpos, ligar para debug de prioridades
 const VERBOSE_EVAL = false;
+const CITADEL_TEMP_BUFF = {
+  role: "temporary_stat_buff",
+  purpose: "offense",
+  atkBoost: 500,
+  defBoost: 500,
+};
+
+function findBestOffensiveTemporaryBuffTarget(monsters, opponent, preference) {
+  return (monsters || []).reduce(
+    (best, monster) => {
+      const score = estimateOffensiveTemporaryBuffValue(monster, {
+        atkBoost: preference?.atkBoost || 0,
+        opponentField: opponent?.field || [],
+        opponentLp: opponent?.lp || 0,
+      });
+      if (score > best.score) return { monster, score };
+      return best;
+    },
+    { monster: null, score: 0 },
+  );
+}
+
+const LUMINARCH_DEFENSIVE_NAMES = [
+  "Luminarch Aegisbearer",
+  "Luminarch Sanctum Protector",
+  "Luminarch Fortress Aegis",
+  "Luminarch Megashield Barbarias",
+];
+
+const LUMINARCH_OFFENSIVE_NAMES = [
+  "Luminarch Valiant - Knight of the Dawn",
+  "Luminarch Moonblade Captain",
+  "Luminarch Celestial Marshal",
+  "Luminarch Radiant Lancer",
+  "Luminarch Aurora Seraph",
+];
+
+function getBattleReadyLuminarchAttackers(cards) {
+  return (cards || []).filter((card) =>
+    isBattleReadyAttacker(card, { archetype: "Luminarch" })
+  );
+}
+
+function getBestSpearTargetScore(analysis) {
+  const attackers = getBattleReadyLuminarchAttackers(analysis.field);
+  return (analysis.oppField || []).reduce(
+    (best, target) => {
+      const score = estimateTemporaryCombatDebuffTargetValue(target, {
+        attackers,
+        opponentLp: analysis.oppLp || 0,
+      });
+      return score > best.score ? { target, score } : best;
+    },
+    { target: null, score: 0 },
+  );
+}
+
+function getMoonlitPurpose(analysis) {
+  const oppMonsters = (analysis.oppField || []).filter(
+    (card) => card && card.cardKind === "monster",
+  );
+  const oppStrongest = oppMonsters.reduce(
+    (max, card) => Math.max(max, card?.isFacedown ? 1500 : card?.atk || 0),
+    0,
+  );
+  const oppTotalAtk = oppMonsters.reduce(
+    (sum, card) => sum + (card?.isFacedown ? 1500 : card?.atk || 0),
+    0,
+  );
+  const hasStableTank = (analysis.field || []).some(
+    (card) =>
+      card &&
+      isLuminarch(card) &&
+      !card.isFacedown &&
+      (LUMINARCH_DEFENSIVE_NAMES.includes(card.name) ||
+        (card.def || 0) + (card.tempDefBoost || 0) >= oppStrongest),
+  );
+  if (
+    (analysis.lp || 8000) <= 3500 ||
+    oppTotalAtk >= (analysis.lp || 8000) ||
+    (oppStrongest >= 2200 && !hasStableTank)
+  ) {
+    return "stabilize";
+  }
+  if ((analysis.oppLp || 8000) <= 3000 || getBestSpearTargetScore(analysis).score > 0) {
+    return "pressure";
+  }
+  return "value";
+}
+
+function getMoonlitPositionFor(card, purpose) {
+  if (!card || card.cardKind !== "monster") return "attack";
+  const defensive =
+    LUMINARCH_DEFENSIVE_NAMES.includes(card.name) ||
+    (card.def || 0) >= (card.atk || 0) + 500 ||
+    card.mustBeAttacked;
+  if (purpose === "stabilize" || defensive) return "defense";
+  if (purpose === "pressure" && (card.atk || 0) >= 1600) return "attack";
+  return (card.def || 0) > (card.atk || 0) ? "defense" : "attack";
+}
+
+function buildLuminarchSpellActionContext(card, analysis, baseActionContext = {}) {
+  const actionContext = { ...(baseActionContext || {}) };
+
+  if (card?.name === "Luminarch Spear of Dawnfall") {
+    const attackers = getBattleReadyLuminarchAttackers(analysis.field);
+    actionContext.targetPreferences = {
+      ...(actionContext.targetPreferences || {}),
+      spear_zero_target: {
+        role: "temporary_stat_debuff",
+        purpose: "combat",
+        attackers,
+        opponentLp: analysis.oppLp || 0,
+      },
+    };
+  }
+
+  if (card?.name === "Luminarch Moonlit Blessing") {
+    const purpose = getMoonlitPurpose(analysis);
+    const byName = {};
+    (analysis.graveyard || [])
+      .filter((entry) => entry && entry.cardKind === "monster" && isLuminarch(entry))
+      .forEach((entry) => {
+        byName[entry.name] = getMoonlitPositionFor(entry, purpose);
+      });
+    actionContext.targetPreferences = {
+      ...(actionContext.targetPreferences || {}),
+      moonlit_blessing_target: {
+        role: "recursion",
+        purpose,
+        defensiveNames: LUMINARCH_DEFENSIVE_NAMES,
+        offensiveNames: LUMINARCH_OFFENSIVE_NAMES,
+      },
+    };
+    actionContext.specialSummonPositions = {
+      ...(actionContext.specialSummonPositions || {}),
+      byName,
+    };
+  }
+
+  return actionContext;
+}
 
 export default class LuminarchStrategy extends BaseStrategy {
   evaluateBoard(gameOrState, perspectivePlayer) {
@@ -798,7 +943,11 @@ export default class LuminarchStrategy extends BaseStrategy {
           reason: decision.reason,
           activationContext: {
             ...activationContext,
-            actionContext: activationContext.actionContext,
+            actionContext: buildLuminarchSpellActionContext(
+              card,
+              analysis,
+              activationContext.actionContext,
+            ),
           },
         });
         spellIndicesActivated.add(index);
@@ -881,6 +1030,17 @@ export default class LuminarchStrategy extends BaseStrategy {
           macroBuff,
           safetyScore: spellSafety.riskScore,
           reason: decision.reason,
+          activationContext: {
+            ...activationContext,
+            fromHand: false,
+            activationZone: "spellTrap",
+            sourceZone: "spellTrap",
+            actionContext: buildLuminarchSpellActionContext(
+              card,
+              analysis,
+              activationContext.actionContext,
+            ),
+          },
         });
       } catch (e) {
         // Silent spell/trap evaluation error
@@ -953,62 +1113,19 @@ export default class LuminarchStrategy extends BaseStrategy {
               !card.isFacedown &&
               isLuminarch(card),
           );
-          if (!myMonsters.length) {
-            shouldUseFieldEffect = false;
-          } else {
-            const oppField = opponent?.field || [];
-            const oppLP = opponent?.lp || 0;
-            const oppStrongestAtk = oppField.reduce((max, monster) => {
-              if (!monster || monster.cardKind !== "monster") return max;
-              const atk = monster.isFacedown ? 1500 : monster.atk || 0;
-              return Math.max(max, atk);
-            }, 0);
-            const lp = bot.lp || 0;
-            const canPay = lp > 1000;
-            const wouldBeCritical = lp <= 2000;
+          const bestBuffTarget = findBestOffensiveTemporaryBuffTarget(
+            myMonsters,
+            opponent,
+            CITADEL_TEMP_BUFF,
+          );
+          const lp = bot.lp || 0;
+          const canPay = lp > 1000;
+          const wouldBeCritical = lp <= 2000;
 
-            const getAtk = (card) =>
-              (card.atk || 0) +
-              (card.tempAtkBoost || 0) +
-              (card.equipAtkBonus || 0);
-            const getDef = (card) =>
-              (card.def || 0) +
-              (card.tempDefBoost || 0) +
-              (card.equipDefBonus || 0);
-
-            const bestAtk = Math.max(...myMonsters.map(getAtk), 0);
-            const lethalWithBuff =
-              oppField.length === 0 && bestAtk + 500 >= oppLP;
-
-            const improvesMatchup = myMonsters.some((monster) => {
-              const atk = getAtk(monster);
-              const def = getDef(monster);
-              const atkImproves =
-                atk <= oppStrongestAtk && atk + 500 > oppStrongestAtk;
-              const defImproves =
-                def <= oppStrongestAtk && def + 500 > oppStrongestAtk;
-              return atkImproves || defImproves;
-            });
-            const oppTotalAtk = oppField.reduce((sum, monster) => {
-              if (!monster || monster.cardKind !== "monster") return sum;
-              return sum + (monster.isFacedown ? 1500 : monster.atk || 0);
-            }, 0);
-            const preventsImmediateThreat =
-              oppTotalAtk >= lp &&
-              myMonsters.some((monster) => getDef(monster) + 500 > oppStrongestAtk);
-            const comfortableValue =
-              lp >= 5000 && oppField.length > 0 && improvesMatchup;
-            const decisiveCombat =
-              lp > 3000 && oppStrongestAtk >= 1800 && improvesMatchup;
-
-            shouldUseFieldEffect =
-              canPay &&
-              (lethalWithBuff ||
-                preventsImmediateThreat ||
-                decisiveCombat ||
-                comfortableValue) &&
-              !(wouldBeCritical && !lethalWithBuff && !preventsImmediateThreat);
-          }
+          shouldUseFieldEffect =
+            canPay &&
+            bestBuffTarget.score > 0 &&
+            !(wouldBeCritical && bestBuffTarget.score < 100);
         }
 
         if (preview && preview.ok && shouldUseFieldEffect) {
@@ -1016,6 +1133,15 @@ export default class LuminarchStrategy extends BaseStrategy {
             type: "fieldEffect",
             priority: 0,
             cardName: bot.fieldSpell.name,
+            activationContext: {
+              ...activationContext,
+              actionContext: {
+                ...(activationContext.actionContext || {}),
+                targetPreferences: {
+                  sanctum_citadel_target: CITADEL_TEMP_BUFF,
+                },
+              },
+            },
           });
         }
       }
@@ -1735,13 +1861,22 @@ export default class LuminarchStrategy extends BaseStrategy {
           (entry) => entry && entry.timing === "on_field_activate",
         );
         if (!effect) break;
+        const targetPreference = fieldSpell.name?.includes("Citadel")
+          ? CITADEL_TEMP_BUFF
+          : null;
         const selections = selectSimulatedTargets({
           targets: effect.targets || [],
           actions: effect.actions || [],
           state,
           sourceCard: fieldSpell,
           selfId: "bot",
-          options: { archetype: "Luminarch", preferDefense: true },
+          options: {
+            archetype: "Luminarch",
+            preferDefense: !targetPreference,
+            targetPreference,
+            opponentField: state.player?.field || [],
+            opponentLp: state.player?.lp || 0,
+          },
         });
         applySimulatedActions({
           actions: effect.actions || [],

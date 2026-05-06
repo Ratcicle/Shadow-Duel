@@ -37,6 +37,7 @@ import {
 import {
   handleSetStatsToZeroAndNegate,
   handleBuffStatsTemp,
+  handleModifyStatsTempThenDestroyIfZeroed,
   handleGrantAttackAllMonsters,
   handleAddStatus,
   handleGrantProtection,
@@ -141,6 +142,11 @@ export function registerDefaultHandlers(registry) {
   // Luminarch refactoring: new generic handlers
 
   registry.register("buff_stats_temp", handleBuffStatsTemp);
+
+  registry.register(
+    "modify_stats_temp_then_destroy_if_zeroed",
+    handleModifyStatsTempThenDestroyIfZeroed,
+  );
 
   registry.register("reduce_self_atk", handleBuffStatsTemp);
 

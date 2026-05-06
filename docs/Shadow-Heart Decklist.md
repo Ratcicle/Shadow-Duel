@@ -84,7 +84,7 @@ Fonte dos textos: `src/data/cards.js` (1x cada carta).
 
 ### Magias
 
-**Shadow-Heart Purge (54)** — Magia Normal. Descarte 1 carta "Shadow-Heart"; destrua 1 monstro do oponente (OPT por nome).
+**Shadow-Heart Purge (54)** — Magia Normal. Descarte 1 carta "Shadow-Heart"; 1 monstro face-up do oponente perde 1000 ATK ate o fim do turno. Se esse efeito zerar o ATK dele, destrua-o (OPT por nome).
 
 **Shadow-Heart Battle Hymn (58)** – Magia Normal. Todos os seus "Shadow-Heart" ganham 500 ATK até o fim do turno.
 

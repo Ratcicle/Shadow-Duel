@@ -1,4 +1,9 @@
-import { estimateCardValue, estimateMonsterValue } from "./ai/StrategyUtils.js";
+import {
+  estimateCardValue,
+  estimateTemporaryCombatDebuffTargetValue,
+  estimateMonsterValue,
+  estimateOffensiveTemporaryBuffValue,
+} from "./ai/StrategyUtils.js";
 
 export default class AutoSelector {
   constructor(game) {
@@ -84,7 +89,10 @@ export default class AutoSelector {
 
     const scored = candidates.map((candidate) => ({
       candidate,
-      score: this.getCandidateScore(candidate, intent, context),
+      score: this.getCandidateScore(candidate, intent, {
+        ...context,
+        requirement,
+      }),
     }));
 
     scored.sort((a, b) => {
@@ -226,9 +234,46 @@ export default class AutoSelector {
     const self = context?.owner || context?.player || null;
     const isSelf = self && ownerPlayer === self;
     if (intent === "harm") {
+      const targetPreference = getTargetPreference(context);
+      if (
+        targetPreference?.role === "temporary_stat_debuff" &&
+        targetPreference?.purpose === "combat"
+      ) {
+        return (
+          estimateTemporaryCombatDebuffTargetValue(baseCard, {
+            attackers: targetPreference.attackers || [],
+            opponentLp:
+              targetPreference.opponentLp ??
+              this.resolveCandidateOwner(candidate, context)?.lp ??
+              0,
+            atkReduction: targetPreference.atkReduction,
+            defReduction: targetPreference.defReduction,
+            destroyIfAtkZeroedByThisEffect:
+              targetPreference.destroyIfAtkZeroedByThisEffect,
+            destroyIfDefZeroedByThisEffect:
+              targetPreference.destroyIfDefZeroedByThisEffect,
+          }) + (isSelf ? -0.4 : 0.4)
+        );
+      }
       return baseValue + (isSelf ? -0.6 : 0.6);
     }
     if (intent === "benefit") {
+      const targetPreference = getTargetPreference(context);
+      if (targetPreference?.role === "recursion") {
+        return (
+          getRecursionTargetScore(baseCard, targetPreference) +
+          (isSelf ? 0.2 : -0.4)
+        );
+      }
+      if (
+        targetPreference?.role === "temporary_stat_buff" &&
+        targetPreference?.purpose === "offense"
+      ) {
+        return (
+          this.getOffensiveTemporaryBuffScore(baseCard, context, targetPreference) +
+          (isSelf ? 0.2 : -0.4)
+        );
+      }
       return baseValue + (isSelf ? 0.4 : -0.4);
     }
     if (intent === "cost") {
@@ -281,9 +326,86 @@ export default class AutoSelector {
     }
     return baseValue;
   }
+
+  getOffensiveTemporaryBuffScore(card, context, preference) {
+    if (!card || card.cardKind !== "monster") return -100;
+    const atkBoost = Number.isFinite(preference?.atkBoost)
+      ? preference.atkBoost
+      : 0;
+    if (atkBoost <= 0) return -100;
+    if (card.position !== "attack") return -80 + getEffectiveAtk(card) / 10000;
+    if (card.cannotAttackThisTurn || card.hasAttacked) {
+      return -40 + getEffectiveAtk(card) / 10000;
+    }
+
+    const self = context?.owner || context?.player || null;
+    const opponent =
+      self && typeof this.game?.getOpponent === "function"
+        ? this.game.getOpponent(self)
+        : null;
+    const opponentMonsters = (opponent?.field || []).filter(
+      (monster) => monster && monster.cardKind === "monster",
+    );
+    return estimateOffensiveTemporaryBuffValue(card, {
+      atkBoost,
+      opponentField: opponentMonsters,
+      opponentLp: opponent?.lp || 0,
+    });
+  }
 }
 
 function selectionContractIntent(context) {
   const intent = context?.selectionContract?.metadata?.intent;
   return typeof intent === "string" ? intent : null;
+}
+
+function getTargetPreference(context) {
+  const requirementId = context?.requirement?.id || null;
+  const actionContext = context?.activationContext?.actionContext || {};
+  const byTarget = actionContext.targetPreferences || {};
+  if (requirementId && byTarget[requirementId]) return byTarget[requirementId];
+  return actionContext.targetPreference || null;
+}
+
+function getEffectiveAtk(card) {
+  return (
+    (card?.atk || 0) +
+    (card?.tempAtkBoost || 0) +
+    (card?.equipAtkBonus || 0)
+  );
+}
+
+function getEffectiveDef(card) {
+  return (
+    (card?.def || 0) +
+    (card?.tempDefBoost || 0) +
+    (card?.equipDefBonus || 0)
+  );
+}
+
+function getRecursionTargetScore(card, preference = {}) {
+  if (!card || card.cardKind !== "monster") return -100;
+  const atk = getEffectiveAtk(card);
+  const def = getEffectiveDef(card);
+  const purpose = preference.purpose || "value";
+  const defensiveNames = preference.defensiveNames || [];
+  const offensiveNames = preference.offensiveNames || [];
+  let score = (card.level || 0) * 0.2 + Math.max(atk, def) / 1000;
+
+  if (purpose === "stabilize" || purpose === "defense") {
+    score += def / 450;
+    if (def >= atk + 500 || card.mustBeAttacked) score += 2;
+    if (defensiveNames.includes(card.name)) score += 3;
+    if (offensiveNames.includes(card.name) && def < 2000) score -= 1;
+  } else if (purpose === "pressure" || purpose === "offense") {
+    score += atk / 450;
+    if (atk >= 2000 || card.piercing) score += 2;
+    if (offensiveNames.includes(card.name)) score += 2;
+    if (defensiveNames.includes(card.name) && atk < 1800) score -= 3;
+  } else {
+    if (defensiveNames.includes(card.name)) score += 0.8;
+    if (offensiveNames.includes(card.name)) score += 0.8;
+  }
+
+  return score;
 }

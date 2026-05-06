@@ -70,7 +70,7 @@
     },
     "54": {
       "name": "Purificação do Coração Sombrio",
-      "description": "Descarte 1 card \"Coração Sombrio\", e então escolha 1 monstro que seu oponente controla; destrua-o. Você só pode ativar 1 \"Purificação do Coração Sombrio\" por turno."
+      "description": "Descarte 1 card \"Coração Sombrio\" e, então, escolha 1 monstro com a face para cima que o oponente controla; ele perde 1000 de ATK até o final deste turno. Se o ATK desse monstro se tornar 0 por este efeito, destrua-o. Você só pode ativar 1 \"Purificação do Coração Sombrio\" por turno."
     },
     "57": {
       "name": "Demônio Arctroth do Coração Sombrio",

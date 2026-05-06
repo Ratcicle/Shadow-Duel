@@ -11,7 +11,6 @@ import { createUIAdapter } from "./UIAdapter.js";
 
 // DevTools modules (moved from inline methods)
 import * as devToolsCommands from "./game/devTools/commands.js";
-import * as devToolsSanity from "./game/devTools/sanity.js";
 import * as devToolsSetup from "./game/devTools/setup.js";
 
 // Events modules (moved from inline methods)
@@ -674,7 +673,7 @@ export default class Game {
 
   // -----------------------------------------------------------------------------
   // DevTools methods moved to core/game/devTools/
-  // See: commands.js, sanity.js, setup.js
+  // See: commands.js, setup.js
   // Methods are attached to prototype after class definition
   // -----------------------------------------------------------------------------
 }
@@ -693,23 +692,6 @@ Game.prototype.devGetSelectionCleanupState =
 Game.prototype.devForceTargetCleanup = devToolsCommands.devForceTargetCleanup;
 Game.prototype.devAutoConfirmTargetSelection =
   devToolsCommands.devAutoConfirmTargetSelection;
-
-// Sanity tests: devRunSanityA through devRunSanityO
-Game.prototype.devRunSanityA = devToolsSanity.devRunSanityA;
-Game.prototype.devRunSanityB = devToolsSanity.devRunSanityB;
-Game.prototype.devRunSanityC = devToolsSanity.devRunSanityC;
-Game.prototype.devRunSanityD = devToolsSanity.devRunSanityD;
-Game.prototype.devRunSanityE = devToolsSanity.devRunSanityE;
-Game.prototype.devRunSanityF = devToolsSanity.devRunSanityF;
-Game.prototype.devRunSanityG = devToolsSanity.devRunSanityG;
-Game.prototype.devRunSanityH = devToolsSanity.devRunSanityH;
-Game.prototype.devRunSanityI = devToolsSanity.devRunSanityI;
-Game.prototype.devRunSanityJ = devToolsSanity.devRunSanityJ;
-Game.prototype.devRunSanityK = devToolsSanity.devRunSanityK;
-Game.prototype.devRunSanityL = devToolsSanity.devRunSanityL;
-Game.prototype.devRunSanityM = devToolsSanity.devRunSanityM;
-Game.prototype.devRunSanityN = devToolsSanity.devRunSanityN;
-Game.prototype.devRunSanityO = devToolsSanity.devRunSanityO;
 
 // Setup: applyManualSetup
 Game.prototype.applyManualSetup = devToolsSetup.applyManualSetup;

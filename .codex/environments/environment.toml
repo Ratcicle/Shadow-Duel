@@ -4,3 +4,8 @@ name = "Shadow-Duel"
 
 [setup]
 script = ""
+
+[[actions]]
+name = "Executar"
+icon = "run"
+command = "npx serve"

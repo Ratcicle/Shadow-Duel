@@ -339,6 +339,40 @@ export const ACTION_CATALOG = {
     mutates: ["stats"],
     examples: [{ type: "buff_stats_temp", targetRef: "sanctum_citadel_target", atkBoost: 500, defBoost: 500 }],
   }),
+  modify_stats_temp_then_destroy_if_zeroed: action({
+    category: "stats",
+    summary:
+      "Temporarily modifies ATK and/or DEF, then destroys targets whose checked stat was reduced to 0 by this action.",
+    handler: "handleModifyStatsTempThenDestroyIfZeroed",
+    required: ["targetRef"],
+    optional: [
+      "atkChange",
+      "defChange",
+      "destroyIfAtkZeroedByThisEffect",
+      "destroyIfDefZeroedByThisEffect",
+      "permanent",
+    ],
+    fields: {
+      ...COMMON_TARGET_FIELDS,
+      atkChange: { type: "number" },
+      defChange: { type: "number" },
+      destroyIfAtkZeroedByThisEffect: { type: "boolean" },
+      destroyIfDefZeroedByThisEffect: { type: "boolean" },
+      permanent: { type: "boolean" },
+    },
+    targetRef: "required",
+    selection: "usesTargets",
+    mutates: ["stats", "field", "graveyard"],
+    emits: ["stat_buff_applied", "before_destroy", "card_to_grave"],
+    examples: [
+      {
+        type: "modify_stats_temp_then_destroy_if_zeroed",
+        targetRef: "purge_target_monster",
+        atkChange: -1000,
+        destroyIfAtkZeroedByThisEffect: true,
+      },
+    ],
+  }),
   buff_atk_by_lp_gained_this_turn: action({
     category: "stats",
     summary: "Temporarily boosts ATK by the player's LP gained this turn.",

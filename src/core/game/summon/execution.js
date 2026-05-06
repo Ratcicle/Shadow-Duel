@@ -13,7 +13,8 @@ export async function flipSummon(card) {
   card.revealedTurn = this.turnCounter; // Track when monster was revealed for Ascension timing
   card.position = "attack";
   card.positionChangedThisTurn = true;
-  card.cannotAttackThisTurn = true;
+  card.hasAttacked = false;
+  card.attacksUsedThisTurn = 0;
   this.effectEngine?.clearTargetingCache?.();
   this.ui.log(`${card.name} is Flip Summoned!`);
 

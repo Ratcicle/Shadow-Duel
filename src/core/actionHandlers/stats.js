@@ -383,6 +383,142 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
 }
 
 /**
+ * Generic handler for temporary stat changes that can destroy a monster if
+ * this action is what reduced the checked stat to 0.
+ *
+ * Action properties:
+ * - targetRef: reference to the target card(s)
+ * - atkChange: ATK change amount (default: 0)
+ * - defChange: DEF change amount (default: 0)
+ * - destroyIfAtkZeroedByThisEffect: destroy if ATK crossed from above 0 to 0
+ * - destroyIfDefZeroedByThisEffect: destroy if DEF crossed from above 0 to 0
+ * - permanent: if true, stat changes are not tracked for end-turn cleanup
+ */
+export async function handleModifyStatsTempThenDestroyIfZeroed(
+  action,
+  ctx,
+  targets,
+  engine,
+) {
+  const { player } = ctx;
+  const game = engine.game;
+
+  if (!player || !game) return false;
+
+  const atkChange = action.atkChange || 0;
+  const defChange = action.defChange || 0;
+  const permanent = action.permanent || false;
+
+  const targetCards = resolveTargetCards(action, ctx, targets, {
+    defaultRef: "self",
+    game,
+  });
+
+  if (targetCards.length === 0) {
+    getUI(game)?.log("No valid targets for stat modification.");
+    return false;
+  }
+
+  let modified = false;
+  let destroyed = false;
+
+  for (const card of targetCards) {
+    if (!card || card.cardKind !== "monster" || card.isFacedown) continue;
+
+    const previousAtk = card.atk || 0;
+    const previousDef = card.def || 0;
+    let newAtk = previousAtk;
+    let newDef = previousDef;
+
+    if (atkChange !== 0) {
+      newAtk = Math.max(0, previousAtk + atkChange);
+      const appliedAtkChange = newAtk - previousAtk;
+      if (!permanent) {
+        card.tempAtkBoost = (card.tempAtkBoost || 0) + appliedAtkChange;
+      }
+      card.atk = newAtk;
+    }
+
+    if (defChange !== 0) {
+      newDef = Math.max(0, previousDef + defChange);
+      const appliedDefChange = newDef - previousDef;
+      if (!permanent) {
+        card.tempDefBoost = (card.tempDefBoost || 0) + appliedDefChange;
+      }
+      card.def = newDef;
+    }
+
+    const appliedAtkChange = newAtk - previousAtk;
+    const appliedDefChange = newDef - previousDef;
+    const cardModified = appliedAtkChange !== 0 || appliedDefChange !== 0;
+
+    if (cardModified) {
+      modified = true;
+      const weakensStats = appliedAtkChange < 0 || appliedDefChange < 0;
+      queueCardFeedback(game, weakensStats ? "debuff" : "buff", card, {
+        sourceCard: ctx.source,
+        tone: weakensStats ? "red" : "green",
+      });
+
+      game.emit?.("stat_buff_applied", {
+        card,
+        previousAtk,
+        newAtk: card.atk,
+        previousDef,
+        newDef: card.def,
+        atkChange: appliedAtkChange,
+        defChange: appliedDefChange,
+        permanent,
+        sourceCard: ctx.source,
+        player: ctx.player,
+      });
+
+      const changes = [];
+      if (appliedAtkChange !== 0) {
+        changes.push(`${appliedAtkChange > 0 ? "+" : ""}${appliedAtkChange} ATK`);
+      }
+      if (appliedDefChange !== 0) {
+        changes.push(`${appliedDefChange > 0 ? "+" : ""}${appliedDefChange} DEF`);
+      }
+      const duration = permanent ? "" : " until end of turn";
+      const changeVerb =
+        appliedAtkChange <= 0 && appliedDefChange <= 0 ? "lost" : "gained";
+      const changeText = changes
+        .join(" and ")
+        .replace(/-/g, changeVerb === "lost" ? "" : "-");
+      getUI(game)?.log(`${card.name} ${changeVerb} ${changeText}${duration}.`);
+    }
+
+    const atkZeroedByThisEffect =
+      action.destroyIfAtkZeroedByThisEffect === true &&
+      previousAtk > 0 &&
+      newAtk === 0 &&
+      appliedAtkChange < 0;
+    const defZeroedByThisEffect =
+      action.destroyIfDefZeroedByThisEffect === true &&
+      previousDef > 0 &&
+      newDef === 0 &&
+      appliedDefChange < 0;
+
+    if (atkZeroedByThisEffect || defZeroedByThisEffect) {
+      await game.destroyCard(card, {
+        cause: "effect",
+        sourceCard: ctx.source,
+        opponent: ctx.opponent,
+      });
+      destroyed = true;
+      getUI(game)?.log(`${card.name} was destroyed because its stats became 0.`);
+    }
+  }
+
+  if (modified || destroyed) {
+    game.updateBoard();
+  }
+
+  return modified || destroyed;
+}
+
+/**
  * Temporarily boosts ATK by the amount of LP the player gained this turn.
  */
 export async function handleBuffAtkByLpGainedThisTurn(

@@ -99,7 +99,7 @@ export default class Bot extends Player {
       59, // Shadow-Heart Covenant (searcher - 2x)
       58, // Shadow-Heart Battle Hymn (buff - 1x)
       65, // Shadow-Heart Rage (OTK enabler - 1x)
-      54, // Shadow-Heart Purge (remoção - 1x)
+      54, // Shadow-Heart Purge (debuff/remocao condicional - 1x)
       66, // Shadow-Heart Shield (proteção - 1x)
       73,
       73, // The Shadow Heart (recuperação de board - 2x)
@@ -1477,8 +1477,10 @@ export default class Bot extends Player {
         game.effectEngine?.getSpellTrapActivationEffect?.(card, {
           fromHand: false,
         });
+      const actionActivationContext = action.activationContext || {};
 
       const activationContext = {
+        ...actionActivationContext,
         fromHand: false,
         activationZone: "spellTrap",
         sourceZone: "spellTrap",
@@ -1532,7 +1534,9 @@ export default class Bot extends Player {
 
     if (action.type === "fieldEffect" && this.fieldSpell) {
       const fieldSpell = this.fieldSpell;
+      const actionActivationContext = action.activationContext || {};
       const activationContext = {
+        ...actionActivationContext,
         fromHand: false,
         activationZone: "fieldSpell",
         sourceZone: "fieldSpell",

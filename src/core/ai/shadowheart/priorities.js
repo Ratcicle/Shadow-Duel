@@ -263,28 +263,105 @@ export function shouldPlaySpell(card, analysis) {
     };
   }
 
-  // Shadow-Heart Purge - Remoção
+  // Shadow-Heart Purge - conditional debuff/removal
   if (name === "Shadow-Heart Purge") {
-    if (analysis.oppField.length === 0) {
-      return { yes: false, reason: "Oponente sem monstros (DESPERDÍCIO)" };
+    const shadowHeartCardsInHand = analysis.hand.filter(
+      (c) => isShadowHeart(c) || isShadowHeartByName(c.name),
+    );
+    const discardAvailable =
+      shadowHeartCardsInHand.length > (isShadowHeartByName(card.name) ? 1 : 0);
+    if (!discardAvailable) {
+      return { yes: false, reason: "Sem Shadow-Heart para descartar" };
     }
-    if (analysis.oppField.length > 0) {
-      const strongestThreat = analysis.oppField.reduce(
-        (max, c) => ((c.atk || 0) > (max.atk || 0) ? c : max),
-        { atk: 0 }
-      );
-      // Prioridade baseada no threat
-      const threatATK = strongestThreat.atk || 0;
-      const priority = threatATK >= 2500 ? 9 : threatATK >= 2000 ? 7 : 5;
+
+    const faceUpOpponents = analysis.oppField.filter(
+      (c) => c && c.cardKind === "monster" && !c.isFacedown,
+    );
+    if (faceUpOpponents.length === 0) {
+      return { yes: false, reason: "Oponente sem monstros face-up" };
+    }
+
+    const zeroableTarget = faceUpOpponents
+      .filter((c) => (c.atk || 0) > 0 && (c.atk || 0) <= 1000)
+      .sort((a, b) => (b.atk || 0) - (a.atk || 0))[0];
+
+    if (zeroableTarget) {
+      const targetATK = zeroableTarget.atk || 0;
       return {
         yes: true,
-        priority,
-        reason: `Destruir ${
-          strongestThreat.name || "ameaça"
-        } (${threatATK} ATK)`,
+        priority: targetATK >= 800 ? 7 : 5,
+        reason: `Purge zera e destroi ${zeroableTarget.name || "alvo"} (${targetATK} ATK)`,
       };
     }
-    return { yes: false, reason: "Oponente sem monstros" };
+
+    if (analysis.phase === "main2") {
+      return {
+        yes: false,
+        reason: "Main2: debuff temporario sem remocao seria desperdicado",
+      };
+    }
+
+    const attackers = analysis.field.filter(
+      (c) =>
+        c &&
+        c.cardKind === "monster" &&
+        (isShadowHeart(c) || isShadowHeartByName(c.name)) &&
+        !c.isFacedown &&
+        c.position === "attack" &&
+        !c.cannotAttackThisTurn &&
+        !c.hasAttacked,
+    );
+
+    if (attackers.length === 0) {
+      return {
+        yes: false,
+        reason: "Sem atacante Shadow-Heart pronto para aproveitar o debuff",
+      };
+    }
+
+    const attackTargets = faceUpOpponents.filter(
+      (target) => target.position !== "defense",
+    );
+    const combatSwing = attackTargets.some((target) => {
+      const currentAtk = target.atk || 0;
+      const debuffedAtk = Math.max(0, currentAtk - 1000);
+      return attackers.some((attacker) => {
+        const atk = attacker.atk || 0;
+        return atk <= currentAtk && atk > debuffedAtk;
+      });
+    });
+
+    if (combatSwing) {
+      return {
+        yes: true,
+        priority: 6,
+        reason: "Purge abre uma troca de batalha favoravel neste turno",
+      };
+    }
+
+    const relevantDamage = attackTargets.some((target) => {
+      const currentAtk = target.atk || 0;
+      const debuffedAtk = Math.max(0, currentAtk - 1000);
+      return attackers.some((attacker) => {
+        const atk = attacker.atk || 0;
+        const before = atk > currentAtk ? atk - currentAtk : 0;
+        const after = atk > debuffedAtk ? atk - debuffedAtk : 0;
+        return after >= analysis.oppLp || after - before >= 1000;
+      });
+    });
+
+    if (relevantDamage) {
+      return {
+        yes: true,
+        priority: 4,
+        reason: "Purge aumenta dano relevante antes da batalha",
+      };
+    }
+
+    return {
+      yes: false,
+      reason: "Nenhum alvo gera remocao ou ganho real de combate",
+    };
   }
 
   // Shadow-Heart Shield - Proteção flexível (não só boss)
