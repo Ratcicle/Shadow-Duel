@@ -224,6 +224,18 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
     minSelect,
     promptPlayer: promptPlayer !== false,
     botSelect: (cards, max) => {
+      if (typeof player.strategy?.rankSearchCandidates === "function") {
+        const ranked = player.strategy.rankSearchCandidates(cards, action, {
+          player,
+          source,
+          game,
+          ctx,
+        });
+        if (Array.isArray(ranked) && ranked.length > 0) {
+          return ranked.slice(0, max);
+        }
+      }
+
       // Apply botPrefer rules: if hand contains a trigger card, prefer a specific search target
       if (Array.isArray(action.botPrefer) && action.botPrefer.length > 0) {
         const hand = player.hand || [];

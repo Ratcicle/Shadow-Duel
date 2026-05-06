@@ -4,10 +4,76 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { CARD_KNOWLEDGE, isLuminarchByName, isLuminarch } from "./knowledge.js";
-import { evaluateFieldSpellUrgency } from "./cardValue.js";
+import {
+  evaluateCardExpendability,
+  evaluateFieldSpellUrgency,
+} from "./cardValue.js";
 
 // Rastrear erros já logados para evitar spam
 const _loggedErrors = new Set();
+
+function getVisibleAtk(card) {
+  if (!card || card.isFacedown) return 0;
+  return (card.atk || 0) + (card.tempAtkBoost || 0) + (card.equipAtkBonus || 0);
+}
+
+function getVisibleDef(card) {
+  if (!card || card.isFacedown) return 0;
+  return (card.def || 0) + (card.tempDefBoost || 0) + (card.equipDefBonus || 0);
+}
+
+function isProtectedLuminarchCost(card) {
+  const name = card?.name || "";
+  return (
+    name === "Luminarch Aegisbearer" ||
+    name === "Luminarch Sanctum Protector" ||
+    name === "Luminarch Fortress Aegis" ||
+    name === "Luminarch Aurora Seraph" ||
+    (name === "Luminarch Radiant Lancer" &&
+      ((card.atk || 0) > 2200 || card.hasAttacked))
+  );
+}
+
+function getRemovalCostScore(card, analysis) {
+  const expendability = evaluateCardExpendability(card, {
+    hand: analysis.hand || [],
+    field: analysis.field || [],
+    graveyard: analysis.graveyard || [],
+    fieldSpell: analysis.fieldSpell || null,
+    usedEffects: analysis.usedEffects || [],
+  });
+
+  let score = expendability.value ?? 5;
+  if (expendability.expendable) score -= 2;
+  if (card.usedEffectThisTurn || card.hasAttacked) score -= 1.25;
+  if (card.name === "Luminarch Enchanted Halberd") score -= 1.5;
+  if (card.name === "Luminarch Magic Sickle") score -= 1.25;
+  if (isProtectedLuminarchCost(card)) score += 4;
+  if (card.mustBeAttacked) score += 2;
+  if (getVisibleDef(card) >= 2500) score += 1.5;
+  return score;
+}
+
+function getRemovalTargetScore(card, analysis) {
+  if (!card) return 0;
+  const atk = getVisibleAtk(card);
+  const def = getVisibleDef(card);
+  let score = Math.max(atk, def) / 450;
+  if (atk >= 2500 || def >= 2500) score += 1.5;
+  if (atk >= 3000) score += 2.5;
+  if ((card.name || "").includes("Extreme Dragon")) score += 3;
+  if (card.monsterType === "fusion" || card.monsterType === "ascension") {
+    score += 1.5;
+  }
+  if (card.mustBeAttacked || card.battleIndestructibleOncePerTurn) score += 1;
+
+  const oppTotalAtk = (analysis.oppField || []).reduce(
+    (sum, monster) => sum + getVisibleAtk(monster),
+    0,
+  );
+  if (oppTotalAtk >= (analysis.lp || 8000) && atk >= 2000) score += 2;
+  return score;
+}
 
 /**
  * @typedef {Object} SpellDecision
@@ -222,36 +288,52 @@ export function shouldPlaySpell(card, analysis) {
           c &&
           isLuminarch(c) &&
           c.cardKind === "monster" &&
-          (c.atk || 0) >= 2000
+          !c.isFacedown &&
+          getVisibleAtk(c) >= 2000
       );
-      const oppThreats = (analysis.oppField || []).filter(
-        (m) => m && !m.isFacedown && (m.atk || 0) >= 2200
+      const opponentTargets = (analysis.oppField || []).filter(
+        (m) => m && m.cardKind === "monster" && !m.isFacedown
       );
 
-      if (luminarch2kPlus.length > 0 && oppThreats.length > 0) {
-        // NOVO: Priorizar bosses que já usaram efeitos OPT como custo
-        // Esses já geraram valor e são melhores custos que bosses frescos
-        const usedBosses = luminarch2kPlus.filter((c) => c.usedEffectThisTurn);
-        const expendableBosses = luminarch2kPlus.filter((c) => {
-          // Bosses que são bons custos: já usaram efeito OU são menores que o alvo
-          const alreadyActed = c.usedEffectThisTurn || c.hasAttacked;
-          const smallerThanThreat = (c.atk || 0) < (oppThreats[0]?.atk || 0);
-          return alreadyActed || smallerThanThreat;
-        });
+      if (luminarch2kPlus.length > 0 && opponentTargets.length > 0) {
+        const bestCost = luminarch2kPlus
+          .map((card) => ({
+            card,
+            score: getRemovalCostScore(card, analysis),
+          }))
+          .sort((a, b) => a.score - b.score)[0];
+        const bestTarget = opponentTargets
+          .map((card) => ({
+            card,
+            score: getRemovalTargetScore(card, analysis),
+          }))
+          .sort((a, b) => b.score - a.score)[0];
+        const oppTotalAtk = opponentTargets.reduce(
+          (sum, card) => sum + getVisibleAtk(card),
+          0
+        );
+        const targetAtk = getVisibleAtk(bestTarget?.card);
+        const targetName = bestTarget?.card?.name || "opposing threat";
+        const costName = bestCost?.card?.name || "Luminarch monster";
+        const preventsLethal =
+          oppTotalAtk >= (analysis.lp || 8000) && targetAtk >= 1800;
+        const removesWinCondition =
+          /Extreme Dragon|Bahamut|Galaxy|Malicious|Leviathan|Fire Extreme/i.test(
+            targetName
+          ) || bestTarget.score >= 9;
+        const positiveTrade = bestTarget.score >= bestCost.score + 1.5;
 
-        const bestCost =
-          usedBosses[0] || expendableBosses[0] || luminarch2kPlus[0];
-        const costReason =
-          usedBosses.length > 0
-            ? `${bestCost.name} (já usou efeito = bom custo)`
-            : expendableBosses.length > 0
-            ? `${bestCost.name} (expendable)`
-            : `${bestCost.name} (2000+ ATK)`;
+        if (!positiveTrade && !preventsLethal && !removesWinCondition) {
+          return {
+            yes: false,
+            reason: `Radiant Wave held: ${targetName} is not worth ${costName}`,
+          };
+        }
 
         return {
           yes: true,
-          priority: 11,
-          reason: `Destruir ameaça ${oppThreats[0]?.name} (custo: ${costReason})`,
+          priority: preventsLethal || removesWinCondition ? 15 : 11,
+          reason: `Destroy ${targetName} with preferred cost ${costName}`,
         };
       }
 
@@ -608,6 +690,25 @@ export function shouldSummonMonster(card, analysis) {
       (c) => c && c.name === "Luminarch Sanctum Protector"
     );
     const hasFieldSpell = !!analysis.fieldSpell;
+    const hasAegisInHand = analysis.hand.some(
+      (c) => c && c.name === "Luminarch Aegisbearer"
+    );
+    const hasProtection = [
+      ...(analysis.hand || []),
+      ...(analysis.spellTrap || []),
+    ].some(
+      (c) =>
+        c &&
+        (c.name === "Luminarch Holy Shield" ||
+          c.name === "Luminarch Crescent Shield" ||
+          c.name === "Luminarch Moonlit Blessing")
+    );
+    const oppMonsterCount = (analysis.oppField || []).filter(
+      (c) => c && c.cardKind === "monster"
+    ).length;
+    const underHeavyPressure = oppStrongest >= 2200 || oppMonsterCount >= 2;
+    const shouldAvoidExposedSearcher =
+      underHeavyPressure && !hasTank && !hasProtection;
 
     // ═════════════════════════════════════════════════════════════════════════
     // TANKS - PRIORIDADE MÁXIMA NO EARLY GAME
@@ -693,26 +794,46 @@ export function shouldSummonMonster(card, analysis) {
 
       // Arbiter busca SPELL/TRAP - priorizar se não temos field spell
       if (!hasFieldSpell) {
+        if (
+          shouldAvoidExposedSearcher &&
+          (hasAegisInHand || hasSanctumProtectorInHand || oppStrongest >= 2400)
+        ) {
+          return {
+            yes: false,
+            reason:
+              "Board inimigo forte: priorizar tank/protecao antes de expor Arbiter",
+          };
+        }
         return {
           yes: true,
           position: "attack", // SEMPRE attack para buscar!
-          priority: 10,
+          priority: shouldAvoidExposedSearcher ? 4 : 10,
           reason:
             "Buscar Sanctum Citadel (field spell core!) - FACE-UP para trigger",
         };
       }
       // Já tem field spell - buscar proteção se não temos
-      const hasProtection = (analysis.hand || []).some(
+      const hasProtectionInHand = (analysis.hand || []).some(
         (c) =>
           c &&
           (c.name === "Luminarch Holy Shield" ||
             c.name === "Luminarch Crescent Shield")
       );
-      if (!hasProtection) {
+      if (!hasProtectionInHand) {
+        if (
+          shouldAvoidExposedSearcher &&
+          (hasAegisInHand || hasSanctumProtectorInHand)
+        ) {
+          return {
+            yes: false,
+            reason:
+              "Board inimigo forte: proteger campo antes de buscar utility com Arbiter",
+          };
+        }
         return {
           yes: true,
           position: "attack", // SEMPRE attack para buscar!
-          priority: 7,
+          priority: shouldAvoidExposedSearcher ? 3 : 7,
           reason: "Buscar spell de proteção - FACE-UP para trigger",
         };
       }
@@ -771,8 +892,10 @@ export function shouldSummonMonster(card, analysis) {
         return {
           yes: true,
           position: "attack", // SEMPRE attack para buscar!
-          priority: 7,
-          reason: "Buscar Aegisbearer (setup) - FACE-UP para trigger",
+          priority: shouldAvoidExposedSearcher ? 3 : 7,
+          reason: shouldAvoidExposedSearcher
+            ? "Buscar Aegisbearer, mas com risco alto de expor Valiant"
+            : "Buscar Aegisbearer (setup) - FACE-UP para trigger",
         };
       }
 

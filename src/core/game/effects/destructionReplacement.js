@@ -203,6 +203,10 @@ async function tryReplacement(game, sourceCard, sourceOwner, effect, ctx) {
     return { replaced: false };
   }
 
+  if (replacement.targetMustBeSource === true && card !== sourceCard) {
+    return { replaced: false };
+  }
+
   const targetOwnerKey =
     replacement.targetOwner ||
     replacement.appliesTo ||

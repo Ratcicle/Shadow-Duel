@@ -28,10 +28,7 @@ export function detectFusionOpportunities(context) {
   if (!poly) return opportunities;
 
   // Pool de materiais disponíveis (mão + campo)
-  const availableCards = [
-    ...hand,
-    ...field.filter((c) => c.controller === "bot"),
-  ];
+  const availableCards = [...hand, ...field];
 
   // Verificar cada fusão conhecida do Luminarch
   for (const fusionName in LUMINARCH_FUSIONS) {
@@ -81,7 +78,7 @@ export function calculatePowerSwing(opportunity, context) {
   // === CENÁRIO ATUAL ===
   // ATK total disponível no campo atual
   const currentBoardATK = field
-    .filter((c) => c.controller === "bot" && c.cardKind === "monster")
+    .filter((c) => c.cardKind === "monster")
     .reduce((sum, c) => sum + (c.atk || 0), 0);
 
   // Materiais que estão no campo contribuem para currentBoardATK

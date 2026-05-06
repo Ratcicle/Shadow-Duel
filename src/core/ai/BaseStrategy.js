@@ -531,6 +531,9 @@ export default class BaseStrategy {
   integrateP2IntoActionSelection(game, actions, analysis = null) {
     try {
       if (!actions || actions.length === 0) return actions;
+      if (game?._isPerspectiveState === true || game?._suppressP2Analysis) {
+        return actions;
+      }
 
       const oppAnalysis = this.analyzeOpponentPosition(game);
       if (!oppAnalysis) return actions;

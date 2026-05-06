@@ -536,18 +536,21 @@
     subtype: "normal",
     archetype: "Shadow-Heart",
     description:
-      "Discard 1 card; then target 1 monster your opponent controls; destroy that target.",
+      'Discard 1 "Shadow-Heart" card, then target 1 monster your opponent controls; destroy it. You can only activate 1 "Shadow-Heart Purge" per turn.',
     image: "assets/Shadow-Heart Purge.png",
     effects: [
       {
         id: "shadow_heart_purge_destroy",
         timing: "on_play",
         speed: 1,
+        oncePerTurn: true,
+        oncePerTurnName: "shadow_heart_purge",
         targets: [
           {
             id: "purge_discard",
             owner: "self",
             zone: "hand",
+            archetype: "Shadow-Heart",
             count: { min: 1, max: 1 },
           },
           {
@@ -650,7 +653,7 @@
     subtype: "normal",
     archetype: "Shadow-Heart",
     description:
-      'Pay 800 LP; add 1 "Shadow-Heart" card from your Deck to your hand. You can only activate 1 "Shadow-Heart Covenant" per turn.',
+      'Pay 800 LP; add 1 "Shadow-Heart" card from your Deck to your hand. You must control no other cards to activate this effect. You can only activate 1 "Shadow-Heart Covenant" per turn.',
     image: "assets/Shadow-Heart Covenant.png",
     effects: [
       {
@@ -659,6 +662,17 @@
         speed: 1,
         oncePerTurn: true,
         oncePerTurnName: "shadow_heart_covenant",
+        conditions: [
+          {
+            type: "control_card_filters",
+            owner: "self",
+            zones: ["field", "spellTrap", "fieldSpell"],
+            includeFacedown: true,
+            excludeSource: true,
+            max: 0,
+            reason: "You must control no other cards to activate this effect.",
+          },
+        ],
         actions: [
           {
             type: "pay_lp",
@@ -1208,7 +1222,7 @@
     type: "Spellcaster",
     archetype: "Shadow-Heart",
     description:
-      'If this card is Normal Summoned: You can add 1 "Shadow-Heart" Spell/Trap from your Deck to your hand. If your opponent loses LP while this card is on the field: draw 1 card.',
+      'If this card is Normal Summoned: You can add 1 "Shadow-Heart" Spell/Trap from your Deck to your hand. If your opponent loses LP while this card is on the field: draw 1 card. You can only use this effect of "Shadow-Heart Void Mage" once per turn.',
     image: "assets/Shadow-Heart Void Mage.png",
     effects: [
       {
@@ -1230,6 +1244,8 @@
         id: "shadow_heart_void_mage_draw",
         timing: "on_event",
         event: "opponent_damage",
+        oncePerTurn: true,
+        oncePerTurnName: "shadow_heart_void_mage_draw",
         actions: [
           {
             type: "draw",
@@ -4187,6 +4203,8 @@
     level: 8,
     atk: 2500,
     def: 2000,
+    extraAttacks: 1,
+    extraAttackTargetRestriction: "monster",
     description:
       "You can send 2 Dragon-type monsters from your hand to the GY; Special Summon this card from your hand, but it cannot attack the turn it is Special Summoned by this effect. This card can make up to 2 attacks on opponent's monsters during each Battle Phase. You can banish this card from your GY; add 1 Level 7 or 8 Dragon monster from your Deck to your hand.",
     image: "assets/Black Bull Dragon.png",
@@ -4213,21 +4231,6 @@
             costTargetRef: "bbd_cost",
             position: "choice",
             cannotAttackThisTurn: true,
-          },
-        ],
-      },
-      {
-        id: "bbd_double_attack_on_monsters",
-        timing: "on_event",
-        event: "after_summon",
-        summonMethods: ["normal", "special", "tribute"],
-        requireSelfAsSummoned: true,
-        actions: [
-          {
-            type: "add_status",
-            targetRef: "self",
-            status: "extraAttacks",
-            value: 1,
           },
         ],
       },
@@ -6200,6 +6203,7 @@
           type: "destruction",
           reason: "any",
           targetOwner: "self",
+          targetMustBeSource: true,
           targetZones: ["field"],
           targetRequireFaceup: true,
           auto: true,

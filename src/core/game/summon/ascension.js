@@ -249,7 +249,8 @@ export function canUseAsAscensionMaterial(player, materialCard) {
 export async function performAscensionSummon(
   player,
   materialCard,
-  ascensionCard
+  ascensionCard,
+  options = {}
 ) {
   const game = this;
   if (!player || !materialCard || !ascensionCard) {
@@ -282,13 +283,14 @@ export async function performAscensionSummon(
     };
   }
 
-  const positionPref = ascensionCard.ascension?.position || "choice";
+  const positionPref = options.position || ascensionCard.ascension?.position || "choice";
   const resolvedPosition =
     positionPref === "choice" &&
     typeof this.effectEngine?.chooseSpecialSummonPosition === "function"
       ? await this.effectEngine.chooseSpecialSummonPosition(
           ascensionCard,
-          player
+          player,
+          { position: positionPref }
         )
       : positionPref === "defense"
       ? "defense"

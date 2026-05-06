@@ -56,7 +56,7 @@ export function scheduleDelayedAction(
  * @param {string} phase - Current phase (e.g., "standby")
  * @param {string} activePlayer - Active player ("player" or "bot")
  */
-export function processDelayedActions(phase, activePlayer) {
+export async function processDelayedActions(phase, activePlayer) {
   if (!Array.isArray(this.delayedActions) || this.delayedActions.length === 0) {
     return;
   }
@@ -87,7 +87,7 @@ export function processDelayedActions(phase, activePlayer) {
   actionsToResolve.sort((a, b) => b.priority - a.priority);
 
   for (const action of actionsToResolve) {
-    this.resolveDelayedAction(action);
+    await this.resolveDelayedAction(action);
   }
 
   // Remove resolved actions
@@ -101,11 +101,11 @@ export function processDelayedActions(phase, activePlayer) {
  * Calls the appropriate resolver based on action type.
  * @param {Object} action - Action to resolve
  */
-export function resolveDelayedAction(action) {
+export async function resolveDelayedAction(action) {
   try {
     switch (action.actionType) {
       case "delayed_summon":
-        this.resolveDelayedSummon(action.payload);
+        await this.resolveDelayedSummon(action.payload);
         break;
       // Future action types can be added here
       default:

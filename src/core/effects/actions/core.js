@@ -138,6 +138,78 @@ export function checkActionPreviewRequirements(actions, ctx) {
 
   for (const action of actions) {
     if (!action || !action.type) continue;
+    if (action.type === "pay_lp") {
+      let amount = Number(action.amount || 0);
+      if (action.fraction) {
+        amount = Math.floor((player.lp || 0) * action.fraction);
+      }
+      if (amount > 0 && typeof this?.resolveLpCost === "function") {
+        const costResult = this.resolveLpCost(action, ctx, amount);
+        if (costResult && typeof costResult.finalAmount === "number") {
+          amount = costResult.finalAmount;
+        }
+      }
+      if (amount > 0 && (player.lp || 0) < amount) {
+        return { ok: false, reason: "Not enough LP to pay cost." };
+      }
+    }
+
+    if (action.type === "search_any" || action.type === "add_from_zone_to_hand") {
+      const inferredSearch =
+        action.type === "search_any" || action.mode === "search_any";
+      const sourceZone = action.zone || (inferredSearch ? "deck" : "graveyard");
+      const zone = player[sourceZone] || [];
+      const baseFilters = action.filters || {};
+      const filters = { ...baseFilters };
+      if (inferredSearch) {
+        if (action.archetype && !filters.archetype) {
+          filters.archetype = action.archetype;
+        }
+        if (action.cardKind && !filters.cardKind) {
+          filters.cardKind = action.cardKind;
+        }
+        if (action.cardName && !filters.name) {
+          filters.name = action.cardName;
+        }
+      }
+      const count = action.count || { min: 1, max: 1 };
+      const min = Math.max(count.min || 0, 0);
+      if (min > 0) {
+        const hasCandidate = zone.some((card) => {
+          if (!card) return false;
+          if (typeof this?.cardMatchesFilters === "function") {
+            if (!this.cardMatchesFilters(card, filters)) return false;
+          }
+          if (action.cardName) {
+            const match = action.cardName.toLowerCase();
+            if ((card.name || "").toLowerCase() !== match) return false;
+          }
+          if (typeof action.cardId === "number" && card.id !== action.cardId) {
+            return false;
+          }
+          if (
+            typeof action.minLevel === "number" &&
+            (card.level || 0) < action.minLevel
+          ) {
+            return false;
+          }
+          if (
+            typeof action.maxLevel === "number" &&
+            (card.level || 0) > action.maxLevel
+          ) {
+            return false;
+          }
+          return true;
+        });
+        if (!hasCandidate) {
+          return {
+            ok: false,
+            reason: `No valid cards in ${sourceZone} matching filters.`,
+          };
+        }
+      }
+    }
+
     if (
       action.type === "special_summon_from_zone" ||
       action.type === "call_of_haunted_summon_and_bind"

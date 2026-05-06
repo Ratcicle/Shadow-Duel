@@ -931,6 +931,10 @@ export function bindCardInteractions() {
           !attacker.cannotAttackDirectly &&
           !this.player?.forbidDirectAttacksThisTurn &&
           !isMultiAttackMode && // Multi-attack can only target monsters, not direct
+          !(
+            (attacker.attacksUsedThisTurn || 0) > 0 &&
+            attacker.extraAttackTargetRestriction === "monster"
+          ) &&
           (attacker.canAttackDirectlyThisTurn === true ||
             attackCandidates.length === 0);
 

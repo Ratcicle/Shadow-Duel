@@ -58,6 +58,21 @@ export function getAttackAvailability(attacker) {
   const attacksUsed = attacker.attacksUsedThisTurn || 0;
   const canUseSecondAttack =
     attacker.canMakeSecondAttackThisTurn && !attacker.secondAttackUsedThisTurn;
+  const extraAttackTargetRestriction =
+    attacker.extraAttackTargetRestriction || null;
+
+  if (attacksUsed > 0 && extraAttackTargetRestriction === "monster") {
+    const opponent = attacker.owner === "player" ? this.bot : this.player;
+    const hasOpponentMonster = (opponent?.field || []).some(
+      (m) => m && m.cardKind === "monster",
+    );
+    if (!hasOpponentMonster) {
+      return {
+        ok: false,
+        reason: `${attacker.name}'s extra attack can only target monsters.`,
+      };
+    }
+  }
 
   // Check for multi-attack ability (attack all opponent monsters)
   if (attacker.canAttackAllOpponentMonstersThisTurn) {

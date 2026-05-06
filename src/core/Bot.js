@@ -308,6 +308,9 @@ export default class Bot extends Player {
 
     const bot = this;
     const opponent = game.player.id === bot.id ? game.bot : game.player;
+    const useAutomaticAscension =
+      this.strategy?.shouldUseAutomaticAscensionShortcut?.(game, this) !==
+      false;
 
     // === LOG DE ESTADO (DEV MODE) ===
     if (bot.debug) {
@@ -364,7 +367,9 @@ export default class Bot extends Player {
       totalAttempts++;
 
       // Try Ascension before other actions if available
-      const ascended = await this.tryAscensionIfAvailable(game);
+      const ascended = useAutomaticAscension
+        ? await this.tryAscensionIfAvailable(game)
+        : false;
       if (ascended) {
         // Allow subsequent actions after ascension
         const successfulActionDelayMs = Number.isFinite(
@@ -588,7 +593,9 @@ export default class Bot extends Player {
     }
 
     // Final chance to ascend if no actions left
-    await this.tryAscensionIfAvailable(game);
+    if (useAutomaticAscension) {
+      await this.tryAscensionIfAvailable(game);
+    }
   }
 
   playBattlePhase(game) {
@@ -683,7 +690,11 @@ export default class Bot extends Player {
           opponent.field.length === 0 &&
           !this.forbidDirectAttacksThisTurn &&
           !attacker.cannotAttackDirectly &&
-          !attacker.canAttackAllOpponentMonstersThisTurn;
+          !attacker.canAttackAllOpponentMonstersThisTurn &&
+          !(
+            (attacker.attacksUsedThisTurn || 0) > 0 &&
+            attacker.extraAttackTargetRestriction === "monster"
+          );
 
         const tauntTargets = opponent.field.filter(
           (card) =>
@@ -902,6 +913,12 @@ export default class Bot extends Player {
 
     const attackStat = attacker.atk || 0;
     if (!target) {
+      if (
+        usedAttacks > 0 &&
+        attacker.extraAttackTargetRestriction === "monster"
+      ) {
+        return;
+      }
       defenderOwner.lp -= attackStat;
       attacker.attacksUsedThisTurn = usedAttacks + 1;
       // Multi-attack mode uses different limit
@@ -1120,6 +1137,15 @@ export default class Bot extends Player {
           this,
           material,
           action.ascensionCard,
+          {
+            position:
+              action.position ||
+              this.getAscensionPositionPreference(
+                action.ascensionCard,
+                material,
+                game,
+              ),
+          },
         );
 
         if (result?.success) {
@@ -1326,6 +1352,7 @@ export default class Bot extends Player {
         return false;
       }
       const card = this.hand[resolvedIndex];
+      const actionActivationContext = action.activationContext || {};
 
       console.log(
         `[Bot.executeMainPhaseAction] 📝 Attempting spell: ${card.name}`,
@@ -1338,6 +1365,7 @@ export default class Bot extends Player {
         const preview = game.effectEngine.canActivateSpellFromHandPreview(
           card,
           this,
+          { activationContext: actionActivationContext },
         );
         console.log(`[Bot.executeMainPhaseAction] 🔍 Preview check:`, preview);
         if (preview && !preview.ok) {
@@ -1362,9 +1390,12 @@ export default class Bot extends Player {
         guardKind: "bot_spell_from_hand",
         phaseReq: ["main1", "main2"],
         preview: () =>
-          game.effectEngine?.canActivateSpellFromHandPreview?.(card, this),
+          game.effectEngine?.canActivateSpellFromHandPreview?.(card, this, {
+            activationContext: actionActivationContext,
+          }),
         commit: () => game.commitCardActivationFromHand(this, resolvedIndex),
         activationContext: {
+          ...actionActivationContext,
           fromHand: true,
           sourceZone: "hand",
         },
@@ -1655,7 +1686,9 @@ export default class Bot extends Player {
 
         // Priorização inteligente de Ascensão
         const best = this.selectBestAscension(eligible, material, game);
-        const res = await game.performAscensionSummon(this, material, best);
+        const res = await game.performAscensionSummon(this, material, best, {
+          position: this.getAscensionPositionPreference(best, material, game),
+        });
         if (res?.success) {
           return true;
         }
@@ -1712,5 +1745,23 @@ export default class Bot extends Player {
     // Ordenar por score decrescente e retornar o melhor
     scored.sort((a, b) => b.score - a.score);
     return scored[0].asc;
+  }
+
+  getAscensionPositionPreference(ascensionCard, _material, game) {
+    if (ascensionCard?.name !== "Metal Armored Dragon") {
+      return ascensionCard?.ascension?.position || "choice";
+    }
+
+    const opponent = this.resolveOpponent(game);
+    const oppStrongestATK = (opponent?.field || []).reduce(
+      (max, monster) => Math.max(max, monster?.atk || 0),
+      0,
+    );
+
+    if (oppStrongestATK >= (ascensionCard.atk || 0)) {
+      return "defense";
+    }
+
+    return "attack";
   }
 }

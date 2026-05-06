@@ -205,6 +205,13 @@ export default class AutoSelector {
         archetypes: candidate?.archetypes,
         goodDiscard: candidate?.goodDiscard,
         cannotBeNormalSummonedOrSet: candidate?.cannotBeNormalSummonedOrSet,
+        usedEffectThisTurn: candidate?.usedEffectThisTurn,
+        hasAttacked: candidate?.hasAttacked,
+        mustBeAttacked: candidate?.mustBeAttacked,
+        tempAtkBoost: candidate?.tempAtkBoost,
+        equipAtkBonus: candidate?.equipAtkBonus,
+        tempDefBoost: candidate?.tempDefBoost,
+        equipDefBonus: candidate?.equipDefBonus,
       };
     const options = {
       fieldSpell: ownerPlayer?.fieldSpell || null,
@@ -233,7 +240,43 @@ export default class AutoSelector {
       if (baseCard?.goodDiscard === true) costScore -= 1.5;
       if (baseCard?.cannotBeNormalSummonedOrSet === true) costScore -= 2.0;
       // Preserve Extreme Dragons — needed for Bahamut win condition (5 in GY)
-      if (baseCard?.archetype === "Extreme Dragons") costScore += 100;
+      if (
+        baseCard?.archetype === "Extreme Dragons" ||
+        baseCard?.archetypes?.includes?.("Extreme Dragons")
+      ) {
+        costScore += 100;
+      }
+      const costPreferences =
+        context?.activationContext?.actionContext?.costPreferences ||
+        context?.activationContext?.costPreferences ||
+        null;
+      const isPreferredArchetype =
+        costPreferences?.archetype &&
+        (baseCard?.archetype === costPreferences.archetype ||
+          baseCard?.archetypes?.includes?.(costPreferences.archetype));
+      if (isPreferredArchetype) {
+        const preferNames = costPreferences.preferNames || [];
+        const preserveNames = costPreferences.preserveNames || [];
+        if (preferNames.includes(baseCard?.name)) costScore -= 2.5;
+        if (preserveNames.includes(baseCard?.name)) costScore += 6;
+        if (baseCard?.usedEffectThisTurn || baseCard?.hasAttacked) {
+          costScore -= 1.5;
+        }
+        if (baseCard?.mustBeAttacked) costScore += 4;
+        if (
+          baseCard?.name === "Luminarch Radiant Lancer" &&
+          ((baseCard?.atk || 0) +
+            (baseCard?.tempAtkBoost || 0) +
+            (baseCard?.equipAtkBonus || 0) >
+            2200 ||
+            baseCard?.hasAttacked)
+        ) {
+          costScore += 5;
+        }
+        if ((baseCard?.def || 0) + (baseCard?.tempDefBoost || 0) >= 2500) {
+          costScore += 3;
+        }
+      }
       return costScore;
     }
     return baseValue;

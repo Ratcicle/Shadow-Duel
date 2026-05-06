@@ -31,6 +31,8 @@ export default class Card {
     this.extraAttacks = Number.isFinite(baseExtraAttacks)
       ? baseExtraAttacks
       : 0;
+    this.extraAttackTargetRestriction =
+      data.extraAttackTargetRestriction || null;
     this.dynamicExtraAttacks = data.dynamicExtraAttacks
       ? JSON.parse(JSON.stringify(data.dynamicExtraAttacks))
       : null;

@@ -53,7 +53,7 @@ export function getSpecialSummonedTypeCount(owner, typeName) {
  * Executes Special Summons with validity checks.
  * @param {Object} payload - Delayed summon payload with summons array
  */
-export function resolveDelayedSummon(payload) {
+export async function resolveDelayedSummon(payload) {
   if (
     !payload ||
     !Array.isArray(payload.summons) ||
@@ -93,9 +93,15 @@ export function resolveDelayedSummon(payload) {
     }
 
     // Executar special summon
-    void this.moveCard(card, targetPlayer, "field", {
+    const moveResult = await this.moveCard(card, targetPlayer, "field", {
       summonMethodOverride: "special",
     });
+    if (moveResult?.success === false) {
+      this.ui?.log?.(
+        `${card.name} could not be special summoned from delayed action.`
+      );
+      continue;
+    }
     successCount++;
 
     // Aplicar buff condicional: Abyssal Serpent ganha +800 ATK se alvo era Fusion/Ascension

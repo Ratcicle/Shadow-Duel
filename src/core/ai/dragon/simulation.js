@@ -324,7 +324,21 @@ function simulateDragonHandIgnition(state, card, action) {
 
   if (card.name === "Hellkite Dragon") {
     // Send field Dragon to GY → SS Hellkite from hand
-    const costIdx = player.field.findIndex((c) => c.type === "Dragon" || c.cardKind === "monster");
+    const costIdx =
+      player.field
+        .map((candidate, index) => ({ candidate, index }))
+        .filter(
+          ({ candidate }) =>
+            candidate &&
+            (candidate.type === "Dragon" || candidate.cardKind === "monster") &&
+            !isExtremeDragon(candidate),
+        )
+        .sort(
+          (a, b) =>
+            (a.candidate.atk || 0) +
+            (a.candidate.level || 0) * 50 -
+            ((b.candidate.atk || 0) + (b.candidate.level || 0) * 50),
+        )[0]?.index ?? -1;
     if (costIdx >= 0 && player.field.length < 5) {
       const cost = player.field.splice(costIdx, 1)[0];
       player.graveyard.push(cost);

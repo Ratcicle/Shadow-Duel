@@ -11,6 +11,33 @@
 
 import { isAI } from "../../Player.js";
 
+function scheduleAiMoveAfterPaint(game, actor) {
+  if (!isAI(actor) || game.gameOver || typeof actor?.makeMove !== "function") {
+    return;
+  }
+
+  const expectedTurn = game.turn;
+  const expectedPhase = game.phase;
+  const runMove = () => {
+    if (
+      game.gameOver ||
+      game.turn !== expectedTurn ||
+      game.phase !== expectedPhase
+    ) {
+      return;
+    }
+    actor.makeMove(game);
+  };
+
+  const requestFrame = globalThis.requestAnimationFrame;
+  if (typeof requestFrame === "function") {
+    requestFrame(() => setTimeout(runMove, 0));
+    return;
+  }
+
+  setTimeout(runMove, 0);
+}
+
 /**
  * Advances to the next phase in the turn order.
  * Phase order: draw → standby → main1 → battle → main2 → end
@@ -46,8 +73,7 @@ export async function nextPhase() {
   if (idx === -1) return;
   const next = order[idx + 1];
   if (!next) {
-    this.endTurn();
-    return;
+    return await this.endTurn();
   }
   this.phase = next;
 
@@ -57,9 +83,7 @@ export async function nextPhase() {
 
   this.updateBoard();
 
-  if (isAI(actor) && !this.gameOver && typeof actor?.makeMove === "function") {
-    actor.makeMove(this);
-  }
+  scheduleAiMoveAfterPaint(this, actor);
 }
 
 /**
@@ -67,7 +91,7 @@ export async function nextPhase() {
  * Can only skip forward, not backward.
  * @param {string} targetPhase - The phase to skip to
  */
-export function skipToPhase(targetPhase) {
+export async function skipToPhase(targetPhase) {
   const actor = this.turn === "player" ? this.player : this.bot;
   const guard = this.guardActionStart(
     { actor, kind: "phase_change" },
@@ -97,16 +121,10 @@ export function skipToPhase(targetPhase) {
   }
 
   if (this.phase === "end") {
-    this.endTurn();
-    return;
+    return await this.endTurn();
   }
   this.updateBoard();
-  if (
-    isAI(actor) &&
-    this.phase !== "draw" &&
-    !this.gameOver &&
-    typeof actor?.makeMove === "function"
-  ) {
-    actor.makeMove(this);
+  if (this.phase !== "draw") {
+    scheduleAiMoveAfterPaint(this, actor);
   }
 }

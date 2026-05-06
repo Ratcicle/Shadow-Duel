@@ -141,6 +141,15 @@ export async function resolveCombat(attacker, target, options = {}) {
   }
 
   if (!target) {
+    if (
+      (attacker.attacksUsedThisTurn || 0) > 0 &&
+      attacker.extraAttackTargetRestriction === "monster"
+    ) {
+      this.ui?.log?.(`${attacker.name}'s extra attack can only target monsters.`);
+      this.clearAttackResolutionIndicators();
+      this.updateBoard();
+      return { ok: false, reason: "extra_attack_requires_monster_target" };
+    }
     if (attacker.cannotAttackDirectly) {
       this.ui?.log?.(`${attacker.name} cannot attack directly.`);
       this.clearAttackResolutionIndicators();

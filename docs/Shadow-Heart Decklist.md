@@ -72,7 +72,7 @@ Fonte dos textos: `src/data/cards.js` (1x cada carta).
 
 **Shadow-Heart Leviathan (70)** — Nível 6, Sea Serpent, 2200/1800. Pode ser Invocada da mão enviando 1 "Shadow-Heart Abyssal Eel" que você controla. Se destruir em batalha: causa 500. Se for destruída em batalha: causa 800.
 
-**Shadow-Heart Void Mage (71)** — Nível 4, Spellcaster, 1500/1500. Normal Summon: adicione 1 Magia/Armadilha "Shadow-Heart". Quando o oponente perde LP enquanto esta carta estiver em campo: compre 1.
+**Shadow-Heart Void Mage (71)** — Nível 4, Spellcaster, 1500/1500. Normal Summon: adicione 1 Magia/Armadilha "Shadow-Heart". Quando o oponente perde LP enquanto esta carta estiver em campo: compre 1 (uma vez por turno).
 
 ### Extra Deck
 
@@ -84,11 +84,11 @@ Fonte dos textos: `src/data/cards.js` (1x cada carta).
 
 ### Magias
 
-**Shadow-Heart Purge (54)** — Magia Normal. Descarte 1; destrua 1 monstro do oponente.
+**Shadow-Heart Purge (54)** — Magia Normal. Descarte 1 carta "Shadow-Heart"; destrua 1 monstro do oponente (OPT por nome).
 
 **Shadow-Heart Battle Hymn (58)** – Magia Normal. Todos os seus "Shadow-Heart" ganham 500 ATK até o fim do turno.
 
-**Shadow-Heart Covenant (59)** — Magia Normal. Pague 800 LP; adicione 1 carta "Shadow-Heart" (OPT por nome).
+**Shadow-Heart Covenant (59)** — Magia Normal. Pague 800 LP; adicione 1 carta "Shadow-Heart". Só pode ser ativada se você não controlar outros cards (OPT por nome).
 
 **Shadow-Heart Infusion (63)** — Magia Normal. Descarte 2; Invoque por Invocação-Especial 1 monstro "Shadow-Heart" do Cemitério (pos. escolha), não pode atacar neste turno. OPT por nome.
 

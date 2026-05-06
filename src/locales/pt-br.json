@@ -70,7 +70,7 @@
     },
     "54": {
       "name": "Purificação do Coração Sombrio",
-      "description": "Discarte 1 card, e então escolha 1 monstro que seu oponente controla; destrua-o."
+      "description": "Descarte 1 card \"Coração Sombrio\", e então escolha 1 monstro que seu oponente controla; destrua-o. Você só pode ativar 1 \"Purificação do Coração Sombrio\" por turno."
     },
     "57": {
       "name": "Demônio Arctroth do Coração Sombrio",
@@ -82,7 +82,7 @@
     },
     "59": {
       "name": "Pacto do Coração Sombrio",
-      "description": "Pague 800 PV; Adicione 1 card 'Coração Sombrio' do seu Deck à sua mão."
+      "description": "Pague 800 PV; adicione 1 card \"Coração Sombrio\" do seu Deck à sua mão. Você não pode controlar outros cards para ativar este efeito. Você só pode ativar 1 \"Pacto do Coração Sombrio\" por turno."
     },
     "60": {
       "name": "Imp do Coração Sombrio",

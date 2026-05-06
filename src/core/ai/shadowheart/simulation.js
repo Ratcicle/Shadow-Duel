@@ -207,6 +207,14 @@ export function simulateSpellEffect(state, card) {
       break;
     }
     case "Shadow-Heart Covenant": {
+      if (
+        (player.field?.length || 0) > 0 ||
+        (player.spellTrap?.length || 0) > 0 ||
+        player.fieldSpell
+      ) {
+        break;
+      }
+
       // Searcher: Paga 800 LP, adiciona 1 Shadow-Heart da deck à mão
       player.lp = Math.max(0, (player.lp || 8000) - 800);
 
@@ -248,10 +256,20 @@ export function simulateSpellEffect(state, card) {
       break;
     }
     case "Shadow-Heart Purge": {
+      const discard = player.hand.find(
+        (c) =>
+          c &&
+          c !== card &&
+          (c.archetype === "Shadow-Heart" ||
+            (Array.isArray(c.archetypes) &&
+              c.archetypes.includes("Shadow-Heart"))),
+      );
       const target = opponent.field
         .slice()
         .sort((a, b) => (b.atk || 0) - (a.atk || 0))[0];
-      if (target) {
+      if (discard && target) {
+        player.hand.splice(player.hand.indexOf(discard), 1);
+        player.graveyard.push(discard);
         opponent.field.splice(opponent.field.indexOf(target), 1);
         opponent.graveyard.push(target);
       }

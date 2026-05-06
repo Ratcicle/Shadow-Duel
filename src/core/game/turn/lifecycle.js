@@ -13,6 +13,33 @@
 import { isAI } from "../../Player.js";
 import { botLogger } from "../../BotLogger.js";
 
+function scheduleAiMoveAfterPaint(game, actor) {
+  if (!isAI(actor) || game.gameOver || typeof actor?.makeMove !== "function") {
+    return;
+  }
+
+  const expectedTurn = game.turn;
+  const expectedPhase = game.phase;
+  const runMove = () => {
+    if (
+      game.gameOver ||
+      game.turn !== expectedTurn ||
+      game.phase !== expectedPhase
+    ) {
+      return;
+    }
+    actor.makeMove(game);
+  };
+
+  const requestFrame = globalThis.requestAnimationFrame;
+  if (typeof requestFrame === "function") {
+    requestFrame(() => setTimeout(runMove, 0));
+    return;
+  }
+
+  setTimeout(runMove, 0);
+}
+
 /**
  * Starts a new turn for the active player.
  * Handles draw phase, standby phase, and transitions to main1.
@@ -80,7 +107,7 @@ export async function startTurn() {
   this.phase = "standby";
 
   // Process delayed actions in standby phase BEFORE emitting the event
-  this.processDelayedActions("standby", activePlayer.id || this.turn);
+  await this.processDelayedActions("standby", activePlayer.id || this.turn);
 
   this.updateBoard();
   await this.emit("standby_phase", { player: activePlayer, opponent });
@@ -101,19 +128,13 @@ export async function startTurn() {
     );
   }
 
-  if (
-    isAI(activePlayer) &&
-    !this.gameOver &&
-    typeof activePlayer?.makeMove === "function"
-  ) {
-    activePlayer.makeMove(this);
-  }
+  scheduleAiMoveAfterPaint(this, activePlayer);
 }
 
 /**
  * Ends the current turn and starts the opponent's turn.
  */
-export function endTurn() {
+export async function endTurn() {
   const actor = this.turn === "player" ? this.player : this.bot;
   const guard = this.guardActionStart(
     { actor, kind: "phase_change" },
@@ -123,7 +144,7 @@ export function endTurn() {
 
   // Resolve any actions scheduled for the end phase of the current turn
   // (e.g. Galaxy Extreme Dragon returning from the banished zone).
-  this.processDelayedActions("end", this.turn);
+  await this.processDelayedActions("end", this.turn);
 
   this.cleanupTempBoosts(this.player);
   this.cleanupTempBoosts(this.bot);
@@ -135,7 +156,7 @@ export function endTurn() {
   this.clearAttackReadyIndicators();
 
   this.turn = this.turn === "player" ? "bot" : "player";
-  this.startTurn();
+  await this.startTurn();
 }
 
 /**

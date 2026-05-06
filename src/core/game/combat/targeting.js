@@ -14,10 +14,14 @@ export function startAttackTargetSelection(attacker, candidates) {
 
   const isMultiAttackMode = attacker.canAttackAllOpponentMonstersThisTurn;
   const attackerOwner = attacker.owner === "player" ? this.player : this.bot;
+  const usingMonsterOnlyExtraAttack =
+    (attacker.attacksUsedThisTurn || 0) > 0 &&
+    attacker.extraAttackTargetRestriction === "monster";
   const canDirect =
     !attacker.cannotAttackDirectly &&
     !attackerOwner?.forbidDirectAttacksThisTurn &&
     !isMultiAttackMode && // Multi-attack can only target monsters, not direct
+    !usingMonsterOnlyExtraAttack &&
     (attacker.canAttackDirectlyThisTurn === true || candidates.length === 0);
 
   if (candidates.length === 0 && !canDirect) return;

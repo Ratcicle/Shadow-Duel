@@ -688,9 +688,13 @@ export default class EffectEngine {
           const max = filters.max ?? cond.max;
           const requiredMin =
             min !== undefined ? min : max !== undefined ? 0 : 1;
+          const source = ctx?.source || null;
 
           const matchesFilters = (card) => {
             if (!card) return false;
+            if (cond.excludeSource === true && source && card === source) {
+              return false;
+            }
             if (requireFaceup && card.isFacedown) return false;
             if (cardKind) {
               const requiredKinds = Array.isArray(cardKind)

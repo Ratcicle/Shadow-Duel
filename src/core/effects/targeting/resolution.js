@@ -19,8 +19,6 @@ export function resolveTargets(targetDefs, ctx, selections) {
   const requirements = [];
   let needsSelection = false;
   const activationContext = ctx?.activationContext || {};
-  const autoSelectSingleTarget =
-    activationContext.autoSelectSingleTarget === true;
   const isAIPlayer = isAI(ctx?.player);
   const isPreview =
     activationContext.preview === true || activationContext.isPreview === true;
@@ -222,8 +220,7 @@ export function resolveTargets(targetDefs, ctx, selections) {
       !isPreview && !isAIPlayer && autoSelectExplicit;
     const allowAutoSelectForBot =
       allowAutoSelectTargets &&
-      (autoSelectExplicit ||
-        (autoSelectSingleTarget && min === 1 && max === 1));
+      autoSelectExplicit;
     const shouldAutoSelect = allowAutoSelectForPlayer || allowAutoSelectForBot;
     if (shouldAutoSelect) {
       const desiredCount = autoSelectExplicit ? max : 1;
