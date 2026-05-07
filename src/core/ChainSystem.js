@@ -957,14 +957,18 @@ export default class ChainSystem {
         defender && defenderOwnerId && defenderOwnerId === player.id;
       const isOpponentAttack =
         attacker && attackerOwnerId && attackerOwnerId !== player.id;
+      const isBattleContext =
+        context?.type === "attack_declaration" ||
+        context?.type === "battle_damage";
+      const isHolyShieldTiming =
+        isBattleContext &&
+        isOpponentAttack &&
+        isDefendingSelf &&
+        defender?.archetype === "Luminarch" &&
+        !defender?.isFacedown;
 
       let directBattleThreat = false;
-      if (
-        isDefendingSelf &&
-        isOpponentAttack &&
-        (context?.type === "attack_declaration" ||
-          context?.type === "battle_damage")
-      ) {
+      if (isHolyShieldTiming) {
         const outcome = wouldLoseOrTakeDamage(attacker, defender);
         directBattleThreat = outcome.loseMonster || outcome.takeDamage;
       }
@@ -980,6 +984,7 @@ export default class ChainSystem {
         );
 
       if (
+        isHolyShieldTiming &&
         luminarchTargets.length > 0 &&
         (directBattleThreat || anyVulnerableTarget)
       ) {

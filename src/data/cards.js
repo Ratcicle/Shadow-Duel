@@ -1185,7 +1185,7 @@
           {
             type: "special_summon_from_hand_with_cost",
             costTargetRef: "leviathan_cost",
-            position: "attack",
+            position: "choice",
             cannotAttackThisTurn: false,
           },
         ],
@@ -1333,7 +1333,7 @@
             type: "special_summon_from_zone",
             targetRef: "shadow_heart_gy_target",
             sourceZone: "graveyard",
-            position: "attack",
+            position: "choice",
           },
           {
             type: "equip",
@@ -2239,7 +2239,7 @@
           {
             type: "conditional_summon_from_hand",
             targetRef: "self",
-            position: "attack",
+            position: "choice",
             restrictAttackThisTurn: true,
             optional: true,
           },
@@ -2419,7 +2419,7 @@
     ascension: {
       materialId: 103,
       requirements: [{ type: "material_turns_on_field", count: 2 }],
-      position: "defense",
+      position: "choice",
     },
     description:
       "Ascension Material: 'Luminarch Aegisbearer'. Requirement: The material must have been face-up on the field for 2 turns. Your opponent must attack this card, if possible. If this card is Ascension Summoned: Gain 500 LP for each 'Luminarch' monster you control. Once per turn: You can pay 1000 LP, then target 1 'Luminarch' monster with 2000 or less DEF in your GY; Special Summon it.",
@@ -2777,7 +2777,7 @@
           {
             type: "special_summon_from_hand_with_cost",
             costTargetRef: "void_haunter_cost",
-            position: "attack",
+            position: "choice",
             cannotAttackThisTurn: false,
           },
         ],
@@ -3014,7 +3014,7 @@
           {
             type: "special_summon_token",
             player: "self",
-            position: "attack",
+            position: "choice",
             token: {
               name: "Void Little Spider",
               atk: 500,
@@ -3074,7 +3074,7 @@
           {
             type: "special_summon_from_hand_with_cost",
             costTargetRef: "void_forgotten_knight_cost",
-            position: "attack",
+            position: "choice",
             cannotAttackThisTurn: false,
           },
         ],
@@ -3261,7 +3261,7 @@
           {
             type: "special_summon_from_hand_with_cost",
             costTargetRef: "void_slayer_brute_cost",
-            position: "attack",
+            position: "choice",
             cannotAttackThisTurn: false,
           },
         ],
@@ -3354,7 +3354,7 @@
             costFilters: { name: "Void Hollow", cardKind: "monster" },
             minCost: 1,
             maxCost: 3,
-            position: "attack",
+            position: "choice",
             tier1AtkBoost: 300,
             tierOptions: [
               {

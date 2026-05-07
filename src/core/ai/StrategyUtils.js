@@ -1,3 +1,9 @@
+import {
+  getBattleStatForAttackTarget,
+  getEffectiveAtk,
+  getEffectiveDef,
+} from "./common/cardStats.js";
+
 export function getCardArchetypes(card) {
   if (!card) return [];
   if (Array.isArray(card.archetypes)) return card.archetypes.slice();
@@ -317,10 +323,7 @@ function rankCandidates(candidates, intent, options) {
 export function estimateRecursionTargetValue(card, preference = {}) {
   if (!card || card.cardKind !== "monster") return -100;
   const atk = getEffectiveAtk(card);
-  const def =
-    (card.def || 0) +
-    (card.tempDefBoost || 0) +
-    (card.equipDefBonus || 0);
+  const def = getEffectiveDef(card);
   const purpose = preference.purpose || "value";
   const defensiveNames = preference.defensiveNames || [];
   const offensiveNames = preference.offensiveNames || [];
@@ -369,7 +372,7 @@ export function estimateOffensiveTemporaryBuffValue(
 
   let bestScore = 0;
   opponents.forEach((opposing) => {
-    const opposingStat = getBattleStatForAttackingInto(opposing);
+    const opposingStat = getBattleStatForAttackTarget(opposing);
     if (atk <= opposingStat && buffedAtk > opposingStat) {
       bestScore = Math.max(bestScore, 80 + opposingStat / 100);
     } else if (atk > opposingStat) {
@@ -380,7 +383,7 @@ export function estimateOffensiveTemporaryBuffValue(
 }
 
 export function getBattleStat(card) {
-  return getBattleStatForAttackingInto(card);
+  return getBattleStatForAttackTarget(card);
 }
 
 export function isBattleReadyAttacker(card, { archetype = null } = {}) {
@@ -408,10 +411,7 @@ export function estimateTemporaryCombatDebuffTargetValue(
     isBattleReadyAttacker(card)
   );
   const targetAtk = getEffectiveAtk(target);
-  const targetDef =
-    (target.def || 0) +
-    (target.tempDefBoost || 0) +
-    (target.equipDefBonus || 0);
+  const targetDef = getEffectiveDef(target);
   const atkDropsToZero =
     destroyIfAtkZeroedByThisEffect === true &&
     Number.isFinite(atkReduction) &&
@@ -428,7 +428,7 @@ export function estimateTemporaryCombatDebuffTargetValue(
   }
   if (readyAttackers.length === 0) return 0;
 
-  const currentStat = getBattleStatForAttackingInto(target);
+  const currentStat = getBattleStatForAttackTarget(target);
   let debuffedStat = 0;
   if (Number.isFinite(atkReduction) || Number.isFinite(defReduction)) {
     const reduction =
@@ -480,27 +480,6 @@ export function estimateTemporaryCombatDebuffTargetValue(
   }
 
   return bestScore;
-}
-
-function getEffectiveAtk(card) {
-  return (
-    (card?.atk || 0) +
-    (card?.tempAtkBoost || 0) +
-    (card?.equipAtkBonus || 0)
-  );
-}
-
-function getBattleStatForAttackingInto(card) {
-  if (!card || card.cardKind !== "monster") return 0;
-  if (card.isFacedown) return 1500;
-  if (card.position === "defense") {
-    return (
-      (card.def || 0) +
-      (card.tempDefBoost || 0) +
-      (card.equipDefBonus || 0)
-    );
-  }
-  return getEffectiveAtk(card);
 }
 
 export function selectSimulatedTargets({
