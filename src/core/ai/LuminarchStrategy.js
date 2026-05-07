@@ -29,6 +29,8 @@ import {
 } from "./luminarch/knowledge.js";
 import {
   evaluateLuminarchDefensePlan,
+  getMoonlitTargetPlan,
+  evaluateRadiantLancerBattlePlan,
   shouldPlaySpell,
   shouldSummonMonster,
 } from "./luminarch/priorities.js";
@@ -163,6 +165,242 @@ const LUMINARCH_OFFENSIVE_NAMES = [
   "Luminarch Megashield Barbarias",
 ];
 
+function isRadiantLancer(card) {
+  return card?.name === "Luminarch Radiant Lancer";
+}
+
+function spendsAegisbearerProtectorCore(cards) {
+  const names = new Set((cards || []).map((card) => card?.name).filter(Boolean));
+  return (
+    names.has("Luminarch Aegisbearer") &&
+    names.has("Luminarch Sanctum Protector")
+  );
+}
+
+function getRadiantLancerAnalysis(bot, opponent, game) {
+  return {
+    hand: bot?.hand || [],
+    field: bot?.field || [],
+    spellTrap: bot?.spellTrap || [],
+    fieldSpell: bot?.fieldSpell || null,
+    graveyard: bot?.graveyard || [],
+    lp: bot?.lp || 8000,
+    oppField: opponent?.field || [],
+    oppLp: opponent?.lp || 8000,
+    currentTurn: game?.turnCounter || 1,
+  };
+}
+
+function compactRadiantLancerPlan(plan) {
+  if (!plan) return null;
+  return {
+    hasLine: !!plan.hasLine,
+    improvesThreatMatchup: !!plan.improvesThreatMatchup,
+    projectedAtk: plan.projectedAtk || 0,
+    bestTargetName: plan.bestTarget?.name || null,
+    bestTargetStat: plan.bestTargetStat || 0,
+    nextThreatName: plan.nextThreat?.name || null,
+    nextThreatStat: plan.nextThreatStat || 0,
+    survivesNextThreat: !!plan.survivesNextThreat,
+    tradesNextThreat: !!plan.tradesNextThreat,
+  };
+}
+
+function getLuminarchBoardValue(card, context = {}) {
+  if (!card || card.cardKind !== "monster") return 0;
+  const expendability = evaluateCardExpendability(card, context);
+  let value = Math.max(getEffectiveAtk(card), getEffectiveDef(card)) / 1000;
+  value += (card.level || 0) * 0.12;
+  value += (expendability.value ?? 5) * 0.4;
+  if (!expendability.expendable) value += 1;
+  if (card.mustBeAttacked) value += 1.2;
+  if (card.battleIndestructibleOncePerTurn) value += 1.2;
+  if (
+    (card.effects || []).some(
+      (effect) =>
+        effect?.timing === "passive" &&
+        effect.replacementEffect?.type === "destruction",
+    )
+  ) {
+    value += 2;
+  }
+  if (
+    (card.effects || []).some(
+      (effect) =>
+        effect?.event === "battle_destroy" &&
+        (effect.actions || []).some((action) => action.type === "heal_from_destroyed_atk"),
+    )
+  ) {
+    value += 1;
+  }
+  return value;
+}
+
+function isHighValueLuminarchTribute(card, context = {}) {
+  if (!card || card.cardKind !== "monster") return false;
+  const expendability = evaluateCardExpendability(card, context);
+  if (expendability.expendable) return false;
+  if (card.name === "Luminarch Aurora Seraph") return true;
+  if (LUMINARCH_DEFENSIVE_NAMES.includes(card.name)) return true;
+  if (card.name === "Luminarch Radiant Lancer" && getEffectiveAtk(card) > 2600) {
+    return true;
+  }
+  return (
+    (card.level || 0) >= 7 &&
+    Math.max(getEffectiveAtk(card), getEffectiveDef(card)) >= 2400 &&
+    (expendability.value ?? 0) >= 8
+  );
+}
+
+function getBestMoonbladeReviveTarget(bot) {
+  return (bot?.graveyard || [])
+    .filter(
+      (card) =>
+        card &&
+        card.cardKind === "monster" &&
+        isLuminarch(card) &&
+        (card.level || 0) <= 4,
+    )
+    .map((card) => ({
+      card,
+      value: getLuminarchBoardValue(card, {
+        field: bot?.field || [],
+        graveyard: bot?.graveyard || [],
+        hand: bot?.hand || [],
+        spellTrap: bot?.spellTrap || [],
+        fieldSpell: bot?.fieldSpell || null,
+        usedEffects: bot?.usedEffects || [],
+      }),
+    }))
+    .sort((a, b) => b.value - a.value)[0]?.card || null;
+}
+
+function evaluateLuminarchTributeSummonPayoff(cardToSummon, tributes, context) {
+  const bot = context.bot || {};
+  const opponent = context.opponent || {};
+  const summonAtk = getEffectiveAtk(cardToSummon);
+  const summonDef = getEffectiveDef(cardToSummon);
+  const tributeAtk = Math.max(0, ...tributes.map((card) => getEffectiveAtk(card)));
+  const tributeStat = Math.max(
+    0,
+    ...tributes.map((card) => Math.max(getEffectiveAtk(card), getEffectiveDef(card))),
+  );
+  const opponentMonsters = (opponent.field || []).filter(
+    (card) => card && card.cardKind === "monster",
+  );
+  const strongestBattleStat = opponentMonsters.reduce((max, monster) => {
+    const stat = monster.isFacedown
+      ? 1500
+      : monster.position === "defense"
+        ? getEffectiveDef(monster)
+        : getEffectiveAtk(monster);
+    return Math.max(max, stat);
+  }, 0);
+  const opponentTotalAtk = opponentMonsters.reduce(
+    (sum, monster) => sum + (monster.isFacedown ? 1500 : getEffectiveAtk(monster)),
+    0,
+  );
+
+  if (
+    isRadiantLancer(cardToSummon) &&
+    context.shouldSummon?.lancerPlan?.hasLine &&
+    context.shouldSummon?.lancerPlan?.improvesThreatMatchup
+  ) {
+    return { ok: true, reason: "Radiant Lancer has immediate snowball payoff" };
+  }
+
+  if (opponentMonsters.length === 0) {
+    const remainingAtk = (bot.field || [])
+      .filter((card) => card && !tributes.includes(card))
+      .reduce((sum, card) => sum + (card.position === "attack" ? getEffectiveAtk(card) : 0), 0);
+    if (remainingAtk + summonAtk >= (opponent.lp || 8000)) {
+      return { ok: true, reason: "tribute summon creates lethal pressure" };
+    }
+  }
+
+  if (strongestBattleStat > 0 && summonAtk > strongestBattleStat && tributeAtk <= strongestBattleStat) {
+    return { ok: true, reason: "summoned monster clears a threat tributes could not clear" };
+  }
+
+  if ((cardToSummon.level || 0) >= 7 && Math.max(summonAtk, summonDef) >= tributeStat + 500) {
+    return { ok: true, reason: "tribute summon upgrades into a stronger boss" };
+  }
+
+  if (cardToSummon.name === "Luminarch Moonblade Captain") {
+    const reviveTarget = getBestMoonbladeReviveTarget(bot);
+    const remainingField = (bot.field || []).filter((card) => card && !tributes.includes(card));
+    const hasStableDefense = remainingField.some(
+      (card) =>
+        card &&
+        !card.isFacedown &&
+        (LUMINARCH_DEFENSIVE_NAMES.includes(card.name) ||
+          getEffectiveDef(card) >= Math.max(1800, strongestBattleStat)),
+    );
+    const reviveStabilizes =
+      reviveTarget &&
+      (reviveTarget.mustBeAttacked ||
+        getEffectiveDef(reviveTarget) >= Math.max(1800, strongestBattleStat));
+
+    if (
+      opponentTotalAtk >= (bot.lp || 8000) &&
+      !hasStableDefense &&
+      reviveStabilizes
+    ) {
+      return {
+        ok: true,
+        reason: `Moonblade revive ${reviveTarget.name} prevents lethal pressure`,
+      };
+    }
+  }
+
+  return { ok: false, reason: "no immediate tactical payoff" };
+}
+
+function evaluateLuminarchTributeSummonCost(cardToSummon, tributes, context = {}) {
+  if (!Array.isArray(tributes) || tributes.length === 0) {
+    return { ok: true, penalty: 0, reason: "no tribute cost" };
+  }
+
+  const bot = context.bot || {};
+  const evaluationContext = {
+    field: bot.field || [],
+    graveyard: bot.graveyard || [],
+    hand: bot.hand || [],
+    spellTrap: bot.spellTrap || [],
+    fieldSpell: bot.fieldSpell || null,
+    usedEffects: bot.usedEffects || [],
+  };
+  const protectedTributes = tributes.filter((card) =>
+    isHighValueLuminarchTribute(card, evaluationContext)
+  );
+  if (protectedTributes.length === 0) {
+    return { ok: true, penalty: 0, reason: "tributes are expendable enough" };
+  }
+
+  const payoff = evaluateLuminarchTributeSummonPayoff(
+    cardToSummon,
+    tributes,
+    context,
+  );
+  if (payoff.ok) {
+    return {
+      ok: true,
+      penalty: -2 * protectedTributes.length,
+      reason: payoff.reason,
+      protectedTributes,
+    };
+  }
+
+  return {
+    ok: false,
+    penalty: 0,
+    reason: `Preserve ${protectedTributes.map((card) => card.name).join(", ")}: ${
+      cardToSummon?.name || "summon"
+    } has ${payoff.reason}`,
+    protectedTributes,
+  };
+}
+
 function getBattleReadyLuminarchAttackers(cards) {
   return (cards || []).filter((card) =>
     isBattleReadyAttacker(card, { archetype: "Luminarch" })
@@ -216,17 +454,6 @@ function getMoonlitPurpose(analysis) {
   return "value";
 }
 
-function getMoonlitPositionFor(card, purpose) {
-  if (!card || card.cardKind !== "monster") return "attack";
-  const defensive =
-    LUMINARCH_DEFENSIVE_NAMES.includes(card.name) ||
-    (card.def || 0) >= (card.atk || 0) + 500 ||
-    card.mustBeAttacked;
-  if (purpose === "stabilize" || defensive) return "defense";
-  if (purpose === "pressure" && (card.atk || 0) >= 1600) return "attack";
-  return (card.def || 0) > (card.atk || 0) ? "defense" : "attack";
-}
-
 function buildLuminarchSpellActionContext(card, analysis, baseActionContext = {}) {
   const actionContext = { ...(baseActionContext || {}) };
 
@@ -244,18 +471,20 @@ function buildLuminarchSpellActionContext(card, analysis, baseActionContext = {}
   }
 
   if (card?.name === "Luminarch Moonlit Blessing") {
-    const purpose = getMoonlitPurpose(analysis);
+    const plan = getMoonlitTargetPlan(analysis);
+    const purpose = plan?.purpose || getMoonlitPurpose(analysis);
     const byName = {};
-    (analysis.graveyard || [])
-      .filter((entry) => entry && entry.cardKind === "monster" && isLuminarch(entry))
+    (plan?.candidatePlans || [])
+      .filter((entry) => entry?.target?.name)
       .forEach((entry) => {
-        byName[entry.name] = getMoonlitPositionFor(entry, purpose);
+        byName[entry.target.name] = entry.position || "attack";
       });
     actionContext.targetPreferences = {
       ...(actionContext.targetPreferences || {}),
       moonlit_blessing_target: {
         role: "recursion",
         purpose,
+        preferredNames: plan?.target?.name ? [plan.target.name] : [],
         defensiveNames: LUMINARCH_DEFENSIVE_NAMES,
         offensiveNames: LUMINARCH_OFFENSIVE_NAMES,
       },
@@ -597,7 +826,8 @@ export default class LuminarchStrategy extends BaseStrategy {
 
   generateMainPhaseActions(game) {
     const actions = [];
-    const bot = this.bot;
+    const isSimulatedState = game?._isPerspectiveState === true;
+    const bot = isSimulatedState ? game.bot : this.bot || game.bot;
     const opponent = this.getOpponent(game, bot);
     const activationContext = {
       autoSelectSingleTarget: true,
@@ -663,6 +893,8 @@ export default class LuminarchStrategy extends BaseStrategy {
         oppField: opponent?.field || [],
         oppLp: opponent?.lp || 8000,
         currentTurn: game?.turnCounter || 1,
+        player: bot,
+        game,
       };
 
       // === MULTI-TURN PLANNING ===
@@ -795,6 +1027,68 @@ export default class LuminarchStrategy extends BaseStrategy {
         }
         if (!shouldSummon.yes) return;
 
+        const projectedTributeIndices =
+          tributeInfo.tributesNeeded > 0
+            ? this.selectBestTributes(
+                bot.field,
+                tributeInfo.tributesNeeded,
+                card,
+                { oppField: opponent?.field || [], game },
+              )
+            : [];
+        const projectedTributes = projectedTributeIndices
+          .map((fieldIndex) => bot.field?.[fieldIndex])
+          .filter(Boolean);
+
+        let tributeCostPenalty = 0;
+        let tributeCostReason = null;
+        if (tributeInfo.tributesNeeded > 0) {
+          const tributeCost = evaluateLuminarchTributeSummonCost(
+            card,
+            projectedTributes,
+            { bot, opponent, game, shouldSummon },
+          );
+          tributeCostPenalty += tributeCost.penalty || 0;
+          tributeCostReason = tributeCost.reason || null;
+          if (!tributeCost.ok) {
+            if (VERBOSE_EVAL && bot?.debug) {
+              console.log(`  Rejected tribute summon: ${tributeCost.reason}`);
+            }
+            return;
+          }
+        }
+
+        let radiantLancerPlan = shouldSummon.lancerPlan || null;
+        if (isRadiantLancer(card) && tributeInfo.tributesNeeded > 0) {
+          if (spendsAegisbearerProtectorCore(projectedTributes)) {
+            radiantLancerPlan =
+              radiantLancerPlan ||
+              evaluateRadiantLancerBattlePlan(
+                card,
+                getRadiantLancerAnalysis(bot, opponent, game),
+              );
+
+            const hasImmediatePayoff =
+              radiantLancerPlan?.hasLine &&
+              radiantLancerPlan?.improvesThreatMatchup;
+            if (!hasImmediatePayoff) {
+              if (VERBOSE_EVAL && bot?.debug) {
+                console.log(
+                  "  Rejected: Radiant Lancer would spend Aegisbearer + Protector without offensive payoff",
+                );
+              }
+              return;
+            }
+
+            if (
+              radiantLancerPlan.tradesNextThreat &&
+              !radiantLancerPlan.survivesNextThreat
+            ) {
+              tributeCostPenalty -= 2;
+            }
+          }
+        }
+
         const preferredPosition =
           shouldSummon.position || this.chooseSummonPosition(card, game);
         const facedown = this.shouldSetFacedown(card, preferredPosition);
@@ -806,7 +1100,7 @@ export default class LuminarchStrategy extends BaseStrategy {
           card,
           macroStrategy,
         );
-        priority += macroBuff;
+        priority += macroBuff + tributeCostPenalty;
         if (
           luminarchDefensePlan.readyToCounterattack &&
           LUMINARCH_OFFENSIVE_NAMES.includes(card.name)
@@ -834,7 +1128,11 @@ export default class LuminarchStrategy extends BaseStrategy {
           facedown,
           priority,
           cardName: card.name,
+          reason: shouldSummon.reason,
+          lancerPlan: compactRadiantLancerPlan(radiantLancerPlan),
           macroBuff,
+          tributeCostPenalty,
+          tributeCostReason,
           safetyScore: summonSafety.riskScore,
         });
       });
@@ -986,6 +1284,8 @@ export default class LuminarchStrategy extends BaseStrategy {
           oppField: opponent?.field || [],
           oppLp: opponent?.lp || 8000,
           currentTurn: game?.turnCounter || 1,
+          player: bot,
+          game,
         };
 
         const decision = shouldPlaySpell(card, analysis);
@@ -1110,6 +1410,8 @@ export default class LuminarchStrategy extends BaseStrategy {
           oppField: opponent?.field || [],
           oppLp: opponent?.lp || 8000,
           currentTurn: game?.turnCounter || 1,
+          player: bot,
+          game,
         };
 
         const decision = shouldPlaySpell(card, analysis);
@@ -1574,12 +1876,7 @@ export default class LuminarchStrategy extends BaseStrategy {
   }
 
   getOpponent(gameOrState, perspectivePlayer) {
-    if (typeof gameOrState.getOpponent === "function") {
-      return gameOrState.getOpponent(perspectivePlayer);
-    }
-    return gameOrState.player && perspectivePlayer?.id === "bot"
-      ? gameOrState.player
-      : gameOrState.bot;
+    return super.getOpponent(gameOrState, perspectivePlayer);
   }
 
   getPositionChangeActions(game, bot, opponent) {
@@ -2220,7 +2517,8 @@ export default class LuminarchStrategy extends BaseStrategy {
    */
   evaluateMacroStrategy(game) {
     try {
-      const bot = this.bot;
+      const isSimulatedState = game?._isPerspectiveState === true;
+      const bot = isSimulatedState ? game.bot : this.bot || game.bot;
       const opponent = this.getOpponent(game, bot);
 
       if (!bot || !opponent) {
@@ -2228,12 +2526,8 @@ export default class LuminarchStrategy extends BaseStrategy {
       }
 
       // Detectar oportunidades
-      const lethal = detectLethalOpportunity(game, bot, opponent);
-      const defensive = detectDefensiveNeed(game, bot, opponent);
-      const comeback = detectComeback(game, bot, opponent);
-
       // Decidir estratégia
-      const macro = decideMacroStrategy(lethal, defensive, comeback);
+      const macro = decideMacroStrategy(game, bot, opponent);
 
       return macro;
     } catch (e) {
@@ -2262,7 +2556,7 @@ export default class LuminarchStrategy extends BaseStrategy {
       if (!polyCard) return actions;
 
       // Verificar se tem Megashield no Extra Deck
-      const megashield = bot.extraDeck.find(
+      const megashield = (bot.extraDeck || []).find(
         (c) => c && c.name === "Luminarch Megashield Barbarias",
       );
       if (!megashield) return actions;
@@ -2595,7 +2889,7 @@ export default class LuminarchStrategy extends BaseStrategy {
   shouldSummonMonsterSafely(card, game, opponent) {
     try {
       // === USO DO MÓDULO DE PRIORIDADES ===
-      const bot = this.bot || game.bot;
+      const bot = game?._isPerspectiveState ? game.bot : this.bot || game.bot;
       const analysis = {
         hand: bot?.hand || [],
         field: bot?.field || [],
@@ -2614,6 +2908,7 @@ export default class LuminarchStrategy extends BaseStrategy {
         return {
           yes: false,
           reason: decision.reason || "Priorities module blocked summon",
+          lancerPlan: decision.lancerPlan || null,
         };
       }
 
@@ -2622,6 +2917,7 @@ export default class LuminarchStrategy extends BaseStrategy {
         position: decision.position || "defense",
         priority: decision.priority || 3,
         reason: decision.reason || "Priorities module approved",
+        lancerPlan: decision.lancerPlan || null,
       };
     } catch (e) {
       if (this.bot?.debug !== false) {

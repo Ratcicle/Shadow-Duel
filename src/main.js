@@ -1706,8 +1706,8 @@ async function startBotArena() {
   // Desabilitar botões
   btnArenaStart.disabled = true;
   btnArenaCancel.disabled = true;
-  arenaStatus.textContent = "Executando...";
   resetBotArenaStats();
+  arenaStatus.textContent = "Executando...";
 
   // Fechar o modal para exibir o tabuleiro em modo espectador
   botArenaModal.classList.add("hidden");

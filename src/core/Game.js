@@ -251,7 +251,9 @@ export default class Game {
     if (revealBotHand !== undefined) {
       this.laboratoryRevealBotHand = !!revealBotHand;
     }
-    this.player.controllerType = "human";
+    if (this.player.controllerType !== "ai") {
+      this.player.controllerType = "human";
+    }
     // BUG #9 FIX: Reset once-per-duel usage between duels
     // This ensures effects like "once per duel" are available in new matches
     this.player.oncePerDuelUsageByName = Object.create(null);

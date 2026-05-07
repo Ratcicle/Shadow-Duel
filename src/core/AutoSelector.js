@@ -473,7 +473,9 @@ function getRecursionTargetScore(card, preference = {}) {
   const purpose = preference.purpose || "value";
   const defensiveNames = preference.defensiveNames || [];
   const offensiveNames = preference.offensiveNames || [];
+  const preferredNames = preference.preferredNames || [];
   let score = (card.level || 0) * 0.2 + Math.max(atk, def) / 1000;
+  if (preferredNames.includes(card.name)) score += 6;
 
   if (purpose === "stabilize" || purpose === "defense") {
     score += def / 450;

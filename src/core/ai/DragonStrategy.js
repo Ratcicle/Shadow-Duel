@@ -183,9 +183,10 @@ export default class DragonStrategy extends BaseStrategy {
   // ─────────────────────────────────────────────────────────────────────────
 
   evaluateMacroStrategy(game, analysis) {
+    const isSimulatedState = game?._isPerspectiveState === true;
     const actualGame = game._gameRef || game;
-    const bot = this.bot;
-    const opponent = this.getOpponent(actualGame, bot);
+    const bot = isSimulatedState ? game.bot : this.bot || game.bot;
+    const opponent = this.getOpponent(isSimulatedState ? game : actualGame, bot);
 
     const lethal = detectLethalOpportunity({ bot, player: opponent, field: {} }, bot, opponent, 2);
     const defensive = detectDefensiveNeed({ bot, player: opponent }, bot, opponent);
@@ -206,7 +207,7 @@ export default class DragonStrategy extends BaseStrategy {
     const isSimulatedState = game._isPerspectiveState === true;
     const bot = isSimulatedState ? game.bot : this.bot || game.bot;
     const actualGame = game._gameRef || game;
-    const opponent = this.getOpponent(actualGame, bot);
+    const opponent = this.getOpponent(isSimulatedState ? game : actualGame, bot);
 
     const shouldLog = !isSimulatedState;
     const log = (msg) => shouldLog && this.think(msg);
@@ -236,6 +237,11 @@ export default class DragonStrategy extends BaseStrategy {
 
       // Traps are handled in the dedicated trap-set section below
       if (card.cardKind === "trap") return;
+      const spellActivationContext = {
+        autoSelectTargets: true,
+        autoSelectSingleTarget: true,
+        logTargets: false,
+      };
 
       const hasOncePerTurn = (card.effects || []).some((e) => e.oncePerTurn || e.oncePerTurnName);
       if (hasOncePerTurn && addedSpellNames.has(card.name)) {
@@ -247,6 +253,14 @@ export default class DragonStrategy extends BaseStrategy {
       if (!isSimulatedState) {
         const check = actualGame.effectEngine?.canActivate?.(card, bot);
         if (!check?.ok) return;
+
+        const preview =
+          actualGame.effectEngine?.canActivateSpellFromHandPreview?.(
+            card,
+            bot,
+            { activationContext: spellActivationContext },
+          );
+        if (preview && preview.ok === false) return;
 
         if (card.name === "Polymerization") {
           const canActivate = actualGame.canActivatePolymerization?.() ?? false;
@@ -278,6 +292,7 @@ export default class DragonStrategy extends BaseStrategy {
           cardId: card.id,
           priority: finalPriority,
           cardName: card.name,
+          activationContext: spellActivationContext,
           macroBuff,
           safetyScore: safety.riskScore,
         });
@@ -340,6 +355,7 @@ export default class DragonStrategy extends BaseStrategy {
 
         (bot.hand || []).forEach((card, index) => {
           if (!isExtremeDragon(card)) return;
+          if (card.cannotBeNormalSummonedOrSet) return;
           if ((bot.summonCount || 0) >= 1) return;
 
           // Level 10 → 2 tributes (standard lv7+ rule)
@@ -395,6 +411,7 @@ export default class DragonStrategy extends BaseStrategy {
     if (analysis.canNormalSummon) {
       (bot.hand || []).forEach((card, index) => {
         if (card.cardKind !== "monster") return;
+        if (card.cannotBeNormalSummonedOrSet) return;
         if ((bot.summonCount || 0) >= 1) return;
 
         // Extreme Dragons are handled in the dedicated tribute section above
@@ -563,6 +580,112 @@ export default class DragonStrategy extends BaseStrategy {
       });
     });
 
+    // === GRAVEYARD MONSTER IGNITION ACTIONS ===
+    (bot.graveyard || []).forEach((card, graveyardIndex) => {
+      if (!card || card.cardKind !== "monster") return;
+      const graveyardIgnitionEffect = (card.effects || []).find(
+        (e) => e && e.timing === "ignition" && e.requireZone === "graveyard",
+      );
+      if (!graveyardIgnitionEffect) return;
+
+      const activationContext = {
+        fromHand: false,
+        activationZone: "graveyard",
+        sourceZone: "graveyard",
+        autoSelectTargets: true,
+        autoSelectSingleTarget: true,
+        logTargets: false,
+      };
+
+      if (!isSimulatedState && actualGame.effectEngine) {
+        const optCheck = actualGame.effectEngine.checkOncePerTurn(
+          card,
+          bot,
+          graveyardIgnitionEffect,
+        );
+        if (!optCheck?.ok) return;
+
+        const preview =
+          actualGame.effectEngine.canActivateMonsterEffectPreview?.(
+            card,
+            bot,
+            "graveyard",
+            null,
+            { activationContext },
+          );
+        if (preview && preview.ok === false) return;
+      } else {
+        const targetIsAvailable = (target) => {
+          const owner = target.owner === "opponent" ? opponent : bot;
+          const zoneName = target.zone || "field";
+          const zoneCards =
+            zoneName === "fieldSpell"
+              ? owner?.fieldSpell
+                ? [owner.fieldSpell]
+                : []
+              : owner?.[zoneName] || [];
+          const minCount = target.count?.min ?? 1;
+          const candidates = (zoneCards || []).filter((candidate) => {
+            if (!candidate) return false;
+            if (target.cardKind && candidate.cardKind !== target.cardKind) {
+              return false;
+            }
+            if (target.type && candidate.type !== target.type) return false;
+            if (target.filters?.type && candidate.type !== target.filters.type) {
+              return false;
+            }
+            if (target.archetype) {
+              const archetypes = Array.isArray(candidate.archetypes)
+                ? candidate.archetypes
+                : candidate.archetype
+                  ? [candidate.archetype]
+                  : [];
+              if (!archetypes.includes(target.archetype)) return false;
+            }
+            if (target.cardName && candidate.name !== target.cardName) {
+              return false;
+            }
+            if (target.requireFaceup && candidate.isFacedown) return false;
+            return true;
+          });
+          return candidates.length >= minCount;
+        };
+        if (
+          !(graveyardIgnitionEffect.targets || []).every(targetIsAvailable)
+        ) {
+          return;
+        }
+      }
+
+      let priority = 7;
+      if (
+        (graveyardIgnitionEffect.actions || []).some(
+          (action) =>
+            action?.type === "special_summon_from_zone" &&
+            action.zone === "graveyard" &&
+            action.requireSource === true,
+        )
+      ) {
+        priority += 2;
+      }
+      priority += calculateMacroPriorityBonus(
+        "graveyardMonsterEffect",
+        card,
+        macroStrategy,
+      );
+
+      actions.push({
+        type: "graveyardMonsterEffect",
+        graveyardIndex,
+        cardId: card.id,
+        cardName: card.name,
+        effectId: graveyardIgnitionEffect.id,
+        priority,
+        activationContext,
+      });
+      log(`  âœ… Graveyard ignition: ${card.name}`);
+    });
+
     // === SPELL/TRAP-ZONE IGNITION ACTIONS ===
     // Face-up continuous spells with ignition effects (e.g. Extreme Dragon Awakening).
     (bot.spellTrap || []).forEach((card, zoneIndex) => {
@@ -630,6 +753,7 @@ export default class DragonStrategy extends BaseStrategy {
 
       (realBot.hand || []).forEach((card, index) => {
         if (card.cardKind !== "monster") return;
+        if (card.cannotBeNormalSummonedOrSet) return;
         if (isExtremeDragon(card)) return;  // Skip Extreme Dragons for normal stalemate
 
         const tributeInfo = this.getTributeRequirementFor(card, realBot);
@@ -666,6 +790,18 @@ export default class DragonStrategy extends BaseStrategy {
 
         (realBot2.hand || []).forEach((card, index) => {
           if (card.cardKind !== "spell") return;
+          const preview = actualGame.effectEngine?.canActivateSpellFromHandPreview?.(
+            card,
+            realBot2,
+            {
+              activationContext: {
+                autoSelectTargets: true,
+                autoSelectSingleTarget: true,
+                logTargets: false,
+              },
+            },
+          );
+          if (preview && preview.ok === false) return;
 
           if (card.name === "Polymerization") {
             const canActivate = actualGame.canActivatePolymerization?.() ?? false;
@@ -678,6 +814,11 @@ export default class DragonStrategy extends BaseStrategy {
             cardId: card.id,
             priority: 0.5,
             cardName: card.name,
+            activationContext: {
+              autoSelectTargets: true,
+              autoSelectSingleTarget: true,
+              logTargets: false,
+            },
             isCriticalFallback: true,
           });
         });

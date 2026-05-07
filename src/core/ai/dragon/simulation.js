@@ -83,6 +83,23 @@ export function simulateMainPhaseAction(state, action) {
       break;
     }
 
+    case "graveyardMonsterEffect": {
+      const player = state.bot;
+      const graveyardIndex = Number.isInteger(action.graveyardIndex)
+        ? action.graveyardIndex
+        : (player.graveyard || []).findIndex(
+            (card) =>
+              card &&
+              (card.id === action.cardId ||
+                (!action.cardId && card.name === action.cardName)),
+          );
+      const card = player.graveyard?.[graveyardIndex];
+      if (!card) break;
+
+      simulateDragonGraveyardMonsterEffect(state, card, action);
+      break;
+    }
+
     case "set_spell_trap": {
       const player = state.bot;
       const card = player.hand[action.index];
@@ -412,6 +429,135 @@ function simulateDragonHandIgnition(state, card, action) {
       });
     }
     return;
+  }
+}
+
+function simulateDragonGraveyardMonsterEffect(state, card, action) {
+  const player = state.bot;
+  const opponent = state.player;
+  const effect = (card.effects || []).find(
+    (entry) =>
+      entry && entry.timing === "ignition" && entry.requireZone === "graveyard",
+  );
+  if (!effect) return;
+
+  const targetSelections = {};
+  for (const target of effect.targets || []) {
+    const owner = target.owner === "opponent" ? opponent : player;
+    const zoneName = target.zone || "field";
+    const zone =
+      zoneName === "fieldSpell"
+        ? owner?.fieldSpell
+          ? [owner.fieldSpell]
+          : []
+        : owner?.[zoneName] || [];
+    const candidates = (zone || [])
+      .map((candidate, index) => ({ candidate, index, owner, zoneName }))
+      .filter(({ candidate }) => matchesEffectTarget(candidate, target));
+    if (candidates.length < (target.count?.min ?? 1)) return;
+
+    candidates.sort((a, b) => {
+      const aExtreme = isExtremeDragon(a.candidate) ? 100000 : 0;
+      const bExtreme = isExtremeDragon(b.candidate) ? 100000 : 0;
+      const aValue =
+        aExtreme + (a.candidate.atk || 0) + (a.candidate.level || 0) * 50;
+      const bValue =
+        bExtreme + (b.candidate.atk || 0) + (b.candidate.level || 0) * 50;
+      return aValue - bValue;
+    });
+
+    targetSelections[target.id] = candidates.slice(0, target.count?.max || 1);
+  }
+
+  for (const effectAction of effect.actions || []) {
+    if (effectAction.type === "move" && effectAction.targetRef) {
+      const selections = targetSelections[effectAction.targetRef] || [];
+      for (const selection of selections) {
+        moveSimulatedCard(
+          selection.owner,
+          selection.candidate,
+          selection.zoneName,
+          effectAction.to || "graveyard",
+        );
+      }
+      continue;
+    }
+
+    if (
+      effectAction.type === "special_summon_from_zone" &&
+      effectAction.zone === "graveyard" &&
+      effectAction.requireSource === true
+    ) {
+      const sourceIndex = (player.graveyard || []).indexOf(card);
+      if (sourceIndex < 0 || (player.field?.length || 0) >= 5) continue;
+      player.graveyard.splice(sourceIndex, 1);
+      const summoned = {
+        ...card,
+        position: action.position || "attack",
+        isFacedown: false,
+        hasAttacked: false,
+        cannotAttackThisTurn: false,
+      };
+      applySimulatedPassiveBuffs(summoned, player);
+      player.field.push(summoned);
+    }
+  }
+}
+
+function matchesEffectTarget(card, target) {
+  if (!card) return false;
+  if (target.cardKind && card.cardKind !== target.cardKind) return false;
+  if (target.type && card.type !== target.type) return false;
+  if (target.filters?.type && card.type !== target.filters.type) return false;
+  if (target.cardName && card.name !== target.cardName) return false;
+  if (target.requireFaceup && card.isFacedown) return false;
+  if (target.archetype) {
+    const archetypes = Array.isArray(card.archetypes)
+      ? card.archetypes
+      : card.archetype
+        ? [card.archetype]
+        : [];
+    if (!archetypes.includes(target.archetype)) return false;
+  }
+  return true;
+}
+
+function moveSimulatedCard(owner, card, fromZone, toZone) {
+  if (!owner || !card) return;
+  const sourceZone =
+    fromZone === "fieldSpell"
+      ? owner.fieldSpell
+        ? [owner.fieldSpell]
+        : []
+      : owner[fromZone] || [];
+  const sourceIndex = sourceZone.indexOf(card);
+  if (sourceIndex < 0) return;
+  if (fromZone === "fieldSpell") {
+    owner.fieldSpell = null;
+  } else {
+    sourceZone.splice(sourceIndex, 1);
+  }
+  if (!owner[toZone]) owner[toZone] = [];
+  owner[toZone].push(card);
+}
+
+function applySimulatedPassiveBuffs(card, owner) {
+  for (const effect of card.effects || []) {
+    const passive = effect?.passive;
+    if (passive?.type !== "graveyard_type_count_buff") continue;
+    const count = (owner.graveyard || []).filter(
+      (candidate) =>
+        candidate &&
+        candidate.cardKind === "monster" &&
+        candidate.type === passive.monsterType,
+    ).length;
+    const amount = (passive.amountPerCard || 0) * count;
+    if ((passive.stats || []).includes("atk")) {
+      card.atk = (card.atk || 0) + amount;
+    }
+    if ((passive.stats || []).includes("def")) {
+      card.def = (card.def || 0) + amount;
+    }
   }
 }
 

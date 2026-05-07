@@ -1,5 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // src/core/ai/BeamSearch.js
+import { resolvePerspectivePlayers } from "./StrategyUtils.js";
+
 function actionRequiresHand(actionType) {
   return (
     actionType === "summon" ||
@@ -74,13 +76,8 @@ export async function beamSearchTurn(game, strategy, options = {}) {
   let nodesEvaluated = 0;
   const perspectiveBot = strategy?.bot || (strategy?.id ? strategy : null);
   const resolveOpponent = (state) => {
-    if (!state) return null;
-    if (!perspectiveBot) return state.player;
-    if (state._isPerspectiveState) return state.player;
-    if (typeof state.getOpponent === "function") {
-      return state.getOpponent(perspectiveBot);
-    }
-    return perspectiveBot.id === "player" ? state.bot : state.player;
+    return resolvePerspectivePlayers(state, perspectiveBot || state?.bot)
+      .opponent;
   };
   const seenStates = new Set(); // Anti-repetição
 
@@ -130,9 +127,14 @@ export async function beamSearchTurn(game, strategy, options = {}) {
         hand: (safe.hand || []).map((c) => ({ ...c })),
         field: (safe.field || []).map((c) => ({ ...c })),
         graveyard: (safe.graveyard || []).map((c) => ({ ...c })),
+        deck: (safe.deck || []).map((c) => ({ ...c })),
+        extraDeck: (safe.extraDeck || []).map((c) => ({ ...c })),
+        banished: (safe.banished || []).map((c) => ({ ...c })),
         fieldSpell: safe.fieldSpell ? { ...safe.fieldSpell } : null,
         spellTrap: safe.spellTrap ? safe.spellTrap.map((c) => ({ ...c })) : [],
         summonCount: safe.summonCount || 0,
+        additionalNormalSummons: safe.additionalNormalSummons || 0,
+        controllerType: safe.controllerType,
       };
     };
 
@@ -331,13 +333,8 @@ export async function greedySearchWithEvalV2(game, strategy, options = {}) {
   const { useV2Evaluation = true, preGeneratedActions = null } = options;
   const perspectiveBot = strategy?.bot || (strategy?.id ? strategy : null);
   const resolveOpponent = (state) => {
-    if (!state) return null;
-    if (!perspectiveBot) return state.player;
-    if (state._isPerspectiveState) return state.player;
-    if (typeof state.getOpponent === "function") {
-      return state.getOpponent(perspectiveBot);
-    }
-    return perspectiveBot.id === "player" ? state.bot : state.player;
+    return resolvePerspectivePlayers(state, perspectiveBot || state?.bot)
+      .opponent;
   };
 
   function evaluateState(state, perspectivePlayer) {
@@ -356,9 +353,14 @@ export async function greedySearchWithEvalV2(game, strategy, options = {}) {
         hand: (safe.hand || []).map((c) => ({ ...c })),
         field: (safe.field || []).map((c) => ({ ...c })),
         graveyard: (safe.graveyard || []).map((c) => ({ ...c })),
+        deck: (safe.deck || []).map((c) => ({ ...c })),
+        extraDeck: (safe.extraDeck || []).map((c) => ({ ...c })),
+        banished: (safe.banished || []).map((c) => ({ ...c })),
         fieldSpell: safe.fieldSpell ? { ...safe.fieldSpell } : null,
         spellTrap: safe.spellTrap ? safe.spellTrap.map((c) => ({ ...c })) : [],
         summonCount: safe.summonCount || 0,
+        additionalNormalSummons: safe.additionalNormalSummons || 0,
+        controllerType: safe.controllerType,
       };
     };
 
@@ -375,7 +377,9 @@ export async function greedySearchWithEvalV2(game, strategy, options = {}) {
       bot: clonePlayer(sourceBot),
       turn: gameState.turn,
       phase: gameState.phase,
+      turnCounter: gameState.turnCounter || 0,
       _isPerspectiveState: true,
+      _gameRef: gameState._gameRef || gameState,
     };
   }
 

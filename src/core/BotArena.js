@@ -331,7 +331,7 @@ export default class BotArena {
     console.log(`${"═".repeat(50)}\n`);
 
     const duelStartTime = Date.now();
-    game.start();
+    await game.start();
 
     const outcome = await this.waitForGameEnd(game, speedConfig);
     this.activeGame = null;

@@ -844,9 +844,9 @@ export default class Bot extends Player {
 
     // 📊 Log de geração de ações
     if (botLogger) {
-      const hand = game.player?.hand || [];
-      const field = game.player?.field || [];
-      const summonAvailable = (game.player?.summonCount || 0) < 1;
+      const hand = this.hand || [];
+      const field = this.field || [];
+      const summonAvailable = (this.summonCount || 0) < 1;
       botLogger.logActionGeneration(
         this.id,
         game.turnCounter || 0,
@@ -1069,6 +1069,26 @@ export default class Bot extends Player {
       }
       if (action.type === "handIgnition") {
         return this.resolveHandIndexForAction(action, "monster") >= 0;
+      }
+      if (action.type === "graveyardMonsterEffect") {
+        const graveyardIndex = Number.isInteger(action.graveyardIndex)
+          ? action.graveyardIndex
+          : this.graveyard.findIndex(
+              (c) =>
+                c &&
+                (c.id === action.cardId ||
+                  (!action.cardId && c.name === action.cardName)),
+            );
+        const card = this.graveyard?.[graveyardIndex];
+        if (!card || card.cardKind !== "monster") return false;
+        const preview = game?.effectEngine?.canActivateMonsterEffectPreview?.(
+          card,
+          this,
+          "graveyard",
+          null,
+          { activationContext: action.activationContext || {} },
+        );
+        return preview ? preview.ok !== false : true;
       }
       if (action.type === "monsterEffect") {
         const fieldIndex = Number.isInteger(action.fieldIndex)
@@ -1678,6 +1698,88 @@ export default class Bot extends Player {
       );
     }
 
+    if (action.type === "graveyardMonsterEffect") {
+      const graveyardIndex = Number.isInteger(action.graveyardIndex)
+        ? action.graveyardIndex
+        : this.graveyard.findIndex(
+            (c) =>
+              c &&
+              (c.id === action.cardId ||
+                (!action.cardId && c.name === action.cardName)),
+          );
+      const card = this.graveyard?.[graveyardIndex];
+      if (!card || card.cardKind !== "monster") {
+        console.log(
+          `[Bot.executeMainPhaseAction] Invalid graveyardMonsterEffect action: no monster at index ${graveyardIndex}`,
+        );
+        return false;
+      }
+
+      const graveyardEffect =
+        game.effectEngine?.getMonsterIgnitionEffect?.(card, "graveyard") ||
+        (card.effects || []).find(
+          (e) => e && e.timing === "ignition" && e.requireZone === "graveyard",
+        );
+      if (!graveyardEffect) {
+        console.log(
+          `[Bot.executeMainPhaseAction] No graveyard ignition effect found for ${card.name}`,
+        );
+        return false;
+      }
+
+      const actionActivationContext = action.activationContext || {};
+      const activationContext = {
+        ...actionActivationContext,
+        fromHand: false,
+        activationZone: "graveyard",
+        sourceZone: "graveyard",
+        autoSelectTargets: actionActivationContext.autoSelectTargets !== false,
+        autoSelectSingleTarget:
+          actionActivationContext.autoSelectSingleTarget !== false,
+      };
+
+      const pipelineResult = await game.runActivationPipeline({
+        card,
+        owner: this,
+        activationZone: "graveyard",
+        activationContext,
+        selectionKind: "graveyardEffect",
+        selectionMessage: "Select target(s) for the graveyard effect.",
+        guardKind: "bot_graveyard_monster_effect",
+        phaseReq: ["main1", "main2"],
+        preview: () =>
+          game.effectEngine?.canActivateMonsterEffectPreview?.(
+            card,
+            this,
+            "graveyard",
+            null,
+            { activationContext },
+          ),
+        oncePerTurn: {
+          card,
+          player: this,
+          effect: graveyardEffect,
+        },
+        activate: (chosen, ctx) =>
+          game.effectEngine.activateMonsterFromGraveyard(
+            card,
+            this,
+            chosen,
+            ctx,
+          ),
+        finalize: () => {
+          game.ui?.log?.(`Bot activates ${card.name}'s effect from graveyard`);
+          game.updateBoard();
+        },
+      });
+
+      return (
+        pipelineResult !== false &&
+        pipelineResult !== null &&
+        pipelineResult?.success !== false
+      );
+    }
+
     // Handler para ativação de efeitos ignition de monstros na mão
     if (action.type === "handIgnition") {
       const resolvedIndex = this.resolveHandIndexForAction(action, "monster");
@@ -1751,9 +1853,14 @@ export default class Bot extends Player {
         hand: p.hand.map((c) => ({ ...c })),
         field: p.field.map((c) => ({ ...c })),
         graveyard: p.graveyard.map((c) => ({ ...c })),
+        deck: p.deck ? p.deck.map((c) => ({ ...c })) : [],
+        extraDeck: p.extraDeck ? p.extraDeck.map((c) => ({ ...c })) : [],
+        banished: p.banished ? p.banished.map((c) => ({ ...c })) : [],
         fieldSpell: p.fieldSpell ? { ...p.fieldSpell } : null,
         spellTrap: p.spellTrap ? p.spellTrap.map((c) => ({ ...c })) : [],
         summonCount: p.summonCount || 0,
+        additionalNormalSummons: p.additionalNormalSummons || 0,
+        controllerType: p.controllerType,
       };
     };
     const opponent = this.resolveOpponent(game) || game.player;
@@ -1764,6 +1871,8 @@ export default class Bot extends Player {
       turn: game.turn,
       phase: game.phase,
       turnCounter: game.turnCounter || 0,
+      _isPerspectiveState: true,
+      _gameRef: game,
       // Clone once-per-turn tracking from effectEngine if available
       usedThisTurn: game.effectEngine?.usedThisTurn
         ? new Map(game.effectEngine.usedThisTurn)

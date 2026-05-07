@@ -31,7 +31,7 @@ function isAutomaticTriggeredEffect(effect) {
 
 function shouldPromptTriggeredEffect(effect, owner, ctx) {
   if (!effect || effect.timing !== "on_event") return false;
-  if (!owner || owner.id !== "player") return false;
+  if (!owner || isAI(owner)) return false;
   if (ctx?.activationContext?.skipPrompt === true) return false;
   if (ctx?.activationContext?.preview === true) return false;
   if (ctx?.activationContext?.isPreview === true) return false;

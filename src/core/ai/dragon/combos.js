@@ -274,7 +274,7 @@ export function detectAvailableCombos(analysis, logFn = null) {
     available.push({
       name: "Boneflame GY Pump",
       priority: 6,
-      action: { type: "gyIgnition", cardName: "Boneflame Dragon" },
+      action: { type: "graveyardMonsterEffect", cardName: "Boneflame Dragon" },
     });
     log(`💡 Combo: Boneflame Dragon GY ignition`);
   }

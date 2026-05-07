@@ -1,3 +1,5 @@
+import { resolvePerspectivePlayers } from "./StrategyUtils.js";
+
 /**
  * GameTreeSearch.js — P2: Deep Lookahead com Minimax + Alpha-Beta Pruning
  *
@@ -86,11 +88,16 @@ function clonePlayerForSim(player) {
   };
 }
 
-function cloneGameStateDeep(gameState) {
+function cloneGameStateDeep(gameState, perspective = null) {
   const safeGame = gameState || {};
-  const sourceBot = safeGame.bot || safeGame.currentPlayer || safeGame.player;
+  const resolved = resolvePerspectivePlayers(
+    safeGame,
+    perspective || safeGame.bot || safeGame.currentPlayer || null,
+  );
+  const sourceBot =
+    resolved.self || safeGame.bot || safeGame.currentPlayer || safeGame.player;
   const sourcePlayer =
-    safeGame.player || safeGame.opponent || safeGame.currentPlayer;
+    resolved.opponent || safeGame.player || safeGame.opponent || safeGame.bot;
 
   return {
     bot: clonePlayerForSim(sourceBot),
@@ -117,8 +124,10 @@ function shouldLogWarnings(gameState, perspective) {
 function evaluateLeafState(gameState, perspective, maxScore = 100) {
   try {
     if (!gameState || typeof gameState !== "object") return 0;
-    const persp = perspective?.id ? perspective : gameState.bot;
-    const opp = perspective?.id === "bot" ? gameState.player : gameState.bot;
+    const { self: persp, opponent: opp } = resolvePerspectivePlayers(
+      gameState,
+      perspective || gameState.bot,
+    );
 
     if (!persp || !opp) return 0;
 
@@ -166,17 +175,9 @@ function evaluateLeafState(gameState, perspective, maxScore = 100) {
  * Nota: Game.js effects/events não são simulados; apenas board state muda
  */
 function simulateAction(gameState, action, perspective) {
-  const simState = cloneGameStateDeep(gameState);
-  const persp = perspective?.id ? perspective : gameState.bot;
-  const resolveSimPlayer = (id) => {
-    if (!simState) return null;
-    if (simState.bot?.id === id) return simState.bot;
-    if (simState.player?.id === id) return simState.player;
-    return id === "bot" ? simState.bot : simState.player;
-  };
-  const simPersp = resolveSimPlayer(persp?.id);
-  const simOpp =
-    simPersp === simState?.bot ? simState?.player : simState?.bot;
+  const simState = cloneGameStateDeep(gameState, perspective);
+  const simPersp = simState?.bot;
+  const simOpp = simState?.player;
   if (!simPersp || !simOpp) return simState;
 
   try {
@@ -247,15 +248,10 @@ function simulateAction(gameState, action, perspective) {
  */
 function generateCandidateActions(gameState, strategy, perspective) {
   try {
-    // Avoid mutating the real game object; wrap when we need the flag.
-    let stateForActions = gameState;
-    if (!stateForActions || typeof stateForActions !== "object") {
+    if (!gameState || typeof gameState !== "object") {
       return [];
     }
-    if (!stateForActions._isPerspectiveState) {
-      stateForActions = Object.create(stateForActions);
-      stateForActions._isPerspectiveState = true;
-    }
+    const stateForActions = cloneGameStateDeep(gameState, perspective);
     // Retorna top 2-3 ações por scoring (beam width)
     const allActions = strategy.generateMainPhaseActions(stateForActions);
     return allActions.slice(0, 3); // Limita a 3 para reduzir branching
@@ -304,8 +300,11 @@ function minimax(
     }
   }
 
-  const persp = perspective?.id ? perspective : gameState.bot;
-  const actions = generateCandidateActions(gameState, strategy, perspective);
+  const { self: persp } = resolvePerspectivePlayers(
+    gameState,
+    perspective || gameState.bot,
+  );
+  const actions = generateCandidateActions(gameState, strategy, persp);
 
   let bestValue = isMaximizing ? -Infinity : Infinity;
   let bestAction = actions.length > 0 ? actions[0] : null;
@@ -320,8 +319,7 @@ function minimax(
     const nextState = simulateAction(gameState, action, persp);
 
     // Recursão com troca de perspectiva
-    const nextPerspective =
-      persp?.id === "bot" ? nextState.player : nextState.bot;
+    const nextPerspective = nextState.player;
     const { value } = minimax(
       nextState,
       depth - 1,
@@ -379,7 +377,10 @@ export function gameTreeSearch(
 ) {
   try {
     const transpositions = new Map();
-    const persp = perspective?.id ? perspective : gameState.bot;
+    const { self: persp } = resolvePerspectivePlayers(
+      gameState,
+      perspective || gameState.bot,
+    );
 
     const { value: score, action } = minimax(
       gameState,
@@ -426,8 +427,10 @@ export function shouldUseGameTreeSearch(
     // Debug: permitir forçar via flag
     if (forceCritical) return true;
 
-    const persp = perspective?.id ? perspective : gameState.bot;
-    const opp = perspective?.id === "bot" ? gameState.player : gameState.bot;
+    const { self: persp, opponent: opp } = resolvePerspectivePlayers(
+      gameState,
+      perspective || gameState.bot,
+    );
 
     if (!persp || !opp) return false;
 

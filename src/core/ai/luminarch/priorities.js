@@ -41,6 +41,117 @@ function getVisibleDef(card) {
   return (card.def || 0) + (card.tempDefBoost || 0) + (card.equipDefBonus || 0);
 }
 
+function getBattleStatForTarget(card) {
+  if (!card || card.cardKind !== "monster" || card.isFacedown) return 0;
+  return card.position === "defense" ? getVisibleDef(card) : getVisibleAtk(card);
+}
+
+function getBattleDestroyAtkGain(card) {
+  return (card?.effects || []).reduce((total, effect) => {
+    if (
+      effect?.timing !== "on_event" ||
+      effect.event !== "battle_destroy" ||
+      effect.requireSelfAsAttacker === false
+    ) {
+      return total;
+    }
+
+    return total + (effect.actions || []).reduce((sum, action) => {
+      const targetsSelf = !action.targetRef || action.targetRef === "self";
+      if (action.type === "permanent_buff_named" && targetsSelf) {
+        return sum + (action.atkBoost || 0);
+      }
+      return sum;
+    }, 0);
+  }, 0);
+}
+
+export function evaluateRadiantLancerBattlePlan(card, analysis = {}) {
+  const baseAtk = getVisibleAtk(card) || card?.atk || 0;
+  const atkGain = getBattleDestroyAtkGain(card);
+  const visibleTargets = (analysis.oppField || [])
+    .filter((monster) => monster && monster.cardKind === "monster" && !monster.isFacedown)
+    .map((monster) => ({
+      card: monster,
+      stat: getBattleStatForTarget(monster),
+      atk: getVisibleAtk(monster),
+    }))
+    .filter((target) => target.stat > 0);
+
+  const destroyable = visibleTargets.filter((target) => baseAtk > target.stat);
+  const emptyPlan = {
+    hasLine: false,
+    improvesThreatMatchup: false,
+    canSnowball: false,
+    baseAtk,
+    atkGain,
+    projectedAtk: baseAtk,
+    destroyableCount: destroyable.length,
+    visibleThreatCount: visibleTargets.length,
+    bestTarget: null,
+    bestTargetStat: 0,
+    nextThreat: null,
+    nextThreatStat: 0,
+    survivesNextThreat: false,
+    tradesNextThreat: false,
+    score: 0,
+    reason: "Radiant Lancer has no visible battle target it can destroy safely",
+  };
+
+  if (atkGain <= 0 || destroyable.length === 0) {
+    return emptyPlan;
+  }
+
+  const evaluatedLines = destroyable.map((target) => {
+    const projectedAtk = baseAtk + atkGain;
+    const remainingThreats = visibleTargets.filter((entry) => entry.card !== target.card);
+    const nextThreat = remainingThreats.reduce(
+      (best, entry) => (entry.stat > (best?.stat || 0) ? entry : best),
+      null,
+    );
+    const nextThreatStat = nextThreat?.stat || 0;
+    const survivesNextThreat = nextThreatStat > 0 && projectedAtk > nextThreatStat;
+    const tradesNextThreat = nextThreatStat > 0 && projectedAtk === nextThreatStat;
+    const clearsLastThreat = nextThreatStat === 0;
+    const improvesThreatMatchup = clearsLastThreat || survivesNextThreat || tradesNextThreat;
+
+    let score = target.stat / 450;
+    if (clearsLastThreat) score += 4;
+    if (survivesNextThreat) score += 5;
+    else if (tradesNextThreat) score += 3;
+    else score -= 2;
+    if (visibleTargets.length >= 2) score += 1;
+
+    return {
+      hasLine: true,
+      improvesThreatMatchup,
+      canSnowball: true,
+      baseAtk,
+      atkGain,
+      projectedAtk,
+      destroyableCount: destroyable.length,
+      visibleThreatCount: visibleTargets.length,
+      bestTarget: target.card,
+      bestTargetStat: target.stat,
+      nextThreat: nextThreat?.card || null,
+      nextThreatStat,
+      survivesNextThreat,
+      tradesNextThreat,
+      score,
+      reason: nextThreat
+        ? `Radiant Lancer can destroy ${target.card.name} (${target.stat}), grow to ${projectedAtk}, then ${
+            survivesNextThreat ? "beat" : tradesNextThreat ? "trade with" : "still lose to"
+          } ${nextThreat.card.name} (${nextThreatStat})`
+        : `Radiant Lancer can destroy ${target.card.name} (${target.stat}) and grow to ${projectedAtk}`,
+    };
+  });
+
+  return evaluatedLines.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    return b.bestTargetStat - a.bestTargetStat;
+  })[0] || emptyPlan;
+}
+
 function isProtectedLuminarchCost(card) {
   const name = card?.name || "";
   return (
@@ -114,6 +225,260 @@ function getBestTemporaryCombatDebuffTarget(analysis) {
       }),
     }))
     .sort((a, b) => b.score - a.score)[0] || { target: null, score: 0 };
+}
+
+function getBattleStatToAttack(card) {
+  if (!card || card.cardKind !== "monster") return 0;
+  if (card.isFacedown) return 1500;
+  return card.position === "defense" ? getVisibleDef(card) : getVisibleAtk(card);
+}
+
+function getThreatAtk(card) {
+  if (!card || card.cardKind !== "monster") return 0;
+  return card.isFacedown ? 1500 : getVisibleAtk(card);
+}
+
+function getSelfLuminarchTargetIds(effect) {
+  return new Set(
+    (effect?.targets || [])
+      .filter(
+        (target) =>
+          target &&
+          target.owner === "self" &&
+          target.zone === "field" &&
+          target.cardKind === "monster" &&
+          (!target.archetype || target.archetype === "Luminarch")
+      )
+      .map((target) => target.id)
+      .filter(Boolean)
+  );
+}
+
+function getStatBuffOptionsFromEffect(source, effect, sourceZone) {
+  const targetIds = getSelfLuminarchTargetIds(effect);
+  if (targetIds.size === 0) return [];
+
+  const lpCost = (effect.actions || []).reduce(
+    (sum, action) =>
+      action?.type === "pay_lp" ? sum + (action.amount || 0) : sum,
+    0
+  );
+  const options = [];
+  (effect.actions || []).forEach((action) => {
+    if (action.type === "pay_lp") return;
+
+    if (!targetIds.has(action.targetRef)) return;
+    if (action.type === "buff_stats_temp") {
+      options.push({
+        sourceName: source?.name || effect.id || "stat buff",
+        sourceZone,
+        atkBoost: action.atkBoost || 0,
+        defBoost: action.defBoost || 0,
+        lpCost,
+      });
+    }
+    if (action.type === "equip") {
+      options.push({
+        sourceName: source?.name || effect.id || "equip",
+        sourceZone,
+        atkBoost: action.atkBonus || 0,
+        defBoost: action.defBonus || 0,
+        lpCost,
+      });
+    }
+  });
+
+  return options.filter((option) => option.atkBoost > 0 || option.defBoost > 0);
+}
+
+function getMoonlitBuffOptions(analysis) {
+  const options = [];
+  const fieldSpell = analysis.fieldSpell || null;
+  const fieldEffect = (fieldSpell?.effects || []).find(
+    (effect) => effect && effect.timing === "on_field_activate"
+  );
+  if (fieldSpell?.name?.includes("Citadel") && fieldEffect) {
+    options.push(...getStatBuffOptionsFromEffect(fieldSpell, fieldEffect, "fieldSpell"));
+  }
+
+  (analysis.hand || [])
+    .filter(
+      (card) =>
+        card &&
+        card.cardKind === "spell" &&
+        card.name !== "Luminarch Moonlit Blessing"
+    )
+    .forEach((card) => {
+      (card.effects || [])
+        .filter((effect) => effect && effect.timing === "on_play")
+        .forEach((effect) => {
+          options.push(...getStatBuffOptionsFromEffect(card, effect, "hand"));
+        });
+    });
+
+  return options;
+}
+
+function chooseBestBuffPackage(options, lp, purpose) {
+  const usable = (options || []).filter((option) => (option.lpCost || 0) <= lp);
+  const limit = Math.min(usable.length, 8);
+  let best = {
+    atkBoost: 0,
+    defBoost: 0,
+    lpCost: 0,
+    sources: [],
+  };
+
+  for (let mask = 1; mask < 1 << limit; mask += 1) {
+    const selected = [];
+    let atkBoost = 0;
+    let defBoost = 0;
+    let lpCost = 0;
+    for (let i = 0; i < limit; i += 1) {
+      if ((mask & (1 << i)) === 0) continue;
+      const option = usable[i];
+      selected.push(option);
+      atkBoost += option.atkBoost || 0;
+      defBoost += option.defBoost || 0;
+      lpCost += option.lpCost || 0;
+    }
+    if (lpCost > lp) continue;
+
+    const score =
+      purpose === "defense"
+        ? defBoost * 1.2 + atkBoost * 0.25
+        : atkBoost * 1.2 + defBoost * 0.25;
+    const bestScore =
+      purpose === "defense"
+        ? best.defBoost * 1.2 + best.atkBoost * 0.25
+        : best.atkBoost * 1.2 + best.defBoost * 0.25;
+    if (score > bestScore || (score === bestScore && lpCost < best.lpCost)) {
+      best = {
+        atkBoost,
+        defBoost,
+        lpCost,
+        sources: selected.map((option) => option.sourceName),
+      };
+    }
+  }
+
+  return best;
+}
+
+function getBestAttackLine(projectedAtk, oppMonsters) {
+  return (oppMonsters || [])
+    .map((card) => ({
+      card,
+      stat: getBattleStatToAttack(card),
+      atk: getThreatAtk(card),
+    }))
+    .filter((entry) => projectedAtk > entry.stat)
+    .sort((a, b) => b.stat - a.stat)[0] || null;
+}
+
+export function evaluateMoonlitReviveCandidate(card, analysis = {}) {
+  if (!card || card.cardKind !== "monster") {
+    return { target: card, score: -100, purpose: "none", position: "attack" };
+  }
+
+  const oppMonsters = (analysis.oppField || []).filter(
+    (entry) => entry && entry.cardKind === "monster"
+  );
+  const oppStrongestBattleStat = oppMonsters.reduce(
+    (max, monster) => Math.max(max, getBattleStatToAttack(monster)),
+    0
+  );
+  const oppStrongestAtk = oppMonsters.reduce(
+    (max, monster) => Math.max(max, getThreatAtk(monster)),
+    0
+  );
+  const oppTotalAtk = oppMonsters.reduce(
+    (sum, monster) => sum + getThreatAtk(monster),
+    0
+  );
+  const hasTank = (analysis.field || []).some(
+    (entry) =>
+      entry &&
+      entry.cardKind === "monster" &&
+      !entry.isFacedown &&
+      isLuminarch(entry) &&
+      (isDefensiveLuminarch(entry) || getVisibleDef(entry) >= oppStrongestAtk)
+  );
+  const pressure =
+    (analysis.lp || 8000) <= 3500 ||
+    oppTotalAtk >= (analysis.lp || 8000) ||
+    (oppStrongestAtk >= 2200 && !hasTank);
+
+  const buffOptions = getMoonlitBuffOptions(analysis);
+  const attackBuff = chooseBestBuffPackage(buffOptions, analysis.lp || 0, "attack");
+  const defenseBuff = chooseBestBuffPackage(buffOptions, analysis.lp || 0, "defense");
+  const atk = getVisibleAtk(card);
+  const def = getVisibleDef(card);
+  const projectedAtk = atk + attackBuff.atkBoost;
+  const projectedDef = def + defenseBuff.defBoost;
+  const attackLine = getBestAttackLine(projectedAtk, oppMonsters);
+  const canAttackOverAll =
+    oppStrongestBattleStat === 0 || projectedAtk > oppStrongestBattleStat;
+  const canCounterattack = !!attackLine && (canAttackOverAll || projectedAtk > atk);
+  const blocksBestThreat = projectedDef >= oppStrongestAtk;
+  const defensive = isDefensiveLuminarch(card);
+
+  let purpose = pressure ? "stabilize" : "value";
+  let position = atk >= def ? "attack" : "defense";
+  let score = (card.level || 0) * 0.2 + Math.max(atk, def) / 1000;
+
+  if (canCounterattack) {
+    purpose = pressure ? "counterattack" : "pressure";
+    position = "attack";
+    score += projectedAtk / 450;
+    score += (attackLine?.stat || 0) / 350;
+    if (canAttackOverAll) score += 3;
+    if (pressure) score += 3;
+    if (attackBuff.sources.length > 0) score += 1;
+  } else if (pressure) {
+    purpose = "stabilize";
+    position = "defense";
+    score += projectedDef / 450;
+    if (defensive) score += 4;
+    if (blocksBestThreat) score += 2;
+    if (!blocksBestThreat && !defensive) score -= 2;
+  } else {
+    const bestDebuffTarget = getBestTemporaryCombatDebuffTarget({
+      ...analysis,
+      field: [...(analysis.field || []), card],
+    });
+    const wantsPressure =
+      (analysis.oppLp || 8000) <= 3000 || bestDebuffTarget.score > 0;
+    if (wantsPressure && atk >= 1600) {
+      purpose = "pressure";
+      position = "attack";
+      score += atk / 450;
+      if (atk >= 2000 || card.piercing) score += 2;
+    } else if (defensive) {
+      position = "defense";
+      score += 1.2;
+    }
+  }
+
+  return {
+    target: card,
+    score,
+    purpose,
+    position,
+    projectedAtk,
+    projectedDef,
+    attackBuffSources: attackBuff.sources,
+    defenseBuffSources: defenseBuff.sources,
+    attackLine,
+    pressure,
+    canCounterattack,
+    blocksBestThreat,
+    reason: canCounterattack
+      ? `counterattack ${attackLine.card.name} with ${projectedAtk} ATK`
+      : blocksBestThreat
+        ? `stabilize with ${projectedDef} DEF`
+        : `${purpose} in ${position}`,
+  };
 }
 
 function isDefensiveLuminarch(card) {
@@ -315,7 +680,7 @@ export function evaluateKnightsConvocationPlan(analysis = {}) {
   };
 }
 
-function getMoonlitTargetPlan(analysis) {
+export function getMoonlitTargetPlan(analysis) {
   const gyMonsters = (analysis.graveyard || []).filter(
     (card) => card && card.cardKind === "monster" && isLuminarch(card)
   );
@@ -323,67 +688,14 @@ function getMoonlitTargetPlan(analysis) {
     return { target: null, score: 0, purpose: "none", position: "attack" };
   }
 
-  const oppMonsters = (analysis.oppField || []).filter(
-    (card) => card && card.cardKind === "monster"
+  const candidatePlans = gyMonsters.map((card) =>
+    evaluateMoonlitReviveCandidate(card, analysis)
   );
-  const oppStrongest = oppMonsters.reduce(
-    (max, card) => Math.max(max, card?.isFacedown ? 1500 : card?.atk || 0),
-    0
-  );
-  const oppTotalAtk = oppMonsters.reduce(
-    (sum, card) => sum + (card?.isFacedown ? 1500 : card?.atk || 0),
-    0
-  );
-  const hasTank = (analysis.field || []).some(
-    (card) =>
-      card &&
-      card.cardKind === "monster" &&
-      !card.isFacedown &&
-      isLuminarch(card) &&
-      (isDefensiveLuminarch(card) || getVisibleDef(card) >= oppStrongest)
-  );
-  const pressure =
-    (analysis.lp || 8000) <= 3500 ||
-    oppTotalAtk >= (analysis.lp || 8000) ||
-    (oppStrongest >= 2200 && !hasTank);
-  const bestDebuffTarget = getBestTemporaryCombatDebuffTarget({
-    ...analysis,
-    field: [...(analysis.field || []), ...gyMonsters],
-  });
-  const wantsPressure =
-    !pressure &&
-    ((analysis.oppLp || 8000) <= 3000 || bestDebuffTarget.score > 0);
-
-  const scored = gyMonsters.map((card) => {
-    const atk = getVisibleAtk(card);
-    const def = getVisibleDef(card);
-    const defensive = isDefensiveLuminarch(card);
-    let score = (card.level || 0) * 0.2 + Math.max(atk, def) / 1000;
-    let position = atk >= def ? "attack" : "defense";
-    let purpose = "value";
-
-    if (pressure) {
-      purpose = "stabilize";
-      score += def / 450;
-      if (defensive) score += 4;
-      position = "defense";
-    } else if (wantsPressure) {
-      purpose = "pressure";
-      score += atk / 450;
-      if (atk >= 2000 || card.piercing) score += 2;
-      if (defensive && atk < 1800) score -= 3;
-      position = score > 0 && atk >= 1600 ? "attack" : "defense";
-    } else {
-      if (defensive) {
-        score += 1.2;
-        position = "defense";
-      }
-    }
-
-    return { target: card, score, purpose, position };
-  });
-
-  return scored.sort((a, b) => b.score - a.score)[0];
+  const bestPlan = candidatePlans.sort((a, b) => b.score - a.score)[0];
+  return {
+    ...bestPlan,
+    candidatePlans,
+  };
 }
 
 /**
@@ -1272,26 +1584,66 @@ export function shouldSummonMonster(card, analysis) {
     }
 
     if (name === "Luminarch Radiant Lancer") {
-      const isSafe = (card.atk || 2600) > oppStrongest;
-      const hasSnowball = analysis.field.some(
-        (c) => c && c.cardKind === "monster" && c.position === "attack"
+      const lancerPlan = evaluateRadiantLancerBattlePlan(card, analysis);
+      const lancerAtk = getVisibleAtk(card) || card.atk || 2600;
+      const oppStrongestBattleStat = Math.max(
+        ...(analysis.oppField || []).map((monster) =>
+          getBattleStatForTarget(monster)
+        ),
+        0,
+      );
+      const isSafeAttacker = lancerAtk > oppStrongestBattleStat;
+      const hasDefensiveField = analysis.field.some(
+        (c) => c && c.cardKind === "monster" && isDefensiveLuminarch(c)
       );
 
-      // Lancer ganha ATK ao destruir - avaliar potencial
-      if (isSafe && hasSnowball) {
+      if (lancerPlan.hasLine && lancerPlan.improvesThreatMatchup) {
+        const priority = lancerPlan.survivesNextThreat
+          ? 8
+          : lancerPlan.tradesNextThreat
+            ? 7
+            : 6;
         return {
           yes: true,
           position: "attack",
-          priority: 6,
-          reason: "Beater 2600 ATK (snowball após destroy)",
+          priority,
+          reason: lancerPlan.reason,
+          lancerPlan,
+        };
+      }
+
+      if (isSafeAttacker) {
+        return {
+          yes: true,
+          position: "attack",
+          priority: 5,
+          reason: "Radiant Lancer can attack over current visible threats",
+          lancerPlan,
+        };
+      }
+
+      if (hasDefensiveField) {
+        return {
+          yes: false,
+          reason: "Hold Radiant Lancer: defensive field is better than a no-payoff summon",
+          lancerPlan,
+        };
+      }
+
+      if (fieldCount === 0 && oppStrongestBattleStat > 0) {
+        return {
+          yes: true,
+          position: "defense",
+          priority: 2,
+          reason: "Emergency body only: no defensive field available",
+          lancerPlan,
         };
       }
 
       return {
-        yes: true,
-        position: isSafe ? "attack" : "defense",
-        priority: 4,
-        reason: isSafe ? "Beater 2600 ATK" : "Defense position",
+        yes: false,
+        reason: "Hold Radiant Lancer until it has a real offensive line",
+        lancerPlan,
       };
     }
 

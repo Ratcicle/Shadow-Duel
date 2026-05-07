@@ -5,7 +5,11 @@ import {
   canOpponentLethal,
 } from "./ThreatEvaluation.js";
 import { inferRole, isAdvantageEngine } from "./RoleAnalyzer.js";
-import { estimateMonsterValue, estimateCardValue } from "./StrategyUtils.js";
+import {
+  estimateMonsterValue,
+  estimateCardValue,
+  resolvePerspectivePlayers,
+} from "./StrategyUtils.js";
 import {
   gameTreeSearch,
   shouldUseGameTreeSearch,
@@ -431,10 +435,11 @@ export default class BaseStrategy {
       return null;
     }
 
-    // Se é o bot, oponente é player
-    const isBot =
-      perspectivePlayer.id === "bot" || perspectivePlayer === gameOrState.bot;
-    const opponent = isBot ? gameOrState.player : gameOrState.bot;
+    // Resolve real games and perspective simulation states through one contract.
+    const { opponent } = resolvePerspectivePlayers(
+      gameOrState,
+      perspectivePlayer,
+    );
 
     if (!opponent) {
       console.warn("[BaseStrategy] getOpponent: opponent not found", {
