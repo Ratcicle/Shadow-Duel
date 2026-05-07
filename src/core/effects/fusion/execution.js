@@ -63,6 +63,18 @@ function selectBestMaterialCombo(materialCombos) {
   return evaluatedCombos[0].combo;
 }
 
+function resolveBotFusionPosition(fusion, ctx) {
+  const byName = ctx?.actionContext?.fusionPositions?.byName || {};
+  const preferred = byName[fusion?.name];
+  if (preferred === "attack" || preferred === "defense") return preferred;
+  const byId = ctx?.actionContext?.fusionPositions?.byId || {};
+  const preferredById = byId[fusion?.id];
+  if (preferredById === "attack" || preferredById === "defense") {
+    return preferredById;
+  }
+  return fusion?.fusionPosition || fusion?.position || "attack";
+}
+
 /**
  * Perform bot fusion summon
  */
@@ -104,7 +116,7 @@ export async function performBotFusion(
   const success = await this.game.performFusionSummon(
     materials,
     fusionIndex,
-    "attack",
+    resolveBotFusionPosition(fusion, ctx),
     materials,
     ctx.player
   );

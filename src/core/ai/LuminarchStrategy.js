@@ -28,6 +28,7 @@ import {
   getCardsByRole,
 } from "./luminarch/knowledge.js";
 import {
+  evaluateLuminarchDefensePlan,
   shouldPlaySpell,
   shouldSummonMonster,
 } from "./luminarch/priorities.js";
@@ -60,6 +61,12 @@ const CITADEL_TEMP_BUFF = {
   atkBoost: 500,
   defBoost: 500,
 };
+const BARBARIAS_STANCE_DANCE = {
+  role: "stance_dance_buff",
+  purpose: "offense",
+  preferredName: "Luminarch Megashield Barbarias",
+  atkBoost: 800,
+};
 
 function findBestOffensiveTemporaryBuffTarget(monsters, opponent, preference) {
   return (monsters || []).reduce(
@@ -76,6 +83,70 @@ function findBestOffensiveTemporaryBuffTarget(monsters, opponent, preference) {
   );
 }
 
+function getEffectiveAtk(card) {
+  return (
+    (card?.atk || 0) +
+    (card?.tempAtkBoost || 0) +
+    (card?.equipAtkBonus || 0)
+  );
+}
+
+function getEffectiveDef(card) {
+  return (
+    (card?.def || 0) +
+    (card?.tempDefBoost || 0) +
+    (card?.equipDefBonus || 0)
+  );
+}
+
+function evaluateBarbariasStanceDance(card, opponent, options = {}) {
+  if (!card || card.name !== "Luminarch Megashield Barbarias") {
+    return { score: 0, reason: "not_barbarias" };
+  }
+  if (card.isFacedown || card.hasAttacked) {
+    return { score: 0, reason: "barbarias_unavailable" };
+  }
+
+  const expectedAtk = getEffectiveAtk(card) + BARBARIAS_STANCE_DANCE.atkBoost;
+  const opponentMonsters = (opponent?.field || []).filter(
+    (monster) => monster && monster.cardKind === "monster",
+  );
+  const bestTargetStat = opponentMonsters.reduce((max, monster) => {
+    const stat = monster.isFacedown
+      ? 1500
+      : monster.position === "defense"
+        ? getEffectiveDef(monster)
+        : getEffectiveAtk(monster);
+    return Math.max(max, stat);
+  }, 0);
+  const canClearMonster = bestTargetStat > 0 && expectedAtk > bestTargetStat;
+  const directPressure = opponentMonsters.length === 0;
+  const createsLethal = expectedAtk >= (opponent?.lp || 8000);
+
+  let score = 0;
+  if (card.position === "defense") score += 12;
+  if (directPressure) score += 7;
+  if (canClearMonster) score += 10;
+  if (createsLethal) score += 16;
+  if (options.afterManualDefense) score += 5;
+  if (card.position === "attack" && !options.afterManualDefense) score -= 10;
+
+  return {
+    score,
+    expectedAtk,
+    canClearMonster,
+    directPressure,
+    createsLethal,
+    reason: createsLethal
+      ? "barbarias_lethal_push"
+      : canClearMonster
+        ? "barbarias_3300_trade"
+        : directPressure
+          ? "barbarias_direct_pressure"
+          : "barbarias_stance_value",
+  };
+}
+
 const LUMINARCH_DEFENSIVE_NAMES = [
   "Luminarch Aegisbearer",
   "Luminarch Sanctum Protector",
@@ -89,6 +160,7 @@ const LUMINARCH_OFFENSIVE_NAMES = [
   "Luminarch Celestial Marshal",
   "Luminarch Radiant Lancer",
   "Luminarch Aurora Seraph",
+  "Luminarch Megashield Barbarias",
 ];
 
 function getBattleReadyLuminarchAttackers(cards) {
@@ -191,6 +263,43 @@ function buildLuminarchSpellActionContext(card, analysis, baseActionContext = {}
     actionContext.specialSummonPositions = {
       ...(actionContext.specialSummonPositions || {}),
       byName,
+    };
+  }
+
+  if (card?.name === "Polymerization") {
+    actionContext.fusionPositions = {
+      ...(actionContext.fusionPositions || {}),
+      byName: {
+        ...(actionContext.fusionPositions?.byName || {}),
+        "Luminarch Megashield Barbarias": "defense",
+      },
+    };
+  }
+
+  if (card?.name === "Luminarch Knights Convocation") {
+    const defensePlan = evaluateLuminarchDefensePlan(analysis);
+    actionContext.costPreferences = {
+      ...(actionContext.costPreferences || {}),
+      archetype: "Luminarch",
+      preserveLastOffensivePayoff: true,
+      offensivePayoffNames: LUMINARCH_OFFENSIVE_NAMES,
+      preserveNames: [
+        ...new Set([
+          ...((actionContext.costPreferences || {}).preserveNames || []),
+          "Luminarch Aegisbearer",
+          "Luminarch Sanctum Protector",
+          "Luminarch Fortress Aegis",
+          "Luminarch Celestial Marshal",
+          "Luminarch Moonblade Captain",
+          "Luminarch Radiant Lancer",
+          "Luminarch Aurora Seraph",
+          "Luminarch Megashield Barbarias",
+        ]),
+      ],
+      stableDefense: defensePlan.stable,
+      readyToCounterattack: defensePlan.readyToCounterattack,
+      availableOffensivePayoffs:
+        defensePlan.offensivePayoffsAvailable?.length || 0,
     };
   }
 
@@ -506,8 +615,11 @@ export default class LuminarchStrategy extends BaseStrategy {
             "Luminarch Aegisbearer",
             "Luminarch Sanctum Protector",
             "Luminarch Fortress Aegis",
+            "Luminarch Celestial Marshal",
+            "Luminarch Moonblade Captain",
             "Luminarch Aurora Seraph",
             "Luminarch Radiant Lancer",
+            "Luminarch Megashield Barbarias",
           ],
         },
       },
@@ -535,6 +647,7 @@ export default class LuminarchStrategy extends BaseStrategy {
     let gameStance = { stance: "balanced", reason: "default" };
     let turnPlan = { plan: ["Jogar normalmente"] };
     let fusionOpportunity = null;
+    let luminarchDefensePlan = { stable: false, readyToCounterattack: false };
 
     // === COMBO DETECTION ===
     try {
@@ -544,6 +657,7 @@ export default class LuminarchStrategy extends BaseStrategy {
         spellTrap: bot?.spellTrap || [],
         fieldSpell: bot?.fieldSpell || null,
         graveyard: bot?.graveyard || [],
+        deck: bot?.deck || [],
         extraDeck: bot?.extraDeck || [],
         lp: bot?.lp || 8000,
         oppField: opponent?.field || [],
@@ -553,6 +667,7 @@ export default class LuminarchStrategy extends BaseStrategy {
 
       // === MULTI-TURN PLANNING ===
       gameStance = evaluateGameStance(analysis);
+      luminarchDefensePlan = evaluateLuminarchDefensePlan(analysis);
       turnPlan = planNextTurns(analysis);
 
       if (bot?.debug) {
@@ -692,6 +807,12 @@ export default class LuminarchStrategy extends BaseStrategy {
           macroStrategy,
         );
         priority += macroBuff;
+        if (
+          luminarchDefensePlan.readyToCounterattack &&
+          LUMINARCH_OFFENSIVE_NAMES.includes(card.name)
+        ) {
+          priority += 2;
+        }
 
         // === P1: Penalidade de chain risk ===
         const summonSafety = assessActionSafety(
@@ -860,6 +981,7 @@ export default class LuminarchStrategy extends BaseStrategy {
           spellTrap: bot?.spellTrap || [],
           fieldSpell: bot?.fieldSpell || null,
           graveyard: bot?.graveyard || [],
+          deck: bot?.deck || [],
           lp: bot?.lp || 8000,
           oppField: opponent?.field || [],
           oppLp: opponent?.lp || 8000,
@@ -983,6 +1105,7 @@ export default class LuminarchStrategy extends BaseStrategy {
           spellTrap: bot?.spellTrap || [],
           fieldSpell: bot?.fieldSpell || null,
           graveyard: bot?.graveyard || [],
+          deck: bot?.deck || [],
           lp: bot?.lp || 8000,
           oppField: opponent?.field || [],
           oppLp: opponent?.lp || 8000,
@@ -1145,6 +1268,15 @@ export default class LuminarchStrategy extends BaseStrategy {
           });
         }
       }
+    }
+
+    const barbariasActions = this.getBarbariasMonsterEffectActions(
+      game,
+      bot,
+      opponent,
+    );
+    if (barbariasActions.length > 0) {
+      actions.push(...barbariasActions);
     }
 
     const positionActions = this.getPositionChangeActions(game, bot, opponent);
@@ -1310,6 +1442,7 @@ export default class LuminarchStrategy extends BaseStrategy {
       // Fallback: tipo
       const typePriority = {
         fieldEffect: 0,
+        monsterEffect: 0.5,
         spell: 1,
         spellTrapEffect: 2,
         position_change: 2.5,
@@ -1449,6 +1582,90 @@ export default class LuminarchStrategy extends BaseStrategy {
       : gameOrState.bot;
   }
 
+  getPositionChangeActions(game, bot, opponent) {
+    const baseActions = super
+      .getPositionChangeActions(game, bot, opponent)
+      .filter((action) => action.cardName !== "Luminarch Megashield Barbarias");
+    const actions = [...baseActions];
+
+    (bot?.field || []).forEach((card, fieldIndex) => {
+      if (!card || card.name !== "Luminarch Megashield Barbarias") return;
+      if (card.position !== "attack") return;
+      if (typeof game?.canChangePosition === "function") {
+        if (!game.canChangePosition(card)) return;
+      } else if (card.isFacedown || card.positionChangedThisTurn || card.hasAttacked) {
+        return;
+      }
+
+      const preview = game?.effectEngine?.canActivateMonsterEffectPreview?.(
+        card,
+        bot,
+        "field",
+      );
+      if (preview && preview.ok === false) return;
+
+      const value = evaluateBarbariasStanceDance(card, opponent, {
+        afterManualDefense: true,
+      });
+      if (value.score <= 0) return;
+
+      actions.push({
+        type: "position_change",
+        fieldIndex,
+        cardId: card.id,
+        cardName: card.name,
+        toPosition: "defense",
+        priority: Math.max(13, value.score),
+        reason: `setup_${value.reason}`,
+      });
+    });
+
+    return actions;
+  }
+
+  getBarbariasMonsterEffectActions(game, bot, opponent) {
+    const actions = [];
+    (bot?.field || []).forEach((card, fieldIndex) => {
+      if (!card || card.name !== "Luminarch Megashield Barbarias") return;
+      if (card.position !== "defense") return;
+      const value = evaluateBarbariasStanceDance(card, opponent);
+      if (value.score <= 0) return;
+
+      const activationContext = {
+        autoSelectTargets: true,
+        autoSelectSingleTarget: true,
+        logTargets: false,
+        actionContext: {
+          targetPreferences: {
+            barbarias_switch_target: {
+              ...BARBARIAS_STANCE_DANCE,
+              sourceCardId: card.id,
+            },
+          },
+        },
+      };
+      const preview = game?.effectEngine?.canActivateMonsterEffectPreview?.(
+        card,
+        bot,
+        "field",
+        null,
+        { activationContext },
+      );
+      if (preview && preview.ok === false) return;
+
+      actions.push({
+        type: "monsterEffect",
+        fieldIndex,
+        cardId: card.id,
+        cardName: card.name,
+        priority: Math.max(15, value.score),
+        reason: value.reason,
+        activationContext,
+      });
+    });
+    return actions;
+  }
+
   shouldUseAutomaticAscensionShortcut() {
     return false;
   }
@@ -1534,6 +1751,7 @@ export default class LuminarchStrategy extends BaseStrategy {
       spellTrap,
       fieldSpell: player.fieldSpell || null,
       graveyard,
+      deck: player.deck || [],
       lp: player.lp || 8000,
       oppField: opponent.field || [],
       oppLp: opponent.lp || 8000,
@@ -1583,9 +1801,8 @@ export default class LuminarchStrategy extends BaseStrategy {
         score += shouldPlaySpell(card, analysis).yes ? 28 : -30;
       }
       if (card.name === "Luminarch Knights Convocation") {
-        score += hand.some((entry) => entry && isLuminarch(entry) && (entry.level || 0) >= 7)
-          ? 30
-          : 6;
+        const convocationDecision = shouldPlaySpell(card, analysis);
+        score += convocationDecision.yes ? convocationDecision.priority * 4 : -40;
       }
       return score;
     };
@@ -1766,6 +1983,55 @@ export default class LuminarchStrategy extends BaseStrategy {
         target.position = newPosition;
         target.positionChangedThisTurn = true;
         target.cannotAttackThisTurn = newPosition === "defense";
+        break;
+      }
+      case "monsterEffect": {
+        const player = state.bot;
+        const fieldIndex = Number.isInteger(action.fieldIndex)
+          ? action.fieldIndex
+          : player.field.findIndex(
+              (c) =>
+                c &&
+                (c.id === action.cardId ||
+                  (!action.cardId && c.name === action.cardName)),
+            );
+        const card = player.field?.[fieldIndex];
+        if (!card || card.cardKind !== "monster" || card.isFacedown) break;
+        const effect = (card.effects || []).find(
+          (entry) =>
+            entry &&
+            entry.timing === "ignition" &&
+            (!entry.requireZone || entry.requireZone === "field"),
+        );
+        if (!effect) break;
+
+        if (card.name === "Luminarch Megashield Barbarias") {
+          const target = card.position === "defense" ? card : null;
+          if (!target) break;
+          target.position = "attack";
+          target.cannotAttackThisTurn = false;
+          target.tempAtkBoost =
+            (target.tempAtkBoost || 0) + BARBARIAS_STANCE_DANCE.atkBoost;
+          target.atk = (target.atk || 0) + BARBARIAS_STANCE_DANCE.atkBoost;
+          target._simulatedBarbariasBoost = true;
+          break;
+        }
+
+        const selections = selectSimulatedTargets({
+          targets: effect.targets || [],
+          actions: effect.actions || [],
+          state,
+          sourceCard: card,
+          selfId: "bot",
+          options: { archetype: "Luminarch", preferDefense: true },
+        });
+        applySimulatedActions({
+          actions: effect.actions || [],
+          selections,
+          state,
+          selfId: "bot",
+          options: { archetype: "Luminarch", preferDefense: true },
+        });
         break;
       }
       case "spell": {
@@ -2065,7 +2331,15 @@ export default class LuminarchStrategy extends BaseStrategy {
             reason: `Fusion para Megashield (3000 DEF tank)`,
             activationContext: {
               autoSelectSingleTarget: true,
+              autoSelectTargets: true,
               logTargets: false,
+              actionContext: {
+                fusionPositions: {
+                  byName: {
+                    "Luminarch Megashield Barbarias": "defense",
+                  },
+                },
+              },
             },
           });
         }
@@ -2107,6 +2381,21 @@ export default class LuminarchStrategy extends BaseStrategy {
       // Boost se tem Citadel ativo (lifegain dobrado: 500 → 1000)
       const hasCitadel = bot.fieldSpell?.name?.includes("Citadel");
       if (hasCitadel) priority += 2; // Synergy suprema
+
+      const projectedBarbarias = {
+        name: "Luminarch Megashield Barbarias",
+        cardKind: "monster",
+        atk: 2500,
+        def: 3000,
+        position: "defense",
+      };
+      const stanceValue = evaluateBarbariasStanceDance(
+        projectedBarbarias,
+        opponent,
+      );
+      if (stanceValue.score > 0) {
+        priority += Math.min(5, Math.max(2, Math.floor(stanceValue.score / 5)));
+      }
 
       // Penalty se já tem tank forte no campo
       const hasFortress = bot.field.some(

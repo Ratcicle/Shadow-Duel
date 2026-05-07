@@ -274,6 +274,16 @@ export default class AutoSelector {
           (isSelf ? 0.2 : -0.4)
         );
       }
+      if (targetPreference?.role === "stance_dance_buff") {
+        return (
+          this.getStanceDanceBuffScore(
+            baseCard,
+            candidate,
+            context,
+            targetPreference,
+          ) + (isSelf ? 0.2 : -0.4)
+        );
+      }
       return baseValue + (isSelf ? 0.4 : -0.4);
     }
     if (intent === "cost") {
@@ -302,8 +312,21 @@ export default class AutoSelector {
       if (isPreferredArchetype) {
         const preferNames = costPreferences.preferNames || [];
         const preserveNames = costPreferences.preserveNames || [];
+        const offensivePayoffNames = costPreferences.offensivePayoffNames || [];
         if (preferNames.includes(baseCard?.name)) costScore -= 2.5;
         if (preserveNames.includes(baseCard?.name)) costScore += 6;
+        if (
+          costPreferences.preserveLastOffensivePayoff &&
+          isOffensivePayoffCost(baseCard, offensivePayoffNames)
+        ) {
+          const availablePayoffs = Number.isFinite(
+            costPreferences.availableOffensivePayoffs
+          )
+            ? costPreferences.availableOffensivePayoffs
+            : countAvailableOffensivePayoffs(ownerPlayer, offensivePayoffNames);
+          if (availablePayoffs <= 1) costScore += 80;
+          else if (costPreferences.stableDefense) costScore += 8;
+        }
         if (baseCard?.usedEffectThisTurn || baseCard?.hasAttacked) {
           costScore -= 1.5;
         }
@@ -352,6 +375,53 @@ export default class AutoSelector {
       opponentLp: opponent?.lp || 0,
     });
   }
+
+  getStanceDanceBuffScore(card, candidate, context, preference) {
+    if (!card || card.cardKind !== "monster") return -100;
+    const atkBoost = Number.isFinite(preference?.atkBoost)
+      ? preference.atkBoost
+      : 0;
+    const sourceCardId =
+      preference?.sourceCardId ??
+      context?.selectionContract?.metadata?.sourceCardId;
+    const isSource =
+      sourceCardId != null &&
+      (candidate?.cardRef?.id === sourceCardId || candidate?.id === sourceCardId);
+    const expectedAtk = getEffectiveAtk(card) + atkBoost;
+    let score = -10;
+
+    if (isSource) score += 80;
+    if (preference?.preferredName && card.name === preference.preferredName) {
+      score += 35;
+    }
+    if (card.position === "defense") score += 25;
+    if (card.position === "attack") score -= 35;
+    if (card.cannotAttackThisTurn && card.position !== "defense") score -= 30;
+    if (card.hasAttacked) score -= 40;
+
+    const self = context?.owner || context?.player || null;
+    const opponent =
+      self && typeof this.game?.getOpponent === "function"
+        ? this.game.getOpponent(self)
+        : null;
+    const opponentMonsters = (opponent?.field || []).filter(
+      (monster) => monster && monster.cardKind === "monster",
+    );
+    const bestTargetStat = opponentMonsters.reduce((max, monster) => {
+      const stat = monster.isFacedown
+        ? 1500
+        : monster.position === "defense"
+          ? getEffectiveDef(monster)
+          : getEffectiveAtk(monster);
+      return Math.max(max, stat);
+    }, 0);
+
+    if (opponentMonsters.length === 0) score += 20;
+    if (expectedAtk >= (opponent?.lp || 8000)) score += 45;
+    if (bestTargetStat > 0 && expectedAtk > bestTargetStat) score += 30;
+    score += expectedAtk / 1000;
+    return score;
+  }
 }
 
 function selectionContractIntent(context) {
@@ -381,6 +451,19 @@ function getEffectiveDef(card) {
     (card?.tempDefBoost || 0) +
     (card?.equipDefBonus || 0)
   );
+}
+
+function isOffensivePayoffCost(card, payoffNames = []) {
+  if (!card || card.cardKind !== "monster") return false;
+  if ((payoffNames || []).includes(card.name)) return true;
+  return (card.level || 0) >= 7 && getEffectiveAtk(card) >= 2400;
+}
+
+function countAvailableOffensivePayoffs(player, payoffNames = []) {
+  if (!player) return 0;
+  return [...(player.hand || []), ...(player.deck || [])].filter((card) =>
+    isOffensivePayoffCost(card, payoffNames)
+  ).length;
 }
 
 function getRecursionTargetScore(card, preference = {}) {

@@ -4,6 +4,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { isLuminarch } from "./knowledge.js";
+import { evaluateKnightsConvocationPlan } from "./priorities.js";
 
 /**
  * Avalia o "stance" ideal baseado no campo oponente
@@ -179,8 +180,13 @@ export function shouldCommitResourcesNow(card, analysis, stance) {
     };
   }
 
-  // Convocation: jogar quando houver Lv7+ na mão (destrava recursos)
+  // Convocation: anti-brick/setup; parar quando a defesa ja estabilizou.
   if (cardName.includes("Convocation")) {
+    const convocationPlan = evaluateKnightsConvocationPlan(analysis);
+    return {
+      shouldPlay: convocationPlan.yes,
+      reason: convocationPlan.reason,
+    };
     const hasHighLevel = (hand || []).some(
       (c) =>
         c && c.cardKind === "monster" && isLuminarch(c) && (c.level || 0) >= 7

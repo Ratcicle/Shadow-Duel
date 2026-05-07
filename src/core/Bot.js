@@ -1070,6 +1070,28 @@ export default class Bot extends Player {
       if (action.type === "handIgnition") {
         return this.resolveHandIndexForAction(action, "monster") >= 0;
       }
+      if (action.type === "monsterEffect") {
+        const fieldIndex = Number.isInteger(action.fieldIndex)
+          ? action.fieldIndex
+          : this.field.findIndex(
+              (c) =>
+                c &&
+                (c.id === action.cardId ||
+                  (!action.cardId && c.name === action.cardName)),
+            );
+        const card = this.field?.[fieldIndex];
+        if (!card || card.cardKind !== "monster" || card.isFacedown) {
+          return false;
+        }
+        const preview = game?.effectEngine?.canActivateMonsterEffectPreview?.(
+          card,
+          this,
+          "field",
+          null,
+          { activationContext: action.activationContext || {} },
+        );
+        return preview ? preview.ok !== false : true;
+      }
       if (action.type === "ascension") {
         const material = this.field[action.materialIndex];
         if (!material) return false;
@@ -1083,12 +1105,14 @@ export default class Bot extends Player {
         return !!this.fieldSpell;
       }
       if (action.type === "position_change") {
-        const target = (this.field || []).find(
-          (c) =>
-            c &&
-            (c.id === action.cardId ||
-              (!action.cardId && c.name === action.cardName)),
-        );
+        const target = Number.isInteger(action.fieldIndex)
+          ? this.field?.[action.fieldIndex]
+          : (this.field || []).find(
+              (c) =>
+                c &&
+                (c.id === action.cardId ||
+                  (!action.cardId && c.name === action.cardName)),
+            );
         if (!target) return false;
         if (
           typeof game?.canChangePosition === "function" &&
@@ -1251,12 +1275,14 @@ export default class Bot extends Player {
     }
 
     if (action.type === "position_change") {
-      const target = (this.field || []).find(
-        (c) =>
-          c &&
-          (c.id === action.cardId ||
-            (!action.cardId && c.name === action.cardName)),
-      );
+      const target = Number.isInteger(action.fieldIndex)
+        ? this.field?.[action.fieldIndex]
+        : (this.field || []).find(
+            (c) =>
+              c &&
+              (c.id === action.cardId ||
+                (!action.cardId && c.name === action.cardName)),
+          );
       if (!target) return false;
       const newPosition =
         action.toPosition === "defense" ? "defense" : "attack";
@@ -1570,6 +1596,81 @@ export default class Bot extends Player {
         },
       });
       // Pipeline retorna false, null, ou {success: false} quando falha
+      return (
+        pipelineResult !== false &&
+        pipelineResult !== null &&
+        pipelineResult?.success !== false
+      );
+    }
+
+    if (action.type === "monsterEffect") {
+      const fieldIndex = Number.isInteger(action.fieldIndex)
+        ? action.fieldIndex
+        : this.field.findIndex(
+            (c) =>
+              c &&
+              (c.id === action.cardId ||
+                (!action.cardId && c.name === action.cardName)),
+          );
+      const card = this.field?.[fieldIndex];
+      if (!card || card.cardKind !== "monster" || card.isFacedown) {
+        console.log(
+          `[Bot.executeMainPhaseAction] Invalid monsterEffect action: no face-up monster at index ${fieldIndex}`,
+        );
+        return false;
+      }
+
+      const actionActivationContext = action.activationContext || {};
+      const activationContext = {
+        ...actionActivationContext,
+        fromHand: false,
+        activationZone: "field",
+        sourceZone: "field",
+        autoSelectTargets: actionActivationContext.autoSelectTargets !== false,
+      };
+      const activationEffect = (card.effects || []).find(
+        (e) =>
+          e &&
+          e.timing === "ignition" &&
+          (!e.requireZone || e.requireZone === "field"),
+      );
+
+      const pipelineResult = await game.runActivationPipeline({
+        card,
+        owner: this,
+        activationZone: "field",
+        activationContext,
+        selectionKind: "monsterEffect",
+        selectionMessage: "Select target(s) for the monster effect.",
+        guardKind: "bot_monster_effect",
+        phaseReq: ["main1", "main2"],
+        preview: () =>
+          game.effectEngine?.canActivateMonsterEffectPreview?.(
+            card,
+            this,
+            "field",
+            null,
+            { activationContext },
+          ),
+        oncePerTurn: {
+          card,
+          player: this,
+          effect: activationEffect,
+        },
+        activate: (chosen, ctx, zone) =>
+          game.effectEngine.activateMonsterEffect(
+            card,
+            this,
+            chosen,
+            zone,
+            ctx,
+          ),
+        finalize: () => {
+          game.ui?.log?.(`Bot activates ${card.name}'s effect`);
+          game.updateBoard();
+        },
+      });
+
       return (
         pipelineResult !== false &&
         pipelineResult !== null &&
