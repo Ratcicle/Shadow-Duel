@@ -40,7 +40,6 @@ export function shouldPlaySpell(card, analysis) {
   const knowledge = CARD_KNOWLEDGE[name];
 
   // Polymerization - Detecta APENAS fusões viáveis (não Ascensões!)
-  // CORREÇÃO: Armored Arctroth e Apocalypse Dragon são monstros de ASCENSÃO, não Fusão!
   if (name === "Polymerization") {
     const allCards = [...analysis.hand, ...analysis.field];
     const shMonsters = allCards.filter(
@@ -76,11 +75,6 @@ export function shouldPlaySpell(card, analysis) {
         reason: `Fusion: Demon Dragon (3000 ATK, destroy 2) com Scale Dragon + ${materialName}`,
       };
     }
-
-    // NOTE: Armored Arctroth e Apocalypse Dragon são ASCENSÕES, não Fusões!
-    // Eles requerem Invocação-Ascensão, não Polymerization.
-    // - Armored Arctroth: Ascende de Shadow-Heart Demon Arctroth
-    // - Apocalypse Dragon: Ascende de Shadow-Heart Scale Dragon
 
     return {
       yes: false,

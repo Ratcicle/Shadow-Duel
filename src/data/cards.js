@@ -1404,6 +1404,75 @@
     ],
   },
   {
+    id: 77,
+    name: "Shadow-Heart Warlord",
+    cardKind: "monster",
+    monsterType: "fusion",
+    atk: 2500,
+    def: 1900,
+    level: 8,
+    type: "Warrior",
+    archetype: "Shadow-Heart",
+    archetypes: ["Shadow-Heart"],
+    description:
+      "2 'Shadow-Heart' monsters. The first time per turn this card would be destroyed by battle, you can send 1 'Shadow-Heart' monster you control to the GY instead. If this card destroys an opponent's monster by battle: You can Special Summon 1 'Shadow-Heart' monster of Level 4 or lower from your GY, but it cannot attack this turn. You can only use this effect of 'Shadow-Heart Warlord' once per turn.",
+    image: "assets/Shadow-Heart Warlord.png",
+    fusionMaterials: [{ archetype: "Shadow-Heart", count: 2 }],
+    effects: [
+      {
+        id: "shadow_heart_warlord_protect",
+        timing: "passive",
+        oncePerTurn: true,
+        oncePerTurnName: "shadow_heart_warlord_protect",
+        oncePerTurnScope: "card",
+        replacementEffect: {
+          type: "destruction",
+          reason: "battle",
+          costFilters: {
+            cardKind: "monster",
+            archetype: "Shadow-Heart",
+          },
+          costZone: "field",
+          costCount: 1,
+          prompt:
+            "Send 1 'Shadow-Heart' monster you control to the GY to save Warlord?",
+          selectionMessage:
+            "Choose a 'Shadow-Heart' monster to send to the Graveyard for protection.",
+        },
+      },
+      {
+        id: "shadow_heart_warlord_revive",
+        timing: "on_event",
+        event: "battle_destroy",
+        requireSelfAsAttacker: true,
+        requireDestroyedIsOpponent: true,
+        oncePerTurn: true,
+        oncePerTurnName: "shadow_heart_warlord_revive",
+        oncePerTurnScope: "card",
+        targets: [
+          {
+            id: "warlord_revive_target",
+            owner: "self",
+            zone: "graveyard",
+            cardKind: "monster",
+            archetype: "Shadow-Heart",
+            maxLevel: 4,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "special_summon_from_zone",
+            targetRef: "warlord_revive_target",
+            zone: "graveyard",
+            position: "choice",
+            cannotAttackThisTurn: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
     id: 75,
     name: "Shadow-Heart Armored Arctroth",
     cardKind: "monster",
@@ -1458,77 +1527,6 @@
         actions: [
           {
             type: "switch_defender_position_on_attack",
-          },
-        ],
-      },
-    ],
-  },
-  {
-    id: 76,
-    name: "Shadow-Heart Apocalypse Dragon",
-    cardKind: "monster",
-    archetype: "Shadow-Heart",
-    level: 9,
-    atk: 3300,
-    def: 2600,
-    monsterType: "ascension",
-    ascension: {
-      materialId: 64,
-      requirements: [{ type: "material_effect_activations", count: 3 }],
-      position: "choice",
-    },
-    description:
-      "Ascension Summon: Send 1 'Shadow-Heart Scale Dragon' you control to the Graveyard. Requirement: That monster's effect was activated at least 3 times this duel. Once per turn: You can discard 1 card; destroy 1 monster your opponent controls. If this card leaves the field: destroy all monsters on the field.",
-    image: "assets/Shadow-Heart Apocalypse Dragon.png",
-    effects: [
-      {
-        id: "apocalypse_dragon_once_per_turn_destroy",
-        timing: "ignition",
-        requireZone: "field",
-        requirePhase: ["main1", "main2"],
-        oncePerTurn: true,
-        oncePerTurnName: "apocalypse_dragon_discard_destroy",
-        targets: [
-          {
-            id: "apocalypse_discard",
-            owner: "self",
-            zone: "hand",
-            count: { min: 1, max: 1 },
-          },
-          {
-            id: "apocalypse_destroy_target",
-            owner: "opponent",
-            zone: "field",
-            requireFaceup: true,
-            cardKind: "monster",
-            count: { min: 1, max: 1 },
-          },
-        ],
-        actions: [
-          {
-            type: "move",
-            targetRef: "apocalypse_discard",
-            player: "self",
-            to: "graveyard",
-          },
-          {
-            type: "destroy",
-            targetRef: "apocalypse_destroy_target",
-          },
-        ],
-      },
-      {
-        id: "apocalypse_dragon_leave_field_destroy_all",
-        timing: "on_event",
-        event: "card_to_grave",
-        fromZone: "field",
-        actions: [
-          {
-            type: "selective_field_destruction",
-            keepPerSide: 0,
-            allowTieBreak: false,
-            modalTitle: "Apocalypse",
-            modalInfoText: "All monsters will be destroyed.",
           },
         ],
       },

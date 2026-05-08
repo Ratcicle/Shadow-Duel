@@ -21,18 +21,14 @@ export const CARD_KNOWLEDGE = {
       "Darkness Valley",
       "Shadow-Heart Rage",
       "Polymerization",
-      "Shadow-Heart Apocalypse Dragon",
     ],
     playPatterns: [
       "Invocar quando tiver 2 tributos disponíveis",
       "Proteger com Shadow-Heart Shield",
       "Usar Shadow-Heart Rage para 3700 ATK + 2 ataques",
       "Usar como material para Demon Dragon Fusion",
-      "Ativar efeito 3+ vezes para qualificar Ascensão para Apocalypse Dragon",
-      "Ascender para Apocalypse Dragon (3300 ATK + remoção recorrente)",
     ],
     value: 15,
-    ascensionTarget: "Shadow-Heart Apocalypse Dragon",
   },
   "Shadow-Heart Demon Dragon": {
     role: "fusion_boss",
@@ -46,6 +42,20 @@ export const CARD_KNOWLEDGE = {
       "Se destruído, revive Scale Dragon do GY",
     ],
     value: 18,
+  },
+  "Shadow-Heart Warlord": {
+    role: "fusion_boss",
+    priority: 11,
+    summonCondition: "fusion_any_2_shadow_heart",
+    effect:
+      "Substitui destruição por batalha (custo: 1 Shadow-Heart no campo). Se destrói monstro oponente em batalha: revive 1 Shadow-Heart Lv4- do GY (não pode atacar)",
+    synergies: ["Polymerization", "Shadow-Heart Imp", "Shadow-Heart Specter"],
+    playPatterns: [
+      "Fusion Summon quando há 2+ monstros Shadow-Heart no campo/mão",
+      "Usar para gerar valor incremental (revive a cada combate vencido)",
+      "Tributos de proteção: priorizar monstros já usados/baixo valor",
+    ],
+    value: 14,
   },
   "Shadow-Heart Demon Arctroth": {
     role: "boss",
@@ -218,22 +228,6 @@ export const CARD_KNOWLEDGE = {
     ],
     value: 12,
   },
-  "Shadow-Heart Apocalypse Dragon": {
-    role: "ascension_boss",
-    priority: 11,
-    summonCondition: "ascension_from_scale_dragon",
-    effect:
-      "Ascensão de Scale Dragon (3+ ativações). 1x/turno: descarta 1 para destruir 1 monstro oponente. Se sair do campo: destrói todos os monstros",
-    synergies: ["Shadow-Heart Scale Dragon", "remoção", "board wipe"],
-    playPatterns: [
-      "Ascender Scale Dragon após 3+ ativações de efeito",
-      "Usar efeito ignition para remoção pontual (custo: 1 descarte)",
-      "Board wipe ao sair do campo = jogo virado ou OTK negado",
-      "3300 ATK altíssimo + pressão constante",
-    ],
-    value: 14,
-  },
-
   // ===== SPELLS =====
   Polymerization: {
     role: "fusion_enabler",

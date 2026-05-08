@@ -216,7 +216,7 @@ export default class Bot extends Player {
     return [
       74, // Shadow-Heart Demon Dragon (fusão principal)
       75, // Shadow-Heart Armored Arctroth (ascensão de Demon Arctroth)
-      76, // Shadow-Heart Apocalypse Dragon (ascensão de Scale Dragon)
+      77, // Shadow-Heart Warlord (fusão genérica, 2 Shadow-Heart)
     ];
   }
 
@@ -1938,14 +1938,6 @@ export default class Bot extends Player {
       // Shadow-Heart Armored Arctroth (75): melhor contra ameaças únicas fortes
       if (asc.id === 75 && oppHasThreats) {
         score += 5; // Efeito de zerar ATK/DEF é ótimo contra bosses
-      }
-
-      // Shadow-Heart Apocalypse Dragon (76): melhor para pressão/remoção contínua
-      if (asc.id === 76) {
-        score += 3; // Remoção 1x/turno é sempre útil
-        if (oppFieldSize >= 2) {
-          score += 2; // Board wipe ao sair = seguro contra swarm
-        }
       }
 
       // Priorizar ATK maior se não há contexto específico

@@ -30,7 +30,7 @@ Fonte dos textos: `src/data/cards.js` (1x cada carta).
 
 - 1x Shadow-Heart Demon Dragon — Fusão (74)
 - 1x Shadow-Heart Armored Arctroth — Ascension (75)
-- 1x Shadow-Heart Apocalypse Dragon — Ascension (76)
+- 1x Shadow-Heart Warlord — Fusão (77)
 
 ### Magias
 
@@ -80,7 +80,7 @@ Fonte dos textos: `src/data/cards.js` (1x cada carta).
 
 **Shadow-Heart Armored Arctroth (75)** — Ascension, Nível 9, 2800/2500. Matéria: "Shadow-Heart Demon Arctroth" que destruiu 2 monstros. Ao ser Invocada: zera ATK/DEF de 1 monstro do oponente (não nega efeitos). Quando ataca um monstro em Defesa: troca para Ataque.
 
-**Shadow-Heart Apocalypse Dragon (76)** — Ascension, Nível 9, 3300/2600. Matéria: "Shadow-Heart Scale Dragon" com 3 ativações de efeito no duelo. Uma vez por turno: descarte 1; destrua 1 monstro do oponente. Se sair do campo: destrói todos os monstros no campo.
+**Shadow-Heart Warlord (77)** — Fusão, Nível 8, 2500/1900. Materiais: 2 monstros "Shadow-Heart". A primeira vez por turno que este card seria destruído em batalha: envie 1 "Shadow-Heart" do seu campo para o GY em vez disso. Se destruir monstro do oponente em batalha: Invoque por Invocação-Especial 1 "Shadow-Heart" Nível 4 ou menor do seu GY (não pode atacar). 1x por turno.
 
 ### Magias
 
