@@ -128,7 +128,11 @@ export function applyGenericSimulatedMainPhaseAction(
       const tributesNeeded = tributeInfo.tributesNeeded;
 
       const tributeIndices =
-        options.selectBestTributes?.(player.field, tributesNeeded, card) || [];
+        options.selectBestTributes?.(player.field, tributesNeeded, card, {
+          botState: player,
+          oppField: state.player?.field || [],
+          game: state,
+        }) || [];
 
       tributeIndices.sort((a, b) => b - a);
       tributeIndices.forEach((idx) => {

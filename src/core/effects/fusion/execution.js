@@ -64,10 +64,14 @@ function selectBestMaterialCombo(materialCombos) {
 }
 
 function resolveBotFusionPosition(fusion, ctx) {
-  const byName = ctx?.actionContext?.fusionPositions?.byName || {};
+  const fusionPositions =
+    ctx?.actionContext?.fusionPositions ||
+    ctx?.activationContext?.actionContext?.fusionPositions ||
+    null;
+  const byName = fusionPositions?.byName || {};
   const preferred = byName[fusion?.name];
   if (preferred === "attack" || preferred === "defense") return preferred;
-  const byId = ctx?.actionContext?.fusionPositions?.byId || {};
+  const byId = fusionPositions?.byId || {};
   const preferredById = byId[fusion?.id];
   if (preferredById === "attack" || preferredById === "defense") {
     return preferredById;

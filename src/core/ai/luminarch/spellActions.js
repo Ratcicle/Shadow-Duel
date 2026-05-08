@@ -14,7 +14,6 @@ function getHandSpellActions(context, spellIndicesActivated) {
     activationContext,
     macroStrategy,
     gameStance,
-    fusionOpportunity,
     verboseEval,
   } = context;
   const actions = [];
@@ -23,6 +22,8 @@ function getHandSpellActions(context, spellIndicesActivated) {
     if (card.cardKind !== "spell") return;
 
     try {
+      if (card.name === "Polymerization") return;
+
       if (verboseEval && bot?.debug) {
         console.log(
           `\n[LuminarchStrategy] Evaluating spell: ${card.name} (${
@@ -93,17 +94,6 @@ function getHandSpellActions(context, spellIndicesActivated) {
         macroStrategy,
       );
       priority += macroBuff;
-
-      if (card.name === "Polymerization" && fusionOpportunity) {
-        if (fusionOpportunity.decision.shouldPrioritize) {
-          priority = fusionOpportunity.decision.priority;
-          if (bot?.debug) {
-            console.log(
-              `[LuminarchStrategy] Polymerization priority override: ${priority} (${fusionOpportunity.decision.reason})`,
-            );
-          }
-        }
-      }
 
       const spellSafety = assessActionSafety(
         { bot, player: opponent },

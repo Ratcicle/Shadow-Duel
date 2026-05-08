@@ -351,54 +351,6 @@ export function shouldPlaySpell(card, analysis) {
             reason: "Spear segurada: nenhum alvo gera ganho real de batalha",
           };
 
-      const hasLuminarch = (analysis.field || []).some(
-        (c) => c && isLuminarch(c)
-      );
-      const oppBiggest = (analysis.oppField || [])
-        .filter((m) => m && !m.isFacedown)
-        .sort((a, b) => (b.atk || 0) - (a.atk || 0))[0];
-      const oppDefenders = (analysis.oppField || []).filter(
-        (m) => m && m.position === "defense"
-      );
-
-      // NOVO: Prioridade alta se tem monstros com Piercing e oponente em DEF
-      const piercingMonsters = (analysis.field || []).filter(
-        (c) => c && c.cardKind === "monster" && !c.isFacedown && c.piercing
-      );
-      const hasPiercingSetup =
-        piercingMonsters.length > 0 && oppDefenders.length > 0;
-
-      if (hasLuminarch && hasPiercingSetup) {
-        const totalPiercingAtk = piercingMonsters.reduce(
-          (sum, m) => sum + (m.atk || 0),
-          0
-        );
-        const oppLp = analysis.oppLp || 8000;
-        const canLethal = totalPiercingAtk >= oppLp;
-
-        return {
-          yes: true,
-          priority: canLethal ? 18 : 12, // LETHAL = máxima prioridade
-          reason: canLethal
-            ? `LETHAL! Spear → Zerar DEF → Piercing ${totalPiercingAtk} = WIN`
-            : `Piercing setup: zerar DEF de defender → ${piercingMonsters
-                .map((m) => m.name?.split(" - ")[0])
-                .join(", ")} (${totalPiercingAtk} dmg)`,
-        };
-      }
-
-      if (hasLuminarch && oppBiggest && (oppBiggest.atk || 0) >= 2000) {
-        return {
-          yes: true,
-          priority: 10,
-          reason: `Zerar ${oppBiggest.name} (${oppBiggest.atk} ATK → 0)`,
-        };
-      }
-
-      return {
-        yes: false,
-        reason: "Sem Luminarch no campo ou sem alvo forte",
-      };
     }
 
     // ═════════════════════════════════════════════════════════════════════════
@@ -488,34 +440,6 @@ export function shouldPlaySpell(card, analysis) {
 
     if (name === "Luminarch Knights Convocation") {
       return evaluateKnightsConvocationPlan(analysis);
-      const lv7Plus = (analysis.hand || []).filter(
-        (c) =>
-          c && isLuminarch(c) && c.cardKind === "monster" && (c.level || 0) >= 7
-      );
-
-      // NOVO: Detectar situação de BRICK (muitos Lv7+ sem searchers)
-      const hasSearcherInHand = (analysis.hand || []).some(
-        (c) => c && (c.name?.includes("Valiant") || c.name?.includes("Arbiter"))
-      );
-      const isBricked = lv7Plus.length >= 2 && !hasSearcherInHand;
-
-      if (isBricked) {
-        return {
-          yes: true,
-          priority: 14, // Alta prioridade - resolver brick é crítico
-          reason: `BRICK ESCAPE: ${lv7Plus.length}x Lv7+ na mão sem searchers → discard boss → search Valiant/Arbiter`,
-        };
-      }
-
-      if (lv7Plus.length > 0) {
-        return {
-          yes: true,
-          priority: 5,
-          reason: "Continuous search (discard high-level para buscar Lv4-)",
-        };
-      }
-
-      return { yes: false, reason: "Sem Lv7+ para discartar" };
     }
 
     if (name === "Luminarch Sacred Judgment") {

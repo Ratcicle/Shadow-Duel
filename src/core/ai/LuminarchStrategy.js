@@ -799,7 +799,7 @@ export default class LuminarchStrategy extends BaseStrategy {
   selectBestTributes(field, tributesNeeded, cardToSummon, context = {}) {
     return selectBestLuminarchTributes(field, tributesNeeded, cardToSummon, {
       ...context,
-      botState: this.bot || {},
+      botState: context.botState || this.bot || {},
     });
   }
 
@@ -955,7 +955,12 @@ export default class LuminarchStrategy extends BaseStrategy {
       getTributeRequirementFor: (card, playerState) =>
         this.getTributeRequirementFor(card, playerState),
       selectBestTributes: (field, tributesNeeded, cardToSummon, context) =>
-        this.selectBestTributes(field, tributesNeeded, cardToSummon, context),
+        this.selectBestTributes(field, tributesNeeded, cardToSummon, {
+          ...(context || {}),
+          botState: state.bot,
+          oppField: state.player?.field || [],
+          game: state,
+        }),
       placeSpellCard: this.placeSpellCard.bind(this),
       citadelTempBuff: CITADEL_TEMP_BUFF,
       barbariasStanceDance: BARBARIAS_STANCE_DANCE,

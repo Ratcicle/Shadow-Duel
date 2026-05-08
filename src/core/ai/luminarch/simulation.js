@@ -144,13 +144,29 @@ function handleLuminarchAfterSummon({ state, action, player, card, newCard, opti
     card.name === "Luminarch Valiant - Knight of the Dawn" &&
     !action.facedown
   ) {
-    simulateLuminarchSearch(player, newCard, action, state, options);
-    newCard._searchedAegis = true;
+    const searched = simulateLuminarchSearch(
+      player,
+      newCard,
+      action,
+      state,
+      options,
+    );
+    if (searched) {
+      newCard._searchedAegis = true;
+    }
   }
 
   if (card.name === "Luminarch Sanctified Arbiter" && !action.facedown) {
-    simulateLuminarchSearch(player, newCard, action, state, options);
-    newCard._searchedSpell = true;
+    const searched = simulateLuminarchSearch(
+      player,
+      newCard,
+      action,
+      state,
+      options,
+    );
+    if (searched) {
+      newCard._searchedSpell = true;
+    }
   }
 }
 
