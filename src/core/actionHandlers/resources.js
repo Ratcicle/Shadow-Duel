@@ -573,6 +573,91 @@ export async function handleGrantAdditionalNormalSummon(
   return true;
 }
 
+function findSourceZone(engine, player, source) {
+  if (!player || !source) return null;
+  if (engine && typeof engine.findCardZone === "function") {
+    const zone = engine.findCardZone(player, source);
+    if (zone) return zone;
+  }
+
+  for (const zone of ["spellTrap", "fieldSpell", "field", "hand"]) {
+    if (Array.isArray(player[zone]) && player[zone].includes(source)) {
+      return zone;
+    }
+    if (player[zone] === source) {
+      return zone;
+    }
+  }
+
+  return null;
+}
+
+function moveUpkeepSourceToFailureZone(game, player, source, failureZone, sourceZone) {
+  if (!game || !player || !source || !sourceZone) return false;
+
+  if (typeof game.moveCard === "function") {
+    game.moveCard(source, player, failureZone, { fromZone: sourceZone });
+    return true;
+  }
+
+  const zoneArr = Array.isArray(player[sourceZone]) ? player[sourceZone] : null;
+  if (!zoneArr) return false;
+
+  const idx = zoneArr.indexOf(source);
+  if (idx === -1) return false;
+
+  zoneArr.splice(idx, 1);
+  player[failureZone] = player[failureZone] || [];
+  player[failureZone].push(source);
+  return true;
+}
+
+function shouldAiPayUpkeep(action, player, source, lpCost) {
+  if (action.aiPay === false) return false;
+  if (typeof action.aiMinLpAfterPay === "number") {
+    return player.lp - lpCost >= action.aiMinLpAfterPay;
+  }
+  if (typeof action.aiMaxLpFraction === "number" && player.lp > 0) {
+    return lpCost / player.lp <= action.aiMaxLpFraction;
+  }
+  if (source?.upkeepValue === "low" && player.lp - lpCost < 2000) {
+    return false;
+  }
+  return true;
+}
+
+async function confirmHumanUpkeepPayment(action, game, player, source, lpCost) {
+  if (action.promptPlayer === false) return true;
+
+  const ui = getUI(game);
+  if (ui && typeof ui.showConfirmPrompt === "function") {
+    const message =
+      action.promptMessage ||
+      `Pay ${lpCost} LP to maintain ${source.name || "this card"}?`;
+    const result = ui.showConfirmPrompt(message, {
+      kind: "upkeep_cost",
+      cardName: source.name,
+      lpCost,
+      playerId: player.id,
+      confirmLabel: action.confirmLabel || `Pay ${lpCost} LP`,
+      cancelLabel: action.cancelLabel || "Send to GY",
+      title: action.promptTitle || "Maintenance Cost",
+    });
+    return result && typeof result.then === "function"
+      ? !!(await result)
+      : !!result;
+  }
+
+  if (typeof window !== "undefined" && typeof window.confirm === "function") {
+    return window.confirm(
+      action.promptMessage ||
+        `Pay ${lpCost} LP to maintain ${source.name || "this card"}?`
+    );
+  }
+
+  return true;
+}
+
 /**
  * Generic handler for upkeep cost: pay LP or send card to graveyard
  * Implements the "Shadow-Heart Shield" upkeep effect pattern
@@ -600,50 +685,40 @@ export async function handleUpkeepPayOrSendToGrave(
 
   const failureZone = action.failureZone || "graveyard";
 
-  // Check if LP is available
-
-  if (player.lp < lpCost) {
-    // Send source to graveyard
-
-    const sourceZone =
-      typeof engine.findCardZone === "function"
-        ? engine.findCardZone(player, source)
-        : null;
-
-    if (sourceZone) {
-      if (failureZone === "graveyard" && typeof game.moveCard === "function") {
-        game.moveCard(source, player, "graveyard", { fromZone: sourceZone });
-      } else {
-        const zoneArr = player[sourceZone] || [];
-
-        const idx = zoneArr.indexOf(source);
-
-        if (idx !== -1) {
-          zoneArr.splice(idx, 1);
-
-          if (failureZone === "graveyard") {
-            player.graveyard = player.graveyard || [];
-
-            player.graveyard.push(source);
-          } else if (failureZone === "banished") {
-            player.banished = player.banished || [];
-
-            player.banished.push(source);
-          }
-        }
-      }
-    }
-
-    getUI(game)?.log(
-      `${source.name} sent to ${failureZone} (insufficient LP for upkeep).`
+  const sourceZone = findSourceZone(engine, player, source);
+  const sendToFailureZone = (reason) => {
+    const moved = moveUpkeepSourceToFailureZone(
+      game,
+      player,
+      source,
+      failureZone,
+      sourceZone
     );
-
+    getUI(game)?.log(
+      `${source.name} sent to ${failureZone} (${reason}).`
+    );
     game.updateBoard();
+    return moved;
+  };
 
+  if (!sourceZone) {
+    getUI(game)?.log(`${source.name} is no longer on the field for upkeep.`);
     return true; // Effect resolved, just couldn't pay
   }
 
-  // Can pay LP, deduct it
+  if (player.lp < lpCost) {
+    sendToFailureZone("insufficient LP for upkeep");
+    return true;
+  }
+
+  const shouldPay = isAI(player)
+    ? shouldAiPayUpkeep(action, player, source, lpCost)
+    : await confirmHumanUpkeepPayment(action, game, player, source, lpCost);
+
+  if (!shouldPay) {
+    sendToFailureZone("upkeep not paid");
+    return true;
+  }
 
   player.lp -= lpCost;
 

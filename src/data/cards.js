@@ -1025,6 +1025,7 @@
         id: "shadow_heart_shield_upkeep_effect",
         timing: "on_event",
         event: "standby_phase",
+        promptUser: false,
         actions: [
           {
             type: "upkeep_pay_or_send_to_grave",

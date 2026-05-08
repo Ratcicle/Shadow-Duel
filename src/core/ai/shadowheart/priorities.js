@@ -14,6 +14,217 @@ import {
   isShadowHeart,
 } from "./knowledge.js";
 
+const SHADOW_HEART_OFFENSIVE_PAYOFFS = [
+  "Polymerization",
+  "Shadow-Heart Scale Dragon",
+  "Shadow-Heart Demon Arctroth",
+  "Shadow-Heart Death Wyrm",
+  "Shadow-Heart Leviathan",
+  "Shadow-Heart Purge",
+  "Shadow-Heart Rage",
+  "Shadow-Heart Battle Hymn",
+  "The Shadow Heart",
+];
+
+function cardCountByName(cards = []) {
+  const counts = new Map();
+  for (const card of cards) {
+    if (!card?.name) continue;
+    counts.set(card.name, (counts.get(card.name) || 0) + 1);
+  }
+  return counts;
+}
+
+export function isCovenantLive(analysis) {
+  const controlledCards =
+    (analysis?.field?.length || 0) +
+    (analysis?.spellTrap?.length || 0) +
+    (analysis?.fieldSpell ? 1 : 0);
+  return controlledCards === 0;
+}
+
+export function evaluateShadowHeartOffensivePlan(analysis) {
+  const hand = analysis?.hand || [];
+  const field = analysis?.field || [];
+  const graveyard = analysis?.graveyard || [];
+  const oppField = analysis?.oppField || [];
+  const oppLp = analysis?.oppLp || 0;
+  const phase = analysis?.phase || "main1";
+
+  const attackers = field.filter(
+    (card) =>
+      card &&
+      card.cardKind === "monster" &&
+      (isShadowHeart(card) || isShadowHeartByName(card.name)) &&
+      !card.isFacedown &&
+      card.position === "attack" &&
+      !card.cannotAttackThisTurn &&
+      !card.hasAttacked,
+  );
+  const totalAttack = attackers.reduce((sum, card) => sum + (card.atk || 0), 0);
+  const directLethal = oppField.length === 0 && totalAttack >= oppLp && oppLp > 0;
+  const battleHymnLethal =
+    phase !== "main2" &&
+    hand.some((card) => card.name === "Shadow-Heart Battle Hymn") &&
+    attackers.length > 0 &&
+    oppField.length === 0 &&
+    totalAttack + attackers.length * 500 >= oppLp &&
+    oppLp > 0;
+
+  const scaleOnField = field.find(
+    (card) =>
+      card?.name === "Shadow-Heart Scale Dragon" &&
+      !card.isFacedown &&
+      card.position === "attack" &&
+      !card.cannotAttackThisTurn,
+  );
+  const scaleInHand = hand.some((card) => card.name === "Shadow-Heart Scale Dragon");
+  const scaleSolo =
+    !!scaleOnField &&
+    field.filter((card) => card && card.cardKind === "monster").length === 1;
+  const rageLive =
+    phase !== "main2" &&
+    scaleSolo &&
+    hand.some((card) => card.name === "Shadow-Heart Rage");
+
+  const purgeWindow =
+    phase !== "main2" &&
+    hand.some((card) => card.name === "Shadow-Heart Purge") &&
+    attackers.length > 0 &&
+    oppField.some((target) => {
+      if (!target || target.cardKind !== "monster" || target.isFacedown) {
+        return false;
+      }
+      const currentAtk = target.atk || 0;
+      const debuffedAtk = Math.max(0, currentAtk - 1000);
+      if (currentAtk > 0 && currentAtk <= 1000) return true;
+      return attackers.some((attacker) => {
+        const atk = attacker.atk || 0;
+        const before = atk > currentAtk ? atk - currentAtk : 0;
+        const after = atk > debuffedAtk ? atk - debuffedAtk : 0;
+        return (atk <= currentAtk && atk > debuffedAtk) || after >= oppLp || after - before >= 1000;
+      });
+    });
+
+  const allFusionCards = [...hand, ...field];
+  const shMonsters = allFusionCards.filter(
+    (card) =>
+      card &&
+      card.cardKind === "monster" &&
+      (isShadowHeart(card) || isShadowHeartByName(card.name)),
+  );
+  const scaleCount = shMonsters.filter(
+    (card) => card.name === "Shadow-Heart Scale Dragon",
+  ).length;
+  const level5Plus = shMonsters.filter(
+    (card) => card.name !== "Shadow-Heart Scale Dragon" && (card.level || 0) >= 5,
+  ).length;
+  const demonDragonFusionReady = scaleCount > 0 && (level5Plus > 0 || scaleCount >= 2);
+  const warlordFusionLikelyReady = shMonsters.length >= 2;
+  const fusionNear =
+    hand.some((card) => card.name === "Polymerization") &&
+    (demonDragonFusionReady || warlordFusionLikelyReady);
+
+  const comebackReady =
+    field.length === 0 &&
+    hand.some((card) => card.name === "The Shadow Heart") &&
+    graveyard.some(
+      (card) =>
+        card?.cardKind === "monster" &&
+        (isShadowHeart(card) || isShadowHeartByName(card.name)),
+    );
+
+  const preserveNames = new Set();
+  if (fusionNear) {
+    preserveNames.add("Polymerization");
+    preserveNames.add("Shadow-Heart Scale Dragon");
+    preserveNames.add("Shadow-Heart Demon Arctroth");
+    preserveNames.add("Shadow-Heart Leviathan");
+    preserveNames.add("Shadow-Heart Griffin");
+  }
+  if (purgeWindow) preserveNames.add("Shadow-Heart Purge");
+  if (battleHymnLethal || attackers.length >= 2) {
+    preserveNames.add("Shadow-Heart Battle Hymn");
+  }
+  if (rageLive || scaleOnField || scaleInHand) {
+    preserveNames.add("Shadow-Heart Rage");
+    preserveNames.add("Shadow-Heart Scale Dragon");
+  }
+  if (comebackReady || field.length === 0) preserveNames.add("The Shadow Heart");
+
+  return {
+    attackers,
+    totalAttack,
+    directLethal,
+    battleHymnLethal,
+    rageLive,
+    purgeWindow,
+    fusionNear,
+    comebackReady,
+    scaleOnField: !!scaleOnField,
+    scaleInHand,
+    hasMajorSwing:
+      directLethal ||
+      battleHymnLethal ||
+      rageLive ||
+      purgeWindow ||
+      fusionNear ||
+      comebackReady,
+    preserveNames: [...preserveNames],
+  };
+}
+
+export function buildShadowHeartCostPreferences(analysis) {
+  const hand = analysis?.hand || [];
+  const handCounts = cardCountByName(hand);
+  const offensivePlan = evaluateShadowHeartOffensivePlan(analysis);
+  const preferNames = new Set([
+    "Shadow-Heart Coward",
+    "Shadow-Heart Specter",
+  ]);
+
+  const geckoHasClearSpecialLine =
+    hand.some((card) => card.name === "Shadow-Heart Imp") ||
+    (analysis?.field || []).some((card) => card.name === "Shadow-Heart Imp");
+  if (!geckoHasClearSpecialLine) {
+    preferNames.add("Shadow-Heart Gecko");
+  }
+
+  for (const [name, count] of handCounts.entries()) {
+    if (count >= 2) preferNames.add(name);
+  }
+
+  const hasScale =
+    hand.some((card) => card.name === "Shadow-Heart Scale Dragon") ||
+    (analysis?.field || []).some((card) => card.name === "Shadow-Heart Scale Dragon");
+  if (!hasScale) {
+    preferNames.add("Shadow-Heart Rage");
+  }
+
+  if (!isCovenantLive(analysis)) {
+    preferNames.add("Shadow-Heart Covenant");
+  }
+
+  const preserveNames = new Set(offensivePlan.preserveNames || []);
+  if (offensivePlan.hasMajorSwing) {
+    for (const name of SHADOW_HEART_OFFENSIVE_PAYOFFS) {
+      if (!preferNames.has(name)) preserveNames.add(name);
+    }
+  }
+
+  return {
+    archetype: "Shadow-Heart",
+    preferNames: [...preferNames],
+    preserveNames: [...preserveNames],
+    offensivePayoffNames: SHADOW_HEART_OFFENSIVE_PAYOFFS,
+    preserveLastOffensivePayoff: offensivePlan.hasMajorSwing,
+    availableOffensivePayoffs: hand.filter((card) =>
+      SHADOW_HEART_OFFENSIVE_PAYOFFS.includes(card.name),
+    ).length,
+    offensivePlan,
+  };
+}
+
 /**
  * @typedef {Object} SpellDecision
  * @property {boolean} yes
@@ -178,6 +389,13 @@ export function shouldPlaySpell(card, analysis) {
 
   // Shadow-Heart Covenant - Searcher genérico (custo: 800 LP)
   if (name === "Shadow-Heart Covenant") {
+    if (!isCovenantLive(analysis)) {
+      return {
+        yes: false,
+        reason: "Covenant requer controlar nenhum outro card",
+      };
+    }
+
     // Prioridade MÁXIMA em T1-T2 para buscar peças antes de outras ações
     const turnCounter = analysis.game?.turnCounter || 0;
     const isEarlyGame = turnCounter <= 2;

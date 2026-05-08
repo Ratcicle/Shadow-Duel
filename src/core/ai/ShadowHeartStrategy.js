@@ -38,6 +38,7 @@ import {
   selectBestTributes,
   evaluateTributeTrade,
   getTributeRequirementFor,
+  buildShadowHeartCostPreferences,
 } from "./shadowheart/priorities.js";
 import {
   evaluateMonster,
@@ -48,8 +49,39 @@ import {
   simulateSpellEffect,
 } from "./shadowheart/simulation.js";
 
-function buildShadowHeartSpellActivationContext(card, bot, opponent) {
-  if (card?.name !== "Shadow-Heart Purge") return null;
+function canActivateShadowHeartSpell(game, card, bot, activationContext = {}) {
+  if (!game || game._isPerspectiveState === true) return { ok: true };
+  const actualGame = game._gameRef || game;
+
+  if (
+    actualGame.effectEngine &&
+    typeof actualGame.effectEngine.canActivateSpellFromHandPreview === "function"
+  ) {
+    return actualGame.effectEngine.canActivateSpellFromHandPreview(card, bot, {
+      activationContext,
+    });
+  }
+
+  if (actualGame.effectEngine && typeof actualGame.effectEngine.canActivate === "function") {
+    return actualGame.effectEngine.canActivate(card, bot);
+  }
+
+  return { ok: true };
+}
+
+function buildShadowHeartSpellActivationContext(card, bot, opponent, analysis) {
+  const costPreferences = buildShadowHeartCostPreferences(analysis);
+  const actionContext = {
+    costPreferences,
+  };
+
+  if (card?.name !== "Shadow-Heart Purge") {
+    return {
+      autoSelectTargets: true,
+      autoSelectSingleTarget: true,
+      actionContext,
+    };
+  }
 
   const attackers = (bot?.field || []).filter(
     (monster) =>
@@ -66,6 +98,7 @@ function buildShadowHeartSpellActivationContext(card, bot, opponent) {
     autoSelectSingleTarget: true,
     logTargets: false,
     actionContext: {
+      ...actionContext,
       targetPreferences: {
         purge_target_monster: {
           role: "temporary_stat_debuff",
@@ -121,8 +154,10 @@ export default class ShadowHeartStrategy extends BaseStrategy {
       hand: (bot.hand || []).map((c) => ({
         name: c.name,
         type: c.cardKind,
+        cardKind: c.cardKind,
         level: c.level,
         atk: c.atk,
+        archetype: c.archetype,
       })),
       field: (bot.field || []).map((c) => ({
         name: c.name,
@@ -138,9 +173,11 @@ export default class ShadowHeartStrategy extends BaseStrategy {
         cannotBeDestroyedByBattle: c.cannotBeDestroyedByBattle,
       })),
       graveyard: (bot.graveyard || []).filter((c) => isShadowHeart(c)),
+      spellTrap: (bot.spellTrap || []).filter(Boolean),
       fieldSpell: bot.fieldSpell?.name || null,
       lp: bot.lp,
       summonCount: bot.summonCount || 0,
+      game,
 
       // Informações de timing (para evitar desperdício de recursos)
       phase: game.phase || "main1",
@@ -363,9 +400,21 @@ export default class ShadowHeartStrategy extends BaseStrategy {
       }
 
       // Só verificar canActivate em game real (não simulado)
+      const activationContext = buildShadowHeartSpellActivationContext(
+        card,
+        bot,
+        opponent,
+        analysis,
+      );
+
       if (!isSimulatedState) {
         const actualGame = game._gameRef || game;
-        const check = actualGame.effectEngine?.canActivate?.(card, bot);
+        const check = canActivateShadowHeartSpell(
+          game,
+          card,
+          bot,
+          activationContext,
+        );
         if (!check?.ok) return;
 
         // VALIDAÇÃO EXTRA: Polymerization requer materiais válidos
@@ -395,6 +444,22 @@ export default class ShadowHeartStrategy extends BaseStrategy {
           macroStrategy,
         );
         finalPriority += macroBuff;
+        const offensivePlan =
+          activationContext?.actionContext?.costPreferences?.offensivePlan;
+        if (offensivePlan?.hasMajorSwing) {
+          if (card.name === "Shadow-Heart Purge" && offensivePlan.purgeWindow) {
+            finalPriority += 5;
+          } else if (
+            card.name === "Shadow-Heart Battle Hymn" &&
+            (offensivePlan.battleHymnLethal || offensivePlan.attackers?.length >= 2)
+          ) {
+            finalPriority += offensivePlan.battleHymnLethal ? 7 : 3;
+          } else if (card.name === "Shadow-Heart Rage" && offensivePlan.rageLive) {
+            finalPriority += 7;
+          } else if (card.name === "Polymerization" && offensivePlan.fusionNear) {
+            finalPriority += 4;
+          }
+        }
 
         const spellSafety = assessActionSafety(
           { bot, player: opponent },
@@ -410,12 +475,6 @@ export default class ShadowHeartStrategy extends BaseStrategy {
           finalPriority -= 8;
         }
 
-        const activationContext = buildShadowHeartSpellActivationContext(
-          card,
-          bot,
-          opponent,
-        );
-
         actions.push({
           type: "spell",
           index,
@@ -424,7 +483,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
           cardName: card.name,
           macroBuff,
           safetyScore: spellSafety.riskScore,
-          ...(activationContext ? { activationContext } : {}),
+          activationContext,
         });
       } else {
         log(`  ❌ Spell descartada: ${card.name} - ${decision.reason}`);
@@ -458,6 +517,13 @@ export default class ShadowHeartStrategy extends BaseStrategy {
             macroStrategy,
           );
           finalPriority += macroBuff;
+          const offensivePlan = buildShadowHeartCostPreferences(analysis).offensivePlan;
+          if (
+            card.name === "Shadow-Heart Scale Dragon" &&
+            offensivePlan?.hasMajorSwing
+          ) {
+            finalPriority += 3;
+          }
 
           const summonSafety = assessActionSafety(
             { bot, player: opponent },
@@ -690,8 +756,35 @@ export default class ShadowHeartStrategy extends BaseStrategy {
         );
 
         let spellsFound = 0;
+        const canUseFallbackSpell = (card) => {
+          const activationContext = buildShadowHeartSpellActivationContext(
+            card,
+            realBot2,
+            opponent,
+            analysis,
+          );
+          const preview = canActivateShadowHeartSpell(
+            game,
+            card,
+            realBot2,
+            activationContext,
+          );
+          return {
+            ok: !!preview?.ok,
+            reason: preview?.reason || "preview failed",
+            activationContext,
+          };
+        };
         (realBot2.hand || []).forEach((card, index) => {
           if (card.cardKind !== "spell") return;
+
+          const fallbackCheck = canUseFallbackSpell(card);
+          if (!fallbackCheck.ok) {
+            log(
+              `    Fallback spell bloqueada: ${card.name} (${fallbackCheck.reason})`,
+            );
+            return;
+          }
 
           // VALIDAÇÃO: Polymerization só pode ser ativado se tiver materiais válidos
           if (card.name === "Polymerization") {
@@ -713,11 +806,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
           }
 
           spellsFound++;
-          const activationContext = buildShadowHeartSpellActivationContext(
-            card,
-            realBot2,
-            opponent,
-          );
+          const activationContext = fallbackCheck.activationContext;
 
           // Tentar qualquer spell, mesmo sem validação prévia
           if (bot?.debug) {

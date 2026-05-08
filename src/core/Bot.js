@@ -67,42 +67,38 @@ export default class Bot extends Player {
   getShadowHeartDeck() {
     return [
       // === MONSTROS ===
-      // Extenders e Searchers
-      60,
-      60,
-      60, // Shadow-Heart Imp (extender - 3x)
-      61, // Shadow-Heart Gecko (draw engine - 1x)
-      53,
-      53, // Shadow-Heart Specter (recursão GY - 2x)
-      62,
-      62, // Shadow-Heart Coward (discard value - 2x)
-      52,
-      52, // Shadow-Heart Abyssal Eel (utility - 2x)
-      70, // Shadow-Heart Leviathan (burn beater - 1x)
-      69, // Shadow-Heart Death Wyrm (hand trap boss - 1x)
-      // Bosses
+      69, // Shadow-Heart Death Wyrm (1x)
+      57, // Shadow-Heart Demon Arctroth (1x)
       64,
-      64, // Shadow-Heart Scale Dragon (boss 3000 ATK - 2x)
-      57, // Shadow-Heart Demon Arctroth (boss com remoção - 1x)
-      67,
-      67, // Shadow-Heart Griffin (sem tributo - 2x)
+      64, // Shadow-Heart Scale Dragon (2x)
+      70, // Shadow-Heart Leviathan (1x)
+      67, // Shadow-Heart Griffin (1x)
+      52,
+      52, // Shadow-Heart Abyssal Eel (2x)
+      60,
+      60, // Shadow-Heart Imp (2x)
       71,
-      71, // Shadow-Heart Void Mage (buscador de spell/trap - 2x)
+      71,
+      71, // Shadow-Heart Void Mage (3x)
+      62, // Shadow-Heart Coward (1x)
+      61, // Shadow-Heart Gecko (1x)
+      53, // Shadow-Heart Specter (1x)
+
       // === SPELLS ===
+      68, // Darkness Valley (1x)
       13,
-      13, // Polymerization (fusão - 2x)
-      68,
-      68, // Darkness Valley (field spell - 2x)
-      63,
-      63, // Shadow-Heart Infusion (revive - 2x)
+      13, // Polymerization (2x)
+      58, // Shadow-Heart Battle Hymn (1x)
+      72, // Shadow-Heart Cathedral (1x)
       59,
-      59, // Shadow-Heart Covenant (searcher - 2x)
-      58, // Shadow-Heart Battle Hymn (buff - 1x)
-      65, // Shadow-Heart Rage (OTK enabler - 1x)
-      54, // Shadow-Heart Purge (debuff/remocao condicional - 1x)
-      66, // Shadow-Heart Shield (proteção - 1x)
-      73,
-      73, // The Shadow Heart (recuperação de board - 2x)
+      59,
+      59, // Shadow-Heart Covenant (3x)
+      63,
+      63, // Shadow-Heart Infusion (2x)
+      54, // Shadow-Heart Purge (1x)
+      65, // Shadow-Heart Rage (1x)
+      66, // Shadow-Heart Shield (1x)
+      73, // The Shadow Heart (1x)
     ];
   }
 

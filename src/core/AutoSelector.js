@@ -309,12 +309,33 @@ export default class AutoSelector {
         costPreferences?.archetype &&
         (baseCard?.archetype === costPreferences.archetype ||
           baseCard?.archetypes?.includes?.(costPreferences.archetype));
+      if (costPreferences) {
+        const preferNames = costPreferences.preferNames || [];
+        const preserveNames = costPreferences.preserveNames || [];
+        if (preferNames.includes(baseCard?.name)) costScore -= 2.5;
+        if (preserveNames.includes(baseCard?.name)) costScore += 18;
+        if (
+          costPreferences.preserveLastOffensivePayoff &&
+          isOffensivePayoffCost(
+            baseCard,
+            costPreferences.offensivePayoffNames || [],
+          )
+        ) {
+          const availablePayoffs = Number.isFinite(
+            costPreferences.availableOffensivePayoffs,
+          )
+            ? costPreferences.availableOffensivePayoffs
+            : countAvailableOffensivePayoffs(
+                ownerPlayer,
+                costPreferences.offensivePayoffNames || [],
+              );
+          if (availablePayoffs <= 1) costScore += 80;
+        }
+      }
       if (isPreferredArchetype) {
         const preferNames = costPreferences.preferNames || [];
         const preserveNames = costPreferences.preserveNames || [];
         const offensivePayoffNames = costPreferences.offensivePayoffNames || [];
-        if (preferNames.includes(baseCard?.name)) costScore -= 2.5;
-        if (preserveNames.includes(baseCard?.name)) costScore += 6;
         if (
           costPreferences.preserveLastOffensivePayoff &&
           isOffensivePayoffCost(baseCard, offensivePayoffNames)
