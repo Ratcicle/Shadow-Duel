@@ -102,6 +102,15 @@ export function canStartAction(options = {}) {
 
 export function guardActionStart(options = {}, logToRenderer = true) {
   const result = this.canStartAction(options);
+  if (!result.ok) {
+    this._arenaTracker?.recordBlockedAction?.({
+      actor: options.actor || null,
+      kind: options.kind || "action",
+      reason: result.reason,
+      code: result.code,
+      turn: this.turnCounter,
+    });
+  }
   if (!result.ok && logToRenderer && result.reason && this.ui?.log) {
     this.ui.log(result.reason);
   }

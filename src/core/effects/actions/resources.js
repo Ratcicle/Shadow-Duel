@@ -24,6 +24,7 @@ export function applyDraw(action, ctx) {
           cards: result.drawn,
           fromZone: "deck",
           sourceCard: ctx.source,
+          effectId: ctx.effect?.id || null,
         });
       }
     }
@@ -78,7 +79,18 @@ export function applyHeal(action, ctx) {
   const amount = action.amount ?? 0;
 
   // LP gain multiplier is now handled by Player.gainLP() based on passive effects
+  const before = targetPlayer.lp || 0;
   targetPlayer.gainLP(amount);
+  const gained = Math.max(0, (targetPlayer.lp || 0) - before);
+  if (gained > 0) {
+    this.game?.notify?.("lp_change", {
+      player: targetPlayer,
+      sourceCard: ctx.source,
+      lpGained: gained,
+      before,
+      after: targetPlayer.lp,
+    });
+  }
   return amount !== 0;
 }
 
@@ -107,7 +119,18 @@ export function applyHealPerArchetypeMonster(action, ctx) {
 
   const totalHeal = count * amountPerMonster;
   if (totalHeal > 0) {
+    const before = targetPlayer.lp || 0;
     targetPlayer.gainLP(totalHeal);
+    const gained = Math.max(0, (targetPlayer.lp || 0) - before);
+    if (gained > 0) {
+      this.game?.notify?.("lp_change", {
+        player: targetPlayer,
+        sourceCard: ctx.source,
+        lpGained: gained,
+        before,
+        after: targetPlayer.lp,
+      });
+    }
     console.log(
       `${targetPlayer.id} gained ${totalHeal} LP from ${count} ${archetype} monster(s).`
     );
@@ -130,7 +153,18 @@ export async function applyDamage(action, ctx) {
   // Apply damage to LP only if not in trigger-only mode
   // (inflictDamage from Game already applied the damage)
   if (!action.triggerOnly) {
+    const before = targetPlayer.lp || 0;
     targetPlayer.takeDamage(amount);
+    const lost = Math.max(0, before - (targetPlayer.lp || 0));
+    if (lost > 0) {
+      this.game?.notify?.("damage_inflicted", {
+        target: targetPlayer,
+        sourceCard: ctx.source,
+        amount: lost,
+        lpLost: lost,
+        newLP: targetPlayer.lp,
+      });
+    }
   }
 
   // Trigger effects that care about opponent losing LP

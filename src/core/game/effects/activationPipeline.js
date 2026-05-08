@@ -56,6 +56,22 @@ export async function runActivationPipeline(config = {}) {
     this.devLog(tag, { summary, ...detail });
   };
 
+  const trackActivationAttempt = (result = {}, extra = {}) => {
+    this._arenaTracker?.recordActivationAttempt?.({
+      player: owner,
+      card: resolvedCard,
+      type: selectionKind,
+      success: result.success === true,
+      blocked:
+        result.blockedByGuard === true ||
+        result.blockedOncePerTurn === true ||
+        extra.blocked === true,
+      reason: result.reason || extra.reason || null,
+      code: result.code || extra.code || null,
+      turn: this.turnCounter,
+    });
+  };
+
   const guardResult = this.canStartAction({
     actor: owner,
     kind: config.guardKind || selectionKind || "activation",
@@ -76,13 +92,15 @@ export async function runActivationPipeline(config = {}) {
     ) {
       this.ui.log(guardResult.reason);
     }
-    return {
+    const blockedResult = {
       success: false,
       needsSelection: false,
       reason: guardResult.reason,
       code: guardResult.code,
       blockedByGuard: true,
     };
+    trackActivationAttempt(blockedResult, { blocked: true });
+    return blockedResult;
   }
 
   if (typeof config.gate === "function") {
@@ -92,6 +110,11 @@ export async function runActivationPipeline(config = {}) {
       if (gateResult.reason) {
         this.ui.log(gateResult.reason);
       }
+      trackActivationAttempt({
+        success: false,
+        reason: gateResult.reason,
+        code: gateResult.code,
+      });
       return gateResult;
     }
   }
@@ -103,6 +126,11 @@ export async function runActivationPipeline(config = {}) {
       if (previewResult.reason) {
         this.ui.log(previewResult.reason);
       }
+      trackActivationAttempt({
+        success: false,
+        reason: previewResult.reason,
+        code: previewResult.code,
+      });
       return previewResult;
     }
     logPipeline("PIPELINE_PREVIEW_OK");
@@ -129,12 +157,14 @@ export async function runActivationPipeline(config = {}) {
       if (optCheck.reason) {
         this.ui.log(optCheck.reason);
       }
-      return {
+      const blockedResult = {
         success: false,
         needsSelection: false,
         reason: optCheck.reason,
         blockedOncePerTurn: true,
       };
+      trackActivationAttempt(blockedResult, { blocked: true });
+      return blockedResult;
     }
     oncePerTurnInfo = {
       card: optCard,
@@ -202,11 +232,13 @@ export async function runActivationPipeline(config = {}) {
       );
     } catch (err) {
       console.error("[Game] Activation pipeline error:", err);
-      return {
+      const errorResult = {
         success: false,
         needsSelection: false,
         reason: "Resolution failed.",
       };
+      trackActivationAttempt(errorResult);
+      return errorResult;
     }
   };
 
@@ -423,6 +455,7 @@ export async function runActivationPipeline(config = {}) {
       if (typeof config.onFailure === "function") {
         config.onFailure(normalized, activationContext);
       }
+      trackActivationAttempt(normalized);
       return normalized;
     }
 
@@ -473,6 +506,7 @@ export async function runActivationPipeline(config = {}) {
     if (typeof config.onSuccess === "function") {
       await config.onSuccess(normalized, activationContext);
     }
+    trackActivationAttempt({ ...normalized, success: true });
     return normalized;
   };
 
@@ -487,6 +521,7 @@ export async function runActivationPipeline(config = {}) {
     if (typeof config.onFailure === "function") {
       await config.onFailure(negatedResult, activationContext);
     }
+    trackActivationAttempt(negatedResult, { blocked: true });
     return negatedResult;
   }
 

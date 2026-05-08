@@ -104,7 +104,7 @@ export function cleanupTokenReferences(token, tokenOwner) {
  * @returns {Object|Promise} Result of the move operation
  */
 export function moveCard(card, destPlayer, toZone, options = {}) {
-  return this.runZoneOp(
+  const result = this.runZoneOp(
     "MOVE_CARD",
     () => this.moveCardInternal(card, destPlayer, toZone, options),
     {
@@ -114,6 +114,20 @@ export function moveCard(card, destPlayer, toZone, options = {}) {
       toZone,
     }
   );
+  if (result && typeof result.then === "function") {
+    return result.then((moveResult) => {
+      this._arenaTracker?.recordZoneMove?.(
+        card,
+        destPlayer,
+        toZone,
+        options,
+        moveResult,
+      );
+      return moveResult;
+    });
+  }
+  this._arenaTracker?.recordZoneMove?.(card, destPlayer, toZone, options, result);
+  return result;
 }
 
 function buildZoneMoveAnimationIntent(game, card, fromOwner, fromZone, destPlayer, toZone, options) {

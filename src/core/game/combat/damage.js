@@ -16,7 +16,18 @@ export function inflictDamage(player, amount, options = {}) {
   if (!player || !amount || amount <= 0) return;
 
   // Apply the damage to player LP
+  const before = player.lp || 0;
   player.takeDamage(amount);
+  const actual = Math.max(0, before - (player.lp || 0));
+  if (actual > 0) {
+    this.notify?.("damage_inflicted", {
+      target: player,
+      sourceCard: options.sourceCard || null,
+      amount: actual,
+      lpLost: actual,
+      newLP: player.lp,
+    });
+  }
 
   // Trigger opponent_damage effects via EffectEngine
   if (

@@ -60,10 +60,18 @@ export async function handlePayLP(action, ctx, targets, engine) {
     return false;
   }
 
+  const before = player.lp;
   player.lp -= amount;
   console.log(
     `[handlePayLP] SUCCESS: Paid ${amount} LP, remaining ${player.lp}`
   );
+  game.notify?.("lp_change", {
+    player,
+    sourceCard: ctx.source,
+    lpPaid: amount,
+    before,
+    after: player.lp,
+  });
 
   getUI(game)?.log(`${player.name || player.id} paid ${amount} LP.`);
 
@@ -206,6 +214,7 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
         cards: selected,
         fromZone: sourceZone,
         sourceCard: source,
+        effectId: ctx.effect?.id || null,
       });
     }
 

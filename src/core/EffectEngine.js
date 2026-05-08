@@ -110,6 +110,14 @@ export default class EffectEngine {
         actionPosition,
         forced: true,
       });
+      this.game?.notify?.("position_chosen", {
+        card,
+        player,
+        position: actionPosition,
+        context: "special_summon",
+        turn: this.game?.turnCounter,
+        phase: this.game?.phase,
+      });
       return actionPosition;
     }
 
@@ -136,6 +144,14 @@ export default class EffectEngine {
         actionPosition,
         allowsChoice: true,
         viaStrategy: !!strategy?.chooseSpecialSummonPosition,
+      });
+      this.game?.notify?.("position_chosen", {
+        card,
+        player,
+        position: chosen,
+        context: "special_summon",
+        turn: this.game?.turnCounter,
+        phase: this.game?.phase,
       });
       return chosen;
     }
@@ -178,6 +194,14 @@ export default class EffectEngine {
       card: card?.name,
       actionPosition,
       fallback: true,
+    });
+    this.game?.notify?.("position_chosen", {
+      card,
+      player,
+      position: "attack",
+      context: "special_summon",
+      turn: this.game?.turnCounter,
+      phase: this.game?.phase,
     });
     return "attack";
   }

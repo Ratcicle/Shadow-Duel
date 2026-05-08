@@ -1083,6 +1083,7 @@ export async function handleSwitchPosition(action, ctx, targets, engine) {
 
     // Switch position
 
+    const previousPosition = card.position;
     const newPosition = card.position === "attack" ? "defense" : "attack";
 
     card.position = newPosition;
@@ -1110,6 +1111,15 @@ export async function handleSwitchPosition(action, ctx, targets, engine) {
 
       card.def = (card.def || 0) + action.defBoost;
     }
+
+    game.notify?.("position_change", {
+      card,
+      player,
+      sourceCard: ctx.source,
+      fromPosition: previousPosition,
+      toPosition: newPosition,
+      wasFlipped: false,
+    });
 
     switched = true;
 

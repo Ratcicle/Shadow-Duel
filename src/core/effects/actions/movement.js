@@ -94,12 +94,22 @@ export function applyMove(action, ctx, targets) {
       const finalPosition = shouldPromptForPosition
         ? chosenPosition || action.position || defaultFieldPosition || "attack"
         : chosenPosition ?? action.position ?? defaultFieldPosition;
+      const isCostMove =
+        toZone === "graveyard" &&
+        /cost|discard|material|tribute/i.test(
+          String(action.contextLabel || action.targetRef || action.reason || ""),
+        );
+      const contextLabel =
+        action.contextLabel || (isCostMove ? "cost" : "applyMove");
 
       if (this.game && typeof this.game.moveCard === "function") {
         this.game.moveCard(card, destPlayer, toZone, {
           position: finalPosition,
           isFacedown: action.isFacedown,
           resetAttackFlags: action.resetAttackFlags,
+          contextLabel,
+          sourceCard: ctx?.source || null,
+          effectId: ctx?.effect?.id || null,
           allowExtraDeckMonsterToHand: shouldAllowExtraDeckMonsterToHand(
             action,
             ctx

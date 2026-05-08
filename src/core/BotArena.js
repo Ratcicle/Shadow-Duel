@@ -370,6 +370,7 @@ export default class BotArena {
     console.log(`${"═".repeat(50)}\n`);
 
     // Finalizar tracker e registrar no analytics
+    tracker.setCurrentTurn?.(game.turnCounter || 0);
     const duelResult = tracker.finalize(winner, outcome.reason, {
       player: game.player?.lp ?? 0,
       bot: game.bot?.lp ?? 0,
@@ -453,6 +454,7 @@ export default class BotArena {
           reason: END_REASONS.ERROR,
           finalLP: { player: 0, bot: 0 },
           totalTimeMs: 0,
+          errors: [err?.message || "Unknown error"],
         });
       }
 
@@ -551,6 +553,13 @@ export default class BotArena {
   }
 
   /**
+   * Exporta relatorio estrategico compacto.
+   */
+  exportStrategicReport() {
+    return this.analytics.exportStrategicReport();
+  }
+
+  /**
    * Faz download do CSV no browser.
    */
   downloadCSV(filename = "arena_results.csv") {
@@ -569,5 +578,12 @@ export default class BotArena {
    */
   downloadSummary(filename = "arena_summary.json") {
     this.analytics.downloadSummary(filename);
+  }
+
+  /**
+   * Faz download do relatorio estrategico no browser.
+   */
+  downloadStrategicReport(filename = "arena_strategic_report.json") {
+    this.analytics.downloadStrategicReport(filename);
   }
 }

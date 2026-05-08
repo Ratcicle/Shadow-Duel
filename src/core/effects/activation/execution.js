@@ -90,6 +90,7 @@ export async function activateMonsterFromGraveyard(
 
   const ctx = {
     source: card,
+    effect,
     player,
     opponent: this.game.getOpponent(player),
     activationZone: "graveyard",
@@ -212,6 +213,7 @@ export async function activateFieldSpell(
 
   const ctx = {
     source: card,
+    effect,
     player,
     opponent: this.game.getOpponent(player),
     activationZone: "fieldSpell",

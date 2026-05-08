@@ -29,9 +29,7 @@ desktop.ini
 .idea/
 
 # Local/generated project output
-/replays/local/
-/replays/tmp/
-/replays/generated/
+/replays
 /Training Digest/tmp/
 /Training Digest/generated/
 /wizard templates/generated/

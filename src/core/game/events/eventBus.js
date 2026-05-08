@@ -19,6 +19,10 @@ export function on(eventName, handler) {
  * @this {import('../../Game.js').default}
  */
 export async function emit(eventName, payload) {
+  this._arenaTracker?.recordEvent?.(eventName, payload, {
+    turn: this.turnCounter,
+    phase: this.phase,
+  });
   const list = this.eventListeners[eventName];
   if (list) {
     for (const fn of list) {
@@ -38,6 +42,10 @@ export async function emit(eventName, payload) {
  * @this {import('../../Game.js').default}
  */
 export function notify(eventName, payload) {
+  this._arenaTracker?.recordEvent?.(eventName, payload, {
+    turn: this.turnCounter,
+    phase: this.phase,
+  });
   const list = this.eventListeners[eventName];
   if (list) {
     for (const fn of list) {

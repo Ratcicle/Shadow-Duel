@@ -108,6 +108,9 @@ const arenaSpeedSelect = document.getElementById("arena-speed");
 const arenaAutoPauseCheckbox = document.getElementById("arena-auto-pause");
 const btnArenaStart = document.getElementById("btn-arena-start");
 const btnArenaCancel = document.getElementById("btn-arena-cancel");
+const btnArenaExportStrategic = document.getElementById(
+  "btn-arena-export-strategic",
+);
 const closeArenaBtn = document.querySelector(".close-arena");
 const arenaCompleted = document.getElementById("arena-completed");
 const arenaWins1 = document.getElementById("arena-wins-1");
@@ -1638,6 +1641,9 @@ function closeReplayDashboard() {
 // ============ Bot Arena ============
 
 let botArenaInstance = null;
+if (typeof window !== "undefined") {
+  window.botArenaInstance = null;
+}
 
 function openBotArenaModal() {
   startScreen.classList.add("hidden");
@@ -1690,6 +1696,10 @@ function resetBotArenaStats() {
   arenaAvgTurns.textContent = "-";
   arenaStatus.textContent = "Pronto";
   arenaLog.innerHTML = '<p class="log-entry">Aguardando início...</p>';
+  if (btnArenaExportStrategic) {
+    btnArenaExportStrategic.disabled =
+      !botArenaInstance?.getAnalytics?.()?.duelRecords?.length;
+  }
 }
 
 async function startBotArena() {
@@ -1707,6 +1717,9 @@ async function startBotArena() {
   btnArenaStart.disabled = true;
   btnArenaCancel.disabled = true;
   resetBotArenaStats();
+  if (btnArenaExportStrategic) {
+    btnArenaExportStrategic.disabled = true;
+  }
   arenaStatus.textContent = "Executando...";
 
   // Fechar o modal para exibir o tabuleiro em modo espectador
@@ -1719,6 +1732,9 @@ async function startBotArena() {
     ShadowHeartStrategy,
     LuminarchStrategy,
   );
+  if (typeof window !== "undefined") {
+    window.botArenaInstance = botArenaInstance;
+  }
 
   try {
     await botArenaInstance.startArena(
@@ -1736,6 +1752,9 @@ async function startBotArena() {
     arenaStatus.textContent = "Erro";
     btnArenaStart.disabled = false;
     btnArenaCancel.disabled = false;
+    if (btnArenaExportStrategic) {
+      btnArenaExportStrategic.disabled = true;
+    }
   }
 }
 
@@ -1796,9 +1815,25 @@ function addArenaLogEntry(text, className = "") {
 function finishBotArena(result) {
   btnArenaStart.disabled = false;
   btnArenaCancel.disabled = false;
+  if (btnArenaExportStrategic) {
+    btnArenaExportStrategic.disabled = !botArenaInstance
+      ?.getAnalytics?.()
+      ?.duelRecords?.length;
+  }
   arenaStatus.textContent = "Concluído";
   addArenaLogEntry(`✔️ Arena concluída! ${result.completed} duelos.`);
   botArenaModal.classList.remove("hidden");
+}
+
+function downloadBotArenaStrategicReport() {
+  if (!botArenaInstance?.getAnalytics?.()?.duelRecords?.length) {
+    addArenaLogEntry("Nenhum relatório estratégico disponível ainda.", "error");
+    return;
+  }
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  botArenaInstance.downloadStrategicReport(
+    `shadow-duel-strategic-report-${stamp}.json`,
+  );
 }
 
 btnDeckBuilder?.addEventListener("click", openDeckBuilder);
@@ -1846,6 +1881,10 @@ btnOpenLaboratory?.addEventListener("click", openLaboratory);
 closeReplayDashboardBtn?.addEventListener("click", closeReplayDashboard);
 btnArenaStart?.addEventListener("click", startBotArena);
 btnArenaCancel?.addEventListener("click", closeBotArenaModal);
+btnArenaExportStrategic?.addEventListener(
+  "click",
+  downloadBotArenaStrategicReport,
+);
 closeArenaBtn?.addEventListener("click", closeBotArenaModal);
 botPresetSelect?.addEventListener("change", (e) => {
   const value = e.target.value;

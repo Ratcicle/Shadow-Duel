@@ -116,10 +116,10 @@ export function evaluateShadowHeartOffensivePlan(analysis) {
   const scaleCount = shMonsters.filter(
     (card) => card.name === "Shadow-Heart Scale Dragon",
   ).length;
-  const level5Plus = shMonsters.filter(
-    (card) => card.name !== "Shadow-Heart Scale Dragon" && (card.level || 0) >= 5,
+  const level8Plus = shMonsters.filter(
+    (card) => card.name !== "Shadow-Heart Scale Dragon" && (card.level || 0) >= 8,
   ).length;
-  const demonDragonFusionReady = scaleCount > 0 && (level5Plus > 0 || scaleCount >= 2);
+  const demonDragonFusionReady = scaleCount > 0 && (level8Plus > 0 || scaleCount >= 2);
   const warlordFusionLikelyReady = shMonsters.length >= 2;
   const fusionNear =
     hand.some((card) => card.name === "Polymerization") &&
@@ -139,8 +139,19 @@ export function evaluateShadowHeartOffensivePlan(analysis) {
     preserveNames.add("Polymerization");
     preserveNames.add("Shadow-Heart Scale Dragon");
     preserveNames.add("Shadow-Heart Demon Arctroth");
-    preserveNames.add("Shadow-Heart Leviathan");
-    preserveNames.add("Shadow-Heart Griffin");
+    preserveNames.add("Shadow-Heart Death Wyrm");
+  }
+  // Proteger materiais do Demon Dragon mesmo sem Polymerization na mão,
+  // para não perder Scale Dragon + Lv8+ antes de sacar Poly.
+  const hasDemonDragonSetup =
+    scaleCount > 0 &&
+    shMonsters.some(
+      (c) => c.name !== "Shadow-Heart Scale Dragon" && (c.level || 0) >= 8,
+    );
+  if (hasDemonDragonSetup) {
+    preserveNames.add("Shadow-Heart Scale Dragon");
+    preserveNames.add("Shadow-Heart Demon Arctroth");
+    preserveNames.add("Shadow-Heart Death Wyrm");
   }
   if (purgeWindow) preserveNames.add("Shadow-Heart Purge");
   if (battleHymnLethal || attackers.length >= 2) {
@@ -257,28 +268,28 @@ export function shouldPlaySpell(card, analysis) {
       (c) => isShadowHeartByName(c.name) && c.cardKind === "monster"
     );
 
-    // ===== Demon Dragon (priority 12) =====
-    // Materiais: 1 "Shadow-Heart Scale Dragon" + 1 monstro Shadow-Heart Level 5+
+    // ===== Demon Dragon (priority 14) =====
+    // Materiais: 1 "Shadow-Heart Scale Dragon" + 1 monstro Shadow-Heart Level 8+
     const hasScaleDragon = allCards.some(
       (c) => c.name === "Shadow-Heart Scale Dragon"
     );
-    const validLevel5Plus = shMonsters.filter((c) => {
+    const validLevel8Plus = shMonsters.filter((c) => {
       if (c.name === "Shadow-Heart Scale Dragon") return false;
       const level = c.level || 0;
-      return level >= 5;
+      return level >= 8;
     });
     const scaleCount = allCards.filter(
       (c) => c.name === "Shadow-Heart Scale Dragon"
     ).length;
 
-    if (hasScaleDragon && (validLevel5Plus.length > 0 || scaleCount >= 2)) {
+    if (hasScaleDragon && (validLevel8Plus.length > 0 || scaleCount >= 2)) {
       const materialName =
-        validLevel5Plus.length > 0
-          ? validLevel5Plus[0].name
+        validLevel8Plus.length > 0
+          ? validLevel8Plus[0].name
           : "Shadow-Heart Scale Dragon";
       return {
         yes: true,
-        priority: 12,
+        priority: 14,
         reason: `Fusion: Demon Dragon (3000 ATK, destroy 2) com Scale Dragon + ${materialName}`,
       };
     }
@@ -298,7 +309,7 @@ export function shouldPlaySpell(card, analysis) {
     return {
       yes: false,
       reason:
-        "Sem materiais para fusão Shadow-Heart (Demon Dragon: Scale + Lv5+; Warlord: 2 SH)",
+        "Sem materiais para fusão Shadow-Heart (Demon Dragon: Scale + Lv8+; Warlord: 2 SH)",
     };
   }
 

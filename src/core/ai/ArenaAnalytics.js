@@ -16,6 +16,192 @@ export const END_REASONS = {
   CANCELLED: "cancelled",
 };
 
+const REPORT_VERSION = 1;
+const SEATS = ["player", "bot"];
+const TRACKED_EVENTS = new Set([
+  "after_summon",
+  "attack_declared",
+  "combat_resolved",
+  "spell_activated",
+  "trap_activated",
+  "effect_activated",
+  "cards_added_to_hand",
+  "card_to_grave",
+  "effect_targeted",
+  "target_selected",
+  "position_chosen",
+  "position_change",
+  "stat_buff_applied",
+  "damage_inflicted",
+  "lp_change",
+]);
+
+const SHADOWHEART_FINISHERS = new Set([
+  "Shadow-Heart Apex Dragon",
+  "Shadow-Heart Malicious Dragon",
+  "Shadow-Heart Demon Dragon",
+  "Shadow-Heart Tyrant Dragon",
+  "Shadow-Heart Archfiend Dragon",
+]);
+
+const SHADOWHEART_BOSSES = new Set([
+  ...SHADOWHEART_FINISHERS,
+  "Shadow-Heart Demon Dragon",
+  "Shadow-Heart Dragon",
+]);
+
+const EXTREME_DRAGON_RE = /Extreme Dragon|Supreme Bahamut Dragon/i;
+
+function createCounter() {
+  return Object.create(null);
+}
+
+function addCount(counter, key, amount = 1) {
+  if (!counter || !key) return;
+  counter[key] = (counter[key] || 0) + amount;
+}
+
+function topCounter(counter, limit = 12) {
+  return Object.entries(counter || {})
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, limit)
+    .map(([name, count]) => ({ name, count }));
+}
+
+function round(value, digits = 1) {
+  if (!Number.isFinite(value)) return 0;
+  const factor = 10 ** digits;
+  return Math.round(value * factor) / factor;
+}
+
+function cardName(card) {
+  if (typeof card === "string") return card;
+  return card?.name || card?.cardName || card?.label || null;
+}
+
+function cardNames(value) {
+  if (!value) return [];
+  const list = Array.isArray(value) ? value : [value];
+  return list.map(cardName).filter(Boolean);
+}
+
+function playerSeat(player) {
+  const id = typeof player === "string" ? player : player?.id;
+  return id === "player" || id === "bot" ? id : null;
+}
+
+function compactCardRef(card) {
+  if (!card) return null;
+  if (typeof card === "string") return { name: card };
+  return {
+    name: cardName(card),
+    id: card.id ?? null,
+    owner: card.owner ?? null,
+    zone: card.zone ?? null,
+    position: card.position ?? null,
+  };
+}
+
+function effectId(payload = {}) {
+  return payload.effectId || payload.effect?.id || payload.action?.effectId || null;
+}
+
+function sourceName(payload = {}) {
+  return cardName(payload.sourceCard || payload.source || payload.card);
+}
+
+function causalKey(card, source) {
+  const name = cardName(card);
+  const src = cardName(source);
+  return src ? `${name} <= ${src}` : name;
+}
+
+function classifyActivationEvent(eventName, payload = {}) {
+  const card = payload.card || payload.source || null;
+  const kind = card?.cardKind || null;
+  const effectType = String(payload.effectType || "");
+  const activationZone = String(payload.activationZone || "");
+
+  if (eventName === "spell_activated") return "spell";
+  if (eventName === "trap_activated") return "trap";
+  if (kind === "spell") return "spell";
+  if (kind === "trap") return "trap";
+  if (/spellTrapEffect|fieldSpell|spell_trap/i.test(effectType)) return "spell";
+  if (activationZone === "spellTrap" || activationZone === "fieldSpell") {
+    return kind === "trap" ? "trap" : "spell";
+  }
+  return "effect";
+}
+
+function createSeatStats(archetype = "unknown") {
+  return {
+    archetype,
+    actions: 0,
+    summons: 0,
+    fusionSummons: 0,
+    ascensionSummons: 0,
+    spellActivations: 0,
+    trapActivations: 0,
+    effectActivations: 0,
+    attacks: 0,
+    failedActions: 0,
+    blockedActions: 0,
+    activated: createCounter(),
+    discarded: createCounter(),
+    discardedByCost: createCounter(),
+    discardedByDestruction: createCounter(),
+    searched: createCounter(),
+    summoned: createCounter(),
+    fusionSummoned: createCounter(),
+    ascensionSummoned: createCounter(),
+    targeted: createCounter(),
+    targetedBySource: createCounter(),
+    invalidByCard: createCounter(),
+    blockedByCard: createCounter(),
+    usedAsCost: createCounter(),
+    banished: createCounter(),
+    graveyardResourceUses: 0,
+    noUsefulTurns: 0,
+    turnActions: createCounter(),
+    warnings: [],
+  };
+}
+
+function compactSeatStats(stats) {
+  return {
+    archetype: stats.archetype,
+    actions: stats.actions,
+    summons: stats.summons,
+    fusionSummons: stats.fusionSummons,
+    ascensionSummons: stats.ascensionSummons,
+    spellActivations: stats.spellActivations || 0,
+    trapActivations: stats.trapActivations || 0,
+    effectActivations: stats.effectActivations || 0,
+    // backward-compat aggregate
+    spellTrapActivations: (stats.spellActivations || 0) + (stats.trapActivations || 0),
+    attacks: stats.attacks,
+    failedActions: stats.failedActions,
+    blockedActions: stats.blockedActions,
+    noUsefulTurns: stats.noUsefulTurns,
+    activated: topCounter(stats.activated),
+    discarded: topCounter(stats.discarded),
+    discardedByCost: topCounter(stats.discardedByCost),
+    discardedByDestruction: topCounter(stats.discardedByDestruction),
+    searched: topCounter(stats.searched),
+    summoned: topCounter(stats.summoned),
+    fusionSummoned: topCounter(stats.fusionSummoned),
+    ascensionSummoned: topCounter(stats.ascensionSummoned),
+    targeted: topCounter(stats.targeted),
+    targetedBySource: topCounter(stats.targetedBySource),
+    invalidByCard: topCounter(stats.invalidByCard),
+    blockedByCard: topCounter(stats.blockedByCard),
+    usedAsCost: topCounter(stats.usedAsCost),
+    banished: topCounter(stats.banished),
+    graveyardResourceUses: stats.graveyardResourceUses,
+    warnings: stats.warnings.slice(0, 8),
+  };
+}
+
 /**
  * Classe para coletar e agregar métricas de duelos.
  * Focada em analytics, não em aprendizado de policy.
@@ -151,6 +337,9 @@ export class ArenaAnalytics {
       cardsPlayed: result.cardsPlayed ?? [],
       actionsExecuted: result.actionsExecuted ?? [],
       openingSequence: result.openingSequence ?? null,
+      strategic: result.strategic ?? null,
+      errors: result.errors ?? [],
+      warnings: result.warnings ?? [],
     };
 
     this.duelRecords.push(record);
@@ -192,6 +381,10 @@ export class ArenaAnalytics {
     const stats = this.matchupStats.get(key);
     stats.total += 1;
     stats.totalTurns += record.turns;
+    stats.totalFinalLP.player += record.finalLP.player;
+    stats.totalFinalLP.bot += record.finalLP.bot;
+    stats.errors += record.endReason === END_REASONS.ERROR ? 1 : 0;
+    stats.warnings += (record.warnings || []).length;
 
     if (record.winner === "player") {
       stats.wins1 += 1;
@@ -227,9 +420,12 @@ export class ArenaAnalytics {
       wins2: 0,
       draws: 0,
       totalTurns: 0,
+      totalFinalLP: { player: 0, bot: 0 },
       endReasons: {},
       decisionTimes: [],
       nodesVisited: [],
+      errors: 0,
+      warnings: 0,
     };
   }
 
@@ -497,6 +693,16 @@ export class ArenaAnalytics {
           stats.total > 0 ? ((stats.wins2 / stats.total) * 100).toFixed(1) : 0,
         avgTurns:
           stats.total > 0 ? (stats.totalTurns / stats.total).toFixed(1) : 0,
+        avgFinalLP: {
+          player:
+            stats.total > 0
+              ? (stats.totalFinalLP.player / stats.total).toFixed(1)
+              : 0,
+          bot:
+            stats.total > 0
+              ? (stats.totalFinalLP.bot / stats.total).toFixed(1)
+              : 0,
+        },
         avgDecisionTimeMs:
           stats.decisionTimes.length > 0
             ? (
@@ -561,6 +767,464 @@ export class ArenaAnalytics {
     }
 
     return results.sort((a, b) => b.winRate - a.winRate);
+  }
+
+  exportStrategicReport() {
+    const matchups = this.buildStrategicMatchups();
+    const duels = this.buildStrategicDuelSummaries();
+    const bots = this.buildStrategicBotSummaries();
+    const archetypes = this.buildArchetypeSummaries(duels);
+    const suspiciousPatterns = this.detectSuspiciousPatterns(bots, archetypes);
+
+    return {
+      generatedAt: new Date().toISOString(),
+      version: REPORT_VERSION,
+      duelCount: this.duelRecords.length,
+      matchups,
+      duels,
+      bots,
+      archetypes,
+      suspiciousPatterns,
+    };
+  }
+
+  buildStrategicMatchups() {
+    const matchups = {};
+    for (const record of this.duelRecords) {
+      const key = `${record.archetype1}_vs_${record.archetype2}`;
+      if (!matchups[key]) {
+        matchups[key] = {
+          totalDuels: 0,
+          wins: { player: 0, bot: 0, draw: 0 },
+          winRate: { player: 0, bot: 0 },
+          avgTurns: 0,
+          avgFinalLP: { player: 0, bot: 0 },
+          endReasons: {},
+          warnings: 0,
+          errors: 0,
+        };
+      }
+      const stats = matchups[key];
+      stats.totalDuels += 1;
+      stats.wins[record.winner] = (stats.wins[record.winner] || 0) + 1;
+      stats.avgTurns += record.turns || 0;
+      stats.avgFinalLP.player += record.finalLP?.player || 0;
+      stats.avgFinalLP.bot += record.finalLP?.bot || 0;
+      stats.endReasons[record.endReason] =
+        (stats.endReasons[record.endReason] || 0) + 1;
+      stats.warnings += (record.warnings || []).length;
+      stats.errors += record.endReason === END_REASONS.ERROR ? 1 : 0;
+    }
+    for (const stats of Object.values(matchups)) {
+      const total = stats.totalDuels || 1;
+      stats.winRate.player = round((stats.wins.player / total) * 100);
+      stats.winRate.bot = round((stats.wins.bot / total) * 100);
+      stats.avgTurns = round(stats.avgTurns / total);
+      stats.avgFinalLP.player = round(stats.avgFinalLP.player / total);
+      stats.avgFinalLP.bot = round(stats.avgFinalLP.bot / total);
+    }
+    return matchups;
+  }
+
+  buildStrategicDuelSummaries() {
+    return this.duelRecords.map((record) => {
+      const seats = record.strategic?.seats || {};
+      return {
+        duelNumber: record.duelNumber,
+        matchup: `${record.archetype1}_vs_${record.archetype2}`,
+        winner: record.winner,
+        turns: record.turns,
+        finalLP: record.finalLP,
+        endReason: record.endReason,
+        actionsByBot: {
+          player: seats.player?.actions || 0,
+          bot: seats.bot?.actions || 0,
+        },
+        summons: {
+          player: seats.player?.summons || 0,
+          bot: seats.bot?.summons || 0,
+        },
+        spellActivations: {
+          player: seats.player?.spellActivations || 0,
+          bot: seats.bot?.spellActivations || 0,
+        },
+        trapActivations: {
+          player: seats.player?.trapActivations || 0,
+          bot: seats.bot?.trapActivations || 0,
+        },
+        effectActivations: {
+          player: seats.player?.effectActivations || 0,
+          bot: seats.bot?.effectActivations || 0,
+        },
+        spellTrapActivations: {
+          player: seats.player?.spellTrapActivations || 0,
+          bot: seats.bot?.spellTrapActivations || 0,
+        },
+        attacks: {
+          player: seats.player?.attacks || 0,
+          bot: seats.bot?.attacks || 0,
+        },
+        failedOrBlocked: {
+          player:
+            (seats.player?.failedActions || 0) +
+            (seats.player?.blockedActions || 0),
+          bot:
+            (seats.bot?.failedActions || 0) +
+            (seats.bot?.blockedActions || 0),
+        },
+        errors: record.errors || [],
+        warnings: record.warnings || [],
+        bots: seats,
+        events: record.strategic?.events || [],
+      };
+    });
+  }
+
+  buildStrategicBotSummaries() {
+    const bots = {};
+    for (const record of this.duelRecords) {
+      const seats = record.strategic?.seats || {};
+      for (const seat of SEATS) {
+        const seatStats = seats[seat];
+        if (!seatStats) continue;
+        const key = `${seat}:${seatStats.archetype || "unknown"}`;
+        if (!bots[key]) {
+          bots[key] = createSeatStats(seatStats.archetype || "unknown");
+          bots[key].duels = 0;
+          bots[key].wins = 0;
+        }
+        this.mergeSeatStats(bots[key], seatStats);
+        bots[key].duels += 1;
+        if (record.winner === seat) bots[key].wins += 1;
+      }
+    }
+
+    const compact = {};
+    for (const [key, stats] of Object.entries(bots)) {
+      compact[key] = {
+        ...compactSeatStats(stats),
+        duels: stats.duels,
+        wins: stats.wins,
+        winRate: stats.duels > 0 ? round((stats.wins / stats.duels) * 100) : 0,
+      };
+    }
+    return compact;
+  }
+
+  mergeSeatStats(target, source) {
+    for (const field of [
+      "actions",
+      "summons",
+      "fusionSummons",
+      "ascensionSummons",
+      "spellActivations",
+      "trapActivations",
+      "effectActivations",
+      "attacks",
+      "failedActions",
+      "blockedActions",
+      "noUsefulTurns",
+      "graveyardResourceUses",
+    ]) {
+      target[field] = (target[field] || 0) + (source[field] || 0);
+    }
+    for (const field of [
+      "activated",
+      "discarded",
+      "discardedByCost",
+      "discardedByDestruction",
+      "searched",
+      "summoned",
+      "fusionSummoned",
+      "ascensionSummoned",
+      "targeted",
+      "targetedBySource",
+      "invalidByCard",
+      "blockedByCard",
+      "usedAsCost",
+      "banished",
+    ]) {
+      for (const { name, count } of source[field] || []) {
+        addCount(target[field], name, count);
+      }
+    }
+  }
+
+  buildArchetypeSummaries(duels) {
+    const archetypes = {
+      shadowheart: {
+        covenantInvalid: 0,
+        covenantSuccess: 0,
+        discards: [],
+        discardsByCost: [],
+        purgeUses: 0,
+        purgeTargets: [],
+        polymerizationActivations: 0,
+        fusionSummons: 0,
+        bossesSummoned: [],
+        battleHymnUses: 0,
+        rageUses: 0,
+        finisherDiscards: [],
+      },
+      luminarch: {
+        knightsConvocationUses: 0,
+        knightsConvocationDiscards: [],
+        citadelTargets: [],
+        spearTargets: [],
+        moonlitRevives: [],
+        barbarias: {
+          summoned: 0,
+          summonedPositions: [],
+          selfEffectUses: 0,
+          effectTargets: [],
+          selfTargets: 0,
+          positionChanges: [],
+          attacksAfterBuff: 0,
+        },
+      },
+      dragon: {
+        extremeDragonSummons: [],
+        importantDiscards: [],
+        importantBanishes: [],
+        graveyardResourceUses: 0,
+        noUsefulTurns: 0,
+      },
+    };
+    const shDiscards = createCounter();
+    const shDiscardsByCost = createCounter();
+    const shPurgeTargets = createCounter();
+    const shBosses = createCounter();
+    const shFinishers = createCounter();
+    // Luminarch: per-source targeting counters built from events array
+    const lumCitadelTargets = createCounter();
+    const lumSpearTargets = createCounter();
+    const lumMoonlitTargets = createCounter();
+    const lumKCDiscards = createCounter();
+    const lumBarbariasPositions = createCounter();
+    const lumBarbariasTargets = createCounter();
+    const lumBarbariasPositionChanges = createCounter();
+    const barbariasBuffedByDuel = new Set();
+    const dragonSummons = createCounter();
+    const dragonDiscards = createCounter();
+    const dragonBanishes = createCounter();
+
+    for (const duel of duels) {
+      // Percorre eventos do duelo para atribuição por fonte (Luminarch)
+      const duelEvents = duel.events || [];
+      for (const ev of duelEvents) {
+        const source = ev.sourceCard || null;
+        const target = ev.card || ev.target || null;
+
+        if (ev.type === "targeting" && source) {
+          switch (source) {
+            case "Sanctum of the Luminarch Citadel":
+              addCount(lumCitadelTargets, target);
+              break;
+            case "Luminarch Spear of Dawnfall":
+              if (!ev.targetOwner || ev.targetOwner !== ev.seat) {
+                addCount(lumSpearTargets, target);
+              }
+              break;
+            case "Luminarch Moonlit Blessing":
+              addCount(lumMoonlitTargets, target);
+              break;
+            case "Luminarch Megashield Barbarias":
+              addCount(lumBarbariasTargets, target);
+              if (target === "Luminarch Megashield Barbarias") {
+                archetypes.luminarch.barbarias.selfTargets += 1;
+              }
+              barbariasBuffedByDuel.add(`${duel.duelNumber}:${target}`);
+              break;
+            case "Luminarch Knights Convocation":
+              addCount(lumKCDiscards, target);
+              break;
+          }
+        }
+
+        if (ev.type === "move" && ev.sourceCard) {
+          if (
+            ev.sourceCard === "Luminarch Knights Convocation" &&
+            ev.fromZone === "hand" &&
+            ev.toZone === "graveyard"
+          ) {
+            addCount(lumKCDiscards, ev.card);
+          }
+          if (
+            ev.sourceCard === "Luminarch Moonlit Blessing" &&
+            (ev.fromZone === "graveyard" || ev.fromZone === "hand") &&
+            (ev.toZone === "field" || ev.toZone === "hand")
+          ) {
+            addCount(
+              lumMoonlitTargets,
+              ev.position ? `${ev.card} (${ev.toZone}/${ev.position})` : `${ev.card} (${ev.toZone})`,
+            );
+          }
+        }
+
+        if (ev.type === "summon" && ev.card === "Luminarch Megashield Barbarias") {
+          addCount(lumBarbariasPositions, ev.position || "unknown");
+        }
+
+        if (ev.type === "position" && ev.sourceCard === "Luminarch Megashield Barbarias") {
+          addCount(
+            lumBarbariasPositionChanges,
+            `${ev.card}: ${ev.fromPosition || "?"}->${ev.toPosition || "?"}`,
+          );
+        }
+
+        if (ev.type === "attack" && barbariasBuffedByDuel.has(`${duel.duelNumber}:${ev.card}`)) {
+          archetypes.luminarch.barbarias.attacksAfterBuff += 1;
+        }
+      }
+
+      for (const seat of SEATS) {
+        const stats = duel.bots?.[seat];
+        if (!stats) continue;
+        const arch = stats.archetype || "";
+        const activated = Object.fromEntries(
+          (stats.activated || []).map((entry) => [entry.name, entry.count]),
+        );
+
+        if (arch === "shadowheart") {
+          archetypes.shadowheart.covenantSuccess +=
+            activated["Shadow-Heart Covenant"] || 0;
+          archetypes.shadowheart.purgeUses += activated["Shadow-Heart Purge"] || 0;
+          archetypes.shadowheart.polymerizationActivations +=
+            activated.Polymerization || 0;
+          archetypes.shadowheart.battleHymnUses +=
+            activated["Shadow-Heart Battle Hymn"] || 0;
+          archetypes.shadowheart.rageUses += activated["Shadow-Heart Rage"] || 0;
+          archetypes.shadowheart.fusionSummons += stats.fusionSummons || 0;
+          for (const entry of stats.invalidByCard || []) {
+            if (entry.name === "Shadow-Heart Covenant") {
+              archetypes.shadowheart.covenantInvalid += entry.count;
+            }
+          }
+          for (const entry of stats.discarded || []) {
+            addCount(shDiscards, entry.name, entry.count);
+            if (SHADOWHEART_FINISHERS.has(entry.name)) {
+              addCount(shFinishers, entry.name, entry.count);
+            }
+          }
+          for (const entry of stats.discardedByCost || []) {
+            addCount(shDiscardsByCost, entry.name, entry.count);
+          }
+          for (const entry of stats.targeted || []) {
+            addCount(shPurgeTargets, entry.name, entry.count);
+          }
+          for (const entry of stats.summoned || []) {
+            if (SHADOWHEART_BOSSES.has(entry.name)) {
+              addCount(shBosses, entry.name, entry.count);
+            }
+          }
+        } else if (arch === "luminarch") {
+          archetypes.luminarch.knightsConvocationUses +=
+            activated["Luminarch Knights Convocation"] || 0;
+          for (const entry of stats.summoned || []) {
+            if (entry.name === "Luminarch Megashield Barbarias") {
+              archetypes.luminarch.barbarias.summoned += entry.count;
+            }
+          }
+          archetypes.luminarch.barbarias.selfEffectUses +=
+            activated["Luminarch Megashield Barbarias"] || 0;
+        } else if (arch === "dragon") {
+          archetypes.dragon.graveyardResourceUses +=
+            stats.graveyardResourceUses || 0;
+          archetypes.dragon.noUsefulTurns += stats.noUsefulTurns || 0;
+          for (const entry of stats.summoned || []) {
+            if (EXTREME_DRAGON_RE.test(entry.name)) {
+              addCount(dragonSummons, entry.name, entry.count);
+            }
+          }
+          for (const entry of stats.discarded || []) {
+            if (/Dragon|Polymerization/i.test(entry.name)) {
+              addCount(dragonDiscards, entry.name, entry.count);
+            }
+          }
+          for (const entry of stats.banished || []) {
+            if (/Dragon|Polymerization/i.test(entry.name)) {
+              addCount(dragonBanishes, entry.name, entry.count);
+            }
+          }
+        }
+      }
+    }
+
+    archetypes.shadowheart.discards = topCounter(shDiscards);
+    archetypes.shadowheart.discardsByCost = topCounter(shDiscardsByCost);
+    archetypes.shadowheart.purgeTargets = topCounter(shPurgeTargets);
+    archetypes.shadowheart.bossesSummoned = topCounter(shBosses);
+    archetypes.shadowheart.finisherDiscards = topCounter(shFinishers);
+    // Luminarch: fontes separadas por carta ativadora
+    archetypes.luminarch.knightsConvocationDiscards = topCounter(lumKCDiscards);
+    archetypes.luminarch.citadelTargets = topCounter(lumCitadelTargets);
+    archetypes.luminarch.spearTargets = topCounter(lumSpearTargets);
+    archetypes.luminarch.moonlitRevives = topCounter(lumMoonlitTargets);
+    archetypes.luminarch.barbarias.summonedPositions =
+      topCounter(lumBarbariasPositions);
+    archetypes.luminarch.barbarias.effectTargets = topCounter(lumBarbariasTargets);
+    archetypes.luminarch.barbarias.positionChanges =
+      topCounter(lumBarbariasPositionChanges);
+    archetypes.dragon.extremeDragonSummons = topCounter(dragonSummons);
+    archetypes.dragon.importantDiscards = topCounter(dragonDiscards);
+    archetypes.dragon.importantBanishes = topCounter(dragonBanishes);
+    return archetypes;
+  }
+
+  detectSuspiciousPatterns(bots, archetypes) {
+    const alerts = [];
+    const pushAlert = (type, severity, detail) => {
+      alerts.push({ type, severity, detail });
+    };
+
+    for (const [botKey, stats] of Object.entries(bots)) {
+      for (const entry of stats.invalidByCard || []) {
+        if (entry.count >= 3) {
+          pushAlert("repeated_invalid_activation", "high", {
+            bot: botKey,
+            card: entry.name,
+            count: entry.count,
+          });
+        }
+      }
+      if (stats.blockedActions >= 5) {
+        pushAlert("many_blocked_actions", "medium", {
+          bot: botKey,
+          count: stats.blockedActions,
+        });
+      }
+      if (stats.noUsefulTurns >= Math.max(3, stats.duels || 1)) {
+        pushAlert("turns_without_useful_action", "medium", {
+          bot: botKey,
+          count: stats.noUsefulTurns,
+        });
+      }
+    }
+
+    for (const entry of archetypes.shadowheart.finisherDiscards || []) {
+      if (entry.count >= 2) {
+        pushAlert("key_finisher_discarded", "medium", {
+          archetype: "shadowheart",
+          card: entry.name,
+          count: entry.count,
+        });
+      }
+    }
+    if (archetypes.shadowheart.covenantInvalid >= 3) {
+      pushAlert("shadowheart_covenant_invalid_many_times", "high", {
+        count: archetypes.shadowheart.covenantInvalid,
+      });
+    }
+    if (archetypes.dragon.noUsefulTurns >= 4) {
+      pushAlert("dragon_turns_without_useful_action", "medium", {
+        count: archetypes.dragon.noUsefulTurns,
+      });
+    }
+
+    return alerts.sort((a, b) => {
+      const severity = { high: 0, medium: 1, low: 2 };
+      return (severity[a.severity] ?? 9) - (severity[b.severity] ?? 9);
+    });
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -687,6 +1351,22 @@ export class ArenaAnalytics {
     link.click();
     URL.revokeObjectURL(link.href);
   }
+
+  /**
+   * Faz download do relatorio estrategico JSON compacto.
+   * @param {string} filename
+   */
+  downloadStrategicReport(filename = "arena_strategic_report.json") {
+    const report = this.exportStrategicReport();
+    const blob = new Blob([JSON.stringify(report)], {
+      type: "application/json;charset=utf-8;",
+    });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -740,6 +1420,17 @@ export class DuelTracker {
     this.openingSequence = [];
     this.openingTurnLimit = options.openingBookDepth ?? 2;
     this.currentTurn = 0;
+    this.seats = {
+      player: createSeatStats(archetype1),
+      bot: createSeatStats(archetype2),
+    };
+    // Última carta ativada por seat — usado para atribuir eventos de targeting à fonte
+    this.lastActivated = { player: null, bot: null };
+    this.targetingKeys = new Set();
+    this.rawSpellTrapActivationKeys = new Set();
+    this.events = [];
+    this.errors = [];
+    this.warnings = [];
   }
 
   /**
@@ -754,6 +1445,13 @@ export class DuelTracker {
    */
   recordAction(action) {
     this.actionsExecuted.push(action);
+    const seat = action?.seat || action?.player || null;
+    if (this.seats[seat]) {
+      this.seats[seat].actions += 1;
+      if (action.success === false) this.seats[seat].failedActions += 1;
+      if (action.blocked === true) this.seats[seat].blockedActions += 1;
+      this.markUsefulAction(seat, action?.turn);
+    }
 
     // Opening book: só primeiros N turnos
     if (this.currentTurn <= this.openingTurnLimit) {
@@ -782,6 +1480,436 @@ export class DuelTracker {
     this.currentTurn += 1;
   }
 
+  setCurrentTurn(turn) {
+    const numericTurn = Number(turn);
+    if (Number.isFinite(numericTurn) && numericTurn > this.currentTurn) {
+      this.currentTurn = numericTurn;
+    }
+  }
+
+  markUsefulAction(seat, turn = null) {
+    if (!this.seats[seat]) return;
+    const numericTurn = Number(turn);
+    const turnKey = Number.isFinite(numericTurn)
+      ? String(numericTurn)
+      : String(this.currentTurn || 0);
+    if (turnKey !== "0") {
+      addCount(this.seats[seat].turnActions, turnKey);
+    }
+  }
+
+  pushEvent(event) {
+    if (!event || this.events.length >= 400) return;
+    const compact = {};
+    for (const [key, value] of Object.entries(event)) {
+      if (value !== undefined && value !== null) compact[key] = value;
+    }
+    this.events.push(compact);
+  }
+
+  recordEvent(eventName, payload = {}, meta = {}) {
+    if (!TRACKED_EVENTS.has(eventName)) return;
+    this.setCurrentTurn(meta.turn);
+
+    if (eventName === "after_summon") {
+      this.recordSummon(payload, meta);
+    } else if (eventName === "attack_declared") {
+      this.recordAttack(payload, meta);
+    } else if (
+      eventName === "spell_activated" ||
+      eventName === "trap_activated" ||
+      eventName === "effect_activated"
+    ) {
+      this.recordActivationEvent(eventName, payload, meta);
+    } else if (eventName === "cards_added_to_hand") {
+      this.recordCardsAddedToHand(payload, meta);
+    } else if (eventName === "card_to_grave") {
+      this.recordCardToGrave(payload, meta);
+    } else if (eventName === "effect_targeted" || eventName === "target_selected") {
+      this.recordTargeting(payload, meta);
+    } else if (eventName === "position_chosen") {
+      this.recordPositionChosen(payload, meta);
+    } else if (eventName === "position_change") {
+      this.recordPositionChange(payload, meta);
+    } else if (eventName === "stat_buff_applied") {
+      this.recordStatBuff(payload, meta);
+    } else if (eventName === "damage_inflicted" || eventName === "lp_change") {
+      this.recordLpEvent(eventName, payload, meta);
+    }
+  }
+
+  recordSummon(payload = {}, meta = {}) {
+    const seat = playerSeat(payload.player);
+    const name = cardName(payload.card);
+    if (!this.seats[seat] || !name) return;
+
+    const method = payload.method || payload.summonMethod || "summon";
+    const stats = this.seats[seat];
+    stats.summons += 1;
+    addCount(stats.summoned, name);
+    this.markUsefulAction(seat, meta.turn);
+
+    if (method === "fusion") {
+      stats.fusionSummons += 1;
+      addCount(stats.fusionSummoned, name);
+    }
+    if (method === "ascension") {
+      stats.ascensionSummons += 1;
+      addCount(stats.ascensionSummoned, name);
+    }
+    this.pushEvent({
+      t: meta.turn,
+      seat,
+      type: "summon",
+      card: name,
+      method,
+      fromZone: payload.fromZone || null,
+      position: payload.position || payload.card?.position || null,
+      sourceCard: sourceName(payload),
+      effectId: effectId(payload),
+    });
+  }
+
+  recordAttack(payload = {}, meta = {}) {
+    const seat = playerSeat(payload.attackerOwner);
+    if (!this.seats[seat]) return;
+
+    this.seats[seat].attacks += 1;
+    this.markUsefulAction(seat, meta.turn);
+    this.pushEvent({
+      t: meta.turn,
+      seat,
+      type: "attack",
+      card: cardName(payload.attacker),
+      target: cardName(payload.target),
+      result: payload.result || null,
+    });
+  }
+
+  recordActivationEvent(eventName, payload = {}, meta = {}) {
+    const seat = playerSeat(payload.player || payload.owner);
+    const name = cardName(payload.card || payload.source);
+    if (!this.seats[seat] || !name) return;
+
+    const stats = this.seats[seat];
+    const activationKind = classifyActivationEvent(eventName, payload);
+    const rawKey = [
+      meta.turn || this.currentTurn || 0,
+      seat,
+      name,
+      payload.activationZone || payload.fromZone || "",
+    ].join("|");
+    if (eventName === "spell_activated" || eventName === "trap_activated") {
+      this.rawSpellTrapActivationKeys.add(rawKey);
+    } else if (
+      eventName === "effect_activated" &&
+      activationKind !== "effect" &&
+      this.rawSpellTrapActivationKeys.has(rawKey)
+    ) {
+      this.lastActivated[seat] = name;
+      return;
+    }
+
+    addCount(stats.activated, name);
+    this.recordCardPlayed(name);
+    this.markUsefulAction(seat, meta.turn);
+
+    if (activationKind === "spell") stats.spellActivations += 1;
+    else if (activationKind === "trap") stats.trapActivations += 1;
+    else stats.effectActivations += 1;
+
+    // Registra última carta ativada para correlacionar eventos de targeting
+    this.lastActivated[seat] = name;
+
+    this.recordAction({
+      type: activationKind === "effect" ? "effect" : `${activationKind}_activated`,
+      cardName: name,
+      seat,
+      turn: meta.turn,
+      success: true,
+    });
+    this.pushEvent({
+      t: meta.turn,
+      seat,
+      type: activationKind === "effect" ? "effect" : `${activationKind}_activated`,
+      card: name,
+      sourceCard: name,
+      effectId: effectId(payload),
+      effectType: payload.effectType || null,
+      fromZone: payload.activationZone || payload.fromZone || null,
+      result: payload.placementOnly === true ? "placement" : "activated",
+    });
+  }
+
+  recordCardsAddedToHand(payload = {}, meta = {}) {
+    const seat = playerSeat(payload.player || payload.owner);
+    if (!this.seats[seat]) return;
+    const sourceZone = payload.sourceZone || payload.fromZone || null;
+    if (sourceZone !== "deck" && payload.fromDeck !== true) return;
+
+    for (const name of cardNames(payload.cards || payload.addedCards || payload.card)) {
+      addCount(this.seats[seat].searched, name);
+      this.markUsefulAction(seat, meta.turn);
+      this.pushEvent({
+        t: meta.turn,
+        seat,
+        type: "search",
+        card: name,
+        sourceCard: sourceName(payload),
+        effectId: effectId(payload),
+        fromZone: payload.sourceZone || payload.fromZone || "deck",
+        toZone: "hand",
+      });
+    }
+  }
+
+  recordCardToGrave(payload = {}, _meta = {}) {
+    const seat = playerSeat(payload.player || payload.owner);
+    const name = cardName(payload.card);
+    if (!this.seats[seat] || !name) return;
+
+    const fromZone = payload.fromZone || null;
+    const wasDestroyed = payload.wasDestroyed === true;
+    const cause = String(
+      payload.reason || payload.cause || payload.destroyCause || payload.contextLabel || ""
+    );
+    const isCost = /cost|material|tribute/i.test(cause);
+    const isBattle = /battle/i.test(cause) || (wasDestroyed && !isCost);
+
+    if (fromZone === "hand") {
+      addCount(this.seats[seat].discarded, name);
+      if (isCost) {
+        addCount(
+          this.seats[seat].discardedByCost,
+          causalKey(name, payload.sourceCard || payload.source),
+        );
+      } else if (isBattle || wasDestroyed) {
+        addCount(this.seats[seat].discardedByDestruction, name);
+      }
+    }
+    if (isCost) {
+      addCount(this.seats[seat].usedAsCost, name);
+    }
+  }
+
+  recordTargeting(payload = {}, meta = {}) {
+    const seat = playerSeat(payload.player || payload.owner || payload.sourcePlayer);
+    if (!this.seats[seat]) return;
+    const targetValues =
+      payload.targets ||
+      payload.selectedTargets ||
+      payload.selectedCards ||
+      payload.cards ||
+      payload.target ||
+      payload.card;
+    const targets = Array.isArray(targetValues) ? targetValues : [targetValues];
+    const sourceCard = sourceName(payload) || this.lastActivated[seat] || null;
+    const names = [];
+    for (const target of targets) {
+      const name = cardName(target);
+      if (!name) continue;
+      const key = [
+        meta.turn || this.currentTurn || 0,
+        seat,
+        sourceCard || "",
+        effectId(payload) || "",
+        name,
+        target?.id ?? "",
+      ].join("|");
+      if (this.targetingKeys.has(key)) continue;
+      this.targetingKeys.add(key);
+      names.push(name);
+      addCount(this.seats[seat].targeted, name);
+      addCount(this.seats[seat].targetedBySource, causalKey(name, sourceCard));
+    }
+    if (names.length > 0) {
+      this.markUsefulAction(seat, meta.turn);
+      // Associa targeting à última carta ativada pelo mesmo seat
+      for (const name of names) {
+        const target = targets.find((candidate) => cardName(candidate) === name);
+        this.pushEvent({
+          t: meta.turn,
+          seat,
+          type: "targeting",
+          card: name,
+          sourceCard,
+          effectId: effectId(payload),
+          targetOwner: target?.owner || null,
+          targetZone: target?.zone || null,
+          position: target?.position || null,
+        });
+      }
+    }
+  }
+
+  recordPositionChosen(payload = {}, meta = {}) {
+    const seat = playerSeat(payload.player || payload.owner);
+    const name = cardName(payload.card);
+    if (!this.seats[seat] || !name) return;
+    this.pushEvent({
+      t: payload.turn || meta.turn,
+      seat,
+      type: "position_chosen",
+      card: name,
+      position: payload.position,
+      result: payload.context || null,
+    });
+  }
+
+  recordPositionChange(payload = {}, meta = {}) {
+    const seat = playerSeat(payload.player || payload.owner);
+    const name = cardName(payload.card);
+    if (!this.seats[seat] || !name) return;
+    this.pushEvent({
+      t: meta.turn,
+      seat,
+      type: "position",
+      card: name,
+      sourceCard: sourceName(payload),
+      fromPosition: payload.fromPosition,
+      toPosition: payload.toPosition,
+      result: payload.wasFlipped ? "flipped" : "changed",
+    });
+  }
+
+  recordStatBuff(payload = {}, meta = {}) {
+    const seat = playerSeat(payload.player || payload.owner);
+    const name = cardName(payload.card);
+    if (!this.seats[seat] || !name) return;
+    this.pushEvent({
+      t: meta.turn,
+      seat,
+      type: "stat",
+      card: name,
+      sourceCard: sourceName(payload),
+      result:
+        payload.atkChange || payload.defChange
+          ? `${payload.atkChange || 0}/${payload.defChange || 0}`
+          : null,
+    });
+  }
+
+  recordLpEvent(eventName, payload = {}, meta = {}) {
+    const seat = playerSeat(payload.player || payload.target || payload.owner);
+    if (!this.seats[seat]) return;
+    this.pushEvent({
+      t: payload.turn || meta.turn,
+      seat,
+      type: eventName === "damage_inflicted" ? "damage" : "lp",
+      sourceCard: sourceName(payload),
+      lpPaid: payload.lpPaid || null,
+      lpGained: payload.lpGained || null,
+      lpLost: payload.lpLost || payload.amount || null,
+      result: payload.newLP ?? payload.after ?? null,
+    });
+  }
+
+  recordActivationAttempt(data = {}) {
+    const seat = playerSeat(data.player || data.owner || data.seat);
+    const name = cardName(data.card || data.source) || data.cardName || "unknown";
+    if (!this.seats[seat]) return;
+
+    const success = data.success === true;
+    const blocked = data.blocked === true;
+    const stats = this.seats[seat];
+    if (success) {
+      this.markUsefulAction(seat, data.turn);
+      return;
+    } else {
+      addCount(stats.invalidByCard, name);
+      if (blocked) {
+        addCount(stats.blockedByCard, name);
+      }
+    }
+
+    this.recordAction({
+      type: data.type || "activation_attempt",
+      cardName: name,
+      seat,
+      turn: data.turn,
+      success,
+      blocked,
+      reason: data.reason || data.code || null,
+    });
+  }
+
+  recordBlockedAction(data = {}) {
+    const seat = playerSeat(data.player || data.actor || data.seat);
+    const name = cardName(data.card) || data.cardName || data.kind || "action";
+    if (!this.seats[seat]) return;
+
+    const stats = this.seats[seat];
+    addCount(stats.invalidByCard, name);
+    addCount(stats.blockedByCard, name);
+    this.recordAction({
+      type: data.kind || "blocked_action",
+      cardName: name,
+      seat,
+      turn: data.turn,
+      success: false,
+      blocked: true,
+      reason: data.reason || data.code || null,
+    });
+  }
+
+  recordZoneMove(card, destPlayer, toZone, options = {}, result = {}) {
+    if (!result || result.success === false) return;
+    const seat = playerSeat(destPlayer);
+    const name = cardName(card);
+    if (!this.seats[seat] || !name) return;
+
+    const fromZone = result.fromZone || options.fromZone || null;
+    const finalZone = result.toZone || toZone;
+    const label = String(options.contextLabel || options.reason || options.cause || "");
+    const isCost = /cost|material|tribute/i.test(label);
+    const source = options.sourceCard || options.source || null;
+
+    if (fromZone === "hand" && finalZone === "graveyard") {
+      addCount(this.seats[seat].discarded, name);
+      if (isCost) {
+        addCount(this.seats[seat].discardedByCost, causalKey(name, source));
+      }
+    }
+    if (isCost) {
+      addCount(this.seats[seat].usedAsCost, name);
+    }
+    if (fromZone === "deck" && finalZone === "hand") {
+      addCount(this.seats[seat].searched, name);
+      this.markUsefulAction(seat, this.currentTurn);
+    }
+    if (finalZone === "banished") {
+      addCount(this.seats[seat].banished, name);
+      if (fromZone === "graveyard") {
+        this.seats[seat].graveyardResourceUses += 1;
+      }
+    }
+    this.pushEvent({
+      t: this.currentTurn,
+      seat,
+      type: "move",
+      card: name,
+      sourceCard: cardName(source),
+      effectId: options.effectId || null,
+      fromZone,
+      toZone: finalZone,
+      position: options.position || card?.position || null,
+      cost: isCost ? true : null,
+      result: result.success === false ? "failed" : "success",
+    });
+  }
+
+  finalizeStrategic(turns) {
+    const totalTurns = Number(turns) || this.currentTurn || 0;
+    for (const seat of SEATS) {
+      const stats = this.seats[seat];
+      for (let turn = 1; turn <= totalTurns; turn += 1) {
+        if (!stats.turnActions[String(turn)]) {
+          stats.noUsefulTurns += 1;
+        }
+      }
+    }
+  }
+
   /**
    * Finaliza o tracker e retorna resultado para registro.
    * @param {string} winner - "player" | "bot" | "draw"
@@ -800,6 +1928,7 @@ export class DuelTracker {
       this.nodesVisited.length > 0
         ? this.nodesVisited.reduce((a, b) => a + b, 0)
         : null;
+    this.finalizeStrategic(this.currentTurn);
 
     return {
       duelNumber: this.duelNumber,
@@ -819,6 +1948,15 @@ export class DuelTracker {
       actionsExecuted: this.actionsExecuted,
       openingSequence:
         this.openingSequence.length > 0 ? this.openingSequence : null,
+      strategic: {
+        seats: {
+          player: compactSeatStats(this.seats.player),
+          bot: compactSeatStats(this.seats.bot),
+        },
+        events: this.events,
+      },
+      errors: this.errors,
+      warnings: this.warnings,
     };
   }
 }
