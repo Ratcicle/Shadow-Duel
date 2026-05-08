@@ -132,6 +132,65 @@ export default class ShadowHeartStrategy extends BaseStrategy {
     this.thoughtProcess = [];
   }
 
+  /**
+   * Chooses attack/defense for a Special Summon when the action allows choice.
+   * Shadow-Heart policy:
+   *   1. If the card has an on-summon effect that removes opponent cards
+   *      (destroy / banish / bounce), summon in attack — the opponent's board
+   *      will shrink before they can punish.
+   *   2. If myDef >= myAtk, defense gives no stat advantage; pick attack to
+   *      keep pressure (cards like Megashield Barbarias).
+   *   3. If any face-up opponent monster has ATK > myAtk, defense — losing in
+   *      defense avoids battle damage. Otherwise attack.
+   * Returns "attack" | "defense" | null (null = let the engine fall back).
+   */
+  chooseSpecialSummonPosition(card, ctx = {}) {
+    if (!card || card.cardKind !== "monster") return null;
+    const myAtk = Number(card.atk) || 0;
+    const myDef = Number(card.def) || 0;
+
+    if (this.cardClearsOpponentBoardOnSummon(card)) return "attack";
+    if (myDef >= myAtk) return "attack";
+
+    const opponent =
+      ctx.player === ctx.game?.player ? ctx.game?.bot : ctx.game?.player;
+    const oppMaxAtk = (opponent?.field || []).reduce((max, c) => {
+      if (!c || c.cardKind !== "monster" || c.isFacedown) return max;
+      return Math.max(max, Number(c.atk) || 0);
+    }, 0);
+
+    return oppMaxAtk > myAtk ? "defense" : "attack";
+  }
+
+  /**
+   * True when the card has an after_summon / on_play effect that removes
+   * (destroy / banish / bounce) opponent cards. Static analysis on effects[].
+   */
+  cardClearsOpponentBoardOnSummon(card) {
+    const effects = Array.isArray(card?.effects) ? card.effects : [];
+    const removalActionTypes = new Set([
+      "destroy_targeted_cards",
+      "destroy",
+      "banish",
+      "banish_card_from_graveyard",
+      "banish_destroyed_monster",
+      "return_to_hand",
+      "bounce_and_summon",
+    ]);
+    for (const eff of effects) {
+      if (!eff) continue;
+      const triggersOnSummon =
+        eff.timing === "on_play" ||
+        (eff.timing === "on_event" && eff.event === "after_summon");
+      if (!triggersOnSummon) continue;
+      const actions = Array.isArray(eff.actions) ? eff.actions : [];
+      if (actions.some((a) => a && removalActionTypes.has(a.type))) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // Análise de estado
   // ─────────────────────────────────────────────────────────────────────────

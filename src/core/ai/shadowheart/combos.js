@@ -144,7 +144,7 @@ export function detectAvailableCombos(analysis, logFn = null) {
     const hasLv5Material = [...analysis.hand, ...analysis.field].some(
       (c) =>
         isShadowHeartByName(c.name) &&
-        c.type === "monster" &&
+        c.cardKind === "monster" &&
         (c.level || 0) >= 5 &&
         c.name !== "Shadow-Heart Scale Dragon"
     );
@@ -156,6 +156,19 @@ export function detectAvailableCombos(analysis, logFn = null) {
         action: { type: "spell", cardName: "Polymerization" },
       });
       log(`🔥 Combo detectado: Fusion para Demon Dragon!`);
+    } else {
+      // Warlord Fusion (fallback): 2 quaisquer Shadow-Heart
+      const shCount = [...analysis.hand, ...analysis.field].filter(
+        (c) => isShadowHeartByName(c.name) && c.cardKind === "monster"
+      ).length;
+      if (shCount >= 2) {
+        available.push({
+          name: "Warlord Fusion",
+          priority: 8,
+          action: { type: "spell", cardName: "Polymerization" },
+        });
+        log(`⚔️ Combo detectado: Fusion para Warlord (${shCount} SH disponíveis)`);
+      }
     }
   }
 

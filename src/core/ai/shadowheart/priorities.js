@@ -250,27 +250,23 @@ export function shouldPlaySpell(card, analysis) {
   const name = card.name;
   const knowledge = CARD_KNOWLEDGE[name];
 
-  // Polymerization - Detecta APENAS fusões viáveis (não Ascensões!)
+  // Polymerization - Detecta fusões Shadow-Heart viáveis (não Ascensões!)
   if (name === "Polymerization") {
     const allCards = [...analysis.hand, ...analysis.field];
     const shMonsters = allCards.filter(
       (c) => isShadowHeartByName(c.name) && c.cardKind === "monster"
     );
 
-    // ===== ÚNICA FUSÃO SHADOW-HEART: Demon Dragon =====
+    // ===== Demon Dragon (priority 12) =====
     // Materiais: 1 "Shadow-Heart Scale Dragon" + 1 monstro Shadow-Heart Level 5+
     const hasScaleDragon = allCards.some(
       (c) => c.name === "Shadow-Heart Scale Dragon"
     );
-
-    // Encontrar monstros Shadow-Heart Level 5+ que NÃO sejam Scale Dragon
     const validLevel5Plus = shMonsters.filter((c) => {
-      if (c.name === "Shadow-Heart Scale Dragon") return false; // Não contar o próprio Scale Dragon
+      if (c.name === "Shadow-Heart Scale Dragon") return false;
       const level = c.level || 0;
       return level >= 5;
     });
-
-    // Também aceita segundo Scale Dragon como material
     const scaleCount = allCards.filter(
       (c) => c.name === "Shadow-Heart Scale Dragon"
     ).length;
@@ -287,10 +283,22 @@ export function shouldPlaySpell(card, analysis) {
       };
     }
 
+    // ===== Shadow-Heart Warlord (priority 9) =====
+    // Materiais: 2 monstros Shadow-Heart quaisquer.
+    // Prioridade abaixo de Demon Dragon: se ambas viáveis, Demon Dragon vence.
+    if (shMonsters.length >= 2) {
+      const [m1, m2] = shMonsters;
+      return {
+        yes: true,
+        priority: 9,
+        reason: `Fusion: Warlord (2500 ATK, protection + revive) com ${m1.name} + ${m2.name}`,
+      };
+    }
+
     return {
       yes: false,
       reason:
-        "Sem materiais para Demon Dragon (precisa Scale Dragon + monstro Shadow-Heart Lv5+)",
+        "Sem materiais para fusão Shadow-Heart (Demon Dragon: Scale + Lv5+; Warlord: 2 SH)",
     };
   }
 

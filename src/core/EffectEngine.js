@@ -113,16 +113,31 @@ export default class EffectEngine {
       return actionPosition;
     }
 
-    // CHOICE ALLOWED: AI auto-selects "attack"
+    // CHOICE ALLOWED: delegate to the bot's strategy if it provides a hook,
+    // otherwise default to "attack". Each archetype owns its own positioning
+    // policy — this method must not impose a global heuristic.
     if (isAI(player)) {
+      const strategy = player?.strategy;
+      let chosen = "attack";
+      if (strategy && typeof strategy.chooseSpecialSummonPosition === "function") {
+        const fromStrategy = strategy.chooseSpecialSummonPosition(card, {
+          game: this.game,
+          player,
+          actionPosition,
+        });
+        if (fromStrategy === "attack" || fromStrategy === "defense") {
+          chosen = fromStrategy;
+        }
+      }
       this.game?.devLog?.("SS_POSITION", {
-        summary: `Bot auto-chooses attack for ${card?.name || "unknown"}`,
+        summary: `Bot chose ${chosen} for ${card?.name || "unknown"}`,
         player: player?.id,
         card: card?.name,
         actionPosition,
         allowsChoice: true,
+        viaStrategy: !!strategy?.chooseSpecialSummonPosition,
       });
-      return "attack";
+      return chosen;
     }
 
     // Player gets modal for position choice
