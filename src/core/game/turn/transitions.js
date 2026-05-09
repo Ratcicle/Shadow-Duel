@@ -10,6 +10,7 @@
  */
 
 import { isAI } from "../../Player.js";
+import { PHASE_ORDER, normalizeTargetPhase } from "./phaseRules.js";
 
 function scheduleAiMoveAfterPaint(game, actor) {
   if (!isAI(actor) || game.gameOver || typeof actor?.makeMove !== "function") {
@@ -68,10 +69,7 @@ export async function nextPhase() {
     currentPhase: this.phase,
   });
 
-  const order = ["draw", "standby", "main1", "battle", "main2", "end"];
-  const idx = order.indexOf(this.phase);
-  if (idx === -1) return;
-  const next = order[idx + 1];
+  const next = this.getNextPhase?.(this.phase) ?? null;
   if (!next) {
     return await this.endTurn();
   }
@@ -98,25 +96,30 @@ export async function skipToPhase(targetPhase) {
     actor === this.player,
   );
   if (!guard.ok) return guard;
-  const order = ["draw", "standby", "main1", "battle", "main2", "end"];
-  const currentIdx = order.indexOf(this.phase);
-  const targetIdx = order.indexOf(targetPhase);
+  const normalized = normalizeTargetPhase(targetPhase, this);
+  const finalTargetPhase = normalized.phase;
+  const currentIdx = PHASE_ORDER.indexOf(this.phase);
+  const targetIdx = PHASE_ORDER.indexOf(finalTargetPhase);
   if (currentIdx === -1 || targetIdx === -1) return;
   if (targetIdx <= currentIdx) return;
 
   const fromPhase = this.phase;
-  this.phase = targetPhase;
+  this.phase = finalTargetPhase;
 
   // Clear attack indicators when skipping phases
   this.clearAttackResolutionIndicators();
   this.clearAttackReadyIndicators();
+
+  if (normalized.redirected && actor.controllerType === "human") {
+    this.ui?.log?.(normalized.reason);
+  }
 
   // Emitir evento informativo para captura de replay (não bloqueia)
   if (actor.controllerType === "human") {
     this.notify("phase_skip", {
       player: this.turn,
       fromPhase,
-      toPhase: targetPhase,
+      toPhase: finalTargetPhase,
     });
   }
 

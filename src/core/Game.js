@@ -58,6 +58,7 @@ import * as extraDeckModal from "./game/extraDeck/modal.js";
 import * as turnScheduling from "./game/turn/scheduling.js";
 import * as turnCleanup from "./game/turn/cleanup.js";
 import * as turnLifecycle from "./game/turn/lifecycle.js";
+import * as turnPhaseRules from "./game/turn/phaseRules.js";
 import * as turnTransitions from "./game/turn/transitions.js";
 import * as turnOncePerTurn from "./game/turn/oncePerTurn.js";
 
@@ -987,6 +988,11 @@ Game.prototype.waitForPhaseDelay = turnLifecycle.waitForPhaseDelay;
 // Transitions: nextPhase, skipToPhase
 Game.prototype.nextPhase = turnTransitions.nextPhase;
 Game.prototype.skipToPhase = turnTransitions.skipToPhase;
+
+// Phase rules: first-turn battle lock and phase order helpers
+Game.prototype.isFirstTurnOfDuel = turnPhaseRules.isFirstTurnOfDuel;
+Game.prototype.canEnterBattlePhase = turnPhaseRules.canEnterBattlePhase;
+Game.prototype.getNextPhase = turnPhaseRules.getNextPhase;
 
 // -----------------------------------------------------------------------------
 // Spell/Trap: Attach methods from modular spellTrap/ folder

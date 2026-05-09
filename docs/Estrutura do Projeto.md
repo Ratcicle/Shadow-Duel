@@ -7,7 +7,7 @@ Documento gerado a partir de uma varredura completa do repositório. Descreve a 
 Shadow Duel é uma SPA (single-page application) em JavaScript puro (ES Modules), sem framework. O ponto de entrada HTML é [index.html](../index.html), que carrega [src/main.js](../src/main.js). A aplicação é dividida em três grandes camadas:
 
 - **Core** ([src/core/](../src/core/)) — motor de regras, estado de jogo, IA do bot, sistema de chain, efeitos.
-- **UI** ([src/ui/](../src/ui/)) — renderização DOM, animações, modais, dashboard de replays.
+- **UI** ([src/ui/](../src/ui/)) — bootstrap da SPA, controllers de tela, renderização DOM, animações e modais.
 - **Data / Locales** ([src/data/](../src/data/), [src/locales/](../src/locales/)) — banco de cartas e traduções.
 
 ---
@@ -38,12 +38,13 @@ Shadow-Duel/
 ## `src/` — Código-fonte
 
 ### `src/main.js`
-Ponto de entrada da SPA. Responsável por:
-- Inicializar locale via [i18n.js](../src/core/i18n.js).
-- Montar o deck builder (carregar pool, slots de deck, salvar/carregar do `localStorage`).
-- Iniciar duelos: cria `Game`, `Bot`, `Renderer` e fia tudo.
-- Gerenciar presets de bot e modo replay capture.
-- Validar database de cartas via [CardDatabaseValidator.js](../src/core/CardDatabaseValidator.js).
+Ponto de entrada da SPA. Hoje é um bootstrap enxuto de composição:
+- Inicializa locale via [i18n.js](../src/core/i18n.js).
+- Coleta referências de DOM e cria controllers em [src/ui/main/](../src/ui/main/).
+- Cria o `deckState`, o painel de validação, o launcher de duelos, o laboratório e a Bot Arena UI.
+- Liga eventos globais de alto nível, como iniciar duelo, abrir telas e `shadow-duel-rematch`.
+
+Regra de manutenção: `main.js` deve orquestrar módulos, não concentrar lógica de deck builder, laboratório, Bot Arena ou persistência.
 
 ### `src/data/cards.js`
 Banco de dados único de todas as cartas do jogo. Exporta:
@@ -69,7 +70,7 @@ Arquivos JSON de tradução.
 | [Game.js](../src/core/Game.js) | **Fachada principal do estado de jogo.** Classe de ~thousand-of-lines reduzida via composição: importa dezenas de módulos de [game/](../src/core/game/) e os anexa ao próprio prototype. Coordena turnos, fases, invocações, batalha, efeitos, seleções e UI prompts. |
 | [Player.js](../src/core/Player.js) | Classe `Player` — LP, mão, deck, campo, GY, banimento, contadores per-turn. Exporta helper `isAI()`. |
 | [Bot.js](../src/core/Bot.js) | Subclasse de `Player` representando o oponente IA. Carrega presets de deck (Shadow-Heart/Luminarch/Void/Dragon), seleciona estratégia via `StrategyRegistry`, e roda `BeamSearch`/`greedySearchWithEvalV2` para escolher ações. |
-| [BotArena.js](../src/core/BotArena.js) | Modo "bot vs bot" para testes em massa. Roda partidas headless e coleta métricas via `ArenaAnalytics`. |
+| [BotArena.js](../src/core/BotArena.js) | Modo "bot vs bot" para testes em massa. Roda partidas headless, controla timeouts/auto pause e coleta Strategic Reports via `ArenaAnalytics`/`DuelTracker`. |
 | [BotLogger.js](../src/core/BotLogger.js) | Logger configurável por `localStorage`. Categorias: action_gen, decision, state_change, phase_transition, etc. Filtra por bot e nível de verbosidade. |
 | [Card.js](../src/core/Card.js) | Classe `Card`. Encapsula dados imutáveis (do database) + estado mutável (counters, equipped, position, etc.) e gera `instanceId` único. |
 | [CardDatabaseValidator.js](../src/core/CardDatabaseValidator.js) | Valida o database de cartas no boot — checa shapes de ações via [actionCatalog.js](../src/core/actionHandlers/actionCatalog.js). |
@@ -118,7 +119,7 @@ Sistema de handlers declarativos. Cada efeito de carta no database é um objeto 
 | [RoleAnalyzer.js](../src/core/ai/RoleAnalyzer.js) | Inferência genérica de papéis (extender, removal, searcher, draw_engine, etc.) a partir dos efeitos da carta — sem hardcoding de nomes. |
 | [ThreatEvaluation.js](../src/core/ai/ThreatEvaluation.js) | Pontuação contextual de ameaças, ranking de ameaças do oponente, detecção de lethal. |
 | [ChainAwareness.js](../src/core/ai/ChainAwareness.js) | Detecção de bloqueios potenciais, spell speed, trap defensivos, cadeias negáveis. |
-| [ArenaAnalytics.js](../src/core/ai/ArenaAnalytics.js) | Telemetria do BotArena — métricas, razões de término, `DuelTracker`. |
+| [ArenaAnalytics.js](../src/core/ai/ArenaAnalytics.js) | Telemetria do BotArena e do duelo comum — métricas, razões de término, diagnostics, `DuelTracker` e export Strategic JSON. |
 
 #### Strategy classes (uma por arquétipo)
 
@@ -185,6 +186,7 @@ Sistema de gatilhos (on-summon, on-destroy, on-attack, etc.): [registration.js](
 | Subpasta | Conteúdo |
 |---|---|
 | [actions/](../src/core/game/actions/) | `guard.js` — validação de ações permitidas por fase/turno. |
+| [analytics/](../src/core/game/analytics/) | Strategic Report do duelo comum: ciclo de vida do tracker e download do JSON de 1 duelo. |
 | [combat/](../src/core/game/combat/) | Sistema de batalha: `availability.js`, `targeting.js`, `damage.js`, `resolution.js`, `indicators.js`. |
 | [deck/](../src/core/game/deck/) | `draw.js` — compra de cartas e checagem de deck-out. |
 | [devTools/](../src/core/game/devTools/) | Comandos de debug e setup: `commands.js`, `setup.js`. Testes de cards e efeitos rodam no Laboratório. |
@@ -204,6 +206,21 @@ Sistema de gatilhos (on-summon, on-destroy, on-attack, etc.): [registration.js](
 ---
 
 ## `src/ui/` — Renderização
+
+### `src/ui/main/`
+
+Controllers e helpers da shell da SPA. Essa pasta modulariza o antigo `main.js` sem introduzir framework ou store global novo.
+
+| Arquivo | Responsabilidade |
+|---|---|
+| [domRefs.js](../src/ui/main/domRefs.js) | Agrupa referências do DOM por área: start screen, deck builder, Bot Arena, laboratório, validação e locale. |
+| [deckState.js](../src/ui/main/deckState.js) | Estado e persistência do deck builder: presets, slots, chaves de `localStorage`, sanitização de deck/extra deck, pool sorting e inferência de arquétipo. |
+| [validationPanel.js](../src/ui/main/validationPanel.js) | Executa `validateCardDatabase()` e renderiza erros da base de cartas na tela inicial. |
+| [deckBuilderController.js](../src/ui/main/deckBuilderController.js) | UI do deck builder: slots, filtros, preview, edição do main/extra deck, preset do bot e preparação dos dados para duelo comum. |
+| [laboratoryController.js](../src/ui/main/laboratoryController.js) | UI do Laboratório: setup manual, randomização, import/export JSON, modos de teste/duelo e configuração de bot/revelar mão. |
+| [botArenaController.js](../src/ui/main/botArenaController.js) | UI da Bot Arena: seleção de matchups, velocidade, auto pause, status/log/result cards e download do Strategic JSON. Preserva `window.botArenaInstance`. |
+| [gameLauncher.js](../src/ui/main/gameLauncher.js) | Cria `Game` + `Renderer` para duelo comum ou Laboratório recebendo configurações prontas dos controllers. |
+| [localeControls.js](../src/ui/main/localeControls.js) | Botões de idioma e reload após troca de locale. |
 
 ### `src/ui/Renderer.js`
 Fachada principal de renderização. Constructor próprio + métodos importados de [renderer/](../src/ui/renderer/) e anexados ao prototype.
@@ -264,4 +281,4 @@ Fachada principal de renderização. Constructor próprio + métodos importados 
 
 ## Arquitetura em uma frase
 
-> `main.js` cria um `Game` (que delega para módulos em `core/game/`), conecta um `Bot` (que escolhe ações via `BeamSearch` + uma `Strategy` específica do deck) e um `Renderer` (que pinta o DOM via `UIAdapter`); efeitos de carta declarados em `data/cards.js` são executados pelo `EffectEngine` através de handlers em `actionHandlers/` e podem entrar no `ChainSystem`.
+> `main.js` compõe controllers em `ui/main/`; o `gameLauncher` cria um `Game` (que delega para módulos em `core/game/`), conecta um `Bot` (que escolhe ações via `BeamSearch` + uma `Strategy` específica do deck) e um `Renderer` (que pinta o DOM via `UIAdapter`); efeitos de carta declarados em `data/cards.js` são executados pelo `EffectEngine` através de handlers em `actionHandlers/` e podem entrar no `ChainSystem`.

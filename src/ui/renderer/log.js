@@ -50,16 +50,22 @@ export function updateTurn(player) {
 /**
  * @this {import('../Renderer.js').default}
  */
-export function updatePhaseTrack(currentPhase) {
+export function updatePhaseTrack(currentPhase, game = null) {
   const phases = this.elements.phaseTrack?.querySelectorAll("li");
   if (!phases) return;
-  let reachedCurrent = false;
+  const phaseOrder =
+    game?.canEnterBattlePhase?.() === false
+      ? ["draw", "standby", "main1", "main2", "end"]
+      : ["draw", "standby", "main1", "battle", "main2", "end"];
+  const currentIdx = phaseOrder.indexOf(currentPhase);
   phases.forEach((li) => {
     li.classList.remove("active", "done");
     if (li.dataset.phase === currentPhase) {
       li.classList.add("active");
-      reachedCurrent = true;
-    } else if (!reachedCurrent) {
+      return;
+    }
+    const phaseIdx = phaseOrder.indexOf(li.dataset.phase);
+    if (currentIdx >= 0 && phaseIdx >= 0 && phaseIdx < currentIdx) {
       li.classList.add("done");
     }
   });

@@ -12,6 +12,12 @@ export function getAttackAvailability(attacker) {
   if (!attacker) {
     return { ok: false, reason: "No attacker selected." };
   }
+  if (this.isFirstTurnOfDuel?.() || this.turnCounter === 1) {
+    return {
+      ok: false,
+      reason: "Cannot attack on the first turn of the duel.",
+    };
+  }
   if (attacker.cannotAttackThisTurn) {
     return {
       ok: false,

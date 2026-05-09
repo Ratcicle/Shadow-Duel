@@ -85,7 +85,7 @@ export function updateBoard(options = {}) {
     this.ui.renderFieldSpell(this.bot);
     this.ui.updateLP(this.player);
     this.ui.updateLP(this.bot);
-    this.ui.updatePhaseTrack(this.phase);
+    this.ui.updatePhaseTrack(this.phase, this);
     this.ui.updateTurn(this.turn === "player" ? this.player : this.bot);
     this.ui.updateGYPreview(this.player);
     this.ui.updateGYPreview(this.bot);
