@@ -16,7 +16,7 @@ export const END_REASONS = {
   CANCELLED: "cancelled",
 };
 
-const REPORT_VERSION = 1;
+const REPORT_VERSION = 2;
 const SEATS = ["player", "bot"];
 const TRACKED_EVENTS = new Set([
   "after_summon",
@@ -141,7 +141,11 @@ function createSeatStats(archetype = "unknown") {
     fusionSummons: 0,
     ascensionSummons: 0,
     spellActivations: 0,
+    spellCardActivations: 0,
+    spellEffectActivations: 0,
     trapActivations: 0,
+    trapCardActivations: 0,
+    trapEffectActivations: 0,
     effectActivations: 0,
     attacks: 0,
     failedActions: 0,
@@ -175,7 +179,11 @@ function compactSeatStats(stats) {
     fusionSummons: stats.fusionSummons,
     ascensionSummons: stats.ascensionSummons,
     spellActivations: stats.spellActivations || 0,
+    spellCardActivations: stats.spellCardActivations || 0,
+    spellEffectActivations: stats.spellEffectActivations || 0,
     trapActivations: stats.trapActivations || 0,
+    trapCardActivations: stats.trapCardActivations || 0,
+    trapEffectActivations: stats.trapEffectActivations || 0,
     effectActivations: stats.effectActivations || 0,
     // backward-compat aggregate
     spellTrapActivations: (stats.spellActivations || 0) + (stats.trapActivations || 0),
@@ -918,7 +926,11 @@ export class ArenaAnalytics {
       "fusionSummons",
       "ascensionSummons",
       "spellActivations",
+      "spellCardActivations",
+      "spellEffectActivations",
       "trapActivations",
+      "trapCardActivations",
+      "trapEffectActivations",
       "effectActivations",
       "attacks",
       "failedActions",
@@ -958,7 +970,13 @@ export class ArenaAnalytics {
         discards: [],
         discardsByCost: [],
         purgeUses: 0,
-        purgeTargets: [],
+        purgeTargets: [], // legado: deprecated, mantido p/ compat (= purgeMonsterTargets)
+        purgeDiscardCosts: [],
+        purgeMonsterTargets: [],
+        purgeStatResults: [],
+        purgeDestroyedTargets: 0,
+        purgeSuccessfulUses: 0,
+        purgeFailedOrBlockedUses: 0,
         polymerizationActivations: 0,
         fusionSummons: 0,
         bossesSummoned: [],
@@ -992,31 +1010,78 @@ export class ArenaAnalytics {
     };
     const shDiscards = createCounter();
     const shDiscardsByCost = createCounter();
-    const shPurgeTargets = createCounter();
     const shBosses = createCounter();
     const shFinishers = createCounter();
+    // Shadow-Heart Purge: separated by target slot ID (purge_discard vs purge_target_monster)
+    const shPurgeDiscardCosts = createCounter();
+    const shPurgeMonsterTargets = createCounter();
+    const shPurgeStatResults = [];
+    let shPurgeDestroyedTargets = 0;
     // Luminarch: per-source targeting counters built from events array
     const lumCitadelTargets = createCounter();
     const lumSpearTargets = createCounter();
-    const lumMoonlitTargets = createCounter();
     const lumKCDiscards = createCounter();
     const lumBarbariasPositions = createCounter();
     const lumBarbariasTargets = createCounter();
     const lumBarbariasPositionChanges = createCounter();
     const barbariasBuffedByDuel = new Set();
+    // Luminarch Moonlit Blessing: agrupa cada resolução em uma única entrada
+    const moonlitResolutions = [];
+    const moonlitByGroup = new Map();
     const dragonSummons = createCounter();
     const dragonDiscards = createCounter();
     const dragonBanishes = createCounter();
 
+    const moonlitGroupKey = (duelN, t, seat) => `${duelN}|${t}|${seat}`;
+    const ensureMoonlitResolution = (key) => {
+      let res = moonlitByGroup.get(key);
+      if (!res) {
+        res = {
+          recovered: null,
+          recoveredFrom: null,
+          recoveredTo: null,
+          summoned: false,
+          summonedPosition: null,
+          result: null,
+        };
+        moonlitByGroup.set(key, res);
+        moonlitResolutions.push(res);
+      }
+      return res;
+    };
+
     for (const duel of duels) {
-      // Percorre eventos do duelo para atribuição por fonte (Luminarch)
+      // Percorre eventos do duelo para atribuição por fonte
       const duelEvents = duel.events || [];
+
+      // Inferência segura de destruição por Purge:
+      // só conta quando o move pro cemitério tem sourceCard = "Shadow-Heart Purge"
+      // (propagado pelo handler modify_stats_temp_then_destroy_if_zeroed).
+      for (const ev of duelEvents) {
+        if (
+          ev.type === "move" &&
+          ev.sourceCard === "Shadow-Heart Purge" &&
+          ev.toZone === "graveyard" &&
+          ev.fromZone === "field" &&
+          ev.card
+        ) {
+          shPurgeDestroyedTargets += 1;
+        }
+      }
+
       for (const ev of duelEvents) {
         const source = ev.sourceCard || null;
         const target = ev.card || ev.target || null;
 
         if (ev.type === "targeting" && source) {
           switch (source) {
+            case "Shadow-Heart Purge":
+              if (ev.targetZone === "purge_discard") {
+                addCount(shPurgeDiscardCosts, target);
+              } else if (ev.targetZone === "purge_target_monster") {
+                addCount(shPurgeMonsterTargets, target);
+              }
+              break;
             case "Sanctum of the Luminarch Citadel":
               addCount(lumCitadelTargets, target);
               break;
@@ -1025,9 +1090,13 @@ export class ArenaAnalytics {
                 addCount(lumSpearTargets, target);
               }
               break;
-            case "Luminarch Moonlit Blessing":
-              addCount(lumMoonlitTargets, target);
+            case "Luminarch Moonlit Blessing": {
+              const key = moonlitGroupKey(duel.duelNumber, ev.t, ev.seat);
+              const res = ensureMoonlitResolution(key);
+              res.recovered = target;
+              res.recoveredFrom = "graveyard";
               break;
+            }
             case "Luminarch Megashield Barbarias":
               addCount(lumBarbariasTargets, target);
               if (target === "Luminarch Megashield Barbarias") {
@@ -1041,6 +1110,14 @@ export class ArenaAnalytics {
           }
         }
 
+        if (ev.type === "stat" && source === "Shadow-Heart Purge" && target) {
+          shPurgeStatResults.push({
+            card: target,
+            atkChange: ev.result || null,
+            turn: ev.t || null,
+          });
+        }
+
         if (ev.type === "move" && ev.sourceCard) {
           if (
             ev.sourceCard === "Luminarch Knights Convocation" &&
@@ -1051,18 +1128,38 @@ export class ArenaAnalytics {
           }
           if (
             ev.sourceCard === "Luminarch Moonlit Blessing" &&
-            (ev.fromZone === "graveyard" || ev.fromZone === "hand") &&
-            (ev.toZone === "field" || ev.toZone === "hand")
+            ev.fromZone === "graveyard" &&
+            ev.toZone === "hand"
           ) {
-            addCount(
-              lumMoonlitTargets,
-              ev.position ? `${ev.card} (${ev.toZone}/${ev.position})` : `${ev.card} (${ev.toZone})`,
-            );
+            const key = moonlitGroupKey(duel.duelNumber, ev.t, ev.seat);
+            const res = ensureMoonlitResolution(key);
+            if (!res.recovered) res.recovered = ev.card;
+            res.recoveredFrom = "graveyard";
+            res.recoveredTo = "hand";
           }
         }
 
-        if (ev.type === "summon" && ev.card === "Luminarch Megashield Barbarias") {
-          addCount(lumBarbariasPositions, ev.position || "unknown");
+        if (ev.type === "summon") {
+          if (ev.sourceCard === "Luminarch Moonlit Blessing") {
+            const key = moonlitGroupKey(duel.duelNumber, ev.t, ev.seat);
+            const res = ensureMoonlitResolution(key);
+            res.summoned = true;
+            res.summonedPosition = ev.position || res.summonedPosition;
+            if (!res.recovered) res.recovered = ev.card;
+          }
+          if (ev.card === "Luminarch Megashield Barbarias") {
+            addCount(lumBarbariasPositions, ev.position || "unknown");
+          }
+        }
+
+        if (
+          ev.type === "position_chosen" &&
+          ev.result === "Luminarch Moonlit Blessing"
+        ) {
+          // Some position_chosen events carry context = source name
+          const key = moonlitGroupKey(duel.duelNumber, ev.t, ev.seat);
+          const res = ensureMoonlitResolution(key);
+          if (ev.position) res.summonedPosition = ev.position;
         }
 
         if (ev.type === "position" && ev.sourceCard === "Luminarch Megashield Barbarias") {
@@ -1074,6 +1171,19 @@ export class ArenaAnalytics {
 
         if (ev.type === "attack" && barbariasBuffedByDuel.has(`${duel.duelNumber}:${ev.card}`)) {
           archetypes.luminarch.barbarias.attacksAfterBuff += 1;
+        }
+      }
+
+      // Finaliza result de cada Moonlit deste duelo
+      for (const [key, res] of moonlitByGroup) {
+        if (!key.startsWith(`${duel.duelNumber}|`)) continue;
+        if (res.result) continue;
+        if (res.recovered && (res.recoveredTo || res.summoned)) {
+          res.result = "success";
+        } else if (res.recovered) {
+          res.result = "partial";
+        } else {
+          res.result = "fail";
         }
       }
 
@@ -1099,6 +1209,14 @@ export class ArenaAnalytics {
             if (entry.name === "Shadow-Heart Covenant") {
               archetypes.shadowheart.covenantInvalid += entry.count;
             }
+            if (entry.name === "Shadow-Heart Purge") {
+              archetypes.shadowheart.purgeFailedOrBlockedUses += entry.count;
+            }
+          }
+          for (const entry of stats.blockedByCard || []) {
+            if (entry.name === "Shadow-Heart Purge") {
+              archetypes.shadowheart.purgeFailedOrBlockedUses += entry.count;
+            }
           }
           for (const entry of stats.discarded || []) {
             addCount(shDiscards, entry.name, entry.count);
@@ -1108,9 +1226,6 @@ export class ArenaAnalytics {
           }
           for (const entry of stats.discardedByCost || []) {
             addCount(shDiscardsByCost, entry.name, entry.count);
-          }
-          for (const entry of stats.targeted || []) {
-            addCount(shPurgeTargets, entry.name, entry.count);
           }
           for (const entry of stats.summoned || []) {
             if (SHADOWHEART_BOSSES.has(entry.name)) {
@@ -1152,14 +1267,34 @@ export class ArenaAnalytics {
 
     archetypes.shadowheart.discards = topCounter(shDiscards);
     archetypes.shadowheart.discardsByCost = topCounter(shDiscardsByCost);
-    archetypes.shadowheart.purgeTargets = topCounter(shPurgeTargets);
+    // Purge: estruturas separadas por slot de target
+    const purgeMonsterTargetsList = topCounter(shPurgeMonsterTargets);
+    archetypes.shadowheart.purgeMonsterTargets = purgeMonsterTargetsList;
+    archetypes.shadowheart.purgeDiscardCosts = topCounter(shPurgeDiscardCosts);
+    archetypes.shadowheart.purgeStatResults = shPurgeStatResults.slice(0, 24);
+    archetypes.shadowheart.purgeDestroyedTargets = shPurgeDestroyedTargets;
+    archetypes.shadowheart.purgeSuccessfulUses = purgeMonsterTargetsList.reduce(
+      (s, e) => s + e.count,
+      0,
+    );
+    // Compat legacy: purgeTargets agora reflete monstros alvejados (não custos)
+    archetypes.shadowheart.purgeTargets = purgeMonsterTargetsList;
     archetypes.shadowheart.bossesSummoned = topCounter(shBosses);
     archetypes.shadowheart.finisherDiscards = topCounter(shFinishers);
     // Luminarch: fontes separadas por carta ativadora
     archetypes.luminarch.knightsConvocationDiscards = topCounter(lumKCDiscards);
     archetypes.luminarch.citadelTargets = topCounter(lumCitadelTargets);
     archetypes.luminarch.spearTargets = topCounter(lumSpearTargets);
-    archetypes.luminarch.moonlitRevives = topCounter(lumMoonlitTargets);
+    // Moonlit: cada resolução é uma entrada compacta
+    archetypes.luminarch.moonlitRevives = {
+      total: moonlitResolutions.length,
+      successful: moonlitResolutions.filter((r) => r.result === "success").length,
+      summoned: moonlitResolutions.filter((r) => r.summoned).length,
+      handOnly: moonlitResolutions.filter(
+        (r) => !r.summoned && r.recoveredTo === "hand",
+      ).length,
+      resolutions: moonlitResolutions.slice(0, 24),
+    };
     archetypes.luminarch.barbarias.summonedPositions =
       topCounter(lumBarbariasPositions);
     archetypes.luminarch.barbarias.effectTargets = topCounter(lumBarbariasTargets);
@@ -1614,9 +1749,37 @@ export class DuelTracker {
     this.recordCardPlayed(name);
     this.markUsefulAction(seat, meta.turn);
 
-    if (activationKind === "spell") stats.spellActivations += 1;
-    else if (activationKind === "trap") stats.trapActivations += 1;
-    else stats.effectActivations += 1;
+    // Card activation = the act of playing the spell/trap card itself.
+    //   Triggered when:
+    //     - dedicated `spell_activated` / `trap_activated` event fires, OR
+    //     - placement-only effect (e.g. field/continuous spell placed), OR
+    //     - the activation source is the hand / a face-down set zone (the bot
+    //       fast-path bypasses tryActivateSpell, so we infer from context).
+    // Effect activation = an effect resolving on an already-on-field spell/trap
+    //   (continuous, field-spell trigger, in-zone re-activation).
+    const isPlacement = payload.placementOnly === true;
+    const ctx = payload.activationContext || null;
+    const fromHand =
+      payload.fromHand === true ||
+      ctx?.fromHand === true ||
+      ctx?.sourceZone === "hand" ||
+      payload.fromZone === "hand";
+    const isCardPlay =
+      eventName === "spell_activated" ||
+      eventName === "trap_activated" ||
+      isPlacement ||
+      fromHand;
+    if (activationKind === "spell") {
+      stats.spellActivations += 1;
+      if (isCardPlay) stats.spellCardActivations += 1;
+      else stats.spellEffectActivations += 1;
+    } else if (activationKind === "trap") {
+      stats.trapActivations += 1;
+      if (isCardPlay) stats.trapCardActivations += 1;
+      else stats.trapEffectActivations += 1;
+    } else {
+      stats.effectActivations += 1;
+    }
 
     // Registra última carta ativada para correlacionar eventos de targeting
     this.lastActivated[seat] = name;

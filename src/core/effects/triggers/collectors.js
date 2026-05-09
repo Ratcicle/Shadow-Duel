@@ -1314,6 +1314,39 @@ export async function collectCardToGraveTriggers(payload) {
       }. Targets definition: ${JSON.stringify(effect.targets)}`,
     );
 
+    // Precheck genérico: triggers que exigem alvos só devem entrar na chain
+    // se houver candidatos válidos para todos os targets obrigatórios.
+    // Isso evita ativações inválidas como Shadow-Heart Coward sem monstro
+    // do oponente em campo.
+    if (Array.isArray(effect.targets) && effect.targets.length > 0) {
+      const precheckCtx = {
+        source: card,
+        player,
+        opponent: resolvedOpponent,
+        fromZone,
+        toZone,
+        actionContext,
+        activationContext: { logTargets: false },
+      };
+      let unmetRequiredTarget = null;
+      for (const targetDef of effect.targets) {
+        if (!targetDef) continue;
+        const min = Number(targetDef.count?.min ?? 1);
+        if (min <= 0) continue;
+        const { candidates } = this.selectCandidates(targetDef, precheckCtx);
+        if (!candidates || candidates.length < min) {
+          unmetRequiredTarget = targetDef.id || targetDef.zone || "target";
+          break;
+        }
+      }
+      if (unmetRequiredTarget) {
+        console.log(
+          `[card_to_grave] Skipping trigger ${effect.id} on ${card.name}: no valid candidates for required target "${unmetRequiredTarget}"`,
+        );
+        continue;
+      }
+    }
+
     const activationContext = this.buildTriggerActivationContext(
       card,
       player,
