@@ -73,8 +73,7 @@ export async function checkAndOfferTraps(event, eventData = {}) {
       isOpponentAttack:
         eventData.isOpponentAttack ??
         (attackerOwner && defenderOwner
-          ? attackerOwner.id !== defenderOwner.id &&
-            defenderOwner.id === "player"
+          ? attackerOwner.id !== defenderOwner.id
           : false),
       triggerPlayer:
         attackerOwner ||

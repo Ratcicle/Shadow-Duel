@@ -279,12 +279,16 @@ export async function resolveEventEntries(
     });
   } else if (eventName === "attack_declared") {
     const defenderOwner = payload?.defenderOwner || null;
-    if (defenderOwner === this.player) {
-      // Determine if opponent is attacking by checking if attacker owner differs from defender (player)
-      const attackerOwnerId = payload?.attackerOwner?.id;
+    if (defenderOwner) {
+      // Determine opponent attack from the defender/card perspective.
+      const attackerOwnerId = payload?.attackerOwner?.id || null;
+      const defenderOwnerId = defenderOwner?.id || null;
       await this.checkAndOfferTraps(eventName, {
         ...payload,
-        isOpponentAttack: attackerOwnerId && attackerOwnerId !== this.player.id,
+        isOpponentAttack:
+          !!attackerOwnerId &&
+          !!defenderOwnerId &&
+          attackerOwnerId !== defenderOwnerId,
       });
     }
   }

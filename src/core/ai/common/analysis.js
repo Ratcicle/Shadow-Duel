@@ -11,6 +11,7 @@ export function buildStrategyAnalysis({ bot, opponent, game } = {}) {
     oppField: opponent?.field || [],
     oppLp: opponent?.lp || 8000,
     currentTurn: game?.turnCounter || 1,
+    phase: game?.phase || "main1",
     player: bot,
     game,
   };

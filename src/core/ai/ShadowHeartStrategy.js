@@ -47,6 +47,7 @@ import {
 import {
   evaluateMonster,
   evaluateBoardShadowHeart,
+  evaluateShadowHeartTributeBossBonus,
 } from "./shadowheart/scoring.js";
 import {
   simulateMainPhaseAction as simAction,
@@ -443,6 +444,17 @@ export default class ShadowHeartStrategy extends BaseStrategy {
       gameOrState,
       perspectivePlayer,
       this.getOpponent.bind(this),
+    );
+  }
+
+  evaluateBoardV2(gameOrState, perspectivePlayer) {
+    const perspective = perspectivePlayer?.id
+      ? perspectivePlayer
+      : gameOrState?.bot;
+    const opponent = this.getOpponent(gameOrState, perspective);
+    return (
+      super.evaluateBoardV2(gameOrState, perspectivePlayer) +
+      evaluateShadowHeartTributeBossBonus(perspective, opponent)
     );
   }
 
@@ -884,19 +896,27 @@ export default class ShadowHeartStrategy extends BaseStrategy {
           }
         }
 
-        // Forçar summon em defesa com prioridade baixa
+        // Forcar summon com prioridade baixa. Cartas com remocao ao invocar
+        // precisam entrar face-up, ou o fallback desperdiça o proprio payoff.
+        const mustResolveOnSummonFaceUp =
+          this.cardClearsOpponentBoardOnSummon(card);
+        const fallbackPosition = mustResolveOnSummonFaceUp
+          ? "attack"
+          : "defense";
+        const fallbackFacedown = fallbackPosition === "defense";
+
         if (bot?.debug) {
           console.log(
-            `[ShadowHeartStrategy] 🔧 Fallback summon: ${card.name} em defesa`,
+            `[ShadowHeartStrategy] 🔧 Fallback summon: ${card.name} em ${fallbackPosition}`,
           );
         }
-        log(`    🔧 Fallback summon: ${card.name} em defesa`);
+        log(`    🔧 Fallback summon: ${card.name} em ${fallbackPosition}`);
         actions.push({
           type: "summon",
           index,
           cardId: card.id,
-          position: "defense",
-          facedown: true,
+          position: fallbackPosition,
+          facedown: fallbackFacedown,
           priority: 1,
           cardName: card.name,
           isStalemateBreaker: true,

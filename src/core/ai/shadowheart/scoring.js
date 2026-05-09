@@ -5,6 +5,95 @@
 
 import { CARD_KNOWLEDGE, isShadowHeart } from "./knowledge.js";
 
+function wasTributeSummoned(monster) {
+  return monster?.lastSummonMethod === "tribute";
+}
+
+function shadowHeartCardsInGraveyard(owner) {
+  return (owner?.graveyard || []).filter((card) => isShadowHeart(card));
+}
+
+function scaleReviveTargets(owner) {
+  return shadowHeartCardsInGraveyard(owner).filter(
+    (card) => card?.cardKind === "monster" && (card.atk || 0) <= 1600,
+  );
+}
+
+function scaleRecycleTargets(owner) {
+  return shadowHeartCardsInGraveyard(owner);
+}
+
+function tributeMaterialSynergy(monster) {
+  const materialNames = Array.isArray(monster?.lastTributeMaterialNames)
+    ? monster.lastTributeMaterialNames
+    : [];
+  const highValueNames = new Set([
+    "Shadow-Heart Void Mage",
+    "Shadow-Heart Imp",
+    "Shadow-Heart Abyssal Eel",
+    "Shadow-Heart Coward",
+    "Shadow-Heart Gecko",
+    "Shadow-Heart Specter",
+  ]);
+  return materialNames.filter((name) => highValueNames.has(name)).length;
+}
+
+function scoreTributeScaleDragon(monster, owner, opponent) {
+  if (!wasTributeSummoned(monster)) return 0;
+
+  const reviveTargets = scaleReviveTargets(owner);
+  const recycleTargets = scaleRecycleTargets(owner);
+  const materialSynergy = tributeMaterialSynergy(monster);
+  const battleTargets = (opponent?.field || []).filter(
+    (card) =>
+      card?.cardKind === "monster" &&
+      card.position !== "defense" &&
+      (monster.atk || 0) > (card.atk || 0),
+  );
+
+  let value = 4; // unlocks the tribute-only effects
+  if (recycleTargets.length > 0) value += 2;
+  value += Math.min(6, reviveTargets.length * 2);
+  value += Math.min(2, materialSynergy * 0.75);
+  if (battleTargets.length > 0) value += 1.5;
+  return value;
+}
+
+function scoreTributeDemonArctroth(monster, owner, opponent) {
+  if (!wasTributeSummoned(monster)) return 0;
+
+  const removedBySim = monster.destroyedOpponentMonstersByEffect || 0;
+  const remainingThreats = (opponent?.field || []).filter(
+    (card) => card?.cardKind === "monster" && (card.atk || 0) >= 2000,
+  ).length;
+  const materialSynergy = tributeMaterialSynergy(monster);
+  const ascensionProgress = Math.min(
+    2,
+    monster.destroyedOpponentMonstersByEffect ||
+      monster.destroyedOpponentMonsters ||
+      0,
+  );
+
+  let value = 3; // tribute summon turns on the removal effect
+  value += removedBySim * 4;
+  value += ascensionProgress * 1.5;
+  value += Math.min(1.5, materialSynergy * 0.5);
+  if (remainingThreats === 0 && removedBySim > 0) value += 1;
+  return value;
+}
+
+export function evaluateShadowHeartTributeBossBonus(owner, opponent) {
+  let value = 0;
+  for (const monster of owner?.field || []) {
+    if (monster?.name === "Shadow-Heart Scale Dragon") {
+      value += scoreTributeScaleDragon(monster, owner, opponent);
+    } else if (monster?.name === "Shadow-Heart Demon Arctroth") {
+      value += scoreTributeDemonArctroth(monster, owner, opponent);
+    }
+  }
+  return value;
+}
+
 /**
  * Avalia um monstro individual para scoring de board.
  * @param {Object} monster
@@ -30,9 +119,15 @@ export function evaluateMonster(monster, owner, opponent) {
     value += 0.5;
 
     // Bônus específicos
-    if (monster.name === "Shadow-Heart Scale Dragon") value += 3;
+    if (monster.name === "Shadow-Heart Scale Dragon") {
+      value += 3;
+      value += scoreTributeScaleDragon(monster, owner, opponent);
+    }
     if (monster.name === "Shadow-Heart Demon Dragon") value += 4;
-    if (monster.name === "Shadow-Heart Demon Arctroth") value += 2;
+    if (monster.name === "Shadow-Heart Demon Arctroth") {
+      value += 2;
+      value += scoreTributeDemonArctroth(monster, owner, opponent);
+    }
     if (monster.name === "Shadow-Heart Imp") value += 1;
     if (monster.name === "Shadow-Heart Gecko") value += 0.5;
     if (monster.name === "Shadow-Heart Leviathan") value += 1;

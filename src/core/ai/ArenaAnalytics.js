@@ -2027,6 +2027,12 @@ export class DuelTracker {
       turn: meta.turn,
       success: true,
     });
+    const targets = cardNames(
+      payload.targets ||
+        payload.selectedTargets ||
+        payload.selectedCards ||
+        payload.target,
+    );
     this.pushEvent({
       t: meta.turn,
       seat,
@@ -2036,6 +2042,8 @@ export class DuelTracker {
       effectId: effectId(payload),
       effectType: payload.effectType || null,
       fromZone: payload.activationZone || payload.fromZone || null,
+      target: targets[0] || null,
+      targets: targets.length > 1 ? targets : undefined,
       result: payload.placementOnly === true ? "placement" : "activated",
     });
   }

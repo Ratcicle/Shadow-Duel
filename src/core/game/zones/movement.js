@@ -1194,7 +1194,7 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     console.log(
       `[moveCard] Emitting card_to_grave event for ${card.name} (fromZone: ${fromZone})`
     );
-    void this.emit("card_to_grave", {
+    const cardToGraveEvent = this.emit("card_to_grave", {
       card,
       fromZone: fromZone || options.fromZone || null,
       toZone: "graveyard",
@@ -1205,6 +1205,11 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
       destroySource:
         options.destroySource || options.sourceCard || options.source || null,
     });
+    if (options.awaitEvents === true || options.awaitCardToGraveEvent === true) {
+      await cardToGraveEvent;
+    } else {
+      void cardToGraveEvent;
+    }
   }
 
   // Limpar cache de targeting após mover cartas (estado do jogo mudou)

@@ -1070,18 +1070,22 @@ export default class ChainSystem {
         if (card.name === "Luminarch Holy Shield") {
           // CRITICAL: Holy Shield só deve ser ativado em contextos de batalha do OPONENTE
           // Nunca ativar no próprio turno ou em resposta aos próprios summons
-          const isOpponentAction = context?.player?.id !== player?.id;
+          const isOpponentAction =
+            typeof context?.isOpponentAttack === "boolean"
+              ? context.isOpponentAttack
+              : context?.player?.id !== player?.id;
           const isBattleContext =
             context?.type === "attack_declaration" ||
             context?.type === "battle_damage";
 
-          if (!isOpponentAction) {
+          if (isBattleContext) {
+            // Battle threats are handled by the dedicated Holy Shield block
+            // above. If execution reaches this fallback, the attack is not
+            // worth spending the shield on.
+            priority = -100;
+          } else if (!isOpponentAction) {
             // Próprio turno ou própria ação = NÃO ATIVAR
             priority = -100;
-          } else if (context?.type === "attack_declaration") {
-            priority += 70;
-          } else if (context?.type === "battle_damage") {
-            priority += 55;
           } else if (context?.type === "effect_targeted") {
             priority += 40;
           } else {

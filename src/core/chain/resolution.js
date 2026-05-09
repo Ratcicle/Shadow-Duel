@@ -130,6 +130,18 @@ function prepareForResolution(cs, link, activationZone) {
       player.hand.splice(handIdx, 1);
       player.spellTrap = player.spellTrap || [];
       player.spellTrap.push(card);
+      cs.game?._arenaTracker?.recordZoneMove?.(
+        card,
+        player,
+        "spellTrap",
+        {
+          fromZone: "hand",
+          sourceCard: card,
+          effectId: link.effect?.id || null,
+          contextLabel: "chain_activation",
+        },
+        { success: true, fromZone: "hand", toZone: "spellTrap" },
+      );
     }
   }
 
@@ -148,6 +160,9 @@ async function applyChainEffect(cs, link, activationZone) {
 
   const ctx = {
     source: card,
+    sourceCard: card,
+    effect,
+    effectId: effect?.id || null,
     player,
     opponent: cs.getOpponent(player),
     activationZone,
@@ -157,7 +172,10 @@ async function applyChainEffect(cs, link, activationZone) {
     defenderOwner: link.context?.defenderOwner,
     activationContext: {
       chainLevel: link.chainLevel,
-      context: link.context,
+      effectId: effect?.id || null,
+      sourceZone: activationZone,
+      chainContext: link.context?.type || null,
+      event: link.context?.event || null,
       autoSelectSingleTarget: true,
       autoSelectTargets: isAI(player),
     },
@@ -179,6 +197,8 @@ async function applyChainEffect(cs, link, activationZone) {
       resolvedSelections = {};
     }
   }
+
+  notifyChainActivation(cs, link, activationZone, resolvedSelections);
 
   if (Array.isArray(effect.actions)) {
     try {
@@ -224,7 +244,101 @@ async function applyChainEffect(cs, link, activationZone) {
 }
 
 /**
- * Phase 3 — cleanup.
+ * Chain activation telemetry.
+ * Emits compact strategic events for chain-resolved activations.
+ */
+function getChainActivationEventName(card) {
+  if (card?.cardKind === "spell") return "spell_activated";
+  if (card?.cardKind === "trap") return "trap_activated";
+  return "effect_activated";
+}
+
+function flattenSelectionCards(selections) {
+  const cards = [];
+  const visit = (value) => {
+    if (!value) return;
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
+    if (typeof value === "object" && value.card) {
+      visit(value.card);
+      return;
+    }
+    if (typeof value === "object" && (value.name || value.cardName)) {
+      cards.push(value);
+    }
+  };
+
+  for (const value of Object.values(selections || {})) {
+    visit(value);
+  }
+  return cards;
+}
+
+function compactSelectedTarget(card) {
+  if (!card) return null;
+  return {
+    id: card.id ?? null,
+    name: card.name || card.cardName || null,
+    owner: card.owner || null,
+    zone: card.zone || null,
+    position: card.position || null,
+  };
+}
+
+function notifyChainActivation(cs, link, activationZone, resolvedSelections) {
+  const game = cs.game;
+  if (typeof game?.notify !== "function") return;
+
+  const { card, player, effect } = link;
+  const selectedCards = flattenSelectionCards(resolvedSelections);
+  const selectedTargets = selectedCards.map(compactSelectedTarget).filter(Boolean);
+  const eventName = getChainActivationEventName(card);
+
+  game.notify(eventName, {
+    card,
+    source: card,
+    sourceCard: card,
+    player,
+    owner: player,
+    effect,
+    effectId: effect?.id || null,
+    effectType: effect?.timing || "chain",
+    activationZone,
+    fromZone: activationZone,
+    fromHand: activationZone === "hand",
+    chainLevel: link.chainLevel,
+    chainContext: link.context?.type || null,
+    trigger: link.context?.event || null,
+    target: selectedCards[0] || null,
+    targets: selectedCards,
+    selectedTargets,
+    selectedCount: selectedTargets.length,
+    activationContext: {
+      chainLevel: link.chainLevel,
+      effectId: effect?.id || null,
+      sourceZone: activationZone,
+      chainContext: link.context?.type || null,
+      event: link.context?.event || null,
+    },
+  });
+
+  if (selectedTargets.length > 0) {
+    game.notify("target_selected", {
+      player,
+      source: card,
+      sourceCard: card,
+      effect,
+      effectId: effect?.id || null,
+      targets: selectedCards,
+      selectedTargets,
+      selectedCount: selectedTargets.length,
+    });
+  }
+}
+
+/**
  * Sends non-continuous traps and quick-play spells to graveyard,
  * registers once-per-turn usage, and refreshes the board.
  */
@@ -238,6 +352,18 @@ function cleanupAfterResolution(cs, link) {
       player.spellTrap.splice(idx, 1);
       player.graveyard = player.graveyard || [];
       player.graveyard.push(card);
+      cs.game?._arenaTracker?.recordZoneMove?.(
+        card,
+        player,
+        "graveyard",
+        {
+          fromZone: "spellTrap",
+          sourceCard: card,
+          effectId: effect?.id || null,
+          contextLabel: "chain_resolution_cleanup",
+        },
+        { success: true, fromZone: "spellTrap", toZone: "graveyard" },
+      );
       cs.log(`${card.name} sent to graveyard after resolution`);
     }
   }
@@ -248,6 +374,18 @@ function cleanupAfterResolution(cs, link) {
       player.spellTrap.splice(idx, 1);
       player.graveyard = player.graveyard || [];
       player.graveyard.push(card);
+      cs.game?._arenaTracker?.recordZoneMove?.(
+        card,
+        player,
+        "graveyard",
+        {
+          fromZone: "spellTrap",
+          sourceCard: card,
+          effectId: effect?.id || null,
+          contextLabel: "chain_resolution_cleanup",
+        },
+        { success: true, fromZone: "spellTrap", toZone: "graveyard" },
+      );
       cs.log(`${card.name} sent to graveyard after resolution`);
     }
   }

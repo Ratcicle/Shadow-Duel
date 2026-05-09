@@ -146,11 +146,54 @@ export async function performFusionSummon(
     requiredSubset && requiredSubset.length ? requiredSubset : materials;
   const requiredSet = new Set(requiredMaterials);
   const extraMaterials = materials.filter((mat) => !requiredSet.has(mat));
+  const hasFieldToGraveTrigger = (card) =>
+    activePlayer.field.includes(card) &&
+    Array.isArray(card?.effects) &&
+    card.effects.some(
+      (effect) =>
+        effect &&
+        effect.timing === "on_event" &&
+        effect.event === "card_to_grave" &&
+        (!effect.fromZone ||
+          effect.fromZone === "any" ||
+          effect.fromZone === "field"),
+    );
+  const materialSendOrder = [...materials].sort(
+    (a, b) =>
+      Number(hasFieldToGraveTrigger(a)) - Number(hasFieldToGraveTrigger(b)),
+  );
 
-  // Send materials to GY
-  materials.forEach((material) => {
-    this.moveCard(material, activePlayer, "graveyard");
-  });
+  // Send materials to GY in a deterministic order. Fusion materials can have
+  // "sent from field to GY" triggers, so callers that await this summon need
+  // those card_to_grave events to resolve before the summon continues.
+  for (const material of materialSendOrder) {
+    const fromZone =
+      activePlayer.field.includes(material)
+        ? "field"
+        : activePlayer.hand.includes(material)
+          ? "hand"
+          : typeof this.findCardZone === "function"
+            ? this.findCardZone(activePlayer, material)
+            : null;
+    const moveResult = await this.moveCard(material, activePlayer, "graveyard", {
+      fromZone: fromZone || undefined,
+      awaitCardToGraveEvent: true,
+      contextLabel: "fusion_material",
+    });
+    if (moveResult?.success === false) {
+      this.ui.log(`Could not send ${material.name} as Fusion Material.`);
+      return false;
+    }
+  }
+
+  const postMaterialLimitCheck = this.canPlaceCardOnField?.(
+    fusionMonster,
+    activePlayer,
+    { isFacedown: false },
+  );
+  if (postMaterialLimitCheck && postMaterialLimitCheck.ok === false) {
+    return false;
+  }
 
   const attempt = await this.offerSummonAttempt(fusionMonster, activePlayer, {
     method: "fusion",

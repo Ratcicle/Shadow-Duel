@@ -6,6 +6,7 @@ import {
   evaluateFieldSpellUrgency,
 } from "./cardValue.js";
 import { getVisibleAtk, getVisibleDef } from "../common/cardStats.js";
+import { estimateOffensiveTemporaryBuffValue } from "../StrategyUtils.js";
 import {
   getBattleReadyLuminarchAttackers,
   getBestTemporaryCombatDebuffTarget,
@@ -358,85 +359,65 @@ export function shouldPlaySpell(card, analysis) {
     // ═════════════════════════════════════════════════════════════════════════
 
     if (name === "Luminarch Holy Ascension") {
-      const lp = analysis.lp || 8000;
-      const oppLp = analysis.oppLp || 8000;
-      const luminarchMonsters = (analysis.field || []).filter(
-        (c) => c && isLuminarch(c) && c.cardKind === "monster" && !c.isFacedown
-      );
-      const oppMaxAtk = Math.max(
-        ...(analysis.oppField || []).map(
-          (m) => (m && !m.isFacedown && m.atk) || 0
-        ),
-        0
-      );
-
-      // CRITICAL: Holy Ascension custa 1000 LP - gerenciar budget
-      // Só usar se LP alto (custo 1000 LP é pesado)
-      if (lp < 4000) {
-        return { yes: false, reason: "LP muito baixo (custo 1000 LP)" };
-      }
-
-      // Prioridade 1: LETHAL
-      // Se pode fechar jogo com buff, SEMPRE usar
-      const totalAtk = luminarchMonsters.reduce(
-        (sum, m) => sum + (m.atk || 0),
-        0
-      );
-      const buffedAtk = totalAtk + luminarchMonsters.length * 800;
-      const directDamage = Math.max(
-        buffedAtk -
-          oppMaxAtk *
-            Math.min(analysis.oppField.length, luminarchMonsters.length),
-        0
-      );
-
-      if (directDamage >= oppLp) {
+      const phase = analysis.phase || analysis.game?.phase || "main1";
+      if (phase !== "main1") {
         return {
-          yes: true,
-          priority: 15,
-          reason: `LETHAL! ${directDamage} damage = WIN (custo 1000 LP OK)`,
+          yes: false,
+          reason: "Holy Ascension segurada: buff temporario sem Battle Phase futura",
         };
       }
 
-      // Prioridade 2: Fechar gap crítico
-      // Se pode ultrapassar wall defensiva forte e tem LP sobrando
-      if (lp >= 5000 && luminarchMonsters.length > 0 && oppMaxAtk >= 2500) {
-        const wouldWin = luminarchMonsters.some((m) => {
-          const boostedAtk = (m.atk || 0) + 800;
-          return boostedAtk > oppMaxAtk + 300;
-        });
-
-        if (wouldWin) {
-          return {
-            yes: true,
-            priority: 8,
-            reason: `Buff para superar wall ${oppMaxAtk} ATK (LP saudável: ${lp})`,
-          };
-        }
+      const attackers = getBattleReadyLuminarchAttackers(analysis);
+      if (attackers.length === 0) {
+        return {
+          yes: false,
+          reason: "Sem atacante Luminarch em Ataque para aproveitar o buff",
+        };
       }
 
-      // Prioridade 3: Setup de comeback
-      // Se LP crítico mas pode virar jogo
-      if (lp <= 3000 && lp >= 2000 && oppLp <= 3000) {
-        const canPush = luminarchMonsters.length >= 2;
-        if (canPush) {
-          return {
-            yes: true,
-            priority: 6,
-            reason: "ALL-IN: ambos LP baixo, buff para push final",
-          };
-        }
+      const lpForHolyAscension = analysis.lp || 8000;
+      if (lpForHolyAscension < 4000) {
+        return { yes: false, reason: "LP muito baixo (custo 1000 LP)" };
+      }
+
+      const bestBuffLine = attackers
+        .map((attacker) => ({
+          attacker,
+          score: estimateOffensiveTemporaryBuffValue(attacker, {
+            atkBoost: 800,
+            opponentField: analysis.oppField || [],
+            opponentLp: analysis.oppLp || 0,
+          }),
+        }))
+        .sort((a, b) => b.score - a.score)[0] || { attacker: null, score: 0 };
+      const totalAtkNow = attackers.reduce(
+        (sum, m) => sum + (m.atk || 0) + (m.tempAtkBoost || 0),
+        0
+      );
+      const directLethal =
+        (analysis.oppField || []).length === 0 &&
+        totalAtkNow < (analysis.oppLp || 0) &&
+        totalAtkNow + 800 >= (analysis.oppLp || 0);
+      if (directLethal) {
+        return {
+          yes: true,
+          priority: 15,
+          reason: "LETHAL: Holy Ascension habilita dano direto suficiente",
+        };
+      }
+      if (bestBuffLine.score >= 80) {
+        return {
+          yes: true,
+          priority: bestBuffLine.score >= 100 ? 12 : 8,
+          reason: `Buff em ${bestBuffLine.attacker.name} abre combate real`,
+        };
       }
 
       return {
         yes: false,
-        reason: "Custo alto (1000 LP) - esperar momento melhor",
+        reason: "Holy Ascension segurada: buff nao muda nenhum combate",
       };
     }
-
-    // ═════════════════════════════════════════════════════════════════════════
-    // CONTINUOUS / SITUATIONAL
-    // ═════════════════════════════════════════════════════════════════════════
 
     if (name === "Luminarch Knights Convocation") {
       return evaluateKnightsConvocationPlan(analysis);

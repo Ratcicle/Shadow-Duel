@@ -19,11 +19,13 @@ export function simulateMainPhaseAction(state, action, placeSpellCard) {
   switch (action.type) {
     case "summon": {
       const player = state.bot;
+      const opponent = state.player;
       const card = player.hand[action.index];
       if (!card) break;
 
       const tributeInfo = getTributeRequirementFor(card, player);
       let tributeIndices = [];
+      const tributes = [];
 
       // Só seleciona tributos se necessário E há monstros suficientes
       if (
@@ -45,6 +47,7 @@ export function simulateMainPhaseAction(state, action, placeSpellCard) {
       tributeIndices.forEach((idx) => {
         const t = player.field[idx];
         if (t) {
+          tributes.push(t);
           player.graveyard.push(t);
           player.field.splice(idx, 1);
         }
@@ -58,8 +61,30 @@ export function simulateMainPhaseAction(state, action, placeSpellCard) {
       newCard.hasAttacked = false;
       newCard.attacksUsedThisTurn = 0;
       newCard.cannotAttackThisTurn = true; // Normal summon não ataca no turno
+      newCard.lastSummonMethod =
+        tributeInfo.tributesNeeded > 0 ? "tribute" : "normal";
+      newCard.lastSummonedFromZone = "hand";
+      newCard.lastTributeMaterialNames = tributes.map((tribute) => tribute.name);
+      newCard.lastTributeMaterialCount = tributes.length;
       player.field.push(newCard);
       player.summonCount = (player.summonCount || 0) + 1;
+
+      if (
+        newCard.name === "Shadow-Heart Demon Arctroth" &&
+        newCard.lastSummonMethod === "tribute"
+      ) {
+        const target = (opponent.field || [])
+          .filter((c) => c && c.cardKind === "monster")
+          .slice()
+          .sort((a, b) => (b.atk || 0) - (a.atk || 0))[0];
+        if (target) {
+          opponent.field.splice(opponent.field.indexOf(target), 1);
+          opponent.graveyard = opponent.graveyard || [];
+          opponent.graveyard.push(target);
+          newCard.destroyedOpponentMonstersByEffect =
+            (newCard.destroyedOpponentMonstersByEffect || 0) + 1;
+        }
+      }
       break;
     }
     case "spell": {

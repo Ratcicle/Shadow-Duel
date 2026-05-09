@@ -1,4 +1,5 @@
 import {
+  estimateOffensiveTemporaryBuffValue,
   estimateTemporaryCombatDebuffTargetValue,
   isBattleReadyAttacker,
 } from "../StrategyUtils.js";
@@ -135,6 +136,31 @@ export function buildLuminarchSpellActionContext(
     actionContext.specialSummonPositions = {
       ...(actionContext.specialSummonPositions || {}),
       byName,
+    };
+  }
+
+  if (card?.name === "Luminarch Holy Ascension") {
+    const attackers = getBattleReadyLuminarchAttackers(analysis.field);
+    const preferredNames = attackers
+      .map((attacker) => ({
+        attacker,
+        score: estimateOffensiveTemporaryBuffValue(attacker, {
+          atkBoost: 800,
+          opponentField: analysis.oppField || [],
+          opponentLp: analysis.oppLp || 0,
+        }),
+      }))
+      .filter((entry) => entry.score >= 80)
+      .sort((a, b) => b.score - a.score)
+      .map((entry) => entry.attacker.name);
+    actionContext.targetPreferences = {
+      ...(actionContext.targetPreferences || {}),
+      holy_ascension_target: {
+        role: "temporary_stat_buff",
+        purpose: "offense",
+        atkBoost: 800,
+        preferredNames,
+      },
     };
   }
 
