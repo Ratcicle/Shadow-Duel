@@ -1363,7 +1363,7 @@
     archetype: "Shadow-Heart",
     archetypes: ["Shadow-Heart"],
     description:
-      "Shadow-Heart Scale Dragon + 1 level 8+ 'Shadow-Heart' monster. If this card is Fusion Summoned: target up to 2 cards your opponent controls; destroy them. If this card is destroyed by battle or card effect: You can Special Summon 1 'Shadow-Heart Scale Dragon' from your GY.",
+      "Shadow-Heart Scale Dragon + 1 level 8+ 'Shadow-Heart' monster. If this card is Fusion Summoned: target 1 card your opponent controls; destroy it. If this card is destroyed by battle or card effect: You can Special Summon 1 'Shadow-Heart Scale Dragon' from your GY.",
     image: "assets/Shadow-Heart Demon Dragon.png",
     fusionMaterials: [
       { name: "Shadow-Heart Scale Dragon", count: 1 },
@@ -1379,7 +1379,7 @@
         actions: [
           {
             type: "destroy_targeted_cards",
-            maxTargets: 2,
+            maxTargets: 1,
           },
         ],
       },
@@ -1409,7 +1409,7 @@
     name: "Shadow-Heart Warlord",
     cardKind: "monster",
     monsterType: "fusion",
-    atk: 2500,
+    atk: 2300,
     def: 1900,
     level: 8,
     type: "Warrior",

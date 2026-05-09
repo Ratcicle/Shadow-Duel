@@ -2,7 +2,6 @@ import Game from "./core/Game.js";
 import Bot from "./core/Bot.js";
 import BotArena from "./core/BotArena.js";
 import Renderer from "./ui/Renderer.js";
-import { ReplayDashboard } from "./ui/replay/ReplayDashboard.js";
 import { cardDatabase, cardDatabaseById } from "./data/cards.js";
 import { validateCardDatabase } from "./core/CardDatabaseValidator.js";
 import ShadowHeartStrategy from "./core/ai/ShadowHeartStrategy.js";
@@ -89,14 +88,6 @@ const previewEls = {
 
 const btnStartDuel = document.getElementById("btn-start-duel");
 const btnBotArena = document.getElementById("btn-bot-arena");
-const btnReplayDashboard = document.getElementById("btn-replay-dashboard");
-const replayDashboardModal = document.getElementById("replay-dashboard-modal");
-const replayDashboardContainer = document.getElementById(
-  "replay-dashboard-container",
-);
-const closeReplayDashboardBtn = document.querySelector(
-  ".close-replay-dashboard",
-);
 const botArenaModal = document.getElementById("bot-arena-modal");
 const arenaDeckSeat1Select = document.getElementById("arena-deck-seat1");
 const arenaDeckSeat2Select = document.getElementById("arena-deck-seat2");
@@ -1617,30 +1608,6 @@ window.addEventListener("shadow-duel-rematch", async () => {
   bootGame();
 });
 
-// ============ Replay Dashboard ============
-
-let replayDashboardInstance = null;
-
-async function openReplayDashboard() {
-  startScreen.classList.add("hidden");
-  replayDashboardModal.classList.remove("hidden");
-
-  // Inicializar dashboard se ainda não foi criado
-  if (!replayDashboardInstance) {
-    replayDashboardInstance = new ReplayDashboard();
-  }
-
-  // Montar no container
-  await replayDashboardInstance.mount(replayDashboardContainer);
-}
-
-function closeReplayDashboard() {
-  replayDashboardModal.classList.add("hidden");
-  startScreen.classList.remove("hidden");
-
-  // Não desmontar completamente para manter estado
-}
-
 // ============ Bot Arena ============
 
 let botArenaInstance = null;
@@ -1879,9 +1846,7 @@ btnPoolFilterArcanist?.addEventListener("click", () => {
 });
 btnStartDuel?.addEventListener("click", startDuel);
 btnBotArena?.addEventListener("click", openBotArenaModal);
-btnReplayDashboard?.addEventListener("click", openReplayDashboard);
 btnOpenLaboratory?.addEventListener("click", openLaboratory);
-closeReplayDashboardBtn?.addEventListener("click", closeReplayDashboard);
 btnArenaStart?.addEventListener("click", startBotArena);
 btnArenaCancel?.addEventListener("click", closeBotArenaModal);
 btnArenaExportStrategic?.addEventListener(

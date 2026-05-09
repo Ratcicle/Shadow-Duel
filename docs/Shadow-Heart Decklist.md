@@ -76,11 +76,11 @@ Fonte dos textos: `src/data/cards.js` (1x cada carta).
 
 ### Extra Deck
 
-**Shadow-Heart Demon Dragon (74)** — Fusão, Nível 10, Dragon, 3000/3000. Materiais: "Shadow-Heart Scale Dragon" + 1 monstro "Shadow-Heart" de Nível 5+. Ao ser Invocada por Fusão: destrua 2 cartas do oponente. Se destruída por batalha/efeito: Invoque 1 "Shadow-Heart Scale Dragon" do Cemitério.
+**Shadow-Heart Demon Dragon (74)** — Fusão, Nível 10, Dragon, 3000/3000. Materiais: "Shadow-Heart Scale Dragon" + 1 monstro "Shadow-Heart" de Nível 5+. Ao ser Invocada por Fusão: destrua 1 carta do oponente. Se destruída por batalha/efeito: Invoque 1 "Shadow-Heart Scale Dragon" do Cemitério.
 
 **Shadow-Heart Armored Arctroth (75)** — Ascension, Nível 9, 2800/2500. Matéria: "Shadow-Heart Demon Arctroth" que destruiu 2 monstros. Ao ser Invocada: zera ATK/DEF de 1 monstro do oponente (não nega efeitos). Quando ataca um monstro em Defesa: troca para Ataque.
 
-**Shadow-Heart Warlord (77)** — Fusão, Nível 8, 2500/1900. Materiais: 2 monstros "Shadow-Heart". A primeira vez por turno que este card seria destruído em batalha: envie 1 "Shadow-Heart" do seu campo para o GY em vez disso. Se destruir monstro do oponente em batalha: Invoque por Invocação-Especial 1 "Shadow-Heart" Nível 4 ou menor do seu GY (não pode atacar). 1x por turno.
+**Shadow-Heart Warlord (77)** — Fusão, Nível 8, 2300/1900. Materiais: 2 monstros "Shadow-Heart". A primeira vez por turno que este card seria destruído em batalha: envie 1 "Shadow-Heart" do seu campo para o GY em vez disso. Se destruir monstro do oponente em batalha: Invoque por Invocação-Especial 1 "Shadow-Heart" Nível 4 ou menor do seu GY (não pode atacar). 1x por turno.
 
 ### Magias
 

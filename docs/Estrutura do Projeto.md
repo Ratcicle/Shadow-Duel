@@ -144,17 +144,6 @@ Padrão repetido em [shadowheart/](../src/core/ai/shadowheart/), [luminarch/](..
 
 Luminarch também tem [cardValue.js](../src/core/ai/luminarch/cardValue.js), [fusionPriority.js](../src/core/ai/luminarch/fusionPriority.js) e [multiTurnPlanning.js](../src/core/ai/luminarch/multiTurnPlanning.js) por sua complexidade de fusões.
 
-#### `src/core/ai/replay/` — Análise de replays para IA
-
-| Arquivo | Responsabilidade |
-|---|---|
-| [ReplayImporter.js](../src/core/ai/replay/ReplayImporter.js) | Importa arquivos JSON de [replays/](../replays/). |
-| [ReplayDatabase.js](../src/core/ai/replay/ReplayDatabase.js) | Persistência local (IndexedDB/localStorage) de replays processados. |
-| [ReplayAnalyzer.js](../src/core/ai/replay/ReplayAnalyzer.js) | Extrai padrões/decisões de cada replay. |
-| [PatternMatcher.js](../src/core/ai/replay/PatternMatcher.js) | Detecta sequências repetidas (combos identificados). |
-| [ReplayInsights.js](../src/core/ai/replay/ReplayInsights.js) | Métricas agregadas (taxa de vitória por jogada, etc.). |
-| [index.js](../src/core/ai/replay/index.js) | Barrel. |
-
 ### `src/core/chain/` — Sistema de chain (módulos)
 
 | Arquivo | Responsabilidade |
@@ -236,10 +225,6 @@ Fachada principal de renderização. Constructor próprio + métodos importados 
 | [selectionModals.js](../src/ui/renderer/selectionModals.js) | Modais de seleção de alvo. |
 | [summonModals.js](../src/ui/renderer/summonModals.js) | Modais de invocação (tributo, ascension, fusion). |
 | [trapModals.js](../src/ui/renderer/trapModals.js) | Modais de ativação de trap em chain window. |
-
-### `src/ui/replay/`
-- [ReplayDashboard.js](../src/ui/replay/ReplayDashboard.js) — Tela de gerenciamento/inspeção de replays.
-- [index.js](../src/ui/replay/index.js) — Barrel.
 
 ---
 
