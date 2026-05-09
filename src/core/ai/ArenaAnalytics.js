@@ -18,6 +18,8 @@ export const END_REASONS = {
 
 const REPORT_VERSION = 3;
 const SEATS = ["player", "bot"];
+const DIAGNOSTIC_PROGRESS_LIMIT = 80;
+const DIAGNOSTIC_SNAPSHOT_LIMIT = 3;
 const TRACKED_EVENTS = new Set([
   "after_summon",
   "attack_declared",
@@ -100,6 +102,97 @@ function compactCardRef(card) {
     zone: card.zone ?? null,
     position: card.position ?? null,
   };
+}
+
+function compactCardNames(cards = [], limit = 12) {
+  const list = Array.isArray(cards) ? cards : [];
+  return list.slice(0, limit).map((card) => cardName(card) || "unknown");
+}
+
+function compactFieldCards(cards = [], limit = 8) {
+  const list = Array.isArray(cards) ? cards : [];
+  return list.slice(0, limit).map((card) => ({
+    name: cardName(card) || "unknown",
+    position: card?.position || null,
+    faceDown: !!card?.isFacedown,
+    atk: card?.atk ?? null,
+    def: card?.def ?? null,
+  }));
+}
+
+function compactFieldSpell(player) {
+  if (!player?.fieldSpell) return null;
+  return {
+    name: cardName(player.fieldSpell) || "unknown",
+    faceDown: !!player.fieldSpell.isFacedown,
+  };
+}
+
+function compactPlayerSnapshot(player) {
+  return {
+    hand: compactCardNames(player?.hand),
+    field: compactFieldCards(player?.field),
+    spellTrap: compactCardNames(player?.spellTrap),
+    fieldSpell: compactFieldSpell(player),
+    deckSize: Array.isArray(player?.deck) ? player.deck.length : 0,
+    graveyardSize: Array.isArray(player?.graveyard) ? player.graveyard.length : 0,
+    banishedSize: Array.isArray(player?.banished) ? player.banished.length : 0,
+    lp: player?.lp ?? null,
+  };
+}
+
+function isDiagnosticsExportEnabledByFlag() {
+  try {
+    const storage = globalThis?.localStorage;
+    if (!storage) return false;
+    return (
+      storage.getItem("shadow_duel_dev_mode") === "true" ||
+      storage.getItem("shadow_duel_diagnostics_mode") === "true"
+    );
+  } catch (_err) {
+    return false;
+  }
+}
+
+function shouldIncludeDetailedDiagnostics(options = {}) {
+  if (options === true) return true;
+  if (!options || typeof options !== "object") {
+    return isDiagnosticsExportEnabledByFlag();
+  }
+  if (
+    options.includeDiagnostics === true ||
+    options.detailedDiagnostics === true ||
+    options.diagnostics === true ||
+    options.diagnostics === "full"
+  ) {
+    return true;
+  }
+  if (
+    options.includeDiagnostics === false ||
+    options.detailedDiagnostics === false ||
+    options.diagnostics === false ||
+    options.diagnostics === "compact"
+  ) {
+    return false;
+  }
+  return isDiagnosticsExportEnabledByFlag();
+}
+
+function compactDuelDiagnostics(diagnostics, includeDetailed = false) {
+  if (!diagnostics) return null;
+  const zeroEventTimeoutSnapshot =
+    diagnostics.zeroEventTimeoutSnapshot || null;
+  if (includeDetailed) {
+    return {
+      progress: diagnostics.progress || [],
+      zeroEventTimeoutSnapshot,
+      stallSnapshots: diagnostics.stallSnapshots || [],
+    };
+  }
+  if (zeroEventTimeoutSnapshot) {
+    return { zeroEventTimeoutSnapshot };
+  }
+  return null;
 }
 
 function effectId(payload = {}) {
@@ -346,6 +439,8 @@ export class ArenaAnalytics {
       actionsExecuted: result.actionsExecuted ?? [],
       openingSequence: result.openingSequence ?? null,
       strategic: result.strategic ?? null,
+      timeoutKind: result.timeoutKind ?? null,
+      diagnostics: result.diagnostics ?? null,
       errors: result.errors ?? [],
       warnings: result.warnings ?? [],
     };
@@ -777,12 +872,13 @@ export class ArenaAnalytics {
     return results.sort((a, b) => b.winRate - a.winRate);
   }
 
-  exportStrategicReport() {
+  exportStrategicReport(options = {}) {
+    const includeDiagnostics = shouldIncludeDetailedDiagnostics(options);
     const matchups = this.buildStrategicMatchups();
-    const duels = this.buildStrategicDuelSummaries();
+    const duels = this.buildStrategicDuelSummaries({ includeDiagnostics });
     const bots = this.buildStrategicBotSummaries();
     const archetypes = this.buildArchetypeSummaries(duels);
-    const suspiciousPatterns = this.detectSuspiciousPatterns(bots, archetypes);
+    const suspiciousPatterns = this.detectSuspiciousPatterns(bots, archetypes, duels);
 
     return {
       generatedAt: new Date().toISOString(),
@@ -835,16 +931,28 @@ export class ArenaAnalytics {
     return matchups;
   }
 
-  buildStrategicDuelSummaries() {
+  buildStrategicDuelSummaries(options = {}) {
+    const includeDiagnostics = options.includeDiagnostics === true;
     return this.duelRecords.map((record) => {
       const seats = record.strategic?.seats || {};
-      return {
+      const diagnostics = compactDuelDiagnostics(
+        record.diagnostics,
+        includeDiagnostics,
+      );
+      const summary = {
         duelNumber: record.duelNumber,
         matchup: `${record.archetype1}_vs_${record.archetype2}`,
         winner: record.winner,
         turns: record.turns,
         finalLP: record.finalLP,
         endReason: record.endReason,
+        timeoutKind:
+          record.timeoutKind ||
+          (record.endReason === END_REASONS.TIMEOUT
+            ? record.strategic?.events?.length
+              ? "eventful_timeout"
+              : "zero_event_timeout"
+            : "none"),
         actionsByBot: {
           player: seats.player?.actions || 0,
           bot: seats.bot?.actions || 0,
@@ -891,6 +999,10 @@ export class ArenaAnalytics {
         participants: seats,  // semantic alias (player vs Bot ou Bot vs Bot)
         events: record.strategic?.events || [],
       };
+      if (diagnostics) {
+        summary.diagnostics = diagnostics;
+      }
+      return summary;
     });
   }
 
@@ -1312,11 +1424,30 @@ export class ArenaAnalytics {
     return archetypes;
   }
 
-  detectSuspiciousPatterns(bots, archetypes) {
+  detectSuspiciousPatterns(bots, archetypes, duels = []) {
     const alerts = [];
     const pushAlert = (type, severity, detail) => {
       alerts.push({ type, severity, detail });
     };
+
+    for (const duel of duels) {
+      if (duel.timeoutKind === "zero_event_timeout") {
+        pushAlert("zero_event_timeout", "high", {
+          duelNumber: duel.duelNumber,
+          matchup: duel.matchup,
+          lastProgressStage:
+            duel.diagnostics?.zeroEventTimeoutSnapshot?.lastProgressStage ||
+            duel.diagnostics?.progress?.at?.(-1)?.stage ||
+            null,
+        });
+      } else if (duel.timeoutKind === "eventful_timeout") {
+        pushAlert("eventful_timeout", "medium", {
+          duelNumber: duel.duelNumber,
+          matchup: duel.matchup,
+          events: duel.events?.length || 0,
+        });
+      }
+    }
 
     for (const [botKey, stats] of Object.entries(bots)) {
       for (const entry of stats.invalidByCard || []) {
@@ -1499,9 +1630,10 @@ export class ArenaAnalytics {
   /**
    * Faz download do relatorio estrategico JSON compacto.
    * @param {string} filename
+   * @param {Object} options
    */
-  downloadStrategicReport(filename = "arena_strategic_report.json") {
-    const report = this.exportStrategicReport();
+  downloadStrategicReport(filename = "arena_strategic_report.json", options = {}) {
+    const report = this.exportStrategicReport(options);
     const blob = new Blob([JSON.stringify(report)], {
       type: "application/json;charset=utf-8;",
     });
@@ -1555,6 +1687,7 @@ export class DuelTracker {
     this.seed = options.seed ?? null;
     this.beamWidth = options.beamWidth ?? null;
     this.maxDepth = options.maxDepth ?? null;
+    this.diagnosticLog = options.diagnosticLog === true;
 
     this.startTime = Date.now();
     this.cardsPlayed = [];
@@ -1575,6 +1708,12 @@ export class DuelTracker {
     this.events = [];
     this.errors = [];
     this.warnings = [];
+    this.lastProgressStage = null;
+    this.diagnostics = {
+      progress: [],
+      zeroEventTimeoutSnapshot: null,
+      stallSnapshots: [],
+    };
   }
 
   /**
@@ -1649,6 +1788,94 @@ export class DuelTracker {
       if (value !== undefined && value !== null) compact[key] = value;
     }
     this.events.push(compact);
+  }
+
+  getStrategicEventCount() {
+    return this.events.length;
+  }
+
+  getTimeoutKind(reason) {
+    if (reason !== END_REASONS.TIMEOUT) return "none";
+    return this.events.length === 0 ? "zero_event_timeout" : "eventful_timeout";
+  }
+
+  recordProgress(stage, game = null, details = {}) {
+    if (!stage) return;
+    const turn = game?.turnCounter ?? this.currentTurn ?? 0;
+    const phase = game?.phase ?? game?.currentPhase ?? null;
+    const currentPlayer =
+      game?.turn ??
+      game?.currentPlayer?.id ??
+      game?.currentTurnPlayer?.id ??
+      null;
+    const entry = {
+      t: Date.now() - this.startTime,
+      stage,
+      turn,
+      phase,
+      currentPlayer,
+      gameOver: !!game?.gameOver,
+    };
+    for (const [key, value] of Object.entries(details || {})) {
+      if (value !== undefined && value !== null) entry[key] = value;
+    }
+
+    this.lastProgressStage = stage;
+    this.diagnostics.progress.push(entry);
+    if (this.diagnostics.progress.length > DIAGNOSTIC_PROGRESS_LIMIT) {
+      this.diagnostics.progress.shift();
+    }
+
+    if (this.diagnosticLog) {
+      console.log(
+        `[BotArena:progress] duel=${this.duelNumber} stage=${stage} turn=${turn} phase=${phase || "?"}`,
+      );
+    }
+  }
+
+  captureGameSnapshot(game = null, reason = "snapshot") {
+    return {
+      reason,
+      capturedAtMs: Date.now() - this.startTime,
+      duelNumber: this.duelNumber,
+      turnCounter: game?.turnCounter ?? this.currentTurn ?? 0,
+      phase: game?.phase ?? game?.currentPhase ?? null,
+      currentPhase: game?.currentPhase ?? game?.phase ?? null,
+      currentPlayer: game?.currentPlayer?.id ?? game?.turn ?? null,
+      currentTurnPlayer: game?.currentTurnPlayer?.id ?? game?.turn ?? null,
+      turn: game?.turn ?? null,
+      gameOver: !!game?.gameOver,
+      winner: game?.winner ?? null,
+      player: compactPlayerSnapshot(game?.player),
+      bot: compactPlayerSnapshot(game?.bot),
+      refs: {
+        gamePlayer: !!game?.player,
+        gameBot: !!game?.bot,
+        playerGame: game?.player?.game === game,
+        botGame: game?.bot?.game === game,
+      },
+      lastProgressStage: this.lastProgressStage,
+      lastProgress: this.diagnostics.progress.at(-1) || null,
+    };
+  }
+
+  recordStallSnapshot(reason, game = null) {
+    const snapshot = this.captureGameSnapshot(game, reason);
+    if (
+      reason === "zero_event_timeout" &&
+      !this.diagnostics.zeroEventTimeoutSnapshot
+    ) {
+      this.diagnostics.zeroEventTimeoutSnapshot = snapshot;
+    }
+    if (this.diagnostics.stallSnapshots.length < DIAGNOSTIC_SNAPSHOT_LIMIT) {
+      this.diagnostics.stallSnapshots.push(snapshot);
+    }
+    const warning = `${reason}: no strategic events before first action`;
+    if (!this.warnings.includes(warning)) {
+      this.warnings.push(warning);
+    }
+    this.recordProgress(reason, game, { snapshot: true });
+    return snapshot;
   }
 
   recordEvent(eventName, payload = {}, meta = {}) {
@@ -2105,6 +2332,7 @@ export class DuelTracker {
         ? this.nodesVisited.reduce((a, b) => a + b, 0)
         : null;
     this.finalizeStrategic(this.currentTurn);
+    const timeoutKind = this.getTimeoutKind(reason);
 
     return {
       duelNumber: this.duelNumber,
@@ -2114,6 +2342,7 @@ export class DuelTracker {
       winner,
       turns: this.currentTurn,
       reason,
+      timeoutKind,
       finalLP,
       totalTimeMs,
       avgDecisionTimeMs,
@@ -2130,6 +2359,11 @@ export class DuelTracker {
           bot: compactSeatStats(this.seats.bot),
         },
         events: this.events,
+      },
+      diagnostics: {
+        progress: this.diagnostics.progress,
+        zeroEventTimeoutSnapshot: this.diagnostics.zeroEventTimeoutSnapshot,
+        stallSnapshots: this.diagnostics.stallSnapshots,
       },
       errors: this.errors,
       warnings: this.warnings,

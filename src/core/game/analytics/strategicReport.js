@@ -75,11 +75,11 @@ export function hasStrategicReport() {
   return (this._normalDuelStrategic?.analytics?.duelRecords?.length || 0) > 0;
 }
 
-export function exportStrategicReport() {
+export function exportStrategicReport(options = {}) {
   if (!this.hasStrategicReport?.()) {
     return null;
   }
-  return this._normalDuelStrategic.analytics.exportStrategicReport();
+  return this._normalDuelStrategic.analytics.exportStrategicReport(options);
 }
 
 export function buildStrategicReportFilename(outcome = null) {
@@ -94,14 +94,15 @@ export function buildStrategicReportFilename(outcome = null) {
   return `normal_duel_strategic_report_${localDateStamp()}_${suffix}.json`;
 }
 
-export function downloadStrategicReport(filename = null) {
+export function downloadStrategicReport(filename = null, options = {}) {
   if (!this.hasStrategicReport?.()) {
     console.warn("[StrategicReport] No normal duel analytics available to export.");
     return null;
   }
-  const report = this.exportStrategicReport();
+  const report = this.exportStrategicReport(options);
   this._normalDuelStrategic.analytics.downloadStrategicReport(
     filename || this.buildStrategicReportFilename?.() || undefined,
+    options,
   );
   return report;
 }

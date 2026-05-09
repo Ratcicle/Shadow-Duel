@@ -369,6 +369,69 @@ function chooseInfusionReviveTarget(candidates = [], analysis = {}) {
   };
 }
 
+/**
+ * Escolhe o melhor monstro Shadow-Heart para descartar+reviver em modo emergencial
+ * (quando o GY não tem nenhum SH monster disponível para Infusion).
+ *
+ * Prioridade contextual:
+ *   1. Scale Dragon — quando não há linha real de Fusion/Tribute próxima.
+ *   2. Gecko — quando Imp está acessível (SS→Gecko busca Lv8).
+ *   3. Arctroth / Death Wyrm — corpo grande para pressão imediata.
+ *   4. Eel — corpo + pressão secundária.
+ *   5. Fallback: maior ATK disponível.
+ *
+ * @param {Object[]} nonInfusionHand — mão excluindo as cópias de Infusion
+ * @param {Object} analysis
+ * @returns {Object|null} card object ou null se não há candidato
+ */
+export function pickInfusionEmergencyRevive(nonInfusionHand = [], analysis = {}) {
+  const monsters = nonInfusionHand.filter(
+    (c) => c?.cardKind === "monster" && isShadowHeartByName(c.name),
+  );
+  if (monsters.length === 0) return null;
+
+  const allHandField = [...(analysis?.hand || []), ...(analysis?.field || [])];
+
+  // P1: Scale Dragon — quando não há linha de Fusion nem Tribute montada
+  const scale = monsters.find((c) => c.name === SH.scale);
+  if (scale) {
+    const hasFusionLine =
+      allHandField.some((c) => c.name === SH.poly) &&
+      allHandField.some(
+        (c) =>
+          isShadowHeartByName(c.name) &&
+          (c.level || 0) >= 8 &&
+          c.name !== SH.scale,
+      );
+    const hasTributeLine = (analysis?.field || []).length >= 2;
+    if (!hasFusionLine && !hasTributeLine) return scale;
+  }
+
+  // P2: Gecko — quando Imp está disponível (SS de Gecko ativa busca de Lv8)
+  const gecko = monsters.find((c) => c.name === SH.gecko);
+  if (gecko) {
+    const hasImpAccess = allHandField.some((c) => c.name === SH.imp);
+    if (hasImpAccess) return gecko;
+  }
+
+  // P3: Arctroth / Death Wyrm (corpo grande / pressão)
+  const heavy = monsters.find(
+    (c) => c.name === SH.arctroth || c.name === SH.deathWyrm,
+  );
+  if (heavy) return heavy;
+
+  // P4: Eel (corpo + pressão secundária)
+  const eel = monsters.find((c) => c.name === SH.eel);
+  if (eel) return eel;
+
+  // Scale/Gecko sem condição ideal ainda é melhor que nada
+  if (scale) return scale;
+  if (gecko) return gecko;
+
+  // Fallback: maior ATK
+  return monsters.slice().sort((a, b) => (b.atk || 0) - (a.atk || 0))[0] || null;
+}
+
 export function rankShadowHeartSearchCandidates(cards = [], action = {}, ctx = {}) {
   if (!Array.isArray(cards) || cards.length <= 1) return cards || [];
   const player = ctx.player || ctx.strategy?.bot || {};
@@ -789,18 +852,6 @@ export function shouldPlaySpell(card, analysis) {
     }
     const shInGY = analysis.graveyard.filter((c) => c.cardKind === "monster");
     const nonInfusionHand = analysis.hand.filter((c) => c.name !== SH.infusion);
-    const emergencyReviveCandidate = nonInfusionHand.find(
-      (c) =>
-        c?.cardKind === "monster" &&
-        isShadowHeartByName(c.name) &&
-        ([SH.scale, SH.arctroth, SH.deathWyrm, SH.gecko].includes(c.name) ||
-          (c.atk || 0) >= 1800),
-    );
-    const lowValueDiscard = nonInfusionHand.find(
-      (c) =>
-        LOW_VALUE_DISCARDS.includes(c?.name) ||
-        countName(nonInfusionHand, c?.name) > 1,
-    );
     const hasBetterNormalLine =
       hasName(analysis.hand, SH.voidMage) ||
       hasName(analysis.hand, SH.imp) ||
@@ -808,53 +859,56 @@ export function shouldPlaySpell(card, analysis) {
       hasName(analysis.hand, SH.valley) ||
       hasName(analysis.hand, SH.cathedral);
 
-    if (
-      shInGY.length === 0 &&
-      emergencyReviveCandidate &&
-      lowValueDiscard &&
-      !hasBetterNormalLine
-    ) {
+    if (shInGY.length === 0) {
+      // Sem SH monster no GY: só ativar se puder descartar 1 monstro revivível como custo.
+      // Linha normal preferida — evita gastar Infusion desnecessariamente.
+      if (hasBetterNormalLine) {
+        return { yes: false, reason: "Sem SH no GY — linha normal disponível" };
+      }
+      const emergencyRevive = pickInfusionEmergencyRevive(nonInfusionHand, analysis);
+      if (!emergencyRevive) {
+        return {
+          yes: false,
+          reason: "Sem SH no GY e sem monstro Shadow-Heart revivível na mão",
+        };
+      }
+      // Precisamos de pelo menos 2 cartas além da Infusion (monstro + 2º descarte)
+      if (nonInfusionHand.length < 2) {
+        return { yes: false, reason: "Sem segunda carta para o descarte emergencial" };
+      }
       const damagePenalty =
         analysis.phase !== "main2" &&
         (analysis.oppField || []).length === 0 &&
-        (analysis.oppLp || 8000) <= (emergencyReviveCandidate.atk || 0);
+        (analysis.oppLp || 8000) <= (emergencyRevive.atk || 0);
       return {
         yes: true,
         priority: damagePenalty ? 6 : 8,
-        reason: `Starter emergencial: descartar ${emergencyReviveCandidate.name} + ${lowValueDiscard.name} e reviver ${emergencyReviveCandidate.name}`,
+        reason: `Starter emergencial: forçar ${emergencyRevive.name} no descarte e reviver`,
       };
     }
 
-    if (shInGY.length === 0) {
-      return { yes: false, reason: "Sem Shadow-Heart no GY e sem starter emergencial" };
-    }
-
-    // Avaliar valor das cartas na mão (usando CARD_KNOWLEDGE)
+    // GY tem SH monster — avaliar custo/benefício do revival
     const handValues = analysis.hand
-      .filter((c) => c.name !== "Shadow-Heart Infusion")
+      .filter((c) => c.name !== SH.infusion)
       .map((c) => ({
         card: c,
         value: CARD_KNOWLEDGE[c.name]?.value || 0,
       }))
-      .sort((a, b) => a.value - b.value); // Menor valor primeiro
+      .sort((a, b) => a.value - b.value); // Menor valor primeiro para descartar
 
-    // Avaliar valor do revival (melhor monstro no GY)
-    const bestRevival = shInGY.sort((a, b) => {
+    const bestRevival = shInGY.slice().sort((a, b) => {
       const valA = CARD_KNOWLEDGE[a.name]?.value || 0;
       const valB = CARD_KNOWLEDGE[b.name]?.value || 0;
       return valB - valA;
     })[0];
     const revivalValue = CARD_KNOWLEDGE[bestRevival.name]?.value || 0;
 
-    // Precisamos descartar 1 carta. Pegar a de MENOR valor.
     const worstCard = handValues[0];
     const discardCost = worstCard.value;
 
-    // Só ativar se o revival vale MAIS que o descarte
-    // Bônus: cartas com "discard value" (Specter, Coward)
+    // Bônus: Specter/Coward têm efeito ao serem descartados
     const hasValueDiscard =
-      worstCard.card.name === "Shadow-Heart Specter" ||
-      worstCard.card.name === "Shadow-Heart Coward";
+      worstCard.card.name === SH.specter || worstCard.card.name === SH.coward;
     const netValue = revivalValue - discardCost + (hasValueDiscard ? 1 : 0);
 
     if (netValue > 0) {

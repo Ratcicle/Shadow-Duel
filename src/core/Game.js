@@ -232,13 +232,16 @@ export default class Game {
   // -----------------------------------------------------------------------------
 
   async start(deckList = null, extraDeckList = null) {
+    this._arenaTracker?.recordProgress?.("game_start_enter", this);
     await this.startWithDecks({
       playerDeck: deckList,
       playerExtraDeck: extraDeckList,
     });
+    this._arenaTracker?.recordProgress?.("game_start_exit", this);
   }
 
   async startWithDecks(options = {}) {
+    this._arenaTracker?.recordProgress?.("start_with_decks_enter", this);
     const {
       playerDeck = null,
       playerExtraDeck = null,
@@ -263,6 +266,9 @@ export default class Game {
     this.bot.oncePerDuelUsageByName = Object.create(null);
 
     this.resetMaterialDuelStats("start");
+    this._arenaTracker?.recordProgress?.("deck_build_before", this, {
+      exactDecks,
+    });
     if (exactDecks) {
       this.buildExactDeckForPlayer(this.player, playerDeck);
       this.buildExactExtraDeckForPlayer(this.player, playerExtraDeck);
@@ -274,12 +280,25 @@ export default class Game {
       this.bot.buildDeck(botDeck);
       this.bot.buildExtraDeck(botExtraDeck);
     }
+    this._arenaTracker?.recordProgress?.("deck_build_after", this, {
+      playerDeckSize: this.player?.deck?.length || 0,
+      botDeckSize: this.bot?.deck?.length || 0,
+      playerExtraDeckSize: this.player?.extraDeck?.length || 0,
+      botExtraDeckSize: this.bot?.extraDeck?.length || 0,
+    });
 
     // Normal duel strategic telemetry is opt-in; Bot Arena owns its tracker.
     this.startNormalDuelStrategicReport?.();
 
+    this._arenaTracker?.recordProgress?.("opening_draw_before", this);
     this.drawCards(this.player, 4);
     this.drawCards(this.bot, 4);
+    this._arenaTracker?.recordProgress?.("opening_draw_after", this, {
+      playerHandSize: this.player?.hand?.length || 0,
+      botHandSize: this.bot?.hand?.length || 0,
+      playerDeckSize: this.player?.deck?.length || 0,
+      botDeckSize: this.bot?.deck?.length || 0,
+    });
 
     if (startAtDrawPhase) {
       this.turn = "player";
@@ -303,11 +322,14 @@ export default class Game {
         }
       });
       this.bindCardInteractions();
+      this._arenaTracker?.recordProgress?.("start_with_decks_draw_phase_ready", this);
       return;
     }
 
     this.updateBoard();
+    this._arenaTracker?.recordProgress?.("start_turn_before", this);
     await this.startTurn();
+    this._arenaTracker?.recordProgress?.("start_turn_after", this);
     this.ui.bindPhaseClick((phase) => {
       const activePlayer = this.turn === "player" ? this.player : this.bot;
       if (this.laboratoryModeEnabled) {

@@ -18,6 +18,9 @@ function scheduleAiMoveAfterPaint(game, actor) {
     return;
   }
 
+  game._arenaTracker?.recordProgress?.("ai_move_scheduled", game, {
+    actor: actor?.id || null,
+  });
   const expectedTurn = game.turn;
   const expectedPhase = game.phase;
   const runMove = () => {
@@ -28,7 +31,31 @@ function scheduleAiMoveAfterPaint(game, actor) {
     ) {
       return;
     }
-    actor.makeMove(game);
+    game._arenaTracker?.recordProgress?.("ai_move_before_makeMove", game, {
+      actor: actor?.id || null,
+      expectedPhase,
+    });
+    try {
+      Promise.resolve(actor.makeMove(game))
+        .then(() => {
+          game._arenaTracker?.recordProgress?.("ai_move_after_makeMove", game, {
+            actor: actor?.id || null,
+          });
+        })
+        .catch((error) => {
+          game._arenaTracker?.recordProgress?.("ai_move_makeMove_error", game, {
+            actor: actor?.id || null,
+            error: error?.message || String(error),
+          });
+          console.error("[BotArena:progress] AI makeMove failed:", error);
+        });
+    } catch (error) {
+      game._arenaTracker?.recordProgress?.("ai_move_makeMove_error", game, {
+        actor: actor?.id || null,
+        error: error?.message || String(error),
+      });
+      throw error;
+    }
   };
 
   const requestFrame = globalThis.requestAnimationFrame;
@@ -46,6 +73,7 @@ function scheduleAiMoveAfterPaint(game, actor) {
  */
 export async function startTurn() {
   this.turnCounter += 1;
+  this._arenaTracker?.recordProgress?.("turn_start", this);
 
   // Log separador de turno
   const activePlayerName =
@@ -100,7 +128,17 @@ export async function startTurn() {
   activePlayer.additionalNormalSummons = 0;
 
   this.updateBoard();
+  this._arenaTracker?.recordProgress?.("turn_draw_before", this, {
+    actor: activePlayer?.id || this.turn,
+    deckSize: activePlayer?.deck?.length || 0,
+    handSize: activePlayer?.hand?.length || 0,
+  });
   this.drawCards(activePlayer, 1);
+  this._arenaTracker?.recordProgress?.("turn_draw_after", this, {
+    actor: activePlayer?.id || this.turn,
+    deckSize: activePlayer?.deck?.length || 0,
+    handSize: activePlayer?.hand?.length || 0,
+  });
   this.updateBoard();
   await this.waitForPhaseDelay();
 
@@ -115,6 +153,9 @@ export async function startTurn() {
 
   this.phase = "main1";
   this.updateBoard();
+  this._arenaTracker?.recordProgress?.("main1_ready", this, {
+    actor: activePlayer?.id || this.turn,
+  });
 
   // 📊 Log de transição para main1
   if (botLogger && isAI(activePlayer)) {

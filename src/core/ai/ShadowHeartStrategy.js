@@ -42,6 +42,7 @@ import {
   buildShadowHeartTargetPreferences,
   evaluateShadowHeartRecruitCandidate,
   rankShadowHeartSearchCandidates,
+  pickInfusionEmergencyRevive,
 } from "./shadowheart/priorities.js";
 import {
   evaluateMonster,
@@ -74,23 +75,53 @@ function canActivateShadowHeartSpell(game, card, bot, activationContext = {}) {
 
 function buildShadowHeartSpellActivationContext(card, bot, opponent, analysis) {
   const costPreferences = buildShadowHeartCostPreferences(analysis);
-  if (
-    card?.name === "Shadow-Heart Infusion" &&
-    !(analysis?.graveyard || []).some((c) => c?.cardKind === "monster") &&
-    (analysis?.hand || []).some((c) => c?.name === "Shadow-Heart Gecko") &&
-    (analysis?.hand || []).some((c) => c?.name === "Shadow-Heart Rage")
-  ) {
-    costPreferences.forceNames = [
-      "Shadow-Heart Gecko",
-      "Shadow-Heart Rage",
-    ];
-    costPreferences.preserveNames = [
-      ...new Set([
-        ...(costPreferences.preserveNames || []),
-        "Polymerization",
-        "Shadow-Heart Scale Dragon",
-      ]),
-    ];
+
+  if (card?.name === "Shadow-Heart Infusion") {
+    // Always force a SH monster from hand into the discards so SSZ always finds
+    // a valid GY target regardless of:
+    //   a) DV/triggers claiming the GY monster before activation resolves
+    //   b) AutoSelector picking all-spell discards when GY had no SH monster
+    const hand = analysis?.hand || [];
+    const nonInfusionHand = hand.filter(
+      (c) => c?.name !== "Shadow-Heart Infusion",
+    );
+    const reviveMonster = pickInfusionEmergencyRevive(nonInfusionHand, analysis);
+    if (reviveMonster) {
+      const secondPool = nonInfusionHand.filter(
+        (c) => c?.name !== reviveMonster.name,
+      );
+      const secondDiscard =
+        secondPool.length > 0
+          ? secondPool.slice().sort(
+              (a, b) =>
+                (CARD_KNOWLEDGE[a?.name]?.value || 0) -
+                (CARD_KNOWLEDGE[b?.name]?.value || 0),
+            )[0]
+          : null;
+      costPreferences.forceNames = secondDiscard
+        ? [reviveMonster.name, secondDiscard.name]
+        : [reviveMonster.name];
+      const toPreserve = ["Polymerization"];
+      if (reviveMonster.name !== "Shadow-Heart Scale Dragon") {
+        toPreserve.push("Shadow-Heart Scale Dragon");
+      }
+      costPreferences.preserveNames = [
+        ...new Set([
+          ...(costPreferences.preserveNames || []).filter(
+            (n) => !costPreferences.forceNames.includes(n),
+          ),
+          ...toPreserve,
+        ]),
+      ];
+      if (bot?.debug || analysis?.game?.devModeEnabled) {
+        console.log(
+          `[ShadowHeart Infusion] Forçando descarte: ${reviveMonster.name}` +
+            `${secondDiscard ? ` + ${secondDiscard.name}` : ""}`,
+        );
+      }
+    }
+    // No hand SH monster: rely on GY having one (shouldPlaySpell validated this).
+    // AutoSelector picks cheapest 2 hand cards; GY monster stays intact.
   }
   const strategicPreferences = buildShadowHeartTargetPreferences(
     card,
@@ -946,9 +977,12 @@ export default class ShadowHeartStrategy extends BaseStrategy {
             }
           }
 
-          if (card.name === "Shadow-Heart Purge") {
-            const purgeDecision = shouldPlaySpell(card, analysis);
-            if (!purgeDecision.yes) return;
+          if (
+            card.name === "Shadow-Heart Purge" ||
+            card.name === "Shadow-Heart Infusion"
+          ) {
+            const decision = shouldPlaySpell(card, analysis);
+            if (!decision.yes) return;
           }
 
           spellsFound++;

@@ -252,8 +252,19 @@ export default class Bot extends Player {
     if (!game || game.gameOver) return;
 
     try {
+      game._arenaTracker?.recordProgress?.("bot_make_move_enter", game, {
+        actor: this.id,
+      });
+      game._arenaTracker?.recordProgress?.("bot_make_move_guard_before", game, {
+        actor: this.id,
+      });
       const guard = game.canStartAction({ actor: this, kind: "bot_turn" });
       console.log(`[Bot.makeMove] Guard check:`, guard);
+      game._arenaTracker?.recordProgress?.("bot_make_move_guard_after", game, {
+        actor: this.id,
+        ok: !!guard.ok,
+        reason: guard.reason || null,
+      });
       if (!guard.ok) {
         console.log(`[Bot.makeMove] ❌ Guard blocked: ${guard.reason}`);
         return;
@@ -261,9 +272,17 @@ export default class Bot extends Player {
 
       const phase = game.phase;
       console.log(`[Bot.makeMove] Phase: ${phase}`);
+      game._arenaTracker?.recordProgress?.("bot_make_move_phase", game, {
+        actor: this.id,
+        phase,
+      });
 
       if (phase === "main1" || phase === "main2") {
         await this.playMainPhase(game);
+        game._arenaTracker?.recordProgress?.("bot_make_move_after_main_phase", game, {
+          actor: this.id,
+          phase,
+        });
         if (!game.gameOver && game.phase === phase) {
           const actionDelayMs = Number.isFinite(game?.aiActionDelayMs)
             ? game.aiActionDelayMs
@@ -275,6 +294,9 @@ export default class Bot extends Player {
 
       if (phase === "battle") {
         this.playBattlePhase(game);
+        game._arenaTracker?.recordProgress?.("bot_make_move_after_battle_phase", game, {
+          actor: this.id,
+        });
         return;
       }
 
@@ -282,6 +304,10 @@ export default class Bot extends Player {
         game.endTurn();
       }
     } catch (error) {
+      game._arenaTracker?.recordProgress?.("bot_make_move_error", game, {
+        actor: this.id,
+        error: error?.message || String(error),
+      });
       console.error(
         `[Bot.makeMove] ❌ FATAL ERROR in ${game.phase} phase:`,
         error,
@@ -300,6 +326,9 @@ export default class Bot extends Player {
     if (game.gameOver) {
       return;
     }
+    game._arenaTracker?.recordProgress?.("bot_main_phase_enter", game, {
+      actor: this.id,
+    });
 
     const bot = this;
     const opponent = game.player.id === bot.id ? game.bot : game.player;
@@ -394,6 +423,15 @@ export default class Bot extends Player {
       console.log(
         `[Bot.playMainPhase] Generated ${rawActions.length} raw actions, ${actions.length} sequenced actions (${failedActionsThisTurn.size} filtered)`,
       );
+      game._arenaTracker?.recordProgress?.("ai_decision_before", game, {
+        actor: this.id,
+        attempt: totalAttempts,
+        rawActions: rawActions.length,
+        sequencedActions: sequencedActions.length,
+        actions: actions.length,
+        fallbackActions: fallbackActions.length,
+        failedThisTurn: failedActionsThisTurn.size,
+      });
       if (actions.length > 0) {
         console.log(
           `[Bot.playMainPhase] Actions:`,
@@ -403,6 +441,12 @@ export default class Bot extends Player {
 
       // 📊 Log de fase vazia
       if (!actions.length) {
+        game._arenaTracker?.recordProgress?.("ai_decision_after", game, {
+          actor: this.id,
+          attempt: totalAttempts,
+          selected: false,
+          reason: "no_actions_generated",
+        });
         if (botLogger) {
           botLogger.logEmptyPhase(
             this.id,
@@ -501,8 +545,22 @@ export default class Bot extends Player {
       // Se ainda não tem ação, break
       if (!bestAction) {
         console.log(`[Bot.playMainPhase] ⚠️ No action selected, breaking loop`);
+        game._arenaTracker?.recordProgress?.("ai_decision_after", game, {
+          actor: this.id,
+          attempt: totalAttempts,
+          selected: false,
+          reason: "no_action_selected",
+        });
         break;
       }
+
+      game._arenaTracker?.recordProgress?.("ai_decision_after", game, {
+        actor: this.id,
+        attempt: totalAttempts,
+        selected: true,
+        actionType: bestAction.type || null,
+        card: bestAction.card?.name || bestAction.cardName || null,
+      });
 
       // 📊 Log de decisão (ranking e coerência)
       if (botLogger && actions.length > 0) {

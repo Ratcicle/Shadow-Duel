@@ -229,13 +229,26 @@ export default class BotArena {
     return speedConfig.timeoutMs ?? 30000;
   }
 
-  async waitForGameEnd(game, speedConfig) {
+  async waitForGameEnd(game, speedConfig, tracker = game?._arenaTracker) {
     const pollInterval = Math.max(5, speedConfig.pollIntervalMs || 25);
     const startTime = Date.now();
     const timeoutMs = this.getEffectiveTimeout(speedConfig);
+    const zeroEventWatchdogMs = 5000;
+    let zeroEventWatchdogCaptured = false;
 
     return new Promise((resolve) => {
       const tick = () => {
+        const elapsedMs = Date.now() - startTime;
+        const eventCount = tracker?.getStrategicEventCount?.() ?? 0;
+        if (
+          !zeroEventWatchdogCaptured &&
+          elapsedMs >= zeroEventWatchdogMs &&
+          eventCount === 0
+        ) {
+          zeroEventWatchdogCaptured = true;
+          tracker?.recordStallSnapshot?.("zero_event_watchdog", game);
+        }
+
         if (this.stopRequested) {
           game.gameOver = true;
           resolve({ type: "cancelled", reason: END_REASONS.CANCELLED });
@@ -259,7 +272,10 @@ export default class BotArena {
           return;
         }
 
-        if (Date.now() - startTime >= timeoutMs) {
+        if (elapsedMs >= timeoutMs) {
+          if (eventCount === 0) {
+            tracker?.recordStallSnapshot?.("zero_event_timeout", game);
+          }
           game.gameOver = true;
           resolve({ type: "draw", reason: END_REASONS.TIMEOUT });
           return;
@@ -313,10 +329,12 @@ export default class BotArena {
     const tracker = new DuelTracker(duelNumber, arch1, arch2, {
       beamWidth: game.arenaBeamWidth,
       maxDepth: game.arenaMaxDepth,
+      diagnosticLog: true,
     });
 
     // Injetar tracker no game para coleta de métricas durante execução
     game._arenaTracker = tracker;
+    tracker.recordProgress("bot_arena_duel_created", game, { arch1, arch2 });
 
     if (speedConfig.useRenderer) {
       const logEl = document.getElementById("action-log-list");
@@ -331,9 +349,16 @@ export default class BotArena {
     console.log(`${"═".repeat(50)}\n`);
 
     const duelStartTime = Date.now();
+    tracker.recordProgress("bot_arena_before_game_start", game);
     await game.start();
+    tracker.recordProgress("bot_arena_after_game_start", game);
 
-    const outcome = await this.waitForGameEnd(game, speedConfig);
+    tracker.recordProgress("bot_arena_before_wait_for_end", game);
+    const outcome = await this.waitForGameEnd(game, speedConfig, tracker);
+    tracker.recordProgress("bot_arena_after_wait_for_end", game, {
+      outcomeType: outcome.type,
+      reason: outcome.reason,
+    });
     this.activeGame = null;
 
     if (outcome.type === "cancelled") {
@@ -555,8 +580,8 @@ export default class BotArena {
   /**
    * Exporta relatorio estrategico compacto.
    */
-  exportStrategicReport() {
-    return this.analytics.exportStrategicReport();
+  exportStrategicReport(options = {}) {
+    return this.analytics.exportStrategicReport(options);
   }
 
   /**
@@ -583,7 +608,7 @@ export default class BotArena {
   /**
    * Faz download do relatorio estrategico no browser.
    */
-  downloadStrategicReport(filename = "arena_strategic_report.json") {
-    this.analytics.downloadStrategicReport(filename);
+  downloadStrategicReport(filename = "arena_strategic_report.json", options = {}) {
+    this.analytics.downloadStrategicReport(filename, options);
   }
 }
