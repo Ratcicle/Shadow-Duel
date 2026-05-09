@@ -217,6 +217,38 @@ export function buildTriggerActivationContext(
   };
 }
 
+function mergeStrategyActivationContext(baseContext, extraContext) {
+  if (!extraContext || typeof extraContext !== "object") return baseContext;
+  const baseActionContext = baseContext?.actionContext || {};
+  const extraActionContext = extraContext.actionContext || {};
+  return {
+    ...baseContext,
+    ...extraContext,
+    actionContext: {
+      ...baseActionContext,
+      ...extraActionContext,
+      targetPreferences: {
+        ...(baseActionContext.targetPreferences || {}),
+        ...(extraActionContext.targetPreferences || {}),
+      },
+      costPreferences:
+        extraActionContext.costPreferences || baseActionContext.costPreferences,
+      specialSummonPositions: {
+        ...(baseActionContext.specialSummonPositions || {}),
+        ...(extraActionContext.specialSummonPositions || {}),
+        byName: {
+          ...(baseActionContext.specialSummonPositions?.byName || {}),
+          ...(extraActionContext.specialSummonPositions?.byName || {}),
+        },
+        byTargetRef: {
+          ...(baseActionContext.specialSummonPositions?.byTargetRef || {}),
+          ...(extraActionContext.specialSummonPositions?.byTargetRef || {}),
+        },
+      },
+    },
+  };
+}
+
 /**
  * Builds a trigger entry for chain/activation handling.
  * @param {Object} options - Configuration options
@@ -248,13 +280,27 @@ export function buildTriggerEntry(options = {}) {
     return null;
   }
 
-  const activationContext =
+  let activationContext =
     options.activationContext ||
     this.buildTriggerActivationContext(
       sourceCard,
       owner,
       options.activationZone
     );
+  const strategyContext =
+    typeof owner.strategy?.buildActivationContextForEffect === "function"
+      ? owner.strategy.buildActivationContextForEffect({
+          sourceCard,
+          effect,
+          player: owner,
+          game: this.game,
+          activationZone: activationContext.activationZone,
+        })
+      : null;
+  activationContext = mergeStrategyActivationContext(
+    activationContext,
+    strategyContext,
+  );
   const selectionKind = options.selectionKind || "triggered";
   const selectionMessage =
     options.selectionMessage || "Select target(s) for the triggered effect.";

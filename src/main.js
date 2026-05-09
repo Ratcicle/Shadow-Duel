@@ -2,7 +2,6 @@ import Game from "./core/Game.js";
 import Bot from "./core/Bot.js";
 import BotArena from "./core/BotArena.js";
 import Renderer from "./ui/Renderer.js";
-import ReplayCapture from "./core/ReplayCapture.js";
 import { ReplayDashboard } from "./ui/replay/ReplayDashboard.js";
 import { cardDatabase, cardDatabaseById } from "./data/cards.js";
 import { validateCardDatabase } from "./core/CardDatabaseValidator.js";
@@ -21,14 +20,12 @@ initializeLocale();
 
 let game = null;
 const cardKindOrder = { monster: 0, spell: 1, trap: 2 };
-const REPLAY_MODE_KEY = "shadow_duel_capture_mode";
 const BOT_PRESET_KEY = "shadow_duel_bot_preset";
 const LEGACY_DECK_KEY = "shadow_duel_deck";
 const LEGACY_EXTRA_DECK_KEY = "shadow_duel_extra_deck";
 const DECK_PRESETS_KEY = "shadow_duel_deck_presets";
 const ACTIVE_DECK_SLOT_KEY = "shadow_duel_active_deck_slot";
 const DECK_PRESET_COUNT = 5;
-let replayModeEnabled = loadReplayModeFlag();
 let currentBotPreset = loadBotPreset();
 let latestValidationResult = null;
 // Use the imported indexed map instead of creating a new one
@@ -132,7 +129,6 @@ const btnPoolFilterArcanist = document.getElementById("deck-filter-arcanist");
 const btnPoolFilterLuminarch = document.getElementById("deck-filter-luminarch");
 const btnPoolFilterVoid = document.getElementById("deck-filter-void");
 const btnOpenLaboratory = document.getElementById("btn-open-laboratory");
-const btnToggleReplay = document.getElementById("btn-toggle-replay");
 const validationMessagesEl = document.getElementById("validation-messages");
 const laboratoryModal = document.getElementById("laboratory-modal");
 const laboratoryBody = document.getElementById("laboratory-body");
@@ -196,7 +192,6 @@ const LAB_OWNER_LABELS = {
 let laboratorySetup = createEmptyLaboratorySetup();
 let laboratorySelection = { owner: "player", zone: "hand" };
 let laboratoryMode = "test";
-updateReplayModeButton();
 runCardDatabaseValidation({ silent: true });
 
 function getCardById(cardId) {
@@ -437,34 +432,6 @@ function populateBotPresetDropdown() {
   });
 }
 
-function loadReplayModeFlag() {
-  try {
-    return localStorage.getItem(REPLAY_MODE_KEY) === "true";
-  } catch (e) {
-    console.warn("Failed to load replay mode flag", e);
-    return false;
-  }
-}
-
-function saveReplayModeFlag(enabled) {
-  try {
-    localStorage.setItem(REPLAY_MODE_KEY, enabled ? "true" : "false");
-  } catch (e) {
-    console.warn("Failed to save replay mode flag", e);
-  }
-}
-
-function updateReplayModeButton() {
-  if (!btnToggleReplay) return;
-  const stats = ReplayCapture.getStats();
-  const duelCount = stats.totalDuels || 0;
-  const label = replayModeEnabled
-    ? `Gravando (${duelCount})`
-    : `Gravando: desligado`;
-  btnToggleReplay.textContent = label;
-  btnToggleReplay.classList.toggle("active", replayModeEnabled);
-}
-
 function runCardDatabaseValidation(options = {}) {
   const { silent = false } = options;
   latestValidationResult = validateCardDatabase();
@@ -662,6 +629,39 @@ function cardHasArchetypeName(card, archetypeName) {
       ? [card.archetype]
       : [];
   return archetypes.includes(archetypeName);
+}
+
+function normalizeArchetypeId(archetypeName) {
+  const raw = String(archetypeName || "").trim().toLowerCase();
+  if (!raw) return null;
+  if (raw === "shadow-heart" || raw === "shadow_heart") return "shadowheart";
+  return raw.replace(/[^a-z0-9]+/g, "");
+}
+
+function inferDeckArchetype(deckIds = []) {
+  const counts = new Map();
+  let archetypedCards = 0;
+
+  deckIds.forEach((cardId) => {
+    const card = getCardById(cardId);
+    const archetypes = Array.isArray(card?.archetypes)
+      ? card.archetypes
+      : card?.archetype
+        ? [card.archetype]
+        : [];
+    const normalized = [...new Set(archetypes.map(normalizeArchetypeId))]
+      .filter(Boolean);
+    if (!normalized.length) return;
+    archetypedCards += 1;
+    normalized.forEach((name) => counts.set(name, (counts.get(name) || 0) + 1));
+  });
+
+  if (!archetypedCards || counts.size === 0) return "custom";
+
+  const [bestName, bestCount] = [...counts.entries()].sort(
+    (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
+  )[0];
+  return bestCount / archetypedCards >= 0.5 ? bestName : "custom";
 }
 
 function updatePoolFilterButtons() {
@@ -1554,9 +1554,13 @@ function startDuel() {
 
 function bootGame() {
   const renderer = new Renderer();
+  const playerArchetype = inferDeckArchetype(currentDeck);
   game = new Game({
     botPreset: currentBotPreset,
+    botArchetype: currentBotPreset,
     devMode: false,
+    normalDuelStrategicReport: true,
+    playerArchetype,
     renderer,
   });
   game.start([...currentDeck], [...currentExtraDeck]);
@@ -1611,7 +1615,6 @@ window.addEventListener("shadow-duel-rematch", async () => {
     return;
   }
   bootGame();
-  updateReplayModeButton(); // Atualizar contador de replays
 });
 
 // ============ Replay Dashboard ============
@@ -1968,27 +1971,6 @@ laboratoryBody?.addEventListener("click", (event) => {
   const zoneEl = event.target?.closest?.(".laboratory-zone");
   if (zoneEl?.dataset?.owner && zoneEl?.dataset?.zone) {
     applyLabZoneSelection(zoneEl.dataset.owner, zoneEl.dataset.zone);
-  }
-});
-
-btnToggleReplay?.addEventListener("click", () => {
-  replayModeEnabled = !replayModeEnabled;
-  saveReplayModeFlag(replayModeEnabled);
-  updateReplayModeButton();
-
-  if (replayModeEnabled) {
-    console.log(
-      "[ReplayCapture] Modo de captura ATIVADO - suas decisões serão gravadas nos próximos duelos",
-    );
-  } else {
-    // Mostrar resumo ao desativar
-    const stats = ReplayCapture.getStats();
-    if (stats.totalDuels > 0) {
-      console.log(
-        `[ReplayCapture] Modo de captura DESATIVADO - ${stats.totalDuels} duelos gravados`,
-      );
-      ReplayCapture.showSummary();
-    }
   }
 });
 

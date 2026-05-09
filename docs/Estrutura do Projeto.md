@@ -79,7 +79,6 @@ Arquivos JSON de tradução.
 | [ActionHandlers.js](../src/core/ActionHandlers.js) | Re-exporta tudo de [actionHandlers/](../src/core/actionHandlers/) para compatibilidade legada. |
 | [AutoSelector.js](../src/core/AutoSelector.js) | Resolve `selectionContract`s automaticamente para o bot — escolhe alvos sem UI usando heurísticas de `StrategyUtils`. |
 | [UIAdapter.js](../src/core/UIAdapter.js) | Proxy entre `Game` e `Renderer`. Permite ao engine pedir prompts (confirm/number/alert) sem acoplar diretamente ao DOM. |
-| [ReplayCapture.js](../src/core/ReplayCapture.js) | Grava decisões do jogador humano em formato otimizado (snapshots + deltas + dicionário de cartas) para treinar a IA. |
 | [i18n.js](../src/core/i18n.js) | Internationalization. Carrega locale do `localStorage`, expõe `getCardDisplayName`/`getCardDisplayDescription`. |
 
 ### `src/core/actionHandlers/` — Handlers de ações de cartas
@@ -205,7 +204,6 @@ Sistema de gatilhos (on-summon, on-destroy, on-attack, etc.): [registration.js](
 | [extraDeck/](../src/core/game/extraDeck/) | `modal.js` — abertura/seleção do extra deck. |
 | [graveyard/](../src/core/game/graveyard/) | `modal.js` — visualização do GY. |
 | [helpers/](../src/core/game/helpers/) | `cards.js`, `players.js` — utilitários compartilhados. |
-| [replay/](../src/core/game/replay/) | `integration.js` — ponte com `ReplayCapture`. |
 | [selection/](../src/core/game/selection/) | Sistema de seleção: `contract.js` (definição), `session.js` (sessão ativa), `handlers.js` (callback wiring), `highlighting.js` (visual). |
 | [spellTrap/](../src/core/game/spellTrap/) | Spells/Traps: `set.js`, `activation.js`, `verification.js`, `finalization.js`, `triggers.js`, `index.js`. |
 | [state/](../src/core/game/state/) | `serialization.js` — snapshot/clone de estado para IA. |
@@ -270,7 +268,7 @@ Fachada principal de renderização. Constructor próprio + métodos importados 
 ## Diretórios auxiliares
 
 - **`assets/`** — PNG/JPG das cartas. Nome do arquivo = nome da carta.
-- **`replays/`** — Replays salvos em JSON (formato definido por `ReplayCapture`).
+- **`replays/`** — Arquivos JSON exportados/importados para análise, incluindo Strategic Reports e replays legados.
 - **`laboratory-imports/`** — Presets de bot/deck importáveis manualmente.
 - **`Training Digest/`** — JSONL com decisões agregadas para treinar a IA.
 - **`.codex/`** — Logs e ambientes auxiliares (não vão para git em produção).

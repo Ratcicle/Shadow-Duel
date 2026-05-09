@@ -509,6 +509,33 @@ export async function collectAfterSummonTriggers(payload) {
           if (!conditionMet) continue;
         }
 
+        if (Array.isArray(effect.targets) && effect.targets.length > 0) {
+          const precheckCtx = {
+            source: sourceCard,
+            player: owner,
+            opponent: other,
+            actionContext,
+            activationContext: { logTargets: false },
+          };
+          let unmetRequiredTarget = null;
+          for (const targetDef of effect.targets) {
+            if (!targetDef) continue;
+            const min = Number(targetDef.count?.min ?? 1);
+            if (min <= 0) continue;
+            const { candidates } = this.selectCandidates(targetDef, precheckCtx);
+            if (!candidates || candidates.length < min) {
+              unmetRequiredTarget = targetDef.id || targetDef.zone || "target";
+              break;
+            }
+          }
+          if (unmetRequiredTarget) {
+            console.log(
+              `[after_summon] Skipping trigger ${effect.id} on ${sourceCard.name}: no valid candidates for required target "${unmetRequiredTarget}"`,
+            );
+            continue;
+          }
+        }
+
         const activationContext = this.buildTriggerActivationContext(
           sourceCard,
           owner,
@@ -580,15 +607,6 @@ export async function collectBattleDestroyTriggers(payload) {
     const handCards = owner.hand || [];
     const triggerSources = [...fieldCards, ...handCards];
 
-    // DEBUG: Log de triggerSources para battle_destroy
-    console.log(
-      `[battle_destroy DEBUG] Side owner: ${owner?.id}, triggerSources:`,
-      triggerSources.map((c) => c?.name),
-    );
-    console.log(
-      `[battle_destroy DEBUG] attacker in triggerSources: ${triggerSources.includes(attacker)}`,
-    );
-
     // Add destroyed card to trigger sources only once (avoid double processing in mutual destruction)
     if (
       destroyed &&
@@ -619,26 +637,6 @@ export async function collectBattleDestroyTriggers(payload) {
         if (!effect || effect.timing !== "on_event") continue;
         if (effect.event !== "battle_destroy") continue;
 
-        // DEBUG: Log de diagnóstico para battle_destroy
-        console.log(
-          `[battle_destroy DEBUG] Checking effect ${effect.id} on ${card.name}`,
-        );
-        console.log(
-          `  - attacker: ${attacker?.name}, destroyed: ${destroyed?.name}`,
-        );
-        console.log(
-          `  - attackerOwner: ${attackerOwner?.id}, destroyedOwner: ${destroyedOwner?.id}`,
-        );
-        console.log(
-          `  - side.owner: ${owner?.id}, side.other: ${side.other?.id}`,
-        );
-        console.log(
-          `  - requireSelfAsAttacker: ${effect.requireSelfAsAttacker}, ctx.attacker === card: ${ctx.attacker === card}`,
-        );
-        console.log(
-          `  - requireDestroyedIsOpponent: ${effect.requireDestroyedIsOpponent}`,
-        );
-
         if (this.isEffectNegated(card)) {
           console.log(`${card.name} effects are negated, skipping effect.`);
           continue;
@@ -661,14 +659,6 @@ export async function collectBattleDestroyTriggers(payload) {
           effect.requireSelfWasSummonedBy &&
           !matchesLastSummonMethod(card, effect.requireSelfWasSummonedBy)
         ) {
-          const allowedMethods = Array.isArray(effect.requireSelfWasSummonedBy)
-            ? effect.requireSelfWasSummonedBy
-            : [effect.requireSelfWasSummonedBy];
-          console.log(
-            `[battle_destroy DEBUG] SKIPPED: requires last summon method ${allowedMethods.join(
-              "/",
-            )}, but was "${card.lastSummonMethod || null}"`,
-          );
           continue;
         }
 
@@ -685,38 +675,47 @@ export async function collectBattleDestroyTriggers(payload) {
         }
 
         if (effect.requireSelfAsAttacker && ctx.attacker !== card) {
-          console.log(
-            `[battle_destroy DEBUG] SKIPPED: requireSelfAsAttacker but ctx.attacker !== card`,
-          );
           continue;
         }
         if (effect.requireSelfAsDestroyed && ctx.destroyed !== card) {
-          console.log(
-            `[battle_destroy DEBUG] SKIPPED: requireSelfAsDestroyed but ctx.destroyed !== card`,
-          );
           continue;
         }
         if (effect.requireDestroyedIsOpponent) {
           const destroyedOwnerId =
             (ctx.destroyedOwner && ctx.destroyedOwner.id) || ctx.destroyedOwner;
           const opponentId = side.other?.id;
-          console.log(
-            `[battle_destroy DEBUG] requireDestroyedIsOpponent check:`,
-          );
-          console.log(
-            `  - destroyedOwnerId: ${destroyedOwnerId}, opponentId: ${opponentId}`,
-          );
           if (!destroyedOwnerId || destroyedOwnerId !== opponentId) {
+            continue;
+          }
+        }
+
+        if (Array.isArray(effect.targets) && effect.targets.length > 0) {
+          const precheckCtx = {
+            source: card,
+            player: owner,
+            opponent: side.other,
+            actionContext,
+            activationContext: { logTargets: false },
+          };
+          let unmetRequiredTarget = null;
+          for (const targetDef of effect.targets) {
+            if (!targetDef) continue;
+            const min = Number(targetDef.count?.min ?? 1);
+            if (min <= 0) continue;
+            const { candidates } = this.selectCandidates(targetDef, precheckCtx);
+            if (!candidates || candidates.length < min) {
+              unmetRequiredTarget = targetDef.id || targetDef.zone || "target";
+              break;
+            }
+          }
+          if (unmetRequiredTarget) {
             console.log(
-              `[battle_destroy DEBUG] SKIPPED: requireDestroyedIsOpponent failed`,
+              `[battle_destroy] Skipping trigger ${effect.id} on ${card.name}: no valid candidates for required target "${unmetRequiredTarget}"`,
             );
             continue;
           }
         }
 
-        console.log(
-          `[battle_destroy DEBUG] PASSED ALL CHECKS for ${effect.id}, creating entry`,
-        );
         if (effect.requireOwnMonsterArchetype) {
           const destroyedCard = ctx.destroyed;
           const destroyedOwnerId =

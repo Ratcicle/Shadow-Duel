@@ -145,14 +145,12 @@ const modifier = getReplayModifier(action, gameState);
 
 | Flag                          | Efeito                      |
 | ----------------------------- | --------------------------- |
-| `shadow_duel_capture_mode`    | Ativa captura de replays    |
 | `shadow_duel_replay_insights` | Ativa uso de insights na IA |
 | `shadow_duel_replay_weight`   | Peso dos insights (0.0-1.0) |
 
 ### Ativar via console:
 
 ```javascript
-localStorage.setItem('shadow_duel_capture_mode', 'true');
 localStorage.setItem('shadow_duel_replay_insights', 'true');
 localStorage.setItem('shadow_duel_replay_weight', '0.5');
 ```
@@ -174,8 +172,8 @@ src/ui/replay/
 ├── ReplayDashboard.js    # UI completa
 └── index.js              # Re-exports
 
-src/core/game/replay/
-└── integration.js        # Hooks de captura
+src/core/game/analytics/
+└── strategicReport.js    # Export estratégico do duelo comum
 ```
 
 ---
@@ -185,18 +183,18 @@ src/core/game/replay/
 ```
 ┌─────────────────┐
 │   Jogar Duelo   │
-│ (capture mode)  │
+│ Strategic JSON  │
 └────────┬────────┘
          │
          ▼
 ┌─────────────────┐
-│ ReplayCapture   │ ← Captura decisões + availableActions
+│ DuelTracker     │ ← Coleta telemetria estratégica compacta
 │ (durante jogo)  │
 └────────┬────────┘
          │
          ▼
 ┌─────────────────┐
-│  Salvar Replay  │ ← Modal ao final do duelo
+│ Exportar Replay │ ← Baixa Strategic JSON no modal final
 │   (.json file)  │
 └────────┬────────┘
          │
@@ -255,19 +253,16 @@ src/core/game/replay/
 
 ## 🎯 Casos de Uso
 
-### 1. Treinar IA com suas partidas
+### 1. Treinar IA com arquivos importados
 ```javascript
-// 1. Ative captura
-localStorage.setItem('shadow_duel_capture_mode', 'true');
+// 1. Exporte Strategic JSON no fim do duelo ou no Bot Arena
 
-// 2. Jogue várias partidas
+// 2. Importe arquivos no Dashboard
 
-// 3. Importe replays no Dashboard
-
-// 4. Ative insights
+// 3. Ative insights
 localStorage.setItem('shadow_duel_replay_insights', 'true');
 
-// 5. A IA agora usa seus padrões de jogo
+// 4. A IA agora usa os padrões importados
 ```
 
 ### 2. Analisar performance de cartas

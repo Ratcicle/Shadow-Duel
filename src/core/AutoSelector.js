@@ -145,7 +145,10 @@ export default class AutoSelector {
     }
 
     const best = candidates[0];
-    const score = this.getCandidateScore(best, intent, context);
+    const score = this.getCandidateScore(best, intent, {
+      ...context,
+      requirement,
+    });
     const threshold =
       intent === "harm" ? 0.5 : intent === "benefit" ? 0.6 : 0.7;
 
@@ -153,6 +156,13 @@ export default class AutoSelector {
   }
 
   getRequirementIntent(requirement, context, candidates) {
+    const targetPreference = getTargetPreference({
+      ...context,
+      requirement,
+    });
+    if (targetPreference?.intent) return targetPreference.intent;
+    if (targetPreference?.role === "cost") return "cost";
+
     const explicit =
       requirement.intent ||
       requirement.filters?.intent ||
@@ -259,6 +269,15 @@ export default class AutoSelector {
     }
     if (intent === "benefit") {
       const targetPreference = getTargetPreference(context);
+      if (
+        targetPreference?.role === "named_preference" ||
+        targetPreference?.preferredNames?.length
+      ) {
+        return (
+          getNamedPreferenceTargetScore(baseCard, targetPreference) +
+          (isSelf ? 0.2 : -0.4)
+        );
+      }
       if (targetPreference?.role === "recursion") {
         return (
           getRecursionTargetScore(baseCard, targetPreference) +
@@ -311,7 +330,9 @@ export default class AutoSelector {
           baseCard?.archetypes?.includes?.(costPreferences.archetype));
       if (costPreferences) {
         const preferNames = costPreferences.preferNames || [];
+        const forceNames = costPreferences.forceNames || [];
         const preserveNames = costPreferences.preserveNames || [];
+        if (forceNames.includes(baseCard?.name)) costScore -= 30;
         if (preferNames.includes(baseCard?.name)) costScore -= 2.5;
         if (preserveNames.includes(baseCard?.name)) costScore += 18;
         if (
@@ -485,6 +506,16 @@ function countAvailableOffensivePayoffs(player, payoffNames = []) {
   return [...(player.hand || []), ...(player.deck || [])].filter((card) =>
     isOffensivePayoffCost(card, payoffNames)
   ).length;
+}
+
+function getNamedPreferenceTargetScore(card, preference = {}) {
+  if (!card) return -100;
+  const preferredNames = preference.preferredNames || [];
+  const avoidNames = preference.avoidNames || [];
+  let score = estimateCardValue(card);
+  if (preferredNames.includes(card.name)) score += 40;
+  if (avoidNames.includes(card.name)) score -= 30;
+  return score;
 }
 
 function getRecursionTargetScore(card, preference = {}) {

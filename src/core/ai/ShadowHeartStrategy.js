@@ -39,6 +39,9 @@ import {
   evaluateTributeTrade,
   getTributeRequirementFor,
   buildShadowHeartCostPreferences,
+  buildShadowHeartTargetPreferences,
+  evaluateShadowHeartRecruitCandidate,
+  rankShadowHeartSearchCandidates,
 } from "./shadowheart/priorities.js";
 import {
   evaluateMonster,
@@ -71,8 +74,33 @@ function canActivateShadowHeartSpell(game, card, bot, activationContext = {}) {
 
 function buildShadowHeartSpellActivationContext(card, bot, opponent, analysis) {
   const costPreferences = buildShadowHeartCostPreferences(analysis);
+  if (
+    card?.name === "Shadow-Heart Infusion" &&
+    !(analysis?.graveyard || []).some((c) => c?.cardKind === "monster") &&
+    (analysis?.hand || []).some((c) => c?.name === "Shadow-Heart Gecko") &&
+    (analysis?.hand || []).some((c) => c?.name === "Shadow-Heart Rage")
+  ) {
+    costPreferences.forceNames = [
+      "Shadow-Heart Gecko",
+      "Shadow-Heart Rage",
+    ];
+    costPreferences.preserveNames = [
+      ...new Set([
+        ...(costPreferences.preserveNames || []),
+        "Polymerization",
+        "Shadow-Heart Scale Dragon",
+      ]),
+    ];
+  }
+  const strategicPreferences = buildShadowHeartTargetPreferences(
+    card,
+    (card?.effects || [])[0] || null,
+    analysis,
+  );
   const actionContext = {
     costPreferences,
+    targetPreferences: strategicPreferences.targetPreferences,
+    specialSummonPositions: strategicPreferences.specialSummonPositions,
   };
 
   if (card?.name !== "Shadow-Heart Purge") {
@@ -130,6 +158,65 @@ export default class ShadowHeartStrategy extends BaseStrategy {
     // Estado de análise atual
     this.currentAnalysis = null;
     this.thoughtProcess = [];
+  }
+
+  buildActivationContextForEffect({ sourceCard, effect, player, game } = {}) {
+    if (!sourceCard || !player || !game) return null;
+    const analysis = this.analyzeGameState(game);
+    const strategicPreferences = buildShadowHeartTargetPreferences(
+      sourceCard,
+      effect,
+      analysis,
+    );
+    const targetPreferences = strategicPreferences.targetPreferences || {};
+    const specialSummonPositions =
+      strategicPreferences.specialSummonPositions || {};
+
+    if (
+      Object.keys(targetPreferences).length === 0 &&
+      Object.keys(specialSummonPositions.byName || {}).length === 0
+    ) {
+      return null;
+    }
+
+    if (player.debug || game.devModeEnabled) {
+      const impPreference = targetPreferences.imp_special_from_hand;
+      if (impPreference?.preferredNames?.[0]) {
+        console.log(
+          `[ShadowHeartStrategy] Imp target: ${impPreference.preferredNames[0]} (${impPreference.reason})`,
+        );
+      }
+      if (sourceCard.name === "Shadow-Heart Infusion") {
+        console.log("[ShadowHeartStrategy] Infusion context prepared");
+      }
+    }
+
+    return {
+      autoSelectTargets: true,
+      autoSelectSingleTarget: true,
+      logTargets: false,
+      actionContext: {
+        costPreferences: buildShadowHeartCostPreferences(analysis),
+        targetPreferences,
+        specialSummonPositions,
+      },
+    };
+  }
+
+  rankSearchCandidates(cards, action = {}, ctx = {}) {
+    return rankShadowHeartSearchCandidates(cards, action, {
+      ...ctx,
+      strategy: this,
+      getOpponent: this.getOpponent.bind(this),
+    });
+  }
+
+  evaluateRecruitCandidate(candidates, context = {}) {
+    return evaluateShadowHeartRecruitCandidate(candidates, {
+      ...context,
+      strategy: this,
+      getOpponent: this.getOpponent.bind(this),
+    });
   }
 
   /**

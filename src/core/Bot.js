@@ -4,7 +4,6 @@ import Card from "./Card.js";
 import { getStrategyFor } from "./ai/StrategyRegistry.js";
 import { beamSearchTurn, greedySearchWithEvalV2 } from "./ai/BeamSearch.js";
 import { botLogger } from "./BotLogger.js";
-import ReplayCapture from "./ReplayCapture.js";
 
 export default class Bot extends Player {
   constructor(archetype = "shadowheart") {
@@ -392,17 +391,6 @@ export default class Bot extends Player {
         game,
       );
 
-      // v4: Registrar availableActions para captura de replay
-      if (ReplayCapture.isEnabled() && actions.length > 0) {
-        ReplayCapture.registerAvailableActions({
-          actor: "bot",
-          promptType: "main_phase",
-          actions: actions,
-          turn: game.turnCounter || 0,
-          phase: game.phase || "main1",
-        });
-      }
-
       console.log(
         `[Bot.playMainPhase] Generated ${rawActions.length} raw actions, ${actions.length} sequenced actions (${failedActionsThisTurn.size} filtered)`,
       );
@@ -623,46 +611,6 @@ export default class Bot extends Player {
         if (m.cannotAttackThisTurn) return false;
         return game.getAttackAvailability?.(m)?.ok ?? true;
       });
-
-      // v4: Registrar availableActions de batalha
-      if (ReplayCapture.isEnabled() && availableAttackers.length > 0) {
-        const attackActions = [];
-        for (const attacker of availableAttackers) {
-          // Ação de ataque direto
-          if (
-            opponent.field.length === 0 &&
-            !this.forbidDirectAttacksThisTurn &&
-            !attacker.cannotAttackDirectly
-          ) {
-            attackActions.push({
-              type: "attack",
-              card: attacker,
-              target: null,
-              directAttack: true,
-            });
-          } else {
-            // Ações de ataque a cada monstro
-            for (const target of opponent.field) {
-              if (target?.cardKind === "monster") {
-                attackActions.push({
-                  type: "attack",
-                  card: attacker,
-                  target: target,
-                });
-              }
-            }
-          }
-        }
-        if (attackActions.length > 0) {
-          ReplayCapture.registerAvailableActions({
-            actor: "bot",
-            promptType: "battle",
-            actions: attackActions,
-            turn: game.turnCounter || 0,
-            phase: "battle",
-          });
-        }
-      }
 
       if (!availableAttackers.length) {
         setTimeout(() => game.nextPhase(), battleDelayMs);

@@ -4,8 +4,6 @@
  * @module game/ui/interactions
  */
 
-import ReplayCapture from "../../ReplayCapture.js";
-
 /**
  * Binds all card interaction handlers.
  * This method sets up click handlers for all interactive elements in the game UI.
@@ -468,41 +466,6 @@ export function bindCardInteractions() {
           return;
         }
 
-        // v4: Captura de available actions para humano
-        if (ReplayCapture.isEnabled()) {
-          const availableActions = [
-            {
-              type: "normal_summon",
-              card: { id: card.id, name: card.name },
-              position: "attack",
-            },
-            {
-              type: "set",
-              card: { id: card.id, name: card.name },
-              position: "defense",
-            },
-          ];
-          if (canSanctumSpecialFromAegis) {
-            availableActions.push({
-              type: "special_from_aegisbearer",
-              card: { id: card.id, name: card.name },
-            });
-          }
-          if (canUseHandEffect) {
-            availableActions.push({
-              type: "special_from_hand_effect",
-              card: { id: card.id, name: card.name },
-            });
-          }
-          ReplayCapture.registerAvailableActions({
-            actor: "human",
-            promptType: "summon_modal",
-            turn: this.turnCounter,
-            phase: this.phase,
-            actions: availableActions,
-          });
-        }
-
         this.ui.showSummonModal(
           index,
           async (choice) => {
@@ -648,26 +611,6 @@ export function bindCardInteractions() {
             this.setSpellOrTrap(card, index);
           }
         };
-
-        // v4: Captura de available actions para humano (spell)
-        if (ReplayCapture.isEnabled()) {
-          const availableActions = [
-            { type: "set_spell", card: { id: card.id, name: card.name } },
-          ];
-          if (canActivateFromHand) {
-            availableActions.unshift({
-              type: "activate_spell",
-              card: { id: card.id, name: card.name },
-            });
-          }
-          ReplayCapture.registerAvailableActions({
-            actor: "human",
-            promptType: "spell_modal",
-            turn: this.turnCounter,
-            phase: this.phase,
-            actions: availableActions,
-          });
-        }
 
         if (this.ui && typeof this.ui.showSpellChoiceModal === "function") {
           this.ui.showSpellChoiceModal(index, handleSpellChoice, {
@@ -942,39 +885,6 @@ export function bindCardInteractions() {
         if (!canDirect && attackCandidates.length === 0) {
           this.ui.log("No valid attack targets and cannot attack directly!");
           return;
-        }
-
-        // v4: Captura de available actions para humano (ataque)
-        if (ReplayCapture.isEnabled()) {
-          const attackActions = [];
-
-          // Ataques a monstros
-          attackCandidates.forEach((target) => {
-            attackActions.push({
-              type: "attack",
-              card: { id: attacker.id, name: attacker.name },
-              target: { id: target.id, name: target.name },
-            });
-          });
-
-          // Ataque direto
-          if (canDirect) {
-            attackActions.push({
-              type: "direct_attack",
-              card: { id: attacker.id, name: attacker.name },
-            });
-          }
-
-          // Cancelar
-          attackActions.push({ type: "cancel_attack" });
-
-          ReplayCapture.registerAvailableActions({
-            actor: "human",
-            promptType: "attack_target",
-            turn: this.turnCounter,
-            phase: this.phase,
-            actions: attackActions,
-          });
         }
 
         this.startAttackTargetSelection(attacker, attackCandidates);

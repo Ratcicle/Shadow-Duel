@@ -12,8 +12,8 @@ Captura (durante jogo) → Armazenamento (IndexedDB) → Análise (TrainingDiges
 
 | Arquivo | Responsabilidade |
 |---------|------------------|
-| `ReplayCapture.js` | Captura decisões durante o duelo (v3 otimizado) |
-| `game/replay/integration.js` | Hooks de eventos do Game.js |
+| `ArenaAnalytics.js` / `DuelTracker` | Coleta telemetria estratégica para Bot Arena e duelo comum |
+| `game/analytics/strategicReport.js` | Ciclo de vida do Strategic JSON no duelo comum |
 | `ReplayDatabase.js` | Persistência em IndexedDB |
 | `ReplayImporter.js` | Validação, dedup e qualidade |
 | `ReplayAnalyzer.js` | Geração de training digests |
@@ -25,14 +25,14 @@ Captura (durante jogo) → Armazenamento (IndexedDB) → Análise (TrainingDiges
 
 ## 2. Análise do Pipeline Atual
 
-### 2.1 Captura de Eventos (ReplayCapture.js) ✅ Bem Implementado
+### 2.1 Captura Estratégica Atual (DuelTracker) ✅ Implementada
 
 **Pontos Fortes:**
-- Versão 3 otimizada com snapshots a cada 5 turnos + deltas
-- Dicionário de cartas para evitar repetição de nomes
-- Timestamps relativos (t0/dt) para análise de tempo de decisão
-- Captura de `availableActions` (v4) - **crítico para ML**
-- Suporta ambos jogadores (human e bot)
+- Strategic JSON compacto compartilhado entre Bot Arena e duelo comum
+- Coleta por `game._arenaTracker` nos eventos canônicos do motor
+- Agrega summons, ativações, ataques, custos, alvos, LP e padrões suspeitos
+- Exporta um duelo comum com o mesmo schema do Bot Arena
+- O sistema antigo `ReplayCapture` foi removido e não é mais o caminho ativo
 
 **Tipos de Decisão Capturados:**
 - `summon` - com summonType (normal/special/fusion/ascension)
@@ -194,7 +194,7 @@ Implementado completo:
 - Evento `target_selection_options` emitido em `session.js` quando seleção inicia
 - Evento `target_selected` emitido em `session.js` quando seleção é finalizada
 - Listener em `integration.js` para capturar ambos eventos
-- Método `captureTargetSelection()` em `ReplayCapture.js`
+- Targeting registrado via eventos estratégicos do tracker
 - Tipo `target_selection` adicionado ao `ReplayAnalyzer.js`
 
 #### 4.2.2 Adicionar Métricas de Qualidade de Decisão ✅
@@ -298,8 +298,8 @@ O sistema de replays está **bem arquitetado** e tem todos os componentes necess
 2. **Captura de Target Selection** (Novo)
    - Evento `target_selection_options` emitido quando seleção inicia
    - Evento `target_selected` emitido quando seleção é finalizada
-   - Handler completo em `ReplayCapture.js`
-   - Integração com digest generation
+   - Registro completo no tracker estratégico
+   - Integração com geração/importação de dados de análise quando aplicável
 
 3. **Métricas de Qualidade** (Novo)
    - `calculateDigestQualityMetrics()` para avaliar qualidade dos dados

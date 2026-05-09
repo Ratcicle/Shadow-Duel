@@ -1,62 +1,62 @@
-// ─────────────────────────────────────────────────────────────────────────────
 // src/core/game/ui/winCondition.js
-// Win condition check and display for Game class — B.10 extraction
-// ─────────────────────────────────────────────────────────────────────────────
-
-import ReplayCapture from "../../ReplayCapture.js";
+// Win condition check and display for Game class.
 
 /**
  * Checks if a win condition has been met and displays the result.
  */
 export function checkWinCondition() {
-  if (this.gameOver) return; // Já terminou
+  if (this.gameOver) return;
 
   const showGameOver = (victory) => {
-    // Usa o modal customizado se disponível, senão fallback para alert
+    const hasStrategicReport = this.hasStrategicReport?.() === true;
+    if (!hasStrategicReport && this.normalDuelStrategicReportEnabled) {
+      console.warn(
+        "[StrategicReport] Game over modal opened without exportable analytics.",
+      );
+    }
+
     if (typeof this.ui?.showGameOverModal === "function") {
       this.ui.showGameOverModal({
         victory,
         playerLP: this.player.lp,
         botLP: this.bot.lp,
         turns: this.turnCounter,
-        // Info do replay pendente
-        replayPending: ReplayCapture.hasPendingDuel(),
-        replayInfo: ReplayCapture.getPendingDuelInfo(),
+        strategicReportAvailable: hasStrategicReport,
+        strategicReportInfo: hasStrategicReport
+          ? {
+              duelCount: 1,
+              winner: this.winner,
+              turns: this.turnCounter,
+            }
+          : null,
         onMenu: () => {
-          // Voltar ao menu principal
           document.getElementById("start-screen")?.classList.remove("hidden");
         },
         onRematch: () => {
-          // Reiniciar duelo - dispara evento para main.js tratar
           window.dispatchEvent(new CustomEvent("shadow-duel-rematch"));
         },
-        onSaveReplay: () => {
-          // Salvar replay do duelo atual
-          if (ReplayCapture.hasPendingDuel()) {
-            const info = ReplayCapture.getPendingDuelInfo();
-            ReplayCapture.exportCurrentDuel();
-            return info;
+        onExportStrategicReport: () => {
+          if (!this.hasStrategicReport?.()) {
+            console.warn(
+              "[StrategicReport] Export requested but no normal duel analytics are available.",
+            );
+            return null;
           }
-          return null;
-        },
-        onDiscardReplay: () => {
-          // Descartar replay sem salvar
-          ReplayCapture.discardLastDuel();
-        },
-        // Manter onExport para compatibilidade
-        onExport: () => {
-          if (ReplayCapture.hasPendingDuel()) {
-            const info = ReplayCapture.getPendingDuelInfo();
-            ReplayCapture.exportCurrentDuel();
-            return { decisions: info?.decisions || 0 };
-          }
-          return null;
+          const filename = this.buildStrategicReportFilename?.(
+            victory ? "win" : "loss",
+          );
+          const report = this.downloadStrategicReport?.(filename);
+          return report
+            ? {
+                duelCount: report.duelCount || 1,
+                filename,
+              }
+            : null;
         },
       });
     } else {
-      // Fallback
       this.ui?.showAlert?.(
-        victory ? "Victory! You Won." : "Game Over! You Lost."
+        victory ? "Victory! You Won." : "Game Over! You Lost.",
       );
     }
   };
@@ -71,6 +71,7 @@ export function checkWinCondition() {
       loserId: this.player.id,
       reason: "lp_zero",
     });
+    this.finalizeNormalDuelStrategicReport?.("bot", "lp_zero");
     showGameOver(false);
   } else if (this.bot.lp <= 0) {
     this.gameOver = true;
@@ -82,6 +83,7 @@ export function checkWinCondition() {
       loserId: this.bot.id,
       reason: "lp_zero",
     });
+    this.finalizeNormalDuelStrategicReport?.("player", "lp_zero");
     showGameOver(true);
   }
 }

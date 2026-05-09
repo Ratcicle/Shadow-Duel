@@ -16,7 +16,7 @@ export const END_REASONS = {
   CANCELLED: "cancelled",
 };
 
-const REPORT_VERSION = 2;
+const REPORT_VERSION = 3;
 const SEATS = ["player", "bot"];
 const TRACKED_EVENTS = new Set([
   "after_summon",
@@ -790,7 +790,8 @@ export class ArenaAnalytics {
       duelCount: this.duelRecords.length,
       matchups,
       duels,
-      bots,
+      bots,               // backward compat (Bot Arena)
+      participants: bots, // semantic alias: inclui player + bot em qualquer modo
       archetypes,
       suspiciousPatterns,
     };
@@ -848,6 +849,10 @@ export class ArenaAnalytics {
           player: seats.player?.actions || 0,
           bot: seats.bot?.actions || 0,
         },
+        actionsBySeat: {
+          player: seats.player?.actions || 0,
+          bot: seats.bot?.actions || 0,
+        },
         summons: {
           player: seats.player?.summons || 0,
           bot: seats.bot?.summons || 0,
@@ -882,7 +887,8 @@ export class ArenaAnalytics {
         },
         errors: record.errors || [],
         warnings: record.warnings || [],
-        bots: seats,
+        bots: seats,          // backward compat
+        participants: seats,  // semantic alias (player vs Bot ou Bot vs Bot)
         events: record.strategic?.events || [],
       };
     });
@@ -1104,9 +1110,9 @@ export class ArenaAnalytics {
               }
               barbariasBuffedByDuel.add(`${duel.duelNumber}:${target}`);
               break;
-            case "Luminarch Knights Convocation":
-              addCount(lumKCDiscards, target);
-              break;
+            // Knights Convocation: NÃO acumular via targeting — targeting não
+            // garante que a carta foi descartada como custo; a atribuição correta
+            // vem do evento move (hand→graveyard com sourceCard=KC) logo abaixo.
           }
         }
 
@@ -1316,7 +1322,8 @@ export class ArenaAnalytics {
       for (const entry of stats.invalidByCard || []) {
         if (entry.count >= 3) {
           pushAlert("repeated_invalid_activation", "high", {
-            bot: botKey,
+            bot: botKey,         // backward compat
+            participant: botKey, // semântico: pode ser "player:X" em duelo normal
             card: entry.name,
             count: entry.count,
           });
@@ -1324,13 +1331,15 @@ export class ArenaAnalytics {
       }
       if (stats.blockedActions >= 5) {
         pushAlert("many_blocked_actions", "medium", {
-          bot: botKey,
+          bot: botKey,         // backward compat
+          participant: botKey,
           count: stats.blockedActions,
         });
       }
       if (stats.noUsefulTurns >= Math.max(3, stats.duels || 1)) {
         pushAlert("turns_without_useful_action", "medium", {
-          bot: botKey,
+          bot: botKey,         // backward compat
+          participant: botKey,
           count: stats.noUsefulTurns,
         });
       }
@@ -1810,6 +1819,10 @@ export class DuelTracker {
     const sourceZone = payload.sourceZone || payload.fromZone || null;
     if (sourceZone !== "deck" && payload.fromDeck !== true) return;
 
+    // Usa apenas sourceCard/source explícitos — evita payload.card como fallback,
+    // pois payload.card pode ser a própria carta sendo buscada (self-attribution).
+    const sourceCard = cardName(payload.sourceCard || payload.source) || null;
+
     for (const name of cardNames(payload.cards || payload.addedCards || payload.card)) {
       addCount(this.seats[seat].searched, name);
       this.markUsefulAction(seat, meta.turn);
@@ -1818,7 +1831,7 @@ export class DuelTracker {
         seat,
         type: "search",
         card: name,
-        sourceCard: sourceName(payload),
+        sourceCard,
         effectId: effectId(payload),
         fromZone: payload.sourceZone || payload.fromZone || "deck",
         toZone: "hand",

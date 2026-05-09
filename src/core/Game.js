@@ -86,9 +86,7 @@ import * as uiModals from "./game/ui/modals.js";
 import * as uiPrompts from "./game/ui/prompts.js";
 import * as uiWinCondition from "./game/ui/winCondition.js";
 import * as uiInteractions from "./game/ui/interactions.js";
-
-// Replay capture integration
-import * as replayIntegration from "./game/replay/integration.js";
+import * as strategicReport from "./game/analytics/strategicReport.js";
 
 // Effects modules (moved from inline methods)
 import * as effectsDestructionReplacement from "./game/effects/destructionReplacement.js";
@@ -155,6 +153,11 @@ export default class Game {
     this.pendingCardAnimations = [];
     this.pendingVisualFeedback = [];
     this.cardAnimationsReady = false;
+    this.normalDuelStrategicReportEnabled =
+      options.normalDuelStrategicReport === true;
+    this.normalDuelPlayerArchetype = options.playerArchetype || "custom";
+    this.normalDuelBotArchetype = options.botArchetype || this.botPreset;
+    this._normalDuelStrategic = null;
     this.oncePerTurnUsage = {
       player: new Map(),
       bot: new Map(),
@@ -272,9 +275,8 @@ export default class Game {
       this.bot.buildExtraDeck(botExtraDeck);
     }
 
-    // Integra��o do sistema de captura de replay (se habilitado)
-    replayIntegration.integrateReplayCapture(this);
-    replayIntegration.startReplayCapture(this);
+    // Normal duel strategic telemetry is opt-in; Bot Arena owns its tracker.
+    this.startNormalDuelStrategicReport?.();
 
     this.drawCards(this.player, 4);
     this.drawCards(this.bot, 4);
@@ -1030,3 +1032,15 @@ Game.prototype.checkWinCondition = uiWinCondition.checkWinCondition;
 
 // Interactions: bindCardInteractions
 Game.prototype.bindCardInteractions = uiInteractions.bindCardInteractions;
+
+// Strategic report: normal duel analytics export
+Game.prototype.startNormalDuelStrategicReport =
+  strategicReport.startNormalDuelStrategicReport;
+Game.prototype.finalizeNormalDuelStrategicReport =
+  strategicReport.finalizeNormalDuelStrategicReport;
+Game.prototype.hasStrategicReport = strategicReport.hasStrategicReport;
+Game.prototype.exportStrategicReport = strategicReport.exportStrategicReport;
+Game.prototype.buildStrategicReportFilename =
+  strategicReport.buildStrategicReportFilename;
+Game.prototype.downloadStrategicReport =
+  strategicReport.downloadStrategicReport;

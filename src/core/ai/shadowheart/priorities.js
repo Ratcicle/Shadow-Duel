@@ -26,6 +26,32 @@ const SHADOW_HEART_OFFENSIVE_PAYOFFS = [
   "The Shadow Heart",
 ];
 
+const SH = {
+  covenant: "Shadow-Heart Covenant",
+  cathedral: "Shadow-Heart Cathedral",
+  valley: "Darkness Valley",
+  poly: "Polymerization",
+  infusion: "Shadow-Heart Infusion",
+  voidMage: "Shadow-Heart Void Mage",
+  imp: "Shadow-Heart Imp",
+  gecko: "Shadow-Heart Gecko",
+  eel: "Shadow-Heart Abyssal Eel",
+  leviathan: "Shadow-Heart Leviathan",
+  scale: "Shadow-Heart Scale Dragon",
+  arctroth: "Shadow-Heart Demon Arctroth",
+  deathWyrm: "Shadow-Heart Death Wyrm",
+  griffin: "Shadow-Heart Griffin",
+  specter: "Shadow-Heart Specter",
+  coward: "Shadow-Heart Coward",
+  rage: "Shadow-Heart Rage",
+  battleHymn: "Shadow-Heart Battle Hymn",
+  demonDragon: "Shadow-Heart Demon Dragon",
+  warlord: "Shadow-Heart Warlord",
+};
+
+const SHADOW_HEART_STARTERS = [SH.voidMage, SH.imp, SH.eel, SH.gecko];
+const LOW_VALUE_DISCARDS = [SH.coward, SH.specter, SH.rage, SH.gecko];
+
 function cardCountByName(cards = []) {
   const counts = new Map();
   for (const card of cards) {
@@ -33,6 +59,401 @@ function cardCountByName(cards = []) {
     counts.set(card.name, (counts.get(card.name) || 0) + 1);
   }
   return counts;
+}
+
+function allCards(analysis, zones = ["hand", "field"]) {
+  return zones.flatMap((zone) => analysis?.[zone] || []);
+}
+
+function hasName(cards = [], name) {
+  return cards.some((card) => card?.name === name);
+}
+
+function countName(cards = [], name) {
+  return cards.filter((card) => card?.name === name).length;
+}
+
+function hasShadowHeartStarter(cards = []) {
+  return cards.some((card) => SHADOW_HEART_STARTERS.includes(card?.name));
+}
+
+function hasLevel8PlusShadowHeart(cards = [], { excludeScale = false } = {}) {
+  return cards.some(
+    (card) =>
+      card &&
+      card.cardKind === "monster" &&
+      isShadowHeartByName(card.name) &&
+      (card.level || 0) >= 8 &&
+      (!excludeScale || card.name !== SH.scale),
+  );
+}
+
+function hasUsefulImpTarget(cards = []) {
+  return cards.some(
+    (card) =>
+      card &&
+      card.cardKind === "monster" &&
+      isShadowHeartByName(card.name) &&
+      (card.level || 0) <= 4 &&
+      card.name !== SH.imp,
+  );
+}
+
+function hasOpponentPressure(analysis) {
+  const oppField = analysis?.oppField || [];
+  return (
+    oppField.length >= 2 ||
+    oppField.some((card) => !card?.isFacedown && (card?.atk || 0) >= 2200)
+  );
+}
+
+function getCandidateByName(candidates = [], names = []) {
+  for (const name of names) {
+    const match = candidates.find((card) => card?.name === name);
+    if (match) return match;
+  }
+  return null;
+}
+
+function getDemonDragonLevel8Target(candidates = [], analysis = {}) {
+  const pool = candidates.filter(
+    (card) =>
+      card &&
+      card.cardKind === "monster" &&
+      isShadowHeartByName(card.name) &&
+      (card.level || 0) >= 8 &&
+      card.name !== SH.scale,
+  );
+  if (pool.length === 0) return null;
+  const preferred = hasOpponentPressure(analysis)
+    ? [SH.arctroth, SH.deathWyrm]
+    : [SH.deathWyrm, SH.arctroth];
+  return getCandidateByName(pool, preferred) || pool[0];
+}
+
+export function shouldPreserveScaleForDemonLine(analysis) {
+  const cards = allCards(analysis);
+  const hasPoly = hasName(analysis?.hand || [], SH.poly);
+  const hasScale = hasName(cards, SH.scale);
+  const hasLevel8 = hasLevel8PlusShadowHeart(cards, { excludeScale: true });
+  const hasNearbySearch =
+    hasName(analysis?.hand || [], SH.covenant) && isCovenantLive(analysis);
+  const urgentBoard = hasOpponentPressure(analysis) || (analysis?.lp || 8000) <= 2500;
+
+  if (!hasScale || urgentBoard) return false;
+  if (hasPoly && hasLevel8) return false;
+  if (hasPoly && !hasLevel8) return true;
+  return hasNearbySearch;
+}
+
+export function chooseCovenantSearchTarget(candidates = [], analysis = {}) {
+  const hand = analysis?.hand || [];
+  const field = analysis?.field || [];
+  const current = [...hand, ...field];
+  const hasPoly = hasName(hand, SH.poly);
+  const hasScale = hasName(current, SH.scale);
+  const hasLevel8 = hasLevel8PlusShadowHeart(current, { excludeScale: true });
+
+  if (hasPoly && !hasScale) {
+    const scale = getCandidateByName(candidates, [SH.scale]);
+    if (scale) {
+      return { card: scale, reason: "complete_demon_dragon_scale" };
+    }
+  }
+
+  if (hasPoly && hasScale && !hasLevel8) {
+    const level8 = getDemonDragonLevel8Target(candidates, analysis);
+    if (level8) {
+      return { card: level8, reason: "complete_demon_dragon_level8" };
+    }
+  }
+
+  if (hasName(hand, SH.leviathan) && !hasName(current, SH.eel)) {
+    const eel = getCandidateByName(candidates, [SH.eel]);
+    if (eel) return { card: eel, reason: "enable_leviathan" };
+  }
+
+  if (hasName(hand, SH.imp) && !hasUsefulImpTarget(hand)) {
+    const wantsGecko =
+      hasPoly ||
+      hasScale ||
+      hasName(hand, SH.infusion) ||
+      !hasLevel8PlusShadowHeart(current, { excludeScale: true });
+    const target = getCandidateByName(
+      candidates,
+      wantsGecko ? [SH.gecko, SH.eel, SH.specter, SH.coward] : [SH.eel, SH.gecko],
+    );
+    if (target) return { card: target, reason: "enable_imp_line" };
+  }
+
+  if (!hasShadowHeartStarter(current)) {
+    const hasLineSpell = hand.some((card) =>
+      [SH.valley, SH.cathedral, SH.infusion, SH.poly].includes(card?.name),
+    );
+    const starter = getCandidateByName(
+      candidates,
+      hasLineSpell ? [SH.imp, SH.voidMage, SH.eel] : [SH.voidMage, SH.imp],
+    );
+    if (starter) return { card: starter, reason: "find_starter" };
+  }
+
+  const fallback = getCandidateByName(candidates, [
+    SH.voidMage,
+    SH.imp,
+    SH.eel,
+    SH.gecko,
+    SH.scale,
+  ]);
+  return fallback
+    ? { card: fallback, reason: "best_general_starter" }
+    : { card: candidates[0] || null, reason: "fallback" };
+}
+
+export function chooseVoidMageSearchTarget(candidates = [], analysis = {}) {
+  const cards = allCards(analysis);
+  const hand = analysis?.hand || [];
+  const graveyard = analysis?.graveyard || [];
+
+  if (!analysis?.fieldSpell) {
+    const valley = getCandidateByName(candidates, [SH.valley]);
+    if (valley) return { card: valley, reason: "establish_valley_engine" };
+  }
+
+  if (!hasName(cards, SH.cathedral)) {
+    const cathedral = getCandidateByName(candidates, [SH.cathedral]);
+    if (cathedral && !hasName(hand, SH.valley)) {
+      return { card: cathedral, reason: "early_cathedral_engine" };
+    }
+  }
+
+  if (
+    hasName(cards, SH.scale) &&
+    !hasName(hand, SH.rage) &&
+    candidates.some((card) => card?.name === SH.rage)
+  ) {
+    const rage = getCandidateByName(candidates, [SH.rage]);
+    return { card: rage, reason: "scale_finisher_setup" };
+  }
+
+  const hasInfusionTarget =
+    graveyard.some((card) => card?.cardKind === "monster") ||
+    hand.some((card) => [SH.scale, SH.arctroth, SH.deathWyrm, SH.gecko].includes(card?.name));
+  if (hasInfusionTarget && !hasName(hand, SH.infusion)) {
+    const infusion = getCandidateByName(candidates, [SH.infusion]);
+    if (infusion) return { card: infusion, reason: "infusion_starter_or_recovery" };
+  }
+
+  const fallback = getCandidateByName(candidates, [
+    SH.valley,
+    SH.cathedral,
+    SH.infusion,
+    SH.battleHymn,
+    SH.rage,
+  ]);
+  return fallback
+    ? { card: fallback, reason: "best_spell_line" }
+    : { card: candidates[0] || null, reason: "fallback" };
+}
+
+export function chooseGeckoSearchTarget(candidates = [], analysis = {}) {
+  const cards = allCards(analysis);
+  const hasPoly = hasName(analysis?.hand || [], SH.poly);
+  const hasScale = hasName(cards, SH.scale);
+  const hasLevel8 = hasLevel8PlusShadowHeart(cards, { excludeScale: true });
+
+  if (hasPoly && !hasScale) {
+    const scale = getCandidateByName(candidates, [SH.scale]);
+    if (scale) return { card: scale, reason: "gecko_find_scale" };
+  }
+
+  if ((hasPoly || hasScale) && !hasLevel8) {
+    const level8 = getDemonDragonLevel8Target(candidates, analysis);
+    if (level8) return { card: level8, reason: "gecko_find_level8" };
+  }
+
+  const target = getCandidateByName(candidates, [SH.scale, SH.arctroth, SH.deathWyrm]);
+  return target
+    ? { card: target, reason: "gecko_best_level8" }
+    : { card: candidates[0] || null, reason: "fallback" };
+}
+
+export function chooseImpSpecialTargetName(analysis = {}, candidates = []) {
+  const hand = analysis?.hand || [];
+  const hasPoly = hasName(hand, SH.poly);
+  const hasScale = hasName([...hand, ...(analysis?.field || [])], SH.scale);
+  const wantsLv8Search =
+    hasPoly ||
+    hasScale ||
+    hasName(hand, SH.infusion) ||
+    !hasLevel8PlusShadowHeart(hand, { excludeScale: true });
+
+  if (wantsLv8Search && candidates.some((card) => card?.name === SH.gecko)) {
+    return { name: SH.gecko, reason: "imp_into_gecko_search" };
+  }
+
+  if (
+    (hasName(hand, SH.leviathan) || (analysis?.oppField || []).length === 0) &&
+    candidates.some((card) => card?.name === SH.eel)
+  ) {
+    return { name: SH.eel, reason: "imp_into_eel_pressure" };
+  }
+
+  const fallback = getCandidateByName(candidates, [SH.specter, SH.coward, SH.gecko, SH.eel]);
+  return fallback
+    ? { name: fallback.name, reason: "imp_defensive_fodder" }
+    : { name: null, reason: "fallback" };
+}
+
+export function buildShadowHeartTargetPreferences(sourceCard, effect, analysis = {}) {
+  const targetPreferences = {};
+  const specialSummonPositions = { byName: {} };
+
+  if (sourceCard?.name === SH.imp || effect?.id === "shadow_heart_imp_on_summon") {
+    const candidates = (analysis?.hand || []).filter(
+      (card) =>
+        card &&
+        card.cardKind === "monster" &&
+        isShadowHeartByName(card.name) &&
+        (card.level || 0) <= 4 &&
+        card.name !== SH.imp,
+    );
+    const target = chooseImpSpecialTargetName(analysis, candidates);
+    targetPreferences.imp_special_from_hand = {
+      role: "named_preference",
+      purpose: "combo_extension",
+      preferredNames: target.name ? [target.name] : [],
+      reason: target.reason,
+    };
+    if ([SH.gecko, SH.eel].includes(target.name)) {
+      specialSummonPositions.byName[target.name] = "attack";
+    }
+  }
+
+  if (sourceCard?.name === SH.infusion || effect?.id === "shadow_heart_infusion") {
+    targetPreferences.infusion_discard = {
+      role: "cost",
+      intent: "cost",
+      purpose: "infusion_starter",
+    };
+    const bestRevive = chooseInfusionReviveTarget(analysis?.graveyard || [], analysis);
+    if (bestRevive?.name) {
+      specialSummonPositions.byName[bestRevive.name] =
+        bestRevive.position || "defense";
+    }
+  }
+
+  return {
+    targetPreferences,
+    specialSummonPositions,
+  };
+}
+
+function chooseInfusionReviveTarget(candidates = [], analysis = {}) {
+  const monsters = candidates.filter(
+    (card) => card?.cardKind === "monster" && isShadowHeartByName(card.name),
+  );
+  if (monsters.length === 0) return null;
+  const preferred = getCandidateByName(monsters, [
+    SH.scale,
+    SH.arctroth,
+    SH.deathWyrm,
+    SH.gecko,
+    SH.eel,
+  ]);
+  const card = preferred || monsters.slice().sort((a, b) => (b.atk || 0) - (a.atk || 0))[0];
+  const dependsOnImmediateDamage =
+    (analysis?.oppField || []).length === 0 && (analysis?.oppLp || 8000) <= (card?.atk || 0);
+  return {
+    name: card?.name || null,
+    position: dependsOnImmediateDamage ? "defense" : "attack",
+  };
+}
+
+export function rankShadowHeartSearchCandidates(cards = [], action = {}, ctx = {}) {
+  if (!Array.isArray(cards) || cards.length <= 1) return cards || [];
+  const player = ctx.player || ctx.strategy?.bot || {};
+  const opponent =
+    ctx.opponent || ctx.getOpponent?.(ctx.game || {}, player) || {};
+  const analysis =
+    typeof ctx.strategy?.analyzeGameState === "function"
+      ? ctx.strategy.analyzeGameState(ctx.game || { bot: player, player: opponent })
+      : {
+          hand: player.hand || [],
+          field: player.field || [],
+          graveyard: player.graveyard || [],
+          spellTrap: player.spellTrap || [],
+          fieldSpell: player.fieldSpell?.name || null,
+          oppField: opponent.field || [],
+          oppLp: opponent.lp || 8000,
+          lp: player.lp || 8000,
+        };
+  const sourceName = ctx.source?.name || ctx.ctx?.source?.name || action.sourceName || null;
+  let plan = null;
+
+  if (sourceName === SH.covenant) {
+    plan = chooseCovenantSearchTarget(cards, analysis);
+  } else if (sourceName === SH.voidMage) {
+    plan = chooseVoidMageSearchTarget(cards, analysis);
+  } else if (sourceName === SH.gecko) {
+    plan = chooseGeckoSearchTarget(cards, analysis);
+  }
+
+  const preferredName = plan?.card?.name || null;
+  if (preferredName && (player.debug || ctx.game?.devModeEnabled)) {
+    console.log(
+      `[ShadowHeartStrategy] ${sourceName || "Search"} target: ${preferredName} (${plan.reason})`,
+    );
+  }
+
+  const scoreCard = (card) => {
+    let score = CARD_KNOWLEDGE[card?.name]?.value || 0;
+    if (card?.name === preferredName) score += 100;
+    if (card?.name && (player.hand || []).some((handCard) => handCard?.name === card.name)) {
+      score -= 2;
+    }
+    if (card?.name === SH.covenant && !isCovenantLive(analysis)) score -= 40;
+    if (card?.name === SH.scale && shouldPreserveScaleForDemonLine(analysis)) score += 8;
+    return score;
+  };
+
+  return cards.slice().sort((a, b) => scoreCard(b) - scoreCard(a));
+}
+
+export function evaluateShadowHeartRecruitCandidate(candidates = [], context = {}) {
+  const cards = Array.isArray(candidates) ? candidates : [];
+  const player = context.player || context.strategy?.bot || {};
+  const opponent =
+    context.opponent || context.strategy?.getOpponent?.(context.game || {}, player) || {};
+  const analysis =
+    typeof context.strategy?.analyzeGameState === "function"
+      ? context.strategy.analyzeGameState(context.game || { bot: player, player: opponent })
+      : {
+          hand: player.hand || [],
+          field: player.field || [],
+          graveyard: player.graveyard || [],
+          oppField: opponent.field || [],
+          oppLp: opponent.lp || 8000,
+        };
+  const sourceName = context.source?.name || null;
+
+  const scoreCard = (card) => {
+    if (!card) return -999;
+    let score = CARD_KNOWLEDGE[card.name]?.value || (card.atk || 0) / 1000;
+    if (sourceName === SH.infusion) {
+      if ([SH.scale, SH.arctroth, SH.deathWyrm].includes(card.name)) score += 40;
+      if (card.name === SH.gecko && !hasLevel8PlusShadowHeart(analysis.hand, { excludeScale: true })) {
+        score += 30;
+      }
+      if (analysis?.phase === "main1" && card.cannotAttackThisTurn) score -= 3;
+    }
+    if (sourceName === SH.cathedral && card.name === SH.eel) score += 10;
+    return score;
+  };
+
+  const scores = cards
+    .map((card) => ({ card, score: scoreCard(card) }))
+    .sort((a, b) => b.score - a.score);
+  return { best: scores[0]?.card || null, scores };
 }
 
 export function isCovenantLive(analysis) {
@@ -289,7 +710,7 @@ export function shouldPlaySpell(card, analysis) {
           : "Shadow-Heart Scale Dragon";
       return {
         yes: true,
-        priority: 14,
+        priority: 17,
         reason: `Fusion: Demon Dragon (3000 ATK, destroy 2) com Scale Dragon + ${materialName}`,
       };
     }
@@ -298,6 +719,13 @@ export function shouldPlaySpell(card, analysis) {
     // Materiais: 2 monstros Shadow-Heart quaisquer.
     // Prioridade abaixo de Demon Dragon: se ambas viáveis, Demon Dragon vence.
     if (shMonsters.length >= 2) {
+      if (shouldPreserveScaleForDemonLine(analysis)) {
+        return {
+          yes: false,
+          reason:
+            "Preservar Scale Dragon para linha proxima de Demon Dragon em vez de Warlord cedo",
+        };
+      }
       const [m1, m2] = shMonsters;
       return {
         yes: true,
@@ -325,7 +753,7 @@ export function shouldPlaySpell(card, analysis) {
       analysis.field.some((c) => isShadowHeartByName(c.name)) ||
       shMonsters.length > 0
     ) {
-      return { yes: true, priority: 9, reason: "Vai buffar meus monstros" };
+      return { yes: true, priority: 10, reason: "Vai buffar meus monstros" };
     }
     return { yes: false, reason: "Sem monstros Shadow-Heart para buffar" };
   }
@@ -360,8 +788,45 @@ export function shouldPlaySpell(card, analysis) {
       return { yes: false, reason: "Preciso de 2 cartas para descartar" };
     }
     const shInGY = analysis.graveyard.filter((c) => c.cardKind === "monster");
+    const nonInfusionHand = analysis.hand.filter((c) => c.name !== SH.infusion);
+    const emergencyReviveCandidate = nonInfusionHand.find(
+      (c) =>
+        c?.cardKind === "monster" &&
+        isShadowHeartByName(c.name) &&
+        ([SH.scale, SH.arctroth, SH.deathWyrm, SH.gecko].includes(c.name) ||
+          (c.atk || 0) >= 1800),
+    );
+    const lowValueDiscard = nonInfusionHand.find(
+      (c) =>
+        LOW_VALUE_DISCARDS.includes(c?.name) ||
+        countName(nonInfusionHand, c?.name) > 1,
+    );
+    const hasBetterNormalLine =
+      hasName(analysis.hand, SH.voidMage) ||
+      hasName(analysis.hand, SH.imp) ||
+      hasName(analysis.hand, SH.eel) ||
+      hasName(analysis.hand, SH.valley) ||
+      hasName(analysis.hand, SH.cathedral);
+
+    if (
+      shInGY.length === 0 &&
+      emergencyReviveCandidate &&
+      lowValueDiscard &&
+      !hasBetterNormalLine
+    ) {
+      const damagePenalty =
+        analysis.phase !== "main2" &&
+        (analysis.oppField || []).length === 0 &&
+        (analysis.oppLp || 8000) <= (emergencyReviveCandidate.atk || 0);
+      return {
+        yes: true,
+        priority: damagePenalty ? 6 : 8,
+        reason: `Starter emergencial: descartar ${emergencyReviveCandidate.name} + ${lowValueDiscard.name} e reviver ${emergencyReviveCandidate.name}`,
+      };
+    }
+
     if (shInGY.length === 0) {
-      return { yes: false, reason: "Sem Shadow-Heart no GY para reviver" };
+      return { yes: false, reason: "Sem Shadow-Heart no GY e sem starter emergencial" };
     }
 
     // Avaliar valor das cartas na mão (usando CARD_KNOWLEDGE)
@@ -427,18 +892,43 @@ export function shouldPlaySpell(card, analysis) {
       };
     }
 
-    // Em T1-T2, SEMPRE ativar (priority 15 > Polymerization 12)
+    const searchPlan = chooseCovenantSearchTarget([], analysis);
+
+    // Em T1-T2, SEMPRE ativar antes de qualquer desenvolvimento de board
     // Garante buscar peças ANTES de fazer fusion
     if (isEarlyGame) {
       return {
         yes: true,
-        priority: 15,
+        priority: 24,
         reason: `T${turnCounter}: Buscar peça PRIMEIRO (setup ideal)`,
+      };
+    }
+
+    if (!isEarlyGame) {
+      return {
+        yes: true,
+        priority: 21,
+        reason: `Buscar peca chave antes de desenvolver board (${searchPlan.reason})`,
       };
     }
 
     // T3+: Priority normal (7), sem bloqueio por LP
     return { yes: true, priority: 7, reason: "Buscar peça chave do combo" };
+  }
+
+  // Shadow-Heart Cathedral - long-term engine; Covenant still outranks it.
+  if (name === "Shadow-Heart Cathedral") {
+    const alreadyActive =
+      analysis.spellTrap.some((c) => c?.name === SH.cathedral) ||
+      analysis.field.some((c) => c?.name === SH.cathedral);
+    if (alreadyActive) {
+      return { yes: false, reason: "Cathedral ja esta ativa" };
+    }
+    return {
+      yes: true,
+      priority: 15,
+      reason: "Engine cedo para acumular Judgment Counters",
+    };
   }
 
   // Shadow-Heart Battle Hymn - Buff em monstros Shadow-Heart
@@ -760,7 +1250,7 @@ export function shouldSummonMonster(card, analysis, tributeInfo, context = {}) {
       return {
         yes: true,
         position: shouldDefensivePosition ? "defense" : "attack",
-        priority: 9,
+        priority: 10,
         reason: "Extender para 2 corpos",
       };
     }
@@ -773,7 +1263,7 @@ export function shouldSummonMonster(card, analysis, tributeInfo, context = {}) {
     return {
       yes: true,
       position: "attack",
-      priority: 6,
+      priority: 4,
       reason: "Beater de 1500",
     };
   }
@@ -786,11 +1276,17 @@ export function shouldSummonMonster(card, analysis, tributeInfo, context = {}) {
         reason: `Requer ${tributeInfo.tributesNeeded} tributos (tenho ${analysis.field.length})`,
       };
     }
+    const hasLeviathanLine =
+      hasName(analysis.hand, SH.leviathan) ||
+      (analysis.oppField || []).length === 0 ||
+      (analysis.game?.turnCounter || 0) <= 2;
     return {
       yes: true,
       position: "attack",
-      priority: 8,
-      reason: "Boss 2600 ATK + burn damage",
+      priority: hasLeviathanLine ? 9 : 8,
+      reason: hasLeviathanLine
+        ? "Pressao e linha Eel -> Leviathan"
+        : "Boss 2600 ATK + burn damage",
     };
   }
 
@@ -836,15 +1332,15 @@ export function shouldSummonMonster(card, analysis, tributeInfo, context = {}) {
     if (hasGYTargets.length > 0) {
       return {
         yes: true,
-        position: "attack",
-        priority: 7,
+        position: shouldDefensivePosition ? "defense" : "attack",
+        priority: 5,
         reason: "Recursão: adiciona Shadow-Heart do GY à mão",
       };
     }
     return {
       yes: true,
-      position: "attack",
-      priority: 5,
+      position: "defense",
+      priority: 2,
       reason: "1800 ATK (setup futuro para recursão)",
     };
   }
@@ -873,7 +1369,7 @@ export function shouldSummonMonster(card, analysis, tributeInfo, context = {}) {
         // Se precisamos de defesa, invocamos em attack mesmo assim para buscar
         // O efeito de busca é mais importante que sobreviver
         position: "attack",
-        priority: 9,
+        priority: 13,
         reason: "Buscar spell-chave (Darkness Valley/Covenant/Shield)",
       };
     }
@@ -886,7 +1382,7 @@ export function shouldSummonMonster(card, analysis, tributeInfo, context = {}) {
         yes: shouldDefensivePosition,
         position: "defense",
         // REGRA DO JOGO: defense = sempre facedown
-        priority: shouldDefensivePosition ? 5 : 0,
+        priority: shouldDefensivePosition ? 12 : 0,
         reason: shouldDefensivePosition
           ? "Searcher em DEF (set)"
           : "Void Mage seria destruído",
@@ -896,7 +1392,7 @@ export function shouldSummonMonster(card, analysis, tributeInfo, context = {}) {
     return {
       yes: true,
       position: "attack",
-      priority: 7,
+      priority: 12,
       reason: "Searcher de spells + draw engine",
     };
   }
@@ -1043,11 +1539,18 @@ export function shouldSummonMonster(card, analysis, tributeInfo, context = {}) {
         reason: `Eel 1600 ATK vs oponente ${oppStrongestATK} ATK = perda de monstro + burn inútil`,
       };
     }
+    const hasLeviathanInHand = hasName(analysis.hand, SH.leviathan);
+    const pressureLine =
+      hasLeviathanInHand ||
+      (analysis.oppField || []).length === 0 ||
+      (analysis.game?.turnCounter || 0) <= 2;
     return {
       yes: true,
       position: "attack",
-      priority: 4,
-      reason: "Beater 1600 + burn",
+      priority: pressureLine ? 8 : 5,
+      reason: pressureLine
+        ? "Starter de pressao e ponte para Leviathan"
+        : "Beater 1600 + burn",
     };
   }
 
