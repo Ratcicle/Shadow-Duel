@@ -416,6 +416,8 @@ export async function activateSpellTrapEffect(
     source: card,
     player,
     opponent: this.game.getOpponent(player),
+    effect,
+    effectId: effect?.id || null,
     activationZone,
     activationContext: normalizedActivationContext,
     actionContext: normalizedActivationContext.actionContext || null,

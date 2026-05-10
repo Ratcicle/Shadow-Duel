@@ -16,3 +16,37 @@ export function buildStrategyAnalysis({ bot, opponent, game } = {}) {
     game,
   };
 }
+
+export function cardHasRelevantTriggerForSummonMethod(card, method) {
+  if (!card || !method) return false;
+  const normalizedMethod = String(method).toLowerCase();
+  const methodAliases =
+    normalizedMethod === "tribute"
+      ? new Set(["tribute"])
+      : new Set([normalizedMethod]);
+
+  return (card.effects || []).some((effect) => {
+    if (!effect) return false;
+
+    if (
+      effect.requireSelfWasSummonedBy &&
+      methodAliases.has(String(effect.requireSelfWasSummonedBy).toLowerCase())
+    ) {
+      return true;
+    }
+
+    if (
+      effect.timing === "on_event" &&
+      effect.event === "after_summon" &&
+      effect.requireSelfAsSummoned
+    ) {
+      const summonMethods = Array.isArray(effect.summonMethods)
+        ? effect.summonMethods.map((entry) => String(entry).toLowerCase())
+        : [];
+      if (summonMethods.length === 0) return true;
+      return summonMethods.some((entry) => methodAliases.has(entry));
+    }
+
+    return false;
+  });
+}

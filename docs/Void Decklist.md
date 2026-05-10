@@ -91,13 +91,13 @@ Fonte dos textos: `src/data/cards.js` (1x cada carta).
 
 ### Magias
 
-**Void Gravitational Pull (168)** — Contínua. OPT: devolva 1 monstro seu e 1 do oponente para a mão.
+**Void Gravitational Pull (168)** — Normal. Escolha 1 monstro "Void" face-up seu e 1 monstro do oponente; devolva os alvos para a mão. OPT por nome.
 
 **Sealing the Void (166)** — Normal. Escolha 1 monstro "Void" face-up seu; ATK/DEF tornam-se 0 e efeitos são negados até o fim do turno, depois ganhe 1 Invocação-Normal adicional. OPT por nome.
 
 **The Void (167)** — Campo. Se você não controla monstros: Invoque do Cemitério 1 monstro "Void" de Nível 4 ou menos, com efeitos negados (pos. escolha). OPT por nome.
 
-**Void Lost Throne (169)** — Normal. Destrua todos os monstros exceto 1 com maior ATK de cada lado (em empate, você escolhe quem fica). OPT por nome.
+**Void Lost Throne (169)** — Normal. Adicione 1 monstro "Void" com 1600 ou menos de ATK do Deck à mão; depois, se você não controla monstros, pode Invocar esse mesmo monstro por Invocação-Especial da mão. OPT por nome.
 
 ### Armadilhas
 

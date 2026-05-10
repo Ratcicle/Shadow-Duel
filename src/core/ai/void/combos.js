@@ -280,15 +280,12 @@ export const COMBO_DATABASE = [
     priority: 7,
   },
   {
-    name: "Lost Throne Reset",
-    description: "Board clear deixando apenas o mais forte de cada lado",
-    requires: [
-      "Void Lost Throne",
-      "Monstro forte próprio",
-      "Oponente com múltiplos",
-    ],
-    result: "Remove múltiplas ameaças mantendo seu boss",
-    priority: 8.5,
+    name: "Lost Throne Starter",
+    description:
+      "Campo vazio -> busca Void Hollow e pode Invocar da mao para abrir swarm",
+    requires: ["Void Lost Throne", "Campo vazio", "Void Hollow no deck"],
+    result: "Void Hollow no campo com trigger normal de Special Summon da mao",
+    priority: 8.8,
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -551,14 +548,23 @@ export function detectAvailableCombos(analysis) {
 
   // Lost Throne
   if (hasInHand(VOID_IDS.LOST_THRONE)) {
-    const oppFieldCount = analysis.oppFieldCount || 0;
-    const myStrongest = Math.max(...(field || []).map((m) => m?.atk || 0), 0);
-    const shouldUse = oppFieldCount >= 2 && myStrongest >= 2000;
+    const fieldEmpty = (field || []).length === 0;
+    const deck = analysis.deck || [];
+    const searchableVoid = deck.some(
+      (c) => isVoid(c) && c?.cardKind === "monster" && (c.atk || 0) <= 1600,
+    );
+    const hasHollowTarget = deck.some((c) => c?.id === VOID_IDS.HOLLOW);
+    const shouldUse = fieldEmpty && searchableVoid;
     detected.push({
-      combo: COMBO_DATABASE.find((c) => c.name === "Lost Throne Reset"),
+      combo: COMBO_DATABASE.find((c) => c.name === "Lost Throne Starter"),
       ready: shouldUse,
-      missing: shouldUse ? [] : ["Condições não ideais"],
-      priority: shouldUse ? 8.5 : 2,
+      missing: shouldUse
+        ? []
+        : [
+            fieldEmpty ? "Void <=1600 ATK no deck" : "Campo vazio",
+            hasHollowTarget ? null : "Void Hollow no deck",
+          ].filter(Boolean),
+      priority: shouldUse ? (hasHollowTarget ? 8.8 : 7.2) : 2,
     });
   }
 

@@ -107,6 +107,9 @@ export async function handleTriggeredEffect(
   ctx,
   selections = null
 ) {
+  ctx.effect = ctx.effect || effect;
+  ctx.effectId = ctx.effectId || effect?.id || null;
+
   const targetResult = this.resolveTargets(
     effect.targets || [],
     ctx,

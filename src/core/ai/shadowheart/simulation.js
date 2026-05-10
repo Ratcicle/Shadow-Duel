@@ -4,7 +4,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { isShadowHeart } from "./knowledge.js";
-import { selectBestTributes, getTributeRequirementFor } from "./priorities.js";
+import {
+  selectBestTributes,
+  getTributeRequirementFor,
+  chooseCathedralSummonTarget,
+} from "./priorities.js";
 
 /**
  * Simula uma ação de main phase no estado clonado.
@@ -139,6 +143,59 @@ export function simulateMainPhaseAction(state, action, placeSpellCard) {
       target.cannotAttackThisTurn = newPosition === "defense";
       break;
     }
+    case "spellTrapEffect": {
+      const player = state.bot;
+      const zoneIndex = Number.isInteger(action.zoneIndex)
+        ? action.zoneIndex
+        : action.index;
+      const card = player.spellTrap?.[zoneIndex];
+      if (!card || card.isFacedown) break;
+
+      if (card.name === "Shadow-Heart Cathedral") {
+        if ((player.field || []).length >= 5) break;
+        const counterCount = action.cathedralPlan?.counterCount || getCounterCount(card);
+        if (counterCount <= 0) break;
+        const maxAtk = counterCount * 500;
+        const candidates = (player.deck || []).filter(
+          (candidate) =>
+            candidate &&
+            candidate.cardKind === "monster" &&
+            isShadowHeart(candidate) &&
+            (candidate.atk || 0) <= maxAtk,
+        );
+        const targetName = action.cathedralPlan?.targetName || null;
+        const chosen =
+          candidates.find((candidate) => candidate.name === targetName) ||
+          chooseCathedralSummonTarget(candidates, {
+            ...state,
+            hand: player.hand || [],
+            field: player.field || [],
+            spellTrap: player.spellTrap || [],
+            graveyard: player.graveyard || [],
+            deck: player.deck || [],
+            oppField: state.player?.field || [],
+            oppLp: state.player?.lp || 8000,
+          }).card;
+        if (!chosen) break;
+
+        const deckIndex = player.deck.indexOf(chosen);
+        if (deckIndex >= 0) player.deck.splice(deckIndex, 1);
+        const summoned = { ...chosen };
+        summoned.position = "attack";
+        summoned.isFacedown = false;
+        summoned.hasAttacked = false;
+        summoned.attacksUsedThisTurn = 0;
+        summoned.cannotAttackThisTurn = false;
+        summoned.lastSummonMethod = "special";
+        summoned.lastSummonedFromZone = "deck";
+        summoned.sourceCard = "Shadow-Heart Cathedral";
+        player.field.push(summoned);
+
+        player.spellTrap.splice(zoneIndex, 1);
+        player.graveyard.push(card);
+      }
+      break;
+    }
     case "fieldEffect": {
       const player = state.bot;
       if (player.fieldSpell?.name === "Darkness Valley") {
@@ -185,6 +242,16 @@ export function simulateMainPhaseAction(state, action, placeSpellCard) {
   }
 
   return state;
+}
+
+function getCounterCount(card, counterType = "judgment_marker") {
+  if (!card) return 0;
+  if (typeof card.getCounter === "function") return card.getCounter(counterType) || 0;
+  if (card.counters instanceof Map) return card.counters.get(counterType) || 0;
+  if (card.counters && typeof card.counters === "object") {
+    return card.counters[counterType] || 0;
+  }
+  return 0;
 }
 
 /**

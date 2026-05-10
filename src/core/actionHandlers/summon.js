@@ -319,13 +319,11 @@ export async function handleSpecialSummonFromZone(
   // Helper: Escolhe carta usando estratégia do bot se disponível
   const smartBotSelect = (cards) => {
     // Tentar usar estratégia específica do bot se existir
-    const botPlayer = game?.bot;
-    const strategy = botPlayer?.strategy;
+    const strategy = player?.strategy;
 
     if (
       strategy &&
-      typeof strategy.evaluateRecruitCandidate === "function" &&
-      player === botPlayer
+      typeof strategy.evaluateRecruitCandidate === "function"
     ) {
       const evaluation = strategy.evaluateRecruitCandidate(cards, {
         game,
@@ -415,13 +413,11 @@ export async function handleSpecialSummonFromZone(
 
   // Helper para multi-select inteligente
   const smartBotSelectMulti = (cards, max) => {
-    const botPlayer = game?.bot;
-    const strategy = botPlayer?.strategy;
+    const strategy = player?.strategy;
 
     if (
       strategy &&
-      typeof strategy.evaluateRecruitCandidate === "function" &&
-      player === botPlayer
+      typeof strategy.evaluateRecruitCandidate === "function"
     ) {
       const evaluation = strategy.evaluateRecruitCandidate(cards, {
         game,
@@ -1654,6 +1650,7 @@ export async function handleSpecialSummonFromDeckWithCounterLimit(
 
   if (!player || !source || !game) return false;
 
+  const effectId = action.effectId || ctx.effectId || ctx.effect?.id || null;
   const counterType = action.counterType || "judgment_marker";
   const counterMultiplier = action.counterMultiplier || 500;
   const filters = { ...(action.filters || {}) };
@@ -1702,11 +1699,20 @@ export async function handleSpecialSummonFromDeckWithCounterLimit(
     return false;
   }
 
-  // AI: auto-select best card (highest ATK)
+  // AI: auto-select best card. Prefer archetype strategy when available.
   if (isAI(player)) {
-    const chosen = candidates.reduce((best, card) =>
-      card.atk > best.atk ? card : best,
-    );
+    const evaluation = player.strategy?.evaluateRecruitCandidate?.(candidates, {
+      game,
+      player,
+      source,
+    });
+    const strategicChoice =
+      evaluation?.best && candidates.includes(evaluation.best)
+        ? evaluation.best
+        : null;
+    const chosen =
+      strategicChoice ||
+      candidates.reduce((best, card) => (card.atk > best.atk ? card : best));
 
     return await performSummonFromDeck(
       chosen,
@@ -1715,6 +1721,7 @@ export async function handleSpecialSummonFromDeckWithCounterLimit(
       action,
       engine,
       source,
+      effectId,
     );
   }
 
@@ -1734,6 +1741,7 @@ export async function handleSpecialSummonFromDeckWithCounterLimit(
         action,
         engine,
         source,
+        effectId,
       );
 
       resolve(result);
@@ -1774,6 +1782,7 @@ async function performSummonFromDeck(
   action,
   engine,
   source,
+  effectId = null,
 ) {
   const game = engine.game;
 
@@ -1807,6 +1816,9 @@ async function performSummonFromDeck(
       position: summonPosition,
       isFacedown: false,
       resetAttackFlags: true,
+      sourceCard: source,
+      source,
+      effectId: effectId || action.effectId || null,
     });
 
     if (moveResult?.success === false) {
@@ -1845,6 +1857,9 @@ async function performSummonFromDeck(
       player: player,
       method: "special",
       fromZone: "deck",
+      sourceCard: source,
+      source,
+      effectId: effectId || action.effectId || null,
     });
   }
 
@@ -1859,6 +1874,10 @@ async function performSummonFromDeck(
       if (typeof game.moveCard === "function") {
         await game.moveCard(source, player, "graveyard", {
           fromZone: sourceZone,
+          sourceCard: source,
+          source,
+          effectId: effectId || action.effectId || null,
+          reason: "effect_resolution",
         });
       } else {
         const sourceIdx = sourceZone.indexOf(source);
@@ -1871,6 +1890,9 @@ async function performSummonFromDeck(
             card: source,
             fromZone: sourceZone,
             player: player,
+            sourceCard: source,
+            source,
+            effectId: effectId || action.effectId || null,
           });
         }
       }

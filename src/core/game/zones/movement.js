@@ -1178,6 +1178,10 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
       opponent: otherPlayer,
       method: summonMethod,
       fromZone,
+      position: options.position || card.position || null,
+      sourceCard: options.sourceCard || options.source || null,
+      source: options.source || options.sourceCard || null,
+      effectId: options.effectId || null,
     });
   }
 

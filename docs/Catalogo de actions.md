@@ -4,7 +4,7 @@
 
 Este catalogo descreve o contrato declarativo de cada `action.type` registrado no Shadow Duel. O runtime continua vindo de `src/core/actionHandlers/wiring.js`; este documento serve para criar cartas, revisar handlers e validar o banco de cartas.
 
-Total de actions catalogadas: 67.
+Total de actions catalogadas: 77.
 
 ## Recursos
 
@@ -30,6 +30,10 @@ Adds selected cards from a zone to hand.
 | `archetype` | nao | string |  |
 | `cardKind` | nao | stringOrArray |  |
 | `cardName` | nao | string |  |
+| `minAtk` | nao | number |  |
+| `maxAtk` | nao | number |  |
+| `minDef` | nao | number |  |
+| `maxDef` | nao | number |  |
 | `minLevel` | nao | number |  |
 | `maxLevel` | nao | number |  |
 | `requireSource` | nao | boolean |  |
@@ -78,6 +82,40 @@ Deals LP damage.
   "type": "damage",
   "player": "opponent",
   "amount": 500
+}
+```
+
+**Notas**
+
+_Sem notas._
+
+### `damage_from_destroyed_atk`
+
+Deals LP damage based on the destroyed monster's ATK.
+
+- Handler: `handleDamageFromDestroyedAtk`
+- Target: `none`
+- Selecao: `none`
+- Mutacoes: lp
+- Eventos emitidos: nenhum
+- Atualiza board: sim
+- Preview: `notNeeded`
+
+| Campo | Obrigatorio | Contrato | Descricao |
+| --- | --- | --- | --- |
+| `fraction` | nao | number |  |
+| `multiplier` | nao | number |  |
+| `player` | nao | enum: self, opponent | Perspective for the action: "self" or "opponent". |
+| `useBaseAtk` | nao | boolean |  |
+
+**Exemplos**
+
+```json
+{
+  "type": "damage_from_destroyed_atk",
+  "player": "opponent",
+  "fraction": 0.5,
+  "useBaseAtk": true
 }
 ```
 
@@ -304,6 +342,37 @@ Heals for each field card matching filters.
 
 _Sem notas._
 
+### `heal_per_opponent_cards_and_hand`
+
+Heals for each card the opponent controls plus each card in their hand.
+
+- Handler: `handleHealPerOpponentCardsAndHand`
+- Target: `none`
+- Selecao: `none`
+- Mutacoes: lp
+- Eventos emitidos: nenhum
+- Atualiza board: sim
+- Preview: `notNeeded`
+
+| Campo | Obrigatorio | Contrato | Descricao |
+| --- | --- | --- | --- |
+| `amountPerCard` | sim | number |  |
+| `player` | nao | enum: self, opponent | Perspective for the action: "self" or "opponent". |
+
+**Exemplos**
+
+```json
+{
+  "type": "heal_per_opponent_cards_and_hand",
+  "player": "self",
+  "amountPerCard": 200
+}
+```
+
+**Notas**
+
+_Sem notas._
+
 ### `pay_lp`
 
 Pays LP as a cost.
@@ -368,6 +437,74 @@ Searches the deck and adds a card to hand.
     "min": 1,
     "max": 1
   }
+}
+```
+
+**Notas**
+
+_Sem notas._
+
+### `search_then_optional_special_summon_from_hand`
+
+Searches a card to hand, then optionally Special Summons that same card from hand if a condition is met.
+
+- Handler: `handleSearchThenOptionalSpecialSummonFromHand`
+- Target: `none`
+- Selecao: `dynamic`
+- Mutacoes: deck, hand, field
+- Eventos emitidos: cards_added_to_hand, after_summon
+- Atualiza board: sim
+- Preview: `covered`
+
+| Campo | Obrigatorio | Contrato | Descricao |
+| --- | --- | --- | --- |
+| `zone` | nao | zone; valores: deck, hand, field, graveyard, spellTrap, fieldSpell, banish, banished | Source zone used by the action. |
+| `filters` | nao | object | Card filter object evaluated by the handler. |
+| `count` | nao | object | Selection count object, usually { min, max }. |
+| `promptPlayer` | nao | boolean |  |
+| `player` | nao | enum: self, opponent | Perspective for the action: "self" or "opponent". |
+| `archetype` | nao | string |  |
+| `cardKind` | nao | stringOrArray |  |
+| `cardName` | nao | string |  |
+| `minAtk` | nao | number |  |
+| `maxAtk` | nao | number |  |
+| `minDef` | nao | number |  |
+| `maxDef` | nao | number |  |
+| `minLevel` | nao | number |  |
+| `maxLevel` | nao | number |  |
+| `requireSource` | nao | boolean |  |
+| `cardId` | nao | number |  |
+| `condition` | nao | object |  |
+| `summonCondition` | nao | object |  |
+| `optional` | nao | boolean |  |
+| `position` | nao | enum: attack, defense, choice | Battle position: "attack", "defense", or "choice". |
+| `cannotAttackThisTurn` | nao | boolean |  |
+| `restrictAttackThisTurn` | nao | boolean |  |
+| `promptMessage` | nao | string |  |
+| `promptTitle` | nao | string |  |
+| `confirmLabel` | nao | string |  |
+| `cancelLabel` | nao | string |  |
+
+**Exemplos**
+
+```json
+{
+  "type": "search_then_optional_special_summon_from_hand",
+  "zone": "deck",
+  "filters": {
+    "archetype": "Void",
+    "cardKind": "monster",
+    "maxAtk": 1600
+  },
+  "count": {
+    "min": 1,
+    "max": 1
+  },
+  "summonCondition": {
+    "type": "empty_field"
+  },
+  "optional": true,
+  "position": "choice"
 }
 ```
 
@@ -456,6 +593,8 @@ Moves target cards to another zone.
 | `player` | nao | enum: self, opponent | Perspective for the action: "self" or "opponent". |
 | `isFacedown` | nao | boolean |  |
 | `resetAttackFlags` | nao | boolean |  |
+| `allowExtraDeckMonsterToHand` | nao | boolean |  |
+| `allowExtraDeckMonsterToHandIf` | nao | object | Optional condition that lets an Extra Deck monster pass through hand instead of redirecting to Extra Deck. |
 
 **Exemplos**
 
@@ -496,6 +635,32 @@ Returns target cards to hand.
 {
   "type": "return_to_hand",
   "targetRef": "returning"
+}
+```
+
+**Notas**
+
+_Sem notas._
+
+### `shuffle_opponent_field_to_deck`
+
+Shuffles all cards the opponent controls into their Deck.
+
+- Handler: `handleShuffleOpponentFieldToDeck`
+- Target: `none`
+- Selecao: `none`
+- Mutacoes: field, spellTrap, fieldSpell, deck
+- Eventos emitidos: nenhum
+- Atualiza board: sim
+- Preview: `notNeeded`
+
+_Sem campos alem de `type`._
+
+**Exemplos**
+
+```json
+{
+  "type": "shuffle_opponent_field_to_deck"
 }
 ```
 
@@ -696,6 +861,39 @@ _Sem campos alem de `type`._
 
 _Sem notas._
 
+### `schedule_return_from_banished`
+
+Schedules a banished card to return to the field at a future phase (default: end of next turn).
+
+- Handler: `handleScheduleReturnFromBanished`
+- Target: `none`
+- Selecao: `none`
+- Mutacoes: delayedActions
+- Eventos emitidos: nenhum
+- Atualiza board: sim
+- Preview: `missing`
+
+| Campo | Obrigatorio | Contrato | Descricao |
+| --- | --- | --- | --- |
+| `cardRef` | nao | string |  |
+| `returnPhase` | nao | string |  |
+| `delayTurns` | nao | number |  |
+
+**Exemplos**
+
+```json
+{
+  "type": "schedule_return_from_banished",
+  "cardRef": "self",
+  "delayTurns": 1,
+  "returnPhase": "end"
+}
+```
+
+**Notas**
+
+_Sem notas._
+
 ### `special_summon_from_deck_with_counter_limit`
 
 Special Summons from deck using source counters as an ATK limit.
@@ -819,6 +1017,11 @@ Special Summons cards from a configured zone.
 | `count` | nao | object | Selection count object, usually { min, max }. |
 | `archetype` | nao | string |  |
 | `cardName` | nao | string |  |
+| `minAtk` | nao | number |  |
+| `maxAtk` | nao | number |  |
+| `minDef` | nao | number |  |
+| `maxDef` | nao | number |  |
+| `minLevel` | nao | number |  |
 | `maxLevel` | nao | number |  |
 | `position` | nao | enum: attack, defense, choice | Battle position: "attack", "defense", or "choice". |
 | `promptPlayer` | nao | boolean |  |
@@ -830,6 +1033,8 @@ Special Summons cards from a configured zone.
 | `oncePerTurnName` | nao | string |  |
 | `setAtkToZeroAfterSummon` | nao | boolean |  |
 | `setDefToZeroAfterSummon` | nao | boolean |  |
+| `atkBoostAfterSummon` | nao | number |  |
+| `defBoostAfterSummon` | nao | number |  |
 
 **Exemplos**
 
@@ -975,6 +1180,37 @@ Banishes target cards or context cards.
   "type": "banish",
   "targetRef": "self",
   "fromZone": "graveyard"
+}
+```
+
+**Notas**
+
+_Sem notas._
+
+### `banish_all_graveyard_and_burn`
+
+Banishes all cards in the controller's graveyard, then deals damage per card banished.
+
+- Handler: `handleBanishAllGraveyardAndBurn`
+- Target: `none`
+- Selecao: `none`
+- Mutacoes: graveyard, banished, lp
+- Eventos emitidos: nenhum
+- Atualiza board: sim
+- Preview: `notNeeded`
+
+| Campo | Obrigatorio | Contrato | Descricao |
+| --- | --- | --- | --- |
+| `damagePerCard` | nao | number; min: 0 | Numeric amount. |
+| `player` | nao | enum: self, opponent | Perspective for the action: "self" or "opponent". |
+
+**Exemplos**
+
+```json
+{
+  "type": "banish_all_graveyard_and_burn",
+  "damagePerCard": 500,
+  "player": "opponent"
 }
 ```
 
@@ -1205,6 +1441,7 @@ Destroys selected cards from one or more zones.
 | --- | --- | --- | --- |
 | `zones` | nao | array |  |
 | `cardKind` | nao | stringOrArray |  |
+| `minTargets` | nao | number |  |
 | `maxTargets` | nao | number |  |
 
 **Exemplos**
@@ -1377,6 +1614,35 @@ Banishes a card and applies a buff based on the banished card.
 {
   "type": "banish_and_buff",
   "targetRef": "tech_void_banish_target"
+}
+```
+
+**Notas**
+
+_Sem notas._
+
+### `buff_atk_by_lp_gained_this_turn`
+
+Temporarily boosts ATK by the player's LP gained this turn.
+
+- Handler: `handleBuffAtkByLpGainedThisTurn`
+- Target: `optional`
+- Selecao: `usesTargets`
+- Mutacoes: stats
+- Eventos emitidos: nenhum
+- Atualiza board: sim
+- Preview: `notNeeded`
+
+| Campo | Obrigatorio | Contrato | Descricao |
+| --- | --- | --- | --- |
+| `targetRef` | nao | string | References an effect target id or a context target such as self. |
+
+**Exemplos**
+
+```json
+{
+  "type": "buff_atk_by_lp_gained_this_turn",
+  "targetRef": "self"
 }
 ```
 
@@ -1613,6 +1879,42 @@ Temporarily modifies stats using factors.
 
 _Sem notas._
 
+### `modify_stats_temp_then_destroy_if_zeroed`
+
+Temporarily modifies ATK and/or DEF, then destroys targets whose checked stat was reduced to 0 by this action.
+
+- Handler: `handleModifyStatsTempThenDestroyIfZeroed`
+- Target: `required`
+- Selecao: `usesTargets`
+- Mutacoes: stats, field, graveyard
+- Eventos emitidos: stat_buff_applied, before_destroy, card_to_grave
+- Atualiza board: sim
+- Preview: `notNeeded`
+
+| Campo | Obrigatorio | Contrato | Descricao |
+| --- | --- | --- | --- |
+| `targetRef` | sim | string | References an effect target id or a context target such as self. |
+| `atkChange` | nao | number |  |
+| `defChange` | nao | number |  |
+| `destroyIfAtkZeroedByThisEffect` | nao | boolean |  |
+| `destroyIfDefZeroedByThisEffect` | nao | boolean |  |
+| `permanent` | nao | boolean |  |
+
+**Exemplos**
+
+```json
+{
+  "type": "modify_stats_temp_then_destroy_if_zeroed",
+  "targetRef": "purge_target_monster",
+  "atkChange": -1000,
+  "destroyIfAtkZeroedByThisEffect": true
+}
+```
+
+**Notas**
+
+_Sem notas._
+
 ### `permanent_buff_named`
 
 Applies a named persistent buff.
@@ -1643,6 +1945,32 @@ Applies a named persistent buff.
   "targetRef": "self",
   "sourceName": "Darkness Valley",
   "atkBoost": 300
+}
+```
+
+**Notas**
+
+_Sem notas._
+
+### `reduce_hand_monster_levels`
+
+Reduces the Level of all monsters in the player's hand.
+
+- Handler: `handleReduceHandMonsterLevels`
+- Target: `none`
+- Selecao: `none`
+- Mutacoes: stats
+- Eventos emitidos: nenhum
+- Atualiza board: sim
+- Preview: `notNeeded`
+
+_Sem campos alem de `type`._
+
+**Exemplos**
+
+```json
+{
+  "type": "reduce_hand_monster_levels"
 }
 ```
 
@@ -1973,6 +2301,32 @@ _Sem campos alem de `type`._
 ```json
 {
   "type": "negate_attack"
+}
+```
+
+**Notas**
+
+_Sem notas._
+
+### `negate_summon_or_activation_and_destroy`
+
+Negates the current summon attempt or activation context, then destroys that card.
+
+- Handler: `handleNegateSummonOrActivationAndDestroy`
+- Target: `none`
+- Selecao: `none`
+- Mutacoes: chain, field, graveyard
+- Eventos emitidos: card_to_grave
+- Atualiza board: sim
+- Preview: `notNeeded`
+
+_Sem campos alem de `type`._
+
+**Exemplos**
+
+```json
+{
+  "type": "negate_summon_or_activation_and_destroy"
 }
 ```
 

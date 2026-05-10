@@ -154,9 +154,15 @@ export function checkActionPreviewRequirements(actions, ctx) {
       }
     }
 
-    if (action.type === "search_any" || action.type === "add_from_zone_to_hand") {
+    if (
+      action.type === "search_any" ||
+      action.type === "add_from_zone_to_hand" ||
+      action.type === "search_then_optional_special_summon_from_hand"
+    ) {
       const inferredSearch =
-        action.type === "search_any" || action.mode === "search_any";
+        action.type === "search_any" ||
+        action.type === "search_then_optional_special_summon_from_hand" ||
+        action.mode === "search_any";
       const sourceZone = action.zone || (inferredSearch ? "deck" : "graveyard");
       const zone = player[sourceZone] || [];
       const baseFilters = action.filters || {};
@@ -170,6 +176,12 @@ export function checkActionPreviewRequirements(actions, ctx) {
         }
         if (action.cardName && !filters.name) {
           filters.name = action.cardName;
+        }
+        if (Number.isFinite(action.minAtk) && filters.minAtk == null) {
+          filters.minAtk = action.minAtk;
+        }
+        if (Number.isFinite(action.maxAtk) && filters.maxAtk == null) {
+          filters.maxAtk = action.maxAtk;
         }
       }
       const count = action.count || { min: 1, max: 1 };

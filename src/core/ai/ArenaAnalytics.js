@@ -34,6 +34,7 @@ const TRACKED_EVENTS = new Set([
   "position_chosen",
   "position_change",
   "stat_buff_applied",
+  "counter_changed",
   "damage_inflicted",
   "lp_change",
 ]);
@@ -1904,6 +1905,8 @@ export class DuelTracker {
       this.recordPositionChange(payload, meta);
     } else if (eventName === "stat_buff_applied") {
       this.recordStatBuff(payload, meta);
+    } else if (eventName === "counter_changed") {
+      this.recordCounterEvent(payload, meta);
     } else if (eventName === "damage_inflicted" || eventName === "lp_change") {
       this.recordLpEvent(eventName, payload, meta);
     }
@@ -2197,6 +2200,25 @@ export class DuelTracker {
         payload.atkChange || payload.defChange
           ? `${payload.atkChange || 0}/${payload.defChange || 0}`
           : null,
+    });
+  }
+
+  recordCounterEvent(payload = {}, meta = {}) {
+    const seat = playerSeat(payload.player || payload.owner || payload.sourcePlayer);
+    const name = cardName(payload.card || payload.target || payload.source);
+    if (!this.seats[seat] || !name) return;
+
+    this.pushEvent({
+      t: payload.turn || meta.turn,
+      seat,
+      type: "counter",
+      card: name,
+      sourceCard: sourceName(payload),
+      effectId: effectId(payload),
+      counterType: payload.counterType || null,
+      amount: payload.amount ?? null,
+      action: payload.action || payload.change || null,
+      result: payload.result ?? payload.after ?? null,
     });
   }
 

@@ -310,11 +310,11 @@
     },
     "168": {
       "name": "Atração Gravitacional do Vazio",
-      "description": "Uma vez por turno: você pode escolher 1 monstro \"void\" com a face para cima que você controla e 1 monstro que seu oponente controla; devolva os alvos para a mão."
+      "description": "Escolha 1 monstro 'Vazio' com a face para cima que você controla e 1 monstro que seu oponente controla; devolva os alvos para a mão. Você só pode ativar 1 'Atração Gravitacional do Vazio' por turno."
     },
     "169": {
       "name": "Trono Perdido do Vazio",
-      "description": "Destrua o máximo de monstros no campo possível, exceto 1 monstro com o maior ATK de cada lado do campo (em caso de empate, você escolhe 1 para permanecer em cada lado). Você só pode ativar 1 'Trono Perdido do Vazio' por turno."
+      "description": "Adicione 1 monstro 'Vazio' com 1600 ou menos de ATK do seu Deck à sua mão. Depois, se você não controlar monstros, você pode Invocar esse monstro por Invocação-Especial da sua mão. Você só pode ativar 1 'Trono Perdido do Vazio' por turno."
     },
     "170": {
       "name": "Dimensão Espelho do Vazio",

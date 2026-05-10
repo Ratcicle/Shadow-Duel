@@ -61,6 +61,7 @@ export { handleNegateSummonOrActivationAndDestroy } from "./negation.js";
 export {
   handlePayLP,
   handleAddFromZoneToHand,
+  handleSearchThenOptionalSpecialSummonFromHand,
   handleDamageFromDestroyedAtk,
   handleHealFromDestroyedAtk,
   handleHealFromDestroyedLevel,

@@ -17,8 +17,8 @@ export const VOID_CARD_KNOWLEDGE = {
   171: { role: "ascension_boss", tags: ["swarm"] },
   166: { role: "tempo", tags: ["extra_normal"] },
   167: { role: "field_spell", tags: ["revive"] },
-  168: { role: "tempo", tags: ["bounce"] },
-  169: { role: "board_clear", tags: ["reset"] },
+  168: { role: "removal", tags: ["bounce", "tempo"] },
+  169: { role: "starter", tags: ["search", "recovery", "hollow"] },
   170: { role: "trap", tags: ["response"] },
 };
 

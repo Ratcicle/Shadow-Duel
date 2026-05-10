@@ -155,7 +155,7 @@ export default class Bot extends Player {
   getVoidDeck() {
     return [
       151, 151, 151, 154, 154, 154, 155, 152, 152, 153, 156, 158, 159, 160, 161,
-      161, 162, 162, 164, 13, 13, 166, 167, 168, 169, 169, 170,
+      161, 162, 162, 164, 172, 172, 13, 13, 166, 167, 168, 169, 169, 170,
     ];
   }
 
@@ -228,7 +228,8 @@ export default class Bot extends Player {
       157, // Void Hollow King (fusion)
       163, // Void Berserker (fusion)
       165, // Void Hydra Titan (fusion)
-      171, // Void Cosmic Walker (ascension)
+      171, // Void Cosmic Walker (ascension of Void Walker)
+      173, // Malicious Demon of the Void (ascension of Thousand-Arms of the Void)
     ];
   }
 

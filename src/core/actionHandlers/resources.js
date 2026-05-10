@@ -6,7 +6,12 @@
  */
 
 import { isAI } from "../Player.js";
-import { getUI, collectZoneCandidates, selectCardsFromZone } from "./shared.js";
+import {
+  getUI,
+  collectZoneCandidates,
+  selectCardsFromZone,
+  summonFromHandCore,
+} from "./shared.js";
 
 /**
  * Generic handler for paying Life Points as a cost
@@ -310,6 +315,275 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
 
   const result = finalizeSelection(selection.selected || []);
   return result;
+}
+
+/**
+ * Search a card, add it to hand, then optionally Special Summon that same card.
+ *
+ * Action properties:
+ * - zone: source zone (default: "deck")
+ * - filters: card filters for the search
+ * - count: currently resolves the first selected card, default { min: 1, max: 1 }
+ * - summonCondition: { type: "empty_field" } or omitted
+ * - optional: whether the Special Summon can be declined (default: true)
+ * - position: "attack" | "defense" | "choice"
+ */
+export async function handleSearchThenOptionalSpecialSummonFromHand(
+  action,
+  ctx,
+  targets,
+  engine,
+) {
+  const { player, source } = ctx;
+  const game = engine.game;
+  const promptPlayer = action.promptPlayer !== false && !isAI(player);
+
+  if (!player || !game) return false;
+
+  const sourceZone = action.zone || "deck";
+  const zone = player[sourceZone];
+
+  if (!Array.isArray(zone) || zone.length === 0) {
+    getUI(game)?.log(`No cards in ${sourceZone}.`);
+    return false;
+  }
+
+  const filters = buildSearchFilters(action);
+  const candidates = collectZoneCandidates(zone, filters, {
+    source,
+    extraFilter: (card) => cardMatchesSearchAction(card, action),
+  });
+
+  if (candidates.length === 0) {
+    getUI(game)?.log(`No valid cards in ${sourceZone} matching filters.`);
+    return false;
+  }
+
+  const count = action.count || { min: 1, max: 1 };
+  const requestedMax = Number.isFinite(count.max) ? count.max : 1;
+  const maxSelect = Math.min(requestedMax, 1, candidates.length);
+  const minSelect = Math.max(count.min ?? 1, 0);
+
+  if (maxSelect <= 0 || minSelect > maxSelect) {
+    getUI(game)?.log("No cards available to add.");
+    return false;
+  }
+
+  const selection = await selectCardsFromZone({
+    game,
+    player,
+    zone,
+    source,
+    filters,
+    candidates,
+    maxSelect,
+    minSelect,
+    promptPlayer,
+    botSelect: (cards, max) => {
+      if (typeof player.strategy?.rankSearchCandidates === "function") {
+        const ranked = player.strategy.rankSearchCandidates(cards, action, {
+          player,
+          source,
+          game,
+          ctx,
+        });
+        if (Array.isArray(ranked) && ranked.length > 0) {
+          return ranked.slice(0, max);
+        }
+      }
+
+      return cards
+        .slice()
+        .sort((a, b) => (b.atk || 0) - (a.atk || 0))
+        .slice(0, max);
+    },
+    selectSingle: (cards) => selectSingleSearchCard(game, cards),
+    selectMulti: (cards, range) => cards.slice(0, range.max),
+  });
+
+  const searchedCard = selection.selected?.[0] || null;
+  if (!searchedCard) {
+    getUI(game)?.log("No cards selected.");
+    return false;
+  }
+
+  const moveResult =
+    typeof game.moveCard === "function"
+      ? await game.moveCard(searchedCard, player, "hand", {
+          fromZone: sourceZone,
+        })
+      : null;
+
+  if (moveResult && moveResult.success === false) {
+    return false;
+  }
+
+  if (moveResult == null) {
+    const index = zone.indexOf(searchedCard);
+    if (index !== -1) zone.splice(index, 1);
+    player.hand = player.hand || [];
+    player.hand.push(searchedCard);
+  }
+
+  getUI(game)?.log(
+    `${player.name || player.id} added ${searchedCard.name} to hand from ${sourceZone}.`,
+  );
+
+  if (typeof game.emit === "function") {
+    await game.emit("cards_added_to_hand", {
+      player,
+      cards: [searchedCard],
+      fromZone: sourceZone,
+      sourceCard: source,
+      effectId: ctx.effect?.id || null,
+    });
+  }
+
+  game.updateBoard();
+
+  if (!canResolveFollowupSummon(action, player)) {
+    return true;
+  }
+
+  if (!player.hand?.includes(searchedCard)) {
+    getUI(game)?.log(`${searchedCard.name} is no longer in hand.`);
+    return true;
+  }
+
+  if ((player.field || []).length >= 5) {
+    getUI(game)?.log("No Monster Zone available for Special Summon.");
+    return true;
+  }
+
+  const shouldSummon = await shouldPerformOptionalSummon(
+    action,
+    game,
+    player,
+    searchedCard,
+  );
+
+  if (!shouldSummon) {
+    return true;
+  }
+
+  const summonResult = await summonFromHandCore({
+    card: searchedCard,
+    player,
+    engine,
+    game,
+    position: action.position,
+    cannotAttackThisTurn:
+      action.restrictAttackThisTurn || action.cannotAttackThisTurn || false,
+  });
+
+  if (!summonResult.success) {
+    return true;
+  }
+
+  getUI(game)?.log(
+    `${player.name || player.id} Special Summoned ${searchedCard.name} from hand.`,
+  );
+  game.updateBoard();
+
+  if (game.finishSelection && typeof game.finishSelection === "function") {
+    game.finishSelection();
+  }
+
+  return true;
+}
+
+function buildSearchFilters(action) {
+  const filters = { ...(action.filters || {}) };
+  if (action.archetype && !filters.archetype) filters.archetype = action.archetype;
+  if (action.cardKind && !filters.cardKind) filters.cardKind = action.cardKind;
+  if (action.cardName && !filters.name) filters.name = action.cardName;
+  if (Number.isFinite(action.minAtk) && filters.minAtk == null) {
+    filters.minAtk = action.minAtk;
+  }
+  if (Number.isFinite(action.maxAtk) && filters.maxAtk == null) {
+    filters.maxAtk = action.maxAtk;
+  }
+  if (Number.isFinite(action.minLevel) && filters.minLevel == null) {
+    filters.minLevel = action.minLevel;
+  }
+  if (Number.isFinite(action.maxLevel) && filters.maxLevel == null) {
+    filters.maxLevel = action.maxLevel;
+  }
+  return filters;
+}
+
+function cardMatchesSearchAction(card, action) {
+  if (!card) return false;
+  if (action.cardName) {
+    const match = action.cardName.toLowerCase();
+    if ((card.name || "").toLowerCase() !== match) return false;
+  }
+  if (typeof action.cardId === "number" && card.id !== action.cardId) {
+    return false;
+  }
+  return true;
+}
+
+function selectSingleSearchCard(game, cards) {
+  const renderer = getUI(game);
+  const searchModal = renderer?.getSearchModalElements?.();
+  const defaultCardName = cards[0]?.name || "";
+
+  if (!searchModal) {
+    return cards[0];
+  }
+
+  return new Promise((resolve) => {
+    game.isResolvingEffect = true;
+    renderer.showSearchModalVisual(
+      searchModal,
+      cards,
+      defaultCardName,
+      (selectedName) => {
+        const chosen =
+          cards.find((card) => card && card.name === selectedName) || cards[0];
+        game.isResolvingEffect = false;
+        resolve(chosen);
+      },
+    );
+  });
+}
+
+function canResolveFollowupSummon(action, player) {
+  const condition = action.summonCondition || action.condition || {};
+  if (!condition.type) return true;
+
+  if (condition.type === "empty_field") {
+    return (player.field || []).length === 0;
+  }
+
+  return false;
+}
+
+async function shouldPerformOptionalSummon(action, game, player, card) {
+  if (action.optional === false || isAI(player)) {
+    return true;
+  }
+
+  const ui = getUI(game);
+  if (ui && typeof ui.showConfirmPrompt === "function") {
+    const result = ui.showConfirmPrompt(
+      action.promptMessage || `Special Summon ${card.name} from your hand?`,
+      {
+        kind: "optional_special_summon",
+        cardName: card.name,
+        playerId: player.id,
+        confirmLabel: action.confirmLabel || "Special Summon",
+        cancelLabel: action.cancelLabel || "Keep in hand",
+        title: action.promptTitle || "Optional Special Summon",
+      },
+    );
+    return result && typeof result.then === "function"
+      ? !!(await result)
+      : !!result;
+  }
+
+  return true;
 }
 
 /**

@@ -43,6 +43,8 @@ import {
   evaluateShadowHeartRecruitCandidate,
   rankShadowHeartSearchCandidates,
   pickInfusionEmergencyRevive,
+  evaluateCathedralActivation,
+  estimateShadowHeartCathedralCounterGain,
 } from "./shadowheart/priorities.js";
 import {
   evaluateMonster,
@@ -353,6 +355,8 @@ export default class ShadowHeartStrategy extends BaseStrategy {
       graveyard: (bot.graveyard || []).filter((c) => isShadowHeart(c)),
       spellTrap: (bot.spellTrap || []).filter(Boolean),
       fieldSpell: bot.fieldSpell?.name || null,
+      deck: (bot.deck || []).filter(Boolean),
+      extraDeck: (bot.extraDeck || []).filter(Boolean),
       lp: bot.lp,
       summonCount: bot.summonCount || 0,
       game,
@@ -617,6 +621,16 @@ export default class ShadowHeartStrategy extends BaseStrategy {
       }
 
       const decision = shouldPlaySpell(card, analysis);
+      if (
+        card.name === "Shadow-Heart Cathedral" &&
+        (bot?.debug || actualGame?.devModeEnabled)
+      ) {
+        const predicted = estimateShadowHeartCathedralCounterGain(analysis);
+        console.log(
+          `[ShadowHeart Cathedral] hand=true predicted=${predicted.count} ` +
+            `decision=${decision.yes ? "place" : "hold"} reason=${decision.reason}`,
+        );
+      }
 
       if (decision.yes) {
         log(`  ✅ Spell válida: ${card.name} - ${decision.reason}`);
@@ -829,6 +843,110 @@ export default class ShadowHeartStrategy extends BaseStrategy {
         cardName: card.name,
         effectId: handIgnitionEffect.id,
         macroBuff,
+      });
+    });
+
+    // === GERAR EFEITOS DE CONTINUOUS SPELL/TRAP EM CAMPO ===
+    (bot.spellTrap || []).forEach((card, zoneIndex) => {
+      if (!card || card.cardKind !== "spell" || card.isFacedown) return;
+      const ignitionEffect = (card.effects || []).find(
+        (effect) => effect && effect.timing === "ignition",
+      );
+      if (!ignitionEffect) return;
+
+      if (card.name === "Shadow-Heart Cathedral") {
+        const cathedralPlan = evaluateCathedralActivation(card, analysis);
+        const predicted = estimateShadowHeartCathedralCounterGain(analysis);
+        if (bot?.debug || actualGame?.devModeEnabled) {
+          const candidateText = (cathedralPlan.candidateScores || [])
+            .map(
+              (entry) =>
+                `${entry.name}:${entry.score} (${entry.plan || "no plan"})`,
+            )
+            .join(" | ");
+          console.log(
+            `[ShadowHeart Cathedral] field=true counters=${cathedralPlan.counterCount || 0} ` +
+              `predicted=${predicted.count} target=${
+                cathedralPlan.target?.name || "none"
+              } specialTrigger=${!!cathedralPlan.hasRelevantSpecialTrigger} ` +
+              `candidates=[${candidateText || (cathedralPlan.candidateNames || []).join(", ") || "none"}] ` +
+              `plan=${cathedralPlan.expectedPlan || "none"} ` +
+              `decision=${cathedralPlan.shouldActivate ? "use" : "hold"} reason=${
+                cathedralPlan.reason
+              }`,
+          );
+        }
+        if (!cathedralPlan.shouldActivate) {
+          log(`  ⏭️ Cathedral segura: ${cathedralPlan.reason}`);
+          return;
+        }
+
+        if (!isSimulatedState) {
+          const check =
+            actualGame.effectEngine?.canActivateSpellTrapEffectPreview?.(
+              card,
+              bot,
+              "spellTrap",
+            );
+          if (check?.ok === false) {
+            log(`  ⏭️ Cathedral bloqueada: ${check.reason}`);
+            return;
+          }
+        }
+
+        log(
+          `  ✅ Cathedral effect: ${cathedralPlan.target?.name || "target"} ` +
+            `(${cathedralPlan.reason})`,
+        );
+        actions.push({
+          type: "spellTrapEffect",
+          zoneIndex,
+          cardId: card.id,
+          cardName: card.name,
+          priority: cathedralPlan.priority,
+          effectId: ignitionEffect.id,
+          cathedralPlan: {
+            targetName: cathedralPlan.target?.name || null,
+            counterCount: cathedralPlan.counterCount || 0,
+            reason: cathedralPlan.reason,
+            expectedPlan: cathedralPlan.expectedPlan || null,
+            candidateNames: cathedralPlan.candidateNames || [],
+            candidateScores: cathedralPlan.candidateScores || [],
+          },
+          activationContext: {
+            sourceZone: "spellTrap",
+            actionContext: {
+              cathedral: {
+                counterCount: cathedralPlan.counterCount || 0,
+                predictedCounters: predicted.count,
+                targetName: cathedralPlan.target?.name || null,
+                reason: cathedralPlan.reason,
+                expectedPlan: cathedralPlan.expectedPlan || null,
+                candidateNames: cathedralPlan.candidateNames || [],
+                candidateScores: cathedralPlan.candidateScores || [],
+              },
+            },
+          },
+        });
+        return;
+      }
+
+      if (!isSimulatedState) {
+        const check = actualGame.effectEngine?.canActivateSpellTrapEffectPreview?.(
+          card,
+          bot,
+          "spellTrap",
+        );
+        if (check?.ok === false) return;
+      }
+
+      actions.push({
+        type: "spellTrapEffect",
+        zoneIndex,
+        cardId: card.id,
+        cardName: card.name,
+        priority: 5,
+        effectId: ignitionEffect.id,
       });
     });
 

@@ -15,14 +15,50 @@ export function shouldPlayVoidSpell(card, game, bot, opponent) {
     return { yes: true, priority };
   }
 
+  if (knowledge?.role === "starter") {
+    const searchTargets = (bot?.deck || []).filter(
+      (candidate) =>
+        candidate?.cardKind === "monster" &&
+        isVoid(candidate) &&
+        (candidate.atk || 0) <= 1600,
+    );
+
+    if (searchTargets.length === 0) {
+      return { yes: false, priority: 0 };
+    }
+
+    if (myFieldCount === 0) {
+      const hasHollow = searchTargets.some(
+        (candidate) => candidate?.name === "Void Hollow" || candidate?.id === 154,
+      );
+      return {
+        yes: true,
+        priority: hasHollow ? 8.8 : 7.2,
+        reason: hasHollow
+          ? "Starter: busca Hollow e pode invocar da mão"
+          : "Starter: busca e estabelece monstro Void",
+      };
+    }
+
+    return {
+      yes: true,
+      priority: 4.8,
+      reason: "Busca peça de engine sem extensão grátis",
+    };
+  }
+
   if (knowledge?.role === "board_clear") {
     const shouldReset = oppFieldCount > myFieldCount && oppFieldCount >= 2;
     return { yes: shouldReset, priority: shouldReset ? 7.5 : 0 };
   }
 
-  if (knowledge?.role === "tempo") {
+  if (knowledge?.role === "tempo" || knowledge?.role === "removal") {
     const shouldTempo = oppFieldCount > 0 && myFieldCount > 0;
-    return { yes: shouldTempo, priority: shouldTempo ? 6 : 0 };
+    return {
+      yes: shouldTempo,
+      priority: shouldTempo ? 5.5 : 0,
+      reason: "Bounce one-shot requer troca de tempo clara",
+    };
   }
 
   if (knowledge?.role === "field_spell") {

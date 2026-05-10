@@ -3511,19 +3511,18 @@
     id: 168,
     name: "Void Gravitational Pull",
     cardKind: "spell",
-    subtype: "continuous",
+    subtype: "normal",
     archetype: "Void",
     description:
-      "Once per turn: You can target 1 face-up 'Void' monster you control and 1 monster your opponent controls; return those targets to the hand.",
+      "Target 1 face-up 'Void' monster you control and 1 monster your opponent controls; return those targets to the hand. You can only activate 1 'Void Gravitational Pull' per turn.",
     image: "assets/Void Gravitational pull.png",
     effects: [
       {
         id: "void_gravitational_pull_bounce",
-        timing: "ignition",
-        requireZone: "field",
-        manualActivationOnly: true,
+        timing: "on_play",
+        speed: 1,
         oncePerTurn: true,
-        oncePerTurnName: "void_gravitational_pull_bounce",
+        oncePerTurnName: "void_gravitational_pull",
         targets: [
           {
             id: "void_gravitational_self",
@@ -3566,7 +3565,7 @@
     subtype: "normal",
     archetype: "Void",
     description:
-      "Destroy as many monsters on the field as possible, except 1 monster with the highest ATK on each side of the field (in case of a tie, you choose 1 to remain on each side). You can only activate 1 'Void Lost Throne' per turn.",
+      "Add 1 'Void' monster with 1600 or less ATK from your Deck to your hand. Then, if you control no monsters, you can Special Summon that monster from your hand. You can only activate 1 'Void Lost Throne' per turn.",
     image: "assets/Void Lost Throne.png",
     effects: [
       {
@@ -3577,9 +3576,17 @@
         oncePerTurnName: "void_lost_throne",
         actions: [
           {
-            type: "selective_field_destruction",
-            keepPerSide: 1,
-            allowTieBreak: true,
+            type: "search_then_optional_special_summon_from_hand",
+            zone: "deck",
+            filters: {
+              archetype: "Void",
+              cardKind: "monster",
+              maxAtk: 1600,
+            },
+            count: { min: 1, max: 1 },
+            summonCondition: { type: "empty_field" },
+            optional: true,
+            position: "choice",
           },
         ],
       },

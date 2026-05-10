@@ -23,6 +23,45 @@ function scaleRecycleTargets(owner) {
   return shadowHeartCardsInGraveyard(owner);
 }
 
+function getCounterCount(card, counterType = "judgment_marker") {
+  if (!card) return 0;
+  if (typeof card.getCounter === "function") return card.getCounter(counterType) || 0;
+  if (card.counters instanceof Map) return card.counters.get(counterType) || 0;
+  if (card.counters && typeof card.counters === "object") {
+    return card.counters[counterType] || 0;
+  }
+  return 0;
+}
+
+function scoreCathedralBackrow(card, owner, opponent) {
+  if (card?.name !== "Shadow-Heart Cathedral") return 0;
+
+  const counters = getCounterCount(card);
+  const readyAttackers = (owner?.field || []).filter(
+    (monster) =>
+      isShadowHeart(monster) &&
+      monster.position === "attack" &&
+      !monster.hasAttacked &&
+      !monster.cannotAttackThisTurn,
+  );
+  const counterPressure = readyAttackers.filter((attacker) => {
+    const atk = attacker.atk || 0;
+    if ((opponent?.field || []).length === 0) return atk >= 500;
+    return (opponent?.field || []).some(
+      (target) =>
+        target?.cardKind === "monster" &&
+        !target.isFacedown &&
+        target.position !== "defense" &&
+        atk - (target.atk || 0) >= 500,
+    );
+  }).length;
+
+  let value = 0.4 + Math.min(3, counters * 0.5);
+  if (counterPressure > 0) value += Math.min(1.5, counterPressure * 0.4);
+  if (counters >= 2) value += 0.8;
+  return value;
+}
+
 function tributeMaterialSynergy(monster) {
   const materialNames = Array.isArray(monster?.lastTributeMaterialNames)
     ? monster.lastTributeMaterialNames
@@ -232,6 +271,9 @@ export function evaluateBoardShadowHeart(
 
   // === AVALIAÇÃO DE BACKROW ===
   score += (perspective.spellTrap?.length || 0) * 0.2;
+  for (const backrow of perspective.spellTrap || []) {
+    score += scoreCathedralBackrow(backrow, perspective, opponent);
+  }
   score -= (opponent.spellTrap?.length || 0) * 0.25;
 
   // === AVALIAÇÃO DE PRESSÃO ===

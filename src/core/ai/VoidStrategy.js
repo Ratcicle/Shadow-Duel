@@ -53,6 +53,7 @@ export default class VoidStrategy extends BaseStrategy {
     const analysis = {
       // Recursos próprios
       hand: bot.hand || [],
+      deck: bot.deck || [],
       field: bot.field || [],
       graveyard: bot.graveyard || [],
       extraDeck: bot.extraDeck || [],
@@ -341,6 +342,65 @@ export default class VoidStrategy extends BaseStrategy {
       // Retorna função para usar como botSelect
       asBotSelect: () => [best].filter(Boolean),
     };
+  }
+
+  /**
+   * Ranks dynamic search targets for Void effects.
+   */
+  rankSearchCandidates(cards, action = {}, ctx = {}) {
+    if (!Array.isArray(cards) || cards.length === 0) return [];
+
+    const source = ctx?.source || {};
+    const isLostThroneSearch =
+      action?.type === "search_then_optional_special_summon_from_hand" &&
+      (source.id === VOID_IDS.LOST_THRONE ||
+        source.name === "Void Lost Throne");
+
+    if (!isLostThroneSearch) {
+      return this.evaluateRecruitCandidate(cards, ctx).asBotSelect();
+    }
+
+    const game = ctx.game || this.bot?.game;
+    const bot = ctx.player || this.bot || game?.bot;
+    const fieldEmpty = (bot?.field || []).length === 0;
+    const analysis = this.currentAnalysis || (game ? this.analyzeGameState(game) : {});
+    const hand = bot?.hand || [];
+    const field = bot?.field || [];
+    const graveyard = bot?.graveyard || [];
+
+    return cards
+      .map((card) => {
+        let score = (card.atk || 0) / 1000;
+
+        if (card.id === VOID_IDS.HOLLOW) {
+          score += fieldEmpty ? 6.0 : 2.0;
+          if (fieldEmpty) {
+            score += analysis?.swarmPayoffs?.totalPayoffValue || 0;
+          }
+          if (hand.some((c) => c?.id === VOID_IDS.HOLLOW)) {
+            score -= fieldEmpty ? 0.5 : 1.0;
+          }
+        } else if (card.id === VOID_IDS.BEAST) {
+          score += 2.5;
+          if (!hand.some((c) => c?.id === VOID_IDS.HOLLOW)) score += 0.5;
+        } else if (card.id === VOID_IDS.TENEBRIS_HORN) {
+          score += 2.0 + Math.min(field.filter(isVoid).length, 3) * 0.4;
+        } else if (card.id === VOID_IDS.RAVEN) {
+          score += field.length >= 2 ? 2.2 : 0.8;
+        } else {
+          const knowledge = getVoidCardKnowledge(card);
+          if (knowledge?.tags?.includes("swarm")) score += 1.0;
+          if (knowledge?.role === "control") score += 0.8;
+        }
+
+        if (graveyard.some((c) => c?.id === card.id)) {
+          score -= 0.2;
+        }
+
+        return { card, score };
+      })
+      .sort((a, b) => b.score - a.score)
+      .map((entry) => entry.card);
   }
 
   /**
@@ -635,6 +695,19 @@ export default class VoidStrategy extends BaseStrategy {
 
           let decision = shouldPlayVoidSpell(card, game, bot, opponent);
           let fusionHint = null;
+
+          if (card.id === VOID_IDS.GRAVITATIONAL) {
+            const gravitationalEval = this.evaluateGravitationalPull(
+              bot,
+              opponent,
+            );
+            if (!gravitationalEval.shouldActivate) return;
+            decision = {
+              yes: true,
+              priority: gravitationalEval.priority,
+              reason: gravitationalEval.reason,
+            };
+          }
 
           // Penalizar Sealing the Void se há efeitos ignition disponíveis em campo
           if (card.id === VOID_IDS.SEALING && !isSimulatedState) {
