@@ -170,6 +170,9 @@ async function applyChainEffect(cs, link, activationZone) {
     attacker: link.context?.attacker,
     attackerOwner: link.context?.attackerOwner,
     defenderOwner: link.context?.defenderOwner,
+    summonedCard: link.context?.summonedCard || link.context?.card || null,
+    summonMethod: link.context?.method || link.context?.summonMethod || null,
+    summonFromZone: link.context?.fromZone || null,
     activationContext: {
       chainLevel: link.chainLevel,
       effectId: effect?.id || null,

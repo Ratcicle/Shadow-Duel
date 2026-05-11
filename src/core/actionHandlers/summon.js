@@ -557,6 +557,11 @@ async function summonCards(cards, sourceZoneEntries, player, action, engine) {
     });
 
     let usedMoveCard = false;
+    const previousEffectsNegated = card.effectsNegated;
+    if (action.negateEffects) {
+      card.effectsNegated = true;
+    }
+
     if (canUseMoveCard) {
       const moveResult = await game.moveCard(card, player, "field", {
         fromZone: resolvedFromZone || undefined,
@@ -566,6 +571,7 @@ async function summonCards(cards, sourceZoneEntries, player, action, engine) {
       });
 
       if (moveResult?.success === false) {
+        card.effectsNegated = previousEffectsNegated;
         continue;
       }
 
@@ -598,9 +604,9 @@ async function summonCards(cards, sourceZoneEntries, player, action, engine) {
 
     card.cannotAttackThisTurn = action.cannotAttackThisTurn || false;
 
-    if (action.negateEffects) {
-      card.effectsNegated = true;
-    }
+    card.effectsNegated = action.negateEffects
+      ? true
+      : previousEffectsNegated || false;
 
     if (setAtkToZero) {
       if (card.originalAtk == null) {

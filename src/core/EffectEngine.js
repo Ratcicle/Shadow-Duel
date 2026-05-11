@@ -1220,6 +1220,40 @@ export default class EffectEngine {
           return;
         }
 
+        // Passive: buff based on count of specific cards in controller's graveyard
+        if (passive.type === "graveyard_card_count_buff") {
+          const names =
+            passive.cardNames || passive.names || passive.name || passive.cardName;
+          const cardNames = Array.isArray(names) ? names : names ? [names] : [];
+          if (cardNames.length === 0) return;
+
+          const owner = this.getOwnerByCard(card);
+          const gy = owner?.graveyard || [];
+          const cardCount = gy.filter((c) => {
+            if (!c) return false;
+            if (passive.cardKind && c.cardKind !== passive.cardKind) {
+              return false;
+            }
+            return cardNames.includes(c.name);
+          }).length;
+
+          const perCard =
+            passive.amountPerCard ??
+            passive.perCard ??
+            passive.buffPerCard ??
+            0;
+          const stats = passive.stats || ["atk", "def"];
+          const buffKey = effect.id || `passive_${card.id}_${index}_gy_card`;
+          const applied = this.applyPassiveBuffValue(
+            card,
+            buffKey,
+            cardCount * perCard,
+            stats,
+          );
+          if (applied) updated = true;
+          return;
+        }
+
         // Passive: buff based on count of monsters of an archetype in controller's graveyard
         if (passive.type === "graveyard_archetype_count_buff") {
           const archetypeName = passive.archetype || null;

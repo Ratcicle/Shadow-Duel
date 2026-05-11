@@ -975,10 +975,9 @@ body {
 
 .gy-preview {
   position: absolute;
-  bottom: 0;
-  right: 0;
-  width: 80px !important;
-  height: 110px !important;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
   pointer-events: none;
   font-size: 0.7rem !important;
 }
@@ -2016,12 +2015,12 @@ body {
   padding: 12px;
   width: 90vw;
   max-width: 1100px;
-  height: calc(100vh - 30px);
+  height: calc(100dvh - 30px);
   overflow: hidden;
   border-radius: 10px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
   display: grid;
-  grid-template-rows: auto auto 1fr auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   gap: 10px;
 }
 
@@ -2125,6 +2124,7 @@ body {
   grid-template-columns: 3fr 1fr;
   gap: 10px;
   min-height: 0;
+  overflow: hidden;
 }
 
 .deck-left {
@@ -2132,6 +2132,7 @@ body {
   flex-direction: column;
   gap: 8px;
   min-height: 0;
+  min-width: 0;
   overflow: hidden;
 }
 
@@ -2249,16 +2250,20 @@ body {
   justify-content: space-between;
   align-items: center;
   gap: 12px;
+  min-height: 0;
 }
 
 .deck-footer-left {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
+  min-width: 0;
 }
 
 .deck-footer-right {
   display: flex;
+  flex: 0 0 auto;
   gap: 10px;
   align-items: center;
 }
@@ -2296,22 +2301,46 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .deck-preview-image {
   width: 100%;
   aspect-ratio: 3 / 4;
+  max-height: clamp(220px, 42dvh, 360px);
   background: #222;
   border: 1px solid var(--accent-color);
   border-radius: 6px;
   background-size: cover;
   background-position: center;
+  flex: 0 1 auto;
 }
 
 .deck-preview-stats {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   font-weight: 700;
+}
+
+#deck-preview-name,
+#deck-preview-level,
+#deck-preview-desc {
+  min-width: 0;
+}
+
+#deck-preview-name {
+  flex: 0 0 auto;
+}
+
+#deck-preview-desc {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+  line-height: 1.35;
 }
 
 /* phase track */

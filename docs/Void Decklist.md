@@ -7,7 +7,7 @@ Fonte dos textos: `src/data/cards.js` (1x cada carta).
 - Total: 29
 - Monstros (Main Deck): 20
 - Extra Deck: 5 (3 Fusão, 2 Ascension)
-- Magias: 9
+- Magias: 8
 - Armadilhas: 1
 
 ## Decklist Completa
@@ -53,6 +53,8 @@ Fonte dos textos: `src/data/cards.js` (1x cada carta).
 
 ### Monstros (Main Deck)
 
+**Arcturus, Lord of the Void (258)** — Nível 10, Warrior, 2800/2500. Enquanto for o único monstro face-up que você controla, ganha 100 ATK para cada monstro "Void" no seu Cemitério. O oponente não pode ativar cards ou efeitos durante a Fase de Batalha. Se esta carta seria destruída por efeito de card: você pode banir 2 monstros "Void" do seu Cemitério em vez disso.
+
 **Void Conjurer (151)** — Nível 4, Spellcaster, 1700/800. Ignition OPT: Invoca do Deck 1 monstro "Void" de Nível 4 ou menos (pos. escolha), não pode atacar neste turno. No Cemitério, envie 1 monstro "Void" que você controla para o Cemitério; Invoque esta carta (pos. escolha).
 
 **Void Walker (152)** — Nível 4, Fiend, 1800/200. Não pode atacar no turno em que é Invocada. OPT: devolva esta carta à mão; Invoque da mão 1 monstro "Void" de Nível 4 ou menos (pos. escolha), exceto "Void Walker".
@@ -67,7 +69,7 @@ Fonte dos textos: `src/data/cards.js` (1x cada carta).
 
 **Void Bone Spider (158)** — Nível 6, Insect, 2200/1400. OPT: escolha 1 monstro do oponente; ele não pode atacar até o fim do próximo turno. Se esta carta sair do campo para o Cemitério: Invoque 1 ficha "Void Little Spider" (Nível 1, 500/500) em ATK.
 
-**Void Forgotten Knight (159)** — Nível 5, Fiend, 2000/1000. Da mão: envie 1 monstro "Void" que você controla (face-up); Invoque esta carta (OPT). No Cemitério: bana esta carta; destrua 1 Spell/Trap face-up do oponente (OPT).
+**Void Forgotten Knight (159)** — Nível 5, Fiend, 2000/1000. Da mão: envie 1 monstro "Void" que você controla (face-up); Invoque esta carta (OPT). Ganha 100 ATK para cada "Void Hollow" no seu Cemitério. No Cemitério: bana esta carta; destrua 1 Spell/Trap face-up do oponente (OPT).
 
 **Void Raven (160)** — Nível 2, Winged Beast, 300/300. Quando um monstro de Fusão "Void" é Invocado: descarte esta carta; esse monstro fica imune a efeitos do oponente até o fim do próximo turno. OPT.
 
@@ -87,7 +89,7 @@ Fonte dos textos: `src/data/cards.js` (1x cada carta).
 
 **Void Hydra Titan (165)** — Fusão, Nível 10, Dragon, 3500/2900. Materiais: 6× "Void". Ao ser Invocada por Fusão: destrua todos os outros monstros que você controla; compre 1 por cada. 1/turno: se seria destruída, reduza ATK em 700 e negue a destruição.
 
-**Void Cosmic Walker (171)** — Ascension, Nível 6, 2100/1600. Matéria: "Void Walker" com 2 ativações de efeito no duelo. OPT: envie 1 monstro "Void" que você controla; Invoque da mão 1 monstro "Void" de Nível 5 ou menos (pos. escolha). Se esta carta for ao Cemitério do campo: Invoque até 3 "Void Hollow" da mão ou Deck (pos. escolha).
+**Void Cosmic Walker (171)** — Ascension, Nível 6, 2100/1600. Matéria: "Void Walker" com 2 ativações de efeito no duelo. OPT: Invoque por Invocação-Especial 1 "Void Hollow" do seu Cemitério (pos. escolha). Se esta carta for ao Cemitério do campo: Invoque até 3 "Void Hollow" da mão ou Deck (pos. escolha).
 
 **Malicious Demon of the Void (173)** — Ascension, Nível 8, Fiend, 2600/2400. Matéria: "Thousand-Arms of the Void" com os 2 efeitos ativados no duelo. O número de ataques que este card pode declarar por Fase de Batalha é igual ao número de "Void Hollow" no seu Cemitério. Se este card no campo for enviado ao Cemitério: Invoque por Invocação-Especial até 3 "Void Hollow" do seu Cemitério e, se isso acontecer, adicione 1 "Polymerization" do seu Deck à sua mão.
 
@@ -103,4 +105,4 @@ Fonte dos textos: `src/data/cards.js` (1x cada carta).
 
 ### Armadilhas
 
-**Void Mirror Dimension (170)** — Normal, Speed 2. Na Fase Principal, se o oponente Invocar por Invocação-Especial: Invoque da mão 1 monstro com o mesmo Nível, com efeitos negados até o fim do turno (pos. escolha). OPT por nome.
+**Void Mirror Dimension (170)** — Armadilha Normal, Speed 2. Se o oponente Invocar um monstro: Invoque da mão 1 monstro com o mesmo Nível, com efeitos negados até o fim do turno (pos. escolha). OPT por nome.

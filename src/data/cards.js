@@ -2579,6 +2579,7 @@
             zone: "field",
             cardKind: "monster",
             archetype: "Void",
+            intent: "cost",
             count: { min: 1, max: 1 },
           },
         ],
@@ -2769,6 +2770,7 @@
             zone: "field",
             cardKind: "monster",
             archetype: "Void",
+            intent: "cost",
             count: { min: 1, max: 1 },
           },
         ],
@@ -3038,15 +3040,16 @@
     type: "Fiend",
     archetype: "Void",
     description:
-      "You can send a face-up 'Void' monster you control to the GY; Special Summon this card from your hand. This card gains 100 ATK for each 'Void' monster in your GY. You can banish this card from your GY; target 1 face-up Spell/Trap your opponent controls; destroy it. You can only use each effect of 'Void Forgotten Knight' once per turn.",
+      "You can send a face-up 'Void' monster you control to the GY; Special Summon this card from your hand. This card gains 100 ATK for each 'Void Hollow' in your GY. You can banish this card from your GY; target 1 face-up Spell/Trap your opponent controls; destroy it. You can only use each effect of 'Void Forgotten Knight' once per turn.",
     image: "assets/Void Forgotten Knight.png",
     effects: [
       {
         id: "void_forgotten_knight_atk_boost",
         timing: "passive",
         passive: {
-          type: "graveyard_archetype_count_buff",
-          archetype: "Void",
+          type: "graveyard_card_count_buff",
+          cardName: "Void Hollow",
+          cardKind: "monster",
           amountPerCard: 100,
           stats: ["atk"],
         },
@@ -3066,6 +3069,7 @@
             archetype: "Void",
             excludeCardName: "Void Forgotten Knight",
             requireFaceup: true,
+            intent: "cost",
             count: { min: 1, max: 1 },
           },
         ],
@@ -3595,20 +3599,18 @@
   {
     id: 170,
     name: "Void Mirror Dimension",
-    cardKind: "spell",
-    subtype: "continuous",
+    cardKind: "trap",
+    subtype: "normal",
     archetype: "Void",
     description:
-      "Quick Effect: During the Main Phase, if your opponent Summons a monster: You can Special Summon 1 monster from your hand with the same Level as that monster, but until the end of this turn, its effects are negated. You can only activate 1 'Void Mirror Dimension' per turn.",
+      "If your opponent Summons a monster: You can Special Summon 1 monster from your hand with the same Level as that monster, but until the end of this turn, its effects are negated. You can only activate 1 'Void Mirror Dimension' per turn.",
     image: "assets/Void Mirror Dimension.png",
     effects: [
       {
         id: "void_mirror_dimension_effect",
         timing: "on_event",
         event: "after_summon",
-        summonMethods: ["normal", "special"],
         requireOpponentSummon: true,
-        requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "void_mirror_dimension",
         actions: [
@@ -3650,6 +3652,7 @@
             zone: "field",
             cardKind: "monster",
             archetype: "Void",
+            intent: "cost",
             count: { min: 1, max: 1 },
           },
         ],
@@ -3707,7 +3710,7 @@
       position: "choice",
     },
     description:
-      "Ascension Material: 'Void Walker'. Requirement: The effect of the material being activated twice in this duel. Once per turn: You can send 1 face-up 'Void' monster you control to the Graveyard; Special Summon 1 Level 5 or lower 'Void' monster from your hand. If this card is sent from the field to the Graveyard: You can Special Summon up to 3 'Void Hollow' from your hand or Deck.",
+      "Ascension Material: 'Void Walker'. Requirement: The effect of the material being activated twice in this duel. Once per turn: You can Special Summon 1 'Void Hollow' from your Graveyard. If this card is sent from the field to the Graveyard: You can Special Summon up to 3 'Void Hollow' from your hand or Deck.",
     image: "assets/Void Cosmic Walker.png",
     effects: [
       {
@@ -3717,32 +3720,13 @@
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "void_cosmic_walker_summon",
-        targets: [
-          {
-            id: "void_cosmic_walker_cost",
-            owner: "self",
-            zone: "field",
-            archetype: "Void",
-            requireFaceup: true,
-            cardKind: "monster",
-            count: { min: 1, max: 1 },
-          },
-        ],
         actions: [
           {
-            type: "move",
-            targetRef: "void_cosmic_walker_cost",
-            player: "self",
-            to: "graveyard",
-          },
-          {
             type: "special_summon_from_zone",
-            zone: "hand",
+            zone: "graveyard",
             filters: {
-              archetype: "Void",
+              name: "Void Hollow",
               cardKind: "monster",
-              level: 5,
-              levelOp: "lte",
             },
             count: { min: 1, max: 1 },
             position: "choice",
