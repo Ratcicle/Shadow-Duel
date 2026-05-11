@@ -444,8 +444,9 @@ async function tryReplacement(game, sourceCard, sourceOwner, effect, ctx) {
 
   const costDestination = replacement.costDestination || "graveyard";
 
-  // Bot auto-selection (lowest ATK for cost)
-  if (costOwner.id !== "player") {
+  // AI auto-selection (lowest ATK for cost). Bot Arena can place an AI in the
+  // "player" seat, so controllerType is the reliable human/AI boundary.
+  if (costOwner.controllerType !== "human") {
     const chosen = [...candidates]
       .sort((a, b) => (a.atk || 0) - (b.atk || 0))
       .slice(0, costCount);

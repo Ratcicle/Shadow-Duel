@@ -4,29 +4,30 @@ Fonte dos textos: `src/data/cards.js` (1x cada carta).
 
 ## Resumo
 
-- Total: 23
-- Monstros (Main Deck): 13
+- Total: 29
+- Monstros (Main Deck): 20
 - Extra Deck: 5 (3 Fusão, 2 Ascension)
-- Magias: 4
+- Magias: 9
 - Armadilhas: 1
 
-## Decklist Completa (1x cada)
+## Decklist Completa
 
 ### Monstros (Main Deck)
 
-- 1x Void Conjurer (151)
-- 1x Void Walker (152)
-- 1x Void Beast (153)
-- 1x Void Hollow (154)
-- 1x Void Haunter (155)
-- 1x Void Ghost Wolf (156)
-- 1x Void Bone Spider (158)
-- 1x Void Forgotten Knight (159)
-- 1x Void Raven (160)
-- 1x Void Tenebris Horn (161)
+- 1x Arcturus, Lord of the Void (258)
 - 1x Void Slayer Brute (162)
-- 1x Void Serpent Drake (164)
 - 1x Thousand-Arms of the Void (172)
+- 1x Void Bone Spider (158)
+- 1x Void Serpent Drake (164)
+- 1x Void Forgotten Knight (159)
+- 1x Void Haunter (155)
+- 1x Void Beast (153)
+- 3x Void Conjurer (151)
+- 2x Void Tenebris Horn (161)
+- 2x Void Walker (152)
+- 1x Void Ghost Wolf (156)
+- 3x Void Hollow (154)
+- 1x Void Raven (160)
 
 ### Extra Deck
 
@@ -38,14 +39,15 @@ Fonte dos textos: `src/data/cards.js` (1x cada carta).
 
 ### Magias
 
-- Void Gravitational Pull (168)
-- Sealing the Void (166)
-- The Void (167)
-- Void Lost Throne (169)
+- 3x Polymerization (13)
+- 1x Sealing the Void (166)
+- 1x The Void (167)
+- 1x Void Gravitational Pull (168)
+- 2x Void Lost Throne (169)
 
 ### Armadilhas
 
-- Void Mirror Dimension (170)
+- 1x Void Mirror Dimension (170)
 
 ## Efeitos & Detalhes
 

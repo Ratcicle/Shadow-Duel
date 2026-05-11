@@ -1,4 +1,6 @@
 import { getVoidCardKnowledge, isVoid } from "./knowledge.js";
+import { VOID_IDS } from "./combos.js";
+import { evaluateVoidMonster } from "./scoring.js";
 
 export function shouldPlayVoidSpell(card, game, bot, opponent) {
   if (!card || card.cardKind !== "spell") return { yes: false, priority: 0 };
@@ -7,6 +9,116 @@ export function shouldPlayVoidSpell(card, game, bot, opponent) {
   const myFieldCount = bot?.field?.length || 0;
   const myLp = bot?.lp || 0;
   const oppLp = opponent?.lp || 0;
+  const isSimulatedState = game?._isPerspectiveState === true;
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // MIRROR DIMENSION (continuous, reactive SS)
+  // Ativar proativamente: quando ainda não está em campo E há monstros lv4+
+  // na mão para casar com o level matching de summons do oponente.
+  // ─────────────────────────────────────────────────────────────────────────
+  if (card.id === VOID_IDS.MIRROR_DIMENSION) {
+    const alreadyOnField = (bot?.spellTrap || []).some(
+      (c) => c?.id === VOID_IDS.MIRROR_DIMENSION,
+    );
+    if (alreadyOnField) {
+      return { yes: false, priority: 0, reason: "Mirror Dimension já em campo" };
+    }
+    const handMonstersLv4Plus = (bot?.hand || []).filter(
+      (c) => c?.cardKind === "monster" && (c.level || 0) >= 4,
+    ).length;
+    if (handMonstersLv4Plus === 0) {
+      return {
+        yes: false,
+        priority: 0,
+        reason: "Sem monstro lv4+ na mão para SS reativo",
+      };
+    }
+    return {
+      yes: true,
+      priority: 5.5 + Math.min(handMonstersLv4Plus, 3) * 0.4,
+      reason: "Mirror Dimension proativo (resposta a summons do oponente)",
+    };
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // SEALING THE VOID
+  // Custo: zera ATK/DEF e nega efeitos de 1 Void no campo (este turno).
+  // Payoff: ganha 1 Normal Summon extra.
+  // Vale alta prioridade quando o alvo já queimou sua ignition (custo zero
+  // efetivo). Vale prioridade média se o alvo não tem ignition (Hollow,
+  // Tenebris Horn). Vale prioridade baixa se há ignitions ainda disponíveis
+  // (gastar Sealing nelas é desperdício do efeito do monstro).
+  // ─────────────────────────────────────────────────────────────────────────
+  if (card.id === VOID_IDS.SEALING) {
+    const fieldVoids = (bot?.field || []).filter(
+      (m) => m && m.cardKind === "monster" && !m.isFacedown && isVoid(m),
+    );
+    if (fieldVoids.length === 0) {
+      return { yes: false, priority: 0, reason: "Sem Void face-up para alvo" };
+    }
+    const handMonsterCount = (bot?.hand || []).filter(
+      (c) => c?.cardKind === "monster",
+    ).length;
+    if (handMonsterCount === 0) {
+      return {
+        yes: false,
+        priority: 0,
+        reason: "Sem monstro extra para a Normal Summon adicional",
+      };
+    }
+
+    // Em simulação ou sem effectEngine, fallback moderado.
+    if (isSimulatedState || !game?.effectEngine?.checkOncePerTurn) {
+      return {
+        yes: true,
+        priority: 4.0,
+        reason: "Sealing para Normal Summon extra (estado simulado)",
+      };
+    }
+
+    let burned = 0;
+    let fresh = 0;
+    let noIgnition = 0;
+    for (const monster of fieldVoids) {
+      const ignitions = (monster.effects || []).filter(
+        (e) =>
+          e &&
+          e.timing === "ignition" &&
+          (!e.requireZone || e.requireZone === "field"),
+      );
+      if (ignitions.length === 0) {
+        noIgnition += 1;
+        continue;
+      }
+      const allBurned = ignitions.every((effect) => {
+        const check = game.effectEngine.checkOncePerTurn(monster, bot, effect);
+        return check?.ok === false;
+      });
+      if (allBurned) burned += 1;
+      else fresh += 1;
+    }
+
+    if (burned > 0) {
+      return {
+        yes: true,
+        priority: 7.5,
+        reason: "Sealing pós-payoff: alvo tem ignition queimada (custo zero)",
+      };
+    }
+    if (fresh > 0 && noIgnition === 0) {
+      return {
+        yes: true,
+        priority: 2.5,
+        reason: "Sealing arriscado: queimaria ignition disponível",
+      };
+    }
+    // Maioria sem ignition (Hollow/Tenebris Horn) — uso decente sem perda real
+    return {
+      yes: true,
+      priority: 5.5,
+      reason: "Sealing em monstro sem ignition disponível",
+    };
+  }
 
   if (card.subtype === "field") {
     const shouldRevive =
@@ -87,7 +199,231 @@ export function shouldSummonVoidMonster(card, game, bot, opponent) {
   return { yes: true, priority };
 }
 
-export function chooseVoidSummonPosition(card, opponent) {
+export function assessVoidSummonEntry(card, context = {}) {
+  if (!card || card.cardKind !== "monster") {
+    return {
+      shouldSummon: false,
+      position: "attack",
+      scoreDelta: -100,
+      reason: "Invalid summon candidate",
+    };
+  }
+
+  const game = context.game || null;
+  const analysis = context.analysis || null;
+  const player = context.player || context.bot || null;
+  const opponent =
+    context.opponent ||
+    (game && player && typeof game.getOpponent === "function"
+      ? game.getOpponent(player)
+      : null);
+  const oppField = opponent?.field || analysis?.oppField || [];
+  const myField = player?.field || analysis?.field || [];
+  const phase = String(context.phase || game?.phase || "").toLowerCase();
+  const source = context.source || {};
+  const action = context.action || {};
+  const knowledge = getVoidCardKnowledge(card);
+  const atk = getEffectiveAtk(card);
+  const def = getEffectiveDef(card);
+  const strongestThreat = getStrongestOpponentBattleStat(oppField);
+  const oppHasThreat = strongestThreat > 0;
+  const isPostBattle =
+    phase.includes("main2") ||
+    phase.includes("main_2") ||
+    phase.includes("end");
+  const cannotAttack =
+    action.cannotAttackThisTurn === true ||
+    action.restrictAttackThisTurn === true ||
+    card.cannotAttackThisTurn === true ||
+    isPostBattle;
+  const isWalkerBounce =
+    source?.id === VOID_IDS.WALKER ||
+    source?.name === "Void Walker" ||
+    action?.type === "bounce_and_summon";
+  const isEmergency = myField.length === 0 && oppHasThreat;
+  const isBoss =
+    knowledge?.role === "boss" ||
+    [
+      VOID_IDS.ARCTURUS,
+      VOID_IDS.HOLLOW_KING,
+      VOID_IDS.BERSERKER,
+      VOID_IDS.HYDRA_TITAN,
+      VOID_IDS.COSMIC_WALKER,
+      VOID_IDS.MALICIOUS_DEMON,
+    ].includes(card.id);
+  const isEnginePiece = [
+    VOID_IDS.CONJURER,
+    VOID_IDS.WALKER,
+    VOID_IDS.HOLLOW,
+    VOID_IDS.BEAST,
+    VOID_IDS.TENEBRIS_HORN,
+    VOID_IDS.HAUNTER,
+    VOID_IDS.BONE_SPIDER,
+    VOID_IDS.THOUSAND_ARMS,
+  ].includes(card.id);
+
+  if (card.id === VOID_IDS.RAVEN) {
+    const position = "defense";
+    if (!isEmergency) {
+      return {
+        shouldSummon: false,
+        position,
+        scoreDelta: -80,
+        reason: "Raven should stay in hand for Void fusion protection",
+        strongestThreat,
+      };
+    }
+    return {
+      shouldSummon: true,
+      position,
+      scoreDelta: -8,
+      reason: "Emergency body only: Raven enters defense",
+      strongestThreat,
+    };
+  }
+
+  const reasons = [];
+  let position = "attack";
+  let scoreDelta = 0;
+  const canClearThreat = oppHasThreat && !cannotAttack && atk > strongestThreat;
+  const safeInAttack = !oppHasThreat || atk >= strongestThreat;
+  const safeInDefense = !oppHasThreat || def >= strongestThreat;
+  const lowImpactBody = atk < 1000 && !isEnginePiece && !isBoss;
+
+  if (canClearThreat) {
+    position = "attack";
+    scoreDelta += 2.2;
+    reasons.push("can attack over current threat");
+  } else if (isBoss && safeInAttack) {
+    position = "attack";
+    scoreDelta += 1.5;
+    reasons.push("boss is safe in attack");
+  } else if (cannotAttack && !isBoss) {
+    position = safeInDefense || def >= atk ? "defense" : "attack";
+    scoreDelta -= 0.6;
+    reasons.push("no immediate attack value");
+  } else if (!safeInAttack && safeInDefense) {
+    position = "defense";
+    scoreDelta -= 0.4;
+    reasons.push("defense survives better than attack");
+  } else if (!safeInAttack && !safeInDefense) {
+    position = "defense";
+    scoreDelta -= isEmergency ? 0.8 : 1.8;
+    reasons.push("summon is exposed to opponent threat");
+  } else if (!oppHasThreat) {
+    position = "attack";
+    reasons.push("no opponent battle threat");
+  }
+
+  if (isPostBattle && !isBoss && !canClearThreat) {
+    position = safeInDefense || def >= atk ? "defense" : position;
+    scoreDelta -= 0.5;
+    reasons.push("post-battle summon favors defense/material");
+  }
+
+  if (isEnginePiece) {
+    scoreDelta += 0.6;
+    reasons.push("engine/combo body");
+  }
+  if (lowImpactBody && !isEmergency) {
+    scoreDelta -= 2.5;
+    reasons.push("low-impact body without emergency");
+  }
+  if (isWalkerBounce && card.id === VOID_IDS.HOLLOW) {
+    scoreDelta += 1.2;
+    reasons.push("Walker into Hollow enables hand summon chain");
+  }
+
+  return {
+    shouldSummon: !lowImpactBody || isEmergency || isEnginePiece || isBoss,
+    position,
+    scoreDelta,
+    reason: reasons.join("; ") || "default Void summon assessment",
+    strongestThreat,
+  };
+}
+
+export function assessVoidNormalSummonEntry(card, context = {}) {
+  const base = assessVoidSummonEntry(card, {
+    ...context,
+    action: {
+      ...(context.action || {}),
+      type: "normal_summon",
+      cannotAttackThisTurn: false,
+    },
+  });
+  if (!card || card.cardKind !== "monster") return base;
+
+  if (card.id === VOID_IDS.RAVEN) {
+    return {
+      ...base,
+      position: "defense",
+      facedown: false,
+      reason: [
+        base.reason,
+        "normal summon Raven only as emergency defense",
+      ]
+        .filter(Boolean)
+        .join("; "),
+    };
+  }
+
+  const field = context.player?.field || context.analysis?.field || [];
+  const graveyard = context.player?.graveyard || context.analysis?.graveyard || [];
+  const tributeCards = Array.isArray(context.tributeCards)
+    ? context.tributeCards
+    : [];
+  const tributeCount = Number.isFinite(context.tributeCount)
+    ? context.tributeCount
+    : tributeCards.length;
+  const remainingFieldCount = Math.max(0, field.length - tributeCount);
+  const voidsInGYAfterTribute =
+    graveyard.filter(isVoid).length + tributeCards.filter(isVoid).length;
+  const strongestThreat = base.strongestThreat || 0;
+  const faceupValue = hasVoidFaceupNormalSummonValue(card);
+
+  let effectiveAtk = getEffectiveAtk(card);
+  if (card.id === VOID_IDS.ARCTURUS && remainingFieldCount === 0) {
+    effectiveAtk += voidsInGYAfterTribute * 100;
+  }
+
+  if (faceupValue) {
+    const beatsThreat = strongestThreat <= 0 || effectiveAtk > strongestThreat;
+    return {
+      ...base,
+      shouldSummon: true,
+      position: "attack",
+      facedown: false,
+      scoreDelta:
+        (base.scoreDelta || 0) +
+        (beatsThreat ? 1.4 : -0.4) +
+        (card.id === VOID_IDS.ARCTURUS && remainingFieldCount === 0 ? 1.2 : 0),
+      reason: [
+        base.reason,
+        "normal summon must stay face-up for Void payoff",
+        card.id === VOID_IDS.ARCTURUS && remainingFieldCount === 0
+          ? `Arcturus projected ATK ${effectiveAtk}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join("; "),
+      projectedAtk: effectiveAtk,
+    };
+  }
+
+  const shouldSetDefensively =
+    strongestThreat > 0 && getEffectiveDef(card) > getEffectiveAtk(card);
+  return {
+    ...base,
+    position: shouldSetDefensively ? "defense" : "attack",
+    facedown: shouldSetDefensively,
+    projectedAtk: effectiveAtk,
+  };
+}
+
+export function chooseVoidSummonPosition(card, opponent, analysis = null) {
+  return assessVoidSummonEntry(card, { opponent, analysis }).position;
+  if (!card || card.cardKind !== "monster") return "attack";
   const oppField = opponent?.field || [];
   const oppStrongest = oppField.reduce((max, monster) => {
     if (!monster || monster.cardKind !== "monster") return max;
@@ -95,37 +431,160 @@ export function chooseVoidSummonPosition(card, opponent) {
     return Math.max(max, atk);
   }, 0);
 
-  const atk = card.atk || 0;
-  const def = card.def || 0;
+  // Sem ameaça: ATK sempre.
   if (oppStrongest <= 0) return "attack";
-  if (atk >= oppStrongest + 200) return "attack";
-  if (def >= oppStrongest + 200) return "defense";
-  if (atk >= oppStrongest) return "attack";
-  return atk >= def ? "attack" : "defense";
+
+  // Avalia o monstro nas duas posições e escolhe a de maior valor.
+  // evaluateVoidMonster já considera role/efeito do arquétipo + posição
+  // relativa à ameaça do oponente.
+  const ctx = {
+    oppStrongestAtk: oppStrongest,
+    hollowCount: analysis?.hollowCount || 0,
+    voidCount: analysis?.voidCount || 0,
+    hollowsInGY: analysis?.hollowEconomy?.hollowsInGY || 0,
+    voidsInGY: 0,
+  };
+
+  const valueAttack = evaluateVoidMonster(
+    { ...card, position: "attack" },
+    ctx,
+  );
+  const valueDefense = evaluateVoidMonster(
+    { ...card, position: "defense" },
+    ctx,
+  );
+
+  // Empate técnico → preferir ATK (gera pressão; defesa fica para casos claros).
+  return valueAttack + 0.05 >= valueDefense ? "attack" : "defense";
+}
+
+/**
+ * Avalia se vale a pena atrasar Hollow King para tentar Hydra Titan no próximo
+ * turno. Reserva acontece quando há 4-5 Voids acessíveis (não chegou em 6) E
+ * existe extensor pronto para fechar o gap (Conjurer/Walker fresh no campo,
+ * Lost Throne na mão, Haunter+Hollows GY, ou Hollow extra na mão).
+ */
+function shouldReserveForHydra(bot, voidsAccessible) {
+  const fieldIds = (bot?.field || []).map((c) => c?.id).filter(Boolean);
+  const handIds = (bot?.hand || []).map((c) => c?.id).filter(Boolean);
+  const gyIds = (bot?.graveyard || []).map((c) => c?.id).filter(Boolean);
+  const extraIds = (bot?.extraDeck || []).map((c) => c?.id).filter(Boolean);
+
+  if (!extraIds.includes(VOID_IDS.HYDRA_TITAN)) return false;
+  if (voidsAccessible >= 6 || voidsAccessible < 4) return false;
+
+  const conjurerOnField = fieldIds.includes(VOID_IDS.CONJURER);
+  const walkerOnField = fieldIds.includes(VOID_IDS.WALKER);
+  const hasLostThrone = handIds.includes(VOID_IDS.LOST_THRONE);
+  const haunterRevive =
+    (handIds.includes(VOID_IDS.HAUNTER) || gyIds.includes(VOID_IDS.HAUNTER)) &&
+    gyIds.includes(VOID_IDS.HOLLOW);
+  const extraHollowInHand = handIds.includes(VOID_IDS.HOLLOW);
+  const thousandArmsRevive =
+    fieldIds.includes(VOID_IDS.THOUSAND_ARMS) &&
+    gyIds.includes(VOID_IDS.HOLLOW);
+
+  return (
+    conjurerOnField ||
+    walkerOnField ||
+    hasLostThrone ||
+    haunterRevive ||
+    extraHollowInHand ||
+    thousandArmsRevive
+  );
 }
 
 export function evaluateVoidFusionPriority(bot) {
   const field = bot?.field || [];
   const hand = bot?.hand || [];
+  const extraIds = (bot?.extraDeck || []).map((c) => c?.id).filter(Boolean);
   const voids = [...field, ...hand].filter(isVoid);
-  const hollows = voids.filter((card) => card?.id === 154);
-  const slayerField = field.some((card) => card?.id === 162);
-  const otherVoidCount = voids.filter((card) => card?.id !== 162).length;
+  const hollows = voids.filter((card) => card?.id === VOID_IDS.HOLLOW);
+  const slayerField = field.some((card) => card?.id === VOID_IDS.SLAYER_BRUTE);
+  const otherVoidCount = voids.filter(
+    (card) => card?.id !== VOID_IDS.SLAYER_BRUTE,
+  ).length;
 
-  const hydraReady = voids.length >= 6;
-  if (hydraReady) {
+  if (extraIds.includes(VOID_IDS.HYDRA_TITAN) && voids.length >= 6) {
     return { priority: 12, target: "Void Hydra Titan" };
   }
 
-  const berserkerReady = slayerField && otherVoidCount >= 1;
-  if (berserkerReady) {
+  if (
+    extraIds.includes(VOID_IDS.BERSERKER) &&
+    slayerField &&
+    otherVoidCount >= 1
+  ) {
     return { priority: 10.5, target: "Void Berserker" };
   }
 
-  const hollowKingReady = hollows.length >= 3;
-  if (hollowKingReady) {
+  if (extraIds.includes(VOID_IDS.HOLLOW_KING) && hollows.length >= 3) {
+    if (shouldReserveForHydra(bot, voids.length)) {
+      // Atrasar: Hydra Titan estaria a 1-2 Voids de distância com extender ativo
+      return {
+        priority: 6,
+        target: "Void Hollow King",
+        reservedForHydra: true,
+        reason: "Hollow King atrasado: Hydra Titan acessível em 1-2 turnos",
+      };
+    }
     return { priority: 9.5, target: "Void Hollow King" };
   }
 
   return { priority: 0, target: null };
+}
+
+function getEffectiveAtk(card) {
+  return (
+    (card?.atk || 0) +
+    (card?.tempAtkBoost || 0) +
+    (card?.equipAtkBonus || 0)
+  );
+}
+
+function getEffectiveDef(card) {
+  return (
+    (card?.def || 0) +
+    (card?.tempDefBoost || 0) +
+    (card?.equipDefBonus || 0)
+  );
+}
+
+function getStrongestOpponentBattleStat(field = []) {
+  return (field || []).reduce((max, monster) => {
+    if (!monster || monster.cardKind !== "monster") return max;
+    if (monster.isFacedown) return Math.max(max, 1500);
+    const stat =
+      monster.position === "defense"
+        ? getEffectiveDef(monster)
+        : getEffectiveAtk(monster);
+    return Math.max(max, stat);
+  }, 0);
+}
+
+function hasVoidFaceupNormalSummonValue(card) {
+  if (!card || card.cardKind !== "monster") return false;
+  if (
+    [
+      VOID_IDS.ARCTURUS,
+      VOID_IDS.CONJURER,
+      VOID_IDS.WALKER,
+      VOID_IDS.BEAST,
+      VOID_IDS.BONE_SPIDER,
+      VOID_IDS.TENEBRIS_HORN,
+      VOID_IDS.THOUSAND_ARMS,
+    ].includes(card.id)
+  ) {
+    return true;
+  }
+  return (card.effects || []).some(
+    (effect) =>
+      effect &&
+      (effect.timing === "ignition" ||
+        effect.timing === "passive" ||
+        (effect.timing === "on_event" &&
+          effect.event === "after_summon" &&
+          (!effect.summonMethods ||
+            effect.summonMethods.includes("normal") ||
+            effect.summonMethods.includes("tribute")))),
+  );
 }

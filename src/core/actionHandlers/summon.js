@@ -329,7 +329,11 @@ export async function handleSpecialSummonFromZone(
         game,
         player,
         source,
+        action,
       });
+      if (evaluation?.blockedAll) {
+        return [];
+      }
       if (evaluation?.best) {
         return [evaluation.best];
       }
@@ -423,7 +427,11 @@ export async function handleSpecialSummonFromZone(
         game,
         player,
         source,
+        action,
       });
+      if (evaluation?.blockedAll) {
+        return [];
+      }
       // Ordenar pelos scores e pegar os melhores
       const sorted = evaluation.scores
         .sort((a, b) => b.score - a.score)
@@ -1705,7 +1713,12 @@ export async function handleSpecialSummonFromDeckWithCounterLimit(
       game,
       player,
       source,
+      action,
     });
+    if (evaluation?.blockedAll) {
+      getUI(game)?.log("No strategically valid monster to summon.");
+      return false;
+    }
     const strategicChoice =
       evaluation?.best && candidates.includes(evaluation.best)
         ? evaluation.best

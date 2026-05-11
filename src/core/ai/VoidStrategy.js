@@ -6,7 +6,8 @@ import {
   VOID_EXTRA_DECK_IDS,
 } from "./void/knowledge.js";
 import {
-  chooseVoidSummonPosition,
+  assessVoidNormalSummonEntry,
+  assessVoidSummonEntry,
   evaluateVoidFusionPriority,
   shouldPlayVoidSpell,
   shouldSummonVoidMonster,
@@ -23,6 +24,262 @@ import {
   evaluateVoidMonster,
   analyzeHollowEconomy,
 } from "./void/scoring.js";
+import {
+  buildVoidActivationContext,
+  buildVoidTributePolicy,
+} from "./void/costPolicy.js";
+import { selectBestTributes as selectBestTributesGeneric } from "./common/tributePolicy.js";
+
+const CONJURER_REVIVE_PROTECTED_COST_IDS = new Set([
+  VOID_IDS.ARCTURUS,
+  VOID_IDS.HOLLOW_KING,
+  VOID_IDS.BERSERKER,
+  VOID_IDS.HYDRA_TITAN,
+  VOID_IDS.COSMIC_WALKER,
+  VOID_IDS.MALICIOUS_DEMON,
+  VOID_IDS.SLAYER_BRUTE,
+  VOID_IDS.SERPENT_DRAKE,
+  VOID_IDS.THOUSAND_ARMS,
+]);
+
+function getEffectiveBattleStat(card, stat) {
+  if (!card) return 0;
+  const base = Number(card[stat] || 0);
+  const boostKey = stat === "def" ? "tempDefBoost" : "tempAtkBoost";
+  return base + Number(card[boostKey] || 0);
+}
+
+function getOpponentStrongestBattleStat(analysis = {}) {
+  const fromAnalysis = Number(analysis.oppStrongestAtk || 0);
+  if (fromAnalysis > 0) return fromAnalysis;
+  return (analysis.oppField || []).reduce((max, card) => {
+    if (!card || card.cardKind !== "monster") return max;
+    if (card.isFacedown) return Math.max(max, 1500);
+    return Math.max(max, getEffectiveBattleStat(card, "atk"));
+  }, 0);
+}
+
+function assessConjurerReviveCostRisk(card, analysis = {}) {
+  const knowledge = getVoidCardKnowledge(card);
+  const protectedBoss =
+    CONJURER_REVIVE_PROTECTED_COST_IDS.has(card?.id) ||
+    knowledge?.role === "boss" ||
+    knowledge?.role === "fusion_boss" ||
+    knowledge?.role === "ascension_boss";
+
+  const def = getEffectiveBattleStat(card, "def");
+  const atk = getEffectiveBattleStat(card, "atk");
+  const strongestThreat = getOpponentStrongestBattleStat(analysis);
+  const canStillWall =
+    def > 0 && (strongestThreat <= 0 || def >= strongestThreat || def >= atk);
+
+  if (!protectedBoss) {
+    return { protectedBoss: false, canStillWall, strongestThreat };
+  }
+
+  const reason = canStillWall
+    ? "protected boss can still hold the field in defense"
+    : "protected boss is not valid Conjurer revive cost";
+
+  return { protectedBoss: true, canStillWall, strongestThreat, reason };
+}
+
+function cardHasArchetype(card, archetype) {
+  if (!card || !archetype) return true;
+  return (
+    card.archetype === archetype ||
+    (Array.isArray(card.archetypes) && card.archetypes.includes(archetype))
+  );
+}
+
+function cardMatchesSimpleFilter(card, filter = {}) {
+  if (!card) return false;
+  if (filter.cardKind && card.cardKind !== filter.cardKind) return false;
+  if (filter.archetype && !cardHasArchetype(card, filter.archetype)) {
+    return false;
+  }
+  if (filter.cardName && card.name !== filter.cardName) return false;
+  if (filter.name && card.name !== filter.name) return false;
+  if (filter.type && card.type !== filter.type) return false;
+  if (filter.requireFaceup && card.isFacedown) return false;
+  if (filter.excludeCardName && card.name === filter.excludeCardName) {
+    return false;
+  }
+  if (
+    Array.isArray(filter.excludeCardNames) &&
+    filter.excludeCardNames.includes(card.name)
+  ) {
+    return false;
+  }
+
+  const nested = filter.filters || {};
+  if (nested.cardKind && card.cardKind !== nested.cardKind) return false;
+  if (nested.archetype && !cardHasArchetype(card, nested.archetype)) {
+    return false;
+  }
+  if (nested.cardName && card.name !== nested.cardName) return false;
+  if (nested.name && card.name !== nested.name) return false;
+  if (nested.type && card.type !== nested.type) return false;
+
+  const level = Number(card.level || 0);
+  const levelFilter = filter.level ?? nested.level;
+  const levelOp = filter.levelOp || nested.levelOp || "lte";
+  if (Number.isFinite(levelFilter)) {
+    if (levelOp === "eq" && level !== levelFilter) return false;
+    if (levelOp === "lte" && level > levelFilter) return false;
+    if (levelOp === "gte" && level < levelFilter) return false;
+  }
+  const minLevel = filter.minLevel ?? nested.minLevel;
+  const maxLevel = filter.maxLevel ?? nested.maxLevel;
+  if (Number.isFinite(minLevel) && level < minLevel) return false;
+  if (Number.isFinite(maxLevel) && level > maxLevel) return false;
+
+  const atk = Number(card.atk || 0);
+  const minAtk = filter.minAtk ?? nested.minAtk;
+  const maxAtk = filter.maxAtk ?? nested.maxAtk;
+  if (Number.isFinite(minAtk) && atk < minAtk) return false;
+  if (Number.isFinite(maxAtk) && atk > maxAtk) return false;
+
+  return true;
+}
+
+function getPlayerZoneCards(player, zone) {
+  if (!player || !zone) return [];
+  if (zone === "fieldSpell") return player.fieldSpell ? [player.fieldSpell] : [];
+  const cards = player[zone];
+  return Array.isArray(cards) ? cards : [];
+}
+
+function countValidCostCandidates(player, target = {}) {
+  const zones = Array.isArray(target.zones)
+    ? target.zones
+    : [target.zone || "field"];
+  return zones.reduce((count, zone) => {
+    const candidates = getPlayerZoneCards(player, zone).filter((card) =>
+      cardMatchesSimpleFilter(card, target),
+    );
+    return count + candidates.length;
+  }, 0);
+}
+
+function validateVoidHandIgnitionCandidate({
+  card,
+  effect,
+  player,
+  game,
+  isSimulatedState,
+}) {
+  if (!card || !effect || effect.timing !== "ignition") {
+    return { ok: false, reason: "not a hand ignition effect" };
+  }
+  if (effect.requireZone !== "hand") {
+    return { ok: false, reason: "effect is not from hand" };
+  }
+
+  const actions = effect.actions || [];
+  const summonsFromHand = actions.some((action) =>
+    String(action?.type || "").startsWith("special_summon_from_hand"),
+  );
+  if (summonsFromHand && (player?.field || []).length >= 5) {
+    return { ok: false, reason: "field is full" };
+  }
+
+  if (!isSimulatedState) {
+    const optCheck = game?.effectEngine?.checkOncePerTurn?.(
+      card,
+      player,
+      effect,
+    );
+    if (optCheck?.ok === false) {
+      return { ok: false, reason: optCheck.reason || "once per turn used" };
+    }
+  }
+
+  const targets = effect.targets || [];
+  for (const action of actions) {
+    if (!action) continue;
+
+    if (action.type === "special_summon_from_hand_with_cost") {
+      const target = targets.find((entry) => entry.id === action.costTargetRef);
+      const min = target?.count?.min ?? 1;
+      if (!target || countValidCostCandidates(player, target) < min) {
+        return { ok: false, reason: "not enough cost targets" };
+      }
+    }
+
+    if (action.type === "special_summon_from_hand_with_tiered_cost") {
+      const filters = action.costFilters || {};
+      const min = action.minCost ?? action.count?.min ?? 1;
+      const candidates = (player?.field || []).filter((fieldCard) =>
+        cardMatchesSimpleFilter(fieldCard, filters),
+      );
+      if (candidates.length < min) {
+        return { ok: false, reason: "not enough tiered cost targets" };
+      }
+    }
+  }
+
+  return { ok: true };
+}
+
+function hasActionZoneCandidates(player, action, source = null) {
+  if (!player || !action) return true;
+
+  if (action.type === "special_summon_from_zone") {
+    const zoneSpec = action.zone || action.sourceZone || "deck";
+    const zoneNames = Array.isArray(zoneSpec) ? zoneSpec : [zoneSpec];
+    const zoneCards = zoneNames.flatMap((zone) => getPlayerZoneCards(player, zone));
+
+    if (action.requireSource) {
+      return !!source && zoneCards.includes(source);
+    }
+
+    const filters = {
+      ...(action.filters || {}),
+      ...(action.cardName ? { name: action.cardName } : {}),
+      ...(action.archetype ? { archetype: action.archetype } : {}),
+      ...(action.cardKind ? { cardKind: action.cardKind } : {}),
+      ...(Number.isFinite(action.minAtk) ? { minAtk: action.minAtk } : {}),
+      ...(Number.isFinite(action.maxAtk) ? { maxAtk: action.maxAtk } : {}),
+      ...(Number.isFinite(action.minLevel) ? { minLevel: action.minLevel } : {}),
+      ...(Number.isFinite(action.maxLevel) ? { maxLevel: action.maxLevel } : {}),
+    };
+    const min = action.count?.min ?? 1;
+    return (
+      zoneCards.filter((card) => cardMatchesSimpleFilter(card, filters)).length >=
+      min
+    );
+  }
+
+  if (action.type === "bounce_and_summon") {
+    const filters = action.filters || {};
+    const min = action.count?.min ?? 1;
+    return (
+      (player.hand || []).filter(
+        (card) =>
+          cardMatchesSimpleFilter(card, filters) &&
+          !(filters.excludeSelf && card === source),
+      ).length >= min
+    );
+  }
+
+  return true;
+}
+
+function validateVoidFieldIgnitionCandidate({ card, effect, player }) {
+  if (!card || !effect || !player) return { ok: false };
+
+  for (const action of effect.actions || []) {
+    if (!hasActionZoneCandidates(player, action, card)) {
+      return {
+        ok: false,
+        reason: `No valid candidates for ${action?.type || "action"}`,
+      };
+    }
+  }
+
+  return { ok: true };
+}
 
 export default class VoidStrategy extends BaseStrategy {
   constructor(bot) {
@@ -164,6 +421,24 @@ export default class VoidStrategy extends BaseStrategy {
       payoffs.reasons.push("Forgotten Knight pode tributar Void");
     }
 
+    // Thousand-Arms (tributa 1 Void → 2100 ATK + bounce-revive 2 Hollows do GY com +700)
+    if (handIds.includes(VOID_IDS.THOUSAND_ARMS)) {
+      payoffs.hasBossPayoff = true;
+      payoffs.totalPayoffValue += 3.5;
+      payoffs.reasons.push(
+        "Thousand-Arms tributa Void e habilita bounce-revive de Hollows do GY",
+      );
+    }
+
+    // Arcturus (2 tributos → 2800 ATK + lock de BP + scaling com Voids no GY)
+    if (handIds.includes(VOID_IDS.ARCTURUS)) {
+      payoffs.hasBossPayoff = true;
+      payoffs.totalPayoffValue += 5.0;
+      payoffs.reasons.push(
+        "Arcturus Lord of the Void: 2800 ATK + lock de Battle Phase + GY scaling",
+      );
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // FUSION PAYOFFS
     // ═══════════════════════════════════════════════════════════════════════════
@@ -249,9 +524,21 @@ export default class VoidStrategy extends BaseStrategy {
     const bot = context.player || this.bot || game?.bot;
     const analysis = this.currentAnalysis || this.analyzeGameState(game);
     const hollowEconomy = analysis?.hollowEconomy || {};
+    const opponent = game ? this.getOpponent(game, bot) : null;
 
     const hand = bot?.hand || [];
     const field = bot?.field || [];
+    const source = context.source || {};
+    const action = context.action || {};
+    const isWalkerBounce =
+      source?.id === VOID_IDS.WALKER ||
+      source?.name === "Void Walker" ||
+      action?.type === "bounce_and_summon";
+    const actionType = String(action?.type || "");
+    const isSummonContext =
+      context.forceSummonAssessment === true ||
+      actionType.includes("summon") ||
+      actionType === "bounce_and_summon";
 
     const hollowsInHand = hand.filter((c) => c?.id === VOID_IDS.HOLLOW).length;
     const walkerInHand = hand.some((c) => c?.id === VOID_IDS.WALKER);
@@ -262,6 +549,20 @@ export default class VoidStrategy extends BaseStrategy {
     const scores = candidates.map((card) => {
       let score = (card.atk || 0) / 1000; // Base: ATK normalizado
       let reasons = [];
+      const summonAssessment = isSummonContext
+        ? assessVoidSummonEntry(card, {
+            game,
+            player: bot,
+            opponent,
+            analysis,
+            source,
+            action,
+          })
+        : { shouldSummon: true, scoreDelta: 0, reason: null };
+      score += summonAssessment.scoreDelta || 0;
+      if (summonAssessment.reason) {
+        reasons.push(`entry: ${summonAssessment.reason}`);
+      }
 
       switch (card.id) {
         case VOID_IDS.WALKER:
@@ -310,6 +611,11 @@ export default class VoidStrategy extends BaseStrategy {
           break;
 
         case VOID_IDS.RAVEN:
+          if (isWalkerBounce) {
+            score -= 50;
+            reasons.push("Raven deve ficar na mao para proteger fusoes (-50)");
+            break;
+          }
           // Proteção útil se temos ameaças no campo
           if (hollowsOnField >= 2 || field.length >= 3) {
             score += 1.2;
@@ -326,22 +632,50 @@ export default class VoidStrategy extends BaseStrategy {
           reasons.push(`Void genérico (+0.5)`);
       }
 
-      return { card, score, reasons };
+      if (summonAssessment.shouldSummon === false) {
+        score -= 1000;
+        reasons.push("blocked by pre-summon assessment");
+      }
+
+      return {
+        card,
+        score,
+        reasons,
+        summonAssessment,
+        blocked: summonAssessment.shouldSummon === false,
+      };
     });
 
     // Ordenar por score decrescente
     scores.sort((a, b) => b.score - a.score);
 
-    const best = scores[0]?.card || null;
+    const bestEntry = scores.find((entry) => !entry.blocked) || null;
+    const best = bestEntry?.card || null;
     const reasoning = scores[0]?.reasons?.join("; ") || "No specific reasoning";
 
     return {
       best,
       scores,
       reasoning,
+      blockedAll: !best,
       // Retorna função para usar como botSelect
       asBotSelect: () => [best].filter(Boolean),
     };
+  }
+
+  chooseSpecialSummonPosition(card, context = {}) {
+    const game = context.game || this.bot?.game;
+    const player = context.player || this.bot || game?.bot;
+    const opponent = game ? this.getOpponent(game, player) : null;
+    const analysis = this.currentAnalysis || (game ? this.analyzeGameState(game) : null);
+    return assessVoidSummonEntry(card, {
+      game,
+      player,
+      opponent,
+      analysis,
+      source: context.source,
+      action: context.action,
+    }).position;
   }
 
   /**
@@ -371,6 +705,22 @@ export default class VoidStrategy extends BaseStrategy {
     return cards
       .map((card) => {
         let score = (card.atk || 0) / 1000;
+        let blocked = false;
+        if (fieldEmpty) {
+          const summonAssessment = assessVoidSummonEntry(card, {
+            game,
+            player: bot,
+            opponent: game ? this.getOpponent(game, bot) : null,
+            analysis,
+            source,
+            action,
+          });
+          score += summonAssessment.scoreDelta || 0;
+          if (summonAssessment.shouldSummon === false) {
+            score -= 1000;
+            blocked = true;
+          }
+        }
 
         if (card.id === VOID_IDS.HOLLOW) {
           score += fieldEmpty ? 6.0 : 2.0;
@@ -397,8 +747,9 @@ export default class VoidStrategy extends BaseStrategy {
           score -= 0.2;
         }
 
-        return { card, score };
+        return { card, score, blocked };
       })
+      .filter((entry) => !entry.blocked)
       .sort((a, b) => b.score - a.score)
       .map((entry) => entry.card);
   }
@@ -547,6 +898,186 @@ export default class VoidStrategy extends BaseStrategy {
   /**
    * Decide a estratégia macro baseada no estado do jogo.
    */
+  evaluateConjurerGraveyardRevive(analysis, game, bot, conjurerCard) {
+    const field = bot?.field || [];
+    const hand = bot?.hand || [];
+    const deck = bot?.deck || [];
+    const extraDeck = bot?.extraDeck || [];
+
+    const fieldVoids = field.filter(
+      (card) => card?.cardKind === "monster" && isVoid(card),
+    );
+    if (fieldVoids.length < 1 || field.length >= 5) {
+      return { shouldActivate: false, priority: 0, reason: "Sem custo/espaco" };
+    }
+
+    const fieldEffect = (conjurerCard?.effects || []).find(
+      (effect) =>
+        effect &&
+        effect.id === "void_conjurer_field_summon" &&
+        effect.timing === "ignition",
+    );
+    if (!fieldEffect) {
+      return { shouldActivate: false, priority: 0, reason: "Sem efeito de recrute" };
+    }
+
+    const fieldEffectCheck = game?.effectEngine?.checkOncePerTurn?.(
+      conjurerCard,
+      bot,
+      fieldEffect,
+    );
+    if (fieldEffectCheck?.ok === false) {
+      return {
+        shouldActivate: false,
+        priority: 0,
+        reason: "Recrute do Conjurer ja foi usado",
+      };
+    }
+
+    const deckTargets = deck.filter(
+      (card) =>
+        card?.cardKind === "monster" &&
+        isVoid(card) &&
+        (card.level || 0) <= 4,
+    );
+    if (deckTargets.length < 1) {
+      return {
+        shouldActivate: false,
+        priority: 0,
+        reason: "Sem alvo lv4- no deck",
+      };
+    }
+
+    const bestCost = this.chooseLowestValueConjurerCost(analysis, fieldVoids);
+    if (!bestCost) {
+      return { shouldActivate: false, priority: 0, reason: "Sem custo valido" };
+    }
+    if (bestCost.costRisk?.protectedBoss) {
+      return {
+        shouldActivate: false,
+        priority: 0,
+        reason:
+          bestCost.costRisk.reason ||
+          "Custo preservado: boss nao deve virar revive do Conjurer",
+        costName: bestCost.card?.name || null,
+      };
+    }
+
+    const handIds = hand.map((card) => card?.id).filter(Boolean);
+    const targetIds = deckTargets.map((card) => card?.id).filter(Boolean);
+    const extraIds = extraDeck.map((card) => card?.id).filter(Boolean);
+    const hasPoly = handIds.includes(VOID_IDS.POLYMERIZATION);
+
+    const fieldHollows = field.filter((card) => card?.id === VOID_IDS.HOLLOW)
+      .length;
+    const handHollows = hand.filter((card) => card?.id === VOID_IDS.HOLLOW)
+      .length;
+    const hollowCost = bestCost.id === VOID_IDS.HOLLOW ? 1 : 0;
+    const hollowsAfterRecruit =
+      fieldHollows + handHollows - hollowCost +
+      (targetIds.includes(VOID_IDS.HOLLOW) ? 1 : 0);
+
+    const fieldVoidsAfterRecruit = fieldVoids.length + 1;
+    const handVoids = hand.filter(isVoid).length;
+    const voidsAfterRecruit = fieldVoidsAfterRecruit + handVoids;
+
+    const reasons = [];
+    let priority = 0;
+
+    if (targetIds.includes(VOID_IDS.WALKER) && handIds.includes(VOID_IDS.HOLLOW)) {
+      priority = Math.max(priority, 9.0);
+      reasons.push("Conjurer recruta Walker para descer Hollow da mao");
+    }
+
+    if (
+      hasPoly &&
+      extraIds.includes(VOID_IDS.HOLLOW_KING) &&
+      hollowsAfterRecruit >= 3
+    ) {
+      priority = Math.max(priority, 8.5);
+      reasons.push("Conjurer completa material para Hollow King");
+    }
+
+    if (
+      hasPoly &&
+      extraIds.includes(VOID_IDS.HYDRA_TITAN) &&
+      voidsAfterRecruit >= 6
+    ) {
+      priority = Math.max(priority, 8.0);
+      reasons.push("Conjurer aproxima/fecha Hydra Titan");
+    }
+
+    const hasSlayerAfterCost =
+      (bestCost.id !== VOID_IDS.SLAYER_BRUTE &&
+        field.some((card) => card?.id === VOID_IDS.SLAYER_BRUTE)) ||
+      handIds.includes(VOID_IDS.SLAYER_BRUTE);
+    if (
+      hasPoly &&
+      extraIds.includes(VOID_IDS.BERSERKER) &&
+      hasSlayerAfterCost &&
+      voidsAfterRecruit >= 2
+    ) {
+      priority = Math.max(priority, 7.8);
+      reasons.push("Conjurer fornece material extra para Berserker");
+    }
+
+    if (
+      targetIds.includes(VOID_IDS.TENEBRIS_HORN) &&
+      (analysis.voidCount || 0) >= 2 &&
+      (analysis.swarmPayoffs?.hasFusionPayoff ||
+        analysis.swarmPayoffs?.totalPayoffValue >= 2.0)
+    ) {
+      priority = Math.max(priority, 7.2);
+      reasons.push("Conjurer recruta Tenebris para fortalecer swarm com payoff");
+    }
+
+    if (priority <= 0) {
+      return {
+        shouldActivate: false,
+        priority: 0,
+        reason: "Sem combo claro apos reviver Conjurer",
+      };
+    }
+
+    const costPenalty = Math.max(0, bestCost.score - 7) * 0.25;
+    return {
+      shouldActivate: true,
+      priority: Math.max(1, priority - costPenalty),
+      reason: reasons.join("; "),
+      costName: bestCost.card?.name || null,
+    };
+  }
+
+  chooseLowestValueConjurerCost(analysis, candidates) {
+    if (!Array.isArray(candidates) || candidates.length === 0) return null;
+    const activationContext = buildVoidActivationContext(analysis);
+    const costPreferences =
+      activationContext?.actionContext?.costPreferences || {};
+    const preferNames = new Set(costPreferences.preferNames || []);
+    const preserveNames = new Set(costPreferences.preserveNames || []);
+    const payoffNames = new Set(costPreferences.offensivePayoffNames || []);
+
+    return candidates
+      .map((card) => {
+        const costRisk = assessConjurerReviveCostRisk(card, analysis);
+        let score = evaluateVoidMonster(card, {
+          ...analysis,
+          phase: "cost",
+        });
+        score += ((card?.atk || 0) + (card?.def || 0)) / 3000;
+        if (preferNames.has(card?.name)) score -= 3;
+        if (preserveNames.has(card?.name)) score += 18;
+        if (payoffNames.has(card?.name)) score += 4;
+        if (card?.isToken) score -= 4;
+        if (card?.usedEffectThisTurn) score -= 1.5;
+        if (card?.hasAttacked) score -= 1;
+        if (card?.isFacedown) score -= 0.5;
+        if (costRisk.protectedBoss) score += 100;
+        return { card, score, id: card?.id, costRisk };
+      })
+      .sort((a, b) => a.score - b.score)[0];
+  }
+
   decideMacroStrategy(analysis) {
     const {
       myLP,
@@ -621,12 +1152,12 @@ export default class VoidStrategy extends BaseStrategy {
   generateMainPhaseActions(game) {
     const actions = [];
     const analysis = this.analyzeGameState(game);
+    const voidActivationContext = buildVoidActivationContext(analysis);
     const bot = game._isPerspectiveState ? game.bot : this.bot || game.bot;
     const opponent = this.getOpponent(game, bot);
     const isSimulatedState = game._isPerspectiveState === true;
 
     const handIds = (bot.hand || []).map((card) => card?.id).filter(Boolean);
-    const fieldIds = (bot.field || []).map((card) => card?.id).filter(Boolean);
     const hollowFieldCount = analysis.hollowCount;
     const voidFieldCount = analysis.voidCount;
     const macroStrategy = analysis.macroStrategy;
@@ -653,14 +1184,24 @@ export default class VoidStrategy extends BaseStrategy {
           (asc) => game.checkAscensionRequirements(bot, asc)?.ok,
         );
         for (const ascensionCard of eligible) {
-          // Cosmic Walker é prioridade alta
-          const isCosmicWalker = ascensionCard.id === VOID_IDS.COSMIC_WALKER;
+          let ascensionPriority;
+          if (ascensionCard.id === VOID_IDS.COSMIC_WALKER) {
+            ascensionPriority = 11;
+          } else if (ascensionCard.id === VOID_IDS.MALICIOUS_DEMON) {
+            // Multi-attack escala com Hollows no GY (cada Hollow = +1 ataque)
+            const hollowsInGY = (bot.graveyard || []).filter(
+              (c) => c?.id === VOID_IDS.HOLLOW,
+            ).length;
+            ascensionPriority = 10 + Math.min(hollowsInGY, 4) * 0.5;
+          } else {
+            ascensionPriority = 9 + (ascensionCard.atk || 0) / 1000;
+          }
           actions.push({
             type: "ascension",
             materialIndex: bot.field.indexOf(material),
             ascensionCard,
             cardName: ascensionCard.name,
-            priority: isCosmicWalker ? 11 : 9 + (ascensionCard.atk || 0) / 1000,
+            priority: ascensionPriority,
             extraDeck: true,
           });
         }
@@ -709,36 +1250,6 @@ export default class VoidStrategy extends BaseStrategy {
             };
           }
 
-          // Penalizar Sealing the Void se há efeitos ignition disponíveis em campo
-          if (card.id === VOID_IDS.SEALING && !isSimulatedState) {
-            const fieldMonstersWithUnusedIgnition = (bot.field || []).filter(
-              (m) => {
-                if (!m || m.cardKind !== "monster") return false;
-                const hasIgnition = (m.effects || []).some(
-                  (e) => e && e.timing === "ignition" && !e.requireZone,
-                );
-                if (!hasIgnition) return false;
-                // Verificar se já foi usado
-                const firstIgnition = (m.effects || []).find(
-                  (e) => e.timing === "ignition" && !e.requireZone,
-                );
-                if (firstIgnition) {
-                  const check = game.effectEngine?.checkOncePerTurn?.(
-                    m,
-                    bot,
-                    firstIgnition,
-                  );
-                  return check?.ok !== false; // Retorna true se AINDA NÃO foi usado
-                }
-                return false;
-              },
-            );
-            if (fieldMonstersWithUnusedIgnition.length > 0) {
-              // Tem efeitos ignition disponíveis - dar prioridade baixa para Sealing
-              decision.priority = Math.min(decision.priority, 2.5);
-            }
-          }
-
           if (hasFusionAction) {
             const fusionEval = evaluateVoidFusionPriority(bot);
             fusionHint = fusionEval.target;
@@ -772,6 +1283,7 @@ export default class VoidStrategy extends BaseStrategy {
                 : decision.priority,
               extraDeck: hasFusionAction,
               fusionTargetHint: fusionHint,
+              activationContext: voidActivationContext,
             });
           }
           return;
@@ -849,6 +1361,26 @@ export default class VoidStrategy extends BaseStrategy {
           }
 
           // ═══════════════════════════════════════════════════════════════════
+          // ARCTURUS: Lord of the Void — 2 tributos para 2800 ATK + lock de BP
+          // Escala com Voids no GY (boost passive se for único monstro)
+          // ═══════════════════════════════════════════════════════════════════
+          if (card.id === VOID_IDS.ARCTURUS) {
+            const monstersOnField = (bot.field || []).filter(
+              (m) => m && m.cardKind === "monster",
+            ).length;
+            if (monstersOnField >= 2) {
+              const voidsInGY = (bot.graveyard || []).filter(isVoid).length;
+              comboBoost += 3.0; // Boss máximo: prioridade alta
+              comboBoost += Math.min(voidsInGY, 6) * 0.3; // Scaling do GY
+              // Cada par de Voids no GY = 1 vida extra via replacementEffect
+              if (voidsInGY >= 2) comboBoost += 0.6;
+            } else {
+              // Sem tributos suficientes: penalizar para não ser escolhido
+              comboBoost -= 5.0;
+            }
+          }
+
+          // ═══════════════════════════════════════════════════════════════════
           // WALKER: Bom se tem Hollow na mão (e não tem Conjurer)
           // ═══════════════════════════════════════════════════════════════════
           if (card.id === VOID_IDS.WALKER) {
@@ -870,15 +1402,43 @@ export default class VoidStrategy extends BaseStrategy {
             }
           }
 
-          const position = chooseVoidSummonPosition(card, opponent);
+          const tributeInfo = this.getTributeRequirementFor(card, bot) || {
+            tributesNeeded: 0,
+          };
+          const tributeIndices =
+            tributeInfo.tributesNeeded > 0
+              ? this.selectBestTributes(
+                  bot.field || [],
+                  tributeInfo.tributesNeeded,
+                  card,
+                  { oppField: opponent?.field || [], game },
+                )
+              : [];
+          const tributeCards = (tributeIndices || [])
+            .map((fieldIndex) => bot.field?.[fieldIndex])
+            .filter(Boolean);
+          const normalSummonAssessment = assessVoidNormalSummonEntry(card, {
+            game,
+            player: bot,
+            opponent,
+            analysis,
+            tributeCards,
+            tributeCount: tributeInfo.tributesNeeded || 0,
+          });
+          if (!normalSummonAssessment.shouldSummon) return;
+
+          const position = normalSummonAssessment.position || "attack";
           actions.push({
             type: "summon",
             index,
             cardId: card.id,
             cardName: card.name,
             position,
-            facedown: position === "defense",
-            priority: summonDecision.priority + comboBoost,
+            facedown: normalSummonAssessment.facedown === true,
+            priority:
+              summonDecision.priority +
+              comboBoost +
+              (normalSummonAssessment.scoreDelta || 0),
           });
         }
 
@@ -886,10 +1446,19 @@ export default class VoidStrategy extends BaseStrategy {
         // HAND IGNITION (com sequenciamento)
         // ─────────────────────────────────────────────────────────────────────
         if (card.cardKind === "monster") {
-          const hasHandIgnition = (card.effects || []).some(
+          const handIgnitionEffect = (card.effects || []).find(
             (e) => e && e.timing === "ignition" && e.requireZone === "hand",
           );
-          if (hasHandIgnition) {
+          if (handIgnitionEffect) {
+            const validation = validateVoidHandIgnitionCandidate({
+              card,
+              effect: handIgnitionEffect,
+              player: bot,
+              game,
+              isSimulatedState,
+            });
+            if (!validation.ok) return;
+
             const knowledge = getVoidCardKnowledge(card);
             let ignitionPriority = knowledge?.role === "boss" ? 7 : 5.5;
 
@@ -930,12 +1499,36 @@ export default class VoidStrategy extends BaseStrategy {
               ignitionPriority += 1.5;
             }
 
+            // Thousand-Arms: tributa 1 Void e depois bounce-revive Hollows do GY
+            if (card.id === VOID_IDS.THOUSAND_ARMS) {
+              if (voidFieldCount >= 1) {
+                ignitionPriority += 2.5;
+                const hollowsInGY = (bot.graveyard || []).filter(
+                  (c) => c?.id === VOID_IDS.HOLLOW,
+                ).length;
+                if (hollowsInGY >= 1) {
+                  // Cada Hollow no GY = +700 ATK potencial via bounce-revive
+                  ignitionPriority += 1.0 + Math.min(hollowsInGY, 2) * 0.5;
+                }
+                // Caminho para Malicious Demon (precisa 2 ativações)
+                if (
+                  (bot.extraDeck || []).some(
+                    (c) => c?.id === VOID_IDS.MALICIOUS_DEMON,
+                  )
+                ) {
+                  ignitionPriority += 0.8;
+                }
+              }
+            }
+
             actions.push({
               type: "handIgnition",
               index,
               cardId: card.id,
               cardName: card.name,
               priority: ignitionPriority,
+              effectId: handIgnitionEffect.id,
+              activationContext: voidActivationContext,
             });
           }
         }
@@ -971,6 +1564,7 @@ export default class VoidStrategy extends BaseStrategy {
             cardId: card.id,
             cardName: card.name,
             priority: evaluation.priority,
+            activationContext: voidActivationContext,
           });
           return;
         }
@@ -981,9 +1575,276 @@ export default class VoidStrategy extends BaseStrategy {
           cardId: card.id,
           cardName: card.name,
           priority: 5.5,
+          activationContext: voidActivationContext,
         });
       });
     }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // FIELD MONSTER IGNITIONS
+    // Cobre Conjurer (recruta deck), Walker (bounce + SS), Bone Spider (lock),
+    // Ghost Wolf (direct), Thousand-Arms (bounce-revive), Cosmic Walker (tribute SS).
+    // ═══════════════════════════════════════════════════════════════════════════
+    (bot.field || []).forEach((card, fieldIndex) => {
+      if (!card || card.cardKind !== "monster" || card.isFacedown) return;
+
+      const fieldIgnition = (card.effects || []).find(
+        (e) =>
+          e &&
+          e.timing === "ignition" &&
+          (!e.requireZone || e.requireZone === "field"),
+      );
+      if (!fieldIgnition) return;
+
+      if (!isSimulatedState) {
+        const preview = game?.effectEngine?.canActivateMonsterEffectPreview?.(
+          card,
+          bot,
+          "field",
+          null,
+          {},
+        );
+        if (preview && preview.ok === false) return;
+      } else {
+        // Em simulação, validar OPT manualmente para evitar duplicar ações
+        const optCheck = game.effectEngine?.checkOncePerTurn?.(
+          card,
+          bot,
+          fieldIgnition,
+        );
+        if (optCheck?.ok === false) return;
+      }
+
+      const fieldIgnitionValidation = validateVoidFieldIgnitionCandidate({
+        card,
+        effect: fieldIgnition,
+        player: bot,
+      });
+      if (!fieldIgnitionValidation.ok) return;
+
+      const oppFieldCount = analysis.oppFieldCount || 0;
+      const oppStrongestAtk = analysis.oppStrongestAtk || 0;
+      const hollowsInGY = (bot.graveyard || []).filter(
+        (c) => c?.id === VOID_IDS.HOLLOW,
+      ).length;
+      const fieldHasSpace = (bot.field || []).length < 5;
+
+      let priority = 0;
+
+      switch (card.id) {
+        case VOID_IDS.CONJURER: {
+          // Engine principal: recruta Void lv4- do deck
+          if (!fieldHasSpace) break;
+          priority = 8.5;
+          if (handIds.includes(VOID_IDS.HOLLOW)) priority += 1.0;
+          // Reciclar via Gravitational depois é payoff extra
+          if (handIds.includes(VOID_IDS.GRAVITATIONAL)) priority += 0.3;
+          break;
+        }
+        case VOID_IDS.WALKER: {
+          // Bounce self → SS Void lv4- da mão (não Walker)
+          if (!fieldHasSpace) break;
+          if (handIds.includes(VOID_IDS.HOLLOW)) {
+            priority = 9.0; // Walker into Hollow é o melhor combo de extensão
+          } else {
+            const otherVoidLv4 = (bot.hand || []).filter(
+              (c) =>
+                isVoid(c) &&
+                c.id !== VOID_IDS.WALKER &&
+                c.id !== VOID_IDS.RAVEN &&
+                (c.level || 0) <= 4 &&
+                (c.atk || 0) > 0,
+            ).length;
+            priority = otherVoidLv4 > 0 ? 6.0 : 0;
+          }
+          break;
+        }
+        case VOID_IDS.THOUSAND_ARMS: {
+          // Bounce self → SS até 2 Hollows do GY com +700 ATK/DEF
+          if (hollowsInGY < 1) break;
+          priority = 7.0;
+          priority += Math.min(hollowsInGY, 2) * 0.75; // até +1.5
+          // Caminho para Malicious Demon ascension (precisa 2 ativações)
+          if (
+            (bot.extraDeck || []).some(
+              (c) => c?.id === VOID_IDS.MALICIOUS_DEMON,
+            )
+          ) {
+            priority += 1.5;
+          }
+          break;
+        }
+        case VOID_IDS.COSMIC_WALKER: {
+          // Tributa 1 Void do campo → SS Void lv5- da mão
+          if (!fieldHasSpace) break;
+          const voidLv5DownInHand = (bot.hand || []).filter(
+            (c) => isVoid(c) && (c.level || 0) <= 5,
+          );
+          if (voidLv5DownInHand.length === 0) break;
+          // Precisa de outro Void no campo para tributar (não pode tributar a si mesmo
+          // sem perder o efeito; safer só com 2+ Voids)
+          if ((analysis.voidCount || 0) < 2) break;
+          priority = 7.5;
+          // Haunter (lv5) na mão é payoff S-tier
+          if (handIds.includes(VOID_IDS.HAUNTER)) priority += 1.5;
+          break;
+        }
+        case VOID_IDS.BONE_SPIDER: {
+          // Locka 1 monstro inimigo até o final do próximo turno
+          if (oppFieldCount === 0) break;
+          priority = 4.0;
+          if (oppStrongestAtk >= 2000) priority += 1.5;
+          if (oppStrongestAtk >= 2500) priority += 1.0;
+          break;
+        }
+        case VOID_IDS.GHOST_WOLF: {
+          // Halve ATK + direct attack — só vale se oponente sem field
+          if (oppFieldCount > 0) break;
+          // Damage = atk/2; só usar se vai fechar o jogo ou se LP do oponente é baixo
+          const halvedDamage = Math.floor((card.atk || 0) / 2);
+          const oppLP = analysis.oppLP || 8000;
+          if (halvedDamage >= oppLP) {
+            priority = 12.0; // letal
+          } else if (oppLP <= 2000) {
+            priority = 6.5; // pressão grande
+          } else {
+            priority = 3.5;
+          }
+          break;
+        }
+        default: {
+          // Outros monstros Void com ignition genérico — fallback baixo
+          const knowledge = getVoidCardKnowledge(card);
+          priority = knowledge?.role === "boss" ? 5.0 : 4.0;
+        }
+      }
+
+      if (priority <= 0) return;
+
+      actions.push({
+        type: "monsterEffect",
+        fieldIndex,
+        cardId: card.id,
+        cardName: card.name,
+        priority,
+        effectId: fieldIgnition.id,
+        activationContext: voidActivationContext,
+      });
+    });
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // GRAVEYARD MONSTER IGNITIONS
+    // Cobre Conjurer GY-revive, Tenebris Horn once-per-duel revive,
+    // Forgotten Knight banish-to-destroy, Haunter banish-to-revive Hollows.
+    // ═══════════════════════════════════════════════════════════════════════════
+    (bot.graveyard || []).forEach((card, graveyardIndex) => {
+      if (!card || card.cardKind !== "monster") return;
+
+      const gyIgnition = (card.effects || []).find(
+        (e) =>
+          e && e.timing === "ignition" && e.requireZone === "graveyard",
+      );
+      if (!gyIgnition) return;
+
+      if (!isSimulatedState) {
+        const preview = game?.effectEngine?.canActivateMonsterEffectPreview?.(
+          card,
+          bot,
+          "graveyard",
+          null,
+          {},
+        );
+        if (preview && preview.ok === false) return;
+      } else {
+        const optCheck = game.effectEngine?.checkOncePerTurn?.(
+          card,
+          bot,
+          gyIgnition,
+        );
+        if (optCheck?.ok === false) return;
+        const opdCheck = game.effectEngine?.checkOncePerDuel?.(
+          card,
+          bot,
+          gyIgnition,
+        );
+        if (opdCheck?.ok === false) return;
+      }
+
+      const fieldHasSpace = (bot.field || []).length < 5;
+      const hollowsInGY = (bot.graveyard || []).filter(
+        (c) => c?.id === VOID_IDS.HOLLOW,
+      ).length;
+      const oppFaceUpST =
+        ((opponent?.spellTrap || []).filter(
+          (c) => c && !c.isFacedown,
+        ).length || 0) + (opponent?.fieldSpell ? 1 : 0);
+
+      let priority = 0;
+
+      switch (card.id) {
+        case VOID_IDS.CONJURER: {
+          // Tributa 1 Void do campo → SS Conjurer do GY
+          const revivePlan = this.evaluateConjurerGraveyardRevive(
+            analysis,
+            game,
+            bot,
+            card,
+          );
+          if (!revivePlan.shouldActivate) break;
+          priority = revivePlan.priority;
+          break;
+        }
+        case VOID_IDS.TENEBRIS_HORN: {
+          // Once per duel: SS self do GY
+          if (!fieldHasSpace) break;
+          priority = 6.5;
+          // Cada Void no campo aumenta valor (passive scaling)
+          priority += Math.min(analysis.voidCount || 0, 4) * 0.4;
+          break;
+        }
+        case VOID_IDS.FORGOTTEN_KNIGHT: {
+          // Banir self do GY → destruir 1 face-up S/T do oponente
+          if (oppFaceUpST < 1) break;
+          priority = 7.0;
+          if (opponent?.fieldSpell) priority += 1.0; // field spells são valiosos
+          break;
+        }
+        case VOID_IDS.HAUNTER: {
+          // Banir self do GY → SS até 3 Hollows do GY com ATK/DEF 0
+          if (hollowsInGY < 1 || !fieldHasSpace) break;
+          priority = 8.0;
+          priority += Math.min(hollowsInGY, 3) * 0.5; // até +1.5
+          // Payoffs para os Hollows revividos
+          const hasPoly = handIds.includes(VOID_IDS.POLYMERIZATION);
+          const extraIds = (bot.extraDeck || [])
+            .map((c) => c?.id)
+            .filter(Boolean);
+          if (hasPoly && extraIds.includes(VOID_IDS.HOLLOW_KING)) {
+            priority += 1.5; // Hollow King fusion fica disponível
+          }
+          if (hasPoly && extraIds.includes(VOID_IDS.HYDRA_TITAN)) {
+            priority += 1.0; // material para Hydra
+          }
+          break;
+        }
+        default: {
+          // Outros GY ignitions desconhecidos — fallback conservador
+          priority = 3.0;
+        }
+      }
+
+      if (priority <= 0) return;
+
+      actions.push({
+        type: "graveyardMonsterEffect",
+        graveyardIndex,
+        cardId: card.id,
+        cardName: card.name,
+        priority,
+        effectId: gyIgnition.id,
+        activationContext: voidActivationContext,
+      });
+    });
 
     if (bot.fieldSpell && !isSimulatedState) {
       const effect = (bot.fieldSpell.effects || []).find(
@@ -1019,6 +1880,7 @@ export default class VoidStrategy extends BaseStrategy {
                 type: "fieldEffect",
                 priority: 6,
                 cardName: bot.fieldSpell.name,
+                activationContext: voidActivationContext,
               });
             }
           }
@@ -1194,5 +2056,28 @@ export default class VoidStrategy extends BaseStrategy {
         break;
     }
     return state;
+  }
+
+  /**
+   * Override: tributos para Normal Summon (Arcturus 2 tributos, Forgotten Knight
+   * lv5, etc.) usam costPolicy Void — preferindo Hollows quando não há fusion path,
+   * preservando engine pieces (Conjurer/Walker/Tenebris Horn) e bosses do campo.
+   */
+  selectBestTributes(field, tributesNeeded, cardToSummon, context = {}) {
+    if (tributesNeeded <= 0 || !field || field.length < tributesNeeded) {
+      return [];
+    }
+    const game = context?.game || this.bot?.game;
+    const analysis =
+      this.currentAnalysis ||
+      (game ? this.analyzeGameState(game) : { field });
+    const policy = buildVoidTributePolicy(analysis);
+    return selectBestTributesGeneric(
+      field,
+      tributesNeeded,
+      cardToSummon,
+      context,
+      policy,
+    );
   }
 }

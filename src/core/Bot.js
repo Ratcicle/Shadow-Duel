@@ -154,8 +154,40 @@ export default class Bot extends Player {
 
   getVoidDeck() {
     return [
-      151, 151, 151, 154, 154, 154, 155, 152, 152, 153, 156, 158, 159, 160, 161,
-      161, 162, 162, 164, 172, 172, 13, 13, 166, 167, 168, 169, 169, 170,
+      // Bosses and high-impact Void monsters
+      258, // Arcturus, Lord of the Void
+      162, // Void Slayer Brute
+      172, // Thousand-Arms of the Void
+      158, // Void Bone Spider
+      164, // Void Serpent Drake
+      159, // Void Forgotten Knight
+      155, // Void Haunter
+      153, // Void Beast
+
+      // Core engine
+      151,
+      151,
+      151, // Void Conjurer (3x)
+      161,
+      161, // Void Tenebris Horn (2x)
+      152,
+      152, // Void Walker (2x)
+      156, // Void Ghost Wolf
+      154,
+      154,
+      154, // Void Hollow (3x)
+      160, // Void Raven
+
+      // Spells and traps
+      13,
+      13,
+      13, // Polymerization (3x)
+      166, // Sealing the Void
+      167, // The Void
+      168, // Void Gravitational Pull
+      169,
+      169, // Void Lost Throne (2x)
+      170, // Void Mirror Dimension
     ];
   }
 
@@ -1804,10 +1836,13 @@ export default class Bot extends Player {
         return false;
       }
 
+      const actionActivationContext = action.activationContext || {};
       const activationContext = {
+        ...actionActivationContext,
         fromHand: true,
         activationZone: "hand",
         sourceZone: "hand",
+        autoSelectTargets: actionActivationContext.autoSelectTargets !== false,
       };
 
       const pipelineResult = await game.runActivationPipeline({

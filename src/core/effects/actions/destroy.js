@@ -65,8 +65,11 @@ export async function checkBeforeDestroyNegations(card, ctx) {
       continue;
     }
 
-    // For player-controlled cards, prompt for confirmation
-    if (owner === this.game.player) {
+    const ownerIsHuman = owner?.controllerType === "human";
+
+    // Human-controlled cards ask for confirmation. AI seats in Bot Arena can
+    // occupy either side, so do not infer "human" from owner.id/player slot.
+    if (ownerIsHuman) {
       const shouldNegate = await this.promptForDestructionNegation(
         card,
         effect
@@ -82,6 +85,7 @@ export async function checkBeforeDestroyNegations(card, ctx) {
       player: owner,
       opponent:
         ctx?.opponent ||
+        this.game?.getOpponent?.(owner) ||
         (owner === this.game.player ? this.game.bot : this.game.player),
       cause: ctx?.cause,
       destroySource: ctx?.source || null,

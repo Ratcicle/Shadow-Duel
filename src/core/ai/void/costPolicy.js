@@ -1,0 +1,222 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// src/core/ai/void/costPolicy.js
+// Cost preferences dinâmicas para o arquétipo Void.
+//
+// Quando um efeito Void exige custo (tributo/descarte/banish), a IA precisa
+// indicar para o AutoSelector e o seletor de tributos:
+//   - quais cartas DEVEM ser preservadas (preserveNames) — ex.: Hollow quando
+//     há fusion path acessível, Walker quando há Cosmic Walker possível,
+//     Thousand-Arms quando há Malicious Demon possível;
+//   - quais cartas PODEM ser sacrificadas (preferNames) — ex.: Hollow quando
+//     não há fusion path, tokens de Bone Spider, monstros cujo efeito já foi
+//     usado neste turno.
+//
+// As decisões são derivadas do estado atual (campo, mão, GY, extra deck) e
+// nunca hard-codam IDs específicos onde o nome canônico já basta.
+// ─────────────────────────────────────────────────────────────────────────────
+
+import { isVoid } from "./knowledge.js";
+import { VOID_IDS } from "./combos.js";
+
+const VOID_OFFENSIVE_PAYOFFS = [
+  "Arcturus, Lord of the Void",
+  "Void Hydra Titan",
+  "Void Berserker",
+  "Void Hollow King",
+  "Void Cosmic Walker",
+  "Malicious Demon of the Void",
+  "Void Slayer Brute",
+  "Void Haunter",
+  "Thousand-Arms of the Void",
+  "Void Serpent Drake",
+  "Void Forgotten Knight",
+];
+
+/**
+ * Calcula custos preferidos / preservados a partir do estado.
+ * Retorna o formato esperado pelo AutoSelector.getCandidateScore (intent="cost").
+ */
+export function buildVoidCostPreferences(analysis = {}) {
+  const hand = analysis.hand || [];
+  const field = analysis.field || [];
+  const graveyard = analysis.graveyard || [];
+  const extraDeck = analysis.extraDeck || [];
+  const deck = analysis.deck || [];
+
+  const handIds = hand.map((c) => c?.id).filter(Boolean);
+  const fieldIds = field.map((c) => c?.id).filter(Boolean);
+  const gyIds = graveyard.map((c) => c?.id).filter(Boolean);
+  const extraIds = extraDeck.map((c) => c?.id).filter(Boolean);
+
+  const hasPoly = handIds.includes(VOID_IDS.POLYMERIZATION);
+
+  const hollowsHand = handIds.filter((id) => id === VOID_IDS.HOLLOW).length;
+  const hollowsField = fieldIds.filter((id) => id === VOID_IDS.HOLLOW).length;
+  const hollowsGY = gyIds.filter((id) => id === VOID_IDS.HOLLOW).length;
+  const totalHollows = hollowsHand + hollowsField + hollowsGY;
+
+  const handVoids = hand.filter(isVoid).length;
+  const fieldVoids = field.filter(isVoid).length;
+  const accessibleVoids = handVoids + fieldVoids;
+
+  const preserveNames = new Set();
+  const preferNames = new Set();
+
+  // ─── PRESERVE: peças críticas com payoff próximo ───────────────────────────
+
+  // Hollow é material universal: preservar quando há fusion path acessível.
+  // Hollow King precisa de 3 Hollows totais; Hydra Titan precisa de 6 Voids.
+  const hollowKingPath =
+    hasPoly &&
+    extraIds.includes(VOID_IDS.HOLLOW_KING) &&
+    totalHollows >= 3;
+  const hydraPathClose =
+    hasPoly &&
+    extraIds.includes(VOID_IDS.HYDRA_TITAN) &&
+    accessibleVoids >= 4;
+  if (hollowKingPath || hydraPathClose) {
+    preserveNames.add("Void Hollow");
+  }
+
+  // Walker no campo + Cosmic Walker no extra = caminho ascension preservado.
+  if (
+    fieldIds.includes(VOID_IDS.WALKER) &&
+    extraIds.includes(VOID_IDS.COSMIC_WALKER)
+  ) {
+    preserveNames.add("Void Walker");
+  }
+
+  // Thousand-Arms no campo + Malicious Demon no extra = caminho ascension.
+  if (
+    fieldIds.includes(VOID_IDS.THOUSAND_ARMS) &&
+    extraIds.includes(VOID_IDS.MALICIOUS_DEMON)
+  ) {
+    preserveNames.add("Thousand-Arms of the Void");
+  }
+
+  // Tenebris Horn no campo: passive +ATK/DEF para todos os Voids — sustentar.
+  if (fieldIds.includes(VOID_IDS.TENEBRIS_HORN)) {
+    preserveNames.add("Void Tenebris Horn");
+  }
+
+  // Conjurer no campo com efeito ainda recrutável (há Voids lv4- no deck).
+  const conjurerOnField = fieldIds.includes(VOID_IDS.CONJURER);
+  const deckHasVoidLv4 = deck.some(
+    (c) => isVoid(c) && c?.cardKind === "monster" && (c.level || 0) <= 4,
+  );
+  if (conjurerOnField && deckHasVoidLv4) {
+    preserveNames.add("Void Conjurer");
+  }
+
+  // Haunter no campo + Hollows no GY = engine de revive massivo.
+  if (fieldIds.includes(VOID_IDS.HAUNTER) && hollowsGY >= 1) {
+    preserveNames.add("Void Haunter");
+  }
+
+  // Bosses no campo: nunca sacrificar.
+  const bossIdsToProtect = [
+    VOID_IDS.ARCTURUS,
+    VOID_IDS.HOLLOW_KING,
+    VOID_IDS.BERSERKER,
+    VOID_IDS.HYDRA_TITAN,
+    VOID_IDS.COSMIC_WALKER,
+    VOID_IDS.MALICIOUS_DEMON,
+  ];
+  for (const card of field) {
+    if (!card || !bossIdsToProtect.includes(card.id)) continue;
+    if (card.name) preserveNames.add(card.name);
+  }
+
+  // Slayer Brute no campo: caminho para Berserker fusion (caso haja Poly+Void).
+  if (
+    fieldIds.includes(VOID_IDS.SLAYER_BRUTE) &&
+    hasPoly &&
+    extraIds.includes(VOID_IDS.BERSERKER) &&
+    accessibleVoids >= 2
+  ) {
+    preserveNames.add("Void Slayer Brute");
+  }
+
+  // ─── PREFER: peças descartáveis ────────────────────────────────────────────
+
+  // Hollow se NÃO há fusion path: ATK/DEF baixos, sem futuro próximo.
+  if (!preserveNames.has("Void Hollow") && hollowsField > 0) {
+    preferNames.add("Void Hollow");
+  }
+
+  // Tokens de Bone Spider (não-Void, atk 500) — descartáveis sempre.
+  preferNames.add("Void Little Spider");
+
+  // Walker já com efeito de bounce usado: prioriza tributo
+  // (handled indiretamente pelo usedEffectThisTurn no AutoSelector)
+
+  return {
+    archetype: "Void",
+    preferNames: [...preferNames],
+    preserveNames: [...preserveNames],
+    offensivePayoffNames: VOID_OFFENSIVE_PAYOFFS,
+    preserveLastOffensivePayoff: true,
+    availableOffensivePayoffs: hand.filter((c) =>
+      VOID_OFFENSIVE_PAYOFFS.includes(c?.name),
+    ).length,
+  };
+}
+
+/**
+ * Empacota costPreferences no shape esperado em `action.activationContext`.
+ * Pode ser estendido com `targetPreferences` específicos por efeito futuramente.
+ */
+export function buildVoidActivationContext(analysis = {}) {
+  return {
+    autoSelectTargets: true,
+    autoSelectSingleTarget: true,
+    actionContext: {
+      costPreferences: buildVoidCostPreferences(analysis),
+      targetPreferences: {
+        void_conjurer_cost: {
+          role: "cost",
+          intent: "cost",
+        },
+      },
+    },
+  };
+}
+
+/**
+ * Policy para `selectBestTributes` (normal summon com tributo, ex.: Arcturus).
+ * Implementa `evaluateCardValue` consumido por
+ * src/core/ai/common/tributePolicy.js#selectBestTributes.
+ *
+ * Quanto MENOR o keepScore, MAIS provável o monstro ser tributado.
+ */
+export function buildVoidTributePolicy(analysis = {}) {
+  const costPrefs = buildVoidCostPreferences(analysis);
+  const preserveSet = new Set(costPrefs.preserveNames);
+  const preferSet = new Set(costPrefs.preferNames);
+  const offensivePayoffs = new Set(costPrefs.offensivePayoffNames);
+
+  return {
+    evaluateCardValue: (monster) => {
+      if (!monster) return 0;
+      let score = (monster.atk || 0) / 1000;
+
+      const name = monster.name;
+      if (preferSet.has(name)) score -= 2.5;
+      if (preserveSet.has(name)) score += 5;
+      if (offensivePayoffs.has(name)) score += 1.5;
+
+      // Tokens de qualquer tipo são tributos ideais
+      if (monster.isToken) score -= 3;
+
+      // Já cumpriu função neste turno → custo barato
+      if (monster.usedEffectThisTurn) score -= 1.2;
+      if (monster.hasAttacked) score -= 0.6;
+
+      // Faceup/facedown — facedown geralmente é defesa improvisada,
+      // melhor tributar do que face-up útil
+      if (monster.isFacedown) score -= 0.4;
+
+      return score;
+    },
+  };
+}

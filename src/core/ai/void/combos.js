@@ -38,6 +38,9 @@ export const VOID_IDS = {
   LOST_THRONE: 169,
   MIRROR_DIMENSION: 170,
   COSMIC_WALKER: 171, // Ascension
+  THOUSAND_ARMS: 172,
+  MALICIOUS_DEMON: 173, // Ascension de Thousand-Arms
+  ARCTURUS: 258, // Lord of the Void (boss máximo)
   POLYMERIZATION: 13,
 };
 
@@ -256,6 +259,69 @@ export const COMBO_DATABASE = [
     ],
     result: "Knight 2000 ATK + destruição de spell/trap",
     priority: 7.5,
+  },
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // BOSSES SUPERIORES (Thousand-Arms, Arcturus, Malicious Demon)
+  // ═══════════════════════════════════════════════════════════════════════════
+  {
+    name: "Thousand-Arms Hand-SS",
+    description:
+      "Tributa 1 Void do campo → Special Summon Thousand-Arms (2100 ATK) da mão",
+    requires: ["Void Thousand-Arms na mão", "1 Void no campo"],
+    result: "Boss 2100 ATK no campo + uma ativação de efeito do material registrada",
+    priority: 8,
+    sequence: [
+      {
+        action: "handIgnition",
+        cardId: 172,
+        note: "Tributa Void e desce Thousand-Arms da mão",
+      },
+    ],
+  },
+  {
+    name: "Thousand-Arms Bounce-Revive",
+    description:
+      "Thousand-Arms no campo → bounce → revive até 2 Hollows do GY com +700 ATK/DEF",
+    requires: ["Void Thousand-Arms no campo", "1+ Void Hollow no GY"],
+    result: "Thousand-Arms na mão (reusável) + 2 Hollows fortalecidos no campo",
+    priority: 9.5,
+    sequence: [
+      {
+        action: "ignition",
+        cardId: 172,
+        note: "Bounce + revive 2 Hollows com +700",
+      },
+    ],
+  },
+  {
+    name: "Arcturus Tribute Summon",
+    description:
+      "2 tributos → Arcturus 2800 ATK (lock de Battle Phase + ATK escala com Voids no GY se for único monstro)",
+    requires: ["Arcturus na mão", "2 monstros para tributar", "Voids no GY (recomendado)"],
+    result:
+      "Lord of the Void no campo: oponente não ativa nada na BP + survival via banish 2 Voids do GY",
+    priority: 11,
+    sequence: [
+      { action: "summon", cardId: 258, note: "Tributa 2 monstros para Arcturus" },
+    ],
+  },
+  {
+    name: "Malicious Demon Ascension",
+    description:
+      "Thousand-Arms no campo (com 2 ativações de efeito) → ascende para Malicious Demon",
+    requires: ["Thousand-Arms no campo com 2+ ativações de efeito"],
+    result:
+      "Boss 2600 ATK com ataques múltiplos por Hollow no GY",
+    priority: 11,
+  },
+  {
+    name: "Malicious Demon Death Loop",
+    description:
+      "Malicious Demon morre → revive até 3 Hollows do GY + busca Polymerization do deck",
+    requires: ["Malicious Demon no campo", "Hollows no GY", "Poly no deck"],
+    result: "3 Hollows extras + Poly na mão (habilita refusão Hollow King/Hydra Titan)",
+    priority: 9.5,
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -514,6 +580,81 @@ export function detectAvailableCombos(analysis) {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // BOSSES SUPERIORES
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // Thousand-Arms Hand-SS (precisa 1 Void no campo para tributar)
+  if (hasInHand(VOID_IDS.THOUSAND_ARMS) && countVoidsOnField() >= 1) {
+    detected.push({
+      combo: COMBO_DATABASE.find((c) => c.name === "Thousand-Arms Hand-SS"),
+      ready: true,
+      missing: [],
+      priority: 8,
+    });
+  }
+
+  // Thousand-Arms Bounce-Revive (Thousand-Arms no campo + Hollow no GY)
+  if (hasOnField(VOID_IDS.THOUSAND_ARMS) && countInGY(VOID_IDS.HOLLOW) >= 1) {
+    const hollowsAvail = Math.min(countInGY(VOID_IDS.HOLLOW), 2);
+    detected.push({
+      combo: COMBO_DATABASE.find(
+        (c) => c.name === "Thousand-Arms Bounce-Revive",
+      ),
+      ready: true,
+      missing: [],
+      priority: 8.5 + hollowsAvail * 0.5, // +0.5 por Hollow revivido
+    });
+  }
+
+  // Arcturus Tribute Summon (precisa 2 monstros no campo + Normal Summon disponível)
+  if (hasInHand(VOID_IDS.ARCTURUS) && summonAvailable) {
+    const monstersOnField = (field || []).filter(
+      (m) => m && m.cardKind === "monster",
+    ).length;
+    const ready = monstersOnField >= 2;
+    const voidsInGY = (graveyard || []).filter(isVoid).length;
+    detected.push({
+      combo: COMBO_DATABASE.find((c) => c.name === "Arcturus Tribute Summon"),
+      ready,
+      missing: ready
+        ? []
+        : [`${2 - monstersOnField} monstro(s) para tributar`],
+      // Boost por Voids no GY (cada par = uma "vida extra" via replacementEffect)
+      priority: ready ? 9 + Math.min(voidsInGY, 6) * 0.4 : 4,
+    });
+  }
+
+  // Malicious Demon Ascension (Thousand-Arms no campo + Demon no extra)
+  // A checagem de "2 ativações" é feita downstream via game.checkAscensionRequirements;
+  // aqui sinalizamos interesse no combo quando o material está em jogo.
+  if (
+    hasOnField(VOID_IDS.THOUSAND_ARMS) &&
+    hasInExtra(VOID_IDS.MALICIOUS_DEMON)
+  ) {
+    const hollowsInGY = countInGY(VOID_IDS.HOLLOW);
+    detected.push({
+      combo: COMBO_DATABASE.find((c) => c.name === "Malicious Demon Ascension"),
+      ready: true,
+      missing: [],
+      // Quanto mais Hollows no GY, mais ataques Malicious Demon faz
+      priority: 10 + Math.min(hollowsInGY, 4) * 0.5,
+    });
+  }
+
+  // Malicious Demon Death Loop (Demon no campo + Hollows no GY)
+  if (
+    hasOnField(VOID_IDS.MALICIOUS_DEMON) &&
+    countInGY(VOID_IDS.HOLLOW) >= 1
+  ) {
+    detected.push({
+      combo: COMBO_DATABASE.find((c) => c.name === "Malicious Demon Death Loop"),
+      ready: true,
+      missing: [],
+      priority: 8.5,
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // Combos de Spell
   // ═══════════════════════════════════════════════════════════════════════════
 
@@ -596,23 +737,52 @@ export function getComboSequence(combo, analysis) {
  * @returns {number} - Valor estimado
  */
 export function calculateFusionValue(fusionId, analysis) {
-  const { oppFieldCount, oppStrongestAtk, myLP, oppLP } = analysis;
+  const { oppFieldCount, oppLP } = analysis;
+
+  // Sinergias compartilhadas
+  const fieldIds = (analysis.field || []).map((c) => c?.id).filter(Boolean);
+  const handIds = (analysis.hand || []).map((c) => c?.id).filter(Boolean);
+  const tenebrisOnField = fieldIds.includes(VOID_IDS.TENEBRIS_HORN);
+  const ravenInHand = handIds.includes(VOID_IDS.RAVEN);
+
+  // Tenebris Horn passive: +100 ATK/DEF por Void no campo (incluindo a fusão)
+  const tenebrisBonus = tenebrisOnField ? 0.6 : 0;
+  // Raven discard pós-fusão: imunidade por 1 turno (S-tier para fusões grandes)
+  const ravenBonus = ravenInHand ? 0.8 : 0;
 
   switch (fusionId) {
     case VOID_IDS.HOLLOW_KING:
       // Bom se oponente tem campo moderado, valor na resiliência
-      return 9 + (oppFieldCount >= 2 ? 1 : 0);
+      return (
+        9 + (oppFieldCount >= 2 ? 1 : 0) + tenebrisBonus + ravenBonus
+      );
 
-    case VOID_IDS.BERSERKER:
+    case VOID_IDS.BERSERKER: {
       // Excelente para OTK (2 ataques + bounce)
       const lethalPotential = oppLP <= 5600 ? 3 : 0; // 2800 x 2 = 5600
-      return 10 + lethalPotential + (oppFieldCount >= 1 ? 1 : 0);
+      return (
+        10 +
+        lethalPotential +
+        (oppFieldCount >= 1 ? 1 : 0) +
+        tenebrisBonus +
+        ravenBonus
+      );
+    }
 
-    case VOID_IDS.HYDRA_TITAN:
-      // Maior fusão, sempre forte
-      return 12 + (oppFieldCount >= 3 ? 2 : 0);
+    case VOID_IDS.HYDRA_TITAN: {
+      // Hydra destrói TODOS os outros monstros próprios na invocação:
+      // → Tenebris Horn no campo morre, perdendo o bônus passive (anti-sinergia).
+      // Raven é S-tier aqui: imunidade contra remoções pós-fusão.
+      const hydraTenebrisAdjust = tenebrisOnField ? -0.6 : 0;
+      return (
+        12 +
+        (oppFieldCount >= 3 ? 2 : 0) +
+        hydraTenebrisAdjust +
+        ravenBonus * 1.5 // Raven vale mais para Hydra (3500 ATK protegido)
+      );
+    }
 
     default:
-      return 5;
+      return 5 + tenebrisBonus + ravenBonus;
   }
 }

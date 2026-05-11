@@ -245,7 +245,7 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
           game,
           ctx,
         });
-        if (Array.isArray(ranked) && ranked.length > 0) {
+        if (Array.isArray(ranked)) {
           return ranked.slice(0, max);
         }
       }
@@ -387,7 +387,7 @@ export async function handleSearchThenOptionalSpecialSummonFromHand(
           game,
           ctx,
         });
-        if (Array.isArray(ranked) && ranked.length > 0) {
+        if (Array.isArray(ranked)) {
           return ranked.slice(0, max);
         }
       }

@@ -134,6 +134,8 @@ export function evaluateVoidMonster(monster, context = {}) {
     oppStrongestAtk = 0,
     hollowCount = 0,
     voidCount = 0,
+    hollowsInGY = 0,
+    voidsInGY = 0,
     phase = "main",
   } = context;
   const knowledge = getVoidCardKnowledge(monster);
@@ -220,6 +222,24 @@ export function evaluateVoidMonster(monster, context = {}) {
       value += 0.8; // Proteção para fusões
       break;
 
+    // Boss escalável de Hollows do GY (mini-Haunter com bounce)
+    case VOID_IDS.THOUSAND_ARMS:
+      value += 2.4;
+      if (hollowsInGY > 0) value += Math.min(hollowsInGY, 2) * 0.4;
+      break;
+
+    // Ascension boss: ataques múltiplos por Hollow no GY + death loop
+    case VOID_IDS.MALICIOUS_DEMON:
+      value += 3.6;
+      if (hollowsInGY > 0) value += Math.min(hollowsInGY, 3) * 0.4;
+      break;
+
+    // Lord of the Void: lock de BP + scaling com Voids no GY + survival
+    case VOID_IDS.ARCTURUS:
+      value += 4.5;
+      if (voidsInGY > 0) value += Math.min(voidsInGY, 8) * 0.3;
+      break;
+
     default:
       if (knowledge?.role === "boss") value += 1.5;
       else if (knowledge?.role === "extender") value += 1.0;
@@ -289,6 +309,7 @@ export function evaluateBoardVoid(gameOrState, perspectivePlayer) {
   const hollowCount = myField.filter((m) => m?.id === VOID_IDS.HOLLOW).length;
   const voidCount = myField.filter(isVoid).length;
   const hollowsInGY = myGY.filter((m) => m?.id === VOID_IDS.HOLLOW).length;
+  const voidsInGY = myGY.filter(isVoid).length;
 
   const oppStrongestAtk = oppField.reduce((max, m) => {
     if (!m || m.cardKind !== "monster") return max;
@@ -296,7 +317,13 @@ export function evaluateBoardVoid(gameOrState, perspectivePlayer) {
     return Math.max(max, atk);
   }, 0);
 
-  const context = { oppStrongestAtk, hollowCount, voidCount };
+  const context = {
+    oppStrongestAtk,
+    hollowCount,
+    voidCount,
+    hollowsInGY,
+    voidsInGY,
+  };
 
   // Avaliar meus monstros
   for (const monster of myField) {
@@ -304,14 +331,31 @@ export function evaluateBoardVoid(gameOrState, perspectivePlayer) {
     score += evaluateVoidMonster(monster, context);
   }
 
-  // Avaliar monstros do oponente (negativo)
+  // Avaliar monstros do oponente (negativo).
+  // Bone Spider lock: monstros com `cannotAttackUntilTurn` no turno atual ou
+  // futuro são tratados como ameaça parcial — não podem atacar este turno,
+  // mas ainda podem ativar efeitos / ser tributados.
+  const currentTurn =
+    typeof gameOrState?.turnCounter === "number"
+      ? gameOrState.turnCounter
+      : 0;
   for (const monster of oppField) {
     if (!monster || monster.cardKind !== "monster") continue;
     const threatScore = calculateThreatScore(monster, {
       myStrongestAtk: Math.max(...myField.map((m) => m?.atk || 0), 0),
       hasDefenses: myField.some((m) => m?.position === "defense"),
     });
-    score -= threatScore * 0.8;
+    let multiplier = 0.8;
+    const lockedThisTurn =
+      monster.cannotAttackThisTurn ||
+      (typeof monster.cannotAttackUntilTurn === "number" &&
+        monster.cannotAttackUntilTurn >= currentTurn);
+    if (lockedThisTurn) {
+      // Lockado = não pode atacar. Vale ~40% do threat (preserva valor de
+      // efeitos / sinergias / futuros turnos quando o lock expira).
+      multiplier = 0.32;
+    }
+    score -= threatScore * multiplier;
   }
 
   // ═══════════════════════════════════════════════════════════════════════════

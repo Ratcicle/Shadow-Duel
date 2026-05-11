@@ -92,7 +92,7 @@ export async function handleReturnToHand(action, ctx, targets, engine) {
 /**
  * Helper function to bounce source and summon target
  */
-async function bounceAndSummonCard(source, target, player, action, engine) {
+async function bounceAndSummonCard(source, target, player, action, engine, ctx = {}) {
   const game = engine.game;
 
   if (!target || player.field.length >= 5) return false;
@@ -120,6 +120,17 @@ async function bounceAndSummonCard(source, target, player, action, engine) {
 
   // Determine position
   let position = action.position || "choice";
+  const positionPreferences =
+    ctx?.actionContext?.specialSummonPositions ||
+    ctx?.activationContext?.actionContext?.specialSummonPositions ||
+    null;
+  const byName =
+    target?.name && positionPreferences?.byName
+      ? positionPreferences.byName[target.name]
+      : null;
+  if (byName === "attack" || byName === "defense") {
+    position = byName;
+  }
   if (position === "choice") {
     position = await engine.chooseSpecialSummonPosition(target, player);
   }
@@ -288,13 +299,32 @@ export async function handleBounceAndSummon(action, ctx, targets, engine) {
 
   // Bot auto-selection (highest ATK)
   if (isAI(player)) {
-    const best = validTargets.reduce((top, c) => {
-      const cAtk = c.atk || 0;
-      const topAtk = top.atk || 0;
-      return cAtk >= topAtk ? c : top;
-    }, validTargets[0]);
+    const evaluation = player.strategy?.evaluateRecruitCandidate?.(
+      validTargets,
+      {
+        game,
+        player,
+        source,
+        action,
+      },
+    );
+    const strategicChoice =
+      evaluation?.best && validTargets.includes(evaluation.best)
+        ? evaluation.best
+        : null;
+    if (evaluation?.blockedAll) {
+      getUI(game)?.log("No strategically valid monster to summon.");
+      return false;
+    }
+    const best =
+      strategicChoice ||
+      validTargets.reduce((top, c) => {
+        const cAtk = c.atk || 0;
+        const topAtk = top.atk || 0;
+        return cAtk >= topAtk ? c : top;
+      }, validTargets[0]);
 
-    return await bounceAndSummonCard(source, best, player, action, engine);
+    return await bounceAndSummonCard(source, best, player, action, engine, ctx);
   }
 
   // Player selection
@@ -320,7 +350,8 @@ export async function handleBounceAndSummon(action, ctx, targets, engine) {
             target,
             player,
             action,
-            engine
+            engine,
+            ctx,
           );
 
           game.isResolvingEffect = false;
@@ -334,5 +365,5 @@ export async function handleBounceAndSummon(action, ctx, targets, engine) {
   // Fallback
   const fallback = validTargets[0];
 
-  return await bounceAndSummonCard(source, fallback, player, action, engine);
+  return await bounceAndSummonCard(source, fallback, player, action, engine, ctx);
 }
