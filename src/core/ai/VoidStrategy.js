@@ -8,6 +8,7 @@ import {
 import {
   assessVoidNormalSummonEntry,
   assessVoidSummonEntry,
+  evaluateVoidFinisherPlans,
   evaluateVoidFusionPriority,
   shouldPlayVoidSpell,
   shouldSummonVoidMonster,
@@ -160,6 +161,67 @@ function countValidCostCandidates(player, target = {}) {
     );
     return count + candidates.length;
   }, 0);
+}
+
+const MIRROR_DIMENSION_RANKS = new Map([
+  [VOID_IDS.CONJURER, 100],
+  [VOID_IDS.WALKER, 90],
+  [VOID_IDS.TENEBRIS_HORN, 80],
+  [VOID_IDS.BEAST, 70],
+  [VOID_IDS.FORGOTTEN_KNIGHT, 100],
+  [VOID_IDS.HAUNTER, 90],
+  [VOID_IDS.THOUSAND_ARMS, 100],
+  [VOID_IDS.SERPENT_DRAKE, 90],
+  [VOID_IDS.BONE_SPIDER, 80],
+  [VOID_IDS.SLAYER_BRUTE, 100],
+  [VOID_IDS.ARCTURUS, 100],
+]);
+
+function isMirrorDimensionContext(source, action = {}) {
+  return (
+    source?.id === VOID_IDS.MIRROR_DIMENSION ||
+    source?.name === "Void Mirror Dimension" ||
+    action?.type === "special_summon_matching_level"
+  );
+}
+
+function getMirrorDimensionCandidateScore(card) {
+  if (!card || card.cardKind !== "monster") return -100;
+  if (card.id === VOID_IDS.RAVEN) return -80;
+  if (card.id === VOID_IDS.HOLLOW) return -25;
+  if (MIRROR_DIMENSION_RANKS.has(card.id)) {
+    return MIRROR_DIMENSION_RANKS.get(card.id);
+  }
+  if (isVoid(card) && (card.level || 0) >= 4) return 35;
+  return 10;
+}
+
+function isUsefulMirrorDimensionHandMonster(card) {
+  return getMirrorDimensionCandidateScore(card) > 0;
+}
+
+function hasImmediateVoidFusionPlan(bot) {
+  const handIds = (bot?.hand || []).map((card) => card?.id).filter(Boolean);
+  if (!handIds.includes(VOID_IDS.POLYMERIZATION)) return false;
+  const fusionEval = evaluateVoidFusionPriority(bot);
+  return (fusionEval?.priority || 0) >= 9;
+}
+
+function withVoidFusionPreferences(baseContext, fusionEval) {
+  if (!fusionEval?.target) return baseContext;
+  return {
+    ...(baseContext || {}),
+    actionContext: {
+      ...(baseContext?.actionContext || {}),
+      fusionPreferences: {
+        preferredNames: [fusionEval.target],
+        scoresByName: {
+          [fusionEval.target]: fusionEval.priority || 0,
+        },
+        reason: fusionEval.reason || null,
+      },
+    },
+  };
 }
 
 function validateVoidHandIgnitionCandidate({
@@ -356,6 +418,13 @@ export default class VoidStrategy extends BaseStrategy {
 
     // Analisar payoffs disponíveis para swarm
     analysis.swarmPayoffs = this.analyzeSwarmPayoffs(analysis);
+    analysis.finisherPlans = evaluateVoidFinisherPlans(
+      bot,
+      opponent,
+      game,
+      analysis,
+    );
+    analysis.bestFinisherPlan = analysis.finisherPlans[0] || null;
 
     // Determinar estratégia macro
     analysis.macroStrategy = this.decideMacroStrategy(analysis);
@@ -534,6 +603,7 @@ export default class VoidStrategy extends BaseStrategy {
       source?.id === VOID_IDS.WALKER ||
       source?.name === "Void Walker" ||
       action?.type === "bounce_and_summon";
+    const isMirrorDimension = isMirrorDimensionContext(source, action);
     const actionType = String(action?.type || "");
     const isSummonContext =
       context.forceSummonAssessment === true ||
@@ -562,6 +632,18 @@ export default class VoidStrategy extends BaseStrategy {
       score += summonAssessment.scoreDelta || 0;
       if (summonAssessment.reason) {
         reasons.push(`entry: ${summonAssessment.reason}`);
+      }
+
+      if (isMirrorDimension) {
+        const mirrorRank = getMirrorDimensionCandidateScore(card);
+        score += mirrorRank;
+        reasons.push(`Mirror Dimension level-rank ${mirrorRank}`);
+        if (card.id === VOID_IDS.HOLLOW) {
+          reasons.push("Hollow entra com efeitos negados via Mirror");
+        }
+        if (card.id === VOID_IDS.RAVEN) {
+          reasons.push("Raven deve ficar na mão para proteger fusões");
+        }
       }
 
       switch (card.id) {
@@ -678,6 +760,100 @@ export default class VoidStrategy extends BaseStrategy {
     }).position;
   }
 
+  scoreBattleAttackCandidate(context = {}) {
+    const {
+      attacker,
+      target,
+      lethalNow = false,
+      attackerSurvived = false,
+      targetSurvived = false,
+      isSecondAttack = false,
+      bot = this.bot,
+      opponent,
+    } = context;
+    if (!attacker || !isVoid(attacker)) return 0;
+
+    const graveyard = bot?.graveyard || [];
+    const hollowsInGY = graveyard.filter(
+      (card) => card?.id === VOID_IDS.HOLLOW,
+    ).length;
+    const oppMonsters =
+      opponent?.field?.filter((card) => card?.cardKind === "monster") || [];
+    const oppStrongest = getOpponentStrongestBattleStat({
+      oppField: oppMonsters,
+      oppStrongestAtk: 0,
+    });
+    const attackerAtk = getEffectiveBattleStat(attacker, "atk");
+    const targetStat = target
+      ? target.isFacedown
+        ? 1500
+        : target.position === "defense"
+          ? getEffectiveBattleStat(target, "def")
+          : getEffectiveBattleStat(target, "atk")
+      : 0;
+    const destroysTarget = Boolean(target && !targetSurvived);
+    const survivesTrade = attackerSurvived || lethalNow;
+    let delta = 0;
+
+    switch (attacker.id) {
+      case VOID_IDS.FORGOTTEN_KNIGHT: {
+        if (target && attackerAtk > targetStat) {
+          delta += 0.45 + Math.min(hollowsInGY, 4) * 0.12;
+        }
+        if (hollowsInGY > 0 && target && destroysTarget && survivesTrade) {
+          delta += 0.35;
+        }
+        break;
+      }
+      case VOID_IDS.ARCTURUS: {
+        const faceUpOwnMonsters = (bot?.field || []).filter(
+          (card) =>
+            card &&
+            card.cardKind === "monster" &&
+            !card.isFacedown &&
+            card !== attacker,
+        ).length;
+        if (faceUpOwnMonsters === 0) delta += 1.1;
+        else delta -= 0.35;
+        if (!target && lethalNow) delta += 3.5;
+        if (target && attackerAtk > Math.max(targetStat, oppStrongest - 1)) {
+          delta += 0.7;
+        }
+        break;
+      }
+      case VOID_IDS.GHOST_WOLF: {
+        if (!target) {
+          if (lethalNow) {
+            delta += 4.0;
+          } else if ((opponent?.lp || 8000) <= 2500 || oppStrongest >= attackerAtk) {
+            delta += 1.2;
+          } else {
+            delta -= 1.2;
+          }
+        }
+        break;
+      }
+      case VOID_IDS.BERSERKER: {
+        if (target && destroysTarget && survivesTrade) {
+          delta += 0.8;
+          if (targetStat >= oppStrongest) delta += 0.35;
+        }
+        if (isSecondAttack) delta += 0.2;
+        if (!target && lethalNow) delta += 3.0;
+        break;
+      }
+      case VOID_IDS.MALICIOUS_DEMON: {
+        if (hollowsInGY >= 2) delta += 0.25;
+        if (!target && lethalNow) delta += 2.0;
+        break;
+      }
+      default:
+        break;
+    }
+
+    return delta;
+  }
+
   /**
    * Ranks dynamic search targets for Void effects.
    */
@@ -701,55 +877,65 @@ export default class VoidStrategy extends BaseStrategy {
     const hand = bot?.hand || [];
     const field = bot?.field || [];
     const graveyard = bot?.graveyard || [];
+    const hasFusionPlan = hasImmediateVoidFusionPlan(bot);
 
-    return cards
-      .map((card) => {
-        let score = (card.atk || 0) / 1000;
-        let blocked = false;
+    const ranked = cards.map((card) => {
+      let score = (card.atk || 0) / 1000;
+      let blocked = false;
+      if (fieldEmpty) {
+        const summonAssessment = assessVoidSummonEntry(card, {
+          game,
+          player: bot,
+          opponent: game ? this.getOpponent(game, bot) : null,
+          analysis,
+          source,
+          action,
+        });
+        score += summonAssessment.scoreDelta || 0;
+        if (summonAssessment.shouldSummon === false) {
+          score -= 1000;
+          blocked = true;
+        }
+      }
+
+      if (card.id === VOID_IDS.HOLLOW) {
+        score += fieldEmpty ? 7.0 : 2.0;
         if (fieldEmpty) {
-          const summonAssessment = assessVoidSummonEntry(card, {
-            game,
-            player: bot,
-            opponent: game ? this.getOpponent(game, bot) : null,
-            analysis,
-            source,
-            action,
-          });
-          score += summonAssessment.scoreDelta || 0;
-          if (summonAssessment.shouldSummon === false) {
-            score -= 1000;
-            blocked = true;
-          }
+          score += analysis?.swarmPayoffs?.totalPayoffValue || 0;
         }
-
-        if (card.id === VOID_IDS.HOLLOW) {
-          score += fieldEmpty ? 6.0 : 2.0;
-          if (fieldEmpty) {
-            score += analysis?.swarmPayoffs?.totalPayoffValue || 0;
-          }
-          if (hand.some((c) => c?.id === VOID_IDS.HOLLOW)) {
-            score -= fieldEmpty ? 0.5 : 1.0;
-          }
-        } else if (card.id === VOID_IDS.BEAST) {
-          score += 2.5;
-          if (!hand.some((c) => c?.id === VOID_IDS.HOLLOW)) score += 0.5;
-        } else if (card.id === VOID_IDS.TENEBRIS_HORN) {
-          score += 2.0 + Math.min(field.filter(isVoid).length, 3) * 0.4;
-        } else if (card.id === VOID_IDS.RAVEN) {
-          score += field.length >= 2 ? 2.2 : 0.8;
+        if (hand.some((c) => c?.id === VOID_IDS.HOLLOW)) {
+          score -= fieldEmpty ? 0.5 : 1.0;
+        }
+      } else if (card.id === VOID_IDS.BEAST) {
+        score += 2.5;
+        if (!hand.some((c) => c?.id === VOID_IDS.HOLLOW)) score += 0.5;
+      } else if (card.id === VOID_IDS.TENEBRIS_HORN) {
+        score += 2.0 + Math.min(field.filter(isVoid).length, 3) * 0.4;
+      } else if (card.id === VOID_IDS.RAVEN) {
+        if (hasFusionPlan) {
+          score += 5.5;
         } else {
-          const knowledge = getVoidCardKnowledge(card);
-          if (knowledge?.tags?.includes("swarm")) score += 1.0;
-          if (knowledge?.role === "control") score += 0.8;
+          score -= fieldEmpty ? 30 : 20;
+          blocked = true;
         }
+      } else {
+        const knowledge = getVoidCardKnowledge(card);
+        if (knowledge?.tags?.includes("swarm")) score += 1.0;
+        if (knowledge?.role === "control") score += 0.8;
+      }
 
-        if (graveyard.some((c) => c?.id === card.id)) {
-          score -= 0.2;
-        }
+      if (graveyard.some((c) => c?.id === card.id)) {
+        score -= 0.2;
+      }
 
-        return { card, score, blocked };
-      })
-      .filter((entry) => !entry.blocked)
+      return { card, score, blocked };
+    });
+
+    const pool = ranked.some((entry) => !entry.blocked)
+      ? ranked.filter((entry) => !entry.blocked)
+      : ranked;
+
+    return pool
       .sort((a, b) => b.score - a.score)
       .map((entry) => entry.card);
   }
@@ -1162,6 +1348,10 @@ export default class VoidStrategy extends BaseStrategy {
     const voidFieldCount = analysis.voidCount;
     const macroStrategy = analysis.macroStrategy;
     const swarmPayoffs = analysis.swarmPayoffs || {};
+    const bestFinisherPlan = analysis.bestFinisherPlan || null;
+    const preserveHollowsForFinisher =
+      bestFinisherPlan?.preserveHollowsInGY === true &&
+      String(game?.phase || "").toLowerCase().includes("main1");
 
     // ═══════════════════════════════════════════════════════════════════════════
     // ASCENSION CHECK
@@ -1184,6 +1374,10 @@ export default class VoidStrategy extends BaseStrategy {
           (asc) => game.checkAscensionRequirements(bot, asc)?.ok,
         );
         for (const ascensionCard of eligible) {
+          const ascensionFinisherPlan =
+            bestFinisherPlan?.targetName === ascensionCard.name
+              ? bestFinisherPlan
+              : null;
           let ascensionPriority;
           if (ascensionCard.id === VOID_IDS.COSMIC_WALKER) {
             ascensionPriority = 11;
@@ -1196,6 +1390,15 @@ export default class VoidStrategy extends BaseStrategy {
           } else {
             ascensionPriority = 9 + (ascensionCard.atk || 0) / 1000;
           }
+          if (ascensionFinisherPlan) {
+            ascensionPriority = Math.max(
+              ascensionPriority,
+              ascensionFinisherPlan.actionPriority || 0,
+            );
+            if (ascensionFinisherPlan.preserveHollowsInGY) {
+              ascensionPriority += 0.4;
+            }
+          }
           actions.push({
             type: "ascension",
             materialIndex: bot.field.indexOf(material),
@@ -1203,6 +1406,7 @@ export default class VoidStrategy extends BaseStrategy {
             cardName: ascensionCard.name,
             priority: ascensionPriority,
             extraDeck: true,
+            finisherPlanRank: ascensionFinisherPlan?.score100,
           });
         }
       }
@@ -1236,6 +1440,7 @@ export default class VoidStrategy extends BaseStrategy {
 
           let decision = shouldPlayVoidSpell(card, game, bot, opponent);
           let fusionHint = null;
+          let activationContext = voidActivationContext;
 
           if (card.id === VOID_IDS.GRAVITATIONAL) {
             const gravitationalEval = this.evaluateGravitationalPull(
@@ -1250,10 +1455,38 @@ export default class VoidStrategy extends BaseStrategy {
             };
           }
 
+          if (
+            card.id === VOID_IDS.THE_VOID &&
+            (bot.field || []).length === 0 &&
+            handIds.includes(VOID_IDS.LOST_THRONE) &&
+            (bot.deck || []).some((candidate) => candidate?.id === VOID_IDS.HOLLOW)
+          ) {
+            decision = {
+              ...decision,
+              priority: Math.min(decision.priority || 0, 7.8),
+              reason: "Lost Throne deve liderar a linha starter com Hollow",
+            };
+          }
+
           if (hasFusionAction) {
-            const fusionEval = evaluateVoidFusionPriority(bot);
+            const fusionPlan = (analysis.finisherPlans || []).find(
+              (plan) => plan.kind === "fusion",
+            );
+            const fusionEval = fusionPlan
+              ? {
+                  priority: fusionPlan.actionPriority,
+                  target: fusionPlan.targetName,
+                  reason: fusionPlan.reason,
+                  preserveHollowsInGY: fusionPlan.preserveHollowsInGY,
+                  plan: fusionPlan,
+                }
+              : evaluateVoidFusionPriority(bot);
             fusionHint = fusionEval.target;
             if (fusionEval.priority <= 0) return;
+            activationContext = withVoidFusionPreferences(
+              voidActivationContext,
+              fusionEval,
+            );
 
             // Usar calculateFusionValue para prioridade mais precisa
             const fusionValue = this.evaluateFusionOpportunity(analysis);
@@ -1273,6 +1506,9 @@ export default class VoidStrategy extends BaseStrategy {
           }
 
           if (decision.yes) {
+            const fusionPreferenceScore =
+              activationContext?.actionContext?.fusionPreferences
+                ?.scoresByName?.[fusionHint];
             actions.push({
               type: "spell",
               index,
@@ -1283,9 +1519,36 @@ export default class VoidStrategy extends BaseStrategy {
                 : decision.priority,
               extraDeck: hasFusionAction,
               fusionTargetHint: fusionHint,
-              activationContext: voidActivationContext,
+              finisherPlanRank: hasFusionAction
+                ? Number.isFinite(fusionPreferenceScore)
+                  ? fusionPreferenceScore * 10
+                  : undefined
+                : undefined,
+              activationContext,
             });
           }
+          return;
+        }
+
+        if (card.cardKind === "trap" && card.id === VOID_IDS.MIRROR_DIMENSION) {
+          const hasSpace = (bot.spellTrap || []).length < 5;
+          const alreadySet = (bot.spellTrap || []).some(
+            (setCard) => setCard?.id === VOID_IDS.MIRROR_DIMENSION,
+          );
+          const usefulHandMonsters = (bot.hand || []).filter(
+            (candidate) =>
+              candidate !== card && isUsefulMirrorDimensionHandMonster(candidate),
+          );
+          if (!hasSpace || alreadySet || usefulHandMonsters.length === 0) {
+            return;
+          }
+          actions.push({
+            type: "set_spell_trap",
+            index,
+            cardId: card.id,
+            cardName: card.name,
+            priority: 5.5 + Math.min(usefulHandMonsters.length, 3) * 0.4,
+          });
           return;
         }
 
@@ -1428,6 +1691,16 @@ export default class VoidStrategy extends BaseStrategy {
           if (!normalSummonAssessment.shouldSummon) return;
 
           const position = normalSummonAssessment.position || "attack";
+          let normalSummonPriority =
+            summonDecision.priority +
+            comboBoost +
+            (normalSummonAssessment.scoreDelta || 0);
+          if (bestFinisherPlan?.targetName === card.name) {
+            normalSummonPriority = Math.max(
+              normalSummonPriority,
+              bestFinisherPlan.actionPriority || 0,
+            );
+          }
           actions.push({
             type: "summon",
             index,
@@ -1435,10 +1708,11 @@ export default class VoidStrategy extends BaseStrategy {
             cardName: card.name,
             position,
             facedown: normalSummonAssessment.facedown === true,
-            priority:
-              summonDecision.priority +
-              comboBoost +
-              (normalSummonAssessment.scoreDelta || 0),
+            priority: normalSummonPriority,
+            finisherPlanRank:
+              bestFinisherPlan?.targetName === card.name
+                ? bestFinisherPlan.score100
+                : undefined,
           });
         }
 
@@ -1583,7 +1857,7 @@ export default class VoidStrategy extends BaseStrategy {
     // ═══════════════════════════════════════════════════════════════════════════
     // FIELD MONSTER IGNITIONS
     // Cobre Conjurer (recruta deck), Walker (bounce + SS), Bone Spider (lock),
-    // Ghost Wolf (direct), Thousand-Arms (bounce-revive), Cosmic Walker (tribute SS).
+    // Ghost Wolf (direct), Thousand-Arms (bounce-revive), Cosmic Walker (revive Hollow).
     // ═══════════════════════════════════════════════════════════════════════════
     (bot.field || []).forEach((card, fieldIndex) => {
       if (!card || card.cardKind !== "monster" || card.isFacedown) return;
@@ -1672,21 +1946,21 @@ export default class VoidStrategy extends BaseStrategy {
           ) {
             priority += 1.5;
           }
+          if (preserveHollowsForFinisher) {
+            priority -= 3.0;
+          }
           break;
         }
         case VOID_IDS.COSMIC_WALKER: {
-          // Tributa 1 Void do campo → SS Void lv5- da mão
-          if (!fieldHasSpace) break;
-          const voidLv5DownInHand = (bot.hand || []).filter(
-            (c) => isVoid(c) && (c.level || 0) <= 5,
-          );
-          if (voidLv5DownInHand.length === 0) break;
-          // Precisa de outro Void no campo para tributar (não pode tributar a si mesmo
-          // sem perder o efeito; safer só com 2+ Voids)
-          if ((analysis.voidCount || 0) < 2) break;
-          priority = 7.5;
-          // Haunter (lv5) na mão é payoff S-tier
-          if (handIds.includes(VOID_IDS.HAUNTER)) priority += 1.5;
+          // Revive 1 Void Hollow do GY.
+          if (!fieldHasSpace || hollowsInGY < 1) break;
+          priority = 7.0 + Math.min(hollowsInGY, 2) * 0.5;
+          if (swarmPayoffs.hasFusionPayoff || swarmPayoffs.hasBossPayoff) {
+            priority += 0.5;
+          }
+          if (preserveHollowsForFinisher) {
+            priority -= 2.5;
+          }
           break;
         }
         case VOID_IDS.BONE_SPIDER: {
@@ -1698,17 +1972,37 @@ export default class VoidStrategy extends BaseStrategy {
           break;
         }
         case VOID_IDS.GHOST_WOLF: {
-          // Halve ATK + direct attack — só vale se oponente sem field
-          if (oppFieldCount > 0) break;
-          // Damage = atk/2; só usar se vai fechar o jogo ou se LP do oponente é baixo
+          // Halve ATK + direct attack para contornar ameaça ou fechar pressão.
+          const phase = String(game?.phase || "").toLowerCase();
+          const isPostBattle =
+            phase.includes("main2") ||
+            phase.includes("main_2") ||
+            phase.includes("end");
+          if (
+            isPostBattle ||
+            card.hasAttacked ||
+            card.cannotAttackThisTurn ||
+            card.position === "defense"
+          ) {
+            break;
+          }
           const halvedDamage = Math.floor((card.atk || 0) / 2);
           const oppLP = analysis.oppLP || 8000;
+          const canClearThreat =
+            oppStrongestAtk > 0 && (card.atk || 0) > oppStrongestAtk;
+          const fieldIsHard = oppFieldCount > 0 && !canClearThreat;
           if (halvedDamage >= oppLP) {
             priority = 12.0; // letal
+          } else if (fieldIsHard && oppLP <= 2500) {
+            priority = 6.5;
+          } else if (fieldIsHard && oppStrongestAtk >= (card.atk || 0)) {
+            priority = 4.8;
           } else if (oppLP <= 2000) {
-            priority = 6.5; // pressão grande
-          } else {
+            priority = 6.5;
+          } else if (oppFieldCount === 0) {
             priority = 3.5;
+          } else {
+            priority = 0;
           }
           break;
         }
@@ -1824,6 +2118,9 @@ export default class VoidStrategy extends BaseStrategy {
           }
           if (hasPoly && extraIds.includes(VOID_IDS.HYDRA_TITAN)) {
             priority += 1.0; // material para Hydra
+          }
+          if (preserveHollowsForFinisher) {
+            priority -= 3.0;
           }
           break;
         }
@@ -1953,6 +2250,13 @@ export default class VoidStrategy extends BaseStrategy {
   sequenceActions(actions) {
     // Sequenciamento inteligente baseado em combos
     const sorted = actions.sort((a, b) => {
+      const planA = Number.isFinite(a.finisherPlanRank)
+        ? a.finisherPlanRank
+        : -1;
+      const planB = Number.isFinite(b.finisherPlanRank)
+        ? b.finisherPlanRank
+        : -1;
+      if (planA !== planB) return planB - planA;
       // 1. Extra deck actions (fusão/ascensão) têm prioridade especial
       const extraA = a.extraDeck ? 1 : 0;
       const extraB = b.extraDeck ? 1 : 0;

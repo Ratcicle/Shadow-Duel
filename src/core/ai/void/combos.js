@@ -353,6 +353,48 @@ export const COMBO_DATABASE = [
     result: "Void Hollow no campo com trigger normal de Special Summon da mao",
     priority: 8.8,
   },
+  {
+    name: "Beast Search Hollow",
+    description: "Void Beast busca Void Hollow como starter secundario",
+    requires: ["Void Beast na mao", "Normal Summon disponivel", "Void Hollow no deck"],
+    result: "Acesso a Hollow para uma ponte de Special Summon futura",
+    priority: 7.8,
+    sequence: [
+      { action: "summon", cardId: 153, note: "Normal Summon Void Beast" },
+      { action: "trigger", cardId: 153, note: "Beast busca Void Hollow" },
+    ],
+  },
+  {
+    name: "Conjurer Graveyard Reloop",
+    description:
+      "Tributa corpo Void barato para reviver Conjurer e abrir outro recruit",
+    requires: ["Void Conjurer no GY", "Void descartavel no campo"],
+    result: "Conjurer volta como engine/material se ha follow-up claro",
+    priority: 9.4,
+  },
+  {
+    name: "Cosmic Walker Hollow Reclaimer",
+    description: "Cosmic Walker revive Void Hollow do GY",
+    requires: ["Void Cosmic Walker no campo", "Void Hollow no GY"],
+    result: "Hollow volta como corpo de custo/material/pressao",
+    priority: 9,
+  },
+  {
+    name: "Forgotten Knight Hollow Scaling",
+    description:
+      "Forgotten Knight ganha valor quando Hollows ficam no cemiterio",
+    requires: ["Void Forgotten Knight acessivel", "Void Hollow no GY"],
+    result: "Corpo intermediario que pode superar combate pelo scaling",
+    priority: 8.6,
+  },
+  {
+    name: "Arcturus Solo Battle Lock",
+    description:
+      "Arcturus entra sozinho ou quase sozinho para escalar com Voids no GY",
+    requires: ["Arcturus na mao", "2 tributos", "Voids no GY"],
+    result: "Finalizador solo com lock de Battle Phase",
+    priority: 9.5,
+  },
 
   // ═══════════════════════════════════════════════════════════════════════════
   // ASCENSION
@@ -374,16 +416,19 @@ export const COMBO_DATABASE = [
 export function detectAvailableCombos(analysis) {
   const { hand, field, graveyard, extraDeck, fieldSpell, summonAvailable } =
     analysis;
+  const deck = analysis.deck || [];
   const detected = [];
 
   const handIds = (hand || []).map((c) => c?.id).filter(Boolean);
   const fieldIds = (field || []).map((c) => c?.id).filter(Boolean);
   const gyIds = (graveyard || []).map((c) => c?.id).filter(Boolean);
+  const deckIds = (deck || []).map((c) => c?.id).filter(Boolean);
   const extraIds = (extraDeck || []).map((c) => c?.id).filter(Boolean);
 
   const hasInHand = (id) => handIds.includes(id);
   const hasOnField = (id) => fieldIds.includes(id);
   const hasInGY = (id) => gyIds.includes(id);
+  const hasInDeck = (id) => deckIds.includes(id);
   const hasInExtra = (id) => extraIds.includes(id);
   const countInHand = (id) => handIds.filter((i) => i === id).length;
   const countOnField = (id) => fieldIds.filter((i) => i === id).length;
@@ -391,6 +436,7 @@ export function detectAvailableCombos(analysis) {
   const countVoidsOnField = () => (field || []).filter(isVoid).length;
   const countVoidsInHand = () => (hand || []).filter(isVoid).length;
   const countVoidsTotal = () => countVoidsOnField() + countVoidsInHand();
+  const countVoidsInGY = () => (graveyard || []).filter(isVoid).length;
   const countHollowsTotal = () =>
     countInHand(VOID_IDS.HOLLOW) + countOnField(VOID_IDS.HOLLOW);
   const hasPoly = hasInHand(VOID_IDS.POLYMERIZATION);
@@ -427,6 +473,21 @@ export function detectAvailableCombos(analysis) {
       ready: true,
       missing: [],
       priority: 8,
+    });
+  }
+
+  // Beast Search Hollow (starter secundario quando Conjurer/Lost Throne nao lideram)
+  if (
+    hasInHand(VOID_IDS.BEAST) &&
+    summonAvailable &&
+    !hasInHand(VOID_IDS.HOLLOW) &&
+    hasInDeck(VOID_IDS.HOLLOW)
+  ) {
+    detected.push({
+      combo: COMBO_DATABASE.find((c) => c.name === "Beast Search Hollow"),
+      ready: true,
+      missing: [],
+      priority: 7.8,
     });
   }
 
@@ -520,11 +581,26 @@ export function detectAvailableCombos(analysis) {
   // Hydra Titan (6 Voids)
   if (hasPoly && hasInExtra(VOID_IDS.HYDRA_TITAN)) {
     const voidCount = countVoidsTotal();
+    const fieldVoidCount = countVoidsOnField();
+    const handVoidCount = countVoidsInHand();
+    const fieldMonsterCount = (field || []).filter(
+      (card) => card?.cardKind === "monster",
+    ).length;
+    const fieldMaterialsNeeded = Math.max(0, 6 - handVoidCount);
+    const projectedDraws = Math.max(
+      0,
+      fieldMonsterCount - Math.min(fieldMaterialsNeeded, fieldVoidCount),
+    );
+    const ravenInHand = hasInHand(VOID_IDS.RAVEN);
     detected.push({
       combo: COMBO_DATABASE.find((c) => c.name === "Hydra Titan Fusion"),
       ready: voidCount >= 6,
       missing: voidCount >= 6 ? [] : [`${6 - voidCount} Void(s) faltando`],
-      priority: voidCount >= 6 ? 12 : 3,
+      priority:
+        voidCount >= 6
+          ? 8.8 + Math.min(projectedDraws, 2) * 0.9 + (ravenInHand ? 0.7 : 0)
+          : 3,
+      projectedDraws,
     });
   }
 
@@ -579,6 +655,25 @@ export function detectAvailableCombos(analysis) {
     });
   }
 
+  // Conjurer GY reloop: so sinalizar alto se ha follow-up real no deck.
+  if (hasInGY(VOID_IDS.CONJURER) && countVoidsOnField() >= 1) {
+    const hasRecruitTarget = (deck || []).some(
+      (card) => isVoid(card) && card?.cardKind === "monster" && (card.level || 0) <= 4,
+    );
+    const highPayoff =
+      hasRecruitTarget &&
+      (hasInHand(VOID_IDS.HOLLOW) ||
+        hasPoly ||
+        hasInHand(VOID_IDS.SLAYER_BRUTE) ||
+        hasInHand(VOID_IDS.SERPENT_DRAKE));
+    detected.push({
+      combo: COMBO_DATABASE.find((c) => c.name === "Conjurer Graveyard Reloop"),
+      ready: hasRecruitTarget,
+      missing: hasRecruitTarget ? [] : ["Void lv4- no deck para recrutar"],
+      priority: highPayoff ? 9.4 : 8.2,
+    });
+  }
+
   // ═══════════════════════════════════════════════════════════════════════════
   // BOSSES SUPERIORES
   // ═══════════════════════════════════════════════════════════════════════════
@@ -606,13 +701,25 @@ export function detectAvailableCombos(analysis) {
     });
   }
 
+  if (hasOnField(VOID_IDS.COSMIC_WALKER)) {
+    const hollowsInGY = countInGY(VOID_IDS.HOLLOW);
+    detected.push({
+      combo: COMBO_DATABASE.find((c) => c.name === "Cosmic Walker Hollow Reclaimer"),
+      ready: hollowsInGY >= 1,
+      missing: hollowsInGY >= 1 ? [] : ["Void Hollow no GY"],
+      priority: hollowsInGY >= 1 ? 8.0 + Math.min(hollowsInGY, 2) * 0.5 : 6.0,
+    });
+  }
+
   // Arcturus Tribute Summon (precisa 2 monstros no campo + Normal Summon disponível)
   if (hasInHand(VOID_IDS.ARCTURUS) && summonAvailable) {
     const monstersOnField = (field || []).filter(
       (m) => m && m.cardKind === "monster",
     ).length;
     const ready = monstersOnField >= 2;
-    const voidsInGY = (graveyard || []).filter(isVoid).length;
+    const voidsInGY = countVoidsInGY();
+    const projectedVoidsInGY = voidsInGY + Math.min(monstersOnField, 2);
+    const canBeSolo = monstersOnField <= 2;
     detected.push({
       combo: COMBO_DATABASE.find((c) => c.name === "Arcturus Tribute Summon"),
       ready,
@@ -620,7 +727,29 @@ export function detectAvailableCombos(analysis) {
         ? []
         : [`${2 - monstersOnField} monstro(s) para tributar`],
       // Boost por Voids no GY (cada par = uma "vida extra" via replacementEffect)
-      priority: ready ? 9 + Math.min(voidsInGY, 6) * 0.4 : 4,
+      priority:
+        ready
+          ? (canBeSolo ? 8.7 : 7.6) + Math.min(projectedVoidsInGY, 6) * 0.35
+          : 4,
+    });
+  }
+
+  if (
+    hasInHand(VOID_IDS.ARCTURUS) &&
+    summonAvailable &&
+    countVoidsInGY() + Math.min(countVoidsOnField(), 2) >= 3
+  ) {
+    const monstersOnField = (field || []).filter(
+      (m) => m && m.cardKind === "monster",
+    ).length;
+    detected.push({
+      combo: COMBO_DATABASE.find((c) => c.name === "Arcturus Solo Battle Lock"),
+      ready: monstersOnField >= 2,
+      missing: monstersOnField >= 2 ? [] : ["2 tributos para Arcturus"],
+      priority:
+        monstersOnField >= 2
+          ? 8.5 + Math.min(countVoidsInGY() + 2, 6) * 0.35
+          : 4,
     });
   }
 
@@ -637,7 +766,30 @@ export function detectAvailableCombos(analysis) {
       ready: true,
       missing: [],
       // Quanto mais Hollows no GY, mais ataques Malicious Demon faz
-      priority: 10 + Math.min(hollowsInGY, 4) * 0.5,
+      priority:
+        hollowsInGY >= 3
+          ? 9.2 + Math.min(hollowsInGY, 4) * 0.5
+          : hollowsInGY >= 2
+            ? 7.5
+            : 4.5,
+    });
+  }
+
+  if (
+    (hasOnField(VOID_IDS.FORGOTTEN_KNIGHT) ||
+      hasInHand(VOID_IDS.FORGOTTEN_KNIGHT)) &&
+    countInGY(VOID_IDS.HOLLOW) >= 1
+  ) {
+    const hollowsInGY = countInGY(VOID_IDS.HOLLOW);
+    const projectedAtk = 2000 + hollowsInGY * 200;
+    const beatsThreat =
+      (analysis.oppStrongestAtk || 0) <= 0 || projectedAtk > analysis.oppStrongestAtk;
+    detected.push({
+      combo: COMBO_DATABASE.find((c) => c.name === "Forgotten Knight Hollow Scaling"),
+      ready: true,
+      missing: [],
+      priority: (beatsThreat ? 8.6 : 7.5) + Math.min(hollowsInGY, 3) * 0.2,
+      projectedAtk,
     });
   }
 
@@ -740,10 +892,19 @@ export function calculateFusionValue(fusionId, analysis) {
   const { oppFieldCount, oppLP } = analysis;
 
   // Sinergias compartilhadas
+  const field = analysis.field || [];
+  const hand = analysis.hand || [];
   const fieldIds = (analysis.field || []).map((c) => c?.id).filter(Boolean);
   const handIds = (analysis.hand || []).map((c) => c?.id).filter(Boolean);
   const tenebrisOnField = fieldIds.includes(VOID_IDS.TENEBRIS_HORN);
   const ravenInHand = handIds.includes(VOID_IDS.RAVEN);
+  const fieldVoids = field.filter(isVoid);
+  const handVoids = hand.filter(isVoid);
+  const projectedHydraDraws = Math.max(
+    0,
+    field.filter((card) => card?.cardKind === "monster").length -
+      Math.min(Math.max(0, 6 - handVoids.length), fieldVoids.length),
+  );
 
   // Tenebris Horn passive: +100 ATK/DEF por Void no campo (incluindo a fusão)
   const tenebrisBonus = tenebrisOnField ? 0.6 : 0;
@@ -754,18 +915,18 @@ export function calculateFusionValue(fusionId, analysis) {
     case VOID_IDS.HOLLOW_KING:
       // Bom se oponente tem campo moderado, valor na resiliência
       return (
-        9 + (oppFieldCount >= 2 ? 1 : 0) + tenebrisBonus + ravenBonus
+        8.2 + (oppFieldCount >= 2 ? 0.8 : 0) + tenebrisBonus + ravenBonus * 0.5
       );
 
     case VOID_IDS.BERSERKER: {
       // Excelente para OTK (2 ataques + bounce)
       const lethalPotential = oppLP <= 5600 ? 3 : 0; // 2800 x 2 = 5600
       return (
-        10 +
+        10.2 +
         lethalPotential +
-        (oppFieldCount >= 1 ? 1 : 0) +
+        (oppFieldCount >= 1 ? 0.9 : 0) +
         tenebrisBonus +
-        ravenBonus
+        ravenBonus * 0.6
       );
     }
 
@@ -775,8 +936,10 @@ export function calculateFusionValue(fusionId, analysis) {
       // Raven é S-tier aqui: imunidade contra remoções pós-fusão.
       const hydraTenebrisAdjust = tenebrisOnField ? -0.6 : 0;
       return (
-        12 +
-        (oppFieldCount >= 3 ? 2 : 0) +
+        8.2 +
+        Math.min(projectedHydraDraws, 2) * 1.0 +
+        (oppFieldCount >= 3 ? 1.2 : 0) +
+        (projectedHydraDraws <= 0 && oppFieldCount < 2 ? -1.1 : 0) +
         hydraTenebrisAdjust +
         ravenBonus * 1.5 // Raven vale mais para Hydra (3500 ATK protegido)
       );

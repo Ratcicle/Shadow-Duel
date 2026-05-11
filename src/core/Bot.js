@@ -673,6 +673,14 @@ export default class Bot extends Player {
     }
   }
 
+  isSameBattleCard(candidate, original) {
+    if (!candidate || !original) return false;
+    if (candidate.instanceId != null && original.instanceId != null) {
+      return candidate.instanceId === original.instanceId;
+    }
+    return candidate.id === original.id;
+  }
+
   playBattlePhase(game) {
     const guard = game.canStartAction({
       actor: this,
@@ -722,7 +730,8 @@ export default class Bot extends Player {
         const isSecondAttack = (attacker.attacksUsedThisTurn || 0) >= 1;
         const attackThreshold = isSecondAttack ? 0.0 : minDeltaToAttack;
         const canDirectAttackNow =
-          opponent.field.length === 0 &&
+          (opponent.field.length === 0 ||
+            attacker.canAttackDirectlyThisTurn === true) &&
           !this.forbidDirectAttacksThisTurn &&
           !attacker.cannotAttackDirectly &&
           !attacker.canAttackAllOpponentMonstersThisTurn &&
@@ -743,20 +752,22 @@ export default class Bot extends Player {
           tauntTargets.length > 0
             ? [...tauntTargets]
             : opponent.field.length
-              ? [...opponent.field, null]
+              ? [...opponent.field, ...(canDirectAttackNow ? [null] : [])]
               : canDirectAttackNow
                 ? [null]
                 : [];
 
         for (const target of possibleTargets) {
-          if (target === null && opponent.field.length > 0) continue;
+          if (target === null && opponent.field.length > 0 && !canDirectAttackNow) {
+            continue;
+          }
 
           const simState = this.cloneGameState(game);
           const simAttacker = simState.bot.field.find(
-            (c) => c.id === attacker.id,
+            (c) => this.isSameBattleCard(c, attacker),
           );
           const simTarget = target
-            ? simState.player.field.find((c) => c.id === target.id)
+            ? simState.player.field.find((c) => this.isSameBattleCard(c, target))
             : null;
 
           // 🎯 BOOST: Atacar monstros facedown é geralmente vantajoso
@@ -772,10 +783,10 @@ export default class Bot extends Player {
           let delta = scoreAfter - baseScore;
           const opponentLpAfter = simState.player.lp || 0;
           const attackerSurvived = simState.bot.field.some(
-            (c) => c.id === attacker.id,
+            (c) => this.isSameBattleCard(c, attacker),
           );
           const targetSurvived = target
-            ? simState.player.field.some((c) => c.id === target.id)
+            ? simState.player.field.some((c) => this.isSameBattleCard(c, target))
             : false;
           const lethalNow = opponentLpAfter <= 0;
 
@@ -814,6 +825,27 @@ export default class Bot extends Player {
             (simAttacker.atk || 0) <= (target.atk || 0)
           ) {
             delta -= 0.5;
+          }
+
+          const strategyBattleDelta =
+            this.strategy?.scoreBattleAttackCandidate?.({
+              attacker,
+              target,
+              baseDelta: delta,
+              simState,
+              game,
+              bot: this,
+              opponent,
+              isSecondAttack,
+              attackerSurvived,
+              targetSurvived,
+              lethalNow,
+              opponentLpAfter,
+            });
+          if (Number.isFinite(strategyBattleDelta)) {
+            delta += strategyBattleDelta;
+          } else if (Number.isFinite(strategyBattleDelta?.scoreDelta)) {
+            delta += strategyBattleDelta.scoreDelta;
           }
 
           if (

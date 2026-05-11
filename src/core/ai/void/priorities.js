@@ -189,11 +189,20 @@ export function shouldSummonVoidMonster(card, game, bot, opponent) {
   const def = card.def || 0;
   let priority = atk / 600;
 
-  if (knowledge?.role === "boss") priority += 2.0;
+  if (
+    knowledge?.role === "boss" ||
+    knowledge?.role === "solo_finisher" ||
+    knowledge?.role === "ascension_material"
+  ) {
+    priority += 2.0;
+  }
   if (knowledge?.tags?.includes("swarm")) priority += 1.4;
   if (knowledge?.tags?.includes("direct"))
     priority += oppFieldCount === 0 ? 1.2 : 0.4;
   if (knowledge?.role === "control") priority += 0.8;
+  if (knowledge?.role === "starter") priority += 1.2;
+  if (knowledge?.role === "midrange") priority += 0.8;
+  if (knowledge?.role === "support") priority += 0.5;
   if (def > atk + 300) priority -= 0.4;
 
   return { yes: true, priority };
@@ -494,43 +503,281 @@ function shouldReserveForHydra(bot, voidsAccessible) {
   );
 }
 
-export function evaluateVoidFusionPriority(bot) {
+function clampScore100(value) {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function createVoidFinisherPlan({
+  kind,
+  targetName,
+  score100,
+  reason,
+  preserveHollowsInGY = false,
+  details = {},
+}) {
+  const normalizedScore = clampScore100(score100);
+  return {
+    kind,
+    targetName,
+    score100: normalizedScore,
+    actionPriority: normalizedScore / 10,
+    reason,
+    preserveHollowsInGY,
+    details,
+  };
+}
+
+function countCards(cards = [], predicate) {
+  return (cards || []).filter((card) => card && predicate(card)).length;
+}
+
+function hasCardId(cards = [], id) {
+  return (cards || []).some((card) => card?.id === id);
+}
+
+function canUseAscensionFinisher(game, bot, materialId, ascensionId) {
+  const realGame = game?._gameRef || game;
+  const material = (bot?.field || []).find(
+    (card) => card?.id === materialId && card.cardKind === "monster",
+  );
+  const ascensionCard = (bot?.extraDeck || []).find(
+    (card) => card?.id === ascensionId,
+  );
+  if (!material || !ascensionCard) return false;
+  if (
+    typeof realGame?.canUseAsAscensionMaterial !== "function" ||
+    typeof realGame?.checkAscensionRequirements !== "function"
+  ) {
+    return true;
+  }
+  return (
+    realGame.canUseAsAscensionMaterial(bot, material)?.ok !== false &&
+    realGame.checkAscensionRequirements(bot, ascensionCard)?.ok !== false
+  );
+}
+
+function estimateVoidHydraDraws(bot) {
   const field = bot?.field || [];
   const hand = bot?.hand || [];
+  const fieldVoids = field.filter(isVoid);
+  const handVoids = hand.filter(isVoid);
+  const fieldMaterialsNeeded = Math.max(0, 6 - handVoids.length);
+  return Math.max(
+    0,
+    fieldVoids.length - Math.min(fieldMaterialsNeeded, fieldVoids.length),
+  );
+}
+
+function strongestBattleStat(monsters = []) {
+  return getStrongestOpponentBattleStat(monsters);
+}
+
+function countDestroyableByAtk(monsters = [], atk = 0) {
+  return countCards(monsters, (monster) => {
+    if (monster.cardKind !== "monster") return false;
+    const stat = monster.isFacedown
+      ? 1500
+      : monster.position === "defense"
+        ? getEffectiveDef(monster)
+        : getEffectiveAtk(monster);
+    return atk > stat;
+  });
+}
+
+export function evaluateVoidFinisherPlans(bot, opponent, game = null, analysis = null) {
+  const field = bot?.field || [];
+  const hand = bot?.hand || [];
+  const resolvedOpponent =
+    opponent ||
+    (bot?.game && typeof bot.game.getOpponent === "function"
+      ? bot.game.getOpponent(bot)
+      : null);
+  const graveyard = bot?.graveyard || [];
+  const deck = bot?.deck || [];
   const extraIds = (bot?.extraDeck || []).map((c) => c?.id).filter(Boolean);
   const voids = [...field, ...hand].filter(isVoid);
+  const voidsInGY = graveyard.filter(isVoid);
   const hollows = voids.filter((card) => card?.id === VOID_IDS.HOLLOW);
+  const hollowsInGY = countCards(graveyard, (card) => card.id === VOID_IDS.HOLLOW);
   const slayerField = field.some((card) => card?.id === VOID_IDS.SLAYER_BRUTE);
   const otherVoidCount = voids.filter(
     (card) => card?.id !== VOID_IDS.SLAYER_BRUTE,
   ).length;
+  const ravenInHand = hand.some((card) => card?.id === VOID_IDS.RAVEN);
+  const oppFieldCount =
+    resolvedOpponent?.field?.filter((card) => card?.cardKind === "monster")
+      .length || 0;
+  const oppMonsters =
+    resolvedOpponent?.field?.filter((card) => card?.cardKind === "monster") ||
+    [];
+  const oppStrongest = strongestBattleStat(oppMonsters);
+  const oppLP = resolvedOpponent?.lp || analysis?.oppLP || 8000;
+  const myLP = bot?.lp || analysis?.myLP || 8000;
+  const hasPoly = hasCardId(hand, VOID_IDS.POLYMERIZATION);
+  const plans = [];
 
-  if (extraIds.includes(VOID_IDS.HYDRA_TITAN) && voids.length >= 6) {
-    return { priority: 12, target: "Void Hydra Titan" };
+  if (
+    hasCardId(hand, VOID_IDS.ARCTURUS) &&
+    (bot?.summonCount || 0) < 1 + (bot?.additionalNormalSummons || 0) &&
+    field.filter((card) => card?.cardKind === "monster").length >= 2
+  ) {
+    const fieldMonsters = field.filter((card) => card?.cardKind === "monster");
+    const canBeSolo = fieldMonsters.length <= 2;
+    const projectedAtk =
+      2800 + (canBeSolo ? Math.min(voidsInGY.length + 2, 10) * 100 : 0);
+    const jointLethal =
+      fieldMonsters.reduce((sum, card) => sum + getEffectiveAtk(card), projectedAtk) >=
+      oppLP;
+    let score = canBeSolo ? 78 : 56;
+    score += Math.min(voidsInGY.length, 8) * (canBeSolo ? 2 : 0.5);
+    if (projectedAtk > oppStrongest) score += 9;
+    if (projectedAtk >= oppLP && oppFieldCount === 0) score += 10;
+    if (jointLethal) score += 8;
+    if (canBeSolo) score += 6; // Battle Phase lock has real value when he is the plan.
+    if (!canBeSolo && !jointLethal) score -= 18;
+    plans.push(
+      createVoidFinisherPlan({
+        kind: "normal_summon",
+        targetName: "Arcturus, Lord of the Void",
+        score100: score,
+        reason: canBeSolo
+          ? "Arcturus fica solo, escala com o GY e trava a Battle Phase"
+          : "Arcturus acompanhado perde parte do payoff solo",
+        details: { projectedAtk, canBeSolo, voidsInGY: voidsInGY.length },
+      }),
+    );
+  }
+
+  if (
+    extraIds.includes(VOID_IDS.MALICIOUS_DEMON) &&
+    canUseAscensionFinisher(
+      game,
+      bot,
+      VOID_IDS.THOUSAND_ARMS,
+      VOID_IDS.MALICIOUS_DEMON,
+    )
+  ) {
+    let score = hollowsInGY >= 3 ? 94 : hollowsInGY === 2 ? 75 : 45;
+    if (oppFieldCount === 0 && hollowsInGY >= 2) score += 5;
+    if (hollowsInGY >= 1 && oppLP <= 2600 * hollowsInGY) score += 9;
+    if (oppStrongest >= 2600 && hollowsInGY <= 1) score -= 10;
+    plans.push(
+      createVoidFinisherPlan({
+        kind: "ascension",
+        targetName: "Malicious Demon of the Void",
+        score100: score,
+        preserveHollowsInGY: hollowsInGY >= 2,
+        reason:
+          hollowsInGY >= 3
+            ? "Malicious tem multiplos ataques relevantes com Hollows no GY"
+            : "Malicious ainda compete, mas precisa de mais Hollows no GY",
+        details: { hollowsInGY },
+      }),
+    );
+  }
+
+  if (extraIds.includes(VOID_IDS.HYDRA_TITAN) && hasPoly && voids.length >= 6) {
+    const projectedDraws = estimateVoidHydraDraws(bot);
+    const stabilizesBoard =
+      oppFieldCount >= 2 || oppStrongest >= 2800 || myLP <= 3000;
+    let score =
+      projectedDraws >= 2 ? 95 : projectedDraws === 1 ? 88 : stabilizesBoard ? 82 : 58;
+    if (ravenInHand) score += 4;
+    if (oppFieldCount === 0 && oppLP <= 3500) score += 8;
+    if (projectedDraws <= 0 && !stabilizesBoard) score -= 8;
+    plans.push(
+      createVoidFinisherPlan({
+        kind: "fusion",
+        targetName: "Void Hydra Titan",
+        score100: score,
+        reason:
+          projectedDraws > 0
+            ? `Hydra converte board em ${projectedDraws} compra(s)`
+            : "Hydra estabiliza, mas sem compras precisa competir com payoff melhor",
+        details: { projectedDraws, stabilizesBoard },
+      }),
+    );
   }
 
   if (
     extraIds.includes(VOID_IDS.BERSERKER) &&
+    hasPoly &&
     slayerField &&
     otherVoidCount >= 1
   ) {
-    return { priority: 10.5, target: "Void Berserker" };
+    const lethalPotential = oppLP <= 5600;
+    const destroyableTargets = countDestroyableByAtk(oppMonsters, 2800);
+    let score = 76 + Math.min(destroyableTargets, 2) * 7;
+    if (lethalPotential) score += 12;
+    if (ravenInHand) score += 3;
+    if (oppFieldCount > 0 && destroyableTargets === 0) score -= 9;
+    plans.push(
+      createVoidFinisherPlan({
+        kind: "fusion",
+        targetName: "Void Berserker",
+        score100: score,
+        reason: lethalPotential
+          ? "Berserker ameaca lethal com dois ataques"
+          : "Berserker remove monstros e habilita bounce de batalha",
+        details: { destroyableTargets, lethalPotential },
+      }),
+    );
   }
 
-  if (extraIds.includes(VOID_IDS.HOLLOW_KING) && hollows.length >= 3) {
+  if (extraIds.includes(VOID_IDS.HOLLOW_KING) && hasPoly && hollows.length >= 3) {
     if (shouldReserveForHydra(bot, voids.length)) {
-      // Atrasar: Hydra Titan estaria a 1-2 Voids de distância com extender ativo
-      return {
-        priority: 6,
-        target: "Void Hollow King",
-        reservedForHydra: true,
-        reason: "Hollow King atrasado: Hydra Titan acessível em 1-2 turnos",
-      };
+      plans.push(
+        createVoidFinisherPlan({
+          kind: "fusion",
+          targetName: "Void Hollow King",
+          score100: 58,
+          reason: "Hollow King atrasado: Hydra Titan acessivel em 1-2 turnos",
+          details: { reservedForHydra: true },
+        }),
+      );
+    } else {
+      const resilienceNeeded =
+        oppFieldCount >= 2 || oppStrongest >= 2500 || myLP <= 3000;
+      let score = resilienceNeeded ? 82 : 74;
+      if (ravenInHand) score += 2;
+      if (hasCardId(deck, VOID_IDS.HOLLOW) && hollows.length === 3) score += 2;
+      plans.push(
+        createVoidFinisherPlan({
+          kind: "fusion",
+          targetName: "Void Hollow King",
+          score100: score,
+          reason: resilienceNeeded
+            ? "Hollow King e o melhor plano de resiliencia agora"
+            : "Hollow King e payoff estavel quando nao ha finisher superior",
+          details: { resilienceNeeded },
+        }),
+      );
     }
-    return { priority: 9.5, target: "Void Hollow King" };
   }
 
-  return { priority: 0, target: null };
+  plans.sort((a, b) => b.score100 - a.score100);
+  return plans;
+}
+
+export function evaluateVoidFusionPriority(bot) {
+  const game = bot?.game || null;
+  const opponent =
+    bot?.game && typeof bot.game.getOpponent === "function"
+      ? bot.game.getOpponent(bot)
+      : null;
+  const best = evaluateVoidFinisherPlans(bot, opponent, game).find(
+    (plan) => plan.kind === "fusion",
+  );
+  return best
+    ? {
+        priority: best.actionPriority,
+        target: best.targetName,
+        reason: best.reason,
+        preserveHollowsInGY: best.preserveHollowsInGY,
+        plan: best,
+      }
+    : { priority: 0, target: null };
 }
 
 function getEffectiveAtk(card) {

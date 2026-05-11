@@ -58,6 +58,7 @@ export function buildVoidCostPreferences(analysis = {}) {
   const handVoids = hand.filter(isVoid).length;
   const fieldVoids = field.filter(isVoid).length;
   const accessibleVoids = handVoids + fieldVoids;
+  const ravenInHand = handIds.includes(VOID_IDS.RAVEN);
 
   const preserveNames = new Set();
   const preferNames = new Set();
@@ -76,6 +77,19 @@ export function buildVoidCostPreferences(analysis = {}) {
     accessibleVoids >= 4;
   if (hollowKingPath || hydraPathClose) {
     preserveNames.add("Void Hollow");
+  }
+
+  const berserkerPathReady =
+    hasPoly &&
+    extraIds.includes(VOID_IDS.BERSERKER) &&
+    fieldIds.includes(VOID_IDS.SLAYER_BRUTE) &&
+    accessibleVoids >= 2;
+  const hydraReadyOrClose =
+    hasPoly &&
+    extraIds.includes(VOID_IDS.HYDRA_TITAN) &&
+    accessibleVoids >= 5;
+  if (ravenInHand && (hollowKingPath || berserkerPathReady || hydraReadyOrClose)) {
+    preserveNames.add("Void Raven");
   }
 
   // Walker no campo + Cosmic Walker no extra = caminho ascension preservado.
@@ -100,7 +114,9 @@ export function buildVoidCostPreferences(analysis = {}) {
   }
 
   // Conjurer no campo com efeito ainda recrutável (há Voids lv4- no deck).
-  const conjurerOnField = fieldIds.includes(VOID_IDS.CONJURER);
+  const conjurerOnField = field.some(
+    (c) => c?.id === VOID_IDS.CONJURER && !c.usedEffectThisTurn,
+  );
   const deckHasVoidLv4 = deck.some(
     (c) => isVoid(c) && c?.cardKind === "monster" && (c.level || 0) <= 4,
   );
@@ -147,6 +163,10 @@ export function buildVoidCostPreferences(analysis = {}) {
   // Tokens de Bone Spider (não-Void, atk 500) — descartáveis sempre.
   preferNames.add("Void Little Spider");
 
+  if (field.some((c) => c?.id === VOID_IDS.CONJURER && c.usedEffectThisTurn)) {
+    preferNames.add("Void Conjurer");
+  }
+
   // Walker já com efeito de bounce usado: prioriza tributo
   // (handled indiretamente pelo usedEffectThisTurn no AutoSelector)
 
@@ -162,22 +182,59 @@ export function buildVoidCostPreferences(analysis = {}) {
   };
 }
 
+function buildVoidTargetPreferences(costPreferences = {}) {
+  const preserveNames = new Set(costPreferences.preserveNames || []);
+  const avoidNames = new Set([
+    "Arcturus, Lord of the Void",
+    "Void Hollow King",
+    "Void Berserker",
+    "Void Hydra Titan",
+    "Void Cosmic Walker",
+    "Malicious Demon of the Void",
+  ]);
+
+  if (preserveNames.has("Thousand-Arms of the Void")) {
+    avoidNames.add("Thousand-Arms of the Void");
+  }
+  if (preserveNames.has("Void Walker")) {
+    avoidNames.add("Void Walker");
+  }
+
+  const preferredGravitationalSelf = [
+    "Void Walker",
+    "Void Hollow",
+    "Void Conjurer",
+  ].filter((name) => !avoidNames.has(name));
+
+  return {
+    void_conjurer_cost: {
+      role: "cost",
+      intent: "cost",
+    },
+    void_gravitational_self: {
+      role: "named_preference",
+      intent: "benefit",
+      preferredNames: preferredGravitationalSelf,
+      avoidNames: [...avoidNames],
+    },
+    void_gravitational_opponent: {
+      intent: "harm",
+    },
+  };
+}
+
 /**
  * Empacota costPreferences no shape esperado em `action.activationContext`.
  * Pode ser estendido com `targetPreferences` específicos por efeito futuramente.
  */
 export function buildVoidActivationContext(analysis = {}) {
+  const costPreferences = buildVoidCostPreferences(analysis);
   return {
     autoSelectTargets: true,
     autoSelectSingleTarget: true,
     actionContext: {
-      costPreferences: buildVoidCostPreferences(analysis),
-      targetPreferences: {
-        void_conjurer_cost: {
-          role: "cost",
-          intent: "cost",
-        },
-      },
+      costPreferences,
+      targetPreferences: buildVoidTargetPreferences(costPreferences),
     },
   };
 }

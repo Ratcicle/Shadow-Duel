@@ -7,10 +7,35 @@
 
 import { isAI } from "../../Player.js";
 
+function getActionContext(ctx) {
+  return (
+    ctx?.actionContext ||
+    ctx?.activationContext?.actionContext ||
+    ctx?.activationContext ||
+    {}
+  );
+}
+
+function getFusionPreferenceScore(fusion, ctx) {
+  const prefs = getActionContext(ctx).fusionPreferences || {};
+  const scoresById = prefs.scoresById || {};
+  const scoresByName = prefs.scoresByName || {};
+  const preferredIds = prefs.preferredIds || [];
+  const preferredNames = prefs.preferredNames || [];
+  let score = 0;
+  if (Number.isFinite(scoresById[fusion?.id])) score += scoresById[fusion.id];
+  if (Number.isFinite(scoresByName[fusion?.name])) {
+    score += scoresByName[fusion.name];
+  }
+  if (preferredIds.includes(fusion?.id)) score += 100;
+  if (preferredNames.includes(fusion?.name)) score += 100;
+  return score;
+}
+
 /**
  * Select the best material combo for fusion (prioritize sacrificing weak monsters)
  */
-function selectBestMaterialCombo(materialCombos) {
+function selectBestMaterialCombo(materialCombos, ctx = {}) {
   if (!materialCombos || materialCombos.length === 0) {
     return null;
   }
@@ -24,6 +49,14 @@ function selectBestMaterialCombo(materialCombos) {
   // Higher value = more important to preserve, lower value = better tribute candidate
   const getMaterialValue = (monster) => {
     const name = monster.name || "";
+    const costPreferences = getActionContext(ctx).costPreferences || {};
+    const preserveNames = costPreferences.preserveNames || [];
+    const preferNames = costPreferences.preferNames || [];
+    const payoffNames = costPreferences.offensivePayoffNames || [];
+
+    if (preserveNames.includes(name)) return 120;
+    if (payoffNames.includes(name)) return 80;
+    if (preferNames.includes(name)) return -10;
 
     // Protect boss monsters and extra deck materials
     if (name.includes("Demon Dragon")) return 100; // Never sacrifice unless emergency
@@ -88,8 +121,11 @@ export async function performBotFusion(
   availableMaterials
 ) {
   // Bot AI: choose best fusion
-  // For now, just pick the first available fusion with highest ATK
+  // Prefer strategy-provided generic fusion preferences, then fall back to ATK.
   const sorted = [...summonableFusions].sort((a, b) => {
+    const prefA = getFusionPreferenceScore(a.fusion, ctx);
+    const prefB = getFusionPreferenceScore(b.fusion, ctx);
+    if (prefA !== prefB) return prefB - prefA;
     const atkA = a.fusion.atk || 0;
     const atkB = b.fusion.atk || 0;
     return atkB - atkA;
@@ -101,7 +137,7 @@ export async function performBotFusion(
   const { fusion, materialCombos } = chosen;
 
   // Select the best material combo (prioritize sacrificing weak monsters)
-  const materials = selectBestMaterialCombo(materialCombos);
+  const materials = selectBestMaterialCombo(materialCombos, ctx);
 
   // Log bot fusion decision
   console.log(

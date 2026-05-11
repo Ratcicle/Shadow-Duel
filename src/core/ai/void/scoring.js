@@ -192,6 +192,30 @@ export function evaluateVoidMonster(monster, context = {}) {
       }
       break;
 
+    case VOID_IDS.FORGOTTEN_KNIGHT:
+      value += 1.8 + Math.min(hollowsInGY, 4) * 0.25;
+      if (atk > oppStrongestAtk && oppStrongestAtk > 0) value += 0.8;
+      break;
+
+    case VOID_IDS.HYDRA_TITAN:
+      value += 4.0;
+      if (context.hydraProjectedDraws > 0) {
+        value += Math.min(context.hydraProjectedDraws, 2) * 0.8;
+      }
+      break;
+
+    case VOID_IDS.MALICIOUS_DEMON:
+      value += 3.6;
+      if (hollowsInGY > 0) value += Math.min(hollowsInGY, 4) * 0.45;
+      break;
+
+    case VOID_IDS.ARCTURUS:
+      value += 4.5;
+      if (voidsInGY > 0) value += Math.min(voidsInGY, 8) * 0.3;
+      if (voidCount <= 1) value += 1.2;
+      else value -= Math.min(voidCount - 1, 4) * 0.6;
+      break;
+
     // Fusion bosses
     case VOID_IDS.HOLLOW_KING:
       value += 3.0;
@@ -199,10 +223,6 @@ export function evaluateVoidMonster(monster, context = {}) {
 
     case VOID_IDS.BERSERKER:
       value += 3.5; // 2 ataques é muito forte
-      break;
-
-    case VOID_IDS.HYDRA_TITAN:
-      value += 4.0; // Maior fusão
       break;
 
     case VOID_IDS.COSMIC_WALKER:
@@ -226,18 +246,6 @@ export function evaluateVoidMonster(monster, context = {}) {
     case VOID_IDS.THOUSAND_ARMS:
       value += 2.4;
       if (hollowsInGY > 0) value += Math.min(hollowsInGY, 2) * 0.4;
-      break;
-
-    // Ascension boss: ataques múltiplos por Hollow no GY + death loop
-    case VOID_IDS.MALICIOUS_DEMON:
-      value += 3.6;
-      if (hollowsInGY > 0) value += Math.min(hollowsInGY, 3) * 0.4;
-      break;
-
-    // Lord of the Void: lock de BP + scaling com Voids no GY + survival
-    case VOID_IDS.ARCTURUS:
-      value += 4.5;
-      if (voidsInGY > 0) value += Math.min(voidsInGY, 8) * 0.3;
       break;
 
     default:
@@ -310,6 +318,13 @@ export function evaluateBoardVoid(gameOrState, perspectivePlayer) {
   const voidCount = myField.filter(isVoid).length;
   const hollowsInGY = myGY.filter((m) => m?.id === VOID_IDS.HOLLOW).length;
   const voidsInGY = myGY.filter(isVoid).length;
+  const handVoids = myHand.filter(isVoid);
+  const fieldVoids = myField.filter(isVoid);
+  const hydraProjectedDraws = Math.max(
+    0,
+    myField.filter((card) => card?.cardKind === "monster").length -
+      Math.min(Math.max(0, 6 - handVoids.length), fieldVoids.length),
+  );
 
   const oppStrongestAtk = oppField.reduce((max, m) => {
     if (!m || m.cardKind !== "monster") return max;
@@ -323,6 +338,7 @@ export function evaluateBoardVoid(gameOrState, perspectivePlayer) {
     voidCount,
     hollowsInGY,
     voidsInGY,
+    hydraProjectedDraws,
   };
 
   // Avaliar meus monstros
@@ -374,6 +390,7 @@ export function evaluateBoardVoid(gameOrState, perspectivePlayer) {
     field: myField,
     graveyard: myGY,
     extraDeck: myExtra,
+    deck: perspective?.deck || [],
     fieldSpell: perspective?.fieldSpell,
     summonAvailable: (perspective?.summonCount || 0) < 1,
     oppFieldCount: oppField.length,
@@ -455,6 +472,28 @@ export function evaluateBoardVoid(gameOrState, perspectivePlayer) {
 
   // Bônus por diversidade de recursos Hollow (campo + mão + GY acessível)
   score += hollowEconomy.totalAccessibleHollows * 0.15;
+
+  const wantsHollowsInGY =
+    myField.some((card) =>
+      [VOID_IDS.MALICIOUS_DEMON, VOID_IDS.FORGOTTEN_KNIGHT].includes(card?.id),
+    ) ||
+    myExtra.some((card) => card?.id === VOID_IDS.MALICIOUS_DEMON);
+  const arcturusAccessible =
+    myField.some((card) => card?.id === VOID_IDS.ARCTURUS) ||
+    myHand.some((card) => card?.id === VOID_IDS.ARCTURUS);
+  if (wantsHollowsInGY && hollowsInGY > 0) {
+    score += Math.min(hollowsInGY, 4) * 0.35;
+  }
+  if (arcturusAccessible && voidsInGY > 0) {
+    score += Math.min(voidsInGY, 8) * 0.15;
+  }
+  if (
+    myField.some((card) => card?.id === VOID_IDS.ARCTURUS) &&
+    myField.filter((card) => card && card.cardKind === "monster" && !card.isFacedown)
+      .length > 1
+  ) {
+    score -= 1.4;
+  }
 
   // Penalidade por Hollow "perdido" (no GY sem recovery)
   score -= hollowEconomy.strandedHollows * 0.2;
