@@ -54,9 +54,15 @@ function buildChoiceCandidates(cases, ctx, action, engine) {
 }
 
 function shouldAllowCase(caseEntry, ctx, engine) {
-  const targets = Array.isArray(caseEntry?.targets) ? caseEntry.targets : [];
-  if (targets.length === 0) return true;
+  const conditions = Array.isArray(caseEntry?.conditions)
+    ? caseEntry.conditions
+    : [];
+  if (conditions.length > 0) {
+    const conditionResult = engine?.evaluateConditions?.(conditions, ctx);
+    if (!conditionResult?.ok) return false;
+  }
 
+  const targets = Array.isArray(caseEntry?.targets) ? caseEntry.targets : [];
   const previewCtx = {
     ...ctx,
     activationContext: {
@@ -64,8 +70,22 @@ function shouldAllowCase(caseEntry, ctx, engine) {
       preview: true,
     },
   };
-  const targetResult = engine.resolveTargets(targets, previewCtx, null);
-  return targetResult.ok !== false;
+
+  if (targets.length > 0) {
+    const targetResult = engine.resolveTargets(targets, previewCtx, null);
+    if (targetResult.ok === false) return false;
+  }
+
+  const actions = Array.isArray(caseEntry?.actions) ? caseEntry.actions : [];
+  if (actions.length > 0) {
+    const actionResult = engine?.checkActionPreviewRequirements?.(
+      actions,
+      previewCtx,
+    );
+    if (actionResult?.ok === false) return false;
+  }
+
+  return true;
 }
 
 function runSelectionContract(game, selectionContract, options = {}) {

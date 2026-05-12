@@ -177,6 +177,14 @@ export function collectZoneCandidates(zone, filters = {}, options = {}) {
       }
     }
 
+    if (filters.subtype) {
+      if (Array.isArray(filters.subtype)) {
+        if (!filters.subtype.includes(card.subtype)) return false;
+      } else {
+        if (card.subtype !== filters.subtype) return false;
+      }
+    }
+
     // Support filtering by monster type (e.g., "Dragon")
     if (filters.type) {
       const cardType = card.type || null;

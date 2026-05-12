@@ -110,6 +110,14 @@ export async function handleConditionalTargetActions(
   const applyMode = action.applyMode === "all" ? "all" : "first";
 
   const matchesCase = (caseEntry) => {
+    const conditions = Array.isArray(caseEntry?.conditions)
+      ? caseEntry.conditions
+      : [];
+    if (conditions.length > 0) {
+      const conditionResult = engine.evaluateConditions?.(conditions, ctx);
+      if (!conditionResult?.ok) return false;
+    }
+
     const filters = caseEntry?.filters || caseEntry?.filter;
     if (!filters || Object.keys(filters).length === 0) return true;
     if (matchMode === "all") {

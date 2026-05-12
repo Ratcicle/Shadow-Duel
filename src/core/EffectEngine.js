@@ -970,22 +970,25 @@ export default class EffectEngine {
           if (ownerRule === "opponent" && attackerOwner?.id === player?.id) {
             return { ok: false, reason: "Attacker is not opponent's." };
           }
-          // Match filters: type, cardKind, level bounds
+          // Match filters: monster race/type, cardKind, level bounds.
+          // `cond.type` is the condition discriminator ("attacker_matches").
           if (cond.cardKind && attacker.cardKind !== cond.cardKind) {
             return { ok: false, reason: "Attacker kind mismatch." };
           }
-          if (cond.type) {
+          const requiredType =
+            cond.attackerType || cond.monsterType || cond.cardType || cond.race;
+          if (requiredType) {
             const aType = attacker.type || null;
             const aTypes = Array.isArray(attacker.types)
               ? attacker.types
               : null;
-            const ok = Array.isArray(cond.type)
+            const ok = Array.isArray(requiredType)
               ? aTypes
-                ? cond.type.some((t) => aTypes.includes(t))
-                : cond.type.includes(aType)
+                ? requiredType.some((t) => aTypes.includes(t))
+                : requiredType.includes(aType)
               : aTypes
-                ? aTypes.includes(cond.type)
-                : aType === cond.type;
+                ? aTypes.includes(requiredType)
+                : aType === requiredType;
             if (!ok) {
               return { ok: false, reason: "Attacker type mismatch." };
             }

@@ -94,8 +94,10 @@
 
 ### 212 — Arcanist Grand Library (Field)
 - **Efeitos:**
-	- Uma vez por turno, se você não controla monstros: pague 2000 LP; Invoque por Especial 1 monstro "Arcanist" de Nível 4 ou menor do Deck.
-	- A primeira vez por turno que um monstro "Arcanist" seu destrói um monstro do oponente em batalha: compre 1 carta.
+	- A primeira vez a cada turno que um monstro "Arcanist" seu destruir um monstro do oponente em batalha: compre 1 carta.
+	- Uma vez por turno: você pode ativar 1 destes efeitos:
+		- Se você não controlar monstros: pague 2000 LP; Invoque por Especial 1 monstro "Arcanist" de Nível 4 ou menor do Deck.
+		- Se você controlar um monstro "Arcanist": adicione 1 Magia de Equipamento "Arcanist" do Deck à sua mão.
 
 ### 215 — Glyph-Destroying Tornado (Normal)
 - **Efeito:**
@@ -103,4 +105,4 @@
 
 ### 216 — Arcanist Seismic Impact (Normal)
 - **Efeito:**
-	- Se você controla um monstro "Arcanist" equipado com uma Magia de Equipamento "Arcanist": envie 1 monstro que você controla e 1 Magia "Arcanist" que você controla para o Cemitério e, se isso acontecer, alvo 1 card que seu oponente controla; bana-o.
+	- Se você controla um monstro "Arcanist": alvo 1 card que seu oponente controla; devolva-o para a mão, ou, se você controla uma Magia de Equipamento "Arcanist", bana-o em vez disso. Você só pode ativar 1 "Arcanist Seismic Impact" por turno.

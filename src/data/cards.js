@@ -5575,43 +5575,87 @@
     subtype: "field",
     archetype: "Arcanist",
     description:
-      'Once per turn, if you control no monsters: you can pay 2000 LP; Special Summon 1 Level 4 or lower "Arcanist" monster from your Deck. The first time each turn an "Arcanist" monster you control destroys an opponent\'s monster by battle: draw 1 card.',
+      'The first time each turn an "Arcanist" monster you control destroys an opponent\'s monster by battle: draw 1 card. Once per turn: You can activate 1 of these effects; If you control no monsters: pay 2000 LP; Special Summon 1 Level 4 or lower "Arcanist" monster from your Deck. If you control an "Arcanist" monster: add 1 "Arcanist" Equip Spell from your Deck to your hand.',
     image: "assets/Arcanist Grand Library.png",
     effects: [
       {
-        id: "arcanist_grand_library_summon",
+        id: "arcanist_grand_library_ignition",
         timing: "ignition",
         requireZone: "fieldSpell",
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
-        oncePerTurnName: "arcanist_grand_library_summon",
-        conditions: [
-          {
-            type: "control_card_filters",
-            owner: "self",
-            zone: "field",
-            cardKind: "monster",
-            includeFacedown: true,
-            max: 0,
-          },
-        ],
+        oncePerTurnName: "arcanist_grand_library_ignition",
         actions: [
           {
-            type: "pay_lp",
-            amount: 2000,
-          },
-          {
-            type: "special_summon_from_zone",
-            zone: "deck",
-            filters: {
-              cardKind: "monster",
-              archetype: "Arcanist",
-              level: 4,
-              levelOp: "lte",
-            },
-            count: { min: 1, max: 1 },
-            position: "choice",
-            promptPlayer: true,
+            type: "choose_action_case",
+            selectionMessage: "Choose an Arcanist Grand Library effect.",
+            cases: [
+              {
+                id: "arcanist_grand_library_summon",
+                label: "Pay 2000 LP; Special Summon an Arcanist monster",
+                description:
+                  'If you control no monsters: pay 2000 LP; Special Summon 1 Level 4 or lower "Arcanist" monster from your Deck.',
+                conditions: [
+                  {
+                    type: "control_card_filters",
+                    owner: "self",
+                    zone: "field",
+                    cardKind: "monster",
+                    includeFacedown: true,
+                    max: 0,
+                  },
+                ],
+                actions: [
+                  {
+                    type: "pay_lp",
+                    amount: 2000,
+                  },
+                  {
+                    type: "special_summon_from_zone",
+                    zone: "deck",
+                    filters: {
+                      cardKind: "monster",
+                      archetype: "Arcanist",
+                      level: 4,
+                      levelOp: "lte",
+                    },
+                    count: { min: 1, max: 1 },
+                    position: "choice",
+                    promptPlayer: true,
+                  },
+                ],
+              },
+              {
+                id: "arcanist_grand_library_search_equip",
+                label: 'Add an "Arcanist" Equip Spell',
+                description:
+                  'If you control an "Arcanist" monster: add 1 "Arcanist" Equip Spell from your Deck to your hand.',
+                conditions: [
+                  {
+                    type: "control_card_filters",
+                    owner: "self",
+                    zone: "field",
+                    cardKind: "monster",
+                    archetype: "Arcanist",
+                    requireFaceup: true,
+                  },
+                ],
+                actions: [
+                  {
+                    type: "search_any",
+                    player: "self",
+                    zone: "deck",
+                    filters: {
+                      cardKind: "spell",
+                      subtype: "equip",
+                      archetype: "Arcanist",
+                    },
+                    count: { min: 1, max: 1 },
+                    promptPlayer: true,
+                  },
+                ],
+              },
+            ],
           },
         ],
       },
@@ -5854,13 +5898,15 @@
     subtype: "normal",
     archetype: "Arcanist",
     description:
-      'If you control an "Arcanist" monster equipped with an "Arcanist" Equip Spell: send 1 monster you control and 1 "Arcanist" Spell you control to the GY, and if you do, target 1 card your opponent controls; banish it.',
+      'If you control an "Arcanist" monster: target 1 card your opponent controls; return it to the hand, or, if you control an "Arcanist" Equip Spell, banish it instead. You can only activate 1 "Arcanist Seismic Impact" per turn.',
     image: "assets/Arcanist Seismic Impact.png",
     effects: [
       {
         id: "seismic_impact_effect",
         timing: "on_play",
         speed: 1,
+        oncePerTurn: true,
+        oncePerTurnName: "seismic_impact_effect",
         conditions: [
           {
             type: "control_card_filters",
@@ -5871,36 +5917,10 @@
             requireFaceup: true,
             reason: 'You must control an "Arcanist" monster.',
           },
-          {
-            type: "control_card_filters",
-            owner: "self",
-            zone: "spellTrap",
-            cardKind: "spell",
-            subtype: "equip",
-            archetype: "Arcanist",
-            requireFaceup: true,
-            reason: 'You must control an "Arcanist" Equip Spell.',
-          },
         ],
         targets: [
           {
-            id: "seismic_cost_monster",
-            owner: "self",
-            zone: "field",
-            cardKind: "monster",
-            requireFaceup: true,
-            count: { min: 1, max: 1 },
-          },
-          {
-            id: "seismic_cost_spell",
-            owner: "self",
-            zones: ["spellTrap", "fieldSpell"],
-            cardKind: "spell",
-            archetype: "Arcanist",
-            count: { min: 1, max: 1 },
-          },
-          {
-            id: "seismic_banish_target",
+            id: "seismic_impact_target",
             owner: "opponent",
             zones: ["field", "spellTrap", "fieldSpell"],
             count: { min: 1, max: 1 },
@@ -5908,20 +5928,35 @@
         ],
         actions: [
           {
-            type: "move",
-            targetRef: "seismic_cost_monster",
-            player: "self",
-            to: "graveyard",
-          },
-          {
-            type: "move",
-            targetRef: "seismic_cost_spell",
-            player: "self",
-            to: "graveyard",
-          },
-          {
-            type: "banish",
-            targetRef: "seismic_banish_target",
+            type: "conditional_target_actions",
+            targetRef: "seismic_impact_target",
+            cases: [
+              {
+                conditions: [
+                  {
+                    type: "control_card_filters",
+                    owner: "self",
+                    zone: "spellTrap",
+                    cardKind: "spell",
+                    subtype: "equip",
+                    archetype: "Arcanist",
+                    requireFaceup: true,
+                  },
+                ],
+                actions: [
+                  {
+                    type: "banish",
+                    targetRef: "seismic_impact_target",
+                  },
+                ],
+              },
+            ],
+            defaultActions: [
+              {
+                type: "return_to_hand",
+                targetRef: "seismic_impact_target",
+              },
+            ],
           },
         ],
       },

@@ -816,7 +816,14 @@ export function evaluateVoidFinisherPlans(bot, opponent, game = null, analysis =
       VOID_IDS.MALICIOUS_DEMON,
     )
   ) {
-    let score = hollowsInGY >= 3 ? 94 : hollowsInGY === 2 ? 75 : 45;
+    let score =
+      hollowsInGY >= 3
+        ? 94
+        : hollowsInGY === 2
+          ? 78
+          : hollowsInGY === 1
+            ? 66
+            : 42;
     if (oppFieldCount === 0 && hollowsInGY >= 2) score += 5;
     if (hollowsInGY >= 1 && oppLP <= 2600 * hollowsInGY) score += 9;
     if (oppStrongest >= 2600 && hollowsInGY <= 1) score -= 10;
@@ -825,7 +832,7 @@ export function evaluateVoidFinisherPlans(bot, opponent, game = null, analysis =
         kind: "ascension",
         targetName: "Malicious Demon of the Void",
         score100: score,
-        preserveHollowsInGY: hollowsInGY >= 2,
+        preserveHollowsInGY: hollowsInGY >= 1,
         reason:
           hollowsInGY >= 3
             ? "Malicious tem multiplos ataques relevantes com Hollows no GY"

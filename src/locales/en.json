@@ -10,7 +10,7 @@
     },
     "212": {
       "name": "Arcanist Grand Library",
-      "description": "Once per turn, if you control no monsters: you can pay 2000 LP; Special Summon 1 Level 4 or lower \"Arcanist\" monster from your Deck. The first time each turn an \"Arcanist\" monster you control destroys an opponent's monster by battle: draw 1 card."
+      "description": "The first time each turn an \"Arcanist\" monster you control destroys an opponent's monster by battle: draw 1 card.\nOnce per turn: You can activate 1 of these effects;\n● If you control no monsters: pay 2000 LP; Special Summon 1 Level 4 or lower \"Arcanist\" monster from your Deck.\n● If you control an \"Arcanist\" monster: add 1 \"Arcanist\" Equip Spell from your Deck to your hand."
     },
     "214": {
       "name": "Azrath, Corrupted Arcanist",
@@ -22,7 +22,7 @@
     },
     "216": {
       "name": "Arcanist Seismic Impact",
-      "description": "If you control an \"Arcanist\" monster equipped with an \"Arcanist\" Equip Spell: send 1 monster you control and 1 \"Arcanist\" Spell you control to the GY, and if you do, target 1 card your opponent controls; banish it."
+      "description": "If you control an \"Arcanist\" monster: target 1 card your opponent controls; return it to the hand, or, if you control an \"Arcanist\" Equip Spell, banish it instead. You can only activate 1 \"Arcanist Seismic Impact\" per turn."
     },
     "250": {
       "name": "Fire Extreme Dragon",

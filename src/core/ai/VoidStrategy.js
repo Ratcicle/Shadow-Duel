@@ -60,6 +60,47 @@ function getOpponentStrongestBattleStat(analysis = {}) {
   }, 0);
 }
 
+function getArcturusSoloBuffState(player) {
+  const faceUpMonsters = (player?.field || []).filter(
+    (card) => card && card.cardKind === "monster" && !card.isFacedown,
+  );
+  const arcturus = faceUpMonsters.find(
+    (card) => card?.id === VOID_IDS.ARCTURUS,
+  );
+  if (!arcturus) {
+    return {
+      arcturus: null,
+      isSolo: false,
+      voidsInGY: 0,
+      soloBonus: 0,
+      projectedAtk: 0,
+    };
+  }
+
+  const voidsInGY = (player?.graveyard || []).filter(isVoid).length;
+  const soloBonus = voidsInGY * 100;
+  return {
+    arcturus,
+    isSolo: faceUpMonsters.length === 1,
+    voidsInGY,
+    soloBonus,
+    projectedAtk: getEffectiveBattleStat(arcturus, "atk") + soloBonus,
+  };
+}
+
+function shouldPreserveArcturusSoloBuff(player, opponent, analysis = {}) {
+  const state = getArcturusSoloBuffState(player);
+  if (!state.isSolo || state.soloBonus <= 0) return false;
+
+  const strongestThreat = getOpponentStrongestBattleStat(analysis);
+  const opponentLP = opponent?.lp || analysis.oppLP || 8000;
+  return (
+    state.projectedAtk >= opponentLP ||
+    state.projectedAtk > strongestThreat ||
+    state.soloBonus >= 300
+  );
+}
+
 function assessConjurerReviveCostRisk(card, analysis = {}) {
   const knowledge = getVoidCardKnowledge(card);
   const protectedBoss =
@@ -322,14 +363,78 @@ function isMaliciousAscensionReady(game, player, material) {
   if (!game || !player || material?.id !== VOID_IDS.THOUSAND_ARMS) {
     return false;
   }
+  const realGame = game?._gameRef || game;
   const malicious = (player.extraDeck || []).find(
     (card) => card?.id === VOID_IDS.MALICIOUS_DEMON,
   );
   if (!malicious) return false;
-  const materialCheck = game.canUseAsAscensionMaterial?.(player, material);
+  const materialCheck = realGame.canUseAsAscensionMaterial?.(player, material);
   if (materialCheck && materialCheck.ok === false) return false;
-  const requirementCheck = game.checkAscensionRequirements?.(player, malicious);
+  const requirementCheck = realGame.checkAscensionRequirements?.(
+    player,
+    malicious,
+  );
   return requirementCheck?.ok === true;
+}
+
+function getThousandArmsMaliciousSetup(game, player, material) {
+  if (!game || !player || material?.id !== VOID_IDS.THOUSAND_ARMS) {
+    return {
+      hasMalicious: false,
+      activations: 0,
+      requirementsMet: false,
+      canAscendNow: false,
+      shouldHoldForAscension: false,
+      shouldDelayFreshBounce: false,
+    };
+  }
+
+  const realGame = game?._gameRef || game;
+  const malicious = (player.extraDeck || []).find(
+    (card) => card?.id === VOID_IDS.MALICIOUS_DEMON,
+  );
+  const activations = getMaterialEffectActivationCount(
+    realGame,
+    player,
+    VOID_IDS.THOUSAND_ARMS,
+  );
+
+  if (!malicious) {
+    return {
+      hasMalicious: false,
+      activations,
+      requirementsMet: false,
+      canAscendNow: false,
+      shouldHoldForAscension: false,
+      shouldDelayFreshBounce: false,
+    };
+  }
+
+  const requirementCheck = realGame.checkAscensionRequirements?.(
+    player,
+    malicious,
+  );
+  const requirementsMet =
+    requirementCheck?.ok === true ||
+    (typeof requirementCheck?.ok !== "boolean" && activations >= 2);
+  const materialCheck = realGame.canUseAsAscensionMaterial?.(player, material);
+  const canAscendNow =
+    requirementsMet && (materialCheck?.ok !== false || !materialCheck);
+  const onField = (player.field || []).includes(material);
+  const tooFreshForAscension =
+    materialCheck?.ok === false &&
+    String(materialCheck.reason || "").includes("at least 1 turn");
+
+  return {
+    hasMalicious: true,
+    activations,
+    requirementsMet,
+    canAscendNow,
+    tooFreshForAscension,
+    shouldHoldForAscension:
+      onField && requirementsMet && (canAscendNow || tooFreshForAscension),
+    shouldDelayFreshBounce: onField && !requirementsMet && tooFreshForAscension,
+  };
 }
 
 function validateVoidHandIgnitionCandidate({
@@ -1548,6 +1653,11 @@ export default class VoidStrategy extends BaseStrategy {
     const preserveHollowsForFinisher =
       bestFinisherPlan?.preserveHollowsInGY === true &&
       String(game?.phase || "").toLowerCase().includes("main1");
+    const preserveArcturusSoloBuff = shouldPreserveArcturusSoloBuff(
+      bot,
+      opponent,
+      analysis,
+    );
 
     // ═══════════════════════════════════════════════════════════════════════════
     // ASCENSION CHECK
@@ -1575,7 +1685,7 @@ export default class VoidStrategy extends BaseStrategy {
           );
           if (
             ascensionCard.id === VOID_IDS.MALICIOUS_DEMON &&
-            (!ascensionFinisherPlan || ascensionFinisherPlan.score100 < 72)
+            (!ascensionFinisherPlan || ascensionFinisherPlan.score100 < 60)
           ) {
             continue;
           }
@@ -2187,19 +2297,24 @@ export default class VoidStrategy extends BaseStrategy {
         }
         case VOID_IDS.THOUSAND_ARMS: {
           // Bounce self → SS até 2 Hollows do GY com +700 ATK/DEF
-          if (isMaliciousAscensionReady(game, bot, card)) {
+          const maliciousSetup = getThousandArmsMaliciousSetup(
+            game,
+            bot,
+            card,
+          );
+          if (
+            isMaliciousAscensionReady(game, bot, card) ||
+            maliciousSetup.shouldHoldForAscension ||
+            maliciousSetup.shouldDelayFreshBounce
+          ) {
             break;
           }
           if (hollowsInGY < 1) break;
           priority = 7.0;
           priority += Math.min(hollowsInGY, 2) * 0.75; // até +1.5
           // Caminho para Malicious Demon ascension (precisa 2 ativações)
-          if (
-            (bot.extraDeck || []).some(
-              (c) => c?.id === VOID_IDS.MALICIOUS_DEMON,
-            )
-          ) {
-            priority += 1.5;
+          if (maliciousSetup.hasMalicious) {
+            priority += maliciousSetup.activations >= 1 ? 0.8 : 1.5;
           }
           if (preserveHollowsForFinisher) {
             priority -= 3.0;
@@ -2346,6 +2461,7 @@ export default class VoidStrategy extends BaseStrategy {
         case VOID_IDS.TENEBRIS_HORN: {
           // Once per duel: SS self do GY
           if (!fieldHasSpace) break;
+          if (preserveArcturusSoloBuff) break;
           priority = 6.5;
           // Cada Void no campo aumenta valor (passive scaling)
           priority += Math.min(analysis.voidCount || 0, 4) * 0.4;
@@ -2361,6 +2477,7 @@ export default class VoidStrategy extends BaseStrategy {
         case VOID_IDS.HAUNTER: {
           // Banir self do GY → SS até 3 Hollows do GY com ATK/DEF 0
           if (hollowsInGY < 1 || !fieldHasSpace) break;
+          if (preserveArcturusSoloBuff) break;
           priority = 8.0;
           priority += Math.min(hollowsInGY, 3) * 0.5; // até +1.5
           // Payoffs para os Hollows revividos

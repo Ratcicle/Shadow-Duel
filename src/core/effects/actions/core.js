@@ -117,6 +117,107 @@ export async function applyActions(actions, ctx, targets) {
   return executed;
 }
 
+function buildPreviewFilters(action) {
+  const filters = { ...(action?.filters || {}) };
+  if (action?.archetype && !filters.archetype) {
+    filters.archetype = action.archetype;
+  }
+  if (action?.cardKind && !filters.cardKind) {
+    filters.cardKind = action.cardKind;
+  }
+  if (action?.cardName && !filters.name) {
+    filters.name = action.cardName;
+  }
+  if (action?.monsterType && !filters.type) {
+    filters.type = action.monsterType;
+  }
+  if (Number.isFinite(action?.minLevel) && filters.minLevel == null) {
+    filters.minLevel = action.minLevel;
+  }
+  if (Number.isFinite(action?.maxLevel) && filters.maxLevel == null) {
+    filters.maxLevel = action.maxLevel;
+  }
+  if (Number.isFinite(action?.minAtk) && filters.minAtk == null) {
+    filters.minAtk = action.minAtk;
+  }
+  if (Number.isFinite(action?.maxAtk) && filters.maxAtk == null) {
+    filters.maxAtk = action.maxAtk;
+  }
+  return filters;
+}
+
+function matchesPreviewFilters(engine, card, filters) {
+  if (!card) return false;
+  if (typeof engine?.cardMatchesFilters === "function") {
+    if (!engine.cardMatchesFilters(card, filters)) return false;
+  }
+  if (
+    typeof filters.minLevel === "number" &&
+    (card.level || 0) < filters.minLevel
+  ) {
+    return false;
+  }
+  if (
+    typeof filters.maxLevel === "number" &&
+    (card.level || 0) > filters.maxLevel
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function hasSpecialSummonCandidate(engine, action, ctx) {
+  const player = ctx?.player;
+  if (!player) return false;
+
+  const zoneSpec = action.zone || action.sourceZone || "deck";
+  const zoneNames = Array.isArray(zoneSpec) ? zoneSpec : [zoneSpec];
+  const zones = zoneNames
+    .map((zoneName) => player?.[zoneName])
+    .filter((zone) => Array.isArray(zone));
+  if (zones.length === 0) return false;
+
+  if (action.requireSource) {
+    return zones.some((zone) => zone.includes(ctx?.source));
+  }
+  if (action.targetRef) return true;
+
+  const filters = buildPreviewFilters(action);
+  return zones.some((zone) =>
+    zone.some((card) => {
+      if (card?.cannotBeSpecialSummoned) return false;
+      return matchesPreviewFilters(engine, card, filters);
+    }),
+  );
+}
+
+function isChoiceCaseAllowedInPreview(engine, caseEntry, ctx) {
+  const conditions = Array.isArray(caseEntry?.conditions)
+    ? caseEntry.conditions
+    : [];
+  if (conditions.length > 0) {
+    const conditionResult = engine?.evaluateConditions?.(conditions, ctx);
+    if (!conditionResult?.ok) return false;
+  }
+
+  const targets = Array.isArray(caseEntry?.targets) ? caseEntry.targets : [];
+  if (targets.length > 0) {
+    const targetResult = engine?.resolveTargets?.(targets, ctx, null);
+    if (targetResult?.ok === false) return false;
+  }
+
+  const caseActions = Array.isArray(caseEntry?.actions)
+    ? caseEntry.actions
+    : [];
+  if (caseActions.length === 0) return false;
+
+  const actionResult =
+    typeof engine?.checkActionPreviewRequirements === "function"
+      ? engine.checkActionPreviewRequirements(caseActions, ctx)
+      : checkActionPreviewRequirements.call(engine, caseActions, ctx);
+  return actionResult?.ok !== false;
+}
+
 /**
  * Check action preview requirements without executing
  * @param {Array} actions - Array of action definitions
@@ -138,6 +239,17 @@ export function checkActionPreviewRequirements(actions, ctx) {
 
   for (const action of actions) {
     if (!action || !action.type) continue;
+    if (action.type === "choose_action_case") {
+      const cases = Array.isArray(action.cases) ? action.cases : [];
+      const hasAllowedCase = cases.some((caseEntry) =>
+        isChoiceCaseAllowedInPreview(this, caseEntry, ctx),
+      );
+      if (!hasAllowedCase) {
+        return { ok: false, reason: "No valid options to activate this effect." };
+      }
+      continue;
+    }
+
     if (action.type === "pay_lp") {
       let amount = Number(action.amount || 0);
       if (action.fraction) {
@@ -228,6 +340,15 @@ export function checkActionPreviewRequirements(actions, ctx) {
     ) {
       if ((player.field || []).length >= 5) {
         return { ok: false, reason: "Field is full." };
+      }
+      if (
+        action.type === "special_summon_from_zone" &&
+        !hasSpecialSummonCandidate(this, action, ctx)
+      ) {
+        return {
+          ok: false,
+          reason: "No valid cards available to Special Summon.",
+        };
       }
     }
 

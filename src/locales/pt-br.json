@@ -438,7 +438,7 @@
     },
     "212": {
       "name": "Grande Biblioteca Arcanista",
-      "description": "Uma vez por turno, se você não controlar monstros: você pode pagar 2000 PV; Invoque por Invocação-Especial 1 monstro \"Arcanista\" de Nível 4 ou menor do seu Deck. A primeira vez em cada turno que um monstro \"Arcanista\" que você controla destruir um monstro do oponente em batalha: compre 1 card."
+      "description": "A primeira vez a cada turno que um monstro \"Arcanista\" seu destruir um monstro do oponente em batalha: compre 1 carta.\nUma vez por turno: você pode ativar 1 destes efeitos;\n● Se você não controlar monstros: pague 2000 PV; Invoque por Invocação-Especial 1 monstro \"Arcanista\" de Nível 4 ou menor do seu Deck.\n● Se você controlar um monstro \"Arcanista\": adicione 1 Magia de Equipamento \"Arcanista\" do seu Deck à sua mão."
     },
     "213": {
       "name": "Mestre Elementalista Arcanista",
@@ -454,7 +454,7 @@
     },
     "216": {
       "name": "Impacto Sísmico Arcanista",
-      "description": "Se você controlar um monstro \"Arcanista\" equipado com uma Magia de Equipamento \"Arcanista\": envie 1 monstro que você controla e 1 Magia \"Arcanista\" que você controla para o Cemitério e, se isso acontecer, escolha 1 card que seu oponente controla; bana-o."
+      "description": "Se você controlar um monstro \"Arcanista\": escolha 1 card que seu oponente controla; devolva-o para a mão, ou, se você controlar uma Magia de Equipamento \"Arcanista\", bana-o em vez disso. Você só pode ativar 1 \"Impacto Sísmico Arcanista\" por turno."
     },
     "250": {
       "name": "Dragão Extremo de Fogo",

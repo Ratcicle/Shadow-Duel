@@ -239,11 +239,16 @@ function buildVoidTargetPreferences(costPreferences = {}) {
     avoidNames.add("Void Walker");
   }
 
+  const gravitationalAvoidNames = new Set(avoidNames);
+  // Gravitational Pull returns the chosen Void to hand, so Walker is a good
+  // recyclable self-target even when other cost policies want to preserve it.
+  gravitationalAvoidNames.delete("Void Walker");
+
   const preferredGravitationalSelf = [
     "Void Walker",
     "Void Hollow",
     "Void Conjurer",
-  ].filter((name) => !avoidNames.has(name));
+  ].filter((name) => !gravitationalAvoidNames.has(name));
 
   return {
     void_conjurer_cost: {
@@ -278,7 +283,7 @@ function buildVoidTargetPreferences(costPreferences = {}) {
       role: "named_preference",
       intent: "benefit",
       preferredNames: preferredGravitationalSelf,
-      avoidNames: [...avoidNames],
+      avoidNames: [...gravitationalAvoidNames],
     },
     void_gravitational_opponent: {
       intent: "harm",
