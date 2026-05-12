@@ -54,6 +54,17 @@ export async function offerSummonAttempt(card, player, options = {}) {
     summonAttempt: attempt,
   };
 
+  const opponent = this.getOpponent?.(player) || null;
+  const playerResponses =
+    this.chainSystem.getActivatableCardsInChain?.(player, context) || [];
+  const opponentResponses = opponent
+    ? this.chainSystem.getActivatableCardsInChain?.(opponent, context) || []
+    : [];
+
+  if (playerResponses.length === 0 && opponentResponses.length === 0) {
+    return { ok: true };
+  }
+
   await this.chainSystem.openChainWindow(context);
   if (attempt.negated || context.negated) {
     return { ok: false, negated: true, reason: "summon_negated" };

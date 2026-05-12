@@ -1952,7 +1952,7 @@ export default class Bot extends Player {
 
   async tryAscensionIfAvailable(game) {
     try {
-      // Find a material on bot field eligible for ascension
+      const choices = [];
       const materials = (this.field || []).filter(
         (m) => m && m.cardKind === "monster" && !m.isFacedown,
       );
@@ -1967,15 +1967,71 @@ export default class Bot extends Player {
           (asc) => game.checkAscensionRequirements(this, asc).ok,
         );
         if (!eligible.length) continue;
-
-        // Priorização inteligente de Ascensão
-        const best = this.selectBestAscension(eligible, material, game);
-        const res = await game.performAscensionSummon(this, material, best, {
-          position: this.getAscensionPositionPreference(best, material, game),
-        });
-        if (res?.success) {
-          return true;
+        for (const ascensionCard of eligible) {
+          choices.push({ material, ascensionCard });
         }
+      }
+
+      if (!choices.length) return false;
+
+      const opponent = this.resolveOpponent(game);
+      const strategicChoice = this.strategy?.selectAutomaticAscension?.({
+        choices,
+        game,
+        bot: this,
+        opponent,
+      });
+      if (strategicChoice?.skip === true) {
+        return false;
+      }
+
+      let selected = null;
+      if (strategicChoice?.material && strategicChoice?.ascensionCard) {
+        selected = {
+          material: strategicChoice.material,
+          ascensionCard: strategicChoice.ascensionCard,
+          position: strategicChoice.position,
+        };
+      }
+
+      if (!selected) {
+        const firstMaterial = choices[0].material;
+        const eligibleForFirstMaterial = choices
+          .filter((choice) => choice.material === firstMaterial)
+          .map((choice) => choice.ascensionCard);
+        selected = {
+          material: firstMaterial,
+          ascensionCard: this.selectBestAscension(
+            eligibleForFirstMaterial,
+            firstMaterial,
+            game,
+          ),
+        };
+      }
+
+      const position =
+        selected.position ||
+        this.strategy?.chooseAutomaticAscensionPosition?.({
+          material: selected.material,
+          ascensionCard: selected.ascensionCard,
+          game,
+          bot: this,
+          opponent,
+        }) ||
+        this.getAscensionPositionPreference(
+          selected.ascensionCard,
+          selected.material,
+          game,
+        );
+
+      const res = await game.performAscensionSummon(
+        this,
+        selected.material,
+        selected.ascensionCard,
+        { position },
+      );
+      if (res?.success) {
+        return true;
       }
     } catch (e) {
       // Silent fail; bot ascension is opportunistic

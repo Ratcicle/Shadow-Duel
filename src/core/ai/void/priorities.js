@@ -2,6 +2,86 @@ import { getVoidCardKnowledge, isVoid } from "./knowledge.js";
 import { VOID_IDS } from "./combos.js";
 import { evaluateVoidMonster } from "./scoring.js";
 
+const SEALING_PROTECTED_TARGET_IDS = new Set([
+  VOID_IDS.ARCTURUS,
+  VOID_IDS.HOLLOW_KING,
+  VOID_IDS.BERSERKER,
+  VOID_IDS.HYDRA_TITAN,
+  VOID_IDS.COSMIC_WALKER,
+  VOID_IDS.MALICIOUS_DEMON,
+  VOID_IDS.THOUSAND_ARMS,
+  VOID_IDS.SLAYER_BRUTE,
+  VOID_IDS.SERPENT_DRAKE,
+  VOID_IDS.HAUNTER,
+  VOID_IDS.FORGOTTEN_KNIGHT,
+]);
+
+const SEALING_LOW_COST_TARGET_IDS = new Set([
+  VOID_IDS.HOLLOW,
+  VOID_IDS.CONJURER,
+  VOID_IDS.WALKER,
+  VOID_IDS.BEAST,
+  VOID_IDS.TENEBRIS_HORN,
+]);
+
+const FUSION_PROTECTED_MATERIAL_IDS = new Set([
+  VOID_IDS.RAVEN,
+  VOID_IDS.ARCTURUS,
+  VOID_IDS.HOLLOW_KING,
+  VOID_IDS.BERSERKER,
+  VOID_IDS.HYDRA_TITAN,
+  VOID_IDS.COSMIC_WALKER,
+  VOID_IDS.MALICIOUS_DEMON,
+]);
+
+function getTributeNeedForNormalSummon(card) {
+  if (!card || card.cardKind !== "monster") return Infinity;
+  if (card.cannotBeNormalSummonedOrSet) return Infinity;
+  const level = Number(card.level || 0);
+  if (level >= 7) return 2;
+  if (level >= 5) return 1;
+  return 0;
+}
+
+function canNormalSummonWithCurrentField(card, fieldCount) {
+  return getTributeNeedForNormalSummon(card) <= fieldCount;
+}
+
+function getFieldIgnitions(monster) {
+  return (monster?.effects || []).filter(
+    (effect) =>
+      effect &&
+      effect.timing === "ignition" &&
+      (!effect.requireZone || effect.requireZone === "field"),
+  );
+}
+
+function isSafeSealingTarget(monster, bot, game) {
+  if (!monster || SEALING_PROTECTED_TARGET_IDS.has(monster.id)) return false;
+  if (monster.usedEffectThisTurn || monster.hasAttacked) return true;
+  if (SEALING_LOW_COST_TARGET_IDS.has(monster.id)) return true;
+
+  const ignitions = getFieldIgnitions(monster);
+  if (ignitions.length === 0) return true;
+  if (!game?.effectEngine?.checkOncePerTurn) return false;
+
+  return ignitions.every((effect) => {
+    const check = game.effectEngine.checkOncePerTurn(monster, bot, effect);
+    return check?.ok === false;
+  });
+}
+
+function isProtectedVoidFusionMaterial(card, bot) {
+  if (!card || FUSION_PROTECTED_MATERIAL_IDS.has(card.id)) return true;
+  if (
+    card.id === VOID_IDS.THOUSAND_ARMS &&
+    (bot?.extraDeck || []).some((extra) => extra?.id === VOID_IDS.MALICIOUS_DEMON)
+  ) {
+    return true;
+  }
+  return false;
+}
+
 export function shouldPlayVoidSpell(card, game, bot, opponent) {
   if (!card || card.cardKind !== "spell") return { yes: false, priority: 0 };
   const knowledge = getVoidCardKnowledge(card);
@@ -56,6 +136,81 @@ export function shouldPlayVoidSpell(card, game, bot, opponent) {
     if (fieldVoids.length === 0) {
       return { yes: false, priority: 0, reason: "Sem Void face-up para alvo" };
     }
+
+    const safeTargets = fieldVoids.filter((monster) =>
+      isSafeSealingTarget(monster, bot, game),
+    );
+    if (safeTargets.length === 0) {
+      return {
+        yes: false,
+        priority: 0,
+        reason: "Sealing sem alvo Void descartavel ou ja usado",
+      };
+    }
+
+    const summonLimit = 1 + (bot?.additionalNormalSummons || 0);
+    const normalAvailable = (bot?.summonCount || 0) < summonLimit;
+    const immediateNormalTargets = (bot?.hand || []).filter(
+      (candidate) =>
+        candidate?.cardKind === "monster" &&
+        isVoid(candidate) &&
+        candidate.id !== VOID_IDS.RAVEN &&
+        candidate.id !== VOID_IDS.HOLLOW &&
+        canNormalSummonWithCurrentField(candidate, fieldVoids.length),
+    );
+    if (immediateNormalTargets.length === 0) {
+      return {
+        yes: false,
+        priority: 0,
+        reason: "Sem monstro Void relevante para a Normal Summon adicional",
+      };
+    }
+
+    const createsActualExtraNormal =
+      !normalAvailable || immediateNormalTargets.length >= 2;
+    if (!createsActualExtraNormal) {
+      return {
+        yes: false,
+        priority: 0,
+        reason: "Sealing nao adiciona summon extra real neste estado",
+      };
+    }
+
+    const hasHighPayoffNormal = immediateNormalTargets.some((candidate) =>
+      [
+        VOID_IDS.ARCTURUS,
+        VOID_IDS.THOUSAND_ARMS,
+        VOID_IDS.SLAYER_BRUTE,
+        VOID_IDS.SERPENT_DRAKE,
+        VOID_IDS.HAUNTER,
+        VOID_IDS.FORGOTTEN_KNIGHT,
+      ].includes(candidate.id),
+    );
+    const burnedTargets = safeTargets.filter(
+      (monster) =>
+        monster.usedEffectThisTurn ||
+        getFieldIgnitions(monster).some((effect) => {
+          const check = game?.effectEngine?.checkOncePerTurn?.(
+            monster,
+            bot,
+            effect,
+          );
+          return check?.ok === false;
+        }),
+    ).length;
+
+    let priority = hasHighPayoffNormal ? 7.2 : 5.8;
+    if (!normalAvailable) priority += 0.8;
+    if (burnedTargets > 0) priority += 0.6;
+    if (immediateNormalTargets.length >= 2) priority += 0.4;
+    if (isSimulatedState && priority > 6.5) priority -= 0.3;
+
+    return {
+      yes: true,
+      priority,
+      reason: "Sealing com alvo barato e Normal Summon extra imediata",
+    };
+
     const handMonsterCount = (bot?.hand || []).filter(
       (c) => c?.cardKind === "monster",
     ).length;
@@ -615,6 +770,9 @@ export function evaluateVoidFinisherPlans(bot, opponent, game = null, analysis =
   const oppLP = resolvedOpponent?.lp || analysis?.oppLP || 8000;
   const myLP = bot?.lp || analysis?.myLP || 8000;
   const hasPoly = hasCardId(hand, VOID_IDS.POLYMERIZATION);
+  const expendableVoids = voids.filter(
+    (card) => !isProtectedVoidFusionMaterial(card, bot),
+  );
   const plans = [];
 
   if (
@@ -677,7 +835,11 @@ export function evaluateVoidFinisherPlans(bot, opponent, game = null, analysis =
     );
   }
 
-  if (extraIds.includes(VOID_IDS.HYDRA_TITAN) && hasPoly && voids.length >= 6) {
+  if (
+    extraIds.includes(VOID_IDS.HYDRA_TITAN) &&
+    hasPoly &&
+    expendableVoids.length >= 6
+  ) {
     const projectedDraws = estimateVoidHydraDraws(bot);
     const stabilizesBoard =
       oppFieldCount >= 2 || oppStrongest >= 2800 || myLP <= 3000;
@@ -704,7 +866,7 @@ export function evaluateVoidFinisherPlans(bot, opponent, game = null, analysis =
     extraIds.includes(VOID_IDS.BERSERKER) &&
     hasPoly &&
     slayerField &&
-    otherVoidCount >= 1
+    expendableVoids.some((card) => card?.id !== VOID_IDS.SLAYER_BRUTE)
   ) {
     const lethalPotential = oppLP <= 5600;
     const destroyableTargets = countDestroyableByAtk(oppMonsters, 2800);

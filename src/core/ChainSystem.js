@@ -146,6 +146,49 @@ export default class ChainSystem {
   // ACTIVATABLE CARDS FILTERING
   // ============================================================
 
+  effectCanRespondToContext(effect, contextType) {
+    return (
+      !!contextType &&
+      Array.isArray(effect?.canRespondTo) &&
+      effect.canRespondTo.includes(contextType)
+    );
+  }
+
+  effectHasAction(effect, actionType) {
+    if (!actionType || !Array.isArray(effect?.actions)) return false;
+    return effect.actions.some((action) => action?.type === actionType);
+  }
+
+  isSummonNegationResponse(effect) {
+    return (
+      this.effectCanRespondToContext(effect, "summon_attempt") ||
+      this.effectHasAction(effect, "negate_summon_or_activation_and_destroy")
+    );
+  }
+
+  requiresExplicitSummonResponse(context) {
+    return context?.type === "summon" || context?.type === "summon_attempt";
+  }
+
+  isExplicitAfterSummonEventResponse(effect, context) {
+    return (
+      context?.type === "summon" &&
+      effect?.timing === "on_event" &&
+      effect.event === "after_summon"
+    );
+  }
+
+  canOfferEffectInChainContext(effect, context) {
+    if (!this.requiresExplicitSummonResponse(context)) return true;
+    if (context?.type === "summon_attempt") {
+      return this.isSummonNegationResponse(effect);
+    }
+    return (
+      this.isExplicitAfterSummonEventResponse(effect, context) ||
+      this.effectCanRespondToContext(effect, context?.type)
+    );
+  }
+
   /**
    * Get all cards a player can activate in current chain context
    * @param {Object} player - The player to check
@@ -199,6 +242,7 @@ export default class ChainSystem {
 
         const effect = this.findActivatableEffect(card, context, player);
         if (effect) {
+          if (!this.canOfferEffectInChainContext(effect, context)) continue;
           console.log(
             `[getActivatableCardsInChain] Found effect for ${card.name}:`,
             effect.id,
@@ -240,6 +284,7 @@ export default class ChainSystem {
 
         const effect = this.findActivatableEffect(card, context, player);
         if (effect) {
+          if (!this.canOfferEffectInChainContext(effect, context)) continue;
           const chainCheck = this.canActivateInChain(effect, card, context);
           if (chainCheck.ok) {
             const useMainPhaseRules = context?.type === "main_phase_action";
@@ -278,6 +323,7 @@ export default class ChainSystem {
 
         const effect = this.findActivatableEffect(card, context, player);
         if (effect) {
+          if (!this.canOfferEffectInChainContext(effect, context)) continue;
           const chainCheck = this.canActivateInChain(effect, card, context);
           if (chainCheck.ok) {
             const useMainPhaseRules = context?.type === "main_phase_action";
@@ -305,6 +351,7 @@ export default class ChainSystem {
 
         const effect = this.findQuickMonsterEffect(card, context, player);
         if (effect) {
+          if (!this.canOfferEffectInChainContext(effect, context)) continue;
           const chainCheck = this.canActivateInChain(effect, card, context);
           if (chainCheck.ok) {
             activatable.push({ card, effect, zone: "field" });
@@ -537,6 +584,13 @@ export default class ChainSystem {
           effect.timing === "manual" ||
           effect.timing === "ignition"
         ) {
+          if (
+            this.requiresExplicitSummonResponse(context) &&
+            !this.canOfferEffectInChainContext(effect, context)
+          ) {
+            continue;
+          }
+
           // Only allow activation in appropriate contexts:
           // - on_activate: when setting or in response to specific events
           // - manual: only during phase_change/phase_end
@@ -597,6 +651,13 @@ export default class ChainSystem {
           effect.timing === "on_activate" ||
           effect.timing === "ignition"
         ) {
+          if (
+            this.requiresExplicitSummonResponse(context) &&
+            !this.canOfferEffectInChainContext(effect, context)
+          ) {
+            continue;
+          }
+
           // Check if targets are available before allowing activation
           if (
             effect.targets &&
@@ -656,6 +717,13 @@ export default class ChainSystem {
       if (!effect) continue;
 
       if (!(effect.isQuickEffect || effect.speed === 2)) {
+        continue;
+      }
+
+      if (
+        this.requiresExplicitSummonResponse(context) &&
+        !this.canOfferEffectInChainContext(effect, context)
+      ) {
         continue;
       }
 

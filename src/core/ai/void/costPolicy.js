@@ -32,6 +32,23 @@ const VOID_OFFENSIVE_PAYOFFS = [
   "Void Forgotten Knight",
 ];
 
+const VOID_PROTECTED_COST_NAMES = [
+  "Arcturus, Lord of the Void",
+  "Void Hydra Titan",
+  "Void Berserker",
+  "Void Hollow King",
+  "Void Cosmic Walker",
+  "Malicious Demon of the Void",
+];
+
+const VOID_SEALING_PREFERRED_TARGETS = [
+  "Void Hollow",
+  "Void Conjurer",
+  "Void Walker",
+  "Void Beast",
+  "Void Tenebris Horn",
+];
+
 /**
  * Calcula custos preferidos / preservados a partir do estado.
  * Retorna o formato esperado pelo AutoSelector.getCandidateScore (intent="cost").
@@ -49,6 +66,11 @@ export function buildVoidCostPreferences(analysis = {}) {
   const extraIds = extraDeck.map((c) => c?.id).filter(Boolean);
 
   const hasPoly = handIds.includes(VOID_IDS.POLYMERIZATION);
+  const hasFusionInExtra = extraDeck.some((card) =>
+    [VOID_IDS.HOLLOW_KING, VOID_IDS.BERSERKER, VOID_IDS.HYDRA_TITAN].includes(
+      card?.id,
+    ),
+  );
 
   const hollowsHand = handIds.filter((id) => id === VOID_IDS.HOLLOW).length;
   const hollowsField = fieldIds.filter((id) => id === VOID_IDS.HOLLOW).length;
@@ -62,6 +84,12 @@ export function buildVoidCostPreferences(analysis = {}) {
 
   const preserveNames = new Set();
   const preferNames = new Set();
+
+  for (const card of [...hand, ...field]) {
+    if (card?.name && VOID_PROTECTED_COST_NAMES.includes(card.name)) {
+      preserveNames.add(card.name);
+    }
+  }
 
   // ─── PRESERVE: peças críticas com payoff próximo ───────────────────────────
 
@@ -88,7 +116,15 @@ export function buildVoidCostPreferences(analysis = {}) {
     hasPoly &&
     extraIds.includes(VOID_IDS.HYDRA_TITAN) &&
     accessibleVoids >= 5;
-  if (ravenInHand && (hollowKingPath || berserkerPathReady || hydraReadyOrClose)) {
+  const hasRavenProtectionPlan =
+    ravenInHand &&
+    hasPoly &&
+    hasFusionInExtra &&
+    (accessibleVoids >= 2 ||
+      hollowKingPath ||
+      berserkerPathReady ||
+      hydraReadyOrClose);
+  if (hasRavenProtectionPlan) {
     preserveNames.add("Void Raven");
   }
 
@@ -102,7 +138,8 @@ export function buildVoidCostPreferences(analysis = {}) {
 
   // Thousand-Arms no campo + Malicious Demon no extra = caminho ascension.
   if (
-    fieldIds.includes(VOID_IDS.THOUSAND_ARMS) &&
+    (fieldIds.includes(VOID_IDS.THOUSAND_ARMS) ||
+      handIds.includes(VOID_IDS.THOUSAND_ARMS)) &&
     extraIds.includes(VOID_IDS.MALICIOUS_DEMON)
   ) {
     preserveNames.add("Thousand-Arms of the Void");
@@ -170,15 +207,17 @@ export function buildVoidCostPreferences(analysis = {}) {
   // Walker já com efeito de bounce usado: prioriza tributo
   // (handled indiretamente pelo usedEffectThisTurn no AutoSelector)
 
+  const availableOffensivePayoffs = [...hand, ...field].filter((c) =>
+    VOID_OFFENSIVE_PAYOFFS.includes(c?.name),
+  ).length;
+
   return {
     archetype: "Void",
     preferNames: [...preferNames],
     preserveNames: [...preserveNames],
     offensivePayoffNames: VOID_OFFENSIVE_PAYOFFS,
     preserveLastOffensivePayoff: true,
-    availableOffensivePayoffs: hand.filter((c) =>
-      VOID_OFFENSIVE_PAYOFFS.includes(c?.name),
-    ).length,
+    availableOffensivePayoffs,
   };
 }
 
@@ -211,6 +250,30 @@ function buildVoidTargetPreferences(costPreferences = {}) {
       role: "cost",
       intent: "cost",
     },
+    void_haunter_cost: {
+      role: "cost",
+      intent: "cost",
+    },
+    void_forgotten_knight_cost: {
+      role: "cost",
+      intent: "cost",
+    },
+    void_slayer_brute_cost: {
+      role: "cost",
+      intent: "cost",
+    },
+    thousand_arms_cost: {
+      role: "cost",
+      intent: "cost",
+    },
+    void_hollow_king_boost_cost: {
+      role: "cost",
+      intent: "cost",
+    },
+    void_raven_discard_cost: {
+      role: "cost",
+      intent: "cost",
+    },
     void_gravitational_self: {
       role: "named_preference",
       intent: "benefit",
@@ -219,6 +282,21 @@ function buildVoidTargetPreferences(costPreferences = {}) {
     },
     void_gravitational_opponent: {
       intent: "harm",
+    },
+    void_monster_target: {
+      role: "named_preference",
+      intent: "benefit",
+      preferredNames: VOID_SEALING_PREFERRED_TARGETS.filter(
+        (name) => !avoidNames.has(name),
+      ),
+      avoidNames: [
+        ...avoidNames,
+        "Void Slayer Brute",
+        "Void Haunter",
+        "Void Serpent Drake",
+        "Void Forgotten Knight",
+        "Thousand-Arms of the Void",
+      ],
     },
   };
 }
