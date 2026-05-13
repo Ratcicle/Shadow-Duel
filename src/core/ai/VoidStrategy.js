@@ -24,12 +24,22 @@ import {
   evaluateBoardVoid,
   evaluateVoidMonster,
   analyzeHollowEconomy,
+  assessVoidHollowResourcePolicy,
 } from "./void/scoring.js";
 import {
   buildVoidActivationContext,
   buildVoidTributePolicy,
 } from "./void/costPolicy.js";
 import { selectBestTributes as selectBestTributesGeneric } from "./common/tributePolicy.js";
+import { getEffectiveStat } from "./common/cardStats.js";
+import {
+  validateFieldIgnitionCandidate as validateVoidFieldIgnitionCandidate,
+  validateHandIgnitionCandidate as validateVoidHandIgnitionCandidate,
+} from "./common/actionValidation.js";
+import {
+  getFusionPreferenceScore,
+  withFusionPreferences,
+} from "./common/fusionPlanning.js";
 
 const CONJURER_REVIVE_PROTECTED_COST_IDS = new Set([
   VOID_IDS.ARCTURUS,
@@ -44,10 +54,7 @@ const CONJURER_REVIVE_PROTECTED_COST_IDS = new Set([
 ]);
 
 function getEffectiveBattleStat(card, stat) {
-  if (!card) return 0;
-  const base = Number(card[stat] || 0);
-  const boostKey = stat === "def" ? "tempDefBoost" : "tempAtkBoost";
-  return base + Number(card[boostKey] || 0);
+  return getEffectiveStat(card, stat, { includeEquip: false });
 }
 
 function getOpponentStrongestBattleStat(analysis = {}) {
@@ -124,126 +131,6 @@ function assessConjurerReviveCostRisk(card, analysis = {}) {
     : "protected boss is not valid Conjurer revive cost";
 
   return { protectedBoss: true, canStillWall, strongestThreat, reason };
-}
-
-function cardHasArchetype(card, archetype) {
-  if (!card || !archetype) return true;
-  return (
-    card.archetype === archetype ||
-    (Array.isArray(card.archetypes) && card.archetypes.includes(archetype))
-  );
-}
-
-function cardMatchesSimpleFilter(card, filter = {}) {
-  if (!card) return false;
-  if (filter.cardKind && card.cardKind !== filter.cardKind) return false;
-  if (filter.archetype && !cardHasArchetype(card, filter.archetype)) {
-    return false;
-  }
-  if (filter.cardName && card.name !== filter.cardName) return false;
-  if (filter.name && card.name !== filter.name) return false;
-  if (filter.type && card.type !== filter.type) return false;
-  if (filter.requireFaceup && card.isFacedown) return false;
-  if (filter.excludeCardName && card.name === filter.excludeCardName) {
-    return false;
-  }
-  if (
-    Array.isArray(filter.excludeCardNames) &&
-    filter.excludeCardNames.includes(card.name)
-  ) {
-    return false;
-  }
-
-  const nested = filter.filters || {};
-  if (nested.cardKind && card.cardKind !== nested.cardKind) return false;
-  if (nested.archetype && !cardHasArchetype(card, nested.archetype)) {
-    return false;
-  }
-  if (nested.cardName && card.name !== nested.cardName) return false;
-  if (nested.name && card.name !== nested.name) return false;
-  if (nested.type && card.type !== nested.type) return false;
-
-  const level = Number(card.level || 0);
-  const levelFilter = filter.level ?? nested.level;
-  const levelOp = filter.levelOp || nested.levelOp || "lte";
-  if (Number.isFinite(levelFilter)) {
-    if (levelOp === "eq" && level !== levelFilter) return false;
-    if (levelOp === "lte" && level > levelFilter) return false;
-    if (levelOp === "gte" && level < levelFilter) return false;
-  }
-  const minLevel = filter.minLevel ?? nested.minLevel;
-  const maxLevel = filter.maxLevel ?? nested.maxLevel;
-  if (Number.isFinite(minLevel) && level < minLevel) return false;
-  if (Number.isFinite(maxLevel) && level > maxLevel) return false;
-
-  const atk = Number(card.atk || 0);
-  const minAtk = filter.minAtk ?? nested.minAtk;
-  const maxAtk = filter.maxAtk ?? nested.maxAtk;
-  if (Number.isFinite(minAtk) && atk < minAtk) return false;
-  if (Number.isFinite(maxAtk) && atk > maxAtk) return false;
-
-  return true;
-}
-
-function getPlayerZoneCards(player, zone) {
-  if (!player || !zone) return [];
-  if (zone === "fieldSpell") return player.fieldSpell ? [player.fieldSpell] : [];
-  const cards = player[zone];
-  return Array.isArray(cards) ? cards : [];
-}
-
-function countValidCostCandidates(player, target = {}) {
-  const zones = Array.isArray(target.zones)
-    ? target.zones
-    : [target.zone || "field"];
-  return zones.reduce((count, zone) => {
-    const candidates = getPlayerZoneCards(player, zone).filter((card) =>
-      cardMatchesSimpleFilter(card, target),
-    );
-    return count + candidates.length;
-  }, 0);
-}
-
-function countStrategicallyViableCostCandidates(
-  player,
-  target = {},
-  activationContext = null,
-) {
-  const zones = Array.isArray(target.zones)
-    ? target.zones
-    : [target.zone || "field"];
-  const candidates = zones.flatMap((zone) =>
-    getPlayerZoneCards(player, zone).filter((card) =>
-      cardMatchesSimpleFilter(card, target),
-    ),
-  );
-  if (candidates.length === 0) return 0;
-
-  const costPreferences =
-    activationContext?.actionContext?.costPreferences ||
-    activationContext?.costPreferences ||
-    null;
-  if (!costPreferences) return candidates.length;
-
-  const preserveNames = new Set(costPreferences.preserveNames || []);
-  const payoffNames = new Set(costPreferences.offensivePayoffNames || []);
-  const availablePayoffs = Number.isFinite(
-    costPreferences.availableOffensivePayoffs,
-  )
-    ? costPreferences.availableOffensivePayoffs
-    : 0;
-
-  return candidates.filter((card) => {
-    if (preserveNames.has(card?.name)) return false;
-    if (
-      costPreferences.preserveLastOffensivePayoff &&
-      payoffNames.has(card?.name) &&
-      availablePayoffs <= 1
-    ) {
-      return false;
-    }
-    return true;
-  }).length;
 }
 
 const MIRROR_DIMENSION_RANKS = new Map([
@@ -333,23 +220,6 @@ function hasImmediateVoidFusionPlan(bot) {
   return (fusionEval?.priority || 0) >= 9;
 }
 
-function withVoidFusionPreferences(baseContext, fusionEval) {
-  if (!fusionEval?.target) return baseContext;
-  return {
-    ...(baseContext || {}),
-    actionContext: {
-      ...(baseContext?.actionContext || {}),
-      fusionPreferences: {
-        preferredNames: [fusionEval.target],
-        scoresByName: {
-          [fusionEval.target]: fusionEval.priority || 0,
-        },
-        reason: fusionEval.reason || null,
-      },
-    },
-  };
-}
-
 function getMaterialEffectActivationCount(game, player, materialId) {
   const playerId = player?.id || player;
   return (
@@ -437,135 +307,6 @@ function getThousandArmsMaliciousSetup(game, player, material) {
   };
 }
 
-function validateVoidHandIgnitionCandidate({
-  card,
-  effect,
-  player,
-  game,
-  isSimulatedState,
-  activationContext,
-}) {
-  if (!card || !effect || effect.timing !== "ignition") {
-    return { ok: false, reason: "not a hand ignition effect" };
-  }
-  if (effect.requireZone !== "hand") {
-    return { ok: false, reason: "effect is not from hand" };
-  }
-
-  const actions = effect.actions || [];
-  const summonsFromHand = actions.some((action) =>
-    String(action?.type || "").startsWith("special_summon_from_hand"),
-  );
-  if (summonsFromHand && (player?.field || []).length >= 5) {
-    return { ok: false, reason: "field is full" };
-  }
-
-  if (!isSimulatedState) {
-    const optCheck = game?.effectEngine?.checkOncePerTurn?.(
-      card,
-      player,
-      effect,
-    );
-    if (optCheck?.ok === false) {
-      return { ok: false, reason: optCheck.reason || "once per turn used" };
-    }
-  }
-
-  const targets = effect.targets || [];
-  for (const action of actions) {
-    if (!action) continue;
-
-    if (action.type === "special_summon_from_hand_with_cost") {
-      const target = targets.find((entry) => entry.id === action.costTargetRef);
-      const min = target?.count?.min ?? 1;
-      if (
-        !target ||
-        countStrategicallyViableCostCandidates(
-          player,
-          target,
-          activationContext,
-        ) < min
-      ) {
-        return { ok: false, reason: "not enough cost targets" };
-      }
-    }
-
-    if (action.type === "special_summon_from_hand_with_tiered_cost") {
-      const filters = action.costFilters || {};
-      const min = action.minCost ?? action.count?.min ?? 1;
-      const candidateCount = countStrategicallyViableCostCandidates(
-        player,
-        { ...filters, zone: "field" },
-        activationContext,
-      );
-      if (candidateCount < min) {
-        return { ok: false, reason: "not enough tiered cost targets" };
-      }
-    }
-  }
-
-  return { ok: true };
-}
-
-function hasActionZoneCandidates(player, action, source = null) {
-  if (!player || !action) return true;
-
-  if (action.type === "special_summon_from_zone") {
-    const zoneSpec = action.zone || action.sourceZone || "deck";
-    const zoneNames = Array.isArray(zoneSpec) ? zoneSpec : [zoneSpec];
-    const zoneCards = zoneNames.flatMap((zone) => getPlayerZoneCards(player, zone));
-
-    if (action.requireSource) {
-      return !!source && zoneCards.includes(source);
-    }
-
-    const filters = {
-      ...(action.filters || {}),
-      ...(action.cardName ? { name: action.cardName } : {}),
-      ...(action.archetype ? { archetype: action.archetype } : {}),
-      ...(action.cardKind ? { cardKind: action.cardKind } : {}),
-      ...(Number.isFinite(action.minAtk) ? { minAtk: action.minAtk } : {}),
-      ...(Number.isFinite(action.maxAtk) ? { maxAtk: action.maxAtk } : {}),
-      ...(Number.isFinite(action.minLevel) ? { minLevel: action.minLevel } : {}),
-      ...(Number.isFinite(action.maxLevel) ? { maxLevel: action.maxLevel } : {}),
-    };
-    const min = action.count?.min ?? 1;
-    return (
-      zoneCards.filter((card) => cardMatchesSimpleFilter(card, filters)).length >=
-      min
-    );
-  }
-
-  if (action.type === "bounce_and_summon") {
-    const filters = action.filters || {};
-    const min = action.count?.min ?? 1;
-    return (
-      (player.hand || []).filter(
-        (card) =>
-          cardMatchesSimpleFilter(card, filters) &&
-          !(filters.excludeSelf && card === source),
-      ).length >= min
-    );
-  }
-
-  return true;
-}
-
-function validateVoidFieldIgnitionCandidate({ card, effect, player }) {
-  if (!card || !effect || !player) return { ok: false };
-
-  for (const action of effect.actions || []) {
-    if (!hasActionZoneCandidates(player, action, card)) {
-      return {
-        ok: false,
-        reason: `No valid candidates for ${action?.type || "action"}`,
-      };
-    }
-  }
-
-  return { ok: true };
-}
-
 export default class VoidStrategy extends BaseStrategy {
   constructor(bot) {
     super(bot);
@@ -648,6 +389,7 @@ export default class VoidStrategy extends BaseStrategy {
       analysis,
     );
     analysis.bestFinisherPlan = analysis.finisherPlans[0] || null;
+    analysis.hollowResourcePolicy = assessVoidHollowResourcePolicy(analysis);
 
     // Determinar estratégia macro
     analysis.macroStrategy = this.decideMacroStrategy(analysis);
@@ -1650,9 +1392,11 @@ export default class VoidStrategy extends BaseStrategy {
     const macroStrategy = analysis.macroStrategy;
     const swarmPayoffs = analysis.swarmPayoffs || {};
     const bestFinisherPlan = analysis.bestFinisherPlan || null;
+    const hollowResourcePolicy = analysis.hollowResourcePolicy || {};
     const preserveHollowsForFinisher =
-      bestFinisherPlan?.preserveHollowsInGY === true &&
-      String(game?.phase || "").toLowerCase().includes("main1");
+      hollowResourcePolicy.preserveHollowsInGY === true ||
+      (bestFinisherPlan?.preserveHollowsInGY === true &&
+        String(game?.phase || "").toLowerCase().includes("main1"));
     const preserveArcturusSoloBuff = shouldPreserveArcturusSoloBuff(
       bot,
       opponent,
@@ -1801,7 +1545,7 @@ export default class VoidStrategy extends BaseStrategy {
               : evaluateVoidFusionPriority(bot);
             fusionHint = fusionEval.target;
             if (fusionEval.priority <= 0) return;
-            activationContext = withVoidFusionPreferences(
+            activationContext = withFusionPreferences(
               voidActivationContext,
               fusionEval,
             );
@@ -1824,9 +1568,10 @@ export default class VoidStrategy extends BaseStrategy {
           }
 
           if (decision.yes) {
-            const fusionPreferenceScore =
-              activationContext?.actionContext?.fusionPreferences
-                ?.scoresByName?.[fusionHint];
+            const fusionPreferenceScore = getFusionPreferenceScore(
+              activationContext,
+              fusionHint,
+            );
             actions.push({
               type: "spell",
               index,
@@ -2316,9 +2061,9 @@ export default class VoidStrategy extends BaseStrategy {
           if (maliciousSetup.hasMalicious) {
             priority += maliciousSetup.activations >= 1 ? 0.8 : 1.5;
           }
-          if (preserveHollowsForFinisher) {
-            priority -= 3.0;
-          }
+          priority +=
+            hollowResourcePolicy.spend?.thousandArmsRevive?.scoreDelta ??
+            (preserveHollowsForFinisher ? -3.0 : 0);
           break;
         }
         case VOID_IDS.COSMIC_WALKER: {
@@ -2328,9 +2073,9 @@ export default class VoidStrategy extends BaseStrategy {
           if (swarmPayoffs.hasFusionPayoff || swarmPayoffs.hasBossPayoff) {
             priority += 0.5;
           }
-          if (preserveHollowsForFinisher) {
-            priority -= 2.5;
-          }
+          priority +=
+            hollowResourcePolicy.spend?.cosmicWalkerRevive?.scoreDelta ??
+            (preserveHollowsForFinisher ? -2.5 : 0);
           break;
         }
         case VOID_IDS.BONE_SPIDER: {
@@ -2491,9 +2236,9 @@ export default class VoidStrategy extends BaseStrategy {
           if (hasPoly && extraIds.includes(VOID_IDS.HYDRA_TITAN)) {
             priority += 1.0; // material para Hydra
           }
-          if (preserveHollowsForFinisher) {
-            priority -= 3.0;
-          }
+          priority +=
+            hollowResourcePolicy.spend?.haunterRevive?.scoreDelta ??
+            (preserveHollowsForFinisher ? -3.0 : 0);
           break;
         }
         default: {

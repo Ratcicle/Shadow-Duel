@@ -1,6 +1,17 @@
 import { getVoidCardKnowledge, isVoid } from "./knowledge.js";
 import { VOID_IDS } from "./combos.js";
 import { evaluateVoidMonster } from "./scoring.js";
+import {
+  getEffectiveAtk,
+  getEffectiveDef,
+  getStrongestBattleStat,
+} from "../common/cardStats.js";
+import {
+  createFinisherPlan,
+  getBestFinisherPlan,
+  rankFinisherPlans,
+} from "../common/finisherPlans.js";
+import { assessSummonEntry } from "../common/summonAssessment.js";
 
 const SEALING_PROTECTED_TARGET_IDS = new Set([
   VOID_IDS.ARCTURUS,
@@ -32,6 +43,26 @@ const FUSION_PROTECTED_MATERIAL_IDS = new Set([
   VOID_IDS.HYDRA_TITAN,
   VOID_IDS.COSMIC_WALKER,
   VOID_IDS.MALICIOUS_DEMON,
+]);
+
+const VOID_BOSS_SUMMON_IDS = new Set([
+  VOID_IDS.ARCTURUS,
+  VOID_IDS.HOLLOW_KING,
+  VOID_IDS.BERSERKER,
+  VOID_IDS.HYDRA_TITAN,
+  VOID_IDS.COSMIC_WALKER,
+  VOID_IDS.MALICIOUS_DEMON,
+]);
+
+const VOID_ENGINE_SUMMON_IDS = new Set([
+  VOID_IDS.CONJURER,
+  VOID_IDS.WALKER,
+  VOID_IDS.HOLLOW,
+  VOID_IDS.BEAST,
+  VOID_IDS.TENEBRIS_HORN,
+  VOID_IDS.HAUNTER,
+  VOID_IDS.BONE_SPIDER,
+  VOID_IDS.THOUSAND_ARMS,
 ]);
 
 function getTributeNeedForNormalSummon(card) {
@@ -365,12 +396,10 @@ export function shouldSummonVoidMonster(card, game, bot, opponent) {
 
 export function assessVoidSummonEntry(card, context = {}) {
   if (!card || card.cardKind !== "monster") {
-    return {
-      shouldSummon: false,
-      position: "attack",
-      scoreDelta: -100,
-      reason: "Invalid summon candidate",
-    };
+    return assessSummonEntry(card, {
+      ...context,
+      profile: { invalidReason: "Invalid summon candidate" },
+    });
   }
 
   const game = context.game || null;
@@ -383,48 +412,15 @@ export function assessVoidSummonEntry(card, context = {}) {
       : null);
   const oppField = opponent?.field || analysis?.oppField || [];
   const myField = player?.field || analysis?.field || [];
-  const phase = String(context.phase || game?.phase || "").toLowerCase();
   const source = context.source || {};
   const action = context.action || {};
-  const knowledge = getVoidCardKnowledge(card);
-  const atk = getEffectiveAtk(card);
-  const def = getEffectiveDef(card);
   const strongestThreat = getStrongestOpponentBattleStat(oppField);
   const oppHasThreat = strongestThreat > 0;
-  const isPostBattle =
-    phase.includes("main2") ||
-    phase.includes("main_2") ||
-    phase.includes("end");
-  const cannotAttack =
-    action.cannotAttackThisTurn === true ||
-    action.restrictAttackThisTurn === true ||
-    card.cannotAttackThisTurn === true ||
-    isPostBattle;
   const isWalkerBounce =
     source?.id === VOID_IDS.WALKER ||
     source?.name === "Void Walker" ||
     action?.type === "bounce_and_summon";
   const isEmergency = myField.length === 0 && oppHasThreat;
-  const isBoss =
-    knowledge?.role === "boss" ||
-    [
-      VOID_IDS.ARCTURUS,
-      VOID_IDS.HOLLOW_KING,
-      VOID_IDS.BERSERKER,
-      VOID_IDS.HYDRA_TITAN,
-      VOID_IDS.COSMIC_WALKER,
-      VOID_IDS.MALICIOUS_DEMON,
-    ].includes(card.id);
-  const isEnginePiece = [
-    VOID_IDS.CONJURER,
-    VOID_IDS.WALKER,
-    VOID_IDS.HOLLOW,
-    VOID_IDS.BEAST,
-    VOID_IDS.TENEBRIS_HORN,
-    VOID_IDS.HAUNTER,
-    VOID_IDS.BONE_SPIDER,
-    VOID_IDS.THOUSAND_ARMS,
-  ].includes(card.id);
 
   if (card.id === VOID_IDS.RAVEN) {
     const position = "defense";
@@ -446,65 +442,36 @@ export function assessVoidSummonEntry(card, context = {}) {
     };
   }
 
-  const reasons = [];
-  let position = "attack";
-  let scoreDelta = 0;
-  const canClearThreat = oppHasThreat && !cannotAttack && atk > strongestThreat;
-  const safeInAttack = !oppHasThreat || atk >= strongestThreat;
-  const safeInDefense = !oppHasThreat || def >= strongestThreat;
-  const lowImpactBody = atk < 1000 && !isEnginePiece && !isBoss;
+  const base = assessSummonEntry(card, {
+    ...context,
+    game,
+    analysis,
+    player,
+    opponent,
+    profile: {
+      bossIds: VOID_BOSS_SUMMON_IDS,
+      enginePieceIds: VOID_ENGINE_SUMMON_IDS,
+      isBoss: (candidate) =>
+        getVoidCardKnowledge(candidate)?.role === "boss" ||
+        VOID_BOSS_SUMMON_IDS.has(candidate?.id),
+      defaultReason: "default Void summon assessment",
+    },
+  });
 
-  if (canClearThreat) {
-    position = "attack";
-    scoreDelta += 2.2;
-    reasons.push("can attack over current threat");
-  } else if (isBoss && safeInAttack) {
-    position = "attack";
-    scoreDelta += 1.5;
-    reasons.push("boss is safe in attack");
-  } else if (cannotAttack && !isBoss) {
-    position = safeInDefense || def >= atk ? "defense" : "attack";
-    scoreDelta -= 0.6;
-    reasons.push("no immediate attack value");
-  } else if (!safeInAttack && safeInDefense) {
-    position = "defense";
-    scoreDelta -= 0.4;
-    reasons.push("defense survives better than attack");
-  } else if (!safeInAttack && !safeInDefense) {
-    position = "defense";
-    scoreDelta -= isEmergency ? 0.8 : 1.8;
-    reasons.push("summon is exposed to opponent threat");
-  } else if (!oppHasThreat) {
-    position = "attack";
-    reasons.push("no opponent battle threat");
-  }
-
-  if (isPostBattle && !isBoss && !canClearThreat) {
-    position = safeInDefense || def >= atk ? "defense" : position;
-    scoreDelta -= 0.5;
-    reasons.push("post-battle summon favors defense/material");
-  }
-
-  if (isEnginePiece) {
-    scoreDelta += 0.6;
-    reasons.push("engine/combo body");
-  }
-  if (lowImpactBody && !isEmergency) {
-    scoreDelta -= 2.5;
-    reasons.push("low-impact body without emergency");
-  }
   if (isWalkerBounce && card.id === VOID_IDS.HOLLOW) {
-    scoreDelta += 1.2;
-    reasons.push("Walker into Hollow enables hand summon chain");
+    return {
+      ...base,
+      scoreDelta: (base.scoreDelta || 0) + 1.2,
+      reason: [
+        base.reason,
+        "Walker into Hollow enables hand summon chain",
+      ]
+        .filter(Boolean)
+        .join("; "),
+    };
   }
 
-  return {
-    shouldSummon: !lowImpactBody || isEmergency || isEnginePiece || isBoss,
-    position,
-    scoreDelta,
-    reason: reasons.join("; ") || "default Void summon assessment",
-    strongestThreat,
-  };
+  return base;
 }
 
 export function assessVoidNormalSummonEntry(card, context = {}) {
@@ -658,31 +625,6 @@ function shouldReserveForHydra(bot, voidsAccessible) {
   );
 }
 
-function clampScore100(value) {
-  if (!Number.isFinite(value)) return 0;
-  return Math.max(0, Math.min(100, Math.round(value)));
-}
-
-function createVoidFinisherPlan({
-  kind,
-  targetName,
-  score100,
-  reason,
-  preserveHollowsInGY = false,
-  details = {},
-}) {
-  const normalizedScore = clampScore100(score100);
-  return {
-    kind,
-    targetName,
-    score100: normalizedScore,
-    actionPriority: normalizedScore / 10,
-    reason,
-    preserveHollowsInGY,
-    details,
-  };
-}
-
 function countCards(cards = [], predicate) {
   return (cards || []).filter((card) => card && predicate(card)).length;
 }
@@ -795,7 +737,7 @@ export function evaluateVoidFinisherPlans(bot, opponent, game = null, analysis =
     if (canBeSolo) score += 6; // Battle Phase lock has real value when he is the plan.
     if (!canBeSolo && !jointLethal) score -= 18;
     plans.push(
-      createVoidFinisherPlan({
+      createFinisherPlan({
         kind: "normal_summon",
         targetName: "Arcturus, Lord of the Void",
         score100: score,
@@ -828,7 +770,7 @@ export function evaluateVoidFinisherPlans(bot, opponent, game = null, analysis =
     if (hollowsInGY >= 1 && oppLP <= 2600 * hollowsInGY) score += 9;
     if (oppStrongest >= 2600 && hollowsInGY <= 1) score -= 10;
     plans.push(
-      createVoidFinisherPlan({
+      createFinisherPlan({
         kind: "ascension",
         targetName: "Malicious Demon of the Void",
         score100: score,
@@ -856,7 +798,7 @@ export function evaluateVoidFinisherPlans(bot, opponent, game = null, analysis =
     if (oppFieldCount === 0 && oppLP <= 3500) score += 8;
     if (projectedDraws <= 0 && !stabilizesBoard) score -= 8;
     plans.push(
-      createVoidFinisherPlan({
+      createFinisherPlan({
         kind: "fusion",
         targetName: "Void Hydra Titan",
         score100: score,
@@ -882,7 +824,7 @@ export function evaluateVoidFinisherPlans(bot, opponent, game = null, analysis =
     if (ravenInHand) score += 3;
     if (oppFieldCount > 0 && destroyableTargets === 0) score -= 9;
     plans.push(
-      createVoidFinisherPlan({
+      createFinisherPlan({
         kind: "fusion",
         targetName: "Void Berserker",
         score100: score,
@@ -897,7 +839,7 @@ export function evaluateVoidFinisherPlans(bot, opponent, game = null, analysis =
   if (extraIds.includes(VOID_IDS.HOLLOW_KING) && hasPoly && hollows.length >= 3) {
     if (shouldReserveForHydra(bot, voids.length)) {
       plans.push(
-        createVoidFinisherPlan({
+        createFinisherPlan({
           kind: "fusion",
           targetName: "Void Hollow King",
           score100: 58,
@@ -912,7 +854,7 @@ export function evaluateVoidFinisherPlans(bot, opponent, game = null, analysis =
       if (ravenInHand) score += 2;
       if (hasCardId(deck, VOID_IDS.HOLLOW) && hollows.length === 3) score += 2;
       plans.push(
-        createVoidFinisherPlan({
+        createFinisherPlan({
           kind: "fusion",
           targetName: "Void Hollow King",
           score100: score,
@@ -925,8 +867,7 @@ export function evaluateVoidFinisherPlans(bot, opponent, game = null, analysis =
     }
   }
 
-  plans.sort((a, b) => b.score100 - a.score100);
-  return plans;
+  return rankFinisherPlans(plans);
 }
 
 export function evaluateVoidFusionPriority(bot) {
@@ -935,8 +876,9 @@ export function evaluateVoidFusionPriority(bot) {
     bot?.game && typeof bot.game.getOpponent === "function"
       ? bot.game.getOpponent(bot)
       : null;
-  const best = evaluateVoidFinisherPlans(bot, opponent, game).find(
-    (plan) => plan.kind === "fusion",
+  const best = getBestFinisherPlan(
+    evaluateVoidFinisherPlans(bot, opponent, game),
+    "fusion",
   );
   return best
     ? {
@@ -949,32 +891,8 @@ export function evaluateVoidFusionPriority(bot) {
     : { priority: 0, target: null };
 }
 
-function getEffectiveAtk(card) {
-  return (
-    (card?.atk || 0) +
-    (card?.tempAtkBoost || 0) +
-    (card?.equipAtkBonus || 0)
-  );
-}
-
-function getEffectiveDef(card) {
-  return (
-    (card?.def || 0) +
-    (card?.tempDefBoost || 0) +
-    (card?.equipDefBonus || 0)
-  );
-}
-
 function getStrongestOpponentBattleStat(field = []) {
-  return (field || []).reduce((max, monster) => {
-    if (!monster || monster.cardKind !== "monster") return max;
-    if (monster.isFacedown) return Math.max(max, 1500);
-    const stat =
-      monster.position === "defense"
-        ? getEffectiveDef(monster)
-        : getEffectiveAtk(monster);
-    return Math.max(max, stat);
-  }, 0);
+  return getStrongestBattleStat(field, { facedownValue: 1500 });
 }
 
 function hasVoidFaceupNormalSummonValue(card) {

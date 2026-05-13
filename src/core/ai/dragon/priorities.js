@@ -110,7 +110,7 @@ export function shouldPlaySpell(card, analysis) {
 
   // ── Polymerization ─────────────────────────────────────────────────────────
   if (name === "Polymerization") {
-    const gyExtremeCount = countExtremeInGY(
+    const gyExtremeCount = analysis.extremeDragonEconomy?.extremeInGY ?? countExtremeInGY(
       analysis.graveyard.map((c) => ({ name: c.name, archetype: c.archetype, archetypes: c.archetypes }))
     );
 

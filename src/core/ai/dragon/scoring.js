@@ -3,7 +3,66 @@
 // Board evaluation for Dragon deck.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { CARD_KNOWLEDGE, isExtremeDragon, countExtremeInGY } from "./knowledge.js";
+import { CARD_KNOWLEDGE, isExtremeDragon } from "./knowledge.js";
+import { analyzeResourceEconomy } from "../common/resourceEconomy.js";
+import { scoreResourcePressure } from "../common/resourcePolicy.js";
+
+export const DRAGON_EXTREME_RESOURCE_POLICY = {
+  resourceName: "Extreme Dragon",
+  primaryZone: "graveyard",
+  thresholds: {
+    preserveAt: 3,
+    criticalAt: 5,
+  },
+};
+
+export function analyzeExtremeDragonEconomy(analysisOrGraveyard = {}) {
+  const analysis = Array.isArray(analysisOrGraveyard)
+    ? { graveyard: analysisOrGraveyard }
+    : analysisOrGraveyard || {};
+
+  const economy = analyzeResourceEconomy(analysis, {
+    resourceName: "Extreme Dragon",
+    zones: ["graveyard"],
+    matchResource: isExtremeDragon,
+    computeAccessibility: ({ countsByZone }) => ({
+      accessibleByZone: {
+        graveyard: countsByZone.graveyard,
+      },
+      strandedByZone: {
+        graveyard: 0,
+      },
+    }),
+    computeFlags: ({ countsByZone }) => ({
+      bahamutReady: countsByZone.graveyard >= 5,
+      closeToBahamut: countsByZone.graveyard >= 3,
+    }),
+  });
+
+  const extremeInGY = economy.countsByZone.graveyard || 0;
+
+  return {
+    extremeInGY,
+    extremeDragonsInGY: extremeInGY,
+    totalExtremeDragons: economy.totalResources,
+    bahamutReady: economy.flags.bahamutReady,
+    closeToBahamut: economy.flags.closeToBahamut,
+    economy,
+  };
+}
+
+export function assessDragonExtremeResourcePolicy(analysis = {}) {
+  const economy =
+    analysis.extremeDragonEconomy?.economy ||
+    analyzeExtremeDragonEconomy(analysis).economy;
+  const pressure = scoreResourcePressure(economy, DRAGON_EXTREME_RESOURCE_POLICY);
+
+  return {
+    pressure,
+    preserveExtremeInGY: pressure.shouldPreserve,
+    bahamutReady: pressure.isCritical,
+  };
+}
 
 /**
  * Evaluates a single Dragon monster's board value.
@@ -98,7 +157,7 @@ export function evaluateBoardDragon(gameOrState, perspectivePlayer, getOpponentF
 
   // ── Extreme Dragon GY count (Bahamut progress) ────────────────────────────
   const myGY = perspective?.graveyard || [];
-  const extremeInGY = countExtremeInGY(myGY);
+  const { extremeInGY } = analyzeExtremeDragonEconomy(myGY);
   score += extremeInGY * 0.8;  // Each Extreme Dragon in GY = closer to Bahamut
   if (extremeInGY >= 5) score += 8.0;  // Bahamut available = massive advantage
   if (extremeInGY >= 3) score += 2.0;  // Getting close

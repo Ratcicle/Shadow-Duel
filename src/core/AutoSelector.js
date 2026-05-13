@@ -4,6 +4,7 @@ import {
   estimateMonsterValue,
   estimateOffensiveTemporaryBuffValue,
 } from "./ai/StrategyUtils.js";
+import { getEffectiveAtk, getEffectiveDef } from "./ai/common/cardStats.js";
 
 export default class AutoSelector {
   constructor(game) {
@@ -477,22 +478,6 @@ function getTargetPreference(context) {
   const byTarget = actionContext.targetPreferences || {};
   if (requirementId && byTarget[requirementId]) return byTarget[requirementId];
   return actionContext.targetPreference || null;
-}
-
-function getEffectiveAtk(card) {
-  return (
-    (card?.atk || 0) +
-    (card?.tempAtkBoost || 0) +
-    (card?.equipAtkBonus || 0)
-  );
-}
-
-function getEffectiveDef(card) {
-  return (
-    (card?.def || 0) +
-    (card?.tempDefBoost || 0) +
-    (card?.equipDefBonus || 0)
-  );
 }
 
 function isOffensivePayoffCost(card, payoffNames = []) {

@@ -22,6 +22,35 @@ import {
   calculateThreatScore,
   canOpponentLethal,
 } from "../ThreatEvaluation.js";
+import { analyzeResourceEconomy } from "../common/resourceEconomy.js";
+import {
+  assessResourceRecovery,
+  assessResourceSpend,
+  scoreResourcePressure,
+} from "../common/resourcePolicy.js";
+
+export const VOID_HOLLOW_RESOURCE_POLICY = {
+  resourceName: "Void Hollow",
+  primaryZone: "graveyard",
+  thresholds: {
+    preserveAt: 2,
+    criticalAt: 3,
+    recoveryStrandedMin: 2,
+  },
+  minAccessible: 2,
+  defaultPreservePenalty: 2.5,
+  recoverySpendPenalty: 0,
+  defaultRecoveryBonus: 1.0,
+  recoveryPreserveBonus: 0.4,
+  spendModes: {
+    revive_for_thousand_arms: { preservePenalty: 3.0, usePressurePreserve: false },
+    revive_for_cosmic_walker: { preservePenalty: 2.5, usePressurePreserve: false },
+    revive_for_haunter: { preservePenalty: 3.0, usePressurePreserve: false },
+  },
+  recoveryModes: {
+    hollow_recovery: { recoveryBonus: 1.0, preserveBonus: 0.4 },
+  },
+};
 
 /**
  * Analisa a "economia de Hollows" — onde estão e como podem ser acessados.
@@ -34,65 +63,92 @@ import {
  * @returns {Object} - Análise detalhada de recursos Hollow
  */
 export function analyzeHollowEconomy(analysis) {
-  const { hand = [], field = [], graveyard = [], extraDeck = [] } = analysis;
+  const { hand = [], field = [] } = analysis;
   const fieldSpell = analysis.fieldSpell;
 
-  // Contar Hollows em cada zona
-  const hollowsInHand = hand.filter((c) => c?.id === VOID_IDS.HOLLOW).length;
-  const hollowsOnField = field.filter((c) => c?.id === VOID_IDS.HOLLOW).length;
-  const hollowsInGY = graveyard.filter((c) => c?.id === VOID_IDS.HOLLOW).length;
+  const economy = analyzeResourceEconomy(analysis, {
+    resourceName: "Void Hollow",
+    zones: ["hand", "field", "graveyard"],
+    matchResource: (card) => card?.id === VOID_IDS.HOLLOW,
+    getEnablers: () => ({
+      haunterOnField: field.some((c) => c?.id === VOID_IDS.HAUNTER),
+      haunterInHand: hand.some((c) => c?.id === VOID_IDS.HAUNTER),
+      theVoidActive: fieldSpell?.id === VOID_IDS.THE_VOID,
+      walkerInHand: hand.some((c) => c?.id === VOID_IDS.WALKER),
+      conjurerInHand: hand.some((c) => c?.id === VOID_IDS.CONJURER),
+    }),
+    computeAccessibility: ({ countsByZone, enablers }) => {
+      const accessibleFromGY =
+        enablers.haunterOnField || enablers.haunterInHand
+          ? countsByZone.graveyard
+          : enablers.theVoidActive
+            ? Math.min(1, countsByZone.graveyard)
+            : 0;
+
+      return {
+        accessibleByZone: {
+          hand: countsByZone.hand,
+          field: countsByZone.field,
+          graveyard: accessibleFromGY,
+        },
+        strandedByZone: {
+          graveyard: countsByZone.graveyard - accessibleFromGY,
+        },
+      };
+    },
+    computePotential: ({ countsByZone, enablers }) => {
+      let swarmPotential = countsByZone.field;
+
+      if (countsByZone.hand > 0 && (enablers.walkerInHand || enablers.haunterOnField)) {
+        swarmPotential += countsByZone.hand * 2;
+      } else {
+        swarmPotential += countsByZone.hand;
+      }
+
+      if (enablers.haunterOnField || enablers.haunterInHand) {
+        swarmPotential += countsByZone.graveyard;
+      }
+
+      return {
+        canTriggerRecruitment:
+          countsByZone.hand > 0 || (countsByZone.field > 0 && enablers.walkerInHand),
+        swarmPotential,
+      };
+    },
+    computeFlags: ({ enablers, totalAccessibleResources, totalStrandedResources }) => ({
+      isHealthy: totalAccessibleResources >= 2 && totalStrandedResources <= 1,
+      needsRecovery:
+        totalStrandedResources >= 2 && !enablers.haunterOnField && !enablers.haunterInHand,
+    }),
+  });
+
+  const hollowsInHand = economy.countsByZone.hand || 0;
+  const hollowsOnField = economy.countsByZone.field || 0;
+  const hollowsInGY = economy.countsByZone.graveyard || 0;
 
   // Enablers para recuperar Hollows
-  const haunterOnField = field.some((c) => c?.id === VOID_IDS.HAUNTER);
-  const haunterInHand = hand.some((c) => c?.id === VOID_IDS.HAUNTER);
-  const theVoidActive = fieldSpell?.id === VOID_IDS.THE_VOID;
+  const haunterOnField = economy.enablers.haunterOnField;
+  const haunterInHand = economy.enablers.haunterInHand;
+  const theVoidActive = economy.enablers.theVoidActive;
 
   // Walker pode voltar Hollow do campo para a mão (para re-trigger)
-  const walkerInHand = hand.some((c) => c?.id === VOID_IDS.WALKER);
+  const walkerInHand = economy.enablers.walkerInHand;
 
   // Conjurer recruta do DECK (não traz Hollow da mão, mas traz Walker)
-  const conjurerInHand = hand.some((c) => c?.id === VOID_IDS.CONJURER);
+  const conjurerInHand = economy.enablers.conjurerInHand;
 
   // Quantos Hollows podemos acessar de forma útil?
-  let accessibleHollows = hollowsInHand; // Mão = sempre acessível
-
-  // Campo: podem ser tributados/usados como material
-  accessibleHollows += hollowsOnField;
-
-  // GY: só acessível com Haunter ou The Void
-  let accessibleFromGY = 0;
-  if (haunterOnField || haunterInHand) {
-    // Haunter pode reviver TODOS os Hollows do GY
-    accessibleFromGY = hollowsInGY;
-  } else if (theVoidActive) {
-    // The Void recupera 1 por turno
-    accessibleFromGY = Math.min(1, hollowsInGY);
-  }
-  accessibleHollows += accessibleFromGY;
+  const accessibleHollows = economy.totalAccessibleResources;
 
   // Hollows "perdidos" = no GY sem forma de recuperar
-  const strandedHollows = hollowsInGY - accessibleFromGY;
+  const strandedHollows = economy.totalStrandedResources;
 
   // Hollows que podem recrutar (na mão e podem ser Special Summoned)
   // Walker permite bounce Hollow do campo → mão → Special Summon novamente
-  const canTriggerRecruitment =
-    hollowsInHand > 0 || (hollowsOnField > 0 && walkerInHand);
+  const canTriggerRecruitment = economy.potential?.canTriggerRecruitment || false;
 
   // Potencial de swarm: quantos Hollows podemos colocar no campo?
-  let swarmPotential = hollowsOnField;
-
-  // Cada Hollow na mão = pode SS e recrutar outro (se tiver método de SS)
-  if (hollowsInHand > 0 && (walkerInHand || haunterOnField)) {
-    // Walker SS Hollow da mão → recruta → 2 Hollows
-    swarmPotential += hollowsInHand * 2;
-  } else {
-    swarmPotential += hollowsInHand; // Precisa encontrar forma de SS
-  }
-
-  // Haunter revive todos do GY
-  if (haunterOnField || haunterInHand) {
-    swarmPotential += hollowsInGY;
-  }
+  const swarmPotential = economy.potential?.swarmPotential || 0;
 
   return {
     // Contagens
@@ -118,6 +174,60 @@ export function analyzeHollowEconomy(analysis) {
     // Estado geral
     isHealthy: accessibleHollows >= 2 && strandedHollows <= 1,
     needsRecovery: strandedHollows >= 2 && !haunterOnField && !haunterInHand,
+    resourceEconomy: economy,
+  };
+}
+
+export function assessVoidHollowResourcePolicy(analysis = {}) {
+  const hollowEconomy = analysis.hollowEconomy || analyzeHollowEconomy(analysis);
+  const economy = hollowEconomy.resourceEconomy || {
+    resourceName: "Void Hollow",
+    countsByZone: {
+      hand: hollowEconomy.hollowsInHand || 0,
+      field: hollowEconomy.hollowsOnField || 0,
+      graveyard: hollowEconomy.hollowsInGY || 0,
+    },
+    totalAccessibleResources: hollowEconomy.totalAccessibleHollows || 0,
+    totalStrandedResources: hollowEconomy.strandedHollows || 0,
+    flags: {
+      needsRecovery: hollowEconomy.needsRecovery,
+    },
+  };
+  const preserveForFinisher =
+    analysis.bestFinisherPlan?.preserveHollowsInGY === true &&
+    String(analysis.phase || "").toLowerCase().includes("main1");
+  const context = { preserveForPayoff: preserveForFinisher };
+
+  return {
+    pressure: scoreResourcePressure(economy, VOID_HOLLOW_RESOURCE_POLICY, context),
+    preserveHollowsInGY: preserveForFinisher,
+    needsRecovery: hollowEconomy.needsRecovery,
+    recovery: assessResourceRecovery({
+      economy,
+      recovery: { mode: "hollow_recovery" },
+      policy: VOID_HOLLOW_RESOURCE_POLICY,
+      context,
+    }),
+    spend: {
+      thousandArmsRevive: assessResourceSpend({
+        economy,
+        spend: { mode: "revive_for_thousand_arms" },
+        policy: VOID_HOLLOW_RESOURCE_POLICY,
+        context,
+      }),
+      cosmicWalkerRevive: assessResourceSpend({
+        economy,
+        spend: { mode: "revive_for_cosmic_walker" },
+        policy: VOID_HOLLOW_RESOURCE_POLICY,
+        context,
+      }),
+      haunterRevive: assessResourceSpend({
+        economy,
+        spend: { mode: "revive_for_haunter" },
+        policy: VOID_HOLLOW_RESOURCE_POLICY,
+        context,
+      }),
+    },
   };
 }
 

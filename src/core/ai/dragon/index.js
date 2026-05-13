@@ -30,6 +30,8 @@ export {
 } from "./priorities.js";
 
 export {
+  assessDragonExtremeResourcePolicy,
+  analyzeExtremeDragonEconomy,
   evaluateDragonMonster,
   evaluateBoardDragon,
 } from "./scoring.js";

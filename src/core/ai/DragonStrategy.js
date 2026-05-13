@@ -27,7 +27,6 @@ import {
 import {
   CARD_KNOWLEDGE,
   isExtremeDragon,
-  countExtremeInGY,
   selectBestExtremeDragon,
 } from "./dragon/knowledge.js";
 import { COMBO_DATABASE, detectAvailableCombos } from "./dragon/combos.js";
@@ -38,7 +37,11 @@ import {
   selectBestTributes,
   evaluateTributeTrade,
 } from "./dragon/priorities.js";
-import { evaluateBoardDragon } from "./dragon/scoring.js";
+import {
+  assessDragonExtremeResourcePolicy,
+  analyzeExtremeDragonEconomy,
+  evaluateBoardDragon,
+} from "./dragon/scoring.js";
 import { simulateMainPhaseAction as simulateDragonAction } from "./dragon/simulation.js";
 
 export default class DragonStrategy extends BaseStrategy {
@@ -100,8 +103,9 @@ export default class DragonStrategy extends BaseStrategy {
     const opponent = this.getOpponent(game, bot);
 
     const gyCards = bot.graveyard || [];
-    const extremeInGY = countExtremeInGY(gyCards);
-    const bahamutReady = extremeInGY >= 5;
+    const extremeDragonEconomy = analyzeExtremeDragonEconomy({ graveyard: gyCards });
+    const extremeInGY = extremeDragonEconomy.extremeInGY;
+    const bahamutReady = extremeDragonEconomy.bahamutReady;
 
     const analysis = {
       hand: (bot.hand || []).map((c) => ({
@@ -161,6 +165,8 @@ export default class DragonStrategy extends BaseStrategy {
       // Dragon-specific
       extremeInGY,
       bahamutReady,
+      extremeDragonEconomy,
+      extremeResourcePolicy: assessDragonExtremeResourcePolicy({ extremeDragonEconomy }),
       hasJaggedPeak: bot.fieldSpell?.name === "Jagged Peak of the Dragons",
       jaggedPeakCounters: bot.fieldSpell?.counters?.dragon_peak || 0,
 
@@ -505,7 +511,7 @@ export default class DragonStrategy extends BaseStrategy {
           const nonExtremeInGY = gyMatches.filter((c) => !isExtremeDragon(c));
           if (nonExtremeInGY.length < minCount) {
             // Would have to banish Extreme Dragons
-            if (extremeInGY >= 3) {
+            if (analysis.extremeResourcePolicy?.preserveExtremeInGY || extremeInGY >= 3) {
               // Too important for Bahamut
               log(`  ⏭️ Purified Crystal: would banish Extreme Dragons needed for Bahamut (${extremeInGY} in GY)`);
               return;

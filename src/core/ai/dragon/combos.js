@@ -140,7 +140,7 @@ export function detectAvailableCombos(analysis, logFn = null) {
   const log = (msg) => typeof logFn === "function" && logFn(msg);
 
   const hasFieldDragon = analysis.field.some((c) => c.cardKind === "monster");
-  const gyExtremeCount = countExtremeInGY(gyCards);
+  const gyExtremeCount = analysis.extremeDragonEconomy?.extremeInGY ?? countExtremeInGY(gyCards);
 
   // ── Bahamut Win Condition ──────────────────────────────────────────────────
   if (gyExtremeCount >= 5 && handNames.includes("Polymerization")) {

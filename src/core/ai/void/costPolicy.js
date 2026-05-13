@@ -17,6 +17,11 @@
 
 import { isVoid } from "./knowledge.js";
 import { VOID_IDS } from "./combos.js";
+import {
+  buildActivationContext,
+  buildCostPreferences,
+  buildTargetPreferences,
+} from "../common/preferencePolicy.js";
 
 const VOID_OFFENSIVE_PAYOFFS = [
   "Arcturus, Lord of the Void",
@@ -211,14 +216,16 @@ export function buildVoidCostPreferences(analysis = {}) {
     VOID_OFFENSIVE_PAYOFFS.includes(c?.name),
   ).length;
 
-  return {
+  return buildCostPreferences({
     archetype: "Void",
+    hand,
+    field,
     preferNames: [...preferNames],
     preserveNames: [...preserveNames],
     offensivePayoffNames: VOID_OFFENSIVE_PAYOFFS,
     preserveLastOffensivePayoff: true,
     availableOffensivePayoffs,
-  };
+  });
 }
 
 function buildVoidTargetPreferences(costPreferences = {}) {
@@ -250,60 +257,63 @@ function buildVoidTargetPreferences(costPreferences = {}) {
     "Void Conjurer",
   ].filter((name) => !gravitationalAvoidNames.has(name));
 
-  return {
-    void_conjurer_cost: {
-      role: "cost",
-      intent: "cost",
+  return buildTargetPreferences({
+    costPreferences,
+    targetProfiles: {
+      void_conjurer_cost: {
+        role: "cost",
+        intent: "cost",
+      },
+      void_haunter_cost: {
+        role: "cost",
+        intent: "cost",
+      },
+      void_forgotten_knight_cost: {
+        role: "cost",
+        intent: "cost",
+      },
+      void_slayer_brute_cost: {
+        role: "cost",
+        intent: "cost",
+      },
+      thousand_arms_cost: {
+        role: "cost",
+        intent: "cost",
+      },
+      void_hollow_king_boost_cost: {
+        role: "cost",
+        intent: "cost",
+      },
+      void_raven_discard_cost: {
+        role: "cost",
+        intent: "cost",
+      },
+      void_gravitational_self: {
+        role: "named_preference",
+        intent: "benefit",
+        preferredNames: preferredGravitationalSelf,
+        avoidNames: [...gravitationalAvoidNames],
+      },
+      void_gravitational_opponent: {
+        intent: "harm",
+      },
+      void_monster_target: {
+        role: "named_preference",
+        intent: "benefit",
+        preferredNames: VOID_SEALING_PREFERRED_TARGETS.filter(
+          (name) => !avoidNames.has(name),
+        ),
+        avoidNames: [
+          ...avoidNames,
+          "Void Slayer Brute",
+          "Void Haunter",
+          "Void Serpent Drake",
+          "Void Forgotten Knight",
+          "Thousand-Arms of the Void",
+        ],
+      },
     },
-    void_haunter_cost: {
-      role: "cost",
-      intent: "cost",
-    },
-    void_forgotten_knight_cost: {
-      role: "cost",
-      intent: "cost",
-    },
-    void_slayer_brute_cost: {
-      role: "cost",
-      intent: "cost",
-    },
-    thousand_arms_cost: {
-      role: "cost",
-      intent: "cost",
-    },
-    void_hollow_king_boost_cost: {
-      role: "cost",
-      intent: "cost",
-    },
-    void_raven_discard_cost: {
-      role: "cost",
-      intent: "cost",
-    },
-    void_gravitational_self: {
-      role: "named_preference",
-      intent: "benefit",
-      preferredNames: preferredGravitationalSelf,
-      avoidNames: [...gravitationalAvoidNames],
-    },
-    void_gravitational_opponent: {
-      intent: "harm",
-    },
-    void_monster_target: {
-      role: "named_preference",
-      intent: "benefit",
-      preferredNames: VOID_SEALING_PREFERRED_TARGETS.filter(
-        (name) => !avoidNames.has(name),
-      ),
-      avoidNames: [
-        ...avoidNames,
-        "Void Slayer Brute",
-        "Void Haunter",
-        "Void Serpent Drake",
-        "Void Forgotten Knight",
-        "Thousand-Arms of the Void",
-      ],
-    },
-  };
+  });
 }
 
 /**
@@ -312,14 +322,12 @@ function buildVoidTargetPreferences(costPreferences = {}) {
  */
 export function buildVoidActivationContext(analysis = {}) {
   const costPreferences = buildVoidCostPreferences(analysis);
-  return {
+  return buildActivationContext({
     autoSelectTargets: true,
     autoSelectSingleTarget: true,
-    actionContext: {
-      costPreferences,
-      targetPreferences: buildVoidTargetPreferences(costPreferences),
-    },
-  };
+    costPreferences,
+    targetPreferences: buildVoidTargetPreferences(costPreferences),
+  });
 }
 
 /**

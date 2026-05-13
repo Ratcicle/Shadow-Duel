@@ -14,6 +14,16 @@ import {
   getVoidCardKnowledge,
   VOID_CARD_KNOWLEDGE,
 } from "./knowledge.js";
+import {
+  countAcrossZones,
+  countCardId,
+  countMatching,
+  createDetectedCombo,
+  createZoneIndex,
+  finalizeDetectedCombos,
+  findComboByName,
+  hasCardId,
+} from "../common/comboDetection.js";
 
 // IDs das cartas Void
 export const VOID_IDS = {
@@ -419,27 +429,38 @@ export function detectAvailableCombos(analysis) {
   const deck = analysis.deck || [];
   const detected = [];
 
-  const handIds = (hand || []).map((c) => c?.id).filter(Boolean);
-  const fieldIds = (field || []).map((c) => c?.id).filter(Boolean);
-  const gyIds = (graveyard || []).map((c) => c?.id).filter(Boolean);
-  const deckIds = (deck || []).map((c) => c?.id).filter(Boolean);
-  const extraIds = (extraDeck || []).map((c) => c?.id).filter(Boolean);
-
-  const hasInHand = (id) => handIds.includes(id);
-  const hasOnField = (id) => fieldIds.includes(id);
-  const hasInGY = (id) => gyIds.includes(id);
-  const hasInDeck = (id) => deckIds.includes(id);
-  const hasInExtra = (id) => extraIds.includes(id);
-  const countInHand = (id) => handIds.filter((i) => i === id).length;
-  const countOnField = (id) => fieldIds.filter((i) => i === id).length;
-  const countInGY = (id) => gyIds.filter((i) => i === id).length;
-  const countVoidsOnField = () => (field || []).filter(isVoid).length;
-  const countVoidsInHand = () => (hand || []).filter(isVoid).length;
-  const countVoidsTotal = () => countVoidsOnField() + countVoidsInHand();
-  const countVoidsInGY = () => (graveyard || []).filter(isVoid).length;
+  const zoneIndex = createZoneIndex({
+    hand,
+    field,
+    graveyard,
+    deck,
+    extraDeck,
+  });
+  const hasInHand = (id) => hasCardId(zoneIndex, "hand", id);
+  const hasOnField = (id) => hasCardId(zoneIndex, "field", id);
+  const hasInGY = (id) => hasCardId(zoneIndex, "graveyard", id);
+  const hasInDeck = (id) => hasCardId(zoneIndex, "deck", id);
+  const hasInExtra = (id) => hasCardId(zoneIndex, "extraDeck", id);
+  const countInHand = (id) => countCardId(zoneIndex, "hand", id);
+  const countOnField = (id) => countCardId(zoneIndex, "field", id);
+  const countInGY = (id) => countCardId(zoneIndex, "graveyard", id);
+  const countVoidsOnField = () => countMatching(zoneIndex, "field", isVoid);
+  const countVoidsInHand = () => countMatching(zoneIndex, "hand", isVoid);
+  const countVoidsTotal = () =>
+    countAcrossZones(zoneIndex, ["field", "hand"], isVoid);
+  const countVoidsInGY = () => countMatching(zoneIndex, "graveyard", isVoid);
   const countHollowsTotal = () =>
     countInHand(VOID_IDS.HOLLOW) + countOnField(VOID_IDS.HOLLOW);
   const hasPoly = hasInHand(VOID_IDS.POLYMERIZATION);
+  const comboByName = (name) => findComboByName(COMBO_DATABASE, name);
+  const addCombo = (name, details) => {
+    detected.push(
+      createDetectedCombo({
+        combo: comboByName(name),
+        ...details,
+      }),
+    );
+  };
 
   // ═══════════════════════════════════════════════════════════════════════════
   // Conjurer Walker Hollow Pipeline (MELHOR COMBO)
@@ -450,10 +471,7 @@ export function detectAvailableCombos(analysis) {
     hasInHand(VOID_IDS.HOLLOW) &&
     summonAvailable
   ) {
-    detected.push({
-      combo: COMBO_DATABASE.find(
-        (c) => c.name === "Conjurer Walker Hollow Pipeline",
-      ),
+    addCombo("Conjurer Walker Hollow Pipeline", {
       ready: true,
       missing: [],
       priority: 11, // Máxima prioridade - 3 corpos + Walker na mão
@@ -468,8 +486,7 @@ export function detectAvailableCombos(analysis) {
     !hasInHand(VOID_IDS.HOLLOW) &&
     summonAvailable
   ) {
-    detected.push({
-      combo: COMBO_DATABASE.find((c) => c.name === "Conjurer Basic"),
+    addCombo("Conjurer Basic", {
       ready: true,
       missing: [],
       priority: 8,
@@ -483,8 +500,7 @@ export function detectAvailableCombos(analysis) {
     !hasInHand(VOID_IDS.HOLLOW) &&
     hasInDeck(VOID_IDS.HOLLOW)
   ) {
-    detected.push({
-      combo: COMBO_DATABASE.find((c) => c.name === "Beast Search Hollow"),
+    addCombo("Beast Search Hollow", {
       ready: true,
       missing: [],
       priority: 7.8,
@@ -496,8 +512,7 @@ export function detectAvailableCombos(analysis) {
   // Walker sobe, Hollow desce DA MÃO e recruta outro
   // ═══════════════════════════════════════════════════════════════════════════
   if (hasOnField(VOID_IDS.WALKER) && hasInHand(VOID_IDS.HOLLOW)) {
-    detected.push({
-      combo: COMBO_DATABASE.find((c) => c.name === "Walker into Hollow"),
+    addCombo("Walker into Hollow", {
       ready: true,
       missing: [],
       priority: 9.5, // Muito bom - ganha 2 Hollows + Walker na mão
@@ -517,8 +532,7 @@ export function detectAvailableCombos(analysis) {
         (c.level || 0) <= 4,
     );
     if (hasOtherVoidToSummon) {
-      detected.push({
-        combo: COMBO_DATABASE.find((c) => c.name === "Walker Rotation"),
+      addCombo("Walker Rotation", {
         ready: true,
         missing: [],
         priority: 8,
@@ -536,8 +550,7 @@ export function detectAvailableCombos(analysis) {
     const canSpecialHollowFromHand = hasOnField(VOID_IDS.WALKER);
     // Haunter no GY pode reviver Hollow, MAS isso não é "da mão"
     // Então só Walker conta aqui
-    detected.push({
-      combo: COMBO_DATABASE.find((c) => c.name === "Hollow Chain (da mão)"),
+    addCombo("Hollow Chain (da mão)", {
       ready: canSpecialHollowFromHand,
       missing: canSpecialHollowFromHand
         ? []
@@ -553,8 +566,7 @@ export function detectAvailableCombos(analysis) {
   // Hollow King (3 Hollows)
   if (hasPoly && hasInExtra(VOID_IDS.HOLLOW_KING)) {
     const hollowCount = countHollowsTotal();
-    detected.push({
-      combo: COMBO_DATABASE.find((c) => c.name === "Hollow King Fusion"),
+    addCombo("Hollow King Fusion", {
       ready: hollowCount >= 3,
       missing:
         hollowCount >= 3 ? [] : [`${3 - hollowCount} Hollow(s) faltando`],
@@ -566,8 +578,7 @@ export function detectAvailableCombos(analysis) {
   if (hasPoly && hasInExtra(VOID_IDS.BERSERKER)) {
     const slayerOnField = hasOnField(VOID_IDS.SLAYER_BRUTE);
     const hasOtherVoid = countVoidsTotal() >= (slayerOnField ? 2 : 1);
-    detected.push({
-      combo: COMBO_DATABASE.find((c) => c.name === "Berserker Fusion"),
+    addCombo("Berserker Fusion", {
       ready: slayerOnField && hasOtherVoid,
       missing: slayerOnField
         ? hasOtherVoid
@@ -592,8 +603,7 @@ export function detectAvailableCombos(analysis) {
       fieldMonsterCount - Math.min(fieldMaterialsNeeded, fieldVoidCount),
     );
     const ravenInHand = hasInHand(VOID_IDS.RAVEN);
-    detected.push({
-      combo: COMBO_DATABASE.find((c) => c.name === "Hydra Titan Fusion"),
+    addCombo("Hydra Titan Fusion", {
       ready: voidCount >= 6,
       missing: voidCount >= 6 ? [] : [`${6 - voidCount} Void(s) faltando`],
       priority:
@@ -610,8 +620,7 @@ export function detectAvailableCombos(analysis) {
 
   // Haunter
   if (hasInHand(VOID_IDS.HAUNTER) && countOnField(VOID_IDS.HOLLOW) >= 1) {
-    detected.push({
-      combo: COMBO_DATABASE.find((c) => c.name === "Haunter Hollow Swarm"),
+    addCombo("Haunter Hollow Swarm", {
       ready: true,
       missing: [],
       priority: 9,
@@ -621,8 +630,7 @@ export function detectAvailableCombos(analysis) {
   // Serpent Drake
   if (hasInHand(VOID_IDS.SERPENT_DRAKE) && countOnField(VOID_IDS.HOLLOW) >= 1) {
     const hollowCount = countOnField(VOID_IDS.HOLLOW);
-    detected.push({
-      combo: COMBO_DATABASE.find((c) => c.name === "Serpent Drake Power Up"),
+    addCombo("Serpent Drake Power Up", {
       ready: true,
       missing: [],
       priority: 8.5 + hollowCount * 0.5, // Mais Hollows = mais bônus
@@ -631,8 +639,7 @@ export function detectAvailableCombos(analysis) {
 
   // Slayer Brute
   if (hasInHand(VOID_IDS.SLAYER_BRUTE) && countVoidsOnField() >= 2) {
-    detected.push({
-      combo: COMBO_DATABASE.find((c) => c.name === "Slayer Brute Rush"),
+    addCombo("Slayer Brute Rush", {
       ready: true,
       missing: [],
       priority: 8,
@@ -645,10 +652,7 @@ export function detectAvailableCombos(analysis) {
     hasInHand(VOID_IDS.HAUNTER) &&
     summonAvailable
   ) {
-    detected.push({
-      combo: COMBO_DATABASE.find(
-        (c) => c.name === "Conjurer to Haunter Pipeline",
-      ),
+    addCombo("Conjurer to Haunter Pipeline", {
       ready: true,
       missing: [],
       priority: 10.5,
@@ -666,8 +670,7 @@ export function detectAvailableCombos(analysis) {
         hasPoly ||
         hasInHand(VOID_IDS.SLAYER_BRUTE) ||
         hasInHand(VOID_IDS.SERPENT_DRAKE));
-    detected.push({
-      combo: COMBO_DATABASE.find((c) => c.name === "Conjurer Graveyard Reloop"),
+    addCombo("Conjurer Graveyard Reloop", {
       ready: hasRecruitTarget,
       missing: hasRecruitTarget ? [] : ["Void lv4- no deck para recrutar"],
       priority: highPayoff ? 9.4 : 8.2,
@@ -680,8 +683,7 @@ export function detectAvailableCombos(analysis) {
 
   // Thousand-Arms Hand-SS (precisa 1 Void no campo para tributar)
   if (hasInHand(VOID_IDS.THOUSAND_ARMS) && countVoidsOnField() >= 1) {
-    detected.push({
-      combo: COMBO_DATABASE.find((c) => c.name === "Thousand-Arms Hand-SS"),
+    addCombo("Thousand-Arms Hand-SS", {
       ready: true,
       missing: [],
       priority: 8,
@@ -691,10 +693,7 @@ export function detectAvailableCombos(analysis) {
   // Thousand-Arms Bounce-Revive (Thousand-Arms no campo + Hollow no GY)
   if (hasOnField(VOID_IDS.THOUSAND_ARMS) && countInGY(VOID_IDS.HOLLOW) >= 1) {
     const hollowsAvail = Math.min(countInGY(VOID_IDS.HOLLOW), 2);
-    detected.push({
-      combo: COMBO_DATABASE.find(
-        (c) => c.name === "Thousand-Arms Bounce-Revive",
-      ),
+    addCombo("Thousand-Arms Bounce-Revive", {
       ready: true,
       missing: [],
       priority: 8.5 + hollowsAvail * 0.5, // +0.5 por Hollow revivido
@@ -703,8 +702,7 @@ export function detectAvailableCombos(analysis) {
 
   if (hasOnField(VOID_IDS.COSMIC_WALKER)) {
     const hollowsInGY = countInGY(VOID_IDS.HOLLOW);
-    detected.push({
-      combo: COMBO_DATABASE.find((c) => c.name === "Cosmic Walker Hollow Reclaimer"),
+    addCombo("Cosmic Walker Hollow Reclaimer", {
       ready: hollowsInGY >= 1,
       missing: hollowsInGY >= 1 ? [] : ["Void Hollow no GY"],
       priority: hollowsInGY >= 1 ? 8.0 + Math.min(hollowsInGY, 2) * 0.5 : 6.0,
@@ -720,8 +718,7 @@ export function detectAvailableCombos(analysis) {
     const voidsInGY = countVoidsInGY();
     const projectedVoidsInGY = voidsInGY + Math.min(monstersOnField, 2);
     const canBeSolo = monstersOnField <= 2;
-    detected.push({
-      combo: COMBO_DATABASE.find((c) => c.name === "Arcturus Tribute Summon"),
+    addCombo("Arcturus Tribute Summon", {
       ready,
       missing: ready
         ? []
@@ -742,8 +739,7 @@ export function detectAvailableCombos(analysis) {
     const monstersOnField = (field || []).filter(
       (m) => m && m.cardKind === "monster",
     ).length;
-    detected.push({
-      combo: COMBO_DATABASE.find((c) => c.name === "Arcturus Solo Battle Lock"),
+    addCombo("Arcturus Solo Battle Lock", {
       ready: monstersOnField >= 2,
       missing: monstersOnField >= 2 ? [] : ["2 tributos para Arcturus"],
       priority:
@@ -761,8 +757,7 @@ export function detectAvailableCombos(analysis) {
     hasInExtra(VOID_IDS.MALICIOUS_DEMON)
   ) {
     const hollowsInGY = countInGY(VOID_IDS.HOLLOW);
-    detected.push({
-      combo: COMBO_DATABASE.find((c) => c.name === "Malicious Demon Ascension"),
+    addCombo("Malicious Demon Ascension", {
       ready: true,
       missing: [],
       // Quanto mais Hollows no GY, mais ataques Malicious Demon faz
@@ -784,8 +779,7 @@ export function detectAvailableCombos(analysis) {
     const projectedAtk = 2000 + hollowsInGY * 200;
     const beatsThreat =
       (analysis.oppStrongestAtk || 0) <= 0 || projectedAtk > analysis.oppStrongestAtk;
-    detected.push({
-      combo: COMBO_DATABASE.find((c) => c.name === "Forgotten Knight Hollow Scaling"),
+    addCombo("Forgotten Knight Hollow Scaling", {
       ready: true,
       missing: [],
       priority: (beatsThreat ? 8.6 : 7.5) + Math.min(hollowsInGY, 3) * 0.2,
@@ -798,8 +792,7 @@ export function detectAvailableCombos(analysis) {
     hasOnField(VOID_IDS.MALICIOUS_DEMON) &&
     countInGY(VOID_IDS.HOLLOW) >= 1
   ) {
-    detected.push({
-      combo: COMBO_DATABASE.find((c) => c.name === "Malicious Demon Death Loop"),
+    addCombo("Malicious Demon Death Loop", {
       ready: true,
       missing: [],
       priority: 8.5,
@@ -815,8 +808,7 @@ export function detectAvailableCombos(analysis) {
     const hasVoidInGY = (graveyard || []).some(
       (c) => isVoid(c) && (c.level || 0) <= 4,
     );
-    detected.push({
-      combo: COMBO_DATABASE.find((c) => c.name === "The Void Recovery"),
+    addCombo("The Void Recovery", {
       ready: hasVoidInGY,
       missing: hasVoidInGY ? [] : ["Void lv4- no GY"],
       priority: hasVoidInGY ? 8 : 4,
@@ -831,8 +823,7 @@ export function detectAvailableCombos(analysis) {
   ) {
     const hasExtraMonster =
       (hand || []).filter((c) => c?.cardKind === "monster").length >= 2;
-    detected.push({
-      combo: COMBO_DATABASE.find((c) => c.name === "Sealing Extra Summon"),
+    addCombo("Sealing Extra Summon", {
       ready: hasExtraMonster,
       missing: hasExtraMonster ? [] : ["Monstro extra para invocar"],
       priority: hasExtraMonster ? 7 : 3,
@@ -848,8 +839,7 @@ export function detectAvailableCombos(analysis) {
     );
     const hasHollowTarget = deck.some((c) => c?.id === VOID_IDS.HOLLOW);
     const shouldUse = fieldEmpty && searchableVoid;
-    detected.push({
-      combo: COMBO_DATABASE.find((c) => c.name === "Lost Throne Starter"),
+    addCombo("Lost Throne Starter", {
       ready: shouldUse,
       missing: shouldUse
         ? []
@@ -862,9 +852,7 @@ export function detectAvailableCombos(analysis) {
   }
 
   // Sort by priority
-  return detected
-    .filter((d) => d.combo)
-    .sort((a, b) => b.priority - a.priority);
+  return finalizeDetectedCombos(detected);
 }
 
 /**
