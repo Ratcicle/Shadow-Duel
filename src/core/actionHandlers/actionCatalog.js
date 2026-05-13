@@ -470,9 +470,13 @@ export const ACTION_CATALOG = {
     summary: "Executes nested action cases based on a resolved target.",
     handler: "handleConditionalTargetActions",
     required: ["targetRef", "cases"],
+    optional: ["defaultActions", "matchMode", "applyMode"],
     fields: {
       ...COMMON_TARGET_FIELDS,
       cases: { type: "array" },
+      defaultActions: { type: "array" },
+      matchMode: { type: "string" },
+      applyMode: { type: "string" },
     },
     targetRef: "required",
     selection: "usesTargets",

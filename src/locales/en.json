@@ -4,6 +4,18 @@
       "name": "Dragon Spirit Sanctuary",
       "description": "When a Dragon monster you control is targeted by an opponent's attack or card effect: return that monster to the hand; then Special Summon 1 Dragon monster from your hand with Level less than or equal to the returned monster. You can only activate 1 'Dragon Spirit Sanctuary' per turn."
     },
+    "202": {
+      "name": "Arcanist Apprentice",
+      "description": "If this card is Normal Summoned: You can add 1 \"Arcanist\" Spell from your Deck to your hand. If this card is equipped with an \"Arcanist\" Equip Spell: all \"Arcanist\" monsters you control gain 300 ATK while this card is face-up on the field. You can only activate each effect of \"Arcanist Apprentice\" once per turn."
+    },
+    "207": {
+      "name": "Albus, Arcanist of Ice",
+      "description": "If you control an \"Arcanist\" monster, you can Special Summon this card from your hand. If this card is equipped with an \"Arcanist\" Equip Spell: target 1 \"Arcanist\" monster in your GY; add it to your hand. You can only activate each effect of \"Albus, Arcanist of Ice\" once per turn."
+    },
+    "209": {
+      "name": "Meeting of the Arcanists",
+      "description": "The first time each turn an \"Arcanist\" Spell you control would be destroyed, it is not destroyed.\nOnce per turn: You can apply 1 of these effects;\n- Discard 2 \"Arcanist\" monsters; add 1 \"Arcanist\" Spell from your Deck to your hand.\n- Discard 2 \"Arcanist\" Spells; add 1 Level 4 or lower \"Arcanist\" monster from your Deck to your hand."
+    },
     "211": {
       "name": "Arcanist Ink River",
       "description": "Each time you activate an \"Arcanist\" Spell: place 1 Ink counter on this card. You can remove 2 Ink counters from this card; add 1 \"Arcanist\" Spell from your GY to your hand."
@@ -22,7 +34,7 @@
     },
     "216": {
       "name": "Arcanist Seismic Impact",
-      "description": "If you control an \"Arcanist\" monster: target 1 card your opponent controls; return it to the hand, or, if you control an \"Arcanist\" Equip Spell, banish it instead. You can only activate 1 \"Arcanist Seismic Impact\" per turn."
+      "description": "If you control an \"Arcanist\" monster: discard 1 card, then target 1 card your opponent controls; return it to the hand, or, if you control an \"Arcanist\" Equip Spell, banish it instead. You can only activate 1 \"Arcanist Seismic Impact\" per turn."
     },
     "250": {
       "name": "Fire Extreme Dragon",

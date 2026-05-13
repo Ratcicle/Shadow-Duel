@@ -4859,7 +4859,7 @@
     type: "Spellcaster",
     archetype: "Arcanist",
     description:
-      'If this card is Normal Summoned: You can add 1 "Arcanist" Spell from your Deck to your hand. If this card is in your GY: You can send 1 "Arcanist" Spell you control to the GY; add this card to your hand.',
+      'If this card is Normal Summoned: You can add 1 "Arcanist" Spell from your Deck to your hand. If this card is equipped with an "Arcanist" Equip Spell: All "Arcanist" monsters you control gain 300 ATK while this card is face-up on the field. You can only activate each effect of "Arcanist Apprentice" once per turn.',
     image: "assets/Arcanist Apprentice.png",
     effects: [
       {
@@ -4868,6 +4868,8 @@
         event: "after_summon",
         requireSelfAsSummoned: true,
         summonMethods: ["normal"],
+        oncePerTurn: true,
+        oncePerTurnName: "arcanist_apprentice_search_spell",
         actions: [
           {
             type: "search_any",
@@ -4878,33 +4880,24 @@
         ],
       },
       {
-        id: "arcanist_apprentice_gy_return",
-        timing: "ignition",
-        requireZone: "graveyard",
-        targets: [
-          {
-            id: "arcanist_apprentice_cost",
-            owner: "self",
-            zones: ["spellTrap", "fieldSpell"],
-            cardKind: "spell",
-            archetype: "Arcanist",
-            count: { min: 1, max: 1 },
+        id: "arcanist_apprentice_equip_aura",
+        timing: "passive",
+        requireFaceup: true,
+        passive: {
+          type: "field_archetype_aura_buff",
+          archetype: "Arcanist",
+          targetOwners: ["self"],
+          targetCardKinds: ["monster"],
+          targetRequireFaceup: true,
+          sourceFilters: {
+            equippedWithFilters: {
+              cardKind: "spell",
+              subtype: "equip",
+              archetype: "Arcanist",
+            },
           },
-        ],
-        actions: [
-          {
-            type: "move",
-            targetRef: "arcanist_apprentice_cost",
-            player: "self",
-            to: "graveyard",
-          },
-          {
-            type: "move",
-            targetRef: "self",
-            player: "self",
-            to: "hand",
-          },
-        ],
+          atkBoost: 300,
+        },
       },
     ],
   },
@@ -5212,7 +5205,7 @@
     type: "Spellcaster",
     archetype: "Arcanist",
     description:
-      'If you control an "Arcanist" monster, you can Special Summon this card from your hand. You can only Special Summon "Albus, Arcanist of Ice" once per turn this way. The first time each turn an "Arcanist" Spell you control would be destroyed, it is not destroyed.',
+      'If you control an "Arcanist" monster, you can Special Summon this card from your hand. If this card is equipped with an "Arcanist" Equip Spell: target 1 "Arcanist" monster in your GY; add it to your hand. You can only activate each effect of "Albus, Arcanist of Ice" once per turn.',
     image: "assets/Albus, Arcanist of Ice.png",
     effects: [
       {
@@ -5245,25 +5238,39 @@
         ],
       },
       {
-        id: "albus_arcanist_ice_spell_guard",
-        timing: "passive",
+        id: "albus_arcanist_ice_recover",
+        timing: "on_event",
+        event: "card_equipped",
+        requireZone: "field",
         requireFaceup: true,
         oncePerTurn: true,
-        oncePerTurnName: "albus_arcanist_ice_spell_guard",
-        replacementEffect: {
-          type: "destruction",
-          reason: "any",
-          targetOwner: "self",
-          targetZones: ["spellTrap", "fieldSpell"],
-          targetFilters: {
-            cardKind: "spell",
-            archetype: "Arcanist",
-          },
-          targetRequireFaceup: false,
-          auto: true,
-          logMessage:
-            "An Arcanist Spell you control avoided destruction due to {source}.",
+        oncePerTurnName: "albus_arcanist_ice_recover",
+        requireEquipCardFilters: {
+          cardKind: "spell",
+          subtype: "equip",
+          archetype: "Arcanist",
         },
+        promptUser: true,
+        promptMessage:
+          'Activate "Albus, Arcanist of Ice" to add 1 "Arcanist" monster from your GY to your hand?',
+        targets: [
+          {
+            id: "albus_arcanist_ice_recover_target",
+            owner: "self",
+            zone: "graveyard",
+            cardKind: "monster",
+            archetype: "Arcanist",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "albus_arcanist_ice_recover_target",
+            player: "self",
+            to: "hand",
+          },
+        ],
       },
     ],
   },
@@ -5273,7 +5280,7 @@
     cardKind: "monster",
     atk: 2200,
     def: 2200,
-    level: 7,
+    level: 6,
     type: "Spellcaster",
     archetype: "Arcanist",
     description:
@@ -5359,9 +5366,30 @@
     subtype: "continuous",
     archetype: "Arcanist",
     description:
-      'Once per turn: You can apply 1 of these effects;\n- Discard 2 "Arcanist" monsters; add 1 "Arcanist" Spell from your Deck to your hand.\n- Discard 2 "Arcanist" Spells; add 1 Level 4 or lower "Arcanist" monster from your Deck to your hand.',
+      'The first time each turn an "Arcanist" Spell you control would be destroyed, it is not destroyed.\nOnce per turn: You can apply 1 of these effects;\n- Discard 2 "Arcanist" monsters; add 1 "Arcanist" Spell from your Deck to your hand.\n- Discard 2 "Arcanist" Spells; add 1 Level 4 or lower "Arcanist" monster from your Deck to your hand.',
     image: "assets/Meeting of the Arcanists.png",
     effects: [
+      {
+        id: "meeting_arcanists_spell_guard",
+        timing: "passive",
+        requireFaceup: true,
+        oncePerTurn: true,
+        oncePerTurnName: "meeting_arcanists_spell_guard",
+        replacementEffect: {
+          type: "destruction",
+          reason: "any",
+          targetOwner: "self",
+          targetZones: ["spellTrap", "fieldSpell"],
+          targetFilters: {
+            cardKind: "spell",
+            archetype: "Arcanist",
+          },
+          targetRequireFaceup: false,
+          auto: true,
+          logMessage:
+            "An Arcanist Spell you control avoided destruction due to {source}.",
+        },
+      },
       {
         id: "meeting_arcanists_choose_effect",
         timing: "ignition",
@@ -5853,6 +5881,7 @@
         id: "glyph_destroying_tornado_effect",
         timing: "on_play",
         speed: 1,
+        storableByGrimoire: true,
         conditions: [
           {
             type: "control_card_filters",
@@ -5898,7 +5927,7 @@
     subtype: "normal",
     archetype: "Arcanist",
     description:
-      'If you control an "Arcanist" monster: target 1 card your opponent controls; return it to the hand, or, if you control an "Arcanist" Equip Spell, banish it instead. You can only activate 1 "Arcanist Seismic Impact" per turn.',
+      'If you control an "Arcanist" monster: discard 1 card, then target 1 card your opponent controls; return it to the hand, or, if you control an "Arcanist" Equip Spell, banish it instead. You can only activate 1 "Arcanist Seismic Impact" per turn.',
     image: "assets/Arcanist Seismic Impact.png",
     effects: [
       {
@@ -5907,6 +5936,7 @@
         speed: 1,
         oncePerTurn: true,
         oncePerTurnName: "seismic_impact_effect",
+        storableByGrimoire: true,
         conditions: [
           {
             type: "control_card_filters",
@@ -5920,6 +5950,13 @@
         ],
         targets: [
           {
+            id: "seismic_impact_discard_cost",
+            owner: "self",
+            zone: "hand",
+            count: { min: 1, max: 1 },
+            intent: "cost",
+          },
+          {
             id: "seismic_impact_target",
             owner: "opponent",
             zones: ["field", "spellTrap", "fieldSpell"],
@@ -5927,6 +5964,12 @@
           },
         ],
         actions: [
+          {
+            type: "move",
+            targetRef: "seismic_impact_discard_cost",
+            player: "self",
+            to: "graveyard",
+          },
           {
             type: "conditional_target_actions",
             targetRef: "seismic_impact_target",

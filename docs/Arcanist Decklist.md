@@ -6,8 +6,8 @@
 - **ATK/DEF:** 1500 / 1000
 - **Nível/Tipo:** 3 — Spellcaster
 - **Efeitos:**
-	- Ao ser Invocado Normalmente: adicione 1 Magia "Arcanist" do Deck à mão.
-	- No Cemitério: envie 1 Magia "Arcanist" que você controla para o Cemitério; adicione esta carta à mão.
+	- Ao ser Invocado Normalmente: adicione 1 Magia "Arcanist" do Deck à mão. (1x por turno)
+	- Enquanto estiver com a face para cima no campo e equipada com uma Magia de Equipamento "Arcanist": todos os monstros "Arcanist" que você controla ganham 300 ATK.
 
 ### 205 — Viridis, Arcanist of Life
 - **ATK/DEF:** 1600 / 1500
@@ -29,7 +29,7 @@
 - **Nível/Tipo:** 4 — Spellcaster
 - **Efeitos:**
 	- Se você controla um monstro "Arcanist": Invocação-Especial esta carta da mão. (1x por turno)
-	- Passivo: a primeira vez por turno que uma Magia "Arcanist" sua seria destruída, ela não é destruída.
+	- Quando equipada com Magia de Equipamento "Arcanist": alvo 1 monstro "Arcanist" no seu Cemitério; adicione-o à mão. (1x por turno)
 
 ### 214 — Azrath, Corrupted Arcanist
 - **ATK/DEF:** 1700 / 1400
@@ -78,9 +78,11 @@
 	- Você só pode ativar 1 "Arcanist Lightning Lance" por turno. Armazenável pelo Grimoire.
 
 ### 209 — Meeting of the Arcanists (Continuous)
-- **Efeito (1x por turno, escolha 1):**
-	- Descarte 2 monstros "Arcanist"; adicione 1 Magia "Arcanist" do Deck à mão.
-	- Descarte 2 Magias "Arcanist"; adicione 1 monstro "Arcanist" de Nível 4 ou menor do Deck à mão.
+- **Efeitos:**
+	- A primeira vez em cada turno que uma Magia "Arcanist" que você controla seria destruída, ela não é destruída.
+	- Uma vez por turno, escolha 1:
+		- Descarte 2 monstros "Arcanist"; adicione 1 Magia "Arcanist" do Deck à mão.
+		- Descarte 2 Magias "Arcanist"; adicione 1 monstro "Arcanist" de Nível 4 ou menor do Deck à mão.
 
 ### 210 — Arcanist Ice Barrier (Normal)
 - **Efeito:**
@@ -102,7 +104,9 @@
 ### 215 — Glyph-Destroying Tornado (Normal)
 - **Efeito:**
 	- Se você controla um monstro "Arcanist" equipado com uma Magia de Equipamento "Arcanist": alvo 1 Magia/Armadilha do oponente; destrua-a.
+	- Armazenável pelo Grimoire.
 
 ### 216 — Arcanist Seismic Impact (Normal)
 - **Efeito:**
-	- Se você controla um monstro "Arcanist": alvo 1 card que seu oponente controla; devolva-o para a mão, ou, se você controla uma Magia de Equipamento "Arcanist", bana-o em vez disso. Você só pode ativar 1 "Arcanist Seismic Impact" por turno.
+	- Se você controla um monstro "Arcanist": descarte 1 card e, depois, alvo 1 card que seu oponente controla; devolva-o para a mão, ou, se você controla uma Magia de Equipamento "Arcanist", bana-o em vez disso. Você só pode ativar 1 "Arcanist Seismic Impact" por turno.
+	- Armazenável pelo Grimoire.
