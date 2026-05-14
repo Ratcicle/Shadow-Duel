@@ -3,7 +3,13 @@ import {
   getTributeRequirementFor,
   selectBestTributes,
 } from "../common/tributePolicy.js";
-import { getEffectiveAtk, getEffectiveDef } from "../common/cardStats.js";
+import {
+  getEffectiveAtk,
+  getEffectiveDef,
+  getStrongestAttackThreat,
+  getStrongestBattleStat,
+  getTotalAttackThreat,
+} from "../common/cardStats.js";
 import { evaluateCardExpendability } from "./cardValue.js";
 import { isLuminarch } from "./knowledge.js";
 
@@ -121,18 +127,12 @@ function evaluateLuminarchTributeSummonPayoff(cardToSummon, tributes, context) {
   const opponentMonsters = (opponent.field || []).filter(
     (card) => card && card.cardKind === "monster",
   );
-  const strongestBattleStat = opponentMonsters.reduce((max, monster) => {
-    const stat = monster.isFacedown
-      ? 1500
-      : monster.position === "defense"
-        ? getEffectiveDef(monster)
-        : getEffectiveAtk(monster);
-    return Math.max(max, stat);
-  }, 0);
-  const opponentTotalAtk = opponentMonsters.reduce(
-    (sum, monster) => sum + (monster.isFacedown ? 1500 : getEffectiveAtk(monster)),
-    0,
-  );
+  const strongestBattleStat = getStrongestBattleStat(opponentMonsters, {
+    facedownValue: 1500,
+  });
+  const opponentTotalAtk = getTotalAttackThreat(opponentMonsters, {
+    facedownValue: 1500,
+  });
 
   if (
     isRadiantLancer(cardToSummon) &&
@@ -191,10 +191,10 @@ function evaluateLuminarchTributeSummonPayoff(cardToSummon, tributes, context) {
 
 function evaluateLuminarchTributeKeepScore(card, evaluationContext, context) {
   const oppField = Array.isArray(context.oppField) ? context.oppField : [];
-  const oppStrongest = oppField.reduce((max, monster) => {
-    if (!monster || monster.cardKind !== "monster") return max;
-    return Math.max(max, monster.atk || 0);
-  }, 0);
+  const oppStrongest = getStrongestAttackThreat(oppField, {
+    facedownValue: "printed",
+    includeBoosts: false,
+  });
 
   const atk = (card.atk || 0) + (card.tempAtkBoost || 0);
   const def = (card.def || 0) + (card.tempDefBoost || 0);

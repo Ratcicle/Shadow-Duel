@@ -4,6 +4,15 @@ import {
   isBattleReadyAttacker,
 } from "../StrategyUtils.js";
 import {
+  getStrongestAttackThreat,
+  getTotalAttackThreat,
+} from "../common/cardStats.js";
+import {
+  buildActivationContext,
+  buildCostPreferences,
+  buildTargetPreferences,
+} from "../common/preferencePolicy.js";
+import {
   evaluateLuminarchDefensePlan,
   getMoonlitTargetPlan,
 } from "./priorities.js";
@@ -12,33 +21,74 @@ import {
   LUMINARCH_DEFENSIVE_NAMES,
   LUMINARCH_OFFENSIVE_NAMES,
 } from "./tributePolicy.js";
+import { buildLuminarchResourcePreferences } from "./resourceEconomy.js";
+import { applyLuminarchDefenseActionContext } from "./defensePolicy.js";
+
+const LUMINARCH_COST_PREFER_NAMES = [
+  "Luminarch Enchanted Halberd",
+  "Luminarch Magic Sickle",
+  "Luminarch Valiant - Knight of the Dawn",
+  "Luminarch Sanctified Arbiter",
+];
+
+const LUMINARCH_COST_PRESERVE_NAMES = [
+  "Luminarch Aegisbearer",
+  "Luminarch Sanctum Protector",
+  "Luminarch Fortress Aegis",
+  "Luminarch Celestial Marshal",
+  "Luminarch Moonblade Captain",
+  "Luminarch Aurora Seraph",
+  "Luminarch Radiant Lancer",
+  "Luminarch Megashield Barbarias",
+];
+
+export function buildLuminarchCostPreferences({
+  analysis = {},
+  preferNames = LUMINARCH_COST_PREFER_NAMES,
+  preserveNames = LUMINARCH_COST_PRESERVE_NAMES,
+  offensivePayoffNames = [],
+  preserveLastOffensivePayoff = true,
+  availableOffensivePayoffs,
+  extra = {},
+} = {}) {
+  const resourcePreferences = buildLuminarchResourcePreferences(analysis);
+  const mergedPreferNames = [
+    ...new Set([
+      ...(preferNames || []),
+      ...(resourcePreferences.preferNames || []),
+    ]),
+  ];
+  const mergedPreserveNames = [
+    ...new Set([
+      ...(preserveNames || []),
+      ...(resourcePreferences.preserveNames || []),
+    ]),
+  ];
+
+  return buildCostPreferences({
+    archetype: "Luminarch",
+    hand: analysis.hand || [],
+    field: analysis.field || [],
+    preferNames: mergedPreferNames,
+    preserveNames: mergedPreserveNames,
+    offensivePayoffNames,
+    preserveLastOffensivePayoff,
+    availableOffensivePayoffs,
+    extra: {
+      ...extra,
+      resourceEconomy: resourcePreferences.resourceEconomy,
+      resourcePressure: resourcePreferences.resourcePressure,
+    },
+  });
+}
 
 export function buildLuminarchActivationContext() {
-  return {
+  return buildActivationContext({
+    costPreferences: buildLuminarchCostPreferences(),
     autoSelectSingleTarget: true,
+    includeAutoSelectTargets: false,
     logTargets: false,
-    actionContext: {
-      costPreferences: {
-        archetype: "Luminarch",
-        preferNames: [
-          "Luminarch Enchanted Halberd",
-          "Luminarch Magic Sickle",
-          "Luminarch Valiant - Knight of the Dawn",
-          "Luminarch Sanctified Arbiter",
-        ],
-        preserveNames: [
-          "Luminarch Aegisbearer",
-          "Luminarch Sanctum Protector",
-          "Luminarch Fortress Aegis",
-          "Luminarch Celestial Marshal",
-          "Luminarch Moonblade Captain",
-          "Luminarch Aurora Seraph",
-          "Luminarch Radiant Lancer",
-          "Luminarch Megashield Barbarias",
-        ],
-      },
-    },
-  };
+  });
 }
 
 function getBattleReadyLuminarchAttackers(cards) {
@@ -61,18 +111,30 @@ function getBestSpearTargetScore(analysis) {
   );
 }
 
+function mergeTargetPreferences(actionContext, targetProfiles) {
+  const targetPreferences = buildTargetPreferences({
+    costPreferences: actionContext.costPreferences,
+    targetProfiles,
+  });
+  if (Object.keys(targetPreferences).length === 0) return;
+  actionContext.targetPreferences = {
+    ...(actionContext.targetPreferences || {}),
+    ...targetPreferences,
+  };
+}
+
 function getMoonlitPurpose(analysis) {
   const oppMonsters = (analysis.oppField || []).filter(
     (card) => card && card.cardKind === "monster",
   );
-  const oppStrongest = oppMonsters.reduce(
-    (max, card) => Math.max(max, card?.isFacedown ? 1500 : card?.atk || 0),
-    0,
-  );
-  const oppTotalAtk = oppMonsters.reduce(
-    (sum, card) => sum + (card?.isFacedown ? 1500 : card?.atk || 0),
-    0,
-  );
+  const oppStrongest = getStrongestAttackThreat(oppMonsters, {
+    facedownValue: 1500,
+    includeBoosts: false,
+  });
+  const oppTotalAtk = getTotalAttackThreat(oppMonsters, {
+    facedownValue: 1500,
+    includeBoosts: false,
+  });
   const hasStableTank = (analysis.field || []).some(
     (card) =>
       card &&
@@ -99,19 +161,23 @@ export function buildLuminarchSpellActionContext(
   analysis,
   baseActionContext = {},
 ) {
-  const actionContext = { ...(baseActionContext || {}) };
+  let actionContext = { ...(baseActionContext || {}) };
+  actionContext = applyLuminarchDefenseActionContext(
+    actionContext,
+    card,
+    analysis,
+  );
 
   if (card?.name === "Luminarch Spear of Dawnfall") {
     const attackers = getBattleReadyLuminarchAttackers(analysis.field);
-    actionContext.targetPreferences = {
-      ...(actionContext.targetPreferences || {}),
+    mergeTargetPreferences(actionContext, {
       spear_zero_target: {
         role: "temporary_stat_debuff",
         purpose: "combat",
         attackers,
         opponentLp: analysis.oppLp || 0,
       },
-    };
+    });
   }
 
   if (card?.name === "Luminarch Moonlit Blessing") {
@@ -123,8 +189,7 @@ export function buildLuminarchSpellActionContext(
       .forEach((entry) => {
         byName[entry.target.name] = entry.position || "attack";
       });
-    actionContext.targetPreferences = {
-      ...(actionContext.targetPreferences || {}),
+    mergeTargetPreferences(actionContext, {
       moonlit_blessing_target: {
         role: "recursion",
         purpose,
@@ -132,7 +197,7 @@ export function buildLuminarchSpellActionContext(
         defensiveNames: LUMINARCH_DEFENSIVE_NAMES,
         offensiveNames: LUMINARCH_OFFENSIVE_NAMES,
       },
-    };
+    });
     actionContext.specialSummonPositions = {
       ...(actionContext.specialSummonPositions || {}),
       byName,
@@ -153,15 +218,14 @@ export function buildLuminarchSpellActionContext(
       .filter((entry) => entry.score >= 80)
       .sort((a, b) => b.score - a.score)
       .map((entry) => entry.attacker.name);
-    actionContext.targetPreferences = {
-      ...(actionContext.targetPreferences || {}),
+    mergeTargetPreferences(actionContext, {
       holy_ascension_target: {
         role: "temporary_stat_buff",
         purpose: "offense",
         atkBoost: 800,
         preferredNames,
       },
-    };
+    });
   }
 
   if (card?.name === "Polymerization") {
@@ -176,29 +240,25 @@ export function buildLuminarchSpellActionContext(
 
   if (card?.name === "Luminarch Knights Convocation") {
     const defensePlan = evaluateLuminarchDefensePlan(analysis);
-    actionContext.costPreferences = {
-      ...(actionContext.costPreferences || {}),
-      archetype: "Luminarch",
-      preserveLastOffensivePayoff: true,
-      offensivePayoffNames: LUMINARCH_OFFENSIVE_NAMES,
+    const existingPreferences = actionContext.costPreferences || {};
+    actionContext.costPreferences = buildLuminarchCostPreferences({
+      analysis,
+      preferNames: existingPreferences.preferNames || [],
       preserveNames: [
         ...new Set([
-          ...((actionContext.costPreferences || {}).preserveNames || []),
-          "Luminarch Aegisbearer",
-          "Luminarch Sanctum Protector",
-          "Luminarch Fortress Aegis",
-          "Luminarch Celestial Marshal",
-          "Luminarch Moonblade Captain",
-          "Luminarch Radiant Lancer",
-          "Luminarch Aurora Seraph",
-          "Luminarch Megashield Barbarias",
+          ...(existingPreferences.preserveNames || []),
+          ...LUMINARCH_COST_PRESERVE_NAMES,
         ]),
       ],
-      stableDefense: defensePlan.stable,
-      readyToCounterattack: defensePlan.readyToCounterattack,
+      offensivePayoffNames: LUMINARCH_OFFENSIVE_NAMES,
+      preserveLastOffensivePayoff: true,
       availableOffensivePayoffs:
         defensePlan.offensivePayoffsAvailable?.length || 0,
-    };
+      extra: {
+        stableDefense: defensePlan.stable,
+        readyToCounterattack: defensePlan.readyToCounterattack,
+      },
+    });
   }
 
   return actionContext;

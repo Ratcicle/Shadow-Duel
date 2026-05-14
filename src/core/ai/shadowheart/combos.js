@@ -4,6 +4,14 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { isShadowHeartByName } from "./knowledge.js";
+import {
+  createAvailableCombo,
+  createZoneIndex,
+  findComboByName,
+  getZoneCards,
+  hasCardName,
+  hasCardNameInZones,
+} from "../common/comboDetection.js";
 
 /**
  * Banco de dados de combos conhecidos do arquétipo Shadow-Heart.
@@ -109,146 +117,149 @@ export const COMBO_DATABASE = [
  */
 export function detectAvailableCombos(analysis, logFn = null) {
   const available = [];
-  const handNames = analysis.hand.map((c) => c.name);
-  const fieldNames = analysis.field.map((c) => c.name);
-  const gyNames = analysis.graveyard.map((c) => c.name);
+  const zoneIndex = createZoneIndex(analysis);
+  const hand = getZoneCards(zoneIndex, "hand");
+  const field = getZoneCards(zoneIndex, "field");
+  const graveyard = getZoneCards(zoneIndex, "graveyard");
+  const handAndField = [...hand, ...field];
+
+  const hasInHand = (name) => hasCardName(zoneIndex, "hand", name);
+  const hasOnField = (name) => hasCardName(zoneIndex, "field", name);
+  const hasInHandOrField = (name) =>
+    hasCardNameInZones(zoneIndex, ["hand", "field"], name);
+  const comboByName = (name) => findComboByName(COMBO_DATABASE, name);
 
   const log = (msg) => {
     if (typeof logFn === "function") logFn(msg);
   };
+  const addCombo = (name, details = {}) => {
+    const { logMessage, ...comboDetails } = details;
+    available.push(
+      createAvailableCombo({
+        combo: comboByName(name),
+        name,
+        ...comboDetails,
+      }),
+    );
+    if (logMessage) log(logMessage);
+  };
 
   // Imp Extender
-  if (handNames.includes("Shadow-Heart Imp") && analysis.canNormalSummon) {
-    const targets = analysis.hand.filter(
+  if (hasInHand("Shadow-Heart Imp") && analysis.canNormalSummon) {
+    const targets = hand.filter(
       (c) =>
         isShadowHeartByName(c.name) &&
         c.type === "monster" &&
         (c.level || 0) <= 4 &&
-        c.name !== "Shadow-Heart Imp"
+        c.name !== "Shadow-Heart Imp",
     );
     if (targets.length > 0) {
-      available.push({
-        name: "Imp Extender",
+      addCombo("Imp Extender", {
         priority: 8,
         action: { type: "summon", cardName: "Shadow-Heart Imp" },
+        logMessage: `Combo detectado: Imp Extender com ${targets[0].name}`,
       });
-      log(`💡 Combo detectado: Imp Extender com ${targets[0].name}`);
     }
   }
 
   // Demon Dragon Fusion
-  if (handNames.includes("Polymerization")) {
-    const hasScaleDragon =
-      fieldNames.includes("Shadow-Heart Scale Dragon") ||
-      handNames.includes("Shadow-Heart Scale Dragon");
-    const hasLv5Material = [...analysis.hand, ...analysis.field].some(
+  if (hasInHand("Polymerization")) {
+    const hasScaleDragon = hasInHandOrField("Shadow-Heart Scale Dragon");
+    const hasLv5Material = handAndField.some(
       (c) =>
         isShadowHeartByName(c.name) &&
         c.cardKind === "monster" &&
         (c.level || 0) >= 5 &&
-        c.name !== "Shadow-Heart Scale Dragon"
+        c.name !== "Shadow-Heart Scale Dragon",
     );
 
     if (hasScaleDragon && hasLv5Material) {
-      available.push({
-        name: "Demon Dragon Fusion",
+      addCombo("Demon Dragon Fusion", {
         priority: 10,
         action: { type: "spell", cardName: "Polymerization" },
+        logMessage: "Combo detectado: Fusion para Demon Dragon!",
       });
-      log(`🔥 Combo detectado: Fusion para Demon Dragon!`);
     } else {
       // Warlord Fusion (fallback): 2 quaisquer Shadow-Heart
-      const shCount = [...analysis.hand, ...analysis.field].filter(
-        (c) => isShadowHeartByName(c.name) && c.cardKind === "monster"
+      const shCount = handAndField.filter(
+        (c) => isShadowHeartByName(c.name) && c.cardKind === "monster",
       ).length;
       if (shCount >= 2) {
-        available.push({
-          name: "Warlord Fusion",
+        addCombo("Warlord Fusion", {
           priority: 8,
           action: { type: "spell", cardName: "Polymerization" },
+          logMessage: `Combo detectado: Fusion para Warlord (${shCount} SH disponiveis)`,
         });
-        log(`⚔️ Combo detectado: Fusion para Warlord (${shCount} SH disponíveis)`);
       }
     }
   }
 
   // Scale Dragon OTK
   if (
-    fieldNames.includes("Shadow-Heart Scale Dragon") &&
-    analysis.field.length === 1 &&
-    handNames.includes("Shadow-Heart Rage")
+    hasOnField("Shadow-Heart Scale Dragon") &&
+    field.length === 1 &&
+    hasInHand("Shadow-Heart Rage")
   ) {
-    available.push({
-      name: "Scale Dragon OTK",
+    addCombo("Scale Dragon OTK", {
       priority: 10,
       action: { type: "spell", cardName: "Shadow-Heart Rage" },
+      logMessage: "Combo detectado: Scale Dragon OTK (3700 ATK x2)!",
     });
-    log(`🔥 Combo detectado: Scale Dragon OTK (3700 ATK x2)!`);
   }
 
   // Griffin Comeback
   if (
-    handNames.includes("Shadow-Heart Griffin") &&
-    analysis.field.length === 0 &&
+    hasInHand("Shadow-Heart Griffin") &&
+    field.length === 0 &&
     analysis.canNormalSummon
   ) {
-    available.push({
-      name: "Griffin Comeback",
+    addCombo("Griffin Comeback", {
       priority: 7,
       action: { type: "summon", cardName: "Shadow-Heart Griffin" },
+      logMessage: "Combo detectado: Griffin sem tributo",
     });
-    log(`💡 Combo detectado: Griffin sem tributo`);
   }
 
   // Infusion Value
   if (
-    handNames.includes("Shadow-Heart Infusion") &&
-    analysis.hand.length >= 3 &&
-    analysis.graveyard.some((c) => c.cardKind === "monster")
+    hasInHand("Shadow-Heart Infusion") &&
+    hand.length >= 3 &&
+    graveyard.some((c) => c.cardKind === "monster")
   ) {
     const hasValueDiscard =
-      handNames.includes("Shadow-Heart Specter") ||
-      handNames.includes("Shadow-Heart Coward");
-    available.push({
-      name: "Infusion Revival",
+      hasInHand("Shadow-Heart Specter") || hasInHand("Shadow-Heart Coward");
+    addCombo("Infusion Revival", {
       priority: hasValueDiscard ? 8 : 6,
       action: { type: "spell", cardName: "Shadow-Heart Infusion" },
+      logMessage: `Combo detectado: Infusion ${hasValueDiscard ? "com valor extra" : ""}`,
     });
-    log(`💡 Combo detectado: Infusion ${hasValueDiscard ? "com valor extra" : ""}`);
   }
 
   // Darkness Valley Setup
-  if (handNames.includes("Darkness Valley") && !analysis.fieldSpell) {
-    available.push({
-      name: "Darkness Valley Setup",
+  if (hasInHand("Darkness Valley") && !analysis.fieldSpell) {
+    addCombo("Darkness Valley Setup", {
       priority: 8,
       action: { type: "spell", cardName: "Darkness Valley" },
+      logMessage: "Field Spell disponivel: Darkness Valley",
     });
-    log(`💡 Field Spell disponível: Darkness Valley`);
   }
 
   // Eel to Leviathan Combo
-  // Leviathan na mão + Abyssal Eel no campo = pode ativar ignition da mão
+  // Leviathan na mao + Abyssal Eel no campo = pode ativar ignition da mao
   if (
-    handNames.includes("Shadow-Heart Leviathan") &&
-    fieldNames.includes("Shadow-Heart Abyssal Eel")
+    hasInHand("Shadow-Heart Leviathan") &&
+    hasOnField("Shadow-Heart Abyssal Eel")
   ) {
-    available.push({
-      name: "Eel to Leviathan",
+    addCombo("Eel to Leviathan", {
       priority: 9,
       action: { type: "handIgnition", cardName: "Shadow-Heart Leviathan" },
+      logMessage: "Combo detectado: Eel -> Leviathan (2200 ATK + burn)!",
     });
-    log(`🔥 Combo detectado: Eel → Leviathan (2200 ATK + burn)!`);
   }
 
   return available;
 }
 
-/**
- * Retorna combo por nome.
- * @param {string} name
- * @returns {ComboDefinition|null}
- */
 export function getComboByName(name) {
-  return COMBO_DATABASE.find((c) => c.name === name) || null;
+  return findComboByName(COMBO_DATABASE, name);
 }

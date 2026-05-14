@@ -1,3 +1,69 @@
+import {
+  getStrongestAttackThreat,
+  getTotalAttackThreat,
+} from "../common/cardStats.js";
+import { withFusionPreferences } from "../common/fusionPlanning.js";
+import {
+  evaluateLuminarchFinisherPlans,
+  getBestLuminarchFinisherPlan,
+} from "./finisherPlanning.js";
+
+const BARBARIAS_NAME = "Luminarch Megashield Barbarias";
+const FORTRESS_NAME = "Luminarch Fortress Aegis";
+
+function getContextFinisherPlans(context = {}) {
+  if (Array.isArray(context.finisherPlans)) return context.finisherPlans;
+  if (Array.isArray(context.analysis?.finisherPlans)) {
+    return context.analysis.finisherPlans;
+  }
+  try {
+    return evaluateLuminarchFinisherPlans(
+      context.bot,
+      context.opponent,
+      context.game,
+      context.analysis,
+      context.hooks || {},
+    );
+  } catch (error) {
+    return [];
+  }
+}
+
+function getContextFinisherPlan(context, kind, targetName) {
+  return getBestLuminarchFinisherPlan(getContextFinisherPlans(context), (plan) => {
+    if (!plan || plan.kind !== kind) return false;
+    return !targetName || plan.targetName === targetName;
+  });
+}
+
+function buildLuminarchFusionActivationContext(context, fusionPlan) {
+  const baseContext = {
+    ...(context.activationContext || {}),
+    autoSelectSingleTarget: true,
+    autoSelectTargets: true,
+    logTargets: false,
+    actionContext: {
+      ...(context.activationContext?.actionContext || {}),
+      fusionPositions: {
+        ...(context.activationContext?.actionContext?.fusionPositions || {}),
+        byName: {
+          ...(context.activationContext?.actionContext?.fusionPositions?.byName ||
+            {}),
+          [BARBARIAS_NAME]: fusionPlan?.details?.position || "defense",
+        },
+      },
+    },
+  };
+
+  if (!fusionPlan) return baseContext;
+  return withFusionPreferences(baseContext, {
+    target: fusionPlan.targetName,
+    priority: fusionPlan.details?.spellPriority || fusionPlan.actionPriority,
+    reason: fusionPlan.reason,
+    plan: fusionPlan,
+  });
+}
+
 export function evaluateLuminarchFusionPriority(
   fusionName,
   bot,
@@ -12,10 +78,10 @@ export function evaluateLuminarchFusionPriority(
     if (lp <= 2000) priority += 4;
     else if (lp <= 3500) priority += 2;
 
-    const oppStrength = (opponent?.field || []).reduce(
-      (sum, m) => sum + (m && m.atk ? m.atk : 0),
-      0,
-    );
+    const oppStrength = getTotalAttackThreat(opponent?.field || [], {
+      facedownValue: "printed",
+      includeBoosts: false,
+    });
     if (oppStrength >= 8000) priority += 3;
     else if (oppStrength >= 6000) priority += 1;
 
@@ -69,6 +135,11 @@ export function detectLuminarchFusionOpportunities(context) {
   const actions = [];
 
   try {
+    const fusionPlan = getContextFinisherPlan(
+      context,
+      "fusion",
+      BARBARIAS_NAME,
+    );
     const polyInHand = bot.hand.findIndex(
       (c) => c && c.name === "Polymerization",
     );
@@ -77,7 +148,7 @@ export function detectLuminarchFusionOpportunities(context) {
     if (!polyCard) return actions;
 
     const megashield = (bot.extraDeck || []).find(
-      (c) => c && c.name === "Luminarch Megashield Barbarias",
+      (c) => c && c.name === BARBARIAS_NAME,
     );
     if (!megashield) return actions;
 
@@ -101,10 +172,10 @@ export function detectLuminarchFusionOpportunities(context) {
     }
 
     if (game?.effectEngine?.canActivateSpellFromHandPreview) {
-      const activationContext = {
-        autoSelectSingleTarget: true,
-        logTargets: false,
-      };
+      const activationContext = buildLuminarchFusionActivationContext(
+        context,
+        fusionPlan,
+      );
       const preview = game.effectEngine.canActivateSpellFromHandPreview(
         polyCard,
         bot,
@@ -117,22 +188,28 @@ export function detectLuminarchFusionOpportunities(context) {
     const hasProtector = availableMaterials.some(
       (c) => c && c.name === "Luminarch Sanctum Protector",
     );
-    const lv5Plus = availableMaterials.filter(
+    const protectorCount = availableMaterials.filter(
+      (c) => c && c.name === "Luminarch Sanctum Protector",
+    ).length;
+    const hasLv5PlusAlongsideProtector = availableMaterials.some(
       (c) =>
         c &&
         c.cardKind === "monster" &&
+        c.name !== "Luminarch Sanctum Protector" &&
         c.archetype === "Luminarch" &&
         (c.level || 0) >= 5,
-    );
+    ) || protectorCount >= 2;
 
-    if (hasProtector && lv5Plus.length > 0) {
-      const priority = evaluateLuminarchFusionPriority(
-        "Luminarch Megashield Barbarias",
-        bot,
-        opponent,
-        game,
-        hooks,
-      );
+    if (hasProtector && hasLv5PlusAlongsideProtector) {
+      const priority =
+        fusionPlan?.details?.spellPriority ||
+        evaluateLuminarchFusionPriority(
+          BARBARIAS_NAME,
+          bot,
+          opponent,
+          game,
+          hooks,
+        );
 
       if (priority > 0) {
         actions.push({
@@ -141,20 +218,14 @@ export function detectLuminarchFusionOpportunities(context) {
           cardId: polyCard.id,
           priority: priority,
           cardName: "Polymerization",
-          fusionTarget: "Luminarch Megashield Barbarias",
-          reason: `Fusion para Megashield (3000 DEF tank)`,
-          activationContext: {
-            autoSelectSingleTarget: true,
-            autoSelectTargets: true,
-            logTargets: false,
-            actionContext: {
-              fusionPositions: {
-                byName: {
-                  "Luminarch Megashield Barbarias": "defense",
-                },
-              },
-            },
-          },
+          fusionTarget: BARBARIAS_NAME,
+          reason:
+            fusionPlan?.reason || "Fusion para Megashield (3000 DEF tank)",
+          finisherPlan: fusionPlan,
+          activationContext: buildLuminarchFusionActivationContext(
+            context,
+            fusionPlan,
+          ),
         });
       }
     }
@@ -174,14 +245,14 @@ export function chooseLuminarchAscensionPosition(ascensionCard, bot, opponent) {
   const oppMonsters = (opponent?.field || []).filter(
     (monster) => monster && monster.cardKind === "monster",
   );
-  const oppStrongestAtk = oppMonsters.reduce(
-    (max, monster) => Math.max(max, monster.isFacedown ? 1500 : monster.atk || 0),
-    0,
-  );
-  const oppTotalAtk = oppMonsters.reduce(
-    (sum, monster) => sum + (monster.isFacedown ? 1500 : monster.atk || 0),
-    0,
-  );
+  const oppStrongestAtk = getStrongestAttackThreat(oppMonsters, {
+    facedownValue: 1500,
+    includeBoosts: false,
+  });
+  const oppTotalAtk = getTotalAttackThreat(oppMonsters, {
+    facedownValue: 1500,
+    includeBoosts: false,
+  });
   const atk = ascensionCard.atk || 0;
   const def = ascensionCard.def || 0;
   const canLethal = oppMonsters.length === 0 && atk >= (opponent?.lp || 8000);
@@ -212,10 +283,10 @@ export function evaluateLuminarchAscensionPriority(
     if (lp <= 3000) priority += 3;
     else if (lp <= 5000) priority += 1;
 
-    const oppStrength = (opponent?.field || []).reduce(
-      (sum, m) => sum + (m && m.atk ? m.atk : 0),
-      0,
-    );
+    const oppStrength = getTotalAttackThreat(opponent?.field || [], {
+      facedownValue: "printed",
+      includeBoosts: false,
+    });
     if (oppStrength >= 6000) priority += 2;
 
     if (materialAge >= 3) priority += 2;
@@ -238,10 +309,10 @@ export function evaluateLuminarchAscensionPriority(
     const lp = bot.lp || 8000;
     if (lp <= 2500) priority += 3;
 
-    const oppStrength = (opponent?.field || []).reduce(
-      (sum, m) => sum + (m && m.atk ? m.atk : 0),
-      0,
-    );
+    const oppStrength = getTotalAttackThreat(opponent?.field || [], {
+      facedownValue: "printed",
+      includeBoosts: false,
+    });
     if (oppStrength >= 7000) priority += 2;
 
     return priority;
@@ -258,6 +329,11 @@ export function detectLuminarchAscensionOpportunities(context) {
   const actions = [];
 
   try {
+    const fortressPlan = getContextFinisherPlan(
+      context,
+      "ascension",
+      FORTRESS_NAME,
+    );
     bot.field.forEach((material, fieldIndex) => {
       if (!material || material.cardKind !== "monster") return;
 
@@ -274,13 +350,30 @@ export function detectLuminarchAscensionOpportunities(context) {
       if (eligible.length === 0) return;
 
       eligible.forEach((ascensionCard) => {
-        const priority = evaluateLuminarchAscensionPriority(
-          material,
-          ascensionCard,
-          bot,
-          opponent,
-          game,
-        );
+        const plannedForThisMaterial =
+          fortressPlan &&
+          ascensionCard.name === fortressPlan.targetName &&
+          (fortressPlan.details?.materialInstanceId
+            ? fortressPlan.details.materialInstanceId === material.instanceId
+            : fortressPlan.details?.materialIndex === fieldIndex);
+        const priority = plannedForThisMaterial
+          ? Math.max(
+              fortressPlan.details?.ascensionPriority || 0,
+              evaluateLuminarchAscensionPriority(
+                material,
+                ascensionCard,
+                bot,
+                opponent,
+                game,
+              ),
+            )
+          : evaluateLuminarchAscensionPriority(
+              material,
+              ascensionCard,
+              bot,
+              opponent,
+              game,
+            );
 
         if (priority > 0) {
           actions.push({
@@ -295,6 +388,10 @@ export function detectLuminarchAscensionOpportunities(context) {
             priority: priority,
             cardName: ascensionCard.name,
             materialName: material.name,
+            finisherPlan: plannedForThisMaterial ? fortressPlan : null,
+            reason: plannedForThisMaterial
+              ? fortressPlan.reason
+              : "ascension_opportunity",
           });
         }
       });

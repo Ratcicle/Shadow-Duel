@@ -15,6 +15,7 @@ import {
 import { isLuminarch } from "./luminarch/knowledge.js";
 import {
   evaluateLuminarchDefensePlan,
+  evaluateLuminarchFinisherPlans,
   shouldSummonMonster,
 } from "./luminarch/priorities.js";
 import {
@@ -28,10 +29,10 @@ import {
   evaluateGameStance,
   planNextTurns,
 } from "./luminarch/multiTurnPlanning.js";
-import { evaluateFusionPriority } from "./luminarch/fusionPriority.js";
 import {
   buildLuminarchActivationContext,
 } from "./luminarch/actionContext.js";
+import { buildLuminarchResourceEconomy } from "./luminarch/resourceEconomy.js";
 import { getLuminarchSummonActions } from "./luminarch/summonActions.js";
 import { getLuminarchSpellActions } from "./luminarch/spellActions.js";
 import {
@@ -47,7 +48,11 @@ import {
   selectBestLuminarchTributes,
 } from "./luminarch/tributePolicy.js";
 import { buildStrategyAnalysis } from "./common/analysis.js";
-import { getEffectiveAtk, getEffectiveDef } from "./common/cardStats.js";
+import {
+  getEffectiveAtk,
+  getStrongestAttackThreat,
+  getStrongestBattleStat,
+} from "./common/cardStats.js";
 import {
   resolveSimulatedFieldIndex as resolveGenericSimulatedFieldIndex,
   resolveSimulatedHandIndex as resolveGenericSimulatedHandIndex,
@@ -102,14 +107,9 @@ function evaluateBarbariasStanceDance(card, opponent, options = {}) {
   const opponentMonsters = (opponent?.field || []).filter(
     (monster) => monster && monster.cardKind === "monster",
   );
-  const bestTargetStat = opponentMonsters.reduce((max, monster) => {
-    const stat = monster.isFacedown
-      ? 1500
-      : monster.position === "defense"
-        ? getEffectiveDef(monster)
-        : getEffectiveAtk(monster);
-    return Math.max(max, stat);
-  }, 0);
+  const bestTargetStat = getStrongestBattleStat(opponentMonsters, {
+    facedownValue: 1500,
+  });
   const canClearMonster = bestTargetStat > 0 && expectedAtk > bestTargetStat;
   const directPressure = opponentMonsters.length === 0;
   const createsLethal = expectedAtk >= (opponent?.lp || 8000);
@@ -172,12 +172,10 @@ export default class LuminarchStrategy extends BaseStrategy {
     );
     score += ownMonstersValue - oppMonstersValue;
 
-    const opponentStrongest = (opponent?.field || []).reduce((max, monster) => {
-      if (!monster || monster.cardKind !== "monster" || monster.isFacedown) {
-        return max;
-      }
-      return Math.max(max, monster.atk || 0);
-    }, 0);
+    const opponentStrongest = getStrongestAttackThreat(opponent?.field || [], {
+      includeFacedown: false,
+      includeBoosts: false,
+    });
     const exposedAttackers = (perspective?.field || []).filter(
       (monster) =>
         monster &&
@@ -286,11 +284,10 @@ export default class LuminarchStrategy extends BaseStrategy {
     );
     score += ownMonstersValue - oppMonstersValue * 0.9;
 
-    const opponentStrongestAtk = oppField.reduce((max, monster) => {
-      if (!monster || monster.cardKind !== "monster") return max;
-      const atk = monster.isFacedown ? 1500 : monster.atk || 0;
-      return Math.max(max, atk);
-    }, 0);
+    const opponentStrongestAtk = getStrongestAttackThreat(oppField, {
+      facedownValue: 1500,
+      includeBoosts: false,
+    });
 
     const myStrongestDef = myField.reduce((max, monster) => {
       if (!monster || monster.cardKind !== "monster") return max;
@@ -455,15 +452,28 @@ export default class LuminarchStrategy extends BaseStrategy {
     let gameStance = { stance: "balanced", reason: "default" };
     let turnPlan = { plan: ["Jogar normalmente"] };
     let fusionOpportunity = null;
+    let strategyAnalysis = null;
+    let luminarchFinisherPlans = [];
     let luminarchDefensePlan = { stable: false, readyToCounterattack: false };
 
     // === COMBO DETECTION ===
     try {
       const analysis = buildStrategyAnalysis({ bot, opponent, game });
+      strategyAnalysis = analysis;
+      analysis.resourceEconomy = buildLuminarchResourceEconomy(analysis);
 
       // === MULTI-TURN PLANNING ===
       gameStance = evaluateGameStance(analysis);
       luminarchDefensePlan = evaluateLuminarchDefensePlan(analysis);
+      analysis.luminarchDefensePlan = luminarchDefensePlan;
+      luminarchFinisherPlans = evaluateLuminarchFinisherPlans(
+        bot,
+        opponent,
+        game,
+        analysis,
+        { evaluateBarbariasStanceDance },
+      );
+      analysis.finisherPlans = luminarchFinisherPlans;
       turnPlan = planNextTurns(analysis);
 
       if (bot?.debug) {
@@ -475,15 +485,23 @@ export default class LuminarchStrategy extends BaseStrategy {
         console.log(`[LuminarchStrategy] 📋 Plano:`, turnPlan.plan[0]);
       }
 
-      // === FUSION PRIORITY EVALUATION ===
-      fusionOpportunity = evaluateFusionPriority({
-        hand: analysis.hand,
-        field: analysis.field,
-        opponent: {
-          field: analysis.oppField,
-          lp: analysis.oppLp,
-        },
-      });
+      // === FINISHER/FUSION PRIORITY EVALUATION ===
+      const fusionPlan = luminarchFinisherPlans.find(
+        (plan) =>
+          plan?.kind === "fusion" &&
+          plan.targetName === "Luminarch Megashield Barbarias",
+      );
+      fusionOpportunity = fusionPlan
+        ? {
+            fusionName: fusionPlan.targetName,
+            decision: {
+              reason: fusionPlan.reason,
+              priority:
+                fusionPlan.details?.spellPriority || fusionPlan.actionPriority,
+            },
+            plan: fusionPlan,
+          }
+        : null;
 
       if (fusionOpportunity && bot?.debug) {
         console.log(
@@ -551,7 +569,10 @@ export default class LuminarchStrategy extends BaseStrategy {
       activationContext,
       macroStrategy,
       gameStance,
+      analysis: strategyAnalysis,
       fusionOpportunity,
+      finisherPlans: luminarchFinisherPlans,
+      bestFinisherPlan: luminarchFinisherPlans[0] || null,
       luminarchDefensePlan,
       verboseEval: VERBOSE_EVAL,
       hooks: {
@@ -805,12 +826,10 @@ export default class LuminarchStrategy extends BaseStrategy {
 
   chooseSummonPosition(card, game) {
     const opponent = game?.player || { field: [] };
-    const opponentStrongest = (opponent.field || []).reduce((max, monster) => {
-      if (!monster || monster.cardKind !== "monster" || monster.isFacedown) {
-        return max;
-      }
-      return Math.max(max, monster.atk || 0);
-    }, 0);
+    const opponentStrongest = getStrongestAttackThreat(opponent.field || [], {
+      includeFacedown: false,
+      includeBoosts: false,
+    });
 
     const atk = card.atk || 0;
     const def = card.def || 0;
@@ -1085,10 +1104,10 @@ export default class LuminarchStrategy extends BaseStrategy {
       }
       // Fallback: Luminarch prefere defesa
       const cardDEF = card.def || 0;
-      const oppStrongestATK = (opponent?.field || []).reduce(
-        (max, m) => Math.max(max, m.atk || 0),
-        0,
-      );
+      const oppStrongestATK = getStrongestAttackThreat(opponent?.field || [], {
+        facedownValue: "printed",
+        includeBoosts: false,
+      });
       const safePosition =
         cardDEF >= oppStrongestATK - 300 ? "defense" : "defense";
       return { yes: true, priority: 2, position: safePosition };

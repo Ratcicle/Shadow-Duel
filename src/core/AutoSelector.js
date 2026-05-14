@@ -247,6 +247,16 @@ export default class AutoSelector {
     if (intent === "harm") {
       const targetPreference = getTargetPreference(context);
       if (
+        targetPreference?.role === "removal" ||
+        targetPreference?.role === "named_preference" ||
+        targetPreference?.preferredNames?.length
+      ) {
+        return (
+          getNamedPreferenceTargetScore(baseCard, targetPreference) +
+          (isSelf ? -0.4 : 0.4)
+        );
+      }
+      if (
         targetPreference?.role === "temporary_stat_debuff" &&
         targetPreference?.purpose === "combat"
       ) {

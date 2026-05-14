@@ -62,11 +62,11 @@ export function buildActivationContext({
   targetPreferences = {},
   autoSelectTargets = true,
   autoSelectSingleTarget = true,
+  includeAutoSelectTargets = true,
   actionContext = {},
   ...rest
 } = {}) {
-  return {
-    autoSelectTargets,
+  const result = {
     autoSelectSingleTarget,
     ...rest,
     actionContext: {
@@ -75,4 +75,10 @@ export function buildActivationContext({
       targetPreferences,
     },
   };
+
+  if (includeAutoSelectTargets) {
+    result.autoSelectTargets = autoSelectTargets;
+  }
+
+  return result;
 }

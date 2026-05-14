@@ -1,5 +1,6 @@
 import { assessActionSafety } from "../ChainAwareness.js";
 import { calculateMacroPriorityBonus } from "../MacroPlanning.js";
+import { getStrongestAttackThreat } from "../common/cardStats.js";
 import { evaluateRadiantLancerBattlePlan } from "./priorities.js";
 import {
   evaluateLuminarchTributeSummonCost,
@@ -35,6 +36,17 @@ function compactRadiantLancerPlan(plan) {
     survivesNextThreat: !!plan.survivesNextThreat,
     tradesNextThreat: !!plan.tradesNextThreat,
   };
+}
+
+function getNormalSummonFinisherPlan(context, card) {
+  if (!card) return null;
+  const plans = context.finisherPlans || context.analysis?.finisherPlans || [];
+  return (plans || []).find(
+    (plan) =>
+      plan &&
+      plan.kind === "normal_summon" &&
+      plan.targetName === card.name,
+  );
 }
 
 function getNormalSummonActions(context) {
@@ -169,6 +181,13 @@ function getNormalSummonActions(context) {
       priority += 2;
     }
 
+    const finisherPlan = getNormalSummonFinisherPlan(context, card);
+    if (finisherPlan) {
+      const plannedPriority =
+        finisherPlan.details?.summonPriority || finisherPlan.actionPriority;
+      priority = Math.max(priority, plannedPriority);
+    }
+
     const summonSafety = assessActionSafety(
       { bot, player: opponent },
       bot,
@@ -188,7 +207,8 @@ function getNormalSummonActions(context) {
       facedown,
       priority,
       cardName: card.name,
-      reason: shouldSummon.reason,
+      reason: finisherPlan?.reason || shouldSummon.reason,
+      finisherPlan,
       lancerPlan: compactRadiantLancerPlan(radiantLancerPlan),
       macroBuff,
       tributeCostPenalty,
@@ -244,11 +264,10 @@ function getSanctumProtectorActions(context) {
     const protectorIndex = protectorIndices[0];
     const protectorCard = bot.hand[protectorIndex];
 
-    const oppStrongest = (opponent?.field || []).reduce((max, monster) => {
-      if (!monster || monster.cardKind !== "monster") return max;
-      const atk = monster.isFacedown ? 1500 : monster.atk || 0;
-      return Math.max(max, atk);
-    }, 0);
+    const oppStrongest = getStrongestAttackThreat(opponent?.field || [], {
+      facedownValue: 1500,
+      includeBoosts: false,
+    });
 
     const hasOtherTank = (bot.field || []).some(
       (card) =>

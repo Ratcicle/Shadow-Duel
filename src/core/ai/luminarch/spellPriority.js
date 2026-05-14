@@ -1,73 +1,23 @@
 // Luminarch spell priority decisions.
 
 import { CARD_KNOWLEDGE, isLuminarch } from "./knowledge.js";
-import {
-  evaluateCardExpendability,
-  evaluateFieldSpellUrgency,
-} from "./cardValue.js";
-import { getVisibleAtk, getVisibleDef } from "../common/cardStats.js";
+import { evaluateFieldSpellUrgency } from "./cardValue.js";
 import { estimateOffensiveTemporaryBuffValue } from "../StrategyUtils.js";
 import {
   getBattleReadyLuminarchAttackers,
-  getBestTemporaryCombatDebuffTarget,
   hasLoggedPriorityError,
   markPriorityErrorLogged,
 } from "./priorityShared.js";
 import { getMoonlitTargetPlan } from "./moonlitPlanning.js";
 import { evaluateKnightsConvocationPlan } from "./defensePlanning.js";
-
-function isProtectedLuminarchCost(card) {
-  const name = card?.name || "";
-  return (
-    name === "Luminarch Aegisbearer" ||
-    name === "Luminarch Sanctum Protector" ||
-    name === "Luminarch Fortress Aegis" ||
-    name === "Luminarch Aurora Seraph" ||
-    (name === "Luminarch Radiant Lancer" &&
-      ((card.atk || 0) > 2200 || card.hasAttacked))
-  );
-}
-
-function getRemovalCostScore(card, analysis) {
-  const expendability = evaluateCardExpendability(card, {
-    hand: analysis.hand || [],
-    field: analysis.field || [],
-    graveyard: analysis.graveyard || [],
-    fieldSpell: analysis.fieldSpell || null,
-    usedEffects: analysis.usedEffects || [],
-  });
-
-  let score = expendability.value ?? 5;
-  if (expendability.expendable) score -= 2;
-  if (card.usedEffectThisTurn || card.hasAttacked) score -= 1.25;
-  if (card.name === "Luminarch Enchanted Halberd") score -= 1.5;
-  if (card.name === "Luminarch Magic Sickle") score -= 1.25;
-  if (isProtectedLuminarchCost(card)) score += 4;
-  if (card.mustBeAttacked) score += 2;
-  if (getVisibleDef(card) >= 2500) score += 1.5;
-  return score;
-}
-
-function getRemovalTargetScore(card, analysis) {
-  if (!card) return 0;
-  const atk = getVisibleAtk(card);
-  const def = getVisibleDef(card);
-  let score = Math.max(atk, def) / 450;
-  if (atk >= 2500 || def >= 2500) score += 1.5;
-  if (atk >= 3000) score += 2.5;
-  if ((card.name || "").includes("Extreme Dragon")) score += 3;
-  if (card.monsterType === "fusion" || card.monsterType === "ascension") {
-    score += 1.5;
-  }
-  if (card.mustBeAttacked || card.battleIndestructibleOncePerTurn) score += 1;
-
-  const oppTotalAtk = (analysis.oppField || []).reduce(
-    (sum, monster) => sum + getVisibleAtk(monster),
-    0,
-  );
-  if (oppTotalAtk >= (analysis.lp || 8000) && atk >= 2000) score += 2;
-  return score;
-}
+import {
+  assessLuminarchResourceRecovery,
+  getLuminarchResourcePressure,
+} from "./resourceEconomy.js";
+import {
+  evaluateLuminarchProtectionSpell,
+  evaluateLuminarchRemovalSpell,
+} from "./defensePolicy.js";
 
 /**
  * @typedef {Object} SpellDecision
@@ -109,6 +59,7 @@ export function shouldPlaySpell(card, analysis) {
     analysis.graveyard = Array.isArray(analysis.graveyard)
       ? analysis.graveyard
       : [];
+    const resourcePressure = getLuminarchResourcePressure(analysis);
 
     // ═════════════════════════════════════════════════════════════════════════
     // FIELD SPELL - MÁXIMA PRIORIDADE
@@ -133,99 +84,8 @@ export function shouldPlaySpell(card, analysis) {
     // PROTEÇÃO
     // ═════════════════════════════════════════════════════════════════════════
 
-    if (name === "Luminarch Holy Shield") {
-      const luminarchOnField = (analysis.field || []).filter(
-        (c) => c && isLuminarch(c)
-      );
-
-      // CRITICAL: Sem monstros no campo = NÃO PODE ATIVAR (requer targets)
-      if (luminarchOnField.length === 0) {
-        return {
-          yes: false,
-          reason: "Sem monstros Luminarch no campo para proteger",
-        };
-      }
-
-      const oppHasThreats = (analysis.oppField || []).some(
-        (m) => m && m.atk && m.atk >= 2000
-      );
-
-      // CRÍTICO: Holy Shield agora é QUICK SPELL (speed 2)
-      // Ideal é SETAR e ativar no turno do oponente como reação
-      // Só ativar proativamente em Main Phase se situação desesperadora
-
-      // Situação desesperadora: LP crítico + múltiplas ameaças
-      const lpCritical = (analysis.lp || 8000) <= 2000;
-      const multipleThreats =
-        (analysis.oppField || []).filter((m) => m && m.atk && m.atk >= 1800)
-          .length >= 2;
-
-      if (lpCritical && multipleThreats && luminarchOnField.length >= 2) {
-        return {
-          yes: true,
-          priority: 16,
-          reason: `LP crítico + ${luminarchOnField.length} alvos - ativar AGORA`,
-        };
-      }
-
-      // Caso contrário: SEGURAR para uso reativo
-      // A IA deve SET esta carta para usar no turno do oponente
-      return {
-        yes: false,
-        reason:
-          "Quick Spell - segurar para ativar no turno do oponente (uso reativo)",
-      };
-    }
-
-    if (name === "Luminarch Crescent Shield") {
-      // Crescent Shield é equip que requer um monstro Luminarch no campo
-      const luminarchMonsters = (analysis.field || []).filter(
-        (c) =>
-          c &&
-          c.archetype === "Luminarch" &&
-          c.cardKind === "monster" &&
-          !c.isFacedown
-      );
-
-      if (luminarchMonsters.length === 0) {
-        return {
-          yes: false,
-          reason: "Sem monstro Luminarch face-up para equipar",
-        };
-      }
-
-      // Priorizar monstros defensivos
-      const aegis = luminarchMonsters.find(
-        (c) => c.name === "Luminarch Aegisbearer"
-      );
-      const protector = luminarchMonsters.find(
-        (c) => c.name === "Luminarch Sanctum Protector"
-      );
-
-      if (aegis) {
-        return {
-          yes: true,
-          priority: 8,
-          reason: "Equipar Aegisbearer (3000 DEF = wall)",
-        };
-      }
-      if (protector) {
-        return {
-          yes: true,
-          priority: 7,
-          reason: "Equipar Sanctum Protector (3300 DEF)",
-        };
-      }
-
-      // Qualquer monstro Luminarch serve como fallback
-      return {
-        yes: true,
-        priority: 5,
-        reason: `Equipar ${luminarchMonsters[0].name}`,
-      };
-    }
-
-    // ═════════════════════════════════════════════════════════════════════════
+    const protectionDecision = evaluateLuminarchProtectionSpell(card, analysis);
+    if (protectionDecision) return protectionDecision;
     // RECURSÃO
     // ═════════════════════════════════════════════════════════════════════════
 
@@ -235,6 +95,9 @@ export function shouldPlaySpell(card, analysis) {
       );
       const hasCitadel =
         analysis.fieldSpell?.name?.includes("Citadel") ?? false;
+      const recoveryValue = assessLuminarchResourceRecovery(analysis, {
+        mode: "moonlit_blessing",
+      });
 
       if (gyLuminarch.length === 0) {
         return { yes: false, reason: "GY vazio (sem alvos)" };
@@ -249,7 +112,9 @@ export function shouldPlaySpell(card, analysis) {
 
         return {
           yes: true,
-          priority: plan.purpose === "stabilize" ? 14 : 12,
+          priority:
+            (plan.purpose === "stabilize" ? 14 : 12) +
+            recoveryValue.scoreDelta,
           reason: `COM CITADEL: recuperar ${plan.target.name} para ${plan.purpose} em ${plan.position}`,
         };
       }
@@ -258,7 +123,7 @@ export function shouldPlaySpell(card, analysis) {
       if (gyLuminarch.length >= 2) {
         return {
           yes: true,
-          priority: 7,
+          priority: 7 + recoveryValue.scoreDelta,
           reason: `Add da GY para mão (${gyLuminarch.length} opções)`,
         };
       }
@@ -270,91 +135,8 @@ export function shouldPlaySpell(card, analysis) {
     // REMOVAL
     // ═════════════════════════════════════════════════════════════════════════
 
-    if (name === "Luminarch Radiant Wave") {
-      const luminarch2kPlus = (analysis.field || []).filter(
-        (c) =>
-          c &&
-          isLuminarch(c) &&
-          c.cardKind === "monster" &&
-          !c.isFacedown &&
-          getVisibleAtk(c) >= 2000
-      );
-      const opponentTargets = (analysis.oppField || []).filter(
-        (m) => m && m.cardKind === "monster" && !m.isFacedown
-      );
-
-      if (luminarch2kPlus.length > 0 && opponentTargets.length > 0) {
-        const bestCost = luminarch2kPlus
-          .map((card) => ({
-            card,
-            score: getRemovalCostScore(card, analysis),
-          }))
-          .sort((a, b) => a.score - b.score)[0];
-        const bestTarget = opponentTargets
-          .map((card) => ({
-            card,
-            score: getRemovalTargetScore(card, analysis),
-          }))
-          .sort((a, b) => b.score - a.score)[0];
-        const oppTotalAtk = opponentTargets.reduce(
-          (sum, card) => sum + getVisibleAtk(card),
-          0
-        );
-        const targetAtk = getVisibleAtk(bestTarget?.card);
-        const targetName = bestTarget?.card?.name || "opposing threat";
-        const costName = bestCost?.card?.name || "Luminarch monster";
-        const preventsLethal =
-          oppTotalAtk >= (analysis.lp || 8000) && targetAtk >= 1800;
-        const removesWinCondition =
-          /Extreme Dragon|Bahamut|Galaxy|Malicious|Leviathan|Fire Extreme/i.test(
-            targetName
-          ) || bestTarget.score >= 9;
-        const positiveTrade = bestTarget.score >= bestCost.score + 1.5;
-
-        if (!positiveTrade && !preventsLethal && !removesWinCondition) {
-          return {
-            yes: false,
-            reason: `Radiant Wave held: ${targetName} is not worth ${costName}`,
-          };
-        }
-
-        return {
-          yes: true,
-          priority: preventsLethal || removesWinCondition ? 15 : 11,
-          reason: `Destroy ${targetName} with preferred cost ${costName}`,
-        };
-      }
-
-      return {
-        yes: false,
-        reason: "Sem material 2000+ ATK ou sem ameaças para remover",
-      };
-    }
-
-    if (name === "Luminarch Spear of Dawnfall") {
-      const attackers = getBattleReadyLuminarchAttackers(analysis);
-      if (attackers.length === 0) {
-        return {
-          yes: false,
-          reason: "Sem atacante Luminarch apto para aproveitar o debuff",
-        };
-      }
-
-      const combatTarget = getBestTemporaryCombatDebuffTarget(analysis);
-      return combatTarget.target && combatTarget.score > 0
-        ? {
-            yes: true,
-            priority: combatTarget.score >= 100 ? 18 : 11,
-            reason: `Spear em ${combatTarget.target.name}: janela real de combate`,
-          }
-        : {
-            yes: false,
-            reason: "Spear segurada: nenhum alvo gera ganho real de batalha",
-          };
-
-    }
-
-    // ═════════════════════════════════════════════════════════════════════════
+    const removalDecision = evaluateLuminarchRemovalSpell(card, analysis);
+    if (removalDecision) return removalDecision;
     // BUFF
     // ═════════════════════════════════════════════════════════════════════════
 
@@ -445,6 +227,9 @@ export function shouldPlaySpell(card, analysis) {
           (c.atk && c.atk >= 2000)
         );
       }).length;
+      const recoveryValue = assessLuminarchResourceRecovery(analysis, {
+        mode: "sacred_judgment",
+      });
 
       // === SITUAÇÃO CRÍTICA: Campo vazio + opp domina ===
       // Precisa: campo vazio, opp 2+, LP >= 2500 (sobra 500 após custo), GY com recursos
@@ -467,7 +252,9 @@ export function shouldPlaySpell(card, analysis) {
 
         if (isCritical && hasQuality && survives) {
           // Prioridade MUITO ALTA: é carta de comeback
-          const priority = oppField >= 4 ? 19 : oppField >= 3 ? 17 : 15;
+          const priority =
+            (oppField >= 4 ? 19 : oppField >= 3 ? 17 : 15) +
+            recoveryValue.scoreDelta;
           return {
             yes: true,
             priority,
@@ -479,7 +266,7 @@ export function shouldPlaySpell(card, analysis) {
           // Situação menos crítica mas ainda válida
           return {
             yes: true,
-            priority: 13,
+            priority: 13 + recoveryValue.scoreDelta,
             reason: `Comeback: SS ${potentialSummons} monstros da GY (LP final: ${finalLp})`,
           };
         }
@@ -499,7 +286,12 @@ export function shouldPlaySpell(card, analysis) {
         };
       }
       if (gyLuminarch.length < 2) {
-        return { yes: false, reason: "GY sem recursos (precisa 2+ Luminarch)" };
+        return {
+          yes: false,
+          reason: resourcePressure.shouldRecover
+            ? "GY ainda nao tem recursos suficientes para comeback"
+            : "GY sem recursos (precisa 2+ Luminarch)",
+        };
       }
 
       return {

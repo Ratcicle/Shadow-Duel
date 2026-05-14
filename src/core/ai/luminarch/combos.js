@@ -4,6 +4,47 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { isLuminarch, isLuminarchByName } from "./knowledge.js";
+import { getTotalAttackThreat } from "../common/cardStats.js";
+import {
+  createAvailableCombo,
+  createZoneIndex,
+  getZoneCards,
+  hasCardName,
+  hasCardNameInZones,
+} from "../common/comboDetection.js";
+
+const LUMINARCH_COMBO_ZONES = [
+  "hand",
+  "field",
+  "graveyard",
+  "spellTrap",
+  "extraDeck",
+  "oppField",
+];
+
+function getLuminarchComboZones(analysis = {}) {
+  const zoneIndex = createZoneIndex(analysis, LUMINARCH_COMBO_ZONES);
+  return {
+    zoneIndex,
+    hand: getZoneCards(zoneIndex, "hand"),
+    field: getZoneCards(zoneIndex, "field"),
+    graveyard: getZoneCards(zoneIndex, "graveyard"),
+    spellTrap: getZoneCards(zoneIndex, "spellTrap"),
+    extraDeck: getZoneCards(zoneIndex, "extraDeck"),
+    oppField: getZoneCards(zoneIndex, "oppField"),
+  };
+}
+
+function pushCombo(combos, combo) {
+  combos.push(
+    createAvailableCombo({
+      combo,
+      name: combo.name,
+      priority: combo.priority,
+      ...combo,
+    }),
+  );
+}
 
 /**
  * Detecta combos disponíveis baseado no estado do jogo.
@@ -29,6 +70,12 @@ export function detectAvailableCombos(analysis) {
     analysis.extraDeck = Array.isArray(analysis.extraDeck)
       ? analysis.extraDeck
       : [];
+    analysis.spellTrap = Array.isArray(analysis.spellTrap)
+      ? analysis.spellTrap
+      : [];
+
+    const { zoneIndex, hand, field, graveyard, oppField } =
+      getLuminarchComboZones(analysis);
     
     // Detectar turno do jogo (aproximado)
     const currentTurn = analysis.currentTurn || 1;
@@ -37,15 +84,21 @@ export function detectAvailableCombos(analysis) {
     // ═════════════════════════════════════════════════════════════════════════
     // COMBO 1: Tank Setup (Valiant → Aegisbearer → Citadel)
     // ═════════════════════════════════════════════════════════════════════════
-    const hasValiant = analysis.hand.some(
-      (c) => c && c.name === "Luminarch Valiant - Knight of the Dawn"
+    const hasValiant = hasCardName(
+      zoneIndex,
+      "hand",
+      "Luminarch Valiant - Knight of the Dawn",
     );
     const hasAegisInDeck = true; // Assumimos que está no deck
-    const hasAegisInHand = analysis.hand.some(
-      (c) => c && c.name === "Luminarch Aegisbearer"
+    const hasAegisInHand = hasCardName(
+      zoneIndex,
+      "hand",
+      "Luminarch Aegisbearer",
     );
-    const hasCitadelInHand = analysis.hand.some(
-      (c) => c && c.name === "Sanctum of the Luminarch Citadel"
+    const hasCitadelInHand = hasCardName(
+      zoneIndex,
+      "hand",
+      "Sanctum of the Luminarch Citadel",
     );
     const hasCitadelActive =
       analysis.fieldSpell?.name?.includes("Citadel") ?? false;
@@ -53,7 +106,7 @@ export function detectAvailableCombos(analysis) {
     // Prioridade MÁXIMA no Turn 1: setup completo
     if (hasValiant && !hasCitadelActive && isEarlyGame) {
       const hasFullCombo = hasCitadelInHand;
-      combos.push({
+      pushCombo(combos, {
         id: "tank_setup",
         name: hasFullCombo ? "Tank Setup COMPLETO" : "Tank Setup",
         priority: hasFullCombo ? 15 : 12,
@@ -73,7 +126,7 @@ export function detectAvailableCombos(analysis) {
         ],
         conditions: {
           hasValiantInHand: hasValiant,
-          fieldNotFull: analysis.field.length < 4,
+          fieldNotFull: field.length < 4,
           fullCombo: hasFullCombo,
         },
       });
@@ -81,7 +134,7 @@ export function detectAvailableCombos(analysis) {
     
     // Se já tem Aegis na mão + Citadel, pode pular Valiant
     if (hasAegisInHand && hasCitadelInHand && !hasCitadelActive && isEarlyGame) {
-      combos.push({
+      pushCombo(combos, {
         id: "aegis_citadel_direct",
         name: "Aegis + Citadel Setup Direto",
         priority: 13,
@@ -102,14 +155,16 @@ export function detectAvailableCombos(analysis) {
     // ═════════════════════════════════════════════════════════════════════════
     // COMBO 2: Arbiter → Citadel Field
     // ═════════════════════════════════════════════════════════════════════════
-    const hasArbiter = analysis.hand.some(
-      (c) => c && c.name === "Luminarch Sanctified Arbiter"
+    const hasArbiter = hasCardName(
+      zoneIndex,
+      "hand",
+      "Luminarch Sanctified Arbiter",
     );
 
     if (hasArbiter && !hasCitadelActive) {
       // Prioridade EXTRA alta se T1 e ainda não tem field spell
       const priorityBoost = isEarlyGame && !analysis.fieldSpell ? 3 : 0;
-      combos.push({
+      pushCombo(combos, {
         id: "arbiter_citadel",
         name: "Arbiter → Citadel",
         priority: 11 + priorityBoost,
@@ -133,15 +188,17 @@ export function detectAvailableCombos(analysis) {
     // COMBO 2.5: Knights Convocation Brick Escape
     // Quando mão está "brickada" com muitos Lv7+, usar Convocation para converter
     // ═════════════════════════════════════════════════════════════════════════
-    const hasConvocationInHand = analysis.hand.some(
-      (c) => c && c.name === "Luminarch Knights Convocation"
+    const hasConvocationInHand = hasCardName(
+      zoneIndex,
+      "hand",
+      "Luminarch Knights Convocation",
     );
-    const hasConvocationOnField = analysis.field.some(
-      (c) => c && c.name === "Luminarch Knights Convocation"
-    ) || (analysis.spellTrap || []).some(
-      (c) => c && c.name === "Luminarch Knights Convocation"
+    const hasConvocationOnField = hasCardNameInZones(
+      zoneIndex,
+      ["field", "spellTrap"],
+      "Luminarch Knights Convocation",
     );
-    const lv7PlusInHand = analysis.hand.filter(
+    const lv7PlusInHand = hand.filter(
       (c) => c && isLuminarch(c) && c.cardKind === "monster" && (c.level || 0) >= 7
     );
     const hasSearcherInDeck = true; // Assumimos Valiant/Arbiter no deck
@@ -153,7 +210,7 @@ export function detectAvailableCombos(analysis) {
 
     if (isBricked && hasBrickEscape) {
       const brickNames = lv7PlusInHand.slice(0, 2).map((c) => c.name?.split(" - ")[0] || c.name).join(", ");
-      combos.push({
+      pushCombo(combos, {
         id: "convocation_brick_escape",
         name: "⚠️ BRICK ESCAPE: Convocation",
         priority: 16, // Alta prioridade - resolver brick é crítico
@@ -177,7 +234,7 @@ export function detectAvailableCombos(analysis) {
 
     // Mesmo sem brick, Convocation é útil se tem 1 Lv7+ e quer cycle
     if ((hasConvocationInHand || hasConvocationOnField) && lv7PlusInHand.length >= 1 && !isBricked) {
-      combos.push({
+      pushCombo(combos, {
         id: "convocation_cycle",
         name: "Convocation Cycle",
         priority: 6,
@@ -198,12 +255,14 @@ export function detectAvailableCombos(analysis) {
     // ═════════════════════════════════════════════════════════════════════════
     // COMBO 3: Citadel + Aegis = Heal Loop
     // ═════════════════════════════════════════════════════════════════════════
-    const hasAegisOnField = analysis.field.some(
-      (c) => c && c.name === "Luminarch Aegisbearer"
+    const hasAegisOnField = hasCardName(
+      zoneIndex,
+      "field",
+      "Luminarch Aegisbearer",
     );
 
     if (hasCitadelActive && hasAegisOnField) {
-      combos.push({
+      pushCombo(combos, {
         id: "citadel_aegis_heal",
         name: "Citadel + Aegis Heal Loop",
         priority: 9,
@@ -224,15 +283,17 @@ export function detectAvailableCombos(analysis) {
     // ═════════════════════════════════════════════════════════════════════════
     // COMBO 4: Moonlit Blessing + Citadel = GY → Field
     // ═════════════════════════════════════════════════════════════════════════
-    const hasMoonlitInHand = analysis.hand.some(
-      (c) => c && c.name === "Luminarch Moonlit Blessing"
+    const hasMoonlitInHand = hasCardName(
+      zoneIndex,
+      "hand",
+      "Luminarch Moonlit Blessing",
     );
-    const gyHasLuminarch = (analysis.graveyard || []).some(
+    const gyHasLuminarch = graveyard.some(
       (c) => c && isLuminarch(c) && c.cardKind === "monster"
     );
 
     if (hasMoonlitInHand && hasCitadelActive && gyHasLuminarch) {
-      const bestTarget = (analysis.graveyard || [])
+      const bestTarget = graveyard
         .filter((c) => c && isLuminarch(c) && c.cardKind === "monster")
         .sort((a, b) => {
           if (a.name === "Luminarch Aegisbearer") return -1;
@@ -240,7 +301,7 @@ export function detectAvailableCombos(analysis) {
           return (b.level || 0) - (a.level || 0);
         })[0];
 
-      combos.push({
+      pushCombo(combos, {
         id: "moonlit_citadel_revive",
         name: "Moonlit + Citadel = Revive Direto",
         priority: 12,
@@ -265,12 +326,14 @@ export function detectAvailableCombos(analysis) {
     // ═════════════════════════════════════════════════════════════════════════
     // COMBO 5: Aegis → Sanctum Protector
     // ═════════════════════════════════════════════════════════════════════════
-    const hasProtectorInHand = analysis.hand.some(
-      (c) => c && c.name === "Luminarch Sanctum Protector"
+    const hasProtectorInHand = hasCardName(
+      zoneIndex,
+      "hand",
+      "Luminarch Sanctum Protector",
     );
 
     if (hasAegisOnField && hasProtectorInHand) {
-      combos.push({
+      pushCombo(combos, {
         id: "aegis_protector",
         name: "Aegis → Sanctum Protector",
         priority: 8,
@@ -292,10 +355,12 @@ export function detectAvailableCombos(analysis) {
     // ═════════════════════════════════════════════════════════════════════════
     // COMBO 6: Holy Shield + Citadel = Massive Heal
     // ═════════════════════════════════════════════════════════════════════════
-    const hasHolyShieldInHand = analysis.hand.some(
-      (c) => c && c.name === "Luminarch Holy Shield"
+    const hasHolyShieldInHand = hasCardName(
+      zoneIndex,
+      "hand",
+      "Luminarch Holy Shield",
     );
-    const luminarchOnField = (analysis.field || []).filter(
+    const luminarchOnField = field.filter(
       (c) => c && isLuminarch(c)
     );
 
@@ -304,7 +369,7 @@ export function detectAvailableCombos(analysis) {
       hasCitadelActive &&
       luminarchOnField.length >= 2
     ) {
-      combos.push({
+      pushCombo(combos, {
         id: "holy_shield_citadel_heal",
         name: "Holy Shield + Citadel = Heal Massivo",
         priority: 10,
@@ -327,15 +392,17 @@ export function detectAvailableCombos(analysis) {
     // ═════════════════════════════════════════════════════════════════════════
     // COMBO 7: Magic Sickle Recursion
     // ═════════════════════════════════════════════════════════════════════════
-    const hasSickleOnField = analysis.field.some(
-      (c) => c && c.name === "Luminarch Magic Sickle"
+    const hasSickleOnField = hasCardName(
+      zoneIndex,
+      "field",
+      "Luminarch Magic Sickle",
     );
-    const gyLuminarch = (analysis.graveyard || []).filter(
+    const gyLuminarch = graveyard.filter(
       (c) => c && isLuminarch(c)
     );
 
     if (hasSickleOnField && gyLuminarch.length >= 2) {
-      combos.push({
+      pushCombo(combos, {
         id: "sickle_recursion",
         name: "Magic Sickle Recursion",
         priority: 7,
@@ -357,18 +424,22 @@ export function detectAvailableCombos(analysis) {
     // COMBO 7.5: Moonblade Captain + Enchanted Halberd Chain
     // Captain revive → Aegis SS → Halberd trigger → 3 monstros em 1 turno
     // ═════════════════════════════════════════════════════════════════════════
-    const hasMoonbladeInHand = analysis.hand.some(
-      (c) => c && c.name === "Luminarch Moonblade Captain"
+    const hasMoonbladeInHand = hasCardName(
+      zoneIndex,
+      "hand",
+      "Luminarch Moonblade Captain",
     );
-    const hasHalberdInHand = analysis.hand.some(
-      (c) => c && c.name === "Luminarch Enchanted Halberd"
+    const hasHalberdInHand = hasCardName(
+      zoneIndex,
+      "hand",
+      "Luminarch Enchanted Halberd",
     );
-    const gyHasLv4Luminarch = (analysis.graveyard || []).some(
+    const gyHasLv4Luminarch = graveyard.some(
       (c) => c && isLuminarch(c) && c.cardKind === "monster" && (c.level || 0) <= 4
     );
 
     if (hasMoonbladeInHand && hasHalberdInHand && gyHasLv4Luminarch) {
-      const bestReviveTarget = (analysis.graveyard || [])
+      const bestReviveTarget = graveyard
         .filter((c) => c && isLuminarch(c) && c.cardKind === "monster" && (c.level || 0) <= 4)
         .sort((a, b) => {
           // Priorizar Aegisbearer (melhor target)
@@ -377,7 +448,7 @@ export function detectAvailableCombos(analysis) {
           return (b.def || 0) - (a.def || 0);
         })[0];
 
-      combos.push({
+      pushCombo(combos, {
         id: "moonblade_halberd_chain",
         name: "🔗 Moonblade + Halberd Chain",
         priority: 13,
@@ -403,25 +474,27 @@ export function detectAvailableCombos(analysis) {
     // COMBO 7.6: Spear of Dawnfall + Piercing Lethal
     // Zerar stats de defender → Piercing para dano direto
     // ═════════════════════════════════════════════════════════════════════════
-    const hasSpearInHand = analysis.hand.some(
-      (c) => c && c.name === "Luminarch Spear of Dawnfall"
+    const hasSpearInHand = hasCardName(
+      zoneIndex,
+      "hand",
+      "Luminarch Spear of Dawnfall",
     );
-    const hasPiercingMonster = analysis.field.some(
+    const hasPiercingMonster = field.some(
       (c) => c && c.cardKind === "monster" && !c.isFacedown && c.piercing
     );
-    const oppHasDefenders = (analysis.oppField || []).some(
+    const oppHasDefenders = oppField.some(
       (c) => c && c.cardKind === "monster" && c.position === "defense"
     );
     const oppLp = analysis.oppLp || 8000;
 
     if (hasSpearInHand && hasPiercingMonster && oppHasDefenders) {
-      const piercers = analysis.field.filter(
+      const piercers = field.filter(
         (c) => c && c.cardKind === "monster" && !c.isFacedown && c.piercing
       );
       const totalPiercingAtk = piercers.reduce((sum, m) => sum + (m.atk || 0), 0);
       const canLethal = totalPiercingAtk >= oppLp;
 
-      combos.push({
+      pushCombo(combos, {
         id: "spear_piercing_setup",
         name: canLethal ? "⚔️ SPEAR + PIERCING LETHAL" : "Spear + Piercing Setup",
         priority: canLethal ? 18 : 9,
@@ -449,23 +522,27 @@ export function detectAvailableCombos(analysis) {
     // ═════════════════════════════════════════════════════════════════════════
     // COMBO 8: Fusion Setup (Sanctum Protector + Lv5+)
     // ═════════════════════════════════════════════════════════════════════════
-    const hasProtectorOnField = analysis.field.some(
-      (c) => c && c.name === "Luminarch Sanctum Protector"
+    const hasProtectorOnField = hasCardName(
+      zoneIndex,
+      "field",
+      "Luminarch Sanctum Protector",
     );
-    const hasLv5Plus = analysis.field.some(
+    const hasLv5Plus = field.some(
       (c) =>
         c && isLuminarch(c) && c.cardKind === "monster" && (c.level || 0) >= 5
     );
-    const hasMegashieldInExtra = (analysis.extraDeck || []).some(
-      (c) => c && c.name === "Luminarch Megashield Barbarias"
+    const hasMegashieldInExtra = hasCardName(
+      zoneIndex,
+      "extraDeck",
+      "Luminarch Megashield Barbarias",
     );
 
     if (hasProtectorOnField && hasLv5Plus && hasMegashieldInExtra) {
-      const lv5Card = analysis.field.find(
+      const lv5Card = field.find(
         (c) =>
           c && isLuminarch(c) && c.cardKind === "monster" && (c.level || 0) >= 5
       );
-      combos.push({
+      pushCombo(combos, {
         id: "megashield_fusion",
         name: "Megashield Barbarias Fusion",
         priority: 6,
@@ -489,19 +566,21 @@ export function detectAvailableCombos(analysis) {
     // COMBO 9: Fortress Aegis Ascension Chain (AVANÇADO)
     // ═════════════════════════════════════════════════════════════════════════
     const aegisFieldAge = hasAegisOnField
-      ? analysis.field.find((c) => c && c.name === "Luminarch Aegisbearer")
+      ? field.find((c) => c && c.name === "Luminarch Aegisbearer")
           ?.fieldAgeTurns || 0
       : 0;
     const canAscend = aegisFieldAge >= 2;
-    const hasFortressInExtra = (analysis.extraDeck || []).some(
-      (c) => c && c.name === "Luminarch Fortress Aegis"
+    const hasFortressInExtra = hasCardName(
+      zoneIndex,
+      "extraDeck",
+      "Luminarch Fortress Aegis",
     );
     // hasHalberdInHand já declarado no combo 7.5
 
     if (hasAegisOnField && hasFortressInExtra) {
       if (canAscend) {
         const hasFullChain = hasHalberdInHand;
-        combos.push({
+        pushCombo(combos, {
           id: "fortress_aegis_ascension_chain",
           name: hasFullChain
             ? "🔥 FORTRESS AEGIS CHAIN COMPLETA"
@@ -540,7 +619,7 @@ export function detectAvailableCombos(analysis) {
       } else {
         // Aegis ainda não pronto - avisar quantos turnos faltam
         const turnsLeft = Math.max(0, 2 - aegisFieldAge);
-        combos.push({
+        pushCombo(combos, {
           id: "fortress_aegis_prep",
           name: "Fortress Aegis - Aguardando Maturidade",
           priority: 0, // Não executar, apenas informativo
@@ -563,13 +642,15 @@ export function detectAvailableCombos(analysis) {
     // ═════════════════════════════════════════════════════════════════════════
     // COMBO: SACRED JUDGMENT COMEBACK
     // ═════════════════════════════════════════════════════════════════════════
-    const hasSacredJudgment = analysis.hand.some(
-      (c) => c && c.name === "Luminarch Sacred Judgment"
+    const hasSacredJudgment = hasCardName(
+      zoneIndex,
+      "hand",
+      "Luminarch Sacred Judgment",
     );
-    const myFieldCount = analysis.field.length;
-    const oppFieldCount = (analysis.oppField || []).length;
+    const myFieldCount = field.length;
+    const oppFieldCount = oppField.length;
     const lp = analysis.lp || 8000;
-    const gyLuminarchSJ = analysis.graveyard.filter(
+    const gyLuminarchSJ = graveyard.filter(
       (c) => c && isLuminarch(c) && c.cardKind === "monster"
     );
 
@@ -596,7 +677,7 @@ export function detectAvailableCombos(analysis) {
       const hasQuality = highValueMonsters.length >= 1;
       
       if (isCritical && hasQuality) {
-        combos.push({
+        pushCombo(combos, {
           id: "sacred_judgment_comeback",
           name: "⚡ SACRED JUDGMENT COMEBACK",
           priority: oppFieldCount >= 4 ? 19 : oppFieldCount >= 3 ? 17 : 15,
@@ -621,7 +702,7 @@ export function detectAvailableCombos(analysis) {
         });
       } else if (gyLuminarchSJ.length >= 3 && finalLp >= 1500) {
         // Situação menos crítica mas ainda válida
-        combos.push({
+        pushCombo(combos, {
           id: "sacred_judgment_recovery",
           name: "Sacred Judgment - Recovery Play",
           priority: 13,
@@ -672,12 +753,13 @@ export function shouldExecuteCombo(combo, gameState) {
  */
 export function shouldPrioritizeDefense(analysis) {
   const lp = analysis.lp || 8000;
-  const oppFieldStrength = (analysis.oppField || []).reduce(
+  const { field, oppField } = getLuminarchComboZones(analysis);
+  const oppFieldStrength = oppField.reduce(
     (sum, m) => sum + (m && m.atk ? m.atk : 0),
     0
   );
   
-  const myFieldStrength = (analysis.field || []).reduce(
+  const myFieldStrength = field.reduce(
     (sum, m) => sum + (m && m.atk ? m.atk : 0),
     0
   );
@@ -692,7 +774,7 @@ export function shouldPrioritizeDefense(analysis) {
   if (oppFieldStrength >= 7500) return true;
 
   // Campo vazio + oponente com 2+ monstros = defensivo
-  if (analysis.field.length === 0 && (analysis.oppField || []).length >= 2) {
+  if (field.length === 0 && oppField.length >= 2) {
     return true;
   }
   
@@ -713,12 +795,17 @@ export function shouldPrioritizeDefense(analysis) {
 export function shouldTurtleStrategy(analysis) {
   const lp = analysis.lp || 8000;
   const oppLp = analysis.oppLp || 8000;
+  const { zoneIndex, oppField } = getLuminarchComboZones(analysis);
   const hasCitadel = analysis.fieldSpell?.name?.includes("Citadel") ?? false;
-  const hasAegis = analysis.field.some(
-    (c) => c && c.name === "Luminarch Aegisbearer"
+  const hasAegis = hasCardName(
+    zoneIndex,
+    "field",
+    "Luminarch Aegisbearer",
   );
-  const hasHolyShield = analysis.hand.some(
-    (c) => c && c.name === "Luminarch Holy Shield"
+  const hasHolyShield = hasCardName(
+    zoneIndex,
+    "hand",
+    "Luminarch Holy Shield",
   );
   
   // Condição 1: LP crítico mas tenho engine de heal
@@ -730,10 +817,10 @@ export function shouldTurtleStrategy(analysis) {
   }
   
   // Condição 2: Oponente muito forte, preciso ganhar tempo
-  const oppStrength = (analysis.oppField || []).reduce(
-    (sum, m) => sum + (m && m.atk ? m.atk : 0),
-    0
-  );
+  const oppStrength = getTotalAttackThreat(oppField, {
+    facedownValue: "printed",
+    includeBoosts: false,
+  });
   if (oppStrength >= 7000 && hasCitadel) {
     return {
       shouldTurtle: true,
@@ -762,13 +849,14 @@ export function shouldTurtleStrategy(analysis) {
  */
 export function canAttemptLethal(analysis) {
   const oppLp = analysis.oppLp || 8000;
-  const myAttackers = analysis.field.filter(
+  const { field, oppField } = getLuminarchComboZones(analysis);
+  const myAttackers = field.filter(
     (m) => m && m.cardKind === "monster" && m.position === "attack" && !m.isFacedown
   );
   const totalAtk = myAttackers.reduce((sum, m) => sum + (m.atk || 0), 0);
   
   // Calcular damage direto potencial
-  const oppDefenders = (analysis.oppField || []).filter(
+  const oppDefenders = oppField.filter(
     (m) => m && m.cardKind === "monster" && !m.isFacedown
   ).length;
   

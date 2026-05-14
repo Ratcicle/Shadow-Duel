@@ -14,6 +14,22 @@ import {
   isShadowHeart,
 } from "./knowledge.js";
 import { cardHasRelevantTriggerForSummonMethod } from "../common/analysis.js";
+import {
+  countDestroyableByAtk,
+  getEffectiveAtk,
+  getEffectiveDef,
+  getStrongestBattleStat,
+} from "../common/cardStats.js";
+import { getCounterCount } from "../common/counters.js";
+import {
+  createFinisherPlan,
+  rankFinisherPlans,
+} from "../common/finisherPlans.js";
+import { assessSummonEntry } from "../common/summonAssessment.js";
+import {
+  assessShadowHeartResourceRecovery,
+  buildShadowHeartResourcePreferences,
+} from "./resourceEconomy.js";
 
 const SHADOW_HEART_OFFENSIVE_PAYOFFS = [
   "Polymerization",
@@ -52,6 +68,22 @@ const SH = {
 
 const SHADOW_HEART_STARTERS = [SH.voidMage, SH.imp, SH.eel, SH.gecko];
 const LOW_VALUE_DISCARDS = [SH.coward, SH.specter, SH.rage, SH.gecko];
+const SHADOW_HEART_BOSS_SUMMON_NAMES = new Set([
+  SH.scale,
+  SH.arctroth,
+  SH.deathWyrm,
+  SH.leviathan,
+  SH.demonDragon,
+  SH.warlord,
+]);
+const SHADOW_HEART_ENGINE_SUMMON_NAMES = new Set([
+  SH.voidMage,
+  SH.imp,
+  SH.gecko,
+  SH.specter,
+  SH.coward,
+  SH.eel,
+]);
 
 function cardCountByName(cards = []) {
   const counts = new Map();
@@ -114,20 +146,6 @@ function getCandidateByName(candidates = [], names = []) {
     if (match) return match;
   }
   return null;
-}
-
-function getCounterCount(card, counterType = "judgment_marker") {
-  if (!card) return 0;
-  if (typeof card.getCounter === "function") {
-    return card.getCounter(counterType) || 0;
-  }
-  if (card.counters instanceof Map) {
-    return card.counters.get(counterType) || 0;
-  }
-  if (card.counters && typeof card.counters === "object") {
-    return card.counters[counterType] || 0;
-  }
-  return 0;
 }
 
 function isReadyShadowHeartAttacker(card) {
@@ -1173,10 +1191,14 @@ export function buildShadowHeartCostPreferences(analysis) {
   const hand = analysis?.hand || [];
   const handCounts = cardCountByName(hand);
   const offensivePlan = evaluateShadowHeartOffensivePlan(analysis);
+  const resourcePreferences = buildShadowHeartResourcePreferences(analysis);
   const preferNames = new Set([
     "Shadow-Heart Coward",
     "Shadow-Heart Specter",
   ]);
+  for (const name of resourcePreferences.preferNames || []) {
+    preferNames.add(name);
+  }
 
   const geckoHasClearSpecialLine =
     hand.some((card) => card.name === "Shadow-Heart Imp") ||
@@ -1200,7 +1222,10 @@ export function buildShadowHeartCostPreferences(analysis) {
     preferNames.add("Shadow-Heart Covenant");
   }
 
-  const preserveNames = new Set(offensivePlan.preserveNames || []);
+  const preserveNames = new Set([
+    ...(offensivePlan.preserveNames || []),
+    ...(resourcePreferences.preserveNames || []),
+  ]);
   if (offensivePlan.hasMajorSwing) {
     for (const name of SHADOW_HEART_OFFENSIVE_PAYOFFS) {
       if (!preferNames.has(name)) preserveNames.add(name);
@@ -1217,7 +1242,210 @@ export function buildShadowHeartCostPreferences(analysis) {
       SHADOW_HEART_OFFENSIVE_PAYOFFS.includes(card.name),
     ).length,
     offensivePlan,
+    resourceEconomy: resourcePreferences.resourceEconomy,
+    resourcePressure: resourcePreferences.resourcePressure,
   };
+}
+
+export function assessShadowHeartSummonEntry(card, context = {}) {
+  const base = assessSummonEntry(card, {
+    ...context,
+    profile: {
+      bossNames: SHADOW_HEART_BOSS_SUMMON_NAMES,
+      enginePieceNames: SHADOW_HEART_ENGINE_SUMMON_NAMES,
+      lowImpactAtk: 1200,
+      facedownValue: context.facedownValue ?? 1500,
+      defaultReason: "default Shadow-Heart summon assessment",
+      ...(context.profile || {}),
+    },
+  });
+
+  if (!card || card.cardKind !== "monster") return base;
+
+  const atk = getEffectiveAtk(card);
+  const def = getEffectiveDef(card);
+  const oppField =
+    context.oppField ||
+    context.opponent?.field ||
+    context.analysis?.oppField ||
+    [];
+
+  if (context.clearsOpponentBoardOnSummon === true) {
+    return {
+      ...base,
+      shouldSummon: true,
+      position: "attack",
+      scoreDelta: (base.scoreDelta || 0) + 1.2,
+      reason: [
+        base.reason,
+        "Shadow-Heart removal summon should pressure in attack",
+      ]
+        .filter(Boolean)
+        .join("; "),
+    };
+  }
+
+  if (def >= atk) {
+    return {
+      ...base,
+      position: "attack",
+      reason: [
+        base.reason,
+        "Shadow-Heart pressure prefers attack when DEF is not lower",
+      ]
+        .filter(Boolean)
+        .join("; "),
+    };
+  }
+
+  const strongestFaceUpAtk = (oppField || []).reduce((max, monster) => {
+    if (!monster || monster.cardKind !== "monster" || monster.isFacedown) {
+      return max;
+    }
+    return Math.max(max, getEffectiveAtk(monster));
+  }, 0);
+
+  return {
+    ...base,
+    position: strongestFaceUpAtk > atk ? "defense" : "attack",
+    strongestThreat: Math.max(base.strongestThreat || 0, strongestFaceUpAtk),
+  };
+}
+
+export function evaluateShadowHeartFusionPlan(analysis = {}) {
+  const allCards = [...(analysis.hand || []), ...(analysis.field || [])];
+  const shMonsters = allCards.filter(
+    (card) => isShadowHeartByName(card?.name) && card.cardKind === "monster",
+  );
+  const hasScaleDragon = allCards.some((card) => card?.name === SH.scale);
+  const validLevel8Plus = shMonsters.filter((card) => {
+    if (card.name === SH.scale) return false;
+    return (card.level || 0) >= 8;
+  });
+  const scaleCount = allCards.filter((card) => card?.name === SH.scale).length;
+
+  if (hasScaleDragon && (validLevel8Plus.length > 0 || scaleCount >= 2)) {
+    const materialName =
+      validLevel8Plus.length > 0 ? validLevel8Plus[0].name : SH.scale;
+    return createFinisherPlan({
+      kind: "fusion",
+      targetName: SH.demonDragon,
+      score100: 100,
+      reason: `Fusion: Demon Dragon (3000 ATK, destroy 2) com Scale Dragon + ${materialName}`,
+      details: {
+        spellPriority: 17,
+        materialNames: [SH.scale, materialName],
+      },
+    });
+  }
+
+  if (shMonsters.length >= 2) {
+    if (shouldPreserveScaleForDemonLine(analysis)) {
+      return {
+        kind: "fusion_hold",
+        targetName: null,
+        score100: 0,
+        actionPriority: 0,
+        reason:
+          "Preservar Scale Dragon para linha proxima de Demon Dragon em vez de Warlord cedo",
+      };
+    }
+
+    const [m1, m2] = shMonsters;
+    return createFinisherPlan({
+      kind: "fusion",
+      targetName: SH.warlord,
+      score100: 72,
+      reason: `Fusion: Warlord (2500 ATK, protection + revive) com ${m1.name} + ${m2.name}`,
+      details: {
+        spellPriority: 9,
+        materialNames: [m1.name, m2.name],
+      },
+    });
+  }
+
+  return null;
+}
+
+export function evaluateShadowHeartFinisherPlans(
+  bot = null,
+  opponent = null,
+  game = null,
+  analysis = null,
+) {
+  const field = analysis?.field || bot?.field || [];
+  const hand = analysis?.hand || bot?.hand || [];
+  const oppField = analysis?.oppField || opponent?.field || [];
+  const oppLp = analysis?.oppLp || opponent?.lp || 8000;
+  const summonLimit = 1 + (bot?.additionalNormalSummons || 0);
+  const canNormalSummon =
+    analysis?.canNormalSummon ?? (bot?.summonCount || 0) < summonLimit;
+  const strongestThreat = getStrongestBattleStat(oppField, {
+    facedownValue: 1500,
+  });
+  const plans = [];
+
+  const fusionPlan = evaluateShadowHeartFusionPlan(analysis || { hand, field });
+  if (fusionPlan?.targetName) plans.push(fusionPlan);
+
+  const scaleInHand = hand.find((card) => card?.name === SH.scale);
+  if (scaleInHand && canNormalSummon && field.length >= 2) {
+    const atk = getEffectiveAtk(scaleInHand);
+    plans.push(
+      createFinisherPlan({
+        kind: "normal_summon",
+        targetName: SH.scale,
+        score100:
+          78 +
+          (atk > strongestThreat ? 8 : 0) +
+          (oppField.length === 0 && atk >= oppLp ? 10 : 0),
+        reason: "Scale Dragon cria pressao alta e recupera recursos por batalha",
+        details: { atk },
+      }),
+    );
+  }
+
+  const arctrothInHand = hand.find((card) => card?.name === SH.arctroth);
+  if (arctrothInHand && canNormalSummon && field.length >= 2 && oppField.length > 0) {
+    const destroyable = countDestroyableByAtk(oppField, getEffectiveAtk(arctrothInHand), {
+      facedownValue: 1500,
+    });
+    const battleIndestructible = oppField.some(
+      (monster) =>
+        monster?.battleIndestructible || monster?.cannotBeDestroyedByBattle,
+    );
+    plans.push(
+      createFinisherPlan({
+        kind: "normal_summon",
+        targetName: SH.arctroth,
+        score100: battleIndestructible ? 92 : 74 + Math.min(2, destroyable) * 6,
+        reason: battleIndestructible
+          ? "Demon Arctroth remove ameaca que batalha nao resolve"
+          : "Demon Arctroth converte tributos em remocao e pressao",
+        details: { destroyable, battleIndestructible },
+      }),
+    );
+  }
+
+  const leviathanInHand = hand.find((card) => card?.name === SH.leviathan);
+  const eelOnField = field.some((card) => card?.name === SH.eel);
+  if (leviathanInHand && eelOnField) {
+    const atk = getEffectiveAtk(leviathanInHand);
+    plans.push(
+      createFinisherPlan({
+        kind: "hand_ignition",
+        targetName: SH.leviathan,
+        score100:
+          70 +
+          (atk > strongestThreat ? 6 : 0) +
+          (oppField.length === 0 && atk >= oppLp ? 8 : 0),
+        reason: "Leviathan usa Eel como ponte para pressao e burn",
+        details: { atk },
+      }),
+    );
+  }
+
+  return rankFinisherPlans(plans);
 }
 
 /**
@@ -1245,62 +1473,26 @@ export function shouldPlaySpell(card, analysis) {
   const name = card.name;
   const knowledge = CARD_KNOWLEDGE[name];
 
-  // Polymerization - Detecta fusões Shadow-Heart viáveis (não Ascensões!)
+  // Polymerization - Detecta fusoes Shadow-Heart viaveis (nao Ascensoes!)
   if (name === "Polymerization") {
-    const allCards = [...analysis.hand, ...analysis.field];
-    const shMonsters = allCards.filter(
-      (c) => isShadowHeartByName(c.name) && c.cardKind === "monster"
-    );
+    const fusionPlan = evaluateShadowHeartFusionPlan(analysis);
 
-    // ===== Demon Dragon (priority 14) =====
-    // Materiais: 1 "Shadow-Heart Scale Dragon" + 1 monstro Shadow-Heart Level 8+
-    const hasScaleDragon = allCards.some(
-      (c) => c.name === "Shadow-Heart Scale Dragon"
-    );
-    const validLevel8Plus = shMonsters.filter((c) => {
-      if (c.name === "Shadow-Heart Scale Dragon") return false;
-      const level = c.level || 0;
-      return level >= 8;
-    });
-    const scaleCount = allCards.filter(
-      (c) => c.name === "Shadow-Heart Scale Dragon"
-    ).length;
-
-    if (hasScaleDragon && (validLevel8Plus.length > 0 || scaleCount >= 2)) {
-      const materialName =
-        validLevel8Plus.length > 0
-          ? validLevel8Plus[0].name
-          : "Shadow-Heart Scale Dragon";
+    if (fusionPlan?.targetName) {
       return {
         yes: true,
-        priority: 17,
-        reason: `Fusion: Demon Dragon (3000 ATK, destroy 2) com Scale Dragon + ${materialName}`,
+        priority: fusionPlan.details?.spellPriority || 9,
+        reason: fusionPlan.reason,
       };
     }
 
-    // ===== Shadow-Heart Warlord (priority 9) =====
-    // Materiais: 2 monstros Shadow-Heart quaisquer.
-    // Prioridade abaixo de Demon Dragon: se ambas viáveis, Demon Dragon vence.
-    if (shMonsters.length >= 2) {
-      if (shouldPreserveScaleForDemonLine(analysis)) {
-        return {
-          yes: false,
-          reason:
-            "Preservar Scale Dragon para linha proxima de Demon Dragon em vez de Warlord cedo",
-        };
-      }
-      const [m1, m2] = shMonsters;
-      return {
-        yes: true,
-        priority: 9,
-        reason: `Fusion: Warlord (2500 ATK, protection + revive) com ${m1.name} + ${m2.name}`,
-      };
+    if (fusionPlan?.kind === "fusion_hold") {
+      return { yes: false, reason: fusionPlan.reason };
     }
 
     return {
       yes: false,
       reason:
-        "Sem materiais para fusão Shadow-Heart (Demon Dragon: Scale + Lv8+; Warlord: 2 SH)",
+        "Sem materiais para fusao Shadow-Heart (Demon Dragon: Scale + Lv8+; Warlord: 2 SH)",
     };
   }
 
@@ -1412,10 +1604,19 @@ export function shouldPlaySpell(card, analysis) {
     const netValue = revivalValue - discardCost + (hasValueDiscard ? 1 : 0);
 
     if (netValue > 0) {
+      const recoveryAssessment = assessShadowHeartResourceRecovery(analysis, {
+        mode: "revive",
+      });
+      const recoveryBonus = Math.max(
+        0,
+        Math.min(2, recoveryAssessment.scoreDelta || 0),
+      );
       return {
         yes: true,
-        priority: hasValueDiscard ? 8 : 6,
-        reason: `Reviver ${bestRevival.name} (val:${revivalValue}) > descartar ${worstCard.card.name} (val:${discardCost})`,
+        priority: (hasValueDiscard ? 8 : 6) + recoveryBonus,
+        reason:
+          `Reviver ${bestRevival.name} (val:${revivalValue}) > descartar ${worstCard.card.name} (val:${discardCost})` +
+          (recoveryBonus > 0 ? "; economia SH favorece revival" : ""),
       };
     }
 
@@ -1768,13 +1969,19 @@ export function shouldSummonMonster(card, analysis, tributeInfo, context = {}) {
   const knowledge = CARD_KNOWLEDGE[name];
   const fieldState = context.field || analysis?.field || [];
   const oppFieldState = context.oppField || analysis?.oppField || [];
+  const summonAssessment = assessShadowHeartSummonEntry(card, {
+    analysis,
+    myField: fieldState,
+    oppField: oppFieldState,
+    phase: analysis?.phase,
+  });
 
   // === SAFETY CHECK: Avaliar se é seguro summon em ATK ===
-  const cardATK = card.atk || 0;
-  const cardDEF = card.def || 0;
-  const oppStrongestATK = analysis.oppField.reduce(
-    (max, m) => Math.max(max, m.atk || 0),
-    0
+  const cardATK = getEffectiveAtk(card);
+  const cardDEF = getEffectiveDef(card);
+  const oppStrongestATK = getStrongestBattleStat(
+    (analysis.oppField || []).filter((monster) => !monster?.isFacedown),
+    { facedownValue: 0 },
   );
   const oppHasThreats = analysis.oppField.length > 0;
 
@@ -2125,7 +2332,7 @@ export function shouldSummonMonster(card, analysis, tributeInfo, context = {}) {
     }
     return {
       yes: true,
-      position: "attack",
+      position: summonAssessment.position || "attack",
       priority: 4,
       reason: `Beater de ${baseAtk}`,
     };

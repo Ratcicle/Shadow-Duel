@@ -5,6 +5,7 @@ import {
   isBattleReadyAttacker,
 } from "../StrategyUtils.js";
 import {
+  getAttackThreatStat,
   getBattleStatForAttackTarget,
   getVisibleAtk,
   getVisibleDef,
@@ -67,8 +68,7 @@ export function getBattleStatToAttack(card) {
 }
 
 export function getThreatAtk(card) {
-  if (!card || card.cardKind !== "monster") return 0;
-  return card.isFacedown ? 1500 : getVisibleAtk(card);
+  return getAttackThreatStat(card, { facedownValue: 1500 });
 }
 
 export function isDefensiveLuminarch(card) {

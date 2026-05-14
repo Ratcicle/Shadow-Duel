@@ -5,6 +5,12 @@
 
 import { isLuminarch } from "./knowledge.js";
 import { evaluateKnightsConvocationPlan } from "./priorities.js";
+import {
+  getStrongestAttackThreat,
+  getStrongestBattleThreat,
+  getTotalAttackThreat,
+} from "../common/cardStats.js";
+import { buildLuminarchResourceEconomy } from "./resourceEconomy.js";
 
 /**
  * Avalia o "stance" ideal baseado no campo oponente
@@ -19,26 +25,23 @@ export function evaluateGameStance(analysis) {
   const currentTurn = analysis.currentTurn || 1;
 
   // Calcular ameaça do oponente
-  const oppStrongest = Math.max(
-    ...oppField
-      .filter((m) => m && m.cardKind === "monster" && !m.isFacedown)
-      .map((m) => m.atk || 0),
-    0
-  );
+  const oppStrongest = getStrongestAttackThreat(oppField, {
+    includeFacedown: false,
+    includeBoosts: false,
+  });
   const oppMonsterCount = oppField.filter(
     (m) => m && m.cardKind === "monster"
   ).length;
-  const oppTotalAtk = oppField
-    .filter((m) => m && m.cardKind === "monster" && !m.isFacedown)
-    .reduce((sum, m) => sum + (m.atk || 0), 0);
+  const oppTotalAtk = getTotalAttackThreat(oppField, {
+    includeFacedown: false,
+    includeBoosts: false,
+  });
 
   // Calcular defesa própria
-  const ownStrongest = Math.max(
-    ...ownField
-      .filter((m) => m && m.cardKind === "monster" && !m.isFacedown)
-      .map((m) => (m.position === "defense" ? m.def || 0 : m.atk || 0)),
-    0
-  );
+  const ownStrongest = getStrongestBattleThreat(ownField, {
+    includeFacedown: false,
+    includeBoosts: false,
+  });
   const ownDefCount = ownField.filter(
     (m) => m && m.cardKind === "monster" && m.position === "defense"
   ).length;
@@ -101,6 +104,8 @@ export function estimateNextTurnResources(analysis) {
   const graveyard = analysis.graveyard || [];
   const field = analysis.field || [];
   const fieldSpell = analysis.fieldSpell;
+  const resourceEconomy =
+    analysis.resourceEconomy || buildLuminarchResourceEconomy(analysis);
 
   const resources = [];
 
@@ -114,6 +119,12 @@ export function estimateNextTurnResources(analysis) {
   ).length;
   if (luminarchInGY >= 2) {
     resources.push(`GY: ${luminarchInGY} Luminarch (recursão disponível)`);
+  }
+
+  if (resourceEconomy.flags?.hasRecoveryLine && luminarchInGY > 0) {
+    resources.push(
+      `Recovery acessivel: ${resourceEconomy.accessibleByZone?.graveyard || 0} da GY`,
+    );
   }
 
   // Field spell buffs
@@ -207,10 +218,10 @@ export function shouldCommitResourcesNow(card, analysis, stance) {
     const myField = analysis.field || [];
 
     // Calcular ATK mais alto do oponente (face-up)
-    const oppStrongestAtk = oppField.reduce((max, m) => {
-      if (!m || m.cardKind !== "monster" || m.isFacedown) return max;
-      return Math.max(max, m.atk || 0);
-    }, 0);
+    const oppStrongestAtk = getStrongestAttackThreat(oppField, {
+      includeFacedown: false,
+      includeBoosts: false,
+    });
 
     // Radiant Wave: permitir se oponente tem monstro ATK >= 2000 (ameaça real)
     if (cardName.includes("Radiant Wave")) {

@@ -12,6 +12,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import BaseStrategy from "./BaseStrategy.js";
+import { validateHandIgnitionCandidate } from "./common/actionValidation.js";
+import { buildStrategyAnalysis } from "./common/analysis.js";
+import { getEffectiveAtk } from "./common/cardStats.js";
+import { withFusionPreferences } from "./common/fusionPlanning.js";
 import {
   detectLethalOpportunity,
   detectDefensiveNeed,
@@ -40,6 +44,9 @@ import {
   getTributeRequirementFor,
   buildShadowHeartCostPreferences,
   buildShadowHeartTargetPreferences,
+  assessShadowHeartSummonEntry,
+  evaluateShadowHeartFinisherPlans,
+  evaluateShadowHeartFusionPlan,
   evaluateShadowHeartRecruitCandidate,
   rankShadowHeartSearchCandidates,
   pickInfusionEmergencyRevive,
@@ -55,6 +62,7 @@ import {
   simulateMainPhaseAction as simAction,
   simulateSpellEffect,
 } from "./shadowheart/simulation.js";
+import { buildShadowHeartResourceEconomy } from "./shadowheart/resourceEconomy.js";
 
 function canActivateShadowHeartSpell(game, card, bot, activationContext = {}) {
   if (!game || game._isPerspectiveState === true) return { ok: true };
@@ -74,6 +82,18 @@ function canActivateShadowHeartSpell(game, card, bot, activationContext = {}) {
   }
 
   return { ok: true };
+}
+
+function withShadowHeartFusionPreferences(baseContext, card, analysis) {
+  if (card?.name !== "Polymerization") return baseContext;
+  const fusionPlan = evaluateShadowHeartFusionPlan(analysis);
+  if (!fusionPlan?.targetName) return baseContext;
+  return withFusionPreferences(baseContext, {
+    target: fusionPlan.targetName,
+    priority: fusionPlan.actionPriority,
+    reason: fusionPlan.reason,
+    plan: fusionPlan,
+  });
 }
 
 function buildShadowHeartSpellActivationContext(card, bot, opponent, analysis) {
@@ -138,11 +158,11 @@ function buildShadowHeartSpellActivationContext(card, bot, opponent, analysis) {
   };
 
   if (card?.name !== "Shadow-Heart Purge") {
-    return {
+    return withShadowHeartFusionPreferences({
       autoSelectTargets: true,
       autoSelectSingleTarget: true,
       actionContext,
-    };
+    }, card, analysis);
   }
 
   const attackers = (bot?.field || []).filter(
@@ -156,7 +176,7 @@ function buildShadowHeartSpellActivationContext(card, bot, opponent, analysis) {
       !monster.hasAttacked,
   );
 
-  return {
+  return withShadowHeartFusionPreferences({
     autoSelectSingleTarget: true,
     logTargets: false,
     actionContext: {
@@ -173,7 +193,7 @@ function buildShadowHeartSpellActivationContext(card, bot, opponent, analysis) {
         },
       },
     },
-  };
+  }, card, analysis);
 }
 
 /**
@@ -267,20 +287,16 @@ export default class ShadowHeartStrategy extends BaseStrategy {
    */
   chooseSpecialSummonPosition(card, ctx = {}) {
     if (!card || card.cardKind !== "monster") return null;
-    const myAtk = Number(card.atk) || 0;
-    const myDef = Number(card.def) || 0;
-
-    if (this.cardClearsOpponentBoardOnSummon(card)) return "attack";
-    if (myDef >= myAtk) return "attack";
-
     const opponent =
-      ctx.player === ctx.game?.player ? ctx.game?.bot : ctx.game?.player;
-    const oppMaxAtk = (opponent?.field || []).reduce((max, c) => {
-      if (!c || c.cardKind !== "monster" || c.isFacedown) return max;
-      return Math.max(max, Number(c.atk) || 0);
-    }, 0);
+      ctx.opponent ||
+      (ctx.game && ctx.player ? this.getOpponent(ctx.game, ctx.player) : null);
+    const assessment = assessShadowHeartSummonEntry(card, {
+      ...ctx,
+      opponent,
+      clearsOpponentBoardOnSummon: this.cardClearsOpponentBoardOnSummon(card),
+    });
 
-    return oppMaxAtk > myAtk ? "defense" : "attack";
+    return assessment.position || null;
   }
 
   /**
@@ -328,10 +344,16 @@ export default class ShadowHeartStrategy extends BaseStrategy {
     const isSimulatedState = game._isPerspectiveState === true;
     const bot = isSimulatedState ? game.bot : this.bot || game.bot;
     const opponent = this.getOpponent(game, bot);
+    const baseAnalysis = buildStrategyAnalysis({
+      player: bot,
+      opponent,
+      game,
+      strategy: this,
+    });
 
     const analysis = {
       // Recursos próprios
-      hand: (bot.hand || []).map((c) => ({
+      hand: (baseAnalysis.hand || []).map((c) => ({
         name: c.name,
         type: c.cardKind,
         cardKind: c.cardKind,
@@ -339,7 +361,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
         atk: c.atk,
         archetype: c.archetype,
       })),
-      field: (bot.field || []).map((c) => ({
+      field: (baseAnalysis.field || []).map((c) => ({
         name: c.name,
         atk: c.atk,
         def: c.def,
@@ -352,21 +374,25 @@ export default class ShadowHeartStrategy extends BaseStrategy {
         battleIndestructible: c.battleIndestructible,
         cannotBeDestroyedByBattle: c.cannotBeDestroyedByBattle,
       })),
-      graveyard: (bot.graveyard || []).filter((c) => isShadowHeart(c)),
-      spellTrap: (bot.spellTrap || []).filter(Boolean),
-      fieldSpell: bot.fieldSpell?.name || null,
-      deck: (bot.deck || []).filter(Boolean),
-      extraDeck: (bot.extraDeck || []).filter(Boolean),
+      graveyard: (baseAnalysis.graveyard || []).filter((c) => isShadowHeart(c)),
+      spellTrap: (baseAnalysis.spellTrap || []).filter(Boolean),
+      fieldSpell: baseAnalysis.fieldSpell?.name || null,
+      deck: (baseAnalysis.deck || []).filter(Boolean),
+      extraDeck: (baseAnalysis.extraDeck || []).filter(Boolean),
       lp: bot.lp,
       summonCount: bot.summonCount || 0,
       game,
 
       // Informações de timing (para evitar desperdício de recursos)
-      phase: game.phase || "main1",
+      phase: baseAnalysis.phase || "main1",
       turnCounter: game.turnCounter || 0,
+      currentTurn: baseAnalysis.currentTurn,
+      isSimulatedState: baseAnalysis.isSimulatedState,
+      player: baseAnalysis.player,
+      opponent: baseAnalysis.opponent,
 
       // Recursos do oponente
-      oppField: (opponent?.field || []).map((c) => ({
+      oppField: (baseAnalysis.oppField || []).map((c) => ({
         name: c.name,
         atk: c.atk,
         def: c.def,
@@ -377,25 +403,30 @@ export default class ShadowHeartStrategy extends BaseStrategy {
         battleIndestructible: c.battleIndestructible,
         cannotBeDestroyedByBattle: c.cannotBeDestroyedByBattle,
       })),
-      oppBackrow: opponent?.spellTrap?.length || 0,
-      oppHand: opponent?.hand?.length || 0,
-      oppLp: opponent?.lp || 0,
+      oppBackrow: (baseAnalysis.oppSpellTrap || []).length,
+      oppHand: (baseAnalysis.oppHand || []).length,
+      oppLp: baseAnalysis.oppLp || 0,
+      oppLP: baseAnalysis.oppLP || 0,
 
       // Avaliações
-      canNormalSummon: bot.summonCount < 1,
-      fieldCapacity: 5 - bot.field.length,
+      canNormalSummon: baseAnalysis.summonAvailable,
+      summonAvailable: baseAnalysis.summonAvailable,
+      normalSummonsAvailable: baseAnalysis.normalSummonsAvailable,
+      additionalNormalSummons: baseAnalysis.additionalNormalSummons,
+      fieldCapacity: 5 - (baseAnalysis.field || []).length,
       threatsOnBoard: [],
       availableCombos: [],
       bestPlays: [],
     };
 
     // Identificar ameaças do oponente
-    (opponent?.field || []).forEach((c) => {
-      if (c.atk > 2000 || c.isFacedown) {
+    (baseAnalysis.oppField || []).forEach((c) => {
+      const atk = getEffectiveAtk(c);
+      if (atk > 2000 || c.isFacedown) {
         analysis.threatsOnBoard.push({
           card: c.name,
-          atk: c.atk,
-          threat: c.isFacedown ? "unknown" : c.atk >= 2500 ? "high" : "medium",
+          atk,
+          threat: c.isFacedown ? "unknown" : atk >= 2500 ? "high" : "medium",
         });
       }
     });
@@ -418,6 +449,13 @@ export default class ShadowHeartStrategy extends BaseStrategy {
     // Detectar combos disponíveis
     analysis.availableCombos = detectAvailableCombos(analysis, (msg) =>
       this.think(msg),
+    );
+    analysis.resourceEconomy = buildShadowHeartResourceEconomy(analysis);
+    analysis.finisherPlans = evaluateShadowHeartFinisherPlans(
+      bot,
+      opponent,
+      game,
+      analysis,
     );
 
     this.currentAnalysis = analysis;
@@ -771,49 +809,24 @@ export default class ShadowHeartStrategy extends BaseStrategy {
 
       // Verificar se pode ativar (tem alvos válidos no campo)
       // Para Leviathan: precisa de Abyssal Eel no campo
-      const targets = handIgnitionEffect.targets || [];
-      const costTarget = targets.find((t) => t.zone === "field");
-
-      if (costTarget) {
-        // Verificar se existe carta válida no campo para o custo
-        const fieldCards = bot.field || [];
-        const hasValidCost = fieldCards.some((fieldCard) => {
-          if (fieldCard.cardKind !== "monster") return false;
-          if (costTarget.cardName && fieldCard.name !== costTarget.cardName)
-            return false;
-          if (
-            costTarget.archetype &&
-            fieldCard.archetype !== costTarget.archetype
-          )
-            return false;
-          return true;
-        });
-
-        if (!hasValidCost) {
-          log(`  ⏭️ Hand ignition ${card.name}: sem custo válido no campo`);
-          return;
-        }
-      }
-
-      // Verificar once-per-turn
-      if (!isSimulatedState) {
-        const actualGame = game._gameRef || game;
-        if (actualGame.effectEngine) {
-          const optCheck = actualGame.effectEngine.checkOncePerTurn(
-            card,
-            bot,
-            handIgnitionEffect,
-          );
-          if (!optCheck.ok) {
-            log(`  ⏭️ Hand ignition ${card.name}: já usado neste turno`);
-            return;
-          }
-        }
-      }
-
-      // Verificar se há espaço no campo para o special summon
-      if (analysis.fieldCapacity <= 0) {
-        log(`  ⏭️ Hand ignition ${card.name}: campo cheio`);
+      const validation = validateHandIgnitionCandidate({
+        card,
+        effect: handIgnitionEffect,
+        player: bot,
+        game: actualGame,
+        isSimulatedState,
+        activationContext: {
+          actionContext: {
+            costPreferences: buildShadowHeartCostPreferences(analysis),
+          },
+        },
+      });
+      if (!validation.ok) {
+        log(
+          `  Hand ignition ${card.name}: ${
+            validation.reason || "blocked"
+          }`,
+        );
         return;
       }
 

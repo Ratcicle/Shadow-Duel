@@ -1,5 +1,6 @@
 import { estimateCardValue } from "../StrategyUtils.js";
 import { buildStrategyAnalysis } from "../common/analysis.js";
+import { getStrongestAttackThreat } from "../common/cardStats.js";
 import {
   applyGenericSimulatedMainPhaseAction,
   simulateGenericSpellEffect,
@@ -31,11 +32,10 @@ export function rankLuminarchSearchCandidates(cards, action = {}, ctx = {}) {
       card?.name === "Luminarch Crescent Shield" ||
       card?.name === "Luminarch Moonlit Blessing",
   );
-  const oppStrongest = (opponent.field || []).reduce(
-    (max, monster) =>
-      Math.max(max, monster?.isFacedown ? 1500 : monster?.atk || 0),
-    0,
-  );
+  const oppStrongest = getStrongestAttackThreat(opponent.field || [], {
+    facedownValue: 1500,
+    includeBoosts: false,
+  });
   const underPressure =
     oppStrongest >= 2200 || (opponent.field || []).length >= 2;
   const namesInHand = new Set(hand.map((card) => card?.name).filter(Boolean));

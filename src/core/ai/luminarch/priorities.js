@@ -13,4 +13,27 @@ export {
   evaluateLuminarchDefensePlan,
 } from "./defensePlanning.js";
 export { shouldPlaySpell } from "./spellPriority.js";
-export { shouldSummonMonster } from "./summonPriority.js";
+export {
+  assessLuminarchSummonEntry,
+  shouldSummonMonster,
+} from "./summonPriority.js";
+export {
+  LUMINARCH_RESOURCE_POLICY,
+  assessLuminarchResourceRecovery,
+  assessLuminarchResourceSpend,
+  buildLuminarchResourceEconomy,
+  buildLuminarchResourcePreferences,
+  getLuminarchResourcePressure,
+} from "./resourceEconomy.js";
+export {
+  evaluateLuminarchAscensionPlan,
+  evaluateLuminarchFinisherPlans,
+  evaluateLuminarchFusionPlan,
+  getBestLuminarchFinisherPlan,
+} from "./finisherPlanning.js";
+export {
+  applyLuminarchDefenseActionContext,
+  evaluateLuminarchBackrowSetPolicy,
+  evaluateLuminarchProtectionSpell,
+  evaluateLuminarchRemovalSpell,
+} from "./defensePolicy.js";

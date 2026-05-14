@@ -5,6 +5,7 @@ import { buildStrategyAnalysis } from "../common/analysis.js";
 import { shouldCommitResourcesNow } from "./multiTurnPlanning.js";
 import { shouldPlaySpell } from "./priorities.js";
 import { buildLuminarchSpellActionContext } from "./actionContext.js";
+import { evaluateLuminarchBackrowSetPolicy } from "./defensePolicy.js";
 
 function getHandSpellActions(context, spellIndicesActivated) {
   const {
@@ -230,10 +231,12 @@ function getSpellTrapEffectActions(context) {
 }
 
 function getSetSpellTrapActions(context, spellIndicesActivated) {
-  const { bot } = context;
+  const { game, bot, opponent } = context;
   const actions = [];
   const canSetSpellTrap = (bot.spellTrap || []).length < 5;
   if (!canSetSpellTrap) return actions;
+  const analysis =
+    context.analysis || buildStrategyAnalysis({ bot, opponent, game });
 
   const baseSetPriority = -1;
   bot.hand.forEach((card, index) => {
@@ -249,12 +252,16 @@ function getSetSpellTrapActions(context, spellIndicesActivated) {
 
     if (spellIndicesActivated.has(index)) return;
 
+    const setPolicy = evaluateLuminarchBackrowSetPolicy(card, analysis);
+    if (setPolicy && !setPolicy.shouldSet) return;
+
     const valueEstimate = estimateCardValue(card, {
       archetype: "Luminarch",
       fieldSpell: bot?.fieldSpell || null,
       preferDefense: true,
     });
-    const setPriority = baseSetPriority + valueEstimate * 0.2;
+    const setPriority =
+      setPolicy?.priority ?? baseSetPriority + valueEstimate * 0.2;
 
     actions.push({
       type: "set_spell_trap",
@@ -262,7 +269,7 @@ function getSetSpellTrapActions(context, spellIndicesActivated) {
       cardId: card.id,
       priority: setPriority,
       cardName: card.name,
-      reason: "setup_backrow",
+      reason: setPolicy?.reason || "setup_backrow",
     });
   });
 

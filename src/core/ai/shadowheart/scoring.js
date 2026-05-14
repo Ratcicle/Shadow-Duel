@@ -3,6 +3,7 @@
 // Funções de avaliação e scoring específicas para Shadow-Heart.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { getCounterCount } from "../common/counters.js";
 import { CARD_KNOWLEDGE, isShadowHeart } from "./knowledge.js";
 
 function wasTributeSummoned(monster) {
@@ -21,16 +22,6 @@ function scaleReviveTargets(owner) {
 
 function scaleRecycleTargets(owner) {
   return shadowHeartCardsInGraveyard(owner);
-}
-
-function getCounterCount(card, counterType = "judgment_marker") {
-  if (!card) return 0;
-  if (typeof card.getCounter === "function") return card.getCounter(counterType) || 0;
-  if (card.counters instanceof Map) return card.counters.get(counterType) || 0;
-  if (card.counters && typeof card.counters === "object") {
-    return card.counters[counterType] || 0;
-  }
-  return 0;
 }
 
 function scoreCathedralBackrow(card, owner, opponent) {

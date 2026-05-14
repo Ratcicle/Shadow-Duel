@@ -1,6 +1,11 @@
 // Luminarch defensive posture and Knights Convocation planning.
 
-import { getVisibleAtk, getVisibleDef } from "../common/cardStats.js";
+import {
+  getStrongestAttackThreat,
+  getTotalAttackThreat,
+  getVisibleAtk,
+  getVisibleDef,
+} from "../common/cardStats.js";
 import { isLuminarch } from "./knowledge.js";
 import {
   LUMINARCH_COUNTERATTACK_PAYOFFS,
@@ -34,14 +39,12 @@ export function evaluateLuminarchDefensePlan(analysis = {}) {
   const oppMonsters = oppField.filter(
     (card) => card && card.cardKind === "monster"
   );
-  const oppStrongest = oppMonsters.reduce(
-    (max, card) => Math.max(max, card.isFacedown ? 1500 : getVisibleAtk(card)),
-    0
-  );
-  const oppTotalAtk = oppMonsters.reduce(
-    (sum, card) => sum + (card.isFacedown ? 1500 : getVisibleAtk(card)),
-    0
-  );
+  const oppStrongest = getStrongestAttackThreat(oppMonsters, {
+    facedownValue: 1500,
+  });
+  const oppTotalAtk = getTotalAttackThreat(oppMonsters, {
+    facedownValue: 1500,
+  });
   const ownMonsters = field.filter(
     (card) => card && card.cardKind === "monster" && isLuminarch(card)
   );

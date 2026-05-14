@@ -41,3 +41,13 @@ export {
   simulateMainPhaseAction,
   simulateSpellEffect,
 } from "./simulation.js";
+
+// Resource economy
+export {
+  SHADOW_HEART_RESOURCE_POLICY,
+  buildShadowHeartResourceEconomy,
+  getShadowHeartResourcePressure,
+  assessShadowHeartResourceSpend,
+  assessShadowHeartResourceRecovery,
+  buildShadowHeartResourcePreferences,
+} from "./resourceEconomy.js";

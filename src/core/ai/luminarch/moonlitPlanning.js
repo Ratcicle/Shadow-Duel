@@ -1,6 +1,12 @@
 // Moonlit Blessing target and revive planning.
 
-import { getVisibleAtk, getVisibleDef } from "../common/cardStats.js";
+import {
+  getStrongestAttackThreat,
+  getStrongestBattleStat,
+  getTotalAttackThreat,
+  getVisibleAtk,
+  getVisibleDef,
+} from "../common/cardStats.js";
 import { isLuminarch } from "./knowledge.js";
 import {
   getBattleStatToAttack,
@@ -155,18 +161,15 @@ export function evaluateMoonlitReviveCandidate(card, analysis = {}) {
   const oppMonsters = (analysis.oppField || []).filter(
     (entry) => entry && entry.cardKind === "monster"
   );
-  const oppStrongestBattleStat = oppMonsters.reduce(
-    (max, monster) => Math.max(max, getBattleStatToAttack(monster)),
-    0
-  );
-  const oppStrongestAtk = oppMonsters.reduce(
-    (max, monster) => Math.max(max, getThreatAtk(monster)),
-    0
-  );
-  const oppTotalAtk = oppMonsters.reduce(
-    (sum, monster) => sum + getThreatAtk(monster),
-    0
-  );
+  const oppStrongestBattleStat = getStrongestBattleStat(oppMonsters, {
+    facedownValue: 1500,
+  });
+  const oppStrongestAtk = getStrongestAttackThreat(oppMonsters, {
+    facedownValue: 1500,
+  });
+  const oppTotalAtk = getTotalAttackThreat(oppMonsters, {
+    facedownValue: 1500,
+  });
   const hasTank = (analysis.field || []).some(
     (entry) =>
       entry &&

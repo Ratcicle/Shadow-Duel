@@ -40,6 +40,23 @@ export function hasCardName(index, zone, name) {
   return (index?.namesByZone?.[zone] || []).includes(name);
 }
 
+export function countCardName(index, zone, name) {
+  return (index?.namesByZone?.[zone] || []).filter(
+    (candidateName) => candidateName === name,
+  ).length;
+}
+
+export function hasCardNameInZones(index, zones = [], name) {
+  return (zones || []).some((zone) => hasCardName(index, zone, name));
+}
+
+export function countCardNameAcrossZones(index, zones = [], name) {
+  return (zones || []).reduce(
+    (total, zone) => total + countCardName(index, zone, name),
+    0,
+  );
+}
+
 export function countMatching(index, zone, predicate) {
   if (typeof predicate !== "function") return 0;
   return getZoneCards(index, zone).filter((card) => card && predicate(card)).length;
@@ -69,6 +86,22 @@ export function createDetectedCombo({
     ready,
     missing: Array.isArray(missing) ? missing : [missing].filter(Boolean),
     priority,
+    ...extra,
+  };
+}
+
+export function createAvailableCombo({
+  combo,
+  name = null,
+  priority = undefined,
+  action = null,
+  ...extra
+} = {}) {
+  const comboName = name || combo?.name || null;
+  return {
+    name: comboName,
+    priority: Number.isFinite(priority) ? priority : combo?.priority || 0,
+    ...(action ? { action } : {}),
     ...extra,
   };
 }

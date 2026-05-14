@@ -1,14 +1,70 @@
 // Luminarch monster summon priority decisions.
 
 import { CARD_KNOWLEDGE, isLuminarch } from "./knowledge.js";
-import { getVisibleAtk } from "../common/cardStats.js";
 import {
-  getBattleStatForTarget,
+  getStrongestAttackThreat,
+  getStrongestBattleStat,
+  getVisibleAtk,
+} from "../common/cardStats.js";
+import { assessSummonEntry } from "../common/summonAssessment.js";
+import {
   hasLoggedPriorityError,
   isDefensiveLuminarch,
   markPriorityErrorLogged,
 } from "./priorityShared.js";
 import { evaluateRadiantLancerBattlePlan } from "./lancerPlanning.js";
+
+const LUMINARCH_BOSS_NAMES = [
+  "Luminarch Celestial Marshal",
+  "Luminarch Radiant Lancer",
+  "Luminarch Aurora Seraph",
+  "Luminarch Moonblade Captain",
+  "Luminarch Megashield Barbarias",
+  "Luminarch Fortress Aegis",
+];
+
+const LUMINARCH_ENGINE_PIECE_NAMES = [
+  "Luminarch Aegisbearer",
+  "Luminarch Sanctum Protector",
+  "Luminarch Sanctified Arbiter",
+  "Luminarch Valiant - Knight of the Dawn",
+  "Luminarch Magic Sickle",
+  "Luminarch Enchanted Halberd",
+];
+
+const LUMINARCH_SUMMON_ASSESSMENT_PROFILE = {
+  bossNames: LUMINARCH_BOSS_NAMES,
+  enginePieceNames: LUMINARCH_ENGINE_PIECE_NAMES,
+  defaultPosition: "defense",
+  facedownValue: 1500,
+  lowImpactAtk: 1000,
+  clearThreatScoreDelta: 1.2,
+  safeBossScoreDelta: 0.8,
+  enginePieceScoreDelta: 0.4,
+  postBattlePenalty: 0.4,
+  lowImpactPenalty: 1.5,
+};
+
+export function assessLuminarchSummonEntry(card, analysis = {}, context = {}) {
+  return assessSummonEntry(card, {
+    analysis,
+    oppField: analysis.oppField || [],
+    myField: analysis.field || [],
+    phase: analysis.phase,
+    ...context,
+    profile: {
+      ...LUMINARCH_SUMMON_ASSESSMENT_PROFILE,
+      ...(context.profile || {}),
+    },
+  });
+}
+
+function getLuminarchAttackThreat(analysis) {
+  return getStrongestAttackThreat(analysis?.oppField || [], {
+    facedownValue: "printed",
+    includeBoosts: false,
+  });
+}
 
 /**
  * Decide se deve invocar um monstro e em qual posição.
@@ -38,24 +94,22 @@ export function shouldSummonMonster(card, analysis) {
 
     if (!knowledge) {
       // Fallback genérico
-      const oppStrongest = Math.max(
-        ...(analysis.oppField || []).map((m) => (m && m.atk) || 0),
-        0
-      );
+      const entryAssessment = assessLuminarchSummonEntry(card, analysis, {
+        profile: { lowImpactAtk: 0 },
+      });
+      const oppStrongest = getLuminarchAttackThreat(analysis);
       const isSafe = (card.atk || 0) >= oppStrongest || (card.def || 0) >= 2000;
 
       return {
         yes: true,
-        position: isSafe ? "attack" : "defense",
+        position: isSafe ? "attack" : entryAssessment.position || "defense",
         priority: 3,
         reason: isSafe ? "Beater genérico" : "Defense genérica",
       };
     }
 
-    const oppStrongest = Math.max(
-      ...(analysis.oppField || []).map((m) => (m && m.atk) || 0),
-      0
-    );
+    const oppStrongest = getLuminarchAttackThreat(analysis);
+    const entryAssessment = assessLuminarchSummonEntry(card, analysis);
 
     // ═════════════════════════════════════════════════════════════════════════
     // LUMINARCH STRATEGY: DEFENSIVE CONTROL
@@ -337,11 +391,9 @@ export function shouldSummonMonster(card, analysis) {
     if (name === "Luminarch Radiant Lancer") {
       const lancerPlan = evaluateRadiantLancerBattlePlan(card, analysis);
       const lancerAtk = getVisibleAtk(card) || card.atk || 2600;
-      const oppStrongestBattleStat = Math.max(
-        ...(analysis.oppField || []).map((monster) =>
-          getBattleStatForTarget(monster)
-        ),
-        0,
+      const oppStrongestBattleStat = getStrongestBattleStat(
+        analysis.oppField || [],
+        { facedownValue: 1500 },
       );
       const isSafeAttacker = lancerAtk > oppStrongestBattleStat;
       const hasDefensiveField = analysis.field.some(
@@ -498,7 +550,9 @@ export function shouldSummonMonster(card, analysis) {
 
     return {
       yes: true,
-      position: (card.def || 0) >= (card.atk || 0) ? "defense" : "attack",
+      position:
+        entryAssessment.position ||
+        ((card.def || 0) >= (card.atk || 0) ? "defense" : "attack"),
       priority: knowledge.priority || 3,
       reason: knowledge.effect || "Monstro genérico",
     };
