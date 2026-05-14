@@ -134,6 +134,58 @@ export async function tryActivateSpellTrapEffect(
 }
 
 /**
+ * Complete a Spell card activation after the activation pipeline resolves.
+ * This keeps hand Spell activations observable for triggers and analytics
+ * across manual play and AI execution.
+ */
+export async function finalizeSpellCardActivation(
+  result = {},
+  info = {},
+  options = {},
+) {
+  const card = info.card || options.card || null;
+  const owner = info.owner || options.owner || null;
+  const activationZone = info.activationZone || options.activationZone || null;
+  if (!card || !owner) return;
+
+  const placementOnly = result?.placementOnly === true;
+  const placementLog =
+    typeof options.placementLog === "function"
+      ? options.placementLog(card, info)
+      : options.placementLog;
+  const activationLog =
+    typeof options.activationLog === "function"
+      ? options.activationLog(card, info)
+      : options.activationLog;
+
+  if (placementOnly) {
+    this.ui?.log?.(placementLog || `${card.name} is placed on the field.`);
+  } else {
+    await this.finalizeSpellTrapActivation(card, owner, activationZone);
+    this.ui?.log?.(activationLog || `${card.name} effect activated.`);
+  }
+
+  await this.emit("spell_activated", {
+    card,
+    player: owner,
+    fromHand: options.fromHand ?? info.activationContext?.fromHand ?? false,
+    activationZone,
+    placementOnly,
+    effect: options.effect || null,
+  });
+
+  if (!placementOnly && options.offerChainWindow !== false) {
+    await this.checkAndOfferTraps("card_activation", {
+      card,
+      player: owner,
+      activationType: "spell",
+    });
+  }
+
+  this.updateBoard();
+}
+
+/**
  * Attempts to activate a spell card from hand.
  * @param {Card} card - The card to activate.
  * @param {number} handIndex - Index of the card in the player's hand.
@@ -234,32 +286,13 @@ export async function tryActivateSpell(
         ctx,
       ),
     finalize: async (result, info) => {
-      if (result.placementOnly) {
-        this.ui.log(`${info.card.name} is placed on the field.`);
-      } else {
-        await this.finalizeSpellTrapActivation(
-          info.card,
-          owner,
-          info.activationZone,
-        );
-        this.ui.log(`${info.card.name} effect activated.`);
-
-        // Emitir evento para captura de replay
-        this.emit("spell_activated", {
-          card: info.card,
-          player: owner,
-          fromHand: baseActivationContext.fromHand,
-          activationZone: info.activationZone,
-        });
-
-        // Offer chain window for opponent to respond to spell activation
-        await this.checkAndOfferTraps("card_activation", {
-          card: info.card,
-          player: owner,
-          activationType: "spell",
-        });
-      }
-      this.updateBoard();
+      await this.finalizeSpellCardActivation(result, info, {
+        owner,
+        fromHand: baseActivationContext.fromHand,
+        effect: activationEffect,
+        placementLog: `${info.card.name} is placed on the field.`,
+        activationLog: `${info.card.name} effect activated.`,
+      });
     },
   });
   return pipelineResult;

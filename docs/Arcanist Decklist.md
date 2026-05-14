@@ -40,7 +40,7 @@
 
 ### 208 — Master of Mirrors Arcanist
 - **ATK/DEF:** 2200 / 2200
-- **Nível/Tipo:** 7 — Spellcaster
+- **Nível/Tipo:** 6 — Spellcaster
 - **Efeitos:**
 	- Ao ser Invocado Normalmente: alvo 1–3 Magias "Arcanist" no seu Cemitério; embaralhe-as no Deck, depois compre 1 carta.
 	- Quando equipado com Magia de Equipamento "Arcanist": Invoque por Especial 1 monstro "Arcanist" de Nível 4 ou menor do seu Cemitério. (1x por turno cada efeito)

@@ -1004,6 +1004,8 @@ Game.prototype.setSpellOrTrap = spellTrapSet.setSpellOrTrap;
 // Activation: tryActivateSpellTrapEffect, tryActivateSpell, activateFieldSpellEffect
 Game.prototype.tryActivateSpellTrapEffect =
   spellTrapActivation.tryActivateSpellTrapEffect;
+Game.prototype.finalizeSpellCardActivation =
+  spellTrapActivation.finalizeSpellCardActivation;
 Game.prototype.tryActivateSpell = spellTrapActivation.tryActivateSpell;
 Game.prototype.activateFieldSpellEffect =
   spellTrapActivation.activateFieldSpellEffect;

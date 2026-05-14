@@ -2,6 +2,30 @@ import { getUI } from "./shared.js";
 
 const DEFAULT_CHOICE_IMAGE = "assets/card-back.png";
 
+function isAIPlayer(player) {
+  return player?.controllerType === "ai";
+}
+
+function resolveAutoSelection(game, selectionContract, options = {}) {
+  const player = options.player || options.context?.player || null;
+  if (!isAIPlayer(player)) return { attempted: false, selections: null };
+
+  const autoResult = game?.autoSelector?.select?.(selectionContract, {
+    owner: player,
+    player,
+    source: options.card || options.context?.source || null,
+    activationContext:
+      options.activationContext || options.context?.activationContext || {},
+    selectionContract,
+    game,
+  });
+
+  return {
+    attempted: true,
+    selections: autoResult?.ok ? autoResult.selections : null,
+  };
+}
+
 function buildChoiceCandidates(cases, ctx, action, engine) {
   const game = engine?.game;
   const requirementId = action.requirementId || "action_case_choice";
@@ -97,6 +121,16 @@ function runSelectionContract(game, selectionContract, options = {}) {
       resolve(value);
     };
 
+    const autoSelection = resolveAutoSelection(
+      game,
+      selectionContract,
+      options,
+    );
+    if (autoSelection.attempted) {
+      finalize(autoSelection.selections);
+      return;
+    }
+
     game.startTargetSelectionSession({
       kind: options.kind || selectionContract?.kind || "choice",
       selectionContract,
@@ -129,6 +163,9 @@ async function resolveTargetsWithPrompt(engine, ctx, targetDefs) {
       kind: targetResult.selectionContract?.kind || "target",
       card: ctx?.source || null,
       allowCancel: true,
+      context: ctx,
+      player: ctx?.player || null,
+      activationContext: ctx?.activationContext || {},
     }
   );
 
@@ -192,6 +229,9 @@ export async function handleChooseActionCase(action, ctx, targets, engine) {
     kind: action.selectionKind || "choice",
     card: ctx?.source || null,
     allowCancel: action.allowCancel !== false,
+    context: ctx,
+    player,
+    activationContext: ctx?.activationContext || {},
   });
 
   if (!selections || Object.keys(selections).length === 0) {
