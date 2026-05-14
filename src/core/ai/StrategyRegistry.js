@@ -2,6 +2,7 @@ import LuminarchStrategy from "./LuminarchStrategy.js";
 import ShadowHeartStrategy from "./ShadowHeartStrategy.js";
 import VoidStrategy from "./VoidStrategy.js";
 import DragonStrategy from "./DragonStrategy.js";
+import ArcanistStrategy from "./ArcanistStrategy.js";
 
 const registry = new Map();
 
@@ -23,3 +24,4 @@ registerStrategy("shadowheart", ShadowHeartStrategy);
 registerStrategy("luminarch", LuminarchStrategy);
 registerStrategy("void", VoidStrategy);
 registerStrategy("dragon", DragonStrategy);
+registerStrategy("arcanist", ArcanistStrategy);

@@ -18,6 +18,7 @@ export default class Bot extends Player {
       { id: "luminarch", label: "Luminarch" },
       { id: "void", label: "Void" },
       { id: "dragon", label: "Dragon" },
+      { id: "arcanist", label: "Arcanist" },
     ];
   }
 
@@ -50,7 +51,9 @@ export default class Bot extends Player {
           ? this.getVoidDeck()
           : this.archetype === "dragon"
             ? this.getDragonDeck()
-            : this.getLuminarchDeck();
+            : this.archetype === "arcanist"
+              ? this.getArcanistDeck()
+              : this.getLuminarchDeck();
 
     for (const cardId of deckList) {
       const data = cardDatabaseById.get(cardId);
@@ -225,6 +228,29 @@ export default class Bot extends Player {
     ];
   }
 
+  getArcanistDeck() {
+    return [
+      // Monsters - 14
+      202, 202, 202, // Arcanist Apprentice
+      207, 207, 207, // Albus, Arcanist of Ice
+      214, 214, // Azrath
+      206, 206, // Tera
+      205, 205, // Viridis
+      208, // Master of Mirrors Arcanist
+      213, // Elementalist
+
+      // Spells and traps - 16
+      212, 212, 212, // Grand Library
+      201, 201, 201, // Grimoire
+      216, 216, 216, // Seismic Impact
+      211, 211, // Ink River
+      204, 204, // Lightning Lance
+      210, // Ice Barrier
+      203, // Crimson Explosion
+      209, // Meeting
+    ];
+  }
+
   // Sobrescreve buildExtraDeck para usar fusões do arquétipo
   buildExtraDeck() {
     const extraDeckList =
@@ -234,7 +260,9 @@ export default class Bot extends Player {
           ? this.getVoidExtraDeck()
           : this.archetype === "dragon"
             ? this.getDragonExtraDeck()
-            : this.getLuminarchExtraDeck();
+            : this.archetype === "arcanist"
+              ? this.getArcanistExtraDeck()
+              : this.getLuminarchExtraDeck();
     super.buildExtraDeck(extraDeckList);
   }
 
@@ -271,6 +299,10 @@ export default class Bot extends Player {
       30,  // Tech-Void Dragon (fusion: Voltaic Dragon + lv5+ Dragon)
       255, // Supreme Bahamut Dragon (fusion: banish 5 Extreme Dragons from GY)
     ];
+  }
+
+  getArcanistExtraDeck() {
+    return [];
   }
 
   resolveOpponent(game) {
@@ -1526,17 +1558,13 @@ export default class Bot extends Player {
             ctx,
           ),
         finalize: async (result, info) => {
-          if (result.placementOnly) {
-            game.ui?.log?.(`Bot places ${info.card.name}.`);
-          } else {
-            await game.finalizeSpellTrapActivation(
-              info.card,
-              this,
-              info.activationZone,
-            );
-            game.ui?.log?.(`Bot activates ${info.card.name}`);
-          }
-          game.updateBoard();
+          await game.finalizeSpellCardActivation(result, info, {
+            owner: this,
+            fromHand: true,
+            effect: activationEffect,
+            placementLog: `Bot places ${info.card.name}.`,
+            activationLog: `Bot activates ${info.card.name}`,
+          });
         },
       });
       // Pipeline retorna false, null, ou {success: false} quando falha
