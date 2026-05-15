@@ -252,7 +252,7 @@ export default class AutoSelector {
         targetPreference?.preferredNames?.length
       ) {
         return (
-          getNamedPreferenceTargetScore(baseCard, targetPreference) +
+          getNamedPreferenceTargetScore(baseCard, targetPreference, candidate) +
           (isSelf ? -0.4 : 0.4)
         );
       }
@@ -285,7 +285,7 @@ export default class AutoSelector {
         targetPreference?.preferredNames?.length
       ) {
         return (
-          getNamedPreferenceTargetScore(baseCard, targetPreference) +
+          getNamedPreferenceTargetScore(baseCard, targetPreference, candidate) +
           (isSelf ? 0.2 : -0.4)
         );
       }
@@ -503,13 +503,37 @@ function countAvailableOffensivePayoffs(player, payoffNames = []) {
   ).length;
 }
 
-function getNamedPreferenceTargetScore(card, preference = {}) {
+function getCandidateInstanceIds(card, candidate) {
+  return [
+    candidate?.instanceId,
+    candidate?.fieldPresenceId,
+    candidate?.cardRef?.instanceId,
+    candidate?.cardRef?.fieldPresenceId,
+    card?.instanceId,
+    card?.fieldPresenceId,
+  ].filter((id) => id !== null && id !== undefined);
+}
+
+function listIncludesInstance(ids = [], candidateIds = []) {
+  if (!Array.isArray(ids) || ids.length === 0) return false;
+  const normalized = new Set(ids.map((id) => String(id)));
+  return candidateIds.some((id) => normalized.has(String(id)));
+}
+
+function getNamedPreferenceTargetScore(card, preference = {}, candidate = null) {
   if (!card) return -100;
   const preferredNames = preference.preferredNames || [];
   const avoidNames = preference.avoidNames || [];
+  const candidateIds = getCandidateInstanceIds(card, candidate);
   let score = estimateCardValue(card);
   if (preferredNames.includes(card.name)) score += 40;
   if (avoidNames.includes(card.name)) score -= 30;
+  if (listIncludesInstance(preference.preferredInstanceIds, candidateIds)) {
+    score += 55;
+  }
+  if (listIncludesInstance(preference.avoidInstanceIds, candidateIds)) {
+    score -= 45;
+  }
   return score;
 }
 

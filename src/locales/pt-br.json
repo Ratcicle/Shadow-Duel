@@ -434,7 +434,7 @@
     },
     "211": {
       "name": "Rio de Tinta Arcanista",
-      "description": "Cada vez que você ativar uma Magia \"Arcanista\": adicione 1 contador de Tinta a este card. Você pode remover 2 contadores de Tinta deste card; adicione 1 Magia \"Arcanista\" do seu Cemitério à sua mão."
+      "description": "Cada vez que você ativar o efeito de uma Magia \"Arcanista\", exceto \"Rio de Tinta Arcanista\": adicione 1 contador de Tinta a este card. Você pode remover 2 contadores de Tinta deste card; adicione 1 Magia \"Arcanista\" do seu Cemitério à sua mão."
     },
     "212": {
       "name": "Grande Biblioteca Arcanista",
@@ -454,7 +454,7 @@
     },
     "216": {
       "name": "Impacto Sísmico Arcanista",
-      "description": "Se você controlar um monstro \"Arcanista\": descarte 1 card e, depois, escolha 1 card que seu oponente controla; devolva-o para a mão, ou, se você controlar uma Magia de Equipamento \"Arcanista\", bana-o em vez disso. Você só pode ativar 1 \"Impacto Sísmico Arcanista\" por turno."
+      "description": "Se você controlar um monstro \"Arcanista\" equipado com uma Magia de Equipamento \"Arcanista\": envie 1 Magia de Equipamento \"Arcanista\" que você controla para o Cemitério e, depois, escolha 1 card que seu oponente controla; bana-o. Você só pode ativar 1 \"Impacto Sísmico Arcanista\" por turno."
     },
     "250": {
       "name": "Dragão Extremo de Fogo",

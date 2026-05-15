@@ -5542,20 +5542,54 @@
     subtype: "continuous",
     archetype: "Arcanist",
     description:
-      'Each time you activate an "Arcanist" Spell: place 1 Ink counter on this card. You can remove 2 Ink counters from this card; add 1 "Arcanist" Spell from your GY to your hand.',
+      'Each time you activate the effect of an "Arcanist" Spell, except "Arcanist Ink River": place 1 Ink counter on this card. You can remove 2 Ink counters from this card; add 1 "Arcanist" Spell from your GY to your hand.',
     image: "assets/Arcanist Ink River.png",
     effects: [
       {
-        id: "arcanist_ink_river_counter",
+        id: "arcanist_ink_river_counter_normal_spell",
         timing: "on_event",
-        event: "spell_activated",
+        event: "effect_activated",
         requireZone: "spellTrap",
         requireFaceup: true,
         promptUser: false,
         triggerPlayer: "self",
+        excludeActivatedSelf: true,
         activatedCardFilters: {
           cardKind: "spell",
+          subtype: "normal",
           archetype: "Arcanist",
+        },
+        activatedEffectFilters: {
+          timing: "on_play",
+          placementOnly: false,
+        },
+        actions: [
+          {
+            type: "add_counter",
+            targetRef: "self",
+            counterType: "ink",
+            amount: 1,
+          },
+        ],
+      },
+      {
+        id: "arcanist_ink_river_counter_field_spell_effect",
+        timing: "on_event",
+        event: "effect_activated",
+        requireZone: "spellTrap",
+        requireFaceup: true,
+        promptUser: false,
+        triggerPlayer: "self",
+        excludeActivatedSelf: true,
+        activatedCardFilters: {
+          cardKind: "spell",
+          subtype: ["continuous", "field", "equip"],
+          archetype: "Arcanist",
+        },
+        activatedEffectFilters: {
+          timing: "ignition",
+          activationZone: ["spellTrap", "fieldSpell"],
+          placementOnly: false,
         },
         actions: [
           {
@@ -5927,7 +5961,7 @@
     subtype: "normal",
     archetype: "Arcanist",
     description:
-      'If you control an "Arcanist" monster: discard 1 card, then target 1 card your opponent controls; return it to the hand, or, if you control an "Arcanist" Equip Spell, banish it instead. You can only activate 1 "Arcanist Seismic Impact" per turn.',
+      'If you control an "Arcanist" monster equipped with an "Arcanist" Equip Spell: send 1 "Arcanist" Equip Spell you control to the GY, then target 1 card your opponent controls; banish it. You can only activate 1 "Arcanist Seismic Impact" per turn.',
     image: "assets/Arcanist Seismic Impact.png",
     effects: [
       {
@@ -5945,14 +5979,25 @@
             cardKind: "monster",
             archetype: "Arcanist",
             requireFaceup: true,
-            reason: 'You must control an "Arcanist" monster.',
+            equippedWithFilters: {
+              cardKind: "spell",
+              subtype: "equip",
+              archetype: "Arcanist",
+              requireFaceup: true,
+            },
+            reason:
+              'You must control an "Arcanist" monster equipped with an "Arcanist" Equip Spell.',
           },
         ],
         targets: [
           {
-            id: "seismic_impact_discard_cost",
+            id: "seismic_impact_equip_cost",
             owner: "self",
-            zone: "hand",
+            zone: "spellTrap",
+            cardKind: "spell",
+            subtype: "equip",
+            archetype: "Arcanist",
+            requireFaceup: true,
             count: { min: 1, max: 1 },
             intent: "cost",
           },
@@ -5966,40 +6011,13 @@
         actions: [
           {
             type: "move",
-            targetRef: "seismic_impact_discard_cost",
+            targetRef: "seismic_impact_equip_cost",
             player: "self",
             to: "graveyard",
           },
           {
-            type: "conditional_target_actions",
+            type: "banish",
             targetRef: "seismic_impact_target",
-            cases: [
-              {
-                conditions: [
-                  {
-                    type: "control_card_filters",
-                    owner: "self",
-                    zone: "spellTrap",
-                    cardKind: "spell",
-                    subtype: "equip",
-                    archetype: "Arcanist",
-                    requireFaceup: true,
-                  },
-                ],
-                actions: [
-                  {
-                    type: "banish",
-                    targetRef: "seismic_impact_target",
-                  },
-                ],
-              },
-            ],
-            defaultActions: [
-              {
-                type: "return_to_hand",
-                targetRef: "seismic_impact_target",
-              },
-            ],
           },
         ],
       },

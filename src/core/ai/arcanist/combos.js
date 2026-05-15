@@ -56,6 +56,9 @@ export function detectAvailableCombos(analysis = {}) {
   const hasFaceUpArcanist = field.some(
     (card) => isArcanistMonster(card) && !card.isFacedown,
   );
+  const hasEquippedArcanist = field.some(
+    (card) => isArcanistMonster(card) && !card.isFacedown && hasArcanistEquip(card),
+  );
 
   if (hasApprentice && !hasLibraryActive) {
     pushCombo(combos, {
@@ -116,16 +119,19 @@ export function detectAvailableCombos(analysis = {}) {
 
   if (
     hasName(hand, ARCANIST_NAMES.SEISMIC_IMPACT) &&
-    hasFaceUpArcanist &&
+    hasEquippedArcanist &&
     controlsArcanistEquip(analysis.player) &&
-    (analysis.oppField || []).length + (analysis.oppSpellTrap || []).length > 0
+    (analysis.oppField || []).length +
+      (analysis.oppSpellTrap || []).length +
+      (analysis.oppFieldSpell ? 1 : 0) >
+      0
   ) {
     pushCombo(combos, {
       id: "equipped_seismic_banish",
       name: "Equipped Seismic banish",
       priority: 13,
       cards: [ARCANIST_NAMES.SEISMIC_IMPACT],
-      description: "With an Arcanist Equip active, Seismic Impact banishes.",
+      description: "Spend an Arcanist Equip to let Seismic Impact banish.",
     });
   }
 

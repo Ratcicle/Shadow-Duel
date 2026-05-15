@@ -139,6 +139,7 @@ export async function runActivationPipeline(config = {}) {
   }
 
   const oncePerTurnConfig = config.oncePerTurn || null;
+  const activationEffect = oncePerTurnConfig?.effect || config.effect || null;
   let oncePerTurnInfo = null;
   if (oncePerTurnConfig?.effect && oncePerTurnConfig.effect.oncePerTurn) {
     const optCard = oncePerTurnConfig.card || resolvedCard;
@@ -496,7 +497,7 @@ export async function runActivationPipeline(config = {}) {
       await this.emitEffectActivated({
         card: resolvedCard,
         player: owner,
-        effect: oncePerTurnInfo?.effect || config.effect || null,
+        effect: oncePerTurnInfo?.effect || activationEffect,
         activationZone: resolvedActivationZone,
         activationContext,
         effectType: selectionKind,

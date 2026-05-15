@@ -85,16 +85,6 @@ function removeOpponentCard(state, card, destination) {
   return true;
 }
 
-function getCheapestDiscard(player) {
-  return (player?.hand || [])
-    .slice()
-    .sort((a, b) => {
-      const valueA = evaluateArcanistCardValue(a);
-      const valueB = evaluateArcanistCardValue(b);
-      return valueA - valueB;
-    })[0];
-}
-
 export default class ArcanistStrategy extends BaseStrategy {
   constructor(bot) {
     super(bot);
@@ -617,21 +607,33 @@ export default class ArcanistStrategy extends BaseStrategy {
     }
 
     if (card.name === ARCANIST_NAMES.SEISMIC_IMPACT) {
-      if (!player.field?.some(isArcanistMonster)) return true;
+      const equippedHost = (player.field || []).find(
+        (candidate) =>
+          isArcanistMonster(candidate) &&
+          !candidate.isFacedown &&
+          hasArcanistEquip(candidate),
+      );
+      const equipCost = (player.spellTrap || []).find(
+        (candidate) =>
+          candidate &&
+          !candidate.isFacedown &&
+          isArcanistSpell(candidate) &&
+          candidate.subtype === "equip",
+      );
+      if (!equippedHost || !equipCost) return true;
       const target = findOpponentTarget(state);
       if (!target) return true;
       player.hand.splice(handIndex, 1);
       pushToZone(player, "graveyard", card);
-      const discard = getCheapestDiscard(player);
-      if (discard) {
-        removeFromZone(player, "hand", discard);
-        pushToZone(player, "graveyard", discard);
+      removeFromZone(player, "spellTrap", equipCost);
+      for (const monster of player.field || []) {
+        if (Array.isArray(monster.equips)) {
+          monster.equips = monster.equips.filter((equip) => equip !== equipCost);
+        }
       }
-      removeOpponentCard(
-        state,
-        target,
-        controlsArcanistEquip(player) ? "banished" : "hand",
-      );
+      equipCost.equippedTo = null;
+      pushToZone(player, "graveyard", equipCost);
+      removeOpponentCard(state, target, "banished");
       return true;
     }
 

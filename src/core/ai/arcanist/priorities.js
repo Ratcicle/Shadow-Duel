@@ -80,20 +80,113 @@ function canAccessGrimoireThisTurn(analysis = {}) {
   );
 }
 
-function hasSpellFlowAfterInk(analysis = {}) {
-  const handSpells = (analysis.hand || []).filter(
-    (card) => isArcanistSpell(card) && card.name !== ARCANIST_NAMES.INK_RIVER,
+function isNormalArcanistSpellCounterSource(card) {
+  return (
+    isArcanistSpell(card) &&
+    card.name !== ARCANIST_NAMES.INK_RIVER &&
+    card.subtype === "normal"
   );
+}
+
+function hasMeetingIgnitionCost(analysis = {}) {
+  const hand = analysis.hand || [];
+  const monsters = hand.filter(isArcanistMonster).length;
+  const spells = hand.filter(isArcanistSpell).length;
+  return monsters >= 2 || spells >= 2;
+}
+
+function canUseGrandLibraryForInkCounter(analysis = {}) {
+  if (analysis.fieldSpell?.name !== ARCANIST_NAMES.GRAND_LIBRARY) {
+    return false;
+  }
+
+  const hosts = getOwnArcanistHosts(analysis);
+  if (hosts.length === 0) {
+    return (
+      (analysis.player?.lp || analysis.lp || 0) > 2200 &&
+      (analysis.deck || []).some(
+        (card) => isArcanistMonster(card) && (card.level || 0) <= 4,
+      )
+    );
+  }
+
+  return !hasFaceUpGrimoire(analysis) && hasGrimoireInDeck(analysis);
+}
+
+function canUseSpellTrapIgnitionForInkCounter(card, analysis = {}) {
+  if (
+    !card ||
+    card.isFacedown ||
+    !isArcanistSpell(card) ||
+    card.name === ARCANIST_NAMES.INK_RIVER
+  ) {
+    return false;
+  }
+
+  if (card.subtype !== "continuous" && card.subtype !== "equip") {
+    return false;
+  }
+
+  const hasIgnition = (card.effects || []).some(
+    (effect) =>
+      effect &&
+      effect.timing === "ignition" &&
+      (!effect.requireZone || effect.requireZone === "spellTrap"),
+  );
+  if (!hasIgnition) return false;
+
+  if (card.name === ARCANIST_NAMES.GRIMOIRE) {
+    return getStoredBlueprintCount(card) > 0;
+  }
+  if (card.name === ARCANIST_NAMES.MEETING) {
+    return hasMeetingIgnitionCost(analysis);
+  }
+
+  return true;
+}
+
+function getInkCounterFlowAfterInk(analysis = {}) {
+  const normalSpellSources = (analysis.hand || []).filter(
+    isNormalArcanistSpellCounterSource,
+  ).length;
   const hasFieldSpellEffect =
-    analysis.fieldSpell?.name === ARCANIST_NAMES.GRAND_LIBRARY &&
-    (getOwnArcanistHosts(analysis).length > 0 || (analysis.player?.lp || 0) > 2200);
-  const hasStoredGrimoire = (analysis.spellTrap || []).some(
+    canUseGrandLibraryForInkCounter(analysis) ? 1 : 0;
+  const spellTrapEffectSources = (analysis.spellTrap || []).filter((card) =>
+    canUseSpellTrapIgnitionForInkCounter(card, analysis),
+  ).length;
+
+  return {
+    normalSpellSources,
+    fieldSpellEffectSources: hasFieldSpellEffect,
+    spellTrapEffectSources,
+    totalSources:
+      normalSpellSources + hasFieldSpellEffect + spellTrapEffectSources,
+  };
+}
+
+function describeInkCounterFlow(flow = {}) {
+  const parts = [];
+  if (flow.normalSpellSources > 0) {
+    parts.push(`${flow.normalSpellSources} normal spell(s)`);
+  }
+  if (flow.fieldSpellEffectSources > 0) {
+    parts.push("Grand Library effect");
+  }
+  if (flow.spellTrapEffectSources > 0) {
+    parts.push(`${flow.spellTrapEffectSources} face-up spell effect(s)`);
+  }
+  return parts.length > 0
+    ? parts.join(", ")
+    : "no immediate Ink counter source";
+}
+
+function getNonCounterSetupSpellsAfterInk(analysis = {}) {
+  return (analysis.hand || []).filter(
     (card) =>
-      card?.name === ARCANIST_NAMES.GRIMOIRE &&
-      !card.isFacedown &&
-      getStoredBlueprintCount(card) > 0,
+      isArcanistSpell(card) &&
+      card.name !== ARCANIST_NAMES.INK_RIVER &&
+      !isNormalArcanistSpellCounterSource(card),
   );
-  return handSpells.length > 0 || hasFieldSpellEffect || hasStoredGrimoire;
 }
 
 function getStoredBlueprints(card) {
@@ -133,7 +226,10 @@ function isLowValueDiscard(card, analysis = {}) {
   ) {
     return true;
   }
-  if (card.name === ARCANIST_NAMES.CRIMSON_EXPLOSION && (analysis.oppField || []).length === 0) {
+  if (
+    card.name === ARCANIST_NAMES.CRIMSON_EXPLOSION &&
+    !evaluateCrimsonExplosionPlan(analysis).ok
+  ) {
     return true;
   }
   if (
@@ -286,6 +382,161 @@ function getHighestValueOpponentNames(analysis = {}) {
     .map((card) => card.name);
 }
 
+function getCardInstanceId(card) {
+  return card?.instanceId ?? card?.fieldPresenceId ?? null;
+}
+
+function isSameCardInstance(a, b) {
+  if (!a || !b) return false;
+  const aInstance = getCardInstanceId(a);
+  const bInstance = getCardInstanceId(b);
+  if (aInstance !== null && bInstance !== null) {
+    return String(aInstance) === String(bInstance);
+  }
+  return a === b;
+}
+
+function isEquipAttachedToMonster(equip, monster) {
+  if (!equip || !monster) return false;
+  if (isSameCardInstance(equip.equippedTo, monster)) return true;
+  return (monster.equips || []).some((attached) =>
+    isSameCardInstance(attached, equip),
+  );
+}
+
+function getFaceUpArcanistEquipCards(analysis = {}) {
+  return (analysis.spellTrap || []).filter(
+    (card) => card && !card.isFacedown && isArcanistEquip(card),
+  );
+}
+
+function hasSeismicImpactSetup(analysis = {}) {
+  return (
+    getOwnArcanistHosts(analysis).some(hasArcanistEquip) &&
+    getFaceUpArcanistEquipCards(analysis).length > 0
+  );
+}
+
+function hasPremiumSeismicTarget(analysis = {}) {
+  const oppCards = getOpponentCardCount(analysis);
+  if (oppCards === 0) return false;
+  const strongestBattle =
+    analysis.oppStrongestBattle ??
+    getStrongestBattleThreat(analysis.oppField || [], { includeBoosts: true });
+  const canPressureLp =
+    (analysis.oppLp ?? analysis.oppLP ?? analysis.opponent?.lp ?? 8000) <= 2500 &&
+    getOwnArcanistHosts(analysis).some(
+      (monster) => monster.position === "attack" && !monster.hasAttacked,
+    );
+  return (
+    strongestBattle >= 2200 ||
+    (analysis.oppSpellTrap || []).length > 0 ||
+    !!analysis.oppFieldSpell ||
+    oppCards >= 3 ||
+    canPressureLp
+  );
+}
+
+function getCrimsonDamage(card) {
+  return Math.max(0, Math.floor(((card?.atk || 0) * 0.5)));
+}
+
+function evaluateCrimsonExplosionPlan(analysis = {}) {
+  const selfTargets = getOwnArcanistHosts(analysis);
+  const opponentTargets = (analysis.oppField || []).filter(
+    (card) => card?.cardKind === "monster" && !card.isFacedown,
+  );
+  if (selfTargets.length === 0 || opponentTargets.length === 0) {
+    return { ok: false, reason: "need face-up targets for Crimson" };
+  }
+
+  const ownLp = analysis.lp ?? analysis.player?.lp ?? 8000;
+  const opponentLp = analysis.oppLp ?? analysis.oppLP ?? analysis.opponent?.lp ?? 8000;
+  const equipCards = getFaceUpArcanistEquipCards(analysis);
+  const protectedNames = [
+    ARCANIST_NAMES.AZRATH,
+    ARCANIST_NAMES.ELEMENTALIST,
+    ARCANIST_NAMES.MASTER_OF_MIRRORS,
+  ];
+  const strongestOpponentAtk = getStrongestAttackThreat(opponentTargets, {
+    includeBoosts: true,
+  });
+
+  let best = null;
+  for (const selfTarget of selfTargets) {
+    const attachedEquips = equipCards.filter((equip) =>
+      isEquipAttachedToMonster(equip, selfTarget),
+    );
+    const hasSurvivingEquip = equipCards.some(
+      (equip) => !isEquipAttachedToMonster(equip, selfTarget),
+    );
+    const selfDamage = hasSurvivingEquip ? 0 : getCrimsonDamage(selfTarget);
+    const losesLastMonster = selfTargets.length <= 1;
+    const losesEquip = attachedEquips.length > 0;
+    const protectedSelf = protectedNames.includes(selfTarget.name);
+    const selfValue = evaluateArcanistCardValue(selfTarget, analysis);
+
+    for (const opponentTarget of opponentTargets) {
+      const opponentDamage = getCrimsonDamage(opponentTarget);
+      const lethal = opponentDamage >= opponentLp;
+      if (selfDamage >= ownLp) continue;
+      if (!lethal && losesLastMonster) continue;
+      if (!lethal && losesEquip) continue;
+      if (!lethal && protectedSelf) continue;
+
+      const opponentValue = evaluateArcanistCardValue(opponentTarget, analysis);
+      const oneSided = selfDamage === 0;
+      const removesThreat =
+        (opponentTarget.atk || 0) >= 2200 ||
+        strongestOpponentAtk >= 2200 ||
+        opponentValue >= 9;
+      const cleanTrade = selfValue <= 8 && opponentValue >= selfValue + 1;
+      const worthwhile =
+        lethal ||
+        (oneSided && (removesThreat || opponentDamage >= 800)) ||
+        (!oneSided && cleanTrade && removesThreat);
+      if (!worthwhile) continue;
+
+      let score = opponentValue * 4 + opponentDamage / 160;
+      score -= selfValue * (oneSided ? 0.7 : 1.1);
+      score -= selfDamage / 220;
+      if (oneSided) score += 12;
+      if (lethal) score += 35;
+      if (removesThreat) score += 8;
+      if (losesLastMonster) score -= 12;
+      if (losesEquip) score -= 10;
+
+      if (!best || score > best.score) {
+        const priority = lethal
+          ? 14
+          : oneSided
+            ? Math.min(12, 10 + Math.floor(opponentValue / 6))
+            : removesThreat
+              ? 8
+              : 5;
+        best = {
+          ok: true,
+          score,
+          priority,
+          selfTarget,
+          opponentTarget,
+          selfDamage,
+          opponentDamage,
+          oneSided,
+          lethal,
+          reason: lethal
+            ? "safe Crimson lethal"
+            : oneSided
+              ? "one-sided Crimson removal"
+              : "clean Crimson trade removal",
+        };
+      }
+    }
+  }
+
+  return best || { ok: false, reason: "no safe Crimson trade" };
+}
+
 function getCheapArcanistNamesForCrimson(analysis = {}) {
   return (analysis.field || [])
     .filter((card) => isArcanistMonster(card) && !card.isFacedown)
@@ -334,7 +585,24 @@ function getMeetingChoiceNames(analysis = {}) {
 export function buildArcanistTargetPreferences(card, analysis = {}) {
   const opponentNames = getHighestValueOpponentNames(analysis);
   const grimoireHosts = getBestGrimoireHostNames(analysis);
-  const cheapArcanists = getCheapArcanistNamesForCrimson(analysis);
+  const isCrimsonSource =
+    card?.name === ARCANIST_NAMES.CRIMSON_EXPLOSION ||
+    (card?.name === ARCANIST_NAMES.GRIMOIRE &&
+      getStoredBlueprintName(card) === ARCANIST_NAMES.CRIMSON_EXPLOSION);
+  const crimsonPlan = isCrimsonSource
+    ? evaluateCrimsonExplosionPlan(analysis)
+    : null;
+  const cheapArcanists = crimsonPlan?.ok
+    ? [crimsonPlan.selfTarget.name]
+    : getCheapArcanistNamesForCrimson(analysis);
+  const crimsonSelfInstanceId = getCardInstanceId(crimsonPlan?.selfTarget);
+  const crimsonOpponentInstanceId = getCardInstanceId(crimsonPlan?.opponentTarget);
+  const crimsonAvoidSelfInstanceIds = isCrimsonSource
+    ? getOwnArcanistHosts(analysis)
+        .filter((candidate) => !isSameCardInstance(candidate, crimsonPlan?.selfTarget))
+        .map(getCardInstanceId)
+        .filter((id) => id !== null)
+    : [];
 
   const spellRecoveryNames = sortByNameOrder(
     (analysis.graveyard || []).filter(isArcanistSpell),
@@ -344,11 +612,23 @@ export function buildArcanistTargetPreferences(card, analysis = {}) {
     (analysis.graveyard || []).filter(isArcanistMonster),
     ARCANIST_MONSTER_RECOVERY_ORDER,
   ).map((candidate) => candidate.name);
+  const seismicEquipCostNames = getFaceUpArcanistEquipCards(analysis)
+    .slice()
+    .sort(
+      (a, b) =>
+        evaluateArcanistCardValue(a, analysis) -
+        evaluateArcanistCardValue(b, analysis),
+    )
+    .map((candidate) => candidate.name);
 
   const preferences = {
     grimoire_equip_target: {
       role: "named_preference",
       preferredNames: grimoireHosts,
+    },
+    seismic_impact_equip_cost: {
+      role: "named_preference",
+      preferredNames: seismicEquipCostNames,
     },
     seismic_impact_target: {
       role: "removal",
@@ -357,6 +637,9 @@ export function buildArcanistTargetPreferences(card, analysis = {}) {
     crimson_magic_self_target: {
       role: "named_preference",
       preferredNames: cheapArcanists,
+      preferredInstanceIds:
+        crimsonSelfInstanceId !== null ? [crimsonSelfInstanceId] : [],
+      avoidInstanceIds: crimsonAvoidSelfInstanceIds,
       avoidNames: [
         ARCANIST_NAMES.AZRATH,
         ARCANIST_NAMES.ELEMENTALIST,
@@ -365,7 +648,11 @@ export function buildArcanistTargetPreferences(card, analysis = {}) {
     },
     crimson_magic_opponent_target: {
       role: "removal",
-      preferredNames: opponentNames,
+      preferredNames: crimsonPlan?.ok
+        ? [crimsonPlan.opponentTarget.name]
+        : opponentNames,
+      preferredInstanceIds:
+        crimsonOpponentInstanceId !== null ? [crimsonOpponentInstanceId] : [],
     },
     lightning_magic_lance_target: {
       role: opponentNames.length ? "removal" : "named_preference",
@@ -581,7 +868,6 @@ export function shouldPlaySpell(card, analysis = {}) {
   const hasArcanistField = getOwnArcanistHosts(analysis).length > 0;
   const hasEquip = controlsArcanistEquip(analysis.player);
   const hasGrimoireActive = hasFaceUpGrimoire(analysis);
-  const handArcanistSpells = hand.filter(isArcanistSpell).length;
 
   if (card.name === ARCANIST_NAMES.GRAND_LIBRARY) {
     if (analysis.fieldSpell) {
@@ -618,26 +904,23 @@ export function shouldPlaySpell(card, analysis = {}) {
   if (card.name === ARCANIST_NAMES.SEISMIC_IMPACT) {
     if (!hasArcanistField) return { yes: false, reason: "need Arcanist field" };
     if (oppCards === 0) return { yes: false, reason: "no opposing card" };
-    if (hand.length < 2 && hand.includes(card)) {
-      return { yes: false, reason: "need discard card" };
+    if (!hasSeismicImpactSetup(analysis)) {
+      return {
+        yes: false,
+        reason: "need equipped Arcanist and Equip cost",
+      };
     }
-    if (!hasEquip && canAccessGrimoireThisTurn(analysis)) {
-      const emergencyRemoval =
-        (analysis.oppStrongestBattle || 0) >= 2800 ||
-        (analysis.lp || 8000) <= 3500 ||
-        oppCards >= 4;
-      if (!emergencyRemoval) {
-        return {
-          yes: false,
-          priority: 1,
-          reason: "delay Seismic until Grimoire turns it into banish",
-        };
-      }
+    if (!hasPremiumSeismicTarget(analysis)) {
+      return {
+        yes: false,
+        priority: 1,
+        reason: "hold Equip unless Seismic has a premium banish target",
+      };
     }
     return {
       yes: true,
-      priority: hasEquip ? 14 : oppCards >= 2 ? 7 : 5,
-      reason: hasEquip ? "banish opposing card" : "bounce opposing card",
+      priority: 11,
+      reason: "spend Equip to banish opposing card",
     };
   }
 
@@ -646,11 +929,18 @@ export function shouldPlaySpell(card, analysis = {}) {
       return { yes: false, reason: "Ink River already active" };
     }
     const gySpells = (analysis.graveyard || []).filter(isArcanistSpell).length;
-    const hasFlow = hasSpellFlowAfterInk(analysis);
+    const flow = getInkCounterFlowAfterInk(analysis);
+    const hasFlow = flow.totalSources > 0;
+    const setupOnlySpells = getNonCounterSetupSpellsAfterInk(analysis);
+    const priority = gySpells > 0 && hasFlow ? 16 : hasFlow ? 10 : 0;
     return {
-      yes: hasFlow || handArcanistSpells >= 2 || gySpells > 0,
-      priority: gySpells > 0 ? 16 : hasFlow ? 16 : 6,
-      reason: "sets up spell counter recursion",
+      yes: hasFlow,
+      priority,
+      reason: hasFlow
+        ? `sets up Ink counters via ${describeInkCounterFlow(flow)}`
+        : setupOnlySpells.length > 0
+          ? "permanent Arcanist spells in hand do not add Ink counters yet"
+          : "needs an immediate Ink counter source",
     };
   }
 
@@ -689,17 +979,14 @@ export function shouldPlaySpell(card, analysis = {}) {
   }
 
   if (card.name === ARCANIST_NAMES.CRIMSON_EXPLOSION) {
-    if (!hasArcanistField || oppField.length === 0) {
-      return { yes: false, reason: "need both Arcanist and opposing monster" };
+    const plan = evaluateCrimsonExplosionPlan(analysis);
+    if (!plan.ok) {
+      return { yes: false, reason: plan.reason };
     }
-    const oppStrongest = getStrongestAttackThreat(oppField, {
-      includeBoosts: true,
-    });
-    const hasCheapSelfTarget = getCheapArcanistNamesForCrimson(analysis).length > 0;
     return {
-      yes: hasEquip || oppStrongest >= 2200 || hasCheapSelfTarget,
-      priority: hasEquip ? 10 : oppStrongest >= 2200 ? 8 : 5,
-      reason: hasEquip ? "one-sided Crimson damage" : "trade removal",
+      yes: true,
+      priority: plan.priority,
+      reason: plan.reason,
     };
   }
 
@@ -743,27 +1030,26 @@ export function shouldActivateSpellTrapEffect(card, analysis = {}) {
 
     if (storedName === ARCANIST_NAMES.SEISMIC_IMPACT) {
       const opponentTargets = getOpponentCardCount(analysis);
-      const hasCheapDiscard = hasLowValueDiscard(analysis);
       const premiumTarget =
-        (analysis.oppStrongestBattle || 0) >= 2200 ||
-        (analysis.oppSpellTrap || []).length > 0 ||
-        !!analysis.oppFieldSpell;
+        hasSeismicImpactSetup(analysis) && hasPremiumSeismicTarget(analysis);
       return {
-        yes: opponentTargets > 0 && hasCheapDiscard && premiumTarget,
-        priority: 12,
-        reason: hasCheapDiscard
-          ? "use stored Seismic on premium target"
-          : "hold stored Seismic until a cheap discard exists",
+        yes: opponentTargets > 0 && premiumTarget,
+        priority: 10,
+        reason: premiumTarget
+          ? "spend Equip on stored Seismic banish"
+          : "hold stored Seismic until a premium Equip-cost banish exists",
       };
     }
 
     if (storedName === ARCANIST_NAMES.CRIMSON_EXPLOSION) {
+      const plan = evaluateCrimsonExplosionPlan(analysis);
+      if (!plan.ok) {
+        return { yes: false, reason: plan.reason };
+      }
       return {
-        yes:
-          (analysis.oppField || []).length > 0 &&
-          getCheapArcanistNamesForCrimson(analysis).length > 0,
-        priority: 9,
-        reason: "use stored Crimson only when the trade is clean",
+        yes: true,
+        priority: Math.max(8, plan.priority),
+        reason: `stored ${plan.reason}`,
       };
     }
 
@@ -928,8 +1214,15 @@ export function rankSearchCandidates(cards = [], action = {}, ctx = {}) {
       score += 7;
     }
     if (card.name === ARCANIST_NAMES.SEISMIC_IMPACT) {
-      score += getOpponentCardCount(analysis) > 0 ? 5 : 1;
-      if (controlsArcanistEquip(analysis.player)) score += 3;
+      if (hasSeismicImpactSetup(analysis) && hasPremiumSeismicTarget(analysis)) {
+        score += 5;
+      } else {
+        score -= 4;
+      }
+    }
+    if (card.name === ARCANIST_NAMES.CRIMSON_EXPLOSION) {
+      const crimsonPlan = evaluateCrimsonExplosionPlan(analysis);
+      score += crimsonPlan.ok ? crimsonPlan.priority - 5 : -35;
     }
     if (card.name === ARCANIST_NAMES.INK_RIVER) {
       score += (analysis.hand || []).filter(isArcanistSpell).length >= 2 ? 3 : 0;

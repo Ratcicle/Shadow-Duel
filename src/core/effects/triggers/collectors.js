@@ -67,6 +67,7 @@ export async function collectSpellActivatedTriggers(payload) {
   }
 
   const activatedCard = payload.card;
+  const activatedEffect = payload.effect || null;
   const activator = payload.player;
   const opponent = this.game?.getOpponent?.(activator);
   const participants = [];
@@ -144,6 +145,29 @@ export async function collectSpellActivatedTriggers(payload) {
         if (
           activatedFilters &&
           !this.cardMatchesFilters(activatedCard, activatedFilters)
+        ) {
+          continue;
+        }
+
+        const sameActivatedSource =
+          sourceCard === activatedCard ||
+          (sourceCard?.instanceId != null &&
+            activatedCard?.instanceId != null &&
+            sourceCard.instanceId === activatedCard.instanceId);
+        if (effect.excludeActivatedSelf === true && sameActivatedSource) {
+          continue;
+        }
+
+        const activatedEffectFilters =
+          effect.activatedEffectFilters || effect.requireActivatedEffectFilters;
+        if (
+          activatedEffectFilters &&
+          !this.effectMatchesFilters?.(activatedEffect, activatedEffectFilters, {
+            activationZone: payload.activationZone || null,
+            activationContext: payload.activationContext || null,
+            effectType: payload.effectType || null,
+            placementOnly: payload.placementOnly === true,
+          })
         ) {
           continue;
         }
@@ -291,6 +315,29 @@ export async function collectEffectActivatedTriggers(payload) {
         if (
           activatedFilters &&
           !this.cardMatchesFilters(activatedCard, activatedFilters)
+        ) {
+          continue;
+        }
+
+        const sameActivatedSource =
+          sourceCard === activatedCard ||
+          (sourceCard?.instanceId != null &&
+            activatedCard?.instanceId != null &&
+            sourceCard.instanceId === activatedCard.instanceId);
+        if (effect.excludeActivatedSelf === true && sameActivatedSource) {
+          continue;
+        }
+
+        const activatedEffectFilters =
+          effect.activatedEffectFilters || effect.requireActivatedEffectFilters;
+        if (
+          activatedEffectFilters &&
+          !this.effectMatchesFilters?.(activatedEffect, activatedEffectFilters, {
+            activationZone: payload.activationZone || null,
+            activationContext: payload.activationContext || null,
+            effectType: payload.effectType || null,
+            placementOnly: payload.placementOnly === true,
+          })
         ) {
           continue;
         }

@@ -337,6 +337,68 @@ export default class EffectEngine {
     return true;
   }
 
+  effectMatchesFilters(effect, filters = {}, context = {}) {
+    if (!effect) return false;
+
+    const idFilter = filters.effectId ?? filters.id;
+    if (idFilter !== undefined && idFilter !== null && effect.id !== idFilter) {
+      return false;
+    }
+
+    const idsFilter = filters.effectIds ?? filters.ids;
+    if (
+      Array.isArray(idsFilter) &&
+      idsFilter.length > 0 &&
+      !idsFilter.includes(effect.id)
+    ) {
+      return false;
+    }
+
+    if (filters.timing) {
+      const timings = Array.isArray(filters.timing)
+        ? filters.timing
+        : [filters.timing];
+      if (!timings.includes(effect.timing)) return false;
+    }
+
+    if (filters.event) {
+      const events = Array.isArray(filters.event)
+        ? filters.event
+        : [filters.event];
+      if (!events.includes(effect.event)) return false;
+    }
+
+    if (filters.requireZone) {
+      const zones = Array.isArray(filters.requireZone)
+        ? filters.requireZone
+        : [filters.requireZone];
+      if (!zones.includes(effect.requireZone)) return false;
+    }
+
+    if (filters.activationZone) {
+      const zones = Array.isArray(filters.activationZone)
+        ? filters.activationZone
+        : [filters.activationZone];
+      if (!zones.includes(context.activationZone || null)) return false;
+    }
+
+    if (filters.effectType) {
+      const types = Array.isArray(filters.effectType)
+        ? filters.effectType
+        : [filters.effectType];
+      if (!types.includes(context.effectType || null)) return false;
+    }
+
+    if (
+      typeof filters.placementOnly === "boolean" &&
+      context.placementOnly !== filters.placementOnly
+    ) {
+      return false;
+    }
+
+    return true;
+  }
+
   resolveLpCost(action, ctx, baseAmount = 0) {
     const resolvedBase = Number(baseAmount) || 0;
     const result = {
@@ -718,6 +780,8 @@ export default class EffectEngine {
           const cardKind = filters.cardKind ?? cond.cardKind;
           const subtype = filters.subtype ?? cond.subtype;
           const archetype = filters.archetype ?? cond.archetype;
+          const equippedWithFilters =
+            filters.equippedWithFilters ?? cond.equippedWithFilters;
           const cardName =
             filters.cardName ?? filters.name ?? cond.cardName ?? cond.name;
           const includeFacedown = cond.includeFacedown === true;
@@ -766,6 +830,17 @@ export default class EffectEngine {
                 ? cardName
                 : [cardName];
               if (!requiredNames.includes(card.name)) return false;
+            }
+            if (equippedWithFilters) {
+              const equipFilters = equippedWithFilters || {};
+              const requireEquipFaceup = equipFilters.requireFaceup !== false;
+              const equips = Array.isArray(card.equips) ? card.equips : [];
+              const hasMatchingEquip = equips.some((equip) => {
+                if (!equip) return false;
+                if (requireEquipFaceup && equip.isFacedown) return false;
+                return this.cardMatchesFilters(equip, equipFilters);
+              });
+              if (!hasMatchingEquip) return false;
             }
             return true;
           };

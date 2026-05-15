@@ -83,7 +83,7 @@ export const CARD_KNOWLEDGE = {
   [ARCANIST_NAMES.SEISMIC_IMPACT]: {
     role: "premium_removal",
     value: 10,
-    tags: ["discard_cost", "banish_with_equip"],
+    tags: ["equip_cost", "banish"],
   },
   [ARCANIST_NAMES.INK_RIVER]: {
     role: "resource_engine",

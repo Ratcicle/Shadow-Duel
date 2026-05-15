@@ -91,7 +91,7 @@
 
 ### 211 — Arcanist Ink River (Continuous)
 - **Efeitos:**
-	- Cada vez que você ativa uma Magia "Arcanist": coloque 1 Contador de Tinta nesta carta.
+	- Cada vez que você ativa o efeito de uma Magia "Arcanist", exceto "Arcanist Ink River": coloque 1 Contador de Tinta nesta carta.
 	- Você pode remover 2 Contadores de Tinta desta carta; adicione 1 Magia "Arcanist" do seu Cemitério à mão.
 
 ### 212 — Arcanist Grand Library (Field)
@@ -108,5 +108,5 @@
 
 ### 216 — Arcanist Seismic Impact (Normal)
 - **Efeito:**
-	- Se você controla um monstro "Arcanist": descarte 1 card e, depois, alvo 1 card que seu oponente controla; devolva-o para a mão, ou, se você controla uma Magia de Equipamento "Arcanist", bana-o em vez disso. Você só pode ativar 1 "Arcanist Seismic Impact" por turno.
+	- Se você controla um monstro "Arcanist" equipado com uma Magia de Equipamento "Arcanist": envie 1 Magia de Equipamento "Arcanist" que você controla para o Cemitério e, depois, alvo 1 card que seu oponente controla; bana-o. Você só pode ativar 1 "Arcanist Seismic Impact" por turno.
 	- Armazenável pelo Grimoire.
