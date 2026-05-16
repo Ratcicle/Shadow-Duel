@@ -1,5 +1,30 @@
 import { getUI, resolveTargetCards } from "./shared.js";
 
+function sameCardRef(ref, card) {
+  if (!ref || !card) return false;
+  if (ref === card) return true;
+  if (typeof ref === "object") {
+    return ref.instanceId != null && ref.instanceId === card.instanceId;
+  }
+  return card.instanceId != null && String(ref) === String(card.instanceId);
+}
+
+function isActiveEquipForCard(equip, card, ctx) {
+  if (!equip || !card) return false;
+  if (equip.cardKind !== "spell" || equip.subtype !== "equip") return false;
+  const isAttached =
+    sameCardRef(equip.equippedTo, card) || sameCardRef(equip.equipTarget, card);
+  if (!isAttached) return false;
+
+  const owner =
+    equip.owner === ctx?.player?.id
+      ? ctx.player
+      : equip.owner === ctx?.opponent?.id
+        ? ctx.opponent
+        : null;
+  return Array.isArray(owner?.spellTrap) && owner.spellTrap.includes(equip);
+}
+
 function matchesCardFilters(card, filters, ctx) {
   if (!card || !filters) return false;
 
@@ -27,6 +52,23 @@ function matchesCardFilters(card, filters, ctx) {
     const names = Array.isArray(nameFilter) ? nameFilter : [nameFilter];
     if (!names.includes(card.name)) return false;
   }
+  const excludeNames = [
+    filters.excludeName,
+    filters.excludeCardName,
+    ...(Array.isArray(filters.excludeNames) ? filters.excludeNames : []),
+    ...(Array.isArray(filters.excludeCardNames)
+      ? filters.excludeCardNames
+      : []),
+  ].filter(Boolean);
+  if (excludeNames.includes(card.name)) return false;
+
+  const excludeIds = [
+    filters.excludeId,
+    filters.excludeCardId,
+    ...(Array.isArray(filters.excludeIds) ? filters.excludeIds : []),
+    ...(Array.isArray(filters.excludeCardIds) ? filters.excludeCardIds : []),
+  ].filter((value) => value !== undefined && value !== null);
+  if (excludeIds.includes(card.id)) return false;
 
   if (filters.archetype) {
     const required = Array.isArray(filters.archetype)
@@ -81,6 +123,19 @@ function matchesCardFilters(card, filters, ctx) {
   if (filters.maxDef !== undefined) {
     const cardDef = card.def || 0;
     if (cardDef > filters.maxDef) return false;
+  }
+
+  if (filters.equippedWithFilters) {
+    const equipFilters = filters.equippedWithFilters || {};
+    const requireEquipFaceup = equipFilters.requireFaceup !== false;
+    const equips = Array.isArray(card.equips) ? card.equips : [];
+    const hasMatchingEquip = equips.some((equip) => {
+      if (!equip) return false;
+      if (!isActiveEquipForCard(equip, card, ctx)) return false;
+      if (requireEquipFaceup && equip.isFacedown) return false;
+      return matchesCardFilters(equip, equipFilters, ctx);
+    });
+    if (!hasMatchingEquip) return false;
   }
 
   return true;

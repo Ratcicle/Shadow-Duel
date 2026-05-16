@@ -256,6 +256,17 @@ export async function handleRegisterReplacementEffect(
       : Infinity;
   };
 
+  const getReplacementTargetKey = (card) => {
+    if (!card) return null;
+    if (card.instanceId !== undefined && card.instanceId !== null) {
+      return `instance:${card.instanceId}`;
+    }
+    if (card.fieldPresenceId !== undefined && card.fieldPresenceId !== null) {
+      return `presence:${card.fieldPresenceId}`;
+    }
+    return null;
+  };
+
   if (!Array.isArray(game.temporaryReplacementEffects)) {
     game.temporaryReplacementEffects = [];
   }
@@ -267,6 +278,24 @@ export async function handleRegisterReplacementEffect(
     if (!replacementEffect || typeof replacementEffect !== "object") {
       continue;
     }
+
+    const scopedTargets = entryInput?.targetRef
+      ? resolveTargetCards(entryInput, ctx, targets)
+      : [];
+    if (entryInput?.targetRef && scopedTargets.length === 0) {
+      continue;
+    }
+    const targetInstanceIds = scopedTargets
+      .map(getReplacementTargetKey)
+      .filter(Boolean);
+    const runtimeReplacementEffect =
+      scopedTargets.length > 0
+        ? {
+            ...replacementEffect,
+            targetInstanceIds,
+            targetCards: scopedTargets,
+          }
+        : replacementEffect;
 
     const ownerKey = entryInput?.owner || entryInput?.targetOwner || "self";
     const ownerIds =
@@ -293,9 +322,12 @@ export async function handleRegisterReplacementEffect(
         uniqueKey,
         ownerId,
         sourceName: entryInput?.sourceName || sourceName,
-        replacementEffect,
+        replacementEffect: runtimeReplacementEffect,
         usesRemaining: normalizeUses(entryInput),
         expiresOnTurn: resolveExpiresOnTurn(entryInput),
+        usesPerTarget: entryInput?.usesPerTarget === true,
+        usedTargetKeys: [],
+        usedTargetCards: [],
       };
 
       game.temporaryReplacementEffects.push(entry);

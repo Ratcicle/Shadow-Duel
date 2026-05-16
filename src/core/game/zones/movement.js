@@ -754,6 +754,15 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
       if (card.def < 0) card.def = 0;
       card.tempDefBoost = 0;
     }
+    if (card.originalAtk != null) {
+      card.atk = card.originalAtk;
+      card.originalAtk = null;
+    }
+    if (card.originalDef != null) {
+      card.def = card.originalDef;
+      card.originalDef = null;
+    }
+    card.effectsNegated = false;
 
     // Remove permanent named buffs when the monster leaves the field
     if (toZone !== "field" && card.permanentBuffsBySource) {

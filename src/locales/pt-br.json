@@ -148,9 +148,9 @@
       "name": "Arctroth Blindado do Coração Sombrio",
       "description": "Material de Ascens\u00e3o: 'Dem\u00f4nio Arctroth do Cora\u00e7\u00e3o Sombrio'.\nRequisito: esse monstro deve ter destru\u00eddo 2 monstros do oponente em batalha ou por efeito de card.\nSe este card for Invocado por Ascens\u00e3o: Escolha 1 monstro que seu oponente controla; o ATK/DEF dele se tornam 0. Se este card atacar um monstro em Posi\u00e7\u00e3o de Defesa: mude esse monstro para Posi\u00e7\u00e3o de Ataque."
     },
-    "76": {
-      "name": "Dragão Apocalipse do Coração Sombrio",
-      "description": "Material de Ascens\u00e3o: 'Drag\u00e3o de Escamas do Cora\u00e7\u00e3o Sombrio'.\nRequisito: o efeito desse monstro foi ativado pelo menos 3 vezes neste duelo.\nUma vez por turno: Voc\u00ea pode descartar 1 card; destrua 1 monstro que seu oponente controla. Se este card deixar o campo: destrua todos os monstros no campo."
+    "77": {
+      "name": "Senhor da Guerra do Coração Sombrio",
+      "description": "Materiais: 2 monstros 'Coração Sombrio'. A primeira vez por turno que este card seria destruído em batalha, você pode enviar 1 monstro 'Coração Sombrio' que você controla para o Cemitério em vez disso. Se este card destruir um monstro do oponente em batalha: você pode Invocar por Invocação-Especial 1 monstro 'Coração Sombrio' de Nível 4 ou menor do seu Cemitério, mas ele não pode atacar neste turno. Você só pode usar este efeito de 'Senhor da Guerra do Coração Sombrio' uma vez por turno."
     },
     "101": {
       "name": "Luminarca Valente - Cavaleiro da Aurora",
@@ -352,10 +352,6 @@
       "name": "Dragão das Trevas",
       "description": "Se este card for Invocado por Invocação-Normal ou Especial: destrua todos os outros monstros Dragão que você controla e, se isso acontecer, este card ganha 300 de ATK para cada monstro destruído por este efeito. Uma vez por turno: você pode descartar 1 card e, depois, escolher 1 monstro que seu oponente controla; negue os efeitos dele até o final deste turno."
     },
-    "23": {
-      "name": "Dragão Debug",
-      "description": "Você pode Invocar por Invocação-Especial este card da sua mão."
-    },
     "24": {
       "name": "Dragão Touro Negro",
       "description": "Você pode enviar 2 monstros Dragão da sua mão para o Cemitério; Invoque por Invocação-Especial este card da sua mão, mas ele não pode atacar no turno em que for Invocado por este efeito. Este card pode realizar até 2 ataques em monstros do oponente durante cada Fase de Batalha. Você pode banir este card do seu Cemitério; adicione 1 monstro Dragão de Nível 7 ou 8 do seu Deck à sua mão."
@@ -430,7 +426,7 @@
     },
     "210": {
       "name": "Barreira de Gelo Arcanista",
-      "description": "Até o final do próximo turno, a primeira vez que um monstro \"Arcanista\" que você controla que estiver equipado com uma Magia de Equipamento \"Arcanista\" seria destruído por batalha ou efeito de card, ele não é destruído."
+      "description": "Escolha 1 monstro \"Arcanista\" que você controla; até o final do próximo turno, a primeira vez que esse monstro seria destruído em batalha, ele não é destruído. Se esse monstro estiver equipado com uma Magia de Equipamento \"Arcanista\" quando este efeito resolver, em vez disso, até o final do próximo turno, a primeira vez que cada monstro \"Arcanista\" que você controla seria destruído em batalha ou por efeito de card, ele não é destruído. Você só pode ativar 1 \"Barreira de Gelo Arcanista\" por turno."
     },
     "211": {
       "name": "Rio de Tinta Arcanista",
@@ -446,7 +442,7 @@
     },
     "214": {
       "name": "Azrath, Arcanista Corrompido",
-      "description": "Monstros que seu oponente controla perdem 100 de ATK/DEF para cada Magia \"Arcanista\" que você ativou até o final do turno. Se este card for equipado com uma Magia de Equipamento \"Arcanista\": escolha 1 monstro que seu oponente controla; o ATK/DEF dele se tornam 0. Você só pode usar este efeito de \"Azrath, Arcanista Corrompido\" uma vez por turno."
+      "description": "Monstros que seu oponente controla perdem 100 de ATK/DEF para cada Magia \"Arcanista\" que você ativou até o final do turno. Se este card for equipado com uma Magia de Equipamento \"Arcanista\": escolha 1 monstro que seu oponente controla; reduza o ATK/DEF dele pela metade até o final do turno. Você só pode usar este efeito de \"Azrath, Arcanista Corrompido\" uma vez por turno."
     },
     "215": {
       "name": "Tornado Destruidor de Glifos",

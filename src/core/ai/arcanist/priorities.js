@@ -1,4 +1,6 @@
 import {
+  getEffectiveAtk,
+  getEffectiveDef,
   getStrongestAttackThreat,
   getStrongestBattleThreat,
 } from "../common/cardStats.js";
@@ -44,6 +46,113 @@ function getOpponentCardCount(analysis = {}) {
     (analysis.oppSpellTrap || []).length +
     (analysis.oppFieldSpell ? 1 : 0)
   );
+}
+
+function getCurrentBattleStat(card) {
+  if (!card || card.cardKind !== "monster") return 0;
+  if (card.isFacedown) return 1500;
+  return card.position === "defense"
+    ? getEffectiveDef(card)
+    : getEffectiveAtk(card);
+}
+
+function getSwitchedBattleStat(card) {
+  if (!card || card.cardKind !== "monster") return 0;
+  if (card.isFacedown) return 1500;
+  return card.position === "defense"
+    ? getEffectiveAtk(card)
+    : getEffectiveDef(card);
+}
+
+function evaluateTeraPositionPlan(tera, analysis = {}) {
+  if (!tera || tera.name !== ARCANIST_NAMES.TERA || tera.isFacedown) {
+    return { ok: false, reason: "not Tera" };
+  }
+
+  const targets = (analysis.oppField || []).filter(
+    (target) => target && target.cardKind === "monster" && !target.isFacedown,
+  );
+  if (targets.length === 0) {
+    return { ok: false, reason: "no face-up opponent monsters" };
+  }
+
+  const teraAtk = getEffectiveAtk(tera);
+  const canAttackNow =
+    tera.position === "attack" &&
+    !tera.hasAttacked &&
+    !tera.cannotAttackThisTurn &&
+    analysis.phase !== "main2";
+
+  const plans = targets
+    .map((target) => {
+      const currentStat = getCurrentBattleStat(target);
+      const switchedStat = getSwitchedBattleStat(target);
+      const canClearAfterSwitch = canAttackNow && teraAtk > switchedStat;
+      const couldClearBefore = canAttackNow && teraAtk > currentStat;
+      const createsAttackWindow = canClearAfterSwitch && !couldClearBefore;
+      const damageGain =
+        target.position === "defense" && canClearAfterSwitch
+          ? Math.max(0, teraAtk - switchedStat)
+          : 0;
+      let score = evaluateArcanistCardValue(target, analysis);
+
+      if (createsAttackWindow) score += 80;
+      if (canClearAfterSwitch) score += 20;
+      if (target.position === "attack" && currentStat >= teraAtk) score += 18;
+      if (target.position === "defense" && switchedStat < currentStat) score += 12;
+      if (damageGain > 0) score += Math.min(30, damageGain / 50);
+      if (!createsAttackWindow && target.position === "attack" && teraAtk > currentStat) {
+        score -= 35;
+      }
+
+      return {
+        target,
+        currentStat,
+        switchedStat,
+        createsAttackWindow,
+        canClearAfterSwitch,
+        damageGain,
+        score,
+      };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  const attackWindows = plans.filter((plan) => plan.createsAttackWindow);
+  const damageWindows = plans.filter(
+    (plan) => !plan.createsAttackWindow && plan.damageGain > 0,
+  );
+  const usefulPlans =
+    attackWindows.length > 0
+      ? attackWindows
+      : damageWindows.length > 0
+        ? damageWindows
+        : [];
+  const preferredPlans = usefulPlans.length > 0 ? usefulPlans : plans;
+  const best = preferredPlans[0] || null;
+  if (!best) return { ok: false, reason: "no useful Tera target" };
+
+  const targetNames = preferredPlans.map((plan) => plan.target.name);
+  const targetInstanceIds = preferredPlans
+    .map((plan) => getCardInstanceId(plan.target))
+    .filter((id) => id !== null);
+  const avoidInstanceIds = plans
+    .filter((plan) => !preferredPlans.includes(plan))
+    .map((plan) => getCardInstanceId(plan.target))
+    .filter((id) => id !== null);
+
+  return {
+    ok: usefulPlans.length > 0,
+    hasAttackWindow: attackWindows.length > 0,
+    target: best.target,
+    targetNames,
+    targetInstanceIds,
+    avoidInstanceIds,
+    priority: attackWindows.length > 0 ? 9.5 : 7.5,
+    reason:
+      attackWindows.length > 0
+        ? "switch target to create a winning attack"
+        : "switch target to convert defense wall into battle damage",
+  };
 }
 
 function getOwnArcanistHosts(analysis = {}) {
@@ -204,6 +313,148 @@ function getStoredBlueprintName(card) {
   );
 }
 
+function canUseCombatBuffThisTurn(monster, analysis = {}) {
+  return (
+    monster &&
+    monster.cardKind === "monster" &&
+    !monster.isFacedown &&
+    monster.position === "attack" &&
+    !monster.hasAttacked &&
+    !monster.cannotAttackThisTurn &&
+    analysis.phase === "main1"
+  );
+}
+
+function evaluateLightningLancePlan(analysis = {}) {
+  const oppLp = analysis.oppLp ?? analysis.oppLP ?? analysis.opponent?.lp ?? 8000;
+  const attackers = getOwnArcanistHosts(analysis).filter((monster) =>
+    canUseCombatBuffThisTurn(monster, analysis),
+  );
+  const opponentMonsters = (analysis.oppField || []).filter(
+    (card) => card && card.cardKind === "monster",
+  );
+  const faceUpOpponentMonsters = opponentMonsters.filter(
+    (card) => !card.isFacedown,
+  );
+
+  let bestOffensivePlan = null;
+  for (const attacker of attackers) {
+    const baseAtk = getEffectiveAtk(attacker);
+    const boostedAtk = baseAtk + 500;
+
+    if (
+      opponentMonsters.length === 0 &&
+      !attacker.cannotAttackDirectly &&
+      boostedAtk >= oppLp
+    ) {
+      const score = 120 + Math.max(0, oppLp - baseAtk) / 100;
+      if (!bestOffensivePlan || score > bestOffensivePlan.score) {
+        bestOffensivePlan = {
+          attacker,
+          score,
+          priority: 11,
+          reason: "Lightning Lance enables direct lethal",
+        };
+      }
+      continue;
+    }
+
+    for (const target of opponentMonsters) {
+      const battleStat = getCurrentBattleStat(target);
+      const boostedClears = boostedAtk > battleStat;
+      if (!boostedClears) continue;
+
+      const baseClears = baseAtk > battleStat;
+      const targetValue = evaluateArcanistCardValue(target, analysis);
+      const battleDamage =
+        target.position === "attack"
+          ? Math.max(0, boostedAtk - getEffectiveAtk(target))
+          : Math.max(0, boostedAtk - getEffectiveDef(target));
+      const baseBattleDamage =
+        target.position === "attack" && baseClears
+          ? Math.max(0, baseAtk - getEffectiveAtk(target))
+          : 0;
+      const damageGain = Math.max(0, battleDamage - baseBattleDamage);
+      const createsNewClear = !baseClears && boostedClears;
+      const createsPiercingDamage = target.position === "defense" && battleDamage > 0;
+      const createsLethal = battleDamage >= oppLp && baseBattleDamage < oppLp;
+
+      if (!createsNewClear && !createsPiercingDamage && !createsLethal) {
+        continue;
+      }
+
+      let score = targetValue;
+      if (createsLethal) score += 110;
+      if (createsNewClear) score += 80;
+      if (createsPiercingDamage) score += 45 + Math.min(25, damageGain / 100);
+      if (target.position === "attack") score += Math.min(18, battleDamage / 100);
+
+      if (!bestOffensivePlan || score > bestOffensivePlan.score) {
+        bestOffensivePlan = {
+          attacker,
+          target,
+          score,
+          priority: createsLethal ? 11 : createsNewClear ? 9.5 : 8.5,
+          reason: createsLethal
+            ? "Lightning Lance creates lethal battle damage"
+            : createsNewClear
+              ? "Lightning Lance lets an Arcanist destroy a threat"
+              : "Lightning Lance creates piercing battle damage",
+        };
+      }
+    }
+  }
+
+  if (bestOffensivePlan) {
+    const attackerInstanceId = getCardInstanceId(bestOffensivePlan.attacker);
+    const avoidInstanceIds = [
+      ...getOwnArcanistHosts(analysis)
+        .filter((card) => !isSameCardInstance(card, bestOffensivePlan.attacker))
+        .map(getCardInstanceId),
+      ...faceUpOpponentMonsters.map(getCardInstanceId),
+    ].filter((id) => id !== null);
+    return {
+      ok: true,
+      mode: "offense",
+      target: bestOffensivePlan.attacker,
+      targetNames: [bestOffensivePlan.attacker.name],
+      targetInstanceIds: attackerInstanceId !== null ? [attackerInstanceId] : [],
+      avoidInstanceIds,
+      priority: bestOffensivePlan.priority,
+      reason: bestOffensivePlan.reason,
+    };
+  }
+
+  const lockTargets = faceUpOpponentMonsters
+    .filter((target) => !target.cannotAttackThisTurn)
+    .map((target) => ({
+      target,
+      score:
+        evaluateArcanistCardValue(target, analysis) +
+        getEffectiveAtk(target) / 1000 +
+        (target.position === "attack" ? 4 : 0),
+    }))
+    .sort((a, b) => b.score - a.score);
+  const lockPlan = lockTargets[0] || null;
+  if (!lockPlan) {
+    return { ok: false, reason: "no useful Lightning Lance target" };
+  }
+
+  const lockInstanceId = getCardInstanceId(lockPlan.target);
+  return {
+    ok: true,
+    mode: "defense",
+    target: lockPlan.target,
+    targetNames: lockTargets.map((plan) => plan.target.name),
+    targetInstanceIds: lockInstanceId !== null ? [lockInstanceId] : [],
+    avoidInstanceIds: getOwnArcanistHosts(analysis)
+      .map(getCardInstanceId)
+      .filter((id) => id !== null),
+    priority: 5,
+    reason: "lock opponent attacker",
+  };
+}
+
 function isLowValueDiscard(card, analysis = {}) {
   if (!card) return false;
   const hand = analysis.hand || [];
@@ -222,7 +473,7 @@ function isLowValueDiscard(card, analysis = {}) {
   }
   if (
     card.name === ARCANIST_NAMES.ICE_BARRIER &&
-    (analysis.equippedArcanists || []).length === 0
+    !evaluateIceBarrierPlan(analysis).ok
   ) {
     return true;
   }
@@ -234,7 +485,7 @@ function isLowValueDiscard(card, analysis = {}) {
   }
   if (
     card.name === ARCANIST_NAMES.LIGHTNING_LANCE &&
-    (analysis.oppField || []).length === 0
+    !evaluateLightningLancePlan(analysis).ok
   ) {
     return true;
   }
@@ -326,7 +577,7 @@ export function buildArcanistCostPreferences(analysis = {}) {
     ),
     ARCANIST_NAMES.MEETING,
     ...(hasFieldSpell ? [ARCANIST_NAMES.GRAND_LIBRARY] : []),
-    ...((analysis.equippedArcanists || []).length === 0
+    ...(!evaluateIceBarrierPlan(analysis).ok
       ? [ARCANIST_NAMES.ICE_BARRIER]
       : []),
   ];
@@ -435,6 +686,69 @@ function hasPremiumSeismicTarget(analysis = {}) {
     oppCards >= 3 ||
     canPressureLp
   );
+}
+
+function getBattleProtectionThreat(analysis = {}) {
+  return getStrongestBattleThreat(analysis.oppField || [], {
+    includeBoosts: true,
+  });
+}
+
+function hasPlausibleIceBarrierThreat(analysis = {}, { amplified = false } = {}) {
+  const battleThreat = getBattleProtectionThreat(analysis);
+  if (battleThreat > 0) return true;
+  if (!amplified) return false;
+  return (
+    (analysis.oppSpellTrap || []).length > 0 ||
+    !!analysis.oppFieldSpell ||
+    getOpponentCardCount(analysis) >= 2
+  );
+}
+
+function evaluateIceBarrierPlan(analysis = {}) {
+  const hosts = getOwnArcanistHosts(analysis);
+  if (hosts.length === 0) {
+    return { ok: false, reason: "need face-up Arcanist target" };
+  }
+
+  const equippedHosts = hosts.filter(hasArcanistEquip);
+  const amplified = equippedHosts.length > 0;
+  if (!hasPlausibleIceBarrierThreat(analysis, { amplified })) {
+    return {
+      ok: false,
+      reason: amplified
+        ? "no plausible destruction threat"
+        : "no battle threat to guard against",
+    };
+  }
+
+  const battleThreat = getBattleProtectionThreat(analysis);
+  const sortByValue = (a, b) =>
+    evaluateArcanistCardValue(b, analysis) - evaluateArcanistCardValue(a, analysis);
+  const targetPool = amplified ? equippedHosts : hosts;
+  const target = [...targetPool].sort(sortByValue)[0];
+  const targetValue = evaluateArcanistCardValue(target, analysis);
+  const targetBattleStat = Math.max(target?.atk || 0, target?.def || 0);
+  const underBattlePressure = battleThreat >= targetBattleStat;
+
+  let priority = amplified ? 8.5 : 5.5;
+  if (amplified) {
+    priority += Math.min(hosts.length, 3) * 0.5;
+  }
+  if (underBattlePressure) priority += 1.25;
+  if (targetValue >= 10) priority += 0.75;
+
+  return {
+    ok: true,
+    amplified,
+    target,
+    targetNames: target ? [target.name] : [],
+    targetInstanceId: getCardInstanceId(target),
+    priority: Math.min(11, priority),
+    reason: amplified
+      ? "amplified Ice Barrier protects Arcanist board"
+      : "battle guard for vulnerable Arcanist",
+  };
 }
 
 function getCrimsonDamage(card) {
@@ -603,6 +917,19 @@ export function buildArcanistTargetPreferences(card, analysis = {}) {
         .map(getCardInstanceId)
         .filter((id) => id !== null)
     : [];
+  const iceBarrierPlan = evaluateIceBarrierPlan(analysis);
+  const iceBarrierInstanceId = getCardInstanceId(iceBarrierPlan?.target);
+  const teraPlan =
+    card?.name === ARCANIST_NAMES.TERA
+      ? evaluateTeraPositionPlan(card, analysis)
+      : null;
+  const isLightningSource =
+    card?.name === ARCANIST_NAMES.LIGHTNING_LANCE ||
+    (card?.name === ARCANIST_NAMES.GRIMOIRE &&
+      getStoredBlueprintName(card) === ARCANIST_NAMES.LIGHTNING_LANCE);
+  const lightningPlan = isLightningSource
+    ? evaluateLightningLancePlan(analysis)
+    : null;
 
   const spellRecoveryNames = sortByNameOrder(
     (analysis.graveyard || []).filter(isArcanistSpell),
@@ -655,13 +982,27 @@ export function buildArcanistTargetPreferences(card, analysis = {}) {
         crimsonOpponentInstanceId !== null ? [crimsonOpponentInstanceId] : [],
     },
     lightning_magic_lance_target: {
-      role: opponentNames.length ? "removal" : "named_preference",
-      preferredNames:
-        (analysis.oppField || []).length > 0 ? opponentNames : grimoireHosts,
+      role: lightningPlan?.mode === "offense" ? "named_preference" : "removal",
+      intent: lightningPlan?.mode === "offense" ? "benefit" : "harm",
+      preferredNames: lightningPlan?.ok
+        ? lightningPlan.targetNames
+        : (analysis.oppField || []).length > 0
+          ? opponentNames
+          : grimoireHosts,
+      preferredInstanceIds: lightningPlan?.targetInstanceIds || [],
+      avoidInstanceIds: lightningPlan?.avoidInstanceIds || [],
+    },
+    arcanist_ice_barrier_target: {
+      role: "named_preference",
+      preferredNames: iceBarrierPlan.ok ? iceBarrierPlan.targetNames : [],
+      preferredInstanceIds:
+        iceBarrierInstanceId !== null ? [iceBarrierInstanceId] : [],
     },
     tera_arcanist_earth_targets: {
       role: "removal",
-      preferredNames: opponentNames,
+      preferredNames: teraPlan?.ok ? teraPlan.targetNames : opponentNames,
+      preferredInstanceIds: teraPlan?.targetInstanceIds || [],
+      avoidInstanceIds: teraPlan?.avoidInstanceIds || [],
     },
     viridis_bounce_target: {
       role: "removal",
@@ -691,7 +1032,7 @@ export function buildArcanistTargetPreferences(card, analysis = {}) {
       role: "removal",
       preferredNames: opponentNames,
     },
-    azrath_zero_target: {
+    azrath_halve_target: {
       role: "removal",
       preferredNames: opponentNames,
     },
@@ -945,36 +1286,26 @@ export function shouldPlaySpell(card, analysis = {}) {
   }
 
   if (card.name === ARCANIST_NAMES.LIGHTNING_LANCE) {
-    const hasFaceUpMonster =
-      getOwnArcanistHosts(analysis).length > 0 || oppField.length > 0;
-    if (!hasFaceUpMonster) return { yes: false, reason: "no valid monster" };
-    const myAttackers = getOwnArcanistHosts(analysis).filter(
-      (monster) => monster.position === "attack" && !monster.hasAttacked,
-    );
-    const canPressure =
-      myAttackers.some((monster) => (monster.atk || 0) + 500 >= (analysis.oppLp || 8000)) ||
-      (oppField.length > 0 &&
-        myAttackers.some(
-          (monster) =>
-            (monster.atk || 0) + 500 >
-            getStrongestBattleThreat(oppField, { includeBoosts: true }),
-        ));
+    const plan = evaluateLightningLancePlan(analysis);
+    if (!plan.ok) {
+      return { yes: false, reason: plan.reason };
+    }
     return {
-      yes: canPressure || oppField.length > 0,
-      priority: canPressure ? 9 : 5,
-      reason: canPressure ? "combat push" : "lock opponent attacker",
+      yes: true,
+      priority: plan.priority,
+      reason: plan.reason,
     };
   }
 
   if (card.name === ARCANIST_NAMES.ICE_BARRIER) {
-    const protectedHosts = getOwnArcanistHosts(analysis).filter(hasArcanistEquip);
-    if (protectedHosts.length === 0) {
-      return { yes: false, reason: "need equipped Arcanist" };
+    const plan = evaluateIceBarrierPlan(analysis);
+    if (!plan.ok) {
+      return { yes: false, reason: plan.reason };
     }
     return {
-      yes: oppField.length > 0 || (analysis.oppSpellTrap || []).length > 0,
-      priority: 7,
-      reason: "protect equipped Arcanist",
+      yes: true,
+      priority: plan.priority,
+      reason: plan.reason,
     };
   }
 
@@ -1054,23 +1385,26 @@ export function shouldActivateSpellTrapEffect(card, analysis = {}) {
     }
 
     if (storedName === ARCANIST_NAMES.ICE_BARRIER) {
+      const plan = evaluateIceBarrierPlan(analysis);
+      if (!plan.ok) {
+        return { yes: false, reason: plan.reason };
+      }
       return {
-        yes:
-          (analysis.equippedArcanists || []).length > 0 &&
-          ((analysis.oppField || []).length > 0 ||
-            (analysis.oppSpellTrap || []).length > 0),
-        priority: 8,
-        reason: "protect an equipped Arcanist",
+        yes: true,
+        priority: Math.max(7, plan.priority - 0.5),
+        reason: `stored ${plan.reason}`,
       };
     }
 
     if (storedName === ARCANIST_NAMES.LIGHTNING_LANCE) {
+      const plan = evaluateLightningLancePlan(analysis);
+      if (!plan.ok) {
+        return { yes: false, reason: plan.reason };
+      }
       return {
-        yes:
-          (analysis.oppField || []).length > 0 ||
-          (analysis.oppLp || 8000) <= 2500,
-        priority: 8,
-        reason: "stored combat trick has pressure",
+        yes: true,
+        priority: Math.max(6, plan.priority - 0.5),
+        reason: `stored ${plan.reason}`,
       };
     }
 
@@ -1105,10 +1439,11 @@ export function shouldActivateMonsterEffect(card, analysis = {}) {
   }
 
   if (card.name === ARCANIST_NAMES.TERA) {
+    const plan = evaluateTeraPositionPlan(card, analysis);
     return {
-      yes: (analysis.oppField || []).some((target) => !target.isFacedown),
-      priority: hasArcanistEquip(card) ? 8 : 6,
-      reason: "switch opposing monster position",
+      yes: plan.ok,
+      priority: plan.priority,
+      reason: plan.reason,
     };
   }
 
@@ -1223,6 +1558,10 @@ export function rankSearchCandidates(cards = [], action = {}, ctx = {}) {
     if (card.name === ARCANIST_NAMES.CRIMSON_EXPLOSION) {
       const crimsonPlan = evaluateCrimsonExplosionPlan(analysis);
       score += crimsonPlan.ok ? crimsonPlan.priority - 5 : -35;
+    }
+    if (card.name === ARCANIST_NAMES.ICE_BARRIER) {
+      const icePlan = evaluateIceBarrierPlan(analysis);
+      score += icePlan.ok ? icePlan.priority - 4 : -45;
     }
     if (card.name === ARCANIST_NAMES.INK_RIVER) {
       score += (analysis.hand || []).filter(isArcanistSpell).length >= 2 ? 3 : 0;

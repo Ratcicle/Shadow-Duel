@@ -261,6 +261,22 @@ export default class EffectEngine {
     }
     const nameFilter = filters.name || filters.cardName;
     if (nameFilter && card.name !== nameFilter) return false;
+    const excludeNameFilters = [
+      filters.excludeName,
+      filters.excludeCardName,
+      ...(Array.isArray(filters.excludeNames) ? filters.excludeNames : []),
+      ...(Array.isArray(filters.excludeCardNames)
+        ? filters.excludeCardNames
+        : []),
+    ].filter(Boolean);
+    if (excludeNameFilters.includes(card.name)) return false;
+    const excludeIdFilters = [
+      filters.excludeId,
+      filters.excludeCardId,
+      ...(Array.isArray(filters.excludeIds) ? filters.excludeIds : []),
+      ...(Array.isArray(filters.excludeCardIds) ? filters.excludeCardIds : []),
+    ].filter((value) => value !== undefined && value !== null);
+    if (excludeIdFilters.includes(card.id)) return false;
     if (filters.cardKind) {
       const requiredKinds = Array.isArray(filters.cardKind)
         ? filters.cardKind
@@ -329,6 +345,7 @@ export default class EffectEngine {
       const equips = Array.isArray(card.equips) ? card.equips : [];
       const hasMatchingEquip = equips.some((equip) => {
         if (!equip) return false;
+        if (!this.isActiveEquipForCard(equip, card)) return false;
         if (requireEquipFaceup && equip.isFacedown) return false;
         return this.cardMatchesFilters(equip, equipFilters);
       });
@@ -837,6 +854,7 @@ export default class EffectEngine {
               const equips = Array.isArray(card.equips) ? card.equips : [];
               const hasMatchingEquip = equips.some((equip) => {
                 if (!equip) return false;
+                if (!this.isActiveEquipForCard(equip, card)) return false;
                 if (requireEquipFaceup && equip.isFacedown) return false;
                 return this.cardMatchesFilters(equip, equipFilters);
               });
@@ -886,6 +904,7 @@ export default class EffectEngine {
 
           for (const equip of equips) {
             if (!equip) continue;
+            if (!this.isActiveEquipForCard(equip, source)) continue;
             if (requireFaceup && equip.isFacedown) continue;
             if (!this.cardMatchesFilters(equip, filters)) continue;
             count += 1;
@@ -1158,6 +1177,38 @@ export default class EffectEngine {
       return card.archetypes.includes(archetype);
     }
     return false;
+  }
+
+  isSameCardReference(ref, card) {
+    if (!ref || !card) return false;
+    if (ref === card) return true;
+    if (typeof ref === "object") {
+      if (ref.instanceId != null && card.instanceId != null) {
+        return ref.instanceId === card.instanceId;
+      }
+      return false;
+    }
+    if (card.instanceId != null && String(ref) === String(card.instanceId)) {
+      return true;
+    }
+    return false;
+  }
+
+  isActiveEquipForCard(equip, card) {
+    if (!equip || !card) return false;
+    if (equip.cardKind !== "spell" || equip.subtype !== "equip") return false;
+
+    const isAttached =
+      this.isSameCardReference(equip.equippedTo, card) ||
+      this.isSameCardReference(equip.equipTarget, card);
+    if (!isAttached) return false;
+
+    const equipOwner = this.getOwnerByCard(equip);
+    if (!equipOwner) return false;
+    return (
+      Array.isArray(equipOwner.spellTrap) &&
+      equipOwner.spellTrap.includes(equip)
+    );
   }
 
   applyPassiveBuffValue(card, effectKey, amount, stats = ["atk", "def"]) {

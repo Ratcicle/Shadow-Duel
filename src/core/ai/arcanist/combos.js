@@ -29,7 +29,7 @@ export const COMBO_DATABASE = [
     priority: 13,
   },
   {
-    id: "grimoire_azrath_zero",
+    id: "grimoire_azrath_halve",
     name: "Grimoire on Azrath",
     priority: 14,
   },
@@ -89,11 +89,11 @@ export function detectAvailableCombos(analysis = {}) {
   );
   if (azrathField && (hasGrimoireInHand || hasArcanistEquip(azrathField))) {
     pushCombo(combos, {
-      id: "grimoire_azrath_zero",
+      id: "grimoire_azrath_halve",
       name: "Grimoire on Azrath",
       priority: oppField.length > 0 ? 15 : 9,
       cards: [ARCANIST_NAMES.AZRATH, ARCANIST_NAMES.GRIMOIRE],
-      description: "Equip Azrath to zero the opponent's best monster.",
+      description: "Equip Azrath to halve the opponent's best monster.",
     });
   }
 

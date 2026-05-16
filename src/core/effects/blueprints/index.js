@@ -435,7 +435,9 @@ export async function handleBlueprintStorageAfterResolution(
 
   const blueprint = this.buildEffectBlueprint(sourceCard, effect);
   if (!blueprint) return false;
-  blueprint.respectUsageLimits = config.respectStoredEffectUsageLimits === true;
+  blueprint.respectUsageLimits =
+    config.respectStoredEffectUsageLimits === true ||
+    effect.respectStoredEffectUsageLimits === true;
 
   const storageState = this.getBlueprintStorageState(storageCard, true);
   const storedBlueprints = storageState?.storedBlueprints || [];

@@ -48,7 +48,7 @@ export const CARD_KNOWLEDGE = {
   [ARCANIST_NAMES.AZRATH]: {
     role: "control_host",
     value: 10,
-    tags: ["grimoire_host", "stat_zero", "spell_debuff"],
+    tags: ["grimoire_host", "stat_halve", "spell_debuff"],
   },
   [ARCANIST_NAMES.TERA]: {
     role: "tempo_control",
@@ -98,7 +98,7 @@ export const CARD_KNOWLEDGE = {
   [ARCANIST_NAMES.ICE_BARRIER]: {
     role: "protection",
     value: 6,
-    tags: ["destruction_replacement"],
+    tags: ["battle_protection", "destruction_replacement", "equip_amplified"],
   },
   [ARCANIST_NAMES.CRIMSON_EXPLOSION]: {
     role: "trade_removal",

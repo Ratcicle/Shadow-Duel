@@ -5128,18 +5128,6 @@
         requireFaceup: true,
         oncePerTurn: true,
         oncePerTurnName: "tera_arcanist_earth",
-        conditions: [
-          {
-            type: "equipped_with_filters",
-            min: 0,
-            max: 0,
-            filters: {
-              cardKind: "spell",
-              subtype: "equip",
-              archetype: "Arcanist",
-            },
-          },
-        ],
         targets: [
           {
             id: "tera_arcanist_earth_targets",
@@ -5495,41 +5483,87 @@
     subtype: "normal",
     archetype: "Arcanist",
     description:
-      'Until the end of your next turn, the first time an "Arcanist" monster you control that is equipped with an "Arcanist" Equip Spell would be destroyed, it is not destroyed.',
+      'Target 1 "Arcanist" monster you control; until the end of the next turn, the first time that monster would be destroyed by battle, it is not destroyed. If that monster is equipped with an "Arcanist" Equip Spell when this effect resolves, instead, until the end of the next turn, the first time each "Arcanist" monster you control would be destroyed by battle or card effect, it is not destroyed. You can only activate 1 "Arcanist Ice Barrier" per turn.',
     image: "assets/Arcanist Ice Barrier.png",
     effects: [
       {
         id: "arcanist_ice_barrier_guard",
         timing: "on_play",
         speed: 1,
+        oncePerTurn: true,
+        oncePerTurnName: "arcanist_ice_barrier_guard",
+        respectStoredEffectUsageLimits: true,
         storableByGrimoire: true,
+        targets: [
+          {
+            id: "arcanist_ice_barrier_target",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            archetype: "Arcanist",
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
         actions: [
           {
-            type: "register_replacement_effect",
-            duration: "end_of_next_turn",
-            uses: 1,
-            sourceName: "Arcanist Ice Barrier",
-            uniqueKey: "arcanist_ice_barrier_guard",
-            replacementEffect: {
-              type: "destruction",
-              reason: "any",
-              targetOwner: "self",
-              targetZones: ["field"],
-              targetFilters: {
-                cardKind: "monster",
-                archetype: "Arcanist",
-                equippedWithFilters: {
-                  cardKind: "spell",
-                  subtype: "equip",
-                  archetype: "Arcanist",
-                  requireFaceup: true,
+            type: "conditional_target_actions",
+            targetRef: "arcanist_ice_barrier_target",
+            cases: [
+              {
+                filters: {
+                  equippedWithFilters: {
+                    cardKind: "spell",
+                    subtype: "equip",
+                    archetype: "Arcanist",
+                    requireFaceup: true,
+                  },
+                },
+                actions: [
+                  {
+                    type: "register_replacement_effect",
+                    duration: "end_of_next_turn",
+                    sourceName: "Arcanist Ice Barrier",
+                    uniqueKey: "arcanist_ice_barrier_guard",
+                    usesPerTarget: true,
+                    replacementEffect: {
+                      type: "destruction",
+                      reason: "any",
+                      targetOwner: "self",
+                      targetZones: ["field"],
+                      targetFilters: {
+                        cardKind: "monster",
+                        archetype: "Arcanist",
+                      },
+                      targetRequireFaceup: true,
+                      auto: true,
+                      logMessage:
+                        "{target} avoided destruction due to {source}.",
+                    },
+                  },
+                ],
+              },
+            ],
+            defaultActions: [
+              {
+                type: "register_replacement_effect",
+                targetRef: "arcanist_ice_barrier_target",
+                duration: "end_of_next_turn",
+                uses: 1,
+                sourceName: "Arcanist Ice Barrier",
+                uniqueKey: "arcanist_ice_barrier_guard",
+                replacementEffect: {
+                  type: "destruction",
+                  reason: "battle",
+                  targetOwner: "self",
+                  targetZones: ["field"],
+                  targetRequireFaceup: true,
+                  auto: true,
+                  logMessage:
+                    "{target} avoided battle destruction due to {source}.",
                 },
               },
-              targetRequireFaceup: true,
-              auto: true,
-              logMessage:
-                "An equipped Arcanist monster you control avoided destruction due to {source}.",
-            },
+            ],
           },
         ],
       },
@@ -5558,6 +5592,7 @@
           cardKind: "spell",
           subtype: "normal",
           archetype: "Arcanist",
+          excludeCardNames: ["Arcanist Ink River"],
         },
         activatedEffectFilters: {
           timing: "on_play",
@@ -5585,6 +5620,7 @@
           cardKind: "spell",
           subtype: ["continuous", "field", "equip"],
           archetype: "Arcanist",
+          excludeCardNames: ["Arcanist Ink River"],
         },
         activatedEffectFilters: {
           timing: "ignition",
@@ -5839,7 +5875,7 @@
     type: "Spellcaster",
     archetype: "Arcanist",
     description:
-      'Monsters your opponent controls lose 100 ATK/DEF for each "Arcanist" Spell you activated until the end of this turn. If this card is equipped with an "Arcanist" Equip Spell: target 1 monster your opponent controls; its ATK/DEF become 0. You can only use this effect of "Azrath, Arcanista Corrompido" once per turn.',
+      'Monsters your opponent controls lose 100 ATK/DEF for each "Arcanist" Spell you activated until the end of this turn. If this card is equipped with an "Arcanist" Equip Spell: target 1 monster your opponent controls; halve its ATK/DEF until the end of this turn. You can only use this effect of "Azrath, Corrupted Arcanist" once per turn.',
     image: "assets/Azrath, Corrupted Arcanist.png",
     effects: [
       {
@@ -5864,11 +5900,11 @@
         ],
       },
       {
-        id: "azrath_equip_zero",
+        id: "azrath_equip_halve",
         timing: "on_event",
         event: "card_equipped",
         oncePerTurn: true,
-        oncePerTurnName: "azrath_equip_zero",
+        oncePerTurnName: "azrath_equip_halve",
         requireZone: "field",
         requireFaceup: true,
         requireEquipCardFilters: {
@@ -5878,10 +5914,10 @@
         },
         promptUser: true,
         promptMessage:
-          'Activate "Azrath, Arcanista Corrompido" to set 1 opponent\'s monster ATK/DEF to 0?',
+          'Activate "Azrath, Corrupted Arcanist" to halve 1 opponent monster\'s ATK/DEF?',
         targets: [
           {
-            id: "azrath_zero_target",
+            id: "azrath_halve_target",
             owner: "opponent",
             zone: "field",
             cardKind: "monster",
@@ -5891,11 +5927,10 @@
         ],
         actions: [
           {
-            type: "set_stats_to_zero_and_negate",
-            targetRef: "azrath_zero_target",
-            setAtkToZero: true,
-            setDefToZero: true,
-            negateEffects: false,
+            type: "modify_stats_temp",
+            targetRef: "azrath_halve_target",
+            atkFactor: 0.5,
+            defFactor: 0.5,
           },
         ],
       },
@@ -6575,6 +6610,7 @@
         replacementEffect: {
           type: "destruction",
           reason: "effect",
+          targetMustBeSource: true,
           targetOwner: "self",
           targetZones: ["field"],
           targetRequireFaceup: true,

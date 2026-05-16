@@ -23,6 +23,7 @@ function buildTargetingCacheKey(def, ctx) {
     def.zone || "field",
     def.owner || "self",
     def.cardKind || "any",
+    def.subtype || "any",
     def.archetype || "any",
     def.minAtk ?? "",
     def.maxAtk ?? "",
@@ -109,7 +110,7 @@ export function selectCandidates(def, ctx) {
   }
 
   log(
-    `[selectCandidates] Starting search for target "${def.id}": owner="${def.owner}", zone="${zoneName}", archetype="${def.archetype}", excludeCardName="${def.excludeCardName}"`
+    `[selectCandidates] Starting search for target "${def.id}": owner="${def.owner}", zone="${zoneName}", archetype="${def.archetype}", subtype="${def.subtype}", excludeCardName="${def.excludeCardName}"`
   );
 
   const owners = [];
@@ -251,6 +252,19 @@ export function selectCandidates(def, ctx) {
               `[selectCandidates] Rejecting: cardKind mismatch (${
                 card.cardKind
               } !== ${requiredKinds.join(",")})`
+            );
+            continue;
+          }
+        }
+        if (def.subtype) {
+          const requiredSubtypes = Array.isArray(def.subtype)
+            ? def.subtype
+            : [def.subtype];
+          if (!requiredSubtypes.includes(card.subtype)) {
+            log(
+              `[selectCandidates] Rejecting: subtype mismatch (${
+                card.subtype
+              } !== ${requiredSubtypes.join(",")})`
             );
             continue;
           }

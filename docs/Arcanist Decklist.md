@@ -36,7 +36,7 @@
 - **Nível/Tipo:** 4 — Spellcaster
 - **Efeitos:**
 	- Cada vez que você ativa uma Magia "Arcanist": monstros do oponente perdem 100 ATK/DEF até o final deste turno.
-	- Uma vez por turno, quando equipado com uma Magia de Equipamento "Arcanist": alvo 1 monstro do oponente; ATK/DEF tornam-se 0.
+	- Uma vez por turno, quando equipado com uma Magia de Equipamento "Arcanist": alvo 1 monstro do oponente; reduza o ATK/DEF dele pela metade até o final deste turno.
 
 ### 208 — Master of Mirrors Arcanist
 - **ATK/DEF:** 2200 / 2200
@@ -86,7 +86,9 @@
 
 ### 210 — Arcanist Ice Barrier (Normal)
 - **Efeito:**
-	- Até o final do seu próximo turno, a primeira vez que um monstro "Arcanist" equipado com Magia de Equipamento "Arcanist" seria destruído, ele não é destruído.
+	- Escolha 1 monstro "Arcanist" que você controla; até o final do próximo turno, a primeira vez que esse monstro seria destruído em batalha, ele não é destruído.
+	- Se esse monstro estiver equipado com uma Magia de Equipamento "Arcanist" quando este efeito resolver, em vez disso, até o final do próximo turno, a primeira vez que cada monstro "Arcanist" que você controla seria destruído em batalha ou por efeito de card, ele não é destruído.
+	- Você só pode ativar 1 "Arcanist Ice Barrier" por turno.
 	- Armazenável pelo Grimoire.
 
 ### 211 — Arcanist Ink River (Continuous)

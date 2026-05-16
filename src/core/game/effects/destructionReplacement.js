@@ -35,6 +35,17 @@ function formatReplacementText(text, targetCardName, sourceCardName) {
     .replace("{source}", sourceCardName || "");
 }
 
+function getReplacementTargetKey(card) {
+  if (!card) return null;
+  if (card.instanceId !== undefined && card.instanceId !== null) {
+    return `instance:${card.instanceId}`;
+  }
+  if (card.fieldPresenceId !== undefined && card.fieldPresenceId !== null) {
+    return `presence:${card.fieldPresenceId}`;
+  }
+  return null;
+}
+
 function matchesTargetFilters(game, target, filters) {
   if (!filters || Object.keys(filters).length === 0) return true;
   if (game.effectEngine?.cardMatchesFilters) {
@@ -246,6 +257,22 @@ async function tryReplacement(game, sourceCard, sourceOwner, effect, ctx) {
   const targetFilters = replacement.targetFilters || null;
   if (targetFilters && !matchesTargetFilters(game, card, targetFilters)) {
     return { replaced: false };
+  }
+
+  const scopedTargetIds = Array.isArray(replacement.targetInstanceIds)
+    ? replacement.targetInstanceIds
+    : [];
+  const scopedTargetCards = Array.isArray(replacement.targetCards)
+    ? replacement.targetCards
+    : [];
+  if (scopedTargetIds.length > 0 || scopedTargetCards.length > 0) {
+    const targetKey = getReplacementTargetKey(card);
+    const matchesScopedId =
+      targetKey && scopedTargetIds.includes(targetKey);
+    const matchesScopedRef = scopedTargetCards.includes(card);
+    if (!matchesScopedId && !matchesScopedRef) {
+      return { replaced: false };
+    }
   }
 
   const onceCheck = game.canUseOncePerTurn(sourceCard, sourceOwner, effect);
@@ -629,9 +656,33 @@ export async function resolveDestructionWithReplacement(card, options = {}) {
         replacementEffect: entry.replacementEffect,
         requireFaceup: false,
       };
+      const targetKey = getReplacementTargetKey(card);
+      if (
+        entry.usesPerTarget === true &&
+        ((targetKey &&
+          Array.isArray(entry.usedTargetKeys) &&
+          entry.usedTargetKeys.includes(targetKey)) ||
+          (!targetKey &&
+            Array.isArray(entry.usedTargetCards) &&
+            entry.usedTargetCards.includes(card)))
+      ) {
+        continue;
+      }
       const result = await tryReplacement(this, sourceCard, sourceOwner, effect, ctx);
       if (result?.replaced) {
-        if (Number.isFinite(entry.usesRemaining)) {
+        if (entry.usesPerTarget === true) {
+          if (!Array.isArray(entry.usedTargetKeys)) {
+            entry.usedTargetKeys = [];
+          }
+          if (!Array.isArray(entry.usedTargetCards)) {
+            entry.usedTargetCards = [];
+          }
+          if (targetKey) {
+            entry.usedTargetKeys.push(targetKey);
+          } else {
+            entry.usedTargetCards.push(card);
+          }
+        } else if (Number.isFinite(entry.usesRemaining)) {
           entry.usesRemaining -= 1;
         }
         if (
