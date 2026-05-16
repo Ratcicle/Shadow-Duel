@@ -1,5 +1,6 @@
 import BaseStrategy from "./BaseStrategy.js";
 import { estimateCardValue, estimateMonsterValue } from "./StrategyUtils.js";
+import { applyGenericSimulatedMainPhaseAction } from "./common/simulation.js";
 import {
   isVoid,
   getVoidCardKnowledge,
@@ -40,6 +41,12 @@ import {
   getFusionPreferenceScore,
   withFusionPreferences,
 } from "./common/fusionPlanning.js";
+import {
+  buildVoidPlanningProfile,
+  describeVoidPlannedLine,
+  scoreVoidLineMilestones,
+  scoreVoidLineTerminal,
+} from "./void/linePlanning.js";
 
 const CONJURER_REVIVE_PROTECTED_COST_IDS = new Set([
   VOID_IDS.ARCTURUS,
@@ -222,11 +229,21 @@ function hasImmediateVoidFusionPlan(bot) {
 
 function getMaterialEffectActivationCount(game, player, materialId) {
   const playerId = player?.id || player;
-  return (
-    game?.materialDuelStats?.[playerId]?.effectActivationsByMaterialId?.get?.(
-      materialId,
-    ) || 0
+  const readMapLike = (value) => {
+    if (!value) return 0;
+    if (typeof value.get === "function") return value.get(materialId) || 0;
+    return value[materialId] || value[String(materialId)] || 0;
+  };
+  const realGame = game?._gameRef || game;
+  const realCount = readMapLike(
+    realGame?.materialDuelStats?.[playerId]?.effectActivationsByMaterialId,
   );
+  const simCount =
+    readMapLike(
+      game?._simMaterialEffectActivationsByMaterialId?.[playerId],
+    ) +
+    readMapLike(player?._simMaterialEffectActivationsByMaterialId);
+  return realCount + simCount;
 }
 
 function isMaliciousAscensionReady(game, player, material) {
@@ -307,6 +324,22 @@ function getThousandArmsMaliciousSetup(game, player, material) {
   };
 }
 
+function getSimulatedVoidAscensionCandidates(game, player, material) {
+  if (!player || !material || material.cardKind !== "monster" || material.isFacedown) {
+    return [];
+  }
+  return (player.extraDeck || []).filter((candidate) => {
+    if (!candidate || candidate.monsterType !== "ascension") return false;
+    if (candidate.ascension?.materialId !== material.id) return false;
+    const requirements = candidate.ascension?.requirements || [];
+    return requirements.every((requirement) => {
+      if (requirement?.type !== "material_effect_activations") return true;
+      const required = Number(requirement.count || 0);
+      return getMaterialEffectActivationCount(game, player, material.id) >= required;
+    });
+  });
+}
+
 export default class VoidStrategy extends BaseStrategy {
   constructor(bot) {
     super(bot);
@@ -322,6 +355,37 @@ export default class VoidStrategy extends BaseStrategy {
    */
   evaluateBoard(gameOrState, perspectivePlayer) {
     return evaluateBoardVoid(gameOrState, perspectivePlayer);
+  }
+
+  evaluateBoardV2(gameOrState, perspectivePlayer) {
+    return evaluateBoardVoid(gameOrState, perspectivePlayer);
+  }
+
+  getPlanningProfile(game, context = {}) {
+    const analysis = context.analysis || this.analyzeGameState(game);
+    return buildVoidPlanningProfile(analysis, {
+      ...context,
+      game,
+      strategy: this,
+    });
+  }
+
+  shouldUseDeepPlanning(game, context = {}) {
+    const profile =
+      context.profile || this.getPlanningProfile(game, context);
+    return game?.turnLineSearchEnabled === true || profile.enabled === true;
+  }
+
+  scoreLineMilestones(context = {}) {
+    return scoreVoidLineMilestones(context);
+  }
+
+  scoreLineTerminal(context = {}) {
+    return scoreVoidLineTerminal(context);
+  }
+
+  describePlannedLine(context = {}) {
+    return describeVoidPlannedLine(context);
   }
 
   /**
@@ -343,6 +407,9 @@ export default class VoidStrategy extends BaseStrategy {
       spellTrap: bot.spellTrap || [],
       fieldSpell: bot.fieldSpell,
       lp: bot.lp || 8000,
+      bot,
+      opponent,
+      phase: game?.phase,
       summonAvailable:
         (bot.summonCount || 0) < 1 + (bot.additionalNormalSummons || 0),
 
@@ -360,6 +427,15 @@ export default class VoidStrategy extends BaseStrategy {
         if (!m || m.cardKind !== "monster") return max;
         const atk = m.isFacedown ? 1500 : (m.atk || 0) + (m.tempAtkBoost || 0);
         return Math.max(max, atk);
+      }, 0),
+      oppStrongestBattle: (opponent?.field || []).reduce((max, m) => {
+        if (!m || m.cardKind !== "monster") return max;
+        if (m.isFacedown) return Math.max(max, 1500);
+        const stat =
+          m.position === "defense"
+            ? (m.def || 0) + (m.tempDefBoost || 0)
+            : (m.atk || 0) + (m.tempAtkBoost || 0);
+        return Math.max(max, stat);
       }, 0),
       myStrongestAtk: (bot.field || []).reduce((max, m) => {
         if (!m || m.cardKind !== "monster") return max;
@@ -1411,18 +1487,23 @@ export default class VoidStrategy extends BaseStrategy {
       typeof game?.getAscensionCandidatesForMaterial === "function" &&
       typeof game?.checkAscensionRequirements === "function";
 
-    if (canCheckAscension) {
+    if (canCheckAscension || isSimulatedState) {
       const materials = (bot.field || []).filter(
         (m) => m && m.cardKind === "monster" && !m.isFacedown,
       );
       for (const material of materials) {
-        const check = game.canUseAsAscensionMaterial(bot, material);
-        if (!check?.ok) continue;
-        const candidates =
-          game.getAscensionCandidatesForMaterial(bot, material) || [];
-        const eligible = candidates.filter(
-          (asc) => game.checkAscensionRequirements(bot, asc)?.ok,
-        );
+        let eligible = [];
+        if (canCheckAscension) {
+          const check = game.canUseAsAscensionMaterial(bot, material);
+          if (!check?.ok) continue;
+          const candidates =
+            game.getAscensionCandidatesForMaterial(bot, material) || [];
+          eligible = candidates.filter(
+            (asc) => game.checkAscensionRequirements(bot, asc)?.ok,
+          );
+        } else {
+          eligible = getSimulatedVoidAscensionCandidates(game, bot, material);
+        }
         for (const ascensionCard of eligible) {
           const ascensionFinisherPlan = (analysis.finisherPlans || []).find(
             (plan) => plan.targetName === ascensionCard.name,
@@ -2260,17 +2341,15 @@ export default class VoidStrategy extends BaseStrategy {
       });
     });
 
-    if (bot.fieldSpell && !isSimulatedState) {
+    if (bot.fieldSpell) {
       const effect = (bot.fieldSpell.effects || []).find(
         (e) => e.timing === "on_field_activate",
       );
       if (effect) {
         // Verificar once per turn
-        const check = game.effectEngine?.checkOncePerTurn?.(
-          bot.fieldSpell,
-          bot,
-          effect,
-        );
+        const check = !isSimulatedState
+          ? game.effectEngine?.checkOncePerTurn?.(bot.fieldSpell, bot, effect)
+          : { ok: true };
         if (check?.ok === false) {
           // Já usado neste turno, não gerar ação
         } else {
@@ -2400,82 +2479,145 @@ export default class VoidStrategy extends BaseStrategy {
     return sorted;
   }
 
+  recordSimulatedMaterialActivation(state, player, card) {
+    if (![VOID_IDS.WALKER, VOID_IDS.THOUSAND_ARMS].includes(card?.id)) {
+      return;
+    }
+    const playerId = player?.id || "bot";
+    if (!state._simMaterialEffectActivationsByMaterialId) {
+      state._simMaterialEffectActivationsByMaterialId = {};
+    }
+    if (!state._simMaterialEffectActivationsByMaterialId[playerId]) {
+      state._simMaterialEffectActivationsByMaterialId[playerId] = {};
+    }
+    const bucket = state._simMaterialEffectActivationsByMaterialId[playerId];
+    bucket[card.id] = (bucket[card.id] || 0) + 1;
+    if (!player._simMaterialEffectActivationsByMaterialId) {
+      player._simMaterialEffectActivationsByMaterialId = {};
+    }
+    player._simMaterialEffectActivationsByMaterialId[card.id] =
+      (player._simMaterialEffectActivationsByMaterialId[card.id] || 0) + 1;
+  }
+
+  simulateVoidHollowRecruit({ state, player, card, fromZone, action }) {
+    if (card?.id !== VOID_IDS.HOLLOW || fromZone !== "hand") return;
+    if (card.effectsNegated || state._simVoidHollowRecruitUsed) return;
+    if ((player.field || []).length >= 5) return;
+    const deckIndex = (player.deck || []).findIndex(
+      (candidate) => candidate?.id === VOID_IDS.HOLLOW,
+    );
+    if (deckIndex < 0) return;
+    const recruited = player.deck.splice(deckIndex, 1)[0];
+    recruited.position =
+      this.chooseSpecialSummonPosition(recruited, {
+        game: state,
+        player,
+        action,
+        source: card,
+      }) || "defense";
+    recruited.isFacedown = false;
+    recruited.hasAttacked = false;
+    recruited.attacksUsedThisTurn = 0;
+    player.field.push(recruited);
+    state._simVoidHollowRecruitUsed = true;
+  }
+
+  handleVoidSimulatedSpecialSummon(payload = {}) {
+    const { state, player, card, fromZone, action } = payload;
+    if (!card || !player) return;
+    if (card.id === VOID_IDS.WALKER) {
+      card.cannotAttackThisTurn = true;
+    }
+    this.simulateVoidHollowRecruit({ state, player, card, fromZone, action });
+  }
+
+  handleVoidSimulatedNormalSummon({ state, player, newCard } = {}) {
+    if (!state || !player || !newCard) return;
+    if (newCard.id !== VOID_IDS.BEAST || state._simVoidBeastSearchUsed) return;
+    const deckIndex = (player.deck || []).findIndex(
+      (candidate) => candidate?.id === VOID_IDS.HOLLOW,
+    );
+    if (deckIndex < 0) return;
+    const searched = player.deck.splice(deckIndex, 1)[0];
+    player.hand.push(searched);
+    state._simVoidBeastSearchUsed = true;
+  }
+
+  handleVoidSimulatedFusionSummon({ state, player, fusionCard } = {}) {
+    if (!state || !player || !fusionCard || !isVoid(fusionCard)) return;
+    const ravenIndex = (player.hand || []).findIndex(
+      (card) => card?.id === VOID_IDS.RAVEN,
+    );
+    if (ravenIndex >= 0) {
+      const raven = player.hand.splice(ravenIndex, 1)[0];
+      player.graveyard.push(raven);
+      fusionCard.immuneToOpponentEffectsUntilTurn =
+        (state.turnCounter || 0) + 1;
+      fusionCard._simProtectedByRaven = true;
+    }
+
+    if (fusionCard.id !== VOID_IDS.HYDRA_TITAN) return;
+    const destroyed = [];
+    player.field = (player.field || []).filter((card) => {
+      if (!card || card === fusionCard || card.cardKind !== "monster") {
+        return true;
+      }
+      destroyed.push(card);
+      return false;
+    });
+    destroyed.forEach((card) => player.graveyard.push(card));
+    destroyed.forEach(() => {
+      const drawn = player.deck?.shift?.();
+      if (drawn) player.hand.push(drawn);
+    });
+  }
+
+  buildVoidSimulationOptions(action) {
+    const placeSpellCard = (simState, placedCard) => {
+      const player = simState.bot;
+      if (placedCard.subtype === "field") {
+        if (player.fieldSpell) player.graveyard.push(player.fieldSpell);
+        player.fieldSpell = placedCard;
+        return { placed: true };
+      }
+      if (
+        placedCard.subtype === "continuous" ||
+        placedCard.subtype === "equip"
+      ) {
+        player.spellTrap = player.spellTrap || [];
+        player.spellTrap.push(placedCard);
+        return { placed: true };
+      }
+      return { placed: false };
+    };
+
+    return {
+      archetype: "Void",
+      guardLabel: "VoidStrategy",
+      strategy: this,
+      activationContext: action.activationContext,
+      rankSearchCandidates: this.rankSearchCandidates.bind(this),
+      evaluateRecruitCandidate: this.evaluateRecruitCandidate.bind(this),
+      chooseSpecialSummonPosition: this.chooseSpecialSummonPosition.bind(this),
+      getTributeRequirementFor: this.getTributeRequirementFor.bind(this),
+      selectBestTributes: this.selectBestTributes.bind(this),
+      placeSpellCard,
+      onAfterSummon: (payload) => this.handleVoidSimulatedNormalSummon(payload),
+      onAfterSpecialSummon: (payload) =>
+        this.handleVoidSimulatedSpecialSummon(payload),
+      onFusionSummon: (payload) => this.handleVoidSimulatedFusionSummon(payload),
+      onEffectActivated: ({ state, player, card }) =>
+        this.recordSimulatedMaterialActivation(state, player, card),
+    };
+  }
+
   simulateMainPhaseAction(state, action) {
     if (!action) return state;
-    switch (action.type) {
-      case "summon": {
-        const player = state.bot;
-        const card = player.hand[action.index];
-        if (!card) break;
-        const tributeInfo = this.getTributeRequirementFor(card, player);
-        const tributesNeeded = tributeInfo.tributesNeeded || 0;
-        if (player.field.length < tributesNeeded) break;
-        const tributeIndices = this.selectBestTributes(
-          player.field,
-          tributesNeeded,
-          card,
-        );
-        tributeIndices.sort((a, b) => b - a);
-        tributeIndices.forEach((idx) => {
-          const t = player.field[idx];
-          if (t) {
-            player.graveyard.push(t);
-            player.field.splice(idx, 1);
-          }
-        });
-        player.hand.splice(action.index, 1);
-        const newCard = { ...card };
-        newCard.position = action.position || "attack";
-        newCard.isFacedown = action.facedown || false;
-        newCard.hasAttacked = false;
-        newCard.attacksUsedThisTurn = 0;
-        if (newCard.cardKind === "monster") {
-          player.field.push(newCard);
-          player.summonCount = (player.summonCount || 0) + 1;
-        } else {
-          player.graveyard.push(newCard);
-        }
-        break;
-      }
-      case "spell": {
-        const player = state.bot;
-        const card = player.hand[action.index];
-        if (!card) break;
-        player.hand.splice(action.index, 1);
-        if (card.subtype === "field") {
-          if (player.fieldSpell) player.graveyard.push(player.fieldSpell);
-          player.fieldSpell = { ...card };
-        } else if (card.subtype === "continuous" || card.subtype === "equip") {
-          player.spellTrap = player.spellTrap || [];
-          player.spellTrap.push({ ...card });
-        } else {
-          player.graveyard.push({ ...card });
-        }
-        break;
-      }
-      case "position_change": {
-        const player = state.bot;
-        const target = (player.field || []).find(
-          (c) =>
-            c &&
-            (c.id === action.cardId ||
-              (!action.cardId && c.name === action.cardName)),
-        );
-        if (!target) break;
-        if (target.isFacedown) break;
-        if (target.positionChangedThisTurn) break;
-        if (target.hasAttacked) break;
-        const newPosition =
-          action.toPosition === "defense" ? "defense" : "attack";
-        if (target.position === newPosition) break;
-        target.position = newPosition;
-        target.positionChangedThisTurn = true;
-        target.cannotAttackThisTurn = newPosition === "defense";
-        break;
-      }
-      default:
-        break;
-    }
+    applyGenericSimulatedMainPhaseAction(
+      state,
+      action,
+      this.buildVoidSimulationOptions(action),
+    );
     return state;
   }
 

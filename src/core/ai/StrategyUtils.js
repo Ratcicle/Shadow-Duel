@@ -3,6 +3,7 @@ import {
   getEffectiveAtk,
   getEffectiveDef,
 } from "./common/cardStats.js";
+import { cardMatchesFilter } from "./common/cardFilters.js";
 
 export function getCardArchetypes(card) {
   if (!card) return [];
@@ -187,6 +188,8 @@ export function getZoneCards(player, zone) {
       return Array.isArray(player.hand) ? player.hand : [];
     case "graveyard":
       return Array.isArray(player.graveyard) ? player.graveyard : [];
+    case "deck":
+      return Array.isArray(player.deck) ? player.deck : [];
     case "spellTrap":
       return Array.isArray(player.spellTrap) ? player.spellTrap : [];
     case "fieldSpell":
@@ -198,17 +201,113 @@ export function getZoneCards(player, zone) {
   }
 }
 
-function matchesTargetFilters(card, target, sourceCard) {
-  if (!card) return false;
-  if (target.cardKind) {
-    const kinds = Array.isArray(target.cardKind)
-      ? target.cardKind
-      : [target.cardKind];
-    if (!kinds.includes(card.cardKind)) return false;
+function asArray(value) {
+  if (value === undefined || value === null) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+function normalizeCount(count, fallback = 1) {
+  if (Number.isFinite(count)) {
+    return { min: count, max: count };
   }
-  if (target.cardName && card.name !== target.cardName) return false;
-  if (target.name && card.name !== target.name) return false;
-  if (target.excludeCardName && card.name === target.excludeCardName) {
+  const min = Number.isFinite(count?.min) ? count.min : fallback;
+  const max = Number.isFinite(count?.max) ? count.max : min;
+  return { min, max };
+}
+
+function getCardInstanceId(card) {
+  return (
+    card?.instanceId ??
+    card?._instanceId ??
+    card?.uid ??
+    card?.uuid ??
+    card?.simInstanceId ??
+    null
+  );
+}
+
+function getTargetPreference(options = {}, targetId = null) {
+  const byTarget =
+    options.targetPreferences ||
+    options.activationContext?.actionContext?.targetPreferences ||
+    options.actionContext?.targetPreferences ||
+    {};
+  return (
+    (targetId && byTarget?.[targetId]) ||
+    options.targetPreference ||
+    null
+  );
+}
+
+function applyNameAndInstancePreference(score, card, preference, intent) {
+  if (!preference || !card) return score;
+  let adjusted = score;
+  const name = card.name;
+  const instanceId = getCardInstanceId(card);
+  const prefers =
+    asArray(preference.preferredNames).includes(name) ||
+    (instanceId !== null &&
+      asArray(preference.preferredInstanceIds).includes(instanceId));
+  const avoids =
+    asArray(preference.avoidNames).includes(name) ||
+    (instanceId !== null &&
+      asArray(preference.avoidInstanceIds).includes(instanceId));
+  const weight = intent === "cost" ? -100 : 100;
+  if (prefers) adjusted += weight;
+  if (avoids) adjusted -= weight;
+  return adjusted;
+}
+
+function buildActionFilter(action = {}) {
+  const filter = { ...(action.filters || {}) };
+  [
+    "cardKind",
+    "cardName",
+    "name",
+    "cardId",
+    "subtype",
+    "archetype",
+    "archetypes",
+    "requireFaceup",
+    "excludeCardName",
+    "excludeCardNames",
+    "minLevel",
+    "maxLevel",
+    "level",
+    "levelOp",
+    "minAtk",
+    "maxAtk",
+    "minDef",
+    "maxDef",
+  ].forEach((key) => {
+    if (action[key] !== undefined && filter[key] === undefined) {
+      filter[key] = action[key];
+    }
+  });
+  if (action.monsterType && filter.type === undefined) {
+    filter.type = action.monsterType;
+  }
+  return filter;
+}
+
+function matchesTargetFilters(card, target = {}, sourceCard, ownerRole = null) {
+  if (!card) return false;
+  if (Array.isArray(target.anyOf) && target.anyOf.length > 0) {
+    return target.anyOf.some((entry) =>
+      matchesTargetFilters(
+        card,
+        { ...target, ...entry, anyOf: undefined },
+        sourceCard,
+        ownerRole,
+      )
+    );
+  }
+  if (
+    target.owner &&
+    target.owner !== "any" &&
+    ownerRole &&
+    target.owner !== ownerRole
+  ) {
     return false;
   }
   if (target.requireThisCard && sourceCard && card.id !== sourceCard.id) {
@@ -217,36 +316,8 @@ function matchesTargetFilters(card, target, sourceCard) {
   if (target.excludeSelf && sourceCard && card.id === sourceCard.id) {
     return false;
   }
-  if (target.archetype && !hasArchetype(card, target.archetype)) return false;
-  if (target.requireFaceup && card.isFacedown) return false;
-  if (Number.isFinite(target.minLevel) && (card.level || 0) < target.minLevel) {
-    return false;
-  }
-  if (Number.isFinite(target.maxLevel) && (card.level || 0) > target.maxLevel) {
-    return false;
-  }
-  if (Number.isFinite(target.level)) {
-    const level = card.level || 0;
-    const op = target.levelOp || "eq";
-    if (op === "eq" && level !== target.level) return false;
-    if (op === "lte" && level > target.level) return false;
-    if (op === "gte" && level < target.level) return false;
-    if (op === "lt" && level >= target.level) return false;
-    if (op === "gt" && level <= target.level) return false;
-  }
-  if (Number.isFinite(target.minAtk) && (card.atk || 0) < target.minAtk) {
-    return false;
-  }
-  if (Number.isFinite(target.maxAtk) && (card.atk || 0) > target.maxAtk) {
-    return false;
-  }
-  if (Number.isFinite(target.minDef) && (card.def || 0) < target.minDef) {
-    return false;
-  }
-  if (Number.isFinite(target.maxDef) && (card.def || 0) > target.maxDef) {
-    return false;
-  }
-  return true;
+  const { owner: _owner, anyOf: _anyOf, ...filters } = target;
+  return cardMatchesFilter(card, filters);
 }
 
 function inferTargetIntent(action) {
@@ -285,34 +356,39 @@ function buildTargetIntents(actions) {
   return intents;
 }
 
-function rankCandidates(candidates, intent, options) {
+function rankCandidates(candidates, intent, options = {}) {
+  const targetPreference = options.targetPreference || null;
   const scored = candidates.map((card) => ({
     card,
-    score:
-      intent === "benefit" && options?.targetPreference?.role === "recursion"
-        ? estimateRecursionTargetValue(card, options.targetPreference)
+    score: applyNameAndInstancePreference(
+      intent === "benefit" && targetPreference?.role === "recursion"
+        ? estimateRecursionTargetValue(card, targetPreference)
         : intent === "benefit" &&
-            options?.targetPreference?.role === "temporary_stat_buff" &&
-            options?.targetPreference?.purpose === "offense"
+            targetPreference?.role === "temporary_stat_buff" &&
+            targetPreference?.purpose === "offense"
           ? estimateOffensiveTemporaryBuffValue(card, {
-              atkBoost: options.targetPreference.atkBoost,
+              atkBoost: targetPreference.atkBoost,
               opponentField: options.opponentField,
               opponentLp: options.opponentLp,
             })
           : intent === "harm" &&
-            options?.targetPreference?.role === "temporary_stat_debuff" &&
-            options?.targetPreference?.purpose === "combat"
+            targetPreference?.role === "temporary_stat_debuff" &&
+            targetPreference?.purpose === "combat"
           ? estimateTemporaryCombatDebuffTargetValue(card, {
-              attackers: options.targetPreference.attackers || [],
+              attackers: targetPreference.attackers || [],
               opponentLp: options.opponentLp || 0,
-              atkReduction: options.targetPreference.atkReduction,
-              defReduction: options.targetPreference.defReduction,
+              atkReduction: targetPreference.atkReduction,
+              defReduction: targetPreference.defReduction,
               destroyIfAtkZeroedByThisEffect:
-                options.targetPreference.destroyIfAtkZeroedByThisEffect,
+                targetPreference.destroyIfAtkZeroedByThisEffect,
               destroyIfDefZeroedByThisEffect:
-                options.targetPreference.destroyIfDefZeroedByThisEffect,
+                targetPreference.destroyIfDefZeroedByThisEffect,
             })
         : estimateCardValue(card, options),
+      card,
+      targetPreference,
+      intent,
+    ),
   }));
   scored.sort((a, b) => {
     return intent === "cost" ? a.score - b.score : b.score - a.score;
@@ -497,25 +573,42 @@ export function selectSimulatedTargets({
 
   targets.forEach((target) => {
     if (!target || !target.id) return;
-    const owner = target.owner === "opponent" ? opponent : self;
+    const ownerEntries =
+      target.owner === "opponent"
+        ? [{ player: opponent, role: "opponent" }]
+        : target.owner === "any"
+          ? [
+              { player: self, role: "self" },
+              { player: opponent, role: "opponent" },
+            ]
+          : [{ player: self, role: "self" }];
     const zones = target.zones || (target.zone ? [target.zone] : []);
     let candidates = [];
-    zones.forEach((zone) => {
-      candidates = candidates.concat(getZoneCards(owner, zone));
+    ownerEntries.forEach(({ player: owner, role }) => {
+      zones.forEach((zone) => {
+        candidates = candidates.concat(
+          getZoneCards(owner, zone).map((card) => ({ card, role })),
+        );
+      });
     });
-    candidates = candidates.filter((card) =>
-      matchesTargetFilters(card, target, sourceCard)
-    );
+    const filtered = candidates
+      .filter(({ card, role }) =>
+        matchesTargetFilters(card, target, sourceCard, role)
+      )
+      .map(({ card }) => card);
 
-    const intent = intents.get(target.id) || "benefit";
-    const ordered = rankCandidates(candidates, intent, {
+    const targetPreference = getTargetPreference(options, target.id);
+    const intent =
+      targetPreference?.intent || target.intent || intents.get(target.id) || "benefit";
+    const ordered = rankCandidates(filtered, intent, {
       ...options,
       fieldSpell: self.fieldSpell,
+      targetPreference,
     });
 
-    const count = target.count || { min: 1, max: 1 };
-    const min = Number.isFinite(count.min) ? count.min : 1;
-    const max = Number.isFinite(count.max) ? count.max : min;
+    const count = normalizeCount(target.count, 1);
+    const min = count.min;
+    const max = count.max;
     let pickCount = intent === "cost" ? min : max;
     if (min === 0 && intent !== "cost") {
       pickCount = 0;
@@ -528,7 +621,26 @@ export function selectSimulatedTargets({
 
 function removeCardFromZones(player, card) {
   if (!player || !card) return false;
-  const zones = ["hand", "field", "graveyard", "spellTrap", "banished"];
+  if (card.equippedTo && Array.isArray(card.equippedTo.equips)) {
+    card.equippedTo.equips = card.equippedTo.equips.filter(
+      (equip) => equip !== card
+    );
+    card.equippedTo = null;
+  }
+  if (Array.isArray(card.equips) && card.equips.length > 0) {
+    card.equips.forEach((equip) => {
+      if (equip) equip.equippedTo = null;
+    });
+  }
+  const zones = [
+    "hand",
+    "field",
+    "graveyard",
+    "spellTrap",
+    "banished",
+    "deck",
+    "extraDeck",
+  ];
   for (const zone of zones) {
     const list = player[zone];
     if (!Array.isArray(list)) continue;
@@ -547,6 +659,23 @@ function removeCardFromZones(player, card) {
 
 function moveCardToZone(player, card, zone) {
   if (!player || !card) return false;
+  if (
+    card.cardKind === "monster" &&
+    Array.isArray(card.equips) &&
+    card.equips.length > 0 &&
+    zone !== "field"
+  ) {
+    const attachedEquips = card.equips.slice();
+    card.equips = [];
+    attachedEquips.forEach((equip) => {
+      if (!equip) return;
+      equip.equippedTo = null;
+      equip.equipTarget = null;
+      removeCardFromZones(player, equip);
+      if (!Array.isArray(player.graveyard)) player.graveyard = [];
+      player.graveyard.push(equip);
+    });
+  }
   removeCardFromZones(player, card);
   if (zone === "fieldSpell") {
     player.fieldSpell = card;
@@ -577,8 +706,307 @@ function findCardOwner(state, card) {
     if (Array.isArray(player.spellTrap) && player.spellTrap.includes(card)) {
       return player;
     }
+    if (Array.isArray(player.deck) && player.deck.includes(card)) return player;
+    if (Array.isArray(player.banished) && player.banished.includes(card)) {
+      return player;
+    }
   }
   return null;
+}
+
+function getCounterValue(card, counterType = "counter") {
+  if (!card) return 0;
+  const key = counterType || "counter";
+  const counters = card.counters;
+  if (counters instanceof Map) return counters.get(key) || 0;
+  if (counters && typeof counters === "object") {
+    const upperKey = typeof key === "string" ? key.toUpperCase() : key;
+    return counters[key] || counters[upperKey] || 0;
+  }
+  return 0;
+}
+
+function setCounterValue(card, counterType = "counter", value = 0) {
+  if (!card) return;
+  const key = counterType || "counter";
+  const nextValue = Math.max(0, Math.floor(value || 0));
+  if (card.counters instanceof Map) {
+    card.counters.set(key, nextValue);
+    return;
+  }
+  if (!card.counters || typeof card.counters !== "object") card.counters = {};
+  card.counters[key] = nextValue;
+}
+
+function getStoredBlueprints(card) {
+  const storage = card?.state?.blueprintStorage || card?.blueprintStorage;
+  return (
+    card?.storedBlueprints ||
+    card?.blueprintStorageState?.storedBlueprints ||
+    storage?.storedBlueprints ||
+    card?.storedEffects ||
+    []
+  );
+}
+
+function hasOpenMonsterZone(player) {
+  return (player?.field || []).length < 5;
+}
+
+function resolveActionPlayer(action, self, opponent) {
+  return action.player === "opponent" ? opponent : self;
+}
+
+function resolveTargetsForAction(action, selections, options, opponent) {
+  if (!action?.targetRef) return [];
+  if (action.targetRef === "self") return [options.sourceCard].filter(Boolean);
+  if (action.targetRef === "opponent_field") {
+    return (opponent?.field || []).filter(
+      (card) => card && card.cardKind === "monster" && !card.isFacedown,
+    );
+  }
+  return selections[action.targetRef] || [];
+}
+
+function getActionCandidates(player, action = {}, zoneFallback = "deck") {
+  const zones = asArray(action.zones || action.zone || zoneFallback);
+  const filters = buildActionFilter(action);
+  return zones.flatMap((zone) =>
+    getZoneCards(player, zone).filter((card) =>
+      matchesTargetFilters(card, filters, null)
+    )
+  );
+}
+
+function getStrategyRanker(options = {}) {
+  return (
+    options.rankSearchCandidates ||
+    options.strategy?.rankSearchCandidates?.bind(options.strategy) ||
+    null
+  );
+}
+
+function getRecruitEvaluator(options = {}) {
+  return (
+    options.evaluateRecruitCandidate ||
+    options.strategy?.evaluateRecruitCandidate?.bind(options.strategy) ||
+    null
+  );
+}
+
+function chooseRankedCards(candidates, intent, action, state, player, options) {
+  if (!Array.isArray(candidates) || candidates.length === 0) return [];
+  const ctx = {
+    game: state,
+    player,
+    source: options.sourceCard,
+    action,
+    activationContext: options.activationContext,
+  };
+
+  if (intent === "summon") {
+    const evaluator = getRecruitEvaluator(options);
+    if (typeof evaluator === "function") {
+      const result = evaluator(candidates, {
+        ...ctx,
+        forceSummonAssessment: true,
+      });
+      if (Array.isArray(result?.scores)) {
+        const pool = result.scores.some((entry) => !entry.blocked)
+          ? result.scores.filter((entry) => !entry.blocked)
+          : result.scores;
+        return pool
+          .slice()
+          .sort((a, b) => (b.score || 0) - (a.score || 0))
+          .map((entry) => entry.card)
+          .filter(Boolean);
+      }
+      if (typeof result?.asBotSelect === "function") {
+        return result.asBotSelect();
+      }
+      if (result?.best) return [result.best];
+    }
+  }
+
+  const ranker = getStrategyRanker(options);
+  if (typeof ranker === "function") {
+    const ranked = ranker(candidates, action, ctx);
+    if (Array.isArray(ranked) && ranked.length > 0) return ranked;
+  }
+
+  return rankCandidates(candidates, intent === "summon" ? "benefit" : intent, {
+    ...options,
+    targetPreference: getTargetPreference(options, action.targetRef || action.id),
+  });
+}
+
+function chooseSpecialSummonPosition(card, action, state, player, options = {}) {
+  if (action.position && action.position !== "choice") return action.position;
+  const chooser =
+    options.chooseSpecialSummonPosition ||
+    options.strategy?.chooseSpecialSummonPosition?.bind(options.strategy);
+  if (typeof chooser === "function") {
+    const choice = chooser(card, {
+      game: state,
+      player,
+      source: options.sourceCard,
+      action,
+      activationContext: options.activationContext,
+    });
+    if (choice === "attack" || choice === "defense") return choice;
+  }
+  return "attack";
+}
+
+function applySummonState(card, action, state, player, options = {}) {
+  card.position = chooseSpecialSummonPosition(card, action, state, player, options);
+  card.isFacedown = false;
+  card.hasAttacked = false;
+  card.attacksUsedThisTurn = 0;
+  if (action.cannotAttackThisTurn) card.cannotAttackThisTurn = true;
+  if (action.negateEffects) card.effectsNegated = true;
+  if (action.setAtkToZeroAfterSummon) card.atk = 0;
+  if (action.setDefToZeroAfterSummon) card.def = 0;
+  if (Number.isFinite(action.atkBoostAfterSummon)) {
+    card.tempAtkBoost =
+      (card.tempAtkBoost || 0) + action.atkBoostAfterSummon;
+  }
+  if (Number.isFinite(action.defBoostAfterSummon)) {
+    card.tempDefBoost =
+      (card.tempDefBoost || 0) + action.defBoostAfterSummon;
+  }
+}
+
+function pickCountForAction(action, fallback = 1) {
+  const count = normalizeCount(action.count, fallback);
+  return Math.max(0, count.max);
+}
+
+function conditionsArray(conditions) {
+  if (!conditions) return [];
+  return Array.isArray(conditions) ? conditions : [conditions];
+}
+
+function playerControlsMatching(player, condition = {}) {
+  const zones = asArray(condition.zones || condition.zone || "field");
+  const {
+    type: _conditionType,
+    owner: _owner,
+    zone: _zone,
+    zones: _zones,
+    min: _min,
+    reason: _reason,
+    ...directFilters
+  } = condition;
+  const filters = condition.filters || directFilters;
+  return zones.some((zone) =>
+    getZoneCards(player, zone).some((card) =>
+      matchesTargetFilters(card, filters, null)
+    )
+  );
+}
+
+export function evaluateSimulatedConditions(conditions, ctx = {}) {
+  const list = conditionsArray(conditions);
+  if (list.length === 0) return true;
+  const state = ctx.state || ctx.game || {};
+  const { self, opponent } = getPerspectivePlayers(state, ctx.selfId || "bot");
+  const options = ctx.options || {};
+  const custom =
+    options.evaluateSimulatedConditions ||
+    options.strategy?.evaluateSimulatedConditions?.bind(options.strategy);
+  if (typeof custom === "function") {
+    const result = custom(conditions, ctx);
+    if (typeof result === "boolean") return result;
+  }
+
+  return list.every((condition) => {
+    if (!condition) return true;
+    if (condition.type === "any_of" || Array.isArray(condition.any_of)) {
+      const optionsList = condition.conditions || condition.any_of || [];
+      return optionsList.some((entry) =>
+        evaluateSimulatedConditions(entry, ctx)
+      );
+    }
+    const owner = condition.owner === "opponent" ? opponent : self;
+    if (condition.type === "source_counters_at_least") {
+      const sourceCard = ctx.sourceCard || options.sourceCard;
+      return (
+        getCounterValue(sourceCard, condition.counterType || "counter") >=
+        (condition.min || 0)
+      );
+    }
+    if (condition.type === "has_stored_blueprint") {
+      const sourceCard = ctx.sourceCard || options.sourceCard;
+      return getStoredBlueprints(sourceCard).length > 0;
+    }
+    if (condition.type === "empty_field" || condition.empty_field) {
+      return (owner?.field || []).filter((card) => card?.cardKind === "monster")
+        .length === 0;
+    }
+    if (condition.type === "control_card" || condition.control_card) {
+      return playerControlsMatching(owner, condition);
+    }
+    if (
+      condition.type === "control_card_filters" ||
+      condition.control_card_filters
+    ) {
+      const {
+        type: _conditionType,
+        owner: _owner,
+        zone: _zone,
+        zones: _zones,
+        min: _min,
+        max: _max,
+        reason: _reason,
+        ...directFilters
+      } = condition;
+      const filters = {
+        ...directFilters,
+        ...(condition.control_card_filters || condition.filters || {}),
+      };
+      const zones = asArray(condition.zones || condition.zone || "field");
+      const min = Number.isFinite(condition.min)
+        ? condition.min
+        : Number.isFinite(condition.max)
+          ? 0
+          : 1;
+      const max = Number.isFinite(condition.max) ? condition.max : null;
+      const count = zones.reduce(
+        (sum, zone) =>
+          sum +
+          getZoneCards(owner, zone).filter((card) =>
+            matchesTargetFilters(card, filters, null)
+          ).length,
+        0,
+      );
+      return count >= min && (max === null || count <= max);
+    }
+    if (condition.type === "control_card_max") {
+      const zones = asArray(condition.zones || condition.zone || "field");
+      const max = Number.isFinite(condition.max) ? condition.max : 0;
+      const filters = condition.filters || {};
+      const count = zones.reduce(
+        (sum, zone) =>
+          sum +
+          getZoneCards(owner, zone).filter((card) =>
+            matchesTargetFilters(card, filters, null)
+          ).length,
+        0,
+      );
+      return count <= max;
+    }
+    return true;
+  });
+}
+
+function hasRequiredSelections(targets = [], selections = {}) {
+  return (targets || []).every((target) => {
+    if (!target?.id) return true;
+    const { min } = normalizeCount(target.count, 1);
+    if (min <= 0) return true;
+    return (selections[target.id] || []).length >= min;
+  });
 }
 
 export function applySimulatedActions({
@@ -591,29 +1019,27 @@ export function applySimulatedActions({
   if (!Array.isArray(actions)) return;
   const { self, opponent } = getPerspectivePlayers(state, selfId);
 
-  actions.forEach((action) => {
-    if (!action || !action.type) return;
-    const targets =
-      action.targetRef && selections[action.targetRef]
-        ? selections[action.targetRef]
-        : [];
+  for (const action of actions) {
+    if (!action || !action.type) continue;
+    const targets = resolveTargetsForAction(action, selections, options, opponent);
 
     switch (action.type) {
       case "draw": {
-        const targetPlayer = action.player === "opponent" ? opponent : self;
+        const targetPlayer = resolveActionPlayer(action, self, opponent);
         const amount = action.amount || 1;
         for (let i = 0; i < amount; i += 1) {
-          targetPlayer.hand.push({ placeholder: true });
+          const drawn = targetPlayer.deck?.shift?.();
+          if (drawn) targetPlayer.hand.push(drawn);
         }
         break;
       }
       case "heal": {
-        const targetPlayer = action.player === "opponent" ? opponent : self;
+        const targetPlayer = resolveActionPlayer(action, self, opponent);
         targetPlayer.lp += action.amount || 0;
         break;
       }
       case "heal_per_archetype_monster": {
-        const targetPlayer = action.player === "opponent" ? opponent : self;
+        const targetPlayer = resolveActionPlayer(action, self, opponent);
         const archetype = action.archetype;
         const count = (targetPlayer.field || []).filter((card) =>
           hasArchetype(card, archetype)
@@ -622,31 +1048,52 @@ export function applySimulatedActions({
         break;
       }
       case "damage": {
-        const targetPlayer = action.player === "opponent" ? opponent : self;
+        const targetPlayer = resolveActionPlayer(action, self, opponent);
         targetPlayer.lp -= action.amount || 0;
         break;
       }
+      case "pay_lp": {
+        const targetPlayer = resolveActionPlayer(action, self, opponent);
+        const amount = Number.isFinite(action.amount)
+          ? action.amount
+          : Number.isFinite(action.lp)
+            ? action.lp
+            : 0;
+        if (amount <= 0) break;
+        if ((targetPlayer.lp || 0) <= amount && action.allowSelfKO !== true) {
+          return;
+        }
+        targetPlayer.lp = Math.max(0, (targetPlayer.lp || 0) - amount);
+        break;
+      }
       case "search_any": {
-        const targetPlayer = action.player === "opponent" ? opponent : self;
-        targetPlayer.hand.push({ placeholder: true });
+        const targetPlayer = resolveActionPlayer(action, self, opponent);
+        const candidates = getActionCandidates(targetPlayer, action, "deck");
+        const chosen = chooseRankedCards(
+          candidates,
+          "benefit",
+          action,
+          state,
+          targetPlayer,
+          options,
+        )[0];
+        if (!chosen) break;
+        removeCardFromZones(targetPlayer, chosen);
+        targetPlayer.hand.push(chosen);
         break;
       }
       case "add_from_zone_to_hand": {
-        const targetPlayer = action.player === "opponent" ? opponent : self;
-        const zone = action.zone || "graveyard";
-        const source = getZoneCards(targetPlayer, zone);
-        const filters = action.filters || {};
-        const candidates = source.filter((card) =>
-          matchesTargetFilters(card, filters, null)
-        );
-        const count = action.count || { min: 1, max: 1 };
-        const min = Number.isFinite(count.min) ? count.min : 1;
-        const max = Number.isFinite(count.max) ? count.max : min;
-        const pickCount = min === 0 ? 0 : max;
-        const chosen = rankCandidates(candidates, "benefit", options).slice(
-          0,
-          Math.min(pickCount, candidates.length)
-        );
+        const targetPlayer = resolveActionPlayer(action, self, opponent);
+        const candidates = getActionCandidates(targetPlayer, action, "graveyard");
+        const pickCount = pickCountForAction(action, 1);
+        const chosen = chooseRankedCards(
+          candidates,
+          "benefit",
+          action,
+          state,
+          targetPlayer,
+          options,
+        ).slice(0, Math.min(pickCount, candidates.length));
         if (chosen.length === 0) break;
         chosen.forEach((card) => {
           removeCardFromZones(targetPlayer, card);
@@ -655,32 +1102,198 @@ export function applySimulatedActions({
         break;
       }
       case "special_summon_from_zone": {
-        const targetPlayer = action.player === "opponent" ? opponent : self;
-        if ((targetPlayer.field || []).length >= 5) break;
-        const zone = action.zone || "deck";
-        const source = getZoneCards(targetPlayer, zone);
-        const filters = action.filters || {};
-        const candidates = source.filter((card) =>
-          matchesTargetFilters(card, filters, null)
+        const targetPlayer = resolveActionPlayer(action, self, opponent);
+        if (!hasOpenMonsterZone(targetPlayer)) break;
+        let candidates = action.requireSource && options.sourceCard
+          ? [options.sourceCard]
+          : action.targetRef
+            ? targets
+            : null;
+        if (!candidates || candidates.length === 0) {
+          candidates = getActionCandidates(targetPlayer, action, "deck");
+        }
+        const max = Math.min(
+          pickCountForAction(action, 1),
+          candidates.length,
+          5 - (targetPlayer.field || []).length,
         );
-        const count = action.count || { min: 1, max: 1 };
-        const max = Number.isFinite(count.max) ? count.max : 1;
-        const chosen = rankCandidates(candidates, "benefit", options).slice(
-          0,
-          Math.min(max, candidates.length, 5 - targetPlayer.field.length)
-        );
+        const chosen = chooseRankedCards(
+          candidates,
+          "summon",
+          action,
+          state,
+          targetPlayer,
+          options,
+        ).slice(0, max);
+        if (action.banishCost && options.sourceCard) {
+          const sourceOwner = findCardOwner(state, options.sourceCard) || targetPlayer;
+          moveCardToZone(sourceOwner, options.sourceCard, "banished");
+        }
         chosen.forEach((card) => {
           removeCardFromZones(targetPlayer, card);
-          card.position = card.position || action.position || "attack";
-          card.isFacedown = false;
-          card.hasAttacked = false;
-          card.attacksUsedThisTurn = 0;
+          const fromZone = action.zone || "deck";
+          applySummonState(card, action, state, targetPlayer, options);
           targetPlayer.field.push(card);
+          options.onAfterSpecialSummon?.({
+            state,
+            player: targetPlayer,
+            card,
+            action,
+            fromZone,
+            sourceCard: options.sourceCard,
+          });
+        });
+        break;
+      }
+      case "search_then_optional_special_summon_from_hand": {
+        const targetPlayer = resolveActionPlayer(action, self, opponent);
+        const candidates = getActionCandidates(targetPlayer, action, "deck");
+        const searched = chooseRankedCards(
+          candidates,
+          "benefit",
+          action,
+          state,
+          targetPlayer,
+          options,
+        )[0];
+        if (!searched) break;
+        removeCardFromZones(targetPlayer, searched);
+        targetPlayer.hand.push(searched);
+
+        const canSummon =
+          hasOpenMonsterZone(targetPlayer) &&
+          evaluateSimulatedConditions(action.summonCondition, {
+            state,
+            selfId,
+            options,
+          });
+        if (!canSummon) break;
+
+        removeCardFromZones(targetPlayer, searched);
+        applySummonState(searched, action, state, targetPlayer, {
+          ...options,
+          action,
+        });
+        targetPlayer.field.push(searched);
+        options.onAfterSpecialSummon?.({
+          state,
+          player: targetPlayer,
+          card: searched,
+          action,
+          fromZone: "hand",
+          sourceCard: options.sourceCard,
+        });
+        break;
+      }
+      case "special_summon_from_hand_with_cost": {
+        const targetPlayer = resolveActionPlayer(action, self, opponent);
+        if (!hasOpenMonsterZone(targetPlayer)) break;
+        const sourceCard = options.sourceCard;
+        if (!sourceCard || !targetPlayer.hand?.includes(sourceCard)) break;
+        const costTargets = action.costTargetRef
+          ? selections?.[action.costTargetRef] || []
+          : targets;
+        if (!Array.isArray(costTargets) || costTargets.length === 0) break;
+        costTargets.forEach((card) => {
+          if (!card) return;
+          const owner = findCardOwner(state, card) || targetPlayer;
+          moveCardToZone(owner, card, "graveyard");
+        });
+        removeCardFromZones(targetPlayer, sourceCard);
+        applySummonState(sourceCard, action, state, targetPlayer, options);
+        targetPlayer.field.push(sourceCard);
+        options.onAfterSpecialSummon?.({
+          state,
+          player: targetPlayer,
+          card: sourceCard,
+          action,
+          fromZone: "hand",
+          sourceCard,
+        });
+        break;
+      }
+      case "special_summon_from_hand_with_tiered_cost": {
+        const targetPlayer = resolveActionPlayer(action, self, opponent);
+        if (!hasOpenMonsterZone(targetPlayer)) break;
+        const sourceCard = options.sourceCard;
+        if (!sourceCard || !targetPlayer.hand?.includes(sourceCard)) break;
+        const minCost = Number.isFinite(action.minCost)
+          ? action.minCost
+          : normalizeCount(action.count, 1).min;
+        const maxCost = Number.isFinite(action.maxCost)
+          ? action.maxCost
+          : Math.max(minCost, normalizeCount(action.count, minCost).max);
+        const costFilter = action.costFilters || action.filters || {};
+        const costPool = (targetPlayer.field || []).filter((card) =>
+          matchesTargetFilters(card, costFilter, sourceCard, "self"),
+        );
+        if (costPool.length < minCost) break;
+        const chosenCosts = chooseRankedCards(
+          costPool,
+          "cost",
+          { ...action, targetRef: action.costTargetRef },
+          state,
+          targetPlayer,
+          options,
+        ).slice(0, Math.min(maxCost, costPool.length));
+        if (chosenCosts.length < minCost) break;
+        chosenCosts.forEach((card) => moveCardToZone(targetPlayer, card, "graveyard"));
+        removeCardFromZones(targetPlayer, sourceCard);
+        applySummonState(sourceCard, action, state, targetPlayer, options);
+        if (Number.isFinite(action.tier1AtkBoost) && chosenCosts.length >= 1) {
+          sourceCard.tempAtkBoost =
+            (sourceCard.tempAtkBoost || 0) + action.tier1AtkBoost;
+        }
+        if (chosenCosts.length >= 2) {
+          sourceCard.cannotBeDestroyedByBattle = true;
+          sourceCard._simBattleDestructionProtected = true;
+        }
+        targetPlayer.field.push(sourceCard);
+        options.onAfterSpecialSummon?.({
+          state,
+          player: targetPlayer,
+          card: sourceCard,
+          action,
+          fromZone: "hand",
+          sourceCard,
+          costCount: chosenCosts.length,
+        });
+        break;
+      }
+      case "bounce_and_summon": {
+        const targetPlayer = resolveActionPlayer(action, self, opponent);
+        if (!hasOpenMonsterZone(targetPlayer)) break;
+        const sourceCard = options.sourceCard;
+        if (!sourceCard || !targetPlayer.field?.includes(sourceCard)) break;
+        if (action.bounceSource) {
+          moveCardToZone(targetPlayer, sourceCard, "hand");
+        }
+        const candidates = getActionCandidates(targetPlayer, action, "hand")
+          .filter((card) => card !== sourceCard);
+        const chosen = chooseRankedCards(
+          candidates,
+          "summon",
+          action,
+          state,
+          targetPlayer,
+          options,
+        )[0];
+        if (!chosen) break;
+        removeCardFromZones(targetPlayer, chosen);
+        applySummonState(chosen, action, state, targetPlayer, options);
+        targetPlayer.field.push(chosen);
+        options.onAfterSpecialSummon?.({
+          state,
+          player: targetPlayer,
+          card: chosen,
+          action,
+          fromZone: "hand",
+          sourceCard,
         });
         break;
       }
       case "special_summon_token": {
-        const targetPlayer = action.player === "opponent" ? opponent : self;
+        const targetPlayer = resolveActionPlayer(action, self, opponent);
         if ((targetPlayer.field || []).length >= 5) break;
         const token = action.token || { name: "Token", atk: 0, def: 0 };
         targetPlayer.field.push({
@@ -691,6 +1304,22 @@ export function applySimulatedActions({
           hasAttacked: false,
           attacksUsedThisTurn: 0,
           isToken: true,
+        });
+        break;
+      }
+      case "banish": {
+        targets.forEach((card) => {
+          const owner = findCardOwner(state, card);
+          if (!owner) return;
+          moveCardToZone(owner, card, "banished");
+        });
+        break;
+      }
+      case "return_to_hand": {
+        targets.forEach((card) => {
+          const owner = findCardOwner(state, card);
+          if (!owner) return;
+          moveCardToZone(owner, card, "hand");
         });
         break;
       }
@@ -711,6 +1340,51 @@ export function applySimulatedActions({
         });
         break;
       }
+      case "destroy_and_damage_by_target_atk": {
+        const entries = Array.isArray(action.entries) ? action.entries : [];
+        const destroyed = entries.flatMap((entry) => {
+          const entryTargets = resolveTargetsForAction(
+            entry,
+            selections,
+            options,
+            opponent,
+          );
+          return entryTargets.map((card) => ({
+            card,
+            owner: findCardOwner(state, card),
+            damagePlayer: entry.damagePlayer || "owner",
+            multiplier: Number.isFinite(entry.multiplier) ? entry.multiplier : 1,
+            atk: getEffectiveAtk(card),
+          }));
+        });
+        destroyed.forEach(({ card, owner }) => {
+          if (owner) moveCardToZone(owner, card, "graveyard");
+        });
+        const skipDamage = (playerKey) => {
+          const conditions = action.skipDamageIf?.[playerKey];
+          if (!conditions) return false;
+          return evaluateSimulatedConditions(conditions, {
+            state,
+            selfId,
+            options,
+          });
+        };
+        destroyed.forEach(({ owner, damagePlayer, multiplier, atk }) => {
+          if (!owner) return;
+          let recipient = null;
+          if (damagePlayer === "self") recipient = self;
+          else if (damagePlayer === "opponent") recipient = opponent;
+          else recipient = owner;
+          if (!recipient) return;
+          const isSelf = recipient === self;
+          if (skipDamage(isSelf ? "self" : "opponent")) return;
+          recipient.lp = Math.max(
+            0,
+            (recipient.lp || 0) - Math.floor(Math.max(0, atk) * multiplier),
+          );
+        });
+        break;
+      }
       case "equip": {
         targets.forEach((card) => {
           if (!card) return;
@@ -723,6 +1397,28 @@ export function applySimulatedActions({
         });
         break;
       }
+      case "add_counter": {
+        targets.forEach((card) => {
+          const amount = Number.isFinite(action.amount) ? action.amount : 1;
+          setCounterValue(
+            card,
+            action.counterType || "counter",
+            getCounterValue(card, action.counterType || "counter") + amount,
+          );
+        });
+        break;
+      }
+      case "remove_counter": {
+        targets.forEach((card) => {
+          const amount = Number.isFinite(action.amount) ? action.amount : 1;
+          setCounterValue(
+            card,
+            action.counterType || "counter",
+            getCounterValue(card, action.counterType || "counter") - amount,
+          );
+        });
+        break;
+      }
       case "buff_stats_temp": {
         targets.forEach((card) => {
           if (!card) return;
@@ -732,6 +1428,67 @@ export function applySimulatedActions({
           if (Number.isFinite(action.defBoost)) {
             card.tempDefBoost = (card.tempDefBoost || 0) + action.defBoost;
           }
+        });
+        break;
+      }
+      case "forbid_attack_next_turn": {
+        const turns = Number.isFinite(action.turns) ? action.turns : 1;
+        targets.forEach((card) => {
+          if (!card) return;
+          card.cannotAttackThisTurn = true;
+          card.cannotAttackUntilTurn = Math.max(
+            card.cannotAttackUntilTurn || 0,
+            (state.turnCounter || 0) + turns,
+          );
+          card._simCannotAttackByEffect = true;
+        });
+        break;
+      }
+      case "grant_protection": {
+        targets.forEach((card) => {
+          if (!card) return;
+          if (action.protectionType === "effect_destruction") {
+            card.cannotBeDestroyedByCardEffects = true;
+            card._simEffectDestructionProtected = true;
+          } else {
+            card._simProtection = {
+              type: action.protectionType || "generic",
+              duration: action.duration || "temporary",
+            };
+          }
+        });
+        break;
+      }
+      case "register_replacement_effect": {
+        if (!Array.isArray(state._simReplacementEffects)) {
+          state._simReplacementEffects = [];
+        }
+        const targetIds = targets.map(getCardInstanceId).filter((id) => id !== null);
+        const uniqueKey =
+          action.uniqueKey ||
+          `${options.sourceCard?.name || "source"}:${action.replacementEffect?.type || "replacement"}`;
+        state._simReplacementEffects = state._simReplacementEffects.filter(
+          (entry) => entry.uniqueKey !== uniqueKey || entry.playerId !== self.id,
+        );
+        state._simReplacementEffects.push({
+          _sim: true,
+          uniqueKey,
+          playerId: self.id,
+          sourceName: action.sourceName || options.sourceCard?.name || null,
+          duration: action.duration || "temporary",
+          targetRef: action.targetRef || null,
+          targetInstanceIds: targetIds,
+          uses: action.uses || null,
+          usesPerTarget: action.usesPerTarget || null,
+          replacementEffect: action.replacementEffect || null,
+        });
+        targets.forEach((card) => {
+          if (!card) return;
+          card._simReplacementProtection = {
+            uniqueKey,
+            duration: action.duration || "temporary",
+            replacementEffect: action.replacementEffect || null,
+          };
         });
         break;
       }
@@ -777,6 +1534,98 @@ export function applySimulatedActions({
         });
         break;
       }
+      case "set_stats_to_zero_and_negate": {
+        targets.forEach((card) => {
+          if (!card) return;
+          if (action.setAtkToZero) {
+            card.atk = 0;
+            card.tempAtkBoost = 0;
+          }
+          if (action.setDefToZero) {
+            card.def = 0;
+            card.tempDefBoost = 0;
+          }
+          if (action.negateEffects) {
+            card.effectsNegated = true;
+          }
+        });
+        break;
+      }
+      case "allow_direct_attack_this_turn": {
+        targets.forEach((card) => {
+          if (!card) return;
+          card.canAttackDirectlyThisTurn = true;
+        });
+        break;
+      }
+      case "grant_additional_normal_summon": {
+        const targetPlayer = resolveActionPlayer(action, self, opponent);
+        targetPlayer.additionalNormalSummons =
+          (targetPlayer.additionalNormalSummons || 0) +
+          (Number.isFinite(action.count) ? action.count : 1);
+        break;
+      }
+      case "polymerization_fusion_summon": {
+        const targetPlayer = resolveActionPlayer(action, self, opponent);
+        if (!hasOpenMonsterZone(targetPlayer)) break;
+        const materialPool = [
+          ...(targetPlayer.field || []),
+          ...(targetPlayer.hand || []),
+        ].filter((card) => card?.cardKind === "monster");
+        const canPayMaterials = (fusionCard) => {
+          const remaining = materialPool.slice();
+          const picked = [];
+          for (const requirement of fusionCard.fusionMaterials || []) {
+            const count = Number(requirement.count || 1);
+            for (let i = 0; i < count; i += 1) {
+              const index = remaining.findIndex((candidate) =>
+                matchesTargetFilters(candidate, requirement, fusionCard, "self"),
+              );
+              if (index < 0) return null;
+              picked.push(remaining[index]);
+              remaining.splice(index, 1);
+            }
+          }
+          return picked;
+        };
+        const fusionEntries = (targetPlayer.extraDeck || [])
+          .filter((card) => card?.monsterType === "fusion")
+          .map((fusionCard) => ({
+            fusionCard,
+            materials: canPayMaterials(fusionCard),
+          }))
+          .filter((entry) => Array.isArray(entry.materials));
+        if (fusionEntries.length === 0) break;
+        const hint = options.sourceAction?.fusionTargetHint;
+        fusionEntries.sort((a, b) => {
+          if (hint) {
+            if (a.fusionCard.name === hint) return -1;
+            if (b.fusionCard.name === hint) return 1;
+          }
+          return estimateMonsterValue(b.fusionCard) - estimateMonsterValue(a.fusionCard);
+        });
+        const { fusionCard, materials } = fusionEntries[0];
+        materials.forEach((material) => moveCardToZone(targetPlayer, material, "graveyard"));
+        removeCardFromZones(targetPlayer, fusionCard);
+        applySummonState(
+          fusionCard,
+          { ...action, position: action.position || "attack" },
+          state,
+          targetPlayer,
+          options,
+        );
+        fusionCard.summonMethod = "fusion";
+        targetPlayer.field.push(fusionCard);
+        options.onFusionSummon?.({
+          state,
+          player: targetPlayer,
+          fusionCard,
+          materials,
+          action,
+          sourceCard: options.sourceCard,
+        });
+        break;
+      }
       case "add_status": {
         targets.forEach((card) => {
           if (!card) return;
@@ -788,34 +1637,182 @@ export function applySimulatedActions({
         break;
       }
       case "conditional_summon_from_hand": {
-        const targetPlayer = action.player === "opponent" ? opponent : self;
+        const targetPlayer = resolveActionPlayer(action, self, opponent);
         if ((targetPlayer.field || []).length >= 5) break;
-        const condition = action.condition || {};
         if (
-          condition.type === "control_card" &&
-          condition.zone === "fieldSpell"
-        ) {
-          if (!targetPlayer.fieldSpell) break;
-          if (
-            condition.cardName &&
-            targetPlayer.fieldSpell.name !== condition.cardName
-          ) {
-            break;
-          }
-        }
+          action.condition &&
+          !evaluateSimulatedConditions(action.condition, { state, selfId, options })
+        ) break;
         const chosen = targets[0];
         if (chosen) {
           removeCardFromZones(targetPlayer, chosen);
-          chosen.position = action.position || "attack";
-          chosen.isFacedown = false;
-          chosen.hasAttacked = false;
-          chosen.attacksUsedThisTurn = 0;
+          applySummonState(chosen, action, state, targetPlayer, options);
           targetPlayer.field.push(chosen);
         }
         break;
       }
+      case "conditional_target_actions": {
+        const sourceCard = options.sourceCard || null;
+        const caseTargets = targets.length > 0 ? targets : [sourceCard].filter(Boolean);
+        const matchesCase = (caseEntry) => {
+          if (!caseEntry) return false;
+          if (
+            caseEntry.conditions &&
+            !evaluateSimulatedConditions(caseEntry.conditions, {
+              state,
+              selfId,
+              options,
+              sourceCard,
+            })
+          ) {
+            return false;
+          }
+          const filters = caseEntry.filters || caseEntry.filter;
+          if (!filters || Object.keys(filters).length === 0) return true;
+          const matchMode = action.matchMode === "all" ? "all" : "any";
+          if (matchMode === "all") {
+            return caseTargets.every((card) =>
+              matchesTargetFilters(
+                card,
+                filters,
+                sourceCard,
+                findCardOwner(state, card) === self ? "self" : "opponent",
+              )
+            );
+          }
+          return caseTargets.some((card) =>
+            matchesTargetFilters(
+              card,
+              filters,
+              sourceCard,
+              findCardOwner(state, card) === self ? "self" : "opponent",
+            )
+          );
+        };
+        const chosenCase = (action.cases || []).find(matchesCase);
+        const nestedActions = chosenCase?.actions || action.defaultActions || [];
+        if (nestedActions.length === 0) break;
+        applySimulatedActions({
+          actions: nestedActions,
+          selections,
+          state,
+          selfId,
+          options,
+        });
+        break;
+      }
+      case "activate_stored_blueprint": {
+        const sourceCard = options.sourceCard;
+        const blueprint = getStoredBlueprints(sourceCard)[0];
+        const effect = blueprint?.effectSnapshot || blueprint?.effect || null;
+        if (!effect) break;
+        if (
+          effect.conditions &&
+          !evaluateSimulatedConditions(effect.conditions, {
+            state,
+            selfId,
+            options,
+            sourceCard,
+          })
+        ) {
+          break;
+        }
+        const blueprintSelections = selectSimulatedTargets({
+          targets: effect.targets || [],
+          actions: effect.actions || [],
+          state,
+          sourceCard,
+          selfId,
+          options,
+        });
+        if (!hasRequiredSelections(effect.targets || [], blueprintSelections)) {
+          break;
+        }
+        applySimulatedActions({
+          actions: effect.actions || [],
+          selections: blueprintSelections,
+          state,
+          selfId,
+          options: {
+            ...options,
+            sourceCard,
+            activationContext: {
+              ...(options.activationContext || {}),
+              blueprintSourceCardId: blueprint.sourceCardId,
+              blueprintId: blueprint.blueprintId,
+            },
+          },
+        });
+        break;
+      }
+      case "choose_action_case": {
+        const validCases = (action.cases || [])
+          .map((choiceCase) => {
+            if (!choiceCase) return null;
+            if (
+              choiceCase.conditions &&
+              !evaluateSimulatedConditions(choiceCase.conditions, {
+                state,
+                selfId,
+                options,
+              })
+            ) {
+              return null;
+            }
+            const caseSelections = selectSimulatedTargets({
+              targets: choiceCase.targets || [],
+              actions: choiceCase.actions || [],
+              state,
+              sourceCard: options.sourceCard,
+              selfId,
+              options,
+            });
+            if (!hasRequiredSelections(choiceCase.targets || [], caseSelections)) {
+              return null;
+            }
+            return { choiceCase, caseSelections };
+          })
+          .filter(Boolean);
+        if (validCases.length === 0) break;
+
+        const chooser =
+          options.chooseActionCase ||
+          options.strategy?.chooseActionCase?.bind(options.strategy);
+        let chosenEntry = null;
+        if (typeof chooser === "function") {
+          const chosen = chooser(
+            validCases.map((entry) => entry.choiceCase),
+            {
+              state,
+              action,
+              source: options.sourceCard,
+              activationContext: options.activationContext,
+            },
+          );
+          chosenEntry =
+            validCases.find((entry) => entry.choiceCase === chosen) ||
+            validCases.find((entry) => entry.choiceCase.id === chosen?.id) ||
+            validCases.find((entry) => entry.choiceCase.id === chosen);
+        }
+        if (!chosenEntry) chosenEntry = validCases[0];
+
+        applySimulatedActions({
+          actions: chosenEntry.choiceCase.actions || [],
+          selections: chosenEntry.caseSelections,
+          state,
+          selfId,
+          options,
+        });
+        break;
+      }
+      case "shuffle_deck":
+        break;
       default:
+        if (!Array.isArray(state._simUnsupportedActions)) {
+          state._simUnsupportedActions = [];
+        }
+        state._simUnsupportedActions.push(action.type);
         break;
     }
-  });
+  }
 }

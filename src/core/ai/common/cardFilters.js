@@ -6,6 +6,17 @@ export function cardHasArchetype(card, archetype) {
   );
 }
 
+function asArray(value) {
+  if (value === undefined || value === null) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+function matchesOne(value, expected) {
+  const values = asArray(expected);
+  if (values.length === 0) return true;
+  return values.includes(value);
+}
+
 export function cardMatchesFilter(card, filter = {}) {
   if (!card) return false;
 
@@ -14,7 +25,13 @@ export function cardMatchesFilter(card, filter = {}) {
 
   for (const current of checks) {
     if (!current) continue;
-    if (current.cardKind && card.cardKind !== current.cardKind) return false;
+    if (current.cardKind && !matchesOne(card.cardKind, current.cardKind)) {
+      return false;
+    }
+    if (current.cardId !== undefined && card.id !== current.cardId) return false;
+    if (current.subtype && !matchesOne(card.subtype, current.subtype)) {
+      return false;
+    }
     if (current.archetype && !cardHasArchetype(card, current.archetype)) {
       return false;
     }
@@ -24,9 +41,16 @@ export function cardMatchesFilter(card, filter = {}) {
     ) {
       return false;
     }
-    if (current.cardName && card.name !== current.cardName) return false;
-    if (current.name && card.name !== current.name) return false;
-    if (current.type && card.type !== current.type) return false;
+    if (current.cardName && !matchesOne(card.name, current.cardName)) {
+      return false;
+    }
+    if (current.name && !matchesOne(card.name, current.name)) return false;
+    if (current.type) {
+      const cardTypes = Array.isArray(card.types) ? card.types : [card.type];
+      if (!asArray(current.type).some((type) => cardTypes.includes(type))) {
+        return false;
+      }
+    }
     if (current.requireFaceup && card.isFacedown) return false;
     if (current.excludeCardName && card.name === current.excludeCardName) {
       return false;
@@ -37,6 +61,22 @@ export function cardMatchesFilter(card, filter = {}) {
     ) {
       return false;
     }
+    if (
+      Array.isArray(current.excludeCardIds) &&
+      current.excludeCardIds.includes(card.id)
+    ) {
+      return false;
+    }
+    if (current.equippedWithFilters) {
+      const equips = Array.isArray(card.equips) ? card.equips : [];
+      if (
+        !equips.some((equip) =>
+          cardMatchesFilter(equip, current.equippedWithFilters)
+        )
+      ) {
+        return false;
+      }
+    }
   }
 
   const level = Number(card.level || 0);
@@ -46,6 +86,8 @@ export function cardMatchesFilter(card, filter = {}) {
     if (levelOp === "eq" && level !== levelFilter) return false;
     if (levelOp === "lte" && level > levelFilter) return false;
     if (levelOp === "gte" && level < levelFilter) return false;
+    if (levelOp === "lt" && level >= levelFilter) return false;
+    if (levelOp === "gt" && level <= levelFilter) return false;
   }
 
   const minLevel = filter.minLevel ?? nested.minLevel;

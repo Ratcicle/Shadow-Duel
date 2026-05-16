@@ -5,7 +5,7 @@ const DEFAULT_LOCALE = "en";
 const SUPPORTED_LOCALES = ["en", "pt-br"];
 
 const LOCALE_SOURCES = {
-  en: "../locales/en.json",
+  // English text is the canonical card data in cards.js.
   "pt-br": "../locales/pt-br.json",
 };
 

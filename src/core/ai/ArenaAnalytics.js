@@ -71,6 +71,70 @@ function topCounter(counter, limit = 12) {
     .map(([name, count]) => ({ name, count }));
 }
 
+function createPlanningStats() {
+  return {
+    attempts: 0,
+    used: 0,
+    executionMatches: 0,
+    executionMismatches: 0,
+    failedExecutions: 0,
+    totalLineLength: 0,
+    totalNodesEvaluated: 0,
+    totalNodesWhenUsed: 0,
+    scoreTotal: 0,
+    scoreCount: 0,
+    modeCounts: createCounter(),
+    turnModeCounts: createCounter(),
+    topMilestones: createCounter(),
+    mismatchReasons: createCounter(),
+    mismatchSamples: [],
+  };
+}
+
+function compactPlanningStats(planning = {}) {
+  const attempts = planning.attempts || 0;
+  const used = planning.used || 0;
+  const executionComparisons =
+    (planning.executionMatches || 0) +
+    (planning.executionMismatches || 0) +
+    (planning.failedExecutions || 0);
+  return {
+    attempts,
+    used,
+    usedRate: attempts ? round((used / attempts) * 100, 1) : 0,
+    executionMatches: planning.executionMatches || 0,
+    executionMismatches: planning.executionMismatches || 0,
+    failedExecutions: planning.failedExecutions || 0,
+    mismatchRate: executionComparisons
+      ? round(
+          (((planning.executionMismatches || 0) +
+            (planning.failedExecutions || 0)) /
+            executionComparisons) *
+            100,
+          1,
+        )
+      : 0,
+    failedExecutionRate: used
+      ? round(((planning.failedExecutions || 0) / used) * 100, 1)
+      : 0,
+    avgLineLength: used ? round((planning.totalLineLength || 0) / used) : 0,
+    avgNodesEvaluated: attempts
+      ? round((planning.totalNodesEvaluated || 0) / attempts)
+      : 0,
+    avgNodesWhenUsed: used
+      ? round((planning.totalNodesWhenUsed || 0) / used)
+      : 0,
+    avgPlannedScore: planning.scoreCount
+      ? round((planning.scoreTotal || 0) / planning.scoreCount, 2)
+      : null,
+    modeCounts: topCounter(planning.modeCounts),
+    turnModeCounts: topCounter(planning.turnModeCounts),
+    topMilestones: topCounter(planning.topMilestones),
+    mismatchReasons: topCounter(planning.mismatchReasons),
+    mismatchSamples: (planning.mismatchSamples || []).slice(0, 5),
+  };
+}
+
 function round(value, digits = 1) {
   if (!Number.isFinite(value)) return 0;
   const factor = 10 ** digits;
@@ -261,6 +325,7 @@ function createSeatStats(archetype = "unknown") {
     graveyardResourceUses: 0,
     noUsefulTurns: 0,
     turnActions: createCounter(),
+    planning: createPlanningStats(),
     warnings: [],
   };
 }
@@ -300,6 +365,7 @@ function compactSeatStats(stats) {
     usedAsCost: topCounter(stats.usedAsCost),
     banished: topCounter(stats.banished),
     graveyardResourceUses: stats.graveyardResourceUses,
+    planning: compactPlanningStats(stats.planning),
     warnings: stats.warnings.slice(0, 8),
   };
 }
@@ -436,6 +502,7 @@ export class ArenaAnalytics {
       totalNodesVisited: result.totalNodesVisited ?? null,
       beamWidth: result.beamWidth ?? null,
       maxDepth: result.maxDepth ?? null,
+      planner: result.planner ?? null,
       cardsPlayed: result.cardsPlayed ?? [],
       actionsExecuted: result.actionsExecuted ?? [],
       openingSequence: result.openingSequence ?? null,
@@ -947,6 +1014,7 @@ export class ArenaAnalytics {
         turns: record.turns,
         finalLP: record.finalLP,
         endReason: record.endReason,
+        planner: record.planner || null,
         timeoutKind:
           record.timeoutKind ||
           (record.endReason === END_REASONS.TIMEOUT
@@ -1038,8 +1106,8 @@ export class ArenaAnalytics {
     return compact;
   }
 
-  mergeSeatStats(target, source) {
-    for (const field of [
+    mergeSeatStats(target, source) {
+      for (const field of [
       "actions",
       "summons",
       "fusionSummons",
@@ -1076,10 +1144,65 @@ export class ArenaAnalytics {
       "banished",
     ]) {
       for (const { name, count } of source[field] || []) {
-        addCount(target[field], name, count);
+          addCount(target[field], name, count);
+        }
       }
+      this.mergePlanningStats(target.planning, source.planning);
     }
-  }
+
+    mergePlanningStats(target = createPlanningStats(), source = {}) {
+      for (const field of [
+        "attempts",
+        "used",
+        "executionMatches",
+        "executionMismatches",
+        "failedExecutions",
+        "totalLineLength",
+        "totalNodesEvaluated",
+        "totalNodesWhenUsed",
+        "scoreTotal",
+        "scoreCount",
+      ]) {
+        target[field] = (target[field] || 0) + (source[field] || 0);
+      }
+      const avgLineLength = Number(source.avgLineLength || 0);
+      if (avgLineLength && source.used) {
+        target.totalLineLength =
+          (target.totalLineLength || 0) + avgLineLength * source.used;
+      }
+      const avgNodesEvaluated = Number(source.avgNodesEvaluated || 0);
+      if (avgNodesEvaluated && source.attempts) {
+        target.totalNodesEvaluated =
+          (target.totalNodesEvaluated || 0) +
+          avgNodesEvaluated * source.attempts;
+      }
+      const avgNodesWhenUsed = Number(source.avgNodesWhenUsed || 0);
+      if (avgNodesWhenUsed && source.used) {
+        target.totalNodesWhenUsed =
+          (target.totalNodesWhenUsed || 0) + avgNodesWhenUsed * source.used;
+      }
+      const avgPlannedScore = Number(source.avgPlannedScore);
+      if (Number.isFinite(avgPlannedScore) && source.used) {
+        target.scoreTotal = (target.scoreTotal || 0) + avgPlannedScore * source.used;
+        target.scoreCount = (target.scoreCount || 0) + source.used;
+      }
+      for (const { name, count } of source.modeCounts || []) {
+        addCount(target.modeCounts, name, count);
+      }
+      for (const { name, count } of source.turnModeCounts || []) {
+        addCount(target.turnModeCounts, name, count);
+      }
+      for (const { name, count } of source.topMilestones || []) {
+        addCount(target.topMilestones, name, count);
+      }
+      for (const { name, count } of source.mismatchReasons || []) {
+        addCount(target.mismatchReasons, name, count);
+      }
+      target.mismatchSamples = [
+        ...(target.mismatchSamples || []),
+        ...(source.mismatchSamples || []),
+      ].slice(0, 5);
+    }
 
   buildArchetypeSummaries(duels) {
     const archetypes = {
@@ -1688,6 +1811,12 @@ export class DuelTracker {
     this.seed = options.seed ?? null;
     this.beamWidth = options.beamWidth ?? null;
     this.maxDepth = options.maxDepth ?? null;
+    this.plannerMode = options.plannerMode ?? null;
+    this.plannerTurnMode = options.plannerTurnMode ?? null;
+    this.plannerBeamWidth = options.plannerBeamWidth ?? null;
+    this.plannerMaxDepth = options.plannerMaxDepth ?? null;
+    this.plannerNodeBudget = options.plannerNodeBudget ?? null;
+    this.plannerCandidateLimit = options.plannerCandidateLimit ?? null;
     this.diagnosticLog = options.diagnosticLog === true;
 
     this.startTime = Date.now();
@@ -1821,20 +1950,81 @@ export class DuelTracker {
       if (value !== undefined && value !== null) entry[key] = value;
     }
 
-    this.lastProgressStage = stage;
-    this.diagnostics.progress.push(entry);
-    if (this.diagnostics.progress.length > DIAGNOSTIC_PROGRESS_LIMIT) {
-      this.diagnostics.progress.shift();
+      this.lastProgressStage = stage;
+      this.diagnostics.progress.push(entry);
+      if (this.diagnostics.progress.length > DIAGNOSTIC_PROGRESS_LIMIT) {
+        this.diagnostics.progress.shift();
+      }
+      this.recordPlanningProgress(entry);
+
+      if (this.diagnosticLog) {
+        console.log(
+          `[BotArena:progress] duel=${this.duelNumber} stage=${stage} turn=${turn} phase=${phase || "?"}`,
+        );
+      }
     }
 
-    if (this.diagnosticLog) {
-      console.log(
-        `[BotArena:progress] duel=${this.duelNumber} stage=${stage} turn=${turn} phase=${phase || "?"}`,
-      );
-    }
-  }
+    recordPlanningProgress(entry = {}) {
+      if (
+        entry.stage !== "ai_turn_line_search" &&
+        entry.stage !== "ai_plan_execution_compare" &&
+        entry.stage !== "ai_plan_execution_failed"
+      ) {
+        return;
+      }
+      const seat = playerSeat(entry.actor || entry.currentPlayer);
+      const stats = this.seats[seat];
+      if (!stats) return;
+      const planning = stats.planning || (stats.planning = createPlanningStats());
 
-  captureGameSnapshot(game = null, reason = "snapshot") {
+      if (entry.stage === "ai_turn_line_search") {
+        planning.attempts += 1;
+        addCount(planning.modeCounts, entry.plannerMode || "unknown");
+        addCount(planning.turnModeCounts, entry.plannerTurnMode || "unknown");
+        if (entry.plannerUsed) {
+          planning.used += 1;
+          planning.totalLineLength += Number(entry.plannedLineLength || 0);
+          planning.totalNodesWhenUsed += Number(entry.plannedNodesEvaluated || 0);
+        }
+        planning.totalNodesEvaluated += Number(entry.plannedNodesEvaluated || 0);
+        const score = Number(entry.plannedScore);
+        if (Number.isFinite(score)) {
+          planning.scoreTotal += score;
+          planning.scoreCount += 1;
+        }
+        for (const milestone of entry.plannedMilestones || []) {
+          addCount(planning.topMilestones, milestone);
+        }
+        return;
+      }
+
+      if (entry.stage === "ai_plan_execution_failed") {
+        planning.failedExecutions += 1;
+        addCount(planning.mismatchReasons, "action_failed");
+      } else if (entry.matched) {
+        planning.executionMatches += 1;
+      } else {
+        planning.executionMismatches += 1;
+        addCount(planning.mismatchReasons, entry.diffSeverity || "state_mismatch");
+      }
+
+      if (
+        (entry.stage === "ai_plan_execution_failed" || !entry.matched) &&
+        (planning.mismatchSamples || []).length < 5
+      ) {
+        planning.mismatchSamples.push({
+          turn: entry.turn,
+          phase: entry.phase,
+          stage: entry.stage,
+          severity: entry.diffSeverity || "action_failed",
+          action: entry.plannedAction || entry.actualAction || null,
+          reason: entry.plannerReason || null,
+          diffs: (entry.diffs || []).slice(0, 3),
+        });
+      }
+    }
+
+    captureGameSnapshot(game = null, reason = "snapshot") {
     return {
       reason,
       capturedAtMs: Date.now() - this.startTime,
@@ -2379,6 +2569,14 @@ export class DuelTracker {
       totalNodesVisited,
       beamWidth: this.beamWidth,
       maxDepth: this.maxDepth,
+      planner: {
+        mode: this.plannerMode,
+        turnMode: this.plannerTurnMode,
+        beamWidth: this.plannerBeamWidth,
+        maxDepth: this.plannerMaxDepth,
+        nodeBudget: this.plannerNodeBudget,
+        candidateLimit: this.plannerCandidateLimit,
+      },
       cardsPlayed: this.cardsPlayed,
       actionsExecuted: this.actionsExecuted,
       openingSequence:

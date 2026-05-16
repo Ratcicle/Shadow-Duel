@@ -3,7 +3,29 @@ import { cardDatabase, cardDatabaseById } from "../data/cards.js";
 import Card from "./Card.js";
 import { getStrategyFor } from "./ai/StrategyRegistry.js";
 import { beamSearchTurn, greedySearchWithEvalV2 } from "./ai/BeamSearch.js";
+import { turnLineSearch } from "./ai/TurnLineSearch.js";
+import {
+  compactPlanningDiffs,
+  diffPlanningSummaries,
+  fingerprintAction,
+  isMeaningfulPlanningDiff,
+  summarizePlanningState,
+} from "./ai/common/planningDiagnostics.js";
 import { botLogger } from "./BotLogger.js";
+
+function hasValue(value) {
+  return value !== undefined && value !== null;
+}
+
+function resolvePlannerMode(game, profile = {}) {
+  const configuredMode = game?.turnLineSearchMode ?? game?.arenaPlannerMode;
+  if (configuredMode === "off") return "off";
+  if (configuredMode === "always") return "always";
+  if (configuredMode === "critical") return "critical";
+  if (game?.turnLineSearchEnabled === true) return "always";
+  if (profile?.mode) return profile.mode;
+  return profile?.enabled === true ? "critical" : "off";
+}
 
 export default class Bot extends Player {
   constructor(archetype = "shadowheart") {
@@ -530,10 +552,124 @@ export default class Bot extends Player {
       }
 
       let bestAction = null;
+      let pendingPlannerTrace = null;
+
+      const planningStrategy = this.strategy || this;
+      const planningContext = {
+        game,
+        bot: this,
+        strategy: planningStrategy,
+        actions,
+        fallbackActions,
+        attempt: totalAttempts,
+        useV2Evaluation,
+      };
+      const planningProfile =
+        typeof planningStrategy.getPlanningProfile === "function"
+          ? planningStrategy.getPlanningProfile(game, planningContext) || {}
+          : {};
+      planningContext.profile = planningProfile;
+      const plannerMode = resolvePlannerMode(game, planningProfile);
+      const plannerForced = plannerMode === "always";
+      const explicitPlannerOptIn =
+        plannerMode !== "off" && (plannerForced || planningProfile.enabled === true);
+      const shouldUsePlanner =
+        explicitPlannerOptIn &&
+        (plannerForced ||
+        (typeof planningStrategy.shouldUseDeepPlanning === "function"
+          ? planningStrategy.shouldUseDeepPlanning(game, planningContext)
+          : true));
+
+      if (shouldUsePlanner && actions.length > 0) {
+        const plannerBeamWidth =
+          (hasValue(game.turnLineSearchBeamWidth)
+            ? game.turnLineSearchBeamWidth
+            : undefined) ??
+          planningProfile.beamWidth ??
+          game.arenaPlannerBeamWidth ??
+          game.turnLineSearchBeamWidth ??
+          game.arenaBeamWidth ??
+          2;
+        const plannerMaxDepth =
+          (hasValue(game.turnLineSearchMaxDepth)
+            ? game.turnLineSearchMaxDepth
+            : undefined) ??
+          planningProfile.maxDepth ??
+          game.arenaPlannerMaxDepth ??
+          game.turnLineSearchMaxDepth ??
+          game.arenaMaxDepth ??
+          2;
+        const plannerNodeBudget =
+          (hasValue(game.turnLineSearchNodeBudget)
+            ? game.turnLineSearchNodeBudget
+            : undefined) ??
+          planningProfile.nodeBudget ??
+          game.arenaPlannerNodeBudget ??
+          game.turnLineSearchNodeBudget ??
+          game.arenaNodeBudget ??
+          100;
+        const plannerCandidateLimit =
+          (hasValue(game.turnLineSearchCandidateLimit)
+            ? game.turnLineSearchCandidateLimit
+            : undefined) ??
+          planningProfile.candidateLimit ??
+          game.arenaPlannerCandidateLimit ??
+          game.turnLineSearchCandidateLimit ??
+          actions.length;
+        const plannerTurnMode =
+          game.turnLineSearchTurnMode ||
+          planningProfile.turnMode ||
+          game.arenaPlannerTurnMode ||
+          "mainOnly";
+
+        console.log(
+          `[Bot.playMainPhase] Running TurnLineSearch with ${actions.length} actions (width=${plannerBeamWidth}, depth=${plannerMaxDepth}, budget=${plannerNodeBudget})...`,
+        );
+        const plannerResult = await turnLineSearch(game, planningStrategy, {
+          beamWidth: plannerBeamWidth,
+          maxDepth: plannerMaxDepth,
+          nodeBudget: plannerNodeBudget,
+          candidateLimit: plannerCandidateLimit,
+          turnMode: plannerTurnMode,
+          useV2Evaluation,
+          preGeneratedActions: actions,
+          profile: planningProfile,
+          planningContext,
+        });
+
+        game._arenaTracker?.recordProgress?.("ai_turn_line_search", game, {
+          actor: this.id,
+          plannerMode,
+          plannerTurnMode,
+          plannerUsed: Boolean(plannerResult?.action),
+          plannedLineLength: plannerResult?.sequence?.length || 0,
+          plannedNodesEvaluated: plannerResult?.nodesEvaluated || 0,
+          plannedScore: plannerResult?.score ?? null,
+          plannedBaseScore: plannerResult?.baseScore ?? null,
+          plannedMilestoneScore: plannerResult?.milestoneScore ?? null,
+          plannedMilestones: (plannerResult?.milestones || []).slice(0, 8),
+          plannedFirstAction: fingerprintAction(plannerResult?.action),
+          plannedTerminalDigest:
+            plannerResult?.diagnostics?.terminalSummary || null,
+          plannerReason: plannerResult?.reason || "no_plan",
+        });
+
+        console.log(`[Bot.playMainPhase] TurnLineSearch result:`, plannerResult);
+        if (plannerResult?.action) {
+          bestAction = plannerResult.action;
+          pendingPlannerTrace = plannerResult;
+          console.log(
+            `[Bot.playMainPhase] ✅ TurnLineSearch chose:`,
+            bestAction,
+          );
+        } else {
+          console.log(`[Bot.playMainPhase] ❌ TurnLineSearch returned no action`);
+        }
+      }
 
       // DECISÃO: Usar beam search ou greedy?
       // Se tem 2+ opções, usa beam search. Senão, greedy.
-      if (actions.length >= 2) {
+      if (!bestAction && actions.length >= 2) {
         // Beam search com parâmetros do Arena (ou defaults)
         const beamWidth = game.arenaBeamWidth ?? 2;
         const maxDepth = game.arenaMaxDepth ?? 2;
@@ -657,6 +793,34 @@ export default class Bot extends Player {
       }
 
       const actionSuccess = await this.executeMainPhaseAction(game, bestAction);
+      if (pendingPlannerTrace) {
+        const expectedSummary =
+          pendingPlannerTrace.diagnostics?.firstStepSummary || null;
+        const actualSummary = summarizePlanningState(game, {
+          bot: this,
+          strategy: planningStrategy,
+        });
+        const diff = diffPlanningSummaries(expectedSummary, actualSummary);
+        const meaningfulDiff = isMeaningfulPlanningDiff(diff);
+        const comparePayload = {
+          actor: this.id,
+          actionSuccess: !!actionSuccess,
+          plannedAction: fingerprintAction(pendingPlannerTrace.action),
+          actualAction: fingerprintAction(bestAction),
+          matched: !!actionSuccess && !meaningfulDiff,
+          diffSeverity: actionSuccess ? diff.severity : "action_failed",
+          diffs: compactPlanningDiffs(diff.diffs || [], 6),
+          plannedMilestones: (pendingPlannerTrace.milestones || []).slice(0, 8),
+          plannerReason: pendingPlannerTrace.reason || null,
+        };
+        game._arenaTracker?.recordProgress?.(
+          actionSuccess
+            ? "ai_plan_execution_compare"
+            : "ai_plan_execution_failed",
+          game,
+          comparePayload,
+        );
+      }
       if (!actionSuccess) {
         // Marcar ação como falhada para não tentar novamente
         const failedKey = `${bestAction.type}:${bestAction.cardId || bestAction.card?.id || bestAction.index}`;

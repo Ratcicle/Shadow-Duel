@@ -256,7 +256,9 @@ export function checkActionPreviewRequirements(actions, ctx) {
         amount = Math.floor((player.lp || 0) * action.fraction);
       }
       if (amount > 0 && typeof this?.resolveLpCost === "function") {
-        const costResult = this.resolveLpCost(action, ctx, amount);
+        const costResult = this.resolveLpCost(action, ctx, amount, {
+          consume: false,
+        });
         if (costResult && typeof costResult.finalAmount === "number") {
           amount = costResult.finalAmount;
         }

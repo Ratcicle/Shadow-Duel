@@ -1,5 +1,6 @@
 import {
   applySimulatedActions,
+  evaluateSimulatedConditions,
   selectSimulatedTargets,
 } from "../StrategyUtils.js";
 
@@ -49,10 +50,82 @@ export function resolveSimulatedFieldIndex(player, action, predicate = null) {
 }
 
 function buildSelectionOptions(options = {}) {
+  const actionContext =
+    options.actionContext ||
+    options.activationContext?.actionContext ||
+    {};
   return {
+    ...options,
     archetype: options.archetype,
     preferDefense: options.preferDefense,
+    actionContext,
+    activationContext: options.activationContext,
+    targetPreferences:
+      options.targetPreferences || actionContext.targetPreferences || {},
+    specialSummonPositions:
+      options.specialSummonPositions || actionContext.specialSummonPositions || {},
   };
+}
+
+function getSimOncePerTurnKey(effect, sourceCard) {
+  if (!effect) return null;
+  return (
+    effect.oncePerTurnName ||
+    (sourceCard?.name && effect.id ? `${sourceCard.name}:${effect.id}` : null) ||
+    effect.id ||
+    null
+  );
+}
+
+function getSimOptBucket(state, selfId = "bot") {
+  if (!state) return null;
+  if (!state._simOncePerTurn) state._simOncePerTurn = {};
+  const key = selfId || "bot";
+  if (Array.isArray(state._simOncePerTurn[key])) {
+    state._simOncePerTurn[key] = new Set(state._simOncePerTurn[key]);
+  }
+  if (!state._simOncePerTurn[key]) state._simOncePerTurn[key] = new Set();
+  return state._simOncePerTurn[key];
+}
+
+function canUseSimulatedEffect(state, effect, sourceCard, selfId = "bot") {
+  if (!effect?.oncePerTurn && !effect?.oncePerTurnName) return true;
+  const key = getSimOncePerTurnKey(effect, sourceCard);
+  if (!key) return true;
+  const bucket = getSimOptBucket(state, selfId);
+  return !bucket?.has(key);
+}
+
+function markSimulatedEffectUsed(state, effect, sourceCard, selfId = "bot") {
+  if (!effect?.oncePerTurn && !effect?.oncePerTurnName) return;
+  const key = getSimOncePerTurnKey(effect, sourceCard);
+  if (!key) return;
+  const bucket = getSimOptBucket(state, selfId);
+  bucket?.add(key);
+}
+
+function effectConditionsPass(state, effect, sourceCard, options = {}) {
+  if (!effect?.conditions) return true;
+  return evaluateSimulatedConditions(effect.conditions, {
+    state,
+    selfId: options.selfId || "bot",
+    options,
+    sourceCard,
+  });
+}
+
+function resolveEffectForAction(card, action, allowedTimings = []) {
+  const effects = Array.isArray(card?.effects) ? card.effects : [];
+  const effectId = action?.effectId || action?.effect?.id || null;
+  if (effectId) {
+    const exact = effects.find((entry) => entry?.id === effectId);
+    if (exact) return exact;
+  }
+  return effects.find(
+    (entry) =>
+      entry &&
+      (allowedTimings.length === 0 || allowedTimings.includes(entry.timing)),
+  );
 }
 
 export function simulateGenericSpellEffect(state, card, options = {}) {
@@ -61,6 +134,10 @@ export function simulateGenericSpellEffect(state, card, options = {}) {
     (entry) => entry && entry.timing === "on_play",
   );
   if (!effect) return;
+  if (!effectConditionsPass(state, effect, card, options)) return;
+  if (!canUseSimulatedEffect(state, effect, card, options.selfId || "bot")) {
+    return;
+  }
 
   const selectionOptions = buildSelectionOptions(options);
   const selections = selectSimulatedTargets({
@@ -76,8 +153,9 @@ export function simulateGenericSpellEffect(state, card, options = {}) {
     selections,
     state,
     selfId: options.selfId || "bot",
-    options: selectionOptions,
+    options: { ...selectionOptions, sourceCard: card },
   });
+  markSimulatedEffectUsed(state, effect, card, options.selfId || "bot");
 }
 
 function runActionOverride(state, action, options) {
@@ -114,7 +192,11 @@ export function applyGenericSimulatedMainPhaseAction(
     return state;
   }
 
-  const selectionOptions = buildSelectionOptions(options);
+  const selectionOptions = buildSelectionOptions({
+    ...options,
+    activationContext: action.activationContext || options.activationContext,
+    sourceAction: action,
+  });
 
   switch (action.type) {
     case "summon": {
@@ -202,6 +284,10 @@ export function applyGenericSimulatedMainPhaseAction(
           (!entry.requireZone || entry.requireZone === "field"),
       );
       if (!effect) break;
+      if (!effectConditionsPass(state, effect, card, selectionOptions)) break;
+      if (!canUseSimulatedEffect(state, effect, card, options.selfId || "bot")) {
+        break;
+      }
 
       const handled = options.onMonsterEffect?.({
         state,
@@ -227,7 +313,56 @@ export function applyGenericSimulatedMainPhaseAction(
         selections,
         state,
         selfId: options.selfId || "bot",
+        options: { ...selectionOptions, sourceCard: card },
+      });
+      markSimulatedEffectUsed(state, effect, card, options.selfId || "bot");
+      options.onEffectActivated?.({
+        state,
+        action,
+        player,
+        card,
+        effect,
+        zone: "field",
+        options,
+      });
+      break;
+    }
+
+    case "handIgnition": {
+      const player = state.bot;
+      const handIndex = resolveSimulatedHandIndex(player, action, "monster");
+      const card = player.hand?.[handIndex];
+      if (!card || card.cardKind !== "monster") break;
+      const effect = resolveEffectForAction(card, action, ["ignition"]);
+      if (!effect || effect.requireZone !== "hand") break;
+      if (!effectConditionsPass(state, effect, card, selectionOptions)) break;
+      if (!canUseSimulatedEffect(state, effect, card, options.selfId || "bot")) {
+        break;
+      }
+      const selections = selectSimulatedTargets({
+        targets: effect.targets || [],
+        actions: effect.actions || [],
+        state,
+        sourceCard: card,
+        selfId: options.selfId || "bot",
         options: selectionOptions,
+      });
+      applySimulatedActions({
+        actions: effect.actions || [],
+        selections,
+        state,
+        selfId: options.selfId || "bot",
+        options: { ...selectionOptions, sourceCard: card },
+      });
+      markSimulatedEffectUsed(state, effect, card, options.selfId || "bot");
+      options.onEffectActivated?.({
+        state,
+        action,
+        player,
+        card,
+        effect,
+        zone: "hand",
+        options,
       });
       break;
     }
@@ -237,9 +372,22 @@ export function applyGenericSimulatedMainPhaseAction(
       const handIndex = resolveSimulatedHandIndex(player, action, "spell");
       const card = player.hand[handIndex];
       if (!card) break;
+      const onPlayEffect = resolveEffectForAction(card, action, ["on_play"]);
+      if (
+        onPlayEffect &&
+        (!effectConditionsPass(state, onPlayEffect, card, selectionOptions) ||
+          !canUseSimulatedEffect(
+            state,
+            onPlayEffect,
+            card,
+            options.selfId || "bot",
+          ))
+      ) {
+        break;
+      }
       player.hand.splice(handIndex, 1);
       const placedCard = { ...card };
-      simulateGenericSpellEffect(state, placedCard, options);
+      simulateGenericSpellEffect(state, placedCard, selectionOptions);
       const placement = options.placeSpellCard?.(state, placedCard) || {
         placed: false,
       };
@@ -281,12 +429,15 @@ export function applyGenericSimulatedMainPhaseAction(
       if (!card) break;
       card.isFacedown = false;
 
-      const effect = (card.effects || []).find(
-        (entry) =>
-          entry &&
-          (entry.timing === "ignition" || entry.timing === "on_play"),
-      );
+      const effect = resolveEffectForAction(card, action, [
+        "ignition",
+        "on_play",
+      ]);
       if (effect) {
+        if (!effectConditionsPass(state, effect, card, selectionOptions)) break;
+        if (!canUseSimulatedEffect(state, effect, card, options.selfId || "bot")) {
+          break;
+        }
         const selections = selectSimulatedTargets({
           targets: effect.targets || [],
           actions: effect.actions || [],
@@ -300,7 +451,17 @@ export function applyGenericSimulatedMainPhaseAction(
           selections,
           state,
           selfId: options.selfId || "bot",
-          options: selectionOptions,
+          options: { ...selectionOptions, sourceCard: card },
+        });
+        markSimulatedEffectUsed(state, effect, card, options.selfId || "bot");
+        options.onEffectActivated?.({
+          state,
+          action,
+          player,
+          card,
+          effect,
+          zone: "spellTrap",
+          options,
         });
       }
 
@@ -322,10 +483,21 @@ export function applyGenericSimulatedMainPhaseAction(
       const player = state.bot;
       const fieldSpell = player.fieldSpell;
       if (!fieldSpell) break;
-      const effect = (fieldSpell.effects || []).find(
-        (entry) => entry && entry.timing === "on_field_activate",
-      );
+      const effect =
+        resolveEffectForAction(fieldSpell, action, ["on_field_activate"]) ||
+        (fieldSpell.effects || []).find(
+          (entry) =>
+            entry &&
+            entry.timing === "ignition" &&
+            entry.requireZone === "fieldSpell",
+        );
       if (!effect) break;
+      if (!effectConditionsPass(state, effect, fieldSpell, selectionOptions)) {
+        break;
+      }
+      if (!canUseSimulatedEffect(state, effect, fieldSpell, options.selfId || "bot")) {
+        break;
+      }
       const targetPreference =
         options.getFieldEffectTargetPreference?.({
           state,
@@ -354,7 +526,68 @@ export function applyGenericSimulatedMainPhaseAction(
         selections,
         state,
         selfId: options.selfId || "bot",
+        options: {
+          ...selectionOptions,
+          sourceCard: fieldSpell,
+          targetPreference,
+        },
+      });
+      markSimulatedEffectUsed(state, effect, fieldSpell, options.selfId || "bot");
+      options.onEffectActivated?.({
+        state,
+        action,
+        player,
+        card: fieldSpell,
+        effect,
+        zone: "fieldSpell",
+        options,
+      });
+      break;
+    }
+
+    case "graveyardMonsterEffect": {
+      const player = state.bot;
+      const graveyardIndex = Number.isInteger(action.graveyardIndex)
+        ? action.graveyardIndex
+        : player.graveyard?.findIndex(
+            (card) =>
+              card &&
+              card.cardKind === "monster" &&
+              (card.id === action.cardId ||
+                (!action.cardId && card.name === action.cardName)),
+          );
+      const card = player.graveyard?.[graveyardIndex];
+      if (!card || card.cardKind !== "monster") break;
+      const effect = resolveEffectForAction(card, action, ["ignition"]);
+      if (!effect || effect.requireZone !== "graveyard") break;
+      if (!effectConditionsPass(state, effect, card, selectionOptions)) break;
+      if (!canUseSimulatedEffect(state, effect, card, options.selfId || "bot")) {
+        break;
+      }
+      const selections = selectSimulatedTargets({
+        targets: effect.targets || [],
+        actions: effect.actions || [],
+        state,
+        sourceCard: card,
+        selfId: options.selfId || "bot",
         options: selectionOptions,
+      });
+      applySimulatedActions({
+        actions: effect.actions || [],
+        selections,
+        state,
+        selfId: options.selfId || "bot",
+        options: { ...selectionOptions, sourceCard: card },
+      });
+      markSimulatedEffectUsed(state, effect, card, options.selfId || "bot");
+      options.onEffectActivated?.({
+        state,
+        action,
+        player,
+        card,
+        effect,
+        zone: "graveyard",
+        options,
       });
       break;
     }

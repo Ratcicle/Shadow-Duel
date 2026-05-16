@@ -34,6 +34,50 @@ export default class BaseStrategy {
   // para empurrar para `thoughtProcess` e logar quando `bot.debug` está ativo.
   think(_thought) {}
 
+  getPlanningProfile(_game, _context = {}) {
+    return {
+      enabled: false,
+      mode: "off",
+      turnMode: "mainOnly",
+      beamWidth: 3,
+      maxDepth: 3,
+      nodeBudget: 200,
+      candidateLimit: 8,
+    };
+  }
+
+  shouldUseDeepPlanning(game, context = {}) {
+    const profile =
+      context.profile || this.getPlanningProfile(game, context) || {};
+    return game?.turnLineSearchEnabled === true || profile.enabled === true;
+  }
+
+  scoreLineMilestones(_context = {}) {
+    return {
+      scoreDelta: 0,
+      milestones: [],
+    };
+  }
+
+  scoreLineTerminal(context = {}) {
+    const baseScore = Number(context.baseScore ?? context.finalScore ?? 0);
+    const milestoneScore = Number(context.milestoneScore ?? 0);
+    return baseScore + milestoneScore;
+  }
+
+  describePlannedLine(context = {}) {
+    const sequence = Array.isArray(context.sequence) ? context.sequence : [];
+    if (!sequence.length) return "no planned line";
+    return sequence
+      .map((action) => {
+        const card =
+          action?.card?.name || action?.cardName || action?.name || action?.index;
+        return card !== undefined ? `${action?.type}:${card}` : action?.type;
+      })
+      .filter(Boolean)
+      .join(" -> ");
+  }
+
   // Evaluate board state from the bot's perspective.
   // Antes era um stub que retornava 0, mas isso fazia com que callers como
   // playBattlePhase e BeamSearch recebessem score 0 para Lumi/SH/Dragon.

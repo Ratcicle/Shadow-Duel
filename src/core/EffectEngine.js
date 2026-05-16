@@ -416,8 +416,17 @@ export default class EffectEngine {
     return true;
   }
 
-  resolveLpCost(action, ctx, baseAmount = 0) {
+  resolveLpCost(action, ctx, baseAmount = 0, options = {}) {
+    options = options || {};
     const resolvedBase = Number(baseAmount) || 0;
+    const previewOnly =
+      options.preview === true ||
+      options.consume === false ||
+      ctx?.preview === true ||
+      ctx?.isPreview === true ||
+      ctx?.activationContext?.preview === true ||
+      ctx?.activationContext?.isPreview === true;
+    const shouldConsume = !previewOnly;
     const result = {
       baseAmount: resolvedBase,
       finalAmount: resolvedBase,
@@ -563,20 +572,29 @@ export default class EffectEngine {
     result.reduction = resolvedBase - finalAmount;
 
     if (maxReducer && maxReduction > 0) {
-      this.markOncePerTurn(maxReducer.effect, {
-        player: maxReducer.controller,
-        source: maxReducer.card,
-      });
       result.appliedReducers.push(maxReducer);
     }
 
     for (const reducer of sumReducers) {
       if (reducer.reduction <= 0) continue;
-      this.markOncePerTurn(reducer.effect, {
-        player: reducer.controller,
-        source: reducer.card,
-      });
       result.appliedReducers.push(reducer);
+    }
+
+    if (shouldConsume && maxReducer && maxReduction > 0) {
+      this.markOncePerTurn(maxReducer.effect, {
+        player: maxReducer.controller,
+        source: maxReducer.card,
+      });
+    }
+
+    if (shouldConsume) {
+      for (const reducer of sumReducers) {
+        if (reducer.reduction <= 0) continue;
+        this.markOncePerTurn(reducer.effect, {
+          player: reducer.controller,
+          source: reducer.card,
+        });
+      }
     }
 
     result.appliedCount = result.appliedReducers.length;

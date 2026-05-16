@@ -26,6 +26,14 @@ const SPEED_PRESETS = {
     beamWidth: 3, // Aumentado de 2 para melhor exploração
     maxDepth: 2,
     nodeBudget: 120, // Aumentado de 100
+    planner: {
+      mode: "critical",
+      turnMode: null,
+      beamWidth: 4,
+      maxDepth: 6,
+      nodeBudget: 600,
+      candidateLimit: 8,
+    },
   },
   "2x": {
     phaseDelayMs: 200,
@@ -37,6 +45,14 @@ const SPEED_PRESETS = {
     beamWidth: 2,
     maxDepth: 2,
     nodeBudget: 100,
+    planner: {
+      mode: "critical",
+      turnMode: null,
+      beamWidth: 3,
+      maxDepth: 5,
+      nodeBudget: 350,
+      candidateLimit: 7,
+    },
   },
   "4x": {
     phaseDelayMs: 100,
@@ -48,6 +64,14 @@ const SPEED_PRESETS = {
     beamWidth: 2,
     maxDepth: 2,
     nodeBudget: 80,
+    planner: {
+      mode: "critical",
+      turnMode: null,
+      beamWidth: 3,
+      maxDepth: 4,
+      nodeBudget: 220,
+      candidateLimit: 6,
+    },
   },
   instant: {
     phaseDelayMs: 0,
@@ -59,8 +83,36 @@ const SPEED_PRESETS = {
     beamWidth: 2,
     maxDepth: 2,
     nodeBudget: 60,
+    planner: {
+      mode: "critical",
+      turnMode: null,
+      beamWidth: 2,
+      maxDepth: 4,
+      nodeBudget: 160,
+      candidateLimit: 6,
+    },
   },
 };
+
+const PLANNER_MODES = new Set(["off", "critical", "always"]);
+const PLANNER_TURN_MODES = new Set(["mainOnly", "mainBattleMain2"]);
+
+function normalizePlannerMode(value) {
+  if (value == null || value === "") return null;
+  const mode = String(value).trim();
+  return PLANNER_MODES.has(mode) ? mode : null;
+}
+
+function normalizePlannerTurnMode(value) {
+  if (value == null || value === "") return null;
+  const mode = String(value).trim();
+  return PLANNER_TURN_MODES.has(mode) ? mode : null;
+}
+
+function positiveInteger(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? Math.floor(number) : null;
+}
 
 function createNullRenderer() {
   const noop = () => {};
@@ -109,6 +161,13 @@ export default class BotArena {
     this.customTimeoutMs = null; // null = usar do speed preset
     this.customBeamWidth = null;
     this.customMaxDepth = null;
+    this.customNodeBudget = null;
+    this.customPlannerMode = null;
+    this.customPlannerTurnMode = null;
+    this.customPlannerBeamWidth = null;
+    this.customPlannerMaxDepth = null;
+    this.customPlannerNodeBudget = null;
+    this.customPlannerCandidateLimit = null;
   }
 
   /**
@@ -124,8 +183,40 @@ export default class BotArena {
    * @param {Object} options
    */
   setSearchParams(options = {}) {
-    if (options.beamWidth != null) this.customBeamWidth = options.beamWidth;
-    if (options.maxDepth != null) this.customMaxDepth = options.maxDepth;
+    const beamWidth = positiveInteger(options.beamWidth);
+    const maxDepth = positiveInteger(options.maxDepth);
+    const nodeBudget = positiveInteger(options.nodeBudget);
+    if (beamWidth != null) this.customBeamWidth = beamWidth;
+    if (maxDepth != null) this.customMaxDepth = maxDepth;
+    if (nodeBudget != null) this.customNodeBudget = nodeBudget;
+
+    const plannerMode = normalizePlannerMode(
+      options.plannerMode ?? options.turnLineSearchMode,
+    );
+    const plannerTurnMode = normalizePlannerTurnMode(
+      options.plannerTurnMode ?? options.turnLineSearchTurnMode,
+    );
+    const plannerBeamWidth = positiveInteger(
+      options.plannerBeamWidth ?? options.turnLineSearchBeamWidth,
+    );
+    const plannerMaxDepth = positiveInteger(
+      options.plannerMaxDepth ?? options.turnLineSearchMaxDepth,
+    );
+    const plannerNodeBudget = positiveInteger(
+      options.plannerNodeBudget ?? options.turnLineSearchNodeBudget,
+    );
+    const plannerCandidateLimit = positiveInteger(
+      options.plannerCandidateLimit ?? options.turnLineSearchCandidateLimit,
+    );
+
+    if (plannerMode) this.customPlannerMode = plannerMode;
+    if (plannerTurnMode) this.customPlannerTurnMode = plannerTurnMode;
+    if (plannerBeamWidth != null) this.customPlannerBeamWidth = plannerBeamWidth;
+    if (plannerMaxDepth != null) this.customPlannerMaxDepth = plannerMaxDepth;
+    if (plannerNodeBudget != null) this.customPlannerNodeBudget = plannerNodeBudget;
+    if (plannerCandidateLimit != null) {
+      this.customPlannerCandidateLimit = plannerCandidateLimit;
+    }
   }
 
   /**
@@ -138,6 +229,41 @@ export default class BotArena {
 
   getSpeedConfig(speed) {
     return SPEED_PRESETS[speed] || SPEED_PRESETS["1x"];
+  }
+
+  getPlannerConfig(speedConfig = {}) {
+    const preset = speedConfig.planner || {};
+    return {
+      mode:
+        this.customPlannerMode ??
+        normalizePlannerMode(preset.mode) ??
+        "critical",
+      turnMode:
+        this.customPlannerTurnMode ??
+        normalizePlannerTurnMode(preset.turnMode),
+      beamWidth:
+        this.customPlannerBeamWidth ??
+        positiveInteger(preset.beamWidth) ??
+        null,
+      maxDepth:
+        this.customPlannerMaxDepth ??
+        positiveInteger(preset.maxDepth) ??
+        null,
+      nodeBudget:
+        this.customPlannerNodeBudget ??
+        positiveInteger(preset.nodeBudget) ??
+        null,
+      candidateLimit:
+        this.customPlannerCandidateLimit ??
+        positiveInteger(preset.candidateLimit) ??
+        null,
+      hasCustomMode: this.customPlannerMode != null,
+      hasCustomTurnMode: this.customPlannerTurnMode != null,
+      hasCustomBeamWidth: this.customPlannerBeamWidth != null,
+      hasCustomMaxDepth: this.customPlannerMaxDepth != null,
+      hasCustomNodeBudget: this.customPlannerNodeBudget != null,
+      hasCustomCandidateLimit: this.customPlannerCandidateLimit != null,
+    };
   }
 
   loadStoredDeckData() {
@@ -193,8 +319,36 @@ export default class BotArena {
     // Configurar parâmetros de busca na game (para bots usarem)
     game.arenaBeamWidth = this.customBeamWidth ?? speedConfig.beamWidth ?? 2;
     game.arenaMaxDepth = this.customMaxDepth ?? speedConfig.maxDepth ?? 2;
-    game.arenaNodeBudget = speedConfig.nodeBudget ?? 100;
-    game.arenaNodeBudget = speedConfig.nodeBudget ?? 100;
+    game.arenaNodeBudget = this.customNodeBudget ?? speedConfig.nodeBudget ?? 100;
+
+    const plannerConfig = this.getPlannerConfig(speedConfig);
+    game.arenaPlannerMode = plannerConfig.mode;
+    game.arenaPlannerTurnMode = plannerConfig.turnMode;
+    game.arenaPlannerBeamWidth = plannerConfig.beamWidth;
+    game.arenaPlannerMaxDepth = plannerConfig.maxDepth;
+    game.arenaPlannerNodeBudget = plannerConfig.nodeBudget;
+    game.arenaPlannerCandidateLimit = plannerConfig.candidateLimit;
+    game.arenaPlannerConfig = plannerConfig;
+
+    if (plannerConfig.hasCustomMode) {
+      game.turnLineSearchMode = plannerConfig.mode;
+      game.turnLineSearchEnabled = plannerConfig.mode === "always";
+    }
+    if (plannerConfig.hasCustomTurnMode) {
+      game.turnLineSearchTurnMode = plannerConfig.turnMode;
+    }
+    if (plannerConfig.hasCustomBeamWidth) {
+      game.turnLineSearchBeamWidth = plannerConfig.beamWidth;
+    }
+    if (plannerConfig.hasCustomMaxDepth) {
+      game.turnLineSearchMaxDepth = plannerConfig.maxDepth;
+    }
+    if (plannerConfig.hasCustomNodeBudget) {
+      game.turnLineSearchNodeBudget = plannerConfig.nodeBudget;
+    }
+    if (plannerConfig.hasCustomCandidateLimit) {
+      game.turnLineSearchCandidateLimit = plannerConfig.candidateLimit;
+    }
 
     if (game.ui) {
       game.ui.showAlert = () => {};
@@ -329,6 +483,19 @@ export default class BotArena {
     const tracker = new DuelTracker(duelNumber, arch1, arch2, {
       beamWidth: game.arenaBeamWidth,
       maxDepth: game.arenaMaxDepth,
+      plannerMode: game.turnLineSearchMode ?? game.arenaPlannerMode ?? null,
+      plannerTurnMode:
+        game.turnLineSearchTurnMode ?? game.arenaPlannerTurnMode ?? null,
+      plannerBeamWidth:
+        game.turnLineSearchBeamWidth ?? game.arenaPlannerBeamWidth ?? null,
+      plannerMaxDepth:
+        game.turnLineSearchMaxDepth ?? game.arenaPlannerMaxDepth ?? null,
+      plannerNodeBudget:
+        game.turnLineSearchNodeBudget ?? game.arenaPlannerNodeBudget ?? null,
+      plannerCandidateLimit:
+        game.turnLineSearchCandidateLimit ??
+        game.arenaPlannerCandidateLimit ??
+        null,
       diagnosticLog: true,
     });
 
