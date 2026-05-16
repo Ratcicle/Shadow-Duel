@@ -1041,6 +1041,8 @@ Game.prototype.queueCardAnimation = uiCardAnimations.queueCardAnimation;
 Game.prototype.queueVisualFeedback = uiCardAnimations.queueVisualFeedback;
 Game.prototype.waitForAiPresentationStep =
   uiCardAnimations.waitForAiPresentationStep;
+Game.prototype.waitForPresentationDelay =
+  uiCardAnimations.waitForPresentationDelay;
 
 // Indicators: updateActivationIndicators, buildActivationIndicatorsForPlayer
 Game.prototype.updateActivationIndicators =

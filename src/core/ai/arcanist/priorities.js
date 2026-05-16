@@ -15,6 +15,7 @@ import {
   ARCANIST_SPELL_RECOVERY_ORDER,
   GRIMOIRE_HOST_ORDER,
   controlsArcanistEquip,
+  getInkCounters,
   getNameRank,
   getStoredBlueprintCount,
   hasArcanistEquip,
@@ -1341,9 +1342,7 @@ export function shouldActivateSpellTrapEffect(card, analysis = {}) {
   }
 
   if (card.name === ARCANIST_NAMES.INK_RIVER) {
-    const counters = card.counters instanceof Map
-      ? card.counters.get("ink") || 0
-      : card.counters?.ink || 0;
+    const counters = getInkCounters(card);
     const gySpells = (analysis.graveyard || []).filter(isArcanistSpell).length;
     return {
       yes: counters >= 2 && gySpells > 0,

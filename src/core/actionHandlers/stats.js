@@ -1183,8 +1183,12 @@ export async function handleSwitchDefenderPositionOnAttack(
     getUI(game)?.log(`${defender.name} was flipped!`);
     game.updateBoard();
 
-    // Small delay for animation
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    // Small delay for animation; skipped in instant/headless Arena.
+    if (typeof game.waitForPresentationDelay === "function") {
+      await game.waitForPresentationDelay(300);
+    } else {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    }
   }
 
   if (defender.position !== "defense") {

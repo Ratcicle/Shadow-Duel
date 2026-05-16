@@ -29,6 +29,16 @@ function isAutomaticTriggeredEffect(effect) {
   );
 }
 
+function isPromptOwnedTriggeredEffect(effect) {
+  const actions = Array.isArray(effect?.actions) ? effect.actions : [];
+  if (actions.length === 0) return false;
+
+  return actions.every((action) => {
+    if (!action || action.optional === false) return false;
+    return action.type === "conditional_summon_from_hand";
+  });
+}
+
 function shouldPromptTriggeredEffect(effect, owner, ctx) {
   if (!effect || effect.timing !== "on_event") return false;
   if (!owner || isAI(owner)) return false;
@@ -47,6 +57,7 @@ function shouldPromptTriggeredEffect(effect, owner, ctx) {
   if (effect.promptUser === true) return true;
   if (effect.promptUser === false) return false;
   if (isAutomaticTriggeredEffect(effect)) return false;
+  if (isPromptOwnedTriggeredEffect(effect)) return false;
   return true;
 }
 
@@ -312,6 +323,24 @@ export function buildTriggerEntry(options = {}) {
     `${owner.id}:${sourceCard.name}:${effect.id || effect.event || "trigger"}`;
 
   const baseCtx = options.ctx || {};
+  if (Array.isArray(effect.targets) && effect.targets.length > 0) {
+    const previewCtx = {
+      ...baseCtx,
+      source: baseCtx.source || sourceCard,
+      player: baseCtx.player || owner,
+      opponent: baseCtx.opponent || this.game?.getOpponent?.(owner) || null,
+      activationZone: activationContext.activationZone,
+      activationContext: {
+        ...activationContext,
+        preview: true,
+      },
+    };
+    const targetPreview = this.resolveTargets(effect.targets, previewCtx, null);
+    if (targetPreview?.ok === false && !targetPreview.needsSelection) {
+      return null;
+    }
+  }
+
   const activateImpl =
     options.activate ||
     ((selections, activationCtx, resolvedCtx) =>

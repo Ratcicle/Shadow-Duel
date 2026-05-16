@@ -61,3 +61,25 @@ export function waitForAiPresentationStep(player, options = {}) {
 
   return new Promise((resolve) => setTimeout(resolve, delayMs));
 }
+
+export function waitForPresentationDelay(defaultDelayMs = 0, options = {}) {
+  if (this.gameOver) return Promise.resolve();
+  if (this.disablePresentationDelays === true) return Promise.resolve();
+
+  const defaultDelay = Number.isFinite(defaultDelayMs) ? defaultDelayMs : 0;
+  const arenaDelay =
+    this._botArenaMode === true && Number.isFinite(this.aiPresentationStepDelayMs)
+      ? this.aiPresentationStepDelayMs
+      : null;
+  const requestedDelay = Number.isFinite(options.delayMs)
+    ? options.delayMs
+    : arenaDelay != null
+      ? Math.min(defaultDelay, arenaDelay)
+      : defaultDelay;
+
+  if (!Number.isFinite(requestedDelay) || requestedDelay <= 0) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve) => setTimeout(resolve, requestedDelay));
+}

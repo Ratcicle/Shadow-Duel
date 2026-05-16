@@ -1248,8 +1248,12 @@ export async function handleDrawAndSummon(action, ctx, targets, engine) {
   // Update board to show the drawn card visually
   game.updateBoard();
 
-  // Add a small delay to let the user see the card being drawn
-  await new Promise((resolve) => setTimeout(resolve, 400));
+  // Add a small delay to let the user see the card being drawn; skipped in instant/headless Arena.
+  if (typeof game.waitForPresentationDelay === "function") {
+    await game.waitForPresentationDelay(400);
+  } else {
+    await new Promise((resolve) => setTimeout(resolve, 400));
+  }
 
   // Check condition against drawn card
   let conditionMet = false;

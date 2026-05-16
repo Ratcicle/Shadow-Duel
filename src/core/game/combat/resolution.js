@@ -201,7 +201,11 @@ export async function resolveCombat(attacker, target, options = {}) {
     this.updateBoard();
     this.applyAttackResolutionIndicators(attacker, target);
 
-    await new Promise((resolve) => setTimeout(resolve, 600));
+    if (typeof this.waitForPresentationDelay === "function") {
+      await this.waitForPresentationDelay(600);
+    } else {
+      await new Promise((resolve) => setTimeout(resolve, 600));
+    }
   }
 
   const combatResult = await this.finishCombat(attacker, target);

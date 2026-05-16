@@ -130,6 +130,101 @@ function getOwnStrongestBattle(analysis = {}) {
   });
 }
 
+function hasGrandLibraryAccess(analysis = {}) {
+  return (
+    analysis.fieldSpell?.name === ARCANIST_NAMES.GRAND_LIBRARY ||
+    hasName(analysis.hand || [], ARCANIST_NAMES.GRAND_LIBRARY)
+  );
+}
+
+function getMonsterBattleStatForAttackTarget(card) {
+  if (!card || card.cardKind !== "monster") return 0;
+  if (card.isFacedown) return 1500;
+  return card.position === "defense"
+    ? getEffectiveDef(card)
+    : getEffectiveAtk(card);
+}
+
+function collectCurrentArcanistAttackers(analysis = {}) {
+  return (analysis.field || []).filter(
+    (card) =>
+      isArcanistMonster(card) &&
+      !card.isFacedown &&
+      card.position !== "defense" &&
+      !card.cannotAttackThisTurn &&
+      getEffectiveAtk(card) > 0,
+  );
+}
+
+function collectPotentialArcanistAttackers(analysis = {}) {
+  const attackers = [...collectCurrentArcanistAttackers(analysis)];
+  const canNormalSummon = analysis.summonAvailable !== false;
+  if (canNormalSummon) {
+    attackers.push(
+      ...(analysis.hand || []).filter(
+        (card) => isArcanistMonster(card) && (card.level || 0) <= 4,
+      ),
+    );
+  }
+  if (hasGrandLibraryAccess(analysis) && (analysis.lp || 0) > 2000) {
+    attackers.push(
+      ...(analysis.player?.deck || []).filter(
+        (card) => isArcanistMonster(card) && (card.level || 0) <= 4,
+      ),
+    );
+  }
+  const seen = new Set();
+  return attackers.filter((card) => {
+    const key = card?.instanceId || card?.id || card?.name;
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function shouldUseArcanistBattleBridge(analysis = {}, context = {}) {
+  const game = context.game || analysis.game || null;
+  const phase = analysis.phase || game?.phase || "main1";
+  if (!isMain1Phase(phase)) return false;
+
+  const attackers = collectPotentialArcanistAttackers(analysis);
+  if (attackers.length === 0) return false;
+
+  const oppField = (analysis.oppField || []).filter(
+    (card) => card?.cardKind === "monster",
+  );
+  const opponentLp = analysis.oppLp ?? analysis.oppLP ?? analysis.opponent?.lp ?? 0;
+  const maxAttack = Math.max(0, ...attackers.map((card) => getEffectiveAtk(card)));
+  const totalCurrentAttack = collectCurrentArcanistAttackers(analysis).reduce(
+    (sum, card) => sum + getEffectiveAtk(card),
+    0,
+  );
+
+  if (oppField.length === 0) {
+    return opponentLp > 0 && totalCurrentAttack >= opponentLp;
+  }
+
+  const grandLibraryAccess = hasGrandLibraryAccess(analysis);
+  const strongestThreat = Math.max(
+    0,
+    ...oppField.map((card) => getMonsterBattleStatForAttackTarget(card)),
+  );
+  const canRemoveRelevantThreat = oppField.some((target) => {
+    const targetStat = getMonsterBattleStatForAttackTarget(target);
+    if (maxAttack <= targetStat) return false;
+    return (
+      targetStat >= strongestThreat ||
+      targetStat >= 1800 ||
+      getEffectiveAtk(target) >= (analysis.lp || 0)
+    );
+  });
+
+  if (canRemoveRelevantThreat) return true;
+  if (!grandLibraryAccess) return false;
+
+  return oppField.some((target) => maxAttack > getMonsterBattleStatForAttackTarget(target));
+}
+
 export function buildArcanistPlanningProfile(analysis = {}, context = {}) {
   const game = context.game || analysis.game || null;
   const manual = game?.turnLineSearchEnabled === true;
@@ -167,9 +262,11 @@ export function buildArcanistPlanningProfile(analysis = {}, context = {}) {
 
   const enabled = manual || reasons.length > 0;
   const requestedTurnMode = game?.turnLineSearchTurnMode;
+  const useBattleBridge =
+    enabled && !requestedTurnMode && shouldUseArcanistBattleBridge(analysis, context);
   const turnMode =
     requestedTurnMode ||
-    (enabled && isMain1Phase(phase) ? "mainBattleMain2" : "mainOnly");
+    (useBattleBridge ? "mainBattleMain2" : "mainOnly");
   return {
     ...DEFAULT_PROFILE,
     enabled,

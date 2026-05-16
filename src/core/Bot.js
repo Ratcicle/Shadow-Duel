@@ -1805,6 +1805,8 @@ export default class Bot extends Player {
             card,
             this,
             "spellTrap",
+            null,
+            { activationContext },
           ),
         oncePerTurn: {
           card,

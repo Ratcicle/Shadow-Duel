@@ -80,6 +80,8 @@ const SPEED_PRESETS = {
     pollIntervalMs: 5,
     useRenderer: false,
     timeoutMs: 120000, // 120s (2min) - Permitir duelos mais longos
+    diagnosticLog: false,
+    quietLogs: true,
     beamWidth: 2,
     maxDepth: 2,
     nodeBudget: 60,
@@ -168,6 +170,8 @@ export default class BotArena {
     this.customPlannerMaxDepth = null;
     this.customPlannerNodeBudget = null;
     this.customPlannerCandidateLimit = null;
+    this.customDiagnosticLog = null;
+    this.customQuietLogs = null;
   }
 
   /**
@@ -217,6 +221,12 @@ export default class BotArena {
     if (plannerCandidateLimit != null) {
       this.customPlannerCandidateLimit = plannerCandidateLimit;
     }
+    if (options.diagnosticLog != null) {
+      this.customDiagnosticLog = options.diagnosticLog === true;
+    }
+    if (options.quietLogs != null || options.quiet != null) {
+      this.customQuietLogs = (options.quietLogs ?? options.quiet) === true;
+    }
   }
 
   /**
@@ -264,6 +274,14 @@ export default class BotArena {
       hasCustomNodeBudget: this.customPlannerNodeBudget != null,
       hasCustomCandidateLimit: this.customPlannerCandidateLimit != null,
     };
+  }
+
+  shouldUseQuietLogs(speedConfig = {}) {
+    return this.customQuietLogs ?? speedConfig.quietLogs === true;
+  }
+
+  shouldUseDiagnosticLog(speedConfig = {}) {
+    return this.customDiagnosticLog ?? speedConfig.diagnosticLog === true;
   }
 
   loadStoredDeckData() {
@@ -315,6 +333,9 @@ export default class BotArena {
     game.aiSuccessfulActionDelayMs = speedConfig.actionDelayMs;
     game.aiPresentationStepDelayMs = speedConfig.actionDelayMs;
     game.aiBattleDelayMs = speedConfig.battleDelayMs;
+    game._botArenaMode = true;
+    game.disablePresentationDelays =
+      !speedConfig.useRenderer || speedConfig.actionDelayMs <= 0;
 
     // Configurar parâmetros de busca na game (para bots usarem)
     game.arenaBeamWidth = this.customBeamWidth ?? speedConfig.beamWidth ?? 2;
@@ -496,7 +517,7 @@ export default class BotArena {
         game.turnLineSearchCandidateLimit ??
         game.arenaPlannerCandidateLimit ??
         null,
-      diagnosticLog: true,
+      diagnosticLog: this.shouldUseDiagnosticLog(speedConfig),
     });
 
     // Injetar tracker no game para coleta de métricas durante execução
@@ -618,13 +639,30 @@ export default class BotArena {
       totalTurns: 0,
       totalTimeMs: 0,
     };
+    const quietLogs = this.shouldUseQuietLogs(speedConfig);
 
     for (let i = 1; i <= numDuels; i += 1) {
       if (this.stopRequested) break;
 
       let result;
       try {
-        result = await this.runDuel(preset1, preset2, speedConfig, i, deckData);
+        if (quietLogs) {
+          const originalLog = console.log;
+          console.log = () => {};
+          try {
+            result = await this.runDuel(
+              preset1,
+              preset2,
+              speedConfig,
+              i,
+              deckData,
+            );
+          } finally {
+            console.log = originalLog;
+          }
+        } else {
+          result = await this.runDuel(preset1, preset2, speedConfig, i, deckData);
+        }
       } catch (err) {
         result = {
           duelNumber: i,
