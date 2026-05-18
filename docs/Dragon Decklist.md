@@ -192,7 +192,7 @@ Os **Extreme Dragons** são monstros de Nível 10 do tipo Dragão com efeitos po
 > There can only be 1 face-up "Extreme Dragon" monster on the field. While this card is the only monster you control, it cannot be destroyed by card effects. If this card destroys an opponent's monster by battle: inflict damage to your opponent equal to half the destroyed monster's original ATK. Each time your opponent activates a card or effect: inflict 300 damage to your opponent.
 
 **251 - Volcanic Extreme Dragon** (L10 Dragon | ATK 2600 / DEF 3000)
-> There can only be 1 face-up "Extreme Dragon" monster on the field. While this card is the only monster you control, it cannot be destroyed by battle. If this card battles an opponent's monster: inflict 600 damage to your opponent. Once per turn: you can banish all cards in your Graveyard; inflict 500 damage to your opponent for each card banished by this effect.
+> There can only be 1 face-up "Extreme Dragon" monster on the field. While this card is the only monster you control, it cannot be destroyed by battle. If this card battles an opponent's monster: inflict 600 damage to your opponent. Once per Duel: you can banish all cards in both Graveyards; inflict 100 damage to your opponent for each card banished by this effect.
 
 **252 - Mist Extreme Dragon** (L10 Dragon | ATK 2800 / DEF 2500)
 > There can only be 1 face-up "Extreme Dragon" monster on the field. Monsters your opponent controls that were summoned this turn cannot declare attacks. Once per turn: you can target 1 card your opponent controls; return it to the hand. If this card is destroyed by battle: shuffle all cards your opponent controls into the Deck.

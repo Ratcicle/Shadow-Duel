@@ -458,7 +458,7 @@
     },
     "251": {
       "name": "Dragão Extremo Vulcânico",
-      "description": "Só pode haver 1 monstro \"Dragão Extremo\" com a face para cima no campo. Enquanto este card for o único monstro que você controla, ele não pode ser destruído em batalha. Se este card batalhar um monstro do oponente: cause 600 de dano ao seu oponente. Uma vez por turno: você pode banir todos os cards do seu Cemitério; cause 500 de dano ao seu oponente para cada card banido por este efeito."
+      "description": "Só pode haver 1 monstro \"Dragão Extremo\" com a face para cima no campo. Enquanto este card for o único monstro que você controla, ele não pode ser destruído em batalha. Se este card batalhar um monstro do oponente: cause 600 de dano ao seu oponente. Uma vez por duelo: você pode banir todos os cards em ambos os Cemitérios; cause 100 de dano ao seu oponente para cada card banido por este efeito."
     },
     "252": {
       "name": "Dragão Extremo da Névoa",

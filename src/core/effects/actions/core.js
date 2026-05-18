@@ -191,6 +191,19 @@ function hasSpecialSummonCandidate(engine, action, ctx) {
   );
 }
 
+function getGraveyardOwnersForActionScope(action, ctx) {
+  const player = ctx?.player;
+  const opponent = ctx?.opponent;
+  const scope = action?.scope || "self";
+  if (scope === "both") {
+    return [player, opponent].filter(Boolean);
+  }
+  if (scope === "opponent") {
+    return opponent ? [opponent] : [];
+  }
+  return player ? [player] : [];
+}
+
 function isChoiceCaseAllowedInPreview(engine, caseEntry, ctx) {
   const conditions = Array.isArray(caseEntry?.conditions)
     ? caseEntry.conditions
@@ -265,6 +278,19 @@ export function checkActionPreviewRequirements(actions, ctx) {
       }
       if (amount > 0 && (player.lp || 0) < amount) {
         return { ok: false, reason: "Not enough LP to pay cost." };
+      }
+    }
+
+    if (action.type === "banish_all_graveyard_and_burn") {
+      const owners = getGraveyardOwnersForActionScope(action, ctx);
+      const hasCards = owners.some(
+        (owner) => Array.isArray(owner?.graveyard) && owner.graveyard.length > 0,
+      );
+      if (!hasCards) {
+        return {
+          ok: false,
+          reason: "No cards in the selected Graveyard scope to banish.",
+        };
       }
     }
 

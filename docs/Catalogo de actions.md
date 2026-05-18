@@ -1189,7 +1189,7 @@ _Sem notas._
 
 ### `banish_all_graveyard_and_burn`
 
-Banishes all cards in the controller's graveyard, then deals damage per card banished.
+Banishes all cards in the selected graveyard scope, then deals damage per card banished.
 
 - Handler: `handleBanishAllGraveyardAndBurn`
 - Target: `none`
@@ -1203,13 +1203,15 @@ Banishes all cards in the controller's graveyard, then deals damage per card ban
 | --- | --- | --- | --- |
 | `damagePerCard` | nao | number; min: 0 | Numeric amount. |
 | `player` | nao | enum: self, opponent | Perspective for the action: "self" or "opponent". |
+| `scope` | nao | enum: self, opponent, both | Player scope for the action: "self", "opponent", or "both". |
 
 **Exemplos**
 
 ```json
 {
   "type": "banish_all_graveyard_and_burn",
-  "damagePerCard": 500,
+  "scope": "both",
+  "damagePerCard": 100,
   "player": "opponent"
 }
 ```

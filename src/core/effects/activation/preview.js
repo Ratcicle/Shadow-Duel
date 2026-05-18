@@ -152,7 +152,9 @@ export function canActivateMonsterEffectPreview(
   if (card.cardKind !== "monster") {
     return { ok: false, reason: "Only Monster cards can use this effect." };
   }
-  if (card.isFacedown && activationZone !== "hand") {
+  const isPublicOutOfPlayZone =
+    activationZone === "graveyard" || activationZone === "banished";
+  if (card.isFacedown && activationZone !== "hand" && !isPublicOutOfPlayZone) {
     return { ok: false, reason: "Card must be face-up to activate." };
   }
   if (this.game?.turn !== player.id) {

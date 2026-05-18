@@ -219,10 +219,8 @@ export default class Bot extends Player {
   getDragonDeck() {
     return [
       // === MONSTERS ===
-      // Extreme Dragons (1x each — fieldLimit allows only 1 face-up at a time)
-      250, // Fire Extreme Dragon (3000 ATK — burn on activation + battle destroy)
+      // Extreme Dragons (trimmed for consistency; fieldLimit allows only 1 face-up at a time)
       251, // Volcanic Extreme Dragon (2600 ATK — battle-indestructible alone + GY burn)
-      252, // Mist Extreme Dragon (2800 ATK — bounce + restrict summon-turn attacks)
       253, // Galaxy Extreme Dragon (2900 ATK — opp GY banish + once per duel survival)
       254, // Forest Extreme Dragon (2500 ATK — standby LP heal + ATK gain)
       // Big Dragons
@@ -232,21 +230,22 @@ export default class Bot extends Player {
       25,  // Hellkite Dragon (2300 ATK — SS from hand by sending field Dragon to GY)
       21,  // Majestic Silver Dragon (2500 ATK — alt tribute 1 Dragon, position switch)
       22,  // Darkness Dragon (2000+ ATK — destroys field dragons to gain ATK)
+      12,  // Luminous Dragon (2000 ATK — empty-field SS + discard recovery)
       // Mid Dragons
       16, 16, 16, // Armored Dragon (1600 ATK — search lv4 Dragon on normal summon)
-      18, 18,     // Grey Dragon (1800 ATK — SS buff +500, GY return self)
-      20, 20,     // Luminescent Dragon (1500 ATK — NS revives lv4- from GY)
+      18, 18, 18, // Grey Dragon (1800 ATK — SS buff +500, GY return self)
+      20, 20, 20, // Luminescent Dragon (1500 ATK — NS revives lv4- from GY)
       33,         // Boneflame Dragon (GY ignition — send field Dragon, gains 300 per GY Dragon)
       19, 19,     // Voltaic Dragon (1200 ATK — SS if control Dragon, 800 burn on discard)
       // === SPELLS ===
       256,        // Converging Stars (discard 1; reduce hand monster levels -2 until EOT)
-      26, 26,     // Hellkite Roar (control lv7+ Dragon: destroy up to 2 opp spell/trap)
-      13,         // Polymerization (fusion: Voltaic + lv5+ = Tech-Void; 5 Extreme GY = Bahamut)
+      26,         // Hellkite Roar (control lv7+ Dragon: destroy opp spell/trap)
+      13, 13,     // Polymerization (fusion: Tech-Void or Radiant Cosmic)
       15,         // Call of the Haunted (trap: revive from GY)
       27,         // Jagged Peak of the Dragons (field: GY search + counter + SS on 5 counters)
       257,        // Extreme Dragon Awakening (cont. spell — tribute 2 Dragons → SS lv9+ Dragon from hand)
       // === TRAPS ===
-      32, 32,     // Dragon Spirit Sanctuary (Dragon targeted: return to hand + SS from hand)
+      32,         // Dragon Spirit Sanctuary (Dragon targeted: return to hand + SS from hand)
     ];
   }
 
@@ -319,7 +318,8 @@ export default class Bot extends Player {
     return [
       17,  // Metal Armored Dragon (ascension from Armored Dragon)
       30,  // Tech-Void Dragon (fusion: Voltaic Dragon + lv5+ Dragon)
-      255, // Supreme Bahamut Dragon (fusion: banish 5 Extreme Dragons from GY)
+      259, // Radiant Cosmic Dragon (fusion: 3 Dragons, including 1 LIGHT)
+      260, // Rainbow Cosmic Dragon (ascension from Purified Crystal Dragon)
     ];
   }
 

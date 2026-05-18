@@ -10,6 +10,7 @@ const ZONES = [
 ];
 
 const PLAYERS = ["self", "opponent"];
+const PLAYER_SCOPES = ["self", "opponent", "both"];
 const POSITIONS = ["attack", "defense", "choice"];
 
 export const ACTION_CATEGORIES = [
@@ -33,6 +34,10 @@ export const ACTION_FIELD_DEFS = {
   player: {
     enum: PLAYERS,
     description: 'Perspective for the action: "self" or "opponent".',
+  },
+  scope: {
+    enum: PLAYER_SCOPES,
+    description: 'Player scope for the action: "self", "opponent", or "both".',
   },
   zone: {
     type: "zone",
@@ -274,16 +279,24 @@ export const ACTION_CATALOG = {
   }),
   banish_all_graveyard_and_burn: action({
     category: "destruction",
-    summary: "Banishes all cards in the controller's graveyard, then deals damage per card banished.",
+    summary: "Banishes all cards in the selected graveyard scope, then deals damage per card banished.",
     handler: "handleBanishAllGraveyardAndBurn",
-    optional: ["damagePerCard", "player"],
+    optional: ["damagePerCard", "player", "scope"],
     fields: {
       damagePerCard: field("amount"),
       player: field("player"),
+      scope: field("scope"),
     },
     selection: "none",
     mutates: ["graveyard", "banished", "lp"],
-    examples: [{ type: "banish_all_graveyard_and_burn", damagePerCard: 500, player: "opponent" }],
+    examples: [
+      {
+        type: "banish_all_graveyard_and_burn",
+        scope: "both",
+        damagePerCard: 100,
+        player: "opponent",
+      },
+    ],
   }),
   banish_destroyed_monster: action({
     category: "destruction",

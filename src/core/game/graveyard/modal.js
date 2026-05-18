@@ -30,7 +30,15 @@ export function openGraveyardModal(player, options = {}) {
     // Se não tem onSelect customizado, usar o padrão para ativar efeitos
     if (!options.onSelect) {
       options.onSelect = (card) => {
-        if (!this.effectEngine.hasActivatableGraveyardEffect(card, player)) {
+        const preview = this.effectEngine.canActivateMonsterEffectPreview?.(
+          card,
+          player,
+          "graveyard",
+        );
+        if (!preview?.ok) {
+          if (preview?.reason) {
+            this.ui.log(preview.reason);
+          }
           return;
         }
         const activationContext = {

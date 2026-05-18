@@ -6451,7 +6451,7 @@
       },
     },
     description:
-      'There can only be 1 face-up "Extreme Dragon" monster on the field. While this card is the only monster you control, it cannot be destroyed by battle. If this card battles an opponent\'s monster: inflict 600 damage to your opponent. Once per turn: you can banish all cards in your Graveyard; inflict 500 damage to your opponent for each card banished by this effect.',
+      'There can only be 1 face-up "Extreme Dragon" monster on the field. While this card is the only monster you control, it cannot be destroyed by battle. If this card battles an opponent\'s monster: inflict 600 damage to your opponent. Once per Duel: you can banish all cards in both Graveyards; inflict 100 damage to your opponent for each card banished by this effect.',
     image: "assets/Volcanic Extreme Dragon.png",
     effects: [
       {
@@ -6511,12 +6511,13 @@
         timing: "ignition",
         requireZone: "field",
         requireFaceup: true,
-        oncePerTurn: true,
-        oncePerTurnName: "volcanic_extreme_dragon_banish_burn",
+        oncePerDuel: true,
+        oncePerDuelName: "volcanic_extreme_dragon_banish_burn",
         actions: [
           {
             type: "banish_all_graveyard_and_burn",
-            damagePerCard: 500,
+            scope: "both",
+            damagePerCard: 100,
             player: "opponent",
           },
         ],
@@ -6665,7 +6666,7 @@
     def: 2700,
     level: 10,
     type: "Dragon",
-    attribute: "Wind",
+    attribute: "Earth",
     archetype: "Extreme Dragons",
     fieldLimit: {
       key: "extreme_dragons_faceup",

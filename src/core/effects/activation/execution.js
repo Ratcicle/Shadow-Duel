@@ -663,6 +663,15 @@ export async function activateMonsterEffect(
     return { success: false, needsSelection: false, reason: optCheck.reason };
   }
 
+  const duelCheck = this.checkOncePerDuel(card, player, effect);
+  if (!duelCheck.ok) {
+    return {
+      success: false,
+      needsSelection: false,
+      reason: duelCheck.reason,
+    };
+  }
+
   const targetResult = this.resolveTargets(
     effect.targets || [],
     ctx,

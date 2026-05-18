@@ -541,6 +541,9 @@ export async function handleBanish(action, ctx, targets, engine) {
     }
 
     tgt.location = "banished";
+    tgt.isFacedown = false;
+    tgt.setTurn = null;
+    tgt.turnSetOn = null;
 
     if (resolvedOwner?.id) {
       tgt.owner = resolvedOwner.id;
@@ -766,45 +769,93 @@ export async function handleBanishCardFromGraveyard(
   return false;
 }
 
+function resolveGraveyardBanishOwners(scope, player, opponent) {
+  if (scope === "both") {
+    return [player, opponent].filter(Boolean);
+  }
+  if (scope === "opponent") {
+    return opponent ? [opponent] : [];
+  }
+  return player ? [player] : [];
+}
+
 /**
- * Banishes all cards in the controlling player's graveyard, then inflicts
- * damage to the target player equal to damagePerCard × number of cards banished.
+ * Banishes all cards in the selected graveyard scope, then inflicts damage to
+ * the target player equal to damagePerCard times the number of cards banished.
  *
  * Action properties:
+ * - scope: "self" | "opponent" | "both" - graveyard scope to banish (default: "self")
  * - damagePerCard: LP damage per card banished (default: 0)
- * - player: "self" | "opponent" — who takes the damage (default: "opponent")
+ * - player: "self" | "opponent" - who takes the damage (default: "opponent")
  */
 export async function handleBanishAllGraveyardAndBurn(action, ctx, _targets, engine) {
-  const { player } = ctx;
+  const { player, opponent } = ctx;
   const game = engine.game;
 
   if (!player || !game) return false;
 
-  const graveyard = player.graveyard || [];
-  if (graveyard.length === 0) {
-    getUI(game)?.log("No cards in graveyard to banish.");
+  const scope = action.scope || "self";
+  const owners = resolveGraveyardBanishOwners(scope, player, opponent);
+  const toBanish = owners.flatMap((owner) =>
+    (owner.graveyard || []).map((card) => ({ owner, card })),
+  );
+
+  if (toBanish.length === 0) {
+    getUI(game)?.log("No cards in the selected Graveyard scope to banish.");
     return false;
   }
 
   const damagePerCard = action.damagePerCard ?? 0;
   const targetPlayer = action.player === "self" ? player : ctx.opponent;
 
-  const toBanish = [...graveyard];
-  player.graveyard.length = 0;
-  player.banished = player.banished || [];
+  let banishedCount = 0;
 
-  for (const card of toBanish) {
-    queueBanishAnimation(game, player, card, "graveyard");
-    player.banished.push(card);
-    card.location = "banished";
-    getUI(game)?.log(`${card.name} was banished from the graveyard.`);
+  for (const { owner, card } of toBanish) {
+    if (!card || !(owner.graveyard || []).includes(card)) {
+      continue;
+    }
+
+    let moved = false;
+    if (typeof game.moveCard === "function") {
+      const moveResult = await game.moveCard(card, owner, "banished", {
+        fromZone: "graveyard",
+        contextLabel: "banish_all_graveyard_and_burn",
+      });
+      moved = moveResult !== false && moveResult?.success !== false;
+    }
+
+    if (!moved) {
+      const idx = (owner.graveyard || []).indexOf(card);
+      if (idx === -1) {
+        continue;
+      }
+      queueBanishAnimation(game, owner, card, "graveyard");
+      owner.graveyard.splice(idx, 1);
+      owner.banished = owner.banished || [];
+      owner.banished.push(card);
+      card.location = "banished";
+      card.isFacedown = false;
+      card.setTurn = null;
+      card.turnSetOn = null;
+      moved = true;
+    }
+
+    if (moved) {
+      banishedCount++;
+      getUI(game)?.log(`${card.name} was banished from the graveyard.`);
+      game.updateBoard?.();
+    }
   }
 
-  const totalDamage = toBanish.length * damagePerCard;
+  if (banishedCount === 0) {
+    return false;
+  }
+
+  const totalDamage = banishedCount * damagePerCard;
   if (totalDamage > 0 && targetPlayer) {
     targetPlayer.takeDamage(totalDamage);
     getUI(game)?.log(
-      `${targetPlayer.id} takes ${totalDamage} damage (${toBanish.length} × ${damagePerCard}).`,
+      `${targetPlayer.id} takes ${totalDamage} damage (${banishedCount} x ${damagePerCard}).`,
     );
   }
 

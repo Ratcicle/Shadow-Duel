@@ -37,12 +37,12 @@ export const CARD_KNOWLEDGE = {
     level: 10,
     isExtremeDragon: true,
     summonCondition: "special_via_jagged_peak_or_tribute",
-    effect: "Battle indestructible when alone. 600 burn on battle. Banish all GY for 500 per card burn.",
+    effect: "Battle indestructible when alone. 600 burn on battle. Once per duel, banish both GYs for 100 per card burn.",
     synergies: ["Jagged Peak of the Dragons"],
     playPatterns: [
       "Best when alone (battle indestructible)",
-      "AVOID using GY banish effect if need Extreme Dragons in GY for Bahamut",
-      "Lower priority — GY banish effect is counterproductive to Bahamut setup",
+      "AVOID using both-GY banish effect if need Extreme Dragons in GY for Bahamut",
+      "Lower priority - once-per-duel GY banish effect is counterproductive to Bahamut setup",
     ],
     situationScore: {
       alone: 2,
@@ -524,7 +524,7 @@ export function selectBestExtremeDragon(extremesInHand, analysis) {
       score += oppLp <= 4000 ? 2 : 0;  // Burn stacks matter more vs low LP
     }
     if (card.name === "Volcanic Extreme Dragon") {
-      // Lowest priority — GY banish effect destroys Bahamut setup
+      // Lowest priority - both-GY banish effect disrupts Bahamut setup
       score -= 3;
     }
     if (card.name === "Mist Extreme Dragon") {

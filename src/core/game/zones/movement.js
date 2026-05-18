@@ -1089,6 +1089,12 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
   card.owner = destPlayer.id;
   card.controller = destPlayer.id;
 
+  if (toZone === "graveyard" || toZone === "banished") {
+    card.isFacedown = false;
+    card.setTurn = null;
+    card.turnSetOn = null;
+  }
+
   // Special case: Extra Deck monsters returning to hand/deck go back to Extra Deck instead
   if (shouldRedirectExtraDeckMonsterToExtraDeck) {
     const extraDeck = this.getZone(destPlayer, "extraDeck");
