@@ -390,10 +390,16 @@ export const ACTION_CATALOG = {
     category: "stats",
     summary: "Reduces the Level of all monsters in the player's hand.",
     handler: "handleReduceHandMonsterLevels",
-    fields: {},
+    optional: ["amount"],
+    fields: {
+      amount: field("amount", {
+        min: 1,
+        description: "Level reduction amount. Defaults to 1.",
+      }),
+    },
     selection: "none",
     mutates: ["stats"],
-    examples: [{ type: "reduce_hand_monster_levels" }],
+    examples: [{ type: "reduce_hand_monster_levels", amount: 2 }],
   }),
   buff_stats_temp_with_second_attack: action({
     category: "stats",
@@ -764,10 +770,14 @@ export const ACTION_CATALOG = {
     category: "resources",
     summary: "Heals based on the destroyed monster's ATK.",
     handler: "handleHealFromDestroyedAtk",
-    optional: ["fraction"],
-    fields: { fraction: { type: "number" } },
+    optional: ["fraction", "multiplier", "useBaseAtk"],
+    fields: {
+      fraction: { type: "number" },
+      multiplier: { type: "number" },
+      useBaseAtk: { type: "boolean" },
+    },
     mutates: ["lp"],
-    examples: [{ type: "heal_from_destroyed_atk", fraction: 0.5 }],
+    examples: [{ type: "heal_from_destroyed_atk", fraction: 0.5, useBaseAtk: true }],
   }),
   heal_from_destroyed_level: action({
     category: "resources",
@@ -976,6 +986,7 @@ export const ACTION_CATALOG = {
       "uniqueKey",
       "uses",
       "usesPerTarget",
+      "logMessage",
     ],
     fields: {
       ...COMMON_TARGET_FIELDS,
@@ -986,6 +997,7 @@ export const ACTION_CATALOG = {
       uniqueKey: { type: "string" },
       uses: { type: "number" },
       usesPerTarget: { type: "boolean" },
+      logMessage: { type: "string" },
     },
     targetRef: "optional",
     selection: "usesTargets",

@@ -322,6 +322,24 @@ export function buildTriggerEntry(options = {}) {
     options.summary ||
     `${owner.id}:${sourceCard.name}:${effect.id || effect.event || "trigger"}`;
 
+  const triggerGuard = this.game?.canStartAction?.({
+    actor: owner,
+    kind: options.guardKind || selectionKind || "triggered",
+    phaseReq: options.phaseReq || null,
+    allowDuringSelection: options.allowDuringSelection === true,
+    allowDuringResolving: options.allowDuringResolving !== false,
+    allowDuringOpponentTurn: options.allowDuringOpponentTurn !== false,
+    silent: true,
+  });
+  if (triggerGuard?.ok === false) {
+    // Arcturus-style battle locks are real activation rules. Skipping the
+    // trigger here keeps analytics focused on bad AI actions instead of
+    // recording a blocked activation attempt that could never resolve.
+    if (triggerGuard.code === "BLOCKED_BATTLE_PHASE_LOCK") {
+      return null;
+    }
+  }
+
   const baseCtx = options.ctx || {};
   if (Array.isArray(effect.targets) && effect.targets.length > 0) {
     const previewCtx = {

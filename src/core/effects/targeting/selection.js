@@ -10,6 +10,51 @@ import { botLogger } from "../../BotLogger.js";
 // Track duplicate selectCandidates calls per turn
 const selectCandidatesCallTracker = {};
 
+function cardCacheIdentity(card, fallbackIndex = 0) {
+  if (!card) return `empty:${fallbackIndex}`;
+  const instanceId =
+    card.instanceId || card._instanceId || card.uuid || card.simInstanceId || null;
+  return [
+    instanceId || card.id || card.name || fallbackIndex,
+    card.name || "",
+    card.owner || "",
+    card.position || "",
+    card.isFacedown ? "down" : "up",
+  ].join(":");
+}
+
+function getZoneSnapshot(player, zoneKey) {
+  if (!player) return [];
+  if (zoneKey === "fieldSpell") return player.fieldSpell ? [player.fieldSpell] : [];
+  const zone = player[zoneKey];
+  return Array.isArray(zone) ? zone : [];
+}
+
+function buildZoneSignature(def, ctx) {
+  const zoneName = def.zone || "field";
+  const zoneList =
+    Array.isArray(def.zones) && def.zones.length > 0 ? def.zones : [zoneName];
+  const owners =
+    def.owner === "opponent"
+      ? [ctx?.opponent]
+      : def.owner === "any"
+        ? [ctx?.player, ctx?.opponent]
+        : [ctx?.player];
+
+  return owners
+    .filter(Boolean)
+    .map((owner) => {
+      const ownerId = owner.id || "unknown";
+      const zones = zoneList.map((zoneKey) => {
+        const cards = getZoneSnapshot(owner, zoneKey);
+        const signature = cards.map(cardCacheIdentity).join(",");
+        return `${zoneKey}[${cards.length}]=${signature}`;
+      });
+      return `${ownerId}:${zones.join(";")}`;
+    })
+    .join("|");
+}
+
 /**
  * Build a unique cache key for targeting lookups.
  * @param {Object} def - Target definition
@@ -22,6 +67,7 @@ function buildTargetingCacheKey(def, ctx) {
     def.id || "unknown",
     def.zone || "field",
     def.owner || "self",
+    JSON.stringify(def.count || null),
     def.cardKind || "any",
     def.subtype || "any",
     def.archetype || "any",
@@ -33,9 +79,16 @@ function buildTargetingCacheKey(def, ctx) {
     def.maxLevel ?? "",
     anyOfKey,
     def.excludeCardName || "",
+    Array.isArray(def.excludeCardNames) ? def.excludeCardNames.join(",") : "",
+    def.excludeEventCardName ? "excludeEventCardName" : "",
+    def.excludeEventCardName && ctx?.eventCard
+      ? cardCacheIdentity(ctx.eventCard, "eventCard")
+      : "",
     def.requireThisCard ? "this" : "",
+    cardCacheIdentity(ctx.source, "source"),
     ctx.source?.name || "",
     ctx.player?.id || "p",
+    buildZoneSignature(def, ctx),
   ];
   return parts.join("|");
 }
@@ -194,6 +247,13 @@ export function selectCandidates(def, ctx) {
         ? filter.subtype
         : [filter.subtype];
       if (!requiredSubtypes.includes(card.subtype)) return false;
+    }
+    if (
+      filter.excludeEventCardName === true &&
+      ctx?.eventCard?.name &&
+      card.name === ctx.eventCard.name
+    ) {
+      return false;
     }
     return true;
   };
@@ -383,6 +443,17 @@ export function selectCandidates(def, ctx) {
             );
             continue;
           }
+        }
+
+        if (
+          def.excludeEventCardName === true &&
+          ctx?.eventCard?.name &&
+          card.name === ctx.eventCard.name
+        ) {
+          log(
+            `[selectCandidates] Excluding ${card.name} (matches event card name ${ctx.eventCard.name})`
+          );
+          continue;
         }
 
         if (!matchesAnyOf(card)) {

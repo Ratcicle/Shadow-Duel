@@ -252,6 +252,9 @@ export function resolveTargets(targetDefs, ctx, selections) {
     if (def.excludeCardName) {
       filters.excludeCardName = def.excludeCardName;
     }
+    if (def.excludeEventCardName === true && ctx?.eventCard?.name) {
+      filters.excludeCardName = ctx.eventCard.name;
+    }
     if (def.level !== undefined) {
       filters.level = def.level;
     }

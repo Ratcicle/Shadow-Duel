@@ -1027,6 +1027,7 @@ export async function handleSpecialSummonFromHandWithCost(
       if (chosenCount >= 1 && buffAmount !== 0) {
         engine.applyBuffAtkTemp(
           { targetRef: "tier_self", amount: buffAmount },
+          { player, source },
           { tier_self: [source] },
         );
       }

@@ -63,6 +63,15 @@ import {
   simulateSpellEffect,
 } from "./shadowheart/simulation.js";
 import { buildShadowHeartResourceEconomy } from "./shadowheart/resourceEconomy.js";
+import {
+  buildShadowHeartPlanningProfile,
+  applyShadowHeartCandidateRetention,
+  applyShadowHeartSimulatedBattleRewards,
+  scoreShadowHeartBattleAttackCandidate,
+  scoreShadowHeartLineMilestones,
+  scoreShadowHeartLineTerminal,
+  describeShadowHeartPlannedLine,
+} from "./shadowheart/linePlanning.js";
 
 function canActivateShadowHeartSpell(game, card, bot, activationContext = {}) {
   if (!game || game._isPerspectiveState === true) return { ok: true };
@@ -212,6 +221,42 @@ export default class ShadowHeartStrategy extends BaseStrategy {
     // Estado de análise atual
     this.currentAnalysis = null;
     this.thoughtProcess = [];
+  }
+
+  getPlanningProfile(game, context = {}) {
+    if (!game) return super.getPlanningProfile(game, context);
+    const analysis = context.analysis || this.analyzeGameState(game);
+    return buildShadowHeartPlanningProfile(analysis, {
+      ...context,
+      game,
+      strategy: this,
+    });
+  }
+
+  shouldUseDeepPlanning(game, context = {}) {
+    const profile =
+      context.profile || this.getPlanningProfile(game, context) || {};
+    return game?.turnLineSearchEnabled === true || profile.enabled === true;
+  }
+
+  scoreLineMilestones(context = {}) {
+    return scoreShadowHeartLineMilestones(context);
+  }
+
+  scoreLineTerminal(context = {}) {
+    return scoreShadowHeartLineTerminal(context);
+  }
+
+  describePlannedLine(context = {}) {
+    return describeShadowHeartPlannedLine(context);
+  }
+
+  scoreBattleAttackCandidate(context = {}) {
+    return scoreShadowHeartBattleAttackCandidate(context);
+  }
+
+  applySimulatedBattleRewards(context = {}) {
+    return applyShadowHeartSimulatedBattleRewards(context);
   }
 
   buildActivationContextForEffect({ sourceCard, effect, player, game } = {}) {
@@ -1210,15 +1255,26 @@ export default class ShadowHeartStrategy extends BaseStrategy {
       actions.push(...positionActions);
     }
 
+    const planningProfile = buildShadowHeartPlanningProfile(analysis, {
+      game,
+      strategy: this,
+    });
+    const retainedActions = applyShadowHeartCandidateRetention(actions, analysis, {
+      game,
+      strategy: this,
+      profile: planningProfile,
+      isSimulatedState,
+    });
+
     // === P2: GAME TREE SEARCH (OPCIONAL) ===
     // Desativar P2 em simulação para evitar recursão infinita
     if (isSimulatedState) {
-      return this.sequenceActions(actions);
+      return this.sequenceActions(retainedActions);
     }
 
     const finalActions = this.integrateP2IntoActionSelection(
       game,
-      this.sequenceActions(actions),
+      this.sequenceActions(retainedActions),
       analysis,
     );
 
@@ -1264,11 +1320,25 @@ export default class ShadowHeartStrategy extends BaseStrategy {
   }
 
   simulateMainPhaseAction(state, action) {
-    return simAction(state, action, this.placeSpellCard.bind(this));
+    return simAction(state, action, {
+      strategy: this,
+      placeSpellCard: this.placeSpellCard.bind(this),
+      buildActivationContextForEffect: this.buildActivationContextForEffect.bind(this),
+      rankSearchCandidates: this.rankSearchCandidates.bind(this),
+      evaluateRecruitCandidate: this.evaluateRecruitCandidate.bind(this),
+      chooseSpecialSummonPosition: this.chooseSpecialSummonPosition.bind(this),
+    });
   }
 
   simulateSpellEffect(state, card) {
-    return simulateSpellEffect(state, card);
+    return simulateSpellEffect(state, card, {
+      strategy: this,
+      placeSpellCard: this.placeSpellCard.bind(this),
+      buildActivationContextForEffect: this.buildActivationContextForEffect.bind(this),
+      rankSearchCandidates: this.rankSearchCandidates.bind(this),
+      evaluateRecruitCandidate: this.evaluateRecruitCandidate.bind(this),
+      chooseSpecialSummonPosition: this.chooseSpecialSummonPosition.bind(this),
+    });
   }
 
   // P2 (evaluateCriticalSituationWithGameTree, analyzeOpponentPosition,

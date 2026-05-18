@@ -1,3 +1,5 @@
+import { cardDatabaseById } from "../../../data/cards.js";
+
 function safeArray(value) {
   return Array.isArray(value) ? value.filter(Boolean) : [];
 }
@@ -198,34 +200,53 @@ function stableString(value) {
   return JSON.stringify(value);
 }
 
+function getBaseStat(card, stat) {
+  const value = cardDatabaseById.get(card?.id)?.[stat];
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.round(number) : null;
+}
+
+function effectiveStat(card, stat) {
+  const raw = roundStat(card?.[stat]);
+  const tempKey = stat === "def" ? "tempDef" : "tempAtk";
+  const equipKey = stat === "def" ? "equipDef" : "equipAtk";
+  const temp = roundStat(card?.[tempKey]);
+  const equip = roundStat(card?.[equipKey]);
+  const base = getBaseStat(card, stat);
+
+  if (base !== null && raw !== base && (temp !== 0 || equip !== 0)) {
+    return raw;
+  }
+  return raw + temp + equip;
+}
+
 function effectiveAtk(card) {
-  return roundStat((card?.atk || 0) + (card?.tempAtk || 0) + (card?.equipAtk || 0));
+  return effectiveStat(card, "atk");
 }
 
 function effectiveDef(card) {
-  return roundStat((card?.def || 0) + (card?.tempDef || 0) + (card?.equipDef || 0));
+  return effectiveStat(card, "def");
+}
+
+function statRepresentationStableCard(card) {
+  if (!card) return null;
+  const {
+    instanceId: _instanceId,
+    atk: _atk,
+    def: _def,
+    tempAtk: _tempAtk,
+    tempDef: _tempDef,
+    equipAtk: _equipAtk,
+    equipDef: _equipDef,
+    ...stable
+  } = card;
+  return stable;
 }
 
 function equivalentCardExceptStatRepresentation(expected, actual) {
   if (!expected || !actual) return false;
-  const expectedStable = {
-    ...expected,
-    atk: 0,
-    def: 0,
-    tempAtk: 0,
-    tempDef: 0,
-    equipAtk: 0,
-    equipDef: 0,
-  };
-  const actualStable = {
-    ...actual,
-    atk: 0,
-    def: 0,
-    tempAtk: 0,
-    tempDef: 0,
-    equipAtk: 0,
-    equipDef: 0,
-  };
+  const expectedStable = statRepresentationStableCard(expected);
+  const actualStable = statRepresentationStableCard(actual);
   return (
     stableString(expectedStable) === stableString(actualStable) &&
     effectiveAtk(expected) === effectiveAtk(actual) &&
@@ -301,8 +322,15 @@ function comparePlayer(prefix, expected = {}, actual = {}, diffs) {
 function classifyDiff(diffs = []) {
   if (!diffs.length) return "none";
   if (diffs.every((diff) => diff.severity === "minor")) return "minor";
-  const meaningful = diffs.find((diff) => diff.severity !== "minor");
-  if (meaningful?.severity) return meaningful.severity;
+  const meaningful = diffs.filter((diff) => diff.severity !== "minor");
+  if (
+    meaningful.length > 0 &&
+    meaningful.every((diff) => String(diff.path || "").startsWith("opponent."))
+  ) {
+    return "opponent_reaction_mismatch";
+  }
+  const firstMeaningful = meaningful[0];
+  if (firstMeaningful?.severity) return firstMeaningful.severity;
   const targetDiff = diffs.find((diff) =>
     /field|spellTrap|fieldSpell|banished/.test(diff.path || ""),
   );

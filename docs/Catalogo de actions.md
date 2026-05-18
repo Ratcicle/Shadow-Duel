@@ -1964,13 +1964,16 @@ Reduces the Level of all monsters in the player's hand.
 - Atualiza board: sim
 - Preview: `notNeeded`
 
-_Sem campos alem de `type`._
+| Campo | Obrigatorio | Contrato | Descricao |
+| --- | --- | --- | --- |
+| `amount` | nao | number; min: 1 | Level reduction amount. Defaults to 1. |
 
 **Exemplos**
 
 ```json
 {
-  "type": "reduce_hand_monster_levels"
+  "type": "reduce_hand_monster_levels",
+  "amount": 2
 }
 ```
 

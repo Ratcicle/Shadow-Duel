@@ -1,4 +1,5 @@
 import {
+  getBattleStat,
   getEffectiveAtk,
   getEffectiveDef,
   getStrongestBattleStat,
@@ -33,6 +34,98 @@ function resolveGroupMatch(card, context, profile, groupName) {
   );
 }
 
+function normalizeProjectedStat(value, fallback) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : fallback;
+}
+
+function resolveEntryStats(card, context, profile) {
+  const baseStats = {
+    atk: getEffectiveAtk(card),
+    def: getEffectiveDef(card),
+  };
+  const projector =
+    context.projectEntryStats || profile.projectEntryStats || null;
+  if (typeof projector !== "function") {
+    return {
+      ...baseStats,
+      baseAtk: baseStats.atk,
+      baseDef: baseStats.def,
+      projected: false,
+    };
+  }
+
+  const projected = projector(card, context, {
+    ...baseStats,
+    baseAtk: baseStats.atk,
+    baseDef: baseStats.def,
+  });
+
+  const atk = normalizeProjectedStat(
+    projected?.atk ?? projected?.projectedAtk,
+    baseStats.atk,
+  );
+  const def = normalizeProjectedStat(
+    projected?.def ?? projected?.projectedDef,
+    baseStats.def,
+  );
+
+  return {
+    atk,
+    def,
+    baseAtk: baseStats.atk,
+    baseDef: baseStats.def,
+    projected: atk !== baseStats.atk || def !== baseStats.def,
+  };
+}
+
+export function evaluateProjectedAttackLine(
+  projectedAtk,
+  opponentField = [],
+  options = {},
+) {
+  const attack = Number(projectedAtk || 0);
+  const visibleMonsters = (opponentField || []).filter(
+    (card) =>
+      card &&
+      card.cardKind === "monster" &&
+      !card.isFacedown &&
+      !card.faceDown,
+  );
+  const targets = visibleMonsters.map((card) => ({
+    card,
+    battleStat: getBattleStat(card, {
+      facedownValue: options.facedownValue ?? 1500,
+    }),
+    attackStat: getEffectiveAtk(card),
+  }));
+  const destroyable = targets
+    .filter((entry) => attack > entry.battleStat)
+    .sort((a, b) => b.battleStat - a.battleStat);
+  const strongestBattleStat = targets.reduce(
+    (max, entry) => Math.max(max, entry.battleStat),
+    0,
+  );
+  const strongestFaceUpAtk = targets.reduce(
+    (max, entry) => Math.max(max, entry.attackStat),
+    0,
+  );
+
+  return {
+    projectedAtk: attack,
+    destroyableCount: destroyable.length,
+    bestTarget: destroyable[0]?.card || null,
+    bestTargetStat: destroyable[0]?.battleStat || 0,
+    strongestBattleStat,
+    strongestFaceUpAtk,
+    safeInAttack: strongestFaceUpAtk <= 0 || attack >= strongestFaceUpAtk,
+    canClearStrongestBattle:
+      strongestBattleStat > 0 && attack > strongestBattleStat,
+    canTradeStrongestAttack:
+      strongestFaceUpAtk > 0 && attack === strongestFaceUpAtk,
+  };
+}
+
 export function assessSummonEntry(card, context = {}) {
   const profile = context.profile || {};
   if (!card || card.cardKind !== "monster") {
@@ -58,8 +151,9 @@ export function assessSummonEntry(card, context = {}) {
   const phase = String(context.phase || game?.phase || "").toLowerCase();
   const action = context.action || {};
 
-  const atk = getEffectiveAtk(card);
-  const def = getEffectiveDef(card);
+  const entryStats = resolveEntryStats(card, context, profile);
+  const atk = entryStats.atk;
+  const def = entryStats.def;
   const strongestThreat = getStrongestBattleStat(oppField, {
     facedownValue: profile.facedownValue ?? 1500,
   });
@@ -156,5 +250,10 @@ export function assessSummonEntry(card, context = {}) {
     scoreDelta,
     reason: reasons.join("; ") || profile.defaultReason || "default summon assessment",
     strongestThreat,
+    projectedAtk: atk,
+    projectedDef: def,
+    baseAtk: entryStats.baseAtk,
+    baseDef: entryStats.baseDef,
+    projectedStats: entryStats.projected,
   };
 }

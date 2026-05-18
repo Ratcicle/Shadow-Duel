@@ -15,6 +15,15 @@ function requirementToString(requirement) {
   }
   if (typeof requirement === "object" && requirement !== null) {
     // Object format: { name: "Card Name" } or { archetype: "Archetype", minLevel: 5 }
+    // Keep combined requirements as objects so every declared filter is checked.
+    if (
+      requirement.attribute ||
+      requirement.minLevel !== undefined ||
+      requirement.maxLevel !== undefined ||
+      requirement.allowedZones
+    ) {
+      return requirement;
+    }
     if (requirement.name) {
       return `name:${requirement.name}`;
     }

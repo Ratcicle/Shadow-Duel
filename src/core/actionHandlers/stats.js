@@ -1497,6 +1497,7 @@ export async function handleReduceHandMonsterLevels(action, ctx, targets, engine
   const game = engine.game;
   if (!player || !game) return false;
 
+  const amount = Math.max(1, Number(action.amount ?? 1) || 1);
   const handMonsters = player.hand.filter((c) => c && c.cardKind === "monster");
   if (handMonsters.length === 0) return false;
 
@@ -1504,12 +1505,14 @@ export async function handleReduceHandMonsterLevels(action, ctx, targets, engine
   for (const card of handMonsters) {
     if (card.level <= 1) continue;
     if (card.originalLevel == null) card.originalLevel = card.level;
-    card.level = Math.max(1, card.level - 1);
+    card.level = Math.max(1, card.level - amount);
     modified = true;
   }
 
   if (modified) {
-    getUI(game)?.log("Nível dos monstros na mão reduzido em 1 até o fim do turno.");
+    getUI(game)?.log(
+      `Nível dos monstros na mão reduzido em ${amount} até o fim do turno.`
+    );
     game.updateBoard();
   }
   return modified;

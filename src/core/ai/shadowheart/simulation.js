@@ -1,420 +1,661 @@
-// ─────────────────────────────────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
 // src/core/ai/shadowheart/simulation.js
-// Simulação de ações para lookahead (BeamSearch/GameTree).
-// ─────────────────────────────────────────────────────────────────────────────
+// Shadow-Heart simulation layer for lookahead/beam/planner clones.
+// ---------------------------------------------------------------------------
 
+import {
+  applyGenericSimulatedMainPhaseAction,
+  resolveSimulatedHandIndex,
+  simulateGenericSpellEffect,
+} from "../common/simulation.js";
+import { cardMatchesFilter } from "../common/cardFilters.js";
 import { getCounterCount } from "../common/counters.js";
 import { isShadowHeart } from "./knowledge.js";
 import {
-  selectBestTributes,
-  getTributeRequirementFor,
+  buildShadowHeartTargetPreferences,
+  buildShadowHeartCostPreferences,
   chooseCathedralSummonTarget,
+  chooseImpSpecialTargetName,
+  evaluateShadowHeartFusionPlan,
+  evaluateShadowHeartRecruitCandidate,
+  getTributeRequirementFor,
+  rankShadowHeartSearchCandidates,
+  selectBestTributes,
 } from "./priorities.js";
 
-/**
- * Simula uma ação de main phase no estado clonado.
- * @param {Object} state - Estado clonado do jogo
- * @param {Object} action - Ação a simular
- * @param {Function} placeSpellCard - Função para posicionar spell
- * @returns {Object} Estado modificado
- */
-export function simulateMainPhaseAction(state, action, placeSpellCard) {
-  if (!action) return state;
+const SH = {
+  arctroth: "Shadow-Heart Demon Arctroth",
+  battleHymn: "Shadow-Heart Battle Hymn",
+  cathedral: "Shadow-Heart Cathedral",
+  covenant: "Shadow-Heart Covenant",
+  demonDragon: "Shadow-Heart Demon Dragon",
+  gecko: "Shadow-Heart Gecko",
+  imp: "Shadow-Heart Imp",
+  infusion: "Shadow-Heart Infusion",
+  leviathan: "Shadow-Heart Leviathan",
+  purge: "Shadow-Heart Purge",
+  rage: "Shadow-Heart Rage",
+  scale: "Shadow-Heart Scale Dragon",
+  valley: "Darkness Valley",
+  voidMage: "Shadow-Heart Void Mage",
+};
 
-  switch (action.type) {
-    case "summon": {
-      const player = state.bot;
-      const opponent = state.player;
-      const card = player.hand[action.index];
-      if (!card) break;
+function normalizeOptions(placeSpellCardOrOptions = null) {
+  if (typeof placeSpellCardOrOptions === "function") {
+    return { placeSpellCard: placeSpellCardOrOptions };
+  }
+  return placeSpellCardOrOptions || {};
+}
 
-      const tributeInfo = getTributeRequirementFor(card, player);
-      let tributeIndices = [];
-      const tributes = [];
+function ensureZones(player = {}) {
+  player.hand = player.hand || [];
+  player.field = player.field || [];
+  player.spellTrap = player.spellTrap || [];
+  player.graveyard = player.graveyard || [];
+  player.deck = player.deck || [];
+  player.extraDeck = player.extraDeck || [];
+  player.banished = player.banished || [];
+  return player;
+}
 
-      // Só seleciona tributos se necessário E há monstros suficientes
-      if (
-        tributeInfo.tributesNeeded > 0 &&
-        player.field.length >= tributeInfo.tributesNeeded
-      ) {
-        tributeIndices = selectBestTributes(
-          player.field,
-          tributeInfo.tributesNeeded,
-          card,
-        );
-      } else if (tributeInfo.tributesNeeded > 0) {
-        // Não pode summon (falta tributos)
-        break;
-      }
+function buildSimAnalysis(state = {}) {
+  const player = ensureZones(state.bot || {});
+  const opponent = ensureZones(state.player || {});
+  return {
+    hand: player.hand,
+    field: player.field,
+    graveyard: player.graveyard,
+    spellTrap: player.spellTrap,
+    fieldSpell: player.fieldSpell?.name || null,
+    deck: player.deck,
+    extraDeck: player.extraDeck,
+    lp: player.lp || 8000,
+    summonCount: player.summonCount || 0,
+    phase: state.phase || state.currentPhase || "main1",
+    game: state,
+    player,
+    opponent,
+    oppField: opponent.field || [],
+    oppLp: opponent.lp || 8000,
+  };
+}
 
-      // Remove tributos (do maior índice para o menor)
-      tributeIndices.sort((a, b) => b - a);
-      tributeIndices.forEach((idx) => {
-        const t = player.field[idx];
-        if (t) {
-          tributes.push(t);
-          player.graveyard.push(t);
-          player.field.splice(idx, 1);
-        }
-      });
+function getSimOptBucket(state, selfId = "bot") {
+  if (!state._simOncePerTurn) state._simOncePerTurn = {};
+  if (Array.isArray(state._simOncePerTurn[selfId])) {
+    state._simOncePerTurn[selfId] = new Set(state._simOncePerTurn[selfId]);
+  }
+  if (!state._simOncePerTurn[selfId]) {
+    state._simOncePerTurn[selfId] = new Set();
+  }
+  return state._simOncePerTurn[selfId];
+}
 
-      // Remove carta da mão e adiciona ao campo
-      player.hand.splice(action.index, 1);
-      const newCard = { ...card };
-      newCard.position = action.position || "attack";
-      newCard.isFacedown = action.facedown || false;
-      newCard.hasAttacked = false;
-      newCard.attacksUsedThisTurn = 0;
-      newCard.cannotAttackThisTurn = true; // Normal summon não ataca no turno
-      newCard.lastSummonMethod =
-        tributeInfo.tributesNeeded > 0 ? "tribute" : "normal";
-      newCard.lastSummonedFromZone = "hand";
-      newCard.lastTributeMaterialNames = tributes.map((tribute) => tribute.name);
-      newCard.lastTributeMaterialCount = tributes.length;
-      player.field.push(newCard);
-      player.summonCount = (player.summonCount || 0) + 1;
+function canUseSimOpt(state, key, selfId = "bot") {
+  if (!key) return true;
+  return !getSimOptBucket(state, selfId).has(key);
+}
 
-      if (
-        newCard.name === "Shadow-Heart Demon Arctroth" &&
-        newCard.lastSummonMethod === "tribute"
-      ) {
-        const target = (opponent.field || [])
-          .filter((c) => c && c.cardKind === "monster")
-          .slice()
-          .sort((a, b) => (b.atk || 0) - (a.atk || 0))[0];
-        if (target) {
-          opponent.field.splice(opponent.field.indexOf(target), 1);
-          opponent.graveyard = opponent.graveyard || [];
-          opponent.graveyard.push(target);
-          newCard.destroyedOpponentMonstersByEffect =
-            (newCard.destroyedOpponentMonstersByEffect || 0) + 1;
-        }
-      }
-      break;
-    }
-    case "spell": {
-      const player = state.bot;
-      const card = player.hand[action.index];
-      if (!card) break;
+function markSimOpt(state, key, selfId = "bot") {
+  if (!key) return;
+  getSimOptBucket(state, selfId).add(key);
+}
 
-      // Remove da mão
-      player.hand.splice(action.index, 1);
-      const placedCard = { ...card };
+function removeFromZone(list, card) {
+  const index = list?.indexOf(card) ?? -1;
+  if (index < 0) return false;
+  list.splice(index, 1);
+  return true;
+}
 
-      // Simula efeito (inclui LP costs)
-      const effectResult = simulateSpellEffect(state, placedCard);
+function moveToZone(player, card, zone) {
+  if (!player || !card) return false;
+  for (const key of [
+    "hand",
+    "field",
+    "graveyard",
+    "spellTrap",
+    "deck",
+    "extraDeck",
+    "banished",
+  ]) {
+    const cards = player[key];
+    if (Array.isArray(cards) && removeFromZone(cards, card)) break;
+  }
+  if (player.fieldSpell === card) player.fieldSpell = null;
+  if (zone === "fieldSpell") {
+    if (player.fieldSpell) player.graveyard.push(player.fieldSpell);
+    player.fieldSpell = card;
+  } else {
+    player[zone] = player[zone] || [];
+    player[zone].push(card);
+  }
+  return true;
+}
 
-      // Spell placement (field spell fica no campo, resto vai pro GY)
-      if (placedCard.subtype === "field") {
-        player.fieldSpell = placedCard;
-      } else if (
-        placedCard.subtype === "continuous" ||
-        placedCard.subtype === "equip"
-      ) {
-        // Continuous/Equip ficam na spell/trap zone
-        if (!player.spellTrap) player.spellTrap = [];
-        if (player.spellTrap.length < 5) {
-          player.spellTrap.push(placedCard);
-        } else {
-          player.graveyard.push(placedCard);
-        }
-      } else {
-        // Normal spells vão direto pro GY
-        player.graveyard.push(placedCard);
-      }
-      break;
-    }
-    case "position_change": {
-      const player = state.bot;
-      const target = (player.field || []).find(
-        (c) =>
-          c &&
-          (c.id === action.cardId ||
-            (!action.cardId && c.name === action.cardName)),
-      );
-      if (!target) break;
-      if (target.isFacedown) break;
-      if (target.positionChangedThisTurn) break;
-      if (target.hasAttacked) break;
-      const newPosition =
-        action.toPosition === "defense" ? "defense" : "attack";
-      if (target.position === newPosition) break;
-      target.position = newPosition;
-      target.positionChangedThisTurn = true;
-      target.cannotAttackThisTurn = newPosition === "defense";
-      break;
-    }
-    case "spellTrapEffect": {
-      const player = state.bot;
-      const zoneIndex = Number.isInteger(action.zoneIndex)
-        ? action.zoneIndex
-        : action.index;
-      const card = player.spellTrap?.[zoneIndex];
-      if (!card || card.isFacedown) break;
+function applyDarknessValleyBuffToCard(card, player = null) {
+  if (player && player.fieldSpell?.name !== SH.valley) return;
+  if (!card || card.cardKind !== "monster" || card.isFacedown) return;
+  if (!isShadowHeart(card)) return;
+  if (card._simDarknessValleyBuff) return;
+  card.tempAtkBoost = (card.tempAtkBoost || 0) + 300;
+  card._simDarknessValleyBuff = true;
+}
 
-      if (card.name === "Shadow-Heart Cathedral") {
-        if ((player.field || []).length >= 5) break;
-        const counterCount = action.cathedralPlan?.counterCount || getCounterCount(card);
-        if (counterCount <= 0) break;
-        const maxAtk = counterCount * 500;
-        const candidates = (player.deck || []).filter(
-          (candidate) =>
-            candidate &&
-            candidate.cardKind === "monster" &&
-            isShadowHeart(candidate) &&
-            (candidate.atk || 0) <= maxAtk,
-        );
-        const targetName = action.cathedralPlan?.targetName || null;
-        const chosen =
-          candidates.find((candidate) => candidate.name === targetName) ||
-          chooseCathedralSummonTarget(candidates, {
-            ...state,
-            hand: player.hand || [],
-            field: player.field || [],
-            spellTrap: player.spellTrap || [],
-            graveyard: player.graveyard || [],
-            deck: player.deck || [],
-            oppField: state.player?.field || [],
-            oppLp: state.player?.lp || 8000,
-          }).card;
-        if (!chosen) break;
+function applyDarknessValleyBuffs(player) {
+  if (player?.fieldSpell?.name !== SH.valley) return;
+  (player.field || []).forEach((card) =>
+    applyDarknessValleyBuffToCard(card, player)
+  );
+}
 
-        const deckIndex = player.deck.indexOf(chosen);
-        if (deckIndex >= 0) player.deck.splice(deckIndex, 1);
-        const summoned = { ...chosen };
-        summoned.position = "attack";
-        summoned.isFacedown = false;
-        summoned.hasAttacked = false;
-        summoned.attacksUsedThisTurn = 0;
-        summoned.cannotAttackThisTurn = false;
-        summoned.lastSummonMethod = "special";
-        summoned.lastSummonedFromZone = "deck";
-        summoned.sourceCard = "Shadow-Heart Cathedral";
-        player.field.push(summoned);
+function defaultPlaceSpellCard(state, card) {
+  const player = ensureZones(state.bot || {});
+  if (card.subtype === "field") {
+    if (player.fieldSpell) player.graveyard.push(player.fieldSpell);
+    player.fieldSpell = card;
+    return { placed: true, zone: "fieldSpell" };
+  }
+  if (card.subtype === "continuous" || card.subtype === "equip") {
+    player.spellTrap.push(card);
+    return { placed: true, zone: "spellTrap" };
+  }
+  return { placed: false, zone: null };
+}
 
-        player.spellTrap.splice(zoneIndex, 1);
-        player.graveyard.push(card);
-      }
-      break;
-    }
-    case "fieldEffect": {
-      const player = state.bot;
-      if (player.fieldSpell?.name === "Darkness Valley") {
-        player.field.forEach((m) => {
-          if (isShadowHeart(m)) {
-            m.atk = (m.atk || 0) + 300;
-          }
-        });
-      }
-      break;
-    }
-    case "handIgnition": {
-      // Simula ativação de efeito ignition de monstro da mão
-      const player = state.bot;
-      const card = player.hand[action.index];
-      if (!card) break;
+function placeShadowHeartSpellCard(state, card, options = {}) {
+  const placeSpellCard = options.placeSpellCard || defaultPlaceSpellCard;
+  const result = placeSpellCard(state, card);
+  if (card?.name === SH.valley) {
+    applyDarknessValleyBuffs(state.bot);
+  }
+  return result;
+}
 
-      // Caso específico: Shadow-Heart Leviathan (envia Eel ao GY, special summon Leviathan)
-      if (card.name === "Shadow-Heart Leviathan") {
-        // Encontrar Abyssal Eel no campo para usar como custo
-        const eelIdx = player.field.findIndex(
-          (c) => c.name === "Shadow-Heart Abyssal Eel",
-        );
-        if (eelIdx === -1 || player.field.length >= 5) break; // Sem custo válido ou campo cheio
+function buildActionFilter(action = {}) {
+  return {
+    ...(action.filters || {}),
+    cardKind: action.cardKind ?? action.filters?.cardKind,
+    archetype: action.archetype ?? action.filters?.archetype,
+    archetypes: action.archetypes ?? action.filters?.archetypes,
+    cardName: action.cardName ?? action.name ?? action.filters?.cardName,
+    name: action.name ?? action.filters?.name,
+    minLevel: action.minLevel ?? action.filters?.minLevel,
+    maxLevel: action.maxLevel ?? action.filters?.maxLevel,
+    minAtk: action.minAtk ?? action.filters?.minAtk,
+    maxAtk: action.maxAtk ?? action.filters?.maxAtk,
+    subtype: action.subtype ?? action.filters?.subtype,
+  };
+}
 
-        // Enviar Eel ao GY
-        const eel = player.field[eelIdx];
-        player.graveyard.push(eel);
-        player.field.splice(eelIdx, 1);
+function rankSearchCandidates(candidates, action, state, sourceCard, options = {}) {
+  const player = ensureZones(state.bot || {});
+  const opponent = ensureZones(state.player || {});
+  const ranker =
+    options.rankSearchCandidates ||
+    options.strategy?.rankSearchCandidates?.bind(options.strategy) ||
+    rankShadowHeartSearchCandidates;
+  const ranked = ranker(candidates, action, {
+    game: state,
+    player,
+    opponent,
+    source: sourceCard,
+  });
+  return Array.isArray(ranked) && ranked.length > 0 ? ranked : candidates;
+}
 
-        // Remover Leviathan da mão e special summon
-        player.hand.splice(action.index, 1);
-        const newCard = { ...card };
-        newCard.position = "attack";
-        newCard.isFacedown = false;
-        newCard.hasAttacked = false;
-        newCard.attacksUsedThisTurn = 0;
-        newCard.cannotAttackThisTurn = false; // Special summon pode atacar
-        player.field.push(newCard);
-      }
-      // Adicionar outros monstros com hand ignition aqui conforme necessário
-      break;
+function searchDeck(state, action, sourceCard, options = {}) {
+  const player = ensureZones(state.bot || {});
+  const filter = buildActionFilter(action);
+  const candidates = player.deck.filter((card) => cardMatchesFilter(card, filter));
+  if (candidates.length === 0) return null;
+  const chosen = rankSearchCandidates(candidates, action, state, sourceCard, options)[0];
+  if (!chosen) return null;
+  removeFromZone(player.deck, chosen);
+  player.hand.push(chosen);
+  return chosen;
+}
+
+function findEffect(card, timings = []) {
+  const effects = Array.isArray(card?.effects) ? card.effects : [];
+  return effects.find(
+    (effect) =>
+      effect &&
+      (timings.length === 0 || timings.includes(effect.timing)),
+  );
+}
+
+function buildActivationContext(state, sourceCard, effect, options = {}) {
+  if (!sourceCard) return null;
+  if (typeof options.buildActivationContextForEffect === "function") {
+    const built = options.buildActivationContextForEffect({
+      sourceCard,
+      effect,
+      player: state.bot,
+      game: state,
+    });
+    if (built) return built;
+  }
+  if (typeof options.strategy?.buildActivationContextForEffect === "function") {
+    const built = options.strategy.buildActivationContextForEffect({
+      sourceCard,
+      effect,
+      player: state.bot,
+      game: state,
+    });
+    if (built) return built;
+  }
+
+  const preferences = buildShadowHeartTargetPreferences(
+    sourceCard,
+    effect,
+    buildSimAnalysis(state),
+  );
+  return {
+    autoSelectTargets: true,
+    autoSelectSingleTarget: true,
+    logTargets: false,
+    actionContext: {
+      costPreferences: buildShadowHeartCostPreferences(buildSimAnalysis(state)),
+      targetPreferences: preferences.targetPreferences || {},
+      specialSummonPositions: preferences.specialSummonPositions || {},
+    },
+  };
+}
+
+function getSourceCardForAction(state, action) {
+  const player = ensureZones(state.bot || {});
+  if (action.type === "spell") {
+    const index = resolveSimulatedHandIndex(player, action, "spell");
+    return player.hand[index] || null;
+  }
+  if (action.type === "handIgnition") {
+    const index = resolveSimulatedHandIndex(player, action, "monster");
+    return player.hand[index] || null;
+  }
+  if (action.type === "spellTrapEffect") {
+    const index = Number.isInteger(action.zoneIndex) ? action.zoneIndex : action.index;
+    return player.spellTrap?.[index] || null;
+  }
+  if (action.type === "fieldEffect") return player.fieldSpell || null;
+  if (action.type === "monsterEffect") {
+    return player.field?.[action.fieldIndex] || null;
+  }
+  return null;
+}
+
+function prepareAction(state, action, options = {}) {
+  const prepared = { ...action };
+  const sourceCard = getSourceCardForAction(state, action);
+  const effect = sourceCard
+    ? findEffect(sourceCard, action.type === "handIgnition" ? ["ignition"] : [])
+    : null;
+  if (!prepared.activationContext && sourceCard) {
+    const activationContext = buildActivationContext(
+      state,
+      sourceCard,
+      effect,
+      options,
+    );
+    if (activationContext) prepared.activationContext = activationContext;
+  }
+  if (sourceCard?.name === "Polymerization" && !prepared.fusionTargetHint) {
+    const fusionPlan = evaluateShadowHeartFusionPlan(buildSimAnalysis(state));
+    if (fusionPlan?.targetName) prepared.fusionTargetHint = fusionPlan.targetName;
+  }
+  return prepared;
+}
+
+function chooseSpecialSummonPosition(card, action, state, options = {}) {
+  if (action.position && action.position !== "choice") return action.position;
+  const chooser =
+    options.chooseSpecialSummonPosition ||
+    options.strategy?.chooseSpecialSummonPosition?.bind(options.strategy);
+  if (typeof chooser === "function") {
+    const choice = chooser(card, {
+      game: state,
+      player: state.bot,
+      opponent: state.player,
+      source: action.sourceCard || null,
+      action,
+      activationContext: action.activationContext,
+    });
+    if (choice === "attack" || choice === "defense") return choice;
+  }
+  return "attack";
+}
+
+function applySummonState(card, action, state, options = {}) {
+  card.position = chooseSpecialSummonPosition(card, action, state, options);
+  card.isFacedown = action.facedown || false;
+  card.hasAttacked = false;
+  card.attacksUsedThisTurn = 0;
+  if (action.cannotAttackThisTurn) card.cannotAttackThisTurn = true;
+  else card.cannotAttackThisTurn = false;
+}
+
+function destroyBestOpponentCard(state) {
+  const opponent = ensureZones(state.player || {});
+  const candidates = [
+    ...(opponent.field || []),
+    opponent.fieldSpell,
+    ...(opponent.spellTrap || []),
+  ].filter(Boolean);
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => {
+    const aMonster = a.cardKind === "monster" ? 1 : 0;
+    const bMonster = b.cardKind === "monster" ? 1 : 0;
+    if (aMonster !== bMonster) return bMonster - aMonster;
+    return (b.atk || 0) - (a.atk || 0);
+  });
+  const target = candidates[0];
+  moveToZone(opponent, target, "graveyard");
+  return target;
+}
+
+function handleAfterSummon({ state, player, card, method, action, options = {} }) {
+  if (!card || card.isFacedown) return;
+  applyDarknessValleyBuffToCard(card, player);
+
+  if (
+    card.name === SH.arctroth &&
+    method === "tribute" &&
+    (state.player?.field || []).length > 0
+  ) {
+    const target = (state.player.field || [])
+      .filter((candidate) => candidate?.cardKind === "monster")
+      .slice()
+      .sort((a, b) => (b.atk || 0) - (a.atk || 0))[0];
+    if (target) {
+      moveToZone(state.player, target, "graveyard");
+      card.destroyedOpponentMonstersByEffect =
+        (card.destroyedOpponentMonstersByEffect || 0) + 1;
     }
   }
 
+  if (card.name === SH.voidMage && method === "normal") {
+    searchDeck(
+      state,
+      {
+        type: "search_any",
+        sourceName: SH.voidMage,
+        archetype: "Shadow-Heart",
+        cardKind: ["spell", "trap"],
+      },
+      card,
+      options,
+    );
+  }
+
+  if (
+    card.name === SH.imp &&
+    method === "normal" &&
+    canUseSimOpt(state, "shadow_heart_imp_on_summon")
+  ) {
+    const analysis = buildSimAnalysis(state);
+    const candidates = (player.hand || []).filter(
+      (candidate) =>
+        candidate &&
+        candidate.cardKind === "monster" &&
+        isShadowHeart(candidate) &&
+        (candidate.level || 0) <= 4 &&
+        candidate.name !== SH.imp,
+    );
+    const plan = chooseImpSpecialTargetName(analysis, candidates);
+    const chosen =
+      candidates.find((candidate) => candidate.name === plan.name) ||
+      candidates[0] ||
+      null;
+    if (chosen && (player.field || []).length < 5) {
+      removeFromZone(player.hand, chosen);
+      applySummonState(
+        chosen,
+        {
+          ...action,
+          position: plan.name === SH.gecko || plan.name === "Shadow-Heart Abyssal Eel"
+            ? "attack"
+            : "choice",
+        },
+        state,
+        options,
+      );
+      chosen.lastSummonMethod = "special";
+      chosen.lastSummonedFromZone = "hand";
+      chosen.sourceCard = SH.imp;
+      player.field.push(chosen);
+      markSimOpt(state, "shadow_heart_imp_on_summon");
+      handleAfterSummon({
+        state,
+        player,
+        card: chosen,
+        method: "special",
+        action,
+        options,
+      });
+    }
+  }
+
+  if (
+    card.name === SH.gecko &&
+    method === "special" &&
+    canUseSimOpt(state, "shadow_heart_gecko_special_search")
+  ) {
+    const chosen = searchDeck(
+      state,
+      {
+        type: "search_any",
+        sourceName: SH.gecko,
+        archetype: "Shadow-Heart",
+        cardKind: "monster",
+        minLevel: 8,
+        maxLevel: 8,
+      },
+      card,
+      options,
+    );
+    if (chosen) markSimOpt(state, "shadow_heart_gecko_special_search");
+  }
+}
+
+function simulateNormalSummon(state, action, options = {}) {
+  const player = ensureZones(state.bot || {});
+  const handIndex = resolveSimulatedHandIndex(player, action, "monster");
+  const card = player.hand[handIndex];
+  if (!card) return true;
+
+  const tributeInfo = getTributeRequirementFor(card, player);
+  const tributesNeeded = tributeInfo.tributesNeeded || 0;
+  if ((player.field || []).length < tributesNeeded) return true;
+
+  const tributeIndices =
+    tributesNeeded > 0
+      ? selectBestTributes(player.field, tributesNeeded, card, {
+          botState: player,
+          oppField: state.player?.field || [],
+          game: state,
+        })
+      : [];
+  if (tributeIndices.length < tributesNeeded) return true;
+
+  const tributes = [];
+  tributeIndices
+    .slice()
+    .sort((a, b) => b - a)
+    .forEach((idx) => {
+      const tribute = player.field[idx];
+      if (!tribute) return;
+      tributes.push(tribute);
+      player.field.splice(idx, 1);
+      player.graveyard.push(tribute);
+    });
+
+  player.hand.splice(handIndex, 1);
+  const summoned = { ...card };
+  summoned.position = action.position || "attack";
+  summoned.isFacedown = action.facedown || false;
+  summoned.hasAttacked = false;
+  summoned.attacksUsedThisTurn = 0;
+  summoned.cannotAttackThisTurn = action.cannotAttackThisTurn === true;
+  summoned.lastSummonMethod = tributesNeeded > 0 ? "tribute" : "normal";
+  summoned.lastSummonedFromZone = "hand";
+  summoned.lastTributeMaterialNames = tributes.map((tribute) => tribute.name);
+  summoned.lastTributeMaterialCount = tributes.length;
+  player.field.push(summoned);
+  player.summonCount = (player.summonCount || 0) + 1;
+
+  handleAfterSummon({
+    state,
+    player,
+    card: summoned,
+    method: summoned.lastSummonMethod,
+    action,
+    options,
+  });
+  return true;
+}
+
+function simulateCathedralEffect(state, action, options = {}) {
+  const player = ensureZones(state.bot || {});
+  const zoneIndex = Number.isInteger(action.zoneIndex) ? action.zoneIndex : action.index;
+  const card = player.spellTrap?.[zoneIndex];
+  if (!card || card.name !== SH.cathedral) return false;
+  if (card.isFacedown) return true;
+  if ((player.field || []).length >= 5) return true;
+
+  const counterCount = action.cathedralPlan?.counterCount || getCounterCount(card);
+  if (counterCount <= 0) return true;
+  const maxAtk = counterCount * 500;
+  const candidates = player.deck.filter(
+    (candidate) =>
+      candidate &&
+      candidate.cardKind === "monster" &&
+      isShadowHeart(candidate) &&
+      (candidate.atk || 0) <= maxAtk,
+  );
+  const targetName = action.cathedralPlan?.targetName || null;
+  const chosen =
+    candidates.find((candidate) => candidate.name === targetName) ||
+    chooseCathedralSummonTarget(candidates, buildSimAnalysis(state)).card;
+  if (!chosen) return true;
+
+  removeFromZone(player.deck, chosen);
+  applySummonState(chosen, { ...action, position: "attack" }, state, options);
+  chosen.lastSummonMethod = "special";
+  chosen.lastSummonedFromZone = "deck";
+  chosen.sourceCard = SH.cathedral;
+  player.field.push(chosen);
+
+  player.spellTrap.splice(zoneIndex, 1);
+  player.graveyard.push(card);
+
+  handleAfterSummon({
+    state,
+    player,
+    card: chosen,
+    method: "special",
+    action,
+    options,
+  });
+  return true;
+}
+
+function handleEffectActivated({ state, card }) {
+  const player = ensureZones(state.bot || {});
+  if (card?.name === SH.rage) {
+    const scale = (player.field || []).find(
+      (monster) =>
+        monster?.name === SH.scale &&
+        !monster.isFacedown &&
+        (player.field || []).filter((entry) => entry?.cardKind === "monster").length === 1,
+    );
+    if (scale) {
+      scale.tempAtkBoost = (scale.tempAtkBoost || 0) + 700;
+      scale.tempDefBoost = (scale.tempDefBoost || 0) + 700;
+      scale.canMakeSecondAttackThisTurn = true;
+      scale.secondAttackUsedThisTurn = false;
+      player.forbidDirectAttacksThisTurn = true;
+    }
+  }
+}
+
+function buildGenericOptions(state, action, baseOptions = {}) {
+  const options = {
+    ...baseOptions,
+    guardLabel: "ShadowHeartSimulation",
+    strategy: baseOptions.strategy,
+    getTributeRequirementFor,
+    selectBestTributes,
+    rankSearchCandidates: baseOptions.rankSearchCandidates || rankShadowHeartSearchCandidates,
+    evaluateRecruitCandidate:
+      baseOptions.evaluateRecruitCandidate || evaluateShadowHeartRecruitCandidate,
+    chooseSpecialSummonPosition: baseOptions.chooseSpecialSummonPosition,
+    placeSpellCard: (simState, card) =>
+      placeShadowHeartSpellCard(simState, card, baseOptions),
+    actionOverrides: {
+      summon: ({ state: simState, action: simAction, options: simOptions }) =>
+        simulateNormalSummon(simState, simAction, simOptions),
+      spellTrapEffect: ({ state: simState, action: simAction, options: simOptions }) =>
+        simulateCathedralEffect(simState, simAction, simOptions),
+      fieldEffect: ({ state: simState }) => {
+        if (simState.bot?.fieldSpell?.name !== SH.valley) return false;
+        applyDarknessValleyBuffs(simState.bot);
+        return true;
+      },
+    },
+    onAfterSpecialSummon: ({ state: simState, player, card, action: simAction }) => {
+      handleAfterSummon({
+        state: simState,
+        player,
+        card,
+        method: "special",
+        action: simAction,
+        options,
+      });
+    },
+    onFusionSummon: ({ state: simState, fusionCard }) => {
+      applyDarknessValleyBuffToCard(fusionCard, simState.bot);
+      if (fusionCard?.name === SH.demonDragon) {
+        destroyBestOpponentCard(simState);
+      }
+    },
+    onEffectActivated: (ctx) => handleEffectActivated(ctx),
+  };
+
+  if (!options.chooseSpecialSummonPosition && options.strategy?.chooseSpecialSummonPosition) {
+    options.chooseSpecialSummonPosition =
+      options.strategy.chooseSpecialSummonPosition.bind(options.strategy);
+  }
+
+  return options;
+}
+
+export function simulateMainPhaseAction(state, action, placeSpellCardOrOptions = null) {
+  if (!action) return state;
+  ensureZones(state.bot || {});
+  ensureZones(state.player || {});
+  const baseOptions = normalizeOptions(placeSpellCardOrOptions);
+  const preparedAction = prepareAction(state, action, baseOptions);
+  const options = buildGenericOptions(state, preparedAction, baseOptions);
+  applyGenericSimulatedMainPhaseAction(state, preparedAction, options);
   return state;
 }
 
-/**
- * Simula efeito de uma spell específica.
- * @param {Object} state
- * @param {Object} card
- */
-export function simulateSpellEffect(state, card) {
-  const player = state.bot;
-  const opponent = state.player;
-
-  switch (card.name) {
-    case "Polymerization": {
-      // Simula fusão
-      const scaleIdx = player.field.findIndex(
-        (c) => c.name === "Shadow-Heart Scale Dragon",
-      );
-      const materialIdx = player.field.findIndex(
-        (c, i) => i !== scaleIdx && isShadowHeart(c) && (c.level || 0) >= 5,
-      );
-
-      if (scaleIdx !== -1) {
-        player.graveyard.push(player.field[scaleIdx]);
-        player.field.splice(scaleIdx, 1);
-      }
-      if (materialIdx !== -1 && materialIdx !== scaleIdx) {
-        const adjustedIdx =
-          materialIdx > scaleIdx ? materialIdx - 1 : materialIdx;
-        player.graveyard.push(player.field[adjustedIdx]);
-        player.field.splice(adjustedIdx, 1);
-      }
-
-      if (player.field.length < 5) {
-        player.field.push({
-          name: "Shadow-Heart Demon Dragon",
-          atk: 3000,
-          def: 3000,
-          level: 10,
-          position: "attack",
-          hasAttacked: false,
-          cardKind: "monster",
-          archetypes: ["Shadow-Heart"],
-        });
-      }
-      break;
-    }
-    case "Shadow-Heart Covenant": {
-      if (
-        (player.field?.length || 0) > 0 ||
-        (player.spellTrap?.length || 0) > 0 ||
-        player.fieldSpell
-      ) {
-        break;
-      }
-
-      // Searcher: Paga 800 LP, adiciona 1 Shadow-Heart da deck à mão
-      player.lp = Math.max(0, (player.lp || 8000) - 800);
-
-      // Simula adicionar melhor carta Shadow-Heart (placeholder)
-      player.hand.push({
-        placeholder: true,
-        archetype: "Shadow-Heart",
-        name: "Shadow-Heart (searched)",
-      });
-      break;
-    }
-    case "Shadow-Heart Infusion": {
-      // Revive: Descarta 2, special summon Shadow-Heart do GY
-      if (player.hand.length >= 2 && player.field.length < 5) {
-        const discards = player.hand.splice(0, 2);
-        player.graveyard.push(...discards);
-
-        const target = player.graveyard
-          .filter((c) => isShadowHeart(c) && c.cardKind === "monster")
-          .sort((a, b) => (b.atk || 0) - (a.atk || 0))[0];
-
-        if (target) {
-          const idx = player.graveyard.indexOf(target);
-          player.graveyard.splice(idx, 1);
-          target.position = "attack";
-          target.cannotAttackThisTurn = true; // Special summon restriction
-          player.field.push(target);
-        }
-      }
-      break;
-    }
-    case "Darkness Valley": {
-      player.fieldSpell = { ...card };
-      player.field.forEach((m) => {
-        if (isShadowHeart(m)) {
-          m.atk = (m.atk || 0) + 300;
-        }
-      });
-      break;
-    }
-    case "Shadow-Heart Purge": {
-      const discard = player.hand.find(
-        (c) =>
-          c &&
-          c !== card &&
-          (c.archetype === "Shadow-Heart" ||
-            (Array.isArray(c.archetypes) &&
-              c.archetypes.includes("Shadow-Heart"))),
-      );
-      const target = opponent.field
-        .filter((c) => c && !c.isFacedown)
-        .slice()
-        .sort((a, b) => {
-          const aDestroyed = (a.atk || 0) > 0 && (a.atk || 0) <= 1000;
-          const bDestroyed = (b.atk || 0) > 0 && (b.atk || 0) <= 1000;
-          if (aDestroyed !== bDestroyed) return bDestroyed - aDestroyed;
-          return (b.atk || 0) - (a.atk || 0);
-        })[0];
-      if (discard && target) {
-        player.hand.splice(player.hand.indexOf(discard), 1);
-        player.graveyard.push(discard);
-        const previousAtk = target.atk || 0;
-        target.atk = Math.max(0, previousAtk - 1000);
-        target.tempAtkBoost = (target.tempAtkBoost || 0) + target.atk - previousAtk;
-        if (previousAtk > 0 && target.atk === 0) {
-          opponent.field.splice(opponent.field.indexOf(target), 1);
-          opponent.graveyard.push(target);
-        }
-      }
-      break;
-    }
-    case "Shadow-Heart Battle Hymn": {
-      // Buff: +500 ATK para todos Shadow-Heart
-      player.field.forEach((m) => {
-        if (isShadowHeart(m)) {
-          m.tempAtkBoost = (m.tempAtkBoost || 0) + 500;
-        }
-      });
-      break;
-    }
-    case "Shadow-Heart Rage": {
-      // OTK spell: Se Scale Dragon está sozinho, +700/+700 e 1 ataque extra
-      const scale = player.field.find(
-        (c) => c.name === "Shadow-Heart Scale Dragon",
-      );
-      if (scale && player.field.length === 1) {
-        scale.tempAtkBoost = (scale.tempAtkBoost || 0) + 700;
-        scale.tempDefBoost = (scale.tempDefBoost || 0) + 700;
-        scale.canMakeSecondAttackThisTurn = true;
-        scale.secondAttackUsedThisTurn = false;
-        player.forbidDirectAttacksThisTurn = true;
-      }
-      break;
-    }
-    case "Monster Reborn": {
-      if (player.field.length >= 5) break;
-      const pool = [...player.graveyard, ...opponent.graveyard];
-      const best = pool
-        .filter((c) => c.cardKind === "monster")
-        .sort((a, b) => (b.atk || 0) - (a.atk || 0))[0];
-      if (best) {
-        const grave = player.graveyard.includes(best)
-          ? player.graveyard
-          : opponent.graveyard;
-        grave.splice(grave.indexOf(best), 1);
-        best.position = "attack";
-        player.field.push(best);
-      }
-      break;
-    }
-    case "Arcane Surge": {
-      player.hand.push({ placeholder: true }, { placeholder: true });
-      break;
-    }
-    case "Infinity Searcher": {
-      player.hand.push({ placeholder: true });
-      break;
-    }
-  }
+export function simulateSpellEffect(state, card, placeSpellCardOrOptions = null) {
+  if (!card) return state;
+  ensureZones(state.bot || {});
+  ensureZones(state.player || {});
+  const baseOptions = normalizeOptions(placeSpellCardOrOptions);
+  const effect = findEffect(card, ["on_play"]);
+  const activationContext = buildActivationContext(state, card, effect, baseOptions);
+  const options = buildGenericOptions(state, { type: "spell", cardName: card.name }, {
+    ...baseOptions,
+    activationContext,
+  });
+  simulateGenericSpellEffect(state, card, {
+    ...options,
+    sourceCard: card,
+    activationContext,
+  });
+  handleEffectActivated({ state, card });
+  return state;
 }

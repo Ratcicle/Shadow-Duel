@@ -45,8 +45,8 @@
       "description": "O monstro equipado pode atacar 1 vez adicional durante cada Fase de Batalha. Se este card for enviado para o Cemitério: escolha 1 Magia/Armadilha que seu oponente controla; destrua-a."
     },
     "12": {
-      "name": "Dragão Radiante",
-      "description": "Se esse card for invocado por invocação-Normal: Você pode adicionar um monstro 'Luminarca' do seu Deck à sua mão. Durante sua Fase de Espera, uma vez por turno: ganhe 300 PV para cada monstro 'Luminarca' que você controla."
+      "name": "Dragão Luminoso",
+      "description": "Se você não controlar monstros, você pode Invocar este card por Invocação-Especial da sua mão. Se um monstro do Tipo Dragão for descartado da sua mão para o Cemitério enquanto este card estiver com a face para cima no campo: você pode escolher 1 monstro do Tipo Dragão no seu Cemitério com nome diferente do monstro descartado; adicione-o à sua mão. Você só pode usar cada efeito de \"Dragão Luminoso\" uma vez por turno."
     },
     "13": {
       "name": "Polimerização",
@@ -362,7 +362,7 @@
     },
     "26": {
       "name": "Rugido Infernal",
-      "description": "Se você controlar um monstro Dragão de Nível 7 ou maior: destrua até 2 cards de Magia/Armadilha que seu oponente controla. Você pode banir este card do seu Cemitério; adicione 1 'Pico Escarpado dos Dragões' do seu Deck à sua mão."
+      "description": "Se você controlar um monstro Dragão de Nível 7 ou maior: destrua até 1 card de Magia/Armadilha que seu oponente controla. Você pode banir este card do seu Cemitério; adicione 1 'Pico Escarpado dos Dragões' do seu Deck à sua mão."
     },
     "27": {
       "name": "Pico Escarpado dos Dragões",
@@ -370,7 +370,7 @@
     },
     "28": {
       "name": "Dragão Serpente Abissal",
-      "description": "Não pode ser Invocado por Invocação-Especial. Durante sua Fase Principal: você pode escolher 1 monstro que seu oponente controla; envie este card e o alvo para o Cemitério e, durante a próxima Fase de Espera do seu oponente, Invoque-os por Invocação-Especial. Se você escolheu um Monstro de Fusão ou de Ascensão como alvo: este card ganha 800 de ATK até o final do seu próximo turno. Você pode usar cada efeito de 'Dragão Serpente Abissal' uma vez por turno."
+      "description": "Durante sua Fase Principal: você pode escolher 1 monstro que seu oponente controla; envie este card e o alvo para o Cemitério e, durante a próxima Fase de Espera do seu oponente, Invoque-os por Invocação-Especial. Se você escolheu um Monstro de Fusão ou de Ascensão como alvo: este card ganha 800 de ATK até o final do seu próximo turno. Você pode usar cada efeito de 'Dragão Serpente Abissal' uma vez por turno."
     },
     "29": {
       "name": "Dragão de Cristal Purificado",
@@ -474,11 +474,19 @@
     },
     "256": {
       "name": "Estrelas Convergentes",
-      "description": "Descarte 1 card; reduza o nível de todos os monstros na sua mão em 1 até o fim do turno."
+      "description": "Descarte 1 card; reduza o nível de todos os monstros na sua mão em 2 até o fim do turno."
     },
     "257": {
       "name": "Despertar do Dragão Extremo",
-      "description": "Você pode enviar 2 monstros do Tipo Dragão que você controla para o Cemitério; Invoque por Invocação-Especial 1 monstro do Tipo Dragão de Nível 9 ou maior da sua mão. Você só pode usar este efeito de \"Despertar do Dragão Extremo\" uma vez por turno."
+      "description": "Quando este card for ativado: adicione 1 monstro do Tipo Dragão de Nível 8 ou maior do seu Deck à sua mão. Uma vez por turno: você pode enviar 2 monstros do Tipo Dragão que você controla para o Cemitério; Invoque por Invocação-Especial 1 monstro do Tipo Dragão de Nível 8 ou maior da sua mão. Você só pode ativar 1 \"Despertar do Dragão Extremo\" por turno."
+    },
+    "259": {
+      "name": "Dragão Cósmico Radiante",
+      "description": "3 monstros do Tipo Dragão, incluindo 1 monstro de Luz. Se este card for Invocado por Invocação-Fusão: você pode escolher de 1 a 5 cards no seu Cemitério; embaralhe-os no Deck e, depois, compre 1 card. Você não sofre dano de batalha em batalhas envolvendo este card. Se este card for destruído em batalha ou por efeito de card: você pode Invocar por Invocação-Especial 1 monstro do Tipo Dragão do seu Cemitério, exceto \"Dragão Cósmico Radiante\". Você só pode usar cada efeito de \"Dragão Cósmico Radiante\" uma vez por turno."
+    },
+    "260": {
+      "name": "Dragão Cósmico Arco-Íris",
+      "description": "Material de Ascensão: \"Dragão de Cristal Purificado\". Requisito: o material deve ter ativado seus efeitos 3 vezes neste duelo. Uma vez por turno: escolha 1 monstro do Tipo Dragão que você controla; ele não pode ser destruído em batalha ou por efeitos de card até o final do próximo turno. Se este card destruir um monstro em batalha: ganhe PV igual ao ATK original do monstro destruído. Você pode banir este card do seu Cemitério; envie de 1 a 3 monstros \"Dragão Extremo\" do seu Deck para o Cemitério."
     },
     "255": {
       "name": "Dragão Bahamut Supremo",

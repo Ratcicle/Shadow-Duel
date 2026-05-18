@@ -223,19 +223,26 @@ body {
 
 #preview-info h2 {
   color: var(--accent-color);
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 #preview-stats {
   display: flex;
   gap: 20px;
-  margin-bottom: 10px;
+  margin-bottom: 14px;
   font-weight: bold;
 }
 
 #preview-level {
+  color: #fff;
+  margin-bottom: 8px;
+  font-weight: 700;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+.monster-level-number {
   color: #ffd700;
-  margin-bottom: 15px;
 }
 
 #preview-desc {
@@ -2323,6 +2330,13 @@ body {
   flex-wrap: wrap;
   gap: 10px;
   font-weight: 700;
+}
+
+#deck-preview-level {
+  color: #fff;
+  font-weight: 700;
+  line-height: 1.3;
+  text-transform: uppercase;
 }
 
 #deck-preview-name,

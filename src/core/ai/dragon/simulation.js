@@ -143,6 +143,34 @@ function simulateDragonSpellEffect(state, card, action) {
   const player = state.bot;
 
   switch (card.name) {
+    case "Extreme Dragon Awakening": {
+      const candidates = (player.deck || [])
+        .map((candidate, index) => ({ candidate, index }))
+        .filter(
+          ({ candidate }) =>
+            candidate?.cardKind === "monster" &&
+            candidate.type === "Dragon" &&
+            (candidate.level || 0) >= 8,
+        )
+        .sort((a, b) => {
+          const scoreA =
+            (isExtremeDragon(a.candidate) ? 100000 : 0) +
+            (a.candidate.atk || 0) +
+            (a.candidate.level || 0) * 10;
+          const scoreB =
+            (isExtremeDragon(b.candidate) ? 100000 : 0) +
+            (b.candidate.atk || 0) +
+            (b.candidate.level || 0) * 10;
+          return scoreB - scoreA;
+        });
+
+      if (candidates.length > 0) {
+        const searched = player.deck.splice(candidates[0].index, 1)[0];
+        player.hand.push(searched);
+      }
+      break;
+    }
+
     case "Converging Stars": {
       // Step 1: Discard 1 card (pick least valuable from remaining hand)
       if (player.hand.length > 0) {
@@ -151,10 +179,10 @@ function simulateDragonSpellEffect(state, card, action) {
         player.graveyard.push(discarded);
       }
 
-      // Step 2: Reduce all hand monster levels by 1
+      // Step 2: Reduce all hand monster levels by 2
       player.hand = player.hand.map((c) => {
         if (c.cardKind === "monster" && (c.level || 0) > 1) {
-          return { ...c, level: (c.level || 0) - 1 };
+          return { ...c, level: Math.max(1, (c.level || 0) - 2) };
         }
         return c;
       });

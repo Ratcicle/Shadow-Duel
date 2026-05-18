@@ -267,7 +267,16 @@ export async function finishCombat(attacker, target, options = {}) {
     amount,
     shouldHeal = false,
   ) => {
-    if (!player || amount <= 0) return;
+    if (!player || amount <= 0) return 0;
+    if (
+      cardInvolved?.preventsBattleDamageToController === true &&
+      player.id === cardInvolved?.owner
+    ) {
+      this.ui?.log?.(
+        `${cardInvolved.name} prevents battle damage to its controller.`,
+      );
+      return 0;
+    }
     if (shouldHeal && player.id === cardInvolved?.owner) {
       player.gainLP(amount);
     } else {
@@ -276,6 +285,7 @@ export async function finishCombat(attacker, target, options = {}) {
         cause: "battle",
       });
     }
+    return amount;
   };
 
   const logBattleResult = (message) => {
@@ -303,10 +313,17 @@ export async function finishCombat(attacker, target, options = {}) {
     if (attacker.atk > target.atk) {
       const defender = target.owner === "player" ? this.player : this.bot;
       const damage = attacker.atk - target.atk;
-      totalDamageDealt = damage;
-      applyBattleDamage(defender, target, damage, defenderHealsOnBattleDamage);
+      const appliedDamage = applyBattleDamage(
+        defender,
+        target,
+        damage,
+        defenderHealsOnBattleDamage,
+      );
+      totalDamageDealt = appliedDamage;
       logBattleResult(
-        `${attacker.name} destroyed ${target.name} and dealt ${damage} damage.`,
+        appliedDamage > 0
+          ? `${attacker.name} destroyed ${target.name} and dealt ${appliedDamage} damage.`
+          : `${attacker.name} destroyed ${target.name}, but no battle damage was taken.`,
       );
 
       logBattleDestroyCheck("attacker over atk target");
@@ -347,15 +364,17 @@ export async function finishCombat(attacker, target, options = {}) {
     } else if (attacker.atk < target.atk) {
       const attPlayer = attacker.owner === "player" ? this.player : this.bot;
       const damage = target.atk - attacker.atk;
-      totalDamageDealt = damage;
-      applyBattleDamage(
+      const appliedDamage = applyBattleDamage(
         attPlayer,
         attacker,
         damage,
         attackerHealsOnBattleDamage,
       );
+      totalDamageDealt = appliedDamage;
       logBattleResult(
-        `${attacker.name} was destroyed by ${target.name} and took ${damage} damage.`,
+        appliedDamage > 0
+          ? `${attacker.name} was destroyed by ${target.name} and took ${appliedDamage} damage.`
+          : `${attacker.name} was destroyed by ${target.name}, but no battle damage was taken.`,
       );
 
       logBattleDestroyCheck("attacker loses to atk target");
@@ -472,14 +491,17 @@ export async function finishCombat(attacker, target, options = {}) {
     if (attacker.atk > target.def) {
       if (attacker.piercing) {
         const damage = attacker.atk - target.def;
-        applyBattleDamage(
+        const appliedDamage = applyBattleDamage(
           defender,
           target,
           damage,
           defenderHealsOnBattleDamage,
         );
+        totalDamageDealt = appliedDamage;
         logBattleResult(
-          `${attacker.name} pierced ${target.name} for ${damage} damage.`,
+          appliedDamage > 0
+            ? `${attacker.name} pierced ${target.name} for ${appliedDamage} damage.`
+            : `${attacker.name} pierced ${target.name}, but no battle damage was taken.`,
         );
       }
       logBattleDestroyCheck("defense target destruction check");
@@ -512,14 +534,17 @@ export async function finishCombat(attacker, target, options = {}) {
     } else if (attacker.atk < target.def) {
       const attPlayer = attacker.owner === "player" ? this.player : this.bot;
       const damage = target.def - attacker.atk;
-      applyBattleDamage(
+      const appliedDamage = applyBattleDamage(
         attPlayer,
         attacker,
         damage,
         attackerHealsOnBattleDamage,
       );
+      totalDamageDealt = appliedDamage;
       logBattleResult(
-        `${attacker.name} took ${damage} damage attacking ${target.name}.`,
+        appliedDamage > 0
+          ? `${attacker.name} took ${appliedDamage} damage attacking ${target.name}.`
+          : `${attacker.name} attacked ${target.name}, but no battle damage was taken.`,
       );
     } else {
       logBattleResult(

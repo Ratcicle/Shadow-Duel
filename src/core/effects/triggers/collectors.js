@@ -14,6 +14,46 @@ function matchesLastSummonMethod(card, allowed) {
   return allowedMethods.includes(card?.lastSummonMethod || null);
 }
 
+function asArray(value) {
+  return Array.isArray(value) ? value : [value];
+}
+
+function matchesZoneFilter(actualZone, filterValue) {
+  if (!filterValue || filterValue === "any") return true;
+  return asArray(filterValue).includes(actualZone);
+}
+
+function matchesOwnerFilter(filterValue, sourceOwner, eventOwner) {
+  if (!filterValue || filterValue === "any") return true;
+  const sourceOwnerId = sourceOwner?.id || sourceOwner || null;
+  const eventOwnerId = eventOwner?.id || eventOwner || null;
+  if (filterValue === "self") return sourceOwnerId === eventOwnerId;
+  if (filterValue === "opponent") return sourceOwnerId !== eventOwnerId;
+  return asArray(filterValue).includes(eventOwnerId);
+}
+
+function cardMatchesEventFilters(engine, eventCard, filters, context = {}) {
+  if (!filters || typeof filters !== "object") return true;
+  if (!eventCard) return false;
+
+  if (!matchesOwnerFilter(filters.owner, context.sourceOwner, context.eventOwner)) {
+    return false;
+  }
+  if (!matchesZoneFilter(context.fromZone, filters.fromZone)) {
+    return false;
+  }
+  if (!matchesZoneFilter(context.toZone, filters.toZone)) {
+    return false;
+  }
+
+  const cardFilters = { ...filters };
+  delete cardFilters.owner;
+  delete cardFilters.fromZone;
+  delete cardFilters.toZone;
+
+  return engine.cardMatchesFilters(eventCard, cardFilters);
+}
+
 /**
  * Main dispatcher for event trigger collection.
  * Routes to specific collector based on event name.
@@ -1184,14 +1224,12 @@ export async function collectEffectTargetedTriggers(payload) {
  */
 export async function collectCardToGraveTriggers(payload) {
   const entries = [];
-  const orderRule = "card owner only; source: card";
+  const orderRule =
+    "card owner self-source -> card owner field observers -> opponent field observers";
 
   const { card, player, opponent, fromZone, toZone } = payload || {};
   const actionContext = payload?.actionContext || null;
   if (!card || !player) return { entries, orderRule };
-  if (!card.effects || !Array.isArray(card.effects)) {
-    return { entries, orderRule };
-  }
 
   const resolvedOpponent = opponent || this.game?.getOpponent?.(player);
 
@@ -1206,26 +1244,19 @@ export async function collectCardToGraveTriggers(payload) {
       `[handleCardToGraveEvent] ${card.name} entered graveyard. card.owner="${card.owner}", ctx.player.id="${player.id}", ctx.opponent.id="${resolvedOpponent?.id}", wasDestroyed=${payload?.wasDestroyed}`,
     );
     console.log(
-      `[handleCardToGraveEvent] ${card.name} entered graveyard from ${fromZone}. Card has ${card.effects.length} effects.`,
+      `[handleCardToGraveEvent] ${card.name} entered graveyard from ${fromZone}. Card has ${
+        Array.isArray(card.effects) ? card.effects.length : 0
+      } effects.`,
     );
     this._graveLogCache.lastLog = now;
   }
 
-  const ctx = {
-    source: card,
-    player,
-    opponent: resolvedOpponent,
-    fromZone,
-    toZone,
-    actionContext,
-  };
-
-  for (const effect of card.effects) {
+  const collectFromSource = (sourceCard, owner, other, sourceZone, effect) => {
     if (!effect || effect.timing !== "on_event") {
       if (devMode) {
         console.log(`[handleCardToGraveEvent] Skipping effect: not on_event`);
       }
-      continue;
+      return;
     }
     if (effect.event !== "card_to_grave") {
       if (devMode) {
@@ -1233,22 +1264,48 @@ export async function collectCardToGraveTriggers(payload) {
           `[handleCardToGraveEvent] Skipping effect: event is ${effect.event}, not card_to_grave`,
         );
       }
-      continue;
+      return;
     }
 
-    if (this.isEffectNegated(card)) {
+    if (this.isEffectNegated(sourceCard)) {
       console.log(
-        `[handleCardToGraveEvent] ${card.name} effects are negated, skipping effect.`,
+        `[handleCardToGraveEvent] ${sourceCard.name} effects are negated, skipping effect.`,
       );
-      continue;
+      return;
+    }
+
+    if (effect.requireZone && sourceZone !== effect.requireZone) {
+      if (devMode) {
+        console.log(
+          `[handleCardToGraveEvent] Skipping ${effect.id}: requireZone ${effect.requireZone} but source zone was ${sourceZone}.`,
+        );
+      }
+      return;
     }
 
     // Check requireFaceup condition (rare case: card destroyed while facedown)
-    if (effect.requireFaceup === true && card.isFacedown === true) {
+    if (effect.requireFaceup === true && sourceCard.isFacedown === true) {
       console.log(
-        `[card_to_grave] Skipping effect on ${card.name}: requireFaceup=true but card was facedown`,
+        `[card_to_grave] Skipping effect on ${sourceCard.name}: requireFaceup=true but card was facedown`,
       );
-      continue;
+      return;
+    }
+
+    if (
+      effect.eventCardFilters &&
+      !cardMatchesEventFilters(this, card, effect.eventCardFilters, {
+        sourceOwner: owner,
+        eventOwner: player,
+        fromZone,
+        toZone,
+      })
+    ) {
+      if (devMode) {
+        console.log(
+          `[handleCardToGraveEvent] Skipping ${effect.id}: event card filters did not match ${card.name}.`,
+        );
+      }
+      return;
     }
 
     console.log(
@@ -1259,13 +1316,13 @@ export async function collectCardToGraveTriggers(payload) {
       console.log(
         `[handleCardToGraveEvent] Skipping ${effect.id}: requires destruction.`,
       );
-      continue;
+      return;
     }
 
     if (effect.requireSelfWasSummonedBy) {
-      const lastSummonMethod = card.lastSummonMethod || null;
+      const lastSummonMethod = sourceCard.lastSummonMethod || null;
 
-      if (!matchesLastSummonMethod(card, effect.requireSelfWasSummonedBy)) {
+      if (!matchesLastSummonMethod(sourceCard, effect.requireSelfWasSummonedBy)) {
         const allowedMethods = Array.isArray(effect.requireSelfWasSummonedBy)
           ? effect.requireSelfWasSummonedBy
           : [effect.requireSelfWasSummonedBy];
@@ -1274,7 +1331,7 @@ export async function collectCardToGraveTriggers(payload) {
             "/",
           )}, but was "${lastSummonMethod}".`,
         );
-        continue;
+        return;
       }
     }
 
@@ -1290,7 +1347,7 @@ export async function collectCardToGraveTriggers(payload) {
         console.log(
           `[handleCardToGraveEvent] Skipping ${effect.id}: destruction source was not controlled by opponent.`,
         );
-        continue;
+        return;
       }
     }
 
@@ -1304,39 +1361,53 @@ export async function collectCardToGraveTriggers(payload) {
           console.log(
             `[handleCardToGraveEvent] Skipping ${effect.id}: requires destruction by battle, but cause was "${destroyCause}".`,
           );
-          continue;
+          return;
         }
       } else if (condType === "destroyed_by_effect") {
         if (destroyCause !== "effect") {
           console.log(
             `[handleCardToGraveEvent] Skipping ${effect.id}: requires destruction by effect, but cause was "${destroyCause}".`,
           );
-          continue;
+          return;
         }
       } else if (condType === "destroyed_by_battle_or_effect") {
         if (destroyCause !== "battle" && destroyCause !== "effect") {
           console.log(
             `[handleCardToGraveEvent] Skipping ${effect.id}: requires destruction by battle or effect, but cause was "${destroyCause}".`,
           );
-          continue;
+          return;
         }
       }
     }
 
-    const optCheck = this.checkOncePerTurn(card, player, effect);
+    const ctx = {
+      source: sourceCard,
+      player: owner,
+      opponent: other,
+      eventCard: card,
+      movedCard: card,
+      eventPlayer: player,
+      eventOpponent: resolvedOpponent,
+      discardedCard: fromZone === "hand" ? card : null,
+      fromZone,
+      toZone,
+      actionContext,
+    };
+
+    const optCheck = this.checkOncePerTurn(sourceCard, owner, effect);
     if (!optCheck.ok) {
       console.log(
         `[handleCardToGraveEvent] Once per turn check failed: ${optCheck.reason}`,
       );
-      continue;
+      return;
     }
 
-    const duelCheck = this.checkOncePerDuel(card, player, effect);
+    const duelCheck = this.checkOncePerDuel(sourceCard, owner, effect);
     if (!duelCheck.ok) {
       console.log(
         `[handleCardToGraveEvent] Once per duel check failed: ${duelCheck.reason}`,
       );
-      continue;
+      return;
     }
 
     console.log(
@@ -1351,12 +1422,12 @@ export async function collectCardToGraveTriggers(payload) {
       console.log(
         `[handleCardToGraveEvent] Skipping: fromZone mismatch (${effect.fromZone} !== ${fromZone})`,
       );
-      continue;
+      return;
     }
 
     console.log(
       `[card_to_grave] About to resolve targets for ${
-        card.name
+        sourceCard.name
       }. Targets definition: ${JSON.stringify(effect.targets)}`,
     );
 
@@ -1366,9 +1437,7 @@ export async function collectCardToGraveTriggers(payload) {
     // do oponente em campo.
     if (Array.isArray(effect.targets) && effect.targets.length > 0) {
       const precheckCtx = {
-        source: card,
-        player,
-        opponent: resolvedOpponent,
+        ...ctx,
         fromZone,
         toZone,
         actionContext,
@@ -1387,21 +1456,21 @@ export async function collectCardToGraveTriggers(payload) {
       }
       if (unmetRequiredTarget) {
         console.log(
-          `[card_to_grave] Skipping trigger ${effect.id} on ${card.name}: no valid candidates for required target "${unmetRequiredTarget}"`,
+          `[card_to_grave] Skipping trigger ${effect.id} on ${sourceCard.name}: no valid candidates for required target "${unmetRequiredTarget}"`,
         );
-        continue;
+        return;
       }
     }
 
     const activationContext = this.buildTriggerActivationContext(
-      card,
-      player,
-      toZone || this.findCardZone(player, card) || "graveyard",
+      sourceCard,
+      owner,
+      sourceZone || this.findCardZone(owner, sourceCard) || toZone || "graveyard",
     );
 
     const entry = this.buildTriggerEntry({
-      sourceCard: card,
-      owner: player,
+      sourceCard,
+      owner,
       effect,
       ctx,
       activationContext,
@@ -1411,6 +1480,33 @@ export async function collectCardToGraveTriggers(payload) {
 
     if (entry) {
       entries.push(entry);
+    }
+  };
+
+  if (Array.isArray(card.effects)) {
+    const sourceZone = toZone || this.findCardZone(player, card) || "graveyard";
+    for (const effect of card.effects) {
+      collectFromSource(card, player, resolvedOpponent, sourceZone, effect);
+    }
+  }
+
+  const observerSides = [
+    { owner: player, other: resolvedOpponent },
+    { owner: resolvedOpponent, other: player },
+  ].filter((side) => side.owner);
+
+  for (const { owner, other } of observerSides) {
+    const field = Array.isArray(owner.field) ? owner.field : [];
+    for (const sourceCard of field) {
+      if (!sourceCard || sourceCard === card) continue;
+      if (!Array.isArray(sourceCard.effects)) continue;
+      if (sourceCard.isFacedown === true) continue;
+
+      const sourceZone = this.findCardZone?.(owner, sourceCard) || "field";
+      for (const effect of sourceCard.effects) {
+        if (!effect?.eventCardFilters) continue;
+        collectFromSource(sourceCard, owner, other, sourceZone, effect);
+      }
     }
   }
 

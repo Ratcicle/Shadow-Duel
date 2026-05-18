@@ -4,6 +4,99 @@ const LOCALE_STORAGE_KEY = "shadowduel_locale";
 const DEFAULT_LOCALE = "en";
 const SUPPORTED_LOCALES = ["en", "pt-br"];
 
+const ATTRIBUTE_LABELS = {
+  en: {
+    Light: "Light",
+    Dark: "Dark",
+    Fire: "Fire",
+    Water: "Water",
+    Earth: "Earth",
+    Wind: "Wind",
+  },
+  "pt-br": {
+    Light: "Luz",
+    Dark: "Trevas",
+    Fire: "Fogo",
+    Water: "Água",
+    Earth: "Terra",
+    Wind: "Vento",
+  },
+};
+
+const MONSTER_TYPE_LABELS = {
+  en: {},
+  "pt-br": {
+    Beast: "Besta",
+    Dragon: "Dragão",
+    Fairy: "Fada",
+    Fiend: "Demônio",
+    Insect: "Inseto",
+    Reptile: "Réptil",
+    "Sea Serpent": "Serpente Marinha",
+    Spellcaster: "Mago",
+    Spirit: "Espírito",
+    Warrior: "Guerreiro",
+    "Winged Beast": "Besta Alada",
+  },
+};
+
+const CARD_KIND_LABELS = {
+  en: {
+    spell: "Spell",
+    trap: "Trap",
+  },
+  "pt-br": {
+    spell: "Magia",
+    trap: "Armadilha",
+  },
+};
+
+const SUBTYPE_LABELS = {
+  en: {
+    normal: "Normal",
+    continuous: "Continuous",
+    field: "Field",
+    equip: "Equip",
+    quick: "Quick-Play",
+  },
+  "pt-br": {
+    normal: "Normal",
+    continuous: "Contínua",
+    field: "Campo",
+    equip: "Equipamento",
+    quick: "Rápida",
+  },
+};
+
+const CARD_KIND_SUBTYPE_PHRASES = {
+  en: {
+    spell: {
+      normal: "normal spell",
+      continuous: "continuous spell",
+      field: "field spell",
+      equip: "equip spell",
+      quick: "quick-play spell",
+    },
+    trap: {
+      normal: "normal trap",
+      continuous: "continuous trap",
+    },
+  },
+  "pt-br": {
+    spell: {
+      normal: "magia normal",
+      continuous: "magia contínua",
+      field: "magia de campo",
+      equip: "magia de equipamento",
+      quick: "magia rápida",
+    },
+    trap: {
+      normal: "armadilha normal",
+      continuous: "armadilha contínua",
+    },
+  },
+};
+
 const LOCALE_SOURCES = {
   // English text is the canonical card data in cards.js.
   "pt-br": "../locales/pt-br.json",
@@ -184,6 +277,80 @@ export function getCardDisplayDescription(card) {
   return getCardDisplayProperty(card, "description");
 }
 
+export function getMonsterAttributeDisplayName(attribute) {
+  const rawAttribute = String(attribute || "").trim();
+  if (!rawAttribute) return "";
+  return ATTRIBUTE_LABELS[currentLocale]?.[rawAttribute] || rawAttribute;
+}
+
+export function getMonsterTypeDisplayName(card) {
+  const rawTypes = Array.isArray(card?.types)
+    ? card.types
+    : card?.type
+      ? [card.type]
+      : [];
+  if (rawTypes.length === 0) {
+    return currentLocale === "pt-br" ? "Monstro" : "Monster";
+  }
+
+  return rawTypes
+    .map((type) => {
+      const rawType = String(type || "").trim();
+      return MONSTER_TYPE_LABELS[currentLocale]?.[rawType] || rawType;
+    })
+    .filter(Boolean)
+    .join(" / ");
+}
+
+export function getMonsterDetailParts(card) {
+  const level = Number.isFinite(card?.level) ? card.level : "-";
+  const type = getMonsterTypeDisplayName(card);
+  const attribute = getMonsterAttributeDisplayName(card?.attribute);
+  return { level, type, attribute };
+}
+
+export function formatMonsterDetailLine(card) {
+  const { level, type, attribute } = getMonsterDetailParts(card);
+  const parts = [`⭐${level}`, type];
+  if (attribute) parts.push(attribute);
+  return parts.filter(Boolean).join(" | ");
+}
+
+export function formatMonsterDetailHtml(card) {
+  const { level, type, attribute } = getMonsterDetailParts(card);
+  const rest = [type, attribute].filter(Boolean).map(escapeHtml).join(" | ");
+  return `⭐<span class="monster-level-number">${escapeHtml(level)}</span>${
+    rest ? ` | ${rest}` : ""
+  }`;
+}
+
+export function formatMonsterStatsLine(card) {
+  const atk = Number.isFinite(card?.atk) ? card.atk : "-";
+  const def = Number.isFinite(card?.def) ? card.def : "-";
+  return {
+    atk: `ATK: ${atk}`,
+    def: `DEF: ${def}`,
+  };
+}
+
+export function formatCardKindSubtypeLine(card) {
+  const rawKind = String(card?.cardKind || "card").trim();
+  const rawSubtype = String(card?.subtype || "").trim();
+  const phrase =
+    CARD_KIND_SUBTYPE_PHRASES[currentLocale]?.[rawKind]?.[rawSubtype] ||
+    CARD_KIND_SUBTYPE_PHRASES.en?.[rawKind]?.[rawSubtype];
+  if (phrase) return phrase;
+
+  const kindLabel = CARD_KIND_LABELS[currentLocale]?.[rawKind] || rawKind.toUpperCase();
+  const subtypeLabel = rawSubtype
+    ? SUBTYPE_LABELS[currentLocale]?.[rawSubtype] || rawSubtype.toUpperCase()
+    : "";
+  if (!subtypeLabel) return kindLabel;
+  return currentLocale === "pt-br"
+    ? `${kindLabel.toLowerCase()} ${subtypeLabel.toLowerCase()}`
+    : `${subtypeLabel.toLowerCase()} ${kindLabel.toLowerCase()}`;
+}
+
 function getCardDisplayProperty(card, property) {
   const fallbackText = String(
     property === "name" ? card?.name || "" : card?.description || ""
@@ -200,6 +367,15 @@ function getCardDisplayProperty(card, property) {
     }
   }
   return fallbackText;
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 export function getSupportedLocales() {

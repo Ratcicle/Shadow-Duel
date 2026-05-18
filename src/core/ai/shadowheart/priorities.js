@@ -25,7 +25,10 @@ import {
   createFinisherPlan,
   rankFinisherPlans,
 } from "../common/finisherPlans.js";
-import { assessSummonEntry } from "../common/summonAssessment.js";
+import {
+  assessSummonEntry,
+  evaluateProjectedAttackLine,
+} from "../common/summonAssessment.js";
 import {
   assessShadowHeartResourceRecovery,
   buildShadowHeartResourcePreferences,
@@ -84,6 +87,58 @@ const SHADOW_HEART_ENGINE_SUMMON_NAMES = new Set([
   SH.coward,
   SH.eel,
 ]);
+
+function getCardName(value) {
+  return typeof value === "string" ? value : value?.name || null;
+}
+
+function hasActiveOwnFieldSpell(context = {}, name) {
+  const candidates = [
+    context.fieldSpell,
+    context.analysis?.fieldSpell,
+    context.player?.fieldSpell,
+    context.bot?.fieldSpell,
+  ];
+  return candidates.some((candidate) => getCardName(candidate) === name);
+}
+
+function sameCardInstance(a, b) {
+  if (!a || !b) return false;
+  if (a === b) return true;
+  if (a.instanceId && b.instanceId) return a.instanceId === b.instanceId;
+  return false;
+}
+
+function isAlreadyOnOwnField(card, context = {}) {
+  const field =
+    context.myField ||
+    context.player?.field ||
+    context.bot?.field ||
+    context.analysis?.field ||
+    [];
+  return (field || []).some((fieldCard) => sameCardInstance(card, fieldCard));
+}
+
+function hasNamedAtkBuff(card, sourceName) {
+  return Number(card?.permanentBuffsBySource?.[sourceName]?.atk || 0) > 0;
+}
+
+function projectShadowHeartEntryStats(card, context = {}, stats = {}) {
+  const projected = {
+    atk: stats.atk ?? getEffectiveAtk(card),
+    def: stats.def ?? getEffectiveDef(card),
+  };
+
+  if (!isShadowHeartByName(card?.name)) return projected;
+  if (!hasActiveOwnFieldSpell(context, SH.valley)) return projected;
+  if (isAlreadyOnOwnField(card, context)) return projected;
+  if (hasNamedAtkBuff(card, SH.valley)) return projected;
+
+  return {
+    ...projected,
+    atk: projected.atk + 300,
+  };
+}
 
 function cardCountByName(cards = []) {
   const counts = new Map();
@@ -1256,14 +1311,15 @@ export function assessShadowHeartSummonEntry(card, context = {}) {
       lowImpactAtk: 1200,
       facedownValue: context.facedownValue ?? 1500,
       defaultReason: "default Shadow-Heart summon assessment",
+      projectEntryStats: projectShadowHeartEntryStats,
       ...(context.profile || {}),
     },
   });
 
   if (!card || card.cardKind !== "monster") return base;
 
-  const atk = getEffectiveAtk(card);
-  const def = getEffectiveDef(card);
+  const atk = base.projectedAtk ?? getEffectiveAtk(card);
+  const def = base.projectedDef ?? getEffectiveDef(card);
   const oppField =
     context.oppField ||
     context.opponent?.field ||
@@ -1298,17 +1354,16 @@ export function assessShadowHeartSummonEntry(card, context = {}) {
     };
   }
 
-  const strongestFaceUpAtk = (oppField || []).reduce((max, monster) => {
-    if (!monster || monster.cardKind !== "monster" || monster.isFacedown) {
-      return max;
-    }
-    return Math.max(max, getEffectiveAtk(monster));
-  }, 0);
+  const attackLine = evaluateProjectedAttackLine(atk, oppField, {
+    facedownValue: context.facedownValue ?? 1500,
+  });
+  const strongestFaceUpAtk = attackLine.strongestFaceUpAtk;
 
   return {
     ...base,
-    position: strongestFaceUpAtk > atk ? "defense" : "attack",
+    position: attackLine.safeInAttack ? "attack" : "defense",
     strongestThreat: Math.max(base.strongestThreat || 0, strongestFaceUpAtk),
+    attackLine,
   };
 }
 

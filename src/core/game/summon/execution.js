@@ -95,7 +95,19 @@ export async function performNormalSummon(
   if (attempt?.negated) {
     return null;
   }
-  return player.summon(cardIndex, position, isFacedown, tributeIndices);
+  const result = player.summon(cardIndex, position, isFacedown, tributeIndices);
+  const summonedCard = result?.card || result || null;
+  if (summonedCard?.isFacedown) {
+    this.notify?.("monster_set", {
+      card: summonedCard,
+      player,
+      method,
+      fromZone: "hand",
+      position: summonedCard.position || "defense",
+      tributes: result?.tributes || [],
+    });
+  }
+  return result;
 }
 
 /**

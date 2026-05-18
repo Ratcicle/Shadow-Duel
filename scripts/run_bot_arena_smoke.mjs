@@ -111,6 +111,8 @@ function compactStrategicReport(report) {
     wins: bot.wins,
     winRate: bot.winRate,
     actions: bot.actions,
+    monsterSets: bot.monsterSets,
+    setMonsters: bot.setMonsters,
     failedActions: bot.failedActions,
     blockedActions: bot.blockedActions,
     noUsefulTurns: bot.noUsefulTurns,

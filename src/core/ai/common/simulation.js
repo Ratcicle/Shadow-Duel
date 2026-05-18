@@ -204,10 +204,13 @@ export function applyGenericSimulatedMainPhaseAction(
       const handIndex = resolveSimulatedHandIndex(player, action, "monster");
       const card = player.hand[handIndex];
       if (!card) break;
+      if (card.cardKind !== "monster") break;
+      if (card.cannotBeNormalSummonedOrSet) break;
+      if (card.summonRestrict === "shadow_heart_invocation_only") break;
       const tributeInfo = options.getTributeRequirementFor?.(card, player) || {
         tributesNeeded: 0,
       };
-      const tributesNeeded = tributeInfo.tributesNeeded;
+      const tributesNeeded = Math.max(0, Number(tributeInfo.tributesNeeded) || 0);
 
       const tributeIndices =
         options.selectBestTributes?.(player.field, tributesNeeded, card, {
@@ -215,9 +218,17 @@ export function applyGenericSimulatedMainPhaseAction(
           oppField: state.player?.field || [],
           game: state,
         }) || [];
+      const validTributeIndices = [...new Set(tributeIndices)].filter(
+        (idx) =>
+          Number.isInteger(idx) &&
+          idx >= 0 &&
+          idx < (player.field || []).length,
+      );
+      if (validTributeIndices.length < tributesNeeded) break;
+      if ((player.field || []).length - tributesNeeded + 1 > 5) break;
 
-      tributeIndices.sort((a, b) => b - a);
-      tributeIndices.forEach((idx) => {
+      validTributeIndices.sort((a, b) => b - a);
+      validTributeIndices.forEach((idx) => {
         const tribute = player.field[idx];
         if (tribute) {
           player.graveyard.push(tribute);
@@ -227,8 +238,9 @@ export function applyGenericSimulatedMainPhaseAction(
 
       player.hand.splice(handIndex, 1);
       const newCard = { ...card };
-      newCard.position = action.position;
-      newCard.isFacedown = action.facedown;
+      const summonPosition = action.position === "defense" ? "defense" : "attack";
+      newCard.position = summonPosition;
+      newCard.isFacedown = action.facedown === true || summonPosition === "defense";
       newCard.hasAttacked = false;
       newCard.attacksUsedThisTurn = 0;
       if (newCard.cardKind !== "monster") {

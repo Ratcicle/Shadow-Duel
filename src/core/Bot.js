@@ -228,7 +228,7 @@ export default class Bot extends Player {
       // Big Dragons
       24,  // Black Bull Dragon (2500 ATK — SS by discarding 2 Dragons, double attack)
       29,  // Purified Crystal Dragon (2500 ATK — SS by banishing 3 GY Dragons, heal)
-      28,  // Abyssal Serpent Dragon (2200 ATK — cannot be SS'd, stall exchange effect)
+      28,  // Abyssal Serpent Dragon (2200 ATK — stall exchange effect)
       25,  // Hellkite Dragon (2300 ATK — SS from hand by sending field Dragon to GY)
       21,  // Majestic Silver Dragon (2500 ATK — alt tribute 1 Dragon, position switch)
       22,  // Darkness Dragon (2000+ ATK — destroys field dragons to gain ATK)
@@ -239,7 +239,7 @@ export default class Bot extends Player {
       33,         // Boneflame Dragon (GY ignition — send field Dragon, gains 300 per GY Dragon)
       19, 19,     // Voltaic Dragon (1200 ATK — SS if control Dragon, 800 burn on discard)
       // === SPELLS ===
-      256,        // Converging Stars (discard 1; reduce hand monster levels -1 until EOT)
+      256,        // Converging Stars (discard 1; reduce hand monster levels -2 until EOT)
       26, 26,     // Hellkite Roar (control lv7+ Dragon: destroy up to 2 opp spell/trap)
       13,         // Polymerization (fusion: Voltaic + lv5+ = Tech-Void; 5 Extreme GY = Bahamut)
       15,         // Call of the Haunted (trap: revive from GY)
@@ -649,6 +649,7 @@ export default class Bot extends Player {
           plannedMilestoneScore: plannerResult?.milestoneScore ?? null,
           plannedMilestones: (plannerResult?.milestones || []).slice(0, 8),
           plannedFirstAction: fingerprintAction(plannerResult?.action),
+          selectedFirstAction: fingerprintAction(plannerResult?.action),
           plannedTerminalDigest:
             plannerResult?.diagnostics?.terminalSummary || null,
           plannerReason: plannerResult?.reason || "no_plan",
@@ -807,8 +808,11 @@ export default class Bot extends Player {
           actionSuccess: !!actionSuccess,
           plannedAction: fingerprintAction(pendingPlannerTrace.action),
           actualAction: fingerprintAction(bestAction),
+          selectedFirstAction: fingerprintAction(pendingPlannerTrace.action),
+          executedFirstAction: fingerprintAction(bestAction),
           matched: !!actionSuccess && !meaningfulDiff,
           diffSeverity: actionSuccess ? diff.severity : "action_failed",
+          mismatchReason: actionSuccess ? diff.severity : "action_failed",
           diffs: compactPlanningDiffs(diff.diffs || [], 6),
           plannedMilestones: (pendingPlannerTrace.milestones || []).slice(0, 8),
           plannerReason: pendingPlannerTrace.reason || null,

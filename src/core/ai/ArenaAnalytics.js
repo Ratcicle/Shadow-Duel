@@ -16,12 +16,13 @@ export const END_REASONS = {
   CANCELLED: "cancelled",
 };
 
-const REPORT_VERSION = 3;
+const REPORT_VERSION = 4;
 const SEATS = ["player", "bot"];
 const DIAGNOSTIC_PROGRESS_LIMIT = 80;
 const DIAGNOSTIC_SNAPSHOT_LIMIT = 3;
 const TRACKED_EVENTS = new Set([
   "after_summon",
+  "monster_set",
   "attack_declared",
   "combat_resolved",
   "spell_activated",
@@ -71,6 +72,44 @@ function topCounter(counter, limit = 12) {
     .map(([name, count]) => ({ name, count }));
 }
 
+function planningLabel(value) {
+  if (value == null) return null;
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  if (typeof value === "object") {
+    const direct =
+      value.label ||
+      value.name ||
+      value.reason ||
+      value.milestone ||
+      value.description ||
+      value.type;
+    if (direct) return String(direct);
+    try {
+      return JSON.stringify(value).slice(0, 160);
+    } catch (_error) {
+      return "unserializable_planning_entry";
+    }
+  }
+  return String(value);
+}
+
+function planningActionLabel(action = null) {
+  if (!action) return null;
+  if (typeof action === "string") return action;
+  const type = action.type || "action";
+  const card =
+    action.cardName ??
+    action.name ??
+    action.attackerName ??
+    action.targetName ??
+    action.cardId ??
+    action.index;
+  return card != null ? `${type}:${card}` : type;
+}
+
 function createPlanningStats() {
   return {
     attempts: 0,
@@ -85,8 +124,11 @@ function createPlanningStats() {
     scoreCount: 0,
     modeCounts: createCounter(),
     turnModeCounts: createCounter(),
+    selectedFirstActions: createCounter(),
+    executedFirstActions: createCounter(),
     topMilestones: createCounter(),
     mismatchReasons: createCounter(),
+    planSamples: [],
     mismatchSamples: [],
   };
 }
@@ -129,8 +171,11 @@ function compactPlanningStats(planning = {}) {
       : null,
     modeCounts: topCounter(planning.modeCounts),
     turnModeCounts: topCounter(planning.turnModeCounts),
+    selectedFirstActions: topCounter(planning.selectedFirstActions),
+    executedFirstActions: topCounter(planning.executedFirstActions),
     topMilestones: topCounter(planning.topMilestones),
     mismatchReasons: topCounter(planning.mismatchReasons),
+    planSamples: (planning.planSamples || []).slice(0, 5),
     mismatchSamples: (planning.mismatchSamples || []).slice(0, 5),
   };
 }
@@ -296,6 +341,7 @@ function createSeatStats(archetype = "unknown") {
     archetype,
     actions: 0,
     summons: 0,
+    monsterSets: 0,
     fusionSummons: 0,
     ascensionSummons: 0,
     spellActivations: 0,
@@ -314,6 +360,7 @@ function createSeatStats(archetype = "unknown") {
     discardedByDestruction: createCounter(),
     searched: createCounter(),
     summoned: createCounter(),
+    setMonsters: createCounter(),
     fusionSummoned: createCounter(),
     ascensionSummoned: createCounter(),
     targeted: createCounter(),
@@ -356,6 +403,8 @@ function compactSeatStats(stats) {
     discardedByDestruction: topCounter(stats.discardedByDestruction),
     searched: topCounter(stats.searched),
     summoned: topCounter(stats.summoned),
+    monsterSets: stats.monsterSets || 0,
+    setMonsters: topCounter(stats.setMonsters),
     fusionSummoned: topCounter(stats.fusionSummoned),
     ascensionSummoned: topCounter(stats.ascensionSummoned),
     targeted: topCounter(stats.targeted),
@@ -1110,6 +1159,7 @@ export class ArenaAnalytics {
       for (const field of [
       "actions",
       "summons",
+      "monsterSets",
       "fusionSummons",
       "ascensionSummons",
       "spellActivations",
@@ -1134,6 +1184,7 @@ export class ArenaAnalytics {
       "discardedByDestruction",
       "searched",
       "summoned",
+      "setMonsters",
       "fusionSummoned",
       "ascensionSummoned",
       "targeted",
@@ -1192,12 +1243,22 @@ export class ArenaAnalytics {
       for (const { name, count } of source.turnModeCounts || []) {
         addCount(target.turnModeCounts, name, count);
       }
+      for (const { name, count } of source.selectedFirstActions || []) {
+        addCount(target.selectedFirstActions, name, count);
+      }
+      for (const { name, count } of source.executedFirstActions || []) {
+        addCount(target.executedFirstActions, name, count);
+      }
       for (const { name, count } of source.topMilestones || []) {
-        addCount(target.topMilestones, name, count);
+        addCount(target.topMilestones, planningLabel(name), count);
       }
       for (const { name, count } of source.mismatchReasons || []) {
         addCount(target.mismatchReasons, name, count);
       }
+      target.planSamples = [
+        ...(target.planSamples || []),
+        ...(source.planSamples || []),
+      ].slice(0, 5);
       target.mismatchSamples = [
         ...(target.mismatchSamples || []),
         ...(source.mismatchSamples || []),
@@ -1993,19 +2054,52 @@ export class DuelTracker {
           planning.scoreCount += 1;
         }
         for (const milestone of entry.plannedMilestones || []) {
-          addCount(planning.topMilestones, milestone);
+          addCount(planning.topMilestones, planningLabel(milestone));
+        }
+        const firstAction =
+          entry.selectedFirstAction || entry.plannedFirstAction || null;
+        addCount(planning.selectedFirstActions, planningActionLabel(firstAction));
+        if (
+          entry.plannerUsed &&
+          (planning.planSamples || []).length < 5
+        ) {
+          planning.planSamples.push({
+            turn: entry.turn,
+            phase: entry.phase,
+            mode: entry.plannerMode || null,
+            turnMode: entry.plannerTurnMode || null,
+            score: Number.isFinite(score) ? round(score, 2) : null,
+            lineLength: entry.plannedLineLength || 0,
+            nodes: entry.plannedNodesEvaluated || 0,
+            firstAction: planningActionLabel(firstAction),
+            milestones: (entry.plannedMilestones || [])
+              .map(planningLabel)
+              .filter(Boolean)
+              .slice(0, 4),
+            reason: entry.plannerReason || null,
+          });
         }
         return;
       }
 
+      const executedFirstAction =
+        entry.executedFirstAction || entry.actualAction || null;
+      addCount(
+        planning.executedFirstActions,
+        planningActionLabel(executedFirstAction),
+      );
+
       if (entry.stage === "ai_plan_execution_failed") {
         planning.failedExecutions += 1;
-        addCount(planning.mismatchReasons, "action_failed");
+        addCount(planning.mismatchReasons, entry.mismatchReason || "action_failed");
       } else if (entry.matched) {
         planning.executionMatches += 1;
       } else {
         planning.executionMismatches += 1;
-        addCount(planning.mismatchReasons, entry.diffSeverity || "state_mismatch");
+        addCount(
+          planning.mismatchReasons,
+          entry.mismatchReason || entry.diffSeverity || "state_mismatch",
+        );
       }
 
       if (
@@ -2016,7 +2110,11 @@ export class DuelTracker {
           turn: entry.turn,
           phase: entry.phase,
           stage: entry.stage,
-          severity: entry.diffSeverity || "action_failed",
+          severity: entry.mismatchReason || entry.diffSeverity || "action_failed",
+          selectedFirstAction:
+            entry.selectedFirstAction || entry.plannedAction || null,
+          executedFirstAction:
+            entry.executedFirstAction || entry.actualAction || null,
           action: entry.plannedAction || entry.actualAction || null,
           reason: entry.plannerReason || null,
           diffs: (entry.diffs || []).slice(0, 3),
@@ -2075,6 +2173,8 @@ export class DuelTracker {
 
     if (eventName === "after_summon") {
       this.recordSummon(payload, meta);
+    } else if (eventName === "monster_set") {
+      this.recordMonsterSet(payload, meta);
     } else if (eventName === "attack_declared") {
       this.recordAttack(payload, meta);
     } else if (
@@ -2131,6 +2231,30 @@ export class DuelTracker {
       position: payload.position || payload.card?.position || null,
       sourceCard: sourceName(payload),
       effectId: effectId(payload),
+    });
+  }
+
+  recordMonsterSet(payload = {}, meta = {}) {
+    const seat = playerSeat(payload.player);
+    const name = cardName(payload.card);
+    if (!this.seats[seat] || !name) return;
+
+    const stats = this.seats[seat];
+    stats.monsterSets += 1;
+    addCount(stats.setMonsters, name);
+    this.markUsefulAction(seat, meta.turn);
+
+    this.pushEvent({
+      t: meta.turn,
+      seat,
+      type: "monster_set",
+      card: name,
+      method: payload.method || "normal_set",
+      fromZone: payload.fromZone || null,
+      position: payload.position || payload.card?.position || "defense",
+      tributes: Array.isArray(payload.tributes)
+        ? payload.tributes.map(cardName).filter(Boolean)
+        : null,
     });
   }
 

@@ -9,16 +9,17 @@ O tema **Dragon** é um conjunto de cartas genéricas de tipo Dragão que funcio
 - **Sinergia de tipo**: Muitos efeitos buscam, invocam ou buffam outros Dragons
 - **Cemitério como recurso**: Vários efeitos funcionam a partir do GY
 - **Field Spell central**: Jagged Peak of the Dragons acumula contadores para SS gratuito
-- **Linha de Fusão**: Tech-Void Dragon
+- **Linha de Extra Deck**: Metal Armored Dragon, Tech-Void Dragon, Radiant Cosmic Dragon e Rainbow Cosmic Dragon
 
 ---
 
-## Decklist (17 cartas)
+## Decklist (19 cartas)
 
 ### Monstros (12)
 
 | ID  | Nome                    | Tipo   | Nível | ATK  | DEF  | Notas                      |
 | --- | ----------------------- | ------ | ----- | ---- | ---- | -------------------------- |
+| 12 | Luminous Dragon         | Dragon | 5     | 2000 | 1600 | Extender / recovery        |
 | 16 | Armored Dragon          | Dragon | 4     | 1600 | 1500 |                            |
 | 18 | Grey Dragon             | Dragon | 4     | 1800 | 800  | Cannot attack directly     |
 | 19 | Voltaic Dragon          | Dragon | 3     | 1200 | 800  |                            |
@@ -27,7 +28,7 @@ O tema **Dragon** é um conjunto de cartas genéricas de tipo Dragão que funcio
 | 22 | Darkness Dragon         | Dragon | 5     | 2000 | 1700 |                            |
 | 24 | Black Bull Dragon       | Dragon | 8     | 2500 | 2000 |                            |
 | 25 | Hellkite Dragon         | Dragon | 7     | 2300 | 1900 |                            |
-| 28 | Abyssal Serpent Dragon  | Dragon | 7     | 2200 | 1400 | Cannot be Special Summoned |
+| 28 | Abyssal Serpent Dragon  | Dragon | 7     | 2200 | 1400 | Delayed exchange control |
 | 29 | Purified Crystal Dragon | Dragon | 8     | 2500 | 1700 |                            |
 | 33 | Boneflame Dragon        | Dragon | 3     | 0    | 0    | Cannot be Normal Summoned  |
 
@@ -46,22 +47,31 @@ O tema **Dragon** é um conjunto de cartas genéricas de tipo Dragão que funcio
 
 ---
 
-## Extra Deck (3)
+## Extra Deck (4)
 
 | ID  | Nome                    | Tipo      | Nível | ATK  | DEF  |
 | --- | ----------------------- | --------- | ----- | ---- | ---- |
 | 17 | Metal Armored Dragon    | Ascension | 6     | 1600 | 2000 |
 | 30 | Tech-Void Dragon        | Fusion    | 8     | 2500 | 1000 |
+| 259 | Radiant Cosmic Dragon  | Fusion    | 9     | 3300 | 2700 |
+| 260 | Rainbow Cosmic Dragon  | Ascension | 10    | 3500 | 3200 |
 
 **Materiais de Fusão (Tech-Void Dragon):** "Voltaic Dragon" + 1 monstro Dragon de Nível 5+
 
+**Materiais de Fusão (Radiant Cosmic Dragon):** 3 monstros Dragon, incluindo 1 monstro Light
+
 **Material de Ascensão (Metal Armored Dragon):** Armored Dragon (ID 16)
+
+**Material de Ascensão (Rainbow Cosmic Dragon):** Purified Crystal Dragon (ID 29), com efeitos ativados 3 vezes no duelo
 
 ---
 
 ## Efeitos & Detalhes
 
 ### Monstros
+
+**12 - Luminous Dragon** (L5 Dragon | ATK 2000 / DEF 1600)
+> If you control no monsters, you can Special Summon this card from your hand. If a Dragon-Type monster is discarded from your hand to the Graveyard while this card is face-up on the field: You can target 1 Dragon-Type monster in your Graveyard with a different name from the discarded monster; add it to your hand. You can only use each effect of "Luminous Dragon" once per turn.
 
 **16 - Armored Dragon** (L4 Dragon | ATK 1600 / DEF 1500)
 > If this card is Normal Summoned: You can add 1 Level 4 or lower Dragon monster from your Deck to your hand. If this card is destroyed by battle: draw 1 card, and if it is a Level 4 or lower Dragon monster, you can Special Summon it.
@@ -88,7 +98,7 @@ O tema **Dragon** é um conjunto de cartas genéricas de tipo Dragão que funcio
 > You can send 1 Dragon you control to the GY; Special Summon this card from your hand. Once per turn: You can send this face-up card to the GY; Special Summon 1 Level 7 or lower Dragon from your GY.
 
 **28 - Abyssal Serpent Dragon** (L7 Dragon | ATK 2200 / DEF 1400)
-> Cannot be Special Summoned. During your Main Phase: you can select 1 monster your opponent controls; send this card and the target to the GY, and during your opponent's next Standby Phase, Special Summon them. If you selected a Fusion or Ascension Monster as a target: this card gains 800 ATK until the end of your next turn. You can use each effect of 'Abyssal Serpent Dragon' once per turn.
+> During your Main Phase: you can select 1 monster your opponent controls; send this card and the target to the GY, and during your opponent's next Standby Phase, Special Summon them. If you selected a Fusion or Ascension Monster as a target: this card gains 800 ATK until the end of your next turn. You can use each effect of 'Abyssal Serpent Dragon' once per turn.
 
 **29 - Purified Crystal Dragon** (L8 Dragon | ATK 2500 / DEF 1700)
 > You can Special Summon this card from your hand by banishing 3 Dragon monsters from your GY. If this card destroys a monster by battle: Gain LP equal to the destroyed monster's Level x100. Once per turn: You can target 1 other Dragon monster you control; it cannot be destroyed by card effects while it is face-up on the field.
@@ -123,6 +133,12 @@ O tema **Dragon** é um conjunto de cartas genéricas de tipo Dragão que funcio
 **30 - Tech-Void Dragon** (L8 Fusion Dragon | ATK 2500 / DEF 1000)
 > Voltaic Dragon + 1 Level 5+ Dragon monster. If this card is Fusion Summoned: You can target 1 Level 4 or lower Dragon monster in your GY; banish it, and if you do, this card gains ATK equal to the banished monster's ATK until the end of this turn. If this card is destroyed by battle: You can Special Summon 1 'Voltaic Dragon' from your GY. You can only use each effect of 'Tech-Void Dragon' once per turn.
 
+**259 - Radiant Cosmic Dragon** (L9 Fusion Dragon | ATK 3300 / DEF 2700)
+> 3 Dragon-type monsters, including 1 LIGHT monster. If this card is Fusion Summoned: You can target 1 to 5 cards in your GY; shuffle them into the Deck, then draw 1 card. You take no battle damage from battles involving this card. If this card is destroyed by battle or card effect: You can Special Summon 1 Dragon-type monster from your GY, except "Radiant Cosmic Dragon". You can only use each effect of "Radiant Cosmic Dragon" once per turn.
+
+**260 - Rainbow Cosmic Dragon** (L10 Ascension Dragon | ATK 3500 / DEF 3200)
+> Ascension Material: "Purified Crystal Dragon". Requirement: the material must have activated its effects 3 times this Duel. Once per turn: You can target 1 Dragon-type monster you control; it cannot be destroyed by battle or card effects until the end of the next turn. If this card destroys a monster by battle: gain LP equal to the destroyed monster's original ATK. You can banish this card from your GY; send 1 to 3 "Extreme Dragons" monsters from your Deck to the GY.
+
 ---
 
 ---
@@ -136,7 +152,7 @@ Os **Extreme Dragons** são monstros de Nível 10 do tipo Dragão com efeitos po
 **Estilo de jogo:**
 - **Win condition de longo prazo**: Acumular Extreme Dragons no Cemitério para invocar o Bahamut
 - **Um monstro, um foco**: Cada turno, você joga com um único Extreme Dragon com efeitos fortíssimos
-- **Extreme Dragon Awakening**: Magia Contínua que tributa 2 Dragons para Invocar por Especial Extreme Dragons da mão
+- **Extreme Dragon Awakening**: Magia Contínua que busca um Dragon grande na ativação e envia 2 Dragons para Invocar por Especial da mão
 - **Diversidade de estratégias**: Cada Extreme Dragon tem um perfil completamente diferente
 
 ---
@@ -153,10 +169,11 @@ Os **Extreme Dragons** são monstros de Nível 10 do tipo Dragão com efeitos po
 | 253 | Galaxy Extreme Dragon  | Dragon | 10    | 2900 | 2900 | Banimento/macro   |
 | 254 | Forest Extreme Dragon  | Dragon | 10    | 2500 | 2700 | Ganho de LP/ATK   |
 
-### Magias (1)
+### Magias (2)
 
 | ID  | Nome                     | Subtipo    |
 | --- | ------------------------ | ---------- |
+| 256 | Converging Stars         | Normal     |
 | 257 | Extreme Dragon Awakening | Continuous |
 
 ### Extra Deck (1)
@@ -172,7 +189,7 @@ Os **Extreme Dragons** são monstros de Nível 10 do tipo Dragão com efeitos po
 ## Efeitos & Detalhes — Extreme Dragons
 
 **250 - Fire Extreme Dragon** (L10 Dragon | ATK 3000 / DEF 2600)
-> There can only be 1 face-up "Extreme Dragon" monster on the field. While this card is the only monster you control, it cannot be destroyed by card effects. If this card destroys an opponent's monster by battle: inflict damage to your opponent equal to half the destroyed monster's original ATK. Each time your opponent activates a card or effect: inflict 300 damage to your opponent. If this card is destroyed by battle: you can Special Summon 1 "Volcanic Extreme Dragon" from your hand or Deck.
+> There can only be 1 face-up "Extreme Dragon" monster on the field. While this card is the only monster you control, it cannot be destroyed by card effects. If this card destroys an opponent's monster by battle: inflict damage to your opponent equal to half the destroyed monster's original ATK. Each time your opponent activates a card or effect: inflict 300 damage to your opponent.
 
 **251 - Volcanic Extreme Dragon** (L10 Dragon | ATK 2600 / DEF 3000)
 > There can only be 1 face-up "Extreme Dragon" monster on the field. While this card is the only monster you control, it cannot be destroyed by battle. If this card battles an opponent's monster: inflict 600 damage to your opponent. Once per turn: you can banish all cards in your Graveyard; inflict 500 damage to your opponent for each card banished by this effect.
@@ -190,8 +207,11 @@ Os **Extreme Dragons** são monstros de Nível 10 do tipo Dragão com efeitos po
 
 ### Magia
 
+**256 - Converging Stars** (Normal Spell)
+> Discard 1 card; reduce the Level of all monsters in your hand by 2 until the end of this turn.
+
 **257 - Extreme Dragon Awakening** (Continuous Spell)
-> You can send 2 Dragon-type monsters you control to the GY; Special Summon 1 Level 9 or higher Dragon-type monster from your hand. You can only use this effect of "Extreme Dragon Awakening" once per turn.
+> When this card is activated: add 1 Level 8 or higher Dragon-type monster from your Deck to your hand. Once per turn: You can send 2 Dragon-type monsters you control to the GY; Special Summon 1 Level 8 or higher Dragon-type monster from your hand. You can only activate 1 "Extreme Dragon Awakening" per turn.
 
 ---
 

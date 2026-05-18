@@ -80,6 +80,8 @@ export default class Card {
     this.tempBattleIndestructible = false;
     // Status temporário: dano de batalha sofrido envolvendo este monstro vira cura para o controlador
     this.battleDamageHealsControllerThisTurn = false;
+    this.preventsBattleDamageToController =
+      !!data.preventsBattleDamageToController;
     this.battleIndestructibleOncePerTurn =
       !!data.battleIndestructibleOncePerTurn;
     this.battleIndestructibleOncePerTurnUsed = false;

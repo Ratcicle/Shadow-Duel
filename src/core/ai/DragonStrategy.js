@@ -711,17 +711,24 @@ export default class DragonStrategy extends BaseStrategy {
           (c) => c?.cardKind === "monster" && !c.isFacedown && c.type === "Dragon"
         );
         const nonExtreme = fieldDragons.filter((c) => !isExtremeDragon(c));
-        const extremeInHand = (bot.hand || []).filter((c) => isExtremeDragon(c));
         const hasExtremeFaceup = fieldDragons.some(isExtremeDragon);
-        if (nonExtreme.length < 2 || extremeInHand.length === 0 || hasExtremeFaceup) return;
+        const lv8DragonsInHand = (bot.hand || []).filter(
+          (c) => c?.cardKind === "monster" && c.type === "Dragon" && (c.level || 0) >= 8
+        );
+        const summonableTargets = hasExtremeFaceup
+          ? lv8DragonsInHand.filter((c) => !isExtremeDragon(c))
+          : lv8DragonsInHand;
+        if (nonExtreme.length < 2 || summonableTargets.length === 0) return;
 
         const oppStrongest = (opponent?.field || []).reduce(
           (m, c) => Math.max(m, c.atk || 0),
           0
         );
-        const bestExtreme = selectBestExtremeDragon(extremeInHand, analysis);
+        const bestDragon =
+          selectBestExtremeDragon(summonableTargets.filter((c) => isExtremeDragon(c)), analysis) ||
+          summonableTargets.slice().sort((a, b) => (b.atk || 0) - (a.atk || 0))[0];
         let priority = 12;
-        if ((bestExtreme?.atk || 0) > oppStrongest) priority = 14;
+        if ((bestDragon?.atk || 0) > oppStrongest) priority = 14;
 
         if (
           analysis.canNormalSummon &&
@@ -733,7 +740,7 @@ export default class DragonStrategy extends BaseStrategy {
         }
 
         log(
-          `  ✅ Awakening ignition: SS ${bestExtreme?.name} via 2 Dragon cost (priority ${priority})`
+          `  Awakening ignition: SS ${bestDragon?.name} via 2 Dragon cost (priority ${priority})`
         );
         actions.push({
           type: "spellTrapEffect",

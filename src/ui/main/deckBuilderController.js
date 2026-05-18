@@ -1,5 +1,10 @@
 import { cardDatabase, cardDatabaseById } from "../../data/cards.js";
 import {
+  formatCardKindSubtypeLine,
+  formatMonsterDetailHtml,
+  formatMonsterStatsLine,
+} from "../../core/i18n.js";
+import {
   MAX_DECK_SIZE,
   MAX_EXTRA_DECK_SIZE,
   MIN_DECK_SIZE,
@@ -60,20 +65,23 @@ export function createDeckBuilderController({
       dom.preview.name.textContent = getCardDisplayName(card) || card.name;
     }
     const isMonster = card.cardKind !== "spell" && card.cardKind !== "trap";
+    const monsterStats = isMonster ? formatMonsterStatsLine(card) : null;
     if (dom.preview.atk) {
       dom.preview.atk.textContent = isMonster
-        ? `ATK: ${card.atk}`
-        : card.cardKind.toUpperCase();
+        ? monsterStats.atk
+        : "";
     }
     if (dom.preview.def) {
       dom.preview.def.textContent = isMonster
-        ? `DEF: ${card.def}`
-        : card.subtype
-          ? card.subtype.toUpperCase()
-          : "";
+        ? monsterStats.def
+        : "";
     }
     if (dom.preview.level) {
-      dom.preview.level.textContent = isMonster ? `Level: ${card.level}` : "";
+      if (isMonster) {
+        dom.preview.level.innerHTML = formatMonsterDetailHtml(card);
+      } else {
+        dom.preview.level.textContent = formatCardKindSubtypeLine(card);
+      }
     }
     if (dom.preview.desc) {
       dom.preview.desc.textContent =

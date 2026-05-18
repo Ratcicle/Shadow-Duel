@@ -239,11 +239,44 @@ function getTargetPreference(options = {}, targetId = null) {
   );
 }
 
+function getCostPreference(options = {}) {
+  return (
+    options.costPreferences ||
+    options.actionContext?.costPreferences ||
+    options.activationContext?.actionContext?.costPreferences ||
+    options.activationContext?.costPreferences ||
+    null
+  );
+}
+
+function mergeCostPreference(targetPreference, costPreference) {
+  if (!costPreference) return targetPreference || null;
+  return {
+    ...costPreference,
+    ...(targetPreference || {}),
+    preferNames: [
+      ...asArray(costPreference.preferNames),
+      ...asArray(targetPreference?.preferNames),
+    ],
+    forceNames: [
+      ...asArray(costPreference.forceNames),
+      ...asArray(targetPreference?.forceNames),
+    ],
+    preserveNames: [
+      ...asArray(costPreference.preserveNames),
+      ...asArray(targetPreference?.preserveNames),
+    ],
+  };
+}
+
 function applyNameAndInstancePreference(score, card, preference, intent) {
   if (!preference || !card) return score;
   let adjusted = score;
   const name = card.name;
   const instanceId = getCardInstanceId(card);
+  const forced = asArray(preference.forceNames).includes(name);
+  const preferredByPolicy = asArray(preference.preferNames).includes(name);
+  const preserved = asArray(preference.preserveNames).includes(name);
   const prefers =
     asArray(preference.preferredNames).includes(name) ||
     (instanceId !== null &&
@@ -253,8 +286,11 @@ function applyNameAndInstancePreference(score, card, preference, intent) {
     (instanceId !== null &&
       asArray(preference.avoidInstanceIds).includes(instanceId));
   const weight = intent === "cost" ? -100 : 100;
+  if (forced) adjusted += intent === "cost" ? -120 : 120;
   if (prefers) adjusted += weight;
+  if (preferredByPolicy) adjusted += intent === "cost" ? -8 : 8;
   if (avoids) adjusted -= weight;
+  if (preserved && intent === "cost") adjusted += 80;
   return adjusted;
 }
 
@@ -310,11 +346,20 @@ function matchesTargetFilters(card, target = {}, sourceCard, ownerRole = null) {
   ) {
     return false;
   }
-  if (target.requireThisCard && sourceCard && card.id !== sourceCard.id) {
-    return false;
-  }
-  if (target.excludeSelf && sourceCard && card.id === sourceCard.id) {
-    return false;
+  if (sourceCard && (target.requireThisCard || target.excludeSelf)) {
+    const sourceInstanceId = getCardInstanceId(sourceCard);
+    const cardInstanceId = getCardInstanceId(card);
+    const sameCard =
+      card === sourceCard ||
+      (sourceInstanceId !== null &&
+        cardInstanceId !== null &&
+        sourceInstanceId === cardInstanceId);
+    if (target.requireThisCard && !sameCard) {
+      return false;
+    }
+    if (target.excludeSelf && sameCard) {
+      return false;
+    }
   }
   const { owner: _owner, anyOf: _anyOf, ...filters } = target;
   return cardMatchesFilter(card, filters);
@@ -597,9 +642,19 @@ export function selectSimulatedTargets({
       )
       .map(({ card }) => card);
 
-    const targetPreference = getTargetPreference(options, target.id);
+    const explicitTargetPreference = getTargetPreference(options, target.id);
     const intent =
-      targetPreference?.intent || target.intent || intents.get(target.id) || "benefit";
+      explicitTargetPreference?.intent ||
+      target.intent ||
+      intents.get(target.id) ||
+      "benefit";
+    const targetPreference =
+      intent === "cost"
+        ? mergeCostPreference(
+            explicitTargetPreference,
+            getCostPreference(options),
+          )
+        : explicitTargetPreference;
     const ordered = rankCandidates(filtered, intent, {
       ...options,
       fieldSpell: self.fieldSpell,
@@ -621,15 +676,12 @@ export function selectSimulatedTargets({
 
 function removeCardFromZones(player, card) {
   if (!player || !card) return false;
-  if (card.equippedTo && Array.isArray(card.equippedTo.equips)) {
-    card.equippedTo.equips = card.equippedTo.equips.filter(
-      (equip) => equip !== card
-    );
-    card.equippedTo = null;
-  }
+  detachSimulatedEquip(card);
   if (Array.isArray(card.equips) && card.equips.length > 0) {
     card.equips.forEach((equip) => {
-      if (equip) equip.equippedTo = null;
+      if (!equip) return;
+      equip.equippedTo = null;
+      equip.equipTarget = null;
     });
   }
   const zones = [
@@ -657,6 +709,82 @@ function removeCardFromZones(player, card) {
   return false;
 }
 
+function detachSimulatedEquip(equipCard) {
+  if (!equipCard) return;
+  const host = equipCard.equippedTo || equipCard.equipTarget || null;
+  if (!host) return;
+
+  if (Array.isArray(host.equips)) {
+    host.equips = host.equips.filter((equip) => equip !== equipCard);
+  }
+
+  if (
+    typeof equipCard.equipAtkBonus === "number" &&
+    equipCard.equipAtkBonus !== 0
+  ) {
+    host.atk = Math.max(0, (host.atk || 0) - equipCard.equipAtkBonus);
+  }
+  if (
+    typeof equipCard.equipDefBonus === "number" &&
+    equipCard.equipDefBonus !== 0
+  ) {
+    host.def = Math.max(0, (host.def || 0) - equipCard.equipDefBonus);
+  }
+  if (
+    typeof equipCard.equipExtraAttacks === "number" &&
+    equipCard.equipExtraAttacks !== 0
+  ) {
+    host.extraAttacks = Math.max(
+      0,
+      (host.extraAttacks || 0) - equipCard.equipExtraAttacks,
+    );
+  }
+  if (equipCard.grantsBattleIndestructible) {
+    host.battleIndestructible = false;
+  }
+
+  equipCard.equippedTo = null;
+  equipCard.equipTarget = null;
+  equipCard.equipAtkBonus = 0;
+  equipCard.equipDefBonus = 0;
+  equipCard.equipExtraAttacks = 0;
+  equipCard.grantsBattleIndestructible = false;
+  equipCard.grantsCrescentShieldGuard = false;
+}
+
+function attachSimulatedEquip(equipCard, target, action = {}) {
+  if (!equipCard || !target || target.cardKind !== "monster" || target.isFacedown) {
+    return false;
+  }
+
+  detachSimulatedEquip(equipCard);
+  equipCard.equippedTo = target;
+  equipCard.equipTarget = target;
+  if (!Array.isArray(target.equips)) target.equips = [];
+  if (!target.equips.includes(equipCard)) target.equips.push(equipCard);
+
+  if (Number.isFinite(action.atkBonus)) {
+    equipCard.equipAtkBonus = action.atkBonus;
+    target.atk = (target.atk || 0) + action.atkBonus;
+  }
+  if (Number.isFinite(action.defBonus)) {
+    equipCard.equipDefBonus = action.defBonus;
+    target.def = (target.def || 0) + action.defBonus;
+  }
+  if (Number.isFinite(action.extraAttacks) && action.extraAttacks !== 0) {
+    equipCard.equipExtraAttacks = action.extraAttacks;
+    target.extraAttacks = (target.extraAttacks || 0) + action.extraAttacks;
+  }
+  if (action.battleIndestructible) {
+    equipCard.grantsBattleIndestructible = true;
+    target.battleIndestructible = true;
+  } else {
+    equipCard.grantsBattleIndestructible = false;
+  }
+  equipCard.grantsCrescentShieldGuard = action.grantCrescentShieldGuard === true;
+  return true;
+}
+
 function moveCardToZone(player, card, zone) {
   if (!player || !card) return false;
   if (
@@ -669,8 +797,7 @@ function moveCardToZone(player, card, zone) {
     card.equips = [];
     attachedEquips.forEach((equip) => {
       if (!equip) return;
-      equip.equippedTo = null;
-      equip.equipTarget = null;
+      detachSimulatedEquip(equip);
       removeCardFromZones(player, equip);
       if (!Array.isArray(player.graveyard)) player.graveyard = [];
       player.graveyard.push(equip);
@@ -829,14 +956,23 @@ function chooseRankedCards(candidates, intent, action, state, player, options) {
   }
 
   const ranker = getStrategyRanker(options);
-  if (typeof ranker === "function") {
+  if (intent !== "cost" && typeof ranker === "function") {
     const ranked = ranker(candidates, action, ctx);
     if (Array.isArray(ranked) && ranked.length > 0) return ranked;
   }
 
+  const explicitTargetPreference = getTargetPreference(
+    options,
+    action.targetRef || action.id,
+  );
+  const targetPreference =
+    intent === "cost"
+      ? mergeCostPreference(explicitTargetPreference, getCostPreference(options))
+      : explicitTargetPreference;
+
   return rankCandidates(candidates, intent === "summon" ? "benefit" : intent, {
     ...options,
-    targetPreference: getTargetPreference(options, action.targetRef || action.id),
+    targetPreference,
   });
 }
 
@@ -1241,6 +1377,10 @@ export function applySimulatedActions({
         removeCardFromZones(targetPlayer, sourceCard);
         applySummonState(sourceCard, action, state, targetPlayer, options);
         if (Number.isFinite(action.tier1AtkBoost) && chosenCosts.length >= 1) {
+          sourceCard.atk = Math.max(
+            0,
+            (sourceCard.atk || 0) + action.tier1AtkBoost,
+          );
           sourceCard.tempAtkBoost =
             (sourceCard.tempAtkBoost || 0) + action.tier1AtkBoost;
         }
@@ -1386,15 +1526,9 @@ export function applySimulatedActions({
         break;
       }
       case "equip": {
-        targets.forEach((card) => {
-          if (!card) return;
-          if (Number.isFinite(action.atkBonus)) {
-            card.tempAtkBoost = (card.tempAtkBoost || 0) + action.atkBonus;
-          }
-          if (Number.isFinite(action.defBonus)) {
-            card.tempDefBoost = (card.tempDefBoost || 0) + action.defBonus;
-          }
-        });
+        const equipCard = options.sourceCard || null;
+        const target = targets[0] || null;
+        attachSimulatedEquip(equipCard, target, action);
         break;
       }
       case "add_counter": {
@@ -1424,9 +1558,26 @@ export function applySimulatedActions({
           if (!card) return;
           if (Number.isFinite(action.atkBoost)) {
             card.tempAtkBoost = (card.tempAtkBoost || 0) + action.atkBoost;
+            card.atk = Math.max(0, (card.atk || 0) + action.atkBoost);
           }
           if (Number.isFinite(action.defBoost)) {
             card.tempDefBoost = (card.tempDefBoost || 0) + action.defBoost;
+            card.def = Math.max(0, (card.def || 0) + action.defBoost);
+          }
+        });
+        break;
+      }
+      case "buff_atk_temp": {
+        targets.forEach((card) => {
+          if (!card) return;
+          const amount = Number.isFinite(action.amount)
+            ? action.amount
+            : Number.isFinite(action.atkBoost)
+              ? action.atkBoost
+              : 0;
+          if (amount !== 0) {
+            card.tempAtkBoost = (card.tempAtkBoost || 0) + amount;
+            card.atk = Math.max(0, (card.atk || 0) + amount);
           }
         });
         break;
@@ -1496,10 +1647,18 @@ export function applySimulatedActions({
         targets.forEach((card) => {
           if (!card) return;
           if (Number.isFinite(action.atkFactor)) {
-            card.atk = Math.floor((card.atk || 0) * action.atkFactor);
+            const previousAtk = card.atk || 0;
+            const newAtk = Math.floor(previousAtk * action.atkFactor);
+            card.atk = newAtk;
+            card.tempAtkBoost =
+              (card.tempAtkBoost || 0) + newAtk - previousAtk;
           }
           if (Number.isFinite(action.defFactor)) {
-            card.def = Math.floor((card.def || 0) * action.defFactor);
+            const previousDef = card.def || 0;
+            const newDef = Math.floor(previousDef * action.defFactor);
+            card.def = newDef;
+            card.tempDefBoost =
+              (card.tempDefBoost || 0) + newDef - previousDef;
           }
         });
         break;
@@ -1568,10 +1727,17 @@ export function applySimulatedActions({
       case "polymerization_fusion_summon": {
         const targetPlayer = resolveActionPlayer(action, self, opponent);
         if (!hasOpenMonsterZone(targetPlayer)) break;
-        const materialPool = [
+        const materialPool = rankCandidates([
           ...(targetPlayer.field || []),
           ...(targetPlayer.hand || []),
-        ].filter((card) => card?.cardKind === "monster");
+        ].filter((card) => card?.cardKind === "monster"), "cost", {
+          ...options,
+          fieldSpell: targetPlayer.fieldSpell,
+          targetPreference: mergeCostPreference(
+            getTargetPreference(options, action.targetRef || action.id),
+            getCostPreference(options),
+          ),
+        });
         const canPayMaterials = (fusionCard) => {
           const remaining = materialPool.slice();
           const picked = [];

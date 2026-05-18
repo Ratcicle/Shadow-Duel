@@ -59,36 +59,36 @@ export function shouldPlaySpell(card, analysis) {
     const hasMajesticInHand = analysis.hand.some((c) => c.name === "Majestic Silver Dragon");
 
     // Also check if reducing levels would allow ANY useful summon
-    // Darkness Dragon: lv5 → lv4 = 0 tributes (highest benefit)
+    // Darkness Dragon: lv5 → lv3 = 0 tributes (highest benefit)
     if (hasDarknessInHand) {
       return {
         yes: true,
         priority: 12,
-        reason: "Darkness Dragon (lv5→4) becomes free summon",
+        reason: "Darkness Dragon (lv5→3) becomes free summon",
       };
     }
 
-    // Abyssal Serpent: lv7 → lv6 = saves 1 tribute (can't SS itself)
+    // Abyssal Serpent: lv7 → lv5 = saves 1 tribute (can't SS itself)
     if (hasAbyssalInHand) {
       const fieldMonsters = analysis.field.filter((c) => c.cardKind === "monster");
       if (fieldMonsters.length >= 1) {
         return {
           yes: true,
           priority: 10,
-          reason: "Abyssal Serpent (lv7→6) saves 1 tribute",
+          reason: "Abyssal Serpent (lv7→5) saves 1 tribute",
         };
       }
       return { yes: false, reason: "Abyssal Serpent needs at least 1 tribute but field is empty" };
     }
 
-    // Majestic Silver: lv7 → lv6 = use any 1 tribute (not requiring Dragon type)
+    // Majestic Silver: lv7 → lv5 = use any 1 tribute (not requiring Dragon type)
     if (hasMajesticInHand) {
       const fieldMonsters = analysis.field.filter((c) => c.cardKind === "monster");
       if (fieldMonsters.length >= 1) {
         return {
           yes: true,
           priority: 8,
-          reason: "Majestic Silver (lv7→6) = 1 regular tribute instead of Dragon-type",
+          reason: "Majestic Silver (lv7→5) = 1 regular tribute instead of Dragon-type",
         };
       }
     }
@@ -98,7 +98,7 @@ export function shouldPlaySpell(card, analysis) {
       if (SELF_SUMMON_MONSTERS.includes(c.name)) return false;  // Has own SS
       if (CONVERGING_STARS_TARGETS.includes(c.name)) return false;  // Already checked above
       const lv = c.level || 0;
-      return lv === 5 || lv === 7;  // lv5→4 (0 tribute) or lv7→6 (1 tribute)
+      return lv >= 5 && lv <= 8;  // lv5-6 become free; lv7-8 become 1 tribute
     });
 
     if (hasHighLevelBenefit) {
@@ -184,29 +184,30 @@ export function shouldPlaySpell(card, analysis) {
 
   // ── Extreme Dragon Awakening ───────────────────────────────────────────────
   if (name === "Extreme Dragon Awakening") {
-    const hasExtremeInHand = analysis.hand.some((c) => isExtremeDragon(c));
-    if (!hasExtremeInHand) {
-      return { yes: false, reason: "No lv9+ Dragon in hand to summon" };
-    }
+    const lv8DragonsInHand = analysis.hand.filter(
+      (c) => c.cardKind === "monster" && c.type === "Dragon" && (c.level || 0) >= 8
+    );
     const fieldDragons = analysis.field.filter(
       (c) => c.cardKind === "monster" && !c.isFacedown && c.type === "Dragon"
     );
     const nonExtremeFieldDragons = fieldDragons.filter((c) => !isExtremeDragon(c));
     const hasExtremeFaceup = fieldDragons.some((c) => isExtremeDragon(c));
-
-    if (hasExtremeFaceup) {
-      return { yes: false, reason: "Extreme Dragon already face-up — Awakening's SS would be blocked by fieldLimit" };
-    }
+    const hasSummonableLv8InHand = lv8DragonsInHand.some(
+      (c) => !hasExtremeFaceup || !isExtremeDragon(c)
+    );
     if (nonExtremeFieldDragons.length < 2) {
       const canBuildFodder = analysis.hand.some((c) =>
         ["Luminescent Dragon", "Hellkite Dragon", "Voltaic Dragon", "Boneflame Dragon"].includes(c.name)
       );
       if (!canBuildFodder) {
-        return { yes: false, reason: "Need 2 non-Extreme field Dragons (or extenders to produce them)" };
+        return { yes: true, priority: 8, reason: "Search Level 8+ Dragon and set up Awakening for later" };
       }
-      return { yes: true, priority: 7, reason: "Setup: extenders in hand will produce fodder" };
+      return { yes: true, priority: 10, reason: "Search Level 8+ Dragon; extenders can produce fodder" };
     }
-    return { yes: true, priority: 11, reason: "Activate to enable ignition: 2 Dragon fodder + Extreme in hand" };
+    if (hasSummonableLv8InHand) {
+      return { yes: true, priority: 12, reason: "Activate and threaten ignition: 2 Dragon fodder + Level 8+ Dragon in hand" };
+    }
+    return { yes: true, priority: 11, reason: "Activate to search Level 8+ Dragon, then use ignition with 2 Dragon fodder" };
   }
 
   // ── Call of the Haunted ────────────────────────────────────────────────────

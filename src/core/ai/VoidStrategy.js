@@ -60,6 +60,12 @@ const CONJURER_REVIVE_PROTECTED_COST_IDS = new Set([
   VOID_IDS.THOUSAND_ARMS,
 ]);
 
+const VOID_SIM_PASSIVE_KEYS = new Set([
+  "void_tenebris_horn_aura",
+  "void_forgotten_knight_atk_boost",
+  "arturus_atk_gy_buff",
+]);
+
 function getEffectiveBattleStat(card, stat) {
   return getEffectiveStat(card, stat, { includeEquip: false });
 }
@@ -790,7 +796,9 @@ export default class VoidStrategy extends BaseStrategy {
     const game = context.game || this.bot?.game;
     const player = context.player || this.bot || game?.bot;
     const opponent = game ? this.getOpponent(game, player) : null;
-    const analysis = this.currentAnalysis || (game ? this.analyzeGameState(game) : null);
+    const analysis = game?._isPerspectiveState
+      ? this.analyzeGameState(game)
+      : this.currentAnalysis || (game ? this.analyzeGameState(game) : null);
     return assessVoidSummonEntry(card, {
       game,
       player,
@@ -1576,6 +1584,30 @@ export default class VoidStrategy extends BaseStrategy {
                 action && action.type === "polymerization_fusion_summon",
             ),
           );
+          const activationEffect =
+            game?.effectEngine?.getSpellTrapActivationEffect?.(card, {
+              fromHand: true,
+            }) ||
+            (card.effects || []).find(
+              (effect) =>
+                effect &&
+                (effect.timing === "on_play" ||
+                  effect.timing === "on_activate" ||
+                  effect.timing === "on_field_activate"),
+            );
+          if (
+            !isSimulatedState &&
+            activationEffect?.oncePerTurn &&
+            typeof game?.effectEngine?.checkOncePerTurn === "function"
+          ) {
+            const optCheck = game.effectEngine.checkOncePerTurn(
+              card,
+              bot,
+              activationEffect,
+            );
+            if (optCheck?.ok === false) return;
+          }
+
           if (!isSimulatedState && hasFusionAction) {
             const canActivate = game.canActivatePolymerization?.();
             if (!canActivate) return;
@@ -1821,13 +1853,20 @@ export default class VoidStrategy extends BaseStrategy {
           const tributeCards = (tributeIndices || [])
             .map((fieldIndex) => bot.field?.[fieldIndex])
             .filter(Boolean);
+          const tributesNeeded = Math.max(
+            0,
+            Number(tributeInfo.tributesNeeded) || 0,
+          );
+          if (tributeCards.length < tributesNeeded) return;
+          if ((bot.field || []).length - tributesNeeded + 1 > 5) return;
+
           const normalSummonAssessment = assessVoidNormalSummonEntry(card, {
             game,
             player: bot,
             opponent,
             analysis,
             tributeCards,
-            tributeCount: tributeInfo.tributesNeeded || 0,
+            tributeCount: tributesNeeded,
           });
           if (!normalSummonAssessment.shouldSummon) return;
 
@@ -2479,6 +2518,108 @@ export default class VoidStrategy extends BaseStrategy {
     return sorted;
   }
 
+  getVoidSimFieldOwners(state = {}) {
+    return [state.bot, state.player].filter(Boolean);
+  }
+
+  findVoidSimOwner(state = {}, card = null) {
+    return this.getVoidSimFieldOwners(state).find((player) =>
+      (player?.field || []).includes(card),
+    );
+  }
+
+  clearSimulatedVoidPassives(card = null) {
+    if (!card?.dynamicBuffs) return;
+    for (const key of Object.keys(card.dynamicBuffs)) {
+      if (!VOID_SIM_PASSIVE_KEYS.has(key)) continue;
+      const entry = card.dynamicBuffs[key];
+      const value = Number(entry?.value || 0);
+      const stats = Array.isArray(entry?.stats) ? entry.stats : ["atk", "def"];
+      if (value !== 0) {
+        for (const stat of stats) {
+          if (typeof card[stat] === "number") {
+            card[stat] = Math.max(0, card[stat] - value);
+          }
+        }
+      }
+      delete card.dynamicBuffs[key];
+    }
+    if (Object.keys(card.dynamicBuffs).length === 0) {
+      card.dynamicBuffs = null;
+    }
+  }
+
+  applySimulatedVoidPassiveBuff(card = null, key, value, stats = ["atk", "def"]) {
+    const amount = Number(value || 0);
+    if (!card || !key || amount === 0) return;
+    card.dynamicBuffs = card.dynamicBuffs || {};
+    for (const stat of stats) {
+      if (typeof card[stat] === "number") {
+        card[stat] = Math.max(0, card[stat] + amount);
+      }
+    }
+    card.dynamicBuffs[key] = { value: amount, stats };
+  }
+
+  applySimulatedVoidPassives(state = {}) {
+    const players = this.getVoidSimFieldOwners(state);
+    const fieldCards = players.flatMap((player) => player?.field || []);
+    fieldCards.forEach((card) => this.clearSimulatedVoidPassives(card));
+
+    for (const card of fieldCards) {
+      if (!card || card.cardKind !== "monster") continue;
+      const owner = this.findVoidSimOwner(state, card);
+      if (!owner) continue;
+
+      if (card.id === VOID_IDS.TENEBRIS_HORN) {
+        const voidCount = fieldCards.filter(
+          (candidate) => candidate?.cardKind === "monster" && isVoid(candidate),
+        ).length;
+        this.applySimulatedVoidPassiveBuff(
+          card,
+          "void_tenebris_horn_aura",
+          voidCount * 100,
+          ["atk", "def"],
+        );
+        continue;
+      }
+
+      if (card.id === VOID_IDS.FORGOTTEN_KNIGHT) {
+        const hollowCount = (owner.graveyard || []).filter(
+          (candidate) =>
+            candidate?.id === VOID_IDS.HOLLOW ||
+            candidate?.name === "Void Hollow",
+        ).length;
+        this.applySimulatedVoidPassiveBuff(
+          card,
+          "void_forgotten_knight_atk_boost",
+          hollowCount * 100,
+          ["atk"],
+        );
+        continue;
+      }
+
+      if (card.id === VOID_IDS.ARCTURUS) {
+        const faceUpMonsters = (owner.field || []).filter(
+          (candidate) =>
+            candidate?.cardKind === "monster" && !candidate.isFacedown,
+        );
+        if (faceUpMonsters.length !== 1 || faceUpMonsters[0] !== card) {
+          continue;
+        }
+        const voidCount = (owner.graveyard || []).filter(
+          (candidate) => candidate?.cardKind === "monster" && isVoid(candidate),
+        ).length;
+        this.applySimulatedVoidPassiveBuff(
+          card,
+          "arturus_atk_gy_buff",
+          voidCount * 100,
+          ["atk"],
+        );
+      }
+    }
+  }
+
   recordSimulatedMaterialActivation(state, player, card) {
     if (![VOID_IDS.WALKER, VOID_IDS.THOUSAND_ARMS].includes(card?.id)) {
       return;
@@ -2618,6 +2759,7 @@ export default class VoidStrategy extends BaseStrategy {
       action,
       this.buildVoidSimulationOptions(action),
     );
+    this.applySimulatedVoidPassives(state);
     return state;
   }
 

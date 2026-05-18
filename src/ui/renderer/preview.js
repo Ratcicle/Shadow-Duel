@@ -4,6 +4,9 @@
  */
 
 import {
+  formatCardKindSubtypeLine,
+  formatMonsterDetailHtml,
+  formatMonsterStatsLine,
   getCardDisplayDescription,
   getCardDisplayName,
 } from "../../core/i18n.js";
@@ -46,17 +49,14 @@ export function renderPreview(card) {
   const isMonster = card.cardKind !== "spell" && card.cardKind !== "trap";
 
   if (isMonster) {
-    previewAtk.textContent = `ATK: ${card.atk}`;
-    previewDef.textContent = `DEF: ${card.def}`;
-    previewLevel.textContent = `Level: ${card.level} ${"*".repeat(
-      card.level || 0,
-    )}`;
+    const stats = formatMonsterStatsLine(card);
+    previewLevel.innerHTML = formatMonsterDetailHtml(card);
+    previewAtk.textContent = stats.atk;
+    previewDef.textContent = stats.def;
   } else {
-    previewAtk.textContent = `${(card.cardKind || "").toUpperCase()}${
-      card.subtype ? " / " + card.subtype.toUpperCase() : ""
-    }`;
+    previewLevel.textContent = formatCardKindSubtypeLine(card);
+    previewAtk.textContent = "";
     previewDef.textContent = "";
-    previewLevel.textContent = "";
   }
   const desc =
     getCardDisplayDescription(card) ||

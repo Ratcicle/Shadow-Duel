@@ -592,6 +592,7 @@ async function shouldPerformOptionalSummon(action, game, player, card) {
  * Action properties:
  * - fraction: fraction of ATK to heal (default: 1.0)
  * - multiplier: alternative name for fraction
+ * - useBaseAtk: when true, use printed ATK with fallback to current ATK
  */
 export async function handleHealFromDestroyedAtk(action, ctx, targets, engine) {
   const { player, destroyed } = ctx;
@@ -600,9 +601,15 @@ export async function handleHealFromDestroyedAtk(action, ctx, targets, engine) {
 
   if (!player || !game || !destroyed) return false;
 
-  const fraction = action.fraction || action.multiplier || 1.0;
+  const fraction = action.fraction ?? action.multiplier ?? 1.0;
+  const baseValue =
+    action.useBaseAtk === true && Number.isFinite(Number(destroyed.baseAtk))
+      ? Number(destroyed.baseAtk)
+      : Number.isFinite(Number(destroyed.atk))
+        ? Number(destroyed.atk)
+        : 0;
 
-  const healAmount = Math.floor((destroyed.atk || 0) * fraction);
+  const healAmount = Math.floor(baseValue * fraction);
 
   if (healAmount <= 0) return false;
 

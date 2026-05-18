@@ -690,7 +690,9 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
   const allowExtraDeckMonsterToHand =
     options.allowExtraDeckMonsterToHand === true;
   const shouldRedirectExtraDeckMonsterToExtraDeck =
-    toZone === "hand" && isExtraDeckMonster && !allowExtraDeckMonsterToHand;
+    isExtraDeckMonster &&
+    (toZone === "deck" ||
+      (toZone === "hand" && !allowExtraDeckMonsterToHand));
   const animationToZone = shouldRedirectExtraDeckMonsterToExtraDeck
     ? "extraDeck"
     : toZone;
@@ -1087,7 +1089,7 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
   card.owner = destPlayer.id;
   card.controller = destPlayer.id;
 
-  // Special case: Extra Deck monsters returning to hand go back to Extra Deck instead
+  // Special case: Extra Deck monsters returning to hand/deck go back to Extra Deck instead
   if (shouldRedirectExtraDeckMonsterToExtraDeck) {
     const extraDeck = this.getZone(destPlayer, "extraDeck");
     if (extraDeck) {

@@ -6,7 +6,6 @@
 import {
   EXTREME_DRAGON_NAMES,
   countExtremeInGY,
-  isExtremeDragon,
 } from "./knowledge.js";
 
 /**
@@ -85,14 +84,14 @@ export const COMBO_DATABASE = [
   },
   {
     name: "Converging Stars Darkness",
-    description: "Converging Stars (discard fodder) → Darkness Dragon level 5→4 → free Normal Summon",
+    description: "Converging Stars (discard fodder) → Darkness Dragon level 5→3 → free Normal Summon",
     requires: ["Converging Stars in hand", "Darkness Dragon in hand", "Discard fodder"],
     result: "Darkness Dragon in ATK with +300 per destroyed Dragon",
     priority: 10,
   },
   {
     name: "Converging Stars Abyssal",
-    description: "Converging Stars → Abyssal Serpent Dragon lv7→6 → Normal Summon with 1 tribute",
+    description: "Converging Stars → Abyssal Serpent Dragon lv7→5 → Normal Summon with 1 tribute",
     requires: ["Converging Stars in hand", "Abyssal Serpent Dragon in hand", "1 tribute on field"],
     result: "Abyssal Serpent on field — stalls opponent's biggest threat",
     priority: 9,
@@ -265,7 +264,7 @@ export function detectAvailableCombos(analysis, logFn = null) {
         priority: 9,
         action: { type: "spell", cardName: "Converging Stars" },
       });
-      log(`💡 Combo: Converging Stars → Abyssal Serpent (lv7→6, 1 tribute)`);
+      log(`💡 Combo: Converging Stars → Abyssal Serpent (lv7→5, 1 tribute)`);
     }
   }
 
@@ -284,8 +283,8 @@ export function detectAvailableCombos(analysis, logFn = null) {
   const awakeningFaceup = (analysis.spellTrap || []).some(
     (c) => !c.isFacedown && c.name === "Extreme Dragon Awakening"
   );
-  const extremeInHand = analysis.hand.some((c) =>
-    EXTREME_DRAGON_NAMES.includes(c.name)
+  const lv8DragonsInHand = analysis.hand.filter(
+    (c) => c.cardKind === "monster" && c.type === "Dragon" && (c.level || 0) >= 8
   );
   const fieldDragonMons = analysis.field.filter(
     (c) => c.cardKind === "monster" && c.type === "Dragon"
@@ -296,11 +295,12 @@ export function detectAvailableCombos(analysis, logFn = null) {
   const hasExtremeFaceupField = fieldDragonMons.some((c) =>
     EXTREME_DRAGON_NAMES.includes(c.name)
   );
+  const summonableLv8DragonInHand = lv8DragonsInHand.some(
+    (c) => !hasExtremeFaceupField || !EXTREME_DRAGON_NAMES.includes(c.name)
+  );
 
   if (
     awakeningInHand &&
-    extremeInHand &&
-    !hasExtremeFaceupField &&
     (nonExtremeField.length >= 2 ||
       handNames.some((n) =>
         ["Luminescent Dragon", "Hellkite Dragon", "Voltaic Dragon"].includes(n)
@@ -311,20 +311,19 @@ export function detectAvailableCombos(analysis, logFn = null) {
       priority: 11,
       action: { type: "spell", cardName: "Extreme Dragon Awakening" },
     });
-    log(`💡 Combo: Awakening Setup`);
+    log(`Combo: Awakening Setup -> search Level 8+ Dragon`);
   }
   if (
     awakeningFaceup &&
-    extremeInHand &&
-    nonExtremeField.length >= 2 &&
-    !hasExtremeFaceupField
+    summonableLv8DragonInHand &&
+    nonExtremeField.length >= 2
   ) {
     available.push({
       name: "Awakening Ignition",
       priority: 13,
       action: { type: "spellTrapEffect", cardName: "Extreme Dragon Awakening" },
     });
-    log(`🐉 Combo: Awakening Ignition → SS Extreme Dragon`);
+    log(`Combo: Awakening Ignition -> SS Level 8+ Dragon`);
   }
 
   return available;

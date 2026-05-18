@@ -435,7 +435,20 @@ function applyGrandLibraryBattleReward(state, battlePlan) {
   return [drawn.name || "drawn card"];
 }
 
-function applySimulatedBattle(state, battlePlan) {
+function applyStrategyBattleRewards(state, battlePlan, summary, strategy, options = {}) {
+  if (typeof strategy?.applySimulatedBattleRewards !== "function") return [];
+  const rewards = strategy.applySimulatedBattleRewards({
+    state,
+    battlePlan,
+    summary,
+    bot: state?.bot,
+    opponent: state?.player,
+    options,
+  });
+  return Array.isArray(rewards) ? rewards.filter(Boolean) : [];
+}
+
+function applySimulatedBattle(state, battlePlan, strategy = null, options = {}) {
   const bot = state?.bot;
   const opponent = state?.player;
   if (!bot || !opponent || !battlePlan) return null;
@@ -512,6 +525,19 @@ function applySimulatedBattle(state, battlePlan) {
     attackerCard: attacker,
     destroyedCards: summary.destroyedCards,
   });
+  summary.rewardNames.push(
+    ...applyStrategyBattleRewards(
+      state,
+      {
+        ...battlePlan,
+        attackerCard: attacker,
+        destroyedCards: summary.destroyedCards,
+      },
+      summary,
+      strategy,
+      options,
+    ),
+  );
   return summary;
 }
 
@@ -558,7 +584,7 @@ function chooseBestSimulatedBattle(state, strategy, options = {}) {
     const wasSecondAttack =
       Number(originalAttacker?.attacksUsedThisTurn || 0) > 0;
     const candidateState = clonePlanningState(state, strategy);
-    const summary = applySimulatedBattle(candidateState, plan);
+    const summary = applySimulatedBattle(candidateState, plan, strategy, options);
     if (!summary) return;
     const destroyedOpponent = summary.destroyedNames.filter(
       (_name, index) => summary.destroyedCards[index]?.owner === "opponent",

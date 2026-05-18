@@ -7,6 +7,7 @@
     def: 1200,
     level: 4,
     type: "Beast",
+    attribute: "Dark",
     description: "A demonic horse with flaming mane.",
     image: "assets/Nightmare Steed.png",
   },
@@ -82,6 +83,7 @@
     def: 2000,
     level: 7,
     type: "Beast",
+    attribute: "Dark",
     altTribute: { requiresName: "Nightmare Steed", tributes: 1 },
     onBattleDestroy: { damage: 300 },
     description:
@@ -174,6 +176,7 @@
     def: 1200,
     level: 4,
     type: "Spellcaster",
+    attribute: "Dark",
     description: "When this card is Normal Summoned: draw 1 card.",
     image: "assets/Arcane Scholar.png",
     effects: [
@@ -312,44 +315,65 @@
   },
   {
     id: 12,
-    name: "Radiant Dragon",
+    name: "Luminous Dragon",
     cardKind: "monster",
-    atk: 2200,
+    atk: 2000,
     def: 1600,
-    level: 6,
+    level: 5,
     type: "Dragon",
-    archetype: "Radiant",
+    attribute: "Light",
     description:
-      'If this card was Normal Summoned: Add 1 "Luminarch" monster from your Deck to your hand. Once per turn, during your Standby Phase: gain 300 LP for each "Luminarch" monster you control.',
-    image: "assets/Radiant Dragon.png",
+      'If you control no monsters, you can Special Summon this card from your hand. If a Dragon-Type monster is discarded from your hand to the Graveyard while this card is face-up on the field: You can target 1 Dragon-Type monster in your Graveyard with a different name from the discarded monster; add it to your hand. You can only use each effect of "Luminous Dragon" once per turn.',
+    image: "assets/Luminous Dragon.png",
     effects: [
       {
-        id: "radiant_dragon_search_luminarch",
-        timing: "on_event",
-        event: "after_summon",
-        requireSelfAsSummoned: true,
-        summonMethods: ["normal", "tribute"],
+        id: "luminous_dragon_empty_field_summon",
+        timing: "ignition",
+        requireZone: "hand",
+        conditions: [{ type: "playerFieldEmpty" }],
+        oncePerTurn: true,
+        oncePerTurnName: "luminous_dragon_empty_field_summon",
         actions: [
           {
-            type: "search_any",
-            archetype: "Luminarch",
-            cardKind: "monster",
-            player: "self",
+            type: "conditional_summon_from_hand",
+            targetRef: "self",
+            position: "choice",
+            optional: false,
           },
         ],
       },
       {
-        id: "radiant_dragon_luminarch_heal",
+        id: "luminous_dragon_discard_recover",
         timing: "on_event",
-        event: "standby_phase",
+        event: "card_to_grave",
+        requireZone: "field",
+        requireFaceup: true,
+        eventCardFilters: {
+          owner: "self",
+          fromZone: "hand",
+          toZone: "graveyard",
+          cardKind: "monster",
+          type: "Dragon",
+        },
         oncePerTurn: true,
-        oncePerTurnName: "radiant_dragon_luminarch_heal",
+        oncePerTurnName: "luminous_dragon_discard_recover",
+        targets: [
+          {
+            id: "luminous_recover_target",
+            owner: "self",
+            zone: "graveyard",
+            cardKind: "monster",
+            type: "Dragon",
+            excludeEventCardName: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
         actions: [
           {
-            type: "heal_per_archetype_monster",
+            type: "move",
+            targetRef: "luminous_recover_target",
+            to: "hand",
             player: "self",
-            archetype: "Luminarch",
-            amountPerMonster: 300,
           },
         ],
       },
@@ -442,6 +466,7 @@
     def: 1700,
     level: 4,
     type: "Sea Serpent",
+    attribute: "Water",
     archetype: "Shadow-Heart",
     description:
       'If this card is attacked while in Defense Position: inflict 600 damage to your opponent. If this card is destroyed by battle: You can add 1 "Shadow-Heart" Spell/Trap from your Graveyard to your hand.',
@@ -495,6 +520,7 @@
     def: 800,
     level: 2,
     type: "Spirit",
+    attribute: "Dark",
     archetype: "Shadow-Heart",
     description:
       'If this card is sent to the Graveyard: You can target 1 "Shadow-Heart" monster in your Graveyard, except "Shadow-Heart Specter"; add it to your hand. You can only use this effect of "Shadow-Heart Specter" once per turn.',
@@ -587,6 +613,7 @@
     def: 1800,
     level: 8,
     type: "Fiend",
+    attribute: "Dark",
     archetype: "Shadow-Heart",
     description:
       "If this card is Normal Summoned: target 1 monster your opponent controls; destroy that target.",
@@ -701,6 +728,7 @@
     def: 800,
     level: 4,
     type: "Fiend",
+    attribute: "Dark",
     archetype: "Shadow-Heart",
     description:
       'When this card is Normal Summoned: You can Special Summon 1 Level 4 or lower "Shadow-Heart" monster from your hand. You can only use this effect of "Shadow-Heart Imp" once per turn.',
@@ -745,6 +773,7 @@
     def: 1000,
     level: 3,
     type: "Reptile",
+    attribute: "Dark",
     archetype: "Shadow-Heart",
     description:
       'If this card is Special Summoned: You can add 1 Level 8 "Shadow-Heart" monster from your Deck to your hand. If this card is destroyed by battle: draw 1 card. You can only use each effect of "Shadow-Heart Gecko" once per turn.',
@@ -794,6 +823,7 @@
     def: 1000,
     level: 3,
     type: "Fiend",
+    attribute: "Dark",
     archetype: "Shadow-Heart",
     description:
       "If this card is discarded from your hand to the Graveyard: target 1 monster your opponent controls; its ATK and DEF are halved until the end of this turn.",
@@ -879,6 +909,7 @@
     def: 2500,
     level: 8,
     type: "Dragon",
+    attribute: "Dark",
     archetype: "Shadow-Heart",
     description:
       'If this card was Tribute Summoned, it gains the following effects: \n●If this card destroys an opponent\'s monster by battle: You can target 1 "Shadow-Heart" card in your Graveyard; add it to your hand. \n●If this card is destroyed by battle or by an opponent\'s card effect: You can Special Summon up to 3 "Shadow-Heart" monsters with 1600 or less ATK from your Graveyard. You can only use each effect of "Shadow-Heart Scale Dragon" once per turn.',
@@ -1044,6 +1075,7 @@
     def: 1500,
     level: 5,
     type: "Winged Beast",
+    attribute: "Dark",
     archetype: "Shadow-Heart",
     altTribute: { type: "no_tribute_if_empty_field" },
     description:
@@ -1131,6 +1163,7 @@
     def: 2000,
     level: 8,
     type: "Fiend",
+    attribute: "Dark",
     archetype: "Shadow-Heart",
     description:
       'Quick Effect: Once per turn, when a "Shadow-Heart" monster you control is destroyed by battle: You can Special Summon this card from your hand.',
@@ -1163,6 +1196,7 @@
     def: 1800,
     level: 6,
     type: "Sea Serpent",
+    attribute: "Water",
     archetype: "Shadow-Heart",
     description:
       'You can Special Summon this card from your hand by sending 1 "Shadow-Heart Abyssal Eel" you control to the GY. If this card destroys a monster by battle: inflict 500 damage to your opponent. If this card is destroyed by battle: inflict 800 damage to your opponent.',
@@ -1227,6 +1261,7 @@
     def: 1500,
     level: 4,
     type: "Spellcaster",
+    attribute: "Dark",
     archetype: "Shadow-Heart",
     description:
       'If this card is Normal Summoned: You can add 1 "Shadow-Heart" Spell/Trap from your Deck to your hand. If your opponent loses LP while this card is on the field: draw 1 card. You can only use this effect of "Shadow-Heart Void Mage" once per turn.',
@@ -1360,6 +1395,7 @@
     def: 3000,
     level: 10,
     type: "Dragon",
+    attribute: "Dark",
     archetype: "Shadow-Heart",
     archetypes: ["Shadow-Heart"],
     description:
@@ -1413,6 +1449,7 @@
     def: 1900,
     level: 8,
     type: "Warrior",
+    attribute: "Dark",
     archetype: "Shadow-Heart",
     archetypes: ["Shadow-Heart"],
     description:
@@ -1478,6 +1515,7 @@
     name: "Shadow-Heart Armored Arctroth",
     cardKind: "monster",
     archetype: "Shadow-Heart",
+    attribute: "Dark",
     level: 9,
     atk: 2800,
     def: 2500,
@@ -1541,6 +1579,7 @@
     def: 1200,
     level: 4,
     type: "Warrior",
+    attribute: "Light",
     archetype: "Luminarch",
     piercing: true,
     description:
@@ -1616,6 +1655,7 @@
     def: 2000,
     level: 4,
     type: "Warrior",
+    attribute: "Light",
     archetype: "Luminarch",
     mustBeAttacked: true,
     description:
@@ -1660,6 +1700,7 @@
     def: 1700,
     level: 6,
     type: "Warrior",
+    attribute: "Light",
     archetype: "Luminarch",
     description:
       'If this card is Normal Summoned: You can target 1 Level 4 or lower "Luminarch" monster in your GY; Special Summon it. Once per turn, if this card destroys an opponent\'s monster by battle: it can make a second attack this turn.',
@@ -1717,6 +1758,7 @@
     def: 2100,
     level: 7,
     type: "Warrior",
+    attribute: "Light",
     archetype: "Luminarch",
     piercing: true,
     battleIndestructibleOncePerTurn: true,
@@ -1733,6 +1775,7 @@
     def: 1000,
     level: 3,
     type: "Warrior",
+    attribute: "Light",
     archetype: "Luminarch",
     description:
       'You can send this card from the field to the GY; add up to 2 "Luminarch" monsters from your GY to your hand.',
@@ -1783,6 +1826,7 @@
     def: 2800,
     level: 7,
     type: "Warrior",
+    attribute: "Light",
     archetype: "Luminarch",
     description:
       'If you control a face-up "Luminarch Aegisbearer", you can send it to the GY; Special Summon this card from your hand. Once per turn, when an opponent\'s monster declares an attack (Quick Effect): negate that attack.',
@@ -1811,6 +1855,7 @@
     def: 2100,
     level: 8,
     type: "Warrior",
+    attribute: "Light",
     archetype: "Luminarch",
     description:
       "If this card destroys an opponent's monster by battle, it gains 200 ATK while it remains on the field. If this card is destroyed by battle, destroy 1 Spell/Trap your opponent controls.",
@@ -1871,6 +1916,7 @@
     def: 2400,
     level: 8,
     type: "Fairy",
+    attribute: "Light",
     archetype: "Luminarch",
     description:
       "If this card destroys an opponent's monster by battle, gain LP equal to half that monster's ATK. Once per turn, if this card would be destroyed by battle or card effect: you can send 1 \"Luminarch\" monster you control to the GY instead.",
@@ -1919,6 +1965,7 @@
     def: 1000,
     level: 4,
     type: "Warrior",
+    attribute: "Light",
     archetype: "Luminarch",
     description:
       'If this card is Normal Summoned: You can add 1 "Luminarch" Spell/Trap from your Deck to your hand. You can only use this effect of "Luminarch Sanctified Arbiter" once per turn.',
@@ -2218,6 +2265,7 @@
     def: 1400,
     level: 4,
     type: "Warrior",
+    attribute: "Light",
     archetype: "Luminarch",
     image: "assets/Luminarch Enchanted Halberd.png",
     description:
@@ -2358,6 +2406,7 @@
     def: 3000,
     level: 9,
     type: "Warrior",
+    attribute: "Light",
     archetype: "Luminarch",
     archetypes: ["Luminarch"],
     description:
@@ -2413,6 +2462,7 @@
     def: 2500,
     level: 6,
     type: "Warrior",
+    attribute: "Light",
     archetype: "Luminarch",
     mustBeAttacked: true,
     ascension: {
@@ -2487,6 +2537,7 @@
     def: 2000,
     level: 6,
     type: "Warrior",
+    attribute: "Light",
     archetype: "Luminarch",
     archetypes: ["Luminarch"],
     description:
@@ -2541,6 +2592,7 @@
     def: 800,
     level: 4,
     type: "Spellcaster",
+    attribute: "Dark",
     archetype: "Void",
     description:
       "Special Summon 1 Level 4 or lower 'Void' monster from your Deck, but it cannot attack this turn. If this card is in your GY: You can send 1 'Void' monster you control to the GY; Special Summon this card. You can only use each effect of 'Void Conjurer' once per turn.",
@@ -2609,6 +2661,7 @@
     def: 200,
     level: 4,
     type: "Fiend",
+    attribute: "Dark",
     archetype: "Void",
     description:
       "Cannot attack the turn it is Special Summoned. Once per turn: You can return this card to your hand; Special Summon 1 Level 4 or lower 'Void' monster from your hand, except 'Void Walker'.",
@@ -2658,6 +2711,7 @@
     def: 1300,
     level: 4,
     type: "Beast",
+    attribute: "Dark",
     archetype: "Void",
     description:
       "If this card is Normal Summoned: You can add 1 'Void Hollow' from your Deck to your hand. If this card destroys an opponent's monster by battle: You can Special Summon 1 'Void Hollow' from your hand. You can only use each effect of 'Void Beast' once per turn.",
@@ -2711,6 +2765,7 @@
     def: 1200,
     level: 3,
     type: "Fiend",
+    attribute: "Dark",
     archetype: "Void",
     description:
       "If this card is Special Summoned from your hand: You can Special Summon 1 'Void Hollow' from your Deck. You can only use this effect of 'Void Hollow' once per turn.",
@@ -2752,6 +2807,7 @@
     def: 1500,
     level: 5,
     type: "Fiend",
+    attribute: "Dark",
     archetype: "Void",
     description:
       "You can send 1 'Void' monster you control to the GY; Special Summon this card from your hand. You can banish this card from your GY, then target up to 3 'Void Hollow' in your GY; Special Summon those targets, but their ATK/DEF become 0. You can only use each effect of 'Void Haunter' once per turn.",
@@ -2817,6 +2873,7 @@
     def: 600,
     level: 3,
     type: "Beast",
+    attribute: "Dark",
     archetype: "Void",
     description:
       "Once per turn: You can halve this card's ATK until the end of this turn, and if you do, it can attack directly this turn.",
@@ -2861,6 +2918,7 @@
     def: 1200,
     level: 6,
     type: "Fiend",
+    attribute: "Dark",
     archetype: "Void",
     description:
       "3 'Void Hollow' monsters. If this card is destroyed by battle or card effect: You can Special Summon up to 3 'Void Hollow' from your GY. If this card destroys an opponent's monster by battle: You can Special Summon 1 'Void Hollow' from your GY. (Quick Effect) You can send 1 'Void Hollow' you control to the GY; this card gains 1000 ATK until the end of this turn.",
@@ -2978,6 +3036,7 @@
     def: 1400,
     level: 6,
     type: "Insect",
+    attribute: "Dark",
     archetype: "Void",
     description:
       "Once per turn: Target 1 face-up monster your opponent controls; it cannot attack until the end of the next turn. If this card is sent from the field to the Graveyard: Special Summon a 'Void Little Spider' token (Level 1, 500 ATK/DEF).",
@@ -3038,6 +3097,7 @@
     def: 1000,
     level: 5,
     type: "Fiend",
+    attribute: "Dark",
     archetype: "Void",
     description:
       "You can send a face-up 'Void' monster you control to the GY; Special Summon this card from your hand. This card gains 100 ATK for each 'Void Hollow' in your GY. You can banish this card from your GY; target 1 face-up Spell/Trap your opponent controls; destroy it. You can only use each effect of 'Void Forgotten Knight' once per turn.",
@@ -3127,6 +3187,7 @@
     def: 300,
     level: 2,
     type: "Winged Beast",
+    attribute: "Dark",
     archetype: "Void",
     description:
       "Se um monstro de fusÃ£o 'Void' for Invocado por InvocaÃ§Ã£o-FusÃ£o: vocÃª pode descartar esta carta da mÃ£o; esse monstro fica imune aos efeitos de cartas do oponente atÃ© o final do prÃ³ximo turno.",
@@ -3182,6 +3243,7 @@
     def: 800,
     level: 4,
     type: "Fiend",
+    attribute: "Dark",
     archetype: "Void",
     description:
       'Gains 100 ATK/DEF for each "Void" monster on the field. Once per Duel, if this card is in your GY: You can Special Summon it.',
@@ -3238,6 +3300,7 @@
     def: 2200,
     level: 8,
     type: "Fiend",
+    attribute: "Dark",
     archetype: "Void",
     description:
       'Once per turn: You can Special Summon this card from your hand by sending 2 face-up "Void" monsters you control to the GY. If this card destroys an opponent\'s monster by battle: banish that monster.',
@@ -3292,6 +3355,7 @@
     def: 2200,
     level: 8,
     type: "Fiend",
+    attribute: "Dark",
     archetype: "Void",
     description:
       "Void Slayer Brute (on the field) + 1 'Void' monster. This card can make up to 2 attacks during each Battle Phase. Once per turn, if this card destroys an opponent's monster by battle: You can target 1 card your opponent controls; return it to the hand.",
@@ -3340,6 +3404,7 @@
     def: 1800,
     level: 6,
     type: "Dragon",
+    attribute: "Wind",
     archetype: "Void",
     description:
       'If this card is in your hand: You can send 1 to 3 "Void Hollow" you control to the GY; Special Summon this card, and if you do, it gains the following effects based on the number sent:\n- 1+: This card gains 300 ATK until the end of the turn.\n- 2+: Also, this card cannot be destroyed by battle.\n- 3: Also, destroy 1 card your opponent controls.\nYou can only use this effect of "Void Serpent Drake" once per turn.',
@@ -3391,6 +3456,7 @@
     def: 2900,
     level: 10,
     type: "Dragon",
+    attribute: "Dark",
     archetype: "Void",
     archetypes: ["Void"],
     description:
@@ -3634,6 +3700,7 @@
     def: 1600,
     level: 6,
     type: "Fiend",
+    attribute: "Dark",
     archetype: "Void",
     description:
       "You can send 1 'Void' monster you control to the GY; Special Summon this card from your hand. You can return this card from the field to your hand; Special Summon up to 2 'Void Hollow' from your GY, and if you do, they gain 700 ATK/DEF until the end of this turn. You can only use each effect of 'Thousand-Arms of the Void' once per turn.",
@@ -3700,6 +3767,7 @@
     name: "Void Cosmic Walker",
     cardKind: "monster",
     archetype: "Void",
+    attribute: "Dark",
     level: 6,
     atk: 2100,
     def: 1600,
@@ -3761,6 +3829,7 @@
     atk: 2600,
     def: 2400,
     type: "Fiend",
+    attribute: "Dark",
     archetype: "Void",
     monsterType: "ascension",
     ascension: {
@@ -3802,6 +3871,7 @@
     name: "Armored Dragon",
     cardKind: "monster",
     type: "Dragon",
+    attribute: "Earth",
     level: 4,
     atk: 1600,
     def: 1500,
@@ -3857,6 +3927,7 @@
     name: "Metal Armored Dragon",
     cardKind: "monster",
     type: "Dragon",
+    attribute: "Earth",
     level: 6,
     atk: 1600,
     def: 2000,
@@ -3898,6 +3969,7 @@
     name: "Grey Dragon",
     cardKind: "monster",
     type: "Dragon",
+    attribute: "Earth",
     level: 4,
     atk: 1800,
     def: 800,
@@ -3973,6 +4045,7 @@
     name: "Voltaic Dragon",
     cardKind: "monster",
     type: "Dragon",
+    attribute: "Light",
     level: 3,
     atk: 1200,
     def: 800,
@@ -4024,6 +4097,7 @@
     name: "Luminescent Dragon",
     cardKind: "monster",
     type: "Dragon",
+    attribute: "Light",
     level: 4,
     atk: 1500,
     def: 900,
@@ -4088,6 +4162,7 @@
     name: "Majestic Silver Dragon",
     cardKind: "monster",
     type: "Dragon",
+    attribute: "Light",
     level: 7,
     atk: 2500,
     def: 2400,
@@ -4127,6 +4202,7 @@
     name: "Darkness Dragon",
     cardKind: "monster",
     type: "Dragon",
+    attribute: "Dark",
     level: 5,
     atk: 2000,
     def: 1700,
@@ -4196,6 +4272,7 @@
     name: "Black Bull Dragon",
     cardKind: "monster",
     type: "Dragon",
+    attribute: "Wind",
     level: 8,
     atk: 2500,
     def: 2000,
@@ -4259,6 +4336,7 @@
     name: "Hellkite Dragon",
     cardKind: "monster",
     type: "Dragon",
+    attribute: "Fire",
     level: 7,
     atk: 2300,
     def: 1900,
@@ -4323,7 +4401,7 @@
     cardKind: "spell",
     subtype: "normal",
     description:
-      "If you control a Level 7 or higher Dragon: Destroy up to 2 Spell/Trap cards your opponent controls. You can banish this card from your GY; add 1 'Jagged Peak of the Dragons' from your Deck to your hand.",
+      "If you control a Level 7 or higher Dragon: Destroy up to 1 Spell/Trap card your opponent controls. You can banish this card from your GY; add 1 'Jagged Peak of the Dragons' from your Deck to your hand.",
     image: "assets/Hellkite Roar.png",
     effects: [
       {
@@ -4445,12 +4523,12 @@
     name: "Abyssal Serpent Dragon",
     cardKind: "monster",
     type: "Dragon",
+    attribute: "Water",
     level: 7,
     atk: 2200,
     def: 1400,
-    cannotBeSpecialSummoned: true,
     description:
-      "Cannot be Special Summoned. During your Main Phase: you can select 1 monster your opponent controls; send this card and the target to the GY, and during your opponent's next Standby Phase, Special Summon them. If you selected a Fusion or Ascension Monster as a target: this card gains 800 ATK until the end of your next turn. You can use each effect of 'Abyssal Serpent Dragon' once per turn.",
+      "During your Main Phase: you can select 1 monster your opponent controls; send this card and the target to the GY, and during your opponent's next Standby Phase, Special Summon them. If you selected a Fusion or Ascension Monster as a target: this card gains 800 ATK until the end of your next turn. You can use each effect of 'Abyssal Serpent Dragon' once per turn.",
     image: "assets/Abyssal Serpent Dragon.png",
     effects: [
       {
@@ -4484,6 +4562,7 @@
     name: "Purified Crystal Dragon",
     cardKind: "monster",
     type: "Dragon",
+    attribute: "Light",
     level: 8,
     atk: 2500,
     def: 1700,
@@ -4569,6 +4648,7 @@
     atk: 2500,
     def: 1000,
     type: "Dragon",
+    attribute: "Dark",
     description:
       "Voltaic Dragon + 1 Level 5+ Dragon monster. If this card is Fusion Summoned: You can target 1 Level 4 or lower Dragon monster in your GY; banish it, and if you do, this card gains ATK equal to the banished monster's ATK until the end of this turn. If this card is destroyed by battle: You can Special Summon 1 'Voltaic Dragon' from your GY. You can only use each effect of 'Tech-Void Dragon' once per turn.",
     image: "assets/Tech-Void Dragon.png",
@@ -4624,6 +4704,210 @@
             zone: "graveyard",
             cardName: "Voltaic Dragon",
             position: "choice",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 259,
+    name: "Radiant Cosmic Dragon",
+    cardKind: "monster",
+    monsterType: "fusion",
+    level: 9,
+    atk: 3300,
+    def: 2700,
+    type: "Dragon",
+    attribute: "Light",
+    preventsBattleDamageToController: true,
+    description:
+      '3 Dragon-type monsters, including 1 LIGHT monster. If this card is Fusion Summoned: You can target 1 to 5 cards in your GY; shuffle them into the Deck, then draw 1 card. You take no battle damage from battles involving this card. If this card is destroyed by battle or card effect: You can Special Summon 1 Dragon-type monster from your GY, except "Radiant Cosmic Dragon". You can only use each effect of "Radiant Cosmic Dragon" once per turn.',
+    image: "assets/Radiant Cosmic Dragon.png",
+    fusionMaterials: [
+      { type: "Dragon", attribute: "Light", count: 1 },
+      { type: "Dragon", count: 2 },
+    ],
+    effects: [
+      {
+        id: "radiant_cosmic_dragon_fusion_recycle_draw",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethods: ["fusion"],
+        requireSelfAsSummoned: true,
+        oncePerTurn: true,
+        oncePerTurnName: "radiant_cosmic_dragon_recycle_draw",
+        promptUser: true,
+        promptMessage:
+          'Activate "Radiant Cosmic Dragon" to shuffle 1 to 5 cards from your GY into the Deck, then draw 1 card?',
+        targets: [
+          {
+            id: "radiant_cosmic_recycle_targets",
+            owner: "self",
+            zone: "graveyard",
+            count: { min: 1, max: 5 },
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "radiant_cosmic_recycle_targets",
+            player: "self",
+            to: "deck",
+          },
+          {
+            type: "shuffle_deck",
+            player: "self",
+          },
+          {
+            type: "draw",
+            player: "self",
+            amount: 1,
+          },
+        ],
+      },
+      {
+        id: "radiant_cosmic_dragon_destroyed_revive",
+        timing: "on_event",
+        event: "card_to_grave",
+        requireSelfAsDestroyed: true,
+        condition: {
+          type: "destroyed_by_battle_or_effect",
+        },
+        oncePerTurn: true,
+        oncePerTurnName: "radiant_cosmic_dragon_destroyed_revive",
+        promptUser: true,
+        promptMessage:
+          'Activate "Radiant Cosmic Dragon" to Special Summon 1 Dragon monster from your GY?',
+        targets: [
+          {
+            id: "radiant_cosmic_revive_target",
+            owner: "self",
+            zone: "graveyard",
+            cardKind: "monster",
+            type: "Dragon",
+            excludeEventCardName: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "special_summon_from_zone",
+            targetRef: "radiant_cosmic_revive_target",
+            zone: "graveyard",
+            position: "choice",
+            promptPlayer: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 260,
+    name: "Rainbow Cosmic Dragon",
+    cardKind: "monster",
+    monsterType: "ascension",
+    level: 10,
+    atk: 3500,
+    def: 3200,
+    type: "Dragon",
+    attribute: "Light",
+    ascension: {
+      materialId: 29,
+      requirements: [{ type: "material_effect_activations", count: 3 }],
+      position: "choice",
+    },
+    description:
+      'Ascension Material: "Purified Crystal Dragon". Requirement: the material must have activated its effects 3 times this Duel. Once per turn: You can target 1 Dragon-type monster you control; it cannot be destroyed by battle or card effects until the end of the next turn. If this card destroys a monster by battle: gain LP equal to the destroyed monster\'s original ATK. You can banish this card from your GY; send 1 to 3 "Extreme Dragons" monsters from your Deck to the GY.',
+    image: "assets/Rainbow Cosmic Dragon.png",
+    effects: [
+      {
+        id: "rainbow_cosmic_dragon_protect_dragon",
+        timing: "ignition",
+        requireZone: "field",
+        requirePhase: ["main1", "main2"],
+        oncePerTurn: true,
+        oncePerTurnName: "rainbow_cosmic_dragon_protect_dragon",
+        oncePerTurnScope: "card",
+        targets: [
+          {
+            id: "rainbow_cosmic_protection_target",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            type: "Dragon",
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "register_replacement_effect",
+            targetRef: "rainbow_cosmic_protection_target",
+            duration: "end_of_next_turn",
+            sourceName: "Rainbow Cosmic Dragon",
+            logMessage:
+              "Rainbow Cosmic Dragon protects the chosen Dragon until the end of the next turn.",
+            replacementEffect: {
+              type: "destruction",
+              reason: "any",
+              targetOwner: "self",
+              targetZones: ["field"],
+              targetFilters: {
+                cardKind: "monster",
+                type: "Dragon",
+              },
+              targetRequireFaceup: true,
+              auto: true,
+              logMessage: "{target} avoided destruction due to {source}.",
+            },
+          },
+        ],
+      },
+      {
+        id: "rainbow_cosmic_dragon_battle_heal",
+        timing: "on_event",
+        event: "battle_destroy",
+        requireZone: "field",
+        requireFaceup: true,
+        requireSelfAsAttacker: true,
+        requireDestroyedIsOpponent: true,
+        actions: [
+          {
+            type: "heal_from_destroyed_atk",
+            useBaseAtk: true,
+          },
+        ],
+      },
+      {
+        id: "rainbow_cosmic_dragon_gy_send_extremes",
+        timing: "ignition",
+        requireZone: "graveyard",
+        requirePhase: ["main1", "main2"],
+        targets: [
+          {
+            id: "rainbow_cosmic_extreme_send_targets",
+            owner: "self",
+            zone: "deck",
+            cardKind: "monster",
+            archetype: "Extreme Dragons",
+            count: { min: 1, max: 3 },
+          },
+        ],
+        actions: [
+          {
+            type: "banish",
+            targetRef: "self",
+            fromZone: "graveyard",
+          },
+          {
+            type: "move",
+            targetRef: "rainbow_cosmic_extreme_send_targets",
+            player: "self",
+            to: "graveyard",
+          },
+          {
+            type: "shuffle_deck",
+            player: "self",
           },
         ],
       },
@@ -4732,6 +5016,7 @@
     name: "Boneflame Dragon",
     cardKind: "monster",
     type: "Dragon",
+    attribute: "Dark",
     level: 3,
     atk: 0,
     def: 0,
@@ -4857,6 +5142,7 @@
     def: 1000,
     level: 3,
     type: "Spellcaster",
+    attribute: "Light",
     archetype: "Arcanist",
     description:
       'If this card is Normal Summoned: You can add 1 "Arcanist" Spell from your Deck to your hand. If this card is equipped with an "Arcanist" Equip Spell: All "Arcanist" monsters you control gain 300 ATK while this card is face-up on the field. You can only activate each effect of "Arcanist Apprentice" once per turn.',
@@ -5046,6 +5332,7 @@
     def: 1500,
     level: 4,
     type: "Spellcaster",
+    attribute: "Wind",
     archetype: "Arcanist",
     description:
       'Once per turn: You can target 1 face-up Spell your opponent controls; return it to the hand, and if you do, gain 500 LP.\nIf this card becomes equipped with an "Arcanist" Equip Spell: You can target 1 Spell in your GY; add it to your hand.\nYou can only use each effect of "Viridis, Arcanist of Life" once per turn.',
@@ -5117,6 +5404,7 @@
     def: 1800,
     level: 4,
     type: "Spellcaster",
+    attribute: "Earth",
     archetype: "Arcanist",
     description:
       'You can target 1 face-up monster your opponent controls; change its battle position. If this card is equipped with an "Arcanist" Equip Spell, this effect can be activated as a Quick Effect. You can only use this effect of "Tera, Arcanist of Earth" once per turn.',
@@ -5191,6 +5479,7 @@
     def: 1200,
     level: 4,
     type: "Spellcaster",
+    attribute: "Water",
     archetype: "Arcanist",
     description:
       'If you control an "Arcanist" monster, you can Special Summon this card from your hand. If this card is equipped with an "Arcanist" Equip Spell: target 1 "Arcanist" monster in your GY; add it to your hand. You can only activate each effect of "Albus, Arcanist of Ice" once per turn.',
@@ -5270,6 +5559,7 @@
     def: 2200,
     level: 6,
     type: "Spellcaster",
+    attribute: "Light",
     archetype: "Arcanist",
     description:
       'If this card is Normal Summoned: You can target 1 to 3 "Arcanist" Spells in your GY; shuffle them into the Deck, then draw 1 card.\nIf this card is equipped with an "Arcanist" Equip Spell: You can target 1 Level 4 or lower "Arcanist" monster in your GY; Special Summon it.\nYou can only activate each effect of "Master of Mirrors Arcanist" once per turn.',
@@ -5792,6 +6082,7 @@
     def: 2400,
     level: 9,
     type: "Spellcaster",
+    attribute: "Light",
     archetype: "Arcanist",
     description:
       'Cannot be destroyed by card effects. This card gains 100 ATK for each "Arcanist" Spell activated this turn. Once per turn, if this card is equipped with an "Arcanist" Equip Spell: you can target 1 monster your opponent controls; destroy it.',
@@ -5873,6 +6164,7 @@
     def: 1400,
     level: 4,
     type: "Spellcaster",
+    attribute: "Dark",
     archetype: "Arcanist",
     description:
       'Monsters your opponent controls lose 100 ATK/DEF for each "Arcanist" Spell you activated until the end of this turn. If this card is equipped with an "Arcanist" Equip Spell: target 1 monster your opponent controls; halve its ATK/DEF until the end of this turn. You can only use this effect of "Azrath, Corrupted Arcanist" once per turn.',
@@ -6066,6 +6358,7 @@
     def: 2600,
     level: 10,
     type: "Dragon",
+    attribute: "Fire",
     archetype: "Extreme Dragons",
     fieldLimit: {
       key: "extreme_dragons_faceup",
@@ -6145,6 +6438,7 @@
     def: 3000,
     level: 10,
     type: "Dragon",
+    attribute: "Fire",
     archetype: "Extreme Dragons",
     fieldLimit: {
       key: "extreme_dragons_faceup",
@@ -6237,6 +6531,7 @@
     def: 2500,
     level: 10,
     type: "Dragon",
+    attribute: "Wind",
     archetype: "Extreme Dragons",
     fieldLimit: {
       key: "extreme_dragons_faceup",
@@ -6295,6 +6590,7 @@
     def: 2900,
     level: 10,
     type: "Dragon",
+    attribute: "Light",
     archetype: "Extreme Dragons",
     fieldLimit: {
       key: "extreme_dragons_faceup",
@@ -6369,6 +6665,7 @@
     def: 2700,
     level: 10,
     type: "Dragon",
+    attribute: "Wind",
     archetype: "Extreme Dragons",
     fieldLimit: {
       key: "extreme_dragons_faceup",
@@ -6442,6 +6739,7 @@
     def: 5000,
     level: 12,
     type: "Dragon",
+    attribute: "Light",
     specialSummonOnlyBy: ["graveyard_banish_fusion"],
     fieldPresenceRestriction: {
       type: "only_monster_you_control_while_faceup",
@@ -6489,7 +6787,7 @@
     cardKind: "spell",
     subtype: "normal",
     description:
-      "Discard 1 card; reduce the Level of all monsters in your hand by 1 until the end of this turn.",
+      "Discard 1 card; reduce the Level of all monsters in your hand by 2 until the end of this turn.",
     image: "assets/Converging Stars.png",
     effects: [
       {
@@ -6513,6 +6811,7 @@
           },
           {
             type: "reduce_hand_monster_levels",
+            amount: 2,
           },
         ],
       },
@@ -6524,9 +6823,25 @@
     cardKind: "spell",
     subtype: "continuous",
     description:
-      'You can send 2 Dragon-type monsters you control to the GY; Special Summon 1 Level 9 or higher Dragon-type monster from your hand. You can only use this effect of "Extreme Dragon Awakening" once per turn.',
+      'When this card is activated: add 1 Level 8 or higher Dragon-type monster from your Deck to your hand. Once per turn: You can send 2 Dragon-type monsters you control to the GY; Special Summon 1 Level 8 or higher Dragon-type monster from your hand. You can only activate 1 "Extreme Dragon Awakening" per turn.',
     image: "assets/Extreme Dragon Awakening.png",
     effects: [
+      {
+        id: "extreme_dragon_awakening_search",
+        timing: "on_play",
+        oncePerTurn: true,
+        oncePerTurnName: "extreme_dragon_awakening_activate",
+        actions: [
+          {
+            type: "search_any",
+            cardKind: "monster",
+            filters: { type: "Dragon" },
+            minLevel: 8,
+            count: { min: 1, max: 1 },
+            player: "self",
+          },
+        ],
+      },
       {
         id: "extreme_dragon_awakening_summon",
         timing: "ignition",
@@ -6534,6 +6849,7 @@
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "extreme_dragon_awakening_summon",
+        oncePerTurnScope: "card",
         targets: [
           {
             id: "awakening_cost_dragons",
@@ -6550,7 +6866,7 @@
             zone: "hand",
             cardKind: "monster",
             filters: { type: "Dragon" },
-            minLevel: 9,
+            minLevel: 8,
             count: { min: 1, max: 1 },
           },
         ],
@@ -6580,6 +6896,7 @@
     def: 2500,
     level: 10,
     type: "Warrior",
+    attribute: "Dark",
     archetype: "Void",
     description:
       "While this card is the only face-up monster you control, it gains 100 ATK for each 'Void' monster in your GY. Your opponent cannot activate cards or effects during the Battle Phase. If this card would be destroyed by a card effect: you can banish 2 'Void' monsters from your GY instead.",
