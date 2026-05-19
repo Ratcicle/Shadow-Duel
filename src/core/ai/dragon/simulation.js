@@ -42,6 +42,14 @@ const EXTREME_GY_SEND_ORDER = [
   "Mist Extreme Dragon",
 ];
 
+function tributeMatchesAltRequirement(card, alt) {
+  if (!card || card.cardKind !== "monster" || !alt) return false;
+  if (card.isFacedown) return false;
+  if (alt.requiresName && card.name !== alt.requiresName) return false;
+  if (alt.requiresType && card.type !== alt.requiresType) return false;
+  return true;
+}
+
 /**
  * Simulates a main-phase action on a cloned game state.
  * @param {Object} state - Cloned game state
@@ -66,6 +74,21 @@ export function simulateMainPhaseAction(state, action) {
       // Remove tributes
       if (tributeInfo.tributesNeeded > 0) {
         const tributeIndices = selectBestTributes(player.field, tributeInfo.tributesNeeded, card);
+        if (
+          !Array.isArray(tributeIndices) ||
+          tributeIndices.length < tributeInfo.tributesNeeded
+        ) {
+          break;
+        }
+        if (
+          tributeInfo.usingAlt === true &&
+          tributeInfo.alt &&
+          !tributeIndices
+            .slice(0, tributeInfo.tributesNeeded)
+            .some((idx) => tributeMatchesAltRequirement(player.field[idx], tributeInfo.alt))
+        ) {
+          break;
+        }
         tributeIndices.sort((a, b) => b - a);
         tributeIndices.forEach((idx) => {
           const t = player.field[idx];
@@ -83,7 +106,8 @@ export function simulateMainPhaseAction(state, action) {
         position: action.position || "attack",
         isFacedown: action.facedown || false,
         hasAttacked: false,
-        cannotAttackThisTurn: true,
+        cannotAttackThisTurn:
+          action.facedown === true || (action.position || "attack") === "defense",
       });
       player.summonCount = (player.summonCount || 0) + 1;
       const summoned = player.field[player.field.length - 1];
@@ -697,6 +721,16 @@ function normalSummonFromHandIndex(state, player, handIndex, action = {}) {
   if (tributeInfo.tributesNeeded > 0) {
     const tributeIndices = selectBestTributes(player.field, tributeInfo.tributesNeeded, card)
       .sort((a, b) => b - a);
+    if (tributeIndices.length < tributeInfo.tributesNeeded) return null;
+    if (
+      tributeInfo.usingAlt === true &&
+      tributeInfo.alt &&
+      !tributeIndices.some((idx) =>
+        tributeMatchesAltRequirement(player.field[idx], tributeInfo.alt),
+      )
+    ) {
+      return null;
+    }
     for (const index of tributeIndices) moveFieldIndexToGraveyard(player, index);
   }
 
@@ -708,7 +742,7 @@ function normalSummonFromHandIndex(state, player, handIndex, action = {}) {
     position: action.position || "attack",
     isFacedown: false,
     hasAttacked: false,
-    cannotAttackThisTurn: true,
+    cannotAttackThisTurn: (action.position || "attack") === "defense",
   };
   player.field.push(summoned);
   player.summonCount = (player.summonCount || 0) + 1;

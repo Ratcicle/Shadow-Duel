@@ -41,9 +41,11 @@ export {
 export { simulateMainPhaseAction } from "./simulation.js";
 
 export {
+  applyDragonSimulatedBattleRewards,
   applyDragonRetentionPriorities,
   buildDragonPlanningProfile,
   describeDragonPlannedLine,
+  scoreDragonBattleAttackCandidate,
   scoreDragonLineMilestones,
   scoreDragonLineTerminal,
 } from "./linePlanning.js";

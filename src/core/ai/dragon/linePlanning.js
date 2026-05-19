@@ -101,7 +101,7 @@ function getPlayer(analysis = {}, context = {}) {
 }
 
 function getOpponent(analysis = {}, context = {}) {
-  return analysis.opponent || context.game?.player || {};
+  return analysis.opponent || context.opponent || context.game?.player || {};
 }
 
 function getCards(player, zone) {
@@ -187,6 +187,21 @@ function hasGoodAwakeningTarget(cards = []) {
 
 function hasUsefulDiscard(cards = []) {
   return (cards || []).some((card) => CHEAP_DRAGON_COST_NAMES.has(card?.name));
+}
+
+function hasRealGreyDiscardValue({ hand = [], field = [], graveyard = [] } = {}) {
+  const discardableDragons = (hand || []).filter(isDragonMonster);
+  if (discardableDragons.some((card) => card.name === "Voltaic Dragon")) return true;
+  if (discardableDragons.some((card) => card.name === "Boneflame Dragon")) return true;
+  if (hasLuminousRecovery(field)) {
+    return discardableDragons.some((discard) =>
+      (graveyard || []).some(
+        (candidate) =>
+          isDragonMonster(candidate) && candidate.name !== discard.name,
+      ),
+    );
+  }
+  return false;
 }
 
 function hasCriticalPayoff(cards = []) {
@@ -309,6 +324,96 @@ function hasBlackBullPressure({ hand, graveyard, deck, opponent }) {
     opponentLp <= 3000 ||
     (opponent?.field || []).some((card) => (card?.atk || 0) >= 2200);
   return pressureNeeded && (liveHandBull || liveGyBull);
+}
+
+function getBattleTargetStat(card = {}) {
+  if (!card || card.cardKind !== "monster") return 0;
+  if (card.isFacedown || card.position === "defense") {
+    return Number(card.def || 0);
+  }
+  return getEffectiveAtk(card);
+}
+
+function canDragonAttack(card = {}) {
+  return (
+    isFaceupDragon(card) &&
+    card.position !== "defense" &&
+    !card.cannotAttackThisTurn &&
+    !card.hasAttacked &&
+    getEffectiveAtk(card) > 0
+  );
+}
+
+function canDestroyByBattle(attacker, target) {
+  if (!canDragonAttack(attacker) || !target || target.cardKind !== "monster") {
+    return false;
+  }
+  return getEffectiveAtk(attacker) > getBattleTargetStat(target);
+}
+
+function hasBattleRemoval({ field = [], opponentField = [] } = {}) {
+  return (field || []).some((attacker) =>
+    (opponentField || []).some((target) => canDestroyByBattle(attacker, target)),
+  );
+}
+
+function hasDirectLethal({ field = [], opponent = {} } = {}) {
+  const opponentLp = Number(opponent?.lp || 8000);
+  if (opponentLp <= 0) return true;
+  const damage = (field || [])
+    .filter(canDragonAttack)
+    .reduce((sum, card) => sum + Math.max(0, getEffectiveAtk(card)), 0);
+  return damage >= opponentLp;
+}
+
+function hasBlackBullBattlePlan({ field = [], opponentField = [] } = {}) {
+  const bull = (field || []).find((card) => card?.name === "Black Bull Dragon" && canDragonAttack(card));
+  if (!bull) return false;
+  const removable = (opponentField || []).filter((target) => canDestroyByBattle(bull, target));
+  return removable.length >= 1;
+}
+
+function hasJaggedBattleCounterPlan({ field = [], opponentField = [], fieldSpell = null } = {}) {
+  if (fieldSpell?.name !== "Jagged Peak of the Dragons") return false;
+  const counters = Number(fieldSpell.counters?.dragon_peak || 0);
+  return counters >= 4 && hasBattleRemoval({ field, opponentField });
+}
+
+function hasNamedBattlePlan({ field = [], opponentField = [] } = {}, name) {
+  const attacker = (field || []).find((card) => card?.name === name && canDragonAttack(card));
+  if (!attacker) return false;
+  return (opponentField || []).some((target) => canDestroyByBattle(attacker, target));
+}
+
+function hasRadiantSafeBattle({ field = [], opponentField = [] } = {}) {
+  const radiant = (field || []).find(
+    (card) => card?.name === "Radiant Cosmic Dragon" && canDragonAttack(card),
+  );
+  if (!radiant) return false;
+  return (
+    radiant.preventsBattleDamageToController === true &&
+    (opponentField || []).some((target) => getBattleTargetStat(target) >= getEffectiveAtk(radiant))
+  );
+}
+
+function hasBattleMain2Payoff({ fieldSpell = null, spellTrap = [], hand = [], field = [], deck = [] } = {}) {
+  if (fieldSpell?.name === "Jagged Peak of the Dragons" && Number(fieldSpell.counters?.dragon_peak || 0) >= 4) {
+    return true;
+  }
+  if (
+    spellTrap.some((card) => card?.name === "Extreme Dragon Awakening" && !card.isFacedown) &&
+    countFaceupDragons(field) >= 2 &&
+    hasGoodAwakeningTarget(hand)
+  ) {
+    return true;
+  }
+  if (hasName(hand, "Polymerization") && hasRadiantCosmicMaterials([...hand, ...field])) {
+    return true;
+  }
+  if (hasName(field, "Purified Crystal Dragon") && countDragonMonsters(deck) > 0) {
+    return true;
+  }
+  return false;
 }
 
 function hasLongLuminousPayoff({ hand, field, deck, graveyard }) {
@@ -490,7 +595,11 @@ function getRetentionAdjustment(action = {}, context = {}) {
     }
   }
 
-  if (action.type === "graveyardMonsterEffect" && actionName === "Grey Dragon" && hasUsefulDiscard(hand)) {
+  if (
+    action.type === "graveyardMonsterEffect" &&
+    actionName === "Grey Dragon" &&
+    hasRealGreyDiscardValue({ hand, field, graveyard })
+  ) {
     boost += addRetention(reasons, 4, "grey_has_useful_discard");
   }
 
@@ -599,6 +708,127 @@ export function applyDragonRetentionPriorities(actions = [], context = {}) {
       return a.index - b.index;
     })
     .map((entry) => entry.action);
+}
+
+function getDestroyedOpponentMonsters(summary = {}) {
+  return (summary.destroyedCards || []).filter(
+    (card) => card?.owner === "opponent" && card.cardKind === "monster",
+  );
+}
+
+function addJaggedCounter(fieldSpell) {
+  if (!fieldSpell || fieldSpell.name !== "Jagged Peak of the Dragons") return false;
+  if (!fieldSpell.counters || typeof fieldSpell.counters !== "object") {
+    fieldSpell.counters = {};
+  }
+  fieldSpell.counters.dragon_peak = Number(fieldSpell.counters.dragon_peak || 0) + 1;
+  return true;
+}
+
+export function applyDragonSimulatedBattleRewards(context = {}) {
+  const state = context.state || {};
+  const bot = context.bot || state.bot || {};
+  const opponent = context.opponent || state.player || {};
+  const summary = context.summary || {};
+  const battlePlan = context.battlePlan || {};
+  const attacker =
+    battlePlan.attackerCard ||
+    (Number.isInteger(battlePlan.attackerIndex)
+      ? bot.field?.[battlePlan.attackerIndex]
+      : null);
+  if (!isFaceupDragon(attacker)) return [];
+
+  const rewards = [];
+  const destroyedOpponent = getDestroyedOpponentMonsters(summary);
+  if (destroyedOpponent.length > 0 && addJaggedCounter(bot.fieldSpell)) {
+    rewards.push("Jagged Peak counter");
+  }
+
+  if (attacker.name === "Volcanic Extreme Dragon" && battlePlan.targetIndex != null) {
+    const burn = 600;
+    opponent.lp = Math.max(0, Number(opponent.lp || 0) - burn);
+    summary.damage = Number(summary.damage || 0) + burn;
+    rewards.push("Volcanic battle burn");
+  }
+
+  if (attacker.name === "Rainbow Cosmic Dragon" && destroyedOpponent.length > 0) {
+    const heal = destroyedOpponent.reduce(
+      (sum, card) => sum + Math.max(0, Number(card.baseAtk ?? card.atk ?? 0)),
+      0,
+    );
+    if (heal > 0) {
+      bot.lp = Number(bot.lp || 0) + heal;
+      rewards.push("Rainbow battle heal");
+    }
+  }
+
+  if (attacker.name === "Purified Crystal Dragon" && destroyedOpponent.length > 0) {
+    const heal = destroyedOpponent.reduce(
+      (sum, card) => sum + Math.max(0, Number(card.level || 0)) * 100,
+      0,
+    );
+    if (heal > 0) {
+      bot.lp = Number(bot.lp || 0) + heal;
+      rewards.push("Purified battle heal");
+    }
+  }
+
+  if (attacker.name === "Radiant Cosmic Dragon" && attacker.preventsBattleDamageToController) {
+    rewards.push("Radiant battle damage shield");
+  }
+
+  return rewards;
+}
+
+export function scoreDragonBattleAttackCandidate(context = {}) {
+  const attacker = context.attacker || {};
+  const target = context.target || null;
+  const bot = context.bot || {};
+  const opponent = context.opponent || {};
+  if (!isDragonMonster(attacker)) return 0;
+
+  const targetDestroyed = Boolean(target) && context.targetSurvived === false;
+  const attackerSurvived = context.attackerSurvived !== false;
+  const lethalNow = context.lethalNow === true;
+  const targetThreat = Math.max(
+    0,
+    Number(target?.atk || 0),
+    Number(target?.def || 0),
+  );
+  let score = 0;
+
+  if (lethalNow) score += 8;
+  if (targetDestroyed) score += 2.5 + Math.min(2.5, targetThreat / 1200);
+  if (attackerSurvived && target) score += 0.8;
+  if (target && !attackerSurvived && !lethalNow) {
+    score -= DRAGON_BOSS_NAMES.has(attacker.name) ? 4 : 2.5;
+  }
+
+  if (attacker.name === "Black Bull Dragon") {
+    if (targetDestroyed) score += context.isSecondAttack ? 2.2 : 1.6;
+    else if (!target && !lethalNow) score -= 1.5;
+  }
+
+  if (targetDestroyed && bot.fieldSpell?.name === "Jagged Peak of the Dragons") {
+    const counters = Number(bot.fieldSpell.counters?.dragon_peak || 0);
+    score += counters >= 4 ? 3.5 : 1.2;
+  }
+
+  if (attacker.name === "Volcanic Extreme Dragon" && target) {
+    score += (opponent.lp || 0) <= 600 ? 4 : 1.5;
+  }
+  if (attacker.name === "Rainbow Cosmic Dragon" && targetDestroyed) {
+    score += (bot.lp || 8000) <= 3500 ? 2.2 : 1.2;
+  }
+  if (attacker.name === "Purified Crystal Dragon" && targetDestroyed) {
+    score += 0.8;
+  }
+  if (attacker.name === "Radiant Cosmic Dragon" && target) {
+    score += attacker.preventsBattleDamageToController ? 1.3 : 0.6;
+  }
+
+  if (!target && !lethalNow) score += 0.4;
+  return score;
 }
 
 function getPlanningBot(state = {}) {
@@ -736,6 +966,16 @@ function clampScore(score, min, max) {
   return Math.max(min, Math.min(max, Number(score) || 0));
 }
 
+function getSimulatedBattleSteps(sequence = []) {
+  return (sequence || []).flatMap((action) => {
+    if (action?.type !== "simulatedBattle") return [];
+    if (Array.isArray(action.battleSteps) && action.battleSteps.length > 0) {
+      return action.battleSteps;
+    }
+    return [action];
+  });
+}
+
 export function scoreDragonLineMilestones(context = {}) {
   const initialState = context.initialState || {};
   const finalState = context.finalState || {};
@@ -774,9 +1014,83 @@ export function scoreDragonLineMilestones(context = {}) {
   const finalHasProtection = hasProtectedDragon(finalBot);
   const finalHasBoss = hasBossOnField(finalBot);
   const finalHasRealThreat = finalHasBoss || finalStrongestOwnAtk >= 2400 || finalHasProtection;
+  const battleSteps = getSimulatedBattleSteps(sequence);
+  const battleDamage = battleSteps.reduce(
+    (sum, step) => sum + Math.max(0, Number(step.damage || 0)),
+    0,
+  );
+  const battleRemovedOpponentCards = battleSteps.reduce(
+    (sum, step) =>
+      sum +
+      (step.destroyedCards || []).filter((card) => card?.owner === "opponent").length,
+    0,
+  );
+  const battleLostSelfCards = battleSteps.reduce(
+    (sum, step) =>
+      sum +
+      (step.destroyedCards || []).filter((card) => card?.owner === "self").length,
+    0,
+  );
+  const battleRewards = battleSteps.flatMap((step) => step.rewardNames || []);
+  const hasBattleBridge = battleSteps.length > 0;
 
   if (sequenceMentions(sequence, "Supreme Bahamut Dragon") || hasName(getAllCards(finalBot), "Supreme Bahamut Dragon")) {
     addLineMilestone(milestones, "Bahamut line excluded from Dragon plan", -100);
+  }
+
+  if (hasBattleBridge) {
+    if (battleRemovedOpponentCards > 0) {
+      addLineMilestone(
+        milestones,
+        "Battle: removed opposing monster",
+        Math.min(5, battleRemovedOpponentCards * 2),
+      );
+    }
+    if (battleDamage >= 1000) {
+      addLineMilestone(
+        milestones,
+        "Battle: meaningful damage",
+        Math.min(4, battleDamage / 1000),
+      );
+    }
+    if (battleRewards.includes("Volcanic battle burn")) {
+      addLineMilestone(milestones, "Battle: Volcanic burn mattered", 2.5);
+    }
+    if (battleRewards.includes("Jagged Peak counter")) {
+      const finalCounters = Number(finalBot.fieldSpell?.counters?.dragon_peak || 0);
+      addLineMilestone(
+        milestones,
+        finalCounters >= 5
+          ? "Battle: Jagged Peak reached cashout"
+          : "Battle: Jagged Peak gained counter",
+        finalCounters >= 5 ? 4 : 1.5,
+      );
+    }
+    if (
+      battleRewards.includes("Rainbow battle heal") ||
+      battleRewards.includes("Purified battle heal")
+    ) {
+      addLineMilestone(milestones, "Battle: Dragon gained LP", 1.8);
+    }
+    if (battleRewards.includes("Radiant battle damage shield")) {
+      addLineMilestone(milestones, "Battle: Radiant avoided battle damage", 1.4);
+    }
+    if (
+      battleSteps.length >= 2 &&
+      battleSteps.some((step) => step.attackerName === "Black Bull Dragon")
+    ) {
+      addLineMilestone(milestones, "Battle: Black Bull cleared multiple attacks", 3);
+    }
+    const battleIndex = sequence.findIndex((action) => action?.type === "simulatedBattle");
+    if (
+      battleIndex >= 0 &&
+      sequence.slice(battleIndex + 1).some((action) => action?.type !== "simulatedBattle")
+    ) {
+      addLineMilestone(milestones, "Main2: battle opened payoff", 2);
+    }
+    if (battleLostSelfCards > 0 && battleRemovedOpponentCards === 0 && battleDamage < 1000) {
+      addLineMilestone(milestones, "Penalty: weak battle bridge lost material", -4);
+    }
   }
 
   if (
@@ -925,11 +1239,20 @@ export function scoreDragonLineMilestones(context = {}) {
     addLineMilestone(milestones, "Resource: Luminous recovered useful Dragon", 3);
   }
 
-  if (
-    hasAction(sequence, "Grey Dragon", "graveyardMonsterEffect") &&
-    finalHand.length >= initialHand.length
-  ) {
-    addLineMilestone(milestones, "Resource: Grey traded discard into hand", 3);
+  if (hasAction(sequence, "Grey Dragon", "graveyardMonsterEffect")) {
+    const greyMadeValue =
+      damageDealt >= 800 ||
+      finalDragonFieldCount > initialDragonFieldCount ||
+      finalHandGainedFromInitialGy(initialBot, finalBot, (card) =>
+        isDragonMonster(card) && card.name !== "Grey Dragon",
+      );
+    addLineMilestone(
+      milestones,
+      greyMadeValue
+        ? "Resource: Grey traded discard into hand"
+        : "Penalty: Grey loop without payoff",
+      greyMadeValue ? 2.5 : -3,
+    );
   }
 
   if (
@@ -1222,6 +1545,14 @@ export function scoreDragonLineTerminal(context = {}) {
 function actionLabel(action = {}) {
   if (!action) return "";
   if (action.type === "simulatedBattle") {
+    if (Array.isArray(action.battleSteps) && action.battleSteps.length > 1) {
+      const attacker = action.battleSteps[0]?.attackerName || action.attackerName || "attacker";
+      const targets = action.battleSteps
+        .map((step) => (step.direct ? "direct" : step.targetName || "target"))
+        .filter(Boolean)
+        .join(" + ");
+      return `Battle ${attacker} > ${targets}`;
+    }
     const target = action.direct ? "direct" : action.targetName || "target";
     return `Battle ${action.attackerName || "attacker"} > ${target}`;
   }
@@ -1296,6 +1627,26 @@ function inferDragonLineHeadline(context = {}) {
 
   if (usedNames.includes("Supreme Bahamut Dragon")) {
     return "Bahamut line rejected";
+  }
+
+  const battleSteps = getSimulatedBattleSteps(sequence);
+  if (battleSteps.length > 0) {
+    const rewards = battleSteps.flatMap((step) => step.rewardNames || []);
+    if (battleSteps.some((step) => step.attackerName === "Black Bull Dragon")) {
+      return battleSteps.length >= 2
+        ? "Black Bull clears battle path into Main 2"
+        : "Black Bull pressure opens Main 2";
+    }
+    if (rewards.includes("Jagged Peak counter")) {
+      return "Battle charges Jagged Peak for Main 2";
+    }
+    if (battleSteps.some((step) => step.attackerName === "Volcanic Extreme Dragon")) {
+      return "Volcanic battle burn into Main 2";
+    }
+    if (battleSteps.some((step) => step.attackerName === "Radiant Cosmic Dragon")) {
+      return "Radiant Cosmic safe battle bridge";
+    }
+    return "Battle bridge opens Main 2";
   }
 
   if (
@@ -1496,16 +1847,43 @@ export function buildDragonPlanningProfile(analysis = {}, context = {}) {
     reasons.push("Black Bull pressure line is live");
   }
 
+  const main1Phase = phase === "main1" || phase === "main";
+  const blackBullBattlePlan = hasBlackBullBattlePlan({ field, opponentField });
+  const battleBridge =
+    main1Phase &&
+    (
+      hasDirectLethal({ field, opponent }) ||
+      hasBattleRemoval({ field, opponentField }) ||
+      blackBullBattlePlan ||
+      hasJaggedBattleCounterPlan({ field, opponentField, fieldSpell }) ||
+      hasNamedBattlePlan({ field, opponentField }, "Volcanic Extreme Dragon") ||
+      hasNamedBattlePlan({ field, opponentField }, "Rainbow Cosmic Dragon") ||
+      hasNamedBattlePlan({ field, opponentField }, "Purified Crystal Dragon") ||
+      hasRadiantSafeBattle({ field, opponentField }) ||
+      hasBattleMain2Payoff({ fieldSpell, spellTrap, hand, field, deck })
+    );
+  if (battleBridge) {
+    if (blackBullBattlePlan) {
+      reasons.push("Black Bull can convert battle into Main 2");
+    } else if (hasJaggedBattleCounterPlan({ field, opponentField, fieldSpell })) {
+      reasons.push("Battle can charge Jagged Peak for Main 2");
+    } else {
+      reasons.push("Dragon battle bridge has Main 2 value");
+    }
+  }
+
   const enabled = manual || reasons.length > 0;
   const longLine = hasLongLuminousPayoff({ hand, field, deck, graveyard });
   const requestedTurnMode = game?.turnLineSearchTurnMode;
+  const battleStepLimit = blackBullBattlePlan ? 2 : 1;
   const maxDepth = phase.includes("main2") ? 3 : longLine ? 5 : 4;
 
   return {
     ...DEFAULT_PROFILE,
     enabled,
     mode: manual && reasons.length === 0 ? "manual" : enabled ? "critical" : "off",
-    turnMode: requestedTurnMode || "mainOnly",
+    turnMode: requestedTurnMode || (battleBridge ? "mainBattleMain2" : "mainOnly"),
+    battleStepLimit,
     beamWidth: Number.isFinite(game?.turnLineSearchBeamWidth)
       ? game.turnLineSearchBeamWidth
       : DEFAULT_PROFILE.beamWidth,
@@ -1514,7 +1892,7 @@ export function buildDragonPlanningProfile(analysis = {}, context = {}) {
       : maxDepth,
     nodeBudget: Number.isFinite(game?.turnLineSearchNodeBudget)
       ? game.turnLineSearchNodeBudget
-      : DEFAULT_PROFILE.nodeBudget,
+      : DEFAULT_PROFILE.nodeBudget + (battleBridge ? 40 : 0),
     candidateLimit: Number.isFinite(game?.turnLineSearchCandidateLimit)
       ? game.turnLineSearchCandidateLimit
       : DEFAULT_PROFILE.candidateLimit,

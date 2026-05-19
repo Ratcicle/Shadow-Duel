@@ -621,9 +621,16 @@ export default class Bot extends Player {
           planningProfile.turnMode ||
           game.arenaPlannerTurnMode ||
           "mainOnly";
+        const plannerBattleStepLimit =
+          (hasValue(game.turnLineSearchBattleStepLimit)
+            ? game.turnLineSearchBattleStepLimit
+            : undefined) ??
+          planningProfile.battleStepLimit ??
+          game.arenaPlannerBattleStepLimit ??
+          1;
 
         console.log(
-          `[Bot.playMainPhase] Running TurnLineSearch with ${actions.length} actions (width=${plannerBeamWidth}, depth=${plannerMaxDepth}, budget=${plannerNodeBudget})...`,
+          `[Bot.playMainPhase] Running TurnLineSearch with ${actions.length} actions (width=${plannerBeamWidth}, depth=${plannerMaxDepth}, budget=${plannerNodeBudget}, battleSteps=${plannerBattleStepLimit})...`,
         );
         const plannerResult = await turnLineSearch(game, planningStrategy, {
           beamWidth: plannerBeamWidth,
@@ -631,6 +638,7 @@ export default class Bot extends Player {
           nodeBudget: plannerNodeBudget,
           candidateLimit: plannerCandidateLimit,
           turnMode: plannerTurnMode,
+          battleStepLimit: plannerBattleStepLimit,
           useV2Evaluation,
           preGeneratedActions: actions,
           profile: planningProfile,
@@ -641,6 +649,7 @@ export default class Bot extends Player {
           actor: this.id,
           plannerMode,
           plannerTurnMode,
+          plannerBattleStepLimit,
           plannerUsed: Boolean(plannerResult?.action),
           plannedLineLength: plannerResult?.sequence?.length || 0,
           plannedNodesEvaluated: plannerResult?.nodesEvaluated || 0,
@@ -1299,12 +1308,83 @@ export default class Bot extends Player {
     return -1;
   }
 
+  tributeMatchesAltRequirement(card, alt) {
+    if (!card || card.cardKind !== "monster" || !alt) return false;
+    if (card.isFacedown) return false;
+    if (alt.requiresName && card.name !== alt.requiresName) return false;
+    if (alt.requiresType && card.type !== alt.requiresType) return false;
+    return true;
+  }
+
+  canResolveSummonActionForCurrentState(action, game) {
+    const resolvedIndex = this.resolveHandIndexForAction(action, "monster");
+    if (resolvedIndex < 0) return false;
+    const card = this.hand?.[resolvedIndex];
+    if (!card || card.cardKind !== "monster") return false;
+    if (card.cannotBeNormalSummonedOrSet) return false;
+    if (card.summonRestrict === "shadow_heart_invocation_only") return false;
+
+    const summonLimit = 1 + Math.max(0, Number(this.additionalNormalSummons || 0));
+    if (Number(this.summonCount || 0) >= summonLimit) return false;
+
+    const tributeInfo = this.getTributeRequirementFor(card, this) || {
+      tributesNeeded: 0,
+    };
+    const tributesNeeded = Math.max(0, Number(tributeInfo.tributesNeeded || 0));
+    const field = Array.isArray(this.field) ? this.field : [];
+    if (field.length < tributesNeeded) return false;
+    if (field.length - tributesNeeded + 1 > 5) return false;
+
+    let tributeIndices = [];
+    if (tributesNeeded > 0) {
+      const opponent = game ? (this === game.player ? game.bot : game.player) : null;
+      tributeIndices =
+        typeof this.selectBestTributes === "function"
+          ? this.selectBestTributes(field, tributesNeeded, card, {
+              oppField: opponent?.field || [],
+              game,
+            })
+          : field.map((_entry, index) => index).slice(0, tributesNeeded);
+      if (!Array.isArray(tributeIndices) || tributeIndices.length < tributesNeeded) {
+        return false;
+      }
+      const uniqueIndices = [...new Set(tributeIndices)].filter(
+        (index) => Number.isInteger(index) && field[index],
+      );
+      if (uniqueIndices.length < tributesNeeded) return false;
+      tributeIndices = uniqueIndices.slice(0, tributesNeeded);
+      if (
+        tributeInfo.usingAlt === true &&
+        tributeInfo.alt &&
+        !tributeIndices.some((index) =>
+          this.tributeMatchesAltRequirement(field[index], tributeInfo.alt),
+        )
+      ) {
+        return false;
+      }
+    }
+
+    if (typeof game?.canPlaceCardOnField === "function") {
+      const isFacedown = action.facedown === true;
+      const excluded = tributeIndices.map((index) => field[index]).filter(Boolean);
+      const placeCheck = game.canPlaceCardOnField(card, this, {
+        zone: "monster",
+        isFacedown,
+        excludeCards: excluded,
+        silent: true,
+      });
+      if (placeCheck?.ok === false) return false;
+    }
+
+    return true;
+  }
+
   filterValidActionsForCurrentState(actions, game) {
     if (!Array.isArray(actions)) return [];
     return actions.filter((action) => {
       if (!action || !action.type) return false;
       if (action.type === "summon") {
-        return this.resolveHandIndexForAction(action, "monster") >= 0;
+        return this.canResolveSummonActionForCurrentState(action, game);
       }
       if (action.type === "spell") {
         return this.resolveHandIndexForAction(action, "spell") >= 0;
@@ -1634,6 +1714,12 @@ export default class Bot extends Player {
         return false;
       }
       const cardToSummon = this.hand[resolvedIndex];
+      if (!this.canResolveSummonActionForCurrentState(action, game)) {
+        console.log(
+          `[Bot.executeMainPhaseAction] Invalid summon action: summon requirements no longer met for ${cardToSummon?.name || action.cardName || "unknown"}`,
+        );
+        return false;
+      }
 
       // Calcular tributos necessários e selecionar os melhores (piores monstros)
       const tributeInfo = this.getTributeRequirementFor(cardToSummon, this);

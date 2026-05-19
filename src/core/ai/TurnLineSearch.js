@@ -44,6 +44,113 @@ function actionIsValidForHand(action, hand) {
   return true;
 }
 
+function tributeMatchesAltRequirement(card, alt) {
+  if (!card || card.cardKind !== "monster" || !alt) return false;
+  if (card.isFacedown) return false;
+  if (alt.requiresName && card.name !== alt.requiresName) return false;
+  if (alt.requiresType && card.type !== alt.requiresType) return false;
+  return true;
+}
+
+function getPlannerTributeRequirement(card, player, strategy) {
+  if (!card) return { tributesNeeded: 0, usingAlt: false, alt: null };
+  if (typeof strategy?.getTributeRequirementFor === "function") {
+    return strategy.getTributeRequirementFor(card, player) || {
+      tributesNeeded: 0,
+      usingAlt: false,
+      alt: null,
+    };
+  }
+
+  let tributesNeeded = 0;
+  const level = Number(card.level || 0);
+  if (level >= 5 && level <= 6) tributesNeeded = 1;
+  else if (level >= 7) tributesNeeded = 2;
+  if (typeof card.requiredTributes === "number" && card.requiredTributes >= 0) {
+    tributesNeeded = card.requiredTributes;
+  }
+
+  const alt = card.altTribute || null;
+  if (alt?.type === "no_tribute_if_empty_field" && (player?.field || []).length === 0) {
+    return { tributesNeeded: 0, usingAlt: true, alt };
+  }
+  if (alt?.requiresType && typeof alt?.tributes === "number") {
+    const hasRequiredType = (player?.field || []).some((entry) =>
+      tributeMatchesAltRequirement(entry, alt),
+    );
+    if (hasRequiredType && alt.tributes < tributesNeeded) {
+      return { tributesNeeded: alt.tributes, usingAlt: true, alt };
+    }
+  }
+  if (alt?.requiresName && typeof alt?.tributes === "number") {
+    const hasRequiredName = (player?.field || []).some((entry) =>
+      tributeMatchesAltRequirement(entry, alt),
+    );
+    if (hasRequiredName && alt.tributes < tributesNeeded) {
+      return { tributesNeeded: alt.tributes, usingAlt: true, alt };
+    }
+  }
+
+  return { tributesNeeded, usingAlt: false, alt };
+}
+
+function selectPlannerTributes(field = [], tributesNeeded = 0, cardToSummon = null, strategy = null) {
+  if (tributesNeeded <= 0) return [];
+  if (!Array.isArray(field) || field.length < tributesNeeded) return [];
+  const selected =
+    typeof strategy?.selectBestTributes === "function"
+      ? strategy.selectBestTributes(field, tributesNeeded, cardToSummon)
+      : field
+          .map((card, index) => ({ card, index }))
+          .sort((a, b) => {
+            const value = (entry) =>
+              Math.max(0, Number(entry.card?.atk || 0)) +
+              Math.max(0, Number(entry.card?.def || 0)) * 0.25 +
+              Number(entry.card?.level || 0) * 120;
+            return value(a) - value(b);
+          })
+          .map((entry) => entry.index)
+          .slice(0, tributesNeeded);
+  return [...new Set(selected || [])].filter(
+    (index) => Number.isInteger(index) && field[index],
+  );
+}
+
+function summonActionIsStillLegal(action, state, strategy) {
+  if (!action || action.type !== "summon") return true;
+  const player = state?.bot || {};
+  const hand = player.hand || [];
+  if (!actionIsValidForHand(action, hand)) return false;
+  const card = hand[action.index];
+  if (!card || card.cardKind !== "monster") return false;
+  if (card.cannotBeNormalSummonedOrSet) return false;
+  if (card.summonRestrict === "shadow_heart_invocation_only") return false;
+
+  const summonLimit = 1 + Math.max(0, Number(player.additionalNormalSummons || 0));
+  if (Number(player.summonCount || 0) >= summonLimit) return false;
+
+  const tributeInfo = getPlannerTributeRequirement(card, player, strategy);
+  const tributesNeeded = Math.max(0, Number(tributeInfo.tributesNeeded || 0));
+  const field = player.field || [];
+  if (field.length < tributesNeeded) return false;
+  if (field.length - tributesNeeded + 1 > 5) return false;
+  if (tributesNeeded > 0) {
+    const tributeIndices = selectPlannerTributes(field, tributesNeeded, card, strategy);
+    if (tributeIndices.length < tributesNeeded) return false;
+    if (
+      tributeInfo.usingAlt === true &&
+      tributeInfo.alt &&
+      !tributeIndices
+        .slice(0, tributesNeeded)
+        .some((index) => tributeMatchesAltRequirement(field[index], tributeInfo.alt))
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function clonePlain(value) {
   if (typeof structuredClone === "function") {
     try {
@@ -218,10 +325,13 @@ function getPlanningStateHash(state) {
   ].join("||");
 }
 
-function filterStillLegalRootActions(actions, state) {
+function filterStillLegalRootActions(actions, state, strategy = null) {
   if (!Array.isArray(actions)) return [];
   const hand = state?.bot?.hand || [];
-  return actions.filter((action) => actionIsValidForHand(action, hand));
+  return actions.filter((action) => {
+    if (!actionIsValidForHand(action, hand)) return false;
+    return summonActionIsStillLegal(action, state, strategy);
+  });
 }
 
 function simulatePlanningAction(state, action, strategy) {
@@ -411,6 +521,29 @@ function destroyPlannerMonster(player, monster) {
   return true;
 }
 
+function hasBattleDestructionProtection(card) {
+  return Boolean(
+    card?.battleIndestructible ||
+      card?.tempBattleIndestructible ||
+      card?.cannotBeDestroyedByBattle ||
+      card?.simBattleDestructionProtected ||
+      (card?.battleIndestructibleOncePerTurn &&
+        !card?.battleIndestructibleOncePerTurnUsed),
+  );
+}
+
+function preventBattleDestruction(card) {
+  if (!hasBattleDestructionProtection(card)) return false;
+  if (card?.battleIndestructibleOncePerTurn) {
+    card.battleIndestructibleOncePerTurnUsed = true;
+  }
+  return true;
+}
+
+function preventsBattleDamageToController(card) {
+  return card?.preventsBattleDamageToController === true;
+}
+
 function isArcanistMonster(card) {
   if (!card || card.cardKind !== "monster") return false;
   if (card.archetype === "Arcanist") return true;
@@ -474,44 +607,56 @@ function applySimulatedBattle(state, battlePlan, strategy = null, options = {}) 
     if (!card) return;
     summary.destroyedNames.push(card.name || "card");
     summary.destroyedCards.push({
+      id: card.id,
       name: card.name,
       owner,
       cardKind: card.cardKind,
+      type: card.type,
+      archetype: card.archetype,
+      archetypes: Array.isArray(card.archetypes) ? [...card.archetypes] : undefined,
+      level: card.level || 0,
+      atk: card.atk || 0,
+      def: card.def || 0,
+      baseAtk: card.baseAtk ?? card.originalAtk ?? card.atk ?? 0,
     });
+  };
+  const inflictDamage = (recipient, amount, involvedCard = null) => {
+    const raw = Math.max(0, Number(amount || 0));
+    const damage = preventsBattleDamageToController(involvedCard) ? 0 : raw;
+    recipient.lp = Math.max(0, Number(recipient.lp || 0) - damage);
+    return damage;
+  };
+  const destroyIfAllowed = (owner, card, ownerLabel) => {
+    if (!card) return false;
+    if (preventBattleDestruction(card)) return false;
+    recordDestroyed(card, ownerLabel);
+    return destroyPlannerMonster(owner, card);
   };
 
   if (!target) {
-    opponent.lp = Math.max(0, Number(opponent.lp || 0) - attackStat);
-    summary.damage = attackStat;
+    summary.damage = inflictDamage(opponent, attackStat, null);
   } else {
     const targetStat = getBattleStatForAttackTarget(target);
     if (target.position === "attack") {
       if (attackStat > targetStat) {
-        summary.damage = attackStat - targetStat;
-        opponent.lp = Math.max(0, Number(opponent.lp || 0) - summary.damage);
-        recordDestroyed(target, "opponent");
-        destroyPlannerMonster(opponent, target);
+        summary.damage = inflictDamage(opponent, attackStat - targetStat, target);
+        destroyIfAllowed(opponent, target, "opponent");
       } else if (attackStat < targetStat) {
-        summary.damage = -(targetStat - attackStat);
-        bot.lp = Math.max(0, Number(bot.lp || 0) + summary.damage);
-        recordDestroyed(attacker, "self");
-        destroyPlannerMonster(bot, attacker);
+        const damageTaken = inflictDamage(bot, targetStat - attackStat, attacker);
+        summary.damage = -damageTaken;
+        destroyIfAllowed(bot, attacker, "self");
       } else {
-        recordDestroyed(attacker, "self");
-        recordDestroyed(target, "opponent");
-        destroyPlannerMonster(opponent, target);
-        destroyPlannerMonster(bot, attacker);
+        destroyIfAllowed(opponent, target, "opponent");
+        destroyIfAllowed(bot, attacker, "self");
       }
     } else if (attackStat > targetStat) {
-      recordDestroyed(target, "opponent");
-      destroyPlannerMonster(opponent, target);
+      destroyIfAllowed(opponent, target, "opponent");
       if (attacker.piercing) {
-        summary.damage = attackStat - targetStat;
-        opponent.lp = Math.max(0, Number(opponent.lp || 0) - summary.damage);
+        summary.damage = inflictDamage(opponent, attackStat - targetStat, target);
       }
     } else if (attackStat < targetStat) {
-      summary.damage = -(targetStat - attackStat);
-      bot.lp = Math.max(0, Number(bot.lp || 0) + summary.damage);
+      const damageTaken = inflictDamage(bot, targetStat - attackStat, attacker);
+      summary.damage = -damageTaken;
     }
   }
 
@@ -551,7 +696,14 @@ function buildPlannerBattlePlans(state) {
   const plans = [];
   (bot.field || []).forEach((attacker, attackerIndex) => {
     if (!canPlannerAttackerStillAttack(attacker, state)) return;
-    if (opponentMonsters.length === 0 || attacker.canAttackDirectlyThisTurn) {
+    const usedAttacks = Number(attacker.attacksUsedThisTurn || 0);
+    const monsterOnlyExtraAttack =
+      usedAttacks > 0 && attacker.extraAttackTargetRestriction === "monster";
+    if (
+      !attacker.cannotAttackDirectly &&
+      !monsterOnlyExtraAttack &&
+      (opponentMonsters.length === 0 || attacker.canAttackDirectlyThisTurn)
+    ) {
       plans.push({
         attackerIndex,
         targetIndex: null,
@@ -570,7 +722,7 @@ function buildPlannerBattlePlans(state) {
   return plans;
 }
 
-function chooseBestSimulatedBattle(state, strategy, options = {}) {
+function chooseBestSingleSimulatedBattle(state, strategy, options = {}) {
   const plans = buildPlannerBattlePlans(state);
   if (plans.length === 0) return null;
   const baseScore = evaluateBasePlanningScore(state, strategy, options);
@@ -637,6 +789,64 @@ function chooseBestSimulatedBattle(state, strategy, options = {}) {
   return best;
 }
 
+function normalizeBattleStepLimit(options = {}) {
+  const raw =
+    options.battleStepLimit ??
+    options.profile?.battleStepLimit ??
+    options.planningContext?.profile?.battleStepLimit ??
+    1;
+  const value = Number(raw);
+  return Number.isFinite(value) ? Math.max(1, Math.floor(value)) : 1;
+}
+
+function aggregateBattleSummaries(steps = [], totalScore = 0) {
+  const validSteps = (steps || []).filter(Boolean);
+  const first = validSteps[0] || {};
+  const destroyedCards = validSteps.flatMap((step) => step.destroyedCards || []);
+  const destroyedNames = validSteps.flatMap((step) => step.destroyedNames || []);
+  const rewardNames = validSteps.flatMap((step) => step.rewardNames || []);
+  const damage = validSteps.reduce((sum, step) => sum + Number(step.damage || 0), 0);
+  return {
+    type: "simulatedBattle",
+    attackerName: first.attackerName || "attacker",
+    targetName: first.targetName || null,
+    direct: first.direct === true,
+    damage,
+    destroyedNames,
+    destroyedCards,
+    rewardNames,
+    battleSteps: validSteps,
+    phaseBridge: "main1_battle_main2",
+    priority: totalScore,
+  };
+}
+
+function chooseBestSimulatedBattle(state, strategy, options = {}) {
+  const limit = normalizeBattleStepLimit(options);
+  let currentState = state;
+  let totalScore = 0;
+  let firstPlan = null;
+  const steps = [];
+
+  for (let stepIndex = 0; stepIndex < limit; stepIndex += 1) {
+    const next = chooseBestSingleSimulatedBattle(currentState, strategy, options);
+    if (!next) break;
+    if (!firstPlan) firstPlan = next.plan;
+    steps.push(next.summary);
+    totalScore += Number(next.score || 0);
+    currentState = next.state;
+    if ((currentState.player?.lp || 0) <= 0) break;
+  }
+
+  if (steps.length === 0) return null;
+  return {
+    plan: firstPlan,
+    score: totalScore,
+    state: currentState,
+    summary: aggregateBattleSummaries(steps, totalScore),
+  };
+}
+
 function tryMainBattleMain2Bridge(state, sequence, strategy, options = {}) {
   if (!isMainBattleMain2Mode(options)) return null;
   if (state?._simPlanningBattleDone) return null;
@@ -660,12 +870,18 @@ function tryMainBattleMain2Bridge(state, sequence, strategy, options = {}) {
 
 function getCandidatesForDepth(state, strategy, depth, options) {
   if (depth === 0 && Array.isArray(options.preGeneratedActions)) {
-    const legal = filterStillLegalRootActions(options.preGeneratedActions, state);
+    const legal = filterStillLegalRootActions(
+      options.preGeneratedActions,
+      state,
+      strategy,
+    );
     if (legal.length > 0) return legal;
   }
   if (typeof strategy?.generateMainPhaseActions !== "function") return [];
   const generated = strategy.generateMainPhaseActions(state) || [];
-  return depth === 0 ? filterStillLegalRootActions(generated, state) : generated;
+  return depth === 0
+    ? filterStillLegalRootActions(generated, state, strategy)
+    : generated;
 }
 
 export async function turnLineSearch(game, strategy, options = {}) {

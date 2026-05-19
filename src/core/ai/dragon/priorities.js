@@ -482,9 +482,27 @@ export function getTributeRequirementFor(card, playerState) {
   if (alt?.requiresType && typeof alt?.tributes === "number") {
     const field = playerState.field || [];
     const hasRequiredType = field.some(
-      (c) => c && c.type === alt.requiresType && c.cardKind === "monster"
+      (c) =>
+        c &&
+        !c.isFacedown &&
+        c.type === alt.requiresType &&
+        c.cardKind === "monster"
     );
     if (hasRequiredType && alt.tributes < tributesNeeded) {
+      return { tributesNeeded: alt.tributes, usingAlt: true, alt };
+    }
+  }
+
+  if (alt?.requiresName && typeof alt?.tributes === "number") {
+    const field = playerState.field || [];
+    const hasRequiredName = field.some(
+      (c) =>
+        c &&
+        !c.isFacedown &&
+        c.name === alt.requiresName &&
+        c.cardKind === "monster"
+    );
+    if (hasRequiredName && alt.tributes < tributesNeeded) {
       return { tributesNeeded: alt.tributes, usingAlt: true, alt };
     }
   }

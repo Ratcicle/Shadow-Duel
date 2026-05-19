@@ -43,9 +43,11 @@ import {
 } from "./dragon/scoring.js";
 import { simulateMainPhaseAction as simulateDragonAction } from "./dragon/simulation.js";
 import {
+  applyDragonSimulatedBattleRewards,
   applyDragonRetentionPriorities,
   buildDragonPlanningProfile,
   describeDragonPlannedLine,
+  scoreDragonBattleAttackCandidate,
   scoreDragonLineMilestones,
   scoreDragonLineTerminal,
 } from "./dragon/linePlanning.js";
@@ -341,6 +343,14 @@ export default class DragonStrategy extends BaseStrategy {
 
   describePlannedLine(context = {}) {
     return describeDragonPlannedLine(context);
+  }
+
+  scoreBattleAttackCandidate(context = {}) {
+    return scoreDragonBattleAttackCandidate(context);
+  }
+
+  applySimulatedBattleRewards(context = {}) {
+    return applyDragonSimulatedBattleRewards(context);
   }
 
   sequenceActions(actions = []) {
@@ -1077,9 +1087,20 @@ export default class DragonStrategy extends BaseStrategy {
         const discardableDragons = (bot.hand || []).filter(isDragonMonster);
         if (discardableDragons.length === 0) return;
         const usefulDiscard = discardableDragons.some((candidate) =>
-          ["Voltaic Dragon", "Boneflame Dragon", "Grey Dragon"].includes(candidate.name)
+          ["Voltaic Dragon", "Boneflame Dragon"].includes(candidate.name)
         );
-        priority = usefulDiscard ? 8 : 6;
+        const luminousRecovery =
+          (bot.field || []).some(
+            (candidate) => candidate?.name === "Luminous Dragon" && !candidate.isFacedown,
+          ) &&
+          discardableDragons.some((discard) =>
+            (bot.graveyard || []).some(
+              (candidate) =>
+                isDragonMonster(candidate) && candidate.name !== discard.name,
+            ),
+          );
+        if (!usefulDiscard && !luminousRecovery) return;
+        priority = 8;
         targetPreferences.grey_dragon_discard_cost = {
           role: "cost",
           preferNames: uniqueNames([

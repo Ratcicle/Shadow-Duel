@@ -444,7 +444,14 @@ export async function runActivationPipeline(config = {}) {
     }
 
     if (!normalized.success) {
-      if (normalized.reason && config.suppressFailureLog !== true) {
+      const skipFailureTracking =
+        normalized.activationSkipped === true ||
+        normalized.skipActivationTracking === true;
+      if (
+        normalized.reason &&
+        config.suppressFailureLog !== true &&
+        !skipFailureTracking
+      ) {
         this.ui.log(normalized.reason);
       }
       if (activationContext.committed && activationContext.commitInfo) {
@@ -456,7 +463,9 @@ export async function runActivationPipeline(config = {}) {
       if (typeof config.onFailure === "function") {
         config.onFailure(normalized, activationContext);
       }
-      trackActivationAttempt(normalized);
+      if (!skipFailureTracking) {
+        trackActivationAttempt(normalized);
+      }
       return normalized;
     }
 

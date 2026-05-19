@@ -385,6 +385,32 @@ export function buildTriggerEntry(options = {}) {
         activationZone: activationCtx.activationZone,
         activationContext: activationCtx,
       };
+      if (Array.isArray(effect.targets) && effect.targets.length > 0) {
+        const livePreviewCtx = {
+          ...resolvedCtx,
+          source: resolvedCtx.source || sourceCard,
+          player: resolvedCtx.player || owner,
+          opponent:
+            resolvedCtx.opponent || this.game?.getOpponent?.(owner) || null,
+          activationContext: {
+            ...activationCtx,
+            preview: true,
+          },
+        };
+        const livePreview = this.resolveTargets(
+          effect.targets,
+          livePreviewCtx,
+          null,
+        );
+        if (livePreview?.ok === false && !livePreview.needsSelection) {
+          return {
+            success: false,
+            needsSelection: false,
+            activationSkipped: true,
+            reason: livePreview.reason || "No valid targets for this effect.",
+          };
+        }
+      }
       if (selections == null) {
         const wantsToUse = await confirmTriggeredEffect(
           effect,
