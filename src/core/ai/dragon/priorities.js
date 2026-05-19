@@ -7,8 +7,6 @@ import {
   CARD_KNOWLEDGE,
   CONVERGING_STARS_TARGETS,
   SELF_SUMMON_MONSTERS,
-  countExtremeInGY,
-  countSafeBanishTargets,
   isExtremeDragon,
 } from "./knowledge.js";
 
@@ -26,6 +24,26 @@ import {
  * @property {number} [priority]
  * @property {string} reason
  */
+
+function isDragonMonster(card) {
+  return card?.cardKind === "monster" && card.type === "Dragon";
+}
+
+function hasRadiantCosmicMaterials(cards = []) {
+  const dragons = (cards || []).filter(isDragonMonster);
+  return (
+    dragons.length >= 3 &&
+    dragons.some((card) => String(card.attribute || "").toLowerCase() === "light")
+  );
+}
+
+function hasTechVoidMaterials(cards = []) {
+  const dragons = (cards || []).filter(isDragonMonster);
+  return (
+    dragons.some((card) => card.name === "Voltaic Dragon") &&
+    dragons.some((card) => card.name !== "Voltaic Dragon" && (card.level || 0) >= 5)
+  );
+}
 
 /**
  * Decides whether to play a spell/trap card.
@@ -110,52 +128,41 @@ export function shouldPlaySpell(card, analysis) {
 
   // ── Polymerization ─────────────────────────────────────────────────────────
   if (name === "Polymerization") {
-    const gyExtremeCount = analysis.extremeDragonEconomy?.extremeInGY ?? countExtremeInGY(
-      analysis.graveyard.map((c) => ({ name: c.name, archetype: c.archetype, archetypes: c.archetypes }))
-    );
+    const allCards = [...analysis.hand, ...analysis.field];
+    const canRadiant = hasRadiantCosmicMaterials(allCards);
+    const canTechVoid = hasTechVoidMaterials(allCards);
+    const techHasDamageRole =
+      analysis.oppLp <= 2500 ||
+      analysis.oppField.length >= 2 ||
+      analysis.oppField.some((c) => (c.atk || 0) >= 2500);
 
-    // Priority 1: Supreme Bahamut (5 Extreme Dragons in GY)
-    if (gyExtremeCount >= 5) {
+    if (canTechVoid && techHasDamageRole) {
       return {
         yes: true,
-        priority: 15,
-        reason: "BAHAMUT AVAILABLE — 5 Extreme Dragons in GY! Game winning move!",
+        priority: 12,
+        reason: "Tech-Void Dragon fusion for pressure, lower cost, or damage",
       };
     }
 
-    // Priority 2: Tech-Void Dragon (Voltaic + lv5+ Dragon)
-    const allCards = [...analysis.hand, ...analysis.field];
-    const hasVoltaic = allCards.some((c) => c.name === "Voltaic Dragon");
-    const hasLv5PlusDragon = allCards.some(
-      (c) => c.type === "Dragon" && (c.level || 0) >= 5 && c.name !== "Voltaic Dragon"
-    );
-
-    if (hasVoltaic && hasLv5PlusDragon) {
-      // Check if we have meaningful threats to deal with
-      if (analysis.oppField.length >= 2) {
-        return {
-          yes: true,
-          priority: 11,
-          reason: "Tech-Void Dragon fusion vs 2+ opp threats",
-        };
-      }
-      if (analysis.oppField.some((c) => (c.atk || 0) >= 2500)) {
-        return {
-          yes: true,
-          priority: 10,
-          reason: "Tech-Void Dragon fusion to match big threat",
-        };
-      }
+    if (canRadiant) {
       return {
         yes: true,
-        priority: 8,
-        reason: "Tech-Void Dragon fusion (Voltaic + lv5+ Dragon available)",
+        priority: 11,
+        reason: "Radiant Cosmic Dragon fusion value line",
+      };
+    }
+
+    if (canTechVoid) {
+      return {
+        yes: true,
+        priority: 9,
+        reason: "Tech-Void Dragon fusion fallback",
       };
     }
 
     return {
       yes: false,
-      reason: "No valid fusion materials (need Voltaic + lv5+ Dragon, or 5 Extreme in GY)",
+      reason: "No valid Dragon fusion materials for Radiant Cosmic or Tech-Void",
     };
   }
 
@@ -175,7 +182,7 @@ export function shouldPlaySpell(card, analysis) {
       return {
         yes: true,
         priority,
-        reason: `Destroy opp backrow (${analysis.oppBackrow} set cards)`,
+        reason: `Destroy 1 opponent backrow (${analysis.oppBackrow} available)`,
       };
     }
 
@@ -557,7 +564,7 @@ export function evaluateTributeTrade(cardToSummon, field, tributesNeeded, contex
   // Never tribute an Extreme Dragon
   const hasExtremeTribute = tributes.some((m) => isExtremeDragon(m));
   if (hasExtremeTribute) {
-    return { ok: false, reason: "Would tribute Extreme Dragon (preserve for Bahamut)" };
+    return { ok: false, reason: "Would tribute Extreme Dragon" };
   }
 
   const tributeCost = tributes.reduce((sum, m) => sum + getTributeValue(m), 0);

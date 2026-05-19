@@ -41,13 +41,13 @@ export const CARD_KNOWLEDGE = {
     synergies: ["Jagged Peak of the Dragons"],
     playPatterns: [
       "Best when alone (battle indestructible)",
-      "AVOID using both-GY banish effect if need Extreme Dragons in GY for Bahamut",
-      "Lower priority - once-per-duel GY banish effect is counterproductive to Bahamut setup",
+      "Use both-GY banish effect only for lethal, a large burn swing, or to deny opponent GY value",
+      "Avoid the once-per-duel effect if own GY still fuels Purified, Boneflame, Luminous, Grey, Hellkite, or Radiant revive",
     ],
     situationScore: {
       alone: 2,
     },
-    dangerousEffect: "gy_banish_bahamut_counter",  // marker to avoid GY banish
+    dangerousEffect: "gy_banish_resource_cost",
     value: 10,
   },
   "Mist Extreme Dragon": {
@@ -132,6 +132,25 @@ export const CARD_KNOWLEDGE = {
     goodDiscard: false,
     value: 12,
   },
+  "Luminous Dragon": {
+    role: "starter",
+    priority: 9,
+    atk: 2000,
+    def: 1600,
+    level: 5,
+    summonCondition: "hand_ignition_empty_field",
+    effect: "SS from hand if you control no monsters. While face-up, recovers a different Dragon from GY when a Dragon is discarded from hand to GY.",
+    synergies: ["Voltaic Dragon", "Grey Dragon", "Black Bull Dragon", "Converging Stars", "Polymerization", "Extreme Dragon Awakening"],
+    playPatterns: [
+      "Open with Luminous on an empty field when hand has follow-up",
+      "Pairs with Voltaic for a free second body",
+      "Turns discard costs into recovery when it stays face-up",
+      "LIGHT Dragon material for Radiant Cosmic Dragon",
+    ],
+    selfSummons: true,
+    fusionMaterial: "radiant_light_dragon",
+    value: 10,
+  },
   "Purified Crystal Dragon": {
     role: "boss",
     priority: 7,
@@ -142,11 +161,11 @@ export const CARD_KNOWLEDGE = {
     effect: "SS by banishing 3 GY Dragons. Heal LP on battle destroy (level×100). Protect another Dragon from effect destruction.",
     synergies: ["GY buildup", "Hellkite Dragon", "Metal Armored Dragon"],
     playPatterns: [
-      "Only use when have 3 non-Extreme Dragons in GY to banish",
-      "NEVER banish Extreme Dragons for this cost if close to Bahamut",
-      "Provides protection for another Dragon — protect Extreme Dragon on field",
+      "Prefer spending non-Extreme Dragons first; spend Extreme Dragons only when the body or protection matters",
+      "Extreme Dragons in GY are useful, but not an automatic reason to block this summon",
+      "Provides protection for another Dragon - protect the best current threat",
+      "Bridge toward Rainbow Cosmic Dragon after enough Purified activations",
     ],
-    avoidBanishingExtremes: true,
     value: 10,
   },
   "Abyssal Serpent Dragon": {
@@ -280,7 +299,7 @@ export const CARD_KNOWLEDGE = {
     playPatterns: [
       "Use as GY extender when field Dragon is not needed",
       "High GY count → very high ATK (e.g., 5 Dragons in GY = 1500 ATK base)",
-      "Sending a used-up Dragon to GY via cost adds another Dragon to GY (Bahamut setup)",
+      "Sending a used-up Dragon to GY via cost improves GY resource density",
     ],
     value: 6,
   },
@@ -320,12 +339,13 @@ export const CARD_KNOWLEDGE = {
   Polymerization: {
     role: "fusion_enabler",
     priority: 10,
-    playCondition: "voltaic_plus_lv5_dragon_OR_5_extreme_in_gy",
-    effect: "Fusion summon from Extra Deck. Supreme Bahamut: banish 5 Extreme Dragons from GY. Tech-Void: Voltaic + lv5+ Dragon.",
-    synergies: ["Voltaic Dragon", "Supreme Bahamut Dragon", "Tech-Void Dragon"],
+    playCondition: "radiant_cosmic_materials_OR_tech_void_materials",
+    effect: "Fusion summon Radiant Cosmic Dragon or Tech-Void Dragon from the Extra Deck.",
+    synergies: ["Luminous Dragon", "Voltaic Dragon", "Radiant Cosmic Dragon", "Tech-Void Dragon"],
     playPatterns: [
-      "PRIORITY 1: 5 Extreme Dragons in GY → Bahamut (guaranteed game win)",
-      "PRIORITY 2: Voltaic Dragon + lv5+ Dragon available → Tech-Void (2500+ ATK)",
+      "Primary value line: 3 Dragons including 1 LIGHT -> Radiant Cosmic Dragon",
+      "Pressure or lower-cost line: Voltaic Dragon + lv5+ Dragon -> Tech-Void Dragon",
+      "Do not consider Metal Armored Dragon; it is Ascension-only",
     ],
     value: 12,
   },
@@ -346,7 +366,7 @@ export const CARD_KNOWLEDGE = {
     role: "removal",
     priority: 8,
     playCondition: "control_lv7_plus_dragon",
-    effect: "If control lv7+ Dragon: destroy up to 2 opp spell/trap. GY banish self → search Jagged Peak from deck.",
+    effect: "If control lv7+ Dragon: destroy up to 1 opp spell/trap. GY banish self -> search Jagged Peak from deck.",
     synergies: ["Extreme Dragons", "Jagged Peak of the Dragons", "Abyssal Serpent Dragon", "Majestic Silver Dragon"],
     playPatterns: [
       "Activate only if have lv7+ Dragon on field",
@@ -408,6 +428,7 @@ export const CARD_KNOWLEDGE = {
     summonCondition: "ascension_from_armored_dragon",
     effect: "Defense indestructible. Gains 100 ATK/DEF per Dragon Special Summoned while face-up.",
     synergies: ["Armored Dragon", "Dragon spam"],
+    polymerizationTarget: false,
     value: 8,
   },
   "Tech-Void Dragon": {
@@ -421,13 +442,37 @@ export const CARD_KNOWLEDGE = {
     synergies: ["Voltaic Dragon", "Polymerization"],
     value: 12,
   },
-  "Supreme Bahamut Dragon": {
-    role: "win_condition",
-    priority: 15,
-    summonCondition: "banish_5_extreme_dragons_from_gy",
-    effect: "Fusion by banishing 5 Extreme Dragons from GY. Unaffected by card effects. Negate summon/activation once per turn (Quick). Cannot control other monsters.",
-    synergies: ["All Extreme Dragons", "Polymerization"],
-    value: 25,
+  "Radiant Cosmic Dragon": {
+    role: "fusion_boss",
+    priority: 11,
+    atk: 3300,
+    def: 2700,
+    level: 9,
+    summonCondition: "fusion_3_dragons_including_light",
+    effect: "On fusion summon: shuffle 1-5 cards from GY into Deck, then draw 1. Controller takes no battle damage involving it. If destroyed, revive a non-Radiant Dragon from GY.",
+    synergies: ["Polymerization", "Luminous Dragon", "Purified Crystal Dragon", "Dragon GY resources"],
+    playPatterns: [
+      "Primary Polymerization value payoff",
+      "Use as stabilizer when GY has optional recycle targets",
+      "Do not over-shuffle GY cards needed for Purified, Hellkite, Boneflame, Grey, Luminous, or revive follow-up",
+    ],
+    value: 16,
+  },
+  "Rainbow Cosmic Dragon": {
+    role: "ascension_boss",
+    priority: 10,
+    atk: 3500,
+    def: 3200,
+    level: 10,
+    summonCondition: "ascension_from_purified_after_3_effect_activations",
+    effect: "Protects a Dragon through next turn. Gains LP after battle destruction. GY effect sends up to 3 Extreme Dragons from Deck to GY.",
+    synergies: ["Purified Crystal Dragon", "Call of the Haunted", "Luminous Dragon", "Boneflame Dragon"],
+    playPatterns: [
+      "Long-term boss after Purified has progressed",
+      "GY effect is not an automatic win setup",
+      "Use GY effect only when it creates real follow-up for Call of the Haunted, Luminous recovery, Boneflame, or next turn",
+    ],
+    value: 15,
   },
 };
 
@@ -447,13 +492,14 @@ export const SELF_SUMMON_MONSTERS = [
   "Purified Crystal Dragon",
   "Voltaic Dragon",
   "Boneflame Dragon",
+  "Luminous Dragon",
 ];
 
 // ===== CONVERGING STARS PRIORITY TARGETS =====
 export const CONVERGING_STARS_TARGETS = [
-  "Darkness Dragon",        // lv5 → lv4 = 0 tributes (highest benefit)
-  "Abyssal Serpent Dragon", // lv7 → lv6 = 1 tribute (saves 1 tribute)
-  "Majestic Silver Dragon", // lv7 → lv6 = 1 regular tribute (any monster)
+  "Darkness Dragon",        // lv5 -> lv3 = 0 tributes (highest benefit)
+  "Abyssal Serpent Dragon", // lv7 -> lv5 = 1 tribute (saves 1 tribute)
+  "Majestic Silver Dragon", // lv7 -> lv5 = 1 regular tribute (any monster)
 ];
 
 /**
@@ -481,7 +527,7 @@ export function countExtremeInGY(graveyard) {
 }
 
 /**
- * Counts non-Extreme Dragons in the graveyard (safe to banish without breaking Bahamut setup).
+ * Counts non-Extreme Dragons in the graveyard.
  * @param {Array} graveyard
  * @returns {number}
  */
@@ -524,8 +570,8 @@ export function selectBestExtremeDragon(extremesInHand, analysis) {
       score += oppLp <= 4000 ? 2 : 0;  // Burn stacks matter more vs low LP
     }
     if (card.name === "Volcanic Extreme Dragon") {
-      // Lowest priority - both-GY banish effect disrupts Bahamut setup
-      score -= 3;
+      // Strong when burn pressure matters, but its once-per-duel GY banish stays situational.
+      score += oppLp <= 3000 ? 2 : 0;
     }
     if (card.name === "Mist Extreme Dragon") {
       // Best when opponent has multiple monsters

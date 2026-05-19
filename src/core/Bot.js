@@ -239,11 +239,11 @@ export default class Bot extends Player {
       19, 19,     // Voltaic Dragon (1200 ATK — SS if control Dragon, 800 burn on discard)
       // === SPELLS ===
       256,        // Converging Stars (discard 1; reduce hand monster levels -2 until EOT)
-      26,         // Hellkite Roar (control lv7+ Dragon: destroy opp spell/trap)
+      26,         // Hellkite Roar (control lv7+ Dragon: destroy 1 opp spell/trap)
       13, 13,     // Polymerization (fusion: Tech-Void or Radiant Cosmic)
       15,         // Call of the Haunted (trap: revive from GY)
       27,         // Jagged Peak of the Dragons (field: GY search + counter + SS on 5 counters)
-      257,        // Extreme Dragon Awakening (cont. spell — tribute 2 Dragons → SS lv9+ Dragon from hand)
+      257,        // Extreme Dragon Awakening (cont. spell — search/SS lv8+ Dragon from hand)
       // === TRAPS ===
       32,         // Dragon Spirit Sanctuary (Dragon targeted: return to hand + SS from hand)
     ];
@@ -1319,6 +1319,32 @@ export default class Bot extends Player {
         const card = this.spellTrap?.[zoneIndex];
         return !!(card && card.cardKind === "spell");
       }
+      if (action.type === "graveyardSpellEffect") {
+        const graveyardIndex = Number.isInteger(action.graveyardIndex)
+          ? action.graveyardIndex
+          : this.graveyard.findIndex(
+              (c) =>
+                c &&
+                (c.id === action.cardId ||
+                  (!action.cardId && c.name === action.cardName)),
+            );
+        const card = this.graveyard?.[graveyardIndex];
+        if (!card || card.cardKind !== "spell") return false;
+        const activationContext = {
+          ...(action.activationContext || {}),
+          fromHand: false,
+          activationZone: "graveyard",
+          sourceZone: "graveyard",
+        };
+        const preview = game?.effectEngine?.canActivateSpellTrapEffectPreview?.(
+          card,
+          this,
+          "graveyard",
+          null,
+          { activationContext },
+        );
+        return preview ? preview.ok !== false : true;
+      }
       if (action.type === "special_summon_sanctum_protector") {
         const handIndex = this.resolveHandIndexForAction(action, "monster");
         if (handIndex < 0) return false;
@@ -1389,7 +1415,20 @@ export default class Bot extends Player {
         return true;
       }
       if (action.type === "fieldEffect") {
-        return !!this.fieldSpell;
+        if (!this.fieldSpell) return false;
+        const activationContext = {
+          ...(action.activationContext || {}),
+          fromHand: false,
+          activationZone: "fieldSpell",
+          sourceZone: "fieldSpell",
+        };
+        const preview = game?.effectEngine?.canActivateFieldSpellEffectPreview?.(
+          this.fieldSpell,
+          this,
+          null,
+          { activationContext },
+        );
+        return preview ? preview.ok !== false : true;
       }
       if (action.type === "position_change") {
         const target = Number.isInteger(action.fieldIndex)
@@ -1843,6 +1882,88 @@ export default class Bot extends Player {
       return !!pipelineResult && pipelineResult.success !== false;
     }
 
+    if (action.type === "graveyardSpellEffect") {
+      const graveyardIndex = Number.isInteger(action.graveyardIndex)
+        ? action.graveyardIndex
+        : this.graveyard.findIndex(
+            (c) =>
+              c &&
+              (c.id === action.cardId ||
+                (!action.cardId && c.name === action.cardName)),
+          );
+      const card = this.graveyard?.[graveyardIndex];
+      if (!card || card.cardKind !== "spell") {
+        console.log(
+          `[Bot.executeMainPhaseAction] Invalid graveyardSpellEffect action: no spell at index ${graveyardIndex}`,
+        );
+        return false;
+      }
+
+      const graveyardEffect =
+        game.effectEngine?.getSpellTrapActivationEffect?.(card, {
+          fromHand: false,
+        });
+      if (!graveyardEffect) {
+        console.log(
+          `[Bot.executeMainPhaseAction] No graveyard spell ignition effect found for ${card.name}`,
+        );
+        return false;
+      }
+
+      const actionActivationContext = action.activationContext || {};
+      const activationContext = {
+        ...actionActivationContext,
+        fromHand: false,
+        activationZone: "graveyard",
+        sourceZone: "graveyard",
+        autoSelectTargets: actionActivationContext.autoSelectTargets !== false,
+        autoSelectSingleTarget:
+          actionActivationContext.autoSelectSingleTarget !== false,
+      };
+
+      const pipelineResult = await game.runActivationPipeline({
+        card,
+        owner: this,
+        activationZone: "graveyard",
+        activationContext,
+        selectionKind: "graveyardEffect",
+        selectionMessage: "Select target(s) for the graveyard spell effect.",
+        guardKind: "bot_graveyard_spell_effect",
+        phaseReq: ["main1", "main2"],
+        preview: () =>
+          game.effectEngine?.canActivateSpellTrapEffectPreview?.(
+            card,
+            this,
+            "graveyard",
+            null,
+            { activationContext },
+          ),
+        oncePerTurn: {
+          card,
+          player: this,
+          effect: graveyardEffect,
+        },
+        activate: (chosen, ctx, zone) =>
+          game.effectEngine.activateSpellTrapEffect(
+            card,
+            this,
+            chosen,
+            zone,
+            ctx,
+          ),
+        finalize: () => {
+          game.ui?.log?.(`Bot activates ${card.name}'s effect from graveyard`);
+          game.updateBoard();
+        },
+      });
+
+      return (
+        pipelineResult !== false &&
+        pipelineResult !== null &&
+        pipelineResult?.success !== false
+      );
+    }
+
     if (action.type === "fieldEffect" && this.fieldSpell) {
       const fieldSpell = this.fieldSpell;
       const actionActivationContext = action.activationContext || {};
@@ -1863,6 +1984,13 @@ export default class Bot extends Player {
         selectionMessage: "Select target(s) for the field spell effect.",
         guardKind: "bot_fieldspell_effect",
         phaseReq: ["main1", "main2"],
+        preview: () =>
+          game.effectEngine?.canActivateFieldSpellEffectPreview?.(
+            fieldSpell,
+            this,
+            null,
+            { activationContext },
+          ),
         oncePerTurn: {
           card: fieldSpell,
           player: this,

@@ -113,8 +113,15 @@ buildDragonPlanningProfile(game, strategy, context)
 scoreDragonLineMilestones(context)
 scoreDragonLineTerminal(context)
 describeDragonPlannedLine(context)
+```
+
+Export opcional:
+
+```js
 applyDragonRetentionPriorities(candidates, context)
 ```
+
+`applyDragonRetentionPriorities` só deve ser criado se houver chamada real em `DragonStrategy`, `TurnLineSearch` ou em outro ponto de ordenação de candidatos. Se não houver integração direta, a retenção deve ser resolvida por prioridades, scoring e `candidateLimit`, sem função solta.
 
 Depois integrar em `src/core/ai/DragonStrategy.js`:
 
@@ -127,6 +134,11 @@ describePlannedLine(context)
 ```
 
 O primeiro rollout deve usar `turnMode: "mainOnly"` para reduzir risco. A etapa de batalha pode ser adicionada depois com `mainBattleMain2`, focada em `Black Bull Dragon`, counters de `Jagged Peak`, dano letal e ataques seguros com `Radiant`/`Rainbow`.
+
+Divisão obrigatória:
+
+- Rollout 1: `mainOnly` + starters + `Radiant Cosmic Dragon` / `Tech-Void Dragon` + `Extreme Dragon Awakening` + `Jagged Peak` cashout.
+- Rollout 2: field ignition completo + battle planning.
 
 ## 6. Plano de Implementação
 
@@ -162,8 +174,10 @@ Tarefas:
    - `Dragon Spirit Sanctuary`;
    - nova função de `Volcanic Extreme Dragon`.
 2. Reduzir ou remover prioridade de `Supreme Bahamut Dragon` para o bot Dragon.
-3. Manter Bahamut documentado como plano humano ou futuro, mas não como objetivo de IA nesta versão.
-4. Classificar cada carta por papel:
+3. Neutralizar `Supreme Bahamut Dragon` em knowledge, combos, priorities, scoring e simulation nesta versão.
+4. Manter Bahamut documentado como plano humano ou futuro, mas nunca como objetivo de IA nesta versão.
+5. Extreme Dragons no Cemitério ainda têm valor como recurso, mas não devem dominar o score nem representar progresso automático para Bahamut.
+6. Classificar cada carta por papel:
    - starter;
    - extender;
    - payoff;
@@ -172,7 +186,7 @@ Tarefas:
    - fusion enabler;
    - defensive utility;
    - graveyard resource.
-5. Atualizar o `COMBO_DATABASE` com os combos novos e marcar o status de cada um:
+7. Atualizar o `COMBO_DATABASE` com os combos novos e marcar o status de cada um:
    - suportado hoje;
    - parcialmente suportado;
    - requer action generation;
@@ -204,7 +218,7 @@ Registrar os combos no banco de conhecimento e usar esta matriz como guia de imp
 | Boneflame GY Extender | Média | Planejado quando GY já estiver carregado |
 | Purified Setup | Alta | Planejado quando 3 Dragons no GY forem acessíveis |
 | Purified para Rainbow | Média | Planejado como payoff de longo prazo |
-| Rainbow para setup de GY | Baixa | Usar sem plano Bahamut, apenas se houver valor real |
+| Rainbow para setup de GY | Baixa | Usar apenas se gerar recurso real, como `Call of the Haunted`, recuperação por `Luminous`, `Boneflame` ou setup claro do próximo turno |
 | Rainbow + Bahamut Finish | Fora do bot | Manter fora da IA Dragon atual |
 | Dragon Spirit Sanctuary Tag-Out | Média | Planejamento defensivo, não prioridade inicial |
 
@@ -256,9 +270,10 @@ Implementar ou revisar:
 5. Efeitos de field spell face-up:
    - `Jagged Peak of the Dragons` cashout com 5+ counters.
 6. `Polymerization`:
-   - reconhecer `Radiant Cosmic Dragon` como payoff principal;
-   - manter `Tech-Void Dragon` como linha secundária;
-   - ignorar Bahamut se ele não estiver no Extra Deck.
+   - avaliar apenas `Radiant Cosmic Dragon` e `Tech-Void Dragon` nesta versão;
+   - reconhecer `Radiant Cosmic Dragon` como payoff principal de valor;
+   - permitir que `Tech-Void Dragon` seja melhor em linhas de dano, menor custo ou lethal;
+   - nunca priorizar Bahamut nesta versão do bot.
 7. `Extreme Dragon Awakening`:
    - gerar ação quando houver 2 Dragons em campo e alvo Nível 8+ válido;
    - valorizar `Black Bull`, `Purified`, `Volcanic`, `Galaxy` e `Forest` conforme contexto.
@@ -298,8 +313,8 @@ Simular com fidelidade suficiente:
 6. `Polymerization`
    - `Radiant Cosmic Dragon` com 3 Dragons incluindo LIGHT;
    - `Tech-Void Dragon` com Dragon Nível 5+;
-   - `Metal Armored Dragon`, se aplicável;
-   - Bahamut apenas se estiver no Extra Deck e com requisito real.
+   - não considerar `Metal Armored Dragon`, pois ele é apenas Ascension de `Armored Dragon`;
+   - não considerar Bahamut como candidato nesta versão do bot.
 7. `Radiant Cosmic Dragon`
    - shuffle de 1-5 cards do GY;
    - compra 1;
@@ -312,7 +327,7 @@ Simular com fidelidade suficiente:
    - Ascension Summon via requisito de Purified;
    - proteção dos Dragons;
    - ganho de LP em batalha como valor defensivo;
-   - efeito de GY sem tratar Bahamut como objetivo automático.
+   - efeito de GY apenas quando gerar recurso real: `Call of the Haunted`, recuperação por `Luminous`, `Boneflame` ou setup claro do próximo turno.
 10. `Jagged Peak of the Dragons`
    - counters por battle destroy;
    - cashout com 5+ counters para invocar Dragon da mão, Deck ou GY.
@@ -374,7 +389,9 @@ Aumentar `maxDepth` para 5 apenas quando houver `Luminous` + extender + payoff c
 
 ### DR-6 - Retenção e ordenação de candidatos
 
-Criar `applyDragonRetentionPriorities` para impedir que o planner descarte peças importantes antes de avaliá-las.
+Impedir que o planner descarte peças importantes antes de avaliá-las.
+
+Criar `applyDragonRetentionPriorities` somente se a função for chamada por `DragonStrategy`, `TurnLineSearch` ou pelo fluxo real de ordenação de candidatos. Caso contrário, resolver retenção por prioridades, scoring e `candidateLimit`.
 
 Prioridade alta:
 
@@ -403,7 +420,7 @@ Penalizar:
 - `Polymerization` que consome `Luminous` sem payoff melhor que manter corpos;
 - `Converging Stars` descartando payoff crítico sem recuperação;
 - `Jagged Peak` cashout fraco quando o campo já está cheio;
-- qualquer linha cuja recompensa principal seja Bahamut fora do Extra Deck.
+- qualquer linha cuja recompensa principal seja Bahamut.
 
 ### DR-7 - Scoring de milestones
 
@@ -558,11 +575,11 @@ Alvos preferidos:
 
 Plano principal: `Radiant Cosmic Dragon`.
 
-Plano secundário: `Tech-Void Dragon`.
+`Radiant Cosmic Dragon` é o payoff principal de valor, mas `Tech-Void Dragon` pode ser melhor em linhas de dano, menor custo ou lethal.
 
-Plano situacional: `Metal Armored Dragon`.
+`Metal Armored Dragon` não é alvo de `Polymerization`; ele deve ser tratado apenas como Ascension de `Armored Dragon`.
 
-Nunca pontuar Bahamut se ele não estiver no Extra Deck.
+Nunca pontuar Bahamut como objetivo de `Polymerization` nesta versão. Se Bahamut não estiver no Extra Deck, ele não pode aparecer como plano; mesmo em lógica genérica futura, este rollout deve manter Bahamut neutralizado para o bot Dragon.
 
 ### Radiant Cosmic Dragon
 
@@ -592,7 +609,7 @@ Tratar como boss de longo prazo.
 
 Sem Bahamut, o efeito de GY deve ser usado com cautela:
 
-- pode preparar GY ou reduzir deck em situações específicas;
+- pode preparar recurso real para `Call of the Haunted`, recuperação por `Luminous`, `Boneflame` ou próximo turno;
 - não deve ser objetivo central do bot;
 - não deve sacrificar plano de campo forte sem motivo.
 
@@ -620,7 +637,7 @@ A implementação estará pronta quando:
 - O bot reconhecer `Radiant Cosmic Dragon` como alvo importante de fusão.
 - O bot conseguir usar ou planejar `Jagged Peak` cashout.
 - O bot conseguir usar efeitos relevantes de monstros em campo.
-- O bot não perseguir `Supreme Bahamut Dragon` enquanto Bahamut estiver fora do Extra Deck.
+- O bot não perseguir `Supreme Bahamut Dragon` nesta versão.
 - O número de turnos sem ação útil cair em relação ao baseline.
 - Não houver aumento relevante de ativações falhas.
 
@@ -641,7 +658,7 @@ Criar ou verificar simulações com estas mãos/estados:
 1. `Luminous Dragon` + `Voltaic Dragon`.
 2. `Luminous Dragon` + `Voltaic Dragon` + `Armored Dragon`.
 3. `Luminous Dragon` + `Voltaic Dragon` + `Extreme Dragon Awakening`.
-4. `Armored Dragon` + `Polymerization` + Dragon Nível 5+.
+4. `Polymerization` com materiais viáveis para `Radiant Cosmic Dragon` ou `Tech-Void Dragon`.
 5. `Luminous Dragon` + 2 Dragons + `Polymerization` para `Radiant`.
 6. `Converging Stars` + `Abyssal Serpent Dragon` + 1 tributo.
 7. `Converging Stars` + `Darkness Dragon`.
@@ -682,16 +699,24 @@ Métricas mínimas para comparar com baseline:
 7. Rodar Bot Arena e ajustar pesos.
 8. Opcional: adicionar battle planning.
 
+Os commits devem ser agrupados em dois rollouts:
+
+- Rollout 1: `mainOnly`, starters, `Radiant`/`Tech`, `Awakening` e `Jagged Peak` cashout.
+- Rollout 2: field ignition completo e battle planning.
+
 ## 11. Checklist de Implementação
 
 - [ ] Baseline Dragon registrado.
 - [ ] Knowledge atualizado para Luminous, Radiant, Rainbow e nova decklist.
 - [ ] Combos antigos revisados e combos novos adicionados.
 - [ ] Plano Bahamut removido da prioridade do bot.
+- [ ] Bahamut neutralizado em knowledge, combos, priorities, scoring e simulation.
 - [ ] Action generation cobre monstros no campo.
 - [ ] Action generation cobre field spell ignition de `Jagged Peak`.
 - [ ] Action generation cobre spell GY ignition de `Hellkite Roar`.
 - [ ] `Polymerization` prioriza `Radiant` quando possível.
+- [ ] `Polymerization` avalia apenas `Radiant Cosmic Dragon` e `Tech-Void Dragon`.
+- [ ] `Metal Armored Dragon` tratado apenas como Ascension.
 - [ ] `Awakening` é planejado como conversão de corpos.
 - [ ] Simulação cobre Luminous.
 - [ ] Simulação cobre Radiant.

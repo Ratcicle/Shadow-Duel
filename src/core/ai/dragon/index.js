@@ -17,6 +17,8 @@ export {
 
 export {
   COMBO_DATABASE,
+  DRAGON_COMBO_PRIORITY,
+  DRAGON_COMBO_STATUS,
   detectAvailableCombos,
   getComboByName,
 } from "./combos.js";
@@ -37,3 +39,11 @@ export {
 } from "./scoring.js";
 
 export { simulateMainPhaseAction } from "./simulation.js";
+
+export {
+  applyDragonRetentionPriorities,
+  buildDragonPlanningProfile,
+  describeDragonPlannedLine,
+  scoreDragonLineMilestones,
+  scoreDragonLineTerminal,
+} from "./linePlanning.js";

@@ -11,8 +11,8 @@ export const DRAGON_EXTREME_RESOURCE_POLICY = {
   resourceName: "Extreme Dragon",
   primaryZone: "graveyard",
   thresholds: {
-    preserveAt: 3,
-    criticalAt: 5,
+    preserveAt: Infinity,
+    criticalAt: Infinity,
   },
 };
 
@@ -34,8 +34,7 @@ export function analyzeExtremeDragonEconomy(analysisOrGraveyard = {}) {
       },
     }),
     computeFlags: ({ countsByZone }) => ({
-      bahamutReady: countsByZone.graveyard >= 5,
-      closeToBahamut: countsByZone.graveyard >= 3,
+      usefulExtremeResources: countsByZone.graveyard > 0,
     }),
   });
 
@@ -45,8 +44,7 @@ export function analyzeExtremeDragonEconomy(analysisOrGraveyard = {}) {
     extremeInGY,
     extremeDragonsInGY: extremeInGY,
     totalExtremeDragons: economy.totalResources,
-    bahamutReady: economy.flags.bahamutReady,
-    closeToBahamut: economy.flags.closeToBahamut,
+    usefulExtremeResources: economy.flags.usefulExtremeResources,
     economy,
   };
 }
@@ -60,7 +58,7 @@ export function assessDragonExtremeResourcePolicy(analysis = {}) {
   return {
     pressure,
     preserveExtremeInGY: pressure.shouldPreserve,
-    bahamutReady: pressure.isCritical,
+    criticalExtremeResource: pressure.isCritical,
   };
 }
 
@@ -105,6 +103,10 @@ export function evaluateDragonMonster(monster, owner, opponent) {
 
   // Protection
   if (monster.battleIndestructible || monster.tempBattleIndestructible) value += 0.8;
+  if (monster.simBattleDestructionProtected || monster.simEffectDestructionProtected) value += 0.7;
+  if (monster.simProtectedUntilNextTurn) value += 0.3;
+  if (monster.simFutureRevive) value += 0.6;
+  if (monster.simMultiAttackPressure && !monster.cannotAttackThisTurn) value += 0.6;
   if (monster.effectsNegated) value -= 0.5;
 
   // Penalties
@@ -155,12 +157,10 @@ export function evaluateBoardDragon(gameOrState, perspectivePlayer, getOpponentF
     score -= oppValue * 0.85;
   }
 
-  // ── Extreme Dragon GY count (Bahamut progress) ────────────────────────────
+  // ── Extreme Dragon GY resources ───────────────────────────────────────────
   const myGY = perspective?.graveyard || [];
   const { extremeInGY } = analyzeExtremeDragonEconomy(myGY);
-  score += extremeInGY * 0.8;  // Each Extreme Dragon in GY = closer to Bahamut
-  if (extremeInGY >= 5) score += 8.0;  // Bahamut available = massive advantage
-  if (extremeInGY >= 3) score += 2.0;  // Getting close
+  score += Math.min(extremeInGY, 3) * 0.25; // Useful follow-up resource, not a win condition.
 
   // ── Hand advantage ────────────────────────────────────────────────────────
   const myHand = perspective?.hand || [];
