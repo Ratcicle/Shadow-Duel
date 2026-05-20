@@ -881,6 +881,7 @@ export const ACTION_CATALOG = {
       "resetAttackFlags",
       "allowExtraDeckMonsterToHand",
       "allowExtraDeckMonsterToHandIf",
+      "contextLabel",
     ],
     fields: {
       ...COMMON_TARGET_FIELDS,
@@ -894,6 +895,7 @@ export const ACTION_CATALOG = {
         description:
           "Optional condition that lets an Extra Deck monster pass through hand instead of redirecting to Extra Deck.",
       },
+      contextLabel: { type: "string" },
     },
     targetRef: "required",
     selection: "usesTargets",

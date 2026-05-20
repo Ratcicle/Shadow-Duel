@@ -66,8 +66,8 @@ export function rankLuminarchSearchCandidates(cards, action = {}, ctx = {}) {
         score += 45;
       }
       if (card.name === "Luminarch Enchanted Halberd") score += 18;
-      if (card.name === "Luminarch Magic Sickle" && graveyard.length >= 2) {
-        score += 16;
+      if (card.name === "Luminarch Magic Sickle") {
+        score += underPressure ? 10 : 2;
       }
       if (underPressure && !hasTank && card.def >= 2000) score += 20;
       return score;

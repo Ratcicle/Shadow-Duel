@@ -32,6 +32,7 @@ export {
   collectEffectActivatedTriggers,
   collectBattleDestroyTriggers,
   collectAttackDeclaredTriggers,
+  collectBattleDamageTriggers,
   collectEffectTargetedTriggers,
   collectCardEquippedTriggers,
   collectCardToGraveTriggers,

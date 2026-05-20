@@ -390,36 +390,8 @@ export function detectAvailableCombos(analysis) {
     }
 
     // ═════════════════════════════════════════════════════════════════════════
-    // COMBO 7: Magic Sickle Recursion
+    // COMBO 7: Magic Sickle battle trick is reactive and handled outside main-phase combos.
     // ═════════════════════════════════════════════════════════════════════════
-    const hasSickleOnField = hasCardName(
-      zoneIndex,
-      "field",
-      "Luminarch Magic Sickle",
-    );
-    const gyLuminarch = graveyard.filter(
-      (c) => c && isLuminarch(c)
-    );
-
-    if (hasSickleOnField && gyLuminarch.length >= 2) {
-      pushCombo(combos, {
-        id: "sickle_recursion",
-        name: "Magic Sickle Recursion",
-        priority: 7,
-        cards: ["Luminarch Magic Sickle"],
-        description: `Enviar Sickle → add 2 Luminarch da GY (${gyLuminarch.length} opções)`,
-        steps: [
-          "Ativar efeito de Magic Sickle",
-          "Enviar do campo para GY",
-          "Add até 2 Luminarch da GY para mão",
-        ],
-        conditions: {
-          sickleOnField: hasSickleOnField,
-          gyHasTargets: gyLuminarch.length >= 2,
-        },
-      });
-    }
-
     // ═════════════════════════════════════════════════════════════════════════
     // COMBO 7.5: Moonblade Captain + Enchanted Halberd Chain
     // Captain revive → Aegis SS → Halberd trigger → 3 monstros em 1 turno

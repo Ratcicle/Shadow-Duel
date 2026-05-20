@@ -170,11 +170,11 @@
     },
     "105": {
       "name": "Marechal Celestial Luminarca",
-      "description": "Se esse card atacar um monstro em posição de defesa, cause dano perfurante. Uma vez por turno, esse card não pode ser destruído em batalha."
+      "description": "Você pode pagar 2000 PV; Invoque este card por Invocação-Especial da sua mão. Uma vez por turno, se este card seria destruído em batalha: negue essa destruição. Se este card for destruído em batalha: ganhe 1000 PV."
     },
     "106": {
       "name": "Foice Mágica Luminarca",
-      "description": "Você pode enviar este card do seu campo para o cemitério: adicione até 2 monstros 'Luminarca' do seu cemitério à sua mão."
+      "description": "Durante a Etapa de Dano, quando um monstro 'Luminarca' que você controla batalhar (Efeito Rápido): você pode enviar este card da sua mão para o Cemitério; até o final deste turno, esse monstro ganha 1200 de ATK e 1700 de DEF. Você pode banir este card do seu Cemitério; adicione 1 Magia 'Luminarca' do seu Cemitério à sua mão. Você só pode usar cada efeito de 'Foice Mágica Luminarca' uma vez por turno."
     },
     "107": {
       "name": "Protetor do Santuário Luminarca",
@@ -198,7 +198,7 @@
     },
     "112": {
       "name": "Santuário da Cidadela Luminarca",
-      "description": "Quando um monstro do oponente declarar um ataque: ganhe 500 PV. Uma vez por turno, você pode pagar 1000 PV e escolher 1 monstro 'Luminarca' que você controla: ele ganha de 500 ATK/DEF até o final do turno."
+      "description": "Quando um monstro do oponente declarar um ataque: ganhe 500 PV. Uma vez por turno, você pode pagar 1000 PV e escolher 1 monstro 'Luminarca' que você controla: ele ganha de 500 ATK/DEF até o final do turno. Uma vez por turno, se um monstro 'Luminarca' que você controla seria destruído em batalha, você pode pagar 1000 PV; ele não é destruído."
     },
     "113": {
       "name": "Ascensão Sagrada Luminarca",

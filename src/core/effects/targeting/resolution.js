@@ -288,6 +288,9 @@ export function resolveTargets(targetDefs, ctx, selections) {
     if (def.excludeSelf) {
       filters.excludeSelf = true;
     }
+    if (def.battleParticipant) {
+      filters.battleParticipant = true;
+    }
     requirements.push({
       id: def.id,
       min,

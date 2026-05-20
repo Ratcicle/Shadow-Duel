@@ -291,6 +291,16 @@ export async function resolveEventEntries(
           attackerOwnerId !== defenderOwnerId,
       });
     }
+  } else if (eventName === "battle_damage") {
+    const defenderOwner = payload?.defenderOwner || payload?.targetOwner || null;
+    if (payload?.attackerOwner && defenderOwner) {
+      await this.checkAndOfferTraps(eventName, {
+        ...payload,
+        defenderOwner,
+        targetOwner: payload?.targetOwner || defenderOwner,
+        isOpponentAttack: payload.attackerOwner.id !== defenderOwner.id,
+      });
+    }
   }
 
   return {

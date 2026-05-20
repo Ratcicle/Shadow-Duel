@@ -21,8 +21,8 @@ O arquétipo **Luminarch** é focado em guerreiros sagrados, defensores celestia
 | 101 | Luminarch Valiant - Knight of the Dawn | Warrior | 4     | 1600 | 1200 |
 | 103 | Luminarch Aegisbearer                  | Warrior | 4     | 1000 | 2000 |
 | 104 | Luminarch Moonblade Captain            | Warrior | 6     | 2200 | 1700 |
-| 105 | Luminarch Celestial Marshal            | Warrior | 7     | 2500 | 2000 |
-| 106 | Luminarch Magic Sickle                 | Warrior | 3     | 1000 | 1000 |
+| 105 | Luminarch Celestial Marshal            | Warrior | 7     | 2100 | 2500 |
+| 106 | Luminarch Magic Sickle                 | Warrior | 3     | 1200 | 1700 |
 | 107 | Luminarch Sanctum Protector            | Warrior | 7     | 1800 | 2800 |
 | 108 | Luminarch Radiant Lancer               | Warrior | 8     | 2600 | 2000 |
 | 109 | Luminarch Aurora Seraph                | Fairy   | 8     | 2800 | 2400 |
@@ -75,11 +75,11 @@ _Nenhuma trap no arquétipo atualmente._
 **104 - Luminarch Moonblade Captain** (L6 Warrior | ATK 2200 / DEF 1700)
 > If this card is Normal Summoned: You can target 1 Level 4 or lower "Luminarch" monster in your GY; Special Summon it. Once per turn, if this card destroys an opponent's monster by battle: it can make a second attack this turn.
 
-**105 - Luminarch Celestial Marshal** (L7 Warrior | ATK 2500 / DEF 2000)
-> If this card battles a Defense Position monster, inflict piercing battle damage to your opponent. Once per turn, this card cannot be destroyed by battle.
+**105 - Luminarch Celestial Marshal** (L7 Warrior | ATK 2100 / DEF 2500)
+> You can pay 2000 LP; Special Summon this card from your hand. Once per turn, if this card would be destroyed by battle: negate that destruction. If this card is destroyed by battle: gain 1000 LP.
 
-**106 - Luminarch Magic Sickle** (L3 Warrior | ATK 1000 / DEF 1000)
-> You can send this card from the field to the GY; add up to 2 "Luminarch" monsters from your GY to your hand.
+**106 - Luminarch Magic Sickle** (L3 Warrior | ATK 1200 / DEF 1700)
+> During the Damage Step, when a "Luminarch" monster you control battles (Quick Effect): you can send this card from your hand to the GY; that monster gains 1200 ATK and 1700 DEF until the end of this turn. You can banish this card from your GY; add 1 "Luminarch" Spell from your GY to your hand. You can only use each effect of "Luminarch Magic Sickle" once per turn.
 
 **107 - Luminarch Sanctum Protector** (L7 Warrior | ATK 1800 / DEF 2800)
 > If you control a face-up "Luminarch Aegisbearer", you can send it to the GY; Special Summon this card from your hand. Once per turn, when an opponent's monster declares an attack (Quick Effect): negate that attack.
@@ -107,7 +107,7 @@ _Nenhuma trap no arquétipo atualmente._
 > Once per turn: discard 1 Level 7 or higher Luminarch monster; add 1 Level 4 or lower Luminarch monster from your Deck to your hand.
 
 **112 - Sanctum of the Luminarch Citadel** (Field Spell)
-> Whenever an opponent's monster declares an attack: gain 500 LP. Once per turn: You can pay 1000 LP, then target 1 "Luminarch" monster you control; it gains 500 ATK/DEF until the end of this turn.
+> Whenever an opponent's monster declares an attack: gain 500 LP. Once per turn: You can pay 1000 LP, then target 1 "Luminarch" monster you control; it gains 500 ATK/DEF until the end of this turn. Once per turn, if a "Luminarch" monster you control would be destroyed by battle, you can pay 1000 LP; it is not destroyed.
 
 **113 - Luminarch Holy Ascension** (Normal Spell)
 > Pay 1000 LP, then target 1 "Luminarch" monster you control; it gains 800 ATK/DEF until the end of this turn.

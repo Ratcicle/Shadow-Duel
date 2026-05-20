@@ -84,6 +84,13 @@ function buildTargetingCacheKey(def, ctx) {
     def.excludeEventCardName && ctx?.eventCard
       ? cardCacheIdentity(ctx.eventCard, "eventCard")
       : "",
+    def.battleParticipant ? "battleParticipant" : "",
+    def.battleParticipant
+      ? [ctx?.attacker, ctx?.defender || ctx?.target]
+          .filter(Boolean)
+          .map((card, idx) => cardCacheIdentity(card, `battle${idx}`))
+          .join(",")
+      : "",
     def.requireThisCard ? "this" : "",
     cardCacheIdentity(ctx.source, "source"),
     ctx.source?.name || "",
@@ -282,6 +289,16 @@ export function selectCandidates(def, ctx) {
         log(
           `[selectCandidates] Evaluating card: ${card.name} (archetype: ${card.archetype}, owner: ${owner.id})`
         );
+        if (def.battleParticipant === true) {
+          const battleParticipants = [
+            ctx?.attacker,
+            ctx?.defender || ctx?.target,
+          ].filter(Boolean);
+          if (!battleParticipants.includes(card)) {
+            log("[selectCandidates] Rejecting: card is not a battle participant");
+            continue;
+          }
+        }
         if (def.requireThisCard && ctx?.source && card !== ctx.source) {
           log(
             `[selectCandidates] Rejecting: requireThisCard and card is not source`

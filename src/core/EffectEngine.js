@@ -1795,6 +1795,8 @@ EffectEngine.prototype.collectBattleDestroyTriggers =
   triggers.collectBattleDestroyTriggers;
 EffectEngine.prototype.collectAttackDeclaredTriggers =
   triggers.collectAttackDeclaredTriggers;
+EffectEngine.prototype.collectBattleDamageTriggers =
+  triggers.collectBattleDamageTriggers;
 EffectEngine.prototype.collectEffectTargetedTriggers =
   triggers.collectEffectTargetedTriggers;
 EffectEngine.prototype.collectCardEquippedTriggers =

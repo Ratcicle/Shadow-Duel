@@ -236,6 +236,8 @@ export async function resolveCombat(attacker, target, options = {}) {
  * @returns {Object} Result with ok status and any pending selections
  */
 export async function finishCombat(attacker, target, options = {}) {
+  const resumeFromTie = options.resumeFromTie === true;
+
   this.queueVisualFeedback?.({
     kind: "impact",
     sourceCard: attacker,
@@ -245,6 +247,80 @@ export async function finishCombat(attacker, target, options = {}) {
     tone: "red",
   });
 
+  const attackerOwner = attacker?.owner === "player" ? this.player : this.bot;
+  const defenderOwner = target?.owner === "player" ? this.player : this.bot;
+
+  if (!resumeFromTie) {
+    const battleDamageResult = await this.emit("battle_damage", {
+      attacker,
+      defender: target,
+      target,
+      attackerOwner,
+      defenderOwner,
+      targetOwner: defenderOwner,
+    });
+
+    if (battleDamageResult?.needsSelection) {
+      return {
+        ok: true,
+        needsSelection: true,
+        selectionContract: battleDamageResult.selectionContract,
+        damageDealt: 0,
+        targetDestroyed: false,
+        attackerDestroyed: false,
+      };
+    }
+
+    if (this.lastAttackNegated) {
+      this.markAttackUsed(attacker, target);
+      this.clearAttackResolutionIndicators();
+      this.updateBoard();
+      return {
+        ok: true,
+        damageDealt: 0,
+        targetDestroyed: false,
+        attackerDestroyed: false,
+      };
+    }
+
+    const attackerStillOnField =
+      attackerOwner && Array.isArray(attackerOwner.field)
+        ? attackerOwner.field.includes(attacker)
+        : false;
+    const targetStillOnField =
+      defenderOwner && Array.isArray(defenderOwner.field)
+        ? defenderOwner.field.includes(target)
+        : false;
+
+    if (!attackerStillOnField || !targetStillOnField) {
+      this.ui?.log?.("Attack stopped before damage calculation.");
+      this.markAttackUsed(attacker, target);
+      this.clearAttackResolutionIndicators();
+      this.updateBoard();
+      return {
+        ok: true,
+        damageDealt: 0,
+        targetDestroyed: false,
+        attackerDestroyed: false,
+      };
+    }
+
+    if (attacker.position !== "attack" || attacker.isFacedown) {
+      this.ui?.log?.(
+        "Attack stopped because the attacker is no longer in Attack Position.",
+      );
+      this.markAttackUsed(attacker, target);
+      this.clearAttackResolutionIndicators();
+      this.updateBoard();
+      return {
+        ok: true,
+        damageDealt: 0,
+        targetDestroyed: false,
+        attackerDestroyed: false,
+      };
+    }
+  }
+
   // Capture healing flags at the start of combat resolution to avoid race conditions
   const attackerHealsOnBattleDamage =
     attacker?.battleDamageHealsControllerThisTurn || false;
@@ -252,7 +328,6 @@ export async function finishCombat(attacker, target, options = {}) {
     target?.battleDamageHealsControllerThisTurn || false;
 
   // Check if we're resuming from a pending tie destruction
-  const resumeFromTie = options.resumeFromTie === true;
   const skipAttackerDestruction = resumeFromTie;
   const battleDestroyResults = [];
 

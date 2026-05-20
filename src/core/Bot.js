@@ -156,7 +156,7 @@ export default class Bot extends Player {
       // ═════════════════════════════════════════════════════════════════════
       104,
       104, // Luminarch Moonblade Captain (Lv6 recursion + double atk, priority 16)
-      105, // Luminarch Celestial Marshal (Lv7 boss 2500 ATK, priority 15)
+      105, // Luminarch Celestial Marshal (Lv7 self-SS tank, priority 15)
       108, // Luminarch Radiant Lancer (Lv8 2600 ATK + ATK gain, priority 14)
       109, // Luminarch Aurora Seraph (Lv8 2800 ATK + heal + protection, priority 14)
 
@@ -165,7 +165,7 @@ export default class Bot extends Player {
       // ═════════════════════════════════════════════════════════════════════
       107,
       107, // Luminarch Sanctum Protector (Lv7 2800 DEF tank, priority 14)
-      106, // Luminarch Magic Sickle (Lv3 recursion engine, priority 12)
+      106, // Luminarch Magic Sickle (Lv3 hand battle trick + spell recovery, priority 12)
       117, // Luminarch Enchanted Halberd (Lv4 SS trigger, priority 11)
       115, // Luminarch Crescent Shield (equip, priority 10)
       13, // Polymerization (fusion para Megashield, priority 10)

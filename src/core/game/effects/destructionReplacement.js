@@ -307,6 +307,75 @@ async function tryReplacement(game, sourceCard, sourceOwner, effect, ctx) {
     sourceOwner.oncePerDuelUsageByName[duelKey] = true;
   };
 
+  const buildActionCostCtx = (extra = {}) => {
+    const opponent =
+      typeof game.getOpponent === "function"
+        ? game.getOpponent(sourceOwner)
+        : null;
+    return {
+      player: sourceOwner,
+      opponent,
+      source: sourceCard,
+      destroyed: card,
+      destroyedOwner: ownerPlayer,
+      cause,
+      activationContext: {
+        source: sourceCard,
+        player: sourceOwner,
+      },
+      ...extra,
+    };
+  };
+
+  const runReplacementCostActions = async () => {
+    const costActions = Array.isArray(replacement.costActions)
+      ? replacement.costActions
+      : [];
+    if (costActions.length === 0) return true;
+
+    const engine = game.effectEngine;
+    if (!engine || typeof engine.applyActions !== "function") {
+      return false;
+    }
+
+    const previewCtx = buildActionCostCtx({
+      preview: true,
+      isPreview: true,
+      activationContext: {
+        source: sourceCard,
+        player: sourceOwner,
+        preview: true,
+        isPreview: true,
+      },
+    });
+    const previewResult =
+      typeof engine.checkActionPreviewRequirements === "function"
+        ? engine.checkActionPreviewRequirements(costActions, previewCtx)
+        : { ok: true };
+    if (previewResult && previewResult.ok === false) {
+      return false;
+    }
+
+    const sourceIsHuman = sourceOwner?.controllerType === "human";
+    if (sourceIsHuman && replacement.auto !== true) {
+      const prompt =
+        formatReplacementText(replacement.prompt, card.name, sourceCard.name) ||
+        `${sourceCard.name}: pay the replacement cost to prevent ${card.name} from being destroyed?`;
+      const wantsToReplace =
+        (await game.ui?.showConfirmPrompt?.(prompt, {
+          kind: "destruction_replacement",
+          cardName: card.name,
+        })) ?? false;
+      if (!wantsToReplace) {
+        return false;
+      }
+    }
+
+    const costCtx = buildActionCostCtx();
+    const costResult = await engine.applyActions(costActions, costCtx, {});
+    return !!costResult;
+  };
+
   const runFollowUpActions = async () => {
     const followUpActions = Array.isArray(effect.actions) ? effect.actions : [];
     if (followUpActions.length === 0) return;
@@ -409,6 +478,33 @@ async function tryReplacement(game, sourceCard, sourceOwner, effect, ctx) {
   };
 
   const costCount = replacement.costCount ?? 0;
+  const hasActionCosts =
+    Array.isArray(replacement.costActions) &&
+    replacement.costActions.length > 0;
+  if (hasActionCosts && costCount === 0) {
+    const costPaid = await runReplacementCostActions();
+    if (!costPaid) {
+      return { replaced: false };
+    }
+
+    game.markOncePerTurnUsed(sourceCard, sourceOwner, effect);
+    markOncePerDuelUsedIfNeeded();
+    const logMessage = formatReplacementText(
+      replacement.logMessage,
+      card.name,
+      sourceCard.name,
+    );
+    if (logMessage) {
+      game.ui?.log?.(logMessage);
+    } else {
+      game.ui?.log?.(
+        `${card.name} avoided destruction due to ${sourceCard.name}.`,
+      );
+    }
+    await runFollowUpActions();
+    return { replaced: true };
+  }
+
   if (replacement.auto === true || costCount === 0) {
     game.markOncePerTurnUsed(sourceCard, sourceOwner, effect);
     markOncePerDuelUsedIfNeeded();

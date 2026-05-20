@@ -366,9 +366,9 @@ export function shouldSummonMonster(card, analysis) {
     // ═════════════════════════════════════════════════════════════════════════
 
     if (name === "Luminarch Celestial Marshal") {
-      // Marshal é 2500 ATK / 2300 DEF com proteção de batalha
-      const isSafeAttack = (card.atk || 2500) > oppStrongest + 100;
-      const isSafeDefense = (card.def || 2300) >= oppStrongest - 200;
+      // Marshal agora é um tank 2100 ATK / 2500 DEF com proteção de batalha
+      const isSafeAttack = (card.atk || 2100) > oppStrongest + 100;
+      const isSafeDefense = (card.def || 2500) >= oppStrongest - 200;
 
       // CRITICAL: Se opp tem ameaças fortes e não temos defesa, não suicide
       if (oppStrongest >= 2600 && !hasTank) {
@@ -383,8 +383,8 @@ export function shouldSummonMonster(card, analysis) {
         position: isSafeAttack ? "attack" : "defense",
         priority: isSafeAttack ? 7 : 5,
         reason: isSafeAttack
-          ? "Boss beater 2500 ATK (seguro)"
-          : "Defense até limpar board",
+          ? "Marshal pressiona com proteção de batalha"
+          : "Tank 2500 DEF até limpar board",
       };
     }
 
@@ -491,20 +491,9 @@ export function shouldSummonMonster(card, analysis) {
     }
 
     if (name === "Luminarch Magic Sickle") {
-      const gyHasLuminarch = (analysis.graveyard || []).some(
-        (c) => c && isLuminarch(c)
-      );
-      if (gyHasLuminarch) {
-        return {
-          yes: true,
-          position: "defense",
-          priority: 6,
-          reason: "Recursion engine (enviar → add 2 da GY)",
-        };
-      }
       return {
         yes: false,
-        reason: "GY sem alvos ainda",
+        reason: "Melhor preservar na mão como truque de batalha",
       };
     }
 

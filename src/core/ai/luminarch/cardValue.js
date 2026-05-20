@@ -55,22 +55,22 @@ export function evaluateCardExpendability(card, context) {
     };
   }
 
-  // Magic Sickle: Seu PRÓPRIO efeito é se enviar ao GY para buscar
+  // Magic Sickle: agora é melhor preservada na mão como truque de batalha.
   if (name === "Luminarch Magic Sickle") {
-    const gyHasTargets = (context.graveyard || []).filter(
-      (c) => c && isLuminarch(c) && c.cardKind === "monster"
-    ).length >= 2;
-    if (gyHasTargets) {
+    const gyHasSpell = (context.graveyard || []).some(
+      (c) => c && c.cardKind === "spell" && isLuminarch(c)
+    );
+    if (gyHasSpell && context.zone === "graveyard") {
       return {
         expendable: true,
-        reason: "Efeito ativo requer se enviar - gastável para recursão",
-        value: 2, // Quer ser gasto!
+        reason: "No GY pode virar recuperação de Magia Luminarch",
+        value: 3,
       };
     }
     return {
       expendable: false,
-      reason: "GY sem alvos suficientes ainda",
-      value: 5,
+      reason: "Truque de batalha de mão preservável",
+      value: 6,
     };
   }
 

@@ -30,14 +30,12 @@ const LUMINARCH = {
 
 const LOW_VALUE_COST_NAMES = new Set([
   LUMINARCH.enchantedHalberd,
-  LUMINARCH.magicSickle,
   LUMINARCH.valiant,
   LUMINARCH.arbiter,
 ]);
 
 const RECOVERY_ENABLER_NAMES = new Set([
   LUMINARCH.fortressAegis,
-  LUMINARCH.magicSickle,
   LUMINARCH.moonbladeCaptain,
   LUMINARCH.moonlitBlessing,
   LUMINARCH.sacredJudgment,
@@ -99,11 +97,6 @@ export const LUMINARCH_RESOURCE_POLICY = {
       baseDelta: 0,
       recoveryBonus: 1.1,
       preserveBonus: 0.4,
-    },
-    magic_sickle: {
-      baseDelta: 0,
-      recoveryBonus: 1.0,
-      preserveBonus: 0.35,
     },
     sacred_judgment: {
       baseDelta: 0,

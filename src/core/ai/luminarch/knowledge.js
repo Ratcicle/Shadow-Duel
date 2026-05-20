@@ -81,39 +81,41 @@ export const CARD_KNOWLEDGE = {
   },
 
   "Luminarch Celestial Marshal": {
-    role: "boss_beater",
+    role: "defensive_boss",
     priority: 6,
     summonCondition: "mid_late_game",
-    effect: "Piercing. 1x/turn: não pode ser destruído em batalha",
+    effect:
+      "Pode pagar 2000 LP para Special Summon da mão. 1x/turn: nega sua destruição em batalha. Se for destruído em batalha: ganha 1000 LP",
     synergies: [
       "Luminarch Holy Ascension",
       "Sanctum of the Luminarch Citadel",
       "Luminarch Radiant Wave",
     ],
     playPatterns: [
-      "Beater de 2500 ATK com proteção",
-      "Piercing limpa defenders",
-      "Buffar com Holy Ascension para 3300 ATK",
+      "Tank de 2500 DEF com proteção",
+      "Special Summon quando LP sobrar e o campo precisar de corpo",
+      "Buffar com Holy Ascension para pressão ou defesa",
     ],
     value: 12,
   },
 
   "Luminarch Magic Sickle": {
-    role: "recursion_engine",
-    priority: 8,
-    summonCondition: "when_gy_has_2plus",
-    effect: "Enviar do campo → add até 2 Luminarch da GY para mão",
+    role: "hand_battle_trick",
+    priority: 7,
+    summonCondition: "hold_for_battle_or_spell_recovery",
+    effect:
+      "Da mão na Etapa de Dano: envia ao GY para buffar Luminarch batalhando. Do GY: bane para recuperar 1 Magia Luminarch",
     synergies: [
-      "Luminarch Moonlit Blessing",
-      "Luminarch Sanctum Protector",
+      "Luminarch Holy Shield",
+      "Luminarch Spear of Dawnfall",
       "Luminarch Moonblade Captain",
     ],
     playPatterns: [
-      "Cycle: campo → GY → mão (2 cartas)",
-      "Recovery após trade",
-      "Setup para Moonlit Blessing",
+      "Segurar na mão para vencer batalha chave",
+      "Converter depois em recuperação de Magia Luminarch",
+      "Protege ataques de valor sem ocupar campo",
     ],
-    value: 15,
+    value: 11,
   },
 
   "Luminarch Sanctum Protector": {
@@ -173,12 +175,12 @@ export const CARD_KNOWLEDGE = {
     playPatterns: [
       "Lifegain engine ao destruir",
       "Proteção built-in (mandar ally para GY)",
-      "PREFERIR Magic Sickle como substituto (vai para GY → recicla 2 cartas)",
+      "Magic Sickle agora vale mais como truque de batalha na mão do que como custo",
       "Sinergiza com LP-gain strategy",
       "Sacrificar Halberd/Sickle > Aegis/Protector como custo de proteção",
     ],
     value: 13,
-    preferredSacrificeTargets: ["Luminarch Magic Sickle", "Luminarch Enchanted Halberd"],
+    preferredSacrificeTargets: ["Luminarch Enchanted Halberd"],
   },
 
   "Luminarch Sanctified Arbiter": {
@@ -272,7 +274,7 @@ export const CARD_KNOWLEDGE = {
     role: "field_spell_core",
     priority: 10,
     effect:
-      "Oponente ataca → +500 LP. 1x/turn: pague 1000 LP → +500 ATK/DEF a 1 Luminarch",
+      "Oponente ataca → +500 LP. 1x/turn: pague 1000 LP → +500 ATK/DEF a 1 Luminarch. 1x/turn: pague 1000 LP para impedir destruição por batalha de 1 Luminarch",
     synergies: [
       "Luminarch Aegisbearer",
       "Luminarch Holy Shield",
@@ -283,6 +285,7 @@ export const CARD_KNOWLEDGE = {
       "SEMPRE ativar turn 1-2",
       "Combo Aegis: heal 500 LP por ataque",
       "Usar buff quando LP alto",
+      "Guardar LP para proteger tank importante em batalha",
       "Synergy com lifegain doubles de Megashield",
     ],
     value: 22, // Field spell CENTRAL
@@ -343,12 +346,11 @@ export const CARD_KNOWLEDGE = {
     effect: "Controle Luminarch → ATK/DEF de 1 monstro oponente vira 0",
     synergies: [
       "Luminarch Valiant - Knight of the Dawn",
-      "Luminarch Celestial Marshal",
       "Luminarch Radiant Lancer",
     ],
     playPatterns: [
       "Remoção indireta (zerar stats)",
-      "COMBO PIERCING: Zerar DEF de defender → Valiant/Marshal piercing = dano direto",
+      "COMBO PIERCING: Zerar DEF de defender → Valiant piercing = dano direto",
       "Neutralizar boss oponente (2800+ ATK → 0)",
       "Setup para lethal quando oponente está em DEF mode",
     ],
