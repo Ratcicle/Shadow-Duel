@@ -29,6 +29,7 @@ const VALID_EVENTS = new Set([
   "before_destroy",
   "effect_targeted",
   "card_equipped",
+  "lp_change",
   "spell_activated",
   "effect_activated",
 ]);

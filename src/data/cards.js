@@ -2308,6 +2308,81 @@
     ],
   },
   {
+    id: 261,
+    name: "Luminarch Sunforged Blade",
+    cardKind: "spell",
+    subtype: "equip",
+    archetype: "Luminarch",
+    description:
+      'Equip only to a "Luminarch" monster you control. Each time you gain LP, place 1 Solar Counter on this card. The equipped monster gains 200 ATK/DEF for each Solar Counter on this card. You can only control 1 "Luminarch Sunforged Blade".',
+    image: "assets/Luminarch Sunforged Blade.png",
+    effects: [
+      {
+        id: "luminarch_sunforged_blade_equip",
+        timing: "on_play",
+        speed: 1,
+        conditions: [
+          {
+            type: "control_card_max",
+            zone: "spellTrap",
+            max: 0,
+            includeFacedown: true,
+            filters: { cardId: 261 },
+            excludeSource: true,
+            reason:
+              'You can only control 1 "Luminarch Sunforged Blade".',
+          },
+        ],
+        targets: [
+          {
+            id: "sunforged_blade_target",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            archetype: "Luminarch",
+            count: { min: 1, max: 1 },
+            requireFaceup: true,
+          },
+        ],
+        actions: [
+          {
+            type: "equip",
+            targetRef: "sunforged_blade_target",
+          },
+        ],
+      },
+      {
+        id: "luminarch_sunforged_blade_solar_counter",
+        timing: "on_event",
+        event: "lp_change",
+        requireZone: "spellTrap",
+        requireFaceup: true,
+        triggerPlayer: "self",
+        actions: [
+          {
+            type: "add_counter",
+            targetRef: "self",
+            counterType: "solar",
+            amount: 1,
+          },
+        ],
+      },
+      {
+        id: "luminarch_sunforged_blade_counter_buff",
+        timing: "passive",
+        requireZone: "spellTrap",
+        requireFaceup: true,
+        passive: {
+          type: "equipped_counter_buff",
+          counterType: "solar",
+          amountPerCounter: 200,
+          stats: ["atk", "def"],
+          targetFilters: { archetype: "Luminarch" },
+        },
+      },
+    ],
+  },
+  {
     id: 116,
     name: "Luminarch Spear of Dawnfall",
     cardKind: "spell",

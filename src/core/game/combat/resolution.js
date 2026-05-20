@@ -336,7 +336,7 @@ export async function finishCombat(attacker, target, options = {}) {
   let targetWasDestroyed = false;
   let attackerWasDestroyed = false;
 
-  const applyBattleDamage = (
+  const applyBattleDamage = async (
     player,
     cardInvolved,
     amount,
@@ -353,7 +353,18 @@ export async function finishCombat(attacker, target, options = {}) {
       return 0;
     }
     if (shouldHeal && player.id === cardInvolved?.owner) {
+      const before = player.lp || 0;
       player.gainLP(amount);
+      const gained = Math.max(0, (player.lp || 0) - before);
+      if (gained > 0 && typeof this.emit === "function") {
+        await this.emit("lp_change", {
+          player,
+          sourceCard: cardInvolved,
+          lpGained: gained,
+          before,
+          after: player.lp,
+        });
+      }
     } else {
       this.inflictDamage(player, amount, {
         sourceCard: cardInvolved,
@@ -388,7 +399,7 @@ export async function finishCombat(attacker, target, options = {}) {
     if (attacker.atk > target.atk) {
       const defender = target.owner === "player" ? this.player : this.bot;
       const damage = attacker.atk - target.atk;
-      const appliedDamage = applyBattleDamage(
+      const appliedDamage = await applyBattleDamage(
         defender,
         target,
         damage,
@@ -439,7 +450,7 @@ export async function finishCombat(attacker, target, options = {}) {
     } else if (attacker.atk < target.atk) {
       const attPlayer = attacker.owner === "player" ? this.player : this.bot;
       const damage = target.atk - attacker.atk;
-      const appliedDamage = applyBattleDamage(
+      const appliedDamage = await applyBattleDamage(
         attPlayer,
         attacker,
         damage,
@@ -566,7 +577,7 @@ export async function finishCombat(attacker, target, options = {}) {
     if (attacker.atk > target.def) {
       if (attacker.piercing) {
         const damage = attacker.atk - target.def;
-        const appliedDamage = applyBattleDamage(
+        const appliedDamage = await applyBattleDamage(
           defender,
           target,
           damage,
@@ -609,7 +620,7 @@ export async function finishCombat(attacker, target, options = {}) {
     } else if (attacker.atk < target.def) {
       const attPlayer = attacker.owner === "player" ? this.player : this.bot;
       const damage = target.def - attacker.atk;
-      const appliedDamage = applyBattleDamage(
+      const appliedDamage = await applyBattleDamage(
         attPlayer,
         attacker,
         damage,

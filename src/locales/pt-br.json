@@ -212,6 +212,10 @@
       "name": "Escudo Crescente Luminarca",
       "description": "Só pode ser equipado a um monstro 'Luminarca'. O monstro equipado ganha 500 de DEF. Se o monstro equipado seria destruído em batalha, envie esse card para o cemitério em vez disso."
     },
+    "261": {
+      "name": "L\u00e2mina Solarforjada Luminarca",
+      "description": "S\u00f3 pode ser equipada a um monstro \"Luminarca\". Cada vez que voc\u00ea ganhar PV, coloque 1 Marcador Solar neste card. O monstro equipado ganha 200 ATK/DEF para cada Marcador Solar neste card. Voc\u00ea s\u00f3 pode controlar 1 \"L\u00e2mina Solarforjada Luminarca\"."
+    },
     "116": {
       "name": "Lança da Alvorada Luminarca",
       "description": "Se você controlar 1 monstro 'Luminarca': Escolha 1 monstro que seu oponente controla; o ATK/DEF do alvo se tornam 0 até o final do turno."

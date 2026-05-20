@@ -6,6 +6,8 @@ const AUTOMATIC_TRIGGER_ACTION_TYPES = new Set([
   "forbid_direct_attack_this_turn",
   "permanent_buff_named",
   "remove_permanent_buff_named",
+  "add_counter",
+  "remove_counter",
 ]);
 
 function hasRegisteredTriggerActions(effect, actionHandlers) {

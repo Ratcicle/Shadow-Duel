@@ -13,6 +13,27 @@ import {
   summonFromHandCore,
 } from "./shared.js";
 
+async function emitLpGainEvent(game, player, sourceCard, before) {
+  const gained = Math.max(0, (player?.lp || 0) - before);
+  if (gained <= 0) return false;
+
+  const payload = {
+    player,
+    sourceCard,
+    lpGained: gained,
+    before,
+    after: player.lp,
+  };
+
+  if (typeof game?.emit === "function") {
+    await game.emit("lp_change", payload);
+  } else {
+    game?.notify?.("lp_change", payload);
+  }
+
+  return true;
+}
+
 /**
  * Generic handler for paying Life Points as a cost
  *
@@ -613,7 +634,9 @@ export async function handleHealFromDestroyedAtk(action, ctx, targets, engine) {
 
   if (healAmount <= 0) return false;
 
+  const before = player.lp || 0;
   player.gainLP(healAmount);
+  await emitLpGainEvent(game, player, ctx.source, before);
 
   getUI(game)?.log(
     `${player.name || player.id} gained ${healAmount} LP from ${
@@ -708,7 +731,9 @@ export async function handleHealFromDestroyedLevel(
     return true; // Still valid execution, just 0 heal
   }
 
+  const before = player.lp || 0;
   player.gainLP(healAmount);
+  await emitLpGainEvent(game, player, ctx.source, before);
 
   getUI(game)?.log(
     `${
@@ -767,7 +792,9 @@ export async function handleHealPerFieldCount(action, ctx, targets, engine) {
   }
 
   const healAmount = count * amountPerCard;
+  const before = player.lp || 0;
   player.gainLP(healAmount);
+  await emitLpGainEvent(game, player, ctx.source, before);
 
   getUI(game)?.log(
     `${
@@ -817,7 +844,9 @@ export async function handleHealPerOpponentCardsAndHand(
   }
 
   const healAmount = count * amountPerCard;
+  const before = targetPlayer.lp || 0;
   targetPlayer.gainLP(healAmount);
+  await emitLpGainEvent(game, targetPlayer, ctx.source, before);
 
   getUI(game)?.log(
     `${targetPlayer.name || targetPlayer.id} gained ${healAmount} LP (${count} opponent card(s) x ${amountPerCard} LP).`,

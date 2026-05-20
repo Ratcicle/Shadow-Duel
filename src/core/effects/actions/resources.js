@@ -68,29 +68,41 @@ export function applyShuffleDeck(action, ctx) {
   return true;
 }
 
+async function emitLpGainEvent(game, player, sourceCard, before) {
+  const gained = Math.max(0, (player?.lp || 0) - before);
+  if (gained <= 0) return false;
+
+  const payload = {
+    player,
+    sourceCard,
+    lpGained: gained,
+    before,
+    after: player.lp,
+  };
+
+  if (typeof game?.emit === "function") {
+    await game.emit("lp_change", payload);
+  } else {
+    game?.notify?.("lp_change", payload);
+  }
+
+  return true;
+}
+
 /**
  * Apply heal action
  * @param {Object} action - Action configuration
  * @param {Object} ctx - Context object
  * @returns {boolean} Whether LP was gained
  */
-export function applyHeal(action, ctx) {
+export async function applyHeal(action, ctx) {
   const targetPlayer = action.player === "opponent" ? ctx.opponent : ctx.player;
   const amount = action.amount ?? 0;
 
   // LP gain multiplier is now handled by Player.gainLP() based on passive effects
   const before = targetPlayer.lp || 0;
   targetPlayer.gainLP(amount);
-  const gained = Math.max(0, (targetPlayer.lp || 0) - before);
-  if (gained > 0) {
-    this.game?.notify?.("lp_change", {
-      player: targetPlayer,
-      sourceCard: ctx.source,
-      lpGained: gained,
-      before,
-      after: targetPlayer.lp,
-    });
-  }
+  await emitLpGainEvent(this.game, targetPlayer, ctx.source, before);
   return amount !== 0;
 }
 
@@ -100,7 +112,7 @@ export function applyHeal(action, ctx) {
  * @param {Object} ctx - Context object
  * @returns {boolean} Whether LP was gained
  */
-export function applyHealPerArchetypeMonster(action, ctx) {
+export async function applyHealPerArchetypeMonster(action, ctx) {
   const targetPlayer = action.player === "opponent" ? ctx.opponent : ctx.player;
   const archetype = action.archetype;
   const amountPerMonster = action.amountPerMonster ?? 0;
@@ -121,16 +133,7 @@ export function applyHealPerArchetypeMonster(action, ctx) {
   if (totalHeal > 0) {
     const before = targetPlayer.lp || 0;
     targetPlayer.gainLP(totalHeal);
-    const gained = Math.max(0, (targetPlayer.lp || 0) - before);
-    if (gained > 0) {
-      this.game?.notify?.("lp_change", {
-        player: targetPlayer,
-        sourceCard: ctx.source,
-        lpGained: gained,
-        before,
-        after: targetPlayer.lp,
-      });
-    }
+    await emitLpGainEvent(this.game, targetPlayer, ctx.source, before);
     console.log(
       `${targetPlayer.id} gained ${totalHeal} LP from ${count} ${archetype} monster(s).`
     );

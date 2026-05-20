@@ -1277,8 +1277,15 @@ export default class EffectEngine {
     if (!this.game) return false;
 
     const fieldCards = [
-      ...(this.game.player.field || []),
-      ...(this.game.bot.field || []),
+      ...(this.game.player?.field || []),
+      ...(this.game.bot?.field || []),
+    ].filter(Boolean);
+    const passiveSources = [
+      ...fieldCards,
+      ...(this.game.player?.spellTrap || []),
+      this.game.player?.fieldSpell,
+      ...(this.game.bot?.spellTrap || []),
+      this.game.bot?.fieldSpell,
     ].filter(Boolean);
 
     let updated = false;
@@ -1313,11 +1320,18 @@ export default class EffectEngine {
     }
 
     // PHASE 2: Recalculate fresh buffs based on current game state
-    for (const card of fieldCards) {
+    for (const card of passiveSources) {
       const effects = card.effects || [];
 
       effects.forEach((effect, index) => {
         if (!effect || effect.timing !== "passive") return;
+        const sourceOwner = this.getOwnerByCard(card);
+        const sourceZone =
+          sourceOwner && typeof this.findCardZone === "function"
+            ? this.findCardZone(sourceOwner, card)
+            : null;
+        if (effect.requireZone && sourceZone !== effect.requireZone) return;
+        if (effect.requireFaceup === true && card.isFacedown === true) return;
         const passive = effect.passive;
         if (!passive) return;
 
@@ -1521,6 +1535,59 @@ export default class EffectEngine {
           return;
         }
 
+        // Passive: Equip source buffs its equipped monster by counters on itself
+        if (
+          passive.type === "equipped_counter_buff" ||
+          passive.type === "equip_counter_buff"
+        ) {
+          if (card.cardKind !== "spell" || card.subtype !== "equip") return;
+
+          const target = card.equippedTo || card.equipTarget || null;
+          if (!target || target.cardKind !== "monster") return;
+          if (!this.isActiveEquipForCard(card, target)) return;
+
+          const requireSourceFaceup =
+            passive.requireSourceFaceup !== false ||
+            effect.requireFaceup === true;
+          if (requireSourceFaceup && card.isFacedown) return;
+
+          const requireTargetFaceup = passive.targetRequireFaceup !== false;
+          if (requireTargetFaceup && target.isFacedown) return;
+
+          const targetFilters = passive.targetFilters || null;
+          if (targetFilters && !this.cardMatchesFilters(target, targetFilters)) {
+            return;
+          }
+
+          const counterType = passive.counterType || "default";
+          const counterCount =
+            typeof card.getCounter === "function"
+              ? card.getCounter(counterType)
+              : 0;
+          const amountPerCounter =
+            passive.amountPerCounter ??
+            passive.perCounter ??
+            passive.buffPerCounter ??
+            passive.amount ??
+            0;
+          const stats = passive.stats || ["atk", "def"];
+          const sourceKey =
+            card.fieldPresenceId ||
+            card.instanceId ||
+            `${card.id}_${passiveSources.indexOf(card)}`;
+          const buffKey =
+            effect.id ||
+            `passive_${card.id}_${index}_${sourceKey}_counter_equip`;
+          const applied = this.applyPassiveBuffValue(
+            target,
+            buffKey,
+            counterCount * amountPerCounter,
+            stats,
+          );
+          if (applied) updated = true;
+          return;
+        }
+
         // Passive: field_archetype_aura_buff - source-based aura for field monsters
         if (passive.type === "field_archetype_aura_buff") {
           const archetype = passive.archetype || passive.targetArchetype;
@@ -1663,7 +1730,7 @@ export default class EffectEngine {
     if (this.game.player) this.game.player.opponentCannotActivateDuringBattle = false;
     if (this.game.bot) this.game.bot.opponentCannotActivateDuringBattle = false;
 
-    for (const card of fieldCards) {
+    for (const card of passiveSources) {
       const effects = card.effects || [];
       effects.forEach((effect) => {
         if (!effect || effect.timing !== "passive") return;
@@ -1797,6 +1864,7 @@ EffectEngine.prototype.collectAttackDeclaredTriggers =
   triggers.collectAttackDeclaredTriggers;
 EffectEngine.prototype.collectBattleDamageTriggers =
   triggers.collectBattleDamageTriggers;
+EffectEngine.prototype.collectLpChangeTriggers = triggers.collectLpChangeTriggers;
 EffectEngine.prototype.collectEffectTargetedTriggers =
   triggers.collectEffectTargetedTriggers;
 EffectEngine.prototype.collectCardEquippedTriggers =
