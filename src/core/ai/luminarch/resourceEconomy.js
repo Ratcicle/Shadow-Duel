@@ -21,10 +21,13 @@ const LUMINARCH = {
   magicSickle: "Luminarch Magic Sickle",
   moonbladeCaptain: "Luminarch Moonblade Captain",
   moonlitBlessing: "Luminarch Moonlit Blessing",
+  pureKnight: "Luminarch Pure Knight",
   radiantLancer: "Luminarch Radiant Lancer",
   radiantWave: "Luminarch Radiant Wave",
   sacredJudgment: "Luminarch Sacred Judgment",
   sanctumProtector: "Luminarch Sanctum Protector",
+  spearOfDawnfall: "Luminarch Spear of Dawnfall",
+  sunforgedBlade: "Luminarch Sunforged Blade",
   valiant: "Luminarch Valiant - Knight of the Dawn",
 };
 
@@ -48,8 +51,20 @@ const CORE_PRESERVE_NAMES = new Set([
   LUMINARCH.celestialMarshal,
   LUMINARCH.fortressAegis,
   LUMINARCH.moonbladeCaptain,
+  LUMINARCH.pureKnight,
   LUMINARCH.radiantLancer,
   LUMINARCH.sanctumProtector,
+]);
+
+const MAGIC_SICKLE_SPELL_TARGET_NAMES = new Set([
+  LUMINARCH.citadel,
+  LUMINARCH.holyShield,
+  LUMINARCH.moonlitBlessing,
+  LUMINARCH.radiantWave,
+  LUMINARCH.sacredJudgment,
+  LUMINARCH.spearOfDawnfall,
+  LUMINARCH.sunforgedBlade,
+  "Luminarch Holy Ascension",
 ]);
 
 export const LUMINARCH_RESOURCE_POLICY = {
@@ -108,6 +123,11 @@ export const LUMINARCH_RESOURCE_POLICY = {
       recoveryBonus: 0.9,
       preserveBonus: 0.3,
     },
+    magic_sickle_spell_recovery: {
+      baseDelta: 0,
+      recoveryBonus: 0.55,
+      preserveBonus: 0.2,
+    },
   },
 };
 
@@ -152,6 +172,16 @@ function countLowLevelReviveTargets(cards = []) {
   ).length;
 }
 
+function countUsefulMagicSickleSpellTargets(cards = []) {
+  return cards.filter(
+    (card) =>
+      card &&
+      card.cardKind === "spell" &&
+      isLuminarch(card) &&
+      MAGIC_SICKLE_SPELL_TARGET_NAMES.has(card.name),
+  ).length;
+}
+
 function buildZoneSummary(analysis = {}) {
   const hand = cardsIn(analysis, "hand");
   const field = cardsIn(analysis, "field");
@@ -188,7 +218,10 @@ function getEnablers(analysis = {}) {
     hasMoonlitBlessing:
       zones.handNames.has(LUMINARCH.moonlitBlessing) ||
       zones.spellTrapNames.has(LUMINARCH.moonlitBlessing),
-    hasMagicSickleOnField: hasFaceupName(zones.field, LUMINARCH.magicSickle),
+    hasMagicSickleInGY: zones.graveyardNames.has(LUMINARCH.magicSickle),
+    hasMagicSickleSpellRecovery:
+      zones.graveyardNames.has(LUMINARCH.magicSickle) &&
+      countUsefulMagicSickleSpellTargets(zones.graveyard) > 0,
     hasMoonbladeInHand: zones.handNames.has(LUMINARCH.moonbladeCaptain),
     hasFortressAegisOnField: hasFaceupName(zones.field, LUMINARCH.fortressAegis),
     hasSacredJudgment: zones.handNames.has(LUMINARCH.sacredJudgment),
@@ -211,7 +244,6 @@ function computeAccessibility({ analysis, countsByZone, enablers }) {
   let accessibleFromGY = 0;
 
   if (enablers.hasMoonlitBlessing) accessibleFromGY += 1;
-  if (enablers.hasMagicSickleOnField) accessibleFromGY += Math.min(2, gyCount);
   if (enablers.hasFortressAegisOnField && (analysis.lp || 8000) > 1000) {
     accessibleFromGY += Math.min(1, countLowDefReviveTargets(graveyard));
   }
@@ -241,6 +273,8 @@ function computePotential({ analysis, countsByZone, enablers }) {
   const highValueReviveTargets = countHighValueReviveTargets(graveyard);
   const lowDefReviveTargets = countLowDefReviveTargets(graveyard);
   const lowLevelReviveTargets = countLowLevelReviveTargets(graveyard);
+  const usefulSickleSpellTargets =
+    countUsefulMagicSickleSpellTargets(graveyard);
 
   return {
     graveyardMonsters: countsByZone.graveyard || 0,
@@ -251,8 +285,9 @@ function computePotential({ analysis, countsByZone, enablers }) {
       enablers.hasMoonlitBlessing &&
       enablers.hasCitadel &&
       (countsByZone.graveyard || 0) > 0,
-    magicSickleReady:
-      enablers.hasMagicSickleOnField && (countsByZone.graveyard || 0) >= 2,
+    magicSickleReady: enablers.hasMagicSickleSpellRecovery,
+    magicSickleSpellRecoveryReady: enablers.hasMagicSickleSpellRecovery,
+    usefulSickleSpellTargets,
     fortressReviveReady:
       enablers.hasFortressAegisOnField &&
       (analysis.lp || 8000) > 1000 &&

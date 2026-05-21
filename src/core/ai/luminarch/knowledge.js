@@ -7,6 +7,54 @@
  * Card knowledge database para Luminarch.
  * Cada carta tem: role, priority, summonCondition, synergies, playPatterns, value.
  */
+export const LUMINARCH_LINE_PACKAGES = Object.freeze({
+  STARTER: "starter",
+  CITADEL: "citadel",
+  WALL: "wall",
+  FUSION: "fusion",
+  ASCENSION: "ascension",
+  GRIND: "grind",
+  BATTLE_CONVERSION: "battle_conversion",
+  LP_PAYOFF: "lp_payoff",
+  COMEBACK: "comeback",
+});
+
+export const LUMINARCH_PACKAGE_STATUS = Object.freeze({
+  SUPPORTED: "supported",
+  PARTIAL: "partial",
+  NEEDS_ACTION_GENERATION: "needs_action_generation",
+  NEEDS_SIMULATION: "needs_simulation",
+  NEEDS_MAIN_BATTLE_MAIN2: "needs_mainBattleMain2",
+  REACTIVE_ENGINE_ONLY: "reactive_engine_only",
+});
+
+export const LUMINARCH_CARD_ROLES = Object.freeze({
+  "Luminarch Valiant - Knight of the Dawn": ["starter", "searcher", "finisher"],
+  "Luminarch Sanctified Arbiter": ["starter", "searcher"],
+  "Luminarch Aegisbearer": ["wall", "protection", "ascension_material"],
+  "Luminarch Moonblade Captain": ["starter", "recursion", "battle_conversion"],
+  "Luminarch Celestial Marshal": ["extender", "wall", "lp_payoff"],
+  "Luminarch Magic Sickle": ["battle_trick", "recursion", "grind"],
+  "Luminarch Sanctum Protector": ["wall", "protection", "fusion_material"],
+  "Luminarch Radiant Lancer": ["finisher", "battle_conversion", "removal"],
+  "Luminarch Aurora Seraph": ["finisher", "lp_payoff", "protection"],
+  "Luminarch Enchanted Halberd": ["extender", "fusion_material"],
+  "Luminarch Holy Shield": ["protection", "lp_payoff", "battle_trick"],
+  "Luminarch Knights Convocation": ["starter", "searcher", "grind"],
+  "Sanctum of the Luminarch Citadel": ["citadel", "wall", "protection", "lp_payoff"],
+  "Luminarch Holy Ascension": ["battle_trick", "protection", "lp_payoff"],
+  "Luminarch Radiant Wave": ["removal", "grind"],
+  "Luminarch Crescent Shield": ["protection", "wall"],
+  "Luminarch Spear of Dawnfall": ["battle_conversion", "removal", "finisher"],
+  "Luminarch Moonlit Blessing": ["recursion", "grind", "extender"],
+  "Luminarch Sacred Judgment": ["comeback", "recursion", "lp_payoff"],
+  "Luminarch Sunforged Blade": ["lp_payoff", "battle_conversion", "finisher"],
+  Polymerization: ["fusion"],
+  "Luminarch Pure Knight": ["fusion_payoff", "citadel", "searcher", "lp_payoff"],
+  "Luminarch Megashield Barbarias": ["fusion_payoff", "wall", "lp_payoff"],
+  "Luminarch Fortress Aegis": ["ascension_payoff", "wall", "recursion"],
+});
+
 export const CARD_KNOWLEDGE = {
   // ═════════════════════════════════════════════════════════════════════════
   // MONSTROS
@@ -84,6 +132,11 @@ export const CARD_KNOWLEDGE = {
     role: "defensive_boss",
     priority: 6,
     summonCondition: "mid_late_game",
+    linePackages: [
+      LUMINARCH_LINE_PACKAGES.WALL,
+      LUMINARCH_LINE_PACKAGES.LP_PAYOFF,
+    ],
+    status: LUMINARCH_PACKAGE_STATUS.NEEDS_ACTION_GENERATION,
     effect:
       "Pode pagar 2000 LP para Special Summon da mão. 1x/turn: nega sua destruição em batalha. Se for destruído em batalha: ganha 1000 LP",
     synergies: [
@@ -93,16 +146,23 @@ export const CARD_KNOWLEDGE = {
     ],
     playPatterns: [
       "Tank de 2500 DEF com proteção",
-      "Special Summon quando LP sobrar e o campo precisar de corpo",
+      "Special Summon pagando LP apenas quando cria wall real, reduz lethal ou abre Fusion/Ascension",
       "Buffar com Holy Ascension para pressão ou defesa",
     ],
+    lpPolicy:
+      "Pagar 2000 LP só deve ser bom quando o corpo final estabiliza ou vira payoff; nunca pagar se deixar em lethal provável.",
     value: 12,
   },
 
   "Luminarch Magic Sickle": {
-    role: "hand_battle_trick",
+    role: "battle_trick_spell_recovery",
     priority: 7,
     summonCondition: "hold_for_battle_or_spell_recovery",
+    linePackages: [
+      LUMINARCH_LINE_PACKAGES.BATTLE_CONVERSION,
+      LUMINARCH_LINE_PACKAGES.GRIND,
+    ],
+    status: LUMINARCH_PACKAGE_STATUS.PARTIAL,
     effect:
       "Da mão na Etapa de Dano: envia ao GY para buffar Luminarch batalhando. Do GY: bane para recuperar 1 Magia Luminarch",
     synergies: [
@@ -112,9 +172,12 @@ export const CARD_KNOWLEDGE = {
     ],
     playPatterns: [
       "Segurar na mão para vencer batalha chave",
-      "Converter depois em recuperação de Magia Luminarch",
+      "No GY, recuperar Magia apenas quando houver uso real, alto valor ou follow-up claro",
       "Protege ataques de valor sem ocupar campo",
+      "Não é mais motor de reciclar 2 monstros; não contar como recuperação genérica",
     ],
+    recoveryPolicy:
+      "Banir do GY só para Moonlit, Holy Shield, Holy Ascension, Radiant Wave, Spear, Sacred Judgment, Sunforged ou Citadel quando a carta recuperada importa para o estado.",
     value: 11,
   },
 
@@ -273,6 +336,12 @@ export const CARD_KNOWLEDGE = {
   "Sanctum of the Luminarch Citadel": {
     role: "field_spell_core",
     priority: 10,
+    linePackages: [
+      LUMINARCH_LINE_PACKAGES.CITADEL,
+      LUMINARCH_LINE_PACKAGES.WALL,
+      LUMINARCH_LINE_PACKAGES.LP_PAYOFF,
+    ],
+    status: LUMINARCH_PACKAGE_STATUS.SUPPORTED,
     effect:
       "Oponente ataca → +500 LP. 1x/turn: pague 1000 LP → +500 ATK/DEF a 1 Luminarch. 1x/turn: pague 1000 LP para impedir destruição por batalha de 1 Luminarch",
     synergies: [
@@ -284,7 +353,7 @@ export const CARD_KNOWLEDGE = {
     playPatterns: [
       "SEMPRE ativar turn 1-2",
       "Combo Aegis: heal 500 LP por ataque",
-      "Usar buff quando LP alto",
+      "Usar buff quando LP alto ou quando o buff muda combate/ameaça",
       "Guardar LP para proteger tank importante em batalha",
       "Synergy com lifegain doubles de Megashield",
     ],
@@ -358,6 +427,31 @@ export const CARD_KNOWLEDGE = {
     piercingCombo: true, // Sinaliza sinergia com piercing
   },
 
+  "Luminarch Sunforged Blade": {
+    role: "lp_payoff_equip",
+    priority: 5,
+    linePackages: [
+      LUMINARCH_LINE_PACKAGES.LP_PAYOFF,
+      LUMINARCH_LINE_PACKAGES.BATTLE_CONVERSION,
+    ],
+    status: LUMINARCH_PACKAGE_STATUS.NEEDS_MAIN_BATTLE_MAIN2,
+    effect:
+      "Equipe a 1 Luminarch. Cada ganho de LP coloca Solar Counter; o equipado ganha +200 ATK/DEF por counter",
+    synergies: [
+      "Sanctum of the Luminarch Citadel",
+      "Luminarch Holy Shield",
+      "Luminarch Aurora Seraph",
+      "Luminarch Megashield Barbarias",
+      "Luminarch Magic Sickle",
+    ],
+    playPatterns: [
+      "Equip só escala se houver fonte real de ganho de LP",
+      "Com Citadel/Holy Shield transforma ataques do oponente em stats permanentes",
+      "Com Barbarias o ganho de LP fica mais seguro, mas os counters continuam por evento de cura",
+    ],
+    value: 9,
+  },
+
   "Luminarch Moonlit Blessing": {
     role: "recursion",
     priority: 9,
@@ -398,9 +492,15 @@ export const CARD_KNOWLEDGE = {
   // ═════════════════════════════════════════════════════════════════════════
 
   "Luminarch Megashield Barbarias": {
-    role: "fusion_tank",
+    role: "fusion_wall_lp_payoff",
     priority: 7,
     summonCondition: "fusion_mid_late",
+    linePackages: [
+      LUMINARCH_LINE_PACKAGES.FUSION,
+      LUMINARCH_LINE_PACKAGES.WALL,
+      LUMINARCH_LINE_PACKAGES.LP_PAYOFF,
+    ],
+    status: LUMINARCH_PACKAGE_STATUS.PARTIAL,
     effect:
       "Materiais: Sanctum Protector + Lv5+. Lifegain dobrado. 1x/turn: switch + buff ATK",
     synergies: [
@@ -412,9 +512,37 @@ export const CARD_KNOWLEDGE = {
       "Lifegain x2 = insano com Citadel/Aurora",
       "3000 DEF = wall forte",
       "Switch position = flexibilidade",
+      "Escolher via Polymerization quando a linha precisa de wall/payoff defensivo, não por prioridade fixa",
     ],
     value: 14,
     fusionMaterials: ["Luminarch Sanctum Protector", "Lv5+ Luminarch"],
+  },
+
+  "Luminarch Pure Knight": {
+    role: "fusion_citadel_access",
+    priority: 8,
+    summonCondition: "fusion_when_need_citadel_or_lp_discount",
+    linePackages: [
+      LUMINARCH_LINE_PACKAGES.FUSION,
+      LUMINARCH_LINE_PACKAGES.CITADEL,
+      LUMINARCH_LINE_PACKAGES.LP_PAYOFF,
+    ],
+    status: LUMINARCH_PACKAGE_STATUS.NEEDS_ACTION_GENERATION,
+    effect:
+      "Materiais: 2 Luminarch. Fusion Summon → busca Citadel. 1x/turn: reduz em 1000 LP o custo de efeito de Magia/Armadilha Luminarch",
+    synergies: [
+      "Sanctum of the Luminarch Citadel",
+      "Luminarch Holy Ascension",
+      "Luminarch Radiant Wave",
+      "Luminarch Sacred Judgment",
+    ],
+    playPatterns: [
+      "Fusion barata para acessar Citadel quando Arbiter não resolve",
+      "Redutor de custo para transformar PV em recurso com segurança",
+      "Papel distinto de Barbarias: não é wall principal, é acesso/eficiência",
+    ],
+    value: 15,
+    fusionMaterials: ["2 Luminarch monsters"],
   },
 
   "Luminarch Fortress Aegis": {
@@ -432,6 +560,25 @@ export const CARD_KNOWLEDGE = {
       "Ascender Aegisbearer após 2 turnos",
       "Heal ao entrar + revive recursivo",
       "Taunt mantém proteção",
+    ],
+    value: 13,
+  },
+
+  Polymerization: {
+    role: "fusion_enabler",
+    priority: 7,
+    linePackages: [LUMINARCH_LINE_PACKAGES.FUSION],
+    status: LUMINARCH_PACKAGE_STATUS.NEEDS_ACTION_GENERATION,
+    effect:
+      "Fusion Summon usando materiais da mão/campo. No Luminarch, deve avaliar Pure Knight e Megashield Barbarias por estado final",
+    synergies: [
+      "Luminarch Pure Knight",
+      "Luminarch Megashield Barbarias",
+    ],
+    playPatterns: [
+      "Pure Knight quando precisa de Citadel, redução de custo ou Fusion barata",
+      "Barbarias quando precisa de wall, payoff defensivo ou conversão de ganho de LP",
+      "Não limitar o conhecimento a Barbarias; escolher por estado",
     ],
     value: 13,
   },
@@ -461,11 +608,39 @@ export function getCardKnowledge(cardName) {
 }
 
 /**
+ * Helper: lista roles estratégicos declarados para uma carta.
+ */
+export function getCardRoles(cardName) {
+  const declared = LUMINARCH_CARD_ROLES[cardName] || [];
+  const knowledge = CARD_KNOWLEDGE[cardName];
+  const primary = knowledge?.role ? [knowledge.role] : [];
+  return [...new Set([...primary, ...declared])];
+}
+
+/**
+ * Helper: verifica se uma carta tem determinado role.
+ */
+export function cardHasRole(cardName, role) {
+  return getCardRoles(cardName).includes(role);
+}
+
+/**
  * Helper: lista cartas por role
  */
 export function getCardsByRole(role) {
   return Object.entries(CARD_KNOWLEDGE)
-    .filter(([_, knowledge]) => knowledge.role === role)
+    .filter(([name, knowledge]) =>
+      knowledge.role === role || getCardRoles(name).includes(role)
+    )
+    .map(([name, _]) => name);
+}
+
+/**
+ * Helper: lista cartas ligadas a um pacote de linha.
+ */
+export function getCardsByLinePackage(linePackage) {
+  return Object.entries(CARD_KNOWLEDGE)
+    .filter(([_, knowledge]) => (knowledge.linePackages || []).includes(linePackage))
     .map(([name, _]) => name);
 }
 

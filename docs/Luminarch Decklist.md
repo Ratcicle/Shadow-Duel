@@ -1,5 +1,7 @@
 # Luminarch Decklist
 
+Fonte dos textos: `src/data/cards.js` (1x cada carta do arquétipo).
+
 ## Resumo
 
 O arquétipo **Luminarch** é focado em guerreiros sagrados, defensores celestiais e ganho de LP. O tema principal gira em torno de proteção (efeitos de barreira, negação de ataque, absorção de dano como cura), buffs de stats e sinergia com o Field Spell **Sanctum of the Luminarch Citadel**. É um arquétipo mais defensivo que premia jogadores que mantêm monstros no campo e usam LP como recurso estratégico.
@@ -12,9 +14,9 @@ O arquétipo **Luminarch** é focado em guerreiros sagrados, defensores celestia
 
 ---
 
-## Decklist (20 cartas)
+## Decklist (23 cartas)
 
-### Monstros (12)
+### Monstros (Main Deck) (10)
 
 | ID  | Nome                                   | Tipo    | Nível | ATK  | DEF  |
 | --- | -------------------------------------- | ------- | ----- | ---- | ---- |
@@ -24,21 +26,22 @@ O arquétipo **Luminarch** é focado em guerreiros sagrados, defensores celestia
 | 105 | Luminarch Celestial Marshal            | Warrior | 7     | 2100 | 2500 |
 | 106 | Luminarch Magic Sickle                 | Warrior | 3     | 1200 | 1700 |
 | 107 | Luminarch Sanctum Protector            | Warrior | 7     | 1800 | 2800 |
-| 108 | Luminarch Radiant Lancer               | Warrior | 8     | 2600 | 2000 |
+| 108 | Luminarch Radiant Lancer               | Warrior | 8     | 2600 | 2100 |
 | 109 | Luminarch Aurora Seraph                | Fairy   | 8     | 2800 | 2400 |
 | 110 | Luminarch Sanctified Arbiter           | Warrior | 4     | 1500 | 1000 |
 | 117 | Luminarch Enchanted Halberd            | Warrior | 4     | 1600 | 1400 |
 
-### Magias (8)
+### Magias (Main Deck) (10)
 
 | ID  | Nome                             | Subtipo    |
 | --- | -------------------------------- | ---------- |
-| 102 | Luminarch Holy Shield            | Normal     |
+| 102 | Luminarch Holy Shield            | Quick      |
 | 111 | Luminarch Knights Convocation    | Continuous |
 | 112 | Sanctum of the Luminarch Citadel | Field      |
 | 113 | Luminarch Holy Ascension         | Normal     |
 | 114 | Luminarch Radiant Wave           | Normal     |
 | 115 | Luminarch Crescent Shield        | Equip      |
+| 261 | Luminarch Sunforged Blade        | Equip      |
 | 116 | Luminarch Spear of Dawnfall      | Normal     |
 | 118 | Luminarch Moonlit Blessing       | Normal     |
 | 119 | Luminarch Sacred Judgment        | Normal     |
@@ -49,14 +52,17 @@ _Nenhuma trap no arquétipo atualmente._
 
 ---
 
-## Extra Deck (2)
+## Extra Deck (3)
 
 | ID  | Nome                           | Tipo      | Nível | ATK  | DEF  |
 | --- | ------------------------------ | --------- | ----- | ---- | ---- |
 | 120 | Luminarch Megashield Barbarias | Fusion    | 9     | 2500 | 3000 |
 | 121 | Luminarch Fortress Aegis       | Ascension | 6     | 1500 | 2500 |
+| 122 | Luminarch Pure Knight          | Fusion    | 6     | 2000 | 2000 |
 
 **Materiais de Fusão (120):** "Luminarch Sanctum Protector" + 1 monstro "Luminarch" de Nível 5 ou maior
+
+**Materiais de Fusão (122):** 2 monstros "Luminarch"
 
 **Material de Ascensão (121):** "Luminarch Aegisbearer" (requisito: 2 turnos face-up no campo)
 
@@ -84,7 +90,7 @@ _Nenhuma trap no arquétipo atualmente._
 **107 - Luminarch Sanctum Protector** (L7 Warrior | ATK 1800 / DEF 2800)
 > If you control a face-up "Luminarch Aegisbearer", you can send it to the GY; Special Summon this card from your hand. Once per turn, when an opponent's monster declares an attack (Quick Effect): negate that attack.
 
-**108 - Luminarch Radiant Lancer** (L8 Warrior | ATK 2600 / DEF 2000)
+**108 - Luminarch Radiant Lancer** (L8 Warrior | ATK 2600 / DEF 2100)
 > If this card destroys an opponent's monster by battle, it gains 200 ATK while it remains on the field. If this card is destroyed by battle, destroy 1 Spell/Trap your opponent controls.
 
 **109 - Luminarch Aurora Seraph** (L8 Fairy | ATK 2800 / DEF 2400)
@@ -100,7 +106,7 @@ _Nenhuma trap no arquétipo atualmente._
 
 ### Magias
 
-**102 - Luminarch Holy Shield** (Normal Spell)
+**102 - Luminarch Holy Shield** (Quick Spell)
 > Target up to 3 "Luminarch" monsters you control; until the end of this turn, they cannot be destroyed by battle, and any battle damage you would take involving those monsters is gained instead.
 
 **111 - Luminarch Knights Convocation** (Continuous Spell)
@@ -117,6 +123,9 @@ _Nenhuma trap no arquétipo atualmente._
 
 **115 - Luminarch Crescent Shield** (Equip Spell)
 > Equip only to a "Luminarch" monster you control. It gains 500 DEF. If the equipped monster would be destroyed by battle, send this card to the GY instead.
+
+**261 - Luminarch Sunforged Blade** (Equip Spell)
+> Equip only to a "Luminarch" monster you control. Each time you gain LP, place 1 Solar Counter on this card. The equipped monster gains 200 ATK/DEF for each Solar Counter on this card. You can only control 1 "Luminarch Sunforged Blade".
 
 **116 - Luminarch Spear of Dawnfall** (Normal Spell)
 > If you control a "Luminarch" monster: target 1 monster your opponent controls; its ATK and DEF become 0 until the end of this turn.
@@ -136,3 +145,6 @@ _Nenhuma trap no arquétipo atualmente._
 
 **121 - Luminarch Fortress Aegis** (L6 Ascension Warrior | ATK 1500 / DEF 2500)
 > Ascension Material: "Luminarch Aegisbearer". Requirement: The material must have been face-up on the field for 2 turns. Your opponent must attack this card, if possible. If this card is Ascension Summoned: Gain 500 LP for each "Luminarch" monster you control. Once per turn: You can pay 1000 LP, then target 1 "Luminarch" monster with 2000 or less DEF in your GY; Special Summon it.
+
+**122 - Luminarch Pure Knight** (L6 Fusion Warrior | ATK 2000 / DEF 2000)
+> 2 "Luminarch" monsters. If this card is Fusion Summoned: You can add 1 "Sanctum of the Luminarch Citadel" from your Deck to your hand. Once per turn, when you activate the effect of a "Luminarch" Spell/Trap that requires paying LP: reduce that cost by 1000. You can only use each effect of "Luminarch Pure Knight" once per turn.

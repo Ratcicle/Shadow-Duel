@@ -5,6 +5,26 @@
 
 import { isLuminarch } from "./knowledge.js";
 
+const HIGH_VALUE_SICKLE_SPELL_TARGETS = new Set([
+  "Sanctum of the Luminarch Citadel",
+  "Luminarch Moonlit Blessing",
+  "Luminarch Holy Shield",
+  "Luminarch Holy Ascension",
+  "Luminarch Radiant Wave",
+  "Luminarch Sacred Judgment",
+  "Luminarch Spear of Dawnfall",
+  "Luminarch Sunforged Blade",
+]);
+
+function isUsefulMagicSickleSpellTarget(card) {
+  return (
+    card &&
+    card.cardKind === "spell" &&
+    isLuminarch(card) &&
+    HIGH_VALUE_SICKLE_SPELL_TARGETS.has(card.name)
+  );
+}
+
 /**
  * Avalia se uma carta "já cumpriu seu papel" e pode ser gastável
  * @param {Object} card
@@ -57,14 +77,21 @@ export function evaluateCardExpendability(card, context) {
 
   // Magic Sickle: agora é melhor preservada na mão como truque de batalha.
   if (name === "Luminarch Magic Sickle") {
-    const gyHasSpell = (context.graveyard || []).some(
-      (c) => c && c.cardKind === "spell" && isLuminarch(c)
+    const usefulSpellTargets = (context.graveyard || []).filter(
+      isUsefulMagicSickleSpellTarget,
     );
-    if (gyHasSpell && context.zone === "graveyard") {
+    if (context.zone === "graveyard" && usefulSpellTargets.length > 0) {
       return {
         expendable: true,
-        reason: "No GY pode virar recuperação de Magia Luminarch",
+        reason: `No GY pode recuperar Magia Luminarch de valor (${usefulSpellTargets[0].name})`,
         value: 3,
+      };
+    }
+    if (context.zone === "graveyard") {
+      return {
+        expendable: false,
+        reason: "No GY sem alvo de Magia relevante - preservar recurso de grind",
+        value: 5,
       };
     }
     return {
@@ -121,6 +148,24 @@ export function evaluateCardExpendability(card, context) {
     };
   }
 
+  // Pure Knight: acesso a Citadel e redução de custo, não é material barato.
+  if (name === "Luminarch Pure Knight") {
+    return {
+      expendable: false,
+      reason: "Fusion de acesso a Citadel/redução de custo - preservar enquanto gera valor",
+      value: 8,
+    };
+  }
+
+  // Barbarias: payoff defensivo e conversor de ganho de LP.
+  if (name === "Luminarch Megashield Barbarias") {
+    return {
+      expendable: false,
+      reason: "Fusion wall/payoff de LP - preservar como peça defensiva",
+      value: 9,
+    };
+  }
+
   // Sanctum Protector: Tank com negar ataque, valor alto
   if (name === "Luminarch Sanctum Protector") {
     return {
@@ -153,7 +198,7 @@ export function evaluateCardExpendability(card, context) {
 
   // Radiant Lancer: SNOWBALL EFFECT - valor AUMENTA com buffs acumulados
   if (name === "Luminarch Radiant Lancer") {
-    const baseAtk = 2200; // ATK original do Lancer
+    const baseAtk = 2600; // ATK original do Lancer
     const currentAtk = card.atk || baseAtk;
     const atkGain = currentAtk - baseAtk;
     const killCount = Math.floor(atkGain / 200); // +200 por kill

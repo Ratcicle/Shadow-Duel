@@ -1,6 +1,9 @@
 import { assessActionSafety } from "../ChainAwareness.js";
 import { calculateMacroPriorityBonus } from "../MacroPlanning.js";
-import { getStrongestAttackThreat } from "../common/cardStats.js";
+import {
+  getStrongestAttackThreat,
+  getTotalAttackThreat,
+} from "../common/cardStats.js";
 import { evaluateRadiantLancerBattlePlan } from "./priorities.js";
 import {
   evaluateLuminarchTributeSummonCost,
@@ -8,6 +11,21 @@ import {
   LUMINARCH_OFFENSIVE_NAMES,
   spendsAegisbearerProtectorCore,
 } from "./tributePolicy.js";
+
+const CELESTIAL_MARSHAL_NAME = "Luminarch Celestial Marshal";
+const FORTRESS_AEGIS_NAME = "Luminarch Fortress Aegis";
+const MAGIC_SICKLE_NAME = "Luminarch Magic Sickle";
+
+const LUMINARCH_SPELL_RECOVERY_TARGETS = new Set([
+  "Sanctum of the Luminarch Citadel",
+  "Luminarch Holy Ascension",
+  "Luminarch Holy Shield",
+  "Luminarch Moonlit Blessing",
+  "Luminarch Radiant Wave",
+  "Luminarch Sacred Judgment",
+  "Luminarch Spear of Dawnfall",
+  "Luminarch Sunforged Blade",
+]);
 
 function getRadiantLancerAnalysis(bot, opponent, game) {
   return {
@@ -21,6 +39,109 @@ function getRadiantLancerAnalysis(bot, opponent, game) {
     oppLp: opponent?.lp || 8000,
     currentTurn: game?.turnCounter || 1,
   };
+}
+
+function isLuminarchMonster(card) {
+  return card?.cardKind === "monster" && card.archetype === "Luminarch";
+}
+
+function getOpponentTotalThreat(opponent) {
+  return getTotalAttackThreat(opponent?.field || [], {
+    facedownValue: "printed",
+    includeBoosts: false,
+  });
+}
+
+function hasStableWall(bot, opponent) {
+  const oppStrongest = getStrongestAttackThreat(opponent?.field || [], {
+    facedownValue: 1500,
+    includeBoosts: false,
+  });
+  return (bot?.field || []).some((card) => {
+    if (!card || card.cardKind !== "monster" || card.isFacedown) return false;
+    if (card.mustBeAttacked) return true;
+    return (card.def || 0) + (card.tempDefBoost || 0) >= oppStrongest;
+  });
+}
+
+function canPayLpForLuminarchAction({
+  bot,
+  opponent,
+  cost,
+  createsWall = false,
+  createsPayoff = false,
+}) {
+  const lp = bot?.lp || 0;
+  const finalLp = lp - cost;
+  if (finalLp <= 0) return false;
+  if (createsWall || createsPayoff) return finalLp >= 500;
+  const oppThreat = getOpponentTotalThreat(opponent);
+  return finalLp > Math.max(1500, oppThreat);
+}
+
+function getBestFortressReviveTarget(graveyard = [], opponent = null) {
+  const oppStrongest = getStrongestAttackThreat(opponent?.field || [], {
+    facedownValue: 1500,
+    includeBoosts: false,
+  });
+  return graveyard
+    .filter(
+      (card) =>
+        isLuminarchMonster(card) &&
+        (card.def || 0) <= 2000,
+    )
+    .map((card) => {
+      let score = (card.def || 0) / 350 + (card.atk || 0) / 700;
+      if (card.name === "Luminarch Aegisbearer") score += 8;
+      if (card.name === "Luminarch Valiant - Knight of the Dawn") score += 5;
+      if (card.name === "Luminarch Sanctified Arbiter") score += 4;
+      if (card.name === MAGIC_SICKLE_NAME) score += 2;
+      if ((card.def || 0) >= oppStrongest && oppStrongest > 0) score += 3;
+      return { card, score };
+    })
+    .sort((a, b) => b.score - a.score)[0]?.card || null;
+}
+
+function getUsefulSickleSpellTargets(graveyard = []) {
+  return graveyard.filter(
+    (card) =>
+      card &&
+      card.cardKind === "spell" &&
+      card.archetype === "Luminarch" &&
+      LUMINARCH_SPELL_RECOVERY_TARGETS.has(card.name),
+  );
+}
+
+function scoreSickleSpellTarget(card, { bot, opponent }) {
+  if (!card) return 0;
+  const hasCitadel = bot?.fieldSpell?.name === "Sanctum of the Luminarch Citadel";
+  const oppThreat = getOpponentTotalThreat(opponent);
+  const underPressure = oppThreat >= (bot?.lp || 8000) || (bot?.lp || 8000) <= 3500;
+  const hasGyLuminarch = (bot?.graveyard || []).some(
+    (entry) => isLuminarchMonster(entry) && entry.name !== MAGIC_SICKLE_NAME,
+  );
+  switch (card.name) {
+    case "Sanctum of the Luminarch Citadel":
+      return hasCitadel ? 1 : 12;
+    case "Luminarch Moonlit Blessing":
+      return hasGyLuminarch ? (hasCitadel ? 13 : 9) : 3;
+    case "Luminarch Holy Shield":
+      return underPressure ? 12 : 7;
+    case "Luminarch Radiant Wave":
+      return (bot?.field || []).some((entry) => isLuminarchMonster(entry) && (entry.atk || 0) >= 2000)
+        ? 10
+        : 4;
+    case "Luminarch Sacred Judgment":
+      return underPressure && (bot?.field || []).length === 0 ? 11 : 5;
+    case "Luminarch Spear of Dawnfall":
+      return (opponent?.field || []).length > 0 ? 9 : 4;
+    case "Luminarch Sunforged Blade":
+      return hasCitadel ? 8 : 4;
+    case "Luminarch Holy Ascension":
+      return (opponent?.field || []).length > 0 ? 7 : 3;
+    default:
+      return 2;
+  }
 }
 
 function compactRadiantLancerPlan(plan) {
@@ -312,9 +433,258 @@ function getSanctumProtectorActions(context) {
   return actions;
 }
 
+function getCelestialMarshalHandIgnitionActions(context) {
+  const { game, bot, opponent, activationContext, macroStrategy } = context;
+  const actions = [];
+  if ((bot.field || []).length >= 5) return actions;
+
+  const marshalIndex = (bot.hand || []).findIndex(
+    (card) => card?.name === CELESTIAL_MARSHAL_NAME,
+  );
+  if (marshalIndex < 0) return actions;
+
+  const marshal = bot.hand[marshalIndex];
+  const oppStrongest = getStrongestAttackThreat(opponent?.field || [], {
+    facedownValue: 1500,
+    includeBoosts: false,
+  });
+  const createsWall =
+    oppStrongest === 0 ||
+    (marshal.def || 0) >= oppStrongest ||
+    !hasStableWall(bot, opponent);
+  const hasHalberdFollowUp = (bot.hand || []).some(
+    (card) => card?.name === "Luminarch Enchanted Halberd",
+  );
+  const opensFusion =
+    (bot.hand || []).some((card) => card?.name === "Polymerization") &&
+    (bot.extraDeck || []).some((card) =>
+      ["Luminarch Pure Knight", "Luminarch Megashield Barbarias"].includes(
+        card?.name,
+      ),
+    );
+  const createsPayoff = hasHalberdFollowUp || opensFusion;
+
+  if (
+    !canPayLpForLuminarchAction({
+      bot,
+      opponent,
+      cost: 2000,
+      createsWall,
+      createsPayoff,
+    })
+  ) {
+    return actions;
+  }
+
+  const handActivationContext = {
+    ...(activationContext || {}),
+    fromHand: true,
+    activationZone: "hand",
+    sourceZone: "hand",
+    autoSelectTargets: true,
+    autoSelectSingleTarget: true,
+  };
+  const preview = game?.effectEngine?.canActivateMonsterEffectPreview?.(
+    marshal,
+    bot,
+    "hand",
+    null,
+    { activationContext: handActivationContext },
+  );
+  if (preview && preview.ok === false) return actions;
+
+  let priority = 8;
+  if (createsWall) priority += 3;
+  if (hasHalberdFollowUp) priority += 2;
+  if (opensFusion) priority += 2;
+  if ((opponent?.field || []).length === 0 && !opensFusion) priority -= 2;
+  priority += calculateMacroPriorityBonus(
+    "handIgnition",
+    marshal,
+    macroStrategy,
+  );
+
+  actions.push({
+    type: "handIgnition",
+    index: marshalIndex,
+    cardId: marshal.id,
+    cardName: marshal.name,
+    priority,
+    reason: createsWall
+      ? "marshal_creates_wall"
+      : createsPayoff
+        ? "marshal_opens_followup"
+        : "marshal_body",
+    activationContext: handActivationContext,
+  });
+
+  return actions;
+}
+
+function getFortressAegisReviveActions(context) {
+  const { game, bot, opponent, activationContext, macroStrategy } = context;
+  const actions = [];
+  if ((bot.field || []).length >= 5) return actions;
+
+  (bot.field || []).forEach((card, fieldIndex) => {
+    if (!card || card.name !== FORTRESS_AEGIS_NAME || card.isFacedown) return;
+
+    const bestTarget = getBestFortressReviveTarget(bot.graveyard || [], opponent);
+    if (!bestTarget) return;
+
+    const oppStrongest = getStrongestAttackThreat(opponent?.field || [], {
+      facedownValue: 1500,
+      includeBoosts: false,
+    });
+    const createsWall =
+      bestTarget.name === "Luminarch Aegisbearer" ||
+      (bestTarget.def || 0) >= oppStrongest;
+    const createsPayoff = [
+      "Luminarch Valiant - Knight of the Dawn",
+      "Luminarch Sanctified Arbiter",
+      "Luminarch Aegisbearer",
+    ].includes(bestTarget.name);
+
+    if (
+      !canPayLpForLuminarchAction({
+        bot,
+        opponent,
+        cost: 1000,
+        createsWall,
+        createsPayoff,
+      })
+    ) {
+      return;
+    }
+
+    const reviveContext = {
+      ...(activationContext || {}),
+      fromHand: false,
+      activationZone: "field",
+      sourceZone: "field",
+      autoSelectTargets: true,
+      autoSelectSingleTarget: true,
+      actionContext: {
+        ...(activationContext?.actionContext || {}),
+        targetPreferences: {
+          ...(activationContext?.actionContext?.targetPreferences || {}),
+          fortress_aegis_revive_target: {
+            role: "recursion",
+            purpose: createsWall ? "stabilize" : "value",
+            preferredNames: [bestTarget.name],
+            defensiveNames: ["Luminarch Aegisbearer"],
+            offensiveNames: [
+              "Luminarch Valiant - Knight of the Dawn",
+              "Luminarch Sanctified Arbiter",
+            ],
+          },
+        },
+      },
+    };
+
+    const preview = game?.effectEngine?.canActivateMonsterEffectPreview?.(
+      card,
+      bot,
+      "field",
+      null,
+      { activationContext: reviveContext },
+    );
+    if (preview && preview.ok === false) return;
+
+    let priority = 9;
+    if (createsWall) priority += 3;
+    if (createsPayoff) priority += 2;
+    if ((bot.lp || 0) <= 3000) priority -= 1;
+    priority += calculateMacroPriorityBonus(
+      "monsterEffect",
+      card,
+      macroStrategy,
+    );
+
+    actions.push({
+      type: "monsterEffect",
+      fieldIndex,
+      cardId: card.id,
+      cardName: card.name,
+      priority,
+      reason: `fortress_revive_${bestTarget.name}`,
+      activationContext: reviveContext,
+    });
+  });
+
+  return actions;
+}
+
+function getMagicSickleGraveyardActions(context) {
+  const { game, bot, opponent, activationContext, macroStrategy } = context;
+  const actions = [];
+  const graveyard = bot.graveyard || [];
+  const spellTargets = getUsefulSickleSpellTargets(graveyard)
+    .map((card) => ({
+      card,
+      score: scoreSickleSpellTarget(card, { bot, opponent }),
+    }))
+    .filter((entry) => entry.score >= 7)
+    .sort((a, b) => b.score - a.score);
+  if (spellTargets.length === 0) return actions;
+
+  graveyard.forEach((card, graveyardIndex) => {
+    if (!card || card.name !== MAGIC_SICKLE_NAME) return;
+
+    const bestSpell = spellTargets[0].card;
+    const sickleContext = {
+      ...(activationContext || {}),
+      fromHand: false,
+      activationZone: "graveyard",
+      sourceZone: "graveyard",
+      autoSelectTargets: true,
+      autoSelectSingleTarget: true,
+      actionContext: {
+        ...(activationContext?.actionContext || {}),
+        preferredSearchNames: [bestSpell.name],
+      },
+    };
+
+    const preview = game?.effectEngine?.canActivateMonsterEffectPreview?.(
+      card,
+      bot,
+      "graveyard",
+      null,
+      { activationContext: sickleContext },
+    );
+    if (preview && preview.ok === false) return;
+
+    const macroBuff = calculateMacroPriorityBonus(
+      "graveyardMonsterEffect",
+      card,
+      macroStrategy,
+    );
+    actions.push({
+      type: "graveyardMonsterEffect",
+      graveyardIndex,
+      cardId: card.id,
+      cardName: card.name,
+      priority: 7 + spellTargets[0].score + macroBuff,
+      reason: `sickle_recover_${bestSpell.name}`,
+      activationContext: sickleContext,
+    });
+  });
+
+  return actions;
+}
+
+export function getLuminarchMonsterIgnitionActions(context) {
+  return [
+    ...getCelestialMarshalHandIgnitionActions(context),
+    ...getFortressAegisReviveActions(context),
+    ...getMagicSickleGraveyardActions(context),
+  ];
+}
+
 export function getLuminarchSummonActions(context) {
   return [
     ...getNormalSummonActions(context),
     ...getSanctumProtectorActions(context),
+    ...getLuminarchMonsterIgnitionActions(context),
   ];
 }

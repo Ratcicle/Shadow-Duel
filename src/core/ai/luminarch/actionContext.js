@@ -234,6 +234,7 @@ export function buildLuminarchSpellActionContext(
       byName: {
         ...(actionContext.fusionPositions?.byName || {}),
         "Luminarch Megashield Barbarias": "defense",
+        "Luminarch Pure Knight": "defense",
       },
     };
   }

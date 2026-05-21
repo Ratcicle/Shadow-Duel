@@ -798,6 +798,8 @@ export default class LuminarchStrategy extends BaseStrategy {
       const typePriority = {
         fieldEffect: 0,
         monsterEffect: 0.5,
+        handIgnition: 0.75,
+        graveyardMonsterEffect: 0.9,
         spell: 1,
         spellTrapEffect: 2,
         position_change: 2.5,

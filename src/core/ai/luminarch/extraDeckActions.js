@@ -10,6 +10,7 @@ import {
 
 const BARBARIAS_NAME = "Luminarch Megashield Barbarias";
 const FORTRESS_NAME = "Luminarch Fortress Aegis";
+const PURE_KNIGHT_NAME = "Luminarch Pure Knight";
 
 function getContextFinisherPlans(context = {}) {
   if (Array.isArray(context.finisherPlans)) return context.finisherPlans;
@@ -37,6 +38,11 @@ function getContextFinisherPlan(context, kind, targetName) {
 }
 
 function buildLuminarchFusionActivationContext(context, fusionPlan) {
+  const targetName = fusionPlan?.targetName || BARBARIAS_NAME;
+  const defaultPosition =
+    targetName === BARBARIAS_NAME
+      ? fusionPlan?.details?.position || "defense"
+      : fusionPlan?.details?.position || "defense";
   const baseContext = {
     ...(context.activationContext || {}),
     autoSelectSingleTarget: true,
@@ -49,17 +55,17 @@ function buildLuminarchFusionActivationContext(context, fusionPlan) {
         byName: {
           ...(context.activationContext?.actionContext?.fusionPositions?.byName ||
             {}),
-          [BARBARIAS_NAME]: fusionPlan?.details?.position || "defense",
+          [targetName]: defaultPosition,
         },
       },
     },
   };
 
-  if (!fusionPlan) return baseContext;
   return withFusionPreferences(baseContext, {
-    target: fusionPlan.targetName,
-    priority: fusionPlan.details?.spellPriority || fusionPlan.actionPriority,
-    reason: fusionPlan.reason,
+    target: targetName,
+    priority:
+      fusionPlan?.details?.spellPriority || fusionPlan?.actionPriority || 0,
+    reason: fusionPlan?.reason || `fusion_${targetName}`,
     plan: fusionPlan,
   });
 }
@@ -127,7 +133,56 @@ export function evaluateLuminarchFusionPriority(
     return priority;
   }
 
+  if (fusionName === PURE_KNIGHT_NAME) {
+    let priority = 11;
+
+    const hasCitadel = bot.fieldSpell?.name === "Sanctum of the Luminarch Citadel";
+    const hasCitadelInHand = (bot.hand || []).some(
+      (c) => c?.name === "Sanctum of the Luminarch Citadel",
+    );
+    const hasCitadelInDeck = (bot.deck || []).some(
+      (c) => c?.name === "Sanctum of the Luminarch Citadel",
+    );
+    if (!hasCitadel && !hasCitadelInHand && hasCitadelInDeck) priority += 5;
+    else if (!hasCitadel) priority += 2;
+
+    const lp = bot.lp || 8000;
+    const hasLpCostSpell = (bot.hand || []).some((card) =>
+      [
+        "Luminarch Holy Ascension",
+        "Luminarch Radiant Wave",
+        "Luminarch Sacred Judgment",
+      ].includes(card?.name),
+    );
+    if (hasLpCostSpell) priority += 2;
+    if (lp <= 3000) priority += 1;
+
+    const hasBarbariasWall = (bot.field || []).some(
+      (c) => c?.name === BARBARIAS_NAME || c?.name === FORTRESS_NAME,
+    );
+    if (hasBarbariasWall && hasCitadel) priority -= 3;
+
+    return priority;
+  }
+
   return 6;
+}
+
+function canSummonFusionTarget(game, fusionCard, bot) {
+  if (!fusionCard) return false;
+  if (!game?.effectEngine?.canSummonFusion) return true;
+  const handMaterials = (bot.hand || [])
+    .filter((c) => c && c.cardKind === "monster")
+    .map((card) => ({ card, zone: "hand" }));
+  const fieldMaterials = (bot.field || [])
+    .filter((c) => c && c.cardKind === "monster")
+    .map((card) => ({ card, zone: "field" }));
+  const combined = [...handMaterials, ...fieldMaterials];
+  const materials = combined.map((entry) => entry.card);
+  const materialInfo = combined.map((entry) => ({ zone: entry.zone }));
+  return game.effectEngine.canSummonFusion(fusionCard, materials, bot, {
+    materialInfo,
+  });
 }
 
 export function detectLuminarchFusionOpportunities(context) {
@@ -135,11 +190,6 @@ export function detectLuminarchFusionOpportunities(context) {
   const actions = [];
 
   try {
-    const fusionPlan = getContextFinisherPlan(
-      context,
-      "fusion",
-      BARBARIAS_NAME,
-    );
     const polyInHand = bot.hand.findIndex(
       (c) => c && c.name === "Polymerization",
     );
@@ -147,64 +197,36 @@ export function detectLuminarchFusionOpportunities(context) {
     const polyCard = bot.hand[polyInHand];
     if (!polyCard) return actions;
 
-    const megashield = (bot.extraDeck || []).find(
-      (c) => c && c.name === BARBARIAS_NAME,
-    );
-    if (!megashield) return actions;
+    const fusionCandidates = [PURE_KNIGHT_NAME, BARBARIAS_NAME]
+      .map((targetName) => ({
+        targetName,
+        fusionCard: (bot.extraDeck || []).find((c) => c?.name === targetName),
+        fusionPlan: getContextFinisherPlan(context, "fusion", targetName),
+      }))
+      .filter((entry) => entry.fusionCard);
 
-    if (game?.effectEngine?.canSummonFusion) {
-      const handMaterials = (bot.hand || [])
-        .filter((c) => c && c.cardKind === "monster")
-        .map((card) => ({ card, zone: "hand" }));
-      const fieldMaterials = (bot.field || [])
-        .filter((c) => c && c.cardKind === "monster")
-        .map((card) => ({ card, zone: "field" }));
-      const combined = [...handMaterials, ...fieldMaterials];
-      const materials = combined.map((entry) => entry.card);
-      const materialInfo = combined.map((entry) => ({ zone: entry.zone }));
-      const canFuse = game.effectEngine.canSummonFusion(
-        megashield,
-        materials,
-        bot,
-        { materialInfo },
-      );
-      if (!canFuse) return actions;
-    }
+    for (const entry of fusionCandidates) {
+      const { targetName, fusionCard, fusionPlan } = entry;
+      if (!canSummonFusionTarget(game, fusionCard, bot)) continue;
 
-    if (game?.effectEngine?.canActivateSpellFromHandPreview) {
-      const activationContext = buildLuminarchFusionActivationContext(
-        context,
-        fusionPlan,
-      );
-      const preview = game.effectEngine.canActivateSpellFromHandPreview(
-        polyCard,
-        bot,
-        { activationContext },
-      );
-      if (preview && preview.ok === false) return actions;
-    }
+      const activationContext = buildLuminarchFusionActivationContext(context, {
+        ...(fusionPlan || {}),
+        targetName,
+      });
 
-    const availableMaterials = [...(bot.hand || []), ...(bot.field || [])];
-    const hasProtector = availableMaterials.some(
-      (c) => c && c.name === "Luminarch Sanctum Protector",
-    );
-    const protectorCount = availableMaterials.filter(
-      (c) => c && c.name === "Luminarch Sanctum Protector",
-    ).length;
-    const hasLv5PlusAlongsideProtector = availableMaterials.some(
-      (c) =>
-        c &&
-        c.cardKind === "monster" &&
-        c.name !== "Luminarch Sanctum Protector" &&
-        c.archetype === "Luminarch" &&
-        (c.level || 0) >= 5,
-    ) || protectorCount >= 2;
+      if (game?.effectEngine?.canActivateSpellFromHandPreview) {
+        const preview = game.effectEngine.canActivateSpellFromHandPreview(
+          polyCard,
+          bot,
+          { activationContext },
+        );
+        if (preview && preview.ok === false) continue;
+      }
 
-    if (hasProtector && hasLv5PlusAlongsideProtector) {
       const priority =
         fusionPlan?.details?.spellPriority ||
         evaluateLuminarchFusionPriority(
-          BARBARIAS_NAME,
+          targetName,
           bot,
           opponent,
           game,
@@ -218,14 +240,14 @@ export function detectLuminarchFusionOpportunities(context) {
           cardId: polyCard.id,
           priority: priority,
           cardName: "Polymerization",
-          fusionTarget: BARBARIAS_NAME,
+          fusionTarget: targetName,
           reason:
-            fusionPlan?.reason || "Fusion para Megashield (3000 DEF tank)",
+            fusionPlan?.reason ||
+            (targetName === PURE_KNIGHT_NAME
+              ? "fusion_to_pure_knight_citadel_access"
+              : "fusion_to_barbarias_wall"),
           finisherPlan: fusionPlan,
-          activationContext: buildLuminarchFusionActivationContext(
-            context,
-            fusionPlan,
-          ),
+          activationContext,
         });
       }
     }

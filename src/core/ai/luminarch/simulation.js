@@ -45,6 +45,10 @@ export function rankLuminarchSearchCandidates(cards, action = {}, ctx = {}) {
     opponent,
     game: ctx.game,
   });
+  const preferredSearchNames =
+    ctx.ctx?.activationContext?.actionContext?.preferredSearchNames ||
+    ctx.activationContext?.actionContext?.preferredSearchNames ||
+    [];
 
   const scoreCard = (card) => {
     if (!card) return -999;
@@ -55,6 +59,7 @@ export function rankLuminarchSearchCandidates(cards, action = {}, ctx = {}) {
     });
     if (!isLuminarch(card)) score -= 20;
     if (namesInHand.has(card.name)) score -= 4;
+    if (preferredSearchNames.includes(card.name)) score += 100;
 
     if (card.cardKind === "monster") {
       if (card.name === "Luminarch Aegisbearer" && !hasTank) score += 60;

@@ -129,51 +129,36 @@ export default class Bot extends Player {
   // Deck Luminarch completo (Tank/Control/Versatility) — 30 cards
   getLuminarchDeck() {
     return [
-      // ═════════════════════════════════════════════════════════════════════
-      // S-TIER CORE — 8 cards
-      // ═════════════════════════════════════════════════════════════════════
-      112,
-      112,
-      112, // Sanctum of the Luminarch Citadel (field spell S-tier, priority 22)
+      109, // Luminarch Aurora Seraph (Lv8 2800 ATK + heal + protection, priority 14)
+      108, // Luminarch Radiant Lancer (Lv8 2600 ATK + ATK gain, priority 14)
+      105, // Luminarch Celestial Marshal (Lv7 self-SS tank, priority 15)
+      107, // Luminarch Sanctum Protector (Lv7 2800 DEF tank, priority 14)
+      104,
+      104, // Luminarch Moonblade Captain (Lv6 recursion + double atk, priority 16)
       103,
       103,
       103, // Luminarch Aegisbearer (taunt tank S-tier, priority 20)
-      102,
-      102, // Luminarch Holy Shield (proteção S-tier, priority 20)
-
-      // ═════════════════════════════════════════════════════════════════════
-      // A-TIER SEARCHERS & RECURSION — 6 cards
-      // ═════════════════════════════════════════════════════════════════════
-      101,
-      101, // Luminarch Valiant – Knight of the Dawn (searcher A-tier, priority 18)
-      118,
-      118, // Luminarch Moonlit Blessing (recursion A-tier, priority 17)
+      117, // Luminarch Enchanted Halberd (Lv4 SS trigger, priority 11)
       110,
       110, // Luminarch Sanctified Arbiter (busca Citadel, A-tier, priority 16)
-
-      // ═════════════════════════════════════════════════════════════════════
-      // A-TIER BOSS BEATERS — 5 cards (Lv6-8)
-      // ═════════════════════════════════════════════════════════════════════
-      104,
-      104, // Luminarch Moonblade Captain (Lv6 recursion + double atk, priority 16)
-      105, // Luminarch Celestial Marshal (Lv7 self-SS tank, priority 15)
-      108, // Luminarch Radiant Lancer (Lv8 2600 ATK + ATK gain, priority 14)
-      109, // Luminarch Aurora Seraph (Lv8 2800 ATK + heal + protection, priority 14)
-
-      // ═════════════════════════════════════════════════════════════════════
-      // B-TIER SUPPORT & UTILITY — 11 cards
-      // ═════════════════════════════════════════════════════════════════════
-      107,
-      107, // Luminarch Sanctum Protector (Lv7 2800 DEF tank, priority 14)
+      101,
+      101,
+      101, // Luminarch Valiant - Knight of the Dawn (searcher A-tier, priority 18)
       106, // Luminarch Magic Sickle (Lv3 hand battle trick + spell recovery, priority 12)
-      117, // Luminarch Enchanted Halberd (Lv4 SS trigger, priority 11)
       115, // Luminarch Crescent Shield (equip, priority 10)
-      13, // Polymerization (fusion para Megashield, priority 10)
-      111, // Luminarch Knights Convocation (discard Lv7+ → search Lv4-, priority 9)
-      119, // Luminarch Sacred Judgment (comeback, priority 8)
-      114, // Luminarch Radiant Wave (removal, priority 8)
-      116, // Luminarch Spear of Dawnfall (ATK/DEF zero, priority 7)
       113, // Luminarch Holy Ascension (ATK buff, priority 7)
+      102, // Luminarch Holy Shield (proteção S-tier, priority 20)
+      111, // Luminarch Knights Convocation (discard Lv7+ → search Lv4-, priority 9)
+      118,
+      118, // Luminarch Moonlit Blessing (recursion A-tier, priority 17)
+      114, // Luminarch Radiant Wave (removal, priority 8)
+      119, // Luminarch Sacred Judgment (comeback, priority 8)
+      116, // Luminarch Spear of Dawnfall (ATK/DEF zero, priority 7)
+      261, // Luminarch Sunforged Blade (LP-gain equip payoff)
+      13,
+      13, // Polymerization (fusion para Megashield/Pure Knight, priority 10)
+      112,
+      112, // Sanctum of the Luminarch Citadel (field spell S-tier, priority 22)
     ];
   }
 
@@ -301,6 +286,7 @@ export default class Bot extends Player {
     return [
       120, // Luminarch Megashield Barbarias (fusion tank, 3000 DEF)
       121, // Luminarch Fortress Aegis (ascensão de Aegisbearer)
+      122, // Luminarch Pure Knight (fusion search + LP cost reduction)
     ];
   }
 
