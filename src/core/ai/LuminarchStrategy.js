@@ -58,7 +58,11 @@ import {
   resolveSimulatedHandIndex as resolveGenericSimulatedHandIndex,
 } from "./common/simulation.js";
 import {
+  chooseLuminarchSpecialSummonPosition,
+  applyLuminarchSimulatedBattleRewards,
+  prepareLuminarchSimulatedBattle,
   rankLuminarchSearchCandidates,
+  scoreLuminarchBattleAttackCandidate,
   simulateLuminarchMainPhaseAction,
   simulateLuminarchSearch as simulateLuminarchSearchAction,
   simulateLuminarchSpellEffect,
@@ -144,6 +148,31 @@ function evaluateBarbariasStanceDance(card, opponent, options = {}) {
   };
 }
 
+function canUseCitadelBuff(bot, opponent, bestBuffTarget) {
+  const lp = bot?.lp || 0;
+  const finalLp = lp - 1000;
+  if (finalLp <= 0) return false;
+  if (!bestBuffTarget?.monster || bestBuffTarget.score <= 0) return false;
+
+  const opponentStrongest = getStrongestAttackThreat(opponent?.field || [], {
+    includeFacedown: false,
+    includeBoosts: false,
+  });
+  const target = bestBuffTarget.monster;
+  const projectedDef =
+    (target.def || 0) +
+    (target.tempDefBoost || 0) +
+    CITADEL_TEMP_BUFF.defBoost;
+  const createsWall =
+    target.mustBeAttacked ||
+    target.battleIndestructibleOncePerTurn ||
+    (opponentStrongest > 0 && projectedDef >= opponentStrongest);
+  const createsPayoff = bestBuffTarget.score >= 100;
+
+  if (finalLp <= 1500 && !createsWall && !createsPayoff) return false;
+  return true;
+}
+
 export default class LuminarchStrategy extends BaseStrategy {
   buildPlanningAnalysis(game, context = {}) {
     const bot = context.bot || this.bot || game?.bot || null;
@@ -197,6 +226,18 @@ export default class LuminarchStrategy extends BaseStrategy {
 
   describePlannedLine(context = {}) {
     return describeLuminarchPlannedLine(context);
+  }
+
+  prepareSimulatedBattle(context = {}) {
+    return prepareLuminarchSimulatedBattle(context);
+  }
+
+  applySimulatedBattleRewards(context = {}) {
+    return applyLuminarchSimulatedBattleRewards(context);
+  }
+
+  scoreBattleAttackCandidate(context = {}) {
+    return scoreLuminarchBattleAttackCandidate(context);
   }
 
   evaluateBoard(gameOrState, perspectivePlayer) {
@@ -684,14 +725,9 @@ export default class LuminarchStrategy extends BaseStrategy {
             opponent,
             CITADEL_TEMP_BUFF,
           );
-          const lp = bot.lp || 0;
-          const canPay = lp > 1000;
-          const wouldBeCritical = lp <= 2000;
 
           shouldUseFieldEffect =
-            canPay &&
-            bestBuffTarget.score > 0 &&
-            !(wouldBeCritical && bestBuffTarget.score < 100);
+            canUseCitadelBuff(bot, opponent, bestBuffTarget);
         }
 
         if (preview && preview.ok && shouldUseFieldEffect) {
@@ -905,6 +941,30 @@ export default class LuminarchStrategy extends BaseStrategy {
     if (canPierce && atk >= opponentStrongest) return "attack";
     if (def >= atk && opponentStrongest > atk) return "defense";
     return "attack";
+  }
+
+  chooseSpecialSummonPosition(card, context = {}) {
+    const game = context.game || context.state || {};
+    const player = context.player || this.bot || game.bot || null;
+    const opponent = player ? this.getOpponent(game, player) : game.player;
+    return chooseLuminarchSpecialSummonPosition(card, {
+      game,
+      state: game,
+      player,
+      opponent,
+      action: {
+        ...(context.action || {}),
+        position:
+          context.action?.position ??
+          context.actionPosition ??
+          context.position,
+      },
+      sourceAction: context.sourceAction || context.action || null,
+      activationContext: context.activationContext,
+      options: {
+        chooseSummonPosition: this.chooseSummonPosition.bind(this),
+      },
+    });
   }
 
   shouldSetFacedown(card, position) {

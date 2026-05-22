@@ -1,4 +1,6 @@
 import {
+  getBattleStatForAttackTarget,
+  getEffectiveAtk,
   getStrongestAttackThreat,
   getStrongestBattleThreat,
 } from "../common/cardStats.js";
@@ -31,8 +33,15 @@ const NAMES = Object.freeze({
   polymerization: "Polymerization",
   protector: "Luminarch Sanctum Protector",
   pureKnight: "Luminarch Pure Knight",
+  aurora: "Luminarch Aurora Seraph",
+  radiantLancer: "Luminarch Radiant Lancer",
+  holyAscension: "Luminarch Holy Ascension",
+  holyShield: "Luminarch Holy Shield",
+  crescentShield: "Luminarch Crescent Shield",
   radiantWave: "Luminarch Radiant Wave",
   sacredJudgment: "Luminarch Sacred Judgment",
+  spear: "Luminarch Spear of Dawnfall",
+  sunforgedBlade: "Luminarch Sunforged Blade",
   valiant: "Luminarch Valiant - Knight of the Dawn",
 });
 
@@ -49,11 +58,43 @@ const USEFUL_SICKLE_SPELL_TARGETS = new Set([
 
 const WALL_NAMES = new Set([
   NAMES.aegisbearer,
+  NAMES.aurora,
   NAMES.barbarias,
   NAMES.fortress,
   NAMES.marshal,
   NAMES.protector,
-  "Luminarch Aurora Seraph",
+]);
+
+const LP_COST_FOLLOW_UP_NAMES = new Set([
+  NAMES.citadel,
+  NAMES.holyAscension,
+  NAMES.sacredJudgment,
+]);
+
+const LP_PAYOFF_NAMES = new Set([
+  NAMES.aurora,
+  NAMES.barbarias,
+  NAMES.citadel,
+  NAMES.holyShield,
+  NAMES.sacredJudgment,
+  NAMES.sunforgedBlade,
+]);
+
+const MAIN2_BATTLE_PAYOFF_NAMES = new Set([
+  NAMES.barbarias,
+  NAMES.fortress,
+  NAMES.moonlit,
+  NAMES.pureKnight,
+  NAMES.radiantWave,
+  NAMES.sacredJudgment,
+]);
+
+const BATTLE_SIM_MILESTONE_KEYS = new Set([
+  "citadel_battle_protection",
+  "luminarch_battle_lp_gain",
+  "magic_sickle_battle_boost",
+  "moonblade_second_attack",
+  "radiant_lancer_growth",
 ]);
 
 const SIM_MILESTONE_SCORES = Object.freeze({
@@ -61,10 +102,15 @@ const SIM_MILESTONE_SCORES = Object.freeze({
   citadel_access: { score: 3.5, label: "Engine: Citadel access" },
   fortress_revive: { score: 3.5, label: "Grind: Fortress revived body" },
   halberd_followup: { score: 2, label: "Extender: Halberd follow-up" },
+  citadel_battle_protection: { score: 1.5, label: "Battle: Citadel protected attacker" },
+  luminarch_battle_lp_gain: { score: 1.2, label: "Battle: LP payoff triggered" },
   lp_payment_created_payoff: { score: 2, label: "LP: payment created payoff" },
   lp_payment_created_wall: { score: 2.5, label: "LP: payment created wall" },
+  magic_sickle_battle_boost: { score: 1.5, label: "Battle: Magic Sickle changed combat" },
   marshal_self_summon: { score: 2, label: "Wall: Marshal self-summoned" },
+  moonblade_second_attack: { score: 1.5, label: "Battle: Moonblade earned second attack" },
   pure_knight_fusion: { score: 4, label: "Fusion: Pure Knight access" },
+  radiant_lancer_growth: { score: 1.2, label: "Battle: Radiant Lancer grew" },
   risky_lp_payment: { score: -6, label: "Risk: LP payment left lethal exposure" },
   sickle_spell_recovery: { score: 2, label: "Grind: Sickle recovered useful Spell" },
 });
@@ -77,6 +123,12 @@ const MAIN_ONLY_PACKAGES = new Set([
   LUMINARCH_LINE_PACKAGES.ASCENSION,
   LUMINARCH_LINE_PACKAGES.GRIND,
   LUMINARCH_LINE_PACKAGES.COMEBACK,
+]);
+
+const MAIN_BATTLE_PACKAGES = new Set([
+  ...MAIN_ONLY_PACKAGES,
+  LUMINARCH_LINE_PACKAGES.BATTLE_CONVERSION,
+  LUMINARCH_LINE_PACKAGES.LP_PAYOFF,
 ]);
 
 function cards(analysis = {}, zone) {
@@ -282,6 +334,203 @@ function hasComebackOrPressure(analysis = {}) {
   );
 }
 
+function isMain1Phase(phase) {
+  const normalized = String(phase || "main1").toLowerCase();
+  return normalized === "main1" || normalized === "main";
+}
+
+function isBattleReadyAttacker(card) {
+  return (
+    isFaceupLuminarchMonster(card) &&
+    card.position !== "defense" &&
+    card.cannotAttackThisTurn !== true &&
+    card.hasAttacked !== true &&
+    getEffectiveAtk(card) > 0
+  );
+}
+
+function collectBattleReadyAttackers(analysis = {}) {
+  return cards(analysis, "field").filter(isBattleReadyAttacker);
+}
+
+function getPotentialBattleAttackers(analysis = {}) {
+  const attackers = [...collectBattleReadyAttackers(analysis)];
+  if (analysis.summonAvailable !== false) {
+    attackers.push(
+      ...cards(analysis, "hand").filter(
+        (card) =>
+          isLuminarchMonster(card) &&
+          ((card.level || 0) <= 4 ||
+            card.name === NAMES.moonblade ||
+            (card.name === NAMES.marshal && (analysis.lp || 0) > 2500)),
+      ),
+    );
+  }
+  const barbarias = cards(analysis, "field").find(
+    (card) =>
+      card?.name === NAMES.barbarias &&
+      !card.isFacedown &&
+      card.position === "defense" &&
+      card.hasAttacked !== true,
+  );
+  if (barbarias) {
+    attackers.push({
+      ...barbarias,
+      atk: (barbarias.atk || 0) + 800,
+      position: "attack",
+      _simPotentialBarbariasPush: true,
+    });
+  }
+  return attackers;
+}
+
+function getTargetBattleStat(card) {
+  return getBattleStatForAttackTarget(card, { facedownValue: 1500 });
+}
+
+function canDestroyBattleTarget(attacker, target, atkBoost = 0) {
+  if (!attacker || !target || target.cardKind !== "monster") return false;
+  return getEffectiveAtk(attacker) + atkBoost > getTargetBattleStat(target);
+}
+
+function canAnyAttackerDestroyTarget(attackers = [], targets = [], atkBoost = 0) {
+  return attackers.some((attacker) =>
+    targets.some((target) => canDestroyBattleTarget(attacker, target, atkBoost)),
+  );
+}
+
+function hasDirectOrNearLethal(analysis = {}, attackers = []) {
+  const opponentLp = Number(analysis.oppLp ?? analysis.opponent?.lp ?? 0);
+  if (opponentLp <= 0) return false;
+  if (cards(analysis, "oppField").some((card) => card?.cardKind === "monster")) {
+    return false;
+  }
+  const attackTotal = attackers.reduce(
+    (sum, card) => sum + Math.max(0, getEffectiveAtk(card)),
+    0,
+  );
+  if (attackTotal >= opponentLp) return true;
+  const hasSickle = hasName(cards(analysis, "hand"), NAMES.magicSickle);
+  return hasSickle && attackTotal + 1200 >= opponentLp;
+}
+
+function hasBattleMain2Payoff(analysis = {}) {
+  const hand = cards(analysis, "hand");
+  const field = cards(analysis, "field");
+  const gy = cards(analysis, "graveyard");
+  if (hasFortressRevive(analysis)) return true;
+  if (hasName(hand, NAMES.moonlit) && gy.some(isLuminarchMonster)) return true;
+  if (
+    hasName(hand, NAMES.radiantWave) &&
+    field.some((card) => isLuminarchMonster(card) && getEffectiveAtk(card) >= 2000)
+  ) {
+    return true;
+  }
+  if (hasName(hand, NAMES.sacredJudgment) && gy.some(isLuminarchMonster)) {
+    return true;
+  }
+  if (hasPureKnightFusionAccess(analysis) || hasBarbariasFusionAccess(analysis)) {
+    return true;
+  }
+  return hasMagicSickleRecovery(analysis);
+}
+
+function collectBattleBridgeSignals(analysis = {}, context = {}) {
+  const game = context.game || analysis.game || {};
+  const phase = analysis.phase || game?.phase || "main1";
+  const requestedTurnMode = game?.turnLineSearchTurnMode;
+  if (!isMain1Phase(phase)) return [];
+  if (requestedTurnMode === "mainOnly") return [];
+  if (requestedTurnMode === "mainBattleMain2") {
+    return ["manual mainBattleMain2"];
+  }
+
+  const hand = cards(analysis, "hand");
+  const field = cards(analysis, "field");
+  const spellTrap = cards(analysis, "spellTrap");
+  const oppField = cards(analysis, "oppField").filter(
+    (card) => card?.cardKind === "monster",
+  );
+  const attackers = getPotentialBattleAttackers(analysis);
+  const readyAttackers = collectBattleReadyAttackers(analysis);
+  const signals = [];
+
+  if (attackers.length === 0) return signals;
+  if (hasDirectOrNearLethal(analysis, attackers)) signals.push("battle lethal");
+  if (
+    hasName(hand, NAMES.spear) &&
+    field.some(isFaceupLuminarchMonster) &&
+    oppField.length > 0
+  ) {
+    signals.push("Spear creates battle target");
+  }
+  if (
+    (hasName(field, NAMES.moonblade) || hasName(hand, NAMES.moonblade)) &&
+    oppField.length > 0
+  ) {
+    signals.push("Moonblade battle conversion");
+  }
+  if (
+    field.some((card) => card?.name === NAMES.radiantLancer) &&
+    canAnyAttackerDestroyTarget(
+      field.filter((card) => card?.name === NAMES.radiantLancer),
+      oppField,
+    )
+  ) {
+    signals.push("Radiant Lancer can grow");
+  }
+  if (
+    field.some((card) => card?.name === NAMES.aurora) &&
+    canAnyAttackerDestroyTarget(
+      field.filter((card) => card?.name === NAMES.aurora),
+      oppField,
+    )
+  ) {
+    signals.push("Aurora can convert battle to LP");
+  }
+  if (field.some((card) => card?.name === NAMES.barbarias)) {
+    signals.push("Barbarias battle push");
+  }
+  if (spellTrap.some((card) => card?.name === NAMES.sunforgedBlade)) {
+    signals.push("Sunforged LP battle payoff");
+  }
+  if (
+    hasName(hand, NAMES.magicSickle) &&
+    (canAnyAttackerDestroyTarget(attackers, oppField, 1200) ||
+      hasDirectOrNearLethal(analysis, attackers))
+  ) {
+    signals.push("Magic Sickle changes combat");
+  }
+  if (
+    (hasName(hand, NAMES.holyShield) ||
+      spellTrap.some((card) => card?.name === NAMES.holyShield)) &&
+    readyAttackers.length > 0
+  ) {
+    signals.push("Holy Shield supports battle");
+  }
+  if (analysis.fieldSpell?.name === NAMES.citadel && oppField.length > 0) {
+    signals.push("Citadel battle protection");
+  }
+  if (field.some((card) => card?.name === NAMES.marshal && !card.isFacedown)) {
+    signals.push("Marshal can hold combat");
+  }
+  if (hasBattleMain2Payoff(analysis) && oppField.length > 0) {
+    signals.push("battle opens Main 2 payoff");
+  }
+
+  return [...new Set(signals)];
+}
+
+function getBattleStepLimit(analysis = {}, battleSignals = []) {
+  const readyAttackers = collectBattleReadyAttackers(analysis);
+  const hasMoonbladeReady = readyAttackers.some(
+    (card) => card?.name === NAMES.moonblade,
+  );
+  if (hasMoonbladeReady || readyAttackers.length >= 2) return 2;
+  if (battleSignals.some((signal) => signal.includes("Moonblade"))) return 2;
+  return 1;
+}
+
 function collectPlanningReasons(analysis = {}) {
   const reasons = [];
   const hand = cards(analysis, "hand");
@@ -318,6 +567,10 @@ function isMain2(phase) {
 
 function clampScore(value, min, max) {
   return Math.max(min, Math.min(max, value));
+}
+
+function isCriticalProfile(profile = {}) {
+  return profile.critical === true || profile.mode === "critical";
 }
 
 function getPlanningBot(state = {}) {
@@ -422,12 +675,106 @@ function sequenceUses(sequence = [], name, type = null) {
   );
 }
 
+function getSimulatedBattleSteps(sequence = []) {
+  return (sequence || []).filter((action) => action?.type === "simulatedBattle");
+}
+
+function getDetailedBattleSteps(sequence = []) {
+  return getSimulatedBattleSteps(sequence).flatMap((step) =>
+    Array.isArray(step?.battleSteps) && step.battleSteps.length > 0
+      ? step.battleSteps
+      : [step],
+  );
+}
+
+function getBattleRewardNames(steps = []) {
+  return steps.flatMap((step) =>
+    Array.isArray(step?.rewardNames) ? step.rewardNames.filter(Boolean) : [],
+  );
+}
+
+function getBattleLpGain(steps = []) {
+  return steps.reduce(
+    (sum, step) =>
+      sum +
+      (step?.lpGains || []).reduce(
+        (gainSum, gain) => gainSum + Math.max(0, Number(gain?.amount || 0)),
+        0,
+      ),
+    0,
+  );
+}
+
+function getDestroyedBattleCards(steps = [], owner) {
+  return steps.flatMap((step) =>
+    (step?.destroyedCards || []).filter(
+      (card) => !owner || card?.owner === owner,
+    ),
+  );
+}
+
+function getDestroyedBattleCardValue(card) {
+  if (!card || card.cardKind !== "monster") return 0;
+  const printedBest = Math.max(Number(card.atk || 0), Number(card.def || 0));
+  const levelValue = Number(card.level || 0) * 180;
+  return Math.max(printedBest, levelValue);
+}
+
+function isDestroyedBattleWall(card) {
+  if (!card || card.cardKind !== "monster") return false;
+  if (WALL_NAMES.has(card.name)) return true;
+  return Number(card.def || 0) >= 2400;
+}
+
+function getMain2PayoffActionsAfterBattle(sequence = []) {
+  const battleIndex = sequence.findIndex(
+    (action) => action?.type === "simulatedBattle",
+  );
+  if (battleIndex < 0) return [];
+  return sequence.slice(battleIndex + 1).filter((action) =>
+    MAIN2_BATTLE_PAYOFF_NAMES.has(
+      action?.cardName || action?.card?.name || action?.name,
+    ),
+  );
+}
+
+function rewardNameMatches(rewards = [], pattern) {
+  return rewards.some((name) => pattern.test(String(name || "")));
+}
+
 function getLineImpact(context = {}) {
   const initialBot = getPlanningBot(context.initialState || {});
   const finalBot = getPlanningBot(context.finalState || {});
   const initialOpponent = getPlanningOpponent(context.initialState || {});
   const finalOpponent = getPlanningOpponent(context.finalState || {});
   const sequence = Array.isArray(context.sequence) ? context.sequence : [];
+  const simulatedBattles = getSimulatedBattleSteps(sequence);
+  const detailedBattleSteps = getDetailedBattleSteps(sequence);
+  const battleRewardNames = getBattleRewardNames(detailedBattleSteps);
+  const battleLpGain = getBattleLpGain(detailedBattleSteps);
+  const battleDestroyedOpponentCards = getDestroyedBattleCards(
+    detailedBattleSteps,
+    "opponent",
+  );
+  const battleDestroyedSelfCards = getDestroyedBattleCards(
+    detailedBattleSteps,
+    "self",
+  );
+  const battleLostWallCount = battleDestroyedSelfCards.filter(
+    isDestroyedBattleWall,
+  ).length;
+  const simulatedBattleRemovedThreat = battleDestroyedOpponentCards.reduce(
+    (sum, card) => sum + getDestroyedBattleCardValue(card),
+    0,
+  );
+  const main2PayoffActions = getMain2PayoffActionsAfterBattle(sequence);
+  const simulatedBattleDamage = detailedBattleSteps.reduce(
+    (sum, battle) => sum + Math.max(0, Number(battle.damage || 0)),
+    0,
+  );
+  const simulatedBattleRemovedOpponent = battleDestroyedOpponentCards.length;
+  const simulatedBattleLostSelf = battleDestroyedSelfCards.length;
+  const hasMain2AfterBattlePayoff = main2PayoffActions.length > 0;
   const initialOpponentThreat = getStrongestBattleThreat(
     stateCards(initialOpponent, "field"),
     { facedownValue: 1500 },
@@ -446,6 +793,8 @@ function getLineImpact(context = {}) {
     actionNames: getActionNames(sequence),
     initialLethal: stateThreatensLethal(initialBot, initialOpponent),
     finalLethal: stateThreatensLethal(finalBot, finalOpponent),
+    initialOpponentThreat,
+    finalOpponentThreat,
     removedOpponentCards: Math.max(
       0,
       countBoardCards(initialOpponent) - countBoardCards(finalOpponent),
@@ -465,7 +814,310 @@ function getLineImpact(context = {}) {
     finalGyResources: countUsefulGyLuminarchs(finalBot),
     lpDelta: Number(finalBot.lp || 0) - Number(initialBot.lp || 0),
     simMeta: context.finalState?._simLuminarch || {},
+    simulatedBattles,
+    detailedBattleSteps,
+    simulatedBattleDamage,
+    simulatedBattleRemovedOpponent,
+    simulatedBattleLostSelf,
+    simulatedBattleLostWallCount: battleLostWallCount,
+    simulatedBattleRemovedThreat,
+    simulatedBattleRewardNames: battleRewardNames,
+    simulatedBattleRewards: battleRewardNames.length,
+    simulatedBattleLpGain: battleLpGain,
+    hasMain2AfterBattlePayoff,
+    main2BattlePayoffNames: main2PayoffActions
+      .map((action) => action?.cardName || action?.card?.name || action?.name)
+      .filter(Boolean),
   };
+}
+
+function hasStateCard(player = {}, zones = [], predicate = () => false) {
+  return zones.some((zone) => stateCards(player, zone).some(predicate));
+}
+
+function countStateCards(player = {}, zones = [], predicate = () => true) {
+  return zones.reduce(
+    (sum, zone) => sum + stateCards(player, zone).filter(predicate).length,
+    0,
+  );
+}
+
+function hasStateNameInZones(player = {}, zones = [], name) {
+  return hasStateCard(player, zones, (card) => card?.name === name);
+}
+
+function getBattleWallValue(card) {
+  if (!card || card.cardKind !== "monster") return 0;
+  const atk =
+    Number(card.atk || 0) +
+    Number(card.tempAtkBoost || 0) +
+    Number(card.permanentAtkBoost || 0);
+  const def =
+    Number(card.def || 0) +
+    Number(card.tempDefBoost || 0) +
+    Number(card.permanentDefBoost || 0);
+  return card.position === "attack" ? atk : def;
+}
+
+function getBestWallValue(player = {}) {
+  return stateCards(player, "field").reduce((best, card) => {
+    if (!isLuminarchWall(card)) return best;
+    return Math.max(best, getBattleWallValue(card));
+  }, 0);
+}
+
+function hasWallOverThreat(player = {}, opponent = {}) {
+  const wallValue = getBestWallValue(player);
+  if (wallValue <= 0) return false;
+  const threat = getStrongestAttackThreat(stateCards(opponent, "field"), {
+    facedownValue: 1500,
+    includeBoosts: false,
+  });
+  return threat <= 0 || wallValue >= threat;
+}
+
+function hasProtectedWall(player = {}, opponent = {}) {
+  if (countWalls(player) <= 0) return false;
+  const hasProtection =
+    hasCitadelOnline(player) ||
+    hasStateNameInZones(player, ["hand", "spellTrap"], NAMES.holyShield) ||
+    hasStateNameInZones(player, ["field", "spellTrap"], NAMES.crescentShield) ||
+    (hasStateName(player, "field", NAMES.aurora) &&
+      countFaceupLuminarchs(player) >= 2);
+  return hasProtection && hasWallOverThreat(player, opponent);
+}
+
+function countLpCostFollowUps(player = {}) {
+  return countStateCards(
+    player,
+    ["hand", "spellTrap", "fieldSpell"],
+    (card) => card && LP_COST_FOLLOW_UP_NAMES.has(card.name),
+  );
+}
+
+function hasLpPayoffEngine(player = {}, options = {}) {
+  const hasFaceupLuminarch = countFaceupLuminarchs(player) > 0;
+  if (!hasFaceupLuminarch) return false;
+  const excludedNames = new Set(options.excludeNames || []);
+  return hasStateCard(
+    player,
+    ["field", "spellTrap", "fieldSpell", "hand"],
+    (card) =>
+      card && LP_PAYOFF_NAMES.has(card.name) && !excludedNames.has(card.name),
+  );
+}
+
+function hasFortressReviveFollowUp(player = {}) {
+  if (stateCards(player, "field").length >= 5) return false;
+  return (
+    hasStateName(player, "field", NAMES.fortress) &&
+    stateCards(player, "graveyard").some(
+      (card) => isLuminarchMonster(card) && (card.def || 0) <= 2000,
+    )
+  );
+}
+
+function hasGrindFollowUp(player = {}) {
+  const gyLuminarchs = countUsefulGyLuminarchs(player);
+  if (hasFortressReviveFollowUp(player)) return true;
+  if (
+    gyLuminarchs > 0 &&
+    hasStateNameInZones(player, ["hand", "spellTrap"], NAMES.moonlit)
+  ) {
+    return true;
+  }
+  if (
+    gyLuminarchs > 0 &&
+    hasStateNameInZones(player, ["hand", "spellTrap"], NAMES.sacredJudgment)
+  ) {
+    return true;
+  }
+  return (
+    hasStateName(player, "graveyard", NAMES.magicSickle) &&
+    stateCards(player, "graveyard").some(
+      (card) =>
+        card?.cardKind === "spell" &&
+        isLuminarch(card) &&
+        USEFUL_SICKLE_SPELL_TARGETS.has(card.name),
+    )
+  );
+}
+
+function hasRealAttackPressure(player = {}, opponent = {}) {
+  const opponentLp = Number(opponent?.lp || 0);
+  const attackDamage = getAttackDamage(player);
+  if (opponentLp > 0 && attackDamage >= opponentLp) return true;
+  if (attackDamage >= 2800 && countBoardCards(opponent) === 0) return true;
+  return attackDamage >= 4000;
+}
+
+function getLpPayments(impact = {}) {
+  const payments = Array.isArray(impact.simMeta?.lpPayments)
+    ? impact.simMeta.lpPayments
+    : [];
+  if (payments.length > 0) return payments;
+  if (impact.lpDelta < 0) {
+    return [
+      {
+        cardName: "unknown",
+        cost: Math.abs(impact.lpDelta),
+        beforeLp: Number(impact.initialBot?.lp || 0),
+        afterLp: Number(impact.finalBot?.lp || 0),
+      },
+    ];
+  }
+  return [];
+}
+
+function scoreTerminalQuality(impact = {}) {
+  const finalBot = impact.finalBot || {};
+  const finalOpponent = impact.finalOpponent || {};
+  let score = 0;
+
+  if (impact.finalCitadel && impact.finalFaceupLuminarchs > 0) score += 2;
+  if (impact.finalCitadel && impact.finalWalls > 0) score += 1.5;
+  if (impact.finalFaceupLuminarchs >= 2) score += 1;
+  if (hasWallOverThreat(finalBot, finalOpponent)) score += 2;
+  if (hasProtectedWall(finalBot, finalOpponent)) score += 1.5;
+  if (
+    hasStateName(finalBot, "field", NAMES.pureKnight) &&
+    countLpCostFollowUps(finalBot) > 0
+  ) {
+    score += 2;
+  }
+  if (
+    hasStateName(finalBot, "field", NAMES.barbarias) &&
+    hasLpPayoffEngine(finalBot, { excludeNames: [NAMES.barbarias] })
+  ) {
+    score += 2;
+  }
+  if (hasFortressReviveFollowUp(finalBot)) score += 2;
+  if (hasGrindFollowUp(finalBot)) score += 1;
+  if (hasRealAttackPressure(finalBot, finalOpponent)) score += 1;
+  if (countBoardCards(finalOpponent) === 0 && countBoardCards(finalBot) > 0) {
+    score += 1;
+  }
+
+  return score;
+}
+
+function scoreTerminalLpPolicy(impact = {}) {
+  const payments = getLpPayments(impact);
+  if (payments.length === 0) return 0;
+
+  const safetyImproved = impact.initialLethal && !impact.finalLethal;
+  const wallCreated = impact.finalWalls > impact.initialWalls;
+  const payoffCreated =
+    impact.finalFusionPayoffs > impact.initialFusionPayoffs ||
+    (!impact.initialCitadel && impact.finalCitadel);
+  const resourceRecovered =
+    impact.finalHandCount > impact.initialHandCount ||
+    impact.finalGyResources > impact.initialGyResources;
+  const opponentWeakened =
+    impact.removedOpponentCards > 0 || impact.threatReduction >= 500;
+  const finalLp = Number(impact.finalBot?.lp || 0);
+  let score = 0;
+
+  payments.forEach((payment) => {
+    const cost = Math.max(0, Number(payment?.cost || 0));
+    const afterLp = Number(payment?.afterLp ?? finalLp);
+    const markedPositive =
+      payment?.createsWall === true || payment?.createsPayoff === true;
+    const createdUsefulState =
+      markedPositive ||
+      safetyImproved ||
+      wallCreated ||
+      payoffCreated ||
+      resourceRecovered ||
+      opponentWeakened;
+
+    if (impact.finalLethal && afterLp <= Math.max(3000, impact.finalOpponentThreat)) {
+      score -= cost >= 2000 ? 4.5 : 3;
+    } else if (createdUsefulState) {
+      score += cost >= 2000 ? 1.8 : 1.2;
+    } else {
+      score -= cost >= 2000 ? 3 : 1.8;
+    }
+  });
+
+  const totalCost = payments.reduce(
+    (sum, payment) => sum + Math.max(0, Number(payment?.cost || 0)),
+    0,
+  );
+  const hasStrongPayoff =
+    safetyImproved ||
+    wallCreated ||
+    payoffCreated ||
+    (opponentWeakened && !impact.finalLethal);
+  if (totalCost >= 3000 && !hasStrongPayoff) score -= 2.5;
+  if (totalCost > 0 && finalLp <= 2000 && impact.finalOpponentThreat > 0) {
+    score -= impact.finalLethal ? 3 : 1.5;
+  }
+
+  return score;
+}
+
+function scoreTerminalRisk(impact = {}) {
+  const finalBot = impact.finalBot || {};
+  const finalOpponent = impact.finalOpponent || {};
+  const finalField = stateCards(finalBot, "field");
+  const finalHand = stateCards(finalBot, "hand");
+  const lineLength = impact.sequence.filter(
+    (action) => action?.type !== "simulatedBattle",
+  ).length;
+  const fieldWeak =
+    impact.finalFaceupLuminarchs === 0 ||
+    (impact.finalWalls === 0 && impact.finalFusionPayoffs === 0);
+  const battleSetupWithoutBattle =
+    !impact.sequence.some((action) => action?.type === "simulatedBattle") &&
+    (sequenceUses(impact.sequence, NAMES.spear) ||
+      sequenceUses(impact.sequence, NAMES.holyAscension));
+  let score = 0;
+
+  if (finalField.length === 0 && impact.finalOpponentThreat > 0) score -= 6;
+  if (impact.finalLethal && (finalBot.lp || 0) <= 3000) score -= 5;
+  if (finalHand.length === 0 && fieldWeak) score -= 4;
+  if (
+    impact.finalWalls > 0 &&
+    !impact.finalCitadel &&
+    !hasGrindFollowUp(finalBot) &&
+    !hasRealAttackPressure(finalBot, finalOpponent)
+  ) {
+    score -= 2.5;
+  }
+  if (
+    impact.finalFusionPayoffs < impact.initialFusionPayoffs &&
+    impact.finalWalls <= impact.initialWalls &&
+    impact.removedOpponentCards <= 0
+  ) {
+    score -= 4;
+  }
+  if (
+    lineLength >= 4 &&
+    !impact.finalCitadel &&
+    impact.finalWalls <= impact.initialWalls &&
+    impact.finalFusionPayoffs <= impact.initialFusionPayoffs &&
+    impact.removedOpponentCards <= 0
+  ) {
+    score -= 3;
+  }
+  if (
+    battleSetupWithoutBattle &&
+    impact.removedOpponentCards <= 0 &&
+    !hasRealAttackPressure(finalBot, finalOpponent)
+  ) {
+    score -= 2;
+  }
+
+  return score;
+}
+
+function scoreTerminalAdjustments(impact = {}) {
+  return (
+    scoreTerminalQuality(impact) +
+    scoreTerminalLpPolicy(impact) +
+    scoreTerminalRisk(impact)
+  );
 }
 
 function addMilestone(entries, score, label) {
@@ -479,6 +1131,12 @@ function addSimMetaMilestones(entries, impact) {
     : [];
   raw.forEach((entry) => {
     const key = typeof entry === "string" ? entry : entry?.label || entry?.name;
+    if (
+      impact.simulatedBattles.length > 0 &&
+      BATTLE_SIM_MILESTONE_KEYS.has(key)
+    ) {
+      return;
+    }
     const mapped = SIM_MILESTONE_SCORES[key];
     if (mapped) {
       addMilestone(entries, mapped.score, mapped.label);
@@ -574,6 +1232,126 @@ function scoreBoardImpactMilestones(entries, impact) {
   }
 }
 
+function scoreBattleBridgeMilestones(entries, impact) {
+  if (impact.simulatedBattles.length === 0) return;
+  const rewards = impact.simulatedBattleRewardNames || [];
+  const removedCount = impact.simulatedBattleRemovedOpponent || 0;
+  const lostCount = impact.simulatedBattleLostSelf || 0;
+  const removedThreat = impact.simulatedBattleRemovedThreat || 0;
+  const damage = impact.simulatedBattleDamage || 0;
+  const lpGain = impact.simulatedBattleLpGain || 0;
+  const usefulBattle =
+    removedCount > 0 ||
+    damage >= 800 ||
+    lpGain >= 800 ||
+    rewards.length > 0 ||
+    impact.hasMain2AfterBattlePayoff ||
+    Number(impact.finalOpponent?.lp || 0) <= 0;
+
+  if (Number(impact.finalOpponent?.lp || 0) <= 0) {
+    addMilestone(entries, 4, "Battle: converted lethal");
+  }
+  if (impact.simulatedBattleRemovedOpponent > 0) {
+    const removalScore =
+      Math.min(4.5, removedCount * 2.1) + Math.min(1.8, removedThreat / 1800);
+    addMilestone(entries, removalScore, "Battle: removed real threat");
+  }
+  if (damage >= 1800) {
+    addMilestone(entries, Math.min(3, damage / 900), "Battle: decisive damage");
+  } else if (damage >= 800) {
+    addMilestone(entries, 1.2, "Battle: useful damage");
+  }
+  if (sequenceUses(impact.sequence, NAMES.spear)) {
+    if (removedCount > 0 || impact.threatReduction >= 800) {
+      addMilestone(entries, 3, "Spear: converted threat into removal");
+    } else if (!usefulBattle) {
+      addMilestone(entries, -2, "Spear: no battle conversion");
+    }
+  }
+  if (rewardNameMatches(rewards, /Magic Sickle/)) {
+    const sickleMattered =
+      removedCount > 0 ||
+      damage >= 1000 ||
+      Number(impact.finalOpponent?.lp || 0) <= 0;
+    addMilestone(
+      entries,
+      sickleMattered ? 2.5 : -1.5,
+      sickleMattered
+        ? "Magic Sickle: combat result mattered"
+        : "Risk: Magic Sickle lacked payoff",
+    );
+  }
+  if (rewardNameMatches(rewards, /Citadel protected/)) {
+    addMilestone(entries, 1.6, "Citadel: protected battle body");
+  }
+  if (rewardNameMatches(rewards, /battle damage converted to LP/)) {
+    addMilestone(
+      entries,
+      Math.min(3.5, 1.5 + lpGain / 1000),
+      "Holy Shield: battle damage became LP",
+    );
+  }
+  if (rewardNameMatches(rewards, /Moonblade/)) {
+    addMilestone(
+      entries,
+      impact.detailedBattleSteps.length >= 2 ? 3 : 1.8,
+      "Moonblade: earned second attack",
+    );
+  }
+  if (rewardNameMatches(rewards, /Radiant Lancer/)) {
+    addMilestone(entries, 1.8, "Radiant Lancer: battle growth");
+  }
+  if (rewardNameMatches(rewards, /Aurora Seraph/)) {
+    addMilestone(
+      entries,
+      Math.min(3, 1.2 + lpGain / 1200),
+      "Aurora: converted battle into LP",
+    );
+  }
+  if (rewardNameMatches(rewards, /Sunforged/)) {
+    const sunforgedEvents = rewards.filter((name) => /Sunforged/.test(name)).length;
+    addMilestone(
+      entries,
+      Math.min(2.2, sunforgedEvents * 0.9),
+      "Sunforged: battle LP fed counters",
+    );
+  }
+  if (rewardNameMatches(rewards, /Barbarias doubled/)) {
+    addMilestone(
+      entries,
+      lpGain >= 1600 ? 2.4 : 1.4,
+      "Barbarias: doubled relevant LP gain",
+    );
+  }
+  if (rewardNameMatches(rewards, /Marshal battle destruction heal/)) {
+    addMilestone(entries, 1.2, "Marshal: turned battle loss into LP");
+  }
+  if (impact.hasMain2AfterBattlePayoff) {
+    const uniquePayoffs = new Set(impact.main2BattlePayoffNames || []);
+    addMilestone(
+      entries,
+      Math.min(4, 2.2 + uniquePayoffs.size * 0.6),
+      "Battle: opened Main 2 payoff",
+    );
+  }
+  if (lostCount > 0 && removedCount === 0 && !impact.finalLethal) {
+    addMilestone(
+      entries,
+      impact.simulatedBattleLostWallCount > 0 ? -6 : -4,
+      "Risk: battle lost body without payoff",
+    );
+  }
+  if (!usefulBattle) {
+    addMilestone(entries, -3, "Risk: Battle bridge had no payoff");
+  }
+  if (
+    impact.finalLethal &&
+    Number(impact.finalBot?.lp || 0) <= Math.max(3000, impact.finalOpponentThreat)
+  ) {
+    addMilestone(entries, -4, "Risk: battle left lethal exposure");
+  }
+}
+
 function scoreRiskMilestones(entries, impact) {
   if (
     impact.finalFaceupLuminarchs === 0 &&
@@ -613,15 +1391,22 @@ function formatMilestone(entry) {
 export function buildLuminarchPlanningProfile(analysis = {}, context = {}) {
   const game = context.game || analysis.game || {};
   const manual = game?.turnLineSearchEnabled === true;
-  const reasons = collectPlanningReasons(analysis);
+  const battleSignals = collectBattleBridgeSignals(analysis, context);
+  const reasons = [...collectPlanningReasons(analysis), ...battleSignals];
   const enabled = manual || reasons.length > 0;
   const phase = analysis.phase || game?.phase || "main1";
+  const requestedTurnMode = game?.turnLineSearchTurnMode;
+  const useBattleBridge = battleSignals.length > 0;
+  const turnMode =
+    requestedTurnMode ||
+    (useBattleBridge ? "mainBattleMain2" : DEFAULT_PROFILE.turnMode);
 
   return {
     ...DEFAULT_PROFILE,
     enabled,
     mode: manual && reasons.length === 0 ? "manual" : enabled ? "critical" : "off",
-    turnMode: "mainOnly",
+    turnMode,
+    battleStepLimit: useBattleBridge ? getBattleStepLimit(analysis, battleSignals) : 1,
     beamWidth: Number.isFinite(game?.turnLineSearchBeamWidth)
       ? game.turnLineSearchBeamWidth
       : DEFAULT_PROFILE.beamWidth,
@@ -632,14 +1417,18 @@ export function buildLuminarchPlanningProfile(analysis = {}, context = {}) {
         : DEFAULT_PROFILE.maxDepth,
     nodeBudget: Number.isFinite(game?.turnLineSearchNodeBudget)
       ? game.turnLineSearchNodeBudget
-      : DEFAULT_PROFILE.nodeBudget,
+      : DEFAULT_PROFILE.nodeBudget + (useBattleBridge ? 40 : 0),
     candidateLimit: Number.isFinite(game?.turnLineSearchCandidateLimit)
       ? game.turnLineSearchCandidateLimit
       : DEFAULT_PROFILE.candidateLimit,
     reasons,
     critical: reasons.length > 0,
     availablePackages: (analysis.availableCombos || detectAvailableCombos(analysis))
-      .filter((entry) => MAIN_ONLY_PACKAGES.has(entry?.package))
+      .filter((entry) =>
+        (useBattleBridge ? MAIN_BATTLE_PACKAGES : MAIN_ONLY_PACKAGES).has(
+          entry?.package,
+        ),
+      )
       .slice(0, 5)
       .map((entry) => ({
         name: entry.name,
@@ -651,6 +1440,7 @@ export function buildLuminarchPlanningProfile(analysis = {}, context = {}) {
       facedownValue: 1500,
       includeBoosts: false,
     }),
+    battleSignals,
   };
 }
 
@@ -675,6 +1465,7 @@ export function scoreLuminarchLineMilestones(context = {}) {
   scoreFusionMilestones(entries, impact);
   scoreGrindMilestones(entries, impact);
   scoreBoardImpactMilestones(entries, impact);
+  scoreBattleBridgeMilestones(entries, impact);
   addSimMetaMilestones(entries, impact);
   scoreRiskMilestones(entries, impact);
 
@@ -684,8 +1475,10 @@ export function scoreLuminarchLineMilestones(context = {}) {
   });
 
   const rawScore = entries.reduce((sum, entry) => sum + entry.score, 0);
+  const profile = context.profile || context.planningContext?.profile || {};
+  const milestoneCap = isCriticalProfile(profile) ? 14 : 10;
   return {
-    scoreDelta: clampScore(rawScore, -12, 12),
+    scoreDelta: clampScore(rawScore, -milestoneCap, milestoneCap),
     milestones: entries.slice(0, 8).map(formatMilestone),
     details: {
       lineImpact: {
@@ -698,6 +1491,11 @@ export function scoreLuminarchLineMilestones(context = {}) {
         fusionPayoffDelta:
           impact.finalFusionPayoffs - impact.initialFusionPayoffs,
         lpDelta: impact.lpDelta,
+        simulatedBattles: impact.simulatedBattles.length,
+        battleDamage: impact.simulatedBattleDamage,
+        battleLpGain: impact.simulatedBattleLpGain,
+        battleRemovedThreat: impact.simulatedBattleRemovedThreat,
+        main2BattlePayoffs: impact.main2BattlePayoffNames,
       },
       entries,
     },
@@ -713,9 +1511,20 @@ export function scoreLuminarchLineTerminal(context = {}) {
   const baseScore = Number(context.baseScore ?? context.finalScore ?? 0);
   const rawMilestoneScore = Number(context.milestoneScore ?? 0);
   const profile = context.profile || context.planningContext?.profile || {};
-  const cap = profile.critical || profile.mode === "critical" ? 12 : 8;
-  const milestoneScore = clampScore(rawMilestoneScore, -cap, cap);
-  return baseScore + milestoneScore;
+  const critical = isCriticalProfile(profile);
+  const milestoneCap = critical ? 14 : 10;
+  const terminalCap = critical ? 12 : 8;
+  const milestoneScore = clampScore(
+    rawMilestoneScore,
+    -milestoneCap,
+    milestoneCap,
+  );
+  const terminalScore = clampScore(
+    scoreTerminalAdjustments(getLineImpact(context)),
+    -terminalCap,
+    terminalCap,
+  );
+  return baseScore + milestoneScore + terminalScore;
 }
 
 function describeAction(action = {}) {

@@ -339,13 +339,19 @@ export default class BaseStrategy {
       if (player.fieldSpell) {
         player.graveyard.push(player.fieldSpell);
       }
-      player.fieldSpell = { ...card };
+      player.fieldSpell = card;
       return { placed: true, zone: "fieldSpell" };
     }
 
-    if (card.subtype === "continuous" || card.subtype === "equip") {
+    if (
+      card.subtype === "continuous" ||
+      card.subtype === "equip" ||
+      card.subtype === "quick"
+    ) {
       player.spellTrap = player.spellTrap || [];
-      player.spellTrap.push({ ...card });
+      if (!player.spellTrap.includes(card)) {
+        player.spellTrap.push(card);
+      }
       return { placed: true, zone: "spellTrap" };
     }
 

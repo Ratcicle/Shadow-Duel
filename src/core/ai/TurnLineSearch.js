@@ -216,6 +216,9 @@ function clonePlanningState(game, strategy) {
   if (game?._simOncePerTurn) {
     state._simOncePerTurn = clonePlain(game._simOncePerTurn);
   }
+  if (game?._simLuminarch) {
+    state._simLuminarch = clonePlain(game._simLuminarch);
+  }
   return state;
 }
 
@@ -455,7 +458,9 @@ function getPlannerMaxAttacks(card, state) {
   if (card?.canAttackAllOpponentMonstersThisTurn) {
     return Math.max(1, Number(card.multiAttackLimit || 1));
   }
-  return Math.max(1, 1 + Math.max(0, extra));
+  const secondAttack =
+    card?.canMakeSecondAttackThisTurn && !card?.secondAttackUsedThisTurn ? 1 : 0;
+  return Math.max(1, 1 + Math.max(0, extra) + secondAttack);
 }
 
 function canPlannerAttackerStillAttack(card, state) {
@@ -534,6 +539,9 @@ function hasBattleDestructionProtection(card) {
 
 function preventBattleDestruction(card) {
   if (!hasBattleDestructionProtection(card)) return false;
+  if (card?.simBattleDestructionProtected) {
+    card.simBattleDestructionProtected = false;
+  }
   if (card?.battleIndestructibleOncePerTurn) {
     card.battleIndestructibleOncePerTurnUsed = true;
   }
@@ -581,6 +589,29 @@ function applyStrategyBattleRewards(state, battlePlan, summary, strategy, option
   return Array.isArray(rewards) ? rewards.filter(Boolean) : [];
 }
 
+function prepareStrategyBattle(state, battlePlan, strategy, options = {}) {
+  if (typeof strategy?.prepareSimulatedBattle !== "function") return [];
+  const bot = state?.bot;
+  const opponent = state?.player;
+  const attacker = bot?.field?.[battlePlan?.attackerIndex];
+  const target = Number.isInteger(battlePlan?.targetIndex)
+    ? opponent?.field?.[battlePlan.targetIndex]
+    : null;
+  const result = strategy.prepareSimulatedBattle({
+    state,
+    battlePlan,
+    attacker,
+    target,
+    bot,
+    opponent,
+    options,
+  });
+  if (Array.isArray(result)) return result.filter(Boolean);
+  if (Array.isArray(result?.rewardNames)) return result.rewardNames.filter(Boolean);
+  if (result?.rewardName) return [result.rewardName];
+  return [];
+}
+
 function applySimulatedBattle(state, battlePlan, strategy = null, options = {}) {
   const bot = state?.bot;
   const opponent = state?.player;
@@ -590,6 +621,7 @@ function applySimulatedBattle(state, battlePlan, strategy = null, options = {}) 
     ? opponent.field?.[battlePlan.targetIndex]
     : null;
   if (!canPlannerAttackerStillAttack(attacker, state)) return null;
+  const prepareRewards = prepareStrategyBattle(state, battlePlan, strategy, options);
   const attackStat = getEffectiveAtk(attacker);
   const usedAttacks = Number(attacker.attacksUsedThisTurn || 0);
   const summary = {
@@ -600,7 +632,8 @@ function applySimulatedBattle(state, battlePlan, strategy = null, options = {}) 
     damage: 0,
     destroyedNames: [],
     destroyedCards: [],
-    rewardNames: [],
+    rewardNames: [...prepareRewards],
+    lpGains: [],
     phaseBridge: "main1_battle_main2",
   };
   const recordDestroyed = (card, owner) => {
@@ -622,6 +655,22 @@ function applySimulatedBattle(state, battlePlan, strategy = null, options = {}) 
   };
   const inflictDamage = (recipient, amount, involvedCard = null) => {
     const raw = Math.max(0, Number(amount || 0));
+    if (
+      raw > 0 &&
+      involvedCard?.battleDamageHealsControllerThisTurn === true &&
+      (!involvedCard.owner || involvedCard.owner === recipient?.id)
+    ) {
+      const before = Number(recipient.lp || 0);
+      recipient.lp = before + raw;
+      summary.lpGains.push({
+        playerId: recipient.id || null,
+        amount: raw,
+        sourceName: involvedCard.name || null,
+        reason: "battle_damage_heal",
+      });
+      summary.rewardNames.push("battle damage converted to LP");
+      return 0;
+    }
     const damage = preventsBattleDamageToController(involvedCard) ? 0 : raw;
     recipient.lp = Math.max(0, Number(recipient.lp || 0) - damage);
     return damage;
@@ -665,11 +714,13 @@ function applySimulatedBattle(state, battlePlan, strategy = null, options = {}) 
     attacker.hasAttacked =
       attacker.attacksUsedThisTurn >= getPlannerMaxAttacks(attacker, state);
   }
-  summary.rewardNames = applyGrandLibraryBattleReward(state, {
-    ...battlePlan,
-    attackerCard: attacker,
-    destroyedCards: summary.destroyedCards,
-  });
+  summary.rewardNames.push(
+    ...applyGrandLibraryBattleReward(state, {
+      ...battlePlan,
+      attackerCard: attacker,
+      destroyedCards: summary.destroyedCards,
+    }),
+  );
   summary.rewardNames.push(
     ...applyStrategyBattleRewards(
       state,
@@ -772,6 +823,7 @@ function chooseBestSingleSimulatedBattle(state, strategy, options = {}) {
         attackerSurvived: Boolean(attackerAfter),
         targetSurvived: Boolean(targetAfter),
         isSecondAttack: wasSecondAttack,
+        summary,
       });
       if (Number.isFinite(hookDelta)) score += hookDelta;
     }
@@ -851,7 +903,7 @@ function tryMainBattleMain2Bridge(state, sequence, strategy, options = {}) {
   if (!isMainBattleMain2Mode(options)) return null;
   if (state?._simPlanningBattleDone) return null;
   if (!isMain1Phase(state?.phase)) return null;
-  if (!Array.isArray(sequence) || sequence.length === 0) return null;
+  if (!Array.isArray(sequence)) return null;
 
   const battle = chooseBestSimulatedBattle(state, strategy, options);
   if (!battle) return null;

@@ -1,6 +1,7 @@
 import {
   applySimulatedActions,
   evaluateSimulatedConditions,
+  moveCardToZone,
   selectSimulatedTargets,
 } from "../StrategyUtils.js";
 
@@ -231,8 +232,7 @@ export function applyGenericSimulatedMainPhaseAction(
       validTributeIndices.forEach((idx) => {
         const tribute = player.field[idx];
         if (tribute) {
-          player.graveyard.push(tribute);
-          player.field.splice(idx, 1);
+          moveCardToZone(player, tribute, "graveyard");
         }
       });
 
@@ -480,7 +480,6 @@ export function applyGenericSimulatedMainPhaseAction(
       if (
         card.cardKind === "spell" &&
         (card.subtype === "normal" ||
-          card.subtype === "quick" ||
           card.subtype === "quick-play")
       ) {
         player.graveyard.push(card);

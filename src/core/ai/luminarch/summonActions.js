@@ -15,6 +15,11 @@ import {
 const CELESTIAL_MARSHAL_NAME = "Luminarch Celestial Marshal";
 const FORTRESS_AEGIS_NAME = "Luminarch Fortress Aegis";
 const MAGIC_SICKLE_NAME = "Luminarch Magic Sickle";
+const CITADEL_NAME = "Sanctum of the Luminarch Citadel";
+const CRESCENT_SHIELD_NAME = "Luminarch Crescent Shield";
+const HOLY_SHIELD_NAME = "Luminarch Holy Shield";
+const MOONLIT_BLESSING_NAME = "Luminarch Moonlit Blessing";
+const SUNFORGED_BLADE_NAME = "Luminarch Sunforged Blade";
 
 const LUMINARCH_SPELL_RECOVERY_TARGETS = new Set([
   "Sanctum of the Luminarch Citadel",
@@ -114,19 +119,27 @@ function getUsefulSickleSpellTargets(graveyard = []) {
 
 function scoreSickleSpellTarget(card, { bot, opponent }) {
   if (!card) return 0;
-  const hasCitadel = bot?.fieldSpell?.name === "Sanctum of the Luminarch Citadel";
+  const hasCitadel = bot?.fieldSpell?.name === CITADEL_NAME;
   const oppThreat = getOpponentTotalThreat(opponent);
   const underPressure = oppThreat >= (bot?.lp || 8000) || (bot?.lp || 8000) <= 3500;
   const hasGyLuminarch = (bot?.graveyard || []).some(
     (entry) => isLuminarchMonster(entry) && entry.name !== MAGIC_SICKLE_NAME,
   );
+  const hasFaceupLuminarch = (bot?.field || []).some(
+    (entry) => isLuminarchMonster(entry) && !entry.isFacedown,
+  );
+  const controlsSunforged = (bot?.spellTrap || []).some(
+    (entry) => entry?.name === SUNFORGED_BLADE_NAME,
+  );
   switch (card.name) {
-    case "Sanctum of the Luminarch Citadel":
+    case CITADEL_NAME:
       return hasCitadel ? 1 : 12;
-    case "Luminarch Moonlit Blessing":
+    case MOONLIT_BLESSING_NAME:
       return hasGyLuminarch ? (hasCitadel ? 13 : 9) : 3;
-    case "Luminarch Holy Shield":
+    case HOLY_SHIELD_NAME:
       return underPressure ? 12 : 7;
+    case CRESCENT_SHIELD_NAME:
+      return hasFaceupLuminarch ? (underPressure ? 10 : 7) : 2;
     case "Luminarch Radiant Wave":
       return (bot?.field || []).some((entry) => isLuminarchMonster(entry) && (entry.atk || 0) >= 2000)
         ? 10
@@ -135,8 +148,9 @@ function scoreSickleSpellTarget(card, { bot, opponent }) {
       return underPressure && (bot?.field || []).length === 0 ? 11 : 5;
     case "Luminarch Spear of Dawnfall":
       return (opponent?.field || []).length > 0 ? 9 : 4;
-    case "Luminarch Sunforged Blade":
-      return hasCitadel ? 8 : 4;
+    case SUNFORGED_BLADE_NAME:
+      if (controlsSunforged || !hasFaceupLuminarch) return 2;
+      return hasCitadel ? 9 : 7;
     case "Luminarch Holy Ascension":
       return (opponent?.field || []).length > 0 ? 7 : 3;
     default:
@@ -476,6 +490,7 @@ function getCelestialMarshalHandIgnitionActions(context) {
     return actions;
   }
 
+  const marshalPosition = oppStrongest > 0 ? "defense" : "attack";
   const handActivationContext = {
     ...(activationContext || {}),
     fromHand: true,
@@ -483,6 +498,17 @@ function getCelestialMarshalHandIgnitionActions(context) {
     sourceZone: "hand",
     autoSelectTargets: true,
     autoSelectSingleTarget: true,
+    actionContext: {
+      ...(activationContext?.actionContext || {}),
+      specialSummonPositions: {
+        ...(activationContext?.actionContext?.specialSummonPositions || {}),
+        byName: {
+          ...(activationContext?.actionContext?.specialSummonPositions?.byName ||
+            {}),
+          [CELESTIAL_MARSHAL_NAME]: marshalPosition,
+        },
+      },
+    },
   };
   const preview = game?.effectEngine?.canActivateMonsterEffectPreview?.(
     marshal,

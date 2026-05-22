@@ -759,6 +759,22 @@ export default class Bot extends Player {
         card: bestAction.card?.name || bestAction.cardName || null,
       });
 
+      if (bestAction.type === "simulatedBattle") {
+        console.log(
+          `[Bot.playMainPhase] Planner selected battle bridge; advancing to Battle Phase`,
+          bestAction,
+        );
+        game._arenaTracker?.recordProgress?.("ai_plan_phase_bridge", game, {
+          actor: this.id,
+          attempt: totalAttempts,
+          plannedAction: fingerprintAction(bestAction),
+          plannedMilestones: (pendingPlannerTrace?.milestones || []).slice(0, 8),
+          plannerReason: pendingPlannerTrace?.reason || null,
+        });
+        await game.nextPhase();
+        return;
+      }
+
       // 📊 Log de decisão (ranking e coerência)
       if (botLogger && actions.length > 0) {
         const sorted = [...actions].sort(

@@ -88,8 +88,24 @@ export function evaluateLuminarchFusionPriority(
       facedownValue: "printed",
       includeBoosts: false,
     });
+    const oppStrongest = getStrongestAttackThreat(opponent?.field || [], {
+      facedownValue: 1500,
+      includeBoosts: false,
+    });
+    const hasStableWall = (bot.field || []).some(
+      (c) =>
+        c &&
+        c.cardKind === "monster" &&
+        !c.isFacedown &&
+        (c.mustBeAttacked ||
+          (c.position === "defense" && (c.def || 0) >= oppStrongest)),
+    );
+    const underRealPressure =
+      oppStrength >= lp || (oppStrongest >= 2200 && !hasStableWall);
     if (oppStrength >= 8000) priority += 3;
     else if (oppStrength >= 6000) priority += 1;
+    if (!hasStableWall) priority += 3;
+    if (underRealPressure) priority += 4;
 
     const hasCitadel = bot.fieldSpell?.name?.includes("Citadel");
     if (hasCitadel) priority += 2;
@@ -161,6 +177,23 @@ export function evaluateLuminarchFusionPriority(
       (c) => c?.name === BARBARIAS_NAME || c?.name === FORTRESS_NAME,
     );
     if (hasBarbariasWall && hasCitadel) priority -= 3;
+    const oppStrength = getTotalAttackThreat(opponent?.field || [], {
+      facedownValue: "printed",
+      includeBoosts: false,
+    });
+    const oppStrongest = getStrongestAttackThreat(opponent?.field || [], {
+      facedownValue: 1500,
+      includeBoosts: false,
+    });
+    const hasStableWall = (bot.field || []).some(
+      (c) =>
+        c &&
+        c.cardKind === "monster" &&
+        !c.isFacedown &&
+        (c.mustBeAttacked ||
+          (c.position === "defense" && (c.def || 0) >= oppStrongest)),
+    );
+    if (!hasBarbariasWall && !hasStableWall && oppStrength >= lp) priority -= 3;
 
     return priority;
   }

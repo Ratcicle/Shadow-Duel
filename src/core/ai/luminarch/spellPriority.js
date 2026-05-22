@@ -158,8 +158,9 @@ export function shouldPlaySpell(card, analysis) {
       }
 
       const lpForHolyAscension = analysis.lp || 8000;
-      if (lpForHolyAscension < 4000) {
-        return { yes: false, reason: "LP muito baixo (custo 1000 LP)" };
+      const finalLpAfterHolyAscension = lpForHolyAscension - 1000;
+      if (finalLpAfterHolyAscension <= 0) {
+        return { yes: false, reason: "LP insuficiente (custo 1000 LP)" };
       }
 
       const bestBuffLine = attackers
@@ -180,6 +181,16 @@ export function shouldPlaySpell(card, analysis) {
         (analysis.oppField || []).length === 0 &&
         totalAtkNow < (analysis.oppLp || 0) &&
         totalAtkNow + 800 >= (analysis.oppLp || 0);
+      if (
+        lpForHolyAscension <= 3000 &&
+        !directLethal &&
+        bestBuffLine.score < 100
+      ) {
+        return {
+          yes: false,
+          reason: "LP baixo: Holy Ascension exige payoff real",
+        };
+      }
       if (directLethal) {
         return {
           yes: true,

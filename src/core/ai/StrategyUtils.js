@@ -785,7 +785,7 @@ function attachSimulatedEquip(equipCard, target, action = {}) {
   return true;
 }
 
-function moveCardToZone(player, card, zone) {
+export function moveCardToZone(player, card, zone) {
   if (!player || !card) return false;
   if (
     card.cardKind === "monster" &&
@@ -882,6 +882,129 @@ function hasOpenMonsterZone(player) {
 
 function resolveActionPlayer(action, self, opponent) {
   return action.player === "opponent" ? opponent : self;
+}
+
+function getSimulatedOncePerTurnKey(effect, card) {
+  return effect?.oncePerTurnName || effect?.id || card?.name || null;
+}
+
+function canUseSimulatedPassive(state, player, card, effect) {
+  if (!effect?.oncePerTurn && !effect?.oncePerTurnName) return true;
+  const key = getSimulatedOncePerTurnKey(effect, card);
+  if (!key) return true;
+  const currentTurn = state?.turnCounter || 0;
+  const usage =
+    effect.oncePerTurnScope === "card" || effect.oncePerTurnPerCard
+      ? card?.oncePerTurnUsageByName || {}
+      : player?.oncePerTurnUsageByName || {};
+  if (usage[key] === currentTurn) return false;
+  if (!state._simPassiveOncePerTurn) state._simPassiveOncePerTurn = new Set();
+  const ownerKey = player?.id || (player === state?.bot ? "bot" : "player");
+  const cardKey = card?.instanceId || card?.id || card?.name || "card";
+  const simKey = `${ownerKey}:${cardKey}:${key}`;
+  return !state._simPassiveOncePerTurn.has(simKey);
+}
+
+function markSimulatedPassiveUsed(state, player, card, effect) {
+  if (!effect?.oncePerTurn && !effect?.oncePerTurnName) return;
+  const key = getSimulatedOncePerTurnKey(effect, card);
+  if (!key) return;
+  if (!state._simPassiveOncePerTurn) state._simPassiveOncePerTurn = new Set();
+  const ownerKey = player?.id || (player === state?.bot ? "bot" : "player");
+  const cardKey = card?.instanceId || card?.id || card?.name || "card";
+  state._simPassiveOncePerTurn.add(`${ownerKey}:${cardKey}:${key}`);
+}
+
+function resolveSimulatedLpCost({
+  action,
+  targetPlayer,
+  self,
+  opponent,
+  state,
+  options,
+  baseAmount,
+}) {
+  const result = {
+    finalAmount: baseAmount,
+    appliedReducers: [],
+  };
+  if (!state || !targetPlayer || baseAmount <= 0) return result;
+
+  const source = options.sourceCard || null;
+  const boards = [self, opponent].filter(Boolean);
+  const reducers = [];
+
+  boards.forEach((board) => {
+    const zoneCards = [
+      ...(board.field || []),
+      ...(board.spellTrap || []),
+      board.fieldSpell,
+    ].filter(Boolean);
+
+    zoneCards.forEach((card) => {
+      (card.effects || []).forEach((effect) => {
+        if (!effect || effect.timing !== "passive") return;
+        const passive = effect.passive;
+        if (!passive || passive.type !== "lp_cost_reduction") return;
+        if (effect.requireFaceup === true && card.isFacedown) return;
+        if (card.isFacedown && effect.allowFacedown !== true && passive.allowFacedown !== true) {
+          return;
+        }
+
+        const appliesTo = asArray(
+          passive.appliesTo || passive.affects || passive.owner || "self",
+        );
+        const relation = board === targetPlayer ? "self" : "opponent";
+        if (!appliesTo.includes("any") && !appliesTo.includes(relation)) return;
+
+        const actionTypes = passive.actionTypes || passive.actionType;
+        if (actionTypes && !asArray(actionTypes).includes(action.type)) return;
+
+        if (passive.sourceFilters || passive.sourceFilter) {
+          const filters = { ...(passive.sourceFilters || passive.sourceFilter) };
+          if (filters.cardName && !filters.name) filters.name = filters.cardName;
+          if (!source || !matchesTargetFilters(source, filters, source, relation)) {
+            return;
+          }
+        }
+
+        if (!canUseSimulatedPassive(state, board, card, effect)) return;
+        const reduction = Number(passive.amount ?? passive.reduction ?? passive.value ?? 0);
+        if (reduction <= 0) return;
+        reducers.push({
+          board,
+          card,
+          effect,
+          reduction,
+          stackMode: passive.stackMode || "max",
+          minFinalAmount: Number(passive.minFinalAmount ?? passive.minAmount ?? 0),
+        });
+      });
+    });
+  });
+
+  if (reducers.length === 0) return result;
+
+  const sumReducers = reducers.filter((entry) => entry.stackMode === "sum");
+  const maxReducer = reducers
+    .filter((entry) => entry.stackMode !== "sum")
+    .sort((a, b) => b.reduction - a.reduction)[0] || null;
+  const appliedReducers = [...sumReducers];
+  if (maxReducer) appliedReducers.push(maxReducer);
+
+  const totalReduction = appliedReducers.reduce(
+    (sum, entry) => sum + entry.reduction,
+    0,
+  );
+  const minFinalAmount = appliedReducers.reduce(
+    (max, entry) => Math.max(max, entry.minFinalAmount || 0),
+    0,
+  );
+  result.finalAmount = Math.max(minFinalAmount, baseAmount - totalReduction);
+  if (result.finalAmount < baseAmount) {
+    result.appliedReducers = appliedReducers;
+  }
+  return result;
 }
 
 function resolveTargetsForAction(action, selections, options, opponent) {
@@ -1196,10 +1319,27 @@ export function applySimulatedActions({
             ? action.lp
             : 0;
         if (amount <= 0) break;
-        if ((targetPlayer.lp || 0) <= amount && action.allowSelfKO !== true) {
+        const cost = resolveSimulatedLpCost({
+          action,
+          targetPlayer,
+          self,
+          opponent,
+          state,
+          options,
+          baseAmount: amount,
+        });
+        const finalAmount = cost.finalAmount;
+        if (
+          finalAmount > 0 &&
+          (targetPlayer.lp || 0) <= finalAmount &&
+          action.allowSelfKO !== true
+        ) {
           return;
         }
-        targetPlayer.lp = Math.max(0, (targetPlayer.lp || 0) - amount);
+        targetPlayer.lp = Math.max(0, (targetPlayer.lp || 0) - finalAmount);
+        cost.appliedReducers.forEach((reducer) => {
+          markSimulatedPassiveUsed(state, reducer.board, reducer.card, reducer.effect);
+        });
         break;
       }
       case "search_any": {
