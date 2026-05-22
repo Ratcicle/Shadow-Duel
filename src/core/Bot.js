@@ -751,6 +751,26 @@ export default class Bot extends Player {
         break;
       }
 
+      const selectedStillValid =
+        bestAction.type === "simulatedBattle" ||
+        this.filterValidActionsForCurrentState([bestAction], game).length > 0;
+      if (!selectedStillValid) {
+        const failedKey = `${bestAction.type}:${bestAction.cardId || bestAction.card?.id || bestAction.index}`;
+        failedActionsThisTurn.add(failedKey);
+        console.log(
+          `[Bot.playMainPhase] Selected action no longer valid, retrying: ${failedKey}`,
+        );
+        game._arenaTracker?.recordProgress?.("ai_decision_after", game, {
+          actor: this.id,
+          attempt: totalAttempts,
+          selected: false,
+          reason: "selected_action_invalid",
+          actionType: bestAction.type || null,
+          card: bestAction.card?.name || bestAction.cardName || null,
+        });
+        continue;
+      }
+
       game._arenaTracker?.recordProgress?.("ai_decision_after", game, {
         actor: this.id,
         attempt: totalAttempts,
@@ -1399,7 +1419,21 @@ export default class Bot extends Player {
           ? action.zoneIndex
           : action.index;
         const card = this.spellTrap?.[zoneIndex];
-        return !!(card && card.cardKind === "spell");
+        if (!card || card.cardKind !== "spell") return false;
+        const activationContext = {
+          ...(action.activationContext || {}),
+          fromHand: false,
+          activationZone: "spellTrap",
+          sourceZone: "spellTrap",
+        };
+        const preview = game?.effectEngine?.canActivateSpellTrapEffectPreview?.(
+          card,
+          this,
+          "spellTrap",
+          null,
+          { activationContext },
+        );
+        return preview ? preview.ok !== false : true;
       }
       if (action.type === "graveyardSpellEffect") {
         const graveyardIndex = Number.isInteger(action.graveyardIndex)

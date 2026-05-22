@@ -1117,6 +1117,53 @@ function getBattleCardValue(card) {
   return Math.max(battleStat, printedBest, levelValue);
 }
 
+function getRawBattleStatForAttackTarget(card, { facedownValue = 1500 } = {}) {
+  if (!card || card.cardKind !== "monster") return 0;
+  if (card.isFacedown) return facedownValue;
+  return card.position === "defense"
+    ? Math.max(0, Number(card.def || 0))
+    : Math.max(0, Number(card.atk || 0));
+}
+
+function isTemporarilyZeroedBattleTarget(card) {
+  if (!card || card.cardKind !== "monster" || card.isFacedown) return false;
+  const battleStat = getRawBattleStatForAttackTarget(card);
+  if (battleStat > 0) return false;
+
+  const atkWasReduced = Number(card.tempAtkBoost || 0) < 0;
+  const defWasReduced = Number(card.tempDefBoost || 0) < 0;
+  if (card.position === "defense") return defWasReduced;
+  return atkWasReduced;
+}
+
+function estimateRawBattleDamage(attacker, target) {
+  if (!attacker || !target || target.cardKind !== "monster") return 0;
+  const attack = Math.max(0, Number(attacker.atk || 0));
+  const targetStat = getRawBattleStatForAttackTarget(target);
+  if (attack <= targetStat) return 0;
+  if (target.position !== "defense") return attack - targetStat;
+  return attacker.piercing ? attack - targetStat : 0;
+}
+
+function sameBattleCardIdentity(a, b) {
+  if (!a || !b) return false;
+  if (a === b) return true;
+  if (a.instanceId != null && b.instanceId != null) {
+    return a.instanceId === b.instanceId;
+  }
+  return a.name === b.name;
+}
+
+function hasOtherZeroedAttackTarget(opponent = {}, target) {
+  return (opponent.field || []).some(
+    (card) =>
+      card &&
+      card.position !== "defense" &&
+      !sameBattleCardIdentity(card, target) &&
+      isTemporarilyZeroedBattleTarget(card),
+  );
+}
+
 function getSummaryLpGain(summary = {}) {
   return (summary.lpGains || []).reduce(
     (sum, gain) => sum + Math.max(0, Number(gain?.amount || 0)),
@@ -1156,6 +1203,10 @@ export function scoreLuminarchBattleAttackCandidate({
   const lpGain = getSummaryLpGain(summary);
   const targetValue = getBattleCardValue(target);
   const removedThreatValue = destroyedTarget ? targetValue : 0;
+  const targetWasZeroed = isTemporarilyZeroedBattleTarget(target);
+  const zeroedTargetDamage = targetWasZeroed
+    ? estimateRawBattleDamage(attacker, target)
+    : 0;
   const hasSickle = rewardMatches(rewards, /Magic Sickle/) ||
     battleEvents.some((event) => event?.tag === "sickleChangedCombat");
   const hasCitadelProtection = rewardMatches(rewards, /Citadel protected/) ||
@@ -1185,6 +1236,20 @@ export function scoreLuminarchBattleAttackCandidate({
     delta += 1.6 + Math.min(2.4, removedThreatValue / 1000);
   } else if (destroyedTarget) {
     delta += Math.min(1.5, removedThreatValue / 1600);
+  }
+  if (targetWasZeroed) {
+    if (destroyedTarget) {
+      delta += target?.position === "defense" ? 1.4 : 3.2;
+      delta += Math.min(3, zeroedTargetDamage / 500);
+    } else if (!lethalNow) {
+      delta += target?.position === "defense" ? 0.4 : 1;
+    }
+  } else if (
+    target &&
+    !lethalNow &&
+    hasOtherZeroedAttackTarget(opponent || simState?.player || {}, target)
+  ) {
+    delta -= 3.5;
   }
 
   if (hasSickle) {

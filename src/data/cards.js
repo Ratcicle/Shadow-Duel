@@ -1924,7 +1924,7 @@
     attribute: "Light",
     archetype: "Luminarch",
     description:
-      "If this card destroys an opponent's monster by battle, it gains 200 ATK while it remains on the field. If this card is destroyed by battle, destroy 1 Spell/Trap your opponent controls.",
+      "If this card destroys an opponent's monster by battle, it gains 100 ATK while it remains on the field. If this card is destroyed by battle, destroy 1 Spell/Trap your opponent controls.",
     image: "assets/Luminarch Radiant Lancer.png",
     effects: [
       {
@@ -1936,7 +1936,7 @@
           {
             type: "permanent_buff_named",
             targetRef: "self",
-            atkBoost: 200,
+            atkBoost: 100,
           },
         ],
       },

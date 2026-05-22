@@ -194,12 +194,21 @@ export function askPlayerToSelectCards(config = {}) {
       distinct: true,
       candidates: candidatesWithKeys,
     };
+    const canUseFieldTargeting =
+      typeof this.canUseFieldTargeting === "function"
+        ? this.canUseFieldTargeting([requirement])
+        : ["field", "spellTrap", "fieldSpell"].includes(zoneName);
+    const useFieldTargeting =
+      typeof config.useFieldTargeting === "boolean"
+        ? config.useFieldTargeting && canUseFieldTargeting
+        : canUseFieldTargeting;
+
     const selectionContract = {
       kind: "choice",
       message:
         config.message || "Select card(s) by clicking the highlighted targets.",
       requirements: [requirement],
-      ui: { useFieldTargeting: true },
+      ui: { useFieldTargeting },
       metadata: { context: "custom" },
     };
 

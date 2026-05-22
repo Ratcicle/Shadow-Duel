@@ -182,7 +182,7 @@
     },
     "108": {
       "name": "Lanceiro Radiante Luminarca",
-      "description": "Se esse card destruir um monstro do oponente em batalha: ele ganha 200 de ATK enquanto estiver com a face para cima no campo. Se esse card for destruído em batalha: escolha uma Magia/Armadilha que seu oponente controla; destrua-a."
+      "description": "Se esse card destruir um monstro do oponente em batalha: ele ganha 100 de ATK enquanto estiver com a face para cima no campo. Se esse card for destruído em batalha: escolha uma Magia/Armadilha que seu oponente controla; destrua-a."
     },
     "109": {
       "name": "Aurora Serafim Luminarca",
