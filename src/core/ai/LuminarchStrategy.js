@@ -63,6 +63,12 @@ import {
   simulateLuminarchSearch as simulateLuminarchSearchAction,
   simulateLuminarchSpellEffect,
 } from "./luminarch/simulation.js";
+import {
+  buildLuminarchPlanningProfile,
+  describeLuminarchPlannedLine,
+  scoreLuminarchLineMilestones,
+  scoreLuminarchLineTerminal,
+} from "./luminarch/linePlanning.js";
 
 // Flag para logs detalhados de avaliação por carta (muito verboso - ~6000 linhas/10 duelos)
 // Desligar para logs mais limpos, ligar para debug de prioridades
@@ -139,6 +145,60 @@ function evaluateBarbariasStanceDance(card, opponent, options = {}) {
 }
 
 export default class LuminarchStrategy extends BaseStrategy {
+  buildPlanningAnalysis(game, context = {}) {
+    const bot = context.bot || this.bot || game?.bot || null;
+    const opponent = bot ? this.getOpponent(game, bot) : game?.player || null;
+    const analysis =
+      context.analysis ||
+      buildStrategyAnalysis({
+        bot,
+        opponent,
+        game,
+        strategy: this,
+      });
+
+    analysis.resourceEconomy =
+      analysis.resourceEconomy || buildLuminarchResourceEconomy(analysis);
+    analysis.luminarchDefensePlan =
+      analysis.luminarchDefensePlan || evaluateLuminarchDefensePlan(analysis);
+    analysis.finisherPlans =
+      analysis.finisherPlans ||
+      evaluateLuminarchFinisherPlans(bot, opponent, game, analysis, {
+        evaluateBarbariasStanceDance,
+      });
+    analysis.availableCombos =
+      analysis.availableCombos || detectAvailableCombos(analysis);
+    return analysis;
+  }
+
+  getPlanningProfile(game, context = {}) {
+    if (!game) return super.getPlanningProfile(game, context);
+    const analysis = this.buildPlanningAnalysis(game, context);
+    return buildLuminarchPlanningProfile(analysis, {
+      ...context,
+      game,
+      bot: context.bot || this.bot || game.bot,
+    });
+  }
+
+  shouldUseDeepPlanning(game, context = {}) {
+    const profile =
+      context.profile || this.getPlanningProfile(game, context) || {};
+    return game?.turnLineSearchEnabled === true || profile.enabled === true;
+  }
+
+  scoreLineMilestones(context = {}) {
+    return scoreLuminarchLineMilestones(context);
+  }
+
+  scoreLineTerminal(context = {}) {
+    return scoreLuminarchLineTerminal(context);
+  }
+
+  describePlannedLine(context = {}) {
+    return describeLuminarchPlannedLine(context);
+  }
+
   evaluateBoard(gameOrState, perspectivePlayer) {
     const perspective = perspectivePlayer?.id
       ? perspectivePlayer
