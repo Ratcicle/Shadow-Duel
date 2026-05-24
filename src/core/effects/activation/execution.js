@@ -303,20 +303,38 @@ export async function activateSpellTrapEffect(
   if (card.cardKind !== "spell" && card.cardKind !== "trap") {
     return fail("Only Spell/Trap cards can use this effect.");
   }
+  const fromHand = activationContext?.fromHand === true;
+  const trapActivationFromSet =
+    activationContext?.trapActivationFromSet === true ||
+    activationContext?.fromSet === true;
   const isSetSpell =
     card.cardKind === "spell" &&
     card.isFacedown === true &&
     activationZone === "spellTrap";
+  const isSetTrap =
+    card.cardKind === "trap" &&
+    card.isFacedown === true &&
+    activationZone === "spellTrap";
   let flipAfterChecks = false;
   if (card.isFacedown) {
-    if (!isSetSpell) {
+    if (isSetTrap) {
+      const canActivateTrap =
+        typeof this.game?.canActivateTrap === "function"
+          ? this.game.canActivateTrap(card)
+          : true;
+      if (!canActivateTrap) {
+        return fail("Trap cannot be activated this turn.");
+      }
+      flipAfterChecks = true;
+    } else if (!isSetSpell) {
       return fail("Card must be face-up to activate.");
+    } else {
+      const setTurn = card.setTurn ?? card.turnSetOn ?? null;
+      if (setTurn === null || this.game?.turnCounter <= setTurn) {
+        return fail("Spell cannot be activated this turn.");
+      }
+      flipAfterChecks = true;
     }
-    const setTurn = card.setTurn ?? card.turnSetOn ?? null;
-    if (setTurn === null || this.game?.turnCounter <= setTurn) {
-      return fail("Spell cannot be activated this turn.");
-    }
-    flipAfterChecks = true;
   }
   if (this.game.turn !== player.id) {
     return fail("Not your turn.");
@@ -325,7 +343,6 @@ export async function activateSpellTrapEffect(
     return fail("Effect can only be activated during Main Phase.");
   }
 
-  const fromHand = activationContext?.fromHand === true;
   const normalizedActivationContext = {
     fromHand,
     activationZone,
@@ -337,6 +354,7 @@ export async function activateSpellTrapEffect(
     autoSelectTargets: activationContext?.autoSelectTargets,
     actionContext: activationContext?.actionContext || null,
     resolvedTargets: activationContext?.resolvedTargets || null,
+    trapActivationFromSet: trapActivationFromSet || isSetTrap || false,
   };
   let effect = null;
 
@@ -361,10 +379,32 @@ export async function activateSpellTrapEffect(
   }
 
   if (card.cardKind === "trap") {
-    effect = (card.effects || []).find(
-      (e) => e && (e.timing === "on_activate" || e.timing === "ignition")
-    );
+    effect = this.getSpellTrapActivationEffect(card, {
+      fromHand: false,
+      trapActivationFromSet:
+        normalizedActivationContext.trapActivationFromSet === true ||
+        flipAfterChecks,
+    });
     if (!effect) {
+      const placementOnly =
+        card.subtype === "continuous" &&
+        (normalizedActivationContext.trapActivationFromSet === true ||
+          flipAfterChecks);
+      if (placementOnly) {
+        if (flipAfterChecks) {
+          card.isFacedown = false;
+        }
+        logDev?.("SPELL_TRAP_PLACEMENT_ONLY", {
+          card: card.name,
+          player: player.id,
+          activationZone,
+        });
+        return {
+          success: true,
+          needsSelection: false,
+          placementOnly: true,
+        };
+      }
       return fail("No trap activation effect defined.");
     }
   } else if (card.cardKind === "spell") {
@@ -410,6 +450,14 @@ export async function activateSpellTrapEffect(
   // Check requireEmptyField condition
   if (effect.requireEmptyField && player.field.length > 0) {
     return fail("You must control no monsters to activate this effect.");
+  }
+  if (effect.requirePhase) {
+    const allowedPhases = Array.isArray(effect.requirePhase)
+      ? effect.requirePhase
+      : [effect.requirePhase];
+    if (!allowedPhases.includes(this.game?.phase)) {
+      return fail("Effect cannot be activated this phase.");
+    }
   }
 
   const ctx = {

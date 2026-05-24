@@ -56,6 +56,22 @@
       "name": "Força Espelho",
       "description": "Quando um monstro do oponente declarar um ataque: destrua todos os monstros em Posição de Ataque do seu oponente."
     },
+    "262": {
+      "name": "Campo de Força de Potência",
+      "description": "Quando um monstro do oponente declarar um ataque: escolha o monstro atacante; negue o ataque e, depois, encerre a Fase de Batalha."
+    },
+    "263": {
+      "name": "Queda do Tolo",
+      "description": "Quando seu oponente Invocar por Invocação-Normal um monstro com 1600 ou mais de ATK: escolha o monstro; destrua o alvo."
+    },
+    "264": {
+      "name": "Espírito da Árvore Ancestral",
+      "description": "Invoque este card por Invocação-Especial em Posição de Defesa como um Monstro de Efeito (Espírito/TREVAS/Nível 4/ATK 1700/DEF 1900). Este card ainda é considerado uma Armadilha. Se este card Invocado desta forma for destruído em batalha: cause 500 de dano ao seu oponente."
+    },
+    "265": {
+      "name": "Corte dos Mortos",
+      "description": "Sempre que um monstro for enviado a qualquer Cemitério: coloque 1 Marcador Fúnebre neste card. Uma vez por turno: você pode remover 8 Marcadores Fúnebres deste card e escolher 1 monstro em qualquer Cemitério; Invoque-o por Invocação-Especial no seu campo."
+    },
     "15": {
       "name": "Chamado dos Assombrados",
       "description": "Ative este card ao escolher 1 monstro no seu Cemitério; Invoque o alvo por Invocação-Especial em Posição de Ataque. Quando este card deixar o campo, destrua esse monstro. Quando esse monstro for destruído, destrua este card."

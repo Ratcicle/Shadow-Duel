@@ -6,6 +6,7 @@
  */
 
 import { isAI } from "../Player.js";
+import { cardMatchesKind } from "../Card.js";
 
 // Stub UI for fallback when game.ui is unavailable
 export const NULL_UI = {
@@ -169,12 +170,8 @@ export function collectZoneCandidates(zone, filters = {}, options = {}) {
   return zone.filter((card) => {
     if (!card) return false;
 
-    if (filters.cardKind) {
-      if (Array.isArray(filters.cardKind)) {
-        if (!filters.cardKind.includes(card.cardKind)) return false;
-      } else {
-        if (card.cardKind !== filters.cardKind) return false;
-      }
+    if (filters.cardKind && !cardMatchesKind(card, filters.cardKind)) {
+      return false;
     }
 
     if (filters.subtype) {

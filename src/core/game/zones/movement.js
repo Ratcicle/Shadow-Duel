@@ -1,3 +1,5 @@
+import { restoreTrapMonsterOriginalState } from "../../Card.js";
+
 /**
  * Zone movement - card movement between zones with side effects.
  * Extracted from Game.js as part of B.4 modularization.
@@ -1072,6 +1074,10 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     });
   }
 
+  if (fromZone === "field" && toZone !== "field" && card.isTrapMonster) {
+    restoreTrapMonsterOriginalState(card);
+  }
+
   if (options.position) {
     card.position = options.position;
   }
@@ -1195,6 +1201,7 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
       opponent: otherPlayer,
       method: summonMethod,
       fromZone,
+      summonProcedure: options.summonProcedure || null,
       position: options.position || card.position || null,
       sourceCard: options.sourceCard || options.source || null,
       source: options.source || options.sourceCard || null,

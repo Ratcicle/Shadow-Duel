@@ -162,13 +162,22 @@ export function buildActivationIndicatorsForPlayer(player) {
 
   (player.spellTrap || []).forEach((card, index) => {
     if (!card) return;
-    const guard = canStart("spelltrap_effect", ["main1", "main2"]);
+    const isTrap = card.cardKind === "trap";
+    const guard = canStart(
+      isTrap ? "trap_activation" : "spelltrap_effect",
+      isTrap ? ["main1", "battle", "main2"] : ["main1", "main2"],
+    );
     const preview = this.effectEngine?.canActivateSpellTrapEffectPreview?.(
       card,
       player,
       "spellTrap",
       null,
-      { activationContext }
+      {
+        activationContext: {
+          ...activationContext,
+          trapActivationFromSet: isTrap && card.isFacedown === true,
+        },
+      }
     ) || { ok: false };
     const hint = buildHint(guard, preview, "ignition disponivel");
     if (hint) {

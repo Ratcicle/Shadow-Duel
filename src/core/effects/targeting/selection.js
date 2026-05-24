@@ -6,6 +6,7 @@
  */
 
 import { botLogger } from "../../BotLogger.js";
+import { cardMatchesKind } from "../../Card.js";
 
 // Track duplicate selectCandidates calls per turn
 const selectCandidatesCallTracker = {};
@@ -191,11 +192,8 @@ export function selectCandidates(def, ctx) {
     if (filter.owner === "self" && card.owner !== ctx?.player?.id) return false;
     if (filter.owner === "opponent" && card.owner !== ctx?.opponent?.id)
       return false;
-    if (filter.cardKind) {
-      const requiredKinds = Array.isArray(filter.cardKind)
-        ? filter.cardKind
-        : [filter.cardKind];
-      if (!requiredKinds.includes(card.cardKind)) return false;
+    if (filter.cardKind && !cardMatchesKind(card, filter.cardKind)) {
+      return false;
     }
     if (filter.requireFaceup && card.isFacedown) return false;
     if (filter.position && filter.position !== "any") {
@@ -320,18 +318,16 @@ export function selectCandidates(def, ctx) {
           );
           continue;
         }
-        if (def.cardKind) {
+        if (def.cardKind && !cardMatchesKind(card, def.cardKind)) {
           const requiredKinds = Array.isArray(def.cardKind)
             ? def.cardKind
             : [def.cardKind];
-          if (!requiredKinds.includes(card.cardKind)) {
-            log(
-              `[selectCandidates] Rejecting: cardKind mismatch (${
-                card.cardKind
-              } !== ${requiredKinds.join(",")})`
-            );
-            continue;
-          }
+          log(
+            `[selectCandidates] Rejecting: cardKind mismatch (${
+              card.cardKind
+            } not in ${requiredKinds.join(",")})`
+          );
+          continue;
         }
         if (def.subtype) {
           const requiredSubtypes = Array.isArray(def.subtype)

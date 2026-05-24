@@ -447,6 +447,18 @@ export default class ChainSystem {
                 continue;
               }
             }
+            if (context?.type === "summon") {
+              const summonMethods = effect.summonMethods ?? effect.summonMethod;
+              if (summonMethods) {
+                const methods = Array.isArray(summonMethods)
+                  ? summonMethods
+                  : [summonMethods];
+                const contextMethod = context.method || context.summonMethod;
+                if (!methods.includes(contextMethod)) {
+                  continue;
+                }
+              }
+            }
             // Check requireDefenderIsSelf (e.g., Dragon Spirit Sanctuary)
             if (
               effect.requireDefenderIsSelf &&
@@ -528,6 +540,9 @@ export default class ChainSystem {
                   card.owner === "player" ? this.game.bot : this.game.player,
                 defender: context.defender || context.target,
                 attacker: context.attacker,
+                summonedCard: context.summonedCard || context.card || null,
+                summonMethod: context.method || context.summonMethod || null,
+                summonFromZone: context.fromZone || null,
                 attackerOwner: context.attackerOwner,
                 defenderOwner: context.defenderOwner,
                 activationContext: {
@@ -584,6 +599,12 @@ export default class ChainSystem {
           effect.timing === "manual" ||
           effect.timing === "ignition"
         ) {
+          if (effect.requireFaceup && card.isFacedown) {
+            continue;
+          }
+          if (effect.timing === "ignition" && card.isFacedown) {
+            continue;
+          }
           if (
             this.requiresExplicitSummonResponse(context) &&
             !this.canOfferEffectInChainContext(effect, context)
@@ -603,25 +624,47 @@ export default class ChainSystem {
             continue;
           }
 
+          const cardOwner =
+            ownerPlayer ||
+            (card.owner === "player"
+              ? this.game.player
+              : card.owner === "bot"
+                ? this.game.bot
+                : null);
+          const ctx = {
+            source: card,
+            player: cardOwner,
+            opponent: cardOwner ? this.game.getOpponent?.(cardOwner) : null,
+            activationZone: "spellTrap",
+            defender: context.defender || context.target,
+            attacker: context.attacker,
+            summonedCard: context.summonedCard || context.card || null,
+            summonMethod: context.method || context.summonMethod || null,
+            summonFromZone: context.fromZone || null,
+            attackerOwner: context.attackerOwner,
+            defenderOwner: context.defenderOwner,
+            activationContext: {
+              autoSelectSingleTarget: true,
+              logTargets: false,
+            },
+          };
+
+          if (effect.conditions && this.game?.effectEngine?.evaluateConditions) {
+            const condCheck = this.game.effectEngine.evaluateConditions(
+              effect.conditions,
+              ctx,
+            );
+            if (!condCheck.ok) {
+              continue;
+            }
+          }
+
           // Check if targets are available before allowing activation
           if (
             effect.targets &&
             effect.targets.length > 0 &&
             this.game?.effectEngine
           ) {
-            const cardOwner =
-              card.owner === "player" ? this.game.player : this.game.bot;
-            const ctx = {
-              source: card,
-              player: cardOwner,
-              opponent:
-                card.owner === "player" ? this.game.bot : this.game.player,
-              activationContext: {
-                autoSelectSingleTarget: true,
-                logTargets: false,
-              },
-            };
-
             const targetResult = this.game.effectEngine.resolveTargets(
               effect.targets,
               ctx,

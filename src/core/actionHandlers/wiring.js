@@ -286,6 +286,10 @@ export function registerDefaultHandlers(registry) {
 
   registry.register("negate_attack", proxyEngineMethod("applyNegateAttack"));
   registry.register(
+    "end_battle_phase",
+    proxyEngineMethod("applyEndBattlePhase"),
+  );
+  registry.register(
     "negate_summon_or_activation_and_destroy",
     handleNegateSummonOrActivationAndDestroy,
   );
@@ -331,6 +335,12 @@ export function registerDefaultHandlers(registry) {
     "special_summon_token",
 
     proxyEngineMethod("applySpecialSummonToken"),
+  );
+
+  registry.register(
+    "special_summon_self_as_trap_monster",
+
+    proxyEngineMethod("applySpecialSummonSelfAsTrapMonster"),
   );
 
   registry.register(

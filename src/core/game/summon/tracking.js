@@ -15,6 +15,7 @@ export function _trackSpecialSummonType(payload) {
     card.lastSummonMethod = method || null;
     card.lastSummonedFromZone = payload?.fromZone || null;
     card.lastSummonedTurn = this.turnCounter ?? null;
+    card.lastSummonProcedure = payload?.summonProcedure || null;
 
     if (method !== "special") return;
     const typeName = card.type || null;

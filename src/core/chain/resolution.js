@@ -17,6 +17,7 @@
  */
 
 import { isAI } from "../Player.js";
+import { cardMatchesKind } from "../Card.js";
 
 export async function resolveChain() {
   if (this.chainStack.length === 0) {
@@ -251,8 +252,8 @@ async function applyChainEffect(cs, link, activationZone) {
  * Emits compact strategic events for chain-resolved activations.
  */
 function getChainActivationEventName(card) {
-  if (card?.cardKind === "spell") return "spell_activated";
-  if (card?.cardKind === "trap") return "trap_activated";
+  if (cardMatchesKind(card, "spell")) return "spell_activated";
+  if (cardMatchesKind(card, "trap")) return "trap_activated";
   return "effect_activated";
 }
 

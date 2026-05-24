@@ -1,3 +1,5 @@
+import { cardMatchesKind } from "../../Card.js";
+
 /**
  * Actions Core - applyActions dispatcher and preview requirements
  * Extracted from EffectEngine.js – preserving original logic and signatures.
@@ -94,6 +96,14 @@ export async function applyActions(actions, ctx, targets) {
           handler: true,
           result: !!result,
         });
+
+        if (
+          !result &&
+          (action.haltOnFailure === true || action.stopOnFailure === true)
+        ) {
+          logDev?.("ACTION_SEQUENCE_HALTED", actionInfo);
+          return false;
+        }
       } catch (error) {
         logDev?.("ACTION_HANDLER_ERROR", {
           ...actionInfo,
@@ -166,14 +176,27 @@ function matchesPreviewFilters(engine, card, filters) {
   return true;
 }
 
+function getSourceOwnersForPreview(action, ctx, player) {
+  const scope = action?.sourceOwner || action?.sourceScope || action?.scope || "self";
+  const opponent = ctx?.opponent;
+  if (scope === "opponent") {
+    return opponent ? [opponent] : [];
+  }
+  if (scope === "both" || scope === "any") {
+    return [player, opponent].filter(Boolean);
+  }
+  return player ? [player] : [];
+}
+
 function hasSpecialSummonCandidate(engine, action, ctx) {
   const player = ctx?.player;
   if (!player) return false;
 
   const zoneSpec = action.zone || action.sourceZone || "deck";
   const zoneNames = Array.isArray(zoneSpec) ? zoneSpec : [zoneSpec];
-  const zones = zoneNames
-    .map((zoneName) => player?.[zoneName])
+  const sourceOwners = getSourceOwnersForPreview(action, ctx, player);
+  const zones = sourceOwners
+    .flatMap((owner) => zoneNames.map((zoneName) => owner?.[zoneName]))
     .filter((zone) => Array.isArray(zone));
   if (zones.length === 0) return false;
 
@@ -435,6 +458,23 @@ export function checkActionPreviewRequirements(actions, ctx) {
       }
     }
 
+    if (action.type === "special_summon_self_as_trap_monster") {
+      if ((player.field || []).length >= 5) {
+        return { ok: false, reason: "Field is full." };
+      }
+      const source = ctx?.source;
+      if (!source || !cardMatchesKind(source, ["spell", "trap"])) {
+        return { ok: false, reason: "Source is not a Spell/Trap card." };
+      }
+      const sourceZone =
+        typeof this?.findCardZone === "function"
+          ? this.findCardZone(player, source)
+          : null;
+      if (sourceZone && sourceZone !== "spellTrap") {
+        return { ok: false, reason: "Source must be in the Spell/Trap zone." };
+      }
+    }
+
     if (action.type === "special_summon_from_hand_with_tiered_cost") {
       if ((player.field || []).length >= 5) {
         return { ok: false, reason: "Field is full." };
@@ -446,7 +486,7 @@ export function checkActionPreviewRequirements(actions, ctx) {
       };
       const matchesFilters = (card) => {
         if (!card) return false;
-        if (filters.cardKind && card.cardKind !== filters.cardKind) {
+        if (filters.cardKind && !cardMatchesKind(card, filters.cardKind)) {
           return false;
         }
         if (filters.name && card.name !== filters.name) return false;
@@ -566,7 +606,7 @@ export function checkActionPreviewRequirements(actions, ctx) {
             return false;
           }
         }
-        if (filters.cardKind && card.cardKind !== filters.cardKind) {
+        if (filters.cardKind && !cardMatchesKind(card, filters.cardKind)) {
           return false;
         }
         return true;

@@ -7,6 +7,58 @@
 
 import { isAI } from "../../Player.js";
 
+function buildContextTargetFilters(def = {}) {
+  return {
+    ...(def.filters || {}),
+    ...(def.cardKind ? { cardKind: def.cardKind } : {}),
+    ...(def.cardName ? { name: def.cardName } : {}),
+    ...(def.subtype ? { subtype: def.subtype } : {}),
+    ...(def.archetype ? { archetype: def.archetype } : {}),
+    ...(def.level !== undefined ? { level: def.level } : {}),
+    ...(def.levelOp ? { levelOp: def.levelOp } : {}),
+    ...(def.minAtk !== undefined ? { minAtk: def.minAtk } : {}),
+    ...(def.maxAtk !== undefined ? { maxAtk: def.maxAtk } : {}),
+    ...(def.minDef !== undefined ? { minDef: def.minDef } : {}),
+    ...(def.maxDef !== undefined ? { maxDef: def.maxDef } : {}),
+  };
+}
+
+function contextTargetMatchesDef(engine, card, def = {}, ctx = {}) {
+  if (!card) return false;
+  const filters = buildContextTargetFilters(def);
+  if (
+    Object.keys(filters).length > 0 &&
+    typeof engine?.cardMatchesFilters === "function" &&
+    !engine.cardMatchesFilters(card, filters)
+  ) {
+    return false;
+  }
+  if (def.requireFaceup && card.isFacedown) return false;
+  const requiredTypes = def.type
+    ? Array.isArray(def.type)
+      ? def.type
+      : [def.type]
+    : [];
+  if (requiredTypes.length > 0) {
+    const cardTypes = Array.isArray(card.types) ? card.types : [card.type];
+    const normalizedTypes = cardTypes
+      .filter(Boolean)
+      .map((type) => String(type).toLowerCase());
+    const typeMatches = requiredTypes.some((type) =>
+      normalizedTypes.includes(String(type).toLowerCase()),
+    );
+    if (!typeMatches) return false;
+  }
+  if (def.position && def.position !== "any" && card.position !== def.position) {
+    return false;
+  }
+  if (def.owner === "self" && card.owner !== ctx?.player?.id) return false;
+  if (def.owner === "opponent" && card.owner !== ctx?.opponent?.id) {
+    return false;
+  }
+  return true;
+}
+
 /**
  * Resolve targets for an effect based on target definitions
  * @param {Array} targetDefs - Array of target definition objects
@@ -42,15 +94,25 @@ export function resolveTargets(targetDefs, ctx, selections) {
       const contextKey = def.targetFromContext;
       const contextTarget = ctx?.[contextKey];
       if (contextTarget) {
-        // Wrap single target as array
-        targetMap[def.id] = Array.isArray(contextTarget)
+        const contextTargets = Array.isArray(contextTarget)
           ? contextTarget
           : [contextTarget];
+        const validTargets = contextTargets.filter((card) =>
+          contextTargetMatchesDef(this, card, def, ctx),
+        );
+        const min = Number(def.count?.min ?? 1);
+        if (validTargets.length < min) {
+          return {
+            ok: false,
+            reason: `Context target "${contextKey}" does not match target requirements.`,
+          };
+        }
+        targetMap[def.id] = validTargets;
         if (shouldLogTargets) {
           console.log(
             `[resolveTargets] Using targetFromContext "${contextKey}" for target "${
               def.id
-            }": ${contextTarget.name || contextTarget}`
+            }": ${validTargets.map((card) => card.name || card).join(", ")}`
           );
         }
         continue;

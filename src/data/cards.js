@@ -424,6 +424,195 @@
     ],
   },
   {
+    id: 262,
+    name: "Power Force Field",
+    cardKind: "trap",
+    subtype: "normal",
+    speed: 2,
+    description:
+      "When an opponent's monster declares an attack: target the attacking monster; negate the attack, then end the Battle Phase.",
+    image: "assets/Power Force Field.png",
+    effects: [
+      {
+        id: "power_force_field_negate_end_battle",
+        timing: "on_event",
+        event: "attack_declared",
+        requireOpponentAttack: true,
+        targets: [
+          {
+            id: "attacking_monster",
+            targetFromContext: "attacker",
+            cardKind: "monster",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "negate_attack",
+          },
+          {
+            type: "end_battle_phase",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 263,
+    name: "Down of the Fool",
+    cardKind: "trap",
+    subtype: "normal",
+    speed: 2,
+    description:
+      "When your opponent Normal Summons a monster with 1600 or more ATK: target that monster; destroy that target.",
+    image: "assets/Down of the Fool.png",
+    effects: [
+      {
+        id: "down_of_the_fool_destroy_summoned_monster",
+        timing: "on_event",
+        event: "after_summon",
+        requireOpponentSummon: true,
+        summonMethods: ["normal"],
+        targets: [
+          {
+            id: "summoned_monster",
+            owner: "opponent",
+            targetFromContext: "summonedCard",
+            cardKind: "monster",
+            minAtk: 1600,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "destroy",
+            targetRef: "summoned_monster",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 264,
+    name: "Ancient Tree Spirit",
+    cardKind: "trap",
+    subtype: "continuous",
+    speed: 2,
+    description:
+      "Special Summon this card in Defense Position as an Effect Monster (Spirit/DARK/Level 4/ATK 1700/DEF 1900). This card is still treated as a Trap. If this card Special Summoned this way is destroyed by battle: inflict 500 damage to your opponent.",
+    image: "assets/Ancient Tree Spirit.png",
+    effects: [
+      {
+        id: "ancient_tree_spirit_summon",
+        timing: "on_activate",
+        actions: [
+          {
+            type: "special_summon_self_as_trap_monster",
+            position: "defense",
+            monster: {
+              type: "Spirit",
+              attribute: "Dark",
+              level: 4,
+              atk: 1700,
+              def: 1900,
+            },
+            treatedAsCardKinds: ["monster", "trap"],
+            summonProcedure: "trap_monster",
+          },
+        ],
+      },
+      {
+        id: "ancient_tree_spirit_battle_destroy_damage",
+        timing: "on_event",
+        event: "battle_destroy",
+        requireSelfAsDestroyed: true,
+        requireSelfSummonProcedure: "trap_monster",
+        promptUser: false,
+        actions: [
+          {
+            type: "damage",
+            player: "opponent",
+            amount: 500,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 265,
+    name: "Court of the Dead",
+    cardKind: "trap",
+    subtype: "continuous",
+    speed: 2,
+    description:
+      "Each time a monster is sent to either Graveyard: place 1 Funeral Counter on this card. Once per turn: You can remove 8 Funeral Counters from this card, then target 1 monster in either Graveyard; Special Summon it to your field.",
+    image: "assets/Court of the Dead.png",
+    effects: [
+      {
+        id: "court_of_the_dead_add_funeral_counter",
+        timing: "on_event",
+        event: "card_to_grave",
+        requireZone: "spellTrap",
+        requireFaceup: true,
+        promptUser: false,
+        eventCardFilters: {
+          cardKind: "monster",
+          toZone: "graveyard",
+        },
+        actions: [
+          {
+            type: "add_counter",
+            targetRef: "self",
+            counterType: "funeral",
+            amount: 1,
+          },
+        ],
+      },
+      {
+        id: "court_of_the_dead_revive",
+        timing: "ignition",
+        requireZone: "spellTrap",
+        requireFaceup: true,
+        requirePhase: ["main1", "main2"],
+        oncePerTurn: true,
+        oncePerTurnName: "court_of_the_dead_revive",
+        conditions: [
+          {
+            type: "source_counters_at_least",
+            counterType: "funeral",
+            min: 8,
+          },
+        ],
+        targets: [
+          {
+            id: "court_revive_target",
+            owner: "any",
+            zone: "graveyard",
+            cardKind: "monster",
+            excludeCannotBeSpecialSummoned: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "remove_counter",
+            targetRef: "self",
+            counterType: "funeral",
+            amount: 8,
+            haltOnFailure: true,
+          },
+          {
+            type: "special_summon_from_zone",
+            targetRef: "court_revive_target",
+            zone: "graveyard",
+            scope: "both",
+            position: "choice",
+          },
+        ],
+      },
+    ],
+  },
+  {
     id: 15,
     name: "Call of the Haunted",
     cardKind: "trap",

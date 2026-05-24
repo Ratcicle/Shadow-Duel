@@ -1,4 +1,4 @@
-﻿import Card from "./Card.js";
+import Card, { cardMatchesKind } from "./Card.js";
 import { cardDatabase } from "../data/cards.js";
 import { getCardDisplayName } from "./i18n.js";
 import { isAI } from "./Player.js";
@@ -278,10 +278,7 @@ export default class EffectEngine {
     ].filter((value) => value !== undefined && value !== null);
     if (excludeIdFilters.includes(card.id)) return false;
     if (filters.cardKind) {
-      const requiredKinds = Array.isArray(filters.cardKind)
-        ? filters.cardKind
-        : [filters.cardKind];
-      if (!requiredKinds.includes(card.cardKind)) return false;
+      if (!cardMatchesKind(card, filters.cardKind)) return false;
     }
     if (filters.subtype) {
       const requiredSubtypes = Array.isArray(filters.subtype)
@@ -1924,6 +1921,7 @@ EffectEngine.prototype.applyMirrorForceDestroy =
   actions.applyMirrorForceDestroy;
 // Combat
 EffectEngine.prototype.applyNegateAttack = actions.applyNegateAttack;
+EffectEngine.prototype.applyEndBattlePhase = actions.applyEndBattlePhase;
 EffectEngine.prototype.applyForbidAttackThisTurn =
   actions.applyForbidAttackThisTurn;
 EffectEngine.prototype.applyForbidAttackNextTurn =
@@ -1935,6 +1933,8 @@ EffectEngine.prototype.applyForbidDirectAttackThisTurn =
 // Summon
 EffectEngine.prototype.applySpecialSummonToken =
   actions.applySpecialSummonToken;
+EffectEngine.prototype.applySpecialSummonSelfAsTrapMonster =
+  actions.applySpecialSummonSelfAsTrapMonster;
 EffectEngine.prototype.applyCallOfTheHauntedSummon =
   actions.applyCallOfTheHauntedSummon;
 // Stats

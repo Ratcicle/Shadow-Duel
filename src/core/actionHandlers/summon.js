@@ -18,6 +18,39 @@ import {
   summonFromHandCore,
 } from "./shared.js";
 
+function getSourceScope(action = {}) {
+  return action.sourceOwner || action.sourceScope || action.scope || "self";
+}
+
+function getSourceOwners(action, ctx, fallbackPlayer) {
+  const player = ctx?.player || fallbackPlayer;
+  const opponent = ctx?.opponent;
+  const scope = getSourceScope(action);
+
+  if (scope === "opponent") {
+    return opponent ? [opponent] : [];
+  }
+  if (scope === "both" || scope === "any") {
+    return [player, opponent].filter(Boolean);
+  }
+  return player ? [player] : [];
+}
+
+function buildSourceZoneEntries(zoneNames, owners) {
+  return zoneNames
+    .filter((name) => typeof name === "string")
+    .flatMap((name) =>
+      owners
+        .filter(Boolean)
+        .map((owner) => ({ owner, name, list: owner?.[name] }))
+        .filter((entry) => Array.isArray(entry.list)),
+    );
+}
+
+function findSourceEntryForCard(sourceZoneEntries, card) {
+  return sourceZoneEntries.find((entry) => entry.list?.includes(card)) || null;
+}
+
 /**
  * Generic handler for special summoning from any zone with filters
  * UNIFIED HANDLER - Replaces both single and multi-card summon patterns
@@ -63,11 +96,9 @@ export async function handleSpecialSummonFromZone(
 
   const zoneSpec = action.zone || action.sourceZone || "deck";
   const zoneNames = Array.isArray(zoneSpec) ? zoneSpec : [zoneSpec];
+  const sourceOwners = getSourceOwners(action, ctx, player);
 
-  const zoneEntries = zoneNames
-    .filter((name) => typeof name === "string")
-    .map((name) => ({ name, list: player[name] }))
-    .filter((entry) => Array.isArray(entry.list));
+  const zoneEntries = buildSourceZoneEntries(zoneNames, sourceOwners);
 
   const selectionMap =
     ctx?.selections ||
@@ -139,8 +170,8 @@ export async function handleSpecialSummonFromZone(
       const inAnyZone = zoneEntries.some((entry) => entry.list.includes(card));
       if (!inAnyZone) {
         // Card might have been moved to hand by a previous action
-        for (const zoneName of zoneNames) {
-          if (player[zoneName]?.includes(card)) {
+        for (const entry of zoneEntries) {
+          if (entry.list?.includes(card)) {
             return true;
           }
         }
@@ -530,6 +561,7 @@ async function summonCards(cards, sourceZoneEntries, player, action, engine) {
 
   for (const card of cards) {
     if (!card || player.field.length >= 5) break;
+    const sourceEntry = findSourceEntryForCard(sourceZoneEntries, card);
 
     // 🚨 CRITICAL VALIDATION: Only monsters can be special summoned to field
     if (card.cardKind !== "monster") {
@@ -547,9 +579,10 @@ async function summonCards(cards, sourceZoneEntries, player, action, engine) {
     const resolvedFromZone =
       typeof action.fromZone === "string"
         ? action.fromZone
-        : typeof engine.findCardZone === "function"
-          ? engine.findCardZone(player, card)
-          : fromZoneName;
+        : sourceEntry?.name ||
+          (typeof engine.findCardZone === "function"
+            ? engine.findCardZone(player, card)
+            : fromZoneName);
 
     // Unified semantics: delegate to unified resolver
     const position = await engine.chooseSpecialSummonPosition(card, player, {
@@ -585,7 +618,10 @@ async function summonCards(cards, sourceZoneEntries, player, action, engine) {
           : null);
 
       const fallbackArr =
-        (fallbackZoneName && player[fallbackZoneName]) || player.deck || [];
+        sourceEntry?.list ||
+        (fallbackZoneName && player[fallbackZoneName]) ||
+        player.deck ||
+        [];
 
       const cardIndex = fallbackArr.indexOf(card);
       if (cardIndex !== -1) {

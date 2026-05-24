@@ -3,7 +3,10 @@
  * Extracted from EffectEngine.js – preserving original logic and signatures.
  */
 
-import Card from "../../Card.js";
+import Card, {
+  captureTrapMonsterOriginalState,
+  restoreTrapMonsterOriginalState,
+} from "../../Card.js";
 
 /**
  * Apply special summon token action
@@ -115,6 +118,107 @@ export async function applySpecialSummonToken(action, ctx) {
   return true;
 }
 
+function normalizeTrapMonsterKinds(card, action) {
+  const kinds = new Set(["monster"]);
+  const originalKind = card?.originalCardKind || card?.cardKind || "trap";
+  if (originalKind) kinds.add(originalKind);
+  const configuredKinds = Array.isArray(action?.treatedAsCardKinds)
+    ? action.treatedAsCardKinds
+    : action?.treatedAsCardKinds
+      ? [action.treatedAsCardKinds]
+      : [];
+  for (const kind of configuredKinds) {
+    if (kind) kinds.add(kind);
+  }
+  return Array.from(kinds);
+}
+
+function resolveTrapMonsterStat(monster, action, key, fallback) {
+  const value = monster?.[key] ?? action?.[key] ?? fallback;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : fallback;
+}
+
+/**
+ * Special Summons the source Spell/Trap as a monster while retaining trap treatment.
+ * Generic support for Trap Monsters such as Ancient Tree Spirit.
+ * @param {Object} action - Action configuration
+ * @param {Object} ctx - Context object
+ * @returns {Promise<boolean>} Whether the source was summoned
+ */
+export async function applySpecialSummonSelfAsTrapMonster(action, ctx) {
+  const game = this.game;
+  const player = ctx?.player;
+  const source = ctx?.source || ctx?.card;
+  if (!game || !player || !source) return false;
+
+  const sourceZone =
+    typeof this.findCardZone === "function"
+      ? this.findCardZone(player, source)
+      : ctx?.activationZone || ctx?.sourceZone || null;
+
+  if (sourceZone !== "spellTrap") {
+    game.ui?.log?.(`${source.name} must be in the Spell/Trap zone.`);
+    return false;
+  }
+  if (source.cardKind !== "trap" && source.cardKind !== "spell") {
+    game.ui?.log?.(`${source.name} is not a Spell/Trap card.`);
+    return false;
+  }
+  if ((player.field || []).length >= 5) {
+    game.ui?.log?.("Field is full. Cannot summon.");
+    return false;
+  }
+
+  const monster = action.monster || {};
+  const original = captureTrapMonsterOriginalState(source);
+  const summonProcedure = action.summonProcedure || "trap_monster";
+  let position = action.position || monster.position || "defense";
+  if (position !== "attack" && position !== "defense") {
+    position = await this.chooseSpecialSummonPosition(source, player, {
+      position,
+    });
+  }
+
+  source.originalCardKind = original.cardKind || source.cardKind;
+  source.isTrapMonster = true;
+  source.trapMonsterSummonProcedure = summonProcedure;
+  source.treatedAsCardKinds = normalizeTrapMonsterKinds(source, action);
+  source.cardKind = "monster";
+  source.monsterType = monster.monsterType || action.monsterType || null;
+  source.type = monster.type || action.monsterTypeName || action.typeName || source.type;
+  source.attribute = monster.attribute || action.attribute || source.attribute || null;
+  source.level = resolveTrapMonsterStat(monster, action, "level", 0);
+  source.baseAtk = resolveTrapMonsterStat(monster, action, "atk", 0);
+  source.baseDef = resolveTrapMonsterStat(monster, action, "def", 0);
+  source.atk = source.baseAtk;
+  source.def = source.baseDef;
+  source.position = position;
+  source.isFacedown = false;
+  source.hasAttacked = false;
+  source.attacksUsedThisTurn = 0;
+
+  const moveResult = await game.moveCard(source, player, "field", {
+    fromZone: sourceZone,
+    position,
+    isFacedown: false,
+    resetAttackFlags: true,
+    summonMethodOverride: "special",
+    summonProcedure,
+    sourceCard: source,
+    effectId: ctx?.effectId || ctx?.effect?.id || null,
+  });
+
+  if (moveResult?.success === false) {
+    restoreTrapMonsterOriginalState(source);
+    return false;
+  }
+
+  source.cannotAttackThisTurn = action.cannotAttackThisTurn || false;
+  game.ui?.log?.(`${source.name} was Special Summoned as a Trap Monster.`);
+  game.updateBoard?.();
+  return true;
+}
 /**
  * Apply Call of the Haunted summon action - revive monster from graveyard
  * @param {Object} action - Action configuration

@@ -1,3 +1,4 @@
+import { cardMatchesKind } from "../Card.js";
 import { getUI, resolveTargetCards } from "./shared.js";
 
 function sameCardRef(ref, card) {
@@ -37,7 +38,7 @@ function matchesCardFilters(card, filters, ctx) {
     const kinds = Array.isArray(filters.cardKind)
       ? filters.cardKind
       : [filters.cardKind];
-    if (!kinds.includes(card.cardKind)) return false;
+    if (!cardMatchesKind(card, kinds)) return false;
   }
 
   if (filters.subtype) {

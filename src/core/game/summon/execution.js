@@ -51,6 +51,7 @@ export async function offerSummonAttempt(card, player, options = {}) {
     triggerPlayer: player,
     summonMethod: attempt.method,
     fromZone: attempt.fromZone,
+    summonProcedure: attempt.summonProcedure,
     summonAttempt: attempt,
   };
 

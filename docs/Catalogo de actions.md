@@ -4,7 +4,7 @@
 
 Este catalogo descreve o contrato declarativo de cada `action.type` registrado no Shadow Duel. O runtime continua vindo de `src/core/actionHandlers/wiring.js`; este documento serve para criar cartas, revisar handlers e validar o banco de cartas.
 
-Total de actions catalogadas: 77.
+Total de actions catalogadas: 79.
 
 ## Recursos
 
@@ -229,13 +229,16 @@ Heals based on the destroyed monster's ATK.
 | Campo | Obrigatorio | Contrato | Descricao |
 | --- | --- | --- | --- |
 | `fraction` | nao | number |  |
+| `multiplier` | nao | number |  |
+| `useBaseAtk` | nao | boolean |  |
 
 **Exemplos**
 
 ```json
 {
   "type": "heal_from_destroyed_atk",
-  "fraction": 0.5
+  "fraction": 0.5,
+  "useBaseAtk": true
 }
 ```
 
@@ -595,6 +598,7 @@ Moves target cards to another zone.
 | `resetAttackFlags` | nao | boolean |  |
 | `allowExtraDeckMonsterToHand` | nao | boolean |  |
 | `allowExtraDeckMonsterToHandIf` | nao | object | Optional condition that lets an Extra Deck monster pass through hand instead of redirecting to Extra Deck. |
+| `contextLabel` | nao | string |  |
 
 **Exemplos**
 
@@ -1013,6 +1017,7 @@ Special Summons cards from a configured zone.
 | `targetRef` | nao | string | References an effect target id or a context target such as self. |
 | `zone` | nao | zone; valores: deck, hand, field, graveyard, spellTrap, fieldSpell, banish, banished | Source zone used by the action. |
 | `sourceZone` | nao | zone; valores: deck, hand, field, graveyard, spellTrap, fieldSpell, banish, banished | Alternative source zone used by some summon actions. |
+| `scope` | nao | enum: self, opponent, both | Player scope for the action: "self", "opponent", or "both". |
 | `filters` | nao | object | Card filter object evaluated by the handler. |
 | `count` | nao | object | Selection count object, usually { min, max }. |
 | `archetype` | nao | string |  |
@@ -1081,6 +1086,51 @@ Special Summons a card matching another target's level.
   "matchLevelRef": "cost",
   "zone": "graveyard",
   "position": "choice"
+}
+```
+
+**Notas**
+
+_Sem notas._
+
+### `special_summon_self_as_trap_monster`
+
+Special Summons the source Spell/Trap as a monster while retaining its original card kind treatment.
+
+- Handler: `proxy:applySpecialSummonSelfAsTrapMonster`
+- Target: `none`
+- Selecao: `none`
+- Mutacoes: spellTrap, field
+- Eventos emitidos: after_summon
+- Atualiza board: sim
+- Preview: `covered`
+
+| Campo | Obrigatorio | Contrato | Descricao |
+| --- | --- | --- | --- |
+| `monster` | sim | object |  |
+| `position` | nao | enum: attack, defense, choice | Battle position: "attack", "defense", or "choice". |
+| `treatedAsCardKinds` | nao | stringOrArray |  |
+| `summonProcedure` | nao | string |  |
+| `cannotAttackThisTurn` | nao | boolean |  |
+
+**Exemplos**
+
+```json
+{
+  "type": "special_summon_self_as_trap_monster",
+  "position": "defense",
+  "monster": {
+    "type": "Spirit",
+    "attribute": "Dark",
+    "level": 4,
+    "atk": 1700,
+    "def": 1900
+  },
+  "treatedAsCardKinds": [
+    "monster",
+    "trap"
+  ],
+  "summonProcedure": "trap_monster"
 }
 ```
 
@@ -1493,8 +1543,8 @@ _Sem notas._
 Registers a temporary replacement effect.
 
 - Handler: `handleRegisterReplacementEffect`
-- Target: `none`
-- Selecao: `none`
+- Target: `optional`
+- Selecao: `usesTargets`
 - Mutacoes: replacementEffects
 - Eventos emitidos: nenhum
 - Atualiza board: sim
@@ -1505,8 +1555,11 @@ Registers a temporary replacement effect.
 | `replacementEffect` | sim | object |  |
 | `duration` | nao | string |  |
 | `sourceName` | nao | string |  |
+| `targetRef` | nao | string | References an effect target id or a context target such as self. |
 | `uniqueKey` | nao | string |  |
 | `uses` | nao | number |  |
+| `usesPerTarget` | nao | boolean |  |
+| `logMessage` | nao | string |  |
 
 **Exemplos**
 
@@ -2143,6 +2196,32 @@ Allows a target monster to attack directly this turn.
 
 _Sem notas._
 
+### `end_battle_phase`
+
+Ends the current Battle Phase and moves the turn to Main Phase 2.
+
+- Handler: `proxy:applyEndBattlePhase`
+- Target: `none`
+- Selecao: `none`
+- Mutacoes: phase, combatState
+- Eventos emitidos: phase_skip
+- Atualiza board: sim
+- Preview: `notNeeded`
+
+_Sem campos alem de `type`._
+
+**Exemplos**
+
+```json
+{
+  "type": "end_battle_phase"
+}
+```
+
+**Notas**
+
+_Sem notas._
+
 ### `forbid_attack_next_turn`
 
 Prevents target cards from attacking next turn.
@@ -2418,6 +2497,8 @@ Removes counters from target or source card.
 | `targetRef` | sim | string | References an effect target id or a context target such as self. |
 | `counterType` | sim | string |  |
 | `amount` | sim | number; min: 0 | Numeric amount. |
+| `haltOnFailure` | nao | boolean |  |
+| `stopOnFailure` | nao | boolean |  |
 
 **Exemplos**
 
@@ -2483,6 +2564,9 @@ Executes nested action cases based on a resolved target.
 | --- | --- | --- | --- |
 | `targetRef` | sim | string | References an effect target id or a context target such as self. |
 | `cases` | sim | array |  |
+| `defaultActions` | nao | array |  |
+| `matchMode` | nao | string |  |
+| `applyMode` | nao | string |  |
 
 **Exemplos**
 

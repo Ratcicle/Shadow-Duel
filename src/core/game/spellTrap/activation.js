@@ -48,7 +48,13 @@ export async function tryActivateSpellTrapEffect(
     owner,
     "spellTrap",
     selections,
-    { activationContext: { autoSelectSingleTarget: true } },
+    {
+      activationContext: {
+        autoSelectSingleTarget: true,
+        trapActivationFromSet:
+          card.cardKind === "trap" && card.isFacedown === true,
+      },
+    },
   );
   if (preview && preview.ok === false) {
     if (preview.reason) {
@@ -58,6 +64,8 @@ export async function tryActivateSpellTrapEffect(
   }
 
   // If it's a trap, show confirmation modal first
+  const trapActivationFromSet =
+    card.cardKind === "trap" && card.isFacedown === true;
   if (card.cardKind === "trap") {
     const confirmed = await this.ui.showTrapActivationModal(
       card,
@@ -82,10 +90,11 @@ export async function tryActivateSpellTrapEffect(
     activationZone: "spellTrap",
     sourceZone: "spellTrap",
     committed: false,
+    trapActivationFromSet,
   };
   const activationEffect = this.effectEngine?.getSpellTrapActivationEffect?.(
     card,
-    { fromHand: false },
+    { fromHand: false, trapActivationFromSet },
   );
 
   const pipelinePhaseReq = isTrap

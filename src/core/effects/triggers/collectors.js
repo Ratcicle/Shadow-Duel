@@ -14,6 +14,12 @@ function matchesLastSummonMethod(card, allowed) {
   return allowedMethods.includes(card?.lastSummonMethod || null);
 }
 
+function matchesLastSummonProcedure(card, allowed) {
+  if (!allowed) return true;
+  const allowedProcedures = Array.isArray(allowed) ? allowed : [allowed];
+  return allowedProcedures.includes(card?.lastSummonProcedure || null);
+}
+
 function asArray(value) {
   return Array.isArray(value) ? value : [value];
 }
@@ -909,6 +915,12 @@ export async function collectBattleDestroyTriggers(payload) {
         ) {
           continue;
         }
+        if (
+          effect.requireSelfSummonProcedure &&
+          !matchesLastSummonProcedure(card, effect.requireSelfSummonProcedure)
+        ) {
+          continue;
+        }
 
         const optCheck = this.checkOncePerTurn(card, owner, effect);
         if (!optCheck.ok) {
@@ -1589,7 +1601,7 @@ export async function collectEffectTargetedTriggers(payload) {
 export async function collectCardToGraveTriggers(payload) {
   const entries = [];
   const orderRule =
-    "card owner self-source -> card owner field observers -> opponent field observers";
+    "card owner self-source -> card owner field/spell observers -> opponent field/spell observers";
 
   const { card, player, opponent, fromZone, toZone } = payload || {};
   const actionContext = payload?.actionContext || null;
@@ -1694,6 +1706,27 @@ export async function collectCardToGraveTriggers(payload) {
           `[handleCardToGraveEvent] Skipping ${effect.id}: requires last summon method ${allowedMethods.join(
             "/",
           )}, but was "${lastSummonMethod}".`,
+        );
+        return;
+      }
+    }
+
+    if (effect.requireSelfSummonProcedure) {
+      const lastSummonProcedure = sourceCard.lastSummonProcedure || null;
+
+      if (
+        !matchesLastSummonProcedure(
+          sourceCard,
+          effect.requireSelfSummonProcedure,
+        )
+      ) {
+        const allowedProcedures = Array.isArray(effect.requireSelfSummonProcedure)
+          ? effect.requireSelfSummonProcedure
+          : [effect.requireSelfSummonProcedure];
+        console.log(
+          `[handleCardToGraveEvent] Skipping ${effect.id}: requires summon procedure ${allowedProcedures.join(
+            "/",
+          )}, but was "${lastSummonProcedure}".`,
         );
         return;
       }
@@ -1860,16 +1893,28 @@ export async function collectCardToGraveTriggers(payload) {
   ].filter((side) => side.owner);
 
   for (const { owner, other } of observerSides) {
-    const field = Array.isArray(owner.field) ? owner.field : [];
-    for (const sourceCard of field) {
-      if (!sourceCard || sourceCard === card) continue;
-      if (!Array.isArray(sourceCard.effects)) continue;
-      if (sourceCard.isFacedown === true) continue;
+    const observerZones = ["field", "spellTrap", "fieldSpell"];
+    for (const observerZone of observerZones) {
+      const zoneCards =
+        observerZone === "fieldSpell"
+          ? owner.fieldSpell
+            ? [owner.fieldSpell]
+            : []
+          : Array.isArray(owner[observerZone])
+            ? owner[observerZone]
+            : [];
 
-      const sourceZone = this.findCardZone?.(owner, sourceCard) || "field";
-      for (const effect of sourceCard.effects) {
-        if (!effect?.eventCardFilters) continue;
-        collectFromSource(sourceCard, owner, other, sourceZone, effect);
+      for (const sourceCard of zoneCards) {
+        if (!sourceCard || sourceCard === card) continue;
+        if (!Array.isArray(sourceCard.effects)) continue;
+        if (sourceCard.isFacedown === true) continue;
+
+        const sourceZone =
+          this.findCardZone?.(owner, sourceCard) || observerZone;
+        for (const effect of sourceCard.effects) {
+          if (!effect?.eventCardFilters) continue;
+          collectFromSource(sourceCard, owner, other, sourceZone, effect);
+        }
       }
     }
   }

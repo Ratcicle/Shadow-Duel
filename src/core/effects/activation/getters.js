@@ -18,6 +18,15 @@ export function getHandActivationEffect(card) {
   return card.effects.find((e) => e && e.timing === "on_play") || null;
 }
 
+function isTrapActivationFromSet(card, options = {}) {
+  return (
+    card?.cardKind === "trap" &&
+    (options.trapActivationFromSet === true ||
+      options.fromSet === true ||
+      card.isFacedown === true)
+  );
+}
+
 /**
  * Get the activation effect for a Spell/Trap card.
  * For traps: on_activate or ignition timing
@@ -28,11 +37,11 @@ export function getSpellTrapActivationEffect(card, options = {}) {
     return null;
   }
   if (card.cardKind === "trap") {
-    return (
-      card.effects.find(
-        (e) => e && (e.timing === "on_activate" || e.timing === "ignition")
-      ) || null
-    );
+    const onActivate =
+      card.effects.find((e) => e && e.timing === "on_activate") || null;
+    if (onActivate) return onActivate;
+    if (isTrapActivationFromSet(card, options)) return null;
+    return card.effects.find((e) => e && e.timing === "ignition") || null;
   }
   if (card.cardKind === "spell") {
     const fromHand = options.fromHand === true;

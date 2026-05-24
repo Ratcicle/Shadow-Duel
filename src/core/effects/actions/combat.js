@@ -1,7 +1,36 @@
+import { isAI } from "../../Player.js";
+
 /**
- * Combat Actions - attack negation, forbid attack, direct attack
+ * Combat Actions - attack negation, battle phase control, forbid attack, direct attack
  * Extracted from EffectEngine.js – preserving original logic and signatures.
  */
+
+function scheduleAiMoveAfterPaint(game, actor) {
+  if (!isAI(actor) || game.gameOver || typeof actor?.makeMove !== "function") {
+    return;
+  }
+
+  const expectedTurn = game.turn;
+  const expectedPhase = game.phase;
+  const runMove = () => {
+    if (
+      game.gameOver ||
+      game.turn !== expectedTurn ||
+      game.phase !== expectedPhase
+    ) {
+      return;
+    }
+    actor.makeMove(game);
+  };
+
+  const requestFrame = globalThis.requestAnimationFrame;
+  if (typeof requestFrame === "function") {
+    requestFrame(() => setTimeout(runMove, 0));
+    return;
+  }
+
+  setTimeout(runMove, 0);
+}
 
 /**
  * Apply negate attack action
@@ -16,6 +45,33 @@ export function applyNegateAttack(action, ctx) {
     return true;
   }
   return false;
+}
+
+/**
+ * Apply end battle phase action
+ * @returns {boolean} Whether the Battle Phase was ended
+ */
+export function applyEndBattlePhase() {
+  const game = this.game;
+  if (!game || game.phase !== "battle") return false;
+
+  const fromPhase = game.phase;
+  const activePlayer = game.turn === "player" ? game.player : game.bot;
+  game.phase = "main2";
+
+  game.clearAttackResolutionIndicators?.();
+  game.clearAttackReadyIndicators?.();
+  game.ui?.log?.("The Battle Phase ends.");
+  game.notify?.("phase_skip", {
+    player: game.turn,
+    fromPhase,
+    toPhase: game.phase,
+    reason: "effect",
+  });
+  game.updateBoard?.();
+
+  scheduleAiMoveAfterPaint(game, activePlayer);
+  return true;
 }
 
 /**

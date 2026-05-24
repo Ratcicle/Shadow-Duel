@@ -935,20 +935,30 @@ export function bindCardInteractions() {
         });
         if (!guard.ok) return;
 
-        const hasActivateEffect = (card.effects || []).some(
-          (e) => e && e.timing === "on_activate"
+        const preview = this.effectEngine?.canActivateSpellTrapEffectPreview?.(
+          card,
+          this.player,
+          "spellTrap",
+          null,
+          {
+            activationContext: {
+              autoSelectSingleTarget: true,
+              trapActivationFromSet: card.isFacedown === true,
+            },
+          },
         );
-
-        if (hasActivateEffect) {
-          // Check if trap can be activated (waited at least 1 turn)
-          if (!this.canActivateTrap(card)) {
-            this.ui.log("Esta armadilha nao pode ser ativada neste turno.");
-            return;
+        if (preview && preview.ok === false) {
+          if (
+            preview.reason &&
+            preview.reason !== "No ignition effect defined for this card."
+          ) {
+            this.ui.log(preview.reason);
           }
-
-          console.log(`[Game] Activating trap: ${card.name}`);
-          await this.tryActivateSpellTrapEffect(card);
+          return;
         }
+
+        console.log(`[Game] Activating trap: ${card.name}`);
+        await this.tryActivateSpellTrapEffect(card);
         return;
       }
 
@@ -1013,10 +1023,29 @@ export function bindCardInteractions() {
           allowDuringOpponentTurn: true,
         });
         if (!guard.ok) return;
-        if (!this.canActivateTrap(card)) {
-          this.ui.log("Esta armadilha nao pode ser ativada neste turno.");
+
+        const preview = this.effectEngine?.canActivateSpellTrapEffectPreview?.(
+          card,
+          this.bot,
+          "spellTrap",
+          null,
+          {
+            activationContext: {
+              autoSelectSingleTarget: true,
+              trapActivationFromSet: card.isFacedown === true,
+            },
+          },
+        );
+        if (preview && preview.ok === false) {
+          if (
+            preview.reason &&
+            preview.reason !== "No ignition effect defined for this card."
+          ) {
+            this.ui.log(preview.reason);
+          }
           return;
         }
+
         await this.tryActivateSpellTrapEffect(card, null, { owner: this.bot });
         return;
       }

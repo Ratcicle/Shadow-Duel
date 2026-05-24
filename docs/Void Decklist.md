@@ -4,13 +4,13 @@ Fonte dos textos: `src/data/cards.js` (1x cada carta).
 
 ## Resumo
 
-- Total: 29
-- Monstros (Main Deck): 20
+- Total: 24
+- Monstros (Main Deck): 14
 - Extra Deck: 5 (3 Fusão, 2 Ascension)
-- Magias: 8
+- Magias: 4
 - Armadilhas: 1
 
-## Decklist Completa
+## Decklist Completa (1x cada carta do arquétipo)
 
 ### Monstros (Main Deck)
 
@@ -22,11 +22,11 @@ Fonte dos textos: `src/data/cards.js` (1x cada carta).
 - 1x Void Forgotten Knight (159)
 - 1x Void Haunter (155)
 - 1x Void Beast (153)
-- 3x Void Conjurer (151)
-- 2x Void Tenebris Horn (161)
-- 2x Void Walker (152)
+- 1x Void Conjurer (151)
+- 1x Void Tenebris Horn (161)
+- 1x Void Walker (152)
 - 1x Void Ghost Wolf (156)
-- 3x Void Hollow (154)
+- 1x Void Hollow (154)
 - 1x Void Raven (160)
 
 ### Extra Deck
@@ -39,11 +39,10 @@ Fonte dos textos: `src/data/cards.js` (1x cada carta).
 
 ### Magias
 
-- 3x Polymerization (13)
 - 1x Sealing the Void (166)
 - 1x The Void (167)
 - 1x Void Gravitational Pull (168)
-- 2x Void Lost Throne (169)
+- 1x Void Lost Throne (169)
 
 ### Armadilhas
 
@@ -75,7 +74,7 @@ Fonte dos textos: `src/data/cards.js` (1x cada carta).
 
 **Void Tenebris Horn (161)** — Nível 4, Fiend, 1500/800. Ganha 100 ATK/DEF por carta "Void" em campo (ambos os lados). Uma vez por duelo: do Cemitério, Invoque por Invocação-Especial (pos. escolha).
 
-**Void Slayer Brute (162)** — Nível 8, Fiend, 2500/2000. Da mão: envie 2 monstros "Void" que você controla; Invoque esta carta (OPT). Se destruir um monstro do oponente em batalha: bana-o.
+**Void Slayer Brute (162)** — Nível 8, Fiend, 2500/2200. Da mão: envie 2 monstros "Void" que você controla; Invoque esta carta (OPT). Se destruir um monstro do oponente em batalha: bana-o.
 
 **Void Serpent Drake (164)** — Nível 6, Dragon, 2300/1800. Da mão: envie 1–3 "Void Hollow" que você controla; Invoque esta carta. Ganha efeitos: 1+: +300 ATK; 2+: também indestrutível em batalha; 3: também destrói 1 carta do oponente. OPT.
 

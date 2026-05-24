@@ -1,5 +1,74 @@
 let nextCardInstanceId = 1;
 
+export function getEffectiveCardKinds(card) {
+  if (!card) return [];
+  const kinds = new Set();
+  if (card.cardKind) kinds.add(card.cardKind);
+  if (card.originalCardKind) kinds.add(card.originalCardKind);
+  if (Array.isArray(card.treatedAsCardKinds)) {
+    for (const kind of card.treatedAsCardKinds) {
+      if (kind) kinds.add(kind);
+    }
+  }
+  return Array.from(kinds);
+}
+
+export function cardMatchesKind(card, requiredKinds) {
+  if (!requiredKinds) return true;
+  const required = Array.isArray(requiredKinds) ? requiredKinds : [requiredKinds];
+  if (required.length === 0) return true;
+  const effectiveKinds = getEffectiveCardKinds(card);
+  return required.some((kind) => effectiveKinds.includes(kind));
+}
+
+export function captureTrapMonsterOriginalState(card) {
+  if (!card) return null;
+  if (card.trapMonsterOriginalState) return card.trapMonsterOriginalState;
+
+  card.trapMonsterOriginalState = {
+    cardKind: card.cardKind || null,
+    subtype: card.subtype || null,
+    monsterType: card.monsterType || null,
+    type: card.type || null,
+    types: Array.isArray(card.types) ? [...card.types] : null,
+    attribute: card.attribute || null,
+    level: card.level ?? 0,
+    baseAtk: card.baseAtk ?? 0,
+    baseDef: card.baseDef ?? 0,
+    atk: card.atk ?? 0,
+    def: card.def ?? 0,
+  };
+  return card.trapMonsterOriginalState;
+}
+
+export function restoreTrapMonsterOriginalState(card) {
+  if (!card || !card.isTrapMonster) return false;
+  const original = card.trapMonsterOriginalState || {};
+
+  card.cardKind = original.cardKind || card.originalCardKind || "trap";
+  card.subtype = original.subtype || card.subtype || null;
+  card.monsterType = original.monsterType || null;
+  card.type = original.type || undefined;
+  if (Array.isArray(original.types)) {
+    card.types = [...original.types];
+  } else {
+    delete card.types;
+  }
+  card.attribute = original.attribute || null;
+  card.level = original.level ?? 0;
+  card.baseAtk = original.baseAtk ?? 0;
+  card.baseDef = original.baseDef ?? 0;
+  card.atk = original.atk ?? 0;
+  card.def = original.def ?? 0;
+
+  delete card.isTrapMonster;
+  delete card.originalCardKind;
+  delete card.treatedAsCardKinds;
+  delete card.trapMonsterOriginalState;
+  delete card.trapMonsterSummonProcedure;
+  return true;
+}
+
 export default class Card {
   constructor(data, owner) {
     this.instanceId = nextCardInstanceId++;
@@ -103,6 +172,7 @@ export default class Card {
     this.lastSummonMethod = null;
     this.lastSummonedFromZone = null;
     this.lastSummonedTurn = null;
+    this.lastSummonProcedure = null;
 
     // Turn-based temporary buffs (for expirations like "until end of next turn")
     // Structure: Array of {stat, value, expiresOnTurn, id}

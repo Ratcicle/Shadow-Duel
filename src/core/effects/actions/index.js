@@ -29,6 +29,7 @@ export {
 // Combat actions
 export {
   applyNegateAttack,
+  applyEndBattlePhase,
   applyForbidAttackThisTurn,
   applyForbidAttackNextTurn,
   applyAllowDirectAttackThisTurn,
@@ -38,6 +39,7 @@ export {
 // Summon actions
 export {
   applySpecialSummonToken,
+  applySpecialSummonSelfAsTrapMonster,
   applyCallOfTheHauntedSummon,
 } from "./summon.js";
 

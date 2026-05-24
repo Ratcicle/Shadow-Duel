@@ -6,6 +6,7 @@
  */
 
 import { isAI } from "../Player.js";
+import { cardMatchesKind } from "../Card.js";
 import {
   getUI,
   collectZoneCandidates,
@@ -153,7 +154,7 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
   const extraFilter = (card) => {
     if (!card) return false;
     if (Array.isArray(filters.cardKind)) {
-      if (!filters.cardKind.includes(card.cardKind)) return false;
+      if (!cardMatchesKind(card, filters.cardKind)) return false;
     }
     if (Array.isArray(filters.name)) {
       if (!filters.name.includes(card.name)) return false;
@@ -778,7 +779,7 @@ export async function handleHealPerFieldCount(action, ctx, targets, engine) {
   let count = 0;
   for (const card of zone) {
     if (!card) continue;
-    if (filters.cardKind && card.cardKind !== filters.cardKind) continue;
+    if (filters.cardKind && !cardMatchesKind(card, filters.cardKind)) continue;
     if (filters.archetype && card.archetype !== filters.archetype) continue;
     if (filters.type && card.type !== filters.type) continue;
     if (filters.name && card.name !== filters.name) continue;

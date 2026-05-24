@@ -324,7 +324,7 @@ export function canActivateSpellTrapEffectPreview(
     }
   }
 
-  if (card.cardKind === "trap") {
+  if (card.cardKind === "trap" && card.isFacedown === true) {
     const canActivateTrap =
       typeof this.game?.canActivateTrap === "function"
         ? this.game.canActivateTrap(card)
@@ -344,11 +344,17 @@ export function canActivateSpellTrapEffectPreview(
 
   const effect = this.getSpellTrapActivationEffect(card, {
     fromHand: false,
+    trapActivationFromSet:
+      card.cardKind === "trap" && card.isFacedown === true,
   });
   if (!effect) {
     const placementOnly =
-      card.cardKind === "spell" &&
-      (card.subtype === "continuous" || card.subtype === "field");
+      (card.cardKind === "spell" &&
+        (card.subtype === "continuous" || card.subtype === "field")) ||
+      (card.cardKind === "trap" &&
+        card.subtype === "continuous" &&
+        (card.isFacedown === true ||
+          options?.activationContext?.trapActivationFromSet === true));
     if (placementOnly) {
       return { ok: true, placementOnly: true };
     }
@@ -372,6 +378,21 @@ export function canActivateSpellTrapEffectPreview(
     activationZone,
     activationContext,
   };
+
+  if (card.cardKind === "trap" && effect.timing === "ignition") {
+    if (this.game?.turn !== player.id) {
+      return { ok: false, reason: "Not your turn." };
+    }
+  }
+
+  if (effect.requirePhase) {
+    const allowedPhases = Array.isArray(effect.requirePhase)
+      ? effect.requirePhase
+      : [effect.requirePhase];
+    if (!allowedPhases.includes(this.game?.phase)) {
+      return { ok: false, reason: "Effect cannot be activated this phase." };
+    }
+  }
 
   if (effect.conditions) {
     const condResult = this.evaluateConditions(effect.conditions, ctx);
