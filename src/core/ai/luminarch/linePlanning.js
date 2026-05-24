@@ -90,11 +90,11 @@ const MAIN2_BATTLE_PAYOFF_NAMES = new Set([
 ]);
 
 const BATTLE_SIM_MILESTONE_KEYS = new Set([
-  "citadel_battle_protection",
   "luminarch_battle_lp_gain",
   "magic_sickle_battle_boost",
   "moonblade_second_attack",
   "radiant_lancer_growth",
+  "sunforged_battle_protection",
 ]);
 
 const SIM_MILESTONE_SCORES = Object.freeze({
@@ -102,7 +102,6 @@ const SIM_MILESTONE_SCORES = Object.freeze({
   citadel_access: { score: 3.5, label: "Engine: Citadel access" },
   fortress_revive: { score: 3.5, label: "Grind: Fortress revived body" },
   halberd_followup: { score: 2, label: "Extender: Halberd follow-up" },
-  citadel_battle_protection: { score: 1.5, label: "Battle: Citadel protected attacker" },
   luminarch_battle_lp_gain: { score: 1.2, label: "Battle: LP payoff triggered" },
   lp_payment_created_payoff: { score: 2, label: "LP: payment created payoff" },
   lp_payment_created_wall: { score: 2.5, label: "LP: payment created wall" },
@@ -113,6 +112,10 @@ const SIM_MILESTONE_SCORES = Object.freeze({
   radiant_lancer_growth: { score: 1.2, label: "Battle: Radiant Lancer grew" },
   risky_lp_payment: { score: -6, label: "Risk: LP payment left lethal exposure" },
   sickle_spell_recovery: { score: 2, label: "Grind: Sickle recovered useful Spell" },
+  sunforged_battle_protection: {
+    score: 1.5,
+    label: "Battle: Sunforged protected equipped monster",
+  },
 });
 
 const MAIN_ONLY_PACKAGES = new Set([
@@ -492,7 +495,7 @@ function collectBattleBridgeSignals(analysis = {}, context = {}) {
     signals.push("Barbarias battle push");
   }
   if (spellTrap.some((card) => card?.name === NAMES.sunforgedBlade)) {
-    signals.push("Sunforged LP battle payoff");
+    signals.push("Sunforged LP battle payoff/protection");
   }
   if (
     hasName(hand, NAMES.magicSickle) &&
@@ -507,9 +510,6 @@ function collectBattleBridgeSignals(analysis = {}, context = {}) {
     readyAttackers.length > 0
   ) {
     signals.push("Holy Shield supports battle");
-  }
-  if (analysis.fieldSpell?.name === NAMES.citadel && oppField.length > 0) {
-    signals.push("Citadel battle protection");
   }
   if (field.some((card) => card?.name === NAMES.marshal && !card.isFacedown)) {
     signals.push("Marshal can hold combat");
@@ -1185,9 +1185,6 @@ function scoreWallMilestones(entries, impact) {
   if (impact.initialLethal && !impact.finalLethal) {
     addMilestone(entries, 6, "Defense: removed lethal pressure");
   }
-  if (impact.finalWalls > 0 && impact.finalCitadel) {
-    addMilestone(entries, 2, "Wall: protected by Citadel");
-  }
 }
 
 function scoreFusionMilestones(entries, impact) {
@@ -1281,8 +1278,8 @@ function scoreBattleBridgeMilestones(entries, impact) {
         : "Risk: Magic Sickle lacked payoff",
     );
   }
-  if (rewardNameMatches(rewards, /Citadel protected/)) {
-    addMilestone(entries, 1.6, "Citadel: protected battle body");
+  if (rewardNameMatches(rewards, /Sunforged Blade protected/)) {
+    addMilestone(entries, 1.6, "Sunforged: protected equipped battle body");
   }
   if (rewardNameMatches(rewards, /battle damage converted to LP/)) {
     addMilestone(

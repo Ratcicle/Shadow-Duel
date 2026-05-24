@@ -11,6 +11,15 @@ export const MAX_DECK_SIZE = 30;
 export const MAX_EXTRA_DECK_SIZE = 10;
 
 const cardKindOrder = { monster: 0, spell: 1, trap: 2 };
+const extraDeckTypeOrder = { fusion: 0, ascension: 1 };
+const spellTrapSubtypeOrder = {
+  normal: 0,
+  quick: 1,
+  equip: 2,
+  continuous: 3,
+  field: 4,
+  counter: 5,
+};
 
 export function getCardById(cardId) {
   return cardDatabaseById.get(cardId);
@@ -38,11 +47,50 @@ export function sortDeck(deckIds = []) {
     if (kindA === "monster" && kindB === "monster") {
       const levelA = levelOf(cardA);
       const levelB = levelOf(cardB);
-      if (levelA !== levelB) return levelB - levelA;
+      if (levelA !== levelB) return levelA - levelB;
+    } else if (
+      (kindA === "spell" || kindA === "trap") &&
+      (kindB === "spell" || kindB === "trap")
+    ) {
+      const subtypeA = (cardA?.subtype || "").toLowerCase();
+      const subtypeB = (cardB?.subtype || "").toLowerCase();
+      const subtypeOrderA = Object.prototype.hasOwnProperty.call(
+        spellTrapSubtypeOrder,
+        subtypeA,
+      )
+        ? spellTrapSubtypeOrder[subtypeA]
+        : 99;
+      const subtypeOrderB = Object.prototype.hasOwnProperty.call(
+        spellTrapSubtypeOrder,
+        subtypeB,
+      )
+        ? spellTrapSubtypeOrder[subtypeB]
+        : 99;
+      if (subtypeOrderA !== subtypeOrderB) return subtypeOrderA - subtypeOrderB;
     }
     const nameA = cardA?.name || "";
     const nameB = cardB?.name || "";
     return nameA.localeCompare(nameB);
+  });
+}
+
+export function sortExtraDeck(extraDeckIds = []) {
+  return [...extraDeckIds].sort((aId, bId) => {
+    const cardA = getCardById(aId);
+    const cardB = getCardById(bId);
+    const typeA = (cardA?.monsterType || "").toLowerCase();
+    const typeB = (cardB?.monsterType || "").toLowerCase();
+    const orderA = Object.prototype.hasOwnProperty.call(extraDeckTypeOrder, typeA)
+      ? extraDeckTypeOrder[typeA]
+      : 99;
+    const orderB = Object.prototype.hasOwnProperty.call(extraDeckTypeOrder, typeB)
+      ? extraDeckTypeOrder[typeB]
+      : 99;
+    if (orderA !== orderB) return orderA - orderB;
+    const levelA = levelOf(cardA);
+    const levelB = levelOf(cardB);
+    if (levelA !== levelB) return levelA - levelB;
+    return (cardA?.name || "").localeCompare(cardB?.name || "");
   });
 }
 
@@ -69,7 +117,14 @@ export function sanitizeExtraDeck(extraDeck) {
 }
 
 export function sanitizeDeck(deck) {
-  const valid = new Set(cardDatabase.map((card) => card.id));
+  const valid = new Set(
+    cardDatabase
+      .filter(
+        (card) =>
+          card.monsterType !== "fusion" && card.monsterType !== "ascension",
+      )
+      .map((card) => card.id),
+  );
   const counts = {};
   const result = [];
   for (const id of deck || []) {
@@ -80,7 +135,7 @@ export function sanitizeDeck(deck) {
     counts[id]++;
     result.push(id);
   }
-  return sortDeck(topUpDeck(result));
+  return result;
 }
 
 export function topUpDeck(deck) {
@@ -379,13 +434,13 @@ export function createDeckState() {
     getCurrentDeck: () => currentDeck,
     getCurrentExtraDeck: () => currentExtraDeck,
     setCurrentDeck: (deck) => {
-      currentDeck = sortDeck(deck);
+      currentDeck = sanitizeDeck(deck);
     },
     setCurrentExtraDeck: (extraDeck) => {
       currentExtraDeck = sanitizeExtraDeck(extraDeck);
     },
     saveDeck: (deck) => {
-      currentDeck = sortDeck(deck);
+      currentDeck = sanitizeDeck(deck);
       saveActiveDeckPreset();
     },
     saveExtraDeck: (extraDeck) => {

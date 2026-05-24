@@ -313,9 +313,13 @@ export function bindCardInteractions() {
       if (!guard.ok) return true;
       const card = actor.field[index];
       if (!card || card.cardKind !== "monster") return true;
-      const hasIgnition = (card.effects || []).some(
-        (effect) => effect && effect.timing === "ignition"
-      );
+      const ignitionPreview =
+        this.effectEngine?.canActivateMonsterEffectPreview?.(
+          card,
+          actor,
+          "field",
+        ) || { ok: false };
+      const hasIgnition = !!ignitionPreview.ok;
       const canFlip = this.canFlipSummon(card);
       const canPosChange = this.canChangePosition(card);
       const materialCheck = this.canUseAsAscensionMaterial(actor, card);
@@ -739,10 +743,13 @@ export function bindCardInteractions() {
         const card = this.player.field[index];
         if (!card || card.cardKind !== "monster") return;
 
-        // Verificar se tem efeito ignition ativavel
-        const hasIgnition =
-          card.effects &&
-          card.effects.some((eff) => eff && eff.timing === "ignition");
+        const ignitionPreview =
+          this.effectEngine?.canActivateMonsterEffectPreview?.(
+            card,
+            this.player,
+            "field",
+          ) || { ok: false };
+        const hasIgnition = !!ignitionPreview.ok;
 
         const canFlip = this.canFlipSummon(card);
         const canPosChange = this.canChangePosition(card);

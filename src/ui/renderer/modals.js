@@ -4,9 +4,77 @@
  * getSearchModalElements, showSearchModal, showSearchModalVisual
  */
 
-import { getCardDisplayName } from "../../core/i18n.js";
+import { getCardDisplayName, getLocale } from "../../core/i18n.js";
+import {
+  getSelectionCardTypeClass,
+  renderCompactSelectionCard,
+} from "./selectionModals.js";
 
 let activeConfirmPrompt = null;
+
+const GAME_OVER_COPY = {
+  en: {
+    victoryTitle: "Victory",
+    defeatTitle: "Defeat",
+    drawTitle: "Draw",
+    victoryMessage: "You won the duel.",
+    defeatMessage: "You lost the duel.",
+    drawMessage: "The duel ended in a draw.",
+    playerLabel: "You:",
+    opponentLabel: "Opponent:",
+    turnsLabel: "Turns:",
+    rematch: "Rematch",
+    menu: "Main Menu",
+    exportReplay: "Export Replay",
+    exported: "Exported",
+    exportTitle: "Export this duel replay",
+    reportReady: "Replay available",
+    reportExported: "Replay exported",
+  },
+  "pt-br": {
+    victoryTitle: "Vitória",
+    defeatTitle: "Derrota",
+    drawTitle: "Empate",
+    victoryMessage: "Você venceu o duelo.",
+    defeatMessage: "Você perdeu o duelo.",
+    drawMessage: "O duelo terminou empatado.",
+    playerLabel: "Você:",
+    opponentLabel: "Oponente:",
+    turnsLabel: "Turnos:",
+    rematch: "Revanche",
+    menu: "Menu Principal",
+    exportReplay: "Exportar Replay",
+    exported: "Exportado",
+    exportTitle: "Exportar replay deste duelo",
+    reportReady: "Replay disponível",
+    reportExported: "Replay exportado",
+  },
+};
+
+function getGameOverCopy() {
+  return GAME_OVER_COPY[getLocale()] || GAME_OVER_COPY.en;
+}
+
+function getGameOverResult(options = {}) {
+  const explicitResult = String(
+    options.result || options.outcome || options.state || "",
+  ).toLowerCase();
+  if (["victory", "win", "player"].includes(explicitResult)) return "victory";
+  if (["defeat", "loss", "bot"].includes(explicitResult)) return "defeat";
+  if (["draw", "tie"].includes(explicitResult)) return "draw";
+
+  const winner = String(options.winner || options.strategicReportInfo?.winner || "").toLowerCase();
+  if (winner === "player") return "victory";
+  if (winner === "bot") return "defeat";
+  if (winner === "draw") return "draw";
+  if (options.draw === true) return "draw";
+  return options.victory ? "victory" : "defeat";
+}
+
+function formatLifePoints(value) {
+  const amount = Number(value ?? 0);
+  return `${Number.isFinite(amount) ? amount : 0} PV`;
+}
 
 /**
  * @this {import('../Renderer.js').default}
@@ -189,8 +257,12 @@ export function showAlert(message) {
  */
 export function showGameOverModal(options = {}) {
   const modal = document.getElementById("game-over-modal");
+  const panel = modal?.querySelector(".game-over-panel");
   const title = document.getElementById("game-over-title");
   const message = document.getElementById("game-over-message");
+  const playerLabel = document.getElementById("game-over-player-label");
+  const botLabel = document.getElementById("game-over-bot-label");
+  const turnsLabel = document.getElementById("game-over-turns-label");
   const playerLP = document.getElementById("game-over-player-lp");
   const botLP = document.getElementById("game-over-bot-lp");
   const turns = document.getElementById("game-over-turns");
@@ -202,7 +274,7 @@ export function showGameOverModal(options = {}) {
   if (!modal) return;
 
   if (options.victory) {
-    title.textContent = "Victory!";
+    title.textContent = "Victory";
     title.className = "victory";
     message.textContent = "Você venceu o duelo!";
   } else {
@@ -215,6 +287,26 @@ export function showGameOverModal(options = {}) {
   botLP.textContent = options.botLP ?? 0;
   turns.textContent = options.turns ?? 0;
 
+  const result = getGameOverResult(options);
+  const copy = getGameOverCopy();
+  const titleKey = `${result}Title`;
+  const messageKey = `${result}Message`;
+
+  panel?.classList.remove("result-victory", "result-defeat", "result-draw");
+  panel?.classList.add(`result-${result}`);
+  title.textContent = copy[titleKey] || copy.defeatTitle;
+  title.className = result;
+  message.textContent = copy[messageKey] || copy.defeatMessage;
+
+  if (playerLabel) playerLabel.textContent = copy.playerLabel;
+  if (botLabel) botLabel.textContent = copy.opponentLabel;
+  if (turnsLabel) turnsLabel.textContent = copy.turnsLabel;
+  playerLP.textContent = formatLifePoints(options.playerLP);
+  botLP.textContent = formatLifePoints(options.botLP);
+  menuBtn.textContent = copy.menu;
+  rematchBtn.textContent = copy.rematch;
+  exportBtn.title = copy.exportTitle;
+
   const discardBtn = document.getElementById("btn-game-over-discard");
   if (discardBtn) {
     discardBtn.classList.add("hidden");
@@ -226,14 +318,14 @@ export function showGameOverModal(options = {}) {
     typeof options.onExportStrategicReport === "function";
 
   if (hasStrategicReport) {
-    const duelCount = options.strategicReportInfo?.duelCount || 1;
-    exportBtn.textContent = "Exportar Replay";
+    exportBtn.textContent = copy.exportReplay;
     exportBtn.disabled = false;
     exportBtn.classList.remove("exported", "hidden");
-    replayStatus.textContent = `Strategic JSON pronto (${duelCount} duelo)`;
+    replayStatus.textContent = copy.reportReady;
     replayStatus.classList.remove("hidden");
   } else {
     exportBtn.disabled = true;
+    exportBtn.classList.remove("exported");
     exportBtn.classList.add("hidden");
     replayStatus.classList.add("hidden");
     if (options.strategicReportAvailable !== undefined) {
@@ -265,9 +357,9 @@ export function showGameOverModal(options = {}) {
     if (!hasStrategicReport) return;
     const result = options.onExportStrategicReport();
     if (result) {
-      exportBtn.textContent = "Exportado";
+      exportBtn.textContent = copy.exported;
       exportBtn.classList.add("exported");
-      replayStatus.textContent = `Strategic JSON exportado: ${result.filename || `${result.duelCount || 1} duelo`}`;
+      replayStatus.textContent = copy.reportExported;
     }
   };
 
@@ -407,41 +499,17 @@ export function showSearchModalVisual(
 
   candidates.forEach((card) => {
     if (!card || !card.name) return;
-    const displayName =
-      getCardDisplayName(card) || (card?.name && card.name) || "Card";
 
     const cardBtn = document.createElement("button");
-    cardBtn.className = "search-card-btn";
+    cardBtn.className = [
+      "search-card-btn",
+      "selection-card-candidate",
+      getSelectionCardTypeClass(card),
+    ].join(" ");
     if (selectedCard && card.name === selectedCard.name) {
       cardBtn.classList.add("selected");
     }
-
-    const img = document.createElement("img");
-    img.src = card.image || "assets/card-back.png";
-    img.alt = displayName;
-    img.className = "search-card-image";
-    cardBtn.appendChild(img);
-
-    const nameDiv = document.createElement("div");
-    nameDiv.className = "search-card-name";
-    nameDiv.textContent = displayName;
-    cardBtn.appendChild(nameDiv);
-
-    const typeDiv = document.createElement("div");
-    typeDiv.className = "search-card-type";
-    const typeText = card.type ? `${card.type}` : "Unknown";
-    const levelText = card.level ? ` / L${card.level}` : "";
-    typeDiv.textContent = typeText + levelText;
-    cardBtn.appendChild(typeDiv);
-
-    if (card.cardKind === "monster") {
-      const statsDiv = document.createElement("div");
-      statsDiv.className = "search-card-stats";
-      const atk = card.atk !== undefined ? card.atk : "?";
-      const def = card.def !== undefined ? card.def : "?";
-      statsDiv.textContent = `ATK ${atk} / DEF ${def}`;
-      cardBtn.appendChild(statsDiv);
-    }
+    cardBtn.appendChild(renderCompactSelectionCard(card));
 
     cardBtn.onclick = () => {
       grid.querySelectorAll(".search-card-btn").forEach((btn) => {

@@ -2107,7 +2107,7 @@
     subtype: "field",
     archetype: "Luminarch",
     description:
-      'Whenever an opponent\'s monster declares an attack: gain 500 LP. Once per turn: You can pay 1000 LP, then target 1 "Luminarch" monster you control; it gains 500 ATK/DEF until the end of this turn. Once per turn, if a "Luminarch" monster you control would be destroyed by battle, you can pay 1000 LP; it is not destroyed.',
+      'Whenever an opponent\'s monster declares an attack: gain 500 LP. Once per turn: You can pay 1000 LP, then target 1 "Luminarch" monster you control; it gains 500 ATK/DEF until the end of this turn.',
     image: "assets/Sanctum of the Luminarch Citadel.png",
     effects: [
       {
@@ -2154,34 +2154,6 @@
             defBoost: 500,
           },
         ],
-      },
-      {
-        id: "sanctum_luminarch_citadel_battle_protection",
-        timing: "passive",
-        oncePerTurn: true,
-        oncePerTurnName: "sanctum_luminarch_citadel_battle_protection",
-        oncePerTurnScope: "card",
-        replacementEffect: {
-          type: "destruction",
-          reason: "battle",
-          targetOwner: "self",
-          targetZones: ["field"],
-          targetRequireFaceup: true,
-          targetFilters: {
-            cardKind: "monster",
-            archetype: "Luminarch",
-          },
-          costActions: [
-            {
-              type: "pay_lp",
-              amount: 1000,
-            },
-          ],
-          prompt:
-            'Pay 1000 LP with Sanctum of the Luminarch Citadel to prevent {target} from being destroyed by battle?',
-          logMessage:
-            "{target} avoided battle destruction due to {source}.",
-        },
       },
     ],
   },
@@ -2314,7 +2286,7 @@
     subtype: "equip",
     archetype: "Luminarch",
     description:
-      'Equip only to a "Luminarch" monster you control. Each time you gain LP, place 1 Solar Counter on this card. The equipped monster gains 200 ATK/DEF for each Solar Counter on this card. You can only control 1 "Luminarch Sunforged Blade".',
+      'Equip only to a "Luminarch" monster you control. Each time you gain LP, place 1 Solar Counter on this card. The equipped monster gains 200 ATK/DEF for each Solar Counter on this card. Once per turn, if the equipped monster would be destroyed by battle: you can pay 1000 LP; it is not destroyed. You can only control 1 "Luminarch Sunforged Blade".',
     image: "assets/Luminarch Sunforged Blade.png",
     effects: [
       {
@@ -2378,6 +2350,37 @@
           amountPerCounter: 200,
           stats: ["atk", "def"],
           targetFilters: { archetype: "Luminarch" },
+        },
+      },
+      {
+        id: "luminarch_sunforged_blade_battle_protection",
+        timing: "passive",
+        requireZone: "spellTrap",
+        requireFaceup: true,
+        oncePerTurn: true,
+        oncePerTurnName: "luminarch_sunforged_blade_battle_protection",
+        oncePerTurnScope: "card",
+        replacementEffect: {
+          type: "destruction",
+          reason: "battle",
+          targetMustBeEquippedToSource: true,
+          targetOwner: "self",
+          targetZones: ["field"],
+          targetRequireFaceup: true,
+          targetFilters: {
+            cardKind: "monster",
+            archetype: "Luminarch",
+          },
+          costActions: [
+            {
+              type: "pay_lp",
+              amount: 1000,
+            },
+          ],
+          prompt:
+            'Pay 1000 LP with Luminarch Sunforged Blade to prevent {target} from being destroyed by battle?',
+          logMessage:
+            "{target} avoided battle destruction due to {source}.",
         },
       },
     ],

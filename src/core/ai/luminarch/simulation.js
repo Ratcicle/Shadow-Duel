@@ -962,23 +962,27 @@ function prepareMagicSickleBattleBoost(state, attacker, target, opponent) {
   return "Magic Sickle changed combat";
 }
 
-function prepareCitadelBattleProtection(state, attacker, target) {
+function prepareSunforgedBattleProtection(state, attacker, target) {
   const player = state?.bot;
   const meta = ensureLuminarchSimMeta(state);
-  if (!player || meta.citadelBattleProtectionUsed) return null;
-  if (player.fieldSpell?.name !== CITADEL_NAME) return null;
+  if (!player || meta.sunforgedBattleProtectionUsed) return null;
   if (!isLuminarchMonster(attacker)) return null;
+  const blade = collectSunforgedBlades(player).find((candidate) => {
+    const host = candidate?.equippedTo || candidate?.equipTarget || null;
+    return host === attacker;
+  });
+  if (!blade) return null;
   if (!wouldAttackerBeDestroyedByBattle(attacker, target)) return null;
   const beforeLp = Number(player.lp || 0);
   const finalLp = beforeLp - 1000;
   if (finalLp <= 0) return null;
   player.lp = finalLp;
   attacker.simBattleDestructionProtected = true;
-  meta.citadelBattleProtectionUsed = true;
-  meta.milestones.push("citadel_battle_protection");
+  meta.sunforgedBattleProtectionUsed = true;
+  meta.milestones.push("sunforged_battle_protection");
   recordLuminarchBattleEvent(state, {
-    tag: "citadelProtected",
-    cardName: CITADEL_NAME,
+    tag: "sunforgedProtected",
+    cardName: SUNFORGED_BLADE_NAME,
     attackerName: attacker.name || null,
     targetName: target?.name || null,
     beforeLp,
@@ -986,14 +990,14 @@ function prepareCitadelBattleProtection(state, attacker, target) {
     cost: 1000,
   });
   recordLuminarchLpPayment(state, {
-    cardName: CITADEL_NAME,
+    cardName: SUNFORGED_BLADE_NAME,
     cost: 1000,
     beforeLp,
     afterLp: finalLp,
     createsWall: true,
     createsPayoff: true,
   });
-  return "Citadel protected battle";
+  return "Sunforged Blade protected battle";
 }
 
 export function prepareLuminarchSimulatedBattle({
@@ -1005,8 +1009,8 @@ export function prepareLuminarchSimulatedBattle({
   const rewards = [];
   const sickle = prepareMagicSickleBattleBoost(state, attacker, target, opponent);
   if (sickle) rewards.push(sickle);
-  const citadel = prepareCitadelBattleProtection(state, attacker, target);
-  if (citadel) rewards.push(citadel);
+  const sunforged = prepareSunforgedBattleProtection(state, attacker, target);
+  if (sunforged) rewards.push(sunforged);
   return rewards;
 }
 
@@ -1209,8 +1213,9 @@ export function scoreLuminarchBattleAttackCandidate({
     : 0;
   const hasSickle = rewardMatches(rewards, /Magic Sickle/) ||
     battleEvents.some((event) => event?.tag === "sickleChangedCombat");
-  const hasCitadelProtection = rewardMatches(rewards, /Citadel protected/) ||
-    battleEvents.some((event) => event?.tag === "citadelProtected");
+  const hasSunforgedProtection =
+    rewardMatches(rewards, /Sunforged Blade protected/) ||
+    battleEvents.some((event) => event?.tag === "sunforgedProtected");
   const hasMoonblade = rewardMatches(rewards, /Moonblade/) ||
     battleEvents.some((event) => event?.tag === "moonbladeSecondAttack");
   const hasRadiantGrowth = rewardMatches(rewards, /Radiant Lancer/) ||
@@ -1255,7 +1260,7 @@ export function scoreLuminarchBattleAttackCandidate({
   if (hasSickle) {
     delta += destroyedTarget || lethalNow || positiveDamage >= 1000 ? 2.4 : -1.2;
   }
-  if (hasCitadelProtection) {
+  if (hasSunforgedProtection) {
     delta += attackerSurvived ? 1.5 : 0.4;
   }
   if (hasMoonblade) {

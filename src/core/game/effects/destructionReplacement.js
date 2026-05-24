@@ -218,6 +218,17 @@ async function tryReplacement(game, sourceCard, sourceOwner, effect, ctx) {
     return { replaced: false };
   }
 
+  if (replacement.targetMustBeEquippedToSource === true) {
+    const targetEquips = Array.isArray(card.equips) ? card.equips : [];
+    const sourceEquipsTarget =
+      sourceCard.equippedTo === card ||
+      sourceCard.equipTarget === card ||
+      targetEquips.includes(sourceCard);
+    if (!sourceEquipsTarget) {
+      return { replaced: false };
+    }
+  }
+
   const targetOwnerKey =
     replacement.targetOwner ||
     replacement.appliesTo ||

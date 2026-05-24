@@ -116,6 +116,7 @@ async function rematch() {
 
 function bindMainEvents() {
   deckBuilder.bind(dom.startScreen.root);
+  deckBuilder.bindStartDeckPicker(dom.startScreen);
   laboratory.bind({ onStart: startLaboratoryDuel });
   botArena.bind();
 

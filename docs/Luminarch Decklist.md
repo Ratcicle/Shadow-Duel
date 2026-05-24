@@ -113,7 +113,7 @@ _Nenhuma trap no arquétipo atualmente._
 > Once per turn: discard 1 Level 7 or higher Luminarch monster; add 1 Level 4 or lower Luminarch monster from your Deck to your hand.
 
 **112 - Sanctum of the Luminarch Citadel** (Field Spell)
-> Whenever an opponent's monster declares an attack: gain 500 LP. Once per turn: You can pay 1000 LP, then target 1 "Luminarch" monster you control; it gains 500 ATK/DEF until the end of this turn. Once per turn, if a "Luminarch" monster you control would be destroyed by battle, you can pay 1000 LP; it is not destroyed.
+> Whenever an opponent's monster declares an attack: gain 500 LP. Once per turn: You can pay 1000 LP, then target 1 "Luminarch" monster you control; it gains 500 ATK/DEF until the end of this turn.
 
 **113 - Luminarch Holy Ascension** (Normal Spell)
 > Pay 1000 LP, then target 1 "Luminarch" monster you control; it gains 800 ATK/DEF until the end of this turn.
@@ -125,7 +125,7 @@ _Nenhuma trap no arquétipo atualmente._
 > Equip only to a "Luminarch" monster you control. It gains 500 DEF. If the equipped monster would be destroyed by battle, send this card to the GY instead.
 
 **261 - Luminarch Sunforged Blade** (Equip Spell)
-> Equip only to a "Luminarch" monster you control. Each time you gain LP, place 1 Solar Counter on this card. The equipped monster gains 200 ATK/DEF for each Solar Counter on this card. You can only control 1 "Luminarch Sunforged Blade".
+> Equip only to a "Luminarch" monster you control. Each time you gain LP, place 1 Solar Counter on this card. The equipped monster gains 200 ATK/DEF for each Solar Counter on this card. Once per turn, if the equipped monster would be destroyed by battle: you can pay 1000 LP; it is not destroyed. You can only control 1 "Luminarch Sunforged Blade".
 
 **116 - Luminarch Spear of Dawnfall** (Normal Spell)
 > If you control a "Luminarch" monster: target 1 monster your opponent controls; its ATK and DEF become 0 until the end of this turn.

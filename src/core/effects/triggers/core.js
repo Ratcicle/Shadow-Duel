@@ -41,6 +41,77 @@ function isPromptOwnedTriggeredEffect(effect) {
   });
 }
 
+function getActionTargetRefs(action) {
+  const refs = new Set();
+  if (!action || typeof action !== "object") return refs;
+
+  if (typeof action.targetRef === "string") refs.add(action.targetRef);
+  if (typeof action.costTargetRef === "string") refs.add(action.costTargetRef);
+
+  const nestedActionLists = [
+    action.actions,
+    action.thenActions,
+    action.elseActions,
+    action.onSuccessActions,
+  ];
+  for (const list of nestedActionLists) {
+    if (!Array.isArray(list)) continue;
+    for (const nested of list) {
+      for (const ref of getActionTargetRefs(nested)) refs.add(ref);
+    }
+  }
+
+  if (Array.isArray(action.cases)) {
+    for (const caseEntry of action.cases) {
+      const caseActions = Array.isArray(caseEntry?.actions)
+        ? caseEntry.actions
+        : [];
+      for (const nested of caseActions) {
+        for (const ref of getActionTargetRefs(nested)) refs.add(ref);
+      }
+    }
+  }
+
+  return refs;
+}
+
+function actionCanResolveWithSelectionRequirements(action, requirementById) {
+  const targetRefs = getActionTargetRefs(action);
+  if (targetRefs.size === 0) return true;
+
+  for (const targetRef of targetRefs) {
+    const requirement = requirementById.get(targetRef);
+    if (!requirement) continue;
+
+    const candidates = Array.isArray(requirement.candidates)
+      ? requirement.candidates
+      : [];
+    if (candidates.length === 0) return false;
+  }
+
+  return true;
+}
+
+function hasResolvableSelectionTargetActions(effect, targetPreview) {
+  if (!targetPreview?.needsSelection) return true;
+
+  const requirements =
+    targetPreview?.selectionContract?.requirements || [];
+  if (requirements.length === 0) return false;
+
+  const requirementById = new Map(
+    requirements
+      .filter((req) => req?.id)
+      .map((req) => [req.id, req]),
+  );
+  const actions = Array.isArray(effect?.actions) ? effect.actions : [];
+  if (actions.length === 0) return true;
+
+  return actions.some((action) =>
+    actionCanResolveWithSelectionRequirements(action, requirementById),
+  );
+}
+
 function shouldPromptTriggeredEffect(effect, owner, ctx) {
   if (!effect || effect.timing !== "on_event") return false;
   if (!owner || isAI(owner)) return false;
@@ -130,6 +201,14 @@ export async function handleTriggeredEffect(
   );
 
   if (targetResult.needsSelection) {
+    if (!hasResolvableSelectionTargetActions(effect, targetResult)) {
+      return {
+        success: false,
+        needsSelection: false,
+        activationSkipped: true,
+        reason: "No valid targets for this effect.",
+      };
+    }
     return {
       success: false,
       needsSelection: true,
@@ -343,20 +422,32 @@ export function buildTriggerEntry(options = {}) {
   }
 
   const baseCtx = options.ctx || {};
+  const previewCtx = {
+    ...baseCtx,
+    source: baseCtx.source || sourceCard,
+    player: baseCtx.player || owner,
+    opponent: baseCtx.opponent || this.game?.getOpponent?.(owner) || null,
+    activationZone: activationContext.activationZone,
+    activationContext: {
+      ...activationContext,
+      preview: true,
+    },
+    effect,
+  };
+  const actionPreview =
+    typeof this.checkActionPreviewRequirements === "function"
+      ? this.checkActionPreviewRequirements(effect.actions || [], previewCtx)
+      : { ok: true };
+  if (actionPreview?.ok === false) {
+    return null;
+  }
+
   if (Array.isArray(effect.targets) && effect.targets.length > 0) {
-    const previewCtx = {
-      ...baseCtx,
-      source: baseCtx.source || sourceCard,
-      player: baseCtx.player || owner,
-      opponent: baseCtx.opponent || this.game?.getOpponent?.(owner) || null,
-      activationZone: activationContext.activationZone,
-      activationContext: {
-        ...activationContext,
-        preview: true,
-      },
-    };
     const targetPreview = this.resolveTargets(effect.targets, previewCtx, null);
     if (targetPreview?.ok === false && !targetPreview.needsSelection) {
+      return null;
+    }
+    if (!hasResolvableSelectionTargetActions(effect, targetPreview)) {
       return null;
     }
   }
@@ -387,18 +478,35 @@ export function buildTriggerEntry(options = {}) {
         activationZone: activationCtx.activationZone,
         activationContext: activationCtx,
       };
-      if (Array.isArray(effect.targets) && effect.targets.length > 0) {
-        const livePreviewCtx = {
-          ...resolvedCtx,
-          source: resolvedCtx.source || sourceCard,
-          player: resolvedCtx.player || owner,
-          opponent:
-            resolvedCtx.opponent || this.game?.getOpponent?.(owner) || null,
-          activationContext: {
-            ...activationCtx,
-            preview: true,
-          },
+      const livePreviewCtx = {
+        ...resolvedCtx,
+        source: resolvedCtx.source || sourceCard,
+        player: resolvedCtx.player || owner,
+        opponent:
+          resolvedCtx.opponent || this.game?.getOpponent?.(owner) || null,
+        activationContext: {
+          ...activationCtx,
+          preview: true,
+        },
+        effect,
+      };
+      const liveActionPreview =
+        typeof this.checkActionPreviewRequirements === "function"
+          ? this.checkActionPreviewRequirements(
+              effect.actions || [],
+              livePreviewCtx,
+            )
+          : { ok: true };
+      if (liveActionPreview?.ok === false) {
+        return {
+          success: false,
+          needsSelection: false,
+          activationSkipped: true,
+          reason:
+            liveActionPreview.reason || "Effect cannot be resolved right now.",
         };
+      }
+      if (Array.isArray(effect.targets) && effect.targets.length > 0) {
         const livePreview = this.resolveTargets(
           effect.targets,
           livePreviewCtx,
@@ -410,6 +518,14 @@ export function buildTriggerEntry(options = {}) {
             needsSelection: false,
             activationSkipped: true,
             reason: livePreview.reason || "No valid targets for this effect.",
+          };
+        }
+        if (!hasResolvableSelectionTargetActions(effect, livePreview)) {
+          return {
+            success: false,
+            needsSelection: false,
+            activationSkipped: true,
+            reason: "No valid targets for this effect.",
           };
         }
       }

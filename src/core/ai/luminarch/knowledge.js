@@ -343,7 +343,7 @@ export const CARD_KNOWLEDGE = {
     ],
     status: LUMINARCH_PACKAGE_STATUS.SUPPORTED,
     effect:
-      "Oponente ataca → +500 LP. 1x/turn: pague 1000 LP → +500 ATK/DEF a 1 Luminarch. 1x/turn: pague 1000 LP para impedir destruição por batalha de 1 Luminarch",
+      "Oponente ataca → +500 LP. 1x/turn: pague 1000 LP → +500 ATK/DEF a 1 Luminarch",
     synergies: [
       "Luminarch Aegisbearer",
       "Luminarch Holy Shield",
@@ -354,7 +354,6 @@ export const CARD_KNOWLEDGE = {
       "SEMPRE ativar turn 1-2",
       "Combo Aegis: heal 500 LP por ataque",
       "Usar buff quando LP alto ou quando o buff muda combate/ameaça",
-      "Guardar LP para proteger tank importante em batalha",
       "Synergy com lifegain doubles de Megashield",
     ],
     value: 22, // Field spell CENTRAL
@@ -436,7 +435,7 @@ export const CARD_KNOWLEDGE = {
     ],
     status: LUMINARCH_PACKAGE_STATUS.NEEDS_MAIN_BATTLE_MAIN2,
     effect:
-      "Equipe a 1 Luminarch. Cada ganho de LP coloca Solar Counter; o equipado ganha +200 ATK/DEF por counter",
+      "Equipe a 1 Luminarch. Cada ganho de LP coloca Solar Counter; o equipado ganha +200 ATK/DEF por counter. 1x/turn: pague 1000 LP para impedir destruição por batalha do equipado",
     synergies: [
       "Sanctum of the Luminarch Citadel",
       "Luminarch Holy Shield",
@@ -447,6 +446,7 @@ export const CARD_KNOWLEDGE = {
     playPatterns: [
       "Equip só escala se houver fonte real de ganho de LP",
       "Com Citadel/Holy Shield transforma ataques do oponente em stats permanentes",
+      "Guardar LP para proteger o monstro equipado quando isso preservar wall/payoff real",
       "Com Barbarias o ganho de LP fica mais seguro, mas os counters continuam por evento de cura",
     ],
     value: 9,

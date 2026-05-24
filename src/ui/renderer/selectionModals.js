@@ -9,7 +9,133 @@
 import {
   getCardDisplayName,
   getCardDisplayDescription,
+  getLocale,
+  getMonsterTypeDisplayName,
 } from "../../core/i18n.js";
+
+const SELECTION_KIND_LABELS = {
+  en: {
+    monster: "Monster",
+    spell: "Spell",
+    trap: "Trap",
+    fusion: "Fusion",
+    ascension: "Ascension",
+  },
+  "pt-br": {
+    monster: "Monstro",
+    spell: "Magia",
+    trap: "Armadilha",
+    fusion: "Fusão",
+    ascension: "Ascensão",
+  },
+};
+
+const SELECTION_SUBTYPE_LABELS = {
+  en: {
+    normal: "Normal",
+    continuous: "Continuous",
+    field: "Field",
+    equip: "Equip",
+    quick: "Quick-Play",
+  },
+  "pt-br": {
+    normal: "Normal",
+    continuous: "Contínua",
+    field: "Campo",
+    equip: "Equipamento",
+    quick: "Rápida",
+  },
+};
+
+function getSelectionLabel(key) {
+  const locale = getLocale();
+  return (
+    SELECTION_KIND_LABELS[locale]?.[key] ||
+    SELECTION_SUBTYPE_LABELS[locale]?.[key] ||
+    SELECTION_KIND_LABELS.en?.[key] ||
+    SELECTION_SUBTYPE_LABELS.en?.[key] ||
+    key
+  );
+}
+
+export function getSelectionCardTypeClass(card) {
+  if (card?.cardKind === "spell") return "selection-card--spell";
+  if (card?.cardKind === "trap") return "selection-card--trap";
+  const monsterType = String(card?.monsterType || "").toLowerCase();
+  if (monsterType === "fusion") return "selection-card--fusion";
+  if (monsterType === "ascension") return "selection-card--ascension";
+  return "selection-card--monster";
+}
+
+function getSelectionTypeLine(card) {
+  if (card?.cardKind === "monster") {
+    const monsterType = String(card?.monsterType || "").toLowerCase();
+    const kind =
+      monsterType === "fusion" || monsterType === "ascension"
+        ? getSelectionLabel(monsterType)
+        : getSelectionLabel("monster");
+    const race = getMonsterTypeDisplayName(card);
+    return [kind, race].filter(Boolean).join(" | ");
+  }
+
+  const kind = getSelectionLabel(card?.cardKind || "card");
+  const subtype = card?.subtype ? getSelectionLabel(card.subtype) : "";
+  return [kind, subtype].filter(Boolean).join(" | ");
+}
+
+function getSelectionStat(card, candidate, stat) {
+  const value = candidate?.[stat] ?? card?.[stat];
+  return Number.isFinite(value) ? value : "-";
+}
+
+export function renderCompactSelectionCard(card, candidate = {}) {
+  const displayName =
+    getCardDisplayName(card) || (card?.name && card.name) || candidate.name || "Card";
+  const wrapper = document.createDocumentFragment();
+
+  const nameDiv = document.createElement("div");
+  nameDiv.className = "selection-card-name";
+  nameDiv.textContent = displayName;
+  wrapper.appendChild(nameDiv);
+
+  const body = document.createElement("div");
+  body.className = "selection-card-body";
+
+  const image = document.createElement("img");
+  image.className = "selection-card-image";
+  image.src = card?.image || candidate.cardRef?.image || "assets/card-back.png";
+  image.alt = displayName;
+  body.appendChild(image);
+
+  const details = document.createElement("div");
+  details.className = "selection-card-details";
+
+  const typeLine = document.createElement("div");
+  typeLine.className = "selection-card-type";
+  typeLine.textContent = getSelectionTypeLine(card);
+  details.appendChild(typeLine);
+
+  if (card?.cardKind === "monster") {
+    const level = document.createElement("div");
+    level.className = "selection-card-stat";
+    level.textContent = `⭐ ${getSelectionStat(card, candidate, "level")}`;
+    details.appendChild(level);
+
+    const atk = document.createElement("div");
+    atk.className = "selection-card-stat";
+    atk.textContent = `⚔️ ${getSelectionStat(card, candidate, "atk")}`;
+    details.appendChild(atk);
+
+    const def = document.createElement("div");
+    def.className = "selection-card-stat";
+    def.textContent = `🛡️ ${getSelectionStat(card, candidate, "def")}`;
+    details.appendChild(def);
+  }
+
+  body.appendChild(details);
+  wrapper.appendChild(body);
+  return wrapper;
+}
 
 /**
  * @this {import('../Renderer.js').default}
@@ -138,34 +264,11 @@ export function showTargetSelection(
           btn.appendChild(descDiv);
         }
       } else {
-        // Standard card layout with image
-        const cardImage = document.createElement("img");
-        cardImage.src =
-          targetCard.image || cand.cardRef?.image || "assets/card-back.png";
-        cardImage.alt = displayName;
-        cardImage.style.width = "100px";
-        cardImage.style.height = "auto";
-        cardImage.style.borderRadius = "4px";
-        cardImage.style.marginBottom = "8px";
-        cardImage.style.boxShadow = "0 2px 8px rgba(0, 0, 0, 0.5)";
-
-        const nameDiv = document.createElement("div");
-        nameDiv.className = "target-name";
-        nameDiv.textContent = displayName;
-
-        btn.appendChild(cardImage);
-        btn.appendChild(nameDiv);
-
-        const metaDiv = document.createElement("div");
-        metaDiv.className = "target-meta";
-        metaDiv.textContent = `${cand.owner} ${cand.position || ""}`.trim();
-
-        const statsDiv = document.createElement("div");
-        statsDiv.className = "target-stats";
-        statsDiv.textContent = `ATK ${cand.atk ?? "-"} / DEF ${cand.def ?? "-"}`;
-
-        btn.appendChild(metaDiv);
-        btn.appendChild(statsDiv);
+        btn.classList.add(
+          "selection-card-candidate",
+          getSelectionCardTypeClass(targetCard),
+        );
+        btn.appendChild(renderCompactSelectionCard(targetCard, cand));
       }
 
       btn.addEventListener("click", () => {
@@ -589,34 +692,12 @@ export function showCardGridSelectionModal(options) {
 
   const renderDefaultCard = (card) => {
     const cardEl = document.createElement("div");
-    cardEl.className = cardClass;
-
-    const img = document.createElement("img");
-    img.src = card.image || "assets/card-back.png";
-    const displayName =
-      getCardDisplayName(card) || (card?.name && card.name) || "";
-    img.alt = displayName || "Card";
-    img.className = "card-grid-image";
-
-    const info = document.createElement("div");
-    info.className = "card-grid-info";
-
-    const name = document.createElement("div");
-    name.className = "card-grid-name";
-    name.textContent = displayName;
-    info.appendChild(name);
-
-    if (card.cardKind === "monster") {
-      const stats = document.createElement("div");
-      stats.className = "card-grid-stats";
-      stats.textContent = `ATK ${card.atk || 0} / DEF ${card.def || 0} / L${
-        card.level || 0
-      }`;
-      info.appendChild(stats);
-    }
-
-    cardEl.appendChild(img);
-    cardEl.appendChild(info);
+    cardEl.className = [
+      cardClass,
+      "selection-card-candidate",
+      getSelectionCardTypeClass(card),
+    ].join(" ");
+    cardEl.appendChild(renderCompactSelectionCard(card));
 
     return cardEl;
   };

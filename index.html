@@ -15,21 +15,41 @@
     <div id="start-screen" class="overlay">
       <div class="start-panel">
         <h1>Shadow Duel</h1>
-        <div class="bot-preset-control">
-          <label for="bot-preset-select">Deck do Bot:</label>
-          <select id="bot-preset-select"></select>
-          <span id="bot-preset-status" class="bot-preset-status"></span>
-        </div>
-        <p class="start-sub">
-          Monte um deck de até 30 cartas e duele contra um bot.
-        </p>
         <div class="start-actions">
           <button id="btn-start-duel">Duelar</button>
-          <button id="btn-bot-arena">Bot Arena</button>
-          <button id="btn-deck-builder">Meu Deck</button>
-          <button id="btn-open-laboratory" class="laboratory-toggle">
-            Laboratório
-          </button>
+          <div class="start-deck-control">
+            <div class="start-deck-split">
+              <button id="btn-deck-builder" type="button">Meu Deck</button>
+              <button
+                id="btn-start-deck-menu"
+                class="start-deck-menu-toggle"
+                type="button"
+                aria-label="Trocar deck ativo"
+                aria-haspopup="menu"
+                aria-expanded="false"
+                aria-controls="start-deck-menu"
+                title="Trocar deck ativo"
+              >
+                ▼
+              </button>
+            </div>
+            <div
+              id="start-deck-menu"
+              class="start-deck-menu hidden"
+              role="menu"
+              aria-label="Decks salvos"
+            ></div>
+          </div>
+          <div class="bot-preset-control">
+            <label for="bot-preset-select">Oponente:</label>
+            <select id="bot-preset-select"></select>
+          </div>
+          <div class="start-secondary-actions">
+            <button id="btn-bot-arena" type="button">Bot Arena</button>
+            <button id="btn-open-laboratory" class="laboratory-toggle">
+              Laboratório
+            </button>
+          </div>
         </div>
         <div
           class="language-toggle"
@@ -73,10 +93,49 @@
           <span id="deck-count">0 / 30</span>
         </div>
         <p class="deck-hint">Maximo de 3 cópias por carta.</p>
+        <div class="deck-toolbar" aria-label="Ferramentas do deck builder">
+          <div class="deck-search-row">
+            <input
+              id="deck-search"
+              class="deck-search-input"
+              type="search"
+              placeholder="Buscar carta..."
+              autocomplete="off"
+            />
+          </div>
+          <div class="deck-control-row">
+            <label class="deck-control">
+              Categoria
+              <select id="deck-category-filter" class="deck-select"></select>
+            </label>
+            <label class="deck-control">
+              Tipo/Subtipo
+              <select id="deck-type-subtype-filter" class="deck-select"></select>
+            </label>
+            <label class="deck-control">
+              Arquétipo
+              <select id="deck-archetype-filter" class="deck-select"></select>
+            </label>
+            <label class="deck-control">
+              Visualização
+              <select id="deck-view-mode" class="deck-select"></select>
+            </label>
+            <label class="deck-control">
+              Ordenar
+              <select id="deck-sort-mode" class="deck-select"></select>
+            </label>
+          </div>
+          <div
+            id="deck-active-filters"
+            class="deck-active-filters hidden"
+            aria-label="Filtros ativos"
+          ></div>
+        </div>
         <div class="deck-body">
           <div class="deck-left">
             <div id="deck-grid" class="deck-grid"></div>
-            <div class="extradeck-section">
+            <div id="deck-list" class="deck-list-view hidden"></div>
+            <div id="extradeck-section" class="extradeck-section">
               <h3 class="extradeck-title">Extra Deck</h3>
               <span id="extradeck-count">0 / 10</span>
               <div
@@ -101,19 +160,7 @@
         </div>
         <div class="deck-footer">
           <div class="deck-footer-left">
-            <button id="deck-filter-void" class="deck-filter-btn">Void</button>
-            <button id="deck-filter-luminarch" class="deck-filter-btn">
-              Luminarch
-            </button>
-            <button id="deck-filter-shadow-heart" class="deck-filter-btn">
-              Shadow-Heart
-            </button>
-            <button id="deck-filter-arcanist" class="deck-filter-btn">
-              Arcanist
-            </button>
-            <button id="deck-filter-no-archetype" class="deck-filter-btn">
-              Sem arquétipo
-            </button>
+            <span id="deck-pool-count" class="deck-pool-count">0 cartas</span>
           </div>
           <div class="deck-footer-right">
             <button id="deck-save">Salvar</button>
@@ -487,31 +534,31 @@
     <!-- Game Over Modal -->
     <div id="game-over-modal" class="overlay hidden">
       <div class="game-over-panel">
-        <h1 id="game-over-title">Victory!</h1>
-        <p id="game-over-message">Você venceu o duelo!</p>
+        <h1 id="game-over-title">Vitória</h1>
+        <p id="game-over-message">Você venceu o duelo.</p>
         <div class="game-over-stats">
           <div class="stat-row">
-            <span>Seus LP:</span>
+            <span id="game-over-player-label">Você:</span>
             <span id="game-over-player-lp">8000</span>
           </div>
           <div class="stat-row">
-            <span>LP do Bot:</span>
+            <span id="game-over-bot-label">Oponente:</span>
             <span id="game-over-bot-lp">0</span>
           </div>
           <div class="stat-row">
-            <span>Turnos:</span>
+            <span id="game-over-turns-label">Turnos:</span>
             <span id="game-over-turns">5</span>
           </div>
         </div>
         <div class="game-over-actions">
-          <button id="btn-game-over-menu">Menu Principal</button>
           <button id="btn-game-over-rematch">Revanche</button>
+          <button id="btn-game-over-menu">Menu Principal</button>
           <button
             id="btn-game-over-export"
             class="export-btn"
             title="Exportar replay deste duelo"
           >
-            📥 Exportar Replay
+            Exportar Replay
           </button>
         </div>
         <p id="game-over-replay-status" class="replay-status hidden"></p>
