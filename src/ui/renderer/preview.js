@@ -11,6 +11,211 @@ import {
   getCardDisplayName,
 } from "../../core/i18n.js";
 
+const COUNTER_TOOLTIP_METADATA_CACHE = new Map();
+
+const COUNTER_LABEL_STOP_WORDS =
+  /(\s+(a|ao|aos|à|às|neste|nesta|nesse|nessa|deste|desta|desse|dessa|este|esta|esse|essa|card|carta|conforme|quando|enquanto|para|por|em|no|na|que|se)\b.*)$/iu;
+
+function normalizeCounterLabelKey(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/gi, "")
+    .toLowerCase();
+}
+
+function pluralizePortugueseCounterLabel(label) {
+  const normalized = String(label || "").trim();
+  const match = normalized.match(/^(Marcador|Contador)\s+(.+)$/iu);
+  if (!match) return normalized;
+
+  const pluralBase = "Marcadores";
+  const suffix = match[2].trim();
+  if (/^de\s+/iu.test(suffix) || /^do\s+/iu.test(suffix) || /^da\s+/iu.test(suffix)) {
+    return `${pluralBase} ${suffix}`;
+  }
+
+  const suffixParts = suffix.split(/\s+/);
+  if (suffixParts.length > 1) {
+    return `${pluralBase} ${suffix}`;
+  }
+
+  const pluralSuffix = suffixParts
+    .map((word) => {
+      if (/s$/iu.test(word)) return word;
+      if (/[rz]$/iu.test(word)) return `${word}es`;
+      return `${word}s`;
+    })
+    .join(" ");
+
+  return `${pluralBase} ${pluralSuffix}`;
+}
+
+function pluralizeEnglishCounterLabel(label) {
+  return String(label || "")
+    .trim()
+    .replace(/\bCounters$/i, "Markers")
+    .replace(/\bcounters$/i, "markers")
+    .replace(/\bCounter$/i, "Markers")
+    .replace(/\bcounter$/i, "markers");
+}
+
+function uniqueCounterLabels(labels) {
+  const seen = new Set();
+  return labels.filter((label) => {
+    const key = normalizeCounterLabelKey(label);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function extractPortugueseCounterLabels(description) {
+  const labels = [];
+  const pattern = /\b(?:Marcador(?:es)?|Contador(?:es)?)\b/giu;
+
+  for (const match of description.matchAll(pattern)) {
+    const start = match.index ?? 0;
+    const segment = description.slice(start, start + 80).split(/[.;:,]/)[0];
+    const trimmed = segment.replace(COUNTER_LABEL_STOP_WORDS, "").trim();
+    if (!/\s/.test(trimmed)) continue;
+    labels.push(pluralizePortugueseCounterLabel(trimmed));
+  }
+
+  return uniqueCounterLabels(labels);
+}
+
+function extractEnglishCounterLabels(description) {
+  const labels = [];
+  const pattern =
+    /\b([A-Z][A-Za-z'-]*(?:\s+[A-Z][A-Za-z'-]*)*\s+[Cc]ounters?)\b/g;
+
+  for (const match of description.matchAll(pattern)) {
+    labels.push(pluralizeEnglishCounterLabel(match[1]));
+  }
+
+  return uniqueCounterLabels(labels);
+}
+
+function extractCounterLabels(description) {
+  const text = String(description || "");
+  if (!text) return [];
+  return uniqueCounterLabels([
+    ...extractPortugueseCounterLabels(text),
+    ...extractEnglishCounterLabels(text),
+  ]);
+}
+
+function getCounterAmount(card, counterType) {
+  if (!card || !counterType) return 0;
+  if (typeof card.getCounter === "function") return card.getCounter(counterType) || 0;
+  const counters = card.counters;
+  if (counters instanceof Map) return counters.get(counterType) || 0;
+  if (counters && typeof counters === "object") return counters[counterType] || 0;
+  return 0;
+}
+
+function collectCounterTypesFromValue(value, counterTypes, seen = new WeakSet()) {
+  if (!value || typeof value !== "object") return;
+  if (seen.has(value)) return;
+  seen.add(value);
+
+  if (Array.isArray(value)) {
+    value.forEach((entry) => collectCounterTypesFromValue(entry, counterTypes, seen));
+    return;
+  }
+
+  Object.entries(value).forEach(([key, entry]) => {
+    if (key === "counterType" && typeof entry === "string" && entry.trim()) {
+      counterTypes.add(entry.trim());
+      return;
+    }
+    collectCounterTypesFromValue(entry, counterTypes, seen);
+  });
+}
+
+function collectLiveCounterTypes(card) {
+  const counterTypes = new Set();
+
+  const counters = card?.counters;
+  if (counters instanceof Map) {
+    counters.forEach((amount, counterType) => {
+      if (amount > 0 && counterType) counterTypes.add(counterType);
+    });
+  } else if (counters && typeof counters === "object") {
+    Object.entries(counters).forEach(([counterType, amount]) => {
+      if (amount > 0 && counterType) counterTypes.add(counterType);
+    });
+  }
+
+  return [...counterTypes];
+}
+
+function humanizeCounterType(counterType) {
+  return String(counterType || "counter")
+    .split(/[_\s-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function getCounterTooltipMetadata(card) {
+  const localizedDescription = getCardDisplayDescription(card) || "";
+  const fallbackDescription = card?.description || "";
+  const cacheKey = [
+    card?.id ?? card?.name ?? "",
+    localizedDescription,
+    fallbackDescription,
+  ].join("|");
+
+  const cached = COUNTER_TOOLTIP_METADATA_CACHE.get(cacheKey);
+  if (cached) return cached;
+
+  const effectCounterTypes = new Set();
+  collectCounterTypesFromValue(card?.effects, effectCounterTypes);
+  const localizedLabels = extractCounterLabels(localizedDescription);
+  const fallbackLabels = extractCounterLabels(fallbackDescription);
+  const metadata = {
+    effectCounterTypes: [...effectCounterTypes],
+    labels: localizedLabels.length ? localizedLabels : fallbackLabels,
+  };
+
+  COUNTER_TOOLTIP_METADATA_CACHE.set(cacheKey, metadata);
+  return metadata;
+}
+
+function resolveCounterLabel(metadata, counterType, index) {
+  const labels = metadata?.labels || [];
+
+  if (labels.length === 1) return labels[0];
+
+  const counterTypeKey = normalizeCounterLabelKey(counterType);
+  const matched = labels.find((label) =>
+    normalizeCounterLabelKey(label).includes(counterTypeKey),
+  );
+  if (matched) return matched;
+
+  return labels[index] || `${humanizeCounterType(counterType)} Markers`;
+}
+
+function buildCounterTooltip(card) {
+  const metadata = getCounterTooltipMetadata(card);
+  const counterTypes = [
+    ...new Set([
+      ...(metadata?.effectCounterTypes || []),
+      ...collectLiveCounterTypes(card),
+    ]),
+  ];
+  if (counterTypes.length === 0) return "";
+
+  return counterTypes
+    .map((counterType, index) => {
+      const label = resolveCounterLabel(metadata, counterType, index);
+      return `${label}: ${getCounterAmount(card, counterType)}`;
+    })
+    .join("\n");
+}
+
 /**
  * @this {import('../Renderer.js').default}
  */
@@ -164,13 +369,27 @@ export function createCardElement(card, visible) {
   }
 
   const storedBlueprints = card?.state?.blueprintStorage?.storedBlueprints;
+  const tooltipLines = [];
+  const counterTooltip = visible ? buildCounterTooltip(card) : "";
+  if (counterTooltip) {
+    el.dataset.counterTooltip = counterTooltip;
+    tooltipLines.push(counterTooltip);
+  }
+
   if (visible && Array.isArray(storedBlueprints) && storedBlueprints.length) {
     const storedNames = storedBlueprints
       .map((bp) => bp.displayName || bp.sourceCardName || bp.blueprintId)
       .filter(Boolean);
     if (storedNames.length) {
-      el.title = `Efeito armazenado: ${storedNames.join(", ")}`;
+      tooltipLines.push(`Efeito armazenado: ${storedNames.join(", ")}`);
     }
   }
+
+  if (tooltipLines.length) {
+    const baseTooltip = tooltipLines.join("\n");
+    el.dataset.baseTooltip = baseTooltip;
+    el.title = baseTooltip;
+  }
+
   return el;
 }

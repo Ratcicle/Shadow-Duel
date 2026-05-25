@@ -11,9 +11,13 @@
   /* Card size responsive to viewport height */
   --card-h: clamp(92px, 12vh, 165px);
   --card-w: calc(var(--card-h) * 0.6923);
-  --card-gap: 10px;
-  --zone-pad: 12px;
+  --monster-slot-w: var(--card-h);
+  --card-gap: 3px;
+  --zone-pad: 3px;
   --zone-width: calc(
+    5 * var(--monster-slot-w) + 4 * var(--card-gap) + 2 * var(--zone-pad)
+  );
+  --hand-zone-width: calc(
     5 * var(--card-w) + 4 * var(--card-gap) + 2 * var(--zone-pad)
   );
   --deck-card-ratio: 3 / 4;
@@ -437,7 +441,7 @@ body {
   align-items: center;
   border: 1px solid var(--zone-border-color);
   border-radius: 8px;
-  padding: 0 6px;
+  padding: 0 var(--zone-pad);
   position: relative;
   background: radial-gradient(
     circle at 10% 20%,
@@ -464,6 +468,16 @@ body {
   min-height: var(--card-h);
 }
 
+.field-card-slot {
+  flex: 0 0 var(--monster-slot-w);
+  width: var(--monster-slot-w);
+  height: var(--card-h);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+}
+
 .spelltrap-row {
   background: linear-gradient(135deg, rgba(0, 0, 0, 0.18), rgba(0, 0, 0, 0.08));
   border-color: var(--border-color);
@@ -487,9 +501,9 @@ body {
 .hand-zone {
   display: flex;
   gap: var(--card-gap);
-  width: var(--zone-width);
-  min-width: var(--zone-width);
-  max-width: var(--zone-width);
+  width: var(--hand-zone-width);
+  min-width: var(--hand-zone-width);
+  max-width: var(--hand-zone-width);
   min-height: calc(var(--card-h) + 6px);
   justify-content: center;
   align-items: center;
@@ -591,6 +605,35 @@ body {
   position: relative;
 }
 
+.card[data-counter-tooltip]::after {
+  content: attr(data-counter-tooltip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  z-index: 50;
+  max-width: 220px;
+  padding: 6px 8px;
+  border: 1px solid rgba(187, 134, 252, 0.68);
+  border-radius: 6px;
+  background: rgba(16, 16, 18, 0.96);
+  color: #f2f0ff;
+  font-size: 12px;
+  line-height: 1.25;
+  white-space: pre;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-50%) translateY(4px);
+  transition:
+    opacity 0.12s ease,
+    transform 0.12s ease;
+}
+
+.card[data-counter-tooltip]:hover::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
 .card.card-monster {
   border-color: var(--accent-color);
 }
@@ -614,6 +657,10 @@ body {
 .field-slot .card {
   width: 100%;
   height: 100%;
+}
+
+.field-card-slot .card {
+  flex: 0 0 auto;
 }
 
 .card:not(.defense):hover {

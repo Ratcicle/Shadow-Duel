@@ -8,7 +8,7 @@ O tema **Dragon** é um conjunto de cartas genéricas de tipo Dragão que funcio
 - **Agressivo/Beatdown**: Monstros com ATK alto e efeitos de combate
 - **Sinergia de tipo**: Muitos efeitos buscam, invocam ou buffam outros Dragons
 - **Cemitério como recurso**: Vários efeitos funcionam a partir do GY
-- **Field Spell central**: Jagged Peak of the Dragons acumula contadores para SS gratuito
+- **Field Spell central**: Jagged Peak of the Dragons acumula Marcadores para SS gratuito
 - **Linha de Extra Deck**: Metal Armored Dragon, Tech-Void Dragon, Radiant Cosmic Dragon e Rainbow Cosmic Dragon
 
 ---

@@ -1,11 +1,9 @@
-import Player, { isAI } from "./Player.js";
+import Player from "./Player.js";
 import Bot from "./Bot.js";
 import EffectEngine from "./EffectEngine.js";
 import ChainSystem from "./ChainSystem.js";
 import NullChainSystem from "./NullChainSystem.js";
 import Card from "./Card.js";
-import { cardDatabaseByName, cardDatabaseById } from "../data/cards.js";
-import { getCardDisplayName } from "./i18n.js";
 import AutoSelector from "./AutoSelector.js";
 import { createUIAdapter } from "./UIAdapter.js";
 
@@ -471,82 +469,6 @@ export default class Game {
   // ? showIgnitionActivateModal ? Moved to src/core/game/ui/modals.js
 
   // ? bindCardInteractions ? Moved to src/core/game/ui/interactions.js
-
-  /**
-   * @deprecated LEGACY CODE - Hardcoded logic for "Luminarch Sanctum Protector" card.
-   * This should be replaced with a declarative effect on the card using the
-   * `special_summon_from_hand_with_cost` handler type.
-   * TODO: Add ignition effect to "Luminarch Sanctum Protector" card definition and remove this method.
-   */
-  specialSummonSanctumProtectorFromHand(handIndex, actor = this.player) {
-    const guard = this.guardActionStart({
-      actor,
-      kind: "special_summon",
-      phaseReq: ["main1", "main2"],
-    });
-    if (!guard.ok) return guard;
-    if (actor.field.length >= 5) {
-      this.ui.log("Field is full (max 5 monsters).");
-      return;
-    }
-
-    const card = actor.hand[handIndex];
-    if (!card || card.name !== "Luminarch Sanctum Protector") return;
-
-    const aegis = actor.field.find(
-      (c) => c && c.name === "Luminarch Aegisbearer" && !c.isFacedown,
-    );
-
-    if (!aegis) {
-      this.ui.log('No face-up "Luminarch Aegisbearer" to send.');
-      return;
-    }
-
-    const limitCheck = this.canPlaceCardOnField?.(card, actor, {
-      isFacedown: false,
-      excludeCards: [aegis],
-    });
-    if (limitCheck && limitCheck.ok === false) {
-      return;
-    }
-
-    this.moveCard(aegis, actor, "graveyard", { fromZone: "field" });
-
-    const idxInHand = actor.hand.indexOf(card);
-    if (idxInHand === -1) return;
-    actor.hand.splice(idxInHand, 1);
-
-    const finalizeSummon = (positionChoice) => {
-      const position = positionChoice === "defense" ? "defense" : "attack";
-      card.position = position;
-      card.isFacedown = false;
-      card.hasAttacked = false;
-      card.cannotAttackThisTurn = false;
-      card.attacksUsedThisTurn = 0;
-      card.positionChangedThisTurn = false;
-      card.summonedTurn = this.turnCounter;
-      card.setTurn = null;
-      card.owner = actor.id;
-
-      actor.field.push(card);
-
-      this.emit("after_summon", {
-        card,
-        player: actor,
-        method: "special",
-        fromZone: "hand",
-      });
-
-      this.updateBoard();
-    };
-
-    const positionChoice = this.chooseSpecialSummonPosition(actor, card);
-    if (positionChoice && typeof positionChoice.then === "function") {
-      positionChoice.then((resolved) => finalizeSummon(resolved));
-    } else {
-      finalizeSummon(positionChoice);
-    }
-  }
 
   // resolveDestructionWithReplacement moved to src/core/game/effects/destructionReplacement.js
   // destroyCard moved to src/core/game/zones/destruction.js

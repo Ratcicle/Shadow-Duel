@@ -98,12 +98,6 @@ export function bindCardInteractions() {
       });
       if (!guard.ok) return true;
 
-      const canSanctumSpecialFromAegis =
-        card.name === "Luminarch Sanctum Protector" &&
-        actor.field.length < 5 &&
-        actor.field.some(
-          (c) => c && c.name === "Luminarch Aegisbearer" && !c.isFacedown
-        );
       const tributeInfo = actor.getTributeRequirement(card);
       const tributesNeeded = tributeInfo.tributesNeeded;
       const handEffect = (card.effects || []).find(
@@ -118,8 +112,7 @@ export function bindCardInteractions() {
       if (
         !canUseHandEffect &&
         tributesNeeded > 0 &&
-        actor.field.length < tributesNeeded &&
-        !canSanctumSpecialFromAegis
+        actor.field.length < tributesNeeded
       ) {
         this.ui.log(`Not enough tributes for Level ${card.level} monster.`);
         return true;
@@ -128,10 +121,6 @@ export function bindCardInteractions() {
       this.ui.showSummonModal(
         index,
         async (choice) => {
-          if (choice === "special_from_aegisbearer") {
-            this.specialSummonSanctumProtectorFromHand(index, actor);
-            return;
-          }
           if (
             choice === "special_from_void_forgotten" ||
             choice === "special_from_hand_effect"
@@ -200,7 +189,6 @@ export function bindCardInteractions() {
           }).then(() => this.updateBoard());
         },
         {
-          canSanctumSpecialFromAegis,
           specialSummonFromHand: false,
           specialSummonFromHandEffect: canUseHandEffect,
           specialSummonFromHandEffectLabel: "Special Summon",
@@ -432,15 +420,6 @@ export function bindCardInteractions() {
         });
         if (!guard.ok) return;
 
-        // LEGACY: Hardcoded check for "Luminarch Sanctum Protector" card.
-        // TODO: This should be replaced with a declarative ignition effect on the card definition.
-        const canSanctumSpecialFromAegis =
-          card.name === "Luminarch Sanctum Protector" &&
-          this.player.field.length < 5 &&
-          this.player.field.some(
-            (c) => c && c.name === "Luminarch Aegisbearer" && !c.isFacedown
-          );
-
         const tributeInfo = this.player.getTributeRequirement(card);
         const tributesNeeded = tributeInfo.tributesNeeded;
 
@@ -463,8 +442,7 @@ export function bindCardInteractions() {
         if (
           !canUseHandEffect &&
           tributesNeeded > 0 &&
-          this.player.field.length < tributesNeeded &&
-          !canSanctumSpecialFromAegis
+          this.player.field.length < tributesNeeded
         ) {
           this.ui.log(`Not enough tributes for Level ${card.level} monster.`);
           return;
@@ -473,18 +451,15 @@ export function bindCardInteractions() {
         this.ui.showSummonModal(
           index,
           async (choice) => {
-            if (choice === "special_from_aegisbearer") {
-              this.specialSummonSanctumProtectorFromHand(index);
-              return;
-            }
-
             if (choice === "special_from_void_forgotten") {
               this.tryActivateMonsterEffect(card, null, "hand");
               return;
             }
 
             if (choice === "special_from_hand_effect") {
-              console.log("[Game] Activating hand effect for:", card.name);
+              this.devLog?.("HAND_EFFECT", {
+                summary: `Activating hand effect for ${card.name}`,
+              });
               this.tryActivateMonsterEffect(card, null, "hand");
               return;
             }
@@ -572,7 +547,6 @@ export function bindCardInteractions() {
             }
           },
           {
-            canSanctumSpecialFromAegis,
             specialSummonFromHand: false,
             specialSummonFromHandEffect: canUseHandEffect,
             specialSummonFromHandEffectLabel: handEffectLabel,
@@ -904,7 +878,9 @@ export function bindCardInteractions() {
   // ─────────────────────────────────────────────────────────────────────────────
   if (this.ui && typeof this.ui.bindPlayerSpellTrapClick === "function") {
     this.ui.bindPlayerSpellTrapClick(async (e, cardEl, index) => {
-      console.log(`[Game] Spell/Trap zone clicked! Target:`, e.target);
+      this.devLog?.("SPELL_TRAP_CLICK", {
+        summary: `Spell/Trap zone clicked at index ${index}`,
+      });
 
       if (this.targetSelection) {
         const handled = this.handleTargetSelectionClick(
@@ -914,16 +890,18 @@ export function bindCardInteractions() {
           "spellTrap"
         );
         if (handled) return;
-        console.log(`[Game] Returning: targetSelection active`);
+        this.devLog?.("SPELL_TRAP_CLICK", {
+          summary: "Returning: targetSelection active",
+        });
         return;
       }
 
       const card = this.player.spellTrap[index];
       if (!card) return;
 
-      console.log(
-        `[Game] Clicked spell/trap: ${card.name}, isFacedown: ${card.isFacedown}, cardKind: ${card.cardKind}`
-      );
+      this.devLog?.("SPELL_TRAP_CLICK", {
+        summary: `Clicked ${card.name}, facedown=${card.isFacedown}, kind=${card.cardKind}`,
+      });
 
       // Handle traps - can be activated on opponent's turn and during battle phase
       if (card.cardKind === "trap") {
@@ -957,7 +935,9 @@ export function bindCardInteractions() {
           return;
         }
 
-        console.log(`[Game] Activating trap: ${card.name}`);
+        this.devLog?.("SPELL_TRAP_CLICK", {
+          summary: `Activating trap: ${card.name}`,
+        });
         await this.tryActivateSpellTrapEffect(card);
         return;
       }
@@ -984,7 +964,9 @@ export function bindCardInteractions() {
           }
           return;
         }
-        console.log(`[Game] Activating spell from zone: ${card.name}`);
+        this.devLog?.("SPELL_TRAP_CLICK", {
+          summary: `Activating spell from zone: ${card.name}`,
+        });
         await this.tryActivateSpellTrapEffect(card);
       }
     });

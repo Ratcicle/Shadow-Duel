@@ -69,7 +69,7 @@ Arquivos JSON de tradução.
 | Arquivo | Responsabilidade |
 |---|---|
 | [Game.js](../src/core/Game.js) | **Fachada principal do estado de jogo.** Classe de ~thousand-of-lines reduzida via composição: importa dezenas de módulos de [game/](../src/core/game/) e os anexa ao próprio prototype. Coordena turnos, fases, invocações, batalha, efeitos, seleções e UI prompts. |
-| [Player.js](../src/core/Player.js) | Classe `Player` — LP, mão, deck, campo, GY, banimento, contadores per-turn. Exporta helper `isAI()`. |
+| [Player.js](../src/core/Player.js) | Classe `Player` — LP, mão, deck, campo, GY, banimento, marcadores per-turn. Exporta helper `isAI()`. |
 | [Bot.js](../src/core/Bot.js) | Subclasse de `Player` representando o oponente IA. Carrega presets de deck (Shadow-Heart/Luminarch/Void/Dragon/Arcanist), seleciona estratégia via `StrategyRegistry`, e roda `BeamSearch`/`greedySearchWithEvalV2` com `TurnLineSearch` opcional para escolher ações. |
 | [BotArena.js](../src/core/BotArena.js) | Modo "bot vs bot" para testes em massa. Roda partidas headless, controla timeouts/auto pause e coleta Strategic Reports via `ArenaAnalytics`/`DuelTracker`. |
 | [BotLogger.js](../src/core/BotLogger.js) | Logger configurável por `localStorage`. Categorias: action_gen, decision, state_change, phase_transition, etc. Filtra por bot e nível de verbosidade. |

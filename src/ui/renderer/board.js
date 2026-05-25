@@ -54,6 +54,9 @@ export function renderField(player) {
 
   player.field.forEach((card, index) => {
     if (!card) return; // Defensive: skip empty slots
+    const slotEl = document.createElement("div");
+    slotEl.className = "field-card-slot";
+
     const cardEl = this.createCardElement(card, true);
     cardEl.dataset.index = index;
     cardEl.dataset.location = "field";
@@ -70,7 +73,8 @@ export function renderField(player) {
       cardEl.style.border = "1px solid #555";
     }
 
-    fragment.appendChild(cardEl);
+    slotEl.appendChild(cardEl);
+    fragment.appendChild(slotEl);
   });
 
   container.innerHTML = "";

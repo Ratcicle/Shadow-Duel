@@ -1,17 +1,8 @@
 import Card, { cardMatchesKind } from "./Card.js";
-import { cardDatabase } from "../data/cards.js";
-import { getCardDisplayName } from "./i18n.js";
 import { isAI } from "./Player.js";
 import {
   ActionHandlerRegistry,
   registerDefaultHandlers,
-  handleSpecialSummonFromZone,
-  handlePermanentBuffNamed,
-  handleRemovePermanentBuffNamed,
-  handleDestroyAttackerOnArchetypeDestruction,
-  handleUpkeepPayOrSendToGrave,
-  handleSpecialSummonFromDeckWithCounterLimit,
-  handleDestroyTargetedCards,
 } from "./ActionHandlers.js";
 
 // Effect sub-modules

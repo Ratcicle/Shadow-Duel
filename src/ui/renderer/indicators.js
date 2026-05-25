@@ -431,7 +431,9 @@ export function decorateActivatableCard(cardEl) {
  */
 export function setActivationHint(cardEl, label) {
   if (!label) return;
-  cardEl.title = label;
+  cardEl.title = cardEl.dataset.baseTooltip
+    ? `${label}\n${cardEl.dataset.baseTooltip}`
+    : label;
   cardEl.dataset.activationHint = "true";
 }
 
@@ -442,6 +444,10 @@ export function clearActivationHint(cardEl) {
   cardEl.classList.remove("card-activatable");
   if (cardEl.dataset.activationHint) {
     delete cardEl.dataset.activationHint;
-    cardEl.removeAttribute("title");
+    if (cardEl.dataset.baseTooltip) {
+      cardEl.title = cardEl.dataset.baseTooltip;
+    } else {
+      cardEl.removeAttribute("title");
+    }
   }
 }

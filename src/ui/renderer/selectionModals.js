@@ -8,7 +8,6 @@
 
 import {
   getCardDisplayName,
-  getCardDisplayDescription,
   getLocale,
   getMonsterTypeDisplayName,
 } from "../../core/i18n.js";

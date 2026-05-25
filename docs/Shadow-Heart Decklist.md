@@ -98,7 +98,7 @@ Fonte dos textos: `src/data/cards.js` (1x cada carta).
 
 **Darkness Valley (68)** — Magia de Campo. "Shadow-Heart" +300 ATK. Uma vez por turno, se um "Shadow-Heart" de Nível 8+ seu for destruído em batalha: destrua o monstro atacante.
 
-**Shadow-Heart Cathedral (72)** — Magia Contínua. Ganha Marcadores de Julgamento conforme dano ao oponente (1 por 500). Main Phase: envie ao Cemitério; Invoque do Deck 1 monstro "Shadow-Heart" com ATK ≤ 500 × contadores. OPT.
+**Shadow-Heart Cathedral (72)** — Magia Contínua. Ganha Marcadores de Julgamento conforme dano ao oponente (1 por 500). Main Phase: envie ao Cemitério; Invoque do Deck 1 monstro "Shadow-Heart" com ATK ≤ 500 × Marcadores. OPT.
 
 **The Shadow Heart (73)** — Magia de Equipamento. Ative apenas com campo vazio. Alvo: 1 monstro "Shadow-Heart" no Cemitério; Invoque-o e equipe esta carta. Se ela sair do campo, destrua o monstro equipado.
 

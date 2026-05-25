@@ -95,15 +95,13 @@ export async function resolveEvent(eventName, payload) {
     .map((entry) => entry?.summary)
     .filter((value) => typeof value === "string" && value.trim().length > 0);
 
-  // DEBUG: Log para battle_destroy
   if (eventName === "battle_destroy") {
-    console.log(
-      `[resolveEvent DEBUG] battle_destroy - entries.length: ${entries.length}`,
-    );
-    console.log(
-      `[resolveEvent DEBUG] entries:`,
-      entries.map((e) => e?.summary || e?.effect?.id),
-    );
+    this.devLog("BATTLE_DESTROY_TRIGGERS", {
+      summary: `entries=${entries.length}: ${entries
+        .map((entry) => entry?.summary || entry?.effect?.id)
+        .filter(Boolean)
+        .join(", ")}`,
+    });
   }
 
   this.devLog("TRIGGERS_COLLECTED", {
@@ -206,24 +204,25 @@ export async function resolveEventEntries(
     const entry = entries[i];
     const config = entry?.config || entry?.pipeline || entry;
 
-    // DEBUG: Log para verificar se config.activate existe
     if (eventName === "battle_destroy") {
-      console.log(`[resolveEventEntries DEBUG] entry[${i}]:`, entry?.summary);
-      console.log(`  - config exists: ${!!config}`);
-      console.log(`  - config.activate type: ${typeof config?.activate}`);
+      this.devLog("BATTLE_DESTROY_ENTRY", {
+        summary: `entry[${i}] ${entry?.summary || "(unnamed)"} config=${!!config} activate=${typeof config?.activate}`,
+      });
     }
 
     if (!config || typeof config.activate !== "function") {
       if (eventName === "battle_destroy") {
-        console.log(
-          `[resolveEventEntries DEBUG] SKIPPING entry[${i}] - no activate function`,
-        );
+        this.devLog("BATTLE_DESTROY_ENTRY", {
+          summary: `Skipping entry[${i}] - no activate function`,
+        });
       }
       continue;
     }
 
     if (eventName === "battle_destroy") {
-      console.log(`[resolveEventEntries DEBUG] EXECUTING entry[${i}]`);
+      this.devLog("BATTLE_DESTROY_ENTRY", {
+        summary: `Executing entry[${i}]`,
+      });
     }
 
     const result = await this.runActivationPipelineWait({
@@ -319,14 +318,9 @@ export async function resumePendingEventSelection(
   { actionContext } = {},
 ) {
   const pending = this.pendingEventSelection;
-  if (this.devModeEnabled) {
-    console.log("[Game] resumePendingEventSelection called", {
-      hasPending: !!pending,
-      selectionsKeys: selections ? Object.keys(selections) : null,
-      entryCount: pending?.entries?.length || 0,
-      eventName: pending?.eventName,
-    });
-  }
+  this.devLog("EVENT_RESUME_SELECTION", {
+    summary: `hasPending=${!!pending}, selections=${selections ? Object.keys(selections).join(",") : "(none)"}, entryCount=${pending?.entries?.length || 0}, event=${pending?.eventName || "(none)"}`,
+  });
   if (!pending) {
     return { ok: false, reason: "No pending event selection." };
   }
@@ -382,10 +376,9 @@ export async function resumePendingEventSelection(
   ) {
     const tieInfo = this.pendingTieDestruction;
     this.pendingTieDestruction = null;
-    console.log(
-      "[Game] Resuming pending tie destruction for target:",
-      tieInfo.target?.name,
-    );
+    this.devLog("TIE_DESTRUCTION", {
+      summary: `Resuming pending tie destruction for ${tieInfo.target?.name || "(none)"}`,
+    });
 
     // Continue the combat by destroying the target
     const tieResult = await this.finishCombat(

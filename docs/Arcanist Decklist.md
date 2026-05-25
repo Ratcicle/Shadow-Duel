@@ -93,8 +93,8 @@
 
 ### 211 — Arcanist Ink River (Continuous)
 - **Efeitos:**
-	- Cada vez que você ativa o efeito de uma Magia "Arcanist", exceto "Arcanist Ink River": coloque 1 Contador de Tinta nesta carta.
-	- Você pode remover 2 Contadores de Tinta desta carta; adicione 1 Magia "Arcanist" do seu Cemitério à mão.
+	- Cada vez que você ativa o efeito de uma Magia "Arcanist", exceto "Arcanist Ink River": coloque 1 Marcador de Tinta nesta carta.
+	- Você pode remover 2 Marcadores de Tinta desta carta; adicione 1 Magia "Arcanist" do seu Cemitério à mão.
 
 ### 212 — Arcanist Grand Library (Field)
 - **Efeitos:**

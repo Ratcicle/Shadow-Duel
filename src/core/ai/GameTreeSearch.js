@@ -65,6 +65,8 @@ function cloneCardForSim(card) {
   clone.equippedTo = null;
   clone.equipTarget = null;
   clone.equips = [];
+  clone.boundMonsterTarget = null;
+  clone.boundTrapSource = null;
   clone.callOfTheHauntedTarget = null;
   clone.callOfTheHauntedTrap = null;
 

@@ -231,7 +231,9 @@ export async function applyCallOfTheHauntedSummon(action, ctx, targets) {
   const card = ctx.source;
   const game = this.game;
 
-  console.log(`[applyCallOfTheHauntedSummon] Called with targets:`, targets);
+  game?.devLog?.("CALL_OF_THE_HAUNTED", {
+    summary: "Resolving summon target",
+  });
 
   if (!targets || !targets.haunted_target) {
     game.ui.log(`Call of the Haunted: Nenhum alvo selecionado no cemitério.`);
@@ -244,10 +246,9 @@ export async function applyCallOfTheHauntedSummon(action, ctx, targets) {
     : [targets.haunted_target];
 
   const targetMonster = targetArray[0];
-  console.log(
-    `[applyCallOfTheHauntedSummon] Target monster:`,
-    targetMonster?.name
-  );
+  game?.devLog?.("CALL_OF_THE_HAUNTED", {
+    summary: `Target monster: ${targetMonster?.name || "(none)"}`,
+  });
 
   if (!targetMonster || targetMonster.cardKind !== "monster") {
     game.ui.log(`Call of the Haunted: Alvo inválido.`);
@@ -295,9 +296,9 @@ export async function applyCallOfTheHauntedSummon(action, ctx, targets) {
     if (gyIndex > -1) {
       player.graveyard.splice(gyIndex, 1);
     } else {
-      console.log(
-        `[applyCallOfTheHauntedSummon] Monster not found in graveyard`
-      );
+      game?.devLog?.("CALL_OF_THE_HAUNTED", {
+        summary: "Monster not found in graveyard during fallback",
+      });
     }
 
     // Manual field addition with consistent flags
@@ -325,8 +326,8 @@ export async function applyCallOfTheHauntedSummon(action, ctx, targets) {
   }
 
   // Vincular a trap ao monstro para que se destruam mutuamente
-  targetMonster.callOfTheHauntedTrap = card;
-  card.callOfTheHauntedTarget = targetMonster;
+  targetMonster.boundTrapSource = card;
+  card.boundMonsterTarget = targetMonster;
 
   game.ui.log(
     `Call of the Haunted: ${targetMonster.name} foi revivido do cemitério em ${

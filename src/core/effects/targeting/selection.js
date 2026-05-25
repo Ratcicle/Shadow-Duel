@@ -127,7 +127,12 @@ export function buildSelectionCandidateKey(candidate = {}, fallbackIndex = 0) {
  * @returns {{zoneName: string, candidates: Array}} Zone name and matching candidates
  */
 export function selectCandidates(def, ctx) {
-  const logTargets = ctx?.activationContext?.logTargets !== false;
+  const devMode =
+    ctx?.game?.devModeEnabled === true ||
+    ctx?.player?.game?.devModeEnabled === true;
+  const logTargets =
+    ctx?.activationContext?.logTargets === true ||
+    (ctx?.activationContext?.logTargets !== false && devMode);
   const log = (...args) => {
     if (logTargets) {
       console.log(...args);

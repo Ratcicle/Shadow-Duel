@@ -51,13 +51,18 @@ export function cleanupTokenReferences(token, tokenOwner) {
     token.equips = [];
   }
 
-  // If this token was revived by Call of the Haunted, clear that reference
-  // and destroy the trap
-  if (token.callOfTheHauntedTrap) {
-    const trap = token.callOfTheHauntedTrap;
+  // If this token was revived by a bound continuous trap, clear that reference
+  // and destroy the trap.
+  const boundTrap = token.boundTrapSource || token.callOfTheHauntedTrap;
+  if (boundTrap) {
+    const trap = boundTrap;
+    if (trap.boundMonsterTarget === token) {
+      trap.boundMonsterTarget = null;
+    }
     if (trap.callOfTheHauntedTarget === token) {
       trap.callOfTheHauntedTarget = null;
     }
+    token.boundTrapSource = null;
     token.callOfTheHauntedTrap = null;
 
     // Destroy the Call of the Haunted trap (fire-and-forget, ref already cleared)
@@ -996,8 +1001,16 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     }
 
     // Se o monstro foi revivido por Call of the Haunted, destruir a trap também
-    if (card.callOfTheHauntedTrap) {
-      const callTrap = card.callOfTheHauntedTrap;
+    const boundTrap = card.boundTrapSource || card.callOfTheHauntedTrap;
+    if (boundTrap) {
+      const callTrap = boundTrap;
+      if (callTrap.boundMonsterTarget === card) {
+        callTrap.boundMonsterTarget = null;
+      }
+      if (callTrap.callOfTheHauntedTarget === card) {
+        callTrap.callOfTheHauntedTarget = null;
+      }
+      card.boundTrapSource = null;
       card.callOfTheHauntedTrap = null; // Clear reference before destroy
 
       // Destroy trap - refs already cleared, state is consistent regardless of result
@@ -1028,6 +1041,12 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
   ) {
     const revivedMonster = card.boundMonsterTarget;
     card.boundMonsterTarget = null; // Clear reference BEFORE destroy - state is consistent
+    if (revivedMonster.boundTrapSource === card) {
+      revivedMonster.boundTrapSource = null;
+    }
+    if (revivedMonster.callOfTheHauntedTrap === card) {
+      revivedMonster.callOfTheHauntedTrap = null;
+    }
 
     const monsterOwner =
       revivedMonster.owner === "player" ? this.player : this.bot;
@@ -1046,8 +1065,7 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     });
   }
 
-  // LEGACY SUPPORT: Also check callOfTheHauntedTarget for backwards compatibility
-  // TODO: Migrate cards using callOfTheHauntedTarget to use boundMonsterTarget instead
+  // Legacy save/replay compatibility: older states used callOfTheHauntedTarget.
   if (
     fromZone === "spellTrap" &&
     toZone !== "spellTrap" &&
@@ -1057,6 +1075,12 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
   ) {
     const revivedMonster = card.callOfTheHauntedTarget;
     card.callOfTheHauntedTarget = null;
+    if (revivedMonster.boundTrapSource === card) {
+      revivedMonster.boundTrapSource = null;
+    }
+    if (revivedMonster.callOfTheHauntedTrap === card) {
+      revivedMonster.callOfTheHauntedTrap = null;
+    }
 
     const monsterOwner =
       revivedMonster.owner === "player" ? this.player : this.bot;

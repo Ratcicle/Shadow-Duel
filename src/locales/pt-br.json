@@ -150,7 +150,7 @@
     },
     "72": {
       "name": "Catedral do Coração Sombrio",
-      "description": "Cada vez que seu oponente perder PV: coloque 1 Contador do Julgamento neste card para cada 500 de dano. Durante sua Fase Principal: você pode enviar este card para o cemitério; Invoque por invocação-Especial 1 monstro 'Coração Sombrio' do seu Deck com o ataque igual ou menor ao número de Contadores do Julgamento x 500. Você só pode usar este efeito de 'Catedral do Coração Sombrio' uma vez por turno."
+      "description": "Cada vez que seu oponente perder PV: coloque 1 Marcador do Julgamento neste card para cada 500 de dano. Durante sua Fase Principal: você pode enviar este card para o cemitério; Invoque por invocação-Especial 1 monstro 'Coração Sombrio' do seu Deck com o ataque igual ou menor ao número de Marcadores do Julgamento x 500. Você só pode usar este efeito de 'Catedral do Coração Sombrio' uma vez por turno."
     },
     "73": {
       "name": "O Coração Sombrio",
@@ -386,7 +386,7 @@
     },
     "27": {
       "name": "Pico Escarpado dos Dragões",
-      "description": "Quando este card é ativado: você pode adicionar 1 monstro Dragão de Nível 4 ou menor do seu Cemitério à sua mão. Cada vez que um monstro Dragão destruir um monstro do oponente em batalha, coloque 1 Contador Pico Dragão neste card. Uma vez por turno: se este card tiver 5 ou mais Contadores Pico Dragão; você pode enviá-lo para o Cemitério e, se fizer isso, Invoque por Invocação-Especial 1 monstro Dragão da sua mão, Deck ou Cemitério."
+      "description": "Quando este card é ativado: você pode adicionar 1 monstro Dragão de Nível 4 ou menor do seu Cemitério à sua mão. Cada vez que um monstro Dragão destruir um monstro do oponente em batalha, coloque 1 Marcador Pico Dragão neste card. Uma vez por turno: se este card tiver 5 ou mais Marcadores Pico Dragão; você pode enviá-lo para o Cemitério e, se fizer isso, Invoque por Invocação-Especial 1 monstro Dragão da sua mão, Deck ou Cemitério."
     },
     "28": {
       "name": "Dragão Serpente Abissal",
@@ -450,7 +450,7 @@
     },
     "211": {
       "name": "Rio de Tinta Arcanista",
-      "description": "Cada vez que você ativar o efeito de uma Magia \"Arcanista\", exceto \"Rio de Tinta Arcanista\": adicione 1 contador de Tinta a este card. Você pode remover 2 contadores de Tinta deste card; adicione 1 Magia \"Arcanista\" do seu Cemitério à sua mão."
+      "description": "Cada vez que você ativar o efeito de uma Magia \"Arcanista\", exceto \"Rio de Tinta Arcanista\": adicione 1 marcador de Tinta a este card. Você pode remover 2 marcadores de Tinta deste card; adicione 1 Magia \"Arcanista\" do seu Cemitério à sua mão."
     },
     "212": {
       "name": "Grande Biblioteca Arcanista",

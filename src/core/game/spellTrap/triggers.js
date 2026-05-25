@@ -11,31 +11,39 @@
  * @returns {Promise<void>}
  */
 export async function checkAndOfferTraps(event, eventData = {}) {
-  console.log(`[checkAndOfferTraps] Called for event: ${event}`, eventData);
+  this.devLog?.("CHECK_TRAPS", { summary: `Called for event: ${event}` });
   if (!this.player || this.disableTraps || this.disableChains) {
-    console.log(`[checkAndOfferTraps] Early exit: player=${!!this.player}, disableTraps=${this.disableTraps}, disableChains=${this.disableChains}`);
+    this.devLog?.("CHECK_TRAPS", {
+      summary: `Early exit: player=${!!this.player}, disableTraps=${this.disableTraps}, disableChains=${this.disableChains}`,
+    });
     return;
   }
 
   // Evitar reentrância: se já existe um modal de trap aberto, não abrir outro
   if (this.trapPromptInProgress) {
-    console.log(`[checkAndOfferTraps] Skipped: trapPromptInProgress=true`);
+    this.devLog?.("CHECK_TRAPS", {
+      summary: "Skipped: trapPromptInProgress=true",
+    });
     return;
   }
 
   // Se o ChainSystem já está resolvendo, não interromper
   if (this.chainSystem?.isChainResolving()) {
-    console.log(`[checkAndOfferTraps] Skipped: chain is resolving`);
+    this.devLog?.("CHECK_TRAPS", { summary: "Skipped: chain is resolving" });
     return;
   }
 
   // Prevenir abrir nova chain window enquanto outra já está aberta
   if (this.chainSystem?.isChainWindowOpen?.()) {
-    console.log(`[checkAndOfferTraps] Skipped: chain window already open`);
+    this.devLog?.("CHECK_TRAPS", {
+      summary: "Skipped: chain window already open",
+    });
     return;
   }
 
-  console.log(`[checkAndOfferTraps] Proceeding to open chain window`);
+  this.devLog?.("CHECK_TRAPS", {
+    summary: "Proceeding to open chain window",
+  });
   this.trapPromptInProgress = true;
 
   try {
@@ -96,12 +104,18 @@ export async function checkAndOfferTraps(event, eventData = {}) {
     }
 
     // Abrir chain window através do ChainSystem
-    console.log(`[checkAndOfferTraps] Opening chain window via ChainSystem`);
+    this.devLog?.("CHECK_TRAPS", {
+      summary: "Opening chain window via ChainSystem",
+    });
     await this.chainSystem.openChainWindow(context);
-    console.log(`[checkAndOfferTraps] Chain window closed, cleaning up`);
+    this.devLog?.("CHECK_TRAPS", {
+      summary: "Chain window closed, cleaning up",
+    });
   } finally {
     this.trapPromptInProgress = false;
-    console.log(`[checkAndOfferTraps] Cleanup complete, trapPromptInProgress=false`);
+    this.devLog?.("CHECK_TRAPS", {
+      summary: "Cleanup complete, trapPromptInProgress=false",
+    });
   }
 }
 

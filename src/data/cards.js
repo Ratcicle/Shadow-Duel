@@ -2088,6 +2088,31 @@
     image: "assets/Luminarch Sanctum Protector.png",
     effects: [
       {
+        id: "luminarch_sanctum_protector_special_summon_hand",
+        timing: "ignition",
+        requireZone: "hand",
+        targets: [
+          {
+            id: "aegisbearer_cost",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            cardName: "Luminarch Aegisbearer",
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+            intent: "cost",
+          },
+        ],
+        actions: [
+          {
+            type: "special_summon_from_hand_with_cost",
+            costTargetRef: "aegisbearer_cost",
+            position: "choice",
+            cannotAttackThisTurn: false,
+          },
+        ],
+      },
+      {
         id: "luminarch_sanctum_protector_negate",
         timing: "on_event",
         event: "attack_declared",
@@ -4254,9 +4279,6 @@
             maxLevel: 4,
             count: { min: 0, max: 1 },
             promptPlayer: true,
-            botPrefer: [
-              { ifHandHas: "Polymerization", prefer: "Voltaic Dragon" },
-            ],
           },
         ],
       },

@@ -42,18 +42,6 @@ export function showSummonModal(cardIndex, callback, options = {}) {
   content.appendChild(normalBtn);
   content.appendChild(setBtn);
 
-  if (options.canSanctumSpecialFromAegis) {
-    const specialBtn = document.createElement("button");
-    specialBtn.textContent = "Special Summon";
-    content.appendChild(specialBtn);
-
-    specialBtn.onclick = (e) => {
-      e.stopPropagation();
-      callback("special_from_aegisbearer");
-      cleanup();
-    };
-  }
-
   if (options.specialSummonFromHand) {
     const specialHandBtn = document.createElement("button");
     specialHandBtn.textContent =

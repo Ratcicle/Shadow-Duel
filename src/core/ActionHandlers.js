@@ -8,10 +8,6 @@
  * New code should import directly from "./actionHandlers/index.js".
  */
 
-// Preserve i18n import for future localization of handler messages
-// eslint-disable-next-line no-unused-vars
-import { getCardDisplayName } from "./i18n.js";
-
 // Re-export everything from the actionHandlers package
 export {
   // Registry
