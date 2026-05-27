@@ -1,6 +1,4 @@
 ﻿import Player from "./Player.js";
-import { cardDatabase, cardDatabaseById } from "../data/cards.js";
-import Card from "./Card.js";
 import { getStrategyFor } from "./ai/StrategyRegistry.js";
 import { beamSearchTurn, greedySearchWithEvalV2 } from "./ai/BeamSearch.js";
 import { turnLineSearch } from "./ai/TurnLineSearch.js";
@@ -12,6 +10,12 @@ import {
   summarizePlanningState,
 } from "./ai/common/planningDiagnostics.js";
 import { botLogger } from "./BotLogger.js";
+import { buildBotDeck, buildBotExtraDeck } from "./bot/deckBuilder.js";
+import {
+  getAvailableBotPresets,
+  getBotDeckList,
+  getBotExtraDeckList,
+} from "./bot/presets.js";
 
 function hasValue(value) {
   return value !== undefined && value !== null;
@@ -35,13 +39,7 @@ export default class Bot extends Player {
     this.setPreset(archetype);
   }
   static getAvailablePresets() {
-    return [
-      { id: "shadowheart", label: "Shadow-Heart" },
-      { id: "luminarch", label: "Luminarch" },
-      { id: "void", label: "Void" },
-      { id: "dragon", label: "Dragon" },
-      { id: "arcanist", label: "Arcanist" },
-    ];
+    return getAvailableBotPresets();
   }
 
   setPreset(presetId = "shadowheart") {
@@ -53,264 +51,56 @@ export default class Bot extends Player {
 
   // Sobrescreve buildDeck para usar deck do arquétipo selecionado
   buildDeck() {
-    this.deck = [];
-    const copies = {};
-
-    const addCard = (data) => {
-      copies[data.id] = copies[data.id] || 0;
-      if (copies[data.id] >= 3 || this.deck.length >= this.maxDeckSize)
-        return false;
-      this.deck.push(new Card(data, this.id));
-      copies[data.id]++;
-      return true;
-    };
-
-    // Seleciona deck baseado no arquétipo
-    const deckList =
-      this.archetype === "shadowheart"
-        ? this.getShadowHeartDeck()
-        : this.archetype === "void"
-          ? this.getVoidDeck()
-          : this.archetype === "dragon"
-            ? this.getDragonDeck()
-            : this.archetype === "arcanist"
-              ? this.getArcanistDeck()
-              : this.getLuminarchDeck();
-
-    for (const cardId of deckList) {
-      const data = cardDatabaseById.get(cardId);
-      if (data) {
-        addCard(data);
-      }
-    }
-
-    this.shuffleDeck();
+    buildBotDeck(this);
   }
 
   // Deck Shadow-Heart otimizado para combos e fusões
   getShadowHeartDeck() {
-    return [
-      // === MONSTROS ===
-      69, // Shadow-Heart Death Wyrm (1x)
-      57, // Shadow-Heart Demon Arctroth (1x)
-      64,
-      64, // Shadow-Heart Scale Dragon (2x)
-      70, // Shadow-Heart Leviathan (1x)
-      67, // Shadow-Heart Griffin (1x)
-      52,
-      52, // Shadow-Heart Abyssal Eel (2x)
-      60,
-      60, // Shadow-Heart Imp (2x)
-      71,
-      71,
-      71, // Shadow-Heart Void Mage (3x)
-      62, // Shadow-Heart Coward (1x)
-      61, // Shadow-Heart Gecko (1x)
-      53, // Shadow-Heart Specter (1x)
-
-      // === SPELLS ===
-      68, // Darkness Valley (1x)
-      13,
-      13, // Polymerization (2x)
-      58, // Shadow-Heart Battle Hymn (1x)
-      72, // Shadow-Heart Cathedral (1x)
-      59,
-      59,
-      59, // Shadow-Heart Covenant (3x)
-      63,
-      63, // Shadow-Heart Infusion (2x)
-      54, // Shadow-Heart Purge (1x)
-      65, // Shadow-Heart Rage (1x)
-      66, // Shadow-Heart Shield (1x)
-      73, // The Shadow Heart (1x)
-    ];
+    return getBotDeckList("shadowheart");
   }
 
   // Deck Luminarch completo (Tank/Control/Versatility) — 30 cards
   getLuminarchDeck() {
-    return [
-      109, // Luminarch Aurora Seraph (Lv8 2800 ATK + heal + protection, priority 14)
-      108, // Luminarch Radiant Lancer (Lv8 2600 ATK + ATK gain, priority 14)
-      105, // Luminarch Celestial Marshal (Lv7 self-SS tank, priority 15)
-      107, // Luminarch Sanctum Protector (Lv7 2800 DEF tank, priority 14)
-      104,
-      104, // Luminarch Moonblade Captain (Lv6 recursion + double atk, priority 16)
-      103,
-      103,
-      103, // Luminarch Aegisbearer (taunt tank S-tier, priority 20)
-      117, // Luminarch Enchanted Halberd (Lv4 SS trigger, priority 11)
-      110,
-      110, // Luminarch Sanctified Arbiter (busca Citadel, A-tier, priority 16)
-      101,
-      101,
-      101, // Luminarch Valiant - Knight of the Dawn (searcher A-tier, priority 18)
-      106, // Luminarch Magic Sickle (Lv3 hand battle trick + spell recovery, priority 12)
-      115, // Luminarch Crescent Shield (equip, priority 10)
-      113, // Luminarch Holy Ascension (ATK buff, priority 7)
-      102, // Luminarch Holy Shield (proteção S-tier, priority 20)
-      111, // Luminarch Knights Convocation (discard Lv7+ → search Lv4-, priority 9)
-      118,
-      118, // Luminarch Moonlit Blessing (recursion A-tier, priority 17)
-      114, // Luminarch Radiant Wave (removal, priority 8)
-      119, // Luminarch Sacred Judgment (comeback, priority 8)
-      116, // Luminarch Spear of Dawnfall (ATK/DEF zero, priority 7)
-      261, // Luminarch Sunforged Blade (LP-gain equip payoff)
-      13,
-      13, // Polymerization (fusion para Megashield/Pure Knight, priority 10)
-      112,
-      112, // Sanctum of the Luminarch Citadel (field spell S-tier, priority 22)
-    ];
+    return getBotDeckList("luminarch");
   }
 
   getVoidDeck() {
-    return [
-      // Bosses and high-impact Void monsters
-      258, // Arcturus, Lord of the Void
-      162, // Void Slayer Brute
-      172, // Thousand-Arms of the Void
-      158, // Void Bone Spider
-      164, // Void Serpent Drake
-      159, // Void Forgotten Knight
-      155, // Void Haunter
-      153, // Void Beast
-
-      // Core engine
-      151,
-      151,
-      151, // Void Conjurer (3x)
-      161,
-      161, // Void Tenebris Horn (2x)
-      152,
-      152, // Void Walker (2x)
-      156, // Void Ghost Wolf
-      154,
-      154,
-      154, // Void Hollow (3x)
-      160, // Void Raven
-
-      // Spells and traps
-      13,
-      13,
-      13, // Polymerization (3x)
-      166, // Sealing the Void
-      167, // The Void
-      168, // Void Gravitational Pull
-      169,
-      169, // Void Lost Throne (2x)
-      170, // Void Mirror Dimension
-    ];
+    return getBotDeckList("void");
   }
 
   getDragonDeck() {
-    return [
-      // === MONSTERS ===
-      // Extreme Dragons (trimmed for consistency; fieldLimit allows only 1 face-up at a time)
-      251, // Volcanic Extreme Dragon (2600 ATK — battle-indestructible alone + GY burn)
-      253, // Galaxy Extreme Dragon (2900 ATK — opp GY banish + once per duel survival)
-      254, // Forest Extreme Dragon (2500 ATK — standby LP heal + ATK gain)
-      // Big Dragons
-      24,  // Black Bull Dragon (2500 ATK — SS by discarding 2 Dragons, double attack)
-      29,  // Purified Crystal Dragon (2500 ATK — SS by banishing 3 GY Dragons, heal)
-      28,  // Abyssal Serpent Dragon (2200 ATK — stall exchange effect)
-      25,  // Hellkite Dragon (2300 ATK — SS from hand by sending field Dragon to GY)
-      21,  // Majestic Silver Dragon (2500 ATK — alt tribute 1 Dragon, position switch)
-      22,  // Darkness Dragon (2000+ ATK — destroys field dragons to gain ATK)
-      12,  // Luminous Dragon (2000 ATK — empty-field SS + discard recovery)
-      // Mid Dragons
-      16, 16, 16, // Armored Dragon (1600 ATK — search lv4 Dragon on normal summon)
-      18, 18, 18, // Grey Dragon (1800 ATK — SS buff +500, GY return self)
-      20, 20, 20, // Luminescent Dragon (1500 ATK — NS revives lv4- from GY)
-      33,         // Boneflame Dragon (GY ignition — send field Dragon, gains 300 per GY Dragon)
-      19, 19,     // Voltaic Dragon (1200 ATK — SS if control Dragon, 800 burn on discard)
-      // === SPELLS ===
-      256,        // Converging Stars (discard 1; reduce hand monster levels -2 until EOT)
-      26,         // Hellkite Roar (control lv7+ Dragon: destroy 1 opp spell/trap)
-      13, 13,     // Polymerization (fusion: Tech-Void or Radiant Cosmic)
-      15,         // Call of the Haunted (trap: revive from GY)
-      27,         // Jagged Peak of the Dragons (field: GY search + counter + SS on 5 counters)
-      257,        // Extreme Dragon Awakening (cont. spell — search/SS lv8+ Dragon from hand)
-      // === TRAPS ===
-      32,         // Dragon Spirit Sanctuary (Dragon targeted: return to hand + SS from hand)
-    ];
+    return getBotDeckList("dragon");
   }
 
   getArcanistDeck() {
-    return [
-      // Monsters - 14
-      202, 202, 202, // Arcanist Apprentice
-      207, 207, 207, // Albus, Arcanist of Ice
-      214, 214, // Azrath
-      206, 206, // Tera
-      205, 205, // Viridis
-      208, // Master of Mirrors Arcanist
-      213, // Elementalist
-
-      // Spells and traps - 16
-      212, 212, 212, // Grand Library
-      201, 201, 201, // Grimoire
-      216, 216, 216, // Seismic Impact
-      211, 211, // Ink River
-      204, 204, // Lightning Lance
-      210, // Ice Barrier
-      203, // Crimson Explosion
-      209, // Meeting
-    ];
+    return getBotDeckList("arcanist");
   }
 
   // Sobrescreve buildExtraDeck para usar fusões do arquétipo
   buildExtraDeck() {
-    const extraDeckList =
-      this.archetype === "shadowheart"
-        ? this.getShadowHeartExtraDeck()
-        : this.archetype === "void"
-          ? this.getVoidExtraDeck()
-          : this.archetype === "dragon"
-            ? this.getDragonExtraDeck()
-            : this.archetype === "arcanist"
-              ? this.getArcanistExtraDeck()
-              : this.getLuminarchExtraDeck();
-    super.buildExtraDeck(extraDeckList);
+    buildBotExtraDeck(this);
   }
 
   // Extra Deck Shadow-Heart
   getShadowHeartExtraDeck() {
-    return [
-      74, // Shadow-Heart Demon Dragon (fusão principal)
-      75, // Shadow-Heart Armored Arctroth (ascensão de Demon Arctroth)
-      77, // Shadow-Heart Warlord (fusão genérica, 2 Shadow-Heart)
-    ];
+    return getBotExtraDeckList("shadowheart");
   }
 
   // Extra Deck Luminarch (Fusion + Ascension)
   getLuminarchExtraDeck() {
-    return [
-      120, // Luminarch Megashield Barbarias (fusion tank, 3000 DEF)
-      121, // Luminarch Fortress Aegis (ascensão de Aegisbearer)
-      122, // Luminarch Pure Knight (fusion search + LP cost reduction)
-    ];
+    return getBotExtraDeckList("luminarch");
   }
 
   getVoidExtraDeck() {
-    return [
-      157, // Void Hollow King (fusion)
-      163, // Void Berserker (fusion)
-      165, // Void Hydra Titan (fusion)
-      171, // Void Cosmic Walker (ascension of Void Walker)
-      173, // Malicious Demon of the Void (ascension of Thousand-Arms of the Void)
-    ];
+    return getBotExtraDeckList("void");
   }
 
   getDragonExtraDeck() {
-    return [
-      17,  // Metal Armored Dragon (ascension from Armored Dragon)
-      30,  // Tech-Void Dragon (fusion: Voltaic Dragon + lv5+ Dragon)
-      259, // Radiant Cosmic Dragon (fusion: 3 Dragons, including 1 LIGHT)
-      260, // Rainbow Cosmic Dragon (ascension from Purified Crystal Dragon)
-    ];
+    return getBotExtraDeckList("dragon");
   }
 
   getArcanistExtraDeck() {
-    return [];
+    return getBotExtraDeckList("arcanist");
   }
 
   resolveOpponent(game) {

@@ -1,0 +1,671 @@
+import { isAI } from "../../Player.js";
+import {
+  getUI,
+  collectZoneCandidates,
+  selectCardsFromZone,
+} from "../shared.js";
+import {
+  buildSourceZoneEntries,
+  findSourceEntryForCard,
+  getSourceOwners,
+} from "./sourceZones.js";
+
+/**
+ * Generic handler for special summoning from any zone with filters
+ * UNIFIED HANDLER - Replaces both single and multi-card summon patterns
+ *
+ * Action properties:
+ * - zone: "deck" | "hand" | "graveyard" | "banished" (default: "deck")
+ * - filters: { archetype, name, level, levelOp, cardKind, excludeSelf }
+ * - count: { min, max } - for multi-card selection (default: { min: 1, max: 1 })
+ * - position: "attack" | "defense" | "choice" (default: "choice")
+ * - cannotAttackThisTurn: boolean
+ * - negateEffects: boolean (default: false)
+ * - promptPlayer: boolean (default: true for human player)
+ * - requireSource: boolean (default: false) - if true, summon source card from zone
+ * - banishCost: boolean (default: false) - if true, banish source as cost before summoning
+ */
+export async function handleSpecialSummonFromZone(
+  action,
+  ctx,
+  targets,
+  engine,
+) {
+  const { player, source, destroyed } = ctx;
+  const game = engine.game;
+  const promptPlayer = action.promptPlayer !== false && !isAI(player);
+  const optName = action.oncePerTurnName;
+  const optEffect = optName
+    ? {
+        oncePerTurn: true,
+        oncePerTurnName: optName,
+        oncePerTurnScope: action.oncePerTurnScope,
+      }
+    : null;
+
+  if (!player || !game) return false;
+
+  if (optEffect && typeof game.canUseOncePerTurn === "function") {
+    const optCheck = game.canUseOncePerTurn(source, player, optEffect);
+    if (!optCheck.ok) {
+      getUI(game)?.log(optCheck.reason || "Effect already used this turn.");
+      return false;
+    }
+  }
+
+  const zoneSpec = action.zone || action.sourceZone || "deck";
+  const zoneNames = Array.isArray(zoneSpec) ? zoneSpec : [zoneSpec];
+  const sourceOwners = getSourceOwners(action, ctx, player);
+
+  const zoneEntries = buildSourceZoneEntries(zoneNames, sourceOwners);
+
+  const selectionMap =
+    ctx?.selections ||
+    ctx?.activationContext?.selections ||
+    ctx?.actionContext?.selections ||
+    null;
+
+  const resolveSelectionKeys = (requirementId) => {
+    if (!selectionMap) return null;
+    if (Array.isArray(selectionMap)) return selectionMap;
+    if (typeof selectionMap !== "object") return null;
+    if (requirementId && Array.isArray(selectionMap[requirementId])) {
+      return selectionMap[requirementId];
+    }
+    return null;
+  };
+
+  const allowsPositionChoice = !action.position || action.position === "choice";
+
+  const resolvePositionChoice = () => {
+    const raw = resolveSelectionKeys("special_summon_position");
+    const value = Array.isArray(raw) ? raw[0] : raw;
+    if (value === "attack" || value === "defense") {
+      return value;
+    }
+    return null;
+  };
+
+  const buildPositionSelectionContract = (cardRef) => ({
+    kind: "position_select",
+    message: "Choose Special Summon position",
+    requirements: [
+      {
+        id: "special_summon_position",
+        min: 1,
+        max: 1,
+        zone: "field",
+        candidates: [
+          { id: "attack", label: "Attack", position: "attack" },
+          { id: "defense", label: "Defense", position: "defense" },
+        ],
+      },
+    ],
+    metadata: {
+      cardData: {
+        cardId: cardRef?.id ?? null,
+        name: cardRef?.name ?? "Special Summon",
+        image: cardRef?.image ?? null,
+        cardKind: cardRef?.cardKind ?? "monster",
+        atk: cardRef?.atk ?? null,
+        def: cardRef?.def ?? null,
+        level: cardRef?.level ?? null,
+      },
+    },
+  });
+
+  // Check for targetRef - use pre-resolved targets if available
+  if (action.targetRef && targets?.[action.targetRef]) {
+    const resolved = targets[action.targetRef];
+    const cardsToSummon = Array.isArray(resolved) ? resolved : [resolved];
+
+    if (cardsToSummon.length === 0) {
+      getUI(game)?.log("No valid targets for Special Summon.");
+      return false;
+    }
+
+    // Verify cards are in the specified zone(s)
+    const validCards = cardsToSummon.filter((card) => {
+      const inAnyZone = zoneEntries.some((entry) => entry.list.includes(card));
+      if (!inAnyZone) {
+        // Card might have been moved to hand by a previous action
+        for (const entry of zoneEntries) {
+          if (entry.list?.includes(card)) {
+            return true;
+          }
+        }
+        return false;
+      }
+      return true;
+    });
+
+    if (validCards.length === 0) {
+      getUI(game)?.log("Target cards are no longer in the specified zone.");
+      return false;
+    }
+
+    return await summonCards(validCards, zoneEntries, player, action, engine);
+  }
+
+  const zoneHasCards = zoneEntries.some((entry) => entry.list.length > 0);
+
+  if (!zoneHasCards) {
+    getUI(game)?.log(
+      `No cards in ${Array.isArray(zoneSpec) ? zoneSpec.join("/") : zoneSpec}.`,
+    );
+    return false;
+  }
+
+  // Handle banish cost (before finding candidates)
+  if (action.banishCost && source) {
+    for (const entry of zoneEntries) {
+      const idx = entry.list.indexOf(source);
+      if (idx !== -1) {
+        entry.list.splice(idx, 1);
+        player.banished = player.banished || [];
+        player.banished.push(source);
+        getUI(game)?.log(`${source.name} was banished as cost.`);
+        break;
+      }
+    }
+  }
+
+  // Determine candidates
+  let candidates = [];
+
+  if (action.requireSource) {
+    // Summon the source/destroyed card itself
+    const card = source || destroyed;
+    const inAnyZone = zoneEntries.some((entry) => entry.list.includes(card));
+
+    if (!card || !inAnyZone) {
+      getUI(game)?.log("Card not in specified zone.");
+      return false;
+    }
+
+    candidates = [card];
+  } else {
+    // Apply filters to find candidates
+    const filters = action.filters || {};
+    const excludeSummonRestrict = action.excludeSummonRestrict || [];
+
+    // Map action-level properties to filters
+    if (action.cardName) {
+      filters.name = action.cardName;
+    }
+
+    if (action.archetype) {
+      filters.archetype = action.archetype;
+    }
+
+    if (action.cardKind) {
+      filters.cardKind = action.cardKind;
+    }
+
+    if (Number.isFinite(action.minAtk)) {
+      filters.minAtk = action.minAtk;
+    }
+
+    if (Number.isFinite(action.maxAtk)) {
+      filters.maxAtk = action.maxAtk;
+    }
+
+    if (Number.isFinite(action.minDef)) {
+      filters.minDef = action.minDef;
+    }
+
+    if (Number.isFinite(action.maxDef)) {
+      filters.maxDef = action.maxDef;
+    }
+
+    // Use monsterType for filtering by monster type (e.g., "Dragon")
+    // to avoid conflict with action.type which is the handler type
+    if (action.monsterType) {
+      filters.type = action.monsterType;
+    }
+
+    if (Number.isFinite(action.minLevel)) {
+      filters.minLevel = action.minLevel;
+    }
+
+    if (Number.isFinite(action.maxLevel)) {
+      filters.maxLevel = action.maxLevel;
+    }
+
+    if (action.matchLevelRef) {
+      const levelCard = ctx?.[action.matchLevelRef] || null;
+      const levelValue = levelCard?.level;
+
+      if (!levelValue) {
+        getUI(game)?.log("Cannot match level: no level on reference card.");
+        return false;
+      }
+
+      filters.level = levelValue;
+      filters.levelOp = filters.levelOp || action.levelOp || "eq";
+    }
+
+    candidates = zoneEntries.flatMap((entry) =>
+      collectZoneCandidates(entry.list, filters, {
+        source,
+        excludeSummonRestrict,
+      }),
+    );
+  }
+
+  // ? FASE 1: Filtrar cartas que não podem ser special summoned
+  candidates = candidates.filter((card) => {
+    if (card.cannotBeSpecialSummoned) {
+      const ui = getUI(game);
+      if (ui && ui.log) {
+        ui.log(`${card.name} cannot be Special Summoned.`);
+      }
+      return false;
+    }
+    return true;
+  });
+
+  if (candidates.length === 0) {
+    getUI(game)?.log(
+      `No valid cards in ${
+        Array.isArray(zoneSpec) ? zoneSpec.join("/") : zoneSpec
+      } matching filters.`,
+    );
+    return false;
+  }
+
+  // Determine how many cards to summon
+  const count = action.count || { min: 1, max: 1 };
+  const dynamicSource = count.maxFrom;
+
+  let dynamicMax = null;
+  if (dynamicSource === "opponentFieldCount") {
+    const opponent = ctx?.opponent || engine.game?.getOpponent?.(player);
+    dynamicMax = opponent?.field ? opponent.field.length : 0;
+  }
+
+  const dynamicCap = Number.isFinite(count.cap)
+    ? count.cap
+    : Number.isFinite(count.maxCap)
+      ? count.maxCap
+      : 5;
+
+  const baseMax = Number.isFinite(count.max) ? count.max : 1;
+
+  const resolvedMax =
+    dynamicMax !== null ? Math.min(dynamicMax, dynamicCap, baseMax) : baseMax;
+
+  const maxSelect = Math.min(
+    resolvedMax,
+    candidates.length,
+    5 - player.field.length,
+  );
+
+  if (maxSelect === 0) {
+    getUI(game)?.log("Field is full, cannot Special Summon.");
+    return false;
+  }
+
+  // Helper: Escolhe carta usando estratégia do bot se disponível
+  const smartBotSelect = (cards) => {
+    // Tentar usar estratégia específica do bot se existir
+    const strategy = player?.strategy;
+
+    if (
+      strategy &&
+      typeof strategy.evaluateRecruitCandidate === "function"
+    ) {
+      const evaluation = strategy.evaluateRecruitCandidate(cards, {
+        game,
+        player,
+        source,
+        action,
+      });
+      if (evaluation?.blockedAll) {
+        return [];
+      }
+      if (evaluation?.best) {
+        return [evaluation.best];
+      }
+    }
+
+    // Fallback: maior ATK
+    return [
+      cards.reduce((top, card) => {
+        const cardAtk = card.atk || 0;
+        const topAtk = top.atk || 0;
+        return cardAtk >= topAtk ? card : top;
+      }, cards[0]),
+    ];
+  };
+
+  // Single card summon (original behavior)
+  if (count.max === 1 || maxSelect === 1) {
+    const selection = await selectCardsFromZone({
+      game,
+      player,
+      candidates,
+      maxSelect: 1,
+      promptPlayer: action.promptPlayer !== false,
+      botSelect: smartBotSelect,
+      selectSingle: (cards) => {
+        const renderer = getUI(game);
+        const searchModal = renderer?.getSearchModalElements?.();
+        const defaultCardName = cards[0]?.name || "";
+
+        if (!searchModal) {
+          return cards[0];
+        }
+
+        return new Promise((resolve) => {
+          game.isResolvingEffect = true;
+
+          renderer.showSearchModalVisual(
+            searchModal,
+            cards,
+            defaultCardName,
+            (selectedName) => {
+              const chosen =
+                cards.find((c) => c && c.name === selectedName) || cards[0];
+              game.isResolvingEffect = false;
+              resolve(chosen);
+            },
+          );
+        });
+      },
+    });
+
+    if (!selection.selected || selection.selected.length === 0) {
+      return false;
+    }
+
+    const success = await summonCards(
+      selection.selected,
+      zoneEntries,
+      player,
+      action,
+      engine,
+    );
+    if (
+      success &&
+      optEffect &&
+      typeof game.markOncePerTurnUsed === "function"
+    ) {
+      game.markOncePerTurnUsed(source, player, optEffect);
+    }
+    return success;
+  }
+
+  // Multi-card summon (graveyard revival pattern)
+  // Bot: usar estratégia se disponível, senão maior ATK
+  const minRequired = Number(count.min ?? 0);
+
+  const dynamicMaxSelect =
+    dynamicMax !== null
+      ? Math.min(dynamicMax, dynamicCap, 5 - player.field.length)
+      : maxSelect;
+
+  // Helper para multi-select inteligente
+  const smartBotSelectMulti = (cards, max) => {
+    const strategy = player?.strategy;
+
+    if (
+      strategy &&
+      typeof strategy.evaluateRecruitCandidate === "function"
+    ) {
+      const evaluation = strategy.evaluateRecruitCandidate(cards, {
+        game,
+        player,
+        source,
+        action,
+      });
+      if (evaluation?.blockedAll) {
+        return [];
+      }
+      // Ordenar pelos scores e pegar os melhores
+      const sorted = evaluation.scores
+        .sort((a, b) => b.score - a.score)
+        .map((s) => s.card);
+      return sorted.slice(0, max);
+    }
+
+    // Fallback: maior ATK
+    return cards
+      .slice()
+      .sort((a, b) => (b.atk || 0) - (a.atk || 0))
+      .slice(0, max);
+  };
+
+  const selection = await selectCardsFromZone({
+    game,
+    player,
+    candidates,
+    maxSelect: dynamicMaxSelect,
+    minSelect: minRequired,
+    botSelect: smartBotSelectMulti,
+    selectMulti: (cards, range) => {
+      if (!getUI(game)?.showMultiSelectModal) {
+        return cards
+          .slice()
+          .sort((a, b) => (b.atk || 0) - (a.atk || 0))
+          .slice(0, range.max);
+      }
+
+      return new Promise((resolve) => {
+        getUI(game).showMultiSelectModal(
+          cards,
+          { min: range.min, max: range.max },
+          (selected) => {
+            resolve(selected || []);
+          },
+        );
+      });
+    },
+  });
+
+  const selected = selection.selected || [];
+
+  if (selected.length === 0) {
+    if (minRequired === 0) {
+      getUI(game)?.log("No cards selected (optional).");
+      if (typeof game.updateBoard === "function") {
+        game.updateBoard();
+      }
+      return true;
+    }
+
+    getUI(game)?.log("No cards selected.");
+    return false;
+  }
+
+  const success = await summonCards(
+    selected,
+    zoneEntries,
+    player,
+    action,
+    engine,
+  );
+  if (success && optEffect && typeof game.markOncePerTurnUsed === "function") {
+    game.markOncePerTurnUsed(source, player, optEffect);
+  }
+  return success;
+}
+
+/**
+ * Helper function to summon one or more cards
+ * Unified to handle both single and multi-card summons
+ */
+async function summonCards(cards, sourceZoneEntries, player, action, engine) {
+  const game = engine.game;
+  let summoned = 0;
+
+  const setAtkToZero = action.setAtkToZeroAfterSummon === true;
+  const setDefToZero = action.setDefToZeroAfterSummon === true;
+  const atkBoostAfterSummon = Number.isFinite(action.atkBoostAfterSummon) ? action.atkBoostAfterSummon : 0;
+  const defBoostAfterSummon = Number.isFinite(action.defBoostAfterSummon) ? action.defBoostAfterSummon : 0;
+
+  const canUseMoveCard = game && typeof game.moveCard === "function";
+
+  const fromZoneSpec =
+    action.fromZone ||
+    action.zone ||
+    action.sourceZone ||
+    action.summonZone ||
+    "deck";
+  const fromZoneName = Array.isArray(fromZoneSpec)
+    ? null
+    : typeof fromZoneSpec === "string"
+      ? fromZoneSpec
+      : null;
+
+  for (const card of cards) {
+    if (!card || player.field.length >= 5) break;
+    const sourceEntry = findSourceEntryForCard(sourceZoneEntries, card);
+
+    // 🚨 CRITICAL VALIDATION: Only monsters can be special summoned to field
+    if (card.cardKind !== "monster") {
+      console.error(
+        `[handleSpecialSummonFromZone] ❌ BLOCKED: Attempted to summon non-monster "${card.name}" (kind: ${card.cardKind}) from zone: ${fromZoneName}`,
+      );
+      continue; // Skip this card, continue with others
+    }
+
+    if (card.cannotBeSpecialSummoned) {
+      getUI(game)?.log(`${card.name} cannot be Special Summoned.`);
+      continue;
+    }
+
+    const resolvedFromZone =
+      typeof action.fromZone === "string"
+        ? action.fromZone
+        : sourceEntry?.name ||
+          (typeof engine.findCardZone === "function"
+            ? engine.findCardZone(player, card)
+            : fromZoneName);
+
+    // Unified semantics: delegate to unified resolver
+    const position = await engine.chooseSpecialSummonPosition(card, player, {
+      position: action.position,
+    });
+
+    let usedMoveCard = false;
+    const previousEffectsNegated = card.effectsNegated;
+    if (action.negateEffects) {
+      card.effectsNegated = true;
+    }
+
+    if (canUseMoveCard) {
+      const moveResult = await game.moveCard(card, player, "field", {
+        fromZone: resolvedFromZone || undefined,
+        position,
+        isFacedown: false,
+        resetAttackFlags: true,
+      });
+
+      if (moveResult?.success === false) {
+        card.effectsNegated = previousEffectsNegated;
+        continue;
+      }
+
+      usedMoveCard = true;
+    } else {
+      // Remove from source zone (fallback)
+      const fallbackZoneName =
+        resolvedFromZone ||
+        (Array.isArray(sourceZoneEntries) && sourceZoneEntries.length > 0
+          ? sourceZoneEntries[0].name
+          : null);
+
+      const fallbackArr =
+        sourceEntry?.list ||
+        (fallbackZoneName && player[fallbackZoneName]) ||
+        player.deck ||
+        [];
+
+      const cardIndex = fallbackArr.indexOf(card);
+      if (cardIndex !== -1) {
+        fallbackArr.splice(cardIndex, 1);
+      }
+
+      card.position = position;
+      card.isFacedown = false;
+      card.hasAttacked = false;
+      card.attacksUsedThisTurn = 0;
+      card.owner = player.id;
+      card.controller = player.id;
+
+      player.field.push(card);
+    }
+
+    card.cannotAttackThisTurn = action.cannotAttackThisTurn || false;
+
+    card.effectsNegated = action.negateEffects
+      ? true
+      : previousEffectsNegated || false;
+
+    if (setAtkToZero) {
+      if (card.originalAtk == null) {
+        card.originalAtk = card.atk;
+      }
+      card.atk = 0;
+    }
+
+    if (setDefToZero) {
+      if (card.originalDef == null) {
+        card.originalDef = card.def;
+      }
+      card.def = 0;
+    }
+
+    if (atkBoostAfterSummon !== 0) {
+      card.tempAtkBoost = (card.tempAtkBoost || 0) + atkBoostAfterSummon;
+      card.atk = (card.atk || 0) + atkBoostAfterSummon;
+    }
+
+    if (defBoostAfterSummon !== 0) {
+      card.tempDefBoost = (card.tempDefBoost || 0) + defBoostAfterSummon;
+      card.def = (card.def || 0) + defBoostAfterSummon;
+    }
+
+    if (!usedMoveCard) {
+      await game.emit("after_summon", {
+        card: card,
+        player: player,
+        method: "special",
+        fromZone: resolvedFromZone || fromZoneName || "deck",
+      });
+    }
+
+    summoned++;
+  }
+
+  if (summoned > 0) {
+    // Log message
+    const zoneName = Array.isArray(action.zone)
+      ? action.zone.join("/")
+      : action.zone || "deck";
+    const cardText = summoned === 1 ? cards[0].name : `${summoned} cards`;
+    const positionText =
+      action.position === "defense"
+        ? "Defense"
+        : action.position === "attack"
+          ? "Attack"
+          : "";
+    const restrictText = action.cannotAttackThisTurn
+      ? " (cannot attack this turn)"
+      : "";
+    const negateText = action.negateEffects ? " (effects negated)" : "";
+
+    getUI(game)?.log(
+      `${
+        player.name || player.id
+      } Special Summoned ${cardText} from ${zoneName}${
+        positionText ? ` in ${positionText} Position` : ""
+      }${restrictText}${negateText}.`,
+    );
+
+    game.updateBoard();
+  }
+
+  return summoned > 0;
+}
