@@ -8,3 +8,8 @@ export * as targeting from "./targeting/index.js";
 export * as triggers from "./triggers/index.js";
 export * as actions from "./actions/index.js";
 export * as activation from "./activation/index.js";
+export * as filters from "./filters/index.js";
+export * as costs from "./costs/index.js";
+export * as conditions from "./conditions/index.js";
+export * as passives from "./passives/index.js";
+export { attachEffectModules } from "./attachModules.js";

@@ -19,6 +19,9 @@ export {
   activateMonsterEffect,
 } from "./execution.js";
 
+// Position choice
+export { chooseSpecialSummonPosition } from "./positionChoice.js";
+
 // Preview
 export {
   hasActivatableGraveyardEffect,

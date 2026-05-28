@@ -1,0 +1,11 @@
+export { collectAfterSummonTriggers } from "./afterSummon.js";
+export { collectAttackDeclaredTriggers } from "./attackDeclared.js";
+export { collectBattleDamageTriggers } from "./battleDamage.js";
+export { collectBattleDestroyTriggers } from "./battleDestroy.js";
+export { collectCardEquippedTriggers } from "./cardEquipped.js";
+export { collectCardToGraveTriggers } from "./cardToGrave.js";
+export { collectEffectActivatedTriggers } from "./effectActivated.js";
+export { collectEffectTargetedTriggers } from "./effectTargeted.js";
+export { collectLpChangeTriggers } from "./lpChange.js";
+export { collectSpellActivatedTriggers } from "./spellActivated.js";
+export { collectStandbyPhaseTriggers } from "./standbyPhase.js";
