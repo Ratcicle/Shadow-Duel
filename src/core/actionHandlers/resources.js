@@ -130,8 +130,15 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
     action?.type === "search_any" || action?.mode === "search_any";
   const sourceZone = action.zone || (inferredSearch ? "deck" : "graveyard");
   const zone = player[sourceZone];
+  const count = action.count || { min: 1, max: 1 };
+  const minSelect = Math.max(count.min || 0, 0);
 
   if (!zone || zone.length === 0) {
+    if (minSelect === 0) {
+      getUI(game)?.log("No cards selected (optional).");
+      game.updateBoard();
+      return true;
+    }
     getUI(game)?.log(`No cards in ${sourceZone}.`);
     return false;
   }
@@ -215,13 +222,16 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
   });
 
   if (candidates.length === 0) {
+    if (minSelect === 0) {
+      getUI(game)?.log("No cards selected (optional).");
+      game.updateBoard();
+      return true;
+    }
     getUI(game)?.log(`No valid cards in ${sourceZone} matching filters.`);
     return false;
   }
 
-  const count = action.count || { min: 1, max: 1 };
   const maxSelect = Math.min(count.max, candidates.length);
-  const minSelect = Math.max(count.min || 0, 0);
 
   if (maxSelect === 0) {
     getUI(game)?.log("No cards available to add.");

@@ -348,9 +348,13 @@ export function canActivateSpellTrapEffectPreview(
       card.cardKind === "trap" && card.isFacedown === true,
   });
   if (!effect) {
+    const isSetContinuousSpell =
+      card.cardKind === "spell" &&
+      card.isFacedown === true &&
+      activationZone === "spellTrap" &&
+      (card.subtype === "continuous" || card.subtype === "field");
     const placementOnly =
-      (card.cardKind === "spell" &&
-        (card.subtype === "continuous" || card.subtype === "field")) ||
+      isSetContinuousSpell ||
       (card.cardKind === "trap" &&
         card.subtype === "continuous" &&
         (card.isFacedown === true ||

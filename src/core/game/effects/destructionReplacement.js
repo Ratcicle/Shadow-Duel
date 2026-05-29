@@ -13,7 +13,7 @@
 
 function getCostTypeDescription(costFilters, count) {
   if (costFilters.archetype) {
-    const baseType = costFilters.cardKind || "monster";
+    const baseType = costFilters.cardKind || "card";
     const singular = `"${costFilters.archetype}" ${baseType}`;
     const plural = `"${costFilters.archetype}" ${baseType}s`;
     return count > 1 ? plural : singular;
@@ -107,6 +107,94 @@ function decorateSelectionCandidates(game, owner, candidates, zones) {
       cardRef: card,
     };
   });
+}
+
+function getReplacementCostZones(replacement) {
+  if (Array.isArray(replacement.costZones) && replacement.costZones.length > 0) {
+    return replacement.costZones;
+  }
+  if (Array.isArray(replacement.costZone) && replacement.costZone.length > 0) {
+    return replacement.costZone;
+  }
+  return [replacement.costZone || "field"];
+}
+
+function collectReplacementCostCandidates(
+  game,
+  costOwner,
+  costZones,
+  filterCandidates,
+) {
+  const entries = [];
+  const seen = new Set();
+
+  for (const zoneName of costZones) {
+    const zoneCards =
+      zoneName === "fieldSpell"
+        ? costOwner.fieldSpell
+          ? [costOwner.fieldSpell]
+          : []
+        : game.getZone?.(costOwner, zoneName) || costOwner[zoneName] || [];
+
+    if (!Array.isArray(zoneCards)) continue;
+
+    for (const card of zoneCards) {
+      if (!filterCandidates(card)) continue;
+      const key = getReplacementTargetKey(card) || card;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      entries.push({ card, zone: zoneName });
+    }
+  }
+
+  return entries;
+}
+
+function getSelectedReplacementCostZone(
+  game,
+  costOwner,
+  costZones,
+  candidateEntries,
+  costCard,
+) {
+  const entry = candidateEntries.find((candidate) => candidate.card === costCard);
+  if (entry?.zone) return entry.zone;
+
+  return (
+    costZones.find(
+      (zoneName) => getCardZoneIndex(game, costOwner, zoneName, costCard) >= 0,
+    ) ||
+    costZones[0] ||
+    "field"
+  );
+}
+
+function getCostActionText(costDestination) {
+  if (costDestination === "banished" || costDestination === "banish") {
+    return {
+      verb: "Banish",
+      suffix: "to save",
+      selectionVerb: "banish",
+      logVerb: "banishing",
+      logDestination: "",
+    };
+  }
+  if (costDestination === "hand") {
+    return {
+      verb: "Return",
+      suffix: "to the hand to save",
+      selectionVerb: "return to the hand",
+      logVerb: "returning",
+      logDestination: " to the hand",
+    };
+  }
+  return {
+    verb: "Send",
+    suffix: "to the GY to save",
+    selectionVerb: "send to the Graveyard",
+    logVerb: "sending",
+    logDestination: " to the Graveyard",
+  };
 }
 
 function askHumanToSelectReplacementTargets({
@@ -563,20 +651,21 @@ async function tryReplacement(game, sourceCard, sourceOwner, effect, ctx) {
     return true;
   };
 
-  const costZone = replacement.costZone || "field";
-  const candidateZone =
-    costZone === "fieldSpell"
-      ? costOwner.fieldSpell
-        ? [costOwner.fieldSpell]
-        : []
-      : costOwner[costZone] || [];
-  const candidates = candidateZone.filter(filterCandidates);
+  const costZones = getReplacementCostZones(replacement);
+  const candidateEntries = collectReplacementCostCandidates(
+    game,
+    costOwner,
+    costZones,
+    filterCandidates,
+  );
+  const candidates = candidateEntries.map((entry) => entry.card);
 
   if (candidates.length < costCount) {
     return { replaced: false };
   }
 
   const costDestination = replacement.costDestination || "graveyard";
+  const costActionText = getCostActionText(costDestination);
 
   // AI auto-selection (lowest ATK for cost). Bot Arena can place an AI in the
   // "player" seat, so controllerType is the reliable human/AI boundary.
@@ -586,8 +675,15 @@ async function tryReplacement(game, sourceCard, sourceOwner, effect, ctx) {
       .slice(0, costCount);
 
     for (const costCard of chosen) {
+      const fromZone = getSelectedReplacementCostZone(
+        game,
+        costOwner,
+        costZones,
+        candidateEntries,
+        costCard,
+      );
       game.moveCard(costCard, costOwner, costDestination, {
-        fromZone: costZone,
+        fromZone,
       });
     }
 
@@ -604,19 +700,16 @@ async function tryReplacement(game, sourceCard, sourceOwner, effect, ctx) {
       game.ui?.log?.(logMessage);
     } else {
       game.ui?.log?.(
-        `${card.name} avoided destruction by sending ${costNames} to the Graveyard.`,
+        `${card.name} avoided destruction by ${costActionText.logVerb} ${costNames}${costActionText.logDestination}.`,
       );
     }
     return { replaced: true };
   }
 
   const costDescription = getCostTypeDescription(costFilters, costCount);
-  const costActionVerb = costDestination === "banished" ? "Banish" : "Send";
-  const costActionSuffix =
-    costDestination === "banished" ? "to save" : "to the GY to save";
   const prompt =
     formatReplacementText(replacement.prompt, card.name, sourceCard.name) ||
-    `${costActionVerb} ${costCount} ${costDescription} ${costActionSuffix} ${card.name}?`;
+    `${costActionText.verb} ${costCount} ${costDescription} ${costActionText.suffix} ${card.name}?`;
 
   const wantsToReplace =
     (await game.ui?.showConfirmPrompt?.(prompt, {
@@ -635,16 +728,40 @@ async function tryReplacement(game, sourceCard, sourceOwner, effect, ctx) {
     ) ||
     `Choose ${costCount} ${
       costCount > 1 ? "cards" : "card"
-    } to send to the Graveyard for ${card.name}'s protection.`;
+    } to ${costActionText.selectionVerb} for ${card.name}'s protection.`;
 
-  const selections = await game.askPlayerToSelectCards({
-    owner: "player",
-    zone: costZone,
-    min: costCount,
-    max: costCount,
-    filter: filterCandidates,
-    message: selectionMessage,
-  });
+  let selections = [];
+  if (
+    typeof game.startTargetSelectionSession === "function" &&
+    typeof game.buildSelectionCandidateKey === "function"
+  ) {
+    selections = await askHumanToSelectReplacementTargets({
+      game,
+      sourceCard,
+      targetSpec: {
+        id: "replacement_cost",
+        owner: "self",
+        message: selectionMessage,
+      },
+      targetOwner: costOwner,
+      candidates,
+      zones: costZones,
+      minCount: costCount,
+      maxCount: costCount,
+    });
+  } else if (
+    costZones.length === 1 &&
+    typeof game.askPlayerToSelectCards === "function"
+  ) {
+    selections = await game.askPlayerToSelectCards({
+      owner: "player",
+      zone: costZones[0],
+      min: costCount,
+      max: costCount,
+      filter: filterCandidates,
+      message: selectionMessage,
+    });
+  }
 
   if (!selections || selections.length < costCount) {
     game.ui.log("Protection cancelled.");
@@ -652,7 +769,14 @@ async function tryReplacement(game, sourceCard, sourceOwner, effect, ctx) {
   }
 
   for (const costCard of selections) {
-    game.moveCard(costCard, costOwner, costDestination, { fromZone: costZone });
+    const fromZone = getSelectedReplacementCostZone(
+      game,
+      costOwner,
+      costZones,
+      candidateEntries,
+      costCard,
+    );
+    game.moveCard(costCard, costOwner, costDestination, { fromZone });
   }
 
   game.markOncePerTurnUsed(sourceCard, sourceOwner, effect);
@@ -668,7 +792,7 @@ async function tryReplacement(game, sourceCard, sourceOwner, effect, ctx) {
     game.ui?.log?.(logMessage);
   } else {
     game.ui.log(
-      `${card.name} avoided destruction by sending ${costNames} to the Graveyard.`,
+      `${card.name} avoided destruction by ${costActionText.logVerb} ${costNames}${costActionText.logDestination}.`,
     );
   }
   return { replaced: true };

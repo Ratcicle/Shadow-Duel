@@ -50,6 +50,9 @@ export function getSpellTrapActivationEffect(card, options = {}) {
     }
     const ignition = card.effects.find((e) => e && e.timing === "ignition");
     if (ignition) return ignition;
+    if (card.subtype === "continuous" || card.subtype === "field") {
+      return null;
+    }
     return card.effects.find((e) => e && e.timing === "on_play") || null;
   }
   return null;

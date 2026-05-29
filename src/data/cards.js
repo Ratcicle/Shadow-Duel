@@ -7941,6 +7941,453 @@
       },
     ],
   },
+  {
+    id: 274,
+    name: "Miragebound Mirror Path",
+    cardKind: "spell",
+    subtype: "continuous",
+    archetype: "Miragebound",
+    description:
+      'The first time each turn a "Miragebound" monster you control would be destroyed by battle, you can return it to the hand instead. Once per turn, if a "Miragebound" monster was returned from the field to your hand this turn: Draw 1 card. You can only control 1 "Miragebound Mirror Path".',
+    image: "assets/Miragebound Mirror Path.png",
+    effects: [
+      {
+        id: "miragebound_mirror_path_control_limit",
+        timing: "on_play",
+        speed: 1,
+        conditions: [
+          {
+            type: "control_card_max",
+            zone: "spellTrap",
+            max: 0,
+            includeFacedown: true,
+            filters: { cardId: 274 },
+            excludeSource: true,
+            reason: 'You can only control 1 "Miragebound Mirror Path".',
+          },
+        ],
+        actions: [],
+      },
+      {
+        id: "miragebound_mirror_path_battle_return",
+        timing: "passive",
+        requireFaceup: true,
+        oncePerTurn: true,
+        oncePerTurnName: "miragebound_mirror_path_battle_return",
+        replacementEffect: {
+          type: "destruction",
+          reason: "battle",
+          targetOwner: "self",
+          targetZones: ["field"],
+          targetFilters: {
+            cardKind: "monster",
+            archetype: "Miragebound",
+          },
+          targetRequireFaceup: true,
+          prompt:
+            'Return {target} to the hand with "Miragebound Mirror Path" instead of destroying it by battle?',
+          logMessage:
+            "{target} returned to the hand instead of being destroyed due to {source}.",
+          costActions: [
+            {
+              type: "return_to_hand",
+              targetRef: "destroyed",
+              fromZone: "field",
+            },
+          ],
+        },
+      },
+      {
+        id: "miragebound_mirror_path_draw",
+        timing: "on_event",
+        event: "card_moved",
+        requireZone: "spellTrap",
+        requireFaceup: true,
+        fromZone: "field",
+        toZone: "hand",
+        eventCardFilters: {
+          owner: "self",
+          cardKind: "monster",
+          archetype: "Miragebound",
+        },
+        promptUser: false,
+        oncePerTurn: true,
+        oncePerTurnName: "miragebound_mirror_path_draw",
+        actions: [
+          {
+            type: "draw",
+            player: "self",
+            amount: 1,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 275,
+    name: "Miragebound False Horizon",
+    cardKind: "trap",
+    subtype: "normal",
+    speed: 2,
+    archetype: "Miragebound",
+    description:
+      'When an opponent\'s monster declares an attack: Target 1 monster your opponent controls; change its battle position. Then, you can return 1 "Miragebound" monster you control to the hand. You can only activate 1 "Miragebound False Horizon" per turn.',
+    image: "assets/Miragebound False Horizon.png",
+    effects: [
+      {
+        id: "miragebound_false_horizon_attack",
+        timing: "on_event",
+        event: "attack_declared",
+        speed: 2,
+        requireOpponentAttack: true,
+        oncePerTurn: true,
+        oncePerTurnName: "miragebound_false_horizon",
+        targets: [
+          {
+            id: "miragebound_false_horizon_position_target",
+            owner: "opponent",
+            zone: "field",
+            cardKind: "monster",
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+          {
+            id: "miragebound_false_horizon_return_target",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            archetype: "Miragebound",
+            requireFaceup: true,
+            optional: true,
+            count: { min: 0, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "switch_position",
+            targetRef: "miragebound_false_horizon_position_target",
+          },
+          {
+            type: "return_to_hand",
+            targetRef: "miragebound_false_horizon_return_target",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 276,
+    name: "Miragebound Vanishing Step",
+    cardKind: "spell",
+    subtype: "quick",
+    speed: 2,
+    archetype: "Miragebound",
+    description:
+      'Target 1 "Miragebound" monster you control; return it to the hand, then target 1 monster your opponent controls; change its battle position, and if you do, it loses 500 ATK/DEF until the end of this turn. You can only activate 1 "Miragebound Vanishing Step" per turn.',
+    image: "assets/Miragebound Vanishing Step.png",
+    effects: [
+      {
+        id: "miragebound_vanishing_step",
+        timing: "on_play",
+        speed: 2,
+        oncePerTurn: true,
+        oncePerTurnName: "miragebound_vanishing_step",
+        targets: [
+          {
+            id: "miragebound_vanishing_step_return_target",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            archetype: "Miragebound",
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+          {
+            id: "miragebound_vanishing_step_position_target",
+            owner: "opponent",
+            zone: "field",
+            cardKind: "monster",
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "return_to_hand",
+            targetRef: "miragebound_vanishing_step_return_target",
+            fromZone: "field",
+            haltOnFailure: true,
+          },
+          {
+            type: "switch_position",
+            targetRef: "miragebound_vanishing_step_position_target",
+          },
+          {
+            type: "buff_stats_temp",
+            targetRef: "miragebound_vanishing_step_position_target",
+            atkBoost: -500,
+            defBoost: -500,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 277,
+    name: "Miragebound Heat Haze",
+    cardKind: "spell",
+    subtype: "normal",
+    archetype: "Miragebound",
+    description:
+      'If you control a "Miragebound" monster: Target 1 monster your opponent controls; change its battle position. Then, if that monster is in Defense Position, you can target 1 "Miragebound" monster in your Graveyard; add it to your hand. You can only activate 1 "Miragebound Heat Haze" per turn.',
+    image: "assets/Miragebound Heat Haze.png",
+    effects: [
+      {
+        id: "miragebound_heat_haze",
+        timing: "on_play",
+        oncePerTurn: true,
+        oncePerTurnName: "miragebound_heat_haze",
+        conditions: [
+          {
+            type: "control_card_filters",
+            zone: "field",
+            requireFaceup: true,
+            filters: {
+              cardKind: "monster",
+              archetype: "Miragebound",
+            },
+            min: 1,
+            reason: 'You must control a face-up "Miragebound" monster.',
+          },
+        ],
+        targets: [
+          {
+            id: "miragebound_heat_haze_position_target",
+            owner: "opponent",
+            zone: "field",
+            cardKind: "monster",
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "switch_position",
+            targetRef: "miragebound_heat_haze_position_target",
+          },
+          {
+            type: "conditional_target_actions",
+            targetRef: "miragebound_heat_haze_position_target",
+            cases: [
+              {
+                filters: {
+                  position: "defense",
+                },
+                actions: [
+                  {
+                    type: "add_from_zone_to_hand",
+                    zone: "graveyard",
+                    filters: {
+                      cardKind: "monster",
+                      archetype: "Miragebound",
+                    },
+                    count: { min: 0, max: 1 },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 278,
+    name: "Miragebound Desert Leviathan",
+    cardKind: "monster",
+    monsterType: "fusion",
+    atk: 2700,
+    def: 2400,
+    level: 8,
+    type: "Beast",
+    archetype: "Miragebound",
+    piercing: true,
+    fusionMaterials: [{ archetype: "Miragebound", count: 2 }],
+    description:
+      '2 "Miragebound" monsters. If this card is Fusion Summoned: You can target 1 monster your opponent controls; change its battle position, and if you do, halve its ATK/DEF until the end of this turn. Once per turn: You can return 1 "Miragebound" card you control to the hand; this card can make a second attack on monsters during this Battle Phase. If this card attacks a Defense Position monster, inflict piercing battle damage.',
+    image: "assets/Miragebound Desert Leviathan.png",
+    effects: [
+      {
+        id: "miragebound_desert_leviathan_fusion_shift_halve",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethods: ["fusion"],
+        requireSelfAsSummoned: true,
+        promptUser: true,
+        promptMessage:
+          'Activate "Miragebound Desert Leviathan" to change 1 opponent monster\'s battle position and halve its ATK/DEF?',
+        targets: [
+          {
+            id: "miragebound_desert_leviathan_halve_target",
+            owner: "opponent",
+            zone: "field",
+            cardKind: "monster",
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "switch_position",
+            targetRef: "miragebound_desert_leviathan_halve_target",
+            haltOnFailure: true,
+          },
+          {
+            type: "modify_stats_temp",
+            targetRef: "miragebound_desert_leviathan_halve_target",
+            atkFactor: 0.5,
+            defFactor: 0.5,
+          },
+        ],
+      },
+      {
+        id: "miragebound_desert_leviathan_second_attack",
+        timing: "ignition",
+        requireZone: "field",
+        requireFaceup: true,
+        oncePerTurn: true,
+        oncePerTurnName: "miragebound_desert_leviathan_second_attack",
+        targets: [
+          {
+            id: "miragebound_desert_leviathan_return_target",
+            owner: "self",
+            zones: ["field", "spellTrap", "fieldSpell"],
+            archetype: "Miragebound",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "return_to_hand",
+            targetRef: "miragebound_desert_leviathan_return_target",
+            haltOnFailure: true,
+          },
+          {
+            type: "grant_second_attack",
+            targetRef: "self",
+          },
+          {
+            type: "add_status",
+            targetRef: "self",
+            status: "extraAttackTargetRestriction",
+            value: "monster",
+            untilEndOfTurn: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 279,
+    name: "Miragebound Reflection Dragon",
+    cardKind: "monster",
+    monsterType: "fusion",
+    atk: 3000,
+    def: 2500,
+    level: 9,
+    type: "Dragon",
+    archetype: "Miragebound",
+    fusionMaterials: [
+      { name: "Miragebound False King" },
+      { archetype: "Miragebound" },
+    ],
+    description:
+      '"Miragebound False King" + 1 "Miragebound" monster. If this card is Fusion Summoned: You can return 1 card on the field to the hand. Once per turn, when this card destroys an opponent\'s monster by battle: You can target 1 "Miragebound" monster in your Graveyard; add it to your hand. If this card would be destroyed by a card effect: You can return 1 other "Miragebound" card you control to the hand instead.',
+    image: "assets/Miragebound Reflection Dragon.png",
+    effects: [
+      {
+        id: "miragebound_reflection_dragon_fusion_bounce",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethods: ["fusion"],
+        requireSelfAsSummoned: true,
+        promptUser: true,
+        promptMessage:
+          'Activate "Miragebound Reflection Dragon" to return 1 card on the field to the hand?',
+        targets: [
+          {
+            id: "miragebound_reflection_dragon_bounce_target",
+            owner: "any",
+            zones: ["field", "spellTrap", "fieldSpell"],
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "return_to_hand",
+            targetRef: "miragebound_reflection_dragon_bounce_target",
+          },
+        ],
+      },
+      {
+        id: "miragebound_reflection_dragon_battle_recover",
+        timing: "on_event",
+        event: "battle_destroy",
+        requireZone: "field",
+        requireFaceup: true,
+        requireSelfAsAttacker: true,
+        requireDestroyedIsOpponent: true,
+        promptUser: true,
+        promptMessage:
+          'Activate "Miragebound Reflection Dragon" to add 1 "Miragebound" monster from your Graveyard to your hand?',
+        oncePerTurn: true,
+        oncePerTurnName: "miragebound_reflection_dragon_battle_recover",
+        targets: [
+          {
+            id: "miragebound_reflection_dragon_recover_target",
+            owner: "self",
+            zone: "graveyard",
+            cardKind: "monster",
+            archetype: "Miragebound",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "return_to_hand",
+            targetRef: "miragebound_reflection_dragon_recover_target",
+            fromZone: "graveyard",
+          },
+        ],
+      },
+      {
+        id: "miragebound_reflection_dragon_effect_destruction_replacement",
+        timing: "passive",
+        requireFaceup: true,
+        replacementEffect: {
+          type: "destruction",
+          reason: "effect",
+          targetMustBeSource: true,
+          targetOwner: "self",
+          targetZones: ["field"],
+          targetRequireFaceup: true,
+          costCount: 1,
+          costOwner: "source",
+          costZones: ["field", "spellTrap", "fieldSpell"],
+          costDestination: "hand",
+          costFilters: {
+            archetype: "Miragebound",
+          },
+          prompt:
+            'Return 1 other "Miragebound" card you control to the hand instead of destroying {target}?',
+          selectionMessage:
+            'Choose 1 other "Miragebound" card you control to return to the hand.',
+          logMessage:
+            '{target} avoided destruction by returning another "Miragebound" card to the hand.',
+        },
+      },
+    ],
+  },
 ];
 
 // Performance optimization: Create indexed maps for O(1) lookups

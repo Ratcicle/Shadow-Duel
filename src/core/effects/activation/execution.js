@@ -431,7 +431,8 @@ export async function activateSpellTrapEffect(
       effect = this.getSpellTrapActivationEffect(card, { fromHand: false });
       if (!effect) {
         const placementOnly =
-          card.subtype === "continuous" || card.subtype === "field";
+          flipAfterChecks &&
+          (card.subtype === "continuous" || card.subtype === "field");
         if (placementOnly) {
           if (flipAfterChecks) {
             card.isFacedown = false;

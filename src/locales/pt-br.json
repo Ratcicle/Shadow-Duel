@@ -555,6 +555,30 @@
     "273": {
       "name": "Falso Rei dos Vinculados \u00e0 Miragem",
       "description": "Voc\u00ea pode Invocar este card por Invoca\u00e7\u00e3o-Especial da sua m\u00e3o ao devolver 1 monstro \"Vinculados \u00e0 Miragem\" que voc\u00ea controla para a m\u00e3o. Se este card for Invocado por Invoca\u00e7\u00e3o-Especial: voc\u00ea pode escolher 1 monstro com a face para cima que seu oponente controla; mude a posi\u00e7\u00e3o de batalha dele. Se este card destruir um monstro em Posi\u00e7\u00e3o de Defesa em batalha: voc\u00ea pode escolher 1 card que seu oponente controla; devolva-o para a m\u00e3o. Voc\u00ea s\u00f3 pode usar cada efeito de \"Falso Rei dos Vinculados \u00e0 Miragem\" uma vez por turno."
+    },
+    "274": {
+      "name": "Caminho Espelhado dos Vinculados \u00e0 Miragem",
+      "description": "A primeira vez a cada turno que um monstro \"Vinculados \u00e0 Miragem\" que voc\u00ea controla seria destru\u00eddo em batalha, voc\u00ea pode devolv\u00ea-lo para a m\u00e3o em vez disso. Uma vez por turno, se um monstro \"Vinculados \u00e0 Miragem\" foi devolvido do campo para a sua m\u00e3o neste turno: compre 1 card. Voc\u00ea s\u00f3 pode controlar 1 \"Caminho Espelhado dos Vinculados \u00e0 Miragem\"."
+    },
+    "275": {
+      "name": "Falso Horizonte dos Vinculados \u00e0 Miragem",
+      "description": "Quando um monstro do oponente declarar um ataque: escolha 1 monstro que seu oponente controla; mude a posi\u00e7\u00e3o de batalha dele. Depois, voc\u00ea pode devolver 1 monstro \"Vinculados \u00e0 Miragem\" que voc\u00ea controla para a m\u00e3o. Voc\u00ea s\u00f3 pode ativar 1 \"Falso Horizonte dos Vinculados \u00e0 Miragem\" por turno."
+    },
+    "276": {
+      "name": "Passo Evanescente dos Vinculados \u00e0 Miragem",
+      "description": "Escolha 1 monstro \"Vinculados \u00e0 Miragem\" que voc\u00ea controla; devolva-o para a m\u00e3o e, depois, escolha 1 monstro que seu oponente controla; mude a posi\u00e7\u00e3o de batalha dele e, se isso acontecer, ele perde 500 de ATK/DEF at\u00e9 o final deste turno. Voc\u00ea s\u00f3 pode ativar 1 \"Passo Evanescente dos Vinculados \u00e0 Miragem\" por turno."
+    },
+    "277": {
+      "name": "N\u00e9voa de Calor dos Vinculados \u00e0 Miragem",
+      "description": "Se voc\u00ea controlar um monstro \"Vinculados \u00e0 Miragem\": escolha 1 monstro que seu oponente controla; mude a posi\u00e7\u00e3o de batalha dele. Depois, se esse monstro estiver em Posi\u00e7\u00e3o de Defesa, voc\u00ea pode escolher 1 monstro \"Vinculados \u00e0 Miragem\" no seu Cemit\u00e9rio; adicione-o \u00e0 sua m\u00e3o. Voc\u00ea s\u00f3 pode ativar 1 \"N\u00e9voa de Calor dos Vinculados \u00e0 Miragem\" por turno."
+    },
+    "278": {
+      "name": "Leviat\u00e3 do Deserto dos Vinculados \u00e0 Miragem",
+      "description": "2 monstros \"Vinculados \u00e0 Miragem\". Se este card for Invocado por Invoca\u00e7\u00e3o-Fus\u00e3o: voc\u00ea pode escolher 1 monstro que seu oponente controla; mude a posi\u00e7\u00e3o de batalha dele e, se isso acontecer, reduza o ATK/DEF dele pela metade at\u00e9 o final deste turno. Uma vez por turno: voc\u00ea pode devolver 1 card \"Vinculados \u00e0 Miragem\" que voc\u00ea controla para a m\u00e3o; este card pode realizar um segundo ataque contra monstros durante esta Fase de Batalha. Se este card atacar um monstro em Posi\u00e7\u00e3o de Defesa, cause dano de batalha perfurante."
+    },
+    "279": {
+      "name": "Drag\u00e3o Reflexo dos Vinculados \u00e0 Miragem",
+      "description": "\"Falso Rei dos Vinculados \u00e0 Miragem\" + 1 monstro \"Vinculados \u00e0 Miragem\". Se este card for Invocado por Invoca\u00e7\u00e3o-Fus\u00e3o: voc\u00ea pode devolver 1 card no campo para a m\u00e3o. Uma vez por turno, quando este card destruir um monstro do oponente em batalha: voc\u00ea pode escolher 1 monstro \"Vinculados \u00e0 Miragem\" no seu Cemit\u00e9rio; adicione-o \u00e0 sua m\u00e3o. Se este card seria destru\u00eddo por um efeito de card: voc\u00ea pode devolver 1 outro card \"Vinculados \u00e0 Miragem\" que voc\u00ea controla para a m\u00e3o em vez disso."
     }
   }
 }

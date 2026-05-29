@@ -19,7 +19,8 @@ export async function finalizeSpellTrapActivation(
   const subtype = card.subtype || "";
   const kind = card.cardKind || "";
   const shouldSendToGY =
-    (kind === "spell" && (subtype === "normal" || subtype === "quick-play")) ||
+    (kind === "spell" &&
+      (subtype === "normal" || subtype === "quick" || subtype === "quick-play")) ||
     (kind === "trap" && subtype === "normal");
 
   if (shouldSendToGY) {

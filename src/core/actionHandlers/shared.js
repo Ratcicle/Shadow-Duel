@@ -411,7 +411,7 @@ export async function selectCardsFromZone({
   }
 
   if (resolvedMax === 1) {
-    if (promptPlayer === false || resolvedCandidates.length === 1) {
+    if (promptPlayer === false) {
       return {
         candidates: resolvedCandidates,
         selected: [resolvedCandidates[0]],
@@ -419,7 +419,10 @@ export async function selectCardsFromZone({
       };
     }
 
-    if (typeof selectSingle === "function") {
+    const preferOptionalMulti =
+      resolvedMin === 0 && typeof selectMulti === "function";
+
+    if (!preferOptionalMulti && typeof selectSingle === "function") {
       const chosen = await selectSingle(resolvedCandidates);
       if (!chosen) {
         return {
