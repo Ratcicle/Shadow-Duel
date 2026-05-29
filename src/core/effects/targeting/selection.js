@@ -308,6 +308,10 @@ export function selectCandidates(def, ctx) {
           );
           continue;
         }
+        if (def.excludeSelf && ctx?.source && card === ctx.source) {
+          log("[selectCandidates] Rejecting: excludeSelf and card is source");
+          continue;
+        }
         if (
           zoneKey === "hand" &&
           ctx.activationZone === "hand" &&

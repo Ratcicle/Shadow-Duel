@@ -7333,6 +7333,614 @@
       },
     ],
   },
+  {
+    id: 266,
+    name: "Miragebound Scout",
+    cardKind: "monster",
+    atk: 1400,
+    def: 1000,
+    level: 3,
+    type: "Spellcaster",
+    archetype: "Miragebound",
+    description:
+      'If this card is Normal Summoned: Add 1 "Miragebound" Spell/Trap from your Deck to your hand. Once per turn: You can target 1 face-up monster your opponent controls; change its battle position. You can only use each effect of "Miragebound Scout" once per turn.',
+    image: "assets/Miragebound Scout.png",
+    effects: [
+      {
+        id: "miragebound_scout_search_spell_trap",
+        timing: "on_event",
+        event: "after_summon",
+        requireSelfAsSummoned: true,
+        summonMethods: ["normal"],
+        oncePerTurn: true,
+        oncePerTurnName: "miragebound_scout_search_spell_trap",
+        actions: [
+          {
+            type: "add_from_zone_to_hand",
+            zone: "deck",
+            filters: {
+              cardKind: ["spell", "trap"],
+              archetype: "Miragebound",
+            },
+            count: { min: 1, max: 1 },
+          },
+        ],
+      },
+      {
+        id: "miragebound_scout_switch_position",
+        timing: "ignition",
+        requireZone: "field",
+        requireFaceup: true,
+        oncePerTurn: true,
+        oncePerTurnName: "miragebound_scout_switch_position",
+        targets: [
+          {
+            id: "miragebound_scout_position_target",
+            owner: "opponent",
+            zone: "field",
+            cardKind: "monster",
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "switch_position",
+            targetRef: "miragebound_scout_position_target",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 267,
+    name: "Miragebound Dancer",
+    cardKind: "monster",
+    atk: 1600,
+    def: 1200,
+    level: 4,
+    type: "Spellcaster",
+    archetype: "Miragebound",
+    description:
+      'If you control a "Miragebound" monster: You can Special Summon this card from your hand. Once per turn: You can target 1 other "Miragebound" monster you control; return it to the hand, and if you do, this card gains 600 ATK until the end of this turn. You can only use each effect of "Miragebound Dancer" once per turn.',
+    image: "assets/Miragebound Dancer.png",
+    effects: [
+      {
+        id: "miragebound_dancer_special_summon",
+        timing: "ignition",
+        requireZone: "hand",
+        requirePhase: ["main1", "main2"],
+        oncePerTurn: true,
+        oncePerTurnName: "miragebound_dancer_special_summon",
+        conditions: [
+          {
+            type: "control_card_filters",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            archetype: "Miragebound",
+            min: 1,
+          },
+        ],
+        actions: [
+          {
+            type: "special_summon_from_zone",
+            zone: "hand",
+            requireSource: true,
+            position: "choice",
+            promptPlayer: true,
+            oncePerTurnName: "miragebound_dancer_special_summon",
+          },
+        ],
+      },
+      {
+        id: "miragebound_dancer_bounce_buff",
+        timing: "ignition",
+        requireZone: "field",
+        requireFaceup: true,
+        oncePerTurn: true,
+        oncePerTurnName: "miragebound_dancer_bounce_buff",
+        targets: [
+          {
+            id: "miragebound_dancer_bounce_target",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            archetype: "Miragebound",
+            excludeSelf: true,
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "return_to_hand",
+            targetRef: "miragebound_dancer_bounce_target",
+            haltOnFailure: true,
+          },
+          {
+            type: "buff_stats_temp",
+            targetRef: "self",
+            atkBoost: 600,
+            defBoost: 0,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 268,
+    name: "Miragebound Jackal",
+    cardKind: "monster",
+    atk: 1700,
+    def: 800,
+    level: 4,
+    type: "Beast",
+    archetype: "Miragebound",
+    piercing: true,
+    description:
+      'Once per turn: You can target 1 "Miragebound" monster you control and 1 Attack Position monster your opponent controls; return the first target to the hand, and if you do, change the second target to Defense Position. That opponent\'s monster cannot attack until the end of your opponent\'s next turn. If this card attacks a Defense Position monster, inflict piercing battle damage.',
+    image: "assets/Miragebound Jackal.png",
+    effects: [
+      {
+        id: "miragebound_jackal_bounce_defense_lock",
+        timing: "ignition",
+        requireZone: "field",
+        requireFaceup: true,
+        oncePerTurn: true,
+        oncePerTurnName: "miragebound_jackal_bounce_defense_lock",
+        targets: [
+          {
+            id: "miragebound_jackal_return_target",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            archetype: "Miragebound",
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+          {
+            id: "miragebound_jackal_defense_target",
+            owner: "opponent",
+            zone: "field",
+            cardKind: "monster",
+            requireFaceup: true,
+            position: "attack",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "return_to_hand",
+            targetRef: "miragebound_jackal_return_target",
+            haltOnFailure: true,
+          },
+          {
+            type: "switch_position",
+            targetRef: "miragebound_jackal_defense_target",
+          },
+          {
+            type: "forbid_attack_next_turn",
+            targetRef: "miragebound_jackal_defense_target",
+            turns: 1,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 269,
+    name: "Miragebound Oasis",
+    cardKind: "spell",
+    subtype: "field",
+    archetype: "Miragebound",
+    description:
+      'Once per turn: You can choose 1 of these effects. ● Target 1 "Miragebound" monster you control; return it to the hand, then add 1 "Miragebound" monster with a different name from your Deck to your hand. ● Target 1 face-up monster your opponent controls; change its battle position, then it loses 500 ATK/DEF until the end of this turn.',
+    image: "assets/Miragebound Oasis.png",
+    effects: [
+      {
+        id: "miragebound_oasis_ignition",
+        timing: "ignition",
+        requireZone: "fieldSpell",
+        requirePhase: ["main1", "main2"],
+        oncePerTurn: true,
+        oncePerTurnName: "miragebound_oasis_ignition",
+        actions: [
+          {
+            type: "choose_action_case",
+            selectionMessage: "Choose a Miragebound Oasis effect.",
+            cases: [
+              {
+                id: "miragebound_oasis_recycle_search",
+                label: 'Return a "Miragebound" monster; add a different one',
+                description:
+                  'Target 1 "Miragebound" monster you control; return it to the hand, then add 1 "Miragebound" monster with a different name from your Deck to your hand.',
+                targets: [
+                  {
+                    id: "miragebound_oasis_return_target",
+                    owner: "self",
+                    zone: "field",
+                    cardKind: "monster",
+                    archetype: "Miragebound",
+                    requireFaceup: true,
+                    count: { min: 1, max: 1 },
+                  },
+                ],
+                actions: [
+                  {
+                    type: "return_to_hand",
+                    targetRef: "miragebound_oasis_return_target",
+                    haltOnFailure: true,
+                  },
+                  {
+                    type: "add_from_zone_to_hand",
+                    zone: "deck",
+                    filters: {
+                      cardKind: "monster",
+                      archetype: "Miragebound",
+                    },
+                    excludeNameRef: "miragebound_oasis_return_target",
+                    count: { min: 1, max: 1 },
+                    promptPlayer: true,
+                  },
+                ],
+              },
+              {
+                id: "miragebound_oasis_shift_weaken",
+                label: "Change an opponent monster's position; weaken it",
+                description:
+                  "Target 1 face-up monster your opponent controls; change its battle position, then it loses 500 ATK/DEF until the end of this turn.",
+                targets: [
+                  {
+                    id: "miragebound_oasis_weaken_target",
+                    owner: "opponent",
+                    zone: "field",
+                    cardKind: "monster",
+                    requireFaceup: true,
+                    count: { min: 1, max: 1 },
+                  },
+                ],
+                actions: [
+                  {
+                    type: "switch_position",
+                    targetRef: "miragebound_oasis_weaken_target",
+                  },
+                  {
+                    type: "buff_stats_temp",
+                    targetRef: "miragebound_oasis_weaken_target",
+                    atkBoost: -500,
+                    defBoost: -500,
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 270,
+    name: "Miragebound Glass Sovereign",
+    cardKind: "monster",
+    monsterType: "ascension",
+    atk: 2400,
+    def: 2200,
+    level: 7,
+    type: "Spellcaster",
+    archetype: "Miragebound",
+    piercing: true,
+    ascension: {
+      materialId: 266,
+      requirements: [{ type: "material_effect_activations", count: 2 }],
+      position: "choice",
+    },
+    description:
+      'Ascension Material: "Miragebound Scout". Requirement: The material must have activated its effects 2 times this Duel. If this card is Ascension Summoned: You can target up to 2 face-up monsters your opponent controls; change their battle positions. Once per turn: You can target 1 other "Miragebound" monster you control and 1 card your opponent controls; return the first target to the hand, and if you do, return the second target to the hand. If this card attacks a Defense Position monster, inflict piercing battle damage.',
+    image: "assets/Miragebound Glass Sovereign.png",
+    effects: [
+      {
+        id: "miragebound_glass_sovereign_ascension_shift",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethods: ["ascension"],
+        requireSelfAsSummoned: true,
+        promptUser: true,
+        promptMessage:
+          'Activate "Miragebound Glass Sovereign" to change up to 2 opponent monsters\' battle positions?',
+        targets: [
+          {
+            id: "miragebound_glass_sovereign_shift_targets",
+            owner: "opponent",
+            zone: "field",
+            cardKind: "monster",
+            requireFaceup: true,
+            count: { min: 1, max: 2 },
+          },
+        ],
+        actions: [
+          {
+            type: "switch_position",
+            targetRef: "miragebound_glass_sovereign_shift_targets",
+          },
+        ],
+      },
+      {
+        id: "miragebound_glass_sovereign_bounce",
+        timing: "ignition",
+        requireZone: "field",
+        requireFaceup: true,
+        oncePerTurn: true,
+        oncePerTurnName: "miragebound_glass_sovereign_bounce",
+        targets: [
+          {
+            id: "miragebound_glass_sovereign_return_self_target",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            archetype: "Miragebound",
+            excludeSelf: true,
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+          {
+            id: "miragebound_glass_sovereign_return_opponent_target",
+            owner: "opponent",
+            zones: ["field", "spellTrap", "fieldSpell"],
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "return_to_hand",
+            targetRef: "miragebound_glass_sovereign_return_self_target",
+            haltOnFailure: true,
+          },
+          {
+            type: "return_to_hand",
+            targetRef: "miragebound_glass_sovereign_return_opponent_target",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 271,
+    name: "Miragebound Glass Viper",
+    cardKind: "monster",
+    atk: 1000,
+    def: 1600,
+    level: 3,
+    type: "Reptile",
+    archetype: "Miragebound",
+    description:
+      'If this card is returned from the field to the hand by a card effect: You can Special Summon this card from your hand, but banish it when it leaves the field. If this card is Special Summoned: You can target 1 face-up monster your opponent controls; it loses 500 ATK/DEF until the end of this turn. You can only use each effect of "Miragebound Glass Viper" once per turn.',
+    image: "assets/Miragebound Glass Viper.png",
+    effects: [
+      {
+        id: "miragebound_glass_viper_returned_to_hand",
+        timing: "on_event",
+        event: "card_moved",
+        requireSelfAsMoved: true,
+        fromZone: "field",
+        toZone: "hand",
+        movedByEffect: true,
+        promptUser: true,
+        promptMessage:
+          'Activate "Miragebound Glass Viper" to Special Summon it from your hand?',
+        oncePerTurn: true,
+        oncePerTurnName: "miragebound_glass_viper_returned_to_hand",
+        actions: [
+          {
+            type: "special_summon_from_zone",
+            zone: "hand",
+            requireSource: true,
+            position: "choice",
+          },
+          {
+            type: "add_status",
+            targetRef: "self",
+            status: "banishWhenLeavesField",
+          },
+        ],
+      },
+      {
+        id: "miragebound_glass_viper_special_summon_debuff",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethods: ["special"],
+        requireSelfAsSummoned: true,
+        promptUser: true,
+        promptMessage:
+          'Activate "Miragebound Glass Viper" to weaken an opponent monster?',
+        oncePerTurn: true,
+        oncePerTurnName: "miragebound_glass_viper_special_summon_debuff",
+        targets: [
+          {
+            id: "miragebound_glass_viper_debuff_target",
+            owner: "opponent",
+            zone: "field",
+            cardKind: "monster",
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "buff_stats_temp",
+            targetRef: "miragebound_glass_viper_debuff_target",
+            atkBoost: -500,
+            defBoost: -500,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 272,
+    name: "Miragebound Sand Priestess",
+    cardKind: "monster",
+    atk: 1300,
+    def: 1800,
+    level: 4,
+    type: "Spellcaster",
+    archetype: "Miragebound",
+    description:
+      'Once per turn: You can target 1 "Miragebound" monster in your Graveyard; add it to your hand. If a face-up monster your opponent controls changes to Defense Position: This card gains 500 DEF until the end of the next turn. You can only use each effect of "Miragebound Sand Priestess" once per turn.',
+    image: "assets/Miragebound Sand Priestess.png",
+    effects: [
+      {
+        id: "miragebound_sand_priestess_recover",
+        timing: "ignition",
+        requireZone: "field",
+        requireFaceup: true,
+        requirePhase: ["main1", "main2"],
+        oncePerTurn: true,
+        oncePerTurnName: "miragebound_sand_priestess_recover",
+        targets: [
+          {
+            id: "miragebound_sand_priestess_recover_target",
+            owner: "self",
+            zone: "graveyard",
+            cardKind: "monster",
+            archetype: "Miragebound",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "miragebound_sand_priestess_recover_target",
+            player: "self",
+            to: "hand",
+            contextLabel: "miragebound_sand_priestess_recover",
+          },
+        ],
+      },
+      {
+        id: "miragebound_sand_priestess_defense_buff",
+        timing: "on_event",
+        event: "position_change",
+        requireZone: "field",
+        requireFaceup: true,
+        positionTo: "defense",
+        changedCardOwner: "opponent",
+        changedCardRequireFaceup: true,
+        promptUser: false,
+        oncePerTurn: true,
+        oncePerTurnName: "miragebound_sand_priestess_defense_buff",
+        actions: [
+          {
+            type: "buff_stats_temp",
+            targetRef: "self",
+            defBoost: 500,
+            duration: "end_of_next_turn",
+            sourceName: "Miragebound Sand Priestess",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 273,
+    name: "Miragebound False King",
+    cardKind: "monster",
+    atk: 2200,
+    def: 1800,
+    level: 6,
+    type: "Fiend",
+    archetype: "Miragebound",
+    description:
+      'You can Special Summon this card from your hand by returning 1 "Miragebound" monster you control to the hand. If this card is Special Summoned: You can target 1 face-up monster your opponent controls; change its battle position. If this card destroys a Defense Position monster by battle: You can target 1 card your opponent controls; return it to the hand. You can only use each effect of "Miragebound False King" once per turn.',
+    image: "assets/Miragebound False King.png",
+    effects: [
+      {
+        id: "miragebound_false_king_special_summon",
+        timing: "ignition",
+        requireZone: "hand",
+        requirePhase: ["main1", "main2"],
+        oncePerTurn: true,
+        oncePerTurnName: "miragebound_false_king_special_summon",
+        targets: [
+          {
+            id: "miragebound_false_king_return_cost",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            archetype: "Miragebound",
+            requireFaceup: true,
+            intent: "cost",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "special_summon_from_hand_with_cost",
+            costTargetRef: "miragebound_false_king_return_cost",
+            costDestination: "hand",
+            position: "choice",
+          },
+        ],
+      },
+      {
+        id: "miragebound_false_king_special_summon_shift",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethods: ["special"],
+        requireSelfAsSummoned: true,
+        promptUser: true,
+        promptMessage:
+          'Activate "Miragebound False King" to change an opponent monster\'s battle position?',
+        oncePerTurn: true,
+        oncePerTurnName: "miragebound_false_king_special_summon_shift",
+        targets: [
+          {
+            id: "miragebound_false_king_shift_target",
+            owner: "opponent",
+            zone: "field",
+            cardKind: "monster",
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "switch_position",
+            targetRef: "miragebound_false_king_shift_target",
+          },
+        ],
+      },
+      {
+        id: "miragebound_false_king_battle_destroy_bounce",
+        timing: "on_event",
+        event: "battle_destroy",
+        requireZone: "field",
+        requireFaceup: true,
+        requireSelfAsAttacker: true,
+        requireDestroyedIsOpponent: true,
+        requireDestroyedPosition: "defense",
+        promptUser: true,
+        promptMessage:
+          'Activate "Miragebound False King" to return 1 opponent card to the hand?',
+        oncePerTurn: true,
+        oncePerTurnName: "miragebound_false_king_battle_destroy_bounce",
+        targets: [
+          {
+            id: "miragebound_false_king_bounce_target",
+            owner: "opponent",
+            zones: ["field", "spellTrap", "fieldSpell"],
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "return_to_hand",
+            targetRef: "miragebound_false_king_bounce_target",
+          },
+        ],
+      },
+    ],
+  },
 ];
 
 // Performance optimization: Create indexed maps for O(1) lookups

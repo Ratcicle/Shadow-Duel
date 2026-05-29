@@ -81,7 +81,9 @@ export function attachEffectModules(EngineClass) {
     "collectLpChangeTriggers",
     "collectEffectTargetedTriggers",
     "collectCardEquippedTriggers",
+    "collectCardMovedTriggers",
     "collectCardToGraveTriggers",
+    "collectPositionChangeTriggers",
     "collectStandbyPhaseTriggers",
   ]);
 

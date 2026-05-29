@@ -239,6 +239,62 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
     }
   }
 
+  const duration = action.duration || "end_of_turn";
+  const durationTurns = Number(action.durationTurns ?? action.turns);
+  const explicitExpiresOnTurn = Number(action.expiresOnTurn);
+  let turnBasedExpiresOnTurn = null;
+  if (!permanent) {
+    if (duration === "end_of_next_turn") {
+      turnBasedExpiresOnTurn = game.turnCounter + 1;
+    } else if (Number.isFinite(durationTurns) && durationTurns > 0) {
+      turnBasedExpiresOnTurn = game.turnCounter + durationTurns;
+    } else if (Number.isFinite(explicitExpiresOnTurn)) {
+      turnBasedExpiresOnTurn = explicitExpiresOnTurn;
+    }
+  }
+  const useTurnBasedBuff =
+    Number.isFinite(turnBasedExpiresOnTurn) &&
+    typeof game.applyTurnBasedBuff === "function";
+  const durationText = permanent
+    ? ""
+    : useTurnBasedBuff && duration === "end_of_next_turn"
+      ? " until end of next turn"
+      : useTurnBasedBuff
+        ? ` until turn ${turnBasedExpiresOnTurn}`
+        : " until end of turn";
+
+  const applyStatChange = (card, stat, boost) => {
+    if (!boost) return 0;
+
+    const current = Number(card?.[stat] || 0);
+    const next = Math.max(0, current + boost);
+    const applied = next - current;
+    if (applied === 0) return 0;
+
+    if (useTurnBasedBuff) {
+      const buffId = [
+        action.sourceName || ctx.source?.name || action.type || "stat_buff",
+        card.instanceId || card.id || "card",
+        stat,
+        game.turnCounter,
+        Array.isArray(card.turnBasedBuffs) ? card.turnBasedBuffs.length : 0,
+      ].join("_");
+      game.applyTurnBasedBuff(card, stat, applied, turnBasedExpiresOnTurn, buffId);
+      return applied;
+    }
+
+    if (!permanent) {
+      if (stat === "atk") {
+        card.tempAtkBoost = (card.tempAtkBoost || 0) + applied;
+      } else if (stat === "def") {
+        card.tempDefBoost = (card.tempDefBoost || 0) + applied;
+      }
+    }
+
+    card[stat] = next;
+    return applied;
+  };
+
   const targetCards = resolveTargetCards(action, ctx, targets, {
     defaultRef: "self",
     game,
@@ -271,34 +327,28 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
     // Track original stats for replay
     const originalAtk = card.atk;
     const originalDef = card.def;
+    let appliedAtkBoost = 0;
+    let appliedDefBoost = 0;
 
     if (atkBoost !== 0) {
-      if (!permanent) {
-        card.tempAtkBoost = (card.tempAtkBoost || 0) + atkBoost;
+      appliedAtkBoost = applyStatChange(card, "atk", atkBoost);
+      if (appliedAtkBoost !== 0) {
+        cardBuffed = true;
+        anyBuffed = true;
       }
-
-      card.atk = Math.max(0, (card.atk || 0) + atkBoost);
-
-      cardBuffed = true;
-
-      anyBuffed = true;
     }
 
     if (defBoost !== 0) {
-      if (!permanent) {
-        card.tempDefBoost = (card.tempDefBoost || 0) + defBoost;
+      appliedDefBoost = applyStatChange(card, "def", defBoost);
+      if (appliedDefBoost !== 0) {
+        cardBuffed = true;
+        anyBuffed = true;
       }
-
-      card.def = Math.max(0, (card.def || 0) + defBoost);
-
-      cardBuffed = true;
-
-      anyBuffed = true;
     }
 
     if (cardBuffed) {
       buffedCards.push(card.name);
-      const weakensStats = atkBoost < 0 || defBoost < 0;
+      const weakensStats = appliedAtkBoost < 0 || appliedDefBoost < 0;
       queueCardFeedback(game, weakensStats ? "debuff" : "buff", card, {
         sourceCard: ctx.source,
         tone: weakensStats ? "red" : "green",
@@ -311,9 +361,11 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
         newAtk: card.atk,
         previousDef: originalDef,
         newDef: card.def,
-        atkChange: atkBoost,
-        defChange: defBoost,
+        atkChange: appliedAtkBoost,
+        defChange: appliedDefBoost,
         permanent,
+        duration,
+        expiresOnTurn: useTurnBasedBuff ? turnBasedExpiresOnTurn : null,
         sourceCard: ctx.source,
         player: ctx.player,
       });
@@ -348,8 +400,6 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
       boosts.push(`${defBoost > 0 ? "+" : ""}${defBoost} DEF`);
 
     const cardList = buffedCards.join(", ");
-
-    const duration = permanent ? "" : " until end of turn";
 
     const combineSecondAttack =
       action.type === "buff_stats_temp_with_second_attack" && anySecondAttack;
@@ -1112,13 +1162,19 @@ export async function handleSwitchPosition(action, ctx, targets, engine) {
       card.def = (card.def || 0) + action.defBoost;
     }
 
-    game.notify?.("position_change", {
+    const cardPlayer = card.owner === "player" ? game.player : game.bot;
+    await game.emit?.("position_change", {
       card,
-      player,
+      player: cardPlayer || player,
+      opponent:
+        typeof game.getOpponent === "function" && (cardPlayer || player)
+          ? game.getOpponent(cardPlayer || player)
+          : null,
       sourceCard: ctx.source,
       fromPosition: previousPosition,
       toPosition: newPosition,
       wasFlipped: false,
+      actionContext: ctx?.actionContext || null,
     });
 
     switched = true;

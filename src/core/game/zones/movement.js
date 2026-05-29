@@ -137,6 +137,52 @@ export function moveCard(card, destPlayer, toZone, options = {}) {
   return result;
 }
 
+async function emitCardMovedEvent(game, card, fromOwner, destPlayer, fromZone, toZone, options = {}) {
+  if (!game || !card || !fromZone || !toZone || fromZone === toZone) {
+    return null;
+  }
+
+  const currentOwner = card.owner === "player" ? game.player : game.bot;
+  const eventPlayer = currentOwner || destPlayer || fromOwner || null;
+  const eventOpponent = eventPlayer
+    ? game.getOpponent?.(eventPlayer) || null
+    : null;
+  const movementSourceCard = options.sourceCard || options.source || null;
+  const movedByEffect =
+    typeof options.movedByEffect === "boolean"
+      ? options.movedByEffect
+      : Boolean(movementSourceCard || options.effectId);
+
+  const eventResult = game.emit?.("card_moved", {
+    card,
+    fromZone,
+    toZone,
+    player: eventPlayer,
+    opponent: eventOpponent,
+    fromPlayer: fromOwner,
+    toPlayer: destPlayer,
+    sourceCard: movementSourceCard,
+    source: movementSourceCard,
+    effectId: options.effectId || null,
+    contextLabel: options.contextLabel || null,
+    movedByEffect,
+    actionContext: options.actionContext || null,
+  });
+
+  if (
+    eventResult &&
+    typeof eventResult.then === "function" &&
+    (options.awaitEvents === true || options.awaitCardMovedEvent === true)
+  ) {
+    return await eventResult;
+  }
+
+  if (eventResult && typeof eventResult.then === "function") {
+    void eventResult;
+  }
+  return eventResult || null;
+}
+
 function buildZoneMoveAnimationIntent(game, card, fromOwner, fromZone, destPlayer, toZone, options) {
   if (!game?.cardAnimationsReady) return null;
   if (!card || card.instanceId == null || !fromOwner || !destPlayer) return null;
@@ -692,6 +738,25 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     }
   }
 
+  if (
+    fromZone === "field" &&
+    toZone !== "field" &&
+    card.banishWhenLeavesField === true &&
+    !card.isToken
+  ) {
+    delete card.banishWhenLeavesField;
+    if (toZone !== "banished") {
+      destPlayer = fromOwner;
+      toZone = "banished";
+      destArrRedirected = this.getZone(destPlayer, toZone);
+      if (!Array.isArray(destArrRedirected)) {
+        destArrRedirected = null;
+      } else {
+        this.ui?.log?.(`${card.name} is banished as it leaves the field.`);
+      }
+    }
+  }
+
   const isExtraDeckMonster =
     card.monsterType === "fusion" || card.monsterType === "ascension";
   const allowExtraDeckMonsterToHand =
@@ -770,6 +835,16 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     if (card.originalDef != null) {
       card.def = card.originalDef;
       card.originalDef = null;
+    }
+    if (Array.isArray(card.turnBasedBuffs) && card.turnBasedBuffs.length > 0) {
+      for (const buff of card.turnBasedBuffs) {
+        if (buff?.stat === "atk") {
+          card.atk = Math.max(0, (card.atk || 0) - (buff.value || 0));
+        } else if (buff?.stat === "def") {
+          card.def = Math.max(0, (card.def || 0) - (buff.value || 0));
+        }
+      }
+      card.turnBasedBuffs = [];
     }
     card.effectsNegated = false;
 
@@ -926,6 +1001,15 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
       throw new Error("DEV_ZONE_MUTATION_FAIL");
     }
     queueZoneMoveAnimation(this, cardAnimationIntent, "fieldSpell");
+    await emitCardMovedEvent(
+      this,
+      card,
+      fromOwner,
+      destPlayer,
+      fromZone,
+      "fieldSpell",
+      options,
+    );
     return { success: true, fromZone, toZone };
   }
 
@@ -1136,6 +1220,15 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
         throw new Error("DEV_ZONE_MUTATION_FAIL");
       }
       queueZoneMoveAnimation(this, cardAnimationIntent, "extraDeck");
+      await emitCardMovedEvent(
+        this,
+        card,
+        fromOwner,
+        destPlayer,
+        fromZone,
+        "extraDeck",
+        options,
+      );
       return { success: true, fromZone, toZone: "extraDeck" };
     }
   }
@@ -1265,6 +1358,20 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
   }
 
   // Limpar cache de targeting após mover cartas (estado do jogo mudou)
+  if (this.effectEngine?.clearTargetingCache) {
+    this.effectEngine.clearTargetingCache();
+  }
+
+  await emitCardMovedEvent(
+    this,
+    card,
+    fromOwner,
+    destPlayer,
+    fromZone,
+    toZone,
+    options,
+  );
+
   if (this.effectEngine?.clearTargetingCache) {
     this.effectEngine.clearTargetingCache();
   }

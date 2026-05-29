@@ -28,11 +28,6 @@ export async function handleSpecialSummonFromHandWithCost(
     return false;
   }
 
-  if (player.field.length >= 5) {
-    getUI(game)?.log("Field is full.");
-    return false;
-  }
-
   const performSummon = async () => {
     const summonResult = await summonFromHandCore({
       card: source,
@@ -62,6 +57,32 @@ export async function handleSpecialSummonFromHandWithCost(
     }
 
     const costDestination = action.costDestination || "graveyard";
+    const getCostOwner = (costCard) =>
+      (typeof engine.getOwnerByCard === "function"
+        ? engine.getOwnerByCard(costCard)
+        : null) ||
+      (costCard?.owner === "bot" ? game.bot : game.player) ||
+      player;
+
+    const findCostZone = (costCard, owner) =>
+      (typeof engine.findCardZone === "function"
+        ? engine.findCardZone(owner, costCard)
+        : null) || null;
+
+    const costFreesMonsterZone = costTargets.some((costCard) => {
+      const costOwner = getCostOwner(costCard);
+      const fromZone = findCostZone(costCard, costOwner);
+      return (
+        costOwner === player &&
+        fromZone === "field" &&
+        costDestination !== "field"
+      );
+    });
+
+    if (player.field.length >= 5 && !costFreesMonsterZone) {
+      getUI(game)?.log("Field is full.");
+      return false;
+    }
 
     if (costDestination === "banish") {
       for (const costCard of costTargets) {
@@ -87,6 +108,37 @@ export async function handleSpecialSummonFromHandWithCost(
 
       getUI(game)?.log(
         `Banished ${costTargets.length} card(s) (removed from game).`,
+      );
+    } else if (costDestination === "hand") {
+      let returnedCount = 0;
+
+      for (const costCard of costTargets) {
+        if (!costCard) continue;
+
+        const costOwner = getCostOwner(costCard);
+        const fromZone = findCostZone(costCard, costOwner) || "field";
+        const moveResult = await game.moveCard(costCard, costOwner, "hand", {
+          fromZone,
+          contextLabel: action.contextLabel || "special_summon_cost",
+          sourceCard: source,
+          effectId: ctx?.effect?.id || null,
+          movedByEffect: false,
+          awaitCardMovedEvent: true,
+        });
+
+        const moveFailed =
+          moveResult === false || moveResult?.success === false;
+
+        if (moveFailed) {
+          getUI(game)?.log(`Could not return ${costCard.name} to hand.`);
+          return false;
+        }
+
+        returnedCount++;
+      }
+
+      getUI(game)?.log(
+        `Returned ${returnedCount} card(s) to hand as cost.`,
       );
     } else {
       await sendCardsToGraveyard(costTargets, player, engine, {

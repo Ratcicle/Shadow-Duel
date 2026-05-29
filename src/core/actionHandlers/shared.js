@@ -210,6 +210,24 @@ export function collectZoneCandidates(zone, filters = {}, options = {}) {
 
     if (filters.name && card.name !== filters.name) return false;
 
+    const excludeNames = [
+      filters.excludeName,
+      filters.excludeCardName,
+      ...(Array.isArray(filters.excludeNames) ? filters.excludeNames : []),
+      ...(Array.isArray(filters.excludeCardNames)
+        ? filters.excludeCardNames
+        : []),
+    ].filter(Boolean);
+    if (excludeNames.includes(card.name)) return false;
+
+    const excludeIds = [
+      filters.excludeId,
+      filters.excludeCardId,
+      ...(Array.isArray(filters.excludeIds) ? filters.excludeIds : []),
+      ...(Array.isArray(filters.excludeCardIds) ? filters.excludeCardIds : []),
+    ].filter((value) => value !== undefined && value !== null);
+    if (excludeIds.includes(card.id)) return false;
+
     if (filters.minAtk !== undefined) {
       const cardAtk = card.atk || 0;
       if (cardAtk < filters.minAtk) return false;

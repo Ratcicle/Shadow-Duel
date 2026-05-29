@@ -22,6 +22,7 @@ const VALID_EVENTS = new Set([
   "after_summon",
   "battle_destroy",
   "card_to_grave",
+  "card_moved",
   "standby_phase",
   "attack_declared",
   "battle_damage",
@@ -32,6 +33,7 @@ const VALID_EVENTS = new Set([
   "lp_change",
   "spell_activated",
   "effect_activated",
+  "position_change",
 ]);
 
 function formatIssue(card, message, effectIndex = null, actionIndex = null) {

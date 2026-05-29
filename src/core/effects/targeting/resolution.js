@@ -33,6 +33,7 @@ function contextTargetMatchesDef(engine, card, def = {}, ctx = {}) {
   ) {
     return false;
   }
+  if (def.excludeSelf && ctx?.source && card === ctx.source) return false;
   if (def.requireFaceup && card.isFacedown) return false;
   const requiredTypes = def.type
     ? Array.isArray(def.type)
@@ -361,7 +362,10 @@ export function resolveTargets(targetDefs, ctx, selections) {
       owner,
       filters,
       intent: def.intent || null,
-      allowSelf: def.allowSelf !== false || def.requireThisCard === true,
+      allowSelf:
+        def.excludeSelf === true
+          ? false
+          : def.allowSelf !== false || def.requireThisCard === true,
       distinct: def.distinct !== false,
       candidates: decoratedCandidates,
     });

@@ -139,6 +139,34 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
   // Apply filters
   const baseFilters = action.filters || {};
   const filters = { ...baseFilters };
+  const addExcludedNames = (names) => {
+    const list = Array.isArray(names) ? names : [names];
+    const existing = Array.isArray(filters.excludeCardNames)
+      ? filters.excludeCardNames
+      : filters.excludeCardName
+        ? [filters.excludeCardName]
+        : [];
+    const next = new Set(existing.filter(Boolean));
+    for (const name of list) {
+      if (typeof name === "string" && name) {
+        next.add(name);
+      }
+    }
+    if (next.size > 0) {
+      filters.excludeCardNames = Array.from(next);
+    }
+  };
+
+  addExcludedNames(action.excludeName);
+  addExcludedNames(action.excludeCardName);
+  addExcludedNames(action.excludeCardNames);
+  if (action.excludeNameRef && targets?.[action.excludeNameRef]) {
+    const refCards = Array.isArray(targets[action.excludeNameRef])
+      ? targets[action.excludeNameRef]
+      : [targets[action.excludeNameRef]];
+    addExcludedNames(refCards.map((card) => card?.name).filter(Boolean));
+  }
+
   if (inferredSearch) {
     if (action.archetype && !filters.archetype) {
       filters.archetype = action.archetype;

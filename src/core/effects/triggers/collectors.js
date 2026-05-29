@@ -26,6 +26,9 @@ export async function collectEventTriggers(eventName, payload) {
   if (eventName === "card_to_grave") {
     return await this.collectCardToGraveTriggers(payload);
   }
+  if (eventName === "card_moved") {
+    return await this.collectCardMovedTriggers(payload);
+  }
   if (eventName === "attack_declared") {
     return await this.collectAttackDeclaredTriggers(payload);
   }
@@ -37,6 +40,9 @@ export async function collectEventTriggers(eventName, payload) {
   }
   if (eventName === "effect_targeted") {
     return await this.collectEffectTargetedTriggers(payload);
+  }
+  if (eventName === "position_change") {
+    return await this.collectPositionChangeTriggers(payload);
   }
   if (eventName === "card_equipped") {
     return await this.collectCardEquippedTriggers(payload);
@@ -53,10 +59,12 @@ export {
   collectBattleDamageTriggers,
   collectBattleDestroyTriggers,
   collectCardEquippedTriggers,
+  collectCardMovedTriggers,
   collectCardToGraveTriggers,
   collectEffectActivatedTriggers,
   collectEffectTargetedTriggers,
   collectLpChangeTriggers,
+  collectPositionChangeTriggers,
   collectSpellActivatedTriggers,
   collectStandbyPhaseTriggers,
 } from "./collectors/index.js";

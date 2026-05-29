@@ -36,6 +36,8 @@ export {
   collectLpChangeTriggers,
   collectEffectTargetedTriggers,
   collectCardEquippedTriggers,
+  collectCardMovedTriggers,
   collectCardToGraveTriggers,
+  collectPositionChangeTriggers,
   collectStandbyPhaseTriggers,
 } from "./collectors.js";

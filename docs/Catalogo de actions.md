@@ -37,6 +37,10 @@ Adds selected cards from a zone to hand.
 | `minLevel` | nao | number |  |
 | `maxLevel` | nao | number |  |
 | `requireSource` | nao | boolean |  |
+| `excludeName` | nao | string |  |
+| `excludeCardName` | nao | string |  |
+| `excludeCardNames` | nao | array |  |
+| `excludeNameRef` | nao | string |  |
 
 **Exemplos**
 
@@ -585,7 +589,7 @@ Moves target cards to another zone.
 - Target: `required`
 - Selecao: `usesTargets`
 - Mutacoes: zones
-- Eventos emitidos: after_summon, card_to_grave
+- Eventos emitidos: after_summon, card_to_grave, card_moved
 - Atualiza board: sim
 - Preview: `covered`
 
@@ -624,7 +628,7 @@ Returns target cards to hand.
 - Target: `required`
 - Selecao: `usesTargets`
 - Mutacoes: hand, field, graveyard
-- Eventos emitidos: nenhum
+- Eventos emitidos: card_moved
 - Atualiza board: sim
 - Preview: `notNeeded`
 
@@ -632,6 +636,8 @@ Returns target cards to hand.
 | --- | --- | --- | --- |
 | `targetRef` | sim | string | References an effect target id or a context target such as self. |
 | `fromZone` | nao | zone; valores: deck, hand, field, graveyard, spellTrap, fieldSpell, banish, banished | Zone to read from or remove from. |
+| `haltOnFailure` | nao | boolean |  |
+| `stopOnFailure` | nao | boolean |  |
 
 **Exemplos**
 
@@ -938,8 +944,8 @@ Special Summons source from hand by paying a target cost.
 - Handler: `handleSpecialSummonFromHandWithCost`
 - Target: `none`
 - Selecao: `usesTargets`
-- Mutacoes: hand, field, graveyard
-- Eventos emitidos: after_summon, card_to_grave
+- Mutacoes: hand, field, graveyard, banished
+- Eventos emitidos: after_summon, card_to_grave, card_moved
 - Atualiza board: sim
 - Preview: `covered`
 
@@ -1753,6 +1759,11 @@ Temporarily modifies ATK and/or DEF.
 | `targetRef` | nao | string | References an effect target id or a context target such as self. |
 | `atkBoost` | nao | number |  |
 | `defBoost` | nao | number |  |
+| `duration` | nao | string |  |
+| `durationTurns` | nao | number |  |
+| `expiresOnTurn` | nao | number |  |
+| `permanent` | nao | boolean |  |
+| `sourceName` | nao | string |  |
 
 **Exemplos**
 
@@ -2142,7 +2153,7 @@ Switches target battle position.
 - Target: `required`
 - Selecao: `usesTargets`
 - Mutacoes: position, stats
-- Eventos emitidos: nenhum
+- Eventos emitidos: position_change
 - Atualiza board: sim
 - Preview: `notNeeded`
 

@@ -52,6 +52,11 @@ export async function handleReturnToHand(action, ctx, targets, engine) {
     // Use game.moveCard for proper event handling
     const moveResult = await game.moveCard(card, cardOwner, "hand", {
       fromZone,
+      contextLabel: action.contextLabel || "return_to_hand",
+      sourceCard: ctx?.source || null,
+      effectId: ctx?.effect?.id || null,
+      movedByEffect: true,
+      awaitCardMovedEvent: true,
     });
 
     if (moveResult && moveResult.success !== false) {
@@ -100,7 +105,14 @@ async function bounceAndSummonCard(source, target, player, action, engine, ctx =
   // Bounce source to hand
   if (action.bounceSource !== false) {
     if (typeof game.moveCard === "function") {
-      await game.moveCard(source, player, "hand", { fromZone: "field" });
+      await game.moveCard(source, player, "hand", {
+        fromZone: "field",
+        contextLabel: action.contextLabel || "bounce_and_summon",
+        sourceCard: ctx?.source || source,
+        effectId: ctx?.effect?.id || null,
+        movedByEffect: true,
+        awaitCardMovedEvent: true,
+      });
     } else {
       const fieldIndex = player.field.indexOf(source);
       if (fieldIndex !== -1) {

@@ -110,6 +110,8 @@ export function applyMove(action, ctx, targets) {
           contextLabel,
           sourceCard: ctx?.source || null,
           effectId: ctx?.effect?.id || null,
+          movedByEffect: true,
+          awaitCardMovedEvent: true,
           allowExtraDeckMonsterToHand: shouldAllowExtraDeckMonsterToHand(
             action,
             ctx

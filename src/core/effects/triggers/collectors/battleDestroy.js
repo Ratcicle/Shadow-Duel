@@ -20,6 +20,8 @@ export async function collectBattleDestroyTriggers(payload) {
 
   const attacker = payload.attacker;
   const destroyed = payload.destroyed;
+  const destroyedPosition =
+    payload.destroyedPosition || destroyed.position || null;
   const actionContext = payload?.actionContext || null;
   const attackerOwner = payload.attackerOwner || this.getOwnerByCard(attacker);
   const destroyedOwner =
@@ -71,6 +73,7 @@ export async function collectBattleDestroyTriggers(payload) {
         destroyed,
         attackerOwner,
         destroyedOwner,
+        destroyedPosition,
         host: card.equippedTo || null,
         actionContext,
       };
@@ -133,6 +136,17 @@ export async function collectBattleDestroyTriggers(payload) {
             (ctx.destroyedOwner && ctx.destroyedOwner.id) || ctx.destroyedOwner;
           const opponentId = side.other?.id;
           if (!destroyedOwnerId || destroyedOwnerId !== opponentId) {
+            continue;
+          }
+        }
+
+        const requiredDestroyedPosition =
+          effect.requireDestroyedPosition || effect.destroyedPosition;
+        if (requiredDestroyedPosition) {
+          const allowedPositions = Array.isArray(requiredDestroyedPosition)
+            ? requiredDestroyedPosition
+            : [requiredDestroyedPosition];
+          if (!allowedPositions.includes(ctx.destroyedPosition)) {
             continue;
           }
         }

@@ -417,6 +417,7 @@ export async function finishCombat(attacker, target, options = {}) {
         const preDestroyedOwnerId = target.owner;
         const preDestroyedOwner =
           preDestroyedOwnerId === "player" ? this.player : this.bot;
+        const preDestroyedPosition = target.position || null;
         const result = await this.destroyCard(target, {
           cause: "battle",
           sourceCard: attacker,
@@ -429,6 +430,7 @@ export async function finishCombat(attacker, target, options = {}) {
             {
               destroyedOwner: preDestroyedOwner,
               destroyedOwnerId: preDestroyedOwnerId,
+              destroyedPosition: preDestroyedPosition,
             },
           );
           if (bdResult) battleDestroyResults.push(bdResult);
@@ -468,6 +470,7 @@ export async function finishCombat(attacker, target, options = {}) {
         const preDestroyedOwnerId = attacker.owner;
         const preDestroyedOwner =
           preDestroyedOwnerId === "player" ? this.player : this.bot;
+        const preDestroyedPosition = attacker.position || null;
         const result = await this.destroyCard(attacker, {
           cause: "battle",
           sourceCard: target,
@@ -480,6 +483,7 @@ export async function finishCombat(attacker, target, options = {}) {
             {
               destroyedOwner: preDestroyedOwner,
               destroyedOwnerId: preDestroyedOwnerId,
+              destroyedPosition: preDestroyedPosition,
             },
           );
           if (bdResult) battleDestroyResults.push(bdResult);
@@ -505,6 +509,7 @@ export async function finishCombat(attacker, target, options = {}) {
         const preDestroyedOwnerId = attacker.owner;
         const preDestroyedOwner =
           preDestroyedOwnerId === "player" ? this.player : this.bot;
+        const preDestroyedPosition = attacker.position || null;
         const result = await this.destroyCard(attacker, {
           cause: "battle",
           sourceCard: target,
@@ -516,6 +521,7 @@ export async function finishCombat(attacker, target, options = {}) {
             {
               destroyedOwner: preDestroyedOwner,
               destroyedOwnerId: preDestroyedOwnerId,
+              destroyedPosition: preDestroyedPosition,
             },
           );
           if (bdResult) battleDestroyResults.push(bdResult);
@@ -543,6 +549,10 @@ export async function finishCombat(attacker, target, options = {}) {
 
       logBattleDestroyCheck("tie - target destruction check");
       if (this.canDestroyByBattle(target)) {
+        const preDestroyedOwnerId = target.owner;
+        const preDestroyedOwner =
+          preDestroyedOwnerId === "player" ? this.player : this.bot;
+        const preDestroyedPosition = target.position || null;
         const result = await this.destroyCard(target, {
           cause: "battle",
           sourceCard: attacker,
@@ -551,6 +561,11 @@ export async function finishCombat(attacker, target, options = {}) {
           const bdResult = await this.applyBattleDestroyEffect(
             attacker,
             target,
+            {
+              destroyedOwner: preDestroyedOwner,
+              destroyedOwnerId: preDestroyedOwnerId,
+              destroyedPosition: preDestroyedPosition,
+            },
           );
           if (bdResult) battleDestroyResults.push(bdResult);
         }
@@ -592,6 +607,10 @@ export async function finishCombat(attacker, target, options = {}) {
       }
       logBattleDestroyCheck("defense target destruction check");
       if (this.canDestroyByBattle(target)) {
+        const preDestroyedOwnerId = target.owner;
+        const preDestroyedOwner =
+          preDestroyedOwnerId === "player" ? this.player : this.bot;
+        const preDestroyedPosition = target.position || null;
         const result = await this.destroyCard(target, {
           cause: "battle",
           sourceCard: attacker,
@@ -600,6 +619,11 @@ export async function finishCombat(attacker, target, options = {}) {
           const bdResult = await this.applyBattleDestroyEffect(
             attacker,
             target,
+            {
+              destroyedOwner: preDestroyedOwner,
+              destroyedOwnerId: preDestroyedOwnerId,
+              destroyedPosition: preDestroyedPosition,
+            },
           );
           if (bdResult) battleDestroyResults.push(bdResult);
         }
@@ -697,6 +721,8 @@ export async function applyBattleDestroyEffect(
     extras?.destroyedOwner ||
     (destroyed.owner === "player" ? this.player : this.bot);
   const attackerOwner = attacker.owner === "player" ? this.player : this.bot;
+  const destroyedPosition =
+    extras?.destroyedPosition || destroyed.position || null;
 
   const emitResult = await this.emit("battle_destroy", {
     player: attackerOwner, // o dono do atacante (quem causou a destruição)
@@ -707,7 +733,7 @@ export async function applyBattleDestroyEffect(
     destroyedOwnerId:
       extras?.destroyedOwnerId || destroyedOwner?.id || destroyed?.owner,
     attackerOwner,
-    destroyedOwner,
+    destroyedPosition,
   });
 
   return emitResult || { ok: true };
