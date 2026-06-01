@@ -1,4 +1,5 @@
 import BaseStrategy from "./BaseStrategy.js";
+import { sequenceActionsByPriority } from "./common/actionSequencing.js";
 import {
   estimateCardValue,
   estimateOffensiveTemporaryBuffValue,
@@ -885,30 +886,23 @@ export default class LuminarchStrategy extends BaseStrategy {
 
   sequenceActions(actions) {
     // Ordena por prioridade (P1 priority bonuses aplicados)
-    const sorted = actions.sort((a, b) => {
-      const priorityA = a.priority ?? 0;
-      const priorityB = b.priority ?? 0;
-      if (priorityA !== priorityB) return priorityB - priorityA; // Maior priority primeiro
+    const typePriority = {
+      fieldEffect: 0,
+      monsterEffect: 0.5,
+      handIgnition: 0.75,
+      graveyardMonsterEffect: 0.9,
+      spell: 1,
+      spellTrapEffect: 2,
+      position_change: 2.5,
+      summon: 3,
+      special_summon_sanctum_protector: 3,
+      set_spell_trap: 4,
+    };
 
-      // Fallback: tipo
-      const typePriority = {
-        fieldEffect: 0,
-        monsterEffect: 0.5,
-        handIgnition: 0.75,
-        graveyardMonsterEffect: 0.9,
-        spell: 1,
-        spellTrapEffect: 2,
-        position_change: 2.5,
-        summon: 3,
-        special_summon_sanctum_protector: 3,
-        set_spell_trap: 4,
-      };
-      const typeA = typePriority[a.type] ?? 9;
-      const typeB = typePriority[b.type] ?? 9;
-      return typeA - typeB;
+    return sequenceActionsByPriority(actions, {
+      typeOrder: typePriority,
+      defaultTypeOrder: 9,
     });
-
-    return sorted;
   }
 
   getTributeRequirementFor(card, playerState) {

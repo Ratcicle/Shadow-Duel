@@ -13,6 +13,24 @@
 
 import BaseStrategy from "./BaseStrategy.js";
 import {
+  applyMacroAndSafety,
+  buildPrioritizedAction,
+} from "./common/actionGeneration.js";
+import { getGenericSetBackrowActions } from "./common/backrowPlanning.js";
+import { sequenceActionsByPriority } from "./common/actionSequencing.js";
+import {
+  findIgnitionEffect,
+  hasOncePerTurnEffect,
+} from "./common/effectDiscovery.js";
+import {
+  canActivateFieldSpellEffect,
+  canActivateMonsterEffect,
+  canActivateSpellFromHand,
+  canActivateSpellTrapEffect,
+  checkOncePerTurnIfRealGame,
+} from "./common/previewGuards.js";
+import { buildAutoActivationContext } from "./common/preferencePolicy.js";
+import {
   detectLethalOpportunity,
   detectDefensiveNeed,
   detectComeback,
@@ -183,16 +201,13 @@ function buildDragonActionContext(extra = {}) {
 }
 
 function buildActivationContext(zone, actionContext = null, extra = {}) {
-  return {
+  return buildAutoActivationContext({
+    zone,
     fromHand: zone === "hand",
-    activationZone: zone,
-    sourceZone: zone,
-    autoSelectTargets: true,
-    autoSelectSingleTarget: true,
-    logTargets: false,
-    ...(actionContext ? { actionContext } : {}),
-    ...extra,
-  };
+    actionContext: actionContext || {},
+    includeActionContext: !!actionContext,
+    extra,
+  });
 }
 
 function hasLuminousFollowUp(bot) {
@@ -354,14 +369,7 @@ export default class DragonStrategy extends BaseStrategy {
   }
 
   sequenceActions(actions = []) {
-    return (actions || [])
-      .map((action, index) => ({ action, index }))
-      .sort((a, b) => {
-        const priorityDiff = (b.action?.priority || 0) - (a.action?.priority || 0);
-        if (priorityDiff !== 0) return priorityDiff;
-        return a.index - b.index;
-      })
-      .map((entry) => entry.action);
+    return sequenceActionsByPriority(actions);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -558,7 +566,7 @@ export default class DragonStrategy extends BaseStrategy {
         actionContext: buildDragonActionContext(),
       };
 
-      const hasOncePerTurn = (card.effects || []).some((e) => e.oncePerTurn || e.oncePerTurnName);
+      const hasOncePerTurn = hasOncePerTurnEffect(card);
       if (hasOncePerTurn && addedSpellNames.has(card.name)) {
         log(`  ⏭️ Skipping duplicate 1/turn spell: ${card.name}`);
         return;
@@ -566,16 +574,16 @@ export default class DragonStrategy extends BaseStrategy {
 
       // Validate activatability in real game
       if (!isSimulatedState) {
-        const check = actualGame.effectEngine?.canActivate?.(card, bot);
-        if (!check?.ok) return;
-
-        const preview =
-          actualGame.effectEngine?.canActivateSpellFromHandPreview?.(
+        if (
+          !canActivateSpellFromHand(
+            actualGame,
             card,
             bot,
-            { activationContext: spellActivationContext },
-          );
-        if (preview && preview.ok === false) return;
+            spellActivationContext,
+          )
+        ) {
+          return;
+        }
 
         if (card.name === "Polymerization") {
           const canActivate = actualGame.canActivatePolymerization?.() ?? false;
@@ -593,69 +601,81 @@ export default class DragonStrategy extends BaseStrategy {
 
         if (hasOncePerTurn) addedSpellNames.add(card.name);
 
-        let finalPriority = decision.priority || 5;
-        const macroBuff = calculateMacroPriorityBonus("spell", card, macroStrategy);
-        finalPriority += macroBuff;
-
         const safety = assessActionSafety({ bot, player: opponent }, bot, opponent, "spell", card);
-        if (safety.recommendation === "very_risky") finalPriority -= 15;
-        else if (safety.recommendation === "risky") finalPriority -= 8;
+        const { priority: finalPriority, macroBuff, safetyScore } =
+          applyMacroAndSafety({
+            basePriority: decision.priority || 5,
+            actionType: "spell",
+            card,
+            macroStrategy,
+            safety,
+            macroBonusFn: calculateMacroPriorityBonus,
+            safetyPolicy: {
+              very_risky: -15,
+              risky: -8,
+            },
+          });
 
-        actions.push({
-          type: "spell",
-          index,
-          cardId: card.id,
-          priority: finalPriority,
-          cardName: card.name,
-          activationContext: spellActivationContext,
-          macroBuff,
-          safetyScore: safety.riskScore,
-        });
+        actions.push(
+          buildPrioritizedAction({
+            type: "spell",
+            index,
+            card,
+            priority: finalPriority,
+            activationContext: spellActivationContext,
+            extra: {
+              macroBuff,
+              safetyScore,
+            },
+          }),
+        );
       } else {
         log(`  ❌ Spell: ${card.name} — ${decision.reason}`);
       }
     });
 
     // === TRAP SET ACTIONS ===
-    const canSetTrap = (bot.spellTrap || []).length < 5;
-    if (canSetTrap) {
-      const activatedIndices = new Set(actions.map((a) => a.index));
-      (bot.hand || []).forEach((card, index) => {
-        if (card.cardKind !== "trap") return;
-        if (activatedIndices.has(index)) return;
+    const activatedIndices = new Set(actions.map((a) => a.index));
+    const trapSetActions = getGenericSetBackrowActions({
+      bot,
+      game,
+      opponent,
+      analysis,
+      alreadyUsedHandIndices: activatedIndices,
+      basePriority: 6,
+      defaultReason: "setup_backrow",
+      policy: {
+        acceptsCard: (card) => card?.cardKind === "trap",
+        getPriority: (card) => {
+          let priority = 6;
 
-        let priority = 6;
-
-        if (card.name === "Call of the Haunted") {
-          const gyMonsters = (bot.graveyard || []).filter(
-            (c) => c && c.cardKind === "monster"
-          );
-          if (gyMonsters.length > 0) {
-            priority = 9;
-            if ((opponent?.field || []).length >= 2 || analysis.lpRatio < 0.6) {
-              priority = 11;
+          if (card.name === "Call of the Haunted") {
+            const gyMonsters = (bot.graveyard || []).filter(
+              (c) => c && c.cardKind === "monster",
+            );
+            if (gyMonsters.length > 0) {
+              priority = 9;
+              if ((opponent?.field || []).length >= 2 || analysis.lpRatio < 0.6) {
+                priority = 11;
+              }
+            } else {
+              priority = 4;
             }
-          } else {
-            priority = 4;
+          } else if (card.name === "Dragon Spirit Sanctuary") {
+            const fieldDragons = (bot.field || []).filter(
+              (c) => c && c.cardKind === "monster",
+            );
+            const handDragons = (bot.hand || []).filter(isDragonMonster);
+            priority = fieldDragons.length > 0 && handDragons.length > 0 ? 8 : 4;
           }
-        } else if (card.name === "Dragon Spirit Sanctuary") {
-          const fieldDragons = (bot.field || []).filter(
-            (c) => c && c.cardKind === "monster"
-          );
-          const handDragons = (bot.hand || []).filter(isDragonMonster);
-          priority = fieldDragons.length > 0 && handDragons.length > 0 ? 8 : 4;
-        }
 
-        log(`  📥 Set trap: ${card.name} (priority ${priority})`);
-        actions.push({
-          type: "set_spell_trap",
-          index,
-          cardId: card.id,
-          priority,
-          cardName: card.name,
-          reason: "setup_backrow",
-        });
-      });
+          return priority;
+        },
+      },
+    });
+    for (const action of trapSetActions) {
+      log(`  📥 Set trap: ${action.cardName} (priority ${action.priority})`);
+      actions.push(action);
     }
 
     // === EXTREME DRAGON TRIBUTE SUMMON ===
@@ -745,26 +765,37 @@ export default class DragonStrategy extends BaseStrategy {
         if (decision.yes) {
           log(`  ✅ Summon: ${card.name} — ${decision.reason}`);
 
-          let finalPriority = decision.priority || 5;
-          const macroBuff = calculateMacroPriorityBonus("summon", card, macroStrategy);
-          finalPriority += macroBuff;
-
           const safety = assessActionSafety({ bot, player: opponent }, bot, opponent, "summon", card);
-          if (safety.recommendation === "very_risky") finalPriority -= 10;
+          const { priority: finalPriority, macroBuff, safetyScore } =
+            applyMacroAndSafety({
+              basePriority: decision.priority || 5,
+              actionType: "summon",
+              card,
+              macroStrategy,
+              safety,
+              macroBonusFn: calculateMacroPriorityBonus,
+              safetyPolicy: {
+                very_risky: -10,
+              },
+            });
 
-          actions.push({
-            type: "summon",
-            index,
-            cardId: card.id,
-            position: decision.position,
-            facedown: decision.facedown !== undefined
-              ? decision.facedown
-              : decision.position === "defense",
-            priority: finalPriority,
-            cardName: card.name,
-            macroBuff,
-            safetyScore: safety.riskScore,
-          });
+          actions.push(
+            buildPrioritizedAction({
+              type: "summon",
+              index,
+              card,
+              priority: finalPriority,
+              extra: {
+                position: decision.position,
+                facedown:
+                  decision.facedown !== undefined
+                    ? decision.facedown
+                    : decision.position === "defense",
+                macroBuff,
+                safetyScore,
+              },
+            }),
+          );
         } else {
           log(`  ❌ Summon: ${card.name} — ${decision.reason}`);
         }
@@ -777,9 +808,7 @@ export default class DragonStrategy extends BaseStrategy {
     (bot.hand || []).forEach((card, index) => {
       if (card.cardKind !== "monster") return;
 
-      const handIgnitionEffect = (card.effects || []).find(
-        (e) => e && e.timing === "ignition" && e.requireZone === "hand",
-      );
+      const handIgnitionEffect = findIgnitionEffect(card, "hand");
       if (!handIgnitionEffect) return;
 
       // Check if cost targets exist in field
@@ -820,8 +849,13 @@ export default class DragonStrategy extends BaseStrategy {
       }
 
       // Check once-per-turn
-      if (!isSimulatedState && actualGame.effectEngine) {
-        const optCheck = actualGame.effectEngine.checkOncePerTurn(card, bot, handIgnitionEffect);
+      if (!isSimulatedState) {
+        const optCheck = checkOncePerTurnIfRealGame(
+          actualGame,
+          card,
+          bot,
+          handIgnitionEffect,
+        );
         if (!optCheck?.ok) {
           log(`  ⏭️ Hand ignition ${card.name}: already used this turn`);
           return;
@@ -953,12 +987,7 @@ export default class DragonStrategy extends BaseStrategy {
     // === FIELD MONSTER IGNITION ACTIONS ===
     (bot.field || []).forEach((card, fieldIndex) => {
       if (!card || card.cardKind !== "monster" || card.isFacedown) return;
-      const ignition = (card.effects || []).find(
-        (e) =>
-          e &&
-          e.timing === "ignition" &&
-          (!e.requireZone || e.requireZone === "field"),
-      );
+      const ignition = findIgnitionEffect(card, "field");
       if (!ignition) return;
 
       let priority = null;
@@ -1046,14 +1075,17 @@ export default class DragonStrategy extends BaseStrategy {
       const activationContext = buildActivationContext("field", actionContext);
 
       if (!isSimulatedState && actualGame.effectEngine) {
-        const preview = actualGame.effectEngine.canActivateMonsterEffectPreview?.(
-          card,
-          bot,
-          "field",
-          null,
-          { activationContext },
-        );
-        if (preview && preview.ok === false) return;
+        if (
+          !canActivateMonsterEffect(
+            actualGame,
+            card,
+            bot,
+            "field",
+            activationContext,
+          )
+        ) {
+          return;
+        }
       } else if (!effectTargetsAvailable(ignition, bot, opponent)) {
         return;
       }
@@ -1075,9 +1107,7 @@ export default class DragonStrategy extends BaseStrategy {
     // === GRAVEYARD MONSTER IGNITION ACTIONS ===
     (bot.graveyard || []).forEach((card, graveyardIndex) => {
       if (!card || card.cardKind !== "monster") return;
-      const graveyardIgnitionEffect = (card.effects || []).find(
-        (e) => e && e.timing === "ignition" && e.requireZone === "graveyard",
-      );
+      const graveyardIgnitionEffect = findIgnitionEffect(card, "graveyard");
       if (!graveyardIgnitionEffect) return;
 
       const targetPreferences = {};
@@ -1153,22 +1183,25 @@ export default class DragonStrategy extends BaseStrategy {
       const activationContext = buildActivationContext("graveyard", actionContext);
 
       if (!isSimulatedState && actualGame.effectEngine) {
-        const optCheck = actualGame.effectEngine.checkOncePerTurn(
+        const optCheck = checkOncePerTurnIfRealGame(
+          actualGame,
           card,
           bot,
           graveyardIgnitionEffect,
         );
         if (!optCheck?.ok) return;
 
-        const preview =
-          actualGame.effectEngine.canActivateMonsterEffectPreview?.(
+        if (
+          !canActivateMonsterEffect(
+            actualGame,
             card,
             bot,
             "graveyard",
-            null,
-            { activationContext },
-          );
-        if (preview && preview.ok === false) return;
+            activationContext,
+          )
+        ) {
+          return;
+        }
       } else if (!effectTargetsAvailable(graveyardIgnitionEffect, bot, opponent)) {
         return;
       }
@@ -1205,13 +1238,11 @@ export default class DragonStrategy extends BaseStrategy {
     // Face-up continuous spells with ignition effects (e.g. Extreme Dragon Awakening).
     (bot.spellTrap || []).forEach((card, zoneIndex) => {
       if (!card || card.isFacedown || card.cardKind !== "spell") return;
-      const ignition = (card.effects || []).find(
-        (e) => e && e.timing === "ignition" && e.requireZone === "spellTrap"
-      );
+      const ignition = findIgnitionEffect(card, "spellTrap");
       if (!ignition) return;
 
       if (!isSimulatedState && actualGame.effectEngine) {
-        const opt = actualGame.effectEngine.checkOncePerTurn(card, bot, ignition);
+        const opt = checkOncePerTurnIfRealGame(actualGame, card, bot, ignition);
         if (!opt?.ok) return;
       }
 
@@ -1264,14 +1295,17 @@ export default class DragonStrategy extends BaseStrategy {
         const activationContext = buildActivationContext("spellTrap", actionContext);
 
         if (!isSimulatedState && actualGame.effectEngine) {
-          const preview = actualGame.effectEngine.canActivateSpellTrapEffectPreview?.(
-            card,
-            bot,
-            "spellTrap",
-            null,
-            { activationContext },
-          );
-          if (preview && preview.ok === false) return;
+          if (
+            !canActivateSpellTrapEffect(
+              actualGame,
+              card,
+              bot,
+              "spellTrap",
+              activationContext,
+            )
+          ) {
+            return;
+          }
         }
 
         log(
@@ -1293,9 +1327,7 @@ export default class DragonStrategy extends BaseStrategy {
     const fieldSpell = bot.fieldSpell;
     if (fieldSpell?.name === "Jagged Peak of the Dragons") {
       const counters = fieldSpell.counters?.dragon_peak || 0;
-      const ignition = (fieldSpell.effects || []).find(
-        (e) => e && e.timing === "ignition" && e.requireZone === "fieldSpell",
-      );
+      const ignition = findIgnitionEffect(fieldSpell, "fieldSpell");
       if (ignition && counters >= 5) {
         const preferredDragons = [
           ...rankOwnDragonsByValue(bot.hand || []),
@@ -1319,13 +1351,12 @@ export default class DragonStrategy extends BaseStrategy {
         const activationContext = buildActivationContext("fieldSpell", actionContext);
         let canUsePeak = true;
         if (!isSimulatedState && actualGame.effectEngine) {
-          const preview = actualGame.effectEngine.canActivateFieldSpellEffectPreview?.(
+          canUsePeak = canActivateFieldSpellEffect(
+            actualGame,
             fieldSpell,
             bot,
-            null,
-            { activationContext },
+            activationContext,
           );
-          canUsePeak = !preview || preview.ok !== false;
         } else {
           canUsePeak = effectTargetsAvailable(ignition, bot, opponent);
         }
@@ -1348,9 +1379,7 @@ export default class DragonStrategy extends BaseStrategy {
     // === GRAVEYARD SPELL IGNITION ACTIONS ===
     (bot.graveyard || []).forEach((card, graveyardIndex) => {
       if (!card || card.cardKind !== "spell") return;
-      const ignition = (card.effects || []).find(
-        (e) => e && e.timing === "ignition" && e.requireZone === "graveyard",
-      );
+      const ignition = findIgnitionEffect(card, "graveyard");
       if (!ignition) return;
       if (card.name !== "Hellkite Roar") return;
       if (!hasUsefulJaggedPeakSearch(bot)) return;
@@ -1366,14 +1395,17 @@ export default class DragonStrategy extends BaseStrategy {
       const activationContext = buildActivationContext("graveyard", actionContext);
 
       if (!isSimulatedState && actualGame.effectEngine) {
-        const preview = actualGame.effectEngine.canActivateSpellTrapEffectPreview?.(
-          card,
-          bot,
-          "graveyard",
-          null,
-          { activationContext },
-        );
-        if (preview && preview.ok === false) return;
+        if (
+          !canActivateSpellTrapEffect(
+            actualGame,
+            card,
+            bot,
+            "graveyard",
+            activationContext,
+          )
+        ) {
+          return;
+        }
       } else if (!effectTargetsAvailable(ignition, bot, opponent)) {
         return;
       }

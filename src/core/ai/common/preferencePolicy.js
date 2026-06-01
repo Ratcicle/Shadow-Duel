@@ -57,23 +57,94 @@ export function buildTargetPreferences({
   return preferences;
 }
 
+export function buildAutoActivationContext({
+  zone = null,
+  fromHand = false,
+  sourceZone = zone,
+  activationZone = zone,
+  autoSelectTargets = true,
+  autoSelectSingleTarget = true,
+  includeAutoSelectTargets = true,
+  includeActionContext = true,
+  logTargets = false,
+  actionContext = {},
+  costPreferences = null,
+  targetPreferences = null,
+  specialSummonPositions = null,
+  fusionPositions = null,
+  fusionPreferences = null,
+  extra = {},
+} = {}) {
+  const mergedActionContext = {
+    ...(actionContext || {}),
+  };
+
+  if (costPreferences) mergedActionContext.costPreferences = costPreferences;
+  if (targetPreferences) mergedActionContext.targetPreferences = targetPreferences;
+  if (specialSummonPositions) {
+    mergedActionContext.specialSummonPositions = specialSummonPositions;
+  }
+  if (fusionPositions) mergedActionContext.fusionPositions = fusionPositions;
+  if (fusionPreferences) mergedActionContext.fusionPreferences = fusionPreferences;
+
+  const result = {
+    fromHand,
+    activationZone,
+    sourceZone,
+    autoSelectSingleTarget,
+    logTargets,
+    ...extra,
+  };
+
+  if (includeAutoSelectTargets) {
+    result.autoSelectTargets = autoSelectTargets;
+  }
+
+  if (includeActionContext) {
+    result.actionContext = mergedActionContext;
+  }
+
+  return result;
+}
+
+export function mergeActivationActionContext(baseContext = {}, patch = {}) {
+  return {
+    ...(baseContext || {}),
+    actionContext: {
+      ...(baseContext?.actionContext || {}),
+      ...(patch || {}),
+    },
+  };
+}
+
 export function buildActivationContext({
   costPreferences,
   targetPreferences = {},
+  specialSummonPositions = null,
+  fusionPositions = null,
+  fusionPreferences = null,
   autoSelectTargets = true,
   autoSelectSingleTarget = true,
   includeAutoSelectTargets = true,
   actionContext = {},
   ...rest
 } = {}) {
+  const mergedActionContext = {
+    ...actionContext,
+    costPreferences,
+    targetPreferences,
+  };
+
+  if (specialSummonPositions) {
+    mergedActionContext.specialSummonPositions = specialSummonPositions;
+  }
+  if (fusionPositions) mergedActionContext.fusionPositions = fusionPositions;
+  if (fusionPreferences) mergedActionContext.fusionPreferences = fusionPreferences;
+
   const result = {
     autoSelectSingleTarget,
     ...rest,
-    actionContext: {
-      ...actionContext,
-      costPreferences,
-      targetPreferences,
-    },
+    actionContext: mergedActionContext,
   };
 
   if (includeAutoSelectTargets) {

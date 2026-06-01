@@ -1,5 +1,14 @@
 import BaseStrategy from "./BaseStrategy.js";
+import { sequenceActionsByPriority } from "./common/actionSequencing.js";
+import {
+  getGenericHandSpellActions,
+  getGenericIgnitionEffectActions,
+  getGenericNormalSummonActions,
+} from "./common/actionGeneration.js";
+import { getGenericSetBackrowActions } from "./common/backrowPlanning.js";
 import { buildStrategyAnalysis } from "./common/analysis.js";
+import { findIgnitionEffect } from "./common/effectDiscovery.js";
+import { canUsePreview as canUsePreviewGuard } from "./common/previewGuards.js";
 import {
   getStrongestAttackThreat,
   getStrongestBattleThreat,
@@ -43,10 +52,6 @@ import {
   evaluateArcanistCardValue,
   evaluateBoardArcanist,
 } from "./arcanist/scoring.js";
-
-function getActualGame(game) {
-  return game?._gameRef || game;
-}
 
 function isSimulatedState(game) {
   return game?._isPerspectiveState === true;
@@ -412,140 +417,67 @@ export default class ArcanistStrategy extends BaseStrategy {
   }
 
   canUsePreview(game, previewFn) {
-    if (isSimulatedState(game)) return true;
-    const actualGame = getActualGame(game);
-    if (!actualGame?.effectEngine || typeof previewFn !== "function") {
-      return true;
-    }
-    try {
-      const preview = previewFn(actualGame);
-      return preview ? preview.ok !== false : true;
-    } catch (error) {
-      if (this.bot?.debug) {
-        console.warn("[ArcanistStrategy] Preview check failed:", error);
-      }
-      return false;
-    }
+    return canUsePreviewGuard(game, previewFn, {
+      bot: this.bot,
+      debugLabel: "ArcanistStrategy",
+    });
   }
 
   getSpellActions(game, bot, analysis) {
-    const actions = [];
-    for (const [index, card] of (bot.hand || []).entries()) {
-      if (!card || card.cardKind !== "spell") continue;
-      const decision = shouldPlaySpell(card, analysis);
-      if (!decision.yes) continue;
-
-      const activationContext = buildArcanistActivationContext(card, analysis);
-      const canActivate = this.canUsePreview(game, (actualGame) =>
-        actualGame.effectEngine.canActivateSpellFromHandPreview(card, bot, {
-          activationContext,
-        }),
-      );
-      if (!canActivate) continue;
-
-      actions.push({
-        type: "spell",
-        index,
-        cardId: card.id,
-        cardName: card.name,
-        priority: decision.priority || 1,
-        reason: decision.reason,
-        activationContext,
-      });
-    }
-    return actions;
+    return getGenericHandSpellActions({
+      game,
+      player: bot,
+      analysis,
+      shouldPlay: shouldPlaySpell,
+      buildActivationContext: buildArcanistActivationContext,
+      canActivate: ({ card, player, activationContext }) =>
+        this.canUsePreview(game, (actualGame) =>
+          actualGame.effectEngine.canActivateSpellFromHandPreview(card, player, {
+            activationContext,
+          }),
+        ),
+    });
   }
 
   getSetSpellTrapActions(_game, bot) {
-    if ((bot.spellTrap || []).length >= 5) return [];
-
-    const actions = [];
-    for (const [index, card] of (bot.hand || []).entries()) {
-      if (!card) continue;
-      const isReactiveBackrow =
-        card.cardKind === "trap" ||
-        (card.cardKind === "spell" && card.subtype === "quick");
-      if (!isReactiveBackrow) continue;
-
-      actions.push({
-        type: "set_spell_trap",
-        index,
-        cardId: card.id,
-        cardName: card.name,
-        priority: -1,
-        reason: "prepare reactive backrow",
-      });
-    }
-
-    return actions;
+    return getGenericSetBackrowActions({ player: bot });
   }
 
   getSummonActions(game, bot, analysis) {
-    const actions = [];
-    if (!analysis.canNormalSummon || analysis.fieldCapacity <= 0) {
-      return actions;
-    }
-
-    for (const [index, card] of (bot.hand || []).entries()) {
-      if (!card || card.cardKind !== "monster") continue;
-      if (card.cannotBeNormalSummonedOrSet) continue;
-
-      const tributeInfo = this.getTributeRequirementFor(card, bot);
-      const decision = shouldSummonMonster(card, analysis, tributeInfo);
-      if (!decision.yes) continue;
-
-      actions.push({
-        type: "summon",
-        index,
-        cardId: card.id,
-        cardName: card.name,
-        position: decision.position || "attack",
-        facedown: false,
-        priority: decision.priority || 1,
-        reason: decision.reason,
-      });
-    }
-
-    return actions;
+    return getGenericNormalSummonActions({
+      player: bot,
+      analysis,
+      getTributeRequirement: (card, player) =>
+        this.getTributeRequirementFor(card, player),
+      shouldSummon: shouldSummonMonster,
+    });
   }
 
   getHandIgnitionActions(game, bot, analysis) {
-    const actions = [];
-    for (const [index, card] of (bot.hand || []).entries()) {
-      if (!card || card.cardKind !== "monster") continue;
-      const effect = (card.effects || []).find(
-        (entry) =>
-          entry && entry.timing === "ignition" && entry.requireZone === "hand",
-      );
-      if (!effect) continue;
-
-      const decision = shouldActivateHandIgnition(card, analysis);
-      if (!decision.yes) continue;
-
-      const activationContext = buildArcanistActivationContext(card, analysis);
-      const canActivate = this.canUsePreview(game, (actualGame) =>
-        actualGame.effectEngine.canActivateMonsterEffectPreview(
-          card,
-          bot,
-          "hand",
-          null,
-          { activationContext },
+    return getGenericIgnitionEffectActions({
+      game,
+      player: bot,
+      cards: bot.hand,
+      analysis,
+      type: "handIgnition",
+      sourceZone: "hand",
+      indexFields: ["index"],
+      findEffect: (card) => findIgnitionEffect(card, "hand"),
+      shouldActivate: shouldActivateHandIgnition,
+      buildActivationContext: buildArcanistActivationContext,
+      canActivate: ({ card, player, activationContext }) =>
+        this.canUsePreview(game, (actualGame) =>
+          actualGame.effectEngine.canActivateMonsterEffectPreview(
+            card,
+            player,
+            "hand",
+            null,
+            { activationContext },
+          ),
         ),
-      );
-      if (!canActivate) continue;
-
-      actions.push({
-        type: "handIgnition",
-        index,
-        cardId: card.id,
-        cardName: card.name,
-        effectId: effect.id,
-        priority: decision.priority || 1,
-        reason: decision.reason,
-        activationContext,
-      });
-    }
-    return actions;
+      cardFilter: (card) => card?.cardKind === "monster",
+      includeEffectId: true,
+    });
   }
 
   getFieldEffectActions(game, bot, analysis) {
@@ -590,84 +522,53 @@ export default class ArcanistStrategy extends BaseStrategy {
   }
 
   getSpellTrapEffectActions(game, bot, analysis) {
-    const actions = [];
-    for (const [zoneIndex, card] of (bot.spellTrap || []).entries()) {
-      if (!card || card.cardKind !== "spell" || card.isFacedown) continue;
-      const effect = (card.effects || []).find(
-        (entry) =>
-          entry &&
-          entry.timing === "ignition" &&
-          (!entry.requireZone || entry.requireZone === "spellTrap"),
-      );
-      if (!effect) continue;
-
-      const decision = shouldActivateSpellTrapEffect(card, analysis);
-      if (!decision.yes) continue;
-
-      const activationContext = buildArcanistActivationContext(card, analysis);
-      const canActivate = this.canUsePreview(game, (actualGame) =>
-        actualGame.effectEngine.canActivateSpellTrapEffectPreview(
-          card,
-          bot,
-          "spellTrap",
-          null,
-          { activationContext },
+    return getGenericIgnitionEffectActions({
+      game,
+      player: bot,
+      cards: bot.spellTrap,
+      analysis,
+      type: "spellTrapEffect",
+      sourceZone: "spellTrap",
+      indexFields: ["index", "zoneIndex"],
+      findEffect: (card) => findIgnitionEffect(card, "spellTrap"),
+      shouldActivate: shouldActivateSpellTrapEffect,
+      buildActivationContext: buildArcanistActivationContext,
+      canActivate: ({ card, player, activationContext }) =>
+        this.canUsePreview(game, (actualGame) =>
+          actualGame.effectEngine.canActivateSpellTrapEffectPreview(
+            card,
+            player,
+            "spellTrap",
+            null,
+            { activationContext },
+          ),
         ),
-      );
-      if (!canActivate) continue;
-
-      actions.push({
-        type: "spellTrapEffect",
-        index: zoneIndex,
-        zoneIndex,
-        cardId: card.id,
-        cardName: card.name,
-        priority: decision.priority || 1,
-        reason: decision.reason,
-        activationContext,
-      });
-    }
-    return actions;
+    });
   }
 
   getMonsterEffectActions(game, bot, analysis) {
-    const actions = [];
-    for (const [fieldIndex, card] of (bot.field || []).entries()) {
-      if (!card || card.cardKind !== "monster" || card.isFacedown) continue;
-      const effect = (card.effects || []).find(
-        (entry) =>
-          entry &&
-          entry.timing === "ignition" &&
-          (!entry.requireZone || entry.requireZone === "field"),
-      );
-      if (!effect) continue;
-
-      const decision = shouldActivateMonsterEffect(card, analysis);
-      if (!decision.yes) continue;
-
-      const activationContext = buildArcanistActivationContext(card, analysis);
-      const canActivate = this.canUsePreview(game, (actualGame) =>
-        actualGame.effectEngine.canActivateMonsterEffectPreview(
-          card,
-          bot,
-          "field",
-          null,
-          { activationContext },
+    return getGenericIgnitionEffectActions({
+      game,
+      player: bot,
+      cards: bot.field,
+      analysis,
+      type: "monsterEffect",
+      sourceZone: "field",
+      indexFields: ["fieldIndex"],
+      findEffect: (card) => findIgnitionEffect(card, "field"),
+      shouldActivate: shouldActivateMonsterEffect,
+      buildActivationContext: buildArcanistActivationContext,
+      canActivate: ({ card, player, activationContext }) =>
+        this.canUsePreview(game, (actualGame) =>
+          actualGame.effectEngine.canActivateMonsterEffectPreview(
+            card,
+            player,
+            "field",
+            null,
+            { activationContext },
+          ),
         ),
-      );
-      if (!canActivate) continue;
-
-      actions.push({
-        type: "monsterEffect",
-        fieldIndex,
-        cardId: card.id,
-        cardName: card.name,
-        priority: decision.priority || 1,
-        reason: decision.reason,
-        activationContext,
-      });
-    }
-    return actions;
+    });
   }
 
   generateMainPhaseActions(game) {
@@ -709,11 +610,8 @@ export default class ArcanistStrategy extends BaseStrategy {
       set_spell_trap: 6,
     };
 
-    return [...actions].sort((a, b) => {
-      const priorityA = a.priority ?? 0;
-      const priorityB = b.priority ?? 0;
-      if (priorityA !== priorityB) return priorityB - priorityA;
-      return (typeOrder[a.type] ?? 99) - (typeOrder[b.type] ?? 99);
+    return sequenceActionsByPriority(actions, {
+      typeOrder,
     });
   }
 

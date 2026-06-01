@@ -4,6 +4,7 @@ import {
   getStrongestAttackThreat,
   getTotalAttackThreat,
 } from "../common/cardStats.js";
+import { buildPrioritizedAction } from "../common/actionGeneration.js";
 import { evaluateRadiantLancerBattlePlan } from "./priorities.js";
 import {
   evaluateLuminarchTributeSummonCost,
@@ -334,22 +335,25 @@ function getNormalSummonActions(context) {
       priority -= 10;
     }
 
-    actions.push({
-      type: "summon",
-      index,
-      cardId: card.id,
-      position: preferredPosition,
-      facedown,
-      priority,
-      cardName: card.name,
-      reason: finisherPlan?.reason || shouldSummon.reason,
-      finisherPlan,
-      lancerPlan: compactRadiantLancerPlan(radiantLancerPlan),
-      macroBuff,
-      tributeCostPenalty,
-      tributeCostReason,
-      safetyScore: summonSafety.riskScore,
-    });
+    actions.push(
+      buildPrioritizedAction({
+        type: "summon",
+        index,
+        card,
+        priority,
+        reason: finisherPlan?.reason || shouldSummon.reason,
+        extra: {
+          position: preferredPosition,
+          facedown,
+          finisherPlan,
+          lancerPlan: compactRadiantLancerPlan(radiantLancerPlan),
+          macroBuff,
+          tributeCostPenalty,
+          tributeCostReason,
+          safetyScore: summonSafety.riskScore,
+        },
+      }),
+    );
   });
 
   return actions;
@@ -429,17 +433,21 @@ function getSanctumProtectorActions(context) {
     );
     priority += macroBuff;
 
-    actions.push({
-      type: "special_summon_sanctum_protector",
-      index: protectorIndex,
-      cardId: protectorCard?.id,
-      materialIndex: chosenAegis.fieldIndex,
-      position: "defense",
-      priority,
-      cardName: protectorCard?.name || "Luminarch Sanctum Protector",
-      macroBuff,
-      reason: "upgrade_tank",
-    });
+    actions.push(
+      buildPrioritizedAction({
+        type: "special_summon_sanctum_protector",
+        index: protectorIndex,
+        materialIndex: chosenAegis.fieldIndex,
+        card: protectorCard,
+        priority,
+        reason: "upgrade_tank",
+        extra: {
+          position: "defense",
+          cardName: protectorCard?.name || "Luminarch Sanctum Protector",
+          macroBuff,
+        },
+      }),
+    );
   } else if (bot?.debug && aegisCandidates.length > 0) {
     console.log("[LuminarchStrategy] Skip Protector SS: ascension ready for Aegis");
   }
@@ -530,19 +538,20 @@ function getCelestialMarshalHandIgnitionActions(context) {
     macroStrategy,
   );
 
-  actions.push({
-    type: "handIgnition",
-    index: marshalIndex,
-    cardId: marshal.id,
-    cardName: marshal.name,
-    priority,
-    reason: createsWall
-      ? "marshal_creates_wall"
-      : createsPayoff
-        ? "marshal_opens_followup"
-        : "marshal_body",
-    activationContext: handActivationContext,
-  });
+  actions.push(
+    buildPrioritizedAction({
+      type: "handIgnition",
+      index: marshalIndex,
+      card: marshal,
+      priority,
+      reason: createsWall
+        ? "marshal_creates_wall"
+        : createsPayoff
+          ? "marshal_opens_followup"
+          : "marshal_body",
+      activationContext: handActivationContext,
+    }),
+  );
 
   return actions;
 }
@@ -627,15 +636,16 @@ function getFortressAegisReviveActions(context) {
       macroStrategy,
     );
 
-    actions.push({
-      type: "monsterEffect",
-      fieldIndex,
-      cardId: card.id,
-      cardName: card.name,
-      priority,
-      reason: `fortress_revive_${bestTarget.name}`,
-      activationContext: reviveContext,
-    });
+    actions.push(
+      buildPrioritizedAction({
+        type: "monsterEffect",
+        fieldIndex,
+        card,
+        priority,
+        reason: `fortress_revive_${bestTarget.name}`,
+        activationContext: reviveContext,
+      }),
+    );
   });
 
   return actions;
@@ -685,15 +695,16 @@ function getMagicSickleGraveyardActions(context) {
       card,
       macroStrategy,
     );
-    actions.push({
-      type: "graveyardMonsterEffect",
-      graveyardIndex,
-      cardId: card.id,
-      cardName: card.name,
-      priority: 7 + spellTargets[0].score + macroBuff,
-      reason: `sickle_recover_${bestSpell.name}`,
-      activationContext: sickleContext,
-    });
+    actions.push(
+      buildPrioritizedAction({
+        type: "graveyardMonsterEffect",
+        graveyardIndex,
+        card,
+        priority: 7 + spellTargets[0].score + macroBuff,
+        reason: `sickle_recover_${bestSpell.name}`,
+        activationContext: sickleContext,
+      }),
+    );
   });
 
   return actions;

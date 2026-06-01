@@ -13,6 +13,10 @@
 
 import BaseStrategy from "./BaseStrategy.js";
 import { validateHandIgnitionCandidate } from "./common/actionValidation.js";
+import {
+  applyMacroAndSafety,
+  buildPrioritizedAction,
+} from "./common/actionGeneration.js";
 import { buildStrategyAnalysis } from "./common/analysis.js";
 import { getEffectiveAtk } from "./common/cardStats.js";
 import { withFusionPreferences } from "./common/fusionPlanning.js";
@@ -723,27 +727,21 @@ export default class ShadowHeartStrategy extends BaseStrategy {
           addedSpellNames.add(card.name);
         }
 
-        let finalPriority = decision.priority;
-        const macroBuff = calculateMacroPriorityBonus(
-          "spell",
-          card,
-          macroStrategy,
-        );
-        finalPriority += macroBuff;
+        let offensiveBonus = 0;
         const offensivePlan =
           activationContext?.actionContext?.costPreferences?.offensivePlan;
         if (offensivePlan?.hasMajorSwing) {
           if (card.name === "Shadow-Heart Purge" && offensivePlan.purgeWindow) {
-            finalPriority += 5;
+            offensiveBonus += 5;
           } else if (
             card.name === "Shadow-Heart Battle Hymn" &&
             (offensivePlan.battleHymnLethal || offensivePlan.attackers?.length >= 2)
           ) {
-            finalPriority += offensivePlan.battleHymnLethal ? 7 : 3;
+            offensiveBonus += offensivePlan.battleHymnLethal ? 7 : 3;
           } else if (card.name === "Shadow-Heart Rage" && offensivePlan.rageLive) {
-            finalPriority += 7;
+            offensiveBonus += 7;
           } else if (card.name === "Polymerization" && offensivePlan.fusionNear) {
-            finalPriority += 4;
+            offensiveBonus += 4;
           }
         }
 
@@ -754,23 +752,36 @@ export default class ShadowHeartStrategy extends BaseStrategy {
           "spell",
           card,
         );
+        const { priority: finalPriority, macroBuff, safetyScore } =
+          applyMacroAndSafety({
+            basePriority: decision.priority + offensiveBonus,
+            actionType: "spell",
+            card,
+            macroStrategy,
+            safety: spellSafety,
+            macroBonusFn: calculateMacroPriorityBonus,
+            safetyPolicy: {
+              very_risky: -15,
+              risky: -8,
+            },
+          });
         if (spellSafety.recommendation === "very_risky") {
-          finalPriority -= 15;
           log(`    ⚠️  Very risky (chain blocking): -15 priority`);
-        } else if (spellSafety.recommendation === "risky") {
-          finalPriority -= 8;
         }
 
-        actions.push({
-          type: "spell",
-          index,
-          cardId: card.id,
-          priority: finalPriority,
-          cardName: card.name,
-          macroBuff,
-          safetyScore: spellSafety.riskScore,
-          activationContext,
-        });
+        actions.push(
+          buildPrioritizedAction({
+            type: "spell",
+            index,
+            card,
+            priority: finalPriority,
+            activationContext,
+            extra: {
+              macroBuff,
+              safetyScore,
+            },
+          }),
+        );
       } else {
         log(`  ❌ Spell descartada: ${card.name} - ${decision.reason}`);
       }
@@ -796,19 +807,13 @@ export default class ShadowHeartStrategy extends BaseStrategy {
         if (decision.yes) {
           log(`  ✅ Summon válido: ${card.name} - ${decision.reason}`);
 
-          let finalPriority = decision.priority;
-          const macroBuff = calculateMacroPriorityBonus(
-            "summon",
-            card,
-            macroStrategy,
-          );
-          finalPriority += macroBuff;
+          let offensiveBonus = 0;
           const offensivePlan = buildShadowHeartCostPreferences(analysis).offensivePlan;
           if (
             card.name === "Shadow-Heart Scale Dragon" &&
             offensivePlan?.hasMajorSwing
           ) {
-            finalPriority += 3;
+            offensiveBonus += 3;
           }
 
           const summonSafety = assessActionSafety(
@@ -818,25 +823,38 @@ export default class ShadowHeartStrategy extends BaseStrategy {
             "summon",
             card,
           );
-          if (summonSafety.recommendation === "very_risky") {
-            finalPriority -= 10;
-          }
-          actions.push({
-            type: "summon",
-            index,
-            cardId: card.id,
-            position: decision.position,
-            // Respect explicit facedown decision from priorities.js
-            // Default to facedown only if position is defense AND no explicit decision
-            facedown:
-              decision.facedown !== undefined
-                ? decision.facedown
-                : decision.position === "defense",
-            priority: finalPriority,
-            cardName: card.name,
-            macroBuff,
-            safetyScore: summonSafety.riskScore,
-          });
+          const { priority: finalPriority, macroBuff, safetyScore } =
+            applyMacroAndSafety({
+              basePriority: decision.priority + offensiveBonus,
+              actionType: "summon",
+              card,
+              macroStrategy,
+              safety: summonSafety,
+              macroBonusFn: calculateMacroPriorityBonus,
+              safetyPolicy: {
+                very_risky: -10,
+              },
+            });
+
+          actions.push(
+            buildPrioritizedAction({
+              type: "summon",
+              index,
+              card,
+              priority: finalPriority,
+              extra: {
+                position: decision.position,
+                // Respect explicit facedown decision from priorities.js
+                // Default to facedown only if position is defense AND no explicit decision
+                facedown:
+                  decision.facedown !== undefined
+                    ? decision.facedown
+                    : decision.position === "defense",
+                macroBuff,
+                safetyScore,
+              },
+            }),
+          );
         }
       });
     }

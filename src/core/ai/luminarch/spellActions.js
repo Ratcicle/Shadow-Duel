@@ -1,7 +1,14 @@
 import { assessActionSafety } from "../ChainAwareness.js";
 import { calculateMacroPriorityBonus } from "../MacroPlanning.js";
 import { estimateCardValue } from "../StrategyUtils.js";
+import {
+  applyMacroAndSafety,
+  buildPrioritizedAction,
+} from "../common/actionGeneration.js";
 import { buildStrategyAnalysis } from "../common/analysis.js";
+import { getGenericSetBackrowActions } from "../common/backrowPlanning.js";
+import { mergeActivationActionContext } from "../common/preferencePolicy.js";
+import { canActivateSpellTrapEffect } from "../common/previewGuards.js";
 import { shouldCommitResourcesNow } from "./multiTurnPlanning.js";
 import { shouldPlaySpell } from "./priorities.js";
 import { buildLuminarchSpellActionContext } from "./actionContext.js";
@@ -88,14 +95,6 @@ function getHandSpellActions(context, spellIndicesActivated) {
       }
       if (!resourceCheck.shouldPlay) return;
 
-      let priority = decision.priority || 1;
-      const macroBuff = calculateMacroPriorityBonus(
-        "spell",
-        card,
-        macroStrategy,
-      );
-      priority += macroBuff;
-
       const spellSafety = assessActionSafety(
         { bot, player: opponent },
         bot,
@@ -103,30 +102,41 @@ function getHandSpellActions(context, spellIndicesActivated) {
         "spell",
         card,
       );
-      if (spellSafety.recommendation === "very_risky") {
-        priority -= 15;
-      } else if (spellSafety.recommendation === "risky") {
-        priority -= 8;
-      }
 
-      actions.push({
-        type: "spell",
-        index,
-        cardId: card.id,
-        priority,
-        cardName: card.name,
-        macroBuff,
-        safetyScore: spellSafety.riskScore,
-        reason: decision.reason,
-        activationContext: {
-          ...activationContext,
-          actionContext: buildLuminarchSpellActionContext(
-            card,
-            analysis,
-            activationContext.actionContext,
-          ),
+      const { priority, macroBuff, safetyScore } = applyMacroAndSafety({
+        basePriority: decision.priority || 1,
+        actionType: "spell",
+        card,
+        macroStrategy,
+        safety: spellSafety,
+        macroBonusFn: calculateMacroPriorityBonus,
+        safetyPolicy: {
+          very_risky: -15,
+          risky: -8,
         },
       });
+
+      actions.push(
+        buildPrioritizedAction({
+          type: "spell",
+          index,
+          card,
+          priority,
+          reason: decision.reason,
+          activationContext: mergeActivationActionContext(
+            activationContext,
+            buildLuminarchSpellActionContext(
+              card,
+              analysis,
+              activationContext.actionContext,
+            ),
+          ),
+          extra: {
+            macroBuff,
+            safetyScore,
+          },
+        }),
+      );
       spellIndicesActivated.add(index);
     } catch (e) {
       // Silent spell evaluation error
@@ -154,18 +164,15 @@ function getSpellTrapEffectActions(context) {
 
     try {
       if (
-        game.effectEngine?.canActivateSpellTrapEffectPreview &&
-        typeof game.effectEngine.canActivateSpellTrapEffectPreview ===
-          "function"
-      ) {
-        const preview = game.effectEngine.canActivateSpellTrapEffectPreview(
+        !canActivateSpellTrapEffect(
+          game,
           card,
           bot,
           "spellTrap",
-          null,
-          { activationContext },
-        );
-        if (preview && preview.ok === false) return;
+          activationContext,
+        )
+      ) {
+        return;
       }
 
       const analysis = buildStrategyAnalysis({ bot, opponent, game });
@@ -179,14 +186,6 @@ function getSpellTrapEffectActions(context) {
       );
       if (!resourceCheck.shouldPlay) return;
 
-      let priority = decision.priority || 1;
-      const macroBuff = calculateMacroPriorityBonus(
-        "spell",
-        card,
-        macroStrategy,
-      );
-      priority += macroBuff;
-
       const spellSafety = assessActionSafety(
         { bot, player: opponent },
         bot,
@@ -194,34 +193,47 @@ function getSpellTrapEffectActions(context) {
         "spell",
         card,
       );
-      if (spellSafety.recommendation === "very_risky") {
-        priority -= 15;
-      } else if (spellSafety.recommendation === "risky") {
-        priority -= 8;
-      }
 
-      actions.push({
-        type: "spellTrapEffect",
-        index,
-        zoneIndex: index,
-        cardId: card.id,
-        priority,
-        cardName: card.name,
-        macroBuff,
-        safetyScore: spellSafety.riskScore,
-        reason: decision.reason,
-        activationContext: {
-          ...activationContext,
-          fromHand: false,
-          activationZone: "spellTrap",
-          sourceZone: "spellTrap",
-          actionContext: buildLuminarchSpellActionContext(
-            card,
-            analysis,
-            activationContext.actionContext,
-          ),
+      const { priority, macroBuff, safetyScore } = applyMacroAndSafety({
+        basePriority: decision.priority || 1,
+        actionType: "spell",
+        card,
+        macroStrategy,
+        safety: spellSafety,
+        macroBonusFn: calculateMacroPriorityBonus,
+        safetyPolicy: {
+          very_risky: -15,
+          risky: -8,
         },
       });
+
+      actions.push(
+        buildPrioritizedAction({
+          type: "spellTrapEffect",
+          index,
+          zoneIndex: index,
+          card,
+          priority,
+          reason: decision.reason,
+          activationContext: mergeActivationActionContext(
+            {
+              ...activationContext,
+              fromHand: false,
+              activationZone: "spellTrap",
+              sourceZone: "spellTrap",
+            },
+            buildLuminarchSpellActionContext(
+              card,
+              analysis,
+              activationContext.actionContext,
+            ),
+          ),
+          extra: {
+            macroBuff,
+            safetyScore,
+          },
+        }),
+      );
     } catch (e) {
       // Silent spell/trap evaluation error
     }
@@ -232,48 +244,35 @@ function getSpellTrapEffectActions(context) {
 
 function getSetSpellTrapActions(context, spellIndicesActivated) {
   const { game, bot, opponent } = context;
-  const actions = [];
-  const canSetSpellTrap = (bot.spellTrap || []).length < 5;
-  if (!canSetSpellTrap) return actions;
   const analysis =
     context.analysis || buildStrategyAnalysis({ bot, opponent, game });
 
   const baseSetPriority = -1;
-  bot.hand.forEach((card, index) => {
-    if (!card) return;
-
-    if (card.cardKind === "trap") {
-      // OK
-    } else if (card.cardKind === "spell" && card.subtype === "quick") {
-      // OK
-    } else {
-      return;
-    }
-
-    if (spellIndicesActivated.has(index)) return;
-
-    const setPolicy = evaluateLuminarchBackrowSetPolicy(card, analysis);
-    if (setPolicy && !setPolicy.shouldSet) return;
-
-    const valueEstimate = estimateCardValue(card, {
-      archetype: "Luminarch",
-      fieldSpell: bot?.fieldSpell || null,
-      preferDefense: true,
-    });
-    const setPriority =
-      setPolicy?.priority ?? baseSetPriority + valueEstimate * 0.2;
-
-    actions.push({
-      type: "set_spell_trap",
-      index,
-      cardId: card.id,
-      priority: setPriority,
-      cardName: card.name,
-      reason: setPolicy?.reason || "setup_backrow",
-    });
+  return getGenericSetBackrowActions({
+    bot,
+    game,
+    opponent,
+    analysis,
+    alreadyUsedHandIndices: spellIndicesActivated,
+    basePriority: baseSetPriority,
+    defaultReason: "setup_backrow",
+    policy: {
+      shouldSet: (card) => evaluateLuminarchBackrowSetPolicy(card, analysis),
+      getPriority: (card, { setDecision }) => {
+        if (Number.isFinite(setDecision?.priority)) {
+          return setDecision.priority;
+        }
+        const valueEstimate = estimateCardValue(card, {
+          archetype: "Luminarch",
+          fieldSpell: bot?.fieldSpell || null,
+          preferDefense: true,
+        });
+        return baseSetPriority + valueEstimate * 0.2;
+      },
+      getReason: (_card, { setDecision }) =>
+        setDecision?.reason || "setup_backrow",
+    },
   });
-
-  return actions;
 }
 
 export function getLuminarchSpellActions(context) {
