@@ -1,3 +1,7 @@
+/**
+ * Return a new action array ordered by descending priority, optional type
+ * precedence, and original index for stable ties.
+ */
 export function sequenceActionsByPriority(actions = [], options = {}) {
   const {
     typeOrder = {},

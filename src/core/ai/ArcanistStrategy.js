@@ -18,6 +18,13 @@ import {
   resolveSimulatedHandIndex,
 } from "./common/simulation.js";
 import {
+  getCardInstanceId,
+  getSimStateSignature,
+  pushToZone,
+  removeFromZone,
+  useSimOpt as useSimOptBucket,
+} from "./common/simStateUtils.js";
+import {
   ARCANIST_NAMES,
   CARD_KNOWLEDGE,
   controlsArcanistEquip,
@@ -57,21 +64,6 @@ function isSimulatedState(game) {
   return game?._isPerspectiveState === true;
 }
 
-function removeFromZone(player, zoneName, card) {
-  const zone = player?.[zoneName];
-  if (!Array.isArray(zone)) return false;
-  const index = zone.indexOf(card);
-  if (index < 0) return false;
-  zone.splice(index, 1);
-  return true;
-}
-
-function pushToZone(player, zoneName, card) {
-  if (!player || !card) return;
-  if (!Array.isArray(player[zoneName])) player[zoneName] = [];
-  player[zoneName].push(card);
-}
-
 function findOpponentTarget(state) {
   const opponent = state?.player;
   const candidates = [
@@ -94,17 +86,6 @@ function removeOpponentCard(state, card, destination) {
   }
   pushToZone(opponent, destination, card);
   return true;
-}
-
-function getCardInstanceId(card) {
-  return (
-    card?.instanceId ??
-    card?._instanceId ??
-    card?.uid ??
-    card?.uuid ??
-    card?.simInstanceId ??
-    null
-  );
 }
 
 function isFaceUpArcanistMonster(card) {
@@ -139,36 +120,12 @@ function getEffectiveDef(card) {
   );
 }
 
-function getSimStateSignature(state) {
-  const summarize = (player = {}) => ({
-    lp: player.lp || 0,
-    hand: (player.hand || []).map((card) => card?.name || "?"),
-    field: (player.field || []).map((card) => ({
-      name: card?.name || "?",
-      position: card?.position || null,
-      faceDown: !!card?.isFacedown,
-      atk: card?.atk || 0,
-      def: card?.def || 0,
-      tempAtk: card?.tempAtkBoost || 0,
-      tempDef: card?.tempDefBoost || 0,
-      cannotAttack: !!card?.cannotAttackThisTurn,
-      piercing: !!card?.piercing,
-      equips: (card?.equips || []).map((equip) => equip?.name || "?"),
-    })),
-    spellTrap: (player.spellTrap || []).map((card) => ({
-      name: card?.name || "?",
-      faceDown: !!card?.isFacedown,
-      counters: getInkCounters(card),
-    })),
-    fieldSpell: player.fieldSpell?.name || null,
-    graveyard: (player.graveyard || []).map((card) => card?.name || "?"),
-    banished: (player.banished || []).map((card) => card?.name || "?"),
-    deck: (player.deck || []).map((card) => card?.name || "?"),
-  });
-  return JSON.stringify({
-    bot: summarize(state?.bot),
-    player: summarize(state?.player),
-    simActivations: state?._simArcanistSpellActivations || 0,
+function getArcanistSimStateSignature(state) {
+  return getSimStateSignature(state, {
+    getSpellTrapCounters: getInkCounters,
+    extraState: (simState) => ({
+      simActivations: simState?._simArcanistSpellActivations || 0,
+    }),
   });
 }
 
@@ -251,17 +208,8 @@ function bestPreferredCard(candidates = [], preference = {}) {
     })[0];
 }
 
-function ensureSimOptSet(state) {
-  if (!state._simArcanistOptUsed) state._simArcanistOptUsed = new Set();
-  return state._simArcanistOptUsed;
-}
-
 function useSimOpt(state, key) {
-  if (!key) return true;
-  const used = ensureSimOptSet(state);
-  if (used.has(key)) return false;
-  used.add(key);
-  return true;
+  return useSimOptBucket(state, key, "_simArcanistOptUsed");
 }
 
 function removeEquipRelation(equip) {
@@ -710,7 +658,7 @@ export default class ArcanistStrategy extends BaseStrategy {
   }
 
   simulateMainPhaseAction(state, action) {
-    const beforeSignature = getSimStateSignature(state);
+    const beforeSignature = getArcanistSimStateSignature(state);
     const result = applyGenericSimulatedMainPhaseAction(state, action, {
       archetype: "Arcanist",
       guardLabel: "ArcanistStrategy",
@@ -732,7 +680,7 @@ export default class ArcanistStrategy extends BaseStrategy {
           this.simulateGrandLibraryEffect(simState),
       },
     });
-    const changed = getSimStateSignature(state) !== beforeSignature;
+    const changed = getArcanistSimStateSignature(state) !== beforeSignature;
     this.applyArcanistSimulationPostProcess(state, action, { changed });
     return result;
   }

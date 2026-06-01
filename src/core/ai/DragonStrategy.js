@@ -22,6 +22,7 @@ import {
   findIgnitionEffect,
   hasOncePerTurnEffect,
 } from "./common/effectDiscovery.js";
+import { effectTargetsAvailable } from "./common/targetAvailability.js";
 import {
   canActivateFieldSpellEffect,
   canActivateMonsterEffect,
@@ -279,44 +280,6 @@ function getBestAwakeningTarget(bot, opponent, analysis) {
 function hasUsefulJaggedPeakSearch(bot) {
   if (bot.fieldSpell?.name === "Jagged Peak of the Dragons") return false;
   return (bot.deck || []).some((card) => card?.name === "Jagged Peak of the Dragons");
-}
-
-function targetRequirementAvailable(target, bot, opponent) {
-  const owner = target.owner === "opponent" ? opponent : bot;
-  const zones = target.zones || [target.zone || "field"];
-  const minCount = target.count?.min ?? 1;
-  const candidates = [];
-
-  for (const zoneName of zones) {
-    const zoneCards =
-      zoneName === "fieldSpell"
-        ? owner?.fieldSpell
-          ? [owner.fieldSpell]
-          : []
-        : owner?.[zoneName] || [];
-    for (const candidate of zoneCards || []) {
-      if (!candidate) continue;
-      if (target.cardKind && candidate.cardKind !== target.cardKind) continue;
-      if (target.type && candidate.type !== target.type) continue;
-      if (target.filters?.type && candidate.type !== target.filters.type) continue;
-      if (target.archetype && !hasArchetype(candidate, target.archetype)) continue;
-      if (target.cardName && candidate.name !== target.cardName) continue;
-      if (target.filters?.name && candidate.name !== target.filters.name) continue;
-      if (target.requireFaceup && candidate.isFacedown) continue;
-      if (target.faceup === true && candidate.isFacedown) continue;
-      if (Number.isFinite(target.minLevel) && (candidate.level || 0) < target.minLevel) continue;
-      if (Number.isFinite(target.maxLevel) && (candidate.level || 0) > target.maxLevel) continue;
-      candidates.push(candidate);
-    }
-  }
-
-  return candidates.length >= minCount;
-}
-
-function effectTargetsAvailable(effect, bot, opponent) {
-  return (effect?.targets || []).every((target) =>
-    targetRequirementAvailable(target, bot, opponent)
-  );
 }
 
 export default class DragonStrategy extends BaseStrategy {
@@ -1086,7 +1049,14 @@ export default class DragonStrategy extends BaseStrategy {
         ) {
           return;
         }
-      } else if (!effectTargetsAvailable(ignition, bot, opponent)) {
+      } else if (
+        !effectTargetsAvailable(ignition, {
+          player: bot,
+          opponent,
+          source: card,
+          activationContext,
+        })
+      ) {
         return;
       }
 
@@ -1202,7 +1172,14 @@ export default class DragonStrategy extends BaseStrategy {
         ) {
           return;
         }
-      } else if (!effectTargetsAvailable(graveyardIgnitionEffect, bot, opponent)) {
+      } else if (
+        !effectTargetsAvailable(graveyardIgnitionEffect, {
+          player: bot,
+          opponent,
+          source: card,
+          activationContext,
+        })
+      ) {
         return;
       }
 
@@ -1358,7 +1335,12 @@ export default class DragonStrategy extends BaseStrategy {
             activationContext,
           );
         } else {
-          canUsePeak = effectTargetsAvailable(ignition, bot, opponent);
+          canUsePeak = effectTargetsAvailable(ignition, {
+            player: bot,
+            opponent,
+            source: fieldSpell,
+            activationContext,
+          });
         }
         if (canUsePeak) {
           const bestTarget = preferredDragons[0];
@@ -1406,7 +1388,14 @@ export default class DragonStrategy extends BaseStrategy {
         ) {
           return;
         }
-      } else if (!effectTargetsAvailable(ignition, bot, opponent)) {
+      } else if (
+        !effectTargetsAvailable(ignition, {
+          player: bot,
+          opponent,
+          source: card,
+          activationContext,
+        })
+      ) {
         return;
       }
 

@@ -1,10 +1,9 @@
 import BaseStrategy from "./BaseStrategy.js";
-import { estimateCardValue, estimateMonsterValue } from "./StrategyUtils.js";
 import { applyGenericSimulatedMainPhaseAction } from "./common/simulation.js";
+import { getGenericAscensionActions } from "./common/ascensionPlanning.js";
 import {
   isVoid,
   getVoidCardKnowledge,
-  VOID_EXTRA_DECK_IDS,
 } from "./void/knowledge.js";
 import {
   assessVoidNormalSummonEntry,
@@ -18,7 +17,6 @@ import {
   VOID_IDS,
   COMBO_DATABASE,
   detectAvailableCombos,
-  getComboSequence,
   calculateFusionValue,
 } from "./void/combos.js";
 import {
@@ -1490,78 +1488,64 @@ export default class VoidStrategy extends BaseStrategy {
     // ═══════════════════════════════════════════════════════════════════════════
     // ASCENSION CHECK
     // ═══════════════════════════════════════════════════════════════════════════
-    const canCheckAscension =
-      typeof game?.canUseAsAscensionMaterial === "function" &&
-      typeof game?.getAscensionCandidatesForMaterial === "function" &&
-      typeof game?.checkAscensionRequirements === "function";
-
-    if (canCheckAscension || isSimulatedState) {
-      const materials = (bot.field || []).filter(
-        (m) => m && m.cardKind === "monster" && !m.isFacedown,
+    const getAscensionFinisherPlan = (ascensionCard) =>
+      (analysis.finisherPlans || []).find(
+        (plan) => plan.targetName === ascensionCard.name,
       );
-      for (const material of materials) {
-        let eligible = [];
-        if (canCheckAscension) {
-          const check = game.canUseAsAscensionMaterial(bot, material);
-          if (!check?.ok) continue;
-          const candidates =
-            game.getAscensionCandidatesForMaterial(bot, material) || [];
-          eligible = candidates.filter(
-            (asc) => game.checkAscensionRequirements(bot, asc)?.ok,
-          );
-        } else {
-          eligible = getSimulatedVoidAscensionCandidates(game, bot, material);
-        }
-        for (const ascensionCard of eligible) {
-          const ascensionFinisherPlan = (analysis.finisherPlans || []).find(
-            (plan) => plan.targetName === ascensionCard.name,
-          );
-          if (
-            ascensionCard.id === VOID_IDS.MALICIOUS_DEMON &&
-            (!ascensionFinisherPlan || ascensionFinisherPlan.score100 < 60)
-          ) {
-            continue;
-          }
-          let ascensionPriority;
-          if (ascensionCard.id === VOID_IDS.COSMIC_WALKER) {
-            ascensionPriority = 11;
-          } else if (ascensionCard.id === VOID_IDS.MALICIOUS_DEMON) {
-            // Multi-attack escala com Hollows no GY (cada Hollow = +1 ataque)
-            const hollowsInGY = (bot.graveyard || []).filter(
-              (c) => c?.id === VOID_IDS.HOLLOW,
-            ).length;
-            ascensionPriority = 10 + Math.min(hollowsInGY, 4) * 0.5;
-          } else {
-            ascensionPriority = 9 + (ascensionCard.atk || 0) / 1000;
-          }
-          if (ascensionFinisherPlan) {
-            ascensionPriority = Math.max(
-              ascensionPriority,
-              ascensionFinisherPlan.actionPriority || 0,
+
+    actions.push(
+      ...getGenericAscensionActions(
+        { game, bot, opponent, analysis, isSimulatedState },
+        {
+          getSimulatedAscensionCandidates: getSimulatedVoidAscensionCandidates,
+          shouldSkipAscension: (ascensionCard) => {
+            const ascensionFinisherPlan =
+              getAscensionFinisherPlan(ascensionCard);
+            return (
+              ascensionCard.id === VOID_IDS.MALICIOUS_DEMON &&
+              (!ascensionFinisherPlan || ascensionFinisherPlan.score100 < 60)
             );
-            if (ascensionFinisherPlan.preserveHollowsInGY) {
-              ascensionPriority += 0.4;
+          },
+          evaluateAscensionPriority: (ascensionCard) => {
+            const ascensionFinisherPlan =
+              getAscensionFinisherPlan(ascensionCard);
+            let ascensionPriority;
+            if (ascensionCard.id === VOID_IDS.COSMIC_WALKER) {
+              ascensionPriority = 11;
+            } else if (ascensionCard.id === VOID_IDS.MALICIOUS_DEMON) {
+              // Multi-attack escala com Hollows no GY (cada Hollow = +1 ataque)
+              const hollowsInGY = (bot.graveyard || []).filter(
+                (c) => c?.id === VOID_IDS.HOLLOW,
+              ).length;
+              ascensionPriority = 10 + Math.min(hollowsInGY, 4) * 0.5;
+            } else {
+              ascensionPriority = 9 + (ascensionCard.atk || 0) / 1000;
             }
-          }
-          const ascensionPosition = this.chooseVoidAscensionPosition(
-            ascensionCard,
-            material,
-            game,
-            ascensionFinisherPlan,
-          );
-          actions.push({
-            type: "ascension",
-            materialIndex: bot.field.indexOf(material),
-            ascensionCard,
-            cardName: ascensionCard.name,
-            position: ascensionPosition,
-            priority: ascensionPriority,
-            extraDeck: true,
-            finisherPlanRank: ascensionFinisherPlan?.score100,
-          });
-        }
-      }
-    }
+            if (ascensionFinisherPlan) {
+              ascensionPriority = Math.max(
+                ascensionPriority,
+                ascensionFinisherPlan.actionPriority || 0,
+              );
+              if (ascensionFinisherPlan.preserveHollowsInGY) {
+                ascensionPriority += 0.4;
+              }
+            }
+            return ascensionPriority;
+          },
+          chooseAscensionPosition: (ascensionCard, material) =>
+            this.chooseVoidAscensionPosition(
+              ascensionCard,
+              material,
+              game,
+              getAscensionFinisherPlan(ascensionCard),
+            ),
+          decorateAction: (action, ascensionCard) => ({
+            ...action,
+            finisherPlanRank: getAscensionFinisherPlan(ascensionCard)?.score100,
+          }),
+        },
+      ),
+    );
 
     // ═══════════════════════════════════════════════════════════════════════════
     // COMBO-AWARE ACTION GENERATION
