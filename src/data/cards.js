@@ -8935,6 +8935,349 @@
       },
     ],
   },
+  {
+    id: 286,
+    name: "Bloomrot Gravecap Widow",
+    cardKind: "monster",
+    atk: 2200,
+    def: 2100,
+    level: 6,
+    type: "Plant",
+    attribute: "Dark",
+    archetype: "Bloomrot",
+    description:
+      'You can Special Summon this card from your hand by removing 2 Spore Counters from the field. If this card is Summoned: target 1 monster with a Spore Counter your opponent controls; destroy it. Once per turn, if a monster with a Spore Counter your opponent controls is destroyed: place 1 Spore Counter on 1 face-up card on the field. You can only use each effect of "Bloomrot Gravecap Widow" once per turn.',
+    image: "assets/Bloomrot Gravecap Widow.png",
+    effects: [
+      {
+        id: "bloomrot_gravecap_widow_special_summon_hand",
+        timing: "ignition",
+        requireZone: "hand",
+        requirePhase: ["main1", "main2"],
+        oncePerTurn: true,
+        oncePerTurnName:
+          "bloomrot_gravecap_widow_special_summon_hand",
+        conditions: [
+          {
+            type: "playerFieldCount",
+            max: 4,
+            reason: "You need an open Monster Zone.",
+          },
+          {
+            type: "field_counters_at_least",
+            owner: "any",
+            zones: ["field", "spellTrap", "fieldSpell"],
+            counterType: "spore",
+            min: 2,
+            requireFaceup: true,
+            reason: "There must be at least 2 Spore Counters on the field.",
+          },
+        ],
+        actions: [
+          {
+            type: "remove_counters_from_field",
+            counterType: "spore",
+            amount: 2,
+            owner: "any",
+            zones: ["field", "spellTrap", "fieldSpell"],
+            requireFaceup: true,
+            selectionMessage:
+              "Select card(s) to remove 2 Spore Counters from the field.",
+            haltOnFailure: true,
+          },
+          {
+            type: "conditional_summon_from_hand",
+            targetRef: "self",
+            position: "choice",
+            optional: false,
+          },
+        ],
+      },
+      {
+        id: "bloomrot_gravecap_widow_summon_destroy_infected",
+        timing: "on_event",
+        event: "after_summon",
+        requireSelfAsSummoned: true,
+        oncePerTurn: true,
+        oncePerTurnName:
+          "bloomrot_gravecap_widow_summon_destroy_infected",
+        targets: [
+          {
+            id: "bloomrot_gravecap_widow_destroy_target",
+            owner: "opponent",
+            zone: "field",
+            cardKind: "monster",
+            requireFaceup: true,
+            counterType: "spore",
+            minCounters: 1,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "destroy",
+            targetRef: "bloomrot_gravecap_widow_destroy_target",
+          },
+        ],
+      },
+      {
+        id: "bloomrot_gravecap_widow_destroyed_infected_spore",
+        timing: "on_event",
+        event: "card_to_grave",
+        requireZone: "field",
+        requireFaceup: true,
+        fromZone: "field",
+        condition: { type: "destroyed_by_battle_or_effect" },
+        eventCardFilters: {
+          owner: "opponent",
+          cardKind: "monster",
+          counterType: "spore",
+          minCounters: 1,
+        },
+        oncePerTurn: true,
+        oncePerTurnName:
+          "bloomrot_gravecap_widow_destroyed_infected_spore",
+        targets: [
+          {
+            id: "bloomrot_gravecap_widow_spore_target",
+            owner: "any",
+            zones: ["field", "spellTrap", "fieldSpell"],
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "add_counter",
+            targetRef: "bloomrot_gravecap_widow_spore_target",
+            counterType: "spore",
+            amount: 1,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 287,
+    name: "Bloomrot Ancient Husk",
+    cardKind: "monster",
+    atk: 2400,
+    def: 2600,
+    level: 7,
+    type: "Plant",
+    attribute: "Earth",
+    archetype: "Bloomrot",
+    description:
+      'You can Special Summon this card from your hand by removing 4 Spore Counters from the field. Once per turn: place 1 Spore Counter on up to 2 face-up monsters your opponent controls. If a monster with a Spore Counter is destroyed: place 1 Spore Counter on up to 2 face-up monsters your opponent controls. You can only use each effect of "Bloomrot Ancient Husk" once per turn.',
+    image: "assets/Bloomrot Ancient Husk.png",
+    effects: [
+      {
+        id: "bloomrot_ancient_husk_special_summon_hand",
+        timing: "ignition",
+        requireZone: "hand",
+        requirePhase: ["main1", "main2"],
+        oncePerTurn: true,
+        oncePerTurnName: "bloomrot_ancient_husk_special_summon_hand",
+        conditions: [
+          {
+            type: "playerFieldCount",
+            max: 4,
+            reason: "You need an open Monster Zone.",
+          },
+          {
+            type: "field_counters_at_least",
+            owner: "any",
+            zones: ["field", "spellTrap", "fieldSpell"],
+            counterType: "spore",
+            min: 4,
+            requireFaceup: true,
+            reason: "There must be at least 4 Spore Counters on the field.",
+          },
+        ],
+        actions: [
+          {
+            type: "remove_counters_from_field",
+            counterType: "spore",
+            amount: 4,
+            owner: "any",
+            zones: ["field", "spellTrap", "fieldSpell"],
+            requireFaceup: true,
+            selectionMessage:
+              "Select card(s) to remove 4 Spore Counters from the field.",
+            haltOnFailure: true,
+          },
+          {
+            type: "conditional_summon_from_hand",
+            targetRef: "self",
+            position: "choice",
+            optional: false,
+          },
+        ],
+      },
+      {
+        id: "bloomrot_ancient_husk_ignition_spore_counters",
+        timing: "ignition",
+        requireZone: "field",
+        requireFaceup: true,
+        requirePhase: ["main1", "main2"],
+        oncePerTurn: true,
+        oncePerTurnName:
+          "bloomrot_ancient_husk_ignition_spore_counters",
+        targets: [
+          {
+            id: "bloomrot_ancient_husk_spore_targets",
+            owner: "opponent",
+            zone: "field",
+            cardKind: "monster",
+            requireFaceup: true,
+            count: { min: 1, max: 2 },
+          },
+        ],
+        actions: [
+          {
+            type: "add_counter",
+            targetRef: "bloomrot_ancient_husk_spore_targets",
+            counterType: "spore",
+            amount: 1,
+          },
+        ],
+      },
+      {
+        id: "bloomrot_ancient_husk_destroyed_infected_spore",
+        timing: "on_event",
+        event: "card_to_grave",
+        requireZone: "field",
+        requireFaceup: true,
+        fromZone: "field",
+        condition: { type: "destroyed_by_battle_or_effect" },
+        eventCardFilters: {
+          cardKind: "monster",
+          counterType: "spore",
+          minCounters: 1,
+        },
+        oncePerTurn: true,
+        oncePerTurnName:
+          "bloomrot_ancient_husk_destroyed_infected_spore",
+        targets: [
+          {
+            id: "bloomrot_ancient_husk_destroy_spore_targets",
+            owner: "opponent",
+            zone: "field",
+            cardKind: "monster",
+            requireFaceup: true,
+            count: { min: 1, max: 2 },
+          },
+        ],
+        actions: [
+          {
+            type: "add_counter",
+            targetRef: "bloomrot_ancient_husk_destroy_spore_targets",
+            counterType: "spore",
+            amount: 1,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 289,
+    name: "Bloomrot Living Colony",
+    cardKind: "spell",
+    subtype: "field",
+    archetype: "Bloomrot",
+    description:
+      'When this card is activated: add 1 Level 4 or lower "Bloomrot" monster from your Deck to your hand. Once per turn: target 1 face-up monster on the field; place 1 Spore Counter on it. Monsters your opponent controls lose 100 ATK/DEF for each Spore Counter on them. Each time one or more Spore Counters are removed from the field: Special Summon 1 "Bloomrot Token" (Plant/DARK/Level 1/ATK 0/DEF 0) in Defense Position. You can only activate 1 "Bloomrot Living Colony" per turn.',
+    image: "assets/Bloomrot Living Colony.png",
+    effects: [
+      {
+        id: "bloomrot_living_colony_activation_search",
+        timing: "on_play",
+        oncePerTurn: true,
+        oncePerTurnName: "bloomrot_living_colony_activation",
+        actions: [
+          {
+            type: "add_from_zone_to_hand",
+            zone: "deck",
+            filters: { cardKind: "monster", archetype: "Bloomrot" },
+            maxLevel: 4,
+            count: { min: 1, max: 1 },
+            promptPlayer: true,
+          },
+        ],
+      },
+      {
+        id: "bloomrot_living_colony_ignition_spore_counter",
+        timing: "ignition",
+        requireZone: "fieldSpell",
+        requireFaceup: true,
+        requirePhase: ["main1", "main2"],
+        oncePerTurn: true,
+        oncePerTurnName:
+          "bloomrot_living_colony_ignition_spore_counter",
+        targets: [
+          {
+            id: "bloomrot_living_colony_spore_target",
+            owner: "any",
+            zone: "field",
+            cardKind: "monster",
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "add_counter",
+            targetRef: "bloomrot_living_colony_spore_target",
+            counterType: "spore",
+            amount: 1,
+          },
+        ],
+      },
+      {
+        id: "bloomrot_living_colony_spore_debuff",
+        timing: "passive",
+        requireZone: "fieldSpell",
+        requireFaceup: true,
+        passive: {
+          type: "field_counter_stat_aura",
+          counterType: "spore",
+          amountPerCounter: -100,
+          stats: ["atk", "def"],
+          targetOwners: ["opponent"],
+          targetCardKinds: ["monster"],
+          targetRequireFaceup: true,
+        },
+      },
+      {
+        id: "bloomrot_living_colony_counter_removed_token",
+        timing: "on_event",
+        event: "counter_removed",
+        requireZone: "fieldSpell",
+        requireFaceup: true,
+        counterType: "spore",
+        minAmount: 1,
+        requireRemovedFromField: true,
+        actions: [
+          {
+            type: "special_summon_token",
+            player: "self",
+            position: "defense",
+            token: {
+              name: "Bloomrot Token",
+              atk: 0,
+              def: 0,
+              level: 1,
+              type: "Plant",
+              attribute: "Dark",
+              archetype: "Bloomrot",
+              image: "assets/Bloomrot Token.png",
+              description: "A Bloomrot token grown from lingering spores.",
+            },
+          },
+        ],
+      },
+    ],
+  },
 ];
 
 // Performance optimization: Create indexed maps for O(1) lookups

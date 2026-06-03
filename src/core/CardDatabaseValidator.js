@@ -23,6 +23,7 @@ const VALID_EVENTS = new Set([
   "battle_destroy",
   "card_to_grave",
   "card_moved",
+  "counter_removed",
   "standby_phase",
   "attack_declared",
   "battle_damage",

@@ -398,6 +398,76 @@ export function updatePassiveBuffs() {
           return;
         }
 
+        // Passive: source aura that modifies field monsters by counters on each target
+        if (passive.type === "field_counter_stat_aura") {
+          const requireSourceFaceup =
+            passive.requireSourceFaceup !== false ||
+            effect.requireFaceup === true;
+          if (requireSourceFaceup && card.isFacedown) return;
+
+          const sourceFilters = passive.sourceFilters || null;
+          if (sourceFilters && !this.cardMatchesFilters(card, sourceFilters)) {
+            return;
+          }
+
+          const counterType = passive.counterType || "default";
+          const amountPerCounter =
+            passive.amountPerCounter ??
+            passive.perCounter ??
+            passive.buffPerCounter ??
+            passive.amount ??
+            0;
+          if (amountPerCounter === 0) return;
+
+          const targetOwnersRaw =
+            passive.targetOwners || passive.owners || ["self"];
+          const targetOwners = Array.isArray(targetOwnersRaw)
+            ? targetOwnersRaw
+            : [targetOwnersRaw];
+          const targetCardKindsRaw =
+            passive.targetCardKinds || passive.cardKinds || ["monster"];
+          const targetCardKinds = Array.isArray(targetCardKindsRaw)
+            ? targetCardKindsRaw
+            : [targetCardKindsRaw];
+          const requireTargetFaceup =
+            passive.targetRequireFaceup === true ||
+            passive.requireTargetFaceup === true;
+          const includeSelf = passive.includeSelf !== false;
+          const targetFilters = passive.targetFilters || null;
+          const stats = passive.stats || ["atk", "def"];
+          const sourceKey =
+            card.fieldPresenceId ||
+            card.instanceId ||
+            `${card.id}_${passiveSources.indexOf(card)}`;
+          const baseBuffKey =
+            effect.id || `passive_${card.id}_${index}_field_counter_aura`;
+
+          for (const target of fieldCards) {
+            if (!target) continue;
+            if (!includeSelf && target === card) continue;
+            if (!targetCardKinds.includes(target.cardKind)) continue;
+            if (requireTargetFaceup && target.isFacedown) continue;
+            const ownerType = target.owner === card.owner ? "self" : "opponent";
+            if (!targetOwners.includes(ownerType)) continue;
+            if (targetFilters && !this.cardMatchesFilters(target, targetFilters)) {
+              continue;
+            }
+
+            const counterCount =
+              typeof target.getCounter === "function"
+                ? Math.max(0, Number(target.getCounter(counterType) || 0))
+                : 0;
+            const applied = this.applyPassiveBuffValue(
+              target,
+              `${baseBuffKey}_${sourceKey}_${counterType}`,
+              counterCount * amountPerCounter,
+              stats,
+            );
+            if (applied) updated = true;
+          }
+          return;
+        }
+
         // Passive: field_archetype_aura_buff - source-based aura for field monsters
         if (passive.type === "field_archetype_aura_buff") {
           const archetype = passive.archetype || passive.targetArchetype;

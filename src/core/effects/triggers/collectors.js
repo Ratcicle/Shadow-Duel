@@ -29,6 +29,9 @@ export async function collectEventTriggers(eventName, payload) {
   if (eventName === "card_moved") {
     return await this.collectCardMovedTriggers(payload);
   }
+  if (eventName === "counter_removed") {
+    return await this.collectCounterRemovedTriggers(payload);
+  }
   if (eventName === "attack_declared") {
     return await this.collectAttackDeclaredTriggers(payload);
   }
@@ -61,6 +64,7 @@ export {
   collectCardEquippedTriggers,
   collectCardMovedTriggers,
   collectCardToGraveTriggers,
+  collectCounterRemovedTriggers,
   collectEffectActivatedTriggers,
   collectEffectTargetedTriggers,
   collectLpChangeTriggers,

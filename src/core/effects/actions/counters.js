@@ -48,6 +48,91 @@ function emitCounterEvent(engine, data = {}) {
   );
 }
 
+function isCounterFieldZone(zone) {
+  return zone === "field" || zone === "spellTrap" || zone === "fieldSpell";
+}
+
+function uniqueCounterEntries(cards, zones = []) {
+  const seen = new Set();
+  const entries = [];
+  for (const [index, card] of (cards || []).entries()) {
+    if (!card) continue;
+    const key = card.instanceId || card;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    entries.push({
+      card,
+      zone: zones[index] || zones[0] || null,
+    });
+  }
+  return entries;
+}
+
+function findCounterCardZone(engine, card, fallbackPlayer) {
+  const game = engine?.game;
+  const owner = resolveCounterOwner(game, card, fallbackPlayer);
+  if (owner && typeof engine?.findCardZone === "function") {
+    const ownerZone = engine.findCardZone(owner, card);
+    if (ownerZone) return ownerZone;
+  }
+  if (typeof engine?.findCardZone !== "function") return null;
+  return (
+    engine.findCardZone(game?.player, card) ||
+    engine.findCardZone(game?.bot, card) ||
+    null
+  );
+}
+
+async function emitCounterRemovedEvent(engine, data = {}) {
+  const game = engine?.game;
+  if (!game || typeof game.emit !== "function") return;
+
+  const amount = Math.max(0, Number(data.amount || 0));
+  if (amount <= 0) return;
+
+  const rawCards = data.cards || (data.card ? [data.card] : []);
+  const rawZones = Array.isArray(data.zones) ? data.zones : [];
+  const entries = uniqueCounterEntries(rawCards, rawZones);
+  const cards = entries.map((entry) => entry.card);
+  const zones = entries
+    .map((entry) => entry.zone)
+    .filter((zone) => typeof zone === "string");
+  const uniqueZones = Array.from(
+    new Set(zones),
+  );
+  const fromField =
+    data.fromField === true || zones.some((zone) => isCounterFieldZone(zone));
+  if (!fromField) return;
+
+  const eventPlayer =
+    data.player ||
+    data.ctx?.player ||
+    resolveCounterOwner(game, data.ctx?.source || data.sourceCard, null) ||
+    resolveCounterOwner(game, cards[0], null) ||
+    null;
+  const eventOpponent =
+    data.opponent ||
+    data.ctx?.opponent ||
+    game.getOpponent?.(eventPlayer) ||
+    null;
+
+  await game.emit("counter_removed", {
+    player: eventPlayer,
+    opponent: eventOpponent,
+    sourceCard: data.ctx?.source || data.sourceCard || null,
+    source: data.ctx?.source || data.source || null,
+    effectId: data.ctx?.effect?.id || data.ctx?.effectId || data.effectId || null,
+    counterType: data.counterType,
+    amount,
+    card: cards[0] || null,
+    cards,
+    zones,
+    uniqueZones,
+    fromField,
+    actionContext: data.ctx?.actionContext || data.actionContext || null,
+  });
+}
+
 export function applyAddCounter(action, ctx, targets) {
   const counterType = action.counterType || "default";
   let amount = action.amount || 1;
@@ -112,7 +197,7 @@ export function applyAddCounter(action, ctx, targets) {
  * @param {Object} targets - Resolved targets
  * @returns {boolean} Whether counters were removed
  */
-export function applyRemoveCounter(action, ctx, targets) {
+export async function applyRemoveCounter(action, ctx, targets) {
   const counterType = action.counterType || "default";
   const amount = Number.isFinite(action.amount) ? action.amount : 1;
   const targetRef = action.targetRef || "self";
@@ -130,6 +215,9 @@ export function applyRemoveCounter(action, ctx, targets) {
   }
 
   let removed = false;
+  let removedAmount = 0;
+  const removedCards = [];
+  const removedZones = [];
   for (const card of targetCards) {
     if (!card || typeof card.getCounter !== "function") continue;
     const current = card.getCounter(counterType);
@@ -137,6 +225,7 @@ export function applyRemoveCounter(action, ctx, targets) {
     if (!allowBelow && current < amount) continue;
     const removeAmount = allowBelow ? Math.min(current, amount) : amount;
     if (typeof card.removeCounter === "function") {
+      const zoneBeforeRemoval = findCounterCardZone(this, card, ctx?.player);
       card.removeCounter(counterType, removeAmount);
       const after =
         typeof card.getCounter === "function" ? card.getCounter(counterType) : null;
@@ -151,6 +240,11 @@ export function applyRemoveCounter(action, ctx, targets) {
         action: "remove",
         result: after,
       });
+      if (isCounterFieldZone(zoneBeforeRemoval)) {
+        removedCards.push(card);
+        removedZones.push(zoneBeforeRemoval);
+        removedAmount += removeAmount;
+      }
       removed = true;
     }
   }
@@ -165,6 +259,17 @@ export function applyRemoveCounter(action, ctx, targets) {
         targetCards[0]?.name || ctx.source?.name || "card"
       }.`,
     );
+  }
+
+  if (removedAmount > 0) {
+    await emitCounterRemovedEvent(this, {
+      ctx,
+      counterType,
+      amount: removedAmount,
+      cards: removedCards,
+      zones: removedZones,
+      fromField: true,
+    });
   }
 
   return removed;
@@ -375,6 +480,9 @@ export async function applyRemoveCountersFromField(action, ctx) {
 
   let remaining = amount;
   let removed = false;
+  let removedAmount = 0;
+  const removedCards = [];
+  const removedZones = [];
 
   for (const entry of selectedEntries) {
     if (remaining <= 0) break;
@@ -386,6 +494,9 @@ export async function applyRemoveCountersFromField(action, ctx) {
     card.removeCounter(counterType, firstPassAmount);
     remaining -= firstPassAmount;
     removed = true;
+    removedAmount += firstPassAmount;
+    removedCards.push(card);
+    removedZones.push(entry.zone);
     emitCounterEvent(this, {
       card,
       ctx,
@@ -409,6 +520,9 @@ export async function applyRemoveCountersFromField(action, ctx) {
     card.removeCounter(counterType, removeAmount);
     remaining -= removeAmount;
     removed = true;
+    removedAmount += removeAmount;
+    removedCards.push(card);
+    removedZones.push(entry.zone);
     emitCounterEvent(this, {
       card,
       ctx,
@@ -426,6 +540,17 @@ export async function applyRemoveCountersFromField(action, ctx) {
 
   if (removed && game && typeof game.updateBoard === "function") {
     game.updateBoard();
+  }
+
+  if (removedAmount > 0) {
+    await emitCounterRemovedEvent(this, {
+      ctx,
+      counterType,
+      amount: removedAmount,
+      cards: removedCards,
+      zones: removedZones,
+      fromField: true,
+    });
   }
 
   return removed;

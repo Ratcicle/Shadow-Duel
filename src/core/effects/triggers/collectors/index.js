@@ -5,6 +5,7 @@ export { collectBattleDestroyTriggers } from "./battleDestroy.js";
 export { collectCardEquippedTriggers } from "./cardEquipped.js";
 export { collectCardMovedTriggers } from "./cardMoved.js";
 export { collectCardToGraveTriggers } from "./cardToGrave.js";
+export { collectCounterRemovedTriggers } from "./counterRemoved.js";
 export { collectEffectActivatedTriggers } from "./effectActivated.js";
 export { collectEffectTargetedTriggers } from "./effectTargeted.js";
 export { collectLpChangeTriggers } from "./lpChange.js";
