@@ -790,6 +790,19 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     // Log the removal
     this.ui.log(`${card.name} (Token) was removed from the game.`);
 
+    await emitCardMovedEvent(
+      this,
+      card,
+      fromOwner,
+      null,
+      fromZone,
+      "removed",
+      {
+        ...options,
+        contextLabel: options.contextLabel || "token_removed",
+      },
+    );
+
     // Update board to reflect removal
     this.updateBoard();
 

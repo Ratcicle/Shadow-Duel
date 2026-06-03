@@ -159,7 +159,8 @@ export function canUseFieldTargeting(requirements) {
     }
     return req.candidates.every(
       (cand) =>
-        (allowedZones.has(cand.zone) || cand.isDirectAttack === true) &&
+        cand?.cardRef &&
+        allowedZones.has(cand.zone) &&
         (cand.controller === "player" || cand.controller === "bot")
     );
   });

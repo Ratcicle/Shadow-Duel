@@ -68,12 +68,12 @@ export function startTargetSelectionSession(session) {
     return;
   }
 
-  // Por padrão, evitamos field-targeting em prompts genéricos de alvo,
-  // exceto quando explicitamente habilitado pelo contrato (ex.: combate).
+  // Field-only target prompts resolve directly on the board unless the
+  // contract explicitly opts in or out.
   const usingFieldTargeting =
     typeof selectionContract.ui.useFieldTargeting === "boolean"
       ? selectionContract.ui.useFieldTargeting
-      : false;
+      : this.canUseFieldTargeting(selectionContract.requirements);
   selectionContract.ui.useFieldTargeting = usingFieldTargeting;
 
   this.selectionSessionCounter += 1;

@@ -91,6 +91,31 @@ export function cardMatchesFilters(card, filters = {}) {
   if (filters.maxDef !== undefined && (card.def || 0) > filters.maxDef) {
     return false;
   }
+  const counterType =
+    filters.counterType ||
+    (typeof filters.hasCounter === "string" ? filters.hasCounter : null);
+  const hasCounterFilter =
+    counterType ||
+    filters.minCounters !== undefined ||
+    filters.maxCounters !== undefined;
+  if (hasCounterFilter) {
+    const type = counterType || "default";
+    const counterCount =
+      typeof card.getCounter === "function" ? card.getCounter(type) : 0;
+    const minCounters =
+      filters.minCounters !== undefined
+        ? filters.minCounters
+        : filters.hasCounter
+          ? 1
+          : 0;
+    if (counterCount < minCounters) return false;
+    if (
+      filters.maxCounters !== undefined &&
+      counterCount > filters.maxCounters
+    ) {
+      return false;
+    }
+  }
   if (filters.equippedWithFilters) {
     const equipFilters = filters.equippedWithFilters || {};
     const requireEquipFaceup = equipFilters.requireFaceup !== false;

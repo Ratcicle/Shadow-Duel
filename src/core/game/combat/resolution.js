@@ -3,6 +3,34 @@
  * Extracted from Game.js as part of B.5 modularization.
  */
 
+function clearDamageCalculationTempBuffs(game) {
+  const buffs = game?.damageCalculationTempBuffs;
+  if (!Array.isArray(buffs) || buffs.length === 0) return;
+
+  for (const buff of buffs.splice(0)) {
+    const card = buff?.card;
+    if (!card) continue;
+
+    const atk = Number(buff.atk || 0);
+    const trackedAtk = Number(card.tempAtkBoost || 0);
+    if (atk !== 0 && trackedAtk !== 0) {
+      const removeAtk =
+        Math.abs(trackedAtk) >= Math.abs(atk) ? atk : trackedAtk;
+      card.atk = Math.max(0, Number(card.atk || 0) - removeAtk);
+      card.tempAtkBoost = trackedAtk - removeAtk;
+    }
+
+    const def = Number(buff.def || 0);
+    const trackedDef = Number(card.tempDefBoost || 0);
+    if (def !== 0 && trackedDef !== 0) {
+      const removeDef =
+        Math.abs(trackedDef) >= Math.abs(def) ? def : trackedDef;
+      card.def = Math.max(0, Number(card.def || 0) - removeDef);
+      card.tempDefBoost = trackedDef - removeDef;
+    }
+  }
+}
+
 /**
  * Resolve a combat attack, handling flip effects and delegating to finishCombat.
  * @param {Object} attacker - The attacking monster
@@ -274,6 +302,7 @@ export async function finishCombat(attacker, target, options = {}) {
     if (this.lastAttackNegated) {
       this.markAttackUsed(attacker, target);
       this.clearAttackResolutionIndicators();
+      clearDamageCalculationTempBuffs(this);
       this.updateBoard();
       return {
         ok: true,
@@ -296,6 +325,7 @@ export async function finishCombat(attacker, target, options = {}) {
       this.ui?.log?.("Attack stopped before damage calculation.");
       this.markAttackUsed(attacker, target);
       this.clearAttackResolutionIndicators();
+      clearDamageCalculationTempBuffs(this);
       this.updateBoard();
       return {
         ok: true,
@@ -311,6 +341,7 @@ export async function finishCombat(attacker, target, options = {}) {
       );
       this.markAttackUsed(attacker, target);
       this.clearAttackResolutionIndicators();
+      clearDamageCalculationTempBuffs(this);
       this.updateBoard();
       return {
         ok: true,
@@ -438,6 +469,7 @@ export async function finishCombat(attacker, target, options = {}) {
         if (result?.needsSelection) {
           this.markAttackUsed(attacker, target);
           this.clearAttackResolutionIndicators();
+          clearDamageCalculationTempBuffs(this);
           this.updateBoard();
           return {
             ok: true,
@@ -491,6 +523,7 @@ export async function finishCombat(attacker, target, options = {}) {
         if (result?.needsSelection) {
           this.markAttackUsed(attacker, target);
           this.clearAttackResolutionIndicators();
+          clearDamageCalculationTempBuffs(this);
           this.updateBoard();
           return {
             ok: true,
@@ -537,6 +570,7 @@ export async function finishCombat(attacker, target, options = {}) {
           };
           this.markAttackUsed(attacker, target);
           this.clearAttackResolutionIndicators();
+          clearDamageCalculationTempBuffs(this);
           this.updateBoard();
           return {
             ok: true,
@@ -573,6 +607,7 @@ export async function finishCombat(attacker, target, options = {}) {
         if (result?.needsSelection) {
           this.markAttackUsed(attacker, target);
           this.clearAttackResolutionIndicators();
+          clearDamageCalculationTempBuffs(this);
           this.updateBoard();
           return {
             ok: true,
@@ -630,6 +665,7 @@ export async function finishCombat(attacker, target, options = {}) {
         if (result?.needsSelection) {
           this.markAttackUsed(attacker, target);
           this.clearAttackResolutionIndicators();
+          clearDamageCalculationTempBuffs(this);
           this.updateBoard();
           return {
             ok: true,
@@ -666,6 +702,7 @@ export async function finishCombat(attacker, target, options = {}) {
   this.markAttackUsed(attacker, target);
   this.checkWinCondition();
   this.clearAttackResolutionIndicators();
+  clearDamageCalculationTempBuffs(this);
   this.updateBoard();
   const pendingResult = battleDestroyResults.find(
     (r) => r?.needsSelection && r?.selectionContract,

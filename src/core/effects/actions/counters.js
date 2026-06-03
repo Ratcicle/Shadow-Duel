@@ -1,3 +1,10 @@
+import {
+  buildFieldSelectionCandidates,
+  getUI,
+  selectCards,
+} from "../../actionHandlers/shared.js";
+import { isAI } from "../../Player.js";
+
 /**
  * Counter Actions - add/remove counters
  * Extracted from EffectEngine.js – preserving original logic and signatures.
@@ -158,6 +165,267 @@ export function applyRemoveCounter(action, ctx, targets) {
         targetCards[0]?.name || ctx.source?.name || "card"
       }.`,
     );
+  }
+
+  return removed;
+}
+
+function getCounterValue(card, counterType) {
+  if (!card || typeof card.getCounter !== "function") return 0;
+  return Math.max(0, Number(card.getCounter(counterType) || 0));
+}
+
+function getCounterFieldOwners(game, ctx, ownerRule = "self") {
+  const player = ctx?.player || null;
+  const opponent = ctx?.opponent || game?.getOpponent?.(player) || null;
+
+  if (ownerRule === "opponent") return opponent ? [opponent] : [];
+  if (ownerRule === "any" || ownerRule === "both") {
+    return [player, opponent].filter(Boolean);
+  }
+  return player ? [player] : [];
+}
+
+function getZoneCards(owner, zoneKey) {
+  if (!owner || !zoneKey) return [];
+  if (zoneKey === "fieldSpell") {
+    return owner.fieldSpell ? [owner.fieldSpell] : [];
+  }
+  return Array.isArray(owner[zoneKey]) ? owner[zoneKey] : [];
+}
+
+function collectCounterFieldEntries(engine, action, ctx) {
+  const game = engine?.game;
+  const counterType = action.counterType || "default";
+  const ownerRule = action.owner || action.player || "self";
+  const zones =
+    Array.isArray(action.zones) && action.zones.length > 0
+      ? action.zones
+      : [action.zone || "field"];
+  const filters = action.filters || {};
+  const hasFilters = Object.keys(filters).length > 0;
+  const requireFaceup = action.requireFaceup === true;
+  const entries = [];
+
+  for (const owner of getCounterFieldOwners(game, ctx, ownerRule)) {
+    for (const zoneKey of zones) {
+      for (const card of getZoneCards(owner, zoneKey)) {
+        if (!card) continue;
+        if (requireFaceup && card.isFacedown) continue;
+        if (
+          hasFilters &&
+          typeof engine.cardMatchesFilters === "function" &&
+          !engine.cardMatchesFilters(card, filters)
+        ) {
+          continue;
+        }
+        const counterCount = getCounterValue(card, counterType);
+        if (counterCount <= 0) continue;
+        entries.push({ owner, card, zone: zoneKey, counterCount });
+      }
+    }
+  }
+
+  return entries;
+}
+
+function decorateCounterEntries(game, entries) {
+  const groups = new Map();
+
+  for (const entry of entries) {
+    if (!entry?.owner || !entry.card) continue;
+    if (!groups.has(entry.owner)) groups.set(entry.owner, []);
+    groups.get(entry.owner).push(entry.card);
+  }
+
+  const candidates = [];
+  for (const [owner, cards] of groups.entries()) {
+    candidates.push(
+      ...buildFieldSelectionCandidates(owner, game, cards, {
+        ownerLabel: owner.id,
+      }),
+    );
+  }
+
+  return candidates;
+}
+
+function chooseGreedyCounterEntries(entries, amount) {
+  const selected = [];
+  let remaining = amount;
+
+  for (const entry of entries) {
+    if (remaining <= 0) break;
+    selected.push(entry.card);
+    remaining -= Math.max(1, Math.min(entry.counterCount, remaining));
+  }
+
+  return remaining <= 0 ? selected : [];
+}
+
+async function selectCounterPaymentCards(engine, action, ctx, entries, amount) {
+  const game = engine?.game;
+  const player = ctx?.player;
+  if (!game || !player) return [];
+
+  if (entries.length === 0) return [];
+  if (entries.length === 1 || isAI(player)) {
+    return chooseGreedyCounterEntries(entries, amount);
+  }
+
+  const candidates = decorateCounterEntries(game, entries);
+  const requirementId = action.requirementId || "counter_payment";
+  const maxSelect = Math.min(entries.length, amount);
+  const selectionContract = {
+    kind: "cost",
+    message:
+      action.selectionMessage ||
+      `Select card(s) to remove ${amount} ${action.counterType || "default"} counter(s).`,
+    requirements: [
+      {
+        id: requirementId,
+        min: 1,
+        max: maxSelect,
+        zones:
+          Array.isArray(action.zones) && action.zones.length > 0
+            ? action.zones
+            : [action.zone || "field"],
+        owner: action.owner || action.player || "self",
+        filters: action.filters || {},
+        allowSelf: true,
+        distinct: true,
+        candidates,
+      },
+    ],
+    ui: { useFieldTargeting: true },
+    metadata: { context: "counter_payment" },
+  };
+
+  const selectedKeys = await selectCards({
+    game,
+    player,
+    selectionContract,
+    requirementId,
+    kind: "cost",
+    autoSelectorOptions: {
+      owner: player,
+      activationContext: ctx?.activationContext,
+      selectionKind: "cost",
+    },
+    autoSelectKeys: () =>
+      chooseGreedyCounterEntries(entries, amount)
+        .map((card) => candidates.find((candidate) => candidate.cardRef === card)?.key)
+        .filter(Boolean),
+  });
+
+  if (selectedKeys === null) {
+    getUI(game)?.log("Counter payment cancelled.");
+    return [];
+  }
+
+  return selectedKeys
+    .map((key) => candidates.find((candidate) => candidate.key === key)?.cardRef)
+    .filter(Boolean);
+}
+
+/**
+ * Remove counters from a pool of cards on the field.
+ *
+ * This generic cost-style action can remove counters across one or more cards,
+ * using field targeting when a human player needs to choose the payment source.
+ */
+export async function applyRemoveCountersFromField(action, ctx) {
+  const game = this?.game;
+  const counterType = action.counterType || "default";
+  const amount = Math.max(1, Number(action.amount ?? action.count ?? 1));
+  const entries = collectCounterFieldEntries(this, action, ctx);
+  const totalAvailable = entries.reduce(
+    (sum, entry) => sum + entry.counterCount,
+    0,
+  );
+
+  if (totalAvailable < amount) {
+    getUI(game)?.log(
+      `Not enough ${counterType} counters on the field to pay the cost.`,
+    );
+    return false;
+  }
+
+  const selectedCards = await selectCounterPaymentCards(
+    this,
+    action,
+    ctx,
+    entries,
+    amount,
+  );
+  const selectedEntries = selectedCards
+    .map((card) => entries.find((entry) => entry.card === card))
+    .filter(Boolean);
+  const selectedTotal = selectedEntries.reduce(
+    (sum, entry) => sum + entry.counterCount,
+    0,
+  );
+
+  if (selectedTotal < amount) {
+    getUI(game)?.log(
+      `Select enough cards to remove ${amount} ${counterType} counter(s).`,
+    );
+    return false;
+  }
+
+  let remaining = amount;
+  let removed = false;
+
+  for (const entry of selectedEntries) {
+    if (remaining <= 0) break;
+    const card = entry.card;
+    const current = getCounterValue(card, counterType);
+    if (current <= 0 || typeof card.removeCounter !== "function") continue;
+
+    const firstPassAmount = Math.min(1, current, remaining);
+    card.removeCounter(counterType, firstPassAmount);
+    remaining -= firstPassAmount;
+    removed = true;
+    emitCounterEvent(this, {
+      card,
+      ctx,
+      counterType,
+      amount: firstPassAmount,
+      action: "remove",
+      result: getCounterValue(card, counterType),
+    });
+    getUI(game)?.log(
+      `Removed ${firstPassAmount} ${counterType} counter(s) from ${card.name}.`,
+    );
+  }
+
+  for (const entry of selectedEntries) {
+    if (remaining <= 0) break;
+    const card = entry.card;
+    const current = getCounterValue(card, counterType);
+    if (current <= 0 || typeof card.removeCounter !== "function") continue;
+
+    const removeAmount = Math.min(current, remaining);
+    card.removeCounter(counterType, removeAmount);
+    remaining -= removeAmount;
+    removed = true;
+    emitCounterEvent(this, {
+      card,
+      ctx,
+      counterType,
+      amount: removeAmount,
+      action: "remove",
+      result: getCounterValue(card, counterType),
+    });
+    getUI(game)?.log(
+      `Removed ${removeAmount} ${counterType} counter(s) from ${card.name}.`,
+    );
+  }
+
+  if (remaining > 0) return false;
+
+  if (removed && game && typeof game.updateBoard === "function") {
+    game.updateBoard();
   }
 
   return removed;

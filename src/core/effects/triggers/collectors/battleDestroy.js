@@ -1,4 +1,5 @@
 import {
+  cardMatchesEventFilters,
   debugTriggerLog,
   matchesLastSummonMethod,
   matchesLastSummonProcedure,
@@ -131,6 +132,25 @@ export async function collectBattleDestroyTriggers(payload) {
         if (effect.requireSelfAsDestroyed && ctx.destroyed !== card) {
           continue;
         }
+
+        const destroyedCardFilters =
+          effect.destroyedCardFilters || effect.requireDestroyedCardFilters;
+        if (
+          destroyedCardFilters &&
+          !cardMatchesEventFilters(this, ctx.destroyed, destroyedCardFilters, {
+            sourceOwner: owner,
+            eventOwner: ctx.destroyedOwner,
+            fromZone: "field",
+            toZone: "graveyard",
+          })
+        ) {
+          debugTriggerLog(
+            this,
+            `[battle_destroy] Skipping ${effect.id}: destroyed card filters did not match ${ctx.destroyed?.name}.`,
+          );
+          continue;
+        }
+
         if (effect.requireDestroyedIsOpponent) {
           const destroyedOwnerId =
             (ctx.destroyedOwner && ctx.destroyedOwner.id) || ctx.destroyedOwner;

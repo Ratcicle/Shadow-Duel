@@ -37,6 +37,7 @@ import {
 import {
   handleSetStatsToZeroAndNegate,
   handleBuffStatsTemp,
+  handleBuffStatsByCounter,
   handleModifyStatsTempThenDestroyIfZeroed,
   handleGrantAttackAllMonsters,
   handleAddStatus,
@@ -143,6 +144,8 @@ export function registerDefaultHandlers(registry) {
   // Luminarch refactoring: new generic handlers
 
   registry.register("buff_stats_temp", handleBuffStatsTemp);
+
+  registry.register("buff_stats_by_counter", handleBuffStatsByCounter);
 
   registry.register(
     "modify_stats_temp_then_destroy_if_zeroed",
@@ -306,6 +309,10 @@ export function registerDefaultHandlers(registry) {
 
   registry.register("add_counter", proxyEngineMethod("applyAddCounter"));
   registry.register("remove_counter", proxyEngineMethod("applyRemoveCounter"));
+  registry.register(
+    "remove_counters_from_field",
+    proxyEngineMethod("applyRemoveCountersFromField"),
+  );
 
   registry.register(
     "forbid_attack_this_turn",

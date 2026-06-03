@@ -579,6 +579,30 @@
     "279": {
       "name": "Drag\u00e3o Reflexo dos Vinculados \u00e0 Miragem",
       "description": "\"Falso Rei dos Vinculados \u00e0 Miragem\" + 1 monstro \"Vinculados \u00e0 Miragem\". Se este card for Invocado por Invoca\u00e7\u00e3o-Fus\u00e3o: voc\u00ea pode devolver 1 card no campo para a m\u00e3o. Uma vez por turno, quando este card destruir um monstro do oponente em batalha: voc\u00ea pode escolher 1 monstro \"Vinculados \u00e0 Miragem\" no seu Cemit\u00e9rio; adicione-o \u00e0 sua m\u00e3o. Se este card seria destru\u00eddo por um efeito de card: voc\u00ea pode devolver 1 outro card \"Vinculados \u00e0 Miragem\" que voc\u00ea controla para a m\u00e3o em vez disso."
+    },
+    "280": {
+      "name": "Podriflora Espor\u00f3fito",
+      "description": "Se este card for Invocado por Invoca\u00e7\u00e3o-Normal ou Especial: coloque 1 Marcador de Esporo em 1 card com a face para cima que seu oponente controla. Se este card for enviado do campo para o Cemit\u00e9rio: Invoque por Invoca\u00e7\u00e3o-Especial 1 Ficha \"Podriflora\" (Planta/TREVAS/N\u00edvel 1/ATK 0/DEF 0). Voc\u00ea s\u00f3 pode usar cada efeito de \"Podriflora Espor\u00f3fito\" uma vez por turno."
+    },
+    "281": {
+      "name": "Podriflora Rad\u00edcula",
+      "description": "Se voc\u00ea controla uma Ficha \"Podriflora\", voc\u00ea pode Invocar este card por Invoca\u00e7\u00e3o-Especial da sua m\u00e3o. Uma vez por turno: voc\u00ea pode escolher 1 card com a face para cima que seu oponente controla; coloque 1 Marcador de Esporo nele. Se este card for destru\u00eddo por batalha ou efeito de card: voc\u00ea pode colocar 1 Marcador de Esporo em 1 card com a face para cima que seu oponente controla. Voc\u00ea s\u00f3 pode usar cada efeito de \"Podriflora Rad\u00edcula\" uma vez por turno."
+    },
+    "282": {
+      "name": "Podriflora Tecel\u00e3o-Mic\u00e9lio",
+      "description": "Se este card for Invocado por Invoca\u00e7\u00e3o-Normal ou Especial: Invoque por Invoca\u00e7\u00e3o-Especial 1 Ficha \"Podriflora\" (Planta/TREVAS/N\u00edvel 1/ATK 0/DEF 0). Se uma Ficha \"Podriflora\" que voc\u00ea controla deixar o campo: coloque 1 Marcador de Esporo em 1 monstro com a face para cima que seu oponente controla. Voc\u00ea s\u00f3 pode usar cada efeito de \"Podriflora Tecel\u00e3o-Mic\u00e9lio\" uma vez por turno."
+    },
+    "283": {
+      "name": "Podriflora Cervo-P\u00fatrido",
+      "description": "Voc\u00ea pode Invocar este card por Invoca\u00e7\u00e3o-Especial da sua m\u00e3o ao remover 2 Marcadores de Esporo do campo. Se este card for Invocado por Invoca\u00e7\u00e3o-Especial: escolha 1 card com a face para cima que seu oponente controla; coloque 1 Marcador de Esporo nele. Se este card batalhar um monstro com Marcador de Esporo, este card ganha 500 de ATK durante o c\u00e1lculo de dano. Voc\u00ea s\u00f3 pode usar cada efeito de \"Podriflora Cervo-P\u00fatrido\" uma vez por turno."
+    },
+    "284": {
+      "name": "Podriflora Chap\u00e9u-Carniceiro",
+      "description": "Uma vez por turno: escolha 1 monstro com a face para cima que seu oponente controla; coloque 1 Marcador de Esporo nele e, depois, esse monstro perde 400 de ATK/DEF para cada Marcador de Esporo nele at\u00e9 o final deste turno. Se este card destruir um monstro com Marcador de Esporo em batalha: coloque 1 Marcador de Esporo em 1 card com a face para cima que seu oponente controla. Voc\u00ea s\u00f3 pode usar cada efeito de \"Podriflora Chap\u00e9u-Carniceiro\" uma vez por turno."
+    },
+    "285": {
+      "name": "Podriflora Remenda-Mofo",
+      "description": "Se este card for enviado ao Cemit\u00e9rio: ganhe 500 PV. Voc\u00ea pode banir este card do seu Cemit\u00e9rio; escolha 1 monstro com a face para cima no campo; coloque 1 Marcador de Esporo nele. Voc\u00ea s\u00f3 pode usar cada efeito de \"Podriflora Remenda-Mofo\" uma vez por turno."
     }
   }
 }

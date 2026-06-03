@@ -411,6 +411,42 @@ export function selectCandidates(def, ctx) {
           continue;
         }
 
+        const targetCounterType =
+          def.counterType ||
+          (typeof def.hasCounter === "string" ? def.hasCounter : null);
+        const hasCounterFilter =
+          targetCounterType ||
+          def.minCounters !== undefined ||
+          def.maxCounters !== undefined;
+        if (hasCounterFilter) {
+          const counterType = targetCounterType || "default";
+          const counterCount =
+            typeof card.getCounter === "function"
+              ? card.getCounter(counterType)
+              : 0;
+          const minCounters =
+            def.minCounters !== undefined
+              ? def.minCounters
+              : def.hasCounter
+                ? 1
+                : 0;
+          if (counterCount < minCounters) {
+            log(
+              `[selectCandidates] Rejecting: not enough ${counterType} counters (${counterCount} < ${minCounters})`
+            );
+            continue;
+          }
+          if (
+            def.maxCounters !== undefined &&
+            counterCount > def.maxCounters
+          ) {
+            log(
+              `[selectCandidates] Rejecting: too many ${counterType} counters (${counterCount} > ${def.maxCounters})`
+            );
+            continue;
+          }
+        }
+
         // Counter-based ATK filter
         if (def.maxAtkByCounters && ctx.source) {
           const counterType = def.counterType || "judgment_marker";

@@ -545,6 +545,59 @@ export function evaluateConditions(conditions, ctx) {
           }
           break;
         }
+        case "field_counters_at_least": {
+          const counterType = cond.counterType || "default";
+          const min = Number(cond.min ?? cond.amount ?? 1);
+          const ownerRule = cond.owner || "self";
+          const owners =
+            ownerRule === "opponent"
+              ? [opponent]
+              : ownerRule === "any"
+                ? [player, opponent]
+                : [player];
+          const zones =
+            Array.isArray(cond.zones) && cond.zones.length > 0
+              ? cond.zones
+              : [cond.zone || "field"];
+          const filters = cond.filters || {};
+          const requireFaceup = cond.requireFaceup === true;
+          let count = 0;
+
+          for (const owner of owners.filter(Boolean)) {
+            for (const zoneKey of zones) {
+              const zone =
+                zoneKey === "fieldSpell"
+                  ? owner.fieldSpell
+                    ? [owner.fieldSpell]
+                    : []
+                  : owner[zoneKey] || [];
+              for (const card of zone) {
+                if (!card) continue;
+                if (requireFaceup && card.isFacedown) continue;
+                if (
+                  Object.keys(filters).length > 0 &&
+                  !this.cardMatchesFilters(card, filters)
+                ) {
+                  continue;
+                }
+                count +=
+                  typeof card.getCounter === "function"
+                    ? card.getCounter(counterType)
+                    : 0;
+              }
+            }
+          }
+
+          if (count < min) {
+            return {
+              ok: false,
+              reason:
+                cond.reason ||
+                `Need at least ${min} ${counterType} counter(s) on the field.`,
+            };
+          }
+          break;
+        }
         default:
           break;
       }

@@ -605,12 +605,9 @@ body {
   position: relative;
 }
 
-.card[data-counter-tooltip]::after {
-  content: attr(data-counter-tooltip);
-  position: absolute;
-  left: 50%;
-  bottom: calc(100% + 8px);
-  z-index: 50;
+.floating-counter-tooltip {
+  position: fixed;
+  z-index: 1000;
   max-width: 220px;
   padding: 6px 8px;
   border: 1px solid rgba(187, 134, 252, 0.68);
@@ -623,15 +620,15 @@ body {
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.45);
   opacity: 0;
   pointer-events: none;
-  transform: translateX(-50%) translateY(4px);
+  transform: translateY(4px);
   transition:
     opacity 0.12s ease,
     transform 0.12s ease;
 }
 
-.card[data-counter-tooltip]:hover::after {
+.floating-counter-tooltip.visible {
   opacity: 1;
-  transform: translateX(-50%) translateY(0);
+  transform: translateY(0);
 }
 
 .card.card-monster {

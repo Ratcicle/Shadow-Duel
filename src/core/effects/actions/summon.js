@@ -30,6 +30,11 @@ export async function applySpecialSummonToken(action, ctx) {
       def: action.token.def ?? 0,
       level: action.token.level ?? 1,
       type: action.token.type || "Fiend",
+      attribute: action.token.attribute || null,
+      archetype: action.token.archetype || null,
+      archetypes: Array.isArray(action.token.archetypes)
+        ? [...action.token.archetypes]
+        : undefined,
       image: action.token.image || "",
       description: action.token.description || "Special Summoned by effect.",
     },

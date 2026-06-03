@@ -240,10 +240,11 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
   }
 
   const duration = action.duration || "end_of_turn";
+  const isDamageCalculationBuff = duration === "damage_calculation";
   const durationTurns = Number(action.durationTurns ?? action.turns);
   const explicitExpiresOnTurn = Number(action.expiresOnTurn);
   let turnBasedExpiresOnTurn = null;
-  if (!permanent) {
+  if (!permanent && !isDamageCalculationBuff) {
     if (duration === "end_of_next_turn") {
       turnBasedExpiresOnTurn = game.turnCounter + 1;
     } else if (Number.isFinite(durationTurns) && durationTurns > 0) {
@@ -257,11 +258,13 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
     typeof game.applyTurnBasedBuff === "function";
   const durationText = permanent
     ? ""
-    : useTurnBasedBuff && duration === "end_of_next_turn"
-      ? " until end of next turn"
-      : useTurnBasedBuff
-        ? ` until turn ${turnBasedExpiresOnTurn}`
-        : " until end of turn";
+    : isDamageCalculationBuff
+      ? " during damage calculation"
+      : useTurnBasedBuff && duration === "end_of_next_turn"
+        ? " until end of next turn"
+        : useTurnBasedBuff
+          ? ` until turn ${turnBasedExpiresOnTurn}`
+          : " until end of turn";
 
   const applyStatChange = (card, stat, boost) => {
     if (!boost) return 0;
@@ -347,6 +350,19 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
     }
 
     if (cardBuffed) {
+      if (isDamageCalculationBuff) {
+        game.damageCalculationTempBuffs = Array.isArray(
+          game.damageCalculationTempBuffs,
+        )
+          ? game.damageCalculationTempBuffs
+          : [];
+        game.damageCalculationTempBuffs.push({
+          card,
+          atk: appliedAtkBoost,
+          def: appliedDefBoost,
+        });
+      }
+
       buffedCards.push(card.name);
       const weakensStats = appliedAtkBoost < 0 || appliedDefBoost < 0;
       queueCardFeedback(game, weakensStats ? "debuff" : "buff", card, {
@@ -430,6 +446,91 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
   }
 
   return anyBuffed || anySecondAttack;
+}
+
+export async function handleBuffStatsByCounter(action, ctx, targets, engine) {
+  const game = engine?.game;
+  if (!game) return false;
+
+  const counterType = action.counterType || "default";
+  const minCounters = Number.isFinite(Number(action.minCounters))
+    ? Number(action.minCounters)
+    : 0;
+  const atkPerCounter = Number.isFinite(Number(action.atkPerCounter))
+    ? Number(action.atkPerCounter)
+    : Number.isFinite(Number(action.atkBoostPerCounter))
+      ? Number(action.atkBoostPerCounter)
+      : 0;
+  const defPerCounter = Number.isFinite(Number(action.defPerCounter))
+    ? Number(action.defPerCounter)
+    : Number.isFinite(Number(action.defBoostPerCounter))
+      ? Number(action.defBoostPerCounter)
+      : 0;
+
+  if (atkPerCounter === 0 && defPerCounter === 0) {
+    getUI(game)?.log("No stat change configured for counter-based buff.");
+    return false;
+  }
+
+  const targetCards = resolveTargetCards(action, ctx, targets, {
+    defaultRef: "self",
+    game,
+  });
+
+  if (targetCards.length === 0) {
+    getUI(game)?.log("No valid targets for counter-based stat buff.");
+    return false;
+  }
+
+  let appliedAny = false;
+
+  for (const card of targetCards) {
+    if (!card || card.cardKind !== "monster") continue;
+
+    const counterSourceCards = action.counterSourceRef
+      ? resolveTargetCards(
+          { ...action, targetRef: action.counterSourceRef },
+          ctx,
+          targets,
+          { defaultRef: "self", game },
+        )
+      : [card];
+    const counterCount = counterSourceCards.reduce((total, counterSource) => {
+      if (!counterSource || typeof counterSource.getCounter !== "function") {
+        return total;
+      }
+      return total + Math.max(0, Number(counterSource.getCounter(counterType) || 0));
+    }, 0);
+
+    if (counterCount < minCounters) continue;
+
+    const atkBoost = atkPerCounter * counterCount;
+    const defBoost = defPerCounter * counterCount;
+    if (atkBoost === 0 && defBoost === 0) continue;
+
+    const scopedTargetRef = "__counter_stat_target";
+    const scopedTargets = {
+      ...(targets || {}),
+      [scopedTargetRef]: [card],
+    };
+    const applied = await handleBuffStatsTemp(
+      {
+        ...action,
+        type: "buff_stats_temp",
+        targetRef: scopedTargetRef,
+        atkBoost,
+        defBoost,
+        sourceName: action.sourceName || ctx?.source?.name || action.type,
+      },
+      ctx,
+      scopedTargets,
+      engine,
+    );
+
+    appliedAny = applied || appliedAny;
+  }
+
+  return appliedAny;
 }
 
 /**

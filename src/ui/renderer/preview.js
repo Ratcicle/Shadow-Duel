@@ -205,7 +205,7 @@ function buildCounterTooltip(card) {
       ...(metadata?.effectCounterTypes || []),
       ...collectLiveCounterTypes(card),
     ]),
-  ];
+  ].filter((counterType) => getCounterAmount(card, counterType) > 0);
   if (counterTypes.length === 0) return "";
 
   return counterTypes
@@ -214,6 +214,62 @@ function buildCounterTooltip(card) {
       return `${label}: ${getCounterAmount(card, counterType)}`;
     })
     .join("\n");
+}
+
+function getFloatingCounterTooltip() {
+  let tooltip = document.querySelector(".floating-counter-tooltip");
+  if (!tooltip) {
+    tooltip = document.createElement("div");
+    tooltip.className = "floating-counter-tooltip";
+    document.body.appendChild(tooltip);
+  }
+  return tooltip;
+}
+
+function positionFloatingCounterTooltip(tooltip, anchor) {
+  if (!tooltip || !anchor) return;
+
+  const rect = anchor.getBoundingClientRect();
+  const gap = 8;
+  const margin = 8;
+  const tooltipWidth = tooltip.offsetWidth || 0;
+  const tooltipHeight = tooltip.offsetHeight || 0;
+  const maxLeft = Math.max(margin, window.innerWidth - tooltipWidth - margin);
+  const left = Math.min(
+    Math.max(margin, rect.left + rect.width / 2 - tooltipWidth / 2),
+    maxLeft,
+  );
+  const top = Math.max(margin, rect.top - tooltipHeight - gap);
+
+  tooltip.style.left = `${left}px`;
+  tooltip.style.top = `${top}px`;
+}
+
+function showFloatingCounterTooltip(anchor) {
+  const text = anchor?.dataset?.counterTooltip || "";
+  if (!text) return;
+
+  const tooltip = getFloatingCounterTooltip();
+  tooltip.textContent = text;
+  tooltip.classList.add("visible");
+  positionFloatingCounterTooltip(tooltip, anchor);
+}
+
+function hideFloatingCounterTooltip() {
+  const tooltip = document.querySelector(".floating-counter-tooltip");
+  if (!tooltip) return;
+  tooltip.classList.remove("visible");
+}
+
+function bindCounterTooltipForElement(element) {
+  if (!element || element.dataset.counterTooltipBound === "true") return;
+  element.dataset.counterTooltipBound = "true";
+  element.addEventListener("mouseenter", () => showFloatingCounterTooltip(element));
+  element.addEventListener("mousemove", () => {
+    const tooltip = document.querySelector(".floating-counter-tooltip.visible");
+    if (tooltip) positionFloatingCounterTooltip(tooltip, element);
+  });
+  element.addEventListener("mouseleave", hideFloatingCounterTooltip);
 }
 
 /**
@@ -373,6 +429,7 @@ export function createCardElement(card, visible) {
   const counterTooltip = visible ? buildCounterTooltip(card) : "";
   if (counterTooltip) {
     el.dataset.counterTooltip = counterTooltip;
+    bindCounterTooltipForElement(el);
     tooltipLines.push(counterTooltip);
   }
 

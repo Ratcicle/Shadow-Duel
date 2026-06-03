@@ -357,11 +357,12 @@ export async function runActivationPipeline(config = {}) {
           (req) => Number(req.min ?? 0) === 0,
         );
       }
-      // Default: avoid field targeting in generic prompts unless explicitly requested.
+      // Field-only target prompts resolve directly on the board unless the
+      // contract explicitly opts in or out.
       const usingFieldTargeting =
         typeof contract.ui.useFieldTargeting === "boolean"
           ? contract.ui.useFieldTargeting
-          : false;
+          : this.canUseFieldTargeting(contract.requirements);
       contract.ui.useFieldTargeting = usingFieldTargeting;
 
       if (typeof config.onSelectionStart === "function") {

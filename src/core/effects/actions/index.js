@@ -53,7 +53,11 @@ export { applyEquip, showSickleSelectionModal } from "./equip.js";
 export { applyMove } from "./movement.js";
 
 // Counter actions
-export { applyAddCounter, applyRemoveCounter } from "./counters.js";
+export {
+  applyAddCounter,
+  applyRemoveCounter,
+  applyRemoveCountersFromField,
+} from "./counters.js";
 
 // Immunity actions
 export { applyGrantVoidFusionImmunity } from "./immunity.js";
