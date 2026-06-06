@@ -35,6 +35,42 @@ async function emitLpGainEvent(game, player, sourceCard, before) {
   return true;
 }
 
+function getScopedPlayers(ctx, owner = "self") {
+  if (owner === "opponent") return [ctx?.opponent].filter(Boolean);
+  if (owner === "any" || owner === "both" || owner === "either") {
+    return [ctx?.player, ctx?.opponent].filter(Boolean);
+  }
+  return [ctx?.player].filter(Boolean);
+}
+
+function getFieldCounterZoneCards(player, zone) {
+  if (!player || !zone) return [];
+  if (zone === "fieldSpell") {
+    return player.fieldSpell ? [player.fieldSpell] : [];
+  }
+  const cards = player[zone];
+  return Array.isArray(cards) ? cards.filter(Boolean) : [];
+}
+
+function cardMatchesFieldCounterFilters(card, filters = {}) {
+  if (!card) return false;
+  if (filters.requireFaceup === true && card.isFacedown) return false;
+  if (filters.cardKind && !cardMatchesKind(card, filters.cardKind)) return false;
+  if (filters.archetype) {
+    const archetypes = Array.isArray(card.archetypes)
+      ? card.archetypes
+      : card.archetype
+        ? [card.archetype]
+        : [];
+    if (!archetypes.includes(filters.archetype)) return false;
+  }
+  if (filters.type && card.type !== filters.type) return false;
+  if (filters.attribute && card.attribute !== filters.attribute) return false;
+  if (filters.name && card.name !== filters.name) return false;
+  if (filters.subtype && card.subtype !== filters.subtype) return false;
+  return true;
+}
+
 /**
  * Generic handler for paying Life Points as a cost
  *
@@ -839,6 +875,65 @@ export async function handleHealPerFieldCount(action, ctx, targets, engine) {
     `${
       player.name || player.id
     } gained ${healAmount} LP (${count} card(s) x ${amountPerCard} LP).`
+  );
+
+  game.updateBoard();
+  return true;
+}
+
+/**
+ * Handler for healing LP based on the number of counters on field cards.
+ *
+ * Action properties:
+ * - counterType: counter key to count (default: "default")
+ * - amountPerCounter: LP to heal per counted counter (required)
+ * - owner: whose field cards are counted ("self", "opponent", "any")
+ * - zones: field zones to count from (default: ["field"])
+ * - filters: optional card filters
+ * - player: who gains LP ("self" default)
+ */
+export async function handleHealPerFieldCounter(action, ctx, targets, engine) {
+  const game = engine.game;
+  if (!game) return false;
+
+  const targetPlayer = action.player === "opponent" ? ctx.opponent : ctx.player;
+  if (!targetPlayer) return false;
+
+  const counterType = action.counterType || "default";
+  const amountPerCounter = Number(action.amountPerCounter || 0);
+  if (amountPerCounter <= 0) return false;
+
+  const zones = Array.isArray(action.zones)
+    ? action.zones
+    : [action.zone || "field"];
+  const filters = action.filters || {};
+  let counterCount = 0;
+
+  for (const scopedPlayer of getScopedPlayers(ctx, action.owner || "self")) {
+    for (const zone of zones) {
+      for (const card of getFieldCounterZoneCards(scopedPlayer, zone)) {
+        if (!cardMatchesFieldCounterFilters(card, filters)) continue;
+        const count =
+          typeof card.getCounter === "function"
+            ? Number(card.getCounter(counterType) || 0)
+            : 0;
+        counterCount += Math.max(0, count);
+      }
+    }
+  }
+
+  if (counterCount <= 0) {
+    getUI(game)?.log(`No ${counterType} counters found on the field.`);
+    return true;
+  }
+
+  const healAmount = counterCount * amountPerCounter;
+  const before = targetPlayer.lp || 0;
+  targetPlayer.gainLP(healAmount);
+  await emitLpGainEvent(game, targetPlayer, ctx.source, before);
+
+  getUI(game)?.log(
+    `${targetPlayer.name || targetPlayer.id} gained ${healAmount} LP (${counterCount} ${counterType} counter(s) x ${amountPerCounter} LP).`,
   );
 
   game.updateBoard();

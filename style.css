@@ -584,6 +584,28 @@ body {
   height: 100%;
 }
 
+.graveyard-zone .gy-preview.graveyard-effect-activating {
+  z-index: 4;
+  outline: 2px solid rgba(187, 134, 252, 0.92);
+  box-shadow:
+    0 0 16px rgba(187, 134, 252, 0.72),
+    0 0 30px rgba(45, 212, 191, 0.28);
+  animation: graveyard-effect-activation-pulse 700ms ease-in-out infinite;
+}
+
+@keyframes graveyard-effect-activation-pulse {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+    filter: brightness(1);
+  }
+
+  50% {
+    transform: translateY(-3px) scale(1.03);
+    filter: brightness(1.18);
+  }
+}
+
 /* Card Styles */
 .card {
   width: var(--card-w);
@@ -1618,6 +1640,51 @@ body {
 
 .overlay.hidden {
   display: none;
+}
+
+.duel-start-announcement {
+  position: fixed;
+  inset: 0;
+  z-index: 620;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.28);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease;
+}
+
+.duel-start-announcement.visible {
+  opacity: 1;
+}
+
+.duel-start-announcement-panel {
+  width: min(360px, calc(100vw - 32px));
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 18px;
+  border: 1px solid rgba(187, 134, 252, 0.72);
+  border-radius: 8px;
+  background: rgba(18, 18, 20, 0.96);
+  color: #f6f0ff;
+  font-size: 1.35rem;
+  font-weight: 800;
+  text-align: center;
+  overflow-wrap: anywhere;
+  box-shadow:
+    0 18px 55px rgba(0, 0, 0, 0.58),
+    0 0 24px rgba(187, 134, 252, 0.2);
+}
+
+@media (max-width: 520px) {
+  .duel-start-announcement-panel {
+    font-size: 1.1rem;
+    min-height: 48px;
+  }
 }
 
 #start-screen.overlay {
@@ -4190,6 +4257,82 @@ body {
   font-size: 0.9rem;
   min-width: 64px;
   text-align: center;
+}
+
+.field-targeting-prompt {
+  color: #f2f0ff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.field-targeting-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.field-targeting-actions button {
+  min-width: 108px;
+  padding: 9px 18px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
+
+.field-targeting-actions button.primary {
+  background: var(--accent-color);
+  border-color: var(--accent-color);
+  color: #000;
+}
+
+.field-targeting-actions button.secondary {
+  background: #2d2d2d;
+  color: var(--text-color);
+}
+
+.field-targeting-actions button:not(:disabled):hover,
+.field-targeting-actions button:not(:disabled):focus-visible {
+  transform: translateY(-1px);
+}
+
+.field-targeting-actions button.primary:not(:disabled):hover,
+.field-targeting-actions button.primary:not(:disabled):focus-visible {
+  opacity: 0.92;
+}
+
+.field-targeting-actions button.secondary:not(:disabled):hover,
+.field-targeting-actions button.secondary:not(:disabled):focus-visible {
+  border-color: var(--accent-color);
+  color: #fff;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.field-targeting-actions button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+@media (max-width: 640px) {
+  .field-targeting-actions {
+    flex-wrap: wrap;
+  }
+
+  .field-targeting-actions button {
+    min-width: 96px;
+  }
 }
 
 /* Compact prompt for destruction negation */

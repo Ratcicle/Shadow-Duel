@@ -136,6 +136,154 @@ export function renderCompactSelectionCard(card, candidate = {}) {
   return wrapper;
 }
 
+function getFieldTargetingSourceName(config = {}) {
+  const contract = config.selectionContract || {};
+  const metadata =
+    contract.metadata && typeof contract.metadata === "object"
+      ? contract.metadata
+      : {};
+  const sourceCard =
+    config.sourceCard ||
+    metadata.sourceCard ||
+    config.card ||
+    null;
+  if (sourceCard && typeof sourceCard === "object") {
+    return getCardDisplayName(sourceCard) || sourceCard.name || null;
+  }
+  return (
+    config.sourceCardName ||
+    metadata.sourceCardName ||
+    (typeof sourceCard === "string" ? sourceCard : null)
+  );
+}
+
+function getFieldTargetingTotals(contract = {}) {
+  const requirements = Array.isArray(contract.requirements)
+    ? contract.requirements
+    : [];
+  return requirements.reduce(
+    (totals, req) => {
+      const min = Number(req?.min ?? 0);
+      const max = Number(req?.max ?? min);
+      totals.min += Number.isFinite(min) ? min : 0;
+      totals.max += Number.isFinite(max) ? max : 0;
+      return totals;
+    },
+    { min: 0, max: 0 }
+  );
+}
+
+function isGenericFieldTargetingMessage(message) {
+  const normalized = String(message || "").trim().toLowerCase();
+  return [
+    "select target(s) for the monster effect.",
+    "select target(s) for the continuous spell effect.",
+    "select target(s) for the field spell effect.",
+    "select target(s) for the spell/trap effect.",
+  ].includes(normalized);
+}
+
+function getFieldTargetingPrompt(config = {}) {
+  const contract = config.selectionContract || {};
+  const explicitMessage =
+    config.message || contract.ui?.message || contract.message || null;
+  if (explicitMessage && !isGenericFieldTargetingMessage(explicitMessage)) {
+    return explicitMessage;
+  }
+
+  const sourceName = getFieldTargetingSourceName(config);
+  const { min, max } = getFieldTargetingTotals(contract);
+  const locale = getLocale();
+  const isPtBr = locale === "pt-br";
+  const sourceClause = sourceName
+    ? isPtBr
+      ? ` para o efeito de ${sourceName}`
+      : ` for ${sourceName}'s effect`
+    : isPtBr
+    ? " para o efeito"
+    : " for this effect";
+
+  if (isPtBr) {
+    if (max > 0 && min === 0) {
+      return `Selecione até ${max} ${max === 1 ? "alvo" : "alvos"}${sourceClause}.`;
+    }
+    if (min > 0 && min === max) {
+      return `Selecione ${min} ${min === 1 ? "alvo" : "alvos"}${sourceClause}.`;
+    }
+    if (max > 0) {
+      return `Selecione entre ${min} e ${max} alvos${sourceClause}.`;
+    }
+    return `Selecione os alvos${sourceClause}.`;
+  }
+
+  if (max > 0 && min === 0) {
+    return `Select up to ${max} ${max === 1 ? "target" : "targets"}${sourceClause}.`;
+  }
+  if (min > 0 && min === max) {
+    return `Select ${min} ${min === 1 ? "target" : "targets"}${sourceClause}.`;
+  }
+  if (max > 0) {
+    return `Select ${min}-${max} targets${sourceClause}.`;
+  }
+  return `Select targets${sourceClause}.`;
+}
+
+function getFieldTargetingActionLabels() {
+  return getLocale() === "pt-br"
+    ? { cancel: "Cancelar", confirm: "Confirmar" }
+    : { cancel: "Cancel", confirm: "Confirm" };
+}
+
+function getFieldTargetingHost() {
+  return document.getElementById("game-container") || document.body;
+}
+
+function getHostRect(host) {
+  if (host === document.body) {
+    return {
+      top: 0,
+      left: 0,
+      width: window.innerWidth,
+      height: window.innerHeight,
+    };
+  }
+  return host.getBoundingClientRect();
+}
+
+function clampNumber(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function positionFieldTargetingControls(bar, host) {
+  if (!bar || !host) return;
+  const hostRect = getHostRect(host);
+  const spellTrap = document.getElementById("player-spelltrap");
+  const hand = document.getElementById("player-hand");
+  const anchor = spellTrap || document.querySelector("#player-area .board-core");
+
+  const anchorRect = anchor?.getBoundingClientRect();
+  const anchorCenterX = anchorRect
+    ? anchorRect.left + anchorRect.width / 2 - hostRect.left
+    : hostRect.width / 2;
+  const halfWidth = bar.offsetWidth / 2;
+  const minLeft = Math.min(hostRect.width / 2, halfWidth + 8);
+  const maxLeft = Math.max(minLeft, hostRect.width - halfWidth - 8);
+  bar.style.left = `${Math.round(
+    clampNumber(anchorCenterX, minLeft, maxLeft)
+  )}px`;
+
+  let top = hostRect.height - bar.offsetHeight - 24;
+  if (spellTrap && hand) {
+    const spellTrapRect = spellTrap.getBoundingClientRect();
+    const handRect = hand.getBoundingClientRect();
+    const midpoint = (spellTrapRect.bottom + handRect.top) / 2;
+    top = midpoint - hostRect.top - bar.offsetHeight / 2;
+  }
+
+  const maxTop = Math.max(12, hostRect.height - bar.offsetHeight - 12);
+  bar.style.top = `${Math.round(clampNumber(top, 12, maxTop))}px`;
+}
+
 /**
  * @this {import('../Renderer.js').default}
  */
@@ -369,49 +517,72 @@ export function showFieldTargetingControls(onConfirm, onCancel, config = {}) {
   this.hideFieldTargetingControls();
 
   const allowCancel = config.allowCancel !== false;
+  const promptText = getFieldTargetingPrompt(config);
+  const labels = getFieldTargetingActionLabels();
+  const host = getFieldTargetingHost();
+  const usesBodyHost = host === document.body;
 
   const bar = document.createElement("div");
   bar.className = "field-targeting-controls";
-  bar.style.position = "fixed";
+  bar.style.position = usesBodyHost ? "fixed" : "absolute";
   bar.style.left = "50%";
-  bar.style.bottom = "24px";
+  bar.style.top = "auto";
+  bar.style.bottom = usesBodyHost ? "24px" : "auto";
   bar.style.transform = "translateX(-50%)";
   bar.style.display = "flex";
-  bar.style.gap = "12px";
+  bar.style.flexDirection = "column";
+  bar.style.gap = "8px";
   bar.style.padding = "12px 16px";
   bar.style.background = "rgba(16, 18, 28, 0.92)";
   bar.style.borderRadius = "12px";
   bar.style.boxShadow = "0 8px 24px rgba(0,0,0,0.35)";
   bar.style.zIndex = "3000";
-  bar.style.alignItems = "center";
+  bar.style.alignItems = "stretch";
+  bar.style.width = usesBodyHost
+    ? "min(520px, calc(100vw - 32px))"
+    : "min(520px, calc(100% - 32px))";
+  bar.style.visibility = "hidden";
+
+  const prompt = document.createElement("div");
+  prompt.className = "field-targeting-prompt";
+  prompt.textContent = promptText;
+  bar.appendChild(prompt);
+
+  const actions = document.createElement("div");
+  actions.className = "field-targeting-actions";
 
   const counter = document.createElement("div");
   counter.className = "field-targeting-counter";
   counter.textContent = "0 / 0";
 
   const confirmBtn = document.createElement("button");
-  confirmBtn.textContent = "Confirm";
+  confirmBtn.textContent = labels.confirm;
   confirmBtn.className = "primary";
-  confirmBtn.style.minWidth = "110px";
   confirmBtn.onclick = () => {
     if (typeof onConfirm === "function") onConfirm();
   };
 
   if (allowCancel) {
     const cancelBtn = document.createElement("button");
-    cancelBtn.textContent = "Cancel";
+    cancelBtn.textContent = labels.cancel;
     cancelBtn.className = "secondary";
-    cancelBtn.style.minWidth = "96px";
     cancelBtn.onclick = () => {
       if (typeof onCancel === "function") onCancel();
       this.hideFieldTargetingControls();
     };
-    bar.appendChild(cancelBtn);
+    actions.appendChild(cancelBtn);
   }
 
-  bar.appendChild(counter);
-  bar.appendChild(confirmBtn);
-  document.body.appendChild(bar);
+  actions.appendChild(counter);
+  actions.appendChild(confirmBtn);
+  bar.appendChild(actions);
+  host.appendChild(bar);
+
+  const reposition = () => positionFieldTargetingControls(bar, host);
+  window.addEventListener("resize", reposition);
+  bar.__fieldTargetingCleanup = () => {
+    window.removeEventListener("resize", reposition);
+  };
 
   const updateState = ({ selected = 0, min = 0, max = 0, allowEmpty }) => {
     const requiredMin = allowEmpty ? 0 : min;
@@ -420,6 +591,8 @@ export function showFieldTargetingControls(onConfirm, onCancel, config = {}) {
   };
 
   updateState({ selected: 0, min: 0, max: 0, allowEmpty: true });
+  reposition();
+  bar.style.visibility = "";
 
   return {
     updateState,
@@ -433,6 +606,9 @@ export function showFieldTargetingControls(onConfirm, onCancel, config = {}) {
 export function hideFieldTargetingControls() {
   const existing = document.querySelector(".field-targeting-controls");
   if (existing) {
+    if (typeof existing.__fieldTargetingCleanup === "function") {
+      existing.__fieldTargetingCleanup();
+    }
     existing.remove();
   }
 }

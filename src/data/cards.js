@@ -9180,6 +9180,49 @@
     ],
   },
   {
+    id: 288,
+    name: "Bloomrot Spore Cloud",
+    cardKind: "spell",
+    subtype: "normal",
+    archetype: "Bloomrot",
+    description:
+      'Target up to 2 face-up monsters your opponent controls; place 2 Spore Counters on each of them. Then, those monsters lose 500 ATK/DEF until the end of this turn. You can only activate 1 "Bloomrot Spore Cloud" per turn.',
+    image: "assets/Bloomrot Spore Cloud.png",
+    effects: [
+      {
+        id: "bloomrot_spore_cloud_activation",
+        timing: "on_play",
+        oncePerTurn: true,
+        oncePerTurnName: "bloomrot_spore_cloud_activation",
+        targets: [
+          {
+            id: "bloomrot_spore_cloud_targets",
+            owner: "opponent",
+            zone: "field",
+            cardKind: "monster",
+            requireFaceup: true,
+            count: { min: 1, max: 2 },
+          },
+        ],
+        actions: [
+          {
+            type: "add_counter",
+            targetRef: "bloomrot_spore_cloud_targets",
+            counterType: "spore",
+            amount: 2,
+          },
+          {
+            type: "buff_stats_temp",
+            targetRef: "bloomrot_spore_cloud_targets",
+            atkBoost: -500,
+            defBoost: -500,
+            duration: "end_of_turn",
+          },
+        ],
+      },
+    ],
+  },
+  {
     id: 289,
     name: "Bloomrot Living Colony",
     cardKind: "spell",
@@ -9273,6 +9316,59 @@
               image: "assets/Bloomrot Token.png",
               description: "A Bloomrot token grown from lingering spores.",
             },
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 290,
+    name: "Bloomrot Compost Ritual",
+    cardKind: "spell",
+    subtype: "normal",
+    archetype: "Bloomrot",
+    description:
+      'Target 1 face-up monster on the field; place 1 Spore Counter on it for each "Bloomrot" monster you control. Then, gain 100 LP for each Spore Counter on your opponent\'s field.',
+    image: "assets/Bloomrot Compost Ritual.png",
+    effects: [
+      {
+        id: "bloomrot_compost_ritual_activation",
+        timing: "on_play",
+        oncePerTurn: true,
+        oncePerTurnName: "bloomrot_compost_ritual_activation",
+        targets: [
+          {
+            id: "bloomrot_compost_ritual_target",
+            owner: "any",
+            zone: "field",
+            cardKind: "monster",
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "add_counter",
+            targetRef: "bloomrot_compost_ritual_target",
+            counterType: "spore",
+            amountFromFieldCount: {
+              owner: "self",
+              zone: "field",
+              filters: {
+                cardKind: "monster",
+                archetype: "Bloomrot",
+                requireFaceup: true,
+              },
+            },
+          },
+          {
+            type: "heal_per_field_counter",
+            player: "self",
+            owner: "opponent",
+            zones: ["field", "spellTrap", "fieldSpell"],
+            filters: { requireFaceup: true },
+            counterType: "spore",
+            amountPerCounter: 100,
           },
         ],
       },

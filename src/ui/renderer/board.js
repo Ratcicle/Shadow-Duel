@@ -185,6 +185,9 @@ export function updateGYPreview(player) {
     const lastCard = player.graveyard[player.graveyard.length - 1];
     const preview = this.createCardElement(lastCard, true);
     preview.classList.add("gy-preview");
+    if (lastCard.graveyardEffectActivating === true) {
+      preview.classList.add("graveyard-effect-activating");
+    }
     preview.dataset.index = String(player.graveyard.length - 1);
     preview.dataset.location = "graveyard";
     gyZone.appendChild(preview);

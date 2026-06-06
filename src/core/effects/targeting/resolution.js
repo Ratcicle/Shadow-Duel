@@ -379,6 +379,7 @@ export function resolveTargets(targetDefs, ctx, selections) {
       ui: {},
       metadata: {
         sourceCardId: ctx?.source?.id,
+        sourceCardName: ctx?.source?.name || null,
       },
     };
 

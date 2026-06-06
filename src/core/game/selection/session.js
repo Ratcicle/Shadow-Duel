@@ -127,7 +127,17 @@ export function startTargetSelectionSession(session) {
       const controlsHandle = this.ui.showFieldTargetingControls(
         () => this.advanceTargetSelection(),
         allowCancel ? () => this.cancelTargetSelection() : null,
-        { allowCancel }
+        {
+          allowCancel,
+          message: selectionContract.message || session.message || null,
+          selectionContract,
+          sourceCard:
+            session.card || selectionContract.metadata?.sourceCard || null,
+          sourceCardName:
+            session.card?.name ||
+            selectionContract.metadata?.sourceCardName ||
+            null,
+        }
       );
       this.targetSelection.controlsHandle = controlsHandle || null;
     }

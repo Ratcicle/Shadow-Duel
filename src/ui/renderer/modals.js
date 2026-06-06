@@ -11,6 +11,7 @@ import {
 } from "./selectionModals.js";
 
 let activeConfirmPrompt = null;
+let activeDuelStartAnnouncement = null;
 
 const GAME_OVER_COPY = {
   en: {
@@ -239,6 +240,73 @@ export function showNumberPrompt(message, defaultValue) {
 export function showAlert(message) {
   if (!message) return;
   window.alert(message);
+}
+
+/**
+ * Shows a brief, non-interactive duel start announcement.
+ * @this {import('../Renderer.js').default}
+ */
+export function showDuelStartAnnouncement(message, options = {}) {
+  if (!message) return Promise.resolve(false);
+  if (typeof document === "undefined" || !document.body) {
+    return Promise.resolve(false);
+  }
+
+  if (activeDuelStartAnnouncement?.cleanup) {
+    activeDuelStartAnnouncement.cleanup();
+  }
+
+  const durationMs = Number.isFinite(options.durationMs)
+    ? Math.max(0, options.durationMs)
+    : 1200;
+
+  return new Promise((resolve) => {
+    const requestFrame =
+      typeof globalThis.requestAnimationFrame === "function"
+        ? globalThis.requestAnimationFrame.bind(globalThis)
+        : (callback) => globalThis.setTimeout(callback, 0);
+    const overlay = document.createElement("div");
+    overlay.className = "duel-start-announcement";
+    overlay.setAttribute("role", "status");
+    overlay.setAttribute("aria-live", "polite");
+
+    const panel = document.createElement("div");
+    panel.className = "duel-start-announcement-panel";
+    panel.textContent = String(message);
+
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
+
+    let resolved = false;
+    let hideTimer = null;
+    let cleanupTimer = null;
+
+    const cleanup = () => {
+      globalThis.clearTimeout(hideTimer);
+      globalThis.clearTimeout(cleanupTimer);
+      if (overlay.parentNode) {
+        overlay.parentNode.removeChild(overlay);
+      }
+      if (activeDuelStartAnnouncement?.overlay === overlay) {
+        activeDuelStartAnnouncement = null;
+      }
+      if (!resolved) {
+        resolved = true;
+        resolve(true);
+      }
+    };
+
+    activeDuelStartAnnouncement = { overlay, cleanup };
+
+    requestFrame(() => {
+      overlay.classList.add("visible");
+    });
+
+    hideTimer = globalThis.setTimeout(() => {
+      overlay.classList.remove("visible");
+      cleanupTimer = globalThis.setTimeout(cleanup, 180);
+    }, durationMs);
+  });
 }
 
 /**

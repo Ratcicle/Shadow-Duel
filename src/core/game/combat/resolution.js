@@ -31,6 +31,14 @@ function clearDamageCalculationTempBuffs(game) {
   }
 }
 
+async function presentBattleDestructionBeforeTriggers(game) {
+  game?.updateBoard?.();
+
+  if (typeof game?.waitForPresentationDelay === "function") {
+    await game.waitForPresentationDelay(250);
+  }
+}
+
 /**
  * Resolve a combat attack, handling flip effects and delegating to finishCombat.
  * @param {Object} attacker - The attacking monster
@@ -735,6 +743,12 @@ export async function applyBattleDestroyEffect(
   destroyed,
   extras = {},
 ) {
+  if (!destroyed) {
+    return { ok: true };
+  }
+
+  await presentBattleDestructionBeforeTriggers(this);
+
   // Legacy: onBattleDestroy direct damage effects tied to the attacker
   if (attacker && attacker.onBattleDestroy && attacker.onBattleDestroy.damage) {
     const defender = attacker.owner === "player" ? this.bot : this.player;
@@ -750,10 +764,6 @@ export async function applyBattleDestroyEffect(
   }
 
   // New: global battle_destroy event for cards like Shadow-Heart Gecko
-  if (!destroyed) {
-    return { ok: true };
-  }
-
   const destroyedOwner =
     extras?.destroyedOwner ||
     (destroyed.owner === "player" ? this.player : this.bot);

@@ -215,6 +215,68 @@ function queueZoneMoveAnimation(game, intent, toZoneOverride = null) {
   });
 }
 
+async function presentSummonBeforeAfterSummon(game, options = {}) {
+  if (options.presentBeforeAfterSummon === false) return;
+
+  game?.updateBoard?.();
+
+  if (typeof game?.waitForPresentationDelay === "function") {
+    const delayMs = Number.isFinite(options.summonPresentationDelayMs)
+      ? options.summonPresentationDelayMs
+      : 250;
+    await game.waitForPresentationDelay(delayMs);
+  }
+}
+
+function hasMatchingDestroyedGraveyardTrigger(card, fromZone, options = {}) {
+  if (!card || card.cardKind !== "monster") return false;
+  if (fromZone !== "field" || options.wasDestroyed !== true) return false;
+
+  const destroyCause = options.destroyCause || null;
+  if (destroyCause !== "battle" && destroyCause !== "effect") return false;
+
+  return (card.effects || []).some((effect) => {
+    if (!effect || effect.timing !== "on_event") return false;
+    if (effect.event !== "card_to_grave") return false;
+    if (effect.requireSelfAsDestroyed !== true) return false;
+    if (
+      effect.fromZone &&
+      effect.fromZone !== "any" &&
+      effect.fromZone !== fromZone
+    ) {
+      return false;
+    }
+
+    const conditionType = effect.condition?.type || null;
+    if (conditionType === "destroyed_by_battle") {
+      return destroyCause === "battle";
+    }
+    if (conditionType === "destroyed_by_effect") {
+      return destroyCause === "effect";
+    }
+    if (conditionType === "destroyed_by_battle_or_effect") {
+      return true;
+    }
+    return false;
+  });
+}
+
+async function presentDestroyedGraveyardTrigger(game, card, options = {}) {
+  if (options.presentBeforeCardToGrave === false) return false;
+
+  card.graveyardEffectActivating = true;
+  game?.updateBoard?.();
+
+  if (typeof game?.waitForPresentationDelay === "function") {
+    const delayMs = Number.isFinite(options.graveyardActivationDelayMs)
+      ? options.graveyardActivationDelayMs
+      : 350;
+    await game.waitForPresentationDelay(delayMs);
+  }
+
+  return true;
+}
+
 const FIELD_SOURCE_ZONES = new Set(["field", "spellTrap", "fieldSpell"]);
 
 /**
@@ -1296,6 +1358,9 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
 
   queueZoneMoveAnimation(this, cardAnimationIntent, toZone);
 
+  let afterSummonResult = null;
+  let cardToGraveResult = null;
+
   if (
     toZone === "field" &&
     card.cardKind === "monster" &&
@@ -1325,7 +1390,8 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     const ownerPlayer = card.owner === "player" ? this.player : this.bot;
     const otherPlayer = ownerPlayer === this.player ? this.bot : this.player;
     const summonMethod = options.summonMethodOverride || "special";
-    await this.emit("after_summon", {
+    await presentSummonBeforeAfterSummon(this, options);
+    afterSummonResult = await this.emit("after_summon", {
       card,
       player: ownerPlayer,
       opponent: otherPlayer,
@@ -1349,24 +1415,41 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     const ownerPlayer = card.owner === "player" ? this.player : this.bot;
     const otherPlayer = ownerPlayer === this.player ? this.bot : this.player;
 
-    console.log(
-      `[moveCard] Emitting card_to_grave event for ${card.name} (fromZone: ${fromZone})`
-    );
-    const cardToGraveEvent = this.emit("card_to_grave", {
-      card,
-      fromZone: fromZone || options.fromZone || null,
-      toZone: "graveyard",
-      player: ownerPlayer,
-      opponent: otherPlayer,
-      wasDestroyed: options.wasDestroyed || false,
-      destroyCause: options.destroyCause || null,
-      destroySource:
-        options.destroySource || options.sourceCard || options.source || null,
-    });
-    if (options.awaitEvents === true || options.awaitCardToGraveEvent === true) {
-      await cardToGraveEvent;
-    } else {
-      void cardToGraveEvent;
+    const shouldPresentDestroyedGraveyardTrigger =
+      hasMatchingDestroyedGraveyardTrigger(card, fromZone, options);
+    const presentedDestroyedGraveyardTrigger =
+      shouldPresentDestroyedGraveyardTrigger
+        ? await presentDestroyedGraveyardTrigger(this, card, options)
+        : false;
+
+    try {
+      console.log(
+        `[moveCard] Emitting card_to_grave event for ${card.name} (fromZone: ${fromZone})`
+      );
+      const cardToGraveEvent = this.emit("card_to_grave", {
+        card,
+        fromZone: fromZone || options.fromZone || null,
+        toZone: "graveyard",
+        player: ownerPlayer,
+        opponent: otherPlayer,
+        wasDestroyed: options.wasDestroyed || false,
+        destroyCause: options.destroyCause || null,
+        destroySource:
+          options.destroySource || options.sourceCard || options.source || null,
+      });
+      if (
+        options.awaitEvents === true ||
+        options.awaitCardToGraveEvent === true
+      ) {
+        cardToGraveResult = await cardToGraveEvent;
+      } else {
+        void cardToGraveEvent;
+      }
+    } finally {
+      if (presentedDestroyedGraveyardTrigger) {
+        delete card.graveyardEffectActivating;
+        this.updateBoard?.();
+      }
     }
   }
 
@@ -1389,5 +1472,14 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     this.effectEngine.clearTargetingCache();
   }
 
-  return { success: true, fromZone, toZone };
+  const result = { success: true, fromZone, toZone };
+  if (afterSummonResult?.needsSelection && afterSummonResult.selectionContract) {
+    result.needsSelection = true;
+    result.selectionContract = afterSummonResult.selectionContract;
+  }
+  if (cardToGraveResult?.needsSelection && cardToGraveResult.selectionContract) {
+    result.needsSelection = true;
+    result.selectionContract = cardToGraveResult.selectionContract;
+  }
+  return result;
 }

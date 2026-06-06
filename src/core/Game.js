@@ -91,6 +91,21 @@ import * as strategicReport from "./game/analytics/strategicReport.js";
 import * as effectsDestructionReplacement from "./game/effects/destructionReplacement.js";
 import * as effectsActivationPipeline from "./game/effects/activationPipeline.js";
 
+const STARTING_PLAYER_IDS = new Set(["player", "bot"]);
+
+function resolveStartingPlayerId(startingPlayer) {
+  if (STARTING_PLAYER_IDS.has(startingPlayer)) {
+    return startingPlayer;
+  }
+  return Math.random() < 0.5 ? "player" : "bot";
+}
+
+function getStartingPlayerAnnouncement(turn) {
+  return turn === "player"
+    ? "Você joga primeiro"
+    : "O oponente joga primeiro";
+}
+
 export default class Game {
   constructor(options = {}) {
     // Mode flags must be ready before any subsystem or player/bot creation
@@ -250,6 +265,9 @@ export default class Game {
       startAtDrawPhase = false,
       laboratoryMode = this.laboratoryModeEnabled,
       revealBotHand,
+      startingPlayer = null,
+      firstTurnPlayer = null,
+      announceStartingPlayer = true,
     } = options;
 
     this.laboratoryModeEnabled = laboratoryMode === true;
@@ -286,6 +304,14 @@ export default class Game {
       botExtraDeckSize: this.bot?.extraDeck?.length || 0,
     });
 
+    const requestedStartingPlayer = STARTING_PLAYER_IDS.has(firstTurnPlayer)
+      ? firstTurnPlayer
+      : startingPlayer;
+    this.turn = resolveStartingPlayerId(requestedStartingPlayer);
+    this._arenaTracker?.recordProgress?.("starting_player_selected", this, {
+      startingPlayer: this.turn,
+    });
+
     // Normal duel strategic telemetry is opt-in; Bot Arena owns its tracker.
     this.startNormalDuelStrategicReport?.();
 
@@ -300,7 +326,6 @@ export default class Game {
     });
 
     if (startAtDrawPhase) {
-      this.turn = "player";
       this.phase = "draw";
       this.turnCounter = 1;
       this.resetOncePerTurnUsage("start_turn");
@@ -309,6 +334,9 @@ export default class Game {
       this.effectEngine?.clearTargetingCache?.();
       this.effectEngine?.updatePassiveBuffs?.();
       this.updateBoard();
+      await this.showStartingPlayerAnnouncement({
+        enabled: announceStartingPlayer,
+      });
       this.ui.bindPhaseClick((phase) => {
         const activePlayer = this.turn === "player" ? this.player : this.bot;
         if (this.laboratoryModeEnabled) {
@@ -326,6 +354,9 @@ export default class Game {
     }
 
     this.updateBoard();
+    await this.showStartingPlayerAnnouncement({
+      enabled: announceStartingPlayer,
+    });
     this._arenaTracker?.recordProgress?.("start_turn_before", this);
     await this.startTurn();
     this._arenaTracker?.recordProgress?.("start_turn_after", this);
@@ -347,6 +378,18 @@ export default class Game {
       }
     });
     this.bindCardInteractions();
+  }
+
+  async showStartingPlayerAnnouncement(options = {}) {
+    if (options.enabled === false) return;
+    const message = getStartingPlayerAnnouncement(this.turn);
+    this.ui?.log?.(message);
+
+    if (typeof this.ui?.showDuelStartAnnouncement === "function") {
+      await this.ui.showDuelStartAnnouncement(message, {
+        durationMs: options.durationMs,
+      });
+    }
   }
 
   buildExactDeckForPlayer(player, deckList = []) {

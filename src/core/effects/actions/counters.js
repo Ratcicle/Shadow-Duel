@@ -3,6 +3,7 @@ import {
   getUI,
   selectCards,
 } from "../../actionHandlers/shared.js";
+import { cardMatchesKind } from "../../Card.js";
 import { isAI } from "../../Player.js";
 
 /**
@@ -48,8 +49,117 @@ function emitCounterEvent(engine, data = {}) {
   );
 }
 
+async function waitForCounterStep(engine, action, ctx) {
+  const game = engine?.game;
+  if (!game) return;
+
+  if (typeof game.updateBoard === "function") {
+    game.updateBoard();
+  }
+
+  const delayMs = Number.isFinite(action?.stepDelayMs)
+    ? action.stepDelayMs
+    : 120;
+  if (typeof game.waitForPresentationDelay === "function") {
+    await game.waitForPresentationDelay(delayMs);
+    return;
+  }
+  if (typeof game.waitForAiPresentationStep === "function") {
+    await game.waitForAiPresentationStep(ctx?.player, { delayMs });
+    return;
+  }
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 function isCounterFieldZone(zone) {
   return zone === "field" || zone === "spellTrap" || zone === "fieldSpell";
+}
+
+function getCounterQueryPlayers(ctx, owner = "self") {
+  if (owner === "opponent") return [ctx?.opponent].filter(Boolean);
+  if (owner === "any" || owner === "both" || owner === "either") {
+    return [ctx?.player, ctx?.opponent].filter(Boolean);
+  }
+  return [ctx?.player].filter(Boolean);
+}
+
+function getCounterQueryZoneCards(player, zone) {
+  if (!player || !zone) return [];
+  if (zone === "fieldSpell") {
+    return player.fieldSpell ? [player.fieldSpell] : [];
+  }
+  const cards = player[zone];
+  return Array.isArray(cards) ? cards.filter(Boolean) : [];
+}
+
+function cardMatchesCounterQueryFilters(card, filters = {}) {
+  if (!card) return false;
+  if (filters.requireFaceup === true && card.isFacedown) return false;
+  if (filters.cardKind && !cardMatchesKind(card, filters.cardKind)) return false;
+  if (filters.archetype) {
+    const archetypes = Array.isArray(card.archetypes)
+      ? card.archetypes
+      : card.archetype
+        ? [card.archetype]
+        : [];
+    if (!archetypes.includes(filters.archetype)) return false;
+  }
+  if (filters.type && card.type !== filters.type) return false;
+  if (filters.attribute && card.attribute !== filters.attribute) return false;
+  if (filters.name && card.name !== filters.name) return false;
+  if (filters.subtype && card.subtype !== filters.subtype) return false;
+  if (filters.counterType || filters.minCounters !== undefined) {
+    const counterType = filters.counterType || "default";
+    const minCounters = Number(filters.minCounters ?? 1);
+    const count =
+      typeof card.getCounter === "function" ? card.getCounter(counterType) : 0;
+    if (count < minCounters) return false;
+  }
+  return true;
+}
+
+function countCounterQueryFieldCards(ctx, spec = {}) {
+  const zones = Array.isArray(spec.zones)
+    ? spec.zones
+    : [spec.zone || "field"];
+  const filters = spec.filters || {};
+  let count = 0;
+
+  for (const player of getCounterQueryPlayers(ctx, spec.owner || "self")) {
+    for (const zone of zones) {
+      for (const card of getCounterQueryZoneCards(player, zone)) {
+        if (cardMatchesCounterQueryFilters(card, filters)) {
+          count += 1;
+        }
+      }
+    }
+  }
+
+  return count;
+}
+
+function resolveAddCounterAmount(action, ctx) {
+  if (action.amountFromFieldCount) {
+    const spec = action.amountFromFieldCount;
+    const count = countCounterQueryFieldCards(ctx, spec);
+    const multiplier = Number.isFinite(Number(spec.multiplier))
+      ? Number(spec.multiplier)
+      : 1;
+    let amount = count * multiplier;
+    if (Number.isFinite(Number(spec.min))) {
+      amount = Math.max(Number(spec.min), amount);
+    }
+    if (Number.isFinite(Number(spec.max))) {
+      amount = Math.min(Number(spec.max), amount);
+    }
+    return Math.max(0, Math.floor(amount));
+  }
+
+  if (action.damagePerCounter && ctx.damageAmount !== undefined) {
+    return ctx.damageAmount >= action.damagePerCounter ? 1 : 0;
+  }
+
+  return Math.max(0, Math.floor(Number(action.amount || 1)));
 }
 
 function uniqueCounterEntries(cards, zones = []) {
@@ -133,17 +243,12 @@ async function emitCounterRemovedEvent(engine, data = {}) {
   });
 }
 
-export function applyAddCounter(action, ctx, targets) {
+export async function applyAddCounter(action, ctx, targets) {
   const counterType = action.counterType || "default";
-  let amount = action.amount || 1;
+  const amount = resolveAddCounterAmount(action, ctx);
   const targetRef = action.targetRef || "self";
 
-  // If damagePerCounter is specified, calculate amount based on damage
-  if (action.damagePerCounter && ctx.damageAmount !== undefined) {
-    // Add 1 counter per damage instance that meets the threshold.
-    amount = ctx.damageAmount >= action.damagePerCounter ? 1 : 0;
-    if (amount <= 0) return false;
-  }
+  if (amount <= 0) return false;
 
   let targetCards = [];
   if (targetRef === "self") {
@@ -159,32 +264,30 @@ export function applyAddCounter(action, ctx, targets) {
   let added = false;
   for (const card of targetCards) {
     if (card && typeof card.addCounter === "function") {
-      card.addCounter(counterType, amount);
-      const after =
-        typeof card.getCounter === "function" ? card.getCounter(counterType) : null;
-      console.log(`Added ${amount} ${counterType} counter(s) to ${card.name}`);
-      emitCounterEvent(this, {
-        card,
-        ctx,
-        counterType,
-        amount,
-        action: "add",
-        result: after,
-      });
-      added = true;
+      let remaining = amount;
+      while (remaining > 0) {
+        card.addCounter(counterType, 1);
+        remaining -= 1;
+        const after =
+          typeof card.getCounter === "function"
+            ? card.getCounter(counterType)
+            : null;
+        console.log(`Added 1 ${counterType} counter(s) to ${card.name}`);
+        emitCounterEvent(this, {
+          card,
+          ctx,
+          counterType,
+          amount: 1,
+          action: "add",
+          result: after,
+        });
+        if (this.ui?.log) {
+          this.ui.log(`Added 1 ${counterType} counter(s) to ${card.name}.`);
+        }
+        await waitForCounterStep(this, action, ctx);
+        added = true;
+      }
     }
-  }
-
-  if (added && this.game && typeof this.game.updateBoard === "function") {
-    this.game.updateBoard();
-  }
-
-  if (added && this.ui?.log) {
-    this.ui.log(
-      `Added ${amount} ${counterType} counter(s) to ${
-        targetCards[0]?.name || ctx.source?.name || "card"
-      }.`,
-    );
   }
 
   return added;
@@ -223,42 +326,37 @@ export async function applyRemoveCounter(action, ctx, targets) {
     const current = card.getCounter(counterType);
     if (current <= 0) continue;
     if (!allowBelow && current < amount) continue;
-    const removeAmount = allowBelow ? Math.min(current, amount) : amount;
     if (typeof card.removeCounter === "function") {
       const zoneBeforeRemoval = findCounterCardZone(this, card, ctx?.player);
-      card.removeCounter(counterType, removeAmount);
-      const after =
-        typeof card.getCounter === "function" ? card.getCounter(counterType) : null;
-      console.log(
-        `Removed ${removeAmount} ${counterType} counter(s) from ${card.name}`,
-      );
-      emitCounterEvent(this, {
-        card,
-        ctx,
-        counterType,
-        amount: removeAmount,
-        action: "remove",
-        result: after,
-      });
-      if (isCounterFieldZone(zoneBeforeRemoval)) {
-        removedCards.push(card);
-        removedZones.push(zoneBeforeRemoval);
-        removedAmount += removeAmount;
+      let remainingForCard = allowBelow ? Math.min(current, amount) : amount;
+
+      while (remainingForCard > 0) {
+        card.removeCounter(counterType, 1);
+        remainingForCard -= 1;
+        const after =
+          typeof card.getCounter === "function" ? card.getCounter(counterType) : null;
+        console.log(`Removed 1 ${counterType} counter(s) from ${card.name}`);
+        emitCounterEvent(this, {
+          card,
+          ctx,
+          counterType,
+          amount: 1,
+          action: "remove",
+          result: after,
+        });
+        if (isCounterFieldZone(zoneBeforeRemoval)) {
+          removedCards.push(card);
+          removedZones.push(zoneBeforeRemoval);
+          removedAmount += 1;
+        }
+        if (this.ui?.log) {
+          this.ui.log(`Removed 1 ${counterType} counter(s) from ${card.name}.`);
+        }
+        await waitForCounterStep(this, action, ctx);
       }
+
       removed = true;
     }
-  }
-
-  if (removed && this.game && typeof this.game.updateBoard === "function") {
-    this.game.updateBoard();
-  }
-
-  if (removed && this.ui?.log) {
-    this.ui.log(
-      `Removed ${amount} ${counterType} counter(s) from ${
-        targetCards[0]?.name || ctx.source?.name || "card"
-      }.`,
-    );
   }
 
   if (removedAmount > 0) {
@@ -484,63 +582,40 @@ export async function applyRemoveCountersFromField(action, ctx) {
   const removedCards = [];
   const removedZones = [];
 
-  for (const entry of selectedEntries) {
-    if (remaining <= 0) break;
-    const card = entry.card;
-    const current = getCounterValue(card, counterType);
-    if (current <= 0 || typeof card.removeCounter !== "function") continue;
+  while (remaining > 0) {
+    let progressed = false;
 
-    const firstPassAmount = Math.min(1, current, remaining);
-    card.removeCounter(counterType, firstPassAmount);
-    remaining -= firstPassAmount;
-    removed = true;
-    removedAmount += firstPassAmount;
-    removedCards.push(card);
-    removedZones.push(entry.zone);
-    emitCounterEvent(this, {
-      card,
-      ctx,
-      counterType,
-      amount: firstPassAmount,
-      action: "remove",
-      result: getCounterValue(card, counterType),
-    });
-    getUI(game)?.log(
-      `Removed ${firstPassAmount} ${counterType} counter(s) from ${card.name}.`,
-    );
-  }
+    for (const entry of selectedEntries) {
+      if (remaining <= 0) break;
+      const card = entry.card;
+      const current = getCounterValue(card, counterType);
+      if (current <= 0 || typeof card.removeCounter !== "function") continue;
 
-  for (const entry of selectedEntries) {
-    if (remaining <= 0) break;
-    const card = entry.card;
-    const current = getCounterValue(card, counterType);
-    if (current <= 0 || typeof card.removeCounter !== "function") continue;
+      card.removeCounter(counterType, 1);
+      remaining -= 1;
+      progressed = true;
+      removed = true;
+      removedAmount += 1;
+      removedCards.push(card);
+      removedZones.push(entry.zone);
+      emitCounterEvent(this, {
+        card,
+        ctx,
+        counterType,
+        amount: 1,
+        action: "remove",
+        result: getCounterValue(card, counterType),
+      });
+      getUI(game)?.log(
+        `Removed 1 ${counterType} counter(s) from ${card.name}.`,
+      );
+      await waitForCounterStep(this, action, ctx);
+    }
 
-    const removeAmount = Math.min(current, remaining);
-    card.removeCounter(counterType, removeAmount);
-    remaining -= removeAmount;
-    removed = true;
-    removedAmount += removeAmount;
-    removedCards.push(card);
-    removedZones.push(entry.zone);
-    emitCounterEvent(this, {
-      card,
-      ctx,
-      counterType,
-      amount: removeAmount,
-      action: "remove",
-      result: getCounterValue(card, counterType),
-    });
-    getUI(game)?.log(
-      `Removed ${removeAmount} ${counterType} counter(s) from ${card.name}.`,
-    );
+    if (!progressed) break;
   }
 
   if (remaining > 0) return false;
-
-  if (removed && game && typeof game.updateBoard === "function") {
-    game.updateBoard();
-  }
 
   if (removedAmount > 0) {
     await emitCounterRemovedEvent(this, {

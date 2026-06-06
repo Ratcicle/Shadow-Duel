@@ -254,6 +254,7 @@ export async function destroyCard(card, options = {}) {
         wasDestroyed: true,
         destroyCause: cause,
         destroySource: sourceCard,
+        awaitCardToGraveEvent: options.awaitCardToGraveEvent !== false,
       });
 
       if (!moveResult || moveResult.success === false) {

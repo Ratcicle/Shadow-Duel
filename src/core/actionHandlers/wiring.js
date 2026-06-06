@@ -60,6 +60,7 @@ import {
   handleHealFromDestroyedAtk,
   handleHealFromDestroyedLevel,
   handleHealPerFieldCount,
+  handleHealPerFieldCounter,
   handleHealPerOpponentCardsAndHand,
   handleGrantAdditionalNormalSummon,
   handleUpkeepPayOrSendToGrave,
@@ -173,6 +174,7 @@ export function registerDefaultHandlers(registry) {
   registry.register("heal_from_destroyed_level", handleHealFromDestroyedLevel);
 
   registry.register("heal_per_field_count", handleHealPerFieldCount);
+  registry.register("heal_per_field_counter", handleHealPerFieldCounter);
   registry.register(
     "heal_per_opponent_cards_and_hand",
     handleHealPerOpponentCardsAndHand,
