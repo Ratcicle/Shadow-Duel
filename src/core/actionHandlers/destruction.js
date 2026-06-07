@@ -8,6 +8,7 @@
 import { isAI } from "../Player.js";
 import {
   getUI,
+  resolveContextNumber,
   resolveTargetCards,
   buildFieldSelectionCandidates,
   selectCards,
@@ -1251,12 +1252,32 @@ export async function handleDestroyTargetedCards(action, ctx, targets, engine) {
   // action.maxTargets: maximum cards to target (default 1)
   // action.minTargets: minimum required targets (default maxTargets)
 
-  const requestedMaxTargets = action.maxTargets || 1;
-  const requestedMinTargets = Number.isFinite(action.minTargets)
-    ? action.minTargets
-    : Math.min(requestedMaxTargets, opponentCards.length);
+  const contextTargetCount = action.targetCountFromContext
+    ? Math.max(
+        0,
+        Math.floor(
+          resolveContextNumber(action.targetCountFromContext, ctx, {
+            round: "floor",
+          }),
+        ),
+      )
+    : null;
 
-  if (opponentCards.length < requestedMinTargets) {
+  if (contextTargetCount !== null && contextTargetCount <= 0) {
+    getUI(game)?.log(`${source.name} removed too few counters to destroy a card.`);
+    return false;
+  }
+
+  const requestedMaxTargets =
+    contextTargetCount !== null ? contextTargetCount : action.maxTargets || 1;
+  const requestedMinTargets =
+    contextTargetCount !== null
+      ? requestedMaxTargets
+      : Number.isFinite(action.minTargets)
+        ? action.minTargets
+        : Math.min(requestedMaxTargets, opponentCards.length);
+
+  if (contextTargetCount === null && opponentCards.length < requestedMinTargets) {
     getUI(game)?.log(
       `${source.name} requires ${requestedMinTargets} valid target(s) to destroy.`,
     );

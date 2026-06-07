@@ -178,7 +178,7 @@
     },
     "103": {
       "name": "Portador da Égide Luminarca",
-      "description": "Se esse card for invocado por invocação-Especial: aumente sua DEF em 500. Enquanto esse card estiver com a face para cima no campo, o seu oponente deve atacar este card, se possível."
+      "description": "Se este card for Invocado por Invocação-Especial: aumente sua DEF em 500. Enquanto este card estiver com a face para cima no campo, seu oponente deve priorizar este card como alvo de ataques, se possível."
     },
     "104": {
       "name": "Capitão da Lâmina Lunar Luminarca",
@@ -623,6 +623,30 @@
     "290": {
       "name": "Podriflora Ritual de Compostagem",
       "description": "Escolha 1 monstro com a face para cima no campo; coloque 1 Marcador de Esporo nele para cada monstro \"Podriflora\" que voc\u00ea controla. Depois, ganhe 100 PV para cada Marcador de Esporo no campo do oponente. Voc\u00ea s\u00f3 pode ativar 1 \"Podriflora Ritual de Compostagem\" por turno."
+    },
+    "291": {
+      "name": "Podriflora Rede de Ra\u00edzes",
+      "description": "Monstros que seu oponente controla com 5 ou mais Marcadores de Esporo n\u00e3o podem declarar ataque. Uma vez por turno: voc\u00ea pode remover 3 Marcadores de Esporo em qualquer lado do campo; adicione 1 card \"Podriflora\" do seu Cemit\u00e9rio \u00e0 sua m\u00e3o. Se este card seria destru\u00eddo por efeito do oponente, voc\u00ea pode remover 2 Marcadores de Esporo do campo em vez disso."
+    },
+    "292": {
+      "name": "Podriflora Armadura F\u00fangica",
+      "description": "Equipe apenas a um monstro \"Podriflora\" que voc\u00ea controla. O monstro equipado ganha 500 de DEF e 100 de ATK para cada Marcador de Esporo no campo. Uma vez por turno, se o monstro equipado seria destru\u00eddo por batalha ou efeito de card, voc\u00ea pode remover 1 Marcador de Esporo do campo em vez disso. Se este card for enviado do campo ao Cemit\u00e9rio: coloque 1 Marcador de Esporo em 1 monstro com a face para cima no campo."
+    },
+    "293": {
+      "name": "Colheita Podriflora",
+      "description": "Remova todos os Marcadores de Esporo do campo e, depois, escolha 1 card que seu oponente controla para cada 4 Marcadores de Esporo removidos; destrua-os. Monstros \"Podriflora\" que voc\u00ea controla ganham 100 de ATK/DEF at\u00e9 o final deste turno para cada Marcador de Esporo removido. Voc\u00ea s\u00f3 pode ativar 1 \"Colheita Podriflora\" por turno."
+    },
+    "294": {
+      "name": "Podriflora Supercrescimento",
+      "description": "Equipe somente a um monstro com Marcador de Esporo. O monstro equipado ganha 1 Marcador de Esporo a cada Fase de Apoio. Se o monstro equipado for destru\u00eddo: coloque 1 Marcador de Esporo em cada card com a face para cima que seu oponente controla."
+    },
+    "295": {
+      "name": "Podriflora Germina\u00e7\u00e3o S\u00fabita",
+      "description": "Quando um monstro do oponente declarar ataque: coloque 1 Marcador de Esporo nesse monstro, negue o ataque e Invoque por Invoca\u00e7\u00e3o-Especial 1 Ficha \"Podriflora\" (Planta/TREVAS/N\u00edvel 1/ATK 0/DEF 0) em Posi\u00e7\u00e3o de Defesa. Se voc\u00ea controlar \"Podriflora Col\u00f4nia Viva\", voc\u00ea pode colocar 1 Marcador de Esporo em 1 outro monstro com a face para cima que seu oponente controla. Voc\u00ea s\u00f3 pode ativar 1 \"Podriflora Germina\u00e7\u00e3o S\u00fabita\" por turno."
+    },
+    "296": {
+      "name": "Podriflora Solo Apodrecido",
+      "description": "Uma vez por turno, quando seu oponente Invocar um monstro: coloque 1 Marcador de Esporo nesse monstro. Monstros que seu oponente controla com Marcador de Esporo n\u00e3o s\u00e3o afetados por outros efeitos de cards, exceto cards \"Podriflora\". Uma vez por turno: escolha 1 monstro com 4 ou mais Marcadores de Esporo que seu oponente controla; negue os efeitos dele at\u00e9 o final deste turno."
     }
   }
 }

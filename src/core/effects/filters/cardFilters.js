@@ -16,6 +16,12 @@ export function cardMatchesFilters(card, filters = {}) {
   }
   const nameFilter = filters.name || filters.cardName;
   if (nameFilter && card.name !== nameFilter) return false;
+  if ((filters.requireFaceup === true || filters.faceUp === true) && card.isFacedown) {
+    return false;
+  }
+  if (filters.facedown === true && card.isFacedown !== true) {
+    return false;
+  }
   const excludeNameFilters = [
     filters.excludeName,
     filters.excludeCardName,

@@ -1,3 +1,5 @@
+import { cardMatchesKind } from "../../Card.js";
+
 export function cardHasArchetype(card, archetype) {
     if (!card || !archetype) return false;
     if (card.archetype === archetype) return true;
@@ -39,20 +41,45 @@ export function isActiveEquipForCard(equip, card) {
     );
   }
 
+function getPassiveBuffStats(entry, fallback = ["atk", "def"]) {
+    return Array.isArray(entry?.stats) ? entry.stats : fallback;
+  }
+
+function getPassiveBuffAppliedValue(entry, stat) {
+    const perStatValue = entry?.appliedValues?.[stat];
+    if (Number.isFinite(Number(perStatValue))) {
+      return Number(perStatValue);
+    }
+    return Number(entry?.value || 0);
+  }
+
+function clearPassiveBuffEntry(card, entry) {
+    if (!card || !entry) return false;
+    let changed = false;
+    for (const stat of getPassiveBuffStats(entry)) {
+      if (typeof card[stat] !== "number") continue;
+      const appliedValue = getPassiveBuffAppliedValue(entry, stat);
+      if (appliedValue === 0) continue;
+      card[stat] = Math.max(0, card[stat] - appliedValue);
+      changed = true;
+    }
+    return changed;
+  }
+
 export function applyPassiveBuffValue(card, effectKey, amount, stats = ["atk", "def"]) {
     if (!card) return false;
     card.dynamicBuffs = card.dynamicBuffs || {};
+    const normalizedStats = Array.isArray(stats) ? stats : [stats];
     const previousEntry = card.dynamicBuffs[effectKey];
     const previousValue = previousEntry?.value || 0;
-    if (previousValue === amount) {
-      return false;
-    }
+    const previousStats = getPassiveBuffStats(previousEntry, normalizedStats);
+    const statsChanged =
+      previousEntry &&
+      (previousStats.length !== normalizedStats.length ||
+        previousStats.some((stat) => !normalizedStats.includes(stat)));
 
-    const delta = amount - previousValue;
-    for (const stat of stats) {
-      if (typeof card[stat] === "number") {
-        card[stat] += delta;
-      }
+    if (previousEntry) {
+      clearPassiveBuffEntry(card, previousEntry);
     }
 
     if (amount === 0) {
@@ -60,27 +87,143 @@ export function applyPassiveBuffValue(card, effectKey, amount, stats = ["atk", "
       if (Object.keys(card.dynamicBuffs).length === 0) {
         card.dynamicBuffs = null;
       }
-    } else {
-      card.dynamicBuffs[effectKey] = { value: amount, stats };
+      return previousValue !== 0 || statsChanged;
     }
 
-    return true;
+    const appliedValues = {};
+    let appliedAnyStat = false;
+    for (const stat of normalizedStats) {
+      if (typeof card[stat] !== "number") continue;
+      const current = Number(card[stat] || 0);
+      const next = Math.max(0, current + amount);
+      const appliedValue = next - current;
+      card[stat] = next;
+      appliedValues[stat] = appliedValue;
+      if (appliedValue !== 0) {
+        appliedAnyStat = true;
+      }
+    }
+
+    card.dynamicBuffs[effectKey] = {
+      value: amount,
+      stats: normalizedStats,
+      appliedValues,
+    };
+
+    return previousValue !== amount || statsChanged || appliedAnyStat;
   }
 
 export function clearPassiveBuffsForCard(card) {
     if (!card || !card.dynamicBuffs) return;
     for (const entry of Object.values(card.dynamicBuffs)) {
-      if (!entry) continue;
-      const value = entry.value || 0;
-      const stats = entry.stats || ["atk", "def"];
-      if (value === 0) continue;
-      for (const stat of stats) {
-        if (typeof card[stat] === "number") {
-          card[stat] -= value;
+      clearPassiveBuffEntry(card, entry);
+    }
+    card.dynamicBuffs = null;
+  }
+
+function normalizePassiveList(value, fallback = []) {
+    if (Array.isArray(value)) return value;
+    if (value == null) return fallback;
+    return [value];
+  }
+
+function getPassiveZoneCards(player, zone) {
+    if (!player || !zone) return [];
+    if (zone === "fieldSpell") {
+      return player.fieldSpell ? [player.fieldSpell] : [];
+    }
+    const cards = player[zone];
+    return Array.isArray(cards) ? cards.filter(Boolean) : [];
+  }
+
+function getPassiveCounterOwners(engine, sourceOwner, passive) {
+    if (!sourceOwner) return [];
+    const game = engine?.game;
+    const opponent =
+      typeof game?.getOpponent === "function"
+        ? game.getOpponent(sourceOwner)
+        : null;
+    const ownerRules = normalizePassiveList(
+      passive.counterOwners || passive.counterOwner || passive.owners,
+      ["self"],
+    );
+    const owners = [];
+
+    for (const ownerRule of ownerRules) {
+      if (ownerRule === "any" || ownerRule === "both") {
+        owners.push(sourceOwner, opponent);
+      } else if (ownerRule === "opponent") {
+        owners.push(opponent);
+      } else {
+        owners.push(sourceOwner);
+      }
+    }
+
+    return Array.from(new Set(owners.filter(Boolean)));
+  }
+
+function matchesPassiveCounterFilters(engine, card, filters = {}) {
+    if (!card) return false;
+    if (filters.requireFaceup === true && card.isFacedown) return false;
+    if (filters.cardKind) {
+      if (!cardMatchesKind(card, filters.cardKind)) return false;
+    }
+    if (filters.archetype) {
+      const archetypes = Array.isArray(card.archetypes)
+        ? card.archetypes
+        : card.archetype
+          ? [card.archetype]
+          : [];
+      if (!archetypes.includes(filters.archetype)) return false;
+    }
+    if (filters.type) {
+      const types = Array.isArray(card.types) ? card.types : [card.type];
+      if (!types.includes(filters.type)) return false;
+    }
+    if (filters.attribute && card.attribute !== filters.attribute) return false;
+    if (filters.name && card.name !== filters.name) return false;
+    if (filters.cardName && card.name !== filters.cardName) return false;
+    if (filters.subtype) {
+      const allowedSubtypes = normalizePassiveList(filters.subtype);
+      if (!allowedSubtypes.includes(card.subtype)) return false;
+    }
+    if (
+      Object.keys(filters).length > 0 &&
+      typeof engine?.cardMatchesFilters === "function" &&
+      !engine.cardMatchesFilters(card, filters)
+    ) {
+      return false;
+    }
+    return true;
+  }
+
+function countPassiveFieldCounters(engine, sourceOwner, passive) {
+    const counterType = passive.counterType || "default";
+    const zones = normalizePassiveList(
+      passive.counterZones || passive.zones || passive.zone,
+      ["field"],
+    );
+    const filters = {
+      ...(passive.counterFilters || passive.filters || {}),
+    };
+    if (passive.counterRequireFaceup === true && filters.requireFaceup == null) {
+      filters.requireFaceup = true;
+    }
+    let count = 0;
+
+    for (const owner of getPassiveCounterOwners(engine, sourceOwner, passive)) {
+      for (const zone of zones) {
+        for (const card of getPassiveZoneCards(owner, zone)) {
+          if (!matchesPassiveCounterFilters(engine, card, filters)) continue;
+          count +=
+            typeof card.getCounter === "function"
+              ? Math.max(0, Number(card.getCounter(counterType) || 0))
+              : 0;
         }
       }
     }
-    card.dynamicBuffs = null;
+
+    return count;
   }
 
 export function updatePassiveBuffs() {
@@ -109,18 +252,7 @@ export function updatePassiveBuffs() {
       // Revert all currently applied buffs
       for (const key of Object.keys(card.dynamicBuffs)) {
         const entry = card.dynamicBuffs[key];
-        if (!entry) continue;
-
-        const value = entry.value || 0;
-        const stats = entry.stats || ["atk", "def"];
-
-        if (value !== 0) {
-          for (const stat of stats) {
-            if (typeof card[stat] === "number") {
-              // Remove buff with clamp to prevent negative stats
-              card[stat] = Math.max(0, card[stat] - value);
-            }
-          }
+        if (clearPassiveBuffEntry(card, entry)) {
           updated = true;
         }
       }
@@ -388,6 +520,59 @@ export function updatePassiveBuffs() {
           const buffKey =
             effect.id ||
             `passive_${card.id}_${index}_${sourceKey}_counter_equip`;
+          const applied = this.applyPassiveBuffValue(
+            target,
+            buffKey,
+            counterCount * amountPerCounter,
+            stats,
+          );
+          if (applied) updated = true;
+          return;
+        }
+
+        // Passive: Equip source buffs its equipped monster by counters across field zones
+        if (passive.type === "equipped_field_counter_buff") {
+          if (card.cardKind !== "spell" || card.subtype !== "equip") return;
+
+          const target = card.equippedTo || card.equipTarget || null;
+          if (!target || target.cardKind !== "monster") return;
+          if (!this.isActiveEquipForCard(card, target)) return;
+
+          const requireSourceFaceup =
+            passive.requireSourceFaceup !== false ||
+            effect.requireFaceup === true;
+          if (requireSourceFaceup && card.isFacedown) return;
+
+          const requireTargetFaceup = passive.targetRequireFaceup !== false;
+          if (requireTargetFaceup && target.isFacedown) return;
+
+          const targetFilters = passive.targetFilters || null;
+          if (targetFilters && !this.cardMatchesFilters(target, targetFilters)) {
+            return;
+          }
+
+          const amountPerCounter =
+            passive.amountPerCounter ??
+            passive.perCounter ??
+            passive.buffPerCounter ??
+            passive.amount ??
+            0;
+          if (amountPerCounter === 0) return;
+
+          const sourceOwner = this.getOwnerByCard(card);
+          const counterCount = countPassiveFieldCounters(
+            this,
+            sourceOwner,
+            passive,
+          );
+          const stats = passive.stats || ["atk", "def"];
+          const sourceKey =
+            card.fieldPresenceId ||
+            card.instanceId ||
+            `${card.id}_${passiveSources.indexOf(card)}`;
+          const buffKey =
+            effect.id ||
+            `passive_${card.id}_${index}_${sourceKey}_field_counter_equip`;
           const applied = this.applyPassiveBuffValue(
             target,
             buffKey,

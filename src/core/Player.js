@@ -185,7 +185,7 @@ export default class Player {
     return { tributesNeeded, usingAlt, alt };
   }
 
-  summon(
+  async summon(
     cardIndex,
     position = "attack",
     isFacedown = false,
@@ -218,11 +218,14 @@ export default class Player {
     }
 
     if (cardIndex >= 0 && cardIndex < this.hand.length) {
-      const sendToGrave = (sacrificed) => {
-        if (!sacrificed) return;
+      const sendToGrave = async (sacrificed) => {
+        if (!sacrificed) return { success: false };
         if (this.game && typeof this.game.moveCard === "function") {
-          this.game.moveCard(sacrificed, this, "graveyard");
-          return;
+          return await this.game.moveCard(sacrificed, this, "graveyard", {
+            fromZone: "field",
+            awaitCardToGraveEvent: true,
+            contextLabel: "tribute_summon_cost",
+          });
         }
 
         const idx = this.field.indexOf(sacrificed);
@@ -230,6 +233,7 @@ export default class Player {
           this.field.splice(idx, 1);
         }
         this.graveyard.push(sacrificed);
+        return { success: true };
       };
 
       const tributeInfo = this.getTributeRequirement(card);
@@ -328,7 +332,11 @@ export default class Player {
       const tributedCards = [];
       for (const sacrificed of tributeCards) {
         if (sacrificed) tributedCards.push({ ...sacrificed });
-        sendToGrave(sacrificed);
+        const tributeResult = await sendToGrave(sacrificed);
+        if (tributeResult?.success === false) {
+          console.log(`Could not tribute ${sacrificed?.name || "card"}.`);
+          return null;
+        }
       }
 
       this.hand.splice(cardIndex, 1);

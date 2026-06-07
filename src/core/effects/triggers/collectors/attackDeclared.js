@@ -40,7 +40,12 @@ export async function collectAttackDeclaredTriggers(payload) {
     // Include traps from spellTrap zone (both face-up and face-down)
     if (player.spellTrap && Array.isArray(player.spellTrap)) {
       for (const trap of player.spellTrap) {
-        if (trap && trap.cardType === "trap") {
+        if (
+          trap &&
+          (trap.cardKind === "trap" ||
+            trap.cardType === "trap" ||
+            trap.originalCardKind === "trap")
+        ) {
           sources.push(trap);
         }
       }

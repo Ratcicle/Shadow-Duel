@@ -107,12 +107,13 @@ export async function destroyCard(card, options = {}) {
       const opponent = options.opponent || this.getOpponent(owner);
       const sourcePlayer =
         options.sourcePlayer ||
-        options.opponent ||
         (sourceCard?.owner === "player"
           ? this.player
           : sourceCard?.owner === "bot"
             ? this.bot
-            : opponent);
+            : sourceCard
+              ? opponent
+              : null);
       const fromZone =
         options.fromZone ||
         this.effectEngine?.findCardZone?.(owner, card) ||
@@ -227,6 +228,7 @@ export async function destroyCard(card, options = {}) {
         {
           cause,
           sourceCard,
+          sourcePlayer,
           fromZone,
         },
       )) || { replaced: false };

@@ -23,6 +23,40 @@ function buildContextTargetFilters(def = {}) {
   };
 }
 
+function normalizeContextCardKeys(value) {
+  if (Array.isArray(value)) return value.filter(Boolean);
+  if (value === undefined || value === null) return [];
+  return [value];
+}
+
+function getContextCards(ctx, key) {
+  if (!ctx || !key) return [];
+  const value = ctx[key];
+  if (Array.isArray(value)) return value.filter(Boolean);
+  return value ? [value] : [];
+}
+
+function isSameCardReference(left, right) {
+  if (!left || !right) return false;
+  if (left === right) return true;
+  const leftInstance = left.instanceId ?? left._instanceId ?? null;
+  const rightInstance = right.instanceId ?? right._instanceId ?? null;
+  return leftInstance != null && leftInstance === rightInstance;
+}
+
+function isExcludedContextCard(def, ctx, card) {
+  const keys = [
+    ...normalizeContextCardKeys(def.excludeContextCard),
+    ...normalizeContextCardKeys(def.excludeContextCards),
+  ];
+  if (keys.length === 0) return false;
+  return keys.some((key) =>
+    getContextCards(ctx, key).some((contextCard) =>
+      isSameCardReference(contextCard, card),
+    ),
+  );
+}
+
 function contextTargetMatchesDef(engine, card, def = {}, ctx = {}) {
   if (!card) return false;
   const filters = buildContextTargetFilters(def);
@@ -34,6 +68,7 @@ function contextTargetMatchesDef(engine, card, def = {}, ctx = {}) {
     return false;
   }
   if (def.excludeSelf && ctx?.source && card === ctx.source) return false;
+  if (isExcludedContextCard(def, ctx, card)) return false;
   if (def.requireFaceup && card.isFacedown) return false;
   const requiredTypes = def.type
     ? Array.isArray(def.type)

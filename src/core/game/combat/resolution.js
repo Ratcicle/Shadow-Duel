@@ -39,6 +39,15 @@ async function presentBattleDestructionBeforeTriggers(game) {
   }
 }
 
+function queuePendingBattleDestroyAfterSelection(game, attacker, destroyed, extras) {
+  if (!game || !attacker || !destroyed) return;
+  game.pendingBattleDestroyAfterSelection = {
+    attacker,
+    destroyed,
+    extras: { ...(extras || {}) },
+  };
+}
+
 /**
  * Resolve a combat attack, handling flip effects and delegating to finishCombat.
  * @param {Object} attacker - The attacking monster
@@ -461,20 +470,15 @@ export async function finishCombat(attacker, target, options = {}) {
           cause: "battle",
           sourceCard: attacker,
         });
-        if (result?.destroyed) {
-          targetWasDestroyed = true;
-          const bdResult = await this.applyBattleDestroyEffect(
-            attacker,
-            target,
-            {
+        if (result?.needsSelection) {
+          if (result?.destroyed) {
+            targetWasDestroyed = true;
+            queuePendingBattleDestroyAfterSelection(this, attacker, target, {
               destroyedOwner: preDestroyedOwner,
               destroyedOwnerId: preDestroyedOwnerId,
               destroyedPosition: preDestroyedPosition,
-            },
-          );
-          if (bdResult) battleDestroyResults.push(bdResult);
-        }
-        if (result?.needsSelection) {
+            });
+          }
           this.markAttackUsed(attacker, target);
           this.clearAttackResolutionIndicators();
           clearDamageCalculationTempBuffs(this);
@@ -487,6 +491,19 @@ export async function finishCombat(attacker, target, options = {}) {
             targetDestroyed: targetWasDestroyed,
             attackerDestroyed: attackerWasDestroyed,
           };
+        }
+        if (result?.destroyed) {
+          targetWasDestroyed = true;
+          const bdResult = await this.applyBattleDestroyEffect(
+            attacker,
+            target,
+            {
+              destroyedOwner: preDestroyedOwner,
+              destroyedOwnerId: preDestroyedOwnerId,
+              destroyedPosition: preDestroyedPosition,
+            },
+          );
+          if (bdResult) battleDestroyResults.push(bdResult);
         }
       }
     } else if (attacker.atk < target.atk) {
@@ -515,20 +532,15 @@ export async function finishCombat(attacker, target, options = {}) {
           cause: "battle",
           sourceCard: target,
         });
-        if (result?.destroyed) {
-          attackerWasDestroyed = true;
-          const bdResult = await this.applyBattleDestroyEffect(
-            target,
-            attacker,
-            {
+        if (result?.needsSelection) {
+          if (result?.destroyed) {
+            attackerWasDestroyed = true;
+            queuePendingBattleDestroyAfterSelection(this, target, attacker, {
               destroyedOwner: preDestroyedOwner,
               destroyedOwnerId: preDestroyedOwnerId,
               destroyedPosition: preDestroyedPosition,
-            },
-          );
-          if (bdResult) battleDestroyResults.push(bdResult);
-        }
-        if (result?.needsSelection) {
+            });
+          }
           this.markAttackUsed(attacker, target);
           this.clearAttackResolutionIndicators();
           clearDamageCalculationTempBuffs(this);
@@ -541,6 +553,19 @@ export async function finishCombat(attacker, target, options = {}) {
             targetDestroyed: targetWasDestroyed,
             attackerDestroyed: attackerWasDestroyed,
           };
+        }
+        if (result?.destroyed) {
+          attackerWasDestroyed = true;
+          const bdResult = await this.applyBattleDestroyEffect(
+            target,
+            attacker,
+            {
+              destroyedOwner: preDestroyedOwner,
+              destroyedOwnerId: preDestroyedOwnerId,
+              destroyedPosition: preDestroyedPosition,
+            },
+          );
+          if (bdResult) battleDestroyResults.push(bdResult);
         }
       }
     } else {
@@ -555,20 +580,16 @@ export async function finishCombat(attacker, target, options = {}) {
           cause: "battle",
           sourceCard: target,
         });
-        if (result?.destroyed) {
-          const bdResult = await this.applyBattleDestroyEffect(
-            target,
-            attacker,
-            {
+        // we need to pause and let that resolve before destroying target
+        if (result?.needsSelection) {
+          if (result?.destroyed) {
+            attackerWasDestroyed = true;
+            queuePendingBattleDestroyAfterSelection(this, target, attacker, {
               destroyedOwner: preDestroyedOwner,
               destroyedOwnerId: preDestroyedOwnerId,
               destroyedPosition: preDestroyedPosition,
-            },
-          );
-          if (bdResult) battleDestroyResults.push(bdResult);
-        }
-        // we need to pause and let that resolve before destroying target
-        if (result?.needsSelection) {
+            });
+          }
           // Store pending tie info so we can resume after selection
           this.pendingTieDestruction = {
             attacker,
@@ -587,6 +608,19 @@ export async function finishCombat(attacker, target, options = {}) {
             pendingTieDestruction: true,
           };
         }
+        if (result?.destroyed) {
+          attackerWasDestroyed = true;
+          const bdResult = await this.applyBattleDestroyEffect(
+            target,
+            attacker,
+            {
+              destroyedOwner: preDestroyedOwner,
+              destroyedOwnerId: preDestroyedOwnerId,
+              destroyedPosition: preDestroyedPosition,
+            },
+          );
+          if (bdResult) battleDestroyResults.push(bdResult);
+        }
       }
 
       logBattleDestroyCheck("tie - target destruction check");
@@ -599,7 +633,28 @@ export async function finishCombat(attacker, target, options = {}) {
           cause: "battle",
           sourceCard: attacker,
         });
+        // If target destruction also needs selection, return it
+        if (result?.needsSelection) {
+          if (result?.destroyed) {
+            targetWasDestroyed = true;
+            queuePendingBattleDestroyAfterSelection(this, attacker, target, {
+              destroyedOwner: preDestroyedOwner,
+              destroyedOwnerId: preDestroyedOwnerId,
+              destroyedPosition: preDestroyedPosition,
+            });
+          }
+          this.markAttackUsed(attacker, target);
+          this.clearAttackResolutionIndicators();
+          clearDamageCalculationTempBuffs(this);
+          this.updateBoard();
+          return {
+            ok: true,
+            needsSelection: true,
+            selectionContract: result.selectionContract,
+          };
+        }
         if (result?.destroyed) {
+          targetWasDestroyed = true;
           const bdResult = await this.applyBattleDestroyEffect(
             attacker,
             target,
@@ -610,18 +665,6 @@ export async function finishCombat(attacker, target, options = {}) {
             },
           );
           if (bdResult) battleDestroyResults.push(bdResult);
-        }
-        // If target destruction also needs selection, return it
-        if (result?.needsSelection) {
-          this.markAttackUsed(attacker, target);
-          this.clearAttackResolutionIndicators();
-          clearDamageCalculationTempBuffs(this);
-          this.updateBoard();
-          return {
-            ok: true,
-            needsSelection: true,
-            selectionContract: result.selectionContract,
-          };
         }
       }
       // Clear pending tie destruction if we completed successfully
@@ -658,7 +701,27 @@ export async function finishCombat(attacker, target, options = {}) {
           cause: "battle",
           sourceCard: attacker,
         });
+        if (result?.needsSelection) {
+          if (result?.destroyed) {
+            targetWasDestroyed = true;
+            queuePendingBattleDestroyAfterSelection(this, attacker, target, {
+              destroyedOwner: preDestroyedOwner,
+              destroyedOwnerId: preDestroyedOwnerId,
+              destroyedPosition: preDestroyedPosition,
+            });
+          }
+          this.markAttackUsed(attacker, target);
+          this.clearAttackResolutionIndicators();
+          clearDamageCalculationTempBuffs(this);
+          this.updateBoard();
+          return {
+            ok: true,
+            needsSelection: true,
+            selectionContract: result.selectionContract,
+          };
+        }
         if (result?.destroyed) {
+          targetWasDestroyed = true;
           const bdResult = await this.applyBattleDestroyEffect(
             attacker,
             target,
@@ -669,17 +732,6 @@ export async function finishCombat(attacker, target, options = {}) {
             },
           );
           if (bdResult) battleDestroyResults.push(bdResult);
-        }
-        if (result?.needsSelection) {
-          this.markAttackUsed(attacker, target);
-          this.clearAttackResolutionIndicators();
-          clearDamageCalculationTempBuffs(this);
-          this.updateBoard();
-          return {
-            ok: true,
-            needsSelection: true,
-            selectionContract: result.selectionContract,
-          };
         }
       }
       if (!attacker.piercing) {

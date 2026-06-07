@@ -98,6 +98,158 @@ export function resolveTargetCards(action, ctx, targets, options = {}) {
     : filtered;
 }
 
+function normalizeList(value, fallback = []) {
+  if (Array.isArray(value)) return value;
+  if (value === undefined || value === null) return fallback;
+  return [value];
+}
+
+function getContextNumberSource(ctx, key) {
+  if (!ctx || !key) return undefined;
+  const parts = String(key).split(".").filter(Boolean);
+  const readPath = (root) => {
+    let value = root;
+    for (const part of parts) {
+      if (value == null || typeof value !== "object") return undefined;
+      value = value[part];
+    }
+    return value;
+  };
+
+  return (
+    readPath(ctx) ??
+    readPath(ctx.actionContext) ??
+    readPath(ctx.activationContext) ??
+    readPath(ctx.activationContext?.actionContext)
+  );
+}
+
+export function resolveContextNumber(spec, ctx, options = {}) {
+  if (typeof spec === "number") return spec;
+  if (!spec) return Number(options.defaultValue || 0);
+
+  const config = typeof spec === "string" ? { key: spec } : spec;
+  const raw = getContextNumberSource(ctx, config.key);
+  let value = Number(raw ?? config.defaultValue ?? options.defaultValue ?? 0);
+  if (!Number.isFinite(value)) value = Number(options.defaultValue || 0);
+
+  const divideBy = Number(config.divideBy ?? config.divisor ?? 0);
+  if (Number.isFinite(divideBy) && divideBy !== 0) {
+    value /= divideBy;
+  }
+
+  const multiplier = Number(config.multiplier ?? config.amountPer ?? 1);
+  if (Number.isFinite(multiplier)) {
+    value *= multiplier;
+  }
+
+  const roundMode = config.round || options.round || null;
+  if (roundMode === "floor") value = Math.floor(value);
+  else if (roundMode === "ceil") value = Math.ceil(value);
+  else if (roundMode === "round") value = Math.round(value);
+
+  if (Number.isFinite(Number(config.min))) {
+    value = Math.max(Number(config.min), value);
+  }
+  if (Number.isFinite(Number(config.max))) {
+    value = Math.min(Number(config.max), value);
+  }
+
+  return value;
+}
+
+function getScopeOwners(game, ctx, ownerRule = "self") {
+  const player = ctx?.player || null;
+  const opponent = ctx?.opponent || game?.getOpponent?.(player) || null;
+  if (ownerRule === "opponent") return opponent ? [opponent] : [];
+  if (ownerRule === "any" || ownerRule === "both" || ownerRule === "either") {
+    return [player, opponent].filter(Boolean);
+  }
+  return player ? [player] : [];
+}
+
+function getScopeZoneCards(owner, zone) {
+  if (!owner || !zone) return [];
+  if (zone === "fieldSpell") {
+    return owner.fieldSpell ? [owner.fieldSpell] : [];
+  }
+  return Array.isArray(owner[zone]) ? owner[zone].filter(Boolean) : [];
+}
+
+function cardMatchesScopeFilters(card, filters, engine) {
+  if (!card) return false;
+  if (filters.requireFaceup === true && card.isFacedown) return false;
+  if (filters.cardKind && !cardMatchesKind(card, filters.cardKind)) {
+    return false;
+  }
+  if (engine && typeof engine.cardMatchesFilters === "function") {
+    return engine.cardMatchesFilters(card, filters);
+  }
+  if (filters.archetype) {
+    const archetypes = Array.isArray(card.archetypes)
+      ? card.archetypes
+      : card.archetype
+        ? [card.archetype]
+        : [];
+    if (!archetypes.includes(filters.archetype)) return false;
+  }
+  if (filters.counterType || filters.minCounters !== undefined) {
+    const counterType = filters.counterType || "default";
+    const minCounters = Number(filters.minCounters ?? 1);
+    const counterCount =
+      typeof card.getCounter === "function" ? card.getCounter(counterType) : 0;
+    if (counterCount < minCounters) return false;
+  }
+  return true;
+}
+
+export function resolveFieldScopeCards(scope = {}, ctx = {}, game = null, options = {}) {
+  const config = scope || {};
+  const zones = normalizeList(
+    config.zones,
+    normalizeList(config.zone, ["field"]),
+  );
+  const filters = {
+    ...(config.filters || {}),
+  };
+  for (const key of [
+    "cardKind",
+    "subtype",
+    "monsterType",
+    "type",
+    "archetype",
+    "level",
+    "levelOp",
+    "minAtk",
+    "maxAtk",
+    "minDef",
+    "maxDef",
+    "counterType",
+    "minCounters",
+    "maxCounters",
+    "requireFaceup",
+  ]) {
+    if (config[key] !== undefined && filters[key] === undefined) {
+      filters[key] = config[key];
+    }
+  }
+
+  const cards = [];
+  const seen = new Set();
+  for (const owner of getScopeOwners(game, ctx, config.owner || config.player || "self")) {
+    for (const zone of zones) {
+      for (const card of getScopeZoneCards(owner, zone)) {
+        const key = card?.instanceId ?? card;
+        if (!card || seen.has(key)) continue;
+        if (!cardMatchesScopeFilters(card, filters, options.engine)) continue;
+        seen.add(key);
+        cards.push(card);
+      }
+    }
+  }
+  return cards;
+}
+
 export async function sendCardsToGraveyard(
   cards,
   player,

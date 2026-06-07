@@ -77,6 +77,33 @@ function matchesTargetFilters(game, target, filters) {
   return true;
 }
 
+function getRelativePlayer(game, sourceOwner, ownerRule) {
+  if (!sourceOwner || !ownerRule || ownerRule === "any") return null;
+  if (ownerRule === "self") return sourceOwner;
+  if (ownerRule === "opponent") {
+    return typeof game.getOpponent === "function"
+      ? game.getOpponent(sourceOwner)
+      : null;
+  }
+  return null;
+}
+
+function matchesReplacementSourceOwner(game, replacement, sourceOwner, ctx) {
+  const ownerRule =
+    replacement.sourceOwner ||
+    replacement.sourceController ||
+    replacement.causedByOwner ||
+    replacement.destroyedByOwner ||
+    "any";
+  if (ownerRule === "any") return true;
+
+  const destructionSourcePlayer = ctx?.sourcePlayer || null;
+  if (!destructionSourcePlayer) return false;
+
+  const expectedOwner = getRelativePlayer(game, sourceOwner, ownerRule);
+  return expectedOwner ? destructionSourcePlayer === expectedOwner : false;
+}
+
 function getCardZoneIndex(game, owner, zoneName, card) {
   if (!owner || !zoneName || !card) return -1;
   if (zoneName === "fieldSpell") {
@@ -283,7 +310,7 @@ function askHumanToSelectReplacementTargets({
  * @param {Object} sourceCard
  * @param {Object} sourceOwner
  * @param {Object} effect — must have `replacementEffect` payload
- * @param {{ card, cause, fromZone, ownerPlayer }} ctx
+ * @param {{ card, cause, fromZone, ownerPlayer, sourceCard, sourcePlayer }} ctx
  */
 async function tryReplacement(game, sourceCard, sourceOwner, effect, ctx) {
   const { card, cause, fromZone, ownerPlayer } = ctx;
@@ -395,6 +422,10 @@ async function tryReplacement(game, sourceCard, sourceOwner, effect, ctx) {
     replacement.reason !== "any" &&
     replacement.reason !== cause
   ) {
+    return { replaced: false };
+  }
+
+  if (!matchesReplacementSourceOwner(game, replacement, sourceOwner, ctx)) {
     return { replaced: false };
   }
 
@@ -821,6 +852,14 @@ export async function resolveDestructionWithReplacement(card, options = {}) {
     options.fromZone ||
     this.effectEngine?.findCardZone?.(ownerPlayer, card) ||
     null;
+  const destructionSourceCard = options.sourceCard || options.source || null;
+  const destructionSourcePlayer =
+    options.sourcePlayer ||
+    (destructionSourceCard?.owner === "player"
+      ? this.player
+      : destructionSourceCard?.owner === "bot"
+        ? this.bot
+        : null);
 
   // Check for Equip Spell protection (e.g., Crescent Shield Guard)
   if (cause === "battle" && card.cardKind === "monster") {
@@ -847,7 +886,14 @@ export async function resolveDestructionWithReplacement(card, options = {}) {
     }
   }
 
-  const ctx = { card, cause, fromZone, ownerPlayer };
+  const ctx = {
+    card,
+    cause,
+    fromZone,
+    ownerPlayer,
+    sourceCard: destructionSourceCard,
+    sourcePlayer: destructionSourcePlayer,
+  };
 
   const sourcePool = [
     ...collectSources(ownerPlayer),

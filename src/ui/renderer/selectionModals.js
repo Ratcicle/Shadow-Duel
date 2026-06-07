@@ -174,13 +174,46 @@ function getFieldTargetingTotals(contract = {}) {
 }
 
 function isGenericFieldTargetingMessage(message) {
+  return Boolean(getGenericFieldTargetingEffectLabel(message));
+}
+
+function getGenericFieldTargetingEffectLabel(message) {
   const normalized = String(message || "").trim().toLowerCase();
-  return [
-    "select target(s) for the monster effect.",
-    "select target(s) for the continuous spell effect.",
-    "select target(s) for the field spell effect.",
-    "select target(s) for the spell/trap effect.",
-  ].includes(normalized);
+  const labels = {
+    "select target(s) for the monster effect.": {
+      en: "monster effect",
+      ptBr: "efeito de monstro",
+    },
+    "select target(s) for the spell effect.": {
+      en: "spell effect",
+      ptBr: "efeito de Magia",
+    },
+    "select target(s) for the continuous spell effect.": {
+      en: "continuous spell effect",
+      ptBr: "efeito de Magia Contínua",
+    },
+    "select target(s) for the field spell effect.": {
+      en: "field spell effect",
+      ptBr: "efeito de Magia de Campo",
+    },
+    "select target(s) for the spell/trap effect.": {
+      en: "Spell/Trap effect",
+      ptBr: "efeito de Magia/Armadilha",
+    },
+    "select target(s) for the graveyard effect.": {
+      en: "graveyard effect",
+      ptBr: "efeito no Cemitério",
+    },
+    "select target(s) for the graveyard spell effect.": {
+      en: "graveyard spell effect",
+      ptBr: "efeito de Magia no Cemitério",
+    },
+    "select target(s) for the triggered effect.": {
+      en: "triggered effect",
+      ptBr: "efeito disparado",
+    },
+  };
+  return labels[normalized] || null;
 }
 
 function getFieldTargetingPrompt(config = {}) {
@@ -195,13 +228,17 @@ function getFieldTargetingPrompt(config = {}) {
   const { min, max } = getFieldTargetingTotals(contract);
   const locale = getLocale();
   const isPtBr = locale === "pt-br";
+  const genericEffectLabel = getGenericFieldTargetingEffectLabel(explicitMessage);
+  const effectLabel = isPtBr
+    ? genericEffectLabel?.ptBr || "efeito"
+    : genericEffectLabel?.en || "effect";
   const sourceClause = sourceName
     ? isPtBr
-      ? ` para o efeito de ${sourceName}`
-      : ` for ${sourceName}'s effect`
+      ? ` para o ${effectLabel} de ${sourceName}`
+      : ` for ${sourceName}'s ${effectLabel}`
     : isPtBr
-    ? " para o efeito"
-    : " for this effect";
+    ? ` para o ${effectLabel}`
+    : ` for the ${effectLabel}`;
 
   if (isPtBr) {
     if (max > 0 && min === 0) {
@@ -324,7 +361,9 @@ export function showTargetSelection(
   content.className = isChoiceModal
     ? "modal-content target-content target-content-choice"
     : "modal-content target-content";
-  const titleText = contract.message || "Select target(s)";
+  const titleText = contract.message
+    ? getFieldTargetingPrompt({ ...config, selectionContract: contract })
+    : "Select target(s)";
   content.innerHTML = `<span class="close-target">${
     allowCancel ? "&times;" : ""
   }</span><h2>${titleText}</h2>`;

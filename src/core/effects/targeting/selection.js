@@ -31,6 +31,40 @@ function getZoneSnapshot(player, zoneKey) {
   return Array.isArray(zone) ? zone : [];
 }
 
+function normalizeContextCardKeys(value) {
+  if (Array.isArray(value)) return value.filter(Boolean);
+  if (value === undefined || value === null) return [];
+  return [value];
+}
+
+function getContextCards(ctx, key) {
+  if (!ctx || !key) return [];
+  const value = ctx[key];
+  if (Array.isArray(value)) return value.filter(Boolean);
+  return value ? [value] : [];
+}
+
+function isSameCardReference(left, right) {
+  if (!left || !right) return false;
+  if (left === right) return true;
+  const leftInstance = left.instanceId ?? left._instanceId ?? null;
+  const rightInstance = right.instanceId ?? right._instanceId ?? null;
+  return leftInstance != null && leftInstance === rightInstance;
+}
+
+function isExcludedContextCard(def, ctx, card) {
+  const keys = [
+    ...normalizeContextCardKeys(def.excludeContextCard),
+    ...normalizeContextCardKeys(def.excludeContextCards),
+  ];
+  if (keys.length === 0) return false;
+  return keys.some((key) =>
+    getContextCards(ctx, key).some((contextCard) =>
+      isSameCardReference(contextCard, card),
+    ),
+  );
+}
+
 function buildZoneSignature(def, ctx) {
   const zoneName = def.zone || "field";
   const zoneList =
@@ -85,6 +119,14 @@ function buildTargetingCacheKey(def, ctx) {
     def.excludeEventCardName && ctx?.eventCard
       ? cardCacheIdentity(ctx.eventCard, "eventCard")
       : "",
+    normalizeContextCardKeys(def.excludeContextCard)
+      .concat(normalizeContextCardKeys(def.excludeContextCards))
+      .join(","),
+    normalizeContextCardKeys(def.excludeContextCard)
+      .concat(normalizeContextCardKeys(def.excludeContextCards))
+      .flatMap((key) => getContextCards(ctx, key))
+      .map((card, idx) => cardCacheIdentity(card, `excludeContext${idx}`))
+      .join(","),
     def.battleParticipant ? "battleParticipant" : "",
     def.battleParticipant
       ? [ctx?.attacker, ctx?.defender || ctx?.target]
@@ -265,6 +307,7 @@ export function selectCandidates(def, ctx) {
     ) {
       return false;
     }
+    if (isExcludedContextCard(filter, ctx, card)) return false;
     return true;
   };
   const matchesAnyOf =
@@ -310,6 +353,10 @@ export function selectCandidates(def, ctx) {
         }
         if (def.excludeSelf && ctx?.source && card === ctx.source) {
           log("[selectCandidates] Rejecting: excludeSelf and card is source");
+          continue;
+        }
+        if (isExcludedContextCard(def, ctx, card)) {
+          log("[selectCandidates] Rejecting: card matches excluded context card");
           continue;
         }
         if (

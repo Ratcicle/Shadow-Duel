@@ -806,6 +806,8 @@ Game.prototype.clearAttackResolutionIndicators =
 
 // Availability: getAttackAvailability, markAttackUsed, registerAttackNegated, canDestroyByBattle
 Game.prototype.getAttackAvailability = combatAvailability.getAttackAvailability;
+Game.prototype.isActiveAttackPriorityTarget =
+  combatAvailability.isActiveAttackPriorityTarget;
 Game.prototype.markAttackUsed = combatAvailability.markAttackUsed;
 Game.prototype.registerAttackNegated = combatAvailability.registerAttackNegated;
 Game.prototype.canDestroyByBattle = combatAvailability.canDestroyByBattle;

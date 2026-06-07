@@ -52,7 +52,9 @@ export async function collectCardToGraveTriggers(payload) {
       return;
     }
 
-    if (this.isEffectNegated(sourceCard)) {
+    const ownEffectWasNegatedAtFieldExit =
+      sourceCard === card && payload?.effectsNegatedAtFieldExit === true;
+    if (ownEffectWasNegatedAtFieldExit || this.isEffectNegated(sourceCard)) {
       debugLog(
         `[handleCardToGraveEvent] ${sourceCard.name} effects are negated, skipping effect.`,
       );
@@ -79,6 +81,7 @@ export async function collectCardToGraveTriggers(payload) {
     if (
       effect.eventCardFilters &&
       !cardMatchesEventFilters(this, card, effect.eventCardFilters, {
+        sourceCard,
         sourceOwner: owner,
         eventOwner: player,
         fromZone,

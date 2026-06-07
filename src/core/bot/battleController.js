@@ -67,10 +67,11 @@ export function playBotBattlePhase(bot, game) {
 
       const tauntTargets = opponent.field.filter(
         (card) =>
-          card &&
-          card.cardKind === "monster" &&
-          !card.isFacedown &&
-          card.mustBeAttacked,
+          game.isActiveAttackPriorityTarget?.(card) ||
+          (card &&
+            card.cardKind === "monster" &&
+            card.mustBeAttacked &&
+            !card.isFacedown),
       );
 
       const possibleTargets =

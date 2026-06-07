@@ -24,6 +24,15 @@ export function debugTriggerLog(engine, ...args) {
   }
 }
 
+function isSameCardReference(a, b) {
+  if (!a || !b) return false;
+  if (a === b) return true;
+  if (a.instanceId != null && b.instanceId != null) {
+    return a.instanceId === b.instanceId;
+  }
+  return false;
+}
+
 export function matchesZoneFilter(actualZone, filterValue) {
   if (!filterValue || filterValue === "any") return true;
   return asArray(filterValue).includes(actualZone);
@@ -58,11 +67,22 @@ export function cardMatchesEventFilters(
   if (!matchesZoneFilter(context.toZone, filters.toZone)) {
     return false;
   }
+  if (
+    filters.eventCardIsEquippedToSource === true &&
+    !(
+      isSameCardReference(context.sourceCard?.equippedTo, eventCard) ||
+      isSameCardReference(context.sourceCard?.equipTarget, eventCard) ||
+      isSameCardReference(context.sourceCard?.lastEquippedCardLeftField, eventCard)
+    )
+  ) {
+    return false;
+  }
 
   const cardFilters = { ...filters };
   delete cardFilters.owner;
   delete cardFilters.fromZone;
   delete cardFilters.toZone;
+  delete cardFilters.eventCardIsEquippedToSource;
 
   return engine.cardMatchesFilters(eventCard, cardFilters);
 }

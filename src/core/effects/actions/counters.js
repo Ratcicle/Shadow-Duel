@@ -1,6 +1,7 @@
 import {
   buildFieldSelectionCandidates,
   getUI,
+  resolveFieldScopeCards,
   selectCards,
 } from "../../actionHandlers/shared.js";
 import { cardMatchesKind } from "../../Card.js";
@@ -251,7 +252,11 @@ export async function applyAddCounter(action, ctx, targets) {
   if (amount <= 0) return false;
 
   let targetCards = [];
-  if (targetRef === "self") {
+  if (action.targetScope) {
+    targetCards = resolveFieldScopeCards(action.targetScope, ctx, this.game, {
+      engine: this,
+    });
+  } else if (targetRef === "self") {
     targetCards = [ctx.source];
   } else if (targets[targetRef]) {
     targetCards = targets[targetRef];
@@ -259,6 +264,16 @@ export async function applyAddCounter(action, ctx, targets) {
 
   if (!Array.isArray(targetCards)) {
     targetCards = [targetCards];
+  }
+  if (
+    action.targetScope &&
+    typeof this.filterCardsListByImmunity === "function"
+  ) {
+    targetCards = this.filterCardsListByImmunity(targetCards, ctx.player, {
+      actionType: action.type,
+      effectType: action.effectType || this.inferEffectType?.(action.type),
+      sourceCard: ctx?.source || null,
+    }).allowed;
   }
 
   let added = false;
@@ -291,6 +306,16 @@ export async function applyAddCounter(action, ctx, targets) {
   }
 
   return added;
+}
+
+function toContextCounterKey(counterType) {
+  const raw = String(counterType || "default");
+  const pascal = raw
+    .split(/[^a-zA-Z0-9]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join("");
+  return `removed${pascal || "Default"}CounterCount`;
 }
 
 /**
@@ -629,4 +654,84 @@ export async function applyRemoveCountersFromField(action, ctx) {
   }
 
   return removed;
+}
+
+/**
+ * Remove every matching counter from the field and expose the removed count
+ * on the action context for subsequent actions.
+ */
+export async function applyRemoveAllCountersFromField(action, ctx) {
+  const game = this?.game;
+  const counterType = action.counterType || "default";
+  const entries = collectCounterFieldEntries(this, action, ctx);
+  const totalAvailable = entries.reduce(
+    (sum, entry) => sum + entry.counterCount,
+    0,
+  );
+
+  const contextKey =
+    action.contextKey ||
+    action.storeAs ||
+    action.resultKey ||
+    toContextCounterKey(counterType);
+
+  if (ctx && contextKey) {
+    ctx[contextKey] = 0;
+    ctx.lastRemovedCounterCount = 0;
+    ctx.removedCounterCounts = ctx.removedCounterCounts || {};
+    ctx.removedCounterCounts[counterType] = 0;
+  }
+
+  if (totalAvailable <= 0) {
+    getUI(game)?.log(`No ${counterType} counters found on the field.`);
+    return false;
+  }
+
+  let removedAmount = 0;
+  const removedCards = [];
+  const removedZones = [];
+
+  for (const entry of entries) {
+    const card = entry.card;
+    if (!card || typeof card.removeCounter !== "function") continue;
+
+    while (getCounterValue(card, counterType) > 0) {
+      card.removeCounter(counterType, 1);
+      removedAmount += 1;
+      removedCards.push(card);
+      removedZones.push(entry.zone);
+      emitCounterEvent(this, {
+        card,
+        ctx,
+        counterType,
+        amount: 1,
+        action: "remove",
+        result: getCounterValue(card, counterType),
+      });
+      getUI(game)?.log(
+        `Removed 1 ${counterType} counter(s) from ${card.name}.`,
+      );
+      await waitForCounterStep(this, action, ctx);
+    }
+  }
+
+  if (ctx && contextKey) {
+    ctx[contextKey] = removedAmount;
+    ctx.lastRemovedCounterCount = removedAmount;
+    ctx.removedCounterCounts = ctx.removedCounterCounts || {};
+    ctx.removedCounterCounts[counterType] = removedAmount;
+  }
+
+  if (removedAmount > 0) {
+    await emitCounterRemovedEvent(this, {
+      ctx,
+      counterType,
+      amount: removedAmount,
+      cards: removedCards,
+      zones: removedZones,
+      fromField: true,
+    });
+  }
+
+  return removedAmount > 0;
 }

@@ -1,7 +1,155 @@
+import { cardMatchesKind } from "../../Card.js";
+
 /**
  * Combat availability checks - attack validation and usage tracking.
  * Extracted from Game.js as part of B.5 modularization.
  */
+
+function getPlayerByCardOwner(game, card) {
+  if (!game || !card) return null;
+  return card.owner === "player" ? game.player : game.bot;
+}
+
+function getAttackPassiveSources(player) {
+  if (!player) return [];
+  const field = Array.isArray(player.field) ? player.field : [];
+  const spellTrap = Array.isArray(player.spellTrap) ? player.spellTrap : [];
+  const fieldSpell = player.fieldSpell ? [player.fieldSpell] : [];
+  return [...field, ...spellTrap, ...fieldSpell].filter(Boolean);
+}
+
+export function isActiveAttackPriorityTarget(card) {
+  return (
+    card &&
+    card.cardKind === "monster" &&
+    card.mustBeAttacked === true &&
+    card.isFacedown !== true
+  );
+}
+
+function findAttackPassiveSourceZone(game, owner, card) {
+  if (!game || !owner || !card) return null;
+  if (typeof game.findCardZone === "function") {
+    const zone = game.findCardZone(owner, card);
+    if (zone) return zone;
+  }
+  if (owner.fieldSpell === card) return "fieldSpell";
+  if (Array.isArray(owner.field) && owner.field.includes(card)) return "field";
+  if (Array.isArray(owner.spellTrap) && owner.spellTrap.includes(card)) {
+    return "spellTrap";
+  }
+  return null;
+}
+
+function getCounterValue(card, counterType) {
+  if (!card || !counterType) return 0;
+  if (typeof card.getCounter === "function") {
+    return Math.max(0, Number(card.getCounter(counterType) || 0));
+  }
+  if (card.counters?.get) {
+    return Math.max(0, Number(card.counters.get(counterType) || 0));
+  }
+  return 0;
+}
+
+function cardMatchesAttackPassiveFilters(game, card, filters = {}) {
+  if (!card) return false;
+  if (filters.requireFaceup === true && card.isFacedown) return false;
+  if (filters.cardKind && !cardMatchesKind(card, filters.cardKind)) return false;
+  if (filters.archetype) {
+    const archetypes = Array.isArray(card.archetypes)
+      ? card.archetypes
+      : card.archetype
+        ? [card.archetype]
+        : [];
+    if (!archetypes.includes(filters.archetype)) return false;
+  }
+  if (filters.type) {
+    const types = Array.isArray(card.types) ? card.types : [card.type];
+    if (!types.includes(filters.type)) return false;
+  }
+  if (filters.attribute && card.attribute !== filters.attribute) return false;
+  if (filters.name && card.name !== filters.name) return false;
+  if (filters.cardName && card.name !== filters.cardName) return false;
+  if (filters.subtype) {
+    const allowed = Array.isArray(filters.subtype)
+      ? filters.subtype
+      : [filters.subtype];
+    if (!allowed.includes(card.subtype)) return false;
+  }
+  if (
+    typeof game?.effectEngine?.cardMatchesFilters === "function" &&
+    !game.effectEngine.cardMatchesFilters(card, filters)
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function getCounterAttackLockReason(game, attacker) {
+  const attackerOwner = getPlayerByCardOwner(game, attacker);
+  const opponentOfAttacker =
+    attackerOwner && typeof game?.getOpponent === "function"
+      ? game.getOpponent(attackerOwner)
+      : attacker?.owner === "player"
+        ? game?.bot
+        : game?.player;
+  if (!attackerOwner || !opponentOfAttacker) return null;
+
+  const sourceOwners = Array.from(
+    new Set([attackerOwner, opponentOfAttacker].filter(Boolean)),
+  );
+
+  for (const sourceOwner of sourceOwners) {
+    for (const sourceCard of getAttackPassiveSources(sourceOwner)) {
+      if (!sourceCard || sourceCard.isFacedown) continue;
+
+      for (const effect of sourceCard.effects || []) {
+        if (effect?.timing !== "passive") continue;
+        const passive = effect.passive;
+        if (!passive || passive.type !== "counter_attack_lock") continue;
+
+        const sourceZone = findAttackPassiveSourceZone(
+          game,
+          sourceOwner,
+          sourceCard,
+        );
+        if (effect.requireZone && sourceZone !== effect.requireZone) continue;
+        if (passive.requireZone && sourceZone !== passive.requireZone) continue;
+        if (effect.requireFaceup === true && sourceCard.isFacedown) continue;
+
+        const targetOwnersRaw =
+          passive.targetOwners || passive.owners || ["opponent"];
+        const targetOwners = Array.isArray(targetOwnersRaw)
+          ? targetOwnersRaw
+          : [targetOwnersRaw];
+        const ownerType = attackerOwner === sourceOwner ? "self" : "opponent";
+        if (
+          !targetOwners.includes("any") &&
+          !targetOwners.includes(ownerType)
+        ) {
+          continue;
+        }
+
+        const targetFilters = passive.targetFilters || { cardKind: "monster" };
+        if (!cardMatchesAttackPassiveFilters(game, attacker, targetFilters)) {
+          continue;
+        }
+
+        const counterType = passive.counterType || "default";
+        const minCounters = Math.max(1, Number(passive.minCounters ?? 1));
+        if (getCounterValue(attacker, counterType) < minCounters) continue;
+
+        return (
+          passive.reason ||
+          `${attacker.name} cannot attack while it has ${minCounters} or more ${counterType} counter(s).`
+        );
+      }
+    }
+  }
+
+  return null;
+}
 
 /**
  * Check if a monster can attack and how many attacks it has available.
@@ -25,11 +173,18 @@ export function getAttackAvailability(attacker) {
     };
   }
 
+  const counterAttackLockReason = getCounterAttackLockReason(this, attacker);
+  if (counterAttackLockReason) {
+    return {
+      ok: false,
+      reason: counterAttackLockReason,
+    };
+  }
+
   // Check passive "restrict_opponent_summon_turn_attack" from opponent's field cards
   if (attacker.summonedTurn === this.turnCounter) {
-    const attackerOwner = attacker.owner === "player" ? this.player : this.bot;
     const opponentOfAttacker = attacker.owner === "player" ? this.bot : this.player;
-    for (const fieldCard of (opponentOfAttacker?.field || [])) {
+    for (const fieldCard of getAttackPassiveSources(opponentOfAttacker)) {
       if (!fieldCard || fieldCard.isFacedown) continue;
       for (const effect of (fieldCard.effects || [])) {
         if (

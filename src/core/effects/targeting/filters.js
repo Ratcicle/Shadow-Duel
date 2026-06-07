@@ -13,6 +13,180 @@
  * @param {string} options.effectType - Type of effect (e.g., "destruction", "banish", "target")
  * @returns {{immune: boolean, reason: string|null}} Immunity status and reason
  */
+function asArray(value, fallback = []) {
+  if (Array.isArray(value)) return value;
+  if (value === undefined || value === null) return fallback;
+  return [value];
+}
+
+function cardHasAnyArchetype(card, archetypes = []) {
+  if (!card || archetypes.length === 0) return false;
+  const cardArchetypes = Array.isArray(card.archetypes)
+    ? card.archetypes
+    : card.archetype
+      ? [card.archetype]
+      : [];
+  return archetypes.some((archetype) => cardArchetypes.includes(archetype));
+}
+
+function getPlayerByCardOwner(game, card) {
+  if (!game || !card) return null;
+  if (card.owner === "player" || card.controller === "player") {
+    return game.player || null;
+  }
+  if (card.owner === "bot" || card.controller === "bot") {
+    return game.bot || null;
+  }
+  return null;
+}
+
+function getPassiveSourceCards(owner) {
+  if (!owner) return [];
+  const field = Array.isArray(owner.field) ? owner.field : [];
+  const spellTrap = Array.isArray(owner.spellTrap) ? owner.spellTrap : [];
+  const fieldSpell = owner.fieldSpell ? [owner.fieldSpell] : [];
+  return [...field, ...spellTrap, ...fieldSpell].filter(Boolean);
+}
+
+function findCardZone(engine, owner, card) {
+  if (!owner || !card) return null;
+  if (typeof engine?.findCardZone === "function") {
+    const zone = engine.findCardZone(owner, card);
+    if (zone) return zone;
+  }
+  if (owner.fieldSpell === card) return "fieldSpell";
+  if (Array.isArray(owner.field) && owner.field.includes(card)) return "field";
+  if (Array.isArray(owner.spellTrap) && owner.spellTrap.includes(card)) {
+    return "spellTrap";
+  }
+  return null;
+}
+
+function sourceIsAllowedByPassive(sourceCard, passive) {
+  if (!sourceCard) return false;
+  const allowedArchetypes = asArray(
+    passive.exceptSourceArchetypes ||
+      passive.allowedSourceArchetypes ||
+      passive.sourceArchetypeExceptions,
+  );
+  if (cardHasAnyArchetype(sourceCard, allowedArchetypes)) return true;
+
+  const allowedNames = asArray(
+    passive.exceptSourceNames ||
+      passive.allowedSourceNames ||
+      passive.sourceNameExceptions,
+  );
+  return allowedNames.includes(sourceCard.name);
+}
+
+function targetMatchesConditionalUnaffectedPassive(
+  engine,
+  card,
+  targetOwner,
+  sourceOwner,
+  passive,
+) {
+  if (!card || !targetOwner || !sourceOwner || !passive) return false;
+
+  const ownerRelation =
+    targetOwner.id === sourceOwner.id ? "self" : "opponent";
+  const targetOwners = asArray(
+    passive.targetOwners || passive.owners || ["opponent"],
+  );
+  if (
+    !targetOwners.includes("any") &&
+    !targetOwners.includes(ownerRelation)
+  ) {
+    return false;
+  }
+
+  const targetZones = asArray(passive.targetZones || passive.zones, ["field"]);
+  const targetZone = findCardZone(engine, targetOwner, card);
+  if (!targetZone || !targetZones.includes(targetZone)) return false;
+
+  const filters = passive.targetFilters || {};
+  if (
+    (filters.requireFaceup === true ||
+      filters.faceUp === true ||
+      passive.targetRequireFaceup === true) &&
+    card.isFacedown
+  ) {
+    return false;
+  }
+
+  if (
+    typeof engine?.cardMatchesFilters === "function" &&
+    !engine.cardMatchesFilters(card, filters)
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function findConditionalUnaffectedPassiveReason(
+  engine,
+  card,
+  sourcePlayer,
+  options,
+) {
+  const game = engine?.game;
+  const sourceCard = options.sourceCard || options.source || null;
+  if (!game || !card || !sourcePlayer) return null;
+  if (sourceCard && sourceCard === card) return null;
+
+  const targetOwner = getPlayerByCardOwner(game, card);
+  if (!targetOwner) return null;
+
+  for (const sourceOwner of [game.player, game.bot].filter(Boolean)) {
+    for (const passiveSource of getPassiveSourceCards(sourceOwner)) {
+      if (!passiveSource || passiveSource.isFacedown) continue;
+      if (
+        typeof engine?.isEffectNegated === "function" &&
+        engine.isEffectNegated(passiveSource)
+      ) {
+        continue;
+      }
+
+      const sourceZone = findCardZone(engine, sourceOwner, passiveSource);
+      for (const effect of passiveSource.effects || []) {
+        if (effect?.timing !== "passive") continue;
+        const passive = effect.passive;
+        if (!passive || passive.type !== "conditional_unaffected_by_effects") {
+          continue;
+        }
+        if (effect.requireZone && sourceZone !== effect.requireZone) continue;
+        if (passive.requireZone && sourceZone !== passive.requireZone) continue;
+        if (effect.requireFaceup === true && passiveSource.isFacedown) {
+          continue;
+        }
+        if (passive.requireSourceFaceup === true && passiveSource.isFacedown) {
+          continue;
+        }
+        if (sourceIsAllowedByPassive(sourceCard, passive)) continue;
+        if (
+          !targetMatchesConditionalUnaffectedPassive(
+            engine,
+            card,
+            targetOwner,
+            sourceOwner,
+            passive,
+          )
+        ) {
+          continue;
+        }
+
+        return (
+          passive.reason ||
+          `${card.name} is unaffected by this card effect.`
+        );
+      }
+    }
+  }
+
+  return null;
+}
+
 export function checkImmunity(card, sourcePlayer, options = {}) {
   if (!card || !sourcePlayer) {
     return { immune: false, reason: null };
@@ -23,6 +197,19 @@ export function checkImmunity(card, sourcePlayer, options = {}) {
   // Check 0: Unaffected by every other card effect, including controller's.
   if (card.unaffectedByOtherCardEffects && sourceCard !== card) {
     return { immune: true, reason: "unaffected_by_other_card_effects" };
+  }
+
+  const conditionalUnaffectedReason = findConditionalUnaffectedPassiveReason(
+    this,
+    card,
+    sourcePlayer,
+    { ...options, sourceCard },
+  );
+  if (conditionalUnaffectedReason) {
+    return {
+      immune: true,
+      reason: conditionalUnaffectedReason,
+    };
   }
 
   // Check 1: Temporary immunity to opponent effects (turn-based)
@@ -133,7 +320,7 @@ export function filterCardsListByImmunity(
       if (shouldLog && this.ui?.log) {
         const actionDesc = options.actionType ? ` (${options.actionType})` : "";
         this.ui.log(
-          `${card.name} is immune to opponent's effects${actionDesc} and was skipped.`
+          `${card.name} is immune to this effect${actionDesc} and was skipped.`
         );
       }
     } else {

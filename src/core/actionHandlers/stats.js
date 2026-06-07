@@ -6,7 +6,13 @@
  */
 
 import { isAI } from "../Player.js";
-import { getUI, resolveTargetCards, STATUS_DISPLAY_NAMES } from "./shared.js";
+import {
+  getUI,
+  resolveContextNumber,
+  resolveFieldScopeCards,
+  resolveTargetCards,
+  STATUS_DISPLAY_NAMES,
+} from "./shared.js";
 
 function queueBanishAnimation(game, owner, card, fromZone = null) {
   if (!game?.cardAnimationsReady || typeof game.queueCardAnimation !== "function") {
@@ -219,8 +225,14 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
   if (!player || !game) return false;
 
   let atkBoost = action.atkBoost || 0;
+  if (action.atkBoostFromContext) {
+    atkBoost += resolveContextNumber(action.atkBoostFromContext, ctx);
+  }
 
-  const defBoost = action.defBoost || 0;
+  let defBoost = action.defBoost || 0;
+  if (action.defBoostFromContext) {
+    defBoost += resolveContextNumber(action.defBoostFromContext, ctx);
+  }
 
   let permanent = action.permanent || false;
 
@@ -298,10 +310,22 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
     return applied;
   };
 
-  const targetCards = resolveTargetCards(action, ctx, targets, {
-    defaultRef: "self",
-    game,
-  });
+  let targetCards = action.targetScope
+    ? resolveFieldScopeCards(action.targetScope, ctx, game, { engine })
+    : resolveTargetCards(action, ctx, targets, {
+        defaultRef: "self",
+        game,
+      });
+  if (
+    action.targetScope &&
+    typeof engine.filterCardsListByImmunity === "function"
+  ) {
+    targetCards = engine.filterCardsListByImmunity(targetCards, ctx.player, {
+      actionType: action.type,
+      effectType: action.effectType || engine.inferEffectType?.(action.type),
+      sourceCard: ctx?.source || null,
+    }).allowed;
+  }
 
   if (targetCards.length === 0) {
     const label =

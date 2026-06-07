@@ -142,6 +142,8 @@ async function emitCardMovedEvent(game, card, fromOwner, destPlayer, fromZone, t
     return null;
   }
 
+  game.updateBoard?.();
+
   const currentOwner = card.owner === "player" ? game.player : game.bot;
   const eventPlayer = currentOwner || destPlayer || fromOwner || null;
   const eventOpponent = eventPlayer
@@ -839,6 +841,7 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     animationToZone,
     options,
   );
+  let pendingAttachedEquipCleanup = [];
 
   // TOKEN RULE: Tokens cannot exist outside the field.
   // If a token is leaving the field to any other zone, remove it from the game entirely.
@@ -875,6 +878,11 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
   if (card.owner !== fromOwner.id) {
     card.owner = fromOwner.id;
   }
+
+  const effectsNegatedAtFieldExit =
+    fromZone === "field" &&
+    card.cardKind === "monster" &&
+    card.effectsNegated === true;
 
   cleanupNamedBuffsWhenSourceLeavesField(
     this,
@@ -1095,19 +1103,22 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     toZone !== "field" &&
     card.cardKind === "monster"
   ) {
-    const equipZone = this.getZone(fromOwner, "spellTrap") || [];
-    const attachedEquips = equipZone.filter(
-      (eq) =>
-        eq &&
-        eq.cardKind === "spell" &&
-        eq.subtype === "equip" &&
-        (eq.equippedTo === card || eq.equipTarget === card)
-    );
+    const attachedEquips = [this.player, this.bot]
+      .filter(Boolean)
+      .flatMap((equipOwner) => {
+        const equipZone = this.getZone(equipOwner, "spellTrap") || [];
+        return equipZone
+          .filter(
+            (eq) =>
+              eq &&
+              eq.cardKind === "spell" &&
+              eq.subtype === "equip" &&
+              (eq.equippedTo === card || eq.equipTarget === card),
+          )
+          .map((equip) => ({ equip, equipOwner }));
+      });
 
-    // Process equips synchronously to ensure deterministic state
-    // IMPORTANT: Remove bonuses and clear refs BEFORE moving equips to GY
-    // This prevents the equip's own moveCard path from trying to cleanup again
-    for (const equip of attachedEquips) {
+    for (const { equip, equipOwner } of attachedEquips) {
       // Remove bonuses from host (with clamp) - do this BEFORE clearing refs
       if (
         typeof equip.equipAtkBonus === "number" &&
@@ -1145,7 +1156,12 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
         if (idx > -1) card.equips.splice(idx, 1);
       }
 
-      // Clear equip references AFTER removing bonuses
+      equip.lastEquippedCardLeftField = card;
+      equip.lastEquippedCardLeftFieldCause =
+        options.destroyCause || options.reason || null;
+
+      // Clear active equip references AFTER removing bonuses. The transient
+      // reference above remains available to card_to_grave triggers.
       if (equip.equippedTo === card) {
         equip.equippedTo = null;
       }
@@ -1153,10 +1169,7 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
         equip.equipTarget = null;
       }
 
-      // Move equip to graveyard - refs already cleared, so equip's cleanup block will be skipped
-      this.moveCard(equip, fromOwner, "graveyard", {
-        fromZone: "spellTrap",
-      });
+      pendingAttachedEquipCleanup.push({ equip, equipOwner });
     }
 
     // Se o monstro foi revivido por Call of the Haunted, destruir a trap também
@@ -1423,6 +1436,18 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
         : false;
 
     try {
+      this.updateBoard?.();
+      if (
+        options.presentBeforeCardToGraveEvent !== false &&
+        (options.awaitEvents === true ||
+          options.awaitCardToGraveEvent === true) &&
+        typeof this.waitForPresentationDelay === "function"
+      ) {
+        const delayMs = Number.isFinite(options.graveyardPresentationDelayMs)
+          ? options.graveyardPresentationDelayMs
+          : 160;
+        await this.waitForPresentationDelay(delayMs);
+      }
       console.log(
         `[moveCard] Emitting card_to_grave event for ${card.name} (fromZone: ${fromZone})`
       );
@@ -1436,6 +1461,7 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
         destroyCause: options.destroyCause || null,
         destroySource:
           options.destroySource || options.sourceCard || options.source || null,
+        effectsNegatedAtFieldExit,
       });
       if (
         options.awaitEvents === true ||
@@ -1454,6 +1480,27 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
   }
 
   // Limpar cache de targeting após mover cartas (estado do jogo mudou)
+  if (pendingAttachedEquipCleanup.length > 0) {
+    for (const { equip, equipOwner } of pendingAttachedEquipCleanup) {
+      try {
+        const equipZone = this.getZone(equipOwner, "spellTrap") || [];
+        if (equipZone.includes(equip)) {
+          await this.moveCard(equip, equipOwner, "graveyard", {
+            fromZone: "spellTrap",
+            contextLabel: "equipped_host_left_field",
+          });
+        }
+      } finally {
+        if (equip.lastEquippedCardLeftField === card) {
+          delete equip.lastEquippedCardLeftField;
+        }
+        if (equip.lastEquippedCardLeftFieldCause !== undefined) {
+          delete equip.lastEquippedCardLeftFieldCause;
+        }
+      }
+    }
+  }
+
   if (this.effectEngine?.clearTargetingCache) {
     this.effectEngine.clearTargetingCache();
   }

@@ -176,6 +176,89 @@ function matchesPreviewFilters(engine, card, filters) {
   return true;
 }
 
+function getPreviewCounterOwners(action, ctx, player) {
+  const ownerRule = action?.owner || action?.player || "self";
+  const opponent = ctx?.opponent;
+  if (ownerRule === "opponent") {
+    return opponent ? [opponent] : [];
+  }
+  if (ownerRule === "any" || ownerRule === "both" || ownerRule === "either") {
+    return [player, opponent].filter(Boolean);
+  }
+  return player ? [player] : [];
+}
+
+function getPreviewZoneCards(owner, zone) {
+  if (!owner || !zone) return [];
+  if (zone === "fieldSpell") {
+    return owner.fieldSpell ? [owner.fieldSpell] : [];
+  }
+  const cards = owner[zone];
+  return Array.isArray(cards) ? cards.filter(Boolean) : [];
+}
+
+function matchesCounterPreviewFilters(engine, card, filters = {}) {
+  if (!card) return false;
+  if (filters.requireFaceup === true && card.isFacedown) return false;
+  if (filters.cardKind && !cardMatchesKind(card, filters.cardKind)) {
+    return false;
+  }
+  if (filters.archetype) {
+    const archetypes = Array.isArray(card.archetypes)
+      ? card.archetypes
+      : card.archetype
+        ? [card.archetype]
+        : [];
+    if (!archetypes.includes(filters.archetype)) return false;
+  }
+  if (filters.type) {
+    const types = Array.isArray(card.types) ? card.types : [card.type];
+    if (!types.includes(filters.type)) return false;
+  }
+  if (filters.attribute && card.attribute !== filters.attribute) return false;
+  if (filters.name && card.name !== filters.name) return false;
+  if (filters.cardName && card.name !== filters.cardName) return false;
+  if (filters.subtype) {
+    const allowed = Array.isArray(filters.subtype)
+      ? filters.subtype
+      : [filters.subtype];
+    if (!allowed.includes(card.subtype)) return false;
+  }
+  if (
+    Object.keys(filters).length > 0 &&
+    typeof engine?.cardMatchesFilters === "function" &&
+    !engine.cardMatchesFilters(card, filters)
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function countPreviewFieldCounters(engine, action, ctx, player) {
+  const counterType = action?.counterType || "default";
+  const zones = Array.isArray(action?.zones)
+    ? action.zones
+    : [action?.zone || "field"];
+  const filters = { ...(action?.filters || {}) };
+  if (action?.requireFaceup === true && filters.requireFaceup == null) {
+    filters.requireFaceup = true;
+  }
+
+  let total = 0;
+  for (const owner of getPreviewCounterOwners(action, ctx, player)) {
+    for (const zone of zones) {
+      for (const card of getPreviewZoneCards(owner, zone)) {
+        if (!matchesCounterPreviewFilters(engine, card, filters)) continue;
+        total +=
+          typeof card.getCounter === "function"
+            ? Math.max(0, Number(card.getCounter(counterType) || 0))
+            : 0;
+      }
+    }
+  }
+  return total;
+}
+
 function getSourceOwnersForPreview(action, ctx, player) {
   const scope = action?.sourceOwner || action?.sourceScope || action?.scope || "self";
   const opponent = ctx?.opponent;
@@ -313,6 +396,25 @@ export function checkActionPreviewRequirements(actions, ctx) {
         return {
           ok: false,
           reason: "No cards in the selected Graveyard scope to banish.",
+        };
+      }
+    }
+
+    if (action.type === "remove_counters_from_field") {
+      const requestedAmount = Number(action.amount ?? action.count ?? 1);
+      const amount = Number.isFinite(requestedAmount)
+        ? Math.max(1, requestedAmount)
+        : 1;
+      const availableCounters = countPreviewFieldCounters(
+        this,
+        action,
+        ctx,
+        player,
+      );
+      if (availableCounters < amount) {
+        return {
+          ok: false,
+          reason: `Need at least ${amount} ${action.counterType || "default"} counter(s) on the field.`,
         };
       }
     }

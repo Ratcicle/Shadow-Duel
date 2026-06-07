@@ -363,7 +363,11 @@ export function bindCardInteractions() {
     const opponentTargets = opponent.field.filter(
       (card) => card && card.cardKind === "monster"
     );
-    const forcedTargets = opponentTargets.filter((card) => card.mustBeAttacked);
+    const forcedTargets = opponentTargets.filter((card) =>
+      this.isActiveAttackPriorityTarget
+        ? this.isActiveAttackPriorityTarget(card)
+        : card.mustBeAttacked && !card.isFacedown,
+    );
     const attackCandidates = forcedTargets.length ? forcedTargets : opponentTargets;
     if (
       attackCandidates.length === 0 &&
@@ -835,11 +839,13 @@ export function bindCardInteractions() {
           (card) => card && card.cardKind === "monster"
         );
 
+        const forcedTargets = opponentTargets.filter((card) =>
+          this.isActiveAttackPriorityTarget
+            ? this.isActiveAttackPriorityTarget(card)
+            : card && card.mustBeAttacked && !card.isFacedown,
+        );
         let attackCandidates =
-          opponentTargets.filter((card) => card && card.mustBeAttacked).length >
-          0
-            ? opponentTargets.filter((card) => card && card.mustBeAttacked)
-            : opponentTargets;
+          forcedTargets.length > 0 ? forcedTargets : opponentTargets;
 
         // For multi-attack mode, filter out monsters already attacked this turn
         if (attacker.canAttackAllOpponentMonstersThisTurn) {

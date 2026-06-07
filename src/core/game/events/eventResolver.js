@@ -368,6 +368,30 @@ export async function resumePendingEventSelection(
     });
   }
 
+  // After resolving card_to_grave selections from battle, continue the
+  // battle_destroy window only after the graveyard trigger has fully resolved.
+  if (
+    this.pendingBattleDestroyAfterSelection &&
+    resolutionResult?.ok &&
+    !resolutionResult?.needsSelection
+  ) {
+    const pendingBattleDestroy = this.pendingBattleDestroyAfterSelection;
+    this.pendingBattleDestroyAfterSelection = null;
+    this.devLog("BATTLE_DESTROY_RESUME", {
+      summary: `Resuming battle_destroy for ${pendingBattleDestroy.destroyed?.name || "(none)"}`,
+    });
+
+    const battleDestroyResult = await this.applyBattleDestroyEffect(
+      pendingBattleDestroy.attacker,
+      pendingBattleDestroy.destroyed,
+      pendingBattleDestroy.extras || {},
+    );
+
+    if (battleDestroyResult?.needsSelection) {
+      return battleDestroyResult;
+    }
+  }
+
   // After resolving the event, check if there's a pending tie destruction to continue
   if (
     this.pendingTieDestruction &&

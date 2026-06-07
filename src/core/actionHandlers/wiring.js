@@ -70,7 +70,10 @@ import {
 import { handleActivateStoredBlueprint } from "./blueprints.js";
 
 // Conditional handlers
-import { handleConditionalTargetActions } from "./conditional.js";
+import {
+  handleConditionalTargetActions,
+  handleOptionalTargetActions,
+} from "./conditional.js";
 import { handleChooseActionCase } from "./choice.js";
 import { handleNegateSummonOrActivationAndDestroy } from "./negation.js";
 
@@ -271,6 +274,7 @@ export function registerDefaultHandlers(registry) {
     "conditional_target_actions",
     handleConditionalTargetActions,
   );
+  registry.register("optional_target_actions", handleOptionalTargetActions);
   registry.register("choose_action_case", handleChooseActionCase);
 
   registry.register("heal", proxyEngineMethod("applyHeal"));
@@ -311,6 +315,10 @@ export function registerDefaultHandlers(registry) {
 
   registry.register("add_counter", proxyEngineMethod("applyAddCounter"));
   registry.register("remove_counter", proxyEngineMethod("applyRemoveCounter"));
+  registry.register(
+    "remove_all_counters_from_field",
+    proxyEngineMethod("applyRemoveAllCountersFromField"),
+  );
   registry.register(
     "remove_counters_from_field",
     proxyEngineMethod("applyRemoveCountersFromField"),

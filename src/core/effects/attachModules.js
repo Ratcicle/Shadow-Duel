@@ -108,6 +108,7 @@ export function attachEffectModules(EngineClass) {
     "applyHeal",
     "applyHealPerArchetypeMonster",
     "applyRemoveCounter",
+    "applyRemoveAllCountersFromField",
     "applyRemoveCountersFromField",
     "applyDamage",
     "applyDestroy",

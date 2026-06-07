@@ -1,5 +1,6 @@
 import { cardMatchesKind } from "../Card.js";
 import { getUI, resolveTargetCards } from "./shared.js";
+import { isAI } from "../Player.js";
 
 function sameCardRef(ref, card) {
   if (!ref || !card) return false;
@@ -142,6 +143,120 @@ function matchesCardFilters(card, filters, ctx) {
   return true;
 }
 
+function resolveOptionalAutoSelection(game, selectionContract, ctx) {
+  const player = ctx?.player || null;
+  if (!isAI(player)) return null;
+
+  const autoResult = game?.autoSelector?.select?.(selectionContract, {
+    owner: player,
+    player,
+    source: ctx?.source || null,
+    activationContext: ctx?.activationContext || {},
+    selectionContract,
+    game,
+  });
+
+  if (autoResult?.ok && autoResult.selections) {
+    return autoResult.selections;
+  }
+
+  const fallback = {};
+  for (const req of selectionContract?.requirements || []) {
+    const min = Number(req?.min ?? 0);
+    const max = Number(req?.max ?? min);
+    const candidates = Array.isArray(req?.candidates)
+      ? req.candidates
+      : [];
+    fallback[req.id] = candidates
+      .slice(0, Math.min(Math.max(min, 0), max, candidates.length))
+      .map((candidate) => candidate.key)
+      .filter(Boolean);
+  }
+  return fallback;
+}
+
+function runOptionalTargetSelection(game, selectionContract, ctx, action) {
+  const autoSelection = resolveOptionalAutoSelection(
+    game,
+    selectionContract,
+    ctx,
+  );
+  if (autoSelection) return Promise.resolve(autoSelection);
+
+  return new Promise((resolve) => {
+    let resolved = false;
+    const finalize = (value) => {
+      if (resolved) return;
+      resolved = true;
+      resolve(value);
+    };
+
+    game.startTargetSelectionSession({
+      kind: selectionContract?.kind || "target",
+      selectionContract,
+      card: ctx?.source || null,
+      message: action?.selectionMessage || selectionContract?.message || null,
+      allowCancel: action?.allowCancel !== false,
+      resolve: finalize,
+      execute: (selections) => {
+        finalize(selections || {});
+        return { success: true, needsSelection: false };
+      },
+      onCancel: () => finalize(null),
+    });
+  });
+}
+
+async function resolveOptionalTargets(action, ctx, engine) {
+  const targetDefs = Array.isArray(action?.targets) ? action.targets : [];
+  if (targetDefs.length === 0) {
+    return { ok: true, targets: {} };
+  }
+
+  const game = engine?.game;
+  if (!game) return { ok: false, reason: "Game not available." };
+
+  const targetCtx = {
+    ...ctx,
+    activationContext: {
+      ...(ctx?.activationContext || {}),
+      logTargets: false,
+    },
+  };
+
+  let targetResult = engine.resolveTargets(targetDefs, targetCtx, null);
+  if (targetResult?.ok === false && !targetResult?.needsSelection) {
+    return targetResult;
+  }
+
+  if (!targetResult?.needsSelection) {
+    return targetResult;
+  }
+
+  const selectionContract = targetResult.selectionContract;
+  if (!selectionContract) {
+    return { ok: false, reason: "Selection contract not available." };
+  }
+
+  if (action?.selectionMessage) {
+    selectionContract.message = action.selectionMessage;
+  }
+
+  const selections = await runOptionalTargetSelection(
+    game,
+    selectionContract,
+    targetCtx,
+    action,
+  );
+
+  if (!selections) {
+    return { ok: false, cancelled: true };
+  }
+
+  targetResult = engine.resolveTargets(targetDefs, targetCtx, selections);
+  return targetResult;
+}
+
 export async function handleConditionalTargetActions(
   action,
   ctx,
@@ -217,4 +332,50 @@ export async function handleConditionalTargetActions(
   }
 
   return executed;
+}
+
+export async function handleOptionalTargetActions(action, ctx, targets, engine) {
+  const game = engine?.game;
+  if (!game) return false;
+
+  const conditions = Array.isArray(action?.conditions)
+    ? action.conditions
+    : [];
+  if (conditions.length > 0) {
+    const conditionResult = engine.evaluateConditions?.(conditions, ctx);
+    if (!conditionResult?.ok) {
+      if (action?.logIfSkipped === true && conditionResult?.reason) {
+        getUI(game)?.log(conditionResult.reason);
+      }
+      return false;
+    }
+  }
+
+  const targetResult = await resolveOptionalTargets(action, ctx, engine);
+  if (targetResult?.needsSelection) {
+    return targetResult;
+  }
+  if (targetResult?.ok === false) {
+    if (
+      action?.logIfSkipped === true &&
+      !targetResult.cancelled &&
+      targetResult.reason
+    ) {
+      getUI(game)?.log(targetResult.reason);
+    }
+    return false;
+  }
+
+  const resolvedTargets = {
+    ...(targets || {}),
+    ...(targetResult?.targets || {}),
+  };
+  const actions = Array.isArray(action?.actions) ? action.actions : [];
+  if (actions.length === 0) return false;
+
+  const result = await engine.applyActions(actions, ctx, resolvedTargets);
+  if (result && typeof result === "object" && result.needsSelection) {
+    return result;
+  }
+  return result;
 }

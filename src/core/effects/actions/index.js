@@ -56,6 +56,7 @@ export { applyMove } from "./movement.js";
 export {
   applyAddCounter,
   applyRemoveCounter,
+  applyRemoveAllCountersFromField,
   applyRemoveCountersFromField,
 } from "./counters.js";
 

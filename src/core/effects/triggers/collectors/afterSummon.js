@@ -170,29 +170,33 @@ export async function collectAfterSummonTriggers(payload) {
 
         if (Array.isArray(effect.targets) && effect.targets.length > 0) {
           const precheckCtx = {
-            source: sourceCard,
-            player: owner,
-            opponent: other,
-            actionContext,
-            activationContext: { logTargets: false },
+            ...ctx,
+            activationContext: {
+              ...(ctx.activationContext || {}),
+              isPreview: true,
+              preview: true,
+              logTargets: false,
+            },
           };
-          let unmetRequiredTarget = null;
-          for (const targetDef of effect.targets) {
-            if (!targetDef) continue;
-            const min = Number(targetDef.count?.min ?? 1);
-            if (min <= 0) continue;
-            const { candidates } = this.selectCandidates(targetDef, precheckCtx);
-            if (!candidates || candidates.length < min) {
-              unmetRequiredTarget = targetDef.id || targetDef.zone || "target";
-              break;
-            }
-          }
-          if (unmetRequiredTarget) {
+          const targetPreview = this.resolveTargets(effect.targets, precheckCtx);
+          if (targetPreview?.ok === false && !targetPreview?.needsSelection) {
             debugTriggerLog(this,
-              `[after_summon] Skipping trigger ${effect.id} on ${sourceCard.name}: no valid candidates for required target "${unmetRequiredTarget}"`,
+              `[after_summon] Skipping trigger ${effect.id} on ${sourceCard.name}: ${
+                targetPreview.reason || "no valid candidates"
+              }`,
             );
             continue;
           }
+          const requirements =
+            targetPreview?.selectionContract?.requirements || [];
+          const impossible = requirements.some((req) => {
+            const min = Number(req?.min ?? 0);
+            const candidates = Array.isArray(req?.candidates)
+              ? req.candidates
+              : [];
+            return min > 0 && candidates.length < min;
+          });
+          if (impossible) continue;
         }
 
         const activationContext = this.buildTriggerActivationContext(
