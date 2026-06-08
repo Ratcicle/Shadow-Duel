@@ -27,6 +27,7 @@ import {
   handleBanishCardFromGraveyard,
   handleBanishAllGraveyardAndBurn,
   handleDestroyTargetedCards,
+  handleDestroyCardsByScope,
   handleDestroyAndDamageByTargetAtk,
   handleDestroyAttackerOnArchetypeDestruction,
   handleRegisterReplacementEffect,
@@ -36,6 +37,7 @@ import {
 // Stats handlers
 import {
   handleSetStatsToZeroAndNegate,
+  handleSetOriginalStats,
   handleBuffStatsTemp,
   handleBuffStatsByCounter,
   handleModifyStatsTempThenDestroyIfZeroed,
@@ -148,6 +150,7 @@ export function registerDefaultHandlers(registry) {
   // Luminarch refactoring: new generic handlers
 
   registry.register("buff_stats_temp", handleBuffStatsTemp);
+  registry.register("set_original_stats", handleSetOriginalStats);
 
   registry.register("buff_stats_by_counter", handleBuffStatsByCounter);
 
@@ -236,6 +239,7 @@ export function registerDefaultHandlers(registry) {
   // FASE 3: New handlers for complex Shadow-Heart methods
 
   registry.register("destroy_targeted_cards", handleDestroyTargetedCards);
+  registry.register("destroy_cards_by_scope", handleDestroyCardsByScope);
   registry.register(
     "destroy_and_damage_by_target_atk",
     handleDestroyAndDamageByTargetAtk,
@@ -322,6 +326,10 @@ export function registerDefaultHandlers(registry) {
   registry.register(
     "remove_counters_from_field",
     proxyEngineMethod("applyRemoveCountersFromField"),
+  );
+  registry.register(
+    "count_field_counters",
+    proxyEngineMethod("applyCountFieldCounters"),
   );
 
   registry.register(

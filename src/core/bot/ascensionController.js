@@ -12,7 +12,7 @@ export async function tryAscensionIfAvailable(bot, game) {
       if (!candidates.length) continue;
       // Filter by requirements
       const eligible = candidates.filter(
-        (asc) => game.checkAscensionRequirements(bot, asc).ok,
+        (asc) => game.checkAscensionRequirements(bot, asc, material).ok,
       );
       if (!eligible.length) continue;
       for (const ascensionCard of eligible) {

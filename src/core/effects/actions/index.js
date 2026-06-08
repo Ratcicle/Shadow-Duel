@@ -58,6 +58,7 @@ export {
   applyRemoveCounter,
   applyRemoveAllCountersFromField,
   applyRemoveCountersFromField,
+  applyCountFieldCounters,
 } from "./counters.js";
 
 // Immunity actions

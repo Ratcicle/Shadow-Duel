@@ -110,6 +110,7 @@ export function attachEffectModules(EngineClass) {
     "applyRemoveCounter",
     "applyRemoveAllCountersFromField",
     "applyRemoveCountersFromField",
+    "applyCountFieldCounters",
     "applyDamage",
     "applyDestroy",
     "checkBeforeDestroyNegations",

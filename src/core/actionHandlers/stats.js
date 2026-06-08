@@ -472,6 +472,101 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
   return anyBuffed || anySecondAttack;
 }
 
+export async function handleSetOriginalStats(action, ctx, targets, engine) {
+  const game = engine?.game;
+  const targetCards = resolveTargetCards(action, ctx, targets, {
+    defaultRef: "self",
+    game,
+  });
+  const setAtk =
+    action.atk !== undefined ||
+    action.atkFromContext !== undefined ||
+    action.baseAtk !== undefined;
+  const setDef =
+    action.def !== undefined ||
+    action.defFromContext !== undefined ||
+    action.baseDef !== undefined;
+
+  if (!setAtk && !setDef) {
+    getUI(game)?.log("No original stat change configured.");
+    return false;
+  }
+
+  if (targetCards.length === 0) {
+    getUI(game)?.log("No valid targets for original stat change.");
+    return false;
+  }
+
+  const updateCurrentStats = action.updateCurrentStats !== false;
+  let changed = false;
+
+  for (const card of targetCards) {
+    if (!card || card.cardKind !== "monster") continue;
+
+    if (!card.originalStatsOverride) {
+      card.originalStatsOverride = {
+        baseAtk: Number(card.baseAtk || 0),
+        baseDef: Number(card.baseDef || 0),
+      };
+    }
+
+    const previousAtk = Number(card.atk || 0);
+    const previousDef = Number(card.def || 0);
+    const previousBaseAtk = Number(card.baseAtk || 0);
+    const previousBaseDef = Number(card.baseDef || 0);
+    let nextBaseAtk = previousBaseAtk;
+    let nextBaseDef = previousBaseDef;
+
+    if (setAtk) {
+      const rawAtk =
+        action.atkFromContext !== undefined
+          ? resolveContextNumber(action.atkFromContext, ctx, { round: "floor" })
+          : action.atk ?? action.baseAtk;
+      nextBaseAtk = Math.max(0, Math.floor(Number(rawAtk) || 0));
+      card.baseAtk = nextBaseAtk;
+      if (updateCurrentStats) card.atk = nextBaseAtk;
+    }
+
+    if (setDef) {
+      const rawDef =
+        action.defFromContext !== undefined
+          ? resolveContextNumber(action.defFromContext, ctx, { round: "floor" })
+          : action.def ?? action.baseDef;
+      nextBaseDef = Math.max(0, Math.floor(Number(rawDef) || 0));
+      card.baseDef = nextBaseDef;
+      if (updateCurrentStats) card.def = nextBaseDef;
+    }
+
+    changed = true;
+    queueCardFeedback(game, "buff", card, {
+      sourceCard: ctx.source,
+      tone: "green",
+    });
+    getUI(game)?.log(
+      `${card.name}'s original stats became ${card.baseAtk} ATK / ${card.baseDef} DEF.`,
+    );
+    game?.emit?.("original_stats_changed", {
+      card,
+      previousAtk,
+      previousDef,
+      previousBaseAtk,
+      previousBaseDef,
+      newAtk: card.atk,
+      newDef: card.def,
+      newBaseAtk: card.baseAtk,
+      newBaseDef: card.baseDef,
+      sourceCard: ctx.source,
+      player: ctx.player,
+    });
+  }
+
+  if (changed) {
+    game?.updateBoard?.();
+  }
+
+  return changed;
+}
+
 export async function handleBuffStatsByCounter(action, ctx, targets, engine) {
   const game = engine?.game;
   if (!game) return false;

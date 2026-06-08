@@ -391,7 +391,9 @@ function getSanctumProtectorActions(context) {
     if (!check?.ok) return false;
     const candidates = game.getAscensionCandidatesForMaterial(bot, material);
     if (!Array.isArray(candidates) || candidates.length === 0) return false;
-    return candidates.some((asc) => game.checkAscensionRequirements(bot, asc)?.ok);
+    return candidates.some((asc) =>
+      game.checkAscensionRequirements(bot, asc, material)?.ok,
+    );
   };
 
   const usableAegis = aegisCandidates.filter(

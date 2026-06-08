@@ -259,6 +259,47 @@ function countPreviewFieldCounters(engine, action, ctx, player) {
   return total;
 }
 
+function countPreviewOpponentDestroyTargets(engine, action, ctx) {
+  if (action?.targetCountFromContext) return null;
+
+  const opponent = ctx?.opponent;
+  if (!opponent) return 0;
+
+  const zones = Array.isArray(action.zones)
+    ? action.zones
+    : ["field", "spellTrap", "fieldSpell"];
+  const filters = { ...(action.filters || {}) };
+  if (action.requireFaceup === true && filters.requireFaceup == null) {
+    filters.requireFaceup = true;
+  }
+  const allowedKinds = action.cardKind
+    ? Array.isArray(action.cardKind)
+      ? action.cardKind
+      : [action.cardKind]
+    : null;
+  const allowedSubtypes = action.subtype
+    ? Array.isArray(action.subtype)
+      ? action.subtype
+      : [action.subtype]
+    : null;
+  let count = 0;
+
+  for (const zone of zones) {
+    for (const card of getPreviewZoneCards(opponent, zone)) {
+      if (!card) continue;
+      if (allowedKinds && !allowedKinds.includes(card.cardKind)) continue;
+      if (allowedSubtypes && !allowedSubtypes.includes(card.subtype)) continue;
+      if (action.position && action.position !== "any" && card.position !== action.position) {
+        continue;
+      }
+      if (!matchesPreviewFilters(engine, card, filters)) continue;
+      count += 1;
+    }
+  }
+
+  return count;
+}
+
 function getSourceOwnersForPreview(action, ctx, player) {
   const scope = action?.sourceOwner || action?.sourceScope || action?.scope || "self";
   const opponent = ctx?.opponent;
@@ -401,7 +442,13 @@ export function checkActionPreviewRequirements(actions, ctx) {
     }
 
     if (action.type === "remove_counters_from_field") {
-      const requestedAmount = Number(action.amount ?? action.count ?? 1);
+      const hasRange =
+        action.maxAmount !== undefined ||
+        action.minAmount !== undefined ||
+        action.variableAmount === true;
+      const requestedAmount = hasRange
+        ? Number(action.minAmount ?? 1)
+        : Number(action.amount ?? action.count ?? 1);
       const amount = Number.isFinite(requestedAmount)
         ? Math.max(1, requestedAmount)
         : 1;
@@ -416,6 +463,27 @@ export function checkActionPreviewRequirements(actions, ctx) {
           ok: false,
           reason: `Need at least ${amount} ${action.counterType || "default"} counter(s) on the field.`,
         };
+      }
+    }
+
+    if (action.type === "destroy_targeted_cards") {
+      const availableTargets = countPreviewOpponentDestroyTargets(
+        this,
+        action,
+        ctx,
+      );
+      if (availableTargets !== null) {
+        const requestedMaxTargets = Number(action.maxTargets || 1);
+        const requestedMinTargets = Number.isFinite(action.minTargets)
+          ? action.minTargets
+          : requestedMaxTargets;
+        const minTargets = Math.max(1, requestedMinTargets);
+        if (availableTargets < minTargets) {
+          return {
+            ok: false,
+            reason: `Need ${minTargets} valid target(s) to destroy.`,
+          };
+        }
       }
     }
 

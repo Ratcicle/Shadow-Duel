@@ -318,6 +318,63 @@ function toContextCounterKey(counterType) {
   return `removed${pascal || "Default"}CounterCount`;
 }
 
+function getCounterContextKey(action, counterType, fallback = undefined) {
+  const configured = action.contextKey || action.storeAs || action.resultKey;
+  if (configured) return configured;
+  if (fallback !== undefined) return fallback;
+  return toContextCounterKey(counterType);
+}
+
+function writeCounterContext(ctx, counterType, contextKey, amount) {
+  if (!ctx || !contextKey) return;
+  const safeAmount = Math.max(0, Number(amount || 0));
+  ctx[contextKey] = safeAmount;
+  ctx.lastRemovedCounterCount = safeAmount;
+  ctx.removedCounterCounts = ctx.removedCounterCounts || {};
+  ctx.removedCounterCounts[counterType] = safeAmount;
+}
+
+async function resolveCounterRemovalAmount(engine, action, ctx, totalAvailable) {
+  const game = engine?.game;
+  const player = ctx?.player;
+  const hasRange =
+    action.maxAmount !== undefined ||
+    action.minAmount !== undefined ||
+    action.variableAmount === true;
+
+  if (!hasRange) {
+    return Math.max(1, Number(action.amount ?? action.count ?? 1));
+  }
+
+  const minAmount = Math.max(1, Number(action.minAmount ?? 1));
+  const configuredMax = Math.max(
+    minAmount,
+    Number(action.maxAmount ?? action.amount ?? action.count ?? minAmount),
+  );
+  const maxAmount = Math.min(configuredMax, Math.max(0, totalAvailable));
+
+  if (maxAmount < minAmount) return 0;
+  if (isAI(player)) return maxAmount;
+
+  const defaultAmount = Math.max(
+    minAmount,
+    Math.min(maxAmount, Number(action.defaultAmount ?? maxAmount)),
+  );
+  const ui = getUI(game);
+  if (!ui?.showNumberPrompt) return defaultAmount;
+
+  const prompt =
+    action.amountPrompt ||
+    `Choose how many ${action.counterType || "default"} counter(s) to remove (${minAmount}-${maxAmount}).`;
+  const raw = ui.showNumberPrompt(prompt, defaultAmount);
+  const resolved = raw && typeof raw.then === "function" ? await raw : raw;
+  if (resolved === null || resolved === undefined) return null;
+
+  const parsed = Math.floor(Number(resolved));
+  if (!Number.isFinite(parsed)) return null;
+  return Math.max(minAmount, Math.min(maxAmount, parsed));
+}
+
 /**
  * Apply remove counter action
  * @param {Object} action - Action configuration
@@ -565,12 +622,32 @@ async function selectCounterPaymentCards(engine, action, ctx, entries, amount) {
 export async function applyRemoveCountersFromField(action, ctx) {
   const game = this?.game;
   const counterType = action.counterType || "default";
-  const amount = Math.max(1, Number(action.amount ?? action.count ?? 1));
   const entries = collectCounterFieldEntries(this, action, ctx);
   const totalAvailable = entries.reduce(
     (sum, entry) => sum + entry.counterCount,
     0,
   );
+  const contextKey = getCounterContextKey(action, counterType, null);
+  if (ctx && contextKey) {
+    writeCounterContext(ctx, counterType, contextKey, 0);
+  }
+
+  const amount = await resolveCounterRemovalAmount(
+    this,
+    action,
+    ctx,
+    totalAvailable,
+  );
+  if (amount === null) {
+    getUI(game)?.log("Counter payment cancelled.");
+    return false;
+  }
+  if (!Number.isFinite(amount) || amount <= 0) {
+    getUI(game)?.log(
+      `Not enough ${counterType} counters on the field to pay the cost.`,
+    );
+    return false;
+  }
 
   if (totalAvailable < amount) {
     getUI(game)?.log(
@@ -642,6 +719,10 @@ export async function applyRemoveCountersFromField(action, ctx) {
 
   if (remaining > 0) return false;
 
+  if (ctx && contextKey) {
+    writeCounterContext(ctx, counterType, contextKey, removedAmount);
+  }
+
   if (removedAmount > 0) {
     await emitCounterRemovedEvent(this, {
       ctx,
@@ -669,11 +750,7 @@ export async function applyRemoveAllCountersFromField(action, ctx) {
     0,
   );
 
-  const contextKey =
-    action.contextKey ||
-    action.storeAs ||
-    action.resultKey ||
-    toContextCounterKey(counterType);
+  const contextKey = getCounterContextKey(action, counterType);
 
   if (ctx && contextKey) {
     ctx[contextKey] = 0;
@@ -734,4 +811,34 @@ export async function applyRemoveAllCountersFromField(action, ctx) {
   }
 
   return removedAmount > 0;
+}
+
+/**
+ * Count matching field counters and expose the total on the action context.
+ */
+export async function applyCountFieldCounters(action, ctx) {
+  const game = this?.game;
+  const counterType = action.counterType || "default";
+  const entries = collectCounterFieldEntries(this, action, ctx);
+  const total = entries.reduce((sum, entry) => sum + entry.counterCount, 0);
+  const contextKey =
+    action.contextKey ||
+    action.storeAs ||
+    action.resultKey ||
+    `field${counterType.charAt(0).toUpperCase()}${counterType.slice(1)}CounterCount`;
+
+  if (ctx && contextKey) {
+    ctx[contextKey] = total;
+    ctx.lastFieldCounterCount = total;
+    ctx.fieldCounterCounts = ctx.fieldCounterCounts || {};
+    ctx.fieldCounterCounts[counterType] = total;
+  }
+
+  if (action.log !== false) {
+    getUI(game)?.log(
+      `${total} ${counterType} counter(s) counted on the field.`,
+    );
+  }
+
+  return true;
 }

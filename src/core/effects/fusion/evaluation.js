@@ -17,6 +17,8 @@ function requirementToString(requirement) {
     // Object format: { name: "Card Name" } or { archetype: "Archetype", minLevel: 5 }
     // Keep combined requirements as objects so every declared filter is checked.
     if (
+      requirement.cardKind ||
+      requirement.isToken !== undefined ||
       requirement.attribute ||
       requirement.minLevel !== undefined ||
       requirement.maxLevel !== undefined ||

@@ -56,6 +56,9 @@ export async function handleSpecialSummonFromZone(
   const zoneSpec = action.zone || action.sourceZone || "deck";
   const zoneNames = Array.isArray(zoneSpec) ? zoneSpec : [zoneSpec];
   const sourceOwners = getSourceOwners(action, ctx, player);
+  const count = action.count || { min: 1, max: 1 };
+  const minRequired = Number(count.min ?? 1);
+  const isOptionalSelection = Number.isFinite(minRequired) && minRequired <= 0;
 
   const zoneEntries = buildSourceZoneEntries(zoneNames, sourceOwners);
 
@@ -150,6 +153,13 @@ export async function handleSpecialSummonFromZone(
   const zoneHasCards = zoneEntries.some((entry) => entry.list.length > 0);
 
   if (!zoneHasCards) {
+    if (isOptionalSelection) {
+      getUI(game)?.log("No optional Special Summon targets available.");
+      if (optEffect && typeof game.markOncePerTurnUsed === "function") {
+        game.markOncePerTurnUsed(source, player, optEffect);
+      }
+      return true;
+    }
     getUI(game)?.log(
       `No cards in ${Array.isArray(zoneSpec) ? zoneSpec.join("/") : zoneSpec}.`,
     );
@@ -266,6 +276,13 @@ export async function handleSpecialSummonFromZone(
   });
 
   if (candidates.length === 0) {
+    if (isOptionalSelection) {
+      getUI(game)?.log("No optional Special Summon targets available.");
+      if (optEffect && typeof game.markOncePerTurnUsed === "function") {
+        game.markOncePerTurnUsed(source, player, optEffect);
+      }
+      return true;
+    }
     getUI(game)?.log(
       `No valid cards in ${
         Array.isArray(zoneSpec) ? zoneSpec.join("/") : zoneSpec
@@ -275,7 +292,6 @@ export async function handleSpecialSummonFromZone(
   }
 
   // Determine how many cards to summon
-  const count = action.count || { min: 1, max: 1 };
   const dynamicSource = count.maxFrom;
 
   let dynamicMax = null;
@@ -398,7 +414,7 @@ export async function handleSpecialSummonFromZone(
 
   // Multi-card summon (graveyard revival pattern)
   // Bot: usar estratégia se disponível, senão maior ATK
-  const minRequired = Number(count.min ?? 0);
+  const multiMinRequired = Number(count.min ?? 0);
 
   const dynamicMaxSelect =
     dynamicMax !== null
@@ -441,7 +457,7 @@ export async function handleSpecialSummonFromZone(
     player,
     candidates,
     maxSelect: dynamicMaxSelect,
-    minSelect: minRequired,
+    minSelect: multiMinRequired,
     botSelect: smartBotSelectMulti,
     selectMulti: (cards, range) => {
       if (!getUI(game)?.showMultiSelectModal) {
@@ -466,7 +482,7 @@ export async function handleSpecialSummonFromZone(
   const selected = selection.selected || [];
 
   if (selected.length === 0) {
-    if (minRequired === 0) {
+    if (multiMinRequired === 0) {
       getUI(game)?.log("No cards selected (optional).");
       if (typeof game.updateBoard === "function") {
         game.updateBoard();

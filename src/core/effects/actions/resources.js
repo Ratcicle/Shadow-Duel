@@ -1,3 +1,5 @@
+import { resolveContextNumber } from "../../actionHandlers/shared.js";
+
 /**
  * Resource Actions - draw, heal, damage
  * Extracted from EffectEngine.js – preserving original logic and signatures.
@@ -97,7 +99,12 @@ async function emitLpGainEvent(game, player, sourceCard, before) {
  */
 export async function applyHeal(action, ctx) {
   const targetPlayer = action.player === "opponent" ? ctx.opponent : ctx.player;
-  const amount = action.amount ?? 0;
+  let amount = action.amount ?? 0;
+  if (action.amountFromContext) {
+    amount += resolveContextNumber(action.amountFromContext, ctx);
+  }
+  amount = Math.floor(Number(amount || 0));
+  if (!Number.isFinite(amount)) amount = 0;
 
   // LP gain multiplier is now handled by Player.gainLP() based on passive effects
   const before = targetPlayer.lp || 0;

@@ -41,6 +41,9 @@ export function cardMatchesFilters(card, filters = {}) {
   if (filters.cardKind) {
     if (!cardMatchesKind(card, filters.cardKind)) return false;
   }
+  if (filters.isToken !== undefined) {
+    if ((card.isToken === true) !== Boolean(filters.isToken)) return false;
+  }
   if (filters.subtype) {
     const requiredSubtypes = Array.isArray(filters.subtype)
       ? filters.subtype
@@ -84,6 +87,12 @@ export function cardMatchesFilters(card, filters = {}) {
     if (op === "gte" && lvl < filters.level) return false;
     if (op === "lt" && lvl >= filters.level) return false;
     if (op === "gt" && lvl <= filters.level) return false;
+  }
+  if (filters.minLevel !== undefined && (card.level || 0) < filters.minLevel) {
+    return false;
+  }
+  if (filters.maxLevel !== undefined && (card.level || 0) > filters.maxLevel) {
+    return false;
   }
   if (filters.minAtk !== undefined && (card.atk || 0) < filters.minAtk) {
     return false;

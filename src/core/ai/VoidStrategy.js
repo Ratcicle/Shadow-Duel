@@ -1,6 +1,7 @@
 import BaseStrategy from "./BaseStrategy.js";
 import { applyGenericSimulatedMainPhaseAction } from "./common/simulation.js";
 import { getGenericAscensionActions } from "./common/ascensionPlanning.js";
+import { ascensionMaterialMatches } from "../game/summon/ascension.js";
 import {
   isVoid,
   getVoidCardKnowledge,
@@ -334,7 +335,9 @@ function getSimulatedVoidAscensionCandidates(game, player, material) {
   }
   return (player.extraDeck || []).filter((candidate) => {
     if (!candidate || candidate.monsterType !== "ascension") return false;
-    if (candidate.ascension?.materialId !== material.id) return false;
+    if (!ascensionMaterialMatches(candidate, material, game?.effectEngine)) {
+      return false;
+    }
     const requirements = candidate.ascension?.requirements || [];
     return requirements.every((requirement) => {
       if (requirement?.type !== "material_effect_activations") return true;

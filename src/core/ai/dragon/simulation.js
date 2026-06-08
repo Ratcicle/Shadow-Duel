@@ -5,6 +5,7 @@
 
 import { CARD_KNOWLEDGE, isExtremeDragon } from "./knowledge.js";
 import { getTributeRequirementFor, selectBestTributes } from "./priorities.js";
+import { ascensionMaterialMatches } from "../../game/summon/ascension.js";
 
 const ARMORY_SEARCH_ORDER = [
   "Voltaic Dragon",
@@ -1371,7 +1372,7 @@ function simulateDragonAscension(state, action) {
           !candidate.isFacedown &&
           (
             candidate.id === action.materialId ||
-            candidate.id === action.ascensionCard?.ascension?.materialId
+            ascensionMaterialMatches(action.ascensionCard, candidate)
           ),
       );
   const material = player.field?.[materialIndex];
@@ -1390,7 +1391,7 @@ function simulateDragonAscension(state, action) {
   const ascensionCard =
     extraIndex >= 0 ? player.extraDeck[extraIndex] : action.ascensionCard;
   if (!ascensionCard || ascensionCard.monsterType !== "ascension") return;
-  if (ascensionCard.ascension?.materialId !== material.id) return;
+  if (!ascensionMaterialMatches(ascensionCard, material)) return;
 
   const requirements = ascensionCard.ascension?.requirements || [];
   const requirementsMet = requirements.every((requirement) => {

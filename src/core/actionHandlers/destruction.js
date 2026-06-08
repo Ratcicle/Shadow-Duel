@@ -9,6 +9,7 @@ import { isAI } from "../Player.js";
 import {
   getUI,
   resolveContextNumber,
+  resolveFieldScopeCards,
   resolveTargetCards,
   buildFieldSelectionCandidates,
   selectCards,
@@ -1243,6 +1244,22 @@ export async function handleDestroyTargetedCards(action, ctx, targets, engine) {
     );
   }
 
+  if (action.requireFaceup === true) {
+    opponentCards = opponentCards.filter((c) => c && !c.isFacedown);
+  }
+
+  if (action.position && action.position !== "any") {
+    opponentCards = opponentCards.filter((c) => c?.position === action.position);
+  }
+
+  if (action.filters && Object.keys(action.filters).length > 0) {
+    opponentCards = opponentCards.filter((c) => {
+      if (!c) return false;
+      if (typeof engine.cardMatchesFilters !== "function") return true;
+      return engine.cardMatchesFilters(c, action.filters);
+    });
+  }
+
   if (opponentCards.length === 0) {
     getUI(game)?.log("Opponent has no cards to destroy.");
 
@@ -1407,6 +1424,60 @@ export async function handleDestroyTargetedCards(action, ctx, targets, engine) {
   game.updateBoard();
 
   return true;
+}
+
+export async function handleDestroyCardsByScope(action, ctx, targets, engine) {
+  const game = engine?.game;
+  const { player, source } = ctx || {};
+
+  if (!game || !player || !source) return false;
+  if (!action?.targetScope) {
+    getUI(game)?.log("No destruction scope configured.");
+    return false;
+  }
+
+  let targetCards = resolveFieldScopeCards(action.targetScope, ctx, game, {
+    engine,
+  });
+
+  if (targetCards.length === 0) {
+    getUI(game)?.log("No cards matched the destruction scope.");
+    return false;
+  }
+
+  if (typeof engine.filterCardsListByImmunity === "function") {
+    targetCards = engine.filterCardsListByImmunity(targetCards, player, {
+      actionType: action.type,
+      effectType: action.effectType || engine.inferEffectType?.(action.type),
+      sourceCard: source,
+    }).allowed;
+  }
+
+  if (targetCards.length === 0) {
+    getUI(game)?.log("All matching cards are immune to effects.");
+    return false;
+  }
+
+  let destroyedAny = false;
+
+  for (const card of targetCards) {
+    const result = await game.destroyCard(card, {
+      cause: action.cause || "effect",
+      sourceCard: source,
+      opponent: player,
+    });
+
+    if (result?.destroyed) {
+      destroyedAny = true;
+      getUI(game)?.log(`${source.name} destroyed ${card.name}!`);
+    }
+  }
+
+  if (destroyedAny) {
+    game.updateBoard?.();
+  }
+
+  return destroyedAny;
 }
 
 /**

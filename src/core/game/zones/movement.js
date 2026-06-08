@@ -168,6 +168,10 @@ async function emitCardMovedEvent(game, card, fromOwner, destPlayer, fromZone, t
     effectId: options.effectId || null,
     contextLabel: options.contextLabel || null,
     movedByEffect,
+    wasFaceupBeforeMove:
+      typeof options.wasFaceupBeforeMove === "boolean"
+        ? options.wasFaceupBeforeMove
+        : card.isFacedown !== true,
     actionContext: options.actionContext || null,
   });
 
@@ -841,6 +845,7 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     animationToZone,
     options,
   );
+  const wasFaceupBeforeMove = card.isFacedown !== true;
   let pendingAttachedEquipCleanup = [];
 
   // TOKEN RULE: Tokens cannot exist outside the field.
@@ -864,6 +869,7 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
       "removed",
       {
         ...options,
+        wasFaceupBeforeMove,
         contextLabel: options.contextLabel || "token_removed",
       },
     );
@@ -948,6 +954,18 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
         if (card.def < 0) card.def = 0;
       }
       delete card.permanentBuffsBySource;
+    }
+    if (toZone !== "field" && card.originalStatsOverride) {
+      const original = card.originalStatsOverride;
+      if (Number.isFinite(Number(original.baseAtk))) {
+        card.baseAtk = Number(original.baseAtk);
+        card.atk = card.baseAtk;
+      }
+      if (Number.isFinite(Number(original.baseDef))) {
+        card.baseDef = Number(original.baseDef);
+        card.def = card.baseDef;
+      }
+      delete card.originalStatsOverride;
     }
     this.effectEngine?.clearPassiveBuffsForCard(card);
 
@@ -1091,7 +1109,10 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
       destPlayer,
       fromZone,
       "fieldSpell",
-      options,
+      {
+        ...options,
+        wasFaceupBeforeMove,
+      },
     );
     return { success: true, fromZone, toZone };
   }
@@ -1315,7 +1336,10 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
         destPlayer,
         fromZone,
         "extraDeck",
-        options,
+        {
+          ...options,
+          wasFaceupBeforeMove,
+        },
       );
       return { success: true, fromZone, toZone: "extraDeck" };
     }
@@ -1512,7 +1536,10 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     destPlayer,
     fromZone,
     toZone,
-    options,
+    {
+      ...options,
+      wasFaceupBeforeMove,
+    },
   );
 
   if (this.effectEngine?.clearTargetingCache) {

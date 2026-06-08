@@ -205,7 +205,7 @@ function findFortressAscensionCandidate(bot, game) {
         (candidate) =>
           candidate &&
           candidate.name === FORTRESS_NAME &&
-          game.checkAscensionRequirements(bot, candidate)?.ok,
+          game.checkAscensionRequirements(bot, candidate, material)?.ok,
       );
       if (ascensionCard) {
         return { material, fieldIndex, ascensionCard };

@@ -5,6 +5,8 @@
  * All functions assume `this` = EffectEngine instance
  */
 
+import { cardMatchesKind } from "../../Card.js";
+
 /**
  * Match a card against a fusion requirement
  */
@@ -111,6 +113,16 @@ export function matchesFusionRequirement(card, requirement, materialZone) {
  * or { type: "Dragon", minLevel: 5 }
  */
 function matchComplexRequirement(card, requirement, materialZone) {
+  if (requirement.cardKind) {
+    if (!cardMatchesKind(card, requirement.cardKind)) return false;
+  }
+
+  if (requirement.isToken !== undefined) {
+    if ((card.isToken === true) !== Boolean(requirement.isToken)) {
+      return false;
+    }
+  }
+
   // Check name requirement
   if (requirement.name) {
     if (card.name !== requirement.name) return false;

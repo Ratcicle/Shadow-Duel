@@ -650,7 +650,7 @@ function canUseAscensionFinisher(game, bot, materialId, ascensionId) {
   }
   return (
     realGame.canUseAsAscensionMaterial(bot, material)?.ok !== false &&
-    realGame.checkAscensionRequirements(bot, ascensionCard)?.ok !== false
+    realGame.checkAscensionRequirements(bot, ascensionCard, material)?.ok !== false
   );
 }
 

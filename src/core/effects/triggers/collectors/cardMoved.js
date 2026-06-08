@@ -122,6 +122,20 @@ export async function collectCardMovedTriggers(payload) {
       return;
     }
 
+    if (
+      effect.requireMovedCardWasFaceup === true &&
+      payload.wasFaceupBeforeMove !== true
+    ) {
+      return;
+    }
+
+    if (
+      effect.requireFaceupAtFieldExit === true &&
+      (fromZone !== "field" || payload.wasFaceupBeforeMove !== true)
+    ) {
+      return;
+    }
+
     const requiresEffectMove =
       effect.movedByEffect === true || effect.requireMovedByEffect === true;
     if (requiresEffectMove && payload.movedByEffect !== true) {
@@ -151,6 +165,7 @@ export async function collectCardMovedTriggers(payload) {
       fromZone,
       toZone,
       movedByEffect: payload.movedByEffect === true,
+      wasFaceupBeforeMove: payload.wasFaceupBeforeMove === true,
       movementSourceCard: payload.sourceCard || payload.source || null,
       effectId: payload.effectId || null,
       actionContext,

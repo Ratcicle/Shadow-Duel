@@ -315,7 +315,7 @@ export function bindCardInteractions() {
         materialCheck.ok &&
         this
           .getAscensionCandidatesForMaterial(actor, card)
-          .some((asc) => this.checkAscensionRequirements(actor, asc).ok);
+          .some((asc) => this.checkAscensionRequirements(actor, asc, card).ok);
       if (hasIgnition || canFlip || canPosChange || hasAscension) {
         this.ui.showPositionChoiceModal(
           cardEl,
@@ -741,7 +741,7 @@ export function bindCardInteractions() {
             card
           );
           hasAscension = candidates.some(
-            (asc) => this.checkAscensionRequirements(this.player, asc).ok
+            (asc) => this.checkAscensionRequirements(this.player, asc, card).ok
           );
         }
 

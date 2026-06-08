@@ -84,11 +84,18 @@ export function validateCardDatabase() {
         );
       } else {
         const materialId = asc.materialId;
-        if (!Number.isFinite(materialId)) {
+        const materialFilters = asc.materialFilters || asc.material || null;
+        if (
+          !Number.isFinite(materialId) &&
+          (!materialFilters || typeof materialFilters !== "object")
+        ) {
           errors.push(
-            formatIssue(card, "Ascension.materialId must be a finite number."),
+            formatIssue(
+              card,
+              "Ascension cards must define materialId or materialFilters.",
+            ),
           );
-        } else if (!cardDatabaseById.get(materialId)) {
+        } else if (Number.isFinite(materialId) && !cardDatabaseById.get(materialId)) {
           errors.push(
             formatIssue(
               card,
@@ -117,6 +124,7 @@ export function validateCardDatabase() {
             "player_lp_lte",
             "player_hand_gte",
             "player_graveyard_gte",
+            "field_counters_at_least",
           ]);
           if (!req.type || !allowedReqs.has(req.type)) {
             warnings.push(

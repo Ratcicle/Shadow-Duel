@@ -9945,6 +9945,361 @@
       },
     ],
   },
+  {
+    id: 297,
+    name: "Bloomrot Ancient Mycelium",
+    cardKind: "monster",
+    monsterType: "ascension",
+    atk: 2100,
+    def: 2600,
+    level: 6,
+    type: "Plant",
+    attribute: "Earth",
+    archetype: "Bloomrot",
+    ascension: {
+      materialFilters: {
+        cardKind: "monster",
+        archetype: "Bloomrot",
+      },
+      requirements: [{ type: "material_effect_activations", count: 2 }],
+      position: "choice",
+    },
+    description:
+      'Ascension Material: 1 "Bloomrot" monster. Requirement: The material must have activated its effect 2 times this Duel. If this card is Ascension Summoned: place 1 Spore Counter on all face-up monsters your opponent controls. Once per turn: You can remove 2 Spore Counters from the field; target 1 Defense Position monster your opponent controls; destroy that target.',
+    image: "assets/Bloomrot Ancient Mycelium.png",
+    effects: [
+      {
+        id: "bloomrot_ancient_mycelium_ascension_spores",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethods: ["ascension"],
+        requireSelfAsSummoned: true,
+        actions: [
+          {
+            type: "add_counter",
+            targetScope: {
+              owner: "opponent",
+              zones: ["field"],
+              filters: {
+                cardKind: "monster",
+                requireFaceup: true,
+              },
+            },
+            counterType: "spore",
+            amount: 1,
+          },
+        ],
+      },
+      {
+        id: "bloomrot_ancient_mycelium_destroy_defense",
+        timing: "ignition",
+        requireZone: "field",
+        requireFaceup: true,
+        requirePhase: ["main1", "main2"],
+        oncePerTurn: true,
+        oncePerTurnName: "bloomrot_ancient_mycelium_destroy_defense",
+        conditions: [
+          {
+            type: "field_counters_at_least",
+            owner: "any",
+            zones: ["field", "spellTrap", "fieldSpell"],
+            counterType: "spore",
+            min: 2,
+            requireFaceup: true,
+            reason: "There must be at least 2 Spore Counters on the field.",
+          },
+        ],
+        actions: [
+          {
+            type: "remove_counters_from_field",
+            counterType: "spore",
+            amount: 2,
+            owner: "any",
+            zones: ["field", "spellTrap", "fieldSpell"],
+            requireFaceup: true,
+            selectionMessage:
+              'Select card(s) to remove 2 Spore Counters for "Bloomrot Ancient Mycelium".',
+            haltOnFailure: true,
+          },
+          {
+            type: "destroy_targeted_cards",
+            zones: ["field"],
+            cardKind: "monster",
+            position: "defense",
+            minTargets: 1,
+            maxTargets: 1,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 298,
+    name: "Bloomrot Queen of the Hollow Grove",
+    cardKind: "monster",
+    monsterType: "ascension",
+    atk: 2600,
+    def: 3000,
+    level: 8,
+    type: "Plant",
+    attribute: "Dark",
+    archetype: "Bloomrot",
+    ascension: {
+      materialFilters: {
+        cardKind: "monster",
+        archetype: "Bloomrot",
+        minLevel: 5,
+      },
+      requirements: [
+        {
+          type: "field_counters_at_least",
+          owner: "any",
+          zones: ["field", "spellTrap", "fieldSpell"],
+          counterType: "spore",
+          min: 8,
+          requireFaceup: true,
+          reason: "There must be at least 8 Spore Counters on the field.",
+        },
+      ],
+      position: "choice",
+    },
+    description:
+      'Ascension Material: 1 Level 5 or higher "Bloomrot" monster. Requirement: There must be at least 8 Spore Counters on the field. If this card is Ascension Summoned: monsters your opponent controls lose 100 ATK/DEF for each Spore Counter on the field. You can remove up to 3 Spore Counters from the field; gain 500 LP for each counter removed. If this card leaves the field: place 1 Spore Counter on each face-up card your opponent controls. You can only use each effect of "Bloomrot Queen of the Hollow Grove" once per turn.',
+    image: "assets/Bloomrot Queen of the Hollow Grove.png",
+    effects: [
+      {
+        id: "bloomrot_queen_hollow_grove_ascension_debuff",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethods: ["ascension"],
+        requireSelfAsSummoned: true,
+        oncePerTurn: true,
+        oncePerTurnName: "bloomrot_queen_hollow_grove_ascension_debuff",
+        actions: [
+          {
+            type: "count_field_counters",
+            counterType: "spore",
+            owner: "any",
+            zones: ["field", "spellTrap", "fieldSpell"],
+            requireFaceup: true,
+            contextKey: "fieldSporeCounterCount",
+            log: false,
+          },
+          {
+            type: "buff_stats_temp",
+            targetScope: {
+              owner: "opponent",
+              zones: ["field"],
+              filters: {
+                cardKind: "monster",
+                requireFaceup: true,
+              },
+            },
+            atkBoostFromContext: {
+              key: "fieldSporeCounterCount",
+              multiplier: -100,
+            },
+            defBoostFromContext: {
+              key: "fieldSporeCounterCount",
+              multiplier: -100,
+            },
+            permanent: true,
+          },
+        ],
+      },
+      {
+        id: "bloomrot_queen_hollow_grove_remove_and_heal",
+        timing: "ignition",
+        requireZone: "field",
+        requireFaceup: true,
+        requirePhase: ["main1", "main2"],
+        oncePerTurn: true,
+        oncePerTurnName: "bloomrot_queen_hollow_grove_remove_and_heal",
+        conditions: [
+          {
+            type: "field_counters_at_least",
+            owner: "any",
+            zones: ["field", "spellTrap", "fieldSpell"],
+            counterType: "spore",
+            min: 1,
+            requireFaceup: true,
+            reason: "There must be at least 1 Spore Counter on the field.",
+          },
+        ],
+        actions: [
+          {
+            type: "remove_counters_from_field",
+            counterType: "spore",
+            minAmount: 1,
+            maxAmount: 3,
+            defaultAmount: 3,
+            owner: "any",
+            zones: ["field", "spellTrap", "fieldSpell"],
+            requireFaceup: true,
+            contextKey: "removedSporeCounterCount",
+            amountPrompt:
+              'Choose how many Spore Counters to remove for "Bloomrot Queen of the Hollow Grove" (1-3).',
+            selectionMessage:
+              'Select card(s) to remove Spore Counters for "Bloomrot Queen of the Hollow Grove".',
+            haltOnFailure: true,
+          },
+          {
+            type: "heal",
+            player: "self",
+            amountFromContext: {
+              key: "removedSporeCounterCount",
+              multiplier: 500,
+            },
+          },
+        ],
+      },
+      {
+        id: "bloomrot_queen_hollow_grove_leave_spores",
+        timing: "on_event",
+        event: "card_moved",
+        requireSelfAsMoved: true,
+        requireMovedCardWasFaceup: true,
+        fromZone: "field",
+        toZone: "any",
+        oncePerTurn: true,
+        oncePerTurnName: "bloomrot_queen_hollow_grove_leave_spores",
+        actions: [
+          {
+            type: "add_counter",
+            targetScope: {
+              owner: "opponent",
+              zones: ["field", "spellTrap", "fieldSpell"],
+              filters: {
+                requireFaceup: true,
+              },
+            },
+            counterType: "spore",
+            amount: 1,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 299,
+    name: "Bloomrot Devourer of Dead Roots",
+    cardKind: "monster",
+    monsterType: "fusion",
+    atk: 0,
+    def: 3000,
+    level: 11,
+    type: "Plant",
+    attribute: "Dark",
+    archetype: "Bloomrot",
+    fusionMaterials: [
+      {
+        archetype: "Bloomrot",
+        cardKind: "monster",
+        isToken: true,
+        allowedZones: ["field"],
+        count: 1,
+      },
+      {
+        archetype: "Bloomrot",
+        cardKind: "monster",
+        count: 3,
+      },
+    ],
+    description:
+      'Fusion Materials: 4 "Bloomrot" monsters, including 1 Token. If this card is Fusion Summoned: this card\'s original ATK becomes the number of Spore Counters on the field x500. Once per turn: You can destroy all monsters with Spore Counters your opponent controls. If this card is destroyed by battle or card effect: Special Summon up to 2 "Bloomrot" monsters from your Graveyard, except "Bloomrot Devourer of Dead Roots".',
+    image: "assets/Bloomrot Devourer of Dead Roots.png",
+    effects: [
+      {
+        id: "bloomrot_devourer_dead_roots_fusion_atk",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethods: ["fusion"],
+        requireSelfAsSummoned: true,
+        actions: [
+          {
+            type: "count_field_counters",
+            counterType: "spore",
+            owner: "any",
+            zones: ["field", "spellTrap", "fieldSpell"],
+            requireFaceup: true,
+            contextKey: "fieldSporeCounterCount",
+            log: false,
+          },
+          {
+            type: "set_original_stats",
+            targetRef: "self",
+            atkFromContext: {
+              key: "fieldSporeCounterCount",
+              multiplier: 500,
+            },
+          },
+        ],
+      },
+      {
+        id: "bloomrot_devourer_dead_roots_destroy_spored_monsters",
+        timing: "ignition",
+        requireZone: "field",
+        requireFaceup: true,
+        requirePhase: ["main1", "main2"],
+        oncePerTurn: true,
+        oncePerTurnName:
+          "bloomrot_devourer_dead_roots_destroy_spored_monsters",
+        conditions: [
+          {
+            type: "field_counters_at_least",
+            owner: "opponent",
+            zones: ["field"],
+            filters: {
+              cardKind: "monster",
+            },
+            counterType: "spore",
+            min: 1,
+            requireFaceup: true,
+            reason:
+              "Your opponent must control a face-up monster with a Spore Counter.",
+          },
+        ],
+        actions: [
+          {
+            type: "destroy_cards_by_scope",
+            targetScope: {
+              owner: "opponent",
+              zones: ["field"],
+              filters: {
+                cardKind: "monster",
+                requireFaceup: true,
+                counterType: "spore",
+                minCounters: 1,
+              },
+            },
+          },
+        ],
+      },
+      {
+        id: "bloomrot_devourer_dead_roots_destroyed_revive",
+        timing: "on_event",
+        event: "card_to_grave",
+        fromZone: "field",
+        requireFaceup: true,
+        requireSelfAsDestroyed: true,
+        condition: { type: "destroyed_by_battle_or_effect" },
+        actions: [
+          {
+            type: "special_summon_from_zone",
+            zone: "graveyard",
+            filters: {
+              cardKind: "monster",
+              archetype: "Bloomrot",
+              isToken: false,
+              excludeCardName: "Bloomrot Devourer of Dead Roots",
+            },
+            count: { min: 0, max: 2 },
+            position: "choice",
+          },
+        ],
+      },
+    ],
+  },
 ];
 
 // Performance optimization: Create indexed maps for O(1) lookups

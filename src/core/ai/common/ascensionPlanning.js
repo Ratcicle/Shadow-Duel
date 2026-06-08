@@ -16,7 +16,8 @@ function getRealAscensionCandidates(game, player, material) {
 
   const candidates = game.getAscensionCandidatesForMaterial(player, material) || [];
   return candidates.filter(
-    (ascensionCard) => game.checkAscensionRequirements(player, ascensionCard)?.ok,
+    (ascensionCard) =>
+      game.checkAscensionRequirements(player, ascensionCard, material)?.ok,
   );
 }
 
