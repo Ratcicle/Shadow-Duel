@@ -52,17 +52,44 @@ function filterValidHandActions(actions, hand) {
 // Com travas: depth fixo, budget de nós, anti-repetição
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Simulation clones must detach mutable buff metadata from live cards.
+function cloneDynamicBuffs(dynamicBuffs) {
+  if (!dynamicBuffs || typeof dynamicBuffs !== "object") return dynamicBuffs;
+  return Object.fromEntries(
+    Object.entries(dynamicBuffs).map(([key, entry]) => [
+      key,
+      {
+        ...entry,
+        stats: Array.isArray(entry?.stats) ? [...entry.stats] : entry?.stats,
+        appliedValues:
+          entry?.appliedValues && typeof entry.appliedValues === "object"
+            ? { ...entry.appliedValues }
+            : entry?.appliedValues,
+      },
+    ]),
+  );
+}
+
+function cloneCardForSim(card) {
+  if (!card || typeof card !== "object") return card;
+  const clone = { ...card };
+  clone.dynamicBuffs = cloneDynamicBuffs(card.dynamicBuffs);
+  if (Array.isArray(card.archetypes)) clone.archetypes = [...card.archetypes];
+  if (Array.isArray(card.effects)) clone.effects = [...card.effects];
+  if (card.counters instanceof Map) clone.counters = new Map(card.counters);
+  if (Array.isArray(card.equips)) clone.equips = [...card.equips];
+  if (Array.isArray(card.turnBasedBuffs)) {
+    clone.turnBasedBuffs = card.turnBasedBuffs.map((buff) => ({ ...buff }));
+  }
+  return clone;
+}
+
 /**
- * Realiza beam search para encontrar a melhor sequência de ações.
- * @param {Object} game - Estado atual do jogo
- * @param {Object} strategy - Estratégia do bot
- * @param {Object} options - Configurações
- * @param {number} options.beamWidth - Quantas ações explorar por ply (default: 2)
- * @param {number} options.maxDepth - Profundidade máxima (default: 2)
- * @param {number} options.nodeBudget - Máximo de nós a simular (default: 100)
- * @param {boolean} options.useV2Evaluation - Usar evaluateBoardV2 (default: true)
- * @param {Array} options.preGeneratedActions - Ações pré-geradas como fallback
- * @returns {Object|null} - { action, score, sequence } ou null
+ * Finds the best action sequence with bounded beam search.
+ * @param {Object} game - Current game state.
+ * @param {Object} strategy - Bot strategy.
+ * @param {Object} options - Search options.
+ * @returns {Object|null} Best action result, or null.
  */
 export async function beamSearchTurn(game, strategy, options = {}) {
   const {
@@ -124,14 +151,16 @@ export async function beamSearchTurn(game, strategy, options = {}) {
       return {
         id: safe.id || "unknown",
         lp: safe.lp || 0,
-        hand: (safe.hand || []).map((c) => ({ ...c })),
-        field: (safe.field || []).map((c) => ({ ...c })),
-        graveyard: (safe.graveyard || []).map((c) => ({ ...c })),
-        deck: (safe.deck || []).map((c) => ({ ...c })),
-        extraDeck: (safe.extraDeck || []).map((c) => ({ ...c })),
-        banished: (safe.banished || []).map((c) => ({ ...c })),
-        fieldSpell: safe.fieldSpell ? { ...safe.fieldSpell } : null,
-        spellTrap: safe.spellTrap ? safe.spellTrap.map((c) => ({ ...c })) : [],
+        hand: (safe.hand || []).map(cloneCardForSim),
+        field: (safe.field || []).map(cloneCardForSim),
+        graveyard: (safe.graveyard || []).map(cloneCardForSim),
+        deck: (safe.deck || []).map(cloneCardForSim),
+        extraDeck: (safe.extraDeck || []).map(cloneCardForSim),
+        banished: (safe.banished || []).map(cloneCardForSim),
+        fieldSpell: safe.fieldSpell ? cloneCardForSim(safe.fieldSpell) : null,
+        spellTrap: safe.spellTrap
+          ? safe.spellTrap.map(cloneCardForSim)
+          : [],
         summonCount: safe.summonCount || 0,
         additionalNormalSummons: safe.additionalNormalSummons || 0,
         controllerType: safe.controllerType,
@@ -350,14 +379,16 @@ export async function greedySearchWithEvalV2(game, strategy, options = {}) {
       return {
         id: safe.id || "unknown",
         lp: safe.lp || 0,
-        hand: (safe.hand || []).map((c) => ({ ...c })),
-        field: (safe.field || []).map((c) => ({ ...c })),
-        graveyard: (safe.graveyard || []).map((c) => ({ ...c })),
-        deck: (safe.deck || []).map((c) => ({ ...c })),
-        extraDeck: (safe.extraDeck || []).map((c) => ({ ...c })),
-        banished: (safe.banished || []).map((c) => ({ ...c })),
-        fieldSpell: safe.fieldSpell ? { ...safe.fieldSpell } : null,
-        spellTrap: safe.spellTrap ? safe.spellTrap.map((c) => ({ ...c })) : [],
+        hand: (safe.hand || []).map(cloneCardForSim),
+        field: (safe.field || []).map(cloneCardForSim),
+        graveyard: (safe.graveyard || []).map(cloneCardForSim),
+        deck: (safe.deck || []).map(cloneCardForSim),
+        extraDeck: (safe.extraDeck || []).map(cloneCardForSim),
+        banished: (safe.banished || []).map(cloneCardForSim),
+        fieldSpell: safe.fieldSpell ? cloneCardForSim(safe.fieldSpell) : null,
+        spellTrap: safe.spellTrap
+          ? safe.spellTrap.map(cloneCardForSim)
+          : [],
         summonCount: safe.summonCount || 0,
         additionalNormalSummons: safe.additionalNormalSummons || 0,
         controllerType: safe.controllerType,

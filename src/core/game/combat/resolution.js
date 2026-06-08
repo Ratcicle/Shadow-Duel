@@ -384,6 +384,21 @@ export async function finishCombat(attacker, target, options = {}) {
   let targetWasDestroyed = false;
   let attackerWasDestroyed = false;
 
+  const emitBattleCompleted = async () => {
+    if (typeof this.emit !== "function" || !attacker || !target) return null;
+    return await this.emit("battle_completed", {
+      attacker,
+      defender: target,
+      target,
+      attackerOwner,
+      defenderOwner,
+      targetOwner: defenderOwner,
+      damageDealt: totalDamageDealt,
+      targetDestroyed: targetWasDestroyed,
+      attackerDestroyed: attackerWasDestroyed,
+    });
+  };
+
   const applyBattleDamage = async (
     player,
     cardInvolved,
@@ -483,6 +498,7 @@ export async function finishCombat(attacker, target, options = {}) {
           this.clearAttackResolutionIndicators();
           clearDamageCalculationTempBuffs(this);
           this.updateBoard();
+          await emitBattleCompleted();
           return {
             ok: true,
             needsSelection: true,
@@ -545,6 +561,7 @@ export async function finishCombat(attacker, target, options = {}) {
           this.clearAttackResolutionIndicators();
           clearDamageCalculationTempBuffs(this);
           this.updateBoard();
+          await emitBattleCompleted();
           return {
             ok: true,
             needsSelection: true,
@@ -601,6 +618,7 @@ export async function finishCombat(attacker, target, options = {}) {
           this.clearAttackResolutionIndicators();
           clearDamageCalculationTempBuffs(this);
           this.updateBoard();
+          await emitBattleCompleted();
           return {
             ok: true,
             needsSelection: true,
@@ -647,6 +665,7 @@ export async function finishCombat(attacker, target, options = {}) {
           this.clearAttackResolutionIndicators();
           clearDamageCalculationTempBuffs(this);
           this.updateBoard();
+          await emitBattleCompleted();
           return {
             ok: true,
             needsSelection: true,
@@ -714,6 +733,7 @@ export async function finishCombat(attacker, target, options = {}) {
           this.clearAttackResolutionIndicators();
           clearDamageCalculationTempBuffs(this);
           this.updateBoard();
+          await emitBattleCompleted();
           return {
             ok: true,
             needsSelection: true,
@@ -764,6 +784,15 @@ export async function finishCombat(attacker, target, options = {}) {
   this.clearAttackResolutionIndicators();
   clearDamageCalculationTempBuffs(this);
   this.updateBoard();
+  const battleCompletedResult = await emitBattleCompleted();
+  if (battleCompletedResult?.needsSelection && battleCompletedResult?.selectionContract) {
+    return {
+      ...battleCompletedResult,
+      damageDealt: totalDamageDealt,
+      targetDestroyed: targetWasDestroyed,
+      attackerDestroyed: attackerWasDestroyed,
+    };
+  }
   const pendingResult = battleDestroyResults.find(
     (r) => r?.needsSelection && r?.selectionContract,
   );

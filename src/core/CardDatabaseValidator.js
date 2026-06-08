@@ -21,6 +21,7 @@ const VALID_TIMINGS = new Set([
 const VALID_EVENTS = new Set([
   "after_summon",
   "battle_destroy",
+  "battle_completed",
   "card_to_grave",
   "card_moved",
   "counter_removed",

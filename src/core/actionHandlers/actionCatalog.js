@@ -1849,6 +1849,7 @@ const CONTEXT_TARGET_REFS = new Set([
   "destroyed",
   "attacker",
   "defender",
+  "battle_opponent",
   "target",
   "targetedCard",
   "host",

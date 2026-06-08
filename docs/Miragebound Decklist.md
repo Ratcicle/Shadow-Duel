@@ -1,0 +1,107 @@
+# Miragebound Decklist
+
+Fonte dos textos: `src/data/cards.js` (1x cada carta do arquetipo).
+
+## Resumo
+
+O arquetipo **Miragebound** e focado em controle de posicao de batalha, retorno de cards para a mao e reaproveitamento de recursos. O plano central e deslocar monstros do oponente entre Ataque e Defesa, gerar valor quando cards "Miragebound" voltam para a mao e transformar esses movimentos em buscas, compras, debuffs e pressoes de combate.
+
+**Estilo de jogo:**
+- **Controle de posicao**: varias cartas mudam a posicao de batalha dos monstros do oponente.
+- **Bounce como recurso**: efeitos devolvem seus proprios "Miragebound" para a mao para buscar, comprar ou proteger.
+- **Pressao por combate**: monstros punem alvos em Defesa com dano perfurante, debuffs ou extensao.
+- **Extra Deck flexivel**: uma linha de Ascension via `Miragebound Scout` e uma Fusao generica com 2 monstros "Miragebound".
+
+---
+
+## Decklist (13 cartas)
+
+### Monstros (Main Deck) (6)
+
+| ID  | Nome                        | Tipo        | Nivel | ATK  | DEF  |
+| --- | --------------------------- | ----------- | ----- | ---- | ---- |
+| 266 | Miragebound Scout           | Spellcaster | 3     | 1400 | 1000 |
+| 267 | Miragebound Dancer          | Spellcaster | 4     | 1600 | 1200 |
+| 268 | Miragebound Jackal          | Beast       | 4     | 1700 | 800  |
+| 271 | Miragebound Glass Viper     | Reptile     | 3     | 1000 | 1600 |
+| 272 | Miragebound Sand Priestess  | Spellcaster | 4     | 1300 | 1800 |
+| 273 | Miragebound False King      | Fiend       | 6     | 2200 | 1800 |
+
+### Magias (Main Deck) (4)
+
+| ID  | Nome                         | Subtipo    |
+| --- | ---------------------------- | ---------- |
+| 269 | Miragebound Oasis            | Field      |
+| 274 | Miragebound Mirror Path      | Continuous |
+| 276 | Miragebound Vanishing Step   | Quick      |
+| 277 | Miragebound Heat Haze        | Normal     |
+
+### Armadilhas (Main Deck) (1)
+
+| ID  | Nome                         | Subtipo |
+| --- | ---------------------------- | ------- |
+| 275 | Miragebound False Horizon    | Normal  |
+
+---
+
+## Extra Deck (2)
+
+| ID  | Nome                         | Tipo      | Nivel | ATK  | DEF  |
+| --- | ---------------------------- | --------- | ----- | ---- | ---- |
+| 270 | Miragebound Glass Sovereign  | Ascension | 7     | 2400 | 2200 |
+| 278 | Miragebound Desert Leviathan | Fusion    | 8     | 2700 | 2400 |
+
+**Material de Ascension (270):** `Miragebound Scout` (requisito: o material deve ter ativado seus efeitos 2 vezes neste Duelo).
+
+**Materiais de Fusao (278):** 2 monstros "Miragebound".
+
+---
+
+## Efeitos & Detalhes
+
+### Monstros (Main Deck)
+
+**266 - Miragebound Scout** (L3 Spellcaster | ATK 1400 / DEF 1000)
+> If this card is Normal Summoned: Add 1 "Miragebound" Spell/Trap from your Deck to your hand. Once per turn: You can target 1 face-up monster your opponent controls; change its battle position. You can only use each effect of "Miragebound Scout" once per turn.
+
+**267 - Miragebound Dancer** (L4 Spellcaster | ATK 1600 / DEF 1200)
+> If you control a "Miragebound" monster: You can Special Summon this card from your hand. Once per turn: You can target 1 other "Miragebound" monster you control; return it to the hand, and if you do, this card gains 600 ATK until the end of this turn. You can only use each effect of "Miragebound Dancer" once per turn.
+
+**268 - Miragebound Jackal** (L4 Beast | ATK 1700 / DEF 800)
+> If this card battles an opponent's monster: At the end of the Damage Step, change that opponent's monster's battle position, if it is still on the field. If this card is sent from the field to the GY: Target 1 monster your opponent controls; change its battle position. You can only use each effect of "Miragebound Jackal" once per turn.
+
+**271 - Miragebound Glass Viper** (L3 Reptile | ATK 1000 / DEF 1600)
+> If this card is returned from the field to the hand by a card effect: You can Special Summon this card from your hand, but banish it when it leaves the field. If this card is Special Summoned: You can target 1 face-up monster your opponent controls; it loses 500 ATK/DEF until the end of this turn. You can only use each effect of "Miragebound Glass Viper" once per turn.
+
+**272 - Miragebound Sand Priestess** (L4 Spellcaster | ATK 1300 / DEF 1800)
+> You can target 1 "Miragebound" monster in your Graveyard; add it to your hand. The first time each turn a face-up monster your opponent controls changes its battle position: that monster loses 500 ATK/DEF until the end of the next turn. You can only use each effect of "Miragebound Sand Priestess" once per turn.
+
+**273 - Miragebound False King** (L6 Fiend | ATK 2200 / DEF 1800)
+> You can Special Summon this card from your hand by returning 1 "Miragebound" monster you control to the hand. You can target 1 face-up monster your opponent controls; change its battle position. If this card destroys a Defense Position monster by battle: You can Special Summon 1 Level 4 or lower "Miragebound" monster from your hand. You can only use each effect of "Miragebound False King" once per turn.
+
+### Magias
+
+**269 - Miragebound Oasis** (Field Spell)
+> Once per turn: You can choose 1 of these effects. - Target 1 "Miragebound" monster you control; return it to the hand, then add 1 "Miragebound" monster with a different name from your Deck to your hand. - Target 1 face-up monster your opponent controls; change its battle position, then it loses 500 ATK/DEF until the end of this turn.
+
+**274 - Miragebound Mirror Path** (Continuous Spell)
+> The first time each turn a "Miragebound" monster you control would be destroyed by battle, you can return it to the hand instead. Once per turn, if a "Miragebound" monster was returned from the field to your hand this turn: Draw 1 card. You can only control 1 "Miragebound Mirror Path".
+
+**276 - Miragebound Vanishing Step** (Quick Spell)
+> Target 1 "Miragebound" monster you control; return it to the hand, then target 1 monster your opponent controls; change its battle position, and if you do, it loses 500 ATK/DEF until the end of this turn. You can only activate 1 "Miragebound Vanishing Step" per turn.
+
+**277 - Miragebound Heat Haze** (Normal Spell)
+> If you control a "Miragebound" monster: Target 1 monster your opponent controls; change its battle position. Then, if that monster is in Defense Position, you can target 1 "Miragebound" monster in your Graveyard; add it to your hand. You can only activate 1 "Miragebound Heat Haze" per turn.
+
+### Armadilhas
+
+**275 - Miragebound False Horizon** (Normal Trap)
+> When an opponent's monster declares an attack: Target 1 monster your opponent controls; change its battle position. Then, you can return 1 "Miragebound" monster you control to the hand. You can only activate 1 "Miragebound False Horizon" per turn.
+
+### Extra Deck
+
+**270 - Miragebound Glass Sovereign** (L7 Ascension Spellcaster | ATK 2400 / DEF 2200)
+> Ascension Material: "Miragebound Scout". Requirement: The material must have activated its effects 2 times this Duel. If this card is Ascension Summoned: Target up to 2 face-up monsters your opponent controls; change their battle positions. Once per turn: Target 1 other "Miragebound" monster you control and 1 card your opponent controls; return those targets to the hand. If this card attacks a Defense Position monster, inflict piercing battle damage.
+
+**278 - Miragebound Desert Leviathan** (L8 Fusion Beast | ATK 2700 / DEF 2400)
+> 2 "Miragebound" monsters. If this card is Fusion Summoned: You can target 1 monster your opponent controls; change its battle position, and if you do, halve its ATK/DEF until the end of this turn. Once per turn: You can return 1 "Miragebound" card you control to the hand; this card can make a second attack on monsters during this Battle Phase. If this card attacks a Defense Position monster, inflict piercing battle damage.

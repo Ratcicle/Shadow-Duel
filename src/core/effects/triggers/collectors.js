@@ -23,6 +23,9 @@ export async function collectEventTriggers(eventName, payload) {
   if (eventName === "battle_destroy") {
     return await this.collectBattleDestroyTriggers(payload);
   }
+  if (eventName === "battle_completed") {
+    return await this.collectBattleCompletedTriggers(payload);
+  }
   if (eventName === "card_to_grave") {
     return await this.collectCardToGraveTriggers(payload);
   }
@@ -60,6 +63,7 @@ export {
   collectAfterSummonTriggers,
   collectAttackDeclaredTriggers,
   collectBattleDamageTriggers,
+  collectBattleCompletedTriggers,
   collectBattleDestroyTriggers,
   collectCardEquippedTriggers,
   collectCardMovedTriggers,

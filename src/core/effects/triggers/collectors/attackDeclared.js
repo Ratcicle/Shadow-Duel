@@ -37,11 +37,14 @@ export async function collectAttackDeclaredTriggers(payload) {
     if (player.fieldSpell) {
       sources.push(player.fieldSpell);
     }
-    // Include traps from spellTrap zone (both face-up and face-down)
+    // Face-down traps are offered by the ChainSystem after attack_declared.
+    // Keeping them out of this trigger pass prevents the same Trap from
+    // resolving once as a trigger and once as a chain activation.
     if (player.spellTrap && Array.isArray(player.spellTrap)) {
       for (const trap of player.spellTrap) {
         if (
           trap &&
+          trap.isFacedown !== true &&
           (trap.cardKind === "trap" ||
             trap.cardType === "trap" ||
             trap.originalCardKind === "trap")

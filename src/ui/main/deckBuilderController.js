@@ -55,6 +55,9 @@ const COLLECTION_TRAP_SUBTYPE_ORDER = {
   continuous: 1,
   counter: 2,
 };
+const EXTREME_DRAGONS_ARCHETYPE = "Extreme Dragons";
+const EXTREME_DRAGONS_FILTER_ID = `archetype:${EXTREME_DRAGONS_ARCHETYPE}`;
+const LEGACY_DRAGON_EXTREME_FILTER_ID = "family:dragon_extreme";
 
 const SUBTYPE_DISPLAY_LABELS = {
   normal: "Normal",
@@ -431,11 +434,15 @@ export function createDeckBuilderController({
     }
   }
 
-  function isDragonFamilyCard(card) {
-    const archetypes = getCardArchetypes(card);
-    if (archetypes.includes("Extreme Dragons")) return true;
-    if (archetypes.length > 0) return false;
-    return card?.type === "Dragon" || /\bdragons?\b/i.test(card?.name || "");
+  function normalizeArchetypeFilterMode(filterMode) {
+    if (filterMode === LEGACY_DRAGON_EXTREME_FILTER_ID) {
+      return EXTREME_DRAGONS_FILTER_ID;
+    }
+    return filterMode || "all";
+  }
+
+  function isExtremeDragonsCard(card) {
+    return cardHasArchetypeName(card, EXTREME_DRAGONS_ARCHETYPE);
   }
 
   function getArchetypeOptions() {
@@ -443,11 +450,14 @@ export function createDeckBuilderController({
       { id: "all", label: "Todos" },
       { id: "no_archetype", label: "Sem arquétipo" },
     ];
-    if (cardDatabase.some(isDragonFamilyCard)) {
-      options.push({ id: "family:dragon_extreme", label: "Dragon / Extreme" });
+    if (cardDatabase.some(isExtremeDragonsCard)) {
+      options.push({
+        id: EXTREME_DRAGONS_FILTER_ID,
+        label: EXTREME_DRAGONS_ARCHETYPE,
+      });
     }
     getAvailableArchetypes()
-      .filter((archetype) => archetype !== "Extreme Dragons")
+      .filter((archetype) => archetype !== EXTREME_DRAGONS_ARCHETYPE)
       .forEach((archetype) => {
         options.push({ id: `archetype:${archetype}`, label: archetype });
       });
@@ -479,6 +489,7 @@ export function createDeckBuilderController({
   }
 
   function renderFilterControls() {
+    archetypeFilterMode = normalizeArchetypeFilterMode(archetypeFilterMode);
     setSelectOptions(
       dom.categoryFilterSelect,
       CATEGORY_FILTERS,
@@ -612,15 +623,16 @@ export function createDeckBuilderController({
   }
 
   function cardMatchesArchetypeFilter(card) {
-    if (archetypeFilterMode === "all") return true;
-    if (archetypeFilterMode === "no_archetype") return !cardHasArchetype(card);
-    if (archetypeFilterMode === "family:dragon_extreme") {
-      return isDragonFamilyCard(card);
+    const activeArchetypeFilterMode =
+      normalizeArchetypeFilterMode(archetypeFilterMode);
+    if (activeArchetypeFilterMode === "all") return true;
+    if (activeArchetypeFilterMode === "no_archetype") {
+      return !cardHasArchetype(card);
     }
-    if (archetypeFilterMode.startsWith("archetype:")) {
+    if (activeArchetypeFilterMode.startsWith("archetype:")) {
       return cardHasArchetypeName(
         card,
-        archetypeFilterMode.slice("archetype:".length),
+        activeArchetypeFilterMode.slice("archetype:".length),
       );
     }
     return true;
@@ -1088,7 +1100,7 @@ export function createDeckBuilderController({
       render();
     });
     dom.archetypeFilterSelect?.addEventListener("change", (event) => {
-      archetypeFilterMode = event.target.value || "all";
+      archetypeFilterMode = normalizeArchetypeFilterMode(event.target.value);
       render();
     });
     dom.viewModeSelect?.addEventListener("change", (event) => {

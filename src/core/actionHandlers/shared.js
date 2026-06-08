@@ -58,6 +58,26 @@ export function resolveTargetCards(action, ctx, targets, options = {}) {
     if (ctx?.defender) {
       resolved = [ctx.defender];
     }
+  } else if (targetRef === "battle_opponent") {
+    let opponentCard = null;
+    let opponentOwner = null;
+    if (ctx?.source && ctx.source === ctx?.attacker) {
+      opponentCard = ctx?.defender || ctx?.target || null;
+      opponentOwner = ctx?.defenderOwner || ctx?.targetOwner || null;
+    } else if (ctx?.source && ctx.source === (ctx?.defender || ctx?.target)) {
+      opponentCard = ctx?.attacker || null;
+      opponentOwner = ctx?.attackerOwner || null;
+    }
+    if (
+      opponentCard &&
+      opponentOwner &&
+      Array.isArray(opponentOwner.field) &&
+      opponentOwner.field.includes(opponentCard) &&
+      opponentCard.cardKind === "monster" &&
+      opponentCard.isFacedown !== true
+    ) {
+      resolved = [opponentCard];
+    }
   } else if (targetRef === "destroyed") {
     if (ctx?.destroyed) {
       resolved = [ctx.destroyed];

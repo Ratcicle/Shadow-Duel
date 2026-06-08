@@ -14,7 +14,7 @@ import {
 const COUNTER_TOOLTIP_METADATA_CACHE = new Map();
 
 const COUNTER_LABEL_STOP_WORDS =
-  /(\s+(a|ao|aos|à|às|neste|nesta|nesse|nessa|deste|desta|desse|dessa|este|esta|esse|essa|card|carta|conforme|quando|enquanto|para|por|em|no|na|que|se)\b.*)$/iu;
+  /(\s+(a|ao|aos|e|à|às|neste|nesta|nesse|nessa|nele|nela|neles|nelas|deste|desta|desse|dessa|dele|dela|deles|delas|este|esta|esse|essa|card|carta|conforme|quando|enquanto|para|por|em|no|na|nos|nas|que|se)\b.*)$/iu;
 
 function normalizeCounterLabelKey(value) {
   return String(value || "")

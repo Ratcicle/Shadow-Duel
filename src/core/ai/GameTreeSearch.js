@@ -22,6 +22,23 @@ const ALPHA_INIT = -Infinity;
 const BETA_INIT = Infinity;
 const FUTURE_DISCOUNT = 0.85; // Desconto por ply: score_ply_n = score * (0.85 ^ n)
 
+function cloneDynamicBuffs(dynamicBuffs) {
+  if (!dynamicBuffs || typeof dynamicBuffs !== "object") return dynamicBuffs;
+  return Object.fromEntries(
+    Object.entries(dynamicBuffs).map(([key, entry]) => [
+      key,
+      {
+        ...entry,
+        stats: Array.isArray(entry?.stats) ? [...entry.stats] : entry?.stats,
+        appliedValues:
+          entry?.appliedValues && typeof entry.appliedValues === "object"
+            ? { ...entry.appliedValues }
+            : entry?.appliedValues,
+      },
+    ]),
+  );
+}
+
 /**
  * Estado simulado do tabuleiro para cache de transposição
  */
@@ -50,6 +67,7 @@ function hashGameState(gameState) {
 function cloneCardForSim(card) {
   if (!card || typeof card !== "object") return card;
   const clone = { ...card };
+  clone.dynamicBuffs = cloneDynamicBuffs(card.dynamicBuffs);
 
   if (Array.isArray(card.archetypes)) {
     clone.archetypes = [...card.archetypes];
@@ -59,6 +77,9 @@ function cloneCardForSim(card) {
   }
   if (card.counters instanceof Map) {
     clone.counters = new Map(card.counters);
+  }
+  if (Array.isArray(card.turnBasedBuffs)) {
+    clone.turnBasedBuffs = card.turnBasedBuffs.map((buff) => ({ ...buff }));
   }
 
   // Break circular refs that can exist in live cards.

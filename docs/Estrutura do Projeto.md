@@ -272,7 +272,7 @@ Fachada principal de renderização. Constructor próprio + métodos importados 
 - [Catalogo de actions.md](Catalogo%20de%20actions.md)
 - [Estrutura do Projeto.md](Estrutura%20do%20Projeto.md)
 - [Regras para Invocação-Ascensão.md](Regras%20para%20Invoca%C3%A7%C3%A3o-Ascens%C3%A3o.md)
-- Decklists: [Arcanist](Arcanist%20Decklist.md), [Dragon](Dragon%20Decklist.md), [Luminarch](Luminarch%20Decklist.md), [Shadow-Heart](Shadow-Heart%20Decklist.md), [Void](Void%20Decklist.md).
+- Decklists: [Arcanist](Arcanist%20Decklist.md), [Bloomrot](Bloomrot%20Decklist.md), [Dragon](Dragon%20Decklist.md), [Luminarch](Luminarch%20Decklist.md), [Miragebound](Miragebound%20Decklist.md), [Shadow-Heart](Shadow-Heart%20Decklist.md), [Void](Void%20Decklist.md).
 
 ---
 

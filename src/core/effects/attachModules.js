@@ -76,6 +76,7 @@ export function attachEffectModules(EngineClass) {
     "collectSpellActivatedTriggers",
     "collectEffectActivatedTriggers",
     "collectBattleDestroyTriggers",
+    "collectBattleCompletedTriggers",
     "collectAttackDeclaredTriggers",
     "collectBattleDamageTriggers",
     "collectLpChangeTriggers",

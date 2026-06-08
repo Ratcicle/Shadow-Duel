@@ -76,6 +76,8 @@ O jogo inclui arquétipos temáticos com cartas que funcionam em sinergia:
 - **Luminarch** — Guerreiros de luz com efeitos de cura e proteção
 - **Void** — Entidades do vazio que manipulam o cemitério e banimento
 - **Dragon** — Dragões genéricos com ATK alto e forte sinergia de tipo, usando o Cemitério como recurso
+- **Miragebound** — Ilusões que controlam posições de batalha e devolvem cards para a mão
+- **Bloomrot** — Plantas fúngicas que espalham Marcadores de Esporo e vencem por controle gradual
 
 ---
 

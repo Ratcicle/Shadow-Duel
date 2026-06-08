@@ -31,6 +31,7 @@ export {
   collectSpellActivatedTriggers,
   collectEffectActivatedTriggers,
   collectBattleDestroyTriggers,
+  collectBattleCompletedTriggers,
   collectAttackDeclaredTriggers,
   collectBattleDamageTriggers,
   collectLpChangeTriggers,

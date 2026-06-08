@@ -5104,10 +5104,10 @@
     attribute: "Light",
     preventsBattleDamageToController: true,
     description:
-      '3 Dragon-type monsters, including 1 LIGHT monster. If this card is Fusion Summoned: You can target 1 to 5 cards in your GY; shuffle them into the Deck, then draw 1 card. You take no battle damage from battles involving this card. If this card is destroyed by battle or card effect: You can Special Summon 1 Dragon-type monster from your GY, except "Radiant Cosmic Dragon". You can only use each effect of "Radiant Cosmic Dragon" once per turn.',
+      'Luminous Dragon + 2 Dragon-type monsters. If this card is Fusion Summoned: You can target 1 to 5 cards in your GY; shuffle them into the Deck, then draw 1 card. You take no battle damage from battles involving this card. If this card is destroyed by battle or card effect: You can Special Summon 1 Dragon-type monster from your GY, except "Radiant Cosmic Dragon". You can only use each effect of "Radiant Cosmic Dragon" once per turn.',
     image: "assets/Radiant Cosmic Dragon.png",
     fusionMaterials: [
-      { type: "Dragon", attribute: "Light", count: 1 },
+      { name: "Luminous Dragon", count: 1 },
       { type: "Dragon", count: 2 },
     ],
     effects: [
@@ -7477,52 +7477,49 @@
     level: 4,
     type: "Beast",
     archetype: "Miragebound",
-    piercing: true,
     description:
-      'Once per turn: You can target 1 "Miragebound" monster you control and 1 Attack Position monster your opponent controls; return the first target to the hand, and if you do, change the second target to Defense Position. That opponent\'s monster cannot attack until the end of your opponent\'s next turn. If this card attacks a Defense Position monster, inflict piercing battle damage.',
+      'If this card battles an opponent\'s monster: At the end of the Damage Step, change that opponent\'s monster\'s battle position, if it is still on the field. If this card is sent from the field to the GY: Target 1 monster your opponent controls; change its battle position. You can only use each effect of "Miragebound Jackal" once per turn.',
     image: "assets/Miragebound Jackal.png",
     effects: [
       {
-        id: "miragebound_jackal_bounce_defense_lock",
-        timing: "ignition",
-        requireZone: "field",
-        requireFaceup: true,
+        id: "miragebound_jackal_battle_completed_shift",
+        timing: "on_event",
+        event: "battle_completed",
+        requireSelfBattled: true,
+        promptUser: false,
         oncePerTurn: true,
-        oncePerTurnName: "miragebound_jackal_bounce_defense_lock",
+        oncePerTurnName: "miragebound_jackal_battle_completed_shift",
+        actions: [
+          {
+            type: "switch_position",
+            targetRef: "battle_opponent",
+          },
+        ],
+      },
+      {
+        id: "miragebound_jackal_field_to_grave_shift",
+        timing: "on_event",
+        event: "card_to_grave",
+        fromZone: "field",
+        promptUser: true,
+        promptMessage:
+          'Activate "Miragebound Jackal" to change an opponent monster\'s battle position?',
+        oncePerTurn: true,
+        oncePerTurnName: "miragebound_jackal_field_to_grave_shift",
         targets: [
           {
-            id: "miragebound_jackal_return_target",
-            owner: "self",
-            zone: "field",
-            cardKind: "monster",
-            archetype: "Miragebound",
-            requireFaceup: true,
-            count: { min: 1, max: 1 },
-          },
-          {
-            id: "miragebound_jackal_defense_target",
+            id: "miragebound_jackal_grave_shift_target",
             owner: "opponent",
             zone: "field",
             cardKind: "monster",
             requireFaceup: true,
-            position: "attack",
             count: { min: 1, max: 1 },
           },
         ],
         actions: [
           {
-            type: "return_to_hand",
-            targetRef: "miragebound_jackal_return_target",
-            haltOnFailure: true,
-          },
-          {
             type: "switch_position",
-            targetRef: "miragebound_jackal_defense_target",
-          },
-          {
-            type: "forbid_attack_next_turn",
-            targetRef: "miragebound_jackal_defense_target",
-            turns: 1,
+            targetRef: "miragebound_jackal_grave_shift_target",
           },
         ],
       },
@@ -7636,7 +7633,7 @@
       position: "choice",
     },
     description:
-      'Ascension Material: "Miragebound Scout". Requirement: The material must have activated its effects 2 times this Duel. If this card is Ascension Summoned: You can target up to 2 face-up monsters your opponent controls; change their battle positions. Once per turn: You can target 1 other "Miragebound" monster you control and 1 card your opponent controls; return the first target to the hand, and if you do, return the second target to the hand. If this card attacks a Defense Position monster, inflict piercing battle damage.',
+      'Ascension Material: "Miragebound Scout". Requirement: The material must have activated its effects 2 times this Duel. If this card is Ascension Summoned: Target up to 2 face-up monsters your opponent controls; change their battle positions. Once per turn: Target 1 other "Miragebound" monster you control and 1 card your opponent controls; return those targets to the hand. If this card attacks a Defense Position monster, inflict piercing battle damage.',
     image: "assets/Miragebound Glass Sovereign.png",
     effects: [
       {
@@ -7694,7 +7691,6 @@
           {
             type: "return_to_hand",
             targetRef: "miragebound_glass_sovereign_return_self_target",
-            haltOnFailure: true,
           },
           {
             type: "return_to_hand",
@@ -7786,7 +7782,7 @@
     type: "Spellcaster",
     archetype: "Miragebound",
     description:
-      'Once per turn: You can target 1 "Miragebound" monster in your Graveyard; add it to your hand. If a face-up monster your opponent controls changes to Defense Position: This card gains 500 DEF until the end of the next turn. You can only use each effect of "Miragebound Sand Priestess" once per turn.',
+      'You can target 1 "Miragebound" monster in your Graveyard; add it to your hand. The first time each turn a face-up monster your opponent controls changes its battle position: that monster loses 500 ATK/DEF until the end of the next turn. You can only use each effect of "Miragebound Sand Priestess" once per turn.',
     image: "assets/Miragebound Sand Priestess.png",
     effects: [
       {
@@ -7818,22 +7814,32 @@
         ],
       },
       {
-        id: "miragebound_sand_priestess_defense_buff",
+        id: "miragebound_sand_priestess_position_debuff",
         timing: "on_event",
         event: "position_change",
         requireZone: "field",
         requireFaceup: true,
-        positionTo: "defense",
         changedCardOwner: "opponent",
         changedCardRequireFaceup: true,
         promptUser: false,
         oncePerTurn: true,
-        oncePerTurnName: "miragebound_sand_priestess_defense_buff",
+        oncePerTurnName: "miragebound_sand_priestess_position_debuff",
+        targets: [
+          {
+            id: "miragebound_sand_priestess_debuff_target",
+            targetFromContext: "changedCard",
+            owner: "opponent",
+            cardKind: "monster",
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
         actions: [
           {
             type: "buff_stats_temp",
-            targetRef: "self",
-            defBoost: 500,
+            targetRef: "miragebound_sand_priestess_debuff_target",
+            atkBoost: -500,
+            defBoost: -500,
             duration: "end_of_next_turn",
             sourceName: "Miragebound Sand Priestess",
           },
@@ -7851,7 +7857,7 @@
     type: "Fiend",
     archetype: "Miragebound",
     description:
-      'You can Special Summon this card from your hand by returning 1 "Miragebound" monster you control to the hand. If this card is Special Summoned: You can target 1 face-up monster your opponent controls; change its battle position. If this card destroys a Defense Position monster by battle: You can target 1 card your opponent controls; return it to the hand. You can only use each effect of "Miragebound False King" once per turn.',
+      'You can Special Summon this card from your hand by returning 1 "Miragebound" monster you control to the hand. You can target 1 face-up monster your opponent controls; change its battle position. If this card destroys a Defense Position monster by battle: You can Special Summon 1 Level 4 or lower "Miragebound" monster from your hand. You can only use each effect of "Miragebound False King" once per turn.',
     image: "assets/Miragebound False King.png",
     effects: [
       {
@@ -7883,16 +7889,16 @@
         ],
       },
       {
-        id: "miragebound_false_king_special_summon_shift",
-        timing: "on_event",
-        event: "after_summon",
-        summonMethods: ["special"],
-        requireSelfAsSummoned: true,
+        id: "miragebound_false_king_field_shift",
+        timing: "ignition",
+        requireZone: "field",
+        requireFaceup: true,
+        requirePhase: ["main1", "main2"],
         promptUser: true,
         promptMessage:
           'Activate "Miragebound False King" to change an opponent monster\'s battle position?',
         oncePerTurn: true,
-        oncePerTurnName: "miragebound_false_king_special_summon_shift",
+        oncePerTurnName: "miragebound_false_king_field_shift",
         targets: [
           {
             id: "miragebound_false_king_shift_target",
@@ -7911,7 +7917,7 @@
         ],
       },
       {
-        id: "miragebound_false_king_battle_destroy_bounce",
+        id: "miragebound_false_king_battle_destroy_summon",
         timing: "on_event",
         event: "battle_destroy",
         requireZone: "field",
@@ -7921,21 +7927,26 @@
         requireDestroyedPosition: "defense",
         promptUser: true,
         promptMessage:
-          'Activate "Miragebound False King" to return 1 opponent card to the hand?',
+          'Activate "Miragebound False King" to Special Summon 1 Level 4 or lower "Miragebound" monster from your hand?',
         oncePerTurn: true,
-        oncePerTurnName: "miragebound_false_king_battle_destroy_bounce",
+        oncePerTurnName: "miragebound_false_king_battle_destroy_summon",
         targets: [
           {
-            id: "miragebound_false_king_bounce_target",
-            owner: "opponent",
-            zones: ["field", "spellTrap", "fieldSpell"],
+            id: "miragebound_false_king_summon_target",
+            owner: "self",
+            zone: "hand",
+            cardKind: "monster",
+            archetype: "Miragebound",
+            maxLevel: 4,
             count: { min: 1, max: 1 },
           },
         ],
         actions: [
           {
-            type: "return_to_hand",
-            targetRef: "miragebound_false_king_bounce_target",
+            type: "special_summon_from_zone",
+            targetRef: "miragebound_false_king_summon_target",
+            zone: "hand",
+            position: "choice",
           },
         ],
       },
@@ -8288,112 +8299,11 @@
     ],
   },
   {
-    id: 279,
-    name: "Miragebound Reflection Dragon",
-    cardKind: "monster",
-    monsterType: "fusion",
-    atk: 3000,
-    def: 2500,
-    level: 9,
-    type: "Dragon",
-    archetype: "Miragebound",
-    fusionMaterials: [
-      { name: "Miragebound False King" },
-      { archetype: "Miragebound" },
-    ],
-    description:
-      '"Miragebound False King" + 1 "Miragebound" monster. If this card is Fusion Summoned: You can return 1 card on the field to the hand. Once per turn, when this card destroys an opponent\'s monster by battle: You can target 1 "Miragebound" monster in your Graveyard; add it to your hand. If this card would be destroyed by a card effect: You can return 1 other "Miragebound" card you control to the hand instead.',
-    image: "assets/Miragebound Reflection Dragon.png",
-    effects: [
-      {
-        id: "miragebound_reflection_dragon_fusion_bounce",
-        timing: "on_event",
-        event: "after_summon",
-        summonMethods: ["fusion"],
-        requireSelfAsSummoned: true,
-        promptUser: true,
-        promptMessage:
-          'Activate "Miragebound Reflection Dragon" to return 1 card on the field to the hand?',
-        targets: [
-          {
-            id: "miragebound_reflection_dragon_bounce_target",
-            owner: "any",
-            zones: ["field", "spellTrap", "fieldSpell"],
-            count: { min: 1, max: 1 },
-          },
-        ],
-        actions: [
-          {
-            type: "return_to_hand",
-            targetRef: "miragebound_reflection_dragon_bounce_target",
-          },
-        ],
-      },
-      {
-        id: "miragebound_reflection_dragon_battle_recover",
-        timing: "on_event",
-        event: "battle_destroy",
-        requireZone: "field",
-        requireFaceup: true,
-        requireSelfAsAttacker: true,
-        requireDestroyedIsOpponent: true,
-        promptUser: true,
-        promptMessage:
-          'Activate "Miragebound Reflection Dragon" to add 1 "Miragebound" monster from your Graveyard to your hand?',
-        oncePerTurn: true,
-        oncePerTurnName: "miragebound_reflection_dragon_battle_recover",
-        targets: [
-          {
-            id: "miragebound_reflection_dragon_recover_target",
-            owner: "self",
-            zone: "graveyard",
-            cardKind: "monster",
-            archetype: "Miragebound",
-            count: { min: 1, max: 1 },
-          },
-        ],
-        actions: [
-          {
-            type: "return_to_hand",
-            targetRef: "miragebound_reflection_dragon_recover_target",
-            fromZone: "graveyard",
-          },
-        ],
-      },
-      {
-        id: "miragebound_reflection_dragon_effect_destruction_replacement",
-        timing: "passive",
-        requireFaceup: true,
-        replacementEffect: {
-          type: "destruction",
-          reason: "effect",
-          targetMustBeSource: true,
-          targetOwner: "self",
-          targetZones: ["field"],
-          targetRequireFaceup: true,
-          costCount: 1,
-          costOwner: "source",
-          costZones: ["field", "spellTrap", "fieldSpell"],
-          costDestination: "hand",
-          costFilters: {
-            archetype: "Miragebound",
-          },
-          prompt:
-            'Return 1 other "Miragebound" card you control to the hand instead of destroying {target}?',
-          selectionMessage:
-            'Choose 1 other "Miragebound" card you control to return to the hand.',
-          logMessage:
-            '{target} avoided destruction by returning another "Miragebound" card to the hand.',
-        },
-      },
-    ],
-  },
-  {
     id: 280,
     name: "Bloomrot Sporeling",
     cardKind: "monster",
-    atk: 500,
-    def: 500,
+    atk: 700,
+    def: 1200,
     level: 2,
     type: "Plant",
     attribute: "Dark",
@@ -8460,7 +8370,7 @@
     id: 281,
     name: "Bloomrot Rootling",
     cardKind: "monster",
-    atk: 800,
+    atk: 1200,
     def: 1600,
     level: 3,
     type: "Plant",
@@ -8564,8 +8474,8 @@
     id: 282,
     name: "Bloomrot Myco-Weaver",
     cardKind: "monster",
-    atk: 1200,
-    def: 1400,
+    atk: 1400,
+    def: 1500,
     level: 3,
     type: "Plant",
     attribute: "Dark",
@@ -8642,8 +8552,8 @@
     id: 283,
     name: "Bloomrot Rot-Stag",
     cardKind: "monster",
-    atk: 2100,
-    def: 1600,
+    atk: 2000,
+    def: 1900,
     level: 5,
     type: "Plant",
     attribute: "Earth",
@@ -8790,14 +8700,14 @@
     id: 284,
     name: "Bloomrot Carrioncap",
     cardKind: "monster",
-    atk: 1700,
+    atk: 1600,
     def: 900,
     level: 4,
     type: "Plant",
     attribute: "Dark",
     archetype: "Bloomrot",
     description:
-      'Once per turn: You can target 1 face-up monster your opponent controls; place 1 Spore Counter on it, then that monster loses 400 ATK/DEF for each Spore Counter on it until the end of this turn. If this card destroys a monster with a Spore Counter by battle: place 1 Spore Counter on 1 face-up card your opponent controls. You can only use each effect of "Bloomrot Carrioncap" once per turn.',
+      'Once per turn: You can target 1 face-up monster your opponent controls; place 1 Spore Counter on it, then that monster loses 300 ATK/DEF for each Spore Counter on it until the end of this turn. If this card destroys a monster with a Spore Counter by battle: place 1 Spore Counter on 1 face-up card your opponent controls. You can only use each effect of "Bloomrot Carrioncap" once per turn.',
     image: "assets/Bloomrot Carrioncap.png",
     effects: [
       {
@@ -8830,8 +8740,8 @@
             type: "buff_stats_by_counter",
             targetRef: "bloomrot_carrioncap_spore_target",
             counterType: "spore",
-            atkPerCounter: -400,
-            defPerCounter: -400,
+            atkPerCounter: -300,
+            defPerCounter: -300,
             duration: "end_of_turn",
           },
         ],
@@ -8939,7 +8849,7 @@
     id: 286,
     name: "Bloomrot Gravecap Widow",
     cardKind: "monster",
-    atk: 2200,
+    atk: 2100,
     def: 2100,
     level: 6,
     type: "Plant",
@@ -9061,7 +8971,7 @@
     id: 287,
     name: "Bloomrot Ancient Husk",
     cardKind: "monster",
-    atk: 2400,
+    atk: 2200,
     def: 2600,
     level: 7,
     type: "Plant",
@@ -9328,7 +9238,7 @@
     subtype: "normal",
     archetype: "Bloomrot",
     description:
-      'Target 1 face-up monster on the field; place 1 Spore Counter on it for each "Bloomrot" monster you control. Then, gain 100 LP for each Spore Counter on your opponent\'s field.',
+      'Target 1 face-up monster on the field; place 1 Spore Counter on it for each "Bloomrot" monster you control. Then, gain 300 LP for each Spore Counter on your opponent\'s field.',
     image: "assets/Bloomrot Compost Ritual.png",
     effects: [
       {
@@ -9368,7 +9278,7 @@
             zones: ["field", "spellTrap", "fieldSpell"],
             filters: { requireFaceup: true },
             counterType: "spore",
-            amountPerCounter: 100,
+            amountPerCounter: 300,
           },
         ],
       },
@@ -10038,7 +9948,7 @@
     name: "Bloomrot Queen of the Hollow Grove",
     cardKind: "monster",
     monsterType: "ascension",
-    atk: 2600,
+    atk: 2500,
     def: 3000,
     level: 8,
     type: "Plant",

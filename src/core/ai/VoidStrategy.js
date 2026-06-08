@@ -65,6 +65,28 @@ const VOID_SIM_PASSIVE_KEYS = new Set([
   "arturus_atk_gy_buff",
 ]);
 
+function cloneDynamicBuffsForSim(dynamicBuffs) {
+  if (!dynamicBuffs || typeof dynamicBuffs !== "object") return dynamicBuffs;
+  return Object.fromEntries(
+    Object.entries(dynamicBuffs).map(([key, entry]) => [
+      key,
+      {
+        ...entry,
+        stats: Array.isArray(entry?.stats) ? [...entry.stats] : entry?.stats,
+        appliedValues:
+          entry?.appliedValues && typeof entry.appliedValues === "object"
+            ? { ...entry.appliedValues }
+            : entry?.appliedValues,
+      },
+    ]),
+  );
+}
+
+function detachDynamicBuffsForSim(card) {
+  if (!card?.dynamicBuffs || typeof card.dynamicBuffs !== "object") return;
+  card.dynamicBuffs = cloneDynamicBuffsForSim(card.dynamicBuffs);
+}
+
 function getEffectiveBattleStat(card, stat) {
   return getEffectiveStat(card, stat, { includeEquip: false });
 }
@@ -2517,6 +2539,7 @@ export default class VoidStrategy extends BaseStrategy {
 
   clearSimulatedVoidPassives(card = null) {
     if (!card?.dynamicBuffs) return;
+    detachDynamicBuffsForSim(card);
     for (const key of Object.keys(card.dynamicBuffs)) {
       if (!VOID_SIM_PASSIVE_KEYS.has(key)) continue;
       const entry = card.dynamicBuffs[key];
@@ -2539,6 +2562,7 @@ export default class VoidStrategy extends BaseStrategy {
   applySimulatedVoidPassiveBuff(card = null, key, value, stats = ["atk", "def"]) {
     const amount = Number(value || 0);
     if (!card || !key || amount === 0) return;
+    detachDynamicBuffsForSim(card);
     card.dynamicBuffs = card.dynamicBuffs || {};
     for (const stat of stats) {
       if (typeof card[stat] === "number") {

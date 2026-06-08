@@ -1,6 +1,7 @@
 export { collectAfterSummonTriggers } from "./afterSummon.js";
 export { collectAttackDeclaredTriggers } from "./attackDeclared.js";
 export { collectBattleDamageTriggers } from "./battleDamage.js";
+export { collectBattleCompletedTriggers } from "./battleCompleted.js";
 export { collectBattleDestroyTriggers } from "./battleDestroy.js";
 export { collectCardEquippedTriggers } from "./cardEquipped.js";
 export { collectCardMovedTriggers } from "./cardMoved.js";
