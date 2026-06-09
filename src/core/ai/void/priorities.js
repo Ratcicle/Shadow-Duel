@@ -327,7 +327,8 @@ export function shouldPlayVoidSpell(card, game, bot, opponent) {
 
     if (myFieldCount === 0) {
       const hasHollow = searchTargets.some(
-        (candidate) => candidate?.name === "Void Hollow" || candidate?.id === 154,
+        (candidate) =>
+          candidate?.name === "Void Hollow" || candidate?.id === VOID_IDS.HOLLOW,
       );
       return {
         yes: true,

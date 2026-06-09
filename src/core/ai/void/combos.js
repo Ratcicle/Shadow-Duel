@@ -27,31 +27,31 @@ import {
 
 // IDs das cartas Void
 export const VOID_IDS = {
-  CONJURER: 151,
-  WALKER: 152,
-  BEAST: 153,
-  HOLLOW: 154,
-  HAUNTER: 155,
-  GHOST_WOLF: 156,
-  HOLLOW_KING: 157, // Fusão
-  BONE_SPIDER: 158,
-  FORGOTTEN_KNIGHT: 159,
-  RAVEN: 160,
-  TENEBRIS_HORN: 161,
-  SLAYER_BRUTE: 162,
-  BERSERKER: 163, // Fusão
-  SERPENT_DRAKE: 164,
-  HYDRA_TITAN: 165, // Fusão
-  SEALING: 166,
-  THE_VOID: 167, // Field
-  GRAVITATIONAL: 168,
-  LOST_THRONE: 169,
-  MIRROR_DIMENSION: 170,
-  COSMIC_WALKER: 171, // Ascension
-  THOUSAND_ARMS: 172,
-  MALICIOUS_DEMON: 173, // Ascension de Thousand-Arms
-  ARCTURUS: 258, // Lord of the Void (boss máximo)
-  POLYMERIZATION: 13,
+  CONJURER: 201,
+  WALKER: 202,
+  BEAST: 203,
+  HOLLOW: 204,
+  HAUNTER: 205,
+  GHOST_WOLF: 206,
+  HOLLOW_KING: 207, // Fusão
+  BONE_SPIDER: 208,
+  FORGOTTEN_KNIGHT: 209,
+  RAVEN: 210,
+  TENEBRIS_HORN: 211,
+  SLAYER_BRUTE: 212,
+  BERSERKER: 213, // Fusão
+  SERPENT_DRAKE: 214,
+  HYDRA_TITAN: 215, // Fusão
+  SEALING: 216,
+  THE_VOID: 217, // Field
+  GRAVITATIONAL: 218,
+  LOST_THRONE: 219,
+  MIRROR_DIMENSION: 220,
+  COSMIC_WALKER: 222, // Ascension
+  THOUSAND_ARMS: 221,
+  MALICIOUS_DEMON: 223, // Ascension de Thousand-Arms
+  ARCTURUS: 224, // Lord of the Void (boss máximo)
+  POLYMERIZATION: 12,
 };
 
 /**
@@ -73,20 +73,20 @@ export const COMBO_DATABASE = [
     result: "3 monstros no campo (Conjurer + 2 Hollows) + Walker na mão",
     priority: 11,
     sequence: [
-      { action: "summon", cardId: 151, note: "Normal Summon Conjurer" },
+      { action: "summon", cardId: 201, note: "Normal Summon Conjurer" },
       {
         action: "ignition",
-        cardId: 151,
+        cardId: 201,
         note: "Conjurer recruta Walker do deck",
       },
       {
         action: "ignition",
-        cardId: 152,
+        cardId: 202,
         note: "Walker volta à mão, Special Summon Hollow da mão",
       },
       {
         action: "trigger",
-        cardId: 154,
+        cardId: 204,
         note: "Hollow (da mão) recruta outro Hollow do deck",
       },
     ],
@@ -98,10 +98,10 @@ export const COMBO_DATABASE = [
     result: "2 monstros no campo (Conjurer + Void lv4-)",
     priority: 8,
     sequence: [
-      { action: "summon", cardId: 151, note: "Normal Summon Conjurer" },
+      { action: "summon", cardId: 201, note: "Normal Summon Conjurer" },
       {
         action: "ignition",
-        cardId: 151,
+        cardId: 201,
         note: "Conjurer recruta Void do deck",
       },
     ],
@@ -119,12 +119,12 @@ export const COMBO_DATABASE = [
     sequence: [
       {
         action: "special",
-        cardId: 154,
+        cardId: 204,
         note: "Special Summon Hollow DA MÃO",
       },
       {
         action: "trigger",
-        cardId: 154,
+        cardId: 204,
         note: "Hollow recruta outro do deck",
       },
     ],
@@ -139,7 +139,7 @@ export const COMBO_DATABASE = [
     sequence: [
       {
         action: "ignition",
-        cardId: 152,
+        cardId: 202,
         note: "Walker volta à mão e desce outro Void da mão",
       },
     ],
@@ -154,12 +154,12 @@ export const COMBO_DATABASE = [
     sequence: [
       {
         action: "ignition",
-        cardId: 152,
+        cardId: 202,
         note: "Walker volta à mão, Special Summon Hollow da mão",
       },
       {
         action: "trigger",
-        cardId: 154,
+        cardId: 204,
         note: "Hollow (da mão) recruta outro Hollow do deck",
       },
     ],
@@ -174,7 +174,7 @@ export const COMBO_DATABASE = [
     requires: ["Polymerization", "3x Void Hollow (campo/mão)"],
     result: "Hollow King 2500 ATK (revive 3 Hollows se destruído)",
     priority: 9.5,
-    fusion: { target: 157, materials: [154, 154, 154] },
+    fusion: { target: 207, materials: [204, 204, 204] },
   },
   {
     name: "Berserker Fusion",
@@ -182,7 +182,7 @@ export const COMBO_DATABASE = [
     requires: ["Polymerization", "Void Slayer Brute no campo", "1 Void"],
     result: "Berserker 2800 ATK (2 ataques + bounce)",
     priority: 10.5,
-    fusion: { target: 163, materials: [162, "any_void"] },
+    fusion: { target: 213, materials: [212, "any_void"] },
   },
   {
     name: "Hydra Titan Fusion",
@@ -191,7 +191,7 @@ export const COMBO_DATABASE = [
     result: "Hydra Titan 3500 ATK (board clear + draw + resiliente)",
     priority: 12,
     fusion: {
-      target: 165,
+      target: 215,
       materials: ["void", "void", "void", "void", "void", "void"],
     },
   },
@@ -207,10 +207,10 @@ export const COMBO_DATABASE = [
     result: "Haunter 2100 ATK + potencial para 3 Hollows extras",
     priority: 9,
     sequence: [
-      { action: "handIgnition", cardId: 155, note: "Haunter tributa Hollow" },
+      { action: "handIgnition", cardId: 205, note: "Haunter tributa Hollow" },
       {
         action: "gyIgnition",
-        cardId: 155,
+        cardId: 205,
         note: "Banish Haunter para reviver Hollows",
       },
     ],
@@ -224,7 +224,7 @@ export const COMBO_DATABASE = [
     sequence: [
       {
         action: "handIgnition",
-        cardId: 164,
+        cardId: 214,
         note: "Tributa Hollows para Serpent Drake",
       },
     ],
@@ -239,7 +239,7 @@ export const COMBO_DATABASE = [
     sequence: [
       {
         action: "handIgnition",
-        cardId: 162,
+        cardId: 212,
         note: "Tributa 2 Voids para Slayer",
       },
     ],
@@ -252,10 +252,10 @@ export const COMBO_DATABASE = [
     result: "Conjurer + Hollow + Haunter (3 monstros fortes)",
     priority: 10.5,
     sequence: [
-      { action: "summon", cardId: 151 },
-      { action: "ignition", cardId: 151 },
-      { action: "trigger", cardId: 154 },
-      { action: "handIgnition", cardId: 155 },
+      { action: "summon", cardId: 201 },
+      { action: "ignition", cardId: 201 },
+      { action: "trigger", cardId: 204 },
+      { action: "handIgnition", cardId: 205 },
     ],
   },
   {
@@ -284,7 +284,7 @@ export const COMBO_DATABASE = [
     sequence: [
       {
         action: "handIgnition",
-        cardId: 172,
+        cardId: 221,
         note: "Tributa Void e desce Thousand-Arms da mão",
       },
     ],
@@ -299,7 +299,7 @@ export const COMBO_DATABASE = [
     sequence: [
       {
         action: "ignition",
-        cardId: 172,
+        cardId: 221,
         note: "Bounce + revive 2 Hollows com +700",
       },
     ],
@@ -313,7 +313,7 @@ export const COMBO_DATABASE = [
       "Lord of the Void no campo: oponente não ativa nada na BP + survival via banish 2 Voids do GY",
     priority: 11,
     sequence: [
-      { action: "summon", cardId: 258, note: "Tributa 2 monstros para Arcturus" },
+      { action: "summon", cardId: 224, note: "Tributa 2 monstros para Arcturus" },
     ],
   },
   {
@@ -370,8 +370,8 @@ export const COMBO_DATABASE = [
     result: "Acesso a Hollow para uma ponte de Special Summon futura",
     priority: 7.8,
     sequence: [
-      { action: "summon", cardId: 153, note: "Normal Summon Void Beast" },
-      { action: "trigger", cardId: 153, note: "Beast busca Void Hollow" },
+      { action: "summon", cardId: 203, note: "Normal Summon Void Beast" },
+      { action: "trigger", cardId: 203, note: "Beast busca Void Hollow" },
     ],
   },
   {

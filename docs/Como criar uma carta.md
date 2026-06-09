@@ -1,6 +1,10 @@
 # Como criar uma carta
 
-Arquivo principal: `src/data/cards.js`.
+Fachada publica: `src/data/cards.js`.
+
+As cartas ficam em modulos por grupo dentro de `src/data/cards/`. Ao criar uma
+carta, edite o modulo do grupo correto e deixe `src/data/cards.js` apenas como
+fachada de exportacao.
 
 Este documento descreve o contrato atual do Shadow Duel. As fontes de verdade
 no código são:
@@ -9,6 +13,7 @@ no código são:
   e contrato declarativo das actions.
 - `src/core/actionHandlers/wiring.js`: registra todos os `action.type`.
 - `src/core/actionHandlers/actionCatalog.js`: documenta campos aceitos por action.
+- `src/data/cards/ranges.js`: registra as faixas oficiais de IDs por grupo.
 - `src/core/EffectEngine.js`: avalia conditions, passives, custos e filtros.
 - `src/core/effects/targeting/selection.js`: resolve targets.
 - `src/core/effects/triggers/collectors.js`: define quais eventos disparam quais efeitos.
@@ -24,7 +29,7 @@ Campos básicos:
 
 ```js
 {
-  id: 999,                         // número único, finito e > 0
+  id: 124,                         // ID livre dentro da faixa do modulo
   name: "Card Name",               // nome único
   cardKind: "monster",             // "monster" | "spell" | "trap"
   image: "assets/Card Name.png",
@@ -40,8 +45,26 @@ Campos comuns por tipo:
   `equip`, `quick` ou `counter`.
 - Extra Deck: use `monsterType: "fusion"` ou `monsterType: "ascension"`.
 
-IDs devem ser numéricos. O validador rejeita IDs duplicados, nomes duplicados,
-timings inválidos, eventos inválidos e actions sem handler registrado.
+IDs devem ser numericos e ficar dentro da faixa oficial do modulo. O validador
+rejeita IDs fora da faixa, IDs duplicados, nomes duplicados, timings invalidos,
+eventos invalidos e actions sem handler registrado.
+
+## Faixas de IDs
+
+| Faixa | Modulo | Grupo |
+| --- | --- | --- |
+| `001-100` | `src/data/cards/generic.js` | Genericas/Core |
+| `101-150` | `src/data/cards/shadowHeart.js` | Shadow-Heart |
+| `151-200` | `src/data/cards/luminarch.js` | Luminarch |
+| `201-250` | `src/data/cards/void.js` | Void |
+| `251-300` | `src/data/cards/dragon.js` | Dragon / Extreme Dragons |
+| `301-350` | `src/data/cards/arcanist.js` | Arcanist |
+| `351-400` | `src/data/cards/miragebound.js` | Miragebound |
+| `401-450` | `src/data/cards/bloomrot.js` | Bloomrot |
+
+`Polymerization` e staples compartilhadas ficam em `001-100`. Dragon e
+`Extreme Dragons` compartilham o mesmo modulo e a mesma faixa; `Extreme Dragons`
+continua como subgrupo/archetype interno.
 
 ## Estrutura de effects
 
@@ -294,7 +317,7 @@ Ascension:
 {
   monsterType: "ascension",
   ascension: {
-    materialId: 101,
+    materialId: 104,
     requirements: [
       { type: "material_turns_on_field", count: 2 }
     ]
@@ -393,7 +416,7 @@ Ignition com target e custo:
 
 ## Checklist antes de commitar
 
-1. ID e nome são únicos.
+1. ID esta livre e dentro da faixa oficial do modulo.
 2. Imagem existe em `assets/`.
 3. `timing`, `event` e `action.type` existem no validador/registry.
 4. A action tem contrato atualizado no catálogo.

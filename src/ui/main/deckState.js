@@ -1,8 +1,14 @@
 import { cardDatabase, cardDatabaseById } from "../../data/cards.js";
+import {
+  CARD_ID_MIGRATION_VERSION,
+  migrateCardId,
+} from "../../data/cards/idMigration.js";
 
 export const BOT_PRESET_KEY = "shadow_duel_bot_preset";
 export const LEGACY_DECK_KEY = "shadow_duel_deck";
 export const LEGACY_EXTRA_DECK_KEY = "shadow_duel_extra_deck";
+export const LEGACY_DECK_ID_SCHEMA_VERSION_KEY =
+  "shadow_duel_deck_id_schema_version";
 export const DECK_PRESETS_KEY = "shadow_duel_deck_presets";
 export const ACTIVE_DECK_SLOT_KEY = "shadow_duel_active_deck_slot";
 export const DECK_PRESET_COUNT = 8;
@@ -23,6 +29,11 @@ const spellTrapSubtypeOrder = {
 
 export function getCardById(cardId) {
   return cardDatabaseById.get(cardId);
+}
+
+function normalizeStoredCardId(cardId, { migrateIds = false } = {}) {
+  const normalized = migrateIds ? migrateCardId(cardId) : Number(cardId);
+  return Number.isInteger(normalized) ? normalized : cardId;
 }
 
 export function levelOf(card) {
@@ -94,7 +105,7 @@ export function sortExtraDeck(extraDeckIds = []) {
   });
 }
 
-export function sanitizeExtraDeck(extraDeck) {
+export function sanitizeExtraDeck(extraDeck, options = {}) {
   const valid = new Set(
     cardDatabase
       .filter(
@@ -106,7 +117,8 @@ export function sanitizeExtraDeck(extraDeck) {
   );
   const seen = new Set();
   const result = [];
-  for (const id of extraDeck || []) {
+  for (const rawId of extraDeck || []) {
+    const id = normalizeStoredCardId(rawId, options);
     if (!valid.has(id)) continue;
     if (seen.has(id)) continue;
     if (result.length >= MAX_EXTRA_DECK_SIZE) break;
@@ -116,7 +128,7 @@ export function sanitizeExtraDeck(extraDeck) {
   return result;
 }
 
-export function sanitizeDeck(deck) {
+export function sanitizeDeck(deck, options = {}) {
   const valid = new Set(
     cardDatabase
       .filter(
@@ -127,7 +139,8 @@ export function sanitizeDeck(deck) {
   );
   const counts = {};
   const result = [];
-  for (const id of deck || []) {
+  for (const rawId of deck || []) {
+    const id = normalizeStoredCardId(rawId, options);
     if (!valid.has(id)) continue;
     counts[id] = counts[id] || 0;
     if (counts[id] >= 3) continue;
@@ -176,23 +189,31 @@ export function getDefaultDeckPreset(index) {
   };
 }
 
-export function normalizeDeckPreset(rawPreset, index) {
+export function normalizeDeckPreset(rawPreset, index, options = {}) {
   const fallback = getDefaultDeckPreset(index);
   const rawName =
     typeof rawPreset?.name === "string" ? rawPreset.name.trim() : "";
   return {
     name: rawName || fallback.name,
     deck: Array.isArray(rawPreset?.deck)
-      ? sanitizeDeck(rawPreset.deck)
+      ? sanitizeDeck(rawPreset.deck, options)
       : fallback.deck,
     extraDeck: Array.isArray(rawPreset?.extraDeck)
-      ? sanitizeExtraDeck(rawPreset.extraDeck)
+      ? sanitizeExtraDeck(rawPreset.extraDeck, options)
       : fallback.extraDeck,
   };
 }
 
 function readLegacyDeckPreset() {
   const preset = {};
+  let migrateIds = true;
+  try {
+    migrateIds =
+      localStorage.getItem(LEGACY_DECK_ID_SCHEMA_VERSION_KEY) !==
+      String(CARD_ID_MIGRATION_VERSION);
+  } catch (e) {
+    console.warn("Failed to load legacy deck ID schema version", e);
+  }
   try {
     const storedDeck = localStorage.getItem(LEGACY_DECK_KEY);
     if (storedDeck) {
@@ -209,17 +230,40 @@ function readLegacyDeckPreset() {
   } catch (e) {
     console.warn("Failed to load legacy extra deck", e);
   }
-  return preset.deck || preset.extraDeck ? preset : null;
+  return preset.deck || preset.extraDeck ? { preset, migrateIds } : null;
+}
+
+function getStoredDeckPresetPayload(parsed) {
+  if (Array.isArray(parsed)) {
+    return { presets: parsed, migrateIds: true, shouldPersist: true };
+  }
+
+  if (parsed && typeof parsed === "object" && Array.isArray(parsed.presets)) {
+    const isCurrentVersion =
+      parsed.idSchemaVersion === CARD_ID_MIGRATION_VERSION;
+    return {
+      presets: parsed.presets,
+      migrateIds: !isCurrentVersion,
+      shouldPersist: !isCurrentVersion,
+    };
+  }
+
+  return null;
 }
 
 function loadDeckPresets() {
   try {
     const stored = localStorage.getItem(DECK_PRESETS_KEY);
     const parsed = stored ? JSON.parse(stored) : null;
-    if (Array.isArray(parsed)) {
-      return Array.from({ length: DECK_PRESET_COUNT }, (_, index) =>
-        normalizeDeckPreset(parsed[index], index),
+    const payload = getStoredDeckPresetPayload(parsed);
+    if (payload) {
+      const presets = Array.from({ length: DECK_PRESET_COUNT }, (_, index) =>
+        normalizeDeckPreset(payload.presets[index], index, {
+          migrateIds: payload.migrateIds,
+        }),
       );
+      if (payload.shouldPersist) persistDeckPresets(presets);
+      return presets;
     }
   } catch (e) {
     console.warn("Failed to load deck presets", e);
@@ -230,15 +274,26 @@ function loadDeckPresets() {
   );
   const legacyPreset = readLegacyDeckPreset();
   if (legacyPreset) {
-    presets[0] = normalizeDeckPreset({ name: "Deck 1", ...legacyPreset }, 0);
+    presets[0] = normalizeDeckPreset(
+      { name: "Deck 1", ...legacyPreset.preset },
+      0,
+      { migrateIds: legacyPreset.migrateIds },
+    );
     persistDeckPresets(presets);
+    saveLegacyDeckFallback(presets[0].deck, presets[0].extraDeck);
   }
   return presets;
 }
 
 function persistDeckPresets(presets) {
   try {
-    localStorage.setItem(DECK_PRESETS_KEY, JSON.stringify(presets));
+    localStorage.setItem(
+      DECK_PRESETS_KEY,
+      JSON.stringify({
+        idSchemaVersion: CARD_ID_MIGRATION_VERSION,
+        presets,
+      }),
+    );
   } catch (e) {
     console.warn("Failed to save deck presets", e);
   }
@@ -270,6 +325,10 @@ function saveLegacyDeckFallback(currentDeck, currentExtraDeck) {
     localStorage.setItem(
       LEGACY_EXTRA_DECK_KEY,
       JSON.stringify(currentExtraDeck),
+    );
+    localStorage.setItem(
+      LEGACY_DECK_ID_SCHEMA_VERSION_KEY,
+      String(CARD_ID_MIGRATION_VERSION),
     );
   } catch (e) {
     console.warn("Failed to save legacy deck fallback", e);

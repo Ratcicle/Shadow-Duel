@@ -48,17 +48,24 @@ Ponto de entrada da SPA. Hoje é um bootstrap enxuto de composição:
 Regra de manutenção: `main.js` deve orquestrar módulos, não concentrar lógica de deck builder, laboratório, Bot Arena ou persistência.
 
 ### `src/data/cards.js`
-Banco de dados único de todas as cartas do jogo. Exporta:
+Fachada publica do banco modular de cartas. Importa os arrays por grupo em
+`src/data/cards/` e exporta:
 - `cardDatabase` (array)
 - `cardDatabaseById` (Map por id)
 - `cardDatabaseByName` (Map por nome)
 
 Cada entrada descreve: tipo (monstro/spell/trap), atributos (`atk`/`def`/`level`/`attribute`/`type`), arquétipos e efeitos declarativos executados pelo `EffectEngine`.
 
+### `src/data/cards/`
+Modulos de cartas por grupo e governanca de IDs:
+- `generic.js`: cartas genericas/core (`001-100`).
+- `shadowHeart.js`, `luminarch.js`, `void.js`, `dragon.js`, `arcanist.js`, `miragebound.js`, `bloomrot.js`: cartas por faixa de arquetipo.
+- `ranges.js`: faixas oficiais e politica `enforceAssignedRanges`.
+- `idMigration.js`: mapa `oldId -> newId` usado somente para migrar decks salvos.
+
 ### `src/locales/`
 Arquivos JSON de tradução.
-- `en.json` — inglês (padrão)
-- `pt-br.json` — português brasileiro
+- `pt-br.json` — português brasileiro; as chaves de `cards` acompanham os IDs atuais.
 
 ---
 
@@ -74,7 +81,7 @@ Arquivos JSON de tradução.
 | [BotArena.js](../src/core/BotArena.js) | Modo "bot vs bot" para testes em massa. Roda partidas headless, controla timeouts/auto pause e coleta Strategic Reports via `ArenaAnalytics`/`DuelTracker`. |
 | [BotLogger.js](../src/core/BotLogger.js) | Logger configurável por `localStorage`. Categorias: action_gen, decision, state_change, phase_transition, etc. Filtra por bot e nível de verbosidade. |
 | [Card.js](../src/core/Card.js) | Classe `Card`. Encapsula dados imutáveis (do database) + estado mutável (counters, equipped, position, etc.) e gera `instanceId` único. |
-| [CardDatabaseValidator.js](../src/core/CardDatabaseValidator.js) | Valida o database de cartas no boot — checa shapes de ações via [actionCatalog.js](../src/core/actionHandlers/actionCatalog.js). |
+| [CardDatabaseValidator.js](../src/core/CardDatabaseValidator.js) | Valida o database de cartas no boot — checa shapes de ações via [actionCatalog.js](../src/core/actionHandlers/actionCatalog.js) e governanca de faixas de IDs. |
 | [ChainSystem.js](../src/core/ChainSystem.js) | Sistema completo de Chain/Spell Speed (LIFO, speeds 1/2/3). Fachada que delega para [chain/](../src/core/chain/). |
 | [NullChainSystem.js](../src/core/NullChainSystem.js) | Stub de ChainSystem para modos sem chain (e.g. simulação rápida). API compatível, no-ops. |
 | [EffectEngine.js](../src/core/EffectEngine.js) | **Executor de efeitos declarativos.** Lê o array `effects` de uma carta e executa via handlers registrados. Fachada que delega para [effects/](../src/core/effects/) e [actionHandlers/](../src/core/actionHandlers/). |
@@ -223,7 +230,7 @@ Controllers e helpers da shell da SPA. Essa pasta modulariza o antigo `main.js` 
 | Arquivo | Responsabilidade |
 |---|---|
 | [domRefs.js](../src/ui/main/domRefs.js) | Agrupa referências do DOM por área: start screen, deck builder, Bot Arena, laboratório, validação e locale. |
-| [deckState.js](../src/ui/main/deckState.js) | Estado e persistência do deck builder: presets, slots, chaves de `localStorage`, sanitização de deck/extra deck, pool sorting e inferência de arquétipo. |
+| [deckState.js](../src/ui/main/deckState.js) | Estado e persistência do deck builder: presets, slots, chaves de `localStorage`, migracao versionada de IDs antigos, sanitização de deck/extra deck, pool sorting e inferência de arquétipo. |
 | [validationPanel.js](../src/ui/main/validationPanel.js) | Executa `validateCardDatabase()` e renderiza erros da base de cartas na tela inicial. |
 | [deckBuilderController.js](../src/ui/main/deckBuilderController.js) | UI do deck builder: slots, filtros, preview, edição do main/extra deck, preset do bot e preparação dos dados para duelo comum. |
 | [laboratoryController.js](../src/ui/main/laboratoryController.js) | UI do Laboratório: setup manual, randomização, import/export JSON, modos de teste/duelo e configuração de bot/revelar mão. |
@@ -268,9 +275,9 @@ Fachada principal de renderização. Constructor próprio + métodos importados 
 
 - [Como criar uma carta.md](Como%20criar%20uma%20carta.md)
 - [Como criar um handler.md](Como%20criar%20um%20handler.md)
-- [Como adicionar um arquetipo.md](Como%20adicionar%20um%20arquetipo.md)
 - [Catalogo de actions.md](Catalogo%20de%20actions.md)
 - [Estrutura do Projeto.md](Estrutura%20do%20Projeto.md)
+- [Modularizacao de cards.md](Modularizacao%20de%20cards.md)
 - [Regras para Invocação-Ascensão.md](Regras%20para%20Invoca%C3%A7%C3%A3o-Ascens%C3%A3o.md)
 - Decklists: [Arcanist](Arcanist%20Decklist.md), [Bloomrot](Bloomrot%20Decklist.md), [Dragon](Dragon%20Decklist.md), [Luminarch](Luminarch%20Decklist.md), [Miragebound](Miragebound%20Decklist.md), [Shadow-Heart](Shadow-Heart%20Decklist.md), [Void](Void%20Decklist.md).
 

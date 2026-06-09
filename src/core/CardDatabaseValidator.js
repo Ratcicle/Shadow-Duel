@@ -1,4 +1,15 @@
-import { cardDatabase, cardDatabaseById } from "../data/cards.js";
+import {
+  cardDatabase,
+  cardDatabaseById,
+  cardDatabaseGroups,
+} from "../data/cards.js";
+import {
+  CARD_ID_RANGE_POLICY,
+  getCardIdRangeByKey,
+  getCardIdRangeSize,
+  isCardIdInRange,
+  validateCardIdRangeRegistry,
+} from "../data/cards/ranges.js";
 import {
   ActionHandlerRegistry,
   registerDefaultHandlers,
@@ -48,9 +59,109 @@ function formatIssue(card, message, effectIndex = null, actionIndex = null) {
   };
 }
 
+function validateCardIdGovernance() {
+  const errors = [];
+  const warnings = [];
+  const summary = [];
+  const groupedCards = new Set();
+  const groupedIds = new Map();
+
+  for (const message of validateCardIdRangeRegistry()) {
+    errors.push(formatIssue(null, message));
+  }
+
+  for (const group of cardDatabaseGroups) {
+    const range = getCardIdRangeByKey(group?.rangeKey);
+    const cards = Array.isArray(group?.cards) ? group.cards : [];
+
+    if (!range) {
+      const groupKey = group?.rangeKey || "unknown";
+      errors.push(
+        formatIssue(
+          null,
+          `Card group "${groupKey}" has no declared ID range.`,
+        ),
+      );
+      continue;
+    }
+
+    const capacity = getCardIdRangeSize(range);
+    summary.push({
+      key: range.key,
+      label: range.label,
+      start: range.start,
+      end: range.end,
+      capacity,
+      used: cards.length,
+      remaining: capacity - cards.length,
+      enforceAssignedRanges: CARD_ID_RANGE_POLICY.enforceAssignedRanges,
+    });
+
+    if (cards.length > capacity) {
+      const rangeLabel = `${range.start}-${range.end}`;
+      errors.push(
+        formatIssue(
+          null,
+          `Card group "${range.key}" uses ${cards.length} IDs but range ${rangeLabel} only has ${capacity} slots.`,
+        ),
+      );
+    }
+
+    for (const card of cards) {
+      groupedCards.add(card);
+      if (card?.id !== undefined && card?.id !== null) {
+        const memberships = groupedIds.get(card.id) || [];
+        memberships.push(range.key);
+        groupedIds.set(card.id, memberships);
+      }
+
+      if (
+        CARD_ID_RANGE_POLICY.enforceAssignedRanges &&
+        !isCardIdInRange(card?.id, range)
+      ) {
+        const rangeLabel = `${range.start}-${range.end}`;
+        errors.push(
+          formatIssue(
+            card,
+            `Card id ${card?.id} must be inside ${range.key} range ${rangeLabel}.`,
+          ),
+        );
+      }
+    }
+  }
+
+  for (const card of cardDatabase) {
+    if (!groupedCards.has(card)) {
+      errors.push(
+        formatIssue(
+          card,
+          "Card is exported in cardDatabase but is not assigned to a card group.",
+        ),
+      );
+    }
+  }
+
+  for (const [cardId, memberships] of groupedIds.entries()) {
+    if (memberships.length > 1) {
+      const groups = memberships.join(", ");
+      errors.push(
+        formatIssue(
+          { id: cardId, name: `ID ${cardId}` },
+          `Card id ${cardId} is assigned to multiple groups: ${groups}.`,
+        ),
+      );
+    }
+  }
+
+  return { errors, warnings, summary };
+}
+
 export function validateCardDatabase() {
   const errors = [];
   const warnings = [];
+  const idGovernance = validateCardIdGovernance();
+  errors.push(...idGovernance.errors);
+  warnings.push(...idGovernance.warnings);
 
   const registry = new ActionHandlerRegistry();
   registerDefaultHandlers(registry);
@@ -353,5 +464,5 @@ export function validateCardDatabase() {
     });
   }
 
-  return { errors, warnings };
+  return { errors, warnings, idGovernance: idGovernance.summary };
 }

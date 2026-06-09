@@ -1408,7 +1408,7 @@ function simulateDragonAscension(state, action) {
     method: "ascension",
     position: action.position || ascensionCard.ascension?.position || "attack",
   });
-  if (summoned?.id === 260 || summoned?.name === "Rainbow Cosmic Dragon") {
+  if (summoned?.id === 267 || summoned?.name === "Rainbow Cosmic Dragon") {
     summoned.simBattleDestructionProtected = true;
   }
 }

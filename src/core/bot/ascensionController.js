@@ -110,8 +110,8 @@ export function selectBestAscension(bot, eligible, material, game) {
     // Base: ATK
     score += (asc.atk || 0) / 100;
 
-    // Shadow-Heart Armored Arctroth (75): melhor contra ameaças únicas fortes
-    if (asc.id === 75 && oppHasThreats) {
+    // Shadow-Heart Armored Arctroth (123): melhor contra ameaças únicas fortes
+    if (asc.id === 123 && oppHasThreats) {
       score += 5; // Efeito de zerar ATK/DEF é ótimo contra bosses
     }
 

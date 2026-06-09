@@ -140,7 +140,7 @@ export function registerDefaultHandlers(registry) {
    Declare categoria, resumo, handler, campos obrigatórios/opcionais,
    `targetRef`, seleção, mutações, preview, exemplos e notas.
 
-6. Use em `src/data/cards.js`:
+6. Use no modulo de cartas adequado em `src/data/cards/`:
 
 ```js
 actions: [{ type: "minha_action", targetRef: "my_target" }]
