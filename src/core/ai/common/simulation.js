@@ -265,9 +265,15 @@ export function applyGenericSimulatedMainPhaseAction(
             (!action.cardId && card.name === action.cardName)),
       );
       if (!target) break;
-      if (target.isFacedown) break;
       if (target.positionChangedThisTurn) break;
       if (target.hasAttacked) break;
+      if (target.isFacedown) {
+        target.isFacedown = false;
+        target.position = "attack";
+        target.positionChangedThisTurn = true;
+        target.cannotAttackThisTurn = false;
+        break;
+      }
       const newPosition =
         action.toPosition === "defense" ? "defense" : "attack";
       if (target.position === newPosition) break;

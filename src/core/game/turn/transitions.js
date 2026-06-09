@@ -13,7 +13,12 @@ import { isAI } from "../../Player.js";
 import { PHASE_ORDER, normalizeTargetPhase } from "./phaseRules.js";
 
 function scheduleAiMoveAfterPaint(game, actor) {
-  if (!isAI(actor) || game.gameOver || typeof actor?.makeMove !== "function") {
+  if (
+    !isAI(actor) ||
+    game.gameOver ||
+    game.isDisposed?.() ||
+    typeof actor?.makeMove !== "function"
+  ) {
     return;
   }
 
@@ -21,6 +26,7 @@ function scheduleAiMoveAfterPaint(game, actor) {
   const expectedPhase = game.phase;
   const runMove = () => {
     if (
+      game.isDisposed?.() ||
       game.gameOver ||
       game.turn !== expectedTurn ||
       game.phase !== expectedPhase
@@ -44,7 +50,7 @@ function scheduleAiMoveAfterPaint(game, actor) {
  * Phase order: draw → standby → main1 → battle → main2 → end
  */
 export async function nextPhase() {
-  if (this.gameOver) return;
+  if (this.gameOver || this.isDisposed?.()) return;
   const actor = this.turn === "player" ? this.player : this.bot;
   const guard = this.guardActionStart(
     { actor, kind: "phase_change" },
@@ -59,7 +65,9 @@ export async function nextPhase() {
       const retryDelayMs = Number.isFinite(this?.aiActionDelayMs)
         ? this.aiActionDelayMs
         : 250;
-      setTimeout(() => this.nextPhase(), retryDelayMs);
+      setTimeout(() => {
+        if (!this.isDisposed?.()) this.nextPhase();
+      }, retryDelayMs);
     }
     return guard;
   }
@@ -68,6 +76,7 @@ export async function nextPhase() {
   await this.checkAndOfferTraps("phase_end", {
     currentPhase: this.phase,
   });
+  if (this.gameOver || this.isDisposed?.()) return;
 
   const next = this.getNextPhase?.(this.phase) ?? null;
   if (!next) {
@@ -90,6 +99,7 @@ export async function nextPhase() {
  * @param {string} targetPhase - The phase to skip to
  */
 export async function skipToPhase(targetPhase) {
+  if (this.gameOver || this.isDisposed?.()) return;
   const actor = this.turn === "player" ? this.player : this.bot;
   const guard = this.guardActionStart(
     { actor, kind: "phase_change" },
@@ -126,6 +136,7 @@ export async function skipToPhase(targetPhase) {
   if (this.phase === "end") {
     return await this.endTurn();
   }
+  if (this.gameOver || this.isDisposed?.()) return;
   this.updateBoard();
   if (this.phase !== "draw") {
     scheduleAiMoveAfterPaint(this, actor);

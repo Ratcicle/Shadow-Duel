@@ -8,6 +8,8 @@
  * Refreshes all zones, LP, phase track, and indicators.
  */
 export function updateBoard(options = {}) {
+  if (this.isDisposed?.()) return;
+
   const shouldAnimateCards = options.animateCards !== false;
   const shouldAnimateGhosts =
     shouldAnimateCards && options.animateGhosts !== false;

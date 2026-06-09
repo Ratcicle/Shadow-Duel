@@ -336,7 +336,7 @@ export const arcanistCards = [
     attribute: "Earth",
     archetype: "Arcanist",
     description:
-      'You can target 1 face-up monster your opponent controls; change its battle position. If this card is equipped with an "Arcanist" Equip Spell, this effect can be activated as a Quick Effect. You can only use this effect of "Tera, Arcanist of Earth" once per turn.',
+      'You can target 1 monster your opponent controls; change its battle position. If this card is equipped with an "Arcanist" Equip Spell, this effect can be activated as a Quick Effect. You can only use this effect of "Tera, Arcanist of Earth" once per turn.',
     image: "assets/Tera, Arcanist of Earth.png",
     effects: [
       {
@@ -351,7 +351,6 @@ export const arcanistCards = [
             owner: "opponent",
             zone: "field",
             cardKind: "monster",
-            requireFaceup: true,
             count: { min: 1, max: 1 },
           },
         ],
@@ -387,7 +386,6 @@ export const arcanistCards = [
             owner: "opponent",
             zone: "field",
             cardKind: "monster",
-            requireFaceup: true,
             count: { min: 1, max: 1 },
           },
         ],

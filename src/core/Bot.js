@@ -111,7 +111,7 @@ export default class Bot extends Player {
   }
 
   async makeMove(game) {
-    if (!game || game.gameOver) return;
+    if (!game || game.gameOver || game.isDisposed?.()) return;
 
     try {
       game._arenaTracker?.recordProgress?.("bot_make_move_enter", game, {
@@ -145,11 +145,13 @@ export default class Bot extends Player {
           actor: this.id,
           phase,
         });
-        if (!game.gameOver && game.phase === phase) {
+        if (!game.gameOver && !game.isDisposed?.() && game.phase === phase) {
           const actionDelayMs = Number.isFinite(game?.aiActionDelayMs)
             ? game.aiActionDelayMs
             : 500;
-          setTimeout(() => game.nextPhase(), actionDelayMs);
+          setTimeout(() => {
+            if (!game.isDisposed?.()) game.nextPhase();
+          }, actionDelayMs);
         }
         return;
       }
@@ -176,7 +178,11 @@ export default class Bot extends Player {
       );
       console.error("[Bot.makeMove] Stack trace:", error.stack);
       // Fallback: forçar nextPhase para não travar o jogo
-      if (!game.gameOver && typeof game.nextPhase === "function") {
+      if (
+        !game.gameOver &&
+        !game.isDisposed?.() &&
+        typeof game.nextPhase === "function"
+      ) {
         console.log("[Bot.makeMove] ⚠️ Forcing nextPhase() after error");
         game.nextPhase();
       }

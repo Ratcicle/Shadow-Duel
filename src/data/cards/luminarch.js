@@ -1063,7 +1063,6 @@ export const luminarchCards = [
             owner: "self",
             zone: "field",
             cardKind: "monster",
-            requireFaceup: true,
             count: { min: 1, max: 1 },
           },
         ],

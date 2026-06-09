@@ -8,6 +8,7 @@
  * @this {import('../../Game.js').default}
  */
 export function on(eventName, handler) {
+  if (this.isDisposed?.()) return;
   if (!this.eventListeners[eventName]) {
     this.eventListeners[eventName] = [];
   }
@@ -19,6 +20,7 @@ export function on(eventName, handler) {
  * @this {import('../../Game.js').default}
  */
 export async function emit(eventName, payload) {
+  if (this.isDisposed?.()) return null;
   this._arenaTracker?.recordEvent?.(eventName, payload, {
     turn: this.turnCounter,
     phase: this.phase,
@@ -42,6 +44,7 @@ export async function emit(eventName, payload) {
  * @this {import('../../Game.js').default}
  */
 export function notify(eventName, payload) {
+  if (this.isDisposed?.()) return;
   this._arenaTracker?.recordEvent?.(eventName, payload, {
     turn: this.turnCounter,
     phase: this.phase,

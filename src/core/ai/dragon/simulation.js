@@ -236,7 +236,14 @@ export function simulateMainPhaseAction(state, action) {
       const target = (player.field || []).find(
         (c) => c && (c.id === action.cardId || c.name === action.cardName),
       );
-      if (!target || target.isFacedown || target.positionChangedThisTurn || target.hasAttacked) break;
+      if (!target || target.positionChangedThisTurn || target.hasAttacked) break;
+      if (target.isFacedown) {
+        target.isFacedown = false;
+        target.position = "attack";
+        target.positionChangedThisTurn = true;
+        target.cannotAttackThisTurn = false;
+        break;
+      }
       const newPos = action.toPosition === "defense" ? "defense" : "attack";
       if (target.position === newPos) break;
       target.position = newPos;

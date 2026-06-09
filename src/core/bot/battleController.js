@@ -7,6 +7,8 @@ export function isSameBattleCard(candidate, original) {
 }
 
 export function playBotBattlePhase(bot, game) {
+  if (game.isDisposed?.()) return;
+
   const guard = game.canStartAction({
     actor: bot,
     kind: "bot_attack",
@@ -26,6 +28,7 @@ export function playBotBattlePhase(bot, game) {
 
   const performAttack = () => {
     // Verificar se ainda podemos atacar
+    if (game.isDisposed?.()) return;
     if (game.gameOver) return;
     if (game.phase !== "battle") return; // Fase mudou durante resolução
 
@@ -37,7 +40,9 @@ export function playBotBattlePhase(bot, game) {
     });
 
     if (!availableAttackers.length) {
-      setTimeout(() => game.nextPhase(), battleDelayMs);
+      setTimeout(() => {
+        if (!game.isDisposed?.()) game.nextPhase();
+      }, battleDelayMs);
       return;
     }
 
@@ -199,7 +204,9 @@ export function playBotBattlePhase(bot, game) {
 
       if (!attackerStillOnField || !targetStillOnField) {
         // Cartas foram removidas, recalcular na próxima iteração
-        setTimeout(() => performAttack(), battleDelayMs);
+        setTimeout(() => {
+          if (!game.isDisposed?.()) performAttack();
+        }, battleDelayMs);
         return;
       }
 
@@ -209,15 +216,19 @@ export function playBotBattlePhase(bot, game) {
       )
         .then(() => {
           // Verificar todas as condições antes de continuar atacando
-          if (!game.gameOver && game.phase === "battle") {
-            setTimeout(() => performAttack(), battleDelayMs);
+          if (!game.gameOver && !game.isDisposed?.() && game.phase === "battle") {
+            setTimeout(() => {
+              if (!game.isDisposed?.()) performAttack();
+            }, battleDelayMs);
           }
         })
         .catch((err) => {
           console.error("[Bot.playBattlePhase] resolveCombat error:", err);
         });
     } else {
-      setTimeout(() => game.nextPhase(), battleDelayMs);
+      setTimeout(() => {
+        if (!game.isDisposed?.()) game.nextPhase();
+      }, battleDelayMs);
     }
   };
 

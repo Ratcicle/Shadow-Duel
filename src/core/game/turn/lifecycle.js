@@ -14,7 +14,12 @@ import { isAI } from "../../Player.js";
 import { botLogger } from "../../BotLogger.js";
 
 function scheduleAiMoveAfterPaint(game, actor) {
-  if (!isAI(actor) || game.gameOver || typeof actor?.makeMove !== "function") {
+  if (
+    !isAI(actor) ||
+    game.gameOver ||
+    game.isDisposed?.() ||
+    typeof actor?.makeMove !== "function"
+  ) {
     return;
   }
 
@@ -25,6 +30,7 @@ function scheduleAiMoveAfterPaint(game, actor) {
   const expectedPhase = game.phase;
   const runMove = () => {
     if (
+      game.isDisposed?.() ||
       game.gameOver ||
       game.turn !== expectedTurn ||
       game.phase !== expectedPhase
@@ -72,6 +78,7 @@ function scheduleAiMoveAfterPaint(game, actor) {
  * Handles draw phase, standby phase, and transitions to main1.
  */
 export async function startTurn() {
+  if (this.gameOver || this.isDisposed?.()) return;
   this.turnCounter += 1;
   this._arenaTracker?.recordProgress?.("turn_start", this);
 
@@ -134,6 +141,7 @@ export async function startTurn() {
     handSize: activePlayer?.hand?.length || 0,
   });
   this.drawCards(activePlayer, 1);
+  if (this.gameOver || this.isDisposed?.()) return;
   this._arenaTracker?.recordProgress?.("turn_draw_after", this, {
     actor: activePlayer?.id || this.turn,
     deckSize: activePlayer?.deck?.length || 0,
@@ -141,15 +149,19 @@ export async function startTurn() {
   });
   this.updateBoard();
   await this.waitForPhaseDelay();
+  if (this.gameOver || this.isDisposed?.()) return;
 
   this.phase = "standby";
 
   // Process delayed actions in standby phase BEFORE emitting the event
   await this.processDelayedActions("standby", activePlayer.id || this.turn);
+  if (this.gameOver || this.isDisposed?.()) return;
 
   this.updateBoard();
   await this.emit("standby_phase", { player: activePlayer, opponent });
+  if (this.gameOver || this.isDisposed?.()) return;
   await this.waitForPhaseDelay();
+  if (this.gameOver || this.isDisposed?.()) return;
 
   this.phase = "main1";
   this.updateBoard();
@@ -176,6 +188,7 @@ export async function startTurn() {
  * Ends the current turn and starts the opponent's turn.
  */
 export async function endTurn() {
+  if (this.gameOver || this.isDisposed?.()) return;
   const actor = this.turn === "player" ? this.player : this.bot;
   const guard = this.guardActionStart(
     { actor, kind: "phase_change" },
@@ -186,6 +199,7 @@ export async function endTurn() {
   // Resolve any actions scheduled for the end phase of the current turn
   // (e.g. Galaxy Extreme Dragon returning from the banished zone).
   await this.processDelayedActions("end", this.turn);
+  if (this.gameOver || this.isDisposed?.()) return;
 
   this.cleanupTempBoosts(this.player);
   this.cleanupTempBoosts(this.bot);
@@ -205,5 +219,6 @@ export async function endTurn() {
  * @returns {Promise<void>}
  */
 export function waitForPhaseDelay() {
+  if (this.isDisposed?.()) return Promise.resolve();
   return new Promise((resolve) => setTimeout(resolve, this.phaseDelayMs || 0));
 }

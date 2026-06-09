@@ -25,7 +25,7 @@ function resolvePlannerMode(game, profile = {}) {
 
 export async function playBotMainPhase(bot, game) {
   // Verificar se o jogo já acabou
-  if (game.gameOver) {
+  if (game.gameOver || game.isDisposed?.()) {
     return;
   }
   game._arenaTracker?.recordProgress?.("bot_main_phase_enter", game, {
@@ -89,6 +89,7 @@ export async function playBotMainPhase(bot, game) {
     successfulActions < maxSuccessfulActions &&
     totalAttempts < maxTotalAttempts
   ) {
+    if (game.gameOver || game.isDisposed?.()) return;
     totalAttempts++;
 
     // Try Ascension before other actions if available
@@ -105,6 +106,7 @@ export async function playBotMainPhase(bot, game) {
       await new Promise((resolve) =>
         setTimeout(resolve, successfulActionDelayMs),
       );
+      if (game.gameOver || game.isDisposed?.()) return;
     }
 
     const rawActions = bot.generateMainPhaseActions(game);
@@ -524,6 +526,7 @@ export async function playBotMainPhase(bot, game) {
     await new Promise((resolve) =>
       setTimeout(resolve, successfulActionDelayMs),
     );
+    if (game.gameOver || game.isDisposed?.()) return;
   }
 
   // Final chance to ascend if no actions left

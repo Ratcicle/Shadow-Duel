@@ -106,6 +106,15 @@ function getStartingPlayerAnnouncement(turn) {
     : "O oponente joga primeiro";
 }
 
+function createDisposedUIAdapter() {
+  return new Proxy(
+    {},
+    {
+      get: () => () => {},
+    },
+  );
+}
+
 export default class Game {
   constructor(options = {}) {
     // Mode flags must be ready before any subsystem or player/bot creation
@@ -141,6 +150,7 @@ export default class Game {
     this.turn = "player";
     this.phase = "draw";
     this.turnCounter = 0;
+    this.disposed = false;
     this.gameOver = false;
     this.winner = null; // Will be set by checkWinCondition()
     this.targetSelection = null;
@@ -203,6 +213,34 @@ export default class Game {
       : new ChainSystem(this);
   }
 
+  isDisposed() {
+    return this.disposed === true;
+  }
+
+  dispose(reason = "dispose") {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.gameOver = true;
+    this.disposeReason = reason;
+    this.targetSelection = null;
+    this.selectionState = "idle";
+    this.graveyardSelection = null;
+    this.pendingSpecialSummon = null;
+    this.pendingEventSelection = null;
+    this.isResolvingEffect = false;
+    this.eventResolutionDepth = 0;
+    this.trapPromptInProgress = false;
+    this.delayedActions = [];
+    this.temporaryReplacementEffects = [];
+    this.pendingCardAnimations = [];
+    this.pendingVisualFeedback = [];
+    this.eventListeners = {};
+    this.chainSystem?.cancelChain?.();
+    this.effectEngine?.clearTargetingCache?.();
+    this.ui = createDisposedUIAdapter();
+    this.renderer = null;
+  }
+
   // Material stats methods moved to src/core/game/summon/materialStats.js
   // applyTurnBasedBuff moved to src/core/game/turn/cleanup.js (paired with cleanupExpiredBuffs)
   // _trackSpecialSummonType, getSpecialSummonedTypeCount moved to src/core/game/summon/tracking.js
@@ -246,15 +284,18 @@ export default class Game {
   // -----------------------------------------------------------------------------
 
   async start(deckList = null, extraDeckList = null) {
+    if (this.isDisposed()) return;
     this._arenaTracker?.recordProgress?.("game_start_enter", this);
     await this.startWithDecks({
       playerDeck: deckList,
       playerExtraDeck: extraDeckList,
     });
+    if (this.isDisposed()) return;
     this._arenaTracker?.recordProgress?.("game_start_exit", this);
   }
 
   async startWithDecks(options = {}) {
+    if (this.isDisposed()) return;
     this._arenaTracker?.recordProgress?.("start_with_decks_enter", this);
     const {
       playerDeck = null,
@@ -318,6 +359,7 @@ export default class Game {
     this._arenaTracker?.recordProgress?.("opening_draw_before", this);
     this.drawCards(this.player, 4);
     this.drawCards(this.bot, 4);
+    if (this.isDisposed()) return;
     this._arenaTracker?.recordProgress?.("opening_draw_after", this, {
       playerHandSize: this.player?.hand?.length || 0,
       botHandSize: this.bot?.hand?.length || 0,
@@ -337,7 +379,9 @@ export default class Game {
       await this.showStartingPlayerAnnouncement({
         enabled: announceStartingPlayer,
       });
+      if (this.isDisposed()) return;
       this.ui.bindPhaseClick((phase) => {
+        if (this.isDisposed()) return;
         const activePlayer = this.turn === "player" ? this.player : this.bot;
         if (this.laboratoryModeEnabled) {
           if (activePlayer.controllerType !== "human") return;
@@ -357,10 +401,13 @@ export default class Game {
     await this.showStartingPlayerAnnouncement({
       enabled: announceStartingPlayer,
     });
+    if (this.isDisposed()) return;
     this._arenaTracker?.recordProgress?.("start_turn_before", this);
     await this.startTurn();
+    if (this.isDisposed()) return;
     this._arenaTracker?.recordProgress?.("start_turn_after", this);
     this.ui.bindPhaseClick((phase) => {
+      if (this.isDisposed()) return;
       const activePlayer = this.turn === "player" ? this.player : this.bot;
       if (this.laboratoryModeEnabled) {
         if (activePlayer.controllerType !== "human") return;

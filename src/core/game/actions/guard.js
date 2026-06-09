@@ -48,6 +48,10 @@ export function canStartAction(options = {}) {
     return result;
   };
 
+  if (this.isDisposed?.()) {
+    return blocked("BLOCKED_GAME_DISPOSED", "Este duelo ja foi encerrado.");
+  }
+
   if (selectionInteractive && !allowDuringSelection) {
     return blocked(
       "BLOCKED_SELECTION_ACTIVE",

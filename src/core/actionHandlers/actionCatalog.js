@@ -1700,6 +1700,7 @@ export const ACTION_CATALOG = {
       "setDefToZeroAfterSummon",
       "atkBoostAfterSummon",
       "defBoostAfterSummon",
+      "statusesOnSummon",
     ],
     fields: {
       ...COMMON_TARGET_FIELDS,
@@ -1718,6 +1719,7 @@ export const ACTION_CATALOG = {
       setDefToZeroAfterSummon: { type: "boolean" },
       atkBoostAfterSummon: { type: "number" },
       defBoostAfterSummon: { type: "number" },
+      statusesOnSummon: { type: "array" },
     },
     targetRef: "optional",
     selection: "dynamic",

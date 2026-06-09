@@ -1349,14 +1349,19 @@ export async function handleSwitchPosition(action, ctx, targets, engine) {
   for (const card of targetCards) {
     if (!card || card.cardKind !== "monster") continue;
 
-    if (card.isFacedown) continue;
-
-    // Switch position
-
     const previousPosition = card.position;
-    const newPosition = card.position === "attack" ? "defense" : "attack";
+    const wasFacedown = card.isFacedown === true;
+    const newPosition = wasFacedown
+      ? "attack"
+      : card.position === "attack"
+        ? "defense"
+        : "attack";
 
     card.position = newPosition;
+    if (wasFacedown) {
+      card.isFacedown = false;
+      card.revealedTurn = game.turnCounter;
+    }
 
     if (action.markChanged !== false) {
       card.hasChangedPosition = true;
@@ -1393,7 +1398,7 @@ export async function handleSwitchPosition(action, ctx, targets, engine) {
       sourceCard: ctx.source,
       fromPosition: previousPosition,
       toPosition: newPosition,
-      wasFlipped: false,
+      wasFlipped: wasFacedown,
       actionContext: ctx?.actionContext || null,
     });
 

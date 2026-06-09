@@ -59,7 +59,7 @@ function getCurrentBattleStat(card) {
 
 function getSwitchedBattleStat(card) {
   if (!card || card.cardKind !== "monster") return 0;
-  if (card.isFacedown) return 1500;
+  if (card.isFacedown) return getEffectiveAtk(card);
   return card.position === "defense"
     ? getEffectiveAtk(card)
     : getEffectiveDef(card);
@@ -71,10 +71,10 @@ function evaluateTeraPositionPlan(tera, analysis = {}) {
   }
 
   const targets = (analysis.oppField || []).filter(
-    (target) => target && target.cardKind === "monster" && !target.isFacedown,
+    (target) => target && target.cardKind === "monster",
   );
   if (targets.length === 0) {
-    return { ok: false, reason: "no face-up opponent monsters" };
+    return { ok: false, reason: "no opponent monsters" };
   }
 
   const teraAtk = getEffectiveAtk(tera);

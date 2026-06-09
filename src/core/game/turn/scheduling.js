@@ -25,6 +25,7 @@ export function scheduleDelayedAction(
   payload,
   priority = 0
 ) {
+  if (this.isDisposed?.()) return null;
   if (!actionType || !triggerCondition || !payload) {
     console.error("Invalid delayed action parameters");
     return null;
@@ -57,6 +58,7 @@ export function scheduleDelayedAction(
  * @param {string} activePlayer - Active player ("player" or "bot")
  */
 export async function processDelayedActions(phase, activePlayer) {
+  if (this.isDisposed?.()) return;
   if (!Array.isArray(this.delayedActions) || this.delayedActions.length === 0) {
     return;
   }
@@ -102,6 +104,7 @@ export async function processDelayedActions(phase, activePlayer) {
  * @param {Object} action - Action to resolve
  */
 export async function resolveDelayedAction(action) {
+  if (this.isDisposed?.()) return;
   try {
     switch (action.actionType) {
       case "delayed_summon":

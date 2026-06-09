@@ -10,6 +10,27 @@ import {
   getSourceOwners,
 } from "./sourceZones.js";
 
+function applyStatusesOnSummon(card, statuses) {
+  if (!card || !statuses) return;
+  const statusEntries = Array.isArray(statuses) ? statuses : [statuses];
+  for (const entry of statusEntries) {
+    if (!entry) continue;
+    const status =
+      typeof entry === "string"
+        ? entry
+        : typeof entry.status === "string"
+          ? entry.status
+          : null;
+    if (!status) continue;
+    const value =
+      typeof entry === "object" &&
+      Object.prototype.hasOwnProperty.call(entry, "value")
+        ? entry.value
+        : true;
+    card[status] = value;
+  }
+}
+
 /**
  * Generic handler for special summoning from any zone with filters
  * UNIFIED HANDLER - Replaces both single and multi-card summon patterns
@@ -519,6 +540,7 @@ async function summonCards(cards, sourceZoneEntries, player, action, engine) {
   const setDefToZero = action.setDefToZeroAfterSummon === true;
   const atkBoostAfterSummon = Number.isFinite(action.atkBoostAfterSummon) ? action.atkBoostAfterSummon : 0;
   const defBoostAfterSummon = Number.isFinite(action.defBoostAfterSummon) ? action.defBoostAfterSummon : 0;
+  const statusesOnSummon = action.statusesOnSummon || null;
 
   const canUseMoveCard = game && typeof game.moveCard === "function";
 
@@ -576,6 +598,7 @@ async function summonCards(cards, sourceZoneEntries, player, action, engine) {
         position,
         isFacedown: false,
         resetAttackFlags: true,
+        statusesOnSummon,
       });
 
       if (moveResult?.success === false) {
@@ -611,6 +634,10 @@ async function summonCards(cards, sourceZoneEntries, player, action, engine) {
       card.controller = player.id;
 
       player.field.push(card);
+    }
+
+    if (!usedMoveCard) {
+      applyStatusesOnSummon(card, statusesOnSummon);
     }
 
     card.cannotAttackThisTurn = action.cannotAttackThisTurn || false;

@@ -482,7 +482,7 @@
     },
     "306": {
       "name": "Tera, Arcanista da Terra",
-      "description": "Você pode escolher 1 monstro com a face para cima que seu oponente controla; mude a posição de batalha dele. Se este card estiver equipado com uma Magia de Equipamento \"Arcanista\", este efeito pode ser ativado como um Efeito Rápido. Você só pode usar este efeito de \"Tera, Arcanista da Terra\" uma vez por turno."
+      "description": "Você pode escolher 1 monstro que seu oponente controla; mude a posição de batalha dele. Se este card estiver equipado com uma Magia de Equipamento \"Arcanista\", este efeito pode ser ativado como um Efeito Rápido. Você só pode usar este efeito de \"Tera, Arcanista da Terra\" uma vez por turno."
     },
     "307": {
       "name": "Albus, Arcanista do Gelo",
@@ -526,7 +526,7 @@
     },
     "351": {
       "name": "Explorador dos Vinculados à Miragem",
-      "description": "Se este card for Invocado por Invocação-Normal: adicione 1 Magia/Armadilha \"Vinculados à Miragem\" do seu Deck à sua mão. Uma vez por turno: você pode escolher 1 monstro com a face para cima que seu oponente controla; mude a posição de batalha dele. Você só pode usar cada efeito de \"Explorador dos Vinculados à Miragem\" uma vez por turno."
+      "description": "Se este card for Invocado por Invocação-Normal: adicione 1 Magia/Armadilha \"Vinculados à Miragem\" do seu Deck à sua mão. Uma vez por turno: você pode escolher 1 monstro que seu oponente controla; mude a posição de batalha dele. Você só pode usar cada efeito de \"Explorador dos Vinculados à Miragem\" uma vez por turno."
     },
     "352": {
       "name": "Dançarina dos Vinculados à Miragem",
@@ -538,11 +538,11 @@
     },
     "354": {
       "name": "Oásis dos Vinculados à Miragem",
-      "description": "Uma vez por turno: você pode escolher 1 destes efeitos.\n● Escolha 1 monstro \"Vinculados à Miragem\" que você controla; devolva-o para a mão e, depois, adicione 1 monstro \"Vinculados à Miragem\" com nome diferente do seu Deck à sua mão.\n● Escolha 1 monstro com a face para cima que seu oponente controla; mude a posição de batalha dele e, depois, ele perde 500 de ATK/DEF até o final deste turno."
+      "description": "Cada vez que um monstro que seu oponente controla mudar sua Posição de Batalha, ele perde 500 ATK/DEF até o final do próximo turno.\nUma vez por turno: você pode escolher 1 destes efeitos.\n● Escolha 1 monstro \"Vinculados à Miragem\" que você controla; devolva-o para a mão e, depois, adicione 1 monstro \"Vinculados à Miragem\" com nome diferente do seu Deck à sua mão.\n● Escolha 1 monstro que seu oponente controla; mude sua Posição de Batalha."
     },
     "355": {
       "name": "Soberano de Vidro dos Vinculados à Miragem",
-      "description": "Material de Ascensão: \"Explorador dos Vinculados à Miragem\". Requisito: o material deve ter ativado seus efeitos 2 vezes neste Duelo. Se este card for Invocado por Invocação-Ascensão: escolha até 2 monstros com a face para cima que seu oponente controla; mude as posições de batalha deles. Uma vez por turno: escolha 1 outro monstro \"Vinculados à Miragem\" que você controla e 1 card que seu oponente controla; devolva os alvos à mão. Se este card atacar um monstro em Posição de Defesa, cause dano perfurante."
+      "description": "Material de Ascensão: \"Explorador dos Vinculados à Miragem\". Requisito: o material deve ter ativado seus efeitos 2 vezes neste Duelo. Se este card for Invocado por Invocação-Ascensão: escolha até 2 monstros que seu oponente controla; mude as posições de batalha deles. Uma vez por turno: escolha 1 outro monstro \"Vinculados à Miragem\" que você controla e 1 card que seu oponente controla; devolva os alvos à mão. Se este card atacar um monstro em Posição de Defesa, cause dano perfurante."
     },
     "356": {
       "name": "Víbora de Vidro dos Vinculados à Miragem",
@@ -550,11 +550,11 @@
     },
     "357": {
       "name": "Sacerdotisa de Areia dos Vinculados à Miragem",
-      "description": "Você pode escolher 1 monstro \"Vinculados à Miragem\" no seu Cemitério; adicione-o à sua mão. A primeira vez a cada turno que um monstro com a face para cima que seu oponente controla mudar sua Posição de Batalha: esse monstro perde 500 de ATK/DEF até o final do próximo turno. Você só pode usar cada efeito de \"Sacerdotisa de Areia dos Vinculados à Miragem\" uma vez por turno."
+      "description": "Você pode escolher 1 monstro \"Vinculados à Miragem\" no seu Cemitério; adicione-o à sua mão. A primeira vez a cada turno que um monstro que seu oponente controla mudar sua Posição de Batalha: esse monstro perde 500 de ATK/DEF até o final do próximo turno. Você só pode usar cada efeito de \"Sacerdotisa de Areia dos Vinculados à Miragem\" uma vez por turno."
     },
     "358": {
       "name": "Falso Rei dos Vinculados à Miragem",
-      "description": "Você pode Invocar este card por Invocação-Especial da sua mão ao devolver 1 monstro \"Vinculados à Miragem\" que você controla para a mão. Você pode escolher 1 monstro com a face para cima que seu oponente controla; mude a posição de batalha dele. Se este card destruir um monstro em Posição de Defesa em batalha: você pode Invocar por Invocação-Especial 1 monstro \"Vinculados à Miragem\" de Nível 4 ou menor da sua mão. Você só pode usar cada efeito de \"Falso Rei dos Vinculados à Miragem\" uma vez por turno."
+      "description": "Você pode Invocar este card por Invocação-Especial da sua mão ao devolver 1 monstro \"Vinculados à Miragem\" que você controla para a mão. Você pode escolher 1 monstro que seu oponente controla; mude a posição de batalha dele. Se este card destruir um monstro em Posição de Defesa em batalha: você pode Invocar por Invocação-Especial 1 monstro \"Vinculados à Miragem\" de Nível 4 ou menor da sua mão. Você só pode usar cada efeito de \"Falso Rei dos Vinculados à Miragem\" uma vez por turno."
     },
     "359": {
       "name": "Caminho Espelhado dos Vinculados à Miragem",

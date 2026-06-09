@@ -5,12 +5,18 @@ export function createGameLauncher({ Game, Renderer }) {
     return new Renderer();
   }
 
+  function disposeActiveGame(reason) {
+    game?.dispose?.(reason);
+    game = null;
+  }
+
   function startNormalDuel({
     botPreset,
     deck,
     extraDeck,
     playerArchetype,
   }) {
+    disposeActiveGame("start_normal_duel");
     const renderer = createRenderer();
     game = new Game({
       botPreset,
@@ -32,6 +38,7 @@ export function createGameLauncher({ Game, Renderer }) {
     setup,
     duelDecks,
   }) {
+    disposeActiveGame("start_laboratory_duel");
     const renderer = createRenderer();
     game = new Game({
       laboratoryMode: true,
@@ -62,6 +69,7 @@ export function createGameLauncher({ Game, Renderer }) {
 
   return {
     getActiveGame: () => game,
+    disposeActiveGame,
     startLaboratoryDuel,
     startNormalDuel,
   };

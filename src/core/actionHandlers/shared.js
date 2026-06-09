@@ -73,8 +73,7 @@ export function resolveTargetCards(action, ctx, targets, options = {}) {
       opponentOwner &&
       Array.isArray(opponentOwner.field) &&
       opponentOwner.field.includes(opponentCard) &&
-      opponentCard.cardKind === "monster" &&
-      opponentCard.isFacedown !== true
+      opponentCard.cardKind === "monster"
     ) {
       resolved = [opponentCard];
     }

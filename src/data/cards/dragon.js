@@ -380,7 +380,6 @@ export const dragonCards = [
             owner: "opponent",
             zone: "field",
             cardKind: "monster",
-            requireFaceup: true,
             count: { min: 1, max: 1 },
           },
         ],
