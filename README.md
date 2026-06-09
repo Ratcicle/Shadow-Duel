@@ -17,6 +17,7 @@ Um jogo de cartas digital inspirado na era clássica de Yu-Gi-Oh! Duela contra o
 - Invoque monstros para atacar ou defender
 - Use magias e armadilhas para virar o jogo
 - Vence quem reduzir o LP do oponente a zero
+- Shadow Duel não possui derrota por deck-out: se o deck estiver vazio, a compra falha e o duelo continua
 
 ### Construindo seu deck
 - **Main Deck:** 20 a 30 cartas (máximo 3 cópias de cada)

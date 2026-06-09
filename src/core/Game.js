@@ -64,6 +64,7 @@ import * as turnOncePerTurn from "./game/turn/oncePerTurn.js";
 import * as actionsGuard from "./game/actions/guard.js";
 
 // State modules (moved from inline methods)
+import * as stateDuelReset from "./game/state/duelReset.js";
 import * as stateSerialization from "./game/state/serialization.js";
 
 // Helpers modules (moved from inline methods)
@@ -318,12 +319,8 @@ export default class Game {
     if (this.player.controllerType !== "ai") {
       this.player.controllerType = "human";
     }
-    // BUG #9 FIX: Reset once-per-duel usage between duels
-    // This ensures effects like "once per duel" are available in new matches
-    this.player.oncePerDuelUsageByName = Object.create(null);
-    this.bot.oncePerDuelUsageByName = Object.create(null);
 
-    this.resetMaterialDuelStats("start");
+    this.resetDuelState("startWithDecks");
     this._arenaTracker?.recordProgress?.("deck_build_before", this, {
       exactDecks,
     });
@@ -487,26 +484,17 @@ export default class Game {
     }
     this.player.controllerType = "human";
     const useBot = labOptions.useBot || false;
+    this.bot.controllerType = useBot ? "ai" : "human";
+    this.resetDuelState("laboratory_start", {
+      phase: "main1",
+      turnCounter: 1,
+      turn: "player",
+    });
     if (useBot && typeof this.bot.buildDeck === "function") {
       this.bot.buildDeck();
       this.bot.buildExtraDeck();
       // controllerType is already "ai" from Bot constructor
-    } else {
-      this.bot.controllerType = "human";
     }
-    this.player.oncePerDuelUsageByName = Object.create(null);
-    this.bot.oncePerDuelUsageByName = Object.create(null);
-
-    this.resetMaterialDuelStats("laboratory_start");
-    this.turn = "player";
-    this.phase = "main1";
-    this.turnCounter = 1;
-    this.gameOver = false;
-    this.winner = null;
-    this.isResolvingEffect = false;
-    this.eventResolutionDepth = 0;
-    this.pendingSpecialSummon = null;
-    this.cancelTargetSelection();
 
     this.applyScenarioSetup?.(setup, {
       logMessage: "Laboratory setup applied.",
@@ -977,6 +965,10 @@ Game.prototype.guardActionStart = actionsGuard.guardActionStart;
 // -----------------------------------------------------------------------------
 // State: Attach methods from modular state/ folder
 // -----------------------------------------------------------------------------
+
+// Reset: duel/player state reset helpers
+Game.prototype.resetPlayerDuelState = stateDuelReset.resetPlayerDuelState;
+Game.prototype.resetDuelState = stateDuelReset.resetDuelState;
 
 // Serialization: getPublicState
 Game.prototype.getPublicState = stateSerialization.getPublicState;

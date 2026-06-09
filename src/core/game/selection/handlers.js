@@ -88,13 +88,33 @@ export function handleTargetSelectionClick(
   }
 
   const selections = this.targetSelection.selections[requirement.id] || [];
+  const min = Number(requirement.min ?? 0);
   const max = Number(requirement.max ?? 0);
   const existing = selections.indexOf(candidate.key);
   if (existing > -1) {
+    const canResolveWithCurrentSelection =
+      selections.length >= min &&
+      (max <= 0 || selections.length <= max);
+    if (
+      this.targetSelection.confirmOnRepeatedTarget !== false &&
+      canResolveWithCurrentSelection
+    ) {
+      console.log("[Game] Repeated target click, confirming selection");
+      this.advanceTargetSelection();
+      return true;
+    }
     selections.splice(existing, 1);
     console.log("[Game] Deselected card");
   } else {
     if (max > 0 && selections.length >= max) {
+      if (max === 1) {
+        selections.splice(0, selections.length, candidate.key);
+        console.log("[Game] Replaced selected target");
+        this.targetSelection.selections[requirement.id] = selections;
+        this.highlightTargetCandidates();
+        this.updateFieldTargetingProgress();
+        return true;
+      }
       console.log("[Game] Max selections reached");
       return true;
     }

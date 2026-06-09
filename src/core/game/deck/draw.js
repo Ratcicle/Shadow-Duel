@@ -15,16 +15,22 @@ import Card from "../../Card.js";
  * @param {Object} player - The player drawing cards
  * @param {number} count - Number of cards to draw (default: 1)
  * @param {Object} options - Options { silent, message }
- * @returns {{ ok: boolean, reason?: string, drawn: Card[] }}
+ * @returns {{ ok: boolean, success: boolean, reason?: string, nonFatal?: boolean, drawn: Card[] }}
  */
 export function drawCards(player, count = 1, options = {}) {
   if (!player) {
-    return { ok: false, reason: "invalid_player", drawn: [] };
+    return {
+      ok: false,
+      success: false,
+      reason: "invalid_player",
+      nonFatal: true,
+      drawn: [],
+    };
   }
 
   const drawCount = Math.max(0, Number(count) || 0);
   if (drawCount === 0) {
-    return { ok: true, drawn: [] };
+    return { ok: true, success: true, drawn: [] };
   }
 
   const drawn = [];
@@ -40,7 +46,13 @@ export function drawCards(player, count = 1, options = {}) {
         requested: drawCount,
         drawn: drawn.length,
       });
-      return { ok: false, reason: "deck_empty", drawn };
+      return {
+        ok: false,
+        success: false,
+        reason: "deck_empty",
+        nonFatal: true,
+        drawn,
+      };
     }
     drawn.push(card);
     if (
@@ -66,7 +78,7 @@ export function drawCards(player, count = 1, options = {}) {
     }
   }
 
-  return { ok: true, drawn };
+  return { ok: true, success: true, drawn };
 }
 
 /**

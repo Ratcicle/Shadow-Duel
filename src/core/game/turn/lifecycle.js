@@ -140,7 +140,16 @@ export async function startTurn() {
     deckSize: activePlayer?.deck?.length || 0,
     handSize: activePlayer?.hand?.length || 0,
   });
-  this.drawCards(activePlayer, 1);
+  const drawResult = this.drawCards(activePlayer, 1);
+  this._arenaTracker?.recordProgress?.("turn_draw_result", this, {
+    actor: activePlayer?.id || this.turn,
+    ok: drawResult?.ok === true,
+    reason: drawResult?.reason || null,
+    nonFatal: drawResult?.nonFatal === true,
+    drawnCount: drawResult?.drawn?.length || 0,
+    deckSize: activePlayer?.deck?.length || 0,
+    handSize: activePlayer?.hand?.length || 0,
+  });
   if (this.gameOver || this.isDisposed?.()) return;
   this._arenaTracker?.recordProgress?.("turn_draw_after", this, {
     actor: activePlayer?.id || this.turn,

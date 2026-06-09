@@ -11,6 +11,269 @@ import {
 const BARBARIAS_NAME = "Luminarch Megashield Barbarias";
 const FORTRESS_NAME = "Luminarch Fortress Aegis";
 const PURE_KNIGHT_NAME = "Luminarch Pure Knight";
+const CITADEL_NAME = "Sanctum of the Luminarch Citadel";
+const RADIANT_LANCER_NAME = "Luminarch Radiant Lancer";
+const AURORA_SERAPH_NAME = "Luminarch Aurora Seraph";
+const CELESTIAL_MARSHAL_NAME = "Luminarch Celestial Marshal";
+const MOONBLADE_CAPTAIN_NAME = "Luminarch Moonblade Captain";
+const SANCTUM_PROTECTOR_NAME = "Luminarch Sanctum Protector";
+const AEGISBEARER_NAME = "Luminarch Aegisbearer";
+
+const LUMINARCH_PAYOFF_MATERIAL_NAMES = [
+  BARBARIAS_NAME,
+  FORTRESS_NAME,
+  RADIANT_LANCER_NAME,
+  AURORA_SERAPH_NAME,
+];
+
+const LUMINARCH_PROTECTED_FUSION_MATERIAL_NAMES = [
+  ...LUMINARCH_PAYOFF_MATERIAL_NAMES,
+  CELESTIAL_MARSHAL_NAME,
+  MOONBLADE_CAPTAIN_NAME,
+  SANCTUM_PROTECTOR_NAME,
+];
+
+function uniqueNames(names) {
+  return [...new Set((names || []).filter(Boolean))];
+}
+
+function mergeFusionCostPreferences(existing = {}) {
+  return {
+    ...existing,
+    preserveNames: uniqueNames([
+      ...(existing.preserveNames || []),
+      ...LUMINARCH_PROTECTED_FUSION_MATERIAL_NAMES,
+    ]),
+    offensivePayoffNames: uniqueNames([
+      ...(existing.offensivePayoffNames || []),
+      ...LUMINARCH_PAYOFF_MATERIAL_NAMES,
+    ]),
+    preferNames: uniqueNames([
+      ...(existing.preferNames || []),
+      AEGISBEARER_NAME,
+    ]),
+  };
+}
+
+function getLuminarchFusionMaterialEntries(bot) {
+  const handMaterials = (bot?.hand || [])
+    .filter((c) => c && c.cardKind === "monster")
+    .map((card) => ({ card, zone: "hand" }));
+  const fieldMaterials = (bot?.field || [])
+    .filter((c) => c && c.cardKind === "monster")
+    .map((card) => ({ card, zone: "field" }));
+  return [...handMaterials, ...fieldMaterials];
+}
+
+function findLuminarchFusionMaterialCombos(game, fusionCard, bot) {
+  const entries = getLuminarchFusionMaterialEntries(bot);
+  if (!fusionCard || !game?.effectEngine?.findFusionMaterialCombos) {
+    return { entries, combos: [] };
+  }
+
+  const materials = entries.map((entry) => entry.card);
+  const materialInfo = entries.map((entry) => ({ zone: entry.zone }));
+  try {
+    const combos =
+      game.effectEngine.findFusionMaterialCombos(fusionCard, materials, {
+        materialInfo,
+      }) || [];
+    return { entries, combos };
+  } catch (error) {
+    return { entries, combos: [] };
+  }
+}
+
+function getMaterialZone(card, entries, bot) {
+  const entry = entries.find((item) => item.card === card);
+  if (entry?.zone) return entry.zone;
+  if ((bot?.field || []).includes(card)) return "field";
+  if ((bot?.hand || []).includes(card)) return "hand";
+  return "unknown";
+}
+
+function getFieldMaterialValue(card, context = {}) {
+  if (!card) return 0;
+  const name = card.name || "";
+  const baseStats = Math.max(card.atk || 0, card.def || 0) / 100;
+  const protectedBonus = {
+    [BARBARIAS_NAME]: 55,
+    [FORTRESS_NAME]: 50,
+    [RADIANT_LANCER_NAME]: 45,
+    [AURORA_SERAPH_NAME]: 40,
+    [CELESTIAL_MARSHAL_NAME]: 32,
+    [MOONBLADE_CAPTAIN_NAME]: 26,
+    [SANCTUM_PROTECTOR_NAME]: 24,
+    [AEGISBEARER_NAME]: 14,
+  }[name] || 0;
+  const opponent = context.opponent;
+  const oppStrongest = getStrongestAttackThreat(opponent?.field || [], {
+    facedownValue: 1500,
+    includeBoosts: false,
+  });
+  const defensiveRole =
+    card.mustBeAttacked ||
+    (card.position === "defense" && (card.def || 0) >= oppStrongest);
+  return baseStats + protectedBonus + (defensiveRole ? 8 : 0);
+}
+
+function getHandMaterialValue(card) {
+  if (!card) return 0;
+  const baseStats = Math.max(card.atk || 0, card.def || 0) / 300;
+  const protectedHandBonus = LUMINARCH_PROTECTED_FUSION_MATERIAL_NAMES.includes(
+    card.name,
+  )
+    ? 6
+    : 0;
+  return baseStats + protectedHandBonus;
+}
+
+function getFusionBoardValue(fusionCard, context = {}) {
+  if (!fusionCard) return 0;
+  const baseStats = Math.max(fusionCard.atk || 0, fusionCard.def || 0) / 100;
+  if (fusionCard.name === BARBARIAS_NAME) return baseStats + 38;
+  if (fusionCard.name === FORTRESS_NAME) return baseStats + 34;
+  if (fusionCard.name === PURE_KNIGHT_NAME) {
+    const bot = context.bot;
+    const hasCitadel = bot?.fieldSpell?.name === CITADEL_NAME;
+    const hasCitadelInHand = (bot?.hand || []).some(
+      (c) => c?.name === CITADEL_NAME,
+    );
+    const canSearchCitadel =
+      !hasCitadel &&
+      !hasCitadelInHand &&
+      (bot?.deck || []).some((c) => c?.name === CITADEL_NAME);
+    const hasLpCostSpell = (bot?.hand || []).some((card) =>
+      [
+        "Luminarch Holy Ascension",
+        "Luminarch Radiant Wave",
+        "Luminarch Sacred Judgment",
+      ].includes(card?.name),
+    );
+    return baseStats + (canSearchCitadel ? 16 : 0) + (hasLpCostSpell ? 6 : 0);
+  }
+  return baseStats;
+}
+
+function evaluateFusionMaterialSpend(combo, fusionCard, context, entries) {
+  const bot = context.bot;
+  const fieldMaterials = [];
+  const handMaterials = [];
+
+  for (const material of combo || []) {
+    const zone = getMaterialZone(material, entries, bot);
+    if (zone === "field") fieldMaterials.push(material);
+    else handMaterials.push(material);
+  }
+
+  const fieldMaterialValue = fieldMaterials.reduce(
+    (sum, card) => sum + getFieldMaterialValue(card, context),
+    0,
+  );
+  const handMaterialValue = handMaterials.reduce(
+    (sum, card) => sum + getHandMaterialValue(card),
+    0,
+  );
+  const fusionValue = getFusionBoardValue(fusionCard, context);
+  const boardCompressionPenalty = Math.max(0, fieldMaterials.length - 1) * 10;
+  const netBoardValue =
+    fusionValue - fieldMaterialValue - boardCompressionPenalty;
+  const protectedFieldMaterials = fieldMaterials.filter((card) =>
+    LUMINARCH_PAYOFF_MATERIAL_NAMES.includes(card?.name),
+  );
+
+  return {
+    combo,
+    fieldMaterials,
+    handMaterials,
+    fieldMaterialValue,
+    handMaterialValue,
+    fusionValue,
+    netBoardValue,
+    protectedFieldMaterials,
+    totalCostValue: fieldMaterialValue + handMaterialValue,
+  };
+}
+
+function getBestFusionMaterialSpend(combos, fusionCard, context, entries) {
+  const evaluated = (combos || []).map((combo) =>
+    evaluateFusionMaterialSpend(combo, fusionCard, context, entries),
+  );
+  evaluated.sort((a, b) => a.totalCostValue - b.totalCostValue);
+  return evaluated[0] || null;
+}
+
+function getPureKnightUtilityNeed(bot) {
+  const hasCitadel = bot?.fieldSpell?.name === CITADEL_NAME;
+  const hasCitadelInHand = (bot?.hand || []).some(
+    (c) => c?.name === CITADEL_NAME,
+  );
+  const canSearchCitadel =
+    !hasCitadel &&
+    !hasCitadelInHand &&
+    (bot?.deck || []).some((c) => c?.name === CITADEL_NAME);
+  const hasLpCostSpell = (bot?.hand || []).some((card) =>
+    [
+      "Luminarch Holy Ascension",
+      "Luminarch Radiant Wave",
+      "Luminarch Sacred Judgment",
+    ].includes(card?.name),
+  );
+  return {
+    hasCitadel,
+    canSearchCitadel,
+    needsDiscountNow: hasLpCostSpell && (bot?.lp || 8000) <= 3000,
+  };
+}
+
+function shouldSkipLuminarchFusionAction({
+  targetName,
+  fusionCard,
+  context,
+  materialCombos,
+  materialEntries,
+}) {
+  if (targetName !== PURE_KNIGHT_NAME || !materialCombos?.length) {
+    return { skip: false, spend: null };
+  }
+
+  const spend = getBestFusionMaterialSpend(
+    materialCombos,
+    fusionCard,
+    context,
+    materialEntries,
+  );
+  if (!spend) return { skip: false, spend: null };
+
+  const utility = getPureKnightUtilityNeed(context.bot);
+  const battleAlreadyPassed = ["main2", "end"].includes(context.game?.phase);
+  const consumesPremiumFieldMaterial =
+    spend.protectedFieldMaterials.length > 0;
+  const consumesEstablishedBoard =
+    spend.fieldMaterials.length >= 2 && spend.fieldMaterialValue >= 65;
+  const hasNoImmediatePureKnightNeed =
+    utility.hasCitadel ||
+    (!utility.canSearchCitadel && !utility.needsDiscountNow);
+  const severeDowngrade = spend.netBoardValue <= -25;
+
+  if (
+    consumesPremiumFieldMaterial &&
+    hasNoImmediatePureKnightNeed &&
+    (battleAlreadyPassed || severeDowngrade)
+  ) {
+    return {
+      skip: true,
+      spend,
+      reason: "pure_knight_premium_material_downgrade",
+    };
+  }
+
+  if (battleAlreadyPassed && consumesEstablishedBoard && severeDowngrade) {
+    return { skip: true, spend, reason: "pure_knight_main2_board_downgrade" };
+  }
+
+  return { skip: false, spend };
+}
 
 function getContextFinisherPlans(context = {}) {
   if (Array.isArray(context.finisherPlans)) return context.finisherPlans;
@@ -43,18 +306,21 @@ function buildLuminarchFusionActivationContext(context, fusionPlan) {
     targetName === BARBARIAS_NAME
       ? fusionPlan?.details?.position || "defense"
       : fusionPlan?.details?.position || "defense";
+  const currentActionContext = context.activationContext?.actionContext || {};
   const baseContext = {
     ...(context.activationContext || {}),
     autoSelectSingleTarget: true,
     autoSelectTargets: true,
     logTargets: false,
     actionContext: {
-      ...(context.activationContext?.actionContext || {}),
+      ...currentActionContext,
+      costPreferences: mergeFusionCostPreferences(
+        currentActionContext.costPreferences || {},
+      ),
       fusionPositions: {
-        ...(context.activationContext?.actionContext?.fusionPositions || {}),
+        ...(currentActionContext.fusionPositions || {}),
         byName: {
-          ...(context.activationContext?.actionContext?.fusionPositions?.byName ||
-            {}),
+          ...(currentActionContext.fusionPositions?.byName || {}),
           [targetName]: defaultPosition,
         },
       },
@@ -152,12 +418,12 @@ export function evaluateLuminarchFusionPriority(
   if (fusionName === PURE_KNIGHT_NAME) {
     let priority = 11;
 
-    const hasCitadel = bot.fieldSpell?.name === "Sanctum of the Luminarch Citadel";
+    const hasCitadel = bot.fieldSpell?.name === CITADEL_NAME;
     const hasCitadelInHand = (bot.hand || []).some(
-      (c) => c?.name === "Sanctum of the Luminarch Citadel",
+      (c) => c?.name === CITADEL_NAME,
     );
     const hasCitadelInDeck = (bot.deck || []).some(
-      (c) => c?.name === "Sanctum of the Luminarch Citadel",
+      (c) => c?.name === CITADEL_NAME,
     );
     if (!hasCitadel && !hasCitadelInHand && hasCitadelInDeck) priority += 5;
     else if (!hasCitadel) priority += 2;
@@ -176,7 +442,8 @@ export function evaluateLuminarchFusionPriority(
     const hasBarbariasWall = (bot.field || []).some(
       (c) => c?.name === BARBARIAS_NAME || c?.name === FORTRESS_NAME,
     );
-    if (hasBarbariasWall && hasCitadel) priority -= 3;
+    if (hasBarbariasWall && hasCitadel) priority -= 7;
+    if (hasCitadel && ["main2", "end"].includes(game?.phase)) priority -= 4;
     const oppStrength = getTotalAttackThreat(opponent?.field || [], {
       facedownValue: "printed",
       includeBoosts: false,
@@ -204,13 +471,7 @@ export function evaluateLuminarchFusionPriority(
 function canSummonFusionTarget(game, fusionCard, bot) {
   if (!fusionCard) return false;
   if (!game?.effectEngine?.canSummonFusion) return true;
-  const handMaterials = (bot.hand || [])
-    .filter((c) => c && c.cardKind === "monster")
-    .map((card) => ({ card, zone: "hand" }));
-  const fieldMaterials = (bot.field || [])
-    .filter((c) => c && c.cardKind === "monster")
-    .map((card) => ({ card, zone: "field" }));
-  const combined = [...handMaterials, ...fieldMaterials];
+  const combined = getLuminarchFusionMaterialEntries(bot);
   const materials = combined.map((entry) => entry.card);
   const materialInfo = combined.map((entry) => ({ zone: entry.zone }));
   return game.effectEngine.canSummonFusion(fusionCard, materials, bot, {
@@ -241,6 +502,27 @@ export function detectLuminarchFusionOpportunities(context) {
     for (const entry of fusionCandidates) {
       const { targetName, fusionCard, fusionPlan } = entry;
       if (!canSummonFusionTarget(game, fusionCard, bot)) continue;
+      const { entries: materialEntries, combos: materialCombos } =
+        findLuminarchFusionMaterialCombos(game, fusionCard, bot);
+      const skipCheck = shouldSkipLuminarchFusionAction({
+        targetName,
+        fusionCard,
+        context: { ...context, bot, opponent, game },
+        materialCombos,
+        materialEntries,
+      });
+      if (skipCheck.skip) {
+        if (bot?.debug) {
+          console.log(
+            `[LuminarchStrategy] Skipping ${targetName}: ${skipCheck.reason}`,
+            {
+              materials: skipCheck.spend?.combo?.map((card) => card?.name),
+              netBoardValue: skipCheck.spend?.netBoardValue,
+            },
+          );
+        }
+        continue;
+      }
 
       const activationContext = buildLuminarchFusionActivationContext(context, {
         ...(fusionPlan || {}),
