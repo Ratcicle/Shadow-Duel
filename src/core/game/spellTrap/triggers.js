@@ -72,6 +72,24 @@ export async function checkAndOfferTraps(event, eventData = {}) {
       type: contextType,
       event,
       ...eventData,
+      openState: true,
+      legalWindow: true,
+      phase: eventData.phase ?? this.phase ?? null,
+      currentPhase: eventData.currentPhase ?? this.phase ?? null,
+      fromPhase: eventData.fromPhase ?? eventData.currentPhase ?? null,
+      toPhase:
+        eventData.toPhase ??
+        eventData.nextPhase ??
+        eventData.currentPhase ??
+        null,
+      battleStep: eventData.battleStep ?? this.battleStep ?? null,
+      damageStepTiming:
+        eventData.damageStepTiming ?? this.damageStepTiming ?? null,
+      isDamageStep:
+        eventData.isDamageStep === true ||
+        contextType === "battle_damage" ||
+        eventData.damageStepTiming != null ||
+        this.damageStepTiming != null,
       attacker,
       defender,
       target: defender ?? eventData.target ?? null,

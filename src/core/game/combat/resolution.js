@@ -100,6 +100,8 @@ export async function resolveCombat(attacker, target, options = {}) {
   this.lastAttackNegated = false;
 
   this.ui.log(`${attacker.name} attacks ${target ? target.name : "directly"}!`);
+  this.battleStep = "battle";
+  this.damageStepTiming = null;
 
   const defenderOwner = target
     ? target.owner === "player"
@@ -127,6 +129,8 @@ export async function resolveCombat(attacker, target, options = {}) {
     attackerOwner,
     defenderOwner,
     targetOwner,
+    battleStep: this.battleStep,
+    damageStepTiming: this.damageStepTiming,
   });
 
   if (this.lastAttackNegated) {
@@ -296,6 +300,10 @@ export async function finishCombat(attacker, target, options = {}) {
   const defenderOwner = target?.owner === "player" ? this.player : this.bot;
 
   if (!resumeFromTie) {
+    const previousBattleStep = this.battleStep;
+    const previousDamageStepTiming = this.damageStepTiming;
+    this.battleStep = "damage";
+    this.damageStepTiming = "before_damage_calculation";
     const battleDamageResult = await this.emit("battle_damage", {
       attacker,
       defender: target,
@@ -303,7 +311,13 @@ export async function finishCombat(attacker, target, options = {}) {
       attackerOwner,
       defenderOwner,
       targetOwner: defenderOwner,
+      battleStep: this.battleStep,
+      damageStepTiming: this.damageStepTiming,
+      isDamageStep: true,
     });
+    this.battleStep =
+      previousBattleStep || (this.phase === "battle" ? "battle" : null);
+    this.damageStepTiming = previousDamageStepTiming ?? null;
 
     if (battleDamageResult?.needsSelection) {
       return {
@@ -447,7 +461,9 @@ export async function finishCombat(attacker, target, options = {}) {
     if (!this.devModeEnabled) return;
     const formatCard = (card, label) => {
       if (!card) return `${label}: (none)`;
-      const flags = `bi=${!!card.battleIndestructible}, tempBi=${!!card.tempBattleIndestructible}, once=${!!card.battleIndestructibleOncePerTurn}, onceUsed=${!!card.battleIndestructibleOncePerTurnUsed}`;
+      const lastUsedTurn =
+        card.battleIndestructibleOncePerTurnLastUsedTurn ?? "none";
+      const flags = `bi=${!!card.battleIndestructible}, tempBi=${!!card.tempBattleIndestructible}, once=${!!card.battleIndestructibleOncePerTurn}, onceUsed=${!!card.battleIndestructibleOncePerTurnUsed}, onceLast=${lastUsedTurn}`;
       return `${label}: ${card.name} ATK:${card.atk} DEF:${card.def} ${flags}`;
     };
     this.devLog("BATTLE_DESTROY_CHECK", {

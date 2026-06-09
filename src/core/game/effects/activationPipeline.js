@@ -25,18 +25,47 @@ export function normalizeActivationResult(result) {
       ? result
       : {};
   const needsSelection = base.needsSelection === true;
-  const success = needsSelection ? false : base.success === true;
+  const success = needsSelection
+    ? false
+    : typeof base.success === "boolean"
+      ? base.success
+      : base.ok === true;
+  const ok = typeof base.ok === "boolean" ? base.ok : success;
   const selectionContract = base.selectionContract;
 
-  return { ...base, success, needsSelection, selectionContract };
+  return { ...base, success, ok, needsSelection, selectionContract };
+}
+
+export function createActionResult(result = {}) {
+  const base =
+    typeof result === "string"
+      ? { success: false, reason: result }
+      : result && typeof result === "object" && !Array.isArray(result)
+        ? result
+        : {};
+  return normalizeActivationResult({
+    success: false,
+    needsSelection: false,
+    ...base,
+  });
 }
 
 export async function runActivationPipeline(config = {}) {
-  if (!config || typeof config.activate !== "function") return null;
+  if (!config || typeof config.activate !== "function") {
+    return createActionResult({
+      reason: "Invalid activation configuration.",
+      code: "INVALID_ACTIVATION_CONFIG",
+    });
+  }
 
   const owner = config.owner || this.player;
   let resolvedCard = config.card;
-  if (!owner || !resolvedCard) return null;
+  if (!owner || !resolvedCard) {
+    return createActionResult({
+      reason: "Invalid activation target.",
+      code: "INVALID_ACTIVATION_TARGET",
+    });
+  }
 
   const selectionKind = config.selectionKind || "activation";
   let resolvedZone =
@@ -94,6 +123,7 @@ export async function runActivationPipeline(config = {}) {
     }
     const blockedResult = {
       success: false,
+      ok: false,
       needsSelection: false,
       reason: guardResult.reason,
       code: guardResult.code,
@@ -115,7 +145,7 @@ export async function runActivationPipeline(config = {}) {
         reason: gateResult.reason,
         code: gateResult.code,
       });
-      return gateResult;
+      return normalizeActivationResult(gateResult);
     }
   }
 
@@ -131,7 +161,7 @@ export async function runActivationPipeline(config = {}) {
         reason: previewResult.reason,
         code: previewResult.code,
       });
-      return previewResult;
+      return normalizeActivationResult(previewResult);
     }
     logPipeline("PIPELINE_PREVIEW_OK");
   } else {
@@ -160,6 +190,7 @@ export async function runActivationPipeline(config = {}) {
       }
       const blockedResult = {
         success: false,
+        ok: false,
         needsSelection: false,
         reason: optCheck.reason,
         blockedOncePerTurn: true,
@@ -179,7 +210,10 @@ export async function runActivationPipeline(config = {}) {
   if (typeof config.commit === "function") {
     commitInfo = await config.commit();
     if (!commitInfo || !commitInfo.cardRef) {
-      return null;
+      return createActionResult({
+        reason: "Activation commit failed.",
+        code: "ACTIVATION_COMMIT_FAILED",
+      });
     }
     resolvedCard = commitInfo.cardRef;
     resolvedZone = commitInfo.activationZone || resolvedZone;
@@ -235,8 +269,10 @@ export async function runActivationPipeline(config = {}) {
       console.error("[Game] Activation pipeline error:", err);
       const errorResult = {
         success: false,
+        ok: false,
         needsSelection: false,
         reason: "Resolution failed.",
+        code: "RESOLUTION_FAILED",
       };
       trackActivationAttempt(errorResult);
       return errorResult;
@@ -313,8 +349,10 @@ export async function runActivationPipeline(config = {}) {
       if (!selectionContract) {
         const selectionFailure = {
           success: false,
+          ok: false,
           needsSelection: false,
           reason: "Target selection failed.",
+          code: "TARGET_SELECTION_FAILED",
         };
         return handleResult(selectionFailure, true);
       }
@@ -345,8 +383,10 @@ export async function runActivationPipeline(config = {}) {
       if (!normalizedContract.ok) {
         const selectionFailure = {
           success: false,
+          ok: false,
           needsSelection: false,
           reason: normalizedContract.reason || "Target selection failed.",
+          code: "TARGET_SELECTION_FAILED",
         };
         return handleResult(selectionFailure, true);
       }
@@ -386,8 +426,10 @@ export async function runActivationPipeline(config = {}) {
         if (!autoResult?.ok) {
           const selectionFailure = {
             success: false,
+            ok: false,
             needsSelection: false,
             reason: autoResult?.reason || "Auto selection failed.",
+            code: "AUTO_SELECTION_FAILED",
           };
           return handleResult(selectionFailure, true);
         }
@@ -396,8 +438,10 @@ export async function runActivationPipeline(config = {}) {
         if (normalizedNext.needsSelection) {
           const selectionFailure = {
             success: false,
+            ok: false,
             needsSelection: false,
             reason: "Auto selection failed.",
+            code: "AUTO_SELECTION_FAILED",
           };
           return handleResult(selectionFailure, true);
         }
@@ -435,8 +479,10 @@ export async function runActivationPipeline(config = {}) {
         this.setSelectionState("idle");
         const selectionFailure = {
           success: false,
+          ok: false,
           needsSelection: false,
           reason: "Target selection failed.",
+          code: "TARGET_SELECTION_FAILED",
         };
         return handleResult(selectionFailure, true);
       }
@@ -525,8 +571,10 @@ export async function runActivationPipeline(config = {}) {
   if (negationWindowResult?.negated) {
     const negatedResult = {
       success: false,
+      ok: false,
       needsSelection: false,
       reason: "Activation was negated.",
+      code: "ACTIVATION_NEGATED",
       activationNegated: true,
     };
     if (typeof config.onFailure === "function") {
@@ -576,8 +624,11 @@ export async function runActivationPipelineWait(config = {}) {
       }
       finishOnce({
         success: false,
+        ok: false,
         needsSelection: false,
-        reason: "Selection cancelled.",
+        cancelled: true,
+        reason: "cancelled",
+        code: "CANCELLED",
       });
     },
   };

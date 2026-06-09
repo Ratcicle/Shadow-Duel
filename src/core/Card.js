@@ -154,6 +154,14 @@ export default class Card {
     this.battleIndestructibleOncePerTurn =
       !!data.battleIndestructibleOncePerTurn;
     this.battleIndestructibleOncePerTurnUsed = false;
+    const battleIndestructibleOncePerTurnLastUsedTurn = Number(
+      data.battleIndestructibleOncePerTurnLastUsedTurn,
+    );
+    this.battleIndestructibleOncePerTurnLastUsedTurn =
+      data.battleIndestructibleOncePerTurnLastUsedTurn == null ||
+      !Number.isFinite(battleIndestructibleOncePerTurnLastUsedTurn)
+        ? null
+        : battleIndestructibleOncePerTurnLastUsedTurn;
     this.mustBeAttacked = !!data.mustBeAttacked;
     this.piercing = !!data.piercing;
     this.canMakeSecondAttackThisTurn = false;

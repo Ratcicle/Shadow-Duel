@@ -19,8 +19,7 @@ export async function finalizeSpellTrapActivation(
   const subtype = card.subtype || "";
   const kind = card.cardKind || "";
   const shouldSendToGY =
-    (kind === "spell" &&
-      (subtype === "normal" || subtype === "quick" || subtype === "quick-play")) ||
+    (kind === "spell" && (subtype === "normal" || isQuickSpell(card))) ||
     (kind === "trap" && subtype === "normal");
 
   if (shouldSendToGY) {
@@ -117,4 +116,56 @@ export function rollbackSpellActivation(player, commitInfo) {
 
   this.updateBoard();
   this.assertStateInvariants("rollbackSpellActivation", { failFast: false });
+}
+
+import { isQuickSpell } from "./quickSpellRules.js";
+
+/**
+ * Restore a Set field Spell/Trap activation that failed after being revealed.
+ * This intentionally does not move cards between zones; it only rolls back
+ * reveal metadata when the card is still in its original Spell/Trap zone.
+ * @param {Object} snapshot - Field activation state captured before reveal.
+ * @param {Object|string} reasonOrResult - Failure/cancel reason for dev logs.
+ * @returns {boolean} Whether rollback was applied.
+ */
+export function rollbackFieldSpellTrapActivation(snapshot, reasonOrResult = null) {
+  if (!snapshot || !snapshot.card || !snapshot.owner) return false;
+  const {
+    card,
+    owner,
+    zone = "spellTrap",
+    wasFacedown,
+    previousTurnSetOn,
+    previousSetTurn,
+  } = snapshot;
+
+  const reason =
+    typeof reasonOrResult === "string"
+      ? reasonOrResult
+      : reasonOrResult?.reason || reasonOrResult?.code || "activation_failed";
+
+  if (zone !== "spellTrap" || !owner.spellTrap?.includes?.(card)) {
+    this.devLog?.("FIELD_SPELL_TRAP_ROLLBACK_SKIPPED", {
+      summary: `${card.name || "Unknown card"} rollback skipped (${reason})`,
+      reason,
+      zone,
+      owner: owner.id,
+    });
+    return false;
+  }
+
+  if (typeof wasFacedown === "boolean") {
+    card.isFacedown = wasFacedown;
+  }
+  card.turnSetOn = previousTurnSetOn;
+  card.setTurn = previousSetTurn;
+
+  this.devLog?.("FIELD_SPELL_TRAP_ROLLBACK", {
+    summary: `${card.name || "Unknown card"} restored after ${reason}`,
+    reason,
+    zone,
+    owner: owner.id,
+  });
+  this.updateBoard?.();
+  return true;
 }

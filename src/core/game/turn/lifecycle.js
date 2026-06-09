@@ -82,14 +82,14 @@ export async function startTurn() {
   this.turnCounter += 1;
   this._arenaTracker?.recordProgress?.("turn_start", this);
 
-  // Log separador de turno
   const activePlayerName =
     (this.turn === "player" ? this.player : this.bot)?.name || this.turn;
-  console.log(
-    `\n${"─".repeat(20)} TURNO ${
-      this.turnCounter
-    }: ${activePlayerName} ${"─".repeat(20)}`
-  );
+  this.devLog?.("TURN_START", {
+    summary: `Turn ${this.turnCounter}: ${activePlayerName}`,
+    turn: this.turnCounter,
+    player: this.turn,
+    playerName: activePlayerName,
+  });
 
   this.resetOncePerTurnUsage("start_turn");
   this.player.lpGainedThisTurn = 0;
@@ -104,6 +104,8 @@ export async function startTurn() {
   }
 
   this.phase = "draw";
+  this.battleStep = null;
+  this.damageStepTiming = null;
 
   const activePlayer = this.turn === "player" ? this.player : this.bot;
   const opponent = activePlayer === this.player ? this.bot : this.player;
@@ -114,7 +116,6 @@ export async function startTurn() {
     card.positionChangedThisTurn = false;
     card.canMakeSecondAttackThisTurn = false;
     card.secondAttackUsedThisTurn = false;
-    card.battleIndestructibleOncePerTurnUsed = false;
 
     const shouldRestrictAttack =
       card.cannotAttackUntilTurn &&
@@ -157,10 +158,22 @@ export async function startTurn() {
     handSize: activePlayer?.hand?.length || 0,
   });
   this.updateBoard();
+  await this.checkAndOfferTraps("phase_end", {
+    currentPhase: "draw",
+    nextPhase: "standby",
+    fromPhase: "draw",
+    toPhase: "standby",
+    battleStep: null,
+    damageStepTiming: null,
+  });
+  if (this.gameOver || this.isDisposed?.()) return;
+  if (this.phase !== "draw") return;
   await this.waitForPhaseDelay();
   if (this.gameOver || this.isDisposed?.()) return;
 
   this.phase = "standby";
+  this.battleStep = null;
+  this.damageStepTiming = null;
 
   // Process delayed actions in standby phase BEFORE emitting the event
   await this.processDelayedActions("standby", activePlayer.id || this.turn);
@@ -169,10 +182,32 @@ export async function startTurn() {
   this.updateBoard();
   await this.emit("standby_phase", { player: activePlayer, opponent });
   if (this.gameOver || this.isDisposed?.()) return;
+  await this.checkAndOfferTraps("phase_start", {
+    currentPhase: "standby",
+    previousPhase: "draw",
+    fromPhase: "draw",
+    toPhase: "standby",
+    battleStep: null,
+    damageStepTiming: null,
+  });
+  if (this.gameOver || this.isDisposed?.()) return;
+  if (this.phase !== "standby") return;
   await this.waitForPhaseDelay();
   if (this.gameOver || this.isDisposed?.()) return;
+  await this.checkAndOfferTraps("phase_end", {
+    currentPhase: "standby",
+    nextPhase: "main1",
+    fromPhase: "standby",
+    toPhase: "main1",
+    battleStep: null,
+    damageStepTiming: null,
+  });
+  if (this.gameOver || this.isDisposed?.()) return;
+  if (this.phase !== "standby") return;
 
   this.phase = "main1";
+  this.battleStep = null;
+  this.damageStepTiming = null;
   this.updateBoard();
   this._arenaTracker?.recordProgress?.("main1_ready", this, {
     actor: activePlayer?.id || this.turn,
@@ -218,6 +253,8 @@ export async function endTurn() {
   // Clear all attack indicators at end of turn
   this.clearAttackResolutionIndicators();
   this.clearAttackReadyIndicators();
+  this.battleStep = null;
+  this.damageStepTiming = null;
 
   this.turn = this.turn === "player" ? "bot" : "player";
   await this.startTurn();

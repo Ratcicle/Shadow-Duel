@@ -1,3 +1,5 @@
+import { isQuickSpell } from "../spellTrap/quickSpellRules.js";
+
 /**
  * UI Interactions Module - Card interactions for the Shadow Duel game
  * Handles player hand, field, spell/trap zone, opponent zone, graveyard, and keyboard interactions
@@ -20,6 +22,27 @@ export function bindCardInteractions() {
   const isLaboratoryActive = (actor) =>
     this.laboratoryModeEnabled === true && actor?.id === this.turn;
   const getOpponentOf = (actor) => (actor?.id === "player" ? this.bot : this.player);
+  const isMainPhase = () => this.phase === "main1" || this.phase === "main2";
+  const buildQuickSpellHandContext = (card, actor) =>
+    isQuickSpell(card)
+      ? {
+          activationZone: "hand",
+          legalWindow: actor?.id === this.turn,
+        }
+      : null;
+  const buildSetQuickSpellContext = (card) =>
+    isQuickSpell(card) && card?.isFacedown === true
+      ? {
+          activationZone: "spellTrap",
+          legalWindow: true,
+        }
+      : null;
+  const getSpellHandPreview = (card, actor, quickSpellContext = null) =>
+    this.effectEngine?.canActivateSpellFromHandPreview?.(
+      card,
+      actor,
+      quickSpellContext ? { quickSpellContext } : undefined,
+    ) || { ok: true };
   const handleDirectAttackHandClick = (ownerId, event) => {
     if (!this.targetSelection || this.targetSelection.kind !== "attack") {
       return false;
@@ -199,16 +222,16 @@ export function bindCardInteractions() {
     }
 
     if (card.cardKind === "spell") {
+      const quickSpellContext = buildQuickSpellHandContext(card, actor);
+      const quickSpellOnlyActivationWindow =
+        !!quickSpellContext && !isMainPhase();
       const guard = this.guardActionStart({
         actor,
         kind: "spell_from_hand",
-        phaseReq: ["main1", "main2"],
+        phaseReq: quickSpellContext ? null : ["main1", "main2"],
       });
       if (!guard.ok) return true;
-      const spellPreview =
-        this.effectEngine?.canActivateSpellFromHandPreview(card, actor) || {
-          ok: true,
-        };
+      const spellPreview = getSpellHandPreview(card, actor, quickSpellContext);
       let canActivateFromHand = !!spellPreview.ok;
       const hasFusionAction = (card.effects || []).some(
         (effect) =>
@@ -221,16 +244,46 @@ export function bindCardInteractions() {
       if (hasFusionAction && !this.canActivatePolymerization(actor)) {
         canActivateFromHand = false;
       }
+      const activateSpell = () =>
+        this.tryActivateSpell(card, index, null, {
+          owner: actor,
+          ...(quickSpellContext ? { quickSpellContext } : {}),
+        });
+
+      if (quickSpellOnlyActivationWindow) {
+        if (!canActivateFromHand) {
+          if (spellPreview.reason) this.ui.log(spellPreview.reason);
+          return true;
+        }
+        if (this.ui && typeof this.ui.showSpellChoiceModal === "function") {
+          this.ui.showSpellChoiceModal(
+            index,
+            (choice) => {
+              if (choice === "activate") {
+                activateSpell();
+              }
+            },
+            {
+              canActivate: true,
+              canSet: false,
+              ownerId: actor.id,
+            },
+          );
+        } else {
+          activateSpell();
+        }
+        return true;
+      }
       this.ui.showSpellChoiceModal(
         index,
         (choice) => {
           if (choice === "activate" && canActivateFromHand) {
-            this.tryActivateSpell(card, index, null, { owner: actor });
+            activateSpell();
           } else if (choice === "set") {
             this.setSpellOrTrap(card, index, actor);
           }
         },
-        { canActivate: canActivateFromHand, ownerId: actor.id }
+        { canActivate: canActivateFromHand, canSet: true, ownerId: actor.id }
       );
       return true;
     }
@@ -560,18 +613,22 @@ export function bindCardInteractions() {
       }
 
       if (card.cardKind === "spell") {
+        const quickSpellContext = buildQuickSpellHandContext(card, this.player);
+        const quickSpellOnlyActivationWindow =
+          !!quickSpellContext && !isMainPhase();
         const guard = this.guardActionStart({
           actor: this.player,
           kind: "spell_from_hand",
-          phaseReq: ["main1", "main2"],
+          phaseReq: quickSpellContext ? null : ["main1", "main2"],
         });
         if (!guard.ok) return;
 
         // Check for fusion spell (has polymerization_fusion_summon action) - generic instead of hardcoded name
-        const spellPreview = this.effectEngine?.canActivateSpellFromHandPreview(
+        const spellPreview = getSpellHandPreview(
           card,
-          this.player
-        ) || { ok: true };
+          this.player,
+          quickSpellContext,
+        );
         let canActivateFromHand = !!spellPreview.ok;
 
         const hasFusionAction = (card.effects || []).some(
@@ -586,9 +643,38 @@ export function bindCardInteractions() {
           }
         }
 
+        const activateSpell = () =>
+          this.tryActivateSpell(
+            card,
+            index,
+            null,
+            quickSpellContext ? { quickSpellContext } : {},
+          );
+
+        if (quickSpellOnlyActivationWindow) {
+          if (!canActivateFromHand) {
+            if (spellPreview.reason) this.ui.log(spellPreview.reason);
+            return;
+          }
+          if (this.ui && typeof this.ui.showSpellChoiceModal === "function") {
+            this.ui.showSpellChoiceModal(
+              index,
+              (choice) => {
+                if (choice === "activate") {
+                  activateSpell();
+                }
+              },
+              { canActivate: true, canSet: false },
+            );
+          } else {
+            activateSpell();
+          }
+          return;
+        }
+
         const handleSpellChoice = (choice) => {
-          if (choice === "activate") {
-            this.tryActivateSpell(card, index);
+          if (choice === "activate" && canActivateFromHand) {
+            activateSpell();
           } else if (choice === "set") {
             this.setSpellOrTrap(card, index);
           }
@@ -597,6 +683,7 @@ export function bindCardInteractions() {
         if (this.ui && typeof this.ui.showSpellChoiceModal === "function") {
           this.ui.showSpellChoiceModal(index, handleSpellChoice, {
             canActivate: canActivateFromHand,
+            canSet: true,
           });
         } else {
           const shouldActivate =
@@ -948,11 +1035,14 @@ export function bindCardInteractions() {
         return;
       }
 
-      // Spells can only be activated on your turn during Main Phase
+      const setQuickSpellContext = buildSetQuickSpellContext(card);
       const guard = this.guardActionStart({
         actor: this.player,
-        kind: "spelltrap_zone",
-        phaseReq: ["main1", "main2"],
+        kind: setQuickSpellContext
+          ? "quick_spell_activation"
+          : "spelltrap_zone",
+        phaseReq: setQuickSpellContext ? null : ["main1", "main2"],
+        allowDuringOpponentTurn: !!setQuickSpellContext,
       });
       if (!guard.ok) return;
 
@@ -962,7 +1052,16 @@ export function bindCardInteractions() {
           this.player,
           "spellTrap",
           null,
-          { activationContext: { autoSelectSingleTarget: true } }
+          {
+            activationContext: {
+              autoSelectSingleTarget: true,
+              quickSpellActivationFromSet: !!setQuickSpellContext,
+              quickSpellContext: setQuickSpellContext,
+            },
+            ...(setQuickSpellContext
+              ? { quickSpellContext: setQuickSpellContext }
+              : {}),
+          }
         );
         if (preview && preview.ok === false) {
           if (preview.reason) {
@@ -973,7 +1072,13 @@ export function bindCardInteractions() {
         this.devLog?.("SPELL_TRAP_CLICK", {
           summary: `Activating spell from zone: ${card.name}`,
         });
-        await this.tryActivateSpellTrapEffect(card);
+        await this.tryActivateSpellTrapEffect(
+          card,
+          null,
+          setQuickSpellContext
+            ? { quickSpellContext: setQuickSpellContext }
+            : {},
+        );
       }
     });
   }
@@ -1037,10 +1142,14 @@ export function bindCardInteractions() {
         await this.tryActivateSpellTrapEffect(card, null, { owner: this.bot });
         return;
       }
+      const setQuickSpellContext = buildSetQuickSpellContext(card);
       const guard = this.guardActionStart({
         actor: this.bot,
-        kind: "spelltrap_zone",
-        phaseReq: ["main1", "main2"],
+        kind: setQuickSpellContext
+          ? "quick_spell_activation"
+          : "spelltrap_zone",
+        phaseReq: setQuickSpellContext ? null : ["main1", "main2"],
+        allowDuringOpponentTurn: !!setQuickSpellContext,
       });
       if (!guard.ok) return;
       const preview = this.effectEngine?.canActivateSpellTrapEffectPreview?.(
@@ -1048,13 +1157,25 @@ export function bindCardInteractions() {
         this.bot,
         "spellTrap",
         null,
-        { activationContext: { autoSelectSingleTarget: true } }
+        {
+          activationContext: {
+            autoSelectSingleTarget: true,
+            quickSpellActivationFromSet: !!setQuickSpellContext,
+            quickSpellContext: setQuickSpellContext,
+          },
+          ...(setQuickSpellContext
+            ? { quickSpellContext: setQuickSpellContext }
+            : {}),
+        }
       );
       if (preview && preview.ok === false) {
         if (preview.reason) this.ui.log(preview.reason);
         return;
       }
-      await this.tryActivateSpellTrapEffect(card, null, { owner: this.bot });
+      await this.tryActivateSpellTrapEffect(card, null, {
+        owner: this.bot,
+        ...(setQuickSpellContext ? { quickSpellContext: setQuickSpellContext } : {}),
+      });
     });
   }
 

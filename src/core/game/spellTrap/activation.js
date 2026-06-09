@@ -3,6 +3,12 @@
 // Spell/Trap activation methods for Game class — B.9 extraction
 // ─────────────────────────────────────────────────────────────────────────────
 
+import {
+  canActivateSetQuickSpell,
+  canActivateQuickSpellFromHand,
+  isQuickSpell,
+} from "./quickSpellRules.js";
+
 /**
  * Unified activation of spell/trap effects from field.
  * @param {Card} card - The card being activated.
@@ -16,22 +22,57 @@ export async function tryActivateSpellTrapEffect(
 ) {
   if (this.disableEffectActivation || this.disableTraps) {
     this.ui?.log?.("Spell/Trap activations are disabled in network mode.");
-    return { success: false, reason: "effects_disabled" };
+    return this.createActionResult({
+      reason: "effects_disabled",
+      code: "EFFECTS_DISABLED",
+    });
   }
-  if (!card) return;
+  if (!card) {
+    return this.createActionResult({
+      reason: "invalid_card",
+      code: "INVALID_CARD",
+    });
+  }
   const owner =
     options.owner ||
     (card.owner === "bot" ? this.bot : this.player) ||
     this.player;
-  console.log(`[Game] tryActivateSpellTrapEffect called for: ${card.name}`);
+  if (!owner) {
+    return this.createActionResult({
+      reason: "invalid_owner",
+      code: "INVALID_OWNER",
+    });
+  }
+  this.devLog?.("SPELL_TRAP_ACTIVATION_ATTEMPT", {
+    summary: card.name,
+    card: card.name,
+    owner: owner.id || null,
+    zone: "spellTrap",
+  });
 
-  // Traps can be activated on opponent's turn and during battle phase
   const isTrap = card.cardKind === "trap";
+  const quickSpellActivationFromSet =
+    isQuickSpell(card) &&
+    card.isFacedown === true &&
+    owner.spellTrap?.includes?.(card);
+  const quickSpellContext = quickSpellActivationFromSet
+    ? {
+        ...(options.quickSpellContext || {}),
+        activationZone: "spellTrap",
+      }
+    : null;
   const guardConfig = isTrap
     ? {
         actor: owner,
         kind: "trap_activation",
         phaseReq: ["main1", "battle", "main2"],
+        allowDuringOpponentTurn: true,
+      }
+    : quickSpellActivationFromSet
+    ? {
+        actor: owner,
+        kind: "quick_spell_activation",
+        phaseReq: null,
         allowDuringOpponentTurn: true,
       }
     : {
@@ -41,7 +82,7 @@ export async function tryActivateSpellTrapEffect(
       };
 
   const guard = this.guardActionStart(guardConfig);
-  if (!guard.ok) return guard;
+  if (!guard.ok) return this.normalizeActivationResult(guard);
 
   const preview = this.effectEngine?.canActivateSpellTrapEffectPreview?.(
     card,
@@ -53,19 +94,34 @@ export async function tryActivateSpellTrapEffect(
         autoSelectSingleTarget: true,
         trapActivationFromSet:
           card.cardKind === "trap" && card.isFacedown === true,
+        quickSpellActivationFromSet,
+        quickSpellContext,
       },
+      ...(quickSpellContext ? { quickSpellContext } : {}),
     },
   );
   if (preview && preview.ok === false) {
     if (preview.reason) {
       this.ui.log(preview.reason);
     }
-    return preview;
+    return this.normalizeActivationResult(preview);
   }
 
   // If it's a trap, show confirmation modal first
   const trapActivationFromSet =
     card.cardKind === "trap" && card.isFacedown === true;
+  const fieldActivationFromSet =
+    trapActivationFromSet || quickSpellActivationFromSet;
+  const fieldActivationSnapshot = fieldActivationFromSet
+    ? {
+        card,
+        owner,
+        zone: "spellTrap",
+        wasFacedown: card.isFacedown,
+        previousTurnSetOn: card.turnSetOn,
+        previousSetTurn: card.setTurn,
+      }
+    : null;
   if (card.cardKind === "trap") {
     const confirmed = await this.ui.showTrapActivationModal(
       card,
@@ -73,8 +129,16 @@ export async function tryActivateSpellTrapEffect(
     );
 
     if (!confirmed) {
-      console.log(`[Game] User cancelled trap activation`);
-      return;
+      this.devLog?.("TRAP_ACTIVATION_CANCELLED", {
+        summary: card.name,
+        card: card.name,
+        owner: owner.id || null,
+      });
+      return this.createActionResult({
+        cancelled: true,
+        reason: "cancelled",
+        code: "CANCELLED",
+      });
     }
 
     // Flip the trap face-up after confirmation
@@ -91,14 +155,25 @@ export async function tryActivateSpellTrapEffect(
     sourceZone: "spellTrap",
     committed: false,
     trapActivationFromSet,
+    quickSpellActivationFromSet,
+    quickSpellContext,
   };
   const activationEffect = this.effectEngine?.getSpellTrapActivationEffect?.(
     card,
     { fromHand: false, trapActivationFromSet },
   );
 
+  const pipelineQuickSpellContext = quickSpellActivationFromSet
+    ? {
+        ...(quickSpellContext || {}),
+        activationZone: "spellTrap",
+        effect: activationEffect,
+      }
+    : null;
   const pipelinePhaseReq = isTrap
     ? ["main1", "battle", "main2"]
+    : quickSpellActivationFromSet
+    ? null
     : ["main1", "main2"];
 
   const pipelineResult = await this.runActivationPipeline({
@@ -109,9 +184,22 @@ export async function tryActivateSpellTrapEffect(
     selections,
     selectionKind: "spellTrapEffect",
     selectionMessage: "Select target(s) for the continuous spell effect.",
-    guardKind: isTrap ? "trap_activation" : "spelltrap_effect",
+    guardKind: isTrap
+      ? "trap_activation"
+      : quickSpellActivationFromSet
+      ? "quick_spell_activation"
+      : "spelltrap_effect",
     phaseReq: pipelinePhaseReq,
-    allowDuringOpponentTurn: isTrap,
+    allowDuringOpponentTurn: isTrap || quickSpellActivationFromSet,
+    gate: quickSpellActivationFromSet
+      ? () =>
+          canActivateSetQuickSpell(
+            this,
+            card,
+            owner,
+            pipelineQuickSpellContext,
+          )
+      : null,
     oncePerTurn: {
       card,
       player: owner,
@@ -137,6 +225,22 @@ export async function tryActivateSpellTrapEffect(
         this.ui.log(`${card.name} effect activated.`);
       }
       this.updateBoard();
+    },
+    onFailure: (result) => {
+      if (fieldActivationSnapshot) {
+        this.rollbackFieldSpellTrapActivation?.(
+          fieldActivationSnapshot,
+          result,
+        );
+      }
+    },
+    onCancel: () => {
+      if (fieldActivationSnapshot) {
+        this.rollbackFieldSpellTrapActivation?.(
+          fieldActivationSnapshot,
+          "cancelled",
+        );
+      }
     },
   });
   return pipelineResult;
@@ -208,13 +312,40 @@ export async function tryActivateSpell(
   selections = null,
   options = {},
 ) {
+  if (this.disableEffectActivation) {
+    this.ui?.log?.("Effect activations are disabled.");
+    return this.createActionResult({
+      reason: "effects_disabled",
+      code: "EFFECTS_DISABLED",
+    });
+  }
+  if (!card) {
+    return this.createActionResult({
+      reason: "invalid_card",
+      code: "INVALID_CARD",
+    });
+  }
   const owner = options.owner || this.player;
+  if (!owner) {
+    return this.createActionResult({
+      reason: "invalid_owner",
+      code: "INVALID_OWNER",
+    });
+  }
   const resume = options.resume || null;
   const actionContext = options.actionContext || null;
   const activationEffect = this.effectEngine?.getSpellTrapActivationEffect?.(
     card,
     { fromHand: true },
   );
+  const quickSpellFromHand = isQuickSpell(card);
+  const quickSpellContext = quickSpellFromHand
+    ? {
+        ...(options.quickSpellContext || {}),
+        activationZone: "hand",
+        effect: activationEffect,
+      }
+    : null;
 
   const resumeCommitInfo = resume?.commitInfo || null;
   const resolvedActivationZone =
@@ -246,10 +377,10 @@ export async function tryActivateSpell(
           owner.name || "Jogador"
         } não pode ativar ${card.name}: sem materiais de fusão válidos.`,
       );
-      return {
-        success: false,
+      return this.createActionResult({
         reason: "no_valid_fusion_materials",
-      };
+        code: "NO_VALID_FUSION_MATERIALS",
+      });
     }
   }
 
@@ -260,10 +391,25 @@ export async function tryActivateSpell(
     selectionKind: "spellTrapEffect",
     selectionMessage: "Select target(s) for the continuous spell effect.",
     guardKind: "spell_from_hand",
-    phaseReq: ["main1", "main2"],
+    phaseReq: quickSpellFromHand ? null : ["main1", "main2"],
+    gate:
+      resume || !quickSpellFromHand
+        ? null
+        : () =>
+            canActivateQuickSpellFromHand(
+              this,
+              card,
+              owner,
+              quickSpellContext,
+            ),
     preview: resume
       ? null
-      : () => this.effectEngine?.canActivateSpellFromHandPreview?.(card, owner),
+      : () =>
+          this.effectEngine?.canActivateSpellFromHandPreview?.(
+            card,
+            owner,
+            quickSpellContext ? { quickSpellContext } : undefined,
+          ),
     commit: resume
       ? () =>
           resumeCommitInfo || {
@@ -280,6 +426,7 @@ export async function tryActivateSpell(
       sourceZone: baseActivationContext.sourceZone || "hand",
       commitInfo: baseActivationContext.commitInfo || resumeCommitInfo || null,
       actionContext,
+      quickSpellContext,
     },
     oncePerTurn: {
       card,
@@ -313,7 +460,19 @@ export async function tryActivateSpell(
  * @returns {Object} Activation result.
  */
 export function activateFieldSpellEffect(card) {
+  if (!card) {
+    return this.createActionResult({
+      reason: "invalid_card",
+      code: "INVALID_CARD",
+    });
+  }
   const owner = card.owner === "player" ? this.player : this.bot;
+  if (!owner) {
+    return this.createActionResult({
+      reason: "invalid_owner",
+      code: "INVALID_OWNER",
+    });
+  }
   const guard = this.guardActionStart(
     {
       actor: owner,
@@ -322,7 +481,7 @@ export function activateFieldSpellEffect(card) {
     },
     owner === this.player,
   );
-  if (!guard.ok) return guard;
+  if (!guard.ok) return this.normalizeActivationResult(guard);
   const activationContext = {
     fromHand: false,
     activationZone: "fieldSpell",

@@ -1,3 +1,29 @@
+import {
+  canActivateQuickSpellFromHand,
+  canActivateSetQuickSpell,
+  isQuickSpell,
+} from "../game/spellTrap/quickSpellRules.js";
+
+function buildQuickSpellChainContext(chainSystem, context, effect, activationZone) {
+  const lastLink = chainSystem.getLastChainLink?.();
+  return {
+    ...(context || {}),
+    activationZone,
+    effect,
+    chainWindowOpen: chainSystem.isChainWindowOpen?.() === true || !!context,
+    isChainWindow:
+      context?.type !== "main_phase_action" ||
+      chainSystem.isChainWindowOpen?.() === true,
+    requiredSpellSpeed: chainSystem.getRequiredSpellSpeed?.(context),
+    respondingToSpellSpeed: lastLink
+      ? chainSystem.getEffectSpellSpeed?.(lastLink.effect, lastLink.card)
+      : undefined,
+    lastSpellSpeed: lastLink
+      ? chainSystem.getEffectSpellSpeed?.(lastLink.effect, lastLink.card)
+      : undefined,
+  };
+}
+
 /**
  * Get all cards a player can activate in current chain context
  * @param {Object} player - The player to check
@@ -77,72 +103,67 @@ export function getActivatableCardsInChain(player, context) {
     }
   }
 
-  // Check set Quick-Play Spells in spellTrap zone
+  // Check set Quick Spells in spellTrap zone
   if (Array.isArray(player.spellTrap)) {
     for (const card of player.spellTrap) {
       if (!card || card.cardKind !== "spell") continue;
-      if (card.subtype !== "quick") continue;
+      if (!isQuickSpell(card)) continue;
       if (!card.isFacedown) continue; // Must be set
 
       if (cardsInChain.has(card)) continue;
 
-      const setTurn = card.setTurn ?? card.turnSetOn ?? null;
-      if (setTurn === null || setTurn >= this.game.turnCounter) {
-        continue;
-      }
-
       const effect = this.findActivatableEffect(card, context, player);
       if (effect) {
         if (!this.canOfferEffectInChainContext(effect, context)) continue;
+        const quickSpellContext = buildQuickSpellChainContext(
+          this,
+          context,
+          effect,
+          "spellTrap",
+        );
+        const quickCheck = canActivateSetQuickSpell(
+          this.game,
+          card,
+          player,
+          quickSpellContext,
+        );
+        if (!quickCheck.ok) continue;
         const chainCheck = this.canActivateInChain(effect, card, context);
         if (chainCheck.ok) {
-          const useMainPhaseRules = context?.type === "main_phase_action";
-          if (useMainPhaseRules) {
-            const canActivate = this.game.effectEngine?.canActivate?.(
-              card,
-              player,
-            );
-            if (canActivate && canActivate.ok === false) continue;
-          }
           activatable.push({ card, effect, zone: "spellTrap" });
         }
       }
     }
   }
 
-  // Check Quick-Play Spells in hand
-  // Quick-Play can be activated FROM HAND only:
-  // - During your own Main Phase (like a normal spell)
-  // - NOT during opponent's turn (must be set on field first)
-  // Note: Once set on field, they can be activated as Speed 2 during opponent's turn
+  // Check Quick Spells in hand. They require a legal chain/window context and
+  // can never be activated from hand during the opponent's turn.
   if (Array.isArray(player.hand)) {
     for (const card of player.hand) {
       if (!card || card.cardKind !== "spell") continue;
-      if (card.subtype !== "quick") continue;
+      if (!isQuickSpell(card)) continue;
 
       // Skip cards already in the current chain
       if (cardsInChain.has(card)) continue;
 
-      // CRITICAL: Quick-Play Spells can only be activated from hand during YOUR OWN turn
-      const isPlayerTurn = this.game?.turn === player.id;
-      if (!isPlayerTurn) {
-        // Quick spells in hand cannot be activated during opponent's turn
-        continue;
-      }
-
       const effect = this.findActivatableEffect(card, context, player);
       if (effect) {
         if (!this.canOfferEffectInChainContext(effect, context)) continue;
+        const quickSpellContext = buildQuickSpellChainContext(
+          this,
+          context,
+          effect,
+          "hand",
+        );
+        const quickCheck = canActivateQuickSpellFromHand(
+          this.game,
+          card,
+          player,
+          quickSpellContext,
+        );
+        if (!quickCheck.ok) continue;
         const chainCheck = this.canActivateInChain(effect, card, context);
         if (chainCheck.ok) {
-          const useMainPhaseRules = context?.type === "main_phase_action";
-          if (useMainPhaseRules) {
-            const canActivate = this.game.effectEngine?.canActivate?.(
-              card,
-              player,
-            );
-            if (canActivate && canActivate.ok === false) continue;
-          }
           activatable.push({ card, effect, zone: "hand" });
         }
       }

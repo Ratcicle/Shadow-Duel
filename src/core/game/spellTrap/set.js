@@ -35,6 +35,7 @@ export function setSpellOrTrap(card, handIndex, actor = this.player) {
 
   card.isFacedown = true;
   card.turnSetOn = this.turnCounter;
+  card.setTurn = this.turnCounter;
 
   if (typeof this.moveCard === "function") {
     this.moveCard(card, actor, "spellTrap", { fromZone: "hand" });

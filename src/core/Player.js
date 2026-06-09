@@ -192,29 +192,39 @@ export default class Player {
     tributeIndices = null
   ) {
     const card = this.hand[cardIndex];
-    if (!card || card.cardKind !== "monster") {
-      console.log("Only monsters can be summoned.");
+    const failSummon = (reason, code = "SUMMON_BLOCKED") => {
+      this.game?.devLog?.("SUMMON_BLOCKED", {
+        summary: reason,
+        code,
+        player: this.id,
+        card: card?.name || null,
+      });
+      this.game?.ui?.log?.(reason);
       return null;
+    };
+    if (!card || card.cardKind !== "monster") {
+      return failSummon("Only monsters can be summoned.", "NOT_MONSTER");
     }
 
     if (card.cannotBeNormalSummonedOrSet) {
-      console.log(`${card.name} cannot be Normal Summoned/Set.`);
-      if (this.game?.ui?.log) {
-        this.game.ui.log(`${card.name} cannot be Normal Summoned/Set.`);
-      }
-      return null;
+      return failSummon(
+        `${card.name} cannot be Normal Summoned/Set.`,
+        "NORMAL_SUMMON_FORBIDDEN",
+      );
     }
 
     if (card.summonRestrict === "shadow_heart_invocation_only") {
-      console.log(
-        `${card.name} cannot be Normal Summoned/Set. It must be Special Summoned by "Shadow-Heart Invocation".`
+      return failSummon(
+        `${card.name} cannot be Normal Summoned/Set. It must be Special Summoned by "Shadow-Heart Invocation".`,
+        "SPECIAL_SUMMON_ONLY",
       );
-      return null;
     }
 
     if (this.summonCount >= 1 + this.additionalNormalSummons) {
-      console.log("Summon limit reached for this turn.");
-      return null;
+      return failSummon(
+        "Summon limit reached for this turn.",
+        "SUMMON_LIMIT_REACHED",
+      );
     }
 
     if (cardIndex >= 0 && cardIndex < this.hand.length) {
@@ -240,18 +250,16 @@ export default class Player {
       let { tributesNeeded, usingAlt, alt } = tributeInfo;
 
       if (this.field.length < tributesNeeded) {
-        console.log(`Not enough tributes for Level ${card.level} monster.`);
-        return null;
+        return failSummon(
+          `Not enough tributes for Level ${card.level} monster.`,
+          "NOT_ENOUGH_TRIBUTES",
+        );
       }
 
       // Calculate field state AFTER removing tributes: current field - tributes + new card must be <= 5
       const fieldAfterTributes = this.field.length - tributesNeeded + 1;
       if (fieldAfterTributes > 5) {
-        console.log("Field is full (max 5 monsters).");
-        if (this.game?.ui?.log) {
-          this.game.ui.log("Field is full (max 5 monsters).");
-        }
-        return null;
+        return failSummon("Field is full (max 5 monsters).", "FIELD_FULL");
       }
 
       const matchesAltRequirement = (c) => {
@@ -275,23 +283,27 @@ export default class Player {
           }
 
           if (tributeCards.length !== tributesNeeded) {
-            console.log("Invalid tribute selection.");
-            return null;
+            return failSummon(
+              "Invalid tribute selection.",
+              "INVALID_TRIBUTE_SELECTION",
+            );
           }
 
           if (usingAlt && alt && !tributeCards.some(matchesAltRequirement)) {
             const requirementLabel = alt.requiresName || alt.requiresType;
-            console.log(
-              `Must tribute ${requirementLabel} to use reduced tribute.`
+            return failSummon(
+              `Must tribute ${requirementLabel} to use reduced tribute.`,
+              "TRIBUTE_REQUIREMENT_NOT_MET",
             );
-            return null;
           }
         } else if (usingAlt && alt) {
           const altIdx = this.field.findIndex(matchesAltRequirement);
           if (altIdx === -1) {
             const requirementLabel = alt.requiresName || alt.requiresType;
-            console.log(`No ${requirementLabel} available for tribute.`);
-            return null;
+            return failSummon(
+              `No ${requirementLabel} available for tribute.`,
+              "TRIBUTE_REQUIREMENT_NOT_FOUND",
+            );
           }
           tributeCards.push(this.field[altIdx]);
           for (const candidate of this.field) {
@@ -309,10 +321,10 @@ export default class Player {
           tributeCards.length !== tributesNeeded ||
           tributeCards.some((c) => !c)
         ) {
-          console.log(
-            `Not enough valid tributes for Level ${card.level} monster.`
+          return failSummon(
+            `Not enough valid tributes for Level ${card.level} monster.`,
+            "NOT_ENOUGH_VALID_TRIBUTES",
           );
-          return null;
         }
       }
 
@@ -324,8 +336,10 @@ export default class Player {
         excludeCards: tributeCards,
       });
       if (limitCheck && limitCheck.ok === false) {
-        console.log(limitCheck.reason || "Field limit prevents this summon.");
-        return null;
+        return failSummon(
+          limitCheck.reason || "Field limit prevents this summon.",
+          limitCheck.code || "FIELD_LIMIT",
+        );
       }
 
       // Track tributed cards for replay/event system
@@ -334,8 +348,10 @@ export default class Player {
         if (sacrificed) tributedCards.push({ ...sacrificed });
         const tributeResult = await sendToGrave(sacrificed);
         if (tributeResult?.success === false) {
-          console.log(`Could not tribute ${sacrificed?.name || "card"}.`);
-          return null;
+          return failSummon(
+            `Could not tribute ${sacrificed?.name || "card"}.`,
+            "TRIBUTE_FAILED",
+          );
         }
       }
 

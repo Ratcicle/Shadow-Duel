@@ -12,6 +12,10 @@
  */
 
 import { CHAIN_CONTEXTS } from "./contexts.js";
+import {
+  canActivateDuringDamageStep,
+  isQuickSpell,
+} from "../game/spellTrap/quickSpellRules.js";
 
 /**
  * Get the spell speed of an effect.
@@ -32,7 +36,7 @@ export function getEffectSpellSpeed(effect, card) {
   }
 
   if (card?.cardKind === "spell") {
-    if (card.subtype === "quick") {
+    if (isQuickSpell(card)) {
       return 2;
     }
     return 1;
@@ -106,6 +110,15 @@ export function canActivateInChain(effect, card, context) {
         )}`,
       };
     }
+  }
+
+  const damageStepCheck = canActivateDuringDamageStep(effect, card, context);
+  if (!damageStepCheck.ok) {
+    return {
+      ok: false,
+      code: damageStepCheck.code,
+      reason: damageStepCheck.reason,
+    };
   }
 
   return { ok: true };

@@ -291,6 +291,7 @@ export function showSpellChoiceModal(cardIndex, callback, options = {}) {
 
   const canActivate =
     options.canActivate === undefined ? true : !!options.canActivate;
+  const canSet = options.canSet === undefined ? true : !!options.canSet;
 
   const cardElement = resolveHandCardElement(cardIndex, options);
   const rect = cardElement ? cardElement.getBoundingClientRect() : null;
@@ -310,7 +311,9 @@ export function showSpellChoiceModal(cardIndex, callback, options = {}) {
     activateBtn.textContent = "Activate";
     content.appendChild(activateBtn);
   }
-  content.appendChild(setBtn);
+  if (canSet) {
+    content.appendChild(setBtn);
+  }
   modal.appendChild(content);
 
   // posicionamento semelhante ao modal de invocacao

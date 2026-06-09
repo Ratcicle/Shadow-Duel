@@ -3,6 +3,152 @@
  * Extracted from Game.js as part of B.4 modularization.
  */
 
+const DEFAULT_NULLISH_ZONE_NAMES = [
+  "hand",
+  "field",
+  "spellTrap",
+  "graveyard",
+  "banished",
+  "deck",
+  "extraDeck",
+];
+
+function resolveZoneHelperArgs(boundGame, gameOrContext, contextOrOptions, optionsArg) {
+  const firstArgIsGame =
+    gameOrContext &&
+    typeof gameOrContext === "object" &&
+    ("player" in gameOrContext || "bot" in gameOrContext);
+  const game = firstArgIsGame ? gameOrContext : boundGame;
+  const context = firstArgIsGame
+    ? typeof contextOrOptions === "string"
+      ? contextOrOptions
+      : "zone_check"
+    : typeof gameOrContext === "string"
+      ? gameOrContext
+      : "zone_check";
+  const options = firstArgIsGame
+    ? contextOrOptions && typeof contextOrOptions === "object"
+      ? contextOrOptions
+      : optionsArg || {}
+    : contextOrOptions && typeof contextOrOptions === "object"
+      ? contextOrOptions
+      : {};
+  return { game, context, options };
+}
+
+function getNullishZoneNames(options = {}) {
+  return Array.isArray(options.zones) && options.zones.length > 0
+    ? options.zones
+    : DEFAULT_NULLISH_ZONE_NAMES;
+}
+
+/**
+ * Inspect zones for null/undefined slots without mutating state.
+ * @param {Object} gameOrContext - Game instance, or context when bound as a method.
+ * @param {string|Object} contextOrOptions - Context label or options.
+ * @param {Object} optionsArg - Optional helper options.
+ * @returns {{ok: boolean, context: string, issues: Array}}
+ */
+export function inspectZoneNullishCards(
+  gameOrContext,
+  contextOrOptions = "zone_check",
+  optionsArg = {},
+) {
+  const { game, context, options } = resolveZoneHelperArgs(
+    this,
+    gameOrContext,
+    contextOrOptions,
+    optionsArg,
+  );
+  const issues = [];
+  if (!game) {
+    return { ok: true, context, issues };
+  }
+
+  const inspectPlayer = (player) => {
+    if (!player) return;
+    for (const zone of getNullishZoneNames(options)) {
+      const list = player[zone];
+      if (!Array.isArray(list)) continue;
+      const invalidIndices = [];
+      list.forEach((card, index) => {
+        if (card == null) invalidIndices.push(index);
+      });
+      if (invalidIndices.length > 0) {
+        issues.push({
+          playerId: player.id || null,
+          zone,
+          indices: invalidIndices,
+          length: list.length,
+          context,
+        });
+      }
+    }
+  };
+
+  inspectPlayer(game.player);
+  inspectPlayer(game.bot);
+  return { ok: issues.length === 0, context, issues };
+}
+
+/**
+ * Explicitly recover null/undefined zone slots and report what changed.
+ * This helper is intentionally separate from rendering.
+ * @param {Object} gameOrContext - Game instance, or context when bound as a method.
+ * @param {string|Object} contextOrOptions - Context label or options.
+ * @param {Object} optionsArg - Optional helper options.
+ * @returns {{ok: boolean, recovered: boolean, context: string, issues: Array}}
+ */
+export function recoverNullishZoneCards(
+  gameOrContext,
+  contextOrOptions = "zone_recovery",
+  optionsArg = {},
+) {
+  const { game, context, options } = resolveZoneHelperArgs(
+    this,
+    gameOrContext,
+    contextOrOptions,
+    optionsArg,
+  );
+  const inspection = inspectZoneNullishCards(game, context, options);
+  if (!game || inspection.ok) {
+    return {
+      ok: true,
+      recovered: false,
+      context,
+      issues: inspection.issues,
+    };
+  }
+
+  for (const issue of inspection.issues) {
+    const player =
+      game.player?.id === issue.playerId
+        ? game.player
+        : game.bot?.id === issue.playerId
+          ? game.bot
+          : null;
+    const list = player?.[issue.zone];
+    if (Array.isArray(list)) {
+      player[issue.zone] = list.filter((card) => card != null);
+    }
+  }
+
+  const detail = {
+    summary: `Recovered nullish zone slots during ${context}`,
+    context,
+    issues: inspection.issues,
+  };
+  game.devLog?.("ZONE_NULLISH_RECOVERY", detail);
+  game._arenaTracker?.recordProgress?.("zone_nullish_recovery", game, detail);
+
+  return {
+    ok: true,
+    recovered: true,
+    context,
+    issues: inspection.issues,
+  };
+}
+
 /**
  * Assert that the game state is consistent (no invariant violations).
  * @param {string} contextLabel - Label for logging

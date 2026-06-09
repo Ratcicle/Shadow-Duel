@@ -4,6 +4,21 @@
  * Functions assume `this` = EffectEngine instance
  */
 
+import {
+  canActivateSetQuickSpell,
+  isQuickSpell,
+} from "../../game/spellTrap/quickSpellRules.js";
+
+function hasQuickSpellLegalWindowContext(context = {}) {
+  return (
+    context.legalWindow === true ||
+    context.isChainWindow === true ||
+    context.chainWindowOpen === true ||
+    context.openState === true ||
+    typeof context.type === "string"
+  );
+}
+
 /**
  * Activate a monster's ignition effect from the graveyard.
  * @returns {Promise<Object>} Result with success/needsSelection status
@@ -307,6 +322,8 @@ export async function activateSpellTrapEffect(
   const trapActivationFromSet =
     activationContext?.trapActivationFromSet === true ||
     activationContext?.fromSet === true;
+  const quickSpellActivationFromSet =
+    activationContext?.quickSpellActivationFromSet === true;
   const isSetSpell =
     card.cardKind === "spell" &&
     card.isFacedown === true &&
@@ -315,6 +332,12 @@ export async function activateSpellTrapEffect(
     card.cardKind === "trap" &&
     card.isFacedown === true &&
     activationZone === "spellTrap";
+  const quickSpellFromHand = fromHand && isQuickSpell(card);
+  const quickSpellFromSet =
+    !fromHand &&
+    isQuickSpell(card) &&
+    activationZone === "spellTrap" &&
+    (isSetSpell || quickSpellActivationFromSet);
   let flipAfterChecks = false;
   if (card.isFacedown) {
     if (isSetTrap) {
@@ -336,11 +359,23 @@ export async function activateSpellTrapEffect(
       flipAfterChecks = true;
     }
   }
-  if (this.game.turn !== player.id) {
+  if (this.game.turn !== player.id && !quickSpellFromSet) {
     return fail("Not your turn.");
   }
-  if (this.game.phase !== "main1" && this.game.phase !== "main2") {
+  const inMainPhase = this.game.phase === "main1" || this.game.phase === "main2";
+  if (
+    !inMainPhase &&
+    !quickSpellFromHand &&
+    !quickSpellFromSet
+  ) {
     return fail("Effect can only be activated during Main Phase.");
+  }
+  if (
+    (quickSpellFromHand || quickSpellFromSet) &&
+    (!inMainPhase || this.game.turn !== player.id) &&
+    !hasQuickSpellLegalWindowContext(activationContext?.quickSpellContext)
+  ) {
+    return fail("No legal Quick Spell activation window is open.");
   }
 
   const normalizedActivationContext = {
@@ -353,6 +388,8 @@ export async function activateSpellTrapEffect(
     autoSelectSingleTarget: activationContext?.autoSelectSingleTarget,
     autoSelectTargets: activationContext?.autoSelectTargets,
     actionContext: activationContext?.actionContext || null,
+    quickSpellContext: activationContext?.quickSpellContext || null,
+    quickSpellActivationFromSet,
     resolvedTargets: activationContext?.resolvedTargets || null,
     trapActivationFromSet: trapActivationFromSet || isSetTrap || false,
   };
@@ -445,6 +482,23 @@ export async function activateSpellTrapEffect(
         }
         return fail("No ignition effect defined.");
       }
+    }
+  }
+
+  if (quickSpellFromSet && card.isFacedown === true) {
+    const quickSpellContext = {
+      ...(normalizedActivationContext.quickSpellContext || {}),
+      activationZone: "spellTrap",
+      effect,
+    };
+    const quickCheck = canActivateSetQuickSpell(
+      this.game,
+      card,
+      player,
+      quickSpellContext,
+    );
+    if (!quickCheck.ok) {
+      return fail(quickCheck.reason);
     }
   }
 

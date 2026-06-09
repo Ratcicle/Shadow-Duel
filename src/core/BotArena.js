@@ -126,6 +126,29 @@ function createNullRenderer() {
   );
 }
 
+function canUseBrowserRenderer(speedConfig) {
+  return (
+    speedConfig?.useRenderer === true &&
+    typeof document !== "undefined" &&
+    typeof document.getElementById === "function"
+  );
+}
+
+function resolveRuntimeSpeedConfig(speedConfig) {
+  if (!speedConfig?.useRenderer || canUseBrowserRenderer(speedConfig)) {
+    return speedConfig;
+  }
+
+  return {
+    ...speedConfig,
+    phaseDelayMs: 0,
+    actionDelayMs: 0,
+    battleDelayMs: 0,
+    pollIntervalMs: 5,
+    useRenderer: false,
+  };
+}
+
 function readStoredIds(key) {
   try {
     const raw = localStorage.getItem(key);
@@ -320,10 +343,11 @@ export default class BotArena {
   }
 
   createGame(preset1, preset2, speedConfig, deckData) {
-    const renderer = speedConfig.useRenderer
+    const useBrowserRenderer = canUseBrowserRenderer(speedConfig);
+    const renderer = useBrowserRenderer
       ? this.renderer || new Renderer()
       : createNullRenderer();
-    if (speedConfig.useRenderer && !this.renderer) {
+    if (useBrowserRenderer && !this.renderer) {
       this.renderer = renderer;
     }
 
@@ -335,7 +359,7 @@ export default class BotArena {
     game.aiBattleDelayMs = speedConfig.battleDelayMs;
     game._botArenaMode = true;
     game.disablePresentationDelays =
-      !speedConfig.useRenderer || speedConfig.actionDelayMs <= 0;
+      !useBrowserRenderer || speedConfig.actionDelayMs <= 0;
 
     // Configurar parâmetros de busca na game (para bots usarem)
     game.arenaBeamWidth = this.customBeamWidth ?? speedConfig.beamWidth ?? 2;
@@ -524,7 +548,7 @@ export default class BotArena {
     game._arenaTracker = tracker;
     tracker.recordProgress("bot_arena_duel_created", game, { arch1, arch2 });
 
-    if (speedConfig.useRenderer) {
+    if (canUseBrowserRenderer(speedConfig)) {
       const logEl = document.getElementById("action-log-list");
       if (logEl) logEl.innerHTML = "";
     }
@@ -627,7 +651,7 @@ export default class BotArena {
     this.analytics.reset();
     this.analytics.startBatch();
 
-    const speedConfig = this.getSpeedConfig(speed);
+    const speedConfig = resolveRuntimeSpeedConfig(this.getSpeedConfig(speed));
     const deckData = this.loadStoredDeckData();
     const stats = {
       completed: 0,

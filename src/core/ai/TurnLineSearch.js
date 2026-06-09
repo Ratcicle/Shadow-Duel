@@ -526,23 +526,40 @@ function destroyPlannerMonster(player, monster) {
   return true;
 }
 
-function hasBattleDestructionProtection(card) {
+function getSimTurnCounter(turnCounter) {
+  return Number.isFinite(Number(turnCounter)) ? Number(turnCounter) : 0;
+}
+
+function hasBattleDestructionProtection(card, turnCounter) {
+  const currentTurn = getSimTurnCounter(turnCounter);
   return Boolean(
     card?.battleIndestructible ||
       card?.tempBattleIndestructible ||
       card?.cannotBeDestroyedByBattle ||
       card?.simBattleDestructionProtected ||
       (card?.battleIndestructibleOncePerTurn &&
-        !card?.battleIndestructibleOncePerTurnUsed),
+        card?.battleIndestructibleOncePerTurnLastUsedTurn !== currentTurn),
   );
 }
 
-function preventBattleDestruction(card) {
-  if (!hasBattleDestructionProtection(card)) return false;
+function preventBattleDestruction(card, turnCounter) {
+  if (!hasBattleDestructionProtection(card, turnCounter)) return false;
+  const currentTurn = getSimTurnCounter(turnCounter);
+  const nonOnceProtection = Boolean(
+    card?.battleIndestructible ||
+      card?.tempBattleIndestructible ||
+      card?.cannotBeDestroyedByBattle ||
+      card?.simBattleDestructionProtected,
+  );
   if (card?.simBattleDestructionProtected) {
     card.simBattleDestructionProtected = false;
   }
-  if (card?.battleIndestructibleOncePerTurn) {
+  if (
+    !nonOnceProtection &&
+    card?.battleIndestructibleOncePerTurn &&
+    card?.battleIndestructibleOncePerTurnLastUsedTurn !== currentTurn
+  ) {
+    card.battleIndestructibleOncePerTurnLastUsedTurn = currentTurn;
     card.battleIndestructibleOncePerTurnUsed = true;
   }
   return true;
@@ -677,7 +694,7 @@ function applySimulatedBattle(state, battlePlan, strategy = null, options = {}) 
   };
   const destroyIfAllowed = (owner, card, ownerLabel) => {
     if (!card) return false;
-    if (preventBattleDestruction(card)) return false;
+    if (preventBattleDestruction(card, state?.turnCounter)) return false;
     recordDestroyed(card, ownerLabel);
     return destroyPlannerMonster(owner, card);
   };

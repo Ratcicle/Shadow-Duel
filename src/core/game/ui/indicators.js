@@ -3,6 +3,8 @@
 // Activation indicator methods for Game class — B.10 extraction
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { isQuickSpell } from "../spellTrap/quickSpellRules.js";
+
 /**
  * Updates activation indicators for the player's cards.
  */
@@ -58,12 +60,13 @@ export function buildActivationIndicatorsForPlayer(player) {
     return null;
   };
 
-  const canStart = (kind, phaseReq) =>
+  const canStart = (kind, phaseReq, extra = {}) =>
     this.canStartAction({
       actor: player,
       kind,
       phaseReq,
       silent: true,
+      ...extra,
     });
 
   const buildHint = (guard, preview, readyLabel) => {
@@ -97,12 +100,22 @@ export function buildActivationIndicatorsForPlayer(player) {
   (player.hand || []).forEach((card, index) => {
     if (!card) return;
     if (card.cardKind === "spell") {
-      const guard = canStart("spell_from_hand", ["main1", "main2"]);
+      const quickSpellContext = isQuickSpell(card)
+        ? {
+            activationZone: "hand",
+            legalWindow: player.id === this.turn,
+          }
+        : null;
+      const guard = canStart(
+        "spell_from_hand",
+        quickSpellContext ? null : ["main1", "main2"],
+      );
       const preview = this.effectEngine?.canActivateSpellFromHandPreview?.(
         card,
         player,
         {
           activationContext,
+          ...(quickSpellContext ? { quickSpellContext } : {}),
         }
       ) || { ok: false };
       let ok = !!preview.ok;
@@ -163,9 +176,25 @@ export function buildActivationIndicatorsForPlayer(player) {
   (player.spellTrap || []).forEach((card, index) => {
     if (!card) return;
     const isTrap = card.cardKind === "trap";
+    const setQuickSpellContext =
+      isQuickSpell(card) && card.isFacedown === true
+        ? {
+            activationZone: "spellTrap",
+            legalWindow: true,
+          }
+        : null;
     const guard = canStart(
-      isTrap ? "trap_activation" : "spelltrap_effect",
-      isTrap ? ["main1", "battle", "main2"] : ["main1", "main2"],
+      isTrap
+        ? "trap_activation"
+        : setQuickSpellContext
+        ? "quick_spell_activation"
+        : "spelltrap_effect",
+      isTrap
+        ? ["main1", "battle", "main2"]
+        : setQuickSpellContext
+        ? null
+        : ["main1", "main2"],
+      setQuickSpellContext ? { allowDuringOpponentTurn: true } : {},
     );
     const preview = this.effectEngine?.canActivateSpellTrapEffectPreview?.(
       card,
@@ -176,7 +205,12 @@ export function buildActivationIndicatorsForPlayer(player) {
         activationContext: {
           ...activationContext,
           trapActivationFromSet: isTrap && card.isFacedown === true,
+          quickSpellActivationFromSet: !!setQuickSpellContext,
+          quickSpellContext: setQuickSpellContext,
         },
+        ...(setQuickSpellContext
+          ? { quickSpellContext: setQuickSpellContext }
+          : {}),
       }
     ) || { ok: false };
     const hint = buildHint(guard, preview, "ignition disponivel");

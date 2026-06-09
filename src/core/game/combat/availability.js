@@ -358,12 +358,17 @@ export function canDestroyByBattle(card) {
   if (!card) return false;
   if (card.battleIndestructible) return false;
   if (card.tempBattleIndestructible) return false;
-  if (
-    card.battleIndestructibleOncePerTurn &&
-    !card.battleIndestructibleOncePerTurnUsed
-  ) {
+  if (card.battleIndestructibleOncePerTurn) {
+    const turnCounter = Number.isFinite(Number(this?.turnCounter))
+      ? Number(this.turnCounter)
+      : 0;
+    if (card.battleIndestructibleOncePerTurnLastUsedTurn !== turnCounter) {
+      card.battleIndestructibleOncePerTurnLastUsedTurn = turnCounter;
+      card.battleIndestructibleOncePerTurnUsed = true;
+      return false;
+    }
     card.battleIndestructibleOncePerTurnUsed = true;
-    return false;
+    return true;
   }
   return true;
 }

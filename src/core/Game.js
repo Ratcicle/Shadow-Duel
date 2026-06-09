@@ -163,6 +163,8 @@ export default class Game {
     this.phaseDelayMs = 400;
     this.aiSuccessfulActionDelayMs = 1200;
     this.aiPresentationStepDelayMs = 650;
+    this.battleStep = null;
+    this.damageStepTiming = null;
     this.lastAttackNegated = false;
     this.pendingSpecialSummon = null; // Track pending special summon (e.g., Leviathan from Eel)
     this.isResolvingEffect = false; // Lock player actions while resolving an effect
@@ -563,12 +565,29 @@ export default class Game {
   ) {
     if (this.disableEffectActivation) {
       this.ui?.log?.("Effect activations are disabled.");
-      return { success: false, reason: "effects_disabled" };
+      return this.createActionResult({
+        reason: "effects_disabled",
+        code: "EFFECTS_DISABLED",
+      });
     }
-    if (!card) return;
-    console.log(
-      `[Game] tryActivateMonsterEffect called for: ${card.name} (zone: ${activationZone})`,
-    );
+    if (!card) {
+      return this.createActionResult({
+        reason: "invalid_card",
+        code: "INVALID_CARD",
+      });
+    }
+    if (!owner) {
+      return this.createActionResult({
+        reason: "invalid_owner",
+        code: "INVALID_OWNER",
+      });
+    }
+    this.devLog("MONSTER_EFFECT_ACTIVATION_ATTEMPT", {
+      summary: `${card.name} (${activationZone})`,
+      card: card.name,
+      activationZone,
+      owner: owner.id || null,
+    });
     const activationContext = {
       fromHand: activationZone === "hand",
       activationZone,
@@ -650,20 +669,6 @@ export default class Game {
   // ? performSpecialSummon ? Moved to src/core/game/summon/execution.js
 
   // ? canActivatePolymerization ? Moved to src/core/game/spellTrap/verification.js
-
-  highlightReadySpecialSummon() {
-    // Find and highlight the card ready for special summon in hand
-    if (!this.pendingSpecialSummon) return;
-    const indices = [];
-    this.player.hand.forEach((card, index) => {
-      if (card && card.name === this.pendingSpecialSummon.cardName) {
-        indices.push(index);
-      }
-    });
-    if (this.ui && typeof this.ui.applyHandTargetableIndices === "function") {
-      this.ui.applyHandTargetableIndices("player", indices);
-    }
-  }
 
   // getOpponent moved to src/core/game/helpers/players.js
   // ? cleanupTempBoosts ? Moved to src/core/game/turn/cleanup.js
@@ -794,8 +799,12 @@ Game.prototype.captureZoneSnapshot = zonesSnapshot.captureZoneSnapshot;
 Game.prototype.restoreZoneSnapshot = zonesSnapshot.restoreZoneSnapshot;
 Game.prototype.compareZoneSnapshot = zonesSnapshot.compareZoneSnapshot;
 
-// Invariants: assertStateInvariants
+// Invariants: assertStateInvariants, inspectZoneNullishCards, recoverNullishZoneCards
 Game.prototype.assertStateInvariants = zonesInvariants.assertStateInvariants;
+Game.prototype.inspectZoneNullishCards =
+  zonesInvariants.inspectZoneNullishCards;
+Game.prototype.recoverNullishZoneCards =
+  zonesInvariants.recoverNullishZoneCards;
 
 // Operations: getZone, runZoneOp
 Game.prototype.getZone = zonesOperations.getZone;
@@ -812,9 +821,10 @@ Game.prototype.destroyCard = zonesDestruction.destroyCard;
 Game.prototype.resolveDestructionWithReplacement =
   effectsDestructionReplacement.resolveDestructionWithReplacement;
 
-// Activation pipeline: normalizeActivationResult, runActivationPipeline, runActivationPipelineWait
+// Activation pipeline: normalizeActivationResult, createActionResult, runActivationPipeline, runActivationPipelineWait
 Game.prototype.normalizeActivationResult =
   effectsActivationPipeline.normalizeActivationResult;
+Game.prototype.createActionResult = effectsActivationPipeline.createActionResult;
 Game.prototype.runActivationPipeline =
   effectsActivationPipeline.runActivationPipeline;
 Game.prototype.runActivationPipelineWait =
@@ -1016,13 +1026,15 @@ Game.prototype.tryActivateSpell = spellTrapActivation.tryActivateSpell;
 Game.prototype.activateFieldSpellEffect =
   spellTrapActivation.activateFieldSpellEffect;
 
-// Finalization: finalizeSpellTrapActivation, commitCardActivationFromHand, rollbackSpellActivation
+// Finalization: finalizeSpellTrapActivation, commitCardActivationFromHand, rollback helpers
 Game.prototype.finalizeSpellTrapActivation =
   spellTrapFinalization.finalizeSpellTrapActivation;
 Game.prototype.commitCardActivationFromHand =
   spellTrapFinalization.commitCardActivationFromHand;
 Game.prototype.rollbackSpellActivation =
   spellTrapFinalization.rollbackSpellActivation;
+Game.prototype.rollbackFieldSpellTrapActivation =
+  spellTrapFinalization.rollbackFieldSpellTrapActivation;
 
 // Verification: canActivateTrap, canActivatePolymerization
 Game.prototype.canActivateTrap = spellTrapVerification.canActivateTrap;

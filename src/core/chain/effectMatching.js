@@ -1,4 +1,5 @@
 import { CHAIN_CONTEXTS } from "./contexts.js";
+import { isQuickSpell } from "../game/spellTrap/quickSpellRules.js";
 
 /**
  * Helper to determine if an action was performed by the opponent
@@ -374,8 +375,8 @@ export function findActivatableEffect(card, context, ownerPlayer = null) {
       }
     }
 
-    // For quick-play spells
-    if (card.cardKind === "spell" && card.subtype === "quick") {
+    // For Quick Spells
+    if (card.cardKind === "spell" && isQuickSpell(card)) {
       if (
         effect.timing === "on_play" ||
         effect.timing === "on_activate" ||
@@ -388,25 +389,81 @@ export function findActivatableEffect(card, context, ownerPlayer = null) {
           continue;
         }
 
+        const cardOwner =
+          ownerPlayer ||
+          (card.owner === "player"
+            ? this.game.player
+            : card.owner === "bot"
+              ? this.game.bot
+              : null);
+        const activationZone = cardOwner?.hand?.includes?.(card)
+          ? "hand"
+          : "spellTrap";
+        const ctx = {
+          source: card,
+          player: cardOwner,
+          opponent: cardOwner ? this.game.getOpponent?.(cardOwner) : null,
+          activationZone,
+          defender: context?.defender || context?.target,
+          attacker: context?.attacker,
+          summonedCard: context?.summonedCard || context?.card || null,
+          summonMethod: context?.method || context?.summonMethod || null,
+          summonFromZone: context?.fromZone || null,
+          attackerOwner: context?.attackerOwner,
+          defenderOwner: context?.defenderOwner,
+          activationContext: {
+            isPreview: true,
+            preview: true,
+            autoSelectSingleTarget: true,
+            logTargets: false,
+            quickSpellContext: {
+              ...(context || {}),
+              activationZone,
+              effect,
+            },
+          },
+        };
+
+        if (effect.requirePhase) {
+          const allowedPhases = Array.isArray(effect.requirePhase)
+            ? effect.requirePhase
+            : [effect.requirePhase];
+          if (!allowedPhases.includes(this.game?.phase)) {
+            continue;
+          }
+        }
+
+        if (effect.conditions && this.game?.effectEngine?.evaluateConditions) {
+          const condCheck = this.game.effectEngine.evaluateConditions(
+            effect.conditions,
+            ctx,
+          );
+          if (!condCheck.ok) {
+            continue;
+          }
+        }
+
+        if (
+          effect.oncePerTurn &&
+          cardOwner &&
+          this.game?.effectEngine?.checkOncePerTurn
+        ) {
+          const optCheck = this.game.effectEngine.checkOncePerTurn(
+            card,
+            cardOwner,
+            effect,
+          );
+          if (!optCheck.ok) {
+            continue;
+          }
+        }
+
         // Check if targets are available before allowing activation
         if (
           effect.targets &&
           effect.targets.length > 0 &&
           this.game?.effectEngine
         ) {
-          const cardOwner =
-            card.owner === "player" ? this.game.player : this.game.bot;
-          const ctx = {
-            source: card,
-            player: cardOwner,
-            opponent:
-              card.owner === "player" ? this.game.bot : this.game.player,
-            activationContext: {
-              autoSelectSingleTarget: true,
-              logTargets: false,
-            },
-          };
-
           const targetResult = this.game.effectEngine.resolveTargets(
             effect.targets,
             ctx,
@@ -415,7 +472,7 @@ export function findActivatableEffect(card, context, ownerPlayer = null) {
 
           if (targetResult.ok === false) {
             this.log(
-              `[findActivatableEffect] ${card.name}: targets not available for quick-play - ${targetResult.reason}`,
+              `[findActivatableEffect] ${card.name}: targets not available for Quick Spell - ${targetResult.reason}`,
             );
             continue;
           }

@@ -1,3 +1,5 @@
+import { isQuickSpell } from "../game/spellTrap/quickSpellRules.js";
+
 /**
  * Bot AI for choosing chain response
  * @param {Object} player
@@ -173,7 +175,7 @@ export async function botChooseChainResponse(player, activatable, context) {
       }
     }
 
-    if (card.cardKind === "spell" && card.subtype === "quick") {
+    if (isQuickSpell(card)) {
       priority += 10;
       if (card.name === "Luminarch Holy Shield") {
         // CRITICAL: Holy Shield só deve ser ativado em contextos de batalha do OPONENTE

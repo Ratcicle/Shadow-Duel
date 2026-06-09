@@ -18,6 +18,7 @@
 
 import { isAI } from "../Player.js";
 import { cardMatchesKind } from "../Card.js";
+import { isQuickSpell } from "../game/spellTrap/quickSpellRules.js";
 
 export async function resolveChain() {
   if (this.chainStack.length === 0) {
@@ -87,7 +88,7 @@ export async function resolveChainLink(link) {
 /**
  * Phase 1 — preparation.
  * Verifies effect engine + card validity, reveals face-down spells/traps,
- * relocates quick-play spells from hand to spellTrap zone.
+ * relocates Quick Spells from hand to spellTrap zone.
  * Returns false if resolution must abort (fizzle).
  */
 function prepareForResolution(cs, link, activationZone) {
@@ -122,8 +123,7 @@ function prepareForResolution(cs, link, activationZone) {
   }
 
   if (
-    card.cardKind === "spell" &&
-    card.subtype === "quick" &&
+    isQuickSpell(card) &&
     activationZone === "hand"
   ) {
     const handIdx = player.hand?.indexOf(card);
@@ -343,7 +343,7 @@ function notifyChainActivation(cs, link, activationZone, resolvedSelections) {
 }
 
 /**
- * Sends non-continuous traps and quick-play spells to graveyard,
+ * Sends non-continuous traps and Quick Spells to graveyard,
  * registers once-per-turn usage, and refreshes the board.
  */
 function cleanupAfterResolution(cs, link) {
@@ -372,7 +372,7 @@ function cleanupAfterResolution(cs, link) {
     }
   }
 
-  if (card.cardKind === "spell" && card.subtype === "quick") {
+  if (isQuickSpell(card)) {
     const idx = player.spellTrap?.indexOf(card);
     if (idx !== -1) {
       player.spellTrap.splice(idx, 1);

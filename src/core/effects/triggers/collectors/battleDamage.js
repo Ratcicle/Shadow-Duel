@@ -1,3 +1,5 @@
+import { canActivateDuringDamageStep } from "../../../game/spellTrap/quickSpellRules.js";
+
 /**
  * Collects trigger entries for battle_damage event.
  * This event happens after attack declaration responses and flips, but before
@@ -66,6 +68,19 @@ export async function collectBattleDamageTriggers(payload) {
           if (!isHandMonsterQuick || effect.requireZone !== "hand") {
             continue;
           }
+        }
+
+        const damageStepCheck = canActivateDuringDamageStep(effect, card, {
+          ...(payload || {}),
+          type: "battle_damage",
+          event: "battle_damage",
+          isDamageStep: true,
+          damageStepTiming:
+            payload.damageStepTiming || "before_damage_calculation",
+          activationZone: sourceZone,
+        });
+        if (!damageStepCheck.ok) {
+          continue;
         }
 
         if (

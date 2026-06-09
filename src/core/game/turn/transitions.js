@@ -10,7 +10,7 @@
  */
 
 import { isAI } from "../../Player.js";
-import { PHASE_ORDER, normalizeTargetPhase } from "./phaseRules.js";
+import { PHASE_ORDER, getNextPhase, normalizeTargetPhase } from "./phaseRules.js";
 
 function scheduleAiMoveAfterPaint(game, actor) {
   if (
@@ -45,6 +45,113 @@ function scheduleAiMoveAfterPaint(game, actor) {
   setTimeout(runMove, 0);
 }
 
+function hasPendingPhaseInterruption(game) {
+  const selectionState = game.selectionState || "idle";
+  return (
+    !!game.targetSelection ||
+    selectionState === "selecting" ||
+    selectionState === "confirming" ||
+    selectionState === "resolving" ||
+    game.isResolvingEffect ||
+    game.eventResolutionDepth > 0 ||
+    game.chainSystem?.isChainResolving?.() ||
+    game.chainSystem?.isChainWindowOpen?.()
+  );
+}
+
+function setBattleOpenStateForPhase(game, phase) {
+  if (phase === "battle") {
+    game.battleStep = "start";
+    game.damageStepTiming = null;
+    return;
+  }
+  game.battleStep = null;
+  game.damageStepTiming = null;
+}
+
+async function leaveCurrentPhase(game, options = {}) {
+  const currentPhase = game.phase;
+  const nextPhase =
+    options.nextPhase ??
+    game.getNextPhase?.(currentPhase) ??
+    getNextPhase(currentPhase, game);
+  if (currentPhase === "battle") {
+    game.battleStep = "end";
+    game.damageStepTiming = null;
+  }
+
+  await game.checkAndOfferTraps("phase_end", {
+    currentPhase,
+    nextPhase,
+    fromPhase: currentPhase,
+    toPhase: nextPhase,
+    battleStep: game.battleStep ?? null,
+    damageStepTiming: game.damageStepTiming ?? null,
+  });
+
+  if (game.gameOver || game.isDisposed?.()) {
+    return { ok: false, reason: "duel_stopped" };
+  }
+
+  if (game.phase !== currentPhase) {
+    return {
+      ok: false,
+      reason: "phase_changed_during_phase_end",
+      currentPhase: game.phase,
+    };
+  }
+
+  if (hasPendingPhaseInterruption(game)) {
+    return { ok: false, reason: "phase_window_pending" };
+  }
+
+  if (currentPhase === "battle") {
+    game.clearAttackResolutionIndicators();
+    game.clearAttackReadyIndicators();
+  }
+
+  return { ok: true, currentPhase, nextPhase };
+}
+
+async function enterPhase(game, nextPhase, previousPhase) {
+  if (!nextPhase) return { ok: true };
+
+  game.phase = nextPhase;
+  setBattleOpenStateForPhase(game, nextPhase);
+  game.updateBoard();
+
+  await game.checkAndOfferTraps("phase_start", {
+    currentPhase: nextPhase,
+    previousPhase,
+    fromPhase: previousPhase,
+    toPhase: nextPhase,
+    battleStep: game.battleStep ?? null,
+    damageStepTiming: game.damageStepTiming ?? null,
+  });
+
+  if (game.gameOver || game.isDisposed?.()) {
+    return { ok: false, reason: "duel_stopped" };
+  }
+
+  if (game.phase !== nextPhase) {
+    return {
+      ok: false,
+      reason: "phase_changed_during_phase_start",
+      currentPhase: game.phase,
+    };
+  }
+
+  if (hasPendingPhaseInterruption(game)) {
+    return { ok: false, reason: "phase_window_pending" };
+  }
+
+  if (nextPhase === "battle" && game.battleStep === "start") {
+    game.battleStep = "battle";
+  }
+
+  return { ok: true };
+}
+
 /**
  * Advances to the next phase in the turn order.
  * Phase order: draw → standby → main1 → battle → main2 → end
@@ -72,23 +179,15 @@ export async function nextPhase() {
     return guard;
   }
 
-  // Offer generic trap activation at the end of current phase
-  await this.checkAndOfferTraps("phase_end", {
-    currentPhase: this.phase,
-  });
-  if (this.gameOver || this.isDisposed?.()) return;
-
   const next = this.getNextPhase?.(this.phase) ?? null;
+  const leaveResult = await leaveCurrentPhase(this, { nextPhase: next });
+  if (!leaveResult.ok) return leaveResult;
+
   if (!next) {
     return await this.endTurn();
   }
-  this.phase = next;
-
-  // Clear attack indicators when leaving battle phase
-  this.clearAttackResolutionIndicators();
-  this.clearAttackReadyIndicators();
-
-  this.updateBoard();
+  const enterResult = await enterPhase(this, next, leaveResult.currentPhase);
+  if (!enterResult.ok) return enterResult;
 
   scheduleAiMoveAfterPaint(this, actor);
 }
@@ -114,11 +213,19 @@ export async function skipToPhase(targetPhase) {
   if (targetIdx <= currentIdx) return;
 
   const fromPhase = this.phase;
-  this.phase = finalTargetPhase;
 
-  // Clear attack indicators when skipping phases
-  this.clearAttackResolutionIndicators();
-  this.clearAttackReadyIndicators();
+  while (this.phase !== finalTargetPhase) {
+    const next =
+      this.getNextPhase?.(this.phase) ?? getNextPhase(this.phase, this);
+    if (!next) return;
+
+    const leaveResult = await leaveCurrentPhase(this, { nextPhase: next });
+    if (!leaveResult.ok) return leaveResult;
+
+    const enterResult = await enterPhase(this, next, leaveResult.currentPhase);
+    if (!enterResult.ok) return enterResult;
+    if (this.gameOver || this.isDisposed?.()) return;
+  }
 
   if (normalized.redirected && actor.controllerType === "human") {
     this.ui?.log?.(normalized.reason);

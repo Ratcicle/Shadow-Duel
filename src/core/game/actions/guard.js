@@ -31,7 +31,13 @@ export function canStartAction(options = {}) {
     this.eventResolutionDepth > 0;
 
   const blocked = (code, reason) => {
-    const result = { ok: false, code, reason };
+    const result = {
+      ok: false,
+      success: false,
+      needsSelection: false,
+      code,
+      reason,
+    };
     if (!silent) {
       this.devLog("ACTION_GUARD_BLOCKED", {
         summary: code,

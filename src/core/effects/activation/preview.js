@@ -4,6 +4,12 @@
  * Functions assume `this` = EffectEngine instance
  */
 
+import {
+  canActivateSetQuickSpell,
+  canActivateQuickSpellFromHand,
+  isQuickSpell,
+} from "../../game/spellTrap/quickSpellRules.js";
+
 /**
  * Check if a monster has an activatable graveyard effect.
  */
@@ -68,12 +74,30 @@ export function canActivateSpellFromHandPreview(card, player, options = {}) {
     }
   }
 
-  const baseCheck = this.canActivate(card, player);
-  if (!baseCheck.ok) {
-    return baseCheck;
+  const effect = this.getHandActivationEffect(card);
+  if (isQuickSpell(card)) {
+    const quickSpellContext = {
+      ...(options.activationContext?.quickSpellContext || {}),
+      ...(options.quickSpellContext || {}),
+      activationZone: "hand",
+      effect,
+    };
+    const quickCheck = canActivateQuickSpellFromHand(
+      this.game,
+      card,
+      player,
+      quickSpellContext,
+    );
+    if (!quickCheck.ok) {
+      return quickCheck;
+    }
+  } else {
+    const baseCheck = this.canActivate(card, player);
+    if (!baseCheck.ok) {
+      return baseCheck;
+    }
   }
 
-  const effect = this.getHandActivationEffect(card);
   const isFieldSpell = card.subtype === "field";
   const isContinuousSpell = card.subtype === "continuous";
   const placementOnly = !effect && (isFieldSpell || isContinuousSpell);
@@ -277,7 +301,17 @@ export function canActivateSpellTrapEffectPreview(
     };
   }
 
-  if (card.cardKind === "spell") {
+  const effect = this.getSpellTrapActivationEffect(card, {
+    fromHand: false,
+    trapActivationFromSet:
+      card.cardKind === "trap" && card.isFacedown === true,
+  });
+  const setQuickSpell =
+    isQuickSpell(card) &&
+    activationZone === "spellTrap" &&
+    card.isFacedown === true;
+
+  if (card.cardKind === "spell" && !setQuickSpell) {
     if (this.game?.turn !== player.id) {
       return { ok: false, reason: "Not your turn." };
     }
@@ -324,7 +358,23 @@ export function canActivateSpellTrapEffectPreview(
     }
   }
 
-  if (card.cardKind === "trap" && card.isFacedown === true) {
+  if (setQuickSpell) {
+    const quickSpellContext = {
+      ...(options.activationContext?.quickSpellContext || {}),
+      ...(options.quickSpellContext || {}),
+      activationZone: "spellTrap",
+      effect,
+    };
+    const quickCheck = canActivateSetQuickSpell(
+      this.game,
+      card,
+      player,
+      quickSpellContext,
+    );
+    if (!quickCheck.ok) {
+      return quickCheck;
+    }
+  } else if (card.cardKind === "trap" && card.isFacedown === true) {
     const canActivateTrap =
       typeof this.game?.canActivateTrap === "function"
         ? this.game.canActivateTrap(card)
@@ -342,11 +392,6 @@ export function canActivateSpellTrapEffectPreview(
     }
   }
 
-  const effect = this.getSpellTrapActivationEffect(card, {
-    fromHand: false,
-    trapActivationFromSet:
-      card.cardKind === "trap" && card.isFacedown === true,
-  });
   if (!effect) {
     const isSetContinuousSpell =
       card.cardKind === "spell" &&

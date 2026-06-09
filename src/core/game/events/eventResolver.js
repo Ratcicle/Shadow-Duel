@@ -300,6 +300,17 @@ export async function resolveEventEntries(
         isOpponentAttack: payload.attackerOwner.id !== defenderOwner.id,
       });
     }
+  } else if (eventName === "effect_activated") {
+    if (payload?.card?.cardKind === "monster" && payload?.player) {
+      await this.checkAndOfferTraps("effect_activation", {
+        ...payload,
+        player: payload.player,
+        triggerPlayer: payload.player,
+        card: payload.card,
+        effect: payload.effect || null,
+        activationZone: payload.activationZone || "field",
+      });
+    }
   }
 
   return {

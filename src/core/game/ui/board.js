@@ -3,6 +3,50 @@
 // Board rendering and update methods for Game class — B.10 extraction
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { inspectZoneNullishCards } from "../zones/invariants.js";
+
+const RENDER_ZONE_NAMES = [
+  "hand",
+  "field",
+  "spellTrap",
+  "graveyard",
+  "extraDeck",
+];
+
+function createRenderZoneList(player, zoneName) {
+  return Array.isArray(player?.[zoneName])
+    ? player[zoneName].filter((card) => card != null)
+    : [];
+}
+
+function createPlayerRenderView(player) {
+  if (!player) return player;
+  const renderPlayer = Object.assign(
+    Object.create(Object.getPrototypeOf(player)),
+    player,
+  );
+  for (const zoneName of RENDER_ZONE_NAMES) {
+    renderPlayer[zoneName] = createRenderZoneList(player, zoneName);
+  }
+  return renderPlayer;
+}
+
+function reportNullishZoneIssues(game, inspection) {
+  if (!game) return;
+  game.lastZoneNullishInspection = inspection?.ok === false ? inspection : null;
+  if (inspection?.ok !== false) return;
+  const detail = {
+    summary: `Nullish zone slots detected during ${inspection.context}`,
+    context: inspection.context,
+    issues: inspection.issues,
+  };
+  game.devLog?.("ZONE_NULLISH_RENDER", detail);
+  game._arenaTracker?.recordProgress?.("zone_nullish_render", game, detail);
+  if (game.devModeEnabled) {
+    console.error("[Game] Nullish zone slots detected during render", detail);
+  }
+}
+
 /**
  * Updates the entire board display.
  * Refreshes all zones, LP, phase track, and indicators.
@@ -45,16 +89,10 @@ export function updateBoard(options = {}) {
       : null;
 
   const renderNow = () => {
-    // Defensive cleanup: drop undefined slots to avoid renderer crashes
-    const cleanPlayerZones = (p) => {
-      p.hand = (p.hand || []).filter(Boolean);
-      p.field = (p.field || []).filter(Boolean);
-      p.spellTrap = (p.spellTrap || []).filter(Boolean);
-      p.graveyard = (p.graveyard || []).filter(Boolean);
-      p.extraDeck = (p.extraDeck || []).filter(Boolean);
-    };
-    cleanPlayerZones(this.player);
-    cleanPlayerZones(this.bot);
+    const nullishInspection = inspectZoneNullishCards(this, "updateBoard", {
+      zones: RENDER_ZONE_NAMES,
+    });
+    reportNullishZoneIssues(this, nullishInspection);
 
     // Update passive effects before rendering
     this.effectEngine?.updatePassiveBuffs();
@@ -71,30 +109,33 @@ export function updateBoard(options = {}) {
       revealBotHand: this.laboratoryRevealBotHand === true,
     };
 
-    this.ui.renderHand(this.player, handRenderContext);
-    this.ui.renderField(this.player);
-    this.ui.renderFieldSpell(this.player);
+    const renderPlayer = createPlayerRenderView(this.player);
+    const renderBot = createPlayerRenderView(this.bot);
+
+    this.ui.renderHand(renderPlayer, handRenderContext);
+    this.ui.renderField(renderPlayer);
+    this.ui.renderFieldSpell(renderPlayer);
 
     if (typeof this.ui.renderSpellTrap === "function") {
-      this.ui.renderSpellTrap(this.player);
-      this.ui.renderSpellTrap(this.bot);
+      this.ui.renderSpellTrap(renderPlayer);
+      this.ui.renderSpellTrap(renderBot);
     } else {
       console.warn("Renderer missing renderSpellTrap implementation.");
     }
 
-    this.ui.renderHand(this.bot, handRenderContext);
-    this.ui.renderField(this.bot);
-    this.ui.renderFieldSpell(this.bot);
-    this.ui.updateLP(this.player);
-    this.ui.updateLP(this.bot);
+    this.ui.renderHand(renderBot, handRenderContext);
+    this.ui.renderField(renderBot);
+    this.ui.renderFieldSpell(renderBot);
+    this.ui.updateLP(renderPlayer);
+    this.ui.updateLP(renderBot);
     this.ui.updatePhaseTrack(this.phase, this);
     this.ui.updateTurn(this.turn === "player" ? this.player : this.bot);
-    this.ui.updateGYPreview(this.player);
-    this.ui.updateGYPreview(this.bot);
+    this.ui.updateGYPreview(renderPlayer);
+    this.ui.updateGYPreview(renderBot);
 
     if (typeof this.ui.updateExtraDeckPreview === "function") {
-      this.ui.updateExtraDeckPreview(this.player);
-      this.ui.updateExtraDeckPreview(this.bot);
+      this.ui.updateExtraDeckPreview(renderPlayer);
+      this.ui.updateExtraDeckPreview(renderBot);
     }
 
     if (typeof document !== "undefined") {
