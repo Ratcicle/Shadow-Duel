@@ -14,5 +14,8 @@
   },
   "devDependencies": {
     "serve": "^14.2.6"
+  },
+  "dependencies": {
+    "pixi.js": "^8.19.0"
   }
 }

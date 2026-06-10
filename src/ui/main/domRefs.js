@@ -11,6 +11,7 @@ export function getMainDom() {
     },
     deckBuilder: {
       root: document.getElementById("deck-builder"),
+      mainDeckSection: document.getElementById("main-deck-section"),
       deckGrid: document.getElementById("deck-grid"),
       deckList: document.getElementById("deck-list"),
       extraDeckSection: document.getElementById("extradeck-section"),
@@ -28,7 +29,9 @@ export function getMainDom() {
       viewModeSelect: document.getElementById("deck-view-mode"),
       sortModeSelect: document.getElementById("deck-sort-mode"),
       activeFilters: document.getElementById("deck-active-filters"),
+      titleArea: document.querySelector(".deck-title-area"),
       slotTabs: document.getElementById("deck-slot-tabs"),
+      slotNameToggle: document.getElementById("deck-slot-name-toggle"),
       slotNameInput: document.getElementById("deck-slot-name"),
       saveButton: document.getElementById("deck-save"),
       cancelButton: document.getElementById("deck-cancel"),

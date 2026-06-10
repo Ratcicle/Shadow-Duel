@@ -607,6 +607,17 @@ export function createDeckBuilderController({
     }
   }
 
+  function setDeckNameEditing(isEditing) {
+    dom.titleArea?.classList.toggle("editing-name", isEditing);
+    dom.slotNameToggle?.setAttribute("aria-expanded", String(isEditing));
+    if (isEditing) {
+      requestAnimationFrame(() => {
+        dom.slotNameInput?.focus();
+        dom.slotNameInput?.select();
+      });
+    }
+  }
+
   function cardMatchesMode(card) {
     if (categoryFilterMode === "all") return true;
     if (categoryFilterMode === "monsters") {
@@ -1000,14 +1011,14 @@ export function createDeckBuilderController({
 
   function updateDeckCounters(currentDeck, currentExtraDeck) {
     if (dom.deckCount) {
-      dom.deckCount.textContent = `Main Deck: ${currentDeck.length}/${MAX_DECK_SIZE}`;
+      dom.deckCount.textContent = `${currentDeck.length}/${MAX_DECK_SIZE}`;
       dom.deckCount.classList.toggle(
         "limit-reached",
         currentDeck.length >= MAX_DECK_SIZE,
       );
     }
     if (dom.extraDeckCount) {
-      dom.extraDeckCount.textContent = `Extra Deck: ${currentExtraDeck.length}/${MAX_EXTRA_DECK_SIZE}`;
+      dom.extraDeckCount.textContent = `${currentExtraDeck.length}/${MAX_EXTRA_DECK_SIZE}`;
       dom.extraDeckCount.classList.toggle(
         "limit-reached",
         currentExtraDeck.length >= MAX_EXTRA_DECK_SIZE,
@@ -1017,6 +1028,7 @@ export function createDeckBuilderController({
 
   function updateViewMode() {
     const showList = deckViewMode === "list";
+    dom.mainDeckSection?.classList.toggle("hidden", showList);
     dom.deckGrid?.classList.toggle("hidden", showList);
     dom.extraDeckSection?.classList.toggle("hidden", showList);
     dom.deckList?.classList.toggle("hidden", !showList);
@@ -1112,6 +1124,9 @@ export function createDeckBuilderController({
       applySortMode();
       render();
     });
+    dom.slotNameToggle?.addEventListener("click", () => {
+      setDeckNameEditing(!dom.titleArea?.classList.contains("editing-name"));
+    });
     dom.slotNameInput?.addEventListener("input", () => {
       deckState.renameActiveDeckSlot(dom.slotNameInput.value);
       const activeDeckSlot = deckState.getActiveDeckSlot();
@@ -1126,6 +1141,16 @@ export function createDeckBuilderController({
     });
     dom.slotNameInput?.addEventListener("change", () => {
       deckState.saveActiveDeckPreset(dom.slotNameInput.value);
+    });
+    dom.slotNameInput?.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        deckState.saveActiveDeckPreset(dom.slotNameInput.value);
+        setDeckNameEditing(false);
+      }
+      if (event.key === "Escape") {
+        setDeckNameEditing(false);
+      }
     });
     dom.botPresetSelect?.addEventListener("change", (event) => {
       const value = event.target.value;

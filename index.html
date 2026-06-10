@@ -74,6 +74,16 @@
         <div class="deck-header">
           <div class="deck-title-area">
             <h2>Meu Deck</h2>
+            <button
+              id="deck-slot-name-toggle"
+              class="deck-slot-name-toggle"
+              type="button"
+              aria-label="Editar nome do deck"
+              aria-expanded="false"
+              title="Editar nome do deck"
+            >
+              &#9998;
+            </button>
             <div
               id="deck-slot-tabs"
               class="deck-slot-tabs"
@@ -90,9 +100,7 @@
               />
             </label>
           </div>
-          <span id="deck-count">0 / 30</span>
         </div>
-        <p class="deck-hint">Maximo de 3 cópias por carta.</p>
         <div class="deck-toolbar" aria-label="Ferramentas do deck builder">
           <div class="deck-search-row">
             <input
@@ -133,11 +141,19 @@
         </div>
         <div class="deck-body">
           <div class="deck-left">
-            <div id="deck-grid" class="deck-grid"></div>
+            <div id="main-deck-section" class="main-deck-section">
+              <div class="deck-zone-heading">
+                <h3 class="deck-zone-title">Main Deck</h3>
+                <span id="deck-count">0/30</span>
+              </div>
+              <div id="deck-grid" class="deck-grid"></div>
+            </div>
             <div id="deck-list" class="deck-list-view hidden"></div>
             <div id="extradeck-section" class="extradeck-section">
-              <h3 class="extradeck-title">Extra Deck</h3>
-              <span id="extradeck-count">0 / 10</span>
+              <div class="deck-zone-heading">
+                <h3 class="deck-zone-title">Extra Deck</h3>
+                <span id="extradeck-count">0/10</span>
+              </div>
               <div
                 id="extradeck-grid"
                 class="deck-grid extradeck-grid-builder"
