@@ -51,6 +51,9 @@ function createMockRenderer(options = {}) {
     showConfirmPrompt() {
       return options.confirm ?? true;
     },
+    showSpecialSummonPositionModal(_card, onSelect) {
+      onSelect?.(options.specialSummonPosition || "attack");
+    },
     showTrapActivationModal() {
       return Promise.resolve(options.confirmTrap ?? true);
     },
@@ -1545,6 +1548,125 @@ async function smokeReturnContracts() {
   };
 }
 
+async function smokeLegacyGenericCards() {
+  const callScenario = createSmokeGame();
+  const call = createCard(
+    callScenario.game,
+    callScenario.game.player,
+    "Call of the Haunted",
+  );
+  const hauntedTarget = createCard(
+    callScenario.game,
+    callScenario.game.player,
+    "Arcane Scholar",
+  );
+  callScenario.game.player.spellTrap = [call];
+  callScenario.game.player.graveyard = [hauntedTarget];
+  callScenario.game.phase = "main1";
+  callScenario.game.turn = "player";
+  callScenario.game.turnCounter = 2;
+  const callResult =
+    await callScenario.game.effectEngine.activateSpellTrapEffect(
+      call,
+      callScenario.game.player,
+      { haunted_target: [{ owner: "player", zone: "graveyard", index: 0 }] },
+      "spellTrap",
+      { committed: true },
+    );
+  const callOk =
+    callResult?.success === true &&
+    hauntedTarget.position === "attack" &&
+    callScenario.game.player.field.includes(hauntedTarget) &&
+    call.boundMonsterTarget === hauntedTarget &&
+    hauntedTarget.boundTrapSource === call;
+  callScenario.game.dispose?.("smoke_legacy_call_of_the_haunted");
+
+  const swordScenario = createSmokeGame();
+  const sword = createCard(
+    swordScenario.game,
+    swordScenario.game.player,
+    "Light-Dividing Sword",
+  );
+  const swordHost = createCard(
+    swordScenario.game,
+    swordScenario.game.player,
+    "Nightmare Steed",
+  );
+  const swordVictim = createCard(
+    swordScenario.game,
+    swordScenario.game.bot,
+    "Arcane Scholar",
+  );
+  sword.equippedTo = swordHost;
+  swordHost.equips = [sword];
+  swordScenario.game.player.spellTrap = [sword];
+  swordScenario.game.player.field = [swordHost];
+  swordScenario.game.bot.field = [swordVictim];
+  swordScenario.game.player.lp = 4000;
+  await swordScenario.game.applyBattleDestroyEffect(swordHost, swordVictim);
+  const swordOk = swordScenario.game.player.lp === 4500;
+  swordScenario.game.dispose?.("smoke_legacy_light_dividing_sword");
+
+  const steedScenario = createSmokeGame();
+  const steed = createCard(
+    steedScenario.game,
+    steedScenario.game.player,
+    "Midnight Nightmare Steed",
+  );
+  const steedVictim = createCard(
+    steedScenario.game,
+    steedScenario.game.bot,
+    "Arcane Scholar",
+  );
+  steedScenario.game.player.field = [steed];
+  steedScenario.game.bot.field = [steedVictim];
+  steedScenario.game.bot.lp = 4000;
+  await steedScenario.game.applyBattleDestroyEffect(steed, steedVictim);
+  const steedOk = steedScenario.game.bot.lp === 3700;
+  steedScenario.game.dispose?.("smoke_legacy_midnight_steed");
+
+  const rebornScenario = createSmokeGame();
+  const reborn = createCard(
+    rebornScenario.game,
+    rebornScenario.game.player,
+    "Monster Reborn",
+  );
+  const rebornTarget = createCard(
+    rebornScenario.game,
+    rebornScenario.game.bot,
+    "Arcane Scholar",
+  );
+  rebornScenario.game.player.hand = [reborn];
+  rebornScenario.game.bot.graveyard = [rebornTarget];
+  rebornScenario.game.phase = "main1";
+  rebornScenario.game.turn = "player";
+  rebornScenario.game.turnCounter = 2;
+  const rebornResult =
+    await rebornScenario.game.effectEngine.activateSpellTrapEffect(
+      reborn,
+      rebornScenario.game.player,
+      { reborn_target: [{ owner: "bot", zone: "graveyard", index: 0 }] },
+      "hand",
+      { fromHand: true, committed: true },
+    );
+  const rebornOk =
+    rebornResult?.success === true &&
+    rebornScenario.game.player.field.includes(rebornTarget) &&
+    !rebornScenario.game.bot.graveyard.includes(rebornTarget) &&
+    rebornTarget.owner === "player";
+  rebornScenario.game.dispose?.("smoke_legacy_monster_reborn");
+
+  const allOk = callOk && swordOk && steedOk && rebornOk;
+  return {
+    status: allOk ? "current_behavior" : "unexpected",
+    detail:
+      `callAttackBind=${callOk}; ` +
+      `lightDividingHeal=${swordOk}; ` +
+      `midnightDamage=${steedOk}; ` +
+      `monsterRebornAwaitedMove=${rebornOk}`,
+  };
+}
+
 const scenarios = [
   ["Reset reuse", smokeResetReuse],
   ["Deck empty draw", smokeDeckEmptyDraw],
@@ -1559,6 +1681,7 @@ const scenarios = [
   ["Battle indestructible", smokeBattleIndestructible],
   ["updateBoard mutation", smokeUpdateBoardMutation],
   ["Return contracts", smokeReturnContracts],
+  ["Legacy generic cards", smokeLegacyGenericCards],
 ];
 
 async function runScenario(name, fn) {

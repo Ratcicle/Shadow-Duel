@@ -32,9 +32,9 @@ function shouldAllowExtraDeckMonsterToHand(action, ctx) {
  * @param {Object} action - Action configuration
  * @param {Object} ctx - Context object
  * @param {Object} targets - Resolved targets
- * @returns {boolean} Whether any cards were moved
+ * @returns {Promise<boolean>} Whether any cards were moved
  */
-export function applyMove(action, ctx, targets) {
+export async function applyMove(action, ctx, targets) {
   // Resolve targetRef to get the actual cards
   let targetCards = targets[action.targetRef] || [];
 
@@ -52,9 +52,8 @@ export function applyMove(action, ctx, targets) {
   }
 
   let moved = false;
-  let waitingForChoice = false;
 
-  targetCards.forEach((card) => {
+  for (const card of targetCards) {
     if (
       toZone === "field" &&
       card.summonRestrict === "shadow_heart_invocation_only"
@@ -62,7 +61,7 @@ export function applyMove(action, ctx, targets) {
       console.log(
         `${card.name} can only be Special Summoned by "Shadow-Heart Invocation".`
       );
-      return false;
+      continue;
     }
     if (this.game?.normalizeCardOwnership) {
       this.game.normalizeCardOwnership(card, ctx, {
@@ -90,7 +89,7 @@ export function applyMove(action, ctx, targets) {
     const defaultFieldPosition =
       toZone === "field" && card.cardKind === "monster" ? "attack" : null;
 
-    const applyMoveWithPosition = (chosenPosition) => {
+    const applyMoveWithPosition = async (chosenPosition) => {
       const finalPosition = shouldPromptForPosition
         ? chosenPosition || action.position || defaultFieldPosition || "attack"
         : chosenPosition ?? action.position ?? defaultFieldPosition;
@@ -103,7 +102,7 @@ export function applyMove(action, ctx, targets) {
         action.contextLabel || (isCostMove ? "cost" : "applyMove");
 
       if (this.game && typeof this.game.moveCard === "function") {
-        this.game.moveCard(card, destPlayer, toZone, {
+        const moveResult = await this.game.moveCard(card, destPlayer, toZone, {
           position: finalPosition,
           isFacedown: action.isFacedown,
           resetAttackFlags: action.resetAttackFlags,
@@ -117,6 +116,9 @@ export function applyMove(action, ctx, targets) {
             ctx
           ),
         });
+        if (moveResult?.success === false) {
+          return;
+        }
       } else {
         const fromOwner =
           card.owner === "player" ? this.game.player : this.game.bot;
@@ -171,14 +173,13 @@ export function applyMove(action, ctx, targets) {
         card
       );
       if (positionChoice && typeof positionChoice.then === "function") {
-        waitingForChoice = true;
-        positionChoice.then((resolved) => applyMoveWithPosition(resolved));
+        await applyMoveWithPosition(await positionChoice);
       } else {
-        applyMoveWithPosition(positionChoice);
+        await applyMoveWithPosition(positionChoice);
       }
     } else {
-      applyMoveWithPosition(action.position);
+      await applyMoveWithPosition(action.position);
     }
-  });
-  return moved || waitingForChoice;
+  }
+  return moved;
 }

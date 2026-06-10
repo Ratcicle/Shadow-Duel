@@ -217,6 +217,23 @@ export async function collectBattleDestroyTriggers(payload) {
           if (!card.equippedTo) continue;
           if (ctx.attacker !== card.equippedTo) continue;
         }
+        if (effect.requireSelfAsBattleDestroyer) {
+          const battleDestroyers = Array.isArray(ctx.battleDestroyers)
+            ? ctx.battleDestroyers
+            : ctx.attacker
+              ? [ctx.attacker]
+              : [];
+          if (!battleDestroyers.includes(card)) continue;
+        }
+        if (effect.requireEquippedAsBattleDestroyer) {
+          if (!card.equippedTo) continue;
+          const battleDestroyers = Array.isArray(ctx.battleDestroyers)
+            ? ctx.battleDestroyers
+            : ctx.attacker
+              ? [ctx.attacker]
+              : [];
+          if (!battleDestroyers.includes(card.equippedTo)) continue;
+        }
 
         const activationContext = this.buildTriggerActivationContext(
           card,

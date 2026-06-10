@@ -867,11 +867,18 @@ export async function applyBattleDestroyEffect(
   const attackerOwner = attacker.owner === "player" ? this.player : this.bot;
   const destroyedPosition =
     extras?.destroyedPosition || destroyed.position || null;
+  const battleDestroyers = Array.isArray(extras?.battleDestroyers)
+    ? extras.battleDestroyers.filter(Boolean)
+    : attacker
+      ? [attacker]
+      : [];
 
   const emitResult = await this.emit("battle_destroy", {
     player: attackerOwner, // o dono do atacante (quem causou a destruição)
     opponent: destroyedOwner, // o jogador que perdeu o monstro
     attacker,
+    battleDestroyer: battleDestroyers[0] || attacker || null,
+    battleDestroyers,
     destroyed,
     destroyedOwner: destroyedOwner || extras?.destroyedOwner || null,
     destroyedOwnerId:

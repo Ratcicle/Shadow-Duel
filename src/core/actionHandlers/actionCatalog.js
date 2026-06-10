@@ -574,12 +574,16 @@ export const ACTION_CATALOG = {
     summary: "Special Summons a target and binds it to Call of the Haunted.",
     handler: "proxy:applyCallOfTheHauntedSummon",
     required: ["targetRef"],
-    fields: COMMON_TARGET_FIELDS,
+    optional: ["position"],
+    fields: {
+      ...COMMON_TARGET_FIELDS,
+      position: { type: "string" },
+    },
     targetRef: "required",
     selection: "usesTargets",
     mutates: ["field", "graveyard"],
     emits: ["after_summon"],
-    examples: [{ type: "call_of_haunted_summon_and_bind", targetRef: "haunted_target" }],
+    examples: [{ type: "call_of_haunted_summon_and_bind", targetRef: "haunted_target", position: "attack" }],
   }),
   choose_action_case: action({
     category: "conditional",

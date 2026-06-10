@@ -85,10 +85,24 @@ export const genericCards = [
     type: "Beast",
     attribute: "Dark",
     altTribute: { requiresName: "Nightmare Steed", tributes: 1 },
-    onBattleDestroy: { damage: 300 },
     description:
       'Can be Tribute Summoned with 1 tribute if it is "Nightmare Steed". If it destroys a monster by battle, inflict 300 damage.',
     image: "assets/Midnight Nightmare Steed.png",
+    effects: [
+      {
+        id: "midnight_nightmare_steed_battle_damage",
+        timing: "on_event",
+        event: "battle_destroy",
+        requireSelfAsBattleDestroyer: true,
+        actions: [
+          {
+            type: "damage",
+            player: "opponent",
+            amount: 300,
+          },
+        ],
+      },
+    ],
   },
   {
     id: 6,
@@ -113,7 +127,7 @@ export const genericCards = [
     subtype: "normal",
     description:
       "Send 1 monster you control to the GY, then Special Summon 1 monster from your GY with the same Level.",
-    image: "assets/Transmutate.jpg",
+    image: "assets/Transmutate.png",
     effects: [
       {
         id: "transmutate_effect",
@@ -229,7 +243,7 @@ export const genericCards = [
         id: "light_dividing_sword_lifegain",
         timing: "on_event",
         event: "battle_destroy",
-        requireEquippedAsAttacker: true,
+        requireEquippedAsBattleDestroyer: true,
         actions: [
           {
             type: "heal",
@@ -573,6 +587,7 @@ export const genericCards = [
           {
             type: "call_of_haunted_summon_and_bind",
             targetRef: "haunted_target",
+            position: "attack",
           },
         ],
         ui: {
