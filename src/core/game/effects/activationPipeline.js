@@ -315,6 +315,7 @@ export async function runActivationPipeline(config = {}) {
       triggerPlayer: owner,
       activationZone: resolvedActivationZone,
       activationAttempt,
+      addTriggerToChain: false,
     };
 
     await this.chainSystem.openChainWindow(context);

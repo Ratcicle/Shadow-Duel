@@ -344,6 +344,24 @@ export async function handleSpecialSummonFromZone(
   }
 
   // Helper: Escolhe carta usando estratégia do bot se disponível
+  if (action.requireSource && candidates.length === 1) {
+    const success = await summonCards(
+      candidates,
+      zoneEntries,
+      player,
+      action,
+      engine,
+    );
+    if (
+      success &&
+      optEffect &&
+      typeof game.markOncePerTurnUsed === "function"
+    ) {
+      game.markOncePerTurnUsed(source, player, optEffect);
+    }
+    return success;
+  }
+
   const smartBotSelect = (cards) => {
     // Tentar usar estratégia específica do bot se existir
     const strategy = player?.strategy;

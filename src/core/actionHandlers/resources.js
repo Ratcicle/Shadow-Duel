@@ -274,7 +274,7 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
     return false;
   }
 
-  const finalizeSelection = (selectedCards) => {
+  const finalizeSelection = async (selectedCards) => {
     const selected = Array.isArray(selectedCards) ? selectedCards : [];
     if (selected.length === 0) {
       if (minSelect === 0) {
@@ -288,7 +288,15 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
 
     for (const card of selected) {
       if (typeof game.moveCard === "function") {
-        game.moveCard(card, player, "hand", { fromZone: sourceZone });
+        const moveResult = await game.moveCard(card, player, "hand", {
+          fromZone: sourceZone,
+          sourceCard: source,
+          effectId: ctx.effect?.id || null,
+          awaitEvents: true,
+        });
+        if (moveResult && moveResult.success === false) {
+          return false;
+        }
       } else {
         const idx = zone.indexOf(card);
         if (idx !== -1) {
@@ -310,7 +318,7 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
 
     // v3: Emit event for replay capture - track which cards were added to hand
     if (typeof game.emit === "function") {
-      game.emit("cards_added_to_hand", {
+      await game.emit("cards_added_to_hand", {
         player,
         cards: selected,
         fromZone: sourceZone,
@@ -409,7 +417,7 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
     },
   });
 
-  const result = finalizeSelection(selection.selected || []);
+  const result = await finalizeSelection(selection.selected || []);
   return result;
 }
 
@@ -507,6 +515,9 @@ export async function handleSearchThenOptionalSpecialSummonFromHand(
     typeof game.moveCard === "function"
       ? await game.moveCard(searchedCard, player, "hand", {
           fromZone: sourceZone,
+          sourceCard: source,
+          effectId: ctx.effect?.id || null,
+          awaitEvents: true,
         })
       : null;
 

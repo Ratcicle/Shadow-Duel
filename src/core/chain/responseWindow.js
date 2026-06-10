@@ -24,7 +24,13 @@ export async function openChainWindow(context) {
   this.currentChainLevel = 0;
 
   // If there's a triggering card/effect, add it as Chain Link 1
-  if (context?.card && context?.effect && context?.player) {
+  if (
+    context?.card &&
+    context?.effect &&
+    context?.player &&
+    context.addTriggerToChain !== false &&
+    context.skipTriggerLink !== true
+  ) {
     const triggerZone =
       context?.zone || this.determineCardZone(context.card, context.player);
     this.addToChain(

@@ -49,6 +49,11 @@ export async function checkAndOfferTraps(event, eventData = {}) {
   try {
     // Mapear evento para contexto de chain
     const contextType = this._mapEventToChainContext(event);
+    const addTriggerToChain =
+      typeof eventData.addTriggerToChain === "boolean"
+        ? eventData.addTriggerToChain
+        : contextType !== "card_activation" &&
+          contextType !== "effect_activation";
 
     // Usar ChainSystem para abrir chain window
     const attacker = eventData.attacker || null;
@@ -101,6 +106,7 @@ export async function checkAndOfferTraps(event, eventData = {}) {
         (attackerOwner && defenderOwner
           ? attackerOwner.id !== defenderOwner.id
           : false),
+      addTriggerToChain,
       triggerPlayer:
         attackerOwner ||
         eventData.player ||

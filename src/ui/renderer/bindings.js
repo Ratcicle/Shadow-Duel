@@ -4,12 +4,32 @@
  * No imports from other renderer modules to avoid cycles
  */
 
+const BINDING_STORE = "__shadowDuelManagedBindings";
+
+function bindManagedEvent(target, key, type, handler) {
+  if (!target || typeof target.addEventListener !== "function") return;
+  if (!target[BINDING_STORE]) {
+    Object.defineProperty(target, BINDING_STORE, {
+      value: new Map(),
+      configurable: true,
+    });
+  }
+  const store = target[BINDING_STORE];
+  const bindingKey = `${type}:${key}`;
+  const previous = store.get(bindingKey);
+  if (previous && typeof target.removeEventListener === "function") {
+    target.removeEventListener(type, previous);
+  }
+  target.addEventListener(type, handler);
+  store.set(bindingKey, handler);
+}
+
 /**
  * @this {import('../Renderer.js').default}
  */
 export function bindPhaseClick(handler) {
   if (!this.elements.phaseTrack) return;
-  this.elements.phaseTrack.addEventListener("click", (e) => {
+  bindManagedEvent(this.elements.phaseTrack, "phase-click", "click", (e) => {
     const li = e.target.closest("li[data-phase]");
     if (!li) return;
     handler(li.dataset.phase);
@@ -23,7 +43,7 @@ export function bindCardHover(handler) {
   const gameContainer = document.getElementById("game-container");
   if (!gameContainer) return;
 
-  gameContainer.addEventListener("mouseover", (e) => {
+  bindManagedEvent(gameContainer, "card-hover", "mouseover", (e) => {
     const cardEl = e.target.closest(".card");
     if (cardEl && !cardEl.classList.contains("hidden")) {
       const index = parseInt(cardEl.dataset.index);
@@ -40,7 +60,7 @@ export function bindCardHover(handler) {
 export function bindZoneCardClick(zoneId, handler) {
   const zone = document.getElementById(zoneId);
   if (!zone) return;
-  zone.addEventListener("click", (e) => {
+  bindManagedEvent(zone, `zone-card-click:${zoneId}`, "click", (e) => {
     const cardEl = e.target.closest(".card");
     if (!cardEl) return;
     const index = Number.parseInt(cardEl.dataset.index, 10);
@@ -55,7 +75,7 @@ export function bindZoneCardClick(zoneId, handler) {
 export function bindZoneClick(zoneId, handler) {
   const zone = document.getElementById(zoneId);
   if (!zone) return;
-  zone.addEventListener("click", (e) => handler(e));
+  bindManagedEvent(zone, `zone-click:${zoneId}`, "click", (e) => handler(e));
 }
 
 /**
@@ -106,7 +126,7 @@ export function bindBotSpellTrapClick(handler) {
 export function bindBotHandClick(handler) {
   const zone = document.getElementById("bot-hand");
   if (!zone) return;
-  zone.addEventListener("click", (e) => {
+  bindManagedEvent(zone, "bot-hand-click", "click", (e) => {
     const cardEl = e.target.closest(".card");
     if (!cardEl) {
       handler(e, null, -1);
@@ -159,7 +179,7 @@ export function bindBotExtraDeckClick(handler) {
 export function bindGraveyardModalClose(handler) {
   const closeBtn = document.querySelector(".close-modal");
   if (!closeBtn) return;
-  closeBtn.addEventListener("click", handler);
+  bindManagedEvent(closeBtn, "graveyard-modal-close", "click", handler);
 }
 
 /**
@@ -168,14 +188,14 @@ export function bindGraveyardModalClose(handler) {
 export function bindExtraDeckModalClose(handler) {
   const closeBtn = document.querySelector(".close-extradeck");
   if (!closeBtn) return;
-  closeBtn.addEventListener("click", handler);
+  bindManagedEvent(closeBtn, "extra-deck-modal-close", "click", handler);
 }
 
 /**
  * @this {import('../Renderer.js').default}
  */
 export function bindModalOverlayClick(handler) {
-  window.addEventListener("click", (e) => {
+  bindManagedEvent(window, "modal-overlay-click", "click", (e) => {
     const modal = document.getElementById("gy-modal");
     const extraModal = document.getElementById("extradeck-modal");
     if (e.target === modal) {
@@ -191,5 +211,5 @@ export function bindModalOverlayClick(handler) {
  * @this {import('../Renderer.js').default}
  */
 export function bindGlobalKeydown(handler) {
-  window.addEventListener("keydown", handler);
+  bindManagedEvent(window, "global-keydown", "keydown", handler);
 }
