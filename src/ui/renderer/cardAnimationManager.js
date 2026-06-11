@@ -6,8 +6,7 @@
 const DEFAULT_DURATION = 220;
 const DEFAULT_EASING = "cubic-bezier(0.2, 0.8, 0.2, 1)";
 const MAX_GHOSTS_PER_FLUSH = 12;
-const ATTACK_IMPACT_CUE_OFFSET = 0.8;
-const ATTACK_IMPACT_CUE_DELAY = 0;
+const ATTACK_CONTACT_CUE_OFFSET = 0.72;
 
 const ZONE_IDS = {
   player: {
@@ -57,6 +56,35 @@ function getRectCenter(rect) {
   return {
     x: rect.left + rect.width / 2,
     y: rect.top + rect.height / 2,
+  };
+}
+
+function rectsOverlap(a, b, padding = 0) {
+  if (!a || !b) return false;
+  const aRight = a.left + a.width;
+  const aBottom = a.top + a.height;
+  const bRight = b.left + b.width;
+  const bBottom = b.top + b.height;
+  return (
+    a.left <= bRight + padding &&
+    aRight + padding >= b.left &&
+    a.top <= bBottom + padding &&
+    aBottom + padding >= b.top
+  );
+}
+
+function getLeadingContactRect(rect, unitX, unitY) {
+  if (!rect) return null;
+  const center = getRectCenter(rect);
+  const size = Math.max(28, Math.min(rect.width, rect.height) * 0.58);
+  const reach = Math.min(rect.width, rect.height) * 0.34;
+  const x = center.x + unitX * reach;
+  const y = center.y + unitY * reach;
+  return {
+    left: x - size / 2,
+    top: y - size / 2,
+    width: size,
+    height: size,
   };
 }
 
@@ -213,6 +241,79 @@ function transformAtFacing(rect, visual, facingAngle) {
   return `${translate} rotate(${facingAngle}deg)`;
 }
 
+function clamp(value, min, max) {
+  if (!Number.isFinite(value)) return min;
+  return Math.min(max, Math.max(min, value));
+}
+
+function cssNumber(value, fractionDigits = 2) {
+  if (!Number.isFinite(value)) return 0;
+  return Number(value.toFixed(fractionDigits));
+}
+
+function transformAtAttackPose(
+  rect,
+  visual,
+  {
+    rotateZ = 0,
+    rotateX = 0,
+    rotateY = 0,
+    scale = 1,
+    translateZ = 0,
+  } = {},
+) {
+  const size = {
+    width: visual?.width || rect.width,
+    height: visual?.height || rect.height,
+  };
+  const center = getRectCenter(rect);
+  const x = center.x - size.width / 2;
+  const y = center.y - size.height / 2;
+  return [
+    "perspective(900px)",
+    `translate3d(${cssNumber(x)}px, ${cssNumber(y)}px, ${cssNumber(translateZ)}px)`,
+    `rotateZ(${cssNumber(rotateZ)}deg)`,
+    `rotateX(${cssNumber(rotateX)}deg)`,
+    `rotateY(${cssNumber(rotateY)}deg)`,
+    `scale(${cssNumber(scale, 3)})`,
+  ].join(" ");
+}
+
+function relativeAttackPose({
+  x = 0,
+  y = 0,
+  rotateZ = 0,
+  rotateX = 0,
+  rotateY = 0,
+  scale = 1,
+  translateZ = 0,
+} = {}) {
+  return [
+    "perspective(900px)",
+    `translate3d(${cssNumber(x)}px, ${cssNumber(y)}px, ${cssNumber(translateZ)}px)`,
+    `rotateZ(${cssNumber(rotateZ)}deg)`,
+    `rotateX(${cssNumber(rotateX)}deg)`,
+    `rotateY(${cssNumber(rotateY)}deg)`,
+    `scale(${cssNumber(scale, 3)})`,
+  ].join(" ");
+}
+
+function getPlayerAttackTargetRect(ownerId, cardRect = null) {
+  if (typeof document === "undefined") return null;
+  const id = ownerId === "bot" ? "bot-area" : "player-area";
+  const element = document.getElementById(id);
+  if (!element) return null;
+  return zoneRectToCardRect(element.getBoundingClientRect(), cardRect);
+}
+
+function getDirectAttackTargetRect(renderer, ownerId, cardRect = null) {
+  const handRect =
+    typeof renderer?.getCardZoneAnchorRect === "function"
+      ? renderer.getCardZoneAnchorRect(ownerId, "hand", cardRect)
+      : null;
+  return handRect || getPlayerAttackTargetRect(ownerId, cardRect);
+}
+
 function getLayer() {
   const root = document.getElementById("game-container");
   if (!root) return null;
@@ -259,6 +360,7 @@ function createGhost(renderer, card, visual, rect) {
   ghost.style.margin = "0";
   ghost.style.pointerEvents = "none";
   ghost.style.transformOrigin = "center center";
+  ghost.style.transformStyle = "preserve-3d";
   ghost.style.willChange = "transform, opacity";
   return ghost;
 }
@@ -282,15 +384,167 @@ function finishAnimation(animation, cleanup, duration = DEFAULT_DURATION) {
   });
 }
 
-function createAnimationCue(duration, offset, delay = 0) {
-  const safeDuration = Number.isFinite(duration) ? Math.max(0, duration) : 0;
-  const safeOffset = Number.isFinite(offset)
-    ? Math.min(1, Math.max(0, offset))
-    : 1;
-  const safeDelay = Number.isFinite(delay) ? Math.max(0, delay) : 0;
-  return new Promise((resolve) => {
-    setTimeout(resolve, safeDuration * safeOffset + safeDelay);
+function createNoopAttackPresentation() {
+  const resolved = Promise.resolve(false);
+  return {
+    contact: resolved,
+    finished: resolved,
+    cancel: () => resolved,
+    then: (...args) => resolved.then(...args),
+    catch: (...args) => resolved.catch(...args),
+    finally: (...args) => resolved.finally(...args),
+  };
+}
+
+function createAttackPresentationController({
+  duration,
+  contactOffset,
+  onContact,
+} = {}) {
+  let resolveContact;
+  let resolveFinished;
+  let contactSettled = false;
+  let finishedSettled = false;
+  let canceled = false;
+  let contactTimer = null;
+  let contactRaf = null;
+  let cancelHandler = null;
+
+  const contact = new Promise((resolve) => {
+    resolveContact = resolve;
   });
+  const finished = new Promise((resolve) => {
+    resolveFinished = resolve;
+  });
+
+  const clearContactCue = () => {
+    if (contactTimer) {
+      clearTimeout(contactTimer);
+      contactTimer = null;
+    }
+    if (contactRaf && typeof cancelAnimationFrame === "function") {
+      cancelAnimationFrame(contactRaf);
+      contactRaf = null;
+    }
+  };
+
+  const settleContact = (value, shouldRunCallback, details = null) => {
+    if (contactSettled) return;
+    contactSettled = true;
+    clearContactCue();
+
+    if (shouldRunCallback && typeof onContact === "function") {
+      try {
+        onContact(details || {});
+      } catch (error) {
+        console.warn("[Renderer] Attack contact callback failed.", error);
+      }
+    }
+
+    resolveContact(value);
+  };
+
+  const settleFinished = (value) => {
+    if (finishedSettled) return;
+    finishedSettled = true;
+    if (!contactSettled) settleContact(false, false);
+    clearContactCue();
+    resolveFinished(value);
+  };
+
+  const fireContact = (details = null) => {
+    if (canceled || finishedSettled) return;
+    settleContact(true, true, details);
+  };
+
+  const startContactCue = (animation = null, shouldFireContact = null) => {
+    if (contactSettled || finishedSettled || canceled) return;
+
+    const safeDuration = Number.isFinite(duration) ? Math.max(0, duration) : 0;
+    const safeOffset = Number.isFinite(contactOffset)
+      ? Math.min(1, Math.max(0, contactOffset))
+      : ATTACK_CONTACT_CUE_OFFSET;
+    const contactMs = safeDuration * safeOffset;
+
+    if (contactMs <= 0) {
+      fireContact();
+      return;
+    }
+
+    if (typeof requestAnimationFrame === "function") {
+      let contactDetector =
+        typeof shouldFireContact === "function" ? shouldFireContact : null;
+      const now = () =>
+        typeof performance !== "undefined" && typeof performance.now === "function"
+          ? performance.now()
+          : Date.now();
+      const startedAt = now();
+      const tick = () => {
+        if (contactSettled || finishedSettled || canceled) return;
+
+        if (contactDetector) {
+          try {
+            const contactDetails = contactDetector();
+            if (contactDetails) {
+              fireContact(contactDetails === true ? null : contactDetails);
+              return;
+            }
+          } catch (error) {
+            contactDetector = null;
+          }
+        }
+
+        const currentTime = Number(animation?.currentTime);
+        const elapsed = now() - startedAt;
+        if (
+          (Number.isFinite(currentTime) && currentTime >= contactMs) ||
+          elapsed >= contactMs + 48
+        ) {
+          fireContact();
+          return;
+        }
+
+        contactRaf = requestAnimationFrame(tick);
+      };
+      contactRaf = requestAnimationFrame(tick);
+      return;
+    }
+
+    contactTimer = setTimeout(fireContact, contactMs);
+  };
+
+  const cancel = (cancelOptions = {}) => {
+    if (finishedSettled) return finished;
+    canceled = true;
+    clearContactCue();
+    if (typeof cancelHandler === "function") {
+      try {
+        cancelHandler(cancelOptions);
+      } catch (error) {
+        console.warn("[Renderer] Attack presentation cancel failed.", error);
+      }
+    }
+    settleFinished(false);
+    return finished;
+  };
+
+  const presentation = {
+    contact,
+    finished,
+    cancel,
+    then: (...args) => finished.then(...args),
+    catch: (...args) => finished.catch(...args),
+    finally: (...args) => finished.finally(...args),
+  };
+
+  return {
+    presentation,
+    startContactCue,
+    settleFinished,
+    setCancelHandler(handler) {
+      cancelHandler = handler;
+    },
+  };
 }
 
 function resolveFinalElement(intent) {
@@ -452,75 +706,207 @@ export function playQueuedCardAnimations(intents, options = {}) {
  * @this {import('../Renderer.js').default}
  */
 export function playAttackLunge(intent, options = {}) {
-  if (prefersReducedMotion() || typeof document === "undefined") return;
-  if (!intent?.cardKey) return;
+  if (prefersReducedMotion() || typeof document === "undefined") {
+    return createNoopAttackPresentation();
+  }
+  if (!intent?.cardKey) return createNoopAttackPresentation();
 
   const attackerElement = findBoardCardElement(intent.cardKey);
-  if (!attackerElement || typeof attackerElement.animate !== "function") return;
+  if (!attackerElement || typeof attackerElement.animate !== "function") {
+    return createNoopAttackPresentation();
+  }
 
   const attackerRect = attackerElement.getBoundingClientRect();
   const attackerCenter = getRectCenter(attackerRect);
+  const isDirectAttack = intent.directAttack === true || !intent.targetCardKey;
   const targetElement =
     intent.targetCardKey && findBoardCardElement(String(intent.targetCardKey));
+  const directTargetRect = isDirectAttack
+    ? getDirectAttackTargetRect(this, intent.targetOwnerId, attackerRect)
+    : null;
   const targetRect =
     targetElement?.getBoundingClientRect?.() ||
+    directTargetRect ||
+    this.getCardZoneAnchorRect(intent.targetOwnerId, "field", attackerRect) ||
     this.getCardZoneAnchorRect(intent.targetOwnerId, "hand", attackerRect);
-  if (!targetRect) return;
+  if (!targetRect) return createNoopAttackPresentation();
 
   const targetCenter = getRectCenter(targetRect);
   const deltaX = targetCenter.x - attackerCenter.x;
   const deltaY = targetCenter.y - attackerCenter.y;
   const distance = Math.hypot(deltaX, deltaY);
-  if (distance < 1) return;
+  if (distance < 1) return createNoopAttackPresentation();
 
-  const lunge = Number.isFinite(options.lungeDistance)
+  const lungeDistance = Number.isFinite(options.lungeDistance)
     ? options.lungeDistance
-    : 128;
+    : isDirectAttack
+      ? distance
+      : 150;
   const windupDistance = Number.isFinite(options.windupDistance)
     ? options.windupDistance
-    : 24;
-  const duration = Number.isFinite(options.duration) ? options.duration : 1200;
-  const impactCueOffset = Number.isFinite(options.impactCueOffset)
-    ? options.impactCueOffset
-    : ATTACK_IMPACT_CUE_OFFSET;
-  const impactCueDelay = Number.isFinite(options.impactCueDelay)
-    ? options.impactCueDelay
-    : ATTACK_IMPACT_CUE_DELAY;
-  const impactCue = createAnimationCue(duration, impactCueOffset, impactCueDelay);
-  const travel = Math.min(lunge, distance * 0.72);
+    : clamp(distance * 0.16, 32, 48);
+  const arcLift = Number.isFinite(options.arcLift)
+    ? options.arcLift
+    : clamp(distance * 0.09, 18, 32);
+  const duration = Number.isFinite(options.duration) ? options.duration : 1320;
+  const contactOffset = Number.isFinite(options.contactOffset)
+    ? options.contactOffset
+    : Number.isFinite(intent.contactOffset)
+      ? intent.contactOffset
+      : isDirectAttack
+        ? 0.74
+        : ATTACK_CONTACT_CUE_OFFSET;
+  const visualContactPadding = Number.isFinite(options.visualContactPadding)
+    ? options.visualContactPadding
+    : -2;
+  const controller = createAttackPresentationController({
+    duration,
+    contactOffset,
+    onContact: options.onContact || intent.onContact,
+  });
+  const getCurrentTargetRect = () =>
+    targetElement?.getBoundingClientRect?.() || targetRect;
+
+  const contactGap = Math.max(
+    10,
+    Math.min(attackerRect.width, attackerRect.height, targetRect.width, targetRect.height) *
+      0.32,
+  );
+  const maxSafeTravel = Math.max(0, distance - contactGap);
+  const contactTravelRatio = isDirectAttack ? 0.96 : 0.78;
+  const fallbackTravelRatio = isDirectAttack ? 0.9 : 0.72;
+  const travel = Math.min(
+    lungeDistance,
+    Math.max(
+      24,
+      Math.min(
+        distance * contactTravelRatio,
+        maxSafeTravel || distance * fallbackTravelRatio,
+      ),
+    ),
+  );
   const unitX = deltaX / distance;
   const unitY = deltaY / distance;
+  const perpX = -unitY;
+  const perpY = unitX;
+  const arcSide = Number.isFinite(options.arcSide)
+    ? Math.sign(options.arcSide) || 1
+    : intent.card?.owner === "bot"
+      ? -1
+      : 1;
   const visual = visualFromElement(attackerElement, intent.card);
   const facingAngle = getFacingAngleDegrees(deltaX, deltaY);
   const naturalFacingAngle = getNaturalFacingAngleDegrees(visual);
-  const moveX = unitX * travel;
-  const moveY = unitY * travel;
-  const windupX = -unitX * Math.min(windupDistance, travel * 0.35);
-  const windupY = -unitY * Math.min(windupDistance, travel * 0.35);
-  const recoilX = -unitX * Math.min(6, travel * 0.16);
-  const recoilY = -unitY * Math.min(6, travel * 0.16);
+  const tiltMagnitude = clamp(6 + distance * 0.015, 6, 12);
+  const tiltX = clamp(-unitY * tiltMagnitude, -12, 12);
+  const tiltY = clamp(unitX * tiltMagnitude, -12, 12);
+  const windupX =
+    -unitX * Math.min(windupDistance, travel * 0.42) +
+    perpX * arcLift * arcSide * 0.72;
+  const windupY =
+    -unitY * Math.min(windupDistance, travel * 0.42) +
+    perpY * arcLift * arcSide * 0.72 -
+    arcLift * 0.35;
+  const windupEarlyX = windupX * 0.42;
+  const windupEarlyY = windupY * 0.42;
+  const contactCurve = arcLift * arcSide * 0.2;
+  const contactX = unitX * travel + perpX * contactCurve;
+  const contactY = unitY * travel + perpY * contactCurve - arcLift * 0.08;
+  const recoilDistance = clamp(travel * 0.08, 4, 10);
+  const recoilX = -unitX * recoilDistance + perpX * arcLift * arcSide * 0.12;
+  const recoilY = -unitY * recoilDistance + perpY * arcLift * arcSide * 0.12;
   const baseRect = copyRect(attackerRect);
+  const movedRect = (x, y) => ({
+    ...baseRect,
+    left: attackerRect.left + x,
+    top: attackerRect.top + y,
+  });
   const windupRect = {
     ...baseRect,
     left: attackerRect.left + windupX,
     top: attackerRect.top + windupY,
   };
-  const peakRect = {
-    ...baseRect,
-    left: attackerRect.left + moveX,
-    top: attackerRect.top + moveY,
-  };
-  const recoilRect = {
-    ...baseRect,
-    left: attackerRect.left + recoilX,
-    top: attackerRect.top + recoilY,
-  };
-  const startTransform = transformAtFacing(attackerRect, visual, naturalFacingAngle);
-  const aimedStartTransform = transformAtFacing(attackerRect, visual, facingAngle);
-  const windupTransform = `${transformAtFacing(windupRect, visual, facingAngle)} scale(1.04)`;
-  const peakTransform = `${transformAtFacing(peakRect, visual, facingAngle)} scale(1.085)`;
-  const recoilTransform = `${transformAtFacing(recoilRect, visual, facingAngle)} scale(0.995)`;
+  const peakRect = movedRect(contactX, contactY);
+  const recoilRect = movedRect(recoilX, recoilY);
+  const startTransform = transformAtAttackPose(attackerRect, visual, {
+    rotateZ: naturalFacingAngle,
+  });
+  const aimedStartTransform = transformAtAttackPose(attackerRect, visual, {
+    rotateZ: facingAngle,
+    rotateX: tiltX * 0.18,
+    rotateY: tiltY * 0.18,
+    scale: 1.012,
+  });
+  const windupEarlyTransform = transformAtAttackPose(
+    movedRect(windupEarlyX, windupEarlyY),
+    visual,
+    {
+      rotateZ: facingAngle,
+      rotateX: clamp(tiltX * 0.42 + 3, -12, 12),
+      rotateY: clamp(-tiltY * 0.42, -12, 12),
+      scale: 1.035,
+      translateZ: 6,
+    },
+  );
+  const windupTransform = transformAtAttackPose(windupRect, visual, {
+    rotateZ: facingAngle,
+    rotateX: clamp(tiltX * 0.62 + 5, -12, 12),
+    rotateY: clamp(-tiltY * 0.62, -12, 12),
+    scale: 1.06,
+    translateZ: 10,
+  });
+  const peakTransform = transformAtAttackPose(peakRect, visual, {
+    rotateZ: facingAngle,
+    rotateX: clamp(-tiltX * 0.5, -10, 10),
+    rotateY: clamp(tiltY, -12, 12),
+    scale: 1.12,
+    translateZ: 18,
+  });
+  const recoilTransform = transformAtAttackPose(recoilRect, visual, {
+    rotateZ: facingAngle,
+    rotateX: clamp(tiltX * 0.18, -8, 8),
+    rotateY: clamp(tiltY * 0.18, -8, 8),
+    scale: 0.995,
+    translateZ: 4,
+  });
   const layer = getLayer();
+  const makeContactDetector = (element) => {
+    if (isDirectAttack) {
+      const directProgressThreshold = Number.isFinite(
+        options.directContactProgress,
+      )
+        ? options.directContactProgress
+        : 0.92;
+      return () => {
+        const rect = element.getBoundingClientRect();
+        const center = getRectCenter(rect);
+        const progress =
+          ((center.x - attackerCenter.x) * unitX +
+            (center.y - attackerCenter.y) * unitY) /
+          Math.max(1, travel);
+        if (progress < directProgressThreshold) return false;
+        const contactRect = getLeadingContactRect(rect, unitX, unitY);
+        return {
+          contactRect,
+          targetRect: contactRect,
+          directAttack: true,
+        };
+      };
+    }
+
+    return () => {
+      const rect = element.getBoundingClientRect();
+      const currentTargetRect = getCurrentTargetRect();
+      if (!rectsOverlap(rect, currentTargetRect, visualContactPadding)) {
+        return false;
+      }
+      return {
+        contactRect: rect,
+        targetRect: currentTargetRect,
+        directAttack: false,
+      };
+    };
+  };
 
   if (!layer || !intent.card) {
     const computedTransform = window.getComputedStyle(attackerElement).transform;
@@ -528,59 +914,106 @@ export function playAttackLunge(intent, options = {}) {
       computedTransform && computedTransform !== "none" ? computedTransform : "";
     const composeTransform = (movement) =>
       baseTransform ? `${baseTransform} ${movement}` : movement;
-    const naturalFacingTransform = `rotate(${naturalFacingAngle}deg)`;
-    const facingTransform = `rotate(${facingAngle}deg)`;
     const animation = attackerElement.animate(
       [
         {
-          transform: composeTransform(naturalFacingTransform),
+          transform: composeTransform(
+            relativeAttackPose({ rotateZ: naturalFacingAngle }),
+          ),
           filter: "brightness(1)",
           offset: 0,
         },
         {
-          transform: composeTransform(facingTransform),
+          transform: composeTransform(
+            relativeAttackPose({
+              rotateZ: facingAngle,
+              rotateX: tiltX * 0.18,
+              rotateY: tiltY * 0.18,
+              scale: 1.012,
+            }),
+          ),
           filter: "brightness(1.08) saturate(1.06)",
-          offset: 0.34,
+          offset: 0.2,
           easing: "cubic-bezier(0.22, 0.68, 0.24, 1)",
         },
         {
           transform: composeTransform(
-            `translate(${windupX}px, ${windupY}px) ${facingTransform} scale(1.03)`,
+            relativeAttackPose({
+              x: windupEarlyX,
+              y: windupEarlyY,
+              rotateZ: facingAngle,
+              rotateX: clamp(tiltX * 0.42 + 3, -12, 12),
+              rotateY: clamp(-tiltY * 0.42, -12, 12),
+              scale: 1.035,
+              translateZ: 6,
+            }),
           ),
           filter: "brightness(1.12) saturate(1.08)",
-          offset: 0.48,
+          offset: 0.45,
           easing: "cubic-bezier(0.34, 0, 0.2, 1)",
         },
         {
           transform: composeTransform(
-            `translate(${windupX}px, ${windupY}px) ${facingTransform} scale(1.04)`,
+            relativeAttackPose({
+              x: windupX,
+              y: windupY,
+              rotateZ: facingAngle,
+              rotateX: clamp(tiltX * 0.62 + 5, -12, 12),
+              rotateY: clamp(-tiltY * 0.62, -12, 12),
+              scale: 1.06,
+              translateZ: 10,
+            }),
           ),
           filter: "brightness(1.2) saturate(1.12)",
-          offset: 0.68,
+          offset: 0.62,
           easing: "cubic-bezier(0.12, 0.86, 0.18, 1)",
         },
         {
           transform: composeTransform(
-            `translate(${moveX}px, ${moveY}px) ${facingTransform} scale(1.085)`,
+            relativeAttackPose({
+              x: contactX,
+              y: contactY,
+              rotateZ: facingAngle,
+              rotateX: clamp(-tiltX * 0.5, -10, 10),
+              rotateY: clamp(tiltY, -12, 12),
+              scale: 1.12,
+              translateZ: 18,
+            }),
           ),
           filter: "brightness(1.3) saturate(1.16)",
-          offset: 0.8,
+          offset: 0.72,
           easing: "linear",
         },
         {
           transform: composeTransform(
-            `translate(${moveX}px, ${moveY}px) ${facingTransform} scale(1.085)`,
+            relativeAttackPose({
+              x: contactX,
+              y: contactY,
+              rotateZ: facingAngle,
+              rotateX: clamp(-tiltX * 0.5, -10, 10),
+              rotateY: clamp(tiltY, -12, 12),
+              scale: 1.12,
+              translateZ: 18,
+            }),
           ),
           filter: "brightness(1.24) saturate(1.14)",
-          offset: 0.86,
+          offset: 0.76,
           easing: "cubic-bezier(0.18, 0.72, 0.22, 1)",
         },
         {
           transform: composeTransform(
-            `translate(${recoilX}px, ${recoilY}px) ${facingTransform} scale(0.995)`,
+            relativeAttackPose({
+              x: recoilX,
+              y: recoilY,
+              rotateZ: facingAngle,
+              rotateX: clamp(tiltX * 0.18, -8, 8),
+              rotateY: clamp(tiltY * 0.18, -8, 8),
+              scale: 0.995,
+              translateZ: 4,
+            }),
           ),
           filter: "brightness(1.06)",
-          offset: 0.94,
+          offset: 0.88,
         },
         { transform: baseTransform || "none", filter: "brightness(1)", offset: 1 },
       ],
@@ -589,8 +1022,14 @@ export function playAttackLunge(intent, options = {}) {
         easing: options.easing || DEFAULT_EASING,
       },
     );
-    finishAnimation(animation, () => {}, duration);
-    return impactCue;
+    controller.setCancelHandler(() => {
+      animation?.cancel?.();
+    });
+    controller.startContactCue(animation, makeContactDetector(attackerElement));
+    finishAnimation(animation, () => {}, duration).then(() => {
+      controller.settleFinished(true);
+    });
+    return controller.presentation;
   }
 
   const ghost = createGhost(this, intent.card, visual, attackerRect);
@@ -602,6 +1041,17 @@ export function playAttackLunge(intent, options = {}) {
   }
   this.activeAttackAnimationKeys.add(String(intent.cardKey));
   hideActiveAttackSourceElements(intent.cardKey);
+
+  const cleanup = (() => {
+    let cleaned = false;
+    return () => {
+      if (cleaned) return;
+      cleaned = true;
+      this.activeAttackAnimationKeys?.delete(String(intent.cardKey));
+      revealAttackSourceElements(intent.cardKey);
+      ghost.remove();
+    };
+  })();
 
   const animation = ghost.animate(
     [
@@ -615,42 +1065,42 @@ export function playAttackLunge(intent, options = {}) {
         transform: aimedStartTransform,
         opacity: 1,
         filter: "brightness(1.08) saturate(1.06)",
-        offset: 0.34,
+        offset: 0.2,
         easing: "cubic-bezier(0.22, 0.68, 0.24, 1)",
       },
       {
-        transform: windupTransform,
+        transform: windupEarlyTransform,
         opacity: 1,
         filter: "brightness(1.12) saturate(1.08)",
-        offset: 0.48,
+        offset: 0.45,
         easing: "cubic-bezier(0.34, 0, 0.2, 1)",
       },
       {
         transform: windupTransform,
         opacity: 1,
         filter: "brightness(1.2) saturate(1.12)",
-        offset: 0.68,
+        offset: 0.62,
         easing: "cubic-bezier(0.12, 0.86, 0.18, 1)",
       },
       {
         transform: peakTransform,
         opacity: 1,
         filter: "brightness(1.3) saturate(1.16)",
-        offset: 0.8,
+        offset: 0.72,
         easing: "linear",
       },
       {
         transform: peakTransform,
         opacity: 1,
         filter: "brightness(1.24) saturate(1.14)",
-        offset: 0.86,
+        offset: 0.76,
         easing: "cubic-bezier(0.18, 0.72, 0.22, 1)",
       },
       {
         transform: recoilTransform,
         opacity: 0.99,
         filter: "brightness(1.08) saturate(1.04)",
-        offset: 0.94,
+        offset: 0.88,
       },
       {
         transform: startTransform,
@@ -665,10 +1115,13 @@ export function playAttackLunge(intent, options = {}) {
     },
   );
 
-  finishAnimation(animation, () => {
-    this.activeAttackAnimationKeys?.delete(String(intent.cardKey));
-    revealAttackSourceElements(intent.cardKey);
-    ghost.remove();
-  }, duration);
-  return impactCue;
+  controller.setCancelHandler(() => {
+    animation?.cancel?.();
+    cleanup();
+  });
+  controller.startContactCue(animation, makeContactDetector(ghost));
+  finishAnimation(animation, cleanup, duration).then(() => {
+    controller.settleFinished(true);
+  });
+  return controller.presentation;
 }
