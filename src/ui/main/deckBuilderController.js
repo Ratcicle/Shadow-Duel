@@ -222,6 +222,9 @@ export function createDeckBuilderController({
   let searchQuery = "";
   let currentBotPreset = loadBotPreset(Bot.getAvailablePresets());
   let startDeckDom = null;
+  let editingDeckSlot = null;
+  let deckNameBeforeEdit = "";
+  let deckSaveFeedbackTimeout = null;
 
   function getBotPresetLabel(presetId) {
     const preset =
@@ -581,40 +584,116 @@ export function createDeckBuilderController({
   function renderDeckSlotControls() {
     const deckPresets = deckState.getDeckPresets();
     const activeDeckSlot = deckState.getActiveDeckSlot();
+    if (editingDeckSlot !== null && editingDeckSlot !== activeDeckSlot) {
+      editingDeckSlot = null;
+      deckNameBeforeEdit = "";
+    }
 
     if (dom.slotTabs) {
       dom.slotTabs.innerHTML = "";
       deckPresets.forEach((preset, index) => {
+        const name = preset?.name || `Deck ${index + 1}`;
+        const isActive = index === activeDeckSlot;
+        const isEditing = editingDeckSlot === index;
+        const shell = document.createElement("div");
+        shell.className = "deck-slot-tab-shell";
+        shell.classList.toggle("active", isActive);
+        shell.classList.toggle("editing", isEditing);
+
+        if (isEditing) {
+          const input = document.createElement("input");
+          input.className = "deck-slot-tab-input";
+          input.type = "text";
+          input.maxLength = 24;
+          input.value = name;
+          input.setAttribute("aria-label", "Editar nome do deck");
+          input.addEventListener("input", () => {
+            deckState.renameActiveDeckSlot(input.value);
+          });
+          input.addEventListener("blur", () => {
+            finishDeckNameEditing({ shouldSave: true, shouldRender: true });
+          });
+          input.addEventListener("keydown", (event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              finishDeckNameEditing({ shouldSave: true, shouldRender: true });
+            }
+            if (event.key === "Escape") {
+              event.preventDefault();
+              deckState.renameActiveDeckSlot(deckNameBeforeEdit);
+              finishDeckNameEditing({ shouldSave: false, shouldRender: true });
+            }
+          });
+          shell.appendChild(input);
+          dom.slotTabs.appendChild(shell);
+          requestAnimationFrame(() => {
+            input.focus();
+            input.select();
+          });
+          return;
+        }
+
         const button = document.createElement("button");
         button.type = "button";
         button.className = "deck-slot-tab";
-        button.classList.toggle("active", index === activeDeckSlot);
-        button.textContent = preset?.name || `Deck ${index + 1}`;
-        button.title = button.textContent;
+        button.classList.toggle("active", isActive);
+        button.title = name;
+        button.setAttribute(
+          "aria-current",
+          isActive ? "true" : "false",
+        );
+
+        const label = document.createElement("span");
+        label.className = "deck-slot-tab-text";
+        label.textContent = name;
+        button.appendChild(label);
+
         button.addEventListener("click", () => {
-          const currentName = dom.slotNameInput?.value;
-          if (deckState.switchDeckSlot(index, currentName)) {
+          if (deckState.switchDeckSlot(index)) {
+            finishDeckNameEditing({ shouldSave: false, shouldRender: false });
             render();
           }
         });
-        dom.slotTabs.appendChild(button);
-      });
-    }
+        shell.appendChild(button);
 
-    if (dom.slotNameInput) {
-      dom.slotNameInput.value =
-        deckPresets[activeDeckSlot]?.name || `Deck ${activeDeckSlot + 1}`;
+        if (isActive) {
+          const editButton = document.createElement("button");
+          editButton.type = "button";
+          editButton.className = "deck-slot-tab-edit-button";
+          editButton.innerHTML = "&#9998;";
+          editButton.title = "Editar nome do deck";
+          editButton.setAttribute("aria-label", "Editar nome do deck");
+          editButton.addEventListener("click", (event) => {
+            event.stopPropagation();
+            startDeckNameEditing();
+          });
+          shell.appendChild(editButton);
+        }
+
+        dom.slotTabs.appendChild(shell);
+      });
     }
   }
 
-  function setDeckNameEditing(isEditing) {
-    dom.titleArea?.classList.toggle("editing-name", isEditing);
-    dom.slotNameToggle?.setAttribute("aria-expanded", String(isEditing));
-    if (isEditing) {
-      requestAnimationFrame(() => {
-        dom.slotNameInput?.focus();
-        dom.slotNameInput?.select();
-      });
+  function startDeckNameEditing() {
+    const activeDeckSlot = deckState.getActiveDeckSlot();
+    deckNameBeforeEdit =
+      deckState.getDeckPresets()[activeDeckSlot]?.name ||
+      `Deck ${activeDeckSlot + 1}`;
+    editingDeckSlot = activeDeckSlot;
+    renderDeckSlotControls();
+  }
+
+  function finishDeckNameEditing({ shouldSave, shouldRender }) {
+    if (editingDeckSlot === null) return;
+    if (shouldSave) {
+      deckState.saveActiveDeckPreset();
+    }
+    editingDeckSlot = null;
+    deckNameBeforeEdit = "";
+    if (shouldRender) {
+      renderDeckSlotControls();
+      updateStartDeckDisplay();
     }
   }
 
@@ -1057,22 +1136,52 @@ export function createDeckBuilderController({
 
   function open(startScreenRoot) {
     closeStartDeckMenu();
+    hideDeckSaveFeedback();
     startScreenRoot?.classList.add("hidden");
     dom.root?.classList.remove("hidden");
     render();
   }
 
   function close(startScreenRoot) {
-    deckState.saveActiveDeckPreset(dom.slotNameInput?.value);
+    hideDeckSaveFeedback();
+    finishDeckNameEditing({ shouldSave: true, shouldRender: false });
+    deckState.saveActiveDeckPreset();
     dom.root?.classList.add("hidden");
     startScreenRoot?.classList.remove("hidden");
     updateStartDeckDisplay();
   }
 
-  function saveAndClose(startScreenRoot) {
+  function showDeckSaveFeedback() {
+    if (!dom.saveFeedback) return;
+    dom.saveFeedback.classList.remove("hidden");
+    dom.saveFeedback.classList.add("visible");
+    if (deckSaveFeedbackTimeout) {
+      clearTimeout(deckSaveFeedbackTimeout);
+    }
+    deckSaveFeedbackTimeout = setTimeout(() => {
+      dom.saveFeedback?.classList.remove("visible");
+      deckSaveFeedbackTimeout = setTimeout(() => {
+        dom.saveFeedback?.classList.add("hidden");
+        deckSaveFeedbackTimeout = null;
+      }, 180);
+    }, 1400);
+  }
+
+  function hideDeckSaveFeedback() {
+    if (deckSaveFeedbackTimeout) {
+      clearTimeout(deckSaveFeedbackTimeout);
+      deckSaveFeedbackTimeout = null;
+    }
+    dom.saveFeedback?.classList.remove("visible");
+    dom.saveFeedback?.classList.add("hidden");
+  }
+
+  function saveDeckBuilderChanges() {
+    finishDeckNameEditing({ shouldSave: true, shouldRender: true });
     deckState.saveDeck(deckState.getCurrentDeck());
     deckState.saveExtraDeck(deckState.getCurrentExtraDeck());
-    close(startScreenRoot);
+    updateStartDeckDisplay();
+    showDeckSaveFeedback();
   }
 
   function prepareForDuel() {
@@ -1097,7 +1206,7 @@ export function createDeckBuilderController({
   function bind(startScreenRoot) {
     populateBotPresetDropdown();
     dom.cancelButton?.addEventListener("click", () => close(startScreenRoot));
-    dom.saveButton?.addEventListener("click", () => saveAndClose(startScreenRoot));
+    dom.saveButton?.addEventListener("click", saveDeckBuilderChanges);
     dom.searchInput?.addEventListener("input", (event) => {
       searchQuery = event.target.value || "";
       render();
@@ -1123,34 +1232,6 @@ export function createDeckBuilderController({
       sortMode = event.target.value || "default";
       applySortMode();
       render();
-    });
-    dom.slotNameToggle?.addEventListener("click", () => {
-      setDeckNameEditing(!dom.titleArea?.classList.contains("editing-name"));
-    });
-    dom.slotNameInput?.addEventListener("input", () => {
-      deckState.renameActiveDeckSlot(dom.slotNameInput.value);
-      const activeDeckSlot = deckState.getActiveDeckSlot();
-      const activeTab = dom.slotTabs?.children?.[activeDeckSlot];
-      const name =
-        deckState.getDeckPresets()[activeDeckSlot]?.name ||
-        `Deck ${activeDeckSlot + 1}`;
-      if (activeTab) {
-        activeTab.textContent = name;
-        activeTab.title = name;
-      }
-    });
-    dom.slotNameInput?.addEventListener("change", () => {
-      deckState.saveActiveDeckPreset(dom.slotNameInput.value);
-    });
-    dom.slotNameInput?.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") {
-        event.preventDefault();
-        deckState.saveActiveDeckPreset(dom.slotNameInput.value);
-        setDeckNameEditing(false);
-      }
-      if (event.key === "Escape") {
-        setDeckNameEditing(false);
-      }
     });
     dom.botPresetSelect?.addEventListener("change", (event) => {
       const value = event.target.value;

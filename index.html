@@ -9,6 +9,13 @@
       href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;700&display=swap"
       rel="stylesheet"
     />
+    <script type="importmap">
+      {
+        "imports": {
+          "pixi.js": "./node_modules/pixi.js/dist/pixi.mjs"
+        }
+      }
+    </script>
   </head>
   <body>
     <!-- Start Screen -->
@@ -74,31 +81,11 @@
         <div class="deck-header">
           <div class="deck-title-area">
             <h2>Meu Deck</h2>
-            <button
-              id="deck-slot-name-toggle"
-              class="deck-slot-name-toggle"
-              type="button"
-              aria-label="Editar nome do deck"
-              aria-expanded="false"
-              title="Editar nome do deck"
-            >
-              &#9998;
-            </button>
             <div
               id="deck-slot-tabs"
               class="deck-slot-tabs"
               aria-label="Deck presets"
             ></div>
-            <label class="deck-slot-name-label" for="deck-slot-name">
-              Nome
-              <input
-                id="deck-slot-name"
-                class="deck-slot-name-input"
-                type="text"
-                maxlength="24"
-                autocomplete="off"
-              />
-            </label>
           </div>
         </div>
         <div class="deck-toolbar" aria-label="Ferramentas do deck builder">
@@ -179,6 +166,14 @@
             <span id="deck-pool-count" class="deck-pool-count">0 cartas</span>
           </div>
           <div class="deck-footer-right">
+            <span
+              id="deck-save-feedback"
+              class="deck-save-feedback hidden"
+              role="status"
+              aria-live="polite"
+            >
+              Deck salvo
+            </span>
             <button id="deck-save">Salvar</button>
             <button id="deck-cancel">Fechar</button>
           </div>

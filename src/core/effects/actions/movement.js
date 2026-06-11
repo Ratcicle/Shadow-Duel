@@ -27,6 +27,27 @@ function shouldAllowExtraDeckMonsterToHand(action, ctx) {
   return false;
 }
 
+function getContextTargetCards(targetRef, ctx) {
+  if (!targetRef || !ctx) return [];
+  const contextTargets = {
+    self: ctx.source,
+    source: ctx.source,
+    destroyed: ctx.destroyed,
+    summonedCard: ctx.summonedCard,
+    eventCard: ctx.eventCard,
+    changedCard: ctx.changedCard,
+    movedCard: ctx.movedCard,
+    attacker: ctx.attacker,
+    defender: ctx.defender,
+    target: ctx.target,
+    targetedCard: ctx.targetedCard,
+    host: ctx.host,
+  };
+  const target = contextTargets[targetRef];
+  if (Array.isArray(target)) return target.filter(Boolean);
+  return target ? [target] : [];
+}
+
 /**
  * Apply move action - move cards between zones
  * @param {Object} action - Action configuration
@@ -36,11 +57,10 @@ function shouldAllowExtraDeckMonsterToHand(action, ctx) {
  */
 export async function applyMove(action, ctx, targets) {
   // Resolve targetRef to get the actual cards
-  let targetCards = targets[action.targetRef] || [];
+  let targetCards = targets?.[action.targetRef] || [];
 
-  // If targetRef is "self", resolve from ctx.source
-  if (action.targetRef === "self" && ctx?.source) {
-    targetCards = [ctx.source];
+  if (!targetCards || targetCards.length === 0) {
+    targetCards = getContextTargetCards(action.targetRef, ctx);
   }
 
   if (!targetCards || targetCards.length === 0) return false;
@@ -122,7 +142,15 @@ export async function applyMove(action, ctx, targets) {
       } else {
         const fromOwner =
           card.owner === "player" ? this.game.player : this.game.bot;
-        const zones = ["field", "hand", "deck", "graveyard", "spellTrap"];
+        const zones = [
+          "field",
+          "hand",
+          "deck",
+          "graveyard",
+          "spellTrap",
+          "extraDeck",
+          "banished",
+        ];
         for (const zoneName of zones) {
           const arr = this.getZone(fromOwner, zoneName);
           const idx = arr ? arr.indexOf(card) : -1;

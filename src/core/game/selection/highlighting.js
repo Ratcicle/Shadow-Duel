@@ -92,6 +92,10 @@ export function highlightTargetCandidates() {
 
   const selected = this.targetSelection.selections[requirement.id] || [];
   const selectedSet = new Set(selected);
+  const selectionSourceCard =
+    this.targetSelection.card ||
+    this.targetSelection.selectionContract?.metadata?.sourceCard ||
+    null;
   const highlightTargets = requirement.candidates.map((cand) => ({
     key: cand.key,
     zone: cand.zone,
@@ -108,6 +112,8 @@ export function highlightTargetCandidates() {
     this.ui.applyTargetHighlights({
       targets: highlightTargets,
       attackerHighlight,
+      sourceCard: selectionSourceCard,
+      selectionContract: this.targetSelection.selectionContract,
     });
   }
   this.updateFieldTargetingProgress();

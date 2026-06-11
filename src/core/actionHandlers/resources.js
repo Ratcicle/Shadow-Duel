@@ -71,6 +71,109 @@ function cardMatchesFieldCounterFilters(card, filters = {}) {
   return true;
 }
 
+function getSelectionMessageForSource(source) {
+  if (!source) return "Select target(s).";
+  if (source.cardKind === "monster") {
+    return "Select target(s) for the monster effect.";
+  }
+  if (source.cardKind === "spell") {
+    if (source.subtype === "continuous") {
+      return "Select target(s) for the continuous spell effect.";
+    }
+    if (source.subtype === "field") {
+      return "Select target(s) for the field spell effect.";
+    }
+    return "Select target(s) for the spell effect.";
+  }
+  return "Select target(s) for the spell/trap effect.";
+}
+
+function buildZoneSelectionCandidates(player, game, cards, zoneName) {
+  const zone = Array.isArray(player?.[zoneName]) ? player[zoneName] : [];
+  const controller = player?.id || "player";
+
+  return cards.map((card, idx) => {
+    const candidate = {
+      idx,
+      name: card?.name || "Card",
+      owner: "player",
+      controller,
+      zone: zoneName,
+      zoneIndex: zone.indexOf(card),
+      position: card?.position || "",
+      atk: card?.atk,
+      def: card?.def,
+      level: card?.level,
+      cardKind: card?.cardKind,
+      cardRef: card,
+    };
+
+    candidate.key =
+      typeof game?.buildSelectionCandidateKey === "function"
+        ? game.buildSelectionCandidateKey(candidate, idx)
+        : `${controller}:${zoneName}:${candidate.zoneIndex}:${
+            card?.id || card?.name || idx
+          }`;
+
+    return candidate;
+  });
+}
+
+function buildAddToHandSelectionContract(
+  action,
+  ctx,
+  { player, game, sourceZone },
+) {
+  return (cards, range) => {
+    const requirementId =
+      action.selectionId ||
+      `${ctx?.effect?.id || action.type || "add_from_zone_to_hand"}_selection`;
+    const decorated = buildZoneSelectionCandidates(
+      player,
+      game,
+      cards,
+      sourceZone,
+    );
+
+    return {
+      kind: "target",
+      requirementId,
+      decorated,
+      selectionContract: {
+        kind: "target",
+        message:
+          action.selectionMessage ||
+          getSelectionMessageForSource(ctx?.source || null),
+        requirements: [
+          {
+            id: requirementId,
+            label: action.selectionLabel || requirementId,
+            min: range.min,
+            max: range.max,
+            zones: [sourceZone],
+            owner: "player",
+            filters: action.filters || {},
+            allowSelf: true,
+            distinct: true,
+            candidates: decorated,
+          },
+        ],
+        ui: {
+          useFieldTargeting: false,
+          allowEmpty: Number(range.min || 0) === 0,
+        },
+        metadata: {
+          context: "add_from_zone_to_hand",
+          sourceCard: ctx?.source || null,
+          sourceCardName: ctx?.source?.name || null,
+          effectId: ctx?.effect?.id || null,
+          sourceZone,
+        },
+      },
+    };
+  };
+}
+
 /**
  * Generic handler for paying Life Points as a cost
  *
@@ -268,6 +371,9 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
   }
 
   const maxSelect = Math.min(count.max, candidates.length);
+  const canUseTargetSelection =
+    promptPlayer !== false &&
+    typeof game.startTargetSelectionSession === "function";
 
   if (maxSelect === 0) {
     getUI(game)?.log("No cards available to add.");
@@ -401,6 +507,13 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
         );
       });
     },
+    selectionContractBuilder: canUseTargetSelection
+      ? buildAddToHandSelectionContract(action, ctx, {
+          player,
+          game,
+          sourceZone,
+        })
+      : undefined,
     selectMulti: (cards, range) => {
       if (!getUI(game)?.showMultiSelectModal) {
         return cards.slice(0, range.max);

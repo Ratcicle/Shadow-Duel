@@ -574,7 +574,7 @@
     },
     "363": {
       "name": "Leviatã do Deserto dos Vinculados à Miragem",
-      "description": "2 monstros \"Vinculados à Miragem\". Se este card for Invocado por Invocação-Fusão: você pode escolher 1 monstro que seu oponente controla; mude a posição de batalha dele e, se isso acontecer, reduza o ATK/DEF dele pela metade até o final deste turno. Uma vez por turno: você pode devolver 1 card \"Vinculados à Miragem\" que você controla para a mão; este card pode realizar um segundo ataque contra monstros durante esta Fase de Batalha. Se este card atacar um monstro em Posição de Defesa, cause dano de batalha perfurante."
+      "description": "\"Víbora de Vidro dos Vinculados à Miragem\" + 1 monstro \"Vinculados à Miragem\". Você pode Invocar este card por Invocação-Fusão do seu Deck Adicional ao enviar os materiais acima que você controla para o Cemitério. Se este card for Invocado por Invocação-Fusão: mude a posição de batalha de todos os monstros que seu oponente controla. Enquanto este card estiver com a face para cima no campo, cada vez que um monstro do seu oponente mudar sua posição de batalha por efeito de um card \"Vinculados à Miragem\", ele perde 300 ATK/DEF até o final deste turno. Se este card seria destruído em batalha: você pode devolvê-lo para o Deck Adicional em vez disso."
     },
     "401": {
       "name": "Podriflora Esporófito",

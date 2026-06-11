@@ -6,6 +6,8 @@
 const DEFAULT_DURATION = 220;
 const DEFAULT_EASING = "cubic-bezier(0.2, 0.8, 0.2, 1)";
 const MAX_GHOSTS_PER_FLUSH = 12;
+const ATTACK_IMPACT_CUE_OFFSET = 0.8;
+const ATTACK_IMPACT_CUE_DELAY = 0;
 
 const ZONE_IDS = {
   player: {
@@ -99,6 +101,37 @@ function findBoardCardElement(cardKey) {
   );
 }
 
+function findBoardCardElements(cardKey) {
+  if (!cardKey || typeof document === "undefined") return [];
+  const root = document.getElementById("game-container");
+  if (!root) return [];
+  return Array.from(
+    root.querySelectorAll(
+      `.card[data-card-key="${escapeCardKey(cardKey)}"]:not(.card-animation-ghost)`,
+    ),
+  );
+}
+
+function hideAttackSourceElement(element) {
+  if (!element || element.dataset.attackLungeHidden === "true") return;
+  element.dataset.attackLungeHidden = "true";
+  element.dataset.attackLungeVisibility = element.style.visibility || "";
+  element.style.visibility = "hidden";
+}
+
+function hideActiveAttackSourceElements(cardKey) {
+  findBoardCardElements(cardKey).forEach(hideAttackSourceElement);
+}
+
+function revealAttackSourceElements(cardKey) {
+  findBoardCardElements(cardKey).forEach((element) => {
+    if (element.dataset.attackLungeHidden !== "true") return;
+    element.style.visibility = element.dataset.attackLungeVisibility || "";
+    delete element.dataset.attackLungeHidden;
+    delete element.dataset.attackLungeVisibility;
+  });
+}
+
 function isElementVisible(element) {
   if (!element || typeof window === "undefined") return false;
   const rect = element.getBoundingClientRect();
@@ -160,6 +193,26 @@ function transformAt(rect, visual) {
   return visualTransform ? `${translate} ${visualTransform}` : translate;
 }
 
+function getFacingAngleDegrees(deltaX, deltaY) {
+  return (Math.atan2(deltaY, deltaX) * 180) / Math.PI + 90;
+}
+
+function getNaturalFacingAngleDegrees(visual) {
+  return visual?.defense ? -90 : 0;
+}
+
+function transformAtFacing(rect, visual, facingAngle) {
+  const size = {
+    width: visual?.width || rect.width,
+    height: visual?.height || rect.height,
+  };
+  const center = getRectCenter(rect);
+  const translate = `translate(${center.x - size.width / 2}px, ${
+    center.y - size.height / 2
+  }px)`;
+  return `${translate} rotate(${facingAngle}deg)`;
+}
+
 function getLayer() {
   const root = document.getElementById("game-container");
   if (!root) return null;
@@ -210,12 +263,34 @@ function createGhost(renderer, card, visual, rect) {
   return ghost;
 }
 
-function finishAnimation(animation, cleanup) {
-  if (animation?.finished && typeof animation.finished.finally === "function") {
-    animation.finished.finally(cleanup);
-    return;
+function finishAnimation(animation, cleanup, duration = DEFAULT_DURATION) {
+  if (animation?.finished && typeof animation.finished.then === "function") {
+    return animation.finished.then(
+      () => {
+        cleanup();
+      },
+      () => {
+        cleanup();
+      },
+    );
   }
-  setTimeout(cleanup, DEFAULT_DURATION + 40);
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      cleanup();
+      resolve();
+    }, duration + 40);
+  });
+}
+
+function createAnimationCue(duration, offset, delay = 0) {
+  const safeDuration = Number.isFinite(duration) ? Math.max(0, duration) : 0;
+  const safeOffset = Number.isFinite(offset)
+    ? Math.min(1, Math.max(0, offset))
+    : 1;
+  const safeDelay = Number.isFinite(delay) ? Math.max(0, delay) : 0;
+  return new Promise((resolve) => {
+    setTimeout(resolve, safeDuration * safeOffset + safeDelay);
+  });
 }
 
 function resolveFinalElement(intent) {
@@ -369,7 +444,7 @@ export function playQueuedCardAnimations(intents, options = {}) {
         finalElement.style.visibility = previousVisibility;
       }
       ghost.remove();
-    });
+    }, duration);
   }
 }
 
@@ -400,54 +475,200 @@ export function playAttackLunge(intent, options = {}) {
 
   const lunge = Number.isFinite(options.lungeDistance)
     ? options.lungeDistance
-    : 52;
-  const travel = Math.min(lunge, distance * 0.45);
-  const moveX = (deltaX / distance) * travel;
-  const moveY = (deltaY / distance) * travel;
+    : 128;
+  const windupDistance = Number.isFinite(options.windupDistance)
+    ? options.windupDistance
+    : 24;
+  const duration = Number.isFinite(options.duration) ? options.duration : 1200;
+  const impactCueOffset = Number.isFinite(options.impactCueOffset)
+    ? options.impactCueOffset
+    : ATTACK_IMPACT_CUE_OFFSET;
+  const impactCueDelay = Number.isFinite(options.impactCueDelay)
+    ? options.impactCueDelay
+    : ATTACK_IMPACT_CUE_DELAY;
+  const impactCue = createAnimationCue(duration, impactCueOffset, impactCueDelay);
+  const travel = Math.min(lunge, distance * 0.72);
+  const unitX = deltaX / distance;
+  const unitY = deltaY / distance;
   const visual = visualFromElement(attackerElement, intent.card);
+  const facingAngle = getFacingAngleDegrees(deltaX, deltaY);
+  const naturalFacingAngle = getNaturalFacingAngleDegrees(visual);
+  const moveX = unitX * travel;
+  const moveY = unitY * travel;
+  const windupX = -unitX * Math.min(windupDistance, travel * 0.35);
+  const windupY = -unitY * Math.min(windupDistance, travel * 0.35);
+  const recoilX = -unitX * Math.min(6, travel * 0.16);
+  const recoilY = -unitY * Math.min(6, travel * 0.16);
   const baseRect = copyRect(attackerRect);
+  const windupRect = {
+    ...baseRect,
+    left: attackerRect.left + windupX,
+    top: attackerRect.top + windupY,
+  };
   const peakRect = {
     ...baseRect,
     left: attackerRect.left + moveX,
     top: attackerRect.top + moveY,
   };
-  const startTransform = transformAt(attackerRect, visual);
-  const peakTransform = `${transformAt(peakRect, visual)} scale(1.04)`;
+  const recoilRect = {
+    ...baseRect,
+    left: attackerRect.left + recoilX,
+    top: attackerRect.top + recoilY,
+  };
+  const startTransform = transformAtFacing(attackerRect, visual, naturalFacingAngle);
+  const aimedStartTransform = transformAtFacing(attackerRect, visual, facingAngle);
+  const windupTransform = `${transformAtFacing(windupRect, visual, facingAngle)} scale(1.04)`;
+  const peakTransform = `${transformAtFacing(peakRect, visual, facingAngle)} scale(1.085)`;
+  const recoilTransform = `${transformAtFacing(recoilRect, visual, facingAngle)} scale(0.995)`;
   const layer = getLayer();
 
   if (!layer || !intent.card) {
-    attackerElement.animate(
+    const computedTransform = window.getComputedStyle(attackerElement).transform;
+    const baseTransform =
+      computedTransform && computedTransform !== "none" ? computedTransform : "";
+    const composeTransform = (movement) =>
+      baseTransform ? `${baseTransform} ${movement}` : movement;
+    const naturalFacingTransform = `rotate(${naturalFacingAngle}deg)`;
+    const facingTransform = `rotate(${facingAngle}deg)`;
+    const animation = attackerElement.animate(
       [
-        { transform: window.getComputedStyle(attackerElement).transform || "none" },
-        { transform: `translate(${moveX}px, ${moveY}px)` },
-        { transform: window.getComputedStyle(attackerElement).transform || "none" },
+        {
+          transform: composeTransform(naturalFacingTransform),
+          filter: "brightness(1)",
+          offset: 0,
+        },
+        {
+          transform: composeTransform(facingTransform),
+          filter: "brightness(1.08) saturate(1.06)",
+          offset: 0.34,
+          easing: "cubic-bezier(0.22, 0.68, 0.24, 1)",
+        },
+        {
+          transform: composeTransform(
+            `translate(${windupX}px, ${windupY}px) ${facingTransform} scale(1.03)`,
+          ),
+          filter: "brightness(1.12) saturate(1.08)",
+          offset: 0.48,
+          easing: "cubic-bezier(0.34, 0, 0.2, 1)",
+        },
+        {
+          transform: composeTransform(
+            `translate(${windupX}px, ${windupY}px) ${facingTransform} scale(1.04)`,
+          ),
+          filter: "brightness(1.2) saturate(1.12)",
+          offset: 0.68,
+          easing: "cubic-bezier(0.12, 0.86, 0.18, 1)",
+        },
+        {
+          transform: composeTransform(
+            `translate(${moveX}px, ${moveY}px) ${facingTransform} scale(1.085)`,
+          ),
+          filter: "brightness(1.3) saturate(1.16)",
+          offset: 0.8,
+          easing: "linear",
+        },
+        {
+          transform: composeTransform(
+            `translate(${moveX}px, ${moveY}px) ${facingTransform} scale(1.085)`,
+          ),
+          filter: "brightness(1.24) saturate(1.14)",
+          offset: 0.86,
+          easing: "cubic-bezier(0.18, 0.72, 0.22, 1)",
+        },
+        {
+          transform: composeTransform(
+            `translate(${recoilX}px, ${recoilY}px) ${facingTransform} scale(0.995)`,
+          ),
+          filter: "brightness(1.06)",
+          offset: 0.94,
+        },
+        { transform: baseTransform || "none", filter: "brightness(1)", offset: 1 },
       ],
       {
-        duration: Number.isFinite(options.duration) ? options.duration : 260,
+        duration,
         easing: options.easing || DEFAULT_EASING,
       },
     );
-    return;
+    finishAnimation(animation, () => {}, duration);
+    return impactCue;
   }
 
   const ghost = createGhost(this, intent.card, visual, attackerRect);
   ghost.classList.add("card-animation-attack-ghost");
   ghost.style.transform = startTransform;
   layer.appendChild(ghost);
+  if (!this.activeAttackAnimationKeys) {
+    this.activeAttackAnimationKeys = new Set();
+  }
+  this.activeAttackAnimationKeys.add(String(intent.cardKey));
+  hideActiveAttackSourceElements(intent.cardKey);
 
   const animation = ghost.animate(
     [
-      { transform: startTransform, opacity: 0.98 },
-      { transform: peakTransform, opacity: 1 },
-      { transform: startTransform, opacity: 0.98 },
+      {
+        transform: startTransform,
+        opacity: 0.96,
+        filter: "brightness(1) saturate(1)",
+        offset: 0,
+      },
+      {
+        transform: aimedStartTransform,
+        opacity: 1,
+        filter: "brightness(1.08) saturate(1.06)",
+        offset: 0.34,
+        easing: "cubic-bezier(0.22, 0.68, 0.24, 1)",
+      },
+      {
+        transform: windupTransform,
+        opacity: 1,
+        filter: "brightness(1.12) saturate(1.08)",
+        offset: 0.48,
+        easing: "cubic-bezier(0.34, 0, 0.2, 1)",
+      },
+      {
+        transform: windupTransform,
+        opacity: 1,
+        filter: "brightness(1.2) saturate(1.12)",
+        offset: 0.68,
+        easing: "cubic-bezier(0.12, 0.86, 0.18, 1)",
+      },
+      {
+        transform: peakTransform,
+        opacity: 1,
+        filter: "brightness(1.3) saturate(1.16)",
+        offset: 0.8,
+        easing: "linear",
+      },
+      {
+        transform: peakTransform,
+        opacity: 1,
+        filter: "brightness(1.24) saturate(1.14)",
+        offset: 0.86,
+        easing: "cubic-bezier(0.18, 0.72, 0.22, 1)",
+      },
+      {
+        transform: recoilTransform,
+        opacity: 0.99,
+        filter: "brightness(1.08) saturate(1.04)",
+        offset: 0.94,
+      },
+      {
+        transform: startTransform,
+        opacity: 0.96,
+        filter: "brightness(1) saturate(1)",
+        offset: 1,
+      },
     ],
     {
-      duration: Number.isFinite(options.duration) ? options.duration : 260,
+      duration,
       easing: options.easing || DEFAULT_EASING,
     },
   );
 
   finishAnimation(animation, () => {
+    this.activeAttackAnimationKeys?.delete(String(intent.cardKey));
+    revealAttackSourceElements(intent.cardKey);
     ghost.remove();
-  });
+  }, duration);
+  return impactCue;
 }

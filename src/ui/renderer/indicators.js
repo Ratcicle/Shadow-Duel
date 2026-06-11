@@ -8,6 +8,73 @@
  * setActivationHint, clearActivationHint
  */
 
+const TARGETING_FX_HANDLERS = "__shadowDuelTargetingFxHandlers";
+
+function escapeCardKey(cardKey) {
+  if (typeof CSS !== "undefined" && typeof CSS.escape === "function") {
+    return CSS.escape(String(cardKey));
+  }
+  return String(cardKey).replace(/["\\]/g, "\\$&");
+}
+
+function getSourceCardKey(sourceCard) {
+  const key = sourceCard?.instanceId ?? sourceCard?._instanceId ?? null;
+  return key == null ? null : String(key);
+}
+
+function findCardByKey(cardKey) {
+  if (!cardKey || typeof document === "undefined") return null;
+  const root = document.getElementById("game-container");
+  if (!root) return null;
+  return root.querySelector(
+    `.card[data-card-key="${escapeCardKey(cardKey)}"]:not(.card-animation-ghost)`
+  );
+}
+
+function resolveTargetingSourceElement({
+  sourceCard = null,
+  selectionContract = null,
+} = {}) {
+  const contractSource = selectionContract?.metadata?.sourceCard || null;
+  const cardKey = getSourceCardKey(sourceCard) || getSourceCardKey(contractSource);
+  if (cardKey) {
+    const sourceEl = findCardByKey(cardKey);
+    if (sourceEl) return sourceEl;
+  }
+  if (typeof document === "undefined") return null;
+  return document.querySelector(
+    "#game-container .card.attack-attacker:not(.card-animation-ghost)"
+  );
+}
+
+function detachTargetingFxHandlers(element) {
+  if (!element?.[TARGETING_FX_HANDLERS]) return;
+  const { enter, leave } = element[TARGETING_FX_HANDLERS];
+  element.removeEventListener("mouseenter", enter);
+  element.removeEventListener("mouseleave", leave);
+  delete element[TARGETING_FX_HANDLERS];
+}
+
+function attachTargetingFxHandlers(renderer, targetEl, sourceEl) {
+  if (!targetEl || !sourceEl) return;
+  detachTargetingFxHandlers(targetEl);
+
+  const enter = () => {
+    renderer.pixiVfx?.playTargetingLink?.({
+      sourceRect: sourceEl.getBoundingClientRect(),
+      targetRect: targetEl.getBoundingClientRect(),
+      mode: "hover",
+    });
+  };
+  const leave = () => {
+    renderer.pixiVfx?.clearTargetingFx?.("hover");
+  };
+
+  targetEl.addEventListener("mouseenter", enter);
+  targetEl.addEventListener("mouseleave", leave);
+  targetEl[TARGETING_FX_HANDLERS] = { enter, leave };
+}
+
 /**
  * @this {import('../Renderer.js').default}
  */
@@ -247,6 +314,8 @@ export function clearPlayerFieldTributeable() {
 export function applyTargetHighlights({
   targets = [],
   attackerHighlight = null,
+  sourceCard = null,
+  selectionContract = null,
 } = {}) {
   this.clearTargetHighlights();
 
@@ -263,6 +332,12 @@ export function applyTargetHighlights({
       }
     }
   }
+
+  const sourceEl = resolveTargetingSourceElement({
+    sourceCard,
+    selectionContract,
+  });
+  let selectedTargetEl = null;
 
   targets.forEach((cand) => {
     let targetEl = null;
@@ -313,7 +388,19 @@ export function applyTargetHighlights({
     if (cand.isAttackTarget) {
       targetEl.classList.add("attack-target");
     }
+    attachTargetingFxHandlers(this, targetEl, sourceEl);
+    if (cand.isSelected && !selectedTargetEl) {
+      selectedTargetEl = targetEl;
+    }
   });
+
+  if (sourceEl && selectedTargetEl) {
+    this.pixiVfx?.playTargetingLink?.({
+      sourceRect: sourceEl.getBoundingClientRect(),
+      targetRect: selectedTargetEl.getBoundingClientRect(),
+      mode: "selected",
+    });
+  }
 }
 
 /**
@@ -333,6 +420,7 @@ export function clearTargetHighlights() {
 
   containers.forEach((container) => {
     if (!container) return;
+    detachTargetingFxHandlers(container);
     container.classList.remove(
       "targetable",
       "selected-target",
@@ -345,6 +433,7 @@ export function clearTargetHighlights() {
         ".card.targetable, .card.selected-target, .card.attack-attacker, .card.attack-target, .direct-attack-target"
       )
       .forEach((el) => {
+        detachTargetingFxHandlers(el);
         el.classList.remove(
           "targetable",
           "selected-target",
@@ -358,6 +447,7 @@ export function clearTargetHighlights() {
   if (this.elements.botHand) {
     this.elements.botHand.style.pointerEvents = "";
   }
+  this.pixiVfx?.clearTargetingFx?.();
 }
 
 /**
@@ -367,6 +457,9 @@ export function setSelectionDimming(active) {
   const container = document.getElementById("game-container");
   if (!container) return;
   container.classList.toggle("selection-dim", !!active);
+  if (!active) {
+    this.pixiVfx?.clearTargetingFx?.();
+  }
 }
 
 /**

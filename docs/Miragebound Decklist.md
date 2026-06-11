@@ -10,7 +10,7 @@ O arquetipo **Miragebound** e focado em controle de posicao de batalha, retorno 
 - **Controle de posicao**: varias cartas mudam a posicao de batalha dos monstros do oponente.
 - **Bounce como recurso**: efeitos devolvem seus proprios "Miragebound" para a mao para buscar, comprar ou proteger.
 - **Pressao por combate**: monstros punem alvos em Defesa com dano perfurante, debuffs ou extensao.
-- **Extra Deck flexivel**: uma linha de Ascension via `Miragebound Scout` e uma Fusao generica com 2 monstros "Miragebound".
+- **Extra Deck flexivel**: uma linha de Ascension via `Miragebound Scout` e uma Fusao de contato com `Miragebound Glass Viper` + 1 monstro "Miragebound" no campo.
 
 ---
 
@@ -49,11 +49,11 @@ O arquetipo **Miragebound** e focado em controle de posicao de batalha, retorno 
 | ID  | Nome                         | Tipo      | Nivel | ATK  | DEF  |
 | --- | ---------------------------- | --------- | ----- | ---- | ---- |
 | 355 | Miragebound Glass Sovereign  | Ascension | 7     | 2400 | 2200 |
-| 363 | Miragebound Desert Leviathan | Fusion    | 8     | 2700 | 2400 |
+| 363 | Miragebound Desert Leviathan | Fusion    | 8     | 2400 | 2500 |
 
 **Material de Ascension (355):** `Miragebound Scout` (requisito: o material deve ter ativado seus efeitos 2 vezes neste Duelo).
 
-**Materiais de Fusao (363):** 2 monstros "Miragebound".
+**Materiais de Fusao de contato (363):** `Miragebound Glass Viper` + 1 monstro "Miragebound" que voce controla no campo.
 
 ---
 
@@ -103,5 +103,5 @@ O arquetipo **Miragebound** e focado em controle de posicao de batalha, retorno 
 **355 - Miragebound Glass Sovereign** (L7 Ascension Spellcaster | ATK 2400 / DEF 2200)
 > Ascension Material: "Miragebound Scout". Requirement: The material must have activated its effects 2 times this Duel. If this card is Ascension Summoned: Target up to 2 face-up monsters your opponent controls; change their battle positions. Once per turn: Target 1 other "Miragebound" monster you control and 1 card your opponent controls; return those targets to the hand. If this card attacks a Defense Position monster, inflict piercing battle damage.
 
-**363 - Miragebound Desert Leviathan** (L8 Fusion Beast | ATK 2700 / DEF 2400)
-> 2 "Miragebound" monsters. If this card is Fusion Summoned: You can target 1 monster your opponent controls; change its battle position, and if you do, halve its ATK/DEF until the end of this turn. Once per turn: You can return 1 "Miragebound" card you control to the hand; this card can make a second attack on monsters during this Battle Phase. If this card attacks a Defense Position monster, inflict piercing battle damage.
+**363 - Miragebound Desert Leviathan** (L8 Fusion Beast | ATK 2400 / DEF 2500)
+> "Miragebound Glass Viper" + 1 "Miragebound" monster. You can Fusion Summon this card from your Extra Deck by sending the above materials you control to the GY. If this card is Fusion Summoned: change the battle positions of all monsters your opponent controls. While this card is face-up on the field, each time a monster your opponent controls changes its battle position by a "Miragebound" card effect, it loses 300 ATK/DEF until the end of this turn. If this card would be destroyed by battle: you can return it to the Extra Deck instead.

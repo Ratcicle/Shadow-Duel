@@ -18,9 +18,11 @@ import * as modals from "./renderer/modals.js";
 import * as summonModals from "./renderer/summonModals.js";
 import * as selectionModals from "./renderer/selectionModals.js";
 import * as trapModals from "./renderer/trapModals.js";
+import PixiVfxLayer from "./pixi/PixiVfxLayer.js";
 
 export default class Renderer {
   constructor() {
+    this.destroyed = false;
     this.elements = {
       playerHand: document.getElementById("player-hand"),
       playerField: document.getElementById("player-field"),
@@ -40,6 +42,29 @@ export default class Renderer {
       phaseTrack: document.getElementById("phase-track"),
       actionLog: document.getElementById("action-log-list"),
     };
+    this.pixiVfx = new PixiVfxLayer();
+    const pixiVfx = this.pixiVfx;
+    pixiVfx
+      .init(document.getElementById("game-container"))
+      .then(() => {
+        if (this.destroyed || this.pixiVfx !== pixiVfx) {
+          pixiVfx.destroy();
+        }
+      })
+      .catch((error) => {
+        console.warn("[Renderer] Pixi VFX layer unavailable.", error);
+        if (this.pixiVfx === pixiVfx) {
+          this.pixiVfx = null;
+        }
+        pixiVfx.destroy();
+      });
+  }
+
+  destroy() {
+    if (this.destroyed) return;
+    this.destroyed = true;
+    this.pixiVfx?.destroy?.();
+    this.pixiVfx = null;
   }
 }
 

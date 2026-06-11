@@ -48,6 +48,15 @@ function queuePendingBattleDestroyAfterSelection(game, attacker, destroyed, extr
   };
 }
 
+async function waitForAttackPresentation(game, presentation) {
+  if (!presentation || typeof presentation.then !== "function") return;
+  try {
+    await presentation;
+  } catch (error) {
+    console.warn("[Shadow Duel] Attack presentation failed.", error);
+  }
+}
+
 /**
  * Resolve a combat attack, handling flip effects and delegating to finishCombat.
  * @param {Object} attacker - The attacking monster
@@ -112,15 +121,17 @@ export async function resolveCombat(attacker, target, options = {}) {
       : this.player;
   const targetOwner = defenderOwner;
 
-  if (attacker.instanceId != null && typeof this.ui?.playAttackLunge === "function") {
-    this.ui.playAttackLunge({
-      kind: "attack-lunge",
-      card: attacker,
-      cardKey: String(attacker.instanceId),
-      targetCardKey: target?.instanceId != null ? String(target.instanceId) : null,
-      targetOwnerId: defenderOwner?.id || null,
-    });
-  }
+  const attackPresentation =
+    attacker.instanceId != null && typeof this.ui?.playAttackLunge === "function"
+      ? this.ui.playAttackLunge({
+          kind: "attack-lunge",
+          card: attacker,
+          cardKey: String(attacker.instanceId),
+          targetCardKey:
+            target?.instanceId != null ? String(target.instanceId) : null,
+          targetOwnerId: defenderOwner?.id || null,
+        })
+      : null;
 
   await this.emit("attack_declared", {
     attacker,
@@ -211,9 +222,13 @@ export async function resolveCombat(attacker, target, options = {}) {
       this.updateBoard();
       return { ok: false, reason: "direct_attack_forbidden" };
     }
+    await waitForAttackPresentation(this, attackPresentation);
     const defender = attacker.owner === "player" ? this.bot : this.player;
     this.queueVisualFeedback?.({
       kind: "impact",
+      cause: "battle",
+      directAttack: true,
+      intensity: "normal",
       sourceCard: attacker,
       targetOwnerId: defender.id,
       tone: "red",
@@ -257,6 +272,8 @@ export async function resolveCombat(attacker, target, options = {}) {
     }
   }
 
+  await waitForAttackPresentation(this, attackPresentation);
+
   const combatResult = await this.finishCombat(attacker, target);
 
   // Emit combat resolution event for replay capture
@@ -286,15 +303,6 @@ export async function resolveCombat(attacker, target, options = {}) {
  */
 export async function finishCombat(attacker, target, options = {}) {
   const resumeFromTie = options.resumeFromTie === true;
-
-  this.queueVisualFeedback?.({
-    kind: "impact",
-    sourceCard: attacker,
-    targetCard: target,
-    targetOwnerId: target?.owner,
-    targetZone: "field",
-    tone: "red",
-  });
 
   const attackerOwner = attacker?.owner === "player" ? this.player : this.bot;
   const defenderOwner = target?.owner === "player" ? this.player : this.bot;
@@ -382,6 +390,22 @@ export async function finishCombat(attacker, target, options = {}) {
       };
     }
   }
+
+  const battleImpactVisualTarget = this.ui?.captureCardAnimationSource?.(target, {
+    ownerId: target?.owner,
+    zone: "field",
+  });
+  this.queueVisualFeedback?.({
+    kind: "impact",
+    cause: "battle",
+    intensity: "normal",
+    sourceCard: attacker,
+    targetCard: target,
+    targetOwnerId: target?.owner,
+    targetRect: battleImpactVisualTarget?.rect || null,
+    targetZone: "field",
+    tone: "red",
+  });
 
   // Capture healing flags at the start of combat resolution to avoid race conditions
   const attackerHealsOnBattleDamage =

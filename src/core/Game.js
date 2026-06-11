@@ -240,6 +240,7 @@ export default class Game {
     this.eventListeners = {};
     this.chainSystem?.cancelChain?.();
     this.effectEngine?.clearTargetingCache?.();
+    this.renderer?.destroy?.();
     this.ui = createDisposedUIAdapter();
     this.renderer = null;
   }

@@ -137,10 +137,13 @@ function createAreaNode(layer, className, rect, tone) {
   return node;
 }
 
-function resolveCardElement(intent, preferSource = false) {
+function resolveCardElement(intent, preferSource = false, options = {}) {
+  const allowSourceFallback = options.allowSourceFallback !== false;
   const keys = preferSource
     ? [intent.sourceCardKey, intent.targetCardKey]
-    : [intent.targetCardKey, intent.sourceCardKey];
+    : allowSourceFallback
+      ? [intent.targetCardKey, intent.sourceCardKey]
+      : [intent.targetCardKey];
   for (const key of keys) {
     const element = key ? findBoardCardElement(key) : null;
     if (isElementVisible(element)) return element;
@@ -158,13 +161,18 @@ function resolveOwnerId(intent) {
   );
 }
 
-function resolveAnchorRect(renderer, intent, preferSource = false) {
-  const element = resolveCardElement(intent, preferSource);
+function resolveAnchorRect(renderer, intent, preferSource = false, options = {}) {
+  const allowSourceFallback = options.allowSourceFallback !== false;
+  const element = resolveCardElement(intent, preferSource, {
+    allowSourceFallback,
+  });
   if (element) return copyRect(element.getBoundingClientRect());
 
   const directRect = preferSource
     ? intent.sourceRect || intent.targetRect || intent.fromRect || null
-    : intent.targetRect || intent.sourceRect || intent.fromRect || null;
+    : allowSourceFallback
+      ? intent.targetRect || intent.sourceRect || intent.fromRect || null
+      : intent.targetRect || null;
   if (directRect) return copyRect(directRect);
 
   const zone = intent.targetZone || intent.fromZone || null;
@@ -275,6 +283,68 @@ function playPlayerFeedback(layer, intent, options) {
   playPlayerFlash(layer, rect, intent.tone, options);
 }
 
+function resolveImpactIntensity(intent, rect) {
+  if (Number.isFinite(intent.intensity)) return intent.intensity;
+  return Math.min(1.35, Math.max(0.8, Math.max(rect.width, rect.height) / 100));
+}
+
+function isBattleImpact(intent) {
+  return intent?.kind === "impact" && (intent.cause === "battle" || intent.subtype === "battle");
+}
+
+function resolveBattleShakeIntensity(intent) {
+  if (Number.isFinite(intent.shakeIntensity)) return intent.shakeIntensity;
+  if (Number.isFinite(intent.intensity)) {
+    return Math.min(5, Math.max(2, 2 + intent.intensity));
+  }
+  if (intent.intensity === "heavy") return 5;
+  if (intent.intensity === "light") return 2;
+  return 3;
+}
+
+function playBattleScreenShake(renderer, intent) {
+  if (!isBattleImpact(intent)) return false;
+  const pixiVfx = renderer?.pixiVfx;
+  if (!pixiVfx || typeof pixiVfx.playScreenShake !== "function") return false;
+  try {
+    return (
+      pixiVfx.playScreenShake({
+        duration: Number.isFinite(intent.shakeDuration) ? intent.shakeDuration : 150,
+        intensity: resolveBattleShakeIntensity(intent),
+      }) === true
+    );
+  } catch (error) {
+    console.warn("[Renderer] Battle screen shake failed.", error);
+    return false;
+  }
+}
+
+function playPixiImpact(renderer, intent, rect) {
+  const pixiVfx = renderer?.pixiVfx;
+  if (
+    !pixiVfx ||
+    typeof pixiVfx.isReady !== "function" ||
+    !pixiVfx.isReady() ||
+    typeof pixiVfx.playFeedback !== "function"
+  ) {
+    return false;
+  }
+
+  try {
+    return (
+      pixiVfx.playFeedback({
+        ...intent,
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2,
+        intensity: resolveImpactIntensity(intent, rect),
+      }) === true
+    );
+  } catch (error) {
+    console.warn("[Renderer] Pixi impact feedback failed.", error);
+    return false;
+  }
+}
+
 /**
  * @this {import('../Renderer.js').default}
  */
@@ -317,8 +387,21 @@ export function playVisualFeedback(intents, options = {}) {
     }
 
     if (intent.kind === "impact" || intent.kind === "destroy") {
-      const rect = resolveAnchorRect(this, intent, false);
-      if (rect) playBurst(layer, rect, intent.tone, playbackOptions);
+      const allowSourceFallback =
+        intent.kind !== "impact" ||
+        !!intent.targetCard ||
+        !!intent.targetCardKey;
+      const rect = resolveAnchorRect(this, intent, false, {
+        allowSourceFallback,
+      });
+      if (rect) {
+        playBattleScreenShake(this, intent);
+        const playedWithPixi =
+          intent.kind === "impact" && playPixiImpact(this, intent, rect);
+        if (!playedWithPixi) {
+          playBurst(layer, rect, intent.tone, playbackOptions);
+        }
+      }
       continue;
     }
 

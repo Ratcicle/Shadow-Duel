@@ -372,6 +372,11 @@ export function createCardElement(card, visible) {
   el.className = "card";
   if (card.instanceId != null) {
     el.dataset.cardKey = String(card.instanceId);
+    if (this.activeAttackAnimationKeys?.has(String(card.instanceId))) {
+      el.dataset.attackLungeHidden = "true";
+      el.dataset.attackLungeVisibility = "";
+      el.style.visibility = "hidden";
+    }
   }
   this.bindPreviewForElement(el, card, visible);
   if (card.cardKind === "spell") {

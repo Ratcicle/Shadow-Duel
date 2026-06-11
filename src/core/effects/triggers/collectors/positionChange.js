@@ -26,6 +26,26 @@ function matchesPositionFilter(actual, filterValue) {
   return allowed.includes(actual);
 }
 
+function matchesCardFilters(engine, card, filters) {
+  if (!filters || Object.keys(filters).length === 0) return true;
+  if (!card) return false;
+  if (typeof engine.cardMatchesFilters === "function") {
+    return engine.cardMatchesFilters(card, filters);
+  }
+  if (filters.cardKind && card.cardKind !== filters.cardKind) return false;
+  if (filters.name && card.name !== filters.name) return false;
+  if (filters.cardName && card.name !== filters.cardName) return false;
+  if (filters.archetype) {
+    const archetypes = Array.isArray(card.archetypes)
+      ? card.archetypes
+      : card.archetype
+        ? [card.archetype]
+        : [];
+    if (!archetypes.includes(filters.archetype)) return false;
+  }
+  return true;
+}
+
 /**
  * Collects trigger entries for battle position changes.
  */
@@ -45,6 +65,7 @@ export async function collectPositionChangeTriggers(payload) {
   const changedOpponent =
     payload.opponent || this.game?.getOpponent?.(changedOwner) || null;
   const actionContext = payload?.actionContext || null;
+  const positionChangeSourceCard = payload.sourceCard || payload.source || null;
 
   const observerSides = [
     { owner: changedOwner, other: changedOpponent },
@@ -107,6 +128,17 @@ export async function collectPositionChangeTriggers(payload) {
       return;
     }
 
+    const sourceFilters =
+      effect.positionChangeSourceFilters ||
+      effect.positionChangeSourceCardFilters ||
+      null;
+    if (
+      sourceFilters &&
+      !matchesCardFilters(this, positionChangeSourceCard, sourceFilters)
+    ) {
+      return;
+    }
+
     const ctx = {
       source: sourceCard,
       player: owner,
@@ -118,7 +150,7 @@ export async function collectPositionChangeTriggers(payload) {
       fromPosition,
       toPosition,
       wasFlipped: payload.wasFlipped === true,
-      positionChangeSourceCard: payload.sourceCard || payload.source || null,
+      positionChangeSourceCard,
       actionContext,
     };
 

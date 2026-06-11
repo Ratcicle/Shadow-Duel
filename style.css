@@ -27,6 +27,11 @@
   --sidebar-w: clamp(230px, 18vw, 320px);
   --sidebar-pad: 16px;
   --hover-lift: 6px;
+  --target-link-blue: #64d7ff;
+  --target-link-violet: #bb86fc;
+  --target-link-gold: #ffd666;
+  --target-link-green: #7aff9d;
+  --target-danger-red: #ff6060;
 }
 
 * {
@@ -88,6 +93,50 @@ body {
   pointer-events: none;
   overflow: visible;
   z-index: 250;
+}
+
+.pixi-vfx-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 90;
+}
+
+#game-container.game-screen-shake {
+  animation: game-screen-shake var(--screen-shake-duration, 150ms)
+    cubic-bezier(0.28, 0.02, 0.22, 1) both;
+  transform-origin: center center;
+}
+
+@keyframes game-screen-shake {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  18% {
+    transform: translate3d(var(--screen-shake-distance, 3px), 0, 0);
+  }
+  36% {
+    transform: translate3d(
+      calc(var(--screen-shake-distance, 3px) * -0.75),
+      calc(var(--screen-shake-distance, 3px) * 0.45),
+      0
+    );
+  }
+  58% {
+    transform: translate3d(
+      calc(var(--screen-shake-distance, 3px) * 0.5),
+      calc(var(--screen-shake-distance, 3px) * -0.32),
+      0
+    );
+  }
+  78% {
+    transform: translate3d(
+      calc(var(--screen-shake-distance, 3px) * -0.25),
+      calc(var(--screen-shake-distance, 3px) * 0.18),
+      0
+    );
+  }
 }
 
 .card-animation-ghost {
@@ -161,7 +210,8 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .fx-ring,
   .fx-burst,
-  .fx-player-flash {
+  .fx-player-flash,
+  #game-container.game-screen-shake {
     animation: none;
   }
 }
@@ -2444,7 +2494,7 @@ body {
 
 .deck-title-area {
   display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 8px 12px;
   min-width: 0;
@@ -2483,9 +2533,19 @@ body {
   border-radius: 999px;
 }
 
-.deck-slot-tab {
+.deck-slot-tab-shell {
   flex: 0 0 auto;
   max-width: 110px;
+  min-width: 0;
+  position: relative;
+}
+
+.deck-slot-tab-shell.editing {
+  max-width: 160px;
+}
+
+.deck-slot-tab {
+  width: 100%;
   padding: 6px 10px;
   border: 1px solid rgba(187, 134, 252, 0.55);
   border-radius: 8px;
@@ -2499,56 +2559,77 @@ body {
 }
 
 .deck-slot-tab.active {
+  padding-right: 32px;
+}
+
+.deck-slot-tab.active {
   background: var(--accent-color);
   color: #000;
   box-shadow: 0 0 12px rgba(187, 134, 252, 0.25);
 }
 
-.deck-slot-name-toggle {
-  width: 30px;
-  height: 30px;
-  border: 1px solid rgba(187, 134, 252, 0.55);
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.18);
-  color: var(--accent-color);
+.deck-slot-tab-text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.deck-slot-tab-edit-button {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transform: translateY(-50%);
+  border: 1px solid rgba(0, 0, 0, 0.24);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.12);
+  color: #000;
   cursor: pointer;
-  font-size: 0.95rem;
+  font-size: 0.82rem;
   font-weight: 900;
   line-height: 1;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.15s,
+    background 0.15s;
 }
 
-.deck-slot-name-toggle:hover,
-.deck-slot-name-toggle[aria-expanded="true"] {
-  background: rgba(187, 134, 252, 0.16);
+.deck-slot-tab-shell.active:hover .deck-slot-tab-edit-button,
+.deck-slot-tab-shell.active:focus-within .deck-slot-tab-edit-button {
+  opacity: 1;
+  pointer-events: auto;
 }
 
-.deck-slot-name-label {
-  display: none;
-  align-items: center;
-  gap: 6px;
-  color: #bbb;
-  font-size: 0.8rem;
-  font-weight: 700;
-  white-space: nowrap;
+.deck-slot-tab-edit-button:hover,
+.deck-slot-tab-edit-button:focus-visible {
+  background: rgba(0, 0, 0, 0.22);
 }
 
-.deck-title-area.editing-name .deck-slot-name-label {
-  display: flex;
-}
-
-.deck-slot-name-input {
-  width: 150px;
-  min-width: 0;
-  padding: 6px 8px;
-  border: 1px solid rgba(187, 134, 252, 0.45);
+.deck-slot-tab-input {
+  width: 100%;
+  max-width: 160px;
+  padding: 6px 10px;
+  border: 1px solid rgba(187, 134, 252, 0.9);
   border-radius: 8px;
   background: #111;
   color: #fff;
   font: inherit;
   font-weight: 700;
+  min-width: 0;
 }
 
-.deck-slot-name-input:focus {
+.deck-slot-tab-input:focus {
+  outline: 2px solid rgba(187, 134, 252, 0.45);
+  outline-offset: 1px;
+}
+
+.deck-slot-tab:focus-visible,
+.deck-slot-tab-edit-button:focus-visible {
   outline: 2px solid rgba(187, 134, 252, 0.45);
   outline-offset: 1px;
 }
@@ -2659,8 +2740,7 @@ body {
 
 @media (max-width: 900px) {
   .deck-header,
-  .deck-title-area,
-  .deck-slot-name-label {
+  .deck-title-area {
     align-items: flex-start;
   }
 
@@ -2671,10 +2751,6 @@ body {
 
   .deck-title-area {
     display: flex;
-  }
-
-  .deck-slot-name-input {
-    width: min(220px, 70vw);
   }
 
   .deck-control-row {
@@ -2988,8 +3064,8 @@ body {
   border-radius: 8px;
   padding: 6px;
   background: #111;
-  flex: 0.8;
-  min-height: 80px;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: auto;
 }
 
@@ -3062,6 +3138,29 @@ body {
   flex: 0 0 auto;
   gap: 10px;
   align-items: center;
+}
+
+.deck-save-feedback {
+  padding: 6px 10px;
+  border: 1px solid rgba(64, 190, 123, 0.55);
+  border-radius: 8px;
+  background: rgba(64, 190, 123, 0.14);
+  color: #b7f7cf;
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateX(4px);
+  transition:
+    opacity 0.16s,
+    transform 0.16s;
+  pointer-events: none;
+}
+
+.deck-save-feedback.visible {
+  opacity: 1;
+  transform: translateX(0);
 }
 
 .deck-footer-right button {
@@ -3297,15 +3396,39 @@ body {
 }
 
 .card.targetable {
-  border: 2px dashed #64d7ff;
-  animation: pulse-target 1.2s infinite;
+  border: 2px solid rgba(100, 215, 255, 0.88);
+  outline: 1px solid rgba(187, 134, 252, 0.55);
+  outline-offset: 2px;
+  box-shadow:
+    0 0 0 1px rgba(100, 215, 255, 0.22),
+    0 0 16px rgba(100, 215, 255, 0.34),
+    inset 0 0 10px rgba(187, 134, 252, 0.12);
+  filter: brightness(1.08) saturate(1.08);
   cursor: pointer;
+  transition:
+    border-color 0.16s ease,
+    box-shadow 0.16s ease,
+    filter 0.16s ease;
+}
+
+.card.targetable:hover {
+  border-color: var(--target-link-blue);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.18),
+    0 0 18px rgba(100, 215, 255, 0.48),
+    0 0 28px rgba(187, 134, 252, 0.28);
+  filter: brightness(1.13) saturate(1.12);
 }
 
 .card.targetable.selected-target {
-  border: 2px solid #7bff9d;
-  box-shadow: 0 0 12px #7bff9d;
+  border: 2px solid var(--target-link-green);
+  outline-color: rgba(255, 255, 255, 0.72);
+  box-shadow:
+    0 0 0 2px rgba(122, 255, 157, 0.2),
+    0 0 18px rgba(122, 255, 157, 0.62),
+    0 0 30px rgba(187, 134, 252, 0.32);
   animation: none;
+  filter: brightness(1.16) saturate(1.12);
 }
 
 .card.card-activatable {
@@ -3340,13 +3463,23 @@ body {
 }
 
 .card.attack-attacker {
-  border: 2px solid rgba(255, 80, 80, 0.95);
-  box-shadow: 0 0 18px rgba(255, 80, 80, 0.9);
+  border: 2px solid rgba(255, 214, 102, 0.92);
+  outline: 1px solid rgba(255, 96, 96, 0.55);
+  outline-offset: 2px;
+  box-shadow:
+    0 0 16px rgba(255, 214, 102, 0.5),
+    0 0 26px rgba(255, 96, 96, 0.26);
+  filter: brightness(1.1) saturate(1.08);
 }
 
 .card.attack-target {
-  border: 2px solid rgba(255, 210, 120, 0.95);
-  box-shadow: 0 0 18px rgba(255, 210, 120, 0.85);
+  border: 2px solid rgba(255, 96, 96, 0.92);
+  outline: 1px solid rgba(255, 214, 102, 0.52);
+  outline-offset: 2px;
+  box-shadow:
+    0 0 16px rgba(255, 96, 96, 0.48),
+    0 0 26px rgba(255, 214, 102, 0.24);
+  filter: brightness(1.1) saturate(1.1);
 }
 
 @keyframes pulse-attack-ready {
@@ -3363,11 +3496,12 @@ body {
 
 #bot-hand.direct-attack-target {
   position: relative;
-  outline: 2px dashed #ff6bd6;
+  outline: 2px solid rgba(187, 134, 252, 0.86);
+  outline-offset: 3px;
   box-shadow:
-    0 0 16px rgba(255, 107, 214, 0.65),
-    0 0 28px rgba(100, 215, 255, 0.35);
-  animation: pulse-direct-hand 1.2s ease-in-out infinite;
+    0 0 16px rgba(187, 134, 252, 0.52),
+    0 0 28px rgba(100, 215, 255, 0.3);
+  animation: pulse-direct-hand 1.8s ease-in-out infinite;
   cursor: pointer;
 }
 
@@ -3473,28 +3607,28 @@ body {
 @keyframes pulse-direct-hand {
   0%,
   100% {
-    outline-color: #ff6bd6;
+    outline-color: rgba(187, 134, 252, 0.78);
     box-shadow:
-      0 0 12px rgba(255, 107, 214, 0.6),
-      0 0 22px rgba(100, 215, 255, 0.3);
+      0 0 12px rgba(187, 134, 252, 0.42),
+      0 0 22px rgba(100, 215, 255, 0.24);
   }
   50% {
-    outline-color: #64d7ff;
+    outline-color: rgba(100, 215, 255, 0.9);
     box-shadow:
-      0 0 18px rgba(255, 107, 214, 0.85),
-      0 0 30px rgba(100, 215, 255, 0.5);
+      0 0 16px rgba(187, 134, 252, 0.56),
+      0 0 28px rgba(100, 215, 255, 0.36);
   }
 }
 
 @keyframes pulse-target {
   0%,
   100% {
-    border-color: #64d7ff;
+    border-color: rgba(100, 215, 255, 0.78);
     opacity: 1;
   }
   50% {
-    border-color: #ffffff;
-    opacity: 0.6;
+    border-color: rgba(255, 255, 255, 0.86);
+    opacity: 0.88;
   }
 }
 
@@ -4456,8 +4590,11 @@ body {
 }
 
 #game-container.selection-dim .card {
-  opacity: 0.35;
-  filter: saturate(0.6);
+  opacity: 0.32;
+  filter: saturate(0.58) brightness(0.72);
+  transition:
+    opacity 0.16s ease,
+    filter 0.16s ease;
 }
 
 #game-container.selection-dim .card.targetable,
@@ -4465,7 +4602,6 @@ body {
 #game-container.selection-dim .card.attack-attacker,
 #game-container.selection-dim .card.attack-target {
   opacity: 1;
-  filter: none;
 }
 
 #game-container.selection-dim #bot-hand.direct-attack-target,

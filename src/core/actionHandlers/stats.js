@@ -1077,11 +1077,12 @@ export async function handleGrantProtection(action, ctx, targets, engine) {
 
   if (!player || !game) return false;
 
-  const targetCards = resolveTargetCards(action, ctx, targets, {
-    targetRef: action.targetRef,
-
-    requireArray: true,
-  });
+  const targetCards = action.targetScope
+    ? resolveFieldScopeCards(action.targetScope, ctx, game, { engine })
+    : resolveTargetCards(action, ctx, targets, {
+        targetRef: action.targetRef,
+        requireArray: true,
+      });
 
   if (!targetCards || targetCards.length === 0) {
     getUI(game)?.log("No valid targets for protection.");
@@ -1331,11 +1332,12 @@ export async function handleSwitchPosition(action, ctx, targets, engine) {
 
   if (!player || !game) return false;
 
-  const targetCards = resolveTargetCards(action, ctx, targets, {
-    targetRef: action.targetRef,
-
-    requireArray: true,
-  });
+  const targetCards = action.targetScope
+    ? resolveFieldScopeCards(action.targetScope, ctx, game, { engine })
+    : resolveTargetCards(action, ctx, targets, {
+        targetRef: action.targetRef,
+        requireArray: true,
+      });
 
   if (targetCards.length === 0) {
     getUI(game)?.log("No valid targets for position switch.");

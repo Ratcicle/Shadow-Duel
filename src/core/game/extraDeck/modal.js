@@ -9,19 +9,49 @@
 
 import { isAI } from "../../Player.js";
 
-function cardMatchesRequirement(card, requirement = {}) {
+const SUPPORTED_PROCEDURE_TYPES = new Set([
+  "graveyard_banish_fusion",
+  "contact_fusion",
+]);
+
+function asArray(value, fallback = []) {
+  if (Array.isArray(value)) return value;
+  if (value === undefined || value === null) return fallback;
+  return [value];
+}
+
+function cardHasArchetype(card, archetype) {
+  if (!archetype) return true;
+  const archetypes = Array.isArray(card?.archetypes)
+    ? card.archetypes
+    : card?.archetype
+      ? [card.archetype]
+      : [];
+  return archetypes.includes(archetype);
+}
+
+function cardMatchesRequirement(card, requirement = {}, materialZone = null) {
   if (!card) return false;
   if (requirement.cardKind && card.cardKind !== requirement.cardKind) return false;
-  if (requirement.archetype) {
-    const archetypes = Array.isArray(card.archetypes)
-      ? card.archetypes
-      : card.archetype
-        ? [card.archetype]
-        : [];
-    if (!archetypes.includes(requirement.archetype)) return false;
+  if (requirement.archetype && !cardHasArchetype(card, requirement.archetype)) {
+    return false;
   }
   if (requirement.type && card.type !== requirement.type) return false;
   if (requirement.name && card.name !== requirement.name) return false;
+  if (requirement.attribute) {
+    const expected = String(requirement.attribute).toLowerCase();
+    if (String(card.attribute || "").toLowerCase() !== expected) return false;
+  }
+  if (requirement.minLevel !== undefined && (card.level || 0) < requirement.minLevel) {
+    return false;
+  }
+  if (requirement.maxLevel !== undefined && (card.level || 0) > requirement.maxLevel) {
+    return false;
+  }
+  const allowedZones = asArray(requirement.allowedZones, null);
+  if (allowedZones && materialZone && !allowedZones.includes(materialZone)) {
+    return false;
+  }
   return true;
 }
 
@@ -30,7 +60,104 @@ function getProcedureMaterials(player, procedure) {
   if (!player || !materialReq) return [];
   const zone = materialReq.zone || "graveyard";
   const list = Array.isArray(player[zone]) ? player[zone] : [];
-  return list.filter((card) => cardMatchesRequirement(card, materialReq));
+  return list.filter((card) => cardMatchesRequirement(card, materialReq, zone));
+}
+
+function expandMaterialRequirements(requirements = []) {
+  const expanded = [];
+  for (const requirement of requirements) {
+    const count = Number(requirement?.count || 1);
+    for (let index = 0; index < Math.max(1, count); index += 1) {
+      expanded.push(requirement || {});
+    }
+  }
+  return expanded;
+}
+
+function findMaterialCombos(requirements = [], materialEntries = []) {
+  const expanded = expandMaterialRequirements(requirements);
+  if (expanded.length === 0 || materialEntries.length < expanded.length) {
+    return [];
+  }
+
+  const combos = [];
+  const search = (reqIndex, picked, remaining) => {
+    if (reqIndex >= expanded.length) {
+      combos.push(picked.map((entry) => entry.card));
+      return;
+    }
+
+    const requirement = expanded[reqIndex];
+    for (let index = 0; index < remaining.length; index += 1) {
+      const entry = remaining[index];
+      if (!cardMatchesRequirement(entry.card, requirement, entry.zone)) {
+        continue;
+      }
+      search(
+        reqIndex + 1,
+        [...picked, entry],
+        [...remaining.slice(0, index), ...remaining.slice(index + 1)],
+      );
+    }
+  };
+
+  search(0, [], materialEntries);
+  return combos;
+}
+
+function getContactFusionMaterialEntries(card, player) {
+  const requirements = card?.fusionMaterials || [];
+  const allowedZones = new Set();
+  for (const requirement of requirements) {
+    for (const zone of asArray(requirement?.allowedZones, ["field"])) {
+      allowedZones.add(zone);
+    }
+  }
+  if (allowedZones.size === 0) allowedZones.add("field");
+
+  const entries = [];
+  for (const zone of allowedZones) {
+    const list = Array.isArray(player?.[zone]) ? player[zone] : [];
+    for (const material of list) {
+      entries.push({ card: material, zone });
+    }
+  }
+  return entries;
+}
+
+function uniqueCards(cards = []) {
+  const seen = new Set();
+  const unique = [];
+  for (const card of cards) {
+    if (!card || seen.has(card)) continue;
+    seen.add(card);
+    unique.push(card);
+  }
+  return unique;
+}
+
+function materialSelectionMatchesCombo(materials = [], combos = []) {
+  if (!Array.isArray(materials) || !Array.isArray(combos)) return false;
+  return combos.some((combo) => {
+    if (!Array.isArray(combo) || combo.length !== materials.length) return false;
+    const remaining = [...combo];
+    for (const material of materials) {
+      const index = remaining.indexOf(material);
+      if (index < 0) return false;
+      remaining.splice(index, 1);
+    }
+    return true;
+  });
+}
+
+function getDefaultMaterialDestination(procedure) {
+  if (procedure?.materialDestination) return procedure.materialDestination;
+  return procedure?.type === "contact_fusion" ? "graveyard" : "banished";
+}
+
+function getDefaultMaterialSourceZone(procedure) {
+  if (procedure?.type === "contact_fusion") return "field";
+  return procedure?.materials?.[0]?.zone || "graveyard";
 }
 
 export function canSummonExtraDeckCardByProcedure(card, player, options = {}) {
@@ -38,7 +165,7 @@ export function canSummonExtraDeckCardByProcedure(card, player, options = {}) {
   if (!card || !player || !procedure) {
     return { ok: false, reason: "No summon procedure." };
   }
-  if (procedure.type !== "graveyard_banish_fusion") {
+  if (!SUPPORTED_PROCEDURE_TYPES.has(procedure.type)) {
     return { ok: false, reason: "Unsupported summon procedure." };
   }
   if (
@@ -63,39 +190,83 @@ export function canSummonExtraDeckCardByProcedure(card, player, options = {}) {
       return { ok: false, reason: "Summon procedure is not allowed." };
     }
   }
-  const materialReq = procedure.materials?.[0] || {};
-  const requiredCount = Number(materialReq.count || 0);
-  const candidates = getProcedureMaterials(player, procedure);
-  if (candidates.length < requiredCount) {
+  let requiredCount = 0;
+  let candidates = [];
+  let materialCombos = null;
+  let materialEntries = [];
+  let fieldCheckExclusions = [];
+
+  if (procedure.type === "contact_fusion") {
+    const requirements = card.fusionMaterials || [];
+    materialEntries = getContactFusionMaterialEntries(card, player);
+    materialCombos = findMaterialCombos(requirements, materialEntries);
+    requiredCount = expandMaterialRequirements(requirements).length;
+    candidates = uniqueCards(materialCombos.flat());
+    fieldCheckExclusions = materialCombos[0] || [];
+  } else {
+    const materialReq = procedure.materials?.[0] || {};
+    requiredCount = Number(materialReq.count || 0);
+    candidates = getProcedureMaterials(player, procedure);
+    materialEntries = candidates.map((material) => ({
+      card: material,
+      zone: materialReq.zone || "graveyard",
+    }));
+  }
+
+  if (
+    candidates.length < requiredCount ||
+    (materialCombos && materialCombos.length === 0)
+  ) {
+    const zoneLabel =
+      procedure.type === "contact_fusion" ? "on the field" : "in the Graveyard";
     return {
       ok: false,
-      reason: `Need ${requiredCount} valid material(s) in the Graveyard.`,
+      reason: `Need ${requiredCount} valid material(s) ${zoneLabel}.`,
       candidates,
+      materialCombos,
+      materialEntries,
     };
   }
   const fieldCheck = this.canPlaceCardOnField?.(card, player, {
     isFacedown: false,
+    excludeCards: fieldCheckExclusions,
     silent: options.silent !== false,
   });
   if (fieldCheck?.ok === false) {
-    return { ...fieldCheck, candidates };
+    return { ...fieldCheck, candidates, materialCombos, materialEntries };
   }
-  return { ok: true, candidates, requiredCount, procedure };
+  return {
+    ok: true,
+    candidates,
+    requiredCount,
+    procedure,
+    materialCombos,
+    materialEntries,
+  };
 }
 
-function buildMaterialSelectionContract(card, candidates, count) {
+function buildMaterialSelectionContract(
+  card,
+  candidates,
+  count,
+  procedure,
+  materialEntries = [],
+) {
+  const defaultZone = getDefaultMaterialSourceZone(procedure);
+  const getMaterialZone = (material) =>
+    materialEntries.find((entry) => entry.card === material)?.zone || defaultZone;
   return {
     requirements: [
       {
         id: "extra_deck_materials",
         candidates: candidates.map((material, index) => ({
-          key: `gy_${material.instanceId || material.id}_${index}`,
+          key: `${getMaterialZone(material)}_${material.instanceId || material.id}_${index}`,
           cardRef: material,
           name: material.name,
           image: material.image,
           atk: material.atk,
           def: material.def,
-          zone: "graveyard",
+          zone: getMaterialZone(material),
           owner: material.owner,
         })),
         min: count,
@@ -134,6 +305,8 @@ export async function performExtraDeckSummonProcedure(cardOrIndex, player, optio
       card,
       check.candidates,
       requiredCount,
+      procedure,
+      check.materialEntries,
     );
 
     if (isAI(player)) {
@@ -147,7 +320,13 @@ export async function performExtraDeckSummonProcedure(cardOrIndex, player, optio
           contract.requirements[0].candidates.find((cand) => cand.key === key)
             ?.cardRef,
         )
-        .filter(Boolean);
+            .filter(Boolean);
+      if (
+        check.materialCombos &&
+        !materialSelectionMatchesCombo(materials, check.materialCombos)
+      ) {
+        materials = check.materialCombos[0] || [];
+      }
     } else {
       this.startTargetSelectionSession({
         kind: "extra_deck_summon",
@@ -180,12 +359,26 @@ export async function performExtraDeckSummonProcedure(cardOrIndex, player, optio
   if (materials.some((material) => !candidateSet.has(material))) {
     return { success: false, reason: "invalid_materials" };
   }
+  if (
+    check.materialCombos &&
+    !materialSelectionMatchesCombo(materials, check.materialCombos)
+  ) {
+    return { success: false, reason: "invalid_materials" };
+  }
 
   for (const material of materials) {
-    await this.moveCard(material, player, procedure.materialDestination || "banished", {
-      fromZone: "graveyard",
+    const materialEntry = check.materialEntries?.find(
+      (entry) => entry.card === material,
+    );
+    const materialDestination = getDefaultMaterialDestination(procedure);
+    const moveResult = await this.moveCard(material, player, materialDestination, {
+      fromZone: materialEntry?.zone || getDefaultMaterialSourceZone(procedure),
       contextLabel: "extra_deck_summon_material",
+      awaitCardToGraveEvent: materialDestination === "graveyard",
     });
+    if (moveResult?.success === false) {
+      return moveResult;
+    }
   }
 
   const position = options.position || "attack";
