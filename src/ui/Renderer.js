@@ -132,6 +132,8 @@ Renderer.prototype.playAttackLunge = cardAnimationManager.playAttackLunge;
 Renderer.prototype.getCardZoneAnchorRect =
   cardAnimationManager.getCardZoneAnchorRect;
 Renderer.prototype.playVisualFeedback = feedbackFx.playVisualFeedback;
+Renderer.prototype.playBattleImpactImmediate =
+  feedbackFx.playBattleImpactImmediate;
 Renderer.prototype.showLpChange = animations.showLpChange;
 
 // Attach binding methods

@@ -161,6 +161,27 @@ function resolveOwnerId(intent) {
   );
 }
 
+function getCardKey(card) {
+  return card?.instanceId != null ? String(card.instanceId) : null;
+}
+
+function normalizeFeedbackIntent(rawIntent) {
+  if (!rawIntent?.kind) return null;
+  return {
+    ...rawIntent,
+    sourceCardKey: rawIntent.sourceCardKey || getCardKey(rawIntent.sourceCard),
+    targetCardKey: rawIntent.targetCardKey || getCardKey(rawIntent.targetCard),
+    tone: normalizeTone(
+      rawIntent.tone,
+      rawIntent.kind === "damage" || rawIntent.kind === "destroy"
+        ? "red"
+        : rawIntent.kind === "heal"
+          ? "green"
+          : "gold",
+    ),
+  };
+}
+
 function resolveAnchorRect(renderer, intent, preferSource = false, options = {}) {
   const allowSourceFallback = options.allowSourceFallback !== false;
   const element = resolveCardElement(intent, preferSource, {
@@ -345,6 +366,50 @@ function playPixiImpact(renderer, intent, rect) {
   }
 }
 
+function playImpactFeedback(renderer, layer, intent, playbackOptions) {
+  const allowSourceFallback =
+    intent.kind !== "impact" || !!intent.targetCard || !!intent.targetCardKey;
+  const rect = resolveAnchorRect(renderer, intent, false, {
+    allowSourceFallback,
+  });
+  if (!rect) return false;
+
+  const shook = playBattleScreenShake(renderer, intent);
+  const playedWithPixi =
+    intent.kind === "impact" && playPixiImpact(renderer, intent, rect);
+  if (!playedWithPixi) {
+    playBurst(layer, rect, intent.tone, playbackOptions);
+  }
+  return true;
+}
+
+/**
+ * @this {import('../Renderer.js').default}
+ */
+export function playBattleImpactImmediate(rawIntent = {}, options = {}) {
+  if (prefersReducedMotion() || typeof document === "undefined") return false;
+
+  const layer = getLayer();
+  if (!layer) return false;
+
+  const playbackOptions = {
+    duration: Number.isFinite(options.feedbackDuration)
+      ? options.feedbackDuration
+      : DEFAULT_DURATION,
+    easing: options.feedbackEasing || DEFAULT_EASING,
+  };
+  const intent = normalizeFeedbackIntent({
+    kind: "impact",
+    cause: "battle",
+    tone: "red",
+    shakeDuration: 150,
+    ...rawIntent,
+  });
+  if (!intent) return false;
+
+  return playImpactFeedback(this, layer, intent, playbackOptions);
+}
+
 /**
  * @this {import('../Renderer.js').default}
  */
@@ -363,18 +428,8 @@ export function playVisualFeedback(intents, options = {}) {
   };
 
   for (const rawIntent of intents.slice(0, MAX_FEEDBACK_PER_FLUSH)) {
-    if (!rawIntent?.kind) continue;
-    const intent = {
-      ...rawIntent,
-      tone: normalizeTone(
-        rawIntent.tone,
-        rawIntent.kind === "damage" || rawIntent.kind === "destroy"
-          ? "red"
-          : rawIntent.kind === "heal"
-            ? "green"
-            : "gold",
-      ),
-    };
+    const intent = normalizeFeedbackIntent(rawIntent);
+    if (!intent) continue;
 
     if (intent.kind === "damage" || intent.kind === "heal") {
       playPlayerFeedback(layer, intent, playbackOptions);
@@ -387,21 +442,7 @@ export function playVisualFeedback(intents, options = {}) {
     }
 
     if (intent.kind === "impact" || intent.kind === "destroy") {
-      const allowSourceFallback =
-        intent.kind !== "impact" ||
-        !!intent.targetCard ||
-        !!intent.targetCardKey;
-      const rect = resolveAnchorRect(this, intent, false, {
-        allowSourceFallback,
-      });
-      if (rect) {
-        playBattleScreenShake(this, intent);
-        const playedWithPixi =
-          intent.kind === "impact" && playPixiImpact(this, intent, rect);
-        if (!playedWithPixi) {
-          playBurst(layer, rect, intent.tone, playbackOptions);
-        }
-      }
+      playImpactFeedback(this, layer, intent, playbackOptions);
       continue;
     }
 
