@@ -46,8 +46,9 @@ export async function handleSpecialSummonFromHandWithCost(
     Array.isArray(action.tierOptions);
 
   if (!isTiered) {
+    const costTargetRef = action.costTargetRef || "bbd_cost";
     const costTargets = resolveTargetCards(action, ctx, targets, {
-      targetRef: action.costTargetRef,
+      targetRef: costTargetRef,
       requireArray: true,
     });
 
@@ -68,6 +69,10 @@ export async function handleSpecialSummonFromHandWithCost(
       (typeof engine.findCardZone === "function"
         ? engine.findCardZone(owner, costCard)
         : null) || null;
+    const costTargetDef = (ctx?.effect?.targets || []).find(
+      (target) => target && target.id === costTargetRef,
+    );
+    const fallbackCostZone = costTargetDef?.zone || "field";
 
     const costFreesMonsterZone = costTargets.some((costCard) => {
       const costOwner = getCostOwner(costCard);
@@ -85,29 +90,42 @@ export async function handleSpecialSummonFromHandWithCost(
     }
 
     if (costDestination === "banish") {
+      let banishedCount = 0;
+
       for (const costCard of costTargets) {
         if (!costCard) continue;
 
-        const fromZone =
-          typeof engine.findCardZone === "function"
-            ? engine.findCardZone(player, costCard)
-            : null;
+        const costOwner = getCostOwner(costCard);
+        const fromZone = findCostZone(costCard, costOwner) || fallbackCostZone;
+        const moveResult = await game.moveCard(costCard, costOwner, "banished", {
+          fromZone,
+          contextLabel: action.contextLabel || "special_summon_cost",
+          sourceCard: source,
+          effectId: ctx?.effect?.id || null,
+          movedByEffect: false,
+          awaitCardMovedEvent: true,
+        });
 
-        if (fromZone && Array.isArray(player[fromZone])) {
-          const idx = player[fromZone].indexOf(costCard);
-          if (idx > -1) {
-            player[fromZone].splice(idx, 1);
-          }
+        if (moveResult === false || moveResult?.success === false) {
+          getUI(game)?.log(`${costCard.name} could not be banished as cost.`);
+          return false;
         }
 
         if (!game.banishedCards) {
           game.banishedCards = [];
         }
-        game.banishedCards.push(costCard);
+        if (
+          !moveResult?.tokenRemoved &&
+          !game.banishedCards.includes(costCard)
+        ) {
+          game.banishedCards.push(costCard);
+        }
+
+        banishedCount++;
       }
 
       getUI(game)?.log(
-        `Banished ${costTargets.length} card(s) (removed from game).`,
+        `Banished ${banishedCount} card(s) (removed from game).`,
       );
     } else if (costDestination === "hand") {
       let returnedCount = 0;
@@ -144,9 +162,9 @@ export async function handleSpecialSummonFromHandWithCost(
       await sendCardsToGraveyard(costTargets, player, engine, {
         resolveFromZone: (costCard) =>
           typeof engine.findCardZone === "function"
-            ? engine.findCardZone(player, costCard) || "field"
-            : "field",
-        fallbackZone: "field",
+            ? engine.findCardZone(player, costCard) || fallbackCostZone
+            : fallbackCostZone,
+        fallbackZone: fallbackCostZone,
         useResolvedZoneOnFallback: false,
       });
     }

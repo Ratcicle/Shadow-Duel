@@ -503,7 +503,12 @@ async function tryReplacement(game, sourceCard, sourceOwner, effect, ctx) {
 
     const costCtx = buildActionCostCtx();
     const costResult = await engine.applyActions(costActions, costCtx, {});
-    return !!costResult;
+    return (
+      costResult === true ||
+      (costResult &&
+        typeof costResult === "object" &&
+        costResult.success !== false)
+    );
   };
 
   const runFollowUpActions = async () => {

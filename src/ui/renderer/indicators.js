@@ -9,6 +9,15 @@
  */
 
 const TARGETING_FX_HANDLERS = "__shadowDuelTargetingFxHandlers";
+const FLIP_ANIMATION_CLASSES = ["flipping", "flip-summon-reveal"];
+
+function prefersReducedMotion() {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+}
 
 function escapeCardKey(cardKey) {
   if (typeof CSS !== "undefined" && typeof CSS.escape === "function") {
@@ -241,6 +250,100 @@ export function clearAttackResolutionIndicators() {
   }
 }
 
+function getFlipAnimationClass(options = {}) {
+  return options.revealFromDefense === true ||
+    options.mode === "flip-summon" ||
+    options.mode === "reveal-to-attack"
+    ? "flip-summon-reveal"
+    : "flipping";
+}
+
+function getAnimationLayer() {
+  if (typeof document === "undefined") return null;
+  const root = document.getElementById("game-container");
+  if (!root) return null;
+
+  let layer = root.querySelector(":scope > .card-animation-layer");
+  if (!layer) {
+    layer = document.createElement("div");
+    layer.className = "card-animation-layer";
+    root.appendChild(layer);
+  }
+  return layer;
+}
+
+function cleanupFlipRevealGhost(cardEl, ghost) {
+  if (ghost?.parentNode) {
+    ghost.remove();
+  }
+  if (cardEl?.dataset.flipRevealHidden === "true") {
+    cardEl.style.visibility = cardEl.dataset.flipRevealVisibility || "";
+    delete cardEl.dataset.flipRevealHidden;
+    delete cardEl.dataset.flipRevealVisibility;
+  }
+}
+
+function playFlipRevealGhost(cardEl) {
+  const layer = getAnimationLayer();
+  if (!cardEl || !layer) return false;
+
+  const rect = cardEl.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return false;
+  const slotRect =
+    cardEl.closest(".field-card-slot")?.getBoundingClientRect?.() || rect;
+  const centerX = slotRect.left + slotRect.width / 2;
+  const centerY = slotRect.top + slotRect.height / 2;
+
+  const ghost = cardEl.cloneNode(true);
+  ghost.removeAttribute("data-card-key");
+  delete ghost.dataset.cardKey;
+  ghost.dataset.animationGhost = "true";
+  ghost.classList.remove(...FLIP_ANIMATION_CLASSES, "defense", "facedown");
+  ghost.classList.add("card-animation-ghost", "flip-summon-ghost");
+  ghost.style.position = "fixed";
+  ghost.style.left = `${centerX - rect.width / 2}px`;
+  ghost.style.top = `${centerY - rect.height / 2}px`;
+  ghost.style.width = `${rect.width}px`;
+  ghost.style.height = `${rect.height}px`;
+  ghost.style.margin = "0";
+  ghost.style.pointerEvents = "none";
+  ghost.style.transformOrigin = "center center";
+  ghost.style.transform = "rotate(-90deg)";
+
+  cardEl.dataset.flipRevealHidden = "true";
+  cardEl.dataset.flipRevealVisibility = cardEl.style.visibility || "";
+  cardEl.style.visibility = "hidden";
+
+  layer.appendChild(ghost);
+
+  const cleanup = () => cleanupFlipRevealGhost(cardEl, ghost);
+  ghost.addEventListener("animationend", cleanup, { once: true });
+  globalThis.setTimeout(cleanup, 650);
+  return true;
+}
+
+function applyFlipAnimationClass(cardEl, animationClass) {
+  if (!cardEl || prefersReducedMotion()) return;
+  if (animationClass === "flip-summon-reveal" && playFlipRevealGhost(cardEl)) {
+    return;
+  }
+
+  cardEl.classList.remove(...FLIP_ANIMATION_CLASSES);
+  void cardEl.offsetWidth;
+  cardEl.classList.add(animationClass);
+
+  const cleanup = () => {
+    cardEl.classList.remove(animationClass);
+    cardEl.removeEventListener("animationend", cleanup);
+  };
+
+  cardEl.addEventListener("animationend", cleanup, { once: true });
+  globalThis.setTimeout(
+    cleanup,
+    animationClass === "flip-summon-reveal" ? 650 : 720,
+  );
+}
+
 /**
  * Applies flip animation to a card on the field.
  *
@@ -251,20 +354,41 @@ export function clearAttackResolutionIndicators() {
  *
  * @this {import('../Renderer.js').default}
  */
-export function applyFlipAnimation(owner, index) {
+export function applyFlipAnimation(owner, index, options = {}) {
   if (index < 0) return;
 
-  // Defer to next frame to apply class after updateBoard() recreates DOM
-  requestAnimationFrame(() => {
+  const animationClass = getFlipAnimationClass(options);
+  const deferFrames = Number.isFinite(options.deferFrames)
+    ? Math.max(0, Math.round(options.deferFrames))
+    : 1;
+
+  const apply = () => {
     const container =
       owner === "player" ? this.elements.playerField : this.elements.botField;
     if (!container) return;
 
     const cardEl = container.querySelector(`.card[data-index="${index}"]`);
     if (cardEl) {
-      cardEl.classList.add("flipping");
+      applyFlipAnimationClass(cardEl, animationClass);
     }
-  });
+  };
+
+  if (deferFrames === 0) {
+    apply();
+    return;
+  }
+
+  let framesLeft = deferFrames;
+  const tick = () => {
+    if (framesLeft > 0) {
+      framesLeft -= 1;
+      requestAnimationFrame(tick);
+      return;
+    }
+    apply();
+  };
+
+  requestAnimationFrame(tick);
 }
 
 /**

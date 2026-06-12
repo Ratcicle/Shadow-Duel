@@ -138,6 +138,36 @@ export async function handleSpecialSummonFromZone(
     },
   });
 
+  // Handle banish cost before resolving any summon path.
+  if (action.banishCost) {
+    if (!source) {
+      getUI(game)?.log("No source card available to banish as cost.");
+      return false;
+    }
+
+    const sourceEntry = findSourceEntryForCard(zoneEntries, source);
+    if (!sourceEntry) {
+      getUI(game)?.log(`${source.name} is not in the cost zone.`);
+      return false;
+    }
+
+    const moveResult = await game.moveCard(source, sourceEntry.owner, "banished", {
+      fromZone: sourceEntry.name,
+      contextLabel: action.contextLabel || "special_summon_banish_cost",
+      sourceCard: source,
+      effectId: ctx?.effect?.id || null,
+      movedByEffect: false,
+      awaitCardMovedEvent: true,
+    });
+
+    if (moveResult === false || moveResult?.success === false) {
+      getUI(game)?.log(`${source.name} could not be banished as cost.`);
+      return false;
+    }
+
+    getUI(game)?.log(`${source.name} was banished as cost.`);
+  }
+
   // Check for targetRef - use pre-resolved targets if available
   if (action.targetRef && targets?.[action.targetRef]) {
     const resolved = targets[action.targetRef];
@@ -187,20 +217,6 @@ export async function handleSpecialSummonFromZone(
     return false;
   }
 
-  // Handle banish cost (before finding candidates)
-  if (action.banishCost && source) {
-    for (const entry of zoneEntries) {
-      const idx = entry.list.indexOf(source);
-      if (idx !== -1) {
-        entry.list.splice(idx, 1);
-        player.banished = player.banished || [];
-        player.banished.push(source);
-        getUI(game)?.log(`${source.name} was banished as cost.`);
-        break;
-      }
-    }
-  }
-
   // Determine candidates
   let candidates = [];
 
@@ -217,7 +233,7 @@ export async function handleSpecialSummonFromZone(
     candidates = [card];
   } else {
     // Apply filters to find candidates
-    const filters = action.filters || {};
+    const filters = { ...(action.filters || {}) };
     const excludeSummonRestrict = action.excludeSummonRestrict || [];
 
     // Map action-level properties to filters

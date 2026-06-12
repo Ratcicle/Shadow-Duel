@@ -271,6 +271,18 @@ export async function handleTriggeredEffect(
       ...actionsResult,
     };
   }
+  if (
+    actionsResult &&
+    typeof actionsResult === "object" &&
+    actionsResult.success === false
+  ) {
+    return {
+      success: false,
+      needsSelection: false,
+      reason: actionsResult.reason || "Triggered effect actions failed.",
+      actionResult: actionsResult,
+    };
+  }
 
   // Record material effect activation for ascension tracking
   const owner = ctx?.player;

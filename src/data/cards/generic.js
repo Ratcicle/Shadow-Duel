@@ -567,7 +567,7 @@ export const genericCards = [
     subtype: "continuous",
     speed: 2,
     description:
-      "Activate this card by targeting 1 monster in your GY; Special Summon that target in Attack Position. When this card leaves the field, destroy that target. When that target is destroyed, destroy this card.",
+      "Activate this card by targeting 1 monster in your GY; Special Summon that target in Attack Position. When this card leaves the field, destroy that target. When that target leaves the field, destroy this card.",
     image: "assets/Call of the Haunted.png",
     effects: [
       {

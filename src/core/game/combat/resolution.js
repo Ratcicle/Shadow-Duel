@@ -48,6 +48,109 @@ function queuePendingBattleDestroyAfterSelection(game, attacker, destroyed, extr
   };
 }
 
+function getController(game, card) {
+  if (!game || !card) return null;
+  return card.owner === "player" ? game.player : game.bot;
+}
+
+function getOpponentPlayer(game, card) {
+  if (!game || !card) return null;
+  return card.owner === "player" ? game.bot : game.player;
+}
+
+function getActualLpLoss(player, amount) {
+  const value = Number(amount);
+  if (!player || !Number.isFinite(value) || value <= 0) return 0;
+  return Math.max(0, Math.min(Number(player.lp || 0), value));
+}
+
+function canShowBattleDamageLoss(player, cardInvolved, shouldHeal) {
+  if (!player || !cardInvolved) return false;
+  if (
+    cardInvolved?.preventsBattleDamageToController === true &&
+    player.id === cardInvolved?.owner
+  ) {
+    return false;
+  }
+  if (shouldHeal && player.id === cardInvolved?.owner) {
+    return false;
+  }
+  return true;
+}
+
+function hasBattleDamageTimingEffect(card) {
+  return Array.isArray(card?.effects)
+    ? card.effects.some(
+        (effect) =>
+          effect?.timing === "on_event" && effect.event === "battle_damage",
+      )
+    : false;
+}
+
+function hasPotentialBattleDamageTimingEffect(game, attacker, target) {
+  const candidates = [attacker, target];
+  for (const player of [game?.player, game?.bot]) {
+    for (const zoneName of ["hand", "spellTrap", "fieldSpell"]) {
+      if (Array.isArray(player?.[zoneName])) {
+        candidates.push(...player[zoneName]);
+      } else if (player?.[zoneName]) {
+        candidates.push(player[zoneName]);
+      }
+    }
+  }
+  return candidates.some(hasBattleDamageTimingEffect);
+}
+
+function resolveBattleLpLossPreview(game, attacker, target) {
+  if (!game || !attacker) return null;
+  if (hasPotentialBattleDamageTimingEffect(game, attacker, target)) return null;
+
+  if (!target) {
+    const defender = getOpponentPlayer(game, attacker);
+    const amount = getActualLpLoss(defender, attacker.atk);
+    return amount > 0 ? { player: defender, amount } : null;
+  }
+
+  const attackerOwner = getController(game, attacker);
+  const defenderOwner = getController(game, target);
+  const attackerAtk = Number(attacker.atk || 0);
+  const targetAtk = Number(target.atk || 0);
+  const targetDef = Number(target.def || 0);
+
+  let player = null;
+  let cardInvolved = null;
+  let amount = 0;
+  let shouldHeal = false;
+
+  if (target.position === "attack") {
+    if (attackerAtk > targetAtk) {
+      player = defenderOwner;
+      cardInvolved = target;
+      amount = attackerAtk - targetAtk;
+      shouldHeal = !!target.battleDamageHealsControllerThisTurn;
+    } else if (attackerAtk < targetAtk) {
+      player = attackerOwner;
+      cardInvolved = attacker;
+      amount = targetAtk - attackerAtk;
+      shouldHeal = !!attacker.battleDamageHealsControllerThisTurn;
+    }
+  } else if (attackerAtk > targetDef && attacker.piercing) {
+    player = defenderOwner;
+    cardInvolved = target;
+    amount = attackerAtk - targetDef;
+    shouldHeal = !!target.battleDamageHealsControllerThisTurn;
+  } else if (attackerAtk < targetDef) {
+    player = attackerOwner;
+    cardInvolved = attacker;
+    amount = targetDef - attackerAtk;
+    shouldHeal = !!attacker.battleDamageHealsControllerThisTurn;
+  }
+
+  if (!canShowBattleDamageLoss(player, cardInvolved, shouldHeal)) return null;
+  const actual = getActualLpLoss(player, amount);
+  return actual > 0 ? { player, amount: actual } : null;
+}
+
 async function waitForAttackPresentation(game, presentation) {
   const finished =
     presentation?.finished && typeof presentation.finished.then === "function"
@@ -128,23 +231,76 @@ export async function resolveCombat(attacker, target, options = {}) {
   const targetOwner = defenderOwner;
 
   let battleImpactVisualPlayed = false;
-  const playBattleImpactOnContact = (contact = {}) => {
-    if (battleImpactVisualPlayed) return;
-    const played = this.ui?.playBattleImpactImmediate?.({
-      sourceCard: attacker,
-      targetCard: target || null,
-      targetOwnerId: defenderOwner?.id || null,
-      targetRect: !target
-        ? contact?.targetRect || contact?.contactRect || null
-        : null,
-      directAttack: !target,
-      cause: "battle",
-      intensity: "normal",
-      tone: "red",
-    });
-    if (played === true) {
-      battleImpactVisualPlayed = true;
+  let battleLpLossPreview = null;
+  let battleLpLossFeedback = null;
+  const setBattleLpLossPreview = (preview) => {
+    battleLpLossPreview = preview?.player && preview.amount > 0 ? preview : null;
+  };
+  const showBattleLpLossOnContact = (contact = {}) => {
+    if (battleLpLossFeedback || !battleLpLossPreview) return;
+    const amount = getActualLpLoss(
+      battleLpLossPreview.player,
+      battleLpLossPreview.amount,
+    );
+    if (amount <= 0 || typeof this.ui?.showLpDamageSequence !== "function") {
+      return;
     }
+    const fromLp = Number(battleLpLossPreview.player.lp || 0);
+    const played = this.ui.showLpDamageSequence(
+      battleLpLossPreview.player,
+      amount,
+      {
+        cause: "battle",
+        sourceCard: attacker,
+        targetCard: target || null,
+        sourceRect: contact?.sourceRect || null,
+        targetRect: contact?.targetRect || contact?.contactRect || null,
+        battleImpactRect: contact?.targetRect || contact?.contactRect || null,
+        contactRect: contact?.contactRect || null,
+        directAttack: !target,
+        fromLp,
+        toLp: Math.max(0, fromLp - amount),
+        screenShake: false,
+        holdFinalUntilReal: true,
+      },
+    );
+    if (played !== true) return;
+    battleLpLossFeedback = {
+      player: battleLpLossPreview.player,
+      amount,
+    };
+  };
+  const consumeBattleLpLossFeedback = (player, amount) => {
+    const actual = getActualLpLoss(player, amount);
+    if (
+      !battleLpLossFeedback ||
+      battleLpLossFeedback.player !== player ||
+      battleLpLossFeedback.amount !== actual
+    ) {
+      return false;
+    }
+    battleLpLossFeedback = null;
+    return true;
+  };
+  const playBattleImpactOnContact = (contact = {}) => {
+    if (!battleImpactVisualPlayed) {
+      const played = this.ui?.playBattleImpactImmediate?.({
+        sourceCard: attacker,
+        targetCard: target || null,
+        targetOwnerId: defenderOwner?.id || null,
+        targetRect: !target
+          ? contact?.targetRect || contact?.contactRect || null
+          : null,
+        directAttack: !target,
+        cause: "battle",
+        intensity: "normal",
+        tone: "red",
+      });
+      if (played === true) {
+        battleImpactVisualPlayed = true;
+      }
+    }
+    showBattleLpLossOnContact(contact);
   };
   const startAttackPresentation = () =>
     attacker.instanceId != null && typeof this.ui?.playAttackLunge === "function"
@@ -249,9 +405,10 @@ export async function resolveCombat(attacker, target, options = {}) {
       this.updateBoard();
       return { ok: false, reason: "direct_attack_forbidden" };
     }
+    const defender = attacker.owner === "player" ? this.bot : this.player;
+    setBattleLpLossPreview(resolveBattleLpLossPreview(this, attacker, null));
     const attackPresentation = startAttackPresentation();
     await waitForAttackPresentation(this, attackPresentation);
-    const defender = attacker.owner === "player" ? this.bot : this.player;
     if (!battleImpactVisualPlayed) {
       this.queueVisualFeedback?.({
         kind: "impact",
@@ -266,6 +423,11 @@ export async function resolveCombat(attacker, target, options = {}) {
     this.inflictDamage(defender, attacker.atk, {
       sourceCard: attacker,
       cause: "battle",
+      directAttack: true,
+      suppressVisual: consumeBattleLpLossFeedback(
+        defender,
+        attacker.atk,
+      ),
     });
     this.markAttackUsed(attacker, null); // Direct attack, no target
     this.checkWinCondition();
@@ -302,11 +464,13 @@ export async function resolveCombat(attacker, target, options = {}) {
     }
   }
 
+  setBattleLpLossPreview(resolveBattleLpLossPreview(this, attacker, target));
   const attackPresentation = startAttackPresentation();
   await waitForAttackPresentation(this, attackPresentation);
 
   const combatResult = await this.finishCombat(attacker, target, {
     battleImpactVisualPlayed,
+    consumeBattleLpLossFeedback,
   });
 
   // Emit combat resolution event for replay capture
@@ -337,6 +501,10 @@ export async function resolveCombat(attacker, target, options = {}) {
 export async function finishCombat(attacker, target, options = {}) {
   const resumeFromTie = options.resumeFromTie === true;
   const battleImpactVisualPlayed = options.battleImpactVisualPlayed === true;
+  const consumeBattleLpLossFeedback =
+    typeof options.consumeBattleLpLossFeedback === "function"
+      ? options.consumeBattleLpLossFeedback
+      : null;
 
   const attackerOwner = attacker?.owner === "player" ? this.player : this.bot;
   const defenderOwner = target?.owner === "player" ? this.player : this.bot;
@@ -425,11 +593,11 @@ export async function finishCombat(attacker, target, options = {}) {
     }
   }
 
+  const battleImpactVisualTarget = this.ui?.captureCardAnimationSource?.(target, {
+    ownerId: target?.owner,
+    zone: "field",
+  });
   if (!battleImpactVisualPlayed) {
-    const battleImpactVisualTarget = this.ui?.captureCardAnimationSource?.(target, {
-      ownerId: target?.owner,
-      zone: "field",
-    });
     this.queueVisualFeedback?.({
       kind: "impact",
       cause: "battle",
@@ -503,9 +671,15 @@ export async function finishCombat(attacker, target, options = {}) {
         });
       }
     } else {
+      const actualLoss = getActualLpLoss(player, amount);
       this.inflictDamage(player, amount, {
         sourceCard: cardInvolved,
+        targetCard: target,
+        targetRect: battleImpactVisualTarget?.rect || null,
+        battleImpactRect: battleImpactVisualTarget?.rect || null,
         cause: "battle",
+        suppressVisual:
+          consumeBattleLpLossFeedback?.(player, actualLoss) === true,
       });
     }
     return amount;

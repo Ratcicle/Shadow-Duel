@@ -19,6 +19,24 @@ function hasQuickSpellLegalWindowContext(context = {}) {
   );
 }
 
+function actionsResultFailed(actionsResult) {
+  return (
+    actionsResult &&
+    typeof actionsResult === "object" &&
+    actionsResult.success === false &&
+    actionsResult.needsSelection !== true
+  );
+}
+
+function buildActionsFailure(actionsResult) {
+  return {
+    success: false,
+    needsSelection: false,
+    reason: actionsResult?.reason || "Effect actions failed.",
+    actionResult: actionsResult || null,
+  };
+}
+
 /**
  * Activate a monster's ignition effect from the graveyard.
  * @returns {Promise<Object>} Result with success/needsSelection status
@@ -153,6 +171,9 @@ export async function activateMonsterFromGraveyard(
       ...actionsResult,
     };
   }
+  if (actionsResultFailed(actionsResult)) {
+    return buildActionsFailure(actionsResult);
+  }
 
   // Only register usage and check win after successful resolution
   this.registerOncePerTurnUsage(card, player, effect);
@@ -275,6 +296,9 @@ export async function activateFieldSpell(
       selectionContract: actionsResult.selectionContract,
       ...actionsResult,
     };
+  }
+  if (actionsResultFailed(actionsResult)) {
+    return buildActionsFailure(actionsResult);
   }
 
   // Only register usage and check win after successful resolution
@@ -605,6 +629,9 @@ export async function activateSpellTrapEffect(
       ...actionsResult,
     };
   }
+  if (actionsResultFailed(actionsResult)) {
+    return buildActionsFailure(actionsResult);
+  }
   this.game?.updateBoard?.();
   if (typeof this.game?.waitForAiPresentationStep === "function") {
     await this.game.waitForAiPresentationStep(player);
@@ -812,6 +839,9 @@ export async function activateMonsterEffect(
       selectionContract: actionsResult.selectionContract,
       ...actionsResult,
     };
+  }
+  if (actionsResultFailed(actionsResult)) {
+    return buildActionsFailure(actionsResult);
   }
   this.registerOncePerTurnUsage(card, player, effect);
   this.registerOncePerDuelUsage(card, player, effect);

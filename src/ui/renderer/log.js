@@ -78,5 +78,27 @@ export function updateLP(player) {
   const el =
     player.id === "player" ? this.elements.playerLP : this.elements.botLP;
   if (!el) return;
+
+  if (
+    typeof this.ensureLpDisplayState === "function" &&
+    typeof this.getDisplayedLp === "function" &&
+    typeof this.setDisplayedLp === "function"
+  ) {
+    const state = this.ensureLpDisplayState(player);
+    if (state?.animating || state?.queue?.length > 0) {
+      const displayed = this.getDisplayedLp(player);
+      if (displayed != null) {
+        el.textContent = displayed;
+      }
+      return;
+    }
+
+    if (state) {
+      state.holdFinalUntilReal = false;
+    }
+    this.setDisplayedLp(player, player.lp);
+    return;
+  }
+
   el.textContent = player.lp;
 }

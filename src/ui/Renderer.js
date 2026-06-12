@@ -23,6 +23,18 @@ import PixiVfxLayer from "./pixi/PixiVfxLayer.js";
 export default class Renderer {
   constructor() {
     this.destroyed = false;
+    this.lpDisplayState = {
+      player: {
+        displayed: 8000,
+        animating: false,
+        queue: [],
+      },
+      bot: {
+        displayed: 8000,
+        animating: false,
+        queue: [],
+      },
+    };
     this.elements = {
       playerHand: document.getElementById("player-hand"),
       playerField: document.getElementById("player-field"),
@@ -124,6 +136,12 @@ Renderer.prototype.updateLP = log.updateLP;
 // Attach animation methods
 Renderer.prototype.captureCardRects = animations.captureCardRects;
 Renderer.prototype.animateCardLayout = animations.animateCardLayout;
+Renderer.prototype.ensureLpDisplayState = animations.ensureLpDisplayState;
+Renderer.prototype.getDisplayedLp = animations.getDisplayedLp;
+Renderer.prototype.setDisplayedLp = animations.setDisplayedLp;
+Renderer.prototype.hasActiveLpPresentation = animations.hasActiveLpPresentation;
+Renderer.prototype.showLpDamageSequence = animations.showLpDamageSequence;
+Renderer.prototype.animateLpOdometer = animations.animateLpOdometer;
 Renderer.prototype.captureCardAnimationSource =
   cardAnimationManager.captureCardAnimationSource;
 Renderer.prototype.playQueuedCardAnimations =

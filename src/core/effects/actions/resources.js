@@ -163,17 +163,29 @@ export async function applyDamage(action, ctx) {
   // Apply damage to LP only if not in trigger-only mode
   // (inflictDamage from Game already applied the damage)
   if (!action.triggerOnly) {
-    const before = targetPlayer.lp || 0;
-    targetPlayer.takeDamage(amount);
-    const lost = Math.max(0, before - (targetPlayer.lp || 0));
-    if (lost > 0) {
-      this.game?.notify?.("damage_inflicted", {
-        target: targetPlayer,
-        sourceCard: ctx.source,
-        amount: lost,
-        lpLost: lost,
-        newLP: targetPlayer.lp,
+    if (this.game && typeof this.game.inflictDamage === "function") {
+      this.game.inflictDamage(targetPlayer, amount, {
+        cause: action.cause || "effect",
+        sourceCard: ctx.source || null,
+        screenShake: action.screenShake,
+        triggerOpponentDamage: false,
       });
+    } else {
+      const before = targetPlayer.lp || 0;
+      targetPlayer.takeDamage(amount, {
+        cause: action.cause || "effect",
+        screenShake: action.screenShake,
+      });
+      const lost = Math.max(0, before - (targetPlayer.lp || 0));
+      if (lost > 0) {
+        this.game?.notify?.("damage_inflicted", {
+          target: targetPlayer,
+          sourceCard: ctx.source,
+          amount: lost,
+          lpLost: lost,
+          newLP: targetPlayer.lp,
+        });
+      }
     }
   }
 
@@ -236,6 +248,18 @@ export async function applyDamage(action, ctx) {
             card: card.name,
             effectId: effect.id,
             selectionContract: actionsResult.selectionContract,
+          });
+          continue;
+        }
+        if (
+          actionsResult &&
+          typeof actionsResult === "object" &&
+          actionsResult.success === false
+        ) {
+          this.game?.devLog?.("OPPONENT_DAMAGE_ACTIONS_FAILED", {
+            card: card.name,
+            effectId: effect.id,
+            reason: actionsResult.reason || null,
           });
           continue;
         }

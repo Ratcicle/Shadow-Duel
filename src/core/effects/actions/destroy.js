@@ -98,7 +98,14 @@ export async function checkBeforeDestroyNegations(card, ctx) {
       {}
     );
 
-    if (costSuccess || effect.negationCost?.length === 0) {
+    const costPaid =
+      costSuccess === true ||
+      (costSuccess &&
+        typeof costSuccess === "object" &&
+        costSuccess.success !== false) ||
+      effect.negationCost?.length === 0;
+
+    if (costPaid) {
       // Register OPT usage for negation
       this.registerOncePerTurnUsage(card, owner, effect);
 

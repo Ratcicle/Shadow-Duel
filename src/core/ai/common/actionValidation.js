@@ -61,7 +61,8 @@ export function validateCostCandidateCount({
 
   if (action.type === "special_summon_from_hand_with_cost") {
     const targets = effect?.targets || [];
-    const target = targets.find((entry) => entry.id === action.costTargetRef);
+    const costTargetRef = action.costTargetRef || "bbd_cost";
+    const target = targets.find((entry) => entry.id === costTargetRef);
     const min = target?.count?.min ?? 1;
     if (
       !target ||

@@ -206,11 +206,23 @@ async function applyChainEffect(cs, link, activationZone) {
 
   if (Array.isArray(effect.actions)) {
     try {
-      await effectEngine.applyActions(
+      const actionsResult = await effectEngine.applyActions(
         effect.actions,
         ctx,
         resolvedSelections || {},
       );
+      if (
+        actionsResult &&
+        typeof actionsResult === "object" &&
+        actionsResult.success === false
+      ) {
+        cs.log(
+          `Chain resolution failed for ${card.name} (CL${link.chainLevel}): ${
+            actionsResult.reason || "effect actions failed"
+          }`,
+        );
+        return;
+      }
     } catch (error) {
       const linkContext = {
         cardName: card?.name || "Unknown",

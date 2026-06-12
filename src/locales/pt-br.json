@@ -70,7 +70,7 @@
     },
     "18": {
       "name": "Chamado dos Assombrados",
-      "description": "Ative este card ao escolher 1 monstro no seu Cemitério; Invoque o alvo por Invocação-Especial em Posição de Ataque. Quando este card deixar o campo, destrua esse monstro. Quando esse monstro for destruído, destrua este card."
+      "description": "Ative este card ao escolher 1 monstro no seu Cemitério; Invoque o alvo por Invocação-Especial em Posição de Ataque. Quando este card deixar o campo, destrua esse monstro. Quando esse alvo deixar o campo, destrua este card."
     },
     "101": {
       "name": "Enguia Abissal do Coração Sombrio",

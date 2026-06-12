@@ -37,10 +37,9 @@ export function getSpellTrapActivationEffect(card, options = {}) {
     return null;
   }
   if (card.cardKind === "trap") {
-    const onActivate =
-      card.effects.find((e) => e && e.timing === "on_activate") || null;
-    if (onActivate) return onActivate;
-    if (isTrapActivationFromSet(card, options)) return null;
+    if (isTrapActivationFromSet(card, options)) {
+      return card.effects.find((e) => e && e.timing === "on_activate") || null;
+    }
     return card.effects.find((e) => e && e.timing === "ignition") || null;
   }
   if (card.cardKind === "spell") {

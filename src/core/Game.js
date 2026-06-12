@@ -941,6 +941,11 @@ Game.prototype.canSummonExtraDeckCardByProcedure =
   extraDeckModal.canSummonExtraDeckCardByProcedure;
 Game.prototype.performExtraDeckSummonProcedure =
   extraDeckModal.performExtraDeckSummonProcedure;
+Game.prototype.canSummonAscensionCardFromExtraDeck =
+  extraDeckModal.canSummonAscensionCardFromExtraDeck;
+Game.prototype.performAscensionSummonFromExtraDeck =
+  extraDeckModal.performAscensionSummonFromExtraDeck;
+Game.prototype.canSummonExtraDeckCard = extraDeckModal.canSummonExtraDeckCard;
 
 // -----------------------------------------------------------------------------
 // Turn: Attach methods from modular turn/ folder

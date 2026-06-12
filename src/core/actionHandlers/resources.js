@@ -882,7 +882,17 @@ export async function handleDamageFromDestroyedAtk(
 
   if (damageAmount <= 0) return false;
 
-  targetPlayer.takeDamage(damageAmount);
+  if (typeof game.inflictDamage === "function") {
+    game.inflictDamage(targetPlayer, damageAmount, {
+      cause: "effect",
+      sourceCard: ctx.source || destroyed,
+      targetCard: destroyed,
+    });
+  } else {
+    targetPlayer.takeDamage(damageAmount, {
+      cause: "effect",
+    });
+  }
 
   getUI(game)?.log(
     `${targetPlayer.name || targetPlayer.id} took ${damageAmount} damage from ${

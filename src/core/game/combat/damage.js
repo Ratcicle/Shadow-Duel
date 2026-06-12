@@ -17,9 +17,31 @@ export function inflictDamage(player, amount, options = {}) {
 
   // Apply the damage to player LP
   const before = player.lp || 0;
-  player.takeDamage(amount);
+  const suppressVisual =
+    options.suppressVisual === true ||
+    options.suppressLpChangeFeedback === true ||
+    options.suppressLpDamageSequence === true;
+  player.takeDamage(amount, {
+    suppressVisual: true,
+  });
   const actual = Math.max(0, before - (player.lp || 0));
   if (actual > 0) {
+    if (!suppressVisual && typeof this.ui?.showLpDamageSequence === "function") {
+      this.ui.showLpDamageSequence(player, actual, {
+        cause: options.cause || "effect",
+        sourceCard: options.sourceCard || null,
+        targetCard: options.targetCard || null,
+        sourceRect: options.sourceRect || null,
+        targetRect: options.targetRect || null,
+        battleImpactRect: options.battleImpactRect || null,
+        contactRect: options.contactRect || null,
+        directAttack: options.directAttack === true,
+        fromLp: before,
+        toLp: player.lp,
+        screenShake: options.screenShake,
+      });
+    }
+
     this.notify?.("damage_inflicted", {
       target: player,
       sourceCard: options.sourceCard || null,
@@ -31,6 +53,7 @@ export function inflictDamage(player, amount, options = {}) {
 
   // Trigger opponent_damage effects via EffectEngine
   if (
+    options.triggerOpponentDamage !== false &&
     this.effectEngine &&
     typeof this.effectEngine.applyDamage === "function"
   ) {

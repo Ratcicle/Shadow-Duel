@@ -645,6 +645,17 @@ body {
   font-weight: bold;
 }
 
+.graveyard-zone.zone-activatable,
+.extradeck-zone.zone-activatable {
+  border-color: rgba(255, 215, 0, 0.9);
+  box-shadow:
+    0 0 0 2px rgba(255, 215, 0, 0.18),
+    0 0 16px rgba(255, 215, 0, 0.62),
+    inset 0 0 18px rgba(187, 134, 252, 0.12);
+  color: rgba(255, 236, 170, 0.95);
+  animation: pulse-activatable 1.4s ease-in-out infinite;
+}
+
 .graveyard-zone .zone-counter,
 .extradeck-zone .zone-counter {
   position: static;
@@ -663,6 +674,15 @@ body {
     0 0 16px rgba(187, 134, 252, 0.72),
     0 0 30px rgba(45, 212, 191, 0.28);
   animation: graveyard-effect-activation-pulse 700ms ease-in-out infinite;
+}
+
+.card.extra-deck-summonable {
+  border: 2px solid rgba(255, 215, 0, 0.88);
+  box-shadow:
+    0 0 14px rgba(255, 215, 0, 0.68),
+    0 0 28px rgba(187, 134, 252, 0.22);
+  cursor: pointer;
+  filter: brightness(1.12) saturate(1.08);
 }
 
 @keyframes graveyard-effect-activation-pulse {
@@ -1690,12 +1710,106 @@ body {
   }
 }
 
+@keyframes flip-summon-reveal {
+  0% {
+    transform: rotate(-90deg) scaleX(1);
+    filter: brightness(0.92);
+    box-shadow: 0 0 10px rgba(187, 134, 252, 0.12);
+  }
+  25% {
+    transform: rotate(-68deg) scaleX(0.96);
+    filter: brightness(1.02);
+    box-shadow: 0 0 14px rgba(187, 134, 252, 0.2);
+  }
+  50% {
+    transform: rotate(-42deg) scaleX(0.7);
+    filter: brightness(1.11);
+    box-shadow: 0 0 18px rgba(187, 134, 252, 0.28);
+  }
+  75% {
+    transform: rotate(-18deg) scaleX(0.9);
+    filter: brightness(1.18);
+    box-shadow: 0 0 18px rgba(255, 214, 102, 0.22);
+  }
+  100% {
+    transform: rotate(0deg) scaleX(1);
+    filter: brightness(1);
+    box-shadow: 0 0 0 rgba(255, 214, 102, 0);
+  }
+}
+
+@keyframes flip-summon-card-back {
+  0%,
+  30% {
+    opacity: 1;
+  }
+  64%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes flip-summon-card-front {
+  0%,
+  36% {
+    opacity: 0;
+  }
+  72%,
+  100% {
+    opacity: 1;
+  }
+}
+
 .card.flipping {
   animation: flip-card 0.6s ease-in-out;
 }
 
 .card.defense.flipping {
   animation: flip-card-defense 0.6s ease-in-out;
+}
+
+.flip-summon-ghost {
+  z-index: 270;
+  overflow: hidden;
+  transform-origin: center center;
+  animation: flip-summon-reveal 0.2s linear both;
+  will-change: transform, filter, box-shadow;
+  box-shadow: 0 0 18px rgba(187, 134, 252, 0.2);
+}
+
+.flip-summon-ghost::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  border-radius: inherit;
+  border: 1px solid rgba(187, 134, 252, 0.55);
+  background:
+    radial-gradient(
+      circle at 30% 30%,
+      rgba(187, 134, 252, 0.28),
+      transparent 56%
+    ),
+    linear-gradient(135deg, rgba(24, 19, 32, 0.98), rgba(42, 33, 58, 0.95));
+  box-shadow:
+    inset 0 0 18px rgba(187, 134, 252, 0.2),
+    0 0 14px rgba(187, 134, 252, 0.22);
+  animation: flip-summon-card-back 0.5s linear both;
+}
+
+.flip-summon-ghost > * {
+  animation: flip-summon-card-front 0.5s linear both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card.flipping,
+  .card.defense.flipping,
+  .flip-summon-ghost,
+  .flip-summon-ghost::before,
+  .flip-summon-ghost > * {
+    animation: none !important;
+  }
 }
 
 /* Start/Deck overlays (new) */
@@ -3540,6 +3654,41 @@ body {
   color: #7bff9d;
 }
 
+.lp-damage-float {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 280;
+  pointer-events: none;
+  color: #ff5f5f;
+  font-size: clamp(20px, 2.3vw, 34px);
+  font-weight: 950;
+  line-height: 1;
+  text-align: center;
+  min-width: 56px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background:
+    radial-gradient(circle at 50% 45%, rgba(255, 226, 140, 0.18), transparent 62%),
+    rgba(16, 8, 12, 0.32);
+  text-shadow:
+    0 2px 2px rgba(0, 0, 0, 0.95),
+    0 0 10px rgba(255, 70, 70, 0.72),
+    0 0 20px rgba(255, 156, 72, 0.35);
+  box-shadow:
+    0 0 0 1px rgba(255, 118, 84, 0.22),
+    0 8px 24px rgba(0, 0, 0, 0.34);
+  will-change: transform, opacity;
+}
+
+.lp-damage-float.battle {
+  color: #ff6b5f;
+}
+
+.lp-damage-float.effect {
+  color: #ff875f;
+}
+
 .lp-float-animate {
   animation: lp-float-rise 1s ease-out forwards;
 }
@@ -3566,6 +3715,27 @@ body {
   animation: lp-flash-heal 0.4s ease-in-out;
 }
 
+.lp-counter.lp-odometer-active {
+  color: #f3ddff;
+  text-shadow:
+    0 0 7px rgba(187, 134, 252, 0.72),
+    0 0 16px rgba(255, 255, 255, 0.18);
+}
+
+.lp-counter.lp-odometer-damage {
+  color: #ff7770;
+  text-shadow:
+    0 0 8px rgba(255, 82, 82, 0.7),
+    0 0 18px rgba(255, 154, 72, 0.32);
+}
+
+.lp-counter.lp-odometer-heal {
+  color: #8dffad;
+  text-shadow:
+    0 0 8px rgba(123, 255, 157, 0.58),
+    0 0 18px rgba(123, 255, 157, 0.22);
+}
+
 @keyframes lp-flash-damage {
   0% {
     color: #ff6b6b;
@@ -3585,6 +3755,16 @@ body {
   100% {
     color: inherit;
     text-shadow: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-damage-float {
+    display: none;
+  }
+
+  .lp-counter.lp-odometer-active {
+    transition: color 120ms ease;
   }
 }
 

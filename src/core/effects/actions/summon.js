@@ -240,6 +240,11 @@ export async function applyCallOfTheHauntedSummon(action, ctx, targets) {
     summary: "Resolving summon target",
   });
 
+  if (card?.boundMonsterTarget) {
+    game.ui.log("Call of the Haunted: This card is already bound to a monster.");
+    return false;
+  }
+
   if (!targets || !targets.haunted_target) {
     game.ui.log(`Call of the Haunted: Nenhum alvo selecionado no cemitério.`);
     return false;

@@ -9,6 +9,10 @@
  */
 export async function flipSummon(card) {
   if (!this.canFlipSummon(card)) return;
+  const ownerId = card.owner === "player" ? "player" : "bot";
+  const owner = ownerId === "player" ? this.player : this.bot;
+  const fieldIndex = owner?.field?.indexOf(card) ?? -1;
+
   card.isFacedown = false;
   card.revealedTurn = this.turnCounter; // Track when monster was revealed for Ascension timing
   card.position = "attack";
@@ -25,6 +29,10 @@ export async function flipSummon(card) {
   });
 
   this.updateBoard();
+  this.ui?.applyFlipAnimation?.(ownerId, fieldIndex, {
+    mode: "flip-summon",
+    deferFrames: 0,
+  });
 }
 
 export async function offerSummonAttempt(card, player, options = {}) {

@@ -1353,6 +1353,10 @@ export async function handleSwitchPosition(action, ctx, targets, engine) {
 
     const previousPosition = card.position;
     const wasFacedown = card.isFacedown === true;
+    const ownerId = card.owner === "player" ? "player" : "bot";
+    const ownerField =
+      ownerId === "player" ? game.player?.field : game.bot?.field;
+    const fieldIndex = Array.isArray(ownerField) ? ownerField.indexOf(card) : -1;
     const newPosition = wasFacedown
       ? "attack"
       : card.position === "attack"
@@ -1367,12 +1371,6 @@ export async function handleSwitchPosition(action, ctx, targets, engine) {
 
     if (action.markChanged !== false) {
       card.hasChangedPosition = true;
-    }
-
-    // Clear attack restriction when switching to attack position via effect
-    // (manual position change to defense sets cannotAttackThisTurn, but effects can override this)
-    if (newPosition === "attack") {
-      card.cannotAttackThisTurn = false;
     }
 
     // Apply stat boosts if specified
@@ -1410,6 +1408,9 @@ export async function handleSwitchPosition(action, ctx, targets, engine) {
       name: card.name,
 
       position: newPosition,
+      ownerId,
+      fieldIndex,
+      wasFacedown,
     });
   }
 
@@ -1421,6 +1422,15 @@ export async function handleSwitchPosition(action, ctx, targets, engine) {
     }
 
     game.updateBoard();
+
+    affectedCards
+      .filter((info) => info.wasFacedown && info.position === "attack")
+      .forEach((info) => {
+        getUI(game)?.applyFlipAnimation?.(info.ownerId, info.fieldIndex, {
+          mode: "reveal-to-attack",
+          deferFrames: 0,
+        });
+      });
   }
 
   return switched;

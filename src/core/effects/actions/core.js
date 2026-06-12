@@ -5,17 +5,67 @@ import { cardMatchesKind } from "../../Card.js";
  * Extracted from EffectEngine.js – preserving original logic and signatures.
  */
 
+export function actionResultSucceeded(result) {
+  if (result === true) return true;
+  return (
+    result &&
+    typeof result === "object" &&
+    result.success !== false &&
+    result.needsSelection !== true
+  );
+}
+
+function isActionResultFailure(result) {
+  return (
+    result === false ||
+    (result &&
+      typeof result === "object" &&
+      result.success === false &&
+      result.needsSelection !== true)
+  );
+}
+
+function isActionOptionalNoop(action) {
+  if (!action) return false;
+  if (action.optional === true) return true;
+  const min = Number(action.count?.min);
+  return Number.isFinite(min) && min <= 0;
+}
+
+function createActionResult({
+  success,
+  executed = false,
+  failedAction = null,
+  reason = null,
+  error = null,
+  action = null,
+  skippedCount = 0,
+} = {}) {
+  const result = {
+    success: success !== false,
+    executed: executed === true,
+    needsSelection: false,
+  };
+  if (failedAction) result.failedAction = failedAction;
+  if (reason) result.reason = reason;
+  if (error) result.error = error;
+  if (action) result.action = action;
+  if (skippedCount) result.skippedCount = skippedCount;
+  return result;
+}
+
 /**
  * Main action dispatcher - applies all actions in sequence
  * @param {Array} actions - Array of action definitions
  * @param {Object} ctx - Context object
  * @param {Object} targets - Resolved targets
- * @returns {Promise<boolean|Object>} Execution result or selection request
+ * @returns {Promise<Object>} Normalized execution result or selection request
  */
 export async function applyActions(actions, ctx, targets) {
   let executed = false;
+  let skippedCount = 0;
   if (!Array.isArray(actions)) {
-    return executed;
+    return createActionResult({ success: true, executed });
   }
 
   const logDev =
@@ -45,6 +95,7 @@ export async function applyActions(actions, ctx, targets) {
 
       if (immunityResult.skipAction) {
         // immunityMode: "skip_action" was set and some targets were immune
+        skippedCount += 1;
         logDev?.("ACTION_SKIPPED_IMMUNITY", {
           ...actionInfo,
           mode: "skip_action",
@@ -70,10 +121,16 @@ export async function applyActions(actions, ctx, targets) {
       const handler = this.actionHandlers.get(action.type);
       if (!handler) {
         logDev?.("ACTION_HANDLER_MISSING", actionInfo);
-        console.warn(
-          `No handler for action type "${action.type}". Action skipped.`
-        );
-        continue;
+        const reason = `No handler for action type "${action.type}".`;
+        console.warn(reason);
+        return createActionResult({
+          success: false,
+          executed,
+          failedAction: action.type,
+          reason,
+          action,
+          skippedCount,
+        });
       }
 
       try {
@@ -87,23 +144,45 @@ export async function applyActions(actions, ctx, targets) {
             selectionKind: result.selectionContract?.kind || "unknown",
           });
           // Retornar imediatamente com o selectionContract
-          return result;
+          return {
+            ...result,
+            success: result.success === true,
+            executed,
+          };
         }
 
-        executed = result || executed;
+        if (isActionResultFailure(result)) {
+          const isOptional = isActionOptionalNoop(action);
+          logDev?.("ACTION_HANDLER_FAILED", {
+            ...actionInfo,
+            optional: isOptional,
+            reason:
+              result && typeof result === "object" ? result.reason : null,
+          });
+
+          if (isOptional) {
+            skippedCount += 1;
+            continue;
+          }
+
+          return createActionResult({
+            success: false,
+            executed,
+            failedAction: action.type,
+            reason:
+              (result && typeof result === "object" && result.reason) ||
+              `Action "${action.type}" failed.`,
+            action,
+            skippedCount,
+          });
+        }
+
+        executed = actionResultSucceeded(result) || executed;
         logDev?.("ACTION_HANDLER_DONE", {
           ...actionInfo,
           handler: true,
-          result: !!result,
+          result: result === undefined ? "undefined" : !!result,
         });
-
-        if (
-          !result &&
-          (action.haltOnFailure === true || action.stopOnFailure === true)
-        ) {
-          logDev?.("ACTION_SEQUENCE_HALTED", actionInfo);
-          return false;
-        }
       } catch (error) {
         logDev?.("ACTION_HANDLER_ERROR", {
           ...actionInfo,
@@ -115,16 +194,32 @@ export async function applyActions(actions, ctx, targets) {
         );
         console.error(`Action config:`, action);
         console.error(`Context:`, {
-          player: ctx.player?.id,
-          source: ctx.source?.name,
+          player: ctx?.player?.id,
+          source: ctx?.source?.name,
+        });
+        return createActionResult({
+          success: false,
+          executed,
+          failedAction: action.type,
+          reason: error.message || `Action "${action.type}" threw.`,
+          error,
+          action,
+          skippedCount,
         });
       }
     }
   } catch (err) {
     console.error("Error while applying actions:", err);
+    return createActionResult({
+      success: false,
+      executed,
+      reason: err.message || "Error while applying actions.",
+      error: err,
+      skippedCount,
+    });
   }
 
-  return executed;
+  return createActionResult({ success: true, executed, skippedCount });
 }
 
 function buildPreviewFilters(action) {
@@ -156,10 +251,62 @@ function buildPreviewFilters(action) {
   return filters;
 }
 
+function buildTargetPreviewFilters(target = {}) {
+  const filters = { ...(target.filters || {}) };
+  const copyIfPresent = (sourceKey, filterKey = sourceKey) => {
+    if (target[sourceKey] !== undefined && filters[filterKey] === undefined) {
+      filters[filterKey] = target[sourceKey];
+    }
+  };
+
+  copyIfPresent("cardKind");
+  copyIfPresent("type");
+  copyIfPresent("archetype");
+  copyIfPresent("name");
+  copyIfPresent("cardName", "name");
+  copyIfPresent("cardId");
+  copyIfPresent("subtype");
+  copyIfPresent("monsterType");
+  copyIfPresent("level");
+  copyIfPresent("levelOp");
+  copyIfPresent("minLevel");
+  copyIfPresent("maxLevel");
+  copyIfPresent("minAtk");
+  copyIfPresent("maxAtk");
+  copyIfPresent("minDef");
+  copyIfPresent("maxDef");
+  copyIfPresent("requireFaceup");
+  copyIfPresent("isToken");
+
+  return filters;
+}
+
 function matchesPreviewFilters(engine, card, filters) {
   if (!card) return false;
   if (typeof engine?.cardMatchesFilters === "function") {
     if (!engine.cardMatchesFilters(card, filters)) return false;
+  }
+  if (filters.cardKind && !cardMatchesKind(card, filters.cardKind)) {
+    return false;
+  }
+  if (filters.type) {
+    const types = Array.isArray(card.types) ? card.types : [card.type];
+    const required = Array.isArray(filters.type) ? filters.type : [filters.type];
+    if (!required.some((type) => types.includes(type))) return false;
+  }
+  if (filters.archetype) {
+    const archetypes = Array.isArray(card.archetypes)
+      ? card.archetypes
+      : card.archetype
+        ? [card.archetype]
+        : [];
+    if (!archetypes.includes(filters.archetype)) return false;
+  }
+  if ((filters.name || filters.cardName) && card.name !== (filters.name || filters.cardName)) {
+    return false;
+  }
+  if (filters.requireFaceup === true && card.isFacedown) {
+    return false;
   }
   if (
     typeof filters.minLevel === "number" &&
@@ -174,6 +321,16 @@ function matchesPreviewFilters(engine, card, filters) {
     return false;
   }
   return true;
+}
+
+function getPreviewTargetOwners(target, ctx, player) {
+  const ownerRule = target?.owner || target?.player || "self";
+  const opponent = ctx?.opponent;
+  if (ownerRule === "opponent") return opponent ? [opponent] : [];
+  if (ownerRule === "both" || ownerRule === "any") {
+    return [player, opponent].filter(Boolean);
+  }
+  return player ? [player] : [];
 }
 
 function getPreviewCounterOwners(action, ctx, player) {
@@ -760,35 +917,29 @@ export function checkActionPreviewRequirements(actions, ctx) {
         };
       }
 
-      const requiredCount = costTarget.count?.min || 0;
-      const zone = costTarget.zone ? player[costTarget.zone] : player.hand;
-      if (!zone) {
+      const requiredCount = Math.max(0, Number(costTarget.count?.min ?? 0));
+      const zones = Array.isArray(costTarget.zones)
+        ? costTarget.zones
+        : [costTarget.zone || "hand"];
+      const owners = getPreviewTargetOwners(costTarget, ctx, player);
+      if (owners.length === 0 || zones.length === 0) {
         return { ok: false, reason: "Cost zone not found." };
       }
+      const zoneCards = owners.flatMap((owner) =>
+        zones.flatMap((zoneName) => getPreviewZoneCards(owner, zoneName)),
+      );
 
-      const filters = costTarget.filters || {};
-      const matchesFilters = (card) => {
-        if (!card) return false;
-        if (filters.type) {
-          if (Array.isArray(card.types)) {
-            if (!card.types.includes(filters.type)) return false;
-          } else if (card.type !== filters.type) {
-            return false;
-          }
-        }
-        if (filters.cardKind && !cardMatchesKind(card, filters.cardKind)) {
-          return false;
-        }
-        return true;
-      };
-
-      const validCosts = zone.filter(matchesFilters);
+      const filters = buildTargetPreviewFilters(costTarget);
+      const validCosts = zoneCards.filter((card) =>
+        matchesPreviewFilters(this, card, filters),
+      );
       if (validCosts.length < requiredCount) {
+        const zoneLabel = zones.join("/");
+        const filterLabel =
+          filters.type || filters.archetype || filters.cardKind || "card";
         return {
           ok: false,
-          reason: `Need ${requiredCount} ${filters.type || "monster"}(s) in ${
-            costTarget.zone || "hand"
-          } to activate.`,
+          reason: `Need ${requiredCount} ${filterLabel}(s) in ${zoneLabel} to activate.`,
         };
       }
     }

@@ -396,50 +396,6 @@ export async function handleBanish(action, ctx, targets, engine) {
     return false;
   }
 
-  function removeCardFromOwnerZones(owner, card) {
-    const zones = [
-      "hand",
-
-      "field",
-
-      "graveyard",
-
-      "deck",
-
-      "spellTrap",
-
-      "fieldSpell",
-
-      "banished",
-    ];
-
-    for (const z of zones) {
-      if (z === "fieldSpell") {
-        if (owner?.fieldSpell === card) {
-          owner.fieldSpell = null;
-
-          return true;
-        }
-
-        continue;
-      }
-
-      const zoneArr = owner?.[z];
-
-      if (!Array.isArray(zoneArr)) continue;
-
-      const idx = zoneArr.findIndex((c) => c === card);
-
-      if (idx !== -1) {
-        zoneArr.splice(idx, 1);
-
-        return true;
-      }
-    }
-
-    return false;
-  }
-
   let banishedCount = 0;
 
   const opponent =
@@ -532,25 +488,18 @@ export async function handleBanish(action, ctx, targets, engine) {
     }
 
     const fromZone = action.fromZone || findCardZoneInOwner(resolvedOwner, tgt);
-    queueBanishAnimation(game, resolvedOwner, tgt, fromZone);
+    const moveResult = await game.moveCard(tgt, resolvedOwner, "banished", {
+      fromZone,
+      contextLabel: action.contextLabel || "banish",
+      sourceCard: ctx?.source || null,
+      effectId: ctx?.effect?.id || action.effectId || null,
+      movedByEffect: true,
+      awaitCardMovedEvent: true,
+    });
 
-    removeCardFromOwnerZones(resolvedOwner, tgt);
-
-    resolvedOwner.banished = resolvedOwner.banished || [];
-
-    if (!resolvedOwner.banished.includes(tgt)) {
-      resolvedOwner.banished.push(tgt);
-    }
-
-    tgt.location = "banished";
-    tgt.isFacedown = false;
-    tgt.setTurn = null;
-    tgt.turnSetOn = null;
-
-    if (resolvedOwner?.id) {
-      tgt.owner = resolvedOwner.id;
-
-      tgt.controller = resolvedOwner.id;
+    if (moveResult === false || moveResult?.success === false) {
+      getUI(game)?.log(`${tgt.name} could not be banished.`);
+      continue;
     }
 
     banishedCount += 1;
@@ -855,7 +804,16 @@ export async function handleBanishAllGraveyardAndBurn(action, ctx, _targets, eng
 
   const totalDamage = banishedCount * damagePerCard;
   if (totalDamage > 0 && targetPlayer) {
-    targetPlayer.takeDamage(totalDamage);
+    if (typeof game.inflictDamage === "function") {
+      game.inflictDamage(targetPlayer, totalDamage, {
+        cause: "effect",
+        sourceCard: ctx.source || null,
+      });
+    } else {
+      targetPlayer.takeDamage(totalDamage, {
+        cause: "effect",
+      });
+    }
     getUI(game)?.log(
       `${targetPlayer.id} takes ${totalDamage} damage (${banishedCount} x ${damagePerCard}).`,
     );

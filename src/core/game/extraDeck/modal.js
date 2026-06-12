@@ -160,6 +160,91 @@ function getDefaultMaterialSourceZone(procedure) {
   return procedure?.materials?.[0]?.zone || "graveyard";
 }
 
+function isAscensionExtraDeckCard(card) {
+  return (
+    card &&
+    card.cardKind === "monster" &&
+    card.monsterType === "ascension" &&
+    card.ascension &&
+    typeof card.ascension === "object"
+  );
+}
+
+function buildAscensionMaterialCandidates(game, ascensionCard, player) {
+  if (!game || !isAscensionExtraDeckCard(ascensionCard) || !player) {
+    return [];
+  }
+  const materials = [];
+  for (const material of player.field || []) {
+    if (!material) continue;
+    const materialCheck = game.canUseAsAscensionMaterial?.(player, material);
+    if (materialCheck?.ok !== true) continue;
+    const requirementCheck = game.checkAscensionRequirements?.(
+      player,
+      ascensionCard,
+      material,
+    );
+    if (requirementCheck?.ok === true) {
+      materials.push(material);
+    }
+  }
+  return materials;
+}
+
+function buildAscensionMaterialSelectionContract(
+  ascensionCard,
+  player,
+  materials,
+  game,
+) {
+  const owner = player.id === "player" ? "player" : "opponent";
+  const candidates = materials
+    .map((material) => {
+      const zoneIndex = player.field.indexOf(material);
+      return {
+        name: material.name,
+        owner,
+        controller: player.id,
+        zone: "field",
+        zoneIndex,
+        atk: material.atk || 0,
+        def: material.def || 0,
+        level: material.level || 0,
+        cardKind: material.cardKind,
+        cardRef: material,
+      };
+    })
+    .map((cand, idx) => ({
+      ...cand,
+      key:
+        game.buildSelectionCandidateKey?.(cand, idx) ||
+        `${cand.zoneIndex}:${idx}`,
+    }));
+
+  return {
+    kind: "choice",
+    message: `Select Ascension material for ${ascensionCard.name}.`,
+    requirements: [
+      {
+        id: "ascension_material",
+        min: 1,
+        max: 1,
+        zones: ["field"],
+        owner,
+        filters: {},
+        allowSelf: true,
+        distinct: true,
+        candidates,
+      },
+    ],
+    ui: { useFieldTargeting: true, allowCancel: true },
+    metadata: {
+      context: "extra_deck_ascension_material",
+      sourceCard: ascensionCard,
+    },
+  };
+}
+
 export function canSummonExtraDeckCardByProcedure(card, player, options = {}) {
   const procedure = card?.extraDeckSummonProcedure;
   if (!card || !player || !procedure) {
@@ -243,6 +328,85 @@ export function canSummonExtraDeckCardByProcedure(card, player, options = {}) {
     materialCombos,
     materialEntries,
   };
+}
+
+export function canSummonAscensionCardFromExtraDeck(card, player, options = {}) {
+  if (!isAscensionExtraDeckCard(card) || !player) {
+    return { ok: false, reason: "No Ascension summon procedure." };
+  }
+  if (
+    options.checkActionWindow !== false &&
+    typeof this.canStartAction === "function"
+  ) {
+    const actionCheck = this.canStartAction({
+      actor: player,
+      kind: "ascension_summon",
+      phaseReq: ["main1", "main2"],
+      silent: options.silent !== false,
+    });
+    if (!actionCheck.ok) {
+      return {
+        ok: false,
+        reason: actionCheck.reason || "This card cannot be summoned now.",
+      };
+    }
+  }
+
+  const candidates = buildAscensionMaterialCandidates(this, card, player);
+  if (candidates.length === 0) {
+    return {
+      ok: false,
+      reason: "No valid Ascension material on the field.",
+      candidates,
+    };
+  }
+
+  const fieldChecks = candidates.map((material) => ({
+    material,
+    check: this.canPlaceCardOnField?.(card, player, {
+      isFacedown: false,
+      excludeCards: [material],
+      silent: options.silent !== false,
+    }) || { ok: true },
+  }));
+  const validAfterFieldChecks = fieldChecks
+    .filter(({ check }) => check?.ok !== false)
+    .map(({ material }) => material);
+  if (validAfterFieldChecks.length === 0) {
+    const reason =
+      fieldChecks.find(({ check }) => check?.reason)?.check?.reason ||
+      "Cannot place Ascension monster on the field.";
+    return { ok: false, reason, candidates };
+  }
+
+  return {
+    ok: true,
+    type: "ascension",
+    candidates: validAfterFieldChecks,
+    requiredCount: 1,
+  };
+}
+
+export function canSummonExtraDeckCard(card, player, options = {}) {
+  if (card?.extraDeckSummonProcedure) {
+    const procedureCheck = this.canSummonExtraDeckCardByProcedure(
+      card,
+      player,
+      options,
+    );
+    if (procedureCheck.ok) {
+      return { ...procedureCheck, type: "procedure" };
+    }
+    if (!isAscensionExtraDeckCard(card)) {
+      return { ...procedureCheck, type: "procedure" };
+    }
+  }
+
+  if (isAscensionExtraDeckCard(card)) {
+    return this.canSummonAscensionCardFromExtraDeck(card, player, options);
+  }
+
+  return { ok: false, reason: null, type: "none" };
 }
 
 function buildMaterialSelectionContract(
@@ -400,6 +564,68 @@ export async function performExtraDeckSummonProcedure(cardOrIndex, player, optio
   return { success: true };
 }
 
+export async function performAscensionSummonFromExtraDeck(
+  cardOrIndex,
+  player,
+  options = {},
+) {
+  const extraDeck = player?.extraDeck || [];
+  const card =
+    typeof cardOrIndex === "number" ? extraDeck[cardOrIndex] : cardOrIndex;
+  if (!card || !player) return { success: false, reason: "missing_card" };
+
+  const check = this.canSummonAscensionCardFromExtraDeck(card, player, {
+    silent: false,
+    checkActionWindow: !options.material,
+  });
+  if (!check.ok) {
+    this.ui?.log?.(check.reason || "Cannot Ascension Summon this card.");
+    return { success: false, reason: check.reason || "ascension_unavailable" };
+  }
+
+  const materials = check.candidates || [];
+  const material =
+    options.material || (materials.length === 1 ? materials[0] : null);
+  if (material) {
+    this.closeExtraDeckModal?.();
+    return await this.performAscensionSummon(player, material, card);
+  }
+
+  const selectionContract = buildAscensionMaterialSelectionContract(
+    card,
+    player,
+    materials,
+    this,
+  );
+  this.closeExtraDeckModal?.();
+  this.startTargetSelectionSession({
+    kind: "ascension",
+    card,
+    selectionContract,
+    message: selectionContract.message,
+    execute: async (selections) => {
+      const key = (selections?.ascension_material || [])[0];
+      const chosen =
+        selectionContract.requirements[0].candidates.find(
+          (candidate) => candidate.key === key,
+        )?.cardRef || null;
+      if (!chosen) {
+        return {
+          success: false,
+          needsSelection: false,
+          reason: "No Ascension material selected.",
+        };
+      }
+      return await this.performAscensionSummon(player, chosen, card);
+    },
+  });
+  return {
+    success: false,
+    needsSelection: true,
+    selectionContract,
+  };
+}
+
 /**
  * Opens the Extra Deck modal for a player.
  * @param {Object} player - The player whose Extra Deck to show
@@ -409,18 +635,25 @@ export function openExtraDeckModal(player) {
   const canUseProcedures = activePlayer && !isAI(player);
   const availability = new Map();
   for (const card of player?.extraDeck || []) {
-    if (!card?.extraDeckSummonProcedure) continue;
-    availability.set(
-      card,
-      this.canSummonExtraDeckCardByProcedure(card, player, { silent: true }),
-    );
+    const check = this.canSummonExtraDeckCard?.(card, player, {
+      silent: true,
+    }) || { ok: false, reason: null };
+    if (check.type !== "none" || check.reason) {
+      availability.set(card, check);
+    }
   }
   this.ui.renderExtraDeckModal(player.extraDeck, {
     isSummonable: (card) => canUseProcedures && availability.get(card)?.ok === true,
     getDisabledReason: (card) => availability.get(card)?.reason || null,
     onCardClick: async (card) => {
-      if (!canUseProcedures || availability.get(card)?.ok !== true) return;
-      await this.performExtraDeckSummonProcedure(card, player);
+      if (!canUseProcedures) return;
+      const check = availability.get(card);
+      if (check?.ok !== true) return;
+      if (check.type === "ascension") {
+        await this.performAscensionSummonFromExtraDeck(card, player);
+      } else {
+        await this.performExtraDeckSummonProcedure(card, player);
+      }
     },
   });
   this.ui.toggleExtraDeckModal(true);

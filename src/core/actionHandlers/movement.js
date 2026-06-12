@@ -191,11 +191,26 @@ async function bounceAndSummonCard(source, target, player, action, engine, ctx =
   return true;
 }
 
+function findControlledCardZone(owner, card) {
+  if (!owner || !card) return null;
+  if (owner.fieldSpell === card) return "fieldSpell";
+  if (Array.isArray(owner.field) && owner.field.includes(card)) return "field";
+  if (Array.isArray(owner.spellTrap) && owner.spellTrap.includes(card)) {
+    return "spellTrap";
+  }
+  return null;
+}
+
 /**
  * Shuffles all cards the opponent controls (field monsters + spell/trap zone + field spell) into their Deck.
  * Used by battle_destroy effects that punish the opponent for destroying this card.
  */
-export function handleShuffleOpponentFieldToDeck(action, ctx, targets, engine) {
+export async function handleShuffleOpponentFieldToDeck(
+  action,
+  ctx,
+  targets,
+  engine,
+) {
   const game = engine?.game;
   if (!game) return false;
 
@@ -225,8 +240,31 @@ export function handleShuffleOpponentFieldToDeck(action, ctx, targets, engine) {
     return false;
   }
 
+  let movedCount = 0;
   for (const card of toMove) {
-    game.moveCard(card, opponent, "deck");
+    const fromZone = findControlledCardZone(opponent, card);
+    if (!fromZone) continue;
+
+    const moveResult = await game.moveCard(card, opponent, "deck", {
+      fromZone,
+      contextLabel: action.contextLabel || "shuffle_opponent_field_to_deck",
+      sourceCard: ctx.source || null,
+      effectId: ctx.effect?.id || null,
+      movedByEffect: true,
+      awaitCardMovedEvent: true,
+    });
+
+    if (moveResult === false || moveResult?.success === false) {
+      getUI(game)?.log(`${card.name} could not be shuffled into the Deck.`);
+      continue;
+    }
+
+    movedCount += 1;
+  }
+
+  if (movedCount === 0) {
+    getUI(game)?.log("No opponent cards could be shuffled into the Deck.");
+    return false;
   }
 
   // Shuffle the opponent's deck
@@ -238,7 +276,7 @@ export function handleShuffleOpponentFieldToDeck(action, ctx, targets, engine) {
   }
 
   getUI(game)?.log(
-    `All cards ${opponent.id} controlled were shuffled into the Deck.`
+    `${movedCount} card(s) ${opponent.id} controlled were shuffled into the Deck.`
   );
 
   if (typeof game.updateBoard === "function") game.updateBoard();

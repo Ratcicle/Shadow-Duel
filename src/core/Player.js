@@ -439,16 +439,35 @@ export default class Player {
     return freshCard;
   }
 
-  takeDamage(amount) {
+  takeDamage(amount, options = {}) {
     if (!amount || amount <= 0) return;
     const before = this.lp;
     this.lp -= amount;
     if (this.lp < 0) this.lp = 0;
     const actual = Math.max(0, before - this.lp);
-    if (actual > 0 && this.game?.ui?.showLpChange) {
-      this.game.ui.showLpChange(this, -actual);
+    const suppressVisual =
+      options.suppressVisual === true ||
+      options.suppressLpChangeFeedback === true;
+    let showedLpChange = false;
+    if (
+      actual > 0 &&
+      !suppressVisual &&
+      this.game?.ui?.showLpChange
+    ) {
+      showedLpChange =
+        this.game.ui.showLpChange(this, -actual, {
+          cause: options.cause || "effect",
+          fromLp: before,
+          toLp: this.lp,
+          screenShake: options.screenShake,
+        }) === true;
     }
-    if (actual > 0 && typeof this.game?.queueVisualFeedback === "function") {
+    if (
+      actual > 0 &&
+      !suppressVisual &&
+      !showedLpChange &&
+      typeof this.game?.queueVisualFeedback === "function"
+    ) {
       this.game.queueVisualFeedback({
         kind: "damage",
         targetOwnerId: this.id,

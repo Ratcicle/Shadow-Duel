@@ -302,6 +302,18 @@ export async function executeEffectBlueprint(blueprint, ctx, selections = null) 
       ...actionsResult,
     };
   }
+  if (
+    actionsResult &&
+    typeof actionsResult === "object" &&
+    actionsResult.success === false
+  ) {
+    return {
+      success: false,
+      needsSelection: false,
+      reason: actionsResult.reason || "Stored effect actions failed.",
+      actionResult: actionsResult,
+    };
+  }
 
   if (respectUsageLimits) {
     this.registerOncePerTurnUsage(execCtx.source, execCtx.player, effect);

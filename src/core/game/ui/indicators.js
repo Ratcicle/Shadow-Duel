@@ -254,9 +254,8 @@ export function buildActivationIndicatorsForPlayer(player) {
   );
 
   indicators.zones.extraDeck = (player.extraDeck || []).some((card) => {
-    if (!card?.extraDeckSummonProcedure) return false;
     return (
-      this.canSummonExtraDeckCardByProcedure?.(card, player, {
+      this.canSummonExtraDeckCard?.(card, player, {
         silent: true,
       })?.ok === true
     );
