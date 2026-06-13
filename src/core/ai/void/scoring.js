@@ -15,6 +15,7 @@ import {
 } from "./knowledge.js";
 import {
   VOID_IDS,
+  countControlledSpellTrapCards,
   detectAvailableCombos,
   calculateFusionValue,
 } from "./combos.js";
@@ -428,13 +429,7 @@ export function evaluateBoardVoid(gameOrState, perspectivePlayer) {
   const voidCount = myField.filter(isVoid).length;
   const hollowsInGY = myGY.filter((m) => m?.id === VOID_IDS.HOLLOW).length;
   const voidsInGY = myGY.filter(isVoid).length;
-  const handVoids = myHand.filter(isVoid);
-  const fieldVoids = myField.filter(isVoid);
-  const hydraProjectedDraws = Math.max(
-    0,
-    myField.filter((card) => card?.cardKind === "monster").length -
-      Math.min(Math.max(0, 6 - handVoids.length), fieldVoids.length),
-  );
+  const hydraProjectedDraws = countControlledSpellTrapCards(opponent);
 
   const oppStrongestAtk = oppField.reduce((max, m) => {
     if (!m || m.cardKind !== "monster") return max;

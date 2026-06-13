@@ -4,9 +4,9 @@ Fonte dos textos: `src/data/cards/*.js` via fachada `src/data/cards.js` (1x cada
 
 ## Resumo
 
-- Total: 23
+- Total: 24
 - Monstros (Main Deck): 11
-- Extra Deck: 3 (1 Fusão, 2 Ascension)
+- Extra Deck: 4 (2 Fusão, 2 Ascension)
 - Magias: 9
 - Armadilhas: 0
 
@@ -31,6 +31,7 @@ Fonte dos textos: `src/data/cards/*.js` via fachada `src/data/cards.js` (1x cada
 - 1x Shadow-Heart Demon Dragon — Fusão (121)
 - 1x Shadow-Heart Armored Arctroth — Ascension (123)
 - 1x Shadow-Heart Warlord — Fusão (122)
+- 1x Shadow-Heart Devastation Dragon — Ascension (124)
 
 ### Magias
 
@@ -82,6 +83,8 @@ Fonte dos textos: `src/data/cards/*.js` via fachada `src/data/cards.js` (1x cada
 
 **Shadow-Heart Warlord (122)** — Fusão, Nível 8, 2300/1900. Materiais: 2 monstros "Shadow-Heart". A primeira vez por turno que este card seria destruído em batalha: envie 1 "Shadow-Heart" do seu campo para o GY em vez disso. Se destruir monstro do oponente em batalha: Invoque por Invocação-Especial 1 "Shadow-Heart" Nível 4 ou menor do seu GY (não pode atacar). 1x por turno.
 
+**Shadow-Heart Devastation Dragon (124)** — Ascension, Nível 10, Dragon, 3300/3000. Matéria: "Shadow-Heart Scale Dragon" que ficou face-up no campo por 2 turnos. Ao ser Invocada por Ascensão: ganha 700 ATK até o fim do turno. Enquanto estiver face-up, nega efeitos do oponente que impeçam monstros de serem destruídos em batalha. Se destruir um monstro em Defesa por batalha: destrói todos os monstros em Defesa do oponente.
+
 ### Magias
 
 **Shadow-Heart Purge (103)** — Magia Normal. Descarte 1 carta "Shadow-Heart"; 1 monstro face-up do oponente perde 1000 ATK ate o fim do turno. Se esse efeito zerar o ATK dele, destrua-o (OPT por nome).
@@ -92,7 +95,7 @@ Fonte dos textos: `src/data/cards/*.js` via fachada `src/data/cards.js` (1x cada
 
 **Shadow-Heart Infusion (110)** — Magia Normal. Descarte 2; Invoque por Invocação-Especial 1 monstro "Shadow-Heart" do Cemitério (pos. escolha), não pode atacar neste turno. OPT por nome.
 
-**Shadow-Heart Rage (112)** — Magia Normal. Se "Shadow-Heart Scale Dragon" é seu único monstro: ele ganha 700 ATK/DEF e pode atacar duas vezes neste turno.
+**Shadow-Heart Rage (112)** — Magia Normal. Escolha 1 monstro "Shadow-Heart" do tipo Dragão que você controla: ele ganha 700 ATK/DEF e pode atacar duas vezes neste turno. Você não pode atacar diretamente no turno em que ativar esse efeito.
 
 **Shadow-Heart Shield (113)** — Magia de Equipamento. +500 ATK/DEF, indestrutível em batalha; manutenção: pagar 800 LP ou enviá-la ao Cemitério na Fase de Apoio.
 

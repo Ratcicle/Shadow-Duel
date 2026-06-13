@@ -4,7 +4,7 @@
 
 Este catalogo descreve o contrato declarativo de cada `action.type` registrado no Shadow Duel. O runtime continua vindo de `src/core/actionHandlers/wiring.js`; este documento serve para criar cartas, revisar handlers e validar o banco de cartas.
 
-Total de actions catalogadas: 79.
+Total de actions catalogadas: 87.
 
 ## Recursos
 
@@ -22,7 +22,7 @@ Adds selected cards from a zone to hand.
 
 | Campo | Obrigatorio | Contrato | Descricao |
 | --- | --- | --- | --- |
-| `zone` | nao | zone; valores: deck, hand, field, graveyard, spellTrap, fieldSpell, banish, banished | Source zone used by the action. |
+| `zone` | nao | zone; valores: deck, hand, field, graveyard, spellTrap, fieldSpell, extraDeck, banish, banished | Source zone used by the action. |
 | `filters` | nao | object | Card filter object evaluated by the handler. |
 | `count` | nao | object | Selection count object, usually { min, max }. |
 | `promptPlayer` | nao | boolean |  |
@@ -30,6 +30,7 @@ Adds selected cards from a zone to hand.
 | `archetype` | nao | string |  |
 | `cardKind` | nao | stringOrArray |  |
 | `cardName` | nao | string |  |
+| `isToken` | nao | boolean |  |
 | `minAtk` | nao | number |  |
 | `maxAtk` | nao | number |  |
 | `minDef` | nao | number |  |
@@ -201,7 +202,8 @@ Restores LP.
 
 | Campo | Obrigatorio | Contrato | Descricao |
 | --- | --- | --- | --- |
-| `amount` | sim | number; min: 0 | Numeric amount. |
+| `amount` | nao | number; min: 0 | Numeric amount. |
+| `amountFromContext` | nao | object |  |
 | `player` | nao | enum: self, opponent | Perspective for the action: "self" or "opponent". |
 
 **Exemplos**
@@ -211,6 +213,16 @@ Restores LP.
   "type": "heal",
   "player": "self",
   "amount": 1000
+}
+```
+```json
+{
+  "type": "heal",
+  "player": "self",
+  "amountFromContext": {
+    "key": "removedSporeCounterCount",
+    "multiplier": 500
+  }
 }
 ```
 
@@ -349,6 +361,49 @@ Heals for each field card matching filters.
 
 _Sem notas._
 
+### `heal_per_field_counter`
+
+Heals for each matching counter on field cards.
+
+- Handler: `handleHealPerFieldCounter`
+- Target: `none`
+- Selecao: `none`
+- Mutacoes: lp
+- Eventos emitidos: nenhum
+- Atualiza board: sim
+- Preview: `notNeeded`
+
+| Campo | Obrigatorio | Contrato | Descricao |
+| --- | --- | --- | --- |
+| `amountPerCounter` | sim | number |  |
+| `counterType` | sim | string |  |
+| `player` | nao | enum: self, opponent | Perspective for the action: "self" or "opponent". |
+| `owner` | nao | enum: self, opponent, any, both, either |  |
+| `zone` | nao | zone; valores: deck, hand, field, graveyard, spellTrap, fieldSpell, extraDeck, banish, banished | Source zone used by the action. |
+| `zones` | nao | array |  |
+| `filters` | nao | object | Card filter object evaluated by the handler. |
+
+**Exemplos**
+
+```json
+{
+  "type": "heal_per_field_counter",
+  "player": "self",
+  "owner": "opponent",
+  "zones": [
+    "field",
+    "spellTrap",
+    "fieldSpell"
+  ],
+  "counterType": "spore",
+  "amountPerCounter": 100
+}
+```
+
+**Notas**
+
+_Sem notas._
+
 ### `heal_per_opponent_cards_and_hand`
 
 Heals for each card the opponent controls plus each card in their hand.
@@ -465,7 +520,7 @@ Searches a card to hand, then optionally Special Summons that same card from han
 
 | Campo | Obrigatorio | Contrato | Descricao |
 | --- | --- | --- | --- |
-| `zone` | nao | zone; valores: deck, hand, field, graveyard, spellTrap, fieldSpell, banish, banished | Source zone used by the action. |
+| `zone` | nao | zone; valores: deck, hand, field, graveyard, spellTrap, fieldSpell, extraDeck, banish, banished | Source zone used by the action. |
 | `filters` | nao | object | Card filter object evaluated by the handler. |
 | `count` | nao | object | Selection count object, usually { min, max }. |
 | `promptPlayer` | nao | boolean |  |
@@ -473,6 +528,7 @@ Searches a card to hand, then optionally Special Summons that same card from han
 | `archetype` | nao | string |  |
 | `cardKind` | nao | stringOrArray |  |
 | `cardName` | nao | string |  |
+| `isToken` | nao | boolean |  |
 | `minAtk` | nao | number |  |
 | `maxAtk` | nao | number |  |
 | `minDef` | nao | number |  |
@@ -563,7 +619,7 @@ Pays LP upkeep or sends the source to a failure zone.
 | Campo | Obrigatorio | Contrato | Descricao |
 | --- | --- | --- | --- |
 | `lpCost` | sim | number |  |
-| `failureZone` | nao | zone; valores: deck, hand, field, graveyard, spellTrap, fieldSpell, banish, banished | Destination zone. |
+| `failureZone` | nao | zone; valores: deck, hand, field, graveyard, spellTrap, fieldSpell, extraDeck, banish, banished | Destination zone. |
 
 **Exemplos**
 
@@ -596,7 +652,7 @@ Moves target cards to another zone.
 | Campo | Obrigatorio | Contrato | Descricao |
 | --- | --- | --- | --- |
 | `targetRef` | sim | string | References an effect target id or a context target such as self. |
-| `to` | sim | zone; valores: deck, hand, field, graveyard, spellTrap, fieldSpell, banish, banished | Destination zone. |
+| `to` | sim | zone; valores: deck, hand, field, graveyard, spellTrap, fieldSpell, extraDeck, banish, banished | Destination zone. |
 | `player` | nao | enum: self, opponent | Perspective for the action: "self" or "opponent". |
 | `isFacedown` | nao | boolean |  |
 | `resetAttackFlags` | nao | boolean |  |
@@ -635,7 +691,7 @@ Returns target cards to hand.
 | Campo | Obrigatorio | Contrato | Descricao |
 | --- | --- | --- | --- |
 | `targetRef` | sim | string | References an effect target id or a context target such as self. |
-| `fromZone` | nao | zone; valores: deck, hand, field, graveyard, spellTrap, fieldSpell, banish, banished | Zone to read from or remove from. |
+| `fromZone` | nao | zone; valores: deck, hand, field, graveyard, spellTrap, fieldSpell, extraDeck, banish, banished | Zone to read from or remove from. |
 | `haltOnFailure` | nao | boolean |  |
 | `stopOnFailure` | nao | boolean |  |
 
@@ -760,13 +816,15 @@ Special Summons a target and binds it to Call of the Haunted.
 | Campo | Obrigatorio | Contrato | Descricao |
 | --- | --- | --- | --- |
 | `targetRef` | sim | string | References an effect target id or a context target such as self. |
+| `position` | nao | string |  |
 
 **Exemplos**
 
 ```json
 {
   "type": "call_of_haunted_summon_and_bind",
-  "targetRef": "haunted_target"
+  "targetRef": "haunted_target",
+  "position": "attack"
 }
 ```
 
@@ -952,7 +1010,7 @@ Special Summons source from hand by paying a target cost.
 | Campo | Obrigatorio | Contrato | Descricao |
 | --- | --- | --- | --- |
 | `costTargetRef` | nao | string |  |
-| `costDestination` | nao | zone; valores: deck, hand, field, graveyard, spellTrap, fieldSpell, banish, banished | Destination zone. |
+| `costDestination` | nao | zone; valores: deck, hand, field, graveyard, spellTrap, fieldSpell, extraDeck, banish, banished | Destination zone. |
 | `position` | nao | enum: attack, defense, choice | Battle position: "attack", "defense", or "choice". |
 | `cannotAttackThisTurn` | nao | boolean |  |
 
@@ -1021,8 +1079,8 @@ Special Summons cards from a configured zone.
 | Campo | Obrigatorio | Contrato | Descricao |
 | --- | --- | --- | --- |
 | `targetRef` | nao | string | References an effect target id or a context target such as self. |
-| `zone` | nao | zone; valores: deck, hand, field, graveyard, spellTrap, fieldSpell, banish, banished | Source zone used by the action. |
-| `sourceZone` | nao | zone; valores: deck, hand, field, graveyard, spellTrap, fieldSpell, banish, banished | Alternative source zone used by some summon actions. |
+| `zone` | nao | zone; valores: deck, hand, field, graveyard, spellTrap, fieldSpell, extraDeck, banish, banished | Source zone used by the action. |
+| `sourceZone` | nao | zone; valores: deck, hand, field, graveyard, spellTrap, fieldSpell, extraDeck, banish, banished | Alternative source zone used by some summon actions. |
 | `scope` | nao | enum: self, opponent, both | Player scope for the action: "self", "opponent", or "both". |
 | `filters` | nao | object | Card filter object evaluated by the handler. |
 | `count` | nao | object | Selection count object, usually { min, max }. |
@@ -1046,6 +1104,7 @@ Special Summons cards from a configured zone.
 | `setDefToZeroAfterSummon` | nao | boolean |  |
 | `atkBoostAfterSummon` | nao | number |  |
 | `defBoostAfterSummon` | nao | number |  |
+| `statusesOnSummon` | nao | array |  |
 
 **Exemplos**
 
@@ -1079,7 +1138,7 @@ Special Summons a card matching another target's level.
 | Campo | Obrigatorio | Contrato | Descricao |
 | --- | --- | --- | --- |
 | `matchLevelRef` | sim | string |  |
-| `zone` | sim | zone; valores: deck, hand, field, graveyard, spellTrap, fieldSpell, banish, banished | Source zone used by the action. |
+| `zone` | sim | zone; valores: deck, hand, field, graveyard, spellTrap, fieldSpell, extraDeck, banish, banished | Source zone used by the action. |
 | `position` | nao | enum: attack, defense, choice | Battle position: "attack", "defense", or "choice". |
 | `cannotAttackThisTurn` | nao | boolean |  |
 | `negateEffects` | nao | boolean |  |
@@ -1227,7 +1286,9 @@ Banishes target cards or context cards.
 | Campo | Obrigatorio | Contrato | Descricao |
 | --- | --- | --- | --- |
 | `targetRef` | nao | string | References an effect target id or a context target such as self. |
-| `fromZone` | nao | zone; valores: deck, hand, field, graveyard, spellTrap, fieldSpell, banish, banished | Zone to read from or remove from. |
+| `fromZone` | nao | zone; valores: deck, hand, field, graveyard, spellTrap, fieldSpell, extraDeck, banish, banished | Zone to read from or remove from. |
+| `haltOnFailure` | nao | boolean |  |
+| `stopOnFailure` | nao | boolean |  |
 
 **Exemplos**
 
@@ -1425,6 +1486,50 @@ Destroys the attacker after archetype destruction trigger.
 
 _Sem notas._
 
+### `destroy_cards_by_scope`
+
+Destroys every card matching a field scope without manual targeting.
+
+- Handler: `handleDestroyCardsByScope`
+- Target: `none`
+- Selecao: `none`
+- Mutacoes: field, spellTrap, graveyard, deck, hand
+- Eventos emitidos: before_destroy, card_to_grave, cards_added_to_hand
+- Atualiza board: sim
+- Preview: `missing`
+
+| Campo | Obrigatorio | Contrato | Descricao |
+| --- | --- | --- | --- |
+| `targetScope` | sim | object |  |
+| `cause` | nao | string |  |
+| `effectType` | nao | string |  |
+| `optional` | nao | boolean |  |
+| `drawPerDestroyed` | nao | number |  |
+| `drawPlayer` | nao | player |  |
+
+**Exemplos**
+
+```json
+{
+  "type": "destroy_cards_by_scope",
+  "targetScope": {
+    "owner": "opponent",
+    "zones": [
+      "field"
+    ],
+    "filters": {
+      "cardKind": "monster",
+      "counterType": "spore",
+      "minCounters": 1
+    }
+  }
+}
+```
+
+**Notas**
+
+_Sem notas._
+
 ### `destroy_other_dragons_and_buff`
 
 Destroys other Dragon-type monsters and buffs the source.
@@ -1499,8 +1604,13 @@ Destroys selected cards from one or more zones.
 | --- | --- | --- | --- |
 | `zones` | nao | array |  |
 | `cardKind` | nao | stringOrArray |  |
+| `subtype` | nao | stringOrArray |  |
+| `filters` | nao | object | Card filter object evaluated by the handler. |
+| `position` | nao | enum: attack, defense, choice | Battle position: "attack", "defense", or "choice". |
+| `requireFaceup` | nao | boolean |  |
 | `minTargets` | nao | number |  |
 | `maxTargets` | nao | number |  |
+| `targetCountFromContext` | nao | object |  |
 
 **Exemplos**
 
@@ -1633,6 +1743,8 @@ Adds a named status flag to target cards.
 | `targetRef` | sim | string | References an effect target id or a context target such as self. |
 | `status` | sim | string |  |
 | `value` | nao | any |  |
+| `remove` | nao | boolean |  |
+| `untilEndOfTurn` | nao | boolean |  |
 
 **Exemplos**
 
@@ -1742,6 +1854,50 @@ Temporarily modifies ATK by amount.
 
 _Sem notas._
 
+### `buff_stats_by_counter`
+
+Temporarily modifies ATK and/or DEF based on counters on each target or a referenced counter source.
+
+- Handler: `handleBuffStatsByCounter`
+- Target: `required`
+- Selecao: `usesTargets`
+- Mutacoes: stats
+- Eventos emitidos: nenhum
+- Atualiza board: sim
+- Preview: `notNeeded`
+
+| Campo | Obrigatorio | Contrato | Descricao |
+| --- | --- | --- | --- |
+| `targetRef` | sim | string | References an effect target id or a context target such as self. |
+| `counterType` | sim | string |  |
+| `atkPerCounter` | nao | number |  |
+| `defPerCounter` | nao | number |  |
+| `atkBoostPerCounter` | nao | number |  |
+| `defBoostPerCounter` | nao | number |  |
+| `counterSourceRef` | nao | string |  |
+| `minCounters` | nao | number |  |
+| `duration` | nao | string |  |
+| `durationTurns` | nao | number |  |
+| `expiresOnTurn` | nao | number |  |
+| `permanent` | nao | boolean |  |
+| `sourceName` | nao | string |  |
+
+**Exemplos**
+
+```json
+{
+  "type": "buff_stats_by_counter",
+  "targetRef": "spore_target",
+  "counterType": "spore",
+  "atkPerCounter": -400,
+  "defPerCounter": -400
+}
+```
+
+**Notas**
+
+_Sem notas._
+
 ### `buff_stats_temp`
 
 Temporarily modifies ATK and/or DEF.
@@ -1759,6 +1915,9 @@ Temporarily modifies ATK and/or DEF.
 | `targetRef` | nao | string | References an effect target id or a context target such as self. |
 | `atkBoost` | nao | number |  |
 | `defBoost` | nao | number |  |
+| `targetScope` | nao | object |  |
+| `atkBoostFromContext` | nao | object |  |
+| `defBoostFromContext` | nao | object |  |
 | `duration` | nao | string |  |
 | `durationTurns` | nao | number |  |
 | `expiresOnTurn` | nao | number |  |
@@ -1803,7 +1962,7 @@ Applies a temporary stat buff and grants a second attack.
 ```json
 {
   "type": "buff_stats_temp_with_second_attack",
-  "targetRef": "rage_scale_target",
+  "targetRef": "rage_dragon_target",
   "atkBoost": 1000
 }
 ```
@@ -2112,6 +2271,46 @@ Removes a named persistent buff.
 
 _Sem notas._
 
+### `set_original_stats`
+
+Sets a monster's original ATK and/or DEF, optionally from context.
+
+- Handler: `handleSetOriginalStats`
+- Target: `optional`
+- Selecao: `usesTargets`
+- Mutacoes: stats
+- Eventos emitidos: nenhum
+- Atualiza board: sim
+- Preview: `notNeeded`
+
+| Campo | Obrigatorio | Contrato | Descricao |
+| --- | --- | --- | --- |
+| `targetRef` | nao | string | References an effect target id or a context target such as self. |
+| `atk` | nao | number |  |
+| `def` | nao | number |  |
+| `baseAtk` | nao | number |  |
+| `baseDef` | nao | number |  |
+| `atkFromContext` | nao | object |  |
+| `defFromContext` | nao | object |  |
+| `updateCurrentStats` | nao | boolean |  |
+
+**Exemplos**
+
+```json
+{
+  "type": "set_original_stats",
+  "targetRef": "self",
+  "atkFromContext": {
+    "key": "fieldSporeCounterCount",
+    "multiplier": 500
+  }
+}
+```
+
+**Notas**
+
+_Sem notas._
+
 ### `set_stats_to_zero_and_negate`
 
 Sets target stats to zero and optionally negates effects.
@@ -2150,7 +2349,7 @@ _Sem notas._
 Switches target battle position.
 
 - Handler: `handleSwitchPosition`
-- Target: `required`
+- Target: `optional`
 - Selecao: `usesTargets`
 - Mutacoes: position, stats
 - Eventos emitidos: position_change
@@ -2159,9 +2358,12 @@ Switches target battle position.
 
 | Campo | Obrigatorio | Contrato | Descricao |
 | --- | --- | --- | --- |
-| `targetRef` | sim | string | References an effect target id or a context target such as self. |
+| `targetRef` | nao | string | References an effect target id or a context target such as self. |
+| `targetScope` | nao | object |  |
 | `atkBoost` | nao | number |  |
 | `markChanged` | nao | boolean |  |
+| `haltOnFailure` | nao | boolean |  |
+| `stopOnFailure` | nao | boolean |  |
 
 **Exemplos**
 
@@ -2462,7 +2664,7 @@ _Sem notas._
 Adds counters to a target or source card.
 
 - Handler: `proxy:applyAddCounter`
-- Target: `required`
+- Target: `optional`
 - Selecao: `usesTargets`
 - Mutacoes: counters
 - Eventos emitidos: nenhum
@@ -2471,10 +2673,12 @@ Adds counters to a target or source card.
 
 | Campo | Obrigatorio | Contrato | Descricao |
 | --- | --- | --- | --- |
-| `targetRef` | sim | string | References an effect target id or a context target such as self. |
 | `counterType` | sim | string |  |
+| `targetRef` | nao | string | References an effect target id or a context target such as self. |
 | `amount` | nao | number; min: 0 | Numeric amount. |
 | `damagePerCounter` | nao | number |  |
+| `amountFromFieldCount` | nao | object |  |
+| `targetScope` | nao | object |  |
 
 **Exemplos**
 
@@ -2484,6 +2688,113 @@ Adds counters to a target or source card.
   "targetRef": "self",
   "counterType": "ink",
   "amount": 1
+}
+```
+```json
+{
+  "type": "add_counter",
+  "targetRef": "self",
+  "counterType": "spore",
+  "amountFromFieldCount": {
+    "owner": "self",
+    "zone": "field",
+    "filters": {
+      "archetype": "Bloomrot"
+    }
+  }
+}
+```
+
+**Notas**
+
+_Sem notas._
+
+### `count_field_counters`
+
+Counts matching field counters and stores the total in action context.
+
+- Handler: `proxy:applyCountFieldCounters`
+- Target: `none`
+- Selecao: `none`
+- Mutacoes: nenhum
+- Eventos emitidos: nenhum
+- Atualiza board: sim
+- Preview: `notNeeded`
+
+| Campo | Obrigatorio | Contrato | Descricao |
+| --- | --- | --- | --- |
+| `counterType` | sim | string |  |
+| `owner` | nao | enum: self, opponent, any |  |
+| `player` | nao | enum: self, opponent | Perspective for the action: "self" or "opponent". |
+| `zone` | nao | zone; valores: deck, hand, field, graveyard, spellTrap, fieldSpell, extraDeck, banish, banished | Source zone used by the action. |
+| `zones` | nao | array |  |
+| `filters` | nao | object | Card filter object evaluated by the handler. |
+| `requireFaceup` | nao | boolean |  |
+| `contextKey` | nao | string |  |
+| `storeAs` | nao | string |  |
+| `resultKey` | nao | string |  |
+| `log` | nao | boolean |  |
+
+**Exemplos**
+
+```json
+{
+  "type": "count_field_counters",
+  "counterType": "spore",
+  "owner": "any",
+  "zones": [
+    "field",
+    "spellTrap",
+    "fieldSpell"
+  ],
+  "contextKey": "fieldSporeCounterCount"
+}
+```
+
+**Notas**
+
+_Sem notas._
+
+### `remove_all_counters_from_field`
+
+Removes every matching counter from the field and stores the removed count in context.
+
+- Handler: `proxy:applyRemoveAllCountersFromField`
+- Target: `none`
+- Selecao: `none`
+- Mutacoes: counters
+- Eventos emitidos: nenhum
+- Atualiza board: sim
+- Preview: `notNeeded`
+
+| Campo | Obrigatorio | Contrato | Descricao |
+| --- | --- | --- | --- |
+| `counterType` | sim | string |  |
+| `owner` | nao | enum: self, opponent, any |  |
+| `player` | nao | enum: self, opponent | Perspective for the action: "self" or "opponent". |
+| `zone` | nao | zone; valores: deck, hand, field, graveyard, spellTrap, fieldSpell, extraDeck, banish, banished | Source zone used by the action. |
+| `zones` | nao | array |  |
+| `filters` | nao | object | Card filter object evaluated by the handler. |
+| `requireFaceup` | nao | boolean |  |
+| `contextKey` | nao | string |  |
+| `storeAs` | nao | string |  |
+| `resultKey` | nao | string |  |
+| `haltOnFailure` | nao | boolean |  |
+| `stopOnFailure` | nao | boolean |  |
+
+**Exemplos**
+
+```json
+{
+  "type": "remove_all_counters_from_field",
+  "counterType": "spore",
+  "owner": "any",
+  "zones": [
+    "field",
+    "spellTrap",
+    "fieldSpell"
+  ],
+  "contextKey": "removedSporeCounterCount"
 }
 ```
 
@@ -2519,6 +2830,61 @@ Removes counters from target or source card.
   "targetRef": "self",
   "counterType": "ink",
   "amount": 2
+}
+```
+
+**Notas**
+
+_Sem notas._
+
+### `remove_counters_from_field`
+
+Removes counters from a field-wide pool, with player selection when multiple cards can pay.
+
+- Handler: `proxy:applyRemoveCountersFromField`
+- Target: `none`
+- Selecao: `dynamic`
+- Mutacoes: counters
+- Eventos emitidos: nenhum
+- Atualiza board: sim
+- Preview: `notNeeded`
+
+| Campo | Obrigatorio | Contrato | Descricao |
+| --- | --- | --- | --- |
+| `counterType` | sim | string |  |
+| `amount` | nao | number; min: 0 | Numeric amount. |
+| `count` | nao | number |  |
+| `minAmount` | nao | number |  |
+| `maxAmount` | nao | number |  |
+| `defaultAmount` | nao | number |  |
+| `variableAmount` | nao | boolean |  |
+| `owner` | nao | enum: self, opponent, any |  |
+| `player` | nao | enum: self, opponent | Perspective for the action: "self" or "opponent". |
+| `zone` | nao | zone; valores: deck, hand, field, graveyard, spellTrap, fieldSpell, extraDeck, banish, banished | Source zone used by the action. |
+| `zones` | nao | array |  |
+| `filters` | nao | object | Card filter object evaluated by the handler. |
+| `requireFaceup` | nao | boolean |  |
+| `contextKey` | nao | string |  |
+| `storeAs` | nao | string |  |
+| `resultKey` | nao | string |  |
+| `selectionMessage` | nao | string |  |
+| `amountPrompt` | nao | string |  |
+| `haltOnFailure` | nao | boolean |  |
+| `stopOnFailure` | nao | boolean |  |
+
+**Exemplos**
+
+```json
+{
+  "type": "remove_counters_from_field",
+  "counterType": "spore",
+  "amount": 2,
+  "owner": "any",
+  "zones": [
+    "field",
+    "spellTrap",
+    "fieldSpell"
+  ]
 }
 ```
 
@@ -2586,6 +2952,41 @@ Executes nested action cases based on a resolved target.
   "type": "conditional_target_actions",
   "targetRef": "lightning_magic_lance_target",
   "cases": []
+}
+```
+
+**Notas**
+
+_Sem notas._
+
+### `optional_target_actions`
+
+Optionally resolves its own targets and executes nested actions when conditions and targets are available.
+
+- Handler: `handleOptionalTargetActions`
+- Target: `none`
+- Selecao: `dynamic`
+- Mutacoes: varies
+- Eventos emitidos: nenhum
+- Atualiza board: sim
+- Preview: `missing`
+
+| Campo | Obrigatorio | Contrato | Descricao |
+| --- | --- | --- | --- |
+| `targets` | sim | array |  |
+| `actions` | sim | array |  |
+| `conditions` | nao | array |  |
+| `selectionMessage` | nao | string |  |
+| `allowCancel` | nao | boolean |  |
+| `logIfSkipped` | nao | boolean |  |
+
+**Exemplos**
+
+```json
+{
+  "type": "optional_target_actions",
+  "targets": [],
+  "actions": []
 }
 ```
 

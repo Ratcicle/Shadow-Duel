@@ -401,6 +401,19 @@ async function tryReplacement(game, sourceCard, sourceOwner, effect, ctx) {
     }
   }
 
+  if (
+    cause === "battle" &&
+    typeof game.isBattleDestructionPreventionNegated === "function" &&
+    game.isBattleDestructionPreventionNegated(card, {
+      owner: ownerPlayer,
+      preventionSourceOwner: sourceOwner,
+      preventionSourceCard: sourceCard,
+      fromZone,
+    })
+  ) {
+    return { replaced: false };
+  }
+
   const onceCheck = game.canUseOncePerTurn(sourceCard, sourceOwner, effect);
   if (!onceCheck.ok) {
     return { replaced: false };

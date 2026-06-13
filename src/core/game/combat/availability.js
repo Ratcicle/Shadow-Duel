@@ -56,6 +56,9 @@ function cardMatchesAttackPassiveFilters(game, card, filters = {}) {
   if (!card) return false;
   if (filters.requireFaceup === true && card.isFacedown) return false;
   if (filters.cardKind && !cardMatchesKind(card, filters.cardKind)) return false;
+  if (filters.position && filters.position !== "any") {
+    if (card.position !== filters.position) return false;
+  }
   if (filters.archetype) {
     const archetypes = Array.isArray(card.archetypes)
       ? card.archetypes
@@ -84,6 +87,122 @@ function cardMatchesAttackPassiveFilters(game, card, filters = {}) {
     return false;
   }
   return true;
+}
+
+function normalizePassiveList(value, fallback = []) {
+  if (value === undefined || value === null) return fallback;
+  return Array.isArray(value) ? value : [value];
+}
+
+function samePlayer(left, right) {
+  if (!left || !right) return false;
+  return left === right || (left.id && right.id && left.id === right.id);
+}
+
+function getPlayerFromContext(game, value) {
+  if (!game || !value) return null;
+  if (samePlayer(value, game.player)) return game.player;
+  if (samePlayer(value, game.bot)) return game.bot;
+  if (value === "player") return game.player;
+  if (value === "bot") return game.bot;
+  if (value.owner === "player") return game.player;
+  if (value.owner === "bot") return game.bot;
+  if (value.id === "player") return game.player;
+  if (value.id === "bot") return game.bot;
+  return null;
+}
+
+function getOwnerTypeForAura(auraOwner, targetOwner) {
+  if (!auraOwner || !targetOwner) return null;
+  return samePlayer(auraOwner, targetOwner) ? "self" : "opponent";
+}
+
+function ownerRuleMatches(ruleList, ownerType) {
+  if (!ownerType) return false;
+  return ruleList.includes("any") || ruleList.includes(ownerType);
+}
+
+function isBattleDestructionPreventionAura(passive) {
+  return (
+    passive?.type === "negate_battle_destruction_prevention" ||
+    passive?.type === "negate_opponent_battle_destruction_prevention"
+  );
+}
+
+function findBattleDestructionPreventionNegationAura(
+  game,
+  card,
+  context = {},
+) {
+  if (!game || !card) return null;
+
+  const protectedOwner =
+    getPlayerFromContext(game, context.owner) || getPlayerByCardOwner(game, card);
+  if (!protectedOwner) return null;
+
+  const preventionSourceOwner =
+    getPlayerFromContext(
+      game,
+      context.preventionSourceOwner ||
+        context.effectOwner ||
+        context.sourceOwner,
+    ) || protectedOwner;
+
+  const sourceOwners = [game.player, game.bot].filter(Boolean);
+
+  for (const sourceOwner of sourceOwners) {
+    for (const sourceCard of getAttackPassiveSources(sourceOwner)) {
+      if (!sourceCard || sourceCard.isFacedown || sourceCard.effectsNegated) {
+        continue;
+      }
+
+      for (const effect of sourceCard.effects || []) {
+        if (effect?.timing !== "passive") continue;
+        const passive = effect.passive || {};
+        if (!isBattleDestructionPreventionAura(passive)) continue;
+
+        const sourceZone = findAttackPassiveSourceZone(
+          game,
+          sourceOwner,
+          sourceCard,
+        );
+        if (effect.requireZone && sourceZone !== effect.requireZone) continue;
+        if (passive.requireZone && sourceZone !== passive.requireZone) continue;
+        if (effect.requireFaceup === true && sourceCard.isFacedown) continue;
+
+        const targetOwners = normalizePassiveList(
+          passive.targetOwners || passive.owners,
+          ["opponent"],
+        );
+        const targetOwnerType = getOwnerTypeForAura(
+          sourceOwner,
+          protectedOwner,
+        );
+        if (!ownerRuleMatches(targetOwners, targetOwnerType)) continue;
+
+        const preventedEffectOwners = normalizePassiveList(
+          passive.preventedEffectOwners || passive.effectOwners,
+          ["opponent"],
+        );
+        const preventionOwnerType = getOwnerTypeForAura(
+          sourceOwner,
+          preventionSourceOwner,
+        );
+        if (!ownerRuleMatches(preventedEffectOwners, preventionOwnerType)) {
+          continue;
+        }
+
+        const targetFilters = passive.targetFilters || { cardKind: "monster" };
+        if (!cardMatchesAttackPassiveFilters(game, card, targetFilters)) {
+          continue;
+        }
+
+        return { sourceCard, sourceOwner, effect, passive };
+      }
+    }
+  }
+
+  return null;
 }
 
 function getCounterAttackLockReason(game, attacker) {
@@ -350,12 +469,27 @@ export function registerAttackNegated(attacker) {
 }
 
 /**
+ * Check if an active aura negates effects preventing this card from being
+ * destroyed by battle.
+ * @param {Object} card - The card protected by a battle-destruction effect
+ * @param {Object} context - Optional owner/source context for the prevention
+ * @returns {boolean} True if the prevention effect is negated
+ */
+export function isBattleDestructionPreventionNegated(card, context = {}) {
+  return !!findBattleDestructionPreventionNegationAura(this, card, context);
+}
+
+/**
  * Check if a card can be destroyed by battle.
  * @param {Object} card - The card to check
+ * @param {Object} context - Optional owner/source context for the prevention
  * @returns {boolean} True if the card can be destroyed by battle
  */
-export function canDestroyByBattle(card) {
+export function canDestroyByBattle(card, context = {}) {
   if (!card) return false;
+  if (isBattleDestructionPreventionNegated.call(this, card, context)) {
+    return true;
+  }
   if (card.battleIndestructible) return false;
   if (card.tempBattleIndestructible) return false;
   if (card.battleIndestructibleOncePerTurn) {

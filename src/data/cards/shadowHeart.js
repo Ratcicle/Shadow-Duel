@@ -428,15 +428,31 @@ export const shadowHeartCards = [
             to: "graveyard",
           },
           {
-            type: "special_summon_from_zone",
-            zone: "graveyard",
-            filters: {
-              archetype: "Shadow-Heart",
-              cardKind: "monster",
-            },
-            excludeSummonRestrict: ["shadow_heart_invocation_only"],
-            position: "choice",
-            cannotAttackThisTurn: true,
+            type: "optional_target_actions",
+            allowCancel: false,
+            logIfSkipped: true,
+            selectionMessage:
+              'Choose 1 "Shadow-Heart" monster in your Graveyard to Special Summon.',
+            targets: [
+              {
+                id: "infusion_revive_target",
+                owner: "self",
+                zone: "graveyard",
+                archetype: "Shadow-Heart",
+                cardKind: "monster",
+                count: { min: 1, max: 1 },
+              },
+            ],
+            actions: [
+              {
+                type: "special_summon_from_zone",
+                targetRef: "infusion_revive_target",
+                zone: "graveyard",
+                excludeSummonRestrict: ["shadow_heart_invocation_only"],
+                position: "choice",
+                cannotAttackThisTurn: true,
+              },
+            ],
           },
         ],
       },
@@ -516,38 +532,28 @@ export const shadowHeartCards = [
     subtype: "normal",
     archetype: "Shadow-Heart",
     description:
-      'If "Shadow-Heart Scale Dragon" is the only monster you control: It gains 700 ATK/DEF until the end of this turn, and it can make a second attack during this Battle Phase. You cannot attack directly the turn you activate this effect.',
+      'Choose 1 Dragon "Shadow-Heart" monster you control; it gains 700 ATK/DEF until the end of this turn, and it can make a second attack during this Battle Phase. You cannot attack directly the turn you activate this effect.',
     image: "assets/Shadow-Heart Rage.png",
     effects: [
       {
-        id: "shadow_heart_rage_scale_buff_effect",
+        id: "shadow_heart_rage_dragon_buff_effect",
         timing: "on_play",
         speed: 1,
-        conditions: [
-          { type: "playerFieldCount", count: 1 },
-          {
-            type: "control_card",
-            cardName: "Shadow-Heart Scale Dragon",
-            zone: "field",
-            requireFaceup: true,
-          },
-        ],
         targets: [
           {
-            id: "rage_scale_target",
+            id: "rage_dragon_target",
             owner: "self",
             zone: "field",
             cardKind: "monster",
-            cardName: "Shadow-Heart Scale Dragon",
-            requireFaceup: true,
+            archetype: "Shadow-Heart",
+            type: "Dragon",
             count: { min: 1, max: 1 },
-            autoSelect: true,
           },
         ],
         actions: [
           {
             type: "buff_stats_temp_with_second_attack",
-            targetRef: "rage_scale_target",
+            targetRef: "rage_dragon_target",
             atkBoost: 700,
             defBoost: 700,
           },
@@ -1107,6 +1113,77 @@ export const shadowHeartCards = [
         actions: [
           {
             type: "switch_defender_position_on_attack",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 124,
+    name: "Shadow-Heart Devastation Dragon",
+    cardKind: "monster",
+    archetype: "Shadow-Heart",
+    attribute: "Dark",
+    level: 10,
+    atk: 3300,
+    def: 3000,
+    type: "Dragon",
+    monsterType: "ascension",
+    ascension: {
+      materialId: 111,
+      requirements: [{ type: "material_turns_on_field", count: 2 }],
+      position: "choice",
+    },
+    description:
+      'Ascension Material: "Shadow-Heart Scale Dragon". Requirement: the material must have been face-up on the field for 2 turns. If this card is Ascension Summoned: it gains 700 ATK until the end of this turn. While this card is face-up on the field, negate your opponent\'s card effects that prevent monsters from being destroyed by battle. If this card destroys a Defense Position monster by battle: destroy all Defense Position monsters your opponent controls.',
+    image: "assets/Shadow-Heart Devastation Dragon.png",
+    effects: [
+      {
+        id: "shadow_heart_devastation_dragon_ascension_boost",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethods: ["ascension"],
+        requireSelfAsSummoned: true,
+        actions: [
+          {
+            type: "buff_stats_temp",
+            atkBoost: 700,
+          },
+        ],
+      },
+      {
+        id: "shadow_heart_devastation_dragon_battle_protection_aura",
+        timing: "passive",
+        requireZone: "field",
+        requireFaceup: true,
+        passive: {
+          type: "negate_opponent_battle_destruction_prevention",
+          targetOwners: ["opponent"],
+          preventedEffectOwners: ["opponent"],
+          targetFilters: { cardKind: "monster" },
+        },
+      },
+      {
+        id: "shadow_heart_devastation_dragon_defense_sweep",
+        timing: "on_event",
+        event: "battle_destroy",
+        requireZone: "field",
+        requireFaceup: true,
+        requireSelfAsAttacker: true,
+        requireDestroyedIsOpponent: true,
+        requireDestroyedPosition: "defense",
+        actions: [
+          {
+            type: "destroy_cards_by_scope",
+            optional: true,
+            targetScope: {
+              owner: "opponent",
+              zones: ["field"],
+              filters: {
+                cardKind: "monster",
+                position: "defense",
+              },
+            },
           },
         ],
       },

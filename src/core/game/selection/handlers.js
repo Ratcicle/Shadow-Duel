@@ -48,6 +48,8 @@ export function handleTargetSelectionClick(
     card = ownerPlayer.fieldSpell;
   } else if (zoneHint === "spellTrap") {
     card = ownerPlayer.spellTrap[cardIndex];
+  } else if (zoneHint === "hand") {
+    card = ownerPlayer.hand[cardIndex];
   } else {
     card = ownerPlayer.field[cardIndex];
   }

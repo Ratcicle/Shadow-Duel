@@ -201,6 +201,9 @@ function cardMatchesScopeFilters(card, filters, engine) {
   if (filters.cardKind && !cardMatchesKind(card, filters.cardKind)) {
     return false;
   }
+  if (filters.position && filters.position !== "any") {
+    if (card.position !== filters.position) return false;
+  }
   if (filters.isToken !== undefined) {
     if ((card.isToken === true) !== Boolean(filters.isToken)) return false;
   }
@@ -246,6 +249,7 @@ export function resolveFieldScopeCards(scope = {}, ctx = {}, game = null, option
     "maxAtk",
     "minDef",
     "maxDef",
+    "position",
     "counterType",
     "minCounters",
     "maxCounters",

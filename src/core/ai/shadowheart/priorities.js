@@ -102,6 +102,26 @@ function hasActiveOwnFieldSpell(context = {}, name) {
   return candidates.some((candidate) => getCardName(candidate) === name);
 }
 
+function isDragonType(card) {
+  if (!card) return false;
+  const requiredType = "dragon";
+  if (Array.isArray(card.types)) {
+    return card.types.some(
+      (type) => String(type || "").toLowerCase() === requiredType,
+    );
+  }
+  return String(card.type || "").toLowerCase() === requiredType;
+}
+
+function isShadowHeartDragon(card) {
+  return (
+    card?.cardKind === "monster" &&
+    !card.isFacedown &&
+    isDragonType(card) &&
+    (isShadowHeart(card) || isShadowHeartByName(card.name))
+  );
+}
+
 function sameCardInstance(a, b) {
   if (!a || !b) return false;
   if (a === b) return true;
@@ -1136,12 +1156,15 @@ export function evaluateShadowHeartOffensivePlan(analysis) {
       !card.cannotAttackThisTurn,
   );
   const scaleInHand = hand.some((card) => card.name === "Shadow-Heart Scale Dragon");
-  const scaleSolo =
-    !!scaleOnField &&
-    field.filter((card) => card && card.cardKind === "monster").length === 1;
+  const rageTargetOnField = field.find(
+    (card) =>
+      isShadowHeartDragon(card) &&
+      card.position === "attack" &&
+      !card.cannotAttackThisTurn,
+  );
   const rageLive =
     phase !== "main2" &&
-    scaleSolo &&
+    !!rageTargetOnField &&
     hand.some((card) => card.name === "Shadow-Heart Rage");
 
   const purgeWindow =
@@ -1214,8 +1237,10 @@ export function evaluateShadowHeartOffensivePlan(analysis) {
   if (battleHymnLethal || attackers.length >= 2) {
     preserveNames.add("Shadow-Heart Battle Hymn");
   }
-  if (rageLive || scaleOnField || scaleInHand) {
+  if (rageLive || rageTargetOnField || scaleOnField || scaleInHand) {
     preserveNames.add("Shadow-Heart Rage");
+  }
+  if (scaleOnField || scaleInHand) {
     preserveNames.add("Shadow-Heart Scale Dragon");
   }
   if (comebackReady || field.length === 0) preserveNames.add("The Shadow Heart");
@@ -1568,7 +1593,7 @@ export function shouldPlaySpell(card, analysis) {
     return { yes: false, reason: "Sem monstros Shadow-Heart para buffar" };
   }
 
-  // Shadow-Heart Rage - Só com Scale Dragon sozinho
+  // Shadow-Heart Rage - Dragon Shadow-Heart combat push
   if (name === "Shadow-Heart Rage") {
     // ⚠️ TIMING: Rage é buff de ATK - só útil antes da Battle Phase
     if (analysis.phase === "main2") {
@@ -1578,18 +1603,22 @@ export function shouldPlaySpell(card, analysis) {
       };
     }
 
-    if (
-      analysis.field.length === 1 &&
-      analysis.field[0].name === "Shadow-Heart Scale Dragon" &&
-      !analysis.field[0].cannotAttackThisTurn
-    ) {
+    const rageTargets = analysis.field
+      .filter((card) => isShadowHeartDragon(card) && !card.cannotAttackThisTurn)
+      .sort((a, b) => (b.atk || 0) - (a.atk || 0));
+
+    if (rageTargets.length > 0) {
+      const target = rageTargets[0];
       return {
         yes: true,
-        priority: 10,
-        reason: "OTK potencial com Scale Dragon!",
+        priority: target.name === "Shadow-Heart Scale Dragon" ? 10 : 9,
+        reason: `Push de batalha com ${target.name}`,
       };
     }
-    return { yes: false, reason: "Scale Dragon não está sozinho ou não pode atacar" };
+    return {
+      yes: false,
+      reason: "Sem Dragao Shadow-Heart apto para atacar",
+    };
   }
 
   // Shadow-Heart Infusion - Avaliação dinâmica de custo/benefício

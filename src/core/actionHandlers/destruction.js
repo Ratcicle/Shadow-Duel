@@ -1416,7 +1416,7 @@ export async function handleDestroyCardsByScope(action, ctx, targets, engine) {
     return false;
   }
 
-  let destroyedAny = false;
+  let destroyedCount = 0;
 
   for (const card of targetCards) {
     const result = await game.destroyCard(card, {
@@ -1426,16 +1426,49 @@ export async function handleDestroyCardsByScope(action, ctx, targets, engine) {
     });
 
     if (result?.destroyed) {
-      destroyedAny = true;
+      destroyedCount += 1;
       getUI(game)?.log(`${source.name} destroyed ${card.name}!`);
     }
   }
 
-  if (destroyedAny) {
+  if (destroyedCount > 0) {
+    const drawPerDestroyed = Math.max(0, Number(action.drawPerDestroyed || 0));
+    const drawAmount = Math.floor(destroyedCount * drawPerDestroyed);
+    const drawPlayer = action.drawPlayer === "opponent" ? ctx?.opponent : player;
+
+    if (drawAmount > 0 && drawPlayer) {
+      let drawnCards = [];
+      if (typeof game.drawCards === "function") {
+        const drawResult = await game.drawCards(drawPlayer, drawAmount);
+        drawnCards = Array.isArray(drawResult?.drawn)
+          ? drawResult.drawn.slice()
+          : [];
+      } else if (typeof drawPlayer.draw === "function") {
+        for (let i = 0; i < drawAmount; i += 1) {
+          const drawn = drawPlayer.draw();
+          if (drawn) drawnCards.push(drawn);
+        }
+      }
+
+      if (drawnCards.length > 0 && typeof game.emit === "function") {
+        await game.emit("cards_added_to_hand", {
+          player: drawPlayer,
+          cards: drawnCards,
+          fromZone: "deck",
+          sourceCard: source,
+          effectId: ctx?.effect?.id || null,
+        });
+      }
+
+      getUI(game)?.log(
+        `${source.name} drew ${drawnCards.length} card(s) for ${destroyedCount} destroyed card(s).`,
+      );
+    }
+
     game.updateBoard?.();
   }
 
-  return destroyedAny;
+  return destroyedCount > 0;
 }
 
 /**

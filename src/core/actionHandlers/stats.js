@@ -412,7 +412,7 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
     }
 
     if (grantSecondAttack) {
-      if (!player.field.includes(card) || card.isFacedown) continue;
+      if (!player.field.includes(card)) continue;
 
       card.canMakeSecondAttackThisTurn = true;
 

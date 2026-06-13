@@ -21,12 +21,14 @@ export const CARD_KNOWLEDGE = {
       "Darkness Valley",
       "Shadow-Heart Rage",
       "Polymerization",
+      "Shadow-Heart Devastation Dragon",
     ],
     playPatterns: [
       "Invocar quando tiver 2 tributos disponíveis",
       "Proteger com Shadow-Heart Shield",
       "Usar Shadow-Heart Rage para 3700 ATK + 2 ataques",
       "Usar como material para Demon Dragon Fusion",
+      "Manter face-up por 2 turnos para habilitar Devastation Dragon",
     ],
     value: 15,
   },
@@ -228,6 +230,24 @@ export const CARD_KNOWLEDGE = {
     ],
     value: 12,
   },
+  "Shadow-Heart Devastation Dragon": {
+    role: "ascension_boss",
+    priority: 13,
+    summonCondition: "ascension_from_scale_dragon_turn_2",
+    effect:
+      "Ascensão de Scale Dragon após 2 turnos face-up. Ganha 700 ATK no summon, nega proteções de destruição por batalha do oponente e limpa monstros em Defesa ao destruir um defensor",
+    synergies: [
+      "Shadow-Heart Scale Dragon",
+      "Darkness Valley",
+      "Shadow-Heart Rage",
+    ],
+    playPatterns: [
+      "Preservar Scale Dragon face-up por 2 turnos para habilitar Ascensão",
+      "Ascender quando oponente depende de monstros resistentes a batalha",
+      "Atacar defensores para limpar campos travados em Defesa",
+    ],
+    value: 18,
+  },
   // ===== SPELLS =====
   Polymerization: {
     role: "fusion_enabler",
@@ -259,12 +279,12 @@ export const CARD_KNOWLEDGE = {
   "Shadow-Heart Rage": {
     role: "combat_trick",
     priority: 7,
-    playCondition: "scale_dragon_alone_on_field",
-    effect: "Scale Dragon ganha 700 ATK/DEF e pode atacar 2x",
-    synergies: ["Shadow-Heart Scale Dragon"],
+    playCondition: "dragon_shadowheart_on_field",
+    effect: "1 Dragao Shadow-Heart ganha 700 ATK/DEF e pode atacar 2x",
+    synergies: ["Shadow-Heart Scale Dragon", "Shadow-Heart bosses Dragon"],
     playPatterns: [
-      "Usar durante Battle Phase com Scale Dragon sozinho",
-      "3700 ATK com 2 ataques = OTK potential",
+      "Usar antes da Battle Phase em um Dragao Shadow-Heart apto a atacar",
+      "Scale Dragon chega a 3700 ATK com 2 ataques",
       "Guardar para turno de lethal",
     ],
     value: 7,

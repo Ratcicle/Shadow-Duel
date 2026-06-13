@@ -875,7 +875,7 @@ export const voidCards = [
     archetype: "Void",
     archetypes: ["Void"],
     description:
-      "6 'Void' monsters. If this card is Fusion Summoned: destroy all other monsters you control; draw 1 card for each destroyed. Once per turn: If this card would be destroyed by battle or card effects: You can reduce its ATK by 700; negate the destruction of this card.",
+      "6 'Void' monsters. If this card is Fusion Summoned: destroy all Spell and Trap Cards your opponent controls, and if you do, draw 1 card for each card destroyed. Once per turn: If this card would be destroyed by battle or card effects: You can reduce its ATK by 700; negate the destruction of this card.",
     image: "assets/Void Hydra Titan.png",
     fusionMaterials: [
       {
@@ -890,10 +890,19 @@ export const voidCards = [
         event: "after_summon",
         summonMethods: ["fusion"],
         description:
-          "When Fusion Summoned: Destroy all other monsters you control; draw 1 card for each destroyed.",
+          "When Fusion Summoned: Destroy all Spell and Trap Cards your opponent controls, and if you do, draw 1 card for each card destroyed.",
         actions: [
           {
-            type: "destroy_self_monsters_and_draw",
+            type: "destroy_cards_by_scope",
+            targetScope: {
+              owner: "opponent",
+              zones: ["spellTrap", "fieldSpell"],
+              filters: {
+                cardKind: ["spell", "trap"],
+              },
+            },
+            drawPerDestroyed: 1,
+            drawPlayer: "self",
           },
         ],
       },

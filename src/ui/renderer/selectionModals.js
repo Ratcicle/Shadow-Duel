@@ -137,6 +137,23 @@ export function renderCompactSelectionCard(card, candidate = {}) {
 }
 
 function getFieldTargetingSourceName(config = {}) {
+  const sourceCard = getFieldTargetingSourceCard(config);
+  if (sourceCard) {
+    return getCardDisplayName(sourceCard) || sourceCard.name || null;
+  }
+  const contract = config.selectionContract || {};
+  const metadata =
+    contract.metadata && typeof contract.metadata === "object"
+      ? contract.metadata
+      : {};
+  const sourceCardName =
+    config.sourceCardName ||
+    metadata.sourceCardName ||
+    (typeof config.sourceCard === "string" ? config.sourceCard : null);
+  return sourceCardName || null;
+}
+
+function getFieldTargetingSourceCard(config = {}) {
   const contract = config.selectionContract || {};
   const metadata =
     contract.metadata && typeof contract.metadata === "object"
@@ -148,13 +165,9 @@ function getFieldTargetingSourceName(config = {}) {
     config.card ||
     null;
   if (sourceCard && typeof sourceCard === "object") {
-    return getCardDisplayName(sourceCard) || sourceCard.name || null;
+    return sourceCard;
   }
-  return (
-    config.sourceCardName ||
-    metadata.sourceCardName ||
-    (typeof sourceCard === "string" ? sourceCard : null)
-  );
+  return null;
 }
 
 function getFieldTargetingTotals(contract = {}) {
@@ -216,6 +229,43 @@ function getGenericFieldTargetingEffectLabel(message) {
   return labels[normalized] || null;
 }
 
+function shouldPreserveGenericEffectContext(message) {
+  const normalized = String(message || "").trim().toLowerCase();
+  return normalized.includes("graveyard") || normalized.includes("triggered");
+}
+
+function getSourceSpecificEffectLabel(
+  config = {},
+  fallbackLabel = null,
+  message = null
+) {
+  if (shouldPreserveGenericEffectContext(message)) return fallbackLabel;
+
+  const sourceCard = getFieldTargetingSourceCard(config);
+  if (!sourceCard) return fallbackLabel;
+
+  const locale = getLocale();
+  const isPtBr = locale === "pt-br";
+  if (sourceCard.cardKind === "monster") {
+    return isPtBr ? "efeito de monstro" : "monster effect";
+  }
+  if (sourceCard.cardKind === "spell") {
+    if (sourceCard.subtype === "continuous") {
+      return isPtBr
+        ? `efeito de Magia ${getSelectionLabel("continuous")}`
+        : "continuous spell effect";
+    }
+    if (sourceCard.subtype === "field") {
+      return isPtBr ? "efeito de Magia de Campo" : "field spell effect";
+    }
+    return isPtBr ? "efeito de Magia" : "spell effect";
+  }
+  if (sourceCard.cardKind === "trap") {
+    return isPtBr ? "efeito de Armadilha" : "trap effect";
+  }
+  return fallbackLabel;
+}
+
 function getFieldTargetingPrompt(config = {}) {
   const contract = config.selectionContract || {};
   const explicitMessage =
@@ -229,9 +279,14 @@ function getFieldTargetingPrompt(config = {}) {
   const locale = getLocale();
   const isPtBr = locale === "pt-br";
   const genericEffectLabel = getGenericFieldTargetingEffectLabel(explicitMessage);
-  const effectLabel = isPtBr
+  const genericLabel = isPtBr
     ? genericEffectLabel?.ptBr || "efeito"
     : genericEffectLabel?.en || "effect";
+  const effectLabel = getSourceSpecificEffectLabel(
+    config,
+    genericLabel,
+    explicitMessage
+  );
   const sourceClause = sourceName
     ? isPtBr
       ? ` para o ${effectLabel} de ${sourceName}`
@@ -291,9 +346,40 @@ function clampNumber(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 
-function positionFieldTargetingControls(bar, host) {
+function getHandTargetElements(selectionContract = {}) {
+  const requirements = Array.isArray(selectionContract.requirements)
+    ? selectionContract.requirements
+    : [];
+  const elements = [];
+  requirements.forEach((req) => {
+    (req.candidates || []).forEach((cand) => {
+      if (cand?.zone !== "hand") return;
+      const owner = cand.controller === "bot" ? "bot" : "player";
+      const container = document.getElementById(`${owner}-hand`);
+      if (!container || typeof cand.zoneIndex !== "number") return;
+      const cardEl = container.querySelector(
+        `.card[data-index="${cand.zoneIndex}"]`
+      );
+      if (cardEl) elements.push(cardEl);
+    });
+  });
+  return elements;
+}
+
+function getTopMostRect(elements = []) {
+  let top = Infinity;
+  elements.forEach((el) => {
+    const rect = el?.getBoundingClientRect?.();
+    if (!rect) return;
+    top = Math.min(top, rect.top);
+  });
+  return Number.isFinite(top) ? top : null;
+}
+
+function positionFieldTargetingControls(bar, host, config = {}) {
   if (!bar || !host) return;
   const hostRect = getHostRect(host);
+  bar.style.bottom = "auto";
   const spellTrap = document.getElementById("player-spelltrap");
   const hand = document.getElementById("player-hand");
   const anchor = spellTrap || document.querySelector("#player-area .board-core");
@@ -315,6 +401,15 @@ function positionFieldTargetingControls(bar, host) {
     const handRect = hand.getBoundingClientRect();
     const midpoint = (spellTrapRect.bottom + handRect.top) / 2;
     top = midpoint - hostRect.top - bar.offsetHeight / 2;
+  }
+
+  const handTargetTop = getTopMostRect(
+    getHandTargetElements(config.selectionContract)
+  );
+  if (handTargetTop !== null) {
+    const gap = 10;
+    const maxTopAboveHand = handTargetTop - hostRect.top - bar.offsetHeight - gap;
+    top = Math.min(top, maxTopAboveHand);
   }
 
   const maxTop = Math.max(12, hostRect.height - bar.offsetHeight - 12);
@@ -617,10 +712,22 @@ export function showFieldTargetingControls(onConfirm, onCancel, config = {}) {
   bar.appendChild(actions);
   host.appendChild(bar);
 
-  const reposition = () => positionFieldTargetingControls(bar, host);
+  const reposition = () => positionFieldTargetingControls(bar, host, config);
+  const scheduleReposition = () => {
+    const raf =
+      typeof window.requestAnimationFrame === "function"
+        ? window.requestAnimationFrame.bind(window)
+        : (callback) => window.setTimeout(callback, 0);
+    raf(reposition);
+    window.setTimeout(reposition, 220);
+  };
   window.addEventListener("resize", reposition);
+  document.addEventListener("pointerover", scheduleReposition, true);
+  document.addEventListener("pointerout", scheduleReposition, true);
   bar.__fieldTargetingCleanup = () => {
     window.removeEventListener("resize", reposition);
+    document.removeEventListener("pointerover", scheduleReposition, true);
+    document.removeEventListener("pointerout", scheduleReposition, true);
   };
 
   const updateState = ({ selected = 0, min = 0, max = 0, allowEmpty }) => {

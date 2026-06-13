@@ -86,7 +86,7 @@ Fonte dos textos: `src/data/cards/*.js` via fachada `src/data/cards.js` (1x cada
 
 **Void Berserker (213)** — Fusão, Nível 8, Fiend, 2800/2200. Materiais: "Void Slayer Brute" (campo) + 1 monstro "Void". Pode fazer 2 ataques por Fase de Batalha. Uma vez por turno, se destruir monstro do oponente: devolva 1 carta do oponente à mão.
 
-**Void Hydra Titan (215)** — Fusão, Nível 10, Dragon, 3500/2900. Materiais: 6× "Void". Ao ser Invocada por Fusão: destrua todos os outros monstros que você controla; compre 1 por cada. 1/turno: se seria destruída, reduza ATK em 700 e negue a destruição.
+**Void Hydra Titan (215)** — Fusão, Nível 10, Dragon, 3500/2900. Materiais: 6× "Void". Ao ser Invocada por Fusão: destrua todos os cards de Magia/Armadilha que o oponente controla; compre 1 por cada card destruído. 1/turno: se seria destruída, reduza ATK em 700 e negue a destruição.
 
 **Void Cosmic Walker (222)** — Ascension, Nível 6, 2100/1600. Matéria: "Void Walker" com 2 ativações de efeito no duelo. OPT: Invoque por Invocação-Especial 1 "Void Hollow" do seu Cemitério (pos. escolha). Se esta carta for ao Cemitério do campo: Invoque até 3 "Void Hollow" da mão ou Deck (pos. escolha).
 

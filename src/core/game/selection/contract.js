@@ -152,16 +152,24 @@ export function canUseFieldTargeting(requirements) {
     ? requirements
     : requirements?.requirements || [];
   if (!list || list.length === 0) return false;
-  const allowedZones = new Set(["field", "spellTrap", "fieldSpell"]);
-  return list.every((req) => {
+
+  const allCandidates = [];
+  for (const req of list) {
     if (!Array.isArray(req.candidates) || req.candidates.length === 0) {
       return false;
     }
-    return req.candidates.every(
-      (cand) =>
-        cand?.cardRef &&
-        allowedZones.has(cand.zone) &&
-        (cand.controller === "player" || cand.controller === "bot")
-    );
-  });
+    allCandidates.push(...req.candidates);
+  }
+
+  const hasClickableCards = allCandidates.every(
+    (cand) =>
+      cand?.cardRef &&
+      (cand.controller === "player" || cand.controller === "bot"),
+  );
+  if (!hasClickableCards) return false;
+
+  const fieldZones = new Set(["field", "spellTrap", "fieldSpell"]);
+  const isFieldOnly = allCandidates.every((cand) => fieldZones.has(cand.zone));
+  const isHandOnly = allCandidates.every((cand) => cand.zone === "hand");
+  return isFieldOnly || isHandOnly;
 }

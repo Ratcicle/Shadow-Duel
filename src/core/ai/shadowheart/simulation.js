@@ -10,7 +10,7 @@ import {
 } from "../common/simulation.js";
 import { cardMatchesFilter } from "../common/cardFilters.js";
 import { getCounterCount } from "../common/counters.js";
-import { isShadowHeart } from "./knowledge.js";
+import { isShadowHeart, isShadowHeartByName } from "./knowledge.js";
 import {
   buildShadowHeartTargetPreferences,
   buildShadowHeartCostPreferences,
@@ -56,6 +56,25 @@ function ensureZones(player = {}) {
   player.extraDeck = player.extraDeck || [];
   player.banished = player.banished || [];
   return player;
+}
+
+function isDragonType(card) {
+  if (!card) return false;
+  if (Array.isArray(card.types)) {
+    return card.types.some(
+      (type) => String(type || "").toLowerCase() === "dragon",
+    );
+  }
+  return String(card.type || "").toLowerCase() === "dragon";
+}
+
+function isShadowHeartDragon(card) {
+  return (
+    card?.cardKind === "monster" &&
+    !card.isFacedown &&
+    isDragonType(card) &&
+    (isShadowHeart(card) || isShadowHeartByName(card.name))
+  );
 }
 
 function buildSimAnalysis(state = {}) {
@@ -562,17 +581,14 @@ function simulateCathedralEffect(state, action, options = {}) {
 function handleEffectActivated({ state, card }) {
   const player = ensureZones(state.bot || {});
   if (card?.name === SH.rage) {
-    const scale = (player.field || []).find(
-      (monster) =>
-        monster?.name === SH.scale &&
-        !monster.isFacedown &&
-        (player.field || []).filter((entry) => entry?.cardKind === "monster").length === 1,
-    );
-    if (scale) {
-      scale.tempAtkBoost = (scale.tempAtkBoost || 0) + 700;
-      scale.tempDefBoost = (scale.tempDefBoost || 0) + 700;
-      scale.canMakeSecondAttackThisTurn = true;
-      scale.secondAttackUsedThisTurn = false;
+    const rageTarget = (player.field || [])
+      .filter(isShadowHeartDragon)
+      .sort((a, b) => (b.atk || 0) - (a.atk || 0))[0];
+    if (rageTarget) {
+      rageTarget.tempAtkBoost = (rageTarget.tempAtkBoost || 0) + 700;
+      rageTarget.tempDefBoost = (rageTarget.tempDefBoost || 0) + 700;
+      rageTarget.canMakeSecondAttackThisTurn = true;
+      rageTarget.secondAttackUsedThisTurn = false;
       player.forbidDirectAttacksThisTurn = true;
     }
   }

@@ -28,6 +28,7 @@ import {
 import {
   applyDestroy,
   applyDestroyAndDamageByTargetAtk,
+  applyDestroyCardsByScope,
 } from "./destruction.js";
 import {
   applyEquip,
@@ -79,6 +80,7 @@ export const SIMULATED_ACTION_HANDLERS = {
   "move": applyMove,
   "destroy": applyDestroy,
   "destroy_and_damage_by_target_atk": applyDestroyAndDamageByTargetAtk,
+  "destroy_cards_by_scope": applyDestroyCardsByScope,
   "equip": applyEquip,
   "add_counter": applyAddCounter,
   "remove_counter": applyRemoveCounter,

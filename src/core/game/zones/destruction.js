@@ -123,6 +123,16 @@ export async function destroyCard(card, options = {}) {
         return { destroyed: false, reason: "not_in_zone" };
       }
 
+      const battleDestructionPreventionNegated =
+        cause === "battle" &&
+        typeof this.isBattleDestructionPreventionNegated === "function" &&
+        this.isBattleDestructionPreventionNegated(card, {
+          owner,
+          preventionSourceOwner: owner,
+          preventionSourceCard: card,
+          fromZone,
+        });
+
       if (cause !== "battle" && sourceCard && sourcePlayer) {
         const immunity = this.effectEngine?.checkImmunity?.(card, sourcePlayer, {
           effectType: "destruction",
@@ -136,6 +146,7 @@ export async function destroyCard(card, options = {}) {
 
       // Check protection effects before destruction
       if (
+        !battleDestructionPreventionNegated &&
         Array.isArray(card.protectionEffects) &&
         card.protectionEffects.length > 0
       ) {
@@ -174,14 +185,16 @@ export async function destroyCard(card, options = {}) {
         }
       }
 
-      const conditionalProtection = findConditionalDestructionProtection(
-        this,
-        card,
-        owner,
-        opponent,
-        cause,
-        fromZone,
-      );
+      const conditionalProtection = battleDestructionPreventionNegated
+        ? null
+        : findConditionalDestructionProtection(
+            this,
+            card,
+            owner,
+            opponent,
+            cause,
+            fromZone,
+          );
       if (conditionalProtection) {
         this.ui?.log?.(
           `${card.name} is protected from destruction by ${
@@ -202,7 +215,10 @@ export async function destroyCard(card, options = {}) {
         };
       }
 
-      if (this.effectEngine?.checkBeforeDestroyNegations) {
+      if (
+        !battleDestructionPreventionNegated &&
+        this.effectEngine?.checkBeforeDestroyNegations
+      ) {
         const negationResult =
           await this.effectEngine.checkBeforeDestroyNegations(card, {
             source: sourceCard,

@@ -440,7 +440,8 @@ export function bindCardInteractions() {
   if (this.ui && typeof this.ui.bindPlayerHandClick === "function") {
     this.ui.bindPlayerHandClick(async (e, cardEl, index) => {
       if (this.targetSelection) {
-        handleDirectAttackHandClick("player", e);
+        if (handleDirectAttackHandClick("player", e)) return;
+        this.handleTargetSelectionClick("player", index, cardEl, "hand");
         return;
       }
 
@@ -1185,7 +1186,8 @@ export function bindCardInteractions() {
   if (this.ui && typeof this.ui.bindBotHandClick === "function") {
     this.ui.bindBotHandClick((e, cardEl, index) => {
       if (this.targetSelection) {
-        handleDirectAttackHandClick("bot", e);
+        if (handleDirectAttackHandClick("bot", e)) return;
+        this.handleTargetSelectionClick("bot", index, cardEl, "hand");
         return;
       }
       handleLaboratoryHandClick(this.bot, index);

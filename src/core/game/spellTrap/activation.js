@@ -9,6 +9,19 @@ import {
   isQuickSpell,
 } from "./quickSpellRules.js";
 
+function getSpellTrapSelectionMessage(card) {
+  if (card?.cardKind === "spell") {
+    if (card.subtype === "continuous") {
+      return "Select target(s) for the continuous spell effect.";
+    }
+    if (card.subtype === "field") {
+      return "Select target(s) for the field spell effect.";
+    }
+    return "Select target(s) for the spell effect.";
+  }
+  return "Select target(s) for the spell/trap effect.";
+}
+
 /**
  * Unified activation of spell/trap effects from field.
  * @param {Card} card - The card being activated.
@@ -183,7 +196,7 @@ export async function tryActivateSpellTrapEffect(
     activationContext,
     selections,
     selectionKind: "spellTrapEffect",
-    selectionMessage: "Select target(s) for the continuous spell effect.",
+    selectionMessage: getSpellTrapSelectionMessage(card),
     guardKind: isTrap
       ? "trap_activation"
       : quickSpellActivationFromSet
@@ -389,7 +402,7 @@ export async function tryActivateSpell(
     owner,
     selections,
     selectionKind: "spellTrapEffect",
-    selectionMessage: "Select target(s) for the continuous spell effect.",
+    selectionMessage: getSpellTrapSelectionMessage(card),
     guardKind: "spell_from_hand",
     phaseReq: quickSpellFromHand ? null : ["main1", "main2"],
     gate:

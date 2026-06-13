@@ -169,7 +169,7 @@ const MAIN_DECKS = {
 };
 
 const EXTRA_DECKS = {
-  shadowheart: [121, 123, 122],
+  shadowheart: [121, 123, 122, 124],
   luminarch: [171, 172, 173],
   void: [207, 213, 215, 222, 223],
   dragon: [253, 265, 266, 267],

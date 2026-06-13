@@ -118,7 +118,7 @@
     },
     "112": {
       "name": "Fúria do Coração Sombrio",
-      "description": "Se 'Dragão de Escamas do Coração Sombrio' for o único monstro que você controla: ele ganha 700 de ATK/DEF até o final do turno, e pode realizar um segundo ataque durante essa fase de batalha. Você não pode atacar diretamente no turno em que ativar esse efeito."
+      "description": "Você pode ativar este card ao escolher 1 monstro 'Coração Sombrio' do tipo Dragão que você controla: ele ganha 700 de ATK/DEF até o final do turno e pode realizar um segundo ataque durante essa fase de batalha. Você não pode atacar diretamente no turno em que ativar esse efeito."
     },
     "113": {
       "name": "Escudo do Coração Sombrio",
@@ -163,6 +163,10 @@
     "123": {
       "name": "Arctroth Blindado do Coração Sombrio",
       "description": "Material de Ascensão: 'Demônio Arctroth do Coração Sombrio'.\nRequisito: esse monstro deve ter destruído 2 monstros do oponente em batalha ou por efeito de card.\nSe este card for Invocado por Ascensão: Escolha 1 monstro que seu oponente controla; o ATK/DEF dele se tornam 0. Se este card atacar um monstro em Posição de Defesa: mude esse monstro para Posição de Ataque."
+    },
+    "124": {
+      "name": "Dragão da Devastação do Coração Sombrio",
+      "description": "Material de Ascensão: 'Dragão de Escamas do Coração Sombrio'.\nRequisito: o material deve ter ficado com a face para cima no campo por 2 turnos.\nSe este card for Invocado por Ascensão: ele ganha 700 de ATK até o final deste turno.\nEnquanto este card estiver com a face para cima no campo, negue os efeitos de cards do oponente que impeçam monstros de serem destruídos em batalha.\nSe este card destruir um monstro em Posição de Defesa em batalha: destrua todos os monstros em Posição de Defesa que seu oponente controla."
     },
     "151": {
       "name": "Luminarca Valente - Cavaleiro da Aurora",
@@ -314,7 +318,7 @@
     },
     "215": {
       "name": "Titã Hidra do Vazio",
-      "description": "Materiais: 6 monstros 'Vazio'\nSe este card for Invocado por Invocação-Fusão: destrua todos os outros monstros que você controla; compre 1 card para cada monstro destruído. Uma vez por turno: se este card seria destruído em batalha ou por efeitos de card: você pode reduzir o ATK dele em 700; negue a destruição deste card."
+      "description": "Materiais: 6 monstros 'Vazio'\nSe este card for Invocado por Invocação-Fusão: destrua todos os cards de Magia e Armadilha que seu oponente controla e, se isso acontecer, compre 1 card para cada card destruído. Uma vez por turno: se este card seria destruído em batalha ou por efeitos de card: você pode reduzir o ATK dele em 700; negue a destruição deste card."
     },
     "216": {
       "name": "Selando o Vazio",

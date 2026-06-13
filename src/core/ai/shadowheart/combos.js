@@ -63,13 +63,13 @@ export const COMBO_DATABASE = [
     priority: 10,
   },
   {
-    name: "Scale Dragon OTK",
-    description: "Scale Dragon sozinho + Rage → 3700 ATK com 2 ataques",
+    name: "Shadow-Heart Dragon Rage Push",
+    description: "Dragao Shadow-Heart + Rage -> +700 ATK/DEF com 2 ataques",
     requires: [
-      "Shadow-Heart Scale Dragon sozinho no campo",
+      "Dragao Shadow-Heart no campo",
       "Shadow-Heart Rage",
     ],
-    result: "7400 dano potencial",
+    result: "pressao de batalha com segundo ataque",
     priority: 10,
   },
   {
@@ -194,16 +194,22 @@ export function detectAvailableCombos(analysis, logFn = null) {
     }
   }
 
-  // Scale Dragon OTK
+  // Shadow-Heart Dragon Rage push
   if (
-    hasOnField("Shadow-Heart Scale Dragon") &&
-    field.length === 1 &&
+    field.some(
+      (card) =>
+        card &&
+        card.cardKind === "monster" &&
+        !card.isFacedown &&
+        card.type === "Dragon" &&
+        isShadowHeartByName(card.name),
+    ) &&
     hasInHand("Shadow-Heart Rage")
   ) {
-    addCombo("Scale Dragon OTK", {
+    addCombo("Shadow-Heart Dragon Rage Push", {
       priority: 10,
       action: { type: "spell", cardName: "Shadow-Heart Rage" },
-      logMessage: "Combo detectado: Scale Dragon OTK (3700 ATK x2)!",
+      logMessage: "Combo detectado: Rage em Dragao Shadow-Heart (+700 e 2 ataques)!",
     });
   }
 

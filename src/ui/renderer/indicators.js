@@ -495,6 +495,16 @@ export function applyTargetHighlights({
       if (container) {
         targetEl = container.querySelector(".card");
       }
+    } else if (cand.zone === "hand") {
+      const container =
+        cand.controller === "player"
+          ? this.elements.playerHand
+          : this.elements.botHand;
+      if (container) {
+        targetEl = container.querySelector(
+          `.card[data-index=\"${cand.zoneIndex}\"]`
+        );
+      }
     }
 
     if (!targetEl) {

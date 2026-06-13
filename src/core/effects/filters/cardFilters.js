@@ -41,6 +41,9 @@ export function cardMatchesFilters(card, filters = {}) {
   if (filters.cardKind) {
     if (!cardMatchesKind(card, filters.cardKind)) return false;
   }
+  if (filters.position && filters.position !== "any") {
+    if (card.position !== filters.position) return false;
+  }
   if (filters.isToken !== undefined) {
     if ((card.isToken === true) !== Boolean(filters.isToken)) return false;
   }

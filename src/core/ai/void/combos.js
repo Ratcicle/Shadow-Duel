@@ -54,6 +54,26 @@ export const VOID_IDS = {
   POLYMERIZATION: 12,
 };
 
+export function countControlledSpellTrapCards(player = {}) {
+  const backrowCount = (player?.spellTrap || []).filter(
+    (card) => card && (card.cardKind === "spell" || card.cardKind === "trap"),
+  ).length;
+  const fieldSpell = player?.fieldSpell || null;
+  const fieldSpellCount =
+    fieldSpell &&
+    (fieldSpell.cardKind === "spell" || fieldSpell.cardKind === "trap")
+      ? 1
+      : 0;
+  return backrowCount + fieldSpellCount;
+}
+
+function countOpponentSpellTrapCardsFromAnalysis(analysis = {}) {
+  return countControlledSpellTrapCards({
+    spellTrap: analysis.oppSpellTrap || analysis.opponent?.spellTrap || [],
+    fieldSpell: analysis.oppFieldSpell || analysis.opponent?.fieldSpell || null,
+  });
+}
+
 /**
  * Banco de dados de combos conhecidos do arquétipo Void.
  */
@@ -188,7 +208,7 @@ export const COMBO_DATABASE = [
     name: "Hydra Titan Fusion",
     description: "6 Voids → Void Hydra Titan",
     requires: ["Polymerization", "6x Void (campo/mão)"],
-    result: "Hydra Titan 3500 ATK (board clear + draw + resiliente)",
+    result: "Hydra Titan 3500 ATK (backrow clear + draw + resiliente)",
     priority: 12,
     fusion: {
       target: 215,
@@ -886,13 +906,7 @@ export function calculateFusionValue(fusionId, analysis) {
   const handIds = (analysis.hand || []).map((c) => c?.id).filter(Boolean);
   const tenebrisOnField = fieldIds.includes(VOID_IDS.TENEBRIS_HORN);
   const ravenInHand = handIds.includes(VOID_IDS.RAVEN);
-  const fieldVoids = field.filter(isVoid);
-  const handVoids = hand.filter(isVoid);
-  const projectedHydraDraws = Math.max(
-    0,
-    field.filter((card) => card?.cardKind === "monster").length -
-      Math.min(Math.max(0, 6 - handVoids.length), fieldVoids.length),
-  );
+  const projectedHydraDraws = countOpponentSpellTrapCardsFromAnalysis(analysis);
 
   // Tenebris Horn passive: +100 ATK/DEF por Void no campo (incluindo a fusão)
   const tenebrisBonus = tenebrisOnField ? 0.6 : 0;
@@ -919,16 +933,13 @@ export function calculateFusionValue(fusionId, analysis) {
     }
 
     case VOID_IDS.HYDRA_TITAN: {
-      // Hydra destrói TODOS os outros monstros próprios na invocação:
-      // → Tenebris Horn no campo morre, perdendo o bônus passive (anti-sinergia).
-      // Raven é S-tier aqui: imunidade contra remoções pós-fusão.
-      const hydraTenebrisAdjust = tenebrisOnField ? -0.6 : 0;
+      // Hydra removes opponent backrow on summon and converts each real
+      // destruction into draw pressure. Raven remains excellent protection.
       return (
         8.2 +
         Math.min(projectedHydraDraws, 2) * 1.0 +
         (oppFieldCount >= 3 ? 1.2 : 0) +
         (projectedHydraDraws <= 0 && oppFieldCount < 2 ? -1.1 : 0) +
-        hydraTenebrisAdjust +
         ravenBonus * 1.5 // Raven vale mais para Hydra (3500 ATK protegido)
       );
     }

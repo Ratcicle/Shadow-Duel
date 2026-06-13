@@ -1,5 +1,5 @@
 import { getVoidCardKnowledge, isVoid } from "./knowledge.js";
-import { VOID_IDS } from "./combos.js";
+import { VOID_IDS, countControlledSpellTrapCards } from "./combos.js";
 import { evaluateVoidMonster } from "./scoring.js";
 import {
   getEffectiveAtk,
@@ -655,16 +655,8 @@ function canUseAscensionFinisher(game, bot, materialId, ascensionId) {
   );
 }
 
-function estimateVoidHydraDraws(bot) {
-  const field = bot?.field || [];
-  const hand = bot?.hand || [];
-  const fieldVoids = field.filter(isVoid);
-  const handVoids = hand.filter(isVoid);
-  const fieldMaterialsNeeded = Math.max(0, 6 - handVoids.length);
-  return Math.max(
-    0,
-    fieldVoids.length - Math.min(fieldMaterialsNeeded, fieldVoids.length),
-  );
+function estimateVoidHydraDraws(_bot, opponent) {
+  return countControlledSpellTrapCards(opponent);
 }
 
 function strongestBattleStat(monsters = []) {
@@ -790,7 +782,7 @@ export function evaluateVoidFinisherPlans(bot, opponent, game = null, analysis =
     hasPoly &&
     expendableVoids.length >= 6
   ) {
-    const projectedDraws = estimateVoidHydraDraws(bot);
+    const projectedDraws = estimateVoidHydraDraws(bot, resolvedOpponent);
     const stabilizesBoard =
       oppFieldCount >= 2 || oppStrongest >= 2800 || myLP <= 3000;
     let score =
@@ -805,7 +797,7 @@ export function evaluateVoidFinisherPlans(bot, opponent, game = null, analysis =
         score100: score,
         reason:
           projectedDraws > 0
-            ? `Hydra converte board em ${projectedDraws} compra(s)`
+            ? `Hydra limpa backrow e gera ${projectedDraws} compra(s)`
             : "Hydra estabiliza, mas sem compras precisa competir com payoff melhor",
         details: { projectedDraws, stabilizesBoard },
       }),

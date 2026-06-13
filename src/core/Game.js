@@ -856,6 +856,8 @@ Game.prototype.isActiveAttackPriorityTarget =
   combatAvailability.isActiveAttackPriorityTarget;
 Game.prototype.markAttackUsed = combatAvailability.markAttackUsed;
 Game.prototype.registerAttackNegated = combatAvailability.registerAttackNegated;
+Game.prototype.isBattleDestructionPreventionNegated =
+  combatAvailability.isBattleDestructionPreventionNegated;
 Game.prototype.canDestroyByBattle = combatAvailability.canDestroyByBattle;
 
 // Damage: inflictDamage
