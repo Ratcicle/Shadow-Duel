@@ -700,6 +700,7 @@ body {
 
 /* Card Styles */
 .card {
+  box-sizing: border-box;
   width: var(--card-w);
   height: var(--card-h);
   background-color: var(--card-bg);
@@ -717,6 +718,12 @@ body {
     box-shadow 0.2s;
   user-select: none;
   position: relative;
+}
+
+.hand-zone .card {
+  flex: 0 0 var(--card-w);
+  min-width: var(--card-w);
+  max-width: var(--card-w);
 }
 
 .floating-counter-tooltip {

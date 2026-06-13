@@ -100,12 +100,29 @@ export async function handleReturnToHand(action, ctx, targets, engine) {
 async function bounceAndSummonCard(source, target, player, action, engine, ctx = {}) {
   const game = engine.game;
 
-  if (!target || player.field.length >= 5) return false;
+  if (!target) return false;
+
+  if (target.cardKind !== "monster") {
+    console.error(
+      `[bounceAndSummonCard] BLOCKED: Attempted to summon non-monster "${target?.name}" (kind: ${target?.cardKind})`
+    );
+    return false;
+  }
+
+  const sourceWillFreeSlot =
+    action.bounceSource !== false &&
+    Array.isArray(player.field) &&
+    player.field.includes(source);
+
+  if (player.field.length >= 5 && !sourceWillFreeSlot) {
+    getUI(game)?.log("Field is full.");
+    return false;
+  }
 
   // Bounce source to hand
   if (action.bounceSource !== false) {
     if (typeof game.moveCard === "function") {
-      await game.moveCard(source, player, "hand", {
+      const moveResult = await game.moveCard(source, player, "hand", {
         fromZone: "field",
         contextLabel: action.contextLabel || "bounce_and_summon",
         sourceCard: ctx?.source || source,
@@ -113,11 +130,16 @@ async function bounceAndSummonCard(source, target, player, action, engine, ctx =
         movedByEffect: true,
         awaitCardMovedEvent: true,
       });
+      if (moveResult === false || moveResult?.success === false) {
+        return false;
+      }
     } else {
       const fieldIndex = player.field.indexOf(source);
       if (fieldIndex !== -1) {
         player.field.splice(fieldIndex, 1);
         player.hand.push(source);
+      } else {
+        return false;
       }
     }
   }
@@ -127,6 +149,11 @@ async function bounceAndSummonCard(source, target, player, action, engine, ctx =
     console.error(
       `[bounceAndSummonCard] ❌ BLOCKED: Attempted to summon non-monster "${target?.name}" (kind: ${target?.cardKind})`
     );
+    return false;
+  }
+
+  if (player.field.length >= 5) {
+    getUI(game)?.log("Field is full.");
     return false;
   }
 
@@ -342,7 +369,11 @@ export async function handleBounceAndSummon(action, ctx, targets, engine) {
     return false;
   }
 
-  if (player.field.length >= 5) {
+  const sourceWillFreeSlot =
+    action.bounceSource !== false &&
+    Array.isArray(player.field) &&
+    player.field.includes(source);
+  if (player.field.length >= 5 && !sourceWillFreeSlot) {
     getUI(game)?.log("Field is full.");
     return false;
   }

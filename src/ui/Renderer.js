@@ -28,11 +28,13 @@ export default class Renderer {
         displayed: 8000,
         animating: false,
         queue: [],
+        presentationPromise: null,
       },
       bot: {
         displayed: 8000,
         animating: false,
         queue: [],
+        presentationPromise: null,
       },
     };
     this.elements = {
@@ -140,6 +142,7 @@ Renderer.prototype.ensureLpDisplayState = animations.ensureLpDisplayState;
 Renderer.prototype.getDisplayedLp = animations.getDisplayedLp;
 Renderer.prototype.setDisplayedLp = animations.setDisplayedLp;
 Renderer.prototype.hasActiveLpPresentation = animations.hasActiveLpPresentation;
+Renderer.prototype.waitForLpPresentation = animations.waitForLpPresentation;
 Renderer.prototype.showLpDamageSequence = animations.showLpDamageSequence;
 Renderer.prototype.animateLpOdometer = animations.animateLpOdometer;
 Renderer.prototype.captureCardAnimationSource =

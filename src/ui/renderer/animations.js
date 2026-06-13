@@ -271,44 +271,58 @@ async function playTravelingDamageNumber(renderer, player, amount, options = {})
 }
 
 async function runLpDamageQueue(renderer, player, state) {
-  if (state.animating) return;
-  state.animating = true;
+  if (state.presentationPromise) return state.presentationPromise;
 
-  while (state.queue.length > 0) {
-    const entry = state.queue.shift();
-    if (entry.holdFinalUntilReal === true) {
-      state.holdFinalUntilReal = true;
+  state.presentationPromise = (async () => {
+    state.animating = true;
+    await Promise.resolve();
+
+    try {
+      while (state.queue.length > 0) {
+        const entry = state.queue.shift();
+        if (entry.holdFinalUntilReal === true) {
+          state.holdFinalUntilReal = true;
+        }
+        const toLp = Math.max(0, Math.round(entry.toLp));
+        const fromLp = Number.isFinite(entry.fromLp)
+          ? Math.max(0, Math.round(entry.fromLp))
+          : state.displayed;
+
+        renderer.setDisplayedLp(player, state.displayed ?? fromLp);
+        playEffectDamageShake(renderer, entry.amount, entry);
+
+        if (prefersReducedMotion()) {
+          renderer.setDisplayedLp(player, toLp);
+          playCounterFlash(getLpCounter(renderer, player), "damage");
+          continue;
+        }
+
+        await playTravelingDamageNumber(renderer, player, entry.amount, entry);
+        await renderer.animateLpOdometer(
+          player,
+          state.displayed ?? fromLp,
+          toLp,
+          {
+            amount: entry.amount,
+            kind: "damage",
+          },
+        );
+      }
+    } finally {
+      state.animating = false;
+      state.presentationPromise = null;
+      const realLp = Number(player?.lp);
+      if (
+        !state.holdFinalUntilReal &&
+        Number.isFinite(realLp) &&
+        Math.round(realLp) !== state.displayed
+      ) {
+        renderer.setDisplayedLp(player, realLp);
+      }
     }
-    const toLp = Math.max(0, Math.round(entry.toLp));
-    const fromLp = Number.isFinite(entry.fromLp)
-      ? Math.max(0, Math.round(entry.fromLp))
-      : state.displayed;
+  })();
 
-    renderer.setDisplayedLp(player, state.displayed ?? fromLp);
-    playEffectDamageShake(renderer, entry.amount, entry);
-
-    if (prefersReducedMotion()) {
-      renderer.setDisplayedLp(player, toLp);
-      playCounterFlash(getLpCounter(renderer, player), "damage");
-      continue;
-    }
-
-    await playTravelingDamageNumber(renderer, player, entry.amount, entry);
-    await renderer.animateLpOdometer(player, state.displayed ?? fromLp, toLp, {
-      amount: entry.amount,
-      kind: "damage",
-    });
-  }
-
-  state.animating = false;
-  const realLp = Number(player?.lp);
-  if (
-    !state.holdFinalUntilReal &&
-    Number.isFinite(realLp) &&
-    Math.round(realLp) !== state.displayed
-  ) {
-    renderer.setDisplayedLp(player, realLp);
-  }
+  return state.presentationPromise;
 }
 
 /**
@@ -410,6 +424,7 @@ export function ensureLpDisplayState(player) {
       displayed: Math.max(0, Math.round(initial)),
       animating: false,
       queue: [],
+      presentationPromise: null,
     };
   }
   return this.lpDisplayState[key];
@@ -444,7 +459,30 @@ export function setDisplayedLp(player, value) {
  */
 export function hasActiveLpPresentation(player) {
   const state = this.ensureLpDisplayState?.(player);
-  return !!state && (state.animating || state.queue.length > 0);
+  return (
+    !!state &&
+    (state.animating || state.queue.length > 0 || !!state.presentationPromise)
+  );
+}
+
+/**
+ * @this {import('../Renderer.js').default}
+ */
+export function waitForLpPresentation(player = null) {
+  const states = [];
+  if (player) {
+    const state = this.ensureLpDisplayState?.(player);
+    if (state) states.push(state);
+  } else if (this.lpDisplayState && typeof this.lpDisplayState === "object") {
+    states.push(...Object.values(this.lpDisplayState).filter(Boolean));
+  }
+
+  const pending = states
+    .map((state) => state.presentationPromise)
+    .filter((promise) => promise && typeof promise.then === "function");
+
+  if (pending.length === 0) return Promise.resolve(false);
+  return Promise.allSettled(pending).then(() => true);
 }
 
 /**
