@@ -256,9 +256,16 @@ function showFloatingCounterTooltip(anchor) {
 }
 
 function hideFloatingCounterTooltip() {
+  clearFloatingCounterTooltip();
+}
+
+export function clearFloatingCounterTooltip() {
   const tooltip = document.querySelector(".floating-counter-tooltip");
   if (!tooltip) return;
   tooltip.classList.remove("visible");
+  tooltip.textContent = "";
+  tooltip.style.left = "";
+  tooltip.style.top = "";
 }
 
 function bindCounterTooltipForElement(element) {

@@ -30,7 +30,12 @@ export async function collectEffectTargetedTriggers(payload) {
   // Include face-down traps from spellTrap zone
   if (targetOwner.spellTrap && Array.isArray(targetOwner.spellTrap)) {
     for (const trap of targetOwner.spellTrap) {
-      if (trap && trap.cardType === "trap") {
+      if (
+        trap &&
+        (trap.cardKind === "trap" ||
+          trap.originalCardKind === "trap" ||
+          trap.cardType === "trap")
+      ) {
         sources.push(trap);
       }
     }

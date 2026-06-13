@@ -77,6 +77,7 @@ export default class Renderer {
   destroy() {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.clearFloatingCounterTooltip?.();
     this.pixiVfx?.destroy?.();
     this.pixiVfx = null;
   }
@@ -128,6 +129,8 @@ Renderer.prototype.clearActivationHint = indicators.clearActivationHint;
 Renderer.prototype.renderPreview = preview.renderPreview;
 Renderer.prototype.bindPreviewForElement = preview.bindPreviewForElement;
 Renderer.prototype.createCardElement = preview.createCardElement;
+Renderer.prototype.clearFloatingCounterTooltip =
+  preview.clearFloatingCounterTooltip;
 
 // Attach log methods
 Renderer.prototype.log = log.log;

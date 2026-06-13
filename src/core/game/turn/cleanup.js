@@ -129,8 +129,11 @@ export function cleanupTempBoosts(player) {
       card.originalDef = null;
     }
 
-    // Remove effect negation
-    card.effectsNegated = false;
+    // Remove temporary effect negation; field-presence negation is cleared on move.
+    if (card.effectsNegated && card.effectsNegatedDuration !== "while_faceup") {
+      card.effectsNegated = false;
+      card.effectsNegatedDuration = null;
+    }
 
     card.tempBattleIndestructible = false;
     card.battleDamageHealsControllerThisTurn = false;

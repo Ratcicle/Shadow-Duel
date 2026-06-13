@@ -955,7 +955,10 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
       }
       card.turnBasedBuffs = [];
     }
-    card.effectsNegated = false;
+    if (toZone !== "field") {
+      card.effectsNegated = false;
+      card.effectsNegatedDuration = null;
+    }
 
     // Remove permanent named buffs when the monster leaves the field
     if (toZone !== "field" && card.permanentBuffsBySource) {

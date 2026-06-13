@@ -8,6 +8,7 @@
 import { isAI } from "../Player.js";
 import {
   getUI,
+  normalizeNegateEffectsDuration,
   resolveContextNumber,
   resolveFieldScopeCards,
   resolveTargetCards,
@@ -92,6 +93,7 @@ function isProtectiveStatus(status) {
  * - setAtkToZero: boolean (default: true)
  * - setDefToZero: boolean (default: true)
  * - negateEffects: boolean (default: true)
+ * - negateEffectsDuration: "until_end_turn" | "while_faceup"
  */
 export async function handleSetStatsToZeroAndNegate(
   action,
@@ -125,6 +127,7 @@ export async function handleSetStatsToZeroAndNegate(
   const setDefToZero = action.setDefToZero !== false;
 
   const negateEffects = action.negateEffects !== false;
+  const negateEffectsDuration = normalizeNegateEffectsDuration(action);
 
   let modified = false;
 
@@ -157,6 +160,7 @@ export async function handleSetStatsToZeroAndNegate(
 
     if (negateEffects) {
       card.effectsNegated = true;
+      card.effectsNegatedDuration = negateEffectsDuration;
 
       cardModified = true;
     }
@@ -194,7 +198,11 @@ export async function handleSetStatsToZeroAndNegate(
 
       const message = `${cardList}'s ${effects.join(
         " and ",
-      )} until end of turn.`;
+      )}${
+        negateEffectsDuration === "while_faceup"
+          ? " while face-up."
+          : " until end of turn."
+      }`;
 
       getUI(game)?.log(message);
     }

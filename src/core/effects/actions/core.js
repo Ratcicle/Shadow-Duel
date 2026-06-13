@@ -54,6 +54,120 @@ function createActionResult({
   return result;
 }
 
+function getTargetCards(targets) {
+  const cards = [];
+  const visit = (value) => {
+    if (!value) return;
+    if (Array.isArray(value)) {
+      for (const entry of value) visit(entry);
+      return;
+    }
+    if (typeof value === "object" && value.card) {
+      visit(value.card);
+      return;
+    }
+    if (typeof value === "object") {
+      cards.push(value);
+    }
+  };
+
+  for (const value of Object.values(targets || {})) {
+    visit(value);
+  }
+  return cards;
+}
+
+function findOwnerForTarget(game, fallbackOwner, card) {
+  if (!game || !card) return fallbackOwner || null;
+  const owners = [game.player, game.bot].filter(Boolean);
+  const zones = [
+    "field",
+    "spellTrap",
+    "hand",
+    "graveyard",
+    "deck",
+    "extraDeck",
+    "banished",
+  ];
+
+  for (const owner of owners) {
+    if (owner.fieldSpell === card) return owner;
+    for (const zone of zones) {
+      if (Array.isArray(owner[zone]) && owner[zone].includes(card)) {
+        return owner;
+      }
+    }
+  }
+
+  const explicitOwner = owners.find(
+    (owner) => owner.id === card.owner || owner.id === card.controller,
+  );
+  return explicitOwner || fallbackOwner || null;
+}
+
+async function emitEffectTargetedBeforeActions(engine, ctx, targets, logDev) {
+  const game = engine?.game;
+  const source = ctx?.source;
+  const sourcePlayer = ctx?.player;
+  if (!game || !source || !sourcePlayer || !targets) return null;
+  if (ctx?.isPreview || ctx?.previewOnly) return null;
+  let activationContext = ctx?.activationContext || null;
+  if (!activationContext) {
+    activationContext = {};
+    ctx.activationContext = activationContext;
+  }
+  if (activationContext?.skipEffectTargetedEvent === true) return null;
+  if (activationContext?._effectTargetedResolved === true) return null;
+
+  const targetCards = getTargetCards(targets);
+  if (targetCards.length === 0) return null;
+
+  const emitted = new Set();
+  activationContext._effectTargetedOpened = true;
+  for (const target of targetCards) {
+    if (!target) continue;
+    const targetOwner = findOwnerForTarget(game, null, target);
+    if (!targetOwner || targetOwner.id === sourcePlayer.id) continue;
+
+    const key =
+      target.instanceId ||
+      `${targetOwner.id}:${target.id ?? target.name ?? "unknown"}`;
+    if (emitted.has(key)) continue;
+    emitted.add(key);
+
+    logDev?.("EFFECT_TARGETED_BEFORE_ACTIONS", {
+      source: source.name || null,
+      target: target.name || null,
+      targetOwner: targetOwner.id || null,
+    });
+
+    const result = await game.emit("effect_targeted", {
+      source,
+      sourceCard: source,
+      sourcePlayer,
+      player: sourcePlayer,
+      target,
+      targetOwner,
+      targetId: target.id ?? null,
+      effect: ctx?.effect || null,
+      effectId: ctx?.effect?.id || activationContext?.effectId || null,
+      actionContext:
+        ctx?.actionContext || activationContext?.actionContext || null,
+    });
+
+    if (result?.needsSelection) {
+      return {
+        ...result,
+        success: false,
+        executed: false,
+      };
+    }
+  }
+
+  activationContext._effectTargetedResolved = true;
+  return null;
+}
+
 /**
  * Main action dispatcher - applies all actions in sequence
  * @param {Array} actions - Array of action definitions
@@ -82,6 +196,16 @@ export async function applyActions(actions, ctx, targets) {
   }
 
   try {
+    const targetedResult = await emitEffectTargetedBeforeActions(
+      this,
+      ctx,
+      targets,
+      logDev,
+    );
+    if (targetedResult?.needsSelection) {
+      return targetedResult;
+    }
+
     for (const action of actions) {
       const actionInfo = {
         type: action?.type || "unknown",
@@ -283,14 +407,28 @@ function buildTargetPreviewFilters(target = {}) {
   copyIfPresent("maxDef");
   copyIfPresent("requireFaceup");
   copyIfPresent("isToken");
+  copyIfPresent("excludeCardName");
+  copyIfPresent("excludeCardNames");
+  copyIfPresent("excludeName");
+  copyIfPresent("excludeNames");
+  copyIfPresent("excludeId");
+  copyIfPresent("excludeIds");
+  copyIfPresent("excludeCardId");
+  copyIfPresent("excludeCardIds");
+  copyIfPresent("position");
+  copyIfPresent("facedown");
+  copyIfPresent("excludeSelf");
 
   return filters;
 }
 
-function matchesPreviewFilters(engine, card, filters) {
+function matchesPreviewFilters(engine, card, filters, ctx = {}) {
   if (!card) return false;
   if (typeof engine?.cardMatchesFilters === "function") {
     if (!engine.cardMatchesFilters(card, filters)) return false;
+  }
+  if (filters.excludeSelf && ctx?.source && card === ctx.source) {
+    return false;
   }
   if (filters.cardKind && !cardMatchesKind(card, filters.cardKind)) {
     return false;
@@ -312,6 +450,16 @@ function matchesPreviewFilters(engine, card, filters) {
     return false;
   }
   if (filters.requireFaceup === true && card.isFacedown) {
+    return false;
+  }
+  if (filters.facedown === true && card.isFacedown !== true) {
+    return false;
+  }
+  if (
+    filters.position &&
+    filters.position !== "any" &&
+    card.position !== filters.position
+  ) {
     return false;
   }
   if (Number.isFinite(filters.level)) {
@@ -971,7 +1119,7 @@ export function checkActionPreviewRequirements(actions, ctx) {
 
       const filters = buildTargetPreviewFilters(costTarget);
       const validCosts = zoneCards.filter((card) =>
-        matchesPreviewFilters(this, card, filters),
+        matchesPreviewFilters(this, card, filters, ctx),
       );
       if (validCosts.length < requiredCount) {
         const zoneLabel = zones.join("/");

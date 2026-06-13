@@ -481,8 +481,8 @@ export function resolveTargets(targetDefs, ctx, selections) {
     };
   }
 
-  // ✅ DRAGON SPIRIT SANCTUARY: Emit effect_targeted event for opponent's cards
-  // This allows traps like Dragon Spirit Sanctuary to respond before effect resolves
+  // Notify observers about selected targets. Resolvable target-response windows
+  // are opened by applyActions after all targets are fixed, before handlers run.
   if (!isPreview && this.game && ctx?.source && ctx?.player) {
     const selectedTargets = [];
     for (const [targetId, targetCards] of Object.entries(targetMap)) {
@@ -508,34 +508,6 @@ export function resolveTargets(targetDefs, ctx, selections) {
       });
     }
 
-    for (const [targetId, targetCards] of Object.entries(targetMap)) {
-      if (!Array.isArray(targetCards)) continue;
-
-      for (const targetCard of targetCards) {
-        if (!targetCard) continue;
-
-        // Check if target belongs to opponent
-        const targetOwner =
-          targetCard.owner === "player" ? this.game.player : this.game.bot;
-        if (targetOwner && targetOwner.id !== ctx.player.id) {
-          // Emit event for opponent's targeted card
-          if (shouldLogTargets) {
-            console.log(
-              `[resolveTargets] Emitting effect_targeted: ${ctx.source.name} targets ${targetCard.name}`
-            );
-          }
-
-          // Emit event asynchronously (don't wait for it to avoid blocking)
-          void this.game.emit("effect_targeted", {
-            source: ctx.source,
-            sourcePlayer: ctx.player,
-            target: targetCard,
-            targetOwner: targetOwner,
-            targetId: targetId,
-          });
-        }
-      }
-    }
   }
 
   return { ok: true, targets: targetMap };

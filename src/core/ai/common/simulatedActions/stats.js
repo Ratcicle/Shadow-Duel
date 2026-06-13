@@ -35,6 +35,12 @@ import {
   STOP_SIMULATION,
 } from "./shared.js";
 
+function normalizeNegateEffectsDuration(action = {}) {
+  return action.negateEffectsDuration === "while_faceup"
+    ? "while_faceup"
+    : "until_end_turn";
+}
+
 export function applyBuffStatsTemp(ctx) {
   const {
     action,
@@ -283,6 +289,7 @@ export function applySetStatsToZeroAndNegate(ctx) {
     }
     if (action.negateEffects) {
       card.effectsNegated = true;
+      card.effectsNegatedDuration = normalizeNegateEffectsDuration(action);
     }
   });
   return;

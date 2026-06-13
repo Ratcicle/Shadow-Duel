@@ -17,6 +17,12 @@ export function getUI(game) {
   return game?.ui || game?.renderer || NULL_UI;
 }
 
+export function normalizeNegateEffectsDuration(action = {}) {
+  return action.negateEffectsDuration === "while_faceup"
+    ? "while_faceup"
+    : "until_end_turn";
+}
+
 // Map technical status names to user-friendly descriptions
 export const STATUS_DISPLAY_NAMES = {
   tempBattleIndestructible: "battle indestructibility",

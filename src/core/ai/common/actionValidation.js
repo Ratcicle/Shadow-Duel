@@ -109,6 +109,23 @@ export function hasActionZoneCandidates(player, action, source = null) {
       ...(action.cardName ? { name: action.cardName } : {}),
       ...(action.archetype ? { archetype: action.archetype } : {}),
       ...(action.cardKind ? { cardKind: action.cardKind } : {}),
+      ...(action.excludeCardName
+        ? { excludeCardName: action.excludeCardName }
+        : {}),
+      ...(action.excludeCardNames
+        ? { excludeCardNames: action.excludeCardNames }
+        : {}),
+      ...(action.excludeId !== undefined ? { excludeId: action.excludeId } : {}),
+      ...(action.excludeIds ? { excludeIds: action.excludeIds } : {}),
+      ...(action.excludeCardId !== undefined
+        ? { excludeCardId: action.excludeCardId }
+        : {}),
+      ...(action.excludeCardIds
+        ? { excludeCardIds: action.excludeCardIds }
+        : {}),
+      ...(action.position ? { position: action.position } : {}),
+      ...(action.facedown !== undefined ? { facedown: action.facedown } : {}),
+      ...(action.excludeSelf !== undefined ? { excludeSelf: action.excludeSelf } : {}),
       ...(Number.isFinite(action.minAtk) ? { minAtk: action.minAtk } : {}),
       ...(Number.isFinite(action.maxAtk) ? { maxAtk: action.maxAtk } : {}),
       ...(Number.isFinite(action.minLevel) ? { minLevel: action.minLevel } : {}),
@@ -116,7 +133,8 @@ export function hasActionZoneCandidates(player, action, source = null) {
     };
     const min = action.count?.min ?? 1;
     const candidates = zoneCards.filter((card) =>
-      cardMatchesFilter(card, filters),
+      cardMatchesFilter(card, filters) &&
+      !(filters.excludeSelf && card === source),
     );
     if (action.distinctNames === true) {
       const names = new Set(

@@ -2,6 +2,7 @@ import { isAI } from "../../Player.js";
 import {
   getUI,
   collectZoneCandidates,
+  normalizeNegateEffectsDuration,
   selectCardsFromZone,
 } from "../shared.js";
 import {
@@ -660,8 +661,11 @@ async function summonCards(cards, sourceZoneEntries, player, action, engine) {
 
     let usedMoveCard = false;
     const previousEffectsNegated = card.effectsNegated;
+    const previousEffectsNegatedDuration = card.effectsNegatedDuration;
+    const negateEffectsDuration = normalizeNegateEffectsDuration(action);
     if (action.negateEffects) {
       card.effectsNegated = true;
+      card.effectsNegatedDuration = negateEffectsDuration;
     }
 
     if (canUseMoveCard) {
@@ -675,6 +679,7 @@ async function summonCards(cards, sourceZoneEntries, player, action, engine) {
 
       if (moveResult?.success === false) {
         card.effectsNegated = previousEffectsNegated;
+        card.effectsNegatedDuration = previousEffectsNegatedDuration;
         continue;
       }
 
@@ -717,6 +722,9 @@ async function summonCards(cards, sourceZoneEntries, player, action, engine) {
     card.effectsNegated = action.negateEffects
       ? true
       : previousEffectsNegated || false;
+    card.effectsNegatedDuration = action.negateEffects
+      ? negateEffectsDuration
+      : previousEffectsNegatedDuration || null;
 
     if (setAtkToZero) {
       if (card.originalAtk == null) {

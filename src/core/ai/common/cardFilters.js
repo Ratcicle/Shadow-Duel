@@ -29,6 +29,15 @@ export function cardMatchesFilter(card, filter = {}) {
       return false;
     }
     if (current.cardId !== undefined && card.id !== current.cardId) return false;
+    if (current.id !== undefined && card.id !== current.id) return false;
+    const idList = current.cardIds || current.ids;
+    if (
+      Array.isArray(idList) &&
+      idList.length > 0 &&
+      !idList.includes(card.id)
+    ) {
+      return false;
+    }
     if (current.subtype && !matchesOne(card.subtype, current.subtype)) {
       return false;
     }
@@ -52,21 +61,34 @@ export function cardMatchesFilter(card, filter = {}) {
       }
     }
     if (current.requireFaceup && card.isFacedown) return false;
-    if (current.excludeCardName && card.name === current.excludeCardName) {
-      return false;
-    }
+    if (current.facedown === true && card.isFacedown !== true) return false;
     if (
-      Array.isArray(current.excludeCardNames) &&
-      current.excludeCardNames.includes(card.name)
+      current.position &&
+      current.position !== "any" &&
+      card.position !== current.position
     ) {
       return false;
     }
     if (
-      Array.isArray(current.excludeCardIds) &&
-      current.excludeCardIds.includes(card.id)
+      current.isToken !== undefined &&
+      (card.isToken === true) !== Boolean(current.isToken)
     ) {
       return false;
     }
+    const excludedNames = [
+      current.excludeName,
+      current.excludeCardName,
+      ...asArray(current.excludeNames),
+      ...asArray(current.excludeCardNames),
+    ].filter(Boolean);
+    if (excludedNames.includes(card.name)) return false;
+    const excludedIds = [
+      current.excludeId,
+      current.excludeCardId,
+      ...asArray(current.excludeIds),
+      ...asArray(current.excludeCardIds),
+    ].filter((value) => value !== undefined && value !== null);
+    if (excludedIds.includes(card.id)) return false;
     if (current.equippedWithFilters) {
       const equips = Array.isArray(card.equips) ? card.equips : [];
       if (

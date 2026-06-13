@@ -12,6 +12,8 @@ export function renderHand(player, options = {}) {
     player.id === "player" ? this.elements.playerHand : this.elements.botHand;
   if (!container) return;
 
+  this.clearFloatingCounterTooltip?.();
+
   // Batch DOM updates with DocumentFragment to minimize reflows
   const fragment = document.createDocumentFragment();
   container.classList.toggle("hand-overlap", player.hand.length > 5);
@@ -48,6 +50,8 @@ export function renderField(player) {
   const container =
     player.id === "player" ? this.elements.playerField : this.elements.botField;
   if (!container) return;
+
+  this.clearFloatingCounterTooltip?.();
 
   // Batch DOM updates with DocumentFragment to minimize reflows
   const fragment = document.createDocumentFragment();
@@ -91,6 +95,8 @@ export function renderSpellTrap(player) {
       : this.elements.botSpellTrap;
   if (!container) return;
 
+  this.clearFloatingCounterTooltip?.();
+
   // Batch DOM updates with DocumentFragment to minimize reflows
   const fragment = document.createDocumentFragment();
 
@@ -125,6 +131,8 @@ export function renderFieldSpell(player) {
       ? this.elements.playerFieldSpell
       : this.elements.botFieldSpell;
   if (!container) return;
+
+  this.clearFloatingCounterTooltip?.();
 
   container.innerHTML = "";
 

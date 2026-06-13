@@ -78,8 +78,10 @@ export async function resolveChainLink(link) {
     if (!prepareForResolution(this, link, activationZone)) {
       return;
     }
-    await applyChainEffect(this, link, activationZone);
-    cleanupAfterResolution(this, link);
+    const applyResult = await applyChainEffect(this, link, activationZone);
+    cleanupAfterResolution(this, link, {
+      actionSucceeded: applyResult?.success !== false,
+    });
   } finally {
     this.cardsBeingResolved.delete(card);
   }
@@ -198,7 +200,16 @@ async function applyChainEffect(cs, link, activationZone) {
       cs.log(
         `${card.name} requires selection but none provided, effect may fail`,
       );
-      resolvedSelections = {};
+      return {
+        success: false,
+        needsSelection: true,
+        reason: "Chain link requires target selection.",
+      };
+    } else {
+      return {
+        success: false,
+        reason: targetResult.reason || "Chain link targets are invalid.",
+      };
     }
   }
 
@@ -221,7 +232,7 @@ async function applyChainEffect(cs, link, activationZone) {
             actionsResult.reason || "effect actions failed"
           }`,
         );
-        return;
+        return actionsResult;
       }
     } catch (error) {
       const linkContext = {
@@ -244,6 +255,11 @@ async function applyChainEffect(cs, link, activationZone) {
         `Chain resolution failed for ${linkContext.cardName} (CL${linkContext.chainLevel}):`,
         error.message,
       );
+      return {
+        success: false,
+        reason: error.message || "Chain link actions failed.",
+        error,
+      };
     }
   }
 
@@ -257,6 +273,8 @@ async function applyChainEffect(cs, link, activationZone) {
       ctx,
     );
   }
+
+  return { success: true };
 }
 
 /**
@@ -358,7 +376,7 @@ function notifyChainActivation(cs, link, activationZone, resolvedSelections) {
  * Sends non-continuous traps and Quick Spells to graveyard,
  * registers once-per-turn usage, and refreshes the board.
  */
-function cleanupAfterResolution(cs, link) {
+function cleanupAfterResolution(cs, link, { actionSucceeded = true } = {}) {
   const { card, player, effect } = link;
   const effectEngine = cs.game.effectEngine;
 
@@ -406,12 +424,16 @@ function cleanupAfterResolution(cs, link) {
     }
   }
 
-  if (effect.oncePerTurn) {
+  if (effect.oncePerTurn && actionSucceeded) {
     if (cs.game?.registerOncePerTurnUsage) {
       cs.game.registerOncePerTurnUsage(card, player, effect);
     } else if (effectEngine?.registerOncePerTurnUsage) {
       effectEngine.registerOncePerTurnUsage(card, player, effect);
     }
+  } else if (effect.oncePerTurn && !actionSucceeded) {
+    cs.log(
+      `${card.name}'s once-per-turn use was not registered because resolution failed.`,
+    );
   }
 
   cs.game?.updateBoard?.();

@@ -253,13 +253,22 @@ export function chooseSpecialSummonPosition(card, action, state, player, options
   return "attack";
 }
 
+function normalizeNegateEffectsDuration(action = {}) {
+  return action.negateEffectsDuration === "while_faceup"
+    ? "while_faceup"
+    : "until_end_turn";
+}
+
 export function applySummonState(card, action, state, player, options = {}) {
   card.position = chooseSpecialSummonPosition(card, action, state, player, options);
   card.isFacedown = false;
   card.hasAttacked = false;
   card.attacksUsedThisTurn = 0;
   if (action.cannotAttackThisTurn) card.cannotAttackThisTurn = true;
-  if (action.negateEffects) card.effectsNegated = true;
+  if (action.negateEffects) {
+    card.effectsNegated = true;
+    card.effectsNegatedDuration = normalizeNegateEffectsDuration(action);
+  }
   if (action.setAtkToZeroAfterSummon) card.atk = 0;
   if (action.setDefToZeroAfterSummon) card.def = 0;
   if (Number.isFinite(action.atkBoostAfterSummon)) {

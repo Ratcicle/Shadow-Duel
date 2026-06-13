@@ -38,6 +38,7 @@ export function getPublicState(forPlayerId = "player") {
         status: {
           cannotAttackThisTurn: !!card.cannotAttackThisTurn,
           effectsNegated: !!card.effectsNegated,
+          effectsNegatedDuration: card.effectsNegatedDuration || null,
           canAttackAll: !!card.canAttackAllOpponentMonstersThisTurn,
         },
       };
