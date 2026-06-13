@@ -115,7 +115,16 @@ export function hasActionZoneCandidates(player, action, source = null) {
       ...(Number.isFinite(action.maxLevel) ? { maxLevel: action.maxLevel } : {}),
     };
     const min = action.count?.min ?? 1;
-    return zoneCards.filter((card) => cardMatchesFilter(card, filters)).length >= min;
+    const candidates = zoneCards.filter((card) =>
+      cardMatchesFilter(card, filters),
+    );
+    if (action.distinctNames === true) {
+      const names = new Set(
+        candidates.map((card) => card?.name || `id:${card?.id ?? "unknown"}`),
+      );
+      return names.size >= min;
+    }
+    return candidates.length >= min;
   }
 
   if (action.type === "bounce_and_summon") {

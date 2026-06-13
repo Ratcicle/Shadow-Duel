@@ -1351,4 +1351,76 @@ export const voidCards = [
       },
     ],
   },
+  {
+    id: 225,
+    name: "Arcturus, the Fallen Lord",
+    cardKind: "monster",
+    monsterType: "fusion",
+    atk: 3000,
+    def: 0,
+    level: 10,
+    type: "Warrior",
+    attribute: "Dark",
+    archetype: "Void",
+    specialSummonOnlyBy: ["graveyard_banish_fusion"],
+    extraDeckSummonProcedure: {
+      type: "graveyard_banish_fusion",
+      summonMethod: "fusion",
+      materialDestination: "banished",
+      requiresManualMaterialSelection: true,
+      materials: [
+        {
+          zone: "graveyard",
+          cardKind: "monster",
+          name: "Arcturus, Lord of the Void",
+          count: 1,
+        },
+      ],
+    },
+    description:
+      'Must be Fusion Summoned from your Extra Deck by banishing 1 "Arcturus, Lord of the Void" from your Graveyard. If this card is destroyed by battle: destroy the monster that battled this card. You can banish this card from your Graveyard; Special Summon 1 to 3 "Void" monsters with different names from your Graveyard, except "Arcturus, the Fallen Lord" and "Arcturus, Lord of the Void", but negate their effects.',
+    image: "assets/Arcturus, the Fallen Lord.png",
+    effects: [
+      {
+        id: "arcturus_fallen_battle_revenge",
+        timing: "on_event",
+        event: "battle_completed",
+        requireSelfBattled: true,
+        requireSelfDestroyedByBattle: true,
+        actions: [
+          {
+            type: "destroy",
+            targetRef: "battle_opponent",
+          },
+        ],
+      },
+      {
+        id: "arcturus_fallen_gy_revival",
+        timing: "ignition",
+        requireZone: "graveyard",
+        oncePerTurn: true,
+        oncePerTurnName: "arcturus_fallen_gy_revival",
+        actions: [
+          {
+            type: "special_summon_from_zone",
+            zone: "graveyard",
+            filters: {
+              archetype: "Void",
+              cardKind: "monster",
+              excludeCardNames: [
+                "Arcturus, the Fallen Lord",
+                "Arcturus, Lord of the Void",
+              ],
+            },
+            count: { min: 1, max: 3 },
+            distinctNames: true,
+            banishCost: true,
+            position: "choice",
+            promptPlayer: true,
+            negateEffects: true,
+          },
+        ],
+      },
+    ],
+  },
 ];

@@ -356,6 +356,10 @@
       "name": "Arcturus, Senhor do Vazio",
       "description": "Enquanto este card for o único monstro com a face para cima que você controla, ele ganha 100 de ATK para cada monstro 'Vazio' no seu Cemitério. Seu oponente não pode ativar cards ou efeitos durante a Fase de Batalha. Se este card seria destruído por um efeito de card: você pode banir 2 monstros 'Vazio' do seu Cemitério em vez disso."
     },
+    "225": {
+      "name": "Arcturus, o Lorde Caído",
+      "description": "Deve ser Invocado por Invocação-Fusão do seu Deck Adicional ao banir 1 'Arcturus, Senhor do Vazio' do seu Cemitério. Se este card for destruído em batalha: destrua o monstro que batalhou este card. Você pode banir este card do seu Cemitério; Invoque por Invocação-Especial de 1 a 3 monstros 'Vazio' com nomes diferentes do seu Cemitério, exceto 'Arcturus, o Lorde Caído' e 'Arcturus, Senhor do Vazio', mas negue seus efeitos."
+    },
     "251": {
       "name": "Dragão Luminoso",
       "description": "Se você não controlar monstros, você pode Invocar este card por Invocação-Especial da sua mão. Se um monstro do Tipo Dragão for descartado da sua mão para o Cemitério enquanto este card estiver com a face para cima no campo: você pode escolher 1 monstro do Tipo Dragão no seu Cemitério com nome diferente do monstro descartado; adicione-o à sua mão. Você só pode usar cada efeito de \"Dragão Luminoso\" uma vez por turno."

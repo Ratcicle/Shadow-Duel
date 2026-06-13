@@ -327,6 +327,11 @@ export function evaluateVoidMonster(monster, context = {}) {
       else value -= Math.min(voidCount - 1, 4) * 0.6;
       break;
 
+    case VOID_IDS.FALLEN_ARCTURUS:
+      value += 4.1;
+      if (voidsInGY > 0) value += Math.min(voidsInGY, 3) * 0.35;
+      break;
+
     // Fusion bosses
     case VOID_IDS.HOLLOW_KING:
       value += 3.0;

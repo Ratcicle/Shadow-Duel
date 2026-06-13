@@ -21,6 +21,7 @@ export const VOID_CARD_KNOWLEDGE = {
   222: { role: "ascension_boss", tags: ["hollow_recycler", "death_floater"] },
   223: { role: "ascension_boss", tags: ["multi_attack", "hollow_gy", "search"] },
   224: { role: "solo_finisher", tags: ["lock", "scaling", "survival"] },
+  225: { role: "fusion_boss", tags: ["revenge", "gy_revival", "recovery"] },
   216: { role: "tempo", tags: ["extra_normal"] },
   217: { role: "field_spell", tags: ["revive"] },
   218: { role: "removal", tags: ["bounce", "tempo"] },
@@ -28,7 +29,7 @@ export const VOID_CARD_KNOWLEDGE = {
   220: { role: "trap", tags: ["response", "level_match", "tempo_defense"] },
 };
 
-export const VOID_EXTRA_DECK_IDS = [207, 213, 215, 222, 223];
+export const VOID_EXTRA_DECK_IDS = [207, 213, 215, 222, 223, 225];
 
 export function isVoid(card) {
   if (!card) return false;

@@ -111,6 +111,14 @@ export async function collectBattleCompletedTriggers(payload) {
       if (effect.requireSelfAsDefender && card !== defender) {
         continue;
       }
+      if (effect.requireSelfDestroyedByBattle === true) {
+        const selfDestroyed =
+          (card === attacker && payload.attackerDestroyed === true) ||
+          (card === defender && payload.targetDestroyed === true);
+        if (!selfDestroyed) {
+          continue;
+        }
+      }
 
       if (actionUsesBattleOpponent(effect.actions || [])) {
         const battleOpponent = getBattleOpponent(ctx, card);

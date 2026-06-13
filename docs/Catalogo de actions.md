@@ -1096,6 +1096,7 @@ Special Summons cards from a configured zone.
 | `promptPlayer` | nao | boolean |  |
 | `requireSource` | nao | boolean |  |
 | `banishCost` | nao | any |  |
+| `distinctNames` | nao | boolean |  |
 | `cannotAttackThisTurn` | nao | boolean |  |
 | `excludeSummonRestrict` | nao | any |  |
 | `negateEffects` | nao | boolean |  |

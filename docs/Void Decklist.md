@@ -4,9 +4,9 @@ Fonte dos textos: `src/data/cards/*.js` via fachada `src/data/cards.js` (1x cada
 
 ## Resumo
 
-- Total: 24
+- Total: 25
 - Monstros (Main Deck): 14
-- Extra Deck: 5 (3 Fusão, 2 Ascension)
+- Extra Deck: 6 (4 Fusão, 2 Ascension)
 - Magias: 4
 - Armadilhas: 1
 
@@ -34,6 +34,7 @@ Fonte dos textos: `src/data/cards/*.js` via fachada `src/data/cards.js` (1x cada
 - 1x Void Hollow King — Fusão (207)
 - 1x Void Berserker — Fusão (213)
 - 1x Void Hydra Titan — Fusão (215)
+- 1x Arcturus, the Fallen Lord — Fusão (225)
 - 1x Void Cosmic Walker — Ascension (222)
 - 1x Malicious Demon of the Void — Ascension (223)
 
@@ -87,6 +88,8 @@ Fonte dos textos: `src/data/cards/*.js` via fachada `src/data/cards.js` (1x cada
 **Void Berserker (213)** — Fusão, Nível 8, Fiend, 2800/2200. Materiais: "Void Slayer Brute" (campo) + 1 monstro "Void". Pode fazer 2 ataques por Fase de Batalha. Uma vez por turno, se destruir monstro do oponente: devolva 1 carta do oponente à mão.
 
 **Void Hydra Titan (215)** — Fusão, Nível 10, Dragon, 3500/2900. Materiais: 6× "Void". Ao ser Invocada por Fusão: destrua todos os cards de Magia/Armadilha que o oponente controla; compre 1 por cada card destruído. 1/turno: se seria destruída, reduza ATK em 700 e negue a destruição.
+
+**Arcturus, the Fallen Lord (225)** — Fusão, Nível 10, Warrior, 3000/0. Deve ser Invocado por Invocação-Fusão do Extra Deck ao banir 1 "Arcturus, Lord of the Void" do seu Cemitério. Se for destruído em batalha: destrua o monstro que batalhou com ele. Do Cemitério: bana este card; Invoque por Invocação-Especial de 1 a 3 monstros "Void" com nomes diferentes do seu Cemitério, exceto os dois Arcturus, com efeitos negados.
 
 **Void Cosmic Walker (222)** — Ascension, Nível 6, 2100/1600. Matéria: "Void Walker" com 2 ativações de efeito no duelo. OPT: Invoque por Invocação-Especial 1 "Void Hollow" do seu Cemitério (pos. escolha). Se esta carta for ao Cemitério do campo: Invoque até 3 "Void Hollow" da mão ou Deck (pos. escolha).
 

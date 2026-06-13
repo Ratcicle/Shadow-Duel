@@ -236,6 +236,12 @@ function buildPreviewFilters(action) {
   if (action?.monsterType && !filters.type) {
     filters.type = action.monsterType;
   }
+  if (Number.isFinite(action?.level) && filters.level == null) {
+    filters.level = action.level;
+  }
+  if (action?.levelOp && !filters.levelOp) {
+    filters.levelOp = action.levelOp;
+  }
   if (Number.isFinite(action?.minLevel) && filters.minLevel == null) {
     filters.minLevel = action.minLevel;
   }
@@ -307,6 +313,15 @@ function matchesPreviewFilters(engine, card, filters) {
   }
   if (filters.requireFaceup === true && card.isFacedown) {
     return false;
+  }
+  if (Number.isFinite(filters.level)) {
+    const cardLevel = Number(card.level || 0);
+    const levelOp = filters.levelOp || "eq";
+    if (levelOp === "eq" && cardLevel !== filters.level) return false;
+    if (levelOp === "lte" && cardLevel > filters.level) return false;
+    if (levelOp === "gte" && cardLevel < filters.level) return false;
+    if (levelOp === "lt" && cardLevel >= filters.level) return false;
+    if (levelOp === "gt" && cardLevel <= filters.level) return false;
   }
   if (
     typeof filters.minLevel === "number" &&
@@ -469,6 +484,14 @@ function getSourceOwnersForPreview(action, ctx, player) {
   return player ? [player] : [];
 }
 
+function countDistinctPreviewNames(cards = []) {
+  const names = new Set();
+  for (const card of cards) {
+    names.add(card?.name || `id:${card?.id ?? "unknown"}`);
+  }
+  return names.size;
+}
+
 function hasSpecialSummonCandidate(engine, action, ctx) {
   const player = ctx?.player;
   if (!player) return false;
@@ -476,23 +499,38 @@ function hasSpecialSummonCandidate(engine, action, ctx) {
   const zoneSpec = action.zone || action.sourceZone || "deck";
   const zoneNames = Array.isArray(zoneSpec) ? zoneSpec : [zoneSpec];
   const sourceOwners = getSourceOwnersForPreview(action, ctx, player);
-  const zones = sourceOwners
-    .flatMap((owner) => zoneNames.map((zoneName) => owner?.[zoneName]))
-    .filter((zone) => Array.isArray(zone));
-  if (zones.length === 0) return false;
+  const zoneCards = sourceOwners.flatMap((owner) =>
+    zoneNames.flatMap((zoneName) => getPreviewZoneCards(owner, zoneName)),
+  );
+  if (zoneCards.length === 0) return false;
 
   if (action.requireSource) {
-    return zones.some((zone) => zone.includes(ctx?.source));
+    return zoneCards.includes(ctx?.source);
   }
   if (action.targetRef) return true;
 
   const filters = buildPreviewFilters(action);
-  return zones.some((zone) =>
-    zone.some((card) => {
-      if (card?.cannotBeSpecialSummoned) return false;
-      return matchesPreviewFilters(engine, card, filters);
-    }),
-  );
+  if (action.matchLevelRef) {
+    const levelCard = ctx?.[action.matchLevelRef] || null;
+    const levelValue = Number(levelCard?.level);
+    if (!Number.isFinite(levelValue) || levelValue <= 0) return false;
+    filters.level = levelValue;
+    filters.levelOp = filters.levelOp || action.levelOp || "eq";
+  }
+
+  const candidates = zoneCards.filter((card) => {
+    if (!card || card.cardKind !== "monster") return false;
+    if (card.cannotBeSpecialSummoned) return false;
+    return matchesPreviewFilters(engine, card, filters);
+  });
+  const min = Number(action.count?.min ?? 1);
+  const requiredCount = Number.isFinite(min) && min > 0 ? min : 1;
+  const availableCount =
+    action.distinctNames === true
+      ? countDistinctPreviewNames(candidates)
+      : candidates.length;
+
+  return availableCount >= requiredCount;
 }
 
 function getGraveyardOwnersForActionScope(action, ctx) {
@@ -714,13 +752,15 @@ export function checkActionPreviewRequirements(actions, ctx) {
 
     if (
       action.type === "special_summon_from_zone" ||
+      action.type === "special_summon_matching_level" ||
       action.type === "call_of_haunted_summon_and_bind"
     ) {
       if ((player.field || []).length >= 5) {
         return { ok: false, reason: "Field is full." };
       }
       if (
-        action.type === "special_summon_from_zone" &&
+        (action.type === "special_summon_from_zone" ||
+          action.type === "special_summon_matching_level") &&
         !hasSpecialSummonCandidate(this, action, ctx)
       ) {
         return {

@@ -51,6 +51,7 @@ export const VOID_IDS = {
   THOUSAND_ARMS: 221,
   MALICIOUS_DEMON: 223, // Ascension de Thousand-Arms
   ARCTURUS: 224, // Lord of the Void (boss máximo)
+  FALLEN_ARCTURUS: 225, // Fusion from Arcturus in GY
   POLYMERIZATION: 12,
 };
 

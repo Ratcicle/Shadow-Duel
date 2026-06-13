@@ -271,10 +271,8 @@ export async function resolveEventEntries(
   }
 
   if (eventName === "after_summon" && payload?.player) {
-    const isOpponentSummon = payload.player.id !== "player";
     await this.checkAndOfferTraps(eventName, {
       ...payload,
-      isOpponentSummon,
     });
   } else if (eventName === "attack_declared") {
     const defenderOwner = payload?.defenderOwner || null;

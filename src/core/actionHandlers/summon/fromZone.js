@@ -31,6 +31,22 @@ function applyStatusesOnSummon(card, statuses) {
   }
 }
 
+function getCardDistinctName(card) {
+  return card?.name || `id:${card?.id ?? "unknown"}`;
+}
+
+function keepOneCardPerName(cards = []) {
+  const seenNames = new Set();
+  const unique = [];
+  for (const card of cards) {
+    const name = getCardDistinctName(card);
+    if (seenNames.has(name)) continue;
+    seenNames.add(name);
+    unique.push(card);
+  }
+  return unique;
+}
+
 /**
  * Generic handler for special summoning from any zone with filters
  * UNIFIED HANDLER - Replaces both single and multi-card summon patterns
@@ -45,6 +61,7 @@ function applyStatusesOnSummon(card, statuses) {
  * - promptPlayer: boolean (default: true for human player)
  * - requireSource: boolean (default: false) - if true, summon source card from zone
  * - banishCost: boolean (default: false) - if true, banish source as cost before summoning
+ * - distinctNames: boolean (default: false) - if true, selectable cards must have different names
  */
 export async function handleSpecialSummonFromZone(
   action,
@@ -80,6 +97,7 @@ export async function handleSpecialSummonFromZone(
   const count = action.count || { min: 1, max: 1 };
   const minRequired = Number(count.min ?? 1);
   const isOptionalSelection = Number.isFinite(minRequired) && minRequired <= 0;
+  const requireDistinctNames = action.distinctNames === true;
 
   const zoneEntries = buildSourceZoneEntries(zoneNames, sourceOwners);
 
@@ -138,8 +156,8 @@ export async function handleSpecialSummonFromZone(
     },
   });
 
-  // Handle banish cost before resolving any summon path.
-  if (action.banishCost) {
+  const payBanishCost = async () => {
+    if (!action.banishCost) return true;
     if (!source) {
       getUI(game)?.log("No source card available to banish as cost.");
       return false;
@@ -166,7 +184,8 @@ export async function handleSpecialSummonFromZone(
     }
 
     getUI(game)?.log(`${source.name} was banished as cost.`);
-  }
+    return true;
+  };
 
   // Check for targetRef - use pre-resolved targets if available
   if (action.targetRef && targets?.[action.targetRef]) {
@@ -195,6 +214,10 @@ export async function handleSpecialSummonFromZone(
 
     if (validCards.length === 0) {
       getUI(game)?.log("Target cards are no longer in the specified zone.");
+      return false;
+    }
+
+    if (!(await payBanishCost())) {
       return false;
     }
 
@@ -312,6 +335,10 @@ export async function handleSpecialSummonFromZone(
     return true;
   });
 
+  if (requireDistinctNames) {
+    candidates = keepOneCardPerName(candidates);
+  }
+
   if (candidates.length === 0) {
     if (isOptionalSelection) {
       getUI(game)?.log("No optional Special Summon targets available.");
@@ -356,6 +383,17 @@ export async function handleSpecialSummonFromZone(
 
   if (maxSelect === 0) {
     getUI(game)?.log("Field is full, cannot Special Summon.");
+    return false;
+  }
+
+  if (!isOptionalSelection && maxSelect < minRequired) {
+    getUI(game)?.log(
+      `Need ${minRequired} valid Special Summon target(s), but only ${maxSelect} available.`,
+    );
+    return false;
+  }
+
+  if (!(await payBanishCost())) {
     return false;
   }
 

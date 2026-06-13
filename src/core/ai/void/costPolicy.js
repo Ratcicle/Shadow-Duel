@@ -179,6 +179,7 @@ export function buildVoidCostPreferences(analysis = {}) {
     VOID_IDS.HYDRA_TITAN,
     VOID_IDS.COSMIC_WALKER,
     VOID_IDS.MALICIOUS_DEMON,
+    VOID_IDS.FALLEN_ARCTURUS,
   ];
   for (const card of field) {
     if (!card || !bossIdsToProtect.includes(card.id)) continue;

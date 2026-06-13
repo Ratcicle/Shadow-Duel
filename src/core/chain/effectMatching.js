@@ -58,6 +58,78 @@ export function canOfferEffectInChainContext(effect, context) {
   );
 }
 
+function resolveEffectOwner(chainSystem, card, ownerPlayer = null) {
+  if (ownerPlayer) return ownerPlayer;
+  if (card?.owner === "player") return chainSystem.game?.player || null;
+  if (card?.owner === "bot") return chainSystem.game?.bot || null;
+  if (card?.controller === "player") return chainSystem.game?.player || null;
+  if (card?.controller === "bot") return chainSystem.game?.bot || null;
+  return null;
+}
+
+function buildChainPreviewContext(chainSystem, card, effect, context, ownerPlayer) {
+  const cardOwner = resolveEffectOwner(chainSystem, card, ownerPlayer);
+  const opponent =
+    cardOwner && typeof chainSystem.getOpponent === "function"
+      ? chainSystem.getOpponent(cardOwner)
+      : card?.owner === "player"
+        ? chainSystem.game?.bot || null
+        : card?.owner === "bot"
+          ? chainSystem.game?.player || null
+          : null;
+
+  return {
+    source: card,
+    player: cardOwner,
+    opponent,
+    effect,
+    defender: context?.defender || context?.target,
+    attacker: context?.attacker,
+    summonedCard: context?.summonedCard || context?.card || null,
+    summonMethod: context?.method || context?.summonMethod || null,
+    summonFromZone: context?.fromZone || null,
+    attackerOwner: context?.attackerOwner,
+    defenderOwner: context?.defenderOwner,
+    activationZone: "spellTrap",
+    activationContext: {
+      autoSelectSingleTarget: true,
+      logTargets: true,
+      chainContext: context?.type || null,
+      event: context?.event || null,
+      preview: true,
+    },
+  };
+}
+
+function effectActionsCanResolveInChain(
+  chainSystem,
+  card,
+  effect,
+  context,
+  ownerPlayer,
+) {
+  const effectEngine = chainSystem.game?.effectEngine;
+  if (typeof effectEngine?.checkActionPreviewRequirements !== "function") {
+    return true;
+  }
+
+  const actionPreview = effectEngine.checkActionPreviewRequirements(
+    effect.actions || [],
+    buildChainPreviewContext(chainSystem, card, effect, context, ownerPlayer),
+  );
+
+  if (actionPreview?.ok === false) {
+    chainSystem.log?.(
+      `[findActivatableEffect] ${card.name}: actions not available - ${
+        actionPreview.reason || "preview failed"
+      }`,
+    );
+    return false;
+  }
+
+  return true;
+}
+
 /**
  * Find an activatable effect on a card for the given context
  * @param {Object} card
@@ -147,6 +219,17 @@ export function findActivatableEffect(card, context, ownerPlayer = null) {
               }
             }
           }
+          if (
+            !effectActionsCanResolveInChain(
+              this,
+              card,
+              effect,
+              context,
+              ownerPlayer,
+            )
+          ) {
+            continue;
+          }
           // Check requireDefenderIsSelf (e.g., Dragon Spirit Sanctuary)
           if (
             effect.requireDefenderIsSelf &&
@@ -214,30 +297,13 @@ export function findActivatableEffect(card, context, ownerPlayer = null) {
             effect.targets.length > 0 &&
             this.game?.effectEngine
           ) {
-            const cardOwner =
-              ownerPlayer ||
-              (card.owner === "player"
-                ? this.game.player
-                : card.owner === "bot"
-                  ? this.game.bot
-                  : null);
-            const ctx = {
-              source: card,
-              player: cardOwner,
-              opponent:
-                card.owner === "player" ? this.game.bot : this.game.player,
-              defender: context.defender || context.target,
-              attacker: context.attacker,
-              summonedCard: context.summonedCard || context.card || null,
-              summonMethod: context.method || context.summonMethod || null,
-              summonFromZone: context.fromZone || null,
-              attackerOwner: context.attackerOwner,
-              defenderOwner: context.defenderOwner,
-              activationContext: {
-                autoSelectSingleTarget: true,
-                logTargets: true,
-              },
-            };
+            const ctx = buildChainPreviewContext(
+              this,
+              card,
+              effect,
+              context,
+              ownerPlayer,
+            );
 
             console.log(
               `[findActivatableEffect] Checking targets for ${card.name}:`,
