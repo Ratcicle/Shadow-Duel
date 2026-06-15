@@ -34,7 +34,7 @@ export async function finalizeSpellTrapActivation(
  * @param {number} handIndex - Index of the card in hand.
  * @returns {Object|null} Commit info with cardRef, activationZone, etc.
  */
-export function commitCardActivationFromHand(player, handIndex) {
+export async function commitCardActivationFromHand(player, handIndex) {
   if (!player || handIndex == null) return null;
   const card = player.hand?.[handIndex];
   if (!card) return null;
@@ -55,7 +55,7 @@ export function commitCardActivationFromHand(player, handIndex) {
 
   // Move to destination
   if (typeof this.moveCard === "function") {
-    this.moveCard(card, player, activationZone, { fromZone: "hand" });
+    await this.moveCard(card, player, activationZone, { fromZone: "hand" });
   } else {
     // Fallback (should not happen)
     player.hand.splice(handIndex, 1);
@@ -86,11 +86,11 @@ export function commitCardActivationFromHand(player, handIndex) {
  * @param {Player} player - The player whose activation is being rolled back.
  * @param {Object} commitInfo - Info from commitCardActivationFromHand.
  */
-export function rollbackSpellActivation(player, commitInfo) {
+export async function rollbackSpellActivation(player, commitInfo) {
   if (!player || !commitInfo || !commitInfo.cardRef) return;
   const { cardRef, activationZone, fromIndex, replacedFieldSpell } = commitInfo;
   const sourceZone = activationZone || "spellTrap";
-  this.moveCard(cardRef, player, "hand", { fromZone: sourceZone });
+  await this.moveCard(cardRef, player, "hand", { fromZone: sourceZone });
 
   if (
     typeof fromIndex === "number" &&
@@ -109,7 +109,7 @@ export function rollbackSpellActivation(player, commitInfo) {
     replacedFieldSpell &&
     player.graveyard?.includes(replacedFieldSpell)
   ) {
-    this.moveCard(replacedFieldSpell, player, "fieldSpell", {
+    await this.moveCard(replacedFieldSpell, player, "fieldSpell", {
       fromZone: "graveyard",
     });
   }

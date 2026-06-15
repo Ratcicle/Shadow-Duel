@@ -7,6 +7,8 @@
  * Methods: openGraveyardModal, closeGraveyardModal
  */
 
+import { getUIText } from "../../i18n.js";
+
 /**
  * Opens the graveyard modal for a player.
  * Optionally enables effect activation mode.
@@ -57,7 +59,7 @@ export function openGraveyardModal(player, options = {}) {
           activationZone: "graveyard",
           activationContext,
           selectionKind: "graveyardEffect",
-          selectionMessage: "Select target(s) for the graveyard effect.",
+          selectionMessage: getUIText("ui.graveyard.selection"),
           guardKind: "graveyard_effect",
           phaseReq: ["main1", "main2"],
           oncePerTurn: {

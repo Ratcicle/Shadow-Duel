@@ -70,6 +70,9 @@ export default class ChainSystem {
     /** @type {Set<Object>} Cards currently being resolved (to prevent re-offering) */
     this.cardsBeingResolved = new Set();
 
+    /** @type {Object|null} Paused chain link waiting on a human selection */
+    this.pendingChainSelection = null;
+
     /** @type {number} Current chain level counter */
     this.currentChainLevel = 0;
 
@@ -263,5 +266,9 @@ ChainSystem.prototype.getChainSummary = chainStack.getChainSummary;
 
 ChainSystem.prototype.resolveChain = chainResolution.resolveChain;
 ChainSystem.prototype.resolveChainLink = chainResolution.resolveChainLink;
+ChainSystem.prototype.startPendingChainSelection =
+  chainResolution.startPendingChainSelection;
+ChainSystem.prototype.resumePendingChainSelection =
+  chainResolution.resumePendingChainSelection;
 ChainSystem.prototype.isCardStillValid = chainResolution.isCardStillValid;
 ChainSystem.prototype.determineCardZone = chainResolution.determineCardZone;

@@ -306,6 +306,7 @@ export function createDeckBuilderController({
     if (!card) return;
     if (dom.preview.image) {
       dom.preview.image.style.backgroundImage = `url('${card.image}')`;
+      setPreviewCardFrameClass(dom.preview.image, card);
     }
     if (dom.preview.name) {
       dom.preview.name.textContent = getCardDisplayName(card) || card.name;
@@ -1287,4 +1288,26 @@ function getDeckBuilderCardTypeClass(card) {
   if (card?.cardKind === "trap") return "card-thumb-trap";
   if (card?.cardKind === "monster") return "card-thumb-monster";
   return "card-thumb-generic";
+}
+
+const PREVIEW_CARD_FRAME_CLASSES = [
+  "preview-card-monster",
+  "preview-card-fusion",
+  "preview-card-ascension",
+  "preview-card-spell",
+  "preview-card-trap",
+];
+
+function getPreviewCardFrameClass(card) {
+  if (card?.cardKind === "spell") return "preview-card-spell";
+  if (card?.cardKind === "trap") return "preview-card-trap";
+  if (card?.monsterType === "fusion") return "preview-card-fusion";
+  if (card?.monsterType === "ascension") return "preview-card-ascension";
+  return "preview-card-monster";
+}
+
+function setPreviewCardFrameClass(element, card) {
+  if (!element) return;
+  element.classList.remove(...PREVIEW_CARD_FRAME_CLASSES);
+  element.classList.add(getPreviewCardFrameClass(card));
 }

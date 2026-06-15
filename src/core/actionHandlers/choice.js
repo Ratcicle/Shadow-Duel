@@ -1,6 +1,51 @@
 import { getUI } from "./shared.js";
+import { getCardDisplayName, getUIText } from "../i18n.js";
 
 const DEFAULT_CHOICE_IMAGE = "assets/card-back.png";
+
+function getEffectChoiceKey(ctx, action) {
+  return (
+    action?.effectChoiceKey ||
+    action?.choiceTextKey ||
+    ctx?.effect?.id ||
+    ctx?.effectId ||
+    null
+  );
+}
+
+function getChoiceFallbackLabel(caseEntry, index) {
+  return (
+    caseEntry.label ||
+    caseEntry.name ||
+    caseEntry.title ||
+    caseEntry.id ||
+    `Option ${index + 1}`
+  );
+}
+
+function getChoiceCaseText(effectChoiceKey, caseId, field, fallback) {
+  if (!effectChoiceKey || !caseId) return fallback;
+  return getUIText(
+    `effectChoices.${effectChoiceKey}.cases.${caseId}.${field}`,
+    {},
+    fallback,
+  );
+}
+
+function getChoiceSelectionMessage(effectChoiceKey, action, ctx) {
+  const source = ctx?.source || null;
+  const cardName = source
+    ? getCardDisplayName(source) || source.name || ""
+    : "";
+  const fallback =
+    action.selectionMessage || getUIText("ui.selection.chooseEffect");
+  if (!effectChoiceKey) return fallback;
+  return getUIText(
+    `effectChoices.${effectChoiceKey}.message`,
+    { cardName },
+    fallback,
+  );
+}
 
 function isAIPlayer(player) {
   return player?.controllerType === "ai";
@@ -30,23 +75,30 @@ function buildChoiceCandidates(cases, ctx, action, engine) {
   const game = engine?.game;
   const requirementId = action.requirementId || "action_case_choice";
   const choiceImage = action.choiceImage || DEFAULT_CHOICE_IMAGE;
+  const effectChoiceKey = getEffectChoiceKey(ctx, action);
   const candidates = [];
   const caseByKey = new Map();
 
   cases.forEach((caseEntry, index) => {
-    const label =
-      caseEntry.label ||
-      caseEntry.name ||
-      caseEntry.title ||
-      caseEntry.id ||
-      `Option ${index + 1}`;
-    const description = caseEntry.description || "";
     const baseKey = caseEntry.key || caseEntry.id || `case_${index + 1}`;
+    const label = getChoiceCaseText(
+      effectChoiceKey,
+      baseKey,
+      "label",
+      getChoiceFallbackLabel(caseEntry, index),
+    );
+    const description = getChoiceCaseText(
+      effectChoiceKey,
+      baseKey,
+      "description",
+      caseEntry.description || "",
+    );
     const key = `${requirementId}:${baseKey}`;
 
     const cardRef = {
       id: caseEntry.id || baseKey,
       name: label,
+      label,
       description,
       cardKind: caseEntry.cardKind || "spell",
       image: caseEntry.image || choiceImage,
@@ -191,7 +243,7 @@ export async function handleChooseActionCase(action, ctx, targets, engine) {
       : allCases.filter((caseEntry) => shouldAllowCase(caseEntry, ctx, engine));
 
   if (availableCases.length === 0) {
-    getUI(game)?.log("No valid options to activate this effect.");
+    getUI(game)?.log(getUIText("ui.selection.noValidOptions"));
     return false;
   }
 
@@ -201,12 +253,13 @@ export async function handleChooseActionCase(action, ctx, targets, engine) {
     action,
     engine
   );
-  const selectionLabel = action.selectionLabel || "effect";
+  const selectionLabel =
+    action.selectionLabel || getUIText("ui.selection.effectLabel");
+  const effectChoiceKey = getEffectChoiceKey(ctx, action);
 
   const selectionContract = {
     kind: "choice",
-    message:
-      action.selectionMessage || "Choose which effect you want to activate.",
+    message: getChoiceSelectionMessage(effectChoiceKey, action, ctx),
     requirements: [
       {
         id: requirementId,
@@ -243,7 +296,7 @@ export async function handleChooseActionCase(action, ctx, targets, engine) {
   const chosenCase = caseByKey.get(chosenKey);
 
   if (!chosenCase) {
-    getUI(game)?.log("No valid effect choice selected.");
+    getUI(game)?.log(getUIText("ui.selection.noValidChoice"));
     return false;
   }
 
@@ -262,7 +315,9 @@ export async function handleChooseActionCase(action, ctx, targets, engine) {
       return targetResult;
     }
     if (targetResult.ok === false) {
-      getUI(game)?.log(targetResult.reason || "No valid targets.");
+      getUI(game)?.log(
+        targetResult.reason || getUIText("ui.selection.noValidTargets"),
+      );
       return false;
     }
     resolvedTargets = targetResult.targets || {};

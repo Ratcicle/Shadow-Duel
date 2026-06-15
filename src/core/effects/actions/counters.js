@@ -6,6 +6,7 @@ import {
 } from "../../actionHandlers/shared.js";
 import { cardMatchesKind } from "../../Card.js";
 import { isAI } from "../../Player.js";
+import { getUIText } from "../../i18n.js";
 
 /**
  * Counter Actions - add/remove counters
@@ -365,7 +366,11 @@ async function resolveCounterRemovalAmount(engine, action, ctx, totalAvailable) 
 
   const prompt =
     action.amountPrompt ||
-    `Choose how many ${action.counterType || "default"} counter(s) to remove (${minAmount}-${maxAmount}).`;
+    getUIText("ui.counters.removeAmount", {
+      counterType: action.counterType || "default",
+      min: minAmount,
+      max: maxAmount,
+    });
   const raw = ui.showNumberPrompt(prompt, defaultAmount);
   const resolved = raw && typeof raw.then === "function" ? await raw : raw;
   if (resolved === null || resolved === undefined) return null;
@@ -565,7 +570,10 @@ async function selectCounterPaymentCards(engine, action, ctx, entries, amount) {
     kind: "cost",
     message:
       action.selectionMessage ||
-      `Select card(s) to remove ${amount} ${action.counterType || "default"} counter(s).`,
+      getUIText("ui.counters.selectPayment", {
+        amount,
+        counterType: action.counterType || "default",
+      }),
     requirements: [
       {
         id: requirementId,
@@ -604,7 +612,7 @@ async function selectCounterPaymentCards(engine, action, ctx, entries, amount) {
   });
 
   if (selectedKeys === null) {
-    getUI(game)?.log("Counter payment cancelled.");
+    getUI(game)?.log(getUIText("ui.counters.paymentCancelled"));
     return [];
   }
 
@@ -639,19 +647,19 @@ export async function applyRemoveCountersFromField(action, ctx) {
     totalAvailable,
   );
   if (amount === null) {
-    getUI(game)?.log("Counter payment cancelled.");
+    getUI(game)?.log(getUIText("ui.counters.paymentCancelled"));
     return false;
   }
   if (!Number.isFinite(amount) || amount <= 0) {
     getUI(game)?.log(
-      `Not enough ${counterType} counters on the field to pay the cost.`,
+      getUIText("ui.counters.notEnough", { counterType }),
     );
     return false;
   }
 
   if (totalAvailable < amount) {
     getUI(game)?.log(
-      `Not enough ${counterType} counters on the field to pay the cost.`,
+      getUIText("ui.counters.notEnough", { counterType }),
     );
     return false;
   }
@@ -673,7 +681,7 @@ export async function applyRemoveCountersFromField(action, ctx) {
 
   if (selectedTotal < amount) {
     getUI(game)?.log(
-      `Select enough cards to remove ${amount} ${counterType} counter(s).`,
+      getUIText("ui.counters.selectEnough", { amount, counterType }),
     );
     return false;
   }

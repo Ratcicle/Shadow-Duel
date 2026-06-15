@@ -259,6 +259,52 @@ function hideFloatingCounterTooltip() {
   clearFloatingCounterTooltip();
 }
 
+const PREVIEW_CARD_FRAME_CLASSES = [
+  "preview-card-monster",
+  "preview-card-fusion",
+  "preview-card-ascension",
+  "preview-card-spell",
+  "preview-card-trap",
+];
+
+const PREVIEW_STAT_MOD_CLASSES = [
+  "preview-stat-buff",
+  "preview-stat-debuff",
+];
+
+function getPreviewCardFrameClass(card) {
+  if (card?.cardKind === "spell") return "preview-card-spell";
+  if (card?.cardKind === "trap") return "preview-card-trap";
+  if (card?.monsterType === "fusion") return "preview-card-fusion";
+  if (card?.monsterType === "ascension") return "preview-card-ascension";
+  return "preview-card-monster";
+}
+
+function setPreviewCardFrameClass(element, card) {
+  if (!element) return;
+  element.classList.remove(...PREVIEW_CARD_FRAME_CLASSES);
+  element.classList.add(getPreviewCardFrameClass(card));
+}
+
+function getPreviewStatModifierClass(card, stat) {
+  const current = Number(card?.[stat]);
+  const baseStatKey = `base${stat.charAt(0).toUpperCase()}${stat.slice(1)}`;
+  const base = Number(card?.[baseStatKey]);
+  if (!Number.isFinite(current) || !Number.isFinite(base)) return "";
+  if (current > base) return "preview-stat-buff";
+  if (current < base) return "preview-stat-debuff";
+  return "";
+}
+
+function setPreviewStatModifierClass(element, card, stat) {
+  if (!element) return;
+  element.classList.remove(...PREVIEW_STAT_MOD_CLASSES);
+  const modifierClass = getPreviewStatModifierClass(card, stat);
+  if (modifierClass) {
+    element.classList.add(modifierClass);
+  }
+}
+
 export function clearFloatingCounterTooltip() {
   const tooltip = document.querySelector(".floating-counter-tooltip");
   if (!tooltip) return;
@@ -303,15 +349,19 @@ export function renderPreview(card) {
 
   if (!card) {
     previewImage.style.backgroundImage = "";
+    setPreviewCardFrameClass(previewImage, null);
     previewName.textContent = "Hover a card";
     previewAtk.textContent = "ATK: -";
     previewDef.textContent = "DEF: -";
+    setPreviewStatModifierClass(previewAtk, null, "atk");
+    setPreviewStatModifierClass(previewDef, null, "def");
     previewLevel.textContent = "Level: -";
     previewDesc.textContent = "Description will appear here.";
     return;
   }
 
   previewImage.style.backgroundImage = `url('${card.image}')`;
+  setPreviewCardFrameClass(previewImage, card);
   previewName.textContent =
     getCardDisplayName(card) || (card?.name && card.name) || "Hover a card";
   const isMonster = card.cardKind !== "spell" && card.cardKind !== "trap";
@@ -321,10 +371,14 @@ export function renderPreview(card) {
     previewLevel.innerHTML = formatMonsterDetailHtml(card);
     previewAtk.textContent = stats.atk;
     previewDef.textContent = stats.def;
+    setPreviewStatModifierClass(previewAtk, card, "atk");
+    setPreviewStatModifierClass(previewDef, card, "def");
   } else {
     previewLevel.textContent = formatCardKindSubtypeLine(card);
     previewAtk.textContent = "";
     previewDef.textContent = "";
+    setPreviewStatModifierClass(previewAtk, null, "atk");
+    setPreviewStatModifierClass(previewDef, null, "def");
   }
   const desc =
     getCardDisplayDescription(card) ||
@@ -405,11 +459,7 @@ export function createCardElement(card, visible) {
     const displayName =
       getCardDisplayName(card) || (card?.name && card.name.trim()) || "";
     const stars = "*".repeat(card.level || 0);
-    const typeLabel = isMonster
-      ? stars
-      : `${(card.cardKind || "").toUpperCase()}${
-          card.subtype ? " / " + card.subtype.toUpperCase() : ""
-        }`;
+    const typeLabel = isMonster ? stars : formatCardKindSubtypeLine(card);
 
     const displayDescription =
       getCardDisplayDescription(card) ||

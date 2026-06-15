@@ -594,6 +594,7 @@ export async function activateSpellTrapEffect(
     ownerId: player.id,
     zone: activationZone,
   });
+  normalizedActivationContext.sourceRect = visualSource?.rect || null;
   this.game?.queueVisualFeedback?.({
     kind: "effect-activation",
     sourceCard: card,

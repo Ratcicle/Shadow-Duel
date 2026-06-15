@@ -477,17 +477,25 @@ export default class Player {
     }
   }
 
-  gainLP(amount) {
+  gainLP(amount, options = {}) {
     // Apply LP gain multiplier (for effects like Megashield Barbarias)
     const multiplier = this.lpGainMultiplier || 1.0;
     const adjustedAmount = Math.floor(amount * multiplier);
     if (!adjustedAmount || adjustedAmount <= 0) return;
+    const before = this.lp;
     this.lp += adjustedAmount;
     this.lpGainedThisTurn = (this.lpGainedThisTurn || 0) + adjustedAmount;
+    let showedLpChange = false;
     if (this.game?.ui?.showLpChange) {
-      this.game.ui.showLpChange(this, adjustedAmount);
+      showedLpChange = this.game.ui.showLpChange(this, adjustedAmount, {
+        cause: options.cause || "effect",
+        sourceCard: options.sourceCard || null,
+        sourceRect: options.sourceRect || null,
+        fromLp: before,
+        toLp: this.lp,
+      }) === true;
     }
-    if (typeof this.game?.queueVisualFeedback === "function") {
+    if (!showedLpChange && typeof this.game?.queueVisualFeedback === "function") {
       this.game.queueVisualFeedback({
         kind: "heal",
         targetOwnerId: this.id,

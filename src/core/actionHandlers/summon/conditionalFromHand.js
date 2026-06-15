@@ -1,4 +1,5 @@
 import { isAI } from "../../Player.js";
+import { getCardDisplayName, getUIText } from "../../i18n.js";
 import { getUI } from "../shared.js";
 import { performSummonFromHand } from "./fromHand.js";
 import { resolveContextualSummonPosition } from "./position.js";
@@ -154,13 +155,19 @@ export async function handleConditionalSummonFromHand(
 
   if (optional) {
     const conditionText = condition.cardName
-      ? `You control "${condition.cardName}".`
-      : "Condition met.";
+      ? getUIText("ui.summon.controlsCard", {
+          cardName: condition.cardName,
+        })
+      : getUIText("ui.summon.conditionMet");
+    const cardName = getCardDisplayName(handCard) || handCard.name;
 
     const wantsToSummon =
       (await getUI(game)?.showConfirmPrompt?.(
-        `${conditionText} Do you want to Special Summon "${handCard.name}" from your hand?`,
-        { kind: "conditional_summon", cardName: handCard.name },
+        getUIText("ui.summon.conditionalPrompt", {
+          conditionText,
+          cardName,
+        }),
+        { kind: "conditional_summon", cardName },
       )) ?? false;
 
     if (!wantsToSummon) {

@@ -1,4 +1,5 @@
 import { isAI } from "../../Player.js";
+import { getCardDisplayName, getUIText } from "../../i18n.js";
 import { getUI } from "../shared.js";
 import { performSummonFromHand } from "./fromHand.js";
 
@@ -91,10 +92,11 @@ export async function handleDrawAndSummon(action, ctx, targets, engine) {
   }
 
   if (optional) {
+    const cardName = getCardDisplayName(drawnCard) || drawnCard.name;
     const wantsToSummon =
       (await getUI(game)?.showConfirmPrompt?.(
-        `You drew "${drawnCard.name}". Do you want to Special Summon it from your hand?`,
-        { kind: "draw_and_summon", cardName: drawnCard.name },
+        getUIText("ui.summon.drawnPrompt", { cardName }),
+        { kind: "draw_and_summon", cardName },
       )) ?? false;
 
     if (!wantsToSummon) {

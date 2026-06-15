@@ -78,6 +78,12 @@ function findCardOwner(game, fallbackOwner, card) {
   return fallbackOwner || null;
 }
 
+function ownerHasCardInZone(owner, zone, card) {
+  if (!owner || !zone || !card) return false;
+  if (zone === "fieldSpell") return owner.fieldSpell === card;
+  return Array.isArray(owner[zone]) && owner[zone].includes(card);
+}
+
 function isProtectiveStatus(status) {
   return /protect|indestructible|immune|prevent|cannotBeDestroyed/i.test(
     String(status || ""),
@@ -1163,6 +1169,7 @@ export async function handleBanishAndBuff(action, ctx, targets, engine) {
   const game = engine.game;
 
   if (!player || !game) return false;
+  if (typeof game.moveCard !== "function") return false;
 
   // Resolve targets to banish
 
@@ -1178,21 +1185,16 @@ export async function handleBanishAndBuff(action, ctx, targets, engine) {
     return false;
   }
 
-  // Calculate total buff value from all banished cards
-
   const buffSource = action.buffSource || "atk";
 
   const buffMultiplier = action.buffMultiplier ?? 1;
 
-  let totalBuffValue = 0;
+  const banishEntries = [];
 
   for (const banishCard of banishTargets) {
     if (!banishCard) continue;
 
-    // Calculate value based on buffSource
-
     let cardValue = 0;
-
     if (typeof buffSource === "number") {
       cardValue = buffSource;
     } else if (buffSource === "atk") {
@@ -1205,34 +1207,49 @@ export async function handleBanishAndBuff(action, ctx, targets, engine) {
       cardValue = banishCard[buffSource] || 0;
     }
 
-    totalBuffValue += Math.floor(cardValue * buffMultiplier);
-
-    // Banish the card (remove from game)
-
     const banishOwner = findCardOwner(game, player, banishCard);
     const fromZone =
       typeof engine.findCardZone === "function" && banishOwner
         ? engine.findCardZone(banishOwner, banishCard)
         : "graveyard";
 
-    queueBanishAnimation(game, banishOwner || player, banishCard, fromZone);
-
-    if (fromZone && Array.isArray(banishOwner?.[fromZone])) {
-      const idx = banishOwner[fromZone].indexOf(banishCard);
-
-      if (idx > -1) {
-        banishOwner[fromZone].splice(idx, 1);
-      }
+    if (!banishOwner || !ownerHasCardInZone(banishOwner, fromZone, banishCard)) {
+      getUI(game)?.log(`${banishCard.name} could not be banished.`);
+      return false;
     }
 
-    if (banishOwner) {
-      banishOwner.banished = banishOwner.banished || [];
-      if (!banishOwner.banished.includes(banishCard)) {
-        banishOwner.banished.push(banishCard);
-      }
-      banishCard.location = "banished";
-      banishCard.owner = banishOwner.id;
-      banishCard.controller = banishOwner.id;
+    banishEntries.push({
+      card: banishCard,
+      owner: banishOwner,
+      fromZone,
+      value: Math.floor(cardValue * buffMultiplier),
+    });
+  }
+
+  if (banishEntries.length === 0) {
+    getUI(game)?.log("No valid targets to banish.");
+    return false;
+  }
+
+  let totalBuffValue = 0;
+
+  for (const entry of banishEntries) {
+    queueBanishAnimation(game, entry.owner, entry.card, entry.fromZone);
+
+    const moveResult = await game.moveCard(entry.card, entry.owner, "banished", {
+      fromZone: entry.fromZone,
+      awaitEvents: true,
+      sourceCard: source,
+      effectId: ctx?.effect?.id || null,
+      contextLabel: "banish_and_buff",
+    });
+
+    if (moveResult?.needsSelection) {
+      return { ...moveResult, success: false };
+    }
+    if (moveResult === false || moveResult?.success === false) {
+      getUI(game)?.log(`${entry.card.name} could not be banished.`);
+      return false;
     }
 
     // Keep legacy mirror for older diagnostics that still read game.banishedCards.
@@ -1240,11 +1257,12 @@ export async function handleBanishAndBuff(action, ctx, targets, engine) {
       game.banishedCards = [];
     }
 
-    if (!game.banishedCards.includes(banishCard)) {
-      game.banishedCards.push(banishCard);
+    if (!game.banishedCards.includes(entry.card)) {
+      game.banishedCards.push(entry.card);
     }
 
-    getUI(game)?.log(`${banishCard.name} was banished (removed from game).`);
+    totalBuffValue += entry.value;
+    getUI(game)?.log(`${entry.card.name} was banished (removed from game).`);
   }
 
   if (totalBuffValue === 0) {
@@ -1533,6 +1551,7 @@ export async function handlePermanentBuffNamed(action, ctx, targets, engine) {
   if (!player || !game || !source) return false;
 
   const targetRef = action.targetRef || "self";
+  const fieldWideAura = targetRef === "self" && action.applyToAllField;
 
   let targetCards = [];
 
@@ -1544,7 +1563,7 @@ export async function handlePermanentBuffNamed(action, ctx, targets, engine) {
     if (summonedCard) {
       targetCards = [summonedCard];
     }
-  } else if (targetRef === "self" && action.applyToAllField) {
+  } else if (fieldWideAura) {
     // Apply to all monsters on field matching archetype
 
     targetCards = (player.field || []).filter((card) => {
@@ -1575,7 +1594,7 @@ export async function handlePermanentBuffNamed(action, ctx, targets, engine) {
   }
 
   if (targetCards.length === 0) {
-    return false;
+    return fieldWideAura;
   }
 
   const atkBoost = action.atkBoost || 0;
@@ -1690,7 +1709,7 @@ export async function handlePermanentBuffNamed(action, ctx, targets, engine) {
     game.updateBoard();
   }
 
-  return anyBuffed;
+  return anyBuffed || fieldWideAura;
 }
 
 /**
@@ -1719,10 +1738,12 @@ export async function handleRemovePermanentBuffNamed(
   if (!source || !game || !player) return false;
 
   const targetRef = action.targetRef || "self";
+  const fieldWideAuraRemoval =
+    targetRef === "self" && action.removeFromAllField;
 
   let targetCards = [];
 
-  if (targetRef === "self" && action.removeFromAllField) {
+  if (fieldWideAuraRemoval) {
     // Remove from all monsters on field matching archetype
 
     targetCards = (player.field || []).filter((card) => {
@@ -1750,7 +1771,7 @@ export async function handleRemovePermanentBuffNamed(
     });
   }
 
-  if (targetCards.length === 0) return false;
+  if (targetCards.length === 0) return fieldWideAuraRemoval;
 
   const sourceName = action.sourceName || source.name;
 
@@ -1790,7 +1811,7 @@ export async function handleRemovePermanentBuffNamed(
     game.updateBoard();
   }
 
-  return anyRemoved;
+  return anyRemoved || fieldWideAuraRemoval;
 }
 
 export async function handleReduceHandMonsterLevels(action, ctx, targets, engine) {

@@ -10,6 +10,7 @@ import {
   getCardDisplayName,
   getLocale,
   getMonsterTypeDisplayName,
+  getUIText,
 } from "../../core/i18n.js";
 
 const SELECTION_KIND_LABELS = {
@@ -89,7 +90,10 @@ function getSelectionStat(card, candidate, stat) {
 
 export function renderCompactSelectionCard(card, candidate = {}) {
   const displayName =
-    getCardDisplayName(card) || (card?.name && card.name) || candidate.name || "Card";
+    getCardDisplayName(card) ||
+    (card?.name && card.name) ||
+    candidate.name ||
+    getUIText("ui.selection.cardFallback");
   const wrapper = document.createDocumentFragment();
 
   const nameDiv = document.createElement("div");
@@ -321,9 +325,44 @@ function getFieldTargetingPrompt(config = {}) {
 }
 
 function getFieldTargetingActionLabels() {
-  return getLocale() === "pt-br"
-    ? { cancel: "Cancelar", confirm: "Confirmar" }
-    : { cancel: "Cancel", confirm: "Confirm" };
+  return {
+    cancel: getUIText("ui.common.cancel"),
+    confirm: getUIText("ui.common.confirm"),
+  };
+}
+
+function getRequirementInstruction(req, isChoiceBlock) {
+  const min = Number(req?.min ?? 0);
+  const max = Number(req?.max ?? min);
+  const label = req?.label || req?.id || getUIText("ui.selection.effectLabel");
+
+  if (isChoiceBlock) {
+    if (min === 1 && max === 1) {
+      return getUIText("ui.selection.chooseOneOption");
+    }
+    if (min === max) {
+      return getUIText("ui.selection.chooseOptionCount", { count: min });
+    }
+    return getUIText("ui.selection.chooseOptionRange", { min, max });
+  }
+
+  if (min === max) {
+    return getUIText("ui.selection.chooseTargetCount", { count: min, label });
+  }
+  return getUIText("ui.selection.chooseTargetRange", { min, max, label });
+}
+
+function getSelectionValidationText(req) {
+  const min = Number(req?.min ?? 0);
+  const max = Number(req?.max ?? min);
+  const label = req?.label || req?.id || getUIText("ui.selection.effectLabel");
+  if (min === max) {
+    return getUIText("ui.selection.selectTargetCount", {
+      count: min,
+      label,
+    });
+  }
+  return getUIText("ui.selection.selectTargetRange", { min, max, label });
 }
 
 function getFieldTargetingHost() {
@@ -458,10 +497,18 @@ export function showTargetSelection(
     : "modal-content target-content";
   const titleText = contract.message
     ? getFieldTargetingPrompt({ ...config, selectionContract: contract })
-    : "Select target(s)";
-  content.innerHTML = `<span class="close-target">${
-    allowCancel ? "&times;" : ""
-  }</span><h2>${titleText}</h2>`;
+    : isChoiceModal
+      ? getUIText("ui.selection.chooseOneOption")
+      : getUIText("ui.selection.selectTargets");
+
+  const closeMarker = document.createElement("span");
+  closeMarker.className = "close-target";
+  closeMarker.textContent = allowCancel ? "×" : "";
+  content.appendChild(closeMarker);
+
+  const title = document.createElement("h2");
+  title.textContent = titleText;
+  content.appendChild(title);
 
   const selectionState = {};
   const counterById = new Map();
@@ -489,7 +536,6 @@ export function showTargetSelection(
     block.className = "target-block";
     const min = Number(req.min ?? 0);
     const max = Number(req.max ?? min);
-    const label = req.label || req.id;
 
     // Check if this is a choice-based selection
     const isChoiceBlock = req.candidates?.some((c) => c.zone === "choice");
@@ -497,9 +543,13 @@ export function showTargetSelection(
       block.classList.add("target-block-choice");
     }
 
-    block.innerHTML = `<p>Choose ${
-      min === max ? min : `${min}-${max}`
-    } target(s) for ${label}</p>`;
+    const hideRequirementLine =
+      isChoiceBlock && requirements.length === 1 && min === 1 && max === 1;
+    if (!hideRequirementLine) {
+      const instruction = document.createElement("p");
+      instruction.textContent = getRequirementInstruction(req, isChoiceBlock);
+      block.appendChild(instruction);
+    }
 
     const counter = document.createElement("div");
     counter.className = "target-counter";
@@ -528,7 +578,7 @@ export function showTargetSelection(
         getCardDisplayName(targetCard) ||
         (targetCard?.name && targetCard.name) ||
         cand.name ||
-        "Card";
+        getUIText("ui.selection.cardFallback");
 
       if (isChoiceCandidate) {
         // Compact choice layout (no card image)
@@ -579,10 +629,10 @@ export function showTargetSelection(
   const actions = document.createElement("div");
   actions.className = "target-actions";
   const confirmBtn = document.createElement("button");
-  confirmBtn.textContent = "Confirm";
+  confirmBtn.textContent = getUIText("ui.common.confirm");
   if (allowCancel) {
     const cancelBtn = document.createElement("button");
-    cancelBtn.textContent = "Cancel";
+    cancelBtn.textContent = getUIText("ui.common.cancel");
     actions.appendChild(cancelBtn);
     cancelBtn.addEventListener("click", () => {
       closeModal();
@@ -621,19 +671,11 @@ export function showTargetSelection(
       const maxSel = Number(req.max ?? minSel);
       const requiredMin = allowEmpty ? 0 : minSel;
       if (selected.length < requiredMin) {
-        alert(
-          `Select ${
-            minSel === maxSel ? minSel : `${minSel}-${maxSel}`
-          } target(s) for ${req.id}`
-        );
+        alert(getSelectionValidationText(req));
         return;
       }
       if (selected.length > maxSel) {
-        alert(
-          `Select ${
-            minSel === maxSel ? minSel : `${minSel}-${maxSel}`
-          } target(s) for ${req.id}`
-        );
+        alert(getSelectionValidationText(req));
         return;
       }
     }
@@ -777,22 +819,27 @@ export function showDestructionNegationPrompt(
   content.className = "modal-content target-content";
 
   const title = document.createElement("h3");
-  title.textContent = `Deseja ativar o efeito de "${cardName}"?`;
+  title.textContent = getUIText("ui.prompts.destructionNegationTitle", {
+    cardName,
+  });
 
   const desc = document.createElement("p");
   desc.innerHTML = costDescription
-    ? `Custo: ${costDescription}`.replace(/\n/g, "<br>")
+    ? getUIText("ui.prompts.costLine", { costDescription }).replace(
+        /\n/g,
+        "<br>",
+      )
     : "";
 
   const actions = document.createElement("div");
   actions.className = "target-actions";
 
   const confirmBtn = document.createElement("button");
-  confirmBtn.textContent = "Sim";
+  confirmBtn.textContent = getUIText("ui.common.yes");
   confirmBtn.className = "primary";
 
   const cancelBtn = document.createElement("button");
-  cancelBtn.textContent = "Não";
+  cancelBtn.textContent = getUIText("ui.common.no");
   cancelBtn.className = "secondary";
 
   confirmBtn.onclick = () => {
@@ -828,11 +875,11 @@ export function showFusionTargetModal(availableFusions, onSelect, onCancel) {
   content.className = "modal-content fusion-content";
 
   const title = document.createElement("h2");
-  title.textContent = "Select Fusion Monster";
+  title.textContent = getUIText("ui.fusion.selectMonsterTitle");
   title.style.color = "#8b00ff";
 
   const hint = document.createElement("p");
-  hint.textContent = "Choose a Fusion Monster to summon:";
+  hint.textContent = getUIText("ui.fusion.selectMonsterHint");
   hint.className = "fusion-hint";
 
   const grid = document.createElement("div");
@@ -849,7 +896,7 @@ export function showFusionTargetModal(availableFusions, onSelect, onCancel) {
   });
 
   const cancelBtn = document.createElement("button");
-  cancelBtn.textContent = "Cancel";
+  cancelBtn.textContent = getUIText("ui.common.cancel");
   cancelBtn.className = "secondary";
   cancelBtn.onclick = () => {
     document.body.removeChild(overlay);
@@ -882,16 +929,20 @@ export function showFusionMaterialSelection(
   content.className = "modal-content fusion-material-content";
 
   const title = document.createElement("h2");
-  title.textContent = "Select Fusion Materials";
+  title.textContent = getUIText("ui.fusion.selectMaterialsTitle");
   title.style.color = "#8b00ff";
 
   const hint = document.createElement("p");
   hint.className = "fusion-hint";
-  hint.innerHTML = "Select materials:<br>";
+  hint.innerHTML = `${getUIText("ui.fusion.selectMaterialsHint")}<br>`;
   requirements.forEach((req) => {
     const count = req.count || 1;
     const desc =
-      req.name || req.archetype || req.type || req.attribute || "monster";
+      req.name ||
+      req.archetype ||
+      req.type ||
+      req.attribute ||
+      getUIText("ui.fusion.monsterFallback");
     const zones = Array.isArray(req.allowedZones)
       ? req.allowedZones
       : typeof req.zone === "string"
@@ -935,7 +986,7 @@ export function showFusionMaterialSelection(
   actions.className = "modal-actions";
 
   const cancelBtn = document.createElement("button");
-  cancelBtn.textContent = "Cancel";
+  cancelBtn.textContent = getUIText("ui.common.cancel");
   cancelBtn.className = "secondary";
   cancelBtn.onclick = () => {
     document.body.removeChild(overlay);
@@ -943,7 +994,7 @@ export function showFusionMaterialSelection(
   };
 
   const confirmBtn = document.createElement("button");
-  confirmBtn.textContent = "Confirm";
+  confirmBtn.textContent = getUIText("ui.common.confirm");
   confirmBtn.disabled = true;
   confirmBtn.onclick = () => {
     document.body.removeChild(overlay);
@@ -968,13 +1019,13 @@ export function showFusionMaterialSelection(
  */
 export function showCardGridSelectionModal(options) {
   const {
-    title = "Select Cards",
+    title = getUIText("ui.cardGrid.selectCards"),
     subtitle = "",
     cards = [],
     minSelect = 0,
     maxSelect = cards.length || 1,
-    confirmLabel = "Confirm",
-    cancelLabel = "Cancel",
+    confirmLabel = getUIText("ui.common.confirm"),
+    cancelLabel = getUIText("ui.common.cancel"),
     overlayClass = "card-grid-overlay",
     modalClass = "card-grid-modal",
     gridClass = "card-grid",
@@ -1122,22 +1173,22 @@ export function showIgnitionActivateModal(card, onActivate) {
   const titleText =
     (card && getCardDisplayName(card)) ||
     (card?.name && card.name) ||
-    "Activate effect?";
+    getUIText("ui.ignition.titleFallback");
   title.textContent = titleText;
   title.classList.add("modal-title");
 
   const desc = document.createElement("p");
-  desc.textContent = "Activate this monster's effect?";
+  desc.textContent = getUIText("ui.ignition.prompt");
   desc.classList.add("modal-text");
 
   const actions = document.createElement("div");
   actions.classList.add("modal-actions");
 
   const cancelBtn = document.createElement("button");
-  cancelBtn.textContent = "Cancel";
+  cancelBtn.textContent = getUIText("ui.common.cancel");
   cancelBtn.classList.add("secondary");
   const activateBtn = document.createElement("button");
-  activateBtn.textContent = "Activate";
+  activateBtn.textContent = getUIText("ui.common.activate");
 
   const cleanup = () => {
     overlay.remove();
@@ -1168,18 +1219,21 @@ export function showShadowHeartCathedralModal(
   callback
 ) {
   this.showCardGridSelectionModal({
-    title: "Shadow-Heart Cathedral",
-    subtitle: `Select 1 Shadow-Heart monster with ATK <= ${maxAtk} (${counterCount} counters)`,
+    title: getUIText("ui.shadowHeartCathedral.title"),
+    subtitle: getUIText("ui.shadowHeartCathedral.subtitle", {
+      maxAtk,
+      counterCount,
+    }),
     cards: validMonsters,
     minSelect: 1,
     maxSelect: 1,
-    confirmLabel: "Confirm",
-    cancelLabel: "Cancel",
+    confirmLabel: getUIText("ui.common.confirm"),
+    cancelLabel: getUIText("ui.common.cancel"),
     overlayClass: "cathedral-overlay",
     modalClass: "cathedral-modal",
     gridClass: "cathedral-grid",
     cardClass: "cathedral-card",
-    infoText: "Only Shadow-Heart monsters in your Deck are valid.",
+    infoText: getUIText("ui.shadowHeartCathedral.info"),
     onConfirm: (chosen) => {
       const card = Array.isArray(chosen) ? chosen[0] : null;
       if (callback) callback(card || null);
@@ -1201,7 +1255,7 @@ export function showShadowHeartCathedralModal(
         cardInfo.classList.add("cathedral-card-info");
 
         const cardName = document.createElement("div");
-        cardName.textContent = monster.name;
+        cardName.textContent = getCardDisplayName(monster) || monster.name;
         cardName.classList.add("cathedral-card-name");
         cardName.style.fontSize = "15px";
         cardName.style.fontWeight = "bold";
@@ -1210,7 +1264,9 @@ export function showShadowHeartCathedralModal(
         const cardStats = document.createElement("div");
         cardStats.textContent = `ATK ${monster.atk || 0} / DEF ${
           monster.def || 0
-        } / Level ${monster.level || 0}`;
+        } / ${getUIText("ui.shadowHeartCathedral.level")} ${
+          monster.level || 0
+        }`;
         cardStats.classList.add("cathedral-card-stats");
         cardStats.style.fontSize = "14px";
         cardStats.style.color = "#aaa";
@@ -1239,13 +1295,13 @@ export function showSickleSelectionModal(
   onCancel
 ) {
   this.showCardGridSelectionModal({
-    title: 'Select up to 2 "Luminarch" monsters to add to hand',
-    subtitle: `Select up to ${maxSelect}.`,
+    title: getUIText("ui.luminarchSickle.title"),
+    subtitle: getUIText("ui.luminarchSickle.subtitle", { maxSelect }),
     cards: candidates,
     minSelect: 0,
     maxSelect,
-    confirmLabel: "Add to Hand",
-    cancelLabel: "Cancel",
+    confirmLabel: getUIText("ui.common.addToHand"),
+    cancelLabel: getUIText("ui.common.cancel"),
     overlayClass: "modal sickle-overlay",
     modalClass: "modal-content sickle-modal",
     gridClass: "sickle-list",
@@ -1259,7 +1315,7 @@ export function showSickleSelectionModal(
       const stats = `ATK ${card.atk || 0} / DEF ${card.def || 0} / L${
         card.level || 0
       }`;
-      name.textContent = `${card.name} (${stats})`;
+      name.textContent = `${getCardDisplayName(card) || card.name} (${stats})`;
       row.appendChild(name);
       return row;
     },
@@ -1271,7 +1327,7 @@ export function showSickleSelectionModal(
  */
 export function showTieBreakerSelection(options = {}) {
   const {
-    title = "Choose Survivor",
+    title = getUIText("ui.cardGrid.chooseSurvivor"),
     subtitle = "",
     infoText = "",
     cards = [],
@@ -1295,7 +1351,9 @@ export function showTieBreakerSelection(options = {}) {
     const nameDiv = document.createElement("div");
     nameDiv.classList.add("tie-breaker-card-name");
     const displayName =
-      getCardDisplayName(card) || (card?.name && card.name) || "Card";
+      getCardDisplayName(card) ||
+      (card?.name && card.name) ||
+      getUIText("ui.selection.cardFallback");
     nameDiv.textContent = displayName;
     infoDiv.appendChild(nameDiv);
 
@@ -1314,8 +1372,8 @@ export function showTieBreakerSelection(options = {}) {
     cards,
     minSelect: keepCount,
     maxSelect: keepCount,
-    confirmLabel: "Confirm",
-    cancelLabel: "Cancel",
+    confirmLabel: getUIText("ui.common.confirm"),
+    cancelLabel: getUIText("ui.common.cancel"),
     overlayClass: "tie-breaker-overlay",
     modalClass: "tie-breaker-modal",
     gridClass: "tie-breaker-grid",
@@ -1338,11 +1396,11 @@ export function showMultiSelectModal(
   const {
     min = 0,
     max = cards.length,
-    title = "Select Cards",
+    title = getUIText("ui.cardGrid.selectCards"),
     subtitle = "",
     infoText = "",
-    confirmLabel = "Confirm",
-    cancelLabel = "Cancel",
+    confirmLabel = getUIText("ui.common.confirm"),
+    cancelLabel = getUIText("ui.common.cancel"),
     renderCard,
   } = selectionRange || {};
 

@@ -6,6 +6,7 @@
  */
 
 import { isAI } from "../../Player.js";
+import { getCardDisplayName, getUIText } from "../../i18n.js";
 
 function getActionContext(ctx) {
   return (
@@ -215,7 +216,7 @@ export async function applyPolymerizationFusion(action, ctx) {
   );
 
   if (availableFusions.length === 0) {
-    this.ui?.showMessage?.("No valid Fusion Summons available!");
+    this.ui?.showMessage?.(getUIText("ui.fusion.noValidSummons"));
     return false;
   }
 
@@ -253,12 +254,12 @@ export async function applyPolymerizationFusion(action, ctx) {
           })),
           min: 1,
           max: 1,
-          label: "Choose a Fusion Monster to summon",
+          label: getUIText("ui.fusion.selectMonsterLabel"),
         },
       ],
       ui: {
         allowCancel: true,
-        message: "Select a Fusion Monster to summon",
+        message: getUIText("ui.fusion.selectMonsterMessage"),
       },
     };
 
@@ -290,7 +291,7 @@ export async function applyPolymerizationFusion(action, ctx) {
   const materialCombos = selectedFusionData?.materialCombos || [];
 
   if (materialCombos.length === 0) {
-    this.ui?.showMessage?.("No valid materials for this fusion!");
+    this.ui?.showMessage?.(getUIText("ui.fusion.noValidMaterials"));
     return false;
   }
 
@@ -320,12 +321,17 @@ export async function applyPolymerizationFusion(action, ctx) {
             candidates: materialCandidates,
             min: requiredCount,
             max: requiredCount,
-            label: `Select ${requiredCount} Fusion Materials`,
+            label: getUIText("ui.fusion.selectMaterialsLabel", {
+              count: requiredCount,
+            }),
           },
         ],
         ui: {
           allowCancel: true,
-          message: `Select materials for ${fusionSelection.name}`,
+          message: getUIText("ui.fusion.selectMaterialsFor", {
+            cardName:
+              getCardDisplayName(fusionSelection) || fusionSelection.name,
+          }),
         },
       };
 
@@ -355,7 +361,9 @@ export async function applyPolymerizationFusion(action, ctx) {
       materialSelection
     );
     if (!validation.valid) {
-      this.ui?.showMessage?.(validation.reason || "Invalid fusion materials!");
+      this.ui?.showMessage?.(
+        validation.reason || getUIText("ui.fusion.invalidMaterials"),
+      );
       return false;
     }
 
@@ -370,7 +378,7 @@ export async function applyPolymerizationFusion(action, ctx) {
   // Get fusion monster index in extra deck
   const fusionIndex = player.extraDeck.indexOf(fusionSelection);
   if (fusionIndex === -1) {
-    this.ui?.showMessage?.("Fusion monster not found in Extra Deck!");
+    this.ui?.showMessage?.(getUIText("ui.fusion.notFound"));
     return false;
   }
 

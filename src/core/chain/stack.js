@@ -67,6 +67,7 @@ export function cancelChain() {
   this.chainWindowOpen = false;
   this.chainWindowContext = null;
   this.isResolving = false;
+  this.pendingChainSelection = null;
   this.currentChainLevel = 0;
   this.cardsBeingResolved.clear();
 }

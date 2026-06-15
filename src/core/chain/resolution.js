@@ -23,37 +23,65 @@ import { isQuickSpell } from "../game/spellTrap/quickSpellRules.js";
 export async function resolveChain() {
   if (this.chainStack.length === 0) {
     this.log("No chain to resolve");
-    return;
+    return { success: true, needsSelection: false };
   }
 
   this.isResolving = true;
   this.log(`Resolving chain with ${this.chainStack.length} links`);
 
   const ui = this.getUI();
+  let result = { success: true, needsSelection: false };
 
-  while (this.chainStack.length > 0) {
-    const link = this.chainStack.pop();
+  try {
+    while (this.chainStack.length > 0) {
+      const link = this.chainStack.pop();
 
-    if (!link) continue;
+      if (!link) continue;
 
-    this.log(`Resolving Chain Link ${link.chainLevel}: ${link.card.name}`);
+      this.log(`Resolving Chain Link ${link.chainLevel}: ${link.card.name}`);
 
-    if (ui?.log) {
-      ui.log(`Resolving: ${link.card.name}`);
+      if (ui?.log) {
+        ui.log(`Resolving: ${link.card.name}`);
+      }
+
+      try {
+        result = await this.resolveChainLink(link);
+        if (result?.needsSelection) {
+          this.pendingChainSelection = {
+            link,
+            selectionContract: result.selectionContract || null,
+            selectionSource: result.selectionSource || "actions",
+            baseTargets: result.baseTargets || null,
+          };
+          this.log(
+            `${link.card.name} paused chain resolution for target selection.`,
+          );
+          return {
+            ...result,
+            success: false,
+            needsSelection: true,
+            pendingChainSelection: true,
+          };
+        }
+      } catch (error) {
+        console.error(
+          `[ChainSystem] Error resolving ${link.card.name}:`,
+          error,
+        );
+        result = {
+          success: false,
+          needsSelection: false,
+          reason: error.message || "Chain link failed.",
+          error,
+        };
+      }
     }
-
-    try {
-      await this.resolveChainLink(link);
-    } catch (error) {
-      console.error(
-        `[ChainSystem] Error resolving ${link.card.name}:`,
-        error,
-      );
-    }
+  } finally {
+    this.isResolving = false;
   }
 
-  this.isResolving = false;
   this.log("Chain resolution complete");
+  return result || { success: true, needsSelection: false };
 }
 
 export async function resolveChainLink(link) {
@@ -73,18 +101,191 @@ export async function resolveChainLink(link) {
       const ui = this.getUI();
       this.log(`${card.name}'s activation was negated.`);
       ui?.log?.(`${card.name}'s activation was negated.`);
-      return;
+      return { success: true, needsSelection: false, negated: true };
     }
     if (!prepareForResolution(this, link, activationZone)) {
-      return;
+      return { success: false, needsSelection: false, fizzled: true };
     }
     const applyResult = await applyChainEffect(this, link, activationZone);
+    if (applyResult?.needsSelection) {
+      return {
+        ...applyResult,
+        success: false,
+        needsSelection: true,
+        activationZone,
+      };
+    }
     cleanupAfterResolution(this, link, {
       actionSucceeded: applyResult?.success !== false,
     });
+    return applyResult || { success: true, needsSelection: false };
   } finally {
     this.cardsBeingResolved.delete(card);
   }
+}
+
+export function startPendingChainSelection(result = {}) {
+  const pending = this.pendingChainSelection;
+  const contract = result.selectionContract || pending?.selectionContract;
+  if (!pending || !contract || !this.game?.startTargetSelectionSession) {
+    return false;
+  }
+
+  const link = pending.link;
+  return new Promise((resolve) => {
+    let finished = false;
+    const finishOnce = (value) => {
+      if (finished) return;
+      finished = true;
+      resolve(value);
+    };
+
+    this.game.startTargetSelectionSession({
+      kind: contract.kind || "chain",
+      card: link.card,
+      owner: link.player,
+      selectionContract: contract,
+      message:
+        contract.message ||
+        `Select target(s) for ${link.card?.name || "chain"}`,
+      preventCancel: contract.ui?.preventCancel,
+      allowCancel: contract.ui?.allowCancel,
+      execute: async (selections) => {
+        const nextResult = await this.resumePendingChainSelection(selections);
+        if (!nextResult?.needsSelection) {
+          finishOnce(nextResult);
+        }
+        return nextResult;
+      },
+      onResult: (nextResult) => {
+        if (nextResult?.needsSelection) {
+          const nested = this.startPendingChainSelection(nextResult);
+          if (nested && typeof nested.then === "function") {
+            nested.then(finishOnce);
+          }
+          return;
+        }
+        finishOnce(nextResult);
+      },
+      onCancel: () => {
+        this.pendingChainSelection = null;
+        this.isResolving = false;
+        this.chainWindowOpen = false;
+        this.chainWindowContext = null;
+        this.chainStack = [];
+        this.currentChainLevel = 0;
+        this.cardsBeingResolved.clear();
+        finishOnce({
+          success: false,
+          needsSelection: false,
+          cancelled: true,
+          reason: "Chain selection cancelled.",
+        });
+      },
+    });
+  });
+}
+
+export async function resumePendingChainSelection(selections = {}) {
+  const pending = this.pendingChainSelection;
+  if (!pending?.link) {
+    return {
+      success: false,
+      needsSelection: false,
+      reason: "No pending chain selection.",
+    };
+  }
+
+  this.pendingChainSelection = null;
+  const link = pending.link;
+
+  if (pending.selectionSource === "chain_targets") {
+    const resolvedSelections = resolveChainSelectionCards(
+      this,
+      selections,
+      pending.selectionContract,
+      link.player,
+    );
+    link.selections = {
+      ...(pending.baseTargets || {}),
+      ...resolvedSelections,
+    };
+  } else if (
+    pending.selectionSource === "effect_targeted" &&
+    this.game?.pendingEventSelection &&
+    typeof this.game.resumePendingEventSelection === "function"
+  ) {
+    const eventResult = await this.game.resumePendingEventSelection(selections);
+    if (eventResult?.needsSelection) {
+      this.pendingChainSelection = {
+        link,
+        selectionContract: eventResult.selectionContract || null,
+        selectionSource: "effect_targeted",
+        baseTargets: pending.baseTargets || null,
+      };
+      return {
+        ...eventResult,
+        success: false,
+        needsSelection: true,
+        pendingChainSelection: true,
+      };
+    }
+    link.effectTargetedResolved = true;
+  } else {
+    link.selections = link.selections || selections;
+  }
+
+  const linkResult = await this.resolveChainLink(link);
+  if (linkResult?.needsSelection) {
+    this.pendingChainSelection = {
+      link,
+      selectionContract: linkResult.selectionContract || null,
+      selectionSource: linkResult.selectionSource || "actions",
+      baseTargets: linkResult.baseTargets || null,
+    };
+    return {
+      ...linkResult,
+      success: false,
+      needsSelection: true,
+      pendingChainSelection: true,
+    };
+  }
+
+  const remainingResult =
+    this.chainStack.length > 0
+      ? await this.resolveChain()
+      : { success: true, needsSelection: false };
+  if (remainingResult?.needsSelection) {
+    return remainingResult;
+  }
+
+  this.chainWindowOpen = false;
+  this.chainWindowContext = null;
+  this.chainStack = [];
+  this.currentChainLevel = 0;
+  this.cardsBeingResolved.clear();
+  this.log("Chain resolution complete after selection");
+  return remainingResult;
+}
+
+function resolveChainSelectionCards(cs, selections, contract, player) {
+  const hasCardArrays = Object.values(selections || {}).some(
+    (value) =>
+      Array.isArray(value) &&
+      value.some((entry) => entry && typeof entry === "object"),
+  );
+  if (hasCardArrays) {
+    return selections || {};
+  }
+
+  if (typeof cs.resolveSelectionsToCards === "function") {
+    return cs.resolveSelectionsToCards(
+      selections || {},
+      contract?.requirements || [],
+      player,
+    );
+  }
+  return selections || {};
 }
 
 /**
@@ -184,6 +385,7 @@ async function applyChainEffect(cs, link, activationZone) {
       event: link.context?.event || null,
       autoSelectSingleTarget: true,
       autoSelectTargets: isAI(player),
+      _effectTargetedResolved: link.effectTargetedResolved === true,
     },
   };
 
@@ -203,6 +405,9 @@ async function applyChainEffect(cs, link, activationZone) {
       return {
         success: false,
         needsSelection: true,
+        selectionContract: targetResult.selectionContract,
+        selectionSource: "chain_targets",
+        baseTargets: targetResult.targets || {},
         reason: "Chain link requires target selection.",
       };
     } else {
@@ -222,6 +427,13 @@ async function applyChainEffect(cs, link, activationZone) {
         ctx,
         resolvedSelections || {},
       );
+      if (actionsResult?.needsSelection) {
+        return {
+          ...actionsResult,
+          success: false,
+          selectionSource: actionsResult.selectionSource || "actions",
+        };
+      }
       if (
         actionsResult &&
         typeof actionsResult === "object" &&
@@ -232,7 +444,12 @@ async function applyChainEffect(cs, link, activationZone) {
             actionsResult.reason || "effect actions failed"
           }`,
         );
-        return actionsResult;
+        return {
+          ...actionsResult,
+          selectionSource:
+            actionsResult.selectionSource ||
+            (actionsResult.needsSelection ? "actions" : null),
+        };
       }
     } catch (error) {
       const linkContext = {

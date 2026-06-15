@@ -7,6 +7,7 @@
 import {
   getCardDisplayName,
   getCardDisplayDescription,
+  getUIText,
 } from "../../core/i18n.js";
 
 /**
@@ -56,7 +57,7 @@ export function showUnifiedTrapModal(options = {}) {
     if (mode === "chain" && context) {
       title.textContent = this._getContextDescription(context);
     } else {
-      title.textContent = "Ativar Armadilha?";
+      title.textContent = getUIText("ui.trap.activateTitle");
     }
     header.appendChild(title);
     modal.appendChild(header);
@@ -97,14 +98,17 @@ export function showUnifiedTrapModal(options = {}) {
       actions.className = "trap-modal-actions";
 
       const cancelBtn = document.createElement("button");
-      cancelBtn.textContent = mode === "chain" ? "Passar" : "Não Ativar";
+      cancelBtn.textContent =
+        mode === "chain"
+          ? getUIText("ui.trap.pass")
+          : getUIText("ui.trap.doNotActivate");
       cancelBtn.className = "trap-btn-cancel";
       cancelBtn.onclick = () => {
         finalize(null);
       };
 
       const confirmBtn = document.createElement("button");
-      confirmBtn.textContent = "Ativar Armadilha";
+      confirmBtn.textContent = getUIText("ui.trap.activate");
       confirmBtn.className = "trap-btn-confirm";
       confirmBtn.onclick = () => {
         finalize({ card, effect: item.effect || null, activate: true });
@@ -148,7 +152,7 @@ export function showUnifiedTrapModal(options = {}) {
 
         // Activate button per card
         const activateBtn = document.createElement("button");
-        activateBtn.textContent = "Ativar";
+        activateBtn.textContent = getUIText("ui.trap.activateShort");
         activateBtn.className = "trap-btn-confirm";
         activateBtn.onclick = () => {
           finalize({ card, effect, activate: true });
@@ -166,7 +170,7 @@ export function showUnifiedTrapModal(options = {}) {
       const actions = document.createElement("div");
       actions.className = "trap-modal-actions";
       const passBtn = document.createElement("button");
-      passBtn.textContent = "Passar (Não Responder)";
+      passBtn.textContent = getUIText("ui.trap.passNoResponse");
       passBtn.className = "trap-btn-cancel";
       passBtn.style.width = "100%";
       passBtn.onclick = () => {
@@ -224,29 +228,46 @@ export function showChainResponseModal(activatable, context, chainStack = []) {
  * @returns {string}
  */
 export function _getContextDescription(context) {
-  if (!context) return "Responda à ação.";
+  if (!context) return getUIText("ui.trap.responseDefault");
 
   switch (context.type) {
-    case "attack_declaration":
-      const attacker = context.attacker?.name || "Monstro";
-      const target = context.target?.name || "ataque direto";
-      return `${attacker} declarou ataque em ${target}.`;
+    case "attack_declaration": {
+      const attacker =
+        getCardDisplayName(context.attacker) ||
+        context.attacker?.name ||
+        getUIText("ui.trap.monsterFallback");
+      const target =
+        getCardDisplayName(context.target) ||
+        context.target?.name ||
+        getUIText("ui.trap.directAttack");
+      return getUIText("ui.trap.attackDeclaration", { attacker, target });
+    }
 
-    case "summon":
-      const summoned = context.card?.name || "Monstro";
-      return `${summoned} foi invocado.`;
+    case "summon": {
+      const summoned =
+        getCardDisplayName(context.card) ||
+        context.card?.name ||
+        getUIText("ui.trap.monsterFallback");
+      return getUIText("ui.trap.summon", { card: summoned });
+    }
 
-    case "card_activation":
-      const activated = context.card?.name || "Carta";
-      return `${activated} foi ativado.`;
+    case "card_activation": {
+      const activated =
+        getCardDisplayName(context.card) ||
+        context.card?.name ||
+        getUIText("ui.trap.cardFallback");
+      return getUIText("ui.trap.cardActivation", { card: activated });
+    }
 
     case "phase_change":
-      return `Mudança de fase.`;
+      return getUIText("ui.trap.phaseChange");
 
     case "effect_activation":
-      return `Efeito ativado.`;
+      return getUIText("ui.trap.effectActivation");
 
     default:
-      return `Responda à ${context.event || context.type || "ação"}.`;
+      return getUIText("ui.trap.responseEvent", {
+        event: context.event || context.type || getUIText("ui.selection.effectLabel"),
+      });
   }
 }

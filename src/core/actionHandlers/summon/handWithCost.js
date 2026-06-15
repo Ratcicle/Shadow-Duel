@@ -1,4 +1,5 @@
 import { isAI } from "../../Player.js";
+import { getCardDisplayName, getUIText } from "../../i18n.js";
 import {
   buildFieldSelectionCandidates,
   getUI,
@@ -9,6 +10,36 @@ import {
   sendCardsToGraveyard,
   summonFromHandCore,
 } from "../shared.js";
+
+function getTierEffectChoiceKey(action, ctx) {
+  return (
+    action?.effectChoiceKey ||
+    action?.tierTextKey ||
+    ctx?.effect?.id ||
+    ctx?.effectId ||
+    null
+  );
+}
+
+function localizeTierOptions(options, effectChoiceKey) {
+  return options.map((opt) => {
+    const count = opt.count;
+    if (!Number.isFinite(count)) return opt;
+    return {
+      ...opt,
+      label: getUIText(
+        `effectChoices.${effectChoiceKey}.tiers.${count}.label`,
+        {},
+        opt.label || getUIText("ui.summon.tierFallback", { count }),
+      ),
+      description: getUIText(
+        `effectChoices.${effectChoiceKey}.tiers.${count}.description`,
+        {},
+        opt.description || "",
+      ),
+    };
+  });
+}
 
 export async function handleSpecialSummonFromHandWithCost(
   action,
@@ -217,24 +248,32 @@ export async function handleSpecialSummonFromHandWithCost(
   const defaultTierOptions = [
     {
       count: 1,
-      label: "Tier 1",
-      description: "+300 ATK até o final do turno",
+      label: getUIText("ui.summon.tierFallback", { count: 1 }),
+      description: getUIText(
+        "effectChoices.void_serpent_drake_hand_special.tiers.1.description",
+      ),
     },
     {
       count: 2,
-      label: "Tier 2",
-      description: "+300 ATK e não pode ser destruída em batalha",
+      label: getUIText("ui.summon.tierFallback", { count: 2 }),
+      description: getUIText(
+        "effectChoices.void_serpent_drake_hand_special.tiers.2.description",
+      ),
     },
     {
       count: 3,
-      label: "Tier 3",
-      description:
-        "+300 ATK, indestrutível em batalha e destrói 1 carta do oponente",
+      label: getUIText("ui.summon.tierFallback", { count: 3 }),
+      description: getUIText(
+        "effectChoices.void_serpent_drake_hand_special.tiers.3.description",
+      ),
     },
   ];
 
-  const tierOptions = (action.tierOptions || defaultTierOptions).filter(
-    (opt) => opt.count >= minCost && opt.count <= allowedMax,
+  const tierOptions = localizeTierOptions(
+    (action.tierOptions || defaultTierOptions).filter(
+      (opt) => opt.count >= minCost && opt.count <= allowedMax,
+    ),
+    getTierEffectChoiceKey(action, ctx),
   );
 
   let chosenCount = null;
@@ -243,12 +282,12 @@ export async function handleSpecialSummonFromHandWithCost(
     chosenCount = allowedMax;
   } else if (getUI(game)?.showTierChoiceModal) {
     chosenCount = await getUI(game).showTierChoiceModal({
-      title: action.tierTitle || source.name,
+      title: action.tierTitle || getCardDisplayName(source) || source.name,
       options: tierOptions,
     });
   } else if (getUI(game)?.showNumberPrompt) {
     const parsed = getUI(game).showNumberPrompt(
-      `Choose how many Void Hollow to send (1-${allowedMax}):`,
+      getUIText("ui.voidSerpent.costPrompt", { max: allowedMax }),
       String(allowedMax),
     );
 
@@ -293,8 +332,7 @@ export async function handleSpecialSummonFromHandWithCost(
               decorated,
               selectionContract: {
                 kind: "cost",
-                message:
-                  "Select the Void Hollow cards to send to the Graveyard.",
+                message: getUIText("ui.voidSerpent.selectCost"),
                 requirements: [
                   {
                     id: requirementId,
@@ -368,7 +406,7 @@ export async function handleSpecialSummonFromHandWithCost(
 
           const selectionContract = {
             kind: "target",
-            message: "Select a card to destroy.",
+            message: getUIText("ui.selection.selectCardToDestroy"),
             requirements: [
               {
                 id: requirementId,

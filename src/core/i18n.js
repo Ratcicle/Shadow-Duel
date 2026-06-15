@@ -4,6 +4,296 @@ const LOCALE_STORAGE_KEY = "shadowduel_locale";
 const DEFAULT_LOCALE = "en";
 const SUPPORTED_LOCALES = ["en", "pt-br"];
 
+const DEFAULT_LOCALE_TEXTS = {
+  ui: {
+    common: {
+      ok: "OK",
+      cancel: "Cancel",
+      confirm: "Confirm",
+      close: "x",
+      yes: "Yes",
+      no: "No",
+      activate: "Activate",
+      set: "Set",
+      pass: "Pass",
+      refuse: "Decline",
+      addToHand: "Add to Hand",
+    },
+    lp: "{amount} LP",
+    selection: {
+      cardFallback: "Card",
+      effectLabel: "effect",
+      selectTargets: "Select target(s)",
+      chooseEffect: "Choose which effect you want to activate.",
+      chooseOneOption: "Choose one option.",
+      chooseOptionCount: "Choose {count} options.",
+      chooseOptionRange: "Choose {min}-{max} options.",
+      chooseTargetCount: "Choose {count} target(s) for {label}.",
+      chooseTargetRange: "Choose {min}-{max} targets for {label}.",
+      selectTargetCount: "Select {count} target(s) for {label}.",
+      selectTargetRange: "Select {min}-{max} targets for {label}.",
+      selectCardToDestroy: "Select a card to destroy.",
+      noValidOptions: "No valid options to activate this effect.",
+      noValidChoice: "No valid effect choice selected.",
+      noValidTargets: "No valid targets.",
+    },
+    fieldTargeting: {
+      monsterEffect: "monster effect",
+      spellEffect: "spell effect",
+      continuousSpellEffect: "continuous spell effect",
+      fieldSpellEffect: "field spell effect",
+      spellTrapEffect: "Spell/Trap effect",
+      trapEffect: "trap effect",
+      graveyardEffect: "graveyard effect",
+      graveyardSpellEffect: "graveyard spell effect",
+      triggeredEffect: "triggered effect",
+      effect: "effect",
+      targetSingular: "target",
+      targetPlural: "targets",
+      sourceEffect: "{sourceName}'s {effectLabel}",
+      targetCount: "Select {count} {targetWord} for {sourceClause}.",
+      targetRange: "Select {min}-{max} targets for {sourceClause}.",
+      targetUpTo: "Select up to {max} {targetWord} for {sourceClause}.",
+      targetGeneric: "Select targets for {sourceClause}.",
+    },
+    summon: {
+      normal: "Normal Summon",
+      special: "Special Summon",
+      set: "Set",
+      conditionalConfirm: "Summon",
+      conditionalDecline: "Decline",
+      chooseTier: "Choose Tier",
+      tierFallback: "Tier {count}",
+      activateEffect: "Activate",
+      ascend: "Ascend",
+      flip: "Flip Summon",
+      toAttack: "To Attack",
+      toDefense: "To Defense",
+      attack: "Attack",
+      defense: "Defense",
+      choosePosition: "Choose the position for \"{cardName}\".",
+      choosePositionTitle: "Choose Special Summon position",
+      conditionMet: "Condition met.",
+      controlsCard: "You control \"{cardName}\".",
+      conditionalPrompt:
+        "{conditionText} Special Summon \"{cardName}\" from your hand?",
+      drawnPrompt:
+        "You drew \"{cardName}\". Special Summon it from your hand?",
+    },
+    spell: {
+      activate: "Activate",
+      set: "Set",
+      continuousSelection: "Select target(s) for the continuous spell effect.",
+      fieldSelection: "Select target(s) for the field spell effect.",
+      spellSelection: "Select target(s) for the spell effect.",
+      spellTrapSelection: "Select target(s) for the spell/trap effect.",
+      noFusionMaterials: "You do not have valid materials for a Fusion Summon!",
+    },
+    trap: {
+      activateTitle: "Activate Trap?",
+      activate: "Activate Trap",
+      activateShort: "Activate",
+      doNotActivate: "Do not activate",
+      pass: "Pass",
+      passNoResponse: "Pass (No Response)",
+      responseDefault: "Respond to the action.",
+      attackDeclaration: "{attacker} declared an attack on {target}.",
+      directAttack: "direct attack",
+      monsterFallback: "Monster",
+      cardFallback: "Card",
+      summon: "{card} was summoned.",
+      cardActivation: "{card} was activated.",
+      phaseChange: "Phase changed.",
+      effectActivation: "Effect activated.",
+      responseEvent: "Respond to {event}.",
+    },
+    fusion: {
+      selectMonsterTitle: "Select Fusion Monster",
+      selectMonsterHint: "Choose a Fusion Monster to summon:",
+      selectMonsterLabel: "Choose a Fusion Monster to summon",
+      selectMonsterMessage: "Select a Fusion Monster to summon",
+      selectMaterialsTitle: "Select Fusion Materials",
+      selectMaterialsHint: "Select materials:",
+      selectMaterialsLabel: "Select {count} Fusion Materials",
+      selectMaterialsFor: "Select materials for {cardName}",
+      monsterFallback: "monster",
+      invalidMaterials: "Invalid fusion materials!",
+      noValidSummons: "No valid Fusion Summons available!",
+      noValidMaterials: "No valid materials for this fusion!",
+      notFound: "Fusion monster not found in Extra Deck!",
+    },
+    cardGrid: {
+      selectCards: "Select Cards",
+      chooseSurvivor: "Choose Survivor",
+    },
+    ignition: {
+      titleFallback: "Activate effect?",
+      prompt: "Activate this monster's effect?",
+    },
+    prompts: {
+      confirmTitle: "Confirm",
+      searchPlaceholder: "Choose a card",
+      searchTitle: "Select a card from candidates",
+      searchHint: "Click on a card to select it",
+      destructionNegationTitle: "Activate {cardName}'s effect?",
+      costLine: "Cost: {costDescription}",
+      triggeredAttackTrap: "Activate {cardName} in response to the attack?",
+      triggeredAttackEffect: "Activate {cardName}'s effect?",
+      triggeredTargeted: "Activate {cardName} in response to targeting?",
+      triggeredEffect: "Activate {cardName}'s effect?",
+      thisCard: "this card",
+    },
+    graveyard: {
+      selection: "Select target(s) for the graveyard effect.",
+    },
+    optionalSummon: {
+      prompt: "Special Summon {cardName} from your hand?",
+      confirm: "Special Summon",
+      cancel: "Keep in hand",
+      title: "Optional Special Summon",
+    },
+    upkeep: {
+      prompt: "Pay {amount} LP to maintain {cardName}?",
+      confirm: "Pay {amount} LP",
+      cancel: "Send to GY",
+      title: "Maintenance Cost",
+      thisCard: "this card",
+    },
+    triggers: {
+      selection: "Select target(s) for the triggered effect.",
+    },
+    counters: {
+      removeAmount:
+        "Choose how many {counterType} counter(s) to remove ({min}-{max}).",
+      selectPayment:
+        "Select card(s) to remove {amount} {counterType} counter(s).",
+      selectEnough:
+        "Select enough cards to remove {amount} {counterType} counter(s).",
+      paymentCancelled: "Counter payment cancelled.",
+      notEnough:
+        "Not enough {counterType} counters on the field to pay the cost.",
+    },
+    replacement: {
+      cardSingular: "card",
+      cardPlural: "cards",
+      monsterSingular: "monster",
+      monsterPlural: "monsters",
+      spellSingular: "Spell",
+      spellPlural: "Spells",
+      trapSingular: "Trap",
+      trapPlural: "Traps",
+      chooseToBanish: "Choose {countText} to banish.",
+      confirmCost: "{verb} {count} {costDescription} {suffix} {cardName}?",
+      confirmActionCost:
+        "{sourceName}: pay the replacement cost to prevent {cardName} from being destroyed?",
+      chooseCost:
+        "Choose {count} {cardWord} to {selectionVerb} for {cardName}'s protection.",
+      protectionCancelled: "Protection cancelled.",
+      actions: {
+        banish: {
+          verb: "Banish",
+          suffix: "to save",
+          selectionVerb: "banish",
+          logVerb: "banishing",
+          logDestination: "",
+        },
+        hand: {
+          verb: "Return",
+          suffix: "to the hand to save",
+          selectionVerb: "return to the hand",
+          logVerb: "returning",
+          logDestination: " to the hand",
+        },
+        graveyard: {
+          verb: "Send",
+          suffix: "to the GY to save",
+          selectionVerb: "send to the Graveyard",
+          logVerb: "sending",
+          logDestination: " to the Graveyard",
+        },
+      },
+    },
+    voidSerpent: {
+      costPrompt: "Choose how many Void Hollow to send (1-{max}):",
+      selectCost: "Select the Void Hollow cards to send to the Graveyard.",
+    },
+    shadowHeartCathedral: {
+      title: "Shadow-Heart Cathedral",
+      subtitle:
+        "Select 1 Shadow-Heart monster with ATK <= {maxAtk} ({counterCount} counters)",
+      info: "Only Shadow-Heart monsters in your Deck are valid.",
+      level: "Level",
+    },
+    luminarchSickle: {
+      title: "Select up to 2 \"Luminarch\" monsters to add to hand",
+      subtitle: "Select up to {maxSelect}.",
+    },
+  },
+  effectChoices: {
+    arcanist_grand_library_ignition: {
+      message: "Choose an Arcanist Grand Library effect.",
+      cases: {
+        arcanist_grand_library_summon: {
+          label: "Pay 2000 LP; Special Summon Arcanist",
+          description:
+            "No monsters: pay 2000 LP and Special Summon 1 Level 4 or lower Arcanist from your Deck.",
+        },
+        arcanist_grand_library_search_equip: {
+          label: "Add an Arcanist Equip Spell",
+          description:
+            "With an Arcanist monster: add 1 Arcanist Equip Spell from your Deck to your hand.",
+        },
+      },
+    },
+    meeting_arcanists_choose_effect: {
+      message: "Choose a Meeting of the Arcanists effect.",
+      cases: {
+        meeting_arcanists_discard_monsters: {
+          label: "Discard 2 Arcanist monsters",
+          description:
+            "Discard 2 Arcanist monsters; add 1 Arcanist Spell from your Deck to your hand.",
+        },
+        meeting_arcanists_discard_spells: {
+          label: "Discard 2 Arcanist Spells",
+          description:
+            "Discard 2 Arcanist Spells; add 1 Level 4 or lower Arcanist monster from your Deck to your hand.",
+        },
+      },
+    },
+    miragebound_oasis_ignition: {
+      message: "Choose a Miragebound Oasis effect.",
+      cases: {
+        miragebound_oasis_recycle_search: {
+          label: "Return Miragebound; add another",
+          description:
+            "Return 1 Miragebound monster you control; add a different Miragebound monster from your Deck to your hand.",
+        },
+        miragebound_oasis_shift_weaken: {
+          label: "Change an opponent monster's position",
+          description: "Target 1 opponent monster; change its battle position.",
+        },
+      },
+    },
+    void_serpent_drake_hand_special: {
+      tiers: {
+        1: {
+          label: "Tier 1",
+          description: "+300 ATK until end of turn",
+        },
+        2: {
+          label: "Tier 2",
+          description: "+300 ATK and cannot be destroyed by battle",
+        },
+        3: {
+          label: "Tier 3",
+          description:
+            "+300 ATK, battle indestructible, destroy 1 opponent card",
+        },
+      },
+    },
+  },
+};
+
 const ATTRIBUTE_LABELS = {
   en: {
     Light: "Light",
@@ -58,6 +348,7 @@ const SUBTYPE_LABELS = {
     field: "Field",
     equip: "Equip",
     quick: "Quick-Play",
+    counter: "Counter",
   },
   "pt-br": {
     normal: "Normal",
@@ -65,34 +356,37 @@ const SUBTYPE_LABELS = {
     field: "Campo",
     equip: "Equipamento",
     quick: "Rápida",
+    counter: "Resposta",
   },
 };
 
 const CARD_KIND_SUBTYPE_PHRASES = {
   en: {
     spell: {
-      normal: "normal spell",
-      continuous: "continuous spell",
-      field: "field spell",
-      equip: "equip spell",
-      quick: "quick-play spell",
+      normal: "Normal Spell",
+      continuous: "Continuous Spell",
+      field: "Field Spell",
+      equip: "Equip Spell",
+      quick: "Quick-Play Spell",
     },
     trap: {
-      normal: "normal trap",
-      continuous: "continuous trap",
+      normal: "Normal Trap",
+      continuous: "Continuous Trap",
+      counter: "Counter Trap",
     },
   },
   "pt-br": {
     spell: {
-      normal: "magia normal",
-      continuous: "magia contínua",
-      field: "magia de campo",
-      equip: "magia de equipamento",
-      quick: "magia rápida",
+      normal: "Magia Normal",
+      continuous: "Magia Contínua",
+      field: "Magia de Campo",
+      equip: "Magia de Equipamento",
+      quick: "Magia Rápida",
     },
     trap: {
-      normal: "armadilha normal",
-      continuous: "armadilha contínua",
+      normal: "Armadilha Normal",
+      continuous: "Armadilha Contínua",
+      counter: "Armadilha de Resposta",
     },
   },
 };
@@ -148,8 +442,10 @@ let lastCoverageLogLocale = null;
 
 function normalizeLocalePayload(payload) {
   const cards = {};
+  const ui = {};
+  const effectChoices = {};
   if (!isObject(payload)) {
-    return { cards };
+    return { cards, ui, effectChoices };
   }
 
   const sections = [];
@@ -189,7 +485,14 @@ function normalizeLocalePayload(payload) {
     });
   });
 
-  return { cards };
+  if (isObject(payload.ui)) {
+    Object.assign(ui, payload.ui);
+  }
+  if (isObject(payload.effectChoices)) {
+    Object.assign(effectChoices, payload.effectChoices);
+  }
+
+  return { cards, ui, effectChoices };
 }
 
 function isObject(value) {
@@ -277,6 +580,23 @@ export function getCardDisplayDescription(card) {
   return getCardDisplayProperty(card, "description");
 }
 
+export function getUIText(key, params = {}, fallback = null) {
+  const path = String(key || "").trim();
+  if (!path) return fallback ?? "";
+
+  const localeValue = getPathValue(normalizedLocales[currentLocale], path);
+  const defaultValue = getPathValue(DEFAULT_LOCALE_TEXTS, path);
+  const fallbackValue =
+    typeof localeValue === "string"
+      ? localeValue
+      : typeof defaultValue === "string"
+        ? defaultValue
+        : typeof fallback === "string"
+          ? fallback
+          : path;
+  return interpolateText(fallbackValue, params);
+}
+
 export function getMonsterAttributeDisplayName(attribute) {
   const rawAttribute = String(attribute || "").trim();
   if (!rawAttribute) return "";
@@ -347,8 +667,8 @@ export function formatCardKindSubtypeLine(card) {
     : "";
   if (!subtypeLabel) return kindLabel;
   return currentLocale === "pt-br"
-    ? `${kindLabel.toLowerCase()} ${subtypeLabel.toLowerCase()}`
-    : `${subtypeLabel.toLowerCase()} ${kindLabel.toLowerCase()}`;
+    ? `${kindLabel} ${subtypeLabel}`
+    : `${subtypeLabel} ${kindLabel}`;
 }
 
 function getCardDisplayProperty(card, property) {
@@ -376,6 +696,24 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function getPathValue(source, path) {
+  if (!isObject(source) || !path) return undefined;
+  return String(path)
+    .split(".")
+    .filter(Boolean)
+    .reduce((cursor, part) => {
+      if (!isObject(cursor)) return undefined;
+      return cursor[part];
+    }, source);
+}
+
+function interpolateText(text, params = {}) {
+  return String(text ?? "").replace(/\{([a-zA-Z0-9_]+)\}/g, (match, key) => {
+    const value = params?.[key];
+    return value === undefined || value === null ? match : String(value);
+  });
 }
 
 export function getSupportedLocales() {

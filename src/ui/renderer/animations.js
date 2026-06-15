@@ -36,6 +36,40 @@ function getCardRectSnapshot(element) {
   };
 }
 
+function escapeCardKey(cardKey) {
+  if (typeof CSS !== "undefined" && typeof CSS.escape === "function") {
+    return CSS.escape(cardKey);
+  }
+  return String(cardKey).replace(/["\\]/g, "\\$&");
+}
+
+function getCardKey(card) {
+  const key = card?.instanceId ?? card?._instanceId ?? null;
+  return key != null ? String(key) : null;
+}
+
+function findCardElementByKey(cardKey) {
+  if (!cardKey || typeof document === "undefined") return null;
+  const root = document.getElementById("game-container");
+  if (!root) return null;
+  return root.querySelector(
+    `.card[data-card-key="${escapeCardKey(cardKey)}"]:not(.card-animation-ghost)`,
+  );
+}
+
+function getVisibleCardRectByKey(cardKey) {
+  const element = findCardElementByKey(cardKey);
+  return isVisibleCardElement(element) ? getCardRectSnapshot(element) : null;
+}
+
+function getVisibleSourceCardRect(options = {}) {
+  return (
+    copyRect(options.sourceRect) ||
+    getVisibleCardRectByKey(options.sourceCardKey) ||
+    getVisibleCardRectByKey(getCardKey(options.sourceCard))
+  );
+}
+
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
@@ -141,6 +175,13 @@ function getDamageOrigin(player, options = {}) {
     return randomPointNearRect(battleRect);
   }
 
+  if (cause === "effect") {
+    const sourceRect = getVisibleSourceCardRect(options);
+    if (sourceRect) {
+      return randomPointNearRect(sourceRect);
+    }
+  }
+
   const areaRect = getPlayerAreaRect(getPlayerKey(player));
   if (!areaRect) {
     return battleRect ? randomPointNearRect(battleRect) : { x: 0, y: 0 };
@@ -198,7 +239,7 @@ function playEffectDamageShake(renderer, amount, options = {}) {
   }
 }
 
-async function playTravelingDamageNumber(renderer, player, amount, options = {}) {
+async function playTravelingLpChangeNumber(renderer, player, amount, options = {}) {
   if (prefersReducedMotion()) return;
 
   const layer = getAnimationLayer();
@@ -208,8 +249,11 @@ async function playTravelingDamageNumber(renderer, player, amount, options = {})
   const destination = getDamageDestination(renderer, player);
   const float = document.createElement("div");
   const cause = options.cause === "battle" ? "battle" : "effect";
-  float.className = `lp-damage-float ${cause}`;
-  float.textContent = `-${Math.abs(Math.round(amount))}`;
+  const kind = options.kind === "heal" ? "heal" : "damage";
+  float.className = `lp-damage-float ${cause} ${kind}`;
+  float.textContent = `${kind === "heal" ? "+" : "-"}${Math.abs(
+    Math.round(amount),
+  )}`;
   float.style.left = `${origin.x}px`;
   float.style.top = `${origin.y}px`;
   layer.appendChild(float);
@@ -287,24 +331,27 @@ async function runLpDamageQueue(renderer, player, state) {
         const fromLp = Number.isFinite(entry.fromLp)
           ? Math.max(0, Math.round(entry.fromLp))
           : state.displayed;
+        const kind = entry.kind === "heal" ? "heal" : "damage";
 
         renderer.setDisplayedLp(player, state.displayed ?? fromLp);
-        playEffectDamageShake(renderer, entry.amount, entry);
+        if (kind === "damage") {
+          playEffectDamageShake(renderer, entry.amount, entry);
+        }
 
         if (prefersReducedMotion()) {
           renderer.setDisplayedLp(player, toLp);
-          playCounterFlash(getLpCounter(renderer, player), "damage");
+          playCounterFlash(getLpCounter(renderer, player), kind);
           continue;
         }
 
-        await playTravelingDamageNumber(renderer, player, entry.amount, entry);
+        await playTravelingLpChangeNumber(renderer, player, entry.amount, entry);
         await renderer.animateLpOdometer(
           player,
           state.displayed ?? fromLp,
           toLp,
           {
             amount: entry.amount,
-            kind: "damage",
+            kind,
           },
         );
       }
@@ -495,19 +542,31 @@ export function showLpDamageSequence(player, amount, options = {}) {
 
   const state = this.ensureLpDisplayState?.(player);
   if (!state) return false;
+  const wasIdle =
+    !state.animating &&
+    state.queue.length === 0 &&
+    !state.presentationPromise;
 
   const fromLp = Number.isFinite(options.fromLp)
     ? Math.max(0, Math.round(options.fromLp))
     : state.displayed;
+  const kind = options.kind === "heal" ? "heal" : "damage";
   const toLp = Number.isFinite(options.toLp)
     ? Math.max(0, Math.round(options.toLp))
-    : Math.max(0, fromLp - value);
+    : kind === "heal"
+      ? fromLp + value
+      : Math.max(0, fromLp - value);
+
+  if (wasIdle && Number.isFinite(options.fromLp)) {
+    this.setDisplayedLp?.(player, fromLp);
+  }
 
   state.queue.push({
     ...options,
     amount: value,
     fromLp,
     toLp,
+    kind,
     cause: options.cause === "battle" ? "battle" : "effect",
   });
 
@@ -593,6 +652,17 @@ export function showLpChange(player, amount, options = {}) {
       toLp: Number.isFinite(options.toLp) ? options.toLp : player.lp,
     });
   }
+
+  const sequencePlayed =
+    this.showLpDamageSequence?.(player, Math.abs(value), {
+      ...options,
+      kind: "heal",
+      cause: options.cause || "effect",
+      fromLp: options.fromLp,
+      toLp: Number.isFinite(options.toLp) ? options.toLp : player.lp,
+    }) === true;
+
+  if (sequencePlayed) return true;
 
   const container = document.getElementById(
     player.id === "player" ? "player-area" : "bot-area"

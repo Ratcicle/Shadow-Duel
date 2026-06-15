@@ -1,4 +1,5 @@
 import { isAI } from "../../Player.js";
+import { getCardDisplayName, getUIText } from "../../i18n.js";
 import {
   getUI,
   collectZoneCandidates,
@@ -131,7 +132,7 @@ export async function handleSpecialSummonFromZone(
 
   const buildPositionSelectionContract = (cardRef) => ({
     kind: "position_select",
-    message: "Choose Special Summon position",
+    message: getUIText("ui.summon.choosePositionTitle"),
     requirements: [
       {
         id: "special_summon_position",
@@ -139,15 +140,26 @@ export async function handleSpecialSummonFromZone(
         max: 1,
         zone: "field",
         candidates: [
-          { id: "attack", label: "Attack", position: "attack" },
-          { id: "defense", label: "Defense", position: "defense" },
+          {
+            id: "attack",
+            label: getUIText("ui.summon.attack"),
+            position: "attack",
+          },
+          {
+            id: "defense",
+            label: getUIText("ui.summon.defense"),
+            position: "defense",
+          },
         ],
       },
     ],
     metadata: {
       cardData: {
         cardId: cardRef?.id ?? null,
-        name: cardRef?.name ?? "Special Summon",
+        name:
+          (cardRef && getCardDisplayName(cardRef)) ||
+          cardRef?.name ||
+          getUIText("ui.summon.special"),
         image: cardRef?.image ?? null,
         cardKind: cardRef?.cardKind ?? "monster",
         atk: cardRef?.atk ?? null,

@@ -58,7 +58,16 @@ export async function openChainWindow(context) {
   );
 
   // Resolve the chain
-  await this.resolveChain();
+  const resolutionResult = await this.resolveChain();
+  if (resolutionResult?.needsSelection) {
+    const pendingResolution =
+      this.startPendingChainSelection?.(resolutionResult);
+    if (pendingResolution && typeof pendingResolution.then === "function") {
+      return await pendingResolution;
+    }
+    console.log(`[ChainSystem] Chain resolution paused for selection`);
+    return resolutionResult;
+  }
   console.log(`[ChainSystem] Chain resolution complete`);
 
   // Clean up
@@ -69,6 +78,7 @@ export async function openChainWindow(context) {
   this.currentChainLevel = 0;
   this.cardsBeingResolved.clear();
   console.log(`[ChainSystem] Chain window closed successfully`);
+  return resolutionResult;
 }
 
 /**

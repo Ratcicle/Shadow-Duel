@@ -108,7 +108,11 @@ export async function applyHeal(action, ctx) {
 
   // LP gain multiplier is now handled by Player.gainLP() based on passive effects
   const before = targetPlayer.lp || 0;
-  targetPlayer.gainLP(amount);
+  targetPlayer.gainLP(amount, {
+    cause: action.cause || "effect",
+    sourceCard: ctx.source || null,
+    sourceRect: action.sourceRect || ctx?.activationContext?.sourceRect || null,
+  });
   await emitLpGainEvent(this.game, targetPlayer, ctx.source, before);
   return amount !== 0;
 }
@@ -139,7 +143,11 @@ export async function applyHealPerArchetypeMonster(action, ctx) {
   const totalHeal = count * amountPerMonster;
   if (totalHeal > 0) {
     const before = targetPlayer.lp || 0;
-    targetPlayer.gainLP(totalHeal);
+    targetPlayer.gainLP(totalHeal, {
+      cause: action.cause || "effect",
+      sourceCard: ctx.source || null,
+      sourceRect: action.sourceRect || ctx?.activationContext?.sourceRect || null,
+    });
     await emitLpGainEvent(this.game, targetPlayer, ctx.source, before);
     console.log(
       `${targetPlayer.id} gained ${totalHeal} LP from ${count} ${archetype} monster(s).`
@@ -167,6 +175,7 @@ export async function applyDamage(action, ctx) {
       this.game.inflictDamage(targetPlayer, amount, {
         cause: action.cause || "effect",
         sourceCard: ctx.source || null,
+        sourceRect: action.sourceRect || ctx?.activationContext?.sourceRect || null,
         screenShake: action.screenShake,
         triggerOpponentDamage: false,
       });

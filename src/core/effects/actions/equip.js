@@ -76,17 +76,24 @@ export async function applyEquip(action, ctx, targets) {
     return false;
   }
 
-  detachFromPreviousHost();
-
   if (this.game && typeof this.game.moveCard === "function") {
     const zone = this.game.getZone(player, "hand");
     if (zone && zone.includes(equipCard)) {
-      this.game.moveCard(equipCard, player, "spellTrap", {
+      const moveResult = await this.game.moveCard(equipCard, player, "spellTrap", {
+        fromZone: "hand",
         isFacedown: false,
         resetAttackFlags: false,
       });
+      if (moveResult?.needsSelection) {
+        return { ...moveResult, success: false };
+      }
+      if (moveResult === false || moveResult?.success === false) {
+        return false;
+      }
     }
   }
+
+  detachFromPreviousHost();
 
   equipCard.equippedTo = target;
   if (!Array.isArray(target.equips)) {

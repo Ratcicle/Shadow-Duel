@@ -160,6 +160,7 @@ async function emitEffectTargetedBeforeActions(engine, ctx, targets, logDev) {
         ...result,
         success: false,
         executed: false,
+        selectionSource: "effect_targeted",
       };
     }
   }
@@ -517,6 +518,227 @@ function getPreviewZoneCards(owner, zone) {
   return Array.isArray(cards) ? cards.filter(Boolean) : [];
 }
 
+function getPreviewTargetZones(target, fallbackZone = "field") {
+  const zoneSpec = target?.zones ?? target?.zone ?? fallbackZone;
+  return (Array.isArray(zoneSpec) ? zoneSpec : [zoneSpec]).filter(Boolean);
+}
+
+function getPreviewTargetMinCount(target, fallback = 1) {
+  const raw = target?.count?.min ?? target?.min ?? fallback;
+  const value = Number(raw);
+  return Number.isFinite(value) ? Math.max(0, value) : Math.max(0, fallback);
+}
+
+function getPreviewTargetMaxCount(target, fallback = null) {
+  const raw = target?.count?.max ?? target?.max ?? fallback;
+  const value = Number(raw);
+  return Number.isFinite(value) ? Math.max(0, value) : null;
+}
+
+function getEffectTargetDefinition(ctx, targetRef) {
+  if (!targetRef) return null;
+  const targetDefs = Array.isArray(ctx?.effect?.targets)
+    ? ctx.effect.targets
+    : [];
+  return targetDefs.find((target) => target?.id === targetRef) || null;
+}
+
+function shouldExcludePreviewTargetCard(card, target, ctx, zone) {
+  if (!card || card !== ctx?.source) return false;
+  if (target?.includeSelf === true || target?.allowSelf === true) return false;
+  if (target?.excludeSelf === true) return true;
+
+  const sourceKind = ctx?.source?.cardKind;
+  return (
+    zone === "hand" &&
+    ctx?.activationZone === "hand" &&
+    (sourceKind === "spell" || sourceKind === "trap")
+  );
+}
+
+function collectPreviewTargetEntries(engine, target, ctx, player) {
+  const owners = getPreviewTargetOwners(target, ctx, player);
+  const zones = getPreviewTargetZones(target);
+  const filters = buildTargetPreviewFilters(target);
+  const entries = [];
+  const seen = new Set();
+
+  for (const owner of owners) {
+    for (const zone of zones) {
+      for (const card of getPreviewZoneCards(owner, zone)) {
+        if (!card || seen.has(card)) continue;
+        if (shouldExcludePreviewTargetCard(card, target, ctx, zone)) continue;
+        if (!matchesPreviewFilters(engine, card, filters, ctx)) continue;
+        seen.add(card);
+        entries.push({ owner, zone, card });
+      }
+    }
+  }
+
+  return entries;
+}
+
+function getPreviewMoveDestinationOwner(action, ctx, sourceOwner, player) {
+  if (action?.player === "self") return player || ctx?.player || sourceOwner;
+  if (action?.player === "opponent") return ctx?.opponent || sourceOwner;
+  return sourceOwner || player || ctx?.player || null;
+}
+
+function recordPreviewMoveCandidates(engine, action, ctx, player, previewMoves) {
+  if (action?.type !== "move" || !Array.isArray(previewMoves)) return;
+  const toZone = action.to || action.toZone;
+  if (!toZone || !action.targetRef) return;
+
+  const targetDef = getEffectTargetDefinition(ctx, action.targetRef);
+  if (!targetDef) return;
+
+  const sourceEntries = collectPreviewTargetEntries(
+    engine,
+    targetDef,
+    ctx,
+    player,
+  );
+  if (sourceEntries.length === 0) return;
+
+  const maxCount = getPreviewTargetMaxCount(targetDef, sourceEntries.length);
+  if (maxCount !== null && maxCount <= 0) return;
+
+  for (const entry of sourceEntries) {
+    const owner = getPreviewMoveDestinationOwner(
+      action,
+      ctx,
+      entry.owner,
+      player,
+    );
+    if (!owner) continue;
+    let group = previewMoves.find(
+      (candidate) => candidate.owner === owner && candidate.zone === toZone,
+    );
+    if (!group) {
+      group = {
+        owner,
+        zone: toZone,
+        cards: [],
+        maxCount,
+      };
+      previewMoves.push(group);
+    }
+    group.cards.push(entry.card);
+  }
+}
+
+function countPreviewTargetCandidates(
+  engine,
+  target,
+  ctx,
+  player,
+  previewMoves = [],
+) {
+  const owners = getPreviewTargetOwners(target, ctx, player);
+  const zones = getPreviewTargetZones(target);
+  const filters = buildTargetPreviewFilters(target);
+  const seen = new Set();
+  let count = 0;
+
+  for (const owner of owners) {
+    for (const zone of zones) {
+      for (const card of getPreviewZoneCards(owner, zone)) {
+        if (!card || seen.has(card)) continue;
+        if (shouldExcludePreviewTargetCard(card, target, ctx, zone)) continue;
+        if (!matchesPreviewFilters(engine, card, filters, ctx)) continue;
+        seen.add(card);
+        count += 1;
+      }
+
+      for (const group of previewMoves) {
+        if (group.owner !== owner || group.zone !== zone) continue;
+        const matchingMovedCards = [];
+        for (const card of group.cards || []) {
+          if (!card || seen.has(card)) continue;
+          if (!matchesPreviewFilters(engine, card, filters, ctx)) continue;
+          matchingMovedCards.push(card);
+        }
+        const allowedCount =
+          group.maxCount === null
+            ? matchingMovedCards.length
+            : Math.min(group.maxCount, matchingMovedCards.length);
+        for (let i = 0; i < allowedCount; i += 1) {
+          seen.add(matchingMovedCards[i]);
+          count += 1;
+        }
+      }
+    }
+  }
+
+  return count;
+}
+
+function checkPreviewMoveTargetAvailability(
+  engine,
+  action,
+  ctx,
+  player,
+  previewMoves,
+) {
+  if (action?.type !== "move" || !action.targetRef) return { ok: true };
+  const targetDef = getEffectTargetDefinition(ctx, action.targetRef);
+  if (!targetDef) return { ok: true };
+
+  const min = getPreviewTargetMinCount(targetDef, 1);
+  if (min <= 0) return { ok: true };
+
+  const available = countPreviewTargetCandidates(
+    engine,
+    targetDef,
+    ctx,
+    player,
+    previewMoves,
+  );
+  if (available >= min) return { ok: true };
+
+  const zones = getPreviewTargetZones(targetDef).join("/") || "zone";
+  return {
+    ok: false,
+    reason: `Need ${min} valid target(s) in ${zones} for this move action.`,
+  };
+}
+
+function checkRequiredOptionalTargetsPreview(
+  engine,
+  action,
+  ctx,
+  player,
+  previewMoves,
+) {
+  if (action?.optional === true) return { ok: true };
+  const mustResolve =
+    action?.allowCancel === false || action?.required === true;
+  if (!mustResolve) return { ok: true };
+
+  const targetDefs = Array.isArray(action?.targets) ? action.targets : [];
+  for (const target of targetDefs) {
+    const min = getPreviewTargetMinCount(target, 1);
+    if (min <= 0) continue;
+
+    const available = countPreviewTargetCandidates(
+      engine,
+      target,
+      ctx,
+      player,
+      previewMoves,
+    );
+    if (available < min) {
+      const zones = getPreviewTargetZones(target).join("/") || "zone";
+      return {
+        ok: false,
+        reason: `Need ${min} valid target(s) in ${zones} for the required follow-up effect.`,
+      };
+    }
+  }
+
+  return { ok: true };
+}
+
 function matchesCounterPreviewFilters(engine, card, filters = {}) {
   if (!card) return false;
   if (filters.requireFaceup === true && card.isFacedown) return false;
@@ -739,6 +961,7 @@ export function checkActionPreviewRequirements(actions, ctx) {
 
   const hasOtherActions = (action) =>
     actions.some((candidate) => candidate && candidate !== action);
+  const previewMoves = [];
 
   for (const action of actions) {
     if (!action || !action.type) continue;
@@ -751,6 +974,32 @@ export function checkActionPreviewRequirements(actions, ctx) {
         return { ok: false, reason: "No valid options to activate this effect." };
       }
       continue;
+    }
+
+    if (action.type === "optional_target_actions") {
+      const optionalTargetCheck = checkRequiredOptionalTargetsPreview(
+        this,
+        action,
+        ctx,
+        player,
+        previewMoves,
+      );
+      if (!optionalTargetCheck.ok) {
+        return optionalTargetCheck;
+      }
+    }
+
+    if (action.type === "move") {
+      const moveTargetCheck = checkPreviewMoveTargetAvailability(
+        this,
+        action,
+        ctx,
+        player,
+        previewMoves,
+      );
+      if (!moveTargetCheck.ok) {
+        return moveTargetCheck;
+      }
     }
 
     if (action.type === "pay_lp") {
@@ -1131,6 +1380,8 @@ export function checkActionPreviewRequirements(actions, ctx) {
         };
       }
     }
+
+    recordPreviewMoveCandidates(this, action, ctx, player, previewMoves);
   }
 
   return { ok: true };

@@ -659,7 +659,11 @@ export async function finishCombat(attacker, target, options = {}) {
     }
     if (shouldHeal && player.id === cardInvolved?.owner) {
       const before = player.lp || 0;
-      player.gainLP(amount);
+      player.gainLP(amount, {
+        cause: "effect",
+        sourceCard: cardInvolved,
+        sourceRect: battleImpactVisualTarget?.rect || null,
+      });
       const gained = Math.max(0, (player.lp || 0) - before);
       if (gained > 0 && typeof this.emit === "function") {
         await this.emit("lp_change", {

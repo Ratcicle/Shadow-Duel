@@ -8,18 +8,19 @@ import {
   canActivateQuickSpellFromHand,
   isQuickSpell,
 } from "./quickSpellRules.js";
+import { getUIText } from "../../i18n.js";
 
 function getSpellTrapSelectionMessage(card) {
   if (card?.cardKind === "spell") {
     if (card.subtype === "continuous") {
-      return "Select target(s) for the continuous spell effect.";
+      return getUIText("ui.spell.continuousSelection");
     }
     if (card.subtype === "field") {
-      return "Select target(s) for the field spell effect.";
+      return getUIText("ui.spell.fieldSelection");
     }
-    return "Select target(s) for the spell effect.";
+    return getUIText("ui.spell.spellSelection");
   }
-  return "Select target(s) for the spell/trap effect.";
+  return getUIText("ui.spell.spellTrapSelection");
 }
 
 /**
@@ -383,7 +384,7 @@ export async function tryActivateSpell(
   if (hasFusionAction && !resume) {
     if (!this.canActivatePolymerization?.(owner)) {
       this.ui?.showMessage?.(
-        "Você não tem materiais válidos para Fusion Summon!",
+        getUIText("ui.spell.noFusionMaterials"),
       );
       this.ui?.log?.(
         `${
@@ -509,7 +510,7 @@ export function activateFieldSpellEffect(card) {
     activationZone: "fieldSpell",
     activationContext,
     selectionKind: "fieldSpell",
-    selectionMessage: "Select target(s) for the field spell effect.",
+    selectionMessage: getUIText("ui.spell.fieldSelection"),
     guardKind: "fieldspell_effect",
     phaseReq: ["main1", "main2"],
     preview: () =>

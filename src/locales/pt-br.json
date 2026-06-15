@@ -1,4 +1,276 @@
 {
+  "ui": {
+    "common": {
+      "ok": "OK",
+      "cancel": "Cancelar",
+      "confirm": "Confirmar",
+      "close": "x",
+      "yes": "Sim",
+      "no": "Não",
+      "activate": "Ativar",
+      "set": "Baixar",
+      "pass": "Passar",
+      "refuse": "Recusar",
+      "addToHand": "Adicionar à mão"
+    },
+    "lp": "{amount} PV",
+    "selection": {
+      "cardFallback": "Carta",
+      "effectLabel": "efeito",
+      "selectTargets": "Selecionar alvo(s)",
+      "chooseEffect": "Escolha qual efeito deseja ativar.",
+      "chooseOneOption": "Escolha uma opção.",
+      "chooseOptionCount": "Escolha {count} opções.",
+      "chooseOptionRange": "Escolha {min}-{max} opções.",
+      "chooseTargetCount": "Escolha {count} alvo(s) para {label}.",
+      "chooseTargetRange": "Escolha {min}-{max} alvos para {label}.",
+      "selectTargetCount": "Selecione {count} alvo(s) para {label}.",
+      "selectTargetRange": "Selecione {min}-{max} alvos para {label}.",
+      "selectCardToDestroy": "Selecione 1 carta para destruir.",
+      "noValidOptions": "Não há opções válidas para ativar este efeito.",
+      "noValidChoice": "Nenhuma escolha de efeito válida foi selecionada.",
+      "noValidTargets": "Não há alvos válidos."
+    },
+    "fieldTargeting": {
+      "monsterEffect": "efeito de monstro",
+      "spellEffect": "efeito de Magia",
+      "continuousSpellEffect": "efeito de Magia Contínua",
+      "fieldSpellEffect": "efeito de Magia de Campo",
+      "spellTrapEffect": "efeito de Magia/Armadilha",
+      "trapEffect": "efeito de Armadilha",
+      "graveyardEffect": "efeito no Cemitério",
+      "graveyardSpellEffect": "efeito de Magia no Cemitério",
+      "triggeredEffect": "efeito disparado",
+      "effect": "efeito",
+      "targetSingular": "alvo",
+      "targetPlural": "alvos",
+      "sourceEffect": "{effectLabel} de {sourceName}",
+      "targetCount": "Selecione {count} {targetWord} para {sourceClause}.",
+      "targetRange": "Selecione {min}-{max} alvos para {sourceClause}.",
+      "targetUpTo": "Selecione até {max} {targetWord} para {sourceClause}.",
+      "targetGeneric": "Selecione os alvos para {sourceClause}."
+    },
+    "summon": {
+      "normal": "Invocação-Normal",
+      "special": "Invocação-Especial",
+      "set": "Baixar",
+      "conditionalConfirm": "Invocar",
+      "conditionalDecline": "Recusar",
+      "chooseTier": "Escolher custo",
+      "tierFallback": "Custo {count}",
+      "activateEffect": "Ativar",
+      "ascend": "Ascender",
+      "flip": "Virar",
+      "toAttack": "Para Ataque",
+      "toDefense": "Para Defesa",
+      "attack": "Ataque",
+      "defense": "Defesa",
+      "choosePosition": "Escolha a posição para \"{cardName}\".",
+      "choosePositionTitle": "Escolha a posição da Invocação-Especial",
+      "conditionMet": "Condição cumprida.",
+      "controlsCard": "Você controla \"{cardName}\".",
+      "conditionalPrompt": "{conditionText} Invocar \"{cardName}\" por Invocação-Especial da sua mão?",
+      "drawnPrompt": "Você comprou \"{cardName}\". Invocar por Invocação-Especial da sua mão?"
+    },
+    "spell": {
+      "activate": "Ativar",
+      "set": "Baixar",
+      "continuousSelection": "Selecione alvo(s) para o efeito de Magia Contínua.",
+      "fieldSelection": "Selecione alvo(s) para o efeito de Magia de Campo.",
+      "spellSelection": "Selecione alvo(s) para o efeito de Magia.",
+      "spellTrapSelection": "Selecione alvo(s) para o efeito de Magia/Armadilha.",
+      "noFusionMaterials": "Você não tem materiais válidos para uma Invocação-Fusão!"
+    },
+    "trap": {
+      "activateTitle": "Ativar Armadilha?",
+      "activate": "Ativar Armadilha",
+      "activateShort": "Ativar",
+      "doNotActivate": "Não ativar",
+      "pass": "Passar",
+      "passNoResponse": "Passar (sem responder)",
+      "responseDefault": "Responda à ação.",
+      "attackDeclaration": "{attacker} declarou ataque contra {target}.",
+      "directAttack": "ataque direto",
+      "monsterFallback": "Monstro",
+      "cardFallback": "Carta",
+      "summon": "{card} foi Invocado.",
+      "cardActivation": "{card} foi ativado.",
+      "phaseChange": "Fase alterada.",
+      "effectActivation": "Efeito ativado.",
+      "responseEvent": "Responda a {event}."
+    },
+    "fusion": {
+      "selectMonsterTitle": "Selecionar Monstro de Fusão",
+      "selectMonsterHint": "Escolha um Monstro de Fusão para Invocar:",
+      "selectMonsterLabel": "Escolha um Monstro de Fusão para Invocar",
+      "selectMonsterMessage": "Selecione um Monstro de Fusão para Invocar",
+      "selectMaterialsTitle": "Selecionar Materiais de Fusão",
+      "selectMaterialsHint": "Selecione os materiais:",
+      "selectMaterialsLabel": "Selecione {count} Materiais de Fusão",
+      "selectMaterialsFor": "Selecione materiais para {cardName}",
+      "monsterFallback": "monstro",
+      "invalidMaterials": "Materiais de Fusão inválidos!",
+      "noValidSummons": "Nenhuma Invocação-Fusão válida disponível!",
+      "noValidMaterials": "Não há materiais válidos para esta Fusão!",
+      "notFound": "Monstro de Fusão não encontrado no Deck Adicional!"
+    },
+    "cardGrid": {
+      "selectCards": "Selecionar cartas",
+      "chooseSurvivor": "Escolher sobrevivente"
+    },
+    "ignition": {
+      "titleFallback": "Ativar efeito?",
+      "prompt": "Ativar o efeito deste monstro?"
+    },
+    "prompts": {
+      "confirmTitle": "Confirmar",
+      "searchPlaceholder": "Escolha uma carta",
+      "searchTitle": "Selecione uma carta entre as opções",
+      "searchHint": "Clique em uma carta para selecioná-la",
+      "destructionNegationTitle": "Ativar o efeito de \"{cardName}\"?",
+      "costLine": "Custo: {costDescription}",
+      "triggeredAttackTrap": "Ativar {cardName} em resposta ao ataque?",
+      "triggeredAttackEffect": "Ativar o efeito de {cardName}?",
+      "triggeredTargeted": "Ativar {cardName} em resposta à seleção de alvo?",
+      "triggeredEffect": "Ativar o efeito de {cardName}?",
+      "thisCard": "este card"
+    },
+    "graveyard": {
+      "selection": "Selecione alvo(s) para o efeito no Cemitério."
+    },
+    "optionalSummon": {
+      "prompt": "Invocar {cardName} por Invocação-Especial da sua mão?",
+      "confirm": "Invocar por Invocação-Especial",
+      "cancel": "Manter na mão",
+      "title": "Invocação-Especial opcional"
+    },
+    "upkeep": {
+      "prompt": "Pagar {amount} PV para manter {cardName}?",
+      "confirm": "Pagar {amount} PV",
+      "cancel": "Enviar ao Cemitério",
+      "title": "Custo de manutenção",
+      "thisCard": "este card"
+    },
+    "triggers": {
+      "selection": "Selecione alvo(s) para o efeito disparado."
+    },
+    "counters": {
+      "removeAmount": "Escolha quantos marcadores {counterType} remover ({min}-{max}).",
+      "selectPayment": "Selecione carta(s) para remover {amount} marcador(es) {counterType}.",
+      "selectEnough": "Selecione cartas suficientes para remover {amount} marcador(es) {counterType}.",
+      "paymentCancelled": "Pagamento de marcadores cancelado.",
+      "notEnough": "Não há marcadores {counterType} suficientes no campo para pagar o custo."
+    },
+    "replacement": {
+      "cardSingular": "carta",
+      "cardPlural": "cartas",
+      "monsterSingular": "monstro",
+      "monsterPlural": "monstros",
+      "spellSingular": "Magia",
+      "spellPlural": "Magias",
+      "trapSingular": "Armadilha",
+      "trapPlural": "Armadilhas",
+      "chooseToBanish": "Escolha {countText} para banir.",
+      "confirmCost": "{verb} {count} {costDescription} {suffix} {cardName}?",
+      "confirmActionCost": "{sourceName}: pagar o custo de substituição para impedir a destruição de {cardName}?",
+      "chooseCost": "Escolha {count} {cardWord} para {selectionVerb} e proteger {cardName}.",
+      "protectionCancelled": "Proteção cancelada.",
+      "actions": {
+        "banish": {
+          "verb": "Banir",
+          "suffix": "para proteger",
+          "selectionVerb": "banir",
+          "logVerb": "banindo",
+          "logDestination": ""
+        },
+        "hand": {
+          "verb": "Devolver",
+          "suffix": "para a mão e proteger",
+          "selectionVerb": "devolver à mão",
+          "logVerb": "devolvendo",
+          "logDestination": " para a mão"
+        },
+        "graveyard": {
+          "verb": "Enviar",
+          "suffix": "ao Cemitério para proteger",
+          "selectionVerb": "enviar ao Cemitério",
+          "logVerb": "enviando",
+          "logDestination": " ao Cemitério"
+        }
+      }
+    },
+    "voidSerpent": {
+      "costPrompt": "Escolha quantos Void Hollow enviar (1-{max}):",
+      "selectCost": "Selecione os Void Hollow para enviar ao Cemitério."
+    },
+    "shadowHeartCathedral": {
+      "title": "Catedral do Coração Sombrio",
+      "subtitle": "Selecione 1 monstro Coração Sombrio com ATK <= {maxAtk} ({counterCount} marcadores)",
+      "info": "Apenas monstros Coração Sombrio no seu Deck são válidos.",
+      "level": "Nível"
+    },
+    "luminarchSickle": {
+      "title": "Selecione até 2 monstros Luminarca para adicionar à mão",
+      "subtitle": "Selecione até {maxSelect}."
+    }
+  },
+  "effectChoices": {
+    "arcanist_grand_library_ignition": {
+      "message": "Escolha um efeito da Grande Biblioteca Arcanista.",
+      "cases": {
+        "arcanist_grand_library_summon": {
+          "label": "Pagar 2000 PV; Invocar Arcanista",
+          "description": "Sem monstros: pague 2000 PV e Invoque 1 Arcanista de Nível 4 ou menor do Deck."
+        },
+        "arcanist_grand_library_search_equip": {
+          "label": "Adicionar Magia de Equipamento Arcanista",
+          "description": "Com um monstro Arcanista: adicione 1 Magia de Equipamento Arcanista do Deck à mão."
+        }
+      }
+    },
+    "meeting_arcanists_choose_effect": {
+      "message": "Escolha um efeito da Reunião dos Arcanistas.",
+      "cases": {
+        "meeting_arcanists_discard_monsters": {
+          "label": "Descartar 2 monstros Arcanista",
+          "description": "Descarte 2 monstros Arcanista; adicione 1 Magia Arcanista do Deck à mão."
+        },
+        "meeting_arcanists_discard_spells": {
+          "label": "Descartar 2 Magias Arcanista",
+          "description": "Descarte 2 Magias Arcanista; adicione 1 monstro Arcanista de Nível 4 ou menor do Deck à mão."
+        }
+      }
+    },
+    "miragebound_oasis_ignition": {
+      "message": "Escolha um efeito do Oásis dos Vinculados à Miragem.",
+      "cases": {
+        "miragebound_oasis_recycle_search": {
+          "label": "Devolver Vinculado; adicionar outro",
+          "description": "Devolva 1 monstro Vinculado à Miragem que você controla; adicione 1 monstro Vinculado à Miragem com nome diferente do Deck à mão."
+        },
+        "miragebound_oasis_shift_weaken": {
+          "label": "Mudar posição de monstro oponente",
+          "description": "Escolha 1 monstro do oponente; mude sua posição de batalha."
+        }
+      }
+    },
+    "void_serpent_drake_hand_special": {
+      "tiers": {
+        "1": {
+          "label": "Custo 1",
+          "description": "+300 ATK até o fim do turno"
+        },
+        "2": {
+          "label": "Custo 2",
+          "description": "+300 ATK e indestrutível em batalha"
+        },
+        "3": {
+          "label": "Custo 3",
+          "description": "+300 ATK, indestrutível em batalha e destrói 1 carta do oponente"
+        }
+      }
+    }
+  },
   "cards": {
     "1": {
       "name": "Corcel Pesadelo",

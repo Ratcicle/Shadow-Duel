@@ -318,7 +318,10 @@ export async function runActivationPipeline(config = {}) {
       addTriggerToChain: false,
     };
 
-    await this.chainSystem.openChainWindow(context);
+    const chainResult = await this.chainSystem.openChainWindow(context);
+    if (chainResult?.needsSelection) {
+      return chainResult;
+    }
     if (activationAttempt.negated || context.negated) {
       return { ok: false, negated: true, reason: "activation_negated" };
     }
@@ -503,7 +506,7 @@ export async function runActivationPipeline(config = {}) {
         this.ui.log(normalized.reason);
       }
       if (activationContext.committed && activationContext.commitInfo) {
-        this.rollbackSpellActivation(owner, activationContext.commitInfo);
+        await this.rollbackSpellActivation(owner, activationContext.commitInfo);
         logPipeline("PIPELINE_ROLLBACK", {
           activationZone: resolvedActivationZone,
         });
@@ -569,6 +572,9 @@ export async function runActivationPipeline(config = {}) {
   };
 
   const negationWindowResult = await offerActivationNegationWindow();
+  if (negationWindowResult?.needsSelection) {
+    return negationWindowResult;
+  }
   if (negationWindowResult?.negated) {
     const negatedResult = {
       success: false,

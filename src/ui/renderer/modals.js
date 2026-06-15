@@ -4,7 +4,11 @@
  * getSearchModalElements, showSearchModal, showSearchModalVisual
  */
 
-import { getCardDisplayName, getLocale } from "../../core/i18n.js";
+import {
+  getCardDisplayName,
+  getLocale,
+  getUIText,
+} from "../../core/i18n.js";
 import {
   getSelectionCardTypeClass,
   renderCompactSelectionCard,
@@ -74,7 +78,9 @@ function getGameOverResult(options = {}) {
 
 function formatLifePoints(value) {
   const amount = Number(value ?? 0);
-  return `${Number.isFinite(amount) ? amount : 0} PV`;
+  return getUIText("ui.lp", {
+    amount: Number.isFinite(amount) ? amount : 0,
+  });
 }
 
 /**
@@ -124,9 +130,9 @@ export function showConfirmPrompt(message, options = {}) {
     }
   }
 
-  const confirmLabel = options.confirmLabel || "OK";
-  const cancelLabel = options.cancelLabel || "Cancel";
-  const title = options.title || "Confirm";
+  const confirmLabel = options.confirmLabel || getUIText("ui.common.ok");
+  const cancelLabel = options.cancelLabel || getUIText("ui.common.cancel");
+  const title = options.title || getUIText("ui.prompts.confirmTitle");
   const detailText = String(message);
 
   return new Promise((resolve) => {
@@ -146,7 +152,7 @@ export function showConfirmPrompt(message, options = {}) {
     const closeBtn = document.createElement("button");
     closeBtn.type = "button";
     closeBtn.className = "confirm-modal-close";
-    closeBtn.textContent = "x";
+    closeBtn.textContent = getUIText("ui.common.close");
 
     header.appendChild(titleEl);
     header.appendChild(closeBtn);
@@ -468,7 +474,7 @@ export function showSearchModal(
 
   const placeholder = document.createElement("option");
   placeholder.value = "";
-  placeholder.textContent = "Escolha uma carta";
+  placeholder.textContent = getUIText("ui.prompts.searchPlaceholder");
   select.appendChild(placeholder);
 
   // Only show candidates, not all cards from the database
@@ -550,12 +556,12 @@ export function showSearchModalVisual(
   modalContent.className = "modal-content";
 
   const title = document.createElement("h2");
-  title.textContent = "Select a card from candidates";
+  title.textContent = getUIText("ui.prompts.searchTitle");
   modalContent.appendChild(title);
 
   const hint = document.createElement("p");
   hint.className = "search-hint";
-  hint.textContent = "Click on a card to select it";
+  hint.textContent = getUIText("ui.prompts.searchHint");
   modalContent.appendChild(hint);
 
   const grid = document.createElement("div");
@@ -596,11 +602,11 @@ export function showSearchModalVisual(
   actions.className = "search-actions";
 
   const confirmBtn = document.createElement("button");
-  confirmBtn.textContent = "Confirm";
+  confirmBtn.textContent = getUIText("ui.common.confirm");
   confirmBtn.className = "confirm";
 
   const cancelBtn = document.createElement("button");
-  cancelBtn.textContent = "Cancel";
+  cancelBtn.textContent = getUIText("ui.common.cancel");
   cancelBtn.className = "cancel";
 
   const cleanup = () => {

@@ -23,6 +23,18 @@ export function bindCardInteractions() {
     this.laboratoryModeEnabled === true && actor?.id === this.turn;
   const getOpponentOf = (actor) => (actor?.id === "player" ? this.bot : this.player);
   const isMainPhase = () => this.phase === "main1" || this.phase === "main2";
+  const canNormalSummonFromHand = (actor, card, tributeInfo = null) => {
+    if (!actor || !card || card.cardKind !== "monster") return false;
+    if (card.cannotBeNormalSummonedOrSet) return false;
+    if (card.summonRestrict === "shadow_heart_invocation_only") return false;
+    const normalSummonLimit = 1 + (actor.additionalNormalSummons || 0);
+    if ((actor.summonCount || 0) >= normalSummonLimit) return false;
+    const info = tributeInfo || actor.getTributeRequirement?.(card);
+    const tributesNeeded = Math.max(0, Number(info?.tributesNeeded || 0));
+    const fieldCount = actor.field?.length || 0;
+    if (fieldCount < tributesNeeded) return false;
+    return fieldCount - tributesNeeded + 1 <= 5;
+  };
   const buildQuickSpellHandContext = (card, actor) =>
     isQuickSpell(card)
       ? {
@@ -212,9 +224,10 @@ export function bindCardInteractions() {
           }).then(() => this.updateBoard());
         },
         {
+          canNormalSummon: canNormalSummonFromHand(actor, card, tributeInfo),
+          canSet: canNormalSummonFromHand(actor, card, tributeInfo),
           specialSummonFromHand: false,
           specialSummonFromHandEffect: canUseHandEffect,
-          specialSummonFromHandEffectLabel: "Special Summon",
           ownerId: actor.id,
         }
       );
@@ -495,7 +508,6 @@ export function bindCardInteractions() {
           : { ok: false };
 
         const canUseHandEffect = handEffectPreview.ok;
-        const handEffectLabel = "Special Summon";
 
         if (
           !canUseHandEffect &&
@@ -605,9 +617,14 @@ export function bindCardInteractions() {
             }
           },
           {
+            canNormalSummon: canNormalSummonFromHand(
+              this.player,
+              card,
+              tributeInfo,
+            ),
+            canSet: canNormalSummonFromHand(this.player, card, tributeInfo),
             specialSummonFromHand: false,
             specialSummonFromHandEffect: canUseHandEffect,
-            specialSummonFromHandEffectLabel: handEffectLabel,
           }
         );
         return;

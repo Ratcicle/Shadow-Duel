@@ -11,21 +11,32 @@
  *  - resolveDestructionWithReplacement
  */
 
+import { getCardDisplayName, getUIText } from "../../i18n.js";
+
+function getCostKindLabel(cardKind = "card", count = 1) {
+  const plurality = count > 1 ? "Plural" : "Singular";
+  const key =
+    cardKind === "monster"
+      ? `ui.replacement.monster${plurality}`
+      : cardKind === "spell"
+        ? `ui.replacement.spell${plurality}`
+        : cardKind === "trap"
+          ? `ui.replacement.trap${plurality}`
+          : `ui.replacement.card${plurality}`;
+  return getUIText(key);
+}
+
 function getCostTypeDescription(costFilters, count) {
   if (costFilters.archetype) {
-    const baseType = costFilters.cardKind || "card";
-    const singular = `"${costFilters.archetype}" ${baseType}`;
-    const plural = `"${costFilters.archetype}" ${baseType}s`;
-    return count > 1 ? plural : singular;
+    const baseType = getCostKindLabel(costFilters.cardKind || "card", count);
+    return `"${costFilters.archetype}" ${baseType}`;
   }
 
   if (costFilters.cardKind) {
-    const singular = costFilters.cardKind;
-    const plural = costFilters.cardKind + "s";
-    return count > 1 ? plural : singular;
+    return getCostKindLabel(costFilters.cardKind, count);
   }
 
-  return count > 1 ? "cards" : "card";
+  return getCostKindLabel("card", count);
 }
 
 function formatReplacementText(text, targetCardName, sourceCardName) {
@@ -199,29 +210,93 @@ function getSelectedReplacementCostZone(
 function getCostActionText(costDestination) {
   if (costDestination === "banished" || costDestination === "banish") {
     return {
-      verb: "Banish",
-      suffix: "to save",
-      selectionVerb: "banish",
-      logVerb: "banishing",
-      logDestination: "",
+      verb: getUIText("ui.replacement.actions.banish.verb"),
+      suffix: getUIText("ui.replacement.actions.banish.suffix"),
+      selectionVerb: getUIText(
+        "ui.replacement.actions.banish.selectionVerb",
+      ),
+      logVerb: getUIText("ui.replacement.actions.banish.logVerb"),
+      logDestination: getUIText(
+        "ui.replacement.actions.banish.logDestination",
+      ),
     };
   }
   if (costDestination === "hand") {
     return {
-      verb: "Return",
-      suffix: "to the hand to save",
-      selectionVerb: "return to the hand",
-      logVerb: "returning",
-      logDestination: " to the hand",
+      verb: getUIText("ui.replacement.actions.hand.verb"),
+      suffix: getUIText("ui.replacement.actions.hand.suffix"),
+      selectionVerb: getUIText("ui.replacement.actions.hand.selectionVerb"),
+      logVerb: getUIText("ui.replacement.actions.hand.logVerb"),
+      logDestination: getUIText(
+        "ui.replacement.actions.hand.logDestination",
+      ),
     };
   }
   return {
-    verb: "Send",
-    suffix: "to the GY to save",
-    selectionVerb: "send to the Graveyard",
-    logVerb: "sending",
-    logDestination: " to the Graveyard",
+    verb: getUIText("ui.replacement.actions.graveyard.verb"),
+    suffix: getUIText("ui.replacement.actions.graveyard.suffix"),
+    selectionVerb: getUIText(
+      "ui.replacement.actions.graveyard.selectionVerb",
+    ),
+    logVerb: getUIText("ui.replacement.actions.graveyard.logVerb"),
+    logDestination: getUIText(
+      "ui.replacement.actions.graveyard.logDestination",
+    ),
   };
+}
+
+function normalizeReplacementCostDestination(costDestination) {
+  return costDestination === "banish"
+    ? "banished"
+    : costDestination || "graveyard";
+}
+
+async function moveReplacementCostCards({
+  game,
+  cards,
+  costOwner,
+  costZones,
+  candidateEntries,
+  costDestination,
+  sourceCard,
+  effect,
+}) {
+  if (!game || typeof game.moveCard !== "function") {
+    return { success: false };
+  }
+
+  const normalizedDestination =
+    normalizeReplacementCostDestination(costDestination);
+
+  for (const costCard of cards) {
+    const fromZone = getSelectedReplacementCostZone(
+      game,
+      costOwner,
+      costZones,
+      candidateEntries,
+      costCard,
+    );
+    const moveResult = await game.moveCard(
+      costCard,
+      costOwner,
+      normalizedDestination,
+      {
+        fromZone,
+        awaitEvents: true,
+        sourceCard,
+        effectId: effect?.id || null,
+        contextLabel: "destruction_replacement_cost",
+      },
+    );
+    if (moveResult?.needsSelection) {
+      return { ...moveResult, success: false };
+    }
+    if (moveResult === false || moveResult?.success === false) {
+      return { success: false };
+    }
+  }
+
+  return { success: true };
 }
 
 function askHumanToSelectReplacementTargets({
@@ -266,7 +341,12 @@ function askHumanToSelectReplacementTargets({
 
   const message =
     targetSpec.message ||
-    `Choose ${maxCount > 1 ? "cards" : "1 card"} to banish.`;
+    getUIText("ui.replacement.chooseToBanish", {
+      countText:
+        maxCount > 1
+          ? getUIText("ui.replacement.cardPlural")
+          : `1 ${getUIText("ui.replacement.cardSingular")}`,
+    });
 
   return new Promise((resolve) => {
     game.startTargetSelectionSession({
@@ -501,13 +581,18 @@ async function tryReplacement(game, sourceCard, sourceOwner, effect, ctx) {
 
     const sourceIsHuman = sourceOwner?.controllerType === "human";
     if (sourceIsHuman && replacement.auto !== true) {
+      const targetName = getCardDisplayName(card) || card.name;
+      const sourceName = getCardDisplayName(sourceCard) || sourceCard.name;
       const prompt =
-        formatReplacementText(replacement.prompt, card.name, sourceCard.name) ||
-        `${sourceCard.name}: pay the replacement cost to prevent ${card.name} from being destroyed?`;
+        formatReplacementText(replacement.prompt, targetName, sourceName) ||
+        getUIText("ui.replacement.confirmActionCost", {
+          sourceName,
+          cardName: targetName,
+        });
       const wantsToReplace =
         (await game.ui?.showConfirmPrompt?.(prompt, {
           kind: "destruction_replacement",
-          cardName: card.name,
+          cardName: targetName,
         })) ?? false;
       if (!wantsToReplace) {
         return false;
@@ -516,6 +601,9 @@ async function tryReplacement(game, sourceCard, sourceOwner, effect, ctx) {
 
     const costCtx = buildActionCostCtx();
     const costResult = await engine.applyActions(costActions, costCtx, {});
+    if (costResult?.needsSelection) {
+      return { ...costResult, success: false };
+    }
     return (
       costResult === true ||
       (costResult &&
@@ -631,6 +719,12 @@ async function tryReplacement(game, sourceCard, sourceOwner, effect, ctx) {
     replacement.costActions.length > 0;
   if (hasActionCosts && costCount === 0) {
     const costPaid = await runReplacementCostActions();
+    if (costPaid?.needsSelection) {
+      return {
+        ...costPaid,
+        replaced: false,
+      };
+    }
     if (!costPaid) {
       return { replaced: false };
     }
@@ -713,7 +807,9 @@ async function tryReplacement(game, sourceCard, sourceOwner, effect, ctx) {
     return { replaced: false };
   }
 
-  const costDestination = replacement.costDestination || "graveyard";
+  const costDestination = normalizeReplacementCostDestination(
+    replacement.costDestination,
+  );
   const costActionText = getCostActionText(costDestination);
 
   // AI auto-selection (lowest ATK for cost). Bot Arena can place an AI in the
@@ -723,17 +819,24 @@ async function tryReplacement(game, sourceCard, sourceOwner, effect, ctx) {
       .sort((a, b) => (a.atk || 0) - (b.atk || 0))
       .slice(0, costCount);
 
-    for (const costCard of chosen) {
-      const fromZone = getSelectedReplacementCostZone(
-        game,
-        costOwner,
-        costZones,
-        candidateEntries,
-        costCard,
-      );
-      game.moveCard(costCard, costOwner, costDestination, {
-        fromZone,
-      });
+    const costMoveResult = await moveReplacementCostCards({
+      game,
+      cards: chosen,
+      costOwner,
+      costZones,
+      candidateEntries,
+      costDestination,
+      sourceCard,
+      effect,
+    });
+    if (costMoveResult?.needsSelection) {
+      return {
+        ...costMoveResult,
+        replaced: false,
+      };
+    }
+    if (!costMoveResult.success) {
+      return { replaced: false };
     }
 
     game.markOncePerTurnUsed(sourceCard, sourceOwner, effect);
@@ -756,14 +859,22 @@ async function tryReplacement(game, sourceCard, sourceOwner, effect, ctx) {
   }
 
   const costDescription = getCostTypeDescription(costFilters, costCount);
+  const targetName = getCardDisplayName(card) || card.name;
+  const sourceName = getCardDisplayName(sourceCard) || sourceCard.name;
   const prompt =
-    formatReplacementText(replacement.prompt, card.name, sourceCard.name) ||
-    `${costActionText.verb} ${costCount} ${costDescription} ${costActionText.suffix} ${card.name}?`;
+    formatReplacementText(replacement.prompt, targetName, sourceName) ||
+    getUIText("ui.replacement.confirmCost", {
+      verb: costActionText.verb,
+      count: costCount,
+      costDescription,
+      suffix: costActionText.suffix,
+      cardName: targetName,
+    });
 
   const wantsToReplace =
     (await game.ui?.showConfirmPrompt?.(prompt, {
       kind: "destruction_replacement",
-      cardName: card.name,
+      cardName: targetName,
     })) ?? false;
   if (!wantsToReplace) {
     return { replaced: false };
@@ -772,12 +883,15 @@ async function tryReplacement(game, sourceCard, sourceOwner, effect, ctx) {
   const selectionMessage =
     formatReplacementText(
       replacement.selectionMessage,
-      card.name,
-      sourceCard.name,
+      targetName,
+      sourceName,
     ) ||
-    `Choose ${costCount} ${
-      costCount > 1 ? "cards" : "card"
-    } to ${costActionText.selectionVerb} for ${card.name}'s protection.`;
+    getUIText("ui.replacement.chooseCost", {
+      count: costCount,
+      cardWord: getCostKindLabel("card", costCount),
+      selectionVerb: costActionText.selectionVerb,
+      cardName: targetName,
+    });
 
   let selections = [];
   if (
@@ -813,19 +927,28 @@ async function tryReplacement(game, sourceCard, sourceOwner, effect, ctx) {
   }
 
   if (!selections || selections.length < costCount) {
-    game.ui.log("Protection cancelled.");
+    game.ui.log(getUIText("ui.replacement.protectionCancelled"));
     return { replaced: false };
   }
 
-  for (const costCard of selections) {
-    const fromZone = getSelectedReplacementCostZone(
-      game,
-      costOwner,
-      costZones,
-      candidateEntries,
-      costCard,
-    );
-    game.moveCard(costCard, costOwner, costDestination, { fromZone });
+  const costMoveResult = await moveReplacementCostCards({
+    game,
+    cards: selections,
+    costOwner,
+    costZones,
+    candidateEntries,
+    costDestination,
+    sourceCard,
+    effect,
+  });
+  if (costMoveResult?.needsSelection) {
+    return {
+      ...costMoveResult,
+      replaced: false,
+    };
+  }
+  if (!costMoveResult.success) {
+    return { replaced: false };
   }
 
   game.markOncePerTurnUsed(sourceCard, sourceOwner, effect);

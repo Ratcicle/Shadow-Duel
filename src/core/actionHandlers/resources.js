@@ -7,6 +7,7 @@
 
 import { isAI } from "../Player.js";
 import { cardMatchesKind } from "../Card.js";
+import { getCardDisplayName, getUIText } from "../i18n.js";
 import {
   getUI,
   collectZoneCandidates,
@@ -787,15 +788,19 @@ async function shouldPerformOptionalSummon(action, game, player, card) {
 
   const ui = getUI(game);
   if (ui && typeof ui.showConfirmPrompt === "function") {
+    const cardName = getCardDisplayName(card) || card.name;
     const result = ui.showConfirmPrompt(
-      action.promptMessage || `Special Summon ${card.name} from your hand?`,
+      action.promptMessage ||
+        getUIText("ui.optionalSummon.prompt", { cardName }),
       {
         kind: "optional_special_summon",
-        cardName: card.name,
+        cardName,
         playerId: player.id,
-        confirmLabel: action.confirmLabel || "Special Summon",
-        cancelLabel: action.cancelLabel || "Keep in hand",
-        title: action.promptTitle || "Optional Special Summon",
+        confirmLabel:
+          action.confirmLabel || getUIText("ui.optionalSummon.confirm"),
+        cancelLabel:
+          action.cancelLabel || getUIText("ui.optionalSummon.cancel"),
+        title: action.promptTitle || getUIText("ui.optionalSummon.title"),
       },
     );
     return result && typeof result.then === "function"
@@ -834,7 +839,11 @@ export async function handleHealFromDestroyedAtk(action, ctx, targets, engine) {
   if (healAmount <= 0) return false;
 
   const before = player.lp || 0;
-  player.gainLP(healAmount);
+  player.gainLP(healAmount, {
+    cause: action.cause || "effect",
+    sourceCard: ctx.source || null,
+    sourceRect: action.sourceRect || ctx?.activationContext?.sourceRect || null,
+  });
   await emitLpGainEvent(game, player, ctx.source, before);
 
   getUI(game)?.log(
@@ -941,7 +950,11 @@ export async function handleHealFromDestroyedLevel(
   }
 
   const before = player.lp || 0;
-  player.gainLP(healAmount);
+  player.gainLP(healAmount, {
+    cause: action.cause || "effect",
+    sourceCard: ctx.source || null,
+    sourceRect: action.sourceRect || ctx?.activationContext?.sourceRect || null,
+  });
   await emitLpGainEvent(game, player, ctx.source, before);
 
   getUI(game)?.log(
@@ -1002,7 +1015,11 @@ export async function handleHealPerFieldCount(action, ctx, targets, engine) {
 
   const healAmount = count * amountPerCard;
   const before = player.lp || 0;
-  player.gainLP(healAmount);
+  player.gainLP(healAmount, {
+    cause: action.cause || "effect",
+    sourceCard: ctx.source || null,
+    sourceRect: action.sourceRect || ctx?.activationContext?.sourceRect || null,
+  });
   await emitLpGainEvent(game, player, ctx.source, before);
 
   getUI(game)?.log(
@@ -1063,7 +1080,11 @@ export async function handleHealPerFieldCounter(action, ctx, targets, engine) {
 
   const healAmount = counterCount * amountPerCounter;
   const before = targetPlayer.lp || 0;
-  targetPlayer.gainLP(healAmount);
+  targetPlayer.gainLP(healAmount, {
+    cause: action.cause || "effect",
+    sourceCard: ctx.source || null,
+    sourceRect: action.sourceRect || ctx?.activationContext?.sourceRect || null,
+  });
   await emitLpGainEvent(game, targetPlayer, ctx.source, before);
 
   getUI(game)?.log(
@@ -1113,7 +1134,11 @@ export async function handleHealPerOpponentCardsAndHand(
 
   const healAmount = count * amountPerCard;
   const before = targetPlayer.lp || 0;
-  targetPlayer.gainLP(healAmount);
+  targetPlayer.gainLP(healAmount, {
+    cause: action.cause || "effect",
+    sourceCard: ctx.source || null,
+    sourceRect: action.sourceRect || ctx?.activationContext?.sourceRect || null,
+  });
   await emitLpGainEvent(game, targetPlayer, ctx.source, before);
 
   getUI(game)?.log(
@@ -1179,12 +1204,28 @@ function findSourceZone(engine, player, source) {
   return null;
 }
 
-function moveUpkeepSourceToFailureZone(game, player, source, failureZone, sourceZone) {
+async function moveUpkeepSourceToFailureZone(
+  game,
+  player,
+  source,
+  failureZone,
+  sourceZone,
+  options = {},
+) {
   if (!game || !player || !source || !sourceZone) return false;
 
   if (typeof game.moveCard === "function") {
-    game.moveCard(source, player, failureZone, { fromZone: sourceZone });
-    return true;
+    const moveResult = await game.moveCard(source, player, failureZone, {
+      fromZone: sourceZone,
+      awaitEvents: true,
+      sourceCard: options.sourceCard || source,
+      effectId: options.effectId || null,
+      contextLabel: "upkeep_failure",
+    });
+    if (moveResult?.needsSelection) {
+      return { ...moveResult, success: false };
+    }
+    return moveResult !== false && moveResult?.success !== false;
   }
 
   const zoneArr = Array.isArray(player[sourceZone]) ? player[sourceZone] : null;
@@ -1218,17 +1259,22 @@ async function confirmHumanUpkeepPayment(action, game, player, source, lpCost) {
 
   const ui = getUI(game);
   if (ui && typeof ui.showConfirmPrompt === "function") {
+    const cardName =
+      getCardDisplayName(source) ||
+      source.name ||
+      getUIText("ui.upkeep.thisCard");
     const message =
       action.promptMessage ||
-      `Pay ${lpCost} LP to maintain ${source.name || "this card"}?`;
+      getUIText("ui.upkeep.prompt", { amount: lpCost, cardName });
     const result = ui.showConfirmPrompt(message, {
       kind: "upkeep_cost",
-      cardName: source.name,
+      cardName,
       lpCost,
       playerId: player.id,
-      confirmLabel: action.confirmLabel || `Pay ${lpCost} LP`,
-      cancelLabel: action.cancelLabel || "Send to GY",
-      title: action.promptTitle || "Maintenance Cost",
+      confirmLabel:
+        action.confirmLabel || getUIText("ui.upkeep.confirm", { amount: lpCost }),
+      cancelLabel: action.cancelLabel || getUIText("ui.upkeep.cancel"),
+      title: action.promptTitle || getUIText("ui.upkeep.title"),
     });
     return result && typeof result.then === "function"
       ? !!(await result)
@@ -1236,9 +1282,13 @@ async function confirmHumanUpkeepPayment(action, game, player, source, lpCost) {
   }
 
   if (typeof window !== "undefined" && typeof window.confirm === "function") {
+    const cardName =
+      getCardDisplayName(source) ||
+      source.name ||
+      getUIText("ui.upkeep.thisCard");
     return window.confirm(
       action.promptMessage ||
-        `Pay ${lpCost} LP to maintain ${source.name || "this card"}?`
+        getUIText("ui.upkeep.prompt", { amount: lpCost, cardName }),
     );
   }
 
@@ -1273,14 +1323,28 @@ export async function handleUpkeepPayOrSendToGrave(
   const failureZone = action.failureZone || "graveyard";
 
   const sourceZone = findSourceZone(engine, player, source);
-  const sendToFailureZone = (reason) => {
-    const moved = moveUpkeepSourceToFailureZone(
+  const sendToFailureZone = async (reason) => {
+    const moved = await moveUpkeepSourceToFailureZone(
       game,
       player,
       source,
       failureZone,
-      sourceZone
+      sourceZone,
+      {
+        sourceCard: source,
+        effectId: ctx?.effect?.id || null,
+      },
     );
+    if (moved?.needsSelection) {
+      return moved;
+    }
+    if (!moved) {
+      getUI(game)?.log(
+        `${source.name} could not be sent to ${failureZone} (${reason}).`
+      );
+      game.updateBoard();
+      return false;
+    }
     getUI(game)?.log(
       `${source.name} sent to ${failureZone} (${reason}).`
     );
@@ -1294,8 +1358,7 @@ export async function handleUpkeepPayOrSendToGrave(
   }
 
   if (player.lp < lpCost) {
-    sendToFailureZone("insufficient LP for upkeep");
-    return true;
+    return await sendToFailureZone("insufficient LP for upkeep");
   }
 
   const shouldPay = isAI(player)
@@ -1303,8 +1366,7 @@ export async function handleUpkeepPayOrSendToGrave(
     : await confirmHumanUpkeepPayment(action, game, player, source, lpCost);
 
   if (!shouldPay) {
-    sendToFailureZone("upkeep not paid");
-    return true;
+    return await sendToFailureZone("upkeep not paid");
   }
 
   player.lp -= lpCost;

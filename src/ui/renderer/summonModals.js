@@ -4,7 +4,7 @@
  * showSpellChoiceModal, showPositionChoiceModal, showSpecialSummonPositionModal
  */
 
-import { getCardDisplayName } from "../../core/i18n.js";
+import { getCardDisplayName, getUIText } from "../../core/i18n.js";
 
 function resolveHandCardElement(cardIndex, options = {}) {
   if (options.anchorElement) {
@@ -33,39 +33,45 @@ export function showSummonModal(cardIndex, callback, options = {}) {
   const content = document.createElement("div");
   content.className = "summon-choice-content";
 
-  const normalBtn = document.createElement("button");
-  normalBtn.textContent = "Normal Summon";
-
-  const setBtn = document.createElement("button");
-  setBtn.textContent = "Set";
-
-  content.appendChild(normalBtn);
-  content.appendChild(setBtn);
-
-  if (options.specialSummonFromHand) {
-    const specialHandBtn = document.createElement("button");
-    specialHandBtn.textContent =
-      options.specialSummonFromHandLabel || "Special Summon";
-    content.appendChild(specialHandBtn);
-
-    specialHandBtn.onclick = (e) => {
+  const canNormalSummon =
+    options.canNormalSummon === undefined ? true : !!options.canNormalSummon;
+  const canSet = options.canSet === undefined ? true : !!options.canSet;
+  const addChoiceButton = (label, choice) => {
+    const button = document.createElement("button");
+    button.textContent = label;
+    button.onclick = (e) => {
       e.stopPropagation();
-      callback("special_from_void_forgotten");
+      callback(choice);
       cleanup();
     };
+    content.appendChild(button);
+    return button;
+  };
+
+  if (canNormalSummon) {
+    addChoiceButton(getUIText("ui.summon.normal"), "attack");
+  }
+
+  if (options.specialSummonFromHand) {
+    addChoiceButton(
+      options.specialSummonFromHandLabel || getUIText("ui.summon.special"),
+      "special_from_void_forgotten",
+    );
   }
 
   if (options.specialSummonFromHandEffect) {
-    const specialHandEffectBtn = document.createElement("button");
-    specialHandEffectBtn.textContent =
-      options.specialSummonFromHandEffectLabel || "Special Summon";
-    content.appendChild(specialHandEffectBtn);
+    addChoiceButton(
+      options.specialSummonFromHandEffectLabel || getUIText("ui.summon.special"),
+      "special_from_hand_effect",
+    );
+  }
 
-    specialHandEffectBtn.onclick = (e) => {
-      e.stopPropagation();
-      callback("special_from_hand_effect");
-      cleanup();
-    };
+  if (canSet) {
+    addChoiceButton(getUIText("ui.summon.set"), "defense");
+  }
+
+  if (content.children.length === 0) {
+    return;
   }
 
   modal.appendChild(content);
@@ -116,16 +122,6 @@ export function showSummonModal(cardIndex, callback, options = {}) {
     document.addEventListener("mousedown", handleOutsideClick);
   }, 0);
 
-  normalBtn.onclick = (e) => {
-    e.stopPropagation();
-    callback("attack");
-    cleanup();
-  };
-  setBtn.onclick = (e) => {
-    e.stopPropagation();
-    callback("defense");
-    cleanup();
-  };
 }
 
 /**
@@ -151,8 +147,12 @@ export function showConditionalSummonPrompt(cardName, message) {
         ${message}
       </p>
       <div class="conditional-summon-actions">
-        <button class="primary" data-choice="yes">Invocar</button>
-        <button class="secondary" data-choice="no">Recusar</button>
+        <button class="primary" data-choice="yes">${getUIText(
+          "ui.summon.conditionalConfirm",
+        )}</button>
+        <button class="secondary" data-choice="no">${getUIText(
+          "ui.summon.conditionalDecline",
+        )}</button>
       </div>
     </div>
   `;
@@ -186,7 +186,7 @@ export function showConditionalSummonPrompt(cardName, message) {
  * @this {import('../Renderer.js').default}
  */
 export function showTierChoiceModal({
-  title = "Choose Tier",
+  title = getUIText("ui.summon.chooseTier"),
   options = [],
 } = {}) {
   if (typeof document === "undefined") {
@@ -228,7 +228,9 @@ export function showTierChoiceModal({
 
       const label = document.createElement("div");
       label.className = "tier-choice-label";
-      label.textContent = opt.label || `Tier ${opt.count}`;
+      label.textContent =
+        opt.label ||
+        getUIText("ui.summon.tierFallback", { count: opt.count });
 
       const desc = document.createElement("div");
       desc.className = "tier-choice-desc";
@@ -255,7 +257,7 @@ export function showTierChoiceModal({
     actions.className = "tier-choice-actions";
 
     const cancelBtn = document.createElement("button");
-    cancelBtn.textContent = "Cancel";
+    cancelBtn.textContent = getUIText("ui.common.cancel");
     cancelBtn.className = "secondary";
     cancelBtn.onclick = () => {
       overlay.remove();
@@ -263,7 +265,7 @@ export function showTierChoiceModal({
     };
 
     const confirmBtn = document.createElement("button");
-    confirmBtn.textContent = "Confirm";
+    confirmBtn.textContent = getUIText("ui.common.confirm");
     confirmBtn.className = "primary";
     confirmBtn.disabled = true;
     confirmBtn.onclick = () => {
@@ -303,12 +305,12 @@ export function showSpellChoiceModal(cardIndex, callback, options = {}) {
 
   const setBtn = document.createElement("button");
   setBtn.dataset.choice = "set";
-  setBtn.textContent = "Set";
+  setBtn.textContent = getUIText("ui.spell.set");
 
   if (canActivate) {
     const activateBtn = document.createElement("button");
     activateBtn.dataset.choice = "activate";
-    activateBtn.textContent = "Activate";
+    activateBtn.textContent = getUIText("ui.spell.activate");
     content.appendChild(activateBtn);
   }
   if (canSet) {
@@ -389,7 +391,7 @@ export function showPositionChoiceModal(cardEl, card, callback, options = {}) {
   ) {
     const activateBtn = document.createElement("button");
     activateBtn.dataset.choice = "activate_effect";
-    activateBtn.textContent = "Activate";
+    activateBtn.textContent = getUIText("ui.summon.activateEffect");
     content.appendChild(activateBtn);
   }
 
@@ -399,28 +401,28 @@ export function showPositionChoiceModal(cardEl, card, callback, options = {}) {
   ) {
     const ascendBtn = document.createElement("button");
     ascendBtn.dataset.choice = "ascension_summon";
-    ascendBtn.textContent = "Ascend";
+    ascendBtn.textContent = getUIText("ui.summon.ascend");
     content.appendChild(ascendBtn);
   }
 
   if (options.canFlip) {
     const flipBtn = document.createElement("button");
     flipBtn.dataset.choice = "flip";
-    flipBtn.textContent = "Flip Summon";
+    flipBtn.textContent = getUIText("ui.summon.flip");
     content.appendChild(flipBtn);
   }
 
   if (options.canChangePosition && card?.position !== "attack") {
     const attackBtn = document.createElement("button");
     attackBtn.dataset.choice = "to_attack";
-    attackBtn.textContent = "To Attack";
+    attackBtn.textContent = getUIText("ui.summon.toAttack");
     content.appendChild(attackBtn);
   }
 
   if (options.canChangePosition && card?.position !== "defense") {
     const defenseBtn = document.createElement("button");
     defenseBtn.dataset.choice = "to_defense";
-    defenseBtn.textContent = "To Defense";
+    defenseBtn.textContent = getUIText("ui.summon.toDefense");
     content.appendChild(defenseBtn);
   }
   modal.appendChild(content);
@@ -501,22 +503,22 @@ export function showSpecialSummonPositionModal(card, onChoose) {
   const safeName =
     (card && getCardDisplayName(card)) ||
     (card?.name && card.name.trim()) ||
-    "este monstro";
+    getUIText("ui.fusion.monsterFallback");
   const previewStyle = imageUrl ? `background-image: url('${imageUrl}')` : "";
 
   modal.innerHTML = `
     <div class="special-position-backdrop"></div>
     <div class="special-position-content">
-      <h3>Special Summon</h3>
+      <h3>${getUIText("ui.summon.special")}</h3>
       <p class="special-position-subtitle"></p>
       <div class="special-position-options">
         <button class="position-option attack" data-choice="attack">
           <div class="position-card attack" style="${previewStyle}"></div>
-          <span>Ataque</span>
+          <span>${getUIText("ui.summon.attack")}</span>
         </button>
         <button class="position-option defense" data-choice="defense">
           <div class="position-card defense" style="${previewStyle}"></div>
-          <span>Defesa</span>
+          <span>${getUIText("ui.summon.defense")}</span>
         </button>
       </div>
     </div>
@@ -524,7 +526,9 @@ export function showSpecialSummonPositionModal(card, onChoose) {
 
   const subtitle = modal.querySelector(".special-position-subtitle");
   if (subtitle) {
-    subtitle.textContent = `Escolha a posição para "${safeName}".`;
+    subtitle.textContent = getUIText("ui.summon.choosePosition", {
+      cardName: safeName,
+    });
   }
 
   const cleanup = () => {

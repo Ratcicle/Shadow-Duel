@@ -1,4 +1,4 @@
-import { getCardDisplayName } from "../../i18n.js";
+import { getCardDisplayName, getUIText } from "../../i18n.js";
 import { isAI } from "../../Player.js";
 
 const AUTOMATIC_TRIGGER_ACTION_TYPES = new Set([
@@ -139,7 +139,9 @@ async function confirmTriggeredEffect(effect, sourceCard, owner, ui, ctx) {
 
   let wantsToUse = true;
   const promptName =
-    getCardDisplayName(sourceCard) || sourceCard?.name || "this card";
+    getCardDisplayName(sourceCard) ||
+    sourceCard?.name ||
+    getUIText("ui.prompts.thisCard");
 
   if (effect.customPromptMethod && ui?.[effect.customPromptMethod]) {
     wantsToUse = await ui[effect.customPromptMethod]();
@@ -149,12 +151,20 @@ async function confirmTriggeredEffect(effect, sourceCard, owner, ui, ctx) {
       if (effect.event === "attack_declared") {
         promptMessage =
           sourceCard?.cardKind === "trap"
-            ? `Activate ${promptName} in response to the attack?`
-            : `Activate ${promptName}'s effect?`;
+            ? getUIText("ui.prompts.triggeredAttackTrap", {
+                cardName: promptName,
+              })
+            : getUIText("ui.prompts.triggeredAttackEffect", {
+                cardName: promptName,
+              });
       } else if (effect.event === "effect_targeted") {
-        promptMessage = `Activate ${promptName} in response to targeting?`;
+        promptMessage = getUIText("ui.prompts.triggeredTargeted", {
+          cardName: promptName,
+        });
       } else {
-        promptMessage = `Activate ${promptName}'s effect?`;
+        promptMessage = getUIText("ui.prompts.triggeredEffect", {
+          cardName: promptName,
+        });
       }
     }
     const confirmResult = ui.showConfirmPrompt(promptMessage, {
@@ -410,7 +420,7 @@ export function buildTriggerEntry(options = {}) {
   );
   const selectionKind = options.selectionKind || "triggered";
   const selectionMessage =
-    options.selectionMessage || "Select target(s) for the triggered effect.";
+    options.selectionMessage || getUIText("ui.triggers.selection");
   const summary =
     options.summary ||
     `${owner.id}:${sourceCard.name}:${effect.id || effect.event || "trigger"}`;
