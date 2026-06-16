@@ -265,6 +265,20 @@ export function findActivatableEffect(card, context, ownerPlayer = null) {
           }
           // Check requireDefenderType (e.g., Dragon Spirit Sanctuary)
           if (
+            effect.requireDefender &&
+            context?.type === "attack_declaration" &&
+            !(context.defender || context.target)
+          ) {
+            console.log(
+              `[findActivatableEffect] requireDefender mismatch for ${card.name}`,
+              {
+                defender: context.defender?.name || context.target?.name,
+              },
+            );
+            continue;
+          }
+
+          if (
             effect.requireDefenderType &&
             context?.type === "attack_declaration"
           ) {

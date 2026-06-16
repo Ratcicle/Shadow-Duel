@@ -937,23 +937,29 @@ body {
   right: 2px;
   bottom: 2px;
   z-index: 2;
-  display: flex;
-  justify-content: space-between;
-  column-gap: 6px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: 2px;
   font-size: clamp(0.58rem, 0.7vw, 0.78rem);
   line-height: 1.15;
   background: rgba(0, 0, 0, 0.66);
-  padding: 1px 5px;
+  padding: 1px 3px;
   border-radius: 5px 5px 2px 2px;
   text-shadow: 0 1px 2px #000;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
 }
 
 .stat-atk {
   color: #ff5555;
+  min-width: 0;
+  text-align: center;
 }
 
 .stat-def {
   color: #55aaff;
+  min-width: 0;
+  text-align: center;
 }
 
 .card-image {

@@ -203,7 +203,7 @@ function getDamageDestination(renderer, player) {
 
 function finishAnimation(animation, duration) {
   if (animation?.finished && typeof animation.finished.then === "function") {
-    return animation.finished.catch(() => {});
+    return animation.finished.catch(() => { });
   }
   return waitMs(duration);
 }
@@ -240,10 +240,30 @@ function playEffectDamageShake(renderer, amount, options = {}) {
 }
 
 async function playTravelingLpChangeNumber(renderer, player, amount, options = {}) {
-  if (prefersReducedMotion()) return;
+  const onArrival =
+    typeof options.onArrival === "function" ? options.onArrival : null;
+  let arrived = false;
+  let arrivalTimer = null;
+  const markArrived = () => {
+    if (arrived) return;
+    arrived = true;
+    if (arrivalTimer) {
+      clearTimeout(arrivalTimer);
+      arrivalTimer = null;
+    }
+    onArrival?.();
+  };
+
+  if (prefersReducedMotion()) {
+    markArrived();
+    return;
+  }
 
   const layer = getAnimationLayer();
-  if (!layer) return;
+  if (!layer) {
+    markArrived();
+    return;
+  }
 
   const origin = getDamageOrigin(player, options);
   const destination = getDamageDestination(renderer, player);
@@ -270,48 +290,95 @@ async function playTravelingLpChangeNumber(renderer, player, amount, options = {
   const duration = Math.max(1, holdMs + travelMs + fadeMs);
   const holdOffset = clamp(holdMs / duration, 0.05, 0.7);
   const arrivalOffset = clamp((holdMs + travelMs) / duration, holdOffset, 0.98);
+  const arrivalMs = Math.max(0, holdMs + travelMs);
 
   const animation =
     typeof float.animate === "function"
       ? float.animate(
-          [
-            {
-              opacity: 0,
-              transform: "translate(0, 0) translate(-50%, -50%) scale(0.82)",
-              offset: 0,
-            },
-            {
-              opacity: 1,
-              transform: "translate(0, 0) translate(-50%, -50%) scale(1.08)",
-              offset: 0.16,
-            },
-            {
-              opacity: 1,
-              transform: "translate(0, 0) translate(-50%, -50%) scale(1)",
-              offset: holdOffset,
-              easing: "cubic-bezier(0.24, 0.68, 0.34, 1)",
-            },
-            {
-              opacity: 0.92,
-              transform: `translate(${dx}px, ${dy}px) translate(-50%, -50%) scale(0.72)`,
-              offset: arrivalOffset,
-              easing: "linear",
-            },
-            {
-              opacity: 0,
-              transform: `translate(${dx}px, ${dy}px) translate(-50%, -50%) scale(0.48)`,
-              offset: 1,
-            },
-          ],
+        [
           {
-            duration,
+            opacity: 0,
+            transform: "translate(0, 0) translate(-50%, -50%) scale(0.82)",
+            offset: 0,
+          },
+          {
+            opacity: 1,
+            transform: "translate(0, 0) translate(-50%, -50%) scale(1.08)",
+            offset: 0.16,
+          },
+          {
+            opacity: 1,
+            transform: "translate(0, 0) translate(-50%, -50%) scale(1)",
+            offset: holdOffset,
+            easing: "cubic-bezier(0.24, 0.68, 0.34, 1)",
+          },
+          {
+            opacity: 0.92,
+            transform: `translate(${dx}px, ${dy}px) translate(-50%, -50%) scale(0.72)`,
+            offset: arrivalOffset,
             easing: "linear",
           },
-        )
+          {
+            opacity: 0,
+            transform: `translate(${dx}px, ${dy}px) translate(-50%, -50%) scale(0.48)`,
+            offset: 1,
+          },
+        ],
+        {
+          duration,
+          easing: "linear",
+        },
+      )
       : null;
 
-  await finishAnimation(animation, duration);
-  float.remove();
+  arrivalTimer = setTimeout(markArrived, arrivalMs);
+
+  try {
+    await finishAnimation(animation, duration);
+  } finally {
+    markArrived();
+    float.remove();
+  }
+}
+
+function trackFloatingLpChangeNumber(renderer, player, state, entry) {
+  if (prefersReducedMotion()) return null;
+  if (!state) return null;
+
+  if (!state.floatingPromises) {
+    state.floatingPromises = new Set();
+  }
+
+  let resolveArrival;
+  const arrivalPromise = new Promise((resolve) => {
+    resolveArrival = resolve;
+  });
+  let arrivalSettled = false;
+  const settleArrival = () => {
+    if (arrivalSettled) return;
+    arrivalSettled = true;
+    resolveArrival(true);
+  };
+  entry.floatArrivalPromise = arrivalPromise;
+
+  const promise = playTravelingLpChangeNumber(
+    renderer,
+    player,
+    entry.amount,
+    {
+      ...entry,
+      onArrival: settleArrival,
+    },
+  ).catch((error) => {
+    console.warn("[Renderer] LP floating number failed.", error);
+    settleArrival();
+  });
+
+  state.floatingPromises.add(promise);
+  promise.finally(() => {
+    state.floatingPromises?.delete(promise);
+  });
+  return promise;
 }
 
 async function runLpDamageQueue(renderer, player, state) {
@@ -344,7 +411,13 @@ async function runLpDamageQueue(renderer, player, state) {
           continue;
         }
 
-        await playTravelingLpChangeNumber(renderer, player, entry.amount, entry);
+        if (
+          entry.floatArrivalPromise &&
+          typeof entry.floatArrivalPromise.then === "function"
+        ) {
+          await entry.floatArrivalPromise.catch(() => { });
+        }
+
         await renderer.animateLpOdometer(
           player,
           state.displayed ?? fromLp,
@@ -471,8 +544,12 @@ export function ensureLpDisplayState(player) {
       displayed: Math.max(0, Math.round(initial)),
       animating: false,
       queue: [],
+      floatingPromises: new Set(),
       presentationPromise: null,
     };
+  }
+  if (!this.lpDisplayState[key].floatingPromises) {
+    this.lpDisplayState[key].floatingPromises = new Set();
   }
   return this.lpDisplayState[key];
 }
@@ -508,7 +585,10 @@ export function hasActiveLpPresentation(player) {
   const state = this.ensureLpDisplayState?.(player);
   return (
     !!state &&
-    (state.animating || state.queue.length > 0 || !!state.presentationPromise)
+    (state.animating ||
+      state.queue.length > 0 ||
+      !!state.presentationPromise ||
+      state.floatingPromises?.size > 0)
   );
 }
 
@@ -525,7 +605,10 @@ export function waitForLpPresentation(player = null) {
   }
 
   const pending = states
-    .map((state) => state.presentationPromise)
+    .flatMap((state) => [
+      state.presentationPromise,
+      ...(state.floatingPromises ? Array.from(state.floatingPromises) : []),
+    ])
     .filter((promise) => promise && typeof promise.then === "function");
 
   if (pending.length === 0) return Promise.resolve(false);
@@ -561,14 +644,20 @@ export function showLpDamageSequence(player, amount, options = {}) {
     this.setDisplayedLp?.(player, fromLp);
   }
 
-  state.queue.push({
+  const entry = {
     ...options,
     amount: value,
     fromLp,
     toLp,
     kind,
     cause: options.cause === "battle" ? "battle" : "effect",
-  });
+  };
+
+  if (!prefersReducedMotion()) {
+    trackFloatingLpChangeNumber(this, player, state, entry);
+  }
+
+  state.queue.push(entry);
 
   runLpDamageQueue(this, player, state);
   return true;

@@ -12,6 +12,7 @@ import {
   getLocale,
   getCardDisplayDescription,
   getCardDisplayName,
+  getUIText,
 } from "./core/i18n.js";
 
 import { createBotArenaController } from "./ui/main/botArenaController.js";
@@ -32,6 +33,80 @@ const validationPanel = createValidationPanel({
   validateCardDatabase,
 });
 const gameLauncher = createGameLauncher({ Game, Renderer });
+
+function uiText(key, params = {}, fallback = null) {
+  return getUIText(`ui.${key}`, params, fallback);
+}
+
+function setText(el, value) {
+  if (el && typeof value === "string") {
+    el.textContent = value;
+  }
+}
+
+function setLabelForControl(control, value) {
+  const label = control?.closest?.("label");
+  if (!label) return;
+  const textNode = Array.from(label.childNodes).find(
+    (node) => node.nodeType === Node.TEXT_NODE && node.textContent.trim(),
+  );
+  if (textNode) {
+    textNode.textContent = value;
+  }
+}
+
+function applyStaticLocalization() {
+  setText(dom.startScreen.startDuelButton, uiText("start.startDuel"));
+  setText(dom.startScreen.deckBuilderButton, uiText("start.myDeck"));
+  setText(dom.startScreen.botArenaButton, uiText("start.botArena"));
+  setText(dom.startScreen.laboratoryButton, uiText("start.laboratory"));
+  const deckMenuLabel = uiText("start.changeActiveDeck");
+  dom.startScreen.deckMenuButton?.setAttribute("aria-label", deckMenuLabel);
+  dom.startScreen.deckMenuButton?.setAttribute("title", deckMenuLabel);
+  dom.startScreen.deckMenu?.setAttribute(
+    "aria-label",
+    uiText("start.savedDecks"),
+  );
+  setText(
+    document.querySelector(".bot-preset-control label"),
+    uiText("start.opponent"),
+  );
+
+  const deckRoot = dom.deckBuilder.root;
+  setText(deckRoot?.querySelector(".deck-title-area h2"), uiText("deckBuilder.title"));
+  deckRoot
+    ?.querySelector(".deck-toolbar")
+    ?.setAttribute("aria-label", uiText("deckBuilder.toolbarLabel"));
+  if (dom.deckBuilder.searchInput) {
+    dom.deckBuilder.searchInput.placeholder = uiText(
+      "deckBuilder.searchPlaceholder",
+    );
+  }
+  setLabelForControl(dom.deckBuilder.categoryFilterSelect, uiText("deckBuilder.category"));
+  setLabelForControl(
+    dom.deckBuilder.typeSubtypeFilterSelect,
+    uiText("deckBuilder.typeSubtype"),
+  );
+  setLabelForControl(
+    dom.deckBuilder.archetypeFilterSelect,
+    uiText("deckBuilder.archetype"),
+  );
+  setLabelForControl(dom.deckBuilder.viewModeSelect, uiText("deckBuilder.view"));
+  setLabelForControl(dom.deckBuilder.sortModeSelect, uiText("deckBuilder.sort"));
+  dom.deckBuilder.activeFilters?.setAttribute(
+    "aria-label",
+    uiText("deckBuilder.activeFiltersLabel"),
+  );
+  setText(dom.deckBuilder.preview.name, uiText("deckBuilder.selectCard"));
+  setText(
+    dom.deckBuilder.preview.desc,
+    uiText("deckBuilder.descriptionFallback"),
+  );
+  setText(dom.deckBuilder.poolCount, `0 ${uiText("deckBuilder.cardPlural")}`);
+  setText(dom.deckBuilder.saveFeedback, uiText("deckBuilder.saved"));
+  setText(dom.deckBuilder.saveButton, uiText("deckBuilder.save"));
+  setText(dom.deckBuilder.cancelButton, uiText("deckBuilder.close"));
+}
 
 bindLocaleControls({
   buttons: dom.locale.buttons,
@@ -138,6 +213,7 @@ function ensureDomReady(fn) {
 }
 
 validationPanel.run({ silent: true });
+applyStaticLocalization();
 bindMainEvents();
 
 ensureDomReady(() => {

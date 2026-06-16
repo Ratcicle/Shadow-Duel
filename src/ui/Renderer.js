@@ -28,12 +28,14 @@ export default class Renderer {
         displayed: 8000,
         animating: false,
         queue: [],
+        floatingPromises: new Set(),
         presentationPromise: null,
       },
       bot: {
         displayed: 8000,
         animating: false,
         queue: [],
+        floatingPromises: new Set(),
         presentationPromise: null,
       },
     };

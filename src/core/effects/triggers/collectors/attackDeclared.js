@@ -139,6 +139,18 @@ export async function collectAttackDeclaredTriggers(payload) {
           continue;
         }
 
+        if (effect.requireDefender === true && !payload.defender) {
+          debugTriggerLog(this,
+            "[attack_declared] Skipping effect: requireDefender not met",
+            {
+              effectId: effect.id,
+              cardName: card.name,
+              directAttack: payload.target == null,
+            },
+          );
+          continue;
+        }
+
         if (effect.requireDefenderPosition === true) {
           const defenderCard = payload.defender;
           if (!defenderCard || defenderCard.position !== "defense") {

@@ -128,6 +128,10 @@ export async function collectBattleDamageTriggers(payload) {
           continue;
         }
 
+        if (effect.requireDefender === true && !payload.defender) {
+          continue;
+        }
+
         if (effect.requireDefenderPosition === true) {
           const defenderCard = payload.defender;
           if (!defenderCard || defenderCard.position !== "defense") {
