@@ -148,6 +148,7 @@ Renderer.prototype.getDisplayedLp = animations.getDisplayedLp;
 Renderer.prototype.setDisplayedLp = animations.setDisplayedLp;
 Renderer.prototype.hasActiveLpPresentation = animations.hasActiveLpPresentation;
 Renderer.prototype.waitForLpPresentation = animations.waitForLpPresentation;
+Renderer.prototype.showFieldDamageHit = animations.showFieldDamageHit;
 Renderer.prototype.showLpDamageSequence = animations.showLpDamageSequence;
 Renderer.prototype.animateLpOdometer = animations.animateLpOdometer;
 Renderer.prototype.captureCardAnimationSource =

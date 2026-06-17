@@ -8,6 +8,7 @@ const LP_DAMAGE_TRAVEL_MS = 560;
 const LP_DAMAGE_FADE_MS = 24;
 const LP_ODOMETER_MIN_MS = 600;
 const LP_ODOMETER_MAX_MS = 1400;
+const FIELD_DAMAGE_HIT_MS = 680;
 
 function prefersReducedMotion() {
   return (
@@ -136,6 +137,12 @@ function getPlayerAreaRect(playerId) {
   return element ? copyRect(element.getBoundingClientRect()) : null;
 }
 
+function getPlayerAreaElement(player) {
+  if (typeof document === "undefined") return null;
+  const playerId = getPlayerKey(player);
+  return document.getElementById(playerId === "bot" ? "bot-area" : "player-area");
+}
+
 function randomBetween(min, max) {
   return min + Math.random() * (max - min);
 }
@@ -237,6 +244,36 @@ function playEffectDamageShake(renderer, amount, options = {}) {
   } catch (error) {
     console.warn("[Renderer] LP damage screen shake failed.", error);
   }
+}
+
+/**
+ * @this {import('../Renderer.js').default}
+ */
+export function showFieldDamageHit(player, options = {}) {
+  const area = getPlayerAreaElement(player);
+  if (!area) return false;
+
+  const duration = Number.isFinite(options.duration)
+    ? Math.max(0, options.duration)
+    : prefersReducedMotion()
+      ? 180
+      : FIELD_DAMAGE_HIT_MS;
+
+  if (area._damageHitTimer) {
+    clearTimeout(area._damageHitTimer);
+    area._damageHitTimer = null;
+  }
+
+  area.classList.remove("damage-hit");
+  void area.offsetWidth;
+  area.classList.add("damage-hit");
+
+  area._damageHitTimer = setTimeout(() => {
+    area.classList.remove("damage-hit");
+    area._damageHitTimer = null;
+  }, duration);
+
+  return true;
 }
 
 async function playTravelingLpChangeNumber(renderer, player, amount, options = {}) {
@@ -401,7 +438,7 @@ async function runLpDamageQueue(renderer, player, state) {
         const kind = entry.kind === "heal" ? "heal" : "damage";
 
         renderer.setDisplayedLp(player, state.displayed ?? fromLp);
-        if (kind === "damage") {
+        if (kind === "damage" && entry.cause !== "cost") {
           playEffectDamageShake(renderer, entry.amount, entry);
         }
 
@@ -650,8 +687,17 @@ export function showLpDamageSequence(player, amount, options = {}) {
     fromLp,
     toLp,
     kind,
-    cause: options.cause === "battle" ? "battle" : "effect",
+    cause:
+      options.cause === "battle"
+        ? "battle"
+        : options.cause === "cost"
+          ? "cost"
+          : "effect",
   };
+
+  if (kind === "damage" && entry.cause !== "cost") {
+    this.showFieldDamageHit?.(player);
+  }
 
   if (!prefersReducedMotion()) {
     trackFloatingLpChangeNumber(this, player, state, entry);
