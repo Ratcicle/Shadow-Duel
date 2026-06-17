@@ -144,7 +144,7 @@ _Nenhuma trap no arquétipo atualmente._
 > "Luminarch Sanctum Protector" + 1 Level 5 or higher "Luminarch" monster. All LP you would gain is doubled. Once per turn: You can target 1 monster you control; switch its battle position, and if you do, it gains 800 ATK until the end of this turn.
 
 **172 - Luminarch Fortress Aegis** (L6 Ascension Warrior | ATK 1500 / DEF 2500)
-> Ascension Material: "Luminarch Aegisbearer". Requirement: The material must have been face-up on the field for 2 turns. Your opponent must attack this card, if possible. If this card is Ascension Summoned: Gain 500 LP for each "Luminarch" monster you control. Once per turn: You can pay 1000 LP, then target 1 "Luminarch" monster with 2000 or less DEF in your GY; Special Summon it.
+> Ascension Material: "Luminarch Aegisbearer". Requirement: The material must have been face-up on the field for 2 turns. Your opponent must prioritize this card as an attack target, if possible. If this card is Ascension Summoned: Gain 500 LP for each "Luminarch" monster you control. Once per turn: You can pay 1000 LP, then target 1 "Luminarch" monster with 2000 or less DEF in your GY; Special Summon it.
 
 **173 - Luminarch Pure Knight** (L6 Fusion Warrior | ATK 2000 / DEF 2000)
 > 2 "Luminarch" monsters. If this card is Fusion Summoned: You can add 1 "Sanctum of the Luminarch Citadel" from your Deck to your hand. Once per turn, when you activate the effect of a "Luminarch" Spell/Trap that requires paying LP: reduce that cost by 1000. You can only use each effect of "Luminarch Pure Knight" once per turn.

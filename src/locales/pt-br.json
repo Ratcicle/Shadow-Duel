@@ -592,7 +592,7 @@
     },
     "172": {
       "name": "Fortaleza Égide Luminarca",
-      "description": "Material de Ascensão: 'Portador da Égide Luminarca'.\nRequisito: o material deve ter ficado com a face para cima no campo por 2 turnos.\nSeu oponente deve atacar este card, se possível. Se este card for Invocado por Ascensão: ganhe 500 PV para cada monstro 'Luminarca' que você controla. Uma vez por turno: você pode pagar 1000 PV e, depois, escolher 1 monstro 'Luminarca' com 2000 ou menos de DEF no seu Cemitério; Invoque-o por Invocação-Especial."
+      "description": "Material de Ascensão: 'Portador da Égide Luminarca'.\nRequisito: o material deve ter ficado com a face para cima no campo por 2 turnos.\nSeu oponente deve priorizar este card como alvo de ataques, se possível. Se este card for Invocado por Ascensão: ganhe 500 PV para cada monstro 'Luminarca' que você controla. Uma vez por turno: você pode pagar 1000 PV e, depois, escolher 1 monstro 'Luminarca' com 2000 ou menos de DEF no seu Cemitério; Invoque-o por Invocação-Especial."
     },
     "173": {
       "name": "Cavaleiro Puro Luminarca",
@@ -900,7 +900,7 @@
     },
     "358": {
       "name": "Falso Rei dos Vinculados à Miragem",
-      "description": "Você pode Invocar este card por Invocação-Especial da sua mão ao devolver 1 monstro \"Vinculados à Miragem\" que você controla para a mão. Você pode escolher 1 monstro que seu oponente controla; mude a posição de batalha dele. Se este card destruir um monstro em Posição de Defesa em batalha: você pode Invocar por Invocação-Especial 1 monstro \"Vinculados à Miragem\" de Nível 4 ou menor da sua mão. Você só pode usar cada efeito de \"Falso Rei dos Vinculados à Miragem\" uma vez por turno."
+      "description": "Voc\u00ea pode Invocar este card por Invoca\u00e7\u00e3o-Especial da sua m\u00e3o ao devolver 1 monstro \"Vinculados \u00e0 Miragem\" que voc\u00ea controla para a m\u00e3o. Voc\u00ea pode escolher 1 monstro que seu oponente controla; mude a posi\u00e7\u00e3o de batalha dele. Voc\u00ea s\u00f3 pode usar cada efeito de \"Falso Rei dos Vinculados \u00e0 Miragem\" uma vez por turno."
     },
     "359": {
       "name": "Caminho Espelhado dos Vinculados à Miragem",

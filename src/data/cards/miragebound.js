@@ -535,7 +535,7 @@ export const mirageboundCards = [
     type: "Fiend",
     archetype: "Miragebound",
     description:
-      'You can Special Summon this card from your hand by returning 1 "Miragebound" monster you control to the hand. You can target 1 monster your opponent controls; change its battle position. If this card destroys a Defense Position monster by battle: You can Special Summon 1 Level 4 or lower "Miragebound" monster from your hand. You can only use each effect of "Miragebound False King" once per turn.',
+      'You can Special Summon this card from your hand by returning 1 "Miragebound" monster you control to the hand. You can target 1 monster your opponent controls; change its battle position. You can only use each effect of "Miragebound False King" once per turn.',
     image: "assets/Miragebound False King.png",
     effects: [
       {
@@ -590,40 +590,6 @@ export const mirageboundCards = [
           {
             type: "switch_position",
             targetRef: "miragebound_false_king_shift_target",
-          },
-        ],
-      },
-      {
-        id: "miragebound_false_king_battle_destroy_summon",
-        timing: "on_event",
-        event: "battle_destroy",
-        requireZone: "field",
-        requireFaceup: true,
-        requireSelfAsAttacker: true,
-        requireDestroyedIsOpponent: true,
-        requireDestroyedPosition: "defense",
-        promptUser: true,
-        promptMessage:
-          'Activate "Miragebound False King" to Special Summon 1 Level 4 or lower "Miragebound" monster from your hand?',
-        oncePerTurn: true,
-        oncePerTurnName: "miragebound_false_king_battle_destroy_summon",
-        targets: [
-          {
-            id: "miragebound_false_king_summon_target",
-            owner: "self",
-            zone: "hand",
-            cardKind: "monster",
-            archetype: "Miragebound",
-            maxLevel: 4,
-            count: { min: 1, max: 1 },
-          },
-        ],
-        actions: [
-          {
-            type: "special_summon_from_zone",
-            targetRef: "miragebound_false_king_summon_target",
-            zone: "hand",
-            position: "choice",
           },
         ],
       },
@@ -863,6 +829,7 @@ export const mirageboundCards = [
           {
             type: "conditional_target_actions",
             targetRef: "miragebound_heat_haze_position_target",
+            defaultActions: [],
             cases: [
               {
                 filters: {

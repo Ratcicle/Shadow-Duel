@@ -131,6 +131,7 @@ export async function applyMove(action, ctx, targets) {
           effectId: ctx?.effect?.id || null,
           movedByEffect: true,
           awaitCardMovedEvent: true,
+          awaitCardToGraveEvent: toZone === "graveyard",
           allowExtraDeckMonsterToHand: shouldAllowExtraDeckMonsterToHand(
             action,
             ctx
@@ -138,6 +139,9 @@ export async function applyMove(action, ctx, targets) {
         });
         if (moveResult?.success === false) {
           return;
+        }
+        if (moveResult?.needsSelection && moveResult?.selectionContract) {
+          return moveResult;
         }
       } else {
         const fromOwner =
@@ -201,12 +205,15 @@ export async function applyMove(action, ctx, targets) {
         card
       );
       if (positionChoice && typeof positionChoice.then === "function") {
-        await applyMoveWithPosition(await positionChoice);
+        const moveResult = await applyMoveWithPosition(await positionChoice);
+        if (moveResult?.needsSelection) return moveResult;
       } else {
-        await applyMoveWithPosition(positionChoice);
+        const moveResult = await applyMoveWithPosition(positionChoice);
+        if (moveResult?.needsSelection) return moveResult;
       }
     } else {
-      await applyMoveWithPosition(action.position);
+      const moveResult = await applyMoveWithPosition(action.position);
+      if (moveResult?.needsSelection) return moveResult;
     }
   }
   return moved;

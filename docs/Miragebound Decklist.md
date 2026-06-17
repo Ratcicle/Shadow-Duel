@@ -77,7 +77,7 @@ O arquetipo **Miragebound** e focado em controle de posicao de batalha, retorno 
 > You can target 1 "Miragebound" monster in your Graveyard; add it to your hand. The first time each turn a face-up monster your opponent controls changes its battle position: that monster loses 500 ATK/DEF until the end of the next turn. You can only use each effect of "Miragebound Sand Priestess" once per turn.
 
 **358 - Miragebound False King** (L6 Fiend | ATK 2200 / DEF 1800)
-> You can Special Summon this card from your hand by returning 1 "Miragebound" monster you control to the hand. You can target 1 face-up monster your opponent controls; change its battle position. If this card destroys a Defense Position monster by battle: You can Special Summon 1 Level 4 or lower "Miragebound" monster from your hand. You can only use each effect of "Miragebound False King" once per turn.
+> You can Special Summon this card from your hand by returning 1 "Miragebound" monster you control to the hand. You can target 1 monster your opponent controls; change its battle position. You can only use each effect of "Miragebound False King" once per turn.
 
 ### Magias
 
