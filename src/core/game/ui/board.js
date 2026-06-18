@@ -52,7 +52,7 @@ function reportNullishZoneIssues(game, inspection) {
  * Refreshes all zones, LP, phase track, and indicators.
  */
 export function updateBoard(options = {}) {
-  if (this.isDisposed?.()) return;
+  if (this.isDisposed?.()) return Promise.resolve(false);
 
   const shouldAnimateCards = options.animateCards !== false;
   const shouldAnimateGhosts =
@@ -75,6 +75,7 @@ export function updateBoard(options = {}) {
     canPlayFeedback && Array.isArray(this.pendingVisualFeedback)
       ? this.pendingVisualFeedback.splice(0)
       : [];
+  const presentationPromises = [];
 
   if (!canPlayGhosts && Array.isArray(this.pendingCardAnimations)) {
     this.pendingCardAnimations.length = 0;
@@ -170,11 +171,20 @@ export function updateBoard(options = {}) {
     previousCardRects &&
     typeof this.ui.animateCardLayout === "function"
   ) {
-    this.ui.animateCardLayout(previousCardRects);
+    const layoutPresentation = this.ui.animateCardLayout(previousCardRects);
+    if (layoutPresentation && typeof layoutPresentation.then === "function") {
+      presentationPromises.push(layoutPresentation);
+    }
   }
 
   if (queuedGhostAnimations.length > 0) {
-    this.ui.playQueuedCardAnimations(queuedGhostAnimations, options);
+    const ghostPresentation = this.ui.playQueuedCardAnimations(
+      queuedGhostAnimations,
+      options,
+    );
+    if (ghostPresentation && typeof ghostPresentation.then === "function") {
+      presentationPromises.push(ghostPresentation);
+    }
   }
 
   if (queuedVisualFeedback.length > 0) {
@@ -182,6 +192,11 @@ export function updateBoard(options = {}) {
   }
 
   this.cardAnimationsReady = true;
+  this.pendingBoardPresentationPromise =
+    presentationPromises.length > 0
+      ? Promise.allSettled(presentationPromises).then(() => true)
+      : Promise.resolve(false);
+  return this.pendingBoardPresentationPromise;
 }
 
 /**

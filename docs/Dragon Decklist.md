@@ -60,7 +60,7 @@ O tema **Dragon** é um conjunto de cartas genéricas de tipo Dragão que funcio
 
 **Materiais de Fusão (Tech-Void Dragon):** "Voltaic Dragon" + 1 monstro Dragon de Nível 5+
 
-**Materiais de Fusão (Radiant Cosmic Dragon):** 3 monstros Dragon, incluindo 1 monstro Light
+**Materiais de Fusão (Radiant Cosmic Dragon):** "Luminous Dragon" + 2 monstros Dragon
 
 **Material de Ascensão (Metal Armored Dragon):** Armored Dragon (ID 252)
 
@@ -130,13 +130,13 @@ O tema **Dragon** é um conjunto de cartas genéricas de tipo Dragão que funcio
 ### Extra Deck
 
 **253 - Metal Armored Dragon** (L6 Ascension Dragon | ATK 1600 / DEF 2000)
-> Material: Armored Dragon. While in Defense Position, this card cannot be destroyed by battle. This card gains 100 ATK/DEF for each Dragon-type monster Special Summoned while this card is face-up on the field.
+> While in Defense Position, this card cannot be destroyed by battle. This card gains 100 ATK/DEF for each Dragon-type monster Special Summoned while this card is face-up on the field.
 
 **265 - Tech-Void Dragon** (L8 Fusion Dragon | ATK 2500 / DEF 1000)
 > Voltaic Dragon + 1 Level 5+ Dragon monster. If this card is Fusion Summoned: You can target 1 Level 4 or lower Dragon monster in your GY; banish it, and if you do, this card gains ATK equal to the banished monster's ATK until the end of this turn. If this card is destroyed by battle: You can Special Summon 1 'Voltaic Dragon' from your GY. You can only use each effect of 'Tech-Void Dragon' once per turn.
 
 **266 - Radiant Cosmic Dragon** (L9 Fusion Dragon | ATK 3300 / DEF 2700)
-> 3 Dragon-type monsters, including 1 LIGHT monster. If this card is Fusion Summoned: You can target 1 to 5 cards in your GY; shuffle them into the Deck, then draw 1 card. You take no battle damage from battles involving this card. If this card is destroyed by battle or card effect: You can Special Summon 1 Dragon-type monster from your GY, except "Radiant Cosmic Dragon". You can only use each effect of "Radiant Cosmic Dragon" once per turn.
+> Luminous Dragon + 2 Dragon-type monsters. If this card is Fusion Summoned: You can target 1 to 5 cards in your GY; shuffle them into the Deck, then draw 1 card. You take no battle damage from battles involving this card. If this card is destroyed by battle or card effect: You can Special Summon 1 Dragon-type monster from your GY, except "Radiant Cosmic Dragon". You can only use each effect of "Radiant Cosmic Dragon" once per turn.
 
 **267 - Rainbow Cosmic Dragon** (L10 Ascension Dragon | ATK 3500 / DEF 3200)
 > Ascension Material: "Purified Crystal Dragon". Requirement: the material must have activated its effects 3 times this Duel. Once per turn: You can target 1 Dragon-type monster you control; it cannot be destroyed by battle or card effects until the end of the next turn. If this card destroys a monster by battle: gain LP equal to the destroyed monster's original ATK. You can banish this card from your GY; send 1 to 3 "Extreme Dragons" monsters from your Deck to the GY.

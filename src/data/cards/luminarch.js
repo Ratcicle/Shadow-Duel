@@ -894,7 +894,7 @@ export const luminarchCards = [
     archetype: "Luminarch",
     image: "assets/Luminarch Enchanted Halberd.png",
     description:
-      'Uma vez por turno, se um monstro "Luminarch" for invocado por invocaÃ§Ã£o especial no seu campo; vocÃª pode invocar essa carta por invocaÃ§Ã£o especial da sua mÃ£o, mas ela nÃ£o pode declarar um ataque neste turno.',
+      'Once per turn, if a "Luminarch" monster is Special Summoned to your field: You can Special Summon this card from your hand, but it cannot declare an attack this turn.',
     effects: [
       {
         id: "luminarch_enchanted_halberd_conditional_summon",

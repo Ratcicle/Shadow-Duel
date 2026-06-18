@@ -3,6 +3,15 @@
  * Extracted from Game.js as part of B.6 modularization.
  */
 
+async function presentSummonBeforeAfterSummon(game) {
+  const boardPresentation = game?.updateBoard?.();
+  if (typeof game?.waitForBoardPresentation === "function") {
+    await game.waitForBoardPresentation();
+  } else if (boardPresentation && typeof boardPresentation.then === "function") {
+    await boardPresentation.catch(() => {});
+  }
+}
+
 /**
  * Perform a Flip Summon on a face-down monster.
  * @param {Object} card - The face-down monster to flip summon
@@ -22,6 +31,16 @@ export async function flipSummon(card) {
   this.effectEngine?.clearTargetingCache?.();
   this.ui.log(`${card.name} is Flip Summoned!`);
 
+  this.updateBoard();
+  await this.waitForBoardPresentation?.();
+  const flipPresentation = this.ui?.applyFlipAnimation?.(ownerId, fieldIndex, {
+    mode: "flip-summon",
+    deferFrames: 0,
+  });
+  if (flipPresentation && typeof flipPresentation.then === "function") {
+    await flipPresentation.catch(() => {});
+  }
+
   await this.emit("after_summon", {
     card,
     player: card.owner === "player" ? this.player : this.bot,
@@ -29,10 +48,6 @@ export async function flipSummon(card) {
   });
 
   this.updateBoard();
-  this.ui?.applyFlipAnimation?.(ownerId, fieldIndex, {
-    mode: "flip-summon",
-    deferFrames: 0,
-  });
 }
 
 export async function offerSummonAttempt(card, player, options = {}) {
@@ -272,6 +287,8 @@ export async function performFusionSummon(
     }.${extraNote}`
   );
 
+  await presentSummonBeforeAfterSummon(this);
+
   // Emit after_summon event
   await this.emit("after_summon", {
     card: fusionMonster,
@@ -336,6 +353,8 @@ export async function performSpecialSummon(handIndex, position, actor = this.pla
   if (this.ui && typeof this.ui.applyHandTargetableIndices === "function") {
     this.ui.applyHandTargetableIndices("player", []);
   }
+
+  await presentSummonBeforeAfterSummon(this);
 
   // Emit after_summon for special summons performed directly from hand
   await this.emit("after_summon", {

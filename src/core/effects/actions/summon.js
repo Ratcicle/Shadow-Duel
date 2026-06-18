@@ -104,6 +104,8 @@ export async function applySpecialSummonToken(action, ctx) {
 
     // Emit after_summon event manually (moveCard would do this automatically)
     if (this.game && typeof this.game.emit === "function") {
+      this.game.updateBoard?.();
+      await this.game.waitForBoardPresentation?.();
       await this.game.emit("after_summon", {
         card: tokenCard,
         player: targetPlayer,
@@ -326,6 +328,8 @@ export async function applyCallOfTheHauntedSummon(action, ctx, targets) {
 
     // Emit after_summon event manually (moveCard would do this automatically)
     if (game && typeof game.emit === "function") {
+      game.updateBoard?.();
+      await game.waitForBoardPresentation?.();
       await game.emit("after_summon", {
         card: targetMonster,
         player: player,

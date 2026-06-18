@@ -83,3 +83,10 @@ export function waitForPresentationDelay(defaultDelayMs = 0, options = {}) {
 
   return new Promise((resolve) => setTimeout(resolve, requestedDelay));
 }
+
+export async function waitForBoardPresentation() {
+  if (this.gameOver) return;
+  const presentation = this.pendingBoardPresentationPromise;
+  if (!presentation || typeof presentation.then !== "function") return;
+  await presentation.catch(() => {});
+}

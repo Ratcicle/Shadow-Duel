@@ -285,10 +285,10 @@ function cleanupFlipRevealGhost(cardEl, ghost) {
 
 function playFlipRevealGhost(cardEl) {
   const layer = getAnimationLayer();
-  if (!cardEl || !layer) return false;
+  if (!cardEl || !layer) return null;
 
   const rect = cardEl.getBoundingClientRect();
-  if (rect.width <= 0 || rect.height <= 0) return false;
+  if (rect.width <= 0 || rect.height <= 0) return null;
   const slotRect =
     cardEl.closest(".field-card-slot")?.getBoundingClientRect?.() || rect;
   const centerX = slotRect.left + slotRect.width / 2;
@@ -317,31 +317,45 @@ function playFlipRevealGhost(cardEl) {
   layer.appendChild(ghost);
 
   const cleanup = () => cleanupFlipRevealGhost(cardEl, ghost);
-  ghost.addEventListener("animationend", cleanup, { once: true });
-  globalThis.setTimeout(cleanup, 650);
-  return true;
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      ghost.removeEventListener("animationend", finish);
+      cleanup();
+      resolve(true);
+    };
+    ghost.addEventListener("animationend", finish, { once: true });
+    globalThis.setTimeout(finish, 650);
+  });
 }
 
 function applyFlipAnimationClass(cardEl, animationClass) {
-  if (!cardEl || prefersReducedMotion()) return;
-  if (animationClass === "flip-summon-reveal" && playFlipRevealGhost(cardEl)) {
-    return;
+  if (!cardEl || prefersReducedMotion()) return Promise.resolve(false);
+  if (animationClass === "flip-summon-reveal") {
+    const ghostPresentation = playFlipRevealGhost(cardEl);
+    if (ghostPresentation) return ghostPresentation;
   }
 
   cardEl.classList.remove(...FLIP_ANIMATION_CLASSES);
   void cardEl.offsetWidth;
   cardEl.classList.add(animationClass);
 
-  const cleanup = () => {
-    cardEl.classList.remove(animationClass);
-    cardEl.removeEventListener("animationend", cleanup);
-  };
+  const duration = animationClass === "flip-summon-reveal" ? 650 : 720;
+  return new Promise((resolve) => {
+    let settled = false;
+    const cleanup = () => {
+      if (settled) return;
+      settled = true;
+      cardEl.classList.remove(animationClass);
+      cardEl.removeEventListener("animationend", cleanup);
+      resolve(true);
+    };
 
-  cardEl.addEventListener("animationend", cleanup, { once: true });
-  globalThis.setTimeout(
-    cleanup,
-    animationClass === "flip-summon-reveal" ? 650 : 720,
-  );
+    cardEl.addEventListener("animationend", cleanup, { once: true });
+    globalThis.setTimeout(cleanup, duration);
+  });
 }
 
 /**
@@ -355,7 +369,7 @@ function applyFlipAnimationClass(cardEl, animationClass) {
  * @this {import('../Renderer.js').default}
  */
 export function applyFlipAnimation(owner, index, options = {}) {
-  if (index < 0) return;
+  if (index < 0) return Promise.resolve(false);
 
   const animationClass = getFlipAnimationClass(options);
   const deferFrames = Number.isFinite(options.deferFrames)
@@ -365,30 +379,32 @@ export function applyFlipAnimation(owner, index, options = {}) {
   const apply = () => {
     const container =
       owner === "player" ? this.elements.playerField : this.elements.botField;
-    if (!container) return;
+    if (!container) return Promise.resolve(false);
 
     const cardEl = container.querySelector(`.card[data-index="${index}"]`);
     if (cardEl) {
-      applyFlipAnimationClass(cardEl, animationClass);
+      return applyFlipAnimationClass(cardEl, animationClass);
     }
+    return Promise.resolve(false);
   };
 
   if (deferFrames === 0) {
-    apply();
-    return;
+    return apply();
   }
 
-  let framesLeft = deferFrames;
-  const tick = () => {
-    if (framesLeft > 0) {
-      framesLeft -= 1;
-      requestAnimationFrame(tick);
-      return;
-    }
-    apply();
-  };
+  return new Promise((resolve) => {
+    let framesLeft = deferFrames;
+    const tick = () => {
+      if (framesLeft > 0) {
+        framesLeft -= 1;
+        requestAnimationFrame(tick);
+        return;
+      }
+      Promise.resolve(apply()).then(resolve);
+    };
 
-  requestAnimationFrame(tick);
+    requestAnimationFrame(tick);
+  });
 }
 
 /**

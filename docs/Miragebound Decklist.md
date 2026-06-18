@@ -82,10 +82,10 @@ O arquetipo **Miragebound** e focado em controle de posicao de batalha, retorno 
 ### Magias
 
 **354 - Miragebound Oasis** (Field Spell)
-> Once per turn: You can choose 1 of these effects. - Target 1 "Miragebound" monster you control; return it to the hand, then add 1 "Miragebound" monster with a different name from your Deck to your hand. - Target 1 face-up monster your opponent controls; change its battle position, then it loses 500 ATK/DEF until the end of this turn.
+> Each time a face-up monster your opponent controls changes its battle position, it loses 400 ATK/DEF until the end of the next turn. Once per turn: You can choose 1 of these effects. - Target 1 "Miragebound" monster you control; return it to the hand, then add 1 "Miragebound" monster with a different name from your Deck to your hand. - Target 1 face-up monster your opponent controls; change its battle position.
 
 **359 - Miragebound Mirror Path** (Continuous Spell)
-> The first time each turn a "Miragebound" monster you control would be destroyed by battle, you can return it to the hand instead. Once per turn, if a "Miragebound" monster was returned from the field to your hand this turn: Draw 1 card. You can only control 1 "Miragebound Mirror Path".
+> The first time each turn a "Miragebound" monster you control would be destroyed by battle, you can return it to the hand instead. You can only control 1 "Miragebound Mirror Path".
 
 **361 - Miragebound Vanishing Step** (Quick Spell)
 > Target 1 "Miragebound" monster you control; return it to the hand, then target 1 monster your opponent controls; change its battle position, and if you do, it loses 500 ATK/DEF until the end of this turn. You can only activate 1 "Miragebound Vanishing Step" per turn.

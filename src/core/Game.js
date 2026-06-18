@@ -179,6 +179,7 @@ export default class Game {
     this.devFailAfterZoneMutation = false;
     this.pendingCardAnimations = [];
     this.pendingVisualFeedback = [];
+    this.pendingBoardPresentationPromise = Promise.resolve(false);
     this.cardAnimationsReady = false;
     this.normalDuelStrategicReportEnabled =
       options.normalDuelStrategicReport === true;
@@ -237,6 +238,7 @@ export default class Game {
     this.temporaryReplacementEffects = [];
     this.pendingCardAnimations = [];
     this.pendingVisualFeedback = [];
+    this.pendingBoardPresentationPromise = Promise.resolve(false);
     this.eventListeners = {};
     this.chainSystem?.cancelChain?.();
     this.effectEngine?.clearTargetingCache?.();
@@ -1069,6 +1071,8 @@ Game.prototype.waitForAiPresentationStep =
   uiCardAnimations.waitForAiPresentationStep;
 Game.prototype.waitForPresentationDelay =
   uiCardAnimations.waitForPresentationDelay;
+Game.prototype.waitForBoardPresentation =
+  uiCardAnimations.waitForBoardPresentation;
 
 // Indicators: updateActivationIndicators, buildActivationIndicatorsForPlayer
 Game.prototype.updateActivationIndicators =

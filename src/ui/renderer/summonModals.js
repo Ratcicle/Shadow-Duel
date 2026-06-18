@@ -16,6 +16,23 @@ function resolveHandCardElement(cardIndex, options = {}) {
   );
 }
 
+function positionHandChoiceModalAboveCard(modal, content, rect, gap = 10) {
+  const edgePadding = gap;
+  const contentRect = content.getBoundingClientRect();
+
+  let left = rect.left;
+  let top = rect.top - contentRect.height - gap;
+
+  if (left + contentRect.width > window.innerWidth - edgePadding) {
+    left = window.innerWidth - contentRect.width - edgePadding;
+  }
+  if (left < edgePadding) left = edgePadding;
+  if (top < edgePadding) top = edgePadding;
+
+  modal.style.left = `${left}px`;
+  modal.style.top = `${top}px`;
+}
+
 /**
  * @this {import('../Renderer.js').default}
  */
@@ -76,32 +93,14 @@ export function showSummonModal(cardIndex, callback, options = {}) {
 
   modal.appendChild(content);
 
-  // posicionamento inteligente: tenta abaixo da carta,
-  // e se não couber, abre acima; também evita sair pelas laterais
+  // Hand choices are anchored above the clicked card.
   modal.style.position = "fixed";
   modal.style.zIndex = "200";
 
   document.body.appendChild(modal);
 
   if (rect) {
-    const contentRect = content.getBoundingClientRect();
-
-    let left = rect.left;
-    let top = rect.bottom + 10;
-
-    // se estourar a parte de baixo da tela, coloca acima da carta
-    if (top + contentRect.height > window.innerHeight - 10) {
-      top = rect.top - contentRect.height - 10;
-    }
-
-    // clamp horizontal para não sair pelas laterais
-    if (left + contentRect.width > window.innerWidth - 10) {
-      left = window.innerWidth - contentRect.width - 10;
-    }
-    if (left < 10) left = 10;
-
-    modal.style.left = `${left}px`;
-    modal.style.top = `${top}px`;
+    positionHandChoiceModalAboveCard(modal, content, rect);
   }
 
   const cleanup = () => {
@@ -318,7 +317,7 @@ export function showSpellChoiceModal(cardIndex, callback, options = {}) {
   }
   modal.appendChild(content);
 
-  // posicionamento semelhante ao modal de invocacao
+  // Hand choices are anchored above the clicked card.
   modal.style.position = "fixed";
   modal.style.zIndex = "200";
 
@@ -326,21 +325,7 @@ export function showSpellChoiceModal(cardIndex, callback, options = {}) {
 
   if (rect) {
     const contentEl = modal.querySelector(".spell-choice-content") || modal;
-    const contentRect = contentEl.getBoundingClientRect();
-
-    let left = rect.left;
-    let top = rect.bottom + 10;
-
-    if (top + contentRect.height > window.innerHeight - 10) {
-      top = rect.top - contentRect.height - 10;
-    }
-    if (left + contentRect.width > window.innerWidth - 10) {
-      left = window.innerWidth - contentRect.width - 10;
-    }
-    if (left < 10) left = 10;
-
-    modal.style.left = `${left}px`;
-    modal.style.top = `${top}px`;
+    positionHandChoiceModalAboveCard(modal, contentEl, rect);
   }
 
   const cleanup = () => {

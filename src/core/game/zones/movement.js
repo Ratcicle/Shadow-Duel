@@ -244,12 +244,21 @@ function queueZoneMoveAnimation(game, intent, toZoneOverride = null) {
 async function presentSummonBeforeAfterSummon(game, options = {}) {
   if (options.presentBeforeAfterSummon === false) return;
 
-  game?.updateBoard?.();
+  const boardPresentation = game?.updateBoard?.();
 
-  if (typeof game?.waitForPresentationDelay === "function") {
-    const delayMs = Number.isFinite(options.summonPresentationDelayMs)
-      ? options.summonPresentationDelayMs
-      : 250;
+  if (typeof game?.waitForBoardPresentation === "function") {
+    await game.waitForBoardPresentation();
+  } else if (boardPresentation && typeof boardPresentation.then === "function") {
+    await boardPresentation.catch(() => {});
+  } else if (typeof game?.waitForPresentationDelay === "function") {
+    await game.waitForPresentationDelay(250);
+  }
+
+  if (
+    Number.isFinite(options.summonPresentationDelayMs) &&
+    typeof game?.waitForPresentationDelay === "function"
+  ) {
+    const delayMs = options.summonPresentationDelayMs;
     await game.waitForPresentationDelay(delayMs);
   }
 }

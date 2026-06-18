@@ -616,18 +616,25 @@ export function captureCardAnimationSource(card, context = {}) {
  * @this {import('../Renderer.js').default}
  */
 export function playQueuedCardAnimations(intents, options = {}) {
-  if (prefersReducedMotion() || typeof document === "undefined") return;
-  if (!Array.isArray(intents) || intents.length === 0) return;
-  if (typeof this.createCardElement !== "function") return;
+  if (prefersReducedMotion() || typeof document === "undefined") {
+    return Promise.resolve(false);
+  }
+  if (!Array.isArray(intents) || intents.length === 0) {
+    return Promise.resolve(false);
+  }
+  if (typeof this.createCardElement !== "function") {
+    return Promise.resolve(false);
+  }
 
   const layer = getLayer();
-  if (!layer) return;
+  if (!layer) return Promise.resolve(false);
 
   const duration = Number.isFinite(options.ghostDuration)
     ? options.ghostDuration
     : DEFAULT_DURATION;
   const easing = options.ghostEasing || DEFAULT_EASING;
   const limited = intents.slice(0, MAX_GHOSTS_PER_FLUSH);
+  const animationPromises = [];
 
   for (const intent of limited) {
     if (!intent?.card || !intent.cardKey) continue;
@@ -693,13 +700,19 @@ export function playQueuedCardAnimations(intents, options = {}) {
         ? ghost.animate(keyframes, { duration, easing })
         : null;
 
-    finishAnimation(animation, () => {
+    const animationPromise = finishAnimation(animation, () => {
       if (shouldHideFinal && finalElement) {
         finalElement.style.visibility = previousVisibility;
       }
       ghost.remove();
     }, duration);
+    animationPromises.push(animationPromise);
   }
+
+  if (animationPromises.length === 0) {
+    return Promise.resolve(false);
+  }
+  return Promise.allSettled(animationPromises).then(() => true);
 }
 
 /**

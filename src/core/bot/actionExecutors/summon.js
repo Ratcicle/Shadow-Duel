@@ -126,6 +126,7 @@ export async function executeSummonAction(bot, game, action) {
       `Bot summons ${action.facedown ? "a monster in defense" : card.name}`,
     );
     game.updateBoard();
+    await game.waitForBoardPresentation?.();
 
     // Let the summon become visible before resolving on-summon triggers.
     const isFacedownSet = action.facedown === true;

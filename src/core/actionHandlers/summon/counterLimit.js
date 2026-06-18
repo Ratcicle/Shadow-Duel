@@ -207,6 +207,8 @@ async function performSummonFromDeck(
   );
 
   if (!usedMoveCard) {
+    game.updateBoard?.();
+    await game.waitForBoardPresentation?.();
     await game.emit("after_summon", {
       card: card,
       player: player,

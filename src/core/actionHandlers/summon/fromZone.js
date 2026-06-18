@@ -763,6 +763,8 @@ async function summonCards(cards, sourceZoneEntries, player, action, engine) {
     }
 
     if (!usedMoveCard) {
+      game.updateBoard?.();
+      await game.waitForBoardPresentation?.();
       await game.emit("after_summon", {
         card: card,
         player: player,

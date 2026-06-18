@@ -513,17 +513,18 @@ export function animateCardLayout(previousRects, options = {}) {
     !previousRects ||
     previousRects.size === 0
   ) {
-    return;
+    return Promise.resolve(false);
   }
 
   const root = document.getElementById("game-container");
-  if (!root) return;
+  if (!root) return Promise.resolve(false);
 
   const duration = Number.isFinite(options.duration) ? options.duration : 180;
   const easing = options.easing || "cubic-bezier(0.2, 0.8, 0.2, 1)";
   const minDistance = Number.isFinite(options.minDistance)
     ? options.minDistance
     : 2;
+  const animationPromises = [];
 
   root.querySelectorAll(".card[data-card-key]").forEach((element) => {
     if (!isVisibleCardElement(element)) return;
@@ -548,7 +549,7 @@ export function animateCardLayout(previousRects, options = {}) {
         ? `translate(${deltaX}px, ${deltaY}px)`
         : `translate(${deltaX}px, ${deltaY}px) ${finalTransform}`;
 
-    element.animate(
+    const animation = element.animate(
       [
         { transform: startTransform },
         { transform: finalTransform },
@@ -558,7 +559,13 @@ export function animateCardLayout(previousRects, options = {}) {
         easing,
       }
     );
+    animationPromises.push(finishAnimation(animation, duration));
   });
+
+  if (animationPromises.length === 0) {
+    return Promise.resolve(false);
+  }
+  return Promise.allSettled(animationPromises).then(() => true);
 }
 
 /**

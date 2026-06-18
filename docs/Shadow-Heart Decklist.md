@@ -77,7 +77,7 @@ Fonte dos textos: `src/data/cards/*.js` via fachada `src/data/cards.js` (1x cada
 
 ### Extra Deck
 
-**Shadow-Heart Demon Dragon (121)** — Fusão, Nível 10, Dragon, 3000/3000. Materiais: "Shadow-Heart Scale Dragon" + 1 monstro "Shadow-Heart" de Nível 5+. Ao ser Invocada por Fusão: destrua 1 carta do oponente. Se destruída por batalha/efeito: Invoque 1 "Shadow-Heart Scale Dragon" do Cemitério.
+**Shadow-Heart Demon Dragon (121)** — Fusão, Nível 10, Dragon, 3000/3000. Materiais: "Shadow-Heart Scale Dragon" + 1 monstro "Shadow-Heart" de Nível 8+. Ao ser Invocada por Fusão: destrua 1 carta do oponente. Se destruída por batalha/efeito: Invoque 1 "Shadow-Heart Scale Dragon" do Cemitério.
 
 **Shadow-Heart Armored Arctroth (123)** — Ascension, Nível 9, 2800/2500. Matéria: "Shadow-Heart Demon Arctroth" que destruiu 2 monstros. Ao ser Invocada: zera ATK/DEF de 1 monstro do oponente (não nega efeitos). Quando ataca um monstro em Defesa: troca para Ataque.
 

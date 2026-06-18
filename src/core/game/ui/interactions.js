@@ -55,6 +55,12 @@ export function bindCardInteractions() {
       actor,
       quickSpellContext ? { quickSpellContext } : undefined,
     ) || { ok: true };
+  const emitAfterSummonAfterPresentation = async (payload) => {
+    this.updateBoard();
+    await this.waitForBoardPresentation?.();
+    await this.emit("after_summon", payload);
+    this.updateBoard();
+  };
   const handleDirectAttackHandClick = (ownerId, event) => {
     if (!this.targetSelection || this.targetSelection.kind !== "attack") {
       return false;
@@ -213,15 +219,14 @@ export function bindCardInteractions() {
           summonedCard.summonedTurn = this.turnCounter;
           summonedCard.positionChangedThisTurn = false;
           summonedCard.setTurn = summonedCard.isFacedown ? this.turnCounter : null;
-          this.updateBoard();
-          this.emit("after_summon", {
+          await emitAfterSummonAfterPresentation({
             card: summonedCard,
             player: actor,
             opponent,
             method: "normal",
             fromZone: "hand",
             tributes,
-          }).then(() => this.updateBoard());
+          });
         },
         {
           canNormalSummon: canNormalSummonFromHand(actor, card, tributeInfo),
@@ -345,15 +350,14 @@ export function bindCardInteractions() {
         tributeSelectionMode = false;
         selectedTributes = [];
         pendingSummon = null;
-        this.updateBoard();
-        this.emit("after_summon", {
+        await emitAfterSummonAfterPresentation({
           card: summonedCard,
           player: actor,
           opponent,
           method: tributes.length > 0 ? "tribute" : "normal",
           fromZone: "hand",
           tributes,
-        }).then(() => this.updateBoard());
+        });
       }
       return true;
     }
@@ -602,16 +606,12 @@ export function bindCardInteractions() {
                 } else {
                   summonedCard.setTurn = null;
                 }
-                // Update before after_summon so confirm prompts show after the summon is visible.
-                this.updateBoard();
-                this.emit("after_summon", {
+                await emitAfterSummonAfterPresentation({
                   card: summonedCard,
                   player: this.player,
                   method: "normal",
                   fromZone: "hand",
                   tributes: tributes,
-                }).then(() => {
-                  this.updateBoard();
                 });
               }
             }
@@ -793,21 +793,19 @@ export function bindCardInteractions() {
             summonedCard.setTurn = null;
           }
 
-          // Update before after_summon so confirm prompts show after the summon is visible.
-          this.updateBoard();
-          this.emit("after_summon", {
-            card: summonedCard,
-            player: this.player,
-            method: pendingSummon.tributesNeeded > 0 ? "tribute" : "normal",
-            fromZone: "hand",
-            tributes: tributes,
-          }).then(() => {
-            this.updateBoard();
-          });
-
+          const summonMethod =
+            pendingSummon.tributesNeeded > 0 ? "tribute" : "normal";
           tributeSelectionMode = false;
           selectedTributes = [];
           pendingSummon = null;
+
+          await emitAfterSummonAfterPresentation({
+            card: summonedCard,
+            player: this.player,
+            method: summonMethod,
+            fromZone: "hand",
+            tributes: tributes,
+          });
         }
         return;
       }

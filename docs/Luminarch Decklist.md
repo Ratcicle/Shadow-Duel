@@ -76,7 +76,7 @@ _Nenhuma trap no arquétipo atualmente._
 > If this card is Normal or Special Summoned: Add 1 Level 4 or lower "Luminarch" monster from your Deck to your hand. If this card battles a Defense Position monster, inflict piercing battle damage to your opponent.
 
 **153 - Luminarch Aegisbearer** (L4 Warrior | ATK 1000 / DEF 2000)
-> If this card is Special Summoned: Increase its DEF by 500. While this card is face-up on the field, your opponent's attacks must target this card, if possible.
+> If this card is Special Summoned: Increase its DEF by 500. While this card is face-up on the field, your opponent must prioritize this card as an attack target, if possible.
 
 **154 - Luminarch Moonblade Captain** (L6 Warrior | ATK 2200 / DEF 1700)
 > If this card is Normal Summoned: You can target 1 Level 4 or lower "Luminarch" monster in your GY; Special Summon it. Once per turn, if this card destroys an opponent's monster by battle: it can make a second attack this turn.
@@ -91,7 +91,7 @@ _Nenhuma trap no arquétipo atualmente._
 > If you control a face-up "Luminarch Aegisbearer", you can send it to the GY; Special Summon this card from your hand. Once per turn, when an opponent's monster declares an attack (Quick Effect): negate that attack.
 
 **158 - Luminarch Radiant Lancer** (L8 Warrior | ATK 2600 / DEF 2100)
-> If this card destroys an opponent's monster by battle, it gains 200 ATK while it remains on the field. If this card is destroyed by battle, destroy 1 Spell/Trap your opponent controls.
+> If this card destroys an opponent's monster by battle, it gains 100 ATK while it remains on the field. If this card is destroyed by battle, destroy 1 Spell/Trap your opponent controls.
 
 **159 - Luminarch Aurora Seraph** (L8 Fairy | ATK 2800 / DEF 2400)
 > If this card destroys an opponent's monster by battle, gain LP equal to half that monster's ATK. Once per turn, if this card would be destroyed by battle or card effect: you can send 1 "Luminarch" monster you control to the GY instead.
@@ -100,14 +100,14 @@ _Nenhuma trap no arquétipo atualmente._
 > If this card is Normal Summoned: You can add 1 "Luminarch" Spell/Trap from your Deck to your hand. You can only use this effect of "Luminarch Sanctified Arbiter" once per turn.
 
 **168 - Luminarch Enchanted Halberd** (L4 Warrior | ATK 1600 / DEF 1400)
-> Once per turn, if a "Luminarch" monster is Special Summoned to your field: you can Special Summon this card from your hand, but it cannot declare an attack this turn.
+> Once per turn, if a "Luminarch" monster is Special Summoned to your field: You can Special Summon this card from your hand, but it cannot declare an attack this turn.
 
 ---
 
 ### Magias
 
 **152 - Luminarch Holy Shield** (Quick Spell)
-> Target up to 3 "Luminarch" monsters you control; until the end of this turn, they cannot be destroyed by battle, and any battle damage you would take involving those monsters is gained instead.
+> (Quick Effect) Target up to 3 "Luminarch" monsters you control; until the end of this turn, they cannot be destroyed by battle, and any battle damage you would take involving those monsters is gained instead.
 
 **161 - Luminarch Knights Convocation** (Continuous Spell)
 > Once per turn: discard 1 Level 7 or higher Luminarch monster; add 1 Level 4 or lower Luminarch monster from your Deck to your hand.
@@ -141,10 +141,10 @@ _Nenhuma trap no arquétipo atualmente._
 ### Extra Deck
 
 **171 - Luminarch Megashield Barbarias** (L9 Fusion Warrior | ATK 2500 / DEF 3000)
-> "Luminarch Sanctum Protector" + 1 Level 5 or higher "Luminarch" monster. All LP you would gain is doubled. Once per turn: You can target 1 monster you control; switch its battle position, and if you do, it gains 800 ATK until the end of this turn.
+> 'Luminarch Sanctum Protector' + 1 Level 5 or higher 'Luminarch' monster. All LP you would gain is doubled. Once per turn: You can target 1 monster you control; switch its battle position, and if you do, it gains 800 ATK until the end of this turn.
 
 **172 - Luminarch Fortress Aegis** (L6 Ascension Warrior | ATK 1500 / DEF 2500)
-> Ascension Material: "Luminarch Aegisbearer". Requirement: The material must have been face-up on the field for 2 turns. Your opponent must prioritize this card as an attack target, if possible. If this card is Ascension Summoned: Gain 500 LP for each "Luminarch" monster you control. Once per turn: You can pay 1000 LP, then target 1 "Luminarch" monster with 2000 or less DEF in your GY; Special Summon it.
+> Ascension Material: 'Luminarch Aegisbearer'. Requirement: The material must have been face-up on the field for 2 turns. Your opponent must prioritize this card as an attack target, if possible. If this card is Ascension Summoned: Gain 500 LP for each 'Luminarch' monster you control. Once per turn: You can pay 1000 LP, then target 1 'Luminarch' monster with 2000 or less DEF in your GY; Special Summon it.
 
 **173 - Luminarch Pure Knight** (L6 Fusion Warrior | ATK 2000 / DEF 2000)
-> 2 "Luminarch" monsters. If this card is Fusion Summoned: You can add 1 "Sanctum of the Luminarch Citadel" from your Deck to your hand. Once per turn, when you activate the effect of a "Luminarch" Spell/Trap that requires paying LP: reduce that cost by 1000. You can only use each effect of "Luminarch Pure Knight" once per turn.
+> 2 'Luminarch' monsters. If this card is Fusion Summoned: You can add 1 'Sanctum of the Luminarch Citadel' from your Deck to your hand. Once per turn, when you activate the effect of a 'Luminarch' Spell/Trap that requires paying LP: reduce that cost by 1000. You can only use each effect of 'Luminarch Pure Knight' once per turn.

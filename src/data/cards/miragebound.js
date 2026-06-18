@@ -9,7 +9,7 @@ export const mirageboundCards = [
     type: "Spellcaster",
     archetype: "Miragebound",
     description:
-      'If this card is Normal Summoned: Add 1 "Miragebound" Spell/Trap from your Deck to your hand. Once per turn: You can target 1 monster your opponent controls; change its battle position. You can only use each effect of "Miragebound Scout" once per turn.',
+      'If this card is Normal Summoned: Add 1 "Miragebound" Spell/Trap from your Deck to your hand. Once per turn: You can target 1 face-up monster your opponent controls; change its battle position. You can only use each effect of "Miragebound Scout" once per turn.',
     image: "assets/Miragebound Scout.png",
     effects: [
       {
@@ -45,6 +45,7 @@ export const mirageboundCards = [
             owner: "opponent",
             zone: "field",
             cardKind: "monster",
+            requireFaceup: true,
             count: { min: 1, max: 1 },
           },
         ],
@@ -196,7 +197,7 @@ export const mirageboundCards = [
     subtype: "field",
     archetype: "Miragebound",
     description:
-      'Each time a monster your opponent controls changes its battle position, it loses 500 ATK/DEF until the end of the next turn. Once per turn: You can choose 1 of these effects. ● Target 1 "Miragebound" monster you control; return it to the hand, then add 1 "Miragebound" monster with a different name from your Deck to your hand. ● Target 1 monster your opponent controls; change its battle position.',
+      'Each time a face-up monster your opponent controls changes its battle position, it loses 400 ATK/DEF until the end of the next turn. Once per turn: You can choose 1 of these effects. - Target 1 "Miragebound" monster you control; return it to the hand, then add 1 "Miragebound" monster with a different name from your Deck to your hand. - Target 1 face-up monster your opponent controls; change its battle position.',
     image: "assets/Miragebound Oasis.png",
     effects: [
       {
@@ -206,6 +207,7 @@ export const mirageboundCards = [
         requireZone: "fieldSpell",
         requireFaceup: true,
         changedCardOwner: "opponent",
+        changedCardRequireFaceup: true,
         promptUser: false,
         targets: [
           {
@@ -213,6 +215,7 @@ export const mirageboundCards = [
             targetFromContext: "changedCard",
             owner: "opponent",
             cardKind: "monster",
+            requireFaceup: true,
             count: { min: 1, max: 1 },
           },
         ],
@@ -220,8 +223,8 @@ export const mirageboundCards = [
           {
             type: "buff_stats_temp",
             targetRef: "miragebound_oasis_position_debuff_target",
-            atkBoost: -500,
-            defBoost: -500,
+            atkBoost: -400,
+            defBoost: -400,
             duration: "end_of_next_turn",
             sourceName: "Miragebound Oasis",
           },
@@ -278,13 +281,14 @@ export const mirageboundCards = [
                 id: "miragebound_oasis_shift_weaken",
                 label: "Change an opponent monster's position",
                 description:
-                  "Target 1 monster your opponent controls; change its battle position.",
+                  "Target 1 face-up monster your opponent controls; change its battle position.",
                 targets: [
                   {
                     id: "miragebound_oasis_weaken_target",
                     owner: "opponent",
                     zone: "field",
                     cardKind: "monster",
+                    requireFaceup: true,
                     count: { min: 1, max: 1 },
                   },
                 ],
@@ -318,7 +322,7 @@ export const mirageboundCards = [
       position: "choice",
     },
     description:
-      'Ascension Material: "Miragebound Scout". Requirement: The material must have activated its effects 2 times this Duel. If this card is Ascension Summoned: Target up to 2 monsters your opponent controls; change their battle positions. Once per turn: Target 1 other "Miragebound" monster you control and 1 card your opponent controls; return those targets to the hand. If this card attacks a Defense Position monster, inflict piercing battle damage.',
+      'Ascension Material: "Miragebound Scout". Requirement: The material must have activated its effects 2 times this Duel. If this card is Ascension Summoned: Target up to 2 face-up monsters your opponent controls; change their battle positions. Once per turn: Target 1 other "Miragebound" monster you control and 1 card your opponent controls; return those targets to the hand. If this card attacks a Defense Position monster, inflict piercing battle damage.',
     image: "assets/Miragebound Glass Sovereign.png",
     effects: [
       {
@@ -329,13 +333,14 @@ export const mirageboundCards = [
         requireSelfAsSummoned: true,
         promptUser: true,
         promptMessage:
-          'Activate "Miragebound Glass Sovereign" to change up to 2 opponent monsters\' battle positions?',
+          'Activate "Miragebound Glass Sovereign" to change up to 2 face-up opponent monsters\' battle positions?',
         targets: [
           {
             id: "miragebound_glass_sovereign_shift_targets",
             owner: "opponent",
             zone: "field",
             cardKind: "monster",
+            requireFaceup: true,
             count: { min: 1, max: 2 },
           },
         ],
@@ -462,7 +467,7 @@ export const mirageboundCards = [
     type: "Spellcaster",
     archetype: "Miragebound",
     description:
-      'You can target 1 "Miragebound" monster in your Graveyard; add it to your hand. The first time each turn a monster your opponent controls changes its battle position: that monster loses 500 ATK/DEF until the end of the next turn. You can only use each effect of "Miragebound Sand Priestess" once per turn.',
+      'You can target 1 "Miragebound" monster in your Graveyard; add it to your hand. The first time each turn a face-up monster your opponent controls changes its battle position: that monster loses 500 ATK/DEF until the end of the next turn. You can only use each effect of "Miragebound Sand Priestess" once per turn.',
     image: "assets/Miragebound Sand Priestess.png",
     effects: [
       {
@@ -500,6 +505,7 @@ export const mirageboundCards = [
         requireZone: "field",
         requireFaceup: true,
         changedCardOwner: "opponent",
+        changedCardRequireFaceup: true,
         promptUser: false,
         oncePerTurn: true,
         oncePerTurnName: "miragebound_sand_priestess_position_debuff",
@@ -509,6 +515,7 @@ export const mirageboundCards = [
             targetFromContext: "changedCard",
             owner: "opponent",
             cardKind: "monster",
+            requireFaceup: true,
             count: { min: 1, max: 1 },
           },
         ],
@@ -602,7 +609,7 @@ export const mirageboundCards = [
     subtype: "continuous",
     archetype: "Miragebound",
     description:
-      'The first time each turn a "Miragebound" monster you control would be destroyed by battle, you can return it to the hand instead. Once per turn, if a "Miragebound" monster was returned from the field to your hand this turn: Draw 1 card. You can only control 1 "Miragebound Mirror Path".',
+      'The first time each turn a "Miragebound" monster you control would be destroyed by battle, you can return it to the hand instead. You can only control 1 "Miragebound Mirror Path".',
     image: "assets/Miragebound Mirror Path.png",
     effects: [
       {
@@ -650,30 +657,6 @@ export const mirageboundCards = [
             },
           ],
         },
-      },
-      {
-        id: "miragebound_mirror_path_draw",
-        timing: "on_event",
-        event: "card_moved",
-        requireZone: "spellTrap",
-        requireFaceup: true,
-        fromZone: "field",
-        toZone: "hand",
-        eventCardFilters: {
-          owner: "self",
-          cardKind: "monster",
-          archetype: "Miragebound",
-        },
-        promptUser: false,
-        oncePerTurn: true,
-        oncePerTurnName: "miragebound_mirror_path_draw",
-        actions: [
-          {
-            type: "draw",
-            player: "self",
-            amount: 1,
-          },
-        ],
       },
     ],
   },
