@@ -48,6 +48,8 @@ import {
   handleBuffAtkByLpGainedThisTurn,
   handleSwitchPosition,
   handleSwitchDefenderPositionOnAttack,
+  handleRemoveStatIncreases,
+  handleHalveTargetStatsAndGainRemoved,
   handlePermanentBuffNamed,
   handleRemovePermanentBuffNamed,
   handleReduceHandMonsterLevels,
@@ -199,6 +201,13 @@ export function registerDefaultHandlers(registry) {
   );
 
   registry.register("permanent_buff_named", handlePermanentBuffNamed);
+
+  registry.register("remove_stat_increases", handleRemoveStatIncreases);
+
+  registry.register(
+    "halve_target_stats_and_gain_removed",
+    handleHalveTargetStatsAndGainRemoved,
+  );
 
   registry.register(
     "remove_permanent_buff_named",

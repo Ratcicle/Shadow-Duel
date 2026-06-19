@@ -78,6 +78,232 @@ function findCardOwner(game, fallbackOwner, card) {
   return fallbackOwner || null;
 }
 
+function normalizeStatsList(value) {
+  const list = Array.isArray(value) ? value : value ? [value] : ["atk", "def"];
+  return list.filter((stat) => stat === "atk" || stat === "def");
+}
+
+function getBaseStat(card, stat) {
+  const baseKey = stat === "def" ? "baseDef" : "baseAtk";
+  const base = Number(card?.[baseKey]);
+  if (Number.isFinite(base)) return base;
+  const current = Number(card?.[stat]);
+  return Number.isFinite(current) ? current : 0;
+}
+
+function getTempBoostKey(stat) {
+  return stat === "def" ? "tempDefBoost" : "tempAtkBoost";
+}
+
+function getEquipBonusKey(stat) {
+  return stat === "def" ? "equipDefBonus" : "equipAtkBonus";
+}
+
+function subtractVisibleStat(card, stat, amount) {
+  if (!card || !Number.isFinite(amount) || amount <= 0) return 0;
+  const current = Number(card[stat] || 0);
+  const remove = Math.min(amount, Math.max(0, current));
+  if (remove <= 0) return 0;
+  card[stat] = Math.max(0, current - remove);
+  return current - card[stat];
+}
+
+function sameCardReference(ref, card) {
+  if (!ref || !card) return false;
+  if (ref === card) return true;
+  if (typeof ref === "object") {
+    return ref.instanceId != null && ref.instanceId === card.instanceId;
+  }
+  return card.instanceId != null && String(ref) === String(card.instanceId);
+}
+
+function findActiveEquipCards(game, card) {
+  if (!game || !card) return [];
+  const owners = [game.player, game.bot].filter(Boolean);
+  const equips = [];
+  for (const owner of owners) {
+    for (const equip of owner.spellTrap || []) {
+      if (
+        equip &&
+        equip.cardKind === "spell" &&
+        equip.subtype === "equip" &&
+        (sameCardReference(equip.equippedTo, card) ||
+          sameCardReference(equip.equipTarget, card))
+      ) {
+        equips.push(equip);
+      }
+    }
+  }
+  if (Array.isArray(card.equips)) {
+    for (const equip of card.equips) {
+      if (equip && !equips.includes(equip)) equips.push(equip);
+    }
+  }
+  return equips;
+}
+
+function suppressDynamicBuffStat(card, key, stat) {
+  if (!card || !key || !stat) return;
+  if (!card.suppressedDynamicBuffStatsByKey) {
+    card.suppressedDynamicBuffStatsByKey = {};
+  }
+  const current = card.suppressedDynamicBuffStatsByKey[key];
+  const next =
+    current && typeof current === "object" && !Array.isArray(current)
+      ? current
+      : {};
+  next[stat] = true;
+  card.suppressedDynamicBuffStatsByKey[key] = next;
+}
+
+function consumeTrackedStatIncrease(card, stat, remaining, game) {
+  let removed = 0;
+  const consume = (amount) => {
+    const targetAmount = Math.min(Math.max(0, amount || 0), remaining - removed);
+    if (targetAmount <= 0) return 0;
+    const actual = subtractVisibleStat(card, stat, targetAmount);
+    removed += actual;
+    return actual;
+  };
+
+  const tempKey = getTempBoostKey(stat);
+  const tempBoost = Number(card[tempKey] || 0);
+  if (tempBoost > 0 && removed < remaining) {
+    const actual = consume(tempBoost);
+    card[tempKey] = tempBoost - actual;
+  }
+
+  if (Array.isArray(card.turnBasedBuffs) && removed < remaining) {
+    for (const buff of card.turnBasedBuffs) {
+      if (removed >= remaining) break;
+      if (buff?.stat !== stat || Number(buff.value || 0) <= 0) continue;
+      const actual = consume(Number(buff.value || 0));
+      buff.value = Number(buff.value || 0) - actual;
+    }
+    card.turnBasedBuffs = card.turnBasedBuffs.filter(
+      (buff) => Number(buff?.value || 0) !== 0,
+    );
+  }
+
+  if (card.permanentBuffsBySource && removed < remaining) {
+    for (const [sourceName, buff] of Object.entries(
+      card.permanentBuffsBySource,
+    )) {
+      if (removed >= remaining) break;
+      if (!buff || Number(buff[stat] || 0) <= 0) continue;
+      const actual = consume(Number(buff[stat] || 0));
+      buff[stat] = Number(buff[stat] || 0) - actual;
+      if (!buff.atk && !buff.def) {
+        delete card.permanentBuffsBySource[sourceName];
+      }
+    }
+    if (Object.keys(card.permanentBuffsBySource).length === 0) {
+      delete card.permanentBuffsBySource;
+    }
+  }
+
+  if (card.dynamicBuffs && removed < remaining) {
+    for (const [key, entry] of Object.entries(card.dynamicBuffs)) {
+      if (removed >= remaining) break;
+      const stats = Array.isArray(entry?.stats) ? entry.stats : ["atk", "def"];
+      if (!stats.includes(stat)) continue;
+      const appliedValues =
+        entry.appliedValues && typeof entry.appliedValues === "object"
+          ? entry.appliedValues
+          : null;
+      const applied = Number(
+        appliedValues?.[stat] ?? (stats.includes(stat) ? entry?.value : 0) ?? 0,
+      );
+      if (applied <= 0) continue;
+      const actual = consume(applied);
+      if (actual > 0) {
+        suppressDynamicBuffStat(card, key, stat);
+        if (!entry.appliedValues || typeof entry.appliedValues !== "object") {
+          entry.appliedValues = {};
+        }
+        entry.appliedValues[stat] = applied - actual;
+      }
+    }
+  }
+
+  const equipKey = getEquipBonusKey(stat);
+  if (removed < remaining) {
+    for (const equip of findActiveEquipCards(game, card)) {
+      if (removed >= remaining) break;
+      const bonus = Number(equip?.[equipKey] || 0);
+      if (bonus <= 0) continue;
+      const actual = consume(bonus);
+      equip[equipKey] = bonus - actual;
+    }
+  }
+
+  const hostStoredEquipBonus = Number(card[equipKey] || 0);
+  if (hostStoredEquipBonus > 0 && removed < remaining) {
+    const actual = consume(hostStoredEquipBonus);
+    card[equipKey] = hostStoredEquipBonus - actual;
+  }
+
+  return removed;
+}
+
+function getLinkedSourceName(source, actionType = "linked_stat_change") {
+  const sourceId = source?.instanceId ?? source?.id ?? source?.name ?? "source";
+  return `${actionType}_${sourceId}`;
+}
+
+function rememberLinkedBuffSource(source, sourceName) {
+  if (!source || !sourceName) return;
+  if (!Array.isArray(source.linkedPermanentBuffSourceNames)) {
+    source.linkedPermanentBuffSourceNames = [];
+  }
+  if (!source.linkedPermanentBuffSourceNames.includes(sourceName)) {
+    source.linkedPermanentBuffSourceNames.push(sourceName);
+  }
+}
+
+function applyNamedStatChange(card, sourceName, atkChange = 0, defChange = 0) {
+  if (!card || !sourceName) return { atk: 0, def: 0 };
+  if (!card.permanentBuffsBySource) {
+    card.permanentBuffsBySource = {};
+  }
+  if (!card.permanentBuffsBySource[sourceName]) {
+    card.permanentBuffsBySource[sourceName] = {};
+  }
+
+  let appliedAtk = 0;
+  let appliedDef = 0;
+
+  if (atkChange !== 0) {
+    const previous = Number(card.atk || 0);
+    const next = Math.max(0, previous + atkChange);
+    appliedAtk = next - previous;
+    card.atk = next;
+    card.permanentBuffsBySource[sourceName].atk =
+      Number(card.permanentBuffsBySource[sourceName].atk || 0) + appliedAtk;
+  }
+
+  if (defChange !== 0) {
+    const previous = Number(card.def || 0);
+    const next = Math.max(0, previous + defChange);
+    appliedDef = next - previous;
+    card.def = next;
+    card.permanentBuffsBySource[sourceName].def =
+      Number(card.permanentBuffsBySource[sourceName].def || 0) + appliedDef;
+  }
+
+  if (
+    !card.permanentBuffsBySource[sourceName].atk &&
+    !card.permanentBuffsBySource[sourceName].def
+  ) {
+    delete card.permanentBuffsBySource[sourceName];
+  }
+  if (Object.keys(card.permanentBuffsBySource).length === 0) {
+    delete card.permanentBuffsBySource;
+  }
+
+  return { atk: appliedAtk, def: appliedDef };
+}
+
 function ownerHasCardInZone(owner, zone, card) {
   if (!owner || !zone || !card) return false;
   if (zone === "fieldSpell") return owner.fieldSpell === card;
@@ -431,6 +657,10 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
       card.canMakeSecondAttackThisTurn = true;
 
       card.secondAttackUsedThisTurn = false;
+
+      if (action.targetRestriction === "monster") {
+        card.extraAttackTargetRestriction = "monster";
+      }
 
       anySecondAttack = true;
 
@@ -800,6 +1030,98 @@ export async function handleModifyStatsTempThenDestroyIfZeroed(
   }
 
   return modified || destroyed;
+}
+
+export async function handleHalveTargetStatsAndGainRemoved(
+  action,
+  ctx,
+  targets,
+  engine,
+) {
+  const { player, source } = ctx;
+  const game = engine?.game;
+
+  if (!player || !game || !source) return false;
+
+  const targetCards = resolveTargetCards(action, ctx, targets, {
+    targetRef: action.targetRef,
+    game,
+  });
+  const gainCards = resolveTargetCards(action, ctx, targets, {
+    targetRef: action.gainTargetRef || "self",
+    defaultRef: "self",
+    game,
+  });
+  const gainCard = gainCards.find((card) => card && card.cardKind === "monster");
+
+  if (targetCards.length === 0 || !gainCard) {
+    getUI(game)?.log("No valid targets for stat transfer.");
+    return false;
+  }
+
+  const stats = normalizeStatsList(action.stats);
+  const sourceName = action.sourceName || getLinkedSourceName(source, action.type);
+  rememberLinkedBuffSource(source, sourceName);
+
+  let anyChanged = false;
+
+  for (const target of targetCards) {
+    if (!target || target.cardKind !== "monster" || target.isFacedown) continue;
+
+    const previousTargetAtk = Number(target.atk || 0);
+    const previousTargetDef = Number(target.def || 0);
+    const atkReduction = stats.includes("atk")
+      ? Math.floor(previousTargetAtk / 2)
+      : 0;
+    const defReduction = stats.includes("def")
+      ? Math.floor(previousTargetDef / 2)
+      : 0;
+
+    if (atkReduction <= 0 && defReduction <= 0) continue;
+
+    const targetChange = applyNamedStatChange(
+      target,
+      sourceName,
+      -atkReduction,
+      -defReduction,
+    );
+    const removedAtk = Math.max(0, -targetChange.atk);
+    const removedDef = Math.max(0, -targetChange.def);
+
+    if (removedAtk <= 0 && removedDef <= 0) continue;
+
+    applyNamedStatChange(gainCard, sourceName, removedAtk, removedDef);
+    anyChanged = true;
+
+    queueCardFeedback(game, "debuff", target, {
+      sourceCard: source,
+      tone: "red",
+    });
+    queueCardFeedback(game, "buff", gainCard, {
+      sourceCard: source,
+      tone: "green",
+    });
+
+    await game.emit?.("stat_buff_applied", {
+      card: target,
+      previousAtk: previousTargetAtk,
+      newAtk: target.atk,
+      previousDef: previousTargetDef,
+      newDef: target.def,
+      atkChange: targetChange.atk,
+      defChange: targetChange.def,
+      permanent: true,
+      sourceCard: source,
+      player: ctx.player,
+    });
+  }
+
+  if (anyChanged) {
+    getUI(game)?.log(`${source.name} drained ATK/DEF and gained that power.`);
+    game.updateBoard?.();
+  }
+
+  return anyChanged;
 }
 
 /**
@@ -1527,6 +1849,72 @@ export async function handleSwitchDefenderPositionOnAttack(
   game.updateBoard();
 
   return true;
+}
+
+/**
+ * Removes visible positive ATK/DEF increases from target monsters.
+ *
+ * This consumes tracked stat sources in a stable order and suppresses removed
+ * passive dynamic buff keys so continuous buffs do not immediately reapply
+ * while the affected card remains on the field.
+ */
+export async function handleRemoveStatIncreases(action, ctx, targets, engine) {
+  const game = engine?.game;
+  if (!game) return false;
+
+  const targetCards = resolveTargetCards(action, ctx, targets, {
+    defaultRef: "self",
+    game,
+  });
+  const stats = normalizeStatsList(action.stats);
+  if (targetCards.length === 0 || stats.length === 0) return false;
+
+  let anyRemoved = false;
+
+  for (const card of targetCards) {
+    if (!card || card.cardKind !== "monster") continue;
+
+    const removedByStat = {};
+    for (const stat of stats) {
+      const current = Number(card[stat] || 0);
+      const base = getBaseStat(card, stat);
+      const visibleIncrease = Math.max(0, current - base);
+      if (visibleIncrease <= 0) continue;
+
+      const removed = consumeTrackedStatIncrease(
+        card,
+        stat,
+        visibleIncrease,
+        game,
+      );
+      if (removed > 0) {
+        removedByStat[stat] = removed;
+        anyRemoved = true;
+      }
+    }
+
+    if (Object.keys(removedByStat).length > 0) {
+      queueCardFeedback(game, "debuff", card, {
+        sourceCard: ctx?.source || null,
+        tone: "red",
+      });
+      await game.emit?.("stat_increases_removed", {
+        card,
+        sourceCard: ctx?.source || null,
+        removedByStat,
+        player: ctx?.player || null,
+      });
+    }
+  }
+
+  if (anyRemoved) {
+    getUI(game)?.log(
+      `${ctx?.source?.name || "An effect"} removed visible stat increases.`,
+    );
+    game.updateBoard?.();
+  }
+
+  return anyRemoved;
 }
 
 /**

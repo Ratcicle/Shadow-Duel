@@ -60,6 +60,17 @@ export function cardMatchesFilter(card, filter = {}) {
         return false;
       }
     }
+    const summonMethodFilter =
+      current.lastSummonMethods ||
+      current.summonMethods ||
+      current.lastSummonMethod ||
+      current.summonMethod;
+    if (
+      summonMethodFilter &&
+      !asArray(summonMethodFilter).includes(card.lastSummonMethod || null)
+    ) {
+      return false;
+    }
     if (current.requireFaceup && card.isFacedown) return false;
     if (current.facedown === true && card.isFacedown !== true) return false;
     if (

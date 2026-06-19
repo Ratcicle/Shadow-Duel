@@ -664,6 +664,32 @@ function cleanupNamedBuffsWhenSourceLeavesField(
   }
 }
 
+function cleanupLinkedPermanentBuffsWhenSourceLeavesField(game, card, fromZone, toZone) {
+  if (!FIELD_SOURCE_ZONES.has(fromZone) || fromZone === toZone) return;
+  const sourceNames = Array.isArray(card?.linkedPermanentBuffSourceNames)
+    ? card.linkedPermanentBuffSourceNames
+    : [];
+  if (sourceNames.length === 0) return;
+
+  const allMonsters = [
+    ...(game?.player?.field || []),
+    ...(game?.bot?.field || []),
+  ].filter(Boolean);
+  let anyRemoved = false;
+
+  for (const sourceName of sourceNames) {
+    for (const target of allMonsters) {
+      anyRemoved = removeNamedBuffFromCard(target, sourceName) || anyRemoved;
+    }
+  }
+
+  delete card.linkedPermanentBuffSourceNames;
+
+  if (anyRemoved) {
+    game?.effectEngine?.clearTargetingCache?.();
+  }
+}
+
 /**
  * Internal implementation of card movement with all side effects.
  * @param {Object} card - The card to move
@@ -926,6 +952,7 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     fromZone,
     toZone,
   );
+  cleanupLinkedPermanentBuffsWhenSourceLeavesField(this, card, fromZone, toZone);
 
   if (fromZone === "field" && card.cardKind === "monster") {
     card.summonedTurn = null;

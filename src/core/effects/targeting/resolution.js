@@ -20,6 +20,12 @@ function buildContextTargetFilters(def = {}) {
     ...(def.maxAtk !== undefined ? { maxAtk: def.maxAtk } : {}),
     ...(def.minDef !== undefined ? { minDef: def.minDef } : {}),
     ...(def.maxDef !== undefined ? { maxDef: def.maxDef } : {}),
+    ...(def.lastSummonMethods !== undefined
+      ? { lastSummonMethods: def.lastSummonMethods }
+      : {}),
+    ...(def.summonMethods !== undefined
+      ? { summonMethods: def.summonMethods }
+      : {}),
   };
 }
 

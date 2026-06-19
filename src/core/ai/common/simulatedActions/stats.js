@@ -63,6 +63,17 @@ export function applyBuffStatsTemp(ctx) {
       card.tempDefBoost = (card.tempDefBoost || 0) + action.defBoost;
       card.def = Math.max(0, (card.def || 0) + action.defBoost);
     }
+    if (
+      action.grantSecondAttack === true ||
+      action.type === "grant_second_attack" ||
+      action.type === "buff_stats_temp_with_second_attack"
+    ) {
+      card.canMakeSecondAttackThisTurn = true;
+      card.secondAttackUsedThisTurn = false;
+      if (action.targetRestriction === "monster") {
+        card.extraAttackTargetRestriction = "monster";
+      }
+    }
   });
   return;
 }
@@ -89,6 +100,84 @@ export function applyBuffAtkTemp(ctx) {
     if (amount !== 0) {
       card.tempAtkBoost = (card.tempAtkBoost || 0) + amount;
       card.atk = Math.max(0, (card.atk || 0) + amount);
+    }
+  });
+  return;
+}
+
+export function applyRemoveStatIncreases(ctx) {
+  const { action, targets } = ctx;
+  const stats = Array.isArray(action.stats) && action.stats.length > 0
+    ? action.stats
+    : ["atk", "def"];
+
+  targets.forEach((card) => {
+    if (!card) return;
+    if (stats.includes("atk")) {
+      const baseAtk = Number.isFinite(Number(card.baseAtk))
+        ? Number(card.baseAtk)
+        : Number(card.atk || 0);
+      const currentAtk = Number(card.atk || 0);
+      if (currentAtk > baseAtk) {
+        const reduction = currentAtk - baseAtk;
+        card.atk = baseAtk;
+        if (Number(card.tempAtkBoost || 0) > 0) {
+          card.tempAtkBoost = Math.max(
+            0,
+            Number(card.tempAtkBoost || 0) - reduction,
+          );
+        }
+      }
+    }
+    if (stats.includes("def")) {
+      const baseDef = Number.isFinite(Number(card.baseDef))
+        ? Number(card.baseDef)
+        : Number(card.def || 0);
+      const currentDef = Number(card.def || 0);
+      if (currentDef > baseDef) {
+        const reduction = currentDef - baseDef;
+        card.def = baseDef;
+        if (Number(card.tempDefBoost || 0) > 0) {
+          card.tempDefBoost = Math.max(
+            0,
+            Number(card.tempDefBoost || 0) - reduction,
+          );
+        }
+      }
+    }
+  });
+  return;
+}
+
+export function applyHalveTargetStatsAndGainRemoved(ctx) {
+  const { action, targets, options } = ctx;
+  const gainTargets = action.gainTargetRef === "self" && options?.sourceCard
+    ? [options.sourceCard]
+    : [];
+  const gainCard = gainTargets[0] || options?.sourceCard || null;
+  const stats = Array.isArray(action.stats) && action.stats.length > 0
+    ? action.stats
+    : ["atk", "def"];
+
+  targets.forEach((card) => {
+    if (!card || !gainCard) return;
+    if (stats.includes("atk")) {
+      const reduction = Math.floor(Number(card.atk || 0) / 2);
+      if (reduction > 0) {
+        card.atk = Math.max(0, Number(card.atk || 0) - reduction);
+        card.tempAtkBoost = Number(card.tempAtkBoost || 0) - reduction;
+        gainCard.atk = Math.max(0, Number(gainCard.atk || 0) + reduction);
+        gainCard.tempAtkBoost = Number(gainCard.tempAtkBoost || 0) + reduction;
+      }
+    }
+    if (stats.includes("def")) {
+      const reduction = Math.floor(Number(card.def || 0) / 2);
+      if (reduction > 0) {
+        card.def = Math.max(0, Number(card.def || 0) - reduction);
+        card.tempDefBoost = Number(card.tempDefBoost || 0) - reduction;
+        gainCard.def = Math.max(0, Number(gainCard.def || 0) + reduction);
+        gainCard.tempDefBoost = Number(gainCard.tempDefBoost || 0) + reduction;
+      }
     }
   });
   return;

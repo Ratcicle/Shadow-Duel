@@ -40,6 +40,8 @@ import {
 import {
   applyBuffStatsTemp,
   applyBuffAtkTemp,
+  applyRemoveStatIncreases,
+  applyHalveTargetStatsAndGainRemoved,
   applyForbidAttackNextTurn,
   applyGrantProtection,
   applyRegisterReplacementEffect,
@@ -86,6 +88,8 @@ export const SIMULATED_ACTION_HANDLERS = {
   "remove_counter": applyRemoveCounter,
   "buff_stats_temp": applyBuffStatsTemp,
   "buff_atk_temp": applyBuffAtkTemp,
+  "remove_stat_increases": applyRemoveStatIncreases,
+  "halve_target_stats_and_gain_removed": applyHalveTargetStatsAndGainRemoved,
   "forbid_attack_next_turn": applyForbidAttackNextTurn,
   "grant_protection": applyGrantProtection,
   "register_replacement_effect": applyRegisterReplacementEffect,

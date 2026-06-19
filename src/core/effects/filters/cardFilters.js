@@ -59,6 +59,19 @@ export function cardMatchesFilters(card, filters = {}) {
       : [filters.monsterType];
     if (!requiredMonsterTypes.includes(card.monsterType)) return false;
   }
+  const summonMethodFilter =
+    filters.lastSummonMethods ||
+    filters.summonMethods ||
+    filters.lastSummonMethod ||
+    filters.summonMethod;
+  if (summonMethodFilter) {
+    const requiredSummonMethods = Array.isArray(summonMethodFilter)
+      ? summonMethodFilter
+      : [summonMethodFilter];
+    if (!requiredSummonMethods.includes(card.lastSummonMethod || null)) {
+      return false;
+    }
+  }
   if (filters.type) {
     const cardType = card.type || null;
     const cardTypes = Array.isArray(card.types) ? card.types : null;

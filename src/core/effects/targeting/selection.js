@@ -112,6 +112,14 @@ function buildTargetingCacheKey(def, ctx) {
     def.maxDef ?? "",
     def.minLevel ?? "",
     def.maxLevel ?? "",
+    Array.isArray(def.lastSummonMethods)
+      ? def.lastSummonMethods.join(",")
+      : def.lastSummonMethods || "",
+    Array.isArray(def.summonMethods)
+      ? def.summonMethods.join(",")
+      : def.summonMethods || "",
+    def.lastSummonMethod || "",
+    def.summonMethod || "",
     anyOfKey,
     def.excludeCardName || "",
     Array.isArray(def.excludeCardNames) ? def.excludeCardNames.join(",") : "",
@@ -394,6 +402,22 @@ export function selectCandidates(def, ctx) {
               `[selectCandidates] Rejecting: subtype mismatch (${
                 card.subtype
               } !== ${requiredSubtypes.join(",")})`
+            );
+            continue;
+          }
+        }
+        const summonMethodFilter =
+          def.lastSummonMethods ||
+          def.summonMethods ||
+          def.lastSummonMethod ||
+          def.summonMethod;
+        if (summonMethodFilter) {
+          const requiredSummonMethods = Array.isArray(summonMethodFilter)
+            ? summonMethodFilter
+            : [summonMethodFilter];
+          if (!requiredSummonMethods.includes(card.lastSummonMethod || null)) {
+            log(
+              `[selectCandidates] Rejecting: summon method mismatch (${card.lastSummonMethod} not in ${requiredSummonMethods.join(",")})`
             );
             continue;
           }

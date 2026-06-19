@@ -424,7 +424,7 @@
     },
     "104": {
       "name": "Demônio Arctroth do Coração Sombrio",
-      "description": "Se esse card for invocado por invocação-Normal: você pode escolher 1 monstro que seu oponente controla; destrua-o."
+      "description": "Se este card for Invocado por Invocação-Tributo: você pode escolher 1 card que seu oponente controla; destrua-o. No início do cálculo de dano, se este card batalhar um monstro do oponente: remova todos os aumentos de ATK/DEF aplicados a esse monstro."
     },
     "105": {
       "name": "Hino de Batalha do Coração Sombrio",
@@ -499,8 +499,8 @@
       "description": "Materiais: 2 monstros 'Coração Sombrio'. A primeira vez por turno que este card seria destruído em batalha, você pode enviar 1 monstro 'Coração Sombrio' que você controla para o Cemitério em vez disso. Se este card destruir um monstro do oponente em batalha: você pode Invocar por Invocação-Especial 1 monstro 'Coração Sombrio' de Nível 4 ou menor do seu Cemitério, mas ele não pode atacar neste turno. Você só pode usar este efeito de 'Senhor da Guerra do Coração Sombrio' uma vez por turno."
     },
     "123": {
-      "name": "Arctroth Blindado do Coração Sombrio",
-      "description": "Material de Ascensão: 'Demônio Arctroth do Coração Sombrio'.\nRequisito: esse monstro deve ter destruído 2 monstros do oponente em batalha ou por efeito de card.\nSe este card for Invocado por Ascensão: Escolha 1 monstro que seu oponente controla; o ATK/DEF dele se tornam 0. Se este card atacar um monstro em Posição de Defesa: mude esse monstro para Posição de Ataque."
+      "name": "Perseguidor Arctroth do Coração Sombrio",
+      "description": "Material de Ascensão: 'Demônio Arctroth do Coração Sombrio'.\nSe este card for Invocado por Invocação-Ascensão: escolha 1 monstro Invocado por Invocação-Especial com a face para cima que seu oponente controla; o ATK/DEF dele é diminuído pela metade, e este card ganha o ATK/DEF diminuído por esse efeito. Se este card destruir um monstro do oponente em batalha: você pode escolher 1 monstro no Cemitério do seu oponente, exceto o monstro destruído por esta batalha; Invoque-o por Invocação-Especial no campo do oponente e, se isso acontecer, este card pode realizar 1 ataque adicional contra monstros durante esta Fase de Batalha."
     },
     "124": {
       "name": "Dragão da Devastação do Coração Sombrio",

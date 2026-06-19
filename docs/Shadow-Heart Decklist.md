@@ -29,7 +29,7 @@ Fonte dos textos: `src/data/cards/*.js` via fachada `src/data/cards.js` (1x cada
 ### Extra Deck
 
 - 1x Shadow-Heart Demon Dragon — Fusão (121)
-- 1x Shadow-Heart Armored Arctroth — Ascension (123)
+- 1x Shadow-Heart Arctroth Pursuer — Ascension (123)
 - 1x Shadow-Heart Warlord — Fusão (122)
 - 1x Shadow-Heart Devastation Dragon — Ascension (124)
 
@@ -57,7 +57,7 @@ Fonte dos textos: `src/data/cards/*.js` via fachada `src/data/cards.js` (1x cada
 
 **Shadow-Heart Specter (102)** — Nível 2, Spirit, 800/800. Se for enviada ao Cemitério: adicione 1 monstro "Shadow-Heart" (exceto ela) do seu Cemitério à mão. OPT.
 
-**Shadow-Heart Demon Arctroth (104)** — Nível 8, Fiend, 2600/1800. Ao ser Invocada por Invocação-Tributo: destrói 1 monstro do oponente.
+**Shadow-Heart Demon Arctroth (104)** — Nível 8, Fiend, 2600/2200. Ao ser Invocada por Invocação-Tributo: você pode destruir 1 card que o oponente controla. No início do cálculo de dano, se batalhar um monstro do oponente: remove todos os aumentos de ATK/DEF aplicados a esse monstro.
 
 **Shadow-Heart Imp (107)** — Nível 4, Fiend, 1500/800. Normal Summon: Invoque por Invocação-Especial da mão 1 monstro "Shadow-Heart" de Nível 4 ou menos. OPT.
 
@@ -79,7 +79,7 @@ Fonte dos textos: `src/data/cards/*.js` via fachada `src/data/cards.js` (1x cada
 
 **Shadow-Heart Demon Dragon (121)** — Fusão, Nível 10, Dragon, 3000/3000. Materiais: "Shadow-Heart Scale Dragon" + 1 monstro "Shadow-Heart" de Nível 8+. Ao ser Invocada por Fusão: destrua 1 carta do oponente. Se destruída por batalha/efeito: Invoque 1 "Shadow-Heart Scale Dragon" do Cemitério.
 
-**Shadow-Heart Armored Arctroth (123)** — Ascension, Nível 9, 2800/2500. Matéria: "Shadow-Heart Demon Arctroth" que destruiu 2 monstros. Ao ser Invocada: zera ATK/DEF de 1 monstro do oponente (não nega efeitos). Quando ataca um monstro em Defesa: troca para Ataque.
+**Shadow-Heart Arctroth Pursuer (123)** — Ascension, Nível 9, Fiend/Dark, 2800/2700. Material: "Shadow-Heart Demon Arctroth". Ao ser Invocado por Ascensão: reduz pela metade o ATK/DEF de 1 monstro Invocado por Especial com a face para cima que o oponente controla e ganha os valores reduzidos. Se destruir um monstro do oponente em batalha: pode Invocar 1 outro monstro do Cemitério do oponente no campo do oponente e ganhar 1 ataque adicional contra monstros nesta Fase de Batalha.
 
 **Shadow-Heart Warlord (122)** — Fusão, Nível 8, 2300/1900. Materiais: 2 monstros "Shadow-Heart". A primeira vez por turno que este card seria destruído em batalha: envie 1 "Shadow-Heart" do seu campo para o GY em vez disso. Se destruir monstro do oponente em batalha: Invoque por Invocação-Especial 1 "Shadow-Heart" Nível 4 ou menor do seu GY (não pode atacar). 1x por turno.
 

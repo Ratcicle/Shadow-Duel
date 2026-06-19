@@ -138,6 +138,7 @@ export function cleanupTempBoosts(player) {
     card.tempBattleIndestructible = false;
     card.battleDamageHealsControllerThisTurn = false;
     card.canAttackDirectlyThisTurn = false;
+    delete card.extraAttackTargetRestriction;
 
     // Reset multi-attack flags
     delete card.canAttackAllOpponentMonstersThisTurn;

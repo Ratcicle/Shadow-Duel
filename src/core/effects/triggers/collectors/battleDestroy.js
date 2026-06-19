@@ -176,6 +176,11 @@ export async function collectBattleDestroyTriggers(payload) {
             source: card,
             player: owner,
             opponent: side.other,
+            attacker,
+            destroyed,
+            attackerOwner,
+            destroyedOwner,
+            destroyedPosition,
             actionContext,
             activationContext: { logTargets: false },
           };

@@ -47,7 +47,10 @@ export function applySpecialSummonFromZone(ctx) {
     opponent,
     applySimulatedActions,
   } = ctx;
-  const targetPlayer = resolveActionPlayer(action, self, opponent);
+  const targetPlayer =
+    action.summonToOwner === "opponent"
+      ? opponent
+      : resolveActionPlayer(action, self, opponent);
   if (!hasOpenMonsterZone(targetPlayer)) return;
   let candidates = action.requireSource && options.sourceCard
     ? [options.sourceCard]

@@ -620,6 +620,11 @@ export async function handleSpecialSummonFromZone(
 async function summonCards(cards, sourceZoneEntries, player, action, engine) {
   const game = engine.game;
   let summoned = 0;
+  const summonPlayer =
+    action.summonToOwner === "opponent"
+      ? game?.getOpponent?.(player) ||
+        (player?.id === "player" ? game?.bot : game?.player)
+      : player;
 
   const setAtkToZero = action.setAtkToZeroAfterSummon === true;
   const setDefToZero = action.setDefToZeroAfterSummon === true;
@@ -642,7 +647,7 @@ async function summonCards(cards, sourceZoneEntries, player, action, engine) {
       : null;
 
   for (const card of cards) {
-    if (!card || player.field.length >= 5) break;
+    if (!card || !summonPlayer || summonPlayer.field.length >= 5) break;
     const sourceEntry = findSourceEntryForCard(sourceZoneEntries, card);
 
     // 🚨 CRITICAL VALIDATION: Only monsters can be special summoned to field
@@ -666,7 +671,8 @@ async function summonCards(cards, sourceZoneEntries, player, action, engine) {
             ? engine.findCardZone(player, card)
             : fromZoneName);
 
-    // Unified semantics: delegate to unified resolver
+    // The effect controller chooses the position even when the summon lands on
+    // another player's field.
     const position = await engine.chooseSpecialSummonPosition(card, player, {
       position: action.position,
     });
@@ -681,7 +687,7 @@ async function summonCards(cards, sourceZoneEntries, player, action, engine) {
     }
 
     if (canUseMoveCard) {
-      const moveResult = await game.moveCard(card, player, "field", {
+      const moveResult = await game.moveCard(card, summonPlayer, "field", {
         fromZone: resolvedFromZone || undefined,
         position,
         isFacedown: false,
@@ -719,10 +725,10 @@ async function summonCards(cards, sourceZoneEntries, player, action, engine) {
       card.isFacedown = false;
       card.hasAttacked = false;
       card.attacksUsedThisTurn = 0;
-      card.owner = player.id;
-      card.controller = player.id;
+      card.owner = summonPlayer.id;
+      card.controller = summonPlayer.id;
 
-      player.field.push(card);
+      summonPlayer.field.push(card);
     }
 
     if (!usedMoveCard) {
@@ -767,7 +773,7 @@ async function summonCards(cards, sourceZoneEntries, player, action, engine) {
       await game.waitForBoardPresentation?.();
       await game.emit("after_summon", {
         card: card,
-        player: player,
+        player: summonPlayer,
         method: "special",
         fromZone: resolvedFromZone || fromZoneName || "deck",
       });
@@ -795,7 +801,7 @@ async function summonCards(cards, sourceZoneEntries, player, action, engine) {
 
     getUI(game)?.log(
       `${
-        player.name || player.id
+        summonPlayer.name || summonPlayer.id
       } Special Summoned ${cardText} from ${zoneName}${
         positionText ? ` in ${positionText} Position` : ""
       }${restrictText}${negateText}.`,
