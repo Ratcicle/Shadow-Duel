@@ -119,9 +119,9 @@ export async function executeSpellTrapEffectAction(bot, game, action) {
     ? action.zoneIndex
     : action.index;
   const card = bot.spellTrap?.[zoneIndex];
-  if (!card || card.cardKind !== "spell") {
+  if (!card || (card.cardKind !== "spell" && card.cardKind !== "trap")) {
     console.log(
-      `[Bot.executeMainPhaseAction] Invalid spellTrapEffect action: no spell at index ${zoneIndex}`,
+      `[Bot.executeMainPhaseAction] Invalid spellTrapEffect action: no spell/trap at index ${zoneIndex}`,
     );
     return false;
   }
@@ -137,6 +137,12 @@ export async function executeSpellTrapEffectAction(bot, game, action) {
     fromHand: false,
     activationZone: "spellTrap",
     sourceZone: "spellTrap",
+    trapActivationFromSet:
+      actionActivationContext.trapActivationFromSet === true ||
+      (card.cardKind === "trap" && card.isFacedown === true),
+    autoSelectTargets: actionActivationContext.autoSelectTargets !== false,
+    autoSelectSingleTarget:
+      actionActivationContext.autoSelectSingleTarget !== false,
   };
 
   const pipelineResult = await game.runActivationPipeline({

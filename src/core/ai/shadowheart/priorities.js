@@ -59,6 +59,8 @@ const SH = {
   poly: "Polymerization",
   infusion: "Shadow-Heart Infusion",
   voidMage: "Shadow-Heart Void Mage",
+  heartbearer: "Shadow-Heart Heartbearer",
+  courtOfTheDead: "Court of the Dead",
   imp: "Shadow-Heart Imp",
   gecko: "Shadow-Heart Gecko",
   eel: "Shadow-Heart Abyssal Eel",
@@ -727,6 +729,49 @@ export function shouldPreserveScaleForDemonLine(analysis) {
   return hasNearbySearch;
 }
 
+function getShadowHeartTributesNeeded(card) {
+  if (!card || !isShadowHeartByName(card.name)) return 0;
+  if (card.name === SH.scale) return 3;
+  if ((card.level || 0) >= 7) return 2;
+  if ((card.level || 0) >= 5) return 1;
+  return 0;
+}
+
+function getTributeBossesInHand(analysis = {}) {
+  return (analysis.hand || []).filter(
+    (card) => card && card.cardKind === "monster" && getShadowHeartTributesNeeded(card) > 0,
+  );
+}
+
+function heartbearerCompletesTributeLine(analysis = {}) {
+  const field = analysis.field || [];
+  if ((analysis.fieldCapacity ?? Math.max(0, 5 - field.length)) <= 0) return false;
+  const bosses = getTributeBossesInHand(analysis);
+  return bosses.some((boss) => {
+    const needed = getShadowHeartTributesNeeded(boss);
+    if (fieldHasTributeValue(field, needed, boss)) return false;
+    return fieldHasTributeValue([...field, { name: SH.heartbearer, cardKind: "monster" }], needed, boss);
+  });
+}
+
+function controlsOrHoldsCourt(analysis = {}) {
+  const cards = allCards(analysis, ["hand", "spellTrap"]);
+  return cards.some((card) => card?.name === SH.courtOfTheDead);
+}
+
+function shouldSeekCourtOfTheDead(analysis = {}) {
+  if (controlsOrHoldsCourt(analysis)) return false;
+  const gyMonsters = [
+    ...(analysis.graveyard || []),
+    ...(analysis.oppGraveyard || []),
+  ].filter((card) => card?.cardKind === "monster").length;
+  const fieldMonsters = [
+    ...(analysis.field || []),
+    ...(analysis.oppField || []),
+  ].filter((card) => card?.cardKind === "monster").length;
+  return gyMonsters >= 2 || fieldMonsters >= 3 || hasOpponentPressure(analysis);
+}
+
 export function chooseCovenantSearchTarget(candidates = [], analysis = {}) {
   const hand = analysis?.hand || [];
   const field = analysis?.field || [];
@@ -734,6 +779,13 @@ export function chooseCovenantSearchTarget(candidates = [], analysis = {}) {
   const hasPoly = hasName(hand, SH.poly);
   const hasScale = hasName(current, SH.scale);
   const hasLevel8 = hasLevel8PlusShadowHeart(current, { excludeScale: true });
+
+  if (heartbearerCompletesTributeLine(analysis)) {
+    const heartbearer = getCandidateByName(candidates, [SH.heartbearer]);
+    if (heartbearer) {
+      return { card: heartbearer, reason: "complete_tribute_boss_line" };
+    }
+  }
 
   if (hasPoly && !hasScale) {
     const scale = getCandidateByName(candidates, [SH.scale]);
@@ -795,12 +847,17 @@ export function chooseVoidMageSearchTarget(candidates = [], analysis = {}) {
   const hand = analysis?.hand || [];
   const graveyard = analysis?.graveyard || [];
   const cathedral = getCandidateByName(candidates, [SH.cathedral]);
+  const court = getCandidateByName(candidates, [SH.courtOfTheDead]);
   const cathedralPlan = cathedral
     ? evaluateCathedralPlacement({
         ...analysis,
         hand: [...hand, cathedral],
       })
     : null;
+
+  if (court && shouldSeekCourtOfTheDead(analysis)) {
+    return { card: court, reason: "establish_court_grind_engine" };
+  }
 
   if (!analysis?.fieldSpell) {
     const valley = getCandidateByName(candidates, [SH.valley]);
@@ -841,6 +898,7 @@ export function chooseVoidMageSearchTarget(candidates = [], analysis = {}) {
   const fallback = getCandidateByName(candidates, [
     SH.valley,
     SH.cathedral,
+    SH.courtOfTheDead,
     SH.infusion,
     SH.battleHymn,
     SH.rage,
@@ -1104,6 +1162,13 @@ export function evaluateShadowHeartRecruitCandidate(candidates = [], context = {
       }
       if (analysis?.phase === "main1" && card.cannotAttackThisTurn) score -= 3;
     }
+    if (sourceName === SH.courtOfTheDead) {
+      score += Math.max(card?.atk || 0, card?.def || 0) / 250;
+      if (isShadowHeart(card)) score += 4;
+      if ([SH.scale, SH.arctroth, SH.deathWyrm, SH.demonDragon, SH.warlord].includes(card?.name)) {
+        score += 8;
+      }
+    }
     if (sourceName === SH.cathedral) {
       const cathedralTarget = chooseCathedralSummonTarget(cards, analysis);
       if (cathedralTarget.card?.name === card.name) score += 100;
@@ -1312,6 +1377,13 @@ export function buildShadowHeartCostPreferences(analysis) {
     ...(offensivePlan.preserveNames || []),
     ...(resourcePreferences.preserveNames || []),
   ]);
+  if (heartbearerCompletesTributeLine(analysis)) {
+    preserveNames.add(SH.heartbearer);
+  }
+  if ((analysis.field || []).some((card) => card?.name === SH.heartbearer)) {
+    preserveNames.add(SH.heartbearer);
+  }
+
   if (offensivePlan.hasMajorSwing) {
     for (const name of SHADOW_HEART_OFFENSIVE_PAYOFFS) {
       if (!preferNames.has(name)) preserveNames.add(name);
@@ -2118,6 +2190,7 @@ export function shouldSummonMonster(card, analysis, tributeInfo, context = {}) {
   }
 
   if (name === "Shadow-Heart Heartbearer") {
+    const enablesTributeLine = heartbearerCompletesTributeLine(analysis);
     const hasTributeBossInHand = (analysis.hand || []).some(
       (candidate) =>
         candidate &&
@@ -2134,10 +2207,12 @@ export function shouldSummonMonster(card, analysis, tributeInfo, context = {}) {
     return {
       yes: true,
       position: "attack",
-      priority: hasTributeBossInHand ? 9 : protectsAlly ? 7 : 4,
-      reason: hasTributeBossInHand
-        ? "Enabler de Tribute Summon Shadow-Heart"
-        : protectsAlly
+      priority: enablesTributeLine ? 12 : hasTributeBossInHand ? 9 : protectsAlly ? 7 : 4,
+      reason: enablesTributeLine
+        ? "Completa linha de Tribute Summon Shadow-Heart"
+        : hasTributeBossInHand
+          ? "Enabler de Tribute Summon Shadow-Heart"
+          : protectsAlly
           ? "Protege/revive outro Shadow-Heart"
           : "Setup Shadow-Heart flexivel",
     };
@@ -2228,6 +2303,7 @@ export function shouldSummonMonster(card, analysis, tributeInfo, context = {}) {
         "Darkness Valley",
         "Shadow-Heart Covenant",
         "Shadow-Heart Shield",
+        "Court of the Dead",
       ].includes(c.name)
     );
     const hasDarknessValley = (analysis.spellTrapZone || []).some(

@@ -18,6 +18,7 @@ import {
   buildPrioritizedAction,
 } from "./common/actionGeneration.js";
 import { buildStrategyAnalysis } from "./common/analysis.js";
+import { getGenericSetBackrowActions } from "./common/backrowPlanning.js";
 import { getEffectiveAtk } from "./common/cardStats.js";
 import { withFusionPreferences } from "./common/fusionPlanning.js";
 import {
@@ -77,6 +78,67 @@ import {
   scoreShadowHeartLineTerminal,
   describeShadowHeartPlannedLine,
 } from "./shadowheart/linePlanning.js";
+
+const COURT_OF_THE_DEAD = "Court of the Dead";
+const COURT_REVIVE_TARGET_ID = "court_revive_target";
+
+function getCounterValue(card, counterType) {
+  if (!card || !counterType) return 0;
+  if (typeof card.getCounter === "function") return card.getCounter(counterType) || 0;
+  const counters = card.counters || card.counter || null;
+  if (!counters) return 0;
+  if (counters instanceof Map) return counters.get(counterType) || 0;
+  return counters[counterType] || 0;
+}
+
+function getCourtReviveCandidates(bot, opponent) {
+  return [
+    ...(bot?.graveyard || []),
+    ...(opponent?.graveyard || []),
+  ].filter((card) => card?.cardKind === "monster" && !card.cannotBeSpecialSummoned);
+}
+
+function rankCourtReviveTargetNames(bot, opponent) {
+  const bossNames = new Set([
+    "Shadow-Heart Scale Dragon",
+    "Shadow-Heart Demon Arctroth",
+    "Shadow-Heart Death Wyrm",
+    "Shadow-Heart Demon Dragon",
+    "Shadow-Heart Arctroth Pursuer",
+    "Shadow-Heart Warlord",
+    "Shadow-Heart Devastation Dragon",
+  ]);
+  return getCourtReviveCandidates(bot, opponent)
+    .map((card) => {
+      let score = Math.max(card.atk || 0, card.def || 0);
+      if (isShadowHeartByName(card.name)) score += 500;
+      if (bossNames.has(card.name)) score += 900;
+      return { name: card.name, score };
+    })
+    .sort((a, b) => b.score - a.score)
+    .map((entry) => entry.name)
+    .filter((name, index, names) => name && names.indexOf(name) === index);
+}
+
+function buildCourtActivationContext(card, bot, opponent) {
+  const preferredNames = rankCourtReviveTargetNames(bot, opponent);
+  return {
+    sourceZone: "spellTrap",
+    activationZone: "spellTrap",
+    trapActivationFromSet: card?.cardKind === "trap" && card.isFacedown === true,
+    autoSelectTargets: true,
+    autoSelectSingleTarget: true,
+    actionContext: {
+      targetPreferences: {
+        [COURT_REVIVE_TARGET_ID]: {
+          role: "named_preference",
+          purpose: "offense",
+          preferredNames,
+        },
+      },
+    },
+  };
+}
 
 function canActivateShadowHeartSpell(game, card, bot, activationContext = {}) {
   if (!game || game._isPerspectiveState === true) return { ok: true };
@@ -788,6 +850,34 @@ export default class ShadowHeartStrategy extends BaseStrategy {
       }
     });
 
+    const usedHandIndices = new Set(
+      actions
+        .filter((action) => Number.isInteger(action.index))
+        .map((action) => action.index),
+    );
+    const courtSetActions = getGenericSetBackrowActions({
+      bot,
+      game,
+      opponent,
+      analysis,
+      alreadyUsedHandIndices: usedHandIndices,
+      basePriority: 7,
+      defaultReason: "setup_court_of_the_dead",
+      policy: {
+        acceptsCard: (card) => card?.cardKind === "trap",
+        skipIfAlreadySet: (card) =>
+          card?.name === COURT_OF_THE_DEAD &&
+          (bot.spellTrap || []).some((setCard) => setCard?.name === COURT_OF_THE_DEAD),
+        shouldSet: (card) =>
+          card?.name === COURT_OF_THE_DEAD
+            ? { yes: true, priority: 10, reason: "set Court of the Dead engine" }
+            : false,
+        getPriority: (_card, { setDecision }) => setDecision?.priority || 7,
+        getReason: (_card, { setDecision }) => setDecision?.reason || "setup_court_of_the_dead",
+      },
+    });
+    actions.push(...courtSetActions);
+
     // === GERAR AÇÕES DE SUMMON ===
     if (analysis.canNormalSummon) {
       (bot.hand || []).forEach((card, index) => {
@@ -925,10 +1015,65 @@ export default class ShadowHeartStrategy extends BaseStrategy {
 
     // === GERAR EFEITOS DE CONTINUOUS SPELL/TRAP EM CAMPO ===
     (bot.spellTrap || []).forEach((card, zoneIndex) => {
-      if (!card || card.cardKind !== "spell" || card.isFacedown) return;
+      if (!card || (card.cardKind !== "spell" && card.cardKind !== "trap")) return;
+      const isSetCourt = card.name === COURT_OF_THE_DEAD && card.isFacedown === true;
+      if (card.isFacedown && !isSetCourt) return;
       const ignitionEffect = (card.effects || []).find(
         (effect) => effect && effect.timing === "ignition",
       );
+
+      if (card.name === COURT_OF_THE_DEAD) {
+        const courtActivationContext = buildCourtActivationContext(card, bot, opponent);
+        if (card.isFacedown) {
+          if (!isSimulatedState) {
+            const check = actualGame.effectEngine?.canActivateSpellTrapEffectPreview?.(
+              card,
+              bot,
+              "spellTrap",
+              null,
+              { activationContext: courtActivationContext },
+            );
+            if (check?.ok === false) return;
+          }
+          actions.push({
+            type: "spellTrapEffect",
+            zoneIndex,
+            cardId: card.id,
+            cardName: card.name,
+            priority: 10,
+            activationContext: courtActivationContext,
+          });
+          return;
+        }
+
+        const counters = getCounterValue(card, "funeral");
+        const reviveCandidates = getCourtReviveCandidates(bot, opponent);
+        if (!ignitionEffect || counters < 8 || reviveCandidates.length === 0 || (bot.field || []).length >= 5) {
+          return;
+        }
+        if (!isSimulatedState) {
+          const check = actualGame.effectEngine?.canActivateSpellTrapEffectPreview?.(
+            card,
+            bot,
+            "spellTrap",
+            null,
+            { activationContext: courtActivationContext },
+          );
+          if (check?.ok === false) return;
+        }
+        actions.push({
+          type: "spellTrapEffect",
+          zoneIndex,
+          cardId: card.id,
+          cardName: card.name,
+          priority: 14,
+          effectId: ignitionEffect.id,
+          activationContext: courtActivationContext,
+        });
+        return;
+      }
+
+      if (card.cardKind !== "spell" || card.isFacedown) return;
       if (!ignitionEffect) return;
 
       if (card.name === "Shadow-Heart Cathedral") {

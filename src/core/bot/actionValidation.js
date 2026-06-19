@@ -154,12 +154,18 @@ export function filterValidActionsForCurrentState(bot, actions, game) {
         ? action.zoneIndex
         : action.index;
       const card = bot.spellTrap?.[zoneIndex];
-      if (!card || card.cardKind !== "spell") return false;
+      if (!card || (card.cardKind !== "spell" && card.cardKind !== "trap")) return false;
       const activationContext = {
         ...(action.activationContext || {}),
         fromHand: false,
         activationZone: "spellTrap",
         sourceZone: "spellTrap",
+        trapActivationFromSet:
+          action.activationContext?.trapActivationFromSet === true ||
+          (card.cardKind === "trap" && card.isFacedown === true),
+        autoSelectTargets: action.activationContext?.autoSelectTargets !== false,
+        autoSelectSingleTarget:
+          action.activationContext?.autoSelectSingleTarget !== false,
       };
       const preview = game?.effectEngine?.canActivateSpellTrapEffectPreview?.(
         card,
