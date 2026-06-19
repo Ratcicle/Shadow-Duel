@@ -46,6 +46,10 @@ import {
   scoreVoidLineMilestones,
   scoreVoidLineTerminal,
 } from "./void/linePlanning.js";
+import {
+  fieldHasTributeValue,
+  getTributeValueTotal,
+} from "../game/summon/tributeValue.js";
 
 const CONJURER_REVIVE_PROTECTED_COST_IDS = new Set([
   VOID_IDS.ARCTURUS,
@@ -1867,8 +1871,8 @@ export default class VoidStrategy extends BaseStrategy {
             0,
             Number(tributeInfo.tributesNeeded) || 0,
           );
-          if (tributeCards.length < tributesNeeded) return;
-          if ((bot.field || []).length - tributesNeeded + 1 > 5) return;
+          if (getTributeValueTotal(tributeCards, card) < tributesNeeded) return;
+          if ((bot.field || []).length - tributeCards.length + 1 > 5) return;
 
           const normalSummonAssessment = assessVoidNormalSummonEntry(card, {
             game,
@@ -2781,7 +2785,10 @@ export default class VoidStrategy extends BaseStrategy {
    * preservando engine pieces (Conjurer/Walker/Tenebris Horn) e bosses do campo.
    */
   selectBestTributes(field, tributesNeeded, cardToSummon, context = {}) {
-    if (tributesNeeded <= 0 || !field || field.length < tributesNeeded) {
+    if (
+      tributesNeeded <= 0 ||
+      !fieldHasTributeValue(field || [], tributesNeeded, cardToSummon)
+    ) {
       return [];
     }
     const game = context?.game || this.bot?.game;

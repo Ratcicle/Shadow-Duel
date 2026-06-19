@@ -33,6 +33,12 @@ import {
   assessShadowHeartResourceRecovery,
   buildShadowHeartResourcePreferences,
 } from "./resourceEconomy.js";
+import {
+  fieldHasTributeValue,
+  getTributeCardsFromIndices,
+  getTributeValueTotal,
+  selectTributeIndicesByValue,
+} from "../../game/summon/tributeValue.js";
 
 const SHADOW_HEART_OFFENSIVE_PAYOFFS = [
   "Polymerization",
@@ -291,8 +297,8 @@ function getCathedralBodyPlan(card, analysis = {}) {
     });
     const completesTributeSetup =
       tributesNeeded > 0 &&
-      field.length < tributesNeeded &&
-      field.length + 1 >= tributesNeeded;
+      !fieldHasTributeValue(field, tributesNeeded, tributeBoss) &&
+      fieldHasTributeValue([...field, card], tributesNeeded, tributeBoss);
     if (completesTributeSetup) {
       return {
         ok: true,
@@ -2111,9 +2117,35 @@ export function shouldSummonMonster(card, analysis, tributeInfo, context = {}) {
     };
   }
 
+  if (name === "Shadow-Heart Heartbearer") {
+    const hasTributeBossInHand = (analysis.hand || []).some(
+      (candidate) =>
+        candidate &&
+        candidate !== card &&
+        isShadowHeartByName(candidate.name) &&
+        (candidate.level || 0) >= 7,
+    );
+    const protectsAlly = (fieldState || []).some(
+      (monster) =>
+        monster &&
+        monster.name !== "Shadow-Heart Heartbearer" &&
+        isShadowHeartByName(monster.name),
+    );
+    return {
+      yes: true,
+      position: "attack",
+      priority: hasTributeBossInHand ? 9 : protectsAlly ? 7 : 4,
+      reason: hasTributeBossInHand
+        ? "Enabler de Tribute Summon Shadow-Heart"
+        : protectsAlly
+          ? "Protege/revive outro Shadow-Heart"
+          : "Setup Shadow-Heart flexivel",
+    };
+  }
+
   // Leviathan - Boss 2600 ATK com efeitos de burn
   if (name === "Shadow-Heart Leviathan") {
-    if (tributeInfo.tributesNeeded > analysis.field.length) {
+    if (!fieldHasTributeValue(fieldState, tributeInfo.tributesNeeded, card)) {
       return {
         yes: false,
         reason: `Requer ${tributeInfo.tributesNeeded} tributos (tenho ${analysis.field.length})`,
@@ -2139,7 +2171,7 @@ export function shouldSummonMonster(card, analysis, tributeInfo, context = {}) {
     const actualTributes = tributeInfo.usingAlt
       ? tributeInfo.alt.tributes
       : tributeInfo.tributesNeeded;
-    if (actualTributes > analysis.field.length) {
+    if (!fieldHasTributeValue(fieldState, actualTributes, card)) {
       return {
         yes: false,
         reason: `Requer ${actualTributes} tributos (tenho ${analysis.field.length})`,
@@ -2242,7 +2274,7 @@ export function shouldSummonMonster(card, analysis, tributeInfo, context = {}) {
 
   // Scale Dragon - Boss principal
   if (name === "Shadow-Heart Scale Dragon") {
-    if (tributeInfo.tributesNeeded <= analysis.field.length) {
+    if (fieldHasTributeValue(fieldState, tributeInfo.tributesNeeded, card)) {
       return {
         yes: true,
         position: "attack",
@@ -2255,7 +2287,7 @@ export function shouldSummonMonster(card, analysis, tributeInfo, context = {}) {
   // Demon Arctroth - Boss com remoção
   if (name === "Shadow-Heart Demon Arctroth") {
     if (
-      tributeInfo.tributesNeeded <= analysis.field.length &&
+      fieldHasTributeValue(fieldState, tributeInfo.tributesNeeded, card) &&
       analysis.oppField.length > 0
     ) {
       // PRIORIDADE ALTA: Ameaça battle-indestructible que só pode ser removida por efeito
@@ -2295,8 +2327,15 @@ export function shouldSummonMonster(card, analysis, tributeInfo, context = {}) {
       }
 
       // Se tributos reduzem muito ATK, só invocar se realmente necessário
-      const tributeATK = fieldMonsters
-        .slice(0, tributeInfo.tributesNeeded)
+      const projectedTributeIndices = selectBestTributes(
+        fieldMonsters,
+        tributeInfo.tributesNeeded,
+        card,
+        { oppField: oppFieldState },
+      );
+      const tributeATK = projectedTributeIndices
+        .map((index) => fieldMonsters[index])
+        .filter(Boolean)
         .reduce((sum, m) => sum + (m.atk || 0), 0);
       const summonATK = card.atk || 0;
       const atkLoss = tributeATK - summonATK;
@@ -2424,7 +2463,7 @@ export function shouldSummonMonster(card, analysis, tributeInfo, context = {}) {
 
   if (
     tributeInfo.tributesNeeded > 0 &&
-    tributeInfo.tributesNeeded <= fieldState.length
+    fieldHasTributeValue(fieldState, tributeInfo.tributesNeeded, card)
   ) {
     const tradeCheck = evaluateTributeTrade(
       card,
@@ -2474,7 +2513,10 @@ export function selectBestTributes(
   cardToSummon = null,
   context = {}
 ) {
-  if (tributesNeeded <= 0 || !field || field.length < tributesNeeded) {
+  if (
+    tributesNeeded <= 0 ||
+    !fieldHasTributeValue(field || [], tributesNeeded, cardToSummon)
+  ) {
     return [];
   }
 
@@ -2486,13 +2528,9 @@ export function selectBestTributes(
   );
   const isEmergencyRemoval = isDemonArctroth && hasBattleIndestructibleThreat;
 
-  const monstersWithValue = field.map((monster, index) => {
-    const value = getTributeValue(monster, { isEmergencyRemoval });
-    return { monster, index, value };
+  return selectTributeIndicesByValue(field || [], tributesNeeded, cardToSummon, {
+    scoreCard: (monster) => getTributeValue(monster, { isEmergencyRemoval }),
   });
-
-  monstersWithValue.sort((a, b) => a.value - b.value);
-  return monstersWithValue.slice(0, tributesNeeded).map((t) => t.index);
 }
 
 
@@ -2561,7 +2599,7 @@ export function evaluateTributeTrade(
   const fieldMonsters = (field || []).filter(
     (card) => card && card.cardKind !== "spell" && card.cardKind !== "trap"
   );
-  if (fieldMonsters.length < tributesNeeded) {
+  if (!fieldHasTributeValue(fieldMonsters, tributesNeeded, cardToSummon)) {
     return { ok: false, reason: "Tributos insuficientes" };
   }
 
@@ -2578,13 +2616,11 @@ export function evaluateTributeTrade(
     context
   );
 
-  if (tributeIndices.length < tributesNeeded) {
+  const tributes = getTributeCardsFromIndices(fieldMonsters, tributeIndices);
+
+  if (getTributeValueTotal(tributes, cardToSummon) < tributesNeeded) {
     return { ok: false, reason: "Sem tributos validos" };
   }
-
-  const tributes = tributeIndices
-    .map((index) => fieldMonsters[index])
-    .filter(Boolean);
 
   const tributeCost = tributes.reduce(
     (sum, monster) => sum + getTributeValue(monster, { isEmergencyRemoval }),

@@ -4,6 +4,12 @@ import {
   cardDatabaseByName,
 } from "../data/cards.js";
 import Card from "./Card.js";
+import {
+  fieldHasTributeValue,
+  getTributeCardsFromIndices,
+  getTributeValueTotal,
+  selectTributeIndicesByValue,
+} from "./game/summon/tributeValue.js";
 
 export default class Player {
   constructor(id, name, controllerType = "human") {
@@ -249,19 +255,6 @@ export default class Player {
       const tributeInfo = this.getTributeRequirement(card);
       let { tributesNeeded, usingAlt, alt } = tributeInfo;
 
-      if (this.field.length < tributesNeeded) {
-        return failSummon(
-          `Not enough tributes for Level ${card.level} monster.`,
-          "NOT_ENOUGH_TRIBUTES",
-        );
-      }
-
-      // Calculate field state AFTER removing tributes: current field - tributes + new card must be <= 5
-      const fieldAfterTributes = this.field.length - tributesNeeded + 1;
-      if (fieldAfterTributes > 5) {
-        return failSummon("Field is full (max 5 monsters).", "FIELD_FULL");
-      }
-
       const matchesAltRequirement = (c) => {
         if (!c) return false;
         if (alt?.requiresName) return c.name === alt.requiresName;
@@ -272,60 +265,65 @@ export default class Player {
         return true;
       };
 
-      const tributeCards = [];
+      let tributeCards = [];
       if (tributesNeeded > 0) {
-        if (tributeIndices && tributeIndices.length === tributesNeeded) {
-          const sortedIndices = [...tributeIndices].sort((a, b) => b - a);
-          for (const idx of sortedIndices) {
-            if (idx >= 0 && idx < this.field.length) {
-              tributeCards.push(this.field[idx]);
-            }
-          }
+        if (!fieldHasTributeValue(this.field, tributesNeeded, card)) {
+          return failSummon(
+            `Not enough tributes for Level ${card.level} monster.`,
+            "NOT_ENOUGH_TRIBUTES",
+          );
+        }
 
-          if (tributeCards.length !== tributesNeeded) {
+        if (Array.isArray(tributeIndices) && tributeIndices.length > 0) {
+          tributeCards = getTributeCardsFromIndices(this.field, tributeIndices);
+
+          if (tributeCards.length === 0) {
             return failSummon(
               "Invalid tribute selection.",
               "INVALID_TRIBUTE_SELECTION",
             );
           }
-
-          if (usingAlt && alt && !tributeCards.some(matchesAltRequirement)) {
-            const requirementLabel = alt.requiresName || alt.requiresType;
-            return failSummon(
-              `Must tribute ${requirementLabel} to use reduced tribute.`,
-              "TRIBUTE_REQUIREMENT_NOT_MET",
-            );
-          }
-        } else if (usingAlt && alt) {
-          const altIdx = this.field.findIndex(matchesAltRequirement);
-          if (altIdx === -1) {
-            const requirementLabel = alt.requiresName || alt.requiresType;
-            return failSummon(
-              `No ${requirementLabel} available for tribute.`,
-              "TRIBUTE_REQUIREMENT_NOT_FOUND",
-            );
-          }
-          tributeCards.push(this.field[altIdx]);
-          for (const candidate of this.field) {
-            if (tributeCards.length >= tributesNeeded) break;
-            if (!candidate || tributeCards.includes(candidate)) continue;
-            tributeCards.push(candidate);
-          }
         } else {
-          for (let i = 0; i < tributesNeeded; i++) {
-            tributeCards.push(this.field[i]);
-          }
+          const selectedIndices = selectTributeIndicesByValue(
+            this.field,
+            tributesNeeded,
+            card,
+            {
+              scoreCard: (candidate, index) => {
+                if (usingAlt && alt && matchesAltRequirement(candidate)) {
+                  return -1000 + index;
+                }
+                return index;
+              },
+            },
+          );
+          tributeCards = getTributeCardsFromIndices(this.field, selectedIndices);
+        }
+
+        if (usingAlt && alt && !tributeCards.some(matchesAltRequirement)) {
+          const requirementLabel = alt.requiresName || alt.requiresType;
+          return failSummon(
+            `Must tribute ${requirementLabel} to use reduced tribute.`,
+            "TRIBUTE_REQUIREMENT_NOT_MET",
+          );
         }
 
         if (
-          tributeCards.length !== tributesNeeded ||
-          tributeCards.some((c) => !c)
+          tributeCards.length === 0 ||
+          tributeCards.some((c) => !c) ||
+          getTributeValueTotal(tributeCards, card) < tributesNeeded
         ) {
           return failSummon(
             `Not enough valid tributes for Level ${card.level} monster.`,
             "NOT_ENOUGH_VALID_TRIBUTES",
           );
         }
+      }
+
+      // Calculate field state after removing the physical tribute cards.
+      const fieldAfterTributes = this.field.length - tributeCards.length + 1;
+      if (fieldAfterTributes > 5) {
+        return failSummon("Field is full (max 5 monsters).", "FIELD_FULL");
       }
 
       const summonPosition = position === "defense" ? "defense" : "attack";

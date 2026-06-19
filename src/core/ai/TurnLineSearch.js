@@ -4,6 +4,12 @@ import {
   fingerprintAction,
   summarizePlanningState,
 } from "./common/planningDiagnostics.js";
+import {
+  fieldHasTributeValue,
+  getTributeCardsFromIndices,
+  getTributeValueTotal,
+  selectTributeIndicesByValue,
+} from "../game/summon/tributeValue.js";
 
 function actionRequiresHand(actionType) {
   return (
@@ -96,21 +102,16 @@ function getPlannerTributeRequirement(card, player, strategy) {
 
 function selectPlannerTributes(field = [], tributesNeeded = 0, cardToSummon = null, strategy = null) {
   if (tributesNeeded <= 0) return [];
-  if (!Array.isArray(field) || field.length < tributesNeeded) return [];
+  if (!fieldHasTributeValue(field || [], tributesNeeded, cardToSummon)) return [];
   const selected =
     typeof strategy?.selectBestTributes === "function"
       ? strategy.selectBestTributes(field, tributesNeeded, cardToSummon)
-      : field
-          .map((card, index) => ({ card, index }))
-          .sort((a, b) => {
-            const value = (entry) =>
-              Math.max(0, Number(entry.card?.atk || 0)) +
-              Math.max(0, Number(entry.card?.def || 0)) * 0.25 +
-              Number(entry.card?.level || 0) * 120;
-            return value(a) - value(b);
-          })
-          .map((entry) => entry.index)
-          .slice(0, tributesNeeded);
+      : selectTributeIndicesByValue(field, tributesNeeded, cardToSummon, {
+          scoreCard: (card) =>
+            Math.max(0, Number(card?.atk || 0)) +
+            Math.max(0, Number(card?.def || 0)) * 0.25 +
+            Number(card?.level || 0) * 120,
+        });
   return [...new Set(selected || [])].filter(
     (index) => Number.isInteger(index) && field[index],
   );
@@ -132,11 +133,13 @@ function summonActionIsStillLegal(action, state, strategy) {
   const tributeInfo = getPlannerTributeRequirement(card, player, strategy);
   const tributesNeeded = Math.max(0, Number(tributeInfo.tributesNeeded || 0));
   const field = player.field || [];
-  if (field.length < tributesNeeded) return false;
-  if (field.length - tributesNeeded + 1 > 5) return false;
+  if (!fieldHasTributeValue(field, tributesNeeded, card)) return false;
+  let physicalTributeCount = 0;
   if (tributesNeeded > 0) {
     const tributeIndices = selectPlannerTributes(field, tributesNeeded, card, strategy);
-    if (tributeIndices.length < tributesNeeded) return false;
+    const tributeCards = getTributeCardsFromIndices(field, tributeIndices);
+    if (getTributeValueTotal(tributeCards, card) < tributesNeeded) return false;
+    physicalTributeCount = tributeIndices.length;
     if (
       tributeInfo.usingAlt === true &&
       tributeInfo.alt &&
@@ -147,6 +150,7 @@ function summonActionIsStillLegal(action, state, strategy) {
       return false;
     }
   }
+  if (field.length - physicalTributeCount + 1 > 5) return false;
 
   return true;
 }

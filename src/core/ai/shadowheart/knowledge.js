@@ -28,7 +28,7 @@ export const CARD_KNOWLEDGE = {
       "Proteger com Shadow-Heart Shield",
       "Usar Shadow-Heart Rage para 3700 ATK + 2 ataques",
       "Usar como material para Demon Dragon Fusion",
-      "Manter face-up por 2 turnos para habilitar Devastation Dragon",
+      "Manter face-up por 3 turnos para habilitar Devastation Dragon",
     ],
     value: 15,
   },
@@ -78,6 +78,24 @@ export const CARD_KNOWLEDGE = {
     ],
     value: 10,
     ascensionTarget: "Shadow-Heart Armored Arctroth",
+  },
+  "Shadow-Heart Heartbearer": {
+    role: "tribute_enabler",
+    priority: 8,
+    summonCondition: "normal_faceup",
+    effect:
+      "Conta como 2 Tributos para Tribute Summon de Shadow-Heart. Se outro Shadow-Heart controlado for destruido por batalha/efeito, pode ir ao GY para reviver aquele monstro",
+    synergies: [
+      "Shadow-Heart Scale Dragon",
+      "Shadow-Heart Demon Arctroth",
+      "Shadow-Heart Devastation Dragon",
+    ],
+    playPatterns: [
+      "Invocar face-up para transformar 1 corpo em 2 tributos",
+      "Manter no campo ao lado de outro Shadow-Heart para proteger trades",
+      "Tributar para acelerar Scale Dragon ou Demon Arctroth",
+    ],
+    value: 7,
   },
   "Shadow-Heart Griffin": {
     role: "beater",
@@ -235,14 +253,14 @@ export const CARD_KNOWLEDGE = {
     priority: 13,
     summonCondition: "ascension_from_scale_dragon_turn_2",
     effect:
-      "Ascensão de Scale Dragon após 2 turnos face-up. Ganha 700 ATK no summon, nega proteções de destruição por batalha do oponente e limpa monstros em Defesa ao destruir um defensor",
+      "Ascensão de Scale Dragon após 3 turnos face-up. Ganha 700 ATK no summon, nega proteções de destruição por batalha do oponente e limpa monstros em Defesa ao destruir um defensor",
     synergies: [
       "Shadow-Heart Scale Dragon",
       "Darkness Valley",
       "Shadow-Heart Rage",
     ],
     playPatterns: [
-      "Preservar Scale Dragon face-up por 2 turnos para habilitar Ascensão",
+      "Preservar Scale Dragon face-up por 3 turnos para habilitar Ascensão",
       "Ascender quando oponente depende de monstros resistentes a batalha",
       "Atacar defensores para limpar campos travados em Defesa",
     ],

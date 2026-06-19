@@ -1,4 +1,9 @@
 import { isQuickSpell } from "../spellTrap/quickSpellRules.js";
+import {
+  fieldHasTributeValue,
+  getTributeCardsFromIndices,
+  getTributeValueTotal,
+} from "../summon/tributeValue.js";
 
 /**
  * UI Interactions Module - Card interactions for the Shadow Duel game
@@ -32,8 +37,24 @@ export function bindCardInteractions() {
     const info = tributeInfo || actor.getTributeRequirement?.(card);
     const tributesNeeded = Math.max(0, Number(info?.tributesNeeded || 0));
     const fieldCount = actor.field?.length || 0;
-    if (fieldCount < tributesNeeded) return false;
-    return fieldCount - tributesNeeded + 1 <= 5;
+    if (!fieldHasTributeValue(actor.field || [], tributesNeeded, card)) {
+      return false;
+    }
+    const minimumPhysicalTributes = tributesNeeded > 0 ? 1 : 0;
+    return fieldCount - minimumPhysicalTributes + 1 <= 5;
+  };
+  const getSelectedTributeValue = (actor, summonState) =>
+    getTributeValueTotal(
+      getTributeCardsFromIndices(actor?.field || [], selectedTributes),
+      summonState?.cardToSummon || null,
+    );
+  const hasSelectedRequiredTributeValue = (actor, summonState) =>
+    getSelectedTributeValue(actor, summonState) >=
+    Math.max(0, Number(summonState?.tributesNeeded || 0));
+  const getTributeSelectionMessage = (summonState, actor) => {
+    const required = Math.max(0, Number(summonState?.tributesNeeded || 0));
+    const current = getSelectedTributeValue(actor, summonState);
+    return `Select tribute monster(s). Tribute value: ${current}/${required}.`;
   };
   const buildQuickSpellHandContext = (card, actor) =>
     isQuickSpell(card)
@@ -153,7 +174,7 @@ export function bindCardInteractions() {
       if (
         !canUseHandEffect &&
         tributesNeeded > 0 &&
-        actor.field.length < tributesNeeded
+        !fieldHasTributeValue(actor.field || [], tributesNeeded, card)
       ) {
         this.ui.log(`Not enough tributes for Level ${card.level} monster.`);
         return true;
@@ -196,10 +217,11 @@ export function bindCardInteractions() {
               position,
               isFacedown,
               tributesNeeded,
+              cardToSummon: card,
               tributeableIndices,
             };
             setLaboratoryTributeHighlight(actor, tributeableIndices);
-            this.ui.log(`Select ${tributesNeeded} monster(s) to tribute.`);
+            this.ui.log(getTributeSelectionMessage(pendingSummon, actor));
             return;
           }
 
@@ -321,11 +343,12 @@ export function bindCardInteractions() {
       if (!allowed.includes(index)) return true;
       if (selectedTributes.includes(index)) {
         selectedTributes = selectedTributes.filter((idx) => idx !== index);
-      } else if (selectedTributes.length < pendingSummon.tributesNeeded) {
+      } else if (selectedTributes.length < allowed.length) {
         selectedTributes.push(index);
       }
       setLaboratoryTributeHighlight(actor, allowed, selectedTributes);
-      if (selectedTributes.length === pendingSummon.tributesNeeded) {
+      this.ui.log(getTributeSelectionMessage(pendingSummon, actor));
+      if (hasSelectedRequiredTributeValue(actor, pendingSummon)) {
         clearLaboratoryTributeHighlight(actor);
         const before = actor.field.length;
         const summonResult = await this.performNormalSummon(
@@ -516,7 +539,7 @@ export function bindCardInteractions() {
         if (
           !canUseHandEffect &&
           tributesNeeded > 0 &&
-          this.player.field.length < tributesNeeded
+          !fieldHasTributeValue(this.player.field || [], tributesNeeded, card)
         ) {
           this.ui.log(`Not enough tributes for Level ${card.level} monster.`);
           return;
@@ -549,6 +572,7 @@ export function bindCardInteractions() {
                   position,
                   isFacedown,
                   tributesNeeded,
+                  cardToSummon: card,
                   altTribute: tributeInfo.usingAlt ? tributeInfo.alt : null,
                 };
 
@@ -580,7 +604,9 @@ export function bindCardInteractions() {
                   );
                 }
 
-                this.ui.log(`Select ${tributesNeeded} monster(s) to tribute.`);
+                this.ui.log(
+                  getTributeSelectionMessage(pendingSummon, this.player)
+                );
               } else {
                 const before = this.player.field.length;
                 const summonResult = await this.performNormalSummon(
@@ -748,14 +774,16 @@ export function bindCardInteractions() {
           if (this.ui && typeof this.ui.setPlayerFieldSelected === "function") {
             this.ui.setPlayerFieldSelected(index, false);
           }
-        } else if (selectedTributes.length < pendingSummon.tributesNeeded) {
+        } else if (selectedTributes.length < allowed.length) {
           selectedTributes.push(index);
           if (this.ui && typeof this.ui.setPlayerFieldSelected === "function") {
             this.ui.setPlayerFieldSelected(index, true);
           }
         }
 
-        if (selectedTributes.length === pendingSummon.tributesNeeded) {
+        this.ui.log(getTributeSelectionMessage(pendingSummon, this.player));
+
+        if (hasSelectedRequiredTributeValue(this.player, pendingSummon)) {
           if (
             this.ui &&
             typeof this.ui.clearPlayerFieldTributeable === "function"

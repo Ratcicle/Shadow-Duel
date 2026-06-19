@@ -163,6 +163,9 @@ const DEFAULT_LOCALE_TEXTS = {
       selection: "Select target(s) for the triggered effect.",
     },
     counters: {
+      labels: {
+        spore: "Spore Counters",
+      },
       removeAmount:
         "Choose how many {counterType} counter(s) to remove ({min}-{max}).",
       selectPayment:

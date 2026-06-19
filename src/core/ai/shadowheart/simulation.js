@@ -22,6 +22,11 @@ import {
   rankShadowHeartSearchCandidates,
   selectBestTributes,
 } from "./priorities.js";
+import {
+  fieldHasTributeValue,
+  getTributeCardsFromIndices,
+  getTributeValueTotal,
+} from "../../game/summon/tributeValue.js";
 
 const SH = {
   arctroth: "Shadow-Heart Demon Arctroth",
@@ -484,7 +489,9 @@ function simulateNormalSummon(state, action, options = {}) {
 
   const tributeInfo = getTributeRequirementFor(card, player);
   const tributesNeeded = tributeInfo.tributesNeeded || 0;
-  if ((player.field || []).length < tributesNeeded) return true;
+  if (!fieldHasTributeValue(player.field || [], tributesNeeded, card)) {
+    return true;
+  }
 
   const tributeIndices =
     tributesNeeded > 0
@@ -494,7 +501,11 @@ function simulateNormalSummon(state, action, options = {}) {
           game: state,
         })
       : [];
-  if (tributeIndices.length < tributesNeeded) return true;
+  const tributeCards = getTributeCardsFromIndices(
+    player.field || [],
+    tributeIndices,
+  );
+  if (getTributeValueTotal(tributeCards, card) < tributesNeeded) return true;
 
   const tributes = [];
   tributeIndices

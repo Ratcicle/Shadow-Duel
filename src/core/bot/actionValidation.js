@@ -1,3 +1,9 @@
+import {
+  fieldHasTributeValue,
+  getTributeCardsFromIndices,
+  getTributeValueTotal,
+} from "../game/summon/tributeValue.js";
+
 export function resolveHandIndexForAction(bot, action, expectedKind) {
   if (!action) return -1;
   const hand = bot.hand || [];
@@ -81,8 +87,7 @@ export function canResolveSummonActionForCurrentState(bot, action, game) {
   };
   const tributesNeeded = Math.max(0, Number(tributeInfo.tributesNeeded || 0));
   const field = Array.isArray(bot.field) ? bot.field : [];
-  if (field.length < tributesNeeded) return false;
-  if (field.length - tributesNeeded + 1 > 5) return false;
+  if (!fieldHasTributeValue(field, tributesNeeded, card)) return false;
 
   let tributeIndices = [];
   if (tributesNeeded > 0) {
@@ -94,14 +99,15 @@ export function canResolveSummonActionForCurrentState(bot, action, game) {
             game,
           })
         : field.map((_entry, index) => index).slice(0, tributesNeeded);
-    if (!Array.isArray(tributeIndices) || tributeIndices.length < tributesNeeded) {
+    if (!Array.isArray(tributeIndices) || tributeIndices.length === 0) {
       return false;
     }
     const uniqueIndices = [...new Set(tributeIndices)].filter(
       (index) => Number.isInteger(index) && field[index],
     );
-    if (uniqueIndices.length < tributesNeeded) return false;
-    tributeIndices = uniqueIndices.slice(0, tributesNeeded);
+    const tributeCards = getTributeCardsFromIndices(field, uniqueIndices);
+    if (getTributeValueTotal(tributeCards, card) < tributesNeeded) return false;
+    tributeIndices = uniqueIndices;
     if (
       tributeInfo.usingAlt === true &&
       tributeInfo.alt &&
@@ -112,6 +118,8 @@ export function canResolveSummonActionForCurrentState(bot, action, game) {
       return false;
     }
   }
+
+  if (field.length - tributeIndices.length + 1 > 5) return false;
 
   if (typeof game?.canPlaceCardOnField === "function") {
     const isFacedown = action.facedown === true;

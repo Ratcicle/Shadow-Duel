@@ -648,7 +648,7 @@ export default class DragonStrategy extends BaseStrategy {
       const fieldMonsters = (bot.field || []).filter((c) => c && c.cardKind === "monster");
       const hasExtremeOnField = fieldMonsters.some((c) => isExtremeDragon(c));
 
-      if (!hasExtremeOnField && fieldMonsters.length >= 2) {
+      if (!hasExtremeOnField) {
         const oppField = opponent?.field || [];
         const oppStrongestATK = oppField.reduce((max, m) => Math.max(max, m.atk || 0), 0);
 
@@ -659,7 +659,9 @@ export default class DragonStrategy extends BaseStrategy {
 
           // Level 10 → 2 tributes (standard lv7+ rule)
           const tributesNeeded = 2;
-          if (fieldMonsters.length < tributesNeeded) return;
+          const tributeIndices = selectBestTributes(fieldMonsters, tributesNeeded, card);
+          const tributedCards = tributeIndices.map((i) => fieldMonsters[i]).filter(Boolean);
+          if (tributedCards.length === 0) return;
 
           // Don't waste the tribute summon if extreme dragon's ATK won't dominate
           const extremeATK = card.atk || 0;
@@ -675,8 +677,6 @@ export default class DragonStrategy extends BaseStrategy {
           }
 
           // Don't tribute another Extreme Dragon
-          const tributeIndices = selectBestTributes(fieldMonsters, tributesNeeded, card);
-          const tributedCards = tributeIndices.map((i) => fieldMonsters[i]).filter(Boolean);
           if (tributedCards.some((m) => isExtremeDragon(m))) {
             log(`  ❌ Extreme Tribute: ${card.name} — would tribute another Extreme Dragon`);
             return;
