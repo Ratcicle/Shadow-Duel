@@ -1,16 +1,16 @@
 # Shadow-Heart — Decklist (Completa) & Efeitos
 
-Fonte dos textos: `src/data/cards/*.js` via fachada `src/data/cards.js`; quantidades abaixo refletem o preset do bot Shadow-Heart.
+Fonte dos textos: `src/data/cards/*.js` via fachada `src/data/cards.js` (1x cada carta).
 
 ## Resumo
 
-- Total Main Deck: 30
-- Monstros (Main Deck): 16
+- Total: 25
+- Monstros (Main Deck): 12
 - Extra Deck: 4 (2 Fusão, 2 Ascension)
-- Magias: 13
-- Armadilhas: 1
+- Magias: 9
+- Armadilhas: 0
 
-## Decklist do Bot Shadow-Heart
+## Decklist Completa (1x cada)
 
 ### Monstros (Main Deck)
 
@@ -24,7 +24,7 @@ Fonte dos textos: `src/data/cards/*.js` via fachada `src/data/cards.js`; quantid
 - 1x Shadow-Heart Griffin (114)
 - 1x Shadow-Heart Death Wyrm (116)
 - 1x Shadow-Heart Leviathan (117)
-- 2x Shadow-Heart Void Mage (118)
+- 1x Shadow-Heart Void Mage (118)
 - 1x Shadow-Heart Heartbearer (125)
 
 ### Extra Deck
@@ -38,7 +38,7 @@ Fonte dos textos: `src/data/cards/*.js` via fachada `src/data/cards.js`; quantid
 
 - Shadow-Heart Purge (103)
 - Shadow-Heart Battle Hymn (105)
-- 2x Shadow-Heart Covenant (106)
+- Shadow-Heart Covenant (106)
 - Shadow-Heart Infusion (110)
 - Shadow-Heart Rage (112)
 - Shadow-Heart Shield (113)
@@ -48,7 +48,7 @@ Fonte dos textos: `src/data/cards/*.js` via fachada `src/data/cards.js`; quantid
 
 ### Armadilhas
 
-- 1x Court of the Dead (17)
+- (nenhuma)
 
 ## Efeitos & Detalhes
 
@@ -110,4 +110,4 @@ Fonte dos textos: `src/data/cards/*.js` via fachada `src/data/cards.js`; quantid
 
 ### Armadilhas
 
-**Court of the Dead (17)** — Armadilha Contínua. Cada vez que um monstro é enviado para qualquer Cemitério: coloque 1 Marcador Funeral neste card. Uma vez por turno: remova 8 Marcadores Funeral; escolha 1 monstro em qualquer Cemitério; Invoque-o por Invocação-Especial no seu campo.
+Não há armadilhas "Shadow-Heart" no banco de dados.
