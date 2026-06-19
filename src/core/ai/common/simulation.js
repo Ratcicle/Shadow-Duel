@@ -4,6 +4,11 @@ import {
   moveCardToZone,
   selectSimulatedTargets,
 } from "../StrategyUtils.js";
+import {
+  fieldHasTributeValue,
+  getTributeCardsFromIndices,
+  getTributeValueTotal,
+} from "../../game/summon/tributeValue.js";
 
 export function resolveSimulatedHandIndex(player, action, expectedKind = null) {
   const hand = player?.hand || [];
@@ -212,6 +217,7 @@ export function applyGenericSimulatedMainPhaseAction(
         tributesNeeded: 0,
       };
       const tributesNeeded = Math.max(0, Number(tributeInfo.tributesNeeded) || 0);
+      if (!fieldHasTributeValue(player.field || [], tributesNeeded, card)) break;
 
       const tributeIndices =
         options.selectBestTributes?.(player.field, tributesNeeded, card, {
@@ -225,8 +231,12 @@ export function applyGenericSimulatedMainPhaseAction(
           idx >= 0 &&
           idx < (player.field || []).length,
       );
-      if (validTributeIndices.length < tributesNeeded) break;
-      if ((player.field || []).length - tributesNeeded + 1 > 5) break;
+      const tributeCards = getTributeCardsFromIndices(
+        player.field || [],
+        validTributeIndices,
+      );
+      if (getTributeValueTotal(tributeCards, card) < tributesNeeded) break;
+      if ((player.field || []).length - validTributeIndices.length + 1 > 5) break;
 
       validTributeIndices.sort((a, b) => b - a);
       validTributeIndices.forEach((idx) => {

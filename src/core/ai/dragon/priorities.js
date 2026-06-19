@@ -9,6 +9,11 @@ import {
   SELF_SUMMON_MONSTERS,
   isExtremeDragon,
 } from "./knowledge.js";
+import {
+  fieldHasTributeValue,
+  getTributeValueTotal,
+  selectTributeIndicesByValue,
+} from "../../game/summon/tributeValue.js";
 
 /**
  * @typedef {Object} SpellDecision
@@ -519,15 +524,16 @@ export function getTributeRequirementFor(card, playerState) {
  * @returns {number[]}
  */
 export function selectBestTributes(field, tributesNeeded, cardToSummon = null) {
-  if (tributesNeeded <= 0 || !field || field.length < tributesNeeded) return [];
+  if (
+    tributesNeeded <= 0 ||
+    !fieldHasTributeValue(field || [], tributesNeeded, cardToSummon)
+  ) {
+    return [];
+  }
 
-  const monstersWithValue = field.map((monster, index) => {
-    const value = getTributeValue(monster);
-    return { monster, index, value };
+  return selectTributeIndicesByValue(field || [], tributesNeeded, cardToSummon, {
+    scoreCard: (monster) => getTributeValue(monster),
   });
-
-  monstersWithValue.sort((a, b) => a.value - b.value);
-  return monstersWithValue.slice(0, tributesNeeded).map((t) => t.index);
 }
 
 function getTributeValue(monster) {
@@ -568,16 +574,15 @@ export function evaluateTributeTrade(cardToSummon, field, tributesNeeded, contex
   const fieldMonsters = (field || []).filter(
     (c) => c && c.cardKind !== "spell" && c.cardKind !== "trap"
   );
-  if (fieldMonsters.length < tributesNeeded) {
+  if (!fieldHasTributeValue(fieldMonsters, tributesNeeded, cardToSummon)) {
     return { ok: false, reason: "Insufficient tributes" };
   }
 
   const tributeIndices = selectBestTributes(fieldMonsters, tributesNeeded, cardToSummon);
-  if (tributeIndices.length < tributesNeeded) {
+  const tributes = tributeIndices.map((i) => fieldMonsters[i]).filter(Boolean);
+  if (getTributeValueTotal(tributes, cardToSummon) < tributesNeeded) {
     return { ok: false, reason: "No valid tributes" };
   }
-
-  const tributes = tributeIndices.map((i) => fieldMonsters[i]).filter(Boolean);
 
   // Never tribute an Extreme Dragon
   const hasExtremeTribute = tributes.some((m) => isExtremeDragon(m));

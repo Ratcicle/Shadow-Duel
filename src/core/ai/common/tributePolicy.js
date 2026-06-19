@@ -1,3 +1,8 @@
+import {
+  fieldHasTributeValue,
+  selectTributeIndicesByValue,
+} from "../../game/summon/tributeValue.js";
+
 export function getTributeRequirementFor(card, playerState) {
   let tributesNeeded = 0;
   if (card.level >= 5 && card.level <= 6) tributesNeeded = 1;
@@ -33,27 +38,24 @@ export function selectBestTributes(
   context = {},
   policy = {},
 ) {
-  if (tributesNeeded <= 0 || !field || field.length < tributesNeeded) {
+  if (
+    tributesNeeded <= 0 ||
+    !fieldHasTributeValue(field || [], tributesNeeded, cardToSummon)
+  ) {
     return [];
   }
 
   const evaluationContext = context.evaluationContext || {};
-  const monstersWithValue = (field || [])
-    .map((monster, index) => {
-      if (!monster || monster.cardKind !== "monster") return null;
-      const keepScore = policy.evaluateCardValue
+  return selectTributeIndicesByValue(field || [], tributesNeeded, cardToSummon, {
+    scoreCard: (monster, index) =>
+      policy.evaluateCardValue
         ? policy.evaluateCardValue(monster, evaluationContext, {
             ...context,
             cardToSummon,
             fieldIndex: index,
           })
-        : 0;
-      return { monster, index, keepScore };
-    })
-    .filter(Boolean);
-
-  monstersWithValue.sort((a, b) => a.keepScore - b.keepScore);
-  return monstersWithValue.slice(0, tributesNeeded).map((t) => t.index);
+        : 0,
+  });
 }
 
 export function evaluateTributeSummonCost(

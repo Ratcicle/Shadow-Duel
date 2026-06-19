@@ -113,6 +113,9 @@ export default class Card {
     this.cannotAttackUntilTurn = null;
     this.immuneToOpponentEffectsUntilTurn = null;
     this.altTribute = data.altTribute || null;
+    this.tributeValue = data.tributeValue
+      ? JSON.parse(JSON.stringify(data.tributeValue))
+      : null;
     this.onBattleDestroy = data.onBattleDestroy || null;
     this.canAttackDirectlyThisTurn = false;
     this.cannotAttackDirectly = !!data.cannotAttackDirectly;

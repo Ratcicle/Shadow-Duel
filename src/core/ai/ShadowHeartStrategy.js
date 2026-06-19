@@ -31,6 +31,7 @@ import {
   evaluateActionBlockingRisk,
   assessActionSafety,
 } from "./ChainAwareness.js";
+import { fieldHasTributeValue } from "../game/summon/tributeValue.js";
 // P2 (gameTreeSearch, analyzeOpponent etc.) está em BaseStrategy.
 
 // Módulos Shadow-Heart refatorados
@@ -796,8 +797,8 @@ export default class ShadowHeartStrategy extends BaseStrategy {
         if ((bot.summonCount || 0) >= 1) return;
 
         const tributeInfo = this.getTributeRequirementFor(card, bot);
-        if ((bot.field?.length || 0) < tributeInfo.tributesNeeded) return;
-        if (analysis.fieldCapacity <= 0) return;
+        if (!fieldHasTributeValue(bot.field || [], tributeInfo.tributesNeeded, card)) return;
+        if (analysis.fieldCapacity <= 0 && tributeInfo.tributesNeeded <= 0) return;
 
         const decision = shouldSummonMonster(card, analysis, tributeInfo, {
           field: bot.field || [],
@@ -1033,7 +1034,6 @@ export default class ShadowHeartStrategy extends BaseStrategy {
     // BUGFIX: Só ativar se summon ainda está disponível (evita tentar invocar em Main2 após já ter invocado)
     if (
       actions.length === 0 &&
-      analysis.fieldCapacity > 0 &&
       !isSimulatedState &&
       (bot.summonCount || 0) < 1 // Só força summon se ainda pode invocar
     ) {
@@ -1055,7 +1055,7 @@ export default class ShadowHeartStrategy extends BaseStrategy {
         monstersChecked++;
 
         const tributeInfo = this.getTributeRequirementFor(card, realBot);
-        if ((realBot.field?.length || 0) < tributeInfo.tributesNeeded) {
+        if (!fieldHasTributeValue(realBot.field || [], tributeInfo.tributesNeeded, card)) {
           monstersBlocked++;
           if (bot?.debug) {
             console.log(
@@ -1069,6 +1069,9 @@ export default class ShadowHeartStrategy extends BaseStrategy {
               tributeInfo.tributesNeeded
             } tributos (tenho ${realBot.field?.length || 0})`,
           );
+          return;
+        }
+        if (analysis.fieldCapacity <= 0 && tributeInfo.tributesNeeded <= 0) {
           return;
         }
 

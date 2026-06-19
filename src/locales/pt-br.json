@@ -155,6 +155,9 @@
       "selection": "Selecione alvo(s) para o efeito disparado."
     },
     "counters": {
+      "labels": {
+        "spore": "Contadores de Esporo"
+      },
       "removeAmount": "Escolha quantos marcadores {counterType} remover ({min}-{max}).",
       "selectPayment": "Selecione carta(s) para remover {amount} marcador(es) {counterType}.",
       "selectEnough": "Selecione cartas suficientes para remover {amount} marcador(es) {counterType}.",
@@ -504,7 +507,11 @@
     },
     "124": {
       "name": "Dragão da Devastação do Coração Sombrio",
-      "description": "Material de Ascensão: 'Dragão de Escamas do Coração Sombrio'.\nRequisito: o material deve ter ficado com a face para cima no campo por 2 turnos.\nSe este card for Invocado por Ascensão: ele ganha 700 de ATK até o final deste turno.\nEnquanto este card estiver com a face para cima no campo, negue os efeitos de cards do oponente que impeçam monstros de serem destruídos em batalha.\nSe este card destruir um monstro em Posição de Defesa em batalha: destrua todos os monstros em Posição de Defesa que seu oponente controla."
+      "description": "Material de Ascensão: 'Dragão de Escamas do Coração Sombrio'.\nRequisito: o material deve ter ficado com a face para cima no campo por 3 turnos.\nSe este card for Invocado por Ascensão: ele ganha 700 de ATK até o final deste turno.\nEnquanto este card estiver com a face para cima no campo, negue os efeitos de cards do oponente que impeçam monstros de serem destruídos em batalha.\nSe este card destruir um monstro em Posição de Defesa em batalha: destrua todos os monstros em Posição de Defesa que seu oponente controla."
+    },
+    "125": {
+      "name": "Portador do Coração Sombrio",
+      "description": "Este card pode ser tratado como 2 Tributos para a Invocação-Tributo de um monstro \"Coração Sombrio\". Se outro monstro \"Coração Sombrio\" que você controla for destruído em batalha ou por efeito de card: você pode enviar este card para o Cemitério; Invoque por Invocação-Especial aquele monstro do seu Cemitério. Você só pode usar este efeito de \"Portador do Coração Sombrio\" uma vez por turno."
     },
     "151": {
       "name": "Luminarca Valente - Cavaleiro da Aurora",

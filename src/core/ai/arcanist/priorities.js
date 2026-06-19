@@ -10,6 +10,10 @@ import {
   selectBestTributes as selectGenericTributes,
 } from "../common/tributePolicy.js";
 import {
+  fieldHasTributeValue,
+  getTributeValueTotal,
+} from "../../game/summon/tributeValue.js";
+import {
   ARCANIST_MONSTER_RECOVERY_ORDER,
   ARCANIST_NAMES,
   ARCANIST_SPELL_RECOVERY_ORDER,
@@ -1089,7 +1093,7 @@ export function shouldSummonMonster(card, analysis = {}, tributeInfo = {}) {
   const field = analysis.field || [];
   const oppField = analysis.oppField || [];
   const tributesNeeded = tributeInfo.tributesNeeded || 0;
-  if (field.length < tributesNeeded) {
+  if (!fieldHasTributeValue(field, tributesNeeded, card)) {
     return { yes: false, reason: "insufficient tributes" };
   }
 
@@ -1099,6 +1103,9 @@ export function shouldSummonMonster(card, analysis = {}, tributeInfo = {}) {
       oppField,
     });
     const tributes = tributeIndices.map((index) => field[index]).filter(Boolean);
+    if (getTributeValueTotal(tributes, card) < tributesNeeded) {
+      return { yes: false, reason: "insufficient tributes" };
+    }
     const costCheck = evaluateArcanistTributeTrade(card, tributes, analysis);
     if (!costCheck.ok) return { yes: false, reason: costCheck.reason };
   }

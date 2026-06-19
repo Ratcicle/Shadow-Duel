@@ -6,6 +6,11 @@
 import { CARD_KNOWLEDGE, isExtremeDragon } from "./knowledge.js";
 import { getTributeRequirementFor, selectBestTributes } from "./priorities.js";
 import { ascensionMaterialMatches } from "../../game/summon/ascension.js";
+import {
+  fieldHasTributeValue,
+  getTributeCardsFromIndices,
+  getTributeValueTotal,
+} from "../../game/summon/tributeValue.js";
 
 const ARMORY_SEARCH_ORDER = [
   "Voltaic Dragon",
@@ -68,17 +73,18 @@ export function simulateMainPhaseAction(state, action) {
 
       const tributeInfo = getTributeRequirementFor(card, player);
 
-      if (tributeInfo.tributesNeeded > 0 && player.field.length < tributeInfo.tributesNeeded) {
+      if (
+        tributeInfo.tributesNeeded > 0 &&
+        !fieldHasTributeValue(player.field || [], tributeInfo.tributesNeeded, card)
+      ) {
         break; // Can't tribute summon
       }
 
       // Remove tributes
       if (tributeInfo.tributesNeeded > 0) {
         const tributeIndices = selectBestTributes(player.field, tributeInfo.tributesNeeded, card);
-        if (
-          !Array.isArray(tributeIndices) ||
-          tributeIndices.length < tributeInfo.tributesNeeded
-        ) {
+        const tributeCards = getTributeCardsFromIndices(player.field, tributeIndices);
+        if (getTributeValueTotal(tributeCards, card) < tributeInfo.tributesNeeded) {
           break;
         }
         if (
@@ -723,13 +729,18 @@ function normalSummonFromHandIndex(state, player, handIndex, action = {}) {
   const card = player?.hand?.[handIndex];
   if (!card || (player.summonCount || 0) >= 1) return null;
   const tributeInfo = getTributeRequirementFor(card, player);
-  if ((player.field || []).length < tributeInfo.tributesNeeded) return null;
+  if (!fieldHasTributeValue(player.field || [], tributeInfo.tributesNeeded, card)) {
+    return null;
+  }
   if (tributeInfo.tributesNeeded === 0 && (player.field || []).length >= 5) return null;
 
   if (tributeInfo.tributesNeeded > 0) {
     const tributeIndices = selectBestTributes(player.field, tributeInfo.tributesNeeded, card)
       .sort((a, b) => b - a);
-    if (tributeIndices.length < tributeInfo.tributesNeeded) return null;
+    const tributeCards = getTributeCardsFromIndices(player.field, tributeIndices);
+    if (getTributeValueTotal(tributeCards, card) < tributeInfo.tributesNeeded) {
+      return null;
+    }
     if (
       tributeInfo.usingAlt === true &&
       tributeInfo.alt &&

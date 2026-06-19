@@ -1131,11 +1131,11 @@ export const shadowHeartCards = [
     monsterType: "ascension",
     ascension: {
       materialId: 111,
-      requirements: [{ type: "material_turns_on_field", count: 2 }],
+      requirements: [{ type: "material_turns_on_field", count: 3 }],
       position: "choice",
     },
     description:
-      'Ascension Material: "Shadow-Heart Scale Dragon". Requirement: the material must have been face-up on the field for 2 turns. If this card is Ascension Summoned: it gains 700 ATK until the end of this turn. While this card is face-up on the field, negate your opponent\'s card effects that prevent monsters from being destroyed by battle. If this card destroys a Defense Position monster by battle: destroy all Defense Position monsters your opponent controls.',
+      'Ascension Material: "Shadow-Heart Scale Dragon". Requirement: the material must have been face-up on the field for 3 turns. If this card is Ascension Summoned: it gains 700 ATK until the end of this turn. While this card is face-up on the field, negate your opponent\'s card effects that prevent monsters from being destroyed by battle. If this card destroys a Defense Position monster by battle: destroy all Defense Position monsters your opponent controls.',
     image: "assets/Shadow-Heart Devastation Dragon.png",
     effects: [
       {
@@ -1184,6 +1184,72 @@ export const shadowHeartCards = [
                 position: "defense",
               },
             },
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 125,
+    name: "Shadow-Heart Heartbearer",
+    cardKind: "monster",
+    atk: 1500,
+    def: 1500,
+    level: 4,
+    type: "Fiend",
+    attribute: "Dark",
+    archetype: "Shadow-Heart",
+    tributeValue: {
+      countAs: 2,
+      requireFaceup: true,
+      summonMethods: ["tribute"],
+      summonedCardFilters: { archetype: "Shadow-Heart" },
+    },
+    description:
+      'This card can be treated as 2 Tributes for the Tribute Summon of a "Shadow-Heart" monster. If another "Shadow-Heart" monster you control is destroyed by battle or card effect: You can send this card to the GY; Special Summon that monster from your GY. You can only use this effect of "Shadow-Heart Heartbearer" once per turn.',
+    image: "assets/Shadow-Heart Heartbearer.png",
+    effects: [
+      {
+        id: "shadow_heart_heartbearer_revive",
+        timing: "on_event",
+        event: "card_to_grave",
+        requireZone: "field",
+        requireFaceup: true,
+        fromZone: "field",
+        condition: { type: "destroyed_by_battle_or_effect" },
+        promptUser: true,
+        eventCardFilters: {
+          owner: "self",
+          cardKind: "monster",
+          archetype: "Shadow-Heart",
+        },
+        oncePerTurn: true,
+        oncePerTurnName: "shadow_heart_heartbearer_revive",
+        targets: [
+          {
+            id: "shadow_heart_heartbearer_destroyed_monster",
+            targetFromContext: "eventCard",
+            owner: "self",
+            zone: "graveyard",
+            cardKind: "monster",
+            archetype: "Shadow-Heart",
+            excludeContextCard: "source",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "self",
+            player: "self",
+            to: "graveyard",
+            contextLabel: "shadow_heart_heartbearer_revive_cost",
+          },
+          {
+            type: "special_summon_from_zone",
+            targetRef: "shadow_heart_heartbearer_destroyed_monster",
+            zone: "graveyard",
+            position: "choice",
           },
         ],
       },

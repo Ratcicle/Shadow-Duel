@@ -4,6 +4,10 @@ import {
   getStrongestAttackThreat,
   getTotalAttackThreat,
 } from "../common/cardStats.js";
+import {
+  fieldHasTributeValue,
+  getTributeValueTotal,
+} from "../../game/summon/tributeValue.js";
 import { buildPrioritizedAction } from "../common/actionGeneration.js";
 import { evaluateRadiantLancerBattlePlan } from "./priorities.js";
 import {
@@ -208,7 +212,8 @@ function getNormalSummonActions(context) {
         `  Tributes needed: ${tributeInfo.tributesNeeded}, field: ${bot.field.length}`,
       );
     }
-    if (bot.field.length < tributeInfo.tributesNeeded) {
+    const tributesNeeded = Math.max(0, Number(tributeInfo.tributesNeeded) || 0);
+    if (!fieldHasTributeValue(bot.field || [], tributesNeeded, card)) {
       if (verboseEval && bot?.debug) {
         console.log(
           `  Rejected: insufficient tributes (${tributeInfo.tributesNeeded}/${bot.field.length})`,
@@ -216,8 +221,26 @@ function getNormalSummonActions(context) {
       }
       return;
     }
+    const projectedTributeIndices =
+      tributesNeeded > 0
+        ? hooks.selectBestTributes(bot.field, tributesNeeded, card, {
+            oppField: opponent?.field || [],
+            game,
+          })
+        : [];
+    const projectedTributes = projectedTributeIndices
+      .map((fieldIndex) => bot.field?.[fieldIndex])
+      .filter(Boolean);
+    if (getTributeValueTotal(projectedTributes, card) < tributesNeeded) {
+      if (verboseEval && bot?.debug) {
+        console.log(
+          `  Rejected: insufficient selected tribute value (${tributeInfo.tributesNeeded})`,
+        );
+      }
+      return;
+    }
     const projectedFieldCount =
-      (bot.field?.length || 0) - tributeInfo.tributesNeeded + 1;
+      (bot.field?.length || 0) - projectedTributes.length + 1;
     if (projectedFieldCount > 5) {
       if (verboseEval && bot?.debug) {
         console.log(`  Rejected: no monster zone after tributes`);
@@ -238,17 +261,6 @@ function getNormalSummonActions(context) {
       );
     }
     if (!shouldSummon.yes) return;
-
-    const projectedTributeIndices =
-      tributeInfo.tributesNeeded > 0
-        ? hooks.selectBestTributes(bot.field, tributeInfo.tributesNeeded, card, {
-            oppField: opponent?.field || [],
-            game,
-          })
-        : [];
-    const projectedTributes = projectedTributeIndices
-      .map((fieldIndex) => bot.field?.[fieldIndex])
-      .filter(Boolean);
 
     let tributeCostPenalty = 0;
     let tributeCostReason = null;

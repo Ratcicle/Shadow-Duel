@@ -54,6 +54,11 @@ import {
   getStrongestBattleStat,
 } from "./common/cardStats.js";
 import {
+  fieldHasTributeValue,
+  getTributeCardsFromIndices,
+  getTributeValueTotal,
+} from "../game/summon/tributeValue.js";
+import {
   resolveSimulatedFieldIndex as resolveGenericSimulatedFieldIndex,
   resolveSimulatedHandIndex as resolveGenericSimulatedHandIndex,
 } from "./common/simulation.js";
@@ -833,11 +838,31 @@ export default class LuminarchStrategy extends BaseStrategy {
 
           const card = bot.hand[cardIndex];
           const tributeInfo = this.getTributeRequirementFor(card, bot);
+          const tributesNeeded = Math.max(
+            0,
+            Number(tributeInfo.tributesNeeded) || 0,
+          );
 
           // Verificar tributos e espaço
-          if (bot.field.length < tributeInfo.tributesNeeded) continue;
+          if (!fieldHasTributeValue(bot.field || [], tributesNeeded, card)) {
+            continue;
+          }
+          const tributeIndices =
+            tributesNeeded > 0
+              ? this.selectBestTributes(bot.field || [], tributesNeeded, card, {
+                  oppField: opponent?.field || [],
+                  game,
+                })
+              : [];
+          const tributeCards = getTributeCardsFromIndices(
+            bot.field || [],
+            tributeIndices,
+          );
+          if (getTributeValueTotal(tributeCards, card) < tributesNeeded) {
+            continue;
+          }
           const projectedFieldCount =
-            (bot.field?.length || 0) - tributeInfo.tributesNeeded + 1;
+            (bot.field?.length || 0) - tributeCards.length + 1;
           if (projectedFieldCount > 5) continue;
 
           // Adicionar summon defensivo

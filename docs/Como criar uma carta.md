@@ -44,10 +44,28 @@ Campos comuns por tipo:
 - Spells/Traps: `subtype`, normalmente `normal`, `continuous`, `field`,
   `equip`, `quick` ou `counter`.
 - Extra Deck: use `monsterType: "fusion"` ou `monsterType: "ascension"`.
+- Materiais de Tributo especiais: use `tributeValue` no card que sera oferecido
+  como Tributo quando ele puder contar como mais de 1 Tributo.
 
 IDs devem ser numericos e ficar dentro da faixa oficial do modulo. O validador
 rejeita IDs fora da faixa, IDs duplicados, nomes duplicados, timings invalidos,
 eventos invalidos e actions sem handler registrado.
+
+### Valor especial de Tributo
+
+`tributeValue` e um contrato top-level da carta material. Por padrao, cada
+monstro fisico oferecido conta como 1 Tributo; `tributeValue` altera somente o
+valor acumulado para validar a Invocacao-Tributo. A remocao do campo continua
+usando apenas as cartas fisicas selecionadas.
+
+```js
+tributeValue: {
+  countAs: 2,
+  requireFaceup: true,
+  summonMethods: ["tribute"],
+  summonedCardFilters: { archetype: "Shadow-Heart" }
+}
+```
 
 ## Faixas de IDs
 

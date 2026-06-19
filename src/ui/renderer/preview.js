@@ -9,6 +9,7 @@ import {
   formatMonsterStatsLine,
   getCardDisplayDescription,
   getCardDisplayName,
+  getUIText,
 } from "../../core/i18n.js";
 
 const COUNTER_TOOLTIP_METADATA_CACHE = new Map();
@@ -54,10 +55,10 @@ function pluralizePortugueseCounterLabel(label) {
 function pluralizeEnglishCounterLabel(label) {
   return String(label || "")
     .trim()
-    .replace(/\bCounters$/i, "Markers")
-    .replace(/\bcounters$/i, "markers")
-    .replace(/\bCounter$/i, "Markers")
-    .replace(/\bcounter$/i, "markers");
+    .replace(/\bCounters$/i, "Counters")
+    .replace(/\bcounters$/i, "counters")
+    .replace(/\bCounter$/i, "Counters")
+    .replace(/\bcounter$/i, "counters");
 }
 
 function uniqueCounterLabels(labels) {
@@ -159,6 +160,12 @@ function humanizeCounterType(counterType) {
     .join(" ");
 }
 
+function getLocalizedCounterTypeLabel(counterType) {
+  const key = String(counterType || "").trim();
+  if (!key) return "";
+  return getUIText(`ui.counters.labels.${key}`, {}, "");
+}
+
 function getCounterTooltipMetadata(card) {
   const localizedDescription = getCardDisplayDescription(card) || "";
   const fallbackDescription = card?.description || "";
@@ -185,6 +192,9 @@ function getCounterTooltipMetadata(card) {
 }
 
 function resolveCounterLabel(metadata, counterType, index) {
+  const localizedCounterTypeLabel = getLocalizedCounterTypeLabel(counterType);
+  if (localizedCounterTypeLabel) return localizedCounterTypeLabel;
+
   const labels = metadata?.labels || [];
 
   if (labels.length === 1) return labels[0];
@@ -195,7 +205,7 @@ function resolveCounterLabel(metadata, counterType, index) {
   );
   if (matched) return matched;
 
-  return labels[index] || `${humanizeCounterType(counterType)} Markers`;
+  return labels[index] || `${humanizeCounterType(counterType)} Counters`;
 }
 
 function buildCounterTooltip(card) {

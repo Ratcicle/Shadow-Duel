@@ -4,8 +4,8 @@ Fonte dos textos: `src/data/cards/*.js` via fachada `src/data/cards.js` (1x cada
 
 ## Resumo
 
-- Total: 24
-- Monstros (Main Deck): 11
+- Total: 25
+- Monstros (Main Deck): 12
 - Extra Deck: 4 (2 Fusão, 2 Ascension)
 - Magias: 9
 - Armadilhas: 0
@@ -25,6 +25,7 @@ Fonte dos textos: `src/data/cards/*.js` via fachada `src/data/cards.js` (1x cada
 - 1x Shadow-Heart Death Wyrm (116)
 - 1x Shadow-Heart Leviathan (117)
 - 1x Shadow-Heart Void Mage (118)
+- 1x Shadow-Heart Heartbearer (125)
 
 ### Extra Deck
 
@@ -75,6 +76,8 @@ Fonte dos textos: `src/data/cards/*.js` via fachada `src/data/cards.js` (1x cada
 
 **Shadow-Heart Void Mage (118)** — Nível 4, Spellcaster, 1500/1500. Normal Summon: adicione 1 Magia/Armadilha "Shadow-Heart". Quando o oponente perde LP enquanto esta carta estiver em campo: compre 1 (uma vez por turno).
 
+**Shadow-Heart Heartbearer (125)** — Nível 4, Fiend, 1500/1500. Pode ser tratada como 2 Tributos para a Invocação-Tributo de um monstro "Shadow-Heart". Se outro monstro "Shadow-Heart" que você controla for destruído em batalha ou por efeito: envie este card ao Cemitério; Invoque aquele monstro do seu Cemitério. OPT.
+
 ### Extra Deck
 
 **Shadow-Heart Demon Dragon (121)** — Fusão, Nível 10, Dragon, 3000/3000. Materiais: "Shadow-Heart Scale Dragon" + 1 monstro "Shadow-Heart" de Nível 8+. Ao ser Invocada por Fusão: destrua 1 carta do oponente. Se destruída por batalha/efeito: Invoque 1 "Shadow-Heart Scale Dragon" do Cemitério.
@@ -83,7 +86,7 @@ Fonte dos textos: `src/data/cards/*.js` via fachada `src/data/cards.js` (1x cada
 
 **Shadow-Heart Warlord (122)** — Fusão, Nível 8, 2300/1900. Materiais: 2 monstros "Shadow-Heart". A primeira vez por turno que este card seria destruído em batalha: envie 1 "Shadow-Heart" do seu campo para o GY em vez disso. Se destruir monstro do oponente em batalha: Invoque por Invocação-Especial 1 "Shadow-Heart" Nível 4 ou menor do seu GY (não pode atacar). 1x por turno.
 
-**Shadow-Heart Devastation Dragon (124)** — Ascension, Nível 10, Dragon, 3300/3000. Matéria: "Shadow-Heart Scale Dragon" que ficou face-up no campo por 2 turnos. Ao ser Invocada por Ascensão: ganha 700 ATK até o fim do turno. Enquanto estiver face-up, nega efeitos do oponente que impeçam monstros de serem destruídos em batalha. Se destruir um monstro em Defesa por batalha: destrói todos os monstros em Defesa do oponente.
+**Shadow-Heart Devastation Dragon (124)** — Ascension, Nível 10, Dragon, 3300/3000. Matéria: "Shadow-Heart Scale Dragon" que ficou face-up no campo por 3 turnos. Ao ser Invocada por Ascensão: ganha 700 ATK até o fim do turno. Enquanto estiver face-up, nega efeitos do oponente que impeçam monstros de serem destruídos em batalha. Se destruir um monstro em Defesa por batalha: destrói todos os monstros em Defesa do oponente.
 
 ### Magias
 
