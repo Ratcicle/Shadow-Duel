@@ -156,13 +156,18 @@
     },
     "counters": {
       "labels": {
-        "spore": "Contadores de Esporo"
+        "spore": "Marcadores de Esporo"
       },
-      "removeAmount": "Escolha quantos marcadores {counterType} remover ({min}-{max}).",
-      "selectPayment": "Selecione carta(s) para remover {amount} marcador(es) {counterType}.",
-      "selectEnough": "Selecione cartas suficientes para remover {amount} marcador(es) {counterType}.",
+      "added": "{cardName} recebeu {amount} {counterLabel}.",
+      "removed": "{cardName} perdeu {amount} {counterLabel}.",
+      "noneFound": "Não há {counterLabel} no campo.",
+      "counted": "Total no campo: {amount} {counterLabel}.",
+      "healByCount": "{playerName} ganhou {healAmount} PV ({counterCount} {counterLabel} x {amountPerCounter} PV).",
+      "removeAmount": "Escolha quantos {counterLabel} remover ({min}-{max}).",
+      "selectPayment": "Selecione carta(s) para remover {amount} {counterLabel}.",
+      "selectEnough": "Selecione cartas suficientes para remover {amount} {counterLabel}.",
       "paymentCancelled": "Pagamento de marcadores cancelado.",
-      "notEnough": "Não há marcadores {counterType} suficientes no campo para pagar o custo."
+      "notEnough": "Não há {counterLabel} suficientes no campo para pagar o custo."
     },
     "replacement": {
       "cardSingular": "carta",
@@ -931,7 +936,7 @@
     },
     "401": {
       "name": "Podriflora Esporófito",
-      "description": "Se este card for Invocado por Invocação-Normal ou Especial: coloque 1 Marcador de Esporo em 1 card com a face para cima que seu oponente controla. Se este card for enviado do campo para o Cemitério: Invoque por Invocação-Especial 1 Ficha \"Podriflora\" (Planta/TREVAS/Nível 1/ATK 0/DEF 0). Você só pode usar cada efeito de \"Podriflora Esporófito\" uma vez por turno."
+      "description": "Se este card for Invocado por Invocação-Normal: você pode Invocar por Invocação-Especial 1 \"Podriflora Radícula\" da sua mão ou Deck em Posição de Defesa e, se isso acontecer, coloque 1 Marcador de Esporo em 1 card com a face para cima que seu oponente controla. Se este card deixar o campo: você pode adicionar 1 Magia \"Podriflora\" do seu Deck à sua mão. Você só pode usar cada efeito de \"Podriflora Esporófito\" uma vez por turno."
     },
     "402": {
       "name": "Podriflora Radícula",
@@ -939,7 +944,7 @@
     },
     "403": {
       "name": "Podriflora Tecelão-Micélio",
-      "description": "Se este card for Invocado por Invocação-Normal ou Especial: Invoque por Invocação-Especial 1 Ficha \"Podriflora\" (Planta/TREVAS/Nível 1/ATK 0/DEF 0). Se uma Ficha \"Podriflora\" que você controla deixar o campo: coloque 1 Marcador de Esporo em 1 monstro com a face para cima que seu oponente controla. Você só pode usar cada efeito de \"Podriflora Tecelão-Micélio\" uma vez por turno."
+      "description": "Se este card for Invocado por Invocação-Normal ou Especial: Invoque por Invocação-Especial 1 Ficha \"Podriflora\" (Planta/TERRA/Nível 1/ATK 0/DEF 0). Se uma Ficha \"Podriflora\" que você controla deixar o campo: coloque 1 Marcador de Esporo em 1 monstro com a face para cima que seu oponente controla. Você só pode usar cada efeito de \"Podriflora Tecelão-Micélio\" uma vez por turno."
     },
     "404": {
       "name": "Podriflora Cervo-Pútrido",
@@ -951,7 +956,7 @@
     },
     "406": {
       "name": "Podriflora Remenda-Mofo",
-      "description": "Se este card for enviado ao Cemitério: ganhe 500 PV. Você pode banir este card do seu Cemitério; escolha 1 monstro com a face para cima no campo; coloque 1 Marcador de Esporo nele. Você só pode usar cada efeito de \"Podriflora Remenda-Mofo\" uma vez por turno."
+      "description": "Se este card for destruído em batalha: coloque 1 Marcador de Esporo em cada monstro com a face para cima que seu oponente controla. Você pode banir este card do seu Cemitério e escolher 1 card com a face para cima no campo; coloque 3 Marcadores de Esporo nele. Você só pode usar cada efeito de \"Podriflora Remenda-Mofo\" uma vez por turno."
     },
     "407": {
       "name": "Podriflora Viúva-Cogutumba",
@@ -967,7 +972,7 @@
     },
     "410": {
       "name": "Podriflora Colônia Viva",
-      "description": "Quando este card for ativado: adicione 1 monstro \"Podriflora\" de Nível 4 ou menor do seu Deck à sua mão. Uma vez por turno: escolha 1 monstro com a face para cima no campo; coloque 1 Marcador de Esporo nele. Monstros que seu oponente controla perdem 100 de ATK/DEF para cada Marcador de Esporo neles. Cada vez que um ou mais Marcadores de Esporo forem removidos do campo: Invoque por Invocação-Especial 1 Ficha \"Podriflora\" (Planta/TREVAS/Nível 1/ATK 0/DEF 0) em Posição de Defesa. Você só pode ativar 1 \"Podriflora Colônia Viva\" por turno."
+      "description": "Quando este card for ativado: adicione 1 monstro \"Podriflora\" de Nível 4 ou menor do seu Deck à sua mão. Uma vez por turno: escolha 1 monstro com a face para cima no campo; coloque 1 Marcador de Esporo nele. Monstros que seu oponente controla perdem 100 de ATK/DEF para cada Marcador de Esporo neles. Cada vez que um ou mais Marcadores de Esporo forem removidos do campo: Invoque por Invocação-Especial 1 Ficha \"Podriflora\" (Planta/TERRA/Nível 1/ATK 0/DEF 0) em Posição de Defesa. Você só pode ativar 1 \"Podriflora Colônia Viva\" por turno."
     },
     "411": {
       "name": "Podriflora Ritual de Compostagem",
@@ -991,7 +996,7 @@
     },
     "416": {
       "name": "Podriflora Germinação Súbita",
-      "description": "Quando um monstro do oponente declarar ataque: coloque 1 Marcador de Esporo nesse monstro, negue o ataque e Invoque por Invocação-Especial 1 Ficha \"Podriflora\" (Planta/TREVAS/Nível 1/ATK 0/DEF 0) em Posição de Defesa. Se você controlar \"Podriflora Colônia Viva\", você pode colocar 1 Marcador de Esporo em 1 outro monstro com a face para cima que seu oponente controla. Você só pode ativar 1 \"Podriflora Germinação Súbita\" por turno."
+      "description": "Quando um monstro do oponente declarar ataque: coloque 1 Marcador de Esporo nesse monstro, negue o ataque e Invoque por Invocação-Especial 1 Ficha \"Podriflora\" (Planta/TERRA/Nível 1/ATK 0/DEF 0) em Posição de Defesa. Se você controlar \"Podriflora Colônia Viva\", você pode colocar 1 Marcador de Esporo em 1 outro monstro com a face para cima que seu oponente controla. Você só pode ativar 1 \"Podriflora Germinação Súbita\" por turno."
     },
     "417": {
       "name": "Podriflora Solo Apodrecido",

@@ -7,20 +7,23 @@ export const bloomrotCards = [
     def: 1200,
     level: 2,
     type: "Plant",
-    attribute: "Dark",
+    attribute: "Earth",
     archetype: "Bloomrot",
     description:
-      'If this card is Normal or Special Summoned: place 1 Spore Counter on 1 face-up card your opponent controls. If this card is sent from the field to the Graveyard: Special Summon 1 "Bloomrot Token" (Plant/DARK/Level 1/ATK 0/DEF 0). You can only use each effect of "Bloomrot Sporeling" once per turn.',
+      'If this card is Normal Summoned: You can Special Summon 1 "Bloomrot Rootling" from your hand or Deck in Defense Position, and if you do, place 1 Spore Counter on 1 face-up card your opponent controls. If this card leaves the field: You can add 1 "Bloomrot" Spell from your Deck to your hand. You can only use each effect of "Bloomrot Sporeling" once per turn.',
     image: "assets/Bloomrot Sporeling.png",
     effects: [
       {
-        id: "bloomrot_sporeling_summon_spore_counter",
+        id: "bloomrot_sporeling_normal_summon_rootling",
         timing: "on_event",
         event: "after_summon",
-        summonMethods: ["normal", "special"],
+        summonMethods: ["normal"],
         requireSelfAsSummoned: true,
+        promptUser: true,
+        promptMessage:
+          'Activate "Bloomrot Sporeling" to Special Summon 1 "Bloomrot Rootling"?',
         oncePerTurn: true,
-        oncePerTurnName: "bloomrot_sporeling_summon_spore_counter",
+        oncePerTurnName: "bloomrot_sporeling_normal_summon_rootling",
         targets: [
           {
             id: "bloomrot_sporeling_spore_target",
@@ -32,6 +35,17 @@ export const bloomrotCards = [
         ],
         actions: [
           {
+            type: "special_summon_from_zone",
+            zone: ["hand", "deck"],
+            cardName: "Bloomrot Rootling",
+            filters: {
+              cardKind: "monster",
+            },
+            count: { min: 1, max: 1 },
+            position: "defense",
+            promptPlayer: true,
+          },
+          {
             type: "add_counter",
             targetRef: "bloomrot_sporeling_spore_target",
             counterType: "spore",
@@ -40,28 +54,27 @@ export const bloomrotCards = [
         ],
       },
       {
-        id: "bloomrot_sporeling_grave_token",
+        id: "bloomrot_sporeling_leave_field_search_spell",
         timing: "on_event",
-        event: "card_to_grave",
+        event: "card_moved",
         fromZone: "field",
+        toZone: "any",
+        requireSelfAsMoved: true,
+        promptUser: true,
+        promptMessage:
+          'Activate "Bloomrot Sporeling" to add 1 "Bloomrot" Spell from your Deck to your hand?',
         oncePerTurn: true,
-        oncePerTurnName: "bloomrot_sporeling_grave_token",
+        oncePerTurnName: "bloomrot_sporeling_leave_field_search_spell",
         actions: [
           {
-            type: "special_summon_token",
-            player: "self",
-            position: "choice",
-            token: {
-              name: "Bloomrot Token",
-              atk: 0,
-              def: 0,
-              level: 1,
-              type: "Plant",
-              attribute: "Dark",
+            type: "add_from_zone_to_hand",
+            zone: "deck",
+            filters: {
+              cardKind: "spell",
               archetype: "Bloomrot",
-              image: "assets/Bloomrot Token.png",
-              description: "A Bloomrot token grown from lingering spores.",
             },
+            count: { min: 1, max: 1 },
+            promptPlayer: true,
           },
         ],
       },
@@ -75,7 +88,7 @@ export const bloomrotCards = [
     def: 1600,
     level: 3,
     type: "Plant",
-    attribute: "Dark",
+    attribute: "Earth",
     archetype: "Bloomrot",
     description:
       'If you control a "Bloomrot Token", you can Special Summon this card from your hand. Once per turn: You can target 1 face-up card your opponent controls; place 1 Spore Counter on it. If this card is destroyed by battle or card effect: You can place 1 Spore Counter on 1 face-up card your opponent controls. You can only use each effect of "Bloomrot Rootling" once per turn.',
@@ -179,10 +192,10 @@ export const bloomrotCards = [
     def: 1500,
     level: 3,
     type: "Plant",
-    attribute: "Dark",
+    attribute: "Earth",
     archetype: "Bloomrot",
     description:
-      'If this card is Normal or Special Summoned: Special Summon 1 "Bloomrot Token" (Plant/DARK/Level 1/ATK 0/DEF 0). If a "Bloomrot Token" you control leaves the field: place 1 Spore Counter on 1 face-up monster your opponent controls. You can only use each effect of "Bloomrot Myco-Weaver" once per turn.',
+      'If this card is Normal or Special Summoned: Special Summon 1 "Bloomrot Token" (Plant/EARTH/Level 1/ATK 0/DEF 0). If a "Bloomrot Token" you control leaves the field: place 1 Spore Counter on 1 face-up monster your opponent controls. You can only use each effect of "Bloomrot Myco-Weaver" once per turn.',
     image: "assets/Bloomrot Myco-Weaver.png",
     effects: [
       {
@@ -204,7 +217,7 @@ export const bloomrotCards = [
               def: 0,
               level: 1,
               type: "Plant",
-              attribute: "Dark",
+              attribute: "Earth",
               archetype: "Bloomrot",
               image: "assets/Bloomrot Token.png",
               description: "A Bloomrot token grown from lingering spores.",
@@ -405,7 +418,7 @@ export const bloomrotCards = [
     def: 900,
     level: 4,
     type: "Plant",
-    attribute: "Dark",
+    attribute: "Earth",
     archetype: "Bloomrot",
     description:
       'Once per turn: You can target 1 face-up monster your opponent controls; place 1 Spore Counter on it, then that monster loses 300 ATK/DEF for each Spore Counter on it until the end of this turn. If this card destroys a monster with a Spore Counter by battle: place 1 Spore Counter on 1 face-up card your opponent controls. You can only use each effect of "Bloomrot Carrioncap" once per turn.',
@@ -494,20 +507,32 @@ export const bloomrotCards = [
     attribute: "Earth",
     archetype: "Bloomrot",
     description:
-      'If this card is sent to the Graveyard: gain 500 LP. You can banish this card from your Graveyard; target 1 face-up monster on the field; place 1 Spore Counter on it. You can only use each effect of "Bloomrot Moldmender" once per turn.',
+      'If this card is destroyed by battle: place 1 Spore Counter on each face-up monster your opponent controls. You can banish this card from your Graveyard and target 1 face-up card on the field; place 3 Spore Counters on it. You can only use each effect of "Bloomrot Moldmender" once per turn.',
     image: "assets/Bloomrot Moldmender.png",
     effects: [
       {
-        id: "bloomrot_mold_mender_grave_heal",
+        id: "bloomrot_mold_mender_battle_destroy_spores",
         timing: "on_event",
         event: "card_to_grave",
+        fromZone: "field",
+        requireSelfAsDestroyed: true,
+        condition: { type: "destroyed_by_battle" },
         oncePerTurn: true,
-        oncePerTurnName: "bloomrot_mold_mender_grave_heal",
+        oncePerTurnName: "bloomrot_mold_mender_battle_destroy_spores",
         actions: [
           {
-            type: "heal",
-            player: "self",
-            amount: 500,
+            type: "add_counter",
+            targetScope: {
+              owner: "opponent",
+              zones: ["field"],
+              filters: {
+                cardKind: "monster",
+                requireFaceup: true,
+              },
+            },
+            counterType: "spore",
+            amount: 1,
+            optional: true,
           },
         ],
       },
@@ -523,8 +548,7 @@ export const bloomrotCards = [
           {
             id: "bloomrot_mold_mender_spore_target",
             owner: "any",
-            zone: "field",
-            cardKind: "monster",
+            zones: ["field", "spellTrap", "fieldSpell"],
             requireFaceup: true,
             count: { min: 1, max: 1 },
           },
@@ -540,7 +564,7 @@ export const bloomrotCards = [
             type: "add_counter",
             targetRef: "bloomrot_mold_mender_spore_target",
             counterType: "spore",
-            amount: 1,
+            amount: 3,
           },
         ],
       },
@@ -554,7 +578,7 @@ export const bloomrotCards = [
     def: 2100,
     level: 6,
     type: "Plant",
-    attribute: "Dark",
+    attribute: "Earth",
     archetype: "Bloomrot",
     description:
       'You can Special Summon this card from your hand by removing 2 Spore Counters from the field. If this card is Summoned: target 1 monster with a Spore Counter your opponent controls; destroy it. Once per turn, if a monster with a Spore Counter your opponent controls is destroyed: place 1 Spore Counter on 1 face-up card on the field. You can only use each effect of "Bloomrot Gravecap Widow" once per turn.',
@@ -840,7 +864,7 @@ export const bloomrotCards = [
     subtype: "field",
     archetype: "Bloomrot",
     description:
-      'When this card is activated: add 1 Level 4 or lower "Bloomrot" monster from your Deck to your hand. Once per turn: target 1 face-up monster on the field; place 1 Spore Counter on it. Monsters your opponent controls lose 100 ATK/DEF for each Spore Counter on them. Each time one or more Spore Counters are removed from the field: Special Summon 1 "Bloomrot Token" (Plant/DARK/Level 1/ATK 0/DEF 0) in Defense Position. You can only activate 1 "Bloomrot Living Colony" per turn.',
+      'When this card is activated: add 1 Level 4 or lower "Bloomrot" monster from your Deck to your hand. Once per turn: target 1 face-up monster on the field; place 1 Spore Counter on it. Monsters your opponent controls lose 100 ATK/DEF for each Spore Counter on them. Each time one or more Spore Counters are removed from the field: Special Summon 1 "Bloomrot Token" (Plant/EARTH/Level 1/ATK 0/DEF 0) in Defense Position. You can only activate 1 "Bloomrot Living Colony" per turn.',
     image: "assets/Bloomrot Living Colony.png",
     effects: [
       {
@@ -922,7 +946,7 @@ export const bloomrotCards = [
               def: 0,
               level: 1,
               type: "Plant",
-              attribute: "Dark",
+              attribute: "Earth",
               archetype: "Bloomrot",
               image: "assets/Bloomrot Token.png",
               description: "A Bloomrot token grown from lingering spores.",
@@ -1369,7 +1393,7 @@ export const bloomrotCards = [
     speed: 2,
     archetype: "Bloomrot",
     description:
-      'When an opponent\'s monster declares an attack: place 1 Spore Counter on that monster, negate the attack, and Special Summon 1 "Bloomrot Token" (Plant/DARK/Level 1/ATK 0/DEF 0) in Defense Position. If you control "Bloomrot Living Colony", you can place 1 Spore Counter on 1 other face-up monster your opponent controls. You can only activate 1 "Bloomrot Sudden Germination" per turn.',
+      'When an opponent\'s monster declares an attack: place 1 Spore Counter on that monster, negate the attack, and Special Summon 1 "Bloomrot Token" (Plant/EARTH/Level 1/ATK 0/DEF 0) in Defense Position. If you control "Bloomrot Living Colony", you can place 1 Spore Counter on 1 other face-up monster your opponent controls. You can only activate 1 "Bloomrot Sudden Germination" per turn.',
     image: "assets/Bloomrot Sudden Germination.png",
     effects: [
       {
@@ -1417,7 +1441,7 @@ export const bloomrotCards = [
               def: 0,
               level: 1,
               type: "Plant",
-              attribute: "Dark",
+              attribute: "Earth",
               archetype: "Bloomrot",
               image: "assets/Bloomrot Token.png",
               description: "A Bloomrot token grown from lingering spores.",
@@ -1653,7 +1677,7 @@ export const bloomrotCards = [
     def: 3000,
     level: 8,
     type: "Plant",
-    attribute: "Dark",
+    attribute: "Earth",
     archetype: "Bloomrot",
     ascension: {
       materialFilters: {

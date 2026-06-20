@@ -166,15 +166,21 @@ const DEFAULT_LOCALE_TEXTS = {
       labels: {
         spore: "Spore Counters",
       },
+      added: "Added {amount} {counterLabel} to {cardName}.",
+      removed: "Removed {amount} {counterLabel} from {cardName}.",
+      noneFound: "No {counterLabel} found on the field.",
+      counted: "{amount} {counterLabel} counted on the field.",
+      healByCount:
+        "{playerName} gained {healAmount} LP ({counterCount} {counterLabel} x {amountPerCounter} LP).",
       removeAmount:
-        "Choose how many {counterType} counter(s) to remove ({min}-{max}).",
+        "Choose how many {counterLabel} to remove ({min}-{max}).",
       selectPayment:
-        "Select card(s) to remove {amount} {counterType} counter(s).",
+        "Select card(s) to remove {amount} {counterLabel}.",
       selectEnough:
-        "Select enough cards to remove {amount} {counterType} counter(s).",
+        "Select enough cards to remove {amount} {counterLabel}.",
       paymentCancelled: "Counter payment cancelled.",
       notEnough:
-        "Not enough {counterType} counters on the field to pay the cost.",
+        "Not enough {counterLabel} on the field to pay the cost.",
     },
     replacement: {
       cardSingular: "card",
@@ -664,6 +670,47 @@ export function getUIText(key, params = {}, fallback = null) {
           ? fallback
           : path;
   return interpolateText(fallbackValue, params);
+}
+
+function humanizeCounterType(counterType) {
+  return String(counterType || "counter")
+    .split(/[_\s-]+/)
+    .filter(Boolean)
+    .join(" ");
+}
+
+function singularizeCounterLabel(label) {
+  const normalized = String(label || "").trim();
+  if (!normalized) return normalized;
+  if (/^Marcadores\b/iu.test(normalized)) {
+    return normalized.replace(/^Marcadores\b/iu, "Marcador");
+  }
+  if (/^Contadores\b/iu.test(normalized)) {
+    return normalized.replace(/^Contadores\b/iu, "Marcador");
+  }
+  return normalized
+    .replace(/\bCounters$/i, "Counter")
+    .replace(/\bcounters$/i, "counter");
+}
+
+function normalizePortugueseCounterLabel(label) {
+  const normalized = String(label || "").trim();
+  if (/^Contadores\b/iu.test(normalized)) {
+    return normalized.replace(/^Contadores\b/iu, "Marcadores");
+  }
+  if (/^Contador\b/iu.test(normalized)) {
+    return normalized.replace(/^Contador\b/iu, "Marcador");
+  }
+  return normalized;
+}
+
+export function getCounterDisplayLabel(counterType, amount = 2) {
+  const key = String(counterType || "default").trim();
+  const localized = key ? getUIText(`ui.counters.labels.${key}`, {}, "") : "";
+  const pluralLabel = normalizePortugueseCounterLabel(
+    localized || `${humanizeCounterType(key)} counters`,
+  );
+  return Number(amount) === 1 ? singularizeCounterLabel(pluralLabel) : pluralLabel;
 }
 
 export function getMonsterAttributeDisplayName(attribute) {

@@ -7,7 +7,7 @@
 
 import { isAI } from "../Player.js";
 import { cardMatchesKind } from "../Card.js";
-import { getCardDisplayName, getUIText } from "../i18n.js";
+import { getCardDisplayName, getCounterDisplayLabel, getUIText } from "../i18n.js";
 import {
   getUI,
   collectZoneCandidates,
@@ -1074,7 +1074,11 @@ export async function handleHealPerFieldCounter(action, ctx, targets, engine) {
   }
 
   if (counterCount <= 0) {
-    getUI(game)?.log(`No ${counterType} counters found on the field.`);
+    getUI(game)?.log(
+      getUIText("ui.counters.noneFound", {
+        counterLabel: getCounterDisplayLabel(counterType, 2),
+      }),
+    );
     return true;
   }
 
@@ -1088,7 +1092,13 @@ export async function handleHealPerFieldCounter(action, ctx, targets, engine) {
   await emitLpGainEvent(game, targetPlayer, ctx.source, before);
 
   getUI(game)?.log(
-    `${targetPlayer.name || targetPlayer.id} gained ${healAmount} LP (${counterCount} ${counterType} counter(s) x ${amountPerCounter} LP).`,
+    getUIText("ui.counters.healByCount", {
+      playerName: targetPlayer.name || targetPlayer.id,
+      healAmount,
+      counterCount,
+      counterLabel: getCounterDisplayLabel(counterType, counterCount),
+      amountPerCounter,
+    }),
   );
 
   game.updateBoard();

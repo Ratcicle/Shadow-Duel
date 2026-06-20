@@ -9,6 +9,7 @@ import {
   formatMonsterStatsLine,
   getCardDisplayDescription,
   getCardDisplayName,
+  getCounterDisplayLabel,
   getUIText,
 } from "../../core/i18n.js";
 
@@ -163,7 +164,7 @@ function humanizeCounterType(counterType) {
 function getLocalizedCounterTypeLabel(counterType) {
   const key = String(counterType || "").trim();
   if (!key) return "";
-  return getUIText(`ui.counters.labels.${key}`, {}, "");
+  return getCounterDisplayLabel(key, 2) || getUIText(`ui.counters.labels.${key}`, {}, "");
 }
 
 function getCounterTooltipMetadata(card) {

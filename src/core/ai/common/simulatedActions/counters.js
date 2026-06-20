@@ -18,6 +18,7 @@ import {
 import {
   attachSimulatedEquip,
   findCardOwner,
+  getZoneCards,
   moveCardToZone,
   removeCardFromZones,
 } from "../zones.js";
@@ -35,6 +36,57 @@ import {
   STOP_SIMULATION,
 } from "./shared.js";
 
+function getScopedPlayersForCounterSpec(spec = {}, self, opponent) {
+  const owner = spec.owner || spec.player || "self";
+  if (owner === "opponent") return [opponent].filter(Boolean);
+  if (owner === "any" || owner === "both" || owner === "either") {
+    return [self, opponent].filter(Boolean);
+  }
+  return [self].filter(Boolean);
+}
+
+function countSimulatedFieldCards(spec = {}, self, opponent, options = {}) {
+  const zones = Array.isArray(spec.zones)
+    ? spec.zones
+    : [spec.zone || "field"];
+  const filters = spec.filters || {};
+  let count = 0;
+
+  for (const player of getScopedPlayersForCounterSpec(spec, self, opponent)) {
+    const ownerRole = player === self ? "self" : "opponent";
+    for (const zone of zones) {
+      for (const card of getZoneCards(player, zone)) {
+        if (!matchesTargetFilters(card, filters, options.sourceCard, ownerRole)) {
+          continue;
+        }
+        count += 1;
+      }
+    }
+  }
+
+  return count;
+}
+
+function resolveSimulatedAddCounterAmount(action, self, opponent, options) {
+  if (action.amountFromFieldCount) {
+    const spec = action.amountFromFieldCount;
+    const count = countSimulatedFieldCards(spec, self, opponent, options);
+    const multiplier = Number.isFinite(Number(spec.multiplier))
+      ? Number(spec.multiplier)
+      : 1;
+    let amount = count * multiplier;
+    if (Number.isFinite(Number(spec.min))) {
+      amount = Math.max(Number(spec.min), amount);
+    }
+    if (Number.isFinite(Number(spec.max))) {
+      amount = Math.min(Number(spec.max), amount);
+    }
+    return Math.max(0, Math.floor(amount));
+  }
+
+  return Number.isFinite(action.amount) ? action.amount : 1;
+}
+
 export function applyAddCounter(ctx) {
   const {
     action,
@@ -48,7 +100,12 @@ export function applyAddCounter(ctx) {
     applySimulatedActions,
   } = ctx;
   targets.forEach((card) => {
-    const amount = Number.isFinite(action.amount) ? action.amount : 1;
+    const amount = resolveSimulatedAddCounterAmount(
+      action,
+      self,
+      opponent,
+      options,
+    );
     setCounterValue(
       card,
       action.counterType || "counter",

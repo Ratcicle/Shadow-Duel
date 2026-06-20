@@ -801,6 +801,52 @@ function countPreviewFieldCounters(engine, action, ctx, player) {
   return total;
 }
 
+function countPreviewFieldCardsForSpec(engine, spec = {}, ctx, player) {
+  const zones = Array.isArray(spec?.zones)
+    ? spec.zones
+    : [spec?.zone || "field"];
+  const filters = { ...(spec?.filters || {}) };
+  const actionLike = {
+    owner: spec?.owner,
+    player: spec?.player,
+  };
+
+  let count = 0;
+  for (const owner of getPreviewCounterOwners(actionLike, ctx, player)) {
+    for (const zone of zones) {
+      for (const card of getPreviewZoneCards(owner, zone)) {
+        if (!matchesPreviewFilters(engine, card, filters, ctx)) continue;
+        count += 1;
+      }
+    }
+  }
+  return count;
+}
+
+function resolvePreviewAddCounterAmount(engine, action, ctx, player) {
+  if (action?.amountFromFieldCount) {
+    const spec = action.amountFromFieldCount;
+    const count = countPreviewFieldCardsForSpec(engine, spec, ctx, player);
+    const multiplier = Number.isFinite(Number(spec.multiplier))
+      ? Number(spec.multiplier)
+      : 1;
+    let amount = count * multiplier;
+    if (Number.isFinite(Number(spec.min))) {
+      amount = Math.max(Number(spec.min), amount);
+    }
+    if (Number.isFinite(Number(spec.max))) {
+      amount = Math.min(Number(spec.max), amount);
+    }
+    return Math.max(0, Math.floor(amount));
+  }
+
+  if (action?.damagePerCounter && ctx?.damageAmount !== undefined) {
+    return ctx.damageAmount >= action.damagePerCounter ? 1 : 0;
+  }
+
+  return Math.max(0, Math.floor(Number(action?.amount || 1)));
+}
+
 function countPreviewOpponentDestroyTargets(engine, action, ctx) {
   if (action?.targetCountFromContext) return null;
 
@@ -1054,6 +1100,16 @@ export function checkActionPreviewRequirements(actions, ctx) {
         return {
           ok: false,
           reason: `Need at least ${amount} ${action.counterType || "default"} counter(s) on the field.`,
+        };
+      }
+    }
+
+    if (action.type === "add_counter") {
+      const amount = resolvePreviewAddCounterAmount(this, action, ctx, player);
+      if (amount <= 0 && !isActionOptionalNoop(action)) {
+        return {
+          ok: false,
+          reason: `Need at least 1 ${action.counterType || "default"} counter to add.`,
         };
       }
     }

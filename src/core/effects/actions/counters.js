@@ -6,7 +6,7 @@ import {
 } from "../../actionHandlers/shared.js";
 import { cardMatchesKind } from "../../Card.js";
 import { isAI } from "../../Player.js";
-import { getUIText } from "../../i18n.js";
+import { getCounterDisplayLabel, getUIText } from "../../i18n.js";
 
 /**
  * Counter Actions - add/remove counters
@@ -48,6 +48,24 @@ function emitCounterEvent(engine, data = {}) {
       result: data.result,
     },
     { turn: game?.turnCounter },
+  );
+}
+
+function getCounterTextParams(counterType, amount, extra = {}) {
+  const value = Number.isFinite(Number(amount)) ? Number(amount) : 0;
+  const counterLabel = getCounterDisplayLabel(counterType, value);
+  return {
+    ...extra,
+    amount: value,
+    counterType,
+    counterLabel,
+  };
+}
+
+function getCounterLogMessage(key, counterType, amount, params = {}) {
+  return getUIText(
+    `ui.counters.${key}`,
+    getCounterTextParams(counterType, amount, params),
   );
 }
 
@@ -288,7 +306,10 @@ export async function applyAddCounter(action, ctx, targets) {
           typeof card.getCounter === "function"
             ? card.getCounter(counterType)
             : null;
-        console.log(`Added 1 ${counterType} counter(s) to ${card.name}`);
+        const logMessage = getCounterLogMessage("added", counterType, 1, {
+          cardName: card.name,
+        });
+        console.log(logMessage);
         emitCounterEvent(this, {
           card,
           ctx,
@@ -298,7 +319,7 @@ export async function applyAddCounter(action, ctx, targets) {
           result: after,
         });
         if (this.ui?.log) {
-          this.ui.log(`Added 1 ${counterType} counter(s) to ${card.name}.`);
+          this.ui.log(logMessage);
         }
         await waitForCounterStep(this, action, ctx);
         added = true;
@@ -367,7 +388,7 @@ async function resolveCounterRemovalAmount(engine, action, ctx, totalAvailable) 
   const prompt =
     action.amountPrompt ||
     getUIText("ui.counters.removeAmount", {
-      counterType: action.counterType || "default",
+      ...getCounterTextParams(action.counterType || "default", 2),
       min: minAmount,
       max: maxAmount,
     });
@@ -422,7 +443,10 @@ export async function applyRemoveCounter(action, ctx, targets) {
         remainingForCard -= 1;
         const after =
           typeof card.getCounter === "function" ? card.getCounter(counterType) : null;
-        console.log(`Removed 1 ${counterType} counter(s) from ${card.name}`);
+        const logMessage = getCounterLogMessage("removed", counterType, 1, {
+          cardName: card.name,
+        });
+        console.log(logMessage);
         emitCounterEvent(this, {
           card,
           ctx,
@@ -437,7 +461,7 @@ export async function applyRemoveCounter(action, ctx, targets) {
           removedAmount += 1;
         }
         if (this.ui?.log) {
-          this.ui.log(`Removed 1 ${counterType} counter(s) from ${card.name}.`);
+          this.ui.log(logMessage);
         }
         await waitForCounterStep(this, action, ctx);
       }
@@ -571,8 +595,7 @@ async function selectCounterPaymentCards(engine, action, ctx, entries, amount) {
     message:
       action.selectionMessage ||
       getUIText("ui.counters.selectPayment", {
-        amount,
-        counterType: action.counterType || "default",
+        ...getCounterTextParams(action.counterType || "default", amount),
       }),
     requirements: [
       {
@@ -652,14 +675,14 @@ export async function applyRemoveCountersFromField(action, ctx) {
   }
   if (!Number.isFinite(amount) || amount <= 0) {
     getUI(game)?.log(
-      getUIText("ui.counters.notEnough", { counterType }),
+      getUIText("ui.counters.notEnough", getCounterTextParams(counterType, 2)),
     );
     return false;
   }
 
   if (totalAvailable < amount) {
     getUI(game)?.log(
-      getUIText("ui.counters.notEnough", { counterType }),
+      getUIText("ui.counters.notEnough", getCounterTextParams(counterType, 2)),
     );
     return false;
   }
@@ -681,7 +704,10 @@ export async function applyRemoveCountersFromField(action, ctx) {
 
   if (selectedTotal < amount) {
     getUI(game)?.log(
-      getUIText("ui.counters.selectEnough", { amount, counterType }),
+      getUIText(
+        "ui.counters.selectEnough",
+        getCounterTextParams(counterType, amount),
+      ),
     );
     return false;
   }
@@ -717,7 +743,9 @@ export async function applyRemoveCountersFromField(action, ctx) {
         result: getCounterValue(card, counterType),
       });
       getUI(game)?.log(
-        `Removed 1 ${counterType} counter(s) from ${card.name}.`,
+        getCounterLogMessage("removed", counterType, 1, {
+          cardName: card.name,
+        }),
       );
       await waitForCounterStep(this, action, ctx);
     }
@@ -768,7 +796,9 @@ export async function applyRemoveAllCountersFromField(action, ctx) {
   }
 
   if (totalAvailable <= 0) {
-    getUI(game)?.log(`No ${counterType} counters found on the field.`);
+    getUI(game)?.log(
+      getUIText("ui.counters.noneFound", getCounterTextParams(counterType, 2)),
+    );
     return false;
   }
 
@@ -794,7 +824,9 @@ export async function applyRemoveAllCountersFromField(action, ctx) {
         result: getCounterValue(card, counterType),
       });
       getUI(game)?.log(
-        `Removed 1 ${counterType} counter(s) from ${card.name}.`,
+        getCounterLogMessage("removed", counterType, 1, {
+          cardName: card.name,
+        }),
       );
       await waitForCounterStep(this, action, ctx);
     }
@@ -844,7 +876,10 @@ export async function applyCountFieldCounters(action, ctx) {
 
   if (action.log !== false) {
     getUI(game)?.log(
-      `${total} ${counterType} counter(s) counted on the field.`,
+      getUIText(
+        "ui.counters.counted",
+        getCounterTextParams(counterType, total),
+      ),
     );
   }
 

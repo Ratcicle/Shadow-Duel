@@ -103,13 +103,15 @@ function hasPotentialBattleDamageTimingEffect(game, attacker, target) {
 
 function resolveBattleLpLossPreview(game, attacker, target) {
   if (!game || !attacker) return null;
-  if (hasPotentialBattleDamageTimingEffect(game, attacker, target)) return null;
 
   if (!target) {
+    // Direct attacks do not emit the battle_damage window, so the preview is stable.
     const defender = getOpponentPlayer(game, attacker);
     const amount = getActualLpLoss(defender, attacker.atk);
     return amount > 0 ? { player: defender, amount } : null;
   }
+
+  if (hasPotentialBattleDamageTimingEffect(game, attacker, target)) return null;
 
   const attackerOwner = getController(game, attacker);
   const defenderOwner = getController(game, target);
@@ -163,6 +165,24 @@ async function waitForAttackPresentation(game, presentation) {
     await finished;
   } catch (error) {
     console.warn("[Shadow Duel] Attack presentation failed.", error);
+  }
+}
+
+async function waitForAttackContact(game, presentation) {
+  const contact =
+    presentation?.contact && typeof presentation.contact.then === "function"
+      ? presentation.contact
+      : null;
+  if (!contact) {
+    await waitForAttackPresentation(game, presentation);
+    return false;
+  }
+  try {
+    await contact;
+    return true;
+  } catch (error) {
+    console.warn("[Shadow Duel] Attack contact presentation failed.", error);
+    return false;
   }
 }
 
@@ -466,12 +486,26 @@ export async function resolveCombat(attacker, target, options = {}) {
 
   setBattleLpLossPreview(resolveBattleLpLossPreview(this, attacker, target));
   const attackPresentation = startAttackPresentation();
-  await waitForAttackPresentation(this, attackPresentation);
+  const resolveDamageOnContact = hasPotentialBattleDamageTimingEffect(
+    this,
+    attacker,
+    target,
+  );
+  // Damage Step effects can change stats, so calculate real damage at impact.
+  if (resolveDamageOnContact) {
+    await waitForAttackContact(this, attackPresentation);
+  } else {
+    await waitForAttackPresentation(this, attackPresentation);
+  }
 
   const combatResult = await this.finishCombat(attacker, target, {
     battleImpactVisualPlayed,
     consumeBattleLpLossFeedback,
   });
+
+  if (resolveDamageOnContact) {
+    await waitForAttackPresentation(this, attackPresentation);
+  }
 
   // Emit combat resolution event for replay capture
   await this.emit("combat_resolved", {
