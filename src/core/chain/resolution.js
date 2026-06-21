@@ -19,6 +19,7 @@
 import { isAI } from "../Player.js";
 import { cardMatchesKind } from "../Card.js";
 import { isQuickSpell } from "../game/spellTrap/quickSpellRules.js";
+import { applySpellTrapFinalizationOverride } from "../game/spellTrap/finalization.js";
 
 export async function resolveChain() {
   if (this.chainStack.length === 0) {
@@ -117,6 +118,7 @@ export async function resolveChainLink(link) {
     }
     cleanupAfterResolution(this, link, {
       actionSucceeded: applyResult?.success !== false,
+      activationContext: applyResult?.activationContext || link.activationContext,
     });
     return applyResult || { success: true, needsSelection: false };
   } finally {
@@ -371,23 +373,36 @@ async function applyChainEffect(cs, link, activationZone) {
     opponent: cs.getOpponent(player),
     activationZone,
     defender: link.context?.defender || link.context?.target,
+    target: link.context?.target || link.context?.defender || null,
     attacker: link.context?.attacker,
     attackerOwner: link.context?.attackerOwner,
     defenderOwner: link.context?.defenderOwner,
+    targetOwner: link.context?.targetOwner,
+    destroyed: link.context?.destroyed || null,
+    destroyedOwner: link.context?.destroyedOwner || null,
+    destroyedOwnerId: link.context?.destroyedOwnerId || null,
+    destroyedPosition: link.context?.destroyedPosition || null,
+    battleDestroyer: link.context?.battleDestroyer || link.context?.attacker || null,
+    battleDestroyers: Array.isArray(link.context?.battleDestroyers)
+      ? link.context.battleDestroyers
+      : [link.context?.battleDestroyer || link.context?.attacker].filter(Boolean),
     summonedCard: link.context?.summonedCard || link.context?.card || null,
     summonMethod: link.context?.method || link.context?.summonMethod || null,
     summonFromZone: link.context?.fromZone || null,
+    actionContext: link.context || null,
     activationContext: {
       chainLevel: link.chainLevel,
       effectId: effect?.id || null,
       sourceZone: activationZone,
       chainContext: link.context?.type || null,
+      context: link.context || null,
       event: link.context?.event || null,
       autoSelectSingleTarget: true,
       autoSelectTargets: isAI(player),
       _effectTargetedResolved: link.effectTargetedResolved === true,
     },
   };
+  link.activationContext = ctx.activationContext;
 
   let resolvedSelections = selections;
   if (!resolvedSelections || Object.keys(resolvedSelections).length === 0) {
@@ -491,7 +506,7 @@ async function applyChainEffect(cs, link, activationZone) {
     );
   }
 
-  return { success: true };
+  return { success: true, activationContext: ctx.activationContext };
 }
 
 /**
@@ -593,11 +608,28 @@ function notifyChainActivation(cs, link, activationZone, resolvedSelections) {
  * Sends non-continuous traps and Quick Spells to graveyard,
  * registers once-per-turn usage, and refreshes the board.
  */
-function cleanupAfterResolution(cs, link, { actionSucceeded = true } = {}) {
+function cleanupAfterResolution(
+  cs,
+  link,
+  { actionSucceeded = true, activationContext = null } = {},
+) {
   const { card, player, effect } = link;
   const effectEngine = cs.game.effectEngine;
+  const finalizationOverridden =
+    actionSucceeded &&
+    applySpellTrapFinalizationOverride.call(
+      cs.game,
+      card,
+      player,
+      "spellTrap",
+      { activationContext },
+    );
 
-  if (card.cardKind === "trap" && card.subtype !== "continuous") {
+  if (
+    !finalizationOverridden &&
+    card.cardKind === "trap" &&
+    card.subtype !== "continuous"
+  ) {
     const idx = player.spellTrap?.indexOf(card);
     if (idx !== -1) {
       player.spellTrap.splice(idx, 1);
@@ -619,7 +651,7 @@ function cleanupAfterResolution(cs, link, { actionSucceeded = true } = {}) {
     }
   }
 
-  if (isQuickSpell(card)) {
+  if (!finalizationOverridden && isQuickSpell(card)) {
     const idx = player.spellTrap?.indexOf(card);
     if (idx !== -1) {
       player.spellTrap.splice(idx, 1);

@@ -8,6 +8,8 @@ import {
   applyPayLp,
   applySearchAny,
   applyAddFromZoneToHand,
+  applyDiscardFromHand,
+  applyDeclareCardProperty,
   applyGrantAdditionalNormalSummon,
 } from "./resources.js";
 import {
@@ -52,11 +54,17 @@ import {
 } from "./stats.js";
 import {
   applyAllowDirectAttackThisTurn,
+  applyRegisterBattlePairEffect,
+  applyRedirectCurrentAttackToTarget,
+  applySetSourceAfterResolutionIf,
 } from "./combat.js";
 import {
+  applyConditionalActions,
   applyConditionalTargetActions,
+  applyOptionalTargetActions,
   applyActivateStoredBlueprint,
   applyChooseActionCase,
+  applyRegisterTemporaryEventEffect,
   applyShuffleDeck,
 } from "./flow.js";
 
@@ -68,6 +76,8 @@ export const SIMULATED_ACTION_HANDLERS = {
   "pay_lp": applyPayLp,
   "search_any": applySearchAny,
   "add_from_zone_to_hand": applyAddFromZoneToHand,
+  "discard_from_hand": applyDiscardFromHand,
+  "declare_card_property": applyDeclareCardProperty,
   "grant_additional_normal_summon": applyGrantAdditionalNormalSummon,
   "special_summon_from_zone": applySpecialSummonFromZone,
   "search_then_optional_special_summon_from_hand": applySearchThenOptionalSpecialSummonFromHand,
@@ -98,7 +108,13 @@ export const SIMULATED_ACTION_HANDLERS = {
   "set_stats_to_zero_and_negate": applySetStatsToZeroAndNegate,
   "add_status": applyAddStatus,
   "allow_direct_attack_this_turn": applyAllowDirectAttackThisTurn,
+  "register_battle_pair_effect": applyRegisterBattlePairEffect,
+  "redirect_current_attack_to_target": applyRedirectCurrentAttackToTarget,
+  "set_source_after_resolution_if": applySetSourceAfterResolutionIf,
+  "conditional_actions": applyConditionalActions,
   "conditional_target_actions": applyConditionalTargetActions,
+  "optional_target_actions": applyOptionalTargetActions,
+  "register_temporary_event_effect": applyRegisterTemporaryEventEffect,
   "activate_stored_blueprint": applyActivateStoredBlueprint,
   "choose_action_case": applyChooseActionCase,
   "shuffle_deck": applyShuffleDeck,

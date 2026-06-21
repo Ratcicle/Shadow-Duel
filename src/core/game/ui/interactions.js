@@ -56,6 +56,38 @@ export function bindCardInteractions() {
     const current = getSelectedTributeValue(actor, summonState);
     return `Select tribute monster(s). Tribute value: ${current}/${required}.`;
   };
+  const syncPendingTributeSelectionState = () => {
+    if (!tributeSelectionMode || !pendingSummon?.actor) {
+      this.pendingTributeSummonSelection = null;
+      return;
+    }
+    this.pendingTributeSummonSelection = {
+      active: true,
+      ownerId: pendingSummon.actor.id,
+      cardIndex: pendingSummon.cardIndex,
+      cardId: pendingSummon.cardToSummon?.id ?? null,
+      cardName: pendingSummon.cardToSummon?.name || null,
+      tributeableIndices: [...(pendingSummon.tributeableIndices || [])],
+      selectedTributes: [...selectedTributes],
+      tributesNeeded: pendingSummon.tributesNeeded || 0,
+    };
+  };
+  const beginTributeSelection = (summonState, actor, tributeableIndices) => {
+    tributeSelectionMode = true;
+    selectedTributes = [];
+    pendingSummon = {
+      ...summonState,
+      actor,
+      tributeableIndices,
+    };
+    syncPendingTributeSelectionState();
+  };
+  const clearTributeSelection = () => {
+    tributeSelectionMode = false;
+    selectedTributes = [];
+    pendingSummon = null;
+    this.pendingTributeSummonSelection = null;
+  };
   const buildQuickSpellHandContext = (card, actor) =>
     isQuickSpell(card)
       ? {
@@ -195,8 +227,6 @@ export function bindCardInteractions() {
           const position = choice;
           const isFacedown = choice === "defense";
           if (tributesNeeded > 0) {
-            tributeSelectionMode = true;
-            selectedTributes = [];
             let tributeableIndices = actor.field
               .map((fieldCard, idx) => (fieldCard ? idx : null))
               .filter((idx) => idx !== null);
@@ -210,16 +240,18 @@ export function bindCardInteractions() {
                   : fieldCard.type === requiredType;
               });
             }
-            pendingSummon = {
+            beginTributeSelection(
+              {
+                opponent,
+                cardIndex: index,
+                position,
+                isFacedown,
+                tributesNeeded,
+                cardToSummon: card,
+              },
               actor,
-              opponent,
-              cardIndex: index,
-              position,
-              isFacedown,
-              tributesNeeded,
-              cardToSummon: card,
               tributeableIndices,
-            };
+            );
             setLaboratoryTributeHighlight(actor, tributeableIndices);
             this.ui.log(getTributeSelectionMessage(pendingSummon, actor));
             return;
@@ -346,6 +378,7 @@ export function bindCardInteractions() {
       } else if (selectedTributes.length < allowed.length) {
         selectedTributes.push(index);
       }
+      syncPendingTributeSelectionState();
       setLaboratoryTributeHighlight(actor, allowed, selectedTributes);
       this.ui.log(getTributeSelectionMessage(pendingSummon, actor));
       if (hasSelectedRequiredTributeValue(actor, pendingSummon)) {
@@ -359,9 +392,7 @@ export function bindCardInteractions() {
           selectedTributes
         );
         if (!summonResult && actor.field.length === before) {
-          tributeSelectionMode = false;
-          selectedTributes = [];
-          pendingSummon = null;
+          clearTributeSelection();
           this.updateBoard();
           return true;
         }
@@ -370,9 +401,7 @@ export function bindCardInteractions() {
         summonedCard.summonedTurn = this.turnCounter;
         summonedCard.positionChangedThisTurn = false;
         summonedCard.setTurn = summonedCard.isFacedown ? this.turnCounter : null;
-        tributeSelectionMode = false;
-        selectedTributes = [];
-        pendingSummon = null;
+        clearTributeSelection();
         await emitAfterSummonAfterPresentation({
           card: summonedCard,
           player: actor,
@@ -565,17 +594,6 @@ export function bindCardInteractions() {
               const isFacedown = choice === "defense";
 
               if (tributesNeeded > 0) {
-                tributeSelectionMode = true;
-                selectedTributes = [];
-                pendingSummon = {
-                  cardIndex: index,
-                  position,
-                  isFacedown,
-                  tributesNeeded,
-                  cardToSummon: card,
-                  altTribute: tributeInfo.usingAlt ? tributeInfo.alt : null,
-                };
-
                 // Filter tributeable monsters based on altTribute requirements
                 let tributeableIndices = this.player.field
                   .map((card, idx) => (card ? idx : null))
@@ -594,7 +612,18 @@ export function bindCardInteractions() {
                   });
                 }
 
-                pendingSummon.tributeableIndices = tributeableIndices;
+                beginTributeSelection(
+                  {
+                    cardIndex: index,
+                    position,
+                    isFacedown,
+                    tributesNeeded,
+                    cardToSummon: card,
+                    altTribute: tributeInfo.usingAlt ? tributeInfo.alt : null,
+                  },
+                  this.player,
+                  tributeableIndices,
+                );
                 if (
                   this.ui &&
                   typeof this.ui.setPlayerFieldTributeable === "function"
@@ -780,6 +809,7 @@ export function bindCardInteractions() {
             this.ui.setPlayerFieldSelected(index, true);
           }
         }
+        syncPendingTributeSelectionState();
 
         this.ui.log(getTributeSelectionMessage(pendingSummon, this.player));
 
@@ -801,9 +831,7 @@ export function bindCardInteractions() {
           );
 
           if (!summonResult && this.player.field.length === before) {
-            tributeSelectionMode = false;
-            selectedTributes = [];
-            pendingSummon = null;
+            clearTributeSelection();
             this.updateBoard();
             return;
           }
@@ -823,9 +851,7 @@ export function bindCardInteractions() {
 
           const summonMethod =
             pendingSummon.tributesNeeded > 0 ? "tribute" : "normal";
-          tributeSelectionMode = false;
-          selectedTributes = [];
-          pendingSummon = null;
+          clearTributeSelection();
 
           await emitAfterSummonAfterPresentation({
             card: summonedCard,
@@ -994,7 +1020,8 @@ export function bindCardInteractions() {
           !isMultiAttackMode && // Multi-attack can only target monsters, not direct
           !(
             (attacker.attacksUsedThisTurn || 0) > 0 &&
-            attacker.extraAttackTargetRestriction === "monster"
+            (attacker.extraAttackTargetRestriction ||
+              attacker.passiveExtraAttackTargetRestriction) === "monster"
           ) &&
           (attacker.canAttackDirectlyThisTurn === true ||
             attackCandidates.length === 0);

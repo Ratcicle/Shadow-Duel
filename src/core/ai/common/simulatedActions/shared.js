@@ -146,12 +146,62 @@ export function resolveSimulatedLpCost({
 export function resolveTargetsForAction(action, selections, options, opponent) {
   if (!action?.targetRef) return [];
   if (action.targetRef === "self") return [options.sourceCard].filter(Boolean);
+  if (
+    action.targetRef === "battle_self_participant" ||
+    action.targetRef === "battle_opponent_participant"
+  ) {
+    const selfId = options.selfId || "bot";
+    const expectedId =
+      action.targetRef === "battle_opponent_participant"
+        ? opponent?.id || (selfId === "bot" ? "player" : "bot")
+        : selfId;
+    const expectedPlayer =
+      expectedId === opponent?.id ? opponent : options.self || null;
+    const matchesOwner = (card, ownerId) =>
+      !!card &&
+      ((Array.isArray(expectedPlayer?.field) &&
+        expectedPlayer.field.includes(card)) ||
+        card.controller === ownerId ||
+        card.owner === ownerId);
+    const attacker =
+      options.attacker || options.actionContext?.attacker || null;
+    const defender =
+      options.defender ||
+      options.target ||
+      options.actionContext?.defender ||
+      options.actionContext?.target ||
+      null;
+    if (matchesOwner(attacker, expectedId)) return [attacker];
+    if (matchesOwner(defender, expectedId)) return [defender];
+    return [];
+  }
   if (action.targetRef === "opponent_field") {
     return (opponent?.field || []).filter(
       (card) => card && card.cardKind === "monster" && !card.isFacedown,
     );
   }
   return selections[action.targetRef] || [];
+}
+
+export function storeSimActionResult(
+  action,
+  selections,
+  options,
+  cards,
+  fallbackKey = null,
+) {
+  const resultKey = action?.resultRef || action?.storeResultAs || fallbackKey;
+  if (!resultKey) return;
+  const storedCards = Array.isArray(cards) ? cards.filter(Boolean) : [];
+  if (selections && typeof selections === "object") {
+    selections[resultKey] = storedCards;
+  }
+  if (options && typeof options === "object") {
+    if (!options.actionResults || typeof options.actionResults !== "object") {
+      options.actionResults = {};
+    }
+    options.actionResults[resultKey] = storedCards;
+  }
 }
 
 export function getActionCandidates(player, action = {}, zoneFallback = "deck") {

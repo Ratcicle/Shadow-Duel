@@ -195,12 +195,16 @@ export async function applyActions(actions, ctx, targets) {
   if (ctx && selectionMap && !ctx.selections) {
     ctx.selections = selectionMap;
   }
+  const runtimeTargets =
+    ctx && targets && typeof targets === "object" && !Array.isArray(targets)
+      ? (ctx._actionTargets = ctx._actionTargets || targets)
+      : targets || {};
 
   try {
     const targetedResult = await emitEffectTargetedBeforeActions(
       this,
       ctx,
-      targets,
+      runtimeTargets,
       logDev,
     );
     if (targetedResult?.needsSelection) {
@@ -216,7 +220,11 @@ export async function applyActions(actions, ctx, targets) {
 
       // Filter targets by immunity before passing to handler
       // This implements the "skip_targets" default behavior (vs "skip_action")
-      const immunityResult = this.filterTargetsByImmunity(action, ctx, targets);
+      const immunityResult = this.filterTargetsByImmunity(
+        action,
+        ctx,
+        runtimeTargets,
+      );
 
       if (immunityResult.skipAction) {
         // immunityMode: "skip_action" was set and some targets were immune
@@ -396,6 +404,7 @@ function buildTargetPreviewFilters(target = {}) {
   copyIfPresent("name");
   copyIfPresent("cardName", "name");
   copyIfPresent("cardId");
+  copyIfPresent("cardIds");
   copyIfPresent("subtype");
   copyIfPresent("monsterType");
   copyIfPresent("level");
@@ -432,6 +441,16 @@ function matchesPreviewFilters(engine, card, filters, ctx = {}) {
     return false;
   }
   if (filters.cardKind && !cardMatchesKind(card, filters.cardKind)) {
+    return false;
+  }
+  if (filters.cardId !== undefined && card.id !== filters.cardId) {
+    return false;
+  }
+  if (
+    Array.isArray(filters.cardIds) &&
+    filters.cardIds.length > 0 &&
+    !filters.cardIds.includes(card.id)
+  ) {
     return false;
   }
   if (filters.type) {
@@ -680,7 +699,16 @@ function checkPreviewMoveTargetAvailability(
   player,
   previewMoves,
 ) {
-  if (action?.type !== "move" || !action.targetRef) return { ok: true };
+  if (action?.type !== "move") return { ok: true };
+  const toZone = action.to || action.toZone;
+  if (toZone === "field") {
+    const destinationPlayer =
+      action.player === "opponent" ? ctx?.opponent : ctx?.player || player;
+    if ((destinationPlayer?.field || []).length >= 5) {
+      return { ok: false, reason: "Field is full." };
+    }
+  }
+  if (!action.targetRef) return { ok: true };
   const targetDef = getEffectTargetDefinition(ctx, action.targetRef);
   if (!targetDef) return { ok: true };
 
@@ -1200,6 +1228,34 @@ export function checkActionPreviewRequirements(actions, ctx) {
             reason: `No valid cards in ${sourceZone} matching filters.`,
           };
         }
+      }
+    }
+
+    if (action.type === "discard_from_hand") {
+      const targetPlayer = action.player === "opponent" ? ctx?.opponent : player;
+      const count = action.count || { min: 1, max: 1 };
+      const min = Math.max(Number(count.min ?? 1), 0);
+      if (min > 0) {
+        const hand = targetPlayer?.hand || [];
+        const filters = action.filters || {};
+        const hasEnough =
+          hand.filter((card) => matchesPreviewFilters(this, card, filters, ctx))
+            .length >= min;
+        if (!hasEnough) {
+          return {
+            ok: false,
+            reason: "Not enough cards in hand to discard.",
+          };
+        }
+      }
+    }
+
+    if (action.type === "declare_card_property") {
+      if (!action.property || !action.stateKey) {
+        return {
+          ok: false,
+          reason: "Invalid declaration action.",
+        };
       }
     }
 

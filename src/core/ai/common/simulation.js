@@ -164,6 +164,34 @@ export function simulateGenericSpellEffect(state, card, options = {}) {
   markSimulatedEffectUsed(state, effect, card, options.selfId || "bot");
 }
 
+function resolvesToGraveyardAfterActivation(card) {
+  if (!card || card.cardKind !== "spell") return false;
+  return (
+    card.subtype === "normal" ||
+    card.subtype === "quick" ||
+    card.subtype === "quick-play" ||
+    card.subtype === "quickplay"
+  );
+}
+
+function setSimulatedSpellTrapAfterResolution(player, card, state) {
+  if (!player || !card) return false;
+  player.spellTrap = player.spellTrap || [];
+  if (player.spellTrap.length >= 5 && !player.spellTrap.includes(card)) {
+    return false;
+  }
+  card.isFacedown = true;
+  if (typeof state.turnCounter === "number") {
+    card.turnSetOn = state.turnCounter;
+    card.setTurn = state.turnCounter;
+  }
+  delete card.__simSetAfterResolution;
+  if (!player.spellTrap.includes(card)) {
+    player.spellTrap.push(card);
+  }
+  return true;
+}
+
 function runActionOverride(state, action, options) {
   const override = options.actionOverrides?.[action.type];
   if (typeof override !== "function") return false;
@@ -416,6 +444,17 @@ export function applyGenericSimulatedMainPhaseAction(
       player.hand.splice(handIndex, 1);
       const placedCard = { ...card };
       simulateGenericSpellEffect(state, placedCard, selectionOptions);
+      if (placedCard.__simSetAfterResolution) {
+        if (!setSimulatedSpellTrapAfterResolution(player, placedCard, state)) {
+          delete placedCard.__simSetAfterResolution;
+          player.graveyard.push(placedCard);
+        }
+        break;
+      }
+      if (resolvesToGraveyardAfterActivation(placedCard)) {
+        player.graveyard.push(placedCard);
+        break;
+      }
       const placement = options.placeSpellCard?.(state, placedCard) || {
         placed: false,
       };
@@ -493,11 +532,11 @@ export function applyGenericSimulatedMainPhaseAction(
         });
       }
 
-      if (
-        card.cardKind === "spell" &&
-        (card.subtype === "normal" ||
-          card.subtype === "quick-play")
-      ) {
+      if (resolvesToGraveyardAfterActivation(card)) {
+        if (card.__simSetAfterResolution) {
+          setSimulatedSpellTrapAfterResolution(player, card, state);
+          break;
+        }
         player.graveyard.push(card);
         if (Array.isArray(player.spellTrap)) {
           player.spellTrap.splice(zoneIndex, 1);

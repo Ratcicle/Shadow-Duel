@@ -3,6 +3,49 @@
  * Extracted from EffectEngine.js – preserving original logic and signatures.
  */
 
+function resolveContextTargetCards(action, ctx, targets) {
+  const targetRef = action?.targetRef;
+  const targetCards = targets?.[targetRef] || [];
+  if (Array.isArray(targetCards) && targetCards.length > 0) {
+    return targetCards;
+  }
+
+  if (targetRef === "battle_opponent") {
+    let opponentCard = null;
+    let opponentOwner = null;
+    if (ctx?.source && ctx.source === ctx?.attacker) {
+      opponentCard = ctx?.defender || ctx?.target || null;
+      opponentOwner = ctx?.defenderOwner || ctx?.targetOwner || null;
+    } else if (ctx?.source && ctx.source === (ctx?.defender || ctx?.target)) {
+      opponentCard = ctx?.attacker || null;
+      opponentOwner = ctx?.attackerOwner || null;
+    }
+    if (
+      opponentCard &&
+      opponentOwner &&
+      Array.isArray(opponentOwner.field) &&
+      opponentOwner.field.includes(opponentCard) &&
+      opponentCard.cardKind === "monster"
+    ) {
+      return [opponentCard];
+    }
+  }
+
+  const contextTargets = {
+    self: ctx?.source,
+    source: ctx?.source,
+    destroyed: ctx?.destroyed,
+    summonedCard: ctx?.summonedCard,
+    attacker: ctx?.attacker,
+    defender: ctx?.defender,
+    target: ctx?.target,
+    targetedCard: ctx?.targetedCard,
+  };
+  const contextTarget = contextTargets[targetRef];
+  if (Array.isArray(contextTarget)) return contextTarget.filter(Boolean);
+  return contextTarget ? [contextTarget] : [];
+}
+
 /**
  * Apply destroy action to target cards
  * @param {Object} action - Action configuration
@@ -11,7 +54,7 @@
  * @returns {Promise<boolean>} Whether any cards were destroyed
  */
 export async function applyDestroy(action, ctx, targets) {
-  const targetCards = targets?.[action.targetRef] || [];
+  const targetCards = resolveContextTargetCards(action, ctx, targets);
   let destroyedAny = false;
 
   for (const card of targetCards) {

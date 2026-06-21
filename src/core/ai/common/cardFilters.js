@@ -17,6 +17,10 @@ function matchesOne(value, expected) {
   return values.includes(value);
 }
 
+function getCardInstanceId(card) {
+  return card?.instanceId ?? card?._instanceId ?? card?.uuid ?? card?.simInstanceId ?? null;
+}
+
 export function cardMatchesFilter(card, filter = {}) {
   if (!card) return false;
 
@@ -100,6 +104,19 @@ export function cardMatchesFilter(card, filter = {}) {
       ...asArray(current.excludeCardIds),
     ].filter((value) => value !== undefined && value !== null);
     if (excludedIds.includes(card.id)) return false;
+    const cardInstanceId = getCardInstanceId(card);
+    const excludedInstanceIds = [
+      current.excludeInstanceId,
+      ...asArray(current.excludeInstanceIds),
+      ...asArray(current.excludeCardInstanceIds),
+    ].filter((value) => value !== undefined && value !== null);
+    if (
+      cardInstanceId !== null &&
+      excludedInstanceIds.includes(cardInstanceId)
+    ) {
+      return false;
+    }
+    if (asArray(current.excludeCards).includes(card)) return false;
     if (current.equippedWithFilters) {
       const equips = Array.isArray(card.equips) ? card.equips : [];
       if (

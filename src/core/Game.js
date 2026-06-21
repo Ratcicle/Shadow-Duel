@@ -167,11 +167,14 @@ export default class Game {
     this.damageStepTiming = null;
     this.lastAttackNegated = false;
     this.pendingSpecialSummon = null; // Track pending special summon (e.g., Leviathan from Eel)
+    this.pendingTributeSummonSelection = null;
     this.isResolvingEffect = false; // Lock player actions while resolving an effect
     this.eventResolutionDepth = 0;
     this.eventResolutionCounter = 0;
     this.pendingEventSelection = null;
     this.temporaryReplacementEffects = [];
+    this.temporaryBattlePairEffects = [];
+    this.temporaryEventEffects = [];
     this.trapPromptInProgress = false; // Avoid multiple trap prompts simultaneously
     this.devModeEnabled = !!options.devMode;
     this.zoneOpDepth = 0;
@@ -230,12 +233,15 @@ export default class Game {
     this.selectionState = "idle";
     this.graveyardSelection = null;
     this.pendingSpecialSummon = null;
+    this.pendingTributeSummonSelection = null;
     this.pendingEventSelection = null;
     this.isResolvingEffect = false;
     this.eventResolutionDepth = 0;
     this.trapPromptInProgress = false;
     this.delayedActions = [];
     this.temporaryReplacementEffects = [];
+    this.temporaryBattlePairEffects = [];
+    this.temporaryEventEffects = [];
     this.pendingCardAnimations = [];
     this.pendingVisualFeedback = [];
     this.pendingBoardPresentationPromise = Promise.resolve(false);
@@ -960,9 +966,17 @@ Game.prototype.scheduleDelayedAction = turnScheduling.scheduleDelayedAction;
 Game.prototype.processDelayedActions = turnScheduling.processDelayedActions;
 Game.prototype.resolveDelayedAction = turnScheduling.resolveDelayedAction;
 
-// Cleanup: applyTurnBasedBuff, cleanupExpiredBuffs, cleanupTempBoosts
+// Cleanup: applyTurnBasedBuff, cleanupExpiredBuffs, cleanupExpiredDeclaredValues, cleanupExpiredEffectMarkers, cleanupTempBoosts
 Game.prototype.applyTurnBasedBuff = turnCleanup.applyTurnBasedBuff;
 Game.prototype.cleanupExpiredBuffs = turnCleanup.cleanupExpiredBuffs;
+Game.prototype.cleanupExpiredDeclaredValues =
+  turnCleanup.cleanupExpiredDeclaredValues;
+Game.prototype.cleanupExpiredEffectMarkers =
+  turnCleanup.cleanupExpiredEffectMarkers;
+Game.prototype.cleanupExpiredTemporaryBattlePairEffects =
+  turnCleanup.cleanupExpiredTemporaryBattlePairEffects;
+Game.prototype.cleanupExpiredTemporaryEventEffects =
+  turnCleanup.cleanupExpiredTemporaryEventEffects;
 Game.prototype.cleanupTempBoosts = turnCleanup.cleanupTempBoosts;
 
 // Once-per-turn: usage tracking for oncePerTurn effects

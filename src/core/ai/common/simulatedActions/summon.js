@@ -33,6 +33,7 @@ import {
   resolveSimulatedLpCost,
   resolveTargetsForAction,
   STOP_SIMULATION,
+  storeSimActionResult,
 } from "./shared.js";
 
 export function applySpecialSummonFromZone(ctx) {
@@ -91,6 +92,15 @@ export function applySpecialSummonFromZone(ctx) {
       sourceCard: options.sourceCard,
     });
   });
+  if (chosen.length > 0) {
+    options.lastSpecialSummonedCards = chosen;
+    options.lastSpecialSummonedCard = chosen[0] || null;
+    if (options.actionContext && typeof options.actionContext === "object") {
+      options.actionContext.lastSpecialSummonedCards = chosen;
+      options.actionContext.lastSpecialSummonedCard = chosen[0] || null;
+    }
+    storeSimActionResult(action, selections, options, chosen);
+  }
   return;
 }
 

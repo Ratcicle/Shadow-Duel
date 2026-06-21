@@ -1,5 +1,27 @@
 import { cardMatchesKind } from "../../Card.js";
 
+function getCardInstanceId(card) {
+  return card?.instanceId ?? card?._instanceId ?? card?.uuid ?? card?.simInstanceId ?? null;
+}
+
+function isExcludedInstance(card, filters = {}) {
+  const excludedCards = Array.isArray(filters.excludeCards)
+    ? filters.excludeCards
+    : [];
+  if (excludedCards.includes(card)) return true;
+  const cardInstanceId = getCardInstanceId(card);
+  const excludedInstanceIds = [
+    filters.excludeInstanceId,
+    ...(Array.isArray(filters.excludeInstanceIds)
+      ? filters.excludeInstanceIds
+      : []),
+    ...(Array.isArray(filters.excludeCardInstanceIds)
+      ? filters.excludeCardInstanceIds
+      : []),
+  ].filter((value) => value !== undefined && value !== null);
+  return cardInstanceId !== null && excludedInstanceIds.includes(cardInstanceId);
+}
+
 export function cardMatchesFilters(card, filters = {}) {
   if (!card) return false;
   const idFilter = filters.cardId ?? filters.id;
@@ -38,6 +60,7 @@ export function cardMatchesFilters(card, filters = {}) {
     ...(Array.isArray(filters.excludeCardIds) ? filters.excludeCardIds : []),
   ].filter((value) => value !== undefined && value !== null);
   if (excludeIdFilters.includes(card.id)) return false;
+  if (isExcludedInstance(card, filters)) return false;
   if (filters.cardKind) {
     if (!cardMatchesKind(card, filters.cardKind)) return false;
   }

@@ -404,6 +404,7 @@ export function validateCardDatabase() {
           : [],
       );
 
+      const producedTargetIds = new Set();
       effectActions.forEach((action, actionIndex) => {
         if (!action || typeof action !== "object") {
           errors.push(
@@ -453,12 +454,24 @@ export function validateCardDatabase() {
           return;
         }
 
-        const shapeResult = validateActionShape(action, { targetIds });
+        const availableTargetIds = new Set([
+          ...targetIds,
+          ...producedTargetIds,
+        ]);
+        const shapeResult = validateActionShape(action, {
+          targetIds: availableTargetIds,
+        });
         for (const message of shapeResult.errors) {
           errors.push(formatIssue(card, message, effectIndex, actionIndex));
         }
         for (const message of shapeResult.warnings) {
           warnings.push(formatIssue(card, message, effectIndex, actionIndex));
+        }
+
+        for (const ref of [action.resultRef, action.storeResultAs]) {
+          if (typeof ref === "string" && ref.length > 0) {
+            producedTargetIds.add(ref);
+          }
         }
       });
     });

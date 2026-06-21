@@ -118,6 +118,10 @@ export function buildActionFilter(action = {}) {
     "requireFaceup",
     "excludeCardName",
     "excludeCardNames",
+    "excludeInstanceId",
+    "excludeInstanceIds",
+    "excludeCardInstanceIds",
+    "excludeCards",
     "minLevel",
     "maxLevel",
     "level",
@@ -182,6 +186,7 @@ function inferTargetIntent(action) {
   if (type === "destroy") return "harm";
   if (type === "banish") return "harm";
   if (type === "move" && action.to === "graveyard") return "cost";
+  if (type === "discard_from_hand") return "cost";
   if (type === "damage" && action.player === "self") return "cost";
   if (type === "buff_stats_temp") return "benefit";
   if (type === "equip") return "benefit";
@@ -416,16 +421,46 @@ export function selectSimulatedTargets({
 
   targets.forEach((target) => {
     if (!target || !target.id) return;
+    const excludeTargetRefs = [
+      target.excludeTargetRef,
+      ...asArray(target.excludeTargetRefs),
+    ].filter(Boolean);
+    const excludedCards = excludeTargetRefs.flatMap((ref) =>
+      Array.isArray(result[ref])
+        ? result[ref]
+        : result[ref]
+          ? [result[ref]]
+          : [],
+    );
+    const excludedInstanceIds = excludedCards
+      .map(getCardInstanceId)
+      .filter((value) => value !== undefined && value !== null);
+    const effectiveTarget =
+      excludedCards.length > 0
+        ? {
+            ...target,
+            excludeCards: [
+              ...asArray(target.excludeCards),
+              ...excludedCards,
+            ],
+            excludeInstanceIds: [
+              ...asArray(target.excludeInstanceIds),
+              ...excludedInstanceIds,
+            ],
+          }
+        : target;
     const ownerEntries =
-      target.owner === "opponent"
+      effectiveTarget.owner === "opponent"
         ? [{ player: opponent, role: "opponent" }]
-        : target.owner === "any"
+        : effectiveTarget.owner === "any"
           ? [
               { player: self, role: "self" },
               { player: opponent, role: "opponent" },
             ]
           : [{ player: self, role: "self" }];
-    const zones = target.zones || (target.zone ? [target.zone] : []);
+    const zones =
+      effectiveTarget.zones ||
+      (effectiveTarget.zone ? [effectiveTarget.zone] : []);
     let candidates = [];
     ownerEntries.forEach(({ player: owner, role }) => {
       zones.forEach((zone) => {
@@ -436,7 +471,7 @@ export function selectSimulatedTargets({
     });
     const filtered = candidates
       .filter(({ card, role }) =>
-        matchesTargetFilters(card, target, sourceCard, role)
+        matchesTargetFilters(card, effectiveTarget, sourceCard, role)
       )
       .map(({ card }) => card);
 

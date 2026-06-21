@@ -160,6 +160,21 @@ export function updateBoard(options = {}) {
       this.highlightReadySpecialSummon();
     }
 
+    if (
+      this.pendingTributeSummonSelection?.active === true &&
+      this.pendingTributeSummonSelection.ownerId === "player" &&
+      typeof this.ui.setPlayerFieldTributeable === "function"
+    ) {
+      const tributeable =
+        this.pendingTributeSummonSelection.tributeableIndices || [];
+      const selected =
+        this.pendingTributeSummonSelection.selectedTributes || [];
+      this.ui.setPlayerFieldTributeable(tributeable);
+      if (typeof this.ui.setPlayerFieldSelected === "function") {
+        selected.forEach((index) => this.ui.setPlayerFieldSelected(index, true));
+      }
+    }
+
     this.updateActivationIndicators();
     this.updateAttackIndicators();
   };

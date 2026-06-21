@@ -21,8 +21,11 @@ export function canStartAction(options = {}) {
   const allowDuringOpponentTurn = options.allowDuringOpponentTurn === true;
   const phaseReq = options.phaseReq || null;
   const selectionState = this.selectionState || "idle";
+  const tributeSelectionActive =
+    this.pendingTributeSummonSelection?.active === true;
   const selectionInteractive =
     !!this.targetSelection ||
+    tributeSelectionActive ||
     selectionState === "selecting" ||
     selectionState === "confirming";
   const resolvingActive =

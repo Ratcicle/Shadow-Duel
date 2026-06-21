@@ -129,9 +129,16 @@ export async function applyEquip(action, ctx, targets) {
     equipCard.grantsCrescentShieldGuard = false;
   }
 
-  const maxAttacksAfterEquip = 1 + (target.extraAttacks || 0);
-  target.hasAttacked =
-    (target.attacksUsedThisTurn || 0) >= maxAttacksAfterEquip;
+  const refreshEquippedTargetAttackState = () => {
+    if (typeof this.updatePassiveBuffs === "function") {
+      this.updatePassiveBuffs();
+    }
+    const maxAttacksAfterEquip = 1 + (target.extraAttacks || 0);
+    target.hasAttacked =
+      (target.attacksUsedThisTurn || 0) >= maxAttacksAfterEquip;
+  };
+
+  refreshEquippedTargetAttackState();
 
   if (this.game && typeof this.game.emit === "function") {
     const targetOwner =
@@ -142,6 +149,7 @@ export async function applyEquip(action, ctx, targets) {
       target,
       targetOwner,
     });
+    refreshEquippedTargetAttackState();
   }
   return true;
 }

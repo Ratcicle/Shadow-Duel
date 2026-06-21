@@ -770,7 +770,9 @@ function buildPlannerBattlePlans(state) {
     if (!canPlannerAttackerStillAttack(attacker, state)) return;
     const usedAttacks = Number(attacker.attacksUsedThisTurn || 0);
     const monsterOnlyExtraAttack =
-      usedAttacks > 0 && attacker.extraAttackTargetRestriction === "monster";
+      usedAttacks > 0 &&
+      (attacker.extraAttackTargetRestriction ||
+        attacker.passiveExtraAttackTargetRestriction) === "monster";
     if (
       !attacker.cannotAttackDirectly &&
       !monsterOnlyExtraAttack &&

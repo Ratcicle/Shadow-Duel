@@ -53,6 +53,38 @@ function getFieldCounterZoneCards(player, zone) {
   return Array.isArray(cards) ? cards.filter(Boolean) : [];
 }
 
+function getCardInstanceId(card) {
+  return card?.instanceId ?? card?._instanceId ?? card?.uuid ?? card?.simInstanceId ?? null;
+}
+
+function getCardsFromTargetRefs(refs, targets) {
+  const targetRefs = Array.isArray(refs) ? refs : [refs];
+  return targetRefs
+    .filter(Boolean)
+    .flatMap((ref) =>
+      Array.isArray(targets?.[ref])
+        ? targets[ref]
+        : targets?.[ref]
+          ? [targets[ref]]
+          : [],
+    )
+    .filter(Boolean);
+}
+
+function storeActionResultCards(action, ctx, targets, cards, fallbackKey = null) {
+  const resultKey = action?.resultRef || action?.storeResultAs || fallbackKey;
+  if (!resultKey) return;
+  const storedCards = Array.isArray(cards) ? cards.filter(Boolean) : [];
+  if (!ctx || typeof ctx !== "object") return;
+  if (!ctx._actionTargets || typeof ctx._actionTargets !== "object") {
+    ctx._actionTargets = {};
+  }
+  ctx._actionTargets[resultKey] = storedCards;
+  if (targets && typeof targets === "object") {
+    targets[resultKey] = storedCards;
+  }
+}
+
 function cardMatchesFieldCounterFilters(card, filters = {}) {
   if (!card) return false;
   if (filters.requireFaceup === true && card.isFacedown) return false;
@@ -175,6 +207,98 @@ function buildAddToHandSelectionContract(
   };
 }
 
+function normalizeSelectionCount(count, fallback = 1) {
+  if (Number.isFinite(count)) {
+    return { min: count, max: count };
+  }
+  const min = Number.isFinite(count?.min) ? count.min : fallback;
+  const max = Number.isFinite(count?.max) ? count.max : min;
+  return {
+    min: Math.max(0, min),
+    max: Math.max(0, max),
+  };
+}
+
+function resolveActionPlayer(action, ctx) {
+  return action?.player === "opponent" ? ctx?.opponent : ctx?.player;
+}
+
+function buildDiscardSelectionContract(
+  action,
+  ctx,
+  { affectedPlayer, game },
+) {
+  return (cards, range) => {
+    const requirementId =
+      action.selectionId ||
+      `${ctx?.effect?.id || action.type || "discard_from_hand"}_selection`;
+    const decorated = buildZoneSelectionCandidates(
+      affectedPlayer,
+      game,
+      cards,
+      "hand",
+    );
+
+    return {
+      kind: "target",
+      requirementId,
+      decorated,
+      selectionContract: {
+        kind: "target",
+        message:
+          action.selectionMessage ||
+          getUIText("ui.selection.chooseTargetCount", {
+            count: range.max,
+            label: action.selectionLabel || "discard",
+          }),
+        requirements: [
+          {
+            id: requirementId,
+            label: action.selectionLabel || "Discard",
+            min: range.min,
+            max: range.max,
+            zones: ["hand"],
+            owner: "player",
+            filters: action.filters || {},
+            allowSelf: true,
+            distinct: true,
+            candidates: decorated,
+          },
+        ],
+        ui: {
+          useFieldTargeting: false,
+          allowEmpty: Number(range.min || 0) === 0,
+        },
+        metadata: {
+          context: "discard_from_hand",
+          intent: action.contextLabel === "cost" ? "cost" : "discard",
+          sourceCard: ctx?.source || null,
+          sourceCardName: ctx?.source?.name || null,
+          effectId: ctx?.effect?.id || null,
+          sourceZone: "hand",
+        },
+      },
+    };
+  };
+}
+
+function rankDiscardCandidates(cards, max) {
+  return cards
+    .slice()
+    .sort((a, b) => {
+      const aValue =
+        a?.cardKind === "monster"
+          ? Number(a.atk || 0) + Number(a.def || 0)
+          : 900;
+      const bValue =
+        b?.cardKind === "monster"
+          ? Number(b.atk || 0) + Number(b.def || 0)
+          : 900;
+      return aValue - bValue;
+    })
+    .slice(0, max);
+}
+
 /**
  * Generic handler for paying Life Points as a cost
  *
@@ -257,6 +381,49 @@ export async function handlePayLP(action, ctx, targets, engine) {
  * - count: { min, max } for selection count
  * - promptPlayer: boolean (default: true for human player)
  */
+function resolveMarkerExpirationTurn(game, markerConfig = {}) {
+  const currentTurn = Number(game?.turnCounter || 0);
+  if (Number.isFinite(markerConfig.expiresOnTurn)) {
+    return markerConfig.expiresOnTurn;
+  }
+  if (Number.isFinite(markerConfig.durationTurns)) {
+    return currentTurn + Math.max(0, markerConfig.durationTurns);
+  }
+  if (markerConfig.duration === "end_of_next_turn") {
+    return currentTurn + 1;
+  }
+  return currentTurn;
+}
+
+function markAddedCards(selectedCards, action, ctx, game, player) {
+  const markerConfig = action?.markAddedCards;
+  if (!markerConfig || typeof markerConfig !== "object" || !markerConfig.key) {
+    return;
+  }
+
+  const source = ctx?.source || null;
+  const marker = {
+    key: markerConfig.key,
+    sourceInstanceId:
+      markerConfig.bindToSource === false ? null : getCardInstanceId(source),
+    sourceCardId:
+      markerConfig.bindToSource === false ? null : source?.id ?? null,
+    sourceEffectId:
+      markerConfig.sourceEffectId || ctx?.effect?.id || action?.sourceEffectId || null,
+    controllerId: player?.id || null,
+    markedOnTurn: Number(game?.turnCounter || 0),
+    expiresOnTurn: resolveMarkerExpirationTurn(game, markerConfig),
+  };
+
+  for (const card of selectedCards || []) {
+    if (!card) continue;
+    if (!card.effectMarkers || typeof card.effectMarkers !== "object") {
+      card.effectMarkers = {};
+    }
+    card.effectMarkers[markerConfig.key] = { ...marker };
+  }
+}
+
 export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
   const { player, source } = ctx;
   const game = engine.game;
@@ -312,6 +479,35 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
       ? targets[action.excludeNameRef]
       : [targets[action.excludeNameRef]];
     addExcludedNames(refCards.map((card) => card?.name).filter(Boolean));
+  }
+  const excludedTargetCards = getCardsFromTargetRefs(
+    [
+      action.excludeTargetRef,
+      ...(Array.isArray(action.excludeTargetRefs)
+        ? action.excludeTargetRefs
+        : []),
+    ],
+    targets,
+  );
+  if (excludedTargetCards.length > 0) {
+    const excludedInstanceIds = excludedTargetCards
+      .map(getCardInstanceId)
+      .filter((value) => value !== undefined && value !== null);
+    filters.excludeCards = [
+      ...(Array.isArray(filters.excludeCards) ? filters.excludeCards : []),
+      ...excludedTargetCards,
+    ];
+    if (excludedInstanceIds.length > 0) {
+      filters.excludeInstanceIds = [
+        ...(Array.isArray(filters.excludeInstanceIds)
+          ? filters.excludeInstanceIds
+          : filters.excludeInstanceId !== undefined &&
+              filters.excludeInstanceId !== null
+            ? [filters.excludeInstanceId]
+            : []),
+        ...excludedInstanceIds,
+      ];
+    }
   }
 
   if (inferredSearch) {
@@ -393,6 +589,7 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
       return false;
     }
 
+    const movedCards = [];
     for (const card of selected) {
       if (typeof game.moveCard === "function") {
         const moveResult = await game.moveCard(card, player, "hand", {
@@ -404,30 +601,37 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
         if (moveResult && moveResult.success === false) {
           return false;
         }
+        movedCards.push(card);
       } else {
         const idx = zone.indexOf(card);
         if (idx !== -1) {
           zone.splice(idx, 1);
           player.hand.push(card);
+          movedCards.push(card);
         }
       }
     }
 
+    ctx.lastAddedToHandCards = movedCards;
+    ctx.lastAddedToHandCard = movedCards[0] || null;
+    storeActionResultCards(action, ctx, targets, movedCards);
+    markAddedCards(movedCards, action, ctx, game, player);
+
     const addedText =
       player.id === "bot"
         ? `${player.name || player.id} added ${
-            selected.length
+            movedCards.length
           } card(s) to hand from ${sourceZone}.`
-        : selected.length === 1
-        ? `Added ${selected[0].name} to hand from ${sourceZone}.`
-        : `Added ${selected.length} card(s) to hand from ${sourceZone}.`;
+        : movedCards.length === 1
+        ? `Added ${movedCards[0].name} to hand from ${sourceZone}.`
+        : `Added ${movedCards.length} card(s) to hand from ${sourceZone}.`;
     getUI(game)?.log(addedText);
 
     // v3: Emit event for replay capture - track which cards were added to hand
     if (typeof game.emit === "function") {
       await game.emit("cards_added_to_hand", {
         player,
-        cards: selected,
+        cards: movedCards,
         fromZone: sourceZone,
         sourceCard: source,
         effectId: ctx.effect?.id || null,
@@ -533,6 +737,122 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
 
   const result = await finalizeSelection(selection.selected || []);
   return result;
+}
+
+export async function handleDiscardFromHand(action, ctx, targets, engine) {
+  const game = engine?.game;
+  const affectedPlayer = resolveActionPlayer(action, ctx);
+  const source = ctx?.source || null;
+
+  if (!game || !affectedPlayer) return false;
+
+  const hand = affectedPlayer.hand || [];
+  const count = normalizeSelectionCount(action.count, 1);
+  const minSelect = count.min;
+  const candidates = collectZoneCandidates(hand, action.filters || {}, {
+    source,
+  });
+
+  if (candidates.length < minSelect) {
+    getUI(game)?.log(
+      `${affectedPlayer.name || affectedPlayer.id} does not have enough cards to discard.`,
+    );
+    return false;
+  }
+
+  const maxSelect = Math.min(count.max, candidates.length);
+  if (maxSelect <= 0) {
+    return minSelect === 0;
+  }
+
+  const canUseTargetSelection =
+    typeof game.startTargetSelectionSession === "function";
+  const selectionContractBuilder = canUseTargetSelection
+    ? buildDiscardSelectionContract(action, ctx, {
+        affectedPlayer,
+        game,
+      })
+    : null;
+
+  let selected = [];
+  if (isAI(affectedPlayer) && typeof selectionContractBuilder === "function") {
+    const selectionData = selectionContractBuilder(candidates, {
+      min: minSelect,
+      max: maxSelect,
+    });
+    const autoResult = game.autoSelector?.select?.(
+      selectionData.selectionContract,
+      {
+        owner: affectedPlayer,
+        player: affectedPlayer,
+        source,
+        selectionContract: selectionData.selectionContract,
+        game,
+        activationContext: ctx?.activationContext || {},
+      },
+    );
+    const selectedKeys =
+      autoResult?.ok && autoResult.selections
+        ? autoResult.selections[selectionData.requirementId] || []
+        : [];
+    const decorated = selectionData.decorated || [];
+    selected = selectedKeys
+      .map((key) => decorated.find((candidate) => candidate.key === key)?.cardRef)
+      .filter(Boolean);
+    if (selected.length < minSelect) {
+      selected = rankDiscardCandidates(candidates, maxSelect);
+    }
+  } else {
+    const selection = await selectCardsFromZone({
+      game,
+      player: affectedPlayer,
+      zone: hand,
+      source,
+      filters: action.filters || {},
+      candidates,
+      maxSelect,
+      minSelect,
+      promptPlayer: action.promptPlayer !== false,
+      botSelect: (cards, max) => rankDiscardCandidates(cards, max),
+      selectSingle: (cards) => cards[0],
+      selectMulti: (cards, range) => cards.slice(0, range.max),
+      selectionContractBuilder,
+    });
+
+    selected = selection.selected || [];
+  }
+
+  if (selected.length < minSelect) {
+    getUI(game)?.log("Discard cancelled.");
+    return false;
+  }
+
+  for (const card of selected) {
+    const moveResult = await game.moveCard(card, affectedPlayer, "graveyard", {
+      fromZone: "hand",
+      sourceCard: source,
+      effectId: ctx?.effect?.id || null,
+      contextLabel: action.contextLabel || "discard",
+      movedByEffect: true,
+      awaitEvents: true,
+    });
+    if (moveResult && moveResult.success === false) {
+      return false;
+    }
+  }
+
+  if (selected.length === 1) {
+    getUI(game)?.log(
+      `${affectedPlayer.name || affectedPlayer.id} discarded ${getCardDisplayName(selected[0])}.`,
+    );
+  } else {
+    getUI(game)?.log(
+      `${affectedPlayer.name || affectedPlayer.id} discarded ${selected.length} cards.`,
+    );
+  }
+  game.updateBoard();
+
+  return true;
 }
 
 /**

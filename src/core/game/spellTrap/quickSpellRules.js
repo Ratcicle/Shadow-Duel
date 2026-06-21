@@ -10,6 +10,7 @@ const QUICK_SPELL_SUBTYPES = new Set(["quick", "quick-play", "quickplay"]);
 
 const CHAIN_WINDOW_CONTEXT_TYPES = new Set([
   "attack_declaration",
+  "battle_step_open",
   "battle_damage",
   "card_activation",
   "effect_activation",

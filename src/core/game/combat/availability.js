@@ -339,7 +339,9 @@ export function getAttackAvailability(attacker) {
   const canUseSecondAttack =
     attacker.canMakeSecondAttackThisTurn && !attacker.secondAttackUsedThisTurn;
   const extraAttackTargetRestriction =
-    attacker.extraAttackTargetRestriction || null;
+    attacker.extraAttackTargetRestriction ||
+    attacker.passiveExtraAttackTargetRestriction ||
+    null;
 
   if (attacksUsed > 0 && extraAttackTargetRestriction === "monster") {
     const opponent = attacker.owner === "player" ? this.bot : this.player;

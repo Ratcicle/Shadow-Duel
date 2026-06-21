@@ -97,6 +97,10 @@ export async function startTurn() {
 
   // Clean up expired turn-based buffs at the start of the turn
   this.cleanupExpiredBuffs();
+  this.cleanupExpiredDeclaredValues?.();
+  this.cleanupExpiredEffectMarkers?.();
+  this.cleanupExpiredTemporaryBattlePairEffects?.();
+  this.cleanupExpiredTemporaryEventEffects?.();
 
   // Limpar cache de targeting para novo turno
   if (this.effectEngine?.clearTargetingCache) {

@@ -19,6 +19,12 @@ export const CHAIN_CONTEXTS = {
     requiresChainWindow: true,
   },
 
+  battle_step_open: {
+    description: "During an open Battle Step before the Damage Step",
+    allowedSpeeds: [2, 3],
+    requiresChainWindow: true,
+  },
+
   summon: {
     description: "When a monster is summoned",
     allowedSpeeds: [2, 3],
@@ -45,6 +51,12 @@ export const CHAIN_CONTEXTS = {
 
   battle_damage: {
     description: "When battle damage is about to be inflicted",
+    allowedSpeeds: [2, 3],
+    requiresChainWindow: true,
+  },
+
+  battle_destroy: {
+    description: "When a monster is destroyed by battle",
     allowedSpeeds: [2, 3],
     requiresChainWindow: true,
   },

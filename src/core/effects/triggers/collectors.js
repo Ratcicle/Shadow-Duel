@@ -10,53 +10,182 @@
  * @param {Object} payload - Event payload data
  * @returns {Promise<Object>} Collected entries and order rule
  */
+function getPlayerById(game, playerId) {
+  if (!game || !playerId) return null;
+  if (game.player?.id === playerId) return game.player;
+  if (game.bot?.id === playerId) return game.bot;
+  return null;
+}
+
+function buildTemporarySourceCard(entry, owner) {
+  return {
+    id: entry.sourceCardId ?? entry.id,
+    name: entry.sourceName || "Temporary Effect",
+    cardKind: entry.sourceCardKind || "spell",
+    subtype: entry.sourceCardSubtype || null,
+    image: entry.sourceImage || null,
+    owner: owner?.id || entry.ownerId || null,
+    controller: owner?.id || entry.ownerId || null,
+    isFacedown: false,
+    declaredValues:
+      entry.declaredValues && typeof entry.declaredValues === "object"
+        ? Object.fromEntries(
+            Object.entries(entry.declaredValues).map(([key, value]) => [
+              key,
+              value && typeof value === "object" ? { ...value } : value,
+            ]),
+          )
+        : {},
+    __temporaryEventEffect: true,
+  };
+}
+
+function cleanupTemporaryEventEffects(game) {
+  if (!Array.isArray(game?.temporaryEventEffects)) return;
+  const currentTurn = Number(game.turnCounter || 0);
+  game.temporaryEventEffects = game.temporaryEventEffects.filter(
+    (entry) =>
+      entry &&
+      (!Number.isFinite(entry.expiresOnTurn) ||
+        currentTurn <= entry.expiresOnTurn) &&
+      (!Number.isFinite(entry.usesRemaining) || entry.usesRemaining > 0),
+  );
+}
+
+function collectTemporaryEventTriggers(engine, eventName, payload) {
+  const game = engine?.game;
+  if (!game || !Array.isArray(game.temporaryEventEffects)) return [];
+
+  cleanupTemporaryEventEffects(game);
+  const entries = [];
+  for (const tempEntry of game.temporaryEventEffects) {
+    if (!tempEntry || tempEntry.event !== eventName) continue;
+    if (
+      Number.isFinite(tempEntry.expiresOnTurn) &&
+      Number(game.turnCounter || 0) > tempEntry.expiresOnTurn
+    ) {
+      continue;
+    }
+    if (
+      Number.isFinite(tempEntry.usesRemaining) &&
+      tempEntry.usesRemaining <= 0
+    ) {
+      continue;
+    }
+
+    const owner = getPlayerById(game, tempEntry.ownerId);
+    if (!owner) continue;
+    const opponent = game.getOpponent?.(owner) || null;
+    const sourceCard = buildTemporarySourceCard(tempEntry, owner);
+    const effect = tempEntry.effect || {
+      id: tempEntry.id,
+      timing: "on_event",
+      event: eventName,
+      actions: tempEntry.actions || [],
+    };
+    const ctx = {
+      ...(payload || {}),
+      source: sourceCard,
+      player: owner,
+      opponent,
+      eventCard:
+        payload?.eventCard ||
+        payload?.destroyed ||
+        payload?.card ||
+        payload?.movedCard ||
+        null,
+      movedCard: payload?.movedCard || payload?.card || null,
+      actionContext: payload?.actionContext || null,
+    };
+
+    if (Array.isArray(effect.conditions) && effect.conditions.length > 0) {
+      const conditionResult = engine.evaluateConditions(effect.conditions, ctx);
+      if (!conditionResult?.ok) continue;
+    }
+
+    const triggerEntry = engine.buildTriggerEntry({
+      sourceCard,
+      owner,
+      effect,
+      ctx,
+      activationContext: {
+        activationZone: "temporary",
+        sourceZone: "temporary",
+        committed: false,
+      },
+      selectionKind: "triggered",
+      selectionMessage: "Select target(s) for the temporary triggered effect.",
+      summary: `${owner.id}:${sourceCard.name}:${effect.id || eventName}`,
+      onSuccess: async () => {
+        if (Number.isFinite(tempEntry.usesRemaining)) {
+          tempEntry.usesRemaining -= 1;
+        }
+        cleanupTemporaryEventEffects(game);
+      },
+    });
+
+    if (triggerEntry) entries.push(triggerEntry);
+  }
+
+  return entries;
+}
+
+function appendTemporaryEventTriggers(engine, eventName, triggerPackage, payload) {
+  const temporaryEntries = collectTemporaryEventTriggers(
+    engine,
+    eventName,
+    payload,
+  );
+  if (temporaryEntries.length === 0) return triggerPackage;
+
+  const baseEntries = Array.isArray(triggerPackage?.entries)
+    ? triggerPackage.entries
+    : [];
+  return {
+    ...(triggerPackage || {}),
+    entries: [...baseEntries, ...temporaryEntries],
+    orderRule: triggerPackage?.orderRule
+      ? `${triggerPackage.orderRule} -> temporary event effects`
+      : "temporary event effects",
+  };
+}
+
 export async function collectEventTriggers(eventName, payload) {
+  let triggerPackage = null;
   if (eventName === "after_summon") {
-    return await this.collectAfterSummonTriggers(payload);
+    triggerPackage = await this.collectAfterSummonTriggers(payload);
+  } else if (eventName === "spell_activated") {
+    triggerPackage = await this.collectSpellActivatedTriggers(payload);
+  } else if (eventName === "effect_activated") {
+    triggerPackage = await this.collectEffectActivatedTriggers(payload);
+  } else if (eventName === "battle_destroy") {
+    triggerPackage = await this.collectBattleDestroyTriggers(payload);
+  } else if (eventName === "battle_completed") {
+    triggerPackage = await this.collectBattleCompletedTriggers(payload);
+  } else if (eventName === "card_to_grave") {
+    triggerPackage = await this.collectCardToGraveTriggers(payload);
+  } else if (eventName === "card_moved") {
+    triggerPackage = await this.collectCardMovedTriggers(payload);
+  } else if (eventName === "counter_removed") {
+    triggerPackage = await this.collectCounterRemovedTriggers(payload);
+  } else if (eventName === "attack_declared") {
+    triggerPackage = await this.collectAttackDeclaredTriggers(payload);
+  } else if (eventName === "battle_damage") {
+    triggerPackage = await this.collectBattleDamageTriggers(payload);
+  } else if (eventName === "lp_change") {
+    triggerPackage = await this.collectLpChangeTriggers(payload);
+  } else if (eventName === "effect_targeted") {
+    triggerPackage = await this.collectEffectTargetedTriggers(payload);
+  } else if (eventName === "position_change") {
+    triggerPackage = await this.collectPositionChangeTriggers(payload);
+  } else if (eventName === "card_equipped") {
+    triggerPackage = await this.collectCardEquippedTriggers(payload);
+  } else if (eventName === "standby_phase") {
+    triggerPackage = await this.collectStandbyPhaseTriggers(payload);
+  } else {
+    triggerPackage = { entries: [], orderRule: "no_triggers" };
   }
-  if (eventName === "spell_activated") {
-    return await this.collectSpellActivatedTriggers(payload);
-  }
-  if (eventName === "effect_activated") {
-    return await this.collectEffectActivatedTriggers(payload);
-  }
-  if (eventName === "battle_destroy") {
-    return await this.collectBattleDestroyTriggers(payload);
-  }
-  if (eventName === "battle_completed") {
-    return await this.collectBattleCompletedTriggers(payload);
-  }
-  if (eventName === "card_to_grave") {
-    return await this.collectCardToGraveTriggers(payload);
-  }
-  if (eventName === "card_moved") {
-    return await this.collectCardMovedTriggers(payload);
-  }
-  if (eventName === "counter_removed") {
-    return await this.collectCounterRemovedTriggers(payload);
-  }
-  if (eventName === "attack_declared") {
-    return await this.collectAttackDeclaredTriggers(payload);
-  }
-  if (eventName === "battle_damage") {
-    return await this.collectBattleDamageTriggers(payload);
-  }
-  if (eventName === "lp_change") {
-    return await this.collectLpChangeTriggers(payload);
-  }
-  if (eventName === "effect_targeted") {
-    return await this.collectEffectTargetedTriggers(payload);
-  }
-  if (eventName === "position_change") {
-    return await this.collectPositionChangeTriggers(payload);
-  }
-  if (eventName === "card_equipped") {
-    return await this.collectCardEquippedTriggers(payload);
-  }
-  if (eventName === "standby_phase") {
-    return await this.collectStandbyPhaseTriggers(payload);
-  }
-  return { entries: [], orderRule: "no_triggers" };
+  return appendTemporaryEventTriggers(this, eventName, triggerPackage, payload);
 }
 
 export {

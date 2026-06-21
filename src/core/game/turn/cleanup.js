@@ -7,6 +7,8 @@
  * Methods:
  * - applyTurnBasedBuff
  * - cleanupExpiredBuffs
+ * - cleanupExpiredDeclaredValues
+ * - cleanupExpiredEffectMarkers
  * - cleanupTempBoosts
  */
 
@@ -101,6 +103,127 @@ export function cleanupExpiredBuffs() {
   }
 }
 
+function getActiveCards(player) {
+  if (!player) return [];
+  return [
+    ...(player.field || []),
+    ...(player.spellTrap || []),
+    player.fieldSpell,
+  ].filter(Boolean);
+}
+
+function getAllPlayerCards(player) {
+  if (!player) return [];
+  return [
+    ...(player.deck || []),
+    ...(player.hand || []),
+    ...(player.field || []),
+    ...(player.spellTrap || []),
+    ...(player.graveyard || []),
+    ...(player.banished || []),
+    ...(player.extraDeck || []),
+    player.fieldSpell,
+  ].filter(Boolean);
+}
+
+export function cleanupExpiredDeclaredValues() {
+  const activeCards = [
+    ...getActiveCards(this.player),
+    ...getActiveCards(this.bot),
+  ];
+
+  for (const card of activeCards) {
+    if (!card?.declaredValues || typeof card.declaredValues !== "object") {
+      continue;
+    }
+
+    for (const [stateKey, declaration] of Object.entries(card.declaredValues)) {
+      if (
+        declaration &&
+        Number.isFinite(declaration.expiresOnTurn) &&
+        this.turnCounter > declaration.expiresOnTurn
+      ) {
+        delete card.declaredValues[stateKey];
+        this.devLog?.("DECLARED_VALUE_EXPIRED", {
+          summary: `${card.name} declaration expired (${stateKey})`,
+          card: card.name,
+          stateKey,
+        });
+      }
+    }
+
+    if (Object.keys(card.declaredValues).length === 0) {
+      delete card.declaredValues;
+    }
+  }
+}
+
+export function cleanupExpiredEffectMarkers() {
+  const seen = new Set();
+  const allCards = [
+    ...getAllPlayerCards(this.player),
+    ...getAllPlayerCards(this.bot),
+  ];
+
+  for (const card of allCards) {
+    const key = card?.instanceId ?? card?._instanceId ?? card;
+    if (!card || seen.has(key)) continue;
+    seen.add(key);
+
+    if (!card.effectMarkers || typeof card.effectMarkers !== "object") {
+      continue;
+    }
+
+    for (const [markerKey, marker] of Object.entries(card.effectMarkers)) {
+      if (
+        marker &&
+        Number.isFinite(marker.expiresOnTurn) &&
+        this.turnCounter > marker.expiresOnTurn
+      ) {
+        delete card.effectMarkers[markerKey];
+        this.devLog?.("EFFECT_MARKER_EXPIRED", {
+          summary: `${card.name} effect marker expired (${markerKey})`,
+          card: card.name,
+          markerKey,
+        });
+      }
+    }
+
+    if (Object.keys(card.effectMarkers).length === 0) {
+      delete card.effectMarkers;
+    }
+  }
+}
+
+export function cleanupExpiredTemporaryBattlePairEffects() {
+  if (!Array.isArray(this.temporaryBattlePairEffects)) {
+    this.temporaryBattlePairEffects = [];
+    return;
+  }
+
+  this.temporaryBattlePairEffects = this.temporaryBattlePairEffects.filter(
+    (entry) =>
+      !entry ||
+      !Number.isFinite(entry.expiresOnTurn) ||
+      this.turnCounter <= entry.expiresOnTurn,
+  );
+}
+
+export function cleanupExpiredTemporaryEventEffects() {
+  if (!Array.isArray(this.temporaryEventEffects)) {
+    this.temporaryEventEffects = [];
+    return;
+  }
+
+  this.temporaryEventEffects = this.temporaryEventEffects.filter(
+    (entry) =>
+      entry &&
+      (!Number.isFinite(entry.expiresOnTurn) ||
+        this.turnCounter <= entry.expiresOnTurn) &&
+      (!Number.isFinite(entry.usesRemaining) || entry.usesRemaining > 0),
+  );
+}
+
 /**
  * Cleans up temporary boosts for a player's monsters.
  * Called at end of turn to reset temporary stat modifications.
@@ -139,6 +262,7 @@ export function cleanupTempBoosts(player) {
     card.battleDamageHealsControllerThisTurn = false;
     card.canAttackDirectlyThisTurn = false;
     delete card.extraAttackTargetRestriction;
+    delete card.passiveExtraAttackTargetRestriction;
 
     // Reset multi-attack flags
     delete card.canAttackAllOpponentMonstersThisTurn;

@@ -8,6 +8,29 @@
 import { isAI } from "../Player.js";
 import { cardMatchesKind } from "../Card.js";
 
+function getCardInstanceId(card) {
+  return card?.instanceId ?? card?._instanceId ?? card?.uuid ?? card?.simInstanceId ?? null;
+}
+
+function isExcludedInstance(card, filters = {}) {
+  if (!card || !filters) return false;
+  const excludedCards = Array.isArray(filters.excludeCards)
+    ? filters.excludeCards
+    : [];
+  if (excludedCards.includes(card)) return true;
+  const cardInstanceId = getCardInstanceId(card);
+  const excludedInstanceIds = [
+    filters.excludeInstanceId,
+    ...(Array.isArray(filters.excludeInstanceIds)
+      ? filters.excludeInstanceIds
+      : []),
+    ...(Array.isArray(filters.excludeCardInstanceIds)
+      ? filters.excludeCardInstanceIds
+      : []),
+  ].filter((value) => value !== undefined && value !== null);
+  return cardInstanceId !== null && excludedInstanceIds.includes(cardInstanceId);
+}
+
 // Stub UI for fallback when game.ui is unavailable
 export const NULL_UI = {
   log: () => {},
@@ -46,6 +69,34 @@ export function resolveTargetCards(action, ctx, targets, options = {}) {
   }
 
   let resolved = [];
+  const getBattleParticipantByOwner = (ownerRule) => {
+    const player = ctx?.player || null;
+    const opponent = ctx?.opponent || null;
+    const expectedOwner = ownerRule === "opponent" ? opponent : player;
+    if (!expectedOwner) return null;
+    const controlsCard = (card, explicitOwner) =>
+      !!card &&
+      (explicitOwner === expectedOwner ||
+        explicitOwner?.id === expectedOwner.id ||
+        expectedOwner.field?.includes?.(card) ||
+        card.controller === expectedOwner.id ||
+        card.owner === expectedOwner.id);
+    if (
+      ctx?.attacker &&
+      controlsCard(ctx.attacker, ctx.attackerOwner)
+    ) {
+      return ctx.attacker;
+    }
+    const defender = ctx?.defender || ctx?.target || null;
+    if (
+      defender &&
+      (controlsCard(defender, ctx?.defenderOwner) ||
+        controlsCard(defender, ctx?.targetOwner))
+    ) {
+      return defender;
+    }
+    return null;
+  };
 
   if (targetRef === "self") {
     if (ctx?.source) {
@@ -83,6 +134,16 @@ export function resolveTargetCards(action, ctx, targets, options = {}) {
     ) {
       resolved = [opponentCard];
     }
+  } else if (targetRef === "battle_self_participant") {
+    const participant = getBattleParticipantByOwner("self");
+    if (participant) {
+      resolved = [participant];
+    }
+  } else if (targetRef === "battle_opponent_participant") {
+    const participant = getBattleParticipantByOwner("opponent");
+    if (participant) {
+      resolved = [participant];
+    }
   } else if (targetRef === "destroyed") {
     if (ctx?.destroyed) {
       resolved = [ctx.destroyed];
@@ -102,6 +163,12 @@ export function resolveTargetCards(action, ctx, targets, options = {}) {
     }
   } else if (Array.isArray(targetRef)) {
     resolved = targetRef;
+  } else if (
+    targetRef &&
+    ctx?._actionTargets &&
+    targetRef in ctx._actionTargets
+  ) {
+    resolved = ctx._actionTargets[targetRef];
   } else if (targetRef && targets && targetRef in targets) {
     resolved = targets[targetRef];
   } else if (options.fallbackList) {
@@ -207,6 +274,21 @@ function cardMatchesScopeFilters(card, filters, engine) {
   if (filters.cardKind && !cardMatchesKind(card, filters.cardKind)) {
     return false;
   }
+  if (filters.cardId !== undefined && card.id !== filters.cardId) {
+    return false;
+  }
+  if (
+    Array.isArray(filters.cardIds) &&
+    filters.cardIds.length > 0 &&
+    !filters.cardIds.includes(card.id)
+  ) {
+    return false;
+  }
+  const nameFilter = filters.cardName || filters.name;
+  if (nameFilter) {
+    const requiredNames = Array.isArray(nameFilter) ? nameFilter : [nameFilter];
+    if (!requiredNames.includes(card.name)) return false;
+  }
   if (filters.position && filters.position !== "any") {
     if (card.position !== filters.position) return false;
   }
@@ -245,6 +327,10 @@ export function resolveFieldScopeCards(scope = {}, ctx = {}, game = null, option
   };
   for (const key of [
     "cardKind",
+    "cardName",
+    "name",
+    "cardId",
+    "cardIds",
     "subtype",
     "monsterType",
     "type",
@@ -274,6 +360,9 @@ export function resolveFieldScopeCards(scope = {}, ctx = {}, game = null, option
       for (const card of getScopeZoneCards(owner, zone)) {
         const key = card?.instanceId ?? card;
         if (!card || seen.has(key)) continue;
+        if (config.excludeSelf === true && ctx?.source && card === ctx.source) {
+          continue;
+        }
         if (!cardMatchesScopeFilters(card, filters, options.engine)) continue;
         seen.add(key);
         cards.push(card);
@@ -415,6 +504,7 @@ export function collectZoneCandidates(zone, filters = {}, options = {}) {
       ...(Array.isArray(filters.excludeCardIds) ? filters.excludeCardIds : []),
     ].filter((value) => value !== undefined && value !== null);
     if (excludeIds.includes(card.id)) return false;
+    if (isExcludedInstance(card, filters)) return false;
 
     if (filters.minAtk !== undefined) {
       const cardAtk = card.atk || 0;

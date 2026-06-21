@@ -97,6 +97,138 @@ export function applyConditionalTargetActions(ctx) {
   return;
 }
 
+export function applyConditionalActions(ctx) {
+  const {
+    action,
+    selections,
+    state,
+    selfId,
+    options,
+    applySimulatedActions,
+  } = ctx;
+  if (
+    action.conditions &&
+    !evaluateSimulatedConditions(action.conditions, {
+      state,
+      selfId,
+      options,
+      sourceCard: options.sourceCard,
+      ...options.actionContext,
+    })
+  ) {
+    return;
+  }
+  const nestedActions = Array.isArray(action.actions) ? action.actions : [];
+  if (nestedActions.length === 0) return;
+  applySimulatedActions({
+    actions: nestedActions,
+    selections,
+    state,
+    selfId,
+    options,
+  });
+  return;
+}
+
+export function applyOptionalTargetActions(ctx) {
+  const {
+    action,
+    selections,
+    state,
+    selfId,
+    options,
+    applySimulatedActions,
+  } = ctx;
+  if (
+    action.conditions &&
+    !evaluateSimulatedConditions(action.conditions, {
+      state,
+      selfId,
+      options,
+      sourceCard: options.sourceCard,
+      ...options.actionContext,
+    })
+  ) {
+    return;
+  }
+
+  const nestedActions = Array.isArray(action.actions) ? action.actions : [];
+  if (nestedActions.length === 0) return;
+
+  let nestedSelections = selections || {};
+  const targetDefs = Array.isArray(action.targets) ? action.targets : [];
+  if (targetDefs.length > 0) {
+    const selectedTargets = selectSimulatedTargets({
+      targets: targetDefs,
+      actions: nestedActions,
+      state,
+      sourceCard: options.sourceCard,
+      selfId,
+      options,
+    });
+    if (!hasRequiredSelections(targetDefs, selectedTargets)) {
+      return;
+    }
+    nestedSelections = {
+      ...nestedSelections,
+      ...selectedTargets,
+    };
+  }
+
+  applySimulatedActions({
+    actions: nestedActions,
+    selections: nestedSelections,
+    state,
+    selfId,
+    options,
+  });
+}
+
+export function applyRegisterTemporaryEventEffect(ctx) {
+  const { action, state, self, options } = ctx;
+  const sourceCard = options.sourceCard || null;
+  if (!action?.event || !sourceCard || !self) return;
+  if (!Array.isArray(state.temporaryEventEffects)) {
+    state.temporaryEventEffects = [];
+  }
+  const currentTurn = Number(state.turnCounter || 0);
+  const expiresOnTurn =
+    action.duration === "end_of_next_turn" ? currentTurn + 1 : currentTurn;
+  const declaredValues = sourceCard.declaredValues
+    ? JSON.parse(JSON.stringify(sourceCard.declaredValues))
+    : {};
+  state.temporaryEventEffects.push({
+    event: action.event,
+    ownerId: self.id,
+    sourceCardId: sourceCard.id ?? null,
+    sourceName: action.sourceName || sourceCard.name || null,
+    sourceCardKind: sourceCard.cardKind || null,
+    sourceCardSubtype: sourceCard.subtype || null,
+    sourceArchetype: sourceCard.archetype || null,
+    sourceArchetypes: Array.isArray(sourceCard.archetypes)
+      ? [...sourceCard.archetypes]
+      : sourceCard.archetype
+        ? [sourceCard.archetype]
+        : [],
+    sourceEffectId: options.effect?.id || null,
+    createdOnTurn: currentTurn,
+    expiresOnTurn,
+    usesRemaining: Number.isFinite(Number(action.uses))
+      ? Math.max(0, Number(action.uses))
+      : 1,
+    declaredValues,
+    effect: {
+      id: action.effectId || action.id || "temporary_event_effect",
+      timing: "on_event",
+      event: action.event,
+      conditions: action.conditions || [],
+      actions: action.actions || [],
+      targets: action.targets || [],
+      promptUser: action.promptUser === true,
+    },
+  });
+}
+
 export function applyActivateStoredBlueprint(ctx) {
   const {
     action,

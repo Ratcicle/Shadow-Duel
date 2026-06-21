@@ -49,6 +49,20 @@ function keepOneCardPerName(cards = []) {
   return unique;
 }
 
+function storeActionResultCards(action, ctx, targets, cards, fallbackKey = null) {
+  const resultKey = action?.resultRef || action?.storeResultAs || fallbackKey;
+  if (!resultKey) return;
+  const storedCards = Array.isArray(cards) ? cards.filter(Boolean) : [];
+  if (!ctx || typeof ctx !== "object") return;
+  if (!ctx._actionTargets || typeof ctx._actionTargets !== "object") {
+    ctx._actionTargets = {};
+  }
+  ctx._actionTargets[resultKey] = storedCards;
+  if (targets && typeof targets === "object") {
+    targets[resultKey] = storedCards;
+  }
+}
+
 /**
  * Generic handler for special summoning from any zone with filters
  * UNIFIED HANDLER - Replaces both single and multi-card summon patterns
@@ -234,7 +248,15 @@ export async function handleSpecialSummonFromZone(
       return false;
     }
 
-    return await summonCards(validCards, zoneEntries, player, action, engine);
+    return await summonCards(
+      validCards,
+      zoneEntries,
+      player,
+      action,
+      engine,
+      ctx,
+      targets,
+    );
   }
 
   const zoneHasCards = zoneEntries.some((entry) => entry.list.length > 0);
@@ -418,6 +440,8 @@ export async function handleSpecialSummonFromZone(
       player,
       action,
       engine,
+      ctx,
+      targets,
     );
     if (
       success &&
@@ -507,6 +531,8 @@ export async function handleSpecialSummonFromZone(
       player,
       action,
       engine,
+      ctx,
+      targets,
     );
     if (
       success &&
@@ -606,6 +632,8 @@ export async function handleSpecialSummonFromZone(
     player,
     action,
     engine,
+    ctx,
+    targets,
   );
   if (success && optEffect && typeof game.markOncePerTurnUsed === "function") {
     game.markOncePerTurnUsed(source, player, optEffect);
@@ -617,7 +645,15 @@ export async function handleSpecialSummonFromZone(
  * Helper function to summon one or more cards
  * Unified to handle both single and multi-card summons
  */
-async function summonCards(cards, sourceZoneEntries, player, action, engine) {
+async function summonCards(
+  cards,
+  sourceZoneEntries,
+  player,
+  action,
+  engine,
+  ctx = null,
+  targets = null,
+) {
   const game = engine.game;
   let summoned = 0;
   const summonPlayer =
@@ -633,6 +669,7 @@ async function summonCards(cards, sourceZoneEntries, player, action, engine) {
   const statusesOnSummon = action.statusesOnSummon || null;
 
   const canUseMoveCard = game && typeof game.moveCard === "function";
+  const summonedCards = [];
 
   const fromZoneSpec =
     action.fromZone ||
@@ -780,14 +817,22 @@ async function summonCards(cards, sourceZoneEntries, player, action, engine) {
     }
 
     summoned++;
+    summonedCards.push(card);
   }
 
   if (summoned > 0) {
+    if (ctx && typeof ctx === "object") {
+      ctx.lastSpecialSummonedCards = summonedCards;
+      ctx.lastSpecialSummonedCard = summonedCards[0] || null;
+      storeActionResultCards(action, ctx, targets, summonedCards);
+    }
+
     // Log message
     const zoneName = Array.isArray(action.zone)
       ? action.zone.join("/")
       : action.zone || "deck";
-    const cardText = summoned === 1 ? cards[0].name : `${summoned} cards`;
+    const cardText =
+      summonedCards.length === 1 ? summonedCards[0].name : `${summoned} cards`;
     const positionText =
       action.position === "defense"
         ? "Defense"

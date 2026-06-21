@@ -132,6 +132,15 @@ export async function checkAndOfferTraps(event, eventData = {}) {
       summary: "Opening chain window via ChainSystem",
     });
     await this.chainSystem.openChainWindow(context);
+    if (context.attackRedirect) {
+      eventData.attackRedirect = context.attackRedirect;
+    }
+    if (context.redirectedTarget) {
+      eventData.redirectedTarget = context.redirectedTarget;
+    }
+    if (context.redirectedTargetOwner) {
+      eventData.redirectedTargetOwner = context.redirectedTargetOwner;
+    }
     this.devLog?.("CHECK_TRAPS", {
       summary: "Chain window closed, cleaning up",
     });
@@ -151,6 +160,7 @@ export async function checkAndOfferTraps(event, eventData = {}) {
 export function _mapEventToChainContext(event) {
   const eventToContext = {
     attack_declared: "attack_declaration",
+    battle_step_open: "battle_step_open",
     summon_attempt: "summon_attempt",
     after_summon: "summon",
     phase_end: "phase_change",
@@ -158,6 +168,7 @@ export function _mapEventToChainContext(event) {
     card_activation: "card_activation",
     effect_activation: "effect_activation",
     battle_damage: "battle_damage",
+    battle_destroy: "battle_destroy",
     effect_targeted: "effect_targeted",
   };
   return eventToContext[event] || "card_activation";

@@ -280,13 +280,23 @@ export async function resolveEventEntries(
       // Determine opponent attack from the defender/card perspective.
       const attackerOwnerId = payload?.attackerOwner?.id || null;
       const defenderOwnerId = defenderOwner?.id || null;
-      await this.checkAndOfferTraps(eventName, {
+      const trapEventData = {
         ...payload,
         isOpponentAttack:
           !!attackerOwnerId &&
           !!defenderOwnerId &&
           attackerOwnerId !== defenderOwnerId,
-      });
+      };
+      await this.checkAndOfferTraps(eventName, trapEventData);
+      if (trapEventData.attackRedirect) {
+        payload.attackRedirect = trapEventData.attackRedirect;
+      }
+      if (trapEventData.redirectedTarget) {
+        payload.redirectedTarget = trapEventData.redirectedTarget;
+      }
+      if (trapEventData.redirectedTargetOwner) {
+        payload.redirectedTargetOwner = trapEventData.redirectedTargetOwner;
+      }
     }
   } else if (eventName === "battle_damage") {
     const defenderOwner = payload?.defenderOwner || payload?.targetOwner || null;
@@ -298,6 +308,22 @@ export async function resolveEventEntries(
         isOpponentAttack: payload.attackerOwner.id !== defenderOwner.id,
       });
     }
+  } else if (eventName === "battle_destroy") {
+    await this.checkAndOfferTraps(eventName, {
+      ...payload,
+      target: payload?.destroyed || payload?.target || null,
+      targetOwner:
+        payload?.destroyedOwner ||
+        payload?.targetOwner ||
+        payload?.defenderOwner ||
+        null,
+      defender: payload?.destroyed || payload?.defender || payload?.target || null,
+      defenderOwner:
+        payload?.destroyedOwner ||
+        payload?.defenderOwner ||
+        payload?.targetOwner ||
+        null,
+    });
   } else if (eventName === "effect_activated") {
     if (payload?.card?.cardKind === "monster" && payload?.player) {
       await this.checkAndOfferTraps("effect_activation", {

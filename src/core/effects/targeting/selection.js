@@ -24,6 +24,31 @@ function cardCacheIdentity(card, fallbackIndex = 0) {
   ].join(":");
 }
 
+function getCardInstanceId(card) {
+  return card?.instanceId ?? card?._instanceId ?? card?.uuid ?? card?.simInstanceId ?? null;
+}
+
+function isExcludedInstance(card, filter = {}) {
+  if (!card || !filter) return false;
+  const excludedCards = Array.isArray(filter.excludeCards)
+    ? filter.excludeCards
+    : [];
+  if (excludedCards.some((excluded) => isSameCardReference(excluded, card))) {
+    return true;
+  }
+  const cardInstanceId = getCardInstanceId(card);
+  const excludedInstanceIds = [
+    filter.excludeInstanceId,
+    ...(Array.isArray(filter.excludeInstanceIds)
+      ? filter.excludeInstanceIds
+      : []),
+    ...(Array.isArray(filter.excludeCardInstanceIds)
+      ? filter.excludeCardInstanceIds
+      : []),
+  ].filter((value) => value !== undefined && value !== null);
+  return cardInstanceId !== null && excludedInstanceIds.includes(cardInstanceId);
+}
+
 function getZoneSnapshot(player, zoneKey) {
   if (!player) return [];
   if (zoneKey === "fieldSpell") return player.fieldSpell ? [player.fieldSpell] : [];
@@ -104,6 +129,9 @@ function buildTargetingCacheKey(def, ctx) {
     def.owner || "self",
     JSON.stringify(def.count || null),
     def.cardKind || "any",
+    def.cardId ?? "",
+    Array.isArray(def.cardIds) ? def.cardIds.join(",") : "",
+    def.filters ? JSON.stringify(def.filters) : "",
     def.subtype || "any",
     def.archetype || "any",
     def.minAtk ?? "",
@@ -123,6 +151,16 @@ function buildTargetingCacheKey(def, ctx) {
     anyOfKey,
     def.excludeCardName || "",
     Array.isArray(def.excludeCardNames) ? def.excludeCardNames.join(",") : "",
+    def.excludeInstanceId ?? "",
+    Array.isArray(def.excludeInstanceIds) ? def.excludeInstanceIds.join(",") : "",
+    Array.isArray(def.excludeCardInstanceIds)
+      ? def.excludeCardInstanceIds.join(",")
+      : "",
+    Array.isArray(def.excludeCards)
+      ? def.excludeCards
+          .map((card, idx) => cardCacheIdentity(card, `excludeCard${idx}`))
+          .join(",")
+      : "",
     def.excludeEventCardName ? "excludeEventCardName" : "",
     def.excludeEventCardName && ctx?.eventCard
       ? cardCacheIdentity(ctx.eventCard, "eventCard")
@@ -250,6 +288,16 @@ export function selectCandidates(def, ctx) {
     if (filter.cardKind && !cardMatchesKind(card, filter.cardKind)) {
       return false;
     }
+    if (filter.cardId !== undefined && card.id !== filter.cardId) {
+      return false;
+    }
+    if (
+      Array.isArray(filter.cardIds) &&
+      filter.cardIds.length > 0 &&
+      !filter.cardIds.includes(card.id)
+    ) {
+      return false;
+    }
     if (filter.requireFaceup && card.isFacedown) return false;
     if (filter.position && filter.position !== "any") {
       if (card.position !== filter.position) return false;
@@ -315,6 +363,7 @@ export function selectCandidates(def, ctx) {
     ) {
       return false;
     }
+    if (isExcludedInstance(card, filter)) return false;
     if (isExcludedContextCard(filter, ctx, card)) return false;
     return true;
   };
@@ -363,6 +412,10 @@ export function selectCandidates(def, ctx) {
           log("[selectCandidates] Rejecting: excludeSelf and card is source");
           continue;
         }
+        if (isExcludedInstance(card, def)) {
+          log("[selectCandidates] Rejecting: card matches excluded instance");
+          continue;
+        }
         if (isExcludedContextCard(def, ctx, card)) {
           log("[selectCandidates] Rejecting: card matches excluded context card");
           continue;
@@ -390,6 +443,22 @@ export function selectCandidates(def, ctx) {
             `[selectCandidates] Rejecting: cardKind mismatch (${
               card.cardKind
             } not in ${requiredKinds.join(",")})`
+          );
+          continue;
+        }
+        if (def.cardId !== undefined && card.id !== def.cardId) {
+          log(
+            `[selectCandidates] Rejecting: cardId mismatch (${card.id} !== ${def.cardId})`
+          );
+          continue;
+        }
+        if (
+          Array.isArray(def.cardIds) &&
+          def.cardIds.length > 0 &&
+          !def.cardIds.includes(card.id)
+        ) {
+          log(
+            `[selectCandidates] Rejecting: cardId ${card.id} not in [${def.cardIds.join(",")}]`
           );
           continue;
         }

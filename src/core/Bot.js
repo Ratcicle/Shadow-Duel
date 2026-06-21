@@ -285,7 +285,8 @@ export default class Bot extends Player {
     if (!target) {
       if (
         usedAttacks > 0 &&
-        attacker.extraAttackTargetRestriction === "monster"
+        (attacker.extraAttackTargetRestriction ||
+          attacker.passiveExtraAttackTargetRestriction) === "monster"
       ) {
         return;
       }

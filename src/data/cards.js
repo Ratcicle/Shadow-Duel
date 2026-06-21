@@ -6,6 +6,7 @@ import { dragonCards } from "./cards/dragon.js";
 import { arcanistCards } from "./cards/arcanist.js";
 import { mirageboundCards } from "./cards/miragebound.js";
 import { bloomrotCards } from "./cards/bloomrot.js";
+import { burningWestCards } from "./cards/burningWest.js";
 
 export const cardDatabaseGroups = [
   { rangeKey: "generic", cards: genericCards },
@@ -16,6 +17,7 @@ export const cardDatabaseGroups = [
   { rangeKey: "arcanist", cards: arcanistCards },
   { rangeKey: "miragebound", cards: mirageboundCards },
   { rangeKey: "bloomrot", cards: bloomrotCards },
+  { rangeKey: "burningWest", cards: burningWestCards },
 ];
 
 export const cardDatabase = cardDatabaseGroups.flatMap((group) => group.cards);

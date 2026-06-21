@@ -234,15 +234,26 @@ export function buildActivationIndicatorsForPlayer(player) {
   }
 
   (player.graveyard || []).forEach((card, index) => {
-    if (!card || card.cardKind !== "monster") return;
+    if (!card) return;
     const guard = canStart("graveyard_effect", ["main1", "main2"]);
-    const preview = this.effectEngine?.canActivateMonsterEffectPreview?.(
-      card,
-      player,
-      "graveyard",
-      null,
-      { activationContext },
-    ) || { ok: false };
+    const preview =
+      card.cardKind === "monster"
+        ? this.effectEngine?.canActivateMonsterEffectPreview?.(
+            card,
+            player,
+            "graveyard",
+            null,
+            { activationContext },
+          ) || { ok: false }
+        : card.cardKind === "spell" || card.cardKind === "trap"
+          ? this.effectEngine?.canActivateSpellTrapEffectPreview?.(
+              card,
+              player,
+              "graveyard",
+              null,
+              { activationContext },
+            ) || { ok: false }
+          : { ok: false };
     const hint = buildHint(guard, preview, "efeito disponivel no cemiterio");
     if (hint) {
       indicators.graveyard[index] = hint;

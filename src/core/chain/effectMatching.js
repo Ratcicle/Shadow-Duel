@@ -84,18 +84,30 @@ function buildChainPreviewContext(chainSystem, card, effect, context, ownerPlaye
     opponent,
     effect,
     defender: context?.defender || context?.target,
+    target: context?.target || context?.defender || null,
     attacker: context?.attacker,
+    destroyed: context?.destroyed || null,
+    destroyedOwner: context?.destroyedOwner || null,
+    destroyedOwnerId: context?.destroyedOwnerId || null,
+    destroyedPosition: context?.destroyedPosition || null,
+    battleDestroyer: context?.battleDestroyer || context?.attacker || null,
+    battleDestroyers: Array.isArray(context?.battleDestroyers)
+      ? context.battleDestroyers
+      : [context?.battleDestroyer || context?.attacker].filter(Boolean),
     summonedCard: context?.summonedCard || context?.card || null,
     summonMethod: context?.method || context?.summonMethod || null,
     summonFromZone: context?.fromZone || null,
     attackerOwner: context?.attackerOwner,
     defenderOwner: context?.defenderOwner,
+    targetOwner: context?.targetOwner,
+    actionContext: context || null,
     activationZone: "spellTrap",
     activationContext: {
       autoSelectSingleTarget: true,
       logTargets: true,
       chainContext: context?.type || null,
       event: context?.event || null,
+      context: context || null,
       preview: true,
     },
   };
@@ -142,12 +154,14 @@ export function findActivatableEffect(card, context, ownerPlayer = null) {
   // Map context type back to event name
   const contextToEvent = {
     attack_declaration: "attack_declared",
+    battle_step_open: "battle_step_open",
     summon: "after_summon",
     phase_change: "phase_end",
     card_activation: "card_activation",
     effect_activation: "effect_activation",
     effect_targeted: "effect_targeted",
     battle_damage: "battle_damage",
+    battle_destroy: "battle_destroy",
   };
   const expectedEvent = contextToEvent[context?.type] || context?.event;
 
@@ -182,15 +196,17 @@ export function findActivatableEffect(card, context, ownerPlayer = null) {
             effect.requireOpponentAttack &&
             context?.type === "attack_declaration"
           ) {
-            // Only valid if opponent is attacking (check from card owner's perspective)
-            const cardOwnerId = ownerPlayer?.id || card.owner;
-            if (
-              !isOpponentAction(
-                context.attackerOwner?.id,
-                cardOwnerId,
-                context.isOpponentAttack,
-              )
-            ) {
+            // Only valid if the attacker is an opponent of this card's owner.
+            // context.isOpponentAttack is computed from the defender's
+            // perspective, so it is not reliable when checking the attacker's
+            // own face-down responses.
+            const cardOwnerId = ownerPlayer?.id || card.controller || card.owner;
+            const attackerOwnerId =
+              context.attackerOwner?.id ||
+              context.attacker?.controller ||
+              context.attacker?.owner ||
+              null;
+            if (!attackerOwnerId || !cardOwnerId || attackerOwnerId === cardOwnerId) {
               continue;
             }
           }
@@ -217,6 +233,26 @@ export function findActivatableEffect(card, context, ownerPlayer = null) {
               if (!methods.includes(contextMethod)) {
                 continue;
               }
+            }
+          }
+          const previewCtx = buildChainPreviewContext(
+            this,
+            card,
+            effect,
+            context,
+            ownerPlayer,
+          );
+          if (
+            Array.isArray(effect.conditions) &&
+            effect.conditions.length > 0 &&
+            this.game?.effectEngine?.evaluateConditions
+          ) {
+            const condCheck = this.game.effectEngine.evaluateConditions(
+              effect.conditions,
+              previewCtx,
+            );
+            if (!condCheck?.ok) {
+              continue;
             }
           }
           if (
@@ -311,19 +347,11 @@ export function findActivatableEffect(card, context, ownerPlayer = null) {
             effect.targets.length > 0 &&
             this.game?.effectEngine
           ) {
-            const ctx = buildChainPreviewContext(
-              this,
-              card,
-              effect,
-              context,
-              ownerPlayer,
-            );
-
             console.log(
               `[findActivatableEffect] Checking targets for ${card.name}:`,
               {
-                defender: ctx.defender?.name,
-                defenderType: ctx.defender?.type,
+                defender: previewCtx.defender?.name,
+                defenderType: previewCtx.defender?.type,
                 targets: effect.targets.map((t) => ({
                   id: t.id,
                   targetFromContext: t.targetFromContext,
@@ -334,7 +362,7 @@ export function findActivatableEffect(card, context, ownerPlayer = null) {
 
             const targetResult = this.game.effectEngine.resolveTargets(
               effect.targets,
-              ctx,
+              previewCtx,
               null,
             );
 

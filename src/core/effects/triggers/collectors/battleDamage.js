@@ -163,6 +163,13 @@ export async function collectBattleDamageTriggers(payload) {
           activationZone: sourceZone,
         };
 
+        if (Array.isArray(effect.conditions) && effect.conditions.length > 0) {
+          const conditionResult = this.evaluateConditions(effect.conditions, ctx);
+          if (!conditionResult?.ok) {
+            continue;
+          }
+        }
+
         if (Array.isArray(effect.targets) && effect.targets.length > 0) {
           const previewCtx = {
             ...ctx,

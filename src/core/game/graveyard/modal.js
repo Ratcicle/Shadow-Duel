@@ -32,11 +32,19 @@ export function openGraveyardModal(player, options = {}) {
     // Se não tem onSelect customizado, usar o padrão para ativar efeitos
     if (!options.onSelect) {
       options.onSelect = (card) => {
-        const preview = this.effectEngine.canActivateMonsterEffectPreview?.(
-          card,
-          player,
-          "graveyard",
-        );
+        const isSpellTrap =
+          card?.cardKind === "spell" || card?.cardKind === "trap";
+        const preview = isSpellTrap
+          ? this.effectEngine.canActivateSpellTrapEffectPreview?.(
+              card,
+              player,
+              "graveyard",
+            )
+          : this.effectEngine.canActivateMonsterEffectPreview?.(
+              card,
+              player,
+              "graveyard",
+            );
         if (!preview?.ok) {
           if (preview?.reason) {
             this.ui.log(preview.reason);
@@ -49,18 +57,24 @@ export function openGraveyardModal(player, options = {}) {
           sourceZone: "graveyard",
           committed: false,
         };
-        const activationEffect = this.effectEngine?.getMonsterIgnitionEffect?.(
-          card,
-          "graveyard"
-        );
+        const activationEffect = isSpellTrap
+          ? this.effectEngine?.getSpellTrapActivationEffect?.(card, {
+              fromHand: false,
+              activationZone: "graveyard",
+            })
+          : this.effectEngine?.getMonsterIgnitionEffect?.(card, "graveyard");
         this.runActivationPipeline({
           card,
           owner: player,
           activationZone: "graveyard",
           activationContext,
           selectionKind: "graveyardEffect",
-          selectionMessage: getUIText("ui.graveyard.selection"),
-          guardKind: "graveyard_effect",
+          selectionMessage: isSpellTrap
+            ? getUIText("ui.spell.spellSelection")
+            : getUIText("ui.graveyard.selection"),
+          guardKind: isSpellTrap
+            ? "graveyard_spell_effect"
+            : "graveyard_effect",
           phaseReq: ["main1", "main2"],
           oncePerTurn: {
             card,
@@ -69,12 +83,20 @@ export function openGraveyardModal(player, options = {}) {
           },
           onSelectionStart: () => this.closeGraveyardModal(false),
           activate: (chosen, ctx) =>
-            this.effectEngine.activateMonsterFromGraveyard(
-              card,
-              player,
-              chosen,
-              ctx
-            ),
+            isSpellTrap
+              ? this.effectEngine.activateSpellTrapEffect(
+                  card,
+                  player,
+                  chosen,
+                  "graveyard",
+                  ctx,
+                )
+              : this.effectEngine.activateMonsterFromGraveyard(
+                  card,
+                  player,
+                  chosen,
+                  ctx,
+                ),
           finalize: () => {
             this.closeGraveyardModal(false);
             this.ui.log(`${card.name} activates from the Graveyard.`);

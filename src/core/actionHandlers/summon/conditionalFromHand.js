@@ -53,7 +53,7 @@ export async function handleConditionalSummonFromHand(
     return false;
   }
 
-  const handCard = player.hand.find((candidate) => candidate === card || candidate.name === card.name);
+  const handCard = player.hand.includes(card) ? card : null;
   if (!handCard) {
     return false;
   }

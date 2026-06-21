@@ -14,13 +14,23 @@ import {
  * Check if a monster has an activatable graveyard effect.
  */
 export function hasActivatableGraveyardEffect(card, player = null) {
-  if (!card || card.cardKind !== "monster") return false;
+  if (!card) return false;
   if (player) {
-    return !!this.canActivateMonsterEffectPreview?.(
-      card,
-      player,
-      "graveyard"
-    )?.ok;
+    if (card.cardKind === "monster") {
+      return !!this.canActivateMonsterEffectPreview?.(
+        card,
+        player,
+        "graveyard"
+      )?.ok;
+    }
+    if (card.cardKind === "spell" || card.cardKind === "trap") {
+      return !!this.canActivateSpellTrapEffectPreview?.(
+        card,
+        player,
+        "graveyard"
+      )?.ok;
+    }
+    return false;
   }
   return card.effects?.some(
     (e) => e.timing === "ignition" && e.requireZone === "graveyard"
@@ -303,6 +313,7 @@ export function canActivateSpellTrapEffectPreview(
 
   const effect = this.getSpellTrapActivationEffect(card, {
     fromHand: false,
+    activationZone,
     trapActivationFromSet:
       card.cardKind === "trap" && card.isFacedown === true,
   });
@@ -355,6 +366,10 @@ export function canActivateSpellTrapEffectPreview(
   } else if (activationZone === "fieldSpell") {
     if (player.fieldSpell !== card) {
       return { ok: false, reason: "Card is not in Field Spell zone." };
+    }
+  } else if (activationZone === "graveyard") {
+    if (!player.graveyard || !player.graveyard.includes(card)) {
+      return { ok: false, reason: "Card is not in your graveyard." };
     }
   }
 

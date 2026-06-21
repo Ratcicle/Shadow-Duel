@@ -59,6 +59,7 @@ import {
 import {
   handlePayLP,
   handleAddFromZoneToHand,
+  handleDiscardFromHand,
   handleSearchThenOptionalSpecialSummonFromHand,
   handleDamageFromDestroyedAtk,
   handleHealFromDestroyedAtk,
@@ -75,10 +76,15 @@ import { handleActivateStoredBlueprint } from "./blueprints.js";
 
 // Conditional handlers
 import {
+  handleConditionalActions,
   handleConditionalTargetActions,
   handleOptionalTargetActions,
+  handleRegisterBattlePairEffect,
+  handleRegisterTemporaryEventEffect,
+  handleRedirectCurrentAttackToTarget,
+  handleSetSourceAfterResolutionIf,
 } from "./conditional.js";
-import { handleChooseActionCase } from "./choice.js";
+import { handleChooseActionCase, handleDeclareCardProperty } from "./choice.js";
 import { handleNegateSummonOrActivationAndDestroy } from "./negation.js";
 
 /**
@@ -170,6 +176,8 @@ export function registerDefaultHandlers(registry) {
   registry.register("pay_lp", handlePayLP);
 
   registry.register("add_from_zone_to_hand", handleAddFromZoneToHand);
+  registry.register("discard_from_hand", handleDiscardFromHand);
+  registry.register("declare_card_property", handleDeclareCardProperty);
   registry.register(
     "search_then_optional_special_summon_from_hand",
     handleSearchThenOptionalSpecialSummonFromHand,
@@ -288,6 +296,20 @@ export function registerDefaultHandlers(registry) {
     handleConditionalTargetActions,
   );
   registry.register("optional_target_actions", handleOptionalTargetActions);
+  registry.register("conditional_actions", handleConditionalActions);
+  registry.register(
+    "register_temporary_event_effect",
+    handleRegisterTemporaryEventEffect,
+  );
+  registry.register("register_battle_pair_effect", handleRegisterBattlePairEffect);
+  registry.register(
+    "redirect_current_attack_to_target",
+    handleRedirectCurrentAttackToTarget,
+  );
+  registry.register(
+    "set_source_after_resolution_if",
+    handleSetSourceAfterResolutionIf,
+  );
   registry.register("choose_action_case", handleChooseActionCase);
 
   registry.register("heal", proxyEngineMethod("applyHeal"));

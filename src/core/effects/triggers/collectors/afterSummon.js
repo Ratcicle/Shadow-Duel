@@ -8,7 +8,7 @@ import { debugTriggerLog } from "./shared.js";
 export async function collectAfterSummonTriggers(payload) {
   const entries = [];
   const orderRule =
-    "summoner -> opponent; sources: summoned card -> opposing field -> fieldSpell -> hand";
+    "summoner -> opponent; sources: summoned card -> field -> fieldSpell -> spellTrap -> hand";
 
   if (!payload || !payload.card || !payload.player) {
     return { entries, orderRule };
@@ -42,20 +42,31 @@ export async function collectAfterSummonTriggers(payload) {
     if (!owner) continue;
 
     const sources = [];
+    const addSource = (candidate) => {
+      if (candidate && !sources.includes(candidate)) {
+        sources.push(candidate);
+      }
+    };
     if (side.includeSummonedCard && card) {
-      sources.push(card);
+      addSource(card);
+    }
+    if (Array.isArray(owner.field)) {
+      for (const fieldCard of owner.field) {
+        addSource(fieldCard);
+      }
     }
     if (owner.fieldSpell) {
-      sources.push(owner.fieldSpell);
-    }
-    if (!side.includeSummonedCard && Array.isArray(owner.field)) {
-      sources.push(...owner.field);
+      addSource(owner.fieldSpell);
     }
     if (Array.isArray(owner.spellTrap)) {
-      sources.push(...owner.spellTrap);
+      for (const spellTrap of owner.spellTrap) {
+        addSource(spellTrap);
+      }
     }
     if (Array.isArray(owner.hand)) {
-      sources.push(...owner.hand);
+      for (const handCard of owner.hand) {
+        addSource(handCard);
+      }
     }
 
     for (const sourceCard of sources) {
@@ -166,6 +177,18 @@ export async function collectAfterSummonTriggers(payload) {
             summonFromZone,
           );
           if (!conditionMet) continue;
+        }
+
+        if (Array.isArray(effect.conditions) && effect.conditions.length > 0) {
+          const conditionResult = this.evaluateConditions(effect.conditions, ctx);
+          if (!conditionResult?.ok) {
+            debugTriggerLog(this,
+              `[after_summon] Skipping ${effect.id}: ${
+                conditionResult?.reason || "conditions not met"
+              }.`,
+            );
+            continue;
+          }
         }
 
         if (Array.isArray(effect.targets) && effect.targets.length > 0) {

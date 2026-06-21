@@ -13,7 +13,7 @@ import {
 export async function collectBattleDestroyTriggers(payload) {
   const entries = [];
   const orderRule =
-    "attacker owner -> destroyed owner; sources: field/fieldSpell/equips -> hand -> destroyed card";
+    "attacker owner -> destroyed owner; sources: field/fieldSpell/active spellTrap/equips -> hand -> destroyed card";
 
   if (!payload || !payload.attacker || !payload.destroyed) {
     return { entries, orderRule };
@@ -24,6 +24,12 @@ export async function collectBattleDestroyTriggers(payload) {
   const destroyedPosition =
     payload.destroyedPosition || destroyed.position || null;
   const actionContext = payload?.actionContext || null;
+  const battleDestroyer = payload.battleDestroyer || attacker || null;
+  const battleDestroyers = Array.isArray(payload.battleDestroyers)
+    ? payload.battleDestroyers
+    : battleDestroyer
+      ? [battleDestroyer]
+      : [];
   const attackerOwner = payload.attackerOwner || this.getOwnerByCard(attacker);
   const destroyedOwner =
     payload.destroyedOwner || this.getOwnerByCard(destroyed);
@@ -42,12 +48,20 @@ export async function collectBattleDestroyTriggers(payload) {
     const equipSpells = (owner.spellTrap || []).filter(
       (c) => c && c.subtype === "equip" && c.equippedTo,
     );
+    const activeSpellTraps = (owner.spellTrap || []).filter(
+      (c) =>
+        c &&
+        c.isFacedown !== true &&
+        (c.cardKind === "spell" || c.cardKind === "trap") &&
+        (c.subtype === "continuous" || c.subtype === "field"),
+    );
 
     const fieldCards = [
       ...(owner.field || []),
       owner.fieldSpell,
+      ...activeSpellTraps,
       ...equipSpells,
-    ].filter(Boolean);
+    ].filter((card, index, cards) => card && cards.indexOf(card) === index);
 
     const handCards = owner.hand || [];
     const triggerSources = [...fieldCards, ...handCards];
@@ -74,6 +88,8 @@ export async function collectBattleDestroyTriggers(payload) {
         destroyed,
         attackerOwner,
         destroyedOwner,
+        battleDestroyer,
+        battleDestroyers,
         destroyedPosition,
         host: card.equippedTo || null,
         actionContext,
@@ -180,6 +196,8 @@ export async function collectBattleDestroyTriggers(payload) {
             destroyed,
             attackerOwner,
             destroyedOwner,
+            battleDestroyer,
+            battleDestroyers,
             destroyedPosition,
             actionContext,
             activationContext: { logTargets: false },
@@ -238,6 +256,19 @@ export async function collectBattleDestroyTriggers(payload) {
               ? [ctx.attacker]
               : [];
           if (!battleDestroyers.includes(card.equippedTo)) continue;
+        }
+
+        if (Array.isArray(effect.conditions) && effect.conditions.length > 0) {
+          const conditionResult = this.evaluateConditions(effect.conditions, ctx);
+          if (!conditionResult?.ok) {
+            debugTriggerLog(
+              this,
+              `[battle_destroy] Skipping ${effect.id}: ${
+                conditionResult?.reason || "conditions not met"
+              }.`,
+            );
+            continue;
+          }
         }
 
         const activationContext = this.buildTriggerActivationContext(

@@ -174,7 +174,7 @@ export async function tryActivateSpellTrapEffect(
   };
   const activationEffect = this.effectEngine?.getSpellTrapActivationEffect?.(
     card,
-    { fromHand: false, trapActivationFromSet },
+    { fromHand: false, activationZone: "spellTrap", trapActivationFromSet },
   );
 
   const pipelineQuickSpellContext = quickSpellActivationFromSet
@@ -235,6 +235,7 @@ export async function tryActivateSpellTrapEffect(
           card,
           owner,
           info.activationZone,
+          { activationContext: info.activationContext },
         );
         this.ui.log(`${card.name} effect activated.`);
       }
@@ -288,7 +289,9 @@ export async function finalizeSpellCardActivation(
   if (placementOnly) {
     this.ui?.log?.(placementLog || `${card.name} is placed on the field.`);
   } else {
-    await this.finalizeSpellTrapActivation(card, owner, activationZone);
+    await this.finalizeSpellTrapActivation(card, owner, activationZone, {
+      activationContext: info.activationContext,
+    });
     this.ui?.log?.(activationLog || `${card.name} effect activated.`);
   }
 

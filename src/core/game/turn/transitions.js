@@ -53,6 +53,7 @@ function hasPendingPhaseInterruption(game) {
     selectionState === "confirming" ||
     selectionState === "resolving" ||
     game.isResolvingEffect ||
+    game.pendingTributeSummonSelection?.active === true ||
     game.eventResolutionDepth > 0 ||
     game.chainSystem?.isChainResolving?.() ||
     game.chainSystem?.isChainWindowOpen?.()

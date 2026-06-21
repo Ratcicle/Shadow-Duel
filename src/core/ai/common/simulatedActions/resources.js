@@ -33,6 +33,7 @@ import {
   resolveSimulatedLpCost,
   resolveTargetsForAction,
   STOP_SIMULATION,
+  storeSimActionResult,
 } from "./shared.js";
 
 export function applyDraw(ctx) {
@@ -182,6 +183,51 @@ export function applySearchAny(ctx) {
   return;
 }
 
+function resolveSimMarkerExpirationTurn(state, markerConfig = {}) {
+  const currentTurn = Number(state?.turnCounter || 0);
+  if (Number.isFinite(markerConfig.expiresOnTurn)) {
+    return markerConfig.expiresOnTurn;
+  }
+  if (Number.isFinite(markerConfig.durationTurns)) {
+    return currentTurn + Math.max(0, markerConfig.durationTurns);
+  }
+  if (markerConfig.duration === "end_of_next_turn") {
+    return currentTurn + 1;
+  }
+  return currentTurn;
+}
+
+function markSimAddedCards(cards, action, state, targetPlayer, options = {}) {
+  const markerConfig = action?.markAddedCards;
+  if (!markerConfig || typeof markerConfig !== "object" || !markerConfig.key) {
+    return;
+  }
+
+  const sourceCard = options.sourceCard || null;
+  const marker = {
+    key: markerConfig.key,
+    sourceInstanceId:
+      markerConfig.bindToSource === false
+        ? null
+        : getCardInstanceId(sourceCard),
+    sourceCardId:
+      markerConfig.bindToSource === false ? null : sourceCard?.id ?? null,
+    sourceEffectId:
+      markerConfig.sourceEffectId || options.effect?.id || action.sourceEffectId || null,
+    controllerId: targetPlayer?.id || null,
+    markedOnTurn: Number(state?.turnCounter || 0),
+    expiresOnTurn: resolveSimMarkerExpirationTurn(state, markerConfig),
+  };
+
+  for (const card of cards || []) {
+    if (!card) continue;
+    if (!card.effectMarkers || typeof card.effectMarkers !== "object") {
+      card.effectMarkers = {};
+    }
+    card.effectMarkers[markerConfig.key] = { ...marker };
+  }
+}
+
 export function applyAddFromZoneToHand(ctx) {
   const {
     action,
@@ -195,7 +241,28 @@ export function applyAddFromZoneToHand(ctx) {
     applySimulatedActions,
   } = ctx;
   const targetPlayer = resolveActionPlayer(action, self, opponent);
-  const candidates = getActionCandidates(targetPlayer, action, "graveyard");
+  const excludeTargetRefs = [
+    action.excludeTargetRef,
+    ...(Array.isArray(action.excludeTargetRefs)
+      ? action.excludeTargetRefs
+      : []),
+  ].filter(Boolean);
+  const excludedInstanceIds = excludeTargetRefs
+    .flatMap((ref) =>
+      Array.isArray(targets?.[ref])
+        ? targets[ref]
+        : targets?.[ref]
+          ? [targets[ref]]
+          : [],
+    )
+    .map(getCardInstanceId)
+    .filter((value) => value !== undefined && value !== null);
+  const candidates = getActionCandidates(targetPlayer, action, "graveyard").filter(
+    (card) => {
+      const instanceId = getCardInstanceId(card);
+      return instanceId === null || !excludedInstanceIds.includes(instanceId);
+    },
+  );
   const pickCount = pickCountForAction(action, 1);
   const chosen = chooseRankedCards(
     candidates,
@@ -210,6 +277,74 @@ export function applyAddFromZoneToHand(ctx) {
     removeCardFromZones(targetPlayer, card);
     targetPlayer.hand.push(card);
   });
+  options.lastAddedToHandCards = chosen;
+  options.lastAddedToHandCard = chosen[0] || null;
+  if (options.actionContext && typeof options.actionContext === "object") {
+    options.actionContext.lastAddedToHandCards = chosen;
+    options.actionContext.lastAddedToHandCard = chosen[0] || null;
+  }
+  storeSimActionResult(action, selections, options, chosen);
+  markSimAddedCards(chosen, action, state, targetPlayer, options);
+  return;
+}
+
+export function applyDiscardFromHand(ctx) {
+  const { action, state, options, self, opponent } = ctx;
+  const targetPlayer = resolveActionPlayer(action, self, opponent);
+  const candidates = getActionCandidates(targetPlayer, action, "hand");
+  const count = normalizeCount(action.count, 1);
+  if (candidates.length < count.min) return STOP_SIMULATION;
+
+  const chosen = chooseRankedCards(
+    candidates,
+    "cost",
+    action,
+    state,
+    targetPlayer,
+    options,
+  ).slice(0, Math.min(count.max, candidates.length));
+  if (chosen.length < count.min) return STOP_SIMULATION;
+
+  chosen.forEach((card) => {
+    removeCardFromZones(targetPlayer, card);
+    targetPlayer.graveyard.push(card);
+  });
+  return;
+}
+
+export function applyDeclareCardProperty(ctx) {
+  const { action, state, options, self, opponent } = ctx;
+  const sourceCard = options.sourceCard || null;
+  if (!sourceCard || !action?.property || !action?.stateKey) return;
+
+  const visibleValues = [
+    ...(self?.field || []),
+    ...(opponent?.field || []),
+  ]
+    .map((card) => card?.[action.property])
+    .flatMap((value) => (Array.isArray(value) ? value : [value]))
+    .filter(Boolean);
+  const value =
+    action.value ||
+    visibleValues[0] ||
+    (Array.isArray(action.choices) ? action.choices[0] : null) ||
+    "Pyro";
+
+  if (!sourceCard.declaredValues) sourceCard.declaredValues = {};
+  const currentTurn = Number(state?.turnCounter || 0);
+  const expiresOnTurn =
+    action.duration === "while_faceup" || action.duration === "permanent"
+      ? null
+      : action.duration === "end_of_next_turn"
+        ? currentTurn + 1
+        : currentTurn;
+  sourceCard.declaredValues[action.stateKey] = {
+    property: action.property,
+    value,
+    declaredOnTurn: currentTurn,
+    expiresOnTurn,
+    duration: action.duration || null,
+  };
   return;
 }
 

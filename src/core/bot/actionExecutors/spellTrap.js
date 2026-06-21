@@ -129,6 +129,7 @@ export async function executeSpellTrapEffectAction(bot, game, action) {
   const activationEffect =
     game.effectEngine?.getSpellTrapActivationEffect?.(card, {
       fromHand: false,
+      activationZone: "spellTrap",
     });
   const actionActivationContext = action.activationContext || {};
 
@@ -183,6 +184,7 @@ export async function executeSpellTrapEffectAction(bot, game, action) {
           info.card,
           bot,
           info.activationZone,
+          { activationContext: info.activationContext },
         );
         game.ui?.log?.(`Bot activates ${info.card.name}`);
       }
@@ -213,6 +215,7 @@ export async function executeGraveyardSpellEffectAction(bot, game, action) {
   const graveyardEffect =
     game.effectEngine?.getSpellTrapActivationEffect?.(card, {
       fromHand: false,
+      activationZone: "graveyard",
     });
   if (!graveyardEffect) {
     console.log(

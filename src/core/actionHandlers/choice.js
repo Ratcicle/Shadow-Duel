@@ -1,5 +1,10 @@
 import { getUI } from "./shared.js";
-import { getCardDisplayName, getUIText } from "../i18n.js";
+import { cardDatabase } from "../../data/cards.js";
+import {
+  getCardDisplayName,
+  getMonsterTypeLabel,
+  getUIText,
+} from "../i18n.js";
 
 const DEFAULT_CHOICE_IMAGE = "assets/card-back.png";
 
@@ -45,6 +50,68 @@ function getChoiceSelectionMessage(effectChoiceKey, action, ctx) {
     { cardName },
     fallback,
   );
+}
+
+function getPropertyLabel(property) {
+  if (property === "type") {
+    return getUIText("ui.declaration.typeLabel", {}, "monster Type");
+  }
+  return String(property || "value");
+}
+
+function getPropertyValueLabel(property, value) {
+  if (property === "type") return getMonsterTypeLabel(value);
+  return String(value || "");
+}
+
+function getMonsterTypesInDatabase() {
+  return Array.from(
+    new Set(
+      cardDatabase
+        .filter((card) => card?.cardKind === "monster")
+        .flatMap((card) => {
+          if (Array.isArray(card.types)) return card.types;
+          return card.type ? [card.type] : [];
+        })
+        .filter(Boolean),
+    ),
+  ).sort((a, b) =>
+    getMonsterTypeLabel(a).localeCompare(getMonsterTypeLabel(b)),
+  );
+}
+
+function resolveDeclareChoices(action) {
+  if (Array.isArray(action?.choices)) return action.choices.filter(Boolean);
+  if (action?.choices === "monster_types_in_database") {
+    return getMonsterTypesInDatabase();
+  }
+
+  const property = action?.property;
+  if (!property) return [];
+  return Array.from(
+    new Set(
+      cardDatabase
+        .map((card) => card?.[property])
+        .flatMap((value) => (Array.isArray(value) ? value : [value]))
+        .filter(Boolean),
+    ),
+  ).sort((a, b) => String(a).localeCompare(String(b)));
+}
+
+function getDeclarationExpirationTurn(game, action) {
+  const currentTurn = Number(game?.turnCounter || 0);
+  if (Number.isFinite(action?.expiresOnTurn)) return action.expiresOnTurn;
+  if (Number.isFinite(action?.durationTurns)) {
+    return currentTurn + Math.max(0, action.durationTurns);
+  }
+  if (action?.duration === "while_faceup" || action?.duration === "permanent") {
+    return null;
+  }
+  if (action?.duration === "end_of_next_turn") return currentTurn + 1;
+  if (action?.duration === "end_of_turn" || action?.duration === "this_turn") {
+    return currentTurn;
+  }
+  return currentTurn;
 }
 
 function isAIPlayer(player) {
@@ -127,6 +194,51 @@ function buildChoiceCandidates(cases, ctx, action, engine) {
   });
 
   return { requirementId, candidates, caseByKey };
+}
+
+function buildDeclareChoiceCandidates(values, action, ctx, engine) {
+  const game = engine?.game;
+  const requirementId =
+    action.requirementId ||
+    action.selectionId ||
+    `${ctx?.effect?.id || action.type || "declare_card_property"}_choice`;
+  const candidates = [];
+  const valueByKey = new Map();
+  const property = action.property;
+
+  values.forEach((value, index) => {
+    const label = getPropertyValueLabel(property, value);
+    const cardRef = {
+      id: String(value),
+      name: label,
+      label,
+      description: label,
+      cardKind: "spell",
+      image: action.choiceImage || DEFAULT_CHOICE_IMAGE,
+    };
+    const candidate = {
+      key: `${requirementId}:${String(value)}`,
+      name: label,
+      owner: "player",
+      controller: ctx?.player?.id || "player",
+      zone: "choice",
+      zoneIndex: index,
+      position: "",
+      atk: null,
+      def: null,
+      cardKind: cardRef.cardKind,
+      cardRef,
+    };
+
+    if (game?.buildSelectionCandidateKey) {
+      candidate.key = game.buildSelectionCandidateKey(candidate, index);
+    }
+
+    candidates.push(candidate);
+    valueByKey.set(candidate.key, value);
+  });
+
+  return { requirementId, candidates, valueByKey };
 }
 
 function shouldAllowCase(caseEntry, ctx, engine) {
@@ -334,4 +446,103 @@ export async function handleChooseActionCase(action, ctx, targets, engine) {
   }
 
   return result;
+}
+
+export async function handleDeclareCardProperty(action, ctx, targets, engine) {
+  const game = engine?.game;
+  const player = ctx?.player;
+  const source = ctx?.source;
+  if (!game || !player || !source || !action?.property || !action?.stateKey) {
+    return false;
+  }
+
+  const choices = resolveDeclareChoices(action);
+  if (choices.length === 0) {
+    getUI(game)?.log("No values available to declare.");
+    return false;
+  }
+
+  let declaredValue = action.value || null;
+
+  if (!declaredValue) {
+    const { requirementId, candidates, valueByKey } =
+      buildDeclareChoiceCandidates(choices, action, ctx, engine);
+    const propertyLabel = getPropertyLabel(action.property);
+    const selectionContract = {
+      kind: "choice",
+      message:
+        action.selectionMessage ||
+        getUIText(
+          "ui.declaration.chooseValue",
+          { propertyLabel },
+          `Declare 1 ${propertyLabel}.`,
+        ),
+      requirements: [
+        {
+          id: requirementId,
+          label: action.selectionLabel || propertyLabel,
+          min: 1,
+          max: 1,
+          candidates,
+        },
+      ],
+      ui: {
+        allowCancel: action.allowCancel !== false,
+        useFieldTargeting: false,
+      },
+      metadata: {
+        intent: "declare",
+        sourceCard: source,
+        effectId: ctx?.effect?.id || null,
+      },
+    };
+
+    const selections = await runSelectionContract(game, selectionContract, {
+      kind: "choice",
+      card: source,
+      allowCancel: action.allowCancel !== false,
+      context: ctx,
+      player,
+      activationContext: ctx?.activationContext || {},
+    });
+
+    if (!selections || Object.keys(selections).length === 0) {
+      return false;
+    }
+
+    const chosenKeys = selections[requirementId] || [];
+    const chosenKey = Array.isArray(chosenKeys) ? chosenKeys[0] : chosenKeys;
+    declaredValue = valueByKey.get(chosenKey) || null;
+  }
+
+  if (!declaredValue) {
+    return false;
+  }
+
+  if (!source.declaredValues || typeof source.declaredValues !== "object") {
+    source.declaredValues = {};
+  }
+
+  const valueLabel = getPropertyValueLabel(action.property, declaredValue);
+  source.declaredValues[action.stateKey] = {
+    property: action.property,
+    value: declaredValue,
+    valueLabel,
+    declaredOnTurn: game.turnCounter || 0,
+    expiresOnTurn: getDeclarationExpirationTurn(game, action),
+    duration: action.duration || null,
+  };
+
+  getUI(game)?.log(
+    getUIText(
+      "ui.declaration.declaredValue",
+      {
+        cardName: getCardDisplayName(source),
+        valueLabel,
+      },
+      `${getCardDisplayName(source)} declared ${valueLabel}.`,
+    ),
+  );
+  game.updateBoard?.();
+  return true;
 }

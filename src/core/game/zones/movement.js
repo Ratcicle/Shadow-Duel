@@ -313,6 +313,41 @@ async function presentDestroyedGraveyardTrigger(game, card, options = {}) {
 }
 
 const FIELD_SOURCE_ZONES = new Set(["field", "spellTrap", "fieldSpell"]);
+const MOVE_CARD_SEARCH_ZONES = [
+  "field",
+  "hand",
+  "deck",
+  "graveyard",
+  "spellTrap",
+  "fieldSpell",
+  "extraDeck",
+  "banished",
+];
+
+function findCardLocation(game, card, preferredZone = null) {
+  if (!game || !card) return null;
+  const players = [game.player, game.bot].filter(Boolean);
+  const zones = preferredZone
+    ? [
+        preferredZone,
+        ...MOVE_CARD_SEARCH_ZONES.filter((zone) => zone !== preferredZone),
+      ]
+    : MOVE_CARD_SEARCH_ZONES;
+
+  for (const owner of players) {
+    for (const zoneName of zones) {
+      if (zoneName === "fieldSpell") {
+        if (owner.fieldSpell === card) return { owner, zone: zoneName };
+        continue;
+      }
+      const zone = game.getZone?.(owner, zoneName) || owner[zoneName] || [];
+      if (Array.isArray(zone) && zone.includes(card)) {
+        return { owner, zone: zoneName };
+      }
+    }
+  }
+  return null;
+}
 
 /**
  * Look for any face-up card on the field whose passive `send_to_grave_replacement`
@@ -365,6 +400,197 @@ function findSendToGraveReplacementTarget(game, card, fromOwner) {
   }
 
   return null;
+}
+
+function getSendToGraveReplacementSources(game) {
+  const players = [game?.player, game?.bot].filter(Boolean);
+  const entries = [];
+  for (const owner of players) {
+    for (const zoneName of ["field", "spellTrap", "fieldSpell"]) {
+      const zoneCards =
+        zoneName === "fieldSpell"
+          ? owner.fieldSpell
+            ? [owner.fieldSpell]
+            : []
+          : Array.isArray(owner[zoneName])
+            ? owner[zoneName]
+            : [];
+      for (const card of zoneCards) {
+        if (!card) continue;
+        entries.push({ sourceCard: card, sourceOwner: owner, sourceZone: zoneName });
+      }
+    }
+  }
+  return entries;
+}
+
+function relationMatches(game, sourceOwner, targetOwner, rule = "self") {
+  if (rule === "any") return true;
+  if (!sourceOwner || !targetOwner) return false;
+  if (rule === "self") return sourceOwner === targetOwner;
+  if (rule === "opponent") {
+    return game?.getOpponent?.(sourceOwner) === targetOwner;
+  }
+  return false;
+}
+
+function matchesSendToGraveReplacement(game, replacement, sourceCard, ctx) {
+  const { card, fromOwner, fromZone, sourceOwner } = ctx;
+  if (!replacement || replacement.type !== "send_to_grave") return false;
+  if (!card || !fromOwner || !fromZone || !sourceCard || !sourceOwner) return false;
+
+  if (
+    (replacement.targetMustNotBeSource === true ||
+      replacement.excludeSource === true) &&
+    card === sourceCard
+  ) {
+    return false;
+  }
+
+  const targetOwnerRule =
+    replacement.targetOwner || replacement.appliesTo || "self";
+  if (!relationMatches(game, sourceOwner, fromOwner, targetOwnerRule)) {
+    return false;
+  }
+
+  const targetZones = replacement.targetZones
+    ? replacement.targetZones
+    : replacement.targetZone
+      ? [replacement.targetZone]
+      : ["field"];
+  if (targetZones.length > 0 && !targetZones.includes(fromZone)) {
+    return false;
+  }
+
+  const targetRequireFaceup =
+    replacement.targetRequireFaceup !== false &&
+    replacement.allowFacedown !== true;
+  if (targetRequireFaceup && card.isFacedown) return false;
+
+  const filters = replacement.targetFilters || {};
+  if (
+    Object.keys(filters).length > 0 &&
+    !game.effectEngine?.cardMatchesFilters?.(card, filters)
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+async function trySendToGraveActionReplacement(game, card, destPlayer, options = {}) {
+  if (!game || !card || card.isToken) return { replaced: false };
+  if (options?.skipSendToGraveReplacement === true) return { replaced: false };
+  if (options?.skipSendToGraveActionReplacement === true) {
+    return { replaced: false };
+  }
+
+  const location = findCardLocation(game, card, options.fromZone || null);
+  if (!location || location.zone !== "field") return { replaced: false };
+
+  for (const { sourceCard, sourceOwner, sourceZone } of getSendToGraveReplacementSources(game)) {
+    if (!sourceCard || sourceCard.isFacedown) continue;
+    if (game.effectEngine?.isEffectNegated?.(sourceCard)) continue;
+
+    for (const effect of sourceCard.effects || []) {
+      const replacement = effect?.replacementEffect;
+      if (!replacement || replacement.type !== "send_to_grave") continue;
+      if (effect.requireZone && effect.requireZone !== sourceZone) continue;
+      if (effect.requireFaceup === true && sourceCard.isFacedown) continue;
+      if (
+        !matchesSendToGraveReplacement(game, replacement, sourceCard, {
+          card,
+          fromOwner: location.owner,
+          fromZone: location.zone,
+          sourceOwner,
+        })
+      ) {
+        continue;
+      }
+
+      const optCheck = game.canUseOncePerTurn?.(sourceCard, sourceOwner, effect);
+      if (optCheck && optCheck.ok === false) continue;
+
+      const opponent = game.getOpponent?.(sourceOwner) || null;
+      const replacementCtx = {
+        player: sourceOwner,
+        opponent,
+        source: sourceCard,
+        movedCard: card,
+        eventCard: card,
+        fromZone: location.zone,
+        toZone: "graveyard",
+        activationContext: {
+          source: sourceCard,
+          player: sourceOwner,
+          sourceZone,
+          activationZone: sourceZone,
+        },
+      };
+      const actions = Array.isArray(effect.actions) ? effect.actions : [];
+      if (actions.length === 0) continue;
+
+      const preview =
+        typeof game.effectEngine?.checkActionPreviewRequirements === "function"
+          ? game.effectEngine.checkActionPreviewRequirements(
+              actions,
+              {
+                ...replacementCtx,
+                preview: true,
+                isPreview: true,
+                activationContext: {
+                  ...replacementCtx.activationContext,
+                  preview: true,
+                  isPreview: true,
+                },
+              },
+            )
+          : { ok: true };
+      if (preview?.ok === false) continue;
+
+      if (sourceOwner.controllerType === "human" && replacement.auto !== true) {
+        const prompt =
+          replacement.prompt ||
+          `Use ${sourceCard.name} to replace sending ${card.name} to the Graveyard?`;
+        const wantsToReplace =
+          (await game.ui?.showConfirmPrompt?.(prompt, {
+            kind: "send_to_grave_replacement",
+            cardName: card.name,
+          })) ?? false;
+        if (!wantsToReplace) continue;
+      }
+
+      const result = await game.effectEngine.applyActions(
+        actions,
+        replacementCtx,
+        {},
+      );
+      const success =
+        result === true ||
+        (result &&
+          typeof result === "object" &&
+          result.success !== false &&
+          result.needsSelection !== true);
+      if (!success) continue;
+
+      game.markOncePerTurnUsed?.(sourceCard, sourceOwner, effect);
+      if (replacement.logMessage) {
+        game.ui?.log?.(
+          replacement.logMessage
+            .replace("{target}", card.name)
+            .replace("{source}", sourceCard.name),
+        );
+      }
+      const finalLocation = findCardLocation(game, card, null);
+      return {
+        replaced: true,
+        fromZone: location.zone,
+        toZone: finalLocation?.zone || "deck",
+      };
+    }
+  }
+
+  return { replaced: false };
 }
 
 function asList(value) {
@@ -690,6 +916,13 @@ function cleanupLinkedPermanentBuffsWhenSourceLeavesField(game, card, fromZone, 
   }
 }
 
+function cleanupDeclaredValuesWhenSourceLeavesActiveZone(card, fromZone, toZone) {
+  if (!FIELD_SOURCE_ZONES.has(fromZone) || fromZone === toZone) return;
+  if (card?.declaredValues && typeof card.declaredValues === "object") {
+    delete card.declaredValues;
+  }
+}
+
 /**
  * Internal implementation of card movement with all side effects.
  * @param {Object} card - The card to move
@@ -760,6 +993,27 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
   if (toZone === "spellTrap" && destArr.length >= 5) {
     this.ui.log("Spell/Trap zone is full (max 5 cards).");
     return { success: false, reason: "spell_trap_full" };
+  }
+
+  if (
+    toZone === "graveyard" &&
+    options?.skipSendToGraveReplacement !== true &&
+    options?.skipSendToGraveActionReplacement !== true
+  ) {
+    const replacementResult = await trySendToGraveActionReplacement(
+      this,
+      card,
+      destPlayer,
+      options,
+    );
+    if (replacementResult?.replaced) {
+      return {
+        success: true,
+        replaced: true,
+        fromZone: replacementResult.fromZone || options.fromZone || null,
+        toZone: replacementResult.toZone || "deck",
+      };
+    }
   }
 
   const zones = [
@@ -953,6 +1207,7 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     toZone,
   );
   cleanupLinkedPermanentBuffsWhenSourceLeavesField(this, card, fromZone, toZone);
+  cleanupDeclaredValuesWhenSourceLeavesActiveZone(card, fromZone, toZone);
 
   if (fromZone === "field" && card.cardKind === "monster") {
     card.summonedTurn = null;

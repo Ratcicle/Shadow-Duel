@@ -78,6 +78,147 @@ function canShowBattleDamageLoss(player, cardInvolved, shouldHeal) {
   return true;
 }
 
+function getCardInstanceId(card) {
+  return card?.instanceId ?? card?._instanceId ?? card?.uuid ?? card?.simInstanceId ?? null;
+}
+
+function sameBattleCard(card, expected, expectedInstanceId, expectedFieldPresenceId) {
+  if (!card || !expected) return false;
+  if (card === expected) return true;
+  const cardInstanceId = getCardInstanceId(card);
+  if (
+    cardInstanceId !== null &&
+    expectedInstanceId !== undefined &&
+    expectedInstanceId !== null &&
+    cardInstanceId === expectedInstanceId
+  ) {
+    return true;
+  }
+  return (
+    expectedFieldPresenceId &&
+    card.fieldPresenceId &&
+    expectedFieldPresenceId === card.fieldPresenceId
+  );
+}
+
+function getPlayerById(game, playerId) {
+  if (!game || !playerId) return null;
+  if (game.player?.id === playerId) return game.player;
+  if (game.bot?.id === playerId) return game.bot;
+  return null;
+}
+
+function isFieldMonsterControlledBy(player, card) {
+  return (
+    !!player &&
+    !!card &&
+    card.cardKind === "monster" &&
+    Array.isArray(player.field) &&
+    player.field.includes(card)
+  );
+}
+
+function battlePairMatches(entry, attacker, defender) {
+  const firstIsAttacker = sameBattleCard(
+    attacker,
+    entry.firstTarget,
+    entry.firstInstanceId,
+    entry.firstFieldPresenceId,
+  );
+  const secondIsDefender = sameBattleCard(
+    defender,
+    entry.secondTarget,
+    entry.secondInstanceId,
+    entry.secondFieldPresenceId,
+  );
+  const firstIsDefender = sameBattleCard(
+    defender,
+    entry.firstTarget,
+    entry.firstInstanceId,
+    entry.firstFieldPresenceId,
+  );
+  const secondIsAttacker = sameBattleCard(
+    attacker,
+    entry.secondTarget,
+    entry.secondInstanceId,
+    entry.secondFieldPresenceId,
+  );
+  return (firstIsAttacker && secondIsDefender) || (firstIsDefender && secondIsAttacker);
+}
+
+async function resolveTemporaryBattlePairEffects(game, payload) {
+  const entries = Array.isArray(game?.temporaryBattlePairEffects)
+    ? game.temporaryBattlePairEffects
+    : [];
+  if (entries.length === 0) return null;
+
+  const remaining = [];
+  let selectionResult = null;
+
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index];
+    if (
+      entry &&
+      Number.isFinite(entry.expiresOnTurn) &&
+      game.turnCounter > entry.expiresOnTurn
+    ) {
+      continue;
+    }
+    if (!entry || entry.timing !== payload.damageStepTiming) {
+      remaining.push(entry);
+      continue;
+    }
+    if (!battlePairMatches(entry, payload.attacker, payload.defender)) {
+      remaining.push(entry);
+      continue;
+    }
+
+    const controller = getPlayerById(game, entry.controllerId);
+    const opponent = getPlayerById(game, entry.opponentId);
+    const affectedTarget = entry.affectedTarget;
+    if (!isFieldMonsterControlledBy(opponent, affectedTarget)) {
+      continue;
+    }
+
+    const actionCtx = {
+      source: entry.source,
+      player: controller,
+      opponent,
+      effect: { id: entry.sourceEffectId || entry.id },
+      attacker: payload.attacker,
+      defender: payload.defender,
+      target: payload.target,
+      attackerOwner: payload.attackerOwner,
+      defenderOwner: payload.defenderOwner,
+      targetOwner: payload.targetOwner,
+      battleStep: "damage",
+      damageStepTiming: payload.damageStepTiming,
+      isDamageStep: true,
+    };
+    const actionTargets = {
+      [entry.firstTargetRef]: [entry.firstTarget],
+      [entry.secondTargetRef]: [entry.secondTarget],
+      [entry.affectedTargetRef]: [affectedTarget],
+      battle_pair_first: [entry.firstTarget],
+      battle_pair_second: [entry.secondTarget],
+      battle_pair_affected: [affectedTarget],
+    };
+    const result = await game.effectEngine?.applyActions?.(
+      Array.isArray(entry.actions) ? entry.actions : [],
+      actionCtx,
+      actionTargets,
+    );
+    if (result?.needsSelection) {
+      selectionResult = result;
+      remaining.push(...entries.slice(index + 1));
+      break;
+    }
+  }
+
+  game.temporaryBattlePairEffects = remaining;
+  return selectionResult;
+}
+
 function hasBattleDamageTimingEffect(card) {
   return Array.isArray(card?.effects)
     ? card.effects.some(
@@ -241,14 +382,14 @@ export async function resolveCombat(attacker, target, options = {}) {
   this.battleStep = "battle";
   this.damageStepTiming = null;
 
-  const defenderOwner = target
+  let defenderOwner = target
     ? target.owner === "player"
       ? this.player
       : this.bot
     : attacker.owner === "player"
       ? this.bot
       : this.player;
-  const targetOwner = defenderOwner;
+  let targetOwner = defenderOwner;
 
   let battleImpactVisualPlayed = false;
   let battleLpLossPreview = null;
@@ -336,7 +477,7 @@ export async function resolveCombat(attacker, target, options = {}) {
         })
       : null;
 
-  await this.emit("attack_declared", {
+  const attackDeclaredPayload = {
     attacker,
     target: target || null,
     defender: target || null,
@@ -345,7 +486,53 @@ export async function resolveCombat(attacker, target, options = {}) {
     targetOwner,
     battleStep: this.battleStep,
     damageStepTiming: this.damageStepTiming,
-  });
+  };
+
+  await this.emit("attack_declared", attackDeclaredPayload);
+
+  const applyAttackRedirect = (redirectPayload) => {
+    const redirectedTarget =
+      redirectPayload?.attackRedirect?.target ||
+      redirectPayload?.redirectedTarget ||
+      null;
+    const redirectedTargetOwner =
+      redirectPayload?.attackRedirect?.targetOwner ||
+      redirectPayload?.redirectedTargetOwner ||
+      null;
+    const redirectIsValid =
+      redirectedTarget &&
+      redirectedTarget.cardKind === "monster" &&
+      redirectedTargetOwner &&
+      Array.isArray(redirectedTargetOwner.field) &&
+      redirectedTargetOwner.field.includes(redirectedTarget) &&
+      redirectedTargetOwner.id !== attackerOwner?.id;
+    if (!redirectIsValid) return false;
+
+    target = redirectedTarget;
+    defenderOwner = redirectedTargetOwner;
+    targetOwner = redirectedTargetOwner;
+    this.applyAttackResolutionIndicators(attacker, target);
+    this.ui?.log?.(`Attack target changed to ${target.name}.`);
+    return true;
+  };
+
+  if (applyAttackRedirect(attackDeclaredPayload)) {
+    const battleStepOpenContext = {
+      attacker,
+      target,
+      defender: target,
+      attackerOwner,
+      defenderOwner,
+      targetOwner,
+      battleStep: this.battleStep,
+      damageStepTiming: this.damageStepTiming,
+      isOpponentAttack: attackerOwner?.id !== defenderOwner?.id,
+      triggerPlayer: attackerOwner,
+      addTriggerToChain: false,
+    };
+    await this.checkAndOfferTraps("battle_step_open", battleStepOpenContext);
+    applyAttackRedirect(battleStepOpenContext);
+  }
 
   if (this.lastAttackNegated) {
     attacker.attacksUsedThisTurn = (attacker.attacksUsedThisTurn || 0) + 1;
@@ -393,7 +580,8 @@ export async function resolveCombat(attacker, target, options = {}) {
 
   if (target) {
     const targetOwnerField =
-      target.owner === "player" ? this.player.field : this.bot.field;
+      targetOwner?.field ||
+      (target.owner === "player" ? this.player.field : this.bot.field);
     if (!targetOwnerField.includes(target)) {
       this.ui.log("Attack stopped because the target left the field.");
       this.markAttackUsed(attacker, target);
@@ -406,7 +594,8 @@ export async function resolveCombat(attacker, target, options = {}) {
   if (!target) {
     if (
       (attacker.attacksUsedThisTurn || 0) > 0 &&
-      attacker.extraAttackTargetRestriction === "monster"
+      (attacker.extraAttackTargetRestriction ||
+        attacker.passiveExtraAttackTargetRestriction) === "monster"
     ) {
       this.ui?.log?.(`${attacker.name}'s extra attack can only target monsters.`);
       this.clearAttackResolutionIndicators();
@@ -559,15 +748,29 @@ export async function finishCombat(attacker, target, options = {}) {
       damageStepTiming: this.damageStepTiming,
       isDamageStep: true,
     });
+    const battlePairResult = battleDamageResult?.needsSelection
+      ? null
+      : await resolveTemporaryBattlePairEffects(this, {
+          attacker,
+          defender: target,
+          target,
+          attackerOwner,
+          defenderOwner,
+          targetOwner: defenderOwner,
+          damageStepTiming: this.damageStepTiming,
+        });
     this.battleStep =
       previousBattleStep || (this.phase === "battle" ? "battle" : null);
     this.damageStepTiming = previousDamageStepTiming ?? null;
 
-    if (battleDamageResult?.needsSelection) {
+    if (battleDamageResult?.needsSelection || battlePairResult?.needsSelection) {
+      const pendingSelection = battleDamageResult?.needsSelection
+        ? battleDamageResult
+        : battlePairResult;
       return {
         ok: true,
         needsSelection: true,
-        selectionContract: battleDamageResult.selectionContract,
+        selectionContract: pendingSelection.selectionContract,
         damageDealt: 0,
         targetDestroyed: false,
         attackerDestroyed: false,

@@ -3,6 +3,8 @@
  * Extracted from EffectEngine.js – preserving original logic and signatures.
  */
 
+import { resolveFieldScopeCards } from "../../actionHandlers/shared.js";
+
 function checkControlCardCondition(condition, ctx) {
   if (!condition || condition.type !== "control_card") return false;
 
@@ -59,11 +61,19 @@ export async function applyMove(action, ctx, targets) {
   // Resolve targetRef to get the actual cards
   let targetCards = targets?.[action.targetRef] || [];
 
+  if ((!targetCards || targetCards.length === 0) && action.targetScope) {
+    targetCards = resolveFieldScopeCards(action.targetScope, ctx, this.game, {
+      engine: this,
+    });
+  }
+
   if (!targetCards || targetCards.length === 0) {
     targetCards = getContextTargetCards(action.targetRef, ctx);
   }
 
-  if (!targetCards || targetCards.length === 0) return false;
+  if (!targetCards || targetCards.length === 0) {
+    return action.allowEmpty === true;
+  }
 
   const toZone = action.to || action.toZone;
   if (!toZone) {
@@ -102,12 +112,17 @@ export async function applyMove(action, ctx, targets) {
     const shouldPromptForPosition =
       toZone === "field" &&
       card.cardKind === "monster" &&
+      action.preservePosition !== true &&
       this.game &&
       destPlayer === this.game.player &&
       typeof this.game.chooseSpecialSummonPosition === "function";
 
     const defaultFieldPosition =
-      toZone === "field" && card.cardKind === "monster" ? "attack" : null;
+      toZone === "field" &&
+      card.cardKind === "monster" &&
+      action.preservePosition !== true
+        ? "attack"
+        : null;
 
     const applyMoveWithPosition = async (chosenPosition) => {
       const finalPosition = shouldPromptForPosition
@@ -123,6 +138,7 @@ export async function applyMove(action, ctx, targets) {
 
       if (this.game && typeof this.game.moveCard === "function") {
         const moveResult = await this.game.moveCard(card, destPlayer, toZone, {
+          fromZone: action.fromZone,
           position: finalPosition,
           isFacedown: action.isFacedown,
           resetAttackFlags: action.resetAttackFlags,
@@ -130,6 +146,9 @@ export async function applyMove(action, ctx, targets) {
           sourceCard: ctx?.source || null,
           effectId: ctx?.effect?.id || null,
           movedByEffect: true,
+          skipSendToGraveReplacement: action.skipSendToGraveReplacement,
+          skipSendToGraveActionReplacement:
+            action.skipSendToGraveActionReplacement,
           awaitCardMovedEvent: true,
           awaitCardToGraveEvent: toZone === "graveyard",
           allowExtraDeckMonsterToHand: shouldAllowExtraDeckMonsterToHand(
@@ -147,6 +166,7 @@ export async function applyMove(action, ctx, targets) {
         const fromOwner =
           card.owner === "player" ? this.game.player : this.game.bot;
         const zones = [
+          action.fromZone,
           "field",
           "hand",
           "deck",
@@ -154,7 +174,7 @@ export async function applyMove(action, ctx, targets) {
           "spellTrap",
           "extraDeck",
           "banished",
-        ];
+        ].filter(Boolean);
         for (const zoneName of zones) {
           const arr = this.getZone(fromOwner, zoneName);
           const idx = arr ? arr.indexOf(card) : -1;

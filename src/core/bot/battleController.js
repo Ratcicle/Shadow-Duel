@@ -67,7 +67,8 @@ export function playBotBattlePhase(bot, game) {
         !attacker.canAttackAllOpponentMonstersThisTurn &&
         !(
           (attacker.attacksUsedThisTurn || 0) > 0 &&
-          attacker.extraAttackTargetRestriction === "monster"
+          (attacker.extraAttackTargetRestriction ||
+            attacker.passiveExtraAttackTargetRestriction) === "monster"
         );
 
       const tauntTargets = opponent.field.filter(

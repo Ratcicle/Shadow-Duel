@@ -53,7 +53,15 @@ export {
 } from "./stats.js";
 
 // Conditional
-export { handleConditionalTargetActions } from "./conditional.js";
+export {
+  handleConditionalActions,
+  handleConditionalTargetActions,
+  handleOptionalTargetActions,
+  handleRegisterBattlePairEffect,
+  handleRegisterTemporaryEventEffect,
+  handleRedirectCurrentAttackToTarget,
+  handleSetSourceAfterResolutionIf,
+} from "./conditional.js";
 export { handleChooseActionCase } from "./choice.js";
 export { handleNegateSummonOrActivationAndDestroy } from "./negation.js";
 

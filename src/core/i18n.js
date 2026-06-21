@@ -37,6 +37,11 @@ const DEFAULT_LOCALE_TEXTS = {
       noValidChoice: "No valid effect choice selected.",
       noValidTargets: "No valid targets.",
     },
+    declaration: {
+      chooseValue: "Declare 1 {propertyLabel}.",
+      declaredValue: "{cardName} declared {valueLabel}.",
+      typeLabel: "monster Type",
+    },
     fieldTargeting: {
       monsterEffect: "monster effect",
       spellEffect: "spell effect",
@@ -349,6 +354,26 @@ const DEFAULT_LOCALE_TEXTS = {
         },
       },
     },
+    burning_west_wanted_reward: {
+      message: 'Choose a "Wanted in the Burning West" reward.',
+      cases: {
+        burning_west_wanted_summon: {
+          label: "Special Summon Burning West",
+          description:
+            'Special Summon 1 Level 5 or lower "Burning West" monster from your hand.',
+        },
+        burning_west_wanted_buff: {
+          label: "Gain 800 ATK",
+          description:
+            'Target 1 "Burning West" monster you control; it gains 800 ATK until the end of the next turn.',
+        },
+        burning_west_wanted_recover: {
+          label: "Recover Burning West Spell/Trap",
+          description:
+            'Add 1 "Burning West" Spell/Trap from your Graveyard to your hand.',
+        },
+      },
+    },
     void_serpent_drake_hand_special: {
       tiers: {
         1: {
@@ -398,6 +423,7 @@ const MONSTER_TYPE_LABELS = {
     Insect: "Inseto",
     Reptile: "Réptil",
     "Sea Serpent": "Serpente Marinha",
+    Pyro: "Piro",
     Spellcaster: "Mago",
     Spirit: "Espírito",
     Warrior: "Guerreiro",
@@ -736,6 +762,12 @@ export function getMonsterTypeDisplayName(card) {
     })
     .filter(Boolean)
     .join(" / ");
+}
+
+export function getMonsterTypeLabel(type) {
+  const rawType = String(type || "").trim();
+  if (!rawType) return "";
+  return MONSTER_TYPE_LABELS[currentLocale]?.[rawType] || rawType;
 }
 
 export function getMonsterDetailParts(card) {

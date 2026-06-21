@@ -27,6 +27,18 @@ function isTrapActivationFromSet(card, options = {}) {
   );
 }
 
+function ignitionMatchesActivationZone(effect, activationZone = "spellTrap") {
+  if (!effect || effect.timing !== "ignition") return false;
+  const requiredZone = effect.requireZone || null;
+  if (requiredZone) {
+    return (
+      requiredZone === activationZone ||
+      (requiredZone === "field" && activationZone === "spellTrap")
+    );
+  }
+  return activationZone === "spellTrap" || activationZone === "field";
+}
+
 /**
  * Get the activation effect for a Spell/Trap card.
  * For traps: on_activate or ignition timing
@@ -36,20 +48,30 @@ export function getSpellTrapActivationEffect(card, options = {}) {
   if (!card || !Array.isArray(card.effects)) {
     return null;
   }
+  const activationZone =
+    options.activationZone || (options.fromHand === true ? "hand" : "spellTrap");
   if (card.cardKind === "trap") {
     if (isTrapActivationFromSet(card, options)) {
       return card.effects.find((e) => e && e.timing === "on_activate") || null;
     }
-    return card.effects.find((e) => e && e.timing === "ignition") || null;
+    return (
+      card.effects.find((e) => ignitionMatchesActivationZone(e, activationZone)) ||
+      null
+    );
   }
   if (card.cardKind === "spell") {
     const fromHand = options.fromHand === true;
     if (fromHand) {
       return this.getHandActivationEffect(card);
     }
-    const ignition = card.effects.find((e) => e && e.timing === "ignition");
+    const ignition = card.effects.find((e) =>
+      ignitionMatchesActivationZone(e, activationZone)
+    );
     if (ignition) return ignition;
     if (card.subtype === "continuous" || card.subtype === "field") {
+      return null;
+    }
+    if (activationZone !== "spellTrap") {
       return null;
     }
     return card.effects.find((e) => e && e.timing === "on_play") || null;

@@ -442,6 +442,7 @@ export async function activateSpellTrapEffect(
   if (card.cardKind === "trap") {
     effect = this.getSpellTrapActivationEffect(card, {
       fromHand: false,
+      activationZone,
       trapActivationFromSet:
         normalizedActivationContext.trapActivationFromSet === true ||
         flipAfterChecks,
@@ -489,7 +490,10 @@ export async function activateSpellTrapEffect(
         return fail("No on_play effect defined.");
       }
     } else {
-      effect = this.getSpellTrapActivationEffect(card, { fromHand: false });
+      effect = this.getSpellTrapActivationEffect(card, {
+        fromHand: false,
+        activationZone,
+      });
       if (!effect) {
         const placementOnly =
           flipAfterChecks &&

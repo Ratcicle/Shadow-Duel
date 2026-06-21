@@ -89,6 +89,145 @@ function findConditionalDestructionProtection(
   return null;
 }
 
+function getProtectionAuraSources(game) {
+  const sources = [];
+  for (const sourceOwner of [game?.player, game?.bot]) {
+    if (!sourceOwner) continue;
+    for (const card of sourceOwner.field || []) {
+      sources.push({ card, owner: sourceOwner, zone: "field" });
+    }
+    if (sourceOwner.fieldSpell) {
+      sources.push({
+        card: sourceOwner.fieldSpell,
+        owner: sourceOwner,
+        zone: "fieldSpell",
+      });
+    }
+    for (const card of sourceOwner.spellTrap || []) {
+      sources.push({ card, owner: sourceOwner, zone: "spellTrap" });
+    }
+  }
+  return sources;
+}
+
+function targetOwnerMatchesRule(game, sourceOwner, targetOwner, ownerRule) {
+  if (ownerRule === "any" || ownerRule === "both") return true;
+  if (ownerRule === "opponent") {
+    return game.getOpponent?.(sourceOwner) === targetOwner;
+  }
+  return sourceOwner === targetOwner;
+}
+
+function targetOwnerMatchesAura(game, sourceOwner, targetOwner, passive) {
+  const ownerRules = asArray(
+    passive.targetOwners || passive.targetOwner || passive.appliesTo || "self",
+  );
+  return ownerRules.some((rule) =>
+    targetOwnerMatchesRule(game, sourceOwner, targetOwner, rule),
+  );
+}
+
+function effectSourceIsActive(card, effect, passive, sourceZone) {
+  if (!card || !effect || effect.timing !== "passive") return false;
+  if (effect.requireZone && effect.requireZone !== sourceZone) return false;
+  if (passive.requireZone && passive.requireZone !== sourceZone) return false;
+  const requireFaceup =
+    effect.requireFaceup === true || passive.requireFaceup === true;
+  if (requireFaceup && card.isFacedown) return false;
+  return true;
+}
+
+function findConditionalDestructionProtectionAura(
+  game,
+  card,
+  owner,
+  cause,
+  fromZone,
+) {
+  if (!game || !card || !owner || cause === "battle") return null;
+  const protectionType = getDestructionProtectionType(cause);
+
+  for (const source of getProtectionAuraSources(game)) {
+    const sourceCard = source.card;
+    const sourceOwner = source.owner;
+    if (!sourceCard || !Array.isArray(sourceCard.effects)) continue;
+
+    for (const effect of sourceCard.effects) {
+      const passive = effect?.passive || {};
+      if (passive.type !== "conditional_destruction_protection_aura") {
+        continue;
+      }
+      if (!effectSourceIsActive(sourceCard, effect, passive, source.zone)) {
+        continue;
+      }
+
+      const protectedTypes = asArray(
+        passive.protectionType ||
+          passive.protectionTypes ||
+          effect.protectionType ||
+          effect.protectionTypes ||
+          "effect_destruction",
+      );
+      if (
+        protectedTypes.length > 0 &&
+        !protectedTypes.includes(protectionType)
+      ) {
+        continue;
+      }
+
+      const targetZones = asArray(
+        passive.targetZones || passive.targetZone || "field",
+      );
+      if (targetZones.length > 0 && !targetZones.includes(fromZone)) {
+        continue;
+      }
+      if (!targetOwnerMatchesAura(game, sourceOwner, owner, passive)) {
+        continue;
+      }
+      if (passive.targetRequireFaceup === true && card.isFacedown) {
+        continue;
+      }
+      const targetFilters = passive.targetFilters || passive.filters || null;
+      if (
+        targetFilters &&
+        !game.effectEngine?.cardMatchesFilters?.(card, targetFilters)
+      ) {
+        continue;
+      }
+
+      const opponent = game.getOpponent?.(sourceOwner) || null;
+      const conditions = Array.isArray(effect.conditions)
+        ? effect.conditions
+        : Array.isArray(passive.conditions)
+          ? passive.conditions
+          : passive.condition
+            ? [passive.condition]
+            : [];
+      if (conditions.length > 0) {
+        const conditionResult = game.effectEngine?.evaluateConditions?.(
+          conditions,
+          {
+            source: sourceCard,
+            player: sourceOwner,
+            opponent,
+            protectedCard: card,
+            protectedOwner: owner,
+            activationZone: source.zone,
+            sourceZone: source.zone,
+          },
+        );
+        if (conditionResult && conditionResult.ok === false) {
+          continue;
+        }
+      }
+
+      return { sourceCard, sourceOwner, effect, passive, protectionType };
+    }
+  }
+
+  return null;
+}
+
 export async function destroyCard(card, options = {}) {
   const result = await this.runZoneOp(
     "DESTROY_CARD",
@@ -212,6 +351,33 @@ export async function destroyCard(card, options = {}) {
           destroyed: false,
           reason: "protected",
           protectionType: conditionalProtection.protectionType,
+        };
+      }
+
+      const auraProtection = findConditionalDestructionProtectionAura(
+        this,
+        card,
+        owner,
+        cause,
+        fromZone,
+      );
+      if (auraProtection) {
+        this.ui?.log?.(
+          `${card.name} is protected from destruction by ${
+            auraProtection.sourceCard?.name || "a card effect"
+          }.`,
+        );
+        this.queueVisualFeedback?.({
+          kind: "protect",
+          targetCard: card,
+          targetOwnerId: owner.id,
+          targetZone: fromZone,
+          tone: "blue",
+        });
+        return {
+          destroyed: false,
+          reason: "protected",
+          protectionType: auraProtection.protectionType,
         };
       }
 

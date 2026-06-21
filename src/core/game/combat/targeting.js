@@ -16,7 +16,8 @@ export function startAttackTargetSelection(attacker, candidates) {
   const attackerOwner = attacker.owner === "player" ? this.player : this.bot;
   const usingMonsterOnlyExtraAttack =
     (attacker.attacksUsedThisTurn || 0) > 0 &&
-    attacker.extraAttackTargetRestriction === "monster";
+    (attacker.extraAttackTargetRestriction ||
+      attacker.passiveExtraAttackTargetRestriction) === "monster";
   const canDirect =
     !attacker.cannotAttackDirectly &&
     !attackerOwner?.forbidDirectAttacksThisTurn &&

@@ -138,6 +138,7 @@ export function applyPassiveBuffValue(card, effectKey, amount, stats = ["atk", "
 
 export function clearPassiveBuffsForCard(card) {
     if (!card) return;
+    clearPassiveExtraAttacksForCard(card);
     if (card.dynamicBuffs) {
       for (const entry of Object.values(card.dynamicBuffs)) {
         clearPassiveBuffEntry(card, entry);
@@ -145,6 +146,39 @@ export function clearPassiveBuffsForCard(card) {
       card.dynamicBuffs = null;
     }
     delete card.suppressedDynamicBuffStatsByKey;
+  }
+
+function clearPassiveExtraAttacksForCard(card) {
+    if (!card?.passiveExtraAttackBonuses) {
+      if (card) delete card.passiveExtraAttackTargetRestriction;
+      return false;
+    }
+    let changed = false;
+    for (const entry of Object.values(card.passiveExtraAttackBonuses)) {
+      const amount = Math.max(0, Number(entry?.amount || 0));
+      if (amount <= 0) continue;
+      card.extraAttacks = Math.max(0, Number(card.extraAttacks || 0) - amount);
+      changed = true;
+    }
+    card.passiveExtraAttackBonuses = {};
+    delete card.passiveExtraAttackTargetRestriction;
+    return changed;
+  }
+
+function applyPassiveExtraAttacks(card, effectKey, amount, targetRestriction = null) {
+    if (!card || !effectKey) return false;
+    const normalizedAmount = Math.max(0, Number(amount || 0));
+    if (normalizedAmount <= 0) return false;
+    card.passiveExtraAttackBonuses = card.passiveExtraAttackBonuses || {};
+    card.extraAttacks = Math.max(0, Number(card.extraAttacks || 0)) + normalizedAmount;
+    card.passiveExtraAttackBonuses[effectKey] = {
+      amount: normalizedAmount,
+      targetRestriction: targetRestriction || null,
+    };
+    if (targetRestriction) {
+      card.passiveExtraAttackTargetRestriction = targetRestriction;
+    }
+    return true;
   }
 
 function normalizePassiveList(value, fallback = []) {
@@ -273,6 +307,9 @@ export function updatePassiveBuffs() {
     // This prevents "ghost buffs" from accumulating when effect IDs change
     // or when passive conditions are no longer met
     for (const card of fieldCards) {
+      if (clearPassiveExtraAttacksForCard(card)) {
+        updated = true;
+      }
       if (!card.dynamicBuffs) continue;
 
       // Revert all currently applied buffs
@@ -302,6 +339,42 @@ export function updatePassiveBuffs() {
         if (effect.requireFaceup === true && card.isFacedown === true) return;
         const passive = effect.passive;
         if (!passive) return;
+
+        if (passive.type === "conditional_extra_attacks") {
+          if (card.cardKind !== "monster") return;
+          const requireSourceFaceup =
+            passive.requireSourceFaceup !== false ||
+            effect.requireFaceup === true;
+          if (requireSourceFaceup && card.isFacedown) return;
+
+          const sourceFilters = passive.sourceFilters || null;
+          if (sourceFilters && !this.cardMatchesFilters(card, sourceFilters)) {
+            return;
+          }
+          if (
+            passive.equippedWithFilters &&
+            !this.cardMatchesFilters(card, {
+              equippedWithFilters: passive.equippedWithFilters,
+            })
+          ) {
+            return;
+          }
+
+          const amount = passive.amount ?? passive.extraAttacks ?? 1;
+          const effectKey =
+            effect.id || `passive_${card.id}_${index}_extra_attacks`;
+          if (
+            applyPassiveExtraAttacks(
+              card,
+              effectKey,
+              amount,
+              passive.targetRestriction || null,
+            )
+          ) {
+            updated = true;
+          }
+          return;
+        }
 
         // Passive: position-based status (e.g., battle indestructible in defense)
         if (passive.type === "position_status") {

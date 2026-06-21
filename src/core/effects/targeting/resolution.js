@@ -11,6 +11,8 @@ function buildContextTargetFilters(def = {}) {
   return {
     ...(def.filters || {}),
     ...(def.cardKind ? { cardKind: def.cardKind } : {}),
+    ...(def.cardId !== undefined ? { cardId: def.cardId } : {}),
+    ...(def.cardIds !== undefined ? { cardIds: def.cardIds } : {}),
     ...(def.cardName ? { name: def.cardName } : {}),
     ...(def.subtype ? { subtype: def.subtype } : {}),
     ...(def.archetype ? { archetype: def.archetype } : {}),
@@ -176,16 +178,14 @@ export function resolveTargets(targetDefs, ctx, selections) {
       }
     }
 
-    // Support for excludeNameRef: get name to exclude from a previously resolved target
+    // Support reference-based exclusions from previously resolved targets.
     let effectiveDef = def;
+    const effectiveUpdates = {};
     if (def.excludeNameRef && targetMap[def.excludeNameRef]) {
       const refTargets = targetMap[def.excludeNameRef];
       const namesToExclude = refTargets.map((c) => c.name).filter(Boolean);
       if (namesToExclude.length > 0) {
-        effectiveDef = {
-          ...def,
-          excludeCardNames: namesToExclude,
-        };
+        effectiveUpdates.excludeCardNames = namesToExclude;
         if (shouldLogTargets) {
           console.log(
             `[resolveTargets] Excluding card names from ref "${
@@ -194,6 +194,50 @@ export function resolveTargets(targetDefs, ctx, selections) {
           );
         }
       }
+    }
+    const excludeTargetRefs = [
+      def.excludeTargetRef,
+      ...(Array.isArray(def.excludeTargetRefs) ? def.excludeTargetRefs : []),
+    ].filter(Boolean);
+    const excludedCards = excludeTargetRefs.flatMap((ref) =>
+      Array.isArray(targetMap[ref])
+        ? targetMap[ref]
+        : targetMap[ref]
+          ? [targetMap[ref]]
+          : [],
+    );
+    if (excludedCards.length > 0) {
+      const excludedInstanceIds = excludedCards
+        .map((card) => card?.instanceId ?? card?._instanceId ?? card?.uuid ?? null)
+        .filter((value) => value !== undefined && value !== null);
+      effectiveUpdates.excludeCards = excludedCards;
+      if (excludedInstanceIds.length > 0) {
+        effectiveUpdates.excludeInstanceIds = excludedInstanceIds;
+      }
+      if (shouldLogTargets) {
+        console.log(
+          `[resolveTargets] Excluding target instances from refs "${excludeTargetRefs.join(", ")}".`
+        );
+      }
+    }
+    if (Object.keys(effectiveUpdates).length > 0) {
+      effectiveDef = {
+        ...def,
+        ...effectiveUpdates,
+        excludeCardNames: [
+          ...(Array.isArray(def.excludeCardNames) ? def.excludeCardNames : []),
+          ...(effectiveUpdates.excludeCardNames || []),
+        ],
+        excludeInstanceIds: [
+          ...(Array.isArray(def.excludeInstanceIds)
+            ? def.excludeInstanceIds
+            : def.excludeInstanceId !== undefined &&
+                def.excludeInstanceId !== null
+              ? [def.excludeInstanceId]
+              : []),
+          ...(effectiveUpdates.excludeInstanceIds || []),
+        ],
+      };
     }
 
     const hasResolved =

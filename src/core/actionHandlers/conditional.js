@@ -11,6 +11,44 @@ function sameCardRef(ref, card) {
   return card.instanceId != null && String(ref) === String(card.instanceId);
 }
 
+function getCardInstanceId(card) {
+  return card?.instanceId ?? card?._instanceId ?? card?.uuid ?? null;
+}
+
+function getFirstTargetByRef(ref, ctx, targets) {
+  if (!ref) return null;
+  return (
+    resolveTargetCards({ targetRef: ref }, ctx, targets, {
+      defaultRef: ref === "self" ? "self" : undefined,
+    })[0] || null
+  );
+}
+
+function getCardController(game, card) {
+  if (!game || !card) return null;
+  if (game.player?.field?.includes?.(card)) return game.player;
+  if (game.bot?.field?.includes?.(card)) return game.bot;
+  if (game.player?.spellTrap?.includes?.(card)) return game.player;
+  if (game.bot?.spellTrap?.includes?.(card)) return game.bot;
+  if (game.player?.graveyard?.includes?.(card)) return game.player;
+  if (game.bot?.graveyard?.includes?.(card)) return game.bot;
+  if (game.player?.hand?.includes?.(card)) return game.player;
+  if (game.bot?.hand?.includes?.(card)) return game.bot;
+  if (game.player?.deck?.includes?.(card)) return game.player;
+  if (game.bot?.deck?.includes?.(card)) return game.bot;
+  return card.owner === "player" ? game.player : card.owner === "bot" ? game.bot : null;
+}
+
+function isCardOnField(controller, card) {
+  return !!controller && Array.isArray(controller.field) && controller.field.includes(card);
+}
+
+function computeExpiresOnTurn(game, duration) {
+  const currentTurn = Number(game?.turnCounter || 0);
+  if (duration === "end_of_next_turn") return currentTurn + 1;
+  return currentTurn;
+}
+
 function isActiveEquipForCard(equip, card, ctx) {
   if (!equip || !card) return false;
   if (equip.cardKind !== "spell" || equip.subtype !== "equip") return false;
@@ -71,6 +109,25 @@ function matchesCardFilters(card, filters, ctx) {
     ...(Array.isArray(filters.excludeCardIds) ? filters.excludeCardIds : []),
   ].filter((value) => value !== undefined && value !== null);
   if (excludeIds.includes(card.id)) return false;
+  const cardInstanceId = getCardInstanceId(card);
+  const excludeInstances = [
+    filters.excludeInstanceId,
+    ...(Array.isArray(filters.excludeInstanceIds)
+      ? filters.excludeInstanceIds
+      : []),
+    ...(Array.isArray(filters.excludeCardInstanceIds)
+      ? filters.excludeCardInstanceIds
+      : []),
+  ].filter((value) => value !== undefined && value !== null);
+  if (cardInstanceId !== null && excludeInstances.includes(cardInstanceId)) {
+    return false;
+  }
+  if (
+    Array.isArray(filters.excludeCards) &&
+    filters.excludeCards.some((excluded) => sameCardRef(excluded, card))
+  ) {
+    return false;
+  }
 
   if (filters.archetype) {
     const required = Array.isArray(filters.archetype)
@@ -207,9 +264,90 @@ function runOptionalTargetSelection(game, selectionContract, ctx, action) {
   });
 }
 
+function buildOptionalConfirmationContract(action, ctx) {
+  const requirementId =
+    action?.confirmationId ||
+    action?.selectionId ||
+    `${ctx?.effect?.id || action?.type || "optional"}_confirm`;
+  return {
+    kind: "choice",
+    message: action?.selectionMessage || "Apply this optional effect?",
+    requirements: [
+      {
+        id: requirementId,
+        label: action?.selectionLabel || "Optional effect",
+        min: 1,
+        max: 1,
+        zone: "choice",
+        zones: ["choice"],
+        owner: "player",
+        candidates: [
+          {
+            key: "yes",
+            id: "yes",
+            name: action?.confirmLabel || "Yes",
+            label: action?.confirmLabel || "Yes",
+            zone: "choice",
+            cardKind: "spell",
+          },
+          {
+            key: "no",
+            id: "no",
+            name: action?.cancelLabel || "No",
+            label: action?.cancelLabel || "No",
+            zone: "choice",
+            cardKind: "spell",
+          },
+        ],
+      },
+    ],
+    ui: {
+      useFieldTargeting: false,
+      allowCancel: action?.allowCancel !== false,
+    },
+    metadata: {
+      context: "optional_confirmation",
+      intent: "benefit",
+      sourceCard: ctx?.source || null,
+      sourceCardName: ctx?.source?.name || null,
+      effectId: ctx?.effect?.id || null,
+    },
+  };
+}
+
+async function confirmOptionalAction(action, ctx, engine) {
+  const game = engine?.game;
+  if (!game) return false;
+
+  const selectionContract = buildOptionalConfirmationContract(action, ctx);
+  const selections = await runOptionalTargetSelection(
+    game,
+    selectionContract,
+    ctx,
+    action,
+  );
+  if (!selections) return false;
+
+  const requirementId = selectionContract.requirements?.[0]?.id;
+  const selected = Array.isArray(selections?.[requirementId])
+    ? selections[requirementId]
+    : [];
+  return selected.includes("yes");
+}
+
 async function resolveOptionalTargets(action, ctx, engine) {
   const targetDefs = Array.isArray(action?.targets) ? action.targets : [];
   if (targetDefs.length === 0) {
+    if (
+      action?.optional === true ||
+      action?.requireConfirmation === true ||
+      action?.confirmOnly === true
+    ) {
+      const confirmed = await confirmOptionalAction(action, ctx, engine);
+      if (!confirmed) {
+        return { ok: false, cancelled: true, optionalDeclined: true };
+      }
+    }
     return { ok: true, targets: {} };
   }
 
@@ -356,6 +494,9 @@ export async function handleOptionalTargetActions(action, ctx, targets, engine) 
     return targetResult;
   }
   if (targetResult?.ok === false) {
+    if (targetResult.optionalDeclined) {
+      return true;
+    }
     if (
       action?.logIfSkipped === true &&
       !targetResult.cancelled &&
@@ -378,4 +519,294 @@ export async function handleOptionalTargetActions(action, ctx, targets, engine) 
     return result;
   }
   return result;
+}
+
+export async function handleRedirectCurrentAttackToTarget(
+  action,
+  ctx,
+  targets,
+  engine,
+) {
+  const game = engine?.game;
+  const targetCards = resolveTargetCards(action, ctx, targets, {
+    defaultRef: action?.targetRef,
+  });
+  const target = targetCards[0] || null;
+  if (!game || !target || target.cardKind !== "monster") return false;
+
+  const attackContext =
+    ctx?.actionContext ||
+    ctx?.activationContext?.actionContext ||
+    ctx?.activationContext?.context ||
+    null;
+  if (!attackContext) return false;
+
+  const attacker = attackContext.attacker || ctx?.attacker || null;
+  const attackerOwner =
+    attackContext.attackerOwner || ctx?.attackerOwner || getCardController(game, attacker);
+  const targetOwner = getCardController(game, target);
+  if (!attacker || !attackerOwner || !targetOwner) return false;
+  if (!isCardOnField(targetOwner, target)) return false;
+  if (targetOwner === attackerOwner || targetOwner.id === attackerOwner.id) {
+    return false;
+  }
+
+  attackContext.attackRedirect = {
+    target,
+    targetOwner,
+    source: ctx?.source || null,
+    reason: action?.contextLabel || "redirect_attack",
+  };
+  attackContext.redirectedTarget = target;
+  attackContext.redirectedTargetOwner = targetOwner;
+  game.updateBoard?.();
+  return true;
+}
+
+export async function handleConditionalActions(action, ctx, targets, engine) {
+  const game = engine?.game;
+  if (!game) return false;
+
+  const conditions = Array.isArray(action?.conditions)
+    ? action.conditions
+    : [];
+  if (conditions.length > 0) {
+    const conditionResult = engine.evaluateConditions?.(conditions, ctx);
+    if (!conditionResult?.ok) {
+      if (action?.logIfSkipped === true && conditionResult?.reason) {
+        getUI(game)?.log(conditionResult.reason);
+      }
+      return false;
+    }
+  }
+
+  const actions = Array.isArray(action?.actions) ? action.actions : [];
+  if (actions.length === 0) return false;
+
+  const result = await engine.applyActions(actions, ctx, targets || {});
+  if (result && typeof result === "object" && result.needsSelection) {
+    return result;
+  }
+  return result;
+}
+
+function cloneDeclaredValuesForTemporaryEffect(action, source) {
+  const sourceDeclaredValues =
+    source?.declaredValues && typeof source.declaredValues === "object"
+      ? source.declaredValues
+      : {};
+  const refs = [
+    action.declaredValueRef,
+    action.declaredValueStateKey,
+    action.stateKey,
+  ].filter(Boolean);
+
+  const declaredValues = {};
+  if (refs.length > 0) {
+    for (const ref of refs) {
+      const stateKey =
+        typeof ref === "string" ? ref : ref?.stateKey || ref?.key || null;
+      if (!stateKey || !sourceDeclaredValues[stateKey]) continue;
+      declaredValues[stateKey] = { ...sourceDeclaredValues[stateKey] };
+    }
+    return declaredValues;
+  }
+
+  for (const [stateKey, declaration] of Object.entries(sourceDeclaredValues)) {
+    declaredValues[stateKey] =
+      declaration && typeof declaration === "object"
+        ? { ...declaration }
+        : declaration;
+  }
+  return declaredValues;
+}
+
+export async function handleRegisterTemporaryEventEffect(
+  action,
+  ctx,
+  targets,
+  engine,
+) {
+  const game = engine?.game;
+  const source = ctx?.source || null;
+  const player = ctx?.player || null;
+  if (!game || !source || !player || !action?.event) return false;
+
+  const effect = {
+    id:
+      action.effectId ||
+      action.id ||
+      `${ctx?.effect?.id || action.type}_${action.event}`,
+    timing: "on_event",
+    event: action.event,
+    promptUser: action.promptUser === true,
+    promptMessage: action.promptMessage,
+    conditions: Array.isArray(action.conditions) ? action.conditions : [],
+    targets: Array.isArray(action.targets) ? action.targets : [],
+    actions: Array.isArray(action.actions) ? action.actions : [],
+  };
+
+  const entry = {
+    id:
+      action.uniqueKey ||
+      `${source.instanceId || source.id || source.name}:${
+        ctx?.effect?.id || action.type
+      }:${Math.random().toString(36).slice(2, 9)}`,
+    event: action.event,
+    ownerId: player.id,
+    sourceName: action.sourceName || source.name,
+    sourceCardId: source.id ?? null,
+    sourceCardKind: source.cardKind || "spell",
+    sourceCardSubtype: source.subtype || null,
+    sourceArchetype: source.archetype || null,
+    sourceArchetypes: Array.isArray(source.archetypes)
+      ? [...source.archetypes]
+      : source.archetype
+        ? [source.archetype]
+        : [],
+    sourceImage: source.image || null,
+    sourceInstanceId: getCardInstanceId(source),
+    sourceEffectId: ctx?.effect?.id || null,
+    effect,
+    declaredValues: cloneDeclaredValuesForTemporaryEffect(action, source),
+    createdOnTurn: Number(game.turnCounter || 0),
+    expiresOnTurn: computeExpiresOnTurn(game, action.duration || "end_of_turn"),
+    usesRemaining: Number.isFinite(Number(action.uses))
+      ? Math.max(0, Number(action.uses))
+      : 1,
+    duration: action.duration || "end_of_turn",
+  };
+
+  if (!Array.isArray(game.temporaryEventEffects)) {
+    game.temporaryEventEffects = [];
+  }
+  if (action.uniqueKey) {
+    game.temporaryEventEffects = game.temporaryEventEffects.filter(
+      (existing) =>
+        !existing ||
+        existing.id !== action.uniqueKey ||
+        existing.ownerId !== player.id,
+    );
+  }
+  game.temporaryEventEffects.push(entry);
+  return true;
+}
+
+export async function handleRegisterBattlePairEffect(action, ctx, targets, engine) {
+  const game = engine?.game;
+  if (!game) return false;
+
+  const firstTargetRef = action.firstTargetRef || action.targetARef || action.targetRef;
+  const secondTargetRef =
+    action.secondTargetRef || action.targetBRef || action.opponentTargetRef;
+  const affectedTargetRef =
+    action.affectedTargetRef || action.destroyTargetRef || secondTargetRef;
+
+  const firstTarget = getFirstTargetByRef(firstTargetRef, ctx, targets);
+  const secondTarget = getFirstTargetByRef(secondTargetRef, ctx, targets);
+  const affectedTarget = getFirstTargetByRef(affectedTargetRef, ctx, targets);
+
+  if (!firstTarget || !secondTarget || !affectedTarget) {
+    return true;
+  }
+
+  const firstOwner = getCardController(game, firstTarget);
+  const secondOwner = getCardController(game, secondTarget);
+  const affectedOwner = getCardController(game, affectedTarget);
+  if (
+    !isCardOnField(firstOwner, firstTarget) ||
+    !isCardOnField(secondOwner, secondTarget) ||
+    !isCardOnField(affectedOwner, affectedTarget)
+  ) {
+    return true;
+  }
+
+  const entry = {
+    id:
+      action.uniqueKey ||
+      `${ctx?.source?.instanceId || ctx?.source?.id || "source"}:${
+        ctx?.effect?.id || action.type
+      }:${Math.random().toString(36).slice(2, 9)}`,
+    timing: action.timing || "before_damage_calculation",
+    duration: action.duration || "end_of_turn",
+    createdOnTurn: Number(game.turnCounter || 0),
+    expiresOnTurn: computeExpiresOnTurn(game, action.duration || "end_of_turn"),
+    controllerId: ctx?.player?.id || null,
+    opponentId: ctx?.opponent?.id || null,
+    source: ctx?.source || null,
+    sourceCardId: ctx?.source?.id ?? null,
+    sourceInstanceId: getCardInstanceId(ctx?.source),
+    sourceEffectId: ctx?.effect?.id || null,
+    firstTargetRef,
+    secondTargetRef,
+    affectedTargetRef,
+    firstTarget,
+    secondTarget,
+    affectedTarget,
+    firstInstanceId: getCardInstanceId(firstTarget),
+    secondInstanceId: getCardInstanceId(secondTarget),
+    affectedInstanceId: getCardInstanceId(affectedTarget),
+    firstFieldPresenceId: firstTarget.fieldPresenceId || null,
+    secondFieldPresenceId: secondTarget.fieldPresenceId || null,
+    affectedFieldPresenceId: affectedTarget.fieldPresenceId || null,
+    actions: Array.isArray(action.actions)
+      ? action.actions
+      : [{ type: "destroy", targetRef: affectedTargetRef }],
+  };
+
+  if (!Array.isArray(game.temporaryBattlePairEffects)) {
+    game.temporaryBattlePairEffects = [];
+  }
+  game.temporaryBattlePairEffects.push(entry);
+  return true;
+}
+
+export async function handleSetSourceAfterResolutionIf(
+  action,
+  ctx,
+  targets,
+  engine,
+) {
+  const game = engine?.game;
+  const source = ctx?.source || null;
+  const player = ctx?.player || null;
+  if (!game || !source || !player) return true;
+
+  const firstTarget = getFirstTargetByRef(action.firstTargetRef, ctx, targets);
+  const secondTarget = getFirstTargetByRef(action.secondTargetRef, ctx, targets);
+  if (!firstTarget || !secondTarget) return true;
+
+  const conditionType = action.condition?.type || action.conditionType || "atk_difference_lte";
+  const maxDifference = Number(
+    action.condition?.value ??
+      action.condition?.maxDifference ??
+      action.atkDifferenceMax ??
+      action.maxDifference ??
+      0,
+  );
+
+  let conditionPassed = false;
+  if (conditionType === "atk_difference_lte") {
+    const difference = Math.abs(
+      Number(firstTarget.atk || 0) - Number(secondTarget.atk || 0),
+    );
+    conditionPassed = difference <= maxDifference;
+  }
+
+  if (!conditionPassed) return true;
+  if (!Array.isArray(player.spellTrap) || !player.spellTrap.includes(source)) {
+    return true;
+  }
+
+  const activationContext = ctx.activationContext || {};
+  ctx.activationContext = activationContext;
+  activationContext.spellTrapFinalization = {
+    type: "set_source",
+    sourceInstanceId: getCardInstanceId(source),
+    sourceCardId: source.id ?? null,
+    sourceEffectId: ctx?.effect?.id || null,
+    setTurn: Number(game.turnCounter || 0),
+    reason: action.contextLabel || "set_after_resolution",
+  };
+  return true;
 }

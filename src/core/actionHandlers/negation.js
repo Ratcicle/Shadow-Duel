@@ -38,6 +38,133 @@ function resolveZone(game, owner, card) {
   return null;
 }
 
+function asArray(value) {
+  if (value === undefined || value === null) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+function getActivationProtectionSources(game) {
+  const sources = [];
+  for (const owner of [game?.player, game?.bot]) {
+    if (!owner) continue;
+    for (const card of owner.field || []) {
+      sources.push({ card, owner, zone: "field" });
+    }
+    if (owner.fieldSpell) {
+      sources.push({ card: owner.fieldSpell, owner, zone: "fieldSpell" });
+    }
+    for (const card of owner.spellTrap || []) {
+      sources.push({ card, owner, zone: "spellTrap" });
+    }
+  }
+  return sources;
+}
+
+function isPassiveSourceActive(card, effect, passive, sourceZone) {
+  if (!card || !effect || effect.timing !== "passive") return false;
+  if (effect.requireZone && effect.requireZone !== sourceZone) return false;
+  if (passive.requireZone && passive.requireZone !== sourceZone) return false;
+  const requireFaceup =
+    effect.requireFaceup === true || passive.requireFaceup === true;
+  if (requireFaceup && card.isFacedown) return false;
+  return true;
+}
+
+function cardMentionsAny(card, values) {
+  const haystack = `${card?.name || ""}\n${card?.description || ""}`;
+  return asArray(values)
+    .filter(Boolean)
+    .some((value) => haystack.includes(String(value)));
+}
+
+function passiveMatchesActivationCard(game, passive, targetCard) {
+  if (!targetCard) return false;
+
+  const targetCardKinds = asArray(
+    passive.targetCardKinds ||
+      passive.targetCardKind ||
+      passive.cardKinds ||
+      passive.cardKind,
+  ).filter(Boolean);
+  if (
+    targetCardKinds.length > 0 &&
+    !targetCardKinds.includes(targetCard.cardKind)
+  ) {
+    return false;
+  }
+
+  const textIncludes = asArray(
+    passive.textIncludes ||
+      passive.nameOrDescriptionIncludes ||
+      passive.textIncludesAny,
+  ).filter(Boolean);
+  if (textIncludes.length > 0 && !cardMentionsAny(targetCard, textIncludes)) {
+    return false;
+  }
+
+  const filters = passive.targetFilters || passive.filters || null;
+  if (filters && !game.effectEngine?.cardMatchesFilters?.(targetCard, filters)) {
+    return false;
+  }
+
+  return true;
+}
+
+export function isActivationNegationProtected(
+  game,
+  targetCard,
+  activationAttempt,
+) {
+  if (!game || !targetCard || !activationAttempt) return null;
+
+  for (const source of getActivationProtectionSources(game)) {
+    const sourceCard = source.card;
+    if (!sourceCard || !Array.isArray(sourceCard.effects)) continue;
+
+    for (const effect of sourceCard.effects) {
+      const passive = effect?.passive || {};
+      if (passive.type !== "activation_negation_protection") continue;
+      if (!isPassiveSourceActive(sourceCard, effect, passive, source.zone)) {
+        continue;
+      }
+      if (!passiveMatchesActivationCard(game, passive, targetCard)) {
+        continue;
+      }
+
+      const sourceOwner = source.owner;
+      const opponent = game.getOpponent?.(sourceOwner) || null;
+      const conditions = Array.isArray(effect.conditions)
+        ? effect.conditions
+        : Array.isArray(passive.conditions)
+          ? passive.conditions
+          : passive.condition
+            ? [passive.condition]
+            : [];
+      if (conditions.length > 0) {
+        const conditionResult = game.effectEngine?.evaluateConditions?.(
+          conditions,
+          {
+            source: sourceCard,
+            player: sourceOwner,
+            opponent,
+            protectedCard: targetCard,
+            activationAttempt,
+            activationZone: source.zone,
+            sourceZone: source.zone,
+          },
+        );
+        if (conditionResult && conditionResult.ok === false) {
+          continue;
+        }
+      }
+
+      return { sourceCard, sourceOwner, effect, passive };
+    }
+  }
+
+  return null;
+}
+
 async function removeNegatedCard(game, card, source, sourcePlayer) {
   if (!game || !card) return false;
   const owner = resolveOwner(game, card, sourcePlayer);
@@ -94,6 +221,23 @@ export async function handleNegateSummonOrActivationAndDestroy(
   if (!targetCard) {
     getUI(game)?.log("No summon or activation to negate.");
     return false;
+  }
+
+  if (activationAttempt) {
+    const protection = isActivationNegationProtected(
+      game,
+      targetCard,
+      activationAttempt,
+    );
+    if (protection) {
+      context.negationProtected = true;
+      context.negationProtectionSource = protection.sourceCard;
+      getUI(game)?.log(
+        `${targetCard.name}'s activation cannot be negated by ${source.name}.`,
+      );
+      game.updateBoard?.();
+      return true;
+    }
   }
 
   if (summonAttempt) {

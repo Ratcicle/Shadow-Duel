@@ -10,12 +10,76 @@
  * @param {Player} owner - The card owner.
  * @param {string} activationZone - Zone where activation occurred.
  */
+function getCardInstanceId(card) {
+  return card?.instanceId ?? card?._instanceId ?? card?.uuid ?? card?.simInstanceId ?? null;
+}
+
+function finalizationOverrideMatches(card, override) {
+  if (!card || !override) return false;
+  if (override.sourceCardId !== undefined && override.sourceCardId !== null) {
+    if (card.id !== override.sourceCardId) return false;
+  }
+  const cardInstanceId = getCardInstanceId(card);
+  if (
+    override.sourceInstanceId !== undefined &&
+    override.sourceInstanceId !== null &&
+    cardInstanceId !== override.sourceInstanceId
+  ) {
+    return false;
+  }
+  return true;
+}
+
+export function applySpellTrapFinalizationOverride(
+  card,
+  owner,
+  activationZone = null,
+  options = {},
+) {
+  if (!card || !owner) return false;
+  const override = options?.activationContext?.spellTrapFinalization;
+  if (!override || override.type !== "set_source") return false;
+  if (!finalizationOverrideMatches(card, override)) return false;
+  if (activationZone !== "spellTrap" && !owner.spellTrap?.includes?.(card)) {
+    return false;
+  }
+  if (!owner.spellTrap?.includes?.(card)) return false;
+
+  card.isFacedown = true;
+  const setTurn = Number.isFinite(override.setTurn)
+    ? override.setTurn
+    : Number(this?.turnCounter || 0);
+  card.turnSetOn = setTurn;
+  card.setTurn = setTurn;
+
+  this.devLog?.("SPELL_TRAP_SET_AFTER_RESOLUTION", {
+    summary: `${card.name || "Spell/Trap"} was Set after resolution.`,
+    card: card.name,
+    reason: override.reason || "set_after_resolution",
+  });
+  this.updateBoard?.();
+  return true;
+}
+
 export async function finalizeSpellTrapActivation(
   card,
   owner,
-  activationZone = null
+  activationZone = null,
+  options = {},
 ) {
   if (!card || !owner) return;
+  if (
+    applySpellTrapFinalizationOverride.call(
+      this,
+      card,
+      owner,
+      activationZone,
+      options,
+    )
+  ) {
+    return;
+  }
+
   const subtype = card.subtype || "";
   const kind = card.cardKind || "";
   const shouldSendToGY =

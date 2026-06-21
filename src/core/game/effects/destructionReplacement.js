@@ -409,6 +409,14 @@ async function tryReplacement(game, sourceCard, sourceOwner, effect, ctx) {
     return { replaced: false };
   }
 
+  if (effect.requireZone) {
+    const sourceZone =
+      game.effectEngine?.findCardZone?.(sourceOwner, sourceCard) || null;
+    if (sourceZone !== effect.requireZone) {
+      return { replaced: false };
+    }
+  }
+
   if (replacement.targetMustBeSource === true && card !== sourceCard) {
     return { replaced: false };
   }
@@ -975,7 +983,14 @@ function collectSources(player) {
   const field = Array.isArray(player.field) ? player.field : [];
   const spellTrap = Array.isArray(player.spellTrap) ? player.spellTrap : [];
   const fieldSpell = player.fieldSpell ? [player.fieldSpell] : [];
-  return [...field, ...spellTrap, ...fieldSpell].filter(Boolean);
+  const hand = Array.isArray(player.hand)
+    ? player.hand.filter((card) =>
+        (card?.effects || []).some(
+          (effect) => effect?.replacementEffect && effect.requireZone === "hand",
+        ),
+      )
+    : [];
+  return [...field, ...spellTrap, ...fieldSpell, ...hand].filter(Boolean);
 }
 
 export async function resolveDestructionWithReplacement(card, options = {}) {

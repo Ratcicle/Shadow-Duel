@@ -69,6 +69,7 @@ export function resetDuelState(reason = "reset", options = {}) {
   this.selectionSessionCounter = 0;
   this.lastSelectionSessionId = 0;
   this.pendingSpecialSummon = null;
+  this.pendingTributeSummonSelection = null;
   this.pendingEventSelection = null;
   this.pendingBattleDestroyAfterSelection = null;
   this.isResolvingEffect = false;
@@ -76,6 +77,8 @@ export function resetDuelState(reason = "reset", options = {}) {
   this.eventResolutionCounter = 0;
   this.trapPromptInProgress = false;
   this.temporaryReplacementEffects = [];
+  this.temporaryBattlePairEffects = [];
+  this.temporaryEventEffects = [];
   this.delayedActions = [];
   this.damageCalculationTempBuffs = [];
 

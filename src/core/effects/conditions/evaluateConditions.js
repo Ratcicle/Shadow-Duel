@@ -1,3 +1,162 @@
+function getCardInstanceId(card) {
+  return card?.instanceId ?? card?._instanceId ?? card?.uuid ?? null;
+}
+
+function resolveSourceRef(ctx, sourceRef) {
+  if (!sourceRef || sourceRef === "self" || sourceRef === "source") {
+    return ctx?.source || null;
+  }
+  const value = ctx?.[sourceRef];
+  return Array.isArray(value) ? value[0] || null : value || null;
+}
+
+function markerMatchesSource(marker, source) {
+  if (!source) return false;
+  const sourceInstanceId = getCardInstanceId(source);
+  if (marker?.sourceInstanceId || sourceInstanceId) {
+    return marker?.sourceInstanceId === sourceInstanceId;
+  }
+  return marker?.sourceCardId !== undefined && marker.sourceCardId === source.id;
+}
+
+function asArray(value) {
+  if (value === undefined || value === null) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+function getBattleParticipantForOwner(ctx, owner) {
+  if (!ctx || !owner) return null;
+  const attacker = ctx.attacker || null;
+  const defender = ctx.defender || ctx.target || null;
+  const controlsCard = (card, explicitOwner) =>
+    !!card &&
+    (explicitOwner === owner ||
+      explicitOwner?.id === owner.id ||
+      owner.field?.includes?.(card) ||
+      card.controller === owner.id ||
+      card.owner === owner.id);
+  if (
+    attacker &&
+    controlsCard(attacker, ctx.attackerOwner)
+  ) {
+    return attacker;
+  }
+  if (
+    defender &&
+    (controlsCard(defender, ctx.defenderOwner) ||
+      controlsCard(defender, ctx.targetOwner))
+  ) {
+    return defender;
+  }
+  return null;
+}
+
+function getConditionOwners(ownerRule, player, opponent) {
+  if (ownerRule === "opponent") return [opponent].filter(Boolean);
+  if (ownerRule === "any" || ownerRule === "both") {
+    return [player, opponent].filter(Boolean);
+  }
+  return [player].filter(Boolean);
+}
+
+function getConditionZoneCards(owner, zoneKey) {
+  if (!owner || !zoneKey) return [];
+  if (zoneKey === "fieldSpell") {
+    return owner.fieldSpell ? [owner.fieldSpell] : [];
+  }
+  const zone = owner[zoneKey] || [];
+  return Array.isArray(zone) ? zone.filter(Boolean) : [];
+}
+
+function getEventCardByRef(cond, ctx) {
+  const ref = cond.cardRef || cond.eventCardRef || null;
+  const eventCard =
+    (ref && ctx?.[ref]) ||
+    ctx?.destroyed ||
+    ctx?.eventCard ||
+    ctx?.movedCard ||
+    ctx?.card ||
+    ctx?.target ||
+    null;
+  return Array.isArray(eventCard) ? eventCard[0] || null : eventCard;
+}
+
+function getCardPropertyValues(card, property) {
+  const value = card?.[property];
+  if (Array.isArray(value)) return value.filter(Boolean);
+  return value !== undefined && value !== null ? [value] : [];
+}
+
+function declarationIsActive(game, declaration) {
+  if (!declaration || typeof declaration !== "object") return false;
+  return (
+    !Number.isFinite(declaration.expiresOnTurn) ||
+    !game ||
+    Number(game.turnCounter || 0) <= declaration.expiresOnTurn
+  );
+}
+
+function sourceMatchesDeclaredFilters(engine, source, filters = {}) {
+  if (!filters || Object.keys(filters).length === 0) return true;
+  return engine.cardMatchesFilters(source, filters);
+}
+
+function declarationMatchesCard(game, declaration, card, property) {
+  if (!declarationIsActive(game, declaration)) return false;
+  const declaredProperty = declaration.property || property;
+  if (declaredProperty !== property) return false;
+  return getCardPropertyValues(card, property).includes(declaration.value);
+}
+
+function activeDeclarationSourcesForOwner(owner) {
+  if (!owner) return [];
+  const sources = [];
+  for (const zoneName of ["field", "spellTrap"]) {
+    for (const card of getConditionZoneCards(owner, zoneName)) {
+      if (!card || card.isFacedown) continue;
+      if (!card.declaredValues || typeof card.declaredValues !== "object") {
+        continue;
+      }
+      sources.push(card);
+    }
+  }
+  const fieldSpell = owner.fieldSpell || null;
+  if (
+    fieldSpell &&
+    !fieldSpell.isFacedown &&
+    fieldSpell.declaredValues &&
+    typeof fieldSpell.declaredValues === "object"
+  ) {
+    sources.push(fieldSpell);
+  }
+  return sources;
+}
+
+function buildTemporaryEffectSource(game, entry) {
+  const data =
+    game?.resolveCardData?.(entry?.sourceCardId) ||
+    game?.resolveCardData?.(entry?.sourceName) ||
+    {};
+  const archetypes = Array.isArray(entry?.sourceArchetypes)
+    ? entry.sourceArchetypes
+    : entry?.sourceArchetype
+      ? [entry.sourceArchetype]
+      : Array.isArray(data?.archetypes)
+        ? data.archetypes
+        : data?.archetype
+          ? [data.archetype]
+          : [];
+  return {
+    ...data,
+    id: entry?.sourceCardId ?? data?.id ?? null,
+    name: entry?.sourceName || data?.name || null,
+    cardKind: entry?.sourceCardKind || data?.cardKind || null,
+    subtype: entry?.sourceCardSubtype || data?.subtype || null,
+    archetype: entry?.sourceArchetype || data?.archetype || archetypes[0] || null,
+    archetypes,
+  };
+}
+
 export function evaluateConditions(conditions, ctx) {
     if (!Array.isArray(conditions) || conditions.length === 0) {
       return { ok: true };
@@ -101,6 +260,341 @@ export function evaluateConditions(conditions, ctx) {
               reason:
                 cond.reason ||
                 `You must control "${normalizedFilters.cardName || "this card"}".`,
+            };
+          }
+          break;
+        }
+        case "destroyed_card_matches_declared_value": {
+          const source = ctx?.source || null;
+          const stateKey = cond.stateKey || cond.key || null;
+          const property = cond.property || "type";
+          const declaration = stateKey
+            ? source?.declaredValues?.[stateKey]
+            : null;
+
+          if (!declaration) {
+            return {
+              ok: false,
+              reason: cond.reason || "No declared value.",
+            };
+          }
+
+          if (
+            Number.isFinite(declaration.expiresOnTurn) &&
+            this.game &&
+            this.game.turnCounter > declaration.expiresOnTurn
+          ) {
+            delete source.declaredValues[stateKey];
+            return {
+              ok: false,
+              reason: cond.reason || "Declared value expired.",
+            };
+          }
+
+          const destroyedCard =
+            ctx?.destroyed || ctx?.eventCard || ctx?.target || null;
+          const actualValues = Array.isArray(destroyedCard?.[property])
+            ? destroyedCard[property]
+            : destroyedCard?.[property] !== undefined
+              ? [destroyedCard[property]]
+              : [];
+          if (!actualValues.includes(declaration.value)) {
+            return {
+              ok: false,
+              reason: cond.reason || "Destroyed card does not match declaration.",
+            };
+          }
+          break;
+        }
+        case "battle_destroyer_matches_filters": {
+          const filters = cond.filters || {};
+          const ownerKey = cond.owner || "self";
+          const expectedOwner =
+            ownerKey === "opponent"
+              ? opponent
+              : ownerKey === "any"
+                ? null
+                : player;
+          const battleDestroyers = Array.isArray(ctx?.battleDestroyers)
+            ? ctx.battleDestroyers
+            : [ctx?.battleDestroyer, ctx?.attacker].filter(Boolean);
+
+          const getController = (card) => {
+            if (!card) return null;
+            if (player?.field?.includes?.(card)) return player;
+            if (opponent?.field?.includes?.(card)) return opponent;
+            if (card.controller === player?.id || card.owner === player?.id) {
+              return player;
+            }
+            if (
+              card.controller === opponent?.id ||
+              card.owner === opponent?.id
+            ) {
+              return opponent;
+            }
+            return null;
+          };
+
+          const found = battleDestroyers.some((card) => {
+            if (!card) return false;
+            if (expectedOwner && getController(card) !== expectedOwner) {
+              return false;
+            }
+            return this.cardMatchesFilters(card, filters);
+          });
+
+          if (!found) {
+            return {
+              ok: false,
+              reason:
+                cond.reason || "No battle destroyer matched the condition.",
+            };
+          }
+          break;
+        }
+        case "event_card_matches_filters": {
+          const card = getEventCardByRef(cond, ctx);
+          const ownerKey = cond.owner || "any";
+          if (ownerKey !== "any") {
+            const expectedOwner = ownerKey === "opponent" ? opponent : player;
+            const eventOwner =
+              (ctx?.destroyed === card && ctx?.destroyedOwner) ||
+              (ctx?.eventCard === card && ctx?.eventPlayer) ||
+              (ctx?.movedCard === card && ctx?.eventPlayer) ||
+              null;
+            const eventOwnerId =
+              eventOwner?.id || eventOwner || card?.controller || card?.owner;
+            if (!expectedOwner || eventOwnerId !== expectedOwner.id) {
+              return {
+                ok: false,
+                reason: cond.reason || "Event card owner did not match.",
+              };
+            }
+          }
+          if (!card || !this.cardMatchesFilters(card, cond.filters || {})) {
+            return {
+              ok: false,
+              reason: cond.reason || "Event card did not match filters.",
+            };
+          }
+          break;
+        }
+        case "event_card_matches_declared_value_from_effect_sources": {
+          const card = getEventCardByRef(cond, ctx);
+          const property = cond.property || "type";
+          const sourceFilters = cond.sourceFilters || {};
+          const stateKey = cond.stateKey || cond.key || null;
+          if (!card) {
+            return {
+              ok: false,
+              reason: cond.reason || "Event card was not available.",
+            };
+          }
+
+          const declarationMatches = (declaredValues) => {
+            if (!declaredValues || typeof declaredValues !== "object") {
+              return false;
+            }
+            const entries = stateKey
+              ? [[stateKey, declaredValues[stateKey]]]
+              : Object.entries(declaredValues);
+            return entries.some(([, declaration]) =>
+              declarationMatchesCard(this.game, declaration, card, property),
+            );
+          };
+
+          const owners = getConditionOwners(cond.owner || "self", player, opponent);
+          const activeMatch = owners.some((owner) =>
+            activeDeclarationSourcesForOwner(owner).some((source) => {
+              if (!sourceMatchesDeclaredFilters(this, source, sourceFilters)) {
+                return false;
+              }
+              return declarationMatches(source.declaredValues);
+            }),
+          );
+          if (activeMatch) break;
+
+          const temporaryEffects = Array.isArray(this.game?.temporaryEventEffects)
+            ? this.game.temporaryEventEffects
+            : [];
+          const temporaryMatch = owners.some((owner) =>
+            temporaryEffects.some((entry) => {
+              if (!entry || entry.ownerId !== owner?.id) return false;
+              if (
+                Number.isFinite(entry.expiresOnTurn) &&
+                this.game &&
+                Number(this.game.turnCounter || 0) > entry.expiresOnTurn
+              ) {
+                return false;
+              }
+              const source = buildTemporaryEffectSource(this.game, entry);
+              if (!sourceMatchesDeclaredFilters(this, source, sourceFilters)) {
+                return false;
+              }
+              return declarationMatches(entry.declaredValues);
+            }),
+          );
+          if (!temporaryMatch) {
+            return {
+              ok: false,
+              reason:
+                cond.reason ||
+                "Event card did not match any declared value from matching effects.",
+            };
+          }
+          break;
+        }
+        case "battle_participant_matches_filters": {
+          const ownerKey = cond.owner || "self";
+          const expectedOwner =
+            ownerKey === "opponent"
+              ? opponent
+              : ownerKey === "any"
+                ? null
+                : player;
+          const participants = expectedOwner
+            ? [getBattleParticipantForOwner(ctx, expectedOwner)]
+            : [ctx?.attacker, ctx?.defender || ctx?.target].filter(Boolean);
+          const found = participants.some((card) => {
+            if (!card) return false;
+            return this.cardMatchesFilters(card, cond.filters || {});
+          });
+          if (!found) {
+            return {
+              ok: false,
+              reason:
+                cond.reason || "No battle participant matched the condition.",
+            };
+          }
+          break;
+        }
+        case "battle_opponent_matches_declared_value": {
+          const source = ctx?.source || null;
+          const stateKey = cond.stateKey || cond.key || null;
+          const property = cond.property || "type";
+          const declaration = stateKey
+            ? source?.declaredValues?.[stateKey]
+            : null;
+          if (!declaration) {
+            return {
+              ok: false,
+              reason: cond.reason || "No declared value.",
+            };
+          }
+          if (
+            Number.isFinite(declaration.expiresOnTurn) &&
+            this.game &&
+            this.game.turnCounter > declaration.expiresOnTurn
+          ) {
+            delete source.declaredValues[stateKey];
+            return {
+              ok: false,
+              reason: cond.reason || "Declared value expired.",
+            };
+          }
+          const battleOpponent = getBattleParticipantForOwner(ctx, opponent);
+          const actualValues = asArray(battleOpponent?.[property]);
+          if (!actualValues.includes(declaration.value)) {
+            return {
+              ok: false,
+              reason:
+                cond.reason || "Battle opponent does not match declaration.",
+            };
+          }
+          break;
+        }
+        case "summoned_card_has_marker": {
+          const key = cond.key || cond.stateKey || null;
+          const summonedCard = ctx?.summonedCard || ctx?.card || null;
+          const marker = key ? summonedCard?.effectMarkers?.[key] : null;
+
+          if (!marker) {
+            return {
+              ok: false,
+              reason: cond.reason || "Summoned card does not have marker.",
+            };
+          }
+
+          if (
+            Number.isFinite(marker.expiresOnTurn) &&
+            this.game &&
+            this.game.turnCounter > marker.expiresOnTurn
+          ) {
+            delete summonedCard.effectMarkers[key];
+            return {
+              ok: false,
+              reason: cond.reason || "Summoned card marker expired.",
+            };
+          }
+
+          if (
+            cond.sourceEffectId &&
+            marker.sourceEffectId !== cond.sourceEffectId
+          ) {
+            return {
+              ok: false,
+              reason: cond.reason || "Marker source effect does not match.",
+            };
+          }
+
+          if (cond.sourceRef) {
+            const refSource = resolveSourceRef(ctx, cond.sourceRef);
+            if (!markerMatchesSource(marker, refSource)) {
+              return {
+                ok: false,
+                reason: cond.reason || "Marker source does not match.",
+              };
+            }
+          }
+
+          if (cond.controllerId && marker.controllerId !== cond.controllerId) {
+            return {
+              ok: false,
+              reason: cond.reason || "Marker controller does not match.",
+            };
+          }
+          break;
+        }
+        case "field_card_count": {
+          const zones =
+            Array.isArray(cond.zones) && cond.zones.length > 0
+              ? cond.zones
+              : [cond.zone || "field"];
+          const filters = cond.filters || {};
+          const requireFaceup = cond.requireFaceup === true;
+          let count = 0;
+          for (const owner of getConditionOwners(cond.owner || "self", player, opponent)) {
+            for (const zoneKey of zones) {
+              for (const card of getConditionZoneCards(owner, zoneKey)) {
+                if (!card) continue;
+                if (requireFaceup && card.isFacedown) continue;
+                if (!this.cardMatchesFilters(card, filters)) continue;
+                count += 1;
+              }
+            }
+          }
+          if (cond.count !== undefined && count !== cond.count) {
+            return {
+              ok: false,
+              reason:
+                cond.reason ||
+                `Expected exactly ${cond.count} matching card(s).`,
+            };
+          }
+          if (cond.min !== undefined && count < cond.min) {
+            return {
+              ok: false,
+              reason:
+                cond.reason ||
+                `Expected at least ${cond.min} matching card(s).`,
+            };
+          }
+          if (cond.max !== undefined && count > cond.max) {
+            return {
+              ok: false,
+              reason:
+                cond.reason ||
+                `Expected at most ${cond.max} matching card(s).`,
             };
           }
           break;
