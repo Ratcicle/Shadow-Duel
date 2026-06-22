@@ -77,12 +77,14 @@ export function getActivatableCardsInChain(player, context) {
 
       const effect = this.findActivatableEffect(card, context, player);
       if (effect) {
-        if (!this.canOfferEffectInChainContext(effect, context)) continue;
+        const responseContext =
+          this.getEffectChainResponseContext?.(effect, context) || context;
+        if (!this.canOfferEffectInChainContext(effect, responseContext)) continue;
         console.log(
           `[getActivatableCardsInChain] Found effect for ${card.name}:`,
           effect.id,
         );
-        const chainCheck = this.canActivateInChain(effect, card, context);
+        const chainCheck = this.canActivateInChain(effect, card, responseContext);
         console.log(
           `[getActivatableCardsInChain] Chain check for ${card.name}:`,
           chainCheck,
@@ -93,7 +95,7 @@ export function getActivatableCardsInChain(player, context) {
           console.log(
             `[getActivatableCardsInChain] ${card.name} is ACTIVATABLE`,
           );
-          activatable.push({ card, effect, zone: "spellTrap" });
+          activatable.push({ card, effect, zone: "spellTrap", context: responseContext });
         }
       } else {
         console.log(
@@ -114,10 +116,12 @@ export function getActivatableCardsInChain(player, context) {
 
       const effect = this.findActivatableEffect(card, context, player);
       if (effect) {
-        if (!this.canOfferEffectInChainContext(effect, context)) continue;
+        const responseContext =
+          this.getEffectChainResponseContext?.(effect, context) || context;
+        if (!this.canOfferEffectInChainContext(effect, responseContext)) continue;
         const quickSpellContext = buildQuickSpellChainContext(
           this,
-          context,
+          responseContext,
           effect,
           "spellTrap",
         );
@@ -128,9 +132,9 @@ export function getActivatableCardsInChain(player, context) {
           quickSpellContext,
         );
         if (!quickCheck.ok) continue;
-        const chainCheck = this.canActivateInChain(effect, card, context);
+        const chainCheck = this.canActivateInChain(effect, card, responseContext);
         if (chainCheck.ok) {
-          activatable.push({ card, effect, zone: "spellTrap" });
+          activatable.push({ card, effect, zone: "spellTrap", context: responseContext });
         }
       }
     }
@@ -148,10 +152,12 @@ export function getActivatableCardsInChain(player, context) {
 
       const effect = this.findActivatableEffect(card, context, player);
       if (effect) {
-        if (!this.canOfferEffectInChainContext(effect, context)) continue;
+        const responseContext =
+          this.getEffectChainResponseContext?.(effect, context) || context;
+        if (!this.canOfferEffectInChainContext(effect, responseContext)) continue;
         const quickSpellContext = buildQuickSpellChainContext(
           this,
-          context,
+          responseContext,
           effect,
           "hand",
         );
@@ -162,9 +168,9 @@ export function getActivatableCardsInChain(player, context) {
           quickSpellContext,
         );
         if (!quickCheck.ok) continue;
-        const chainCheck = this.canActivateInChain(effect, card, context);
+        const chainCheck = this.canActivateInChain(effect, card, responseContext);
         if (chainCheck.ok) {
-          activatable.push({ card, effect, zone: "hand" });
+          activatable.push({ card, effect, zone: "hand", context: responseContext });
         }
       }
     }
@@ -181,10 +187,12 @@ export function getActivatableCardsInChain(player, context) {
 
       const effect = this.findQuickMonsterEffect(card, context, player);
       if (effect) {
-        if (!this.canOfferEffectInChainContext(effect, context)) continue;
-        const chainCheck = this.canActivateInChain(effect, card, context);
+        const responseContext =
+          this.getEffectChainResponseContext?.(effect, context) || context;
+        if (!this.canOfferEffectInChainContext(effect, responseContext)) continue;
+        const chainCheck = this.canActivateInChain(effect, card, responseContext);
         if (chainCheck.ok) {
-          activatable.push({ card, effect, zone: "field" });
+          activatable.push({ card, effect, zone: "field", context: responseContext });
         }
       }
     }

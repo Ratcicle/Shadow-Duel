@@ -23,6 +23,65 @@ export function effectCanRespondToContext(effect, contextType) {
   );
 }
 
+export function getCurrentChainActivationContext(context) {
+  const lastLink = this.getLastChainLink?.();
+  if (!lastLink?.card || !lastLink?.player || !lastLink?.effect) return null;
+  const activationType =
+    lastLink.card.cardKind === "monster" ? "effect_activation" : "card_activation";
+  return {
+    ...(context || {}),
+    originalContext: context || null,
+    type: activationType,
+    event: activationType,
+    card: lastLink.card,
+    player: lastLink.player,
+    triggerPlayer: lastLink.player,
+    effect: lastLink.effect,
+    activationZone: lastLink.zone || null,
+    activationAttempt: {
+      card: lastLink.card,
+      player: lastLink.player,
+      effect: lastLink.effect,
+      activationZone: lastLink.zone || null,
+      negated: lastLink.negated === true,
+    },
+    respondingToChainLink: lastLink,
+    addTriggerToChain: false,
+  };
+}
+
+export function getEffectChainResponseContext(effect, context) {
+  const responseContext = this.getCurrentChainActivationContext?.(context);
+  if (!responseContext) return context || null;
+
+  if (this.effectCanRespondToContext?.(effect, responseContext.type)) {
+    return responseContext;
+  }
+
+  const originalExpectedEvent =
+    {
+      attack_declaration: "attack_declared",
+      battle_step_open: "battle_step_open",
+      summon: "after_summon",
+      phase_change: "phase_end",
+      card_activation: "card_activation",
+      effect_activation: "effect_activation",
+      effect_targeted: "effect_targeted",
+      battle_damage: "battle_damage",
+      battle_destroy: "battle_destroy",
+    }[context?.type] || context?.event;
+
+  const matchesOriginal =
+    effect?.event === originalExpectedEvent ||
+    this.effectCanRespondToContext?.(effect, context?.type);
+  if (matchesOriginal) return context || null;
+
+  const matchesLastActivation =
+    effect?.event === responseContext.event ||
+    this.effectCanRespondToContext?.(effect, responseContext.type);
+  return matchesLastActivation ? responseContext : context || null;
+}
+
 export function effectHasAction(effect, actionType) {
   if (!actionType || !Array.isArray(effect?.actions)) return false;
   return effect.actions.some((action) => action?.type === actionType);
@@ -172,21 +231,29 @@ export function findActivatableEffect(card, context, ownerPlayer = null) {
     if (card.cardKind === "trap") {
       // Check on_event effects (like Mirror Force)
       if (effect.timing === "on_event") {
+        const activeContext =
+          this.getEffectChainResponseContext?.(effect, context) || context;
+        const activeExpectedEvent =
+          contextToEvent[activeContext?.type] || activeContext?.event;
         // Match the effect's event with the context
-        if (effect.event === expectedEvent) {
+        if (
+          effect.event === expectedEvent ||
+          effect.event === activeExpectedEvent ||
+          this.effectCanRespondToContext?.(effect, activeContext?.type)
+        ) {
           // Debug log for attack declaration traps
-          if (context?.type === "attack_declaration") {
+          if (activeContext?.type === "attack_declaration") {
             console.log(
               `[findActivatableEffect] trap=${card.name} ctx attackers/defenders`,
               {
-                attacker: context.attacker?.name,
-                attackerOwner: context.attackerOwner?.id,
-                defender: context.defender?.name || context.target?.name,
+                attacker: activeContext.attacker?.name,
+                attackerOwner: activeContext.attackerOwner?.id,
+                defender: activeContext.defender?.name || activeContext.target?.name,
                 defenderOwner:
-                  context.defenderOwner?.id || context.targetOwner?.id,
+                  activeContext.defenderOwner?.id || activeContext.targetOwner?.id,
                 cardOwner: ownerPlayer?.id || card.owner,
                 effectEvent: effect.event,
-                expectedEvent,
+                expectedEvent: activeExpectedEvent,
               },
             );
           }
@@ -194,7 +261,7 @@ export function findActivatableEffect(card, context, ownerPlayer = null) {
           // Check additional conditions
           if (
             effect.requireOpponentAttack &&
-            context?.type === "attack_declaration"
+            activeContext?.type === "attack_declaration"
           ) {
             // Only valid if the attacker is an opponent of this card's owner.
             // context.isOpponentAttack is computed from the defender's
@@ -202,34 +269,34 @@ export function findActivatableEffect(card, context, ownerPlayer = null) {
             // own face-down responses.
             const cardOwnerId = ownerPlayer?.id || card.controller || card.owner;
             const attackerOwnerId =
-              context.attackerOwner?.id ||
-              context.attacker?.controller ||
-              context.attacker?.owner ||
+              activeContext.attackerOwner?.id ||
+              activeContext.attacker?.controller ||
+              activeContext.attacker?.owner ||
               null;
             if (!attackerOwnerId || !cardOwnerId || attackerOwnerId === cardOwnerId) {
               continue;
             }
           }
-          if (effect.requireOpponentSummon && context?.type === "summon") {
+          if (effect.requireOpponentSummon && activeContext?.type === "summon") {
             // Only valid if opponent summoned (check from card owner's perspective)
             const cardOwnerId = ownerPlayer?.id || card.owner;
             if (
               !isOpponentAction(
-                context.player?.id,
+                activeContext.player?.id,
                 cardOwnerId,
-                context.isOpponentSummon,
+                activeContext.isOpponentSummon,
               )
             ) {
               continue;
             }
           }
-          if (context?.type === "summon") {
+          if (activeContext?.type === "summon") {
             const summonMethods = effect.summonMethods ?? effect.summonMethod;
             if (summonMethods) {
               const methods = Array.isArray(summonMethods)
                 ? summonMethods
                 : [summonMethods];
-              const contextMethod = context.method || context.summonMethod;
+              const contextMethod = activeContext.method || activeContext.summonMethod;
               if (!methods.includes(contextMethod)) {
                 continue;
               }
@@ -239,7 +306,7 @@ export function findActivatableEffect(card, context, ownerPlayer = null) {
             this,
             card,
             effect,
-            context,
+            activeContext,
             ownerPlayer,
           );
           if (
@@ -256,11 +323,25 @@ export function findActivatableEffect(card, context, ownerPlayer = null) {
             }
           }
           if (
+            effect.oncePerTurn &&
+            ownerPlayer &&
+            this.game?.effectEngine?.checkOncePerTurn
+          ) {
+            const optCheck = this.game.effectEngine.checkOncePerTurn(
+              card,
+              ownerPlayer,
+              effect,
+            );
+            if (!optCheck.ok) {
+              continue;
+            }
+          }
+          if (
             !effectActionsCanResolveInChain(
               this,
               card,
               effect,
-              context,
+              activeContext,
               ownerPlayer,
             )
           ) {
@@ -269,7 +350,7 @@ export function findActivatableEffect(card, context, ownerPlayer = null) {
           // Check requireDefenderIsSelf (e.g., Dragon Spirit Sanctuary)
           if (
             effect.requireDefenderIsSelf &&
-            context?.type === "attack_declaration"
+            activeContext?.type === "attack_declaration"
           ) {
             // Use the checking player as owner fallback because some set traps may miss card.owner
             const inferredOwner =
@@ -280,10 +361,10 @@ export function findActivatableEffect(card, context, ownerPlayer = null) {
                   ? this.game.bot
                   : null);
             const ctxDefenderOwner =
-              context.defenderOwner ||
-              context.targetOwner ||
-              (context.defender
-                ? context.defender.owner === "player"
+              activeContext.defenderOwner ||
+              activeContext.targetOwner ||
+              (activeContext.defender
+                ? activeContext.defender.owner === "player"
                   ? this.game.player
                   : this.game.bot
                 : null);
@@ -293,7 +374,7 @@ export function findActivatableEffect(card, context, ownerPlayer = null) {
                 {
                   inferredOwner: inferredOwner?.id,
                   ctxDefenderOwner: ctxDefenderOwner?.id,
-                  defender: context.defender?.name || context.target?.name,
+                  defender: activeContext.defender?.name || activeContext.target?.name,
                 },
               );
               continue;
@@ -302,13 +383,13 @@ export function findActivatableEffect(card, context, ownerPlayer = null) {
           // Check requireDefenderType (e.g., Dragon Spirit Sanctuary)
           if (
             effect.requireDefender &&
-            context?.type === "attack_declaration" &&
-            !(context.defender || context.target)
+            activeContext?.type === "attack_declaration" &&
+            !(activeContext.defender || activeContext.target)
           ) {
             console.log(
               `[findActivatableEffect] requireDefender mismatch for ${card.name}`,
               {
-                defender: context.defender?.name || context.target?.name,
+                defender: activeContext.defender?.name || activeContext.target?.name,
               },
             );
             continue;
@@ -316,9 +397,9 @@ export function findActivatableEffect(card, context, ownerPlayer = null) {
 
           if (
             effect.requireDefenderType &&
-            context?.type === "attack_declaration"
+            activeContext?.type === "attack_declaration"
           ) {
-            const defender = context.defender || context.target;
+            const defender = activeContext.defender || activeContext.target;
             const requiredTypes = Array.isArray(effect.requireDefenderType)
               ? effect.requireDefenderType
               : [effect.requireDefenderType];

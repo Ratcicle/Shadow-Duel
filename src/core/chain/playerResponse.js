@@ -57,7 +57,7 @@ export async function playerChooseChainResponse(player, activatable, context) {
       chosenOption.card,
       chosenOption.effect,
       player,
-      context,
+      chosenOption.context || context,
     );
 
     if (

@@ -146,6 +146,9 @@ export function resolveSimulatedLpCost({
 export function resolveTargetsForAction(action, selections, options, opponent) {
   if (!action?.targetRef) return [];
   if (action.targetRef === "self") return [options.sourceCard].filter(Boolean);
+  if (action.targetRef === "ascension_material") {
+    return resolveSimulatedAscensionMaterials(options);
+  }
   if (
     action.targetRef === "battle_self_participant" ||
     action.targetRef === "battle_opponent_participant"
@@ -181,6 +184,28 @@ export function resolveTargetsForAction(action, selections, options, opponent) {
     );
   }
   return selections[action.targetRef] || [];
+}
+
+function getSimCardInstanceId(card) {
+  return card?.instanceId ?? card?._instanceId ?? card?.uuid ?? card?.simInstanceId ?? null;
+}
+
+function resolveSimulatedAscensionMaterials(options = {}) {
+  const source = options.sourceCard || options.actionContext?.source || null;
+  const self = options.self || null;
+  const graveyard = Array.isArray(self?.graveyard) ? self.graveyard : [];
+  const materials = Array.isArray(source?.ascensionMaterials)
+    ? source.ascensionMaterials
+    : [];
+  const materialInstanceIds = new Set(
+    materials
+      .map((entry) => entry?.instanceId)
+      .filter((value) => value !== undefined && value !== null),
+  );
+  if (materialInstanceIds.size === 0) return [];
+  return graveyard.filter((card) =>
+    materialInstanceIds.has(getSimCardInstanceId(card)),
+  );
 }
 
 export function storeSimActionResult(

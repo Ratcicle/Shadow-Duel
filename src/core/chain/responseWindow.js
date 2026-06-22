@@ -103,7 +103,7 @@ export async function offerChainResponses(firstPlayer, secondPlayer, context) {
         response.card,
         currentResponder,
         response.effect,
-        context,
+        response.context || context,
         response.selections,
         response.zone,
       );

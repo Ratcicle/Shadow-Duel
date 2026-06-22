@@ -132,7 +132,12 @@ export function applySimulatedActions({
 
   for (const action of actions) {
     if (!action || !action.type) continue;
-    const targets = resolveTargetsForAction(action, selections, options, opponent);
+    const targets = resolveTargetsForAction(
+      action,
+      selections,
+      { ...options, self, selfId },
+      opponent,
+    );
     const handler = SIMULATED_ACTION_HANDLERS[action.type];
 
     if (!handler) {

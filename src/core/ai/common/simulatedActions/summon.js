@@ -59,6 +59,7 @@ export function applySpecialSummonFromZone(ctx) {
       ? targets
       : null;
   if (!candidates || candidates.length === 0) {
+    if (action.targetRef) return;
     candidates = getActionCandidates(targetPlayer, action, "deck");
   }
   const max = Math.min(

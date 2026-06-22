@@ -125,10 +125,12 @@ export const burningWestCards = [
         oncePerTurnName: "burning_west_wanted_reward",
         conditions: [
           {
-            type: "attacker_matches",
+            type: "battle_destroyer_matches_filters",
             owner: "self",
-            cardKind: "monster",
-            archetype: "Burning West",
+            filters: {
+              cardKind: "monster",
+              archetype: "Burning West",
+            },
           },
           {
             type: "destroyed_card_matches_declared_value",
@@ -1126,6 +1128,116 @@ export const burningWestCards = [
                 promptPlayer: true,
               },
             ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 465,
+    name: "Law in the Burning West",
+    cardKind: "trap",
+    subtype: "counter",
+    speed: 3,
+    archetype: "Burning West",
+    description:
+      'When your opponent activates a card or effect that would destroy 1 or more cards that mention a "Burning West" card in their text: negate the activation, and if you do, destroy that card. You can only activate 1 "Law in the Burning West" per turn.',
+    image: "assets/Law in the Burning West.png",
+    effects: [
+      {
+        id: "law_in_the_burning_west_activation",
+        timing: "on_event",
+        event: "card_activation",
+        speed: 3,
+        canRespondTo: ["card_activation", "effect_activation"],
+        oncePerTurn: true,
+        oncePerTurnName: "law_in_the_burning_west_activation",
+        conditions: [
+          {
+            type: "activation_would_destroy_cards_matching_filters",
+            activationPlayer: "opponent",
+            minCount: 1,
+            destroyedCardFilters: {
+              textIncludes: "Burning West",
+            },
+          },
+        ],
+        actions: [{ type: "negate_summon_or_activation_and_destroy" }],
+      },
+    ],
+  },
+  {
+    id: 466,
+    name: "Executioner of the Burning West",
+    cardKind: "monster",
+    monsterType: "ascension",
+    atk: 2500,
+    def: 2000,
+    level: 7,
+    type: "Pyro",
+    attribute: "Fire",
+    archetype: "Burning West",
+    ascension: {
+      materialFilters: {
+        cardKind: "monster",
+        archetype: "Burning West",
+        minLevel: 5,
+      },
+      position: "choice",
+    },
+    description:
+      'Ascension Material: 1 Level 5 or higher "Burning West" monster. If this card is Ascension Summoned: You can add 1 card from your Graveyard to your hand that mentions a "Burning West" card in its text. If this card battles a monster with the same ATK, this card is not destroyed by that battle. If this card is destroyed by battle: You can Special Summon from your Graveyard the monster used as Ascension Material for this card.',
+    image: "assets/Executioner of the Burning West.png",
+    effects: [
+      {
+        id: "burning_west_executioner_ascension_recover",
+        timing: "on_event",
+        event: "after_summon",
+        requireSelfAsSummoned: true,
+        summonMethods: ["ascension"],
+        promptUser: true,
+        actions: [
+          {
+            type: "add_from_zone_to_hand",
+            zone: "graveyard",
+            filters: {
+              textIncludes: "Burning West",
+            },
+            count: { min: 1, max: 1 },
+            promptPlayer: true,
+            selectionMessage:
+              'Choose 1 card in your Graveyard that mentions "Burning West" to add to your hand.',
+          },
+        ],
+      },
+      {
+        id: "burning_west_executioner_equal_atk_survival",
+        timing: "passive",
+        requireZone: "field",
+        requireFaceup: true,
+        passive: {
+          type: "battle_indestructible_if_stat_match",
+          stat: "atk",
+          opponentFilters: {
+            cardKind: "monster",
+          },
+        },
+      },
+      {
+        id: "burning_west_executioner_revive_material",
+        timing: "on_event",
+        event: "battle_completed",
+        requireSelfBattled: true,
+        requireSelfDestroyedByBattle: true,
+        promptUser: true,
+        actions: [
+          {
+            type: "special_summon_from_zone",
+            zone: "graveyard",
+            targetRef: "ascension_material",
+            count: { min: 1, max: 1 },
+            position: "choice",
+            promptPlayer: true,
           },
         ],
       },

@@ -205,6 +205,77 @@ function findBattleDestructionPreventionNegationAura(
   return null;
 }
 
+function getBattleOpponentForCard(card, context = {}) {
+  if (!card) return null;
+  if (context.battleOpponent) return context.battleOpponent;
+  if (context.opponentCard) return context.opponentCard;
+  const attacker = context.attacker || null;
+  const defender = context.defender || context.target || null;
+  if (card === attacker) return defender;
+  if (card === defender) return attacker;
+  return null;
+}
+
+function isBattleIndestructibleByStatMatchPassive(game, card, context = {}) {
+  if (!game || !card || !Array.isArray(card.effects)) return false;
+  if (card.isFacedown || card.effectsNegated) return false;
+
+  const owner =
+    getPlayerFromContext(game, context.owner) ||
+    (typeof game.getOwnerByCard === "function"
+      ? game.getOwnerByCard(card)
+      : null) ||
+    getPlayerByCardOwner(game, card);
+  const sourceZone =
+    owner && typeof game.findCardZone === "function"
+      ? game.findCardZone(owner, card)
+      : null;
+  const battleOpponent = getBattleOpponentForCard(card, context);
+  if (!battleOpponent || battleOpponent.cardKind !== "monster") return false;
+
+  for (const effect of card.effects) {
+    if (!effect || effect.timing !== "passive") continue;
+    const passive = effect.passive || {};
+    if (passive.type !== "battle_indestructible_if_stat_match") continue;
+    if (effect.requireZone && sourceZone !== effect.requireZone) continue;
+    if (passive.requireZone && sourceZone !== passive.requireZone) continue;
+    if (
+      (effect.requireFaceup === true || passive.requireFaceup !== false) &&
+      card.isFacedown
+    ) {
+      continue;
+    }
+    if (
+      passive.sourceFilters &&
+      !cardMatchesAttackPassiveFilters(game, card, passive.sourceFilters)
+    ) {
+      continue;
+    }
+    const opponentFilters = passive.opponentFilters || {
+      cardKind: "monster",
+    };
+    if (
+      !cardMatchesAttackPassiveFilters(game, battleOpponent, opponentFilters)
+    ) {
+      continue;
+    }
+
+    const sourceStat = passive.sourceStat || passive.stat || "atk";
+    const opponentStat = passive.opponentStat || passive.compareToStat || sourceStat;
+    const sourceValue = Number(card[sourceStat] ?? 0);
+    const opponentValue = Number(battleOpponent[opponentStat] ?? 0);
+    if (
+      Number.isFinite(sourceValue) &&
+      Number.isFinite(opponentValue) &&
+      sourceValue === opponentValue
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function getCounterAttackLockReason(game, attacker) {
   const attackerOwner = getPlayerByCardOwner(game, attacker);
   const opponentOfAttacker =
@@ -491,6 +562,9 @@ export function canDestroyByBattle(card, context = {}) {
   if (!card) return false;
   if (isBattleDestructionPreventionNegated.call(this, card, context)) {
     return true;
+  }
+  if (isBattleIndestructibleByStatMatchPassive(this, card, context)) {
+    return false;
   }
   if (card.battleIndestructible) return false;
   if (card.tempBattleIndestructible) return false;

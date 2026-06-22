@@ -1088,6 +1088,14 @@
       "name": "Recompensa Ardente",
       "description": "Se um monstro \"Oeste Ardente\" que voc\u00ea controla destruir um monstro do oponente em batalha: escolha 1 monstro \"Oeste Ardente\" no seu Cemit\u00e9rio; adicione-o \u00e0 sua m\u00e3o. Depois, se o monstro destru\u00eddo era do Tipo declarado por um efeito de card \"Oeste Ardente\", voc\u00ea pode Invocar o card adicionado por Invoca\u00e7\u00e3o-Especial da sua m\u00e3o. Voc\u00ea s\u00f3 pode ativar 1 \"Recompensa Ardente\" por turno."
     },
+    "465": {
+      "name": "Lei da Cidade Ardente",
+      "description": "Quando seu oponente ativar um card ou efeito que destruiria 1 ou mais cards que mencionem um card \"Oeste Ardente\" em seu texto: negue a ativa\u00e7\u00e3o e, se isso acontecer, destrua esse card. Voc\u00ea s\u00f3 pode ativar 1 \"Lei da Cidade Ardente\" por turno."
+    },
+    "466": {
+      "name": "Carrasco do Oeste Ardente",
+      "description": "Material de Ascens\u00e3o: 1 monstro \"Oeste Ardente\" de N\u00edvel 5 ou maior. Se este card for Invocado por Invoca\u00e7\u00e3o-Ascens\u00e3o: voc\u00ea pode adicionar 1 card do seu Cemit\u00e9rio \u00e0 sua m\u00e3o que mencione um card \"Oeste Ardente\" em seu texto. Se este card batalhar um monstro com o mesmo ATK, este card n\u00e3o \u00e9 destru\u00eddo nessa batalha. Se este card for destru\u00eddo em batalha: voc\u00ea pode Invocar por Invoca\u00e7\u00e3o-Especial do seu Cemit\u00e9rio o monstro usado como Material de Ascens\u00e3o para este card."
+    },
     "420": {
       "name": "Podriflora Devorador de Raízes Mortas",
       "description": "Materiais de Fusão: 4 monstros \"Podriflora\", incluindo 1 Ficha. Se este card for Invocado por Invocação-Fusão: o ATK original deste card se torna igual ao número de Marcadores de Esporo no campo x500. Uma vez por turno: você pode destruir todos os monstros com Marcadores de Esporo que seu oponente controla. Se este card for destruído em batalha ou por efeito de card: Invoque por Invocação-Especial até 2 monstros \"Podriflora\" do seu Cemitério, exceto \"Podriflora Devorador de Raízes Mortas\"."

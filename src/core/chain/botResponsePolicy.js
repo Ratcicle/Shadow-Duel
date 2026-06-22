@@ -102,7 +102,7 @@ export async function botChooseChainResponse(player, activatable, context) {
         holyShieldOption.card,
         holyShieldOption.effect,
         player,
-        context,
+        holyShieldOption.context || context,
       );
       return { ...holyShieldOption, selections };
     }
@@ -246,7 +246,7 @@ export async function botChooseChainResponse(player, activatable, context) {
       bestOption.card,
       bestOption.effect,
       player,
-      context,
+      bestOption.context || context,
     );
 
     return { ...bestOption, selections };

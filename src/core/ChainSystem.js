@@ -191,6 +191,10 @@ ChainSystem.prototype.canActivateInChain = chainSpellSpeed.canActivateInChain;
 
 ChainSystem.prototype.effectCanRespondToContext =
   chainEffectMatching.effectCanRespondToContext;
+ChainSystem.prototype.getCurrentChainActivationContext =
+  chainEffectMatching.getCurrentChainActivationContext;
+ChainSystem.prototype.getEffectChainResponseContext =
+  chainEffectMatching.getEffectChainResponseContext;
 ChainSystem.prototype.effectHasAction = chainEffectMatching.effectHasAction;
 ChainSystem.prototype.isSummonNegationResponse =
   chainEffectMatching.isSummonNegationResponse;

@@ -58,6 +58,17 @@ export function cardMatchesFilter(card, filter = {}) {
       return false;
     }
     if (current.name && !matchesOne(card.name, current.name)) return false;
+    const textIncludes =
+      current.textIncludes ||
+      current.nameOrDescriptionIncludes ||
+      current.textIncludesAny;
+    if (textIncludes) {
+      const requiredText = asArray(textIncludes).filter(Boolean);
+      const haystack = `${card.name || ""}\n${card.description || ""}`;
+      if (!requiredText.some((value) => haystack.includes(String(value)))) {
+        return false;
+      }
+    }
     if (current.type) {
       const cardTypes = Array.isArray(card.types) ? card.types : [card.type];
       if (!asArray(current.type).some((type) => cardTypes.includes(type))) {

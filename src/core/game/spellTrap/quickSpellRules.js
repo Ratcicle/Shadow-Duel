@@ -28,6 +28,7 @@ const DIRECT_ATK_DEF_ACTIONS = new Set([
   "modify_stats_temp",
   "permanent_buff_named",
   "reduce_self_atk",
+  "remove_stat_increases",
   "set_original_stats",
 ]);
 
@@ -142,6 +143,14 @@ function actionDirectlyChangesAtkDef(action) {
       return true;
     case "reduce_self_atk":
       return true;
+    case "remove_stat_increases": {
+      const stats = Array.isArray(action.stats)
+        ? action.stats.map((stat) => String(stat).toLowerCase())
+        : [];
+      return (
+        stats.length === 0 || stats.includes("atk") || stats.includes("def")
+      );
+    }
     case "permanent_buff_named":
       return hasNonZeroNumber(action, ["atkBoost", "defBoost"]);
     case "set_original_stats":

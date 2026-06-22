@@ -252,6 +252,8 @@ function resolveBattleLpLossPreview(game, attacker, target) {
     return amount > 0 ? { player: defender, amount } : null;
   }
 
+  if (target.isFacedown) return null;
+
   if (hasPotentialBattleDamageTimingEffect(game, attacker, target)) return null;
 
   const attackerOwner = getController(game, attacker);
@@ -325,6 +327,34 @@ async function waitForAttackContact(game, presentation) {
     console.warn("[Shadow Duel] Attack contact presentation failed.", error);
     return false;
   }
+}
+
+async function revealBattleTargetBeforeDamage(game, attacker, target) {
+  if (!game || !target?.isFacedown) return false;
+
+  const targetOwner = target.owner === "player" ? "player" : "bot";
+  const targetField =
+    target.owner === "player" ? game.player?.field : game.bot?.field;
+  const targetIndex = Array.isArray(targetField)
+    ? targetField.indexOf(target)
+    : -1;
+
+  game.ui?.applyFlipAnimation?.(targetOwner, targetIndex);
+
+  target.isFacedown = false;
+  target.revealedTurn = game.turnCounter;
+  game.effectEngine?.clearTargetingCache?.();
+  game.ui?.log?.(`${target.name} was flipped!`);
+
+  game.updateBoard?.();
+  game.applyAttackResolutionIndicators?.(attacker, target);
+
+  if (typeof game.waitForPresentationDelay === "function") {
+    await game.waitForPresentationDelay(600);
+  } else {
+    await new Promise((resolve) => setTimeout(resolve, 600));
+  }
+  return true;
 }
 
 /**
@@ -645,34 +675,6 @@ export async function resolveCombat(attacker, target, options = {}) {
     return { ok: true };
   }
 
-  // Check if flip is needed (might have been flipped by attack_declared effects)
-  const needsFlip = target.isFacedown;
-
-  if (needsFlip) {
-    const targetOwner = target.owner === "player" ? "player" : "bot";
-    const targetField =
-      target.owner === "player" ? this.player.field : this.bot.field;
-    const targetIndex = targetField.indexOf(target);
-
-    if (this.ui && typeof this.ui.applyFlipAnimation === "function") {
-      this.ui.applyFlipAnimation(targetOwner, targetIndex);
-    }
-
-    target.isFacedown = false;
-    target.revealedTurn = this.turnCounter; // Track when monster was revealed for Ascension timing
-    this.effectEngine?.clearTargetingCache?.();
-    this.ui.log(`${target.name} was flipped!`);
-
-    this.updateBoard();
-    this.applyAttackResolutionIndicators(attacker, target);
-
-    if (typeof this.waitForPresentationDelay === "function") {
-      await this.waitForPresentationDelay(600);
-    } else {
-      await new Promise((resolve) => setTimeout(resolve, 600));
-    }
-  }
-
   setBattleLpLossPreview(resolveBattleLpLossPreview(this, attacker, target));
   const attackPresentation = startAttackPresentation();
   const resolveDamageOnContact = hasPotentialBattleDamageTimingEffect(
@@ -737,6 +739,7 @@ export async function finishCombat(attacker, target, options = {}) {
     const previousDamageStepTiming = this.damageStepTiming;
     this.battleStep = "damage";
     this.damageStepTiming = "before_damage_calculation";
+    await revealBattleTargetBeforeDamage(this, attacker, target);
     const battleDamageResult = await this.emit("battle_damage", {
       attacker,
       defender: target,
@@ -948,6 +951,13 @@ export async function finishCombat(attacker, target, options = {}) {
       target: target?.name,
     });
   };
+  const getBattleDestructionContext = (card) => ({
+    attacker,
+    defender: target,
+    target,
+    battleOpponent: card === attacker ? target : attacker,
+    sourceCard: card === attacker ? target : attacker,
+  });
 
   if (target.position === "attack") {
     if (attacker.atk > target.atk) {
@@ -967,7 +977,7 @@ export async function finishCombat(attacker, target, options = {}) {
       );
 
       logBattleDestroyCheck("attacker over atk target");
-      if (this.canDestroyByBattle(target)) {
+      if (this.canDestroyByBattle(target, getBattleDestructionContext(target))) {
         const preDestroyedOwnerId = target.owner;
         const preDestroyedOwner =
           preDestroyedOwnerId === "player" ? this.player : this.bot;
@@ -1030,7 +1040,12 @@ export async function finishCombat(attacker, target, options = {}) {
       );
 
       logBattleDestroyCheck("attacker loses to atk target");
-      if (this.canDestroyByBattle(attacker)) {
+      if (
+        this.canDestroyByBattle(
+          attacker,
+          getBattleDestructionContext(attacker),
+        )
+      ) {
         const preDestroyedOwnerId = attacker.owner;
         const preDestroyedOwner =
           preDestroyedOwnerId === "player" ? this.player : this.bot;
@@ -1079,7 +1094,13 @@ export async function finishCombat(attacker, target, options = {}) {
     } else {
       // to allow each triggered effect to be resolved before the next
       logBattleDestroyCheck("tie - attacker destruction check");
-      if (!skipAttackerDestruction && this.canDestroyByBattle(attacker)) {
+      if (
+        !skipAttackerDestruction &&
+        this.canDestroyByBattle(
+          attacker,
+          getBattleDestructionContext(attacker),
+        )
+      ) {
         const preDestroyedOwnerId = attacker.owner;
         const preDestroyedOwner =
           preDestroyedOwnerId === "player" ? this.player : this.bot;
@@ -1133,7 +1154,7 @@ export async function finishCombat(attacker, target, options = {}) {
       }
 
       logBattleDestroyCheck("tie - target destruction check");
-      if (this.canDestroyByBattle(target)) {
+      if (this.canDestroyByBattle(target, getBattleDestructionContext(target))) {
         const preDestroyedOwnerId = target.owner;
         const preDestroyedOwner =
           preDestroyedOwnerId === "player" ? this.player : this.bot;
@@ -1179,9 +1200,19 @@ export async function finishCombat(attacker, target, options = {}) {
       }
       // Clear pending tie destruction if we completed successfully
       this.pendingTieDestruction = null;
-      logBattleResult(
-        `${attacker.name} and ${target.name} destroyed each other.`,
-      );
+      if (attackerWasDestroyed && targetWasDestroyed) {
+        logBattleResult(
+          `${attacker.name} and ${target.name} destroyed each other.`,
+        );
+      } else if (attackerWasDestroyed) {
+        logBattleResult(`${attacker.name} was destroyed by ${target.name}.`);
+      } else if (targetWasDestroyed) {
+        logBattleResult(`${attacker.name} destroyed ${target.name}.`);
+      } else {
+        logBattleResult(
+          `${attacker.name} and ${target.name} survived the battle.`,
+        );
+      }
     }
   } else {
     const defender = target.owner === "player" ? this.player : this.bot;
@@ -1202,7 +1233,7 @@ export async function finishCombat(attacker, target, options = {}) {
         );
       }
       logBattleDestroyCheck("defense target destruction check");
-      if (this.canDestroyByBattle(target)) {
+      if (this.canDestroyByBattle(target, getBattleDestructionContext(target))) {
         const preDestroyedOwnerId = target.owner;
         const preDestroyedOwner =
           preDestroyedOwnerId === "player" ? this.player : this.bot;

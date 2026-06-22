@@ -4,6 +4,7 @@ import {
   getUI,
   collectZoneCandidates,
   normalizeNegateEffectsDuration,
+  resolveTargetCards,
   selectCardsFromZone,
 } from "../shared.js";
 import {
@@ -214,9 +215,14 @@ export async function handleSpecialSummonFromZone(
     return true;
   };
 
-  // Check for targetRef - use pre-resolved targets if available
-  if (action.targetRef && targets?.[action.targetRef]) {
-    const resolved = targets[action.targetRef];
+  // Check for targetRef - use pre-resolved targets or context refs.
+  if (action.targetRef) {
+    const resolved =
+      targets?.[action.targetRef] ??
+      resolveTargetCards(action, ctx, targets, {
+        game,
+        targetRef: action.targetRef,
+      });
     const cardsToSummon = Array.isArray(resolved) ? resolved : [resolved];
 
     if (cardsToSummon.length === 0) {

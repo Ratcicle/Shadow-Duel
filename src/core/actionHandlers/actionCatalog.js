@@ -2251,6 +2251,7 @@ const CONTEXT_TARGET_REFS = new Set([
   "battle_opponent",
   "battle_self_participant",
   "battle_opponent_participant",
+  "ascension_material",
   "target",
   "targetedCard",
   "host",

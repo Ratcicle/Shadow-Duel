@@ -97,6 +97,23 @@ export function resolveTargetCards(action, ctx, targets, options = {}) {
     }
     return null;
   };
+  const resolveAscensionMaterials = () => {
+    const player = ctx?.player || null;
+    const source = ctx?.source || null;
+    const graveyard = Array.isArray(player?.graveyard) ? player.graveyard : [];
+    const materials = Array.isArray(source?.ascensionMaterials)
+      ? source.ascensionMaterials
+      : [];
+    const materialInstanceIds = new Set(
+      materials
+        .map((entry) => entry?.instanceId)
+        .filter((value) => value !== undefined && value !== null),
+    );
+    if (materialInstanceIds.size === 0) return [];
+    return graveyard.filter((card) =>
+      materialInstanceIds.has(getCardInstanceId(card)),
+    );
+  };
 
   if (targetRef === "self") {
     if (ctx?.source) {
@@ -161,6 +178,8 @@ export function resolveTargetCards(action, ctx, targets, options = {}) {
         (c) => c && c.cardKind === "monster" && !c.isFacedown
       );
     }
+  } else if (targetRef === "ascension_material") {
+    resolved = resolveAscensionMaterials();
   } else if (Array.isArray(targetRef)) {
     resolved = targetRef;
   } else if (

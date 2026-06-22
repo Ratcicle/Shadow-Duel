@@ -104,6 +104,24 @@ function getRequirementMaterialId(asc, materialCard) {
   return null;
 }
 
+function getCardInstanceId(card) {
+  return card?.instanceId ?? card?._instanceId ?? card?.uuid ?? card?.simInstanceId ?? null;
+}
+
+function captureAscensionMaterialMetadata(materialCard, player, game) {
+  if (!materialCard) return null;
+  return {
+    instanceId: getCardInstanceId(materialCard),
+    cardId: materialCard.id ?? null,
+    name: materialCard.name || null,
+    ownerId: materialCard.owner || player?.id || null,
+    controllerId: player?.id || materialCard.controller || materialCard.owner || null,
+    usedOnTurn: Number.isFinite(Number(game?.turnCounter))
+      ? Number(game.turnCounter)
+      : null,
+  };
+}
+
 function countAscensionFieldCounters(game, player, req = {}) {
   const counterType = req.counterType || "default";
   const ownerRule = req.owner || "self";
@@ -431,6 +449,12 @@ export async function performAscensionSummon(
       : positionPref === "defense"
       ? "defense"
       : "attack";
+  const materialMetadata = captureAscensionMaterialMetadata(
+    materialCard,
+    player,
+    this,
+  );
+  ascensionCard.ascensionMaterials = [];
 
   const result = await this.runZoneOp(
     "ASCENSION_SUMMON",
@@ -468,6 +492,10 @@ export async function performAscensionSummon(
           reason: summonResult.reason || "Ascension summon failed.",
         };
       }
+
+      ascensionCard.ascensionMaterials = materialMetadata
+        ? [materialMetadata]
+        : [];
 
       // Propagar needsSelection do after_summon
       if (summonResult.needsSelection) {

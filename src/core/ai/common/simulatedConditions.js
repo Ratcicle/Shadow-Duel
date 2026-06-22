@@ -181,6 +181,167 @@ function buildSimTemporarySource(entry) {
   };
 }
 
+function simActionFilterFromConfig(config = {}) {
+  const filters = { ...(config.filters || {}) };
+  for (const key of [
+    "cardKind",
+    "cardName",
+    "name",
+    "cardId",
+    "cardIds",
+    "subtype",
+    "monsterType",
+    "type",
+    "archetype",
+    "level",
+    "levelOp",
+    "minAtk",
+    "maxAtk",
+    "minDef",
+    "maxDef",
+    "position",
+    "requireFaceup",
+    "isToken",
+    "textIncludes",
+    "nameOrDescriptionIncludes",
+    "textIncludesAny",
+  ]) {
+    if (config[key] !== undefined && filters[key] === undefined) {
+      filters[key] = config[key];
+    }
+  }
+  return filters;
+}
+
+function simOwnersFromRule(rule, self, opponent) {
+  if (rule === "opponent") return [opponent].filter(Boolean);
+  if (rule === "any" || rule === "both" || rule === "either") {
+    return [self, opponent].filter(Boolean);
+  }
+  return [self].filter(Boolean);
+}
+
+function simCollectScopeCards(scope = {}, self, opponent) {
+  const zones = asArray(scope.zones || scope.zone || "field");
+  const filters = simActionFilterFromConfig(scope);
+  const cards = [];
+  for (const owner of simOwnersFromRule(
+    scope.owner || scope.player || "self",
+    self,
+    opponent,
+  )) {
+    for (const zone of zones) {
+      for (const card of getZoneCards(owner, zone)) {
+        if (!matchesTargetFilters(card, filters, null)) continue;
+        cards.push(card);
+      }
+    }
+  }
+  return cards;
+}
+
+function simNestedActions(action = {}) {
+  const nested = [];
+  for (const key of [
+    "actions",
+    "thenActions",
+    "ifActions",
+    "elseActions",
+    "optionalActions",
+  ]) {
+    nested.push(...asArray(action[key]));
+  }
+  for (const entry of asArray(action.cases)) {
+    nested.push(...asArray(entry?.actions));
+  }
+  for (const entry of asArray(action.entries)) {
+    nested.push(...asArray(entry?.actions));
+  }
+  return nested;
+}
+
+function simCollectDestroyCandidates(actions, activationPlayer, activationOpponent) {
+  const cards = [];
+  for (const action of asArray(actions)) {
+    if (!action) continue;
+    if (action.type === "destroy_targeted_cards") {
+      const { type: _actionType, ...targetAction } = action;
+      cards.push(
+        ...simCollectScopeCards(
+          {
+            owner: "opponent",
+            zones: targetAction.zones || ["field", "spellTrap", "fieldSpell"],
+            ...targetAction,
+            filters: simActionFilterFromConfig(targetAction),
+          },
+          activationPlayer,
+          activationOpponent,
+        ),
+      );
+    } else if (action.type === "destroy_cards_by_scope") {
+      cards.push(
+        ...simCollectScopeCards(
+          action.targetScope || {},
+          activationPlayer,
+          activationOpponent,
+        ),
+      );
+    } else if (action.type === "mirror_force_destroy_all") {
+      cards.push(
+        ...getZoneCards(activationOpponent, "field").filter(
+          (card) =>
+            card?.cardKind === "monster" &&
+            card.position === "attack" &&
+            !card.isFacedown,
+        ),
+      );
+    }
+    cards.push(
+      ...simCollectDestroyCandidates(
+        simNestedActions(action),
+        activationPlayer,
+        activationOpponent,
+      ),
+    );
+  }
+  return cards;
+}
+
+function simActivationWouldDestroyMatchingCards(condition, ctx, options, self, opponent) {
+  const activationContext =
+    options.actionContext ||
+    ctx.actionContext ||
+    options.activationContext?.context ||
+    {};
+  const activationAttempt = activationContext.activationAttempt || null;
+  const activatedCard =
+    activationAttempt?.card || activationContext.card || options.card || null;
+  const effect =
+    activationAttempt?.effect || activationContext.effect || options.effect || null;
+  const activationPlayer =
+    activationAttempt?.player || activationContext.player || null;
+  const activationPlayerId =
+    activationPlayer?.id || activatedCard?.controller || activatedCard?.owner || null;
+  const activationOwner =
+    activationPlayerId === self?.id ? self : activationPlayerId === opponent?.id ? opponent : null;
+  if (!activationOwner || !effect) return false;
+  if (condition.activationPlayer === "opponent" && activationOwner !== opponent) {
+    return false;
+  }
+  if (condition.activationPlayer === "self" && activationOwner !== self) {
+    return false;
+  }
+  const activationOpponent = activationOwner === self ? opponent : self;
+  const filters = condition.destroyedCardFilters || condition.filters || {};
+  const minCount = Math.max(1, Number(condition.minCount ?? condition.count ?? 1));
+  const matching = simCollectDestroyCandidates(
+    effect.actions || [],
+    activationOwner,
+    activationOpponent,
+  ).filter((card) => matchesTargetFilters(card, filters, null));
+  return matching.length >= minCount;
+}
+
 export function evaluateSimulatedConditions(conditions, ctx = {}) {
   const list = conditionsArray(conditions);
   if (list.length === 0) return true;
@@ -379,6 +540,15 @@ export function evaluateSimulatedConditions(conditions, ctx = {}) {
       if (condition.min !== undefined && count < condition.min) return false;
       if (condition.max !== undefined && count > condition.max) return false;
       return true;
+    }
+    if (condition.type === "activation_would_destroy_cards_matching_filters") {
+      return simActivationWouldDestroyMatchingCards(
+        condition,
+        ctx,
+        options,
+        self,
+        opponent,
+      );
     }
     if (condition.type === "event_card_matches_filters") {
       const card = resolveEventCardByRef(condition, ctx, options);

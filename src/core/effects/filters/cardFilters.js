@@ -64,6 +64,23 @@ export function cardMatchesFilters(card, filters = {}) {
   if (filters.cardKind) {
     if (!cardMatchesKind(card, filters.cardKind)) return false;
   }
+  const textIncludes =
+    filters.textIncludes ||
+    filters.nameOrDescriptionIncludes ||
+    filters.textIncludesAny;
+  if (textIncludes) {
+    const requiredText = Array.isArray(textIncludes)
+      ? textIncludes
+      : [textIncludes];
+    const haystack = `${card.name || ""}\n${card.description || ""}`;
+    if (
+      !requiredText
+        .filter(Boolean)
+        .some((value) => haystack.includes(String(value)))
+    ) {
+      return false;
+    }
+  }
   if (filters.position && filters.position !== "any") {
     if (card.position !== filters.position) return false;
   }

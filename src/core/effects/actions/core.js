@@ -936,6 +936,26 @@ function countDistinctPreviewNames(cards = []) {
   return names.size;
 }
 
+function getPreviewCardInstanceId(card) {
+  return card?.instanceId ?? card?._instanceId ?? card?.uuid ?? card?.simInstanceId ?? null;
+}
+
+function hasAscensionMaterialPreviewCandidate(action, ctx, zoneCards = []) {
+  if (action?.targetRef !== "ascension_material") return null;
+  const materials = Array.isArray(ctx?.source?.ascensionMaterials)
+    ? ctx.source.ascensionMaterials
+    : [];
+  const materialInstanceIds = new Set(
+    materials
+      .map((entry) => entry?.instanceId)
+      .filter((value) => value !== undefined && value !== null),
+  );
+  if (materialInstanceIds.size === 0) return false;
+  return zoneCards.some((card) =>
+    materialInstanceIds.has(getPreviewCardInstanceId(card)),
+  );
+}
+
 function hasSpecialSummonCandidate(engine, action, ctx) {
   const player = ctx?.player;
   if (!player) return false;
@@ -951,6 +971,12 @@ function hasSpecialSummonCandidate(engine, action, ctx) {
   if (action.requireSource) {
     return zoneCards.includes(ctx?.source);
   }
+  const ascensionMaterialPreview = hasAscensionMaterialPreviewCandidate(
+    action,
+    ctx,
+    zoneCards,
+  );
+  if (ascensionMaterialPreview !== null) return ascensionMaterialPreview;
   if (action.targetRef) return true;
 
   const filters = buildPreviewFilters(action);

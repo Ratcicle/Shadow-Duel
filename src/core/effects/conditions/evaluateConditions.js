@@ -132,6 +132,403 @@ function activeDeclarationSourcesForOwner(owner) {
   return sources;
 }
 
+function findConditionCardOwner(game, card) {
+  if (!game || !card) return null;
+  if (typeof game.effectEngine?.getOwnerByCard === "function") {
+    const owner = game.effectEngine.getOwnerByCard(card);
+    if (owner) return owner;
+  }
+  for (const owner of [game.player, game.bot]) {
+    if (!owner) continue;
+    if (owner.fieldSpell === card) return owner;
+    for (const zone of [
+      "field",
+      "spellTrap",
+      "hand",
+      "graveyard",
+      "deck",
+      "extraDeck",
+      "banished",
+    ]) {
+      if (Array.isArray(owner[zone]) && owner[zone].includes(card)) {
+        return owner;
+      }
+    }
+  }
+  return null;
+}
+
+function cardVisibleToConditionViewer(engine, card, viewer) {
+  if (!card?.isFacedown) return true;
+  const owner = findConditionCardOwner(engine?.game, card);
+  return !!viewer && owner?.id === viewer.id;
+}
+
+function appendUniqueCard(cards, card) {
+  if (!card) return;
+  const key = getCardInstanceId(card) || card;
+  if (
+    cards.some((entry) => (getCardInstanceId(entry) || entry) === key)
+  ) {
+    return;
+  }
+  cards.push(card);
+}
+
+function actionFilterFromConfig(config = {}) {
+  const filters = { ...(config.filters || {}) };
+  for (const key of [
+    "cardKind",
+    "cardName",
+    "name",
+    "cardId",
+    "cardIds",
+    "subtype",
+    "monsterType",
+    "type",
+    "archetype",
+    "level",
+    "levelOp",
+    "minAtk",
+    "maxAtk",
+    "minDef",
+    "maxDef",
+    "position",
+    "requireFaceup",
+    "isToken",
+    "textIncludes",
+    "nameOrDescriptionIncludes",
+    "textIncludesAny",
+  ]) {
+    if (config[key] !== undefined && filters[key] === undefined) {
+      filters[key] = config[key];
+    }
+  }
+  return filters;
+}
+
+function getConditionOwnersFromRule(rule, ctx) {
+  if (rule === "opponent") return [ctx.opponent].filter(Boolean);
+  if (rule === "any" || rule === "both" || rule === "either") {
+    return [ctx.player, ctx.opponent].filter(Boolean);
+  }
+  return [ctx.player].filter(Boolean);
+}
+
+function collectCardsFromScope(engine, scope = {}, ctx = {}) {
+  const zones = asArray(scope.zones || scope.zone || "field");
+  const filters = actionFilterFromConfig(scope);
+  const cards = [];
+  for (const owner of getConditionOwnersFromRule(
+    scope.owner || scope.player || "self",
+    ctx,
+  )) {
+    for (const zone of zones) {
+      for (const card of getConditionZoneCards(owner, zone)) {
+        if (!card) continue;
+        if (scope.excludeSelf === true && ctx.source && card === ctx.source) {
+          continue;
+        }
+        if (!engine.cardMatchesFilters(card, filters)) continue;
+        appendUniqueCard(cards, card);
+      }
+    }
+  }
+  return cards;
+}
+
+function collectContextTargetCards(targetRef, ctx = {}) {
+  if (!targetRef) return [];
+  const refs = {
+    self: ctx.source,
+    source: ctx.source,
+    target: ctx.target,
+    targetedCard: ctx.targetedCard,
+    attacker: ctx.attacker,
+    defender: ctx.defender,
+    destroyed: ctx.destroyed,
+    summonedCard: ctx.summonedCard,
+  };
+  if (targetRef === "battle_opponent") {
+    if (ctx.source && ctx.source === ctx.attacker) {
+      return [ctx.defender || ctx.target].filter(Boolean);
+    }
+    if (ctx.source && ctx.source === (ctx.defender || ctx.target)) {
+      return [ctx.attacker].filter(Boolean);
+    }
+  }
+  return asArray(refs[targetRef]).filter(Boolean);
+}
+
+function cardsFromSelectionValue(value) {
+  const cards = [];
+  const visit = (entry) => {
+    if (!entry) return;
+    if (Array.isArray(entry)) {
+      entry.forEach(visit);
+      return;
+    }
+    if (entry.cardRef) {
+      visit(entry.cardRef);
+      return;
+    }
+    if (entry.card) {
+      visit(entry.card);
+      return;
+    }
+    if (typeof entry === "object" && (entry.name || entry.cardKind)) {
+      appendUniqueCard(cards, entry);
+    }
+  };
+  visit(value);
+  return cards;
+}
+
+function collectSelectedTargetCards(targetRef, activationContext = {}) {
+  const selectionSources = [
+    activationContext.selections,
+    activationContext.context?.selections,
+    activationContext.respondingToChainLink?.selections,
+  ].filter(Boolean);
+  const cards = [];
+  for (const selections of selectionSources) {
+    if (!selections || typeof selections !== "object") continue;
+    for (const card of cardsFromSelectionValue(selections[targetRef])) {
+      appendUniqueCard(cards, card);
+    }
+  }
+  return cards;
+}
+
+function collectTargetRefCandidateCards(engine, targetRef, effect, ctx, activationContext) {
+  const cards = [];
+  for (const card of collectSelectedTargetCards(targetRef, activationContext)) {
+    appendUniqueCard(cards, card);
+  }
+  for (const card of collectContextTargetCards(targetRef, ctx)) {
+    appendUniqueCard(cards, card);
+  }
+  if (!targetRef || !Array.isArray(effect?.targets) || effect.targets.length === 0) {
+    return cards;
+  }
+
+  const targetCtx = {
+    ...ctx,
+    activationContext: {
+      ...(ctx.activationContext || {}),
+      preview: true,
+      autoSelectSingleTarget: false,
+      autoSelectTargets: false,
+    },
+  };
+  const targetResult = engine.resolveTargets(effect.targets, targetCtx, null);
+  const resolved = targetResult?.targets?.[targetRef];
+  for (const card of asArray(resolved)) appendUniqueCard(cards, card);
+  for (const requirement of targetResult?.selectionContract?.requirements || []) {
+    if (requirement?.id !== targetRef) continue;
+    for (const candidate of requirement.candidates || []) {
+      appendUniqueCard(cards, candidate.cardRef || candidate.card);
+    }
+  }
+  return cards;
+}
+
+function collectActionDestroyCandidates(engine, action, ctx, effect, activationContext) {
+  if (!action || typeof action !== "object") return [];
+  const cards = [];
+  const addNested = (actions) => {
+    for (const card of collectActionsDestroyCandidates(
+      engine,
+      actions,
+      ctx,
+      effect,
+      activationContext,
+    )) {
+      appendUniqueCard(cards, card);
+    }
+  };
+
+  if (action.type === "destroy") {
+    if (action.targetScope) {
+      addNested([
+        {
+          type: "destroy_cards_by_scope",
+          targetScope: action.targetScope,
+        },
+      ]);
+    }
+    for (const card of collectTargetRefCandidateCards(
+      engine,
+      action.targetRef || "target",
+      effect,
+      ctx,
+      activationContext,
+    )) {
+      appendUniqueCard(cards, card);
+    }
+  } else if (action.type === "destroy_targeted_cards") {
+    const { type: _actionType, ...targetAction } = action;
+    const scope = {
+      owner: "opponent",
+      zones: targetAction.zones || ["field", "spellTrap", "fieldSpell"],
+      ...targetAction,
+      filters: actionFilterFromConfig(targetAction),
+    };
+    for (const card of collectCardsFromScope(engine, scope, ctx)) {
+      appendUniqueCard(cards, card);
+    }
+  } else if (action.type === "destroy_cards_by_scope") {
+    for (const card of collectCardsFromScope(engine, action.targetScope || {}, ctx)) {
+      appendUniqueCard(cards, card);
+    }
+  } else if (action.type === "mirror_force_destroy_all") {
+    const defender = ctx.opponent;
+    for (const card of defender?.field || []) {
+      if (
+        card &&
+        card.cardKind === "monster" &&
+        card.position === "attack" &&
+        !card.isFacedown
+      ) {
+        appendUniqueCard(cards, card);
+      }
+    }
+  } else if (action.type === "destroy_and_damage_by_target_atk") {
+    const entries =
+      Array.isArray(action.entries) && action.entries.length > 0
+        ? action.entries
+        : action.targetRef
+          ? [{ targetRef: action.targetRef }]
+          : [];
+    for (const entry of entries) {
+      for (const card of collectTargetRefCandidateCards(
+        engine,
+        entry.targetRef,
+        effect,
+        ctx,
+        activationContext,
+      )) {
+        appendUniqueCard(cards, card);
+      }
+    }
+  }
+
+  if (action.destroyIfAtkZeroedByThisEffect && action.targetRef) {
+    for (const card of collectTargetRefCandidateCards(
+      engine,
+      action.targetRef,
+      effect,
+      ctx,
+      activationContext,
+    )) {
+      const nextAtk = Number(card?.atk || 0) + Number(action.atkChange || 0);
+      if (nextAtk <= 0) appendUniqueCard(cards, card);
+    }
+  }
+
+  addNested(action.actions);
+  addNested(action.thenActions);
+  addNested(action.ifActions);
+  addNested(action.elseActions);
+  addNested(action.optionalActions);
+  if (Array.isArray(action.cases)) {
+    for (const entry of action.cases) addNested(entry?.actions);
+  }
+  if (Array.isArray(action.entries)) {
+    for (const entry of action.entries) addNested(entry?.actions);
+  }
+
+  return cards;
+}
+
+function collectActionsDestroyCandidates(engine, actions, ctx, effect, activationContext) {
+  const cards = [];
+  for (const action of asArray(actions)) {
+    for (const card of collectActionDestroyCandidates(
+      engine,
+      action,
+      ctx,
+      effect,
+      activationContext,
+    )) {
+      appendUniqueCard(cards, card);
+    }
+  }
+  return cards;
+}
+
+function activationWouldDestroyCardsMatchingFilters(engine, cond, ctx) {
+  const activationContext =
+    ctx?.activationContext?.context || ctx?.actionContext || {};
+  const activationAttempt =
+    activationContext.activationAttempt || ctx?.activationContext?.activationAttempt || null;
+  const activatedCard =
+    activationAttempt?.card ||
+    activationContext.card ||
+    ctx?.activatedCard ||
+    null;
+  const activationPlayer =
+    activationAttempt?.player ||
+    activationContext.player ||
+    activationContext.triggerPlayer ||
+    null;
+  const responsePlayer = ctx?.player || null;
+  const responseOpponent = ctx?.opponent || engine.game?.getOpponent?.(responsePlayer);
+
+  if (!activatedCard || !activationPlayer) {
+    return { ok: false, reason: cond.reason || "No activation to inspect." };
+  }
+  if (cond.activationPlayer === "opponent" && activationPlayer.id !== responseOpponent?.id) {
+    return { ok: false, reason: cond.reason || "Activation was not controlled by the opponent." };
+  }
+  if (cond.activationPlayer === "self" && activationPlayer.id !== responsePlayer?.id) {
+    return { ok: false, reason: cond.reason || "Activation was not yours." };
+  }
+
+  const effect = activationAttempt?.effect || activationContext.effect || null;
+  const actionCtx = {
+    ...ctx,
+    source: activatedCard,
+    sourceCard: activatedCard,
+    effect,
+    player: activationPlayer,
+    opponent: engine.game?.getOpponent?.(activationPlayer) || responsePlayer,
+    activationContext: {
+      ...(ctx?.activationContext || {}),
+      context: activationContext,
+      selections:
+        activationContext.selections ||
+        activationContext.respondingToChainLink?.selections ||
+        ctx?.activationContext?.selections ||
+        null,
+    },
+    actionContext: activationContext,
+  };
+  const candidates = collectActionsDestroyCandidates(
+    engine,
+    effect?.actions || [],
+    actionCtx,
+    effect,
+    activationContext,
+  );
+  const filters = cond.destroyedCardFilters || cond.filters || {};
+  const minCount = Math.max(1, Number(cond.minCount ?? cond.count ?? 1));
+  const matching = candidates.filter((card) => {
+    if (!cardVisibleToConditionViewer(engine, card, responsePlayer)) {
+      return false;
+    }
+    return engine.cardMatchesFilters(card, filters);
+  });
+
+  if (matching.length < minCount) {
+    return {
+      ok: false,
+      reason: cond.reason || "Activation would not destroy matching cards.",
+    };
+  }
+  return { ok: true, matches: matching };
+}
+
 function buildTemporaryEffectSource(game, entry) {
   const data =
     game?.resolveCardData?.(entry?.sourceCardId) ||
@@ -597,6 +994,15 @@ export function evaluateConditions(conditions, ctx) {
                 `Expected at most ${cond.max} matching card(s).`,
             };
           }
+          break;
+        }
+        case "activation_would_destroy_cards_matching_filters": {
+          const result = activationWouldDestroyCardsMatchingFilters(
+            this,
+            cond,
+            ctx,
+          );
+          if (!result.ok) return result;
           break;
         }
         case "control_card_max": {
