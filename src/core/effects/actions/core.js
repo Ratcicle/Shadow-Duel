@@ -195,10 +195,18 @@ export async function applyActions(actions, ctx, targets) {
   if (ctx && selectionMap && !ctx.selections) {
     ctx.selections = selectionMap;
   }
-  const runtimeTargets =
-    ctx && targets && typeof targets === "object" && !Array.isArray(targets)
-      ? (ctx._actionTargets = ctx._actionTargets || targets)
-      : targets || {};
+  const isTargetMap = (value) =>
+    value && typeof value === "object" && !Array.isArray(value);
+  let runtimeTargets = targets || {};
+  if (ctx && isTargetMap(targets)) {
+    const existingTargets = isTargetMap(ctx._actionTargets)
+      ? ctx._actionTargets
+      : {};
+    runtimeTargets = { ...existingTargets, ...targets };
+    ctx._actionTargets = runtimeTargets;
+  } else if (ctx && isTargetMap(ctx._actionTargets)) {
+    runtimeTargets = ctx._actionTargets;
+  }
 
   try {
     const targetedResult = await emitEffectTargetedBeforeActions(

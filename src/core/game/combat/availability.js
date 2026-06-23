@@ -226,10 +226,7 @@ function isBattleIndestructibleByStatMatchPassive(game, card, context = {}) {
       ? game.getOwnerByCard(card)
       : null) ||
     getPlayerByCardOwner(game, card);
-  const sourceZone =
-    owner && typeof game.findCardZone === "function"
-      ? game.findCardZone(owner, card)
-      : null;
+  const sourceZone = findAttackPassiveSourceZone(game, owner, card);
   const battleOpponent = getBattleOpponentForCard(card, context);
   if (!battleOpponent || battleOpponent.cardKind !== "monster") return false;
 

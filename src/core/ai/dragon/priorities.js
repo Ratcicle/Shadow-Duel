@@ -14,6 +14,7 @@ import {
   getTributeValueTotal,
   selectTributeIndicesByValue,
 } from "../../game/summon/tributeValue.js";
+import { getEffectiveAtk, getEffectiveDef } from "../common/cardStats.js";
 
 /**
  * @typedef {Object} SpellDecision
@@ -32,6 +33,111 @@ import {
 
 function isDragonMonster(card) {
   return card?.cardKind === "monster" && card.type === "Dragon";
+}
+
+function isProtectedDragonFieldBoss(card) {
+  return isExtremeDragon(card) || card?.name === "Supreme Bahamut Dragon";
+}
+
+function getCardRole(card) {
+  return CARD_KNOWLEDGE[card?.name]?.role || "";
+}
+
+function isPremiumDragonSummon(card) {
+  const role = getCardRole(card);
+  return (
+    isProtectedDragonFieldBoss(card) ||
+    role === "boss" ||
+    role === "win_condition" ||
+    role === "fusion_boss" ||
+    role === "ascension_boss"
+  );
+}
+
+function getDragonBoardValue(card, overrides = {}) {
+  if (!card || card.cardKind !== "monster") return 0;
+
+  const role = getCardRole(card);
+  const knowledgeValue = Number(CARD_KNOWLEDGE[card.name]?.value || 0);
+  const atk = Number.isFinite(overrides.projectedAtk)
+    ? overrides.projectedAtk
+    : getEffectiveAtk(card);
+  const def = Number.isFinite(overrides.projectedDef)
+    ? overrides.projectedDef
+    : getEffectiveDef(card);
+
+  let value = Math.max(atk, def) / 100;
+  value += (card.level || 0) * 0.4;
+  value += knowledgeValue * 2;
+
+  if (isExtremeDragon(card)) value += 35;
+  if (card.name === "Supreme Bahamut Dragon") value += 90;
+  if (role === "boss" || role === "win_condition") value += 20;
+  if (role === "fusion_boss" || role === "ascension_boss") value += 18;
+  if (role === "situational_boss") value += 4;
+
+  return value;
+}
+
+function evaluateProtectedDragonBossSpend(
+  cardToSummon,
+  spentCards,
+  context = {},
+  overrides = {},
+) {
+  const protectedSpent = (spentCards || []).filter(isProtectedDragonFieldBoss);
+  if (protectedSpent.length === 0) return { ok: true };
+
+  const summonName = cardToSummon?.name || "summon";
+  const protectedNames = protectedSpent.map((card) => card.name).join(", ");
+  if (!isPremiumDragonSummon(cardToSummon)) {
+    return {
+      ok: false,
+      reason: `Preserve ${protectedNames}: ${summonName} is not a field-value upgrade`,
+    };
+  }
+
+  const summonAtk = Number.isFinite(overrides.projectedAtk)
+    ? overrides.projectedAtk
+    : getEffectiveAtk(cardToSummon);
+  const summonDef = Number.isFinite(overrides.projectedDef)
+    ? overrides.projectedDef
+    : getEffectiveDef(cardToSummon);
+  const summonValue = getDragonBoardValue(cardToSummon, overrides);
+  const spentValue = (spentCards || []).reduce(
+    (sum, card) => sum + getDragonBoardValue(card),
+    0,
+  );
+  const protectedBestStat = protectedSpent.reduce(
+    (max, card) => Math.max(max, getEffectiveAtk(card), getEffectiveDef(card)),
+    0,
+  );
+  const protectedBestAtk = protectedSpent.reduce(
+    (max, card) => Math.max(max, getEffectiveAtk(card)),
+    0,
+  );
+  const oppStrongestAtk = (context.oppField || []).reduce(
+    (max, card) => Math.max(max, getEffectiveAtk(card)),
+    0,
+  );
+
+  const clearThreatUpgrade =
+    oppStrongestAtk > 0 &&
+    summonAtk > oppStrongestAtk &&
+    protectedBestAtk <= oppStrongestAtk &&
+    summonValue >= spentValue + 8;
+  const rawFieldUpgrade =
+    Math.max(summonAtk, summonDef) >= protectedBestStat + 500 &&
+    summonValue >= spentValue + 15;
+
+  if (rawFieldUpgrade || clearThreatUpgrade) {
+    return { ok: true, reason: `${summonName} upgrades protected boss value` };
+  }
+
+  return {
+    ok: false,
+    reason: `Preserve ${protectedNames}: ${summonName} does not generate more field value`,
+  };
 }
 
 function hasRadiantCosmicMaterials(cards = []) {
@@ -365,11 +471,26 @@ export function shouldSummonMonster(card, analysis, tributeInfo, context = {}) {
       };
     }
 
+    if (actualTributes > 0) {
+      const tradeCheck = evaluateTributeTrade(card, fieldState, actualTributes, { oppField: oppFieldState });
+      if (!tradeCheck.ok) {
+        return { yes: false, reason: tradeCheck.reason };
+      }
+    }
+
     // Situational only: only summon if it's the sole way to surpass opponent ATK
     const fieldMonsters = fieldState.filter((c) => c && c.cardKind === "monster");
     const dragonsToDestroy = fieldMonsters.filter((c) => c && (c.type === "Dragon" || c.cardKind === "monster"));
-    const atksGained = dragonsToDestroy.reduce((sum, c) => sum + (c.atk || 0), 0);
     const estimatedFinalATK = 2000 + dragonsToDestroy.length * 300;
+    const protectedSweepCheck = evaluateProtectedDragonBossSpend(
+      card,
+      dragonsToDestroy,
+      { oppField: oppFieldState },
+      { projectedAtk: estimatedFinalATK, projectedDef: card.def || 0 },
+    );
+    if (!protectedSweepCheck.ok) {
+      return { yes: false, reason: protectedSweepCheck.reason };
+    }
 
     // Only worthwhile if we destroy enough to power up AND surpass the threat
     if (dragonsToDestroy.length === 0) {
@@ -523,17 +644,41 @@ export function getTributeRequirementFor(card, playerState) {
  * @param {Object} [cardToSummon]
  * @returns {number[]}
  */
-export function selectBestTributes(field, tributesNeeded, cardToSummon = null) {
+function selectBestTributeSet(field, tributesNeeded, cardToSummon = null, context = {}) {
   if (
     tributesNeeded <= 0 ||
     !fieldHasTributeValue(field || [], tributesNeeded, cardToSummon)
   ) {
-    return [];
+    return { indices: [], tributes: [], blockedReason: "Insufficient tributes" };
   }
 
-  return selectTributeIndicesByValue(field || [], tributesNeeded, cardToSummon, {
+  const indices = selectTributeIndicesByValue(field || [], tributesNeeded, cardToSummon, {
     scoreCard: (monster) => getTributeValue(monster),
   });
+  const tributes = indices.map((index) => field?.[index]).filter(Boolean);
+
+  if (getTributeValueTotal(tributes, cardToSummon) < tributesNeeded) {
+    return { indices: [], tributes, blockedReason: "No valid tributes" };
+  }
+
+  const protectedBossCheck = evaluateProtectedDragonBossSpend(
+    cardToSummon,
+    tributes,
+    context,
+  );
+  if (!protectedBossCheck.ok) {
+    return {
+      indices: [],
+      tributes,
+      blockedReason: protectedBossCheck.reason,
+    };
+  }
+
+  return { indices, tributes, blockedReason: null };
+}
+
+export function selectBestTributes(field, tributesNeeded, cardToSummon = null, context = {}) {
+  return selectBestTributeSet(field, tributesNeeded, cardToSummon, context).indices;
 }
 
 function getTributeValue(monster) {
@@ -541,8 +686,8 @@ function getTributeValue(monster) {
   let value = (monster.atk || 0) / 400;
   value += (monster.level || 0) * 0.15;
 
-  // Extreme Dragons: never tribute if possible
-  if (isExtremeDragon(monster)) value += 200;
+  // Extreme Dragons and Supreme Bahamut are field bosses: avoid spending them.
+  if (isProtectedDragonFieldBoss(monster)) value += 300;
 
   // Boss monsters: avoid tributing
   const knowledge = CARD_KNOWLEDGE[monster.name];
@@ -578,16 +723,15 @@ export function evaluateTributeTrade(cardToSummon, field, tributesNeeded, contex
     return { ok: false, reason: "Insufficient tributes" };
   }
 
-  const tributeIndices = selectBestTributes(fieldMonsters, tributesNeeded, cardToSummon);
-  const tributes = tributeIndices.map((i) => fieldMonsters[i]).filter(Boolean);
-  if (getTributeValueTotal(tributes, cardToSummon) < tributesNeeded) {
-    return { ok: false, reason: "No valid tributes" };
-  }
-
-  // Never tribute an Extreme Dragon
-  const hasExtremeTribute = tributes.some((m) => isExtremeDragon(m));
-  if (hasExtremeTribute) {
-    return { ok: false, reason: "Would tribute Extreme Dragon" };
+  const tributeSet = selectBestTributeSet(
+    fieldMonsters,
+    tributesNeeded,
+    cardToSummon,
+    context,
+  );
+  const tributes = tributeSet.tributes;
+  if (tributeSet.indices.length === 0) {
+    return { ok: false, reason: tributeSet.blockedReason || "No valid tributes" };
   }
 
   const tributeCost = tributes.reduce((sum, m) => sum + getTributeValue(m), 0);
@@ -597,9 +741,11 @@ export function evaluateTributeTrade(cardToSummon, field, tributesNeeded, contex
 
   const summonKnowledge = CARD_KNOWLEDGE[cardToSummon?.name];
   const summonIsBoss =
+    isProtectedDragonFieldBoss(cardToSummon) ||
     summonKnowledge?.role === "boss" ||
     summonKnowledge?.role === "win_condition" ||
-    summonKnowledge?.role === "fusion_boss";
+    summonKnowledge?.role === "fusion_boss" ||
+    summonKnowledge?.role === "ascension_boss";
 
   // Don't tribute a boss for a non-boss
   const tributeHasBoss = tributes.some((m) => {

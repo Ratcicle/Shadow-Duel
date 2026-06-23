@@ -81,6 +81,7 @@ export function resetDuelState(reason = "reset", options = {}) {
   this.temporaryEventEffects = [];
   this.delayedActions = [];
   this.damageCalculationTempBuffs = [];
+  this.damageCalculationStatChangePending = false;
 
   this.lastAttackNegated = false;
   this.pendingCardAnimations = [];

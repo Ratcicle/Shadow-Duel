@@ -104,8 +104,19 @@ export async function resolveChainLink(link) {
       ui?.log?.(`${card.name}'s activation was negated.`);
       return { success: true, needsSelection: false, negated: true };
     }
+    const shouldPresentSpellTrapFlip =
+      activationZone === "spellTrap" &&
+      card.isFacedown === true &&
+      (card.cardKind === "spell" || card.cardKind === "trap");
     if (!prepareForResolution(this, link, activationZone)) {
       return { success: false, needsSelection: false, fizzled: true };
+    }
+    if (shouldPresentSpellTrapFlip) {
+      await this.game?.presentSpellTrapActivationFlip?.(
+        card,
+        player,
+        activationZone,
+      );
     }
     const applyResult = await applyChainEffect(this, link, activationZone);
     if (applyResult?.needsSelection) {

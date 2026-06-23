@@ -374,7 +374,7 @@ export const burningWestCards = [
     attribute: "Fire",
     archetype: "Burning West",
     description:
-      'If this card is equipped with a "Burning West" Equip Spell, it can make 1 additional attack on monsters during each Battle Phase. Once per turn: You can target 1 monster your opponent controls; take control of it, and if you do, send all other "Burning West" monsters you control to the Graveyard. You can only use each effect of "Specialist of the Burning West" once per turn.',
+      'If this card is equipped with a "Burning West" Equip Spell, it can make 1 additional attack on monsters during each Battle Phase. Once per Duel: You can target 1 monster your opponent controls; take control of it, and if you do, send all other "Burning West" monsters you control to the Graveyard.',
     image: "assets/Specialist of the Burning West.png",
     effects: [
       {
@@ -398,8 +398,8 @@ export const burningWestCards = [
         requireZone: "field",
         requirePhase: ["main1", "main2"],
         requireFaceup: true,
-        oncePerTurn: true,
-        oncePerTurnName: "burning_west_specialist_take_control",
+        oncePerDuel: true,
+        oncePerDuelName: "burning_west_specialist_take_control",
         targets: [
           {
             id: "burning_west_specialist_control_target",
@@ -583,7 +583,7 @@ export const burningWestCards = [
             firstTargetRef: "quick_draw_burning_west_target",
             secondTargetRef: "quick_draw_opponent_target",
             affectedTargetRef: "quick_draw_opponent_target",
-            timing: "before_damage_calculation",
+            timing: "start_of_damage_step",
             duration: "end_of_turn",
             actions: [
               {
@@ -597,6 +597,7 @@ export const burningWestCards = [
             firstTargetRef: "quick_draw_burning_west_target",
             secondTargetRef: "quick_draw_opponent_target",
             atkDifferenceMax: 500,
+            deferFinalizationUntil: "battle_pair_effect",
             contextLabel: "quick_draw_set_after_resolution",
           },
         ],
@@ -1106,6 +1107,7 @@ export const burningWestCards = [
             optional: true,
             confirmOnly: true,
             selectionMessage: "Special Summon the added monster?",
+            selectionMessageKey: "ui.optionalEffects.burningRewardSummon",
             conditions: [
               {
                 type: "event_card_matches_declared_value_from_effect_sources",

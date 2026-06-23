@@ -5,6 +5,9 @@
 
 function clearDamageCalculationTempBuffs(game) {
   const buffs = game?.damageCalculationTempBuffs;
+  if (game) {
+    game.damageCalculationStatChangePending = false;
+  }
   if (!Array.isArray(buffs) || buffs.length === 0) return;
 
   for (const buff of buffs.splice(0)) {
@@ -213,6 +216,12 @@ async function resolveTemporaryBattlePairEffects(game, payload) {
       remaining.push(...entries.slice(index + 1));
       break;
     }
+    await game.resolvePendingSpellTrapFinalization?.(
+      entry.source,
+      controller,
+      "spellTrap",
+      { deferUntil: "battle_pair_effect" },
+    );
   }
 
   game.temporaryBattlePairEffects = remaining;
@@ -309,6 +318,20 @@ async function waitForAttackPresentation(game, presentation) {
   } catch (error) {
     console.warn("[Shadow Duel] Attack presentation failed.", error);
   }
+}
+
+async function presentDamageCalculationStatChanges(game) {
+  if (!game?.damageCalculationStatChangePending) return;
+
+  game.updateBoard?.({
+    animateCards: false,
+    animateFeedback: true,
+  });
+  await game.waitForBoardPresentation?.();
+  await game.waitForPresentationDelay?.(
+    game.damageCalculationStatPresentationDelayMs ?? 500,
+  );
+  game.damageCalculationStatChangePending = false;
 }
 
 async function waitForAttackContact(game, presentation) {
@@ -738,7 +761,58 @@ export async function finishCombat(attacker, target, options = {}) {
     const previousBattleStep = this.battleStep;
     const previousDamageStepTiming = this.damageStepTiming;
     this.battleStep = "damage";
+    this.damageStepTiming = "start_of_damage_step";
+    const damageStepStartBattlePairResult =
+      await resolveTemporaryBattlePairEffects(this, {
+        attacker,
+        defender: target,
+        target,
+        attackerOwner,
+        defenderOwner,
+        targetOwner: defenderOwner,
+        damageStepTiming: this.damageStepTiming,
+      });
     this.damageStepTiming = "before_damage_calculation";
+    if (damageStepStartBattlePairResult?.needsSelection) {
+      this.battleStep =
+        previousBattleStep || (this.phase === "battle" ? "battle" : null);
+      this.damageStepTiming = previousDamageStepTiming ?? null;
+      return {
+        ok: true,
+        needsSelection: true,
+        selectionContract: damageStepStartBattlePairResult.selectionContract,
+        damageDealt: 0,
+        targetDestroyed: false,
+        attackerDestroyed: false,
+      };
+    }
+
+    const attackerStillOnFieldAtDamageStart =
+      attackerOwner && Array.isArray(attackerOwner.field)
+        ? attackerOwner.field.includes(attacker)
+        : false;
+    const targetStillOnFieldAtDamageStart =
+      defenderOwner && Array.isArray(defenderOwner.field)
+        ? defenderOwner.field.includes(target)
+        : false;
+
+    if (!attackerStillOnFieldAtDamageStart || !targetStillOnFieldAtDamageStart) {
+      this.battleStep =
+        previousBattleStep || (this.phase === "battle" ? "battle" : null);
+      this.damageStepTiming = previousDamageStepTiming ?? null;
+      this.ui?.log?.("Attack stopped at the start of the Damage Step.");
+      this.markAttackUsed(attacker, target);
+      this.clearAttackResolutionIndicators();
+      clearDamageCalculationTempBuffs(this);
+      this.updateBoard();
+      return {
+        ok: true,
+        damageDealt: 0,
+        targetDestroyed: false,
+        attackerDestroyed: false,
+      };
+    }
+
     await revealBattleTargetBeforeDamage(this, attacker, target);
     const battleDamageResult = await this.emit("battle_damage", {
       attacker,
@@ -762,6 +836,9 @@ export async function finishCombat(attacker, target, options = {}) {
           targetOwner: defenderOwner,
           damageStepTiming: this.damageStepTiming,
         });
+    if (!battleDamageResult?.needsSelection && !battlePairResult?.needsSelection) {
+      await presentDamageCalculationStatChanges(this);
+    }
     this.battleStep =
       previousBattleStep || (this.phase === "battle" ? "battle" : null);
     this.damageStepTiming = previousDamageStepTiming ?? null;
@@ -1276,8 +1353,10 @@ export async function finishCombat(attacker, target, options = {}) {
           if (bdResult) battleDestroyResults.push(bdResult);
         }
       }
-      if (!attacker.piercing) {
+      if (!attacker.piercing && targetWasDestroyed) {
         logBattleResult(`${attacker.name} destroyed ${target.name}.`);
+      } else if (!attacker.piercing) {
+        logBattleResult(`${target.name} was not destroyed by battle.`);
       }
     } else if (attacker.atk < target.def) {
       const attPlayer = attacker.owner === "player" ? this.player : this.bot;

@@ -30,6 +30,29 @@ function finalizationOverrideMatches(card, override) {
   return true;
 }
 
+function storePendingSpellTrapFinalization(card, owner, activationZone, override) {
+  if (!card || !owner || !override) return false;
+  card.pendingSpellTrapFinalization = {
+    ...override,
+    ownerId: owner.id || card.owner || null,
+    activationZone: activationZone || "spellTrap",
+  };
+  return true;
+}
+
+async function applyDefaultSpellTrapFinalization(game, card, owner, activationZone) {
+  const subtype = card?.subtype || "";
+  const kind = card?.cardKind || "";
+  const shouldSendToGY =
+    (kind === "spell" && (subtype === "normal" || isQuickSpell(card))) ||
+    (kind === "trap" && subtype === "normal");
+
+  if (!shouldSendToGY) return false;
+  await game.moveCard(card, owner, "graveyard", { fromZone: activationZone });
+  game.updateBoard?.();
+  return true;
+}
+
 export function applySpellTrapFinalizationOverride(
   card,
   owner,
@@ -38,12 +61,28 @@ export function applySpellTrapFinalizationOverride(
 ) {
   if (!card || !owner) return false;
   const override = options?.activationContext?.spellTrapFinalization;
-  if (!override || override.type !== "set_source") return false;
+  if (!override || (override.type !== "set_source" && override.type !== "default")) {
+    return false;
+  }
   if (!finalizationOverrideMatches(card, override)) return false;
   if (activationZone !== "spellTrap" && !owner.spellTrap?.includes?.(card)) {
     return false;
   }
   if (!owner.spellTrap?.includes?.(card)) return false;
+
+  if (
+    override.deferUntil &&
+    options.forceDeferredFinalization !== true
+  ) {
+    return storePendingSpellTrapFinalization(
+      card,
+      owner,
+      activationZone,
+      override,
+    );
+  }
+
+  if (override.type === "default") return false;
 
   card.isFacedown = true;
   const setTurn = Number.isFinite(override.setTurn)
@@ -59,6 +98,51 @@ export function applySpellTrapFinalizationOverride(
   });
   this.updateBoard?.();
   return true;
+}
+
+export async function resolvePendingSpellTrapFinalization(
+  card,
+  owner,
+  activationZone = "spellTrap",
+  options = {},
+) {
+  if (!card || !owner) return false;
+  const pending = card.pendingSpellTrapFinalization;
+  if (!pending) return false;
+  if (!finalizationOverrideMatches(card, pending)) return false;
+  if (pending.deferUntil && pending.deferUntil !== options.deferUntil) {
+    return false;
+  }
+
+  delete card.pendingSpellTrapFinalization;
+
+  if (!owner.spellTrap?.includes?.(card)) {
+    return false;
+  }
+
+  if (pending.type === "set_source") {
+    return applySpellTrapFinalizationOverride.call(
+      this,
+      card,
+      owner,
+      activationZone || pending.activationZone || "spellTrap",
+      {
+        activationContext: { spellTrapFinalization: pending },
+        forceDeferredFinalization: true,
+      },
+    );
+  }
+
+  if (pending.type === "default") {
+    return await applyDefaultSpellTrapFinalization(
+      this,
+      card,
+      owner,
+      activationZone || pending.activationZone || "spellTrap",
+    );
+  }
+
+  return false;
 }
 
 export async function finalizeSpellTrapActivation(
@@ -80,16 +164,7 @@ export async function finalizeSpellTrapActivation(
     return;
   }
 
-  const subtype = card.subtype || "";
-  const kind = card.cardKind || "";
-  const shouldSendToGY =
-    (kind === "spell" && (subtype === "normal" || isQuickSpell(card))) ||
-    (kind === "trap" && subtype === "normal");
-
-  if (shouldSendToGY) {
-    await this.moveCard(card, owner, "graveyard", { fromZone: activationZone });
-    this.updateBoard?.();
-  }
+  await applyDefaultSpellTrapFinalization(this, card, owner, activationZone);
 }
 /**
  * Move a Spell/Trap from hand to the appropriate zone before resolving

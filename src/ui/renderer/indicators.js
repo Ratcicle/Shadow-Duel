@@ -9,7 +9,11 @@
  */
 
 const TARGETING_FX_HANDLERS = "__shadowDuelTargetingFxHandlers";
-const FLIP_ANIMATION_CLASSES = ["flipping", "flip-summon-reveal"];
+const FLIP_ANIMATION_CLASSES = [
+  "flipping",
+  "flip-summon-reveal",
+  "spell-trap-flip-reveal",
+];
 
 function prefersReducedMotion() {
   return (
@@ -331,8 +335,60 @@ function playFlipRevealGhost(cardEl) {
   });
 }
 
+function playSpellTrapFlipGhost(cardEl) {
+  const layer = getAnimationLayer();
+  if (!cardEl || !layer) return null;
+
+  const rect = cardEl.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return null;
+  const slotRect =
+    cardEl.closest(".spell-trap-zone, .field-card-slot")?.getBoundingClientRect?.() ||
+    rect;
+  const centerX = slotRect.left + slotRect.width / 2;
+  const centerY = slotRect.top + slotRect.height / 2;
+
+  const ghost = cardEl.cloneNode(true);
+  ghost.removeAttribute("data-card-key");
+  delete ghost.dataset.cardKey;
+  ghost.dataset.animationGhost = "true";
+  ghost.classList.remove(...FLIP_ANIMATION_CLASSES, "facedown");
+  ghost.classList.add("card-animation-ghost", "spell-trap-flip-ghost");
+  ghost.style.position = "fixed";
+  ghost.style.left = `${centerX - rect.width / 2}px`;
+  ghost.style.top = `${centerY - rect.height / 2}px`;
+  ghost.style.width = `${rect.width}px`;
+  ghost.style.height = `${rect.height}px`;
+  ghost.style.margin = "0";
+  ghost.style.pointerEvents = "none";
+  ghost.style.transformOrigin = "center center";
+
+  cardEl.dataset.flipRevealHidden = "true";
+  cardEl.dataset.flipRevealVisibility = cardEl.style.visibility || "";
+  cardEl.style.visibility = "hidden";
+
+  layer.appendChild(ghost);
+
+  const cleanup = () => cleanupFlipRevealGhost(cardEl, ghost);
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      ghost.removeEventListener("animationend", finish);
+      cleanup();
+      resolve(true);
+    };
+    ghost.addEventListener("animationend", finish, { once: true });
+    globalThis.setTimeout(finish, 620);
+  });
+}
+
 function applyFlipAnimationClass(cardEl, animationClass) {
   if (!cardEl || prefersReducedMotion()) return Promise.resolve(false);
+  if (animationClass === "spell-trap-flip-reveal") {
+    const ghostPresentation = playSpellTrapFlipGhost(cardEl);
+    if (ghostPresentation) return ghostPresentation;
+  }
   if (animationClass === "flip-summon-reveal") {
     const ghostPresentation = playFlipRevealGhost(cardEl);
     if (ghostPresentation) return ghostPresentation;
@@ -384,6 +440,51 @@ export function applyFlipAnimation(owner, index, options = {}) {
     const cardEl = container.querySelector(`.card[data-index="${index}"]`);
     if (cardEl) {
       return applyFlipAnimationClass(cardEl, animationClass);
+    }
+    return Promise.resolve(false);
+  };
+
+  if (deferFrames === 0) {
+    return apply();
+  }
+
+  return new Promise((resolve) => {
+    let framesLeft = deferFrames;
+    const tick = () => {
+      if (framesLeft > 0) {
+        framesLeft -= 1;
+        requestAnimationFrame(tick);
+        return;
+      }
+      Promise.resolve(apply()).then(resolve);
+    };
+
+    requestAnimationFrame(tick);
+  });
+}
+
+/**
+ * Applies a face-down Spell/Trap reveal animation in the Spell/Trap zone.
+ *
+ * @this {import('../Renderer.js').default}
+ */
+export function applySpellTrapFlipAnimation(owner, index, options = {}) {
+  if (index < 0) return Promise.resolve(false);
+
+  const deferFrames = Number.isFinite(options.deferFrames)
+    ? Math.max(0, Math.round(options.deferFrames))
+    : 1;
+
+  const apply = () => {
+    const container =
+      owner === "player"
+        ? this.elements.playerSpellTrap
+        : this.elements.botSpellTrap;
+    if (!container) return Promise.resolve(false);
+
+    const cardEl = container.querySelector(`.card[data-index="${index}"]`);
+    if (cardEl) {
+      return applyFlipAnimationClass(cardEl, "spell-trap-flip-reveal");
     }
     return Promise.resolve(false);
   };

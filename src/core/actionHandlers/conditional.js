@@ -1,4 +1,5 @@
 import { cardMatchesKind } from "../Card.js";
+import { getUIText } from "../i18n.js";
 import { getUI, resolveTargetCards } from "./shared.js";
 import { isAI } from "../Player.js";
 
@@ -315,11 +316,57 @@ function buildOptionalConfirmationContract(action, ctx) {
   };
 }
 
+function getOptionalConfirmationText(action, ctx) {
+  const fallback =
+    action?.promptMessage ||
+    action?.selectionMessage ||
+    getUIText("ui.selection.chooseOneOption");
+  const key = action?.promptMessageKey || action?.selectionMessageKey || null;
+  if (!key) return fallback;
+
+  return getUIText(
+    key,
+    {
+      sourceCardName: ctx?.source?.name || "",
+      effectId: ctx?.effect?.id || "",
+    },
+    fallback,
+  );
+}
+
+function getOptionalConfirmationTitle(action) {
+  const fallback =
+    action?.promptTitle || getUIText("ui.prompts.confirmTitle");
+  return action?.promptTitleKey
+    ? getUIText(action.promptTitleKey, {}, fallback)
+    : fallback;
+}
+
 async function confirmOptionalAction(action, ctx, engine) {
   const game = engine?.game;
   if (!game) return false;
 
   const selectionContract = buildOptionalConfirmationContract(action, ctx);
+  const player = ctx?.player || null;
+  const ui = getUI(game);
+
+  if (!isAI(player) && typeof ui?.showConfirmPrompt === "function") {
+    const result = ui.showConfirmPrompt(
+      getOptionalConfirmationText(action, ctx),
+      {
+        kind: "optional_target_actions",
+        sourceCardName: ctx?.source?.name || null,
+        effectId: ctx?.effect?.id || null,
+        confirmLabel: action?.confirmLabel,
+        cancelLabel: action?.cancelLabel,
+        title: getOptionalConfirmationTitle(action),
+      },
+    );
+    return result && typeof result.then === "function"
+      ? !!(await result)
+      : !!result;
+  }
+
   const selections = await runOptionalTargetSelection(
     game,
     selectionContract,
@@ -793,19 +840,21 @@ export async function handleSetSourceAfterResolutionIf(
     conditionPassed = difference <= maxDifference;
   }
 
-  if (!conditionPassed) return true;
   if (!Array.isArray(player.spellTrap) || !player.spellTrap.includes(source)) {
     return true;
   }
 
+  const deferUntil =
+    action.deferFinalizationUntil || action.deferUntil || null;
   const activationContext = ctx.activationContext || {};
   ctx.activationContext = activationContext;
   activationContext.spellTrapFinalization = {
-    type: "set_source",
+    type: conditionPassed ? "set_source" : "default",
     sourceInstanceId: getCardInstanceId(source),
     sourceCardId: source.id ?? null,
     sourceEffectId: ctx?.effect?.id || null,
     setTurn: Number(game.turnCounter || 0),
+    ...(deferUntil ? { deferUntil } : {}),
     reason: action.contextLabel || "set_after_resolution",
   };
   return true;

@@ -7,6 +7,20 @@
  * Resolve an event by collecting and executing triggers
  * @this {import('../../Game.js').default}
  */
+async function presentDamageCalculationStatChanges(game) {
+  if (!game?.damageCalculationStatChangePending) return;
+
+  game.updateBoard?.({
+    animateCards: false,
+    animateFeedback: true,
+  });
+  await game.waitForBoardPresentation?.();
+  await game.waitForPresentationDelay?.(
+    game.damageCalculationStatPresentationDelayMs ?? 500,
+  );
+  game.damageCalculationStatChangePending = false;
+}
+
 export async function resolveEvent(eventName, payload) {
   if (!eventName) {
     return { ok: false, reason: "missing_event" };
@@ -335,6 +349,10 @@ export async function resolveEventEntries(
         activationZone: payload.activationZone || "field",
       });
     }
+  }
+
+  if (eventName === "battle_damage") {
+    await presentDamageCalculationStatChanges(this);
   }
 
   return {

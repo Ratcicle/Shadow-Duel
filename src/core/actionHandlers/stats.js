@@ -625,6 +625,9 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
           atk: appliedAtkBoost,
           def: appliedDefBoost,
         });
+        if (game.battleStep === "damage" || ctx?.isDamageStep === true) {
+          game.damageCalculationStatChangePending = true;
+        }
       }
 
       buffedCards.push(card.name);
@@ -692,11 +695,11 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
       getUI(game)?.log(
         `${cardList} gained ${boosts.join(
           " and ",
-        )}${duration} and can make a second attack!`,
+        )}${durationText} and can make a second attack!`,
       );
     } else {
       getUI(game)?.log(
-        `${cardList} gained ${boosts.join(" and ")}${duration}.`,
+        `${cardList} gained ${boosts.join(" and ")}${durationText}.`,
       );
     }
   }

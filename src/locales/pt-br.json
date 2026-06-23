@@ -149,6 +149,9 @@
       "cancel": "Manter na mão",
       "title": "Invocação-Especial opcional"
     },
+    "optionalEffects": {
+      "burningRewardSummon": "Invocar o monstro adicionado?"
+    },
     "upkeep": {
       "prompt": "Pagar {amount} PV para manter {cardName}?",
       "confirm": "Pagar {amount} PV",
@@ -1050,7 +1053,7 @@
     },
     "455": {
       "name": "Especialista do Oeste Ardente",
-      "description": "Se este card estiver equipado com uma Magia de Equipamento \"Oeste Ardente\", ele pode realizar 1 ataque adicional contra monstros durante cada Fase de Batalha. Uma vez por turno: voc\u00ea pode escolher 1 monstro que seu oponente controla; tome o controle dele e, se isso acontecer, envie todos os outros monstros \"Oeste Ardente\" que voc\u00ea controla para o Cemit\u00e9rio. Voc\u00ea s\u00f3 pode usar cada efeito de \"Especialista do Oeste Ardente\" uma vez por turno."
+      "description": "Se este card estiver equipado com uma Magia de Equipamento \"Oeste Ardente\", ele pode realizar 1 ataque adicional contra monstros durante cada Fase de Batalha. Uma vez por Duelo: voc\u00ea pode escolher 1 monstro que seu oponente controla; tome o controle dele e, se isso acontecer, envie todos os outros monstros \"Oeste Ardente\" que voc\u00ea controla para o Cemit\u00e9rio."
     },
     "456": {
       "name": "Peacemaker Ardente",

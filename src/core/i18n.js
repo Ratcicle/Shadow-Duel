@@ -157,6 +157,9 @@ const DEFAULT_LOCALE_TEXTS = {
       cancel: "Keep in hand",
       title: "Optional Special Summon",
     },
+    optionalEffects: {
+      burningRewardSummon: "Special Summon the added monster?",
+    },
     upkeep: {
       prompt: "Pay {amount} LP to maintain {cardName}?",
       confirm: "Pay {amount} LP",

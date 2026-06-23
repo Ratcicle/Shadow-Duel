@@ -180,7 +180,11 @@ export async function activateMonsterFromGraveyard(
   this.registerOncePerDuelUsage(card, player, effect);
 
   this.game.checkWinCondition();
-  return { success: true, needsSelection: false };
+  return {
+    success: true,
+    needsSelection: false,
+    activationContext: ctx.activationContext,
+  };
 }
 
 /**
@@ -307,7 +311,11 @@ export async function activateFieldSpell(
 
   await this.handleBlueprintStorageAfterResolution(card, effect, ctx);
 
-  return { success: true, needsSelection: false };
+  return {
+    success: true,
+    needsSelection: false,
+    activationContext: ctx.activationContext,
+  };
 }
 
 /**
@@ -592,6 +600,11 @@ export async function activateSpellTrapEffect(
 
   if (flipAfterChecks) {
     card.isFacedown = false;
+    await this.game?.presentSpellTrapActivationFlip?.(
+      card,
+      player,
+      activationZone,
+    );
   }
 
   const visualSource = this.game?.ui?.captureCardAnimationSource?.(card, {
@@ -652,7 +665,11 @@ export async function activateSpellTrapEffect(
     player: player.id,
   });
 
-  return { success: true, needsSelection: false };
+  return {
+    success: true,
+    needsSelection: false,
+    activationContext: ctx.activationContext,
+  };
 }
 
 /**

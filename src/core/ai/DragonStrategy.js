@@ -355,8 +355,8 @@ export default class DragonStrategy extends BaseStrategy {
     return dragonGetTributeRequirementFor(card, playerState);
   }
 
-  selectBestTributes(field, tributesNeeded, cardToSummon) {
-    return selectBestTributes(field, tributesNeeded, cardToSummon);
+  selectBestTributes(field, tributesNeeded, cardToSummon, context = {}) {
+    return selectBestTributes(field, tributesNeeded, cardToSummon, context);
   }
 
   // ─────────────────────────────────────────────────────────────────────────

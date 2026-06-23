@@ -129,7 +129,7 @@ Nivel 4, Fire/Pyro, ATK 1600 / DEF 1500
 Canonico: `Specialist of the Burning West`  
 Nivel 5, Fire/Pyro, ATK 2000 / DEF 1600
 
-> Se este card estiver equipado com uma Magia de Equipamento "Oeste Ardente", ele pode realizar 1 ataque adicional contra monstros durante cada Fase de Batalha. Uma vez por turno: voce pode escolher 1 monstro que seu oponente controla; tome o controle dele e, se isso acontecer, envie todos os outros monstros "Oeste Ardente" que voce controla para o Cemiterio. Voce so pode usar cada efeito de "Especialista do Oeste Ardente" uma vez por turno.
+> Se este card estiver equipado com uma Magia de Equipamento "Oeste Ardente", ele pode realizar 1 ataque adicional contra monstros durante cada Fase de Batalha. Uma vez por Duelo: voce pode escolher 1 monstro que seu oponente controla; tome o controle dele e, se isso acontecer, envie todos os outros monstros "Oeste Ardente" que voce controla para o Cemiterio.
 
 **460 - Pregador do Oeste Ardente**  
 Canonico: `Preacher of the Burning West`  

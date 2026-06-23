@@ -126,6 +126,8 @@ Renderer.prototype.applyZoneActivationIndicators =
 Renderer.prototype.decorateActivatableCard = indicators.decorateActivatableCard;
 Renderer.prototype.setActivationHint = indicators.setActivationHint;
 Renderer.prototype.clearActivationHint = indicators.clearActivationHint;
+Renderer.prototype.applySpellTrapFlipAnimation =
+  indicators.applySpellTrapFlipAnimation;
 
 // Attach preview methods
 Renderer.prototype.renderPreview = preview.renderPreview;

@@ -23,6 +23,39 @@ function getSpellTrapSelectionMessage(card) {
   return getUIText("ui.spell.spellTrapSelection");
 }
 
+export async function presentSpellTrapActivationFlip(
+  card,
+  owner,
+  activationZone = "spellTrap",
+  options = {},
+) {
+  if (!card || !owner || activationZone !== "spellTrap") return false;
+  if (!Array.isArray(owner.spellTrap) || !owner.spellTrap.includes(card)) {
+    return false;
+  }
+
+  const zoneIndex = owner.spellTrap.indexOf(card);
+  const boardPresentation = this.updateBoard?.(options.updateOptions || {});
+  const flipPresentation = this.ui?.applySpellTrapFlipAnimation?.(
+    owner.id,
+    zoneIndex,
+    {
+      deferFrames: Number.isFinite(options.deferFrames)
+        ? options.deferFrames
+        : 1,
+    },
+  );
+
+  const presentations = [boardPresentation, flipPresentation].filter(
+    (presentation) =>
+      presentation && typeof presentation.then === "function",
+  );
+  if (presentations.length === 0) return false;
+
+  await Promise.allSettled(presentations);
+  return true;
+}
+
 /**
  * Unified activation of spell/trap effects from field.
  * @param {Card} card - The card being activated.

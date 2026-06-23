@@ -307,6 +307,13 @@ function getPreviewStatModifierClass(card, stat) {
   return "";
 }
 
+function getCardStatModifierClass(card, stat) {
+  const modifierClass = getPreviewStatModifierClass(card, stat);
+  if (modifierClass === "preview-stat-buff") return "stat-buff";
+  if (modifierClass === "preview-stat-debuff") return "stat-debuff";
+  return "";
+}
+
 function setPreviewStatModifierClass(element, card, stat) {
   if (!element) return;
   element.classList.remove(...PREVIEW_STAT_MOD_CLASSES);
@@ -489,8 +496,8 @@ export function createCardElement(card, visible) {
       ${
         isMonster
           ? `<div class="card-stats">
-               <span class="stat-atk">${card.atk}</span>
-               <span class="stat-def">${card.def}</span>
+               <span class="stat-atk ${getCardStatModifierClass(card, "atk")}">${card.atk}</span>
+               <span class="stat-def ${getCardStatModifierClass(card, "def")}">${card.def}</span>
              </div>`
           : `<div class="card-type">${typeLabel}</div>`
       }

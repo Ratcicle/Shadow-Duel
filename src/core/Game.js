@@ -165,6 +165,11 @@ export default class Game {
     this.aiPresentationStepDelayMs = 650;
     this.battleStep = null;
     this.damageStepTiming = null;
+    this.damageCalculationStatChangePending = false;
+    this.damageCalculationStatPresentationDelayMs =
+      Number.isFinite(options.damageCalculationStatPresentationDelayMs)
+        ? Math.max(0, options.damageCalculationStatPresentationDelayMs)
+        : 500;
     this.lastAttackNegated = false;
     this.pendingSpecialSummon = null; // Track pending special summon (e.g., Leviathan from Eel)
     this.pendingTributeSummonSelection = null;
@@ -1049,10 +1054,14 @@ Game.prototype.finalizeSpellCardActivation =
 Game.prototype.tryActivateSpell = spellTrapActivation.tryActivateSpell;
 Game.prototype.activateFieldSpellEffect =
   spellTrapActivation.activateFieldSpellEffect;
+Game.prototype.presentSpellTrapActivationFlip =
+  spellTrapActivation.presentSpellTrapActivationFlip;
 
 // Finalization: finalizeSpellTrapActivation, commitCardActivationFromHand, rollback helpers
 Game.prototype.finalizeSpellTrapActivation =
   spellTrapFinalization.finalizeSpellTrapActivation;
+Game.prototype.resolvePendingSpellTrapFinalization =
+  spellTrapFinalization.resolvePendingSpellTrapFinalization;
 Game.prototype.commitCardActivationFromHand =
   spellTrapFinalization.commitCardActivationFromHand;
 Game.prototype.rollbackSpellActivation =

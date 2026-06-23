@@ -1050,6 +1050,22 @@ body {
   text-align: center;
 }
 
+.stat-atk.stat-buff,
+.stat-def.stat-buff {
+  color: #7cff9a;
+  text-shadow:
+    0 0 6px rgba(124, 255, 154, 0.9),
+    0 1px 2px #000;
+}
+
+.stat-atk.stat-debuff,
+.stat-def.stat-debuff {
+  color: #ff8b8b;
+  text-shadow:
+    0 0 6px rgba(255, 100, 100, 0.9),
+    0 1px 2px #000;
+}
+
 .card-image {
   position: absolute;
   inset: 2px;
@@ -1957,6 +1973,51 @@ body {
   }
 }
 
+@keyframes spell-trap-flip-reveal {
+  0% {
+    transform: perspective(720px) rotateY(0deg) scale(1);
+    filter: brightness(0.9);
+    box-shadow: 0 0 10px rgba(255, 214, 102, 0.12);
+  }
+  48% {
+    transform: perspective(720px) rotateY(86deg) scale(0.98);
+    filter: brightness(1.1);
+    box-shadow: 0 0 18px rgba(255, 214, 102, 0.32);
+  }
+  52% {
+    transform: perspective(720px) rotateY(-86deg) scale(0.98);
+    filter: brightness(1.16);
+    box-shadow: 0 0 20px rgba(187, 134, 252, 0.28);
+  }
+  100% {
+    transform: perspective(720px) rotateY(0deg) scale(1);
+    filter: brightness(1);
+    box-shadow: 0 0 0 rgba(255, 214, 102, 0);
+  }
+}
+
+@keyframes spell-trap-flip-card-back {
+  0%,
+  48% {
+    opacity: 1;
+  }
+  52%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes spell-trap-flip-card-front {
+  0%,
+  48% {
+    opacity: 0;
+  }
+  52%,
+  100% {
+    opacity: 1;
+  }
+}
+
 .card.flipping {
   animation: flip-card 0.6s ease-in-out;
 }
@@ -1999,12 +2060,50 @@ body {
   animation: flip-summon-card-front 0.5s linear both;
 }
 
+.spell-trap-flip-ghost {
+  z-index: 280;
+  overflow: hidden;
+  transform-origin: center center;
+  animation: spell-trap-flip-reveal 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  backface-visibility: hidden;
+  will-change: transform, filter, box-shadow;
+  box-shadow: 0 0 18px rgba(255, 214, 102, 0.18);
+}
+
+.spell-trap-flip-ghost::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  border-radius: inherit;
+  border: 1px solid rgba(187, 134, 252, 0.45);
+  background:
+    radial-gradient(
+      circle at 30% 30%,
+      rgba(187, 134, 252, 0.24),
+      transparent 56%
+    ),
+    linear-gradient(135deg, rgba(24, 19, 32, 0.98), rgba(42, 33, 58, 0.95));
+  box-shadow:
+    inset 0 0 18px rgba(187, 134, 252, 0.22),
+    0 0 14px rgba(187, 134, 252, 0.2);
+  animation: spell-trap-flip-card-back 520ms linear both;
+}
+
+.spell-trap-flip-ghost > * {
+  animation: spell-trap-flip-card-front 520ms linear both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .card.flipping,
   .card.defense.flipping,
   .flip-summon-ghost,
   .flip-summon-ghost::before,
-  .flip-summon-ghost > * {
+  .flip-summon-ghost > *,
+  .spell-trap-flip-ghost,
+  .spell-trap-flip-ghost::before,
+  .spell-trap-flip-ghost > * {
     animation: none !important;
   }
 }
