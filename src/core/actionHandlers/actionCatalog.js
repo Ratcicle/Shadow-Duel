@@ -2095,6 +2095,8 @@ export const ACTION_CATALOG = {
       "statusesOnSummon",
       "resultRef",
       "storeResultAs",
+      "haltOnFailure",
+      "stopOnFailure",
     ],
     fields: {
       ...COMMON_TARGET_FIELDS,
@@ -2120,6 +2122,8 @@ export const ACTION_CATALOG = {
       statusesOnSummon: { type: "array" },
       resultRef: { type: "string" },
       storeResultAs: { type: "string" },
+      haltOnFailure: { type: "boolean" },
+      stopOnFailure: { type: "boolean" },
     },
     targetRef: "optional",
     selection: "dynamic",

@@ -68,13 +68,13 @@ O arquetipo **Miragebound** e focado em controle de posicao de batalha, retorno 
 > If you control a "Miragebound" monster: You can Special Summon this card from your hand. Once per turn: You can target 1 other "Miragebound" monster you control; return it to the hand, and if you do, this card gains 600 ATK until the end of this turn. You can only use each effect of "Miragebound Dancer" once per turn.
 
 **353 - Miragebound Jackal** (L4 Beast | ATK 1700 / DEF 800)
-> If this card battles an opponent's monster: At the end of the Damage Step, change that opponent's monster's battle position, if it is still on the field. If this card is sent from the field to the GY: Target 1 monster your opponent controls; change its battle position. You can only use each effect of "Miragebound Jackal" once per turn.
+> If a monster you control is returned from the field to your hand (Quick Effect): You can Special Summon this card from your hand, and if you do, target 1 monster your opponent controls; change its battle position. You can only use this effect of "Miragebound Jackal" once per turn.
 
 **356 - Miragebound Glass Viper** (L3 Reptile | ATK 1000 / DEF 1600)
 > If this card is returned from the field to the hand by a card effect: You can Special Summon this card from your hand, but banish it when it leaves the field. If this card is Special Summoned: You can target 1 face-up monster your opponent controls; it loses 500 ATK/DEF until the end of this turn. You can only use each effect of "Miragebound Glass Viper" once per turn.
 
 **357 - Miragebound Sand Priestess** (L4 Spellcaster | ATK 1300 / DEF 1800)
-> You can target 1 "Miragebound" monster in your Graveyard; add it to your hand. The first time each turn a face-up monster your opponent controls changes its battle position: that monster loses 500 ATK/DEF until the end of the next turn. You can only use each effect of "Miragebound Sand Priestess" once per turn.
+> If this card is returned from the field to the hand: You can target 1 "Miragebound" monster in your Graveyard; add it to your hand. Once per turn: You can target 1 monster your opponent controls; change its battle position, and if you do, that monster loses 500 ATK/DEF until the end of the next turn. You can only use each effect of "Miragebound Sand Priestess" once per turn.
 
 **358 - Miragebound False King** (L6 Fiend | ATK 2200 / DEF 1800)
 > You can Special Summon this card from your hand by returning 1 "Miragebound" monster you control to the hand. You can target 1 monster your opponent controls; change its battle position. You can only use each effect of "Miragebound False King" once per turn.
@@ -82,10 +82,10 @@ O arquetipo **Miragebound** e focado em controle de posicao de batalha, retorno 
 ### Magias
 
 **354 - Miragebound Oasis** (Field Spell)
-> Each time a face-up monster your opponent controls changes its battle position, it loses 400 ATK/DEF until the end of the next turn. Once per turn: You can choose 1 of these effects. - Target 1 "Miragebound" monster you control; return it to the hand, then add 1 "Miragebound" monster with a different name from your Deck to your hand. - Target 1 face-up monster your opponent controls; change its battle position.
+> The first time each face-up monster your opponent controls changes its battle position each turn: it loses 400 ATK/DEF until the end of the next turn. Once per turn: You can choose 1 of these effects. - Return 1 "Miragebound" monster you control to the hand, and if you do, target 1 monster your opponent controls; it loses 400 ATK/DEF until the end of this turn. - Target 1 face-up monster your opponent controls; change its battle position.
 
 **359 - Miragebound Mirror Path** (Continuous Spell)
-> The first time each turn a "Miragebound" monster you control would be destroyed by battle, you can return it to the hand instead. You can only control 1 "Miragebound Mirror Path".
+> The first time each turn a "Miragebound" monster you control would be destroyed by battle, you can return it to the hand instead. Once per turn: You can send this face-up card from the field to the GY; target 1 Spell/Trap your opponent controls; destroy it. You can only control 1 "Miragebound Mirror Path".
 
 **361 - Miragebound Vanishing Step** (Quick Spell)
 > Target 1 "Miragebound" monster you control; return it to the hand, then target 1 monster your opponent controls; change its battle position, and if you do, it loses 500 ATK/DEF until the end of this turn. You can only activate 1 "Miragebound Vanishing Step" per turn.

@@ -24,6 +24,22 @@ function collectBoardSources(owner) {
   return sources.filter(Boolean);
 }
 
+function hasHandCardMovedTrigger(card) {
+  return (card?.effects || []).some(
+    (effect) =>
+      effect &&
+      effect.timing === "on_event" &&
+      effect.event === "card_moved" &&
+      effect.requireZone &&
+      matchesZoneFilter("hand", effect.requireZone),
+  );
+}
+
+function collectHandCardMovedSources(owner) {
+  if (!owner || !Array.isArray(owner.hand)) return [];
+  return owner.hand.filter(hasHandCardMovedTrigger);
+}
+
 function sourceAlreadyListed(sources, card) {
   return sources.some((entry) => entry.card === card);
 }
@@ -31,12 +47,12 @@ function sourceAlreadyListed(sources, card) {
 /**
  * Collects trigger entries for generic card movement events.
  * Supports effects that trigger from the moved card itself (including hand/GY)
- * and face-up board observers.
+ * plus face-up board observers and explicit hand observers.
  */
 export async function collectCardMovedTriggers(payload) {
   const entries = [];
   const orderRule =
-    "moved card -> moved card owner board observers -> opponent board observers";
+    "moved card -> moved card owner board observers -> opponent board observers -> hand observers";
 
   const { card, fromZone, toZone } = payload || {};
   if (!card || !fromZone || !toZone || fromZone === toZone) {
@@ -76,6 +92,16 @@ export async function collectCardMovedTriggers(payload) {
         owner,
         other,
         zone: this.findCardZone?.(owner, sourceCard) || "field",
+      });
+    }
+    for (const sourceCard of collectHandCardMovedSources(owner)) {
+      if (!sourceCard) continue;
+      if (sourceAlreadyListed(sourceEntries, sourceCard)) continue;
+      sourceEntries.push({
+        card: sourceCard,
+        owner,
+        other,
+        zone: "hand",
       });
     }
   }

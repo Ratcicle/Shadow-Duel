@@ -144,37 +144,30 @@ export const mirageboundCards = [
     type: "Beast",
     archetype: "Miragebound",
     description:
-      'If this card battles an opponent\'s monster: At the end of the Damage Step, change that opponent\'s monster\'s battle position, if it is still on the field. If this card is sent from the field to the GY: Target 1 monster your opponent controls; change its battle position. You can only use each effect of "Miragebound Jackal" once per turn.',
+      'If a monster you control is returned from the field to your hand (Quick Effect): You can Special Summon this card from your hand, and if you do, target 1 monster your opponent controls; change its battle position. You can only use this effect of "Miragebound Jackal" once per turn.',
     image: "assets/Miragebound Jackal.png",
     effects: [
       {
-        id: "miragebound_jackal_battle_completed_shift",
+        id: "miragebound_jackal_hand_summon_on_return",
         timing: "on_event",
-        event: "battle_completed",
-        requireSelfBattled: true,
-        promptUser: false,
-        oncePerTurn: true,
-        oncePerTurnName: "miragebound_jackal_battle_completed_shift",
-        actions: [
-          {
-            type: "switch_position",
-            targetRef: "battle_opponent",
-          },
-        ],
-      },
-      {
-        id: "miragebound_jackal_field_to_grave_shift",
-        timing: "on_event",
-        event: "card_to_grave",
+        event: "card_moved",
+        requireZone: "hand",
         fromZone: "field",
+        toZone: "hand",
+        speed: 2,
+        isQuickEffect: true,
+        eventCardFilters: {
+          owner: "self",
+          cardKind: "monster",
+        },
         promptUser: true,
         promptMessage:
-          'Activate "Miragebound Jackal" to change an opponent monster\'s battle position?',
+          'Activate "Miragebound Jackal" to Special Summon it and change an opponent monster\'s battle position?',
         oncePerTurn: true,
-        oncePerTurnName: "miragebound_jackal_field_to_grave_shift",
+        oncePerTurnName: "miragebound_jackal_hand_summon_on_return",
         targets: [
           {
-            id: "miragebound_jackal_grave_shift_target",
+            id: "miragebound_jackal_return_shift_target",
             owner: "opponent",
             zone: "field",
             cardKind: "monster",
@@ -183,8 +176,15 @@ export const mirageboundCards = [
         ],
         actions: [
           {
+            type: "special_summon_from_zone",
+            zone: "hand",
+            requireSource: true,
+            position: "choice",
+            haltOnFailure: true,
+          },
+          {
             type: "switch_position",
-            targetRef: "miragebound_jackal_grave_shift_target",
+            targetRef: "miragebound_jackal_return_shift_target",
           },
         ],
       },
@@ -197,7 +197,7 @@ export const mirageboundCards = [
     subtype: "field",
     archetype: "Miragebound",
     description:
-      'Each time a face-up monster your opponent controls changes its battle position, it loses 400 ATK/DEF until the end of the next turn. Once per turn: You can choose 1 of these effects. - Target 1 "Miragebound" monster you control; return it to the hand, then add 1 "Miragebound" monster with a different name from your Deck to your hand. - Target 1 face-up monster your opponent controls; change its battle position.',
+      'The first time each face-up monster your opponent controls changes its battle position each turn: it loses 400 ATK/DEF until the end of the next turn. Once per turn: You can choose 1 of these effects. - Return 1 "Miragebound" monster you control to the hand, and if you do, target 1 monster your opponent controls; it loses 400 ATK/DEF until the end of this turn. - Target 1 face-up monster your opponent controls; change its battle position.',
     image: "assets/Miragebound Oasis.png",
     effects: [
       {
@@ -208,7 +208,11 @@ export const mirageboundCards = [
         requireFaceup: true,
         changedCardOwner: "opponent",
         changedCardRequireFaceup: true,
+        changedCardRequireFaceupBeforeChange: true,
         promptUser: false,
+        oncePerTurn: true,
+        oncePerTurnPerEventCard: true,
+        oncePerTurnName: "miragebound_oasis_position_debuff",
         targets: [
           {
             id: "miragebound_oasis_position_debuff_target",
@@ -243,10 +247,10 @@ export const mirageboundCards = [
             selectionMessage: "Choose a Miragebound Oasis effect.",
             cases: [
               {
-                id: "miragebound_oasis_recycle_search",
-                label: 'Return a "Miragebound" monster; add a different one',
+                id: "miragebound_oasis_return_weaken",
+                label: 'Return a "Miragebound" monster; weaken an opponent monster',
                 description:
-                  'Target 1 "Miragebound" monster you control; return it to the hand, then add 1 "Miragebound" monster with a different name from your Deck to your hand.',
+                  'Return 1 "Miragebound" monster you control to the hand, and if you do, target 1 monster your opponent controls; it loses 400 ATK/DEF until the end of this turn.',
                 targets: [
                   {
                     id: "miragebound_oasis_return_target",
@@ -254,7 +258,13 @@ export const mirageboundCards = [
                     zone: "field",
                     cardKind: "monster",
                     archetype: "Miragebound",
-                    requireFaceup: true,
+                    count: { min: 1, max: 1 },
+                  },
+                  {
+                    id: "miragebound_oasis_return_weaken_target",
+                    owner: "opponent",
+                    zone: "field",
+                    cardKind: "monster",
                     count: { min: 1, max: 1 },
                   },
                 ],
@@ -265,15 +275,12 @@ export const mirageboundCards = [
                     haltOnFailure: true,
                   },
                   {
-                    type: "add_from_zone_to_hand",
-                    zone: "deck",
-                    filters: {
-                      cardKind: "monster",
-                      archetype: "Miragebound",
-                    },
-                    excludeNameRef: "miragebound_oasis_return_target",
-                    count: { min: 1, max: 1 },
-                    promptPlayer: true,
+                    type: "buff_stats_temp",
+                    targetRef: "miragebound_oasis_return_weaken_target",
+                    atkBoost: -400,
+                    defBoost: -400,
+                    duration: "end_of_turn",
+                    sourceName: "Miragebound Oasis",
                   },
                 ],
               },
@@ -467,15 +474,19 @@ export const mirageboundCards = [
     type: "Spellcaster",
     archetype: "Miragebound",
     description:
-      'You can target 1 "Miragebound" monster in your Graveyard; add it to your hand. The first time each turn a face-up monster your opponent controls changes its battle position: that monster loses 500 ATK/DEF until the end of the next turn. You can only use each effect of "Miragebound Sand Priestess" once per turn.',
+      'If this card is returned from the field to the hand: You can target 1 "Miragebound" monster in your Graveyard; add it to your hand. Once per turn: You can target 1 monster your opponent controls; change its battle position, and if you do, that monster loses 500 ATK/DEF until the end of the next turn. You can only use each effect of "Miragebound Sand Priestess" once per turn.',
     image: "assets/Miragebound Sand Priestess.png",
     effects: [
       {
         id: "miragebound_sand_priestess_recover",
-        timing: "ignition",
-        requireZone: "field",
-        requireFaceup: true,
-        requirePhase: ["main1", "main2"],
+        timing: "on_event",
+        event: "card_moved",
+        requireSelfAsMoved: true,
+        fromZone: "field",
+        toZone: "hand",
+        promptUser: true,
+        promptMessage:
+          'Activate "Miragebound Sand Priestess" to add 1 "Miragebound" monster from your GY to your hand?',
         oncePerTurn: true,
         oncePerTurnName: "miragebound_sand_priestess_recover",
         targets: [
@@ -499,30 +510,31 @@ export const mirageboundCards = [
         ],
       },
       {
-        id: "miragebound_sand_priestess_position_debuff",
-        timing: "on_event",
-        event: "position_change",
+        id: "miragebound_sand_priestess_shift_debuff",
+        timing: "ignition",
         requireZone: "field",
         requireFaceup: true,
-        changedCardOwner: "opponent",
-        changedCardRequireFaceup: true,
-        promptUser: false,
+        requirePhase: ["main1", "main2"],
         oncePerTurn: true,
-        oncePerTurnName: "miragebound_sand_priestess_position_debuff",
+        oncePerTurnName: "miragebound_sand_priestess_shift_debuff",
         targets: [
           {
-            id: "miragebound_sand_priestess_debuff_target",
-            targetFromContext: "changedCard",
+            id: "miragebound_sand_priestess_shift_debuff_target",
             owner: "opponent",
+            zone: "field",
             cardKind: "monster",
-            requireFaceup: true,
             count: { min: 1, max: 1 },
           },
         ],
         actions: [
           {
+            type: "switch_position",
+            targetRef: "miragebound_sand_priestess_shift_debuff_target",
+            haltOnFailure: true,
+          },
+          {
             type: "buff_stats_temp",
-            targetRef: "miragebound_sand_priestess_debuff_target",
+            targetRef: "miragebound_sand_priestess_shift_debuff_target",
             atkBoost: -500,
             defBoost: -500,
             duration: "end_of_next_turn",
@@ -609,7 +621,7 @@ export const mirageboundCards = [
     subtype: "continuous",
     archetype: "Miragebound",
     description:
-      'The first time each turn a "Miragebound" monster you control would be destroyed by battle, you can return it to the hand instead. You can only control 1 "Miragebound Mirror Path".',
+      'The first time each turn a "Miragebound" monster you control would be destroyed by battle, you can return it to the hand instead. Once per turn: You can send this face-up card from the field to the GY; target 1 Spell/Trap your opponent controls; destroy it. You can only control 1 "Miragebound Mirror Path".',
     image: "assets/Miragebound Mirror Path.png",
     effects: [
       {
@@ -657,6 +669,38 @@ export const mirageboundCards = [
             },
           ],
         },
+      },
+      {
+        id: "miragebound_mirror_path_destroy_spell_trap",
+        timing: "ignition",
+        requireZone: "spellTrap",
+        requireFaceup: true,
+        requirePhase: ["main1", "main2"],
+        oncePerTurn: true,
+        oncePerTurnName: "miragebound_mirror_path_destroy_spell_trap",
+        targets: [
+          {
+            id: "miragebound_mirror_path_spell_trap_target",
+            owner: "opponent",
+            zones: ["spellTrap", "fieldSpell"],
+            cardKind: ["spell", "trap"],
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "self",
+            player: "self",
+            fromZone: "spellTrap",
+            to: "graveyard",
+            contextLabel: "miragebound_mirror_path_cost",
+          },
+          {
+            type: "destroy",
+            targetRef: "miragebound_mirror_path_spell_trap_target",
+          },
+        ],
       },
     ],
   },

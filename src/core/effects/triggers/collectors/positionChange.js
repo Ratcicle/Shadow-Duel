@@ -46,6 +46,29 @@ function matchesCardFilters(engine, card, filters) {
   return true;
 }
 
+function getCardLockIdentity(card) {
+  return (
+    card?.instanceId ??
+    card?._instanceId ??
+    card?.uuid ??
+    card?.simInstanceId ??
+    card?.id ??
+    card?.name ??
+    "unknown"
+  );
+}
+
+function buildPerEventCardEffect(effect, eventCard) {
+  if (!effect?.oncePerTurnPerEventCard) return effect;
+  const baseName = effect.oncePerTurnName || effect.id || "position_change";
+  const eventCardKey = getCardLockIdentity(eventCard);
+  return {
+    ...effect,
+    oncePerTurn: true,
+    oncePerTurnName: `${baseName}:event_card:${eventCardKey}`,
+  };
+}
+
 /**
  * Collects trigger entries for battle position changes.
  */
@@ -117,6 +140,13 @@ export async function collectPositionChangeTriggers(payload) {
     }
 
     if (
+      effect.changedCardRequireFaceupBeforeChange === true &&
+      payload.wasFlipped === true
+    ) {
+      return;
+    }
+
+    if (
       effect.eventCardFilters &&
       !cardMatchesEventFilters(this, card, effect.eventCardFilters, {
         sourceOwner: owner,
@@ -154,10 +184,12 @@ export async function collectPositionChangeTriggers(payload) {
       actionContext,
     };
 
-    const optCheck = this.checkOncePerTurn(sourceCard, owner, effect);
+    const effectiveEffect = buildPerEventCardEffect(effect, card);
+
+    const optCheck = this.checkOncePerTurn(sourceCard, owner, effectiveEffect);
     if (!optCheck.ok) return;
 
-    const duelCheck = this.checkOncePerDuel(sourceCard, owner, effect);
+    const duelCheck = this.checkOncePerDuel(sourceCard, owner, effectiveEffect);
     if (!duelCheck.ok) return;
 
     if (Array.isArray(effect.targets) && effect.targets.length > 0) {
@@ -185,7 +217,7 @@ export async function collectPositionChangeTriggers(payload) {
     const entry = this.buildTriggerEntry({
       sourceCard,
       owner,
-      effect,
+      effect: effectiveEffect,
       ctx,
       activationContext,
       selectionKind: "triggered",
