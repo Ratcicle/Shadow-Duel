@@ -60,6 +60,11 @@ import {
   analyzeExtremeDragonEconomy,
   evaluateBoardDragon,
 } from "./dragon/scoring.js";
+import { getEffectiveAtk } from "./common/cardStats.js";
+import {
+  getProjectedBoneflameAtk,
+  getValidBoneflameCostCandidates,
+} from "./dragon/boneflamePolicy.js";
 import { simulateMainPhaseAction as simulateDragonAction } from "./dragon/simulation.js";
 import {
   applyDragonSimulatedBattleRewards,
@@ -171,6 +176,16 @@ function countCards(cards = [], predicate = () => true) {
 
 function hasNamedCard(cards = [], name) {
   return (cards || []).some((card) => card?.name === name);
+}
+
+function getCardInstanceId(card) {
+  return (
+    card?.instanceId ??
+    card?._instanceId ??
+    card?.uuid ??
+    card?.simInstanceId ??
+    null
+  );
 }
 
 function buildDragonActionContext(extra = {}) {
@@ -1123,17 +1138,47 @@ export default class DragonStrategy extends BaseStrategy {
         if (searchTargets.length === 0) return;
         priority = 8 + Math.min(2, searchTargets.length);
       } else if (card.name === "Boneflame Dragon") {
-        const expendableFieldDragons = (bot.field || []).filter(
-          (candidate) => isFaceupDragon(candidate) && !isExtremeDragon(candidate),
+        const validBoneflameCosts = getValidBoneflameCostCandidates(
+          card,
+          bot,
+        ).sort(
+          (a, b) =>
+            getEffectiveAtk(a) - getEffectiveAtk(b) ||
+            cardStrategicValue(a) - cardStrategicValue(b),
         );
-        if (expendableFieldDragons.length === 0) return;
+        if (validBoneflameCosts.length === 0) {
+          log(`  Skipping Graveyard ignition: Boneflame Dragon - no ATK-upgrade cost`);
+          return;
+        }
+        const invalidCostIds = (bot.field || [])
+          .filter(
+            (candidate) =>
+              isFaceupDragon(candidate) &&
+              !validBoneflameCosts.includes(candidate),
+          )
+          .map(getCardInstanceId)
+          .filter((id) => id !== null);
+        const projectedAtk = getProjectedBoneflameAtk(
+          card,
+          validBoneflameCosts[0],
+          bot,
+        );
         priority = 7 + Math.min(3, countCards(bot.graveyard || [], isDragonMonster));
+        priority += Math.min(
+          2,
+          Math.max(0, projectedAtk - getEffectiveAtk(validBoneflameCosts[0])) /
+            600,
+        );
         targetPreferences.boneflame_cost_target = {
           role: "cost",
-          preferNames: getFieldDragonCostNames(bot),
+          preferNames: uniqueNames(validBoneflameCosts.map((candidate) => candidate.name)),
+          preferredInstanceIds: validBoneflameCosts
+            .map(getCardInstanceId)
+            .filter((id) => id !== null),
+          avoidInstanceIds: invalidCostIds,
           preserveNames: uniqueNames([
             ...DRAGON_COST_PRESERVE_NAMES,
-            ...rankOwnDragonsByValue(bot.field || []).slice(0, 2).map((candidate) => candidate.name),
+            "Supreme Bahamut Dragon",
           ]),
         };
       } else if (card.name === "Rainbow Cosmic Dragon") {

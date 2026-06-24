@@ -5,6 +5,8 @@
 
 import { CARD_KNOWLEDGE, isExtremeDragon } from "./knowledge.js";
 import { getTributeRequirementFor, selectBestTributes } from "./priorities.js";
+import { getEffectiveAtk } from "../common/cardStats.js";
+import { isValidBoneflameCost } from "./boneflamePolicy.js";
 import { ascensionMaterialMatches } from "../../game/summon/ascension.js";
 import {
   fieldHasTributeValue,
@@ -1275,12 +1277,24 @@ function simulateDragonGraveyardMonsterEffect(state, card, action) {
           ? [owner.fieldSpell]
           : []
         : owner?.[zoneName] || [];
-    const candidates = (zone || [])
+    let candidates = (zone || [])
       .map((candidate, index) => ({ candidate, index, owner, zoneName }))
       .filter(({ candidate }) => matchesEffectTarget(candidate, target));
+    if (card.name === "Boneflame Dragon" && target.id === "boneflame_cost_target") {
+      candidates = candidates.filter(({ candidate, owner }) =>
+        isValidBoneflameCost(card, candidate, owner),
+      );
+    }
     if (candidates.length < (target.count?.min ?? 1)) return;
 
     candidates.sort((a, b) => {
+      if (card.name === "Boneflame Dragon" && target.id === "boneflame_cost_target") {
+        return (
+          getEffectiveAtk(a.candidate) - getEffectiveAtk(b.candidate) ||
+          cardStrategicSimValue(a.candidate) -
+            cardStrategicSimValue(b.candidate)
+        );
+      }
       if (target.id === "rainbow_cosmic_extreme_send_targets") {
         const score = (entry) =>
           orderBonus(entry.candidate, EXTREME_GY_SEND_ORDER, 30) +

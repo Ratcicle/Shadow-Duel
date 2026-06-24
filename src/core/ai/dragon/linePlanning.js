@@ -3,6 +3,8 @@
 // TurnLineSearch profile for Dragon.
 // -----------------------------------------------------------------------------
 
+import { getValidBoneflameCostCandidates } from "./boneflamePolicy.js";
+
 const DEFAULT_PROFILE = {
   enabled: false,
   mode: "off",
@@ -607,7 +609,10 @@ function getRetentionAdjustment(action = {}, context = {}) {
     action.type === "graveyardMonsterEffect" &&
     actionName === "Boneflame Dragon" &&
     countDragonMonsters(graveyard) >= 3 &&
-    field.some(isFaceupDragon)
+    getValidBoneflameCostCandidates(
+      graveyard.find((card) => card?.name === "Boneflame Dragon"),
+      { field, graveyard },
+    ).length > 0
   ) {
     boost += addRetention(reasons, 4, "boneflame_loaded_graveyard");
   }

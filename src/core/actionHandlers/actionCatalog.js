@@ -2025,10 +2025,17 @@ export const ACTION_CATALOG = {
     category: "summon",
     summary: "Special Summons source from hand by paying a target cost.",
     handler: "handleSpecialSummonFromHandWithCost",
-    optional: ["costTargetRef", "costDestination", "position", "cannotAttackThisTurn"],
+    optional: [
+      "costTargetRef",
+      "costDestination",
+      "costMovedByEffect",
+      "position",
+      "cannotAttackThisTurn",
+    ],
     fields: {
       costTargetRef: { type: "string" },
       costDestination: field("to"),
+      costMovedByEffect: { type: "boolean" },
       position: field("position"),
       cannotAttackThisTurn: { type: "boolean" },
     },

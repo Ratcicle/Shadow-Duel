@@ -2,6 +2,7 @@
 // Combo matrix and lightweight combo detection for the Dragon deck.
 
 import { EXTREME_DRAGON_NAMES } from "./knowledge.js";
+import { getValidBoneflameCostCandidates } from "./boneflamePolicy.js";
 
 export const DRAGON_COMBO_PRIORITY = Object.freeze({
   HIGH: "high",
@@ -622,7 +623,8 @@ export function detectAvailableCombos(analysis, logFn = null) {
     log("Combo: Hellkite Roar GY can access Jagged Peak");
   }
 
-  if (gyNames.includes("Boneflame Dragon") && hasFieldDragon) {
+  const boneflame = gyCards.find((card) => card?.name === "Boneflame Dragon");
+  if (boneflame && getValidBoneflameCostCandidates(boneflame, analysis).length > 0) {
     available.push(availableCombo("Boneflame GY Extender", { type: "graveyardMonsterEffect", cardName: "Boneflame Dragon" }));
     log("Combo: Boneflame Dragon GY ignition");
   }

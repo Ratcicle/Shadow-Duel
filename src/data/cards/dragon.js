@@ -1216,7 +1216,7 @@ export const dragonCards = [
     def: 0,
     cannotBeNormalSummonedOrSet: true,
     description:
-      "Cannot be Normal Summoned/Set. Once per turn, if this card is in your Graveyard: You can send 1 Dragon monster you control to the Graveyard; Special Summon this card. Gains 300 ATK for each Dragon monster in your Graveyard.",
+      "Cannot be Normal Summoned/Set. Once per turn, if this card is in your Graveyard: You can send 1 Dragon monster you control to the Graveyard; Special Summon this card. Gains 400 ATK for each Dragon monster in your Graveyard.",
     image: "assets/Boneflame Dragon.png",
     effects: [
       {
@@ -1258,7 +1258,7 @@ export const dragonCards = [
         passive: {
           type: "graveyard_type_count_buff",
           monsterType: "Dragon",
-          amountPerCard: 300,
+          amountPerCard: 400,
           stats: ["atk"],
         },
       },

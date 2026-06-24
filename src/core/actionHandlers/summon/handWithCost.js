@@ -89,6 +89,7 @@ export async function handleSpecialSummonFromHandWithCost(
     }
 
     const costDestination = action.costDestination || "graveyard";
+    const costMovedByEffect = action.costMovedByEffect === true;
     const getCostOwner = (costCard) =>
       (typeof engine.getOwnerByCard === "function"
         ? engine.getOwnerByCard(costCard)
@@ -133,7 +134,7 @@ export async function handleSpecialSummonFromHandWithCost(
           contextLabel: action.contextLabel || "special_summon_cost",
           sourceCard: source,
           effectId: ctx?.effect?.id || null,
-          movedByEffect: false,
+          movedByEffect: costMovedByEffect,
           awaitCardMovedEvent: true,
         });
 
@@ -171,7 +172,7 @@ export async function handleSpecialSummonFromHandWithCost(
           contextLabel: action.contextLabel || "special_summon_cost",
           sourceCard: source,
           effectId: ctx?.effect?.id || null,
-          movedByEffect: false,
+          movedByEffect: costMovedByEffect,
           awaitCardMovedEvent: true,
         });
 

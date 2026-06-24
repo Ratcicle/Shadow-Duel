@@ -331,10 +331,12 @@ export default class AutoSelector {
       ) {
         costScore += 100;
       }
-      const costPreferences =
+      const costPreferences = mergeCostPreference(
+        getTargetPreference(context),
         context?.activationContext?.actionContext?.costPreferences ||
-        context?.activationContext?.costPreferences ||
-        null;
+          context?.activationContext?.costPreferences ||
+          null,
+      );
       const isPreferredArchetype =
         costPreferences?.archetype &&
         (baseCard?.archetype === costPreferences.archetype ||
@@ -346,6 +348,23 @@ export default class AutoSelector {
         if (forceNames.includes(baseCard?.name)) costScore -= 30;
         if (preferNames.includes(baseCard?.name)) costScore -= 2.5;
         if (preserveNames.includes(baseCard?.name)) costScore += 18;
+        const candidateIds = getCandidateInstanceIds(baseCard, candidate);
+        if (
+          listIncludesInstance(
+            costPreferences.preferredInstanceIds,
+            candidateIds,
+          )
+        ) {
+          costScore -= 60;
+        }
+        if (
+          listIncludesInstance(costPreferences.avoidInstanceIds, candidateIds)
+        ) {
+          costScore += 60;
+        }
+        if ((costPreferences.avoidNames || []).includes(baseCard?.name)) {
+          costScore += 20;
+        }
         if (
           costPreferences.preserveLastOffensivePayoff &&
           isOffensivePayoffCost(
@@ -488,6 +507,40 @@ function getTargetPreference(context) {
   const byTarget = actionContext.targetPreferences || {};
   if (requirementId && byTarget[requirementId]) return byTarget[requirementId];
   return actionContext.targetPreference || null;
+}
+
+function mergeCostPreference(targetPreference, costPreference) {
+  if (!costPreference && !targetPreference) return null;
+  if (!costPreference) return targetPreference || null;
+  if (!targetPreference) return costPreference || null;
+  return {
+    ...costPreference,
+    ...targetPreference,
+    preferNames: [
+      ...(costPreference.preferNames || []),
+      ...(targetPreference.preferNames || []),
+    ],
+    forceNames: [
+      ...(costPreference.forceNames || []),
+      ...(targetPreference.forceNames || []),
+    ],
+    preserveNames: [
+      ...(costPreference.preserveNames || []),
+      ...(targetPreference.preserveNames || []),
+    ],
+    preferredInstanceIds: [
+      ...(costPreference.preferredInstanceIds || []),
+      ...(targetPreference.preferredInstanceIds || []),
+    ],
+    avoidInstanceIds: [
+      ...(costPreference.avoidInstanceIds || []),
+      ...(targetPreference.avoidInstanceIds || []),
+    ],
+    avoidNames: [
+      ...(costPreference.avoidNames || []),
+      ...(targetPreference.avoidNames || []),
+    ],
+  };
 }
 
 function isOffensivePayoffCost(card, payoffNames = []) {

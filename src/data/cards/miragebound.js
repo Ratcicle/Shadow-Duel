@@ -581,6 +581,7 @@ export const mirageboundCards = [
             type: "special_summon_from_hand_with_cost",
             costTargetRef: "miragebound_false_king_return_cost",
             costDestination: "hand",
+            costMovedByEffect: true,
             position: "choice",
           },
         ],
