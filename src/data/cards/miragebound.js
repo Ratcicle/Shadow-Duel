@@ -698,8 +698,11 @@ export const mirageboundCards = [
             contextLabel: "miragebound_mirror_path_cost",
           },
           {
-            type: "destroy",
+            type: "move",
             targetRef: "miragebound_mirror_path_spell_trap_target",
+            player: "opponent",
+            to: "graveyard",
+            contextLabel: "miragebound_mirror_path_destroy_spell_trap",
           },
         ],
       },

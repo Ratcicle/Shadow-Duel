@@ -44,6 +44,28 @@ function sourceAlreadyListed(sources, card) {
   return sources.some((entry) => entry.card === card);
 }
 
+function getCardKey(card) {
+  return (
+    card?.instanceId ??
+    card?._instanceId ??
+    card?.uid ??
+    card?.uuid ??
+    card?.id ??
+    card?.name ??
+    "card"
+  );
+}
+
+function getTriggerReservationKey(owner, sourceCard, effect, optCheck) {
+  if (!effect?.oncePerTurn || !optCheck?.lockKey) return null;
+  const ownerKey = owner?.id || "player";
+  const scope =
+    effect.oncePerTurnScope === "card" || effect.oncePerTurnPerCard === true
+      ? `card:${getCardKey(sourceCard)}`
+      : "player";
+  return `${ownerKey}:${scope}:${optCheck.lockKey}`;
+}
+
 /**
  * Collects trigger entries for generic card movement events.
  * Supports effects that trigger from the moved card itself (including hand/GY)
@@ -51,6 +73,7 @@ function sourceAlreadyListed(sources, card) {
  */
 export async function collectCardMovedTriggers(payload) {
   const entries = [];
+  const reservedOncePerTurnLocks = new Set();
   const orderRule =
     "moved card -> moved card owner board observers -> opponent board observers -> hand observers";
 
@@ -199,6 +222,15 @@ export async function collectCardMovedTriggers(payload) {
 
     const optCheck = this.checkOncePerTurn(sourceCard, owner, effect);
     if (!optCheck.ok) return;
+    const reservationKey = getTriggerReservationKey(
+      owner,
+      sourceCard,
+      effect,
+      optCheck,
+    );
+    if (reservationKey && reservedOncePerTurnLocks.has(reservationKey)) {
+      return;
+    }
 
     const duelCheck = this.checkOncePerDuel(sourceCard, owner, effect);
     if (!duelCheck.ok) return;
@@ -235,7 +267,10 @@ export async function collectCardMovedTriggers(payload) {
       selectionMessage: "Select target(s) for the triggered effect.",
     });
 
-    if (entry) entries.push(entry);
+    if (entry) {
+      if (reservationKey) reservedOncePerTurnLocks.add(reservationKey);
+      entries.push(entry);
+    }
   };
 
   for (const sourceEntry of sourceEntries) {

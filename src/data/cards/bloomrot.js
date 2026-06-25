@@ -24,15 +24,6 @@ export const bloomrotCards = [
           'Activate "Bloomrot Sporeling" to Special Summon 1 "Bloomrot Rootling"?',
         oncePerTurn: true,
         oncePerTurnName: "bloomrot_sporeling_normal_summon_rootling",
-        targets: [
-          {
-            id: "bloomrot_sporeling_spore_target",
-            owner: "opponent",
-            zones: ["field", "spellTrap", "fieldSpell"],
-            requireFaceup: true,
-            count: { min: 1, max: 1 },
-          },
-        ],
         actions: [
           {
             type: "special_summon_from_zone",
@@ -44,12 +35,31 @@ export const bloomrotCards = [
             count: { min: 1, max: 1 },
             position: "defense",
             promptPlayer: true,
+            haltOnFailure: true,
           },
           {
-            type: "add_counter",
-            targetRef: "bloomrot_sporeling_spore_target",
-            counterType: "spore",
-            amount: 1,
+            type: "optional_target_actions",
+            optional: true,
+            allowCancel: false,
+            selectionMessage:
+              'Select 1 face-up opponent card for "Bloomrot Sporeling".',
+            targets: [
+              {
+                id: "bloomrot_sporeling_spore_target",
+                owner: "opponent",
+                zones: ["field", "spellTrap", "fieldSpell"],
+                requireFaceup: true,
+                count: { min: 1, max: 1 },
+              },
+            ],
+            actions: [
+              {
+                type: "add_counter",
+                targetRef: "bloomrot_sporeling_spore_target",
+                counterType: "spore",
+                amount: 1,
+              },
+            ],
           },
         ],
       },

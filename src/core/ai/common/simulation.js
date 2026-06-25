@@ -490,7 +490,13 @@ function buildSimEventActionContext(eventName, payload = {}, base = {}) {
 
 function attachSimulatedEventEmitter(state, options = {}) {
   if (options.enableSimulatedEvents !== true) return options;
-  if (typeof options.emitSimulatedEvent === "function") return options;
+  if (
+    typeof options.emitSimulatedEvent === "function" &&
+    options._managedSimulatedEventEmitter !== true
+  ) {
+    return options;
+  }
+  options._managedSimulatedEventEmitter = true;
   options.emitSimulatedEvent = (eventName, payload = {}, extra = {}) =>
     dispatchSimulatedEvent(state, eventName, payload, {
       ...options,
@@ -567,6 +573,7 @@ function dispatchSimulatedEvent(state, eventName, payload = {}, options = {}) {
       if (!hasRequiredSimSelections(effect.targets || [], selections)) {
         continue;
       }
+      markSimulatedEffectUsed(state, effect, sourceCard, sourceEntry.player?.id || "bot");
       applySimulatedActions({
         actions: effect.actions || [],
         selections,
@@ -574,7 +581,6 @@ function dispatchSimulatedEvent(state, eventName, payload = {}, options = {}) {
         selfId: options.selfId || "bot",
         options: triggerOptions,
       });
-      markSimulatedEffectUsed(state, effect, sourceCard, sourceEntry.player?.id || "bot");
       options.onEffectActivated?.({
         state,
         action: null,

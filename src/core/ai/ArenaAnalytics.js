@@ -1900,6 +1900,7 @@ export class DuelTracker {
     this.errors = [];
     this.warnings = [];
     this.lastProgressStage = null;
+    this.turnOwners = Object.create(null);
     this.diagnostics = {
       progress: [],
       zeroEventTimeoutSnapshot: null,
@@ -1972,6 +1973,19 @@ export class DuelTracker {
     }
   }
 
+  recordTurnOwnerFromGame(game = null) {
+    const turn = Number(game?.turnCounter ?? this.currentTurn ?? 0);
+    const currentPlayer =
+      game?.turn ??
+      game?.currentPlayer?.id ??
+      game?.currentTurnPlayer?.id ??
+      null;
+    if (!Number.isFinite(turn) || turn <= 0 || !SEATS.includes(currentPlayer)) {
+      return;
+    }
+    this.turnOwners[String(turn)] = currentPlayer;
+  }
+
   pushEvent(event) {
     if (!event || this.events.length >= 400) return;
     const compact = {};
@@ -2007,6 +2021,7 @@ export class DuelTracker {
       currentPlayer,
       gameOver: !!game?.gameOver,
     };
+    this.recordTurnOwnerFromGame(game);
     for (const [key, value] of Object.entries(details || {})) {
       if (value !== undefined && value !== null) entry[key] = value;
     }
@@ -2650,6 +2665,8 @@ export class DuelTracker {
     for (const seat of SEATS) {
       const stats = this.seats[seat];
       for (let turn = 1; turn <= totalTurns; turn += 1) {
+        const owner = this.turnOwners[String(turn)];
+        if (owner && owner !== seat) continue;
         if (!stats.turnActions[String(turn)]) {
           stats.noUsefulTurns += 1;
         }
