@@ -20,6 +20,24 @@ export function getZoneCards(player, zone) {
   }
 }
 
+export function findCardZone(player, card) {
+  if (!player || !card) return null;
+  if (player.fieldSpell === card) return "fieldSpell";
+  for (const zone of [
+    "hand",
+    "field",
+    "graveyard",
+    "spellTrap",
+    "banished",
+    "deck",
+    "extraDeck",
+  ]) {
+    const cards = player[zone];
+    if (Array.isArray(cards) && cards.includes(card)) return zone;
+  }
+  return null;
+}
+
 export function detachSimulatedEquip(equipCard) {
   if (!equipCard) return;
   const host = equipCard.equippedTo || equipCard.equipTarget || null;

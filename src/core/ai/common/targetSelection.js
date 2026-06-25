@@ -176,7 +176,13 @@ export function matchesTargetFilters(card, target = {}, sourceCard, ownerRole = 
       return false;
     }
   }
-  const { owner: _owner, anyOf: _anyOf, ...filters } = target;
+  const {
+    owner: _owner,
+    anyOf: _anyOf,
+    id: _targetId,
+    targetFromContext: _targetFromContext,
+    ...filters
+  } = target;
   return cardMatchesFilter(card, filters);
 }
 
@@ -421,6 +427,22 @@ export function selectSimulatedTargets({
 
   targets.forEach((target) => {
     if (!target || !target.id) return;
+    if (target.targetFromContext) {
+      const contextValue =
+        options?.[target.targetFromContext] ||
+        options?.actionContext?.[target.targetFromContext] ||
+        options?.activationContext?.actionContext?.[target.targetFromContext] ||
+        null;
+      const contextCards = asArray(contextValue).filter((card) =>
+        matchesTargetFilters(card, target, sourceCard),
+      );
+      const count = normalizeCount(target.count, 1);
+      result[target.id] = contextCards.slice(
+        0,
+        Math.min(count.max, contextCards.length),
+      );
+      return;
+    }
     const excludeTargetRefs = [
       target.excludeTargetRef,
       ...asArray(target.excludeTargetRefs),

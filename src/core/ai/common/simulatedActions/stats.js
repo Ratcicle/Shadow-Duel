@@ -41,6 +41,103 @@ function normalizeNegateEffectsDuration(action = {}) {
     : "until_end_turn";
 }
 
+function asArray(value) {
+  if (value === undefined || value === null) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+function getTargetScopeCards(scope = {}, self, opponent) {
+  if (!scope || typeof scope !== "object") return [];
+  const ownerEntries =
+    scope.owner === "opponent"
+      ? [{ player: opponent, role: "opponent" }]
+      : scope.owner === "any"
+        ? [
+            { player: self, role: "self" },
+            { player: opponent, role: "opponent" },
+          ]
+        : [{ player: self, role: "self" }];
+  const zones = asArray(scope.zones || scope.zone || "field");
+  const filters = {
+    ...(scope.filters || {}),
+  };
+
+  for (const key of [
+    "cardKind",
+    "archetype",
+    "archetypes",
+    "requireFaceup",
+    "name",
+    "cardName",
+    "cardId",
+    "position",
+  ]) {
+    if (scope[key] !== undefined && filters[key] === undefined) {
+      filters[key] = scope[key];
+    }
+  }
+
+  return ownerEntries.flatMap(({ player, role }) =>
+    zones.flatMap((zone) =>
+      (player?.[zone] || []).filter((card) =>
+        matchesTargetFilters(card, filters, null, role),
+      ),
+    ),
+  );
+}
+
+export function applySwitchPosition(ctx) {
+  const { action, targets, state, options, self, opponent } = ctx;
+  const targetCards =
+    Array.isArray(targets) && targets.length > 0
+      ? targets
+      : getTargetScopeCards(action.targetScope, self, opponent);
+
+  targetCards.forEach((card) => {
+    if (!card || card.cardKind !== "monster") return;
+    const wasFacedown = card.isFacedown === true;
+    const wasFaceupBeforeChange = !wasFacedown;
+    const previousPosition = card.position || "attack";
+    const nextPosition = wasFacedown
+      ? "attack"
+      : card.position === "attack"
+        ? "defense"
+        : "attack";
+
+    card.position = nextPosition;
+    if (wasFacedown) {
+      card.isFacedown = false;
+    }
+    if (action.markChanged !== false) {
+      card.hasChangedPosition = true;
+      card.positionChangedThisTurn = true;
+    }
+    if (nextPosition === "defense") {
+      card.cannotAttackThisTurn = true;
+    }
+    if (Number.isFinite(action.atkBoost)) {
+      card.tempAtkBoost = (card.tempAtkBoost || 0) + action.atkBoost;
+      card.atk = Math.max(0, (card.atk || 0) + action.atkBoost);
+    }
+    if (Number.isFinite(action.defBoost)) {
+      card.tempDefBoost = (card.tempDefBoost || 0) + action.defBoost;
+      card.def = Math.max(0, (card.def || 0) + action.defBoost);
+    }
+    const owner = findCardOwner(state, card);
+    options.emitSimulatedEvent?.("position_change", {
+      card,
+      player: owner,
+      fromPosition: previousPosition,
+      toPosition: nextPosition,
+      wasFlipped: wasFacedown,
+      wasFaceupBeforeChange,
+      sourceCard: options.sourceCard || null,
+      effectId: options.effect?.id || null,
+      actionContext: options.actionContext,
+    });
+  });
+}
+
 export function applyBuffStatsTemp(ctx) {
   const {
     action,

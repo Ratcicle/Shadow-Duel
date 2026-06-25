@@ -4,6 +4,7 @@ const AVAILABLE_BOT_PRESETS = [
   { id: "void", label: "Void" },
   { id: "dragon", label: "Dragon" },
   { id: "arcanist", label: "Arcanist" },
+  { id: "miragebound", label: "Miragebound" },
 ];
 
 const MAIN_DECKS = {
@@ -27,6 +28,10 @@ const MAIN_DECKS = {
     302, 302, 302, 307, 307, 307, 314, 314, 306, 306, 305, 305, 308, 313, 312,
     312, 312, 301, 301, 301, 316, 316, 316, 311, 311, 304, 304, 310, 303, 309,
   ],
+  miragebound: [
+    358, 358, 353, 353, 352, 352, 352, 351, 351, 351, 357, 356, 356, 362,
+    362, 361, 361, 359, 359, 354, 354, 354, 360, 360,
+  ],
 };
 
 const EXTRA_DECKS = {
@@ -35,6 +40,7 @@ const EXTRA_DECKS = {
   void: [207, 213, 215, 222, 223, 225],
   dragon: [253, 265, 266, 267],
   arcanist: [],
+  miragebound: [355, 363],
 };
 
 function copyDeckList(deckList = []) {

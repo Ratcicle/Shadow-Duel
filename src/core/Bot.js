@@ -75,6 +75,10 @@ export default class Bot extends Player {
     return getBotDeckList("arcanist");
   }
 
+  getMirageboundDeck() {
+    return getBotDeckList("miragebound");
+  }
+
   // Sobrescreve buildExtraDeck para usar fusões do arquétipo
   buildExtraDeck() {
     buildBotExtraDeck(this);
@@ -100,6 +104,10 @@ export default class Bot extends Player {
 
   getArcanistExtraDeck() {
     return getBotExtraDeckList("arcanist");
+  }
+
+  getMirageboundExtraDeck() {
+    return getBotExtraDeckList("miragebound");
   }
 
   resolveOpponent(game) {

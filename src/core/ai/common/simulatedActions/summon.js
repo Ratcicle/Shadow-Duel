@@ -18,6 +18,7 @@ import {
 import {
   attachSimulatedEquip,
   findCardOwner,
+  findCardZone,
   moveCardToZone,
   removeCardFromZones,
 } from "../zones.js";
@@ -35,6 +36,25 @@ import {
   STOP_SIMULATION,
   storeSimActionResult,
 } from "./shared.js";
+
+function emitSimulatedAfterSpecialSummon({
+  options,
+  state,
+  player,
+  card,
+  action,
+  fromZone = "hand",
+  sourceCard = null,
+}) {
+  options.emitSimulatedEvent?.("after_summon", {
+    card,
+    player,
+    method: "special",
+    fromZone,
+    sourceCard: sourceCard || options.sourceCard || card,
+    actionContext: options.actionContext,
+  });
+}
 
 export function applySpecialSummonFromZone(ctx) {
   const {
@@ -85,6 +105,15 @@ export function applySpecialSummonFromZone(ctx) {
     applySummonState(card, action, state, targetPlayer, options);
     targetPlayer.field.push(card);
     options.onAfterSpecialSummon?.({
+      state,
+      player: targetPlayer,
+      card,
+      action,
+      fromZone,
+      sourceCard: options.sourceCard,
+    });
+    emitSimulatedAfterSpecialSummon({
+      options,
       state,
       player: targetPlayer,
       card,
@@ -154,6 +183,15 @@ export function applySearchThenOptionalSpecialSummonFromHand(ctx) {
     fromZone: "hand",
     sourceCard: options.sourceCard,
   });
+  emitSimulatedAfterSpecialSummon({
+    options,
+    state,
+    player: targetPlayer,
+    card: searched,
+    action,
+    fromZone: "hand",
+    sourceCard: options.sourceCard,
+  });
   return;
 }
 
@@ -170,22 +208,54 @@ export function applySpecialSummonFromHandWithCost(ctx) {
     applySimulatedActions,
   } = ctx;
   const targetPlayer = resolveActionPlayer(action, self, opponent);
-  if (!hasOpenMonsterZone(targetPlayer)) return;
   const sourceCard = options.sourceCard;
   if (!sourceCard || !targetPlayer.hand?.includes(sourceCard)) return;
   const costTargets = action.costTargetRef
     ? selections?.[action.costTargetRef] || []
     : targets;
   if (!Array.isArray(costTargets) || costTargets.length === 0) return;
+  const costDestination =
+    action.costDestination === "banish"
+      ? "banished"
+      : action.costDestination || "graveyard";
+  const costFreesMonsterZone = costTargets.some((card) => {
+    const owner = findCardOwner(state, card) || targetPlayer;
+    return owner === targetPlayer && findCardZone(owner, card) === "field";
+  });
+  if (!hasOpenMonsterZone(targetPlayer) && !costFreesMonsterZone) return;
   costTargets.forEach((card) => {
     if (!card) return;
     const owner = findCardOwner(state, card) || targetPlayer;
-    moveCardToZone(owner, card, "graveyard");
+    const fromZone = findCardZone(owner, card) || "field";
+    const wasFaceupBeforeMove = card.isFacedown !== true;
+    if (moveCardToZone(owner, card, costDestination)) {
+      options.emitSimulatedEvent?.("card_moved", {
+        card,
+        player: owner,
+        fromZone,
+        toZone: costDestination,
+        movedByEffect: action.costMovedByEffect === true,
+        wasFaceupBeforeMove,
+        sourceCard,
+        effectId: options.effect?.id || null,
+        actionContext: options.actionContext,
+      });
+    }
   });
+  if (!hasOpenMonsterZone(targetPlayer)) return;
   removeCardFromZones(targetPlayer, sourceCard);
   applySummonState(sourceCard, action, state, targetPlayer, options);
   targetPlayer.field.push(sourceCard);
   options.onAfterSpecialSummon?.({
+    state,
+    player: targetPlayer,
+    card: sourceCard,
+    action,
+    fromZone: "hand",
+    sourceCard,
+  });
+  emitSimulatedAfterSpecialSummon({
+    options,
     state,
     player: targetPlayer,
     card: sourceCard,
@@ -257,6 +327,15 @@ export function applySpecialSummonFromHandWithTieredCost(ctx) {
     sourceCard,
     costCount: chosenCosts.length,
   });
+  emitSimulatedAfterSpecialSummon({
+    options,
+    state,
+    player: targetPlayer,
+    card: sourceCard,
+    action,
+    fromZone: "hand",
+    sourceCard,
+  });
   return;
 }
 
@@ -277,7 +356,20 @@ export function applyBounceAndSummon(ctx) {
   const sourceCard = options.sourceCard;
   if (!sourceCard || !targetPlayer.field?.includes(sourceCard)) return;
   if (action.bounceSource) {
-    moveCardToZone(targetPlayer, sourceCard, "hand");
+    const wasFaceupBeforeMove = sourceCard.isFacedown !== true;
+    if (moveCardToZone(targetPlayer, sourceCard, "hand")) {
+      options.emitSimulatedEvent?.("card_moved", {
+        card: sourceCard,
+        player: targetPlayer,
+        fromZone: "field",
+        toZone: "hand",
+        movedByEffect: true,
+        wasFaceupBeforeMove,
+        sourceCard,
+        effectId: options.effect?.id || null,
+        actionContext: options.actionContext,
+      });
+    }
   }
   const candidates = getActionCandidates(targetPlayer, action, "hand")
     .filter((card) => card !== sourceCard);
@@ -294,6 +386,15 @@ export function applyBounceAndSummon(ctx) {
   applySummonState(chosen, action, state, targetPlayer, options);
   targetPlayer.field.push(chosen);
   options.onAfterSpecialSummon?.({
+    state,
+    player: targetPlayer,
+    card: chosen,
+    action,
+    fromZone: "hand",
+    sourceCard,
+  });
+  emitSimulatedAfterSpecialSummon({
+    options,
     state,
     player: targetPlayer,
     card: chosen,
@@ -354,6 +455,15 @@ export function applyConditionalSummonFromHand(ctx) {
     removeCardFromZones(targetPlayer, chosen);
     applySummonState(chosen, action, state, targetPlayer, options);
     targetPlayer.field.push(chosen);
+    emitSimulatedAfterSpecialSummon({
+      options,
+      state,
+      player: targetPlayer,
+      card: chosen,
+      action,
+      fromZone: "hand",
+      sourceCard: options.sourceCard,
+    });
   }
   return;
 }

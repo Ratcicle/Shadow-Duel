@@ -51,6 +51,7 @@ import {
   applyModifyStatsTempThenDestroyIfZeroed,
   applySetStatsToZeroAndNegate,
   applyAddStatus,
+  applySwitchPosition,
 } from "./stats.js";
 import {
   applyAllowDirectAttackThisTurn,
@@ -107,6 +108,7 @@ export const SIMULATED_ACTION_HANDLERS = {
   "modify_stats_temp_then_destroy_if_zeroed": applyModifyStatsTempThenDestroyIfZeroed,
   "set_stats_to_zero_and_negate": applySetStatsToZeroAndNegate,
   "add_status": applyAddStatus,
+  "switch_position": applySwitchPosition,
   "allow_direct_attack_this_turn": applyAllowDirectAttackThisTurn,
   "register_battle_pair_effect": applyRegisterBattlePairEffect,
   "redirect_current_attack_to_target": applyRedirectCurrentAttackToTarget,

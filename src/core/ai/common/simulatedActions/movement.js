@@ -18,6 +18,7 @@ import {
 import {
   attachSimulatedEquip,
   findCardOwner,
+  findCardZone,
   getZoneCards,
   moveCardToZone,
   removeCardFromZones,
@@ -71,7 +72,21 @@ export function applyReturnToHand(ctx) {
   targets.forEach((card) => {
     const owner = findCardOwner(state, card);
     if (!owner) return;
-    moveCardToZone(owner, card, "hand");
+    const fromZone = findCardZone(owner, card) || action.fromZone || "field";
+    const wasFaceupBeforeMove = card.isFacedown !== true;
+    if (moveCardToZone(owner, card, "hand")) {
+      options.emitSimulatedEvent?.("card_moved", {
+        card,
+        player: owner,
+        fromZone,
+        toZone: "hand",
+        movedByEffect: true,
+        wasFaceupBeforeMove,
+        sourceCard: options.sourceCard || null,
+        effectId: options.effect?.id || null,
+        actionContext: options.actionContext,
+      });
+    }
   });
   return;
 }
@@ -81,6 +96,7 @@ export function applyMove(ctx) {
     action,
     targets,
     state,
+    options,
     self,
     opponent,
     source,
@@ -166,6 +182,8 @@ export function applyMove(ctx) {
     if (to === "field" && (destPlayer?.field || []).length >= 5) {
       return;
     }
+    const fromZone = findCardZone(owner, card) || action.fromZone || null;
+    const wasFaceupBeforeMove = card.isFacedown !== true;
     if (moveCardToZone(destPlayer || owner, card, to)) {
       if (action.resetAttackFlags) {
         card.hasAttacked = false;
@@ -174,6 +192,19 @@ export function applyMove(ctx) {
         card.canMakeSecondAttackThisTurn = false;
         card.secondAttackUsedThisTurn = false;
       }
+      options.emitSimulatedEvent?.("card_moved", {
+        card,
+        player: destPlayer || owner,
+        fromPlayer: owner,
+        toPlayer: destPlayer || owner,
+        fromZone,
+        toZone: to,
+        movedByEffect: true,
+        wasFaceupBeforeMove,
+        sourceCard: options.sourceCard || null,
+        effectId: options.effect?.id || null,
+        actionContext: options.actionContext,
+      });
       moved = true;
     }
   });
