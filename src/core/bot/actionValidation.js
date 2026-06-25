@@ -136,6 +136,132 @@ export function canResolveSummonActionForCurrentState(bot, action, game) {
   return true;
 }
 
+function getCardInstanceIds(card) {
+  return [
+    card?.instanceId,
+    card?._instanceId,
+    card?.uid,
+    card?.uuid,
+    card?.simInstanceId,
+    card?.fieldPresenceId,
+  ].filter((id) => id !== null && id !== undefined);
+}
+
+function findExtraDeckCardForAction(bot, action) {
+  const extraDeck = bot?.extraDeck || [];
+  if (Number.isInteger(action.extraDeckIndex)) {
+    const direct = extraDeck[action.extraDeckIndex];
+    if (
+      direct &&
+      (direct.id === action.cardId ||
+        direct.name === action.cardName ||
+        direct.name === action.extraDeckCard?.name)
+    ) {
+      return direct;
+    }
+  }
+  return extraDeck.find(
+    (card) =>
+      card &&
+      (card.id === action.cardId ||
+        card.name === action.cardName ||
+        card.name === action.extraDeckCard?.name),
+  );
+}
+
+function findFieldMaterialForHint(field = [], hint = {}) {
+  const ids = Array.isArray(hint.instanceIds) ? hint.instanceIds : [];
+  if (ids.length > 0) {
+    const byInstance = field.find((card) => {
+      const cardIds = getCardInstanceIds(card);
+      return cardIds.some((id) => ids.includes(id));
+    });
+    if (byInstance) return byInstance;
+  }
+
+  if (Number.isInteger(hint.index)) {
+    const direct = field[hint.index];
+    if (
+      direct &&
+      (hint.id === undefined || direct.id === hint.id) &&
+      (!hint.name || direct.name === hint.name)
+    ) {
+      return direct;
+    }
+  }
+
+  return field.find(
+    (card) =>
+      card &&
+      (hint.id === undefined || card.id === hint.id) &&
+      (!hint.name || card.name === hint.name),
+  );
+}
+
+function resolveExtraDeckProcedureMaterials(bot, action) {
+  const field = bot?.field || [];
+  const hints = Array.isArray(action.materials)
+    ? action.materials
+    : (action.materialIndices || []).map((index, offset) => ({
+        index,
+        id: action.materialIds?.[offset],
+        name: action.materialNames?.[offset],
+        instanceIds: action.materialInstanceIds?.[offset],
+      }));
+  const materials = [];
+  for (const hint of hints) {
+    const material = findFieldMaterialForHint(field, hint);
+    if (!material || materials.includes(material)) return [];
+    materials.push(material);
+  }
+  return materials;
+}
+
+function materialSelectionMatchesCombo(materials = [], combos = []) {
+  if (!Array.isArray(materials) || !Array.isArray(combos)) return false;
+  return combos.some((combo) => {
+    if (!Array.isArray(combo) || combo.length !== materials.length) return false;
+    const remaining = [...combo];
+    for (const material of materials) {
+      const index = remaining.indexOf(material);
+      if (index < 0) return false;
+      remaining.splice(index, 1);
+    }
+    return true;
+  });
+}
+
+export function canResolveExtraDeckProcedureActionForCurrentState(
+  bot,
+  action,
+  game,
+) {
+  const card = findExtraDeckCardForAction(bot, action);
+  if (!card || !card.extraDeckSummonProcedure) return false;
+  if (typeof game?.canSummonExtraDeckCardByProcedure !== "function") {
+    return false;
+  }
+
+  const check = game.canSummonExtraDeckCardByProcedure(card, bot, {
+    silent: true,
+  });
+  if (!check?.ok) return false;
+
+  const materials = resolveExtraDeckProcedureMaterials(bot, action);
+  if (materials.length !== Number(check.requiredCount || materials.length)) {
+    return false;
+  }
+  const candidateSet = new Set(check.candidates || []);
+  if (materials.some((material) => !candidateSet.has(material))) return false;
+  if (
+    check.materialCombos &&
+    !materialSelectionMatchesCombo(materials, check.materialCombos)
+  ) {
+    return false;
+  }
+  return true;
+}
+
 export function filterValidActionsForCurrentState(bot, actions, game) {
   if (!Array.isArray(actions)) return [];
   return actions.filter((action) => {
@@ -270,6 +396,9 @@ export function filterValidActionsForCurrentState(bot, actions, game) {
         if (check && check.ok === false) return false;
       }
       return true;
+    }
+    if (action.type === "extraDeckProcedure") {
+      return canResolveExtraDeckProcedureActionForCurrentState(bot, action, game);
     }
     if (action.type === "fieldEffect") {
       if (!bot.fieldSpell) return false;

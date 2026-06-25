@@ -17,6 +17,7 @@ import {
   canActivateSpellFromHand,
   canActivateSpellTrapEffect,
 } from "./common/previewGuards.js";
+import { getGenericAscensionActions } from "./common/ascensionPlanning.js";
 import { applyGenericSimulatedMainPhaseAction } from "./common/simulation.js";
 import {
   buildMirageboundPlanningProfile,
@@ -107,8 +108,9 @@ function getBattleStat(card) {
 
 function getMaterialEffectActivations(game, player, materialId) {
   if (!player || !Number.isFinite(materialId)) return 0;
+  const stats = game?.materialDuelStats || game?._gameRef?.materialDuelStats;
   return (
-    game?.materialDuelStats?.[
+    stats?.[
       player.id
     ]?.effectActivationsByMaterialId?.get?.(materialId) || 0
   );
@@ -156,6 +158,180 @@ function getInstanceIds(cards = []) {
     result.push(id);
   }
   return result;
+}
+
+function buildMaterialHint(card, index) {
+  return {
+    index,
+    id: card?.id,
+    name: card?.name,
+    instanceIds: getCardInstanceIds(card),
+  };
+}
+
+function hasCardStatus(card, status) {
+  if (!card || !status) return false;
+  if (card[status]) return true;
+  if (Array.isArray(card.statuses) && card.statuses.includes(status)) return true;
+  if (card.status === status) return true;
+  return false;
+}
+
+function getOwnerId(ownerLike) {
+  if (!ownerLike) return null;
+  if (typeof ownerLike === "string") return ownerLike;
+  return ownerLike.id || ownerLike.controller || ownerLike.owner || null;
+}
+
+function uniqueValues(values = []) {
+  const seen = new Set();
+  const result = [];
+  for (const value of values) {
+    if (value === null || value === undefined) continue;
+    const key = String(value);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(value);
+  }
+  return result;
+}
+
+function mergePreference(base = {}, patch = {}) {
+  return {
+    ...(base || {}),
+    ...(patch || {}),
+    preferredInstanceIds: uniqueValues([
+      ...(patch.preferredInstanceIds || []),
+      ...(base.preferredInstanceIds || []),
+    ]),
+    avoidInstanceIds: uniqueValues([
+      ...(patch.avoidInstanceIds || []),
+      ...(base.avoidInstanceIds || []),
+    ]),
+    preferredNames: uniqueValues([
+      ...(patch.preferredNames || []),
+      ...(base.preferredNames || []),
+    ]),
+    avoidNames: uniqueValues([
+      ...(patch.avoidNames || []),
+      ...(base.avoidNames || []),
+    ]),
+  };
+}
+
+function mergeTargetPreference(activationContext, targetId, patch) {
+  if (!activationContext || !targetId || !patch) return activationContext;
+  const actionContext = {
+    ...(activationContext.actionContext || {}),
+  };
+  const targetPreferences = {
+    ...(actionContext.targetPreferences || {}),
+  };
+  targetPreferences[targetId] = mergePreference(
+    targetPreferences[targetId],
+    patch,
+  );
+  actionContext.targetPreferences = targetPreferences;
+  return {
+    ...activationContext,
+    actionContext,
+  };
+}
+
+function getIncomingBattleThreat(context = {}, player, analysis = {}) {
+  const attacker = context.attacker || null;
+  const defender = context.defender || context.target || null;
+  const attackerOwnerId =
+    getOwnerId(context.attackerOwner) || getOwnerId(attacker);
+  const defenderOwnerId =
+    getOwnerId(context.defenderOwner) ||
+    getOwnerId(context.targetOwner) ||
+    getOwnerId(defender);
+  const isAttack =
+    context.type === "attack_declaration" ||
+    context.type === "battle_damage";
+  const isOpponentAttack =
+    isAttack &&
+    attacker &&
+    attackerOwnerId &&
+    attackerOwnerId !== player?.id;
+  const defendingSelf =
+    !defender || !defenderOwnerId || defenderOwnerId === player?.id;
+
+  if (!isOpponentAttack || !defendingSelf) {
+    return {
+      isOpponentAttack: false,
+      damage: 0,
+      loseMonster: false,
+      lethal: false,
+      highThreat: false,
+      attacker,
+      defender,
+    };
+  }
+
+  const atk = getEffectiveAtk(attacker);
+  let damage = 0;
+  let loseMonster = false;
+  if (!defender) {
+    damage = atk;
+  } else if (defender.position === "defense") {
+    const defenderStat = getEffectiveDef(defender);
+    loseMonster = atk > defenderStat;
+    damage = attacker.piercing ? Math.max(0, atk - defenderStat) : 0;
+  } else {
+    const defenderStat = getEffectiveAtk(defender);
+    loseMonster = atk >= defenderStat;
+    damage = Math.max(0, atk - defenderStat);
+  }
+
+  const lethal = damage >= Number(player?.lp || 0);
+  const highThreat =
+    lethal ||
+    loseMonster ||
+    damage >= 800 ||
+    atk >= 2000 ||
+    analysis.oppPressure === true;
+
+  return {
+    isOpponentAttack,
+    damage,
+    loseMonster,
+    lethal,
+    highThreat,
+    attacker,
+    defender,
+  };
+}
+
+function isOpponentEffectTargetingSelf(context = {}, player) {
+  if (context.type !== "effect_targeted") return false;
+  const sourceOwnerId =
+    getOwnerId(context.player) ||
+    getOwnerId(context.sourceOwner) ||
+    getOwnerId(context.card);
+  const target = context.target || context.defender || context.eventCard || null;
+  const targetOwnerId =
+    getOwnerId(context.targetOwner) ||
+    getOwnerId(context.defenderOwner) ||
+    getOwnerId(target);
+  return (
+    sourceOwnerId &&
+    sourceOwnerId !== player?.id &&
+    target &&
+    (!targetOwnerId || targetOwnerId === player?.id)
+  );
+}
+
+function hasUsefulChainBounceTarget(analysis = {}) {
+  return (analysis.faceUpMiragebounds || []).some((card) => {
+    if (!card || card.name === MB.FALSE_KING) return false;
+    if (card.name === MB.SCOUT && analysis.preserveScout) return false;
+    if (card.name === MB.GLASS_SOVEREIGN || card.name === MB.DESERT_LEVIATHAN) {
+      return false;
+    }
+    return true;
+  });
 }
 
 function getBestOwnBattleStat(analysis = {}) {
@@ -703,6 +879,9 @@ function shouldActivateMonsterEffect(card, analysis = {}, context = {}) {
 
   if (card?.name === MB.DANCER) {
     if (otherMiragebounds.length === 0) return { yes: false };
+    if (analysis.hasLeviathanLine && analysis.opponentMonsters.length >= 2) {
+      return { yes: false };
+    }
     if (!analysis.hasMeaningfulBounce && !opponentTargets) return { yes: false };
     return {
       yes: true,
@@ -783,6 +962,161 @@ function getMirageboundCardValue(card) {
   if (card.name === MB.GLASS_SOVEREIGN) return base + 10;
   if (card.name === MB.DESERT_LEVIATHAN) return base + 9;
   return base;
+}
+
+function getDesertLeviathanCard(bot) {
+  return (bot?.extraDeck || []).find((card) => card?.name === MB.DESERT_LEVIATHAN);
+}
+
+function getGlassSovereignCard(bot) {
+  return (bot?.extraDeck || []).find((card) => card?.name === MB.GLASS_SOVEREIGN);
+}
+
+function getLocalLeviathanMaterialCombos(bot) {
+  const field = bot?.field || [];
+  const vipers = field.filter(
+    (card) => isFaceUpMirageboundMonster(card) && card.name === MB.GLASS_VIPER,
+  );
+  const combos = [];
+  for (const viper of vipers) {
+    for (const other of field) {
+      if (other === viper || !isFaceUpMirageboundMonster(other)) continue;
+      combos.push([viper, other]);
+    }
+  }
+  return combos;
+}
+
+function getLeviathanMaterialCombos(game, bot, leviathan) {
+  if (!leviathan) return { ok: false, combos: [], check: null };
+  if (typeof game?.canSummonExtraDeckCardByProcedure === "function") {
+    const check = game.canSummonExtraDeckCardByProcedure(leviathan, bot, {
+      silent: true,
+    });
+    return {
+      ok: !!check?.ok,
+      combos: Array.isArray(check?.materialCombos)
+        ? check.materialCombos
+        : check?.ok
+          ? getLocalLeviathanMaterialCombos(bot)
+          : [],
+      check,
+    };
+  }
+  const combos = getLocalLeviathanMaterialCombos(bot);
+  return { ok: combos.length > 0, combos, check: null };
+}
+
+function getLeviathanSecondMaterialScore(card, analysis = {}) {
+  if (!card) return -100;
+  const preferred = {
+    [MB.DANCER]: 9,
+    [MB.JACKAL]: 8,
+    [MB.SAND_PRIESTESS]: 7,
+    [MB.FALSE_KING]: 6,
+    [MB.GLASS_VIPER]: -8,
+    [MB.GLASS_SOVEREIGN]: -12,
+    [MB.DESERT_LEVIATHAN]: -12,
+  };
+  let score = preferred[card.name] ?? (isMiragebound(card) ? 3 : -5);
+  if (card.name === MB.SCOUT) {
+    score = analysis.scoutReadyForAscension ? -18 : analysis.scoutNearAscension ? -10 : 2;
+  }
+  return score;
+}
+
+function evaluateLeviathanCombo(combo = [], analysis = {}) {
+  const [viper, second] = combo;
+  if (!viper || viper.name !== MB.GLASS_VIPER || !second) {
+    return { viable: false, score: -100, reason: "invalid Leviathan materials" };
+  }
+
+  const opponentCount = (analysis.opponentMonsters || []).length;
+  const attackTargets = (analysis.opponentAttackPositionMonsters || []).length;
+  const wideBoard = opponentCount >= 2;
+  const lethalSwing =
+    analysis.oppPressure ||
+    (analysis.readyAttackers || []).reduce(
+      (sum, card) => sum + Math.max(0, getEffectiveAtk(card)),
+      0,
+    ) >= Number(analysis.oppLP || analysis.opponent?.lp || 8000);
+  let score =
+    7 +
+    getLeviathanSecondMaterialScore(second, analysis) +
+    Math.min(4, opponentCount) * 2 +
+    attackTargets * 1.2;
+
+  if (wideBoard) score += 7;
+  if (analysis.oppPressure) score += 4;
+  if (lethalSwing) score += 3;
+  if (analysis.hasOasisActive) score += 1.2;
+  if (opponentCount <= 1) score -= 7;
+  if (opponentCount === 0) score -= 12;
+  if (second.name === MB.SCOUT && analysis.scoutReadyForAscension && !wideBoard && !lethalSwing) {
+    score -= 12;
+  } else if (second.name === MB.SCOUT && analysis.scoutNearAscension && !wideBoard) {
+    score -= 6;
+  }
+  if (hasCardStatus(viper, "banishWhenLeavesField") && analysis.hasMeaningfulBounce) {
+    score -= 3;
+  }
+
+  const viable =
+    opponentCount > 0 &&
+    (score >= 9 || wideBoard || analysis.oppPressure || lethalSwing);
+  return {
+    viable,
+    score,
+    reason: wideBoard
+      ? "Desert Leviathan punishes a wide board"
+      : analysis.oppPressure
+        ? "Desert Leviathan stabilizes battle pressure"
+        : "Desert Leviathan converts Extra Deck pressure",
+  };
+}
+
+function chooseBestLeviathanCombo(combos = [], analysis = {}) {
+  return combos
+    .map((combo) => ({
+      combo,
+      evaluation: evaluateLeviathanCombo(combo, analysis),
+    }))
+    .filter((entry) => entry.evaluation.viable)
+    .sort((a, b) => b.evaluation.score - a.evaluation.score)[0] || null;
+}
+
+function buildLeviathanProcedureAction({
+  bot,
+  leviathan,
+  combo,
+  evaluation,
+  analysis,
+} = {}) {
+  if (!bot || !leviathan || !Array.isArray(combo) || combo.length === 0) {
+    return null;
+  }
+  const materials = combo.map((card) => buildMaterialHint(card, bot.field.indexOf(card)));
+  return {
+    type: "extraDeckProcedure",
+    cardId: leviathan.id,
+    cardName: leviathan.name,
+    extraDeckIndex: bot.extraDeck.indexOf(leviathan),
+    extraDeckCard: leviathan,
+    materialIndices: materials.map((entry) => entry.index),
+    materialIds: materials.map((entry) => entry.id),
+    materialNames: materials.map((entry) => entry.name),
+    materialInstanceIds: materials.map((entry) => entry.instanceIds),
+    materials,
+    requiredMaterialCount: materials.length,
+    position: "attack",
+    priority: Math.min(15, Math.max(6, evaluation?.score || 8)),
+    reason: evaluation?.reason || "Extra Deck contact fusion",
+    activationContext: buildMirageboundActivationContext(leviathan, analysis, {
+      zone: "extraDeck",
+      activationZone: "extraDeck",
+      sourceZone: "extraDeck",
+    }),
+  };
 }
 
 export default class MirageboundStrategy extends BaseStrategy {
@@ -890,6 +1224,7 @@ export default class MirageboundStrategy extends BaseStrategy {
     const hasScoutInField = hasName(faceUpMiragebounds, MB.SCOUT);
     const hasSovereignInField = hasName(faceUpMiragebounds, MB.GLASS_SOVEREIGN);
     const hasDesertLeviathan = hasName(faceUpMiragebounds, MB.DESERT_LEVIATHAN);
+    const hasDesertLeviathanInExtraDeck = hasName(base.extraDeck || [], MB.DESERT_LEVIATHAN);
     const hasViperBouncePayoff =
       hasName(faceUpMiragebounds, MB.GLASS_VIPER) &&
       availableMonsterZonesAfterBounce > 0;
@@ -994,6 +1329,12 @@ export default class MirageboundStrategy extends BaseStrategy {
           (card) => card?.subtype === "continuous" || card?.subtype === "field",
         ),
       hasLeviathanMaterials:
+        hasDesertLeviathanInExtraDeck &&
+        hasName(faceUpMiragebounds, MB.GLASS_VIPER) &&
+        faceUpMiragebounds.some((card) => card.name !== MB.GLASS_VIPER),
+      hasLeviathanLine:
+        hasDesertLeviathanInExtraDeck &&
+        opponentMonsters.length > 0 &&
         hasName(faceUpMiragebounds, MB.GLASS_VIPER) &&
         faceUpMiragebounds.some((card) => card.name !== MB.GLASS_VIPER),
       oppPressure,
@@ -1020,6 +1361,211 @@ export default class MirageboundStrategy extends BaseStrategy {
       fromHand: zone === "hand",
       effect,
     });
+  }
+
+  buildChainActivationContext(option, analysis, context = {}) {
+    let activationContext = buildMirageboundActivationContext(
+      option?.card,
+      analysis,
+      {
+        zone: option?.zone || "spellTrap",
+        activationZone: option?.zone || "spellTrap",
+        sourceZone: option?.zone || "spellTrap",
+        effect: option?.effect,
+      },
+    );
+
+    const threat = getIncomingBattleThreat(context, analysis.player, analysis);
+    const opponentFocus = [
+      threat.attacker,
+      context.target,
+      context.defender,
+      ...rankOpponentMonstersForPosition(analysis),
+    ].filter((card) => card && card.cardKind === "monster");
+    const opponentPatch = {
+      intent: "harm",
+      role: "named_preference",
+      preferredInstanceIds: getInstanceIds(opponentFocus),
+    };
+
+    if (option?.card?.name === MB.FALSE_HORIZON) {
+      activationContext = mergeTargetPreference(
+        activationContext,
+        "miragebound_false_horizon_position_target",
+        opponentPatch,
+      );
+      if (isFaceUpMirageboundMonster(context.target) && !(
+        context.target.name === MB.SCOUT && analysis.preserveScout
+      )) {
+        activationContext = mergeTargetPreference(
+          activationContext,
+          "miragebound_false_horizon_return_target",
+          {
+            intent: "benefit",
+            role: "named_preference",
+            preferredInstanceIds: getInstanceIds([context.target]),
+          },
+        );
+      }
+    }
+
+    if (option?.card?.name === MB.VANISHING_STEP) {
+      activationContext = mergeTargetPreference(
+        activationContext,
+        "miragebound_vanishing_step_position_target",
+        {
+          ...opponentPatch,
+          role: "temporary_stat_debuff",
+          purpose: "combat",
+          attackers: analysis.readyAttackers || [],
+          opponentLp: analysis.oppLP || analysis.opponent?.lp || 0,
+          atkReduction: 500,
+          defReduction: 500,
+        },
+      );
+      if (isFaceUpMirageboundMonster(context.target) && !(
+        context.target.name === MB.SCOUT && analysis.preserveScout
+      )) {
+        activationContext = mergeTargetPreference(
+          activationContext,
+          "miragebound_vanishing_step_return_target",
+          {
+            intent: "benefit",
+            role: "named_preference",
+            preferredInstanceIds: getInstanceIds([context.target]),
+          },
+        );
+      }
+    }
+
+    return activationContext;
+  }
+
+  evaluateFalseHorizonChainResponse(option, analysis, context = {}) {
+    if (option?.card?.name !== MB.FALSE_HORIZON) return null;
+    const threat = getIncomingBattleThreat(context, analysis.player, analysis);
+    if (!threat.isOpponentAttack) return null;
+    if ((analysis.opponentMonsters || []).length === 0) return null;
+    if (
+      !threat.highThreat &&
+      !analysis.needsBattleProtection
+    ) {
+      return null;
+    }
+    return {
+      option,
+      score:
+        70 +
+        (threat.lethal ? 40 : 0) +
+        (threat.loseMonster ? 18 : 0) +
+        Math.min(20, Math.floor(threat.damage / 100)) +
+        (analysis.hasMeaningfulBounce ? 8 : 0),
+      reason: threat.lethal
+        ? "False Horizon prevents lethal attack pressure"
+        : "False Horizon answers opponent attack pressure",
+    };
+  }
+
+  evaluateVanishingStepChainResponse(option, analysis, context = {}) {
+    if (option?.card?.name !== MB.VANISHING_STEP) return null;
+    if ((analysis.opponentMonsters || []).length === 0) return null;
+    if (!hasUsefulChainBounceTarget(analysis)) return null;
+
+    const threat = getIncomingBattleThreat(context, analysis.player, analysis);
+    const protectsTargetedMiragebound =
+      isOpponentEffectTargetingSelf(context, analysis.player) &&
+      isFaceUpMirageboundMonster(context.target) &&
+      !(context.target.name === MB.SCOUT && analysis.preserveScout);
+    const contextPlayerId = getOwnerId(context.player);
+    const opponentAction =
+      threat.isOpponentAttack ||
+      protectsTargetedMiragebound ||
+      (contextPlayerId && contextPlayerId !== analysis.player?.id);
+    if (!opponentAction) return null;
+    const convertsBattleBounce =
+      threat.isOpponentAttack && threat.highThreat && analysis.hasMeaningfulBounce;
+    if (!convertsBattleBounce && !protectsTargetedMiragebound) {
+      return null;
+    }
+
+    return {
+      option,
+      score:
+        58 +
+        (threat.lethal ? 35 : 0) +
+        (threat.loseMonster ? 14 : 0) +
+        (protectsTargetedMiragebound ? 20 : 0) +
+        (analysis.hasViperBouncePayoff ? 10 : 0) +
+        (analysis.hasPriestessBouncePayoff ? 8 : 0) +
+        Math.min(12, Math.floor(threat.damage / 150)),
+      reason: protectsTargetedMiragebound
+        ? "Vanishing Step protects targeted Miragebound"
+        : "Vanishing Step converts defensive bounce",
+    };
+  }
+
+  async chooseChainResponse({
+    game,
+    player,
+    activatable = [],
+    context = {},
+  } = {}) {
+    if (!player || !Array.isArray(activatable) || activatable.length === 0) {
+      return null;
+    }
+
+    const relevant = activatable.filter(
+      (option) =>
+        option?.card?.name === MB.FALSE_HORIZON ||
+        option?.card?.name === MB.VANISHING_STEP,
+    );
+    if (relevant.length === 0) return null;
+
+    const resolvedGame = game || context?.game || this.currentAnalysis?.game || null;
+    const analysis = resolvedGame
+      ? this.analyzeGameState(resolvedGame)
+      : this.currentAnalysis || {};
+    if (!analysis.player || analysis.player.id !== player.id) {
+      analysis.player = player;
+      analysis.opponent = context?.opponent || analysis.opponent;
+    }
+
+    const evaluated = relevant
+      .map(
+        (option) =>
+          this.evaluateFalseHorizonChainResponse(option, analysis, context) ||
+          this.evaluateVanishingStepChainResponse(option, analysis, context),
+      )
+      .filter(Boolean)
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        const order = {
+          [MB.FALSE_HORIZON]: 0,
+          [MB.VANISHING_STEP]: 1,
+        };
+        return (order[a.option.card.name] ?? 9) - (order[b.option.card.name] ?? 9);
+      });
+
+    if (evaluated.length === 0) {
+      return { pass: true, reason: "no valuable Miragebound response" };
+    }
+
+    const best = evaluated[0];
+    const activationContext = this.buildChainActivationContext(
+      best.option,
+      analysis,
+      context,
+    );
+    return {
+      ...best.option,
+      priority: best.score,
+      reason: best.reason,
+      activationContext,
+      context: {
+        ...(best.option.context || context || {}),
+        activationContext,
+      },
+    };
   }
 
   getSpellActions(game, bot, analysis) {
@@ -1189,6 +1735,77 @@ export default class MirageboundStrategy extends BaseStrategy {
     });
   }
 
+  getExtraDeckActions(game, bot, analysis) {
+    const actions = [];
+    const simulated = isSimulatedState(game);
+    const sovereign = getGlassSovereignCard(bot);
+
+    actions.push(
+      ...getGenericAscensionActions(
+        {
+          game,
+          bot,
+          opponent: analysis.opponent,
+          analysis,
+          isSimulatedState: simulated,
+        },
+        {
+          getSimulatedAscensionCandidates: (_game, player, material) => {
+            if (material?.name !== MB.SCOUT) return [];
+            if (getMaterialEffectActivations(_game, player, 351) < 2) return [];
+            return sovereign ? [sovereign] : [];
+          },
+          shouldSkipAscension: (ascensionCard) =>
+            ascensionCard?.name !== MB.GLASS_SOVEREIGN,
+          evaluateAscensionPriority: () =>
+            12.5 +
+            (analysis.opponentMonsters.length <= 1 ? 2.2 : 0) +
+            (analysis.oppPressure ? 1.2 : 0),
+          chooseAscensionPosition: (ascensionCard, material) =>
+            this.chooseAutomaticAscensionPosition({
+              ascensionCard,
+              material,
+              game,
+              bot,
+              opponent: analysis.opponent,
+            }),
+          decorateAction: (action, ascensionCard, material) => ({
+            ...action,
+            cardId: ascensionCard?.id,
+            materialId: material?.id,
+            materialName: material?.name,
+            reason: "Glass Sovereign Ascension line",
+            activationContext: buildMirageboundActivationContext(
+              ascensionCard,
+              analysis,
+              {
+                zone: "extraDeck",
+                activationZone: "extraDeck",
+                sourceZone: "extraDeck",
+              },
+            ),
+          }),
+        },
+      ),
+    );
+
+    const leviathan = getDesertLeviathanCard(bot);
+    const { ok, combos } = getLeviathanMaterialCombos(game, bot, leviathan);
+    if (ok && combos.length > 0) {
+      const best = chooseBestLeviathanCombo(combos, analysis);
+      const action = buildLeviathanProcedureAction({
+        bot,
+        leviathan,
+        combo: best?.combo,
+        evaluation: best?.evaluation,
+        analysis,
+      });
+      if (action) actions.push(action);
+    }
+
+    return actions;
+  }
+
   generateMainPhaseActions(game) {
     const analysis = this.analyzeGameState(game);
     const bot = analysis.player;
@@ -1200,9 +1817,12 @@ export default class MirageboundStrategy extends BaseStrategy {
       ...this.getFieldEffectActions(game, bot, analysis),
       ...this.getSpellTrapEffectActions(game, bot, analysis),
       ...this.getMonsterEffectActions(game, bot, analysis),
+      ...this.getExtraDeckActions(game, bot, analysis),
       ...this.getSummonActions(game, bot, analysis),
       ...this.getSetSpellTrapActions(game, bot, analysis),
-      ...this.getPositionChangeActions(game, bot, analysis.opponent),
+      ...(analysis.hasLeviathanLine && analysis.opponentMonsters.length >= 2
+        ? []
+        : this.getPositionChangeActions(game, bot, analysis.opponent)),
     ];
 
     const sequenced = this.sequenceActions(actions);
@@ -1217,9 +1837,11 @@ export default class MirageboundStrategy extends BaseStrategy {
         fieldEffect: 2,
         spellTrapEffect: 3,
         monsterEffect: 4,
-        summon: 5,
-        set_spell_trap: 6,
-        position_change: 7,
+        ascension: 5,
+        extraDeckProcedure: 5,
+        summon: 6,
+        set_spell_trap: 7,
+        position_change: 8,
       },
     });
   }
@@ -1278,6 +1900,7 @@ export default class MirageboundStrategy extends BaseStrategy {
       selectBestTributes: this.selectBestTributes.bind(this),
       placeSpellCard: this.placeSpellCard.bind(this),
       chooseSpecialSummonPosition: this.chooseSpecialSummonPosition.bind(this),
+      chooseActionCase: this.chooseActionCase.bind(this),
     });
   }
 
@@ -1415,6 +2038,10 @@ export default class MirageboundStrategy extends BaseStrategy {
         opponent,
       }),
     };
+  }
+
+  shouldUseAutomaticAscensionShortcut() {
+    return false;
   }
 
   chooseAutomaticAscensionPosition({ ascensionCard, game, bot = this.bot, opponent } = {}) {

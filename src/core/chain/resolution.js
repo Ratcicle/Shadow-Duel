@@ -374,6 +374,7 @@ function prepareForResolution(cs, link, activationZone) {
 async function applyChainEffect(cs, link, activationZone) {
   const { card, player, effect, selections } = link;
   const effectEngine = cs.game.effectEngine;
+  const inheritedActivationContext = link.context?.activationContext || {};
 
   const ctx = {
     source: card,
@@ -402,6 +403,7 @@ async function applyChainEffect(cs, link, activationZone) {
     summonFromZone: link.context?.fromZone || null,
     actionContext: link.context || null,
     activationContext: {
+      ...inheritedActivationContext,
       chainLevel: link.chainLevel,
       effectId: effect?.id || null,
       sourceZone: activationZone,
@@ -411,6 +413,11 @@ async function applyChainEffect(cs, link, activationZone) {
       autoSelectSingleTarget: true,
       autoSelectTargets: isAI(player),
       _effectTargetedResolved: link.effectTargetedResolved === true,
+      actionContext: {
+        ...(inheritedActivationContext.actionContext || {}),
+        chainContext: link.context?.type || null,
+        event: link.context?.event || null,
+      },
     },
   };
   link.activationContext = ctx.activationContext;

@@ -64,6 +64,81 @@ export function resolveSimulatedFieldIndex(player, action, predicate = null) {
   return field.findIndex(matches);
 }
 
+function findSimulatedExtraDeckCard(player, action) {
+  const extraDeck = player?.extraDeck || [];
+  if (Number.isInteger(action.extraDeckIndex)) {
+    const direct = extraDeck[action.extraDeckIndex];
+    if (
+      direct &&
+      (direct.id === action.cardId ||
+        direct.name === action.cardName ||
+        direct.name === action.extraDeckCard?.name)
+    ) {
+      return { card: direct, index: action.extraDeckIndex };
+    }
+  }
+  const index = extraDeck.findIndex(
+    (card) =>
+      card &&
+      (card.id === action.cardId ||
+        card.name === action.cardName ||
+        card.name === action.extraDeckCard?.name),
+  );
+  return {
+    card: index >= 0 ? extraDeck[index] : action.extraDeckCard || null,
+    index,
+  };
+}
+
+function findSimulatedMaterialByHint(field = [], hint = {}) {
+  const ids = Array.isArray(hint.instanceIds) ? hint.instanceIds : [];
+  if (ids.length > 0) {
+    const byInstance = field.find((card) => {
+      const cardIds = [
+        getCardInstanceId(card),
+        card?.fieldPresenceId,
+      ].filter((id) => id !== null && id !== undefined);
+      return cardIds.some((id) => ids.includes(id));
+    });
+    if (byInstance) return byInstance;
+  }
+  if (Number.isInteger(hint.index)) {
+    const direct = field[hint.index];
+    if (
+      direct &&
+      (hint.id === undefined || direct.id === hint.id) &&
+      (!hint.name || direct.name === hint.name)
+    ) {
+      return direct;
+    }
+  }
+  return field.find(
+    (card) =>
+      card &&
+      (hint.id === undefined || card.id === hint.id) &&
+      (!hint.name || card.name === hint.name),
+  );
+}
+
+function resolveSimulatedExtraDeckMaterials(player, action) {
+  const field = player?.field || [];
+  const hints = Array.isArray(action.materials)
+    ? action.materials
+    : (action.materialIndices || []).map((index, offset) => ({
+        index,
+        id: action.materialIds?.[offset],
+        name: action.materialNames?.[offset],
+        instanceIds: action.materialInstanceIds?.[offset],
+      }));
+  const materials = [];
+  for (const hint of hints) {
+    const material = findSimulatedMaterialByHint(field, hint);
+    if (!material || materials.includes(material)) return [];
+    materials.push(material);
+  }
+  return materials;
+}
+
 function buildSelectionOptions(options = {}) {
   const actionContext =
     options.actionContext ||
@@ -1096,6 +1171,62 @@ export function applyGenericSimulatedMainPhaseAction(
         card: summoned,
         player,
         method: "ascension",
+        fromZone: "extraDeck",
+        sourceCard: summoned,
+        actionContext: selectionOptions.actionContext,
+      });
+      break;
+    }
+
+    case "extraDeckProcedure": {
+      const player = state.bot;
+      const { card: extraDeckCard, index: extraIndex } =
+        findSimulatedExtraDeckCard(player, action);
+      if (!extraDeckCard || extraDeckCard.cardKind !== "monster") break;
+      const materials = resolveSimulatedExtraDeckMaterials(player, action);
+      const requiredCount = Number(
+        action.requiredMaterialCount ||
+          extraDeckCard.fusionMaterials?.length ||
+          materials.length,
+      );
+      if (materials.length !== requiredCount) break;
+      if ((player.field || []).length - materials.length + 1 > 5) break;
+
+      for (const material of materials) {
+        const fromZone = findCardZone(player, material) || "field";
+        const wasFaceupBeforeMove = material.isFacedown !== true;
+        if (moveCardToZone(player, material, "graveyard")) {
+          selectionOptions.emitSimulatedEvent?.("card_moved", {
+            card: material,
+            player,
+            fromZone,
+            toZone: "graveyard",
+            movedByEffect: false,
+            wasFaceupBeforeMove,
+            sourceCard: extraDeckCard,
+            actionContext: selectionOptions.actionContext,
+          });
+        }
+      }
+
+      if (extraIndex >= 0) {
+        player.extraDeck.splice(extraIndex, 1);
+      }
+      const summoned = {
+        ...extraDeckCard,
+        position: action.position || extraDeckCard.fusionPosition || "attack",
+        isFacedown: false,
+        hasAttacked: false,
+        attacksUsedThisTurn: 0,
+        summonMethod:
+          extraDeckCard.extraDeckSummonProcedure?.summonMethod || "fusion",
+        summonProcedure: extraDeckCard.extraDeckSummonProcedure?.type || null,
+      };
+      player.field.push(summoned);
+      selectionOptions.emitSimulatedEvent?.("after_summon", {
+        card: summoned,
+        player,
+        method: summoned.summonMethod || "fusion",
         fromZone: "extraDeck",
         sourceCard: summoned,
         actionContext: selectionOptions.actionContext,

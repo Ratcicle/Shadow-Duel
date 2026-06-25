@@ -1,4 +1,5 @@
 import { executeAscensionAction } from "./actionExecutors/ascension.js";
+import { executeExtraDeckProcedureAction } from "./actionExecutors/extraDeck.js";
 import {
   executeSpecialSummonSanctumProtectorAction,
   executeSummonAction,
@@ -19,6 +20,7 @@ import {
 
 const EXECUTORS = {
   ascension: executeAscensionAction,
+  extraDeckProcedure: executeExtraDeckProcedureAction,
   special_summon_sanctum_protector: executeSpecialSummonSanctumProtectorAction,
   position_change: executePositionChangeAction,
   summon: executeSummonAction,

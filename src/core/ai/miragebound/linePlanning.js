@@ -217,6 +217,26 @@ function actionUsesAny(sequence = [], names = new Set()) {
   );
 }
 
+function actionUsesMaterialName(action = {}, name) {
+  return safeArray(action.materialNames).includes(name) ||
+    safeArray(action.materials).some((material) => cardName(material) === name);
+}
+
+function sequenceUsesExtraDeckProcedure(sequence = [], name) {
+  return safeArray(sequence).some(
+    (action) => action.type === "extraDeckProcedure" && actionName(action) === name,
+  );
+}
+
+function sequenceProcedureUsesMaterial(sequence = [], procedureName, materialName) {
+  return safeArray(sequence).some(
+    (action) =>
+      action.type === "extraDeckProcedure" &&
+      actionName(action) === procedureName &&
+      actionUsesMaterialName(action, materialName),
+  );
+}
+
 function sequenceHasScoutStarter(sequence = []) {
   return safeArray(sequence).some(
     (action) => action.type === "summon" && actionName(action) === MB.SCOUT,
@@ -295,8 +315,13 @@ function getLineImpact(context = {}) {
     DEFENSIVE_CARD_NAMES.has(cardName(card)),
   );
   const hasFinalSovereign = hasCard(finalBot, ["field"], MB.GLASS_SOVEREIGN);
+  const hasFinalLeviathan = hasCard(finalBot, ["field"], MB.DESERT_LEVIATHAN);
   const hasInitialScout = hasCard(initialBot, ["field"], MB.SCOUT);
   const hasFinalScout = hasCard(finalBot, ["field"], MB.SCOUT);
+  const usedLeviathanProcedure = sequenceUsesExtraDeckProcedure(
+    sequence,
+    MB.DESERT_LEVIATHAN,
+  );
   const unsupportedCount = safeArray(finalState._simUnsupportedActions).length;
 
   return {
@@ -315,11 +340,19 @@ function getLineImpact(context = {}) {
     attackThreatReduction: Math.max(0, initialAttackThreat - finalAttackThreat),
     opponentStatReduction,
     positionImpact,
+    initialOpponentMonsterCount: safeArray(initialOpponent.field).filter(isMonster).length,
+    finalOpponentMonsterCount: safeArray(finalOpponent.field).filter(isMonster).length,
     usedBounceSource: actionUsesAny(sequence, BOUNCE_SOURCE_NAMES),
     usedVanishingStep: actionUsesName(sequence, MB.VANISHING_STEP),
     usedMirrorPath: actionUsesName(sequence, MB.MIRROR_PATH),
     usedHeatHaze: actionUsesName(sequence, MB.HEAT_HAZE),
     usedOasis: actionUsesName(sequence, MB.OASIS),
+    usedLeviathanProcedure,
+    leviathanUsedScoutMaterial: sequenceProcedureUsesMaterial(
+      sequence,
+      MB.DESERT_LEVIATHAN,
+      MB.SCOUT,
+    ),
     usedScoutStarter: sequenceHasScoutStarter(sequence),
     usedBattle: sequenceHasBattle(sequence),
     positionActionCount: sequence.filter((action) => sequenceHasPositionAction([action])).length,
@@ -327,6 +360,7 @@ function getLineImpact(context = {}) {
     mirageboundHandDelta,
     hasFinalDefense,
     hasFinalSovereign,
+    hasFinalLeviathan,
     hasInitialScout,
     hasFinalScout,
     unsupportedCount,
@@ -375,20 +409,56 @@ function scoreEngineMilestones(entries, impact) {
   if (impact.hasFinalSovereign) {
     addMilestone(entries, "Glass Sovereign online", 7);
   }
+  if (impact.hasFinalLeviathan) {
+    const wideBonus = impact.initialOpponentMonsterCount >= 2 ? 4 : 0;
+    addMilestone(entries, "Desert Leviathan online", 5.5 + wideBonus);
+    if (
+      impact.usedLeviathanProcedure &&
+      impact.initialOpponentMonsterCount >= 2 &&
+      impact.sequence[0]?.type === "extraDeckProcedure" &&
+      actionName(impact.sequence[0]) === MB.DESERT_LEVIATHAN
+    ) {
+      addMilestone(entries, "immediate Leviathan wide-board conversion", 6);
+    } else if (
+      impact.usedLeviathanProcedure &&
+      impact.initialOpponentMonsterCount >= 2
+    ) {
+      addMilestone(entries, "delayed Leviathan against wide board", -8);
+    }
+  }
   if (
     profile?.scoutReadyForAscension &&
     impact.hasInitialScout &&
     !impact.hasFinalScout &&
-    !impact.hasFinalSovereign
+    !impact.hasFinalSovereign &&
+    !(impact.hasFinalLeviathan && impact.initialOpponentMonsterCount >= 2)
   ) {
     addMilestone(entries, "spent ready Scout before Ascension", -9);
   } else if (
     profile?.scoutNearAscension &&
     impact.hasInitialScout &&
     !impact.hasFinalScout &&
-    !impact.hasFinalSovereign
+    !impact.hasFinalSovereign &&
+    !(impact.hasFinalLeviathan && impact.initialOpponentMonsterCount >= 2)
   ) {
     addMilestone(entries, "bounced Scout near Ascension", -5.5);
+  }
+  if (
+    impact.usedLeviathanProcedure &&
+    impact.leviathanUsedScoutMaterial &&
+    (profile?.scoutReadyForAscension || profile?.scoutNearAscension) &&
+    !impact.hasFinalSovereign &&
+    impact.initialOpponentMonsterCount <= 1 &&
+    impact.removedOpponentCards <= 0 &&
+    !impact.initialLethalDanger
+  ) {
+    addMilestone(
+      entries,
+      profile?.scoutReadyForAscension
+        ? "spent ready Scout for Leviathan"
+        : "spent near-Ascension Scout for Leviathan",
+      profile?.scoutReadyForAscension ? -9 : -5.5,
+    );
   }
 }
 
@@ -428,6 +498,9 @@ function scoreControlMilestones(entries, impact) {
   const { positionImpact } = impact;
   if (positionImpact.toDefense > 0) {
     addMilestone(entries, "shifted attackers to Defense", positionImpact.toDefense * 2.2);
+  }
+  if (impact.usedLeviathanProcedure && positionImpact.toDefense >= 2) {
+    addMilestone(entries, "Leviathan shifted wide board", 4 + positionImpact.toDefense);
   }
   if (impact.threatReduction >= 500) {
     addMilestone(
@@ -559,11 +632,21 @@ function scoreDefenseAndRiskMilestones(entries, impact) {
   if (impact.unsupportedCount > 0) {
     addMilestone(entries, "line used unsupported simulated action", -8);
   }
+  if (
+    impact.usedLeviathanProcedure &&
+    impact.initialOpponentMonsterCount <= 1 &&
+    impact.removedOpponentCards <= 0 &&
+    impact.finalDirectDamage <= 0 &&
+    !impact.initialLethalDanger
+  ) {
+    addMilestone(entries, "Leviathan into single target without payoff", -6);
+  }
 }
 
 function finalizeImpactPayoff(impact) {
   impact.realPayoff =
     impact.hasFinalSovereign ||
+    (impact.hasFinalLeviathan && impact.initialOpponentMonsterCount >= 2) ||
     impact.removedOpponentCards > 0 ||
     impact.threatReduction >= 500 ||
     impact.attackThreatReduction >= 500 ||
@@ -607,6 +690,9 @@ function collectPlanningReasons(analysis = {}) {
   if (analysis.scoutReadyForAscension || analysis.hasSovereignInField) {
     reasons.push("Glass Sovereign window is live");
   }
+  if (analysis.hasLeviathanLine || analysis.hasLeviathanMaterials) {
+    reasons.push("Desert Leviathan contact fusion is live");
+  }
   if (field.some((card) => cardName(card) === MB.GLASS_SOVEREIGN)) {
     reasons.push("Sovereign battle conversion available");
   }
@@ -624,6 +710,9 @@ function hasBattleBridgeSignal(analysis = {}) {
   const opponentLp = Number(opponent.lp || analysis.oppLP || 8000);
   if (readyAttack >= opponentLp) return true;
   if (analysis.hasSovereignInField && opponentField.some((card) => card?.position === "defense")) {
+    return true;
+  }
+  if ((analysis.hasLeviathanLine || analysis.hasLeviathanMaterials) && opponentField.length >= 2) {
     return true;
   }
   if (analysis.hasMeaningfulBounce || analysis.hasHeatHazeRecoveryLine) {
@@ -680,6 +769,8 @@ export function buildMirageboundPlanningProfile(analysis = {}, context = {}) {
     mirrorPathIsOnlyBattleProtection: !!analysis.mirrorPathIsOnlyBattleProtection,
     hasMeaningfulBounce: !!analysis.hasMeaningfulBounce,
     hasHeatHazeRecoveryLine: !!analysis.hasHeatHazeRecoveryLine,
+    hasLeviathanLine: !!analysis.hasLeviathanLine,
+    hasLeviathanMaterials: !!analysis.hasLeviathanMaterials,
   };
 }
 
@@ -746,6 +837,9 @@ export function scoreMirageboundLineTerminal(context = {}) {
   }
   if (hasCard(finalBot, ["field"], MB.GLASS_SOVEREIGN)) {
     terminalScore += 3;
+  }
+  if (hasCard(finalBot, ["field"], MB.DESERT_LEVIATHAN)) {
+    terminalScore += profile.hasLeviathanLine ? 2.5 : 1.5;
   }
 
   return baseScore + milestoneScore + clamp(terminalScore, -10, 8);

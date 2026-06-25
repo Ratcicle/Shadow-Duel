@@ -1,5 +1,28 @@
 import { isQuickSpell } from "../game/spellTrap/quickSpellRules.js";
 
+function getStrategyForPlayer(game, player) {
+  if (player?.strategy) return player.strategy;
+  if (game?.bot?.id && game.bot.id === player?.id) return game.bot.strategy || null;
+  if (game?.player?.id && game.player.id === player?.id) {
+    return game.player.strategy || null;
+  }
+  return null;
+}
+
+function buildResponseContext(baseContext, response) {
+  const activationContext =
+    response?.activationContext ||
+    response?.context?.activationContext ||
+    baseContext?.activationContext ||
+    null;
+  if (!activationContext) return response?.context || baseContext;
+  return {
+    ...(baseContext || {}),
+    ...(response?.context || {}),
+    activationContext,
+  };
+}
+
 /**
  * Bot AI for choosing chain response
  * @param {Object} player
@@ -12,6 +35,41 @@ export async function botChooseChainResponse(player, activatable, context) {
 
   const game = this.game;
   const opponent = this.getOpponent(player);
+  const strategy = getStrategyForPlayer(game, player);
+  if (typeof strategy?.chooseChainResponse === "function") {
+    const strategyResponse = await strategy.chooseChainResponse({
+      chainSystem: this,
+      game,
+      player,
+      opponent,
+      activatable,
+      context,
+    });
+    if (strategyResponse?.pass === true) {
+      this.log?.(
+        `Bot strategy passing chain response${
+          strategyResponse.reason ? ` (${strategyResponse.reason})` : ""
+        }`,
+      );
+      return null;
+    }
+    if (strategyResponse?.card && strategyResponse?.effect) {
+      const responseContext = buildResponseContext(context, strategyResponse);
+      const selections =
+        strategyResponse.selections ??
+        (await this.getBotSelectionsForEffect(
+          strategyResponse.card,
+          strategyResponse.effect,
+          player,
+          responseContext,
+        ));
+      return {
+        ...strategyResponse,
+        context: responseContext,
+        selections,
+      };
+    }
+  }
   const holyShieldOption = activatable.find(
     (option) => option?.card?.name === "Luminarch Holy Shield",
   );
@@ -273,6 +331,7 @@ export async function getBotSelectionsForEffect(card, effect, player, context) {
   if (!effectEngine) return null;
 
   const ctx = {
+    ...(context || {}),
     source: card,
     player,
     opponent: this.getOpponent(player),
@@ -280,7 +339,12 @@ export async function getBotSelectionsForEffect(card, effect, player, context) {
     attacker: context?.attacker,
     attackerOwner: context?.attackerOwner,
     defenderOwner: context?.defenderOwner,
-    activationContext: { autoSelectSingleTarget: true, logTargets: false },
+    activationContext: {
+      ...(context?.activationContext || {}),
+      autoSelectSingleTarget:
+        context?.activationContext?.autoSelectSingleTarget !== false,
+      logTargets: context?.activationContext?.logTargets === true,
+    },
   };
 
   const targetResult = effectEngine.resolveTargets(effect.targets, ctx, null);
