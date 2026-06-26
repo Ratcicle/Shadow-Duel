@@ -79,6 +79,10 @@ export default class Bot extends Player {
     return getBotDeckList("miragebound");
   }
 
+  getBloomrotDeck() {
+    return getBotDeckList("bloomrot");
+  }
+
   // Sobrescreve buildExtraDeck para usar fusões do arquétipo
   buildExtraDeck() {
     buildBotExtraDeck(this);
@@ -108,6 +112,10 @@ export default class Bot extends Player {
 
   getMirageboundExtraDeck() {
     return getBotExtraDeckList("miragebound");
+  }
+
+  getBloomrotExtraDeck() {
+    return getBotExtraDeckList("bloomrot");
   }
 
   resolveOpponent(game) {

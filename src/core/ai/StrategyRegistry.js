@@ -4,6 +4,7 @@ import VoidStrategy from "./VoidStrategy.js";
 import DragonStrategy from "./DragonStrategy.js";
 import ArcanistStrategy from "./ArcanistStrategy.js";
 import MirageboundStrategy from "./MirageboundStrategy.js";
+import BloomrotStrategy from "./BloomrotStrategy.js";
 
 const registry = new Map();
 
@@ -27,3 +28,4 @@ registerStrategy("void", VoidStrategy);
 registerStrategy("dragon", DragonStrategy);
 registerStrategy("arcanist", ArcanistStrategy);
 registerStrategy("miragebound", MirageboundStrategy);
+registerStrategy("bloomrot", BloomrotStrategy);

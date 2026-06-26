@@ -37,6 +37,8 @@ Critério de aceite:
 - Lista curta de achados, com bloqueadores separados de melhorias futuras.
 - Nenhuma mudança de runtime obrigatória para começar a Etapa 1.
 
+Status: concluída em [`docs/Bloomrot Bot Technical Audit.md`](Bloomrot%20Bot%20Technical%20Audit.md). Não há bloqueador para iniciar a Etapa 1.
+
 ## Etapa 1 - Preset e Registro
 
 Objetivo: tornar Bloomrot selecionável como bot.
@@ -55,6 +57,8 @@ Critério de aceite:
 - Preset Bloomrot aparece na seleção do bot.
 - Bot inicia duelo com deck válido.
 - Sem erros de validação/sintaxe.
+
+Status: concluída. Preset `bloomrot`, main deck de 30 cartas, Extra Deck `[418, 419, 420]` e `BloomrotStrategy` mínima registrados.
 
 ## Etapa 2 - Análise Bloomrot
 
@@ -79,6 +83,8 @@ Critério de aceite:
 
 - `BloomrotStrategy` consegue logar/anexar uma análise consistente por turno.
 - Nenhuma decisão ainda precisa ser perfeita, mas todas devem ler do mesmo objeto de análise.
+
+Status: concluída. `BloomrotStrategy` agora expõe `analyzeGameState()` e usa `src/core/ai/bloomrot/analysis.js` para centralizar Marcadores de Esporo, peças-chave, thresholds e zonas relevantes.
 
 ## Etapa 3 - Main Phase MVP
 
@@ -111,6 +117,8 @@ Critério de aceite:
 - Ele não usa `Harvest` inutilmente.
 - Ele não lota o campo de forma óbvia quando precisa de espaço.
 
+Status: concluída. `BloomrotStrategy` agora gera ações de Main Phase MVP com helpers genéricos, policy simples em `bloomrot/priorities.js`, setup inicial, ignitions básicos e backrow defensivo.
+
 ## Etapa 4 - Preferências de Alvo
 
 Objetivo: ensinar a IA a escolher bons alvos para marcadores, destruição, equip e recuperação.
@@ -134,6 +142,8 @@ Critério de aceite:
 - O bot concentra marcadores quando há ameaça única.
 - O bot espalha marcadores quando preparar `Devourer`/`Harvest` é claramente melhor.
 
+Status: concluída. Preferências de alvo Bloomrot adicionadas em `bloomrot/targeting.js`, conectadas ao `activationContext` e ao ranking de busca/recuperação da `BloomrotStrategy`.
+
 ## Etapa 5 - Política de Gastos
 
 Objetivo: impedir o bot de gastar Marcadores de Esporo sem payoff.
@@ -153,6 +163,8 @@ Critério de aceite:
 
 - O bot para de gastar 2 marcadores só para colocar corpo sem impacto.
 - O bot usa `Harvest` apenas com alvo relevante ou pressão letal.
+
+Status: concluída. A política de gastos foi centralizada em `bloomrot/resourcePolicy.js` e integrada às prioridades de `Rot-Stag`, `Gravecap Widow`, `Ancient Husk`, `Harvest`, `Root Network` e `Ancient Mycelium`, preservando marcadores protegidos e o plano de `Queen`.
 
 ## Etapa 6 - Extra Deck
 
@@ -179,6 +191,8 @@ Critério de aceite:
 - Bot não invoca boss sem impacto claro.
 - Bot não sacrifica campo inteiro por `Devourer` fraco.
 
+Status: concluída. `BloomrotStrategy` agora gera ações de Ascensão para `Ancient Mycelium`/`Queen` via helper genérico e usa `Polymerization` com preferências de fusão/custo para `Bloomrot Devourer of Dead Roots` apenas quando há payoff relevante.
+
 ## Etapa 7 - Battle Phase
 
 Objetivo: atacar com noção de marcadores, buffs e debuffs.
@@ -197,6 +211,8 @@ Critério de aceite:
 
 - Bot ataca monstros marcados quando vence.
 - Bot não joga fora material/boss em combate sem payoff.
+
+Status: concluída. A Battle Phase Bloomrot agora usa perfil de planejamento `mainBattleMain2` quando há payoff real e aplica scoring específico para Marcadores de Esporo, `Rot-Stag`, `Carrioncap`, `Devourer`, ataques diretos e preservação de peças-chave.
 
 ## Etapa 8 - Defesa e Chain
 
