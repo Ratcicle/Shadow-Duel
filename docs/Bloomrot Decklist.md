@@ -79,7 +79,7 @@ O arquetipo **Bloomrot** e focado em Marcadores de Esporo, fichas Planta e contr
 > If you control a "Bloomrot Token", you can Special Summon this card from your hand. Once per turn: You can target 1 face-up card your opponent controls; place 1 Spore Counter on it. If this card is destroyed by battle or card effect: You can place 1 Spore Counter on 1 face-up card your opponent controls. You can only use each effect of "Bloomrot Rootling" once per turn.
 
 **403 - Bloomrot Myco-Weaver** (L3 Earth Plant | ATK 1400 / DEF 1500)
-> If this card is Normal or Special Summoned: Special Summon 1 "Bloomrot Token" (Plant/EARTH/Level 1/ATK 0/DEF 0). If a "Bloomrot Token" you control leaves the field: place 1 Spore Counter on 1 face-up monster your opponent controls. You can only use each effect of "Bloomrot Myco-Weaver" once per turn.
+> If this card is Normal or Special Summoned: Special Summon 1 "Bloomrot Token" (Plant/EARTH/Level 1/ATK 0/DEF 0). Once per turn: You can send 1 "Bloomrot" monster you control to the Graveyard; target 1 face-up card your opponent controls; place 2 Spore Counters on it.
 
 **404 - Bloomrot Rot-Stag** (L5 Earth Plant | ATK 2000 / DEF 1900)
 > You can Special Summon this card from your hand by removing 2 Spore Counters from the field. If this card is Special Summoned: target 1 face-up card your opponent controls; place 1 Spore Counter on it. If this card battles a monster with a Spore Counter, this card gains 500 ATK during damage calculation. You can only use each effect of "Bloomrot Rot-Stag" once per turn.
@@ -88,7 +88,7 @@ O arquetipo **Bloomrot** e focado em Marcadores de Esporo, fichas Planta e contr
 > Once per turn: You can target 1 face-up monster your opponent controls; place 1 Spore Counter on it, then that monster loses 300 ATK/DEF for each Spore Counter on it until the end of this turn. If this card destroys a monster with a Spore Counter by battle: place 1 Spore Counter on 1 face-up card your opponent controls. You can only use each effect of "Bloomrot Carrioncap" once per turn.
 
 **406 - Bloomrot Moldmender** (L2 Earth Plant | ATK 500 / DEF 1800)
-> If this card is destroyed by battle: place 1 Spore Counter on each face-up monster your opponent controls. You can banish this card from your Graveyard and target 1 face-up card on the field; place 3 Spore Counters on it. You can only use each effect of "Bloomrot Moldmender" once per turn.
+> Before damage calculation, if this card is being attacked by an opponent's monster: place 2 Spore Counters on the attacking monster. If this card is destroyed by battle: Special Summon 1 "Bloomrot Token" (Plant/EARTH/Level 1/ATK 0/DEF 0). You can only use each effect of "Bloomrot Moldmender" once per turn.
 
 **407 - Bloomrot Gravecap Widow** (L6 Earth Plant | ATK 2100 / DEF 2100)
 > You can Special Summon this card from your hand by removing 2 Spore Counters from the field. If this card is Summoned: target 1 monster with a Spore Counter your opponent controls; destroy it. Once per turn, if a monster with a Spore Counter your opponent controls is destroyed: place 1 Spore Counter on 1 face-up card on the field. You can only use each effect of "Bloomrot Gravecap Widow" once per turn.
@@ -105,7 +105,7 @@ O arquetipo **Bloomrot** e focado em Marcadores de Esporo, fichas Planta e contr
 > When this card is activated: add 1 Level 4 or lower "Bloomrot" monster from your Deck to your hand. Once per turn: target 1 face-up monster on the field; place 1 Spore Counter on it. Monsters your opponent controls lose 100 ATK/DEF for each Spore Counter on them. Each time one or more Spore Counters are removed from the field: Special Summon 1 "Bloomrot Token" (Plant/EARTH/Level 1/ATK 0/DEF 0) in Defense Position. You can only activate 1 "Bloomrot Living Colony" per turn.
 
 **411 - Bloomrot Compost Ritual** (Normal Spell)
-> Target 1 face-up monster on the field; place 1 Spore Counter on it for each "Bloomrot" monster you control. Then, gain 300 LP for each Spore Counter on your opponent's field.
+> Target 1 face-up card your opponent controls; place 1 Spore Counter on it, then place 1 additional Spore Counter on it for each "Bloomrot" monster you control. Then, gain 300 LP for each Spore Counter placed by this effect. You can only activate 1 "Bloomrot Compost Ritual" per turn.
 
 **412 - Bloomrot Root Network** (Continuous Spell)
 > Monsters your opponent controls with 5 or more Spore Counters cannot declare attacks. Once per turn: You can remove 3 Spore Counters from either side of the field; add 1 "Bloomrot" card from your Graveyard to your hand. If this card would be destroyed by an opponent's card effect, you can remove 2 Spore Counters from the field instead.
@@ -117,7 +117,7 @@ O arquetipo **Bloomrot** e focado em Marcadores de Esporo, fichas Planta e contr
 > Remove all Spore Counters from the field, then target 1 card your opponent controls for every 4 Spore Counters removed; destroy them. "Bloomrot" monsters you control gain 100 ATK/DEF until the end of this turn for each Spore Counter removed. You can only activate 1 "Bloomrot Harvest" per turn.
 
 **415 - Bloomrot Overgrowth** (Equip Spell)
-> Equip only to a monster with a Spore Counter. The equipped monster gains 1 Spore Counter during each Standby Phase. If the equipped monster is destroyed: place 1 Spore Counter on each face-up card your opponent controls.
+> Target 1 face-up monster your opponent controls; place 1 Spore Counter on it, then equip this card to it. During each Standby Phase, place 1 Spore Counter on the equipped monster. If the equipped monster is destroyed: place 1 Spore Counter on each face-up card your opponent controls.
 
 ### Armadilhas
 

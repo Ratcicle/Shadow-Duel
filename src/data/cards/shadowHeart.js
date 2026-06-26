@@ -996,17 +996,19 @@ export const shadowHeartCards = [
         id: "demon_dragon_revive_scale",
         timing: "on_event",
         event: "card_to_grave",
+        promptUser: true,
+        promptMessage:
+          'Activate "Shadow-Heart Demon Dragon" to Special Summon 1 "Shadow-Heart Scale Dragon" from your GY?',
         condition: {
           type: "destroyed_by_battle_or_effect",
         },
         actions: [
           {
             type: "special_summon_from_zone",
-            targetRef: "self",
-            sourceZone: "graveyard",
             zone: "graveyard",
             cardName: "Shadow-Heart Scale Dragon",
             archetype: "Shadow-Heart",
+            count: { min: 1, max: 1 },
             position: "choice",
           },
         ],

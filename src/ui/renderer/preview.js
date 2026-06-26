@@ -237,6 +237,22 @@ function getFloatingCounterTooltip() {
   return tooltip;
 }
 
+const FLOATING_COUNTER_TOOLTIP_CLEANUP_MS = 160;
+let floatingCounterTooltipCleanupTimer = null;
+
+function clearFloatingCounterTooltipCleanupTimer() {
+  if (!floatingCounterTooltipCleanupTimer) return;
+  window.clearTimeout(floatingCounterTooltipCleanupTimer);
+  floatingCounterTooltipCleanupTimer = null;
+}
+
+function resetFloatingCounterTooltip(tooltip) {
+  if (!tooltip || tooltip.classList.contains("visible")) return;
+  tooltip.textContent = "";
+  tooltip.style.left = "";
+  tooltip.style.top = "";
+}
+
 function positionFloatingCounterTooltip(tooltip, anchor) {
   if (!tooltip || !anchor) return;
 
@@ -258,12 +274,16 @@ function positionFloatingCounterTooltip(tooltip, anchor) {
 
 function showFloatingCounterTooltip(anchor) {
   const text = anchor?.dataset?.counterTooltip || "";
-  if (!text) return;
+  if (!text) {
+    clearFloatingCounterTooltip();
+    return;
+  }
 
+  clearFloatingCounterTooltipCleanupTimer();
   const tooltip = getFloatingCounterTooltip();
   tooltip.textContent = text;
-  tooltip.classList.add("visible");
   positionFloatingCounterTooltip(tooltip, anchor);
+  tooltip.classList.add("visible");
 }
 
 function hideFloatingCounterTooltip() {
@@ -326,10 +346,12 @@ function setPreviewStatModifierClass(element, card, stat) {
 export function clearFloatingCounterTooltip() {
   const tooltip = document.querySelector(".floating-counter-tooltip");
   if (!tooltip) return;
+  clearFloatingCounterTooltipCleanupTimer();
   tooltip.classList.remove("visible");
-  tooltip.textContent = "";
-  tooltip.style.left = "";
-  tooltip.style.top = "";
+  floatingCounterTooltipCleanupTimer = window.setTimeout(() => {
+    floatingCounterTooltipCleanupTimer = null;
+    resetFloatingCounterTooltip(tooltip);
+  }, FLOATING_COUNTER_TOOLTIP_CLEANUP_MS);
 }
 
 function bindCounterTooltipForElement(element) {
