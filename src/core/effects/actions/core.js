@@ -866,7 +866,10 @@ function resolvePreviewAddCounterAmount(engine, action, ctx, player) {
     const multiplier = Number.isFinite(Number(spec.multiplier))
       ? Number(spec.multiplier)
       : 1;
-    let amount = count * multiplier;
+    const baseAmount = Number.isFinite(Number(spec.baseAmount ?? spec.base))
+      ? Number(spec.baseAmount ?? spec.base)
+      : 0;
+    let amount = baseAmount + count * multiplier;
     if (Number.isFinite(Number(spec.min))) {
       amount = Math.max(Number(spec.min), amount);
     }

@@ -278,6 +278,14 @@ export async function resumePendingChainSelection(selections = {}) {
   this.currentChainLevel = 0;
   this.cardsBeingResolved.clear();
   this.log("Chain resolution complete after selection");
+  if (typeof this.game?.flushPendingTrapWindows === "function") {
+    const flushResult = await this.game.flushPendingTrapWindows({
+      reason: "chain_selection_resolved",
+    });
+    if (flushResult?.needsSelection) {
+      return flushResult;
+    }
+  }
   return remainingResult;
 }
 

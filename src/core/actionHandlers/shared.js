@@ -456,12 +456,22 @@ export function collectZoneCandidates(zone, filters = {}, options = {}) {
   if (!Array.isArray(zone)) return [];
 
   const source = options.source;
+  const engine = options.engine;
   const defaultLevelOp = options.defaultLevelOp || "eq";
   const excludeSummonRestrict = options.excludeSummonRestrict || [];
   const extraFilter = options.extraFilter;
 
   return zone.filter((card) => {
     if (!card) return false;
+    if (
+      engine &&
+      typeof engine.cardMatchesFilters === "function" &&
+      filters &&
+      Object.keys(filters).length > 0 &&
+      !engine.cardMatchesFilters(card, filters)
+    ) {
+      return false;
+    }
 
     if (filters.cardKind && !cardMatchesKind(card, filters.cardKind)) {
       return false;
@@ -637,6 +647,7 @@ export async function selectCardsFromZone({
   selectSingle,
   selectMulti,
   selectionContractBuilder,
+  engine,
 }) {
   if (!game || !player) {
     return { candidates: [], selected: [], cancelled: false };
@@ -649,6 +660,7 @@ export async function selectCardsFromZone({
       excludeSummonRestrict,
       defaultLevelOp,
       extraFilter,
+      engine: engine || game?.effectEngine,
     });
 
   if (resolvedCandidates.length === 0) {

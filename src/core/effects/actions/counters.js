@@ -165,7 +165,10 @@ function resolveAddCounterAmount(action, ctx) {
     const multiplier = Number.isFinite(Number(spec.multiplier))
       ? Number(spec.multiplier)
       : 1;
-    let amount = count * multiplier;
+    const baseAmount = Number.isFinite(Number(spec.baseAmount ?? spec.base))
+      ? Number(spec.baseAmount ?? spec.base)
+      : 0;
+    let amount = baseAmount + count * multiplier;
     if (Number.isFinite(Number(spec.min))) {
       amount = Math.max(Number(spec.min), amount);
     }
@@ -267,7 +270,11 @@ export async function applyAddCounter(action, ctx, targets) {
   const counterType = action.counterType || "default";
   const amount = resolveAddCounterAmount(action, ctx);
   const targetRef = action.targetRef || "self";
+  const contextKey = getCounterContextKey(action, counterType, null);
 
+  if (ctx && contextKey) {
+    writeAddedCounterContext(ctx, counterType, contextKey, 0);
+  }
   if (amount <= 0) return false;
 
   let targetCards = [];
@@ -296,12 +303,14 @@ export async function applyAddCounter(action, ctx, targets) {
   }
 
   let added = false;
+  let addedAmount = 0;
   for (const card of targetCards) {
     if (card && typeof card.addCounter === "function") {
       let remaining = amount;
       while (remaining > 0) {
         card.addCounter(counterType, 1);
         remaining -= 1;
+        addedAmount += 1;
         const after =
           typeof card.getCounter === "function"
             ? card.getCounter(counterType)
@@ -325,6 +334,10 @@ export async function applyAddCounter(action, ctx, targets) {
         added = true;
       }
     }
+  }
+
+  if (ctx && contextKey) {
+    writeAddedCounterContext(ctx, counterType, contextKey, addedAmount);
   }
 
   return added;
@@ -354,6 +367,15 @@ function writeCounterContext(ctx, counterType, contextKey, amount) {
   ctx.lastRemovedCounterCount = safeAmount;
   ctx.removedCounterCounts = ctx.removedCounterCounts || {};
   ctx.removedCounterCounts[counterType] = safeAmount;
+}
+
+function writeAddedCounterContext(ctx, counterType, contextKey, amount) {
+  if (!ctx || !contextKey) return;
+  const safeAmount = Math.max(0, Number(amount || 0));
+  ctx[contextKey] = safeAmount;
+  ctx.lastAddedCounterCount = safeAmount;
+  ctx.addedCounterCounts = ctx.addedCounterCounts || {};
+  ctx.addedCounterCounts[counterType] = safeAmount;
 }
 
 async function resolveCounterRemovalAmount(engine, action, ctx, totalAvailable) {

@@ -554,6 +554,7 @@ export async function handleAddFromZoneToHand(action, ctx, targets, engine) {
 
   const candidates = collectZoneCandidates(zone, filters, {
     source,
+    engine,
     extraFilter,
   });
 
@@ -751,6 +752,7 @@ export async function handleDiscardFromHand(action, ctx, targets, engine) {
   const minSelect = count.min;
   const candidates = collectZoneCandidates(hand, action.filters || {}, {
     source,
+    engine,
   });
 
   if (candidates.length < minSelect) {
@@ -889,6 +891,7 @@ export async function handleSearchThenOptionalSpecialSummonFromHand(
   const filters = buildSearchFilters(action);
   const candidates = collectZoneCandidates(zone, filters, {
     source,
+    engine,
     extraFilter: (card) => cardMatchesSearchAction(card, action),
   });
 

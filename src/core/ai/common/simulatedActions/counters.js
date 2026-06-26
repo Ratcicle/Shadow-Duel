@@ -74,7 +74,10 @@ function resolveSimulatedAddCounterAmount(action, self, opponent, options) {
     const multiplier = Number.isFinite(Number(spec.multiplier))
       ? Number(spec.multiplier)
       : 1;
-    let amount = count * multiplier;
+    const baseAmount = Number.isFinite(Number(spec.baseAmount ?? spec.base))
+      ? Number(spec.baseAmount ?? spec.base)
+      : 0;
+    let amount = baseAmount + count * multiplier;
     if (Number.isFinite(Number(spec.min))) {
       amount = Math.max(Number(spec.min), amount);
     }
@@ -99,6 +102,7 @@ export function applyAddCounter(ctx) {
     opponent,
     applySimulatedActions,
   } = ctx;
+  let addedAmount = 0;
   targets.forEach((card) => {
     const amount = resolveSimulatedAddCounterAmount(
       action,
@@ -111,7 +115,17 @@ export function applyAddCounter(ctx) {
       action.counterType || "counter",
       getCounterValue(card, action.counterType || "counter") + amount,
     );
+    addedAmount += Math.max(0, Math.floor(Number(amount || 0)));
   });
+  const contextKey = action.contextKey || action.storeAs || action.resultKey;
+  if (contextKey && options.actionContext) {
+    options.actionContext[contextKey] = addedAmount;
+    options.actionContext.lastAddedCounterCount = addedAmount;
+    options.actionContext.addedCounterCounts =
+      options.actionContext.addedCounterCounts || {};
+    options.actionContext.addedCounterCounts[action.counterType || "counter"] =
+      addedAmount;
+  }
   return;
 }
 

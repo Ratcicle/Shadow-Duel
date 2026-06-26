@@ -177,6 +177,7 @@ export default class Game {
     this.eventResolutionDepth = 0;
     this.eventResolutionCounter = 0;
     this.pendingEventSelection = null;
+    this.pendingTrapWindows = [];
     this.temporaryReplacementEffects = [];
     this.temporaryBattlePairEffects = [];
     this.temporaryEventEffects = [];
@@ -240,6 +241,7 @@ export default class Game {
     this.pendingSpecialSummon = null;
     this.pendingTributeSummonSelection = null;
     this.pendingEventSelection = null;
+    this.pendingTrapWindows = [];
     this.isResolvingEffect = false;
     this.eventResolutionDepth = 0;
     this.trapPromptInProgress = false;
@@ -1079,6 +1081,8 @@ Game.prototype.checkAndOfferTraps = spellTrapTriggers.checkAndOfferTraps;
 Game.prototype._mapEventToChainContext =
   spellTrapTriggers._mapEventToChainContext;
 Game.prototype.activateTrapFromZone = spellTrapTriggers.activateTrapFromZone;
+Game.prototype.queuePendingTrapWindow = spellTrapTriggers.queuePendingTrapWindow;
+Game.prototype.flushPendingTrapWindows = spellTrapTriggers.flushPendingTrapWindows;
 
 // -----------------------------------------------------------------------------
 // UI: Attach methods from modular ui/ folder

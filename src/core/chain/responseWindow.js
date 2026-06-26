@@ -78,6 +78,14 @@ export async function openChainWindow(context) {
   this.currentChainLevel = 0;
   this.cardsBeingResolved.clear();
   console.log(`[ChainSystem] Chain window closed successfully`);
+  if (typeof this.game?.flushPendingTrapWindows === "function") {
+    const flushResult = await this.game.flushPendingTrapWindows({
+      reason: "chain_window_closed",
+    });
+    if (flushResult?.needsSelection) {
+      return flushResult;
+    }
+  }
   return resolutionResult;
 }
 

@@ -61,6 +61,11 @@ const RECURSION_TARGET_IDS = [
   "miragebound_sand_priestess_recover_target",
 ];
 
+const DEFENSIVE_CHAIN_RESPONSE_NAMES = new Set([
+  MB.FALSE_HORIZON,
+  MB.VANISHING_STEP,
+]);
+
 function isSimulatedState(game) {
   return game?._isPerspectiveState === true;
 }
@@ -78,6 +83,17 @@ function isFaceUpMonster(card) {
 
 function isFaceUpMirageboundMonster(card) {
   return isFaceUpMonster(card) && isMiragebound(card);
+}
+
+function hasMirageboundDefenseResponseInChain(chainSystem, player) {
+  const stack = Array.isArray(chainSystem?.chainStack)
+    ? chainSystem.chainStack
+    : [];
+  return stack.some(
+    (link) =>
+      link?.player?.id === player?.id &&
+      DEFENSIVE_CHAIN_RESPONSE_NAMES.has(link?.card?.name),
+  );
 }
 
 function hasName(cards = [], name) {
@@ -302,6 +318,19 @@ function getIncomingBattleThreat(context = {}, player, analysis = {}) {
     attacker,
     defender,
   };
+}
+
+function isMeaningfulChainBattleThreat(threat = {}, analysis = {}) {
+  if (!threat.isOpponentAttack) return false;
+  const attackerAtk = getEffectiveAtk(threat.attacker);
+  return (
+    threat.lethal ||
+    threat.loseMonster ||
+    threat.damage >= 700 ||
+    attackerAtk >= 2000 ||
+    (analysis.needsBattleProtection &&
+      (threat.damage >= 400 || attackerAtk >= 1700))
+  );
 }
 
 function isOpponentEffectTargetingSelf(context = {}, player) {
@@ -1446,10 +1475,7 @@ export default class MirageboundStrategy extends BaseStrategy {
     const threat = getIncomingBattleThreat(context, analysis.player, analysis);
     if (!threat.isOpponentAttack) return null;
     if ((analysis.opponentMonsters || []).length === 0) return null;
-    if (
-      !threat.highThreat &&
-      !analysis.needsBattleProtection
-    ) {
+    if (!isMeaningfulChainBattleThreat(threat, analysis)) {
       return null;
     }
     return {
@@ -1483,7 +1509,8 @@ export default class MirageboundStrategy extends BaseStrategy {
       (contextPlayerId && contextPlayerId !== analysis.player?.id);
     if (!opponentAction) return null;
     const convertsBattleBounce =
-      threat.isOpponentAttack && threat.highThreat && analysis.hasMeaningfulBounce;
+      isMeaningfulChainBattleThreat(threat, analysis) &&
+      analysis.hasMeaningfulBounce;
     if (!convertsBattleBounce && !protectsTargetedMiragebound) {
       return null;
     }
@@ -1505,6 +1532,7 @@ export default class MirageboundStrategy extends BaseStrategy {
   }
 
   async chooseChainResponse({
+    chainSystem,
     game,
     player,
     activatable = [],
@@ -1520,6 +1548,12 @@ export default class MirageboundStrategy extends BaseStrategy {
         option?.card?.name === MB.VANISHING_STEP,
     );
     if (relevant.length === 0) return null;
+    if (hasMirageboundDefenseResponseInChain(chainSystem, player)) {
+      return {
+        pass: true,
+        reason: "Miragebound defense already committed to this chain",
+      };
+    }
 
     const resolvedGame = game || context?.game || this.currentAnalysis?.game || null;
     const analysis = resolvedGame

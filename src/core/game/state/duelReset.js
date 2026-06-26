@@ -71,6 +71,7 @@ export function resetDuelState(reason = "reset", options = {}) {
   this.pendingSpecialSummon = null;
   this.pendingTributeSummonSelection = null;
   this.pendingEventSelection = null;
+  this.pendingTrapWindows = [];
   this.pendingBattleDestroyAfterSelection = null;
   this.isResolvingEffect = false;
   this.eventResolutionDepth = 0;

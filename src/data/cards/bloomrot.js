@@ -205,7 +205,7 @@ export const bloomrotCards = [
     attribute: "Earth",
     archetype: "Bloomrot",
     description:
-      'If this card is Normal or Special Summoned: Special Summon 1 "Bloomrot Token" (Plant/EARTH/Level 1/ATK 0/DEF 0). If a "Bloomrot Token" you control leaves the field: place 1 Spore Counter on 1 face-up monster your opponent controls. You can only use each effect of "Bloomrot Myco-Weaver" once per turn.',
+      'If this card is Normal or Special Summoned: Special Summon 1 "Bloomrot Token" (Plant/EARTH/Level 1/ATK 0/DEF 0). Once per turn: You can send 1 "Bloomrot" monster you control to the Graveyard; target 1 face-up card your opponent controls; place 2 Spore Counters on it.',
     image: "assets/Bloomrot Myco-Weaver.png",
     effects: [
       {
@@ -214,8 +214,6 @@ export const bloomrotCards = [
         event: "after_summon",
         summonMethods: ["normal", "special"],
         requireSelfAsSummoned: true,
-        oncePerTurn: true,
-        oncePerTurnName: "bloomrot_myco_weaver_summon_token",
         actions: [
           {
             type: "special_summon_token",
@@ -236,37 +234,44 @@ export const bloomrotCards = [
         ],
       },
       {
-        id: "bloomrot_myco_weaver_token_left_spore_counter",
-        timing: "on_event",
-        event: "card_moved",
+        id: "bloomrot_myco_weaver_send_bloomrot_spore_counters",
+        timing: "ignition",
         requireZone: "field",
         requireFaceup: true,
-        fromZone: "field",
-        toZone: "removed",
-        eventCardFilters: {
-          owner: "self",
-          cardKind: "monster",
-          cardName: "Bloomrot Token",
-        },
+        requirePhase: ["main1", "main2"],
         oncePerTurn: true,
-        oncePerTurnName:
-          "bloomrot_myco_weaver_token_left_spore_counter",
+        oncePerTurnScope: "card",
         targets: [
+          {
+            id: "bloomrot_myco_weaver_cost",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            archetype: "Bloomrot",
+            count: { min: 1, max: 1 },
+          },
           {
             id: "bloomrot_myco_weaver_spore_target",
             owner: "opponent",
-            zone: "field",
-            cardKind: "monster",
+            zones: ["field", "spellTrap", "fieldSpell"],
             requireFaceup: true,
             count: { min: 1, max: 1 },
           },
         ],
         actions: [
           {
+            type: "move",
+            targetRef: "bloomrot_myco_weaver_cost",
+            player: "self",
+            to: "graveyard",
+            fromZone: "field",
+            contextLabel: "bloomrot_myco_weaver_cost",
+          },
+          {
             type: "add_counter",
             targetRef: "bloomrot_myco_weaver_spore_target",
             counterType: "spore",
-            amount: 1,
+            amount: 2,
           },
         ],
       },
@@ -517,64 +522,65 @@ export const bloomrotCards = [
     attribute: "Earth",
     archetype: "Bloomrot",
     description:
-      'If this card is destroyed by battle: place 1 Spore Counter on each face-up monster your opponent controls. You can banish this card from your Graveyard and target 1 face-up card on the field; place 3 Spore Counters on it. You can only use each effect of "Bloomrot Moldmender" once per turn.',
+      'Before damage calculation, if this card is being attacked by an opponent\'s monster: place 2 Spore Counters on the attacking monster. If this card is destroyed by battle: Special Summon 1 "Bloomrot Token" (Plant/EARTH/Level 1/ATK 0/DEF 0). You can only use each effect of "Bloomrot Moldmender" once per turn.',
     image: "assets/Bloomrot Moldmender.png",
     effects: [
       {
-        id: "bloomrot_mold_mender_battle_destroy_spores",
+        id: "bloomrot_mold_mender_attack_spores",
         timing: "on_event",
-        event: "card_to_grave",
-        fromZone: "field",
-        requireSelfAsDestroyed: true,
-        condition: { type: "destroyed_by_battle" },
+        event: "battle_damage",
+        allowDamageStepActivation: true,
+        requireZone: "field",
+        requireFaceup: true,
+        requireOpponentAttack: true,
+        requireSelfAsDefender: true,
         oncePerTurn: true,
-        oncePerTurnName: "bloomrot_mold_mender_battle_destroy_spores",
-        actions: [
-          {
-            type: "add_counter",
-            targetScope: {
-              owner: "opponent",
-              zones: ["field"],
-              filters: {
-                cardKind: "monster",
-                requireFaceup: true,
-              },
-            },
-            counterType: "spore",
-            amount: 1,
-            optional: true,
-          },
-        ],
-      },
-      {
-        id: "bloomrot_mold_mender_graveyard_spore_counter",
-        timing: "ignition",
-        requireZone: "graveyard",
-        requirePhase: ["main1", "main2"],
-        oncePerTurn: true,
-        oncePerTurnName:
-          "bloomrot_mold_mender_graveyard_spore_counter",
+        oncePerTurnName: "bloomrot_mold_mender_attack_spores",
         targets: [
           {
-            id: "bloomrot_mold_mender_spore_target",
-            owner: "any",
-            zones: ["field", "spellTrap", "fieldSpell"],
+            id: "bloomrot_mold_mender_attacker",
+            targetFromContext: "attacker",
+            owner: "opponent",
+            cardKind: "monster",
             requireFaceup: true,
             count: { min: 1, max: 1 },
           },
         ],
         actions: [
           {
-            type: "banish",
-            targetRef: "self",
-            fromZone: "graveyard",
-            haltOnFailure: true,
-          },
-          {
             type: "add_counter",
-            targetRef: "bloomrot_mold_mender_spore_target",
+            targetRef: "bloomrot_mold_mender_attacker",
             counterType: "spore",
-            amount: 3,
+            amount: 2,
+          },
+        ],
+      },
+      {
+        id: "bloomrot_mold_mender_battle_destroy_token",
+        timing: "on_event",
+        event: "card_to_grave",
+        fromZone: "field",
+        requireSelfAsDestroyed: true,
+        condition: { type: "destroyed_by_battle" },
+        oncePerTurn: true,
+        oncePerTurnName:
+          "bloomrot_mold_mender_battle_destroy_token",
+        actions: [
+          {
+            type: "special_summon_token",
+            player: "self",
+            position: "choice",
+            token: {
+              name: "Bloomrot Token",
+              atk: 0,
+              def: 0,
+              level: 1,
+              type: "Plant",
+              attribute: "Earth",
+              archetype: "Bloomrot",
+              image: "assets/Bloomrot Token.png",
+              description: "A Bloomrot token grown from lingering spores.",
+            },
           },
         ],
       },
@@ -973,7 +979,7 @@ export const bloomrotCards = [
     subtype: "normal",
     archetype: "Bloomrot",
     description:
-      'Target 1 face-up monster on the field; place 1 Spore Counter on it for each "Bloomrot" monster you control. Then, gain 300 LP for each Spore Counter on your opponent\'s field.',
+      'Target 1 face-up card your opponent controls; place 1 Spore Counter on it, then place 1 additional Spore Counter on it for each "Bloomrot" monster you control. Then, gain 300 LP for each Spore Counter placed by this effect. You can only activate 1 "Bloomrot Compost Ritual" per turn.',
     image: "assets/Bloomrot Compost Ritual.png",
     effects: [
       {
@@ -984,9 +990,8 @@ export const bloomrotCards = [
         targets: [
           {
             id: "bloomrot_compost_ritual_target",
-            owner: "any",
-            zone: "field",
-            cardKind: "monster",
+            owner: "opponent",
+            zones: ["field", "spellTrap", "fieldSpell"],
             requireFaceup: true,
             count: { min: 1, max: 1 },
           },
@@ -996,7 +1001,9 @@ export const bloomrotCards = [
             type: "add_counter",
             targetRef: "bloomrot_compost_ritual_target",
             counterType: "spore",
+            contextKey: "bloomrotCompostRitualPlacedCounterCount",
             amountFromFieldCount: {
+              baseAmount: 1,
               owner: "self",
               zone: "field",
               filters: {
@@ -1007,13 +1014,12 @@ export const bloomrotCards = [
             },
           },
           {
-            type: "heal_per_field_counter",
+            type: "heal",
             player: "self",
-            owner: "opponent",
-            zones: ["field", "spellTrap", "fieldSpell"],
-            filters: { requireFaceup: true },
-            counterType: "spore",
-            amountPerCounter: 300,
+            amountFromContext: {
+              key: "bloomrotCompostRitualPlacedCounterCount",
+              multiplier: 300,
+            },
           },
         ],
       },
@@ -1317,7 +1323,7 @@ export const bloomrotCards = [
     subtype: "equip",
     archetype: "Bloomrot",
     description:
-      "Equip only to a monster with a Spore Counter. The equipped monster gains 1 Spore Counter during each Standby Phase. If the equipped monster is destroyed: place 1 Spore Counter on each face-up card your opponent controls.",
+      "Target 1 face-up monster your opponent controls; place 1 Spore Counter on it, then equip this card to it. During each Standby Phase, place 1 Spore Counter on the equipped monster. If the equipped monster is destroyed: place 1 Spore Counter on each face-up card your opponent controls.",
     image: "assets/Bloomrot Overgrowth.png",
     effects: [
       {
@@ -1326,16 +1332,20 @@ export const bloomrotCards = [
         targets: [
           {
             id: "bloomrot_overgrowth_equip_target",
-            owner: "any",
+            owner: "opponent",
             zone: "field",
             cardKind: "monster",
             requireFaceup: true,
-            counterType: "spore",
-            minCounters: 1,
             count: { min: 1, max: 1 },
           },
         ],
         actions: [
+          {
+            type: "add_counter",
+            targetRef: "bloomrot_overgrowth_equip_target",
+            counterType: "spore",
+            amount: 1,
+          },
           {
             type: "equip",
             targetRef: "bloomrot_overgrowth_equip_target",

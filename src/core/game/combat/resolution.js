@@ -237,7 +237,37 @@ function hasBattleDamageTimingEffect(card) {
     : false;
 }
 
+function hasMatchingTemporaryBattlePairDamageStepEffect(game, attacker, target) {
+  if (!attacker || !target || !Array.isArray(game?.temporaryBattlePairEffects)) {
+    return false;
+  }
+
+  return game.temporaryBattlePairEffects.some((entry) => {
+    if (!entry) return false;
+    if (
+      Number.isFinite(entry.expiresOnTurn) &&
+      game.turnCounter > entry.expiresOnTurn
+    ) {
+      return false;
+    }
+
+    const timing = entry.timing || "before_damage_calculation";
+    if (
+      timing !== "start_of_damage_step" &&
+      timing !== "before_damage_calculation"
+    ) {
+      return false;
+    }
+
+    return battlePairMatches(entry, attacker, target);
+  });
+}
+
 function hasPotentialBattleDamageTimingEffect(game, attacker, target) {
+  if (hasMatchingTemporaryBattlePairDamageStepEffect(game, attacker, target)) {
+    return true;
+  }
+
   const candidates = [attacker, target];
   for (const player of [game?.player, game?.bot]) {
     for (const zoneName of ["hand", "spellTrap", "fieldSpell"]) {

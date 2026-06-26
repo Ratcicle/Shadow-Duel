@@ -402,7 +402,7 @@ export const luminarchCards = [
           {
             id: "radiant_lancer_destroy_target",
             owner: "opponent",
-            zone: "spellTrap",
+            zones: ["spellTrap", "fieldSpell"],
             count: { min: 1, max: 1 },
           },
         ],

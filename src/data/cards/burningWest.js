@@ -493,7 +493,7 @@ export const burningWestCards = [
           {
             id: "burning_peacemaker_spelltrap_target",
             owner: "opponent",
-            zone: "spellTrap",
+            zones: ["spellTrap", "fieldSpell"],
             cardKind: ["spell", "trap"],
             count: { min: 1, max: 1 },
           },

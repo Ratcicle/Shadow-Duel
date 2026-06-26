@@ -36,6 +36,29 @@ import {
   storeSimActionResult,
 } from "./shared.js";
 
+function readSimContextNumber(spec, options = {}) {
+  if (typeof spec === "number") return spec;
+  if (!spec) return 0;
+
+  const config = typeof spec === "string" ? { key: spec } : spec;
+  const key = config.key;
+  const source = options.actionContext || {};
+  const raw = key ? source[key] : config.defaultValue;
+  let value = Number(raw ?? config.defaultValue ?? 0);
+  if (!Number.isFinite(value)) value = 0;
+
+  const divideBy = Number(config.divideBy ?? config.divisor ?? 0);
+  if (Number.isFinite(divideBy) && divideBy !== 0) value /= divideBy;
+
+  const multiplier = Number(config.multiplier ?? config.amountPer ?? 1);
+  if (Number.isFinite(multiplier)) value *= multiplier;
+
+  if (config.floor !== false) value = Math.floor(value);
+  if (Number.isFinite(Number(config.min))) value = Math.max(Number(config.min), value);
+  if (Number.isFinite(Number(config.max))) value = Math.min(Number(config.max), value);
+  return value;
+}
+
 export function applyDraw(ctx) {
   const {
     action,
@@ -70,7 +93,10 @@ export function applyHeal(ctx) {
     applySimulatedActions,
   } = ctx;
   const targetPlayer = resolveActionPlayer(action, self, opponent);
-  targetPlayer.lp += action.amount || 0;
+  const amount =
+    (Number.isFinite(Number(action.amount)) ? Number(action.amount) : 0) +
+    readSimContextNumber(action.amountFromContext, options);
+  targetPlayer.lp += Math.floor(amount);
   return;
 }
 

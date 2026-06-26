@@ -1156,6 +1156,30 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
   );
   const wasFaceupBeforeMove = card.isFacedown !== true;
   let pendingAttachedEquipCleanup = [];
+  const flushPendingAttachedEquipCleanup = async () => {
+    if (pendingAttachedEquipCleanup.length === 0) return;
+    const pending = pendingAttachedEquipCleanup;
+    pendingAttachedEquipCleanup = [];
+
+    for (const { equip, equipOwner } of pending) {
+      try {
+        const equipZone = this.getZone(equipOwner, "spellTrap") || [];
+        if (equipZone.includes(equip)) {
+          await this.moveCard(equip, equipOwner, "graveyard", {
+            fromZone: "spellTrap",
+            contextLabel: "equipped_host_left_field",
+          });
+        }
+      } finally {
+        if (equip.lastEquippedCardLeftField === card) {
+          delete equip.lastEquippedCardLeftField;
+        }
+        if (equip.lastEquippedCardLeftFieldCause !== undefined) {
+          delete equip.lastEquippedCardLeftFieldCause;
+        }
+      }
+    }
+  };
 
   // TOKEN RULE: Tokens cannot exist outside the field.
   // If a token is leaving the field to any other zone, remove it from the game entirely.
@@ -1643,6 +1667,7 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
         throw new Error("DEV_ZONE_MUTATION_FAIL");
       }
       queueZoneMoveAnimation(this, cardAnimationIntent, "extraDeck");
+      await flushPendingAttachedEquipCleanup();
       await emitCardMovedEvent(
         this,
         card,
@@ -1820,26 +1845,7 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
   }
 
   // Limpar cache de targeting após mover cartas (estado do jogo mudou)
-  if (pendingAttachedEquipCleanup.length > 0) {
-    for (const { equip, equipOwner } of pendingAttachedEquipCleanup) {
-      try {
-        const equipZone = this.getZone(equipOwner, "spellTrap") || [];
-        if (equipZone.includes(equip)) {
-          await this.moveCard(equip, equipOwner, "graveyard", {
-            fromZone: "spellTrap",
-            contextLabel: "equipped_host_left_field",
-          });
-        }
-      } finally {
-        if (equip.lastEquippedCardLeftField === card) {
-          delete equip.lastEquippedCardLeftField;
-        }
-        if (equip.lastEquippedCardLeftFieldCause !== undefined) {
-          delete equip.lastEquippedCardLeftFieldCause;
-        }
-      }
-    }
-  }
+  await flushPendingAttachedEquipCleanup();
 
   if (this.effectEngine?.clearTargetingCache) {
     this.effectEngine.clearTargetingCache();

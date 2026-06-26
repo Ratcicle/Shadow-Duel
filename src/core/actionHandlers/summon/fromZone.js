@@ -359,6 +359,7 @@ export async function handleSpecialSummonFromZone(
     candidates = zoneEntries.flatMap((entry) =>
       collectZoneCandidates(entry.list, filters, {
         source,
+        engine,
         excludeSummonRestrict,
       }),
     );
