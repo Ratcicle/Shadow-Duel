@@ -1,4 +1,8 @@
-import { BLOOMROT_NAMES, getSporeCount } from "./analysis.js";
+import {
+  BLOOMROT_NAMES,
+  getSporeCount,
+  isBloomrotMonster,
+} from "./analysis.js";
 
 const N = {
   ROT_STAG: "Bloomrot Rot-Stag",
@@ -45,6 +49,10 @@ function faceUp(card) {
   return card && card.isFacedown !== true;
 }
 
+function isBloomrotToken(card) {
+  return card?.isToken === true || card?.name === BLOOMROT_NAMES.TOKEN;
+}
+
 function effectiveAtk(card) {
   return (
     Number(card?.atk || 0) +
@@ -73,6 +81,11 @@ function battleValue(card) {
   if (card.subtype === "equip") value += 10;
   if (faceUp(card)) value += 4;
   return value;
+}
+
+function battleStat(card) {
+  if (!card || card.cardKind !== "monster") return 0;
+  return card.position === "defense" ? effectiveDef(card) : effectiveAtk(card);
 }
 
 function isRelevantHarvestTarget(card) {
@@ -161,6 +174,17 @@ function opponentFaceUpMonsters(analysis = {}) {
   return asArray(analysis.opponentMonsters).filter(faceUp);
 }
 
+function harvestAttackers(analysis = {}) {
+  return asArray(analysis.faceUpBloomrotField).filter(
+    (card) =>
+      isBloomrotMonster(card) &&
+      !isBloomrotToken(card) &&
+      card.position === "attack" &&
+      card.cannotAttackThisTurn !== true &&
+      card.hasAttacked !== true,
+  );
+}
+
 function bestHarvestTarget(analysis = {}) {
   return opponentCards(analysis)
     .map((card) => ({ card, score: battleValue(card) }))
@@ -210,7 +234,32 @@ function evaluateFixedSpend({ purpose, amount, analysis }) {
   return allow("safe Spore Counter spend");
 }
 
+function harvestBuffCreatesBattleBreakthrough(analysis = {}, buffAmount = 0) {
+  if (buffAmount <= 0) return null;
+  const targets = opponentFaceUpMonsters(analysis);
+  if (targets.length === 0) return null;
+
+  for (const attacker of harvestAttackers(analysis)) {
+    const currentAtk = effectiveAtk(attacker);
+    const boostedAtk = currentAtk + buffAmount;
+    for (const target of targets) {
+      const targetStat = battleStat(target);
+      if (currentAtk <= targetStat && boostedAtk > targetStat) {
+        return { attacker, target };
+      }
+    }
+  }
+  return null;
+}
+
+function blocksCounterSpendHandSummonZone(analysis = {}) {
+  return analysis.hasLivingColonyActive === true && (analysis.freeMonsterZones || 0) <= 1;
+}
+
 function evaluateRotStag(amount, analysis = {}) {
+  if (blocksCounterSpendHandSummonZone(analysis)) {
+    return block("preserve a Monster Zone for Living Colony token before hand summon");
+  }
   const base = evaluateFixedSpend({
     purpose: "rot_stag_body",
     amount,
@@ -233,6 +282,9 @@ function evaluateRotStag(amount, analysis = {}) {
 }
 
 function evaluateAncientHusk(amount, analysis = {}) {
+  if (blocksCounterSpendHandSummonZone(analysis)) {
+    return block("preserve a Monster Zone for Living Colony token before hand summon");
+  }
   const base = evaluateFixedSpend({
     purpose: "ancient_husk_body",
     amount,
@@ -251,6 +303,9 @@ function evaluateAncientHusk(amount, analysis = {}) {
 }
 
 function evaluateWidow(amount, analysis = {}) {
+  if (blocksCounterSpendHandSummonZone(analysis)) {
+    return block("preserve a Monster Zone for Living Colony token before hand summon");
+  }
   const base = evaluateFixedSpend({
     purpose: "widow_removal",
     amount,
@@ -303,17 +358,23 @@ function evaluateAncientMycelium(amount, analysis = {}) {
 function evaluateHarvest(analysis = {}) {
   const summary = getBloomrotCounterSpendSummary(analysis);
   const destroyCount = Math.floor(summary.totalSporeCount / 4);
-  if (destroyCount <= 0) return block("Harvest needs at least 4 Spore Counters");
+  const buffAmount = summary.totalSporeCount * 100;
   const target = bestHarvestTarget(analysis);
-  if (!target) return block("Harvest has no opponent card to destroy");
-  if (!isRelevantHarvestTarget(target) && destroyCount < 2) {
-    return block("Harvest target is not worth cashing in spores");
+  if (destroyCount > 0 && target) {
+    if (summary.queenReady && !isRelevantHarvestTarget(target)) {
+      return block("preserve Queen setup over low-impact Harvest");
+    }
+    const priorityBonus =
+      Math.min(3, destroyCount) + (isRelevantHarvestTarget(target) ? 1 : 0);
+    return allow("Harvest destroys opponent card", priorityBonus);
   }
-  if (summary.queenReady && !isRelevantHarvestTarget(target)) {
-    return block("preserve Queen setup over low-impact Harvest");
+
+  const breakthrough = harvestBuffCreatesBattleBreakthrough(analysis, buffAmount);
+  if (breakthrough) {
+    return allow("Harvest buff opens a non-token Bloomrot battle win", 0.8);
   }
-  const priorityBonus = Math.min(3, destroyCount) + (isRelevantHarvestTarget(target) ? 1 : 0);
-  return allow("Harvest cashes in spores for relevant removal", priorityBonus);
+
+  return block("Harvest has no removal or non-token battle breakthrough");
 }
 
 function evaluateQueenHeal(amount, analysis = {}) {

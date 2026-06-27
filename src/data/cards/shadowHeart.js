@@ -942,11 +942,12 @@ export const shadowHeartCards = [
             type: "special_summon_from_zone",
             targetRef: "shadow_heart_gy_target",
             sourceZone: "graveyard",
+            storeResultAs: "the_shadow_heart_revived_target",
             position: "choice",
           },
           {
             type: "equip",
-            targetRef: "shadow_heart_gy_target",
+            targetRef: "the_shadow_heart_revived_target",
             equippedCard: "self",
           },
         ],

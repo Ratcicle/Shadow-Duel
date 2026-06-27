@@ -10,6 +10,30 @@ import {
   isQuickSpell,
 } from "../../game/spellTrap/quickSpellRules.js";
 
+function hasImpossibleSelectionRequirement(targetResult) {
+  const requirements = targetResult?.selectionContract?.requirements || [];
+  return requirements.some((requirement) => {
+    const min = Number(requirement?.min ?? 0);
+    const candidates = Array.isArray(requirement?.candidates)
+      ? requirement.candidates
+      : [];
+    return min > 0 && candidates.length < min;
+  });
+}
+
+function impossibleSelectionReason(targetResult, fallback) {
+  const requirements = targetResult?.selectionContract?.requirements || [];
+  const impossible = requirements.find((requirement) => {
+    const min = Number(requirement?.min ?? 0);
+    const candidates = Array.isArray(requirement?.candidates)
+      ? requirement.candidates
+      : [];
+    return min > 0 && candidates.length < min;
+  });
+  if (!impossible) return fallback;
+  return `Need ${Number(impossible.min ?? 1)} valid target(s).`;
+}
+
 /**
  * Check if a monster has an activatable graveyard effect.
  */
@@ -67,6 +91,9 @@ export function canActivateSpellFromHandPreview(card, player, options = {}) {
   }
   if (!player.hand || !player.hand.includes(card)) {
     return { ok: false, reason: "Card not in hand." };
+  }
+  if (card.subtype !== "field" && (player.spellTrap || []).length >= 5) {
+    return { ok: false, reason: "Spell/Trap Zone is full." };
   }
 
   // Check for fusion spell (has polymerization_fusion_summon action)
@@ -157,6 +184,12 @@ export function canActivateSpellFromHandPreview(card, player, options = {}) {
   const targetResult = this.resolveTargets(effect.targets || [], ctx, null);
   if (targetResult.ok === false) {
     return { ok: false, reason: targetResult.reason };
+  }
+  if (hasImpossibleSelectionRequirement(targetResult)) {
+    return {
+      ok: false,
+      reason: impossibleSelectionReason(targetResult, "No valid targets."),
+    };
   }
 
   return {
@@ -283,6 +316,12 @@ export function canActivateMonsterEffectPreview(
 
   if (targetResult.ok === false) {
     return { ok: false, reason: targetResult.reason };
+  }
+  if (hasImpossibleSelectionRequirement(targetResult)) {
+    return {
+      ok: false,
+      reason: impossibleSelectionReason(targetResult, "No valid targets."),
+    };
   }
 
   return { ok: true };

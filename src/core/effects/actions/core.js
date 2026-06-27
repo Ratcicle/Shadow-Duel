@@ -1301,7 +1301,9 @@ export function checkActionPreviewRequirements(actions, ctx) {
       action.type === "special_summon_matching_level" ||
       action.type === "call_of_haunted_summon_and_bind"
     ) {
-      if ((player.field || []).length >= 5) {
+      const destinationPlayer =
+        action.summonToOwner === "opponent" ? ctx?.opponent : player;
+      if ((destinationPlayer?.field || []).length >= 5) {
         return { ok: false, reason: "Field is full." };
       }
       if (

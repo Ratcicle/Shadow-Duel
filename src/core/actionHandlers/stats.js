@@ -575,7 +575,7 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
 
     getUI(game)?.log(`No valid targets for ${label}.`);
 
-    return false;
+    return action.targetScope ? true : false;
   }
 
   let anyBuffed = false;
@@ -716,7 +716,10 @@ export async function handleBuffStatsTemp(action, ctx, targets, engine) {
     game.updateBoard();
   }
 
-  return anyBuffed || anySecondAttack;
+  const hadValidMonsterTarget = targetCards.some(
+    (card) => card?.cardKind === "monster",
+  );
+  return anyBuffed || anySecondAttack || hadValidMonsterTarget;
 }
 
 export async function handleSetOriginalStats(action, ctx, targets, engine) {
@@ -1032,7 +1035,7 @@ export async function handleModifyStatsTempThenDestroyIfZeroed(
     game.updateBoard();
   }
 
-  return modified || destroyed;
+  return modified || destroyed || targetCards.some((card) => card?.cardKind === "monster");
 }
 
 export async function handleHalveTargetStatsAndGainRemoved(
@@ -1124,7 +1127,7 @@ export async function handleHalveTargetStatsAndGainRemoved(
     game.updateBoard?.();
   }
 
-  return anyChanged;
+  return anyChanged || targetCards.some((card) => card?.cardKind === "monster");
 }
 
 /**
@@ -1917,7 +1920,7 @@ export async function handleRemoveStatIncreases(action, ctx, targets, engine) {
     game.updateBoard?.();
   }
 
-  return anyRemoved;
+  return anyRemoved || targetCards.some((card) => card?.cardKind === "monster");
 }
 
 /**
@@ -2100,7 +2103,11 @@ export async function handlePermanentBuffNamed(action, ctx, targets, engine) {
     game.updateBoard();
   }
 
-  return anyBuffed || fieldWideAura;
+  return (
+    anyBuffed ||
+    fieldWideAura ||
+    targetCards.some((card) => card?.cardKind === "monster")
+  );
 }
 
 /**

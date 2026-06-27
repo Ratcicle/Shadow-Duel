@@ -28,10 +28,17 @@ function queueStatFeedback(engine, card, kind, tone, ctx) {
  * @returns {boolean} Whether any cards were affected
  */
 export function applyBuffAtkTemp(action, ctx, targets) {
-  const targetCards = targets?.[action.targetRef] || [];
+  let targetCards = targets?.[action.targetRef] || [];
+  if (!Array.isArray(targetCards)) {
+    targetCards = targetCards ? [targetCards] : [];
+  }
+  if (targetCards.length === 0) return true;
   const amount = action.amount ?? 0;
+  let hadValidTarget = false;
   targetCards.forEach((card) => {
     if (card.isFacedown) return;
+    if (card.cardKind !== "monster") return;
+    hadValidTarget = true;
     card.atk = Math.max(0, card.atk + amount);
     card.tempAtkBoost = (card.tempAtkBoost || 0) + amount;
     if (amount !== 0) {
@@ -44,7 +51,7 @@ export function applyBuffAtkTemp(action, ctx, targets) {
       );
     }
   });
-  return targetCards.length > 0 && amount !== 0;
+  return hadValidTarget;
 }
 
 /**
@@ -55,12 +62,18 @@ export function applyBuffAtkTemp(action, ctx, targets) {
  * @returns {boolean} Whether any cards were affected
  */
 export function applyModifyStatsTemp(action, ctx, targets) {
-  const targetCards = targets?.[action.targetRef] || [];
+  let targetCards = targets?.[action.targetRef] || [];
+  if (!Array.isArray(targetCards)) {
+    targetCards = targetCards ? [targetCards] : [];
+  }
   const atkFactor = action.atkFactor ?? 1;
   const defFactor = action.defFactor ?? 1;
+  let hadValidTarget = false;
 
   targetCards.forEach((card) => {
     if (card.isFacedown) return;
+    if (card.cardKind !== "monster") return;
+    hadValidTarget = true;
     let deltaTotal = 0;
     if (atkFactor !== 1) {
       const newAtk = Math.floor((card.atk || 0) * atkFactor);
@@ -86,5 +99,5 @@ export function applyModifyStatsTemp(action, ctx, targets) {
       );
     }
   });
-  return targetCards.length > 0 && (atkFactor !== 1 || defFactor !== 1);
+  return hadValidTarget;
 }

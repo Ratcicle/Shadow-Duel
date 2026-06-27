@@ -1,136 +1,169 @@
-# Estrutura do Projeto — Shadow Duel
+# Estrutura do Projeto - Shadow Duel
 
-Documento gerado a partir de uma varredura completa do repositório. Descreve a árvore de pastas e a responsabilidade de cada script JavaScript.
+Documento atualizado a partir da árvore atual do repositório. Ele descreve as pastas principais e a responsabilidade dos módulos JavaScript que formam o jogo.
 
-## Visão geral
+## Visão Geral
 
-Shadow Duel é uma SPA (single-page application) em JavaScript puro (ES Modules), sem framework. O ponto de entrada HTML é [index.html](../index.html), que carrega [src/main.js](../src/main.js). A aplicação é dividida em três grandes camadas:
+Shadow Duel é uma SPA em JavaScript puro usando ES Modules nativos do navegador. O ponto de entrada HTML é [index.html](../index.html), que carrega [src/main.js](../src/main.js). A aplicação se organiza em três camadas principais:
 
-- **Core** ([src/core/](../src/core/)) — motor de regras, estado de jogo, IA do bot, sistema de chain, efeitos.
-- **UI** ([src/ui/](../src/ui/)) — bootstrap da SPA, controllers de tela, renderização DOM, animações e modais.
-- **Data / Locales** ([src/data/](../src/data/), [src/locales/](../src/locales/)) — banco de cartas e traduções.
+- **Core** ([src/core/](../src/core/)) - motor de regras, estado de jogo, IA, sistema de Chain e execução de efeitos.
+- **UI** ([src/ui/](../src/ui/)) - controllers da tela inicial, renderização DOM, animações e modais.
+- **Data / Locales** ([src/data/](../src/data/), [src/locales/](../src/locales/)) - banco modular de cartas e traduções.
+
+O projeto usa `serve` para desenvolvimento local e mantém `pixi.js` como dependência runtime em [package.json](../package.json).
 
 ---
 
-## Raiz do projeto
+## Raiz do Projeto
 
-```
+```text
 Shadow-Duel/
-├── .gitignore                  # Ignora dependências, logs e artefatos locais
+├── .agents/                    # Configuração/instruções locais para agentes
 ├── .claude/                    # Configuração local/trackeada de agentes Claude
 ├── .codex/                     # Ambientes auxiliares do Codex
-├── index.html                  # Shell HTML do jogo (start screen, deck builder, board)
-├── style.css                   # Estilos globais
-├── package.json                # Metadados e script `dev` (npx serve)
-├── package-lock.json           # Lockfile das dependências npm
-├── README.md                   # Manual do jogador
+├── .gitignore                  # Ignora dependências, logs e artefatos locais
+├── .vscode/                    # Configuração local do editor
 ├── AGENTS.md                   # Instruções para agentes de IA
-├── DuelLog.log                 # Log de duelos (gerado em runtime)
-├── assets/                     # Imagens das cartas (.png/.jpg)
-├── docs/                       # Documentação técnica (este arquivo + outros)
-├── laboratory-imports/         # Presets de deck/bot importáveis (JSON)
-├── replays/                    # Replays salvos (JSON)
-├── scripts/                    # Utilitários Node.js (validação/geração de docs)
-└── src/                        # Código-fonte da aplicação
+├── DuelLog.log                 # Log de duelos gerado em runtime
+├── README.md                   # Manual do jogador
+├── assets/                     # Imagens das cartas
+├── docs/                       # Documentação técnica e decklists
+├── index.html                  # Shell HTML do jogo
+├── laboratory-imports/         # Presets JSON importáveis no Laboratório
+├── node_modules/               # Dependências instaladas
+├── package-lock.json           # Lockfile npm
+├── package.json                # Metadados, scripts e dependências
+├── replays/                    # Replays e relatórios exportados
+├── scripts/                    # Utilitários Node.js
+├── src/                        # Código-fonte da aplicação
+└── style.css                   # Estilos globais
 ```
 
 ---
 
-## `src/` — Código-fonte
+## `src/` - Código-Fonte
 
 ### `src/main.js`
-Ponto de entrada da SPA. Hoje é um bootstrap enxuto de composição:
-- Inicializa locale via [i18n.js](../src/core/i18n.js).
-- Coleta referências de DOM e cria controllers em [src/ui/main/](../src/ui/main/).
-- Cria o `deckState`, o painel de validação, o launcher de duelos, o laboratório e a Bot Arena UI.
-- Liga eventos globais de alto nível, como iniciar duelo, abrir telas e `shadow-duel-rematch`.
 
-Regra de manutenção: `main.js` deve orquestrar módulos, não concentrar lógica de deck builder, laboratório, Bot Arena ou persistência.
+Bootstrap da SPA. Inicializa o locale, coleta referências de DOM, cria os controllers em [src/ui/main/](../src/ui/main/) e conecta ações globais como iniciar duelo, abrir telas, alternar idioma, laboratório e Bot Arena.
+
+`main.js` deve continuar como composição de módulos. Lógica de deck builder, laboratório, Bot Arena, persistência e renderização pertence aos controllers dedicados.
 
 ### `src/data/cards.js`
-Fachada publica do banco modular de cartas. Importa os arrays por grupo em
-`src/data/cards/` e exporta:
-- `cardDatabase` (array)
-- `cardDatabaseById` (Map por id)
-- `cardDatabaseByName` (Map por nome)
 
-Cada entrada descreve: tipo (monstro/spell/trap), atributos (`atk`/`def`/`level`/`attribute`/`type`), arquétipos e efeitos declarativos executados pelo `EffectEngine`.
+Fachada pública do banco modular de cartas. Importa os grupos de [src/data/cards/](../src/data/cards/) e exporta:
+
+- `cardDatabase`
+- `cardDatabaseById`
+- `cardDatabaseByName`
+- `cardDatabaseGroups`
+
+Cada carta descreve de forma declarativa seus dados fixos e efeitos. O runtime resolve esses efeitos pelo `EffectEngine` e pelos handlers registrados em [src/core/actionHandlers/](../src/core/actionHandlers/).
 
 ### `src/data/cards/`
-Modulos de cartas por grupo e governanca de IDs:
-- `generic.js`: cartas genericas/core (`001-100`).
-- `shadowHeart.js`, `luminarch.js`, `void.js`, `dragon.js`, `arcanist.js`, `miragebound.js`, `bloomrot.js`: cartas por faixa de arquetipo.
-- `ranges.js`: faixas oficiais e politica `enforceAssignedRanges`.
-- `idMigration.js`: mapa `oldId -> newId` usado somente para migrar decks salvos.
+
+Módulos de cartas por grupo e governança de IDs:
+
+| Arquivo | Responsabilidade |
+|---|---|
+| [generic.js](../src/data/cards/generic.js) | Cartas genéricas/core. |
+| [shadowHeart.js](../src/data/cards/shadowHeart.js) | Arquétipo Shadow-Heart. |
+| [luminarch.js](../src/data/cards/luminarch.js) | Arquétipo Luminarch. |
+| [void.js](../src/data/cards/void.js) | Arquétipo Void. |
+| [dragon.js](../src/data/cards/dragon.js) | Arquétipo Dragon. |
+| [arcanist.js](../src/data/cards/arcanist.js) | Arquétipo Arcanist. |
+| [miragebound.js](../src/data/cards/miragebound.js) | Arquétipo Miragebound. |
+| [bloomrot.js](../src/data/cards/bloomrot.js) | Arquétipo Bloomrot. |
+| [burningWest.js](../src/data/cards/burningWest.js) | Arquétipo Burning West. |
+| [ranges.js](../src/data/cards/ranges.js) | Faixas oficiais de IDs e política de validação. |
+| [idMigration.js](../src/data/cards/idMigration.js) | Mapa `oldId -> newId` para migrar decks salvos. |
 
 ### `src/locales/`
-Arquivos JSON de tradução.
-- `pt-br.json` — português brasileiro; as chaves de `cards` acompanham os IDs atuais.
+
+Traduções visíveis no jogo. Hoje há [pt-br.json](../src/locales/pt-br.json), com nomes, descrições, textos de UI e labels de escolhas. O inglês canônico vem dos dados das cartas quando não existe tradução explícita.
 
 ---
 
-## `src/core/` — Motor do jogo
+## `src/core/` - Motor do Jogo
 
-### Arquivos top-level
-
-| Arquivo | Responsabilidade |
-|---|---|
-| [Game.js](../src/core/Game.js) | **Fachada principal do estado de jogo.** Classe de ~thousand-of-lines reduzida via composição: importa dezenas de módulos de [game/](../src/core/game/) e os anexa ao próprio prototype. Coordena turnos, fases, invocações, batalha, efeitos, seleções e UI prompts. |
-| [Player.js](../src/core/Player.js) | Classe `Player` — LP, mão, deck, campo, GY, banimento, marcadores per-turn. Exporta helper `isAI()`. |
-| [Bot.js](../src/core/Bot.js) | Subclasse de `Player` representando o oponente IA. Carrega presets de deck (Shadow-Heart/Luminarch/Void/Dragon/Arcanist), seleciona estratégia via `StrategyRegistry`, e roda `BeamSearch`/`greedySearchWithEvalV2` com `TurnLineSearch` opcional para escolher ações. |
-| [BotArena.js](../src/core/BotArena.js) | Modo "bot vs bot" para testes em massa. Roda partidas headless, controla timeouts/auto pause e coleta Strategic Reports via `ArenaAnalytics`/`DuelTracker`. |
-| [BotLogger.js](../src/core/BotLogger.js) | Logger configurável por `localStorage`. Categorias: action_gen, decision, state_change, phase_transition, etc. Filtra por bot e nível de verbosidade. |
-| [Card.js](../src/core/Card.js) | Classe `Card`. Encapsula dados imutáveis (do database) + estado mutável (counters, equipped, position, etc.) e gera `instanceId` único. |
-| [CardDatabaseValidator.js](../src/core/CardDatabaseValidator.js) | Valida o database de cartas no boot — checa shapes de ações via [actionCatalog.js](../src/core/actionHandlers/actionCatalog.js) e governanca de faixas de IDs. |
-| [ChainSystem.js](../src/core/ChainSystem.js) | Sistema completo de Chain/Spell Speed (LIFO, speeds 1/2/3). Fachada que delega para [chain/](../src/core/chain/). |
-| [NullChainSystem.js](../src/core/NullChainSystem.js) | Stub de ChainSystem para modos sem chain (e.g. simulação rápida). API compatível, no-ops. |
-| [EffectEngine.js](../src/core/EffectEngine.js) | **Executor de efeitos declarativos.** Lê o array `effects` de uma carta e executa via handlers registrados. Fachada que delega para [effects/](../src/core/effects/) e [actionHandlers/](../src/core/actionHandlers/). |
-| [ActionHandlers.js](../src/core/ActionHandlers.js) | Re-exporta tudo de [actionHandlers/](../src/core/actionHandlers/) para compatibilidade legada. |
-| [AutoSelector.js](../src/core/AutoSelector.js) | Resolve `selectionContract`s automaticamente para o bot — escolhe alvos sem UI usando heurísticas de `StrategyUtils`. |
-| [UIAdapter.js](../src/core/UIAdapter.js) | Proxy entre `Game` e `Renderer`. Permite ao engine pedir prompts (confirm/number/alert) sem acoplar diretamente ao DOM. |
-| [i18n.js](../src/core/i18n.js) | Internationalization. Carrega locale do `localStorage`, expõe `getCardDisplayName`/`getCardDisplayDescription`. |
-
-### `src/core/actionHandlers/` — Handlers de ações de cartas
-
-Sistema de handlers declarativos. Cada efeito de carta no database é um objeto `{ type: "...", ... }` que é resolvido por um handler registrado.
+### Arquivos Top-Level
 
 | Arquivo | Responsabilidade |
 |---|---|
-| [index.js](../src/core/actionHandlers/index.js) | Barrel — exporta todos os handlers e o registry. |
-| [registry.js](../src/core/actionHandlers/registry.js) | Classe `ActionHandlerRegistry` (Map de tipo → função) e `proxyEngineMethod`. |
-| [wiring.js](../src/core/actionHandlers/wiring.js) | `registerDefaultHandlers()` — conecta todos os handlers built-in ao registry. |
-| [actionCatalog.js](../src/core/actionHandlers/actionCatalog.js) | Catálogo central — schema/validação de cada tipo de ação. Usado pelo validator. |
-| [blueprints.js](../src/core/actionHandlers/blueprints.js) | Templates reutilizáveis para handlers comuns. |
-| [movement.js](../src/core/actionHandlers/movement.js) | Mover cartas entre zonas (return-to-hand, bounce, etc.). |
-| [summon.js](../src/core/actionHandlers/summon.js) | Special summons (do GY, da mão com custo, condicional, com counters). |
-| [destruction.js](../src/core/actionHandlers/destruction.js) | Destruir cartas (alvo, archetype-trigger, área). |
-| [stats.js](../src/core/actionHandlers/stats.js) | Buffs/debuffs de ATK/DEF (permanentes, por turno, condicionais). |
-| [resources.js](../src/core/actionHandlers/resources.js) | LP, draw, banish-from-deck, mill, recursos em geral. |
-| [choice.js](../src/core/actionHandlers/choice.js) | Escolhas do jogador (selecionar entre N efeitos). |
-| [conditional.js](../src/core/actionHandlers/conditional.js) | If/then/else — efeitos com gating. |
-| [negation.js](../src/core/actionHandlers/negation.js) | Negar efeitos/invocações/ataques. |
-| [shared.js](../src/core/actionHandlers/shared.js) | Utilitários compartilhados entre handlers. |
+| [Game.js](../src/core/Game.js) | Fachada principal do estado de jogo. Orquestra turnos, fases, zonas, invocações, batalha, seleção, efeitos e UI, delegando para [src/core/game/](../src/core/game/). |
+| [Player.js](../src/core/Player.js) | Modelo de jogador: LP, mão, deck, campo, Cemitério, banimento, marcadores e helper `isAI()`. |
+| [Bot.js](../src/core/Bot.js) | Subclasse de `Player` para IA. Usa presets, `StrategyRegistry`, `BeamSearch`, busca de linhas e módulos de execução em [src/core/bot/](../src/core/bot/). |
+| [BotArena.js](../src/core/BotArena.js) | Modo AI vs AI para testes, métricas, velocidade e relatórios. |
+| [BotLogger.js](../src/core/BotLogger.js) | Logger configurável por `localStorage`, com categorias para decisões, estado e fases. |
+| [Card.js](../src/core/Card.js) | Modelo de instância de carta: dados do database, estado mutável, equipamentos, buffs, counters e `instanceId`. |
+| [CardDatabaseValidator.js](../src/core/CardDatabaseValidator.js) | Validação do banco de cartas, incluindo shapes de actions e faixas de IDs. |
+| [ChainSystem.js](../src/core/ChainSystem.js) | Fachada do sistema de Chain/Spell Speed, delegando para [src/core/chain/](../src/core/chain/). |
+| [NullChainSystem.js](../src/core/NullChainSystem.js) | Implementação no-op compatível para simulações ou fluxos sem chain real. |
+| [EffectEngine.js](../src/core/EffectEngine.js) | Fachada de execução de efeitos declarativos, delegando para [src/core/effects/](../src/core/effects/) e [src/core/actionHandlers/](../src/core/actionHandlers/). |
+| [ActionHandlers.js](../src/core/ActionHandlers.js) | Re-export de compatibilidade para o sistema modular de action handlers. |
+| [AutoSelector.js](../src/core/AutoSelector.js) | Resolve contratos de seleção para IA/bot. Não deve substituir decisões humanas. |
+| [UIAdapter.js](../src/core/UIAdapter.js) | Ponte entre `Game` e `Renderer` para prompts e atualização visual. |
+| [i18n.js](../src/core/i18n.js) | Carregamento de locale e helpers como `getCardDisplayName` e `getCardDisplayDescription`. |
 
-### `src/core/ai/` — Inteligência artificial
+### `src/core/bot/`
 
-#### Top-level (genérico, agnóstico de deck)
+Camada operacional do bot, separada da estratégia. Ela valida ações, executa linhas escolhidas pela IA e coordena fases.
+
+| Arquivo/Pasta | Responsabilidade |
+|---|---|
+| [presets.js](../src/core/bot/presets.js) | Presets disponíveis: Shadow-Heart, Luminarch, Void, Dragon, Arcanist, Miragebound e Bloomrot. |
+| [deckBuilder.js](../src/core/bot/deckBuilder.js) | Montagem de listas do bot a partir dos presets. |
+| [actionValidation.js](../src/core/bot/actionValidation.js) | Valida se uma ação planejada ainda é legal no estado atual. |
+| [actionExecutor.js](../src/core/bot/actionExecutor.js) | Executa ações escolhidas pela IA. |
+| [mainPhaseController.js](../src/core/bot/mainPhaseController.js) | Sequência de ações da Main Phase. |
+| [battleController.js](../src/core/bot/battleController.js) | Decisões e execução de batalha. |
+| [ascensionController.js](../src/core/bot/ascensionController.js) | Coordenação de Invocação-Ascensão para IA. |
+| [simulationBridge.js](../src/core/bot/simulationBridge.js) | Ponte entre estado real e simulação. |
+| [actionExecutors/](../src/core/bot/actionExecutors/) | Execução especializada por família de ação: summon, extra deck, ascension, monster effects, spell/trap e posição. |
+
+### `src/core/actionHandlers/`
+
+Handlers genéricos de actions declarativas. Todo `action.type` usado nas cartas deve estar registrado e declarado no catálogo.
 
 | Arquivo | Responsabilidade |
 |---|---|
-| [StrategyRegistry.js](../src/core/ai/StrategyRegistry.js) | Map `id → StrategyClass`. Fallback para Shadow-Heart. Atualmente registra: shadowheart, luminarch, void, dragon, arcanist. |
-| [BaseStrategy.js](../src/core/ai/BaseStrategy.js) | Classe-base com avaliação genérica de board e helpers de threat/role/value. Extendida por cada strategy específica. |
-| [StrategyUtils.js](../src/core/ai/StrategyUtils.js) | Helpers reutilizáveis: archetypes, valor estimado de monstros/cartas, etc. |
-| [BeamSearch.js](../src/core/ai/BeamSearch.js) | Busca em feixe + greedy-with-eval-v2. Núcleo do algoritmo de decisão do bot. |
-| [TurnLineSearch.js](../src/core/ai/TurnLineSearch.js) | Planejador de linha de turno usado de forma opt-in/critical para comparar sequências de ações. |
-| [GameTreeSearch.js](../src/core/ai/GameTreeSearch.js) | Minimax + alpha-beta pruning para deep lookahead (4–6 ply). Acionado em situações críticas (lethal/defesa). |
-| [MacroPlanning.js](../src/core/ai/MacroPlanning.js) | Lookahead de N turnos para detectar lethal forçado, necessidade defensiva, oportunidades. |
-| [OpponentPredictor.js](../src/core/ai/OpponentPredictor.js) | Modelagem leve do oponente — papel estratégico, prioridade de cartas, modo (pressão/estabilizar). |
-| [RoleAnalyzer.js](../src/core/ai/RoleAnalyzer.js) | Inferência genérica de papéis (extender, removal, searcher, draw_engine, etc.) a partir dos efeitos da carta — sem hardcoding de nomes. |
-| [ThreatEvaluation.js](../src/core/ai/ThreatEvaluation.js) | Pontuação contextual de ameaças, ranking de ameaças do oponente, detecção de lethal. |
-| [ChainAwareness.js](../src/core/ai/ChainAwareness.js) | Detecção de bloqueios potenciais, spell speed, trap defensivos, cadeias negáveis. |
-| [ArenaAnalytics.js](../src/core/ai/ArenaAnalytics.js) | Telemetria do BotArena e do duelo comum — métricas, razões de término, diagnostics, `DuelTracker` e export Strategic JSON. |
+| [index.js](../src/core/actionHandlers/index.js) | Barrel dos handlers. |
+| [registry.js](../src/core/actionHandlers/registry.js) | `ActionHandlerRegistry` e `proxyEngineMethod`. |
+| [wiring.js](../src/core/actionHandlers/wiring.js) | Registro central dos handlers padrão. |
+| [actionCatalog.js](../src/core/actionHandlers/actionCatalog.js) | Schema central validado por scripts e pelo database validator. |
+| [blueprints.js](../src/core/actionHandlers/blueprints.js) | Handlers ligados a blueprints e efeitos armazenados. |
+| [choice.js](../src/core/actionHandlers/choice.js) | Escolhas declarativas de efeito. |
+| [conditional.js](../src/core/actionHandlers/conditional.js) | Condições e ações condicionais. |
+| [destruction.js](../src/core/actionHandlers/destruction.js) | Destruição, banimento e replacements ligados a destruição. |
+| [movement.js](../src/core/actionHandlers/movement.js) | Movimento entre zonas, bounce e retorno à mão. |
+| [negation.js](../src/core/actionHandlers/negation.js) | Negação de ativação, summon, ataque e efeitos relacionados. |
+| [resources.js](../src/core/actionHandlers/resources.js) | Compra, LP, busca, descarte, mill e outros recursos. |
+| [stats.js](../src/core/actionHandlers/stats.js) | Buffs/debuffs, status e modificadores de combate. |
+| [summon.js](../src/core/actionHandlers/summon.js) | Special Summon, transmutação e invocações condicionais. |
+| [shared.js](../src/core/actionHandlers/shared.js) | Helpers compartilhados pelos handlers. |
 
-#### Strategy classes (uma por arquétipo)
+---
+
+## `src/core/ai/` - Inteligência Artificial
+
+### Núcleo Genérico
+
+| Arquivo | Responsabilidade |
+|---|---|
+| [StrategyRegistry.js](../src/core/ai/StrategyRegistry.js) | Registra `shadowheart`, `luminarch`, `void`, `dragon`, `arcanist`, `miragebound` e `bloomrot`. |
+| [BaseStrategy.js](../src/core/ai/BaseStrategy.js) | Classe-base com avaliação genérica de board e helpers comuns. |
+| [StrategyUtils.js](../src/core/ai/StrategyUtils.js) | Utilitários de valor, arquétipo, filtros e scoring. |
+| [BeamSearch.js](../src/core/ai/BeamSearch.js) | Busca em feixe e avaliação de linhas. |
+| [TurnLineSearch.js](../src/core/ai/TurnLineSearch.js) | Planejador de linha de turno para sequências de ações. |
+| [GameTreeSearch.js](../src/core/ai/GameTreeSearch.js) | Busca em árvore para cenários críticos. |
+| [MacroPlanning.js](../src/core/ai/MacroPlanning.js) | Planejamento de múltiplos turnos. |
+| [OpponentPredictor.js](../src/core/ai/OpponentPredictor.js) | Modelo leve de comportamento do oponente. |
+| [RoleAnalyzer.js](../src/core/ai/RoleAnalyzer.js) | Classificação genérica de papéis de cartas. |
+| [ThreatEvaluation.js](../src/core/ai/ThreatEvaluation.js) | Avaliação de ameaças e letal. |
+| [ChainAwareness.js](../src/core/ai/ChainAwareness.js) | Avaliação de respostas em Chain e interrupções. |
+| [ArenaAnalytics.js](../src/core/ai/ArenaAnalytics.js) | Métricas de Bot Arena e relatórios estratégicos. |
+
+### Strategy Classes
 
 | Arquivo | Deck |
 |---|---|
@@ -139,139 +172,170 @@ Sistema de handlers declarativos. Cada efeito de carta no database é um objeto 
 | [VoidStrategy.js](../src/core/ai/VoidStrategy.js) | Void |
 | [DragonStrategy.js](../src/core/ai/DragonStrategy.js) | Dragon |
 | [ArcanistStrategy.js](../src/core/ai/ArcanistStrategy.js) | Arcanist |
+| [MirageboundStrategy.js](../src/core/ai/MirageboundStrategy.js) | Miragebound |
+| [BloomrotStrategy.js](../src/core/ai/BloomrotStrategy.js) | Bloomrot |
 
-Cada strategy estende `BaseStrategy` e delega para um pacote de helpers no diretório homônimo (`shadowheart/`, `luminarch/`, `void/`, `dragon/`, `arcanist/`).
+### Pacotes Por Arquétipo
 
-#### Pacotes de helpers por arquétipo
+Os pacotes [shadowheart/](../src/core/ai/shadowheart/), [luminarch/](../src/core/ai/luminarch/), [void/](../src/core/ai/void/), [dragon/](../src/core/ai/dragon/), [arcanist/](../src/core/ai/arcanist/), [miragebound/](../src/core/ai/miragebound/) e [bloomrot/](../src/core/ai/bloomrot/) concentram knowledge bases, prioridades, combos, scoring, simulação e planejamento específicos de cada deck.
 
-Padrão comum em [shadowheart/](../src/core/ai/shadowheart/), [luminarch/](../src/core/ai/luminarch/), [void/](../src/core/ai/void/), [dragon/](../src/core/ai/dragon/) e [arcanist/](../src/core/ai/arcanist/):
+Padrões comuns:
 
-- `index.js` — barrel.
-- `knowledge.js` — base de conhecimento (papéis das cartas, valores, condições especiais).
-- `priorities.js` — `shouldPlaySpell`, `shouldSummonMonster`, seleção de tributos, trades.
-- `combos.js` — `detectAvailableCombos` específico do deck.
-- `scoring.js` — avaliação de board específica do deck.
-- `linePlanning.js` — avaliação/ordenação de linhas de turno específicas do deck.
-- `simulation.js` existe em `shadowheart/`, `dragon/` e `luminarch/` para simulação rápida de jogadas.
+- `knowledge.js` - papéis, valores e regras específicas do arquétipo.
+- `priorities.js` - quando invocar, ativar spells/traps, atacar, tributar ou preservar recursos.
+- `combos.js` - detecção de linhas e sinergias.
+- `scoring.js` - avaliação específica de board.
+- `linePlanning.js` - ordenação e bônus/penalidades de linhas.
+- `simulation.js` - simulação específica quando o arquétipo precisa espelhar efeitos complexos.
 
-Além dos pacotes por arquétipo, [common/](../src/core/ai/common/) concentra helpers compartilhados de validação de ações, análise, filtros, stats, simulação, policy de recursos/tributos, fusão e diagnósticos de planejamento.
+Pacotes com módulos extras relevantes:
 
-Também vivem em `common/` os módulos extraídos da refatoração de geração de actions: ordenação (`actionSequencing.js`), previews (`previewGuards.js`), descoberta de efeitos (`effectDiscovery.js`), geração/montagem de actions (`actionGeneration.js`), backrow (`backrowPlanning.js`), disponibilidade de alvos (`targetAvailability.js`), Ascension (`ascensionPlanning.js`) e utilitários de estado simulado (`simStateUtils.js`). Esses módulos devem permanecer genéricos e sem dependência de knowledge bases específicas de arquétipo.
+- [luminarch/](../src/core/ai/luminarch/) possui módulos dedicados para defesa, economia de recursos, fusão, spells, summons, Lancer, Moonlit e tribute policy.
+- [dragon/](../src/core/ai/dragon/) possui política específica para Boneflame, combos, prioridades, simulação e planejamento de linha.
+- [bloomrot/](../src/core/ai/bloomrot/) possui análise, batalha, defesa, extra deck, resource policy, targeting, scoring e planejamento de linha.
+- [miragebound/](../src/core/ai/miragebound/) possui planejamento de linha próprio.
 
-Luminarch tem módulos extras de plano defensivo, economia de recursos, fusão, spells, summons e linhas específicas: [actionContext.js](../src/core/ai/luminarch/actionContext.js), [cardValue.js](../src/core/ai/luminarch/cardValue.js), [defensePlanning.js](../src/core/ai/luminarch/defensePlanning.js), [defensePolicy.js](../src/core/ai/luminarch/defensePolicy.js), [extraDeckActions.js](../src/core/ai/luminarch/extraDeckActions.js), [finisherPlanning.js](../src/core/ai/luminarch/finisherPlanning.js), [fusionPriority.js](../src/core/ai/luminarch/fusionPriority.js), [lancerPlanning.js](../src/core/ai/luminarch/lancerPlanning.js), [moonlitPlanning.js](../src/core/ai/luminarch/moonlitPlanning.js), [multiTurnPlanning.js](../src/core/ai/luminarch/multiTurnPlanning.js), [resourceEconomy.js](../src/core/ai/luminarch/resourceEconomy.js), [spellActions.js](../src/core/ai/luminarch/spellActions.js), [spellPriority.js](../src/core/ai/luminarch/spellPriority.js), [summonActions.js](../src/core/ai/luminarch/summonActions.js), [summonPriority.js](../src/core/ai/luminarch/summonPriority.js) e [tributePolicy.js](../src/core/ai/luminarch/tributePolicy.js).
+### `src/core/ai/common/`
 
-### `src/core/chain/` — Sistema de chain (módulos)
+Camada compartilhada entre estratégias. Módulos atuais:
 
-| Arquivo | Responsabilidade |
-|---|---|
-| [index.js](../src/core/chain/index.js) | Barrel — exporta `spellSpeed`, `stack`, `CHAIN_CONTEXTS`. |
-| [contexts.js](../src/core/chain/contexts.js) | Enum/constantes de contextos de chain (open windows, trigger types). |
-| [spellSpeed.js](../src/core/chain/spellSpeed.js) | Validação de spell speed (1/2/3) em cada chain link. |
-| [stack.js](../src/core/chain/stack.js) | Gestão da pilha LIFO de chain. |
-| [resolution.js](../src/core/chain/resolution.js) | Resolução em ordem reversa, propagação de efeitos. |
-
-### `src/core/effects/` — Sistema de efeitos (módulos)
-
-Camada baixa do `EffectEngine`. Organizada por área, agregada pelo barrel [index.js](../src/core/effects/index.js):
-
-#### `effects/actions/`
-Ações primitivas executáveis durante efeitos: [index.js](../src/core/effects/actions/index.js) (barrel), [combat.js](../src/core/effects/actions/combat.js), [counters.js](../src/core/effects/actions/counters.js), [destroy.js](../src/core/effects/actions/destroy.js), [equip.js](../src/core/effects/actions/equip.js), [immunity.js](../src/core/effects/actions/immunity.js), [movement.js](../src/core/effects/actions/movement.js), [resources.js](../src/core/effects/actions/resources.js), [stats.js](../src/core/effects/actions/stats.js), [summon.js](../src/core/effects/actions/summon.js), [core.js](../src/core/effects/actions/core.js).
-
-#### `effects/activation/`
-- [index.js](../src/core/effects/activation/index.js) — barrel.
-- [getters.js](../src/core/effects/activation/getters.js) — busca efeitos válidos do estado atual.
-- [preview.js](../src/core/effects/activation/preview.js) — preview de impacto antes de ativar.
-- [execution.js](../src/core/effects/activation/execution.js) — runtime de ativação propriamente dito.
-
-#### `effects/blueprints/`
-[index.js](../src/core/effects/blueprints/index.js) — templates de efeitos reutilizáveis (composição de ações).
-
-#### `effects/fusion/`
-Sistema de Fusion Summon: [index.js](../src/core/effects/fusion/index.js) (barrel), [requirements.js](../src/core/effects/fusion/requirements.js), [evaluation.js](../src/core/effects/fusion/evaluation.js), [execution.js](../src/core/effects/fusion/execution.js).
-
-#### `effects/targeting/`
-Resolução de alvos: [index.js](../src/core/effects/targeting/index.js) (barrel), [filters.js](../src/core/effects/targeting/filters.js) (predicados), [zones.js](../src/core/effects/targeting/zones.js) (escopo), [selection.js](../src/core/effects/targeting/selection.js) (UI/AutoSelector), [resolution.js](../src/core/effects/targeting/resolution.js) (escolha final).
-
-#### `effects/triggers/`
-Sistema de gatilhos (on-summon, on-destroy, on-attack, etc.): [index.js](../src/core/effects/triggers/index.js) (barrel), [registration.js](../src/core/effects/triggers/registration.js), [collectors.js](../src/core/effects/triggers/collectors.js), [counters.js](../src/core/effects/triggers/counters.js), [core.js](../src/core/effects/triggers/core.js).
-
-### `src/core/game/` — Game.js explodido em módulos
-
-`Game.js` originalmente era monolítico. As funcionalidades foram extraídas em módulos por área e anexadas ao prototype no construtor. Cada subpasta abriga um aspecto do estado.
-
-| Subpasta | Conteúdo |
-|---|---|
-| [actions/](../src/core/game/actions/) | `guard.js` — validação de ações permitidas por fase/turno. |
-| [analytics/](../src/core/game/analytics/) | `strategicReport.js` — ciclo de vida do Strategic Report do duelo comum e download do JSON de 1 duelo. |
-| [combat/](../src/core/game/combat/) | Sistema de batalha: `availability.js`, `targeting.js`, `damage.js`, `resolution.js`, `indicators.js`. |
-| [deck/](../src/core/game/deck/) | `draw.js` — compra de cartas e checagem de deck-out. |
-| [devTools/](../src/core/game/devTools/) | Comandos de debug e setup: `commands.js`, `setup.js`. Testes de cards e efeitos rodam no Laboratório. |
-| [effects/](../src/core/game/effects/) | Pipeline de ativação (`activationPipeline.js`) e replacement effects para destruição (`destructionReplacement.js`). |
-| [events/](../src/core/game/events/) | `eventBus.js` (pub/sub) e `eventResolver.js` (encadeamento). |
-| [extraDeck/](../src/core/game/extraDeck/) | `modal.js` — abertura/seleção do extra deck. |
-| [graveyard/](../src/core/game/graveyard/) | `modal.js` — visualização do GY. |
-| [helpers/](../src/core/game/helpers/) | `cards.js`, `players.js` — utilitários compartilhados. |
-| [selection/](../src/core/game/selection/) | Sistema de seleção: `contract.js` (definição), `session.js` (sessão ativa), `handlers.js` (callback wiring), `highlighting.js` (visual). |
-| [spellTrap/](../src/core/game/spellTrap/) | Spells/Traps: `set.js`, `activation.js`, `verification.js`, `finalization.js`, `triggers.js`, `index.js`. |
-| [state/](../src/core/game/state/) | `serialization.js` — snapshot/clone de estado para IA. |
-| [summon/](../src/core/game/summon/) | Invocações: `tracking.js` (once-per-turn flags), `execution.js`, `ascension.js` (regra Ascension), `position.js` (ATK/DEF), `materialStats.js`. |
-| [turn/](../src/core/game/turn/) | Ciclo de turno: `lifecycle.js`, `transitions.js` (mudanças de fase), `phaseRules.js`, `cleanup.js` (end-of-turn), `oncePerTurn.js`, `scheduling.js`. |
-| [ui/](../src/core/game/ui/) | Pontes UI: `board.js`, `modals.js`, `prompts.js`, `interactions.js`, `cardAnimations.js`, `indicators.js`, `winCondition.js`, `index.js`. |
-| [zones/](../src/core/game/zones/) | Manipulação de zonas: `ownership.js`, `operations.js`, `movement.js`, `destruction.js`, `snapshot.js`, `invariants.js`. |
+- Geração e execução planejada: `actionGeneration.js`, `actionSequencing.js`, `actionValidation.js`, `effectDiscovery.js`.
+- Análise e perspectiva: `analysis.js`, `perspective.js`, `planningDiagnostics.js`.
+- Filtros e stats: `cardFilters.js`, `cardStats.js`, `cardValue.js`, `zones.js`.
+- Combos e counters: `comboDetection.js`, `counters.js`.
+- Planejamento: `ascensionPlanning.js`, `backrowPlanning.js`, `finisherPlans.js`, `fusionPlanning.js`, `summonAssessment.js`.
+- Recursos e preferências: `resourceEconomy.js`, `resourcePolicy.js`, `preferencePolicy.js`, `tributePolicy.js`.
+- Targeting e simulação: `targetAvailability.js`, `targetSelection.js`, `simulation.js`, `simStateUtils.js`, `simulatedConditions.js`, `previewGuards.js`.
 
 ---
 
-## `src/ui/` — Renderização
+## `src/core/chain/` - Sistema de Chain
 
-### `src/ui/main/`
-
-Controllers e helpers da shell da SPA. Essa pasta modulariza o antigo `main.js` sem introduzir framework ou store global novo.
+`ChainSystem.js` é a fachada. A lógica modular vive aqui:
 
 | Arquivo | Responsabilidade |
 |---|---|
-| [domRefs.js](../src/ui/main/domRefs.js) | Agrupa referências do DOM por área: start screen, deck builder, Bot Arena, laboratório, validação e locale. |
-| [deckState.js](../src/ui/main/deckState.js) | Estado e persistência do deck builder: presets, slots, chaves de `localStorage`, migracao versionada de IDs antigos, sanitização de deck/extra deck, pool sorting e inferência de arquétipo. |
-| [validationPanel.js](../src/ui/main/validationPanel.js) | Executa `validateCardDatabase()` e renderiza erros da base de cartas na tela inicial. |
-| [deckBuilderController.js](../src/ui/main/deckBuilderController.js) | UI do deck builder: slots, filtros, preview, edição do main/extra deck, preset do bot e preparação dos dados para duelo comum. |
-| [laboratoryController.js](../src/ui/main/laboratoryController.js) | UI do Laboratório: setup manual, randomização, import/export JSON, modos de teste/duelo e configuração de bot/revelar mão. |
-| [botArenaController.js](../src/ui/main/botArenaController.js) | UI da Bot Arena: seleção de matchups, velocidade, auto pause, status/log/result cards e download do Strategic JSON. Preserva `window.botArenaInstance`. |
-| [gameLauncher.js](../src/ui/main/gameLauncher.js) | Cria `Game` + `Renderer` para duelo comum ou Laboratório recebendo configurações prontas dos controllers. |
-| [localeControls.js](../src/ui/main/localeControls.js) | Botões de idioma e reload após troca de locale. |
+| [index.js](../src/core/chain/index.js) | Barrel dos módulos de Chain. |
+| [contexts.js](../src/core/chain/contexts.js) | Definição dos contextos/janelas de Chain. |
+| [spellSpeed.js](../src/core/chain/spellSpeed.js) | Regras de Spell Speed e checagem de ativação em Chain. |
+| [stack.js](../src/core/chain/stack.js) | Pilha LIFO, links e consultas de estado da Chain. |
+| [resolution.js](../src/core/chain/resolution.js) | Preparação, resolução e cleanup de links. |
+| [activationDiscovery.js](../src/core/chain/activationDiscovery.js) | Descoberta de cartas/effects ativáveis em uma janela. |
+| [effectMatching.js](../src/core/chain/effectMatching.js) | Compatibilidade entre efeito, evento e contexto de Chain. |
+| [responseWindow.js](../src/core/chain/responseWindow.js) | Abertura e controle de janelas de resposta. |
+| [playerResponse.js](../src/core/chain/playerResponse.js) | Respostas humanas e coleta de decisões. |
+| [botResponsePolicy.js](../src/core/chain/botResponsePolicy.js) | Política de resposta para IA. |
+| [selection.js](../src/core/chain/selection.js) | Seleção de alvos/efeitos dentro da Chain. |
+
+---
+
+## `src/core/effects/` - Sistema de Efeitos
+
+`EffectEngine.js` é a fachada. A implementação real fica nestes módulos:
+
+| Caminho | Responsabilidade |
+|---|---|
+| [attachModules.js](../src/core/effects/attachModules.js) | Anexa módulos ao prototype/fachada do `EffectEngine`. |
+| [index.js](../src/core/effects/index.js) | Barrel dos módulos de efeitos. |
+| [actions/](../src/core/effects/actions/) | Primitivas de runtime: combate, core, counters, destroy, equip, immunity, movement, resources, stats e summon. |
+| [activation/](../src/core/effects/activation/) | Getters, preview, execução e escolha de posição em ativações. |
+| [blueprints/](../src/core/effects/blueprints/) | Blueprints/efeitos armazenados reutilizáveis. |
+| [conditions/](../src/core/effects/conditions/) | Avaliação genérica de condições declarativas. |
+| [costs/](../src/core/effects/costs/) | Custos declarativos, incluindo LP. |
+| [filters/](../src/core/effects/filters/) | Predicados de cartas e efeitos. |
+| [fusion/](../src/core/effects/fusion/) | Requisitos, avaliação e execução de Fusion Summon. |
+| [passives/](../src/core/effects/passives/) | Buffs e auras passivas. |
+| [targeting/](../src/core/effects/targeting/) | Filtros, zonas, seleção e resolução de alvos. |
+| [triggers/](../src/core/effects/triggers/) | Registro, coleta e disparo de gatilhos. |
+
+### `effects/triggers/collectors/`
+
+Coletores por evento que alimentam os triggers declarativos:
+
+`afterSummon.js`, `attackDeclared.js`, `battleCompleted.js`, `battleDamage.js`, `battleDestroy.js`, `cardEquipped.js`, `cardMoved.js`, `cardToGrave.js`, `counterRemoved.js`, `effectActivated.js`, `effectTargeted.js`, `lpChange.js`, `positionChange.js`, `spellActivated.js`, `standbyPhase.js` e `shared.js`.
+
+---
+
+## `src/core/game/` - Módulos do `Game`
+
+`Game.js` orquestra e delega para estes módulos:
+
+| Subpasta | Conteúdo |
+|---|---|
+| [actions/](../src/core/game/actions/) | `guard.js` - validação antes de iniciar ações. |
+| [analytics/](../src/core/game/analytics/) | `strategicReport.js` - ciclo de vida do Strategic Report. |
+| [combat/](../src/core/game/combat/) | `availability.js`, `damage.js`, `indicators.js`, `resolution.js`, `targeting.js`. |
+| [deck/](../src/core/game/deck/) | `draw.js` - compras e deck-out. |
+| [devTools/](../src/core/game/devTools/) | `commands.js`, `setup.js` - comandos e setups de teste. |
+| [effects/](../src/core/game/effects/) | `activationPipeline.js`, `destructionReplacement.js`. |
+| [events/](../src/core/game/events/) | `eventBus.js`, `eventResolver.js`. |
+| [extraDeck/](../src/core/game/extraDeck/) | `modal.js` - abertura/seleção do Extra Deck. |
+| [graveyard/](../src/core/game/graveyard/) | `modal.js` - visualização e ativação a partir do Cemitério quando legal. |
+| [helpers/](../src/core/game/helpers/) | `cards.js`, `players.js`. |
+| [replay/](../src/core/game/replay/) | Pasta reservada para integração modular de replay. |
+| [selection/](../src/core/game/selection/) | `contract.js`, `handlers.js`, `highlighting.js`, `session.js`. |
+| [spellTrap/](../src/core/game/spellTrap/) | `activation.js`, `finalization.js`, `index.js`, `quickSpellRules.js`, `set.js`, `triggers.js`, `verification.js`. |
+| [state/](../src/core/game/state/) | `duelReset.js`, `serialization.js`. |
+| [summon/](../src/core/game/summon/) | `ascension.js`, `execution.js`, `materialStats.js`, `position.js`, `tracking.js`, `tributeValue.js`. |
+| [turn/](../src/core/game/turn/) | `cleanup.js`, `lifecycle.js`, `oncePerTurn.js`, `phaseRules.js`, `scheduling.js`, `transitions.js`. |
+| [ui/](../src/core/game/ui/) | `board.js`, `cardAnimations.js`, `index.js`, `indicators.js`, `interactions.js`, `modals.js`, `prompts.js`, `winCondition.js`. |
+| [zones/](../src/core/game/zones/) | `destruction.js`, `invariants.js`, `movement.js`, `operations.js`, `ownership.js`, `snapshot.js`. |
+
+---
+
+## `src/ui/` - Renderização e Shell
+
+### `src/ui/main/`
+
+Controllers da tela inicial e fluxos fora do duelo:
+
+| Arquivo | Responsabilidade |
+|---|---|
+| [domRefs.js](../src/ui/main/domRefs.js) | Referências DOM agrupadas por área. |
+| [deckState.js](../src/ui/main/deckState.js) | Estado, persistência, migração e sanitização do deck builder. |
+| [validationPanel.js](../src/ui/main/validationPanel.js) | Renderização dos erros do database validator. |
+| [deckBuilderController.js](../src/ui/main/deckBuilderController.js) | UI de deck builder, filtros, slots, preview e presets. |
+| [laboratoryController.js](../src/ui/main/laboratoryController.js) | UI do Laboratório, import/export e setup manual. |
+| [botArenaController.js](../src/ui/main/botArenaController.js) | UI da Bot Arena, velocidade, logs e relatórios. |
+| [gameLauncher.js](../src/ui/main/gameLauncher.js) | Cria `Game` e `Renderer` para duelo comum ou laboratório. |
+| [localeControls.js](../src/ui/main/localeControls.js) | Troca de idioma e reload controlado. |
 
 ### `src/ui/Renderer.js`
-Fachada principal de renderização. Constructor próprio + métodos importados de [renderer/](../src/ui/renderer/) e anexados ao prototype.
+
+Fachada de renderização. Constrói o renderer e delega métodos para [src/ui/renderer/](../src/ui/renderer/).
 
 ### `src/ui/renderer/`
 
 | Arquivo | Responsabilidade |
 |---|---|
 | [index.js](../src/ui/renderer/index.js) | Barrel. |
-| [bindings.js](../src/ui/renderer/bindings.js) | Wiring de event listeners do DOM. |
-| [board.js](../src/ui/renderer/board.js) | Renderiza zonas (mão, campo, GY, banimento). |
-| [animations.js](../src/ui/renderer/animations.js) | Animações de transição de cartas. |
-| [cardAnimationManager.js](../src/ui/renderer/cardAnimationManager.js) | Coordena queues de animação para evitar overlap. |
-| [feedbackFx.js](../src/ui/renderer/feedbackFx.js) | Efeitos visuais (damage, heal, glow). |
-| [indicators.js](../src/ui/renderer/indicators.js) | Badges/markers (ataque disponível, set, tributo). |
-| [log.js](../src/ui/renderer/log.js) | Painel de log do duelo. |
-| [modals.js](../src/ui/renderer/modals.js) | Modais genéricos (confirm/alert/number prompt). |
-| [preview.js](../src/ui/renderer/preview.js) | Hover/preview de cartas em tamanho grande. |
-| [selectionModals.js](../src/ui/renderer/selectionModals.js) | Modais de seleção de alvo. |
-| [summonModals.js](../src/ui/renderer/summonModals.js) | Modais de invocação (tributo, ascension, fusion). |
-| [trapModals.js](../src/ui/renderer/trapModals.js) | Modais de ativação de trap em chain window. |
+| [bindings.js](../src/ui/renderer/bindings.js) | Event listeners DOM. |
+| [board.js](../src/ui/renderer/board.js) | Renderização das zonas. |
+| [animations.js](../src/ui/renderer/animations.js) | Animações visuais. |
+| [cardAnimationManager.js](../src/ui/renderer/cardAnimationManager.js) | Fila/coordenação de animações de cartas. |
+| [feedbackFx.js](../src/ui/renderer/feedbackFx.js) | Feedback visual de dano, cura e destaque. |
+| [indicators.js](../src/ui/renderer/indicators.js) | Badges e marcadores de estado. |
+| [log.js](../src/ui/renderer/log.js) | Log do duelo. |
+| [modals.js](../src/ui/renderer/modals.js) | Modais genéricos. |
+| [preview.js](../src/ui/renderer/preview.js) | Preview grande de cartas. |
+| [selectionModals.js](../src/ui/renderer/selectionModals.js) | Modais de seleção. |
+| [summonModals.js](../src/ui/renderer/summonModals.js) | Modais de Normal/Special/Fusion/Ascension Summon. |
+| [trapModals.js](../src/ui/renderer/trapModals.js) | Modais de traps e respostas em Chain. |
 
 ---
 
-## `scripts/` — Utilitários Node
+## `scripts/` - Utilitários Node
 
 | Arquivo | Responsabilidade |
 |---|---|
-| [generate_action_catalog_doc.mjs](../scripts/generate_action_catalog_doc.mjs) | Gera Markdown do catálogo de ações (em [docs/Catalogo de actions.md](Catalogo%20de%20actions.md)). |
-| [validate_action_catalog.mjs](../scripts/validate_action_catalog.mjs) | Valida que os action handlers registrados em `wiring.js` batem com `ACTION_CATALOG` e que os exemplos respeitam o schema. |
-| [run_bot_arena_smoke.mjs](../scripts/run_bot_arena_smoke.mjs) | Roda smoke tests curtos de Bot Arena por linha de comando. |
+| [generate_action_catalog_doc.mjs](../scripts/generate_action_catalog_doc.mjs) | Gera [docs/Catalogo de actions.md](Catalogo%20de%20actions.md). |
+| [validate_action_catalog.mjs](../scripts/validate_action_catalog.mjs) | Valida handlers registrados, catálogo e exemplos. |
+| [run_bot_arena_smoke.mjs](../scripts/run_bot_arena_smoke.mjs) | Smoke test curto da Bot Arena por CLI. |
+| [run_bloomrot_bot_smokes.mjs](../scripts/run_bloomrot_bot_smokes.mjs) | Smokes específicos do bot Bloomrot. |
 
 ---
 
-## `docs/` — Documentação técnica
+## `docs/` - Documentação Técnica
 
 - [Como criar uma carta.md](Como%20criar%20uma%20carta.md)
 - [Como criar um handler.md](Como%20criar%20um%20handler.md)
@@ -279,22 +343,27 @@ Fachada principal de renderização. Constructor próprio + métodos importados 
 - [Estrutura do Projeto.md](Estrutura%20do%20Projeto.md)
 - [Modularizacao de cards.md](Modularizacao%20de%20cards.md)
 - [Regras para Invocação-Ascensão.md](Regras%20para%20Invoca%C3%A7%C3%A3o-Ascens%C3%A3o.md)
-- Decklists: [Arcanist](Arcanist%20Decklist.md), [Bloomrot](Bloomrot%20Decklist.md), [Dragon](Dragon%20Decklist.md), [Luminarch](Luminarch%20Decklist.md), [Miragebound](Miragebound%20Decklist.md), [Shadow-Heart](Shadow-Heart%20Decklist.md), [Void](Void%20Decklist.md).
+- [StrategyUtils - Mapa de consumidores.md](StrategyUtils%20-%20Mapa%20de%20consumidores.md)
+- [Bloomrot Bot Implementation Plan.md](Bloomrot%20Bot%20Implementation%20Plan.md)
+- [Bloomrot Bot Technical Audit.md](Bloomrot%20Bot%20Technical%20Audit.md)
+- [bloomrot_bot_strategy.md](bloomrot_bot_strategy.md)
+- Decklists: [Arcanist](Arcanist%20Decklist.md), [Bloomrot](Bloomrot%20Decklist.md), [Burning West](Burning%20West%20Decklist.md), [Dragon](Dragon%20Decklist.md), [Luminarch](Luminarch%20Decklist.md), [Miragebound](Miragebound%20Decklist.md), [Shadow-Heart](Shadow-Heart%20Decklist.md), [Void](Void%20Decklist.md).
 
 ---
 
-## Diretórios auxiliares
+## Diretórios Auxiliares
 
-- **`assets/`** — PNG/JPG das cartas. Nome do arquivo = nome da carta.
-- **`replays/`** — Arquivos JSON exportados/importados para análise, incluindo Strategic Reports e replays legados.
-- **`laboratory-imports/`** — Presets de bot/deck importáveis manualmente.
-- **`.claude/`** — Configuração local/trackeada de agentes Claude.
-- **`.codex/`** — Ambientes auxiliares do Codex.
-- **`.vscode/`** — Configuração local do editor.
-- **`node_modules/`** — Dependências (apenas `serve` em dev).
+- **`assets/`** - imagens das cartas usadas pelo database.
+- **`replays/`** - replays e Strategic Reports exportados/importados.
+- **`laboratory-imports/`** - presets JSON para importação manual no Laboratório.
+- **`.agents/`** - instruções/configuração local de agentes.
+- **`.claude/`** - configuração local/trackeada de agentes Claude.
+- **`.codex/`** - ambientes auxiliares do Codex.
+- **`.vscode/`** - configuração local do editor.
+- **`node_modules/`** - dependências instaladas, incluindo `serve` e `pixi.js`.
 
 ---
 
-## Arquitetura em uma frase
+## Arquitetura em Uma Frase
 
-> `main.js` compõe controllers em `ui/main/`; o `gameLauncher` cria um `Game` (que delega para módulos em `core/game/`), conecta um `Bot` (que escolhe ações via `BeamSearch`, `TurnLineSearch` opcional e uma `Strategy` específica do deck) e um `Renderer` (que pinta o DOM via `UIAdapter`); efeitos de carta declarados em `data/cards.js` são executados pelo `EffectEngine` através de handlers em `actionHandlers/` e podem entrar no `ChainSystem`.
+`main.js` compõe controllers de `ui/main/`; o `gameLauncher` cria `Game` e `Renderer`; `Game` delega regras para módulos em `core/game/`, o `Bot` decide via estratégias em `core/ai/` e execução em `core/bot/`, cartas declarativas em `data/cards.js` resolvem pelo `EffectEngine` e `actionHandlers/`, e respostas/Spell Speed passam pelo `ChainSystem`.

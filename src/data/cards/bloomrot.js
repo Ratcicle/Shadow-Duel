@@ -205,7 +205,7 @@ export const bloomrotCards = [
     attribute: "Earth",
     archetype: "Bloomrot",
     description:
-      'If this card is Normal or Special Summoned: Special Summon 1 "Bloomrot Token" (Plant/EARTH/Level 1/ATK 0/DEF 0). Once per turn: You can send 1 "Bloomrot" monster you control to the Graveyard; target 1 face-up card your opponent controls; place 2 Spore Counters on it.',
+      'If this card is Normal or Special Summoned: Special Summon 1 "Bloomrot Token" (Plant/EARTH/Level 1/ATK 0/DEF 0) in Defense Position. Once per turn: You can send 1 "Bloomrot" monster you control to the Graveyard; target 1 face-up card your opponent controls; place 2 Spore Counters on it.',
     image: "assets/Bloomrot Myco-Weaver.png",
     effects: [
       {
@@ -218,7 +218,7 @@ export const bloomrotCards = [
           {
             type: "special_summon_token",
             player: "self",
-            position: "choice",
+            position: "defense",
             token: {
               name: "Bloomrot Token",
               atk: 0,
@@ -522,7 +522,7 @@ export const bloomrotCards = [
     attribute: "Earth",
     archetype: "Bloomrot",
     description:
-      'Before damage calculation, if this card is being attacked by an opponent\'s monster: place 2 Spore Counters on the attacking monster. If this card is destroyed by battle: Special Summon 1 "Bloomrot Token" (Plant/EARTH/Level 1/ATK 0/DEF 0). You can only use each effect of "Bloomrot Moldmender" once per turn.',
+      'Before damage calculation, if this card is being attacked by an opponent\'s monster: place 2 Spore Counters on the attacking monster. If this card is destroyed by battle: Special Summon 1 "Bloomrot Token" (Plant/EARTH/Level 1/ATK 0/DEF 0) in Defense Position. You can only use each effect of "Bloomrot Moldmender" once per turn.',
     image: "assets/Bloomrot Moldmender.png",
     effects: [
       {
@@ -569,7 +569,7 @@ export const bloomrotCards = [
           {
             type: "special_summon_token",
             player: "self",
-            position: "choice",
+            position: "defense",
             token: {
               name: "Bloomrot Token",
               atk: 0,

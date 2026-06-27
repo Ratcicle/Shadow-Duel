@@ -302,6 +302,10 @@ export async function applyAddCounter(action, ctx, targets) {
     }).allowed;
   }
 
+  if (targetCards.length === 0 && action.targetScope) {
+    return true;
+  }
+
   let added = false;
   let addedAmount = 0;
   for (const card of targetCards) {

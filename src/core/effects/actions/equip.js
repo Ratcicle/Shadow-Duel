@@ -14,8 +14,30 @@ export async function applyEquip(action, ctx, targets) {
   const equipCard = ctx.source;
   const player = ctx.player;
 
-  const targetCards = targets[action.targetRef] || [];
-  if (!targetCards.length) return false;
+  let targetCards = targets[action.targetRef] || [];
+  if (!Array.isArray(targetCards)) {
+    targetCards = targetCards ? [targetCards] : [];
+  }
+  if (!targetCards.length) {
+    const sourceZone =
+      typeof this.findCardZone === "function"
+        ? this.findCardZone(player, equipCard)
+        : null;
+    if (
+      sourceZone === "spellTrap" &&
+      this.game &&
+      typeof this.game.moveCard === "function"
+    ) {
+      await this.game.moveCard(equipCard, player, "graveyard", {
+        fromZone: "spellTrap",
+        contextLabel: action.contextLabel || "equip_target_missing",
+        sourceCard: equipCard,
+        effectId: ctx?.effect?.id || null,
+      });
+      return true;
+    }
+    return false;
+  }
 
   const target = targetCards[0];
   const detachFromPreviousHost = () => {

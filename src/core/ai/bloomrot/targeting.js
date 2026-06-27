@@ -4,6 +4,7 @@ import {
   isBloomrot,
   isBloomrotMonster,
 } from "./analysis.js";
+import { shouldUseRottingGroundNegate } from "./defense.js";
 
 const N = {
   SPORELING: "Bloomrot Sporeling",
@@ -83,6 +84,10 @@ function isFaceup(card) {
   return card && card.isFacedown !== true;
 }
 
+function isBloomrotToken(card) {
+  return card?.isToken === true || card?.name === BLOOMROT_NAMES.TOKEN;
+}
+
 function cardValue(card) {
   if (!card) return 0;
   if (card.cardKind === "monster") {
@@ -111,6 +116,7 @@ function readyBloomrotAttackers(analysis = {}) {
   return (analysis.faceUpBloomrotField || []).filter(
     (card) =>
       card?.cardKind === "monster" &&
+      !isBloomrotToken(card) &&
       card.position === "attack" &&
       !card.hasAttacked &&
       !card.cannotAttackThisTurn,
@@ -156,7 +162,7 @@ function scoreRemovalTarget(card, analysis = {}) {
 }
 
 function scoreOwnEquipTarget(card) {
-  if (!isBloomrotMonster(card) || card.isToken) return -100;
+  if (!isBloomrotMonster(card) || isBloomrotToken(card)) return -100;
   let score = cardValue(card);
   if (card.name === BLOOMROT_NAMES.ANCIENT_MYCELIUM) score += 45;
   if (card.name === BLOOMROT_NAMES.QUEEN) score += 45;
@@ -255,7 +261,7 @@ function opponentEquipPreference(analysis = {}) {
 
 function mycoWeaverCostPreference(analysis = {}) {
   const tokens = (analysis.field || []).filter(
-    (card) => card?.isToken || card?.name === BLOOMROT_NAMES.TOKEN,
+    (card) => isBloomrotToken(card),
   );
   return {
     intent: "cost",
@@ -278,6 +284,7 @@ function mycoWeaverCostPreference(analysis = {}) {
 export function buildBloomrotTargetPreferences(sourceCard, analysis = {}) {
   const preferences = {};
   const defaultSporePreference = sporePreference(analysis);
+  const rottingGroundDecision = shouldUseRottingGroundNegate(analysis);
 
   for (const targetId of SPORE_TARGET_IDS) {
     preferences[targetId] = defaultSporePreference;
@@ -292,9 +299,15 @@ export function buildBloomrotTargetPreferences(sourceCard, analysis = {}) {
   preferences.bloomrot_fungal_armor_equip_target = ownEquipPreference(analysis);
   preferences.bloomrot_overgrowth_equip_target = opponentEquipPreference(analysis);
   preferences.bloomrot_myco_weaver_cost = mycoWeaverCostPreference(analysis);
-  preferences.bloomrot_rotting_ground_negate_target = removalPreference(analysis, {
-    monstersOnly: true,
-  });
+  preferences.bloomrot_rotting_ground_negate_target = rottingGroundDecision.target
+    ? {
+        ...removalPreference(analysis, { monstersOnly: true }),
+        role: "negation",
+        preferredInstanceIds: instanceIds([rottingGroundDecision.target]),
+      }
+    : removalPreference(analysis, {
+        monstersOnly: true,
+      });
 
   if (sourceCard?.name === N.FUNGAL_ARMOR) {
     preferences.targetPreference = ownEquipPreference(analysis);

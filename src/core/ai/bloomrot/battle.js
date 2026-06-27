@@ -44,9 +44,14 @@ function isFaceupMonster(card) {
   return card?.cardKind === "monster" && card.isFacedown !== true;
 }
 
+function isBloomrotToken(card) {
+  return card?.isToken === true || card?.name === BLOOMROT_NAMES.TOKEN;
+}
+
 function canAttack(card) {
   return (
     isFaceupMonster(card) &&
+    !isBloomrotToken(card) &&
     card.position === "attack" &&
     card.cannotAttackThisTurn !== true &&
     card.hasAttacked !== true
@@ -173,7 +178,9 @@ export function buildBloomrotPlanningProfile(analysis = {}, context = {}) {
 }
 
 export function prepareBloomrotSimulatedBattle({ attacker, target } = {}) {
-  if (!attacker || !isBloomrotMonster(attacker)) return [];
+  if (!attacker || !isBloomrotMonster(attacker) || isBloomrotToken(attacker)) {
+    return [];
+  }
   const rewards = [];
   if (
     attacker.name === N.ROT_STAG &&
@@ -238,6 +245,7 @@ export function scoreBloomrotBattleAttackCandidate(context = {}) {
   } = context;
 
   if (!attacker || !isBloomrotMonster(attacker)) return 0;
+  if (isBloomrotToken(attacker)) return -100;
 
   const positiveDamage = Math.max(0, Number(summary?.damage || 0));
   const damageTaken = Math.max(0, -Number(summary?.damage || 0));

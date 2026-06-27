@@ -15,17 +15,28 @@ import {
   canActivateSpellTrapEffect,
 } from "./common/previewGuards.js";
 import {
+  BLOOMROT_NAMES,
   buildBloomrotAnalysis,
   isBloomrot,
   isFaceUpBloomrotMonster,
 } from "./bloomrot/analysis.js";
 import {
   applyBloomrotSimulatedBattleRewards,
-  buildBloomrotPlanningProfile,
   prepareBloomrotSimulatedBattle,
   scoreBloomrotBattleAttackCandidate,
 } from "./bloomrot/battle.js";
+import {
+  BLOOMROT_DEFENSE_NAMES,
+  evaluateSuddenGerminationResponse,
+  hasBloomrotDefenseResponseInChain,
+} from "./bloomrot/defense.js";
 import { getBloomrotExtraDeckActions } from "./bloomrot/extraDeck.js";
+import {
+  buildBloomrotPlanningProfile,
+  describeBloomrotPlannedLine,
+  scoreBloomrotLineMilestones,
+  scoreBloomrotLineTerminal,
+} from "./bloomrot/linePlanning.js";
 import {
   buildBloomrotActivationContext,
   shouldActivateBloomrotFieldEffect,
@@ -37,7 +48,34 @@ import {
   shouldSkipDuplicateBloomrotBackrow,
   shouldSummonBloomrotMonster,
 } from "./bloomrot/priorities.js";
+import { evaluateBoardBloomrot } from "./bloomrot/scoring.js";
 import { rankBloomrotSearchCandidates } from "./bloomrot/targeting.js";
+
+function bloomrotInstanceIds(card) {
+  return [
+    card?.instanceId,
+    card?.fieldPresenceId,
+    card?.uid,
+    card?.uuid,
+  ].filter((id) => id !== null && id !== undefined);
+}
+
+function removeAttackerFromSuddenGerminationBonusPreference(
+  activationContext,
+  context = {},
+) {
+  const attacker = context?.attacker?.card || context?.attacker || null;
+  const attackerIds = new Set(bloomrotInstanceIds(attacker));
+  if (attackerIds.size === 0) return;
+
+  const preference =
+    activationContext?.actionContext?.targetPreferences
+      ?.bloomrot_sudden_germination_bonus_target;
+  if (!Array.isArray(preference?.preferredInstanceIds)) return;
+  preference.preferredInstanceIds = preference.preferredInstanceIds.filter(
+    (id) => !attackerIds.has(id),
+  );
+}
 
 export default class BloomrotStrategy extends BaseStrategy {
   constructor(bot) {
@@ -129,6 +167,107 @@ export default class BloomrotStrategy extends BaseStrategy {
 
   scoreBattleAttackCandidate(context = {}) {
     return scoreBloomrotBattleAttackCandidate(context);
+  }
+
+  scoreLineMilestones(context = {}) {
+    return scoreBloomrotLineMilestones(context);
+  }
+
+  scoreLineTerminal(context = {}) {
+    return scoreBloomrotLineTerminal(context);
+  }
+
+  describePlannedLine(context = {}) {
+    return describeBloomrotPlannedLine(context);
+  }
+
+  chooseSpecialSummonPosition(card, _context = {}) {
+    if (
+      card?.name === BLOOMROT_NAMES.TOKEN ||
+      (card?.isToken === true && card?.archetype === "Bloomrot")
+    ) {
+      return "defense";
+    }
+    return undefined;
+  }
+
+  evaluateBoard(gameOrState, perspectivePlayer) {
+    return this.evaluateBoardV2(gameOrState, perspectivePlayer);
+  }
+
+  evaluateBoardV2(gameOrState, perspectivePlayer) {
+    const baseScore = super.evaluateBoardV2(gameOrState, perspectivePlayer);
+    return evaluateBoardBloomrot(gameOrState, perspectivePlayer, {
+      baseScore,
+    });
+  }
+
+  async chooseChainResponse({
+    chainSystem,
+    game,
+    player,
+    activatable = [],
+    context = {},
+  } = {}) {
+    if (!player || !Array.isArray(activatable) || activatable.length === 0) {
+      return null;
+    }
+
+    const relevant = activatable.filter(
+      (option) => option?.card?.name === BLOOMROT_DEFENSE_NAMES.SUDDEN_GERMINATION,
+    );
+    if (relevant.length === 0) return null;
+    if (hasBloomrotDefenseResponseInChain(chainSystem, player)) {
+      return {
+        pass: true,
+        reason: "Bloomrot defense already committed to this chain",
+      };
+    }
+
+    const resolvedGame = game || context?.game || this.currentAnalysis?.game || null;
+    const analysis = resolvedGame
+      ? this.analyzeGameState(resolvedGame)
+      : this.currentAnalysis || {};
+    if (!analysis.player || analysis.player.id !== player.id) {
+      analysis.player = player;
+      analysis.opponent = context?.opponent || analysis.opponent;
+    }
+
+    const evaluated = relevant
+      .map((option) => evaluateSuddenGerminationResponse(option, analysis, context))
+      .filter((entry) => entry && entry.pass !== true)
+      .sort((a, b) => b.score - a.score);
+
+    if (evaluated.length === 0) {
+      return { pass: true, reason: "no valuable Bloomrot defense response" };
+    }
+
+    const best = evaluated[0];
+    const activationContext = this.buildBloomrotActivationContext(
+      best.option.card,
+      analysis,
+      {
+        zone: "spellTrap",
+        activationZone: "spellTrap",
+        sourceZone: "spellTrap",
+        effect: best.option.effect,
+      },
+    );
+    removeAttackerFromSuddenGerminationBonusPreference(
+      activationContext,
+      context,
+    );
+
+    return {
+      ...best.option,
+      priority: best.score,
+      reason: best.reason,
+      activationContext,
+      context: {
+        ...(best.option.context || context || {}),
+        activationContext,
+      },
+    };
   }
 
   getSpellActions(game, bot, analysis) {

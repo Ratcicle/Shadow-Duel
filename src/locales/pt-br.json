@@ -969,7 +969,7 @@
     },
     "403": {
       "name": "Podriflora Tecelão-Micélio",
-      "description": "Se este card for Invocado por Invocação-Normal ou Especial: Invoque por Invocação-Especial 1 \"Ficha Podriflora\" (Planta/TERRA/Nível 1/ATK 0/DEF 0). Uma vez por turno: você pode enviar 1 monstro \"Podriflora\" que você controla ao Cemitério; escolha 1 card com a face para cima que seu oponente controla; coloque 2 Marcadores de Esporo nele."
+      "description": "Se este card for Invocado por Invocação-Normal ou Especial: Invoque por Invocação-Especial 1 \"Ficha Podriflora\" (Planta/TERRA/Nível 1/ATK 0/DEF 0) em Posição de Defesa. Uma vez por turno: você pode enviar 1 monstro \"Podriflora\" que você controla ao Cemitério; escolha 1 card com a face para cima que seu oponente controla; coloque 2 Marcadores de Esporo nele."
     },
     "404": {
       "name": "Podriflora Cervo-Pútrido",
@@ -981,7 +981,7 @@
     },
     "406": {
       "name": "Podriflora Remenda-Mofo",
-      "description": "Antes do cálculo de dano, se este card estiver sendo atacado por um monstro do oponente: coloque 2 Marcadores de Esporo no monstro atacante. Se este card for destruído em batalha: Invoque por Invocação-Especial 1 \"Ficha Podriflora\" (Planta/TERRA/Nível 1/ATK 0/DEF 0). Você só pode usar cada efeito de \"Podriflora Remenda-Mofo\" uma vez por turno."
+      "description": "Antes do cálculo de dano, se este card estiver sendo atacado por um monstro do oponente: coloque 2 Marcadores de Esporo no monstro atacante. Se este card for destruído em batalha: Invoque por Invocação-Especial 1 \"Ficha Podriflora\" (Planta/TERRA/Nível 1/ATK 0/DEF 0) em Posição de Defesa. Você só pode usar cada efeito de \"Podriflora Remenda-Mofo\" uma vez por turno."
     },
     "407": {
       "name": "Podriflora Viúva-Cogutumba",

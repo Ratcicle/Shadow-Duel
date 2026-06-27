@@ -1,4 +1,13 @@
-import { BLOOMROT_NAMES, getSporeCount, isBloomrot } from "./analysis.js";
+import {
+  BLOOMROT_NAMES,
+  getSporeCount,
+  isBloomrot,
+  isBloomrotMonster,
+} from "./analysis.js";
+import {
+  shouldPrioritizeRottingGroundSet,
+  shouldUseRottingGroundNegate,
+} from "./defense.js";
 import { evaluateBloomrotCounterSpend } from "./resourcePolicy.js";
 import { buildBloomrotTargetPreferences } from "./targeting.js";
 
@@ -31,8 +40,18 @@ function hasOpponentFaceupMonster(analysis = {}) {
   );
 }
 
-function hasAnyBloomrotMonster(analysis = {}) {
-  return (analysis.faceUpBloomrotField || []).length > 0;
+function isBloomrotToken(card) {
+  return card?.isToken === true || card?.name === BLOOMROT_NAMES.TOKEN;
+}
+
+function hasAnyNonTokenBloomrotMonster(analysis = {}) {
+  return (analysis.faceUpBloomrotField || []).some(
+    (card) => isBloomrotMonster(card) && !isBloomrotToken(card),
+  );
+}
+
+function isMainPhase1(analysis = {}) {
+  return String(analysis.phase || "main1").toLowerCase().includes("main1");
 }
 
 function hasRecoverableBloomrot(analysis = {}) {
@@ -79,6 +98,11 @@ export function buildBloomrotActivationContext(
       sourceName: card?.name || null,
       effectId: options.effect?.id || null,
       targetPreferences: buildBloomrotTargetPreferences(card, analysis),
+      specialSummonPositions: {
+        byName: {
+          [BLOOMROT_NAMES.TOKEN]: "defense",
+        },
+      },
     },
     analysis,
   };
@@ -165,7 +189,7 @@ export function shouldPlayBloomrotSpell(card, analysis = {}) {
       };
     case N.FUNGAL_ARMOR:
       return {
-        yes: hasAnyBloomrotMonster(analysis),
+        yes: hasAnyNonTokenBloomrotMonster(analysis),
         priority: analysis.fieldSporeTotal >= 3 ? 7 : 5.8,
         reason: "equip Fungal Armor to preserve Bloomrot body",
       };
@@ -260,9 +284,9 @@ export function shouldActivateBloomrotMonsterEffect(card, analysis = {}) {
       };
     case N.CARRIONCAP:
       return {
-        yes: hasOpponentFaceupMonster(analysis),
-        priority: 8,
-        reason: "Carrioncap debuffs an infected monster",
+        yes: isMainPhase1(analysis) && hasOpponentFaceupMonster(analysis),
+        priority: 9.4,
+        reason: "Carrioncap debuffs before battle",
       };
     case BLOOMROT_NAMES.ANCIENT_MYCELIUM:
       {
@@ -298,11 +322,7 @@ export function shouldActivateBloomrotSpellTrapEffect(card, analysis = {}) {
         };
       }
     case BLOOMROT_NAMES.ROTTING_GROUND:
-      return {
-        yes: (analysis.opponentSporedMonsters4Plus || []).length > 0,
-        priority: 7.5,
-        reason: "Rotting Ground negates heavily infected monster",
-      };
+      return shouldUseRottingGroundNegate(analysis);
     default:
       return { yes: false };
   }
@@ -321,17 +341,22 @@ export function shouldSetBloomrotBackrow(card, analysis = {}) {
   if (!card) return { yes: false };
 
   if (card.name === N.SUDDEN_GERMINATION) {
+    const underPressure =
+      (analysis.opponentMonsters || []).length > 0 ||
+      (Number(analysis.player?.lp) || 8000) <= 3500;
     return {
       yes: true,
-      priority: 4.5,
-      reason: "set Sudden Germination defense",
+      priority: underPressure ? 5.7 : 4.5,
+      reason: underPressure
+        ? "set Sudden Germination under battle pressure"
+        : "set Sudden Germination defense",
     };
   }
   if (card.name === BLOOMROT_NAMES.ROTTING_GROUND) {
+    const decision = shouldPrioritizeRottingGroundSet(analysis);
     return {
-      yes: !alreadyHasRottingGround(analysis),
-      priority: 5.2,
-      reason: "set Rotting Ground control",
+      ...decision,
+      yes: !alreadyHasRottingGround(analysis) && decision.yes,
     };
   }
   return { yes: false };
