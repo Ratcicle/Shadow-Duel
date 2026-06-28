@@ -34,6 +34,7 @@
   --target-danger-red: #ff6060;
   --card-border-monster: var(--accent-color);
   --card-border-fusion: #5d2c7e;
+  --card-border-synchro: #ffffff;
   --card-border-ascension: #f09a32;
   --card-border-spell: #3bbf6b;
   --card-border-trap: #e66aa8;
@@ -308,6 +309,10 @@ body {
 
 #preview-image.preview-card-fusion {
   border-color: var(--card-border-fusion);
+}
+
+#preview-image.preview-card-synchro {
+  border-color: var(--card-border-synchro);
 }
 
 #preview-image.preview-card-ascension {
@@ -894,6 +899,10 @@ body {
 
 .card.card-monster-fusion {
   border-color: var(--card-border-fusion);
+}
+
+.card.card-monster-synchro {
+  border-color: var(--card-border-synchro);
 }
 
 .card.card-monster-ascension {
@@ -3440,6 +3449,11 @@ body {
   --deck-card-glow: rgba(122, 63, 190, 0.44);
 }
 
+.card-thumb-synchro {
+  --deck-card-border: rgba(216, 229, 238, 0.9);
+  --deck-card-glow: rgba(120, 215, 255, 0.32);
+}
+
 .card-thumb-ascension {
   --deck-card-border: rgba(218, 164, 69, 0.88);
   --deck-card-glow: rgba(218, 164, 69, 0.42);
@@ -3510,6 +3524,11 @@ body {
 
 .fusion-count {
   background: linear-gradient(135deg, #8b00ff, #4b0082);
+}
+
+.synchro-count {
+  background: linear-gradient(135deg, #e8f4fb, #6aa8c8);
+  color: #10202a;
 }
 
 .ascension-count {
@@ -3618,6 +3637,10 @@ body {
 
 .deck-preview-image.preview-card-fusion {
   border-color: var(--card-border-fusion);
+}
+
+.deck-preview-image.preview-card-synchro {
+  border-color: var(--card-border-synchro);
 }
 
 .deck-preview-image.preview-card-ascension {
@@ -4786,6 +4809,11 @@ body {
 .selection-card--fusion {
   --selection-card-border: rgba(112, 61, 171, 0.86);
   --selection-card-glow: rgba(112, 61, 171, 0.26);
+}
+
+.selection-card--synchro {
+  --selection-card-border: rgba(216, 229, 238, 0.9);
+  --selection-card-glow: rgba(120, 215, 255, 0.24);
 }
 
 .selection-card--ascension {

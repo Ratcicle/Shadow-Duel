@@ -34,6 +34,7 @@ export function getPublicState(forPlayerId = "player") {
         atk: hidden ? null : card.atk,
         def: hidden ? null : card.def,
         level: hidden ? null : card.level,
+        isTuner: hidden ? null : card.isTuner === true,
         faceDown: !!card.isFacedown,
         status: {
           cannotAttackThisTurn: !!card.cannotAttackThisTurn,
@@ -52,6 +53,7 @@ export function getPublicState(forPlayerId = "player") {
           atk: card.atk,
           def: card.def,
           level: card.level,
+          isTuner: card.isTuner === true,
           cardKind: card.cardKind,
         }))
       : { count: (owner.hand || []).length };
@@ -78,12 +80,24 @@ export function getPublicState(forPlayerId = "player") {
       atk: card.cardKind === "monster" ? (card.atk ?? null) : null,
       def: card.cardKind === "monster" ? (card.def ?? null) : null,
       level: card.cardKind === "monster" ? (card.level ?? null) : null,
+      isTuner: card.cardKind === "monster" ? card.isTuner === true : null,
     }));
 
   const buildPlayerView = (owner, isSelf) => ({
     id: owner.id,
     name: owner.name,
     lp: owner.lp,
+    damageReceivedThisTurn: owner.damageReceivedThisTurn || 0,
+    specialSummonRestrictions: Array.isArray(owner.specialSummonRestrictions)
+      ? owner.specialSummonRestrictions.map((restriction) => ({
+          allowedFilters: restriction.allowedFilters || {},
+          duration: restriction.duration || null,
+          expiresOnTurn: restriction.expiresOnTurn ?? null,
+          reason: restriction.reason || null,
+          sourceName: restriction.sourceName || null,
+          sourceId: restriction.sourceId ?? null,
+        }))
+      : [],
     hand: serializeHand(owner, isSelf),
     handCount: (owner.hand || []).length,
     field: serializeField(owner, isSelf),

@@ -140,6 +140,7 @@ function buildTargetingCacheKey(def, ctx) {
     def.maxDef ?? "",
     def.minLevel ?? "",
     def.maxLevel ?? "",
+    def.isTuner ?? "",
     Array.isArray(def.lastSummonMethods)
       ? def.lastSummonMethods.join(",")
       : def.lastSummonMethods || "",
@@ -288,6 +289,12 @@ export function selectCandidates(def, ctx) {
     if (filter.cardKind && !cardMatchesKind(card, filter.cardKind)) {
       return false;
     }
+    if (filter.monsterType) {
+      const requiredMonsterTypes = Array.isArray(filter.monsterType)
+        ? filter.monsterType
+        : [filter.monsterType];
+      if (!requiredMonsterTypes.includes(card.monsterType)) return false;
+    }
     if (filter.cardId !== undefined && card.id !== filter.cardId) {
       return false;
     }
@@ -299,6 +306,9 @@ export function selectCandidates(def, ctx) {
       return false;
     }
     if (filter.requireFaceup && card.isFacedown) return false;
+    if (filter.isTuner !== undefined) {
+      if ((card.isTuner === true) !== Boolean(filter.isTuner)) return false;
+    }
     if (filter.position && filter.position !== "any") {
       if (card.position !== filter.position) return false;
     }
@@ -446,6 +456,17 @@ export function selectCandidates(def, ctx) {
           );
           continue;
         }
+        if (def.monsterType) {
+          const requiredMonsterTypes = Array.isArray(def.monsterType)
+            ? def.monsterType
+            : [def.monsterType];
+          if (!requiredMonsterTypes.includes(card.monsterType)) {
+            log(
+              `[selectCandidates] Rejecting: monsterType mismatch (${card.monsterType} not in ${requiredMonsterTypes.join(",")})`
+            );
+            continue;
+          }
+        }
         if (def.cardId !== undefined && card.id !== def.cardId) {
           log(
             `[selectCandidates] Rejecting: cardId mismatch (${card.id} !== ${def.cardId})`
@@ -494,6 +515,12 @@ export function selectCandidates(def, ctx) {
         if (def.requireFaceup && card.isFacedown) {
           log(`[selectCandidates] Rejecting: card is facedown`);
           continue;
+        }
+        if (def.isTuner !== undefined) {
+          if ((card.isTuner === true) !== Boolean(def.isTuner)) {
+            log("[selectCandidates] Rejecting: isTuner mismatch");
+            continue;
+          }
         }
         if (
           def.position &&

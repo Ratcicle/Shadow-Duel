@@ -35,6 +35,31 @@ import {
   STOP_SIMULATION,
 } from "./shared.js";
 
+export function applyNegateActivation(ctx) {
+  const { action, selections, options } = ctx;
+  const activationContext =
+    options.actionContext || options.activationContext?.context || {};
+  const activationAttempt = activationContext.activationAttempt || null;
+  const targetCard =
+    activationAttempt?.card ||
+    activationContext.card ||
+    activationContext.targetCard ||
+    null;
+  if (!activationAttempt || !targetCard) return;
+
+  activationAttempt.negated = true;
+  activationContext.negated = true;
+  if (action.storeNegatedCardAs) {
+    if (selections && typeof selections === "object") {
+      selections[action.storeNegatedCardAs] = [targetCard];
+    }
+    if (!options.actionResults || typeof options.actionResults !== "object") {
+      options.actionResults = {};
+    }
+    options.actionResults[action.storeNegatedCardAs] = [targetCard];
+  }
+}
+
 export function applyConditionalTargetActions(ctx) {
   const {
     action,

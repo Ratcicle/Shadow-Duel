@@ -26,6 +26,9 @@ export function inflictDamage(player, amount, options = {}) {
   });
   const actual = Math.max(0, before - (player.lp || 0));
   if (actual > 0) {
+    player.damageReceivedThisTurn =
+      Math.max(0, Number(player.damageReceivedThisTurn || 0)) + actual;
+
     if (!suppressVisual && typeof this.ui?.showLpDamageSequence === "function") {
       this.ui.showLpDamageSequence(player, actual, {
         cause: options.cause || "effect",

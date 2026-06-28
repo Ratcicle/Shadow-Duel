@@ -1,0 +1,1890 @@
+export const techZeroCards = [
+  {
+    id: 501,
+    name: "Tech-Zero Energy Core",
+    cardKind: "monster",
+    atk: 100,
+    def: 100,
+    level: 1,
+    type: "Machine",
+    attribute: "Light",
+    archetype: "Tech-Zero",
+    isTuner: true,
+    description:
+      'If this card is Special Summoned: You can target 1 "Tech-Zero" monster you control; increase or decrease its Level by 1. If this card is sent to the Graveyard as Synchro Material: draw 1 card. You can only use each effect of "Tech-Zero Energy Core" once per turn.',
+    image: "assets/Tech-Zero Energy Core.png",
+    effects: [
+      {
+        id: "tech_zero_energy_core_level_mod",
+        timing: "on_event",
+        event: "after_summon",
+        requireZone: "field",
+        requireFaceup: true,
+        requireSelfAsSummoned: true,
+        summonMethods: ["special"],
+        promptUser: true,
+        promptMessage:
+          'Activate "Tech-Zero Energy Core" to adjust a "Tech-Zero" monster\'s Level?',
+        oncePerTurn: true,
+        oncePerTurnName: "tech_zero_energy_core_level_mod",
+        actions: [
+          {
+            type: "choose_action_case",
+            effectChoiceKey: "tech_zero_energy_core_level_mod",
+            selectionMessage: "Choose a Level adjustment.",
+            cases: [
+              {
+                id: "increase",
+                label: "Increase Level by 1",
+                targets: [
+                  {
+                    id: "tech_zero_energy_core_level_up_target",
+                    owner: "self",
+                    zone: "field",
+                    cardKind: "monster",
+                    archetype: "Tech-Zero",
+                    requireFaceup: true,
+                    count: { min: 1, max: 1 },
+                  },
+                ],
+                actions: [
+                  {
+                    type: "modify_level",
+                    targetRef: "tech_zero_energy_core_level_up_target",
+                    amount: 1,
+                  },
+                ],
+              },
+              {
+                id: "decrease",
+                label: "Decrease Level by 1",
+                targets: [
+                  {
+                    id: "tech_zero_energy_core_level_down_target",
+                    owner: "self",
+                    zone: "field",
+                    cardKind: "monster",
+                    archetype: "Tech-Zero",
+                    requireFaceup: true,
+                    minLevel: 2,
+                    count: { min: 1, max: 1 },
+                  },
+                ],
+                actions: [
+                  {
+                    type: "modify_level",
+                    targetRef: "tech_zero_energy_core_level_down_target",
+                    amount: -1,
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: "tech_zero_energy_core_synchro_draw",
+        timing: "on_event",
+        event: "card_to_grave",
+        fromZone: "field",
+        contextLabel: "synchro_material",
+        allowIfEffectsNegatedAtFieldExit: true,
+        oncePerTurn: true,
+        oncePerTurnName: "tech_zero_energy_core_synchro_draw",
+        actions: [{ type: "draw", amount: 1, player: "self" }],
+      },
+    ],
+  },
+  {
+    id: 502,
+    name: "Tech-Zero Electrocatapult",
+    cardKind: "monster",
+    atk: 1000,
+    def: 1000,
+    level: 3,
+    type: "Machine",
+    attribute: "Light",
+    archetype: "Tech-Zero",
+    description:
+      'If this card is Normal Summoned: You can target 1 Level 2 or lower "Tech-Zero" monster in your hand or Graveyard; Special Summon it. If this card is sent to the Graveyard as Synchro Material: You can target 1 Tuner in your Graveyard; Special Summon it, but negate its effects.',
+    image: "assets/Tech-Zero Electrocatapult.png",
+    effects: [
+      {
+        id: "tech_zero_electrocatapult_normal_summon",
+        timing: "on_event",
+        event: "after_summon",
+        requireZone: "field",
+        requireFaceup: true,
+        requireSelfAsSummoned: true,
+        summonMethods: ["normal"],
+        promptUser: true,
+        promptMessage:
+          'Activate "Tech-Zero Electrocatapult" to Special Summon a Level 2 or lower "Tech-Zero" monster?',
+        targets: [
+          {
+            id: "tech_zero_electrocatapult_summon_target",
+            owner: "self",
+            zones: ["hand", "graveyard"],
+            cardKind: "monster",
+            archetype: "Tech-Zero",
+            maxLevel: 2,
+            excludeCannotBeSpecialSummoned: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "special_summon_from_zone",
+            zone: ["hand", "graveyard"],
+            targetRef: "tech_zero_electrocatapult_summon_target",
+            position: "choice",
+            promptPlayer: true,
+          },
+        ],
+      },
+      {
+        id: "tech_zero_electrocatapult_synchro_revive",
+        timing: "on_event",
+        event: "card_to_grave",
+        fromZone: "field",
+        contextLabel: "synchro_material",
+        allowIfEffectsNegatedAtFieldExit: true,
+        promptUser: true,
+        promptMessage:
+          'Activate "Tech-Zero Electrocatapult" to Special Summon 1 Tuner from your Graveyard?',
+        targets: [
+          {
+            id: "tech_zero_electrocatapult_tuner_target",
+            owner: "self",
+            zone: "graveyard",
+            cardKind: "monster",
+            isTuner: true,
+            excludeCannotBeSpecialSummoned: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "special_summon_from_zone",
+            zone: "graveyard",
+            targetRef: "tech_zero_electrocatapult_tuner_target",
+            position: "choice",
+            promptPlayer: true,
+            negateEffects: true,
+            negateEffectsDuration: "while_faceup",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 503,
+    name: "Tech-Zero Multimodal Machine",
+    cardKind: "monster",
+    monsterType: "synchro",
+    atk: 1200,
+    def: 1500,
+    level: 3,
+    type: "Machine",
+    attribute: "Light",
+    archetype: "Tech-Zero",
+    isTuner: true,
+    synchro: {
+      tunerCount: 1,
+      nonTunerMin: 1,
+      materialFilters: {
+        tuner: { archetype: "Tech-Zero", isTuner: true },
+      },
+    },
+    synchroMaterialRoles: {
+      nonTunerFor: [{ archetype: "Tech-Zero", monsterType: "synchro" }],
+    },
+    description:
+      '1 "Tech-Zero" Tuner + 1+ non-Tuner monsters. This card can be treated as a non-Tuner for the Synchro Summon of a "Tech-Zero" Synchro Monster. You can target 1 monster you control; increase or decrease its Level by up to 2. If this card is sent to the Graveyard as Synchro Material: draw 1 card. You can only use each effect of "Tech-Zero Multimodal Machine" once per turn.',
+    image: "assets/Tech-Zero Multimodal Machine.png",
+    effects: [
+      {
+        id: "tech_zero_multimodal_machine_level_mod",
+        timing: "ignition",
+        requireZone: "field",
+        requirePhase: ["main1", "main2"],
+        oncePerTurn: true,
+        oncePerTurnName: "tech_zero_multimodal_machine_level_mod",
+        actions: [
+          {
+            type: "choose_action_case",
+            effectChoiceKey: "tech_zero_multimodal_machine_level_mod",
+            selectionMessage: "Choose a Level adjustment.",
+            cases: [
+              {
+                id: "increase_1",
+                label: "Increase Level by 1",
+                targets: [
+                  {
+                    id: "tech_zero_multimodal_machine_level_up_1_target",
+                    owner: "self",
+                    zone: "field",
+                    cardKind: "monster",
+                    requireFaceup: true,
+                    count: { min: 1, max: 1 },
+                  },
+                ],
+                actions: [
+                  {
+                    type: "modify_level",
+                    targetRef:
+                      "tech_zero_multimodal_machine_level_up_1_target",
+                    amount: 1,
+                  },
+                ],
+              },
+              {
+                id: "increase_2",
+                label: "Increase Level by 2",
+                targets: [
+                  {
+                    id: "tech_zero_multimodal_machine_level_up_2_target",
+                    owner: "self",
+                    zone: "field",
+                    cardKind: "monster",
+                    requireFaceup: true,
+                    count: { min: 1, max: 1 },
+                  },
+                ],
+                actions: [
+                  {
+                    type: "modify_level",
+                    targetRef:
+                      "tech_zero_multimodal_machine_level_up_2_target",
+                    amount: 2,
+                  },
+                ],
+              },
+              {
+                id: "decrease_1",
+                label: "Decrease Level by 1",
+                targets: [
+                  {
+                    id: "tech_zero_multimodal_machine_level_down_1_target",
+                    owner: "self",
+                    zone: "field",
+                    cardKind: "monster",
+                    requireFaceup: true,
+                    minLevel: 2,
+                    count: { min: 1, max: 1 },
+                  },
+                ],
+                actions: [
+                  {
+                    type: "modify_level",
+                    targetRef:
+                      "tech_zero_multimodal_machine_level_down_1_target",
+                    amount: -1,
+                  },
+                ],
+              },
+              {
+                id: "decrease_2",
+                label: "Decrease Level by 2",
+                targets: [
+                  {
+                    id: "tech_zero_multimodal_machine_level_down_2_target",
+                    owner: "self",
+                    zone: "field",
+                    cardKind: "monster",
+                    requireFaceup: true,
+                    minLevel: 3,
+                    count: { min: 1, max: 1 },
+                  },
+                ],
+                actions: [
+                  {
+                    type: "modify_level",
+                    targetRef:
+                      "tech_zero_multimodal_machine_level_down_2_target",
+                    amount: -2,
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: "tech_zero_multimodal_machine_synchro_draw",
+        timing: "on_event",
+        event: "card_to_grave",
+        fromZone: "field",
+        contextLabel: "synchro_material",
+        allowIfEffectsNegatedAtFieldExit: true,
+        oncePerTurn: true,
+        oncePerTurnName: "tech_zero_multimodal_machine_synchro_draw",
+        actions: [{ type: "draw", amount: 1, player: "self" }],
+      },
+    ],
+  },
+  {
+    id: 504,
+    name: "Tech-Zero Glider Wyvern",
+    cardKind: "monster",
+    atk: 1600,
+    def: 1300,
+    level: 4,
+    type: "Machine",
+    attribute: "Light",
+    archetype: "Tech-Zero",
+    description:
+      'If you control a "Tech-Zero" Tuner: You can Special Summon this card from your hand. If this card is sent to the Graveyard as Synchro Material: You can target 1 Spell/Trap card your opponent controls; destroy it. You can only use each effect of "Tech-Zero Glider Wyvern" once per turn.',
+    image: "assets/Tech-Zero Glider Wyvern.png",
+    effects: [
+      {
+        id: "tech_zero_glider_wyvern_special_summon",
+        timing: "ignition",
+        requireZone: "hand",
+        requirePhase: ["main1", "main2"],
+        oncePerTurn: true,
+        oncePerTurnName: "tech_zero_glider_wyvern_special_summon",
+        conditions: [
+          {
+            type: "field_card_count",
+            owner: "self",
+            zone: "field",
+            filters: {
+              cardKind: "monster",
+              archetype: "Tech-Zero",
+              isTuner: true,
+            },
+            requireFaceup: true,
+            min: 1,
+          },
+          {
+            type: "field_card_count",
+            owner: "self",
+            zone: "field",
+            max: 4,
+            reason: "You need an open Monster Zone to Special Summon this card.",
+          },
+        ],
+        actions: [
+          {
+            type: "special_summon_from_zone",
+            zone: "hand",
+            requireSource: true,
+            position: "choice",
+            promptPlayer: true,
+            oncePerTurnName: "tech_zero_glider_wyvern_special_summon",
+          },
+        ],
+      },
+      {
+        id: "tech_zero_glider_wyvern_synchro_destroy_spelltrap",
+        timing: "on_event",
+        event: "card_to_grave",
+        fromZone: "field",
+        contextLabel: "synchro_material",
+        allowIfEffectsNegatedAtFieldExit: true,
+        promptUser: true,
+        promptMessage:
+          'Activate "Tech-Zero Glider Wyvern" to destroy an opponent Spell/Trap?',
+        oncePerTurn: true,
+        oncePerTurnName:
+          "tech_zero_glider_wyvern_synchro_destroy_spelltrap",
+        targets: [
+          {
+            id: "tech_zero_glider_wyvern_spelltrap_target",
+            owner: "opponent",
+            zones: ["spellTrap", "fieldSpell"],
+            cardKind: ["spell", "trap"],
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "destroy",
+            targetRef: "tech_zero_glider_wyvern_spelltrap_target",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 505,
+    name: "Tech-Zero Iron Raptor",
+    cardKind: "monster",
+    atk: 1300,
+    def: 700,
+    level: 3,
+    type: "Machine",
+    attribute: "Light",
+    archetype: "Tech-Zero",
+    isTuner: true,
+    description:
+      'If a "Tech-Zero" monster is Special Summoned from your Graveyard: You can Special Summon this card from your hand. If this card is sent to the Graveyard as Synchro Material: You can Special Summon 2 "Raptor Tokens" (Machine/Light/Level 1/ATK 500/DEF 500). You can only use each effect of "Tech-Zero Iron Raptor" once per turn.',
+    image: "assets/Tech-Zero Iron Raptor.png",
+    effects: [
+      {
+        id: "tech_zero_iron_raptor_special_summon",
+        timing: "on_event",
+        event: "after_summon",
+        requireZone: "hand",
+        summonMethods: ["special"],
+        summonFrom: "graveyard",
+        condition: { requires: "self_in_hand" },
+        oncePerTurn: true,
+        oncePerTurnName: "tech_zero_iron_raptor_special_summon",
+        conditions: [
+          {
+            type: "event_card_matches_filters",
+            cardRef: "summonedCard",
+            owner: "self",
+            filters: {
+              cardKind: "monster",
+              archetype: "Tech-Zero",
+            },
+          },
+          {
+            type: "field_card_count",
+            owner: "self",
+            zone: "field",
+            max: 4,
+            reason: "You need an open Monster Zone to Special Summon this card.",
+          },
+        ],
+        actions: [
+          {
+            type: "conditional_summon_from_hand",
+            targetRef: "self",
+            position: "choice",
+            optional: true,
+          },
+        ],
+      },
+      {
+        id: "tech_zero_iron_raptor_synchro_tokens",
+        timing: "on_event",
+        event: "card_to_grave",
+        fromZone: "field",
+        contextLabel: "synchro_material",
+        allowIfEffectsNegatedAtFieldExit: true,
+        promptUser: true,
+        promptMessage:
+          'Activate "Tech-Zero Iron Raptor" to Special Summon 2 Raptor Tokens?',
+        oncePerTurn: true,
+        oncePerTurnName: "tech_zero_iron_raptor_synchro_tokens",
+        conditions: [
+          {
+            type: "field_card_count",
+            owner: "self",
+            zone: "field",
+            max: 3,
+            reason: "You need 2 open Monster Zones to Special Summon 2 Raptor Tokens.",
+          },
+        ],
+        actions: [
+          {
+            type: "special_summon_token",
+            player: "self",
+            position: "choice",
+            cannotAttackThisTurn: false,
+            token: {
+              name: "Raptor Token",
+              atk: 500,
+              def: 500,
+              level: 1,
+              type: "Machine",
+              attribute: "Light",
+              image: "assets/Raptor Token.png",
+              description:
+                "A small Tech-Zero support token launched by Iron Raptor.",
+            },
+          },
+          {
+            type: "special_summon_token",
+            player: "self",
+            position: "choice",
+            cannotAttackThisTurn: false,
+            token: {
+              name: "Raptor Token",
+              atk: 500,
+              def: 500,
+              level: 1,
+              type: "Machine",
+              attribute: "Light",
+              image: "assets/Raptor Token.png",
+              description:
+                "A small Tech-Zero support token launched by Iron Raptor.",
+            },
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 506,
+    name: "Tech-Zero Prism Activator",
+    cardKind: "monster",
+    atk: 800,
+    def: 900,
+    level: 2,
+    type: "Machine",
+    attribute: "Light",
+    archetype: "Tech-Zero",
+    description:
+      'You can discard this card and 1 "Tech-Zero" monster; add 1 "Tech-Zero" Tuner from your Deck to your hand. If this card is sent to the Graveyard as Synchro Material: You can Special Summon 1 "Tech-Zero" monster from your hand, but negate its effects until the end of this turn. You can only use each effect of "Tech-Zero Prism Activator" once per turn.',
+    image: "assets/Tech-Zero Prism Activator.png",
+    effects: [
+      {
+        id: "tech_zero_prism_activator_tuner_search",
+        timing: "ignition",
+        requireZone: "hand",
+        requirePhase: ["main1", "main2"],
+        oncePerTurn: true,
+        oncePerTurnName: "tech_zero_prism_activator_tuner_search",
+        targets: [
+          {
+            id: "tech_zero_prism_activator_discard_target",
+            owner: "self",
+            zone: "hand",
+            cardKind: "monster",
+            archetype: "Tech-Zero",
+            excludeSelf: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "self",
+            player: "self",
+            fromZone: "hand",
+            to: "graveyard",
+            contextLabel: "cost",
+          },
+          {
+            type: "move",
+            targetRef: "tech_zero_prism_activator_discard_target",
+            player: "self",
+            fromZone: "hand",
+            to: "graveyard",
+            contextLabel: "cost",
+          },
+          {
+            type: "add_from_zone_to_hand",
+            zone: "deck",
+            filters: {
+              cardKind: "monster",
+              archetype: "Tech-Zero",
+              isTuner: true,
+            },
+            count: { min: 1, max: 1 },
+            selectionMessage:
+              'Select 1 "Tech-Zero" Tuner from your Deck to add to your hand.',
+          },
+        ],
+      },
+      {
+        id: "tech_zero_prism_activator_synchro_summon",
+        timing: "on_event",
+        event: "card_to_grave",
+        fromZone: "field",
+        contextLabel: "synchro_material",
+        allowIfEffectsNegatedAtFieldExit: true,
+        promptUser: true,
+        promptMessage:
+          'Activate "Tech-Zero Prism Activator" to Special Summon 1 "Tech-Zero" monster from your hand?',
+        oncePerTurn: true,
+        oncePerTurnName: "tech_zero_prism_activator_synchro_summon",
+        targets: [
+          {
+            id: "tech_zero_prism_activator_hand_summon_target",
+            owner: "self",
+            zone: "hand",
+            cardKind: "monster",
+            archetype: "Tech-Zero",
+            excludeCannotBeSpecialSummoned: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "special_summon_from_zone",
+            zone: "hand",
+            targetRef: "tech_zero_prism_activator_hand_summon_target",
+            position: "choice",
+            promptPlayer: true,
+            negateEffects: true,
+            negateEffectsDuration: "until_end_turn",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 507,
+    name: "Tech-Zero Connector Dragon",
+    cardKind: "monster",
+    atk: 1900,
+    def: 1500,
+    level: 5,
+    type: "Dragon",
+    attribute: "Light",
+    archetype: "Tech-Zero",
+    description:
+      'If this card is face-up on the field: You can Normal Summon 1 "Tech-Zero" monster in addition to your Normal Summon/Set. If this card is sent to the Graveyard as Synchro Material: You can target 1 "Tech-Zero" Spell/Trap in your Graveyard; add it to your hand. You can only use each effect of "Tech-Zero Connector Dragon" once per turn.',
+    image: "assets/Tech-Zero Connector Dragon.png",
+    effects: [
+      {
+        id: "tech_zero_connector_dragon_additional_normal",
+        timing: "ignition",
+        requireZone: "field",
+        requireFaceup: true,
+        requirePhase: ["main1", "main2"],
+        oncePerTurn: true,
+        oncePerTurnName: "tech_zero_connector_dragon_additional_normal",
+        actions: [
+          {
+            type: "grant_additional_normal_summon",
+            count: 1,
+            filters: {
+              cardKind: "monster",
+              archetype: "Tech-Zero",
+            },
+          },
+        ],
+      },
+      {
+        id: "tech_zero_connector_dragon_synchro_recover_spelltrap",
+        timing: "on_event",
+        event: "card_to_grave",
+        fromZone: "field",
+        contextLabel: "synchro_material",
+        allowIfEffectsNegatedAtFieldExit: true,
+        promptUser: true,
+        promptMessage:
+          'Activate "Tech-Zero Connector Dragon" to add 1 "Tech-Zero" Spell/Trap from your Graveyard to your hand?',
+        oncePerTurn: true,
+        oncePerTurnName:
+          "tech_zero_connector_dragon_synchro_recover_spelltrap",
+        targets: [
+          {
+            id: "tech_zero_connector_dragon_spelltrap_target",
+            owner: "self",
+            zone: "graveyard",
+            cardKind: ["spell", "trap"],
+            archetype: "Tech-Zero",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "tech_zero_connector_dragon_spelltrap_target",
+            player: "self",
+            fromZone: "graveyard",
+            to: "hand",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 508,
+    name: "Tech-Zero Pulse Soldier",
+    cardKind: "monster",
+    atk: 700,
+    def: 500,
+    level: 2,
+    type: "Warrior",
+    attribute: "Light",
+    archetype: "Tech-Zero",
+    isTuner: true,
+    description:
+      'If you control no monsters: You can Special Summon this card from your hand. If you Synchro Summon a "Tech-Zero" Synchro Monster while this card is face-up on the field: draw 1 card, and if it is a Level 4 or lower "Tech-Zero" monster, you can Special Summon it. You can only use each effect of "Tech-Zero Pulse Soldier" once per turn.',
+    image: "assets/Tech-Zero Pulse Soldier.png",
+    effects: [
+      {
+        id: "tech_zero_pulse_soldier_empty_field_summon",
+        timing: "ignition",
+        requireZone: "hand",
+        requirePhase: ["main1", "main2"],
+        requireEmptyField: true,
+        oncePerTurn: true,
+        oncePerTurnName: "tech_zero_pulse_soldier_empty_field_summon",
+        actions: [
+          {
+            type: "special_summon_from_zone",
+            zone: "hand",
+            requireSource: true,
+            position: "choice",
+            promptPlayer: true,
+          },
+        ],
+      },
+      {
+        id: "tech_zero_pulse_soldier_synchro_draw_summon",
+        timing: "on_event",
+        event: "after_summon",
+        requireZone: "field",
+        requireFaceup: true,
+        summonMethods: ["synchro"],
+        oncePerTurn: true,
+        oncePerTurnName: "tech_zero_pulse_soldier_synchro_draw_summon",
+        conditions: [
+          {
+            type: "event_card_matches_filters",
+            cardRef: "summonedCard",
+            owner: "self",
+            filters: {
+              cardKind: "monster",
+              archetype: "Tech-Zero",
+              monsterType: "synchro",
+            },
+          },
+        ],
+        actions: [
+          {
+            type: "draw_and_summon",
+            player: "self",
+            drawAmount: 1,
+            condition: {
+              type: "match_card_props",
+              filters: {
+                cardKind: "monster",
+                archetype: "Tech-Zero",
+                maxLevel: 4,
+              },
+            },
+            position: "choice",
+            optional: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 509,
+    name: "Tech-Zero Summoning Portal",
+    cardKind: "monster",
+    monsterType: "synchro",
+    atk: 0,
+    def: 1500,
+    level: 2,
+    type: "Machine",
+    attribute: "Light",
+    archetype: "Tech-Zero",
+    synchro: {
+      tunerCount: 1,
+      nonTunerMin: 1,
+      materialFilters: {
+        tuner: { archetype: "Tech-Zero", isTuner: true },
+      },
+    },
+    description:
+      '1 "Tech-Zero" Tuner + 1+ non-Tuner monsters. If this card is Synchro Summoned: You can Special Summon up to 3 Level 4 or lower "Tech-Zero" monsters with different names from your Graveyard. For the rest of this turn after this effect resolves, you cannot Special Summon monsters, except "Tech-Zero" monsters. You can only use this effect of "Tech-Zero Summoning Portal" once per turn.',
+    image: "assets/Tech-Zero Summoning Portal.png",
+    effects: [
+      {
+        id: "tech_zero_summoning_portal_synchro_revive",
+        timing: "on_event",
+        event: "after_summon",
+        requireSelfAsSummoned: true,
+        summonMethods: ["synchro"],
+        promptUser: true,
+        promptMessage:
+          'Activate "Tech-Zero Summoning Portal" to Special Summon up to 3 "Tech-Zero" monsters from your Graveyard?',
+        oncePerTurn: true,
+        oncePerTurnName: "tech_zero_summoning_portal_synchro_revive",
+        conditions: [
+          {
+            type: "field_card_count",
+            owner: "self",
+            zone: "field",
+            max: 4,
+            reason:
+              "You need an open Monster Zone to Special Summon from your Graveyard.",
+          },
+          {
+            type: "field_card_count",
+            owner: "self",
+            zone: "graveyard",
+            filters: {
+              cardKind: "monster",
+              archetype: "Tech-Zero",
+              maxLevel: 4,
+            },
+            min: 1,
+            reason:
+              'You need a Level 4 or lower "Tech-Zero" monster in your Graveyard.',
+          },
+        ],
+        actions: [
+          {
+            type: "special_summon_from_zone",
+            zone: "graveyard",
+            filters: {
+              cardKind: "monster",
+              archetype: "Tech-Zero",
+              maxLevel: 4,
+            },
+            count: { min: 0, max: 3 },
+            distinctNames: true,
+            position: "choice",
+            promptPlayer: true,
+          },
+          {
+            type: "restrict_special_summons",
+            player: "self",
+            allowedFilters: {
+              cardKind: "monster",
+              archetype: "Tech-Zero",
+            },
+            duration: "until_end_turn",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 510,
+    name: "Tech-Zero Atomic Slasher",
+    cardKind: "monster",
+    monsterType: "synchro",
+    atk: 1800,
+    def: 1600,
+    level: 4,
+    type: "Warrior",
+    attribute: "Light",
+    archetype: "Tech-Zero",
+    synchro: {
+      tunerCount: 1,
+      nonTunerMin: 1,
+    },
+    description:
+      '1 Tuner + 1+ non-Tuner monsters. If this card is Synchro Summoned: all "Tech-Zero" monsters you control gain 300 ATK/DEF until the end of the next turn. If this card is used as Synchro Material: the monster Synchro Summoned by that Synchro Summon cannot be destroyed by battle or by your opponent\'s card effects until the end of the next turn.',
+    image: "assets/Tech-Zero Atomic Slasher.png",
+    effects: [
+      {
+        id: "tech_zero_atomic_slasher_synchro_buff",
+        timing: "on_event",
+        event: "after_summon",
+        requireSelfAsSummoned: true,
+        requireFaceup: true,
+        summonMethods: ["synchro"],
+        promptUser: false,
+        actions: [
+          {
+            type: "buff_stats_temp",
+            targetScope: {
+              owner: "self",
+              zone: "field",
+              filters: {
+                cardKind: "monster",
+                archetype: "Tech-Zero",
+                requireFaceup: true,
+              },
+            },
+            atkBoost: 300,
+            defBoost: 300,
+            duration: "end_of_next_turn",
+          },
+        ],
+      },
+      {
+        id: "tech_zero_atomic_slasher_synchro_material_protection",
+        timing: "on_event",
+        event: "card_to_grave",
+        fromZone: "field",
+        contextLabel: "synchro_material",
+        allowIfEffectsNegatedAtFieldExit: true,
+        promptUser: false,
+        actions: [
+          {
+            type: "register_synchro_material_followup",
+            actions: [
+              {
+                type: "grant_protection",
+                targetRef: "synchro_summoned_card",
+                protectionType: "battle_destruction",
+                duration: "end_of_next_turn",
+              },
+              {
+                type: "grant_protection",
+                targetRef: "synchro_summoned_card",
+                protectionType: "effect_destruction",
+                duration: "end_of_next_turn",
+                sourceOwner: "opponent",
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 511,
+    name: "Tech-Zero Ghost Samurai",
+    cardKind: "monster",
+    monsterType: "synchro",
+    atk: 1900,
+    def: 1700,
+    level: 5,
+    type: "Warrior",
+    attribute: "Light",
+    archetype: "Tech-Zero",
+    piercing: true,
+    synchro: {
+      tunerCount: 1,
+      nonTunerMin: 1,
+    },
+    description:
+      '1 Tuner + 1+ non-Tuner monsters. If this card is Synchro Summoned: You can target 1 "Tech-Zero" Tuner in your Graveyard; add it to your hand. If this card battles an opponent\'s Special Summoned monster, it gains 500 ATK during the Damage Step. If this card attacks a Defense Position monster, inflict piercing battle damage.',
+    image: "assets/Tech-Zero Ghost Samurai.png",
+    effects: [
+      {
+        id: "tech_zero_ghost_samurai_synchro_recover_tuner",
+        timing: "on_event",
+        event: "after_summon",
+        requireSelfAsSummoned: true,
+        requireFaceup: true,
+        summonMethods: ["synchro"],
+        promptUser: true,
+        promptMessage:
+          'Activate "Tech-Zero Ghost Samurai" to add 1 "Tech-Zero" Tuner from your Graveyard to your hand?',
+        targets: [
+          {
+            id: "tech_zero_ghost_samurai_tuner_target",
+            owner: "self",
+            zone: "graveyard",
+            cardKind: "monster",
+            archetype: "Tech-Zero",
+            isTuner: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "tech_zero_ghost_samurai_tuner_target",
+            player: "self",
+            fromZone: "graveyard",
+            to: "hand",
+          },
+        ],
+      },
+      {
+        id: "tech_zero_ghost_samurai_attack_special_summoned_boost",
+        timing: "on_event",
+        event: "battle_damage",
+        requireZone: "field",
+        requireFaceup: true,
+        requireSelfAsAttacker: true,
+        promptUser: false,
+        targets: [
+          {
+            id: "tech_zero_ghost_samurai_battle_target",
+            owner: "opponent",
+            zone: "field",
+            cardKind: "monster",
+            battleParticipant: true,
+            summonMethods: ["special", "fusion", "ascension", "synchro"],
+            count: { min: 1, max: 1 },
+            autoSelect: true,
+          },
+        ],
+        actions: [
+          {
+            type: "buff_stats_temp",
+            targetRef: "self",
+            atkBoost: 500,
+            duration: "damage_calculation",
+          },
+        ],
+      },
+      {
+        id: "tech_zero_ghost_samurai_defend_special_summoned_boost",
+        timing: "on_event",
+        event: "battle_damage",
+        requireZone: "field",
+        requireFaceup: true,
+        requireSelfAsDefender: true,
+        promptUser: false,
+        targets: [
+          {
+            id: "tech_zero_ghost_samurai_battle_target",
+            owner: "opponent",
+            zone: "field",
+            cardKind: "monster",
+            battleParticipant: true,
+            summonMethods: ["special", "fusion", "ascension", "synchro"],
+            count: { min: 1, max: 1 },
+            autoSelect: true,
+          },
+        ],
+        actions: [
+          {
+            type: "buff_stats_temp",
+            targetRef: "self",
+            atkBoost: 500,
+            duration: "damage_calculation",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 512,
+    name: "Tech-Zero Battle Mage",
+    cardKind: "monster",
+    monsterType: "synchro",
+    atk: 2000,
+    def: 2100,
+    level: 5,
+    type: "Spellcaster",
+    attribute: "Light",
+    archetype: "Tech-Zero",
+    synchro: {
+      tunerCount: 1,
+      nonTunerMin: 1,
+    },
+    description:
+      '1 Tuner + 1+ non-Tuner monsters. While this card is face-up on the field, each time you Synchro Summon a monster: draw 1 card. Once per turn: You can send 1 Level 4 or lower "Tech-Zero" monster you control to the Graveyard; Special Summon 1 "Tech-Zero" monster from your Graveyard with the same Level and a different name from the sent monster.',
+    image: "assets/Tech-Zero Battle Mage.png",
+    effects: [
+      {
+        id: "tech_zero_battle_mage_synchro_draw",
+        timing: "on_event",
+        event: "after_summon",
+        requireZone: "field",
+        requireFaceup: true,
+        summonMethods: ["synchro"],
+        promptUser: false,
+        conditions: [
+          {
+            type: "event_card_matches_filters",
+            cardRef: "summonedCard",
+            owner: "self",
+            excludeSource: true,
+            filters: {
+              cardKind: "monster",
+              monsterType: "synchro",
+            },
+          },
+        ],
+        actions: [
+          {
+            type: "draw",
+            player: "self",
+            amount: 1,
+          },
+        ],
+      },
+      {
+        id: "tech_zero_battle_mage_recycle_revive",
+        timing: "ignition",
+        requireZone: "field",
+        requireFaceup: true,
+        requirePhase: ["main1", "main2"],
+        oncePerTurn: true,
+        oncePerTurnName: "tech_zero_battle_mage_recycle_revive",
+        conditions: [
+          {
+            type: "field_card_count",
+            owner: "self",
+            zone: "field",
+            max: 4,
+            reason:
+              "You need an open Monster Zone to Special Summon from your Graveyard.",
+          },
+          {
+            type: "field_card_count",
+            owner: "self",
+            zone: "graveyard",
+            filters: {
+              cardKind: "monster",
+              archetype: "Tech-Zero",
+            },
+            min: 1,
+            reason: 'You need a "Tech-Zero" monster in your Graveyard.',
+          },
+        ],
+        targets: [
+          {
+            id: "tech_zero_battle_mage_cost",
+            owner: "self",
+            zone: "field",
+            cardKind: "monster",
+            archetype: "Tech-Zero",
+            maxLevel: 4,
+            count: { min: 1, max: 1 },
+            intent: "cost",
+          },
+        ],
+        actions: [
+          {
+            type: "optional_target_actions",
+            logIfSkipped: true,
+            selectionMessage:
+              'Select 1 "Tech-Zero" monster in your Graveyard with the same Level and a different name.',
+            targets: [
+              {
+                id: "tech_zero_battle_mage_revive_target",
+                owner: "self",
+                zone: "graveyard",
+                cardKind: "monster",
+                archetype: "Tech-Zero",
+                excludeCannotBeSpecialSummoned: true,
+                excludeNameRef: "tech_zero_battle_mage_cost",
+                compareAttribute: {
+                  attr: "level",
+                  ref: "tech_zero_battle_mage_cost",
+                  op: "eq",
+                },
+                count: { min: 1, max: 1 },
+              },
+            ],
+            actions: [
+              {
+                type: "move",
+                targetRef: "tech_zero_battle_mage_cost",
+                player: "self",
+                fromZone: "field",
+                to: "graveyard",
+                contextLabel: "cost",
+                skipSendToGraveActionReplacement: true,
+              },
+              {
+                type: "special_summon_from_zone",
+                targetRef: "tech_zero_battle_mage_revive_target",
+                zone: "graveyard",
+                position: "choice",
+                promptPlayer: true,
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 513,
+    name: "Tech-Zero Turbocharge Kaiser",
+    cardKind: "monster",
+    monsterType: "synchro",
+    atk: 2100,
+    def: 1800,
+    level: 6,
+    type: "Warrior",
+    attribute: "Light",
+    archetype: "Tech-Zero",
+    synchro: {
+      tunerCount: 1,
+      nonTunerMin: 1,
+    },
+    description:
+      '1 Tuner + 1+ non-Tuner monsters. If this card is Synchro Summoned: You can target up to 3 "Tech-Zero" monsters in your Graveyard; shuffle them into the Deck, and if you do, this card gains ATK equal to the total Levels of those shuffled monsters x100 until the end of this turn. Once per turn, if this card destroys an opponent\'s monster by battle: You can target 1 Tuner in your Graveyard; Special Summon it.',
+    image: "assets/Tech-Zero Turbocharge Kaiser.png",
+    effects: [
+      {
+        id: "tech_zero_turbocharge_kaiser_synchro_recycle_buff",
+        timing: "on_event",
+        event: "after_summon",
+        requireSelfAsSummoned: true,
+        summonMethods: ["synchro"],
+        promptUser: true,
+        promptMessage:
+          'Activate "Tech-Zero Turbocharge Kaiser" to shuffle up to 3 "Tech-Zero" monsters from your Graveyard into the Deck and gain ATK?',
+        targets: [
+          {
+            id: "tech_zero_turbocharge_kaiser_recycle_targets",
+            owner: "self",
+            zone: "graveyard",
+            cardKind: "monster",
+            archetype: "Tech-Zero",
+            count: { min: 1, max: 3 },
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "tech_zero_turbocharge_kaiser_recycle_targets",
+            player: "self",
+            fromZone: "graveyard",
+            to: "deck",
+            contextLabel: "recycle",
+            storeResultAs: "tech_zero_turbocharge_kaiser_recycled_cards",
+            storeLevelSumAs: "techZeroTurbochargeKaiserLevelSum",
+          },
+          {
+            type: "shuffle_deck",
+            player: "self",
+          },
+          {
+            type: "buff_stats_temp",
+            targetRef: "self",
+            atkBoostFromContext: {
+              key: "techZeroTurbochargeKaiserLevelSum",
+              multiplier: 100,
+            },
+            duration: "end_of_turn",
+          },
+        ],
+      },
+      {
+        id: "tech_zero_turbocharge_kaiser_battle_revive_tuner",
+        timing: "on_event",
+        event: "battle_destroy",
+        requireZone: "field",
+        requireFaceup: true,
+        requireSelfAsBattleDestroyer: true,
+        requireDestroyedIsOpponent: true,
+        oncePerTurn: true,
+        oncePerTurnScope: "card",
+        oncePerTurnName: "tech_zero_turbocharge_kaiser_battle_revive_tuner",
+        promptUser: true,
+        promptMessage:
+          'Activate "Tech-Zero Turbocharge Kaiser" to Special Summon 1 Tuner from your Graveyard?',
+        conditions: [
+          {
+            type: "field_card_count",
+            owner: "self",
+            zone: "field",
+            max: 4,
+            reason: "You need an open Monster Zone to Special Summon a Tuner.",
+          },
+        ],
+        targets: [
+          {
+            id: "tech_zero_turbocharge_kaiser_revive_tuner",
+            owner: "self",
+            zone: "graveyard",
+            cardKind: "monster",
+            isTuner: true,
+            excludeCannotBeSpecialSummoned: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "special_summon_from_zone",
+            targetRef: "tech_zero_turbocharge_kaiser_revive_tuner",
+            zone: "graveyard",
+            position: "choice",
+            promptPlayer: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 514,
+    name: "Tech-Zero Plasma Phoenix",
+    cardKind: "monster",
+    monsterType: "synchro",
+    atk: 2500,
+    def: 2000,
+    level: 7,
+    type: "Winged Beast",
+    attribute: "Light",
+    archetype: "Tech-Zero",
+    synchro: {
+      tunerCount: 1,
+      nonTunerMin: 1,
+    },
+    description:
+      '1 Tuner + 1+ non-Tuner monsters. "Tech-Zero" monsters you control cannot be banished, except this card. During the End Phase, if you took damage this turn: gain LP equal to the damage you took this turn. If this card is destroyed by battle or card effect: You can Special Summon this card from the Graveyard during the End Phase, but banish it when it leaves the field.',
+    image: "assets/Tech-Zero Plasma Phoenix.png",
+    effects: [
+      {
+        id: "tech_zero_plasma_phoenix_banish_protection",
+        timing: "passive",
+        requireZone: "field",
+        requireFaceup: true,
+        passive: {
+          type: "banish_protection",
+          targetScope: {
+            owner: "self",
+            zone: "field",
+            excludeSelf: true,
+            filters: {
+              cardKind: "monster",
+              archetype: "Tech-Zero",
+            },
+          },
+        },
+      },
+      {
+        id: "tech_zero_plasma_phoenix_end_phase_heal",
+        timing: "on_event",
+        event: "end_phase",
+        requireZone: "field",
+        requireFaceup: true,
+        promptUser: false,
+        endPhasePlayer: "any",
+        conditions: [
+          {
+            type: "context_number_compare",
+            key: "player.damageReceivedThisTurn",
+            op: "gt",
+            value: 0,
+          },
+        ],
+        actions: [
+          {
+            type: "heal",
+            player: "self",
+            amountFromContext: {
+              key: "player.damageReceivedThisTurn",
+            },
+          },
+        ],
+      },
+      {
+        id: "tech_zero_plasma_phoenix_destroyed_end_phase_revive",
+        timing: "on_event",
+        event: "card_to_grave",
+        fromZone: "field",
+        requireSelfAsDestroyed: true,
+        condition: {
+          type: "destroyed_by_battle_or_effect",
+        },
+        promptUser: true,
+        promptMessage:
+          'Activate "Tech-Zero Plasma Phoenix" to Special Summon it from your Graveyard during the End Phase?',
+        actions: [
+          {
+            type: "schedule_special_summon",
+            cardRef: "self",
+            fromZone: "graveyard",
+            phase: "end",
+            triggerPlayer: "current",
+            position: "choice",
+            statusesOnSummon: [{ status: "banishWhenLeavesField" }],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 515,
+    name: "Tech-Zero Reactor Dragon",
+    cardKind: "monster",
+    monsterType: "synchro",
+    atk: 2700,
+    def: 2400,
+    level: 8,
+    type: "Dragon",
+    attribute: "Light",
+    archetype: "Tech-Zero",
+    synchro: {
+      tunerCount: 1,
+      nonTunerMin: 1,
+      materialFilters: {
+        nonTuner: { monsterType: "synchro" },
+      },
+    },
+    description:
+      "1 Tuner + 1+ non-Tuner Synchro Monsters. Cannot be destroyed by card effects. If this card is Synchro Summoned: target 1 face-up monster your opponent controls; negate its effects. Once per turn, except the turn this card was Summoned: You can send this card to the Graveyard; Special Summon up to 2 Level 7 or lower Synchro Monsters from your Graveyard.",
+    image: "assets/Tech-Zero Reactor Dragon.png",
+    effects: [
+      {
+        id: "tech_zero_reactor_dragon_effect_destruction_protection",
+        timing: "passive",
+        requireZone: "field",
+        requireFaceup: true,
+        passive: {
+          type: "conditional_protection",
+          protectionType: "effect_destruction",
+        },
+      },
+      {
+        id: "tech_zero_reactor_dragon_synchro_negate",
+        timing: "on_event",
+        event: "after_summon",
+        requireSelfAsSummoned: true,
+        requireFaceup: true,
+        summonMethods: ["synchro"],
+        promptUser: false,
+        targets: [
+          {
+            id: "tech_zero_reactor_dragon_negate_target",
+            owner: "opponent",
+            zone: "field",
+            cardKind: "monster",
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "add_status",
+            targetRef: "tech_zero_reactor_dragon_negate_target",
+            status: "effectsNegated",
+            value: true,
+          },
+        ],
+      },
+      {
+        id: "tech_zero_reactor_dragon_recycle_synchros",
+        timing: "ignition",
+        requireZone: "field",
+        requireFaceup: true,
+        requirePhase: ["main1", "main2"],
+        oncePerTurn: true,
+        oncePerTurnScope: "card",
+        oncePerTurnName: "tech_zero_reactor_dragon_recycle_synchros",
+        conditions: [
+          {
+            type: "context_number_compare",
+            key: "source.summonedTurn",
+            op: "neq",
+            valueFromContext: "game.turnCounter",
+            reason:
+              "This effect cannot be activated during the turn this card was Summoned.",
+          },
+          {
+            type: "field_card_count",
+            owner: "self",
+            zone: "graveyard",
+            filters: {
+              cardKind: "monster",
+              monsterType: "synchro",
+              maxLevel: 7,
+            },
+            min: 1,
+            reason:
+              "You need a Level 7 or lower Synchro Monster in your Graveyard.",
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "self",
+            player: "self",
+            fromZone: "field",
+            to: "graveyard",
+            contextLabel: "cost",
+            skipSendToGraveActionReplacement: true,
+          },
+          {
+            type: "special_summon_from_zone",
+            zone: "graveyard",
+            filters: {
+              cardKind: "monster",
+              monsterType: "synchro",
+              maxLevel: 7,
+            },
+            count: { min: 1, max: 2 },
+            position: "choice",
+            promptPlayer: true,
+            fieldSlotsFreedBeforeSummon: 1,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 516,
+    name: "Tech-Zero Explosive Lancer",
+    cardKind: "monster",
+    monsterType: "synchro",
+    atk: 3300,
+    def: 2500,
+    level: 10,
+    type: "Warrior",
+    attribute: "Light",
+    archetype: "Tech-Zero",
+    synchro: {
+      tunerCount: 1,
+      nonTunerMin: 1,
+      materialFilters: {
+        tuner: { monsterType: "synchro", isTuner: true },
+        nonTuner: { monsterType: "synchro" },
+      },
+    },
+    description:
+      '1 Synchro Tuner Monster + 1+ non-Tuner Synchro Monsters. If this card is Synchro Summoned: You can activate this effect; this turn, this card can declare attacks up to the number of "Tech-Zero" Tuner monsters in your Graveyard. Once per turn, when your opponent activates a card or effect that would destroy 1 or more cards on the field (Quick Effect): negate the activation, and if you do, destroy that card.',
+    image: "assets/Tech Zero Explosive Lancer.png",
+    effects: [
+      {
+        id: "tech_zero_explosive_lancer_synchro_attack_limit",
+        timing: "on_event",
+        event: "after_summon",
+        requireSelfAsSummoned: true,
+        requireFaceup: true,
+        summonMethods: ["synchro"],
+        promptUser: true,
+        promptMessage:
+          'Activate "Tech-Zero Explosive Lancer" to set its attacks this turn?',
+        actions: [
+          {
+            type: "set_attack_limit_from_zone_count",
+            targetRef: "self",
+            owner: "self",
+            zone: "graveyard",
+            filters: {
+              cardKind: "monster",
+              archetype: "Tech-Zero",
+              isTuner: true,
+            },
+            duration: "until_end_turn",
+          },
+        ],
+      },
+      {
+        id: "tech_zero_explosive_lancer_negate_destroy",
+        timing: "manual",
+        speed: 2,
+        isQuickEffect: true,
+        requireZone: "field",
+        requireFaceup: true,
+        oncePerTurn: true,
+        oncePerTurnScope: "card",
+        oncePerTurnName: "tech_zero_explosive_lancer_negate_destroy",
+        canRespondTo: ["card_activation", "effect_activation"],
+        conditions: [
+          {
+            type: "activation_would_destroy_cards_matching_filters",
+            activationPlayer: "opponent",
+            destroyedCardZones: ["field", "spellTrap", "fieldSpell"],
+            destroyedCardFilters: {},
+            minCount: 1,
+          },
+        ],
+        actions: [{ type: "negate_summon_or_activation_and_destroy" }],
+      },
+    ],
+  },
+  {
+    id: 517,
+    name: "Tech-Zero Final Singularity",
+    cardKind: "monster",
+    monsterType: "synchro",
+    atk: 4000,
+    def: 4000,
+    level: 12,
+    type: "Machine",
+    attribute: "Light",
+    archetype: "Tech-Zero",
+    piercing: true,
+    specialSummonOnlyBy: ["synchro"],
+    synchro: {
+      tunerCount: 1,
+      nonTunerMin: 2,
+      materialFilters: {
+        tuner: { monsterType: "synchro", isTuner: true },
+        nonTuner: { monsterType: "synchro" },
+      },
+    },
+    description:
+      "1 Synchro Tuner Monster + 2+ non-Tuner Synchro Monsters. Must be Synchro Summoned and cannot be Special Summoned by other ways. If this card is Synchro Summoned: negate the effects of all face-up cards your opponent controls. If this card battles a Defense Position monster, inflict piercing battle damage. Once per turn, when your opponent activates a card or effect that would make this card leave the field (Quick Effect): negate that effect, and if you control no other cards, banish that card.",
+    image: "assets/Tech-Zero Final Singularity.png",
+    effects: [
+      {
+        id: "tech_zero_final_singularity_synchro_negate_all",
+        timing: "on_event",
+        event: "after_summon",
+        requireSelfAsSummoned: true,
+        requireFaceup: true,
+        summonMethods: ["synchro"],
+        promptUser: false,
+        actions: [
+          {
+            type: "add_status",
+            targetScope: {
+              owner: "opponent",
+              zones: ["field", "spellTrap", "fieldSpell"],
+              requireFaceup: true,
+            },
+            status: "effectsNegated",
+            value: true,
+          },
+        ],
+      },
+      {
+        id: "tech_zero_final_singularity_negate_leave_field",
+        timing: "manual",
+        speed: 2,
+        isQuickEffect: true,
+        requireZone: "field",
+        requireFaceup: true,
+        oncePerTurn: true,
+        oncePerTurnScope: "card",
+        oncePerTurnName: "tech_zero_final_singularity_negate_leave_field",
+        canRespondTo: ["card_activation", "effect_activation"],
+        conditions: [
+          {
+            type: "activation_would_make_card_leave_field",
+            activationPlayer: "opponent",
+            cardRef: "self",
+          },
+        ],
+        actions: [
+          {
+            type: "negate_activation",
+            storeNegatedCardAs: "tech_zero_final_singularity_negated_card",
+          },
+          {
+            type: "conditional_actions",
+            conditions: [
+              {
+                type: "field_card_count",
+                owner: "self",
+                zones: ["field", "spellTrap", "fieldSpell"],
+                excludeSource: true,
+                max: 0,
+              },
+            ],
+            actions: [
+              {
+                type: "banish",
+                targetRef: "tech_zero_final_singularity_negated_card",
+              },
+            ],
+            logIfSkipped: false,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 518,
+    name: "Tech-Zero Development Lab",
+    cardKind: "spell",
+    subtype: "field",
+    archetype: "Tech-Zero",
+    description:
+      'Once per turn: You can target 1 "Tech-Zero" Synchro Monster in your Graveyard; return it to the Extra Deck, and if you do, target 1 monster in your Graveyard; shuffle it into the Deck.',
+    image: "assets/Tech-Zero Development Lab.png",
+    effects: [
+      {
+        id: "tech_zero_development_lab_recycle",
+        timing: "ignition",
+        requireZone: "fieldSpell",
+        requireFaceup: true,
+        requirePhase: ["main1", "main2"],
+        oncePerTurn: true,
+        oncePerTurnName: "tech_zero_development_lab_recycle",
+        targets: [
+          {
+            id: "tech_zero_development_lab_synchro_target",
+            owner: "self",
+            zone: "graveyard",
+            cardKind: "monster",
+            archetype: "Tech-Zero",
+            monsterType: "synchro",
+            count: { min: 1, max: 1 },
+          },
+          {
+            id: "tech_zero_development_lab_shuffle_target",
+            owner: "self",
+            zone: "graveyard",
+            cardKind: "monster",
+            excludeTargetRef: "tech_zero_development_lab_synchro_target",
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "tech_zero_development_lab_synchro_target",
+            player: "self",
+            fromZone: "graveyard",
+            to: "extraDeck",
+            contextLabel: "tech_zero_development_lab_return_synchro",
+          },
+          {
+            type: "move",
+            targetRef: "tech_zero_development_lab_shuffle_target",
+            player: "self",
+            fromZone: "graveyard",
+            to: "deck",
+            contextLabel: "tech_zero_development_lab_shuffle_monster",
+          },
+          {
+            type: "shuffle_deck",
+            player: "self",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 519,
+    name: "Tech-Zero Assembly Line",
+    cardKind: "spell",
+    subtype: "normal",
+    archetype: "Tech-Zero",
+    description:
+      'Banish 2 "Tech-Zero" monsters from your Graveyard; Special Summon 1 "Tech-Zero" monster from your Deck, but banish it when it leaves the field. You cannot attack directly during the turn you activate this card. You can only activate 1 "Tech-Zero Assembly Line" per turn.',
+    image: "assets/Tech-Zero Assembly Line.png",
+    effects: [
+      {
+        id: "tech_zero_assembly_line_activation",
+        timing: "on_play",
+        speed: 1,
+        oncePerTurn: true,
+        oncePerTurnName: "tech_zero_assembly_line_activation",
+        conditions: [
+          {
+            type: "field_card_count",
+            owner: "self",
+            zone: "graveyard",
+            filters: {
+              cardKind: "monster",
+              archetype: "Tech-Zero",
+            },
+            min: 2,
+            reason:
+              'You need 2 "Tech-Zero" monsters in your Graveyard to activate this card.',
+          },
+          {
+            type: "field_card_count",
+            owner: "self",
+            zone: "deck",
+            filters: {
+              cardKind: "monster",
+              archetype: "Tech-Zero",
+            },
+            min: 1,
+            reason:
+              'You need a "Tech-Zero" monster in your Deck to Special Summon.',
+          },
+          {
+            type: "playerFieldCount",
+            max: 4,
+            reason: "You need an open Monster Zone.",
+          },
+        ],
+        targets: [
+          {
+            id: "tech_zero_assembly_line_banish_cost",
+            owner: "self",
+            zone: "graveyard",
+            cardKind: "monster",
+            archetype: "Tech-Zero",
+            count: { min: 2, max: 2 },
+          },
+          {
+            id: "tech_zero_assembly_line_summon_target",
+            owner: "self",
+            zone: "deck",
+            cardKind: "monster",
+            archetype: "Tech-Zero",
+            excludeCannotBeSpecialSummoned: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "tech_zero_assembly_line_banish_cost",
+            player: "self",
+            fromZone: "graveyard",
+            to: "banished",
+            contextLabel: "cost",
+          },
+          {
+            type: "special_summon_from_zone",
+            targetRef: "tech_zero_assembly_line_summon_target",
+            zone: "deck",
+            position: "choice",
+            promptPlayer: true,
+            statusesOnSummon: [{ status: "banishWhenLeavesField" }],
+          },
+          {
+            type: "forbid_direct_attack_this_turn",
+            player: "self",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 520,
+    name: "Tech-Zero Scrapyard",
+    cardKind: "trap",
+    subtype: "normal",
+    speed: 2,
+    archetype: "Tech-Zero",
+    description:
+      'Special Summon 1 "Tech-Zero" Tuner from your Graveyard, and if you do, immediately after this effect resolves, Synchro Summon 1 Synchro Monster from your Extra Deck using materials you control. You can only activate 1 "Tech-Zero Scrapyard" per turn.',
+    image: "assets/Tech-Zero Scrapyard.png",
+    effects: [
+      {
+        id: "tech_zero_scrapyard_activation",
+        timing: "on_activate",
+        speed: 2,
+        oncePerTurn: true,
+        oncePerTurnName: "tech_zero_scrapyard_activation",
+        conditions: [
+          {
+            type: "field_card_count",
+            owner: "self",
+            zone: "graveyard",
+            filters: {
+              cardKind: "monster",
+              archetype: "Tech-Zero",
+              isTuner: true,
+            },
+            min: 1,
+            reason:
+              'You need a "Tech-Zero" Tuner in your Graveyard to activate this card.',
+          },
+          {
+            type: "field_card_count",
+            owner: "self",
+            zone: "extraDeck",
+            filters: {
+              cardKind: "monster",
+              monsterType: "synchro",
+            },
+            min: 1,
+            reason: "You need a Synchro Monster in your Extra Deck.",
+          },
+          {
+            type: "playerFieldCount",
+            max: 4,
+            reason: "You need an open Monster Zone.",
+          },
+        ],
+        targets: [
+          {
+            id: "tech_zero_scrapyard_tuner",
+            owner: "self",
+            zone: "graveyard",
+            cardKind: "monster",
+            archetype: "Tech-Zero",
+            isTuner: true,
+            excludeCannotBeSpecialSummoned: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "special_summon_from_zone",
+            targetRef: "tech_zero_scrapyard_tuner",
+            zone: "graveyard",
+            position: "choice",
+            promptPlayer: true,
+            storeResultAs: "tech_zero_scrapyard_revived_tuner",
+          },
+          {
+            type: "synchro_summon_from_extra_deck",
+            filters: {
+              cardKind: "monster",
+              monsterType: "synchro",
+            },
+            previewPendingSummon: {
+              zone: "graveyard",
+              filters: {
+                cardKind: "monster",
+                archetype: "Tech-Zero",
+                isTuner: true,
+              },
+            },
+          },
+        ],
+      },
+    ],
+  },
+];

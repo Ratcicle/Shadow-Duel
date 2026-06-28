@@ -122,6 +122,11 @@ function matchComplexRequirement(card, requirement, materialZone) {
       return false;
     }
   }
+  if (requirement.isTuner !== undefined) {
+    if ((card.isTuner === true) !== Boolean(requirement.isTuner)) {
+      return false;
+    }
+  }
 
   // Check name requirement
   if (requirement.name) {

@@ -10,6 +10,13 @@ export function getCardArchetypes(card) {
 // Resolves attacks available in a Battle Phase, including dynamic passive count.
 export function getMaxAttacks(card, owner = null) {
   if (!card) return 1;
+  if (
+    card.attackLimitThisTurn !== undefined &&
+    card.attackLimitThisTurn !== null &&
+    Number.isFinite(Number(card.attackLimitThisTurn))
+  ) {
+    return Math.max(0, Math.floor(Number(card.attackLimitThisTurn)));
+  }
   let extra = (card.extraAttacks || 0) + (card.equipExtraAttacks || 0);
   if (card.dynamicExtraAttacks?.source === "graveyard_count" && owner) {
     const dea = card.dynamicExtraAttacks;

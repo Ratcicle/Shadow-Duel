@@ -3,6 +3,10 @@ import {
   countStrategicallyViableCostCandidates,
   getPlayerZoneCards,
 } from "./cardFilters.js";
+import {
+  canUseAsSynchroMaterial,
+  getSynchroMaterialCombos,
+} from "../../game/summon/synchro.js";
 
 export function validateHandIgnitionCandidate({
   card,
@@ -25,6 +29,9 @@ export function validateHandIgnitionCandidate({
   );
   if (summonsFromHand && (player?.field || []).length >= 5) {
     return { ok: false, reason: "field is full" };
+  }
+  if (summonsFromHand && !cardPassesSpecialSummonRestrictions(card, player)) {
+    return { ok: false, reason: "special summon restricted" };
   }
 
   if (!isSimulatedState) {
@@ -92,6 +99,83 @@ export function validateCostCandidateCount({
   return { ok: true };
 }
 
+function cardPassesSpecialSummonRestrictions(card, player) {
+  if (
+    Array.isArray(card?.specialSummonOnlyBy) &&
+    !card.specialSummonOnlyBy.includes("special")
+  ) {
+    return false;
+  }
+  const restrictions = Array.isArray(player?.specialSummonRestrictions)
+    ? player.specialSummonRestrictions
+    : [];
+  return restrictions.every((restriction) => {
+    const filters = restriction?.allowedFilters;
+    return !filters || cardMatchesFilter(card, filters);
+  });
+}
+
+function cardPassesSynchroSummonRestrictions(card, player) {
+  if (
+    Array.isArray(card?.specialSummonOnlyBy) &&
+    !card.specialSummonOnlyBy.includes("synchro")
+  ) {
+    return false;
+  }
+  const restrictions = Array.isArray(player?.specialSummonRestrictions)
+    ? player.specialSummonRestrictions
+    : [];
+  return restrictions.every((restriction) => {
+    const filters = restriction?.allowedFilters;
+    return !filters || cardMatchesFilter(card, filters);
+  });
+}
+
+function hasSynchroSummonActionCandidate(player, action) {
+  if (!player || !action) return false;
+  const filters = {
+    cardKind: "monster",
+    monsterType: "synchro",
+    ...(action.filters || action.candidateFilters || {}),
+  };
+  const extraDeckCandidates = (player.extraDeck || []).filter(
+    (card) =>
+      cardMatchesFilter(card, filters) &&
+      cardPassesSynchroSummonRestrictions(card, player),
+  );
+  if (extraDeckCandidates.length === 0) return false;
+
+  const pending = action.previewPendingSummon || null;
+  const pendingCards = pending
+    ? getPlayerZoneCards(player, pending.zone || "graveyard").filter(
+        (card) =>
+          cardMatchesFilter(card, pending.filters || {}) &&
+          cardPassesSpecialSummonRestrictions(card, player),
+      )
+    : [null];
+  if (pendingCards.length === 0) return false;
+
+  const gameLike = {
+    effectEngine: {
+      isEffectNegated: (card) => card?.effectsNegated === true,
+    },
+    canUseAsSynchroMaterial,
+  };
+
+  return pendingCards.some((pendingCard) => {
+    const field = pendingCard
+      ? [...(player.field || []), pendingCard]
+      : [...(player.field || [])];
+    const previewPlayer = { ...player, field };
+    return extraDeckCandidates.some((synchroCard) => {
+      const combos =
+        getSynchroMaterialCombos.call(gameLike, previewPlayer, synchroCard) ||
+        [];
+      return combos.some((combo) => field.length - combo.length + 1 <= 5);
+    });
+  });
+}
+
 export function hasActionZoneCandidates(player, action, source = null) {
   if (!player || !action) return true;
 
@@ -134,7 +218,8 @@ export function hasActionZoneCandidates(player, action, source = null) {
     const min = action.count?.min ?? 1;
     const candidates = zoneCards.filter((card) =>
       cardMatchesFilter(card, filters) &&
-      !(filters.excludeSelf && card === source),
+      !(filters.excludeSelf && card === source) &&
+      cardPassesSpecialSummonRestrictions(card, player),
     );
     if (action.distinctNames === true) {
       const names = new Set(
@@ -152,9 +237,14 @@ export function hasActionZoneCandidates(player, action, source = null) {
       (player.hand || []).filter(
         (card) =>
           cardMatchesFilter(card, filters) &&
-          !(filters.excludeSelf && card === source),
+          !(filters.excludeSelf && card === source) &&
+          cardPassesSpecialSummonRestrictions(card, player),
       ).length >= min
     );
+  }
+
+  if (action.type === "synchro_summon_from_extra_deck") {
+    return hasSynchroSummonActionCandidate(player, action);
   }
 
   return true;

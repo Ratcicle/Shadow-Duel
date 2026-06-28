@@ -40,6 +40,7 @@ import * as combatResolution from "./game/combat/resolution.js";
 import * as summonTracking from "./game/summon/tracking.js";
 import * as summonExecution from "./game/summon/execution.js";
 import * as summonAscension from "./game/summon/ascension.js";
+import * as summonSynchro from "./game/summon/synchro.js";
 import * as summonPosition from "./game/summon/position.js";
 import * as summonMaterialStats from "./game/summon/materialStats.js";
 
@@ -93,6 +94,7 @@ import * as effectsDestructionReplacement from "./game/effects/destructionReplac
 import * as effectsActivationPipeline from "./game/effects/activationPipeline.js";
 
 const STARTING_PLAYER_IDS = new Set(["player", "bot"]);
+const EXTRA_DECK_MONSTER_TYPES = new Set(["fusion", "ascension", "synchro"]);
 
 function resolveStartingPlayerId(startingPlayer) {
   if (STARTING_PLAYER_IDS.has(startingPlayer)) {
@@ -181,6 +183,8 @@ export default class Game {
     this.temporaryReplacementEffects = [];
     this.temporaryBattlePairEffects = [];
     this.temporaryEventEffects = [];
+    this.pendingSynchroMaterialFollowups = [];
+    this.synchroSummonContextCounter = 0;
     this.trapPromptInProgress = false; // Avoid multiple trap prompts simultaneously
     this.devModeEnabled = !!options.devMode;
     this.zoneOpDepth = 0;
@@ -249,6 +253,7 @@ export default class Game {
     this.temporaryReplacementEffects = [];
     this.temporaryBattlePairEffects = [];
     this.temporaryEventEffects = [];
+    this.pendingSynchroMaterialFollowups = [];
     this.pendingCardAnimations = [];
     this.pendingVisualFeedback = [];
     this.pendingBoardPresentationPromise = Promise.resolve(false);
@@ -467,11 +472,7 @@ export default class Game {
 
     deckList.forEach((entry) => {
       const card = this.createCardForOwner(entry, player, entry);
-      if (
-        !card ||
-        card.monsterType === "fusion" ||
-        card.monsterType === "ascension"
-      ) {
+      if (!card || EXTRA_DECK_MONSTER_TYPES.has(card.monsterType)) {
         return;
       }
       player.deck.push(card);
@@ -485,10 +486,7 @@ export default class Game {
 
     extraDeckList.forEach((entry) => {
       const card = this.createCardForOwner(entry, player, entry);
-      if (
-        !card ||
-        (card.monsterType !== "fusion" && card.monsterType !== "ascension")
-      ) {
+      if (!card || !EXTRA_DECK_MONSTER_TYPES.has(card.monsterType)) {
         return;
       }
       player.extraDeck.push(card);
@@ -848,6 +846,12 @@ Game.prototype.runActivationPipelineWait =
 
 // Movement: cleanupTokenReferences, field-limit checks, moveCard, moveCardInternal
 Game.prototype.cleanupTokenReferences = zonesMovement.cleanupTokenReferences;
+Game.prototype.registerSpecialSummonRestriction =
+  zonesMovement.registerSpecialSummonRestriction;
+Game.prototype.cleanupExpiredSpecialSummonRestrictions =
+  zonesMovement.cleanupExpiredSpecialSummonRestrictions;
+Game.prototype.canSpecialSummonUnderRestrictions =
+  zonesMovement.canSpecialSummonUnderRestrictions;
 Game.prototype.canPlaceCardOnField = zonesMovement.canPlaceCardOnField;
 Game.prototype.moveCard = zonesMovement.moveCard;
 Game.prototype.moveCardInternal = zonesMovement.moveCardInternal;
@@ -867,6 +871,9 @@ Game.prototype.clearAttackResolutionIndicators =
 
 // Availability: getAttackAvailability, markAttackUsed, registerAttackNegated, canDestroyByBattle
 Game.prototype.getAttackAvailability = combatAvailability.getAttackAvailability;
+Game.prototype.getMonsterAttackLimit = combatAvailability.getMonsterAttackLimit;
+Game.prototype.hasExplicitAttackLimitThisTurn =
+  combatAvailability.hasExplicitAttackLimitThisTurn;
 Game.prototype.isActiveAttackPriorityTarget =
   combatAvailability.isActiveAttackPriorityTarget;
 Game.prototype.markAttackUsed = combatAvailability.markAttackUsed;
@@ -930,6 +937,17 @@ Game.prototype.canUseAsAscensionMaterial =
   summonAscension.canUseAsAscensionMaterial;
 Game.prototype.performAscensionSummon = summonAscension.performAscensionSummon;
 Game.prototype.tryAscensionSummon = summonAscension.tryAscensionSummon;
+
+// Synchro: classic one-Tuner + non-Tuner foundation
+Game.prototype.canUseAsSynchroMaterial =
+  summonSynchro.canUseAsSynchroMaterial;
+Game.prototype.getSynchroMaterialCombos =
+  summonSynchro.getSynchroMaterialCombos;
+Game.prototype.canSummonSynchroCard =
+  summonSynchro.canSummonSynchroCard;
+Game.prototype.performSynchroSummon = summonSynchro.performSynchroSummon;
+Game.prototype.performSynchroSummonFromExtraDeck =
+  summonSynchro.performSynchroSummonFromExtraDeck;
 
 // -----------------------------------------------------------------------------
 // Deck: Attach methods from modular deck/ folder

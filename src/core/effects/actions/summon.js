@@ -47,6 +47,19 @@ export async function applySpecialSummonToken(action, ctx) {
   // Optional debug info - not used for logic, only for tracing
   tokenCard.tokenSourceCard = ctx.card?.name || null;
 
+  const restrictionCheck = this.game?.canSpecialSummonUnderRestrictions?.(
+    tokenCard,
+    targetPlayer,
+    {
+      summonMethod: "special",
+      fromZone: "token",
+      silent: false,
+    },
+  );
+  if (restrictionCheck?.ok === false) {
+    return false;
+  }
+
   // UNIFIED POSITION SEMANTICS: respect action.position
   // undefined/null → "choice" (default)
   // "choice" → allow player/bot to choose

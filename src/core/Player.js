@@ -3,13 +3,181 @@ import {
   cardDatabaseById,
   cardDatabaseByName,
 } from "../data/cards.js";
-import Card from "./Card.js";
+import Card, { cardMatchesKind } from "./Card.js";
 import {
   fieldHasTributeValue,
   getTributeCardsFromIndices,
   getTributeValueTotal,
   selectTributeIndicesByValue,
 } from "./game/summon/tributeValue.js";
+
+function isExtraDeckMonsterData(data) {
+  return ["fusion", "ascension", "synchro"].includes(data?.monsterType);
+}
+
+function asArray(value) {
+  if (value === undefined || value === null) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+function cardHasArchetype(card, archetype) {
+  if (!archetype) return true;
+  const required = asArray(archetype).filter(Boolean);
+  if (required.length === 0) return true;
+  const archetypes = Array.isArray(card?.archetypes)
+    ? card.archetypes
+    : card?.archetype
+      ? [card.archetype]
+      : [];
+  return required.some((entry) => archetypes.includes(entry));
+}
+
+export function cardMatchesNormalSummonFilters(card, filters = {}) {
+  if (!card || !filters) return false;
+  if (filters.cardKind && !cardMatchesKind(card, filters.cardKind)) return false;
+  if (filters.cardId !== undefined && card.id !== filters.cardId) return false;
+  if (
+    Array.isArray(filters.cardIds) &&
+    filters.cardIds.length > 0 &&
+    !filters.cardIds.includes(card.id)
+  ) {
+    return false;
+  }
+  if (filters.name && !asArray(filters.name).includes(card.name)) return false;
+  if (filters.cardName && card.name !== filters.cardName) return false;
+  if (filters.archetype && !cardHasArchetype(card, filters.archetype)) {
+    return false;
+  }
+  if (filters.type && !asArray(filters.type).includes(card.type)) return false;
+  if (
+    filters.attribute &&
+    !asArray(filters.attribute).includes(card.attribute)
+  ) {
+    return false;
+  }
+  if (
+    filters.monsterType &&
+    !asArray(filters.monsterType).includes(card.monsterType)
+  ) {
+    return false;
+  }
+  if (filters.isTuner !== undefined) {
+    if ((card.isTuner === true) !== Boolean(filters.isTuner)) return false;
+  }
+  const level = Number(card.level || 0);
+  if (filters.level !== undefined && level !== Number(filters.level)) {
+    return false;
+  }
+  if (filters.minLevel !== undefined && level < Number(filters.minLevel)) {
+    return false;
+  }
+  if (filters.maxLevel !== undefined && level > Number(filters.maxLevel)) {
+    return false;
+  }
+  return true;
+}
+
+export function createNormalSummonRecord(card) {
+  if (!card) return { unknown: true };
+  return {
+    id: card.id ?? null,
+    name: card.name || null,
+    cardKind: card.cardKind || null,
+    archetype: card.archetype || null,
+    archetypes: Array.isArray(card.archetypes)
+      ? [...card.archetypes]
+      : card.archetype
+        ? [card.archetype]
+        : [],
+    type: card.type || null,
+    attribute: card.attribute || null,
+    monsterType: card.monsterType || null,
+    level: card.level ?? 0,
+    isTuner: card.isTuner === true,
+  };
+}
+
+function getNormalSummonRecords(player) {
+  const summonCount = Math.max(0, Number(player?.summonCount || 0));
+  const records = Array.isArray(player?.normalSummonsThisTurn)
+    ? player.normalSummonsThisTurn.slice(0, summonCount)
+    : [];
+  while (records.length < summonCount) {
+    records.push({ unknown: true });
+  }
+  return records;
+}
+
+function getRestrictedNormalSummonSlots(player) {
+  const permissions = Array.isArray(player?.additionalNormalSummonPermissions)
+    ? player.additionalNormalSummonPermissions
+    : [];
+  const slots = [];
+  for (const permission of permissions) {
+    const count = Math.max(0, Number(permission?.count || 0));
+    if (count <= 0 || !permission?.filters) continue;
+    for (let i = 0; i < count; i += 1) {
+      slots.push(permission.filters);
+    }
+  }
+  return slots;
+}
+
+function maxRestrictedAssignments(records, restrictedSlots) {
+  if (!records.length || !restrictedSlots.length) return 0;
+  const assignedRecordForSlot = new Array(restrictedSlots.length).fill(-1);
+
+  const tryAssign = (recordIndex, seenSlots) => {
+    const record = records[recordIndex];
+    if (!record || record.unknown === true) return false;
+
+    for (let slotIndex = 0; slotIndex < restrictedSlots.length; slotIndex += 1) {
+      if (seenSlots[slotIndex]) continue;
+      if (!cardMatchesNormalSummonFilters(record, restrictedSlots[slotIndex])) {
+        continue;
+      }
+      seenSlots[slotIndex] = true;
+      if (
+        assignedRecordForSlot[slotIndex] === -1 ||
+        tryAssign(assignedRecordForSlot[slotIndex], seenSlots)
+      ) {
+        assignedRecordForSlot[slotIndex] = recordIndex;
+        return true;
+      }
+    }
+    return false;
+  };
+
+  let assigned = 0;
+  for (let recordIndex = 0; recordIndex < records.length; recordIndex += 1) {
+    if (tryAssign(recordIndex, new Array(restrictedSlots.length).fill(false))) {
+      assigned += 1;
+    }
+  }
+  return assigned;
+}
+
+export function canUseNormalSummonForCard(player, card) {
+  if (!player || !card) return false;
+  const records = [
+    ...getNormalSummonRecords(player),
+    createNormalSummonRecord(card),
+  ];
+  const unrestrictedSlots =
+    1 + Math.max(0, Number(player.additionalNormalSummons || 0));
+  const restrictedNeeded = Math.max(0, records.length - unrestrictedSlots);
+  if (restrictedNeeded <= 0) return true;
+  const restrictedSlots = getRestrictedNormalSummonSlots(player);
+  return maxRestrictedAssignments(records, restrictedSlots) >= restrictedNeeded;
+}
+
+export function recordNormalSummonForTurn(player, card) {
+  if (!player) return;
+  if (!Array.isArray(player.normalSummonsThisTurn)) {
+    player.normalSummonsThisTurn = [];
+  }
+  player.normalSummonsThisTurn.push(createNormalSummonRecord(card));
+}
 
 export default class Player {
   constructor(id, name, controllerType = "human") {
@@ -18,6 +186,7 @@ export default class Player {
     this.controllerType = controllerType; // "human" | "ai"
     this.lp = 8000;
     this.lpGainedThisTurn = 0;
+    this.damageReceivedThisTurn = 0;
     this.deck = [];
     this.extraDeck = [];
     this.hand = [];
@@ -28,6 +197,9 @@ export default class Player {
     this.fieldSpell = null;
     this.summonCount = 0;
     this.additionalNormalSummons = 0; // Extra normal summons granted this turn
+    this.additionalNormalSummonPermissions = [];
+    this.normalSummonsThisTurn = [];
+    this.specialSummonRestrictions = [];
     this.forbidDirectAttacksThisTurn = false;
     this.maxDeckSize = 30;
     this.minDeckSize = 20;
@@ -42,6 +214,7 @@ export default class Player {
     const copies = {};
 
     const addCard = (data) => {
+      if (isExtraDeckMonsterData(data)) return;
       copies[data.id] = copies[data.id] || 0;
       if (copies[data.id] >= 3 || this.deck.length >= maxDeckSize) return;
       this.deck.push(new Card(data, this.id));
@@ -70,9 +243,8 @@ export default class Player {
 
       while (this.deck.length < targetSize) {
         for (const data of cardDatabase) {
-          // Avoid pulling Fusion monsters into the main deck when topping up
-          if (data.monsterType === "fusion" || data.monsterType === "ascension")
-            continue;
+          // Avoid pulling Extra Deck monsters into the main deck when topping up
+          if (isExtraDeckMonsterData(data)) continue;
           addCard(data);
           if (this.deck.length >= targetSize) break;
         }
@@ -102,10 +274,7 @@ export default class Player {
 
     const copies = new Set();
     const pushExtraDeckMonster = (data) => {
-      if (
-        !data ||
-        (data.monsterType !== "fusion" && data.monsterType !== "ascension")
-      ) {
+      if (!isExtraDeckMonsterData(data)) {
         return;
       }
       if (copies.has(data.id)) return;
@@ -226,7 +395,7 @@ export default class Player {
       );
     }
 
-    if (this.summonCount >= 1 + this.additionalNormalSummons) {
+    if (!canUseNormalSummonForCard(this, card)) {
       return failSummon(
         "Summon limit reached for this turn.",
         "SUMMON_LIMIT_REACHED",
@@ -368,6 +537,7 @@ export default class Player {
       card.summonedTurn = this.game?.turnCounter || null;
       this.field.push(card);
       this.summonCount++;
+      recordNormalSummonForTurn(this, card);
 
       // 🔧 FIX: Clear targeting cache after Normal Summon to ensure new monsters
       // are visible for field spell effects and other targeting

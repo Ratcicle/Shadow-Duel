@@ -145,6 +145,9 @@ function matchesCardFilters(card, filters, ctx) {
 
   if (filters.requireFaceup && card.isFacedown) return false;
   if (filters.faceUp && card.isFacedown) return false;
+  if (filters.isTuner !== undefined) {
+    if ((card.isTuner === true) !== Boolean(filters.isTuner)) return false;
+  }
 
   if (filters.position && filters.position !== "any") {
     if (card.position !== filters.position) return false;
@@ -736,6 +739,55 @@ export async function handleRegisterTemporaryEventEffect(
     );
   }
   game.temporaryEventEffects.push(entry);
+  return true;
+}
+
+export async function handleRegisterSynchroMaterialFollowup(
+  action,
+  ctx,
+  targets,
+  engine,
+) {
+  const game = engine?.game;
+  const player = ctx?.player || null;
+  const source = ctx?.source || null;
+  const actionContext =
+    ctx?.actionContext ||
+    ctx?.activationContext?.actionContext ||
+    ctx?.activationContext ||
+    {};
+  const synchroSummonContextId =
+    action.synchroSummonContextId ||
+    actionContext.synchroSummonContextId ||
+    null;
+  const actions = Array.isArray(action?.actions) ? action.actions : [];
+
+  if (!game || !player || !source || !synchroSummonContextId) {
+    return false;
+  }
+  if (actions.length === 0) return false;
+
+  const entry = {
+    id:
+      action.uniqueKey ||
+      `${source.instanceId || source.id || source.name}:${
+        ctx?.effect?.id || action.type
+      }:${Math.random().toString(36).slice(2, 9)}`,
+    type: "synchro_material_followup",
+    synchroSummonContextId,
+    ownerId: player.id || null,
+    source,
+    sourceName: action.sourceName || source.name,
+    sourceCardId: source.id ?? null,
+    sourceInstanceId: getCardInstanceId(source),
+    sourceEffectId: ctx?.effect?.id || null,
+    actions,
+  };
+
+  if (!Array.isArray(game.pendingSynchroMaterialFollowups)) {
+    game.pendingSynchroMaterialFollowups = [];
+  }
+  game.pendingSynchroMaterialFollowups.push(entry);
   return true;
 }
 

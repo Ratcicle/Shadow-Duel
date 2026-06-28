@@ -40,10 +40,12 @@ Campos básicos:
 
 Campos comuns por tipo:
 
-- Monstros: `atk`, `def`, `level`, `type`, `types`, `archetype`, `archetypes`.
+- Monstros: `atk`, `def`, `level`, `type`, `types`, `archetype`,
+  `archetypes`, `isTuner`, `synchroMaterialRoles`.
 - Spells/Traps: `subtype`, normalmente `normal`, `continuous`, `field`,
   `equip`, `quick` ou `counter`.
-- Extra Deck: use `monsterType: "fusion"` ou `monsterType: "ascension"`.
+- Extra Deck: use `monsterType: "fusion"`, `monsterType: "synchro"` ou
+  `monsterType: "ascension"`.
 - Materiais de Tributo especiais: use `tributeValue` no card que sera oferecido
   como Tributo quando ele puder contar como mais de 1 Tributo.
 
@@ -79,6 +81,8 @@ tributeValue: {
 | `301-350` | `src/data/cards/arcanist.js` | Arcanist |
 | `351-400` | `src/data/cards/miragebound.js` | Miragebound |
 | `401-450` | `src/data/cards/bloomrot.js` | Bloomrot |
+| `451-500` | `src/data/cards/burningWest.js` | Burning West |
+| `501-550` | `src/data/cards/techZero.js` | Tech-Zero |
 
 `Polymerization` e staples compartilhadas ficam em `001-100`. Dragon e
 `Extreme Dragons` compartilham o mesmo modulo e a mesma faixa; `Extreme Dragons`
@@ -150,8 +154,9 @@ Eventos aceitos pelo validador:
 | --- | --- | --- |
 | `after_summon` | Depois de uma invocação. | `summonMethods`, `summonFrom`, `requireSelfAsSummoned`, `requireOpponentSummon`, `condition.requires: "self_in_hand"`, `condition.triggerArchetype`. |
 | `battle_destroy` | Monstro destruído em batalha. | `requireSelfAsAttacker`, `requireSelfAsDestroyed`, `requireDestroyedIsOpponent`, `conditions: [{ type: "attacker_matches" }]`. |
-| `card_to_grave` | Carta enviada ao Cemitério. | `fromZone`, `requireSelfAsDestroyed`, `condition.type: "destroyed_by_battle"`, `"destroyed_by_effect"` ou `"destroyed_by_battle_or_effect"`. |
+| `card_to_grave` | Carta enviada ao Cemitério. | `fromZone`, `contextLabel`, `contextLabels`, `requireSelfAsDestroyed`, `conditions`, `condition.type: "destroyed_by_battle"`, `"destroyed_by_effect"` ou `"destroyed_by_battle_or_effect"`. |
 | `standby_phase` | Standby Phase do jogador ativo. | Fonte precisa estar em campo/spellTrap/fieldSpell. |
+| `end_phase` | End Phase do jogador ativo. | Fonte precisa estar em campo/spellTrap/fieldSpell; use `endPhasePlayer: "any"` para disparar em ambas End Phases. |
 | `attack_declared` | Ataque declarado. | `requireOpponentAttack`, `requireDefenderIsSelf`, `requireSelfAsDefender`, `requireSelfAsAttacker`, `requireDefenderPosition`, `requireDefenderType`. |
 | `opponent_damage` | Oponente recebe dano. | Evite targets manuais; esse fluxo espera efeitos automáticos. |
 | `before_destroy` | Antes de destruição. | Usado para substituições/negações de destruição. |
@@ -161,6 +166,13 @@ Eventos aceitos pelo validador:
 
 Se um efeito declara `event` com timing diferente de `on_event`, o validador pode
 aceitar o evento, mas registra warning. Use `event` apenas em `on_event`.
+
+Para efeitos que so devem disparar por um motivo especifico, use
+`contextLabel` ou `contextLabels`. Exemplo: triggers de material Sincro usam
+`contextLabel: "synchro_material"` e nao disparam por destruicao, descarte,
+Fusao ou Ascensao. Quando um trigger proprio precisa funcionar mesmo se a carta
+estava com efeitos negados ao sair do campo, declare
+`allowIfEffectsNegatedAtFieldExit: true`.
 
 ## Targets
 
@@ -183,6 +195,7 @@ Targets resolvem seleções antes das actions. Cada target gera uma entrada em
   maxLevel: 4,
   minAtk: 0,
   maxAtk: 2000,
+  isTuner: true,
   requireFaceup: true,
   position: "attack",              // "attack" | "defense" | "any"
   excludeCardName: "X",
@@ -233,12 +246,17 @@ atuais em `EffectEngine.evaluateConditions`:
 | `graveyardHasMatch` | Exige carta no Cemitério que bata `filters`. |
 | `control_type_min_level` | Exige monstro de tipo e nível mínimo. |
 | `attacker_matches` | Em batalha, exige atacante com owner/kind/type/archetype/level. |
+| `context_number_compare` | Compara um número do contexto, como `player.damageReceivedThisTurn`, usando `op` (`gt`, `gte`, `eq`, `neq`, `lte`, `lt`) e `value` ou `valueFromContext`. |
+| `event_card_matches_filters` | Exige que o card do evento bata `filters`; aceita `cardRef`, `owner` e `excludeSource: true` para ignorar a propria fonte do efeito. |
+| `activation_would_destroy_cards_matching_filters` | Em uma resposta de corrente, exige que a ativação inspecionada destruiria pelo menos `minCount` cards que batem `destroyedCardFilters`; use `destroyedCardZones` para limitar a checagem a zonas como `field`, `spellTrap` e `fieldSpell`. |
+| `activation_would_make_card_leave_field` | Em uma resposta de corrente, exige que a ativacao inspecionada faria o card em `cardRef`/`targetRef` sair de uma zona ativa (`field`, `spellTrap`, `fieldSpell`). Cobre destruicao, banimento, retorno a mao, movimentos para Cemiterio/Deck/Extra Deck/banido e actions aninhadas. |
+| `field_card_count` | Conta cards em `zones` que batem `filters`; aceita `owner`, `count`/`min`/`max`, `requireFaceup` e `excludeSource: true` para ignorar a fonte do efeito. |
 | `source_counters_at_least` | Exige counters na fonte. |
 
 Filtros usados por conditions e actions geralmente passam por `cardMatchesFilters`:
 `id`, `cardId`, `ids`, `cardIds`, `name`, `cardName`, `cardKind`, `subtype`,
 `monsterType`, `type`, `archetype`, `level`, `levelOp` (`eq`, `lte`, `gte`,
-`lt`, `gt`) e `equippedWithFilters`.
+`lt`, `gt`), `isTuner` e `equippedWithFilters`.
 
 `condition` singular é legado, ainda usado em alguns triggers:
 
@@ -272,13 +290,64 @@ Actions comuns:
 { type: "pay_lp", amount: 1000 }
 { type: "destroy", targetRef: "target_id" }
 { type: "move", targetRef: "target_id", player: "self", to: "hand" }
+{ type: "modify_level", targetRef: "target_id", amount: -1 }
+{ type: "add_status", targetScope: { owner: "opponent", zones: ["field"], requireFaceup: true }, status: "effectsNegated" }
+{ type: "negate_activation", storeNegatedCardAs: "negated_card" }
+{ type: "set_attack_limit_from_zone_count", targetRef: "self", owner: "self", zone: "graveyard", filters: { cardKind: "monster", isTuner: true } }
 { type: "add_from_zone_to_hand", zone: "deck", filters: { archetype: "Void" }, count: { min: 1, max: 1 } }
 { type: "special_summon_from_zone", zone: "graveyard", filters: { cardKind: "monster" }, position: "choice" }
+{ type: "schedule_special_summon", cardRef: "self", fromZone: "graveyard", phase: "end", triggerPlayer: "current" }
+{ type: "special_summon_token", position: "choice", cannotAttackThisTurn: false, token: { name: "Token", atk: 500, def: 500 } }
 ```
 
 `targetRef` aponta para um target resolvido. Algumas actions também aceitam
 `filters`, `zone`, `count` e `promptPlayer` para fazer seleção própria; confira
 o catálogo e o handler antes de reutilizar uma action complexa.
+
+`add_status` aceita `targetRef` para alvos resolvidos ou `targetScope` para
+aplicar um status em massa a cards em zonas ativas. Use `targetScope` para
+efeitos como "negue todos os cards com a face para cima que o oponente
+controla".
+
+`negate_activation` nega apenas a ativacao/efeito atual da corrente. Ela respeita
+passives de `activation_negation_protection` e, com `storeNegatedCardAs`, expoe
+o card/fonte negado para actions seguintes, por exemplo banir o card negado sob
+uma `conditional_actions`.
+
+`special_summon_from_zone` aceita `fieldSlotsFreedBeforeSummon` apenas para
+pre-checagem quando uma action anterior da mesma resolução abre zona antes da
+Invocação-Especial.
+
+`set_attack_limit_from_zone_count` fixa o total de ataques que o alvo pode
+declarar neste turno para a quantidade de cards que batem `filters` na `zone`
+do `owner` escolhido. A contagem é travada na resolução; mudanças posteriores
+na zona não recalculam o limite.
+
+`move` pode guardar resultado para actions seguintes. Use `storeResultAs` para
+expor as cartas efetivamente movidas como alvo interno em `ctx._actionTargets`, e
+`storeLevelSumAs` para salvar em `ctx` a soma dos Niveis das cartas movidas com
+sucesso. Isso permite compor `move` + `shuffle_deck` + `buff_stats_temp` sem
+handler especifico de carta:
+
+```js
+[
+  {
+    type: "move",
+    targetRef: "recycle_targets",
+    player: "self",
+    fromZone: "graveyard",
+    to: "deck",
+    storeResultAs: "recycled_cards",
+    storeLevelSumAs: "recycledLevelSum"
+  },
+  { type: "shuffle_deck", player: "self" },
+  {
+    type: "buff_stats_temp",
+    targetRef: "self",
+    atkBoostFromContext: { key: "recycledLevelSum", multiplier: 100 }
+  }
+]
+```
 
 `applyActions` filtra alvos imunes antes do handler. Por padrão usa
 `immunityMode: "skip_targets"`; use `immunityMode: "skip_action"` se qualquer
@@ -309,11 +378,17 @@ Tipos suportados atualmente:
 - `field_presence_type_summon_count_buff`: buff por invocações de tipo feitas
   enquanto a fonte esteve face-up no campo.
 - `archetype_count_buff`: buff por quantidade de cartas de arquétipo no campo.
+- `conditional_protection`: protege a própria fonte contra tipos como
+  `effect_destruction` enquanto suas conditions passarem; a proteção não
+  funciona se os efeitos da fonte estiverem negados.
+- `banish_protection`: impede que cards em `targetScope` sejam movidos para
+  `banished`; use `excludeSelf: true` quando a própria fonte não deve ser
+  protegida.
 
 Campos comuns de buff: `amountPerCard`, `perCard`, `buffPerCard`, `stats`,
 `owners`/`countOwners`, `cardKinds`, `includeSelf`, `requireFaceup`.
 
-## Fusion e Ascension
+## Fusion, Synchro e Ascension
 
 Fusion:
 
@@ -328,6 +403,96 @@ Fusion:
 ```
 
 `polymerization_fusion_summon` usa `fusionMaterials` para validar materiais.
+
+Synchro:
+
+```js
+{
+  monsterType: "synchro",
+  level: 4
+}
+```
+
+Por padrao, a Invocacao-Sincro usa regras classicas: materiais devem estar
+face-up no campo, exatamente 1 Regulador (`isTuner: true`) + 1 ou mais
+nao-Reguladores, e a soma dos Niveis deve ser exatamente igual ao Nivel do
+monstro Sincro. Metadados `synchro` sao opcionais para futuras restricoes; sem
+eles, esse contrato default e usado.
+
+Use `synchro.materialFilters` quando o monstro Sincro restringir materiais:
+
+```js
+{
+  monsterType: "synchro",
+  synchro: {
+    tunerCount: 1,
+    nonTunerMin: 1,
+    materialFilters: {
+      tuner: { archetype: "Tech-Zero", isTuner: true },
+      nonTuner: { type: "Machine" }
+    }
+  }
+}
+```
+
+Um monstro tambem pode declarar papeis alternativos enquanto e usado como
+material Sincro. Exemplo: um Regulador que tambem pode contar como
+nao-Regulador apenas para Sincros de seu arquetipo:
+
+```js
+{
+  isTuner: true,
+  synchroMaterialRoles: {
+    nonTunerFor: [{ archetype: "Tech-Zero", monsterType: "synchro" }]
+  }
+}
+```
+
+Essa regra conta como efeito ativo do material no campo: se os efeitos do
+material estiverem negados, o papel alternativo nao fica disponivel. A carta
+continua podendo usar triggers de "enviado como Materia Sincro" se o efeito
+declarar `allowIfEffectsNegatedAtFieldExit: true`.
+
+Triggers de Matéria Sincro que precisam afetar o monstro Invocado por aquela
+mesma Invocação-Sincro devem usar `register_synchro_material_followup`. O
+follow-up recebe o alvo interno `synchro_summoned_card` e resolve depois que o
+monstro Sincro entra no campo, mas antes dos triggers de `after_summon`:
+
+```js
+{
+  timing: "on_event",
+  event: "card_to_grave",
+  fromZone: "field",
+  contextLabel: "synchro_material",
+  allowIfEffectsNegatedAtFieldExit: true,
+  actions: [{
+    type: "register_synchro_material_followup",
+    actions: [{
+      type: "grant_protection",
+      targetRef: "synchro_summoned_card",
+      protectionType: "effect_destruction",
+      duration: "end_of_next_turn",
+      sourceOwner: "opponent"
+    }]
+  }]
+}
+```
+
+Esse follow-up deve usar alvos de contexto ja determinados pelo procedimento;
+evite selecao manual nessa janela pre-`after_summon`.
+
+Monstros Invocados por Invocacao-Sincro guardam em runtime
+`synchroMaterials`, com `instanceId`, nome, nivel, papel de Regulador e dono dos
+materiais usados. Esse rastro pode ser consumido por actions genericas como
+`de_synchro`, que devolve um Sincro ao Deck Adicional e so revive os materiais
+se todos os cards fisicos registrados estiverem no Cemiterio do jogador que
+ativou o efeito e houver zonas livres para todos.
+
+Efeitos que fazem uma Invocacao-Sincro imediatamente durante a resolucao usam
+`synchro_summon_from_extra_deck`. A action reutiliza o procedimento Sincro real:
+seleciona um monstro Sincro do Deck Adicional, seleciona materiais no campo, envia
+os materiais com `contextLabel: "synchro_material"` e Invoca o monstro com
+metodo/procedimento `"synchro"`.
 
 Ascension:
 
@@ -443,7 +608,8 @@ Ignition com target e custo:
 6. Efeitos opcionais usam `promptUser`/`promptMessage` quando fazem sentido.
 7. Efeitos por turno/duelo usam `oncePerTurnName`/`oncePerDuelName` estáveis.
 8. Movement usa handlers/actions que preservam eventos e invariantes.
-9. Extra Deck define `fusionMaterials` ou `ascension` completo.
+9. Extra Deck usa `monsterType` correto; Fusion define `fusionMaterials`,
+   Synchro pode usar a regra default, e Ascension define `ascension` completo.
 10. A carta funciona no deck builder e no duelo real.
 11. Rode o jogo e confira se o validador de database não bloqueia o duelo.
 

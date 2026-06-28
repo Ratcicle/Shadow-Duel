@@ -29,6 +29,9 @@ export {
   handleDrawAndSummon,
   handleAbyssalSerpentDelayedSummon,
   handleSpecialSummonFromDeckWithCounterLimit,
+  handleRestrictSpecialSummons,
+  handleDeSynchro,
+  handleSynchroSummonFromExtraDeck,
 
   // Destruction handlers
   handleBanish,
@@ -50,7 +53,9 @@ export {
   handleSwitchDefenderPositionOnAttack,
   handlePermanentBuffNamed,
   handleRemovePermanentBuffNamed,
+  handleNegateActivation,
   handleNegateSummonOrActivationAndDestroy,
+  handleRegisterSynchroMaterialFollowup,
 
   // Resources handlers
   handlePayLP,

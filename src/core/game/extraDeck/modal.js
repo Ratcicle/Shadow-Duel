@@ -170,6 +170,14 @@ function isAscensionExtraDeckCard(card) {
   );
 }
 
+function isSynchroExtraDeckCard(card) {
+  return (
+    card &&
+    card.cardKind === "monster" &&
+    card.monsterType === "synchro"
+  );
+}
+
 function buildAscensionMaterialCandidates(game, ascensionCard, player) {
   if (!game || !isAscensionExtraDeckCard(ascensionCard) || !player) {
     return [];
@@ -315,6 +323,8 @@ export function canSummonExtraDeckCardByProcedure(card, player, options = {}) {
   const fieldCheck = this.canPlaceCardOnField?.(card, player, {
     isFacedown: false,
     excludeCards: fieldCheckExclusions,
+    summonMethod: procedure.type === "contact_fusion" ? "fusion" : procedure.type,
+    summonProcedure: procedure.type,
     silent: options.silent !== false,
   });
   if (fieldCheck?.ok === false) {
@@ -366,6 +376,8 @@ export function canSummonAscensionCardFromExtraDeck(card, player, options = {}) 
     check: this.canPlaceCardOnField?.(card, player, {
       isFacedown: false,
       excludeCards: [material],
+      summonMethod: "ascension",
+      summonProcedure: "ascension",
       silent: options.silent !== false,
     }) || { ok: true },
   }));
@@ -404,6 +416,14 @@ export function canSummonExtraDeckCard(card, player, options = {}) {
 
   if (isAscensionExtraDeckCard(card)) {
     return this.canSummonAscensionCardFromExtraDeck(card, player, options);
+  }
+
+  if (isSynchroExtraDeckCard(card)) {
+    return this.canSummonSynchroCard?.(player, card, options) || {
+      ok: false,
+      reason: "No Synchro summon procedure.",
+      type: "synchro",
+    };
   }
 
   return { ok: false, reason: null, type: "none" };
@@ -651,6 +671,8 @@ export function openExtraDeckModal(player) {
       if (check?.ok !== true) return;
       if (check.type === "ascension") {
         await this.performAscensionSummonFromExtraDeck(card, player);
+      } else if (check.type === "synchro") {
+        await this.performSynchroSummonFromExtraDeck(card, player);
       } else {
         await this.performExtraDeckSummonProcedure(card, player);
       }

@@ -159,6 +159,15 @@ async function performSummonFromDeck(
     return false;
   }
 
+  const restrictionCheck = game?.canSpecialSummonUnderRestrictions?.(card, player, {
+    summonMethod: "special",
+    fromZone: "deck",
+    silent: false,
+  });
+  if (restrictionCheck?.ok === false) {
+    return false;
+  }
+
   const summonPosition = await engine.chooseSpecialSummonPosition(
     card,
     player,

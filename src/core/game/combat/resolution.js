@@ -3,6 +3,11 @@
  * Extracted from Game.js as part of B.5 modularization.
  */
 
+import {
+  getMonsterAttackLimit,
+  hasExplicitAttackLimitThisTurn,
+} from "./availability.js";
+
 function clearDamageCalculationTempBuffs(game) {
   const buffs = game?.damageCalculationTempBuffs;
   if (game) {
@@ -439,18 +444,12 @@ export async function resolveCombat(attacker, target, options = {}) {
 
   const attacksUsed =
     availability.attacksUsed ?? attacker.attacksUsedThisTurn ?? 0;
-  let _extraAttacks = attacker.extraAttacks || 0;
-  if (attacker.dynamicExtraAttacks?.source === "graveyard_count") {
-    const dea = attacker.dynamicExtraAttacks;
-    const owner = attacker.owner === "player" ? this.player : this.bot;
-    const dynamicAttackLimit = (owner?.graveyard || []).filter(
-      (c) => c && c.name === dea.name,
-    ).length;
-    _extraAttacks = dynamicAttackLimit - 1;
-  }
-  const baseMaxAttacks = 1 + _extraAttacks;
+  const baseMaxAttacks = this.getMonsterAttackLimit
+    ? this.getMonsterAttackLimit(attacker)
+    : getMonsterAttackLimit.call(this, attacker);
   const maxAttacks = availability.maxAttacks ?? baseMaxAttacks;
   const usingSecondAttack =
+    !hasExplicitAttackLimitThisTurn(attacker) &&
     attacker.canMakeSecondAttackThisTurn &&
     !attacker.secondAttackUsedThisTurn &&
     attacksUsed >= maxAttacks;
@@ -619,17 +618,9 @@ export async function resolveCombat(attacker, target, options = {}) {
 
   if (this.lastAttackNegated) {
     attacker.attacksUsedThisTurn = (attacker.attacksUsedThisTurn || 0) + 1;
-    // Check if all attacks are exhausted, considering extraAttacks
-    let extraAttacks = attacker.extraAttacks || 0;
-    if (attacker.dynamicExtraAttacks?.source === "graveyard_count") {
-      const dea = attacker.dynamicExtraAttacks;
-      const owner = attacker.owner === "player" ? this.player : this.bot;
-      const dynamicAttackLimit = (owner?.graveyard || []).filter(
-        (c) => c && c.name === dea.name,
-      ).length;
-      extraAttacks = dynamicAttackLimit - 1;
-    }
-    const maxAttacks = 1 + extraAttacks;
+    const maxAttacks = this.getMonsterAttackLimit
+      ? this.getMonsterAttackLimit(attacker)
+      : getMonsterAttackLimit.call(this, attacker);
     // For multi-attack mode, don't block further attacks when one is negated
     if (!attacker.canAttackAllOpponentMonstersThisTurn) {
       attacker.hasAttacked = attacker.attacksUsedThisTurn >= maxAttacks;

@@ -34,6 +34,7 @@ export {
   collectBattleCompletedTriggers,
   collectAttackDeclaredTriggers,
   collectBattleDamageTriggers,
+  collectEndPhaseTriggers,
   collectLpChangeTriggers,
   collectEffectTargetedTriggers,
   collectCardEquippedTriggers,

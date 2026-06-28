@@ -29,6 +29,10 @@ export function captureTrapMonsterOriginalState(card) {
     cardKind: card.cardKind || null,
     subtype: card.subtype || null,
     monsterType: card.monsterType || null,
+    isTuner: card.isTuner === true,
+    synchroMaterialRoles: card.synchroMaterialRoles
+      ? JSON.parse(JSON.stringify(card.synchroMaterialRoles))
+      : null,
     type: card.type || null,
     types: Array.isArray(card.types) ? [...card.types] : null,
     attribute: card.attribute || null,
@@ -48,6 +52,10 @@ export function restoreTrapMonsterOriginalState(card) {
   card.cardKind = original.cardKind || card.originalCardKind || "trap";
   card.subtype = original.subtype || card.subtype || null;
   card.monsterType = original.monsterType || null;
+  card.isTuner = original.isTuner === true;
+  card.synchroMaterialRoles = original.synchroMaterialRoles
+    ? JSON.parse(JSON.stringify(original.synchroMaterialRoles))
+    : null;
   card.type = original.type || undefined;
   if (Array.isArray(original.types)) {
     card.types = [...original.types];
@@ -77,6 +85,10 @@ export default class Card {
     this.cardKind = data.cardKind || "monster"; // monster | spell | trap
     this.subtype = data.subtype || null; // normal | quick | continuous | counter | etc
     this.monsterType = data.monsterType || null; // fusion, synchro, etc.
+    this.isTuner = data.isTuner === true;
+    this.synchroMaterialRoles = data.synchroMaterialRoles
+      ? JSON.parse(JSON.stringify(data.synchroMaterialRoles))
+      : null;
 
     // Archetypes support
     this.archetypes = Array.isArray(data.archetypes)
@@ -105,6 +117,8 @@ export default class Card {
     this.dynamicExtraAttacks = data.dynamicExtraAttacks
       ? JSON.parse(JSON.stringify(data.dynamicExtraAttacks))
       : null;
+    this.attackLimitThisTurn = null;
+    this.attackLimitDuration = null;
     this.attacksUsedThisTurn = 0;
 
     this.tempAtkBoost = 0;
@@ -220,6 +234,9 @@ export default class Card {
     } else {
       this.ascension = null;
     }
+    this.synchro = data.synchro
+      ? JSON.parse(JSON.stringify(data.synchro))
+      : null;
     this.image = data.image;
     this.owner = owner;
   }

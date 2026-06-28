@@ -19,6 +19,7 @@ const SELECTION_KIND_LABELS = {
     spell: "Spell",
     trap: "Trap",
     fusion: "Fusion",
+    synchro: "Synchro",
     ascension: "Ascension",
   },
   "pt-br": {
@@ -26,6 +27,7 @@ const SELECTION_KIND_LABELS = {
     spell: "Magia",
     trap: "Armadilha",
     fusion: "Fusão",
+    synchro: "Sincro",
     ascension: "Ascensão",
   },
 };
@@ -63,6 +65,7 @@ export function getSelectionCardTypeClass(card) {
   if (card?.cardKind === "trap") return "selection-card--trap";
   const monsterType = String(card?.monsterType || "").toLowerCase();
   if (monsterType === "fusion") return "selection-card--fusion";
+  if (monsterType === "synchro") return "selection-card--synchro";
   if (monsterType === "ascension") return "selection-card--ascension";
   return "selection-card--monster";
 }
@@ -71,7 +74,9 @@ function getSelectionTypeLine(card) {
   if (card?.cardKind === "monster") {
     const monsterType = String(card?.monsterType || "").toLowerCase();
     const kind =
-      monsterType === "fusion" || monsterType === "ascension"
+      monsterType === "fusion" ||
+      monsterType === "synchro" ||
+      monsterType === "ascension"
         ? getSelectionLabel(monsterType)
         : getSelectionLabel("monster");
     const race = getMonsterTypeDisplayName(card);

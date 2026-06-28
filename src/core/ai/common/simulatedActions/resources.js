@@ -387,8 +387,24 @@ export function applyGrantAdditionalNormalSummon(ctx) {
     applySimulatedActions,
   } = ctx;
   const targetPlayer = resolveActionPlayer(action, self, opponent);
-  targetPlayer.additionalNormalSummons =
-    (targetPlayer.additionalNormalSummons || 0) +
-    (Number.isFinite(action.count) ? action.count : 1);
+  const rawCount = Number(action.count ?? 1);
+  const count = Number.isFinite(rawCount) ? Math.max(1, rawCount) : 1;
+  const filters = { ...(action.filters || {}) };
+  if (action.archetype && !filters.archetype) filters.archetype = action.archetype;
+  if (action.cardKind && !filters.cardKind) filters.cardKind = action.cardKind;
+
+  if (Object.keys(filters).length > 0) {
+    targetPlayer.additionalNormalSummonPermissions =
+      targetPlayer.additionalNormalSummonPermissions || [];
+    targetPlayer.additionalNormalSummonPermissions.push({
+      count,
+      filters,
+      sourceCardName: ctx?.source?.name || null,
+      effectId: ctx?.effect?.id || null,
+    });
+  } else {
+    targetPlayer.additionalNormalSummons =
+      (targetPlayer.additionalNormalSummons || 0) + count;
+  }
   return;
 }

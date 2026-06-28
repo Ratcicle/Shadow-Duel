@@ -189,6 +189,8 @@ export async function performFusionSummon(
   const limitCheck = this.canPlaceCardOnField?.(fusionMonster, activePlayer, {
     isFacedown: false,
     excludeCards: materials,
+    summonMethod: "fusion",
+    summonProcedure: "fusion",
   });
   if (limitCheck && limitCheck.ok === false) {
     return false;
@@ -241,7 +243,11 @@ export async function performFusionSummon(
   const postMaterialLimitCheck = this.canPlaceCardOnField?.(
     fusionMonster,
     activePlayer,
-    { isFacedown: false },
+    {
+      isFacedown: false,
+      summonMethod: "fusion",
+      summonProcedure: "fusion",
+    },
   );
   if (postMaterialLimitCheck && postMaterialLimitCheck.ok === false) {
     return false;
@@ -327,6 +333,7 @@ export async function performSpecialSummon(handIndex, position, actor = this.pla
 
   const limitCheck = this.canPlaceCardOnField?.(card, player, {
     isFacedown: false,
+    summonMethod: "special",
   });
   if (limitCheck && limitCheck.ok === false) {
     return;

@@ -9,6 +9,7 @@ export { collectCardToGraveTriggers } from "./cardToGrave.js";
 export { collectCounterRemovedTriggers } from "./counterRemoved.js";
 export { collectEffectActivatedTriggers } from "./effectActivated.js";
 export { collectEffectTargetedTriggers } from "./effectTargeted.js";
+export { collectEndPhaseTriggers } from "./endPhase.js";
 export { collectLpChangeTriggers } from "./lpChange.js";
 export { collectPositionChangeTriggers } from "./positionChange.js";
 export { collectSpellActivatedTriggers } from "./spellActivated.js";

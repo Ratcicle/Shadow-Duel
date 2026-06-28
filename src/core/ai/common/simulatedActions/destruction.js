@@ -147,6 +147,7 @@ function buildScopeFilters(scope = {}) {
     "maxDef",
     "position",
     "isToken",
+    "isTuner",
   ].forEach((key) => {
     if (scope[key] !== undefined && filters[key] === undefined) {
       filters[key] = scope[key];

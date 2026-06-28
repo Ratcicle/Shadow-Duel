@@ -4,7 +4,7 @@
 
 Este catalogo descreve o contrato declarativo de cada `action.type` registrado no Shadow Duel. O runtime continua vindo de `src/core/actionHandlers/wiring.js`; este documento serve para criar cartas, revisar handlers e validar o banco de cartas.
 
-Total de actions catalogadas: 87.
+Total de actions catalogadas: 104.
 
 ## Recursos
 
@@ -30,7 +30,9 @@ Adds selected cards from a zone to hand.
 | `archetype` | nao | string |  |
 | `cardKind` | nao | stringOrArray |  |
 | `cardName` | nao | string |  |
+| `monsterType` | nao | stringOrArray |  |
 | `isToken` | nao | boolean |  |
+| `isTuner` | nao | boolean |  |
 | `minAtk` | nao | number |  |
 | `maxAtk` | nao | number |  |
 | `minDef` | nao | number |  |
@@ -38,10 +40,20 @@ Adds selected cards from a zone to hand.
 | `minLevel` | nao | number |  |
 | `maxLevel` | nao | number |  |
 | `requireSource` | nao | boolean |  |
+| `cardId` | nao | number |  |
+| `cardIds` | nao | array |  |
 | `excludeName` | nao | string |  |
 | `excludeCardName` | nao | string |  |
 | `excludeCardNames` | nao | array |  |
 | `excludeNameRef` | nao | string |  |
+| `excludeTargetRef` | nao | string |  |
+| `excludeTargetRefs` | nao | array |  |
+| `markAddedCards` | nao | object |  |
+| `resultRef` | nao | string |  |
+| `storeResultAs` | nao | string |  |
+| `selectionId` | nao | string |  |
+| `selectionLabel` | nao | string |  |
+| `selectionMessage` | nao | string |  |
 
 **Exemplos**
 
@@ -128,6 +140,49 @@ Deals LP damage based on the destroyed monster's ATK.
 
 _Sem notas._
 
+### `discard_from_hand`
+
+Makes the affected player choose cards from their own hand and discard them.
+
+- Handler: `handleDiscardFromHand`
+- Target: `none`
+- Selecao: `dynamic`
+- Mutacoes: hand, graveyard
+- Eventos emitidos: card_moved, card_to_grave
+- Atualiza board: sim
+- Preview: `covered`
+
+| Campo | Obrigatorio | Contrato | Descricao |
+| --- | --- | --- | --- |
+| `player` | nao | enum: self, opponent | Perspective for the action: "self" or "opponent". |
+| `count` | nao | object | Selection count object, usually { min, max }. |
+| `chooser` | nao | string |  |
+| `contextLabel` | nao | string |  |
+| `selectionId` | nao | string |  |
+| `selectionLabel` | nao | string |  |
+| `selectionMessage` | nao | string |  |
+| `filters` | nao | object | Card filter object evaluated by the handler. |
+| `promptPlayer` | nao | boolean |  |
+
+**Exemplos**
+
+```json
+{
+  "type": "discard_from_hand",
+  "player": "opponent",
+  "count": {
+    "min": 1,
+    "max": 1
+  },
+  "chooser": "affected",
+  "contextLabel": "discard"
+}
+```
+
+**Notas**
+
+- When chooser is "affected", the owner of the hand makes the choice; AI choices use AutoSelector.
+
 ### `draw`
 
 Draws cards.
@@ -174,6 +229,9 @@ Grants extra Normal Summons.
 | Campo | Obrigatorio | Contrato | Descricao |
 | --- | --- | --- | --- |
 | `count` | nao | number |  |
+| `filters` | nao | object | Card filter object evaluated by the handler. |
+| `archetype` | nao | string |  |
+| `cardKind` | nao | any |  |
 
 **Exemplos**
 
@@ -181,6 +239,16 @@ Grants extra Normal Summons.
 {
   "type": "grant_additional_normal_summon",
   "count": 1
+}
+```
+```json
+{
+  "type": "grant_additional_normal_summon",
+  "count": 1,
+  "filters": {
+    "cardKind": "monster",
+    "archetype": "Tech-Zero"
+  }
 }
 ```
 
@@ -528,7 +596,9 @@ Searches a card to hand, then optionally Special Summons that same card from han
 | `archetype` | nao | string |  |
 | `cardKind` | nao | stringOrArray |  |
 | `cardName` | nao | string |  |
+| `monsterType` | nao | stringOrArray |  |
 | `isToken` | nao | boolean |  |
+| `isTuner` | nao | boolean |  |
 | `minAtk` | nao | number |  |
 | `maxAtk` | nao | number |  |
 | `minDef` | nao | number |  |
@@ -642,7 +712,7 @@ _Sem notas._
 Moves target cards to another zone.
 
 - Handler: `proxy:applyMove`
-- Target: `required`
+- Target: `optional`
 - Selecao: `usesTargets`
 - Mutacoes: zones
 - Eventos emitidos: after_summon, card_to_grave, card_moved
@@ -651,14 +721,22 @@ Moves target cards to another zone.
 
 | Campo | Obrigatorio | Contrato | Descricao |
 | --- | --- | --- | --- |
-| `targetRef` | sim | string | References an effect target id or a context target such as self. |
 | `to` | sim | zone; valores: deck, hand, field, graveyard, spellTrap, fieldSpell, extraDeck, banish, banished | Destination zone. |
+| `targetRef` | nao | string | References an effect target id or a context target such as self. |
+| `targetScope` | nao | object |  |
 | `player` | nao | enum: self, opponent | Perspective for the action: "self" or "opponent". |
+| `fromZone` | nao | zone; valores: deck, hand, field, graveyard, spellTrap, fieldSpell, extraDeck, banish, banished | Zone to read from or remove from. |
 | `isFacedown` | nao | boolean |  |
 | `resetAttackFlags` | nao | boolean |  |
+| `preservePosition` | nao | boolean |  |
+| `allowEmpty` | nao | boolean |  |
 | `allowExtraDeckMonsterToHand` | nao | boolean |  |
 | `allowExtraDeckMonsterToHandIf` | nao | object | Optional condition that lets an Extra Deck monster pass through hand instead of redirecting to Extra Deck. |
+| `skipSendToGraveReplacement` | nao | boolean |  |
+| `skipSendToGraveActionReplacement` | nao | boolean |  |
 | `contextLabel` | nao | string |  |
+| `storeResultAs` | nao | string | Stores successfully moved cards as an internal target reference. |
+| `storeLevelSumAs` | nao | string | Stores the sum of the moved cards' Levels on the action context. |
 
 **Exemplos**
 
@@ -868,9 +946,47 @@ Special Summons the source from hand when condition allows it.
 
 _Sem notas._
 
+### `de_synchro`
+
+Returns a targeted Synchro Monster to the Extra Deck, then optionally Special Summons all recorded Synchro Materials from the activating player's Graveyard.
+
+- Handler: `handleDeSynchro`
+- Target: `required`
+- Selecao: `usesTargets`
+- Mutacoes: field, extraDeck, graveyard
+- Eventos emitidos: after_summon, card_moved
+- Atualiza board: sim
+- Preview: `covered`
+
+| Campo | Obrigatorio | Contrato | Descricao |
+| --- | --- | --- | --- |
+| `targetRef` | sim | string | References an effect target id or a context target such as self. |
+| `position` | nao | enum: attack, defense, choice | Battle position: "attack", "defense", or "choice". |
+| `contextLabel` | nao | string |  |
+| `reviveContextLabel` | nao | string |  |
+| `promptMessage` | nao | string |  |
+| `promptTitle` | nao | string |  |
+| `confirmLabel` | nao | string |  |
+| `cancelLabel` | nao | string |  |
+
+**Exemplos**
+
+```json
+{
+  "type": "de_synchro",
+  "targetRef": "de_synchro_target",
+  "position": "choice"
+}
+```
+
+**Notas**
+
+- The Synchro monster must have runtime `synchroMaterials` metadata recorded by a previous Synchro Summon.
+- Material revival is all-or-nothing: every recorded material must be in the activating player's Graveyard and enough Monster Zones must be available.
+
 ### `draw_and_summon`
 
-Draws cards and may Special Summon from hand.
+Draws cards and may Special Summon the drawn card from hand when it matches configured filters.
 
 - Handler: `handleDrawAndSummon`
 - Target: `none`
@@ -898,10 +1014,28 @@ Draws cards and may Special Summon from hand.
   "position": "attack"
 }
 ```
+```json
+{
+  "type": "draw_and_summon",
+  "drawAmount": 1,
+  "optional": true,
+  "position": "choice",
+  "condition": {
+    "type": "match_card_props",
+    "filters": {
+      "cardKind": "monster",
+      "archetype": "Tech-Zero",
+      "maxLevel": 4
+    }
+  }
+}
+```
 
 **Notas**
 
-_Sem notas._
+- Use condition.type: "match_card_props" with condition.filters for full cardMatchesFilters support.
+- Legacy condition fields typeName, cardKind, minLevel, and maxLevel are still supported.
+- After a successful draw, the action succeeds even if no Special Summon occurs.
 
 ### `polymerization_fusion_summon`
 
@@ -929,6 +1063,44 @@ _Sem campos alem de `type`._
 
 _Sem notas._
 
+### `restrict_special_summons`
+
+Restricts future Special Summons to cards matching required filters.
+
+- Handler: `handleRestrictSpecialSummons`
+- Target: `none`
+- Selecao: `none`
+- Mutacoes: player_state
+- Eventos emitidos: nenhum
+- Atualiza board: sim
+- Preview: `covered`
+
+| Campo | Obrigatorio | Contrato | Descricao |
+| --- | --- | --- | --- |
+| `allowedFilters` | sim | object | Required card filters. A Special Summoned card must match every active restriction. |
+| `player` | nao | enum: self, opponent | Perspective for the action: "self" or "opponent". |
+| `duration` | nao | enum: until_end_turn |  |
+| `reason` | nao | string |  |
+
+**Exemplos**
+
+```json
+{
+  "type": "restrict_special_summons",
+  "player": "self",
+  "allowedFilters": {
+    "cardKind": "monster",
+    "archetype": "Tech-Zero"
+  },
+  "duration": "until_end_turn"
+}
+```
+
+**Notas**
+
+- Restrictions are cumulative: if multiple restrictions are active, the card must pass all allowedFilters.
+- The default duration is until_end_turn.
+
 ### `schedule_return_from_banished`
 
 Schedules a banished card to return to the field at a future phase (default: end of next turn).
@@ -955,6 +1127,52 @@ Schedules a banished card to return to the field at a future phase (default: end
   "cardRef": "self",
   "delayTurns": 1,
   "returnPhase": "end"
+}
+```
+
+**Notas**
+
+_Sem notas._
+
+### `schedule_special_summon`
+
+Schedules a card to be Special Summoned from a zone during a future phase.
+
+- Handler: `handleScheduleSpecialSummon`
+- Target: `none`
+- Selecao: `none`
+- Mutacoes: delayedActions
+- Eventos emitidos: nenhum
+- Atualiza board: sim
+- Preview: `missing`
+
+| Campo | Obrigatorio | Contrato | Descricao |
+| --- | --- | --- | --- |
+| `cardRef` | nao | string |  |
+| `targetRef` | nao | string |  |
+| `fromZone` | nao | zone; valores: deck, hand, field, graveyard, spellTrap, fieldSpell, extraDeck, banish, banished | Zone to read from or remove from. |
+| `zone` | nao | zone; valores: deck, hand, field, graveyard, spellTrap, fieldSpell, extraDeck, banish, banished | Source zone used by the action. |
+| `phase` | nao | string |  |
+| `returnPhase` | nao | string |  |
+| `triggerPlayer` | nao | string |  |
+| `player` | nao | string |  |
+| `owner` | nao | string |  |
+| `summonPlayer` | nao | string |  |
+| `position` | nao | enum: attack, defense, choice |  |
+| `statusesOnSummon` | nao | array |  |
+| `summonMethod` | nao | string |  |
+| `summonProcedure` | nao | string |  |
+| `priority` | nao | number |  |
+
+**Exemplos**
+
+```json
+{
+  "type": "schedule_special_summon",
+  "cardRef": "self",
+  "fromZone": "graveyard",
+  "phase": "end",
+  "triggerPlayer": "current"
 }
 ```
 
@@ -1011,6 +1229,7 @@ Special Summons source from hand by paying a target cost.
 | --- | --- | --- | --- |
 | `costTargetRef` | nao | string |  |
 | `costDestination` | nao | zone; valores: deck, hand, field, graveyard, spellTrap, fieldSpell, extraDeck, banish, banished | Destination zone. |
+| `costMovedByEffect` | nao | boolean |  |
 | `position` | nao | enum: attack, defense, choice | Battle position: "attack", "defense", or "choice". |
 | `cannotAttackThisTurn` | nao | boolean |  |
 
@@ -1081,6 +1300,8 @@ Special Summons cards from a configured zone.
 | `targetRef` | nao | string | References an effect target id or a context target such as self. |
 | `zone` | nao | zone; valores: deck, hand, field, graveyard, spellTrap, fieldSpell, extraDeck, banish, banished | Source zone used by the action. |
 | `sourceZone` | nao | zone; valores: deck, hand, field, graveyard, spellTrap, fieldSpell, extraDeck, banish, banished | Alternative source zone used by some summon actions. |
+| `sourceOwner` | nao | enum: self, opponent |  |
+| `summonToOwner` | nao | enum: self, opponent |  |
 | `scope` | nao | enum: self, opponent, both | Player scope for the action: "self", "opponent", or "both". |
 | `filters` | nao | object | Card filter object evaluated by the handler. |
 | `count` | nao | object | Selection count object, usually { min, max }. |
@@ -1100,12 +1321,18 @@ Special Summons cards from a configured zone.
 | `cannotAttackThisTurn` | nao | boolean |  |
 | `excludeSummonRestrict` | nao | any |  |
 | `negateEffects` | nao | boolean |  |
+| `negateEffectsDuration` | nao | enum: until_end_turn, while_faceup |  |
 | `oncePerTurnName` | nao | string |  |
 | `setAtkToZeroAfterSummon` | nao | boolean |  |
 | `setDefToZeroAfterSummon` | nao | boolean |  |
 | `atkBoostAfterSummon` | nao | number |  |
 | `defBoostAfterSummon` | nao | number |  |
 | `statusesOnSummon` | nao | array |  |
+| `resultRef` | nao | string |  |
+| `storeResultAs` | nao | string |  |
+| `haltOnFailure` | nao | boolean |  |
+| `stopOnFailure` | nao | boolean |  |
+| `fieldSlotsFreedBeforeSummon` | nao | number |  |
 
 **Exemplos**
 
@@ -1143,6 +1370,7 @@ Special Summons a card matching another target's level.
 | `position` | nao | enum: attack, defense, choice | Battle position: "attack", "defense", or "choice". |
 | `cannotAttackThisTurn` | nao | boolean |  |
 | `negateEffects` | nao | boolean |  |
+| `negateEffectsDuration` | nao | enum: until_end_turn, while_faceup |  |
 
 **Exemplos**
 
@@ -1221,6 +1449,7 @@ Creates and Special Summons a token.
 | `token` | sim | object |  |
 | `player` | nao | enum: self, opponent | Perspective for the action: "self" or "opponent". |
 | `position` | nao | enum: attack, defense, choice | Battle position: "attack", "defense", or "choice". |
+| `cannotAttackThisTurn` | nao | boolean |  |
 
 **Exemplos**
 
@@ -1229,6 +1458,7 @@ Creates and Special Summons a token.
   "type": "special_summon_token",
   "player": "self",
   "position": "choice",
+  "cannotAttackThisTurn": false,
   "token": {
     "name": "Token",
     "atk": 500,
@@ -1240,6 +1470,45 @@ Creates and Special Summons a token.
 **Notas**
 
 _Sem notas._
+
+### `synchro_summon_from_extra_deck`
+
+Performs a real Synchro Summon from the Extra Deck during effect resolution using field materials.
+
+- Handler: `handleSynchroSummonFromExtraDeck`
+- Target: `none`
+- Selecao: `dynamic`
+- Mutacoes: extraDeck, field, graveyard
+- Eventos emitidos: after_summon, card_to_grave, card_moved
+- Atualiza board: sim
+- Preview: `covered`
+
+| Campo | Obrigatorio | Contrato | Descricao |
+| --- | --- | --- | --- |
+| `player` | nao | enum: self, opponent | Perspective for the action: "self" or "opponent". |
+| `filters` | nao | object | Card filter object evaluated by the handler. |
+| `candidateFilters` | nao | object | Card filter object evaluated by the handler. |
+| `position` | nao | enum: attack, defense, choice | Battle position: "attack", "defense", or "choice". |
+| `selectionMessage` | nao | string |  |
+| `allowCancel` | nao | boolean |  |
+| `previewPendingSummon` | nao | object |  |
+
+**Exemplos**
+
+```json
+{
+  "type": "synchro_summon_from_extra_deck",
+  "filters": {
+    "cardKind": "monster",
+    "monsterType": "synchro"
+  }
+}
+```
+
+**Notas**
+
+- Uses the same procedure as manual Synchro Summons: materials go to the Graveyard with `contextLabel: "synchro_material"` and the summoned monster uses method/procedure `synchro`.
+- `previewPendingSummon` can describe a prior Special Summon in the same effect so availability checks can include that future field material.
 
 ### `transmutate`
 
@@ -1494,8 +1763,8 @@ Destroys every card matching a field scope without manual targeting.
 - Handler: `handleDestroyCardsByScope`
 - Target: `none`
 - Selecao: `none`
-- Mutacoes: field, spellTrap, graveyard, deck, hand
-- Eventos emitidos: before_destroy, card_to_grave, cards_added_to_hand
+- Mutacoes: field, spellTrap, graveyard
+- Eventos emitidos: before_destroy, card_to_grave
 - Atualiza board: sim
 - Preview: `missing`
 
@@ -1506,7 +1775,7 @@ Destroys every card matching a field scope without manual targeting.
 | `effectType` | nao | string |  |
 | `optional` | nao | boolean |  |
 | `drawPerDestroyed` | nao | number |  |
-| `drawPlayer` | nao | player |  |
+| `drawPlayer` | nao | enum: self, opponent | Perspective for the action: "self" or "opponent". |
 
 **Exemplos**
 
@@ -1596,8 +1865,8 @@ Destroys selected cards from one or more zones.
 - Handler: `handleDestroyTargetedCards`
 - Target: `none`
 - Selecao: `dynamic`
-- Mutacoes: field, spellTrap, graveyard
-- Eventos emitidos: before_destroy, card_to_grave
+- Mutacoes: field, spellTrap, graveyard, deck, hand
+- Eventos emitidos: before_destroy, card_to_grave, cards_added_to_hand
 - Atualiza board: sim
 - Preview: `missing`
 
@@ -1732,7 +2001,7 @@ _Sem notas._
 Adds a named status flag to target cards.
 
 - Handler: `handleAddStatus`
-- Target: `required`
+- Target: `optional`
 - Selecao: `usesTargets`
 - Mutacoes: status
 - Eventos emitidos: nenhum
@@ -1741,8 +2010,9 @@ Adds a named status flag to target cards.
 
 | Campo | Obrigatorio | Contrato | Descricao |
 | --- | --- | --- | --- |
-| `targetRef` | sim | string | References an effect target id or a context target such as self. |
 | `status` | sim | string |  |
+| `targetRef` | nao | string | References an effect target id or a context target such as self. |
+| `targetScope` | nao | object |  |
 | `value` | nao | any |  |
 | `remove` | nao | boolean |  |
 | `untilEndOfTurn` | nao | boolean |  |
@@ -1754,6 +2024,19 @@ Adds a named status flag to target cards.
   "type": "add_status",
   "targetRef": "self",
   "status": "battleIndestructible"
+}
+```
+```json
+{
+  "type": "add_status",
+  "targetScope": {
+    "owner": "opponent",
+    "zones": [
+      "field"
+    ],
+    "requireFaceup": true
+  },
+  "status": "effectsNegated"
 }
 ```
 
@@ -2013,7 +2296,7 @@ _Sem notas._
 Grants protection status to targets.
 
 - Handler: `handleGrantProtection`
-- Target: `required`
+- Target: `optional`
 - Selecao: `usesTargets`
 - Mutacoes: status
 - Eventos emitidos: nenhum
@@ -2022,9 +2305,12 @@ Grants protection status to targets.
 
 | Campo | Obrigatorio | Contrato | Descricao |
 | --- | --- | --- | --- |
-| `targetRef` | sim | string | References an effect target id or a context target such as self. |
 | `protectionType` | sim | string |  |
+| `targetRef` | nao | string | References an effect target id or a context target such as self. |
 | `duration` | nao | string |  |
+| `sourceOwner` | nao | enum: self, opponent, any |  |
+| `targetScope` | nao | object |  |
+| `removeOnLeave` | nao | boolean |  |
 
 **Exemplos**
 
@@ -2034,6 +2320,15 @@ Grants protection status to targets.
   "targetRef": "self",
   "protectionType": "effect_destruction",
   "duration": "while_faceup"
+}
+```
+```json
+{
+  "type": "grant_protection",
+  "targetRef": "synchro_summoned_card",
+  "protectionType": "effect_destruction",
+  "duration": "end_of_next_turn",
+  "sourceOwner": "opponent"
 }
 ```
 
@@ -2065,6 +2360,73 @@ Grants temporary immunity to Void Fusion monsters.
   "type": "grant_void_fusion_immunity",
   "archetype": "Void",
   "durationTurns": 1
+}
+```
+
+**Notas**
+
+_Sem notas._
+
+### `halve_target_stats_and_gain_removed`
+
+Halves target stats and gives the removed values to another monster.
+
+- Handler: `handleHalveTargetStatsAndGainRemoved`
+- Target: `required`
+- Selecao: `usesTargets`
+- Mutacoes: stats
+- Eventos emitidos: nenhum
+- Atualiza board: sim
+- Preview: `notNeeded`
+
+| Campo | Obrigatorio | Contrato | Descricao |
+| --- | --- | --- | --- |
+| `targetRef` | sim | string | References an effect target id or a context target such as self. |
+| `gainTargetRef` | nao | string |  |
+| `stats` | nao | array |  |
+| `sourceName` | nao | string |  |
+
+**Exemplos**
+
+```json
+{
+  "type": "halve_target_stats_and_gain_removed",
+  "targetRef": "target",
+  "gainTargetRef": "self"
+}
+```
+
+**Notas**
+
+_Sem notas._
+
+### `modify_level`
+
+Temporarily increases or decreases the Level of target monsters.
+
+- Handler: `handleModifyLevel`
+- Target: `required`
+- Selecao: `usesTargets`
+- Mutacoes: stats
+- Eventos emitidos: nenhum
+- Atualiza board: sim
+- Preview: `covered`
+
+| Campo | Obrigatorio | Contrato | Descricao |
+| --- | --- | --- | --- |
+| `targetRef` | sim | string | References an effect target id or a context target such as self. |
+| `amount` | sim | number | Signed Level delta, such as 1 or -1. |
+| `duration` | nao | string |  |
+| `minLevel` | nao | number |  |
+| `maxLevel` | nao | number |  |
+
+**Exemplos**
+
+```json
+{
+  "type": "modify_level",
+  "targetRef": "tech_zero_target",
+  "amount": -1
 }
 ```
 
@@ -2272,6 +2634,40 @@ Removes a named persistent buff.
 
 _Sem notas._
 
+### `remove_stat_increases`
+
+Removes visible positive ATK/DEF increases from target monsters.
+
+- Handler: `handleRemoveStatIncreases`
+- Target: `required`
+- Selecao: `usesTargets`
+- Mutacoes: stats
+- Eventos emitidos: nenhum
+- Atualiza board: sim
+- Preview: `notNeeded`
+
+| Campo | Obrigatorio | Contrato | Descricao |
+| --- | --- | --- | --- |
+| `targetRef` | sim | string | References an effect target id or a context target such as self. |
+| `stats` | nao | array |  |
+
+**Exemplos**
+
+```json
+{
+  "type": "remove_stat_increases",
+  "targetRef": "battle_opponent",
+  "stats": [
+    "atk",
+    "def"
+  ]
+}
+```
+
+**Notas**
+
+_Sem notas._
+
 ### `set_original_stats`
 
 Sets a monster's original ATK and/or DEF, optionally from context.
@@ -2328,6 +2724,7 @@ Sets target stats to zero and optionally negates effects.
 | --- | --- | --- | --- |
 | `targetRef` | sim | string | References an effect target id or a context target such as self. |
 | `negateEffects` | nao | boolean |  |
+| `negateEffectsDuration` | nao | enum: until_end_turn, while_faceup |  |
 | `setAtkToZero` | nao | boolean |  |
 | `setDefToZero` | nao | boolean |  |
 
@@ -2566,19 +2963,51 @@ Grants an additional attack to targets.
 | Campo | Obrigatorio | Contrato | Descricao |
 | --- | --- | --- | --- |
 | `targetRef` | sim | string | References an effect target id or a context target such as self. |
+| `targetRestriction` | nao | enum: monster |  |
 
 **Exemplos**
 
 ```json
 {
   "type": "grant_second_attack",
-  "targetRef": "self"
+  "targetRef": "self",
+  "targetRestriction": "monster"
 }
 ```
 
 **Notas**
 
 _Sem notas._
+
+### `negate_activation`
+
+Negates the current activation context without moving the activated card.
+
+- Handler: `handleNegateActivation`
+- Target: `none`
+- Selecao: `none`
+- Mutacoes: chain
+- Eventos emitidos: nenhum
+- Atualiza board: sim
+- Preview: `covered`
+
+| Campo | Obrigatorio | Contrato | Descricao |
+| --- | --- | --- | --- |
+| `storeNegatedCardAs` | nao | string |  |
+
+**Exemplos**
+
+```json
+{
+  "type": "negate_activation",
+  "storeNegatedCardAs": "negated_card"
+}
+```
+
+**Notas**
+
+- Respects activation_negation_protection passives.
+- storeNegatedCardAs exposes the negated card as an internal target for later actions.
 
 ### `negate_attack`
 
@@ -2625,6 +3054,123 @@ _Sem campos alem de `type`._
 ```json
 {
   "type": "negate_summon_or_activation_and_destroy"
+}
+```
+
+**Notas**
+
+_Sem notas._
+
+### `redirect_current_attack_to_target`
+
+Changes the current attack target to a resolved monster target.
+
+- Handler: `handleRedirectCurrentAttackToTarget`
+- Target: `required`
+- Selecao: `usesTargets`
+- Mutacoes: combatState
+- Eventos emitidos: nenhum
+- Atualiza board: sim
+- Preview: `covered`
+
+| Campo | Obrigatorio | Contrato | Descricao |
+| --- | --- | --- | --- |
+| `targetRef` | sim | string | References an effect target id or a context target such as self. |
+| `contextLabel` | nao | string |  |
+
+**Exemplos**
+
+```json
+{
+  "type": "redirect_current_attack_to_target",
+  "targetRef": "summoned_monster"
+}
+```
+
+**Notas**
+
+_Sem notas._
+
+### `register_battle_pair_effect`
+
+Registers a temporary effect that resolves when two selected monsters battle each other.
+
+- Handler: `handleRegisterBattlePairEffect`
+- Target: `none`
+- Selecao: `usesTargets`
+- Mutacoes: temporaryEffects
+- Eventos emitidos: nenhum
+- Atualiza board: sim
+- Preview: `covered`
+
+| Campo | Obrigatorio | Contrato | Descricao |
+| --- | --- | --- | --- |
+| `firstTargetRef` | sim | string |  |
+| `secondTargetRef` | sim | string |  |
+| `affectedTargetRef` | sim | string |  |
+| `targetRef` | nao | string | References an effect target id or a context target such as self. |
+| `targetARef` | nao | string |  |
+| `targetBRef` | nao | string |  |
+| `opponentTargetRef` | nao | string |  |
+| `destroyTargetRef` | nao | string |  |
+| `timing` | nao | string |  |
+| `duration` | nao | string |  |
+| `actions` | nao | array |  |
+| `uniqueKey` | nao | string |  |
+| `contextLabel` | nao | string |  |
+
+**Exemplos**
+
+```json
+{
+  "type": "register_battle_pair_effect",
+  "firstTargetRef": "self_monster",
+  "secondTargetRef": "opponent_monster",
+  "affectedTargetRef": "opponent_monster",
+  "timing": "start_of_damage_step",
+  "duration": "end_of_turn"
+}
+```
+
+**Notas**
+
+_Sem notas._
+
+### `set_attack_limit_from_zone_count`
+
+Sets a monster's total attack declarations this turn to the number of cards matching filters in a zone.
+
+- Handler: `handleSetAttackLimitFromZoneCount`
+- Target: `optional`
+- Selecao: `usesTargets`
+- Mutacoes: status
+- Eventos emitidos: nenhum
+- Atualiza board: sim
+- Preview: `covered`
+
+| Campo | Obrigatorio | Contrato | Descricao |
+| --- | --- | --- | --- |
+| `targetRef` | nao | string | References an effect target id or a context target such as self. |
+| `owner` | nao | enum: self, opponent, both |  |
+| `player` | nao | enum: self, opponent, both |  |
+| `zone` | nao | zone; valores: deck, hand, field, graveyard, spellTrap, fieldSpell, extraDeck, banish, banished | Source zone used by the action. |
+| `filters` | nao | object | Card filter object evaluated by the handler. |
+| `duration` | nao | string |  |
+| `minAttacks` | nao | number |  |
+
+**Exemplos**
+
+```json
+{
+  "type": "set_attack_limit_from_zone_count",
+  "targetRef": "self",
+  "owner": "self",
+  "zone": "graveyard",
+  "filters": {
+    "cardKind": "monster",
+    "archetype": "Tech-Zero",
+    "isTuner": true
+  }
 }
 ```
 
@@ -2680,6 +3226,9 @@ Adds counters to a target or source card.
 | `damagePerCounter` | nao | number |  |
 | `amountFromFieldCount` | nao | object |  |
 | `targetScope` | nao | object |  |
+| `contextKey` | nao | string |  |
+| `storeAs` | nao | string |  |
+| `resultKey` | nao | string |  |
 
 **Exemplos**
 
@@ -2911,6 +3460,14 @@ Prompts or chooses one case and executes its nested actions.
 | --- | --- | --- | --- |
 | `cases` | sim | array |  |
 | `selectionMessage` | nao | string |  |
+| `effectChoiceKey` | nao | string |  |
+| `choiceTextKey` | nao | string |  |
+| `selectionLabel` | nao | string |  |
+| `allowCancel` | nao | boolean |  |
+| `filterAvailableCases` | nao | boolean |  |
+| `requirementId` | nao | string |  |
+| `selectionKind` | nao | string |  |
+| `choiceImage` | nao | string |  |
 
 **Exemplos**
 
@@ -2919,6 +3476,43 @@ Prompts or chooses one case and executes its nested actions.
   "type": "choose_action_case",
   "selectionMessage": "Choose one.",
   "cases": []
+}
+```
+
+**Notas**
+
+_Sem notas._
+
+### `conditional_actions`
+
+Executes nested actions only when all configured conditions pass.
+
+- Handler: `handleConditionalActions`
+- Target: `none`
+- Selecao: `none`
+- Mutacoes: varies
+- Eventos emitidos: nenhum
+- Atualiza board: sim
+- Preview: `covered`
+
+| Campo | Obrigatorio | Contrato | Descricao |
+| --- | --- | --- | --- |
+| `actions` | sim | array |  |
+| `conditions` | nao | array |  |
+| `logIfSkipped` | nao | boolean |  |
+
+**Exemplos**
+
+```json
+{
+  "type": "conditional_actions",
+  "conditions": [],
+  "actions": [
+    {
+      "type": "draw",
+      "amount": 1
+    }
+  ]
 }
 ```
 
@@ -2960,6 +3554,48 @@ Executes nested action cases based on a resolved target.
 
 _Sem notas._
 
+### `declare_card_property`
+
+Stores a temporary declared card property value on the source card.
+
+- Handler: `handleDeclareCardProperty`
+- Target: `none`
+- Selecao: `dynamic`
+- Mutacoes: state
+- Eventos emitidos: nenhum
+- Atualiza board: sim
+- Preview: `covered`
+
+| Campo | Obrigatorio | Contrato | Descricao |
+| --- | --- | --- | --- |
+| `property` | sim | string |  |
+| `stateKey` | sim | string |  |
+| `choices` | nao | stringOrArray |  |
+| `duration` | nao | string |  |
+| `durationTurns` | nao | number |  |
+| `expiresOnTurn` | nao | number |  |
+| `value` | nao | string |  |
+| `selectionId` | nao | string |  |
+| `selectionLabel` | nao | string |  |
+| `selectionMessage` | nao | string |  |
+| `allowCancel` | nao | boolean |  |
+
+**Exemplos**
+
+```json
+{
+  "type": "declare_card_property",
+  "property": "type",
+  "stateKey": "declared_type",
+  "choices": "monster_types_in_database",
+  "duration": "end_of_next_turn"
+}
+```
+
+**Notas**
+
+_Sem notas._
+
 ### `optional_target_actions`
 
 Optionally resolves its own targets and executes nested actions when conditions and targets are available.
@@ -2978,8 +3614,21 @@ Optionally resolves its own targets and executes nested actions when conditions 
 | `actions` | sim | array |  |
 | `conditions` | nao | array |  |
 | `selectionMessage` | nao | string |  |
+| `selectionMessageKey` | nao | string |  |
+| `promptMessage` | nao | string |  |
+| `promptMessageKey` | nao | string |  |
+| `promptTitle` | nao | string |  |
+| `promptTitleKey` | nao | string |  |
 | `allowCancel` | nao | boolean |  |
 | `logIfSkipped` | nao | boolean |  |
+| `optional` | nao | boolean |  |
+| `confirmOnly` | nao | boolean |  |
+| `requireConfirmation` | nao | boolean |  |
+| `confirmationId` | nao | string |  |
+| `selectionId` | nao | string |  |
+| `selectionLabel` | nao | string |  |
+| `confirmLabel` | nao | string |  |
+| `cancelLabel` | nao | string |  |
 
 **Exemplos**
 
@@ -2988,6 +3637,136 @@ Optionally resolves its own targets and executes nested actions when conditions 
   "type": "optional_target_actions",
   "targets": [],
   "actions": []
+}
+```
+
+**Notas**
+
+_Sem notas._
+
+### `register_synchro_material_followup`
+
+Registers actions from a Synchro Material trigger to apply to the monster summoned by that same Synchro Summon.
+
+- Handler: `handleRegisterSynchroMaterialFollowup`
+- Target: `none`
+- Selecao: `none`
+- Mutacoes: temporaryEffects
+- Eventos emitidos: nenhum
+- Atualiza board: sim
+- Preview: `covered`
+
+| Campo | Obrigatorio | Contrato | Descricao |
+| --- | --- | --- | --- |
+| `actions` | sim | array |  |
+| `uniqueKey` | nao | string |  |
+| `sourceName` | nao | string |  |
+| `synchroSummonContextId` | nao | string |  |
+
+**Exemplos**
+
+```json
+{
+  "type": "register_synchro_material_followup",
+  "actions": [
+    {
+      "type": "grant_protection",
+      "targetRef": "synchro_summoned_card",
+      "protectionType": "battle_destruction",
+      "duration": "end_of_next_turn"
+    }
+  ]
+}
+```
+
+**Notas**
+
+- Use only from `card_to_grave` effects with `contextLabel: "synchro_material"`.
+- Follow-up actions receive `synchro_summoned_card` as an internal target and resolve before `after_summon` triggers for the Synchro monster.
+- Follow-up actions should be fully resolvable from context targets; avoid manual target selection in this pre-trigger window.
+
+### `register_temporary_event_effect`
+
+Registers a temporary virtual event trigger owned by the resolving player.
+
+- Handler: `handleRegisterTemporaryEventEffect`
+- Target: `none`
+- Selecao: `none`
+- Mutacoes: temporaryEffects
+- Eventos emitidos: nenhum
+- Atualiza board: sim
+- Preview: `covered`
+
+| Campo | Obrigatorio | Contrato | Descricao |
+| --- | --- | --- | --- |
+| `event` | sim | string |  |
+| `actions` | sim | array |  |
+| `conditions` | nao | array |  |
+| `targets` | nao | array |  |
+| `duration` | nao | string |  |
+| `uses` | nao | number |  |
+| `effectId` | nao | string |  |
+| `sourceName` | nao | string |  |
+| `declaredValueRef` | nao | string |  |
+| `declaredValueStateKey` | nao | string |  |
+| `stateKey` | nao | string |  |
+| `promptUser` | nao | boolean |  |
+| `promptMessage` | nao | string |  |
+| `uniqueKey` | nao | string |  |
+
+**Exemplos**
+
+```json
+{
+  "type": "register_temporary_event_effect",
+  "event": "battle_destroy",
+  "duration": "end_of_turn",
+  "uses": 1,
+  "actions": [
+    {
+      "type": "draw",
+      "amount": 1
+    }
+  ]
+}
+```
+
+**Notas**
+
+_Sem notas._
+
+### `set_source_after_resolution_if`
+
+Marks the resolving Spell/Trap source to be Set after resolution when a condition passes.
+
+- Handler: `handleSetSourceAfterResolutionIf`
+- Target: `none`
+- Selecao: `usesTargets`
+- Mutacoes: spellTrap
+- Eventos emitidos: nenhum
+- Atualiza board: sim
+- Preview: `covered`
+
+| Campo | Obrigatorio | Contrato | Descricao |
+| --- | --- | --- | --- |
+| `firstTargetRef` | sim | string |  |
+| `secondTargetRef` | sim | string |  |
+| `atkDifferenceMax` | nao | number |  |
+| `maxDifference` | nao | number |  |
+| `condition` | nao | object |  |
+| `conditionType` | nao | string |  |
+| `deferFinalizationUntil` | nao | string |  |
+| `deferUntil` | nao | string |  |
+| `contextLabel` | nao | string |  |
+
+**Exemplos**
+
+```json
+{
+  "type": "set_source_after_resolution_if",
+  "firstTargetRef": "self_monster",
+  "secondTargetRef": "opponent_monster",
+  "atkDifferenceMax": 500
 }
 ```
 

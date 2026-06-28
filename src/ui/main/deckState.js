@@ -17,7 +17,8 @@ export const MAX_DECK_SIZE = 30;
 export const MAX_EXTRA_DECK_SIZE = 10;
 
 const cardKindOrder = { monster: 0, spell: 1, trap: 2 };
-const extraDeckTypeOrder = { fusion: 0, ascension: 1 };
+const extraDeckTypeOrder = { fusion: 0, synchro: 1, ascension: 2 };
+const EXTRA_DECK_MONSTER_TYPES = new Set(["fusion", "synchro", "ascension"]);
 const spellTrapSubtypeOrder = {
   normal: 0,
   quick: 1,
@@ -40,6 +41,10 @@ export function levelOf(card) {
   return typeof card?.level === "number" && !Number.isNaN(card.level)
     ? card.level
     : 0;
+}
+
+export function isExtraDeckMonster(card) {
+  return EXTRA_DECK_MONSTER_TYPES.has(card?.monsterType);
 }
 
 export function sortDeck(deckIds = []) {
@@ -108,11 +113,7 @@ export function sortExtraDeck(extraDeckIds = []) {
 export function sanitizeExtraDeck(extraDeck, options = {}) {
   const valid = new Set(
     cardDatabase
-      .filter(
-        (card) =>
-          card.monsterType === "fusion" ||
-          card.monsterType === "ascension",
-      )
+      .filter((card) => isExtraDeckMonster(card))
       .map((card) => card.id),
   );
   const seen = new Set();
@@ -131,10 +132,7 @@ export function sanitizeExtraDeck(extraDeck, options = {}) {
 export function sanitizeDeck(deck, options = {}) {
   const valid = new Set(
     cardDatabase
-      .filter(
-        (card) =>
-          card.monsterType !== "fusion" && card.monsterType !== "ascension",
-      )
+      .filter((card) => !isExtraDeckMonster(card))
       .map((card) => card.id),
   );
   const counts = {};
@@ -165,7 +163,7 @@ export function topUpDeck(deck) {
   while (filled.length < targetSize) {
     for (const card of cardDatabase) {
       counts[card.id] = counts[card.id] || 0;
-      if (card.monsterType === "fusion" || card.monsterType === "ascension") {
+      if (isExtraDeckMonster(card)) {
         continue;
       }
       if (counts[card.id] < 3 && filled.length < targetSize) {

@@ -78,6 +78,29 @@ function findCardOwner(game, fallbackOwner, card) {
   return fallbackOwner || null;
 }
 
+function asArray(value) {
+  if (value === undefined || value === null) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+function getZoneCards(owner, zoneName) {
+  if (!owner || !zoneName) return [];
+  if (zoneName === "fieldSpell") {
+    return owner.fieldSpell ? [owner.fieldSpell] : [];
+  }
+  const zone = owner[zoneName] || [];
+  return Array.isArray(zone) ? zone.filter(Boolean) : [];
+}
+
+function resolvePlayerScope(action, ctx) {
+  const rule = action.owner || action.player || "self";
+  if (rule === "opponent") return [ctx.opponent].filter(Boolean);
+  if (rule === "both" || rule === "any") {
+    return [ctx.player, ctx.opponent].filter(Boolean);
+  }
+  return [ctx.player].filter(Boolean);
+}
+
 function normalizeStatsList(value) {
   const list = Array.isArray(value) ? value : value ? [value] : ["atk", "def"];
   return list.filter((stat) => stat === "atk" || stat === "def");
@@ -1164,6 +1187,70 @@ export async function handleBuffAtkByLpGainedThisTurn(
   );
 }
 
+export async function handleSetAttackLimitFromZoneCount(
+  action,
+  ctx,
+  targets,
+  engine,
+) {
+  const game = engine?.game;
+  if (!game) return false;
+
+  const targetCards = resolveTargetCards(action, ctx, targets, {
+    defaultRef: "self",
+    game,
+  }).filter((card) => card?.cardKind === "monster");
+
+  if (targetCards.length === 0) {
+    getUI(game)?.log("No valid targets for attack limit.");
+    return false;
+  }
+
+  const zones = asArray(action.zone || "graveyard");
+  const filters = action.filters || {};
+  const owners = resolvePlayerScope(action, ctx);
+  let count = 0;
+
+  for (const owner of owners) {
+    for (const zoneName of zones) {
+      for (const card of getZoneCards(owner, zoneName)) {
+        if (!card) continue;
+        if (
+          typeof engine.cardMatchesFilters === "function" &&
+          !engine.cardMatchesFilters(card, filters)
+        ) {
+          continue;
+        }
+        count += 1;
+      }
+    }
+  }
+
+  const minAttacks = Number.isFinite(Number(action.minAttacks))
+    ? Math.max(0, Math.floor(Number(action.minAttacks)))
+    : 0;
+  const attackLimit = Math.max(minAttacks, count);
+  const duration = action.duration || "until_end_turn";
+
+  for (const card of targetCards) {
+    card.attackLimitThisTurn = attackLimit;
+    card.attackLimitDuration = duration;
+    queueCardFeedback(game, "buff", card, {
+      sourceCard: ctx.source,
+      tone: "green",
+    });
+  }
+
+  const cardList = targetCards.map((card) => card.name).join(", ");
+  getUI(game)?.log(
+    `${cardList} can declare up to ${attackLimit} attack${
+      attackLimit === 1 ? "" : "s"
+    } this turn.`,
+  );
+  game.updateBoard?.();
+  return true;
+}
+
 /**
  * Generic handler for granting ability to attack all opponent monsters this turn
  *
@@ -1293,11 +1380,15 @@ export async function handleAddStatus(action, ctx, targets, engine) {
 
   if (!player || !game) return false;
 
-  const targetCards = resolveTargetCards(action, ctx, targets, {
-    defaultRef: "self",
-  });
+  const targetCards = action.targetScope
+    ? resolveFieldScopeCards(action.targetScope, ctx, game, { engine })
+    : resolveTargetCards(action, ctx, targets, {
+        defaultRef: "self",
+      });
 
   if (targetCards.length === 0) {
+    if (action.targetScope) return true;
+
     getUI(game)?.log("No valid targets for status change.");
 
     return false;
@@ -1404,13 +1495,35 @@ export async function handleAddStatus(action, ctx, targets, engine) {
   return modified;
 }
 
+function computeProtectionExpiresOnTurn(game, duration, action = {}) {
+  const explicit = Number(action.expiresOnTurn);
+  if (Number.isFinite(explicit)) return explicit;
+
+  const durationTurns = Number(action.durationTurns ?? action.turns);
+  if (Number.isFinite(durationTurns) && durationTurns > 0) {
+    return Number(game?.turnCounter || 0) + durationTurns;
+  }
+
+  if (duration === "end_of_next_turn") {
+    return Number(game?.turnCounter || 0) + 1;
+  }
+  if (duration === "end_of_turn") {
+    return Number(game?.turnCounter || 0);
+  }
+  if (Number.isFinite(Number(duration))) {
+    return Number(duration);
+  }
+  return null;
+}
+
 /**
- * Handler for granting protection against destruction by effects
+ * Handler for granting protection against destruction.
  *
  * Action properties:
- * - targetRef: reference to the target that receives protection
- * - protectionType: type of protection ("effect_destruction", "battle_destruction", etc.)
- * - duration: duration ("while_faceup", "end_of_turn", turn number)
+ * - targetRef/targetScope: recipient(s) that receive protection
+ * - protectionType: "effect_destruction", "battle_destruction", etc.
+ * - duration: "while_faceup", "end_of_turn", "end_of_next_turn", or turn number
+ * - sourceOwner: optional "self", "opponent", or "any" relative to the protected card
  */
 export async function handleGrantProtection(action, ctx, targets, engine) {
   const { player, source } = ctx;
@@ -1436,7 +1549,9 @@ export async function handleGrantProtection(action, ctx, targets, engine) {
 
   const duration = action.duration || "while_faceup";
 
+  const expiresOnTurn = computeProtectionExpiresOnTurn(game, duration, action);
   const sourceName = source?.name || "Unknown";
+  const sourceOwner = action.sourceOwner || "any";
 
   for (const target of targetCards) {
     if (!target) continue;
@@ -1457,10 +1572,22 @@ export async function handleGrantProtection(action, ctx, targets, engine) {
       duration,
 
       grantedOnTurn: game.turnCounter,
+
+      expiresOnTurn,
+
+      sourceOwner,
+
+      removeOnLeave: action.removeOnLeave !== false,
     });
 
+    const protectionText =
+      protectionType === "battle_destruction"
+        ? "battle"
+        : sourceOwner === "opponent"
+          ? "opponent's card effects"
+          : "card effects";
     getUI(game)?.log(
-      `${target.name} is now protected from destruction by card effects!`,
+      `${target.name} is now protected from destruction by ${protectionText}!`,
     );
     queueCardFeedback(game, "protect", target, {
       sourceCard: source,
@@ -2210,6 +2337,69 @@ export async function handleRemovePermanentBuffNamed(
   }
 
   return anyRemoved || fieldWideAuraRemoval;
+}
+
+export async function handleModifyLevel(action, ctx, targets, engine) {
+  const game = engine?.game;
+  if (!game) return false;
+
+  const amount = resolveContextNumber(action.amount, ctx, {
+    defaultValue: 0,
+  });
+  if (!Number.isFinite(amount) || amount === 0) {
+    return false;
+  }
+
+  const targetsToModify = resolveTargetCards(action, ctx, targets, {
+    game,
+    targetRef: action.targetRef,
+    filter: (card) => card?.cardKind === "monster",
+  });
+  if (targetsToModify.length === 0) {
+    getUI(game)?.log("No valid monster to modify Level.");
+    return false;
+  }
+
+  const duration = action.duration || "until_end_turn";
+  const minLevel = Number.isFinite(Number(action.minLevel))
+    ? Number(action.minLevel)
+    : 1;
+  const maxLevel = Number.isFinite(Number(action.maxLevel))
+    ? Number(action.maxLevel)
+    : null;
+
+  let modified = false;
+  for (const card of targetsToModify) {
+    const currentLevel = Number(card.level || 0);
+    if (!Number.isFinite(currentLevel)) continue;
+
+    let nextLevel = currentLevel + amount;
+    nextLevel = Math.max(minLevel, nextLevel);
+    if (maxLevel !== null) {
+      nextLevel = Math.min(maxLevel, nextLevel);
+    }
+    if (nextLevel === currentLevel) continue;
+
+    if (duration !== "permanent" && card.originalLevel == null) {
+      card.originalLevel = currentLevel;
+    }
+    card.level = nextLevel;
+    modified = true;
+    queueCardFeedback(game, amount > 0 ? "buff" : "debuff", card, {
+      sourceCard: ctx?.source || null,
+      tone: amount > 0 ? "gold" : "blue",
+    });
+  }
+
+  if (modified) {
+    const direction = amount > 0 ? "increased" : "decreased";
+    getUI(game)?.log(
+      `Level ${direction} by ${Math.abs(amount)} until the end of the turn.`,
+    );
+    game.effectEngine?.clearTargetingCache?.();
+    game.updateBoard?.();
+  }
+  return modified;
 }
 
 export async function handleReduceHandMonsterLevels(action, ctx, targets, engine) {

@@ -27,6 +27,37 @@ export function isActiveAttackPriorityTarget(card) {
   );
 }
 
+export function hasExplicitAttackLimitThisTurn(card) {
+  return (
+    card?.attackLimitThisTurn !== undefined &&
+    card?.attackLimitThisTurn !== null &&
+    Number.isFinite(Number(card.attackLimitThisTurn))
+  );
+}
+
+function getDynamicAttackLimit(game, attacker) {
+  if (attacker?.dynamicExtraAttacks?.source !== "graveyard_count") {
+    return null;
+  }
+  const dea = attacker.dynamicExtraAttacks;
+  const owner = attacker.owner === "player" ? game.player : game.bot;
+  return (owner?.graveyard || []).filter(
+    (c) => c && c.name === dea.name,
+  ).length;
+}
+
+export function getMonsterAttackLimit(attacker) {
+  if (!attacker) return 0;
+  if (hasExplicitAttackLimitThisTurn(attacker)) {
+    return Math.max(0, Math.floor(Number(attacker.attackLimitThisTurn)));
+  }
+  const dynamicAttackLimit = getDynamicAttackLimit(this, attacker);
+  if (dynamicAttackLimit !== null) {
+    return Math.max(0, dynamicAttackLimit);
+  }
+  return Math.max(1, 1 + Number(attacker.extraAttacks || 0));
+}
+
 function findAttackPassiveSourceZone(game, owner, card) {
   if (!game || !owner || !card) return null;
   if (typeof game.findCardZone === "function") {
@@ -393,19 +424,14 @@ export function getAttackAvailability(attacker) {
     };
   }
 
-  let extraAttacks = attacker.extraAttacks || 0;
-  if (attacker.dynamicExtraAttacks?.source === "graveyard_count") {
-    const dea = attacker.dynamicExtraAttacks;
-    const owner = attacker.owner === "player" ? this.player : this.bot;
-    const dynamicAttackLimit = (owner?.graveyard || []).filter(
-      (c) => c && c.name === dea.name,
-    ).length;
-    extraAttacks = dynamicAttackLimit - 1;
-  }
-  const maxAttacks = 1 + extraAttacks;
+  const maxAttacks = this.getMonsterAttackLimit
+    ? this.getMonsterAttackLimit(attacker)
+    : getMonsterAttackLimit.call(this, attacker);
   const attacksUsed = attacker.attacksUsedThisTurn || 0;
   const canUseSecondAttack =
-    attacker.canMakeSecondAttackThisTurn && !attacker.secondAttackUsedThisTurn;
+    !hasExplicitAttackLimitThisTurn(attacker) &&
+    attacker.canMakeSecondAttackThisTurn &&
+    !attacker.secondAttackUsedThisTurn;
   const extraAttackTargetRestriction =
     attacker.extraAttackTargetRestriction ||
     attacker.passiveExtraAttackTargetRestriction ||
@@ -426,11 +452,20 @@ export function getAttackAvailability(attacker) {
 
   // Check for multi-attack ability (attack all opponent monsters)
   if (attacker.canAttackAllOpponentMonstersThisTurn) {
+    const hasExplicitLimit = hasExplicitAttackLimitThisTurn(attacker);
+    if (hasExplicitLimit && attacksUsed >= maxAttacks) {
+      return {
+        ok: false,
+        reason: `${attacker.name} has already attacked the maximum number of times this turn.`,
+      };
+    }
     const opponent = attacker.owner === "player" ? this.bot : this.player;
     const opponentMonsters = (opponent?.field || []).filter(
       (m) => m && !m.isFacedown
     );
-    const opponentMonsterCount = opponentMonsters.length;
+    const opponentMonsterCount = hasExplicitAttackLimitThisTurn(attacker)
+      ? Math.min(opponentMonsters.length, maxAttacks)
+      : opponentMonsters.length;
 
     // Filter out already attacked monsters
     const attackedMonsters = attacker.attackedMonstersThisTurn || new Set();
@@ -440,13 +475,16 @@ export function getAttackAvailability(attacker) {
     });
 
     // Can still attack if there are unattacked monsters
-    if (unattackedMonsters.length > 0) {
+    const remainingByLimit = hasExplicitLimit
+      ? Math.max(0, maxAttacks - attacksUsed)
+      : unattackedMonsters.length;
+    if (unattackedMonsters.length > 0 && remainingByLimit > 0) {
       return {
         ok: true,
         maxAttacks: opponentMonsterCount,
         attacksUsed,
         isMultiAttack: true,
-        remainingTargets: unattackedMonsters.length,
+        remainingTargets: Math.min(unattackedMonsters.length, remainingByLimit),
       };
     }
 
@@ -474,16 +512,9 @@ export function getAttackAvailability(attacker) {
  */
 export function markAttackUsed(attacker, target = null) {
   if (!attacker) return;
-  let extraAttacks = attacker.extraAttacks || 0;
-  if (attacker.dynamicExtraAttacks?.source === "graveyard_count") {
-    const dea = attacker.dynamicExtraAttacks;
-    const owner = attacker.owner === "player" ? this.player : this.bot;
-    const dynamicAttackLimit = (owner?.graveyard || []).filter(
-      (c) => c && c.name === dea.name,
-    ).length;
-    extraAttacks = dynamicAttackLimit - 1;
-  }
-  const maxAttacks = 1 + extraAttacks;
+  const maxAttacks = this.getMonsterAttackLimit
+    ? this.getMonsterAttackLimit(attacker)
+    : getMonsterAttackLimit.call(this, attacker);
   attacker.attacksUsedThisTurn = (attacker.attacksUsedThisTurn || 0) + 1;
 
   // Track attacked monsters for multi-attack effects

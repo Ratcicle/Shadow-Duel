@@ -1,6 +1,7 @@
 import { cardDatabase, cardDatabaseById } from "../../data/cards.js";
 import {
   formatCardKindSubtypeLine,
+  formatCardPreviewDescriptionHtml,
   formatMonsterDetailHtml,
   formatMonsterStatsLine,
   getMonsterTypeDisplayName,
@@ -13,6 +14,7 @@ import {
   cardHasArchetype,
   cardHasArchetypeName,
   inferDeckArchetype,
+  isExtraDeckMonster,
   loadBotPreset,
   saveBotPreset,
   sortDeck,
@@ -26,6 +28,7 @@ const CATEGORY_FILTERS = [
   { id: "traps", labelKey: "categoryTraps" },
   { id: "extra", labelKey: "categoryExtra" },
   { id: "fusion", labelKey: "categoryFusion" },
+  { id: "synchro", labelKey: "categorySynchro" },
   { id: "ascension", labelKey: "categoryAscension" },
 ];
 
@@ -43,7 +46,12 @@ const SORT_MODES = [
 ];
 
 const COLLECTION_KIND_ORDER = { monster: 0, spell: 1, trap: 2 };
-const COLLECTION_MONSTER_GROUP_ORDER = { ascension: 0, fusion: 1, main: 2 };
+const COLLECTION_MONSTER_GROUP_ORDER = {
+  ascension: 0,
+  synchro: 1,
+  fusion: 2,
+  main: 3,
+};
 const COLLECTION_SPELL_SUBTYPE_ORDER = {
   normal: 0,
   quick: 1,
@@ -73,6 +81,8 @@ function deckText(key, params = {}, fallback = null) {
   return getUIText(`ui.deckBuilder.${key}`, params, fallback);
 }
 
+const isExtraDeckCard = isExtraDeckMonster;
+
 function localizeOption(option) {
   if (!option) return option;
   return {
@@ -85,10 +95,6 @@ function localizeOption(option) {
 
 function localizeOptions(options) {
   return options.map(localizeOption);
-}
-
-function isExtraDeckCard(card) {
-  return card?.monsterType === "fusion" || card?.monsterType === "ascension";
 }
 
 function getCardArchetypes(card) {
@@ -180,9 +186,11 @@ function monsterGroupOrder(card) {
   const group =
     card?.monsterType === "ascension"
       ? "ascension"
-      : card?.monsterType === "fusion"
-        ? "fusion"
-        : "main";
+      : card?.monsterType === "synchro"
+        ? "synchro"
+        : card?.monsterType === "fusion"
+          ? "fusion"
+          : "main";
   return COLLECTION_MONSTER_GROUP_ORDER[group];
 }
 
@@ -352,10 +360,10 @@ export function createDeckBuilderController({
       }
     }
     if (dom.preview.desc) {
-      dom.preview.desc.textContent =
-        getCardDisplayDescription(card) ||
-        card.description ||
-        deckText("noDescription", {}, "No description.");
+      dom.preview.desc.innerHTML = formatCardPreviewDescriptionHtml(
+        card,
+        deckText("noDescription", {}, "No description."),
+      );
     }
   }
 
@@ -756,6 +764,9 @@ export function createDeckBuilderController({
     if (categoryFilterMode === "traps") return card.cardKind === "trap";
     if (categoryFilterMode === "extra") return isExtraDeckCard(card);
     if (categoryFilterMode === "fusion") return card.monsterType === "fusion";
+    if (categoryFilterMode === "synchro") {
+      return card.monsterType === "synchro";
+    }
     if (categoryFilterMode === "ascension") {
       return card.monsterType === "ascension";
     }
@@ -1122,9 +1133,11 @@ export function createDeckBuilderController({
           maxCopies,
           card.monsterType === "ascension"
             ? "ascension-count"
-            : card.monsterType === "fusion"
-              ? "fusion-count"
-              : "",
+            : card.monsterType === "synchro"
+              ? "synchro-count"
+              : card.monsterType === "fusion"
+                ? "fusion-count"
+                : "",
         ),
       );
       cardEl.onmouseenter = () => setPreview(card);
@@ -1335,6 +1348,7 @@ export function createCardThumb(card, getCardDisplayName) {
 
 function getDeckBuilderCardTypeClass(card) {
   if (card?.monsterType === "fusion") return "card-thumb-fusion";
+  if (card?.monsterType === "synchro") return "card-thumb-synchro";
   if (card?.monsterType === "ascension") return "card-thumb-ascension";
   if (card?.cardKind === "spell") return "card-thumb-spell";
   if (card?.cardKind === "trap") return "card-thumb-trap";
@@ -1345,6 +1359,7 @@ function getDeckBuilderCardTypeClass(card) {
 const PREVIEW_CARD_FRAME_CLASSES = [
   "preview-card-monster",
   "preview-card-fusion",
+  "preview-card-synchro",
   "preview-card-ascension",
   "preview-card-spell",
   "preview-card-trap",
@@ -1354,6 +1369,7 @@ function getPreviewCardFrameClass(card) {
   if (card?.cardKind === "spell") return "preview-card-spell";
   if (card?.cardKind === "trap") return "preview-card-trap";
   if (card?.monsterType === "fusion") return "preview-card-fusion";
+  if (card?.monsterType === "synchro") return "preview-card-synchro";
   if (card?.monsterType === "ascension") return "preview-card-ascension";
   return "preview-card-monster";
 }

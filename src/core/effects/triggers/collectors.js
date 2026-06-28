@@ -182,6 +182,8 @@ export async function collectEventTriggers(eventName, payload) {
     triggerPackage = await this.collectCardEquippedTriggers(payload);
   } else if (eventName === "standby_phase") {
     triggerPackage = await this.collectStandbyPhaseTriggers(payload);
+  } else if (eventName === "end_phase") {
+    triggerPackage = await this.collectEndPhaseTriggers(payload);
   } else {
     triggerPackage = { entries: [], orderRule: "no_triggers" };
   }
@@ -200,6 +202,7 @@ export {
   collectCounterRemovedTriggers,
   collectEffectActivatedTriggers,
   collectEffectTargetedTriggers,
+  collectEndPhaseTriggers,
   collectLpChangeTriggers,
   collectPositionChangeTriggers,
   collectSpellActivatedTriggers,

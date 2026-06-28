@@ -278,18 +278,31 @@ export default class Bot extends Player {
     if (attacker.cannotAttackThisTurn) return;
     if (attacker.position === "defense") return;
 
-    let _extra = attacker.extraAttacks || 0;
-    if (attacker.dynamicExtraAttacks?.source === "graveyard_count") {
-      const dea = attacker.dynamicExtraAttacks;
-      _extra = (state.bot?.graveyard || []).filter(c => c && c.name === dea.name).length;
-      _extra -= 1;
+    let maxAttacks;
+    const hasAttackLimit =
+      attacker.attackLimitThisTurn !== undefined &&
+      attacker.attackLimitThisTurn !== null &&
+      Number.isFinite(Number(attacker.attackLimitThisTurn));
+    if (hasAttackLimit) {
+      maxAttacks = Math.max(0, Math.floor(Number(attacker.attackLimitThisTurn)));
+    } else {
+      let _extra = attacker.extraAttacks || 0;
+      if (attacker.dynamicExtraAttacks?.source === "graveyard_count") {
+        const dea = attacker.dynamicExtraAttacks;
+        _extra = (state.bot?.graveyard || []).filter(
+          (c) => c && c.name === dea.name,
+        ).length;
+        _extra -= 1;
+      }
+      maxAttacks = 1 + _extra;
     }
-    const maxAttacks = 1 + _extra;
     const usedAttacks = attacker.attacksUsedThisTurn || 0;
 
     // Multi-attack mode allows more attacks
     const isMultiAttackMode = attacker.canAttackAllOpponentMonstersThisTurn;
-    const multiAttackLimit = attacker.multiAttackLimit || 1;
+    const multiAttackLimit = hasAttackLimit
+      ? Math.min(attacker.multiAttackLimit || 1, maxAttacks)
+      : attacker.multiAttackLimit || 1;
 
     if (!isMultiAttackMode && usedAttacks >= maxAttacks) return;
     if (isMultiAttackMode && usedAttacks >= multiAttackLimit) return;

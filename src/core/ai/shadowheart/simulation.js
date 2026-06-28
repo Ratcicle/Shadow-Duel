@@ -27,6 +27,10 @@ import {
   getTributeCardsFromIndices,
   getTributeValueTotal,
 } from "../../game/summon/tributeValue.js";
+import {
+  canUseNormalSummonForCard,
+  recordNormalSummonForTurn,
+} from "../../Player.js";
 
 const SH = {
   arctroth: "Shadow-Heart Demon Arctroth",
@@ -486,6 +490,7 @@ function simulateNormalSummon(state, action, options = {}) {
   const handIndex = resolveSimulatedHandIndex(player, action, "monster");
   const card = player.hand[handIndex];
   if (!card) return true;
+  if (!canUseNormalSummonForCard(player, card)) return true;
 
   const tributeInfo = getTributeRequirementFor(card, player);
   const tributesNeeded = tributeInfo.tributesNeeded || 0;
@@ -532,6 +537,7 @@ function simulateNormalSummon(state, action, options = {}) {
   summoned.lastTributeMaterialCount = tributes.length;
   player.field.push(summoned);
   player.summonCount = (player.summonCount || 0) + 1;
+  recordNormalSummonForTurn(player, summoned);
 
   handleAfterSummon({
     state,

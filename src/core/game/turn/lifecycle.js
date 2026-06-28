@@ -94,6 +94,8 @@ export async function startTurn() {
   this.resetOncePerTurnUsage("start_turn");
   this.player.lpGainedThisTurn = 0;
   this.bot.lpGainedThisTurn = 0;
+  this.player.damageReceivedThisTurn = 0;
+  this.bot.damageReceivedThisTurn = 0;
 
   // Clean up expired turn-based buffs at the start of the turn
   this.cleanupExpiredBuffs();
@@ -101,6 +103,7 @@ export async function startTurn() {
   this.cleanupExpiredEffectMarkers?.();
   this.cleanupExpiredTemporaryBattlePairEffects?.();
   this.cleanupExpiredTemporaryEventEffects?.();
+  this.cleanupExpiredSpecialSummonRestrictions?.();
 
   // Limpar cache de targeting para novo turno
   if (this.effectEngine?.clearTargetingCache) {
@@ -138,6 +141,8 @@ export async function startTurn() {
   });
   activePlayer.summonCount = 0;
   activePlayer.additionalNormalSummons = 0;
+  activePlayer.additionalNormalSummonPermissions = [];
+  activePlayer.normalSummonsThisTurn = [];
 
   this.updateBoard();
   this._arenaTracker?.recordProgress?.("turn_draw_before", this, {
@@ -246,6 +251,10 @@ export async function endTurn() {
 
   // Resolve any actions scheduled for the end phase of the current turn
   // (e.g. Galaxy Extreme Dragon returning from the banished zone).
+  const opponent = this.getOpponent?.(actor) || null;
+  await this.emit("end_phase", { player: actor, opponent });
+  if (this.gameOver || this.isDisposed?.()) return;
+
   await this.processDelayedActions("end", this.turn);
   if (this.gameOver || this.isDisposed?.()) return;
 

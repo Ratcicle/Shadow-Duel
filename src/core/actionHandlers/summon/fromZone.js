@@ -111,6 +111,11 @@ export async function handleSpecialSummonFromZone(
   const zoneSpec = action.zone || action.sourceZone || "deck";
   const zoneNames = Array.isArray(zoneSpec) ? zoneSpec : [zoneSpec];
   const sourceOwners = getSourceOwners(action, ctx, player);
+  const summonPlayer =
+    action.summonToOwner === "opponent"
+      ? game?.getOpponent?.(player) ||
+        (player?.id === "player" ? game?.bot : game?.player)
+      : player;
   const count = action.count || { min: 1, max: 1 };
   const minRequired = Number(count.min ?? 1);
   const isOptionalSelection = Number.isFinite(minRequired) && minRequired <= 0;
@@ -313,6 +318,10 @@ export async function handleSpecialSummonFromZone(
       filters.cardKind = action.cardKind;
     }
 
+    if (action.isTuner !== undefined) {
+      filters.isTuner = action.isTuner;
+    }
+
     if (Number.isFinite(action.minAtk)) {
       filters.minAtk = action.minAtk;
     }
@@ -374,6 +383,18 @@ export async function handleSpecialSummonFromZone(
       }
       return false;
     }
+    const restrictionCheck = game.canSpecialSummonUnderRestrictions?.(
+      card,
+      summonPlayer,
+      {
+        summonMethod: "special",
+        fromZone: Array.isArray(zoneSpec) ? null : zoneSpec,
+        silent: true,
+      },
+    );
+    if (restrictionCheck?.ok === false) {
+      return false;
+    }
     return true;
   });
 
@@ -420,7 +441,7 @@ export async function handleSpecialSummonFromZone(
   const maxSelect = Math.min(
     resolvedMax,
     candidates.length,
-    5 - player.field.length,
+    5 - (summonPlayer?.field?.length || 0),
   );
 
   if (maxSelect === 0) {
@@ -557,7 +578,7 @@ export async function handleSpecialSummonFromZone(
 
   const dynamicMaxSelect =
     dynamicMax !== null
-      ? Math.min(dynamicMax, dynamicCap, 5 - player.field.length)
+      ? Math.min(dynamicMax, dynamicCap, 5 - (summonPlayer?.field?.length || 0))
       : maxSelect;
 
   // Helper para multi-select inteligente
@@ -714,6 +735,18 @@ async function summonCards(
           (typeof engine.findCardZone === "function"
             ? engine.findCardZone(player, card)
             : fromZoneName);
+    const restrictionCheck = game?.canSpecialSummonUnderRestrictions?.(
+      card,
+      summonPlayer,
+      {
+        summonMethod: "special",
+        fromZone: resolvedFromZone || fromZoneName || undefined,
+        silent: false,
+      },
+    );
+    if (restrictionCheck?.ok === false) {
+      continue;
+    }
 
     // The effect controller chooses the position even when the summon lands on
     // another player's field.

@@ -282,7 +282,9 @@ export async function runActivationPipeline(config = {}) {
   const opensNegationWindow = (effect) =>
     Array.isArray(effect?.actions) &&
     effect.actions.some(
-      (action) => action?.type === "negate_summon_or_activation_and_destroy",
+      (action) =>
+        action?.type === "negate_summon_or_activation_and_destroy" ||
+        action?.type === "negate_activation",
     );
 
   const offerActivationNegationWindow = async () => {

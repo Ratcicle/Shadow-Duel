@@ -5,6 +5,7 @@
 
 import {
   formatCardKindSubtypeLine,
+  formatCardPreviewDescriptionHtml,
   formatMonsterDetailHtml,
   formatMonsterStatsLine,
   getCardDisplayDescription,
@@ -293,6 +294,7 @@ function hideFloatingCounterTooltip() {
 const PREVIEW_CARD_FRAME_CLASSES = [
   "preview-card-monster",
   "preview-card-fusion",
+  "preview-card-synchro",
   "preview-card-ascension",
   "preview-card-spell",
   "preview-card-trap",
@@ -307,6 +309,7 @@ function getPreviewCardFrameClass(card) {
   if (card?.cardKind === "spell") return "preview-card-spell";
   if (card?.cardKind === "trap") return "preview-card-trap";
   if (card?.monsterType === "fusion") return "preview-card-fusion";
+  if (card?.monsterType === "synchro") return "preview-card-synchro";
   if (card?.monsterType === "ascension") return "preview-card-ascension";
   return "preview-card-monster";
 }
@@ -420,11 +423,10 @@ export function renderPreview(card) {
     setPreviewStatModifierClass(previewAtk, null, "atk");
     setPreviewStatModifierClass(previewDef, null, "def");
   }
-  const desc =
-    getCardDisplayDescription(card) ||
-    card.description ||
-    "No description available.";
-  previewDesc.innerHTML = desc.replace(/\n/g, "<br>");
+  previewDesc.innerHTML = formatCardPreviewDescriptionHtml(
+    card,
+    "No description available.",
+  );
 }
 
 /**
@@ -489,6 +491,8 @@ export function createCardElement(card, visible) {
     const monsterType = (card.monsterType || "").toLowerCase();
     if (monsterType === "fusion") {
       el.classList.add("card-monster-fusion");
+    } else if (monsterType === "synchro") {
+      el.classList.add("card-monster-synchro");
     } else if (monsterType === "ascension") {
       el.classList.add("card-monster-ascension");
     }

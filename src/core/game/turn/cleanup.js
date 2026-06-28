@@ -69,37 +69,41 @@ export function cleanupExpiredBuffs() {
   ].filter(Boolean);
 
   for (const card of allMonsters) {
-    if (
-      !Array.isArray(card.turnBasedBuffs) ||
-      card.turnBasedBuffs.length === 0
-    ) {
-      continue;
-    }
+    if (Array.isArray(card.turnBasedBuffs) && card.turnBasedBuffs.length > 0) {
+      const expiredBuffs = card.turnBasedBuffs.filter(
+        (buff) => this.turnCounter > buff.expiresOnTurn
+      );
 
-    const expiredBuffs = card.turnBasedBuffs.filter(
-      (buff) => this.turnCounter > buff.expiresOnTurn
-    );
+      for (const buff of expiredBuffs) {
+        // Remove stat value
+        if (buff.stat === "atk") {
+          card.atk = Math.max(0, card.atk - buff.value);
+        } else if (buff.stat === "def") {
+          card.def = Math.max(0, card.def - buff.value);
+        }
 
-    for (const buff of expiredBuffs) {
-      // Remove stat value
-      if (buff.stat === "atk") {
-        card.atk = Math.max(0, card.atk - buff.value);
-      } else if (buff.stat === "def") {
-        card.def = Math.max(0, card.def - buff.value);
+        this.devLog?.("TURN_BASED_BUFF_EXPIRED", {
+          summary: `${card.name} buff expired (${buff.id})`,
+          card: card.name,
+          buffId: buff.id,
+          stat: buff.stat,
+        });
       }
 
-      this.devLog?.("TURN_BASED_BUFF_EXPIRED", {
-        summary: `${card.name} buff expired (${buff.id})`,
-        card: card.name,
-        buffId: buff.id,
-        stat: buff.stat,
-      });
+      // Remove expired buffs from the list
+      card.turnBasedBuffs = card.turnBasedBuffs.filter(
+        (buff) => this.turnCounter <= buff.expiresOnTurn
+      );
     }
 
-    // Remove expired buffs from the list
-    card.turnBasedBuffs = card.turnBasedBuffs.filter(
-      (buff) => this.turnCounter <= buff.expiresOnTurn
-    );
+    if (Array.isArray(card.protectionEffects)) {
+      card.protectionEffects = card.protectionEffects.filter(
+        (entry) =>
+          entry &&
+          (!Number.isFinite(entry.expiresOnTurn) ||
+            this.turnCounter <= entry.expiresOnTurn),
+      );
+    }
   }
 }
 
@@ -251,6 +255,10 @@ export function cleanupTempBoosts(player) {
       card.def = card.originalDef;
       card.originalDef = null;
     }
+    if (card.originalLevel != null) {
+      card.level = card.originalLevel;
+      card.originalLevel = null;
+    }
 
     // Remove temporary effect negation; field-presence negation is cleared on move.
     if (card.effectsNegated && card.effectsNegatedDuration !== "while_faceup") {
@@ -261,6 +269,8 @@ export function cleanupTempBoosts(player) {
     card.tempBattleIndestructible = false;
     card.battleDamageHealsControllerThisTurn = false;
     card.canAttackDirectlyThisTurn = false;
+    delete card.attackLimitThisTurn;
+    delete card.attackLimitDuration;
     delete card.extraAttackTargetRestriction;
     delete card.passiveExtraAttackTargetRestriction;
 

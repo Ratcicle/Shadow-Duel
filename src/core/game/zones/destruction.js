@@ -19,6 +19,40 @@ function getDestructionProtectionType(cause) {
   return cause === "battle" ? "battle_destruction" : "effect_destruction";
 }
 
+function samePlayer(left, right) {
+  if (!left || !right) return false;
+  return left === right || (left.id && right.id && left.id === right.id);
+}
+
+function protectionDurationIsActive(game, card, protection) {
+  if (!protection) return false;
+  if (protection.duration === "while_faceup") {
+    return !card?.isFacedown;
+  }
+  if (Number.isFinite(protection.expiresOnTurn)) {
+    return Number(game?.turnCounter || 0) <= protection.expiresOnTurn;
+  }
+  if (protection.duration === "end_of_turn") {
+    return Number(game?.turnCounter || 0) === protection.grantedOnTurn;
+  }
+  if (typeof protection.duration === "number") {
+    return Number(game?.turnCounter || 0) <= protection.duration;
+  }
+  return true;
+}
+
+function protectionSourceOwnerMatches(game, protection, owner, sourcePlayer) {
+  const rule = protection?.sourceOwner || "any";
+  if (rule === "any") return true;
+  if (!owner || !sourcePlayer) return false;
+  if (rule === "self") return samePlayer(owner, sourcePlayer);
+  if (rule === "opponent") {
+    const opponent = game?.getOpponent?.(owner) || null;
+    return samePlayer(opponent, sourcePlayer);
+  }
+  return false;
+}
+
 function findConditionalDestructionProtection(
   game,
   card,
@@ -35,6 +69,12 @@ function findConditionalDestructionProtection(
     if (!effect || effect.timing !== "passive") continue;
     const passive = effect.passive || {};
     if (passive.type !== "conditional_protection") continue;
+    if (
+      game.effectEngine?.isCardEffectNegated?.(card) ||
+      (!game.effectEngine?.isCardEffectNegated && card.effectsNegated === true)
+    ) {
+      continue;
+    }
 
     const protectedTypes = asArray(
       passive.protectionType ||
@@ -151,6 +191,13 @@ function findConditionalDestructionProtectionAura(
     const sourceCard = source.card;
     const sourceOwner = source.owner;
     if (!sourceCard || !Array.isArray(sourceCard.effects)) continue;
+    if (
+      game.effectEngine?.isCardEffectNegated?.(sourceCard) ||
+      (!game.effectEngine?.isCardEffectNegated &&
+        sourceCard.effectsNegated === true)
+    ) {
+      continue;
+    }
 
     for (const effect of sourceCard.effects) {
       const passive = effect?.passive || {};
@@ -294,17 +341,8 @@ export async function destroyCard(card, options = {}) {
 
         const activeProtection = card.protectionEffects.find((p) => {
           if (p.type !== protectionType) return false;
-
-          if (p.duration === "while_faceup") {
-            return !card.isFacedown;
-          }
-          if (p.duration === "end_of_turn") {
-            return this.turnCounter === p.grantedOnTurn;
-          }
-          if (typeof p.duration === "number") {
-            return this.turnCounter <= p.duration;
-          }
-          return true;
+          if (!protectionDurationIsActive(this, card, p)) return false;
+          return protectionSourceOwnerMatches(this, p, owner, sourcePlayer);
         });
 
         if (activeProtection) {

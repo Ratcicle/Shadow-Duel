@@ -44,6 +44,7 @@ export async function resolveEvent(eventName, payload) {
       tribute: "Tribute",
       special: "Special",
       fusion: "Fusion",
+      synchro: "Synchro",
       ascension: "Ascension",
       flip: "Flip",
     };

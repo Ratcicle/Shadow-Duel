@@ -3,6 +3,7 @@ import {
   MAX_EXTRA_DECK_SIZE,
   cardHasArchetypeName,
   getSortedCardPool,
+  isExtraDeckMonster,
 } from "./deckState.js";
 
 const LAB_ZONE_CONFIG = [
@@ -101,7 +102,7 @@ export function createLaboratoryController({
     return cardDatabase.filter((card) => {
       if (!cardMatchesLabArchetype(card, archetype)) return false;
       if (zone === "extraDeck") {
-        return card.monsterType === "fusion" || card.monsterType === "ascension";
+        return isExtraDeckMonster(card);
       }
       if (zone === "field") return card.cardKind === "monster";
       if (zone === "spellTrap") {
@@ -114,7 +115,7 @@ export function createLaboratoryController({
         return card.cardKind === "spell" && card.subtype === "field";
       }
       if (zone === "deck" || zone === "hand") {
-        return card.monsterType !== "fusion" && card.monsterType !== "ascension";
+        return !isExtraDeckMonster(card);
       }
       return true;
     });

@@ -58,6 +58,12 @@ export const CARD_ID_RANGES = Object.freeze([
     start: 451,
     end: 500,
   }),
+  Object.freeze({
+    key: "techZero",
+    label: "Tech-Zero",
+    start: 501,
+    end: 550,
+  }),
 ]);
 
 export const CARD_ID_RANGE_BY_KEY = new Map(

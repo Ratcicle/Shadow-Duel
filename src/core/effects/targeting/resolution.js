@@ -22,6 +22,7 @@ function buildContextTargetFilters(def = {}) {
     ...(def.maxAtk !== undefined ? { maxAtk: def.maxAtk } : {}),
     ...(def.minDef !== undefined ? { minDef: def.minDef } : {}),
     ...(def.maxDef !== undefined ? { maxDef: def.maxDef } : {}),
+    ...(def.isTuner !== undefined ? { isTuner: def.isTuner } : {}),
     ...(def.lastSummonMethods !== undefined
       ? { lastSummonMethods: def.lastSummonMethods }
       : {}),
@@ -111,7 +112,18 @@ function contextTargetMatchesDef(engine, card, def = {}, ctx = {}) {
  * @returns {Object} Result with ok/targets or needsSelection/selectionContract
  */
 export function resolveTargets(targetDefs, ctx, selections) {
-  const targetMap = {};
+  const existingActionTargets =
+    ctx?._actionTargets &&
+    typeof ctx._actionTargets === "object" &&
+    !Array.isArray(ctx._actionTargets)
+      ? ctx._actionTargets
+      : {};
+  const targetMap = Object.fromEntries(
+    Object.entries(existingActionTargets).map(([id, value]) => [
+      id,
+      Array.isArray(value) ? value.filter(Boolean) : value ? [value] : [],
+    ]),
+  );
   const requirements = [];
   let needsSelection = false;
   const activationContext = ctx?.activationContext || {};
@@ -394,6 +406,7 @@ export function resolveTargets(targetDefs, ctx, selections) {
     if (def.cardName) filters.name = def.cardName;
     if (def.subtype) filters.subtype = def.subtype;
     if (def.requireFaceup) filters.faceUp = true;
+    if (def.isTuner !== undefined) filters.isTuner = def.isTuner;
     if (def.position && def.position !== "any") {
       filters.position = def.position;
     }

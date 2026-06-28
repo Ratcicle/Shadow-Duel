@@ -37,6 +37,7 @@ const VALID_EVENTS = new Set([
   "card_moved",
   "counter_removed",
   "standby_phase",
+  "end_phase",
   "attack_declared",
   "battle_damage",
   "opponent_damage",
@@ -251,6 +252,23 @@ export function validateCardDatabase() {
             );
           }
         });
+      }
+    }
+    if (card.monsterType === "synchro") {
+      if (card.cardKind !== "monster") {
+        warnings.push(
+          formatIssue(
+            card,
+            'Synchro card should have cardKind "monster".',
+            null,
+            null,
+          ),
+        );
+      }
+      if (!Number.isFinite(Number(card.level)) || Number(card.level) <= 0) {
+        errors.push(
+          formatIssue(card, "Synchro cards must define a positive Level."),
+        );
       }
     }
     if (typeof card.id !== "number" || !Number.isFinite(card.id)) {
@@ -470,7 +488,11 @@ export function validateCardDatabase() {
           warnings.push(formatIssue(card, message, effectIndex, actionIndex));
         }
 
-        for (const ref of [action.resultRef, action.storeResultAs]) {
+        for (const ref of [
+          action.resultRef,
+          action.storeResultAs,
+          action.storeNegatedCardAs,
+        ]) {
           if (typeof ref === "string" && ref.length > 0) {
             producedTargetIds.add(ref);
           }

@@ -18,6 +18,21 @@ import {
   getTributeCardsFromIndices,
   getTributeValueTotal,
 } from "../../game/summon/tributeValue.js";
+import {
+  canUseNormalSummonForCard,
+  recordNormalSummonForTurn,
+} from "../../Player.js";
+
+function canSimulatedSpecialSummon(card, player) {
+  if (!card || !player) return false;
+  const restrictions = Array.isArray(player.specialSummonRestrictions)
+    ? player.specialSummonRestrictions
+    : [];
+  return restrictions.every((restriction) => {
+    const filters = restriction?.allowedFilters;
+    return !filters || matchesTargetFilters(card, filters, null, "self");
+  });
+}
 
 export function resolveSimulatedHandIndex(player, action, expectedKind = null) {
   const hand = player?.hand || [];
@@ -717,6 +732,7 @@ export function applyGenericSimulatedMainPhaseAction(
       if (card.cardKind !== "monster") break;
       if (card.cannotBeNormalSummonedOrSet) break;
       if (card.summonRestrict === "shadow_heart_invocation_only") break;
+      if (!canUseNormalSummonForCard(player, card)) break;
       const tributeInfo = options.getTributeRequirementFor?.(card, player) || {
         tributesNeeded: 0,
       };
@@ -775,6 +791,7 @@ export function applyGenericSimulatedMainPhaseAction(
         });
       }
       player.summonCount = (player.summonCount || 0) + 1;
+      recordNormalSummonForTurn(player, newCard);
       break;
     }
 
@@ -1161,6 +1178,7 @@ export function applyGenericSimulatedMainPhaseAction(
       const ascensionCard =
         extraIndex >= 0 ? player.extraDeck[extraIndex] : action.ascensionCard;
       if (!ascensionCard) break;
+      if (!canSimulatedSpecialSummon(ascensionCard, player)) break;
       player.field.splice(materialIndex, 1);
       player.graveyard.push(material);
       if (extraIndex >= 0) player.extraDeck.splice(extraIndex, 1);
@@ -1189,6 +1207,7 @@ export function applyGenericSimulatedMainPhaseAction(
       const { card: extraDeckCard, index: extraIndex } =
         findSimulatedExtraDeckCard(player, action);
       if (!extraDeckCard || extraDeckCard.cardKind !== "monster") break;
+      if (!canSimulatedSpecialSummon(extraDeckCard, player)) break;
       const materials = resolveSimulatedExtraDeckMaterials(player, action);
       const requiredCount = Number(
         action.requiredMaterialCount ||

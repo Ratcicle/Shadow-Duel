@@ -124,7 +124,10 @@ export function handleFieldPresenceTypeSummonCounters(payload) {
       // Check summon method filter
       const summonMethods = passive.summonMethods || ["special"];
       const isSpecialSummon =
-        method === "special" || method === "ascension" || method === "fusion";
+        method === "special" ||
+        method === "ascension" ||
+        method === "fusion" ||
+        method === "synchro";
       if (summonMethods.includes("special") && !isSpecialSummon) continue;
       if (!summonMethods.includes("special") && !summonMethods.includes(method))
         continue;

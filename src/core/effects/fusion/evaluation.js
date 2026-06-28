@@ -19,6 +19,7 @@ function requirementToString(requirement) {
     if (
       requirement.cardKind ||
       requirement.isToken !== undefined ||
+      requirement.isTuner !== undefined ||
       requirement.attribute ||
       requirement.minLevel !== undefined ||
       requirement.maxLevel !== undefined ||
@@ -218,6 +219,16 @@ export function canSummonFusion(
 ) {
   const requirements = this.getFusionRequirements(fusionMonster);
   if (!requirements || requirements.length === 0) return false;
+  const restrictionCheck = this.game?.canSpecialSummonUnderRestrictions?.(
+    fusionMonster,
+    player,
+    {
+      summonMethod: "fusion",
+      summonProcedure: "fusion",
+      silent: true,
+    },
+  );
+  if (restrictionCheck?.ok === false) return false;
 
   // Calculate total required materials
   const requiredCount = this.getRequiredMaterialCount(fusionMonster);

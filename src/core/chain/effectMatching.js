@@ -738,20 +738,26 @@ export function findQuickMonsterEffect(card, context, player) {
       }
     }
 
+    const responseContext =
+      this.getEffectChainResponseContext?.(effect, context) || context;
     const ctx = {
       source: card,
       player: owner,
       opponent,
       activationZone: "field",
+      actionContext: responseContext || null,
       activationContext: {
         isPreview: true,
         preview: true,
         autoSelectSingleTarget: true,
         logTargets: false,
+        context: responseContext || null,
+        activationAttempt: responseContext?.activationAttempt || null,
+        respondingToChainLink: responseContext?.respondingToChainLink || null,
       },
-      attacker: context?.attacker,
-      defender: context?.defender,
-      target: context?.target,
+      attacker: responseContext?.attacker,
+      defender: responseContext?.defender,
+      target: responseContext?.target,
     };
 
     if (effect.conditions && effectEngine?.evaluateConditions) {

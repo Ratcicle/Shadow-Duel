@@ -263,6 +263,80 @@ async function presentSummonBeforeAfterSummon(game, options = {}) {
   }
 }
 
+function getFollowupPlayer(game, entry, fallbackPlayer) {
+  if (!game || !entry?.ownerId) return fallbackPlayer || null;
+  if (game.player?.id === entry.ownerId) return game.player;
+  if (game.bot?.id === entry.ownerId) return game.bot;
+  return fallbackPlayer || null;
+}
+
+async function applySynchroMaterialFollowupsBeforeAfterSummon(
+  game,
+  summonedCard,
+  ownerPlayer,
+  otherPlayer,
+  followups = [],
+  options = {},
+) {
+  if (
+    !game?.effectEngine ||
+    !summonedCard ||
+    !Array.isArray(followups) ||
+    followups.length === 0
+  ) {
+    return null;
+  }
+
+  for (const entry of followups) {
+    const actions = Array.isArray(entry?.actions) ? entry.actions : [];
+    if (actions.length === 0) continue;
+
+    const followupPlayer = getFollowupPlayer(game, entry, ownerPlayer);
+    const followupOpponent =
+      followupPlayer && typeof game.getOpponent === "function"
+        ? game.getOpponent(followupPlayer)
+        : otherPlayer;
+    const actionContext = {
+      ...(options.actionContext || {}),
+      synchroMaterialFollowup: true,
+      synchroSummonContextId: entry.synchroSummonContextId || null,
+    };
+    const ctx = {
+      source: entry.source || null,
+      player: followupPlayer || ownerPlayer,
+      opponent: followupOpponent || otherPlayer,
+      summonedCard,
+      synchroSummonedCard: summonedCard,
+      summonMethod: options.summonMethod || "synchro",
+      summonProcedure: options.summonProcedure || "synchro",
+      actionContext,
+      activationContext: {
+        source: entry.source || null,
+        player: followupPlayer || ownerPlayer,
+        sourceZone: "graveyard",
+        activationZone: "graveyard",
+        actionContext,
+      },
+    };
+    const targets = {
+      synchro_summoned_card: [summonedCard],
+      summonedCard: [summonedCard],
+    };
+    const result = await game.effectEngine.applyActions(actions, ctx, targets);
+    if (result?.needsSelection) {
+      return result;
+    }
+    if (result?.success === false) {
+      game.devLog?.("SYNCHRO_MATERIAL_FOLLOWUP_FAILED", {
+        source: entry.sourceName || entry.source?.name || null,
+        reason: result.reason || null,
+      });
+    }
+  }
+
+  return null;
+}
+
 function hasMatchingDestroyedGraveyardTrigger(card, fromZone, options = {}) {
   if (!card || card.cardKind !== "monster") return false;
   if (fromZone !== "field" || options.wasDestroyed !== true) return false;
@@ -395,6 +469,108 @@ function findSendToGraveReplacementTarget(game, card, fromOwner) {
 
         const redirectTo = passive.redirectTo || "banished";
         return redirectTo;
+      }
+    }
+  }
+
+  return null;
+}
+
+function asArray(value, fallback = []) {
+  if (value === undefined || value === null) return fallback;
+  return Array.isArray(value) ? value : [value];
+}
+
+function buildBanishProtectionFilters(passive = {}) {
+  const scope = passive.targetScope || {};
+  const filters = { ...(scope.filters || passive.filters || {}) };
+  for (const key of [
+    "cardKind",
+    "cardName",
+    "name",
+    "cardId",
+    "cardIds",
+    "subtype",
+    "monsterType",
+    "type",
+    "archetype",
+    "level",
+    "levelOp",
+    "minLevel",
+    "maxLevel",
+    "requireFaceup",
+    "isToken",
+    "isTuner",
+  ]) {
+    const value = scope[key] ?? passive[key];
+    if (value !== undefined && filters[key] === undefined) {
+      filters[key] = value;
+    }
+  }
+  return filters;
+}
+
+function banishProtectionAppliesToCard(game, card, cardOwner, cardZone) {
+  if (!game || !card || !cardOwner) return null;
+
+  const sourceOwners = [game.player, game.bot].filter(Boolean);
+  for (const sourceOwner of sourceOwners) {
+    const sources = [
+      ...(sourceOwner.field || []),
+      ...(sourceOwner.spellTrap || []),
+      sourceOwner.fieldSpell,
+    ].filter(Boolean);
+
+    for (const sourceCard of sources) {
+      if (!sourceCard || sourceCard.isFacedown) continue;
+      if (game.effectEngine?.isEffectNegated?.(sourceCard)) continue;
+
+      const sourceZone =
+        game.findCardZone?.(sourceOwner, sourceCard) ||
+        findCardLocation(game, sourceCard)?.zone ||
+        null;
+      const effects = Array.isArray(sourceCard.effects)
+        ? sourceCard.effects
+        : [];
+      for (const effect of effects) {
+        if (!effect || effect.timing !== "passive") continue;
+        const passive = effect.passive || {};
+        if (passive.type !== "banish_protection") continue;
+        if (effect.requireZone && effect.requireZone !== sourceZone) continue;
+        if (
+          (effect.requireFaceup === true || passive.requireFaceup === true) &&
+          sourceCard.isFacedown
+        ) {
+          continue;
+        }
+
+        const scope = passive.targetScope || {};
+        const ownerRule = scope.owner || passive.targetOwner || "self";
+        if (ownerRule !== "any" && ownerRule !== "both") {
+          const expectedOwner =
+            ownerRule === "opponent"
+              ? game.getOpponent?.(sourceOwner)
+              : sourceOwner;
+          if (expectedOwner !== cardOwner) continue;
+        }
+
+        const zones = asArray(scope.zones ?? scope.zone ?? passive.zones ?? passive.zone, [
+          "field",
+        ]);
+        if (!zones.includes(cardZone)) continue;
+        if ((scope.excludeSelf || passive.excludeSelf) && card === sourceCard) {
+          continue;
+        }
+
+        const filters = buildBanishProtectionFilters(passive);
+        if (
+          Object.keys(filters).length > 0 &&
+          !game.effectEngine?.cardMatchesFilters?.(card, filters)
+        ) {
+          continue;
+        }
+
+        return { sourceCard, effect, passive };
       }
     }
   }
@@ -640,6 +816,10 @@ function cardMatchesFieldLimitFilters(card, filters = {}) {
     return false;
   }
 
+  if (filters.isTuner !== undefined) {
+    if ((card.isTuner === true) !== Boolean(filters.isTuner)) return false;
+  }
+
   if (filters.type) {
     const cardTypes = Array.isArray(card.types) ? card.types : [card.type];
     if (!matchesAny(cardTypes, filters.type)) return false;
@@ -680,6 +860,108 @@ function cardMatchesFieldLimitFilters(card, filters = {}) {
   return true;
 }
 
+const SPECIAL_SUMMON_METHODS = new Set(["special", "fusion", "ascension", "synchro"]);
+
+function isRestrictedSpecialSummonMethod(method) {
+  return SPECIAL_SUMMON_METHODS.has(method);
+}
+
+function getSummonMethodFromOptions(options = {}) {
+  return (
+    options.summonMethod ||
+    options.summonMethodOverride ||
+    options.method ||
+    null
+  );
+}
+
+function cardMatchesRestrictionFilters(game, card, filters = {}) {
+  if (!filters || typeof filters !== "object") return true;
+  if (typeof game?.effectEngine?.cardMatchesFilters === "function") {
+    return game.effectEngine.cardMatchesFilters(card, filters);
+  }
+  return cardMatchesFieldLimitFilters(card, filters);
+}
+
+function normalizeSpecialSummonRestriction(game, restriction = {}) {
+  const duration = restriction.duration || "until_end_turn";
+  const expiresOnTurn =
+    duration === "until_end_turn"
+      ? game?.turnCounter || 0
+      : Number.isFinite(restriction.expiresOnTurn)
+        ? restriction.expiresOnTurn
+        : null;
+  return {
+    allowedFilters: { ...(restriction.allowedFilters || {}) },
+    duration,
+    expiresOnTurn,
+    reason: restriction.reason || null,
+    sourceName: restriction.sourceName || restriction.sourceCard?.name || null,
+    sourceId: restriction.sourceId || restriction.sourceCard?.id || null,
+    effectId: restriction.effectId || null,
+  };
+}
+
+export function registerSpecialSummonRestriction(player, restriction = {}) {
+  if (!player || !restriction?.allowedFilters) return false;
+  if (!player.specialSummonRestrictions) {
+    player.specialSummonRestrictions = [];
+  }
+  player.specialSummonRestrictions.push(
+    normalizeSpecialSummonRestriction(this, restriction),
+  );
+  this.effectEngine?.clearTargetingCache?.();
+  this.updateBoard?.();
+  return true;
+}
+
+export function cleanupExpiredSpecialSummonRestrictions(player = null) {
+  const players = player ? [player] : [this?.player, this?.bot].filter(Boolean);
+  const currentTurn = Number(this?.turnCounter || 0);
+  for (const entryPlayer of players) {
+    const restrictions = Array.isArray(entryPlayer?.specialSummonRestrictions)
+      ? entryPlayer.specialSummonRestrictions
+      : [];
+    entryPlayer.specialSummonRestrictions = restrictions.filter((restriction) => {
+      if (!restriction || restriction.duration !== "until_end_turn") return true;
+      if (!Number.isFinite(restriction.expiresOnTurn)) return true;
+      return restriction.expiresOnTurn >= currentTurn;
+    });
+  }
+}
+
+export function canSpecialSummonUnderRestrictions(card, player, options = {}) {
+  if (!card || !player) {
+    return { ok: false, reason: "Invalid Special Summon restriction check." };
+  }
+  const method = getSummonMethodFromOptions(options) || "special";
+  if (!isRestrictedSpecialSummonMethod(method)) {
+    return { ok: true };
+  }
+
+  this.cleanupExpiredSpecialSummonRestrictions?.(player);
+  const restrictions = Array.isArray(player.specialSummonRestrictions)
+    ? player.specialSummonRestrictions
+    : [];
+  for (const restriction of restrictions) {
+    if (!restriction?.allowedFilters) continue;
+    if (cardMatchesRestrictionFilters(this, card, restriction.allowedFilters)) {
+      continue;
+    }
+    const reason =
+      restriction.reason ||
+      `${player.name || "Player"} cannot Special Summon ${card.name || "that card"} under the current restriction.`;
+    if (options.silent !== true) this?.ui?.log?.(reason);
+    return {
+      ok: false,
+      reason,
+      code: "special_summon_restricted",
+      restriction,
+    };
+  }
+  return { ok: true };
+}
+
 /**
  * Generic field-limit check for declarative card rules.
  * @this {import('../../Game.js').default}
@@ -690,6 +972,19 @@ export function canPlaceCardOnField(card, destPlayer, options = {}) {
   }
   if (card.cardKind !== "monster") {
     return { ok: true };
+  }
+
+  const summonMethod = getSummonMethodFromOptions(options);
+  if (isRestrictedSpecialSummonMethod(summonMethod)) {
+    const restrictionCheck = this.canSpecialSummonUnderRestrictions?.(
+      card,
+      destPlayer,
+      {
+        ...options,
+        summonMethod,
+      },
+    );
+    if (restrictionCheck?.ok === false) return restrictionCheck;
   }
 
   const excludedCards = new Set(options.excludeCards || []);
@@ -965,6 +1260,7 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
   }
   if (toZone === "field") {
     const summonProcedure = options.summonProcedure || null;
+    const summonMethod = options.summonMethodOverride || "special";
     if (
       Array.isArray(card.specialSummonOnlyBy) &&
       !card.specialSummonOnlyBy.includes(summonProcedure)
@@ -981,6 +1277,8 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     const limitCheck = this.canPlaceCardOnField?.(card, destPlayer, {
       isFacedown: options.isFacedown,
       excludeCards: options.excludeCards || [],
+      summonMethod,
+      summonProcedure,
     });
     if (limitCheck && limitCheck.ok === false) {
       return {
@@ -1013,6 +1311,47 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
         fromZone: replacementResult.fromZone || options.fromZone || null,
         toZone: replacementResult.toZone || "deck",
       };
+    }
+  }
+
+  const initialLocation = findCardLocation(this, card, options.fromZone || null);
+  if (initialLocation) {
+    let projectedToZone = toZone;
+    if (
+      projectedToZone === "graveyard" &&
+      !card.isToken &&
+      options?.skipSendToGraveReplacement !== true
+    ) {
+      const redirectTarget = findSendToGraveReplacementTarget(
+        this,
+        card,
+        initialLocation.owner,
+      );
+      if (redirectTarget) {
+        projectedToZone = redirectTarget;
+      }
+    }
+    if (
+      initialLocation.zone === "field" &&
+      projectedToZone !== "field" &&
+      card.banishWhenLeavesField === true &&
+      !card.isToken
+    ) {
+      projectedToZone = "banished";
+    }
+    if (projectedToZone === "banished") {
+      const protection = banishProtectionAppliesToCard(
+        this,
+        card,
+        initialLocation.owner,
+        initialLocation.zone,
+      );
+      if (protection) {
+        this.ui?.log?.(
+          `${card.name} cannot be banished while ${protection.sourceCard.name} is face-up.`,
+        );
+        return { success: false, reason: "banish_protected" };
+      }
     }
   }
 
@@ -1135,7 +1474,9 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
   }
 
   const isExtraDeckMonster =
-    card.monsterType === "fusion" || card.monsterType === "ascension";
+    card.monsterType === "fusion" ||
+    card.monsterType === "ascension" ||
+    card.monsterType === "synchro";
   const allowExtraDeckMonsterToHand =
     options.allowExtraDeckMonsterToHand === true;
   const shouldRedirectExtraDeckMonsterToExtraDeck =
@@ -1233,6 +1574,16 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
   cleanupLinkedPermanentBuffsWhenSourceLeavesField(this, card, fromZone, toZone);
   cleanupDeclaredValuesWhenSourceLeavesActiveZone(card, fromZone, toZone);
 
+  const activeZones = ["field", "spellTrap", "fieldSpell"];
+  if (
+    activeZones.includes(fromZone) &&
+    !activeZones.includes(toZone) &&
+    (card.cardKind === "spell" || card.cardKind === "trap")
+  ) {
+    card.effectsNegated = false;
+    card.effectsNegatedDuration = null;
+  }
+
   if (fromZone === "field" && card.cardKind === "monster") {
     card.summonedTurn = null;
     card.setTurn = null;
@@ -1240,6 +1591,8 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     card.cannotAttackThisTurn = false;
     card.cannotAttackUntilTurn = null;
     card.immuneToOpponentEffectsUntilTurn = null;
+    delete card.attackLimitThisTurn;
+    delete card.attackLimitDuration;
 
     // Clean up temporary stat modifiers from effects (e.g., Shadow-Heart Coward debuff)
     if (card.tempAtkBoost) {
@@ -1259,6 +1612,10 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     if (card.originalDef != null) {
       card.def = card.originalDef;
       card.originalDef = null;
+    }
+    if (toZone !== "field" && card.originalLevel != null) {
+      card.level = card.originalLevel;
+      card.originalLevel = null;
     }
     if (Array.isArray(card.turnBasedBuffs) && card.turnBasedBuffs.length > 0) {
       for (const buff of card.turnBasedBuffs) {
@@ -1320,7 +1677,7 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
       // ✅ Clear protection effects when card leaves field (duration "while_faceup")
       if (Array.isArray(card.protectionEffects)) {
         card.protectionEffects = card.protectionEffects.filter(
-          (p) => p.duration !== "while_faceup"
+          (p) => p.removeOnLeave === false && p.duration !== "while_faceup"
         );
       }
     }
@@ -1768,19 +2125,36 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
     const ownerPlayer = card.owner === "player" ? this.player : this.bot;
     const otherPlayer = ownerPlayer === this.player ? this.bot : this.player;
     const summonMethod = options.summonMethodOverride || "special";
-    await presentSummonBeforeAfterSummon(this, options);
-    afterSummonResult = await this.emit("after_summon", {
-      card,
-      player: ownerPlayer,
-      opponent: otherPlayer,
-      method: summonMethod,
-      fromZone,
-      summonProcedure: options.summonProcedure || null,
-      position: options.position || card.position || null,
-      sourceCard: options.sourceCard || options.source || null,
-      source: options.source || options.sourceCard || null,
-      effectId: options.effectId || null,
-    });
+    const followupResult =
+      await applySynchroMaterialFollowupsBeforeAfterSummon(
+        this,
+        card,
+        ownerPlayer,
+        otherPlayer,
+        options.synchroMaterialFollowups,
+        {
+          actionContext: options.actionContext || null,
+          summonMethod,
+          summonProcedure: options.summonProcedure || null,
+        },
+      );
+    if (followupResult?.needsSelection) {
+      afterSummonResult = followupResult;
+    } else {
+      await presentSummonBeforeAfterSummon(this, options);
+      afterSummonResult = await this.emit("after_summon", {
+        card,
+        player: ownerPlayer,
+        opponent: otherPlayer,
+        method: summonMethod,
+        fromZone,
+        summonProcedure: options.summonProcedure || null,
+        position: options.position || card.position || null,
+        sourceCard: options.sourceCard || options.source || null,
+        source: options.source || options.sourceCard || null,
+        effectId: options.effectId || null,
+      });
+    }
   }
 
   if (toZone === "graveyard") {
@@ -1826,6 +2200,8 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
         destroyCause: options.destroyCause || null,
         destroySource:
           options.destroySource || options.sourceCard || options.source || null,
+        contextLabel: options.contextLabel || null,
+        actionContext: options.actionContext || null,
         effectsNegatedAtFieldExit,
       });
       if (

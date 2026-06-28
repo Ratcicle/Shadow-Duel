@@ -24,6 +24,9 @@ export {
   handleDrawAndSummon,
   handleAbyssalSerpentDelayedSummon,
   handleSpecialSummonFromDeckWithCounterLimit,
+  handleRestrictSpecialSummons,
+  handleDeSynchro,
+  handleSynchroSummonFromExtraDeck,
 } from "./summon.js";
 
 // Destruction
@@ -46,6 +49,7 @@ export {
   handleGrantProtection,
   handleBanishAndBuff,
   handleBuffAtkByLpGainedThisTurn,
+  handleSetAttackLimitFromZoneCount,
   handleSwitchPosition,
   handleSwitchDefenderPositionOnAttack,
   handlePermanentBuffNamed,
@@ -58,12 +62,16 @@ export {
   handleConditionalTargetActions,
   handleOptionalTargetActions,
   handleRegisterBattlePairEffect,
+  handleRegisterSynchroMaterialFollowup,
   handleRegisterTemporaryEventEffect,
   handleRedirectCurrentAttackToTarget,
   handleSetSourceAfterResolutionIf,
 } from "./conditional.js";
 export { handleChooseActionCase } from "./choice.js";
-export { handleNegateSummonOrActivationAndDestroy } from "./negation.js";
+export {
+  handleNegateActivation,
+  handleNegateSummonOrActivationAndDestroy,
+} from "./negation.js";
 
 // Resources
 export {

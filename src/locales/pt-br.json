@@ -259,6 +259,7 @@
       "categoryTraps": "Armadilhas",
       "categoryExtra": "Extra Deck",
       "categoryFusion": "Fus\u00e3o",
+      "categorySynchro": "Sincro",
       "categoryAscension": "Ascens\u00e3o",
       "viewGrid": "Grade",
       "viewList": "Lista",
@@ -353,6 +354,40 @@
         }
       }
     },
+    "tech_zero_energy_core_level_mod": {
+      "message": "Escolha como ajustar o N\u00edvel de um monstro \"Tech-Zero\".",
+      "cases": {
+        "increase": {
+          "label": "Aumentar N\u00edvel em 1",
+          "description": "Escolha 1 monstro \"Tech-Zero\" que voc\u00ea controla; aumente o N\u00edvel dele em 1."
+        },
+        "decrease": {
+          "label": "Diminuir N\u00edvel em 1",
+          "description": "Escolha 1 monstro \"Tech-Zero\" que voc\u00ea controla com N\u00edvel 2 ou maior; diminua o N\u00edvel dele em 1."
+        }
+      }
+    },
+    "tech_zero_multimodal_machine_level_mod": {
+      "message": "Escolha como ajustar o N\u00edvel de um monstro que voc\u00ea controla.",
+      "cases": {
+        "increase_1": {
+          "label": "Aumentar N\u00edvel em 1",
+          "description": "Escolha 1 monstro que voc\u00ea controla; aumente o N\u00edvel dele em 1."
+        },
+        "increase_2": {
+          "label": "Aumentar N\u00edvel em 2",
+          "description": "Escolha 1 monstro que voc\u00ea controla; aumente o N\u00edvel dele em 2."
+        },
+        "decrease_1": {
+          "label": "Diminuir N\u00edvel em 1",
+          "description": "Escolha 1 monstro que voc\u00ea controla com N\u00edvel 2 ou maior; diminua o N\u00edvel dele em 1."
+        },
+        "decrease_2": {
+          "label": "Diminuir N\u00edvel em 2",
+          "description": "Escolha 1 monstro que voc\u00ea controla com N\u00edvel 3 ou maior; diminua o N\u00edvel dele em 2."
+        }
+      }
+    },
     "void_serpent_drake_hand_special": {
       "tiers": {
         "1": {
@@ -443,6 +478,10 @@
       "name": "Chamado dos Assombrados",
       "description": "Ative este card ao escolher 1 monstro no seu Cemitério; Invoque o alvo por Invocação-Especial em Posição de Ataque. Quando este card deixar o campo, destrua esse monstro. Quando esse alvo deixar o campo, destrua este card."
     },
+    "19": {
+      "name": "De-Sincro",
+      "description": "Escolha 1 Monstro Sincro no campo; devolva o alvo para o Deck Adicional e, depois, se todos os monstros que foram usados para a Invocação-Sincro desse monstro estiverem no seu Cemitério, você pode Invocá-los por Invocação-Especial. Você só pode ativar 1 \"De-Sincro\" por turno."
+    },
     "101": {
       "name": "Enguia Abissal do Coração Sombrio",
       "description": "Se esse card for atacado em posição de defesa: cause 600 de dano ao oponente. Se esse card for destruído em batalha: você pode adicionar 1 Magia/Armadilha 'Coração Sombrio' do seu cemitério à sua mão."
@@ -525,7 +564,7 @@
     },
     "121": {
       "name": "Dragão Demônio do Coração Sombrio",
-      "description": "Materiais: Dragão de Escamas do Coração Sombrio + Um monstro 'Coração Sombrio' de nível 8 ou superior\nSe esse card for invocado por invocação-Fusão: Escolha 1 card no campo do oponente; destrua-o. Se esse card for destruído em batalha ou por efeitos de card: Você pode invocar um 'Dragão de Escamas do Coração Sombrio' do seu cemitério."
+      "description": "Materiais: Dragão de Escamas do Coração Sombrio + Um monstro 'Coração Sombrio' de nível 8 ou superior Se esse card for invocado por invocação-Fusão: Escolha 1 card no campo do oponente; destrua-o. Se esse card for destruído em batalha ou por efeitos de card: Você pode invocar um 'Dragão de Escamas do Coração Sombrio' do seu cemitério."
     },
     "122": {
       "name": "Senhor da Guerra do Coração Sombrio",
@@ -533,11 +572,11 @@
     },
     "123": {
       "name": "Perseguidor Arctroth do Coração Sombrio",
-      "description": "Material de Ascensão: 'Demônio Arctroth do Coração Sombrio'.\nSe este card for Invocado por Invocação-Ascensão: escolha 1 monstro Invocado por Invocação-Especial com a face para cima que seu oponente controla; o ATK/DEF dele é diminuído pela metade, e este card ganha o ATK/DEF diminuído por esse efeito. Se este card destruir um monstro do oponente em batalha: você pode escolher 1 monstro no Cemitério do seu oponente, exceto o monstro destruído por esta batalha; Invoque-o por Invocação-Especial no campo do oponente e, se isso acontecer, este card pode realizar 1 ataque adicional contra monstros durante esta Fase de Batalha."
+      "description": "Material de Ascensão: 'Demônio Arctroth do Coração Sombrio' Se este card for Invocado por Invocação-Ascensão: escolha 1 monstro Invocado por Invocação-Especial com a face para cima que seu oponente controla; o ATK/DEF dele é diminuído pela metade, e este card ganha o ATK/DEF diminuído por esse efeito. Se este card destruir um monstro do oponente em batalha: você pode escolher 1 monstro no Cemitério do seu oponente, exceto o monstro destruído por esta batalha; Invoque-o por Invocação-Especial no campo do oponente e, se isso acontecer, este card pode realizar 1 ataque adicional contra monstros durante esta Fase de Batalha."
     },
     "124": {
       "name": "Dragão da Devastação do Coração Sombrio",
-      "description": "Material de Ascensão: 'Dragão de Escamas do Coração Sombrio'.\nRequisito: o material deve ter ficado com a face para cima no campo por 3 turnos.\nSe este card for Invocado por Ascensão: ele ganha 700 de ATK até o final deste turno.\nEnquanto este card estiver com a face para cima no campo, negue os efeitos de cards do oponente que impeçam monstros de serem destruídos em batalha.\nSe este card destruir um monstro em Posição de Defesa em batalha: destrua todos os monstros em Posição de Defesa que seu oponente controla."
+      "description": "Material de Ascensão: 'Dragão de Escamas do Coração Sombrio' Requisito: o material deve ter ficado com a face para cima no campo por 3 turnos. Se este card for Invocado por Ascensão: ele ganha 700 de ATK até o final deste turno. Enquanto este card estiver com a face para cima no campo, negue os efeitos de cards do oponente que impeçam monstros de serem destruídos em batalha. Se este card destruir um monstro em Posição de Defesa em batalha: destrua todos os monstros em Posição de Defesa que seu oponente controla."
     },
     "125": {
       "name": "Portador do Coração Sombrio",
@@ -625,15 +664,15 @@
     },
     "171": {
       "name": "Megaescudo Barbarias Luminarca",
-      "description": "Materiais: 'Protetor do Santuário Luminarca' + 1 monstro 'Luminarca' de nível 5 ou maior\nTodo o PV ganho é dobrado. Uma vez por turno, você pode escolher 1 monstro que você controla; troque sua posição de batalha, e se isso acontecer, ele ganha 800 de ATK até o final do turno."
+      "description": "Materiais: 'Protetor do Santuário Luminarca' + 1 monstro 'Luminarca' de nível 5 ou maior Todo o PV ganho é dobrado. Uma vez por turno, você pode escolher 1 monstro que você controla; troque sua posição de batalha, e se isso acontecer, ele ganha 800 de ATK até o final do turno."
     },
     "172": {
       "name": "Fortaleza Égide Luminarca",
-      "description": "Material de Ascensão: 'Portador da Égide Luminarca'.\nRequisito: o material deve ter ficado com a face para cima no campo por 2 turnos.\nSeu oponente deve priorizar este card como alvo de ataques, se possível. Se este card for Invocado por Ascensão: ganhe 500 PV para cada monstro 'Luminarca' que você controla. Uma vez por turno: você pode pagar 1000 PV e, depois, escolher 1 monstro 'Luminarca' com 2000 ou menos de DEF no seu Cemitério; Invoque-o por Invocação-Especial."
+      "description": "Material de Ascensão: 'Portador da Égide Luminarca' Requisito: o material deve ter ficado com a face para cima no campo por 2 turnos. Seu oponente deve priorizar este card como alvo de ataques, se possível. Se este card for Invocado por Ascensão: ganhe 500 PV para cada monstro 'Luminarca' que você controla. Uma vez por turno: você pode pagar 1000 PV e, depois, escolher 1 monstro 'Luminarca' com 2000 ou menos de DEF no seu Cemitério; Invoque-o por Invocação-Especial."
     },
     "173": {
       "name": "Cavaleiro Puro Luminarca",
-      "description": "Materiais: 2 monstros 'Luminarca'\nSe este card for Invocado por Invocação-Fusão: você pode adicionar 1 'Santuário da Cidadela Luminarca' do seu Deck à sua mão. Uma vez por turno, quando você ativar o efeito de uma Magia/Armadilha 'Luminarca' que exija pagar PV: reduza esse custo em 1000. Você só pode usar cada efeito de 'Cavaleiro Puro Luminarca' uma vez por turno."
+      "description": "Materiais: 2 monstros 'Luminarca' Se este card for Invocado por Invocação-Fusão: você pode adicionar 1 'Santuário da Cidadela Luminarca' do seu Deck à sua mão. Uma vez por turno, quando você ativar o efeito de uma Magia/Armadilha 'Luminarca' que exija pagar PV: reduza esse custo em 1000. Você só pode usar cada efeito de 'Cavaleiro Puro Luminarca' uma vez por turno."
     },
     "201": {
       "name": "Conjurador do Vazio",
@@ -661,7 +700,7 @@
     },
     "207": {
       "name": "Rei Oco do Vazio",
-      "description": "Materiais: 3 monstros \"Oco do Vazio\"\nSe este card for destruido em batalha ou por efeito de card: voce pode Invocar por Invocacao-Especial ate 3 \"Oco do Vazio\" do seu Cemiterio. Se este card destruir um monstro do oponente em batalha: voce pode Invocar por Invocacao-Especial 1 \"Oco do Vazio\" do seu Cemiterio. (Efeito Rapido) Voce pode enviar 1 \"Oco do Vazio\" que voce controla para o Cemiterio; este card ganha 1000 ATK ate o final deste turno."
+      "description": "Materiais: 3 monstros \"Oco do Vazio\" Se este card for destruido em batalha ou por efeito de card: voce pode Invocar por Invocacao-Especial ate 3 \"Oco do Vazio\" do seu Cemiterio. Se este card destruir um monstro do oponente em batalha: voce pode Invocar por Invocacao-Especial 1 \"Oco do Vazio\" do seu Cemiterio. (Efeito Rapido) Voce pode enviar 1 \"Oco do Vazio\" que voce controla para o Cemiterio; este card ganha 1000 ATK ate o final deste turno."
     },
     "208": {
       "name": "Aranha Óssea do Vazio",
@@ -685,7 +724,7 @@
     },
     "213": {
       "name": "Berserker do Vazio",
-      "description": "Materiais: Brutamontes Matador do Vazio (no campo) + 1 monstro 'Vazio'\nEste card pode realizar até 2 ataques durante cada Fase de Batalha. Uma vez por turno, se este card destruir um monstro do oponente em batalha: você pode escolher 1 card que seu oponente controla; devolva-o para a mão."
+      "description": "Materiais: Brutamontes Matador do Vazio (no campo) + 1 monstro 'Vazio' Este card pode realizar até 2 ataques durante cada Fase de Batalha. Uma vez por turno, se este card destruir um monstro do oponente em batalha: você pode escolher 1 card que seu oponente controla; devolva-o para a mão."
     },
     "214": {
       "name": "Draco Serpente do Vazio",
@@ -693,7 +732,7 @@
     },
     "215": {
       "name": "Titã Hidra do Vazio",
-      "description": "Materiais: 6 monstros 'Vazio'\nSe este card for Invocado por Invocação-Fusão: destrua todos os cards de Magia e Armadilha que seu oponente controla e, se isso acontecer, compre 1 card para cada card destruído. Uma vez por turno: se este card seria destruído em batalha ou por efeitos de card: você pode reduzir o ATK dele em 700; negue a destruição deste card."
+      "description": "Materiais: 6 monstros 'Vazio' Se este card for Invocado por Invocação-Fusão: destrua todos os cards de Magia e Armadilha que seu oponente controla e, se isso acontecer, compre 1 card para cada card destruído. Uma vez por turno: se este card seria destruído em batalha ou por efeitos de card: você pode reduzir o ATK dele em 700; negue a destruição deste card."
     },
     "216": {
       "name": "Selando o Vazio",
@@ -721,7 +760,7 @@
     },
     "222": {
       "name": "Andarilho Cósmico do Vazio",
-      "description": "Material de Ascensão: 'Andarilho do Vazio'.\nRequisito: o efeito do material foi ativado duas vezes neste duelo.\nUma vez por turno: você pode Invocar por Invocação-Especial 1 'Oco do Vazio' do seu Cemitério. Se este card for enviado do campo para o Cemitério: você pode Invocar por Invocação-Especial até 3 'Oco do Vazio' da sua mão ou do Deck."
+      "description": "Material de Ascensão: 'Andarilho do Vazio' Requisito: o efeito do material foi ativado duas vezes neste duelo. Uma vez por turno: você pode Invocar por Invocação-Especial 1 'Oco do Vazio' do seu Cemitério. Se este card for enviado do campo para o Cemitério: você pode Invocar por Invocação-Especial até 3 'Oco do Vazio' da sua mão ou do Deck."
     },
     "223": {
       "name": "Demônio Malicioso do Vazio",
@@ -745,7 +784,7 @@
     },
     "253": {
       "name": "Dragão Blindado Metálico",
-      "description": "Material de Ascensão: 'Dragão Blindado'.\nRequisito: Nenhum.\nEnquanto estiver em Posição de Defesa, este card não pode ser destruído em batalha. Este card ganha 100 de ATK/DEF para cada monstro Dragão Invocado por Invocação-Especial enquanto este card estiver com a face para cima no campo."
+      "description": "Material de Ascensão: 'Dragão Blindado' Requisito: Nenhum. Enquanto estiver em Posição de Defesa, este card não pode ser destruído em batalha. Este card ganha 100 de ATK/DEF para cada monstro Dragão Invocado por Invocação-Especial enquanto este card estiver com a face para cima no campo."
     },
     "254": {
       "name": "Dragão Cinzento",
@@ -793,7 +832,7 @@
     },
     "265": {
       "name": "Dragão Tecno-Vazio",
-      "description": "Materiais: Dragão Voltaico + 1 monstro Dragão de Nível 5 ou maior\nSe este card for Invocado por Invocação-Fusão: você pode escolher 1 monstro Dragão de Nível 4 ou menor no seu Cemitério; bana-o e, se fizer isso, este card ganha ATK igual ao ATK do monstro banido até o final deste turno. Se este card for destruído em batalha: você pode Invocar por Invocação-Especial 1 'Dragão Voltaico' do seu Cemitério. Você só pode usar cada efeito de 'Dragão Tecno-Vazio' uma vez por turno."
+      "description": "Materiais: Dragão Voltaico + 1 monstro Dragão de Nível 5 ou maior Se este card for Invocado por Invocação-Fusão: você pode escolher 1 monstro Dragão de Nível 4 ou menor no seu Cemitério; bana-o e, se fizer isso, este card ganha ATK igual ao ATK do monstro banido até o final deste turno. Se este card for destruído em batalha: você pode Invocar por Invocação-Especial 1 'Dragão Voltaico' do seu Cemitério. Você só pode usar cada efeito de 'Dragão Tecno-Vazio' uma vez por turno."
     },
     "266": {
       "name": "Dragão Cósmico Radiante",
@@ -1098,6 +1137,86 @@
     "466": {
       "name": "Carrasco do Oeste Ardente",
       "description": "Material de Ascens\u00e3o: 1 monstro \"Oeste Ardente\" de N\u00edvel 5 ou maior. Se este card for Invocado por Invoca\u00e7\u00e3o-Ascens\u00e3o: voc\u00ea pode adicionar 1 card do seu Cemit\u00e9rio \u00e0 sua m\u00e3o que mencione um card \"Oeste Ardente\" em seu texto. Se este card batalhar um monstro com o mesmo ATK, este card n\u00e3o \u00e9 destru\u00eddo nessa batalha. Se este card for destru\u00eddo em batalha: voc\u00ea pode Invocar por Invoca\u00e7\u00e3o-Especial do seu Cemit\u00e9rio o monstro usado como Material de Ascens\u00e3o para este card."
+    },
+    "501": {
+      "name": "N\u00facleo de Energia Tech-Zero",
+      "description": "Se este card for Invocado por Invoca\u00e7\u00e3o-Especial: voc\u00ea pode escolher 1 monstro \"Tech-Zero\" que voc\u00ea controla; aumente ou diminua o N\u00edvel dele em 1. Se este card for enviado para o Cemit\u00e9rio como Mat\u00e9ria Sincro: compre 1 card. Voc\u00ea s\u00f3 pode usar cada efeito de \"N\u00facleo de Energia Tech-Zero\" uma vez por turno."
+    },
+    "502": {
+      "name": "Eletrocatapulta Tech-Zero",
+      "description": "Se este card for Invocado por Invoca\u00e7\u00e3o-Normal: voc\u00ea pode escolher 1 monstro \"Tech-Zero\" de N\u00edvel 2 ou menor na sua m\u00e3o ou Cemit\u00e9rio; Invoque-o por Invoca\u00e7\u00e3o-Especial. Se este card for enviado para o Cemit\u00e9rio como Mat\u00e9ria Sincro: voc\u00ea pode escolher 1 Regulador no seu Cemit\u00e9rio; Invoque-o por Invoca\u00e7\u00e3o-Especial, mas negue seus efeitos."
+    },
+    "503": {
+      "name": "M\u00e1quina Multimodal Tech-Zero",
+      "description": "Materiais: 1 Regulador \"Tech-Zero\" + 1+ monstros n\u00e3o-Reguladores. Este card pode ser tratado como um monstro n\u00e3o-Regulador para a Invoca\u00e7\u00e3o-Sincro de um monstro Sincro \"Tech-Zero\". Voc\u00ea pode escolher 1 monstro que voc\u00ea controla; aumente ou diminua o N\u00edvel dele em at\u00e9 2. Se este card for enviado para o Cemit\u00e9rio como Mat\u00e9ria Sincro: compre 1 card. Voc\u00ea s\u00f3 pode usar cada efeito de \"M\u00e1quina Multimodal Tech-Zero\" uma vez por turno."
+    },
+    "504": {
+      "name": "Wyvern Planador Tech-Zero",
+      "description": "Se voc\u00ea controlar um Regulador \"Tech-Zero\": voc\u00ea pode Invocar este card por Invoca\u00e7\u00e3o-Especial da sua m\u00e3o. Se este card for enviado para o Cemit\u00e9rio como Mat\u00e9ria Sincro: voc\u00ea pode escolher 1 card de Magia/Armadilha que seu oponente controla; destrua-o. Voc\u00ea s\u00f3 pode usar cada efeito de \"Wyvern Planador Tech-Zero\" uma vez por turno."
+    },
+    "505": {
+      "name": "Raptor de Ferro Tech-Zero",
+      "description": "Se um monstro \"Tech-Zero\" for Invocado por Invoca\u00e7\u00e3o-Especial do seu Cemit\u00e9rio: voc\u00ea pode Invocar este card por Invoca\u00e7\u00e3o-Especial da sua m\u00e3o. Se este card for enviado para o Cemit\u00e9rio como Mat\u00e9ria Sincro: voc\u00ea pode Invocar por Invoca\u00e7\u00e3o-Especial 2 \"Fichas de Raptor\" (M\u00e1quina/LUZ/N\u00edvel 1/ATK 500/DEF 500). Voc\u00ea s\u00f3 pode usar cada efeito de \"Raptor de Ferro Tech-Zero\" uma vez por turno."
+    },
+    "506": {
+      "name": "Acionador Prisma Tech-Zero",
+      "description": "Voc\u00ea pode descartar este card e 1 monstro \"Tech-Zero\"; adicione 1 Regulador \"Tech-Zero\" do seu Deck \u00e0 sua m\u00e3o. Se este card for enviado para o Cemit\u00e9rio como Mat\u00e9ria Sincro: voc\u00ea pode Invocar por Invoca\u00e7\u00e3o-Especial 1 monstro \"Tech-Zero\" da sua m\u00e3o, mas negue seus efeitos at\u00e9 o final do turno. Voc\u00ea s\u00f3 pode usar cada efeito de \"Acionador Prisma Tech-Zero\" uma vez por turno."
+    },
+    "507": {
+      "name": "Drag\u00e3o Conector Tech-Zero",
+      "description": "Se este card estiver com a face para cima no campo: voc\u00ea pode Invocar por Invoca\u00e7\u00e3o-Normal 1 monstro \"Tech-Zero\" em adi\u00e7\u00e3o \u00e0 sua Invoca\u00e7\u00e3o-Normal/Baixar. Se este card for enviado para o Cemit\u00e9rio como Mat\u00e9ria Sincro: voc\u00ea pode escolher 1 Magia/Armadilha \"Tech-Zero\" no seu Cemit\u00e9rio; adicione-a \u00e0 sua m\u00e3o. Voc\u00ea s\u00f3 pode usar cada efeito de \"Drag\u00e3o Conector Tech-Zero\" uma vez por turno."
+    },
+    "508": {
+      "name": "Soldado de Pulso Tech-Zero",
+      "description": "Se voc\u00ea n\u00e3o controlar monstros: voc\u00ea pode Invocar este card por Invoca\u00e7\u00e3o-Especial da sua m\u00e3o. Se voc\u00ea Invocar um monstro Sincro \"Tech-Zero\" enquanto este card estiver com a face para cima no campo: compre 1 card e, se for um monstro \"Tech-Zero\" de N\u00edvel 4 ou menor, voc\u00ea pode Invoc\u00e1-lo por Invoca\u00e7\u00e3o-Especial. Voc\u00ea s\u00f3 pode usar cada efeito de \"Soldado de Pulso Tech-Zero\" uma vez por turno."
+    },
+    "509": {
+      "name": "Portal de Invoca\u00e7\u00e3o Tech-Zero",
+      "description": "Materiais: 1 Regulador \"Tech-Zero\" + 1+ monstros n\u00e3o-Reguladores. Se este card for Invocado por Invoca\u00e7\u00e3o-Sincro: voc\u00ea pode Invocar por Invoca\u00e7\u00e3o-Especial at\u00e9 3 monstros \"Tech-Zero\" de N\u00edvel 4 ou menor com nomes diferentes do seu Cemit\u00e9rio. Pelo resto deste turno depois que este efeito resolver, voc\u00ea n\u00e3o pode Invocar monstros por Invoca\u00e7\u00e3o-Especial, exceto monstros \"Tech-Zero\". Voc\u00ea s\u00f3 pode usar este efeito de \"Portal de Invoca\u00e7\u00e3o Tech-Zero\" uma vez por turno."
+    },
+    "510": {
+      "name": "Retalhador At\u00f4mico Tech-Zero",
+      "description": "Materiais: 1 Regulador + 1+ monstros n\u00e3o-Reguladores. Se este card for Invocado por Invoca\u00e7\u00e3o-Sincro: todos os monstros \"Tech-Zero\" que voc\u00ea controla ganham 300 ATK/DEF at\u00e9 o final do pr\u00f3ximo turno. Se este card for usado como Mat\u00e9ria Sincro: o monstro Invocado por essa Invoca\u00e7\u00e3o-Sincro n\u00e3o pode ser destru\u00eddo em batalha ou por efeitos de cards do oponente at\u00e9 o final do pr\u00f3ximo turno."
+    },
+    "511": {
+      "name": "Samurai Fantasma Tech-Zero",
+      "description": "Materiais: 1 Regulador + 1+ monstros n\u00e3o-Reguladores. Se este card for Invocado por Invoca\u00e7\u00e3o-Sincro: voc\u00ea pode escolher 1 Regulador \"Tech-Zero\" no seu Cemit\u00e9rio; adicione-o \u00e0 sua m\u00e3o. Se este card batalhar um monstro do oponente Invocado por Invoca\u00e7\u00e3o-Especial, ele ganha 500 ATK durante a Etapa de Dano. Se este card atacar um monstro em Posi\u00e7\u00e3o de Defesa, cause dano de batalha perfurante."
+    },
+    "512": {
+      "name": "Mago de Batalha Tech-Zero",
+      "description": "Materiais: 1 Regulador + 1+ monstros n\u00e3o-Reguladores. Enquanto este card estiver com a face para cima no campo, cada vez que voc\u00ea Invocar um monstro por Invoca\u00e7\u00e3o-Sincro: compre 1 card. Uma vez por turno: voc\u00ea pode enviar 1 monstro \"Tech-Zero\" de N\u00edvel 4 ou menor que voc\u00ea controla para o Cemit\u00e9rio; Invoque por Invoca\u00e7\u00e3o-Especial 1 monstro \"Tech-Zero\" do seu Cemit\u00e9rio com o mesmo N\u00edvel e nome diferente do monstro enviado."
+    },
+    "513": {
+      "name": "Kaiser Turbocarga Tech-Zero",
+      "description": "Materiais: 1 Regulador + 1+ monstros n\u00e3o-Reguladores. Se este card for Invocado por Invoca\u00e7\u00e3o-Sincro: voc\u00ea pode escolher at\u00e9 3 monstros \"Tech-Zero\" no seu Cemit\u00e9rio; embaralhe-os no Deck e, se isso acontecer, este card ganha ATK igual \u00e0 soma dos N\u00edveis dos monstros embaralhados x100 at\u00e9 o final do turno. Uma vez por turno, se este card destruir um monstro do oponente em batalha: voc\u00ea pode escolher 1 Regulador no seu Cemit\u00e9rio; Invoque-o por Invoca\u00e7\u00e3o-Especial."
+    },
+    "514": {
+      "name": "F\u00eanix de Plasma Tech-Zero",
+      "description": "Materiais: 1 Regulador + 1+ monstros n\u00e3o-Reguladores. Monstros \"Tech-Zero\" que voc\u00ea controla n\u00e3o podem ser banidos, exceto este card. Durante a End Phase, se voc\u00ea recebeu dano neste turno: ganhe PV igual ao dano que voc\u00ea recebeu neste turno. Se este card for destru\u00eddo em batalha ou por efeito de card: voc\u00ea pode Invocar este card por Invoca\u00e7\u00e3o-Especial do Cemit\u00e9rio durante a End Phase, mas bana-o quando ele deixar o campo."
+    },
+    "515": {
+      "name": "Drag\u00e3o Reator Tech-Zero",
+      "description": "Materiais: 1 Regulador + 1+ monstros Sincro n\u00e3o-Reguladores. N\u00e3o pode ser destru\u00eddo por efeitos de cards. Se este card for Invocado por Invoca\u00e7\u00e3o-Sincro: escolha 1 monstro com a face para cima que seu oponente controla; negue seus efeitos. Uma vez por turno, exceto no turno em que este card foi Invocado: voc\u00ea pode enviar este card para o Cemit\u00e9rio; Invoque por Invoca\u00e7\u00e3o-Especial at\u00e9 2 monstros Sincro de N\u00edvel 7 ou menor do seu Cemit\u00e9rio."
+    },
+    "516": {
+      "name": "Lanceiro Explosivo Tech-Zero",
+      "description": "Materiais: 1 Monstro Sincro Regulador + 1+ Monstros Sincro n\u00e3o-Reguladores. Se este card for Invocado por Invoca\u00e7\u00e3o-Sincro: voc\u00ea pode ativar este efeito; neste turno, este card pode declarar ataques at\u00e9 um n\u00famero de vezes igual ao n\u00famero de monstros Reguladores \"Tech-Zero\" no seu Cemit\u00e9rio. Uma vez por turno, quando seu oponente ativar um card ou efeito que destruiria 1 ou mais cards no campo (Efeito R\u00e1pido): negue a ativa\u00e7\u00e3o e, se isso acontecer, destrua esse card."
+    },
+    "517": {
+      "name": "Singularidade Final Tech-Zero",
+      "description": "Materiais: 1 Monstro Sincro Regulador + 2+ Monstros Sincro n\u00e3o-Reguladores. Deve ser Invocado por Invoca\u00e7\u00e3o-Sincro e n\u00e3o pode ser Invocado por Invoca\u00e7\u00e3o-Especial de nenhuma outra forma. Se este card for Invocado por Invoca\u00e7\u00e3o-Sincro: negue os efeitos de todos os cards com a face para cima que seu oponente controla. Se este card batalhar um monstro em Posi\u00e7\u00e3o de Defesa, cause dano de batalha perfurante. Uma vez por turno, quando seu oponente ativar um card ou efeito que faria este card deixar o campo (Efeito R\u00e1pido): negue esse efeito e, se voc\u00ea n\u00e3o controlar outros cards, bana esse card."
+    },
+    "518": {
+      "name": "Laborat\u00f3rio de Desenvolvimento Tech-Zero",
+      "description": "Uma vez por turno: voc\u00ea pode escolher 1 monstro Sincro \"Tech-Zero\" no seu Cemit\u00e9rio; devolva-o ao Deck Adicional e, se isso acontecer, escolha 1 monstro no seu Cemit\u00e9rio; embaralhe-o no Deck."
+    },
+    "519": {
+      "name": "Linha de Montagem Tech-Zero",
+      "description": "Bana 2 monstros \"Tech-Zero\" do seu Cemit\u00e9rio; Invoque por Invoca\u00e7\u00e3o-Especial 1 monstro \"Tech-Zero\" do seu Deck, mas bana-o quando ele deixar o campo. Voc\u00ea n\u00e3o pode atacar diretamente no turno em que ativar este card. Voc\u00ea s\u00f3 pode ativar 1 \"Linha de Montagem Tech-Zero\" por turno."
+    },
+    "520": {
+      "name": "Ferro-Velho Tech-Zero",
+      "description": "Invoque por Invoca\u00e7\u00e3o-Especial 1 Regulador \"Tech-Zero\" do seu Cemit\u00e9rio e, se isso acontecer, imediatamente ap\u00f3s esse efeito resolver, Invoque por Invoca\u00e7\u00e3o-Sincro 1 monstro Sincro do seu Deck Adicional usando materiais no seu campo. Voc\u00ea s\u00f3 pode ativar 1 \"Ferro-Velho Tech-Zero\" por turno."
     },
     "420": {
       "name": "Podriflora Devorador de Raízes Mortas",

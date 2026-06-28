@@ -1,3 +1,5 @@
+import { canUseNormalSummonForCard } from "../../Player.js";
+
 export function buildStrategyAnalysis({
   bot,
   player,
@@ -16,14 +18,28 @@ export function buildStrategyAnalysis({
       : null) ||
     (actor && game?.bot && actor === game.bot ? game?.player : game?.bot) ||
     null;
-  const normalSummonLimit = 1 + (actor?.additionalNormalSummons || 0);
-  const normalSummonsAvailable = Math.max(
+  const hand = actor?.hand || [];
+  const normalSummonCandidates = hand.filter(
+    (card) =>
+      card &&
+      card.cardKind === "monster" &&
+      !card.cannotBeNormalSummonedOrSet &&
+      card.summonRestrict !== "shadow_heart_invocation_only" &&
+      canUseNormalSummonForCard(actor, card),
+  );
+  const genericNormalSummonsAvailable = Math.max(
     0,
-    normalSummonLimit - (actor?.summonCount || 0),
+    1 +
+      Math.max(0, Number(actor?.additionalNormalSummons || 0)) -
+      Math.max(0, Number(actor?.summonCount || 0)),
+  );
+  const normalSummonsAvailable = Math.max(
+    genericNormalSummonsAvailable,
+    normalSummonCandidates.length > 0 ? 1 : 0,
   );
 
   return {
-    hand: actor?.hand || [],
+    hand,
     field: actor?.field || [],
     spellTrap: actor?.spellTrap || [],
     fieldSpell: actor?.fieldSpell || null,

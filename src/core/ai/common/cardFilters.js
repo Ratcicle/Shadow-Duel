@@ -45,6 +45,12 @@ export function cardMatchesFilter(card, filter = {}) {
     if (current.subtype && !matchesOne(card.subtype, current.subtype)) {
       return false;
     }
+    if (
+      current.monsterType &&
+      !matchesOne(card.monsterType, current.monsterType)
+    ) {
+      return false;
+    }
     if (current.archetype && !cardHasArchetype(card, current.archetype)) {
       return false;
     }
@@ -98,6 +104,12 @@ export function cardMatchesFilter(card, filter = {}) {
     if (
       current.isToken !== undefined &&
       (card.isToken === true) !== Boolean(current.isToken)
+    ) {
+      return false;
+    }
+    if (
+      current.isTuner !== undefined &&
+      (card.isTuner === true) !== Boolean(current.isTuner)
     ) {
       return false;
     }

@@ -10,6 +10,7 @@ import {
   getTributeValueTotal,
   selectTributeIndicesByValue,
 } from "../game/summon/tributeValue.js";
+import { canUseNormalSummonForCard } from "../Player.js";
 
 function actionRequiresHand(actionType) {
   return (
@@ -127,8 +128,7 @@ function summonActionIsStillLegal(action, state, strategy) {
   if (card.cannotBeNormalSummonedOrSet) return false;
   if (card.summonRestrict === "shadow_heart_invocation_only") return false;
 
-  const summonLimit = 1 + Math.max(0, Number(player.additionalNormalSummons || 0));
-  if (Number(player.summonCount || 0) >= summonLimit) return false;
+  if (!canUseNormalSummonForCard(player, card)) return false;
 
   const tributeInfo = getPlannerTributeRequirement(card, player, strategy);
   const tributesNeeded = Math.max(0, Number(tributeInfo.tributesNeeded || 0));
@@ -189,6 +189,10 @@ function clonePlayerState(player) {
     spellTrap: safe.spellTrap || [],
     summonCount: safe.summonCount || 0,
     additionalNormalSummons: safe.additionalNormalSummons || 0,
+    additionalNormalSummonPermissions:
+      safe.additionalNormalSummonPermissions || [],
+    normalSummonsThisTurn: safe.normalSummonsThisTurn || [],
+    specialSummonRestrictions: safe.specialSummonRestrictions || [],
     controllerType: safe.controllerType,
   };
   return clonePlain(snapshot);
@@ -314,6 +318,8 @@ function getPlanningStateHash(state) {
       player.lp || 0,
       player.summonCount || 0,
       player.additionalNormalSummons || 0,
+      summarizeSimOpt(player.additionalNormalSummonPermissions || []),
+      summarizeSimOpt(player.normalSummonsThisTurn || []),
       summarizeZone(player.hand, { sort: true }),
       summarizeZone(player.field),
       summarizeZone(player.spellTrap),
@@ -451,6 +457,13 @@ function isBattleReadyPlannerAttacker(card) {
 }
 
 function getPlannerMaxAttacks(card, state) {
+  if (
+    card?.attackLimitThisTurn !== undefined &&
+    card?.attackLimitThisTurn !== null &&
+    Number.isFinite(Number(card.attackLimitThisTurn))
+  ) {
+    return Math.max(0, Math.floor(Number(card.attackLimitThisTurn)));
+  }
   let extra = Number(card?.extraAttacks || 0);
   if (card?.dynamicExtraAttacks?.source === "graveyard_count") {
     const config = card.dynamicExtraAttacks;

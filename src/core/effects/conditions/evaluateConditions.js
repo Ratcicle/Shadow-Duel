@@ -2,6 +2,18 @@ function getCardInstanceId(card) {
   return card?.instanceId ?? card?._instanceId ?? card?.uuid ?? null;
 }
 
+function isSameCardReference(left, right) {
+  if (!left || !right) return false;
+  if (left === right) return true;
+  const leftInstanceId = getCardInstanceId(left);
+  const rightInstanceId = getCardInstanceId(right);
+  return (
+    leftInstanceId !== null &&
+    rightInstanceId !== null &&
+    leftInstanceId === rightInstanceId
+  );
+}
+
 function resolveSourceRef(ctx, sourceRef) {
   if (!sourceRef || sourceRef === "self" || sourceRef === "source") {
     return ctx?.source || null;
@@ -22,6 +34,34 @@ function markerMatchesSource(marker, source) {
 function asArray(value) {
   if (value === undefined || value === null) return [];
   return Array.isArray(value) ? value : [value];
+}
+
+function readContextPath(ctx, key) {
+  if (!ctx || !key) return undefined;
+  const parts = String(key).split(".").filter(Boolean);
+  const readPath = (root) => {
+    let value = root;
+    for (const part of parts) {
+      if (value == null || typeof value !== "object") return undefined;
+      value = value[part];
+    }
+    return value;
+  };
+  return (
+    readPath(ctx) ??
+    readPath(ctx.actionContext) ??
+    readPath(ctx.activationContext) ??
+    readPath(ctx.activationContext?.actionContext)
+  );
+}
+
+function compareContextNumbers(current, op, expected) {
+  if (op === "eq" || op === "===") return current === expected;
+  if (op === "neq" || op === "!=" || op === "!==") return current !== expected;
+  if (op === "lt" || op === "<") return current < expected;
+  if (op === "lte" || op === "<=") return current <= expected;
+  if (op === "gte" || op === ">=") return current >= expected;
+  return current > expected;
 }
 
 function getBattleParticipantForOwner(ctx, owner) {
@@ -134,6 +174,10 @@ function activeDeclarationSourcesForOwner(owner) {
 
 function findConditionCardOwner(game, card) {
   if (!game || !card) return null;
+  if (typeof game.getOwnerByCard === "function") {
+    const owner = game.getOwnerByCard(card);
+    if (owner) return owner;
+  }
   if (typeof game.effectEngine?.getOwnerByCard === "function") {
     const owner = game.effectEngine.getOwnerByCard(card);
     if (owner) return owner;
@@ -162,6 +206,23 @@ function cardVisibleToConditionViewer(engine, card, viewer) {
   if (!card?.isFacedown) return true;
   const owner = findConditionCardOwner(engine?.game, card);
   return !!viewer && owner?.id === viewer.id;
+}
+
+function cardIsInAllowedConditionZones(engine, card, zones) {
+  const allowedZones = asArray(zones).filter(Boolean);
+  if (allowedZones.length === 0) return true;
+  const game = engine?.game || engine;
+  const owner = findConditionCardOwner(game, card);
+  if (!owner) return false;
+  for (const zone of allowedZones) {
+    if (zone === "fieldSpell") {
+      if (owner.fieldSpell === card) return true;
+      continue;
+    }
+    const zoneCards = owner[zone] || [];
+    if (Array.isArray(zoneCards) && zoneCards.includes(card)) return true;
+  }
+  return false;
 }
 
 function appendUniqueCard(cards, card) {
@@ -196,6 +257,7 @@ function actionFilterFromConfig(config = {}) {
     "position",
     "requireFaceup",
     "isToken",
+    "isTuner",
     "textIncludes",
     "nameOrDescriptionIncludes",
     "textIncludesAny",
@@ -517,6 +579,15 @@ function activationWouldDestroyCardsMatchingFilters(engine, cond, ctx) {
     if (!cardVisibleToConditionViewer(engine, card, responsePlayer)) {
       return false;
     }
+    if (
+      !cardIsInAllowedConditionZones(
+        engine,
+        card,
+        cond.destroyedCardZones || cond.zones,
+      )
+    ) {
+      return false;
+    }
     return engine.cardMatchesFilters(card, filters);
   });
 
@@ -524,6 +595,237 @@ function activationWouldDestroyCardsMatchingFilters(engine, cond, ctx) {
     return {
       ok: false,
       reason: cond.reason || "Activation would not destroy matching cards.",
+    };
+  }
+  return { ok: true, matches: matching };
+}
+
+const ACTIVE_FIELD_ZONES = ["field", "spellTrap", "fieldSpell"];
+const NON_FIELD_DESTINATION_ZONES = [
+  "graveyard",
+  "hand",
+  "deck",
+  "extraDeck",
+  "banished",
+  "banish",
+];
+
+function normalizeDestinationZone(zone) {
+  return zone === "banish" ? "banished" : zone;
+}
+
+function actionMovesToNonField(action) {
+  const toZone = normalizeDestinationZone(
+    action?.to || action?.toZone || action?.destination || null,
+  );
+  if (!toZone) return false;
+  return NON_FIELD_DESTINATION_ZONES.includes(toZone);
+}
+
+function collectActionLeaveFieldCandidates(
+  engine,
+  action,
+  ctx,
+  effect,
+  activationContext,
+) {
+  if (!action || typeof action !== "object") return [];
+  const cards = [];
+  const addNested = (actions) => {
+    for (const card of collectActionsLeaveFieldCandidates(
+      engine,
+      actions,
+      ctx,
+      effect,
+      activationContext,
+    )) {
+      appendUniqueCard(cards, card);
+    }
+  };
+  const addTargetRefCards = (targetRef) => {
+    for (const card of collectTargetRefCandidateCards(
+      engine,
+      targetRef,
+      effect,
+      ctx,
+      activationContext,
+    )) {
+      appendUniqueCard(cards, card);
+    }
+  };
+
+  for (const card of collectActionDestroyCandidates(
+    engine,
+    action,
+    ctx,
+    effect,
+    activationContext,
+  )) {
+    appendUniqueCard(cards, card);
+  }
+
+  if (action.type === "banish" || action.type === "banish_destroyed_monster") {
+    if (action.targetScope) {
+      for (const card of collectCardsFromScope(engine, action.targetScope, ctx)) {
+        appendUniqueCard(cards, card);
+      }
+    }
+    addTargetRefCards(action.targetRef || "target");
+  } else if (action.type === "return_to_hand") {
+    addTargetRefCards(action.targetRef || "target");
+  } else if (action.type === "move" && actionMovesToNonField(action)) {
+    if (action.targetScope) {
+      for (const card of collectCardsFromScope(engine, action.targetScope, ctx)) {
+        appendUniqueCard(cards, card);
+      }
+    }
+    addTargetRefCards(action.targetRef || "target");
+  } else if (action.type === "shuffle_opponent_field_to_deck") {
+    for (const card of ctx.opponent?.field || []) appendUniqueCard(cards, card);
+  }
+
+  addNested(action.actions);
+  addNested(action.thenActions);
+  addNested(action.ifActions);
+  addNested(action.elseActions);
+  addNested(action.optionalActions);
+  if (Array.isArray(action.cases)) {
+    for (const entry of action.cases) addNested(entry?.actions);
+  }
+  if (Array.isArray(action.entries)) {
+    for (const entry of action.entries) addNested(entry?.actions);
+  }
+
+  return cards;
+}
+
+function collectActionsLeaveFieldCandidates(
+  engine,
+  actions,
+  ctx,
+  effect,
+  activationContext,
+) {
+  const cards = [];
+  for (const action of asArray(actions)) {
+    for (const card of collectActionLeaveFieldCandidates(
+      engine,
+      action,
+      ctx,
+      effect,
+      activationContext,
+    )) {
+      appendUniqueCard(cards, card);
+    }
+  }
+  return cards;
+}
+
+function activationWouldMakeCardLeaveField(engine, cond, ctx) {
+  const activationContext =
+    ctx?.activationContext?.context || ctx?.actionContext || {};
+  const activationAttempt =
+    activationContext.activationAttempt ||
+    ctx?.activationContext?.activationAttempt ||
+    null;
+  const activatedCard =
+    activationAttempt?.card ||
+    activationContext.card ||
+    ctx?.activatedCard ||
+    null;
+  const activationPlayer =
+    activationAttempt?.player ||
+    activationContext.player ||
+    activationContext.triggerPlayer ||
+    null;
+  const responsePlayer = ctx?.player || null;
+  const responseOpponent =
+    ctx?.opponent || engine.game?.getOpponent?.(responsePlayer);
+
+  if (!activatedCard || !activationPlayer) {
+    return { ok: false, reason: cond.reason || "No activation to inspect." };
+  }
+  if (
+    cond.activationPlayer === "opponent" &&
+    activationPlayer.id !== responseOpponent?.id
+  ) {
+    return {
+      ok: false,
+      reason: cond.reason || "Activation was not controlled by the opponent.",
+    };
+  }
+  if (
+    cond.activationPlayer === "self" &&
+    activationPlayer.id !== responsePlayer?.id
+  ) {
+    return { ok: false, reason: cond.reason || "Activation was not yours." };
+  }
+
+  const watchedCards = collectContextTargetCards(
+    cond.cardRef || cond.targetRef || "self",
+    ctx,
+  ).filter((card) =>
+    cardIsInAllowedConditionZones(
+      engine,
+      card,
+      cond.fromZones || cond.zones || ACTIVE_FIELD_ZONES,
+    ),
+  );
+  if (watchedCards.length === 0) {
+    return {
+      ok: false,
+      reason: cond.reason || "No watched card on the field.",
+    };
+  }
+
+  const effect = activationAttempt?.effect || activationContext.effect || null;
+  const actionCtx = {
+    ...ctx,
+    source: activatedCard,
+    sourceCard: activatedCard,
+    effect,
+    player: activationPlayer,
+    opponent: engine.game?.getOpponent?.(activationPlayer) || responsePlayer,
+    activationContext: {
+      ...(ctx?.activationContext || {}),
+      context: activationContext,
+      selections:
+        activationContext.selections ||
+        activationContext.respondingToChainLink?.selections ||
+        ctx?.activationContext?.selections ||
+        null,
+    },
+    actionContext: activationContext,
+  };
+  const candidates = collectActionsLeaveFieldCandidates(
+    engine,
+    effect?.actions || [],
+    actionCtx,
+    effect,
+    activationContext,
+  );
+  const filters = cond.filters || {};
+  const matching = candidates.filter((candidate) => {
+    if (!cardVisibleToConditionViewer(engine, candidate, responsePlayer)) {
+      return false;
+    }
+    if (
+      !cardIsInAllowedConditionZones(
+        engine,
+        candidate,
+        cond.fromZones || cond.zones || ACTIVE_FIELD_ZONES,
+      )
+    ) {
+      return false;
+    }
+    if (!engine.cardMatchesFilters(candidate, filters)) return false;
+    return watchedCards.some((card) => isSameCardReference(card, candidate));
+  });
+
+  if (matching.length === 0) {
+    return {
+      ok: false,
+      reason: cond.reason || "Activation would not make that card leave the field.",
     };
   }
   return { ok: true, matches: matching };
@@ -565,6 +867,32 @@ export function evaluateConditions(conditions, ctx) {
     for (const cond of conditions) {
       if (!cond || !cond.type) continue;
       switch (cond.type) {
+        case "context_number_compare": {
+          const contextRoot = { ...ctx, game: this.game };
+          const rawCurrent = readContextPath(contextRoot, cond.key || cond.path);
+          const current = Number(rawCurrent ?? cond.defaultValue ?? 0);
+          const valueFromContext =
+            typeof cond.valueFromContext === "string"
+              ? cond.valueFromContext
+              : cond.valueFromContext?.key || cond.valueFromContext?.path;
+          const rawExpected = valueFromContext
+            ? readContextPath(contextRoot, valueFromContext)
+            : undefined;
+          const expected = Number(
+            rawExpected ?? cond.value ?? cond.amount ?? cond.defaultExpectedValue ?? 0,
+          );
+          if (
+            !Number.isFinite(current) ||
+            !Number.isFinite(expected) ||
+            !compareContextNumbers(current, cond.op || cond.operator || "gt", expected)
+          ) {
+            return {
+              ok: false,
+              reason: cond.reason || "Required context value was not met.",
+            };
+          }
+          break;
+        }
         case "playerFieldEmpty":
           if ((player?.field?.length || 0) !== 0) {
             return { ok: false, reason: "You must control no monsters." };
@@ -751,6 +1079,12 @@ export function evaluateConditions(conditions, ctx) {
         }
         case "event_card_matches_filters": {
           const card = getEventCardByRef(cond, ctx);
+          if (cond.excludeSource === true && isSameCardReference(card, ctx?.source)) {
+            return {
+              ok: false,
+              reason: cond.reason || "Event card matched the effect source.",
+            };
+          }
           const ownerKey = cond.owner || "any";
           if (ownerKey !== "any") {
             const expectedOwner = ownerKey === "opponent" ? opponent : player;
@@ -965,6 +1299,12 @@ export function evaluateConditions(conditions, ctx) {
               for (const card of getConditionZoneCards(owner, zoneKey)) {
                 if (!card) continue;
                 if (requireFaceup && card.isFacedown) continue;
+                if (
+                  cond.excludeSource === true &&
+                  isSameCardReference(card, ctx?.source)
+                ) {
+                  continue;
+                }
                 if (!this.cardMatchesFilters(card, filters)) continue;
                 count += 1;
               }
@@ -1002,6 +1342,11 @@ export function evaluateConditions(conditions, ctx) {
             cond,
             ctx,
           );
+          if (!result.ok) return result;
+          break;
+        }
+        case "activation_would_make_card_leave_field": {
+          const result = activationWouldMakeCardLeaveField(this, cond, ctx);
           if (!result.ok) return result;
           break;
         }

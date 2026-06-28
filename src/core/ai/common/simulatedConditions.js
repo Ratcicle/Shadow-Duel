@@ -110,6 +110,41 @@ function resolveEventCardByRef(condition, ctx, options) {
   return Array.isArray(eventCard) ? eventCard[0] || null : eventCard;
 }
 
+function readSimContextPath(ctx, options, key) {
+  if (!key) return undefined;
+  const state = ctx.state || ctx.game || {};
+  const source = ctx.source || ctx.sourceCard || options.sourceCard || null;
+  const roots = [
+    { ...ctx, source, sourceCard: source, game: state, state, options },
+    ctx,
+    options,
+    options.actionContext,
+    options.activationContext,
+  ].filter(Boolean);
+  const parts = String(key).split(".").filter(Boolean);
+  for (const root of roots) {
+    let value = root;
+    for (const part of parts) {
+      if (value == null || typeof value !== "object") {
+        value = undefined;
+        break;
+      }
+      value = value[part];
+    }
+    if (value !== undefined) return value;
+  }
+  return undefined;
+}
+
+function compareSimContextNumbers(current, op, expected) {
+  if (op === "eq" || op === "===") return current === expected;
+  if (op === "neq" || op === "!=" || op === "!==") return current !== expected;
+  if (op === "lt" || op === "<") return current < expected;
+  if (op === "lte" || op === "<=") return current <= expected;
+  if (op === "gte" || op === ">=") return current >= expected;
+  return current > expected;
+}
+
 function cardPropertyValues(card, property) {
   const value = card?.[property];
   if (Array.isArray(value)) return value.filter(Boolean);
@@ -202,6 +237,7 @@ function simActionFilterFromConfig(config = {}) {
     "position",
     "requireFaceup",
     "isToken",
+    "isTuner",
     "textIncludes",
     "nameOrDescriptionIncludes",
     "textIncludesAny",
@@ -221,6 +257,31 @@ function simOwnersFromRule(rule, self, opponent) {
   return [self].filter(Boolean);
 }
 
+function simCardInAllowedZones(card, zones, owners) {
+  const allowedZones = asArray(zones).filter(Boolean);
+  if (allowedZones.length === 0) return true;
+  for (const owner of owners.filter(Boolean)) {
+    for (const zone of allowedZones) {
+      if (getZoneCards(owner, zone).includes(card)) return true;
+    }
+  }
+  return false;
+}
+
+function simSameCard(left, right) {
+  if (!left || !right) return false;
+  if (left === right) return true;
+  const leftId = getCardInstanceId(left);
+  const rightId = getCardInstanceId(right);
+  return leftId !== null && rightId !== null && leftId === rightId;
+}
+
+function simAppendUnique(cards, card) {
+  if (!card) return;
+  if (cards.some((entry) => simSameCard(entry, card))) return;
+  cards.push(card);
+}
+
 function simCollectScopeCards(scope = {}, self, opponent) {
   const zones = asArray(scope.zones || scope.zone || "field");
   const filters = simActionFilterFromConfig(scope);
@@ -238,6 +299,14 @@ function simCollectScopeCards(scope = {}, self, opponent) {
     }
   }
   return cards;
+}
+
+function simSelectedCards(targetRef, activationContext = {}) {
+  const selections =
+    activationContext.selections ||
+    activationContext.respondingToChainLink?.selections ||
+    {};
+  return asArray(selections?.[targetRef]).filter(Boolean);
 }
 
 function simNestedActions(action = {}) {
@@ -260,11 +329,29 @@ function simNestedActions(action = {}) {
   return nested;
 }
 
-function simCollectDestroyCandidates(actions, activationPlayer, activationOpponent) {
+function simCollectDestroyCandidates(
+  actions,
+  activationPlayer,
+  activationOpponent,
+  activationContext = {},
+) {
   const cards = [];
   for (const action of asArray(actions)) {
     if (!action) continue;
-    if (action.type === "destroy_targeted_cards") {
+    if (action.type === "destroy") {
+      if (action.targetScope) {
+        cards.push(
+          ...simCollectScopeCards(
+            action.targetScope,
+            activationPlayer,
+            activationOpponent,
+          ),
+        );
+      }
+      cards.push(
+        ...simSelectedCards(action.targetRef || "target", activationContext),
+      );
+    } else if (action.type === "destroy_targeted_cards") {
       const { type: _actionType, ...targetAction } = action;
       cards.push(
         ...simCollectScopeCards(
@@ -301,8 +388,76 @@ function simCollectDestroyCandidates(actions, activationPlayer, activationOppone
         simNestedActions(action),
         activationPlayer,
         activationOpponent,
+        activationContext,
       ),
     );
+  }
+  return cards;
+}
+
+function simMoveLeavesField(action) {
+  const toZone = action?.to || action?.toZone || action?.destination || null;
+  return [
+    "graveyard",
+    "hand",
+    "deck",
+    "extraDeck",
+    "banished",
+    "banish",
+  ].includes(toZone);
+}
+
+function simCollectLeaveFieldCandidates(
+  actions,
+  activationPlayer,
+  activationOpponent,
+  activationContext = {},
+) {
+  const cards = [];
+  for (const action of asArray(actions)) {
+    if (!action) continue;
+    for (const card of simCollectDestroyCandidates(
+      [action],
+      activationPlayer,
+      activationOpponent,
+      activationContext,
+    )) {
+      simAppendUnique(cards, card);
+    }
+    if (
+      action.type === "banish" ||
+      action.type === "banish_destroyed_monster" ||
+      action.type === "return_to_hand" ||
+      (action.type === "move" && simMoveLeavesField(action))
+    ) {
+      if (action.targetScope) {
+        for (const card of simCollectScopeCards(
+          action.targetScope,
+          activationPlayer,
+          activationOpponent,
+        )) {
+          simAppendUnique(cards, card);
+        }
+      }
+      for (const card of simSelectedCards(
+        action.targetRef || "target",
+        activationContext,
+      )) {
+        simAppendUnique(cards, card);
+      }
+    } else if (action.type === "shuffle_opponent_field_to_deck") {
+      for (const card of getZoneCards(activationOpponent, "field")) {
+        simAppendUnique(cards, card);
+      }
+    }
+    for (const card of simCollectLeaveFieldCandidates(
+      simNestedActions(action),
+      activationPlayer,
+      activationOpponent,
+      activationContext,
+    )) {
+      simAppendUnique(cards, card);
+    }
   }
   return cards;
 }
@@ -338,8 +493,68 @@ function simActivationWouldDestroyMatchingCards(condition, ctx, options, self, o
     effect.actions || [],
     activationOwner,
     activationOpponent,
-  ).filter((card) => matchesTargetFilters(card, filters, null));
+    activationContext,
+  ).filter(
+    (card) =>
+      simCardInAllowedZones(card, condition.destroyedCardZones || condition.zones, [
+        self,
+        opponent,
+      ]) && matchesTargetFilters(card, filters, null),
+  );
   return matching.length >= minCount;
+}
+
+function simActivationWouldMakeCardLeaveField(condition, ctx, options, self, opponent) {
+  const activationContext =
+    options.actionContext ||
+    ctx.actionContext ||
+    options.activationContext?.context ||
+    {};
+  const activationAttempt = activationContext.activationAttempt || null;
+  const activatedCard =
+    activationAttempt?.card || activationContext.card || options.card || null;
+  const effect =
+    activationAttempt?.effect || activationContext.effect || options.effect || null;
+  const activationPlayer =
+    activationAttempt?.player || activationContext.player || null;
+  const activationPlayerId =
+    activationPlayer?.id || activatedCard?.controller || activatedCard?.owner || null;
+  const activationOwner =
+    activationPlayerId === self?.id ? self : activationPlayerId === opponent?.id ? opponent : null;
+  if (!activationOwner || !effect) return false;
+  if (condition.activationPlayer === "opponent" && activationOwner !== opponent) {
+    return false;
+  }
+  if (condition.activationPlayer === "self" && activationOwner !== self) {
+    return false;
+  }
+  const watched = resolveConditionSource(
+    ctx,
+    options,
+    condition.cardRef || condition.targetRef || "self",
+  );
+  if (!watched) return false;
+  const activationOpponent = activationOwner === self ? opponent : self;
+  const activeZones = condition.fromZones || condition.zones || [
+    "field",
+    "spellTrap",
+    "fieldSpell",
+  ];
+  if (!simCardInAllowedZones(watched, activeZones, [self, opponent])) {
+    return false;
+  }
+  const candidates = simCollectLeaveFieldCandidates(
+    effect.actions || [],
+    activationOwner,
+    activationOpponent,
+    activationContext,
+  ).filter(
+    (card) =>
+      simSameCard(card, watched) &&
+      simCardInAllowedZones(card, activeZones, [self, opponent]) &&
+      matchesTargetFilters(card, condition.filters || {}, null),
+  );
+  return candidates.length > 0;
 }
 
 export function evaluateSimulatedConditions(conditions, ctx = {}) {
@@ -365,6 +580,37 @@ export function evaluateSimulatedConditions(conditions, ctx = {}) {
       );
     }
     const owner = condition.owner === "opponent" ? opponent : self;
+    if (condition.type === "context_number_compare") {
+      const rawCurrent = readSimContextPath(
+        ctx,
+        options,
+        condition.key || condition.path,
+      );
+      const current = Number(rawCurrent ?? condition.defaultValue ?? 0);
+      const valueFromContext =
+        typeof condition.valueFromContext === "string"
+          ? condition.valueFromContext
+          : condition.valueFromContext?.key || condition.valueFromContext?.path;
+      const rawExpected = valueFromContext
+        ? readSimContextPath(ctx, options, valueFromContext)
+        : undefined;
+      const expected = Number(
+        rawExpected ??
+          condition.value ??
+          condition.amount ??
+          condition.defaultExpectedValue ??
+          0,
+      );
+      return (
+        Number.isFinite(current) &&
+        Number.isFinite(expected) &&
+        compareSimContextNumbers(
+          current,
+          condition.op || condition.operator || "gt",
+          expected,
+        )
+      );
+    }
     if (condition.type === "source_counters_at_least") {
       const sourceCard = ctx.sourceCard || options.sourceCard;
       return (
@@ -530,6 +776,12 @@ export function evaluateSimulatedConditions(conditions, ctx = {}) {
                 if (condition.requireFaceup === true && card?.isFacedown) {
                   return false;
                 }
+                if (
+                  condition.excludeSource === true &&
+                  simSameCard(card, resolveConditionSource(ctx, options, "self"))
+                ) {
+                  return false;
+                }
                 return matchesTargetFilters(card, filters, null);
               }).length,
             0,
@@ -543,6 +795,15 @@ export function evaluateSimulatedConditions(conditions, ctx = {}) {
     }
     if (condition.type === "activation_would_destroy_cards_matching_filters") {
       return simActivationWouldDestroyMatchingCards(
+        condition,
+        ctx,
+        options,
+        self,
+        opponent,
+      );
+    }
+    if (condition.type === "activation_would_make_card_leave_field") {
+      return simActivationWouldMakeCardLeaveField(
         condition,
         ctx,
         options,

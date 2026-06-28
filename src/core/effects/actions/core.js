@@ -1,4 +1,5 @@
 import { cardMatchesKind } from "../../Card.js";
+import { hasSynchroSummonPreviewCandidate } from "../../actionHandlers/summon/synchroEffects.js";
 
 /**
  * Actions Core - applyActions dispatcher and preview requirements
@@ -319,6 +320,14 @@ export async function applyActions(actions, ctx, targets) {
         }
 
         executed = actionResultSucceeded(result) || executed;
+        if (
+          ctx &&
+          isTargetMap(ctx._actionTargets) &&
+          ctx._actionTargets !== runtimeTargets
+        ) {
+          runtimeTargets = { ...runtimeTargets, ...ctx._actionTargets };
+          ctx._actionTargets = runtimeTargets;
+        }
         logDev?.("ACTION_HANDLER_DONE", {
           ...actionInfo,
           handler: true,
@@ -377,6 +386,9 @@ function buildPreviewFilters(action) {
   if (action?.monsterType && !filters.type) {
     filters.type = action.monsterType;
   }
+  if (action?.isTuner !== undefined && filters.isTuner === undefined) {
+    filters.isTuner = action.isTuner;
+  }
   if (Number.isFinite(action?.level) && filters.level == null) {
     filters.level = action.level;
   }
@@ -425,6 +437,7 @@ function buildTargetPreviewFilters(target = {}) {
   copyIfPresent("maxDef");
   copyIfPresent("requireFaceup");
   copyIfPresent("isToken");
+  copyIfPresent("isTuner");
   copyIfPresent("excludeCardName");
   copyIfPresent("excludeCardNames");
   copyIfPresent("excludeName");
@@ -479,6 +492,9 @@ function matchesPreviewFilters(engine, card, filters, ctx = {}) {
   }
   if (filters.requireFaceup === true && card.isFacedown) {
     return false;
+  }
+  if (filters.isTuner !== undefined) {
+    if ((card.isTuner === true) !== Boolean(filters.isTuner)) return false;
   }
   if (filters.facedown === true && card.isFacedown !== true) {
     return false;
@@ -970,6 +986,8 @@ function hasAscensionMaterialPreviewCandidate(action, ctx, zoneCards = []) {
 function hasSpecialSummonCandidate(engine, action, ctx) {
   const player = ctx?.player;
   if (!player) return false;
+  const destinationPlayer =
+    action.summonToOwner === "opponent" ? ctx?.opponent : player;
 
   const zoneSpec = action.zone || action.sourceZone || "deck";
   const zoneNames = Array.isArray(zoneSpec) ? zoneSpec : [zoneSpec];
@@ -1002,6 +1020,16 @@ function hasSpecialSummonCandidate(engine, action, ctx) {
   const candidates = zoneCards.filter((card) => {
     if (!card || card.cardKind !== "monster") return false;
     if (card.cannotBeSpecialSummoned) return false;
+    const restrictionCheck = engine?.game?.canSpecialSummonUnderRestrictions?.(
+      card,
+      destinationPlayer,
+      {
+        summonMethod: "special",
+        fromZone: Array.isArray(zoneSpec) ? null : zoneSpec,
+        silent: true,
+      },
+    );
+    if (restrictionCheck?.ok === false) return false;
     return matchesPreviewFilters(engine, card, filters);
   });
   const min = Number(action.count?.min ?? 1);
@@ -1303,7 +1331,15 @@ export function checkActionPreviewRequirements(actions, ctx) {
     ) {
       const destinationPlayer =
         action.summonToOwner === "opponent" ? ctx?.opponent : player;
-      if ((destinationPlayer?.field || []).length >= 5) {
+      const fieldSlotsFreedBeforeSummon = Math.max(
+        0,
+        Number(action.fieldSlotsFreedBeforeSummon || 0),
+      );
+      const occupiedMonsterZones = Math.max(
+        0,
+        (destinationPlayer?.field || []).length - fieldSlotsFreedBeforeSummon,
+      );
+      if (occupiedMonsterZones >= 5) {
         return { ok: false, reason: "Field is full." };
       }
       if (
@@ -1314,6 +1350,15 @@ export function checkActionPreviewRequirements(actions, ctx) {
         return {
           ok: false,
           reason: "No valid cards available to Special Summon.",
+        };
+      }
+    }
+
+    if (action.type === "synchro_summon_from_extra_deck") {
+      if (!hasSynchroSummonPreviewCandidate(this, action, ctx)) {
+        return {
+          ok: false,
+          reason: "No legal Synchro Summon is available.",
         };
       }
     }
@@ -1370,6 +1415,36 @@ export function checkActionPreviewRequirements(actions, ctx) {
       const targetPlayer = action.player === "opponent" ? ctx?.opponent : player;
       if ((targetPlayer?.field || []).length >= 5) {
         return { ok: false, reason: "Field is full." };
+      }
+      if (action.token) {
+        const tokenPreview = {
+          cardKind: "monster",
+          name: action.token.name || "Token",
+          atk: action.token.atk ?? 0,
+          def: action.token.def ?? 0,
+          level: action.token.level ?? 1,
+          type: action.token.type || "Fiend",
+          attribute: action.token.attribute || null,
+          archetype: action.token.archetype || null,
+          archetypes: action.token.archetypes,
+          isToken: true,
+        };
+        const restrictionCheck =
+          this.game?.canSpecialSummonUnderRestrictions?.(
+            tokenPreview,
+            targetPlayer,
+            {
+              summonMethod: "special",
+              fromZone: "token",
+              silent: true,
+            },
+          );
+        if (restrictionCheck?.ok === false) {
+          return {
+            ok: false,
+            reason: restrictionCheck.reason || "Token cannot be Special Summoned.",
+          };
+        }
       }
     }
 

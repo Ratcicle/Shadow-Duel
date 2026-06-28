@@ -13,6 +13,10 @@ import {
   getTributeCardsFromIndices,
   getTributeValueTotal,
 } from "../../game/summon/tributeValue.js";
+import {
+  canUseNormalSummonForCard,
+  recordNormalSummonForTurn,
+} from "../../Player.js";
 
 const ARMORY_SEARCH_ORDER = [
   "Voltaic Dragon",
@@ -72,6 +76,7 @@ export function simulateMainPhaseAction(state, action) {
       const player = state.bot;
       const card = player.hand[action.index];
       if (!card) break;
+      if (!canUseNormalSummonForCard(player, card)) break;
 
       const tributeInfo = getTributeRequirementFor(card, player);
 
@@ -120,6 +125,7 @@ export function simulateMainPhaseAction(state, action) {
       });
       player.summonCount = (player.summonCount || 0) + 1;
       const summoned = player.field[player.field.length - 1];
+      recordNormalSummonForTurn(player, summoned);
       simulateDragonAfterSummonEffects(state, summoned, {
         method: tributeInfo.tributesNeeded > 0 ? "tribute" : "normal",
       });
@@ -729,7 +735,7 @@ function specialSummonToField(state, player, card, action = {}, options = {}) {
 
 function normalSummonFromHandIndex(state, player, handIndex, action = {}) {
   const card = player?.hand?.[handIndex];
-  if (!card || (player.summonCount || 0) >= 1) return null;
+  if (!card || !canUseNormalSummonForCard(player, card)) return null;
   const tributeInfo = getTributeRequirementFor(card, player);
   if (!fieldHasTributeValue(player.field || [], tributeInfo.tributesNeeded, card)) {
     return null;
@@ -767,6 +773,7 @@ function normalSummonFromHandIndex(state, player, handIndex, action = {}) {
   };
   player.field.push(summoned);
   player.summonCount = (player.summonCount || 0) + 1;
+  recordNormalSummonForTurn(player, summoned);
   simulateDragonAfterSummonEffects(state, summoned, {
     method: tributeInfo.tributesNeeded > 0 ? "tribute" : "normal",
   });
@@ -822,12 +829,11 @@ function simulateArmoredDragonSearch(state, player) {
 }
 
 function simulateBestConvergingSummon(state, player, action) {
-  if ((player.summonCount || 0) >= 1) return null;
-
   const candidates = (player.hand || [])
     .map((candidate, index) => ({ candidate, index }))
     .filter(({ candidate }) => {
       if (!isDragonMonster(candidate)) return false;
+      if (!canUseNormalSummonForCard(player, candidate)) return false;
       const tributeInfo = getTributeRequirementFor(candidate, player);
       if ((player.field || []).length < tributeInfo.tributesNeeded) return false;
       if (tributeInfo.tributesNeeded === 0 && (player.field || []).length >= 5) return false;

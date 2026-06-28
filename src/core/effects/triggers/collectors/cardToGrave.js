@@ -18,6 +18,7 @@ export async function collectCardToGraveTriggers(payload) {
 
   const { card, player, opponent, fromZone, toZone } = payload || {};
   const actionContext = payload?.actionContext || null;
+  const contextLabel = payload?.contextLabel || null;
   if (!card || !player) return { entries, orderRule };
 
   const resolvedOpponent = opponent || this.game?.getOpponent?.(player);
@@ -54,9 +55,29 @@ export async function collectCardToGraveTriggers(payload) {
 
     const ownEffectWasNegatedAtFieldExit =
       sourceCard === card && payload?.effectsNegatedAtFieldExit === true;
-    if (ownEffectWasNegatedAtFieldExit || this.isEffectNegated(sourceCard)) {
+    const allowNegatedFieldExit =
+      ownEffectWasNegatedAtFieldExit &&
+      effect.allowIfEffectsNegatedAtFieldExit === true;
+    if (
+      (ownEffectWasNegatedAtFieldExit && !allowNegatedFieldExit) ||
+      (!allowNegatedFieldExit && this.isEffectNegated(sourceCard))
+    ) {
       debugLog(
         `[handleCardToGraveEvent] ${sourceCard.name} effects are negated, skipping effect.`,
+      );
+      return;
+    }
+
+    const allowedContextLabels = [
+      ...(effect.contextLabel ? [effect.contextLabel] : []),
+      ...(Array.isArray(effect.contextLabels) ? effect.contextLabels : []),
+    ].filter(Boolean);
+    if (
+      allowedContextLabels.length > 0 &&
+      !allowedContextLabels.includes(contextLabel)
+    ) {
+      debugLog(
+        `[handleCardToGraveEvent] Skipping ${effect.id}: contextLabel "${contextLabel}" not in [${allowedContextLabels.join(", ")}].`,
       );
       return;
     }
@@ -86,6 +107,7 @@ export async function collectCardToGraveTriggers(payload) {
         eventOwner: player,
         fromZone,
         toZone,
+        contextLabel,
       })
     ) {
       if (devMode) {
@@ -200,8 +222,21 @@ export async function collectCardToGraveTriggers(payload) {
       discardedCard: fromZone === "hand" ? card : null,
       fromZone,
       toZone,
+      contextLabel,
       actionContext,
     };
+
+    if (Array.isArray(effect.conditions) && effect.conditions.length > 0) {
+      const conditionResult = this.evaluateConditions(effect.conditions, ctx);
+      if (!conditionResult?.ok) {
+        debugLog(
+          `[card_to_grave] Skipping ${effect.id}: ${
+            conditionResult?.reason || "conditions not met"
+          }.`,
+        );
+        return;
+      }
+    }
 
     const optCheck = this.checkOncePerTurn(sourceCard, owner, effect);
     if (!optCheck.ok) {
@@ -249,6 +284,7 @@ export async function collectCardToGraveTriggers(payload) {
         ...ctx,
         fromZone,
         toZone,
+        contextLabel,
         actionContext,
         activationContext: { logTargets: false },
       };

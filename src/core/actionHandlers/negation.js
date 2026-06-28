@@ -197,6 +197,75 @@ async function removeNegatedCard(game, card, source, sourcePlayer) {
   return false;
 }
 
+function markChainLinkNegated(game, targetCard, context, effect = null) {
+  if (!Array.isArray(game?.chainSystem?.chainStack)) return null;
+  const link = game.chainSystem.chainStack.find((candidate) => {
+    if (candidate?.card !== targetCard) return false;
+    if (effect && candidate?.effect && candidate.effect !== effect) {
+      return false;
+    }
+    return true;
+  });
+  if (link) {
+    link.negated = true;
+    context.negatedLink = link;
+  }
+  return link;
+}
+
+export async function handleNegateActivation(action, ctx, targets, engine) {
+  const game = engine?.game;
+  const source = ctx?.source || null;
+  const player = ctx?.player || null;
+  const context = ctx?.activationContext?.context || ctx?.actionContext || {};
+  if (!game || !source || !context) return false;
+
+  const activationAttempt = context.activationAttempt || null;
+  const targetCard =
+    activationAttempt?.card ||
+    context.card ||
+    context.targetCard ||
+    context.sourceCard ||
+    null;
+
+  if (!activationAttempt || !targetCard) {
+    getUI(game)?.log("No activation to negate.");
+    return false;
+  }
+
+  const protection = isActivationNegationProtected(
+    game,
+    targetCard,
+    activationAttempt,
+  );
+  if (protection) {
+    context.negationProtected = true;
+    context.negationProtectionSource = protection.sourceCard;
+    getUI(game)?.log(
+      `${targetCard.name}'s activation cannot be negated by ${source.name}.`,
+    );
+    game.updateBoard?.();
+    return true;
+  }
+
+  activationAttempt.negated = true;
+  context.negated = true;
+  context.negatedBy = source;
+  markChainLinkNegated(game, targetCard, context, activationAttempt.effect);
+
+  if (action.storeNegatedCardAs) {
+    if (!ctx._actionTargets || typeof ctx._actionTargets !== "object") {
+      ctx._actionTargets = {};
+    }
+    ctx._actionTargets[action.storeNegatedCardAs] = [targetCard];
+  }
+  ctx.negatedActivationCard = targetCard;
+
+  getUI(game)?.log(`${source.name} negated ${targetCard.name}.`);
+  game.updateBoard?.();
+  return true;
+}
+
 export async function handleNegateSummonOrActivationAndDestroy(
   action,
   ctx,
@@ -249,15 +318,7 @@ export async function handleNegateSummonOrActivationAndDestroy(
   context.negated = true;
   context.negatedBy = source;
 
-  if (Array.isArray(game.chainSystem?.chainStack)) {
-    const link = game.chainSystem.chainStack.find(
-      (candidate) => candidate?.card === targetCard,
-    );
-    if (link) {
-      link.negated = true;
-      context.negatedLink = link;
-    }
-  }
+  markChainLinkNegated(game, targetCard, context, activationAttempt?.effect);
 
   await removeNegatedCard(game, targetCard, source, player);
   getUI(game)?.log(`${source.name} negated ${targetCard.name}.`);

@@ -314,6 +314,9 @@ function cardMatchesScopeFilters(card, filters, engine) {
   if (filters.isToken !== undefined) {
     if ((card.isToken === true) !== Boolean(filters.isToken)) return false;
   }
+  if (filters.isTuner !== undefined) {
+    if ((card.isTuner === true) !== Boolean(filters.isTuner)) return false;
+  }
   if (engine && typeof engine.cardMatchesFilters === "function") {
     return engine.cardMatchesFilters(card, filters);
   }
@@ -366,6 +369,7 @@ export function resolveFieldScopeCards(scope = {}, ctx = {}, game = null, option
     "maxCounters",
     "requireFaceup",
     "isToken",
+    "isTuner",
   ]) {
     if (config[key] !== undefined && filters[key] === undefined) {
       filters[key] = config[key];
@@ -478,6 +482,9 @@ export function collectZoneCandidates(zone, filters = {}, options = {}) {
     }
     if (filters.isToken !== undefined) {
       if ((card.isToken === true) !== Boolean(filters.isToken)) return false;
+    }
+    if (filters.isTuner !== undefined) {
+      if ((card.isTuner === true) !== Boolean(filters.isTuner)) return false;
     }
 
     if (filters.subtype) {
@@ -855,6 +862,15 @@ export async function summonFromHandCore({
     console.error(
       `[summonFromHandCore] ❌ BLOCKED: Attempted to summon non-monster "${card.name}" (kind: ${card.cardKind})`
     );
+    return { success: false, position };
+  }
+
+  const restrictionCheck = game?.canSpecialSummonUnderRestrictions?.(card, player, {
+    summonMethod: "special",
+    fromZone: "hand",
+    silent: false,
+  });
+  if (restrictionCheck?.ok === false) {
     return { success: false, position };
   }
 

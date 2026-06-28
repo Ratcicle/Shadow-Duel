@@ -19,6 +19,10 @@ import {
   handleDrawAndSummon,
   handleAbyssalSerpentDelayedSummon,
   handleSpecialSummonFromDeckWithCounterLimit,
+  handleRestrictSpecialSummons,
+  handleScheduleSpecialSummon,
+  handleDeSynchro,
+  handleSynchroSummonFromExtraDeck,
 } from "./summon.js";
 
 // Destruction handlers
@@ -46,9 +50,11 @@ import {
   handleGrantProtection,
   handleBanishAndBuff,
   handleBuffAtkByLpGainedThisTurn,
+  handleSetAttackLimitFromZoneCount,
   handleSwitchPosition,
   handleSwitchDefenderPositionOnAttack,
   handleRemoveStatIncreases,
+  handleModifyLevel,
   handleHalveTargetStatsAndGainRemoved,
   handlePermanentBuffNamed,
   handleRemovePermanentBuffNamed,
@@ -80,12 +86,16 @@ import {
   handleConditionalTargetActions,
   handleOptionalTargetActions,
   handleRegisterBattlePairEffect,
+  handleRegisterSynchroMaterialFollowup,
   handleRegisterTemporaryEventEffect,
   handleRedirectCurrentAttackToTarget,
   handleSetSourceAfterResolutionIf,
 } from "./conditional.js";
 import { handleChooseActionCase, handleDeclareCardProperty } from "./choice.js";
-import { handleNegateSummonOrActivationAndDestroy } from "./negation.js";
+import {
+  handleNegateActivation,
+  handleNegateSummonOrActivationAndDestroy,
+} from "./negation.js";
 
 /**
  * Initialize default handlers
@@ -95,6 +105,12 @@ export function registerDefaultHandlers(registry) {
   // Generic special summon handler
 
   registry.register("special_summon_from_zone", handleSpecialSummonFromZone);
+  registry.register("restrict_special_summons", handleRestrictSpecialSummons);
+  registry.register("de_synchro", handleDeSynchro);
+  registry.register(
+    "synchro_summon_from_extra_deck",
+    handleSynchroSummonFromExtraDeck,
+  );
 
   registry.register(
     "special_summon_from_hand_with_cost",
@@ -172,6 +188,11 @@ export function registerDefaultHandlers(registry) {
   registry.register("add_status", handleAddStatus);
 
   registry.register("reduce_hand_monster_levels", handleReduceHandMonsterLevels);
+  registry.register("modify_level", handleModifyLevel);
+  registry.register(
+    "set_attack_limit_from_zone_count",
+    handleSetAttackLimitFromZoneCount,
+  );
 
   registry.register("pay_lp", handlePayLP);
 
@@ -285,6 +306,7 @@ export function registerDefaultHandlers(registry) {
 
     handleAbyssalSerpentDelayedSummon,
   );
+  registry.register("schedule_special_summon", handleScheduleSpecialSummon);
 
   // Legacy/common actions migrated into the registry (proxy to EffectEngine methods)
 
@@ -300,6 +322,10 @@ export function registerDefaultHandlers(registry) {
   registry.register(
     "register_temporary_event_effect",
     handleRegisterTemporaryEventEffect,
+  );
+  registry.register(
+    "register_synchro_material_followup",
+    handleRegisterSynchroMaterialFollowup,
   );
   registry.register("register_battle_pair_effect", handleRegisterBattlePairEffect);
   registry.register(
@@ -337,6 +363,7 @@ export function registerDefaultHandlers(registry) {
     "negate_summon_or_activation_and_destroy",
     handleNegateSummonOrActivationAndDestroy,
   );
+  registry.register("negate_activation", handleNegateActivation);
 
   registry.register("search_any", handleAddFromZoneToHand);
 

@@ -553,6 +553,19 @@ export function filterValidActionsForCurrentState(bot, actions, game) {
         );
         if (requirementCheck && requirementCheck.ok === false) return false;
       }
+      if (
+        action.ascensionCard &&
+        typeof game?.canPlaceCardOnField === "function"
+      ) {
+        const placeCheck = game.canPlaceCardOnField(action.ascensionCard, bot, {
+          isFacedown: false,
+          excludeCards: [material],
+          summonMethod: "ascension",
+          summonProcedure: "ascension",
+          silent: true,
+        });
+        if (placeCheck?.ok === false) return false;
+      }
       return true;
     }
     if (action.type === "extraDeckProcedure") {

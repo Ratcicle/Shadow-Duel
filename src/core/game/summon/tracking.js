@@ -93,9 +93,21 @@ export async function resolveDelayedSummon(payload) {
       continue;
     }
 
+    const resolvedPosition =
+      typeof this.chooseSpecialSummonPosition === "function"
+        ? await this.chooseSpecialSummonPosition(targetPlayer, card, {
+            position: summonData.position,
+          })
+        : summonData.position === "defense"
+          ? "defense"
+          : "attack";
+
     // Executar special summon
     const moveResult = await this.moveCard(card, targetPlayer, "field", {
-      summonMethodOverride: "special",
+      position: resolvedPosition,
+      statusesOnSummon: summonData.statusesOnSummon,
+      summonMethodOverride: summonData.summonMethod || "special",
+      summonProcedure: summonData.summonProcedure || null,
     });
     if (moveResult?.success === false) {
       this.ui?.log?.(

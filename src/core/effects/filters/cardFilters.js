@@ -87,6 +87,9 @@ export function cardMatchesFilters(card, filters = {}) {
   if (filters.isToken !== undefined) {
     if ((card.isToken === true) !== Boolean(filters.isToken)) return false;
   }
+  if (filters.isTuner !== undefined) {
+    if ((card.isTuner === true) !== Boolean(filters.isTuner)) return false;
+  }
   if (filters.subtype) {
     const requiredSubtypes = Array.isArray(filters.subtype)
       ? filters.subtype

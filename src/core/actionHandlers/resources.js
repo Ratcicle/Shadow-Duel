@@ -1487,6 +1487,7 @@ export async function handleHealPerOpponentCardsAndHand(
  *
  * Action properties:
  * - count: number of additional normal summons to grant (default: 1)
+ * - filters/archetype/cardKind: optional restriction for the extra summon
  */
 export async function handleGrantAdditionalNormalSummon(
   action,
@@ -1503,14 +1504,31 @@ export async function handleGrantAdditionalNormalSummon(
 
   if (!player || !game) return false;
 
-  const count = action.count || 1;
+  const rawCount = Number(action.count ?? 1);
+  const count = Number.isFinite(rawCount) ? Math.max(1, rawCount) : 1;
+  const filters = { ...(action.filters || {}) };
+  if (action.archetype && !filters.archetype) filters.archetype = action.archetype;
+  if (action.cardKind && !filters.cardKind) filters.cardKind = action.cardKind;
 
-  player.additionalNormalSummons += count;
+  if (Object.keys(filters).length > 0) {
+    player.additionalNormalSummonPermissions =
+      player.additionalNormalSummonPermissions || [];
+    player.additionalNormalSummonPermissions.push({
+      count,
+      filters,
+      sourceCardName: ctx?.source?.name || null,
+      effectId: ctx?.effect?.id || null,
+    });
+  } else {
+    player.additionalNormalSummons += count;
+  }
 
   const summonText = count === 1 ? "Normal Summon" : "Normal Summons";
 
+  const restrictionText =
+    Object.keys(filters).length > 0 ? " matching the listed restriction" : "";
   getUI(game)?.log(
-    `You can conduct ${count} additional ${summonText} this turn.`
+    `You can conduct ${count} additional ${summonText}${restrictionText} this turn.`
   );
 
   game.updateBoard();

@@ -742,7 +742,7 @@ export const burningWestCards = [
                     type: "event_card_matches_filters",
                     cardRef: "destroyed",
                     filters: {
-                      monsterType: ["fusion", "ascension"],
+                      monsterType: ["fusion", "synchro", "ascension"],
                     },
                   },
                 ],

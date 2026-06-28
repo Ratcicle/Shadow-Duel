@@ -21,8 +21,12 @@ function createSpecialSummonTypeCounts() {
 
 function resetKnownPlayerTurnFlags(player) {
   player.lpGainedThisTurn = 0;
+  player.damageReceivedThisTurn = 0;
   player.summonCount = 0;
   player.additionalNormalSummons = 0;
+  player.additionalNormalSummonPermissions = [];
+  player.normalSummonsThisTurn = [];
+  player.specialSummonRestrictions = [];
   player.forbidDirectAttacksThisTurn = false;
 }
 
@@ -80,6 +84,8 @@ export function resetDuelState(reason = "reset", options = {}) {
   this.temporaryReplacementEffects = [];
   this.temporaryBattlePairEffects = [];
   this.temporaryEventEffects = [];
+  this.pendingSynchroMaterialFollowups = [];
+  this.synchroSummonContextCounter = 0;
   this.delayedActions = [];
   this.damageCalculationTempBuffs = [];
   this.damageCalculationStatChangePending = false;

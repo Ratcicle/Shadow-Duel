@@ -113,6 +113,7 @@ export function buildActionFilter(action = {}) {
     "name",
     "cardId",
     "subtype",
+    "monsterType",
     "archetype",
     "archetypes",
     "requireFaceup",
@@ -130,14 +131,12 @@ export function buildActionFilter(action = {}) {
     "maxAtk",
     "minDef",
     "maxDef",
+    "isTuner",
   ].forEach((key) => {
     if (action[key] !== undefined && filter[key] === undefined) {
       filter[key] = action[key];
     }
   });
-  if (action.monsterType && filter.type === undefined) {
-    filter.type = action.monsterType;
-  }
   return filter;
 }
 

@@ -50,6 +50,30 @@ function getContextTargetCards(targetRef, ctx) {
   return target ? [target] : [];
 }
 
+function getCardLevelForStorage(card) {
+  const level = Number(card?.level ?? 0);
+  return Number.isFinite(level) ? level : 0;
+}
+
+function storeMoveActionResults(action, ctx, targets, movedCards, levelSum) {
+  if (!ctx || typeof ctx !== "object") return;
+
+  if (action.storeResultAs) {
+    const storedCards = movedCards.slice();
+    if (!ctx._actionTargets || typeof ctx._actionTargets !== "object") {
+      ctx._actionTargets = {};
+    }
+    ctx._actionTargets[action.storeResultAs] = storedCards;
+    if (targets && typeof targets === "object") {
+      targets[action.storeResultAs] = storedCards;
+    }
+  }
+
+  if (action.storeLevelSumAs) {
+    ctx[action.storeLevelSumAs] = levelSum;
+  }
+}
+
 /**
  * Apply move action - move cards between zones
  * @param {Object} action - Action configuration
@@ -82,6 +106,8 @@ export async function applyMove(action, ctx, targets) {
   }
 
   let moved = false;
+  const movedCards = [];
+  let movedLevelSum = 0;
 
   for (const card of targetCards) {
     if (
@@ -125,6 +151,7 @@ export async function applyMove(action, ctx, targets) {
         : null;
 
     const applyMoveWithPosition = async (chosenPosition) => {
+      const levelBeforeMove = getCardLevelForStorage(card);
       const finalPosition = shouldPromptForPosition
         ? chosenPosition || action.position || defaultFieldPosition || "attack"
         : chosenPosition ?? action.position ?? defaultFieldPosition;
@@ -205,6 +232,8 @@ export async function applyMove(action, ctx, targets) {
         card.owner = destPlayer.id;
         destArr.push(card);
       }
+      movedCards.push(card);
+      movedLevelSum += levelBeforeMove;
       moved = true;
 
       if (this.game && typeof this.game.updateBoard === "function") {
@@ -235,6 +264,9 @@ export async function applyMove(action, ctx, targets) {
       const moveResult = await applyMoveWithPosition(action.position);
       if (moveResult?.needsSelection) return moveResult;
     }
+  }
+  if (moved) {
+    storeMoveActionResults(action, ctx, targets, movedCards, movedLevelSum);
   }
   return moved;
 }

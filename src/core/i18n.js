@@ -275,6 +275,7 @@ const DEFAULT_LOCALE_TEXTS = {
       categoryTraps: "Traps",
       categoryExtra: "Extra Deck",
       categoryFusion: "Fusion",
+      categorySynchro: "Synchro",
       categoryAscension: "Ascension",
       viewGrid: "Grid",
       viewList: "List",
@@ -431,7 +432,13 @@ const MONSTER_TYPE_LABELS = {
     Spirit: "Espírito",
     Warrior: "Guerreiro",
     "Winged Beast": "Besta Alada",
+    Machine: "Máquina",
   },
+};
+
+const TUNER_LABELS = {
+  en: "Tuner",
+  "pt-br": "Regulador",
 };
 
 const CARD_KIND_LABELS = {
@@ -684,6 +691,81 @@ export function getCardDisplayDescription(card) {
   return getCardDisplayProperty(card, "description");
 }
 
+function findFirstSentenceBreak(text) {
+  const match = String(text || "").match(/^([\s\S]*?\.)\s+(\S[\s\S]*)$/u);
+  if (!match) return -1;
+  return match[1].length;
+}
+
+function findMaterialLineBreak(text) {
+  const normalized = String(text || "");
+  const newlineIndex = normalized.search(/\n+\s*\S/u);
+  if (newlineIndex > 0) return newlineIndex;
+
+  const effectStartPattern =
+    /\s+(Requirement:|Requisito:|If\s+|Se\s+|This card\b|Este card\b|You can\b|Voc[eê]\s+pode\b|Once per turn\b|Uma vez por turno\b|While\s+|Enquanto\s+|Your opponent\b|Seu oponente\b|Todo\s+|Must be\b|Deve ser\b|When\s+|Quando\s+|During\s+|Durante\s+)/iu;
+  const effectStartMatch = normalized.match(effectStartPattern);
+  if (effectStartMatch?.index > 0) return effectStartMatch.index;
+
+  return findFirstSentenceBreak(normalized);
+}
+
+function startsWithMaterialLine(card, text) {
+  const monsterType = String(card?.monsterType || "").toLowerCase();
+  if (!["fusion", "ascension", "synchro"].includes(monsterType)) return false;
+
+  const normalized = String(text || "").trimStart();
+  if (!normalized) return false;
+
+  const labeledMaterialPattern =
+    /^(?:Fusion Materials?|Materials?|Materiais(?:\s+de\s+Fus[aã]o)?|Material\s+de\s+Ascens[aã]o|Ascension Material|Ascens[aã]o|Synchro Materials?|Materiais(?:\s+de)?\s+Sincro):/iu;
+  if (labeledMaterialPattern.test(normalized)) return true;
+
+  if (monsterType === "synchro") {
+    return /\b(Tuner|Regulador|non-?Tuner|n[aã]o-Regulador(?:es)?)\b/iu.test(
+      normalized,
+    );
+  }
+
+  if (monsterType === "fusion" && card?.fusionMaterials) {
+    const firstSentenceEnd = findFirstSentenceBreak(normalized);
+    const firstSentence =
+      firstSentenceEnd >= 0 ? normalized.slice(0, firstSentenceEnd) : normalized;
+    return /(?:\+|\b\d+\+?\s+|monsters?|monstros?)\b/iu.test(firstSentence);
+  }
+
+  return false;
+}
+
+function formatDescriptionMaterialLineBreak(card, description) {
+  const text = String(description || "");
+  if (!startsWithMaterialLine(card, text)) return text;
+
+  const leadingWhitespaceLength = text.length - text.trimStart().length;
+  const trimmed = text.slice(leadingWhitespaceLength);
+  const breakIndex = findMaterialLineBreak(trimmed);
+  if (breakIndex < 0 || breakIndex >= trimmed.length - 1) return text;
+
+  const materialLine = text
+    .slice(0, leadingWhitespaceLength + breakIndex)
+    .replace(/\.\s*$/u, "")
+    .trimEnd();
+  const effectText = trimmed.slice(breakIndex).replace(/^\s+/u, "");
+  return `${materialLine}\n${effectText}`;
+}
+
+export function formatCardPreviewDescriptionHtml(card, fallback = "") {
+  const description =
+    getCardDisplayDescription(card) ||
+    card?.description ||
+    fallback ||
+    "";
+  return escapeHtml(formatDescriptionMaterialLineBreak(card, description)).replace(
+    /\n/g,
+    "<br>",
+  );
+}
+
 export function getUIText(key, params = {}, fallback = null) {
   const path = String(key || "").trim();
   if (!path) return fallback ?? "";
@@ -777,19 +859,20 @@ export function getMonsterDetailParts(card) {
   const level = Number.isFinite(card?.level) ? card.level : "-";
   const type = getMonsterTypeDisplayName(card);
   const attribute = getMonsterAttributeDisplayName(card?.attribute);
-  return { level, type, attribute };
+  const tuner = card?.isTuner === true ? TUNER_LABELS[currentLocale] || "Tuner" : "";
+  return { level, type, attribute, tuner };
 }
 
 export function formatMonsterDetailLine(card) {
-  const { level, type, attribute } = getMonsterDetailParts(card);
-  const parts = [`⭐${level}`, type];
+  const { level, type, attribute, tuner } = getMonsterDetailParts(card);
+  const parts = [`⭐${level}`, tuner, type];
   if (attribute) parts.push(attribute);
   return parts.filter(Boolean).join(" | ");
 }
 
 export function formatMonsterDetailHtml(card) {
-  const { level, type, attribute } = getMonsterDetailParts(card);
-  const rest = [type, attribute].filter(Boolean).map(escapeHtml).join(" | ");
+  const { level, type, attribute, tuner } = getMonsterDetailParts(card);
+  const rest = [tuner, type, attribute].filter(Boolean).map(escapeHtml).join(" | ");
   return `⭐<span class="monster-level-number">${escapeHtml(level)}</span>${
     rest ? ` | ${rest}` : ""
   }`;

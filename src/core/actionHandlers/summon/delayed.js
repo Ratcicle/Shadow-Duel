@@ -1,5 +1,72 @@
 import { getUI } from "../shared.js";
 
+function resolveScheduledCard(action, ctx, targets) {
+  const cardRef = action.cardRef || action.targetRef || "self";
+  if (cardRef === "self" || cardRef === "source") return ctx?.source || null;
+  const target = targets?.[cardRef];
+  if (Array.isArray(target)) return target[0] || null;
+  return target || ctx?.[cardRef] || null;
+}
+
+function resolvePlayerId(rule, ctx, game) {
+  const value = rule || "current";
+  if (value === "current" || value === "turn") return game?.turn || null;
+  if (value === "self") return ctx?.player?.id || null;
+  if (value === "opponent") return ctx?.opponent?.id || null;
+  return value;
+}
+
+export async function handleScheduleSpecialSummon(action, ctx, targets, engine) {
+  const game = engine?.game;
+  const player = ctx?.player;
+  const card = resolveScheduledCard(action, ctx, targets);
+  const ui = getUI(game);
+  if (!game || !player || !card) {
+    ui?.log?.("No card available to schedule for Special Summon.");
+    return false;
+  }
+
+  const owner =
+    action.owner === "opponent" || action.summonPlayer === "opponent"
+      ? ctx?.opponent
+      : player;
+  if (!owner) return false;
+
+  const phase = action.phase || action.returnPhase || "end";
+  const fromZone = action.fromZone || action.zone || "graveyard";
+  const triggerPlayerId = resolvePlayerId(
+    action.triggerPlayer || action.player,
+    ctx,
+    game,
+  );
+  if (!triggerPlayerId) return false;
+
+  game.scheduleDelayedAction(
+    "delayed_summon",
+    {
+      phase,
+      player: triggerPlayerId,
+    },
+    {
+      summons: [
+        {
+          card,
+          owner: owner.id,
+          fromZone,
+          position: action.position,
+          statusesOnSummon: action.statusesOnSummon || null,
+          summonMethod: action.summonMethod || "special",
+          summonProcedure: action.summonProcedure || null,
+        },
+      ],
+    },
+    Number.isFinite(Number(action.priority)) ? Number(action.priority) : 1,
+  );
+
+  ui?.log?.(`${card.name} will be Special Summoned during the ${phase} phase.`);
+  return true;
+}
+
 export async function handleAbyssalSerpentDelayedSummon(
   action,
   ctx,

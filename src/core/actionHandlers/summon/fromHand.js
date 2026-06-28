@@ -16,6 +16,15 @@ export async function performSummonFromHand(
     return false;
   }
 
+  const restrictionCheck = game?.canSpecialSummonUnderRestrictions?.(card, player, {
+    summonMethod: "special",
+    fromZone: "hand",
+    silent: false,
+  });
+  if (restrictionCheck?.ok === false) {
+    return false;
+  }
+
   const position = await engine.chooseSpecialSummonPosition(card, player, {
     position: action.position,
   });

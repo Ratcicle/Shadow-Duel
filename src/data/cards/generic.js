@@ -596,4 +596,42 @@ export const genericCards = [
       },
     ],
   },
+  {
+    id: 19,
+    name: "De-Synchro",
+    cardKind: "spell",
+    subtype: "normal",
+    description:
+      "Target 1 Synchro Monster on the field; return that target to the Extra Deck, then, if all the monsters that were used for the Synchro Summon of that monster are in your Graveyard, you can Special Summon them. You can only activate 1 \"De-Synchro\" per turn.",
+    image: "assets/De-Synchro.png",
+    effects: [
+      {
+        id: "de_synchro_activation",
+        timing: "on_play",
+        speed: 1,
+        oncePerTurn: true,
+        oncePerTurnName: "de_synchro_activation",
+        targets: [
+          {
+            id: "de_synchro_target",
+            owner: "any",
+            zone: "field",
+            cardKind: "monster",
+            monsterType: "synchro",
+            requireFaceup: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          {
+            type: "de_synchro",
+            targetRef: "de_synchro_target",
+            position: "choice",
+            contextLabel: "de_synchro_return",
+            reviveContextLabel: "de_synchro_material_summon",
+          },
+        ],
+      },
+    ],
+  },
 ];

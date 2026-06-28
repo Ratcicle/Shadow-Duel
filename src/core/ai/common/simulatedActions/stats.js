@@ -18,6 +18,7 @@ import {
 import {
   attachSimulatedEquip,
   findCardOwner,
+  getZoneCards,
   moveCardToZone,
   removeCardFromZones,
 } from "../zones.js";
@@ -79,7 +80,7 @@ function getTargetScopeCards(scope = {}, self, opponent) {
 
   return ownerEntries.flatMap(({ player, role }) =>
     zones.flatMap((zone) =>
-      (player?.[zone] || []).filter((card) =>
+      getZoneCards(player, zone).filter((card) =>
         matchesTargetFilters(card, filters, null, role),
       ),
     ),
@@ -200,6 +201,46 @@ export function applyBuffAtkTemp(ctx) {
     }
   });
   return;
+}
+
+export function applySetAttackLimitFromZoneCount(ctx) {
+  const { action, targets, self, opponent } = ctx;
+  const owners =
+    action.owner === "opponent"
+      ? [opponent]
+      : action.owner === "both" || action.owner === "any"
+        ? [self, opponent]
+        : [self];
+  const zones = asArray(action.zone || "graveyard");
+  const filters = action.filters || {};
+  let count = 0;
+
+  for (const owner of owners.filter(Boolean)) {
+    for (const zone of zones) {
+      const cards =
+        zone === "fieldSpell"
+          ? owner.fieldSpell
+            ? [owner.fieldSpell]
+            : []
+          : Array.isArray(owner[zone])
+            ? owner[zone]
+            : [];
+      count += cards.filter((card) =>
+        matchesTargetFilters(card, filters, null),
+      ).length;
+    }
+  }
+
+  const minAttacks = Number.isFinite(Number(action.minAttacks))
+    ? Math.max(0, Math.floor(Number(action.minAttacks)))
+    : 0;
+  const attackLimit = Math.max(minAttacks, count);
+
+  targets.forEach((card) => {
+    if (!card || card.cardKind !== "monster") return;
+    card.attackLimitThisTurn = attackLimit;
+    card.attackLimitDuration = action.duration || "until_end_turn";
+  });
 }
 
 export function applyRemoveStatIncreases(ctx) {
@@ -493,7 +534,12 @@ export function applyAddStatus(ctx) {
     opponent,
     applySimulatedActions,
   } = ctx;
-  targets.forEach((card) => {
+  const targetCards =
+    Array.isArray(targets) && targets.length > 0
+      ? targets
+      : getTargetScopeCards(action.targetScope, self, opponent);
+
+  targetCards.forEach((card) => {
     if (!card) return;
     const status = action.status;
     if (status) {

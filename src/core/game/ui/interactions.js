@@ -4,6 +4,7 @@ import {
   getTributeCardsFromIndices,
   getTributeValueTotal,
 } from "../summon/tributeValue.js";
+import { canUseNormalSummonForCard } from "../../Player.js";
 
 /**
  * UI Interactions Module - Card interactions for the Shadow Duel game
@@ -32,8 +33,7 @@ export function bindCardInteractions() {
     if (!actor || !card || card.cardKind !== "monster") return false;
     if (card.cannotBeNormalSummonedOrSet) return false;
     if (card.summonRestrict === "shadow_heart_invocation_only") return false;
-    const normalSummonLimit = 1 + (actor.additionalNormalSummons || 0);
-    if ((actor.summonCount || 0) >= normalSummonLimit) return false;
+    if (!canUseNormalSummonForCard(actor, card)) return false;
     const info = tributeInfo || actor.getTributeRequirement?.(card);
     const tributesNeeded = Math.max(0, Number(info?.tributesNeeded || 0));
     const fieldCount = actor.field?.length || 0;
@@ -964,23 +964,17 @@ export function bindCardInteractions() {
         }
 
         const canUseSecondAttack =
+          !this.hasExplicitAttackLimitThisTurn?.(attacker) &&
           attacker.canMakeSecondAttackThisTurn &&
           !attacker.secondAttackUsedThisTurn;
 
         // Multi-attack mode bypasses the hasAttacked check
         const isMultiAttackMode = attacker.canAttackAllOpponentMonstersThisTurn;
 
-        // Check remaining attacks considering extraAttacks property
-        let extraAttacks = attacker.extraAttacks || 0;
-        if (attacker.dynamicExtraAttacks?.source === "graveyard_count") {
-          const dea = attacker.dynamicExtraAttacks;
-          const owner = attacker.owner === "player" ? this.player : this.bot;
-          const dynamicAttackLimit = (owner?.graveyard || []).filter(
-            (c) => c && c.name === dea.name,
-          ).length;
-          extraAttacks = dynamicAttackLimit - 1;
-        }
-        const maxAttacks = 1 + extraAttacks;
+        const maxAttacks = availability.maxAttacks ??
+          (this.getMonsterAttackLimit
+            ? this.getMonsterAttackLimit(attacker)
+            : 1 + Number(attacker.extraAttacks || 0));
         const attacksUsed = attacker.attacksUsedThisTurn || 0;
         const hasAttacksRemaining =
           attacksUsed < maxAttacks || canUseSecondAttack;
