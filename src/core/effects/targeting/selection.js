@@ -90,6 +90,140 @@ function isExcludedContextCard(def, ctx, card) {
   );
 }
 
+function normalizeList(value, fallback = []) {
+  if (Array.isArray(value)) return value.filter(Boolean);
+  if (value === undefined || value === null) return fallback;
+  return [value];
+}
+
+function getPairedTargetSpec(def = {}) {
+  return def.pairedTarget || def.requiresPairedTarget || null;
+}
+
+function getPairedTargetOwners(pairSpec = {}, ctx = {}) {
+  const ownerRule = pairSpec.owner || pairSpec.player || "self";
+  if (ownerRule === "opponent") return [ctx.opponent].filter(Boolean);
+  if (ownerRule === "any" || ownerRule === "both" || ownerRule === "either") {
+    return [ctx.player, ctx.opponent].filter(Boolean);
+  }
+  return [ctx.player].filter(Boolean);
+}
+
+function buildPairedTargetFilters(pairSpec = {}) {
+  const filters = { ...(pairSpec.filters || {}) };
+  const copyIfPresent = (sourceKey, filterKey = sourceKey) => {
+    if (pairSpec[sourceKey] !== undefined && filters[filterKey] === undefined) {
+      filters[filterKey] = pairSpec[sourceKey];
+    }
+  };
+
+  copyIfPresent("cardKind");
+  copyIfPresent("type");
+  copyIfPresent("archetype");
+  copyIfPresent("name");
+  copyIfPresent("cardName", "name");
+  copyIfPresent("cardId");
+  copyIfPresent("cardIds");
+  copyIfPresent("subtype");
+  copyIfPresent("monsterType");
+  copyIfPresent("level");
+  copyIfPresent("levelOp");
+  copyIfPresent("minLevel");
+  copyIfPresent("maxLevel");
+  copyIfPresent("minAtk");
+  copyIfPresent("maxAtk");
+  copyIfPresent("minDef");
+  copyIfPresent("maxDef");
+  copyIfPresent("requireFaceup");
+  copyIfPresent("isToken");
+  copyIfPresent("isTuner");
+  copyIfPresent("excludeCannotBeSpecialSummoned");
+  return filters;
+}
+
+function comparePairedValues(left, op = "eq", right) {
+  if (op === "eq" || op === "==" || op === "===") return left === right;
+  if (op === "neq" || op === "!=" || op === "!==") return left !== right;
+
+  const leftNumber = Number(left);
+  const rightNumber = Number(right);
+  if (!Number.isFinite(leftNumber) || !Number.isFinite(rightNumber)) {
+    return false;
+  }
+  if (op === "lte" || op === "<=") return leftNumber <= rightNumber;
+  if (op === "lt" || op === "<") return leftNumber < rightNumber;
+  if (op === "gte" || op === ">=") return leftNumber >= rightNumber;
+  if (op === "gt" || op === ">") return leftNumber > rightNumber;
+  return false;
+}
+
+function pairedTargetComparisonsPass(sourceCard, pairedCard, pairSpec = {}) {
+  const comparisons = [
+    ...normalizeList(pairSpec.compareAttribute),
+    ...normalizeList(pairSpec.compareAttributes),
+  ];
+  if (comparisons.length === 0) return true;
+
+  return comparisons.every((comparison) => {
+    const attr = comparison.attr || comparison.attribute;
+    const pairedAttr = comparison.pairedAttr || comparison.targetAttr || attr;
+    const sourceAttr = comparison.sourceAttr || comparison.refAttr || attr;
+    if (!pairedAttr || !sourceAttr) return false;
+    return comparePairedValues(
+      pairedCard?.[pairedAttr],
+      comparison.op || "eq",
+      sourceCard?.[sourceAttr],
+    );
+  });
+}
+
+function pairedTargetMatchesSource(engine, sourceCard, pairedCard, pairSpec, ctx) {
+  if (!sourceCard || !pairedCard || !pairSpec) return false;
+  if (pairSpec.excludeSameCard !== false && isSameCardReference(sourceCard, pairedCard)) {
+    return false;
+  }
+  if (pairSpec.excludeSameName === true && sourceCard.name === pairedCard.name) {
+    return false;
+  }
+  const filters = buildPairedTargetFilters(pairSpec);
+  if (
+    filters.excludeCannotBeSpecialSummoned === true &&
+    pairedCard.cannotBeSpecialSummoned
+  ) {
+    return false;
+  }
+  if (
+    Object.keys(filters).length > 0 &&
+    typeof engine?.cardMatchesFilters === "function" &&
+    !engine.cardMatchesFilters(pairedCard, filters)
+  ) {
+    return false;
+  }
+  if (filters.requireFaceup === true && pairedCard.isFacedown) return false;
+  if (!pairedTargetComparisonsPass(sourceCard, pairedCard, pairSpec)) {
+    return false;
+  }
+  if (pairSpec.excludeContextCard || pairSpec.excludeContextCards) {
+    if (isExcludedContextCard(pairSpec, ctx, pairedCard)) return false;
+  }
+  return true;
+}
+
+function hasPairedTargetCandidate(engine, sourceCard, pairSpec, ctx) {
+  if (!pairSpec) return true;
+  const zones = normalizeList(pairSpec.zones ?? pairSpec.zone, ["field"]);
+  for (const owner of getPairedTargetOwners(pairSpec, ctx)) {
+    for (const zoneKey of zones) {
+      for (const pairedCard of getZoneSnapshot(owner, zoneKey)) {
+        if (pairedTargetMatchesSource(engine, sourceCard, pairedCard, pairSpec, ctx)) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
 function buildZoneSignature(def, ctx) {
   const zoneName = def.zone || "field";
   const zoneList =
@@ -123,6 +257,7 @@ function buildZoneSignature(def, ctx) {
  */
 function buildTargetingCacheKey(def, ctx) {
   const anyOfKey = Array.isArray(def.anyOf) ? JSON.stringify(def.anyOf) : "";
+  const pairedTarget = getPairedTargetSpec(def);
   const parts = [
     def.id || "unknown",
     def.zone || "field",
@@ -186,6 +321,8 @@ function buildTargetingCacheKey(def, ctx) {
     ctx.source?.name || "",
     ctx.player?.id || "p",
     buildZoneSignature(def, ctx),
+    pairedTarget ? JSON.stringify(pairedTarget) : "",
+    pairedTarget ? buildZoneSignature(pairedTarget, ctx) : "",
   ];
   return parts.join("|");
 }
@@ -706,6 +843,15 @@ export function selectCandidates(def, ctx) {
             );
             continue;
           }
+        }
+
+        const pairedTarget = getPairedTargetSpec(def);
+        if (
+          pairedTarget &&
+          !hasPairedTargetCandidate(this, card, pairedTarget, ctx)
+        ) {
+          log("[selectCandidates] Rejecting: no paired target candidate");
+          continue;
         }
 
         log(`[selectCandidates] ACCEPTED: ${card.name}`);

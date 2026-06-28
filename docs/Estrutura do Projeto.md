@@ -347,7 +347,7 @@ Fachada de renderização. Constrói o renderer e delega métodos para [src/ui/r
 - [Bloomrot Bot Implementation Plan.md](Bloomrot%20Bot%20Implementation%20Plan.md)
 - [Bloomrot Bot Technical Audit.md](Bloomrot%20Bot%20Technical%20Audit.md)
 - [bloomrot_bot_strategy.md](bloomrot_bot_strategy.md)
-- Decklists: [Arcanist](Arcanist%20Decklist.md), [Bloomrot](Bloomrot%20Decklist.md), [Burning West](Burning%20West%20Decklist.md), [Dragon](Dragon%20Decklist.md), [Luminarch](Luminarch%20Decklist.md), [Miragebound](Miragebound%20Decklist.md), [Shadow-Heart](Shadow-Heart%20Decklist.md), [Void](Void%20Decklist.md).
+- Decklists: [Arcanist](Arcanist%20Decklist.md), [Bloomrot](Bloomrot%20Decklist.md), [Burning West](Burning%20West%20Decklist.md), [Dragon](Dragon%20Decklist.md), [Luminarch](Luminarch%20Decklist.md), [Miragebound](Miragebound%20Decklist.md), [Shadow-Heart](Shadow-Heart%20Decklist.md), [Tech-Zero](Tech-Zero%20Decklist.md), [Void](Void%20Decklist.md).
 
 ---
 

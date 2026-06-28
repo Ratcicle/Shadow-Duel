@@ -122,6 +122,43 @@ function applyStatusesOnSummon(card, statuses) {
   }
 }
 
+const OWNER_RETURN_ZONES = new Set([
+  "graveyard",
+  "hand",
+  "deck",
+  "extraDeck",
+  "banished",
+]);
+
+function getPlayerById(game, playerId) {
+  if (!game || !playerId) return null;
+  if (game.player?.id === playerId) return game.player;
+  if (game.bot?.id === playerId) return game.bot;
+  return null;
+}
+
+function ensureOriginalOwner(card, fallbackOwnerId) {
+  if (!card) return null;
+  if (!card.originalOwner && fallbackOwnerId) {
+    card.originalOwner = fallbackOwnerId;
+  }
+  return card.originalOwner || fallbackOwnerId || card.owner || null;
+}
+
+function resolveOriginalOwnerDestination(game, card, fromZone, toZone, fromOwner) {
+  if (
+    !card ||
+    fromZone !== "field" ||
+    toZone === "field" ||
+    !OWNER_RETURN_ZONES.has(toZone)
+  ) {
+    return null;
+  }
+
+  const originalOwnerId = ensureOriginalOwner(card, fromOwner?.id || card.owner);
+  return getPlayerById(game, originalOwnerId);
+}
+
 /**
  * Move a card between zones (public API, wrapped in runZoneOp).
  * @param {Object} card - The card to move
@@ -335,6 +372,32 @@ async function applySynchroMaterialFollowupsBeforeAfterSummon(
   }
 
   return null;
+}
+
+export async function applyPendingSynchroMaterialFollowups(
+  summonedCard,
+  ownerPlayer = null,
+  followups = [],
+  options = {},
+) {
+  const resolvedOwner =
+    ownerPlayer ||
+    (summonedCard?.owner === "player" ? this.player : this.bot);
+  const otherPlayer =
+    resolvedOwner && typeof this.getOpponent === "function"
+      ? this.getOpponent(resolvedOwner)
+      : resolvedOwner === this.player
+        ? this.bot
+        : this.player;
+
+  return await applySynchroMaterialFollowupsBeforeAfterSummon(
+    this,
+    summonedCard,
+    resolvedOwner,
+    otherPlayer,
+    followups,
+    options,
+  );
 }
 
 function hasMatchingDestroyedGraveyardTrigger(card, fromZone, options = {}) {
@@ -1424,6 +1487,7 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
   if (!fromZone || !fromOwner) {
     return { success: false, reason: "card_not_found" };
   }
+  ensureOriginalOwner(card, fromOwner.id);
 
   // Send-to-graveyard replacement (e.g. Galaxy Extreme Dragon): if any face-up
   // card on the field has a `passive: { type: "send_to_grave_replacement" }`
@@ -1470,6 +1534,21 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
       } else {
         this.ui?.log?.(`${card.name} is banished as it leaves the field.`);
       }
+    }
+  }
+
+  const originalOwnerDestination = resolveOriginalOwnerDestination(
+    this,
+    card,
+    fromZone,
+    toZone,
+    fromOwner,
+  );
+  if (originalOwnerDestination && originalOwnerDestination !== destPlayer) {
+    destPlayer = originalOwnerDestination;
+    destArrRedirected = this.getZone(destPlayer, toZone);
+    if (!Array.isArray(destArrRedirected)) {
+      return { success: false, reason: "invalid_original_owner_zone" };
     }
   }
 
@@ -2166,6 +2245,8 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
 
     const ownerPlayer = card.owner === "player" ? this.player : this.bot;
     const otherPlayer = ownerPlayer === this.player ? this.bot : this.player;
+    const deferCardToGraveTriggers =
+      options.deferCardToGraveTriggerResolution === true;
 
     const shouldPresentDestroyedGraveyardTrigger =
       hasMatchingDestroyedGraveyardTrigger(card, fromZone, options);
@@ -2179,7 +2260,8 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
       if (
         options.presentBeforeCardToGraveEvent !== false &&
         (options.awaitEvents === true ||
-          options.awaitCardToGraveEvent === true) &&
+          options.awaitCardToGraveEvent === true ||
+          deferCardToGraveTriggers) &&
         typeof this.waitForPresentationDelay === "function"
       ) {
         const delayMs = Number.isFinite(options.graveyardPresentationDelayMs)
@@ -2190,7 +2272,7 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
       console.log(
         `[moveCard] Emitting card_to_grave event for ${card.name} (fromZone: ${fromZone})`
       );
-      const cardToGraveEvent = this.emit("card_to_grave", {
+      const cardToGravePayload = {
         card,
         fromZone: fromZone || options.fromZone || null,
         toZone: "graveyard",
@@ -2203,8 +2285,14 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
         contextLabel: options.contextLabel || null,
         actionContext: options.actionContext || null,
         effectsNegatedAtFieldExit,
-      });
+      };
+      const cardToGraveEvent = this.emit(
+        "card_to_grave",
+        cardToGravePayload,
+        deferCardToGraveTriggers ? { collectTriggersOnly: true } : undefined,
+      );
       if (
+        deferCardToGraveTriggers ||
         options.awaitEvents === true ||
         options.awaitCardToGraveEvent === true
       ) {
@@ -2252,6 +2340,12 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
   if (cardToGraveResult?.needsSelection && cardToGraveResult.selectionContract) {
     result.needsSelection = true;
     result.selectionContract = cardToGraveResult.selectionContract;
+  }
+  if (cardToGraveResult?.collectedOnly) {
+    result.deferredCardToGraveTriggerPackage = cardToGraveResult;
+    result.deferredCardToGraveEntries = Array.isArray(cardToGraveResult.entries)
+      ? cardToGraveResult.entries
+      : [];
   }
   return result;
 }

@@ -21,10 +21,11 @@ async function presentDamageCalculationStatChanges(game) {
   game.damageCalculationStatChangePending = false;
 }
 
-export async function resolveEvent(eventName, payload) {
+export async function resolveEvent(eventName, payload, options = {}) {
   if (!eventName) {
     return { ok: false, reason: "missing_event" };
   }
+  const collectTriggersOnly = options?.collectTriggersOnly === true;
 
   this.eventResolutionDepth += 1;
   this.eventResolutionCounter += 1;
@@ -130,15 +131,29 @@ export async function resolveEvent(eventName, payload) {
 
   let resolutionResult = null;
   try {
-    resolutionResult = await this.resolveEventEntries(
-      eventName,
-      payload,
-      entries,
-      {
-        onComplete,
+    if (collectTriggersOnly) {
+      resolutionResult = {
+        ok: true,
+        collectedOnly: true,
+        eventName,
+        payload,
+        entries,
         orderRule,
-      },
-    );
+        onComplete,
+        triggerCount: entries.length,
+        results: [],
+      };
+    } else {
+      resolutionResult = await this.resolveEventEntries(
+        eventName,
+        payload,
+        entries,
+        {
+          onComplete,
+          orderRule,
+        },
+      );
+    }
   } catch (err) {
     console.error(`[Game] Error resolving event "${eventName}":`, err);
   } finally {
@@ -444,6 +459,18 @@ export async function resumePendingEventSelection(
     if (battleDestroyResult?.needsSelection) {
       return battleDestroyResult;
     }
+  }
+
+  const synchroContinuationResult =
+    await this.finishPendingSynchroMaterialTriggerContinuation?.(
+      resolutionResult,
+      pending.eventName,
+    );
+  if (synchroContinuationResult?.needsSelection) {
+    return synchroContinuationResult;
+  }
+  if (synchroContinuationResult?.ok === false) {
+    return synchroContinuationResult;
   }
 
   // After resolving the event, check if there's a pending tie destruction to continue

@@ -530,16 +530,16 @@ export const techZeroCards = [
     attribute: "Light",
     archetype: "Tech-Zero",
     description:
-      'You can discard this card and 1 "Tech-Zero" monster; add 1 "Tech-Zero" Tuner from your Deck to your hand. If this card is sent to the Graveyard as Synchro Material: You can Special Summon 1 "Tech-Zero" monster from your hand, but negate its effects until the end of this turn. You can only use each effect of "Tech-Zero Prism Activator" once per turn.',
+      'You can discard this card and 1 "Tech-Zero" Tuner; add 1 "Tech-Zero" monster from your Deck to your hand. If this card is sent to the Graveyard as Synchro Material: You can Special Summon 1 "Tech-Zero" monster from your hand, but negate its effects until the end of this turn. You can only use each effect of "Tech-Zero Prism Activator" once per turn.',
     image: "assets/Tech-Zero Prism Activator.png",
     effects: [
       {
-        id: "tech_zero_prism_activator_tuner_search",
+        id: "tech_zero_prism_activator_monster_search",
         timing: "ignition",
         requireZone: "hand",
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
-        oncePerTurnName: "tech_zero_prism_activator_tuner_search",
+        oncePerTurnName: "tech_zero_prism_activator_monster_search",
         targets: [
           {
             id: "tech_zero_prism_activator_discard_target",
@@ -547,6 +547,7 @@ export const techZeroCards = [
             zone: "hand",
             cardKind: "monster",
             archetype: "Tech-Zero",
+            isTuner: true,
             excludeSelf: true,
             count: { min: 1, max: 1 },
           },
@@ -574,11 +575,10 @@ export const techZeroCards = [
             filters: {
               cardKind: "monster",
               archetype: "Tech-Zero",
-              isTuner: true,
             },
             count: { min: 1, max: 1 },
             selectionMessage:
-              'Select 1 "Tech-Zero" Tuner from your Deck to add to your hand.',
+              'Select 1 "Tech-Zero" monster from your Deck to add to your hand.',
           },
         ],
       },
@@ -1115,6 +1115,18 @@ export const techZeroCards = [
             cardKind: "monster",
             archetype: "Tech-Zero",
             maxLevel: 4,
+            pairedTarget: {
+              owner: "self",
+              zone: "graveyard",
+              cardKind: "monster",
+              archetype: "Tech-Zero",
+              excludeCannotBeSpecialSummoned: true,
+              excludeSameName: true,
+              compareAttribute: {
+                attr: "level",
+                op: "eq",
+              },
+            },
             count: { min: 1, max: 1 },
             intent: "cost",
           },
@@ -1125,6 +1137,7 @@ export const techZeroCards = [
             logIfSkipped: true,
             selectionMessage:
               'Select 1 "Tech-Zero" monster in your Graveyard with the same Level and a different name.',
+            allowCancel: false,
             targets: [
               {
                 id: "tech_zero_battle_mage_revive_target",

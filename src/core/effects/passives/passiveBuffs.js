@@ -53,6 +53,14 @@ function getPassiveBuffAppliedValue(entry, stat) {
     return Number(entry?.value || 0);
   }
 
+function passiveSourceEffectsAreNegated(engine, card) {
+    if (!card) return false;
+    if (typeof engine?.isEffectNegated === "function") {
+      return engine.isEffectNegated(card);
+    }
+    return card.effectsNegated === true;
+  }
+
 function clearPassiveBuffEntry(card, entry) {
     if (!card || !entry) return false;
     let changed = false;
@@ -339,6 +347,17 @@ export function updatePassiveBuffs() {
         if (effect.requireFaceup === true && card.isFacedown === true) return;
         const passive = effect.passive;
         if (!passive) return;
+        const sourceEffectsNegated = passiveSourceEffectsAreNegated(this, card);
+        if (sourceEffectsNegated) {
+          if (passive.type === "position_status") {
+            const statusName = passive.status || "battleIndestructible";
+            if (card[statusName]) {
+              delete card[statusName];
+              updated = true;
+            }
+          }
+          return;
+        }
 
         if (passive.type === "conditional_extra_attacks") {
           if (card.cardKind !== "monster") return;
@@ -901,6 +920,7 @@ export function updatePassiveBuffs() {
         const passive = effect.passive;
         if (!passive || passive.type !== "battle_phase_activation_lock") return;
         if (card.isFacedown) return;
+        if (passiveSourceEffectsAreNegated(this, card)) return;
 
         const owner = this.getOwnerByCard(card);
         const opponent =

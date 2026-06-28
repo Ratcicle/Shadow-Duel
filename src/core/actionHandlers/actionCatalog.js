@@ -994,8 +994,8 @@ export const ACTION_CATALOG = {
     ],
     notes: [
       'Use only from `card_to_grave` effects with `contextLabel: "synchro_material"`.',
-      'Follow-up actions receive `synchro_summoned_card` as an internal target and resolve before `after_summon` triggers for the Synchro monster.',
-      "Follow-up actions should be fully resolvable from context targets; avoid manual target selection in this pre-trigger window.",
+      "Follow-up actions receive `synchro_summoned_card` as an internal target and resolve after the Synchro monster is on the field and its `after_summon` triggers have completed.",
+      "Follow-up actions should be fully resolvable from context targets; avoid manual target selection in this deferred material-trigger window.",
     ],
   }),
   register_battle_pair_effect: action({

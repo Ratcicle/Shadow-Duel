@@ -270,6 +270,165 @@ function takeSynchroMaterialFollowups(game, contextId) {
   return matching;
 }
 
+function appendDeferredSynchroMaterialTriggerPackage(packages, moveResult) {
+  const triggerPackage = moveResult?.deferredCardToGraveTriggerPackage || null;
+  if (!triggerPackage || triggerPackage.collectedOnly !== true) return;
+  if (!Array.isArray(triggerPackage.entries)) return;
+  packages.push(triggerPackage);
+}
+
+function getPlayerById(game, playerId, fallback = null) {
+  if (!game || !playerId) return fallback;
+  if (game.player?.id === playerId) return game.player;
+  if (game.bot?.id === playerId) return game.bot;
+  return fallback;
+}
+
+async function applySynchroMaterialFollowupsForContext(
+  game,
+  synchroSummonContextId,
+  synchroCard,
+  player,
+  actionContext,
+) {
+  const followups = takeSynchroMaterialFollowups(
+    game,
+    synchroSummonContextId,
+  );
+  if (followups.length === 0) {
+    return { ok: true, needsSelection: false };
+  }
+
+  const followupResult =
+    await game.applyPendingSynchroMaterialFollowups?.(
+      synchroCard,
+      player,
+      followups,
+      {
+        actionContext,
+        summonMethod: "synchro",
+        summonProcedure: "synchro",
+      },
+    );
+  if (followupResult?.needsSelection) {
+    return followupResult;
+  }
+  if (followupResult?.success === false) {
+    return {
+      ok: false,
+      needsSelection: false,
+      reason: followupResult.reason || "synchro_material_followup_failed",
+    };
+  }
+  return { ok: true, needsSelection: false };
+}
+
+async function resolveDeferredSynchroMaterialTriggers(
+  game,
+  packages,
+  synchroSummonContextId,
+  synchroCard,
+  player,
+  actionContext,
+) {
+  const entries = packages.flatMap((entryPackage) =>
+    Array.isArray(entryPackage?.entries) ? entryPackage.entries : [],
+  );
+  if (entries.length > 0) {
+    const onCompleteHandlers = packages
+      .map((entryPackage) => entryPackage?.onComplete)
+      .filter((handler) => typeof handler === "function");
+    const orderRules = packages
+      .map((entryPackage) => entryPackage?.orderRule)
+      .filter(Boolean);
+    const payload = {
+      player,
+      opponent: game.getOpponent?.(player) || null,
+      contextLabel: "synchro_material",
+      actionContext,
+      deferredSynchroMaterialTriggers: true,
+      synchroSummonContextId,
+      synchroSummonedCard: synchroCard,
+    };
+    const triggerResult = await game.resolveEventEntries?.(
+      "card_to_grave",
+      payload,
+      entries,
+      {
+        orderRule: orderRules.join(" -> "),
+        onComplete:
+          onCompleteHandlers.length > 0
+            ? () => {
+                for (const handler of onCompleteHandlers) handler();
+              }
+            : null,
+      },
+    );
+    if (triggerResult?.needsSelection) {
+      game.pendingSynchroMaterialTriggerContinuation = {
+        stage: "material_triggers",
+        synchroSummonContextId,
+        summonedCard: synchroCard,
+        playerId: player?.id || null,
+        actionContext,
+      };
+      return triggerResult;
+    }
+  }
+
+  game.pendingSynchroMaterialTriggerContinuation = null;
+  return await applySynchroMaterialFollowupsForContext(
+    game,
+    synchroSummonContextId,
+    synchroCard,
+    player,
+    actionContext,
+  );
+}
+
+export async function finishPendingSynchroMaterialTriggerContinuation(
+  resolutionResult = null,
+  eventName = null,
+) {
+  const pending = this.pendingSynchroMaterialTriggerContinuation;
+  if (!pending || resolutionResult?.needsSelection) return null;
+  if (resolutionResult && resolutionResult.ok === false) return null;
+  if (eventName && eventName !== "after_summon" && eventName !== "card_to_grave") {
+    return null;
+  }
+
+  const player = getPlayerById(this, pending.playerId, null);
+  const synchroCard = pending.summonedCard || null;
+  if (!player || !synchroCard || !pending.synchroSummonContextId) {
+    this.pendingSynchroMaterialTriggerContinuation = null;
+    return null;
+  }
+
+  if (pending.stage === "after_summon") {
+    const packages = Array.isArray(pending.deferredTriggerPackages)
+      ? pending.deferredTriggerPackages
+      : [];
+    this.pendingSynchroMaterialTriggerContinuation = null;
+    return await resolveDeferredSynchroMaterialTriggers(
+      this,
+      packages,
+      pending.synchroSummonContextId,
+      synchroCard,
+      player,
+      pending.actionContext || {},
+    );
+  }
+
+  this.pendingSynchroMaterialTriggerContinuation = null;
+  return await applySynchroMaterialFollowupsForContext(
+    this,
+    pending.synchroSummonContextId,
+    synchroCard,
+    player,
+    pending.actionContext || {},
+  );
+}
+
 function buildSynchroMaterialSelectionContract(game, card, player, candidates) {
   const owner = player.id === "player" ? "player" : "opponent";
   const decorated = candidates
@@ -512,11 +671,13 @@ export async function performSynchroSummon(player, materials, synchroCard, optio
   const result = await this.runZoneOp(
     "SYNCHRO_SUMMON",
     async () => {
+      const deferredMaterialTriggerPackages = [];
       for (const material of materials) {
         const moveResult = await this.moveCard(material, player, "graveyard", {
           fromZone: "field",
           contextLabel: "synchro_material",
           awaitCardToGraveEvent: true,
+          deferCardToGraveTriggerResolution: true,
           wasDestroyed: false,
           actionContext: synchroActionContext,
         });
@@ -527,6 +688,10 @@ export async function performSynchroSummon(player, materials, synchroCard, optio
             reason: `Could not send ${material.name} as Synchro Material.`,
           };
         }
+        appendDeferredSynchroMaterialTriggerPackage(
+          deferredMaterialTriggerPackages,
+          moveResult,
+        );
       }
 
       const postMaterialLimitCheck = this.canPlaceCardOnField?.(
@@ -571,10 +736,34 @@ export async function performSynchroSummon(player, materials, synchroCard, optio
 
       synchroCard.synchroMaterials = materialMetadata;
       if (summonResult.needsSelection) {
+        this.pendingSynchroMaterialTriggerContinuation = {
+          stage: "after_summon",
+          synchroSummonContextId,
+          summonedCard: synchroCard,
+          playerId: player?.id || null,
+          actionContext: synchroActionContext,
+          deferredTriggerPackages: deferredMaterialTriggerPackages,
+        };
         return {
           success: true,
           needsSelection: true,
           selectionContract: summonResult.selectionContract,
+        };
+      }
+      const deferredTriggerResult =
+        await resolveDeferredSynchroMaterialTriggers(
+          this,
+          deferredMaterialTriggerPackages,
+          synchroSummonContextId,
+          synchroCard,
+          player,
+          synchroActionContext,
+        );
+      if (deferredTriggerResult?.needsSelection) {
+        return {
+          success: true,
+          needsSelection: true,
+          selectionContract: deferredTriggerResult.selectionContract,
         };
       }
       return { success: true, needsSelection: false };

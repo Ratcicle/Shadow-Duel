@@ -19,7 +19,10 @@
 import { isAI } from "../Player.js";
 import { cardMatchesKind } from "../Card.js";
 import { isQuickSpell } from "../game/spellTrap/quickSpellRules.js";
-import { applySpellTrapFinalizationOverride } from "../game/spellTrap/finalization.js";
+import {
+  applySpellTrapFinalizationOverride,
+  finalizeNegatedSpellTrapActivation,
+} from "../game/spellTrap/finalization.js";
 
 export async function resolveChain() {
   if (this.chainStack.length === 0) {
@@ -102,6 +105,13 @@ export async function resolveChainLink(link) {
       const ui = this.getUI();
       this.log(`${card.name}'s activation was negated.`);
       ui?.log?.(`${card.name}'s activation was negated.`);
+      await finalizeNegatedSpellTrapActivation(
+        this.game,
+        card,
+        player,
+        activationZone,
+        { activationContext: link.activationContext || link.context || null },
+      );
       return { success: true, needsSelection: false, negated: true };
     }
     const shouldPresentSpellTrapFlip =

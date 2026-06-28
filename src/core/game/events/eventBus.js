@@ -16,10 +16,12 @@ export function on(eventName, handler) {
 }
 
 /**
- * Emit an event and resolve triggers
+ * Emit an event and resolve triggers.
+ * When collectTriggersOnly is true, listeners still run immediately, but
+ * triggered effects are returned to the caller instead of resolving now.
  * @this {import('../../Game.js').default}
  */
-export async function emit(eventName, payload) {
+export async function emit(eventName, payload, options = {}) {
   if (this.isDisposed?.()) return null;
   this._arenaTracker?.recordEvent?.(eventName, payload, {
     turn: this.turnCounter,
@@ -35,7 +37,7 @@ export async function emit(eventName, payload) {
       }
     }
   }
-  return await this.resolveEvent(eventName, payload);
+  return await this.resolveEvent(eventName, payload, options);
 }
 
 /**

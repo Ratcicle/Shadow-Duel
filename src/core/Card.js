@@ -239,6 +239,7 @@ export default class Card {
       : null;
     this.image = data.image;
     this.owner = owner;
+    this.originalOwner = data.originalOwner || owner;
   }
 
   addCounter(counterType, amount = 1) {

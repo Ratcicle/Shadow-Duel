@@ -449,12 +449,16 @@ function buildTargetPreviewFilters(target = {}) {
   copyIfPresent("position");
   copyIfPresent("facedown");
   copyIfPresent("excludeSelf");
+  copyIfPresent("excludeCannotBeSpecialSummoned");
 
   return filters;
 }
 
 function matchesPreviewFilters(engine, card, filters, ctx = {}) {
   if (!card) return false;
+  if (filters.excludeCannotBeSpecialSummoned && card.cannotBeSpecialSummoned) {
+    return false;
+  }
   if (typeof engine?.cardMatchesFilters === "function") {
     if (!engine.cardMatchesFilters(card, filters)) return false;
   }
@@ -599,6 +603,89 @@ function shouldExcludePreviewTargetCard(card, target, ctx, zone) {
   );
 }
 
+function normalizePreviewList(value, fallback = []) {
+  if (Array.isArray(value)) return value.filter(Boolean);
+  if (value === undefined || value === null) return fallback;
+  return [value];
+}
+
+function getPairedPreviewTargetSpec(target = {}) {
+  return target.pairedTarget || target.requiresPairedTarget || null;
+}
+
+function comparePairedPreviewValues(left, op = "eq", right) {
+  if (op === "eq" || op === "==" || op === "===") return left === right;
+  if (op === "neq" || op === "!=" || op === "!==") return left !== right;
+
+  const leftNumber = Number(left);
+  const rightNumber = Number(right);
+  if (!Number.isFinite(leftNumber) || !Number.isFinite(rightNumber)) {
+    return false;
+  }
+  if (op === "lte" || op === "<=") return leftNumber <= rightNumber;
+  if (op === "lt" || op === "<") return leftNumber < rightNumber;
+  if (op === "gte" || op === ">=") return leftNumber >= rightNumber;
+  if (op === "gt" || op === ">") return leftNumber > rightNumber;
+  return false;
+}
+
+function pairedPreviewComparisonsPass(sourceCard, pairedCard, pairSpec = {}) {
+  const comparisons = [
+    ...normalizePreviewList(pairSpec.compareAttribute),
+    ...normalizePreviewList(pairSpec.compareAttributes),
+  ];
+  if (comparisons.length === 0) return true;
+
+  return comparisons.every((comparison) => {
+    const attr = comparison.attr || comparison.attribute;
+    const pairedAttr = comparison.pairedAttr || comparison.targetAttr || attr;
+    const sourceAttr = comparison.sourceAttr || comparison.refAttr || attr;
+    if (!pairedAttr || !sourceAttr) return false;
+    return comparePairedPreviewValues(
+      pairedCard?.[pairedAttr],
+      comparison.op || "eq",
+      sourceCard?.[sourceAttr],
+    );
+  });
+}
+
+function previewTargetHasPairedCandidate(engine, sourceCard, pairSpec, ctx, player) {
+  if (!pairSpec) return true;
+  const zones = normalizePreviewList(pairSpec.zones ?? pairSpec.zone, ["field"]);
+  const filters = buildTargetPreviewFilters(pairSpec);
+  for (const owner of getPreviewTargetOwners(pairSpec, ctx, player)) {
+    for (const zone of zones) {
+      for (const pairedCard of getPreviewZoneCards(owner, zone)) {
+        if (!pairedCard) continue;
+        if (
+          pairSpec.excludeSameCard !== false &&
+          pairedCard === sourceCard
+        ) {
+          continue;
+        }
+        if (
+          pairSpec.excludeSameName === true &&
+          pairedCard.name === sourceCard?.name
+        ) {
+          continue;
+        }
+        if (!matchesPreviewFilters(engine, pairedCard, filters, ctx)) continue;
+        if (!pairedPreviewComparisonsPass(sourceCard, pairedCard, pairSpec)) {
+          continue;
+        }
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function previewTargetCandidateMatches(engine, card, target, ctx, player) {
+  if (!card) return false;
+  const pairSpec = getPairedPreviewTargetSpec(target);
+  return previewTargetHasPairedCandidate(engine, card, pairSpec, ctx, player);
+}
+
 function collectPreviewTargetEntries(engine, target, ctx, player) {
   const owners = getPreviewTargetOwners(target, ctx, player);
   const zones = getPreviewTargetZones(target);
@@ -612,6 +699,9 @@ function collectPreviewTargetEntries(engine, target, ctx, player) {
         if (!card || seen.has(card)) continue;
         if (shouldExcludePreviewTargetCard(card, target, ctx, zone)) continue;
         if (!matchesPreviewFilters(engine, card, filters, ctx)) continue;
+        if (!previewTargetCandidateMatches(engine, card, target, ctx, player)) {
+          continue;
+        }
         seen.add(card);
         entries.push({ owner, zone, card });
       }
@@ -689,6 +779,9 @@ function countPreviewTargetCandidates(
         if (!card || seen.has(card)) continue;
         if (shouldExcludePreviewTargetCard(card, target, ctx, zone)) continue;
         if (!matchesPreviewFilters(engine, card, filters, ctx)) continue;
+        if (!previewTargetCandidateMatches(engine, card, target, ctx, player)) {
+          continue;
+        }
         seen.add(card);
         count += 1;
       }
@@ -699,6 +792,9 @@ function countPreviewTargetCandidates(
         for (const card of group.cards || []) {
           if (!card || seen.has(card)) continue;
           if (!matchesPreviewFilters(engine, card, filters, ctx)) continue;
+          if (!previewTargetCandidateMatches(engine, card, target, ctx, player)) {
+            continue;
+          }
           matchingMovedCards.push(card);
         }
         const allowedCount =

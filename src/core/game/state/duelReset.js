@@ -85,6 +85,7 @@ export function resetDuelState(reason = "reset", options = {}) {
   this.temporaryBattlePairEffects = [];
   this.temporaryEventEffects = [];
   this.pendingSynchroMaterialFollowups = [];
+  this.pendingSynchroMaterialTriggerContinuation = null;
   this.synchroSummonContextCounter = 0;
   this.delayedActions = [];
   this.damageCalculationTempBuffs = [];

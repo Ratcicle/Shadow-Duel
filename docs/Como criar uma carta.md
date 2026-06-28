@@ -202,6 +202,13 @@ Targets resolvem seleções antes das actions. Cada target gera uma entrada em
   excludeNameRef: "previous_target",
   anyOf: [{ archetype: "Void" }, { type: "Dragon" }],
   compareAttribute: { attr: "level", ref: "other_target", op: "lte" },
+  pairedTarget: {
+    owner: "self",
+    zone: "graveyard",
+    cardKind: "monster",
+    compareAttribute: { attr: "level", op: "eq" },
+    excludeSameName: true
+  },
   maxAtkByCounters: true,
   counterType: "judgment_marker",
   counterMultiplier: 500,
@@ -220,6 +227,9 @@ Notas importantes:
 - Use `owner: "any"` no card data. Internamente a UI exibe isso como `either`.
 - `targetFromContext` pega uma carta do contexto do evento, por exemplo
   `targetFromContext: "targetedCard"` ou `"defender"`.
+- `pairedTarget` exige que cada candidato tenha ao menos uma carta pareada
+  em outra zona. Use para custos que so sao validos se ja houver um alvo
+  posterior compativel, como "mesmo Nivel e nome diferente" no Cemiterio.
 - `requireThisCard: true` permite selecionar a própria fonte.
 - Sem `autoSelect`, jogador humano recebe modal quando há escolha.
 - Para bots, `activationContext.autoSelectTargets` pode selecionar automaticamente.
@@ -456,7 +466,8 @@ declarar `allowIfEffectsNegatedAtFieldExit: true`.
 Triggers de Matéria Sincro que precisam afetar o monstro Invocado por aquela
 mesma Invocação-Sincro devem usar `register_synchro_material_followup`. O
 follow-up recebe o alvo interno `synchro_summoned_card` e resolve depois que o
-monstro Sincro entra no campo, mas antes dos triggers de `after_summon`:
+monstro Sincro entra no campo e depois que os triggers de `after_summon`
+terminam:
 
 ```js
 {
@@ -479,7 +490,7 @@ monstro Sincro entra no campo, mas antes dos triggers de `after_summon`:
 ```
 
 Esse follow-up deve usar alvos de contexto ja determinados pelo procedimento;
-evite selecao manual nessa janela pre-`after_summon`.
+evite selecao manual nessa janela deferida de trigger de materia.
 
 Monstros Invocados por Invocacao-Sincro guardam em runtime
 `synchroMaterials`, com `instanceId`, nome, nivel, papel de Regulador e dono dos

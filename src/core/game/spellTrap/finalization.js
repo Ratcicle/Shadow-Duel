@@ -53,6 +53,38 @@ async function applyDefaultSpellTrapFinalization(game, card, owner, activationZo
   return true;
 }
 
+function isSpellTrapInActivationZone(owner, card, activationZone) {
+  if (!owner || !card) return false;
+  if (activationZone === "fieldSpell") return owner.fieldSpell === card;
+  return owner.spellTrap?.includes?.(card) === true;
+}
+
+export async function finalizeNegatedSpellTrapActivation(
+  game,
+  card,
+  owner,
+  activationZone = null,
+  options = {},
+) {
+  if (!game || !card || !owner) return false;
+  if (card.cardKind !== "spell" && card.cardKind !== "trap") return false;
+  if (
+    !activationZone ||
+    !isSpellTrapInActivationZone(owner, card, activationZone)
+  ) {
+    return false;
+  }
+
+  await finalizeSpellTrapActivation.call(
+    game,
+    card,
+    owner,
+    activationZone,
+    options,
+  );
+  return true;
+}
+
 export function applySpellTrapFinalizationOverride(
   card,
   owner,

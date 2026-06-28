@@ -18,6 +18,7 @@
  */
 
 import { isAI } from "../../Player.js";
+import { finalizeNegatedSpellTrapActivation } from "../spellTrap/finalization.js";
 
 export function normalizeActivationResult(result) {
   const base =
@@ -586,6 +587,18 @@ export async function runActivationPipeline(config = {}) {
       code: "ACTIVATION_NEGATED",
       activationNegated: true,
     };
+    const negatedFinalized = await finalizeNegatedSpellTrapActivation(
+      this,
+      resolvedCard,
+      owner,
+      resolvedActivationZone,
+      { activationContext },
+    );
+    if (negatedFinalized) {
+      logPipeline("PIPELINE_NEGATED_FINALIZE", {
+        activationZone: resolvedActivationZone,
+      });
+    }
     if (typeof config.onFailure === "function") {
       await config.onFailure(negatedResult, activationContext);
     }

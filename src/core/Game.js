@@ -184,6 +184,7 @@ export default class Game {
     this.temporaryBattlePairEffects = [];
     this.temporaryEventEffects = [];
     this.pendingSynchroMaterialFollowups = [];
+    this.pendingSynchroMaterialTriggerContinuation = null;
     this.synchroSummonContextCounter = 0;
     this.trapPromptInProgress = false; // Avoid multiple trap prompts simultaneously
     this.devModeEnabled = !!options.devMode;
@@ -254,6 +255,7 @@ export default class Game {
     this.temporaryBattlePairEffects = [];
     this.temporaryEventEffects = [];
     this.pendingSynchroMaterialFollowups = [];
+    this.pendingSynchroMaterialTriggerContinuation = null;
     this.pendingCardAnimations = [];
     this.pendingVisualFeedback = [];
     this.pendingBoardPresentationPromise = Promise.resolve(false);
@@ -853,6 +855,8 @@ Game.prototype.cleanupExpiredSpecialSummonRestrictions =
 Game.prototype.canSpecialSummonUnderRestrictions =
   zonesMovement.canSpecialSummonUnderRestrictions;
 Game.prototype.canPlaceCardOnField = zonesMovement.canPlaceCardOnField;
+Game.prototype.applyPendingSynchroMaterialFollowups =
+  zonesMovement.applyPendingSynchroMaterialFollowups;
 Game.prototype.moveCard = zonesMovement.moveCard;
 Game.prototype.moveCardInternal = zonesMovement.moveCardInternal;
 
@@ -948,6 +952,8 @@ Game.prototype.canSummonSynchroCard =
 Game.prototype.performSynchroSummon = summonSynchro.performSynchroSummon;
 Game.prototype.performSynchroSummonFromExtraDeck =
   summonSynchro.performSynchroSummonFromExtraDeck;
+Game.prototype.finishPendingSynchroMaterialTriggerContinuation =
+  summonSynchro.finishPendingSynchroMaterialTriggerContinuation;
 
 // -----------------------------------------------------------------------------
 // Deck: Attach methods from modular deck/ folder

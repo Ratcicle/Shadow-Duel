@@ -667,49 +667,18 @@ export const shadowHeartCards = [
     image: "assets/Darkness Valley.png",
     effects: [
       {
-        id: "darkness_valley_on_place",
-        timing: "on_play",
-        actions: [
-          {
-            type: "permanent_buff_named",
-            targetRef: "self",
-            atkBoost: 300,
-            sourceName: "Darkness Valley",
-            cumulative: false,
-            archetype: "Shadow-Heart",
-            applyToAllField: true,
-          },
-        ],
-      },
-      {
-        id: "darkness_valley_summon_buff",
-        timing: "on_event",
-        event: "after_summon",
-        actions: [
-          {
-            type: "permanent_buff_named",
-            targetRef: "summonedCard",
-            atkBoost: 300,
-            sourceName: "Darkness Valley",
-            cumulative: false,
-            archetype: "Shadow-Heart",
-          },
-        ],
-      },
-      {
-        id: "darkness_valley_cleanup",
-        timing: "on_event",
-        event: "card_to_grave",
-        fromZone: "fieldSpell",
-        actions: [
-          {
-            type: "remove_permanent_buff_named",
-            targetRef: "self",
-            sourceName: "Darkness Valley",
-            archetype: "Shadow-Heart",
-            removeFromAllField: true,
-          },
-        ],
+        id: "darkness_valley_shadow_heart_aura",
+        timing: "passive",
+        requireZone: "fieldSpell",
+        requireFaceup: true,
+        passive: {
+          type: "field_archetype_aura_buff",
+          archetype: "Shadow-Heart",
+          targetOwners: ["self"],
+          targetCardKinds: ["monster"],
+          targetRequireFaceup: true,
+          atkBoost: 300,
+        },
       },
       {
         id: "darkness_valley_battle_punish",
