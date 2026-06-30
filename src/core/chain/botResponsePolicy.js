@@ -19,6 +19,7 @@ function buildResponseContext(baseContext, response) {
   return {
     ...(baseContext || {}),
     ...(response?.context || {}),
+    _chainRootContext: baseContext || response?.context || null,
     activationContext,
   };
 }

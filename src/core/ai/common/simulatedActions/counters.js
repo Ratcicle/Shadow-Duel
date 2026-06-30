@@ -90,6 +90,41 @@ function resolveSimulatedAddCounterAmount(action, self, opponent, options) {
   return Number.isFinite(action.amount) ? action.amount : 1;
 }
 
+function countSimulatedFieldCounters(action = {}, self, opponent, options = {}) {
+  const counterType = action.counterType || "default";
+  const zones = Array.isArray(action.zones)
+    ? action.zones
+    : [action.zone || "field"];
+  const filters = { ...(action.filters || {}) };
+  if (action.requireFaceup === true && filters.requireFaceup == null) {
+    filters.requireFaceup = true;
+  }
+
+  let total = 0;
+  for (const player of getScopedPlayersForCounterSpec(action, self, opponent)) {
+    const ownerRole = player === self ? "self" : "opponent";
+    for (const zone of zones) {
+      for (const card of getZoneCards(player, zone)) {
+        if (!matchesTargetFilters(card, filters, options.sourceCard, ownerRole)) {
+          continue;
+        }
+        total += Math.max(0, Number(getCounterValue(card, counterType) || 0));
+      }
+    }
+  }
+
+  return total;
+}
+
+function getFieldCounterContextKey(action, counterType) {
+  return (
+    action.contextKey ||
+    action.storeAs ||
+    action.resultKey ||
+    `field${counterType.charAt(0).toUpperCase()}${counterType.slice(1)}CounterCount`
+  );
+}
+
 export function applyAddCounter(ctx) {
   const {
     action,
@@ -127,6 +162,23 @@ export function applyAddCounter(ctx) {
       addedAmount;
   }
   return;
+}
+
+export function applyCountFieldCounters(ctx) {
+  const { action, options, self, opponent } = ctx;
+  const counterType = action.counterType || "default";
+  const total = countSimulatedFieldCounters(action, self, opponent, options);
+  if (!options.actionContext || typeof options.actionContext !== "object") {
+    options.actionContext = {};
+  }
+  const contextKey = getFieldCounterContextKey(action, counterType);
+  if (contextKey) {
+    options.actionContext[contextKey] = total;
+  }
+  options.actionContext.lastFieldCounterCount = total;
+  options.actionContext.fieldCounterCounts =
+    options.actionContext.fieldCounterCounts || {};
+  options.actionContext.fieldCounterCounts[counterType] = total;
 }
 
 export function applyRemoveCounter(ctx) {

@@ -8,6 +8,43 @@ import {
   getSynchroMaterialCombos,
 } from "../../game/summon/synchro.js";
 
+function getContextPathValue(ctx, path) {
+  if (!ctx || typeof path !== "string" || !path) return undefined;
+  if (!path.includes(".")) return ctx[path];
+  return path
+    .split(".")
+    .filter(Boolean)
+    .reduce((value, key) => (value == null ? undefined : value[key]), ctx);
+}
+
+function resolveNumberFromContext(ref, ctx) {
+  if (ref === undefined || ref === null) return null;
+  if (Number.isFinite(Number(ref))) return Number(ref);
+  const key =
+    typeof ref === "string"
+      ? ref
+      : ref.key || ref.contextKey || ref.path || ref.resultKey || null;
+  const fallback =
+    typeof ref === "object" && ref !== null
+      ? ref.defaultValue ?? ref.default ?? ref.fallback
+      : undefined;
+  const rawValue = getContextPathValue(ctx, key);
+  const value = rawValue === undefined ? fallback : rawValue;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? Math.floor(numeric) : null;
+}
+
+function applyContextMaxLevelFilter(filters, action, activationContext) {
+  const maxLevel = resolveNumberFromContext(
+    action?.maxLevelFromContext,
+    activationContext,
+  );
+  if (!Number.isFinite(maxLevel)) return;
+  filters.maxLevel = Number.isFinite(filters.maxLevel)
+    ? Math.min(filters.maxLevel, maxLevel)
+    : maxLevel;
+}
+
 export function validateHandIgnitionCandidate({
   card,
   effect,
@@ -176,7 +213,12 @@ function hasSynchroSummonActionCandidate(player, action) {
   });
 }
 
-export function hasActionZoneCandidates(player, action, source = null) {
+export function hasActionZoneCandidates(
+  player,
+  action,
+  source = null,
+  activationContext = null,
+) {
   if (!player || !action) return true;
 
   if (action.type === "special_summon_from_zone") {
@@ -215,6 +257,7 @@ export function hasActionZoneCandidates(player, action, source = null) {
       ...(Number.isFinite(action.minLevel) ? { minLevel: action.minLevel } : {}),
       ...(Number.isFinite(action.maxLevel) ? { maxLevel: action.maxLevel } : {}),
     };
+    applyContextMaxLevelFilter(filters, action, activationContext);
     const min = action.count?.min ?? 1;
     const candidates = zoneCards.filter((card) =>
       cardMatchesFilter(card, filters) &&

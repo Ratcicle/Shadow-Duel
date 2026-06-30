@@ -601,14 +601,21 @@ export async function handleRedirectCurrentAttackToTarget(
     return false;
   }
 
-  attackContext.attackRedirect = {
+  const redirect = {
     target,
     targetOwner,
     source: ctx?.source || null,
     reason: action?.contextLabel || "redirect_attack",
   };
-  attackContext.redirectedTarget = target;
-  attackContext.redirectedTargetOwner = targetOwner;
+  const applyRedirect = (context) => {
+    if (!context || typeof context !== "object") return;
+    context.attackRedirect = redirect;
+    context.redirectedTarget = target;
+    context.redirectedTargetOwner = targetOwner;
+  };
+
+  applyRedirect(attackContext);
+  applyRedirect(attackContext._chainRootContext);
   game.updateBoard?.();
   return true;
 }
@@ -626,7 +633,13 @@ export async function handleConditionalActions(action, ctx, targets, engine) {
       if (action?.logIfSkipped === true && conditionResult?.reason) {
         getUI(game)?.log(conditionResult.reason);
       }
-      return false;
+      return {
+        success: true,
+        executed: false,
+        skipped: true,
+        skippedCount: 1,
+        reason: conditionResult?.reason || "Conditional actions skipped.",
+      };
     }
   }
 

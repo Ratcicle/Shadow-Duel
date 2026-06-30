@@ -224,6 +224,8 @@ async function emitCardMovedEvent(game, card, fromOwner, destPlayer, fromZone, t
     source: movementSourceCard,
     effectId: options.effectId || null,
     contextLabel: options.contextLabel || null,
+    wasDestroyed: options.wasDestroyed === true,
+    destroyCause: options.destroyCause || null,
     movedByEffect,
     wasFaceupBeforeMove:
       typeof options.wasFaceupBeforeMove === "boolean"
@@ -673,6 +675,50 @@ function relationMatches(game, sourceOwner, targetOwner, rule = "self") {
   return false;
 }
 
+function getReplacementStrategy(game, player) {
+  if (!player) return null;
+  if (player.strategy) return player.strategy;
+  if (game?.bot === player) return game.bot?.strategy || null;
+  if (game?.player === player) return game.player?.strategy || null;
+  return null;
+}
+
+async function shouldUseAiReplacementEffect({
+  game,
+  player,
+  sourceCard,
+  effect,
+  replacementEffect,
+  targetCard,
+  cause,
+  fromZone,
+  context,
+  kind,
+}) {
+  if (player?.controllerType === "human") return true;
+  const strategy = getReplacementStrategy(game, player);
+  if (typeof strategy?.shouldUseReplacementEffect !== "function") return true;
+
+  const decision = await strategy.shouldUseReplacementEffect({
+    game,
+    player,
+    sourceCard,
+    effect,
+    replacementEffect,
+    targetCard,
+    cause,
+    fromZone,
+    context,
+    kind,
+  });
+
+  if (decision === false) return false;
+  if (decision && typeof decision === "object") {
+    if (decision.use === false || decision.shouldUse === false) return false;
+  }
+  return true;
+}
+
 function matchesSendToGraveReplacement(game, replacement, sourceCard, ctx) {
   const { card, fromOwner, fromZone, sourceOwner } = ctx;
   if (!replacement || replacement.type !== "send_to_grave") return false;
@@ -786,6 +832,23 @@ async function trySendToGraveActionReplacement(game, card, destPlayer, options =
             )
           : { ok: true };
       if (preview?.ok === false) continue;
+
+      const strategyAllowsReplacement = await shouldUseAiReplacementEffect({
+        game,
+        player: sourceOwner,
+        sourceCard,
+        effect,
+        replacementEffect: replacement,
+        targetCard: card,
+        cause: options.cause || options.contextLabel || "send_to_grave",
+        fromZone: location.zone,
+        context: {
+          ...replacementCtx,
+          moveOptions: options,
+        },
+        kind: "send_to_grave",
+      });
+      if (!strategyAllowsReplacement) continue;
 
       if (sourceOwner.controllerType === "human" && replacement.auto !== true) {
         const prompt =

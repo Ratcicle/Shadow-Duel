@@ -502,22 +502,28 @@ export function scoreBurningWestBattleAttackCandidate({
   lethalNow = false,
   attackerSurvived = false,
   targetSurvived = false,
+  opponent,
+  opponentLpAfter,
   summary,
 } = {}) {
   if (!isBurningWestMonster(attacker)) return 0;
+  const hasSummary = summary && typeof summary === "object";
   const destroyedBattleTarget = Boolean(
     target &&
       !targetSurvived &&
-      (summary?.destroyedCards || []).some(
-        (entry) =>
-          entry?.owner === "opponent" &&
-          entry.cardKind === "monster" &&
-          entry.destroyedBy === "battle",
-      ),
+      (hasSummary
+        ? (summary?.destroyedCards || []).some(
+            (entry) =>
+              entry?.owner === "opponent" &&
+              entry.cardKind === "monster" &&
+              entry.destroyedBy === "battle",
+          )
+        : attackerSurvived),
   );
   const effectDestroyedTarget = Boolean(
     target &&
       !targetSurvived &&
+      hasSummary &&
       (summary?.destroyedCards || []).some(
         (entry) =>
           entry?.owner === "opponent" &&
@@ -525,8 +531,16 @@ export function scoreBurningWestBattleAttackCandidate({
           entry.destroyedBy === "effect",
       ),
   );
-  const positiveDamage = Math.max(0, Number(summary?.damage || 0));
-  const damageTaken = Math.max(0, -Number(summary?.damage || 0));
+  const inferredDamage =
+    !hasSummary &&
+    Number.isFinite(Number(opponent?.lp)) &&
+    Number.isFinite(Number(opponentLpAfter))
+      ? Number(opponent.lp) - Number(opponentLpAfter)
+      : 0;
+  const summaryDamage = Number(summary?.damage || 0);
+  const battleDamage = hasSummary ? summaryDamage : inferredDamage;
+  const positiveDamage = Math.max(0, battleDamage);
+  const damageTaken = Math.max(0, -battleDamage);
   let delta = 0;
 
   if (lethalNow) delta += 7;

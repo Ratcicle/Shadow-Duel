@@ -192,7 +192,7 @@ export function applySpecialSummonFromZone(ctx) {
       : null;
   if (!candidates || candidates.length === 0) {
     if (action.targetRef) return;
-    candidates = getActionCandidates(targetPlayer, action, "deck");
+    candidates = getActionCandidates(targetPlayer, action, "deck", options);
   }
   candidates = candidates.filter((card) => canSimSpecialSummon(card, targetPlayer));
   const max = Math.min(

@@ -229,9 +229,54 @@ export function storeSimActionResult(
   }
 }
 
-export function getActionCandidates(player, action = {}, zoneFallback = "deck") {
+function getContextPathValue(ctx, path) {
+  if (!ctx || typeof path !== "string" || !path) return undefined;
+  if (!path.includes(".")) return ctx[path];
+  return path
+    .split(".")
+    .filter(Boolean)
+    .reduce((value, key) => (value == null ? undefined : value[key]), ctx);
+}
+
+function resolveNumberFromContext(ref, options = {}) {
+  if (ref === undefined || ref === null) return null;
+  if (Number.isFinite(Number(ref))) return Number(ref);
+  const key =
+    typeof ref === "string"
+      ? ref
+      : ref.key || ref.contextKey || ref.path || ref.resultKey || null;
+  const fallback =
+    typeof ref === "object" && ref !== null
+      ? ref.defaultValue ?? ref.default ?? ref.fallback
+      : undefined;
+  const context =
+    options.actionContext ||
+    options.activationContext?.actionContext ||
+    options.activationContext ||
+    {};
+  const rawValue = getContextPathValue(context, key);
+  const value = rawValue === undefined ? fallback : rawValue;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? Math.floor(numeric) : null;
+}
+
+function applyContextMaxLevelFilter(filters, action, options) {
+  const maxLevel = resolveNumberFromContext(action?.maxLevelFromContext, options);
+  if (!Number.isFinite(maxLevel)) return;
+  filters.maxLevel = Number.isFinite(filters.maxLevel)
+    ? Math.min(filters.maxLevel, maxLevel)
+    : maxLevel;
+}
+
+export function getActionCandidates(
+  player,
+  action = {},
+  zoneFallback = "deck",
+  options = {},
+) {
   const zones = asArray(action.zones || action.zone || zoneFallback);
   const filters = buildActionFilter(action);
+  applyContextMaxLevelFilter(filters, action, options);
   return zones.flatMap((zone) =>
     getZoneCards(player, zone).filter((card) =>
       matchesTargetFilters(card, filters, null)

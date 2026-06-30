@@ -23,6 +23,31 @@ export function effectCanRespondToContext(effect, contextType) {
   );
 }
 
+function getExpectedEventForContext(context) {
+  return (
+    {
+      attack_declaration: "attack_declared",
+      battle_step_open: "battle_step_open",
+      summon: "after_summon",
+      phase_change: "phase_end",
+      card_activation: "card_activation",
+      effect_activation: "effect_activation",
+      effect_targeted: "effect_targeted",
+      battle_damage: "battle_damage",
+      battle_destroy: "battle_destroy",
+    }[context?.type] || context?.event
+  );
+}
+
+function effectEventMatchesContext(chainSystem, effect, context) {
+  if (!effect?.event) return true;
+  const expectedEvent = getExpectedEventForContext(context);
+  return (
+    effect.event === expectedEvent ||
+    chainSystem.effectCanRespondToContext?.(effect, context?.type)
+  );
+}
+
 export function getCurrentChainActivationContext(context) {
   const lastLink = this.getLastChainLink?.();
   if (!lastLink?.card || !lastLink?.player || !lastLink?.effect) return null;
@@ -58,18 +83,7 @@ export function getEffectChainResponseContext(effect, context) {
     return responseContext;
   }
 
-  const originalExpectedEvent =
-    {
-      attack_declaration: "attack_declared",
-      battle_step_open: "battle_step_open",
-      summon: "after_summon",
-      phase_change: "phase_end",
-      card_activation: "card_activation",
-      effect_activation: "effect_activation",
-      effect_targeted: "effect_targeted",
-      battle_damage: "battle_damage",
-      battle_destroy: "battle_destroy",
-    }[context?.type] || context?.event;
+  const originalExpectedEvent = getExpectedEventForContext(context);
 
   const matchesOriginal =
     effect?.event === originalExpectedEvent ||
@@ -107,6 +121,7 @@ export function isExplicitAfterSummonEventResponse(effect, context) {
 }
 
 export function canOfferEffectInChainContext(effect, context) {
+  if (effect?.placementOnly === true) return true;
   if (!this.requiresExplicitSummonResponse(context)) return true;
   if (context?.type === "summon_attempt") {
     return this.isSummonNegationResponse(effect);
@@ -241,6 +256,17 @@ export function findActivatableEffect(card, context, ownerPlayer = null) {
           effect.event === activeExpectedEvent ||
           this.effectCanRespondToContext?.(effect, activeContext?.type)
         ) {
+          if (effect.requireZone) {
+            const sourceZone =
+              this.determineCardZone?.(card, ownerPlayer) || null;
+            if (sourceZone !== effect.requireZone) {
+              continue;
+            }
+          }
+          if (effect.requireFaceup === true && card.isFacedown === true) {
+            continue;
+          }
+
           // Debug log for attack declaration traps
           if (activeContext?.type === "attack_declaration") {
             console.log(
@@ -498,6 +524,10 @@ export function findActivatableEffect(card, context, ownerPlayer = null) {
 
         // manual timing only valid at phase_change
         if (effect.timing === "manual" && context?.type !== "phase_change") {
+          continue;
+        }
+
+        if (!effectEventMatchesContext(this, effect, context)) {
           continue;
         }
 

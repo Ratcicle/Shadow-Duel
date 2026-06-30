@@ -40,6 +40,7 @@ import {
 } from "./equip.js";
 import {
   applyAddCounter,
+  applyCountFieldCounters,
   applyRemoveCounter,
 } from "./counters.js";
 import {
@@ -104,6 +105,7 @@ export const SIMULATED_ACTION_HANDLERS = {
   "destroy_cards_by_scope": applyDestroyCardsByScope,
   "equip": applyEquip,
   "add_counter": applyAddCounter,
+  "count_field_counters": applyCountFieldCounters,
   "remove_counter": applyRemoveCounter,
   "buff_stats_temp": applyBuffStatsTemp,
   "buff_atk_temp": applyBuffAtkTemp,

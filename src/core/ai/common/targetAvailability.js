@@ -162,8 +162,10 @@ export function effectTargetsAvailable(effect, context = {}) {
 
   const player = context.player;
   const source = context.source || null;
+  const activationContext =
+    context.activationContext || context.actionContext || context;
   for (const action of effect.actions || []) {
-    if (!hasActionZoneCandidates(player, action, source)) {
+    if (!hasActionZoneCandidates(player, action, source, activationContext)) {
       return false;
     }
   }

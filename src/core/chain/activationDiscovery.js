@@ -24,6 +24,16 @@ function buildQuickSpellChainContext(chainSystem, context, effect, activationZon
   };
 }
 
+function buildTrapPlacementOnlyEffect(card) {
+  return {
+    id: `${card?.id || "trap"}_placement_only_activation`,
+    timing: "on_activate",
+    speed: 2,
+    placementOnly: true,
+    actions: [],
+  };
+}
+
 /**
  * Get all cards a player can activate in current chain context
  * @param {Object} player - The player to check
@@ -76,15 +86,25 @@ export function getActivatableCardsInChain(player, context) {
       );
 
       const effect = this.findActivatableEffect(card, context, player);
-      if (effect) {
+      const responseEffect =
+        effect || (card.subtype === "continuous"
+          ? buildTrapPlacementOnlyEffect(card)
+          : null);
+      if (responseEffect) {
         const responseContext =
-          this.getEffectChainResponseContext?.(effect, context) || context;
-        if (!this.canOfferEffectInChainContext(effect, responseContext)) continue;
+          this.getEffectChainResponseContext?.(responseEffect, context) ||
+          context;
+        if (!this.canOfferEffectInChainContext(responseEffect, responseContext))
+          continue;
         console.log(
           `[getActivatableCardsInChain] Found effect for ${card.name}:`,
-          effect.id,
+          responseEffect.id,
         );
-        const chainCheck = this.canActivateInChain(effect, card, responseContext);
+        const chainCheck = this.canActivateInChain(
+          responseEffect,
+          card,
+          responseContext,
+        );
         console.log(
           `[getActivatableCardsInChain] Chain check for ${card.name}:`,
           chainCheck,
@@ -95,7 +115,12 @@ export function getActivatableCardsInChain(player, context) {
           console.log(
             `[getActivatableCardsInChain] ${card.name} is ACTIVATABLE`,
           );
-          activatable.push({ card, effect, zone: "spellTrap", context: responseContext });
+          activatable.push({
+            card,
+            effect: responseEffect,
+            zone: "spellTrap",
+            context: responseContext,
+          });
         }
       } else {
         console.log(

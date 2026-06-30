@@ -64,6 +64,40 @@ function storeActionResultCards(action, ctx, targets, cards, fallbackKey = null)
   }
 }
 
+function getContextPathValue(ctx, path) {
+  if (!ctx || typeof path !== "string" || !path) return undefined;
+  if (!path.includes(".")) return ctx[path];
+  return path
+    .split(".")
+    .filter(Boolean)
+    .reduce((value, key) => (value == null ? undefined : value[key]), ctx);
+}
+
+function resolveNumberFromContext(ref, ctx) {
+  if (ref === undefined || ref === null) return null;
+  if (Number.isFinite(Number(ref))) return Number(ref);
+  const key =
+    typeof ref === "string"
+      ? ref
+      : ref.key || ref.contextKey || ref.path || ref.resultKey || null;
+  const fallback =
+    typeof ref === "object" && ref !== null
+      ? ref.defaultValue ?? ref.default ?? ref.fallback
+      : undefined;
+  const rawValue = getContextPathValue(ctx, key);
+  const value = rawValue === undefined ? fallback : rawValue;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? Math.floor(numeric) : null;
+}
+
+function applyContextMaxLevelFilter(filters, action, ctx) {
+  const maxLevel = resolveNumberFromContext(action?.maxLevelFromContext, ctx);
+  if (!Number.isFinite(maxLevel)) return;
+  filters.maxLevel = Number.isFinite(filters.maxLevel)
+    ? Math.min(filters.maxLevel, maxLevel)
+    : maxLevel;
+}
+
 /**
  * Generic handler for special summoning from any zone with filters
  * UNIFIED HANDLER - Replaces both single and multi-card summon patterns
@@ -351,6 +385,7 @@ export async function handleSpecialSummonFromZone(
     if (Number.isFinite(action.maxLevel)) {
       filters.maxLevel = action.maxLevel;
     }
+    applyContextMaxLevelFilter(filters, action, ctx);
 
     if (action.matchLevelRef) {
       const levelCard = ctx?.[action.matchLevelRef] || null;
@@ -492,8 +527,18 @@ export async function handleSpecialSummonFromZone(
       const evaluation = strategy.evaluateRecruitCandidate(cards, {
         game,
         player,
+        summonPlayer,
         source,
         action,
+        targets,
+        ctx,
+        effect: ctx?.effect,
+        activationContext: ctx?.activationContext || action.activationContext || null,
+        actionContext:
+          ctx?.actionContext ||
+          ctx?.activationContext?.actionContext ||
+          action.actionContext ||
+          null,
       });
       if (evaluation?.blockedAll) {
         return [];
@@ -592,8 +637,18 @@ export async function handleSpecialSummonFromZone(
       const evaluation = strategy.evaluateRecruitCandidate(cards, {
         game,
         player,
+        summonPlayer,
         source,
         action,
+        targets,
+        ctx,
+        effect: ctx?.effect,
+        activationContext: ctx?.activationContext || action.activationContext || null,
+        actionContext:
+          ctx?.actionContext ||
+          ctx?.activationContext?.actionContext ||
+          action.actionContext ||
+          null,
       });
       if (evaluation?.blockedAll) {
         return [];

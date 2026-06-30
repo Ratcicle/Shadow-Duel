@@ -3,21 +3,21 @@ export const bloomrotCards = [
     id: 401,
     name: "Bloomrot Sporeling",
     cardKind: "monster",
-    atk: 700,
-    def: 1200,
+    atk: 1200,
+    def: 1500,
     level: 2,
     type: "Plant",
     attribute: "Earth",
     archetype: "Bloomrot",
     description:
-      'If this card is Normal Summoned: You can Special Summon 1 "Bloomrot Rootling" from your hand or Deck in Defense Position, and if you do, place 1 Spore Counter on 1 face-up card your opponent controls. If this card leaves the field: You can add 1 "Bloomrot" Spell from your Deck to your hand. You can only use each effect of "Bloomrot Sporeling" once per turn.',
+      'If this card is Normal or Special Summoned: You can Special Summon 1 "Bloomrot Rootling" from your hand or Deck in Defense Position, and if you do, place 1 Spore Counter on each face-up card your opponent controls. If this card leaves the field: You can add 1 "Bloomrot" Spell from your Deck to your hand. You can only use each effect of "Bloomrot Sporeling" once per turn.',
     image: "assets/Bloomrot Sporeling.png",
     effects: [
       {
         id: "bloomrot_sporeling_normal_summon_rootling",
         timing: "on_event",
         event: "after_summon",
-        summonMethods: ["normal"],
+        summonMethods: ["normal", "special"],
         requireSelfAsSummoned: true,
         promptUser: true,
         promptMessage:
@@ -38,28 +38,16 @@ export const bloomrotCards = [
             haltOnFailure: true,
           },
           {
-            type: "optional_target_actions",
-            optional: true,
-            allowCancel: false,
-            selectionMessage:
-              'Select 1 face-up opponent card for "Bloomrot Sporeling".',
-            targets: [
-              {
-                id: "bloomrot_sporeling_spore_target",
-                owner: "opponent",
-                zones: ["field", "spellTrap", "fieldSpell"],
+            type: "add_counter",
+            targetScope: {
+              owner: "opponent",
+              zones: ["field", "spellTrap", "fieldSpell"],
+              filters: {
                 requireFaceup: true,
-                count: { min: 1, max: 1 },
               },
-            ],
-            actions: [
-              {
-                type: "add_counter",
-                targetRef: "bloomrot_sporeling_spore_target",
-                counterType: "spore",
-                amount: 1,
-              },
-            ],
+            },
+            counterType: "spore",
+            amount: 1,
           },
         ],
       },
@@ -101,7 +89,7 @@ export const bloomrotCards = [
     attribute: "Earth",
     archetype: "Bloomrot",
     description:
-      'If you control a "Bloomrot Token", you can Special Summon this card from your hand. Once per turn: You can target 1 face-up card your opponent controls; place 1 Spore Counter on it. If this card is destroyed by battle or card effect: You can place 1 Spore Counter on 1 face-up card your opponent controls. You can only use each effect of "Bloomrot Rootling" once per turn.',
+      'If you control a "Bloomrot Token", you can Special Summon this card from your hand. Once per turn: You can target 1 face-up card your opponent controls; place Spore Counters on it equal to the number of "Bloomrot" monsters you control.',
     image: "assets/Bloomrot Rootling.png",
     effects: [
       {
@@ -109,8 +97,6 @@ export const bloomrotCards = [
         timing: "ignition",
         requireZone: "hand",
         requirePhase: ["main1", "main2"],
-        oncePerTurn: true,
-        oncePerTurnName: "bloomrot_rootling_special_summon_hand",
         conditions: [
           {
             type: "control_card_filters",
@@ -158,37 +144,15 @@ export const bloomrotCards = [
             type: "add_counter",
             targetRef: "bloomrot_rootling_spore_target",
             counterType: "spore",
-            amount: 1,
-          },
-        ],
-      },
-      {
-        id: "bloomrot_rootling_destroyed_spore_counter",
-        timing: "on_event",
-        event: "card_to_grave",
-        fromZone: "field",
-        requireSelfAsDestroyed: true,
-        condition: { type: "destroyed_by_battle_or_effect" },
-        promptUser: true,
-        promptMessage:
-          'Activate "Bloomrot Rootling" to place 1 Spore Counter on a face-up card your opponent controls?',
-        oncePerTurn: true,
-        oncePerTurnName: "bloomrot_rootling_destroyed_spore_counter",
-        targets: [
-          {
-            id: "bloomrot_rootling_destroyed_spore_target",
-            owner: "opponent",
-            zones: ["field", "spellTrap", "fieldSpell"],
-            requireFaceup: true,
-            count: { min: 1, max: 1 },
-          },
-        ],
-        actions: [
-          {
-            type: "add_counter",
-            targetRef: "bloomrot_rootling_destroyed_spore_target",
-            counterType: "spore",
-            amount: 1,
+            amountFromFieldCount: {
+              owner: "self",
+              zone: "field",
+              filters: {
+                cardKind: "monster",
+                archetype: "Bloomrot",
+                requireFaceup: true,
+              },
+            },
           },
         ],
       },
@@ -199,13 +163,13 @@ export const bloomrotCards = [
     name: "Bloomrot Myco-Weaver",
     cardKind: "monster",
     atk: 1400,
-    def: 1500,
+    def: 1700,
     level: 3,
     type: "Plant",
     attribute: "Earth",
     archetype: "Bloomrot",
     description:
-      'If this card is Normal or Special Summoned: Special Summon 1 "Bloomrot Token" (Plant/EARTH/Level 1/ATK 0/DEF 0) in Defense Position. Once per turn: You can send 1 "Bloomrot" monster you control to the Graveyard; target 1 face-up card your opponent controls; place 2 Spore Counters on it.',
+      'If this card is Normal or Special Summoned: Special Summon 1 "Bloomrot Token" (Plant/EARTH/Level 1/ATK 0/DEF 0) in Defense Position. Once per turn: You can send 1 "Bloomrot" monster you control to the Graveyard; target 1 face-up card your opponent controls; place 3 Spore Counters on it.',
     image: "assets/Bloomrot Myco-Weaver.png",
     effects: [
       {
@@ -271,7 +235,7 @@ export const bloomrotCards = [
             type: "add_counter",
             targetRef: "bloomrot_myco_weaver_spore_target",
             counterType: "spore",
-            amount: 2,
+            amount: 3,
           },
         ],
       },
@@ -516,13 +480,13 @@ export const bloomrotCards = [
     name: "Bloomrot Moldmender",
     cardKind: "monster",
     atk: 500,
-    def: 1800,
+    def: 2000,
     level: 2,
     type: "Plant",
     attribute: "Earth",
     archetype: "Bloomrot",
     description:
-      'Before damage calculation, if this card is being attacked by an opponent\'s monster: place 2 Spore Counters on the attacking monster. If this card is destroyed by battle: Special Summon 1 "Bloomrot Token" (Plant/EARTH/Level 1/ATK 0/DEF 0) in Defense Position. You can only use each effect of "Bloomrot Moldmender" once per turn.',
+      'Before damage calculation, if this card is being attacked by an opponent\'s monster: place 2 Spore Counters on the attacking monster. If this card is destroyed by battle: You can Special Summon 1 "Bloomrot" monster from your hand or Deck with Level less than or equal to the total number of Spore Counters on the field.',
     image: "assets/Bloomrot Moldmender.png",
     effects: [
       {
@@ -556,31 +520,36 @@ export const bloomrotCards = [
         ],
       },
       {
-        id: "bloomrot_mold_mender_battle_destroy_token",
+        id: "bloomrot_mold_mender_battle_destroy_summon_bloomrot",
         timing: "on_event",
         event: "card_to_grave",
         fromZone: "field",
         requireSelfAsDestroyed: true,
         condition: { type: "destroyed_by_battle" },
-        oncePerTurn: true,
-        oncePerTurnName:
-          "bloomrot_mold_mender_battle_destroy_token",
+        promptUser: true,
+        promptMessage:
+          'Activate "Bloomrot Moldmender" to Special Summon 1 "Bloomrot" monster?',
         actions: [
           {
-            type: "special_summon_token",
-            player: "self",
-            position: "defense",
-            token: {
-              name: "Bloomrot Token",
-              atk: 0,
-              def: 0,
-              level: 1,
-              type: "Plant",
-              attribute: "Earth",
+            type: "count_field_counters",
+            counterType: "spore",
+            owner: "any",
+            zones: ["field", "spellTrap", "fieldSpell"],
+            requireFaceup: true,
+            contextKey: "fieldSporeCounterCount",
+            log: false,
+          },
+          {
+            type: "special_summon_from_zone",
+            zone: ["hand", "deck"],
+            filters: {
+              cardKind: "monster",
               archetype: "Bloomrot",
-              image: "assets/Bloomrot Token.png",
-              description: "A Bloomrot token grown from lingering spores.",
             },
+            count: { min: 1, max: 1 },
+            position: "choice",
+            promptPlayer: true,
+            maxLevelFromContext: { key: "fieldSporeCounterCount" },
           },
         ],
       },
@@ -880,25 +849,9 @@ export const bloomrotCards = [
     subtype: "field",
     archetype: "Bloomrot",
     description:
-      'When this card is activated: add 1 Level 4 or lower "Bloomrot" monster from your Deck to your hand. Once per turn: target 1 face-up monster on the field; place 1 Spore Counter on it. Monsters your opponent controls lose 100 ATK/DEF for each Spore Counter on them. Each time one or more Spore Counters are removed from the field: Special Summon 1 "Bloomrot Token" (Plant/EARTH/Level 1/ATK 0/DEF 0) in Defense Position. You can only activate 1 "Bloomrot Living Colony" per turn.',
+      'Once per turn: target 1 face-up card on the field; place 1 Spore Counter on it. Monsters your opponent controls lose 100 ATK/DEF for each Spore Counter on them. Each time one or more Spore Counters are removed from the field: Special Summon 1 "Bloomrot Token" (Plant/EARTH/Level 1/ATK 0/DEF 0) in Defense Position. If a "Bloomrot Token" you control is destroyed: place 1 Spore Counter on each face-up card your opponent controls.',
     image: "assets/Bloomrot Living Colony.png",
     effects: [
-      {
-        id: "bloomrot_living_colony_activation_search",
-        timing: "on_play",
-        oncePerTurn: true,
-        oncePerTurnName: "bloomrot_living_colony_activation",
-        actions: [
-          {
-            type: "add_from_zone_to_hand",
-            zone: "deck",
-            filters: { cardKind: "monster", archetype: "Bloomrot" },
-            maxLevel: 4,
-            count: { min: 1, max: 1 },
-            promptPlayer: true,
-          },
-        ],
-      },
       {
         id: "bloomrot_living_colony_ignition_spore_counter",
         timing: "ignition",
@@ -912,8 +865,7 @@ export const bloomrotCards = [
           {
             id: "bloomrot_living_colony_spore_target",
             owner: "any",
-            zone: "field",
-            cardKind: "monster",
+            zones: ["field", "spellTrap", "fieldSpell"],
             requireFaceup: true,
             count: { min: 1, max: 1 },
           },
@@ -967,6 +919,35 @@ export const bloomrotCards = [
               image: "assets/Bloomrot Token.png",
               description: "A Bloomrot token grown from lingering spores.",
             },
+          },
+        ],
+      },
+      {
+        id: "bloomrot_living_colony_token_destroyed_spread_spores",
+        timing: "on_event",
+        event: "card_moved",
+        requireZone: "fieldSpell",
+        requireFaceup: true,
+        fromZone: "field",
+        toZone: "removed",
+        condition: { type: "destroyed_by_battle_or_effect" },
+        eventCardFilters: {
+          owner: "self",
+          cardKind: "monster",
+          isToken: true,
+          cardName: "Bloomrot Token",
+          archetype: "Bloomrot",
+        },
+        actions: [
+          {
+            type: "add_counter",
+            targetScope: {
+              owner: "opponent",
+              zones: ["field", "spellTrap", "fieldSpell"],
+              filters: { requireFaceup: true },
+            },
+            counterType: "spore",
+            amount: 1,
           },
         ],
       },
@@ -1032,7 +1013,7 @@ export const bloomrotCards = [
     subtype: "continuous",
     archetype: "Bloomrot",
     description:
-      'Monsters your opponent controls with 5 or more Spore Counters cannot declare attacks. Once per turn: You can remove 3 Spore Counters from either side of the field; add 1 "Bloomrot" card from your Graveyard to your hand. If this card would be destroyed by an opponent\'s card effect, you can remove 2 Spore Counters from the field instead.',
+      'Monsters your opponent controls with 5 or more Spore Counters cannot declare attacks. Once per turn: You can activate 1 of these effects; remove 2 Spore Counters from the field; add 1 Level 4 or lower "Bloomrot" monster from your Deck to your hand; or remove 3 Spore Counters from the field; add 1 "Bloomrot" card from your Graveyard to your hand.',
     image: "assets/Bloomrot Root Network.png",
     effects: [
       {
@@ -1061,71 +1042,96 @@ export const bloomrotCards = [
         requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "bloomrot_root_network_recover",
-        conditions: [
-          {
-            type: "field_counters_at_least",
-            owner: "any",
-            zones: ["field", "spellTrap", "fieldSpell"],
-            counterType: "spore",
-            min: 3,
-            requireFaceup: true,
-            reason: "There must be at least 3 Spore Counters on the field.",
-          },
-        ],
         actions: [
           {
-            type: "remove_counters_from_field",
-            counterType: "spore",
-            amount: 3,
-            owner: "any",
-            zones: ["field", "spellTrap", "fieldSpell"],
-            requireFaceup: true,
-            selectionMessage:
-              "Select card(s) to remove 3 Spore Counters from the field.",
-            haltOnFailure: true,
-          },
-          {
-            type: "add_from_zone_to_hand",
-            zone: "graveyard",
-            filters: { archetype: "Bloomrot" },
-            count: { min: 1, max: 1 },
-            promptPlayer: true,
+            type: "choose_action_case",
+            selectionMessage: "Choose a Bloomrot Root Network effect.",
+            cases: [
+              {
+                id: "search_level_4_monster",
+                label:
+                  'Remove 2 Spore Counters; add 1 Level 4 or lower "Bloomrot" monster',
+                description:
+                  'Remove 2 Spore Counters from the field; add 1 Level 4 or lower "Bloomrot" monster from your Deck to your hand.',
+                conditions: [
+                  {
+                    type: "field_counters_at_least",
+                    owner: "any",
+                    zones: ["field", "spellTrap", "fieldSpell"],
+                    counterType: "spore",
+                    min: 2,
+                    requireFaceup: true,
+                    reason:
+                      "There must be at least 2 Spore Counters on the field.",
+                  },
+                ],
+                actions: [
+                  {
+                    type: "remove_counters_from_field",
+                    counterType: "spore",
+                    amount: 2,
+                    owner: "any",
+                    zones: ["field", "spellTrap", "fieldSpell"],
+                    requireFaceup: true,
+                    selectionMessage:
+                      "Select card(s) to remove 2 Spore Counters from the field.",
+                    haltOnFailure: true,
+                  },
+                  {
+                    type: "add_from_zone_to_hand",
+                    zone: "deck",
+                    filters: {
+                      cardKind: "monster",
+                      archetype: "Bloomrot",
+                    },
+                    maxLevel: 4,
+                    count: { min: 1, max: 1 },
+                    promptPlayer: true,
+                  },
+                ],
+              },
+              {
+                id: "recover_graveyard_card",
+                label:
+                  'Remove 3 Spore Counters; add 1 "Bloomrot" card from your Graveyard',
+                description:
+                  'Remove 3 Spore Counters from the field; add 1 "Bloomrot" card from your Graveyard to your hand.',
+                conditions: [
+                  {
+                    type: "field_counters_at_least",
+                    owner: "any",
+                    zones: ["field", "spellTrap", "fieldSpell"],
+                    counterType: "spore",
+                    min: 3,
+                    requireFaceup: true,
+                    reason:
+                      "There must be at least 3 Spore Counters on the field.",
+                  },
+                ],
+                actions: [
+                  {
+                    type: "remove_counters_from_field",
+                    counterType: "spore",
+                    amount: 3,
+                    owner: "any",
+                    zones: ["field", "spellTrap", "fieldSpell"],
+                    requireFaceup: true,
+                    selectionMessage:
+                      "Select card(s) to remove 3 Spore Counters from the field.",
+                    haltOnFailure: true,
+                  },
+                  {
+                    type: "add_from_zone_to_hand",
+                    zone: "graveyard",
+                    filters: { archetype: "Bloomrot" },
+                    count: { min: 1, max: 1 },
+                    promptPlayer: true,
+                  },
+                ],
+              },
+            ],
           },
         ],
-      },
-      {
-        id: "bloomrot_root_network_effect_protection",
-        timing: "passive",
-        requireZone: "spellTrap",
-        requireFaceup: true,
-        oncePerTurn: true,
-        oncePerTurnName: "bloomrot_root_network_effect_protection",
-        replacementEffect: {
-          type: "destruction",
-          reason: "effect",
-          sourceOwner: "opponent",
-          targetMustBeSource: true,
-          targetOwner: "self",
-          targetZones: ["spellTrap"],
-          targetRequireFaceup: true,
-          costActions: [
-            {
-              type: "remove_counters_from_field",
-              counterType: "spore",
-              amount: 2,
-              owner: "any",
-              zones: ["field", "spellTrap", "fieldSpell"],
-              requireFaceup: true,
-              selectionMessage:
-                "Select card(s) to remove 2 Spore Counters from the field.",
-              haltOnFailure: true,
-            },
-          ],
-          prompt:
-            "Remove 2 Spore Counters from the field instead of destroying {target}?",
-          logMessage:
-            "{target} avoided destruction by removing 2 Spore Counters from the field.",
-        },
       },
     ],
   },
@@ -1517,7 +1523,7 @@ export const bloomrotCards = [
     speed: 2,
     archetype: "Bloomrot",
     description:
-      'Once per turn, when your opponent Summons a monster: place 1 Spore Counter on that monster. Monsters your opponent controls with a Spore Counter are unaffected by other card effects, except "Bloomrot" cards. Once per turn: target 1 monster your opponent controls with 4 or more Spore Counters; negate its effects until the end of this turn.',
+      'Each time your opponent Summons a monster: place 1 Spore Counter on that monster. Monsters your opponent controls with a Spore Counter are unaffected by other card effects, except "Bloomrot" cards. Once per turn: target 1 monster your opponent controls with 4 or more Spore Counters; negate its effects until the end of this turn.',
     image: "assets/Bloomrot Rotting Ground.png",
     effects: [
       {
@@ -1527,8 +1533,6 @@ export const bloomrotCards = [
         requireZone: "spellTrap",
         requireFaceup: true,
         requireOpponentSummon: true,
-        oncePerTurn: true,
-        oncePerTurnName: "bloomrot_rotting_ground_summon_spore_counter",
         targets: [
           {
             id: "bloomrot_rotting_ground_summoned_monster",

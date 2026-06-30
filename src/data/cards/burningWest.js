@@ -279,6 +279,7 @@ export const burningWestCards = [
           {
             type: "destroy",
             targetRef: "battle_opponent",
+            optional: true,
           },
         ],
       },
@@ -502,6 +503,7 @@ export const burningWestCards = [
           {
             type: "destroy",
             targetRef: "burning_peacemaker_spelltrap_target",
+            optional: true,
           },
         ],
       },
@@ -1066,7 +1068,7 @@ export const burningWestCards = [
     effects: [
       {
         id: "burning_reward",
-        timing: "on_event",
+        timing: "on_activate",
         event: "battle_destroy",
         oncePerTurn: true,
         oncePerTurnName: "burning_reward_activation",

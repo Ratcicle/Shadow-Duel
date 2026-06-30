@@ -372,7 +372,63 @@ export async function applyActions(actions, ctx, targets) {
   return createActionResult({ success: true, executed, skippedCount });
 }
 
-function buildPreviewFilters(action) {
+function getContextPathValue(ctx, path) {
+  if (!ctx || typeof path !== "string" || !path) return undefined;
+  if (!path.includes(".")) return ctx[path];
+  return path
+    .split(".")
+    .filter(Boolean)
+    .reduce((value, key) => (value == null ? undefined : value[key]), ctx);
+}
+
+function resolveNumberFromContext(ref, ctx) {
+  if (ref === undefined || ref === null) return null;
+  if (Number.isFinite(Number(ref))) return Number(ref);
+  const key =
+    typeof ref === "string"
+      ? ref
+      : ref.key || ref.contextKey || ref.path || ref.resultKey || null;
+  const fallback =
+    typeof ref === "object" && ref !== null
+      ? ref.defaultValue ?? ref.default ?? ref.fallback
+      : undefined;
+  const rawValue = getContextPathValue(ctx, key);
+  const value = rawValue === undefined ? fallback : rawValue;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? Math.floor(numeric) : null;
+}
+
+function applyContextMaxLevelFilter(filters, action, ctx) {
+  const maxLevel = resolveNumberFromContext(action?.maxLevelFromContext, ctx);
+  if (!Number.isFinite(maxLevel)) return;
+  filters.maxLevel = Number.isFinite(filters.maxLevel)
+    ? Math.min(filters.maxLevel, maxLevel)
+    : maxLevel;
+}
+
+function getFieldCounterContextKey(action, counterType) {
+  return (
+    action?.contextKey ||
+    action?.storeAs ||
+    action?.resultKey ||
+    `field${counterType.charAt(0).toUpperCase()}${counterType.slice(1)}CounterCount`
+  );
+}
+
+function writePreviewFieldCounterCount(engine, action, ctx, player) {
+  if (!ctx || typeof ctx !== "object") return;
+  const counterType = action?.counterType || "default";
+  const total = countPreviewFieldCounters(engine, action, ctx, player);
+  const contextKey = getFieldCounterContextKey(action, counterType);
+  if (contextKey) ctx[contextKey] = total;
+  ctx.lastFieldCounterCount = total;
+  ctx.fieldCounterCounts = {
+    ...(ctx.fieldCounterCounts || {}),
+    [counterType]: total,
+  };
+}
+
+function buildPreviewFilters(action, ctx = {}) {
   const filters = { ...(action?.filters || {}) };
   if (action?.archetype && !filters.archetype) {
     filters.archetype = action.archetype;
@@ -401,6 +457,7 @@ function buildPreviewFilters(action) {
   if (Number.isFinite(action?.maxLevel) && filters.maxLevel == null) {
     filters.maxLevel = action.maxLevel;
   }
+  applyContextMaxLevelFilter(filters, action, ctx);
   if (Number.isFinite(action?.minAtk) && filters.minAtk == null) {
     filters.minAtk = action.minAtk;
   }
@@ -1104,7 +1161,7 @@ function hasSpecialSummonCandidate(engine, action, ctx) {
   if (ascensionMaterialPreview !== null) return ascensionMaterialPreview;
   if (action.targetRef) return true;
 
-  const filters = buildPreviewFilters(action);
+  const filters = buildPreviewFilters(action, ctx);
   if (action.matchLevelRef) {
     const levelCard = ctx?.[action.matchLevelRef] || null;
     const levelValue = Number(levelCard?.level);
@@ -1193,6 +1250,10 @@ export function checkActionPreviewRequirements(actions, ctx) {
   if (!player) {
     return { ok: false, reason: "Missing player." };
   }
+  const previewCtx = {
+    ...(ctx || {}),
+    fieldCounterCounts: { ...(ctx?.fieldCounterCounts || {}) },
+  };
 
   const hasOtherActions = (action) =>
     actions.some((candidate) => candidate && candidate !== action);
@@ -1200,6 +1261,11 @@ export function checkActionPreviewRequirements(actions, ctx) {
 
   for (const action of actions) {
     if (!action || !action.type) continue;
+    if (action.type === "count_field_counters") {
+      writePreviewFieldCounterCount(this, action, previewCtx, player);
+      continue;
+    }
+
     if (action.type === "choose_action_case") {
       const cases = Array.isArray(action.cases) ? action.cases : [];
       const hasAllowedCase = cases.some((caseEntry) =>
@@ -1441,7 +1507,7 @@ export function checkActionPreviewRequirements(actions, ctx) {
       if (
         (action.type === "special_summon_from_zone" ||
           action.type === "special_summon_matching_level") &&
-        !hasSpecialSummonCandidate(this, action, ctx)
+        !hasSpecialSummonCandidate(this, action, previewCtx)
       ) {
         return {
           ok: false,

@@ -191,6 +191,25 @@ export async function collectCardMovedTriggers(payload) {
       return;
     }
 
+    if (effect.condition) {
+      const condType = effect.condition.type;
+      const destroyCause = payload?.destroyCause;
+      const wasDestroyed = payload?.wasDestroyed === true;
+
+      if (condType === "destroyed_by_battle") {
+        if (!wasDestroyed || destroyCause !== "battle") return;
+      } else if (condType === "destroyed_by_effect") {
+        if (!wasDestroyed || destroyCause !== "effect") return;
+      } else if (condType === "destroyed_by_battle_or_effect") {
+        if (
+          !wasDestroyed ||
+          (destroyCause !== "battle" && destroyCause !== "effect")
+        ) {
+          return;
+        }
+      }
+    }
+
     if (
       effect.eventCardFilters &&
       !cardMatchesEventFilters(this, card, effect.eventCardFilters, {
@@ -214,6 +233,8 @@ export async function collectCardMovedTriggers(payload) {
       fromZone,
       toZone,
       movedByEffect: payload.movedByEffect === true,
+      wasDestroyed: payload.wasDestroyed === true,
+      destroyCause: payload.destroyCause || null,
       wasFaceupBeforeMove: payload.wasFaceupBeforeMove === true,
       movementSourceCard: payload.sourceCard || payload.source || null,
       effectId: payload.effectId || null,

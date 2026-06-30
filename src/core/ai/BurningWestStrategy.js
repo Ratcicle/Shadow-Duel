@@ -20,6 +20,28 @@ import {
   prepareBurningWestSimulatedBattle,
   scoreBurningWestBattleAttackCandidate,
 } from "./burningwest/battle.js";
+import {
+  buildBurningWestPlanningProfile,
+  describeBurningWestPlannedLine,
+  scoreBurningWestLineMilestones,
+  scoreBurningWestLineTerminal,
+} from "./burningwest/linePlanning.js";
+import {
+  chooseBurningWestAscensionPosition,
+  getBurningWestExtraDeckActions,
+  rankBurningWestExecutionerRecoveryCandidates,
+  selectBurningWestAutomaticAscension,
+} from "./burningwest/extraDeck.js";
+import {
+  buildBurningWestDefenseActivationContext,
+  evaluateBurningWestAmbushResponse,
+  evaluateBurningWestLawResponse,
+  evaluateBurningWestQuickDrawResponse,
+  evaluateBurningWestRecruitCandidate,
+  evaluateBurningWestReplacementPolicy,
+  hasBurningWestDefenseResponseInChain,
+} from "./burningwest/defense.js";
+import { evaluateBurningWestBoardBonus } from "./burningwest/scoring.js";
 import { getMonsterTypeLabel } from "../i18n.js";
 
 const ARCHETYPE = "Burning West";
@@ -481,6 +503,20 @@ export default class BurningWestStrategy extends BaseStrategy {
     }
   }
 
+  evaluateBoard(gameOrState, perspectivePlayer) {
+    return this.evaluateBoardV2(gameOrState, perspectivePlayer);
+  }
+
+  evaluateBoardV2(gameOrState, perspectivePlayer) {
+    const baseScore = super.evaluateBoardV2(gameOrState, perspectivePlayer);
+    return (
+      baseScore +
+      evaluateBurningWestBoardBonus(gameOrState, perspectivePlayer, {
+        strategy: this,
+      })
+    );
+  }
+
   analyzeGameState(game) {
     this.thoughtProcess = [];
     const player = game?._isPerspectiveState === true
@@ -678,6 +714,192 @@ export default class BurningWestStrategy extends BaseStrategy {
 
   buildBurningWestActivationContext(card, analysis, options = {}) {
     return buildBurningWestActivationContext(card, analysis, options);
+  }
+
+  getPlanningProfile(game, context = {}) {
+    if (!game) return super.getPlanningProfile(game, context);
+    const analysis = context.analysis || this.analyzeGameState(game);
+    return buildBurningWestPlanningProfile(analysis, {
+      ...context,
+      game,
+      strategy: this,
+      bot: context.bot || analysis.player || this.bot || game.bot,
+    });
+  }
+
+  shouldUseDeepPlanning(game, context = {}) {
+    const profile =
+      context.profile || this.getPlanningProfile(game, context) || {};
+    return game?.turnLineSearchEnabled === true || profile.enabled === true;
+  }
+
+  scoreLineMilestones(context = {}) {
+    return scoreBurningWestLineMilestones(context);
+  }
+
+  scoreLineTerminal(context = {}) {
+    return scoreBurningWestLineTerminal(context);
+  }
+
+  describePlannedLine(context = {}) {
+    return describeBurningWestPlannedLine(context);
+  }
+
+  async chooseChainResponse({
+    chainSystem,
+    game,
+    player = this.bot,
+    activatable = [],
+    context = {},
+  } = {}) {
+    const options = (activatable || []).filter((option) =>
+      [BW.AMBUSH, BW.LAW, BW.QUICK_DRAW].includes(option?.card?.name),
+    );
+
+    if (!options.length) {
+      return {
+        pass: true,
+        reason: "no Burning West defensive chain response is available",
+      };
+    }
+
+    if (hasBurningWestDefenseResponseInChain(chainSystem, player)) {
+      return {
+        pass: true,
+        reason: "Burning West defense is already committed in this chain",
+      };
+    }
+
+    const rawAnalysis = context.analysis || (game ? this.analyzeGameState(game) : this.currentAnalysis || {});
+    const analysis = {
+      ...rawAnalysis,
+      player: player || rawAnalysis.player || this.bot,
+      game,
+      faceUpBurningWestMonsters: rawAnalysis.faceUpBurningWestMonsters || [],
+      faceUpOpponentMonsters: rawAnalysis.faceUpOpponentMonsters || [],
+      opponentMonsters: rawAnalysis.opponentMonsters || [],
+      preferredDeclaredTypes: rawAnalysis.preferredDeclaredTypes || [],
+      activeDeclaredTypes: rawAnalysis.activeDeclaredTypes || [],
+      recoverableBurningWestCards: rawAnalysis.recoverableBurningWestCards || [],
+      recoveryNames: rawAnalysis.recoveryNames || [],
+      bestBattlePlan: rawAnalysis.bestBattlePlan || null,
+      quickDrawPair: rawAnalysis.quickDrawPair || null,
+      bestPeacemakerTarget: rawAnalysis.bestPeacemakerTarget || null,
+      underPressure: rawAnalysis.underPressure || rawAnalysis.oppPressure,
+      battleRewardLive: rawAnalysis.battleRewardLive || rawAnalysis.hasLikelyDeclaredBattle,
+    };
+    const evaluationContext = {
+      ...context,
+      contextPlayer: context.player || null,
+      responsePlayer: analysis.player,
+      game,
+      player: analysis.player,
+      opponent: context.opponent || analysis.opponent,
+      chainSystem,
+    };
+
+    const evaluations = options
+      .map((option) => {
+        const optionContext = {
+          ...evaluationContext,
+          ...(option.context || {}),
+          contextPlayer:
+            option.context?.player || evaluationContext.contextPlayer || null,
+          responsePlayer: analysis.player,
+          player: analysis.player,
+          game,
+          opponent:
+            option.context?.opponent ||
+            evaluationContext.opponent ||
+            analysis.opponent,
+          chainSystem,
+        };
+        if (option.card?.name === BW.AMBUSH) {
+          return evaluateBurningWestAmbushResponse(option, analysis, optionContext);
+        }
+        if (option.card?.name === BW.LAW) {
+          return evaluateBurningWestLawResponse(option, analysis, optionContext);
+        }
+        if (option.card?.name === BW.QUICK_DRAW) {
+          return evaluateBurningWestQuickDrawResponse(option, analysis, optionContext);
+        }
+        return null;
+      })
+      .filter(Boolean)
+      .sort((a, b) => (b.score || 0) - (a.score || 0));
+
+    const best = evaluations.find((evaluation) => !evaluation.pass);
+    if (!best) {
+      return {
+        pass: true,
+        reason: evaluations[0]?.reason || "no Burning West response is worthwhile",
+      };
+    }
+
+    const activationContext = buildBurningWestDefenseActivationContext({
+      option: best.option,
+      analysis,
+      context: evaluationContext,
+      evaluation: best,
+      buildActivationContext: this.buildBurningWestActivationContext.bind(this),
+    });
+
+    return {
+      ...best.option,
+      priority: best.score,
+      score: best.score,
+      reason: best.reason,
+      activationContext,
+      context: {
+        ...context,
+        ...(best.option.context || {}),
+        activationContext,
+        defenseEvaluation: {
+          score: best.score,
+          reason: best.reason,
+          bestCandidate: best.bestCandidate?.name,
+          ownTarget: best.ownTarget?.name,
+          opponentTarget: best.opponentTarget?.name,
+        },
+      },
+    };
+  }
+
+  evaluateRecruitCandidate(candidates = [], context = {}) {
+    const rawAnalysis =
+      context.analysis ||
+      (context.game ? this.analyzeGameState(context.game) : this.currentAnalysis || {});
+    const analysis = {
+      ...rawAnalysis,
+      player: context.player || rawAnalysis.player || this.bot,
+      game: context.game,
+      underPressure: rawAnalysis.underPressure || rawAnalysis.oppPressure,
+      battleRewardLive: rawAnalysis.battleRewardLive || rawAnalysis.hasLikelyDeclaredBattle,
+    };
+    return evaluateBurningWestRecruitCandidate(candidates, {
+      ...context,
+      analysis,
+      player: context.player || analysis.player,
+      game: context.game,
+    });
+  }
+
+  shouldUseReplacementEffect(context = {}) {
+    const rawAnalysis =
+      context.analysis ||
+      (context.game ? this.analyzeGameState(context.game) : this.currentAnalysis || {});
+    const analysis = {
+      ...rawAnalysis,
+      player: context.player || rawAnalysis.player || this.bot,
+      game: context.game,
+      underPressure: rawAnalysis.underPressure || rawAnalysis.oppPressure,
+      battleRewardLive: rawAnalysis.battleRewardLive || rawAnalysis.hasLikelyDeclaredBattle,
+    };
+    return evaluateBurningWestReplacementPolicy({
+      ...context,
+      analysis,
+      player: context.player || analysis.player,
+    });
   }
 
   getSpellActions(game, player, analysis) {
@@ -997,10 +1219,20 @@ export default class BurningWestStrategy extends BaseStrategy {
       ...this.getSpellActions(game, player, analysis),
       ...this.getSpellTrapEffectActions(game, player, analysis),
       ...this.getHandIgnitionActions(game, player, analysis),
+      ...this.getExtraDeckActions(game, player, analysis),
       ...this.getSummonActions(game, player, analysis),
       ...this.getGraveyardSpellEffectActions(game, player, analysis),
       ...this.getSetSpellTrapActions(game, player, analysis),
     ]);
+  }
+
+  getExtraDeckActions(game, player, analysis) {
+    return getBurningWestExtraDeckActions({
+      game,
+      bot: player,
+      analysis,
+      strategy: this,
+    });
   }
 
   sequenceActions(actions = []) {
@@ -1009,10 +1241,11 @@ export default class BurningWestStrategy extends BaseStrategy {
         spell: 0,
         spellTrapEffect: 1,
         handIgnition: 2,
-        summon: 3,
-        graveyardSpellEffect: 4,
-        monsterEffect: 5,
-        set_spell_trap: 6,
+        ascension: 3,
+        summon: 4,
+        graveyardSpellEffect: 5,
+        monsterEffect: 6,
+        set_spell_trap: 7,
       },
     });
   }
@@ -1020,6 +1253,28 @@ export default class BurningWestStrategy extends BaseStrategy {
   rankSearchCandidates(cards = [], action = {}, ctx = {}) {
     const game = ctx.game || ctx.ctx?.game || null;
     const analysis = game ? this.analyzeGameState(game) : this.currentAnalysis || {};
+    const effectId =
+      ctx.ctx?.effect?.id ||
+      ctx.effect?.id ||
+      action.effectId ||
+      action.sourceEffectId ||
+      "";
+    const sourceName = ctx.source?.name || ctx.ctx?.source?.name || "";
+    const isExecutionerRecovery =
+      effectId === "burning_west_executioner_ascension_recover" ||
+      (sourceName === BW.EXECUTIONER && action?.type === "add_from_zone_to_hand");
+    if (isExecutionerRecovery) {
+      return rankBurningWestExecutionerRecoveryCandidates(cards, analysis, {
+        game,
+        bot: ctx.player || analysis.player || this.bot,
+        opponent:
+          analysis.opponent ||
+          (game && (ctx.player || this.bot)
+            ? this.getOpponent(game, ctx.player || this.bot)
+            : null),
+      });
+    }
+
     const filters = action?.filters || action?.candidateFilters || {};
     const cardKinds = Array.isArray(filters.cardKind)
       ? filters.cardKind
@@ -1117,6 +1372,46 @@ export default class BurningWestStrategy extends BaseStrategy {
       return analysis.oppPressure ? "defense" : "attack";
     }
     return "attack";
+  }
+
+  selectAutomaticAscension({
+    choices = [],
+    game,
+    bot = this.bot,
+    opponent,
+  } = {}) {
+    const analysis = game ? this.analyzeGameState(game) : this.currentAnalysis || {};
+    return selectBurningWestAutomaticAscension({
+      choices,
+      game,
+      bot,
+      opponent:
+        opponent ||
+        analysis.opponent ||
+        (game && bot ? this.getOpponent(game, bot) : null),
+      analysis,
+    });
+  }
+
+  chooseAutomaticAscensionPosition({
+    ascensionCard,
+    material,
+    game,
+    bot = this.bot,
+    opponent,
+  } = {}) {
+    const analysis = game ? this.analyzeGameState(game) : this.currentAnalysis || {};
+    return chooseBurningWestAscensionPosition({
+      ascensionCard,
+      material,
+      game,
+      bot,
+      opponent:
+        opponent ||
+        analysis.opponent ||
+        (game && bot ? this.getOpponent(game, bot) : null),
+      analysis,
+    });
   }
 
   chooseActionCase(cases = [], context = {}) {

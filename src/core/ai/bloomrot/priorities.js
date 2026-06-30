@@ -50,6 +50,13 @@ function hasAnyNonTokenBloomrotMonster(analysis = {}) {
   );
 }
 
+function hasAnyBloomrotMonster(analysis = {}) {
+  return [
+    ...(analysis.faceUpBloomrotField || []),
+    ...(analysis.ownMonsters || []),
+  ].some(isBloomrotMonster);
+}
+
 function isMainPhase1(analysis = {}) {
   return String(analysis.phase || "main1").toLowerCase().includes("main1");
 }

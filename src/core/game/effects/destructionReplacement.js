@@ -115,6 +115,50 @@ function matchesReplacementSourceOwner(game, replacement, sourceOwner, ctx) {
   return expectedOwner ? destructionSourcePlayer === expectedOwner : false;
 }
 
+function getReplacementStrategy(game, player) {
+  if (!player) return null;
+  if (player.strategy) return player.strategy;
+  if (game?.bot === player) return game.bot?.strategy || null;
+  if (game?.player === player) return game.player?.strategy || null;
+  return null;
+}
+
+async function shouldUseAiReplacementEffect({
+  game,
+  player,
+  sourceCard,
+  effect,
+  replacementEffect,
+  targetCard,
+  cause,
+  fromZone,
+  context,
+  kind,
+}) {
+  if (player?.controllerType === "human") return true;
+  const strategy = getReplacementStrategy(game, player);
+  if (typeof strategy?.shouldUseReplacementEffect !== "function") return true;
+
+  const decision = await strategy.shouldUseReplacementEffect({
+    game,
+    player,
+    sourceCard,
+    effect,
+    replacementEffect,
+    targetCard,
+    cause,
+    fromZone,
+    context,
+    kind,
+  });
+
+  if (decision === false) return false;
+  if (decision && typeof decision === "object") {
+    if (decision.use === false || decision.shouldUse === false) return false;
+  }
+  return true;
+}
+
 function getCardZoneIndex(game, owner, zoneName, card) {
   if (!owner || !zoneName || !card) return -1;
   if (zoneName === "fieldSpell") {
@@ -527,6 +571,22 @@ async function tryReplacement(game, sourceCard, sourceOwner, effect, ctx) {
   }
 
   if (!matchesReplacementSourceOwner(game, replacement, sourceOwner, ctx)) {
+    return { replaced: false };
+  }
+
+  const strategyAllowsReplacement = await shouldUseAiReplacementEffect({
+    game,
+    player: sourceOwner,
+    sourceCard,
+    effect,
+    replacementEffect: replacement,
+    targetCard: card,
+    cause,
+    fromZone,
+    context: ctx,
+    kind: "destruction",
+  });
+  if (!strategyAllowsReplacement) {
     return { replaced: false };
   }
 
