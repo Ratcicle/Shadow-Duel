@@ -3,6 +3,7 @@ import {
   getTributeCardsFromIndices,
   getTributeValueTotal,
 } from "../game/summon/tributeValue.js";
+import { canUseNormalSummonForCard } from "../Player.js";
 
 export function resolveHandIndexForAction(bot, action, expectedKind) {
   if (!action) return -1;
@@ -79,8 +80,7 @@ export function canResolveSummonActionForCurrentState(bot, action, game) {
   if (card.cannotBeNormalSummonedOrSet) return false;
   if (card.summonRestrict === "shadow_heart_invocation_only") return false;
 
-  const summonLimit = 1 + Math.max(0, Number(bot.additionalNormalSummons || 0));
-  if (Number(bot.summonCount || 0) >= summonLimit) return false;
+  if (!canUseNormalSummonForCard(bot, card)) return false;
 
   const tributeInfo = bot.getTributeRequirementFor(card, bot) || {
     tributesNeeded: 0,
@@ -107,6 +107,14 @@ export function canResolveSummonActionForCurrentState(bot, action, game) {
     );
     const tributeCards = getTributeCardsFromIndices(field, uniqueIndices);
     if (getTributeValueTotal(tributeCards, card) < tributesNeeded) return false;
+    const tradeCheck =
+      typeof bot.evaluateTributeTrade === "function"
+        ? bot.evaluateTributeTrade(card, field, tributesNeeded, {
+            oppField: opponent?.field || [],
+            game,
+          })
+        : { ok: true };
+    if (tradeCheck?.ok === false) return false;
     tributeIndices = uniqueIndices;
     if (
       tributeInfo.usingAlt === true &&

@@ -79,8 +79,16 @@ export function applyRegisterBattlePairEffect(ctx) {
     expiresOnTurn: Number(state.turnCounter || 0),
     controllerId: self?.id || null,
     opponentId: opponent?.id || null,
+    sourceName: options.sourceCard?.name || null,
     sourceCardId: options.sourceCard?.id ?? null,
     sourceInstanceId: getCardInstanceId(options.sourceCard),
+    sourceEffectId: options.effect?.id || null,
+    sourceArchetype: options.sourceCard?.archetype || null,
+    sourceArchetypes: Array.isArray(options.sourceCard?.archetypes)
+      ? [...options.sourceCard.archetypes]
+      : options.sourceCard?.archetype
+        ? [options.sourceCard.archetype]
+        : [],
     firstTargetRef: firstRef,
     secondTargetRef: secondRef,
     affectedTargetRef: affectedRef,
@@ -90,6 +98,9 @@ export function applyRegisterBattlePairEffect(ctx) {
     firstInstanceId: getCardInstanceId(firstTarget),
     secondInstanceId: getCardInstanceId(secondTarget),
     affectedInstanceId: getCardInstanceId(affectedTarget),
+    actions: Array.isArray(action.actions)
+      ? action.actions
+      : [{ type: "destroy", targetRef: affectedRef }],
   });
 }
 

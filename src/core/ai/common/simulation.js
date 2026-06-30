@@ -773,6 +773,8 @@ export function applyGenericSimulatedMainPhaseAction(
       newCard.isFacedown = action.facedown === true || summonPosition === "defense";
       newCard.hasAttacked = false;
       newCard.attacksUsedThisTurn = 0;
+      newCard.lastSummonMethod = tributesNeeded > 0 ? "tribute" : "normal";
+      newCard.lastSummonedFromZone = "hand";
       if (newCard.cardKind !== "monster") {
         console.error(
           `[${options.guardLabel || "Simulation"}] BLOCKED sim: ${newCard.cardKind} "${newCard.name}" tried to enter field!`,
@@ -784,7 +786,7 @@ export function applyGenericSimulatedMainPhaseAction(
         selectionOptions.emitSimulatedEvent?.("after_summon", {
           card: newCard,
           player,
-          method: "normal",
+          method: newCard.lastSummonMethod,
           fromZone: "hand",
           sourceCard: newCard,
           actionContext: selectionOptions.actionContext,

@@ -5,6 +5,7 @@ import DragonStrategy from "./DragonStrategy.js";
 import ArcanistStrategy from "./ArcanistStrategy.js";
 import MirageboundStrategy from "./MirageboundStrategy.js";
 import BloomrotStrategy from "./BloomrotStrategy.js";
+import BurningWestStrategy from "./BurningWestStrategy.js";
 
 const registry = new Map();
 
@@ -29,3 +30,4 @@ registerStrategy("dragon", DragonStrategy);
 registerStrategy("arcanist", ArcanistStrategy);
 registerStrategy("miragebound", MirageboundStrategy);
 registerStrategy("bloomrot", BloomrotStrategy);
+registerStrategy("burningwest", BurningWestStrategy);

@@ -2284,6 +2284,7 @@ export async function moveCardInternal(card, destPlayer, toZone, options = {}) {
           options.destroySource || options.sourceCard || options.source || null,
         contextLabel: options.contextLabel || null,
         actionContext: options.actionContext || null,
+        deferTargetPrecheck: deferCardToGraveTriggers,
         effectsNegatedAtFieldExit,
       };
       const cardToGraveEvent = this.emit(

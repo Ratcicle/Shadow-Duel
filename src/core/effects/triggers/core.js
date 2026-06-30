@@ -464,7 +464,11 @@ export function buildTriggerEntry(options = {}) {
     return null;
   }
 
-  if (Array.isArray(effect.targets) && effect.targets.length > 0) {
+  if (
+    options.skipTargetPreview !== true &&
+    Array.isArray(effect.targets) &&
+    effect.targets.length > 0
+  ) {
     const targetPreview = this.resolveTargets(effect.targets, previewCtx, null);
     if (targetPreview?.ok === false && !targetPreview.needsSelection) {
       return null;

@@ -123,6 +123,128 @@ function getRestrictedNormalSummonSlots(player) {
   return slots;
 }
 
+function getActiveNormalSummonPassiveSources(player) {
+  const game = player?.game || null;
+  const owners = game
+    ? [game.player, game.bot].filter(Boolean)
+    : player
+      ? [player]
+      : [];
+  const sources = [];
+
+  for (const owner of owners) {
+    if (!owner) continue;
+    for (const zone of ["field", "spellTrap"]) {
+      const cards = Array.isArray(owner[zone]) ? owner[zone] : [];
+      for (const card of cards) {
+        if (card) sources.push({ card, owner, zone });
+      }
+    }
+    if (owner.fieldSpell) {
+      sources.push({ card: owner.fieldSpell, owner, zone: "fieldSpell" });
+    }
+  }
+
+  return sources;
+}
+
+function passiveAppliesToNormalSummonPlayer(
+  passive,
+  sourceOwner,
+  targetPlayer,
+  game,
+) {
+  const rules = asArray(
+    passive.targetPlayer || passive.player || passive.owner || "self",
+  );
+  for (const rule of rules) {
+    if (rule === "both" || rule === "all") return true;
+    if (rule === "self" && sourceOwner === targetPlayer) return true;
+    if (rule === "opponent") {
+      const opponent =
+        game && sourceOwner && typeof game.getOpponent === "function"
+          ? game.getOpponent(sourceOwner)
+          : null;
+      if (opponent === targetPlayer) return true;
+    }
+  }
+  return false;
+}
+
+function buildNormalSummonPassiveFilters(passive = {}) {
+  const filters = { ...(passive.filters || {}) };
+  if (passive.archetype && !filters.archetype) {
+    filters.archetype = passive.archetype;
+  }
+  if (passive.cardKind && !filters.cardKind) {
+    filters.cardKind = passive.cardKind;
+  }
+  return filters;
+}
+
+function getPassiveNormalSummonPermissions(player) {
+  const result = {
+    unrestrictedCount: 0,
+    restrictedSlots: [],
+  };
+  const seenUniqueKeys = new Set();
+  const game = player?.game || null;
+
+  for (const { card, owner, zone } of getActiveNormalSummonPassiveSources(player)) {
+    if (!card || !Array.isArray(card.effects)) continue;
+    if (card.isFacedown === true) continue;
+    if (card.effectsNegated === true) continue;
+
+    for (const effect of card.effects) {
+      if (!effect || effect.timing !== "passive") continue;
+      const passive = effect.passive || {};
+      if (
+        passive.type !== "additional_normal_summon" &&
+        passive.type !== "additional_normal_summon_permission"
+      ) {
+        continue;
+      }
+      if (effect.requireZone && !asArray(effect.requireZone).includes(zone)) {
+        continue;
+      }
+      if (effect.requireFaceup === true && card.isFacedown === true) continue;
+      if (!passiveAppliesToNormalSummonPlayer(passive, owner, player, game)) {
+        continue;
+      }
+      if (
+        passive.sourceFilters &&
+        !cardMatchesNormalSummonFilters(card, passive.sourceFilters)
+      ) {
+        continue;
+      }
+
+      const uniqueKey =
+        passive.uniqueKey ||
+        passive.oncePerTurnName ||
+        effect.oncePerTurnName ||
+        null;
+      if (uniqueKey) {
+        const scopedKey = `${owner?.id || "unknown"}:${uniqueKey}`;
+        if (seenUniqueKeys.has(scopedKey)) continue;
+        seenUniqueKeys.add(scopedKey);
+      }
+
+      const rawCount = Number(passive.count ?? passive.amount ?? 1);
+      const count = Number.isFinite(rawCount) ? Math.max(1, rawCount) : 1;
+      const filters = buildNormalSummonPassiveFilters(passive);
+      if (Object.keys(filters).length > 0) {
+        for (let i = 0; i < count; i += 1) {
+          result.restrictedSlots.push(filters);
+        }
+      } else {
+        result.unrestrictedCount += count;
+      }
+    }
+  }
+
+  return result;
+}
+
 function maxRestrictedAssignments(records, restrictedSlots) {
   if (!records.length || !restrictedSlots.length) return 0;
   const assignedRecordForSlot = new Array(restrictedSlots.length).fill(-1);
@@ -163,11 +285,17 @@ export function canUseNormalSummonForCard(player, card) {
     ...getNormalSummonRecords(player),
     createNormalSummonRecord(card),
   ];
+  const passivePermissions = getPassiveNormalSummonPermissions(player);
   const unrestrictedSlots =
-    1 + Math.max(0, Number(player.additionalNormalSummons || 0));
+    1 +
+    Math.max(0, Number(player.additionalNormalSummons || 0)) +
+    passivePermissions.unrestrictedCount;
   const restrictedNeeded = Math.max(0, records.length - unrestrictedSlots);
   if (restrictedNeeded <= 0) return true;
-  const restrictedSlots = getRestrictedNormalSummonSlots(player);
+  const restrictedSlots = [
+    ...getRestrictedNormalSummonSlots(player),
+    ...passivePermissions.restrictedSlots,
+  ];
   return maxRestrictedAssignments(records, restrictedSlots) >= restrictedNeeded;
 }
 

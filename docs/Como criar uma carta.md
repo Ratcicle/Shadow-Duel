@@ -387,6 +387,10 @@ Tipos suportados atualmente:
   de um tipo.
 - `field_presence_type_summon_count_buff`: buff por invocações de tipo feitas
   enquanto a fonte esteve face-up no campo.
+- `additional_normal_summon`: concede uma Normal Summon adicional enquanto a
+  fonte estiver ativa; aceita `count`, `filters`/`archetype`/`cardKind` e
+  `targetPlayer` (`self`, `opponent`, `both`). Se o efeito tiver
+  `oncePerTurnName`, multiplas fontes com o mesmo nome so criam uma permissao.
 - `archetype_count_buff`: buff por quantidade de cartas de arquétipo no campo.
 - `conditional_protection`: protege a própria fonte contra tipos como
   `effect_destruction` enquanto suas conditions passarem; a proteção não

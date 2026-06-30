@@ -139,6 +139,11 @@ function summonActionIsStillLegal(action, state, strategy) {
     const tributeIndices = selectPlannerTributes(field, tributesNeeded, card, strategy);
     const tributeCards = getTributeCardsFromIndices(field, tributeIndices);
     if (getTributeValueTotal(tributeCards, card) < tributesNeeded) return false;
+    const tradeCheck =
+      typeof strategy?.evaluateTributeTrade === "function"
+        ? strategy.evaluateTributeTrade(card, field, tributesNeeded, { state })
+        : { ok: true };
+    if (tradeCheck?.ok === false) return false;
     physicalTributeCount = tributeIndices.length;
     if (
       tributeInfo.usingAlt === true &&
@@ -227,6 +232,15 @@ function clonePlanningState(game, strategy) {
   if (game?._simLuminarch) {
     state._simLuminarch = clonePlain(game._simLuminarch);
   }
+  if (game?._simBurningWest) {
+    state._simBurningWest = clonePlain(game._simBurningWest);
+  }
+  if (Array.isArray(game?.temporaryBattlePairEffects)) {
+    state.temporaryBattlePairEffects = clonePlain(game.temporaryBattlePairEffects);
+  }
+  if (Array.isArray(game?.temporaryEventEffects)) {
+    state.temporaryEventEffects = clonePlain(game.temporaryEventEffects);
+  }
   return state;
 }
 
@@ -309,6 +323,28 @@ function summarizeSimOpt(value) {
   return normalize(value);
 }
 
+function summarizeTemporaryEffects(effects = []) {
+  if (!Array.isArray(effects)) return "";
+  return effects
+    .map((entry) =>
+      [
+        entry?.event || "",
+        entry?.timing || "",
+        entry?.sourceName || entry?.sourceCardId || "",
+        entry?.sourceEffectId || "",
+        entry?.expiresOnTurn ?? "",
+        entry?.usesRemaining ?? "",
+        entry?.firstInstanceId || entry?.firstFieldPresenceId || "",
+        entry?.secondInstanceId || entry?.secondFieldPresenceId || "",
+        entry?.affectedInstanceId || entry?.affectedFieldPresenceId || "",
+        summarizeSimOpt(entry?.declaredValues),
+        summarizeSimOpt((entry?.actions || []).map((action) => action?.type || "")),
+      ].join(":"),
+    )
+    .sort()
+    .join("|");
+}
+
 function getPlanningStateHash(state) {
   const bot = state?.bot || {};
   const opponent = state?.player || {};
@@ -335,6 +371,9 @@ function getPlanningStateHash(state) {
     playerSummary(bot),
     playerSummary(opponent),
     summarizeSimOpt(state?._simOncePerTurn),
+    summarizeSimOpt(state?._simBurningWest),
+    summarizeTemporaryEffects(state?.temporaryBattlePairEffects),
+    summarizeTemporaryEffects(state?.temporaryEventEffects),
   ].join("||");
 }
 
@@ -508,6 +547,28 @@ function sameCardIdentity(a, b) {
   return a === b;
 }
 
+function getPlannerCardInstanceId(card) {
+  return (
+    card?.instanceId ||
+    card?._instanceId ||
+    card?.uid ||
+    card?.uuid ||
+    card?.fieldPresenceId ||
+    null
+  );
+}
+
+function sameBattlePairCard(card, storedCard, storedInstanceId) {
+  if (!card) return false;
+  if (sameCardIdentity(card, storedCard)) return true;
+  const cardInstanceId = getPlannerCardInstanceId(card);
+  return Boolean(
+    cardInstanceId &&
+      storedInstanceId &&
+      String(cardInstanceId) === String(storedInstanceId),
+  );
+}
+
 function detachEquipsForDestroyedMonster(player, monster) {
   if (!player || !monster) return [];
   const detached = [];
@@ -541,6 +602,26 @@ function destroyPlannerMonster(player, monster) {
   detachEquipsForDestroyedMonster(player, monster);
   pushToGraveyard(player, monster);
   return true;
+}
+
+function recordDestroyedCard(summary, card, owner, destroyedBy = "battle") {
+  if (!summary || !card) return;
+  summary.destroyedNames.push(card.name || "card");
+  summary.destroyedCards.push({
+    id: card.id,
+    name: card.name,
+    owner,
+    cardKind: card.cardKind,
+    type: card.type,
+    archetype: card.archetype,
+    archetypes: Array.isArray(card.archetypes) ? [...card.archetypes] : undefined,
+    level: card.level || 0,
+    monsterType: card.monsterType || null,
+    atk: card.atk || 0,
+    def: card.def || 0,
+    baseAtk: card.baseAtk ?? card.originalAtk ?? card.atk ?? 0,
+    destroyedBy,
+  });
 }
 
 function getSimTurnCounter(turnCounter) {
@@ -597,7 +678,10 @@ function applyGrandLibraryBattleReward(state, battlePlan) {
   if (!bot || bot.fieldSpell?.name !== "Arcanist Grand Library") return [];
   if (state._simGrandLibraryBattleRewardUsed) return [];
   const destroyedOpponentMonster = (battlePlan.destroyedCards || []).some(
-    (entry) => entry?.owner === "opponent" && entry?.cardKind === "monster",
+    (entry) =>
+      entry?.owner === "opponent" &&
+      entry?.cardKind === "monster" &&
+      entry.destroyedBy !== "effect",
   );
   if (!destroyedOpponentMonster) return [];
   const attacker = battlePlan.attackerCard || bot.field?.[battlePlan.attackerIndex];
@@ -646,6 +730,104 @@ function prepareStrategyBattle(state, battlePlan, strategy, options = {}) {
   return [];
 }
 
+function battlePairMatches(entry, attacker, defender) {
+  if (!entry || !attacker || !defender) return false;
+  const firstIsAttacker = sameBattlePairCard(
+    attacker,
+    entry.firstTarget,
+    entry.firstInstanceId || entry.firstFieldPresenceId,
+  );
+  const secondIsDefender = sameBattlePairCard(
+    defender,
+    entry.secondTarget,
+    entry.secondInstanceId || entry.secondFieldPresenceId,
+  );
+  const firstIsDefender = sameBattlePairCard(
+    defender,
+    entry.firstTarget,
+    entry.firstInstanceId || entry.firstFieldPresenceId,
+  );
+  const secondIsAttacker = sameBattlePairCard(
+    attacker,
+    entry.secondTarget,
+    entry.secondInstanceId || entry.secondFieldPresenceId,
+  );
+  return (firstIsAttacker && secondIsDefender) || (firstIsDefender && secondIsAttacker);
+}
+
+function findSimulatedFieldCard(player, storedCard, storedInstanceId) {
+  return (player?.field || []).find((card) =>
+    sameBattlePairCard(card, storedCard, storedInstanceId),
+  ) || null;
+}
+
+function actionDestroysBattlePairAffected(action, entry) {
+  if (!action || action.type !== "destroy") return false;
+  if (!action.targetRef) return true;
+  return (
+    action.targetRef === entry.affectedTargetRef ||
+    action.targetRef === "battle_pair_affected"
+  );
+}
+
+function resolveSimulatedBattlePairEffects(state, attacker, target, summary) {
+  const entries = Array.isArray(state?.temporaryBattlePairEffects)
+    ? state.temporaryBattlePairEffects
+    : [];
+  if (!target || entries.length === 0) return { stopped: false };
+  const opponent = state?.player || {};
+  const remaining = [];
+  let stopped = false;
+
+  for (const entry of entries) {
+    if (!entry) continue;
+    if (
+      Number.isFinite(entry.expiresOnTurn) &&
+      Number(state.turnCounter || 0) > Number(entry.expiresOnTurn)
+    ) {
+      continue;
+    }
+    if ((entry.timing || "before_damage_calculation") !== "start_of_damage_step") {
+      remaining.push(entry);
+      continue;
+    }
+    if (!battlePairMatches(entry, attacker, target)) {
+      remaining.push(entry);
+      continue;
+    }
+
+    const affected = findSimulatedFieldCard(
+      opponent,
+      entry.affectedTarget,
+      entry.affectedInstanceId || entry.affectedFieldPresenceId,
+    );
+    if (!affected) continue;
+    const actions = Array.isArray(entry.actions) && entry.actions.length > 0
+      ? entry.actions
+      : [{ type: "destroy", targetRef: entry.affectedTargetRef }];
+    if (!actions.some((action) => actionDestroysBattlePairAffected(action, entry))) {
+      continue;
+    }
+
+    recordDestroyedCard(summary, affected, "opponent", "effect");
+    destroyPlannerMonster(opponent, affected);
+    summary.rewardNames.push(
+      `${entry.sourceName || "battle pair effect"} destroyed ${affected.name || "target"}`,
+    );
+    if (sameCardIdentity(affected, target)) stopped = true;
+  }
+
+  state.temporaryBattlePairEffects = remaining;
+  return { stopped };
+}
+
+function markSimulatedAttackUsed(bot, attacker, state, usedAttacks) {
+  if (!bot?.field?.includes(attacker)) return;
+  attacker.attacksUsedThisTurn = usedAttacks + 1;
+  attacker.hasAttacked =
+    attacker.attacksUsedThisTurn >= getPlannerMaxAttacks(attacker, state);
+}
+
 function applySimulatedBattle(state, battlePlan, strategy = null, options = {}) {
   const bot = state?.bot;
   const opponent = state?.player;
@@ -655,8 +837,6 @@ function applySimulatedBattle(state, battlePlan, strategy = null, options = {}) 
     ? opponent.field?.[battlePlan.targetIndex]
     : null;
   if (!canPlannerAttackerStillAttack(attacker, state)) return null;
-  const prepareRewards = prepareStrategyBattle(state, battlePlan, strategy, options);
-  const attackStat = getEffectiveAtk(attacker);
   const usedAttacks = Number(attacker.attacksUsedThisTurn || 0);
   const summary = {
     type: "simulatedBattle",
@@ -666,27 +846,25 @@ function applySimulatedBattle(state, battlePlan, strategy = null, options = {}) 
     damage: 0,
     destroyedNames: [],
     destroyedCards: [],
-    rewardNames: [...prepareRewards],
+    rewardNames: [],
     lpGains: [],
     phaseBridge: "main1_battle_main2",
   };
-  const recordDestroyed = (card, owner) => {
-    if (!card) return;
-    summary.destroyedNames.push(card.name || "card");
-    summary.destroyedCards.push({
-      id: card.id,
-      name: card.name,
-      owner,
-      cardKind: card.cardKind,
-      type: card.type,
-      archetype: card.archetype,
-      archetypes: Array.isArray(card.archetypes) ? [...card.archetypes] : undefined,
-      level: card.level || 0,
-      atk: card.atk || 0,
-      def: card.def || 0,
-      baseAtk: card.baseAtk ?? card.originalAtk ?? card.atk ?? 0,
-    });
-  };
+
+  const battlePairResult = resolveSimulatedBattlePairEffects(
+    state,
+    attacker,
+    target,
+    summary,
+  );
+  if (battlePairResult.stopped) {
+    markSimulatedAttackUsed(bot, attacker, state, usedAttacks);
+    return summary;
+  }
+
+  const prepareRewards = prepareStrategyBattle(state, battlePlan, strategy, options);
+  summary.rewardNames.push(...prepareRewards);
+  const attackStat = getEffectiveAtk(attacker);
   const inflictDamage = (recipient, amount, involvedCard = null) => {
     const raw = Math.max(0, Number(amount || 0));
     if (
@@ -712,7 +890,7 @@ function applySimulatedBattle(state, battlePlan, strategy = null, options = {}) 
   const destroyIfAllowed = (owner, card, ownerLabel) => {
     if (!card) return false;
     if (preventBattleDestruction(card, state?.turnCounter)) return false;
-    recordDestroyed(card, ownerLabel);
+    recordDestroyedCard(summary, card, ownerLabel, "battle");
     return destroyPlannerMonster(owner, card);
   };
 
@@ -743,11 +921,7 @@ function applySimulatedBattle(state, battlePlan, strategy = null, options = {}) 
     }
   }
 
-  if (bot.field?.includes(attacker)) {
-    attacker.attacksUsedThisTurn = usedAttacks + 1;
-    attacker.hasAttacked =
-      attacker.attacksUsedThisTurn >= getPlannerMaxAttacks(attacker, state);
-  }
+  markSimulatedAttackUsed(bot, attacker, state, usedAttacks);
   summary.rewardNames.push(
     ...applyGrandLibraryBattleReward(state, {
       ...battlePlan,

@@ -19,6 +19,7 @@ export async function collectCardToGraveTriggers(payload) {
   const { card, player, opponent, fromZone, toZone } = payload || {};
   const actionContext = payload?.actionContext || null;
   const contextLabel = payload?.contextLabel || null;
+  const deferTargetPrecheck = payload?.deferTargetPrecheck === true;
   if (!card || !player) return { entries, orderRule };
 
   const resolvedOpponent = opponent || this.game?.getOpponent?.(player);
@@ -279,7 +280,11 @@ export async function collectCardToGraveTriggers(payload) {
     // se houver candidatos válidos para todos os targets obrigatórios.
     // Isso evita ativações inválidas como Shadow-Heart Coward sem monstro
     // do oponente em campo.
-    if (Array.isArray(effect.targets) && effect.targets.length > 0) {
+    if (
+      !deferTargetPrecheck &&
+      Array.isArray(effect.targets) &&
+      effect.targets.length > 0
+    ) {
       const precheckCtx = {
         ...ctx,
         fromZone,
@@ -321,6 +326,7 @@ export async function collectCardToGraveTriggers(payload) {
       activationContext,
       selectionKind: "triggered",
       selectionMessage: "Select target(s) for the triggered effect.",
+      skipTargetPreview: deferTargetPrecheck,
     });
 
     if (entry) {

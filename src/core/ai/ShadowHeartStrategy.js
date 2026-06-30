@@ -1485,6 +1485,10 @@ export default class ShadowHeartStrategy extends BaseStrategy {
     return selectBestTributes(field, tributesNeeded, cardToSummon, context);
   }
 
+  evaluateTributeTrade(cardToSummon, field, tributesNeeded, context = {}) {
+    return evaluateTributeTrade(cardToSummon, field, tributesNeeded, context);
+  }
+
   simulateMainPhaseAction(state, action) {
     return simAction(state, action, {
       strategy: this,

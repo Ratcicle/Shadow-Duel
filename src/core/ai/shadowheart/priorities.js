@@ -2226,6 +2226,20 @@ export function shouldSummonMonster(card, analysis, tributeInfo, context = {}) {
         reason: `Requer ${tributeInfo.tributesNeeded} tributos (tenho ${analysis.field.length})`,
       };
     }
+    if (tributeInfo.tributesNeeded > 0) {
+      const tradeCheck = evaluateTributeTrade(
+        card,
+        fieldState,
+        tributeInfo.tributesNeeded,
+        { oppField: oppFieldState },
+      );
+      if (!tradeCheck.ok) {
+        return {
+          yes: false,
+          reason: tradeCheck.reason,
+        };
+      }
+    }
     const hasLeviathanLine =
       hasName(analysis.hand, SH.leviathan) ||
       (analysis.oppField || []).length === 0 ||

@@ -83,6 +83,10 @@ export default class Bot extends Player {
     return getBotDeckList("bloomrot");
   }
 
+  getBurningWestDeck() {
+    return getBotDeckList("burningwest");
+  }
+
   // Sobrescreve buildExtraDeck para usar fusões do arquétipo
   buildExtraDeck() {
     buildBotExtraDeck(this);
@@ -116,6 +120,10 @@ export default class Bot extends Player {
 
   getBloomrotExtraDeck() {
     return getBotExtraDeckList("bloomrot");
+  }
+
+  getBurningWestExtraDeck() {
+    return getBotExtraDeckList("burningwest");
   }
 
   resolveOpponent(game) {
@@ -263,6 +271,18 @@ export default class Bot extends Player {
       cardToSummon,
       context,
     );
+  }
+
+  evaluateTributeTrade(cardToSummon, field, tributesNeeded, context) {
+    if (typeof this.strategy?.evaluateTributeTrade === "function") {
+      return this.strategy.evaluateTributeTrade(
+        cardToSummon,
+        field,
+        tributesNeeded,
+        context,
+      );
+    }
+    return { ok: true };
   }
 
   simulateMainPhaseAction(state, action) {

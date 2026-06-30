@@ -350,8 +350,34 @@ export function applyDeclareCardProperty(ctx) {
     .map((card) => card?.[action.property])
     .flatMap((value) => (Array.isArray(value) ? value : [value]))
     .filter(Boolean);
+  const actionContext =
+    options.actionContext ||
+    options.activationContext?.actionContext ||
+    {};
+  const targetPreferences =
+    options.targetPreferences ||
+    actionContext.targetPreferences ||
+    options.activationContext?.targetPreferences ||
+    {};
+  const directPreference =
+    options.targetPreference ||
+    actionContext.targetPreference ||
+    options.activationContext?.targetPreference ||
+    null;
+  const namedPreferences = [
+    directPreference,
+    ...Object.values(targetPreferences || {}),
+  ].filter(Boolean);
+  const preferredValues = namedPreferences.flatMap((preference) => [
+    ...(Array.isArray(preference.preferredNames) ? preference.preferredNames : []),
+    ...(Array.isArray(preference.forceNames) ? preference.forceNames : []),
+  ]);
+  const preferredVisibleValue = visibleValues.find((visibleValue) =>
+    preferredValues.includes(visibleValue),
+  );
   const value =
     action.value ||
+    preferredVisibleValue ||
     visibleValues[0] ||
     (Array.isArray(action.choices) ? action.choices[0] : null) ||
     "Pyro";

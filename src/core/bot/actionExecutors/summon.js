@@ -108,6 +108,21 @@ export async function executeSummonAction(bot, game, action) {
       cardToSummon,
       { oppField: opponent.field, game },
     );
+    const tradeCheck =
+      typeof bot.evaluateTributeTrade === "function"
+        ? bot.evaluateTributeTrade(cardToSummon, bot.field, tributeInfo.tributesNeeded, {
+            oppField: opponent.field,
+            game,
+          })
+        : { ok: true };
+    if (tradeCheck?.ok === false) {
+      console.log(
+        `[Bot.executeMainPhaseAction] Tribute summon rejected for ${
+          cardToSummon?.name || action.cardName || "unknown"
+        }: ${tradeCheck.reason || "bad tribute trade"}`,
+      );
+      return false;
+    }
   }
 
   const summonResult = await game.performNormalSummon(

@@ -22,10 +22,15 @@ export async function playerChooseChainResponse(player, activatable, context) {
   }
 
   let chosenOption = null;
+  const autoPassByMouseHold =
+    typeof ui.isLeftMouseHeldForChainSkip === "function" &&
+    ui.isLeftMouseHeldForChainSkip() === true;
 
   // Use existing trap offering system or create new modal
   try {
-    if (typeof ui.showChainResponseModal === "function") {
+    if (autoPassByMouseHold) {
+      this.log("Left mouse button held - auto-passing chain response");
+    } else if (typeof ui.showChainResponseModal === "function") {
       const timeoutMs = 30000;
       const timeoutPromise = new Promise((resolve) => {
         setTimeout(() => resolve(null), timeoutMs);

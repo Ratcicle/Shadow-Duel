@@ -18,6 +18,7 @@ import {
   chooseImpSpecialTargetName,
   evaluateShadowHeartFusionPlan,
   evaluateShadowHeartRecruitCandidate,
+  evaluateTributeTrade,
   getTributeRequirementFor,
   rankShadowHeartSearchCandidates,
   selectBestTributes,
@@ -511,6 +512,19 @@ function simulateNormalSummon(state, action, options = {}) {
     tributeIndices,
   );
   if (getTributeValueTotal(tributeCards, card) < tributesNeeded) return true;
+  if (tributesNeeded > 0) {
+    const tradeCheck = evaluateTributeTrade(
+      card,
+      player.field || [],
+      tributesNeeded,
+      {
+        botState: player,
+        oppField: state.player?.field || [],
+        game: state,
+      },
+    );
+    if (tradeCheck?.ok === false) return true;
+  }
 
   const tributes = [];
   tributeIndices

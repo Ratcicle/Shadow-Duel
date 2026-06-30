@@ -23,6 +23,8 @@ import PixiVfxLayer from "./pixi/PixiVfxLayer.js";
 export default class Renderer {
   constructor() {
     this.destroyed = false;
+    this.leftMouseHeldForChainSkip = false;
+    this.chainSkipInputCleanup = null;
     this.lpDisplayState = {
       player: {
         displayed: 8000,
@@ -58,6 +60,7 @@ export default class Renderer {
       phaseTrack: document.getElementById("phase-track"),
       actionLog: document.getElementById("action-log-list"),
     };
+    this.bindChainSkipInputTracking();
     this.pixiVfx = new PixiVfxLayer();
     const pixiVfx = this.pixiVfx;
     pixiVfx
@@ -76,9 +79,76 @@ export default class Renderer {
       });
   }
 
+  bindChainSkipInputTracking() {
+    if (typeof window === "undefined" || typeof document === "undefined") {
+      return;
+    }
+
+    const setHeld = (held) => {
+      this.leftMouseHeldForChainSkip = held === true;
+    };
+
+    const isMouseInput = (event) =>
+      !event?.pointerType || event.pointerType === "mouse";
+    const isLeftButton = (event) => event?.button === 0;
+
+    const handleDown = (event) => {
+      if (isMouseInput(event) && isLeftButton(event)) {
+        setHeld(true);
+      }
+    };
+
+    const handleUp = (event) => {
+      if (isMouseInput(event) && isLeftButton(event)) {
+        setHeld(false);
+      }
+    };
+
+    const clearHeld = () => setHeld(false);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        clearHeld();
+      }
+    };
+
+    const capture = true;
+    document.addEventListener("pointerdown", handleDown, capture);
+    document.addEventListener("mousedown", handleDown, capture);
+    document.addEventListener("pointerup", handleUp, capture);
+    document.addEventListener("mouseup", handleUp, capture);
+    document.addEventListener("pointercancel", clearHeld, capture);
+    window.addEventListener("blur", clearHeld, capture);
+    document.addEventListener(
+      "visibilitychange",
+      handleVisibilityChange,
+      capture,
+    );
+
+    this.chainSkipInputCleanup = () => {
+      document.removeEventListener("pointerdown", handleDown, capture);
+      document.removeEventListener("mousedown", handleDown, capture);
+      document.removeEventListener("pointerup", handleUp, capture);
+      document.removeEventListener("mouseup", handleUp, capture);
+      document.removeEventListener("pointercancel", clearHeld, capture);
+      window.removeEventListener("blur", clearHeld, capture);
+      document.removeEventListener(
+        "visibilitychange",
+        handleVisibilityChange,
+        capture,
+      );
+      clearHeld();
+    };
+  }
+
+  isLeftMouseHeldForChainSkip() {
+    return this.destroyed !== true && this.leftMouseHeldForChainSkip === true;
+  }
+
   destroy() {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.chainSkipInputCleanup?.();
+    this.chainSkipInputCleanup = null;
     this.clearFloatingCounterTooltip?.();
     this.pixiVfx?.destroy?.();
     this.pixiVfx = null;

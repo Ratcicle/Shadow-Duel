@@ -635,22 +635,19 @@ export const techZeroCards = [
     effects: [
       {
         id: "tech_zero_connector_dragon_additional_normal",
-        timing: "ignition",
+        timing: "passive",
         requireZone: "field",
         requireFaceup: true,
-        requirePhase: ["main1", "main2"],
         oncePerTurn: true,
         oncePerTurnName: "tech_zero_connector_dragon_additional_normal",
-        actions: [
-          {
-            type: "grant_additional_normal_summon",
-            count: 1,
-            filters: {
-              cardKind: "monster",
-              archetype: "Tech-Zero",
-            },
+        passive: {
+          type: "additional_normal_summon",
+          count: 1,
+          filters: {
+            cardKind: "monster",
+            archetype: "Tech-Zero",
           },
-        ],
+        },
       },
       {
         id: "tech_zero_connector_dragon_synchro_recover_spelltrap",

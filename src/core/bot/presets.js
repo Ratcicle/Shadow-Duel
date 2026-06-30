@@ -6,6 +6,7 @@ const AVAILABLE_BOT_PRESETS = [
   { id: "arcanist", label: "Arcanist" },
   { id: "miragebound", label: "Miragebound" },
   { id: "bloomrot", label: "Bloomrot" },
+  { id: "burningwest", label: "Burning West" },
 ];
 
 const MAIN_DECKS = {
@@ -38,6 +39,10 @@ const MAIN_DECKS = {
     411, 414, 414, 409, 409, 413, 415, 412, 412, 410, 410, 410, 416, 417,
     417, 12,
   ],
+  burningwest: [
+    454, 454, 454, 451, 451, 451, 455, 455, 460, 460, 453, 461, 452, 452,
+    452, 456, 456, 457, 457, 458, 459, 462, 463, 463, 464, 465,
+  ],
 };
 
 const EXTRA_DECKS = {
@@ -48,6 +53,7 @@ const EXTRA_DECKS = {
   arcanist: [],
   miragebound: [355, 363],
   bloomrot: [418, 419, 420],
+  burningwest: [466],
 };
 
 function copyDeckList(deckList = []) {
