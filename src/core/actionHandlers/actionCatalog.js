@@ -651,12 +651,13 @@ export const ACTION_CATALOG = {
     category: "stats",
     summary: "Reduces the Level of all monsters in the player's hand.",
     handler: "handleReduceHandMonsterLevels",
-    optional: ["amount"],
+    optional: ["amount", "optional"],
     fields: {
       amount: field("amount", {
         min: 1,
         description: "Level reduction amount. Defaults to 1.",
       }),
+      optional: { type: "boolean" },
     },
     selection: "none",
     mutates: ["stats"],

@@ -139,6 +139,15 @@ export async function activateMonsterFromGraveyard(
     actionContext: normalizedActivationContext.actionContext || null,
   };
 
+  const condCheck = this.evaluateConditions(effect.conditions, ctx);
+  if (!condCheck.ok) {
+    return {
+      success: false,
+      needsSelection: false,
+      reason: condCheck.reason,
+    };
+  }
+
   const targetResult = this.resolveTargets(
     effect.targets || [],
     ctx,

@@ -2474,6 +2474,7 @@ export async function handleReduceHandMonsterLevels(action, ctx, targets, engine
     getUI(game)?.log(
       `Nível dos monstros na mão reduzido em ${amount} até o fim do turno.`
     );
+    game.effectEngine?.clearTargetingCache?.();
     game.updateBoard();
   }
   return modified;

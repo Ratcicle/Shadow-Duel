@@ -15,9 +15,9 @@ O tema **Dragon** é um conjunto de cartas genéricas de tipo Dragão que funcio
 
 ---
 
-## Decklist (19 cartas)
+## Decklist (22 cartas)
 
-### Monstros (12)
+### Monstros (15)
 
 | ID  | Nome                    | Tipo   | Nível | ATK  | DEF  | Notas                      |
 | --- | ----------------------- | ------ | ----- | ---- | ---- | -------------------------- |
@@ -33,6 +33,9 @@ O tema **Dragon** é um conjunto de cartas genéricas de tipo Dragão que funcio
 | 263 | Abyssal Serpent Dragon  | Dragon | 7     | 2200 | 1400 | Delayed exchange control |
 | 264 | Purified Crystal Dragon | Dragon | 8     | 2500 | 1700 |                            |
 | 269 | Boneflame Dragon        | Dragon | 3     | 0    | 0    | Cannot be Normal Summoned  |
+| 278 | Stelya, Dragon Tamer    | Dragon | 4     | 1400 | 1600 | Tribute support / search  |
+| 279 | Solar Eclipse Dragon    | Dragon | 4     | 1700 | 1100 | Eclipse starter / GY revive |
+| 280 | Lunar Eclipse Dragon    | Dragon | 4     | 1100 | 1700 | Search / Deck extender     |
 
 ### Magias (2)
 
@@ -107,6 +110,15 @@ O tema **Dragon** é um conjunto de cartas genéricas de tipo Dragão que funcio
 
 **269 - Boneflame Dragon** (L3 Dragon | ATK 0 / DEF 0)
 > Cannot be Normal Summoned/Set. Once per turn, if this card is in your Graveyard: You can send 1 Dragon monster you control to the Graveyard; Special Summon this card. Gains 300 ATK for each Dragon monster in your Graveyard.
+
+**278 - Stelya, Dragon Tamer** (L4 Dragon | ATK 1400 / DEF 1600)
+> This card can be treated as 2 Tributes for the Tribute Summon of a Dragon-Type monster. You can banish 1 Dragon monster you control; Special Summon this card from your hand or GY. You can discard 2 cards, including this card; add 1 Level 5 or higher Dragon monster from your Deck to your hand. You can only use each effect of "Stelya, Dragon Tamer" once per turn.
+
+**279 - Solar Eclipse Dragon** (L4 Dragon | ATK 1700 / DEF 1100)
+> You can discard this card; Special Summon 1 "Lunar Eclipse Dragon" from your hand or Deck, and if you do, reduce the Level of all monsters in your hand by 2 until the end of this turn. You can banish this card from your GY; Special Summon 1 Level 4 or lower Dragon monster from your GY. You can only use each effect of "Solar Eclipse Dragon" once per turn.
+
+**280 - Lunar Eclipse Dragon** (L4 Dragon | ATK 1100 / DEF 1700)
+> If this card is Normal or Special Summoned: You can discard 1 card; add 1 Level 4 or lower Dragon monster from your Deck to your hand. Then, you can Special Summon 1 "Solar Eclipse Dragon" from your hand or GY. You can banish this card from your GY; Special Summon 1 Level 4 or lower Dragon monster from your Deck. You can only use each effect of "Lunar Eclipse Dragon" once per turn.
 
 ---
 

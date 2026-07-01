@@ -1966,4 +1966,274 @@ export const dragonCards = [
       },
     ],
   },
+  {
+    id: 279,
+    name: "Solar Eclipse Dragon",
+    cardKind: "monster",
+    type: "Dragon",
+    attribute: "Light",
+    level: 4,
+    atk: 1700,
+    def: 1100,
+    description:
+      'You can discard this card; Special Summon 1 "Lunar Eclipse Dragon" from your hand or Deck, and if you do, reduce the Level of all monsters in your hand by 2 until the end of this turn. You can banish this card from your GY; Special Summon 1 Level 4 or lower Dragon monster from your GY. You can only use each effect of "Solar Eclipse Dragon" once per turn.',
+    image: "assets/Solar Eclipse Dragon.png",
+    effects: [
+      {
+        id: "solar_eclipse_discard_summon_lunar",
+        timing: "ignition",
+        requireZone: "hand",
+        requirePhase: ["main1", "main2"],
+        oncePerTurn: true,
+        oncePerTurnName: "solar_eclipse_discard_summon_lunar",
+        conditions: [
+          {
+            type: "playerFieldCount",
+            max: 4,
+            reason: "You need an open Monster Zone to activate this effect.",
+          },
+          {
+            type: "any_of",
+            reason:
+              'You need "Lunar Eclipse Dragon" in your hand or Deck to activate this effect.',
+            conditions: [
+              {
+                type: "graveyardHasMatch",
+                owner: "self",
+                zone: "hand",
+                filters: { name: "Lunar Eclipse Dragon" },
+              },
+              {
+                type: "graveyardHasMatch",
+                owner: "self",
+                zone: "deck",
+                filters: { name: "Lunar Eclipse Dragon" },
+              },
+            ],
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "self",
+            player: "self",
+            to: "graveyard",
+            contextLabel: "cost",
+          },
+          {
+            type: "special_summon_from_zone",
+            zone: ["hand", "deck"],
+            filters: { name: "Lunar Eclipse Dragon" },
+            count: { min: 1, max: 1 },
+            position: "choice",
+            promptPlayer: true,
+          },
+          {
+            type: "reduce_hand_monster_levels",
+            amount: 2,
+            optional: true,
+          },
+        ],
+      },
+      {
+        id: "solar_eclipse_gy_revive_dragon",
+        timing: "ignition",
+        requireZone: "graveyard",
+        requirePhase: ["main1", "main2"],
+        oncePerTurn: true,
+        oncePerTurnName: "solar_eclipse_gy_revive_dragon",
+        conditions: [
+          {
+            type: "playerFieldCount",
+            max: 4,
+            reason: "You need an open Monster Zone to activate this effect.",
+          },
+        ],
+        targets: [
+          {
+            id: "solar_eclipse_gy_revive_target",
+            owner: "self",
+            zone: "graveyard",
+            cardKind: "monster",
+            type: "Dragon",
+            maxLevel: 4,
+            excludeSelf: true,
+            excludeCannotBeSpecialSummoned: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          { type: "banish", targetRef: "self", fromZone: "graveyard" },
+          {
+            type: "special_summon_from_zone",
+            zone: "graveyard",
+            targetRef: "solar_eclipse_gy_revive_target",
+            position: "choice",
+            promptPlayer: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 280,
+    name: "Lunar Eclipse Dragon",
+    cardKind: "monster",
+    type: "Dragon",
+    attribute: "Dark",
+    level: 4,
+    atk: 1100,
+    def: 1700,
+    description:
+      'If this card is Normal or Special Summoned: You can discard 1 card; add 1 Level 4 or lower Dragon monster from your Deck to your hand. Then, you can Special Summon 1 "Solar Eclipse Dragon" from your hand or GY. You can banish this card from your GY; Special Summon 1 Level 4 or lower Dragon monster from your Deck. You can only use each effect of "Lunar Eclipse Dragon" once per turn.',
+    image: "assets/Lunar Eclipse Dragon.png",
+    effects: [
+      {
+        id: "lunar_eclipse_summon_search",
+        timing: "on_event",
+        event: "after_summon",
+        summonMethods: ["normal", "special"],
+        requireSelfAsSummoned: true,
+        oncePerTurn: true,
+        oncePerTurnName: "lunar_eclipse_summon_search",
+        conditions: [
+          {
+            type: "graveyardHasMatch",
+            owner: "self",
+            zone: "deck",
+            filters: {
+              cardKind: "monster",
+              type: "Dragon",
+              maxLevel: 4,
+            },
+            reason:
+              "You need a Level 4 or lower Dragon monster in your Deck to activate this effect.",
+          },
+        ],
+        targets: [
+          {
+            id: "lunar_eclipse_discard_cost",
+            owner: "self",
+            zone: "hand",
+            count: { min: 1, max: 1 },
+            intent: "cost",
+          },
+        ],
+        actions: [
+          {
+            type: "move",
+            targetRef: "lunar_eclipse_discard_cost",
+            player: "self",
+            fromZone: "hand",
+            to: "graveyard",
+            contextLabel: "cost",
+          },
+          {
+            type: "add_from_zone_to_hand",
+            zone: "deck",
+            filters: {
+              cardKind: "monster",
+              type: "Dragon",
+              maxLevel: 4,
+            },
+            count: { min: 1, max: 1 },
+            promptPlayer: true,
+            resultRef: "lunar_eclipse_added_dragon",
+            selectionMessage:
+              "Choose 1 Level 4 or lower Dragon monster in your Deck to add to your hand.",
+          },
+          {
+            type: "optional_target_actions",
+            optional: true,
+            selectionMessage:
+              'Choose 1 "Solar Eclipse Dragon" in your hand or GY to Special Summon.',
+            conditions: [
+              {
+                type: "playerFieldCount",
+                max: 4,
+                reason:
+                  'No open Monster Zone for "Solar Eclipse Dragon".',
+              },
+              {
+                type: "any_of",
+                reason:
+                  'No "Solar Eclipse Dragon" in your hand or GY to Special Summon.',
+                conditions: [
+                  {
+                    type: "graveyardHasMatch",
+                    owner: "self",
+                    zone: "hand",
+                    filters: { name: "Solar Eclipse Dragon" },
+                  },
+                  {
+                    type: "graveyardHasMatch",
+                    owner: "self",
+                    zone: "graveyard",
+                    filters: { name: "Solar Eclipse Dragon" },
+                  },
+                ],
+              },
+            ],
+            targets: [
+              {
+                id: "lunar_eclipse_solar_summon_target",
+                owner: "self",
+                zones: ["hand", "graveyard"],
+                cardKind: "monster",
+                name: "Solar Eclipse Dragon",
+                excludeCannotBeSpecialSummoned: true,
+                count: { min: 1, max: 1 },
+              },
+            ],
+            actions: [
+              {
+                type: "special_summon_from_zone",
+                zone: ["hand", "graveyard"],
+                targetRef: "lunar_eclipse_solar_summon_target",
+                position: "choice",
+                promptPlayer: true,
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: "lunar_eclipse_gy_summon_deck_dragon",
+        timing: "ignition",
+        requireZone: "graveyard",
+        requirePhase: ["main1", "main2"],
+        oncePerTurn: true,
+        oncePerTurnName: "lunar_eclipse_gy_summon_deck_dragon",
+        conditions: [
+          {
+            type: "playerFieldCount",
+            max: 4,
+            reason: "You need an open Monster Zone to activate this effect.",
+          },
+        ],
+        targets: [
+          {
+            id: "lunar_eclipse_deck_summon_target",
+            owner: "self",
+            zone: "deck",
+            cardKind: "monster",
+            type: "Dragon",
+            maxLevel: 4,
+            excludeCannotBeSpecialSummoned: true,
+            count: { min: 1, max: 1 },
+          },
+        ],
+        actions: [
+          { type: "banish", targetRef: "self", fromZone: "graveyard" },
+          {
+            type: "special_summon_from_zone",
+            zone: "deck",
+            targetRef: "lunar_eclipse_deck_summon_target",
+            position: "choice",
+            promptPlayer: true,
+          },
+        ],
+      },
+    ],
+  },
 ];

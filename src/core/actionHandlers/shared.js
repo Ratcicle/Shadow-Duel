@@ -584,7 +584,16 @@ export function collectZoneCandidates(zone, filters = {}, options = {}) {
       if (cardLevel > filters.maxLevel) return false;
     }
 
-    if (filters.excludeSelf && source && card.id === source.id) return false;
+    if (filters.excludeSelf && source) {
+      const cardInstanceId = getCardInstanceId(card);
+      const sourceInstanceId = getCardInstanceId(source);
+      const sameInstance =
+        card === source ||
+        (cardInstanceId !== null &&
+          sourceInstanceId !== null &&
+          cardInstanceId === sourceInstanceId);
+      if (sameInstance) return false;
+    }
 
     if (excludeSummonRestrict.length > 0 && card.summonRestrict) {
       if (excludeSummonRestrict.includes(card.summonRestrict)) return false;

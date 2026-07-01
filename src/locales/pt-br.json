@@ -887,6 +887,14 @@
       "name": "Stelya, Domadora de Dragões",
       "description": "Este card pode ser tratado como 2 Tributos para a Invocação-Tributo de um monstro do Tipo Dragão. Você pode banir 1 monstro Dragão que você controla; Invoque este card por Invocação-Especial da sua mão ou do seu Cemitério. Você pode descartar 2 cards, incluindo este card; adicione 1 monstro Dragão de Nível 5 ou maior do seu Deck à sua mão. Você só pode usar cada efeito de \"Stelya, Domadora de Dragões\" uma vez por turno."
     },
+    "279": {
+      "name": "Drag\u00e3o do Eclipse Solar",
+      "description": "Voc\u00ea pode descartar este card; Invoque por Invoca\u00e7\u00e3o-Especial 1 \"Drag\u00e3o do Eclipse Lunar\" da sua m\u00e3o ou Deck e, se isso acontecer, reduza o N\u00edvel de todos os monstros na sua m\u00e3o em 2 at\u00e9 o final deste turno. Voc\u00ea pode banir este card do seu Cemit\u00e9rio; Invoque por Invoca\u00e7\u00e3o-Especial 1 monstro Drag\u00e3o de N\u00edvel 4 ou menor do seu Cemit\u00e9rio. Voc\u00ea s\u00f3 pode usar cada efeito de \"Drag\u00e3o do Eclipse Solar\" uma vez por turno."
+    },
+    "280": {
+      "name": "Drag\u00e3o do Eclipse Lunar",
+      "description": "Se este card for Invocado por Invoca\u00e7\u00e3o-Normal ou Especial: voc\u00ea pode descartar 1 card; adicione 1 monstro Drag\u00e3o de N\u00edvel 4 ou menor do seu Deck \u00e0 sua m\u00e3o. Depois, voc\u00ea pode Invocar por Invoca\u00e7\u00e3o-Especial 1 \"Drag\u00e3o do Eclipse Solar\" da sua m\u00e3o ou Cemit\u00e9rio. Voc\u00ea pode banir este card do seu Cemit\u00e9rio; Invoque por Invoca\u00e7\u00e3o-Especial 1 monstro Drag\u00e3o de N\u00edvel 4 ou menor do seu Deck. Voc\u00ea s\u00f3 pode usar cada efeito de \"Drag\u00e3o do Eclipse Lunar\" uma vez por turno."
+    },
     "301": {
       "name": "Grimório do Arcanista Aprendiz",
       "description": "Equipe apenas a um monstro \"Arcanista\" que você controla.\nUma vez por turno: você pode ativar 1 dos efeitos armazenados neste card.\nSe uma Magia \"Arcanist\" que você ativou resolver: você pode armazenar o efeito dessa Magia neste card (máximo 1).\nSe este card já tiver 1 efeito armazenado, você pode armazenar o novo efeito em vez disso.\nVocê só pode controlar 1 \"Grimório do Arcanista Aprendiz\"."
